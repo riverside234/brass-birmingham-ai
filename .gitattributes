@@ -1,0 +1,11 @@
+# Keep source and documentation portable between the laptop and lab checkout.
+* text=auto
+.gitignore text eol=lf
+.gitattributes text eol=lf
+*.md text eol=lf
+*.ps1 text eol=lf
+*.cs text eol=lf
+*.py text eol=lf
+*.sh text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
