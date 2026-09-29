@@ -13,7 +13,7 @@ parser.add_argument('--root', type=Path)
 parser.add_argument('--mono')
 args = parser.parse_args()
 result = unittest.TextTestRunner(verbosity=2).run(
-    unittest.defaultTestLoader.discover(str(root / 'tests/Step5'), pattern='test_step5.py'))
+    unittest.defaultTestLoader.discover(str(root / 'tests/Step5'), pattern='test_*.py'))
 if result.wasSuccessful() and args.integration:
     from brass_ai.learning.contracts import LAB_ROOT
     sys.path.insert(0, str(root / 'tests/Step5'))

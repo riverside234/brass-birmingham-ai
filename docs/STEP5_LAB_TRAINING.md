@@ -90,20 +90,27 @@ a different existing runtime.
 
 ## Install and qualify the lab runtime
 
+Use the existing **`ai-training` conda environment**. Every `python` command below
+assumes `conda activate ai-training`; no venv is needed. Installation, tests and
+CUDA smoke training already passed on your lab according to your report. Keep
+that working environment; the install commands are for reproducing it, not a
+requirement to reinstall packages when fixing the qualification error.
+
 Use Python 3.12, a working `mono` command for the preserved .NET host, and an
 NVIDIA driver compatible with the pinned PyTorch CUDA wheel. These commands
 retain the tested R2 dependency versions. The CUDA 12.8 installation is listed in
 [PyTorch's official previous-version instructions](https://pytorch.org/get-started/previous-versions/).
 
 ```bash
-python3.12 -m venv /data/not_backed_up/yxu209/ai-training/.venv
-/data/not_backed_up/yxu209/ai-training/.venv/bin/python -m pip install torch==2.8.0 --index-url https://download.pytorch.org/whl/cu128
-/data/not_backed_up/yxu209/ai-training/.venv/bin/python -m pip install -r /data/not_backed_up/yxu209/ai-training/requirements-step5.txt
+conda activate ai-training
+python -m pip install torch==2.8.0 --index-url https://download.pytorch.org/whl/cu128
+python -m pip install -r /data/not_backed_up/yxu209/ai-training/requirements-step5.txt
 
-/data/not_backed_up/yxu209/ai-training/.venv/bin/python /data/not_backed_up/yxu209/ai-training/scripts/step5.py import-runtime --bundle /data/not_backed_up/yxu209/ai-training/artifacts/step5-transfer/private-rules-runtime.zip
-/data/not_backed_up/yxu209/ai-training/.venv/bin/python /data/not_backed_up/yxu209/ai-training/scripts/verify-step5.py
-/data/not_backed_up/yxu209/ai-training/.venv/bin/python /data/not_backed_up/yxu209/ai-training/scripts/step5.py --device cuda preflight
-/data/not_backed_up/yxu209/ai-training/.venv/bin/python /data/not_backed_up/yxu209/ai-training/scripts/check-transferred-legacy.py
+python /data/not_backed_up/yxu209/ai-training/scripts/step5.py import-runtime --bundle /data/not_backed_up/yxu209/ai-training/artifacts/step5-transfer/private-rules-runtime.zip
+python /data/not_backed_up/yxu209/ai-training/scripts/check_qualification_reports.py
+python /data/not_backed_up/yxu209/ai-training/scripts/verify-step5.py
+python /data/not_backed_up/yxu209/ai-training/scripts/step5.py --device cuda preflight
+python /data/not_backed_up/yxu209/ai-training/scripts/check-transferred-legacy.py
 ```
 
 Pass global options such as `--device`, `--config`, `--root` and `--mono` **before**
@@ -123,6 +130,43 @@ replace expected fingerprints to bypass a mismatch. Linux/Mono and RTX execution
 are **not claimed tested by the Windows checks**. If parity fails, resolve that
 runtime difference before collecting lab training games.
 
+### Fix an existing `Qualification report changed` checkout
+
+The first published qualification report was hashed with CRLF line endings, but
+Git stored it with LF. The expected hash is
+`790942901e25720a58afe0bfe6536f54d014cfba7ec4432cb3e8f1843f5520eb`;
+the LF-converted copy is
+`36821a4da89dc43d66d31943223eddb1167ce09678c78419fb0216689e90d7eb`.
+This affects v3 admission in the main configuration. The pure-neural smoke run
+does not exercise admission; the original runtime preflight used diagnostic
+loading, which also skipped this gate. Conda and CUDA are unrelated to the error.
+
+The fix preserves qualification-report bytes with `-text` in `.gitattributes`.
+[Git documents this switch](https://git-scm.com/docs/gitattributes) as disabling
+line-ending conversion. The distribution check now exercises all six admitted
+v3 policies and includes their qualification report in the required Git assets.
+
+After transferring/pulling the fix into the lab checkout, run:
+
+```bash
+conda activate ai-training
+python /data/not_backed_up/yxu209/ai-training/scripts/check_qualification_reports.py --repair-line-endings
+python /data/not_backed_up/yxu209/ai-training/scripts/check-step5-distribution.py
+```
+
+The repair accepts only an LF/CRLF conversion that produces the **existing exact
+SHA-256**. It checks all referenced reports before writing, then invokes the
+unchanged admission gate. Content changes, missing files or conflicting pins
+remain errors. Do not update the pool's hash to match an arbitrary report.
+The command is safe to repeat and does nothing to an already matching report.
+
+Your reported failure occurs before creating `main/state.json` or collecting
+games. If that file is absent, rerun your original command with `--initial`.
+If a later attempt already created it, resume without `--initial` instead.
+This fix does not change model/trainer signatures or frozen bank code, so it
+does not invalidate existing smoke checkpoints. No environment reinstall,
+private-runtime re-import or completed-game replay is necessary for this repair.
+
 ## Start with a short self-play run
 
 The smoke configuration uses four games per iteration, a medium backbone, two
@@ -130,7 +174,7 @@ PPO epochs, pure neural opposition and no scheduled search. This measures the
 host/inference/replay/update workflow before committing to a longer run.
 
 ```bash
-/data/not_backed_up/yxu209/ai-training/.venv/bin/python /data/not_backed_up/yxu209/ai-training/scripts/step5.py --device cuda --config /data/not_backed_up/yxu209/ai-training/configs/step5/smoke.json train --run /data/not_backed_up/yxu209/ai-training/artifacts/step5/lab-smoke --initial /data/not_backed_up/yxu209/ai-training/training/models/bootstrap/r2-fresh-medium.pt --iterations 2
+python /data/not_backed_up/yxu209/ai-training/scripts/step5.py --device cuda --config /data/not_backed_up/yxu209/ai-training/configs/step5/smoke.json train --run /data/not_backed_up/yxu209/ai-training/artifacts/step5/lab-smoke --initial /data/not_backed_up/yxu209/ai-training/training/models/bootstrap/r2-fresh-medium.pt --iterations 2
 ```
 
 Inspect both iteration reports: all games must have completed; gradients and
@@ -144,10 +188,10 @@ Measure seconds per iteration before increasing workers or games.
 ## Run and resume the main population trainer
 
 ```bash
-/data/not_backed_up/yxu209/ai-training/.venv/bin/python /data/not_backed_up/yxu209/ai-training/scripts/step5.py --device cuda train --run /data/not_backed_up/yxu209/ai-training/artifacts/step5/main --initial /data/not_backed_up/yxu209/ai-training/training/models/bootstrap/r2-fresh-medium.pt --iterations 20
+python /data/not_backed_up/yxu209/ai-training/scripts/step5.py --device cuda train --run /data/not_backed_up/yxu209/ai-training/artifacts/step5/main --initial /data/not_backed_up/yxu209/ai-training/training/models/bootstrap/r2-fresh-medium.pt --iterations 20
 
 # Resume for another 20 iterations; omit --initial.
-/data/not_backed_up/yxu209/ai-training/.venv/bin/python /data/not_backed_up/yxu209/ai-training/scripts/step5.py --device cuda train --run /data/not_backed_up/yxu209/ai-training/artifacts/step5/main --iterations 20
+python /data/not_backed_up/yxu209/ai-training/scripts/step5.py --device cuda train --run /data/not_backed_up/yxu209/ai-training/artifacts/step5/main --iterations 20
 ```
 
 `state.json` commits the iteration only after its replay, report and checkpoint
@@ -164,6 +208,56 @@ or strength guarantee. Check progress against older neural generations. Preserve
 older agents with distinct behavior even if they are not the current champion.
 The main loop freezes candidates; it does not automatically label each new
 generation stronger.
+
+### Budget for a stronger opponent
+
+My initial **planning budget is 5,000 total ordinary-training iterations**, with
+funding released in stages rather than one unattended run. At the unchanged
+20-game default that is **100,000 regular four-player games**, plus **1,996 search
+games** under the current schedule. This is a project estimate, not an empirically
+established threshold for strong Brass play. More iterations cannot by themselves
+guarantee strength or repair a training loop that is not learning.
+
+| Total completed iterations | Regular games | Extra search games | Decision at this point |
+| --- | --- | --- | --- |
+| 100 | 2,000 | 36 | Check that economic play, scores and performance against early neural snapshots improve |
+| 500 | 10,000 | 196 | Require consistent progress against multiple frozen neural references; inspect Pottery and other industry use |
+| 2,000 | 40,000 | 796 | Run larger held-out comparisons, search ablations and sample games for coherent play |
+| 5,000 | 100,000 | 1,996 | Initial substantial training budget; assess strength and human enjoyment before extending |
+
+Evaluate every 100 iterations initially, then every 250–500 once progress is
+clear. Use a stable reference panel and the same prespecified validation setups
+to compare checkpoints; keep final-test setups unused until the end. A five-setup
+evaluation is a trend check. Use the existing 30-setup, four-seat promotion gate
+for release candidates (120 games per lineup). Stock/v3 wins alone are insufficient;
+compare historical neural agents and inspect competent economic play too.
+If progress stalls across several checkpoints, inspect value calibration,
+exploration, complete-game behavior and search-label quality before increasing
+the budget. Evaluate search-enabled and plain policy checkpoints separately.
+
+`--iterations` means **additional iterations**, not a target total. After your
+first 20 finish, `--iterations 80` reaches 100. Then use 400 to reach 500, 1,500 to
+reach 2,000, and 3,000 to reach 5,000, evaluating between stages. Omit `--initial`
+on every resume. Keep the configuration unchanged within a run; a larger batch
+or worker-count experiment should use a new run and its last checkpoint.
+
+Measure your lab's iteration reports for a time estimate. Once search has started,
+one search iteration plus four ordinary iterations is a representative cycle;
+use their combined seconds divided by five, multiplied by the remaining count.
+Search can dominate runtime even with a fast GPU. The trainer also retains every
+optimizer checkpoint and full replay: budget storage from measured bytes per
+iteration, and do not delete history checkpoints while a live run references them.
+The local medium-model optimizer checkpoints are about 22.8 MB each, so 5,000
+generations alone take approximately 114 GB before replay and evaluation data.
+
+Reserve about **10–20% additional compute** for evaluation and independent-seed
+replications. For early reproducibility checks, run two or three shorter
+independent seeds before committing the full extension. RL training can vary
+substantially with seed; see [Spinning Up's experimental guidance](https://spinningup.openai.com/en/latest/spinningup/spinningup.html).
+Consider 10,000–20,000 total iterations only if the 5,000-iteration run is still
+making measured progress. Start meta-RL after the neural population is useful;
+meta-RL outer iterations have a different workload and are not included in these
+ordinary-training counts.
 
 ### Neural search distillation
 
@@ -203,10 +297,10 @@ lineup**, not 20 total. With all four lineups it is 80 games. Start with one set
 and omit `--include-legacy` for a small wiring check.
 
 ```bash
-/data/not_backed_up/yxu209/ai-training/.venv/bin/python /data/not_backed_up/yxu209/ai-training/scripts/step5.py --device cuda evaluate --candidate /data/not_backed_up/yxu209/ai-training/artifacts/step5/main/generation-0020.pt --references /data/not_backed_up/yxu209/ai-training/artifacts/step5/main/generation-0015.pt /data/not_backed_up/yxu209/ai-training/artifacts/step5/main/generation-0010.pt --output /data/not_backed_up/yxu209/ai-training/artifacts/step5/evaluation-g20 --setups 5 --include-legacy
+python /data/not_backed_up/yxu209/ai-training/scripts/step5.py --device cuda evaluate --candidate /data/not_backed_up/yxu209/ai-training/artifacts/step5/main/generation-0020.pt --references /data/not_backed_up/yxu209/ai-training/artifacts/step5/main/generation-0015.pt /data/not_backed_up/yxu209/ai-training/artifacts/step5/main/generation-0010.pt --output /data/not_backed_up/yxu209/ai-training/artifacts/step5/evaluation-g20 --setups 5 --include-legacy
 
 # The same candidate with the learned Pottery context, without forced Pottery moves.
-/data/not_backed_up/yxu209/ai-training/.venv/bin/python /data/not_backed_up/yxu209/ai-training/scripts/step5.py --device cuda evaluate --candidate /data/not_backed_up/yxu209/ai-training/artifacts/step5/main/generation-0020.pt --references /data/not_backed_up/yxu209/ai-training/artifacts/step5/main/generation-0015.pt --output /data/not_backed_up/yxu209/ai-training/artifacts/step5/evaluation-g20-pottery --setups 5 --focus Pottery
+python /data/not_backed_up/yxu209/ai-training/scripts/step5.py --device cuda evaluate --candidate /data/not_backed_up/yxu209/ai-training/artifacts/step5/main/generation-0020.pt --references /data/not_backed_up/yxu209/ai-training/artifacts/step5/main/generation-0015.pt --output /data/not_backed_up/yxu209/ai-training/artifacts/step5/evaluation-g20-pottery --setups 5 --focus Pottery
 ```
 
 The four lineups are recent neural opponents, mixed neural history, mixed admitted
@@ -225,7 +319,7 @@ Pottery-collapse warning. A win over fresh initialization or v3 alone is insuffi
 These gates still do not certify human-level or enjoyable play.
 
 ```bash
-/data/not_backed_up/yxu209/ai-training/.venv/bin/python /data/not_backed_up/yxu209/ai-training/scripts/step5.py promote --checkpoint /data/not_backed_up/yxu209/ai-training/artifacts/step5/main/generation-0020.pt --report /data/not_backed_up/yxu209/ai-training/artifacts/step5/evaluation-g20/report.json
+python /data/not_backed_up/yxu209/ai-training/scripts/step5.py promote --checkpoint /data/not_backed_up/yxu209/ai-training/artifacts/step5/main/generation-0020.pt --report /data/not_backed_up/yxu209/ai-training/artifacts/step5/evaluation-g20/report.json
 ```
 
 The five-setup example deliberately will not pass that promotion gate. Increase
@@ -249,7 +343,7 @@ has produced useful, distinct neural checkpoints; weak initial tasks do not
 provide evidence of useful adaptation.
 
 ```bash
-/data/not_backed_up/yxu209/ai-training/.venv/bin/python /data/not_backed_up/yxu209/ai-training/scripts/step5.py --device cuda meta-train --initial /data/not_backed_up/yxu209/ai-training/artifacts/step5/main/generation-0020.pt --references /data/not_backed_up/yxu209/ai-training/artifacts/step5/main/generation-0010.pt /data/not_backed_up/yxu209/ai-training/artifacts/step5/main/generation-0015.pt --run /data/not_backed_up/yxu209/ai-training/artifacts/step5/meta --iterations 5 --tasks 3 --inner-steps 2 --support-games 4 --query-games 4 --fraction 0.1
+python /data/not_backed_up/yxu209/ai-training/scripts/step5.py --device cuda meta-train --initial /data/not_backed_up/yxu209/ai-training/artifacts/step5/main/generation-0020.pt --references /data/not_backed_up/yxu209/ai-training/artifacts/step5/main/generation-0010.pt /data/not_backed_up/yxu209/ai-training/artifacts/step5/main/generation-0015.pt --run /data/not_backed_up/yxu209/ai-training/artifacts/step5/meta --iterations 5 --tasks 3 --inner-steps 2 --support-games 4 --query-games 4 --fraction 0.1
 ```
 
 Repeat the same command to add iterations to that meta run. Each task in the
@@ -264,7 +358,7 @@ kept outside meta-training. The CLI rejects an exact lineup recorded in the meta
 checkpoint's task history.
 
 ```bash
-/data/not_backed_up/yxu209/ai-training/.venv/bin/python /data/not_backed_up/yxu209/ai-training/scripts/step5.py --device cuda meta-evaluate --candidate /data/not_backed_up/yxu209/ai-training/artifacts/step5/meta/meta-generation-0005.pt --references /data/not_backed_up/yxu209/ai-training/artifacts/step5/main/generation-0008.pt /data/not_backed_up/yxu209/ai-training/artifacts/step5/main/generation-0012.pt /data/not_backed_up/yxu209/ai-training/artifacts/step5/main/generation-0018.pt --output /data/not_backed_up/yxu209/ai-training/artifacts/step5/meta-evaluation --inner-steps 2 --support-games 4 --query-games 8
+python /data/not_backed_up/yxu209/ai-training/scripts/step5.py --device cuda meta-evaluate --candidate /data/not_backed_up/yxu209/ai-training/artifacts/step5/meta/meta-generation-0005.pt --references /data/not_backed_up/yxu209/ai-training/artifacts/step5/main/generation-0008.pt /data/not_backed_up/yxu209/ai-training/artifacts/step5/main/generation-0012.pt /data/not_backed_up/yxu209/ai-training/artifacts/step5/main/generation-0018.pt --output /data/not_backed_up/yxu209/ai-training/artifacts/step5/meta-evaluation --inner-steps 2 --support-games 4 --query-games 8
 ```
 
 Meta-evaluation updates a disposable clone only. Support shards are marked
@@ -280,7 +374,7 @@ or an on-laptop adaptive release.
 Use R2's checked ONNX export with real permitted-view examples from the run:
 
 ```bash
-/data/not_backed_up/yxu209/ai-training/.venv/bin/python /data/not_backed_up/yxu209/ai-training/scripts/r2.py export --checkpoint /data/not_backed_up/yxu209/ai-training/artifacts/step5/main/generation-0020.pt --shards /data/not_backed_up/yxu209/ai-training/artifacts/step5/main/iteration-0019/actor-0000.jsonl.gz --output /data/not_backed_up/yxu209/ai-training/artifacts/step5/model-g20.onnx
+python /data/not_backed_up/yxu209/ai-training/scripts/r2.py export --checkpoint /data/not_backed_up/yxu209/ai-training/artifacts/step5/main/generation-0020.pt --shards /data/not_backed_up/yxu209/ai-training/artifacts/step5/main/iteration-0019/actor-0000.jsonl.gz --output /data/not_backed_up/yxu209/ai-training/artifacts/step5/model-g20.onnx
 ```
 
 Keep ordinary run data under ignored `artifacts/step5/`. Select weights and their

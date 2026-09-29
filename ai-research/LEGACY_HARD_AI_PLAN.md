@@ -115,7 +115,7 @@ Use profile preferences only among credible alternatives, and measure when each 
 
 Start CPU-only. Measure L1 throughput, then compare proposed L2/L3 whole-turn caps such as 0.25, 1 and 3 seconds; these are experiments, not latency promises or difficulty labels. Keep deterministic fixed-work mode for regressions and real wall-clock mode for laptop acceptance. Include proposal generation, restore, execution validation and IPC in timing.
 
-L3 uses the main plan's matched scenarios, fresh finalist checks and zero-to-six intervening ordinary opponent turns. Simulated opponents use L1 policies; do not recursively launch a full search for every reply. S3 and OpenSpiel remain optional later comparisons. Reuse the host, candidate representation, scheduler, telemetry and tests with the Daiyu-based learner, replacing only policy/value evaluation where appropriate.
+L3 uses the main plan's matched scenarios, fresh finalist checks and zero-to-six intervening ordinary opponent turns. Simulated opponents use L1 policies; do not recursively launch a full search for every reply. [S3 and OpenSpiel](../docs/R4_R5_SEARCH_LAB.md) are now required additional neural-search experiments; they do not modify this frozen legacy bank. Reuse the host, candidate representation, scheduler, telemetry and tests with the Daiyu-based learner, replacing only policy/value evaluation where appropriate.
 
 ## 7. Store and freeze opponents reproducibly
 

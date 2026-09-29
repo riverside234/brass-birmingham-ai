@@ -1,0 +1,199 @@
+{
+  "format": "searchlab-correctness/1.0.0",
+  "passed": true,
+  "identity": {
+    "implementation": "1cbbb96029f2597394b2a4a8d042e5ff78a2312867d369fb6c033ff1ab29ef66",
+    "runtime": "3b165f8e407ac34ec0df3e80df4b2e1bc547b66095871bcc984eec02aa7e1734",
+    "r1_runtime": "4b6468f5ff8b0da8d8527be6292474165046faa227a38804b54242d9a37050b5",
+    "step5": "688ce053b57aea695d1b876886629584a16eed499f6ea1f8705e93b60e9905aa",
+    "openspiel": "2.0.2",
+    "platform": "Windows-11-10.0.26200-SP0",
+    "python": "3.12.14",
+    "torch": "2.8.0+cpu",
+    "device": "cpu",
+    "accelerator": "Intel64 Family 6 Model 170 Stepping 4, GenuineIntel",
+    "mono": "dotnet-framework"
+  },
+  "unit_tests": 10,
+  "evidence": {
+    "full_games": [
+      {
+        "seed": 9211,
+        "decisions": 303,
+        "seat_observation_comparisons": 1212,
+        "independent_clones": 7,
+        "pending_chance_clone_kinds": [
+          "draw",
+          "rail-shuffle"
+        ],
+        "private_chance_checks": 91,
+        "chance": {
+          "order": 4,
+          "merchants": 9,
+          "cards": 64,
+          "draw": 60,
+          "rail-shuffle": 64
+        },
+        "returns": [
+          0.0,
+          0.0,
+          1.0,
+          0.0
+        ]
+      }
+    ],
+    "privacy": [
+      {
+        "seat": 0,
+        "variant": "r4",
+        "passed": true,
+        "telemetry": {
+          "searches": 2,
+          "simulations": 16,
+          "incomplete": 0,
+          "opponent_choices": 78
+        }
+      },
+      {
+        "seat": 0,
+        "variant": "s3",
+        "passed": true,
+        "telemetry": {
+          "searches": 2,
+          "confirmed": 2,
+          "incomplete": 0,
+          "proposed": 28,
+          "pilot_worlds": 0,
+          "fresh_worlds": 4,
+          "reply_choices": 350,
+          "tree_simulations": 4,
+          "tree_nodes": 4,
+          "future_root_turns": 4,
+          "leaf_depths": {
+            "1": 12
+          },
+          "unconfirmed_incumbents": 0
+        }
+      },
+      {
+        "seat": 1,
+        "variant": "r4",
+        "passed": true,
+        "telemetry": {
+          "searches": 2,
+          "simulations": 16,
+          "incomplete": 0,
+          "opponent_choices": 86
+        }
+      },
+      {
+        "seat": 1,
+        "variant": "s3",
+        "passed": true,
+        "telemetry": {
+          "searches": 2,
+          "confirmed": 2,
+          "incomplete": 0,
+          "proposed": 28,
+          "pilot_worlds": 0,
+          "fresh_worlds": 4,
+          "reply_choices": 338,
+          "tree_simulations": 4,
+          "tree_nodes": 4,
+          "future_root_turns": 4,
+          "leaf_depths": {
+            "1": 12
+          },
+          "unconfirmed_incumbents": 0
+        }
+      },
+      {
+        "seat": 2,
+        "variant": "r4",
+        "passed": true,
+        "telemetry": {
+          "searches": 2,
+          "simulations": 16,
+          "incomplete": 0,
+          "opponent_choices": 66
+        }
+      },
+      {
+        "seat": 2,
+        "variant": "s3",
+        "passed": true,
+        "telemetry": {
+          "searches": 2,
+          "confirmed": 2,
+          "incomplete": 0,
+          "proposed": 28,
+          "pilot_worlds": 0,
+          "fresh_worlds": 4,
+          "reply_choices": 330,
+          "tree_simulations": 4,
+          "tree_nodes": 4,
+          "future_root_turns": 4,
+          "leaf_depths": {
+            "1": 12
+          },
+          "unconfirmed_incumbents": 0
+        }
+      },
+      {
+        "seat": 3,
+        "variant": "r4",
+        "passed": true,
+        "telemetry": {
+          "searches": 2,
+          "simulations": 16,
+          "incomplete": 0,
+          "opponent_choices": 72
+        }
+      },
+      {
+        "seat": 3,
+        "variant": "s3",
+        "passed": true,
+        "telemetry": {
+          "searches": 2,
+          "confirmed": 2,
+          "incomplete": 0,
+          "proposed": 28,
+          "pilot_worlds": 0,
+          "fresh_worlds": 4,
+          "reply_choices": 354,
+          "tree_simulations": 4,
+          "tree_nodes": 4,
+          "future_root_turns": 4,
+          "leaf_depths": {
+            "1": 12
+          },
+          "unconfirmed_incumbents": 0
+        }
+      }
+    ],
+    "depth_and_deadline": {
+      "two_future_turns": true,
+      "expired_search_rejected": true,
+      "fresh_confirmation": true,
+      "telemetry": {
+        "searches": 2,
+        "confirmed": 1,
+        "incomplete": 0,
+        "proposed": 31,
+        "pilot_worlds": 0,
+        "fresh_worlds": 2,
+        "reply_choices": 281,
+        "tree_simulations": 2,
+        "tree_nodes": 4,
+        "future_root_turns": 4,
+        "leaf_depths": {
+          "2": 6
+        },
+        "unconfirmed_incumbents": 0
+      }
+    }
+  },
+  "seconds": 460.4529999999795,
+  "promotion": false
+}

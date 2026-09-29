@@ -49,3 +49,25 @@ qualification, substantial self-play training, broad neural-population strength,
 equal-budget search ablations, measured meta-adaptation benefit, calibrated
 personality/difficulty, human enjoyment and trained-model integration in Unity.
 The current game patch and frozen R3 policies were not replaced by this work.
+
+## Qualification transfer repair
+
+The first Git upload normalized the current v3 qualification report to LF, while
+the pool retained its original CRLF byte hash. This was reproduced directly from
+the committed Git blob. Main training rejected that report before creating a run;
+pure-neural smoke training and diagnostic preflight did not exercise admission.
+
+The follow-up preserves report bytes through Git and adds
+`scripts/check_qualification_reports.py --repair-line-endings`, which restores
+only newline variants matching the existing SHA-256 exactly. The distribution
+check now covers the report and all six admission checks. Frozen bank code,
+qualification pins, model weights and trainer signatures remain unchanged.
+
+All **23 tests** passed (17 existing plus six transfer regressions), including
+conversion in both directions, repeatable repair, rejection of edited content
+and conflicting fingerprints, and Git clean-filter checks with `core.autocrlf`
+set to `true`, `false` and `input`. All **54 distribution paths** passed checks.
+These are local tests reproducing Linux checkout bytes, not a claim that this
+agent ran the repair on the lab. The user reports that conda installation,
+runtime tests and CUDA smoke training passed there. Updated conda commands,
+repair instructions and staged training budgets are in the lab guide.

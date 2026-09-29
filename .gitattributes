@@ -12,6 +12,8 @@
 
 # Frozen original-source snapshots must retain their recorded bytes on every host.
 training/opponents/bank/**/source/** -text
+# Admission pins report bytes, including the original newline convention.
+training/opponents/evaluations/**/report.json -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
 # Contract/profile files are byte-pinned; preserve the same bytes on the lab.
 configs/**/*.json -text
 training/models/**/*.pt -text

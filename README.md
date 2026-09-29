@@ -25,10 +25,16 @@ adds self-play-first population PPO, neural search distillation, diverse-opponen
 evaluation and optional Reptile meta-RL. Strong neural playing skill and calibrated
 difficulty remain to be demonstrated through substantial training and evaluation.
 
+[R4/R5 search experiments](docs/R4_R5_SEARCH_LAB.md) add the OpenSpiel adapter and
+POMCP-inspired future-observation search alongside Step 5. Separate correctness
+gates, frozen-checkpoint comparisons and promotion records preserve the current
+training run. Implementation does not establish a search advantage.
+
 ## Included work
 
 - [Feasibility review](ai-research/REVIEW.md)
 - [Model, hardware, personality and difficulty design](ai-research/DESIGN.md)
+- [Post–Step 5 personality fine-tuning, learned style discovery and difficulty calibration plan](ai-research/PERSONALITIES_AND_DIFFICULTY_PLAN.md)
 - [Turn planning, hidden information and thinking-time experiments](ai-research/SEARCH_DESIGN.md)
 - [Daiyu AI and OpenSpiel reference integration plan](ai-research/REFERENCE_INTEGRATION.md)
 - [Legacy Hard improvements and six tactical benchmark profiles](ai-research/LEGACY_HARD_AI_PLAN.md)
@@ -43,6 +49,8 @@ difficulty remain to be demonstrated through substantial training and evaluation
 - [R3 H0–H5 exit checks and qualification](docs/R3_EXIT_CHECKS.md)
 - [Step 5 self-play, search, meta-RL and lab transfer instructions](docs/STEP5_LAB_TRAINING.md)
 - [Step 5 executed local checks and unqualified smoke weights](docs/STEP5_EXIT_CHECKS.md)
+- [R4/R5 additional search experiments and lab instructions](docs/R4_R5_SEARCH_LAB.md)
+- [R4/R5 executed exit checks](docs/R4_R5_EXIT_CHECKS.md)
 - [Rules audit and proposed fixes](rules-audit/BUG_FIX_PLAN.md)
 - Original PowerShell/C# probe scripts under `ai-research/` and `rules-audit/`
 

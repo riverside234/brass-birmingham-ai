@@ -7,7 +7,9 @@ import sys
 root = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(root / 'src'))
 from brass_ai.bank import load_bank, read, sha, require
+from check_qualification_reports import check_reports
 
+qualification = check_reports(root)
 distribution = read(root / 'training/runtime/distribution.json')
 manifest = load_bank(root, distribution['bank'])
 paths = [item['path'] for item in distribution['assets']]
@@ -21,6 +23,9 @@ paths += ['training/opponents/bank/' + distribution['bank'] + '/manifest.json']
 paths += ['training/opponents/bank/' + distribution['bank'] + '/source/' + p
           for p in manifest['payload']['source_files']]
 paths += [p.relative_to(root).as_posix() for p in (root / 'training/models/releases').glob('*') if p.is_file()]
+pool = read(root / 'training/opponents/pool.json')
+paths += sorted({entry['qualification'] for purpose in ('training', 'evaluation')
+                 for entry in pool[purpose].values()})
 for item in distribution['assets']:
     require(sha(root / item['path']) == item['sha256'], 'Distributed asset hash mismatch')
 for path in paths:
@@ -33,4 +38,5 @@ require(check.returncode == 0, 'Private runtime bundle must remain ignored')
 tracked = subprocess.run(['git', 'ls-files', '--', *paths], cwd=root, text=True, capture_output=True, check=True)
 print(json.dumps(dict(passed=True, required_paths=len(paths),
                      already_tracked=len(tracked.stdout.splitlines()),
-                     private_bundle_ignored=True, bank=distribution['bank']), indent=2))
+                     private_bundle_ignored=True, bank=distribution['bank'],
+                     qualification=qualification), indent=2))

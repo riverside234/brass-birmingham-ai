@@ -1,10 +1,10 @@
 # Search design for four-player Brass
 
-Revision: 27 September 2026. Proposed architecture and experiments; no search implementation, trained checkpoint, or laptop search benchmark is claimed here. This specifies the thinking-time recommendation in [DESIGN.md](DESIGN.md) and the search milestones in [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md).
+Revision: 29 September 2026. Behavioral specification for implemented S1/S2 and the additional [R4/R5 experiments](../docs/R4_R5_SEARCH_LAB.md). This specifies the thinking-time recommendation in [DESIGN.md](DESIGN.md) and the search milestones in [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md). Implementation and [local correctness evidence](../docs/R4_R5_EXIT_CHECKS.md) do not establish trained strength or a laptop search advantage.
 
 Implementation references are now selected: **Daiyu AI for the Brass policy/search/training scaffold, with OpenSpiel for multiplayer backup, information-state interfaces and algorithm comparisons.** [REFERENCE_INTEGRATION.md](REFERENCE_INTEGRATION.md) pins the source revisions and maps the required adaptations.
 
-This document remains the planner's behavioral specification. The [unified requirements checklist](IMPLEMENTATION_PLAN.md#unified-requirements-from-the-earlier-search-design) maps its earlier recommendations to delivery stages and acceptance checks. The optional OpenSpiel comparison and the POMCP-inspired S3 experiment are independent branches; both retain the complete-turn, information, personality and time-budget requirements below.
+This document remains the planner's behavioral specification. The [unified requirements checklist](IMPLEMENTATION_PLAN.md#unified-requirements-from-the-earlier-search-design) maps its earlier recommendations to delivery stages and acceptance checks. The required additional OpenSpiel comparison and POMCP-inspired S3 experiment are independent branches alongside current training; both retain the information, personality and time-budget requirements below. S3 uses complete-turn tree actions; R4 uses observation-keyed semantic choices without conditioning a continuation on unobserved cards.
 
 ## Decision
 
@@ -14,7 +14,7 @@ The first implementation is not unrestricted four-player minimax, perfect-inform
 
 Approximately two million parameters remains the first neural experiment. More thinking time should buy better comparisons, additional plausible scenarios and selective depth. It must not merely repeat the same narrow plan against the same imagined opponents. Whether this beats a larger network without search remains an experimental question.
 
-Daiyu already supports four players, but some search values are approximated from a root scalar; replace those paths with explicit four-seat predictions. Adapt its candidate scorer and batched evaluation loop to our complete-turn planner and planned rules host, subject to the host's verification gates. OpenSpiel is a companion reference, not a replacement rules engine. Its ordinary n-player MCTS supplies backup mechanics; its ISMCTS supplies information-state/resampling hooks for a separately tested comparison branch. S2 remains the first practical target, and a full OpenSpiel adapter is optional laboratory work rather than a deployment dependency.
+Daiyu already supports four players, but some search values are approximated from a root scalar; replace those paths with explicit four-seat predictions. Adapt its candidate scorer and batched evaluation loop to our complete-turn planner and rules host, subject to the host's verification gates. OpenSpiel is a companion reference, not a replacement rules engine. Its ordinary n-player MCTS supplies backup mechanics; its ISMCTS supplies information-state/resampling hooks for the separately tested R4 branch. S2 remains the initial baseline. The full OpenSpiel adapter is now implemented as required additional laboratory work; the laptop package need not depend on it.
 
 ## Why the search should follow turns and observations
 
@@ -160,6 +160,10 @@ Reuse canonical actor observations and valid deterministic prefixes where proven
 
 Search should help a Supplier pursue a sensible supply plan and a Networker exploit useful connections, while still evaluating their alternatives. Preserve an explicit soft intent across turns, such as an industry sequence or network area. Train with that context and save it per seat. Reconsider it when conditions change; a personality does not justify continuing a clearly failed investment.
 
+The [post–Step 5 personality plan](PERSONALITIES_AND_DIFFICULTY_PLAN.md) adds a shared auxiliary goal head to the completed self-trained model and specifies bounded current-root priors: `softmax(legal logits + alpha * goal_alignment)`, mixed with the base prior. Keep unbiased/enabling candidate coverage and the original four-seat value objective. S2 applies the preference to proposals and near-best selection; R4 exposes a PUCT prior; the current S3 implementation is UCT, so root PUCT must be an explicit new variant. Extra goal bias does not itself guarantee a tactical veto or stronger play.
+
+Freeze root goal/style context across hidden-world samples, keep opponents' private contexts separate, and use newly received observations only at legitimate future decisions. Preserve the same current-turn plan across samples. Complete-plan alignment must not reward a plan merely for having more semantic sub-choices. Compare against zero bias at the same whole-turn cap and preserve a legal complete incumbent. Learned AURORA-style archive profiles use these same search contracts; offline trajectory coordinates never reveal future behavior to the online policy.
+
 Separate estimated game quality from bounded style preferences. After adequate comparison, form a set of credible near-best turns, then select within it using persistent style, measured risk preference and modest seeded variation. Define the acceptable estimated utility gap separately for each difficulty and calibrate it through games; there is no universal numerical threshold before the value model is calibrated.
 
 Independent seeds provide variety, but random blunders are not the main mechanism. Maintain exploration during training and stylistic variation during play. Require style diversity to survive additional search: if all Hard personalities converge to indistinguishable choices, adjust their proposals, training data or near-best selection instead of simply adding more randomness.
@@ -231,4 +235,4 @@ Targeted checks in addition to the legal-interface and game-bridge tests:
 12. Daiyu-derived model/loss/replay/export paths agree on four-seat targets; no equal redistribution of non-root win mass or two-player example configuration survives in production training.
 13. OpenSpiel callbacks never disclose private chance outcomes; clones, semantic action IDs and resampled information states satisfy the shared contract before full-game comparisons.
 
-Deliver S0/S1 and instrumentation first, S2 next, and S3 only after its fixed-budget comparison succeeds. This makes the extra thinking time an explicitly testable feature rather than an assumption about model size or tree depth.
+Deliver S0/S1 and instrumentation first, S2 next, and implement S3 as the required additional experiment after those interfaces settle. Promote S3 only after its fixed-budget comparison succeeds. This makes extra thinking time a testable feature rather than an assumption about model size or tree depth.
