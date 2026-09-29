@@ -9,6 +9,26 @@ from brass_ai.learning.training import prepared, losses
 from .policy import exploration_distribution
 
 
+def bounded_batches(data, batch_size, max_candidate_cells=None):
+    """Bound padded action tensors without dropping/reordering any decisions."""
+    require(type(batch_size) is int and batch_size > 0, 'Invalid minibatch size')
+    require(max_candidate_cells is None or (type(max_candidate_cells) is int and max_candidate_cells > 0),
+            'Invalid candidate-cell limit')
+    start = 0
+    while start < len(data):
+        end, maximum = start, 0
+        while end < len(data) and end - start < batch_size:
+            candidate_max = max(maximum, len(data[end][3].choice_ids))
+            require(max_candidate_cells is None or candidate_max <= max_candidate_cells,
+                    'Single position exceeds training candidate capacity; increase max_candidate_cells')
+            if end > start and max_candidate_cells is not None and (end - start + 1) * candidate_max > max_candidate_cells:
+                break
+            maximum = candidate_max
+            end += 1
+        yield start, data[start:end]
+        start = end
+
+
 def behavior_probabilities(logits, rows, behavior):
     probabilities = torch.softmax(logits / behavior.temperature, -1)
     q = torch.zeros_like(probabilities)
@@ -20,7 +40,7 @@ def behavior_probabilities(logits, rows, behavior):
 
 
 def ppo_update(model, optimizer, games, behavior, *, epochs=3, batch_size=32,
-               clip=.2, entropy_weight=.01):
+               clip=.2, entropy_weight=.01, max_candidate_cells=None):
     """One frozen collection, several clipped epochs; only learner actor rows.
 
     Terminal rewards are each seat's own win share. No team reward, rule-policy
@@ -37,8 +57,7 @@ def ppo_update(model, optimizer, games, behavior, *, epochs=3, batch_size=32,
     advantages = []
     model.eval()
     with torch.no_grad():
-        for start in range(0, len(data), batch_size):
-            batch = data[start:start + batch_size]
+        for start, batch in bounded_batches(data, batch_size, max_candidate_cells):
             rows = [e[0] for e in batch]
             output = model(*collate([e[3] for e in batch], device))
             p = behavior_probabilities(output[0], rows, behavior)
@@ -49,12 +68,17 @@ def ppo_update(model, optimizer, games, behavior, *, epochs=3, batch_size=32,
             for i, (row, target, _, _) in enumerate(batch):
                 advantages.append(target['win_share'][row['seat']] - float(output[1][i, row['seat']]))
     metrics = []
+    batch_metrics = dict(microbatches_per_epoch=0, max_batch_positions=0, max_padded_candidate_cells=0)
     model.train()
     for epoch in range(epochs):
         optimizer.zero_grad(set_to_none=True)
         totals = dict(actor=0.0, value=0.0, entropy=0.0, approx_kl=0.0)
-        for start in range(0, len(data), batch_size):
-            batch = data[start:start + batch_size]
+        for start, batch in bounded_batches(data, batch_size, max_candidate_cells):
+            if epoch == 0:
+                batch_metrics['microbatches_per_epoch'] += 1
+                batch_metrics['max_batch_positions'] = max(batch_metrics['max_batch_positions'], len(batch))
+                cells = len(batch) * max(len(e[3].choice_ids) for e in batch)
+                batch_metrics['max_padded_candidate_cells'] = max(batch_metrics['max_padded_candidate_cells'], cells)
             rows, targets = [e[0] for e in batch], [e[1] for e in batch]
             output = model(*collate([e[3] for e in batch], device))
             p = behavior_probabilities(output[0], rows, behavior)
@@ -74,10 +98,11 @@ def ppo_update(model, optimizer, games, behavior, *, epochs=3, batch_size=32,
         norm = torch.nn.utils.clip_grad_norm_(model.parameters(), 5, error_if_nonfinite=True)
         optimizer.step()
         metrics.append(dict(epoch=epoch, **totals, gradient_norm=float(norm)))
-    return dict(epochs=metrics, learner_decisions=len(data), learner_trajectories=trajectories)
+    return dict(epochs=metrics, learner_decisions=len(data), learner_trajectories=trajectories,
+                optimizer_steps=epochs, minibatch_size=batch_size, **batch_metrics)
 
 
-def distill_update(model, optimizer, games, *, steps=4, batch_size=32, weight=.25):
+def distill_update(model, optimizer, games, *, steps=4, batch_size=32, weight=.25, max_candidate_cells=None):
     require(all(g['split'] == 'train' for g in games), 'Evaluation teacher data is held out')
     require(0 < weight <= 1 and steps > 0, 'Invalid distillation configuration')
     data = [e for e in prepared(games) if e[0]['teacher'] and e[0]['teacher']['confidence'] > 0]
@@ -88,14 +113,17 @@ def distill_update(model, optimizer, games, *, steps=4, batch_size=32, weight=.2
     model.train()
     for _ in range(steps):
         batch = [data[i] for i in torch.randint(len(data), (min(batch_size, len(data)),)).tolist()]
-        output = model(*collate([e[3] for e in batch], device))
-        terms = losses(output, [e[0] for e in batch], [e[1] for e in batch])
-        total = weight * terms['teacher'].mean() + terms['value'].mean()
         optimizer.zero_grad(set_to_none=True)
-        total.backward()
+        total = 0.0
+        for _, part in bounded_batches(batch, batch_size, max_candidate_cells):
+            output = model(*collate([e[3] for e in part], device))
+            terms = losses(output, [e[0] for e in part], [e[1] for e in part])
+            loss = (weight * terms['teacher'].sum() + terms['value'].sum()) / len(batch)
+            loss.backward()
+            total += float(loss.detach())
         torch.nn.utils.clip_grad_norm_(model.parameters(), 5, error_if_nonfinite=True)
         optimizer.step()
-        metrics.append(float(total.detach()))
+        metrics.append(total)
     return dict(updated=True, teacher_rows=len(data), losses=metrics)
 
 

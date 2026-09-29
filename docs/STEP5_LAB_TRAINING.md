@@ -181,11 +181,18 @@ Inspect both iteration reports: all games must have completed; gradients and
 losses must be finite; learner trajectories and context/build counts should be
 present. GPU utilization can be modest because legal moves, IPC and rules
 simulation run on the CPU. More GPU memory alone does not increase game throughput.
-The first implementation batches inference across a small group of game workers
-and bounds replay memory to an iteration; it is not a distributed actor service.
-Measure seconds per iteration before increasing workers or games.
+The current main preset scales this to 32 concurrent rule hosts and 320 games per
+iteration, with separate inference/training batch limits. See the
+[64-CPU lab scaling guide](STEP5_SCALING.md) for settings, bottleneck measurements
+and migration from your existing trained run. The small smoke remains unchanged.
 
 ## Run and resume the main population trainer
+
+The default `configs/step5/lab.json` now uses the larger workload. The commands
+below create a **new** run. If `main` already contains your earlier experiment,
+use the scaling guide's `--from-run` command to create `main-scaled`, preserving
+its weights, optimizer, historical opponents and next setup seed. Config/source
+signatures deliberately prevent resuming an old run with changed settings.
 
 ```bash
 python /data/not_backed_up/yxu209/ai-training/scripts/step5.py --device cuda train --run /data/not_backed_up/yxu209/ai-training/artifacts/step5/main --initial /data/not_backed_up/yxu209/ai-training/training/models/bootstrap/r2-fresh-medium.pt --iterations 20
@@ -203,30 +210,40 @@ an interrupted update. Do not edit an active run's configuration or learning cod
 the signature deliberately rejects that resume. Start a new run from its last
 checkpoint for an experiment with different settings.
 
-Twenty iterations are an initial experiment, not a training-duration prescription
-or strength guarantee. Check progress against older neural generations. Preserve
+Twenty iterations now collect 6,400 regular games. Start with two when first
+measuring the larger preset. This is not a strength guarantee. Check progress against older neural generations. Preserve
 older agents with distinct behavior even if they are not the current champion.
 The main loop freezes candidates; it does not automatically label each new
 generation stronger.
 
 ### Budget for a stronger opponent
 
-My initial **planning budget is 5,000 total ordinary-training iterations**, with
-funding released in stages rather than one unattended run. At the unchanged
-20-game default that is **100,000 regular four-player games**, plus **1,996 search
-games** under the current schedule. This is a project estimate, not an empirically
-established threshold for strong Brass play. More iterations cannot by themselves
-guarantee strength or repair a training loop that is not learning.
+The earlier estimate of 5,000 iterations applied to the **old 20-game preset**:
+100,000 regular games plus 1,996 search games. That preset is preserved in
+`configs/step5/lab-small.json`. The new default has 320 regular games per iteration;
+5,000 of these would mean 1.6 million regular games. Use staged game/update budgets
+rather than carrying the old iteration count over automatically.
+
+The existing PPO algorithm accumulates gradients over a complete epoch, then
+takes one optimizer step. Larger `minibatch_size` improves memory/throughput;
+larger `games_per_iteration` changes the data per update. Equal total games do not
+imply equal learning. Compare learner decisions, optimizer steps, validation
+results and wall time as well as game counts. A substantial initial scaled budget
+is approximately 313–500 iterations (100,160–160,000 additional regular games),
+released in stages below and extended only while measured play improves.
 
 | Total completed iterations | Regular games | Extra search games | Decision at this point |
 | --- | --- | --- | --- |
-| 100 | 2,000 | 36 | Check that economic play, scores and performance against early neural snapshots improve |
-| 500 | 10,000 | 196 | Require consistent progress against multiple frozen neural references; inspect Pottery and other industry use |
-| 2,000 | 40,000 | 796 | Run larger held-out comparisons, search ablations and sample games for coherent play |
-| 5,000 | 100,000 | 1,996 | Initial substantial training budget; assess strength and human enjoyment before extending |
+| 2 | 640 | 0 | Measure fresh collection/update throughput and memory |
+| 10 | 3,200 | 0 | Check economics, scores and early checkpoint progress |
+| 50 | 16,000 | 64 | Compare frozen neural references and inspect industry use/search labels |
+| 200 | 64,000 | 304 | Broader held-out comparisons and coherent-play checks |
+| 313 | 100,160 | 488 | Substantial training-data budget; assess learning before extending |
+| 500 | 160,000 | 784 | Extend only if useful progress continues |
 
-Evaluate every 100 iterations initially, then every 250–500 once progress is
-clear. Use a stable reference panel and the same prespecified validation setups
+These counts start at the new run's iteration zero; inherited training remains
+recorded in its origin/history. Evaluate every 10–25 scaled iterations initially,
+then every 50 once progress is clear. Use a stable reference panel and the same prespecified validation setups
 to compare checkpoints; keep final-test setups unused until the end. A five-setup
 evaluation is a trend check. Use the existing 30-setup, four-seat promotion gate
 for release candidates (120 games per lineup). Stock/v3 wins alone are insufficient;
@@ -235,11 +252,10 @@ If progress stalls across several checkpoints, inspect value calibration,
 exploration, complete-game behavior and search-label quality before increasing
 the budget. Evaluate search-enabled and plain policy checkpoints separately.
 
-`--iterations` means **additional iterations**, not a target total. After your
-first 20 finish, `--iterations 80` reaches 100. Then use 400 to reach 500, 1,500 to
-reach 2,000, and 3,000 to reach 5,000, evaluating between stages. Omit `--initial`
-on every resume. Keep the configuration unchanged within a run; a larger batch
-or worker-count experiment should use a new run and its last checkpoint.
+`--iterations` means **additional iterations**, not a target total. After two
+scaled iterations, `--iterations 8` reaches ten. Omit `--initial` and `--from-run`
+on every normal resume. Keep the configuration unchanged within a run; use a new
+run and `--from-run` for another batch/worker-count experiment.
 
 Measure your lab's iteration reports for a time estimate. Once search has started,
 one search iteration plus four ordinary iterations is a representative cycle;
@@ -247,15 +263,16 @@ use their combined seconds divided by five, multiplied by the remaining count.
 Search can dominate runtime even with a fast GPU. The trainer also retains every
 optimizer checkpoint and full replay: budget storage from measured bytes per
 iteration, and do not delete history checkpoints while a live run references them.
-The local medium-model optimizer checkpoints are about 22.8 MB each, so 5,000
-generations alone take approximately 114 GB before replay and evaluation data.
+The local medium-model optimizer checkpoints are about 22.8 MB each, so 500
+generations alone take approximately 11.4 GB before replay and evaluation data.
+Larger game collections also increase replay and in-memory preparation costs.
 
 Reserve about **10–20% additional compute** for evaluation and independent-seed
 replications. For early reproducibility checks, run two or three shorter
 independent seeds before committing the full extension. RL training can vary
 substantially with seed; see [Spinning Up's experimental guidance](https://spinningup.openai.com/en/latest/spinningup/spinningup.html).
-Consider 10,000–20,000 total iterations only if the 5,000-iteration run is still
-making measured progress. Start meta-RL after the neural population is useful;
+Consider further scaled iterations only while validation shows useful progress.
+Start meta-RL after the neural population is useful;
 meta-RL outer iterations have a different workload and are not included in these
 ordinary-training counts.
 
@@ -263,7 +280,9 @@ ordinary-training counts.
 
 The default starts additional search self-play at zero-based iteration 10, then
 every five iterations. It searches every fourth turn of each seat and collects
-two extra games per search batch. Each search has one 30-second turn allowance;
+eight extra games through eight independent search-game workers in the larger
+preset (the preserved small preset uses two games and one search worker). Each
+search has one 30-second turn allowance;
 the returned plan covers both ordinary actions when two are available. A timeout
 uses the neural fallback and produces **no fabricated teacher label**. Inspect
 `confirmed`, `incomplete`, teacher-row counts and distillation's `updated` field.
@@ -292,15 +311,20 @@ make search a poor teacher, which the reports must expose.
 
 Use fresh validation setups, rotate the candidate through every seat, and retain
 the same frozen references across repeated comparisons. The example below assumes
-the named generations exist after the main run. Five setups means 20 games **per
-lineup**, not 20 total. With all four lineups it is 80 games. Start with one setup
-and omit `--include-legacy` for a small wiring check.
+the named generations exist after the main run. Evaluation now defaults to the
+dedicated `configs/step5/evaluation.json`: **64 setups, four seat rotations,
+32 parallel neural simulators, inference batches up to 64, and eight independent
+game workers for legacy/search lineups**. With two distinct neural references and
+legacy enabled, this is **1,024 games across four lineups**. See the
+[evaluation scaling guide](STEP5_EVALUATION_SCALING.md) for configuration and resume
+details. Append `--setups 4 --no-include-legacy` with a separate output directory
+for a 32-game progress check, or one setup and one reference for a four-game wiring check.
 
 ```bash
-python /data/not_backed_up/yxu209/ai-training/scripts/step5.py --device cuda evaluate --candidate /data/not_backed_up/yxu209/ai-training/artifacts/step5/main/generation-0020.pt --references /data/not_backed_up/yxu209/ai-training/artifacts/step5/main/generation-0015.pt /data/not_backed_up/yxu209/ai-training/artifacts/step5/main/generation-0010.pt --output /data/not_backed_up/yxu209/ai-training/artifacts/step5/evaluation-g20 --setups 5 --include-legacy
+python /data/not_backed_up/yxu209/ai-training/scripts/step5.py --device cuda evaluate --candidate /data/not_backed_up/yxu209/ai-training/artifacts/step5/main/generation-0020.pt --references /data/not_backed_up/yxu209/ai-training/artifacts/step5/main/generation-0015.pt /data/not_backed_up/yxu209/ai-training/artifacts/step5/main/generation-0010.pt --output /data/not_backed_up/yxu209/ai-training/artifacts/step5/evaluation-scaled-g20
 
 # The same candidate with the learned Pottery context, without forced Pottery moves.
-python /data/not_backed_up/yxu209/ai-training/scripts/step5.py --device cuda evaluate --candidate /data/not_backed_up/yxu209/ai-training/artifacts/step5/main/generation-0020.pt --references /data/not_backed_up/yxu209/ai-training/artifacts/step5/main/generation-0015.pt --output /data/not_backed_up/yxu209/ai-training/artifacts/step5/evaluation-g20-pottery --setups 5 --focus Pottery
+python /data/not_backed_up/yxu209/ai-training/scripts/step5.py --device cuda evaluate --candidate /data/not_backed_up/yxu209/ai-training/artifacts/step5/main/generation-0020.pt --references /data/not_backed_up/yxu209/ai-training/artifacts/step5/main/generation-0015.pt /data/not_backed_up/yxu209/ai-training/artifacts/step5/main/generation-0010.pt --output /data/not_backed_up/yxu209/ai-training/artifacts/step5/evaluation-scaled-g20-pottery --focus Pottery
 ```
 
 The four lineups are recent neural opponents, mixed neural history, mixed admitted
@@ -319,12 +343,12 @@ Pottery-collapse warning. A win over fresh initialization or v3 alone is insuffi
 These gates still do not certify human-level or enjoyable play.
 
 ```bash
-python /data/not_backed_up/yxu209/ai-training/scripts/step5.py promote --checkpoint /data/not_backed_up/yxu209/ai-training/artifacts/step5/main/generation-0020.pt --report /data/not_backed_up/yxu209/ai-training/artifacts/step5/evaluation-g20/report.json
+python /data/not_backed_up/yxu209/ai-training/scripts/step5.py promote --checkpoint /data/not_backed_up/yxu209/ai-training/artifacts/step5/main/generation-0020.pt --report /data/not_backed_up/yxu209/ai-training/artifacts/step5/evaluation-scaled-g20/report.json
 ```
 
-The five-setup example deliberately will not pass that promotion gate. Increase
-the prespecified setup count for a real promotion attempt; do not keep adding
-games until one favorable interval appears.
+The 64-setup default meets the sample-count requirement; the other promotion gates
+must still pass. Small progress checks cannot qualify promotion. Prespecify the
+setup count; do not keep adding games until one favorable interval appears.
 
 ## Optional meta-RL: learn to adapt between games
 

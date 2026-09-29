@@ -27,7 +27,8 @@ def adapt_task(root, directory, initialization, opponent_models, config, *, seed
     require(inner_steps >= 2 and support_games > 0 and query_games > 0,
             'Reptile requires at least two inner updates and nonempty support/query games')
     adapted = copy.deepcopy(initialization)
-    opponents = [NeuralPolicy(m, device, exploration=.05, focus='neutral') for m in opponent_models]
+    inference = dict(batch_size=config['batch_size'], max_candidate_cells=config.get('max_candidate_cells', 8192))
+    opponents = [NeuralPolicy(m, device, exploration=.05, focus='neutral', **inference) for m in opponent_models]
     require(len(opponents) == 3, 'Task requires three independently motivated opponents')
     task_id = digest([p.evaluator.model_id for p in opponents])
     host = project_path(root, config['host'])
@@ -36,7 +37,7 @@ def adapt_task(root, directory, initialization, opponent_models, config, *, seed
     require(not set(support_seeds) & set(query_seeds), 'Support/query setup leakage')
 
     def query(model, label):
-        policy = NeuralPolicy(model, device, exploration=0, focus='neutral')
+        policy = NeuralPolicy(model, device, exploration=0, focus='neutral', **inference)
         table = [policy] + opponents
         provenance = dict(producer='step5/1.0.0', purpose='evaluation', role=label,
                           task=task_id, seeds=query_seeds, sampling_seed=seed + 11,
@@ -51,7 +52,7 @@ def adapt_task(root, directory, initialization, opponent_models, config, *, seed
     optimizer = torch.optim.AdamW(adapted.parameters(), lr=config['learning_rate'])
     updates = []
     for inner in range(inner_steps):
-        policy = NeuralPolicy(adapted, device, exploration=config['exploration'], focus='neutral')
+        policy = NeuralPolicy(adapted, device, exploration=config['exploration'], focus='neutral', **inference)
         seeds = support_seeds[inner * support_games:(inner+1) * support_games]
         table = [policy] + opponents
         # Meta-evaluation support is disposable adaptation data and cannot be
@@ -62,7 +63,9 @@ def adapt_task(root, directory, initialization, opponent_models, config, *, seed
         games = collect_cached(root, directory / f'support-{inner}.jsonl.gz', host, seeds,
                                table, config, provenance, mono=mono)
         updates.append(ppo_update(adapted, optimizer, games, policy, epochs=config['ppo_epochs'],
-                                  batch_size=config['batch_size'], entropy_weight=config['entropy_weight']))
+                                  batch_size=config.get('minibatch_size', config['batch_size']),
+                                  entropy_weight=config['entropy_weight'],
+                                  max_candidate_cells=config.get('max_candidate_cells')))
     after = query(adapted, 'query-after')
     report = dict(task_id=task_id, opponent_ids=[p.evaluator.model_id for p in opponents],
                   support_seeds=support_seeds, query_seeds=query_seeds, inner_updates=updates,

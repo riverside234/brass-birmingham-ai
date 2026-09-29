@@ -1,5 +1,9 @@
 # R4 / R5 exit checks
 
+This page records the original implementation's source identity. The subsequent
+[execution/config scaling update](R4_R5_SCALING_CHECKS.md) has separate focused
+evidence; this historical record does not qualify the updated source for a lab comparison.
+
 Local verification: 29 September 2026, Windows, Python 3.12, PyTorch 2.8.0 CPU,
 OpenSpiel 2.0.2 and the preserved rule-patch 1.1.0 runtime. This is the additional
 experiment delivery from item 6 of the [implementation plan](../ai-research/IMPLEMENTATION_PLAN.md).

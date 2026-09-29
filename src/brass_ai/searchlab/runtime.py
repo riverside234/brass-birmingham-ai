@@ -33,7 +33,8 @@ def implementation(root):
     root=Path(root)
     paths=sorted((root/'src/brass_ai/searchlab').glob('*.py'))+sorted((root/'src/BrassSearchHost').glob('*.cs'))
     paths += [root/'scripts/build-search-host.py',root/'scripts/r4r5.py',
-              root/'scripts/verify-searchlab.py',root/'configs/searchlab/experiment.json']
+              root/'scripts/verify-searchlab.py',root/'scripts/smoke-searchlab.py']
+    paths += sorted((root/'configs/searchlab').glob('*.json'))
     paths += sorted((root/'tests/SearchLab').glob('*.py'))
     return digest({p.relative_to(root).as_posix():p.read_text(encoding='utf-8-sig').replace('\r\n','\n') for p in paths})
 

@@ -50,10 +50,11 @@ class NeuralPolicy:
     kind = 'model'
 
     def __init__(self, model, device='cpu', *, exploration=.1, temperature=1.0,
-                 focus='mixed', batch_size=32):
+                 focus='mixed', batch_size=32, max_candidate_cells=8192):
         require(0 <= exploration <= .5 and .1 <= temperature <= 3, 'Invalid behavior distribution')
         require(focus in ('mixed', 'neutral') + INDUSTRIES, 'Invalid context mode')
-        self.evaluator = Evaluator(model, device=device, batch_size=batch_size)
+        self.evaluator = Evaluator(model, device=device, batch_size=batch_size,
+                                   max_candidate_cells=max_candidate_cells)
         self.exploration, self.temperature, self.focus = exploration, temperature, focus
         self.contexts = weakref.WeakKeyDictionary()
         self.context_counter, self.context_offset = 0, None

@@ -9,14 +9,14 @@ import torch
 from brass_ai.learning.contracts import LAB_ROOT, project_path, read_json, require
 from .assets import export_assets, import_runtime, preflight, require_preflight
 from .league import train, validate_config
-from .evaluation import evaluate, promote
+from .evaluation import evaluate, promote, validate_evaluation_config
 from .meta import meta_train, meta_evaluate
 
 
 def parser():
     p = argparse.ArgumentParser(description='Four-player self-play-first neural training and optional Reptile meta-RL')
     p.add_argument('--root', type=Path, default=LAB_ROOT)
-    p.add_argument('--config', default='configs/step5/lab.json')
+    p.add_argument('--config', help='Defaults to configs/step5/evaluation.json for evaluate, otherwise configs/step5/lab.json')
     p.add_argument('--device', choices=['cpu', 'cuda'], default='cpu')
     p.add_argument('--mono')
     sub = p.add_subparsers(dest='command', required=True)
@@ -25,17 +25,20 @@ def parser():
     check = sub.add_parser('preflight'); check.add_argument('--record-parity', action='store_true')
     run = sub.add_parser('train')
     run.add_argument('--run', default='artifacts/step5/selfplay')
-    run.add_argument('--initial'); run.add_argument('--iterations', type=int, default=1)
+    initialization = run.add_mutually_exclusive_group()
+    initialization.add_argument('--initial')
+    initialization.add_argument('--from-run', help='Fork last committed weights, optimizer, history and setup cursor into a NEW run')
+    run.add_argument('--iterations', type=int, default=1)
     evaluation = sub.add_parser('evaluate')
     evaluation.add_argument('--candidate', required=True)
     evaluation.add_argument('--references', nargs='+', required=True)
     evaluation.add_argument('--output', required=True)
-    evaluation.add_argument('--setups', type=int, default=5)
-    evaluation.add_argument('--seed', type=int, default=910000)
-    evaluation.add_argument('--partition', choices=['validation', 'test'], default='validation')
-    evaluation.add_argument('--include-legacy', action='store_true')
-    evaluation.add_argument('--search', action='store_true')
-    evaluation.add_argument('--focus', default='neutral')
+    evaluation.add_argument('--setups', type=int)
+    evaluation.add_argument('--seed', type=int)
+    evaluation.add_argument('--partition', choices=['validation', 'test'])
+    evaluation.add_argument('--include-legacy', action=argparse.BooleanOptionalAction, default=None)
+    evaluation.add_argument('--search', action=argparse.BooleanOptionalAction, default=None)
+    evaluation.add_argument('--focus')
     meta = sub.add_parser('meta-train')
     meta.add_argument('--initial', required=True); meta.add_argument('--references', nargs='+', required=True)
     meta.add_argument('--run', default='artifacts/step5/meta')
@@ -58,7 +61,12 @@ def main(argv=None):
     require(a.root.is_absolute(), 'Pass an absolute --root on this platform')
     root = a.root.resolve()
     require(a.device != 'cuda' or torch.cuda.is_available(), 'CUDA requested but unavailable')
-    config = validate_config(read_json(project_path(root, a.config)))
+    default_config = 'configs/step5/evaluation.json' if a.command == 'evaluate' else 'configs/step5/lab.json'
+    config = read_json(project_path(root, a.config or default_config))
+    if a.command == 'evaluate' and config.get('format') == 'step5-evaluation-config/1.0.0':
+        validate_evaluation_config(config)
+    else:
+        validate_config(config)
     torch.set_num_threads(config['threads'])
     if a.command == 'assets':
         result = export_assets(root, bundle=a.bundle)
@@ -71,7 +79,8 @@ def main(argv=None):
     else:
         require_preflight(root)
         if a.command == 'train':
-            result = train(root, a.run, config, iterations=a.iterations, device=a.device, initial=a.initial, mono=a.mono)
+            result = train(root, a.run, config, iterations=a.iterations, device=a.device, initial=a.initial,
+                           mono=a.mono, from_run=a.from_run)
             result.pop('summaries', None)
         elif a.command == 'evaluate':
             result = evaluate(root, a.output, a.candidate, a.references, config, setups=a.setups, seed=a.seed,

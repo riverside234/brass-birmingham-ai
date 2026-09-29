@@ -1,0 +1,16 @@
+{
+  "format": "searchlab-experiment/1.0.0",
+  "players": 4,
+  "default_variants": ["s2", "r4", "s3"],
+  "seconds": 3.0,
+  "validation_reserve_fraction": 0.1,
+  "simulations": 32,
+  "future_turns": 1,
+  "proposals": 12,
+  "finalists": 4,
+  "pilot_samples": 2,
+  "confirmation_samples": 4,
+  "promotion_min_setups": 30,
+  "default_partition": "validation",
+  "threads": 2
+}

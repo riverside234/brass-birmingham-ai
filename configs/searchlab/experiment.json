@@ -1,10 +1,10 @@
 {
-  "format": "searchlab-experiment/1.0.0",
+  "format": "searchlab-experiment/1.1.0",
   "players": 4,
   "default_variants": ["s2", "r4", "s3"],
   "seconds": 3.0,
   "validation_reserve_fraction": 0.1,
-  "simulations": 32,
+  "simulations": 128,
   "future_turns": 1,
   "proposals": 12,
   "finalists": 4,
@@ -12,5 +12,15 @@
   "confirmation_samples": 4,
   "promotion_min_setups": 30,
   "default_partition": "validation",
-  "threads": 2
+  "threads": 4,
+  "setups": 64,
+  "workers": 8,
+  "distill_games": 64,
+  "distill_workers": 8,
+  "batch_size": 64,
+  "minibatch_size": 512,
+  "max_candidate_cells": 131072,
+  "distill_steps": 8,
+  "distill_weight": 0.25,
+  "learning_rate": 0.0001
 }

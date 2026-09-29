@@ -83,8 +83,11 @@ class Evaluator:
         self.device, self.batch_size = device, batch_size
         self.max_candidate_cells = max_candidate_cells
         self.encoder = Encoder()
+        self.telemetry = dict(batches=0, positions=0, max_batch_positions=0,
+                              max_padded_candidate_cells=0, predict_seconds=0.0)
 
     def predict(self, requests):
+        began = time.monotonic()
         require(len({r.request_id for r in requests}) == len(requests), 'Duplicate request ID')
         responses, active = {}, []
         for request in requests:
@@ -118,6 +121,11 @@ class Evaluator:
                 logits, win, placement, vp = self.model(*collate([e for _, e in live], self.device))
                 probabilities = torch.softmax(logits, -1).cpu().numpy()
                 predictions = [a.cpu().numpy() for a in (win, placement, vp)]
+            self.telemetry['batches'] += 1
+            self.telemetry['positions'] += len(live)
+            self.telemetry['max_batch_positions'] = max(self.telemetry['max_batch_positions'], len(live))
+            cells = len(live) * max(len(e.choice_ids) for _, e in live)
+            self.telemetry['max_padded_candidate_cells'] = max(self.telemetry['max_padded_candidate_cells'], cells)
             for i, (request, encoded) in enumerate(live):
                 status = request.stopped() or 'ok'
                 response = self._response(request, status)
@@ -129,6 +137,7 @@ class Evaluator:
                     require(all(np.isfinite(response[k]).all() for k in ('probabilities', 'win_share', 'placement', 'vp')),
                             'Non-finite network output')
                 responses[request.request_id] = response
+        self.telemetry['predict_seconds'] += time.monotonic() - began
         return [responses[r.request_id] for r in requests]
 
     def _response(self, request, status):

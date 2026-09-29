@@ -48,6 +48,8 @@ training run. Implementation does not establish a search advantage.
 - [R3 four-player legacy bank, planner and optional game bridge](docs/R3_LEGACY_BANK.md)
 - [R3 H0–H5 exit checks and qualification](docs/R3_EXIT_CHECKS.md)
 - [Step 5 self-play, search, meta-RL and lab transfer instructions](docs/STEP5_LAB_TRAINING.md)
+- [Step 5 larger lab preset, parallel simulators and continuing an existing trained run](docs/STEP5_SCALING.md)
+- [Step 5 larger evaluation preset, parallel seat rotations and lab commands](docs/STEP5_EVALUATION_SCALING.md)
 - [Step 5 executed local checks and unqualified smoke weights](docs/STEP5_EXIT_CHECKS.md)
 - [R4/R5 additional search experiments and lab instructions](docs/R4_R5_SEARCH_LAB.md)
 - [R4/R5 executed exit checks](docs/R4_R5_EXIT_CHECKS.md)
