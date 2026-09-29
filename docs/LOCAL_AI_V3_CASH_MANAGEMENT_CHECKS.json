@@ -1,0 +1,217 @@
+{
+  "status": "installed-and-verified",
+  "package": "1.4.0",
+  "aiGeneration": 3,
+  "installedUtc": "2026-09-28T19:10:04.7718271Z",
+  "files": [
+    {
+      "name": "BrassPatch.dll",
+      "sha256": "61C79AF0B4DAF4697FE26C7238D65CF00F4E7E0FA65D56FAA11C972D56BF22DF"
+    },
+    {
+      "name": "BrassLegacyAI.dll",
+      "sha256": "7019C4E7E0FFB231980BFE6778420D4E74C8BAB3F3C634ECDB88F173CEE4C2D0"
+    },
+    {
+      "name": "Assembly-CSharp.dll",
+      "sha256": "0FCF229D5373A389AE855FC00F7F93628E5731160B0D90DADA26A05B3322CDCD"
+    }
+  ],
+  "frozenTrainingBank": "bank-804c85204da65824cb9b",
+  "trainingBankChanged": false,
+  "userSavesModifiedDuringUpgrade": false,
+  "evidence": [
+    {
+      "report": "artifacts/patch-build/local-ai-runtime-0.json",
+      "sha256": "29be9f60bc38a613feedf89aef15b3db55077369ed49e50aaf8db419a4a2900d",
+      "checks": 1030
+    },
+    {
+      "report": "artifacts/patch-build/local-ai-cash-regression.json",
+      "sha256": "d8f42b0c3a1ec84f4a85df185748b3a02a29958fcae3d6fe756076fd68483f37",
+      "checks": 294
+    },
+    {
+      "report": "artifacts/patch-build/local-ai-search-gameplay.json",
+      "sha256": "96381905d91669c08328c0d058fec9f14260c327232995d1389b86aec28301df",
+      "checks": 1441
+    },
+    {
+      "report": "artifacts/patch-build/local-ai-tactical.json",
+      "sha256": "3b77f968adb3cbba6495822e5bd2875cf2d7a8d3814f3f15da1baef5f2c4a818",
+      "checks": 68
+    },
+    {
+      "report": "artifacts/patch-build/local-ai-v2-save-compatibility.json",
+      "sha256": "82e78bb4362bdc953799b687986a679f248e8c101a3da4178d4773d593bd4b82",
+      "checks": 48
+    },
+    {
+      "report": "artifacts/patch-build/local-ai-gameplay-live.json",
+      "sha256": "2cbbc94f76d16aa525ef28fee558a7bc68bcf43cee33919915e339065f557268",
+      "checks": 2041
+    },
+    {
+      "report": "artifacts/patch-build/local-ai-cash-matches.json",
+      "sha256": "4bbc04cb24f302fb8dc14e094e2cc0782bff7b713d5bf9c4dd45b9a19fec7e77",
+      "checks": 3208
+    },
+    {
+      "report": "artifacts/patch-build/local-ai-cash-live-budget.json",
+      "sha256": "664fff7b887a120d569ba432738b236ef566e97785aa9dc9200925d3b59caba4",
+      "checks": 578
+    },
+    {
+      "report": "artifacts/patch-build/local-ai-native.json",
+      "sha256": "08a02ad43512c2c467914f07476612a44cd44c4f7bce7cd4fad3c7514d48d36a",
+      "checks": 18005
+    },
+    {
+      "report": "artifacts/patch-build/packaging-results.json",
+      "sha256": "acb30875ab7ba15deb352d03d87aadd8661d362efd9e34dbf89842d4bc63f983",
+      "checks": 79
+    },
+    {
+      "report": "artifacts/patch-build/local-ai-installed.json",
+      "sha256": "dfcf5a29ce135f9aaa071513cd276e1556147475f847d641e9614e08f0b51e4f",
+      "checks": 57
+    },
+    {
+      "report": "artifacts/patch-build/local-ai-h5-installed.json",
+      "sha256": "8917d48e42d644d17a398b4bfe7849baa5f3f89846c492e07ff92acabe6e2efa",
+      "checks": null
+    },
+    {
+      "report": "artifacts/patch-build/installation-verification.json",
+      "sha256": "9c8f5967a2b2077025ed320a77a30904aa05ccd8d3f027fd8d86ae87bb1ea5a3",
+      "checks": null
+    }
+  ],
+  "normalBudgetGames": [
+    {
+      "seed": 52030,
+      "version": 2,
+      "work": 1024,
+      "milliseconds": 10000,
+      "turns": [
+        16,
+        16,
+        16,
+        16
+      ],
+      "actions": 124,
+      "shortfalls": 0,
+      "avoidableShortfalls": 0,
+      "liquidations": 0,
+      "zeroCash": [
+        0,
+        0,
+        1,
+        2
+      ],
+      "result": {
+        "objective": "win-share/1.0.0",
+        "seats": [
+          {
+            "seat": 0,
+            "vp": 130,
+            "income": 9,
+            "cash": 43,
+            "rank": 1,
+            "utility": 1.0
+          },
+          {
+            "seat": 1,
+            "vp": 115,
+            "income": 16,
+            "cash": 54,
+            "rank": 2,
+            "utility": 0.0
+          },
+          {
+            "seat": 2,
+            "vp": 103,
+            "income": 4,
+            "cash": 18,
+            "rank": 4,
+            "utility": 0.0
+          },
+          {
+            "seat": 3,
+            "vp": 114,
+            "income": 21,
+            "cash": 23,
+            "rank": 3,
+            "utility": 0.0
+          }
+        ]
+      }
+    },
+    {
+      "seed": 52030,
+      "version": 3,
+      "work": 1024,
+      "milliseconds": 10000,
+      "turns": [
+        16,
+        16,
+        16,
+        16
+      ],
+      "actions": 124,
+      "shortfalls": 0,
+      "avoidableShortfalls": 0,
+      "liquidations": 0,
+      "zeroCash": [
+        1,
+        0,
+        1,
+        1
+      ],
+      "result": {
+        "objective": "win-share/1.0.0",
+        "seats": [
+          {
+            "seat": 0,
+            "vp": 133,
+            "income": 20,
+            "cash": 16,
+            "rank": 2,
+            "utility": 0.0
+          },
+          {
+            "seat": 1,
+            "vp": 128,
+            "income": 18,
+            "cash": 52,
+            "rank": 3,
+            "utility": 0.0
+          },
+          {
+            "seat": 2,
+            "vp": 112,
+            "income": 11,
+            "cash": 2,
+            "rank": 4,
+            "utility": 0.0
+          },
+          {
+            "seat": 3,
+            "vp": 143,
+            "income": 14,
+            "cash": 12,
+            "rank": 1,
+            "utility": 1.0
+          }
+        ]
+      }
+    }
+  ],
+  "limitations": [
+    "Small cash/reliability sample; no strength certification.",
+    "Six one-node fallback stress games still reached unavoidable distress; these are not playing-strength tests.",
+    "A preliminary concurrent native run hit its 35-second watchdog; the isolated final candidate passed all 36 turns with the limit unchanged. The cause was not established.",
+    "An initial isolated packaging fixture hit a Windows file-replacement error. A fresh fixture passed all 79 checks; actual installation succeeded on its first attempt.",
+    "V3 deployment profiles are not admitted to the frozen training pool."
+  ]
+}

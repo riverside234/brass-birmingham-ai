@@ -1,53 +1,95 @@
 # Brass: Birmingham AI training project
 
-Research and implementation planning for an offline replacement opponent in the
+Rules-host implementation and research for an offline replacement opponent in the
 Steam version of Brass: Birmingham. The target is four-player games with varied
 personalities and calibrated difficulty, trained on a lab GPU and played locally
 on a laptop.
 
-**Current status:** feasibility probes, a rules audit, and design/implementation
-plans. A replacement AI, reusable training environment, and neural training loop
-have not been implemented yet. Cloning this repository does not start training.
+**Current status:** R0 reference pins, R1's four-player host, R2's model/training
+scaffold and R3's six-style CPU legacy bank are implemented locally. R3 includes
+persistent intent, complete-turn planning, required reply search, immutable
+versions and evidence-gated training/evaluation pools. See the
+[R3 guide](docs/R3_TACTICAL_BANK.md) and [exit checks](docs/R3_EXIT_CHECKS.md) for
+results and remaining gates. The [v3 update](docs/LOCAL_AI_V3_CONVERSION.md)
+adds cash protection, deadline-aware industry completion, merchant routes and beer
+bonuses to the six S1 Custom Game strategies and a matching frozen research bank
+(introduced in package 1.4.1; the bank uses the user-accepted 28-game limited validation).
+The [1.4.2 presentation and save update](docs/PRESENTATION_SAVE_1.4.2.md) repairs
+player-panel layout, white industry tiles, panel closing during animations and
+save/Continue defects. The [1.4.3 budget update](docs/AI_BUDGET_1.4.3.md) sets the live
+v3 search allowance to **10 seconds** and the research bank's **240-node** limit.
+**Package 1.4.3 is installed and verified.**
+The [compatibility check](docs/UI_PATCH_RESEARCH_COMPATIBILITY.md)
+preserves the research bank and training interfaces. [Step 5](docs/STEP5_LAB_TRAINING.md)
+adds self-play-first population PPO, neural search distillation, diverse-opponent
+evaluation and optional Reptile meta-RL. Strong neural playing skill and calibrated
+difficulty remain to be demonstrated through substantial training and evaluation.
 
 ## Included work
 
 - [Feasibility review](ai-research/REVIEW.md)
 - [Model, hardware, personality and difficulty design](ai-research/DESIGN.md)
+- [Turn planning, hidden information and thinking-time experiments](ai-research/SEARCH_DESIGN.md)
+- [Daiyu AI and OpenSpiel reference integration plan](ai-research/REFERENCE_INTEGRATION.md)
+- [Legacy Hard improvements and six tactical benchmark profiles](ai-research/LEGACY_HARD_AI_PLAN.md)
 - [Implementation plan](ai-research/IMPLEMENTATION_PLAN.md)
+- [Implemented R0 reference pins and contracts](docs/R0_CONTRACTS.md)
+- [R0 exit-check results](docs/R0_EXIT_CHECKS.md)
+- [R1 host setup, API and information boundary](docs/R1_HOST.md)
+- [R1 exit-check results and H0 capture](docs/R1_EXIT_CHECKS.md)
+- [R2 model, training and lab commands](docs/R2_TRAINING.md)
+- [R2 exit-check results](docs/R2_EXIT_CHECKS.md)
+- [R3 four-player legacy bank, planner and optional game bridge](docs/R3_LEGACY_BANK.md)
+- [R3 H0–H5 exit checks and qualification](docs/R3_EXIT_CHECKS.md)
+- [Step 5 self-play, search, meta-RL and lab transfer instructions](docs/STEP5_LAB_TRAINING.md)
+- [Step 5 executed local checks and unqualified smoke weights](docs/STEP5_EXIT_CHECKS.md)
 - [Rules audit and proposed fixes](rules-audit/BUG_FIX_PLAN.md)
 - Original PowerShell/C# probe scripts under `ai-research/` and `rules-audit/`
 
 Game executables, Unity assets, managed game assemblies, decompiled source,
-downloaded tools/reference documents, generated probe results and model
-checkpoints are excluded from Git. References in the research reports to local
+downloaded tools/reference documents, generated probe results and experiment
+checkpoints are excluded from Git. Curated weights under `training/models/` and
+the project-authored host/v3 workers under `training/runtime/` have explicit
+exceptions; their game dependencies still require a private transfer. References in the research reports to local
 decompiled files or generated results are inspection evidence, not files included
 in a clone. Some audit links refer to the original laptop's absolute paths.
 
 ## Clone on the lab computer
 
 ```sh
-git clone https://github.com/riverside234/ai-training.git
-cd ai-training
+git clone https://github.com/riverside234/ai-training.git /data/not_backed_up/yxu209/ai-training/
+cd /data/not_backed_up/yxu209/ai-training/
 ```
 
-Keep your own game installation and required game assemblies outside the clone.
-They are runtime dependencies for the current probes and are not downloaded or
-provided by this repository. Future training will also need access to the verified
-rules engine until a separate implementation exists.
+Keep your own game installation outside the clone. The host/bank builders may
+copy the required private assemblies under ignored `artifacts/`; those runtime
+dependencies are not downloaded or provided by this repository. R2 can train compatible replay shards without the
+engine. New match collection needs the verified R1 runtime until a separate
+implementation exists. The default lab root is
+`/data/not_backed_up/yxu209/ai-training/`; R2's [setup guide](docs/R2_TRAINING.md)
+includes CPU/CUDA installation, fresh initialization, collection, training and export.
+For the current population trainer, use the [Step 5 lab guide](docs/STEP5_LAB_TRAINING.md).
+It includes a fingerprint-checked private rules/runtime bundle, loadable R2
+bootstrap weights, CUDA/Mono preflight and resumable self-play/meta-RL commands.
 
-The headless feasibility probe was verified with PowerShell 7.6.5 / .NET 10 on
-Windows. Point it at the game installation on that computer:
+The R1 host was verified on Windows .NET Framework and Unity's actual Mono runtime.
+Point its builder at your patch-1.1.0 installation; the full managed dependency
+inventory is fingerprinted before use:
 
 ```powershell
-pwsh -NoProfile -File ./ai-research/headless-smoke.ps1 -Players 4 -Games 1 -GameRoot 'D:\SteamLibrary\steamapps\common\Brass Birmingham' -OutputPath ./ai-research/smoke-lab.json
+python -m pip install -r requirements-r1.txt
+pwsh -NoProfile -File scripts/build-host.ps1 -GameRoot 'D:\SteamLibrary\steamapps\common\Brass Birmingham'
+python scripts/check-r1-traces.py
+python scripts/test-r1.py
 ```
 
-Replace the example path with your installation directory. Alternatively, set
-`BRASS_GAME_ROOT` before running the probe. If neither is set, the probe uses the
-repository root, preserving operation in the original Steam installation folder.
-The assembly fingerprint is checked before executing game code. A successful run
-tests the original rules and original AI; it is not neural training. Linux and
-the lab machine's runtime have not been validated yet.
+Replace the example path with your installation directory. If `-GameRoot` is
+omitted, the builder uses the repository root. Generated assemblies and traces stay
+under ignored `artifacts/`. See the [R1 guide](docs/R1_HOST.md) for APIs, stock baseline
+capture and runtime parity checks. Linux and the lab machine have not been validated.
+
+The older `ai-research/headless-smoke.ps1` is a historical probe requiring the
+unmodified stock assembly. It is deliberately not retargeted to the patched host.
 
 The older `rules-audit` scripts currently expect the game directory at the
 repository root, and some require Windows PowerShell 5.1 / .NET Framework.
@@ -72,6 +114,18 @@ git ls-files
 Do not force-add excluded game files. `.gitignore` applies to untracked files;
 it does not remove files already committed to history.
 
-The first implementation milestone is the complete four-player legal-decision
-environment, state restoration and player-information boundary described in the
-[implementation plan](ai-research/IMPLEMENTATION_PLAN.md).
+R3 snapshots contain original code/configuration and hashes; game runtime files
+stay private under ignored `artifacts/`. The [bank guide](docs/R3_TACTICAL_BANK.md)
+explains lab preparation, pool selection, mixed neural/legacy collection and R2
+value training. Linux/Mono and rendered human-play acceptance remain separate
+from the Windows automated checks.
+R0 validation can still run without game files; see its [commands and scope](docs/R0_CONTRACTS.md).
+
+## Local rules patch
+
+A reversible local-game patch for the rules audit is implemented under `src/BrassPatch`,
+with a version-checked assembly weaver, regression tests, and installation/restoration
+scripts. See [patch documentation](docs/LOCAL_PATCH.md). R1's host consumes this
+patched engine; the R2 scaffold does not yet replace its AI. Online play is
+disabled while this patch is installed, and games created with its versioned IDs
+require the patch to continue.

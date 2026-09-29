@@ -1,0 +1,140 @@
+{
+  "id": "v3-vs-hard-13c1f2a58726a039c5ac",
+  "payload": {
+    "format": "v3-vs-stock-hard-spec/1.0.0",
+    "player_count": 4,
+    "bank": "bank-af17b1aadbe7f9b21fa7",
+    "bank_manifest_sha256": "b8cdce0df8314f7ddac2330bb6123c12f351adb5462e6f39d2c6053aa8df649b",
+    "frozen_worker_sha256": "5d0238095df57de6e9bc593469139e8e402908f07dea052c3b75f2747d2a79be",
+    "installed_game_ai_dll_sha256": "53213f92d3f403aa39026400af37ebd61278d37e6f53863fa568d96fc4d77897",
+    "installed_game_package": "brass-local-ai/1.4.1",
+    "original_hard": "stock-hard-guarded-1.1.0",
+    "milliseconds": 10000,
+    "work_limit": 1024,
+    "fixed_work": false,
+    "jobs": [
+      {
+        "id": "101001-seat-0",
+        "seed": 101001,
+        "seat": 0,
+        "profile": "balanced-v3"
+      },
+      {
+        "id": "101001-seat-1",
+        "seed": 101001,
+        "seat": 1,
+        "profile": "rail-tempo-v3"
+      },
+      {
+        "id": "101001-seat-2",
+        "seed": 101001,
+        "seat": 2,
+        "profile": "cotton-v3"
+      },
+      {
+        "id": "101001-seat-3",
+        "seed": 101001,
+        "seat": 3,
+        "profile": "goods-beer-v3"
+      },
+      {
+        "id": "101002-seat-0",
+        "seed": 101002,
+        "seat": 0,
+        "profile": "rail-tempo-v3"
+      },
+      {
+        "id": "101002-seat-1",
+        "seed": 101002,
+        "seat": 1,
+        "profile": "cotton-v3"
+      },
+      {
+        "id": "101002-seat-2",
+        "seed": 101002,
+        "seat": 2,
+        "profile": "goods-beer-v3"
+      },
+      {
+        "id": "101002-seat-3",
+        "seed": 101002,
+        "seat": 3,
+        "profile": "supplier-v3"
+      },
+      {
+        "id": "101003-seat-0",
+        "seed": 101003,
+        "seat": 0,
+        "profile": "cotton-v3"
+      },
+      {
+        "id": "101003-seat-1",
+        "seed": 101003,
+        "seat": 1,
+        "profile": "goods-beer-v3"
+      },
+      {
+        "id": "101003-seat-2",
+        "seed": 101003,
+        "seat": 2,
+        "profile": "supplier-v3"
+      },
+      {
+        "id": "101003-seat-3",
+        "seed": 101003,
+        "seat": 3,
+        "profile": "pottery-flex-v3"
+      },
+      {
+        "id": "101004-seat-0",
+        "seed": 101004,
+        "seat": 0,
+        "profile": "goods-beer-v3"
+      },
+      {
+        "id": "101004-seat-1",
+        "seed": 101004,
+        "seat": 1,
+        "profile": "supplier-v3"
+      },
+      {
+        "id": "101004-seat-2",
+        "seed": 101004,
+        "seat": 2,
+        "profile": "pottery-flex-v3"
+      },
+      {
+        "id": "101004-seat-3",
+        "seed": 101004,
+        "seat": 3,
+        "profile": "balanced-v3"
+      },
+      {
+        "id": "101005-seat-0",
+        "seed": 101005,
+        "seat": 0,
+        "profile": "supplier-v3"
+      },
+      {
+        "id": "101005-seat-1",
+        "seed": 101005,
+        "seat": 1,
+        "profile": "pottery-flex-v3"
+      },
+      {
+        "id": "101005-seat-2",
+        "seed": 101005,
+        "seat": 2,
+        "profile": "balanced-v3"
+      },
+      {
+        "id": "101005-seat-3",
+        "seed": 101005,
+        "seat": 3,
+        "profile": "rail-tempo-v3"
+      }
+    ],
+    "protocol": "One v3 seat versus three stock Hard seats; five seeds, all four seats per seed. Run every scheduled game once. No result-based stopping or retuning.",
+    "scope": "Frozen headless four-player rules-1.1.0 proxy; installed game uses package 1.4.1 and separate rules assemblies."
+  }
+}

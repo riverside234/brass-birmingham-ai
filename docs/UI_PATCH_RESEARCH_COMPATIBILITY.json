@@ -1,0 +1,128 @@
+{
+  "format": "research-ui-compatibility/1.0.0",
+  "passed": true,
+  "checked_at_utc": "2026-09-28T02:31:13.067177+00:00",
+  "installed_version": "1.3.0",
+  "installed_files": [
+    {
+      "name": "BrassPatch.dll",
+      "sha256": "2754E9F2A89E24C1A3C8848972B74631E0D59A5CD6EDF3A8846CEA5E3B6D5718"
+    },
+    {
+      "name": "BrassLegacyAI.dll",
+      "sha256": "F8DD8A8930A92D68499C5869610D322A69D25C1180A88AA9B05A4FE1F86A8AC5"
+    },
+    {
+      "name": "Assembly-CSharp.dll",
+      "sha256": "D2B3235BD8DA60869CAD09D79522D0A34A538468134B2A97866E3C31DE7A6034"
+    }
+  ],
+  "installed_evidence_sha256": "afd8e2942dde3690636f3b2e2e40001ed3f85c203735f3091a69e69e51023c4e",
+  "bank": "bank-804c85204da65824cb9b",
+  "frozen_source_files_unchanged": 39,
+  "research_runtimes": [
+    {
+      "path": "artifacts/r1-host/guarded",
+      "files": 112,
+      "manifest_sha256": "436044e902b2f5f970074ed491e6954bab011405b46a58724e44fe62cb541796"
+    },
+    {
+      "path": "artifacts/legacy-ai/runtime",
+      "files": 112,
+      "manifest_sha256": "adfe6027c4744442bd05f2bf676abc108f09c2a72b87f933a0220e4dc1a0e89c"
+    },
+    {
+      "path": "artifacts/legacy-ai/bank/bank-804c85204da65824cb9b/runtime",
+      "files": 112,
+      "manifest_sha256": "c90c546244fbc4ae8d11c16880516e7ac13c840cf29adfbc72640868c781f773"
+    }
+  ],
+  "unit_tests": 114,
+  "suite_results": [
+    {
+      "suite": "tests/R0",
+      "passed": true,
+      "tests": 37,
+      "failures": 0,
+      "errors": 0
+    },
+    {
+      "suite": "tests/R1",
+      "passed": true,
+      "tests": 22,
+      "failures": 0,
+      "errors": 0
+    },
+    {
+      "suite": "tests/r2",
+      "passed": true,
+      "tests": 24,
+      "failures": 0,
+      "errors": 0
+    },
+    {
+      "suite": "R3 frozen bank",
+      "tests": 31,
+      "passed": true
+    }
+  ],
+  "unity": {
+    "passed": true,
+    "unity": "2019.1.7f1",
+    "result": {
+      "passed": true,
+      "assertions": 25,
+      "runtime": "4.0.30319.42000",
+      "full_match": {
+        "passed": true,
+        "turns": 64,
+        "actions": 124,
+        "rail_turns": 32,
+        "reloads": 15,
+        "debts": 7,
+        "final_projection_seats": 4,
+        "manual_seat": "scripted with stock legal actions; not a rendered human UI acceptance test"
+      }
+    }
+  },
+  "core_rule_methods_compared": 1253,
+  "core_rule_methods_changed": 0,
+  "embedded_profiles_match": 6,
+  "staging": {
+    "passed": true,
+    "researchDlls": 111,
+    "installedDestinationRejected": true,
+    "deploymentDllRemovedFromR1": true,
+    "freshOverlayCopyResynchronized": true,
+    "installedFilesUnchanged": true
+  },
+  "checkpoint_and_replay": {
+    "passed": true,
+    "model_id": "9c5c61ba10456d196c97e64632f391e4a23e109d83f29fa1669434ed62f0e001",
+    "checkpoint_sha256": "b62defcd0a7a5938d508c0c19cc75c6dc5401a1bf69f5392061586aeea4fbc2d",
+    "replay_header_compatible": true,
+    "training_profiles": 5,
+    "evaluation_profiles": 1
+  },
+  "original_qualification_evidence_unchanged": true,
+  "evidence": {
+    "regressions.json": "06111c6bc4d08745ff35c7f68df2fe3a2ee0123315f284464bc6a16a11ab51dc",
+    "frozen-checks.json": "c93ad6ea17bf759b7b5015888900772b7ca5c2a90a26f6087a8866ddcab0a1b5",
+    "unity/legacy-unity-result.json": "76117dffc14df8ec6bab758e10b0f105a39361d81160ac3d72773f2d52721f7e",
+    "staging-check.json": "ec842224d316450321ddb8b7bfc19cca367c6b002b3b96cea4ad6b59a932e7ec",
+    "learning-compatibility.json": "2769f44a804eb3686e49cb3c2cd8d922783fd05ec50bce7001da387e01f294ea",
+    "installed-il.json": "fcbc0d4511b702e0cea84b5acd82f7963dca7e12e288f9cc7e63b73722df4272",
+    "embedded-profiles.json": "0b8d91910ba8d08cc053331b15cbc64bdb65a091cff1f3be5070ef5a93c73fa8"
+  },
+  "modified_check_scripts": {
+    "scripts/sync-research-managed.ps1": "c231331f4cc8367b51557ea600a3619a9437e2440b7067fe77b7e388296ea811",
+    "scripts/check-r1-runtime.ps1": "1811093a5599a056ee34a82eafff7ddc9e18fc71d2dca4ba5cf14fecf0dc1bef",
+    "scripts/check-legacy-bridge.ps1": "c08f7f9636dd9c02416e99dd626b268262930825c5b30ac288a76687d473bb35",
+    "scripts/check-legacy-overlay-ui.ps1": "e263b5a227e032dacc1eef2881bef69dd8e33e1e34dd312ace5bbab40ce5901d"
+  },
+  "limits": [
+    "Existing research runtimes remain pinned to 1.1.0; installed 1.3.0 binaries are not substituted.",
+    "Deployment observations/saves use a separate contract and are not automatically research replay.",
+    "Unity test uses scripted human decisions; no physical mouse playtest or new strength tournament."
+  ]
+}

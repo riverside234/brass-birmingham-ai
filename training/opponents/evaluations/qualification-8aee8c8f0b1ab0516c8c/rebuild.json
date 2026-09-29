@@ -1,0 +1,7 @@
+{
+  "bank": "bank-c891530a53c0ae07765b",
+  "scope": "Rebuilt from immutable snapshot sources in a different output path; byte identical on Windows",
+  "worker_sha256": "cd9e7f3e8ac41dbf783210834cb9b2d9e05b9ca380bdea86a09fc38b6f4e34d9",
+  "passed": true,
+  "compiler_sha256": "48fc3f6dbd905197a6c46b46ce02e230bae2b2862eec59879b62553797999b85"
+}

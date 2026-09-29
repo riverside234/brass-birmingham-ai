@@ -1,0 +1,522 @@
+{
+  "format": "legacy-qualification/1.0.0",
+  "spec_id": "qualification-863457aeae843157d4e6",
+  "bank": "bank-b5988f07c96eb193f3f4",
+  "player_count": 4,
+  "checks": {
+    "format": "legacy-v3-correctness/1.0.0",
+    "passed": true,
+    "bank": "bank-b5988f07c96eb193f3f4",
+    "bank_manifest_sha256": "160ce164778ff7e709394a513d4d71f54714ca5c1d6d51f44220f18d7d823c80",
+    "tests": 34,
+    "fixtures": [
+      {
+        "suite": "conversion",
+        "checks_each": 435,
+        "identical_scenarios": 54
+      },
+      {
+        "suite": "cash-beer",
+        "checks_each": 60,
+        "identical_scenarios": 12
+      },
+      {
+        "suite": "credit",
+        "checks_each": 72,
+        "identical_scenarios": 12
+      },
+      {
+        "suite": "demand",
+        "checks_each": 19,
+        "identical_scenarios": 2
+      }
+    ],
+    "worker_sha256": "f7cd8b7e32886db8a289f23ba7abdbe8a4d8b5f482f53b98ff84fe9eb0d6b483",
+    "identical_snapshot_rebuild": true,
+    "platform": "win32",
+    "evidence": {
+      "artifacts/patch-build/local-ai-conversion-0.json": "3f678728693e5d38767ff851fe25e01f72af8993ea23b4b20b6c4ec3308b8211",
+      "artifacts/patch-build/local-ai-conversion-1.json": "9787718f16a77462f7f557eb84fe9975adea4082a6088598d7b0ece33713bf80",
+      "artifacts/patch-build/local-ai-cash-beer-0.json": "ecf7451b7f1115d36993a3e470833e7b807afd7e867dc2956ba93470c07d540f",
+      "artifacts/patch-build/local-ai-cash-beer-1.json": "10a5791f72ecac6855170aacc6e6c85bb439cc793d6d106f701cfe0d46998792",
+      "artifacts/patch-build/local-ai-credit-0.json": "9d81c6d345d5f92f007b15e8fe1365b8cc7e1c071b20e39764882a32b0010e49",
+      "artifacts/patch-build/local-ai-credit-1.json": "9c3c8b37ec22babef3c2580e906ef2f92bfbeede5dfe8dc574d2d1d1f442adff",
+      "artifacts/patch-build/local-ai-demand-0.json": "2e8567be309e7087981911d3046f863085ac129655125149fadc70317fde2b00",
+      "artifacts/patch-build/local-ai-demand-1.json": "d9a954f46848be14702736d187ba9826bb03da2f271561c444fe42406fb0ca97",
+      "tests/BrassLocalAI/ConversionTests.cs": "2ea6d66a88b4087ee39f1b6206765c8042fc66c4622128fa9c3490cf11fdb495",
+      "tests/BrassLocalAI/CashBeerTests.cs": "0a2a0eb67c90fc16870050b8a3f6faa15bba9f1a362b9cc7ad793261f383ab61",
+      "tests/BrassLocalAI/DemandTests.cs": "a569a7bfde538f03a531007264928a2cd935ae8aed8c829832ba51e5d704a6fd",
+      "tests/BrassLocalAI/CreditTests.cs": "07ffa5c1b7a80ec09f46357ba53d337b69f4dc2aa72b83dbd8fc154fea06282d",
+      "tests/legacy-ai/test_v3.py": "13173da909cd3a72e7d3c9e421cfde5cc46c82a3aa39029e197bedd01e67e327",
+      "scripts/check-frozen-bank.py": "f734351f63cd8173103f75a6aafa351b8555a27d50f29fc315313e1a55227be1",
+      "scripts/verify-v3-bank.py": "a9efe764375f947bd5efeef9685e483852af9ab4ac6873639e92c1ef16fcdb71",
+      "src/brass_ai/qualification.py": "fc4473632938fac581bb8f5d8fc1c4e5fa65a57fd994bcf84e23d20717b43640",
+      "training/opponents/evaluations/qualification-863457aeae843157d4e6/platform-check.json": "d29fac42453d4a63c7bd4138f8a1e19c30b0fd2cc37208d6c2a06a5dfbd9c919"
+    },
+    "scope": "Frozen contracts and identical deadline/merchant/cash decisions; no strength admission."
+  },
+  "spec_sha256": "94cc23caebbcfe2f11bc25bebed61d0652d63263721b98d7c06ac5d5923e4b96",
+  "raw_evidence": {
+    "27dc6c62d9b90cda2845.json": "81b739c36078a56cb64458ea730a90f578811414080c5c5c049af14b77f3ce31",
+    "ed5d90079628204cfee2.json": "a624aaca7fed118dc245553bdc0381dd867225ffee6869e0e8f64a669f790db8",
+    "5c5b5fb348a1c45bef33.json": "e2bcd42aaa472a19ff436fc846f2b08f3a09b72ca363732ee42b787b6a728f81",
+    "cdddd82352883f27214c.json": "2a3098d8caa5a16f9017c8ae900e74aa5a1c3c0b342b8f1aacd36750ef4eab39",
+    "e4fdff91ff06f0a69024.json": "f9af6d109705d044c8bd961483675cdc3d42cc36c30ebb8e7c2d274cac3644d9",
+    "6f65f8d4f2851b6dfd90.json": "82d7702db83c3ac7c9d61c95eaebdf0c305f5e67ccf9589580c4c1ece93e589a",
+    "d58cc07a56c6069d9771.json": "32c06a68e616d4e3820296866d3c24cc5d58812a5b164960e4e5138cb9444af0",
+    "f68c35bd1c931ff85a8e.json": "6082c113ec4c95ae873483bf15ae1ae10d62c97ef6f5dc2ed39bd47649d645f2",
+    "8543250f41988ef1beb5.json": "89b77bff72d26c41d4e533d4503de01f68cbec2032adc4e4bfcde979ab732bf7",
+    "1cdfac817e855db2b1e0.json": "92baa8496f99416590e4ca76d7876b9f0b5f302109f27ce1e197d00df750b449",
+    "181dcd1f2b664b585562.json": "e5634e9fd32ce93eec2d2cf4b440ec264b5c8472a9e510652a01c470219c54e7",
+    "baa331ad603dd2f6345e.json": "3ef68d3e306c5b051ba15dd964939a5ab0aa674242b28de3a9288acc09594287",
+    "92d3a0206a2e2a926bab.json": "840aff43e960be90f4ec08bf2026f9f21e6fead06fdbc6eb759b8caf0624e2b7",
+    "b599b5db21dc7934aa2c.json": "a9f91fafa38c4a7d6833ced79fdc3c23d624dc365721f2fd5138420fdc4522a3",
+    "8d57969b740da69c6846.json": "9cd76fe96875b921051ba25337109a7b5830ed8fdf0088c680a03869658183dc",
+    "3826849d84e32e6d88da.json": "98cc3e336fcb52e57f46e9946c97625ff63eae92fef7050d4ed6b8970a02e5ae",
+    "e18f5d10679e07c095a7.json": "942b15f24ed586dd0b9ac11b28795a8a22a747c609e61a97e66a90a4932899f6",
+    "2915b365cfee237c3ed1.json": "2280608acb36095da82b6e4424d0baa52bedf98099fd6c466ee9de6e184f9c46",
+    "ec3e7a17ba6e21af4aad.json": "4f0e43d2aa6eb16c97b8edd435bcb941015c2923ff86e9bee50a4368765047b2",
+    "f34ea5f674d2f75c2109.json": "52cfcbdf18c3e630ed2e97e5de2764cd1aa8de684e3b48cb561d18fe078698f2",
+    "8574b149dac09a585a35.json": "8637dc9ee4274dce49be221eebe12dba90c66acaf6f7b46b73dae79e702f438a",
+    "6903f7ce48e2f9125ee6.json": "f20c2cddab53f4b7c5a1bf2fb441169f96714bb39f5c80da9b5a61e7ab768a9f",
+    "41fe93e5c107d49d408a.json": "e02918cf2528bc99533d6e407e91c4addbf8ae80bcee470f71710335c06fb03e",
+    "3e9d72ee24ffcafac01f.json": "eafa8a80bb499ef7789c080cff587d55ece91d011d7951296a8e55bac0d387d6",
+    "1b3d0c7fdde690e6d397.json": "0af1e815ba720e9efc7f021ba4c5899d05b43a11c315a83890cd665610b35812",
+    "93b4bc7e0d199001c445.json": "252d24ffc48c841c1cbf5170a7d03ed72e5a5a08304f17e1efe2119259b020b0",
+    "7b9e0c1b643f2bb57900.json": "df3b43e5d1cb6dcd37991fd1990004cccce9a51d7a7ba2d2b8a04ca50baf0352",
+    "b2e9528dc4acfa5494fd.json": "2d11127936c620ccf38e77b0bf4f991257d409a697c81206688a2dd55fd2bc59",
+    "007160808e38e236da73.json": "795a236772c5fb4d08fab10fe3dfceb0f2c212ebf9b0e532a5dd54aea47cf45e",
+    "6100a34f2873d5f28890.json": "b09b2746d18ac41687d31df9a80b8ccee5634c699d6cf3511be863cc972cfc15",
+    "38378007f3f7a26bb8b3.json": "ba40d254c96135e26ecac5d844da20464a09f7ce02b53cf5ea65e5eb39fac0ac",
+    "ef8510db03a9c33144cf.json": "addbc340d09a098f8f8d7031cd7bf0db77414da594255d9353d82e1598b08747",
+    "c6fd5cea1a6b2a9a6f4a.json": "12db5f37df9e71b768a7e6089102e7698fb70f74dcc743b14679704e38150c1a",
+    "1cb12717757ebe7f5d8e.json": "25dd217b113fea3fa1255230de06062ca3862fe228b1d3b2c5aab1127a49dc38",
+    "9d9a15ab035953f0eb42.json": "b133d6a877d7c4ffa1fdf25ba05399762799465a6047a9b05bdee1358e52521f",
+    "6ea24b8a2d64e9827185.json": "7b9dd64eb3395884957de6c8b2425b0694513fabee9eea02204b89d5460a886b",
+    "855c0408e975b390d4ae.json": "b80c09f664be1698bd1b9748e7fbebc57e0523be3d18f0b48bd5b93410b37849",
+    "af9cfe5eaf4361d7607d.json": "111d16fb3a1fe12930c683f86910bb43034ba7d44f0bda4ff425c1f5ab256ef4",
+    "13ac2404c0de0c2a6183.json": "860188441a9673b95eac421445c1bfc33739668cfc0ba2af4f2450e21bba5502",
+    "9b4477791902fcc11e76.json": "7594987f54e30c66a76d926b8f1e3b5bee4dcf33d39652c8064bfb545401e359",
+    "987df95e17e9185dc100.json": "950b46602eff10c2799d8af03d61c923377f4cd1d0c2b8fd5badc583636b9736",
+    "c9c4aa9067ae4ecfecae.json": "d6c86301a64eb7743dea11e908d74316b046241116e1978b67c9a16bfb43ae64",
+    "c20f425f96c1562d542a.json": "04fb245ec8e70ccce7d214ec96bbbbecd3320d60ccffb80d4a723b2c545551a3",
+    "5cb621d289b984ed2b6a.json": "fd533ac122721c736df82e36a68756aef2b2bfe932ab4b3c198168045e5fbbde",
+    "fad8b66709b29e3d0bbc.json": "baa5ec5711ea8aafd549ae2afb5898eeb2950e94793b618b6e1b8bea711658fa",
+    "431927ee41cb0bebe4c4.json": "f21350afb613568af96b826b0bdabe1810b7efeb38e8122c91323aa96df873eb",
+    "033a0d9cddfbe6ef1510.json": "a795fa4d8e00e4b91d85a14b15cc35201c8ceaaa5b9f3b146560d4e12abe5ab5",
+    "9530807198bcf2831106.json": "c59c47bdb36cb540ce77a536d885dc186288e39e91e78a2a54f0df39279f2c18",
+    "02b8614e7123acdd2d42.json": "a2064bb592107c6e9277ea98e478c5d4003ac315932d6a02487b0d6f5d5dae7d",
+    "f8750b64b290916f6490.json": "ce115168ab5149da104959dee7f37e07835991ec203b24aae5a53c7b059c2c54",
+    "c95bf5aa4fc2205599ed.json": "3695fb9ea775c67a5a0be115955dffc122e4ef5707976d4a7ebb8ada5508877a",
+    "d47bceb5fb147db56138.json": "0b07fc9c0399b6f34bbb5f199bbd7d5c5b4884962d4947d523d957f51ca89c9b",
+    "e2562b3f4dbc982faeb1.json": "ea42c26102166b8e518e800ed51b839766e7a24168466d322c64bf50e58152f2",
+    "9f6fa4bf53a634393876.json": "d6a4c23427aa9e978dd148a708b003d2dca649b0e7be6a83151df3eae31bda3b",
+    "1556fb2ac697ce58eaf3.json": "b43d2167836efd859814f2ae053b8301d0c2848c8a8673260737d48a10060048",
+    "a5bf635acab319ad471e.json": "350995f323a8f102efa48e408f7b276e0c18acecbc745c1a895eb72730c41d0f",
+    "6ed0304077deb667ccf7.json": "82a30ff7448de09af9fe0d0b7fee89ed20a297875c6e7e1b42dd66fd6e4eaa0b",
+    "90f2ed19398bb6a159f0.json": "eac13ff7605b36f5099881b8d08e28fc67e9143f374b609960454c447f209b88",
+    "97f3419c238af7981fd1.json": "ff2530fd63756523aea219434eed298b43574aaefd824643e3f65836eea06943",
+    "26302e3906e0804c839d.json": "846fe4a024e2f422532e8ec53e68aceea74c2ff16a1cb53a0eaf3cdb68ada926",
+    "b9b5e6e331bc96f335a1.json": "3ddf35f170f0b7541de606d0c1a0c192c4c53344bb0c76812b9b45e75860ba7a",
+    "90314fdf3960682dd8b8.json": "b458af014d3de89db5414b2706b5e832cd2d52645ecd1e56c212ef1279b8654a",
+    "bc18414b91f99a89d667.json": "ea238e6c0e9fc650c485dce0c8de059eb512cc8c497ddbf99e753fb02e113962",
+    "e1a211be6361b2e2df0c.json": "ec92dd4a37366f1eab4a112b65d285fd4d4191fe31fae585535e11890a5acbd9",
+    "591dcb000869a07fb594.json": "70c9253f3f7f8056ff16e24cddf686256064cc24f105e93d669db580d58195cf",
+    "3a1b42a1840a2658b255.json": "f5b2aa53313902ac7940f6e1c26eaccf60eab9f7b40d189d64e333e16ddbc239",
+    "fc71243cb9488d793fcd.json": "5eba9eb9778c8227d2996f9c5d2088d0e39190b557833a522d9af7c46fdfb791",
+    "9c819243555966177fa0.json": "b6b865bb82c32c04bc48add8d660c68d8f40efc1f19606076d74c6e04a6ea524",
+    "64e1f04c2ce24281552b.json": "5d62000bc61d65fe4a1cf0a65a6888b40972fb6c25412b071292dde08524c8c2",
+    "39c4e56d0897429a5d7c.json": "1d1f3a4b66ef77ca6aae5083489f30ac467d43464ebe8503f960b4630024ba9c",
+    "070be46dfc61a44e3108.json": "4c39f8d4e3c200b097797e2014a01a39fbb67a311254df443202eea973d4f17c",
+    "90d9adf685a9d566c15f.json": "25061732af2d8d62238416e0ec9415aba170736322814cd3d1657b8995451f05",
+    "77ccffdd1a4a57eb1fc4.json": "7d2e2fd29a11e8ecbca688e4766f544f52861abdf84996331eb89edd7a8d07d8",
+    "114ab945e5d7830fc0ff.json": "e97338af2e5454acc27c48faa74cf7322cd06e0e74961672f973b0bc1197bc7a",
+    "60c31736783ef809bf44.json": "89038d83ec8a9f6f6c6a0fe5bf565f3f9516ebf174006dce513793d13845cbca",
+    "484613c2eaad565b6f8a.json": "075080fc34bea3d8f0d8b162ace4ff61c79d189f3abe4984f59965adcc7ce483",
+    "e2cae3ded20a5867cc94.json": "1e34d323d01bd8cacef08c02db71953ec7c14837381d604fbde3dadda97330b0",
+    "b0da26643cce02a8f008.json": "9d202f9f1ec164d4562cb04e4a9f84e0eebdadb11334f9a7f308353d1708f1ce",
+    "f486a62dd19ff8f008c1.json": "51ab71d5d34d2a717d13e31157f87090ca6668d4115a0f19b3684478cc0bbfcb",
+    "f457fc76da029950346d.json": "2cb344a89502ab4b879a2472992b9d2f1d1093c6014bd986f7427b71897e4e47",
+    "46b2ef54bd14a48953ba.json": "be9fc51c08fd9b70b44612b50e2902b5946d1e321d226ce5362e683f2f48ef5a",
+    "52233580969751499ff7.json": "cf1abb2d5049b96668d72ac2440e7e1c60ec7e7c1f109a3f4fa4cf88a478f419",
+    "f1c7971f8b582f1227bc.json": "abff808a7705deabf0eea8389c9377eb3a250128f57c917f7337ff0a50270794",
+    "1c3e11708c26c40d1fc4.json": "8a54e3aacf67e60c35e1837a4ddee8999edc6bb942645b355a89527a8572e6b8",
+    "9f3df1b7e1a7e318bd8b.json": "e6b32670075105d1926c33e7a0df06f7cbfdf6404bbdc0fa7e197f49848a8eb4",
+    "4e82a3cebaa4f76b0cf1.json": "a20a9145d014c0965b2bd55d8316c7ca812b631d8df2699654868714269fd747",
+    "bb451c72b112f087d5ff.json": "33911dab219a8171eb886dd00c92504771eade7d6163af26cd6784342d93628c",
+    "6ec38241773d387001b8.json": "73fc2a7e620956d58d4772285717471b5a75b232ab10026f1f3b9acb3ae45640",
+    "89ffa8e9f9c9c4b3995e.json": "35d446a42b50c5e9ebf2e02738f3eaf36afcd80a1e393c1a0cc373f7ddc4d361",
+    "c6877ed5eed4f59005f4.json": "364e05bf5f10e27dcc4056d86fe2fe7000040244c1748acdf4f59c308a5b53d0",
+    "c7f1015cb956a45e796d.json": "156abc74a3d745f160f24ac8dbe757eaf616fdbbd85b23641a2e01c855d1b805",
+    "bd4a33c02ddc7f693c3f.json": "73c640194f712c0da781f2643ed9d5febdf9607e9cd2156ea8b860760342685c",
+    "f496917e9d76c8db306b.json": "224f4f9b270ee4ceec247681beef6fc59f7ed9520b3344a615671aad1a92b468",
+    "66af573edcd068a4eff4.json": "822ce81ae923f251aad40fe4e01d73d8d28a97387fb2f28e33f2db7d2b4f8906",
+    "e9c6faf1774e5ad428ad.json": "b04957a6060901037d608833cf64cb55830a634348223ed3d015d703213bd258",
+    "57c011467b5d12942b07.json": "c2c84d98008ab5ab27dc02f6602fc965e2b25c43666f8f34e67c2c16c955a839",
+    "33cb797953dc5f305a85.json": "ae6ba98e1307239c8cd2eae223870ece5acdba5bf0dfa4de2424b1d7d10dde42",
+    "b520e6aa4ed6f9784e61.json": "87ff0b1320ac1aaed2e9b26f2e563a1a2d83cd207da5301f0a133411d6f8a36c",
+    "8d308e673e6e16384e18.json": "a86abdb9df83e0b486c9e12311965279cc3653c65cc146983ea8a8fdab3d5065",
+    "1de2ade6f72efbbc653f.json": "4bc1322c4ef40a545c876797e3ebadd336b5519e9468cae6d247518454aa0c5c",
+    "869d317661852d151072.json": "adb766146d53e4ed9cee8a9be4a6ef2148d1f36283d2031a3d2b33743f80eb92",
+    "bb86919775e6b4816725.json": "ddef40273580cece6510425414ab896bec045706901019ac5d3de597da0491a6",
+    "f1a4fb708050b02e3699.json": "0a220140bfe368fc66a952c02ddbb2a9f5136a7e9bffebd3d5390fae6d31802a",
+    "2e2bacd1a5dc2c943543.json": "f2883f38b3529338af51702b83c60c2f57b4dd92d6ec86a285d6c28e55bf1543",
+    "3a505dd7ac23447d8eb2.json": "d4a889293d94d1d8d9515d7345c57a8c55a8b4c151e6e87f24f57ef7510d31d9",
+    "e3afd456e5c678fa308d.json": "cf3054abe089bbb980e4d9f69f068a461b02603475d303f65a332acbe57129c1",
+    "a26e123764ab7738c827.json": "2f53b3080bdaedc11b6bc9987d0386112c6e0c483f76656b3918a2978006da8d",
+    "8fac9e7e43cd72790bbb.json": "878e99b58e8df7364ddaf8747b732cb1fbe0c5b213ff3ac6885c18382d68ec03",
+    "4e8edd069e6d3710943f.json": "16b7875b71a68823bb489b85146cc35820fbdc8d44ea9507e8707978c4bed8ba",
+    "23fda88e5bb97459f1a6.json": "d0f24efc0dde1751cf34b96eec6b6a91fe6b01e7f5d2f6e86bcd301eb4f763fb",
+    "c923deeec13b1fb0f705.json": "3dc7158d6e4bffd7244b3c5933aedf445d2c1bfb69318af0b5cdf3e7fa989716",
+    "650faf75e9156a50b7ec.json": "c1bf4b9354cb2052f9333416490891f43bc3a7a76238c983017fdd042229ecbb",
+    "914d75421265dff1da0d.json": "c63b6db40006a13b2b420c27153f9d5fd4d85a975a3b290091c5f5716bd9c1c7",
+    "1b6ad281e96b725101a6.json": "64f022af9f48567ed4a4e96f365eabcb6f7a8b9b2dbfa160f2d656e9f9781482",
+    "bc2f269b9dcf6f5c1105.json": "dfcfab78658c7c8b4a201afbaa797f916af6b53443479e1fee5491458a33e3a2",
+    "560b44d70dcbdaabafb0.json": "6cc5fc46026ffd3363f005e53ae44c50f1423063bb579e96565c241adc3d3c1c",
+    "0e818282188fbfcbaa2f.json": "49d89c515dfc4955d9a340cd010521ee11762e1838896628d3ba11771a8d5208",
+    "bab9984d4bb95e913981.json": "5d218a0090c3ed7ed0f3ded6e62089b08d2fdcadc711c977d7314f2f3c4e2379"
+  },
+  "profiles": {
+    "balanced-v3": {
+      "policy_id": "bank-b5988f07c96eb193f3f4/balanced-v3",
+      "games": 33,
+      "stages": {
+        "guarded": 16,
+        "mixed": 16,
+        "identical": 1
+      },
+      "completed_games": 33,
+      "failures": [],
+      "guarded": {
+        "games": 16,
+        "setup_groups": 4,
+        "win_share": 0.5625,
+        "win_share_setup_bootstrap_95": [
+          0.375,
+          0.75
+        ],
+        "mean_rank": 1.625,
+        "mean_vp": 123.75,
+        "mean_score_margin": 18.833333333333336
+      },
+      "headless_whole_turn_ms": {
+        "p50": 3377.6304,
+        "p95": 3783.5114000000003,
+        "maximum": 4173.9067000000005
+      },
+      "reply_status": {},
+      "reply_failures": 0,
+      "reply_horizons": {},
+      "built_industries": {
+        "Brewery": 127,
+        "CoalMine": 83,
+        "CottonMill": 16,
+        "Pottery": 31,
+        "IronWorks": 75,
+        "Manufacturer": 47
+      },
+      "opening_signatures": 9,
+      "intent_milestones": {
+        "evaluate": 576
+      },
+      "mean_terminal_cash": 25.02777777777778,
+      "reliable_in_observed_games": true,
+      "niche_qualified": true,
+      "training_eligible": true,
+      "evaluation_eligible": false,
+      "general_hard_eligible": false,
+      "live_deployment_eligible": false,
+      "linux_qualified": false,
+      "held_out_family": false
+    },
+    "rail-tempo-v3": {
+      "policy_id": "bank-b5988f07c96eb193f3f4/rail-tempo-v3",
+      "games": 25,
+      "stages": {
+        "guarded": 16,
+        "mixed": 8,
+        "identical": 1
+      },
+      "completed_games": 25,
+      "failures": [],
+      "guarded": {
+        "games": 16,
+        "setup_groups": 4,
+        "win_share": 0.6875,
+        "win_share_setup_bootstrap_95": [
+          0.5,
+          0.875
+        ],
+        "mean_rank": 1.4375,
+        "mean_vp": 127.1875,
+        "mean_score_margin": 21.791666666666664
+      },
+      "headless_whole_turn_ms": {
+        "p50": 3396.4486,
+        "p95": 3773.8363000000004,
+        "maximum": 4377.6971
+      },
+      "reply_status": {},
+      "reply_failures": 0,
+      "reply_horizons": {},
+      "built_industries": {
+        "Brewery": 123,
+        "CoalMine": 38,
+        "Manufacturer": 35,
+        "IronWorks": 44,
+        "Pottery": 22,
+        "CottonMill": 19
+      },
+      "opening_signatures": 9,
+      "intent_milestones": {
+        "build_then_complete": 191,
+        "evaluate": 43,
+        "useful_link": 188,
+        "recover": 26
+      },
+      "mean_terminal_cash": 19.392857142857142,
+      "reliable_in_observed_games": true,
+      "niche_qualified": true,
+      "training_eligible": true,
+      "evaluation_eligible": false,
+      "general_hard_eligible": false,
+      "live_deployment_eligible": false,
+      "linux_qualified": false,
+      "held_out_family": false
+    },
+    "cotton-v3": {
+      "policy_id": "bank-b5988f07c96eb193f3f4/cotton-v3",
+      "games": 25,
+      "stages": {
+        "guarded": 16,
+        "mixed": 8,
+        "identical": 1
+      },
+      "completed_games": 25,
+      "failures": [],
+      "guarded": {
+        "games": 16,
+        "setup_groups": 4,
+        "win_share": 0.75,
+        "win_share_setup_bootstrap_95": [
+          0.5625,
+          0.9375
+        ],
+        "mean_rank": 1.375,
+        "mean_vp": 127.25,
+        "mean_score_margin": 19.0625
+      },
+      "headless_whole_turn_ms": {
+        "p50": 3379.8017,
+        "p95": 3760.358,
+        "maximum": 4110.7498000000005
+      },
+      "reply_status": {},
+      "reply_failures": 0,
+      "reply_horizons": {},
+      "built_industries": {
+        "Brewery": 104,
+        "CoalMine": 54,
+        "CottonMill": 26,
+        "Pottery": 20,
+        "IronWorks": 46,
+        "Manufacturer": 36
+      },
+      "opening_signatures": 8,
+      "intent_milestones": {
+        "evaluate": 276,
+        "build_then_complete": 157,
+        "complete_sale": 10,
+        "recover": 5
+      },
+      "mean_terminal_cash": 25.571428571428573,
+      "reliable_in_observed_games": true,
+      "niche_qualified": true,
+      "training_eligible": true,
+      "evaluation_eligible": false,
+      "general_hard_eligible": false,
+      "live_deployment_eligible": false,
+      "linux_qualified": false,
+      "held_out_family": false
+    },
+    "goods-beer-v3": {
+      "policy_id": "bank-b5988f07c96eb193f3f4/goods-beer-v3",
+      "games": 25,
+      "stages": {
+        "guarded": 16,
+        "mixed": 8,
+        "identical": 1
+      },
+      "completed_games": 25,
+      "failures": [],
+      "guarded": {
+        "games": 16,
+        "setup_groups": 4,
+        "win_share": 0.8125,
+        "win_share_setup_bootstrap_95": [
+          0.625,
+          1.0
+        ],
+        "mean_rank": 1.3125,
+        "mean_vp": 125.625,
+        "mean_score_margin": 24.208333333333332
+      },
+      "headless_whole_turn_ms": {
+        "p50": 3390.5282,
+        "p95": 3795.6879000000004,
+        "maximum": 4171.8004
+      },
+      "reply_status": {},
+      "reply_failures": 0,
+      "reply_horizons": {},
+      "built_industries": {
+        "Brewery": 113,
+        "CoalMine": 36,
+        "Manufacturer": 51,
+        "IronWorks": 42,
+        "CottonMill": 4,
+        "Pottery": 18
+      },
+      "opening_signatures": 9,
+      "intent_milestones": {
+        "build_then_complete": 308,
+        "evaluate": 113,
+        "complete_sale": 15,
+        "recover": 10,
+        "secure_own_beer": 2
+      },
+      "mean_terminal_cash": 19.392857142857142,
+      "reliable_in_observed_games": true,
+      "niche_qualified": true,
+      "training_eligible": true,
+      "evaluation_eligible": false,
+      "general_hard_eligible": false,
+      "live_deployment_eligible": false,
+      "linux_qualified": false,
+      "held_out_family": false
+    },
+    "supplier-v3": {
+      "policy_id": "bank-b5988f07c96eb193f3f4/supplier-v3",
+      "games": 25,
+      "stages": {
+        "guarded": 16,
+        "mixed": 8,
+        "identical": 1
+      },
+      "completed_games": 25,
+      "failures": [],
+      "guarded": {
+        "games": 16,
+        "setup_groups": 4,
+        "win_share": 0.5,
+        "win_share_setup_bootstrap_95": [
+          0.5,
+          0.5
+        ],
+        "mean_rank": 1.875,
+        "mean_vp": 125,
+        "mean_score_margin": 17.854166666666664
+      },
+      "headless_whole_turn_ms": {
+        "p50": 3388.6098,
+        "p95": 3774.1302,
+        "maximum": 4025.3939
+      },
+      "reply_status": {},
+      "reply_failures": 0,
+      "reply_horizons": {},
+      "built_industries": {
+        "Brewery": 106,
+        "CoalMine": 48,
+        "CottonMill": 8,
+        "Manufacturer": 52,
+        "Pottery": 21,
+        "IronWorks": 68
+      },
+      "opening_signatures": 8,
+      "intent_milestones": {
+        "build_then_complete": 364,
+        "recover": 25,
+        "evaluate": 59
+      },
+      "mean_terminal_cash": 22.571428571428573,
+      "reliable_in_observed_games": true,
+      "niche_qualified": true,
+      "training_eligible": true,
+      "evaluation_eligible": false,
+      "general_hard_eligible": false,
+      "live_deployment_eligible": false,
+      "linux_qualified": false,
+      "held_out_family": false
+    },
+    "pottery-flex-v3": {
+      "policy_id": "bank-b5988f07c96eb193f3f4/pottery-flex-v3",
+      "games": 33,
+      "stages": {
+        "guarded": 16,
+        "mixed": 16,
+        "identical": 1
+      },
+      "completed_games": 33,
+      "failures": [],
+      "guarded": {
+        "games": 16,
+        "setup_groups": 4,
+        "win_share": 0.5625,
+        "win_share_setup_bootstrap_95": [
+          0.5,
+          0.6875
+        ],
+        "mean_rank": 1.75,
+        "mean_vp": 125.875,
+        "mean_score_margin": 19.937499999999996
+      },
+      "headless_whole_turn_ms": {
+        "p50": 3396.4678000000004,
+        "p95": 3796.7239,
+        "maximum": 4242.6915
+      },
+      "reply_status": {},
+      "reply_failures": 0,
+      "reply_horizons": {},
+      "built_industries": {
+        "Brewery": 105,
+        "CoalMine": 80,
+        "CottonMill": 13,
+        "Pottery": 29,
+        "IronWorks": 79,
+        "Manufacturer": 56
+      },
+      "opening_signatures": 9,
+      "intent_milestones": {
+        "evaluate": 485,
+        "complete_sale": 15,
+        "build_then_complete": 67,
+        "recover": 9
+      },
+      "mean_terminal_cash": 27.97222222222222,
+      "reliable_in_observed_games": true,
+      "niche_qualified": true,
+      "training_eligible": false,
+      "evaluation_eligible": true,
+      "general_hard_eligible": false,
+      "live_deployment_eligible": false,
+      "linux_qualified": false,
+      "held_out_family": true
+    }
+  },
+  "total_games": 118,
+  "failed_games": 0,
+  "reply_comparison": {
+    "profiles": [],
+    "benefit_demonstrated": false,
+    "complete": false,
+    "scope": "S1 v3 qualification; prior S2 bank unchanged"
+  },
+  "limits": [
+    "Four held-out setup groups per main profile: wide uncertainty and no general improved-Hard label.",
+    "Concurrent headless execution: timing is not a 135U foreground Unity latency certificate.",
+    "Rollout heuristics may mispredict people; human enjoyment and equal-difficulty personalities remain untested.",
+    "Specialist S2 profiles have identical-table coverage only; no bank admission without the full qualification matrix."
+  ]
+}

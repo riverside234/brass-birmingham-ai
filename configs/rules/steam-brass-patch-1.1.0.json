@@ -1,0 +1,54 @@
+{
+  "format": "brass-ai-rules-profile",
+  "format_version": 1,
+  "id": "steam-brass-patch-1.1.0",
+  "player_count": 4,
+  "game_mode": "standard",
+  "patch_version": "1.1.0",
+  "status": "installed-fingerprints-observed-not-r1-certified",
+  "recorded_on": "2026-09-27",
+  "original_assembly_sha256": "600ebf309670b2726001c16a3375f8bbf3de76a23c0202be7cf198ba338981fb",
+  "files": [
+    {
+      "path": "BrassBirminghamUnity_Data/Managed/Assembly-CSharp.dll",
+      "sha256": "1c8cef281b81474200268eed23448faa3f5247f8ea49409a69efc3982c5a2d0a"
+    },
+    {
+      "path": "BrassBirminghamUnity_Data/Managed/BrassPatch.dll",
+      "sha256": "8315180fba0a7d94d757bac270c8944c56cfba315f15db2537aceaca13f6eefb"
+    }
+  ],
+  "terminal_order": [
+    "final_vp_desc",
+    "income_level_desc",
+    "cash_desc"
+  ],
+  "complete_ties": "shared_competition_rank",
+  "objective": {
+    "id": "win-share/1.0.0",
+    "winner_ties": "equal_split",
+    "seat_order": [
+      0,
+      1,
+      2,
+      3
+    ]
+  },
+  "evidence": [
+    "docs/LOCAL_PATCH.md",
+    "rules-audit/BUG_FIX_PLAN.md",
+    "rules-audit/REFERENCE_CROSSCHECK_BUG_FIX_PLAN.md"
+  ],
+  "remaining_r1_gates": [
+    "complete_legal_decisions",
+    "restoration_and_isolation",
+    "observation_noninterference",
+    "runtime_trace_parity",
+    "full_runtime_dependency_fingerprint"
+  ],
+  "limitations": [
+    "This records the installed patch pair, not every runtime dependency or proof of all rules.",
+    "Final-Canal income and introductory scoring interpretations are retained as documented by the patch; AI scope is standard four-player play.",
+    "No installation, restoration or save access is performed by R0."
+  ]
+}

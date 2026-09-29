@@ -1,0 +1,33 @@
+{
+  "format": "step5-training/1.0.0",
+  "players": 4,
+  "model_size": "medium",
+  "host": "artifacts/r1-host/guarded",
+  "games_per_iteration": 4,
+  "workers": 4,
+  "batch_size": 24,
+  "threads": 2,
+  "learning_rate": 0.0001,
+  "ppo_epochs": 2,
+  "exploration": 0.1,
+  "entropy_weight": 0.01,
+  "seed": 751000,
+  "legacy_every": 0,
+  "search_start": 10,
+  "search_every": 0,
+  "search_games": 1,
+  "distill_steps": 2,
+  "distill_weight": 0.25,
+  "search": {
+    "proposals": 2,
+    "finalists": 2,
+    "pilot_samples": 1,
+    "confirmation_samples": 2,
+    "max_plan_choices": 96,
+    "max_reply_choices": 256,
+    "seconds": 120.0,
+    "temperature": 0.1,
+    "turn_interval": 4,
+    "max_searches_per_seat": 1
+  }
+}

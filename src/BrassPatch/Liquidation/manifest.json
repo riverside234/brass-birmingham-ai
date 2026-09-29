@@ -1,0 +1,121 @@
+[
+  {
+    "targetType": "BoardGameRules.Entities.SellIndustry.SellIndustryFlow",
+    "targetMethod": "StartIndustrySelling",
+    "parameterTypes": [],
+    "helperType": "BrassPatch.Liquidation.LiquidationFixes",
+    "helperMethod": "StartIndustrySelling",
+    "mode": "replace"
+  },
+  {
+    "targetType": "BoardGameRules.Entities.SellIndustry.SellIndustryFlow",
+    "targetMethod": "SellIndustry",
+    "parameterTypes": [
+      "BoardGameRules.Entities.Players.PlayerColor",
+      "BoardGameRules.Entities.Board.BuildingSlots.BuildingSlot"
+    ],
+    "helperType": "BrassPatch.Liquidation.LiquidationFixes",
+    "helperMethod": "SellIndustry",
+    "mode": "replace"
+  },
+  {
+    "targetType": "BoardGameRules.Entities.SellIndustry.SellIndustryFlow",
+    "targetMethod": "EndIndustrySelling",
+    "parameterTypes": [],
+    "helperType": "BrassPatch.Liquidation.LiquidationFixes",
+    "helperMethod": "EndIndustrySelling",
+    "mode": "replace"
+  },
+  {
+    "targetType": "BoardGameRules.Entities.SellIndustry.SellIndustryFlow",
+    "targetMethod": "ApplyEvent",
+    "parameterTypes": [
+      "BoardGameRules.Entities.SellIndustry.Events.IndustrySellingStarted"
+    ],
+    "helperType": "BrassPatch.Liquidation.LiquidationFixes",
+    "helperMethod": "ApplyStarted",
+    "mode": "replace"
+  },
+  {
+    "targetType": "BoardGameRules.Entities.SellIndustry.SellIndustryFlow",
+    "targetMethod": "ApplyEvent",
+    "parameterTypes": [
+      "BoardGameRules.Entities.SellIndustry.Events.IndustrySold"
+    ],
+    "helperType": "BrassPatch.Liquidation.LiquidationFixes",
+    "helperMethod": "ApplySold",
+    "mode": "replace"
+  },
+  {
+    "targetType": "BoardGameRules.Entities.SellIndustry.SellIndustryFlow",
+    "targetMethod": "ApplyEvent",
+    "parameterTypes": [
+      "BoardGameRules.Entities.SellIndustry.Events.IndustrySellingEnded"
+    ],
+    "helperType": "BrassPatch.Liquidation.LiquidationFixes",
+    "helperMethod": "ApplyEnded",
+    "mode": "replace"
+  },
+  {
+    "targetType": "BoardGameRules.Entities.GamePhases.GameFlow",
+    "targetMethod": "ApplyEvent",
+    "parameterTypes": [
+      "BoardGameRules.Entities.GamePhases.Events.TurnEnded"
+    ],
+    "helperType": "BrassPatch.Liquidation.LiquidationFixes",
+    "helperMethod": "AfterTurnEnded",
+    "mode": "postfix"
+  },
+  {
+    "targetType": "BoardGameRules.Entities.GamePhases.GameFlow",
+    "targetMethod": "ApplyEvent",
+    "parameterTypes": [
+      "BoardGameRules.Entities.GamePhases.Events.RoundEnded"
+    ],
+    "helperType": "BrassPatch.Liquidation.LiquidationFixes",
+    "helperMethod": "AfterRoundEnded",
+    "mode": "postfix"
+  },
+  {
+    "targetType": "BoardGameRules.Entities.GamePhases.GameFlow",
+    "targetMethod": "EndRound",
+    "parameterTypes": [],
+    "helperType": "BrassPatch.Liquidation.LiquidationFixes",
+    "helperMethod": "EndRound",
+    "mode": "replace"
+  },
+  {
+    "targetType": "BrassApplication.UseCases.Game.PlayGame.PlayGameUseCase",
+    "targetMethod": "EndTurn",
+    "parameterTypes": [],
+    "helperType": "BrassPatch.Liquidation.LiquidationFixes",
+    "helperMethod": "EndTurn",
+    "mode": "replace"
+  },
+  {
+    "targetType": "BrassApplication.UseCases.Game.PlayGame.PlayGameUseCase",
+    "targetMethod": "PlayGame",
+    "parameterTypes": [],
+    "helperType": "BrassPatch.Liquidation.LiquidationFixes",
+    "helperMethod": "PlayGame",
+    "mode": "replace"
+  },
+  {
+    "targetType": "BrassApplication.UseCases.Game.PlayGame.PlayGameUseCase",
+    "targetMethod": "SaveGameComplete",
+    "parameterTypes": [
+      "System.Boolean"
+    ],
+    "helperType": "BrassPatch.Liquidation.LiquidationFixes",
+    "helperMethod": "SaveGameComplete",
+    "mode": "replace"
+  },
+  {
+    "targetType": "BrassApplication.UseCases.Game.SellIndustryFlow.SellIndustryFlowUseCase",
+    "targetMethod": "StartSellIndustriesFlow",
+    "parameterTypes": [],
+    "helperType": "BrassPatch.Liquidation.LiquidationFixes",
+    "helperMethod": "StartSellIndustriesFlow",
+    "mode": "replace"
+  }
+]

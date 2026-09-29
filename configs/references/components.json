@@ -1,0 +1,225 @@
+{
+  "format": "brass-ai-component-map",
+  "format_version": 1,
+  "contract_version": "0.1.0",
+  "components": [
+    {
+      "id": "daiyu-model",
+      "reference": "daiyu",
+      "source_path": "training/model.py",
+      "symbols": [
+        "BrassPolicyValueNet",
+        "ModelOutput",
+        "compute_losses"
+      ],
+      "contracts": [
+        "player_observation",
+        "legal_choices",
+        "value_prediction",
+        "model_metadata"
+      ],
+      "assumption_categories": [
+        "scalar_value",
+        "seat_index"
+      ],
+      "adaptation": "Retain separate state/candidate encoders as the R2 reference; replace scalar win/margin/actor-VP heads with four stable-seat outputs from one permitted observation. Export and loss metadata change together.",
+      "target": "R2 Python model and loss implementation",
+      "reuse_status": "reference_only",
+      "implementation_status": "planned_adapter"
+    },
+    {
+      "id": "daiyu-batching",
+      "reference": "daiyu",
+      "source_path": "training/neural_search.py",
+      "symbols": [
+        "run_batched_neural_puct"
+      ],
+      "contracts": [
+        "decision_request",
+        "decision_response",
+        "budget",
+        "value_prediction"
+      ],
+      "assumption_categories": [
+        "scalar_value",
+        "deadline"
+      ],
+      "adaptation": "Replace Rust search-session calls with our host messages, stable request/model IDs, cancellation and remaining whole-turn budget. Do not assume fixed-simulation completion equals a valid deadline.",
+      "target": "R2/R3 batched inference and search coordinator",
+      "reuse_status": "reference_only",
+      "implementation_status": "planned_adapter"
+    },
+    {
+      "id": "daiyu-schema",
+      "reference": "daiyu",
+      "source_path": "training/schema.py",
+      "symbols": [
+        "FeatureSchema",
+        "assert_compatible"
+      ],
+      "contracts": [
+        "compatibility",
+        "model_metadata"
+      ],
+      "assumption_categories": [
+        "compatibility"
+      ],
+      "adaptation": "Use this project's schema/rules/objective signatures. Reject original scalar checkpoints; unencoded/0.1.0 is an R0 structural placeholder, not the eventual tensor encoding.",
+      "target": "R2 feature schema and checkpoint/shard compatibility",
+      "reuse_status": "reference_only",
+      "implementation_status": "planned_adapter"
+    },
+    {
+      "id": "daiyu-search",
+      "reference": "daiyu",
+      "source_path": "src/game/search.rs",
+      "symbols": [
+        "BatchedNeuralPuctSearch",
+        "aggregate_two_player_action_values"
+      ],
+      "contracts": [
+        "turn_plan",
+        "value_prediction",
+        "context",
+        "budget"
+      ],
+      "assumption_categories": [
+        "scalar_value",
+        "seat_index",
+        "two_player",
+        "hidden_state"
+      ],
+      "adaptation": "Replace equal distribution of non-root win mass and two-player aggregation. Use S1 complete turns and S2 independent masked opponent policies; the real scheduler determines decision ownership and horizon.",
+      "target": "R3 complete-turn and sampled-reply planner",
+      "reuse_status": "reference_only",
+      "implementation_status": "planned_adapter"
+    },
+    {
+      "id": "daiyu-beliefs",
+      "reference": "daiyu",
+      "source_path": "src/game/hidden_information.rs",
+      "symbols": [
+        "determinize_hidden_information"
+      ],
+      "contracts": [
+        "player_observation",
+        "belief_request",
+        "trusted_checkpoint"
+      ],
+      "assumption_categories": [
+        "hidden_state"
+      ],
+      "adaptation": "Build unseen-card constraints from the observer's information, including face-down setup removals. Never pool actual opponent hands/deck as the policy-side belief input. Keep publicly known wild cards with the correct owner.",
+      "target": "R1 observation boundary, R3 belief sampler",
+      "reuse_status": "reference_only",
+      "implementation_status": "planned_adapter"
+    },
+    {
+      "id": "daiyu-data-selection",
+      "reference": "daiyu",
+      "source_path": "docs/training-methodology.md",
+      "symbols": [],
+      "contracts": [
+        "terminal_result",
+        "model_metadata",
+        "host_reset"
+      ],
+      "assumption_categories": [
+        "training_distribution",
+        "hidden_state"
+      ],
+      "adaptation": "Separate development/evaluation setups and keep versions reproducible. Do not import strategy filters against non-positive cash/income, early networks or repeated loans as legality rules. Keep legal losses; trusted environment seeds never enter model input.",
+      "target": "R2/R5 four-player population data and evaluation",
+      "reuse_status": "reference_only",
+      "implementation_status": "planned_adapter"
+    },
+    {
+      "id": "open-spiel-mcts",
+      "reference": "open-spiel",
+      "source_path": "open_spiel/python/algorithms/mcts.py",
+      "symbols": [
+        "SearchNode",
+        "MCTSBot",
+        "mcts_search"
+      ],
+      "contracts": [
+        "value_prediction",
+        "terminal_result",
+        "context"
+      ],
+      "assumption_categories": [
+        "seat_index",
+        "scalar_value",
+        "hidden_state"
+      ],
+      "adaptation": "Reference acting-edge-owner reward selection, repeated actors and chance handling. Preserve all four returns; never alternate signs or combine bot rewards. Full-state MCTS is not a fair hidden-information policy.",
+      "target": "R0 arithmetic fixtures; R3/R4 multiplayer backup",
+      "reuse_status": "reference_only",
+      "implementation_status": "r0_semantic_prototype_only"
+    },
+    {
+      "id": "open-spiel-ismcts",
+      "reference": "open-spiel",
+      "source_path": "open_spiel/python/algorithms/ismcts.py",
+      "symbols": [
+        "ISMCTSBot",
+        "run_simulation"
+      ],
+      "contracts": [
+        "player_observation",
+        "belief_request",
+        "value_prediction"
+      ],
+      "assumption_categories": [
+        "hidden_state",
+        "seat_index"
+      ],
+      "adaptation": "Use observer-specific history keys/resampling. Test opponent-policy and search-statistic invariance, not just masked network inputs, before fair-play promotion. Optional comparison does not block S1/S2.",
+      "target": "R4 optional information-set comparison",
+      "reuse_status": "reference_only",
+      "implementation_status": "planned_adapter"
+    },
+    {
+      "id": "open-spiel-evaluation",
+      "reference": "open-spiel",
+      "source_path": "open_spiel/python/algorithms/evaluate_bots.py",
+      "symbols": [
+        "evaluate_bots"
+      ],
+      "contracts": [
+        "player_observation",
+        "terminal_result",
+        "context"
+      ],
+      "assumption_categories": [
+        "hidden_state",
+        "seat_index"
+      ],
+      "adaptation": "Do not forward the helper's complete state or private chance notifications to every bot. Wrap each seat with its permitted view; rotate all four seats and clockwise opponent arrangements.",
+      "target": "R1/R5 masked match runner",
+      "reuse_status": "reference_only",
+      "implementation_status": "planned_adapter"
+    },
+    {
+      "id": "open-spiel-alpha-zero-exclusion",
+      "reference": "open-spiel",
+      "source_path": "open_spiel/python/algorithms/alpha_zero/alpha_zero.py",
+      "symbols": [
+        "alpha_zero"
+      ],
+      "contracts": [
+        "terminal_result",
+        "value_prediction",
+        "model_metadata"
+      ],
+      "assumption_categories": [
+        "two_player",
+        "scalar_value"
+      ],
+      "adaptation": "Do not adopt this trainer: it explicitly requires two players, uses game_num % 2 and two-player opponent indexing. Implement four-seat learning in the Daiyu-based scaffold.",
+      "target": "R2 exclusion check; no port planned",
+      "reuse_status": "reference_only",
+      "implementation_status": "planned_adapter"
+    }
+  ]
+}

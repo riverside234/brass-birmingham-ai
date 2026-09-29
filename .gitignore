@@ -467,6 +467,12 @@ FodyWeavers.xsd
 !/rules-audit/*.md
 !/rules-audit/*.ps1
 !/rules-audit/extended-network-matrix.cs
+!/rules-audit/reference-review/
+/rules-audit/reference-review/*
+!/rules-audit/reference-review/*.md
+!/rules-audit/reference-review/*.ps1
+!/rules-audit/reference-review/*.cs
+!/rules-audit/reference-review/*.cjs
 
 # Game installation, extracted code, mod dependencies and local game data.
 /BrassBirminghamUnity_Data/
@@ -534,7 +540,27 @@ tensorboard/
 *.npy
 *.parquet
 
+# Deliberately distributed project-authored bootstrap/release weights.
+# Experiments and replay data remain private under artifacts/.
+!/training/models/bootstrap/*.pt
+!/training/models/releases/
+/training/models/releases/*
+!/training/models/releases/*.pt
+!/training/models/releases/*.onnx
+!/training/models/releases/*.json
+!/training/models/releases/*.md
+# Our original host/policy executables only, not proprietary game DLLs.
+!/training/runtime/r1/BrassHost.exe
+!/training/runtime/v3/BrassLegacyAI.exe
+
 # Local operating-system metadata.
+/configs/legacy-ai/live.json
 .DS_Store
 Thumbs.db
 Desktop.ini
+
+# Generated patch validation data and isolated artificial saves.
+/tests/BrassPatch/**/*.rsp
+/tests/BrassPatch/**/*.json
+/tests/BrassPatch/**/results.txt
+/tests/BrassPatch/**/isolated-saves/

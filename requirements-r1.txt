@@ -1,0 +1,2 @@
+# R1 adds no neural or GPU dependency; reuses the pinned JSON Schema validator.
+-r requirements-r0.txt

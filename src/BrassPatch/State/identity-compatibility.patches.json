@@ -1,0 +1,9 @@
+[
+  {"targetType":"BoardGameRules.Entities.Board.Board","targetMethod":"GetCoalSourceById","parameterTypes":["System.String"],"helperType":"BrassPatch.IdentityCompatibility","helperMethod":"Coal","mode":"replace"},
+  {"targetType":"BoardGameRules.Entities.Board.Board","targetMethod":"GetIronSourceById","parameterTypes":["System.String"],"helperType":"BrassPatch.IdentityCompatibility","helperMethod":"Iron","mode":"replace"},
+  {"targetType":"BoardGameRules.Entities.Board.Board","targetMethod":"GetBeerSourceById","parameterTypes":["System.String"],"helperType":"BrassPatch.IdentityCompatibility","helperMethod":"Beer","mode":"replace"},
+  {"targetType":"BoardGameRules.Entities.Board.Board","targetMethod":"GetIndustryByUniqueId","parameterTypes":["System.String"],"helperType":"BrassPatch.IdentityCompatibility","helperMethod":"BoardIndustry","mode":"replace"},
+  {"targetType":"BoardGameRules.Entities.NumericalResources.PlayersTrack","targetMethod":"GetIndustryByUniqueId","parameterTypes":["System.String"],"helperType":"BrassPatch.IdentityCompatibility","helperMethod":"MatIndustry","mode":"replace"},
+  {"targetType":"BoardGameRules.Entities.EventSourcing.Aggregates.AggregateRoot","targetMethod":"ApplyEvent","parameterTypes":["BoardGameRules.Entities.EventSourcing.Events.IEvent"],"helperType":"BrassPatch.IdentityCompatibility","helperMethod":"BeforeEvent","mode":"prefix"},
+  {"targetType":"BrassApplication.UseCases.Menu.MainMenu.MainMenuUseCase","targetMethod":"ShowOnlineGamesView","parameterTypes":[],"helperType":"BrassPatch.OfflineMode","helperMethod":"ShowOnlineDisabled","mode":"replace"}
+]

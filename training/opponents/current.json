@@ -1,0 +1,28 @@
+{
+  "format": "legacy-current-bank/1.0.0",
+  "generation": 3,
+  "bank": "bank-af17b1aadbe7f9b21fa7",
+  "qualification": "training/opponents/evaluations/qualification-c487cd9f12a201a5690c/report.json",
+  "qualification_sha256": "790942901e25720a58afe0bfe6536f54d014cfba7ec4432cb3e8f1843f5520eb",
+  "previous_pool": "training/opponents/archive/pool-5b094b624089c9eae2b4.json",
+  "scope": "User-accepted limited validation; Four-player S1 niche opponents; Pottery Flex held out. Windows qualification only.",
+  "scope_amendment": {
+    "kind": "user-requested-limited-validation",
+    "reason": "User requested that 25 qualification games are good enough; stop the remaining tournament games.",
+    "requested_games": 25,
+    "retained_games": 28,
+    "parent_spec": "qualification-97c7a2f1add8fc7aa336",
+    "parent_spec_sha256": "a1ac3854341b77accf7aaaf2819ce82aea34579869f2ce2d2f40b3f74c51925b",
+    "original_admission": {
+      "min_guarded_games": 16,
+      "min_mixed_games": 4,
+      "min_identical_games": 1,
+      "maximum_failures": 0,
+      "maximum_economic_stalls": 0,
+      "minimum_guarded_mean_rank": 2.5,
+      "held_out_family": "pottery-flex",
+      "general_hard_min_setup_groups": 30
+    },
+    "selection": "Every result file completed before the runner stopped; no outcome filtering."
+  }
+}

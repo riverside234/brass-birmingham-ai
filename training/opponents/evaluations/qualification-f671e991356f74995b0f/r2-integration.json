@@ -1,0 +1,21 @@
+{
+  "passed": true,
+  "bank": "bank-a190d581edf4cff68698",
+  "shard_sha256": "0040d0b7a96a360a672e0154599903b300aa563ee8f52f0ffd8edaf0bcb25cee",
+  "games": 2,
+  "decisions": 707,
+  "four_seat_values_trained": true,
+  "legacy_on_policy_rejected": true,
+  "style_and_intent_preserved": true,
+  "separate_contexts": true,
+  "restore_invalidates_cached_action": true,
+  "last_metrics": {
+    "value": 1.4967453479766846,
+    "teacher": 0.0,
+    "win": 1.449963092803955,
+    "placement": 0.06918439269065857,
+    "vp": 0.2948620021343231,
+    "total": 1.4967453479766846,
+    "gradient_norm": 1.3361868858337402
+  }
+}

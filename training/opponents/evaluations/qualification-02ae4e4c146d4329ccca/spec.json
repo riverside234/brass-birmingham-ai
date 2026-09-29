@@ -1,0 +1,1443 @@
+{
+  "id": "qualification-02ae4e4c146d4329ccca",
+  "payload": {
+    "format": "legacy-qualification-spec/1.0.0",
+    "bank": "bank-1166d8854d8af3997cc3",
+    "player_count": 4,
+    "bank_manifest_sha256": "b3328b377e41e198eb056c406ea09d6e7234e83e06e457569c7bf4ce29433b59",
+    "jobs": [
+      {
+        "id": "9438ffd3ca4e93392221",
+        "stage": "guarded",
+        "seed": 77001,
+        "table": [
+          "balanced-v3",
+          null,
+          null,
+          null
+        ],
+        "target": 0
+      },
+      {
+        "id": "e0ac0189c2a4e7492180",
+        "stage": "guarded",
+        "seed": 77001,
+        "table": [
+          null,
+          "balanced-v3",
+          null,
+          null
+        ],
+        "target": 1
+      },
+      {
+        "id": "c841bf6125f7239026ea",
+        "stage": "guarded",
+        "seed": 77001,
+        "table": [
+          null,
+          null,
+          "balanced-v3",
+          null
+        ],
+        "target": 2
+      },
+      {
+        "id": "30bc38167ba02c83757f",
+        "stage": "guarded",
+        "seed": 77001,
+        "table": [
+          null,
+          null,
+          null,
+          "balanced-v3"
+        ],
+        "target": 3
+      },
+      {
+        "id": "7171c9bd5ba0d516293a",
+        "stage": "guarded",
+        "seed": 77002,
+        "table": [
+          "balanced-v3",
+          null,
+          null,
+          null
+        ],
+        "target": 0
+      },
+      {
+        "id": "cf11e13a0fc5ddf7cacc",
+        "stage": "guarded",
+        "seed": 77002,
+        "table": [
+          null,
+          "balanced-v3",
+          null,
+          null
+        ],
+        "target": 1
+      },
+      {
+        "id": "997fc2d236d2e0395cc1",
+        "stage": "guarded",
+        "seed": 77002,
+        "table": [
+          null,
+          null,
+          "balanced-v3",
+          null
+        ],
+        "target": 2
+      },
+      {
+        "id": "744dd966c03067443ae7",
+        "stage": "guarded",
+        "seed": 77002,
+        "table": [
+          null,
+          null,
+          null,
+          "balanced-v3"
+        ],
+        "target": 3
+      },
+      {
+        "id": "163cf5e0dd6312c7fcb4",
+        "stage": "guarded",
+        "seed": 77003,
+        "table": [
+          "balanced-v3",
+          null,
+          null,
+          null
+        ],
+        "target": 0
+      },
+      {
+        "id": "6d3162cb80c6d477c742",
+        "stage": "guarded",
+        "seed": 77003,
+        "table": [
+          null,
+          "balanced-v3",
+          null,
+          null
+        ],
+        "target": 1
+      },
+      {
+        "id": "7730c52d4a8f16b9371d",
+        "stage": "guarded",
+        "seed": 77003,
+        "table": [
+          null,
+          null,
+          "balanced-v3",
+          null
+        ],
+        "target": 2
+      },
+      {
+        "id": "746edff211586e27d8e2",
+        "stage": "guarded",
+        "seed": 77003,
+        "table": [
+          null,
+          null,
+          null,
+          "balanced-v3"
+        ],
+        "target": 3
+      },
+      {
+        "id": "d96d66bdb58ec827b0a8",
+        "stage": "guarded",
+        "seed": 77004,
+        "table": [
+          "balanced-v3",
+          null,
+          null,
+          null
+        ],
+        "target": 0
+      },
+      {
+        "id": "311abd992f7ae21c7e3f",
+        "stage": "guarded",
+        "seed": 77004,
+        "table": [
+          null,
+          "balanced-v3",
+          null,
+          null
+        ],
+        "target": 1
+      },
+      {
+        "id": "bf6eca6ee236444c937c",
+        "stage": "guarded",
+        "seed": 77004,
+        "table": [
+          null,
+          null,
+          "balanced-v3",
+          null
+        ],
+        "target": 2
+      },
+      {
+        "id": "0c2fc3ebf2f90d58bef0",
+        "stage": "guarded",
+        "seed": 77004,
+        "table": [
+          null,
+          null,
+          null,
+          "balanced-v3"
+        ],
+        "target": 3
+      },
+      {
+        "id": "a952c5d11e8c350d78c4",
+        "stage": "guarded",
+        "seed": 77001,
+        "table": [
+          "rail-tempo-v3",
+          null,
+          null,
+          null
+        ],
+        "target": 0
+      },
+      {
+        "id": "87885b559986c9d7df70",
+        "stage": "guarded",
+        "seed": 77001,
+        "table": [
+          null,
+          "rail-tempo-v3",
+          null,
+          null
+        ],
+        "target": 1
+      },
+      {
+        "id": "890e96f65cc01eebd18e",
+        "stage": "guarded",
+        "seed": 77001,
+        "table": [
+          null,
+          null,
+          "rail-tempo-v3",
+          null
+        ],
+        "target": 2
+      },
+      {
+        "id": "58ed55068799887f3bd7",
+        "stage": "guarded",
+        "seed": 77001,
+        "table": [
+          null,
+          null,
+          null,
+          "rail-tempo-v3"
+        ],
+        "target": 3
+      },
+      {
+        "id": "ff6331e1597f7e17613e",
+        "stage": "guarded",
+        "seed": 77002,
+        "table": [
+          "rail-tempo-v3",
+          null,
+          null,
+          null
+        ],
+        "target": 0
+      },
+      {
+        "id": "5ff3c32a7a1301f52f52",
+        "stage": "guarded",
+        "seed": 77002,
+        "table": [
+          null,
+          "rail-tempo-v3",
+          null,
+          null
+        ],
+        "target": 1
+      },
+      {
+        "id": "f1254954eafca904ecc9",
+        "stage": "guarded",
+        "seed": 77002,
+        "table": [
+          null,
+          null,
+          "rail-tempo-v3",
+          null
+        ],
+        "target": 2
+      },
+      {
+        "id": "8c29122bd86b8aacfa36",
+        "stage": "guarded",
+        "seed": 77002,
+        "table": [
+          null,
+          null,
+          null,
+          "rail-tempo-v3"
+        ],
+        "target": 3
+      },
+      {
+        "id": "b19c5a69e80e0c43e942",
+        "stage": "guarded",
+        "seed": 77003,
+        "table": [
+          "rail-tempo-v3",
+          null,
+          null,
+          null
+        ],
+        "target": 0
+      },
+      {
+        "id": "f9274cb52dffcb383404",
+        "stage": "guarded",
+        "seed": 77003,
+        "table": [
+          null,
+          "rail-tempo-v3",
+          null,
+          null
+        ],
+        "target": 1
+      },
+      {
+        "id": "1ab75c202a63a2a51831",
+        "stage": "guarded",
+        "seed": 77003,
+        "table": [
+          null,
+          null,
+          "rail-tempo-v3",
+          null
+        ],
+        "target": 2
+      },
+      {
+        "id": "8f0853f63d510189034d",
+        "stage": "guarded",
+        "seed": 77003,
+        "table": [
+          null,
+          null,
+          null,
+          "rail-tempo-v3"
+        ],
+        "target": 3
+      },
+      {
+        "id": "a7e7ed5ca075cbf1f65d",
+        "stage": "guarded",
+        "seed": 77004,
+        "table": [
+          "rail-tempo-v3",
+          null,
+          null,
+          null
+        ],
+        "target": 0
+      },
+      {
+        "id": "875f9cb771cad491efa4",
+        "stage": "guarded",
+        "seed": 77004,
+        "table": [
+          null,
+          "rail-tempo-v3",
+          null,
+          null
+        ],
+        "target": 1
+      },
+      {
+        "id": "a41f94f8c70b0ec8827c",
+        "stage": "guarded",
+        "seed": 77004,
+        "table": [
+          null,
+          null,
+          "rail-tempo-v3",
+          null
+        ],
+        "target": 2
+      },
+      {
+        "id": "9e39e78e7399396939b7",
+        "stage": "guarded",
+        "seed": 77004,
+        "table": [
+          null,
+          null,
+          null,
+          "rail-tempo-v3"
+        ],
+        "target": 3
+      },
+      {
+        "id": "65142bc1490475dc88aa",
+        "stage": "guarded",
+        "seed": 77001,
+        "table": [
+          "cotton-v3",
+          null,
+          null,
+          null
+        ],
+        "target": 0
+      },
+      {
+        "id": "c37fca6d23ccd4fd0e42",
+        "stage": "guarded",
+        "seed": 77001,
+        "table": [
+          null,
+          "cotton-v3",
+          null,
+          null
+        ],
+        "target": 1
+      },
+      {
+        "id": "e40ca039eff3789498a2",
+        "stage": "guarded",
+        "seed": 77001,
+        "table": [
+          null,
+          null,
+          "cotton-v3",
+          null
+        ],
+        "target": 2
+      },
+      {
+        "id": "02c994455710e541a78b",
+        "stage": "guarded",
+        "seed": 77001,
+        "table": [
+          null,
+          null,
+          null,
+          "cotton-v3"
+        ],
+        "target": 3
+      },
+      {
+        "id": "74c332641acefffc560a",
+        "stage": "guarded",
+        "seed": 77002,
+        "table": [
+          "cotton-v3",
+          null,
+          null,
+          null
+        ],
+        "target": 0
+      },
+      {
+        "id": "e330861086dc3c4a69fa",
+        "stage": "guarded",
+        "seed": 77002,
+        "table": [
+          null,
+          "cotton-v3",
+          null,
+          null
+        ],
+        "target": 1
+      },
+      {
+        "id": "3e5aef96b78e4468db3c",
+        "stage": "guarded",
+        "seed": 77002,
+        "table": [
+          null,
+          null,
+          "cotton-v3",
+          null
+        ],
+        "target": 2
+      },
+      {
+        "id": "c558e95145f7028d0f14",
+        "stage": "guarded",
+        "seed": 77002,
+        "table": [
+          null,
+          null,
+          null,
+          "cotton-v3"
+        ],
+        "target": 3
+      },
+      {
+        "id": "4f2e8aa96d1c22e8724f",
+        "stage": "guarded",
+        "seed": 77003,
+        "table": [
+          "cotton-v3",
+          null,
+          null,
+          null
+        ],
+        "target": 0
+      },
+      {
+        "id": "7e913b6b881719418cdb",
+        "stage": "guarded",
+        "seed": 77003,
+        "table": [
+          null,
+          "cotton-v3",
+          null,
+          null
+        ],
+        "target": 1
+      },
+      {
+        "id": "38c1268b9debb8bb3fa4",
+        "stage": "guarded",
+        "seed": 77003,
+        "table": [
+          null,
+          null,
+          "cotton-v3",
+          null
+        ],
+        "target": 2
+      },
+      {
+        "id": "78aa013fbafb8648c4a4",
+        "stage": "guarded",
+        "seed": 77003,
+        "table": [
+          null,
+          null,
+          null,
+          "cotton-v3"
+        ],
+        "target": 3
+      },
+      {
+        "id": "b701efb72d827278156f",
+        "stage": "guarded",
+        "seed": 77004,
+        "table": [
+          "cotton-v3",
+          null,
+          null,
+          null
+        ],
+        "target": 0
+      },
+      {
+        "id": "c9032d62391cfc5b1b69",
+        "stage": "guarded",
+        "seed": 77004,
+        "table": [
+          null,
+          "cotton-v3",
+          null,
+          null
+        ],
+        "target": 1
+      },
+      {
+        "id": "e2b7c7d88cd427367ee0",
+        "stage": "guarded",
+        "seed": 77004,
+        "table": [
+          null,
+          null,
+          "cotton-v3",
+          null
+        ],
+        "target": 2
+      },
+      {
+        "id": "02db867978b74267f220",
+        "stage": "guarded",
+        "seed": 77004,
+        "table": [
+          null,
+          null,
+          null,
+          "cotton-v3"
+        ],
+        "target": 3
+      },
+      {
+        "id": "3d28f22e840e5867c854",
+        "stage": "guarded",
+        "seed": 77001,
+        "table": [
+          "goods-beer-v3",
+          null,
+          null,
+          null
+        ],
+        "target": 0
+      },
+      {
+        "id": "ebb3e71bcc94ba9b6c05",
+        "stage": "guarded",
+        "seed": 77001,
+        "table": [
+          null,
+          "goods-beer-v3",
+          null,
+          null
+        ],
+        "target": 1
+      },
+      {
+        "id": "ad19f85c7ce9ccb277a4",
+        "stage": "guarded",
+        "seed": 77001,
+        "table": [
+          null,
+          null,
+          "goods-beer-v3",
+          null
+        ],
+        "target": 2
+      },
+      {
+        "id": "e060d01335d2783ed985",
+        "stage": "guarded",
+        "seed": 77001,
+        "table": [
+          null,
+          null,
+          null,
+          "goods-beer-v3"
+        ],
+        "target": 3
+      },
+      {
+        "id": "9d47f28146a85d2c5ba5",
+        "stage": "guarded",
+        "seed": 77002,
+        "table": [
+          "goods-beer-v3",
+          null,
+          null,
+          null
+        ],
+        "target": 0
+      },
+      {
+        "id": "f250ceb4df22e5bc18ea",
+        "stage": "guarded",
+        "seed": 77002,
+        "table": [
+          null,
+          "goods-beer-v3",
+          null,
+          null
+        ],
+        "target": 1
+      },
+      {
+        "id": "24ec412d4f122a8f0ed5",
+        "stage": "guarded",
+        "seed": 77002,
+        "table": [
+          null,
+          null,
+          "goods-beer-v3",
+          null
+        ],
+        "target": 2
+      },
+      {
+        "id": "5e2694ef7e78be243bc2",
+        "stage": "guarded",
+        "seed": 77002,
+        "table": [
+          null,
+          null,
+          null,
+          "goods-beer-v3"
+        ],
+        "target": 3
+      },
+      {
+        "id": "d66c18f9bcb3170b43b2",
+        "stage": "guarded",
+        "seed": 77003,
+        "table": [
+          "goods-beer-v3",
+          null,
+          null,
+          null
+        ],
+        "target": 0
+      },
+      {
+        "id": "f3eae1a2fbf52382f06f",
+        "stage": "guarded",
+        "seed": 77003,
+        "table": [
+          null,
+          "goods-beer-v3",
+          null,
+          null
+        ],
+        "target": 1
+      },
+      {
+        "id": "9bfeddbe6905434f3558",
+        "stage": "guarded",
+        "seed": 77003,
+        "table": [
+          null,
+          null,
+          "goods-beer-v3",
+          null
+        ],
+        "target": 2
+      },
+      {
+        "id": "924e777883e60da0c748",
+        "stage": "guarded",
+        "seed": 77003,
+        "table": [
+          null,
+          null,
+          null,
+          "goods-beer-v3"
+        ],
+        "target": 3
+      },
+      {
+        "id": "6cccaa07edf0ded4266a",
+        "stage": "guarded",
+        "seed": 77004,
+        "table": [
+          "goods-beer-v3",
+          null,
+          null,
+          null
+        ],
+        "target": 0
+      },
+      {
+        "id": "47697daf267e12e4d4db",
+        "stage": "guarded",
+        "seed": 77004,
+        "table": [
+          null,
+          "goods-beer-v3",
+          null,
+          null
+        ],
+        "target": 1
+      },
+      {
+        "id": "bfc759b044a0f3b4fdb8",
+        "stage": "guarded",
+        "seed": 77004,
+        "table": [
+          null,
+          null,
+          "goods-beer-v3",
+          null
+        ],
+        "target": 2
+      },
+      {
+        "id": "e43fdbc632d42d98eb56",
+        "stage": "guarded",
+        "seed": 77004,
+        "table": [
+          null,
+          null,
+          null,
+          "goods-beer-v3"
+        ],
+        "target": 3
+      },
+      {
+        "id": "062d45b29c4a494d54a1",
+        "stage": "guarded",
+        "seed": 77001,
+        "table": [
+          "supplier-v3",
+          null,
+          null,
+          null
+        ],
+        "target": 0
+      },
+      {
+        "id": "8a541c86317940ebbd05",
+        "stage": "guarded",
+        "seed": 77001,
+        "table": [
+          null,
+          "supplier-v3",
+          null,
+          null
+        ],
+        "target": 1
+      },
+      {
+        "id": "acf971f40950d7fee830",
+        "stage": "guarded",
+        "seed": 77001,
+        "table": [
+          null,
+          null,
+          "supplier-v3",
+          null
+        ],
+        "target": 2
+      },
+      {
+        "id": "63daf9dee0635bba0889",
+        "stage": "guarded",
+        "seed": 77001,
+        "table": [
+          null,
+          null,
+          null,
+          "supplier-v3"
+        ],
+        "target": 3
+      },
+      {
+        "id": "d09d1025f0fb74d7ddc3",
+        "stage": "guarded",
+        "seed": 77002,
+        "table": [
+          "supplier-v3",
+          null,
+          null,
+          null
+        ],
+        "target": 0
+      },
+      {
+        "id": "d6baa9b3299b3362bf8d",
+        "stage": "guarded",
+        "seed": 77002,
+        "table": [
+          null,
+          "supplier-v3",
+          null,
+          null
+        ],
+        "target": 1
+      },
+      {
+        "id": "9416880f75489106e80f",
+        "stage": "guarded",
+        "seed": 77002,
+        "table": [
+          null,
+          null,
+          "supplier-v3",
+          null
+        ],
+        "target": 2
+      },
+      {
+        "id": "b2a9292114791b471492",
+        "stage": "guarded",
+        "seed": 77002,
+        "table": [
+          null,
+          null,
+          null,
+          "supplier-v3"
+        ],
+        "target": 3
+      },
+      {
+        "id": "3a97877d779d8ae4d02d",
+        "stage": "guarded",
+        "seed": 77003,
+        "table": [
+          "supplier-v3",
+          null,
+          null,
+          null
+        ],
+        "target": 0
+      },
+      {
+        "id": "d4533678ac934dafe38a",
+        "stage": "guarded",
+        "seed": 77003,
+        "table": [
+          null,
+          "supplier-v3",
+          null,
+          null
+        ],
+        "target": 1
+      },
+      {
+        "id": "e15a08aaeeb8534d1053",
+        "stage": "guarded",
+        "seed": 77003,
+        "table": [
+          null,
+          null,
+          "supplier-v3",
+          null
+        ],
+        "target": 2
+      },
+      {
+        "id": "86a61f10bc32b845080f",
+        "stage": "guarded",
+        "seed": 77003,
+        "table": [
+          null,
+          null,
+          null,
+          "supplier-v3"
+        ],
+        "target": 3
+      },
+      {
+        "id": "bf58d8d3367535959ed3",
+        "stage": "guarded",
+        "seed": 77004,
+        "table": [
+          "supplier-v3",
+          null,
+          null,
+          null
+        ],
+        "target": 0
+      },
+      {
+        "id": "4a1d3d9d2fe70c925eea",
+        "stage": "guarded",
+        "seed": 77004,
+        "table": [
+          null,
+          "supplier-v3",
+          null,
+          null
+        ],
+        "target": 1
+      },
+      {
+        "id": "84306a3ffd913e345089",
+        "stage": "guarded",
+        "seed": 77004,
+        "table": [
+          null,
+          null,
+          "supplier-v3",
+          null
+        ],
+        "target": 2
+      },
+      {
+        "id": "af80ec395f09b100f5a1",
+        "stage": "guarded",
+        "seed": 77004,
+        "table": [
+          null,
+          null,
+          null,
+          "supplier-v3"
+        ],
+        "target": 3
+      },
+      {
+        "id": "dca483400386d54fe29b",
+        "stage": "guarded",
+        "seed": 77001,
+        "table": [
+          "pottery-flex-v3",
+          null,
+          null,
+          null
+        ],
+        "target": 0
+      },
+      {
+        "id": "c6cefe8401c30516240b",
+        "stage": "guarded",
+        "seed": 77001,
+        "table": [
+          null,
+          "pottery-flex-v3",
+          null,
+          null
+        ],
+        "target": 1
+      },
+      {
+        "id": "7ccb729d1d12661c246d",
+        "stage": "guarded",
+        "seed": 77001,
+        "table": [
+          null,
+          null,
+          "pottery-flex-v3",
+          null
+        ],
+        "target": 2
+      },
+      {
+        "id": "d2ce645e141825250780",
+        "stage": "guarded",
+        "seed": 77001,
+        "table": [
+          null,
+          null,
+          null,
+          "pottery-flex-v3"
+        ],
+        "target": 3
+      },
+      {
+        "id": "73626dc7cd0c893bf38c",
+        "stage": "guarded",
+        "seed": 77002,
+        "table": [
+          "pottery-flex-v3",
+          null,
+          null,
+          null
+        ],
+        "target": 0
+      },
+      {
+        "id": "c13597501213692d7523",
+        "stage": "guarded",
+        "seed": 77002,
+        "table": [
+          null,
+          "pottery-flex-v3",
+          null,
+          null
+        ],
+        "target": 1
+      },
+      {
+        "id": "137e73460d18d7bfd282",
+        "stage": "guarded",
+        "seed": 77002,
+        "table": [
+          null,
+          null,
+          "pottery-flex-v3",
+          null
+        ],
+        "target": 2
+      },
+      {
+        "id": "14ee6b6602bf53951f0d",
+        "stage": "guarded",
+        "seed": 77002,
+        "table": [
+          null,
+          null,
+          null,
+          "pottery-flex-v3"
+        ],
+        "target": 3
+      },
+      {
+        "id": "28cf5e233cad2a59f868",
+        "stage": "guarded",
+        "seed": 77003,
+        "table": [
+          "pottery-flex-v3",
+          null,
+          null,
+          null
+        ],
+        "target": 0
+      },
+      {
+        "id": "96eba22d1afa7aa6f715",
+        "stage": "guarded",
+        "seed": 77003,
+        "table": [
+          null,
+          "pottery-flex-v3",
+          null,
+          null
+        ],
+        "target": 1
+      },
+      {
+        "id": "fd0ba39a8ca28509585a",
+        "stage": "guarded",
+        "seed": 77003,
+        "table": [
+          null,
+          null,
+          "pottery-flex-v3",
+          null
+        ],
+        "target": 2
+      },
+      {
+        "id": "8a2ac56e7f52dc2e0887",
+        "stage": "guarded",
+        "seed": 77003,
+        "table": [
+          null,
+          null,
+          null,
+          "pottery-flex-v3"
+        ],
+        "target": 3
+      },
+      {
+        "id": "3e2708175f2422f98967",
+        "stage": "guarded",
+        "seed": 77004,
+        "table": [
+          "pottery-flex-v3",
+          null,
+          null,
+          null
+        ],
+        "target": 0
+      },
+      {
+        "id": "7390c8e49353266b2f40",
+        "stage": "guarded",
+        "seed": 77004,
+        "table": [
+          null,
+          "pottery-flex-v3",
+          null,
+          null
+        ],
+        "target": 1
+      },
+      {
+        "id": "628ba1af4584327bd4d7",
+        "stage": "guarded",
+        "seed": 77004,
+        "table": [
+          null,
+          null,
+          "pottery-flex-v3",
+          null
+        ],
+        "target": 2
+      },
+      {
+        "id": "d00c76a461a76bc0515c",
+        "stage": "guarded",
+        "seed": 77004,
+        "table": [
+          null,
+          null,
+          null,
+          "pottery-flex-v3"
+        ],
+        "target": 3
+      },
+      {
+        "id": "548fae05465f2cbbc5cc",
+        "stage": "mixed",
+        "seed": 78001,
+        "table": [
+          "balanced-v3",
+          "cotton-v3",
+          "supplier-v3",
+          "pottery-flex-v3"
+        ],
+        "target": null
+      },
+      {
+        "id": "4c187755fb6777ef3eaf",
+        "stage": "mixed",
+        "seed": 78001,
+        "table": [
+          "cotton-v3",
+          "supplier-v3",
+          "pottery-flex-v3",
+          "balanced-v3"
+        ],
+        "target": null
+      },
+      {
+        "id": "04202ab376341083d6ae",
+        "stage": "mixed",
+        "seed": 78001,
+        "table": [
+          "supplier-v3",
+          "pottery-flex-v3",
+          "balanced-v3",
+          "cotton-v3"
+        ],
+        "target": null
+      },
+      {
+        "id": "bd75ebdd475ddc2865a5",
+        "stage": "mixed",
+        "seed": 78001,
+        "table": [
+          "pottery-flex-v3",
+          "balanced-v3",
+          "cotton-v3",
+          "supplier-v3"
+        ],
+        "target": null
+      },
+      {
+        "id": "651c0f19549d1bab50be",
+        "stage": "mixed",
+        "seed": 78001,
+        "table": [
+          "pottery-flex-v3",
+          "supplier-v3",
+          "cotton-v3",
+          "balanced-v3"
+        ],
+        "target": null
+      },
+      {
+        "id": "f2234cfe3da343b4fc9e",
+        "stage": "mixed",
+        "seed": 78001,
+        "table": [
+          "supplier-v3",
+          "cotton-v3",
+          "balanced-v3",
+          "pottery-flex-v3"
+        ],
+        "target": null
+      },
+      {
+        "id": "5ce65437de582d3c2cfd",
+        "stage": "mixed",
+        "seed": 78001,
+        "table": [
+          "cotton-v3",
+          "balanced-v3",
+          "pottery-flex-v3",
+          "supplier-v3"
+        ],
+        "target": null
+      },
+      {
+        "id": "bb65aa0785db8e54cfb2",
+        "stage": "mixed",
+        "seed": 78001,
+        "table": [
+          "balanced-v3",
+          "pottery-flex-v3",
+          "supplier-v3",
+          "cotton-v3"
+        ],
+        "target": null
+      },
+      {
+        "id": "3d83df30247dc9510b5b",
+        "stage": "mixed",
+        "seed": 78002,
+        "table": [
+          "rail-tempo-v3",
+          "goods-beer-v3",
+          "balanced-v3",
+          "pottery-flex-v3"
+        ],
+        "target": null
+      },
+      {
+        "id": "859088e5b0aac2ffdd79",
+        "stage": "mixed",
+        "seed": 78002,
+        "table": [
+          "goods-beer-v3",
+          "balanced-v3",
+          "pottery-flex-v3",
+          "rail-tempo-v3"
+        ],
+        "target": null
+      },
+      {
+        "id": "6c3df87f8577145d1f76",
+        "stage": "mixed",
+        "seed": 78002,
+        "table": [
+          "balanced-v3",
+          "pottery-flex-v3",
+          "rail-tempo-v3",
+          "goods-beer-v3"
+        ],
+        "target": null
+      },
+      {
+        "id": "a1bf540147b96ea59efa",
+        "stage": "mixed",
+        "seed": 78002,
+        "table": [
+          "pottery-flex-v3",
+          "rail-tempo-v3",
+          "goods-beer-v3",
+          "balanced-v3"
+        ],
+        "target": null
+      },
+      {
+        "id": "c3c17eddef117a869be1",
+        "stage": "mixed",
+        "seed": 78002,
+        "table": [
+          "pottery-flex-v3",
+          "balanced-v3",
+          "goods-beer-v3",
+          "rail-tempo-v3"
+        ],
+        "target": null
+      },
+      {
+        "id": "6b1b5219fcc2b914477a",
+        "stage": "mixed",
+        "seed": 78002,
+        "table": [
+          "balanced-v3",
+          "goods-beer-v3",
+          "rail-tempo-v3",
+          "pottery-flex-v3"
+        ],
+        "target": null
+      },
+      {
+        "id": "7a7697d549e84909764b",
+        "stage": "mixed",
+        "seed": 78002,
+        "table": [
+          "goods-beer-v3",
+          "rail-tempo-v3",
+          "pottery-flex-v3",
+          "balanced-v3"
+        ],
+        "target": null
+      },
+      {
+        "id": "9bb4842de18ad19fedd3",
+        "stage": "mixed",
+        "seed": 78002,
+        "table": [
+          "rail-tempo-v3",
+          "pottery-flex-v3",
+          "balanced-v3",
+          "goods-beer-v3"
+        ],
+        "target": null
+      },
+      {
+        "id": "361e9c8c522da7fdcf20",
+        "stage": "identical",
+        "seed": 79001,
+        "table": [
+          "balanced-v3",
+          "balanced-v3",
+          "balanced-v3",
+          "balanced-v3"
+        ],
+        "target": null
+      },
+      {
+        "id": "666ecc3b7ee231c64190",
+        "stage": "identical",
+        "seed": 79001,
+        "table": [
+          "rail-tempo-v3",
+          "rail-tempo-v3",
+          "rail-tempo-v3",
+          "rail-tempo-v3"
+        ],
+        "target": null
+      },
+      {
+        "id": "77510f50e477505310e5",
+        "stage": "identical",
+        "seed": 79001,
+        "table": [
+          "cotton-v3",
+          "cotton-v3",
+          "cotton-v3",
+          "cotton-v3"
+        ],
+        "target": null
+      },
+      {
+        "id": "d7b59e2639e85b46ca85",
+        "stage": "identical",
+        "seed": 79001,
+        "table": [
+          "goods-beer-v3",
+          "goods-beer-v3",
+          "goods-beer-v3",
+          "goods-beer-v3"
+        ],
+        "target": null
+      },
+      {
+        "id": "102a93f72a1b9a80a773",
+        "stage": "identical",
+        "seed": 79001,
+        "table": [
+          "supplier-v3",
+          "supplier-v3",
+          "supplier-v3",
+          "supplier-v3"
+        ],
+        "target": null
+      },
+      {
+        "id": "fb8d95a6baaae08cd60c",
+        "stage": "identical",
+        "seed": 79001,
+        "table": [
+          "pottery-flex-v3",
+          "pottery-flex-v3",
+          "pottery-flex-v3",
+          "pottery-flex-v3"
+        ],
+        "target": null
+      }
+    ],
+    "stopping": "Run every prespecified job once. No early strength stopping or retuning. Resume only missing jobs.",
+    "concurrency": 6,
+    "bootstrap_seed": 731,
+    "bootstrap_samples": 10000,
+    "admission": {
+      "min_guarded_games": 16,
+      "min_mixed_games": 4,
+      "min_identical_games": 1,
+      "maximum_failures": 0,
+      "minimum_guarded_mean_rank": 2.5,
+      "held_out_family": "pottery-flex",
+      "general_hard_min_setup_groups": 30
+    },
+    "release_scope": "Headless niche benchmark/training admission. Human enjoyment, UI latency, difficulty calibration and Linux qualification are separate.",
+    "generation": "v3",
+    "equal_budget_pair": []
+  }
+}

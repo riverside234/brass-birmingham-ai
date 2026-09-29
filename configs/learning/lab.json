@@ -1,0 +1,13 @@
+{
+  "players": 4,
+  "project_root": "/data/not_backed_up/yxu209/ai-training/",
+  "host": "artifacts/r1-host/guarded",
+  "output": "artifacts/r2",
+  "model_size": "medium",
+  "device": "auto",
+  "batch_size": 32,
+  "learning_rate": 0.0003,
+  "seed": 2100,
+  "max_decisions": 2000,
+  "threads": 4
+}

@@ -1,0 +1,1362 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:brass-ai:contracts:0.1.0",
+  "title": "Four-player Brass AI boundary contracts 0.1.0",
+  "description": "R0 structural contracts; R1 must supply legal game adapters and prove information noninterference. No engine implementation or encoder is included.",
+  "oneOf": [
+    {
+      "$ref": "#/$defs/player_observation"
+    },
+    {
+      "$ref": "#/$defs/legal_choices"
+    },
+    {
+      "$ref": "#/$defs/action_plan"
+    },
+    {
+      "$ref": "#/$defs/turn_plan"
+    },
+    {
+      "$ref": "#/$defs/value_prediction"
+    },
+    {
+      "$ref": "#/$defs/decision_request"
+    },
+    {
+      "$ref": "#/$defs/decision_response"
+    },
+    {
+      "$ref": "#/$defs/terminal_result"
+    },
+    {
+      "$ref": "#/$defs/model_metadata"
+    },
+    {
+      "$ref": "#/$defs/trusted_checkpoint"
+    },
+    {
+      "$ref": "#/$defs/host_reset"
+    },
+    {
+      "$ref": "#/$defs/belief_request"
+    }
+  ],
+  "$defs": {
+    "compatibility": {
+      "type": "object",
+      "properties": {
+        "contract_version": {
+          "const": "0.1.0"
+        },
+        "contract_sha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "rules_profile_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160,
+          "pattern": "^[A-Za-z0-9_.:/-]+$"
+        },
+        "rules_profile_sha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "player_count": {
+          "const": 4
+        },
+        "action_schema": {
+          "const": "phase-choice/0.1.0"
+        },
+        "feature_schema": {
+          "const": "unencoded/0.1.0"
+        },
+        "objective": {
+          "const": "win-share/1.0.0"
+        }
+      },
+      "required": [
+        "contract_version",
+        "contract_sha256",
+        "rules_profile_id",
+        "rules_profile_sha256",
+        "player_count",
+        "action_schema",
+        "feature_schema",
+        "objective"
+      ],
+      "additionalProperties": false
+    },
+    "context": {
+      "type": "object",
+      "properties": {
+        "game_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160,
+          "pattern": "^[A-Za-z0-9_.:/-]+$"
+        },
+        "revision": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "decision_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160,
+          "pattern": "^[A-Za-z0-9_.:/-]+$"
+        },
+        "turn_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160,
+          "pattern": "^[A-Za-z0-9_.:/-]+$"
+        },
+        "actor_seat": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 3
+        },
+        "turn_owner_seat": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 3
+        },
+        "phase": {
+          "enum": [
+            "ordinary_action",
+            "action_continuation",
+            "merchant_bonus",
+            "forced_liquidation"
+          ]
+        },
+        "actions_remaining": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 2
+        }
+      },
+      "required": [
+        "game_id",
+        "revision",
+        "decision_id",
+        "turn_id",
+        "actor_seat",
+        "turn_owner_seat",
+        "phase",
+        "actions_remaining"
+      ],
+      "additionalProperties": false
+    },
+    "card": {
+      "type": "object",
+      "properties": {
+        "card_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160,
+          "pattern": "^[A-Za-z0-9_.:/-]+$"
+        },
+        "kind": {
+          "enum": [
+            "location",
+            "industry",
+            "wild_location",
+            "wild_industry"
+          ]
+        },
+        "symbols": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 160,
+            "pattern": "^[A-Za-z0-9_.:/-]+$"
+          },
+          "minItems": 0,
+          "maxItems": 3
+        }
+      },
+      "required": [
+        "card_id",
+        "kind",
+        "symbols"
+      ],
+      "additionalProperties": false
+    },
+    "stack": {
+      "type": "object",
+      "properties": {
+        "industry": {
+          "enum": [
+            "cotton",
+            "manufactured_goods",
+            "pottery",
+            "brewery",
+            "coal_mine",
+            "iron_works"
+          ]
+        },
+        "level": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 20
+        },
+        "count": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "industry",
+        "level",
+        "count"
+      ],
+      "additionalProperties": false
+    },
+    "public_player": {
+      "type": "object",
+      "properties": {
+        "seat": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 3
+        },
+        "cash": {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+        },
+        "income_marker": {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+        },
+        "income_level": {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+        },
+        "banked_vp": {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+        },
+        "spent_this_round": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "hand_size": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 32
+        },
+        "industry_stacks": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/stack"
+          },
+          "minItems": 0,
+          "maxItems": 120
+        },
+        "links_remaining": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "seat",
+        "cash",
+        "income_marker",
+        "income_level",
+        "banked_vp",
+        "spent_this_round",
+        "hand_size",
+        "industry_stacks",
+        "links_remaining"
+      ],
+      "additionalProperties": false
+    },
+    "industry": {
+      "type": "object",
+      "properties": {
+        "industry_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160,
+          "pattern": "^[A-Za-z0-9_.:/-]+$"
+        },
+        "owner_seat": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 3
+        },
+        "region_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160,
+          "pattern": "^[A-Za-z0-9_.:/-]+$"
+        },
+        "slot_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160,
+          "pattern": "^[A-Za-z0-9_.:/-]+$"
+        },
+        "tile_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160,
+          "pattern": "^[A-Za-z0-9_.:/-]+$"
+        },
+        "industry": {
+          "enum": [
+            "cotton",
+            "manufactured_goods",
+            "pottery",
+            "brewery",
+            "coal_mine",
+            "iron_works"
+          ]
+        },
+        "level": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 20
+        },
+        "flipped": {
+          "type": "boolean"
+        },
+        "coal": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "iron": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "beer": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "industry_id",
+        "owner_seat",
+        "region_id",
+        "slot_id",
+        "tile_id",
+        "industry",
+        "level",
+        "flipped",
+        "coal",
+        "iron",
+        "beer"
+      ],
+      "additionalProperties": false
+    },
+    "link": {
+      "type": "object",
+      "properties": {
+        "link_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160,
+          "pattern": "^[A-Za-z0-9_.:/-]+$"
+        },
+        "owner_seat": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 3
+        },
+        "region_ids": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 160,
+            "pattern": "^[A-Za-z0-9_.:/-]+$"
+          },
+          "minItems": 2,
+          "maxItems": 2
+        }
+      },
+      "required": [
+        "link_id",
+        "owner_seat",
+        "region_ids"
+      ],
+      "additionalProperties": false
+    },
+    "merchant": {
+      "type": "object",
+      "properties": {
+        "merchant_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160,
+          "pattern": "^[A-Za-z0-9_.:/-]+$"
+        },
+        "region_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160,
+          "pattern": "^[A-Za-z0-9_.:/-]+$"
+        },
+        "accepts": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "cotton",
+              "manufactured_goods",
+              "pottery",
+              "brewery",
+              "coal_mine",
+              "iron_works"
+            ]
+          },
+          "minItems": 0,
+          "maxItems": 6
+        },
+        "beer": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "bonus": {
+          "enum": [
+            "none",
+            "income",
+            "cash",
+            "vp",
+            "develop"
+          ]
+        }
+      },
+      "required": [
+        "merchant_id",
+        "region_id",
+        "accepts",
+        "beer",
+        "bonus"
+      ],
+      "additionalProperties": false
+    },
+    "public_state": {
+      "type": "object",
+      "properties": {
+        "era": {
+          "enum": [
+            "canal",
+            "rail"
+          ]
+        },
+        "round": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100
+        },
+        "turn_order": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 3
+          },
+          "minItems": 4,
+          "maxItems": 4,
+          "uniqueItems": true
+        },
+        "players": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/public_player"
+          },
+          "minItems": 4,
+          "maxItems": 4
+        },
+        "industries": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/industry"
+          },
+          "minItems": 0,
+          "maxItems": 200
+        },
+        "links": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/link"
+          },
+          "minItems": 0,
+          "maxItems": 200
+        },
+        "merchants": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/merchant"
+          },
+          "minItems": 0,
+          "maxItems": 30
+        },
+        "coal_market_prices": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "minItems": 0,
+          "maxItems": 100
+        },
+        "iron_market_prices": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "minItems": 0,
+          "maxItems": 100
+        },
+        "draw_pile_count": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "face_down_removed_count": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "public_discards": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/card"
+          },
+          "minItems": 0,
+          "maxItems": 500
+        },
+        "catalog_sha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        }
+      },
+      "required": [
+        "era",
+        "round",
+        "turn_order",
+        "players",
+        "industries",
+        "links",
+        "merchants",
+        "coal_market_prices",
+        "iron_market_prices",
+        "draw_pile_count",
+        "face_down_removed_count",
+        "public_discards",
+        "catalog_sha256"
+      ],
+      "additionalProperties": false
+    },
+    "observed_event": {
+      "type": "object",
+      "properties": {
+        "sequence": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "kind": {
+          "enum": [
+            "public_action",
+            "own_draw",
+            "public_scout",
+            "round_end",
+            "era_end"
+          ]
+        },
+        "actor_seat": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 3
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "public_choice_ids": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 160,
+            "pattern": "^[A-Za-z0-9_.:/-]+$"
+          },
+          "minItems": 0,
+          "maxItems": 200
+        },
+        "visible_cards": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/card"
+          },
+          "minItems": 0,
+          "maxItems": 32
+        }
+      },
+      "required": [
+        "sequence",
+        "kind",
+        "actor_seat",
+        "public_choice_ids",
+        "visible_cards"
+      ],
+      "additionalProperties": false
+    },
+    "player_observation": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "const": "player_observation"
+        },
+        "compatibility": {
+          "$ref": "#/$defs/compatibility"
+        },
+        "observer_seat": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 3
+        },
+        "observation_id": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "context": {
+          "$ref": "#/$defs/context"
+        },
+        "public_state": {
+          "$ref": "#/$defs/public_state"
+        },
+        "private_state": {
+          "type": "object",
+          "properties": {
+            "own_hand": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/card"
+              },
+              "minItems": 0,
+              "maxItems": 32
+            },
+            "remembered_events": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/observed_event"
+              },
+              "minItems": 0,
+              "maxItems": 10000
+            }
+          },
+          "required": [
+            "own_hand",
+            "remembered_events"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "kind",
+        "compatibility",
+        "observer_seat",
+        "observation_id",
+        "context",
+        "public_state",
+        "private_state"
+      ],
+      "additionalProperties": false
+    },
+    "choice": {
+      "type": "object",
+      "properties": {
+        "choice_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160,
+          "pattern": "^[A-Za-z0-9_.:/-]+$"
+        },
+        "choice_kind": {
+          "enum": [
+            "action_type",
+            "card",
+            "region",
+            "slot",
+            "industry",
+            "link",
+            "coal_source",
+            "iron_source",
+            "beer_source",
+            "merchant",
+            "finish",
+            "liquidate"
+          ]
+        },
+        "target_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160,
+          "pattern": "^[A-Za-z0-9_.:/-]+$"
+        }
+      },
+      "required": [
+        "choice_id",
+        "choice_kind",
+        "target_id"
+      ],
+      "additionalProperties": false
+    },
+    "legal_choices": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "const": "legal_choices"
+        },
+        "compatibility": {
+          "$ref": "#/$defs/compatibility"
+        },
+        "context": {
+          "$ref": "#/$defs/context"
+        },
+        "observation_id": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "choices": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/choice"
+          },
+          "minItems": 1,
+          "maxItems": 100000
+        }
+      },
+      "required": [
+        "kind",
+        "compatibility",
+        "context",
+        "observation_id",
+        "choices"
+      ],
+      "additionalProperties": false
+    },
+    "action_plan": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "const": "action_plan"
+        },
+        "action_type": {
+          "enum": [
+            "build",
+            "network",
+            "sell",
+            "develop",
+            "loan",
+            "scout",
+            "pass",
+            "liquidate"
+          ]
+        },
+        "choice_ids": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 160,
+            "pattern": "^[A-Za-z0-9_.:/-]+$"
+          },
+          "minItems": 1,
+          "maxItems": 512
+        }
+      },
+      "required": [
+        "kind",
+        "action_type",
+        "choice_ids"
+      ],
+      "additionalProperties": false
+    },
+    "turn_plan": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "const": "turn_plan"
+        },
+        "actions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/action_plan"
+          },
+          "minItems": 1,
+          "maxItems": 2
+        }
+      },
+      "required": [
+        "kind",
+        "actions"
+      ],
+      "additionalProperties": false
+    },
+    "budget": {
+      "type": "object",
+      "properties": {
+        "turn_budget_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160,
+          "pattern": "^[A-Za-z0-9_.:/-]+$"
+        },
+        "mode": {
+          "enum": [
+            "wall_clock",
+            "fixed_work"
+          ]
+        },
+        "total_ms": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 300000
+        },
+        "remaining_ms": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 300000
+        },
+        "work_limit": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 9007199254740991
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "turn_budget_id",
+        "mode",
+        "total_ms",
+        "remaining_ms",
+        "work_limit"
+      ],
+      "additionalProperties": false
+    },
+    "value_prediction": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "const": "value_prediction"
+        },
+        "compatibility": {
+          "$ref": "#/$defs/compatibility"
+        },
+        "observer_seat": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 3
+        },
+        "observation_id": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "seat_ids": {
+          "const": [
+            0,
+            1,
+            2,
+            3
+          ]
+        },
+        "win_share": {
+          "type": "array",
+          "items": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "minItems": 4,
+          "maxItems": 4
+        },
+        "expected_rank": {
+          "type": "array",
+          "items": {
+            "type": "number",
+            "minimum": 1,
+            "maximum": 4
+          },
+          "minItems": 4,
+          "maxItems": 4
+        },
+        "expected_final_vp": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "minItems": 4,
+          "maxItems": 4
+        }
+      },
+      "required": [
+        "kind",
+        "compatibility",
+        "observer_seat",
+        "observation_id",
+        "seat_ids",
+        "win_share",
+        "expected_rank",
+        "expected_final_vp"
+      ],
+      "additionalProperties": false
+    },
+    "intent": {
+      "type": "object",
+      "properties": {
+        "profile_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160,
+          "pattern": "^[A-Za-z0-9_.:/-]+$"
+        },
+        "profile_sha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "focus": {
+          "enum": [
+            "balanced",
+            "rail_tempo",
+            "cotton",
+            "goods_beer",
+            "supplier",
+            "pottery_flex"
+          ]
+        },
+        "target_ids": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 160,
+            "pattern": "^[A-Za-z0-9_.:/-]+$"
+          },
+          "minItems": 0,
+          "maxItems": 50
+        }
+      },
+      "required": [
+        "profile_id",
+        "profile_sha256",
+        "focus",
+        "target_ids"
+      ],
+      "additionalProperties": false
+    },
+    "decision_request": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "const": "decision_request"
+        },
+        "compatibility": {
+          "$ref": "#/$defs/compatibility"
+        },
+        "request_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160,
+          "pattern": "^[A-Za-z0-9_.:/-]+$"
+        },
+        "policy_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160,
+          "pattern": "^[A-Za-z0-9_.:/-]+$"
+        },
+        "observation": {
+          "$ref": "#/$defs/player_observation"
+        },
+        "legal_choices": {
+          "$ref": "#/$defs/legal_choices"
+        },
+        "budget": {
+          "$ref": "#/$defs/budget"
+        },
+        "intent": {
+          "$ref": "#/$defs/intent"
+        }
+      },
+      "required": [
+        "kind",
+        "compatibility",
+        "request_id",
+        "policy_id",
+        "observation",
+        "legal_choices",
+        "budget",
+        "intent"
+      ],
+      "additionalProperties": false
+    },
+    "decision_response": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "const": "decision_response"
+        },
+        "compatibility": {
+          "$ref": "#/$defs/compatibility"
+        },
+        "request_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160,
+          "pattern": "^[A-Za-z0-9_.:/-]+$"
+        },
+        "policy_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160,
+          "pattern": "^[A-Za-z0-9_.:/-]+$"
+        },
+        "context": {
+          "$ref": "#/$defs/context"
+        },
+        "observation_id": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "turn_budget_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160,
+          "pattern": "^[A-Za-z0-9_.:/-]+$"
+        },
+        "status": {
+          "enum": [
+            "ok",
+            "cancelled",
+            "no_plan"
+          ]
+        },
+        "plan": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/turn_plan"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "elapsed_ms": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "kind",
+        "compatibility",
+        "request_id",
+        "policy_id",
+        "context",
+        "observation_id",
+        "turn_budget_id",
+        "status",
+        "plan",
+        "elapsed_ms"
+      ],
+      "additionalProperties": false
+    },
+    "terminal_player": {
+      "type": "object",
+      "properties": {
+        "seat": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 3
+        },
+        "final_vp": {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+        },
+        "income_level": {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+        },
+        "cash": {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+        },
+        "rank": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 4
+        }
+      },
+      "required": [
+        "seat",
+        "final_vp",
+        "income_level",
+        "cash",
+        "rank"
+      ],
+      "additionalProperties": false
+    },
+    "terminal_result": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "const": "terminal_result"
+        },
+        "compatibility": {
+          "$ref": "#/$defs/compatibility"
+        },
+        "game_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160,
+          "pattern": "^[A-Za-z0-9_.:/-]+$"
+        },
+        "players": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/terminal_player"
+          },
+          "minItems": 4,
+          "maxItems": 4
+        },
+        "seat_ids": {
+          "const": [
+            0,
+            1,
+            2,
+            3
+          ]
+        },
+        "win_share": {
+          "type": "array",
+          "items": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "minItems": 4,
+          "maxItems": 4
+        }
+      },
+      "required": [
+        "kind",
+        "compatibility",
+        "game_id",
+        "players",
+        "seat_ids",
+        "win_share"
+      ],
+      "additionalProperties": false
+    },
+    "model_metadata": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "const": "model_metadata"
+        },
+        "compatibility": {
+          "$ref": "#/$defs/compatibility"
+        },
+        "model_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160,
+          "pattern": "^[A-Za-z0-9_.:/-]+$"
+        },
+        "weights_sha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "reference_lock_sha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "seat_ids": {
+          "const": [
+            0,
+            1,
+            2,
+            3
+          ]
+        },
+        "value_heads": {
+          "const": [
+            "win_share",
+            "expected_rank",
+            "expected_final_vp"
+          ]
+        },
+        "parameter_count": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "kind",
+        "compatibility",
+        "model_id",
+        "weights_sha256",
+        "reference_lock_sha256",
+        "seat_ids",
+        "value_heads",
+        "parameter_count"
+      ],
+      "additionalProperties": false
+    },
+    "trusted_checkpoint": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "const": "trusted_checkpoint"
+        },
+        "visibility": {
+          "const": "trusted_host_only"
+        },
+        "compatibility": {
+          "$ref": "#/$defs/compatibility"
+        },
+        "game_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160,
+          "pattern": "^[A-Za-z0-9_.:/-]+$"
+        },
+        "revision": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "checkpoint_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160,
+          "pattern": "^[A-Za-z0-9_.:/-]+$"
+        },
+        "payload_sha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "restore_format": {
+          "const": "unimplemented/0.1.0"
+        }
+      },
+      "required": [
+        "kind",
+        "visibility",
+        "compatibility",
+        "game_id",
+        "revision",
+        "checkpoint_id",
+        "payload_sha256",
+        "restore_format"
+      ],
+      "additionalProperties": false
+    },
+    "host_reset": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "const": "host_reset"
+        },
+        "visibility": {
+          "const": "trusted_host_only"
+        },
+        "compatibility": {
+          "$ref": "#/$defs/compatibility"
+        },
+        "game_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160,
+          "pattern": "^[A-Za-z0-9_.:/-]+$"
+        },
+        "setup_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160,
+          "pattern": "^[A-Za-z0-9_.:/-]+$"
+        },
+        "environment_seed": {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "kind",
+        "visibility",
+        "compatibility",
+        "game_id",
+        "setup_id",
+        "environment_seed"
+      ],
+      "additionalProperties": false
+    },
+    "belief_request": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "const": "belief_request"
+        },
+        "compatibility": {
+          "$ref": "#/$defs/compatibility"
+        },
+        "observation": {
+          "$ref": "#/$defs/player_observation"
+        },
+        "search_seed": {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+        },
+        "world_count": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100000
+        }
+      },
+      "required": [
+        "kind",
+        "compatibility",
+        "observation",
+        "search_seed",
+        "world_count"
+      ],
+      "additionalProperties": false
+    }
+  }
+}

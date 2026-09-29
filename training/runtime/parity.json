@@ -1,0 +1,94 @@
+{
+  "format": "step5-runtime-parity/1.0.0",
+  "seeds": [
+    851001,
+    851002
+  ],
+  "sampling_seed": 9127,
+  "games": [
+    {
+      "setup_group": "2f15c7e0d1186057c9de12386cf7c1a5549522dab4110f830f6d12fa7a26b9f8",
+      "decisions": 288,
+      "sha256": "6fd2d7913f968db4b1600f5461b577f5b4b36aa8f5ee25562dde0b7cb3ae4504",
+      "result": {
+        "objective": "win-share/1.0.0",
+        "seats": [
+          {
+            "seat": 0,
+            "vp": 0,
+            "income": -9,
+            "cash": 0,
+            "rank": 1,
+            "utility": 0.25
+          },
+          {
+            "seat": 1,
+            "vp": 0,
+            "income": -9,
+            "cash": 0,
+            "rank": 1,
+            "utility": 0.25
+          },
+          {
+            "seat": 2,
+            "vp": 0,
+            "income": -9,
+            "cash": 0,
+            "rank": 1,
+            "utility": 0.25
+          },
+          {
+            "seat": 3,
+            "vp": 0,
+            "income": -9,
+            "cash": 0,
+            "rank": 1,
+            "utility": 0.25
+          }
+        ]
+      }
+    },
+    {
+      "setup_group": "a1e40a4a289039b845aa08eac1abbc0f5858fa154e2e6379751dc99b723bb561",
+      "decisions": 284,
+      "sha256": "3b4f342f8f5e8c31be189fec7265c8e26118d0962804f2e601045f1cad60ef65",
+      "result": {
+        "objective": "win-share/1.0.0",
+        "seats": [
+          {
+            "seat": 0,
+            "vp": 0,
+            "income": -9,
+            "cash": 0,
+            "rank": 2,
+            "utility": 0.0
+          },
+          {
+            "seat": 1,
+            "vp": 0,
+            "income": -9,
+            "cash": 0,
+            "rank": 2,
+            "utility": 0.0
+          },
+          {
+            "seat": 2,
+            "vp": 0,
+            "income": -8,
+            "cash": 30,
+            "rank": 1,
+            "utility": 1.0
+          },
+          {
+            "seat": 3,
+            "vp": 0,
+            "income": -9,
+            "cash": 0,
+            "rank": 2,
+            "utility": 0.0
+          }
+        ]
+      }
+    }
+  ]
+}

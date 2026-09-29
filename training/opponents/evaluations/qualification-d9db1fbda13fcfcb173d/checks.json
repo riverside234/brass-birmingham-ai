@@ -1,0 +1,66 @@
+{
+  "format": "r3-correctness/1.0.0",
+  "passed": true,
+  "checked_at_utc": "2026-09-27T22:30:03.018404+00:00",
+  "bank": "bank-804c85204da65824cb9b",
+  "unit_tests": 30,
+  "unit_failures": 0,
+  "unit_errors": 0,
+  "bank_manifest_sha256": "4ba7a5b9bdabb7be909b77c88fcf34832fab8c9dbe80247250b9df13fd33282a",
+  "worker_sha256": "962f3dca57bee47dfb4705427f8c290c86920ae081c14947e5d54d65de668e7b",
+  "evidence": {
+    "dotnet": {
+      "path": "artifacts/legacy-ai/bridge-result.json",
+      "sha256": "408a98f81af43b64bb8abbf746c782ccc423a4c0f4468ec2de94190f8254871a"
+    },
+    "unity": {
+      "path": "artifacts/legacy-ai/unity/legacy-unity-result.json",
+      "sha256": "76117dffc14df8ec6bab758e10b0f105a39361d81160ac3d72773f2d52721f7e"
+    },
+    "unity_routing": {
+      "path": "artifacts/legacy-ai/unity/overlay-ui-result.json",
+      "sha256": "65574e6c7f3a6e0a35da7fed51a369ecf6e043dc765f1f65d9d55f135c41e447"
+    },
+    "replay": {
+      "path": "artifacts/legacy-ai/r3-integration-result.json",
+      "sha256": "2d5115263bcd5d4d427c0ad68fc977a0fefaa68213a57a78a5c86c05632d527c"
+    },
+    "diversity": {
+      "path": "artifacts/legacy-ai/style-diversity.json",
+      "sha256": "635e01728f27c87cc383722a492da5a139765a40ddac1da4b08385cd2cf591db"
+    },
+    "r2": {
+      "path": "artifacts/r2/exit-checks.json",
+      "sha256": "5a801f8468f515d592791babcd2ac15e2ea0668a72e939927aaa57eadd405f74"
+    },
+    "units": {
+      "path": "artifacts/legacy-ai/frozen-platform-check.json",
+      "sha256": "93e3be50cebb381e243358b3e738bb435e82ab89f937d1b77eb3316131139986"
+    }
+  },
+  "source_hashes": {
+    "src/brass_ai/qualification.py": "7386134349ef12d88255bd0a63b916219cdfdc350e805d9e6a709b45fcf816b7",
+    "scripts/verify-r3.py": "8258bc1ce4a823718c1d0d5876b34fcefa7ba82e8d30b703b9207442e9e09bd5",
+    "tests/legacy-ai/test_advanced.py": "c0d222a8f877141ec0936e27b92c63cc7ad8e350190b418ef4b4692a0ff29f1a",
+    "tests/legacy-ai/test_bank.py": "983e41e3caf0dd02f1c73f78846dfdb8baee70a05e76d743fcac7e71e58c404a",
+    "tests/legacy-ai/BridgeChecks.cs": "e59a286eec374c6d4fc6584f81aaea7bac63a1764ab811954b141d997597394f"
+  },
+  "dotnet_assertions": 25,
+  "unity_assertions": 25,
+  "complete_live_turns": 64,
+  "replay_decisions": 359,
+  "r2_regressions": 23,
+  "tactical_differences": {
+    "rail-tempo": 4,
+    "cotton": 3,
+    "goods-beer": 4,
+    "supplier": 3,
+    "pottery-flex": 1
+  },
+  "identical_snapshot_rebuild": true,
+  "installed_rules_unchanged": true,
+  "r1_host_unchanged": true,
+  "human_play_acceptance": false,
+  "linux_qualified": false,
+  "strength_qualification": "separate prespecified tournament"
+}

@@ -1,0 +1,37 @@
+{
+  "format": "legacy-pools/1.0.0",
+  "training": {
+    "bank-804c85204da65824cb9b/balanced-v2": {
+      "qualification": "training/opponents/evaluations/qualification-d9db1fbda13fcfcb173d/report.json",
+      "sha256": "faa01ab828d74837eae9427c0c53e11efdd650c02be48392a3452a4b6d71d63f",
+      "profile": "balanced-v2"
+    },
+    "bank-804c85204da65824cb9b/rail-tempo-v2": {
+      "qualification": "training/opponents/evaluations/qualification-d9db1fbda13fcfcb173d/report.json",
+      "sha256": "faa01ab828d74837eae9427c0c53e11efdd650c02be48392a3452a4b6d71d63f",
+      "profile": "rail-tempo-v2"
+    },
+    "bank-804c85204da65824cb9b/cotton-v2": {
+      "qualification": "training/opponents/evaluations/qualification-d9db1fbda13fcfcb173d/report.json",
+      "sha256": "faa01ab828d74837eae9427c0c53e11efdd650c02be48392a3452a4b6d71d63f",
+      "profile": "cotton-v2"
+    },
+    "bank-804c85204da65824cb9b/goods-beer-v2": {
+      "qualification": "training/opponents/evaluations/qualification-d9db1fbda13fcfcb173d/report.json",
+      "sha256": "faa01ab828d74837eae9427c0c53e11efdd650c02be48392a3452a4b6d71d63f",
+      "profile": "goods-beer-v2"
+    },
+    "bank-804c85204da65824cb9b/supplier-v2": {
+      "qualification": "training/opponents/evaluations/qualification-d9db1fbda13fcfcb173d/report.json",
+      "sha256": "faa01ab828d74837eae9427c0c53e11efdd650c02be48392a3452a4b6d71d63f",
+      "profile": "supplier-v2"
+    }
+  },
+  "evaluation": {
+    "bank-804c85204da65824cb9b/pottery-flex-v2": {
+      "qualification": "training/opponents/evaluations/qualification-d9db1fbda13fcfcb173d/report.json",
+      "sha256": "faa01ab828d74837eae9427c0c53e11efdd650c02be48392a3452a4b6d71d63f",
+      "profile": "pottery-flex-v2"
+    }
+  }
+}

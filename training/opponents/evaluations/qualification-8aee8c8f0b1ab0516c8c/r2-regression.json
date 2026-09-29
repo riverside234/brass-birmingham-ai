@@ -1,0 +1,10 @@
+{
+  "format": "r2-exit-checks/1.0.0",
+  "checked_at_utc": "2026-09-28T21:27:13.652267+00:00",
+  "passed": true,
+  "unit_tests": 24,
+  "unit_passed": true,
+  "failures": 0,
+  "errors": 0,
+  "integration_requested": false
+}

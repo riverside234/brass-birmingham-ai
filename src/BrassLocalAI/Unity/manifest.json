@@ -1,0 +1,240 @@
+[
+  {
+    "targetType": "BrassApplication.UseCases.Menu.OfflineGame.CreateOfflineGame.CreateOfflineGameUseCase",
+    "targetMethod": "CreateNewGameConfiguration",
+    "parameterTypes": [],
+    "helperType": "BrassLegacyAI.LocalMenu",
+    "helperMethod": "CreateConfiguration",
+    "mode": "replace"
+  },
+  {
+    "targetType": "BrassApplication.UseCases.Menu.OfflineGame.CreateOfflineGame.CreateOfflineGameUseCase",
+    "targetMethod": "CanStartGame",
+    "parameterTypes": [],
+    "helperType": "BrassLegacyAI.LocalMenu",
+    "helperMethod": "CanStart",
+    "mode": "replace"
+  },
+  {
+    "targetType": "BrassApplication.UseCases.Menu.OfflineGame.CreateOfflineGame.CreateOfflineGameUseCase",
+    "targetMethod": "UpdateResumeOfflineGameView",
+    "parameterTypes": [],
+    "helperType": "BrassLegacyAI.LocalMenu",
+    "helperMethod": "UpdateResume",
+    "mode": "replace"
+  },
+  {
+    "targetType": "BrassApplication.UseCases.Menu.OfflineGame.CreateOfflineGame.CreateOfflineGameUseCase",
+    "targetMethod": "ContinueClicked",
+    "parameterTypes": [],
+    "helperType": "BrassLegacyAI.LocalMenu",
+    "helperMethod": "Continue",
+    "mode": "replace"
+  },
+  {
+    "targetType": "BrassApplication.UseCases.Menu.OfflineGame.CreateOfflineGame.CreateOfflineGameUseCase",
+    "targetMethod": "PresentGameConfiguration",
+    "parameterTypes": [],
+    "helperType": "BrassLegacyAI.LocalMenu",
+    "helperMethod": "Normalize",
+    "mode": "prefix"
+  },
+  {
+    "targetType": "BrassApplication.UseCases.Menu.OfflineGame.CreateOfflineGame.CreateOfflineGameUseCase",
+    "targetMethod": "NextAiDifficulty",
+    "parameterTypes": [
+      "BrassApplication.Game.PlayerMetadata"
+    ],
+    "helperType": "BrassLegacyAI.LocalMenu",
+    "helperMethod": "Next",
+    "mode": "replace"
+  },
+  {
+    "targetType": "BrassApplication.UseCases.Menu.OfflineGame.CreateOfflineGame.CreateOfflineGameUseCase",
+    "targetMethod": "PreviousAiDifficulty",
+    "parameterTypes": [
+      "BrassApplication.Game.PlayerMetadata"
+    ],
+    "helperType": "BrassLegacyAI.LocalMenu",
+    "helperMethod": "Previous",
+    "mode": "replace"
+  },
+  {
+    "targetType": "BrassApplication.UseCases.Menu.OfflineGame.CreateOfflineGame.CreateOfflineGameUseCase",
+    "targetMethod": "StartGame",
+    "parameterTypes": [
+      "System.Int32"
+    ],
+    "helperType": "BrassLegacyAI.LocalMenu",
+    "helperMethod": "StartGame",
+    "mode": "replace"
+  },
+  {
+    "targetType": "InterfaceAdapters.Common.CreateGame.CreateOfflineGamePresenter",
+    "targetMethod": "ShowExistingGameContainer",
+    "parameterTypes": [
+      "BrassApplication.Game.BrassApplicationGame"
+    ],
+    "helperType": "BrassLegacyAI.LocalMenu",
+    "helperMethod": "ResumeLabels",
+    "mode": "prefix"
+  },
+  {
+    "targetType": "PlayerCreateGameView",
+    "targetMethod": "SetPlayer",
+    "parameterTypes": [
+      "InterfaceAdapters.Common.CreateGame.PlayerCreateGameViewModel"
+    ],
+    "helperType": "BrassLegacyAI.LocalMenu",
+    "helperMethod": "SetRow",
+    "mode": "replace"
+  },
+  {
+    "targetType": "BrassApplication.UseCases.Game.PlayAiTurn.PlayAiTurnUseCase",
+    "targetMethod": "PlayAITurn",
+    "parameterTypes": [
+      "System.Boolean"
+    ],
+    "helperType": "BrassLegacyAI.LocalTurnBridge",
+    "helperMethod": "PlayAITurn",
+    "mode": "replace"
+  },
+  {
+    "targetType": "InterfaceAdapters.Game.PlayGame.PlayGamePresenter",
+    "targetMethod": "StartAITurn",
+    "parameterTypes": [
+      "BrassApplication.Game.PlayerMetadata"
+    ],
+    "helperType": "BrassLegacyAI.LocalTurnBridge",
+    "helperMethod": "Schedule",
+    "mode": "replace"
+  },
+  {
+    "targetType": "BrassApplication.GameHistory.BrassGameHistory",
+    "targetMethod": "SetGame",
+    "parameterTypes": [
+      "BrassApplication.Game.BrassApplicationGame"
+    ],
+    "helperType": "BrassLegacyAI.LocalTurnBridge",
+    "helperMethod": "OnSetGame",
+    "mode": "prefix"
+  },
+  {
+    "targetType": "BrassApplication.GameHistory.BrassGameHistory",
+    "targetMethod": "MoveGameToRevision",
+    "parameterTypes": [
+      "System.Int32"
+    ],
+    "helperType": "BrassLegacyAI.LocalTurnBridge",
+    "helperMethod": "OnMoveHistory",
+    "mode": "prefix"
+  },
+  {
+    "targetType": "BrassApplication.UseCases.Game.ExitToMenu.ExitToMenuUseCase",
+    "targetMethod": "BackToMenu",
+    "parameterTypes": [],
+    "helperType": "BrassLegacyAI.LocalTurnBridge",
+    "helperMethod": "OnExit",
+    "mode": "prefix"
+  },
+  {
+    "targetType": "BrassApplication.UseCases.Game.PlayerActions.PlayerActionsUseCase",
+    "targetMethod": "StartBuildAction",
+    "parameterTypes": [],
+    "helperType": "BrassLegacyAI.TurnInputGuard",
+    "helperMethod": "Build",
+    "mode": "replace"
+  },
+  {
+    "targetType": "BrassApplication.UseCases.Game.PlayerActions.PlayerActionsUseCase",
+    "targetMethod": "StartNetworkAction",
+    "parameterTypes": [],
+    "helperType": "BrassLegacyAI.TurnInputGuard",
+    "helperMethod": "Network",
+    "mode": "replace"
+  },
+  {
+    "targetType": "BrassApplication.UseCases.Game.PlayerActions.PlayerActionsUseCase",
+    "targetMethod": "StartDevelopAction",
+    "parameterTypes": [],
+    "helperType": "BrassLegacyAI.TurnInputGuard",
+    "helperMethod": "Develop",
+    "mode": "replace"
+  },
+  {
+    "targetType": "BrassApplication.UseCases.Game.PlayerActions.PlayerActionsUseCase",
+    "targetMethod": "StartSellAction",
+    "parameterTypes": [],
+    "helperType": "BrassLegacyAI.TurnInputGuard",
+    "helperMethod": "Sell",
+    "mode": "replace"
+  },
+  {
+    "targetType": "BrassApplication.UseCases.Game.PlayerActions.PlayerActionsUseCase",
+    "targetMethod": "StartLoanAction",
+    "parameterTypes": [],
+    "helperType": "BrassLegacyAI.TurnInputGuard",
+    "helperMethod": "Loan",
+    "mode": "replace"
+  },
+  {
+    "targetType": "BrassApplication.UseCases.Game.PlayerActions.PlayerActionsUseCase",
+    "targetMethod": "StartScoutAction",
+    "parameterTypes": [],
+    "helperType": "BrassLegacyAI.TurnInputGuard",
+    "helperMethod": "Scout",
+    "mode": "replace"
+  },
+  {
+    "targetType": "BrassApplication.UseCases.Game.PlayerActions.PlayerActionsUseCase",
+    "targetMethod": "StartPassAction",
+    "parameterTypes": [],
+    "helperType": "BrassLegacyAI.TurnInputGuard",
+    "helperMethod": "Pass",
+    "mode": "replace"
+  },
+  {
+    "targetType": "BrassApplication.UseCases.Game.PlayerActions.PlayerActionsUseCase",
+    "targetMethod": "UndoAction",
+    "parameterTypes": [],
+    "helperType": "BrassLegacyAI.TurnInputGuard",
+    "helperMethod": "Undo",
+    "mode": "replace"
+  },
+  {
+    "targetType": "BrassApplication.UseCases.Game.PlayerActions.PlayerActionsUseCase",
+    "targetMethod": "EndTurn",
+    "parameterTypes": [],
+    "helperType": "BrassLegacyAI.TurnInputGuard",
+    "helperMethod": "EndTurn",
+    "mode": "replace"
+  },
+  {
+    "targetType": "BrassApplication.UseCases.Game.Board.BoardUseCase",
+    "targetMethod": "RegionSelected",
+    "parameterTypes": [
+      "BoardGameRules.Entities.Board.Regions.RegionName"
+    ],
+    "helperType": "BrassLegacyAI.TurnInputGuard",
+    "helperMethod": "Region",
+    "mode": "replace"
+  },
+  {
+    "targetType": "BrassApplication.UseCases.Game.HandOfCards.HandOfCardsUseCase",
+    "targetMethod": "OnCardSelected",
+    "parameterTypes": [
+      "BoardGameRules.Entities.Cards.BaseCard"
+    ],
+    "helperType": "BrassLegacyAI.TurnInputGuard",
+    "helperMethod": "Card",
+    "mode": "replace"
+  },
+  {
+    "targetType": "BrassApplication.UseCases.Game.Replay.ReplayUseCase",
+    "targetMethod": "SkipReplay",
+    "parameterTypes": [],
+    "helperType": "BrassLegacyAI.TurnInputGuard",
+    "helperMethod": "SkipReplay",
+    "mode": "replace"
+  }
+]

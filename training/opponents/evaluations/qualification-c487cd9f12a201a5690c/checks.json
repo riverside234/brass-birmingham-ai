@@ -1,0 +1,66 @@
+{
+  "format": "legacy-v3-correctness/1.0.0",
+  "passed": true,
+  "bank": "bank-af17b1aadbe7f9b21fa7",
+  "bank_manifest_sha256": "b8cdce0df8314f7ddac2330bb6123c12f351adb5462e6f39d2c6053aa8df649b",
+  "tests": 34,
+  "fixtures": [
+    {
+      "suite": "conversion",
+      "checks_each": 435,
+      "identical_scenarios": 54
+    },
+    {
+      "suite": "cash-beer",
+      "checks_each": 60,
+      "identical_scenarios": 12
+    },
+    {
+      "suite": "credit",
+      "checks_each": 72,
+      "identical_scenarios": 12
+    },
+    {
+      "suite": "demand",
+      "checks_each": 19,
+      "identical_scenarios": 2
+    },
+    {
+      "suite": "route",
+      "checks_each": 24,
+      "identical_scenarios": 2
+    }
+  ],
+  "worker_sha256": "5d0238095df57de6e9bc593469139e8e402908f07dea052c3b75f2747d2a79be",
+  "identical_snapshot_rebuild": true,
+  "economic_admission_regressions": 2,
+  "bank_admission_regressions": 5,
+  "platform": "win32",
+  "evidence": {
+    "artifacts/patch-build/local-ai-conversion-0.json": "1e35a6f69d864278fb6a962cf892828d53c334d5af75ba454a2bae8c3b92ed48",
+    "artifacts/patch-build/local-ai-conversion-1.json": "365346d0fba596fb80969adc2335c23088b76df7324d1ec5ba489d5e4b01d11b",
+    "artifacts/patch-build/local-ai-cash-beer-0.json": "26fc366a3adf0bfe0ecb566e20aee2b07ed1b62359ca9c6218a35d05e5fdb118",
+    "artifacts/patch-build/local-ai-cash-beer-1.json": "b2076bd22d92a981cabcc0b8b39711b81c45e89d20ff2c737584eb605ee96973",
+    "artifacts/patch-build/local-ai-credit-0.json": "dfe0b8d8996f232ad3407f340aef331fb7b93fba1273a60290ae7be04ae5a35e",
+    "artifacts/patch-build/local-ai-credit-1.json": "4ed4055f14d8c93dda04f85724376e3fedebc93359abd69a639f832987d928c2",
+    "artifacts/patch-build/local-ai-demand-0.json": "a35dc06d24779a223f4ff83406e22adfc85b531278938082e69cb378b1068dd4",
+    "artifacts/patch-build/local-ai-demand-1.json": "7ff951a8467b1fe11465fd8a5fd5252c3f02e5bc2110bb2ed8204dc63e103f27",
+    "artifacts/patch-build/local-ai-route-0.json": "fd2e1f1fefbd4231228dbe96c4bf27be50f344a79258a185efbcfb503697c71e",
+    "artifacts/patch-build/local-ai-route-1.json": "f9d81532088c8ce8694d536132977b3c54a2e6f8014204d9032186e71e5ced1c",
+    "tests/BrassLocalAI/ConversionTests.cs": "2ea6d66a88b4087ee39f1b6206765c8042fc66c4622128fa9c3490cf11fdb495",
+    "tests/BrassLocalAI/CashBeerTests.cs": "0a2a0eb67c90fc16870050b8a3f6faa15bba9f1a362b9cc7ad793261f383ab61",
+    "tests/BrassLocalAI/DemandTests.cs": "a569a7bfde538f03a531007264928a2cd935ae8aed8c829832ba51e5d704a6fd",
+    "tests/BrassLocalAI/CreditTests.cs": "07ffa5c1b7a80ec09f46357ba53d337b69f4dc2aa72b83dbd8fc154fea06282d",
+    "tests/BrassLocalAI/RouteTests.cs": "08c0d7342eee1565b888709c436b0093aeb5a82320b10bdc44b67405323a49cf",
+    "tests/Qualification/test_economic_admission.py": "48a1d97c46d0cfe5f554588c172473c6480ceaae98723ef9a33311e76feeb06b",
+    "tests/legacy-ai/test_v3.py": "13173da909cd3a72e7d3c9e421cfde5cc46c82a3aa39029e197bedd01e67e327",
+    "tests/legacy-ai/test_bank.py": "983e41e3caf0dd02f1c73f78846dfdb8baee70a05e76d743fcac7e71e58c404a",
+    "scripts/check-frozen-bank.py": "f734351f63cd8173103f75a6aafa351b8555a27d50f29fc315313e1a55227be1",
+    "scripts/amend-v3-qualification.py": "13928b448f6a43431c7f90a48329290a4094554cb2ae2ec800a257e86cdd37a6",
+    "scripts/promote-v3-bank.py": "f007a046f2a808b2b8169c515604e6f22d1918bc50ccc76d769e16d37f7d3422",
+    "scripts/verify-v3-bank.py": "39952e54ffe715f6cce543dcb1365633fd02617d07bf90ce9614d73f532d6396",
+    "src/brass_ai/qualification.py": "d0cd77c15eef8e001293397fe918641b2e7c1380cc388720fe5d5cf98ccc437f",
+    "training/opponents/evaluations/qualification-c487cd9f12a201a5690c/platform-check.json": "a489b7977d0adc243f4933db96afd0ba1ddfbd3f2c2321f2857178219084ff97"
+  },
+  "scope": "Frozen contracts and identical deadline/merchant/cash decisions; no strength admission."
+}

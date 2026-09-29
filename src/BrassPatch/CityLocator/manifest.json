@@ -1,0 +1,91 @@
+[
+  {
+    "targetType": "InterfaceAdapters.Game.HandOfCards.HandOfCardsPresenter",
+    "targetMethod": "OnLocationCardClicked",
+    "parameterTypes": [
+      "BoardGameRules.Entities.Board.Regions.RegionName",
+      "System.Collections.Generic.List`1<BoardGameRules.Entities.Board.BuildingSlots.BuildingSlot>",
+      "BoardGameRules.Entities.Board.Board"
+    ],
+    "helperType": "BrassPatch.CityLocator.CityLocatorFixes",
+    "helperMethod": "AfterCityPreview",
+    "mode": "postfix"
+  },
+  {
+    "targetType": "BoardView",
+    "targetMethod": "UpdateBoardView",
+    "parameterTypes": [
+      "InterfaceAdapters.Game.Board.BoardViewModel"
+    ],
+    "helperType": "BrassPatch.CityLocator.CityLocatorFixes",
+    "helperMethod": "BeforeBoard",
+    "mode": "prefix"
+  },
+  {
+    "targetType": "BoardView",
+    "targetMethod": "HighlightBuildingSlots",
+    "parameterTypes": [
+      "InterfaceAdapters.Game.Board.BoardViewModel"
+    ],
+    "helperType": "BrassPatch.CityLocator.CityLocatorFixes",
+    "helperMethod": "BeforeBoard",
+    "mode": "prefix"
+  },
+  {
+    "targetType": "BoardView",
+    "targetMethod": "HighlightMerchantSlots",
+    "parameterTypes": [
+      "System.Collections.Generic.IDictionary`2<BoardGameRules.Entities.Board.Regions.RegionName,InterfaceAdapters.Game.Board.BorderRegionViewModel>"
+    ],
+    "helperType": "BrassPatch.CityLocator.CityLocatorFixes",
+    "helperMethod": "BeforeMerchants",
+    "mode": "prefix"
+  },
+  {
+    "targetType": "BoardView",
+    "targetMethod": "HighlightLinks",
+    "parameterTypes": [
+      "System.Collections.Generic.IDictionary`2<System.String,InterfaceAdapters.Game.Board.LinkViewModel>",
+      "BrassApplication.UseCases.Game.Actions.ILinkSelectedDelegate"
+    ],
+    "helperType": "BrassPatch.CityLocator.CityLocatorFixes",
+    "helperMethod": "BeforeLinks",
+    "mode": "prefix"
+  },
+  {
+    "targetType": "RegionView",
+    "targetMethod": "TurnOffOutlines",
+    "parameterTypes": [],
+    "helperType": "BrassPatch.CityLocator.CityLocatorFixes",
+    "helperMethod": "ClearRegion",
+    "mode": "postfix"
+  },
+  {
+    "targetType": "BrassApplication.UseCases.Game.HandOfCards.HandOfCardsUseCase",
+    "targetMethod": "SetOnCardClickActionDelegate",
+    "parameterTypes": [
+      "BrassApplication.UseCases.Game.Actions.ISelectCardDelegate"
+    ],
+    "helperType": "BrassPatch.CityLocator.CityLocatorFixes",
+    "helperMethod": "BeforeCardDelegate",
+    "mode": "prefix"
+  },
+  {
+    "targetType": "BrassApplication.UseCases.Game.Actions.ActionInProgress.ActionInProgressUseCase",
+    "targetMethod": "SetCancelActionDelegate",
+    "parameterTypes": [
+      "BrassApplication.UseCases.Game.Actions.IActionInProgressCancelDelegate"
+    ],
+    "helperType": "BrassPatch.CityLocator.CityLocatorFixes",
+    "helperMethod": "BeforeActionDelegate",
+    "mode": "prefix"
+  },
+  {
+    "targetType": "InterfaceAdapters.Game.PlayerActions.PlayerActionsPresenter",
+    "targetMethod": "EndHumanTurn",
+    "parameterTypes": [],
+    "helperType": "BrassPatch.CityLocator.CityLocatorFixes",
+    "helperMethod": "BeforeEndTurn",
+    "mode": "prefix"
+  }
+]

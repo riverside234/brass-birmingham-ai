@@ -1,0 +1,105 @@
+[
+  {
+    "targetType": "BrassApplication.UseCases.Game.Actions.ScoutAction.ScoutActionUseCase",
+    "targetMethod": "StartScoutAction",
+    "parameterTypes": [],
+    "helperType": "BrassPatch.Scout.ScoutFixes",
+    "helperMethod": "StartScoutAction",
+    "mode": "replace"
+  },
+  {
+    "targetType": "BrassApplication.UseCases.Game.Actions.ScoutAction.ScoutActionUseCase",
+    "targetMethod": "SelectCard",
+    "parameterTypes": [
+      "BoardGameRules.Entities.Cards.BaseCard"
+    ],
+    "helperType": "BrassPatch.Scout.ScoutFixes",
+    "helperMethod": "SelectCard",
+    "mode": "replace"
+  },
+  {
+    "targetType": "BrassApplication.UseCases.Game.Actions.ScoutAction.ScoutActionUseCase",
+    "targetMethod": "CancelAction",
+    "parameterTypes": [],
+    "helperType": "BrassPatch.Scout.ScoutFixes",
+    "helperMethod": "CancelAction",
+    "mode": "replace"
+  },
+  {
+    "targetType": "BrassApplication.UseCases.Game.Actions.ScoutAction.ScoutActionUseCase",
+    "targetMethod": "OnCompleteAction",
+    "parameterTypes": [],
+    "helperType": "BrassPatch.Scout.ScoutFixes",
+    "helperMethod": "LegacyComplete",
+    "mode": "replace"
+  },
+  {
+    "targetType": "BoardGameRules.Entities.Actions.ScoutAction",
+    "targetMethod": "Scout",
+    "parameterTypes": [
+      "System.Collections.Generic.List`1<BoardGameRules.Entities.Cards.BaseCard>",
+      "BoardGameRules.Entities.Players.Player"
+    ],
+    "helperType": "BrassPatch.Scout.ScoutFixes",
+    "helperMethod": "Scout",
+    "mode": "replace"
+  },
+  {
+    "targetType": "BoardGameRules.Entities.Actions.BaseAction",
+    "targetMethod": "DiscardCard",
+    "parameterTypes": [
+      "BoardGameRules.Entities.Cards.BaseCard",
+      "BoardGameRules.Entities.Players.Player"
+    ],
+    "helperType": "BrassPatch.Scout.ScoutFixes",
+    "helperMethod": "DiscardCard",
+    "mode": "replace"
+  },
+  {
+    "targetType": "BoardGameRules.Entities.TurnPhases.TurnFlow",
+    "targetMethod": "ConfirmCurrentAction",
+    "parameterTypes": [],
+    "helperType": "BrassPatch.Scout.ScoutFixes",
+    "helperMethod": "ConfirmCurrentAction",
+    "mode": "replace"
+  },
+  {
+    "targetType": "InterfaceAdapters.Game.Actions.ScoutAction.ScoutActionPresenter",
+    "targetMethod": "HideExchangeForWildCardsView",
+    "parameterTypes": [],
+    "helperType": "BrassPatch.Scout.ScoutViewFixes",
+    "helperMethod": "HideExchange",
+    "mode": "replace"
+  },
+  {
+    "targetType": "Frameworks.View.Game.ScoutActionView",
+    "targetMethod": "AnimateCardToSlot",
+    "parameterTypes": [
+      "System.Int32",
+      "System.Tuple`2<System.Object,System.Int32>",
+      "System.Action"
+    ],
+    "helperType": "BrassPatch.Scout.ScoutViewFixes",
+    "helperMethod": "AnimateCardToSlot",
+    "mode": "replace"
+  },
+  {
+    "targetType": "Frameworks.View.Game.ScoutActionView",
+    "targetMethod": "ShowViewCompleted",
+    "parameterTypes": [],
+    "helperType": "BrassPatch.Scout.ScoutViewFixes",
+    "helperMethod": "ShowViewCompleted",
+    "mode": "replace"
+  },
+  {
+    "targetType": "InterfaceAdapters.Game.Actions.ScoutAction.ScoutActionPresenter",
+    "targetMethod": "ShowExchangeForWildCardsView",
+    "parameterTypes": [
+      "BrassApplication.Game.BrassApplicationGame",
+      "BrassApplication.UseCases.Game.Actions.ISelectCardDelegate"
+    ],
+    "helperType": "BrassPatch.Scout.ScoutViewFixes",
+    "helperMethod": "ShowExchange",
+    "mode": "replace"
+  }
+]

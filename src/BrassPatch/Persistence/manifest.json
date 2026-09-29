@@ -1,0 +1,74 @@
+[
+  {
+    "targetType": "BrassApplication.Game.GameMetadata",
+    "targetMethod": "Clone",
+    "parameterTypes": [],
+    "helperType": "BrassPatch.Persistence.SaveExtensions",
+    "helperMethod": "Clone",
+    "mode": "replace"
+  },
+  {
+    "targetType": "Frameworks.Persistence.RepositoryBackends.Filesystem.FilesystemGameStorage",
+    "targetMethod": "SaveGame",
+    "parameterTypes": [
+      "System.String",
+      "System.Collections.Generic.IList`1<BoardGameRules.Entities.EventSourcing.Events.IEvent>",
+      "BrassApplication.Game.GameMetadata"
+    ],
+    "helperType": "BrassPatch.Persistence.PersistenceFixes",
+    "helperMethod": "SaveGame",
+    "mode": "replace"
+  },
+  {
+    "targetType": "Frameworks.Persistence.RepositoryBackends.Filesystem.FilesystemGameStorage",
+    "targetMethod": "SaveGameMetadata",
+    "parameterTypes": [
+      "System.String",
+      "BrassApplication.Game.GameMetadata"
+    ],
+    "helperType": "BrassPatch.Persistence.PersistenceFixes",
+    "helperMethod": "SaveGameMetadata",
+    "mode": "replace"
+  },
+  {
+    "targetType": "Frameworks.Persistence.RepositoryBackends.Filesystem.FilesystemGameStorage",
+    "targetMethod": "ReadEventsFromFile",
+    "parameterTypes": [
+      "System.String"
+    ],
+    "helperType": "BrassPatch.Persistence.PersistenceFixes",
+    "helperMethod": "ReadEventsFromFile",
+    "mode": "replace"
+  },
+  {
+    "targetType": "Frameworks.Persistence.RepositoryBackends.Filesystem.FilesystemGameStorage",
+    "targetMethod": "LoadGameMetadata",
+    "parameterTypes": [
+      "System.String"
+    ],
+    "helperType": "BrassPatch.Persistence.PersistenceFixes",
+    "helperMethod": "LoadGameMetadata",
+    "mode": "replace"
+  },
+  {
+    "targetType": "Frameworks.Persistence.RepositoryBackends.Filesystem.FilesystemGameStorage",
+    "targetMethod": "SavePlayerMetadata",
+    "parameterTypes": [
+      "System.String",
+      "BrassApplication.Game.PlayerMetadata"
+    ],
+    "helperType": "BrassPatch.Persistence.PersistenceFixes",
+    "helperMethod": "SavePlayerMetadata",
+    "mode": "replace"
+  },
+  {
+    "targetType": "Frameworks.Persistence.Repository.RepositoryFactory",
+    "targetMethod": "CreateOfflineGameRepository",
+    "parameterTypes": [
+      "System.String"
+    ],
+    "helperType": "BrassPatch.Persistence.PersistenceFixes",
+    "helperMethod": "CreateOfflineGameRepository",
+    "mode": "replace"
+  }
+]

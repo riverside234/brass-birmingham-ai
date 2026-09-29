@@ -1,0 +1,39 @@
+{
+  "format": "brass-ai-stage-provenance/1.0.0",
+  "stage": "R2",
+  "reference": "daiyu",
+  "commit": "387840dd7a784f2c05fe561cb381e4f7d7bc590b",
+  "learning_contract": "four-seat-learning/1.0.0",
+  "runtime_contract": "0.2.0",
+  "license_text": "src/brass_ai/learning/LICENSE",
+  "license_sha256": "8486a10c4393cee1c25392769ddd3b2d6c242d6ec7928e1414efff7dfb2f07ef",
+  "notice": "src/brass_ai/learning/NOTICE.md",
+  "components": [
+    {
+      "source": "training/model.py",
+      "destination": "src/brass_ai/learning/model.py",
+      "reuse": "architectural_adaptation",
+      "changes": "New R1 permitted-view features; dense candidate encoder; fresh weights; four-seat win-share, competition-rank and VP heads; stable seat remapping and ONNX outputs."
+    },
+    {
+      "source": "training/neural_search.py",
+      "destination": "src/brass_ai/learning/batching.py",
+      "reuse": "interface_reimplementation",
+      "changes": "Project request/evaluate/submit boundary, frozen model IDs, candidate padding, cancellation, absolute deadlines and stale-response checks. No search session or Rust API port."
+    },
+    {
+      "source": "training/schema.py",
+      "destination": "src/brass_ai/learning/contracts.py",
+      "reuse": "compatibility_reimplementation",
+      "changes": "New four-seat, rules, encoder, model, replay and export signatures; reject scalar/two-player/old-schema artifacts."
+    },
+    {
+      "source": "docs/training-methodology.md",
+      "destination": "src/brass_ai/learning/training.py",
+      "reuse": "workflow_reference",
+      "changes": "Whole-setup partitions, complete losing games retained, four-seat terminal targets, masked teacher coverage, optional explicitly on-policy terminal learning. No strategy-based legality filters."
+    }
+  ],
+  "excluded": ["upstream weights", "upstream Rust engine", "upstream web app", "artwork", "OpenSpiel two-player AlphaZero trainer"],
+  "r0_policy": "Do not change the historical R0 component map/lock/manifest; this record describes the later R2 adaptation."
+}

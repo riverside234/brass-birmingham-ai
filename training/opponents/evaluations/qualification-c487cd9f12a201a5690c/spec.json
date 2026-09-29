@@ -1,0 +1,383 @@
+{
+  "id": "qualification-c487cd9f12a201a5690c",
+  "payload": {
+    "format": "legacy-qualification-spec/1.0.0",
+    "bank": "bank-af17b1aadbe7f9b21fa7",
+    "player_count": 4,
+    "bank_manifest_sha256": "b8cdce0df8314f7ddac2330bb6123c12f351adb5462e6f39d2c6053aa8df649b",
+    "jobs": [
+      {
+        "id": "3e7a0bfac791e11ef0cb",
+        "stage": "guarded",
+        "seed": 91001,
+        "table": [
+          null,
+          "balanced-v3",
+          null,
+          null
+        ],
+        "target": 1
+      },
+      {
+        "id": "2cdd7bd8b2a3c76a63da",
+        "stage": "guarded",
+        "seed": 91003,
+        "table": [
+          "balanced-v3",
+          null,
+          null,
+          null
+        ],
+        "target": 0
+      },
+      {
+        "id": "407ba5010366a8432619",
+        "stage": "guarded",
+        "seed": 91003,
+        "table": [
+          null,
+          null,
+          "balanced-v3",
+          null
+        ],
+        "target": 2
+      },
+      {
+        "id": "74f006f3189d083cb119",
+        "stage": "guarded",
+        "seed": 91004,
+        "table": [
+          null,
+          "balanced-v3",
+          null,
+          null
+        ],
+        "target": 1
+      },
+      {
+        "id": "e58b0543bbaece5265e1",
+        "stage": "guarded",
+        "seed": 91001,
+        "table": [
+          "rail-tempo-v3",
+          null,
+          null,
+          null
+        ],
+        "target": 0
+      },
+      {
+        "id": "8f08ca8b020527732110",
+        "stage": "guarded",
+        "seed": 91002,
+        "table": [
+          null,
+          null,
+          "rail-tempo-v3",
+          null
+        ],
+        "target": 2
+      },
+      {
+        "id": "83b1f259ff717a024215",
+        "stage": "guarded",
+        "seed": 91002,
+        "table": [
+          null,
+          null,
+          null,
+          "rail-tempo-v3"
+        ],
+        "target": 3
+      },
+      {
+        "id": "1c613cc0335275235ef3",
+        "stage": "guarded",
+        "seed": 91004,
+        "table": [
+          "rail-tempo-v3",
+          null,
+          null,
+          null
+        ],
+        "target": 0
+      },
+      {
+        "id": "e7197b612d063c5fe5cd",
+        "stage": "guarded",
+        "seed": 91004,
+        "table": [
+          null,
+          null,
+          "rail-tempo-v3",
+          null
+        ],
+        "target": 2
+      },
+      {
+        "id": "97e925cfa94f8533ecf3",
+        "stage": "guarded",
+        "seed": 91001,
+        "table": [
+          null,
+          null,
+          null,
+          "cotton-v3"
+        ],
+        "target": 3
+      },
+      {
+        "id": "0f54433844d1fa23648b",
+        "stage": "guarded",
+        "seed": 91002,
+        "table": [
+          "cotton-v3",
+          null,
+          null,
+          null
+        ],
+        "target": 0
+      },
+      {
+        "id": "9496978f198cbef92bed",
+        "stage": "guarded",
+        "seed": 91002,
+        "table": [
+          null,
+          "cotton-v3",
+          null,
+          null
+        ],
+        "target": 1
+      },
+      {
+        "id": "5c5da837a363c98de89c",
+        "stage": "guarded",
+        "seed": 91004,
+        "table": [
+          null,
+          "cotton-v3",
+          null,
+          null
+        ],
+        "target": 1
+      },
+      {
+        "id": "daf988668c5233ca288b",
+        "stage": "guarded",
+        "seed": 91004,
+        "table": [
+          null,
+          null,
+          null,
+          "cotton-v3"
+        ],
+        "target": 3
+      },
+      {
+        "id": "5c023ced285a54d42629",
+        "stage": "guarded",
+        "seed": 91004,
+        "table": [
+          null,
+          "goods-beer-v3",
+          null,
+          null
+        ],
+        "target": 1
+      },
+      {
+        "id": "6051980a591980336a9a",
+        "stage": "guarded",
+        "seed": 91004,
+        "table": [
+          null,
+          null,
+          "goods-beer-v3",
+          null
+        ],
+        "target": 2
+      },
+      {
+        "id": "2f8e799663089b2541af",
+        "stage": "guarded",
+        "seed": 91003,
+        "table": [
+          null,
+          "supplier-v3",
+          null,
+          null
+        ],
+        "target": 1
+      },
+      {
+        "id": "7ad42a20686269b270fd",
+        "stage": "guarded",
+        "seed": 91004,
+        "table": [
+          null,
+          null,
+          null,
+          "supplier-v3"
+        ],
+        "target": 3
+      },
+      {
+        "id": "98ce762ea2a5f2f14b75",
+        "stage": "guarded",
+        "seed": 91001,
+        "table": [
+          null,
+          null,
+          null,
+          "pottery-flex-v3"
+        ],
+        "target": 3
+      },
+      {
+        "id": "1bb0dbeb647b12cb1378",
+        "stage": "guarded",
+        "seed": 91002,
+        "table": [
+          "pottery-flex-v3",
+          null,
+          null,
+          null
+        ],
+        "target": 0
+      },
+      {
+        "id": "2f1d2116beb0c97cad57",
+        "stage": "guarded",
+        "seed": 91003,
+        "table": [
+          "pottery-flex-v3",
+          null,
+          null,
+          null
+        ],
+        "target": 0
+      },
+      {
+        "id": "abe2901a96249fc1c2f7",
+        "stage": "guarded",
+        "seed": 91003,
+        "table": [
+          null,
+          null,
+          "pottery-flex-v3",
+          null
+        ],
+        "target": 2
+      },
+      {
+        "id": "056c5f41becf12ebf0a8",
+        "stage": "guarded",
+        "seed": 91004,
+        "table": [
+          "pottery-flex-v3",
+          null,
+          null,
+          null
+        ],
+        "target": 0
+      },
+      {
+        "id": "7ab5da79d84274c7fbfb",
+        "stage": "guarded",
+        "seed": 91004,
+        "table": [
+          null,
+          null,
+          "pottery-flex-v3",
+          null
+        ],
+        "target": 2
+      },
+      {
+        "id": "769ca59d1aaa9961e750",
+        "stage": "mixed",
+        "seed": 92001,
+        "table": [
+          "cotton-v3",
+          "supplier-v3",
+          "pottery-flex-v3",
+          "balanced-v3"
+        ],
+        "target": null
+      },
+      {
+        "id": "82634fd6bfa0f43ef674",
+        "stage": "mixed",
+        "seed": 92002,
+        "table": [
+          "goods-beer-v3",
+          "balanced-v3",
+          "pottery-flex-v3",
+          "rail-tempo-v3"
+        ],
+        "target": null
+      },
+      {
+        "id": "005029ed482ef3696bfc",
+        "stage": "mixed",
+        "seed": 92002,
+        "table": [
+          "rail-tempo-v3",
+          "pottery-flex-v3",
+          "balanced-v3",
+          "goods-beer-v3"
+        ],
+        "target": null
+      },
+      {
+        "id": "fe740bc37edb15158a5a",
+        "stage": "identical",
+        "seed": 93001,
+        "table": [
+          "balanced-v3",
+          "balanced-v3",
+          "balanced-v3",
+          "balanced-v3"
+        ],
+        "target": null
+      }
+    ],
+    "stopping": "User stopped the original study; retain all completed results. No new games are required.",
+    "concurrency": 6,
+    "bootstrap_seed": 731,
+    "bootstrap_samples": 10000,
+    "admission": {
+      "min_guarded_games": 1,
+      "min_mixed_games": 0,
+      "min_identical_games": 0,
+      "maximum_failures": 0,
+      "maximum_economic_stalls": 0,
+      "minimum_guarded_mean_rank": 2.5,
+      "held_out_family": "pottery-flex",
+      "general_hard_min_setup_groups": 30
+    },
+    "release_scope": "User-accepted limited Windows validation for niche opponents; no complete strength or all-table coverage claim.",
+    "generation": "v3",
+    "equal_budget_pair": [],
+    "amendment": {
+      "kind": "user-requested-limited-validation",
+      "reason": "User requested that 25 qualification games are good enough; stop the remaining tournament games.",
+      "requested_games": 25,
+      "retained_games": 28,
+      "parent_spec": "qualification-97c7a2f1add8fc7aa336",
+      "parent_spec_sha256": "a1ac3854341b77accf7aaaf2819ce82aea34579869f2ce2d2f40b3f74c51925b",
+      "original_admission": {
+        "min_guarded_games": 16,
+        "min_mixed_games": 4,
+        "min_identical_games": 1,
+        "maximum_failures": 0,
+        "maximum_economic_stalls": 0,
+        "minimum_guarded_mean_rank": 2.5,
+        "held_out_family": "pottery-flex",
+        "general_hard_min_setup_groups": 30
+      },
+      "selection": "Every result file completed before the runner stopped; no outcome filtering."
+    }
+  }
+}

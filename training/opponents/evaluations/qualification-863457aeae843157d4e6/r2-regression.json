@@ -1,0 +1,56 @@
+{
+  "passed": true,
+  "unit_tests": 24,
+  "retainedFrom": "training/opponents/evaluations/qualification-5edd095ebb1d0c77a300/r2-regression.json",
+  "reason": "R2 model, replay and training sources are unchanged by the C# policy refinements; final frozen-bank full-game integration is tested separately.",
+  "sources": [
+    {
+      "name": "__init__.py",
+      "sha256": "8491315B438E81B8EDE2E969E994E1AA30D73E85BF4D6FE6079140C93B6E2730"
+    },
+    {
+      "name": "batching.py",
+      "sha256": "F67FE2DACB598202416E9FEF717176210DF63A16B932B13E61A61A8A89CB66BC"
+    },
+    {
+      "name": "checkpoint.py",
+      "sha256": "8E17F37C44D6DB5023FFE614DE9F1EA4DABD5DE2C6BFB614B5BFD54451552A69"
+    },
+    {
+      "name": "cli.py",
+      "sha256": "F96C4381BFA4DC2DA98A1D558F5BED95DB0BB9C739C34F566645814E359DB47F"
+    },
+    {
+      "name": "contracts.py",
+      "sha256": "6B62ED74D3BE9BF7DFEAD3F38FB4ED3F938FA087A6219B79342B9599628EDAF5"
+    },
+    {
+      "name": "export.py",
+      "sha256": "CE6A13870B5B1418EE36D47A9DE36F01A7720E4C9D3A002FFF0D1C5E3AE18EEF"
+    },
+    {
+      "name": "features.py",
+      "sha256": "6937346F9B1092589EBEDE368ABA40EBCDC0C9373EA21A438D6B75A01B64EF9F"
+    },
+    {
+      "name": "legacy_policy.py",
+      "sha256": "1450669D8781FDD9A56CBE8F4734E8368526ECC5924D9C73C140E2E21761A56B"
+    },
+    {
+      "name": "model.py",
+      "sha256": "8A040433E73117AF480BDB4F6F1001A95DE129123D3E25A9DE06D675F8CB4A2D"
+    },
+    {
+      "name": "replay.py",
+      "sha256": "CAD4F157F30C178ACB83FA10CFB6F8619813637A75DEC692BB226459A759CB68"
+    },
+    {
+      "name": "runner.py",
+      "sha256": "1B577C2CCB1D19CF9D92FD6B515D5DFAFE28529F616EDB14855B94CE940E13A0"
+    },
+    {
+      "name": "training.py",
+      "sha256": "EF452D909FDFA61B02C015DF07A54AEFFE68B92D6D31D62B3BB58734587CE04C"
+    }
+  ]
+}

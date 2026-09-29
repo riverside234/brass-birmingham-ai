@@ -1,0 +1,92 @@
+[
+  {
+    "targetType": "BoardView",
+    "targetMethod": "CreateIndustryFlippedAnimation",
+    "parameterTypes": [
+      "BoardGameRules.Entities.Board.BuildingSlots.BuildingSlot"
+    ],
+    "helperType": "BrassPatch.Presentation.PresentationLifecycle",
+    "helperMethod": "Flip",
+    "mode": "replace"
+  },
+  {
+    "targetType": "BuildingSlotView",
+    "targetMethod": "UpdateSlot",
+    "parameterTypes": [
+      "InterfaceAdapters.Game.Board.BuildingSlotViewModel",
+      "System.Boolean"
+    ],
+    "helperType": "BrassPatch.Presentation.PresentationLifecycle",
+    "helperMethod": "BeforeSlotUpdate",
+    "mode": "prefix"
+  },
+  {
+    "targetType": "Frameworks.View.Game.PlayersSummaryView",
+    "targetMethod": "UpdatePlayersSummaryView",
+    "parameterTypes": [
+      "System.Collections.Generic.List`1<InterfaceAdapters.Game.PlayersSummary.PlayerViewModel>"
+    ],
+    "helperType": "BrassPatch.Presentation.PresentationLifecycle",
+    "helperMethod": "UpdatePlayers",
+    "mode": "replace"
+  },
+  {
+    "targetType": "Frameworks.View.Game.PlayersSummaryView",
+    "targetMethod": "CreateShowCurrentPlayerAnimation",
+    "parameterTypes": [
+      "BoardGameRules.Entities.Players.PlayerColor"
+    ],
+    "helperType": "BrassPatch.Presentation.PresentationLifecycle",
+    "helperMethod": "CurrentPlayer",
+    "mode": "replace"
+  },
+  {
+    "targetType": "Frameworks.View.Game.PlayersSummaryView",
+    "targetMethod": "CreateEndOfRoundAnimation",
+    "parameterTypes": [
+      "BoardGameRules.Entities.GamePhases.Events.RoundEnded"
+    ],
+    "helperType": "BrassPatch.Presentation.PresentationLifecycle",
+    "helperMethod": "BeforeRound",
+    "mode": "prefix"
+  },
+  {
+    "targetType": "Frameworks.Routing.Router",
+    "targetMethod": "PushViewToStack",
+    "parameterTypes": [
+      "InterfaceAdapters.Common.IBaseView"
+    ],
+    "helperType": "BrassPatch.Presentation.PresentationLifecycle",
+    "helperMethod": "AfterPush",
+    "mode": "postfix"
+  },
+  {
+    "targetType": "Frameworks.Routing.Router",
+    "targetMethod": "ProcessInput",
+    "parameterTypes": [],
+    "helperType": "BrassPatch.Presentation.PresentationLifecycle",
+    "helperMethod": "KeepInformationAccessible",
+    "mode": "prefix"
+  },
+  {
+    "targetType": "Frameworks.View.Game.Replay.ReplayView",
+    "targetMethod": "CreateAnimation",
+    "parameterTypes": [
+      "BoardGameRules.Entities.Actions.Events.IndustryDeveloped"
+    ],
+    "helperType": "BrassPatch.Presentation.PresentationLifecycle",
+    "helperMethod": "Develop",
+    "mode": "replace"
+  },
+  {
+    "targetType": "InterfaceAdapters.Common.SaveGame.SaveGamePresenter",
+    "targetMethod": "SaveGameCompleted",
+    "parameterTypes": [
+      "System.Boolean",
+      "BrassApplication.UseCases.Common.SaveGame.ISaveGameDelegate"
+    ],
+    "helperType": "BrassPatch.Persistence.SaveCompletion",
+    "helperMethod": "Completed",
+    "mode": "replace"
+  }
+]

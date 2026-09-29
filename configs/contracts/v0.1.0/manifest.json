@@ -1,0 +1,16 @@
+{
+  "format": "brass-ai-contract-manifest",
+  "format_version": 1,
+  "compatibility": {
+    "contract_version": "0.1.0",
+    "contract_sha256": "deccfa87dbda97d4525685c464d1fc6d6da40a183a4c4c3854075b1045cc64c9",
+    "rules_profile_id": "steam-brass-patch-1.1.0",
+    "rules_profile_sha256": "8c970c77bdc6aca56f5845606927738cdc46faf4ca518725e3daaafc18769610",
+    "player_count": 4,
+    "action_schema": "phase-choice/0.1.0",
+    "feature_schema": "unencoded/0.1.0",
+    "objective": "win-share/1.0.0"
+  },
+  "reference_lock_sha256": "9cf98163e7ed9cbeef0cd9ce9178c4eeea933063d361f5a5e42d2fdddcdd5158",
+  "component_map_sha256": "ffd914034f7bcb13074565902e5ba6f181e4fe320ab11a3bd9e713ea27798e1a"
+}

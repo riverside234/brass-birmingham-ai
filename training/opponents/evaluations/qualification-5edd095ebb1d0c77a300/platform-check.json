@@ -1,0 +1,12 @@
+{
+  "format": "frozen-bank-platform-check/1.0.0",
+  "bank": "bank-b8e1a4d9bf7bdc059c50",
+  "platform": "win32",
+  "checked_at_utc": "2026-09-28T21:54:53.403491+00:00",
+  "passed": true,
+  "tests": 34,
+  "failures": 0,
+  "errors": 0,
+  "manifest_sha256": "27e3420d9a9db8ea2066692d46083a05050b720eb38b0510fe09fe4241977839",
+  "scope": "Headless correctness only; rerun the declared tournament for platform-specific strength/latency."
+}

@@ -1,0 +1,645 @@
+[
+  {
+    "kind": "player_observation",
+    "compatibility": {
+      "contract_version": "0.1.0",
+      "contract_sha256": "deccfa87dbda97d4525685c464d1fc6d6da40a183a4c4c3854075b1045cc64c9",
+      "rules_profile_id": "steam-brass-patch-1.1.0",
+      "rules_profile_sha256": "8c970c77bdc6aca56f5845606927738cdc46faf4ca518725e3daaafc18769610",
+      "player_count": 4,
+      "action_schema": "phase-choice/0.1.0",
+      "feature_schema": "unencoded/0.1.0",
+      "objective": "win-share/1.0.0"
+    },
+    "observer_seat": 0,
+    "context": {
+      "game_id": "fixture-game",
+      "revision": 7,
+      "decision_id": "decision-7",
+      "turn_id": "turn-4",
+      "actor_seat": 0,
+      "turn_owner_seat": 0,
+      "phase": "ordinary_action",
+      "actions_remaining": 2
+    },
+    "public_state": {
+      "era": "canal",
+      "round": 2,
+      "turn_order": [
+        0,
+        1,
+        2,
+        3
+      ],
+      "players": [
+        {
+          "seat": 0,
+          "cash": 17,
+          "income_marker": 10,
+          "income_level": 0,
+          "banked_vp": 0,
+          "spent_this_round": 0,
+          "hand_size": 1,
+          "industry_stacks": [],
+          "links_remaining": 14
+        },
+        {
+          "seat": 1,
+          "cash": 17,
+          "income_marker": 10,
+          "income_level": 0,
+          "banked_vp": 0,
+          "spent_this_round": 0,
+          "hand_size": 8,
+          "industry_stacks": [],
+          "links_remaining": 14
+        },
+        {
+          "seat": 2,
+          "cash": 17,
+          "income_marker": 10,
+          "income_level": 0,
+          "banked_vp": 0,
+          "spent_this_round": 0,
+          "hand_size": 8,
+          "industry_stacks": [],
+          "links_remaining": 14
+        },
+        {
+          "seat": 3,
+          "cash": 17,
+          "income_marker": 10,
+          "income_level": 0,
+          "banked_vp": 0,
+          "spent_this_round": 0,
+          "hand_size": 8,
+          "industry_stacks": [],
+          "links_remaining": 14
+        }
+      ],
+      "industries": [],
+      "links": [],
+      "merchants": [],
+      "coal_market_prices": [],
+      "iron_market_prices": [],
+      "draw_pile_count": 20,
+      "face_down_removed_count": 2,
+      "public_discards": [],
+      "catalog_sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    "private_state": {
+      "own_hand": [
+        {
+          "card_id": "own-card-0",
+          "kind": "location",
+          "symbols": [
+            "birmingham"
+          ]
+        }
+      ],
+      "remembered_events": []
+    },
+    "observation_id": "501b6cd76cf917afcc02712708ff4baec41a658a1e63bc385ac6e60da43992cb"
+  },
+  {
+    "kind": "legal_choices",
+    "compatibility": {
+      "contract_version": "0.1.0",
+      "contract_sha256": "deccfa87dbda97d4525685c464d1fc6d6da40a183a4c4c3854075b1045cc64c9",
+      "rules_profile_id": "steam-brass-patch-1.1.0",
+      "rules_profile_sha256": "8c970c77bdc6aca56f5845606927738cdc46faf4ca518725e3daaafc18769610",
+      "player_count": 4,
+      "action_schema": "phase-choice/0.1.0",
+      "feature_schema": "unencoded/0.1.0",
+      "objective": "win-share/1.0.0"
+    },
+    "context": {
+      "game_id": "fixture-game",
+      "revision": 7,
+      "decision_id": "decision-7",
+      "turn_id": "turn-4",
+      "actor_seat": 0,
+      "turn_owner_seat": 0,
+      "phase": "ordinary_action",
+      "actions_remaining": 2
+    },
+    "observation_id": "501b6cd76cf917afcc02712708ff4baec41a658a1e63bc385ac6e60da43992cb",
+    "choices": [
+      {
+        "choice_id": "action:loan",
+        "choice_kind": "action_type",
+        "target_id": "loan"
+      },
+      {
+        "choice_id": "action:pass",
+        "choice_kind": "action_type",
+        "target_id": "pass"
+      }
+    ]
+  },
+  {
+    "kind": "action_plan",
+    "action_type": "loan",
+    "choice_ids": [
+      "action:loan",
+      "discard:own-card-0"
+    ]
+  },
+  {
+    "kind": "turn_plan",
+    "actions": [
+      {
+        "kind": "action_plan",
+        "action_type": "loan",
+        "choice_ids": [
+          "action:loan",
+          "discard:own-card-0"
+        ]
+      }
+    ]
+  },
+  {
+    "kind": "value_prediction",
+    "compatibility": {
+      "contract_version": "0.1.0",
+      "contract_sha256": "deccfa87dbda97d4525685c464d1fc6d6da40a183a4c4c3854075b1045cc64c9",
+      "rules_profile_id": "steam-brass-patch-1.1.0",
+      "rules_profile_sha256": "8c970c77bdc6aca56f5845606927738cdc46faf4ca518725e3daaafc18769610",
+      "player_count": 4,
+      "action_schema": "phase-choice/0.1.0",
+      "feature_schema": "unencoded/0.1.0",
+      "objective": "win-share/1.0.0"
+    },
+    "observer_seat": 0,
+    "observation_id": "501b6cd76cf917afcc02712708ff4baec41a658a1e63bc385ac6e60da43992cb",
+    "seat_ids": [
+      0,
+      1,
+      2,
+      3
+    ],
+    "win_share": [
+      0.4,
+      0.35,
+      0.2,
+      0.05
+    ],
+    "expected_rank": [
+      1.8,
+      2.2,
+      2.7,
+      3.3
+    ],
+    "expected_final_vp": [
+      130,
+      125,
+      119,
+      104
+    ]
+  },
+  {
+    "kind": "decision_request",
+    "compatibility": {
+      "contract_version": "0.1.0",
+      "contract_sha256": "deccfa87dbda97d4525685c464d1fc6d6da40a183a4c4c3854075b1045cc64c9",
+      "rules_profile_id": "steam-brass-patch-1.1.0",
+      "rules_profile_sha256": "8c970c77bdc6aca56f5845606927738cdc46faf4ca518725e3daaafc18769610",
+      "player_count": 4,
+      "action_schema": "phase-choice/0.1.0",
+      "feature_schema": "unencoded/0.1.0",
+      "objective": "win-share/1.0.0"
+    },
+    "request_id": "request-7",
+    "policy_id": "fixture-untrained-policy",
+    "observation": {
+      "kind": "player_observation",
+      "compatibility": {
+        "contract_version": "0.1.0",
+        "contract_sha256": "deccfa87dbda97d4525685c464d1fc6d6da40a183a4c4c3854075b1045cc64c9",
+        "rules_profile_id": "steam-brass-patch-1.1.0",
+        "rules_profile_sha256": "8c970c77bdc6aca56f5845606927738cdc46faf4ca518725e3daaafc18769610",
+        "player_count": 4,
+        "action_schema": "phase-choice/0.1.0",
+        "feature_schema": "unencoded/0.1.0",
+        "objective": "win-share/1.0.0"
+      },
+      "observer_seat": 0,
+      "context": {
+        "game_id": "fixture-game",
+        "revision": 7,
+        "decision_id": "decision-7",
+        "turn_id": "turn-4",
+        "actor_seat": 0,
+        "turn_owner_seat": 0,
+        "phase": "ordinary_action",
+        "actions_remaining": 2
+      },
+      "public_state": {
+        "era": "canal",
+        "round": 2,
+        "turn_order": [
+          0,
+          1,
+          2,
+          3
+        ],
+        "players": [
+          {
+            "seat": 0,
+            "cash": 17,
+            "income_marker": 10,
+            "income_level": 0,
+            "banked_vp": 0,
+            "spent_this_round": 0,
+            "hand_size": 1,
+            "industry_stacks": [],
+            "links_remaining": 14
+          },
+          {
+            "seat": 1,
+            "cash": 17,
+            "income_marker": 10,
+            "income_level": 0,
+            "banked_vp": 0,
+            "spent_this_round": 0,
+            "hand_size": 8,
+            "industry_stacks": [],
+            "links_remaining": 14
+          },
+          {
+            "seat": 2,
+            "cash": 17,
+            "income_marker": 10,
+            "income_level": 0,
+            "banked_vp": 0,
+            "spent_this_round": 0,
+            "hand_size": 8,
+            "industry_stacks": [],
+            "links_remaining": 14
+          },
+          {
+            "seat": 3,
+            "cash": 17,
+            "income_marker": 10,
+            "income_level": 0,
+            "banked_vp": 0,
+            "spent_this_round": 0,
+            "hand_size": 8,
+            "industry_stacks": [],
+            "links_remaining": 14
+          }
+        ],
+        "industries": [],
+        "links": [],
+        "merchants": [],
+        "coal_market_prices": [],
+        "iron_market_prices": [],
+        "draw_pile_count": 20,
+        "face_down_removed_count": 2,
+        "public_discards": [],
+        "catalog_sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+      },
+      "private_state": {
+        "own_hand": [
+          {
+            "card_id": "own-card-0",
+            "kind": "location",
+            "symbols": [
+              "birmingham"
+            ]
+          }
+        ],
+        "remembered_events": []
+      },
+      "observation_id": "501b6cd76cf917afcc02712708ff4baec41a658a1e63bc385ac6e60da43992cb"
+    },
+    "legal_choices": {
+      "kind": "legal_choices",
+      "compatibility": {
+        "contract_version": "0.1.0",
+        "contract_sha256": "deccfa87dbda97d4525685c464d1fc6d6da40a183a4c4c3854075b1045cc64c9",
+        "rules_profile_id": "steam-brass-patch-1.1.0",
+        "rules_profile_sha256": "8c970c77bdc6aca56f5845606927738cdc46faf4ca518725e3daaafc18769610",
+        "player_count": 4,
+        "action_schema": "phase-choice/0.1.0",
+        "feature_schema": "unencoded/0.1.0",
+        "objective": "win-share/1.0.0"
+      },
+      "context": {
+        "game_id": "fixture-game",
+        "revision": 7,
+        "decision_id": "decision-7",
+        "turn_id": "turn-4",
+        "actor_seat": 0,
+        "turn_owner_seat": 0,
+        "phase": "ordinary_action",
+        "actions_remaining": 2
+      },
+      "observation_id": "501b6cd76cf917afcc02712708ff4baec41a658a1e63bc385ac6e60da43992cb",
+      "choices": [
+        {
+          "choice_id": "action:loan",
+          "choice_kind": "action_type",
+          "target_id": "loan"
+        },
+        {
+          "choice_id": "action:pass",
+          "choice_kind": "action_type",
+          "target_id": "pass"
+        }
+      ]
+    },
+    "budget": {
+      "turn_budget_id": "budget-turn-4",
+      "mode": "wall_clock",
+      "total_ms": 3000,
+      "remaining_ms": 2400,
+      "work_limit": null
+    },
+    "intent": {
+      "profile_id": "fixture-balanced",
+      "profile_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+      "focus": "balanced",
+      "target_ids": []
+    }
+  },
+  {
+    "kind": "decision_response",
+    "compatibility": {
+      "contract_version": "0.1.0",
+      "contract_sha256": "deccfa87dbda97d4525685c464d1fc6d6da40a183a4c4c3854075b1045cc64c9",
+      "rules_profile_id": "steam-brass-patch-1.1.0",
+      "rules_profile_sha256": "8c970c77bdc6aca56f5845606927738cdc46faf4ca518725e3daaafc18769610",
+      "player_count": 4,
+      "action_schema": "phase-choice/0.1.0",
+      "feature_schema": "unencoded/0.1.0",
+      "objective": "win-share/1.0.0"
+    },
+    "request_id": "request-7",
+    "policy_id": "fixture-untrained-policy",
+    "context": {
+      "game_id": "fixture-game",
+      "revision": 7,
+      "decision_id": "decision-7",
+      "turn_id": "turn-4",
+      "actor_seat": 0,
+      "turn_owner_seat": 0,
+      "phase": "ordinary_action",
+      "actions_remaining": 2
+    },
+    "observation_id": "501b6cd76cf917afcc02712708ff4baec41a658a1e63bc385ac6e60da43992cb",
+    "turn_budget_id": "budget-turn-4",
+    "status": "ok",
+    "plan": {
+      "kind": "turn_plan",
+      "actions": [
+        {
+          "kind": "action_plan",
+          "action_type": "loan",
+          "choice_ids": [
+            "action:loan",
+            "discard:own-card-0"
+          ]
+        }
+      ]
+    },
+    "elapsed_ms": 20
+  },
+  {
+    "kind": "terminal_result",
+    "compatibility": {
+      "contract_version": "0.1.0",
+      "contract_sha256": "deccfa87dbda97d4525685c464d1fc6d6da40a183a4c4c3854075b1045cc64c9",
+      "rules_profile_id": "steam-brass-patch-1.1.0",
+      "rules_profile_sha256": "8c970c77bdc6aca56f5845606927738cdc46faf4ca518725e3daaafc18769610",
+      "player_count": 4,
+      "action_schema": "phase-choice/0.1.0",
+      "feature_schema": "unencoded/0.1.0",
+      "objective": "win-share/1.0.0"
+    },
+    "game_id": "fixture-game",
+    "players": [
+      {
+        "seat": 0,
+        "final_vp": 100,
+        "income_level": 10,
+        "cash": 20,
+        "rank": 1
+      },
+      {
+        "seat": 1,
+        "final_vp": 100,
+        "income_level": 10,
+        "cash": 20,
+        "rank": 1
+      },
+      {
+        "seat": 2,
+        "final_vp": 90,
+        "income_level": 10,
+        "cash": 20,
+        "rank": 3
+      },
+      {
+        "seat": 3,
+        "final_vp": 80,
+        "income_level": 10,
+        "cash": 20,
+        "rank": 4
+      }
+    ],
+    "seat_ids": [
+      0,
+      1,
+      2,
+      3
+    ],
+    "win_share": [
+      0.5,
+      0.5,
+      0,
+      0
+    ]
+  },
+  {
+    "kind": "model_metadata",
+    "compatibility": {
+      "contract_version": "0.1.0",
+      "contract_sha256": "deccfa87dbda97d4525685c464d1fc6d6da40a183a4c4c3854075b1045cc64c9",
+      "rules_profile_id": "steam-brass-patch-1.1.0",
+      "rules_profile_sha256": "8c970c77bdc6aca56f5845606927738cdc46faf4ca518725e3daaafc18769610",
+      "player_count": 4,
+      "action_schema": "phase-choice/0.1.0",
+      "feature_schema": "unencoded/0.1.0",
+      "objective": "win-share/1.0.0"
+    },
+    "model_id": "fixture-untrained-policy",
+    "weights_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+    "reference_lock_sha256": "9cf98163e7ed9cbeef0cd9ce9178c4eeea933063d361f5a5e42d2fdddcdd5158",
+    "seat_ids": [
+      0,
+      1,
+      2,
+      3
+    ],
+    "value_heads": [
+      "win_share",
+      "expected_rank",
+      "expected_final_vp"
+    ],
+    "parameter_count": 2000000
+  },
+  {
+    "kind": "trusted_checkpoint",
+    "visibility": "trusted_host_only",
+    "compatibility": {
+      "contract_version": "0.1.0",
+      "contract_sha256": "deccfa87dbda97d4525685c464d1fc6d6da40a183a4c4c3854075b1045cc64c9",
+      "rules_profile_id": "steam-brass-patch-1.1.0",
+      "rules_profile_sha256": "8c970c77bdc6aca56f5845606927738cdc46faf4ca518725e3daaafc18769610",
+      "player_count": 4,
+      "action_schema": "phase-choice/0.1.0",
+      "feature_schema": "unencoded/0.1.0",
+      "objective": "win-share/1.0.0"
+    },
+    "game_id": "fixture-game",
+    "revision": 7,
+    "checkpoint_id": "fixture-checkpoint",
+    "payload_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+    "restore_format": "unimplemented/0.1.0"
+  },
+  {
+    "kind": "host_reset",
+    "visibility": "trusted_host_only",
+    "compatibility": {
+      "contract_version": "0.1.0",
+      "contract_sha256": "deccfa87dbda97d4525685c464d1fc6d6da40a183a4c4c3854075b1045cc64c9",
+      "rules_profile_id": "steam-brass-patch-1.1.0",
+      "rules_profile_sha256": "8c970c77bdc6aca56f5845606927738cdc46faf4ca518725e3daaafc18769610",
+      "player_count": 4,
+      "action_schema": "phase-choice/0.1.0",
+      "feature_schema": "unencoded/0.1.0",
+      "objective": "win-share/1.0.0"
+    },
+    "game_id": "fixture-game",
+    "setup_id": "fixture-setup",
+    "environment_seed": 19
+  },
+  {
+    "kind": "belief_request",
+    "compatibility": {
+      "contract_version": "0.1.0",
+      "contract_sha256": "deccfa87dbda97d4525685c464d1fc6d6da40a183a4c4c3854075b1045cc64c9",
+      "rules_profile_id": "steam-brass-patch-1.1.0",
+      "rules_profile_sha256": "8c970c77bdc6aca56f5845606927738cdc46faf4ca518725e3daaafc18769610",
+      "player_count": 4,
+      "action_schema": "phase-choice/0.1.0",
+      "feature_schema": "unencoded/0.1.0",
+      "objective": "win-share/1.0.0"
+    },
+    "observation": {
+      "kind": "player_observation",
+      "compatibility": {
+        "contract_version": "0.1.0",
+        "contract_sha256": "deccfa87dbda97d4525685c464d1fc6d6da40a183a4c4c3854075b1045cc64c9",
+        "rules_profile_id": "steam-brass-patch-1.1.0",
+        "rules_profile_sha256": "8c970c77bdc6aca56f5845606927738cdc46faf4ca518725e3daaafc18769610",
+        "player_count": 4,
+        "action_schema": "phase-choice/0.1.0",
+        "feature_schema": "unencoded/0.1.0",
+        "objective": "win-share/1.0.0"
+      },
+      "observer_seat": 0,
+      "context": {
+        "game_id": "fixture-game",
+        "revision": 7,
+        "decision_id": "decision-7",
+        "turn_id": "turn-4",
+        "actor_seat": 0,
+        "turn_owner_seat": 0,
+        "phase": "ordinary_action",
+        "actions_remaining": 2
+      },
+      "public_state": {
+        "era": "canal",
+        "round": 2,
+        "turn_order": [
+          0,
+          1,
+          2,
+          3
+        ],
+        "players": [
+          {
+            "seat": 0,
+            "cash": 17,
+            "income_marker": 10,
+            "income_level": 0,
+            "banked_vp": 0,
+            "spent_this_round": 0,
+            "hand_size": 1,
+            "industry_stacks": [],
+            "links_remaining": 14
+          },
+          {
+            "seat": 1,
+            "cash": 17,
+            "income_marker": 10,
+            "income_level": 0,
+            "banked_vp": 0,
+            "spent_this_round": 0,
+            "hand_size": 8,
+            "industry_stacks": [],
+            "links_remaining": 14
+          },
+          {
+            "seat": 2,
+            "cash": 17,
+            "income_marker": 10,
+            "income_level": 0,
+            "banked_vp": 0,
+            "spent_this_round": 0,
+            "hand_size": 8,
+            "industry_stacks": [],
+            "links_remaining": 14
+          },
+          {
+            "seat": 3,
+            "cash": 17,
+            "income_marker": 10,
+            "income_level": 0,
+            "banked_vp": 0,
+            "spent_this_round": 0,
+            "hand_size": 8,
+            "industry_stacks": [],
+            "links_remaining": 14
+          }
+        ],
+        "industries": [],
+        "links": [],
+        "merchants": [],
+        "coal_market_prices": [],
+        "iron_market_prices": [],
+        "draw_pile_count": 20,
+        "face_down_removed_count": 2,
+        "public_discards": [],
+        "catalog_sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+      },
+      "private_state": {
+        "own_hand": [
+          {
+            "card_id": "own-card-0",
+            "kind": "location",
+            "symbols": [
+              "birmingham"
+            ]
+          }
+        ],
+        "remembered_events": []
+      },
+      "observation_id": "501b6cd76cf917afcc02712708ff4baec41a658a1e63bc385ac6e60da43992cb"
+    },
+    "search_seed": 47,
+    "world_count": 8
+  }
+]

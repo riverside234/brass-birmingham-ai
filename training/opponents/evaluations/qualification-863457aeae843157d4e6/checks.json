@@ -1,0 +1,52 @@
+{
+  "format": "legacy-v3-correctness/1.0.0",
+  "passed": true,
+  "bank": "bank-b5988f07c96eb193f3f4",
+  "bank_manifest_sha256": "160ce164778ff7e709394a513d4d71f54714ca5c1d6d51f44220f18d7d823c80",
+  "tests": 34,
+  "fixtures": [
+    {
+      "suite": "conversion",
+      "checks_each": 435,
+      "identical_scenarios": 54
+    },
+    {
+      "suite": "cash-beer",
+      "checks_each": 60,
+      "identical_scenarios": 12
+    },
+    {
+      "suite": "credit",
+      "checks_each": 72,
+      "identical_scenarios": 12
+    },
+    {
+      "suite": "demand",
+      "checks_each": 19,
+      "identical_scenarios": 2
+    }
+  ],
+  "worker_sha256": "f7cd8b7e32886db8a289f23ba7abdbe8a4d8b5f482f53b98ff84fe9eb0d6b483",
+  "identical_snapshot_rebuild": true,
+  "platform": "win32",
+  "evidence": {
+    "artifacts/patch-build/local-ai-conversion-0.json": "3f678728693e5d38767ff851fe25e01f72af8993ea23b4b20b6c4ec3308b8211",
+    "artifacts/patch-build/local-ai-conversion-1.json": "9787718f16a77462f7f557eb84fe9975adea4082a6088598d7b0ece33713bf80",
+    "artifacts/patch-build/local-ai-cash-beer-0.json": "ecf7451b7f1115d36993a3e470833e7b807afd7e867dc2956ba93470c07d540f",
+    "artifacts/patch-build/local-ai-cash-beer-1.json": "10a5791f72ecac6855170aacc6e6c85bb439cc793d6d106f701cfe0d46998792",
+    "artifacts/patch-build/local-ai-credit-0.json": "9d81c6d345d5f92f007b15e8fe1365b8cc7e1c071b20e39764882a32b0010e49",
+    "artifacts/patch-build/local-ai-credit-1.json": "9c3c8b37ec22babef3c2580e906ef2f92bfbeede5dfe8dc574d2d1d1f442adff",
+    "artifacts/patch-build/local-ai-demand-0.json": "2e8567be309e7087981911d3046f863085ac129655125149fadc70317fde2b00",
+    "artifacts/patch-build/local-ai-demand-1.json": "d9a954f46848be14702736d187ba9826bb03da2f271561c444fe42406fb0ca97",
+    "tests/BrassLocalAI/ConversionTests.cs": "2ea6d66a88b4087ee39f1b6206765c8042fc66c4622128fa9c3490cf11fdb495",
+    "tests/BrassLocalAI/CashBeerTests.cs": "0a2a0eb67c90fc16870050b8a3f6faa15bba9f1a362b9cc7ad793261f383ab61",
+    "tests/BrassLocalAI/DemandTests.cs": "a569a7bfde538f03a531007264928a2cd935ae8aed8c829832ba51e5d704a6fd",
+    "tests/BrassLocalAI/CreditTests.cs": "07ffa5c1b7a80ec09f46357ba53d337b69f4dc2aa72b83dbd8fc154fea06282d",
+    "tests/legacy-ai/test_v3.py": "13173da909cd3a72e7d3c9e421cfde5cc46c82a3aa39029e197bedd01e67e327",
+    "scripts/check-frozen-bank.py": "f734351f63cd8173103f75a6aafa351b8555a27d50f29fc315313e1a55227be1",
+    "scripts/verify-v3-bank.py": "a9efe764375f947bd5efeef9685e483852af9ab4ac6873639e92c1ef16fcdb71",
+    "src/brass_ai/qualification.py": "fc4473632938fac581bb8f5d8fc1c4e5fa65a57fd994bcf84e23d20717b43640",
+    "training/opponents/evaluations/qualification-863457aeae843157d4e6/platform-check.json": "d29fac42453d4a63c7bd4138f8a1e19c30b0fd2cc37208d6c2a06a5dfbd9c919"
+  },
+  "scope": "Frozen contracts and identical deadline/merchant/cash decisions; no strength admission."
+}

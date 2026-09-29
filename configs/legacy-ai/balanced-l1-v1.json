@@ -1,0 +1,12 @@
+{
+  "id": "legacy-hard-balanced-l1-v1-candidate",
+  "player_count": 4,
+  "mode": "S0",
+  "work_limit": 160,
+  "milliseconds": 250,
+  "first_width": 32,
+  "beam": 12,
+  "second_width": 1,
+  "credible_window": 0,
+  "rail_preference": 0
+}

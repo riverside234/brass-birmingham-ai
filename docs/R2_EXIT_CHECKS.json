@@ -1,0 +1,181 @@
+{
+  "milestone": "R2",
+  "format": "r2-public-exit-summary/1.0.0",
+  "recorded_at_utc": "2026-09-27T19:28:24.334029+00:00",
+  "passed": true,
+  "unit_tests": 23,
+  "r0_regression_tests": 37,
+  "r1_regression_tests": 22,
+  "reference_cache_files_verified": 16,
+  "installed_patch": "1.1.0, unchanged",
+  "qualified_environment": "Local Windows CPU; Python 3.12.14",
+  "dependencies": {
+    "torch": "2.8.0+cpu",
+    "numpy": "2.3.5",
+    "onnx": "1.19.0",
+    "onnxruntime": "1.22.1",
+    "jsonschema": "4.25.1",
+    "typing-extensions": "4.15.0"
+  },
+  "lab_root": "/data/not_backed_up/yxu209/ai-training/",
+  "models": {
+    "small": 473229,
+    "medium": 1897389,
+    "large": 7797901
+  },
+  "compatibility": {
+    "learning_contract": "four-seat-learning/1.0.0",
+    "players": 4,
+    "rules": "steam-brass-patch-1.1.0",
+    "wire_sha256": "fabe2ef3e1de73aa9f3ddd05b67c08f9ef564a25ab4ff42963a03ab6fe3b6e3d",
+    "observation": "public-state/0.2.0",
+    "choices": "phase-choice/0.2.0",
+    "objective": "win-share/1.0.0",
+    "placement": "competition-rank/1.0.0",
+    "seat_order": "stable-0-1-2-3",
+    "vp_scale": 100.0,
+    "features_sha256": "991308b11eea442f4b071c46cd6361ad288c9877fbd4eedc4b241819f7769094",
+    "producer_profile_sha256": "ffae2fa230bcc42c3877d7817a584b608b60961c0b719316884d6c694a1384d7",
+    "encoder_sha256": "6937346f9b1092589ebede368aba40ebcdc0c9373ea21a438d6b75a01b64ef9f",
+    "architecture_sha256": "8a040433e73117af480bdb4f6f1001a95de129123d3e25a9de06d675f8cb4a2d",
+    "loss": "win-ce+0.25-rank-huber+0.1-vp-huber/1.0.0",
+    "reference_lock_sha256": "9cf98163e7ed9cbeef0cd9ce9178c4eeea933063d361f5a5e42d2fdddcdd5158",
+    "heads": [
+      "policy_logits",
+      "win_share_4",
+      "placement_4",
+      "vp_4"
+    ]
+  },
+  "integration": {
+    "artifact_directory": "artifacts/r2/exit-b2447dd7d79c",
+    "state_dim": 3207,
+    "action_dim": 184,
+    "trace_positions": 41,
+    "counterfactual_predictions": 82,
+    "observer_seats": [
+      0,
+      1,
+      2,
+      3
+    ],
+    "era_phases": [
+      [
+        "CanalEra",
+        "action"
+      ],
+      [
+        "CanalEra",
+        "bonus"
+      ],
+      [
+        "CanalEra",
+        "continuation"
+      ],
+      [
+        "CanalEra",
+        "debt"
+      ],
+      [
+        "CanalEra",
+        "payment"
+      ],
+      [
+        "RailEra",
+        "action"
+      ],
+      [
+        "RailEra",
+        "bonus"
+      ],
+      [
+        "RailEra",
+        "continuation"
+      ],
+      [
+        "RailEra",
+        "debt"
+      ],
+      [
+        "RailEra",
+        "payment"
+      ]
+    ],
+    "complete_games": 8,
+    "recorded_decisions": 2455,
+    "value_steps": 5,
+    "exact_resume": true,
+    "on_policy_update": {
+      "value": 1.402907682582736,
+      "actor": 0.31631601229310036,
+      "entropy": 1.3913096326868981,
+      "gradient_norm": 2.2777068614959717,
+      "games": 4,
+      "seat_trajectories": 16
+    },
+    "cpu_forward_ms_p50": 2.3205000325106084,
+    "cpu_forward_ms_p95": 2.8840150218456975,
+    "timed_candidates": 340,
+    "elapsed_seconds": 966.8279999999795
+  },
+  "all_observed_legal_choice_kinds": [
+    "beer",
+    "bonus_develop",
+    "bonus_skip",
+    "build",
+    "coal",
+    "develop",
+    "finish",
+    "iron",
+    "liquidate",
+    "loan",
+    "network",
+    "pass",
+    "scout",
+    "sell"
+  ],
+  "special_phase_inference": {
+    "passed": true,
+    "decisions": 7,
+    "scenario": "two sales, separate merchant beer, develop/skip bonuses, finish"
+  },
+  "export": {
+    "fresh_max_absolute_error": 6.67572021484375e-06,
+    "trained_max_absolute_error": 9.059906005859375e-06,
+    "dynamic_shape_batches_per_export": 3,
+    "provider": "CPUExecutionProvider"
+  },
+  "source_sha256_lf": {
+    "src/brass_ai/learning/batching.py": "f67fe2dacb598202416e9fef717176210df63a16b932b13e61a61a8a89cb66bc",
+    "src/brass_ai/learning/checkpoint.py": "8e17f37c44d6db5023ffe614de9f1ea4dabd5de2c6bfb614b5bfd54451552a69",
+    "src/brass_ai/learning/cli.py": "f96c4381bfa4dc2da98a1d558f5bed95db0bb9c739c34f566645814e359db47f",
+    "src/brass_ai/learning/contracts.py": "6b62ed74d3be9bf7dfead3f38fb4ed3f938fa087a6219b79342b9599628edaf5",
+    "src/brass_ai/learning/export.py": "ce6a13870b5b1418ee36d47a9de36f01a7720e4c9d3a002fff0d1c5e3ae18eef",
+    "src/brass_ai/learning/features.py": "6937346f9b1092589ebede368aba40ebcdc0c9373ea21a438d6b75a01b64ef9f",
+    "src/brass_ai/learning/model.py": "8a040433e73117af480bdb4f6f1001a95de129123d3e25a9de06d675f8cb4a2d",
+    "src/brass_ai/learning/replay.py": "abb29f85eaffc513b02c468ddcf7b96492e879d13d425a32ad9a01e01072d989",
+    "src/brass_ai/learning/runner.py": "85539e88832835744fa296a6be7fc532aae62576edec316d11815c5f067b3333",
+    "src/brass_ai/learning/training.py": "ef452d909fdfa61b02c015df07a54aeffe68b92d6d31d62b3bb58734587ce04c",
+    "src/brass_ai/learning/__init__.py": "8491315b438e81b8ede2e969e994e1aa30d73e85bf4d6fe6079140c93b6e2730",
+    "tests/R2/fixtures.py": "d4937eb49072ba108ea8f3072ffb4d2e0fdd1027e9f800da4391a74a1731e949",
+    "tests/R2/integration.py": "9ad2cec2079d6b4149b3c0a3982e01cd15286b7bb2601d2b6e396456209b5964",
+    "tests/R2/test_learning.py": "d2d674c4d1aba84e7806d4a8bffdfb519bca2419b8c6539c24292995e3342ec5",
+    "configs/learning/features-1.0.0.json": "b00efe68cb7624d7f10b79aa2835cf8de2d83cb44bf67171ec6188afc8905e8b",
+    "configs/learning/host-1.0.0.json": "b8f33c84463a4c7f5ba405f65c3751ead5b97cb479874b24641e2d343728479b",
+    "configs/learning/lab.json": "fd55c34066951d4b4fb6b746230a52012caa1b676280705d5e6e3b81e960a041",
+    "scripts/r2.py": "37212eeec43057c186e3a6651ea0682a6eece57bfdf7bee6c1979f3ca9731089",
+    "scripts/verify-r2.py": "bedf43c0a6379f6b4941241509faf9fb85bebd122509383ee9159927742a5eb2",
+    "requirements-r2.txt": "d3a3bf698603bf0b621610288824444fff5c90ea2b87676a227c0bdf8cc546b7",
+    "configs/references/r2-components.json": "aaca7ecb32e7f7799ce83cb11632a175544091234bf1e23300b714f02c372680"
+  },
+  "limitations": [
+    "No lab/CUDA/Intel GPU run",
+    "No human/legacy strength evaluation",
+    "No search or live-game AI bridge",
+    "Linux host not yet qualified",
+    "Full-history validation and in-memory replay loading are not production throughput optimizations",
+    "No calibrated Easy/Medium/Hard or trained personalities",
+    "Timing is warmed network forward only, not whole-turn latency"
+  ],
+  "evidence_combination": "Final 23-test suite, full eight-game integration run, supplemental seven-decision merchant/beer inference fixture, and unchanged R0/R1 regression suites."
+}

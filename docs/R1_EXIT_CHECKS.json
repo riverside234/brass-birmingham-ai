@@ -1,0 +1,113 @@
+{
+  "milestone": "R1",
+  "passed": true,
+  "contract": "0.2.0",
+  "rules": "steam-brass-patch-1.1.0",
+  "host_sha256": "4b6468f5ff8b0da8d8527be6292474165046faa227a38804b54242d9a37050b5",
+  "managed_dependencies": 111,
+  "unit_tests": 22,
+  "full_games": 5,
+  "decisions_in_full_games": 1551,
+  "restore_points": 46,
+  "privacy_cases": 328,
+  "sampled_continuations": 328,
+  "covered_choice_kinds": [
+    "beer",
+    "bonus_develop",
+    "bonus_skip",
+    "build",
+    "coal",
+    "develop",
+    "finish",
+    "iron",
+    "liquidate",
+    "loan",
+    "network",
+    "pass",
+    "scout",
+    "sell"
+  ],
+  "dotnet": {
+    "passed": true,
+    "runtime": "4.0.30319.42000",
+    "unity": false,
+    "host_sha256": "4b6468f5ff8b0da8d8527be6292474165046faa227a38804b54242d9a37050b5",
+    "trace_sha256": "00ed49c9d24d62c45981c494cb33c7def3026dc9a10e6545a1ea1c4f4458b589",
+    "restore_points": 46,
+    "replayed_decisions": 5393,
+    "transaction_rollback": "passed",
+    "resources": {
+      "assertions": 99,
+      "findings": [
+        "B02",
+        "B03",
+        "B04",
+        "B08",
+        "B10"
+      ],
+      "failures": []
+    },
+    "liquidation": 56,
+    "scout": 125,
+    "core": "passed",
+    "state": "passed"
+  },
+  "unity": {
+    "passed": true,
+    "unity_version": "2019.1.7f1",
+    "result": {
+      "passed": true,
+      "runtime": "4.0.30319.42000",
+      "unity": true,
+      "host_sha256": "4b6468f5ff8b0da8d8527be6292474165046faa227a38804b54242d9a37050b5",
+      "trace_sha256": "00ed49c9d24d62c45981c494cb33c7def3026dc9a10e6545a1ea1c4f4458b589",
+      "restore_points": 46,
+      "replayed_decisions": 5393,
+      "transaction_rollback": "passed",
+      "resources": {
+        "assertions": 99,
+        "findings": [
+          "B02",
+          "B03",
+          "B04",
+          "B08",
+          "B10"
+        ],
+        "failures": []
+      },
+      "liquidation": 56,
+      "scout": 125,
+      "core": "passed",
+      "state": "passed"
+    }
+  },
+  "h0": [
+    {
+      "identity": "stock-hard-original",
+      "assembly_sha256": "600ebf309670b2726001c16a3375f8bbf3de76a23c0202be7cf198ba338981fb",
+      "games": 5,
+      "completed": 5,
+      "failures": 0,
+      "logging_control_seed": 4100,
+      "logging_noninterference": true,
+      "capture_sha256": "f8649d39494c65a584a835fa5f96df8d55571be117c0919de85f7de8ace23616"
+    },
+    {
+      "identity": "stock-hard-guarded-1.1.0",
+      "assembly_sha256": "1c8cef281b81474200268eed23448faa3f5247f8ea49409a69efc3982c5a2d0a",
+      "games": 5,
+      "completed": 5,
+      "failures": 0,
+      "logging_control_seed": 4100,
+      "logging_noninterference": true,
+      "capture_sha256": "2d5b48bddfcab8b626ecb2d6645afaad34e6ba123816327dc186e67bb625f2ee"
+    }
+  ],
+  "installed_patch_unchanged": true,
+  "limits": [
+    "Windows .NET Framework/Unity Mono only; lab/Linux unvalidated",
+    "finite fixtures, not exhaustive full-game proof",
+    "R2/R3 training/search/live replacement not implemented",
+    "H0 candidate-alternative diagnosis and fairness conversion remain"
+  ]
+}

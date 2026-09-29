@@ -1,0 +1,461 @@
+{
+  "format": "legacy-qualification/1.0.0",
+  "spec_id": "qualification-c487cd9f12a201a5690c",
+  "bank": "bank-af17b1aadbe7f9b21fa7",
+  "player_count": 4,
+  "checks": {
+    "format": "legacy-v3-correctness/1.0.0",
+    "passed": true,
+    "bank": "bank-af17b1aadbe7f9b21fa7",
+    "bank_manifest_sha256": "b8cdce0df8314f7ddac2330bb6123c12f351adb5462e6f39d2c6053aa8df649b",
+    "tests": 34,
+    "fixtures": [
+      {
+        "suite": "conversion",
+        "checks_each": 435,
+        "identical_scenarios": 54
+      },
+      {
+        "suite": "cash-beer",
+        "checks_each": 60,
+        "identical_scenarios": 12
+      },
+      {
+        "suite": "credit",
+        "checks_each": 72,
+        "identical_scenarios": 12
+      },
+      {
+        "suite": "demand",
+        "checks_each": 19,
+        "identical_scenarios": 2
+      },
+      {
+        "suite": "route",
+        "checks_each": 24,
+        "identical_scenarios": 2
+      }
+    ],
+    "worker_sha256": "5d0238095df57de6e9bc593469139e8e402908f07dea052c3b75f2747d2a79be",
+    "identical_snapshot_rebuild": true,
+    "economic_admission_regressions": 2,
+    "bank_admission_regressions": 5,
+    "platform": "win32",
+    "evidence": {
+      "artifacts/patch-build/local-ai-conversion-0.json": "1e35a6f69d864278fb6a962cf892828d53c334d5af75ba454a2bae8c3b92ed48",
+      "artifacts/patch-build/local-ai-conversion-1.json": "365346d0fba596fb80969adc2335c23088b76df7324d1ec5ba489d5e4b01d11b",
+      "artifacts/patch-build/local-ai-cash-beer-0.json": "26fc366a3adf0bfe0ecb566e20aee2b07ed1b62359ca9c6218a35d05e5fdb118",
+      "artifacts/patch-build/local-ai-cash-beer-1.json": "b2076bd22d92a981cabcc0b8b39711b81c45e89d20ff2c737584eb605ee96973",
+      "artifacts/patch-build/local-ai-credit-0.json": "dfe0b8d8996f232ad3407f340aef331fb7b93fba1273a60290ae7be04ae5a35e",
+      "artifacts/patch-build/local-ai-credit-1.json": "4ed4055f14d8c93dda04f85724376e3fedebc93359abd69a639f832987d928c2",
+      "artifacts/patch-build/local-ai-demand-0.json": "a35dc06d24779a223f4ff83406e22adfc85b531278938082e69cb378b1068dd4",
+      "artifacts/patch-build/local-ai-demand-1.json": "7ff951a8467b1fe11465fd8a5fd5252c3f02e5bc2110bb2ed8204dc63e103f27",
+      "artifacts/patch-build/local-ai-route-0.json": "fd2e1f1fefbd4231228dbe96c4bf27be50f344a79258a185efbcfb503697c71e",
+      "artifacts/patch-build/local-ai-route-1.json": "f9d81532088c8ce8694d536132977b3c54a2e6f8014204d9032186e71e5ced1c",
+      "tests/BrassLocalAI/ConversionTests.cs": "2ea6d66a88b4087ee39f1b6206765c8042fc66c4622128fa9c3490cf11fdb495",
+      "tests/BrassLocalAI/CashBeerTests.cs": "0a2a0eb67c90fc16870050b8a3f6faa15bba9f1a362b9cc7ad793261f383ab61",
+      "tests/BrassLocalAI/DemandTests.cs": "a569a7bfde538f03a531007264928a2cd935ae8aed8c829832ba51e5d704a6fd",
+      "tests/BrassLocalAI/CreditTests.cs": "07ffa5c1b7a80ec09f46357ba53d337b69f4dc2aa72b83dbd8fc154fea06282d",
+      "tests/BrassLocalAI/RouteTests.cs": "08c0d7342eee1565b888709c436b0093aeb5a82320b10bdc44b67405323a49cf",
+      "tests/Qualification/test_economic_admission.py": "48a1d97c46d0cfe5f554588c172473c6480ceaae98723ef9a33311e76feeb06b",
+      "tests/legacy-ai/test_v3.py": "13173da909cd3a72e7d3c9e421cfde5cc46c82a3aa39029e197bedd01e67e327",
+      "tests/legacy-ai/test_bank.py": "983e41e3caf0dd02f1c73f78846dfdb8baee70a05e76d743fcac7e71e58c404a",
+      "scripts/check-frozen-bank.py": "f734351f63cd8173103f75a6aafa351b8555a27d50f29fc315313e1a55227be1",
+      "scripts/amend-v3-qualification.py": "13928b448f6a43431c7f90a48329290a4094554cb2ae2ec800a257e86cdd37a6",
+      "scripts/promote-v3-bank.py": "f007a046f2a808b2b8169c515604e6f22d1918bc50ccc76d769e16d37f7d3422",
+      "scripts/verify-v3-bank.py": "39952e54ffe715f6cce543dcb1365633fd02617d07bf90ce9614d73f532d6396",
+      "src/brass_ai/qualification.py": "d0cd77c15eef8e001293397fe918641b2e7c1380cc388720fe5d5cf98ccc437f",
+      "training/opponents/evaluations/qualification-c487cd9f12a201a5690c/platform-check.json": "a489b7977d0adc243f4933db96afd0ba1ddfbd3f2c2321f2857178219084ff97"
+    },
+    "scope": "Frozen contracts and identical deadline/merchant/cash decisions; no strength admission."
+  },
+  "scope_amendment": {
+    "kind": "user-requested-limited-validation",
+    "reason": "User requested that 25 qualification games are good enough; stop the remaining tournament games.",
+    "requested_games": 25,
+    "retained_games": 28,
+    "parent_spec": "qualification-97c7a2f1add8fc7aa336",
+    "parent_spec_sha256": "a1ac3854341b77accf7aaaf2819ce82aea34579869f2ce2d2f40b3f74c51925b",
+    "original_admission": {
+      "min_guarded_games": 16,
+      "min_mixed_games": 4,
+      "min_identical_games": 1,
+      "maximum_failures": 0,
+      "maximum_economic_stalls": 0,
+      "minimum_guarded_mean_rank": 2.5,
+      "held_out_family": "pottery-flex",
+      "general_hard_min_setup_groups": 30
+    },
+    "selection": "Every result file completed before the runner stopped; no outcome filtering."
+  },
+  "complete_original_study": false,
+  "spec_sha256": "4f3326e97a431dcc39a883183ef044def59bd39264c4990cef3b28192e3d8a59",
+  "raw_evidence": {
+    "3e7a0bfac791e11ef0cb.json": "02be4b38b8539610ba58f1d67b88a9a0c9ef2057ceb7246475766e51644e3f34",
+    "2cdd7bd8b2a3c76a63da.json": "e339ea73de9a483d460aa07279603a922db8fd175fc33564ac2c49c417ad3637",
+    "407ba5010366a8432619.json": "f9d9667533709bc8ccfefff04f4178abcfe547f2c1b3e3de8cfaacc0586b72bc",
+    "74f006f3189d083cb119.json": "dbf7396206f3ad63dd70280221a386554a406f9e49649e1e2daf9a1ffe7e6f07",
+    "e58b0543bbaece5265e1.json": "dbbffe9dc20a50b9c6abfad1a6f7e984c9ea8a62498cd615864c13adcbc02363",
+    "8f08ca8b020527732110.json": "94b255fc770bcec2c2b911a7db9cc341992d5ede9d1fd6b1c0570918c6ec33b9",
+    "83b1f259ff717a024215.json": "987a9cd9b24f274aeebc8f601efa3f0aa4e22ba98c4dab1e8e18341e0763d042",
+    "1c613cc0335275235ef3.json": "c4a4d9b21093e334ea3afaddad18299405f24217b7bd8bbfab1b7fd48bc9958b",
+    "e7197b612d063c5fe5cd.json": "1b480bb755b9a59ed488819eb5ca1fb8f271ff7bf93ed0eaca5147e55b542700",
+    "97e925cfa94f8533ecf3.json": "1774ab5d9ab97c0126ff8a1e3561ad5f24bb8ebd75bfe7c4969ec53ba0deb181",
+    "0f54433844d1fa23648b.json": "080e22f46b4af287ea87f3ee0ebed926b2f8504b7b4a8b4085ec50cf005538d7",
+    "9496978f198cbef92bed.json": "ce15f88c04f6c9801e1373fbc006e4cbe3f97b5a558f88be67b8ac1ee13ebb6e",
+    "5c5da837a363c98de89c.json": "cf88842bf6f353b6ee0de467dc1c3366be58bff70a87b415741a2c19c3a85dac",
+    "daf988668c5233ca288b.json": "361be0ba3742aa6636fe486ab9e0f5d660e119eceeac2f5a609c166eaae17165",
+    "5c023ced285a54d42629.json": "42838c5a2c575bb280ce2c5baaf48765d82976c5294e77622b28e433db5d5186",
+    "6051980a591980336a9a.json": "c90df19d828763781416134a2b60320435656d2f350decd51818e1d7f8994f7a",
+    "2f8e799663089b2541af.json": "08e704c19f2f22dd44a14c6a5e0174979438053a31707ec194da7a4cd560c4d0",
+    "7ad42a20686269b270fd.json": "82a9d864fd04e0dae3c8b9809da6a3cb3b5b59a6531cab064c1ec7f1b6a626bc",
+    "98ce762ea2a5f2f14b75.json": "63830ee4a468d4afebfe7e623ff49a9affd0c8a21b9b26adad3787bdd9a89e79",
+    "1bb0dbeb647b12cb1378.json": "754cae8d023363e661b25d4e059d3cd450bec9a3df872c6113fa2885a8906740",
+    "2f1d2116beb0c97cad57.json": "ddcccb2cd4b7604d483b2b6c5912016b07227e97443e996b6947ab9b98b8ef52",
+    "abe2901a96249fc1c2f7.json": "f15fb0be81edd56fb1850d6028380490a236d408c0bf91722b2b8f164ea59e97",
+    "056c5f41becf12ebf0a8.json": "19fbc0fde99c94cc50188d85aad7a549c1e5a1a5843584ecb71d1013f47c742a",
+    "7ab5da79d84274c7fbfb.json": "d81c8b070099b91aa09f9d6f132e59aa91b3beed3286924b5ea7036a70a29aeb",
+    "769ca59d1aaa9961e750.json": "7f08cc5b3f1cb77d680a82f1891a5f0ba2bc63757785346e40dff3f49d65782f",
+    "82634fd6bfa0f43ef674.json": "879dbb78b51f915e0c708f646fa3f0aecf7d131afa3db34bb615318b968ca6b5",
+    "005029ed482ef3696bfc.json": "7a41bbd528b6a206e3825c520cb266e4a0996e1984d25c83d868b4083625faa0",
+    "fe740bc37edb15158a5a.json": "d0de185cb9525e531dbb608ad3d8613802f26915020972538f26f22146787c1d"
+  },
+  "profiles": {
+    "balanced-v3": {
+      "policy_id": "bank-af17b1aadbe7f9b21fa7/balanced-v3",
+      "games": 8,
+      "stages": {
+        "guarded": 4,
+        "mixed": 3,
+        "identical": 1
+      },
+      "completed_games": 8,
+      "failures": [],
+      "guarded": {
+        "games": 4,
+        "setup_groups": 3,
+        "win_share": 0.75,
+        "win_share_setup_bootstrap_95": [
+          0.5,
+          1.0
+        ],
+        "mean_rank": 1.25,
+        "mean_vp": 127.25,
+        "mean_score_margin": 28.33333333333333
+      },
+      "headless_whole_turn_ms": {
+        "p50": 3433.8768,
+        "p95": 3814.6132000000002,
+        "maximum": 4074.1779
+      },
+      "reply_status": {},
+      "reply_failures": 0,
+      "reply_horizons": {},
+      "built_industries": {
+        "Pottery": 11,
+        "Brewery": 16,
+        "IronWorks": 22,
+        "Manufacturer": 13,
+        "CottonMill": 16,
+        "CoalMine": 21
+      },
+      "opening_signatures": 4,
+      "intent_milestones": {
+        "evaluate": 176
+      },
+      "mean_terminal_cash": 36,
+      "economic_stalls": [],
+      "reliable_in_observed_games": true,
+      "niche_qualified": true,
+      "training_eligible": true,
+      "evaluation_eligible": false,
+      "general_hard_eligible": false,
+      "live_deployment_eligible": false,
+      "linux_qualified": false,
+      "held_out_family": false
+    },
+    "rail-tempo-v3": {
+      "policy_id": "bank-af17b1aadbe7f9b21fa7/rail-tempo-v3",
+      "games": 7,
+      "stages": {
+        "guarded": 5,
+        "mixed": 2
+      },
+      "completed_games": 7,
+      "failures": [],
+      "guarded": {
+        "games": 5,
+        "setup_groups": 3,
+        "win_share": 0.8,
+        "win_share_setup_bootstrap_95": [
+          0.5,
+          1.0
+        ],
+        "mean_rank": 1.4,
+        "mean_vp": 119.2,
+        "mean_score_margin": 20.533333333333335
+      },
+      "headless_whole_turn_ms": {
+        "p50": 3400.7288000000003,
+        "p95": 3720.943,
+        "maximum": 3946.4379000000004
+      },
+      "reply_status": {},
+      "reply_failures": 0,
+      "reply_horizons": {},
+      "built_industries": {
+        "CottonMill": 7,
+        "Brewery": 7,
+        "IronWorks": 19,
+        "Pottery": 7,
+        "CoalMine": 3,
+        "Manufacturer": 6
+      },
+      "opening_signatures": 5,
+      "intent_milestones": {
+        "build_then_complete": 43,
+        "evaluate": 10,
+        "useful_link": 49,
+        "recover": 10
+      },
+      "mean_terminal_cash": 39.57142857142857,
+      "economic_stalls": [],
+      "reliable_in_observed_games": true,
+      "niche_qualified": true,
+      "training_eligible": true,
+      "evaluation_eligible": false,
+      "general_hard_eligible": false,
+      "live_deployment_eligible": false,
+      "linux_qualified": false,
+      "held_out_family": false
+    },
+    "cotton-v3": {
+      "policy_id": "bank-af17b1aadbe7f9b21fa7/cotton-v3",
+      "games": 6,
+      "stages": {
+        "guarded": 5,
+        "mixed": 1
+      },
+      "completed_games": 6,
+      "failures": [],
+      "guarded": {
+        "games": 5,
+        "setup_groups": 3,
+        "win_share": 0.8,
+        "win_share_setup_bootstrap_95": [
+          0.5,
+          1.0
+        ],
+        "mean_rank": 1.2,
+        "mean_vp": 128.2,
+        "mean_score_margin": 24.466666666666665
+      },
+      "headless_whole_turn_ms": {
+        "p50": 3367.4302000000002,
+        "p95": 3651.0348000000004,
+        "maximum": 3908.606
+      },
+      "reply_status": {},
+      "reply_failures": 0,
+      "reply_horizons": {},
+      "built_industries": {
+        "Pottery": 7,
+        "Brewery": 13,
+        "IronWorks": 16,
+        "CottonMill": 18
+      },
+      "opening_signatures": 3,
+      "intent_milestones": {
+        "evaluate": 43,
+        "build_then_complete": 33,
+        "secure_own_beer": 9,
+        "recover": 5,
+        "complete_sale": 6
+      },
+      "mean_terminal_cash": 26,
+      "economic_stalls": [],
+      "reliable_in_observed_games": true,
+      "niche_qualified": true,
+      "training_eligible": true,
+      "evaluation_eligible": false,
+      "general_hard_eligible": false,
+      "live_deployment_eligible": false,
+      "linux_qualified": false,
+      "held_out_family": false
+    },
+    "goods-beer-v3": {
+      "policy_id": "bank-af17b1aadbe7f9b21fa7/goods-beer-v3",
+      "games": 4,
+      "stages": {
+        "guarded": 2,
+        "mixed": 2
+      },
+      "completed_games": 4,
+      "failures": [],
+      "guarded": {
+        "games": 2,
+        "setup_groups": 1,
+        "win_share": 0.5,
+        "win_share_setup_bootstrap_95": null,
+        "mean_rank": 1.5,
+        "mean_vp": 125,
+        "mean_score_margin": 23.333333333333336
+      },
+      "headless_whole_turn_ms": {
+        "p50": 3435.1036000000004,
+        "p95": 3799.106,
+        "maximum": 4377.7099
+      },
+      "reply_status": {},
+      "reply_failures": 0,
+      "reply_horizons": {},
+      "built_industries": {
+        "Pottery": 5,
+        "CottonMill": 6,
+        "IronWorks": 12,
+        "Brewery": 10,
+        "Manufacturer": 3
+      },
+      "opening_signatures": 4,
+      "intent_milestones": {
+        "build_then_complete": 49,
+        "evaluate": 12,
+        "complete_sale": 2,
+        "recover": 1
+      },
+      "mean_terminal_cash": 26.5,
+      "economic_stalls": [],
+      "reliable_in_observed_games": true,
+      "niche_qualified": true,
+      "training_eligible": true,
+      "evaluation_eligible": false,
+      "general_hard_eligible": false,
+      "live_deployment_eligible": false,
+      "linux_qualified": false,
+      "held_out_family": false
+    },
+    "supplier-v3": {
+      "policy_id": "bank-af17b1aadbe7f9b21fa7/supplier-v3",
+      "games": 3,
+      "stages": {
+        "guarded": 2,
+        "mixed": 1
+      },
+      "completed_games": 3,
+      "failures": [],
+      "guarded": {
+        "games": 2,
+        "setup_groups": 2,
+        "win_share": 1.0,
+        "win_share_setup_bootstrap_95": [
+          1.0,
+          1.0
+        ],
+        "mean_rank": 1,
+        "mean_vp": 151,
+        "mean_score_margin": 48.0
+      },
+      "headless_whole_turn_ms": {
+        "p50": 3381.5341000000003,
+        "p95": 3645.5446,
+        "maximum": 3711.1064
+      },
+      "reply_status": {},
+      "reply_failures": 0,
+      "reply_horizons": {},
+      "built_industries": {
+        "CottonMill": 3,
+        "Manufacturer": 2,
+        "Brewery": 5,
+        "IronWorks": 12,
+        "Pottery": 3,
+        "CoalMine": 1
+      },
+      "opening_signatures": 2,
+      "intent_milestones": {
+        "build_then_complete": 39,
+        "evaluate": 8,
+        "recover": 1
+      },
+      "mean_terminal_cash": 29,
+      "economic_stalls": [],
+      "reliable_in_observed_games": true,
+      "niche_qualified": true,
+      "training_eligible": true,
+      "evaluation_eligible": false,
+      "general_hard_eligible": false,
+      "live_deployment_eligible": false,
+      "linux_qualified": false,
+      "held_out_family": false
+    },
+    "pottery-flex-v3": {
+      "policy_id": "bank-af17b1aadbe7f9b21fa7/pottery-flex-v3",
+      "games": 9,
+      "stages": {
+        "guarded": 6,
+        "mixed": 3
+      },
+      "completed_games": 9,
+      "failures": [],
+      "guarded": {
+        "games": 6,
+        "setup_groups": 4,
+        "win_share": 1.0,
+        "win_share_setup_bootstrap_95": [
+          1.0,
+          1.0
+        ],
+        "mean_rank": 1,
+        "mean_vp": 132.83333333333334,
+        "mean_score_margin": 32.27777777777778
+      },
+      "headless_whole_turn_ms": {
+        "p50": 3361.5291,
+        "p95": 3714.1992,
+        "maximum": 4193.090200000001
+      },
+      "reply_status": {},
+      "reply_failures": 0,
+      "reply_horizons": {},
+      "built_industries": {
+        "Pottery": 11,
+        "Brewery": 12,
+        "IronWorks": 21,
+        "CottonMill": 7,
+        "CoalMine": 5,
+        "Manufacturer": 8
+      },
+      "opening_signatures": 6,
+      "intent_milestones": {
+        "evaluate": 121,
+        "secure_own_beer": 3,
+        "build_then_complete": 12,
+        "complete_sale": 8
+      },
+      "mean_terminal_cash": 29.88888888888889,
+      "economic_stalls": [],
+      "reliable_in_observed_games": true,
+      "niche_qualified": true,
+      "training_eligible": false,
+      "evaluation_eligible": true,
+      "general_hard_eligible": false,
+      "live_deployment_eligible": false,
+      "linux_qualified": false,
+      "held_out_family": true
+    }
+  },
+  "total_games": 28,
+  "failed_games": 0,
+  "reply_comparison": {
+    "profiles": [],
+    "benefit_demonstrated": false,
+    "complete": false,
+    "scope": "S1 v3 qualification; prior S2 bank unchanged"
+  },
+  "limits": [
+    "User-requested limited validation; 28 completed games retained. Coverage differs by profile; no full-study or calibrated-strength claim.",
+    "Concurrent headless execution: timing is not a 135U foreground Unity latency certificate.",
+    "Rollout heuristics may mispredict people; human enjoyment and equal-difficulty personalities remain untested.",
+    "Specialist S2 profiles have identical-table coverage only; no bank admission without the full qualification matrix."
+  ]
+}

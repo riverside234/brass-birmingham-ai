@@ -1,0 +1,11 @@
+{
+  "passed": true,
+  "unit_tests": 24,
+  "failures": 0,
+  "errors": 0,
+  "evaluation_replay_training_guard": true,
+  "source_hashes": {
+    "src/brass_ai/learning/replay.py": "cad4f157f30c178acb83fa10cfb6f8619813637a75dec692bb226459a759cb68",
+    "tests/r2/test_learning.py": "643bbfa26ee281d2578dac9aa3def7b7a476ade3c1788c2c925bb42338e1bd95"
+  }
+}

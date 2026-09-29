@@ -1,0 +1,4 @@
+{
+  "enabled": false,
+  "profiles": ["balanced-v2", "rail-tempo-v2", "cotton-v2", "supplier-v2"]
+}

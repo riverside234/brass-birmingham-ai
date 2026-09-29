@@ -9,3 +9,12 @@
 *.sh text eol=lf
 *.yml text eol=lf
 *.yaml text eol=lf
+
+# Frozen original-source snapshots must retain their recorded bytes on every host.
+training/opponents/bank/**/source/** -text
+# Contract/profile files are byte-pinned; preserve the same bytes on the lab.
+configs/**/*.json -text
+training/models/**/*.pt -text
+training/models/**/*.onnx -text
+training/runtime/**/*.exe -text
+training/runtime/**/*.json -text

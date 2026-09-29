@@ -1,0 +1,97 @@
+{
+  "passed": true,
+  "pool_sha256": "e98c9bba0694063bcdf71dd6dd444394f94090bd56b0c4585a7c5519cc000d97",
+  "executed": [
+    {
+      "identity": "bank-af17b1aadbe7f9b21fa7/balanced-v3",
+      "purpose": "training",
+      "committed_actions": [
+        [
+          "loan|||industry:IronWorks||",
+          "finish|||||"
+        ]
+      ]
+    },
+    {
+      "identity": "bank-af17b1aadbe7f9b21fa7/cotton-v3",
+      "purpose": "training",
+      "committed_actions": [
+        [
+          "loan|||industry:IronWorks||",
+          "finish|||||"
+        ]
+      ]
+    },
+    {
+      "identity": "bank-af17b1aadbe7f9b21fa7/goods-beer-v3",
+      "purpose": "training",
+      "committed_actions": [
+        [
+          "loan|||industry:IronWorks||",
+          "finish|||||"
+        ]
+      ]
+    },
+    {
+      "identity": "bank-af17b1aadbe7f9b21fa7/rail-tempo-v3",
+      "purpose": "training",
+      "committed_actions": [
+        [
+          "loan|||industry:IronWorks||",
+          "finish|||||"
+        ]
+      ]
+    },
+    {
+      "identity": "bank-af17b1aadbe7f9b21fa7/supplier-v3",
+      "purpose": "training",
+      "committed_actions": [
+        [
+          "loan|||location:Cannock||",
+          "finish|||||"
+        ]
+      ]
+    },
+    {
+      "identity": "bank-af17b1aadbe7f9b21fa7/pottery-flex-v3",
+      "purpose": "evaluation",
+      "committed_actions": [
+        [
+          "loan|||industry:IronWorks||",
+          "finish|||||"
+        ]
+      ]
+    }
+  ],
+  "rejected": [
+    {
+      "identity": "bank-af17b1aadbe7f9b21fa7/balanced-v3",
+      "purpose": "evaluation"
+    },
+    {
+      "identity": "bank-af17b1aadbe7f9b21fa7/cotton-v3",
+      "purpose": "evaluation"
+    },
+    {
+      "identity": "bank-af17b1aadbe7f9b21fa7/goods-beer-v3",
+      "purpose": "evaluation"
+    },
+    {
+      "identity": "bank-af17b1aadbe7f9b21fa7/rail-tempo-v3",
+      "purpose": "evaluation"
+    },
+    {
+      "identity": "bank-af17b1aadbe7f9b21fa7/supplier-v3",
+      "purpose": "evaluation"
+    },
+    {
+      "identity": "bank-af17b1aadbe7f9b21fa7/pottery-flex-v3",
+      "purpose": "training"
+    },
+    {
+      "identity": "bank-af17b1aadbe7f9b21fa7/pottery-flex-v3",
+      "purpose": "training"
+    }
+  ],
+  "verifier_sha256": "ad54d44353ca47587c274716de4fe38887c80e7de35c9869c1006104224d371a"
+}

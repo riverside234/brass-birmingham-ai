@@ -1,0 +1,4 @@
+[
+  {"targetType":"Frameworks.Init.InitUnity","targetMethod":"Awake","parameterTypes":[],"helperType":"BrassPatch.StartupFixes","helperMethod":"Awake","mode":"replace"},
+  {"targetType":"Frameworks.Init.InitUnity","targetMethod":"OnDestroy","parameterTypes":[],"helperType":"BrassPatch.StartupFixes","helperMethod":"OnDestroy","mode":"replace"}
+]

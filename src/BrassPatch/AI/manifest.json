@@ -1,0 +1,12 @@
+[
+  {
+    "targetType": "BrassApplication.AI.RuleBasedSystem.Rules.BuildBreweryForCanalEra",
+    "targetMethod": "IsApplicable",
+    "parameterTypes": [
+      "BrassApplication.Game.BrassApplicationGame"
+    ],
+    "helperType": "BrassPatch.AiFixes",
+    "helperMethod": "BreweryRuleApplicable",
+    "mode": "replace"
+  }
+]

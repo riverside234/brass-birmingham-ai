@@ -1,0 +1,21 @@
+{
+  "format": "legacy-v3-correctness/1.0.0",
+  "passed": true,
+  "bank": "bank-c891530a53c0ae07765b",
+  "bank_manifest_sha256": "a80df39e203f586a2a43a5ebf0f5d6900ff6b65e36810374cf5e8f5c7e9677a9",
+  "tests": 34,
+  "conversion_checks_each": 429,
+  "identical_scenarios": 54,
+  "windows_only": true,
+  "frozen_platform_check_sha256": "9fef1ab007fa4b56f85a1ed55d685eae28e976703fc10db8f75afaf11bfd7eff",
+  "rebuild_sha256": "751f97ca91169ee9931b8128fb0f5db52595c8cfc9cbee2b0cc3293ceb50745a",
+  "evidence": {
+    "artifacts/patch-build/local-ai-conversion-0.json": "8fd46ee979136cc9a8ca6eb5c1db0ef41cbcd3fe79af7d111a432c715ef92416",
+    "artifacts/patch-build/local-ai-conversion-1.json": "0f3ce314e6451fe1350f8a0c5e3120059216fdd42bbebc8503ae97697b08d975",
+    "tests/BrassLocalAI/ConversionTests.cs": "300acbaeb7562892abac62b0b4227352dc251bfddc35dfc94f589726976df9c4",
+    "tests/legacy-ai/test_v3.py": "13173da909cd3a72e7d3c9e421cfde5cc46c82a3aa39029e197bedd01e67e327",
+    "scripts/check-frozen-bank.py": "f734351f63cd8173103f75a6aafa351b8555a27d50f29fc315313e1a55227be1",
+    "src/brass_ai/qualification.py": "53953d099cdf0852f15a94b9d82df2f68f0cfcd8829ef6e806deb2a2fc7b5e6c"
+  },
+  "scope": "Frozen worker contracts plus shared cash/deadline/merchant behavior; 54 identical decisions in research and deployment. No inherited playing-strength admission."
+}

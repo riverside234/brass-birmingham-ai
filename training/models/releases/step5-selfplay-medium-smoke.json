@@ -1,0 +1,14 @@
+{
+  "format": "step5-model-release/1.0.0",
+  "path": "training/models/releases/step5-selfplay-medium-smoke.pt",
+  "sha256": "206d8b34c794576755ed1877185fb50d7e74ffd57ced190069f1e8495ffb0f24",
+  "model_id": "53918c20b2a3e0a9ef8eaa95a4dc20a77ed3253ba074d92acc265b050019785b",
+  "parameters": 1897389,
+  "selfplay_games": 8,
+  "ppo_epochs_per_batch": 2,
+  "completed_batches": 2,
+  "promoted": false,
+  "initialization": "training/models/bootstrap/r2-fresh-medium.pt",
+  "source_checkpoint_sha256": "457fadf2a893f1cbd991e6667444b2fe492e47103e83f8dc29fe6754f165c803",
+  "implementation": "688ce053b57aea695d1b876886629584a16eed499f6ea1f8705e93b60e9905aa"
+}

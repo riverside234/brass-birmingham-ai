@@ -1,0 +1,111 @@
+{
+  "format": "legacy-exploratory-pilot/0.1.0",
+  "rules": "steam-brass-patch-1.1.0",
+  "player_count": 4,
+  "qualification": "Two exploratory setup groups, not H5 qualification; no population confidence claim. Second group added after first-group inspection.",
+  "timing": "Windows CPU with concurrent test workers; nominal 3000 ms search allowance plus completion/validation/commit overhead. Recorded per-turn decision/execution totals exclude outer observation capture, IPC and UI presentation; not full user-visible latency or an isolated laptop benchmark.",
+  "profiles": [
+    {
+      "profile": "Balanced",
+      "profile_id": "legacy-hard-balanced-v1-candidate",
+      "settings": {
+        "id": "legacy-hard-balanced-v1-candidate",
+        "player_count": 4,
+        "mode": "S1",
+        "work_limit": 240,
+        "milliseconds": 3000.0,
+        "first_width": 28,
+        "beam": 10,
+        "second_width": 14,
+        "credible_window": 0,
+        "rail_preference": 0
+      },
+      "setups": [
+        9801,
+        9802
+      ],
+      "games": 8,
+      "complete": 8,
+      "failures": 0,
+      "win_share_sum": 7.0,
+      "win_share": 0.875,
+      "mean_rank": 1.125,
+      "mean_vp": 141.875,
+      "vp_margin_vs_best_rival": 30.875,
+      "mean_search_nodes": 95.7265625,
+      "rejected_candidates": 0,
+      "terminal_projection_checks": 5,
+      "per_setup_win_share": {
+        "9801": 0.75,
+        "9802": 1.0
+      },
+      "runtime_sha256": "babb221e432fd2df78a5bd8a16bfb45185fafaad075ff21607e55b6247af608f",
+      "evidence_files": {
+        "artifacts/legacy-ai/verified-balanced-3s/9801-0.json": "1f3aefefb200ef9dde301adca67dc2d26c56674682644eab071cbb09a2f41359",
+        "artifacts/legacy-ai/verified-balanced-3s/9801-1.json": "19557719370320f7f76c63419dec0f98ab19f24fa38d4683e3aefda6be561e41",
+        "artifacts/legacy-ai/verified-balanced-3s/9801-2.json": "3a4c73a5ca705e6bfde8cb5b8a1bd95a5f6abe0241b3f76bbcaf61457d24c6fd",
+        "artifacts/legacy-ai/verified-balanced-3s/9801-3.json": "e61b2e9e13df5cdcbb5ea8143cedb66015427e1546d35a1b9b895ec877c3b5a6",
+        "artifacts/legacy-ai/verified2-balanced-3s/9802-0.json": "26b685a4d2c9101d6e40eeafa83611ed107251d945b3219e87f67f956320fa24",
+        "artifacts/legacy-ai/verified2-balanced-3s/9802-1.json": "d88900b3a84482540a0565e9c6a6caa124ee611861b442b2c31b45725494ea33",
+        "artifacts/legacy-ai/verified2-balanced-3s/9802-2.json": "662929fed7140bc4caccc47bbcc4971dd4b4d85044dc09f0b1442ffff9780602",
+        "artifacts/legacy-ai/verified2-balanced-3s/9802-3.json": "8a2d820731e0c81774203fe47f87eaa8449645ff23f60ec4c2ae843a2d2ed2a6"
+      },
+      "decision_execution_ms_per_turn": {
+        "median": 3192.4223,
+        "p95": 3316.3907,
+        "maximum": 3402.3863
+      }
+    },
+    {
+      "profile": "Rail Tempo",
+      "profile_id": "legacy-hard-rail-tempo-v1-candidate",
+      "settings": {
+        "id": "legacy-hard-rail-tempo-v1-candidate",
+        "player_count": 4,
+        "mode": "S1",
+        "work_limit": 240,
+        "milliseconds": 3000.0,
+        "first_width": 28,
+        "beam": 10,
+        "second_width": 14,
+        "credible_window": 1.5,
+        "rail_preference": 0.75
+      },
+      "setups": [
+        9801,
+        9802
+      ],
+      "games": 8,
+      "complete": 8,
+      "failures": 0,
+      "win_share_sum": 6.0,
+      "win_share": 0.75,
+      "mean_rank": 1.25,
+      "mean_vp": 138.75,
+      "vp_margin_vs_best_rival": 25.625,
+      "mean_search_nodes": 95.546875,
+      "rejected_candidates": 0,
+      "terminal_projection_checks": 1,
+      "per_setup_win_share": {
+        "9801": 0.5,
+        "9802": 1.0
+      },
+      "runtime_sha256": "babb221e432fd2df78a5bd8a16bfb45185fafaad075ff21607e55b6247af608f",
+      "evidence_files": {
+        "artifacts/legacy-ai/verified-rail-3s/9801-0.json": "4d171c041f68a8bc5352963102d0c0a4b1e3369ac6f950ae7465f55fb7cac423",
+        "artifacts/legacy-ai/verified-rail-3s/9801-1.json": "aad8ae7a649ae07045bbeefc78b2bd83961bc8f8be2a228eb8e85da841d97b9b",
+        "artifacts/legacy-ai/verified-rail-3s/9801-2.json": "9878a807c6c9df392d029408f05b5303c038882c96e6f7aee3c4228c0f4e957d",
+        "artifacts/legacy-ai/verified-rail-3s/9801-3.json": "8e8c30bcf9a7437a19829ffdd7d86b4e5796b5344b07a87fee3ec56b470dfdc8",
+        "artifacts/legacy-ai/verified2-rail-3s/9802-0.json": "b9d403385ff82df2de7e5b97386b6df2c4b412301a46e27c825c3c262093d0a8",
+        "artifacts/legacy-ai/verified2-rail-3s/9802-1.json": "32dee8c73c4b7ae87734ed33b43c8ec44ba351ce3ff747bca433c5f5956c1309",
+        "artifacts/legacy-ai/verified2-rail-3s/9802-2.json": "a784efd2ed7ee980b4da7252b4fbbb1cee4ed9e2aa2430f3d4cfbe03ab8545c4",
+        "artifacts/legacy-ai/verified2-rail-3s/9802-3.json": "677e0b93281b96f8aa7e6ed7b867079ee7dcc39b0828b9b370f829dee6da30a7"
+      },
+      "decision_execution_ms_per_turn": {
+        "median": 3189.2292,
+        "p95": 3334.0784,
+        "maximum": 3465.8931000000002
+      }
+    }
+  ]
+}

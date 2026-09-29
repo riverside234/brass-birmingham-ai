@@ -1,0 +1,22 @@
+{
+  "id": "legacy-hard-pottery-flex-v3",
+  "player_count": 4,
+  "mode": "S1",
+  "cash_policy": 1,
+  "work_limit": 240,
+  "milliseconds": 3000,
+  "first_width": 28,
+  "beam": 10,
+  "second_width": 14,
+  "credible_window": 1.5,
+  "rail_preference": 0,
+  "tactic": "pottery-flex",
+  "intent_enabled": true,
+  "style_weight": 1,
+  "proposal_fraction": 0.4,
+  "reply_candidates": 4,
+  "reply_scenarios": 2,
+  "reply_confirmation": 2,
+  "reply_work": 2048,
+  "conversion_policy": 1
+}

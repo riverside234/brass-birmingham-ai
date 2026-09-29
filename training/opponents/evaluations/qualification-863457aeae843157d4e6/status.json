@@ -1,0 +1,11 @@
+{
+  "admitted": false,
+  "installed": false,
+  "superseded": true,
+  "reason": "118 completed legal games; additional economic audit found two zero-VP/zero-cash seats below the borrowing floor. Merchant-route repair required.",
+  "examples": [
+    "23fda88e5bb97459f1a6",
+    "bab9984d4bb95e913981"
+  ],
+  "replacement_candidate": "bank-af17b1aadbe7f9b21fa7"
+}

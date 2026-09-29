@@ -1,0 +1,22 @@
+{
+  "passed": true,
+  "purpose": "integration only; fresh untrained neural model",
+  "games": 1,
+  "decisions": 368,
+  "behavior_counts": {
+    "external": 279,
+    "model": 89
+  },
+  "policy_ids": [
+    "9c5c61ba10456d196c97e64632f391e4a23e109d83f29fa1669434ed62f0e001",
+    "bank-804c85204da65824cb9b/balanced-v2",
+    "bank-804c85204da65824cb9b/cotton-v2",
+    "bank-804c85204da65824cb9b/supplier-v2"
+  ],
+  "shard_sha256": "0ce6d767f0dd869054988e1f7cc535873f15880194cadc7ddbf4302a3e3e01d3",
+  "collector_sha256": "855431238b954a421405e8b0ffc374725a0497e1bda2f11e733d9be4abce0977",
+  "verifier_sha256": "b98cc2d5a663ab41bb92658cf448f9011f4b620e0227a3324f20f28b6a8abeca",
+  "exact_model_identity": true,
+  "all_four_seat_trajectories": true,
+  "mixed_on_policy_rejected": true
+}

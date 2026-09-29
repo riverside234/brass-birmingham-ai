@@ -1,0 +1,131 @@
+{
+  "passed": true,
+  "pool_sha256": "85da8b5c4dcd170b98291b814f98e620b1bb37ac4082c8fdafb5534562954a69",
+  "executed": [
+    {
+      "identity": "bank-804c85204da65824cb9b/balanced-v2",
+      "purpose": "training",
+      "committed_actions": [
+        [
+          "build|Derby:0|Brewery|location:Derby||",
+          "iron|market||||",
+          "finish|||||"
+        ]
+      ]
+    },
+    {
+      "identity": "bank-804c85204da65824cb9b/cotton-v2",
+      "purpose": "training",
+      "committed_actions": [
+        [
+          "build|Derby:0|Brewery|location:Derby||",
+          "iron|market||||",
+          "finish|||||"
+        ]
+      ]
+    },
+    {
+      "identity": "bank-804c85204da65824cb9b/goods-beer-v2",
+      "purpose": "training",
+      "committed_actions": [
+        [
+          "build|Derby:0|Brewery|location:Derby||",
+          "iron|market||||",
+          "finish|||||"
+        ]
+      ]
+    },
+    {
+      "identity": "bank-804c85204da65824cb9b/rail-tempo-v2",
+      "purpose": "training",
+      "committed_actions": [
+        [
+          "build|Derby:0|Brewery|location:Derby||",
+          "iron|market||||",
+          "finish|||||"
+        ]
+      ]
+    },
+    {
+      "identity": "bank-804c85204da65824cb9b/supplier-v2",
+      "purpose": "training",
+      "committed_actions": [
+        [
+          "build|Derby:0|Brewery|location:Derby||",
+          "iron|market||||",
+          "finish|||||"
+        ]
+      ]
+    },
+    {
+      "identity": "bank-804c85204da65824cb9b/pottery-flex-v2",
+      "purpose": "evaluation",
+      "committed_actions": [
+        [
+          "build|Derby:0|Brewery|location:Derby||",
+          "iron|market||||",
+          "finish|||||"
+        ]
+      ]
+    }
+  ],
+  "rejected": [
+    {
+      "identity": "bank-804c85204da65824cb9b/balanced-v2",
+      "purpose": "evaluation"
+    },
+    {
+      "identity": "bank-804c85204da65824cb9b/cotton-v2",
+      "purpose": "evaluation"
+    },
+    {
+      "identity": "bank-804c85204da65824cb9b/goods-beer-v2",
+      "purpose": "evaluation"
+    },
+    {
+      "identity": "bank-804c85204da65824cb9b/rail-tempo-v2",
+      "purpose": "evaluation"
+    },
+    {
+      "identity": "bank-804c85204da65824cb9b/supplier-v2",
+      "purpose": "evaluation"
+    },
+    {
+      "identity": "bank-804c85204da65824cb9b/pottery-flex-v2",
+      "purpose": "training"
+    },
+    {
+      "identity": "bank-804c85204da65824cb9b/pottery-flex-v2",
+      "purpose": "training"
+    },
+    {
+      "identity": "bank-804c85204da65824cb9b/balanced-s2-v2",
+      "purpose": "training"
+    },
+    {
+      "identity": "bank-804c85204da65824cb9b/rail-tempo-s2-v2",
+      "purpose": "training"
+    },
+    {
+      "identity": "bank-804c85204da65824cb9b/cotton-s2-v2",
+      "purpose": "training"
+    },
+    {
+      "identity": "bank-804c85204da65824cb9b/goods-beer-s2-v2",
+      "purpose": "training"
+    },
+    {
+      "identity": "bank-804c85204da65824cb9b/supplier-s2-v2",
+      "purpose": "training"
+    },
+    {
+      "identity": "bank-804c85204da65824cb9b/pottery-flex-s2-v2",
+      "purpose": "training"
+    },
+    {
+      "identity": "bank-804c85204da65824cb9b/balanced-s1-10s-v2",
+      "purpose": "training"
+    }
+  ],
+  "verifier_sha256": "ad54d44353ca47587c274716de4fe38887c80e7de35c9869c1006104224d371a"
+}

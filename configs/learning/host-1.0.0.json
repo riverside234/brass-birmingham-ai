@@ -1,0 +1,7 @@
+{
+  "rules": "steam-brass-patch-1.1.0",
+  "protocol": "0.2.0",
+  "host_sha256": "4b6468f5ff8b0da8d8527be6292474165046faa227a38804b54242d9a37050b5",
+  "qualified_platforms": ["Windows .NET Framework", "Windows Unity 2019.1.7f1 Mono"],
+  "other_platforms": "Experimental. Repeat R1 parity and R2 collection checks before production. Training on compatible replay shards does not require the proprietary host."
+}

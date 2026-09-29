@@ -1,0 +1,116 @@
+[
+  {
+    "targetType": "BoardGameRules.Entities.GamePhases.GameFlow",
+    "targetMethod": "BeginEndRound",
+    "parameterTypes": [],
+    "helperType": "BrassPatch.StateFixes",
+    "helperMethod": "BeginEndRound",
+    "mode": "replace"
+  },
+  {
+    "targetType": "BoardGameRules.Entities.GamePhases.GameFlow",
+    "targetMethod": "EndTurn",
+    "parameterTypes": [],
+    "helperType": "BrassPatch.StateFixes",
+    "helperMethod": "EndTurn",
+    "mode": "replace"
+  },
+  {
+    "targetType": "BoardGameRules.Entities.GamePhases.EndOfGame",
+    "targetMethod": "ApplyEvent",
+    "parameterTypes": [
+      "BoardGameRules.Entities.GamePhases.Events.GameEnded"
+    ],
+    "helperType": "BrassPatch.StateFixes",
+    "helperMethod": "ApplyGameEnded",
+    "mode": "replace"
+  },
+  {
+    "targetType": "BoardGameRules.Entities.Actions.LoanAction",
+    "targetMethod": "GetLoanActionNotPossibleReasons",
+    "parameterTypes": [
+      "BoardGameRules.Entities.Game.GameProgressInformation"
+    ],
+    "helperType": "BrassPatch.StateFixes",
+    "helperMethod": "LoanReasons",
+    "mode": "replace"
+  },
+  {
+    "targetType": "BrassApplication.AI.RuleBasedSystem.Rules.DevelopManufactureForMerchantBeer",
+    "targetMethod": "IsApplicable",
+    "parameterTypes": [
+      "BrassApplication.Game.BrassApplicationGame"
+    ],
+    "helperType": "BrassPatch.StateFixes",
+    "helperMethod": "ManufacturerRuleApplicable",
+    "mode": "replace"
+  },
+  {
+    "targetType": "BoardGameRules.Entities.NumericalResources.VictoryPointsTrack",
+    "targetMethod": "ApplyEvent",
+    "parameterTypes": [
+      "BoardGameRules.Entities.NumericalResources.Events.IntroductoryGameAdditionalMoneyVictoryPointsChanged"
+    ],
+    "helperType": "BrassPatch.StateFixes",
+    "helperMethod": "IntroMoney",
+    "mode": "replace"
+  },
+  {
+    "targetType": "BoardGameRules.Entities.NumericalResources.VictoryPointsTrack",
+    "targetMethod": "ApplyEvent",
+    "parameterTypes": [
+      "BoardGameRules.Entities.NumericalResources.Events.IntroductoryGameAdditionalIncomeVictoryPointsChanged"
+    ],
+    "helperType": "BrassPatch.StateFixes",
+    "helperMethod": "IntroIncome",
+    "mode": "replace"
+  },
+  {
+    "targetType": "BoardGameRules.Entities.NumericalResources.VictoryPointsTrack",
+    "targetMethod": "ApplyEvent",
+    "parameterTypes": [
+      "BoardGameRules.Entities.NumericalResources.Events.IntroductoryGameAdditionalIndustryVictoryPointsChanged"
+    ],
+    "helperType": "BrassPatch.StateFixes",
+    "helperMethod": "IntroIndustry",
+    "mode": "replace"
+  },
+  {
+    "targetType": "BoardGameRules.Entities.GamePhases.CanalEra",
+    "targetMethod": "ApplyEvent",
+    "parameterTypes": [
+      "BoardGameRules.Entities.GamePhases.Events.CanalEraEnded"
+    ],
+    "helperType": "BrassPatch.StateFixes",
+    "helperMethod": "CanalEnded",
+    "mode": "replace"
+  },
+  {
+    "targetType": "BoardGameRules.Entities.GamePhases.RailEra",
+    "targetMethod": "ApplyEvent",
+    "parameterTypes": [
+      "BoardGameRules.Entities.GamePhases.Events.RailEraEnded"
+    ],
+    "helperType": "BrassPatch.StateFixes",
+    "helperMethod": "RailEnded",
+    "mode": "replace"
+  },
+  {
+    "targetType": "BrassApplication.UseCases.Game.FinishedGameReview.FinishedGameReviewUseCase",
+    "targetMethod": "ShowGameSummaryTable",
+    "parameterTypes": [],
+    "helperType": "BrassPatch.StateFixes",
+    "helperMethod": "ShowSummary",
+    "mode": "replace"
+  },
+  {
+    "targetType": "Frameworks.Analytics.UnityAnalytics",
+    "targetMethod": "GameOver",
+    "parameterTypes": [
+      "BrassApplication.Game.GameMetadata"
+    ],
+    "helperType": "BrassPatch.StateFixes",
+    "helperMethod": "AnalyticsGameOver",
+    "mode": "replace"
+  }
+]

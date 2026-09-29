@@ -1,0 +1,174 @@
+[
+  {
+    "targetType": "BoardGameRules.Entities.Actions.BuildAction",
+    "targetMethod": "CostOfCoalForGivenIndustry",
+    "parameterTypes": [
+      "BoardGameRules.Entities.Board.Regions.Region",
+      "BoardGameRules.Entities.Board.Board",
+      "System.Int32"
+    ],
+    "helperType": "BrassPatch.ResourcesFixes",
+    "helperMethod": "CostOfCoalForGivenIndustry",
+    "mode": "replace"
+  },
+  {
+    "targetType": "BoardGameRules.Entities.Actions.BuildAction",
+    "targetMethod": "IsGivenSlotTheBestOneInGivenRegionForGivenTypeStatic",
+    "parameterTypes": [
+      "BoardGameRules.Entities.Board.BuildingSlots.BuildingSlot",
+      "BoardGameRules.Entities.Board.BuildingSlots.BuildingType",
+      "BoardGameRules.Entities.Board.Board"
+    ],
+    "helperType": "BrassPatch.ResourcesFixes",
+    "helperMethod": "IsGivenSlotTheBestOneInGivenRegionForGivenTypeStatic",
+    "mode": "replace"
+  },
+  {
+    "targetType": "BoardGameRules.Entities.Actions.BuildAction",
+    "targetMethod": "IsSingleSlotOrDoubleSlotButLastPossibleStatic",
+    "parameterTypes": [
+      "BoardGameRules.Entities.Board.BuildingSlots.BuildingSlot",
+      "BoardGameRules.Entities.Board.BuildingSlots.BuildingType",
+      "BoardGameRules.Entities.Board.Regions.Region"
+    ],
+    "helperType": "BrassPatch.ResourcesFixes",
+    "helperMethod": "IsSingleSlotOrDoubleSlotButLastPossibleStatic",
+    "mode": "replace"
+  },
+  {
+    "targetType": "BoardGameRules.Entities.Consumables.ConsumingCoal",
+    "targetMethod": "SupplyCoal",
+    "parameterTypes": [
+      "BoardGameRules.Entities.Common.ICoalSource",
+      "System.Int32",
+      "System.Int32",
+      "BoardGameRules.Entities.Players.Player",
+      "System.Collections.Generic.List`1<BoardGameRules.Entities.Board.Regions.Region>"
+    ],
+    "helperType": "BrassPatch.ResourcesFixes",
+    "helperMethod": "SupplyCoal",
+    "mode": "replace"
+  },
+  {
+    "targetType": "BrassApplication.AI.AIHelpers.NetworkActionAIHelper",
+    "targetMethod": "PlaceLink",
+    "parameterTypes": [
+      "BoardGameRules.Entities.Actions.NetworkAction",
+      "BoardGameRules.Entities.Cards.BaseCard",
+      "BoardGameRules.Entities.Board.Links.Link",
+      "BoardGameRules.Entities.Board.Board",
+      "BoardGameRules.Entities.Players.Player",
+      "System.Boolean"
+    ],
+    "helperType": "BrassPatch.ResourcesFixes",
+    "helperMethod": "PlaceLink",
+    "mode": "replace"
+  },
+  {
+    "targetType": "BrassApplication.UseCases.Game.Actions.NetworkAction.NetworkActionUseCase",
+    "targetMethod": "StartCoalDelivery",
+    "parameterTypes": [],
+    "helperType": "BrassPatch.ResourcesFixes",
+    "helperMethod": "StartCoalDelivery",
+    "mode": "replace"
+  },
+  {
+    "targetType": "BoardGameRules.Entities.Actions.SellAction",
+    "targetMethod": "CanIndustryBeSold",
+    "parameterTypes": [
+      "BoardGameRules.Entities.Industries.BaseIndustry",
+      "BoardGameRules.Entities.Players.Player"
+    ],
+    "helperType": "BrassPatch.ResourcesFixes",
+    "helperMethod": "CanIndustryBeSold",
+    "mode": "replace"
+  },
+  {
+    "targetType": "BoardGameRules.Entities.Actions.SellAction",
+    "targetMethod": "GetSellActionNotPossibleReasons",
+    "parameterTypes": [
+      "BoardGameRules.Entities.Board.Board",
+      "BoardGameRules.Entities.Game.GameProgressInformation"
+    ],
+    "helperType": "BrassPatch.ResourcesFixes",
+    "helperMethod": "GetSellActionNotPossibleReasons",
+    "mode": "replace"
+  },
+  {
+    "targetType": "BoardGameRules.Entities.Actions.SellAction",
+    "targetMethod": "StartSellProcedure",
+    "parameterTypes": [
+      "BoardGameRules.Entities.Industries.BaseIndustry"
+    ],
+    "helperType": "BrassPatch.ResourcesFixes",
+    "helperMethod": "StartSellProcedure",
+    "mode": "replace"
+  },
+  {
+    "targetType": "BoardGameRules.Entities.Actions.SellAction",
+    "targetMethod": "SupplyBeer",
+    "parameterTypes": [
+      "BoardGameRules.Entities.Common.IBeerSource",
+      "System.Int32"
+    ],
+    "helperType": "BrassPatch.ResourcesFixes",
+    "helperMethod": "SupplyBeer",
+    "mode": "replace"
+  },
+  {
+    "targetType": "BrassApplication.AI.AIHelpers.SellActionAIHelper",
+    "targetMethod": "FindBeerSource",
+    "parameterTypes": [
+      "BoardGameRules.Entities.Actions.SellAction",
+      "BoardGameRules.Entities.Board.Board",
+      "BoardGameRules.Entities.Players.Player",
+      "BoardGameRules.Entities.Board.BuildingSlots.BuildingSlot"
+    ],
+    "helperType": "BrassPatch.ResourcesFixes",
+    "helperMethod": "FindBeerSource",
+    "mode": "replace"
+  },
+  {
+    "targetType": "BrassApplication.AI.AIHelpers.SellActionAIHelper",
+    "targetMethod": "SlotToSell",
+    "parameterTypes": [
+      "BoardGameRules.Entities.Actions.SellAction",
+      "BoardGameRules.Entities.Cards.BaseCard",
+      "BoardGameRules.Entities.Board.Board",
+      "BoardGameRules.Entities.Players.Player",
+      "System.Collections.Generic.List`1<BoardGameRules.Entities.Board.BuildingSlots.BuildingSlot>"
+    ],
+    "helperType": "BrassPatch.ResourcesFixes",
+    "helperMethod": "SlotToSell",
+    "mode": "replace"
+  },
+  {
+    "targetType": "BrassApplication.AI.AIHelpers.BoardHelper",
+    "targetMethod": "CanIndustryBeSoldButLackingBeer",
+    "parameterTypes": [
+      "BrassApplication.Game.BrassApplicationGame",
+      "BoardGameRules.Entities.Industries.BaseIndustry",
+      "BoardGameRules.Entities.Players.Player",
+      "BoardGameRules.Entities.Board.Board"
+    ],
+    "helperType": "BrassPatch.ResourcesFixes",
+    "helperMethod": "CanIndustryBeSoldButLackingBeer",
+    "mode": "replace"
+  },
+  {
+    "targetType": "BrassApplication.UseCases.Game.Actions.SellAction.SellActionUseCase",
+    "targetMethod": "StartBeerDelivery",
+    "parameterTypes": [],
+    "helperType": "BrassPatch.ResourcesFixes",
+    "helperMethod": "StartBeerDelivery",
+    "mode": "replace"
+  },
+  {
+    "targetType": "BrassApplication.UseCases.Game.Actions.SellAction.SellActionUseCase",
+    "targetMethod": "ReplayCompleted",
+    "parameterTypes": [],
+    "helperType": "BrassPatch.ResourcesFixes",
+    "helperMethod": "ReplayCompleted",
+    "mode": "replace"
+  }
+]
