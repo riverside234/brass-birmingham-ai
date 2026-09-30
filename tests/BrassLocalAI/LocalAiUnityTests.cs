@@ -107,8 +107,18 @@ public sealed class LocalAiUnityDriver : MonoBehaviour
         history = new BrassGameHistory { Repository = repository }; settings = new Settings();
         menu = new CreateOfflineGameUseCase(new CreateOfflineGamePresenter(router, new Localization()), new Factory(repository), history, new Analytics(), settings);
         menuView = (CreateOfflineGameView)router.GetView<ICreateOfflineGameView>(); menuView.Controller = new CreateOfflineGameController(menu);
-        router.ShowView<ICreateOfflineGameView>(); menu.CreateNewGameConfiguration(); menu.UpdateResumeOfflineGameView();
+        // Main-menu routing configures the cached view before the show animation
+        // enables it. Do not warm it up with ShowView or a user-triggered refresh.
+        Check(!menuView.gameObject.activeInHierarchy, "cold custom-game menu starts inactive");
+        menuView.Controller.OnViewCreated();
+        foreach (var row in Rows().Skip(1))
+            Check(row.GetComponent<AiSetupRow>() != null, "cold-menu AI controls bind before the view is enabled");
+        router.ShowView<ICreateOfflineGameView>();
         yield return null;
+        CheckFirstDisplay("first open"); Capture("local-ai-cold-menu.png");
+        router.HideView<ICreateOfflineGameView>(); yield return null;
+        router.ShowView<ICreateOfflineGameView>(); yield return null;
+        CheckFirstDisplay("cached menu reopened without refresh");
         var rows = Rows();
         Check(Setup.PlayerMetadata.Skip(1).All(p => LocalMenu.Strategy(p) == "balanced"), "new bots default to Balanced");
         Check(Setup.PlayerMetadata.Skip(1).All(p => LocalMenu.Difficulty(p) == "hard"), "new bots default to Hard 12s");
@@ -198,8 +208,21 @@ public sealed class LocalAiUnityDriver : MonoBehaviour
         Check(ProfileCatalog.Keys.Contains(randomStrategy) && (string)LocalGameState.Assignment(state, randomColor)["profile"]["mode"] == "S1", "Random resolves to one of the six real S1 profiles");
         Check(LocalMenu.Strategy(Setup.PlayerMetadata[3]) == "random", "resolving Random does not change the next-game selection");
         Check((string)LocalGameState.Assignment(LocalGameState.Read(repository.Load(first.Metadata.GameId).Metadata), randomColor)["strategy"] == randomStrategy, "Random remains fixed after load");
-        menu.CreateNewGameConfiguration(); Check(LocalMenu.Strategy(Setup.PlayerMetadata[1]) == "goods-beer" && LocalMenu.Strategy(Setup.PlayerMetadata[3]) == "random", "saved defaults retain Random");
-        menu.UpdateResumeOfflineGameView();
+        // Recreate a cold menu with a saved game. Both the parent menu and its
+        // Continue container are inactive while the controller binds the rows.
+        router.DisposeViews(); yield return null;
+        menuView = (CreateOfflineGameView)router.GetView<ICreateOfflineGameView>(); menuView.Controller = new CreateOfflineGameController(menu);
+        Check(!menuView.gameObject.activeInHierarchy, "cold Continue menu starts inactive");
+        menuView.Controller.OnViewCreated();
+        foreach (var row in Rows(true).Skip(1)) Check(row.GetComponent<AiSetupRow>() != null, "cold Continue rows bind before activation");
+        router.ShowView<ICreateOfflineGameView>(); yield return null;
+        CheckFirstDisplay("first open with Continue"); Capture("local-ai-cold-resume-menu.png");
+        foreach (var row in Rows(true).Skip(1)) {
+            var controls = row.GetComponent<AiSetupRow>();
+            Check(!controls.CanEdit && !controls.StyleButton.gameObject.activeInHierarchy && controls.DifficultyButtons.All(b => !b.gameObject.activeInHierarchy), "cold Continue displays read-only controls immediately");
+            Check(!Label(row).gameObject.activeInHierarchy && row.GetComponentsInChildren<TextMeshProUGUI>().Any(t => t.name == "Saved AI" && t.text.Contains("s</size>")), "cold Continue shows the saved summary without stock label overlap");
+        }
+        Check(LocalMenu.Strategy(Setup.PlayerMetadata[1]) == "goods-beer" && LocalMenu.Strategy(Setup.PlayerMetadata[3]) == "random", "saved defaults retain Random");
         Check(Label(Rows(true)[1]).text == "Goods/Beer" && LocalMenu.Difficulty(Get<PlayerMetadata>(Rows(true)[1], "_playerMetadata")) == "easy", "resume shows saved style and difficulty");
         Check(Label(Rows(true)[3]).text == LocalMenu.ChoiceLabel(randomStrategy), "resume reveals the resolved Random strategy");
         Check(Rows(true).SelectMany(r => r.GetComponentsInChildren<Button>(true)).Where(b => Enumerable.Range(0, b.onClick.GetPersistentEventCount()).Any(i => b.onClick.GetPersistentMethodName(i).Contains("Difficulty"))).All(b => !b.interactable), "resume arrows disabled");
@@ -387,6 +410,18 @@ public sealed class LocalAiUnityDriver : MonoBehaviour
         var texture = new Texture2D(router.Target.width, router.Target.height, TextureFormat.RGB24, false);
         texture.ReadPixels(new Rect(0, 0, texture.width, texture.height), 0, 0); texture.Apply(); RenderTexture.active = old;
         string path = Path.Combine(Path.GetDirectoryName(Output), file); File.WriteAllBytes(path, texture.EncodeToPNG()); images.Add(path); UnityEngine.Object.Destroy(texture);
+    }
+    void CheckFirstDisplay(string phase)
+    {
+        foreach (var row in Rows().Skip(1)) {
+            var controls = row.GetComponent<AiSetupRow>();
+            Check(controls != null && row.GetComponents<AiSetupRow>().Length == 1 && controls.CanEdit, phase + ": one bound editable component");
+            Check(controls.StyleButton.gameObject.activeInHierarchy && controls.DifficultyButtons.All(b => b.gameObject.activeInHierarchy), phase + ": style and difficulty visible before any click");
+            Check(!Label(row).gameObject.activeInHierarchy && !Get<TextMeshProUGUI>(row, "_playerAITypeText").gameObject.activeInHierarchy, phase + ": stock labels hidden");
+            Check(row.GetComponentsInChildren<Button>().All(b => !Enumerable.Range(0, b.onClick.GetPersistentEventCount()).Any(i => b.onClick.GetPersistentMethodName(i).Contains("DifficultyClick"))), phase + ": stock arrows hidden");
+            AssertInsideTarget(controls.StyleButton.GetComponent<RectTransform>(), phase + ": style bounds");
+            foreach (var button in controls.DifficultyButtons) AssertInsideTarget(button.GetComponent<RectTransform>(), phase + ": difficulty bounds");
+        }
     }
     void AssertInsideTarget(RectTransform rect, string name)
     {

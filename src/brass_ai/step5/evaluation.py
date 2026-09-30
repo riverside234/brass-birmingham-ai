@@ -52,8 +52,19 @@ def validate_evaluation_config(config):
     expected = {'format', 'players', 'host', 'setups', 'seed', 'partition', 'workers', 'batch_size',
                 'max_candidate_cells', 'threads', 'parallel_hosts', 'legacy_workers', 'search_workers',
                 'include_legacy', 'use_search', 'focus', 'search'}
+    if config.get('format') == 'step5-evaluation-config/1.1.0':
+        from brass_ai.recovery.config import execution_config
+        expected |= {'execution','panel'}
+        execution_config(config['execution'])
+        require(config['panel'] in ('development','full'),'Invalid evaluation panel')
+        ex=config['execution']
+        require(config['workers']==ex['processes']*ex['hosts_per_process'] and
+            config['legacy_workers']==config['search_workers']==ex['heavy_processes'] and
+            config['batch_size']==ex['batch_size'] and config['max_candidate_cells']==ex['max_candidate_cells'],
+            'Evaluation aliases differ from central execution config')
+        require(config['parallel_hosts'],'Schema 1.1.0 uses private spawned parallel hosts')
     require(set(config) == expected, 'Unknown or missing evaluation config field')
-    require(config['format'] == 'step5-evaluation-config/1.0.0' and config['players'] == 4,
+    require(config['format'] in ('step5-evaluation-config/1.0.0','step5-evaluation-config/1.1.0') and config['players'] == 4,
             'Evaluation requires the four-player config')
     for key in ('setups', 'workers', 'batch_size', 'max_candidate_cells', 'threads', 'legacy_workers', 'search_workers'):
         require(type(config[key]) is int and config[key] > 0, 'Invalid evaluation ' + key)
@@ -67,13 +78,20 @@ def validate_evaluation_config(config):
 
 
 def evaluation_config(config, **overrides):
-    if config.get('format') == 'step5-evaluation-config/1.0.0':
+    if config.get('format','').startswith('step5-evaluation-config/'):
         result = dict(config)
+    elif config.get('format') == 'step5-training/2.0.0':
+        result = read(SOURCE_ROOT / 'configs/step5/development-evaluation.json')
+        result.update(host=config['host'],threads=config['threads'],search=config['search'],
+            execution=config['execution'])
+        ex=config['execution']
+        result.update(workers=ex['processes']*ex['hosts_per_process'],legacy_workers=ex['heavy_processes'],
+            search_workers=ex['heavy_processes'],batch_size=ex['batch_size'],max_candidate_cells=ex['max_candidate_cells'])
     else:
         # Explicit older --config lab/smoke paths retain their small defaults.
         # The CLI now chooses evaluation.json when no path is supplied.
         validate_config(config)
-        result = read(SOURCE_ROOT / 'configs/step5/evaluation.json')
+        result = read(SOURCE_ROOT / 'configs/step5/previous-evaluation.json')
         for key in ('host', 'workers', 'batch_size', 'threads', 'search'):
             result[key] = config[key]
         result.update(setups=5, include_legacy=False, max_candidate_cells=config.get('max_candidate_cells', 8192),
@@ -120,6 +138,10 @@ def check_evaluation_batch(games, jobs, candidate_id, partition):
 def evaluate(root, output, candidate_path, references, config, *, setups=None, seed=None,
              partition=None, include_legacy=None, device='cpu', mono=None,
              search=None, focus=None):
+    if config.get('format') in ('step5-evaluation-config/1.1.0','step5-training/2.0.0'):
+        from brass_ai.recovery.evaluation import evaluate as recovery_evaluate
+        return recovery_evaluate(root,output,candidate_path,references,config,setups=setups,seed=seed,
+            partition=partition,include_legacy=include_legacy,device=device,mono=mono,search=search,focus=focus)
     root = Path(root).resolve(); directory = project_path(root, output)
     config = evaluation_config(config, setups=setups, seed=seed, partition=partition,
                                include_legacy=include_legacy, use_search=search, focus=focus)

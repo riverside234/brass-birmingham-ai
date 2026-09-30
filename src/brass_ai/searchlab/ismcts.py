@@ -9,6 +9,7 @@ network inputs would let those node statistics condition on root-private cards.
 OpenSpiel's node/PUCT/prior/resampling interfaces are used for the acting root.
 """
 from dataclasses import asdict, dataclass
+from collections import OrderedDict
 import math
 import random
 import time
@@ -18,7 +19,7 @@ import numpy as np
 from open_spiel.python.algorithms import ismcts
 
 from brass_ai.learning.contracts import digest, require
-from brass_ai.step5.policy import NeuralPolicy
+from brass_ai.step5.policy import NeuralPolicy, inference_deadline
 from brass_ai.step5.search import SearchIncomplete, first_choices, turn_key
 from .spiel import BrassSpielGame, action_id
 
@@ -42,12 +43,21 @@ class SpielSearchConfig:
 class PermittedEvaluator:
     def __init__(self, policy, context, rng):
         self.policy,self.context,self.rng=policy,context,rng
+        self.cache=OrderedDict()
 
     def predict(self,state):
         actor=state.current_player()
         require(actor>=0,'No neural evaluation of chance/full-state data')
+        key=digest(dict(view=state.views[actor],choices=state.legal,context=self.context,
+            model=self.policy.evaluator.model_id,exploration=self.policy.exploration,temperature=self.policy.temperature))
+        if key in self.cache:
+            self.cache.move_to_end(key)
+            return self.cache[key]
         self.policy.contexts[self.rng]=self.context
-        return self.policy.predict([(state.views[actor],state.legal,self.rng)])[0]
+        result=self.policy.predict([(state.views[actor],state.legal,self.rng)])[0]
+        self.cache[key]=result
+        if len(self.cache)>256: self.cache.popitem(last=False)
+        return result
 
     def prior(self,state):
         probabilities,_=self.predict(state)
@@ -140,10 +150,10 @@ class MaskedISMCTS(ismcts.ISMCTSBot):
 
 class OpenSpielPolicy:
     kind='external'
-    def __init__(self,model,root,device='cpu',*,config=None,mono=None,focus='neutral',opponents=None):
+    def __init__(self,model,root,device='cpu',*,config=None,mono=None,focus='neutral',opponents=None,evaluator=None):
         self.config=config or SpielSearchConfig();self.config.validate()
-        self.base=NeuralPolicy(model,device,exploration=.1,focus=focus)
-        self.rollouts=opponents or [NeuralPolicy(model,device,exploration=.05,focus='neutral')]
+        self.base=NeuralPolicy(model,device,exploration=.1,focus=focus,evaluator=evaluator)
+        self.rollouts=opponents or [NeuralPolicy(model,device,exploration=.05,focus='neutral',evaluator=evaluator)]
         require(all(isinstance(p,NeuralPolicy) and p.focus=='neutral' for p in self.rollouts),'Frozen masked neutral rollout models required')
         self.game=BrassSpielGame(root=root,mono=mono)
         self.contexts=weakref.WeakKeyDictionary()
@@ -162,7 +172,9 @@ class OpenSpielPolicy:
         evaluator=PermittedEvaluator(self.base,self.context_features(view,rng),random.Random(rng.randrange(2**63)))
         bot=MaskedISMCTS(self.game,evaluator,view['seat'],self.rollouts,self.config,rng,deadline)
         self.telemetry['searches']+=1
-        try:policy=bot.run_search(state)
+        try:
+            with inference_deadline([self.base]+self.rollouts,deadline):
+                policy=bot.run_search(state)
         except SearchIncomplete:
             self.telemetry['incomplete']+=1
             policy=bot.safe_policy(state) if hasattr(bot,'_root_node') else []

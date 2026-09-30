@@ -16,7 +16,7 @@ from .meta import meta_train, meta_evaluate
 def parser():
     p = argparse.ArgumentParser(description='Four-player self-play-first neural training and optional Reptile meta-RL')
     p.add_argument('--root', type=Path, default=LAB_ROOT)
-    p.add_argument('--config', help='Defaults to configs/step5/evaluation.json for evaluate, otherwise configs/step5/lab.json')
+    p.add_argument('--config', help='Evaluation uses evaluation.json; recovery uses lab.json; optional meta-RL uses previous-lab.json')
     p.add_argument('--device', choices=['cpu', 'cuda'], default='cpu')
     p.add_argument('--mono')
     sub = p.add_subparsers(dest='command', required=True)
@@ -27,8 +27,24 @@ def parser():
     run.add_argument('--run', default='artifacts/step5/selfplay')
     initialization = run.add_mutually_exclusive_group()
     initialization.add_argument('--initial')
-    initialization.add_argument('--from-run', help='Fork last committed weights, optimizer, history and setup cursor into a NEW run')
+    initialization.add_argument('--from-run', help='Fork committed weights/history/setup cursor into a NEW run; recipe 2.0 starts fresh optimizer moments')
     run.add_argument('--iterations', type=int, default=1)
+    demos = sub.add_parser('demo-generate')
+    demos.add_argument('--output',default='artifacts/demonstrations/v3')
+    demos.add_argument('--games',type=int,default=1000)
+    demos.add_argument('--seed',type=int,default=17100000)
+    demos.add_argument('--partition',choices=['train','validation','test'])
+    audit = sub.add_parser('demo-audit')
+    audit.add_argument('--replays',nargs='+',required=True)
+    audit.add_argument('--output',default='training/datasets/v3-demonstrations.json')
+    bc = sub.add_parser('imitate')
+    bc.add_argument('--manifest',default='training/datasets/v3-demonstrations.json')
+    bc.add_argument('--initial',required=True)
+    bc.add_argument('--run',default='artifacts/step5/imitation')
+    bc.add_argument('--epochs',type=int,default=10)
+    bc.add_argument('--min-epochs',type=int,default=3)
+    bc.add_argument('--patience',type=int,default=2)
+    bc.add_argument('--learning-rate',type=float,default=1e-4)
     evaluation = sub.add_parser('evaluate')
     evaluation.add_argument('--candidate', required=True)
     evaluation.add_argument('--references', nargs='+', required=True)
@@ -62,12 +78,16 @@ def main(argv=None):
     root = a.root.resolve()
     require(a.device != 'cuda' or torch.cuda.is_available(), 'CUDA requested but unavailable')
     default_config = 'configs/step5/evaluation.json' if a.command == 'evaluate' else 'configs/step5/lab.json'
+    if a.command in ('meta-train','meta-evaluate'): default_config='configs/step5/previous-lab.json'
     config = read_json(project_path(root, a.config or default_config))
-    if a.command == 'evaluate' and config.get('format') == 'step5-evaluation-config/1.0.0':
+    if a.command == 'evaluate' and config.get('format','').startswith('step5-evaluation-config/'):
         validate_evaluation_config(config)
     else:
         validate_config(config)
     torch.set_num_threads(config['threads'])
+    if a.command in ('meta-train','meta-evaluate'):
+        require(config['format']!='step5-training/2.0.0',
+            'Meta-RL uses the separate historical recipe; pass configs/step5/previous-lab.json')
     if a.command == 'assets':
         result = export_assets(root, bundle=a.bundle)
     elif a.command == 'import-runtime':
@@ -78,7 +98,29 @@ def main(argv=None):
         result = promote(root, a.checkpoint, a.report, a.output)
     else:
         require_preflight(root)
-        if a.command == 'train':
+        if a.command == 'demo-generate':
+            from brass_ai.recovery.demonstrations import generate
+            from brass_ai.recovery.config import EXECUTION
+            result=generate(root,a.output,a.games,config.get('execution',EXECUTION),seed=a.seed,mono=a.mono,partition=a.partition)
+            result={k:result[k] for k in ('format','games','eligible_for_bc','note')}
+        elif a.command == 'demo-audit':
+            from brass_ai.recovery.demonstrations import audit
+            paths=[]
+            for pattern in a.replays:
+                path=project_path(root,pattern)
+                paths.extend(root.glob(path.relative_to(root).as_posix()))
+            require(paths,'No replay paths matched')
+            manifest=audit(root,paths,a.output,mono=a.mono)
+            result=dict(manifest=str(project_path(root,a.output)),partitions=manifest['partitions'],
+                eligible_games=len(manifest['entries']),excluded=len(manifest['excluded']))
+        elif a.command == 'imitate':
+            from brass_ai.recovery.demonstrations import train_bc
+            from brass_ai.recovery.config import UPDATE
+            update=dict(config.get('update',UPDATE),effective_batch_size=1024,value_weight=.5)
+            result=train_bc(root,a.run,a.manifest,a.initial,update,device=a.device,
+                epochs=a.epochs,min_epochs=a.min_epochs,patience=a.patience,lr=a.learning_rate)
+            result={k:result[k] for k in ('candidate','candidate_sha256','epochs','promoted')}
+        elif a.command == 'train':
             result = train(root, a.run, config, iterations=a.iterations, device=a.device, initial=a.initial,
                            mono=a.mono, from_run=a.from_run)
             result.pop('summaries', None)

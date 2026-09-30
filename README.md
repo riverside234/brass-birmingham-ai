@@ -21,7 +21,9 @@ adds a direct style chooser and independent **Easy 2s / Mid 5s / Hard 12s** sear
 allowances for each bot. New setups default to Hard; existing local-AI saves retain
 the preceding package's **10-second** allowance. The research bank's work setting
 remains **240**, with unchanged S1 planning, adaptive intent and fallback behavior.
-**Package 1.4.4 is installed and verified.**
+The [1.4.5 initialization fix](docs/AI_MENU_INITIALIZATION_1.4.5.md) makes the new
+controls visible on first opening the menu, before any click or refresh.
+**Package 1.4.5 is installed and verified.**
 The [compatibility check](docs/UI_PATCH_RESEARCH_COMPATIBILITY.md)
 preserves the research bank and training interfaces. [Step 5](docs/STEP5_LAB_TRAINING.md)
 adds self-play-first population PPO, neural search distillation, diverse-opponent

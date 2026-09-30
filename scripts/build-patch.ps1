@@ -52,6 +52,6 @@ Get-ChildItem -LiteralPath $managed -Filter '*.dll' | Where-Object Name -notin @
 if($LASTEXITCODE -ne 0){throw 'Weaving failed. Installed game was not changed.'}
 & (Join-Path $PSScriptRoot 'build-local-ai.ps1') -Root $repo
 if($LASTEXITCODE -ne 0){throw 'Local AI build failed'}
-$manifest=[ordered]@{version='1.4.4';stockSha256=$expected;files=@(Get-Item $helper,(Join-Path $out 'Managed/BrassLegacyAI.dll'),(Join-Path $out 'Managed/Assembly-CSharp.dll')|ForEach-Object{[ordered]@{name=$_.Name;sha256=(Get-FileHash -LiteralPath $_.FullName).Hash}})}
+$manifest=[ordered]@{version='1.4.5';stockSha256=$expected;files=@(Get-Item $helper,(Join-Path $out 'Managed/BrassLegacyAI.dll'),(Join-Path $out 'Managed/Assembly-CSharp.dll')|ForEach-Object{[ordered]@{name=$_.Name;sha256=(Get-FileHash -LiteralPath $_.FullName).Hash}})}
 $manifest|ConvertTo-Json -Depth 5|Set-Content -LiteralPath (Join-Path $out 'build-manifest.json') -Encoding UTF8
 Write-Output "Candidate patch built in $out. The installed game has not been modified."

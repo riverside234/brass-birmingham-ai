@@ -1,5 +1,7 @@
 # Step 5 evaluation on the 64-CPU lab server
 
+**30 September execution revision:** the current preset retains the full 64-setup panel and adds persistent private actors/shared inference. [TRAINING_RECOVERY_LAB.md](TRAINING_RECOVERY_LAB.md) also defines an eight-setup development panel that excludes held-out Pottery Flex. This guide's original threaded implementation is historical; its config is preserved as `previous-evaluation.json`.
+
 The dedicated [evaluation preset](../configs/step5/evaluation.json) scales evaluation alongside Step 5 training. `evaluate` selects this file automatically unless you supply `--config`. Use the existing conda environment `ai-training`. This evaluates frozen Step 5 checkpoints; the later personality/difficulty stage remains separate.
 
 ## Default workload

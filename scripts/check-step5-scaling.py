@@ -51,7 +51,9 @@ def main():
     report = dict(passed=True, parity_games_per_mode=2, trajectory_sha256=digest(traces[0]),
                   seconds=timings, platform=sys.platform, device=args.device, implementation=implementation_id())
     if args.with_search:
-        config = read(root / 'configs/step5/lab.json')
+        # Historical threaded collector check. verify-recovery.py covers the
+        # current persistent-process and central-inference recipe.
+        config = read(root / 'configs/step5/previous-lab.json')
         config.update(search_games=2, search_workers=2)
         config['search'].update(proposals=2, finalists=2, pilot_samples=1, confirmation_samples=2,
                                 seconds=1.0, max_searches_per_seat=1)

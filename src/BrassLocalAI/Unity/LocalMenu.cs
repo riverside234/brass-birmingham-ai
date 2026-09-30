@@ -253,7 +253,8 @@ namespace BrassLegacyAI
         }
         public static void StyleRow(PlayerCreateGameView view, PlayerCreateGameViewModel model)
         {
-            if (view.GetComponentInParent<CreateOfflineGameView>() == null) return;
+            // The router configures rows before enabling the cached menu.
+            if (!view.GetComponentsInParent<CreateOfflineGameView>(true).Any()) return;
             var label = Field<TextMeshProUGUI>(view, "_playerAIDifficultyText");
             Selection selection = null; bool known = model.PlayerMetadata != null && Selections.TryGetValue(model.PlayerMetadata, out selection);
             if (model.Editable && (!known || selection.Owner == null)) return;

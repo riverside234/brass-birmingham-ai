@@ -1,5 +1,7 @@
 # Step 5: self-play, search distillation and meta-RL on the lab computer
 
+**30 September recovery revision:** the default trainer now uses audited v3 imitation, effective-minibatch PPO, a declining 40% → 20% → 10% → 5% v3 table curriculum, and persistent CPU actors with shared batched inference. Follow [TRAINING_RECOVERY_LAB.md](TRAINING_RECOVERY_LAB.md) for current commands and migration. The original recipe described below is retained as historical context in `configs/step5/previous-lab.json`; its initial 95% neural schedule does not describe the new default. Optional meta-RL retains that explicit historical config.
+
 The project root in every lab command is **`/data/not_backed_up/yxu209/ai-training/`**.
 This delivery implements the learning loop. Local smoke weights demonstrate that
 the code updates a model; they are not a strong trained opponent or a Unity release.
@@ -186,19 +188,20 @@ iteration, with separate inference/training batch limits. See the
 [64-CPU lab scaling guide](STEP5_SCALING.md) for settings, bottleneck measurements
 and migration from your existing trained run. The small smoke remains unchanged.
 
-## Run and resume the main population trainer
+## Historical run and resume commands
 
-The default `configs/step5/lab.json` now uses the larger workload. The commands
-below create a **new** run. If `main` already contains your earlier experiment,
+The original larger workload is retained in `configs/step5/previous-lab.json`.
+For the current default use [the recovery guide](TRAINING_RECOVERY_LAB.md).
+The historical commands below create a **new** run. If `main` already contains your earlier experiment,
 use the scaling guide's `--from-run` command to create `main-scaled`, preserving
 its weights, optimizer, historical opponents and next setup seed. Config/source
 signatures deliberately prevent resuming an old run with changed settings.
 
 ```bash
-python /data/not_backed_up/yxu209/ai-training/scripts/step5.py --device cuda train --run /data/not_backed_up/yxu209/ai-training/artifacts/step5/main --initial /data/not_backed_up/yxu209/ai-training/training/models/bootstrap/r2-fresh-medium.pt --iterations 20
+python /data/not_backed_up/yxu209/ai-training/scripts/step5.py --device cuda --config /data/not_backed_up/yxu209/ai-training/configs/step5/previous-lab.json train --run /data/not_backed_up/yxu209/ai-training/artifacts/step5/main --initial /data/not_backed_up/yxu209/ai-training/training/models/bootstrap/r2-fresh-medium.pt --iterations 20
 
 # Resume for another 20 iterations; omit --initial.
-python /data/not_backed_up/yxu209/ai-training/scripts/step5.py --device cuda train --run /data/not_backed_up/yxu209/ai-training/artifacts/step5/main --iterations 20
+python /data/not_backed_up/yxu209/ai-training/scripts/step5.py --device cuda --config /data/not_backed_up/yxu209/ai-training/configs/step5/previous-lab.json train --run /data/not_backed_up/yxu209/ai-training/artifacts/step5/main --iterations 20
 ```
 
 `state.json` commits the iteration only after its replay, report and checkpoint
@@ -224,7 +227,7 @@ The earlier estimate of 5,000 iterations applied to the **old 20-game preset**:
 5,000 of these would mean 1.6 million regular games. Use staged game/update budgets
 rather than carrying the old iteration count over automatically.
 
-The existing PPO algorithm accumulates gradients over a complete epoch, then
+The historical PPO algorithm accumulates gradients over a complete epoch, then
 takes one optimizer step. Larger `minibatch_size` improves memory/throughput;
 larger `games_per_iteration` changes the data per update. Equal total games do not
 imply equal learning. Compare learner decisions, optimizer steps, validation

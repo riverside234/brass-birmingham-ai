@@ -1,0 +1,108 @@
+"""Bounded phase telemetry and optional short CPU/CUDA profiler windows."""
+from collections import defaultdict
+from contextlib import contextmanager, nullcontext
+import os
+import platform
+import time
+
+import torch
+
+
+class Timings:
+    def __init__(self):
+        self.totals = defaultdict(float)
+        self.counts = defaultdict(int)
+        self.samples = defaultdict(list)
+
+    @contextmanager
+    def phase(self, name):
+        start = time.perf_counter()
+        with torch.profiler.record_function(name):
+            try: yield
+            finally: self.observe(name,time.perf_counter()-start)
+
+    def observe(self,name,elapsed):
+        self.totals[name] += elapsed
+        self.counts[name] += 1
+        # A bounded deterministic sample; totals/counts always include all calls.
+        if len(self.samples[name]) < 1024:
+            self.samples[name].append(elapsed)
+
+    def report(self):
+        def percentile(values, fraction):
+            return sorted(values)[min(len(values)-1, int((len(values)-1)*fraction))]
+        return {name: dict(seconds=seconds, calls=self.counts[name],
+                mean_seconds=seconds/self.counts[name],
+                p50_seconds=percentile(self.samples[name], .5),
+                p95_seconds=percentile(self.samples[name], .95),
+                percentile_sample_count=len(self.samples[name]))
+                for name, seconds in sorted(self.totals.items())}
+
+
+class HostMetrics:
+    """Timing-only wrapper; the admitted host's RPC implementation is unchanged."""
+    def __init__(self,timings=None): self.timings=timings or Timings()
+    def report(self): return self.timings.report()
+
+
+class _MeasuredStream:
+    def __init__(self,stream,metrics,label): self.stream,self.metrics,self.label=stream,metrics,label
+    def __getattr__(self,name): return getattr(self.stream,name)
+    def write(self,value):
+        with self.metrics.timings.phase(self.label+'.write'): return self.stream.write(value)
+    def flush(self):
+        with self.metrics.timings.phase(self.label+'.flush'): return self.stream.flush()
+    def readline(self):
+        with self.metrics.timings.phase(self.label+'.read_wait'): return self.stream.readline()
+
+
+def instrument_host(host,timings=None):
+    if hasattr(host,'recovery_metrics'):
+        if timings is not None: host.recovery_metrics.timings=timings
+        return host
+    metrics=HostMetrics(timings);original=host.call
+    def call(op,**arguments):
+        with metrics.timings.phase('host.rpc.'+op): return original(op,**arguments)
+    host.call=call;host.recovery_metrics=metrics
+    host.process.stdin=_MeasuredStream(host.process.stdin,metrics,'host.ipc.stdin')
+    host.process.stdout=_MeasuredStream(host.process.stdout,metrics,'host.ipc.stdout')
+    return host
+
+
+def environment(device):
+    return dict(platform=platform.platform(), pid=os.getpid(), cpu_count=os.cpu_count(),
+        cpu_affinity=sorted(os.sched_getaffinity(0)) if hasattr(os, 'sched_getaffinity') else None,
+        torch=str(torch.__version__), cuda=torch.version.cuda, device=str(device),
+        gpu=torch.cuda.get_device_name(device) if str(device).startswith('cuda') else None,
+        tensor_threads=torch.get_num_threads(),
+        omp_threads=os.environ.get('OMP_NUM_THREADS'), mkl_threads=os.environ.get('MKL_NUM_THREADS'))
+
+
+def memory(device):
+    result={}
+    try:
+        import psutil
+        result['host_resident_bytes']=psutil.Process().memory_info().rss
+    except ImportError: result['host_resident_bytes']=None
+    if str(device).startswith('cuda'):
+        result.update(cuda_allocated_bytes=torch.cuda.memory_allocated(device),
+            cuda_reserved_bytes=torch.cuda.memory_reserved(device),
+            cuda_peak_allocated_bytes=torch.cuda.max_memory_allocated(device),
+            cuda_peak_reserved_bytes=torch.cuda.max_memory_reserved(device))
+    return result
+
+
+def profile_window(path, device, steps=4):
+    """Call profiler.step after batches; only a short scheduled window is traced."""
+    if path is None:
+        return nullcontext(None)
+    from pathlib import Path
+    path = Path(path)
+    path.mkdir(parents=True, exist_ok=True)
+    activities = [torch.profiler.ProfilerActivity.CPU]
+    if str(device).startswith('cuda'):
+        activities.append(torch.profiler.ProfilerActivity.CUDA)
+    return torch.profiler.profile(activities=activities,
+        schedule=torch.profiler.schedule(wait=1, warmup=1, active=steps, repeat=1),
+        on_trace_ready=torch.profiler.tensorboard_trace_handler(str(path)),
+        record_shapes=True, profile_memory=True)

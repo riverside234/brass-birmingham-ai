@@ -94,36 +94,37 @@ Pass global `--config /data/not_backed_up/yxu209/ai-training/configs/searchlab/s
 | `workers` | **8** | Independent comparison processes, each running one game at a time. |
 | `distill_games` | **64** | Fresh train-partition games for the separate S3 teacher experiment. |
 | `distill_workers` | **8** | Independent S3 teacher processes; all four seats use frozen S3 policies. |
-| `threads` | **4** | PyTorch CPU threads per process. |
+| `threads` | **1** | PyTorch CPU threads per search process. |
 | `simulations` | **128** | R4/S3 work cap, still bounded by the same whole-turn clock. S2 has its existing proposal/sample limits. |
-| `batch_size` | **64** | Per-worker neural inference capacity. |
-| `minibatch_size` | **512** | Training rows sampled per S3 distillation update. |
+| `batch_size` | **64** | Shared same-model inference batch limit. |
+| `update.effective_batch_size` | **1024** | Optimizer batch for revised S3 distillation. |
+| `update.microbatch_size` | **512** | Memory microbatch, also bounded by candidate cells. |
 | `max_candidate_cells` | **131072** | Bound on padded legal-choice batches; oversized minibatches split without dropping choices. |
 | `distill_steps` | **8** | Update steps after completed teacher collection. |
 | `seconds` | **3** | Whole-turn allowance, shared by both actions; override for 1/3/10-second comparisons. |
 | `future_turns` | **1** | Initial R4/S3 future-root-turn horizon; compare two separately. |
 
-The larger setup/game counts increase sample size. Search workers have private
-models, rules hosts, trees and RNG contexts; they send small records back to the
-coordinator and write replay shards locally. Processes use `spawn` on Linux and
-Windows, avoiding a fork of an initialized CUDA runtime. Workers reuse frozen
-weights, while each game gets fresh policy context and a schedule-independent
-sampling seed.
+The default now uses schema `searchlab-experiment/1.2.0`. Search workers retain
+private CPU models for identity/context, rules hosts, trees and RNG contexts;
+one coordinator service owns device models and dynamically batches same-model
+requests. Processes use `spawn` on Linux and Windows. Each game gets fresh
+policy context and a schedule-independent sampling seed. Workers publish
+validated completed replay shards.
 
-Search currently issues individual inference requests inside each worker.
-`batch_size: 64` is an upper bound, **not a central GPU batching service**. The
-real scaling gains to measure are concurrent simulations and larger teacher
-minibatches; there is no promise to fill 90 GB of GPU memory. Start with eight
-processes, then try 16 only after measuring CPU use, confirmed searches, memory
-and fresh-run games/second. Keep four or fewer PyTorch threads per worker within
-the 64-CPU allocation. More concurrency can reduce the work finished per timed
-search even when aggregate games/second improves.
+Independent search requests share inference, with a 2 ms partial flush and a
+131,072 padded-candidate-cell limit. R4 caches combined policy/value predictions
+for the same complete permitted input, including own cards, context, model and
+ordered choices. Replies preserve identity, seat, revision and deadlines. Start
+with eight search processes and one tensor thread per worker; try 16 only after
+measuring CPU use, confirmed searches, memory and fresh-run games/second.
+Concurrency can reduce work finished per timed search even when aggregate
+throughput improves. There is no promise to fill 90 GB of GPU memory.
 
-The config affects `r4r5.py` only. This update does not change Step 5's source
-signature or require another training-run fork. Existing R4/R5 correctness
-records become stale because the experiment code changed; requalify the lab
-device before a full comparison or teacher run. Use fresh output directories
-for this version; old experiment records remain separate.
+This revision also changes shared Step 5 source fingerprints. Use the fresh-run
+migration in [TRAINING_RECOVERY_LAB.md](TRAINING_RECOVERY_LAB.md). Existing R4/R5
+correctness records become stale; requalify the lab device before a full
+comparison or teacher run. Use fresh output directories. The prior schema is
+preserved in `previous-experiment.json` for historical comparisons.
 
 ## Quick smoke experiment
 
@@ -132,6 +133,11 @@ python /data/not_backed_up/yxu209/ai-training/scripts/smoke-searchlab.py --devic
 
 # Exercise spawned workers on the lab GPU: still only three decisions total.
 python /data/not_backed_up/yxu209/ai-training/scripts/smoke-searchlab.py --device cuda --seconds 1 --workers 2
+
+# Current central-inference path, still just three decisions.
+python /data/not_backed_up/yxu209/ai-training/scripts/smoke-searchlab.py --device cuda \
+  --config /data/not_backed_up/yxu209/ai-training/configs/searchlab/experiment.json \
+  --seconds 1 --workers 3
 ```
 
 This runs **one decision each** for S2, R4 and S3 against the same initial
@@ -264,7 +270,9 @@ the same validation seeds must be followed by the untouched test partition.
 against S2 with a setup-cluster bootstrap interval, timing, errors and Pottery
 opportunity/build counts. It also records worker count, execution mode, elapsed
 time and per-process peak allocated CUDA memory. Per-process peaks are not total
-GPU memory, and resumed throughput includes cached games. Per-match files preserve
+GPU memory, and resumed throughput includes cached games. Shared inference
+reports queue/batch/pack/forward/result timings and actual versus padded
+candidate cells. Per-match files preserve
 search completion, reply
 counts, horizons and tree statistics; compressed complete-game replays are
 marked **evaluation**, and the training loader rejects them as training data.
@@ -302,9 +310,11 @@ distillation update to an in-memory copy of the checkpoint. Its output must be
 separate from training. The first run uses an empty directory. Completed per-game
 teacher shards can be resumed with the exact spec; a completed report is reused
 without applying the update twice. The source checkpoint and main training state
-remain unchanged. The default is **64 games, eight workers, eight update steps
-and a minibatch of 512**, with the update running once on the coordinator after
-all worker processes finish.
+remain unchanged. The default is **64 games and eight workers**, followed by
+confirmed-target updates on the coordinator with effective batches of **1,024**,
+memory microbatches up to **512**, and a cap of **eight optimizer steps**.
+Reports include actual useful rows and optimizer steps; a nominal budget cannot
+create labels when search confirmation fails.
 
 ```bash
 python /data/not_backed_up/yxu209/ai-training/scripts/r4r5.py --device cuda distill-s3 \

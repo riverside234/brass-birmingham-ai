@@ -41,7 +41,7 @@ def episode(seed, policies):
 
 class SearchScalingTests(unittest.TestCase):
     def config(self, **overrides):
-        config = read_json(SOURCE_ROOT / 'configs/searchlab/experiment.json')
+        config = read_json(SOURCE_ROOT / 'configs/searchlab/previous-experiment.json')
         config.update(overrides)
         return validate_config(config)
 

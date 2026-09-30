@@ -75,7 +75,7 @@ class EvaluationScalingTests(unittest.TestCase):
         torch.set_num_threads(2)
 
     def test_defaults_cli_overrides_and_strict_config(self):
-        config = read(SOURCE_ROOT / 'configs/step5/evaluation.json')
+        config = read(SOURCE_ROOT / 'configs/step5/previous-evaluation.json')
         self.assertEqual((config['setups'], config['workers'], config['batch_size']), (64, 32, 64))
         self.assertEqual(config['legacy_workers'], 8)
         for key, value in [('setups', 0), ('workers', True), ('legacy_workers', -1), ('partition', 'train'),
@@ -132,7 +132,7 @@ class EvaluationScalingTests(unittest.TestCase):
             paths.append(path)
         host = directory / 'host'; host.mkdir()
         (host / 'BrassHost.exe').write_bytes(b'fake-host')
-        config = read(SOURCE_ROOT / 'configs/step5/evaluation.json')
+        config = read(SOURCE_ROOT / 'configs/step5/previous-evaluation.json')
         config.update(host=str(host), setups=2, workers=4, legacy_workers=2, search_workers=2,
                       include_legacy=False, threads=2)
         return paths, config

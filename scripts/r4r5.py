@@ -21,7 +21,7 @@ def parser():
     for q in (c,d):
         q.add_argument('--seconds',type=float);q.add_argument('--future-turns',type=int,choices=[1,2]);q.add_argument('--simulations',type=int)
         q.add_argument('--workers',type=int,help='Independent processes; use 1 for a promotable equal-budget comparison')
-        q.add_argument('--batch-size',type=int,help='Per-worker inference capacity; search currently issues individual requests')
+        q.add_argument('--batch-size',type=int,help='Inference batch limit; current schema shares batches across workers')
     m=sub.add_parser('promote');m.add_argument('--report',required=True);m.add_argument('--variant',choices=['r4','s3'],required=True)
     m.add_argument('--output',default='artifacts/searchlab/promoted.json')
     return p
@@ -38,6 +38,9 @@ def main(argv=None):
         config=validate_config(read_json(project_path(root,a.config)))
         for field in ('seconds','future_turns','simulations','batch_size','minibatch_size','distill_steps'):
             if getattr(a,field,None) is not None:config[field]=getattr(a,field)
+        if 'execution' in config:
+            config['execution']=dict(config['execution'],batch_size=config['batch_size'])
+            config['update']=dict(config['update'],microbatch_size=config['minibatch_size'])
         if getattr(a,'workers',None) is not None:
             config['distill_workers' if a.command=='distill-s3' else 'workers']=a.workers
         validate_config(config)

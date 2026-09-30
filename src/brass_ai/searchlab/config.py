@@ -17,9 +17,19 @@ SMALL_EXECUTION = dict(setups=1, workers=1, distill_games=2, distill_workers=1,
 def validate_config(config):
     config = dict(config)
     version = config.get('format')
-    require(version in ('searchlab-experiment/1.0.0', 'searchlab-experiment/1.1.0'),
+    require(version in ('searchlab-experiment/1.0.0', 'searchlab-experiment/1.1.0','searchlab-experiment/1.2.0'),
             'Unsupported search experiment config')
     expected = BASE_FIELDS if version.endswith('/1.0.0') else BASE_FIELDS | set(SMALL_EXECUTION)
+    if version.endswith('/1.2.0'):
+        expected |= {'execution','update'}
+        from brass_ai.recovery.config import execution_config,update_config
+        execution_config(config['execution']);update_config(config['update'])
+        require(config['batch_size']==config['execution']['batch_size'] and
+            config['max_candidate_cells']==config['execution']['max_candidate_cells'],
+            'Inference aliases differ from the central execution config')
+        require(config['minibatch_size']==config['update']['microbatch_size'] and
+            config['max_candidate_cells']==config['update']['max_candidate_cells'],
+            'Distillation memory aliases differ from the update config')
     require(set(config) == expected, 'Unknown or missing search experiment config field')
     if version.endswith('/1.0.0'):
         config.update(SMALL_EXECUTION, format='searchlab-experiment/1.1.0')

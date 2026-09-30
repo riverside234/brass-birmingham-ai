@@ -2,6 +2,8 @@ import copy
 from pathlib import Path
 import random
 import unittest
+from types import SimpleNamespace
+from unittest.mock import Mock
 
 import numpy as np
 
@@ -11,6 +13,28 @@ from brass_ai.searchlab.experiment import paired_summary,validate_config
 
 
 class SearchUnitTests(unittest.TestCase):
+    def test_combined_r4_cache_respects_private_cards_and_ordered_choices(self):
+        from brass_ai.searchlab.ismcts import PermittedEvaluator
+        policy=SimpleNamespace(evaluator=SimpleNamespace(model_id='frozen'),exploration=.1,
+            temperature=1.,contexts={},predict=Mock(return_value=[(np.array([.4,.6]),
+                {'win_share':[.1,.2,.3,.4]})]))
+        state=SimpleNamespace(current_player=lambda:0,views=[{'own_hand':['Pottery']},None,None,None],
+            legal=[{'id':'a'},{'id':'b'}])
+        cache=PermittedEvaluator(policy,([0]*4,[0]*8),random.Random(5))
+        cache.prior(state);self.assertEqual(cache.evaluate(state),[.1,.2,.3,.4])
+        self.assertEqual(policy.predict.call_count,1)
+        state.views[0]['own_hand']=['Brewery'];cache.evaluate(state)
+        self.assertEqual(policy.predict.call_count,2)
+        state.legal.reverse();cache.prior(state)
+        self.assertEqual(policy.predict.call_count,3)
+
+    def test_current_shared_execution_config_rejects_ignored_aliases(self):
+        from brass_ai.learning.contracts import SOURCE_ROOT,read_json
+        config=read_json(SOURCE_ROOT/'configs/searchlab/experiment.json')
+        validate_config(config)
+        with self.assertRaisesRegex(ValueError,'aliases differ'):
+            validate_config(dict(config,batch_size=1))
+
     def test_four_seat_backup_uses_actor_utility(self):
         node=TurnNode([['a'],['b']])
         node.backup(0,[.7,.1,.1,.1]);node.backup(1,[.1,.1,.7,.1])

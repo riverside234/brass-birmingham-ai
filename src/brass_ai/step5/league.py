@@ -35,12 +35,16 @@ def write_json(path, value):
 def implementation_id():
     # Source-bound runs cannot silently resume with changed learning/search code.
     base = Path(__file__).parent.parent
-    paths = list((base / 'step5').glob('*.py')) + [base / 'learning/runner.py', base / 'learning/batching.py']
+    paths = list((base / 'step5').glob('*.py')) + list((base / 'recovery').glob('*.py'))
+    paths += [base / 'learning/runner.py', base / 'learning/batching.py']
     return digest({p.relative_to(base).as_posix(): p.read_text(encoding='utf-8').replace('\r\n', '\n')
                    for p in sorted(paths)})
 
 
 def validate_config(config):
+    if config.get('format') == 'step5-training/2.0.0':
+        from brass_ai.recovery.config import validate_config as recovery_config
+        return recovery_config(config)
     expected = {'format', 'players', 'model_size', 'host', 'games_per_iteration', 'workers', 'batch_size',
                 'threads', 'learning_rate', 'ppo_epochs', 'exploration', 'entropy_weight', 'seed',
                 'legacy_every', 'search_start', 'search_every', 'search_games', 'distill_steps', 'distill_weight', 'search'}
@@ -190,6 +194,9 @@ def collect_search_games(root, directory, host, seeds, model, config, signature,
 
 
 def train(root, run_path, config, *, iterations=1, device='cpu', initial=None, mono=None, from_run=None):
+    if config.get('format') == 'step5-training/2.0.0':
+        from brass_ai.recovery.league import train as recovery_train
+        return recovery_train(root,run_path,config,iterations=iterations,device=device,initial=initial,mono=mono,from_run=from_run)
     root = Path(root).resolve(); run = project_path(root, run_path)
     config = validate_config(config)
     require(iterations > 0, 'Positive iteration count required')

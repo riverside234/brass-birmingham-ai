@@ -1,0 +1,30 @@
+{
+  "format": "step5-evaluation-config/1.0.0",
+  "players": 4,
+  "host": "artifacts/r1-host/guarded",
+  "setups": 64,
+  "seed": 910000,
+  "partition": "validation",
+  "workers": 32,
+  "batch_size": 64,
+  "max_candidate_cells": 131072,
+  "threads": 4,
+  "parallel_hosts": true,
+  "legacy_workers": 8,
+  "search_workers": 8,
+  "include_legacy": true,
+  "use_search": false,
+  "focus": "neutral",
+  "search": {
+    "proposals": 12,
+    "finalists": 4,
+    "pilot_samples": 2,
+    "confirmation_samples": 4,
+    "max_plan_choices": 96,
+    "max_reply_choices": 256,
+    "seconds": 30.0,
+    "temperature": 0.1,
+    "turn_interval": 4,
+    "max_searches_per_seat": 0
+  }
+}

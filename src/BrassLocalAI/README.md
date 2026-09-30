@@ -1,6 +1,8 @@
 # Local game deployment of the R3 strategies
 
-This deployment fork targets combined patch **1.4.4**, with the six **v3** cash-management and industry-completion strategies. `Host/` comes from `src/BrassHost`; `Policy/` comes from `src/BrassLegacyAI`. Search policy, host and embedded profiles retain their previous bytes; the deployment adds difficulty contracts and extends `LocalGameState`. The independent research directories and frozen banks retain their recorded identities and qualification.
+This deployment fork targets combined patch **1.4.5**, with the six **v3** cash-management and industry-completion strategies. `Host/` comes from `src/BrassHost`; `Policy/` comes from `src/BrassLegacyAI`. Search policy, host and embedded profiles retain their previous bytes; the deployment adds difficulty contracts and extends `LocalGameState`. The independent research directories and frozen banks retain their recorded identities and qualification.
+
+The [1.4.5 menu initialization repair](../../docs/AI_MENU_INITIALIZATION_1.4.5.md) includes inactive parents when finding the custom menu and attaching row controls. Native regression tests now invoke the real controller while the cached view is still disabled, matching production routing. `qualify-menu-initialization-release.ps1` verifies the two-lookup source scope and fresh menu evidence while retaining 1.4.4's unchanged gameplay/runtime qualification.
 
 The shipped DLL is `BrassLegacyAI.dll`, with a one-way dependency on `BrassPatch.dll`. `scripts/build-patch.ps1` first builds all existing rules/UI repairs from the verified stock binary, then calls `scripts/build-local-ai.ps1` to embed six S1 v3 profiles plus six original v2 compatibility profiles and weave an explicit 28-method menu/turn/input allowlist. No external service, Python runtime, neural weights, `live.json`, or mutable profile file is needed when playing.
 

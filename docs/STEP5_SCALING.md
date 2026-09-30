@@ -1,5 +1,7 @@
 # Larger Step 5 experiments on the lab server
 
+**Superseded default, 30 September:** follow [TRAINING_RECOVERY_LAB.md](TRAINING_RECOVERY_LAB.md) for the new imitation/minibatch/curriculum and central-inference recipe. This document preserves the original scaling experiment; its flat training schema is now `configs/step5/previous-lab.json`. Recipe 2.0 intentionally starts fresh optimizer moments in a new run.
+
 Updated 29 September 2026 for the reported 64 logical CPUs (`nproc`), approximately 90 GB of GPU memory and 755 GiB of system RAM. This scales the **current Step 5 self-training**, before the later personality/difficulty stage. Use the existing conda environment `ai-training`.
 
 Evaluation has its own [larger preset and parallel scheduling guide](STEP5_EVALUATION_SCALING.md): 64 setups with four rotations, 32 neural simulators and eight independent legacy/search game workers. That follow-up source update also changes the trainer implementation signature; the guide explains continuing an already-started run with `--from-run`.

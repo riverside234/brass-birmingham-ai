@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from collections import defaultdict
+from contextlib import contextmanager
 import time
 import uuid
 import weakref
@@ -12,6 +13,17 @@ from brass_ai.learning.batching import Evaluator, Request, accept_response
 from brass_ai.learning.contracts import digest, require
 
 INDUSTRIES = ('CottonMill', 'Manufacturer', 'Pottery', 'Brewery', 'IronWorks', 'CoalMine')
+
+
+@contextmanager
+def inference_deadline(policies, deadline):
+    """Private planner scope; queue/encoding/inference share its turn clock."""
+    unique=list({id(p):p for p in policies}.values())
+    previous=[p.request_deadline for p in unique]
+    for p in unique: p.request_deadline=deadline
+    try: yield
+    finally:
+        for p,old in zip(unique,previous): p.request_deadline=old
 
 
 def exploration_distribution(choices, intent=None):
@@ -50,12 +62,13 @@ class NeuralPolicy:
     kind = 'model'
 
     def __init__(self, model, device='cpu', *, exploration=.1, temperature=1.0,
-                 focus='mixed', batch_size=32, max_candidate_cells=8192):
+                 focus='mixed', batch_size=32, max_candidate_cells=8192, evaluator=None):
         require(0 <= exploration <= .5 and .1 <= temperature <= 3, 'Invalid behavior distribution')
         require(focus in ('mixed', 'neutral') + INDUSTRIES, 'Invalid context mode')
-        self.evaluator = Evaluator(model, device=device, batch_size=batch_size,
-                                   max_candidate_cells=max_candidate_cells)
+        self.evaluator = evaluator if evaluator is not None else Evaluator(model, device=device,
+            batch_size=batch_size, max_candidate_cells=max_candidate_cells)
         self.exploration, self.temperature, self.focus = exploration, temperature, focus
+        self.request_deadline = None
         self.contexts = weakref.WeakKeyDictionary()
         self.context_counter, self.context_offset = 0, None
         self.policy_id = 'step5-neural/' + digest(dict(model=self.evaluator.model_id,
@@ -79,12 +92,19 @@ class NeuralPolicy:
     def predict(self, inputs):
         requests = []
         for view, choices, rng in inputs:
+            if self.request_deadline is not None and time.monotonic()>=self.request_deadline:
+                from .search import SearchIncomplete
+                raise SearchIncomplete('inference_deadline')
             style, intent = self.context_features(view, rng)
             requests.append(Request(uuid.uuid4().hex, self.evaluator.model_id, view, choices,
-                                    time.monotonic() + 120, tuple(style), tuple(intent)))
+                min(time.monotonic()+120,self.request_deadline) if self.request_deadline is not None else time.monotonic()+120,
+                tuple(style), tuple(intent)))
         responses = self.evaluator.predict(requests)
         outputs = []
         for request, response in zip(requests, responses):
+            if self.request_deadline is not None and (request.stopped() or response.get('status') in ('expired','cancelled')):
+                from .search import SearchIncomplete
+                raise SearchIncomplete('inference_deadline')
             accept_response(request, response, request.view['context']['revision'], self.evaluator.model_id)
             raw = np.asarray(response['probabilities'], dtype=np.float64)
             raw = np.power(raw.clip(1e-30), 1 / self.temperature)

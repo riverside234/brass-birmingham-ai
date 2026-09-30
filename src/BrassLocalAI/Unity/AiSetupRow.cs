@@ -65,7 +65,7 @@ namespace BrassLegacyAI
         }
         void Initialize(PlayerCreateGameView view)
         {
-            menu = view.GetComponentInParent<Frameworks.View.Menu.CreateGame.CreateOfflineGameView>();
+            menu = view.GetComponentsInParent<Frameworks.View.Menu.CreateGame.CreateOfflineGameView>(true).FirstOrDefault();
             originalStyle = ReflectionAccess.Get<TextMeshProUGUI>(view, "_playerAIDifficultyText"); template = originalStyle;
             originalType = ReflectionAccess.Get<TextMeshProUGUI>(view, "_playerAITypeText");
             nameRect = ReflectionAccess.Get<TMP_InputField>(view, "_nicknameText").GetComponent<RectTransform>(); namePosition = nameRect.anchoredPosition;

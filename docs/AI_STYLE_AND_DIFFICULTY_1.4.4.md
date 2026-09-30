@@ -4,6 +4,8 @@
 **Status:** Installed and verified in the Steam game directory.  
 **Date:** 30 September 2026.
 
+**Follow-up:** [Patch 1.4.5](AI_MENU_INITIALIZATION_1.4.5.md) fixes first-open initialization, where the stock controls could remain until a click refreshed the menu. Its regression test follows the production order of configuring the menu before enabling it. The results below are the historical 1.4.4 release record.
+
 Custom Game now has a direct style chooser and separate difficulty buttons for each AI player. Click the style button to see Random and the six installed styles, with descriptions and a checkmark beside the selected style. Selecting a tile applies it immediately. Escape or an outside click closes the chooser without changing the selection or activating the menu underneath.
 
 The chooser uses catalog entries and supports larger rosters. Above eight concrete styles, it adds a filter and a bounded scrolling area. Native layout tests use 16 styles plus Random; those synthetic entries are not included in the playable catalog. The future neural personality system and its internal variants remain separate research work.

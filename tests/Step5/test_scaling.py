@@ -42,7 +42,7 @@ class ScalingTests(unittest.TestCase):
         torch.set_num_threads(2)
 
     def test_presets_and_strict_new_fields(self):
-        large = validate_config(read(SOURCE_ROOT / 'configs/step5/lab.json'))
+        large = validate_config(read(SOURCE_ROOT / 'configs/step5/previous-lab.json'))
         small = validate_config(read(SOURCE_ROOT / 'configs/step5/lab-small.json'))
         self.assertEqual((large['games_per_iteration'], large['workers'], large['minibatch_size']), (320, 32, 512))
         self.assertEqual(small['games_per_iteration'], 20)

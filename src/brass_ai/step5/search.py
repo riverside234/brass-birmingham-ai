@@ -20,7 +20,7 @@ from brass_ai.beliefs import sample_world_setup
 from brass_ai.host import RulesHost
 from brass_ai.learning.contracts import SOURCE_ROOT, digest, read_json, require
 from brass_ai.learning.replay import validate_teacher
-from .policy import NeuralPolicy
+from .policy import NeuralPolicy, inference_deadline
 
 
 @dataclass(frozen=True)
@@ -102,10 +102,10 @@ class SearchPolicy:
     kind = 'external'  # Search selections are not on-policy samples of the network.
 
     def __init__(self, model, host_directory, device='cpu', *, config=None, mono=None,
-                 focus='mixed', opponents=None):
+                 focus='mixed', opponents=None, evaluator=None):
         self.config = config or SearchConfig(); self.config.validate()
-        self.base = NeuralPolicy(model, device, exploration=.1, focus=focus)
-        self.rollouts = opponents or [NeuralPolicy(model, device, exploration=.05, focus='neutral')]
+        self.base = NeuralPolicy(model, device, exploration=.1, focus=focus, evaluator=evaluator)
+        self.rollouts = opponents or [NeuralPolicy(model, device, exploration=.05, focus='neutral', evaluator=evaluator)]
         require(all(isinstance(p, NeuralPolicy) and p.focus == 'neutral' for p in self.rollouts),
                 'Use masked frozen neutral-context rollout policies for matched scenarios')
         self.host = RulesHost(host_directory, mono=mono)
@@ -239,7 +239,8 @@ class SearchPolicy:
                 state['searched'] = True
                 state['searches_used'] += 1
                 try:
-                    plan, plans, values, confidence = self.search(view, choices, rng, state['deadline'])
+                    with inference_deadline([self.base]+self.rollouts,state['deadline']):
+                        plan, plans, values, confidence = self.search(view, choices, rng, state['deadline'])
                     state.update(queue=deque(plan), plans=plans, values=values, confidence=confidence)
                 except SearchIncomplete:
                     self.telemetry['incomplete'] += 1

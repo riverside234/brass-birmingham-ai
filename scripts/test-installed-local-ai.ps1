@@ -8,7 +8,7 @@ $validation=Read-BrassJson (Join-Path $build 'validation.json')
 $record=Read-BrassJson (Join-Path $root 'artifacts/patch-installation.json')
 Assert-BrassCandidate $manifest $validation $build
 if(Get-Process BrassBirminghamUnity -ErrorAction SilentlyContinue){throw 'Close the game before the installed-player check.'}
-if($record.status -ne 'installed' -or $record.version -notin @('1.3.0','1.3.1','1.3.2','1.4.0','1.4.1','1.4.2','1.4.3','1.4.4')){throw 'Combined release is not installed'}
+if($record.status -ne 'installed' -or $record.version -notin @('1.3.0','1.3.1','1.3.2','1.4.0','1.4.1','1.4.2','1.4.3','1.4.4','1.4.5')){throw 'Combined release is not installed'}
 function Verify-Installed {
  foreach($file in $manifest.files){
   if((Get-FileHash -LiteralPath (Join-Path $root ('BrassBirminghamUnity_Data/Managed/'+$file.name))).Hash -ne $file.sha256){throw 'Installed file differs from candidate'}
