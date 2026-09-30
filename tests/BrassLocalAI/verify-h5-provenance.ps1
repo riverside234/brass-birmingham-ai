@@ -50,7 +50,7 @@ try{
   $profile=[Text.Encoding]::UTF8.GetString($bytes).TrimStart([char]0xFEFF)|ConvertFrom-Json
   if($profile.id -ne ('legacy-hard-'+$profileName) -or $profile.mode -ne 'S1' -or -not $profile.intent_enabled){throw 'Wrong strategy generation or search mode'}
   $profiles+=[ordered]@{strategy=$key;profile=$profileName;mode=$profile.mode;intentEnabled=$profile.intent_enabled;sha256=$hash;researchPool=$purpose}
-  if($candidate.version -in @('1.4.0','1.4.1','1.4.2','1.4.3')){
+  if($candidate.version -in @('1.4.0','1.4.1','1.4.2','1.4.3','1.4.4')){
    $v3Name=$key+'-v3'
    $resource=@($assembly.MainModule.Resources|Where-Object Name -eq ('BrassLegacyAI.Profiles.'+$v3Name+'.json'))
    if($resource.Count -ne 1){throw 'Missing version 3 resource'}
@@ -59,7 +59,7 @@ try{
    if($v3Hash -ne (Get-FileHash -LiteralPath (Join-Path $root ('configs/legacy-ai/'+$v3Name+'.json'))).Hash.ToLowerInvariant()){throw 'V3 embedded bytes differ from source'}
    $v3=[Text.Encoding]::UTF8.GetString($bytes).TrimStart([char]0xFEFF)|ConvertFrom-Json
    if($v3.id -ne ('legacy-hard-'+$v3Name) -or $v3.cash_policy -ne 1){throw 'Wrong V3 cash policy identity'}
-   $v3.PSObject.Properties.Remove('cash_policy');if($candidate.version -in @('1.4.1','1.4.2','1.4.3')){if($v3.conversion_policy -ne 1){throw 'Missing conversion policy'};$v3.PSObject.Properties.Remove('conversion_policy')};$v3.id=$profile.id
+   $v3.PSObject.Properties.Remove('cash_policy');if($candidate.version -in @('1.4.1','1.4.2','1.4.3','1.4.4')){if($v3.conversion_policy -ne 1){throw 'Missing conversion policy'};$v3.PSObject.Properties.Remove('conversion_policy')};$v3.id=$profile.id
    if(($v3|ConvertTo-Json -Depth 10 -Compress) -cne ($profile|ConvertTo-Json -Depth 10 -Compress)){throw 'V3 strategy settings differ beyond the cash policy and version'}
    $v3Profiles+=[ordered]@{strategy=$key;profile=$v3Name;sha256=$v3Hash;cashPolicy=1;researchPool='See current versioned v3 bank qualification; no v2 strength inherited'}
   }
@@ -78,7 +78,7 @@ $result=[ordered]@{passed=$true;checkedUtc=[DateTime]::UtcNow.ToString('o');inst
  bankManifestSha256=(Get-FileHash -LiteralPath $manifestPath).Hash;archivedResearchSourceFilesVerified=$sourceChecks;
  frozenRuntimeFilesVerified=@($manifest.payload.runtime_files).Count;aiDllSha256=$expected.sha256;profiles=$profiles;v3Profiles=$v3Profiles;deploymentSources=$sourcePins;
  scope='Six archived S1 v2 profiles exactly match H5. H3 tactics differ only in player-seat lookup. V3 profiles, when present, preserve those styles and enable the deployment cash repair with separate identities. Deployment behavior is not the frozen research worker or its qualified budget; new v3 requires separate admission.'}
-if($candidate.version -in @('1.4.1','1.4.2','1.4.3')){
+if($candidate.version -in @('1.4.1','1.4.2','1.4.3','1.4.4')){
  $current=Get-Content -LiteralPath (Join-Path $root 'training/opponents/current.json') -Raw|ConvertFrom-Json
  $v3Root=Join-Path $root ('training/opponents/bank/'+$current.bank)
  $v3Manifest=Get-Content -LiteralPath (Join-Path $v3Root 'manifest.json') -Raw|ConvertFrom-Json
@@ -94,4 +94,3 @@ if($candidate.version -in @('1.4.1','1.4.2','1.4.3')){
 $name=if($Installed){'local-ai-h5-installed.json'}else{'local-ai-h5.json'}
 $result|ConvertTo-Json -Depth 10|Set-Content -LiteralPath (Join-Path $build $name) -Encoding UTF8
 Write-Output ('Profile provenance passed: 6 preserved S1 v2 profiles, '+$v3Profiles.Count+' deployment v3 profiles, '+$sourceChecks+' research sources and '+@($manifest.payload.runtime_files).Count+' frozen runtime files verified.')
-

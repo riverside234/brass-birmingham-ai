@@ -1,4 +1,4 @@
-param([switch]$ExistingSuites)
+param([switch]$ExistingSuites,[switch]$MenuOnly)
 $ErrorActionPreference='Stop'
 $root=Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 $candidate=Join-Path $root 'artifacts/patch-build/Managed'
@@ -25,21 +25,22 @@ if(-not $ExistingSuites){
 Get-ChildItem -LiteralPath $candidate -File|Where-Object Extension -in '.dll','.exe'|Copy-Item -Destination (Join-Path $data 'Managed') -Force
 Get-ChildItem -LiteralPath $candidate -File|Where-Object Extension -in '.dll','.exe'|Copy-Item -Destination (Join-Path $testBuild 'Managed') -Force
 $name=if($ExistingSuites){'unity-selftest-result.json'}else{'local-ai-native.json'}
-$published=Join-Path $root ('artifacts/patch-build/'+$(if($ExistingSuites){'unity-isolated-result.json'}else{$name}))
+$published=Join-Path $root ('artifacts/patch-build/'+$(if($ExistingSuites){'unity-isolated-result.json'}elseif($MenuOnly){'local-ai-menu.json'}else{$name}))
 @{passed=$false;status='running'}|ConvertTo-Json|Set-Content -LiteralPath $published -Encoding UTF8
 $result=Join-Path $testBuild $name
 if(Test-Path -LiteralPath $result){Remove-Item -LiteralPath $result}
 $flag=if($ExistingSuites){'--brass-patch-selftest'}else{'--brass-local-ai-test'}
 $arguments=@('-batchmode','-logFile',('"'+(Join-Path $testBuild ($name+'.log'))+'"'),$flag)
+if($MenuOnly){$arguments+='--brass-local-ai-smoke'}
 $process=Start-Process -FilePath (Join-Path $isolated 'BrassBirminghamUnity.exe') -ArgumentList $arguments -WorkingDirectory $isolated -WindowStyle Hidden -PassThru
 Write-Output "Isolated Unity tests started (PID $($process.Id)); result: $result"
 $timer=[Diagnostics.Stopwatch]::StartNew()
-while(-not $process.HasExited){if($timer.Elapsed.TotalMinutes -gt 12){$process.Kill();throw 'Isolated Unity tests timed out'};Start-Sleep -Milliseconds 500;$process.Refresh()}
+while(-not $process.HasExited){if($timer.Elapsed.TotalMinutes -gt 32){$process.Kill();throw 'Isolated Unity tests timed out'};Start-Sleep -Milliseconds 500;$process.Refresh()}
 if(-not(Test-Path -LiteralPath $result)){throw 'Unity did not produce a test result'}
 $evidence=Get-Content -LiteralPath $result -Raw|ConvertFrom-Json
 if(-not $evidence.passed){throw ('Unity checks failed: '+$evidence.error)}
 $manifest=Get-Content -LiteralPath (Join-Path $root 'artifacts/patch-build/build-manifest.json') -Raw|ConvertFrom-Json
 foreach($file in $manifest.files){if((Get-FileHash -LiteralPath (Join-Path $data ('Managed/'+$file.name))).Hash -ne $file.sha256){throw 'Isolated files do not match current candidate'}}
 $evidence|Add-Member -NotePropertyName testedFiles -NotePropertyValue $manifest.files -Force
-$evidence|ConvertTo-Json -Depth 12|Set-Content -LiteralPath (Join-Path $root ('artifacts/patch-build/'+$(if($ExistingSuites){'unity-isolated-result.json'}else{$name}))) -Encoding UTF8
+$evidence|ConvertTo-Json -Depth 12|Set-Content -LiteralPath $published -Encoding UTF8
 Write-Output 'Unity checks passed for the fingerprinted candidate.'

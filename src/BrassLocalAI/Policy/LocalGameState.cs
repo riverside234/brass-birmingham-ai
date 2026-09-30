@@ -13,13 +13,16 @@ namespace BrassLegacyAI
 {
     public static class LocalGameState
     {
-        public const string Format = "brass-local-ai-save/1.0.0";
+        public const string Format = "brass-local-ai-save/1.1.0";
+        public const string PreviousFormat = "brass-local-ai-save/1.0.0";
         static string AssignmentHash(JObject state)
         {
             return Wire.Hash(new JObject { ["format"] = state["format"], ["runtime"] = state["runtime"],
                 ["rules"] = state["rules"], ["schema"] = state["schema"], ["configuration"] = state["configuration"], ["assignments"] = state["assignments"] });
         }
         public static JObject Create(GameMetadata metadata, Func<PlayerMetadata, string> key)
+        { return Create(metadata, key, p => DifficultyCatalog.Default); }
+        public static JObject Create(GameMetadata metadata, Func<PlayerMetadata, string> key, Func<PlayerMetadata, string> difficulty)
         {
             var config = metadata.GameStartConfiguration;
             var assignments = new JArray(metadata.PlayerMetadata.Select(p => {
@@ -28,6 +31,7 @@ namespace BrassLegacyAI
                 if (p.AiType != AIType.Human) {
                     string strategy = key(p); var profile = ProfileCatalog.Snapshot(strategy, (int)config.NumberOfPlayers, config.IsIntroductoryGame);
                     row["strategy"] = strategy; row["profile"] = profile; row["profile_sha256"] = Wire.Hash(profile); row["source_sha256"] = ProfileCatalog.SourceHash(strategy);
+                    row["execution"] = DifficultyCatalog.Snapshot(difficulty(p));
                 }
                 return row;
             }));
@@ -42,7 +46,7 @@ namespace BrassLegacyAI
             var state = SaveExtensions.Get(metadata);
             if (state == null) return null;
             string runtime=(string)state["runtime"];
-            if ((string)state["format"] != Format || (runtime != ProfileCatalog.Runtime && runtime != ProfileCatalog.PreviousRuntime && runtime != ProfileCatalog.CashRuntime) || (string)state["rules"] != Wire.Rules ||
+            if (((string)state["format"] != Format && (string)state["format"] != PreviousFormat) || (runtime != ProfileCatalog.Runtime && runtime != ProfileCatalog.PreviousRuntime && runtime != ProfileCatalog.CashRuntime) || (string)state["rules"] != Wire.Rules ||
                 (string)state["schema"] != Wire.Version || (string)state["game_id"] != metadata.GameId ||
                 (!allowPending && (bool?)state["ready"] != true) || !JToken.DeepEquals(state["configuration"], Host.Configuration(metadata.GameStartConfiguration)) ||
                 (string)state["assignment_sha256"] != AssignmentHash(state) || !(state["records"] is JArray) || (string)state["records_sha256"] != Wire.Hash(state["records"]))
@@ -56,7 +60,11 @@ namespace BrassLegacyAI
                 bool human = p.AiType == AIType.Human;
                 if ((int)row["sitting_order"] != p.PlayerStartConfiguration.SittingOrder || (string)row["kind"] != (human ? "human" : "legacy"))
                     throw new InvalidDataException("Saved AI player identity changed.");
-                if (human) continue;
+                if (human) {
+                    if (row["execution"] != null) throw new InvalidDataException("Human player has unexpected AI execution settings.");
+                    continue;
+                }
+                Difficulty(state, (JObject)row);
                 string strategy = (string)row["strategy"];
                 var expected = ProfileCatalog.Snapshot(strategy, (int)metadata.GameStartConfiguration.NumberOfPlayers, metadata.GameStartConfiguration.IsIntroductoryGame,runtime);
                 if (!JToken.DeepEquals(row["profile"], expected) || (string)row["profile_sha256"] != Wire.Hash(expected) || (string)row["source_sha256"] != ProfileCatalog.SourceHash(strategy,runtime))
@@ -65,6 +73,15 @@ namespace BrassLegacyAI
             return state;
         }
         public static JObject Assignment(JObject state, int color) { return (JObject)state["assignments"].Single(p => (int)p["color"] == color); }
+        public static string Difficulty(JObject state, JObject assignment)
+        {
+            if ((string)state["format"] == PreviousFormat) {
+                if (assignment["execution"] != null) throw new InvalidDataException("Old AI save has unexpected execution settings.");
+                return DifficultyCatalog.Existing;
+            }
+            if ((string)state["format"] != Format) throw new InvalidDataException("Unsupported AI save format.");
+            return DifficultyCatalog.Read(assignment["execution"]);
+        }
         public static string HistoryHash(IEnumerable<IEvent> events, int revision)
         {
             return HistoryHashes(events.Where(e => e.Metadata.Revision <= revision)).OrderBy(x => x.Key).Last().Value;

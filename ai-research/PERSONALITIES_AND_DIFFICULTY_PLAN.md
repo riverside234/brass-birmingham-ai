@@ -17,7 +17,7 @@ These additions build on the current system:
 | S2 complete-turn comparisons, R4 OpenSpiel ISMCTS, R5 S3 observation-tree experiment | Integrate bounded priors through each algorithm's actual interface, with separate qualification. |
 | Completed self-play-first Step 5 training | Warm-start from its selected trained checkpoint; discover and fine-tune styles in a separately identified post-training run. |
 
-The current medium backbone is approximately 1.9M parameters. If that is the selected Step 5 model, retain it; if Step 5 selects another supported size, preserve that trained backbone rather than replacing it merely to match this plan's default. Personality does not justify a larger base model by itself. Keep four initial named profiles: Industrialist, Networker, Supplier and Investor. Learned archive entries can supply variants or new profiles after validation.
+The current medium backbone is approximately 1.9M parameters. If that is the selected Step 5 model, retain it; if Step 5 selects another supported size, preserve that trained backbone rather than replacing it merely to match this plan's default. Personality does not justify a larger base model by itself. Keep four initial pilot profiles: Industrialist, Networker, Supplier and Investor. The full personality roster targets **16 player-facing archetypes, each backed by eight qualified hidden micro-variants: 128 variants total**. The four pilot profiles can become members of the 16 after qualification; they are not four extra presets. Section 5 defines discovery, selection and runtime sampling.
 
 Use three qualifications when implementing the user's proposal:
 
@@ -174,6 +174,21 @@ The required evidence is that relevant alternatives survive and the bounded bias
 
 ## 5. AURORA-inspired discovery of additional personalities
 
+### 5.0 Product target: 16 visible archetypes and 128 hidden variants
+
+Adopt the proposed two-level repertoire for the completed product. This is an organization of style controls around **one shared decision network**, not a hierarchy of competing decision models.
+
+| Layer | Target | Selection and player experience |
+| --- | --- | --- |
+| Offline discovery pool | Thousands of candidate controller configurations after the pilot | Search supported style codes and small profile mutations; keep performance, repeatability and behavior evidence. These need not be thousands of separately trained neural models. |
+| Player-facing roster | **16 named archetypes** | Each has a distinct, understandable strategic tendency and one tested representative style vector. Select for visible differences among capable candidates; the UI exposes these 16 choices. |
+| Internal variety pool | **Eight micro-variants per archetype; 128 total** | The representative plus seven nearby qualified variants. Sample one before each game to vary credible openings and tactical preferences while keeping the named archetype recognizable. |
+| Difficulty settings | Easy, Medium and Hard over the same roster | Calibrate each variant under each released tier. This is up to **384 variant/tier configurations**, not 384 separate networks or visible personalities. |
+
+The representative is included among its archetype's eight variants: the package contains 128 style configurations, not 16 plus another 128. Internal IDs such as `industrialist/a1` through `industrialist/a8` are diagnostics; the player sees **Industrialist**. The remaining archetype names should follow observed behavior rather than be invented before discovery.
+
+Sixteen is the user's product target for a recognizable menu, not a scientifically established cognitive limit. A tiny change in loan rate is insufficient evidence of a new archetype. "Top-tier" here means qualified strategic competence within a diverse roster, followed by difficulty calibration; it does not mean selecting only the 16 highest raw win rates and losing the variety. Keep prototypes smaller while gathering evidence. The full 16/128 roster remains incomplete until its distinctness and strength gates pass; do not pad it with duplicates or weak variants to meet the count.
+
 ### 5.1 Offline role and descriptor data
 
 Use a separate, small behavior encoder on the lab server. It describes trajectories and organizes candidate controllers; it does not choose game actions and need not ship to the laptop. This preserves one online decision network.
@@ -201,13 +216,16 @@ entry = {
   immutable_model_id, style_code, intent_schema, search_profile,
   rules_and_observation_ids, encoder_id, opponent_pool_id,
   behavior_centroid, behavior_dispersion, trace_ids,
-  own_quality_estimate, uncertainty, qualification_status
+  own_quality_estimate, uncertainty, qualification_status,
+  candidate_id, parent_candidate_id
 }
 ```
 
 Begin by sampling supported style inputs and small mutations of already trained style/profile parameters while keeping model, difficulty and search budget fixed. Do not start by evolving millions of neural weights or arbitrary out-of-distribution style vectors. Candidate mutation is the proposed Brass search operator; the behavior encoder alone cannot generate new capable policies.
 
 Quality means the evaluated seat's own performance against a frozen, representative four-player pool, with rotations and uncertainty. Use win share as the primary outcome and rank/VP diagnostics to detect regressions; separately report legality and style coherence. Do not use total table score, novelty alone, or victories over weak stock alone as quality. Require repeated evaluation before replacing an incumbent on noisy estimates. A promising but uncertain candidate stays provisional.
+
+Scale discovery in stages: first screen approximately 64–128 candidate configurations to check that descriptor repeatability and style control work, then explore a provisional 1,000–5,000 configurations if those checks succeed. These are search-budget hypotheses, not required counts of fully trained or fully qualified models. Use inexpensive discovery games to narrow the pool and spend repeated rotated evaluations on promising candidates. Archive capacity, the number of proposals tested and the final 128-entry runtime pool are separate settings.
 
 The discovery loop is:
 
@@ -219,16 +237,57 @@ encode behavior; estimate repeatability and own outcome quality
 retain distinct qualified improvements; keep uncertain candidates provisional
 at a planned encoder update: refit on training/discovery traces only
 re-encode ALL retained candidates and rebuild the archive under a new version
-freeze a shortlist for independent calibration; leave final tests untouched
+freeze a quality-filtered shortlist and its descriptor geometry
+select 16 recognizable archetype representatives and eight members per archetype
+calibrate the 128 variants and their sampling mixtures independently
+leave final tests untouched
 ```
 
 Encoder updates can move every coordinate. Recompute descriptors for retained entries and rebuild neighborhoods/cells before comparing them with new candidates; this lifecycle follows the [AURORA reference implementation](https://github.com/adaptive-intelligent-robotics/AURORA). Keep stable profile IDs independent of cell coordinates, preserve old snapshots, and version preprocessing, encoder weights and archive membership together. Changing the quality opponent pool also requires a new qualification version.
 
-### 5.3 Bring discovered behavior back into one network
+### 5.3 Select 16 archetypes from qualified candidates
+
+Select at a common model generation, difficulty/search configuration and time allowance first. Otherwise an apparent personality cluster may simply be a stronger network or a longer search. Freeze the encoder, descriptor normalization, distance metric, opponent panel and selection seed before clustering. Use each controller's repeated-game descriptor centroid and dispersion in the validated descriptor space; a convenient 2D display is not a substitute for that space.
+
+Apply the following sequence:
+
+1. **Filter quality and reliability.** Retain controllers with adequate evidence of legal play, coherent plans, tactical recovery and own-seat performance against the frozen neural/mixed pool. Prespecify the quality floor and uncertainty rule relative to the qualified control for that pool. Winning against original Hard alone cannot establish elite quality. Exclude noisy outliers whose apparent novelty does not repeat across setups.
+2. **Construct two small selection alternatives.** Compare K-means with `K = 16`, using multiple recorded initializations, against quality-filtered Farthest Point Sampling (FPS). K-means groups similar descriptor centroids; for each cluster choose a qualified actual controller close to its center. FPS starts from a repeatable qualified controller and repeatedly selects the eligible controller with the largest minimum distance from the selected set. Apply the same quality and repeatability filters before either method.
+3. **Choose actual tested representatives.** A K-means center is a coordinate in descriptor space, not necessarily an existing controller, style input or playable policy. Do not average model weights or feed a centroid directly into the policy. K-means seeks compact clusters rather than maximizing distance between representatives; FPS provides the separate spread-oriented comparison. The center/cluster distinction follows the [KMeans interface](https://scikit-learn.org/stable/modules/generated/sklearn.cluster.KMeans.html); the quality filters and representative selection are this project's adaptation.
+4. **Check practical distinctness.** Inspect matched-position decisions, multi-turn plans and both eras, then use separate calibration games and blinded human descriptions. Prefer differences such as route timing, liquidity commitments, resource supply or sale preparation that players can recognize. Measure between-archetype separation relative to each controller's variation across games; do not select 16 isolated lucky traces.
+5. **Freeze names and membership.** Pick the selection alternative using prespecified quality, coverage and recognition criteria on calibration data. Assign stable archetype IDs and brief descriptions only afterward. Qualified pilot profiles may occupy four of the 16 places when they remain distinct. If two proposed archetypes are indistinguishable, continue discovery or replace a redundant representative rather than inventing different labels for the same play.
+
+Keep selection and final qualification separate: trying thousands of candidates creates selection bias. Freeze the shortlist, evidence rules and sampling policy before collecting the untouched release comparisons. Do not repeatedly select on the final games or choose the most separated points after seeing their final win rates.
+
+### 5.4 Populate eight nearby micro-variants per archetype
+
+For archetype `k`, retain its representative and select seven further configurations from its behavior neighborhood. Prefer already evaluated neighbors; if there are too few, propose small supported mutations around its style control and evaluate them. A nearby numerical `z` is only a proposal: it does not guarantee similar behavior. A nearby descriptor `b` describes observed behavior but is not itself an online style command. Use the explicit `z`/`b` distinction from section 2 throughout.
+
+Calibrate an admissible neighborhood for each archetype using repeat-game dispersion and separation from other archetypes. Members should remain nearer to their own representative in observed behavior, with a prespecified separation margin, while their differences exceed ordinary sampling noise on the relevant tactical measures. Avoid a universal radius chosen from a plot. Check neighborhood membership again under the deployed model and each tier's actual search settings, because fine-tuning and longer search can change the behavior.
+
+Select for subtle, useful differences within the same theme: alternative credible opening plans, build-versus-development timing, route choice, borrowing timing, supplier sequencing or merchant-beer opportunities. Require meaningful differences in plans and public effects; swapping equivalent payment/card IDs or the order of interchangeable sub-choices does not count as variety. No variant receives permission to waste unsold industries, neglect sales, abandon Pottery opportunities or refuse recovery simply to look different.
+
+Measure the added replayability against the same representative using ordinary action randomness across many seeds. Compare canonical opening-plan frequencies, plan switching after disruption and later-era behavior on matched opportunities. Eight near-identical codes that add no measurable variety should be replaced through discovery. Within-archetype variants need not be individually nameable by humans, but players should still recognize the parent archetype and experience less repetition.
+
+Every member must pass the tier's quality/reliability criteria individually. Also evaluate the eight-member sampling mixture, so a high-scoring representative cannot hide a weak member. Keep the roster membership at eight per archetype across Easy/Medium/Hard, with tier-specific qualified settings as needed. The same 128 stable variant IDs are reused across tiers. If a member fails one tier, repair, recalibrate or replace it and recheck the affected group before claiming the full roster is ready.
+
+### 5.5 Runtime sampling, persistence and UI
+
+At game creation, resolve each AI seat's chosen archetype and difficulty against a frozen roster manifest. Sample one of that archetype's eight qualified variants, initially **uniformly at 1/8 each**, using a per-seat random stream. Set its tested style vector and tier/search configuration once. Keep that variant for the entire game; saved soft intent can still adapt to the board. Do not resample the personality every move or change it in response to the human's score.
+
+Persist `roster_id`, archetype ID, micro-variant ID, shared model/profile version, difficulty, sampling-policy version, selected style code and independent RNG/intent state in the save/sidecar. Loading or resuming must restore the exact member instead of drawing again. Two seats choosing the same archetype sample independently; they still use separate permitted observations, goals and search state. Ordinary policy randomness continues within each member, so an eight-member pool does not mean exactly eight scripted openings.
+
+The UI shows the 16 archetypes and a short description for each. It does not expose 128 nearly synonymous menu entries. Keep variant IDs in diagnostics/replays for reproducibility. The behavior encoder and clustering tools stay on the lab server; the laptop needs one shared model, the 16-to-128 mapping, 128 compact style/profile records and existing intent templates.
+
+Calibration games should stratify exposure across all eight members and all four seats, then separately test the actual uniform runtime mixture. Changing membership or sampling weights creates a new roster version and requires renewed mixture/tier checks. A safe fallback must be a previously qualified member of the same archetype/tier and must be logged; do not silently substitute an untested nearby vector. Existing saved games retain their pinned compatible records or require an explicit supported migration.
+
+### 5.6 Bring discovered behavior back into one network
 
 First deployment option: all entries use the same frozen network with different tested style codes. This already satisfies the unified-network goal; no extra distillation is needed.
 
 If useful entries span different checkpoints or short style-specialization runs, distill their qualified decisions into a new shared network conditioned on stable profile codes. Use their actual permitted observations, contexts and covered action targets, then run additional self-play to repair distribution shift. Do not require matching every teacher action when alternatives are equally credible. Re-measure the resulting profiles: shared-network distillation can collapse diversity or reduce strength.
+
+Balance specialization and distillation data across the 16 archetypes and their eight members, with controlled exposure to each tier/search profile; preserve the neutral control and all industry contexts. Re-encode the deployed 128-member repertoire after distillation, then repeat archetype separation, within-archetype variety and quality checks. Historical teacher-cluster membership alone cannot qualify the new shared model. Its release roster pins the actual deployed vectors and evidence, not just the earlier archive coordinates.
 
 Descriptor-conditioned training is a later extension. It requires an explicit learned connection between desired descriptor and achievable behavior, trained without hindsight PPO relabeling. It is not supplied merely by assigning `z = Encoder(T)` after a game. Keep a neutral competitive context and all industry contexts throughout specialization; archive occupancy must not erase Pottery or other less common but sound strategies.
 
@@ -243,7 +302,7 @@ Initially use diversity for offline selection and balanced training-data samplin
 | Supplier | Time coal, iron and beer around observed demand and own returns. | Repeated production without demand, or needless gifts that harm its own outcome. |
 | Investor | Maintain useful cash flexibility and use loans/income to support productive commitments. | Hoarding money indefinitely or refusing sound borrowing/development. |
 
-These are preferences, not scripts or mutually exclusive industries. All profiles must sell, borrow, develop, connect and recover when the board calls for it. Name learned variants only after examining stable behavior across games; an arbitrary latent axis is not automatically a human-readable trait. A small set of recognizable profiles is more useful than dozens of untested labels.
+These four are the pilot seeds for the eventual 16-archetype roster, not the final menu limit. They are preferences, not scripts or mutually exclusive industries. All profiles must sell, borrow, develop, connect and recover when the board calls for it. Name the other archetypes only after examining stable behavior across games; an arbitrary latent axis is not automatically a human-readable trait. Each visible name covers eight internal variants with the same broad identity.
 
 The auxiliary goal output can drive deterministic templates such as “Looking for a route to market” or “Preparing a pottery sale if beer remains available.” This is a reported intention with uncertainty, not a faithful causal explanation of every neural calculation. Use confidence thresholds, change hysteresis and at most one meaningful update per turn. Allow players to hide intent text.
 
@@ -275,17 +334,17 @@ Use frozen, versioned opponent pools and grouped held-out setup seeds. Rotate al
 
 | Question | Measurement / gate |
 | --- | --- |
-| Is every Easy above original Hard? | One candidate Easy plus three original Hard seats, across held-out setups/rotations. Require a prespecified meaningful gain above 25% win share with grouped uncertainty bounds and rank/score corroboration. Record stock failures separately; clearly label any guarded-stock/rules-repaired variant. |
-| Are same-tier styles comparable? | Against the same frozen representative pool, compare each style with the tier target. Start with an equivalence margin such as plus/minus 5 percentage points in win share, then justify it for the pool. A wide interval or a nonsignificant difference does not establish equivalence. |
+| Is every Easy above original Hard? | Test each of the 128 Easy micro-variants as one candidate plus three original Hard seats, across held-out setups/rotations; also check each archetype's runtime mixture. Require a prespecified meaningful gain above 25% win share with grouped uncertainty bounds and rank/score corroboration. Record stock failures separately; clearly label any guarded-stock/rules-repaired variant. An archetype average cannot hide a failing member. |
+| Are same-tier styles comparable? | Against the same frozen representative pool, check the 16 archetype mixtures and each of their eight members against the tier target. Start with an equivalence margin such as plus/minus 5 percentage points in win share, then justify it for the pool. A wide interval or a nonsignificant difference does not establish equivalence. |
 | Do tiers improve? | Medium exceeds Easy and Hard exceeds Medium on aggregate mixed tables and direct matchups, with uncertainty and exceptions reported. Match algorithms at equal budgets during search ablations; actual calibrated tiers can use different declared caps. |
 | Is extra goal bias helpful? | Same model/style/search/time, `alpha = 0` versus bounded bias. Measure tactical misses, plan completion, strength and style consistency. |
-| Does learned discovery add useful variety? | Compare selected archive profiles with the four authored profiles at comparable strength. Measure repeatable action/plan differences and blinded human recognition, not only latent distances. |
+| Does learned discovery add useful variety? | Compare the 16 selected archetypes with the four pilot profiles at comparable strength. Check recognition and between-archetype separation. Within each archetype, compare its eight-member pool against its representative plus normal action randomness; measure repeated canonical openings and meaningful plan differences on matched opportunities. |
 | Is Pottery viable? | Report access/proposal coverage and context-dependent usage, pottery-focused self-play success, and held-out Pottery-opponent results. Avoid a universal Pottery-use quota when opportunities are poor. |
 | Is it enjoyable? | Human feedback on understandable plans, varied openings, resilience after disruption, resource interaction, repetition, excessive interference and waiting. Record which style/tier/hint mode was played. |
 
 Weak legacy bots cannot establish strong new-AI play. Keep original Hard as the requested minimum bar and v3 as an occasional diagnostic opponent, while making mixed neural self-play/checkpoint pools central to qualification. Never copy the held-out Pottery policy or its evaluation traces into ordinary training to improve that test score.
 
-Use independently grouped setup intervals because rotations and reused deals are correlated. Prespecify the final metrics, strength margin and shortlist before testing; avoid repeatedly tuning against the same final games. If same-tier equivalence is unresolved, collect more evidence or release fewer profiles instead of asserting equal strength.
+Use independently grouped setup intervals because rotations and reused deals are correlated. Prespecify the final metrics, strength margin and shortlist before testing; avoid repeatedly tuning against the same final games. The planned 128 Easy-baseline claims and up to 384 variant/tier configurations create multiple-comparison and evaluation-cost concerns: use a prespecified simultaneous-interval or multiplicity-adjusted release rule when asserting that every member passes, with separate archetype-mixture reporting. Use smaller discovery screens to avoid fully qualifying thousands of discarded candidates. If same-tier equivalence or a member's baseline gate is unresolved, gather more evidence or keep the roster provisional; a reduced preview must not be described as the qualified 16/128 release.
 
 Begin with small pilots and reuse existing permitted traces. The larger formal acceptance suite in [implementation step 8](IMPLEMENTATION_PLAN.md#8-optimize-the-laptop-package-and-run-acceptance-tests) applies when selecting a release, not to every prototype or this documentation update. A quick game can establish execution, not superiority or human-like play.
 
@@ -299,11 +358,13 @@ The following names are proposed, not existing contracts:
 | --- | --- |
 | `four-seat-personality/2.0.0` | Existing policy/value semantics, style input semantics, saved intent input, named goal outputs, feature and goal-schema hashes, four-seat identity mapping. |
 | `goal-schema/1.0.0` | Goal factors, compatible combinations, public regions, own-turn horizons, realization labels, confidence calibration and revision rules. |
-| `personality-profile/1.0.0` | Stable profile ID, model ID, tested style code, difficulty/search settings, goal-bias bounds, hint mode, evidence and fallback profile. |
+| `personality-profile/1.0.0` | Stable archetype ID, public name/description, representative member ID, exactly eight micro-variant IDs, supported tiers and group-level evidence. |
+| `personality-micro-variant/1.0.0` | Stable member/parent IDs, shared model ID, tested online style code, per-tier search/intent/bias settings, hint mode, quality/coherence evidence and qualified same-archetype fallback. |
+| `personality-roster/1.0.0` | Versioned mapping of 16 archetypes to 128 unique members, encoder/archive provenance, membership checks, per-tier qualification status, uniform sampling weights/version and save compatibility. |
 | `behavior-descriptor/1.0.0` | Trace schema, split provenance, fitted normalization/encoder hash, latent dimension, distance metric and archive rebuild version. |
 | New replay/teacher version | Actual style/intent, exact behavior probability recipe, goal labels/masks, goal/bias model versions, candidate coverage, search provenance and observed outcomes. |
 
-Serialize per-seat intent and RNG with save/load. Cache keys include model, observer's permitted private history, style, intent, goal schema, rules and relevant search/opponent settings. Archive descriptor versions identify offline artifacts; no future-game descriptor belongs in an online observation or private cache shared across seats.
+Serialize per-seat roster/archetype/member identity, intent and RNG with save/load. Cache keys include model, resolved member/profile version, observer's permitted private history, style, intent, goal schema, rules and relevant search/opponent settings. Archive descriptor versions identify offline artifacts; no future-game descriptor belongs in an online observation or private cache shared across seats.
 
 | Existing location | Planned work |
 | --- | --- |
@@ -311,7 +372,7 @@ Serialize per-seat intent and RNG with save/load. Cache keys include model, obse
 | [step5/policy.py](../src/brass_ai/step5/policy.py), [step5/updates.py](../src/brass_ai/step5/updates.py), [learning/replay.py](../src/brass_ai/learning/replay.py) | Add separate personality-aware collection/update paths and versioned records; keep on-policy verification and test-partition rejection. |
 | [step5/search.py](../src/brass_ai/step5/search.py) | Add an opt-in versioned S2 personality adapter for proposals/near-best selection while keeping the current default unchanged. |
 | [searchlab/ismcts.py](../src/brass_ai/searchlab/ismcts.py), [searchlab/s3.py](../src/brass_ai/searchlab/s3.py) | Add root-scoped R4 priors and explicit S3 goal-proposal/root-PUCT variants; propagate style/intent through batching and permitted caches. |
-| Proposed `src/brass_ai/personality/` | New model/contracts, goal labels, persistent intent, bounded priors, trajectory encoder, archive lifecycle, calibration records and UI projection. Keep offline discovery separate from runtime modules. |
+| Proposed `src/brass_ai/personality/` | New model/contracts, goal labels, persistent intent, bounded priors, trajectory encoder, archive lifecycle, qualified K-means/FPS representative selection, eight-member neighborhood selection, versioned roster/sampler, calibration records and UI projection. Keep offline discovery separate from runtime modules. |
 | Proposed `tests/Personality/` | Small focused contract, prior, privacy, archive and restore checks; reuse existing host/search fixtures. |
 
 For lab artifacts, use the existing conda environment `ai-training` and the configured project root. Proposed directories are:
@@ -336,10 +397,10 @@ These packages refine implementation step 7 and all begin after the completed-St
 | P0: trained-model handoff, contracts and traces | Completed Step 5 entry bundle, frozen control checkpoint, versioned style/intent/goal definitions, profile seeds, trace split manifest and v1 importer specification. | Selected trained checkpoint still loads unchanged; import preserves base outputs before fine-tuning with new context contributions neutralized; new versions fail clearly in old readers; four-seat mapping and actual behavior context round-trip. |
 | P1: shared goal head | New model, masked goal-label builder, warm-start and joint-loss pilot, confidence report. | Correct shapes/masks, finite useful gradients, exact permitted input boundary, no broken base heads; one small learning smoke establishes operation, not strength. |
 | P2: search integration | S2 adapter, root-scoped R4 prior and explicit S3 variant, saved intent and bias telemetry. | Zero bias matches baseline; illegal choices remain masked; supporting plans survive; private-world counterfactual tests pass; save/load preserves decisions under fixed streams; one whole-turn deadline. |
-| P3: learned repertoire | Temporal encoder/PCA comparison, repeated-controller descriptors, versioned archive and provisional quality records. | No train/test leakage, no seat/seed identifiers in features, re-encoding rebuilds all entries, noisy single games do not replace qualified elites. |
-| P4: unified deployment styles | Four authored profiles plus a small learned shortlist, optionally distilled into one model. | Re-evaluate produced behavior after distillation; no Pottery exclusion, preserved neutral context, measurable coherence/variety without clear tactical regression. |
-| P5: difficulty and intent UI | Frozen calibration pools, Easy/Medium/Hard settings, public/hint UI modes and human session records. | Every released Easy clears its baseline gate; tier ordering and same-tier uncertainty reported; UI respects its stated information boundary. |
-| P6: laptop package | Versioned export, profiles, restoration, Play Now, CPU/backend timing and rollback. | Numerical export checks, bounded response time, no stale/duplicate actions, acceptable three-opponent waits and reproducible install/restore. |
+| P3: learned repertoire | Temporal encoder/PCA comparison, repeated-controller descriptors, versioned archive, quality-filtered K-means/FPS alternatives and candidates for 16 representatives plus nearby members. | No train/test leakage, no seat/seed identifiers in features, re-encoding rebuilds all entries; representatives identify actual tested controllers; noisy single games do not replace qualified elites. |
+| P4: unified deployment styles | Progress from the four pilot profiles to 16 archetypes with eight members each, optionally distilled into one model. | Exactly 16 groups and 128 unique members in the full roster; re-evaluate after distillation; between-archetype recognition and within-archetype variety beat their controls; no Pottery exclusion or clear tactical regression. |
+| P5: difficulty and intent UI | Per-member and mixture calibration for Easy/Medium/Hard, frozen pools, a 16-choice UI, public/hint modes and human session records. | Every released Easy member clears its adjusted baseline gate; same-tier strength/coherence and tier ordering reported; UI hides internal variant IDs and respects its information boundary. |
+| P6: laptop package | One shared export, 16-to-128 roster, once-per-game sampler, restoration, Play Now, CPU/backend timing and rollback. | Sampling stays within the chosen qualified eight-member group; save/load retains the exact member/RNG/intent; independent seats and fixed streams behave correctly; numerical export/timing/install checks pass. |
 
 Use a few focused assertions for delicate boundaries rather than a new sprawling test framework. Reuse existing legality, hidden-information and timing checks where they cover the new path. Add new tests when new context/prior/archive behavior creates a failure mode they do not cover.
 

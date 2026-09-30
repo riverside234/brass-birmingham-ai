@@ -34,9 +34,11 @@ namespace BrassLegacyAI
         IntentState intent;
         readonly Queue<string[]> continuation = new Queue<string[]>();
         readonly Stopwatch clock = new Stopwatch();
-        public const double ThinkingMilliseconds = 10000;
+        public const double ThinkingMilliseconds = DifficultyCatalog.ExistingMilliseconds;
         public const int SearchWorkLimit = 240;
         double budget;
+        int planningRequests;
+        double lastRequestMilliseconds;
         int revision, actor, replans;
         long startedGeneration;
         bool endTurn, stopped;
@@ -94,11 +96,12 @@ namespace BrassLegacyAI
                 bridge.revision = app.Game.Revision; bridge.actor = actor; bridge.endTurn = endTurn; bridge.startedGeneration = generation;
                 bridge.strategy = (string)assignment["strategy"]; bridge.profile = ProfileCatalog.ForPlay((JObject)assignment["profile"]);
                 // Apply the requested live allowance on the detached execution copy.
-                // All six current research-bank profiles use 240 whole-turn nodes.
-                bridge.budget = ThinkingMilliseconds;
+                // Keep the bank's 240-node planning setting, including its bounded completion work.
+                string difficulty = LocalGameState.Difficulty(state, assignment);
+                bridge.budget = DifficultyCatalog.Milliseconds(difficulty);
                 bridge.profile.work_limit = SearchWorkLimit;
                 bridge.composition = Host.Composition((JObject)state["configuration"]);
-                bridge.controls = AiTurnControls.Attach(router, ProfileCatalog.Label(bridge.strategy));
+                bridge.controls = AiTurnControls.Attach(router, ProfileCatalog.Label(bridge.strategy) + " · " + DifficultyCatalog.Label(difficulty));
                 bridge.StartRequest(state);
             }
             catch (Exception error)
@@ -119,6 +122,7 @@ namespace BrassLegacyAI
             // Capturing/serializing the live board is preparation, not thinking time.
             if (!clock.IsRunning) clock.Start();
             var cfg = Profile.Read(JObject.FromObject(profile)); cfg.milliseconds = Math.Max(0, budget - clock.Elapsed.TotalMilliseconds);
+            planningRequests++; lastRequestMilliseconds = cfg.milliseconds;
             ticket = Ticket.Create(host.GameId, app.Game.Revision, actor, host.Phase, cfg);
             ticket.profile_fingerprint = (string)LocalGameState.Assignment(state, actor)["profile_sha256"];
             ticket.generation = startedGeneration;

@@ -16,6 +16,7 @@ using Frameworks.Persistence.RepositoryBackends.Filesystem;
 public static class LocalRuntimeTests
 {
     static int checks;
+    static readonly List<object> budgetAccounting = new List<object>();
     static void Check(bool condition, string message) { checks++; if (!condition) throw new Exception(message); }
     static JObject Configuration(int count, bool intro, int rotate = 0)
     {
@@ -82,13 +83,14 @@ public static class LocalRuntimeTests
             var p = new PlayerMetadata { PlayerStartConfiguration = start, PlayerNetworkId = "Player", NickName = "Local AI test", AiType = start.SittingOrder == 0 ? AIType.Human : AIType.Hard };
             p.AIBehaviour = AiBehaviorFactory.CreateAiBehavior(p); metadata.JoinGame(p);
         }
-        var state = LocalGameState.Create(metadata, p => p.PlayerStartConfiguration.SittingOrder == 1 ? "cotton" : "supplier");
+        var state = LocalGameState.Create(metadata, p => p.PlayerStartConfiguration.SittingOrder == 1 ? "cotton" : "supplier", p => p.PlayerStartConfiguration.SittingOrder == 1 ? "easy" : "mid");
         SaveExtensions.Set(metadata, state);
         var repository = new BaseRepository(new FilesystemGameStorage(directory, new Frameworks.Persistence.Serialization.JsonSerializer()), new FilesystemSnapshotStorage(directory, new Frameworks.Persistence.Serialization.JsonSerializer()), new BrassBirminghamFactory());
         var app = repository.Create(metadata); app.Game.StartGame();
         state["game_id"] = app.Metadata.GameId; state["ready"] = true; SaveExtensions.Set(app.Metadata, state); repository.Save(app);
         var loaded = repository.Load(app.Metadata.GameId);
         Check(JToken.DeepEquals(LocalGameState.Read(loaded.Metadata), LocalGameState.Read(app.Metadata)), "assignment roundtrip");
+        Check(LocalGameState.Difficulty(LocalGameState.Read(loaded.Metadata), LocalGameState.Assignment(LocalGameState.Read(loaded.Metadata), (int)loaded.Metadata.PlayerMetadata[1].PlayerStartConfiguration.Color)) == "easy", "per-player difficulty survives real save reload");
         Check(SaveExtensions.Get((GameMetadata)loaded.Metadata.Clone()) != null, "clone retains extension");
         loaded.Metadata.PlayerMetadata[1].LastSeenEventRevision = 1; repository.Save(loaded.Metadata.PlayerMetadata[1]);
         loaded = repository.Load(app.Metadata.GameId);
@@ -112,6 +114,49 @@ public static class LocalRuntimeTests
         bool rejected = false; try { LocalGameState.Read(loaded.Metadata); } catch (InvalidDataException) { rejected = true; }
         Check(rejected, "corrupt assignments rejected");
         Check(File.Exists(Path.Combine(directory, app.Metadata.GameId, "events.storage")), "save preserved on validation failure");
+    }
+    static void DifficultyContracts()
+    {
+        foreach (int count in new[] { 2, 3, 4 }) foreach (bool intro in new[] { false, true })
+        foreach (string style in ProfileCatalog.Keys) foreach (string difficulty in DifficultyCatalog.Keys)
+        {
+            var config = new BoardGameRules.Entities.Game.GameStartConfiguration((BoardGameRules.Entities.Common.NumberOfPlayers)count) { IsIntroductoryGame = intro };
+            var metadata = new GameMetadata(config, GameType.Local) { GameId = "difficulty-contract" };
+            foreach (var start in config.Players) metadata.JoinGame(new PlayerMetadata { PlayerStartConfiguration = start, AiType = AIType.Hard });
+            var state = LocalGameState.Create(metadata, p => style, p => difficulty); state["ready"] = true; SaveExtensions.Set(metadata, state);
+            var saved = LocalGameState.Read(metadata); var assignment = LocalGameState.Assignment(saved, (int)config.Players[0].Color);
+            Check(LocalGameState.Difficulty(saved, assignment) == difficulty, "all 108 configurations retain the selected difficulty");
+            Check((int)assignment["execution"]["search_ms"] == DifficultyCatalog.Milliseconds(difficulty), "saved allowance matches preset");
+            Check(JToken.DeepEquals(assignment["profile"], ProfileCatalog.Snapshot(style, count, intro)), "difficulty leaves frozen profile untouched");
+            Check((int)assignment["profile"]["work_limit"] == 240 && (int)assignment["profile"]["reply_work"] == 2048, "research node limits unchanged across tiers");
+            // Re-sign deliberate invalid data so this exercises semantic validation,
+            // not only the generic assignment hash rejection.
+            foreach (string fault in new[] { "missing", "unknown", "time", "version", "type", "old-with-execution" }) {
+                var broken = (JObject)saved.DeepClone(); var row = (JObject)broken["assignments"][0];
+                switch (fault) {
+                    case "missing": row.Remove("execution"); break;
+                    case "unknown": row["execution"]["difficulty"] = "impossible"; break;
+                    case "time": row["execution"]["search_ms"] = 17; break;
+                    case "version": row["execution"]["version"] = "future/9"; break;
+                    case "type": row["execution"]["search_ms"] = "5000"; break;
+                    case "old-with-execution": broken["format"] = LocalGameState.PreviousFormat; break;
+                }
+                broken["assignment_sha256"] = AssignmentHash(broken); SaveExtensions.Set(metadata, broken);
+                bool rejected = false; try { LocalGameState.Read(metadata); } catch (InvalidDataException) { rejected = true; }
+                Check(rejected, "invalid execution contract rejected: " + fault);
+            }
+            var older = (JObject)saved.DeepClone(); older["format"] = LocalGameState.PreviousFormat;
+            foreach (JObject row in older["assignments"]) row.Remove("execution");
+            older["assignment_sha256"] = AssignmentHash(older); SaveExtensions.Set(metadata, older);
+            var read = LocalGameState.Read(metadata);
+            Check(LocalGameState.Difficulty(read, LocalGameState.Assignment(read, (int)config.Players[0].Color)) == DifficultyCatalog.Existing, "old format has explicit compatibility setting");
+            Check(DifficultyCatalog.Milliseconds(DifficultyCatalog.Existing) == 10000 && JToken.DeepEquals(read, older), "old format reads at 10s without rewriting data");
+        }
+    }
+    static string AssignmentHash(JObject state)
+    {
+        return Wire.Hash(new JObject { ["format"] = state["format"], ["runtime"] = state["runtime"], ["rules"] = state["rules"],
+            ["schema"] = state["schema"], ["configuration"] = state["configuration"], ["assignments"] = state["assignments"] });
     }
     // Ported from the R3 S1 behavioral fixtures, against the deployed runtime.
     static void S1Contracts()
@@ -166,6 +211,26 @@ public static class LocalRuntimeTests
             Console.WriteLine("S1 contract passed: " + fixture + ", nodes=" + decision.nodes);
         }
     }
+    static void BudgetAccounting()
+    {
+        // Exercise the deployed bank setting with real deadlines, including the
+        // bounded legal completion after the remaining search allowance is zero.
+        foreach (string difficulty in DifficultyCatalog.Keys.Concat(new[] { "exhausted" }))
+        {
+            var source = NewHost(4, false, 1301); var composition = Host.Composition(Configuration(4, false));
+            var view = (JObject)Wire.Token(source.Observe(source.Actor));
+            view["context"]["round"] = 2; view["context"]["actions_remaining"] = 2;
+            var host = new Host(1, Belief.Setup(view, composition, 2)); view = (JObject)Wire.Token(host.Observe(host.Actor));
+            var before = Wire.Hash(host.Canonical()); var profile = ProfileCatalog.Create("balanced", 4);
+            profile.milliseconds = difficulty == "exhausted" ? 0 : DifficultyCatalog.Milliseconds(difficulty);
+            var decision = new Planner(composition).Decide(view, host.Choices(), profile, false);
+            Check(decision.mode == "S1" && decision.selected.actions.Count == 2 && decision.nodes > 0, "timed bank search retains a complete incumbent: " + difficulty);
+            Check(Wire.Hash(host.Canonical()) == before, "timed bank search leaves the live input unchanged");
+            foreach (var action in decision.selected.actions) foreach (var id in action) host.SearchApply(id);
+            Check(host.Remaining == 0, "timed bank incumbent is legal through both actions: " + difficulty);
+            budgetAccounting.Add(new { difficulty, allowance_ms = profile.milliseconds, work_limit = profile.work_limit, reply_work = profile.reply_work, decision.nodes, decision.failures, decision.elapsed_ms, decision.overrun, decision.status });
+        }
+    }
     static object Match(int count, bool intro, int seed, string candidate, int candidateSeat, int work)
     {
         var h = NewHost(count, intro, seed, seed % 4);
@@ -201,7 +266,7 @@ public static class LocalRuntimeTests
         {
             string output = args[0];
             bool gameplayOnly = args.Length == 2 && args[1] == "gameplay-only";
-            if (args.Length == 1 || gameplayOnly) { Smoke(); PublicInformationAndMappings(); S1Contracts(); if (!gameplayOnly) Persistence(Path.Combine(Path.GetDirectoryName(output), "save-" + Guid.NewGuid().ToString("N"))); }
+            if (args.Length == 1 || gameplayOnly) { Smoke(); PublicInformationAndMappings(); S1Contracts(); BudgetAccounting(); if (!gameplayOnly) { DifficultyContracts(); Persistence(Path.Combine(Path.GetDirectoryName(output), "save-" + Guid.NewGuid().ToString("N"))); } }
             var matches = new List<object>();
             if (args.Length > 1 && !gameplayOnly)
             {
@@ -227,7 +292,7 @@ public static class LocalRuntimeTests
                         }
                     }
             }
-            File.WriteAllText(output, Wire.Json(new { passed = true, checks, matches })); Console.WriteLine("PASS " + checks); return 0;
+            File.WriteAllText(output, Wire.Json(new { passed = true, checks, matches, budgetAccounting })); Console.WriteLine("PASS " + checks); return 0;
         }
         catch (Exception error) { Console.Error.WriteLine(error); if (args.Length > 0) File.WriteAllText(args[0], Wire.Json(new { passed = false, checks, error = error.ToString() })); return 1; }
     }

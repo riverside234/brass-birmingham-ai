@@ -23,9 +23,9 @@ namespace BrassLegacyAI
             var rect = root.GetComponent<RectTransform>(); rect.SetParent(panel, false);
             // The shipped panel sits at the bottom of the screen: extend upward.
             rect.anchorMin = rect.anchorMax = new Vector2(0.5f, 1f); rect.pivot = new Vector2(0.5f, 0f);
-            rect.anchoredPosition = new Vector2(0, 8); rect.sizeDelta = new Vector2(320, 34);
+            rect.anchoredPosition = new Vector2(0, 8); rect.sizeDelta = new Vector2(440, 34);
             var controls = root.AddComponent<AiTurnControls>(); controls.strategy = strategy;
-            controls.status = Text(root.transform, template, new Vector2(0, -15), new Vector2(320, 28), strategy + " · Thinking…");
+            controls.status = Text(root.transform, template, new Vector2(0, -15), new Vector2(440, 28), strategy + " · Thinking…");
             return controls;
         }
         static TextMeshProUGUI Text(Transform parent, TextMeshProUGUI template, Vector2 position, Vector2 size, string text)

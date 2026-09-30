@@ -16,9 +16,12 @@ bonuses to the six S1 Custom Game strategies and a matching frozen research bank
 (introduced in package 1.4.1; the bank uses the user-accepted 28-game limited validation).
 The [1.4.2 presentation and save update](docs/PRESENTATION_SAVE_1.4.2.md) repairs
 player-panel layout, white industry tiles, panel closing during animations and
-save/Continue defects. The [1.4.3 budget update](docs/AI_BUDGET_1.4.3.md) sets the live
-v3 search allowance to **10 seconds** and the research bank's **240-node** limit.
-**Package 1.4.3 is installed and verified.**
+save/Continue defects. The [1.4.4 menu update](docs/AI_STYLE_AND_DIFFICULTY_1.4.4.md)
+adds a direct style chooser and independent **Easy 2s / Mid 5s / Hard 12s** search
+allowances for each bot. New setups default to Hard; existing local-AI saves retain
+the preceding package's **10-second** allowance. The research bank's work setting
+remains **240**, with unchanged S1 planning, adaptive intent and fallback behavior.
+**Package 1.4.4 is installed and verified.**
 The [compatibility check](docs/UI_PATCH_RESEARCH_COMPATIBILITY.md)
 preserves the research bank and training interfaces. [Step 5](docs/STEP5_LAB_TRAINING.md)
 adds self-play-first population PPO, neural search distillation, diverse-opponent

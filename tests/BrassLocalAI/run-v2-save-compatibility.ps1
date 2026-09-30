@@ -1,4 +1,4 @@
-param([ValidateSet('1.3.2','1.4.0','1.4.1')][string]$PreviousRelease='1.3.2')
+param([ValidateSet('1.3.2','1.4.0','1.4.1','1.4.3')][string]$PreviousRelease='1.3.2')
 $ErrorActionPreference='Stop'
 $root=Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 $build=Join-Path $root 'artifacts/patch-build'
@@ -9,7 +9,7 @@ $old=Get-Content -LiteralPath (Join-Path $prior 'build-manifest.json') -Raw|Conv
 $fixture=Join-Path $root ('artifacts/local-ai-save-compatibility/'+[Guid]::NewGuid().ToString('N'))
 $v2=Join-Path $fixture 'v2';$v3=Join-Path $fixture 'v3';$saves=Join-Path $fixture 'saves'
 New-Item -ItemType Directory -Path $v2,$v3,$saves|Out-Null
-$output=Join-Path $build $(if($PreviousRelease -eq '1.3.2'){'local-ai-v2-save-compatibility.json'}elseif($PreviousRelease -eq '1.4.0'){'local-ai-v3-save-compatibility.json'}else{'local-ai-1.4.1-save-compatibility.json'})
+$output=Join-Path $build $(if($PreviousRelease -eq '1.3.2'){'local-ai-v2-save-compatibility.json'}elseif($PreviousRelease -eq '1.4.0'){'local-ai-v3-save-compatibility.json'}else{'local-ai-'+$PreviousRelease+'-save-compatibility.json'})
 @{passed=$false;status='running'}|ConvertTo-Json|Set-Content -LiteralPath $output
 foreach($dir in $v2,$v3){Get-ChildItem -LiteralPath $managed -Filter '*.dll'|Copy-Item -Destination $dir}
 foreach($file in $old.files){if((Get-FileHash -LiteralPath (Join-Path $prior $file.name)).Hash -ne $file.sha256){throw 'Archive changed'};Copy-Item -LiteralPath (Join-Path $prior $file.name) -Destination $v2 -Force}

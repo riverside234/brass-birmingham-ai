@@ -51,7 +51,7 @@ public static class LocalLiveTests
             var p = new PlayerMetadata { PlayerStartConfiguration = start, PlayerNetworkId = "live-" + start.Color, NickName = "Scripted test", AiType = start.SittingOrder == 0 ? AIType.Human : AIType.Hard };
             p.AIBehaviour = AiBehaviorFactory.CreateAiBehavior(p); metadata.JoinGame(p);
         }
-        var state = LocalGameState.Create(metadata, p => ProfileCatalog.Keys[(p.PlayerStartConfiguration.SittingOrder + count + (intro ? 2 : 0)) % 6]); SaveExtensions.Set(metadata, state);
+        var state = LocalGameState.Create(metadata, p => ProfileCatalog.Keys[(p.PlayerStartConfiguration.SittingOrder + count + (intro ? 2 : 0)) % 6], p => DifficultyCatalog.Keys[(p.PlayerStartConfiguration.SittingOrder - 1 + 3) % 3]); SaveExtensions.Set(metadata, state);
         var serializer = new Frameworks.Persistence.Serialization.JsonSerializer();
         var repository = new BaseRepository(new FilesystemGameStorage(directory, serializer), new FilesystemSnapshotStorage(directory, serializer), new BrassBirminghamFactory());
         var app = repository.Create(metadata); app.Game.StartGame(); state["game_id"] = app.Metadata.GameId; state["ready"] = true; SaveExtensions.Set(app.Metadata, state); repository.Save(app);

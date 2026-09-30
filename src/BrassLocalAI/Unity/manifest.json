@@ -1,6 +1,14 @@
 [
   {
     "targetType": "BrassApplication.UseCases.Menu.OfflineGame.CreateOfflineGame.CreateOfflineGameUseCase",
+    "targetMethod": "BackClicked",
+    "parameterTypes": [],
+    "helperType": "BrassLegacyAI.LocalMenu",
+    "helperMethod": "Back",
+    "mode": "replace"
+  },
+  {
+    "targetType": "BrassApplication.UseCases.Menu.OfflineGame.CreateOfflineGame.CreateOfflineGameUseCase",
     "targetMethod": "CreateNewGameConfiguration",
     "parameterTypes": [],
     "helperType": "BrassLegacyAI.LocalMenu",

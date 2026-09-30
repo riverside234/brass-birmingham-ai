@@ -24,6 +24,7 @@ public static class SaveCompatibilityTests
                 var app=repo.Load((string)entry["id"]);var state=LocalGameState.Read(app.Metadata);string before=Wire.Json(state);
                 Check((string)state["runtime"]==(string)manifest["runtime"],"load genuine old-runtime fixture");
                 int seat=(int)app.Game.GameProgressInformation.CurrentPlayer.Color;var assignment=LocalGameState.Assignment(state,seat);
+                Check((string)state["format"] == LocalGameState.PreviousFormat && LocalGameState.Difficulty(state, assignment) == DifficultyCatalog.Existing && DifficultyCatalog.Milliseconds(DifficultyCatalog.Existing) == 10000, "genuine older save keeps current 10-second compatibility allowance");
                 var cfg=ProfileCatalog.ForPlay((JObject)assignment["profile"]);
                 Check(cfg.cash_policy==1 && cfg.conversion_policy==1 && cfg.id==(string)assignment["profile"]["id"],"apply v3 cash repair with saved intent identity");
                 Check(before==Wire.Json(LocalGameState.Read(app.Metadata)),"reading and preparing old saves does not rewrite assignments");

@@ -111,46 +111,106 @@ public sealed class LocalAiUnityDriver : MonoBehaviour
         yield return null;
         var rows = Rows();
         Check(Setup.PlayerMetadata.Skip(1).All(p => LocalMenu.Strategy(p) == "balanced"), "new bots default to Balanced");
+        Check(Setup.PlayerMetadata.Skip(1).All(p => LocalMenu.Difficulty(p) == "hard"), "new bots default to Hard 12s");
         foreach (var row in rows.Skip(1))
         {
             var p = Get<PlayerMetadata>(row, "_playerMetadata");
+            var controls = row.GetComponent<AiSetupRow>();
             foreach (var key in LocalMenu.Choices)
             {
-                Check(LocalMenu.Strategy(p) == key && Label(row).text == LocalMenu.ChoiceLabel(key), "actual row forward cycles " + key);
-                Check(Label(row).GetComponent<StrategyTooltip>().Description == LocalMenu.ChoiceDescription(key), "strategy tooltip " + key);
-                row.OnNextDifficultyClick();
+                controls.StyleButton.onClick.Invoke();
+                Check(StrategyPicker.IsOpen && StrategyPicker.Active.Tiles.Count() == 7, "seven direct style choices");
+                StrategyPicker.Active.Tiles.Single(b => b.name == key).onClick.Invoke();
+                Check(!StrategyPicker.IsOpen && LocalMenu.Strategy(p) == key && Label(row).text == LocalMenu.ChoiceLabel(key), "actual row directly selects " + key);
+                Check(controls.StyleButton.GetComponent<StrategyTooltip>().Description == LocalMenu.ChoiceDescription(key), "strategy tooltip " + key);
+                Check(LocalMenu.Difficulty(p) == "hard", "style never changes difficulty");
             }
-            row.OnPreviousDifficultyClick(); Check(Label(row).text == "Random", "previous wraps to Random"); row.OnNextDifficultyClick();
+            foreach (var difficulty in DifficultyCatalog.Keys) {
+                controls.DifficultyButtons[Array.IndexOf(DifficultyCatalog.Keys, difficulty)].onClick.Invoke();
+                Check(LocalMenu.Difficulty(p) == difficulty && LocalMenu.Strategy(p) == "random" && p.AiType == AIType.Hard, "difficulty independent of style and original engine enum");
+            }
+            controls.OpenPicker(); menu.BackClicked(); Check(!StrategyPicker.IsOpen && menuView.gameObject.activeInHierarchy, "Escape/back closes chooser without exiting menu");
+            Check(row.GetComponentsInChildren<Button>().All(b => !Enumerable.Range(0, b.onClick.GetPersistentEventCount()).Any(i => b.onClick.GetPersistentMethodName(i).Contains("DifficultyClick"))), "old arrows absent from active UI");
         }
-        for (int i = 1; i < 4; i++) LocalMenu.Select(Setup.PlayerMetadata[i], ProfileCatalog.Keys[i + 2]);
+        for (int i = 1; i < 4; i++) { LocalMenu.Select(Setup.PlayerMetadata[i], ProfileCatalog.Keys[i + 2]); LocalMenu.SelectDifficulty(Setup.PlayerMetadata[i], DifficultyCatalog.Keys[i - 1]); }
         Call(menu, "PresentGameConfiguration");
         var selected = Setup.PlayerMetadata[1]; var priorColor = selected.PlayerStartConfiguration.Color;
         menu.NextColorFor(priorColor, priorColor);
-        Check(selected.PlayerStartConfiguration.Color != priorColor && LocalMenu.Strategy(selected) == "goods-beer", "color swap retains player strategy");
+        Check(selected.PlayerStartConfiguration.Color != priorColor && LocalMenu.Strategy(selected) == "goods-beer" && LocalMenu.Difficulty(selected) == "easy", "color swap retains player strategy and difficulty");
         menu.DecreaseNumberOfPlayers(); menu.DecreaseNumberOfPlayers(); menu.IncreaseNumberOfPlayers(); menu.IncreaseNumberOfPlayers();
         Check(LocalMenu.Strategy(Setup.PlayerMetadata[3]) == "pottery-flex", "remove/add preserves row strategy");
         Call(menu, "NextAiType", selected); Check(selected.AiType == AIType.Human && !Label(rows[1]).gameObject.activeSelf, "switch to human hides selector");
-        Call(menu, "NextAiType", selected); Check(LocalMenu.Strategy(selected) == "goods-beer" && Label(rows[1]).text == "Goods/Beer v3", "switch to bot restores v3 strategy");
+        Call(menu, "NextAiType", selected); Check(LocalMenu.Strategy(selected) == "goods-beer" && Label(rows[1]).text == "Goods/Beer" && LocalMenu.Difficulty(selected) == "easy", "switch to bot restores strategy and difficulty");
         LocalMenu.Select(Setup.PlayerMetadata[3], "random"); Call(menu, "PresentGameConfiguration");
         Check(Label(rows[3]).text == "Random" && LocalMenu.CanStart(menu), "Random is selectable for a new bot");
         Capture("local-ai-custom-menu.png");
+        var ui = rows[1].GetComponent<AiSetupRow>();
+        ui.OpenPicker(); Capture("local-ai-style-picker.png");
+        var oldPicker = StrategyPicker.Active; Call(menu, "PresentGameConfiguration");
+        Check(!StrategyPicker.IsOpen && !oldPicker.gameObject.activeSelf, "refresh invalidates popup binding and blocker");
+        ui.OpenPicker();
+        var popup = StrategyPicker.Active; var randomButton = popup.Tiles.First(); randomButton.Select();
+        ExecuteEvents.Execute(randomButton.gameObject, new AxisEventData(EventSystem.current) { moveDir = MoveDirection.Down }, ExecuteEvents.moveHandler);
+        Check(EventSystem.current.currentSelectedGameObject == popup.Tiles.Single(b => b.name == "balanced").gameObject, "keyboard navigation stays in chooser");
+        ExecuteEvents.ExecuteHierarchy(EventSystem.current.currentSelectedGameObject, new BaseEventData(EventSystem.current), ExecuteEvents.cancelHandler);
+        Check(!StrategyPicker.IsOpen && EventSystem.current.currentSelectedGameObject == ui.StyleButton.gameObject, "keyboard cancel restores the originating control");
+        ui.OpenPicker(); popup = StrategyPicker.Active; yield return null; Canvas.ForceUpdateCanvases();
+        var pointer = new PointerEventData(EventSystem.current) { position = RectTransformUtility.WorldToScreenPoint(router.Camera, Get<Button>(menuView, "_startGameButton").transform.position), button = PointerEventData.InputButton.Left };
+        var hits = new List<RaycastResult>(); EventSystem.current.RaycastAll(pointer, hits);
+        Check(hits.Count > 0 && hits[0].gameObject.name == "Dismiss chooser", "modal intercepts pointer above the New Game button; hits=" + String.Join(",", hits.Select(h => h.gameObject.name)) + "; point=" + pointer.position + "; screen=" + Screen.width + "x" + Screen.height);
+        ExecuteEvents.Execute(hits[0].gameObject, pointer, ExecuteEvents.pointerClickHandler);
+        Check(!StrategyPicker.IsOpen && history.CurrentGame == null, "outside click only dismisses and cannot create a game");
+        ui.OpenPicker(); router.HideView<ICreateOfflineGameView>(); yield return null;
+        Check(!StrategyPicker.IsOpen, "hiding menu closes popup"); router.ShowView<ICreateOfflineGameView>();
+        ui.OpenPicker(); var hiding = menuView.CreateHideViewAnimation(); hiding.Kill(); yield return null;
+        Check(!StrategyPicker.IsOpen && menuView.gameObject.activeInHierarchy, "production fade visibility closes popup even while objects remain enabled");
+        router.ShowView<ICreateOfflineGameView>(); ui.StyleButton.Select();
+        ExecuteEvents.Execute(ui.StyleButton.gameObject, new BaseEventData(EventSystem.current), ExecuteEvents.selectHandler);
+        Check(GameObject.Find("AI selection help") != null, "focused control shows help before the menu fades");
+        hiding = menuView.CreateHideViewAnimation(); hiding.Kill(); yield return null;
+        Check(GameObject.Find("AI selection help") == null, "production fade visibility clears detached tooltip");
+        router.ShowView<ICreateOfflineGameView>();
+        var expanded = Enumerable.Range(1, 16).Select(i => new AiStyleOption("test-" + i, "Style " + i, "Expanded catalog layout fixture " + i)).ToArray();
+        string chosen = null;
+        var expandedPicker = StrategyPicker.Open(ui, Label(rows[1]), "Expanded catalog preview", "test-16", expanded, key => { chosen = key; return true; });
+        Check(expandedPicker.Tiles.Count() == 17 && expandedPicker.Filter != null, "16 styles plus Random and search");
+        Capture("local-ai-expanded-picker.png");
+        expandedPicker.Filter.text = "no matching choice";
+        Check(expandedPicker.Tiles.Count() == 1 && expandedPicker.transform.Find("Style chooser/Styles viewport/No results").gameObject.activeSelf, "empty filter retains Random and shows explanation");
+        expandedPicker.transform.Find("Style chooser/Clear filter").GetComponent<Button>().onClick.Invoke();
+        Check(expandedPicker.Tiles.Count() == 17, "clear filter restores expanded catalog");
+        expandedPicker.Filter.text = "Style 16";
+        Check(expandedPicker.Tiles.Count() == 2, "filter selects the sixteenth style by name");
+        expandedPicker.Tiles.Single(b => b.name == "test-16").onClick.Invoke(); Check(chosen == "test-16", "last expanded style selectable by stable ID");
+        foreach (var size in new[] { new Vector2Int(1280, 720), new Vector2Int(1920, 1080), new Vector2Int(2560, 1440) }) {
+            router.Resize(size.x, size.y); yield return null; ui.OpenPicker();
+            AssertInsideTarget(StrategyPicker.Active.transform.Find("Style chooser").GetComponent<RectTransform>(), "picker " + size.x);
+            Capture("local-ai-picker-" + size.x + ".png"); StrategyPicker.CloseActive();
+        }
+        router.Resize(1600, 900); yield return null;
         menu.SetIntroductoryGame(true); var first = menu.StartGame(92701);
         Check(first != null && first.Game.PlayersTrack.Players.Count == 4 && first.Game.GameStartConfiguration.IsIntroductoryGame, "actual StartGame publishes requested setup");
         var state = LocalGameState.Read(first.Metadata);
         Check((string)LocalGameState.Assignment(state, (int)selected.PlayerStartConfiguration.Color)["strategy"] == "goods-beer", "saved strategy follows changed color");
+        Check(LocalGameState.Difficulty(state, LocalGameState.Assignment(state, (int)selected.PlayerStartConfiguration.Color)) == "easy", "selected difficulty saved with changed color");
         int randomColor = (int)Setup.PlayerMetadata[3].PlayerStartConfiguration.Color;
         string randomStrategy = (string)LocalGameState.Assignment(state, randomColor)["strategy"];
         Check(ProfileCatalog.Keys.Contains(randomStrategy) && (string)LocalGameState.Assignment(state, randomColor)["profile"]["mode"] == "S1", "Random resolves to one of the six real S1 profiles");
         Check(LocalMenu.Strategy(Setup.PlayerMetadata[3]) == "random", "resolving Random does not change the next-game selection");
         Check((string)LocalGameState.Assignment(LocalGameState.Read(repository.Load(first.Metadata.GameId).Metadata), randomColor)["strategy"] == randomStrategy, "Random remains fixed after load");
-        if (Environment.GetCommandLineArgs().Contains("--brass-local-ai-smoke"))
-        { Check(errors.Count == 0, "installed startup/menu has no unexpected errors"); yield break; }
         menu.CreateNewGameConfiguration(); Check(LocalMenu.Strategy(Setup.PlayerMetadata[1]) == "goods-beer" && LocalMenu.Strategy(Setup.PlayerMetadata[3]) == "random", "saved defaults retain Random");
         menu.UpdateResumeOfflineGameView();
-        Check(Label(Rows(true)[1]).text == "Goods/Beer v3", "resume shows saved strategy with current v3 deployment");
-        Check(Label(Rows(true)[3]).text == ProfileCatalog.Label(randomStrategy), "resume reveals the resolved Random strategy");
+        Check(Label(Rows(true)[1]).text == "Goods/Beer" && LocalMenu.Difficulty(Get<PlayerMetadata>(Rows(true)[1], "_playerMetadata")) == "easy", "resume shows saved style and difficulty");
+        Check(Label(Rows(true)[3]).text == LocalMenu.ChoiceLabel(randomStrategy), "resume reveals the resolved Random strategy");
         Check(Rows(true).SelectMany(r => r.GetComponentsInChildren<Button>(true)).Where(b => Enumerable.Range(0, b.onClick.GetPersistentEventCount()).Any(i => b.onClick.GetPersistentMethodName(i).Contains("Difficulty"))).All(b => !b.interactable), "resume arrows disabled");
         Capture("local-ai-resume-menu.png");
+        Rows()[3].GetComponent<AiSetupRow>().OpenPicker(); Capture("local-ai-resume-picker.png"); StrategyPicker.CloseActive();
+        router.Resize(1280, 720); yield return null; Capture("local-ai-resume-1280.png");
+        foreach (var row in Rows().Where(r => r.GetComponent<AiSetupRow>().CanEdit))
+            foreach (var button in row.GetComponent<AiSetupRow>().DifficultyButtons) AssertInsideTarget(button.GetComponent<RectTransform>(), "small split menu controls");
+        Rows()[3].GetComponent<AiSetupRow>().OpenPicker(); AssertInsideTarget(StrategyPicker.Active.transform.Find("Style chooser").GetComponent<RectTransform>(), "small split picker"); Capture("local-ai-resume-picker-1280.png"); StrategyPicker.CloseActive();
+        router.Resize(1600, 900); yield return null;
+        Check(Setup.PlayerMetadata.Skip(1).Select(LocalMenu.Difficulty).SequenceEqual(DifficultyCatalog.Keys), "next-game preferences preserve each difficulty independently of Continue");
         menu.DecreaseNumberOfPlayers(); var second = menu.StartGame(92702);
         Check(second != null && repository.GetGamesMetadata().Count() == 2, "new game keeps previous save");
         Check(LocalMenu.FindResume(history).GameId == second.Metadata.GameId, "newest ready save selected");
@@ -170,6 +230,8 @@ public sealed class LocalAiUnityDriver : MonoBehaviour
         var oldPlayer = new PlayerMetadata { PlayerStartConfiguration = previousPlayer.PlayerStartConfiguration, AiType = AIType.Medium };
         var oldModel = new PlayerCreateGameViewModel { PlayerMetadata = oldPlayer, AiType = AIType.Medium, AiTypeText = "Medium", PlayerNumber = 1, CurrentPlayerCount = 3, Nickname = "Original", PlayerColor = oldPlayer.PlayerStartConfiguration.Color };
         Rows(true)[0].SetPlayer(oldModel); Check(Label(Rows(true)[0]).text == "Original AI", "legacy label preserved without changing saved AI type");
+        if (Environment.GetCommandLineArgs().Contains("--brass-local-ai-smoke"))
+        { Check(errors.Count == 0, "installed startup/menu has no unexpected errors"); yield break; }
         router.DisposeViews(); yield return null;
         yield return SceneManager.LoadSceneAsync("GameScene"); yield return null;
         router.ReloadPrefabs();
@@ -183,13 +245,13 @@ public sealed class LocalAiUnityDriver : MonoBehaviour
         var turn = new PlayAiTurnUseCase(new PlayAITurnPresenter(router), history);
         router.UseCases[typeof(PlayGameUseCase)] = play; router.UseCases[typeof(PlayAiTurnUseCase)] = turn;
         aiView.Controller = new PlayAiTurnController(turn);
-        foreach (int count in new[] { 2, 3, 4 }) foreach (bool intro in new[] { false, true }) foreach (string key in ProfileCatalog.Keys)
+        foreach (int count in new[] { 2, 3, 4 }) foreach (bool intro in new[] { false, true }) foreach (string key in ProfileCatalog.Keys) foreach (string difficulty in DifficultyCatalog.Keys)
         {
             bool humanTransition = count == 2 && key == "balanced";
             var config = new GameStartConfiguration((NumberOfPlayers)count) { Seed = 92720 + count, IsIntroductoryGame = intro };
             var meta = new GameMetadata(config, GameType.Local);
             foreach (var start in config.Players) meta.JoinGame(new PlayerMetadata { PlayerStartConfiguration = start, AiType = AIType.Hard, NickName = "Strategy test", PlayerNetworkId = "native-" + start.Color });
-            var saved = LocalGameState.Create(meta, p => key); SaveExtensions.Set(meta, saved);
+            var saved = LocalGameState.Create(meta, p => key, p => difficulty); SaveExtensions.Set(meta, saved);
             var app = repository.Create(meta); app.Game.StartGame(); saved["game_id"] = app.Metadata.GameId; saved["ready"] = true; SaveExtensions.Set(app.Metadata, saved);
             if (key != "balanced" || humanTransition)
             {
@@ -206,7 +268,7 @@ public sealed class LocalAiUnityDriver : MonoBehaviour
                 // AI scheduling path used to leave permanently disabled.
                 var next = app.Game.PlayersTrack.Players.First(p => p.Color != app.Game.GameProgressInformation.CurrentPlayer.Color);
                 app.Metadata.GetPlayerMetadataByColor(next.Color).AiType = AIType.Human;
-                saved = LocalGameState.Create(app.Metadata, p => key); saved["ready"] = true; SaveExtensions.Set(app.Metadata, saved);
+                saved = LocalGameState.Create(app.Metadata, p => key, p => difficulty); saved["ready"] = true; SaveExtensions.Set(app.Metadata, saved);
             }
             repository.Save(app); history.SetGame(app);
             router.ShowView<IPlayAiTurnView>(); aiView.SetCurrentPlayerName("Strategy test");
@@ -230,7 +292,8 @@ public sealed class LocalAiUnityDriver : MonoBehaviour
             var schedule = new PlayGamePresenter(router); schedule.StartAITurn(app.Metadata.PlayerMetadata[0]); LocalTurnBridge.CancelActive();
             yield return null; Check(!LocalTurnBridge.IsThinking && app.Game.Revision == revision, "cancel pending dispatch");
             turn.PlayAITurn(); turn.PlayAITurn(); Check(LocalTurnBridge.IsThinking, "new strategy bridge starts");
-            var startTime = Time.realtimeSinceStartup; bool probed = false;
+            var startTime = Time.realtimeSinceStartup; bool probed = false, replanInjected = false; double injectedElapsed = 0;
+            var observedBridge = UnityEngine.Object.FindObjectOfType<LocalTurnBridge>();
             while (LocalTurnBridge.IsThinking)
             {
                 var controls = aiView.GetComponentInChildren<AiTurnControls>();
@@ -241,7 +304,7 @@ public sealed class LocalAiUnityDriver : MonoBehaviour
                     var bridge = UnityEngine.Object.FindObjectOfType<LocalTurnBridge>();
                     var executing = Get<Profile>(bridge, "profile");
                     var bankProfile = ProfileCatalog.Create(key, count, intro);
-                    Check(Get<double>(bridge, "budget") == 10000 && executing.work_limit == 240 && executing.work_limit == bankProfile.work_limit && executing.reply_work == bankProfile.reply_work && executing.mode == "S1", "10-second allowance with research-bank node and reply limits");
+                    Check(Get<double>(bridge, "budget") == DifficultyCatalog.Milliseconds(difficulty) && executing.work_limit == 240 && executing.work_limit == bankProfile.work_limit && executing.reply_work == bankProfile.reply_work && executing.mode == "S1", "per-player allowance with research-bank node and reply limits");
                     for (int repeat = 0; repeat < 3; repeat++) foreach (var input in inputs) input();
                     Check(LocalTurnBridge.IsThinking && app.Game.Revision == revision && boardOutput.Builds == 0, "repeated clicks never cancel or skip a thinking turn");
                     // Visual visibility is not ownership of the turn. A popup must
@@ -250,7 +313,11 @@ public sealed class LocalAiUnityDriver : MonoBehaviour
                     Check(LocalTurnBridge.IsThinking, "hiding a panel does not abandon a pending turn");
                     router.ShowView<IPlayAiTurnView>(); probed = true;
                 }
-                if (count == 2 && !intro && key == "balanced" && images.Count == 2 && Time.realtimeSinceStartup - startTime > .1f) Capture("local-ai-thinking.png");
+                if (count == 2 && !intro && key == "balanced" && difficulty == "mid" && !replanInjected && app.Game.Revision > revision && app.Game.TurnFlow.GetRemainingActionsCount() == 1) {
+                    var continuation = Get<Queue<string[]>>(observedBridge, "continuation");
+                    if (continuation.Count > 0) { injectedElapsed = Get<System.Diagnostics.Stopwatch>(observedBridge, "clock").Elapsed.TotalMilliseconds; continuation.Clear(); continuation.Enqueue(new[] { "unavailable-choice" }); replanInjected = true; }
+                }
+                if (count == 2 && !intro && key == "balanced" && difficulty == "mid" && !images.Any(p => p.EndsWith("local-ai-thinking.png")) && Time.realtimeSinceStartup - startTime > .1f) Capture("local-ai-thinking.png");
                 if(Time.realtimeSinceStartup-startTime>=35)
                 {
                     var bridge=UnityEngine.Object.FindObjectOfType<LocalTurnBridge>();
@@ -267,7 +334,11 @@ public sealed class LocalAiUnityDriver : MonoBehaviour
             var reloaded = repository.Load(app.Metadata.GameId);
             Check(reloaded.Game.Revision == app.Game.Revision && LocalGameState.Read(reloaded.Metadata)["records"].Any(), "native action and intent reload together");
             Check(!router.IsViewVisible<IQuestionPopupView>(), "native strategy turn has no error popup");
-            turns.Add(new { count, intro, key, inputGuardTested = probed, humanTransitionTested = humanTransition, thinkingMilliseconds = LocalTurnBridge.ThinkingMilliseconds, workLimit = LocalTurnBridge.SearchWorkLimit, seconds = Time.realtimeSinceStartup - startTime });
+            int requests = Get<int>(observedBridge, "planningRequests"); double remainingBudget = Get<double>(observedBridge, "lastRequestMilliseconds");
+            Check(remainingBudget <= DifficultyCatalog.Milliseconds(difficulty), "no request receives a larger allowance than its actor");
+            if (count == 2 && !intro && key == "balanced" && difficulty == "mid") Check(replanInjected && requests == 2 && remainingBudget <= Math.Max(0, DifficultyCatalog.Milliseconds(difficulty) - injectedElapsed) + 1, "stale second action replans only within the original turn deadline");
+            turns.Add(new { count, intro, key, difficulty, inputGuardTested = probed, humanTransitionTested = humanTransition, replanInjected, planningRequests = requests, lastRequestMilliseconds = remainingBudget, thinkingMilliseconds = DifficultyCatalog.Milliseconds(difficulty), workLimit = LocalTurnBridge.SearchWorkLimit, seconds = Time.realtimeSinceStartup - startTime });
+            File.WriteAllText(Output + ".progress.json", JObject.FromObject(new { completed = turns.Count, total = 108, count, intro, key, difficulty }).ToString());
             if (humanTransition)
             {
                 var human = app.Metadata.GetPlayerMetadataByColor(app.Game.GameProgressInformation.CurrentPlayer.Color);
@@ -302,7 +373,7 @@ public sealed class LocalAiUnityDriver : MonoBehaviour
         }
         Check(errors.Count == 0, "no unexpected native errors: " + String.Join("\n", errors));
     }
-    void Update() { if (!done && Time.realtimeSinceStartup - started > 660) Finish(new Exception("native integration watchdog")); }
+    void Update() { if (!done && Time.realtimeSinceStartup - started > 1800) Finish(new Exception("native integration watchdog")); }
     void Finish(Exception error)
     {
         done = true; LocalTurnBridge.CancelActive(); Application.logMessageReceived -= Log;
@@ -316,6 +387,11 @@ public sealed class LocalAiUnityDriver : MonoBehaviour
         var texture = new Texture2D(router.Target.width, router.Target.height, TextureFormat.RGB24, false);
         texture.ReadPixels(new Rect(0, 0, texture.width, texture.height), 0, 0); texture.Apply(); RenderTexture.active = old;
         string path = Path.Combine(Path.GetDirectoryName(Output), file); File.WriteAllBytes(path, texture.EncodeToPNG()); images.Add(path); UnityEngine.Object.Destroy(texture);
+    }
+    void AssertInsideTarget(RectTransform rect, string name)
+    {
+        Canvas.ForceUpdateCanvases(); var corners = new Vector3[4]; rect.GetWorldCorners(corners);
+        Check(corners.All(p => { var v = router.Camera.WorldToViewportPoint(p); return v.x >= -.002f && v.x <= 1.002f && v.y >= -.002f && v.y <= 1.002f; }), "visible bounds: " + name);
     }
     sealed class Localization : ILocalization
     { public string GetTranslation(string term) { var name = term.Split('/').Last(); return name == "AI_TYPE_HUMAN" ? "Human" : System.Globalization.CultureInfo.InvariantCulture.TextInfo.ToTitleCase(name.Replace('_', ' ').ToLowerInvariant()); } }
@@ -388,6 +464,7 @@ public sealed class LocalAiUnityDriver : MonoBehaviour
         public Router() { UseCaseBuilder = this; }
         public void Initialize()
         {
+            if (EventSystem.current == null) { var events = new GameObject("Native test events", typeof(EventSystem), typeof(StandaloneInputModule)); UnityEngine.Object.DontDestroyOnLoad(events); }
             root = new GameObject("Native integration canvas", typeof(RectTransform), typeof(Canvas), typeof(GraphicRaycaster), typeof(CanvasScaler)); UnityEngine.Object.DontDestroyOnLoad(root);
             var node = new GameObject("Native test camera", typeof(Camera)); UnityEngine.Object.DontDestroyOnLoad(node); Camera = node.GetComponent<Camera>(); Camera.enabled = false; Camera.orthographic = true;
             Camera.transform.position = new Vector3(0, 0, -100); Camera.farClipPlane = 1000; Camera.clearFlags = CameraClearFlags.SolidColor; Camera.backgroundColor = new Color(.08f, .07f, .06f);
@@ -397,6 +474,11 @@ public sealed class LocalAiUnityDriver : MonoBehaviour
             ReloadPrefabs();
         }
         public void ReloadPrefabs() { prefabs = Resources.FindObjectsOfTypeAll<UnityViewFactory>().SelectMany(f => f.ViewList.Views).OfType<BaseView>().ToArray(); }
+        public void Resize(int width, int height)
+        {
+            Camera.targetTexture = null; Target.Release(); UnityEngine.Object.Destroy(Target);
+            Target = new RenderTexture(width, height, 24, RenderTextureFormat.ARGB32); Target.Create(); Camera.targetTexture = Target; Canvas.ForceUpdateCanvases();
+        }
         public void DisposeViews() { foreach (var view in views.Values) UnityEngine.Object.Destroy(view.gameObject); views.Clear(); visible.Clear(); }
         public T GetView<T>() where T : class, IBaseView
         {
