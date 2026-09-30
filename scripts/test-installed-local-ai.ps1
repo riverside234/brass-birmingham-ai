@@ -8,7 +8,7 @@ $validation=Read-BrassJson (Join-Path $build 'validation.json')
 $record=Read-BrassJson (Join-Path $root 'artifacts/patch-installation.json')
 Assert-BrassCandidate $manifest $validation $build
 if(Get-Process BrassBirminghamUnity -ErrorAction SilentlyContinue){throw 'Close the game before the installed-player check.'}
-if($record.status -ne 'installed' -or $record.version -notin @('1.3.0','1.3.1','1.3.2','1.4.0','1.4.1','1.4.2','1.4.3','1.4.4','1.4.5')){throw 'Combined release is not installed'}
+if($record.status -ne 'installed' -or $record.version -notin @('1.3.0','1.3.1','1.3.2','1.4.0','1.4.1','1.4.2','1.4.3','1.4.4','1.4.5','1.4.6','1.4.7')){throw 'Combined release is not installed'}
 function Verify-Installed {
  foreach($file in $manifest.files){
   if((Get-FileHash -LiteralPath (Join-Path $root ('BrassBirminghamUnity_Data/Managed/'+$file.name))).Hash -ne $file.sha256){throw 'Installed file differs from candidate'}
@@ -18,7 +18,7 @@ function Verify-Installed {
 Verify-Installed
 $managed=Join-Path $build 'Managed'
 $rsp=Join-Path $build 'installed-ai-tests.rsp'
-@('/nologo','/target:library','/langversion:7.3','/nostdlib+','/deterministic+',('/out:"'+(Join-Path $managed 'LocalAiUnityTests.dll')+'"'))+@(Get-ChildItem -LiteralPath $managed -Filter '*.dll'|Where-Object {$_.Name -notmatch 'Tests|Regression'}|ForEach-Object {'/reference:"'+$_.FullName+'"'})+@('"'+(Join-Path $root 'tests/BrassLocalAI/LocalAiUnityTests.cs')+'"')|Set-Content -LiteralPath $rsp -Encoding UTF8
+@('/nologo','/target:library','/langversion:7.3','/nostdlib+','/deterministic+',('/out:"'+(Join-Path $managed 'LocalAiUnityTests.dll')+'"'))+@(Get-ChildItem -LiteralPath $managed -Filter '*.dll'|Where-Object {$_.Name -notmatch 'Tests|Regression'}|ForEach-Object {'/reference:"'+$_.FullName+'"'})+@('LocalAiUnityTests.cs','AiExecutionResourceTests.cs'|ForEach-Object{'"'+(Join-Path $root ('tests/BrassLocalAI/'+$_))+'"'})|Set-Content -LiteralPath $rsp -Encoding UTF8
 & (Join-Path $root 'artifacts/patch-tools/microsoft.net.compilers.toolset.4.12.0/tasks/net472/csc.exe') ('@'+$rsp)
 if($LASTEXITCODE -ne 0){throw 'Installed-player test compilation failed'}
 $path=Join-Path $build 'local-ai-native.json'

@@ -45,7 +45,9 @@ class ScalingTests(unittest.TestCase):
         large = validate_config(read(SOURCE_ROOT / 'configs/step5/previous-lab.json'))
         small = validate_config(read(SOURCE_ROOT / 'configs/step5/lab-small.json'))
         self.assertEqual((large['games_per_iteration'], large['workers'], large['minibatch_size']), (320, 32, 512))
-        self.assertEqual(small['games_per_iteration'], 20)
+        self.assertEqual(small['format'],'step5-training/2.1.0')
+        self.assertEqual(small['games_per_iteration'],160)
+        self.assertEqual((small['execution']['processes'],small['execution']['hosts_per_process']),(32,1))
         for field, bad in [('minibatch_size', 0), ('max_candidate_cells', -1), ('search_workers', True),
                            ('parallel_hosts', 1), ('group_tables', 'yes')]:
             with self.subTest(field=field), self.assertRaises(ValueError):
@@ -93,7 +95,9 @@ class ScalingTests(unittest.TestCase):
             torch.testing.assert_close(left, right, rtol=1e-3, atol=2e-6)
 
     def test_fork_preserves_weights_optimizer_history_and_setup_cursor(self):
-        config = read(SOURCE_ROOT / 'configs/step5/lab-small.json')
+        # This gate concerns the historical execution-only migration. Recipe
+        # 2.1 deliberately starts fresh optimizer moments in a separate run.
+        config = read(SOURCE_ROOT / 'configs/step5/smoke.json')
         config.update(model_size='small', games_per_iteration=1, workers=1, threads=2,
                       legacy_every=0, search_every=0, ppo_epochs=1)
         seen = []

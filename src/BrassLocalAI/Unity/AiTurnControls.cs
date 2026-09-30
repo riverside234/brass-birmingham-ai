@@ -11,6 +11,8 @@ namespace BrassLegacyAI
     {
         TextMeshProUGUI status;
         string strategy;
+        string thinkingText, playingText;
+        bool applying;
         public static AiTurnControls Attach(IRouter router, string strategy)
         {
             var view = router.GetView<IPlayAiTurnView>() as Component;
@@ -25,7 +27,8 @@ namespace BrassLegacyAI
             rect.anchorMin = rect.anchorMax = new Vector2(0.5f, 1f); rect.pivot = new Vector2(0.5f, 0f);
             rect.anchoredPosition = new Vector2(0, 8); rect.sizeDelta = new Vector2(440, 34);
             var controls = root.AddComponent<AiTurnControls>(); controls.strategy = strategy;
-            controls.status = Text(root.transform, template, new Vector2(0, -15), new Vector2(440, 28), strategy + " · Thinking…");
+            controls.thinkingText = strategy + " · Thinking…"; controls.playingText = strategy + " · Playing…";
+            controls.status = Text(root.transform, template, new Vector2(0, -15), new Vector2(440, 28), controls.thinkingText);
             return controls;
         }
         static TextMeshProUGUI Text(Transform parent, TextMeshProUGUI template, Vector2 position, Vector2 size, string text)
@@ -38,6 +41,6 @@ namespace BrassLegacyAI
             label.rectTransform.sizeDelta = size; label.rectTransform.anchoredPosition = position;
             return label;
         }
-        public void SetApplying(bool applying) { if (status != null) status.text = strategy + (applying ? " · Playing…" : " · Thinking…"); }
+        public void SetApplying(bool value) { if (applying == value) return; applying = value; if (status != null) status.text = value ? playingText : thinkingText; }
     }
 }

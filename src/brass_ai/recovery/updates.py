@@ -18,12 +18,13 @@ def prepared(games, predicate=None, neutral=False):
     """Targets once per game; filter BEFORE encoding; cached arrays survive epochs."""
     encoder, data = PreparedEncoder(), []
     for game in games:
+        if hasattr(game,'assert_metadata'): game.assert_metadata()
         target = terminal_targets(game['result'])
         for row in game['records']:
             if predicate is None or predicate(row):
                 r = dict(row, style=[0.0]*4, intent=[0.0]*8) if neutral else row
-                data.append((r, target, (game['game_id'],row['seat']),
-                    encoder.encode(r['view'], r['choices'], r['style'], r['intent'])))
+                encoded = game.encoded(r,encoder,allow_context=neutral) if hasattr(game,'encoded') else encoder.encode(r['view'], r['choices'], r['style'], r['intent'])
+                data.append((r, target, (game['game_id'],row['seat']), encoded))
     require(data, 'No eligible learning decisions')
     return data
 
@@ -86,6 +87,8 @@ def autocast(config, device):
 
 
 def policy_measure(model, dataset, indices, behavior, config, timings, verify=False, advantages=None):
+    indices=list(indices)
+    if not indices: return 0.0
     total=0.0
     with torch.no_grad(), timings.phase('ppo.policy_measure'):
         for part in dataset.microbatches(indices,config['microbatch_size'],config['max_candidate_cells'],config['bucket']):
@@ -104,6 +107,9 @@ def policy_measure(model, dataset, indices, behavior, config, timings, verify=Fa
 
 
 def ppo_update(model,optimizer,games,behavior,config,*,profile=None,profile_steps=4,rehearsal=None,rehearsal_weight=0):
+    if config.get('actor_nonforced'):
+        return ppo_nonforced(model,optimizer,games,behavior,config,profile=profile,profile_steps=profile_steps,
+                             rehearsal=rehearsal,rehearsal_weight=rehearsal_weight)
     require(all(g['split']=='train' for g in games),'Held-out PPO data')
     require(model_id(model)==behavior.evaluator.model_id,'Collection model differs from learner')
     timings=Timings()
@@ -170,7 +176,104 @@ def ppo_update(model,optimizer,games,behavior,config,*,profile=None,profile_step
         learner_decisions=count,learner_trajectories=len({d[2] for d in data}),forced_decisions=int(dataset.forced.sum()),
         effective_batch_size=config['effective_batch_size'],microbatch_size=config['microbatch_size'],
         advantage=stats,kl_probe_rows=len(probe),kl_early_stop=stopped,gradient_clip_steps=clip_events,
-        timings=timings.report(),memory=memory(device),rehearsal_weight=rehearsal_weight)
+        timings=timings.report(),memory=memory(device),rehearsal_weight=rehearsal_weight,
+        rehearsal_active=demo is not None,rehearsal_rows=len(demo.data) if demo else 0)
+
+
+def phase_probe(dataset,indices,limit):
+    """Bounded nonforced probe covering phases; full final KL remains required."""
+    from collections import defaultdict
+    groups=defaultdict(list)
+    for i in indices: groups[dataset.rows[i]['view']['context']['phase']].append(i)
+    queues=[]
+    for phase in sorted(groups):
+        group=groups[phase];queues.append([group[j] for j in torch.randperm(len(group)).tolist()])
+    output=[]
+    while queues and len(output)<limit:
+        for q in list(queues):
+            if len(output)>=limit: break
+            output.append(q.pop())
+            if not q: queues.remove(q)
+    return output
+
+
+def ppo_nonforced(model,optimizer,games,behavior,config,*,profile=None,profile_steps=4,rehearsal=None,rehearsal_weight=0):
+    require(all(g['split']=='train' for g in games),'Held-out PPO data')
+    require(model_id(model)==behavior.evaluator.model_id,'Collection model differs from learner')
+    timings=Timings();device=next(model.parameters()).device
+    with timings.phase('ppo.prepare'):
+        data=prepared(games,lambda r:r['behavior']['policy_id']==behavior.policy_id)
+        require(all(d[0]['behavior']['kind']=='model' for d in data),'External actions in PPO')
+        ds=Dataset(data,device);demo=Dataset(rehearsal,device,policy=False) if rehearsal and rehearsal_weight else None
+    count=len(data);actor_ids=(~ds.forced).nonzero().flatten().cpu().tolist()
+    advantages=torch.zeros(count,device=device);model.eval()
+    # Verify likelihoods for ALL rows, including deterministic continuation rows.
+    policy_measure(model,ds,range(count),behavior,config,timings,True,advantages)
+    useful=advantages[actor_ids];mean=useful.mean() if actor_ids else torch.zeros((),device=device)
+    std=useful.std(unbiased=False) if actor_ids else torch.zeros((),device=device)
+    if config['normalize_advantages'] and actor_ids: advantages[actor_ids]=(useful-mean)/std.clamp_min(1e-8)
+    probe=phase_probe(ds,actor_ids,config['kl_probe_rows'])
+    epochs=[];steps=0;clips=0;stopped=False;rehearsal_steps=0
+    with profile_window(profile,device,profile_steps) as profiler:
+        for epoch in range(config['epochs']):
+            order=[actor_ids[j] for j in torch.randperm(len(actor_ids)).tolist()]
+            critic_order=torch.randperm(count).tolist();critic_cursor=0
+            actor_batches=[order[i:i+config['effective_batch_size']] for i in range(0,len(order),config['effective_batch_size'])]
+            if not actor_batches: actor_batches=[[] for _ in range(math.ceil(count/config['critic_batch_size']))]
+            actor_totals=torch.zeros(3,device=device);value_totals=torch.zeros(4,device=device)
+            actor_seen=critic_seen=0;norm=torch.zeros((),device=device);kl=0.0
+            for batch in actor_batches:
+                if critic_cursor>=count: critic_order=torch.randperm(count).tolist();critic_cursor=0
+                crit=critic_order[critic_cursor:critic_cursor+config['critic_batch_size']];critic_cursor+=len(crit)
+                optimizer.zero_grad(set_to_none=True);model.train()
+                with timings.phase('ppo.forward_backward'):
+                    for part in ds.microbatches(batch,config['microbatch_size'],config['max_candidate_cells'],config['bucket']):
+                        ix,inputs,q=ds.batch(part,behavior.exploration,behavior.temperature)
+                        with autocast(config,device): out=model(*inputs)
+                        p=probabilities(out[0],q,behavior.exploration,behavior.temperature)
+                        new=p.gather(1,ds.chosen[ix,None]).squeeze(1).clamp_min(1e-30)
+                        ratio=new/ds.old[ix];a=advantages[ix]
+                        actor=-torch.minimum(ratio*a,ratio.clamp(1-config['clip'],1+config['clip'])*a)
+                        entropy=-(p*p.clamp_min(1e-30).log()).sum(-1)
+                        ((actor-config['entropy_weight']*entropy).sum()/len(batch)).backward()
+                        actor_totals+=torch.stack([x.detach().sum() for x in (actor,entropy,((ratio-1).abs()>config['clip']).float())])
+                        actor_seen+=len(part)
+                    for part in ds.microbatches(crit,config['microbatch_size'],config['max_candidate_cells'],config['bucket']):
+                        ix,inputs,_=ds.batch(part)
+                        with autocast(config,device): out=model(*inputs)
+                        values=value_losses(out,tuple(t[ix] for t in ds.targets))
+                        (config['value_weight']*values[0].sum()/len(crit)).backward()
+                        value_totals+=torch.stack([v.detach().sum() for v in values]);critic_seen+=len(part)
+                    if demo:
+                        sample=torch.randint(len(demo.data),(min(config['effective_batch_size'],len(demo.data)),)).tolist()
+                        meaningful=[i for i in sample if not bool(demo.forced[i])]
+                        for part in demo.microbatches(meaningful,config['microbatch_size'],config['max_candidate_cells'],config['bucket']):
+                            ix,inputs,_=demo.batch(part)
+                            with autocast(config,device): out=model(*inputs)
+                            (rehearsal_weight*bc_loss(out[0],demo.chosen[ix]).sum()/len(meaningful)).backward()
+                        rehearsal_steps+=int(bool(meaningful))
+                with timings.phase('ppo.optimizer'):
+                    norm=torch.nn.utils.clip_grad_norm_(model.parameters(),config['grad_clip'],error_if_nonfinite=True)
+                    clips+=int(float(norm)>config['grad_clip']);optimizer.step();steps+=1
+                if profiler: profiler.step()
+                model.eval();kl=policy_measure(model,ds,probe,behavior,config,timings)
+                if kl>config['target_kl']: stopped=True;break
+            full=policy_measure(model,ds,actor_ids,behavior,config,timings)
+            aa=(actor_totals/max(1,actor_seen)).cpu().tolist();vv=(value_totals/max(1,critic_seen)).cpu().tolist()
+            epochs.append(dict(epoch=epoch,actor=aa[0],entropy=aa[1],clip_fraction=aa[2],value=vv[0],
+                win_loss=vv[1],rank_loss=vv[2],vp_loss=vv[3],post_update_kl=full,probe_kl=kl,
+                gradient_norm=float(norm),actor_positions=actor_seen,critic_positions=critic_seen,positions=actor_seen))
+            if stopped or full>config['target_kl']: stopped=True;break
+    return dict(format='nonforced-actor-ppo/2.1.0',epochs=epochs,optimizer_steps=steps,
+        learner_decisions=count,meaningful_decisions=len(actor_ids),forced_decisions=int(ds.forced.sum()),
+        learner_trajectories=len({d[2] for d in data}),effective_batch_size=config['effective_batch_size'],
+        microbatch_size=config['microbatch_size'],critic_batch_size=config['critic_batch_size'],
+        advantage=dict(mean=float(mean),std=float(std),scope='nonforced actor decisions'),
+        kl_probe_rows=len(probe),kl_early_stop=stopped,gradient_clip_steps=clips,
+        rehearsal_active=demo is not None,rehearsal_rows=len(demo.data) if demo else 0,
+        rehearsal_steps=rehearsal_steps,rehearsal_weight=rehearsal_weight if demo else 0,
+        phases={phase:sum(ds.rows[i]['view']['context']['phase']==phase for i in actor_ids)
+                for phase in sorted({r['view']['context']['phase'] for r in ds.rows})},timings=timings.report(),memory=memory(device))
 
 
 def supervised_epoch(model,optimizer,data,config,*,training=True,kind='bc',weight=1.0,profile=None):
@@ -181,6 +284,7 @@ def supervised_epoch(model,optimizer,data,config,*,training=True,kind='bc',weigh
     data=dataset.data
     count=len(dataset.data);order=torch.randperm(count).tolist() if training else list(range(count))
     totals=torch.zeros(8,device=device);steps=0;clips=0
+    diagnostics={}
     model.train(training)
     with torch.set_grad_enabled(training),profile_window(profile,device) as profiler:
         for start in range(0,count,config['effective_batch_size']):
@@ -206,19 +310,38 @@ def supervised_epoch(model,optimizer,data,config,*,training=True,kind='bc',weigh
                         policy=-(tar*logp).sum(-1)*torch.tensor(confidence,device=device)
                         natural=policy
                     value,win,rank,vp=value_losses(out,tuple(t[ix] for t in dataset.targets))
-                    loss=(weight*policy+config['value_weight']*value).sum()/len(batch)
-                    if training: loss.backward()
                     meaningful=~dataset.forced[ix]
+                    if config.get('actor_nonforced'):
+                        actor_count=sum(not bool(dataset.forced[i]) for i in batch)
+                        loss=weight*policy[meaningful].sum()/max(1,actor_count)+config['value_weight']*value.sum()/len(batch)
+                    else: loss=(weight*policy+config['value_weight']*value).sum()/len(batch)
+                    if training: loss.backward()
                     correct=((out[0].argmax(-1)==dataset.chosen[ix]) & meaningful).float()
                     totals+=torch.stack([x.detach().sum() for x in (policy,value,win,rank,vp,correct,meaningful.float(),natural)])
+                    if kind=='bc':
+                        predicted=out[0].detach().argmax(-1).cpu().tolist();losses=natural.detach().cpu().tolist()
+                        for j,i in enumerate(part):
+                            row=data[i][0]
+                            if len(row['choices'])==1: continue
+                            target=row['choices'][row['chosen']];guess=row['choices'][predicted[j]]
+                            key='|'.join([row['behavior']['policy_id'],row['view']['context']['era'],row['view']['context']['phase'],target['kind']])
+                            bucket=diagnostics.setdefault(key,dict(decisions=0,loss=0.,correct=0,family_correct=0))
+                            bucket['decisions']+=1;bucket['loss']+=losses[j];bucket['correct']+=predicted[j]==row['chosen']
+                            bucket['family_correct']+=(guess['kind'],guess.get('industry'))==(target['kind'],target.get('industry'))
             if training:
                 norm=torch.nn.utils.clip_grad_norm_(model.parameters(),config['grad_clip'],error_if_nonfinite=True)
                 clips+=int(float(norm)>config['grad_clip']);optimizer.step();steps+=1
             if profiler: profiler.step()
     p,v,w,r,vp,correct,meaningful,natural=totals.cpu().tolist()
-    return dict(policy_loss=p/count,natural_policy_loss=natural/count,value_loss=v/count,loss=(weight*p+config['value_weight']*v)/count,
+    actor_denominator=max(1,meaningful) if config.get('actor_nonforced') else count
+    return dict(policy_loss=p/actor_denominator,natural_policy_loss=natural/actor_denominator,value_loss=v/count,
+        loss=weight*p/actor_denominator+config['value_weight']*v/count,
         win_loss=w/count,rank_loss=r/count,vp_loss=vp/count,meaningful_top1=correct/max(1,meaningful),
         meaningful_decisions=int(meaningful),decisions=count,optimizer_steps=steps,gradient_clip_steps=clips,
+        root_action_top1=sum(v['correct'] for k,v in diagnostics.items() if '|action|' in k)/max(1,sum(v['decisions'] for k,v in diagnostics.items() if '|action|' in k)),
+        root_family_top1=sum(v['family_correct'] for k,v in diagnostics.items() if '|action|' in k)/max(1,sum(v['decisions'] for k,v in diagnostics.items() if '|action|' in k)),
+        by_teacher_era_phase_action={k:dict(decisions=v['decisions'],natural_policy_loss=v['loss']/v['decisions'],
+            top1=v['correct']/v['decisions'],family_top1=v['family_correct']/v['decisions']) for k,v in diagnostics.items()},
         timings=timings.report(),memory=memory(device))
 
 

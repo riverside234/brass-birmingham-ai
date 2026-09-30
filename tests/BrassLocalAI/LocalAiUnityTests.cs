@@ -3,6 +3,7 @@ using System.Collections;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Threading.Tasks;
 using BoardGameRules.Entities.Common;
 using BoardGameRules.Entities.Game;
 using BoardGameRules.Entities.Players;
@@ -98,6 +99,8 @@ public sealed class LocalAiUnityDriver : MonoBehaviour
     IEnumerator Cases()
     {
         yield return SceneManager.LoadSceneAsync("MenuScene"); yield return null;
+        var resourceChecks = AiExecutionResourceTests.Run(Check);
+        while (resourceChecks.MoveNext()) yield return resourceChecks.Current;
         router = new Router(); Utils.Global.Instance.Router = router;
         router.Initialize();
         // Unity 2019's Mono cannot open the same long paths supported by modern .NET.
@@ -314,9 +317,24 @@ public sealed class LocalAiUnityDriver : MonoBehaviour
             // Cancel a scheduled turn before it starts, then verify no delayed dispatch survives.
             var schedule = new PlayGamePresenter(router); schedule.StartAITurn(app.Metadata.PlayerMetadata[0]); LocalTurnBridge.CancelActive();
             yield return null; Check(!LocalTurnBridge.IsThinking && app.Game.Revision == revision, "cancel pending dispatch");
+            TaskCompletionSource<int> priorDevice = null;
+            bool initialQueueDelayTested = count == 2 && !intro && key == "balanced" && difficulty == "easy";
+            if (initialQueueDelayTested)
+            {
+                priorDevice = new TaskCompletionSource<int>();
+                BrassLegacyAI.Execution.AiExecutionScheduler.Submit(new BrassLegacyAI.Execution.DelegateAiExecutionBackend("preceding model device tail", token => priorDevice.Task));
+            }
             turn.PlayAITurn(); turn.PlayAITurn(); Check(LocalTurnBridge.IsThinking, "new strategy bridge starts");
+            Check(AiExecutionResources.IsComputing && Application.targetFrameRate == 30 && QualitySettings.vSyncCount == 0, "AI turn enters general computation resource policy");
             var startTime = Time.realtimeSinceStartup; bool probed = false, replanInjected = false; double injectedElapsed = 0;
             var observedBridge = UnityEngine.Object.FindObjectOfType<LocalTurnBridge>();
+            if (initialQueueDelayTested)
+            {
+                yield return null; yield return null;
+                Check(!Get<System.Diagnostics.Stopwatch>(observedBridge, "clock").IsRunning && Get<int>(observedBridge, "planningRequests") == 0,
+                    "initial allowance starts after preceding model retires and board preparation completes");
+                priorDevice.SetResult(0);
+            }
             while (LocalTurnBridge.IsThinking)
             {
                 var controls = aiView.GetComponentInChildren<AiTurnControls>();
@@ -352,6 +370,7 @@ public sealed class LocalAiUnityDriver : MonoBehaviour
                 yield return null;
             }
             Check(output.Saves == savesBefore + 1 && app.Game.Revision > revision, "exactly one end turn/save " + key);
+            Check(!AiExecutionResources.IsComputing && AiExecutionResources.ScopeCount == 0 && Application.targetFrameRate == 60 && QualitySettings.vSyncCount == 0, "AI completion restores foreground rendering synchronously");
             var committed = repository.Advanced.GameStorage.LoadEvents(app.Metadata.GameId, revision, app.Game.Revision);
             Check(committed.Count(e => e.Metadata.Revision > revision && e.GetType().Name == "ActionCountDecreased") == expectedActions, "one confirmation per planned action");
             var reloaded = repository.Load(app.Metadata.GameId);
@@ -360,7 +379,7 @@ public sealed class LocalAiUnityDriver : MonoBehaviour
             int requests = Get<int>(observedBridge, "planningRequests"); double remainingBudget = Get<double>(observedBridge, "lastRequestMilliseconds");
             Check(remainingBudget <= DifficultyCatalog.Milliseconds(difficulty), "no request receives a larger allowance than its actor");
             if (count == 2 && !intro && key == "balanced" && difficulty == "mid") Check(replanInjected && requests == 2 && remainingBudget <= Math.Max(0, DifficultyCatalog.Milliseconds(difficulty) - injectedElapsed) + 1, "stale second action replans only within the original turn deadline");
-            turns.Add(new { count, intro, key, difficulty, inputGuardTested = probed, humanTransitionTested = humanTransition, replanInjected, planningRequests = requests, lastRequestMilliseconds = remainingBudget, thinkingMilliseconds = DifficultyCatalog.Milliseconds(difficulty), workLimit = LocalTurnBridge.SearchWorkLimit, seconds = Time.realtimeSinceStartup - startTime });
+            turns.Add(new { count, intro, key, difficulty, inputGuardTested = probed, humanTransitionTested = humanTransition, replanInjected, initialQueueDelayTested, planningRequests = requests, lastRequestMilliseconds = remainingBudget, thinkingMilliseconds = DifficultyCatalog.Milliseconds(difficulty), workLimit = LocalTurnBridge.SearchWorkLimit, seconds = Time.realtimeSinceStartup - startTime });
             File.WriteAllText(Output + ".progress.json", JObject.FromObject(new { completed = turns.Count, total = 108, count, intro, key, difficulty }).ToString());
             if (humanTransition)
             {
@@ -393,14 +412,18 @@ public sealed class LocalAiUnityDriver : MonoBehaviour
             history.SetGame(reloaded); router.ShowView<IPlayAiTurnView>(); revision = reloaded.Game.Revision;
             turn.PlayAITurn(false); history.SetGame(reloaded); yield return null; yield return null;
             Check(reloaded.Game.Revision == revision && !LocalTurnBridge.IsThinking, "cancel running worker prevents late mutation");
+            Check(AiExecutionResources.ScopeCount == 0 && Application.targetFrameRate == 60, "game replacement restores computing resources despite worker retirement");
         }
+        float retirementDeadline = Time.realtimeSinceStartup + 10;
+        while (!BrassLegacyAI.Execution.AiExecutionScheduler.IsIdle && Time.realtimeSinceStartup < retirementDeadline) yield return null;
+        Check(BrassLegacyAI.Execution.AiExecutionScheduler.IsIdle && BrassLegacyAI.Execution.AiExecutionScheduler.Statistics().maximumRunning == 1, "all strategy jobs drain with one executing job at a time");
         Check(errors.Count == 0, "no unexpected native errors: " + String.Join("\n", errors));
     }
     void Update() { if (!done && Time.realtimeSinceStartup - started > 1800) Finish(new Exception("native integration watchdog")); }
     void Finish(Exception error)
     {
         done = true; LocalTurnBridge.CancelActive(); Application.logMessageReceived -= Log;
-        File.WriteAllText(Output, new JObject { ["passed"] = error == null, ["mode"] = Environment.GetCommandLineArgs().Contains("--brass-local-ai-smoke") ? "startup-menu-smoke" : "full", ["checks"] = checks, ["error"] = error == null ? null : error.ToString(), ["nativeErrors"] = JArray.FromObject(errors), ["environmentMessages"] = JArray.FromObject(environmentMessages), ["images"] = JArray.FromObject(images), ["turns"] = JArray.FromObject(turns), ["unity"] = Application.unityVersion }.ToString());
+        File.WriteAllText(Output, new JObject { ["passed"] = error == null, ["mode"] = Environment.GetCommandLineArgs().Contains("--brass-local-ai-smoke") ? "startup-menu-smoke" : "full", ["checks"] = checks, ["error"] = error == null ? null : error.ToString(), ["nativeErrors"] = JArray.FromObject(errors), ["environmentMessages"] = JArray.FromObject(environmentMessages), ["images"] = JArray.FromObject(images), ["turns"] = JArray.FromObject(turns), ["resourceTests"] = JObject.FromObject(new { passed = AiExecutionResourceTests.Passed, checks = AiExecutionResourceTests.Checks }), ["resourceMeasurements"] = AiExecutionResourceTests.Measurements == null ? null : JObject.FromObject(AiExecutionResourceTests.Measurements), ["executionStatistics"] = JObject.FromObject(BrassLegacyAI.Execution.AiExecutionScheduler.Statistics()), ["unity"] = Application.unityVersion }.ToString());
         Application.Quit(error == null ? 0 : 1);
     }
     void Capture(string file)

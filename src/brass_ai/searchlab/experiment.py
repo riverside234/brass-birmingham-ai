@@ -15,7 +15,8 @@ import torch
 from brass_ai.host import RulesHost
 from brass_ai.learning.checkpoint import load_checkpoint, save_checkpoint
 from brass_ai.learning.contracts import digest, project_path, read_json, require
-from brass_ai.learning.replay import write_shard, read_shards, split_for
+from brass_ai.learning.replay import split_for
+from brass_ai.recovery.replay import write_shard,read_shards,cache_receipt
 from brass_ai.qualification import grouped_interval
 from brass_ai.step5.league import seeds_for, write_json, pottery_metrics
 from brass_ai.step5.policy import NeuralPolicy
@@ -33,11 +34,11 @@ def neural_policy(model, device, config, *, exploration):
         evaluator=remote_evaluator(model,config))
 
 
-def make_policy(kind,model,root,device,config,opponents,mono=None):
+def make_policy(kind,model,root,device,config,opponents,mono=None,private_endpoint=None,replica=None):
     seconds=config['seconds']*(1-config['validation_reserve_fraction'])
     common=SearchConfig(seconds=seconds,proposals=config['proposals'],finalists=config['finalists'],
         pilot_samples=config['pilot_samples'],confirmation_samples=config['confirmation_samples'],turn_interval=1)
-    evaluator=remote_evaluator(model,config)
+    evaluator=remote_evaluator(model,config,private_endpoint)
     if kind=='s2':policy=SearchPolicy(model,root/'artifacts/r1-host/guarded',device,config=common,mono=mono,focus='neutral',opponents=opponents,evaluator=evaluator)
     elif kind=='s3':policy=S3Policy(model,root/'artifacts/r1-host/guarded',device,config=common,mono=mono,
         focus='neutral',opponents=opponents,tree=TreeConfig(simulations=config['simulations'],future_turns=config['future_turns']),evaluator=evaluator)
@@ -45,8 +46,18 @@ def make_policy(kind,model,root,device,config,opponents,mono=None):
         require(kind=='r4','Unknown variant')
         from .ismcts import OpenSpielPolicy,SpielSearchConfig
         policy=OpenSpielPolicy(model,root,device,config=SpielSearchConfig(seconds=seconds,
-            simulations=config['simulations'],future_turns=config['future_turns'],proposals=config['proposals']),
+            simulations=config['simulations'] if replica is None else config['simulations']//config['search_workers']+(replica<config['simulations']%config['search_workers']),
+            future_turns=config['future_turns'],proposals=config['proposals']),
             mono=mono,focus='neutral',opponents=opponents,evaluator=evaluator)
+    if replica is None and config.get('search_workers',1)>1:
+        from brass_ai.recovery.parallel import parallelize
+        from brass_ai.recovery.inference import RemoteEvaluator
+        def factory(i):
+            endpoint=_WORKER['search_endpoints'][i]
+            private=[NeuralPolicy(None,exploration=p.exploration,focus='neutral',
+                evaluator=RemoteEvaluator(endpoint,p.evaluator.model_id,config['batch_size'],config['max_candidate_cells'])) for p in opponents]
+            return make_policy(kind,model,root,device,config,private,mono,endpoint,i)
+        policy=parallelize(policy,kind,config['search_workers'],config['cpu_role'],factory)
     # The evaluator is private to this policy; the optional service groups
     # requests by frozen model identity across independent search workers.
     policy.base.evaluator.batch_size=config.get('batch_size',32)
@@ -130,12 +141,12 @@ _WORKER = {}
 _LAST_INFERENCE = {}
 
 
-def remote_evaluator(model,config):
+def remote_evaluator(model,config,endpoint=None):
     if not _WORKER.get('endpoint'): return None
     from brass_ai.recovery.inference import RemoteEvaluator
     from brass_ai.learning.batching import model_id
     identity=_WORKER['model_ids'].get(id(model)) or model_id(model)
-    return RemoteEvaluator(_WORKER['endpoint'],identity,config['batch_size'],config['max_candidate_cells'])
+    return RemoteEvaluator(endpoint or _WORKER['endpoint'],identity,config['batch_size'],config['max_candidate_cells'])
 
 
 def experiment_jobs(function,jobs,workers,root,checkpoint,references,config,device,mono):
@@ -151,7 +162,7 @@ def experiment_jobs(function,jobs,workers,root,checkpoint,references,config,devi
             path=project_path(root,entry['path'])
             require(sha(path)==entry['sha256'],'Frozen experiment source changed')
             require(service.register_checkpoint(path)==entry['model_id'],'Experiment model differs')
-        lease=service.channels(workers)
+        lease=service.channels(workers*(1+config.get('search_workers',0)))
         try:
             yield from run_jobs(function,jobs,workers,init_worker,args+(lease,))
         finally:
@@ -168,6 +179,7 @@ def init_worker(root,checkpoint,references,config,device,mono,lease=None):
     """Process-local frozen weights; hosts, trees and contexts are never shared."""
     root=Path(root);torch.set_num_threads(config['threads'])
     endpoint=lease.acquire() if lease else None
+    search_endpoints=[lease.acquire() for _ in range(config.get('search_workers',0))] if lease else []
     if endpoint: device='cpu'
     if device=='cuda':torch.cuda.reset_peak_memory_stats()
     def load(entry):
@@ -178,7 +190,7 @@ def init_worker(root,checkpoint,references,config,device,mono,lease=None):
         return model.eval().requires_grad_(False)
     _WORKER.clear()
     _WORKER.update(root=root,model=load(checkpoint),references=[load(p) for p in references],
-                   config=config,device=device,mono=mono,endpoint=endpoint)
+                   config=config,device=device,mono=mono,endpoint=endpoint,search_endpoints=search_endpoints)
     _WORKER['model_ids']={id(_WORKER['model']):checkpoint['model_id']}
     _WORKER['model_ids'].update({id(m):e['model_id'] for m,e in zip(_WORKER['references'],references)})
 
@@ -253,6 +265,8 @@ def compare(root,checkpoint,references,output,config,*,setups=None,seed=3910000,
     else:
         require(not directory.exists() or not any(directory.iterdir()),'Use a new experiment directory, separate from main training')
         write_json(spec_path,spec)
+    if (directory/'report.json').exists() and read_json(directory/'report.json').get('raw_records_pruned'):
+        return dict(read_json(directory/'report.json'),cached_summary=True)
     rows=[];evidence={};worker_evidence={};began=time.monotonic()
     jobs=[dict(j,directory=str(directory),spec=digest(spec)) for j in comparison_jobs(seeds,variants)]
     workers=min(config['workers'],len(jobs))
@@ -269,12 +283,16 @@ def compare(root,checkpoint,references,output,config,*,setups=None,seed=3910000,
         summary=paired_summary(rows,variants,setups,partition,config['promotion_min_setups'],workers=config['workers']),
         evidence=evidence,inference=_LAST_INFERENCE,
         execution=dict(workers=workers,start_method='spawn' if workers>1 else 'in-process',
+            game_workers=workers,search_workers=config.get('search_workers',1),cpu_role=config.get('cpu_role','reference'),
             seconds=time.monotonic()-began,worker_evidence=worker_evidence,
             mode='parallel-screening' if config['workers']>1 else 'serial-timing',
             note='Cached jobs inflate resume throughput; parallel timing cannot qualify promotion.'))
     if failures:
         for result in report['summary'].values():result['eligible']=False
     write_json(directory/'report.json',report)
+    if config.get('retention',{}).get('enabled'):
+        from brass_ai.recovery.retention import prune
+        report['retention']=prune(root,directory,config['retention'],apply=True)
     return report
 
 
@@ -329,10 +347,17 @@ def distill_job(job):
         rollouts=[neural_policy(model,device,config,exploration=.05)]
         with ExitStack() as stack:
             policy=make_policy('s3',model,root,device,config,rollouts,mono);stack.callback(policy.close)
-            episodes=collect_games(root/'artifacts/r1-host/guarded',[job['seed']],[policy]*4,
-                workers=1,sampling_seed=job['sampling_seed'],mono=mono)
+            if 'execution' in config:
+                from brass_ai.recovery.execution import run_game
+                from brass_ai.recovery.telemetry import Timings
+                with RulesHost(root/'artifacts/r1-host/guarded',mono=mono) as host:
+                    episodes=[run_game(host,dict(seed=job['seed'],sampling_seed=job['sampling_seed']),[policy]*4,Timings(),2000)]
+            else:
+                episodes=collect_games(root/'artifacts/r1-host/guarded',[job['seed']],[policy]*4,
+                    workers=1,sampling_seed=job['sampling_seed'],mono=mono)
             write_shard(path,episodes,provenance);telemetry=policy.telemetry
     record=dict(provenance=provenance,replay=path.name,replay_sha256=sha(path),
+                features=cache_receipt(path),
                 telemetry=telemetry,worker=worker_metrics())
     write_json(record_path,record)
     return record
@@ -354,8 +379,9 @@ def distill_s3(root,checkpoint,output,config,*,games=None,seed=4920000,device='c
     if (directory/'report.json').exists():
         report=read_json(directory/'report.json')
         require(report['spec']==digest(spec) and report['candidate_sha256']==sha(directory/'candidate.pt'),'S3 result changed')
-        for record in report['collection']:
-            require(sha(directory/record['replay'])==record['replay_sha256'],'S3 teacher replay changed')
+        if not report.get('raw_records_pruned'):
+            for record in report['collection']:
+                require(sha(directory/record['replay'])==record['replay_sha256'],'S3 teacher replay changed')
         return report
     jobs=[dict(seed=s,sampling_seed=seed*7+i,directory=str(directory),spec=digest(spec)) for i,s in enumerate(seeds)]
     workers=min(games,config['distill_workers']);began=time.monotonic();records=[]
@@ -366,7 +392,8 @@ def distill_s3(root,checkpoint,output,config,*,games=None,seed=4920000,device='c
     finally:_WORKER.clear()
     collection_seconds=time.monotonic()-began
     records.sort(key=lambda r:r['provenance']['seed'])
-    episodes=read_shards([directory/r['replay'] for r in records],partition='train')
+    episodes=read_shards([directory/r['replay'] for r in records],partition='train',
+        receipts={str(directory/r['replay']):r.get('features') for r in records})
     require(len(episodes)==games and len({g['setup_group'] for g in episodes})==games,'Incomplete or duplicate teacher collection')
     require(sha(project_path(root,checkpoint))==source['sha256'],'Source training checkpoint changed')
     model,raw=load_checkpoint(project_path(root,checkpoint),device=device)
@@ -388,11 +415,16 @@ def distill_s3(root,checkpoint,output,config,*,games=None,seed=4920000,device='c
         source_unchanged=True,promoted=False,collection=records,initial_sha256=source['sha256'],
         candidate_sha256=sha(directory/'candidate.pt'),config=config,device=device,implementation=spec['implementation'],
         execution=dict(workers=workers,start_method='spawn' if workers>1 else 'in-process',games=games,
+            game_workers=workers,search_workers=config.get('search_workers',1),cpu_role=config.get('cpu_role','reference'),
             collection_seconds=collection_seconds,update_seconds=update_seconds,
             update_cuda_peak_allocated_bytes=torch.cuda.max_memory_allocated() if device=='cuda' else None,
             note='Cached games are not fresh throughput. Central inference is enabled only by execution schema 1.2.0.'))
     report['inference']=_LAST_INFERENCE
-    write_json(directory/'report.json',report);return report
+    write_json(directory/'report.json',report)
+    if config.get('retention',{}).get('enabled'):
+        from brass_ai.recovery.retention import prune
+        report['retention']=prune(root,directory,config['retention'],apply=True)
+    return report
 
 
 def smoke_job(variant):

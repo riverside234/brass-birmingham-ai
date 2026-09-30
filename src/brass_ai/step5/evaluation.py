@@ -52,7 +52,7 @@ def validate_evaluation_config(config):
     expected = {'format', 'players', 'host', 'setups', 'seed', 'partition', 'workers', 'batch_size',
                 'max_candidate_cells', 'threads', 'parallel_hosts', 'legacy_workers', 'search_workers',
                 'include_legacy', 'use_search', 'focus', 'search'}
-    if config.get('format') == 'step5-evaluation-config/1.1.0':
+    if config.get('format') in ('step5-evaluation-config/1.1.0','step5-evaluation-config/1.2.0'):
         from brass_ai.recovery.config import execution_config
         expected |= {'execution','panel'}
         execution_config(config['execution'])
@@ -63,8 +63,18 @@ def validate_evaluation_config(config):
             config['batch_size']==ex['batch_size'] and config['max_candidate_cells']==ex['max_candidate_cells'],
             'Evaluation aliases differ from central execution config')
         require(config['parallel_hosts'],'Schema 1.1.0 uses private spawned parallel hosts')
+    if config.get('format')=='step5-evaluation-config/1.2.0':
+        from brass_ai.recovery.config import RETENTION,bounded_fields,legacy_budget_config
+        expected|={'lineups','retention','legacy_budget'}
+        require(type(config['lineups']) is list and config['lineups'] and len(set(config['lineups']))==len(config['lineups']) and
+            set(config['lineups'])<={'recent-neural','mixed-neural','mixed-v3','heldout-pottery-v3'},'Invalid explicit lineups')
+        require(config['include_legacy']==any(n.endswith('v3') for n in config['lineups']),'Legacy flag differs from selected lineups')
+        require('heldout-pottery-v3' not in config['lineups'] or config['panel']=='full','Holdout belongs to formal panel')
+        bounded_fields(config['retention'],RETENTION,'retention');legacy_budget_config(config['legacy_budget'])
+        require(max(config['execution'].get('search_workers_per_turn',1),config['legacy_budget']['search_workers'])*
+            config['legacy_workers']<=config['legacy_budget']['global_workers'],'Evaluation searches exceed global CPU allowance')
     require(set(config) == expected, 'Unknown or missing evaluation config field')
-    require(config['format'] in ('step5-evaluation-config/1.0.0','step5-evaluation-config/1.1.0') and config['players'] == 4,
+    require(config['format'] in ('step5-evaluation-config/1.0.0','step5-evaluation-config/1.1.0','step5-evaluation-config/1.2.0') and config['players'] == 4,
             'Evaluation requires the four-player config')
     for key in ('setups', 'workers', 'batch_size', 'max_candidate_cells', 'threads', 'legacy_workers', 'search_workers'):
         require(type(config[key]) is int and config[key] > 0, 'Invalid evaluation ' + key)
@@ -80,13 +90,16 @@ def validate_evaluation_config(config):
 def evaluation_config(config, **overrides):
     if config.get('format','').startswith('step5-evaluation-config/'):
         result = dict(config)
-    elif config.get('format') == 'step5-training/2.0.0':
+    elif config.get('format') in ('step5-training/2.0.0','step5-training/2.1.0'):
         result = read(SOURCE_ROOT / 'configs/step5/development-evaluation.json')
         result.update(host=config['host'],threads=config['threads'],search=config['search'],
             execution=config['execution'])
         ex=config['execution']
         result.update(workers=ex['processes']*ex['hosts_per_process'],legacy_workers=ex['heavy_processes'],
             search_workers=ex['heavy_processes'],batch_size=ex['batch_size'],max_candidate_cells=ex['max_candidate_cells'])
+        if config['format']=='step5-training/2.1.0': result.update(retention=config['retention'],legacy_budget=config['legacy_budget'])
+        elif result.get('format')=='step5-evaluation-config/1.2.0':
+            result['legacy_budget']=dict(result['legacy_budget'],role='reference')
     else:
         # Explicit older --config lab/smoke paths retain their small defaults.
         # The CLI now chooses evaluation.json when no path is supplied.
@@ -98,6 +111,11 @@ def evaluation_config(config, **overrides):
                       parallel_hosts=config.get('parallel_hosts', False),
                       search_workers=config.get('search_workers', 1), legacy_workers=config['workers'])
     result.update({key: value for key, value in overrides.items() if value is not None})
+    if 'lineups' in result and overrides.get('lineups') is None and overrides.get('include_legacy') is not None:
+        result['lineups']=[n for n in result['lineups'] if not n.endswith('v3')]
+        if result['include_legacy']:
+            result['lineups'].append('mixed-v3')
+            if result['panel']=='full': result['lineups'].append('heldout-pottery-v3')
     return validate_evaluation_config(result)
 
 
@@ -137,11 +155,12 @@ def check_evaluation_batch(games, jobs, candidate_id, partition):
 
 def evaluate(root, output, candidate_path, references, config, *, setups=None, seed=None,
              partition=None, include_legacy=None, device='cpu', mono=None,
-             search=None, focus=None):
-    if config.get('format') in ('step5-evaluation-config/1.1.0','step5-training/2.0.0'):
+             search=None, focus=None,lineups=None):
+    if config.get('format') in ('step5-evaluation-config/1.1.0','step5-evaluation-config/1.2.0','step5-training/2.0.0','step5-training/2.1.0'):
         from brass_ai.recovery.evaluation import evaluate as recovery_evaluate
         return recovery_evaluate(root,output,candidate_path,references,config,setups=setups,seed=seed,
-            partition=partition,include_legacy=include_legacy,device=device,mono=mono,search=search,focus=focus)
+            partition=partition,include_legacy=include_legacy,device=device,mono=mono,search=search,focus=focus,lineups=lineups)
+    require(lineups is None,'Explicit lineups require revised evaluation config')
     root = Path(root).resolve(); directory = project_path(root, output)
     config = evaluation_config(config, setups=setups, seed=seed, partition=partition,
                                include_legacy=include_legacy, use_search=search, focus=focus)

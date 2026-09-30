@@ -45,6 +45,14 @@ def parser():
     bc.add_argument('--min-epochs',type=int,default=3)
     bc.add_argument('--patience',type=int,default=2)
     bc.add_argument('--learning-rate',type=float,default=1e-4)
+    bc.add_argument('--batch-size',type=int,default=1024,help='Effective supervised batch; memory microbatch stays in config')
+    sub.add_parser('lab-bank-prepare')
+    calibration=sub.add_parser('lab-calibrate');calibration.add_argument('--games',type=int,default=25)
+    calibration.add_argument('--output')
+    cleanup=sub.add_parser('cleanup');cleanup.add_argument('--run',required=True)
+    cleanup.add_argument('--apply',action='store_true');cleanup.add_argument('--purge',action='store_true')
+    restore=sub.add_parser('restore');restore.add_argument('--manifest',required=True)
+    pin=sub.add_parser('pin');pin.add_argument('--run',required=True);pin.add_argument('--paths',nargs='+',required=True)
     evaluation = sub.add_parser('evaluate')
     evaluation.add_argument('--candidate', required=True)
     evaluation.add_argument('--references', nargs='+', required=True)
@@ -55,6 +63,7 @@ def parser():
     evaluation.add_argument('--include-legacy', action=argparse.BooleanOptionalAction, default=None)
     evaluation.add_argument('--search', action=argparse.BooleanOptionalAction, default=None)
     evaluation.add_argument('--focus')
+    evaluation.add_argument('--lineups',nargs='+',choices=['recent-neural','mixed-neural','mixed-v3','heldout-pottery-v3'])
     meta = sub.add_parser('meta-train')
     meta.add_argument('--initial', required=True); meta.add_argument('--references', nargs='+', required=True)
     meta.add_argument('--run', default='artifacts/step5/meta')
@@ -86,7 +95,7 @@ def main(argv=None):
         validate_config(config)
     torch.set_num_threads(config['threads'])
     if a.command in ('meta-train','meta-evaluate'):
-        require(config['format']!='step5-training/2.0.0',
+        require(config['format'] not in ('step5-training/2.0.0','step5-training/2.1.0'),
             'Meta-RL uses the separate historical recipe; pass configs/step5/previous-lab.json')
     if a.command == 'assets':
         result = export_assets(root, bundle=a.bundle)
@@ -96,12 +105,39 @@ def main(argv=None):
         result = preflight(root, device=a.device, mono=a.mono, record_parity=a.record_parity)
     elif a.command == 'promote':
         result = promote(root, a.checkpoint, a.report, a.output)
+    elif a.command=='cleanup':
+        from brass_ai.recovery.retention import prune,purge,active,owned
+        from brass_ai.recovery.config import RETENTION
+        _,run=owned(root,a.run);require(not active(run),'Cannot clean an active run')
+        result=prune(root,run,config.get('retention',RETENTION),apply=a.apply)
+        require(not a.purge or a.apply,'Purge requires --apply')
+        if a.purge: result['purge']=purge(root,run,config.get('retention',RETENTION))
+    elif a.command=='restore':
+        from brass_ai.recovery.retention import restore
+        result=restore(root,a.manifest)
+    elif a.command=='pin':
+        from brass_ai.recovery.retention import owned,safe,active
+        from brass_ai.step5.league import write_json
+        _,run=owned(root,a.run);require(not active(run),'Cannot change pins for an active run')
+        paths=[safe(run,project_path(root,p)) for p in a.paths]
+        require(all(p.is_file() for p in paths),'Pin files must exist inside the owned run')
+        path=run/'pins.json';previous=read_json(path) if path.exists() else dict(paths=[])
+        previous['paths']=sorted(set(previous['paths']+[p.relative_to(root).as_posix() for p in paths]))
+        write_json(path,previous);result=previous
+    elif a.command=='lab-bank-prepare':
+        from brass_ai.recovery.legacy_search import prepare
+        result=prepare(root)
     else:
         require_preflight(root)
-        if a.command == 'demo-generate':
+        if a.command=='lab-calibrate':
+            from brass_ai.recovery.legacy_search import calibrate
+            require(config.get('legacy_budget',{}).get('role')=='lab','Select a lab budget config')
+            result=calibrate(root,config['legacy_budget'],games=a.games,mono=a.mono,output=a.output)
+            result={k:result[k] for k in ('format','qualification_games','training_eligible','work_ratio','limitation')}
+        elif a.command == 'demo-generate':
             from brass_ai.recovery.demonstrations import generate
             from brass_ai.recovery.config import EXECUTION
-            result=generate(root,a.output,a.games,config.get('execution',EXECUTION),seed=a.seed,mono=a.mono,partition=a.partition)
+            result=generate(root,a.output,a.games,config.get('execution',EXECUTION),seed=a.seed,mono=a.mono,partition=a.partition,budget=config.get('legacy_budget'))
             result={k:result[k] for k in ('format','games','eligible_for_bc','note')}
         elif a.command == 'demo-audit':
             from brass_ai.recovery.demonstrations import audit
@@ -110,15 +146,15 @@ def main(argv=None):
                 path=project_path(root,pattern)
                 paths.extend(root.glob(path.relative_to(root).as_posix()))
             require(paths,'No replay paths matched')
-            manifest=audit(root,paths,a.output,mono=a.mono)
+            manifest=audit(root,paths,a.output,mono=a.mono,workers=config.get('audit_workers',1),budget=config.get('legacy_budget'))
             result=dict(manifest=str(project_path(root,a.output)),partitions=manifest['partitions'],
                 eligible_games=len(manifest['entries']),excluded=len(manifest['excluded']))
         elif a.command == 'imitate':
             from brass_ai.recovery.demonstrations import train_bc
             from brass_ai.recovery.config import UPDATE
-            update=dict(config.get('update',UPDATE),effective_batch_size=1024,value_weight=.5)
+            update=dict(config.get('update',UPDATE),effective_batch_size=a.batch_size,value_weight=.5)
             result=train_bc(root,a.run,a.manifest,a.initial,update,device=a.device,
-                epochs=a.epochs,min_epochs=a.min_epochs,patience=a.patience,lr=a.learning_rate)
+                epochs=a.epochs,min_epochs=a.min_epochs,patience=a.patience,lr=a.learning_rate,retention=config.get('retention'))
             result={k:result[k] for k in ('candidate','candidate_sha256','epochs','promoted')}
         elif a.command == 'train':
             result = train(root, a.run, config, iterations=a.iterations, device=a.device, initial=a.initial,
@@ -127,7 +163,7 @@ def main(argv=None):
         elif a.command == 'evaluate':
             result = evaluate(root, a.output, a.candidate, a.references, config, setups=a.setups, seed=a.seed,
                 partition=a.partition, include_legacy=a.include_legacy, device=a.device, mono=a.mono,
-                search=a.search, focus=a.focus)
+                search=a.search, focus=a.focus,lineups=a.lineups)
             result = {k: result[k] for k in ('promotion_eligible', 'failed_games', 'candidate_sha256')}
         elif a.command == 'meta-train':
             result = meta_train(root, a.run, a.initial, a.references, config, iterations=a.iterations, tasks=a.tasks,

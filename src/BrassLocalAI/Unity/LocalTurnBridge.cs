@@ -16,6 +16,7 @@ using InterfaceAdapters.Game.PlayerActions;
 using InterfaceAdapters.Routing;
 using Newtonsoft.Json.Linq;
 using UnityEngine;
+using BrassLegacyAI.Execution;
 
 namespace BrassLegacyAI
 {
@@ -30,6 +31,8 @@ namespace BrassLegacyAI
         Profile profile;
         JObject composition;
         TurnCoordinator coordinator;
+        AiExecutionScope resources;
+        JObject pendingState;
         Ticket ticket;
         IntentState intent;
         readonly Queue<string[]> continuation = new Queue<string[]>();
@@ -51,10 +54,15 @@ namespace BrassLegacyAI
         {
             generation++;
             if (!ReferenceEquals(active, null)) CancelUnity();
+            // The history/menu hooks also own future backend scopes. The guarded
+            // non-inlined call preserves the managed, non-Unity rules harness.
+            if (AiExecutionResources.ScopeCount > 0) CancelResourcesUnity();
         }
         // History is also used by the managed rules harness without a Unity player.
         [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
-        static void CancelUnity() { active.stopped = true; active.coordinator?.Dispose(); Destroy(active.gameObject); active = null; }
+        static void CancelUnity() { active.Stop(); }
+        [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
+        static void CancelResourcesUnity() { AiExecutionResources.Reset(); }
         public static void OnSetGame(BrassGameHistory owner, BrassApplicationGame game) { CancelActive(); }
         public static void OnMoveHistory(BrassGameHistory owner, int revision) { CancelActive(); }
         public static void OnExit(ExitToMenuUseCase owner) { CancelActive(); }
@@ -116,6 +124,15 @@ namespace BrassLegacyAI
         }
         void StartRequest(JObject state)
         {
+            coordinator?.Dispose(); coordinator = null;
+            if (resources == null) resources = AiExecutionResources.BeginComputation();
+            else resources.WaitingForExecution();
+            pendingState = state;
+            if (AiExecutionScheduler.IsIdle) LaunchRequest();
+        }
+        void LaunchRequest()
+        {
+            var state = pendingState; pendingState = null;
             var events = Events(); var host = Host.Capture(app, events);
             if (host.Phase != "action" || app.Game.TurnFlow.CurrentAction != null) throw new InvalidOperationException("AI planning requires a completed action boundary.");
             var view = (JObject)Wire.Token(host.Observe(actor));
@@ -127,6 +144,7 @@ namespace BrassLegacyAI
             ticket.profile_fingerprint = (string)LocalGameState.Assignment(state, actor)["profile_sha256"];
             ticket.generation = startedGeneration;
             coordinator = new TurnCoordinator(ticket, view, host.Choices(), cfg, composition, LocalGameState.Intent(state, actor, app.Game.Revision, events));
+            resources.Observe(coordinator.Execution);
         }
         void Update()
         {
@@ -136,12 +154,16 @@ namespace BrassLegacyAI
             { Stop(); return; }
             try
             {
+                if (pendingState != null)
+                {
+                    if (controls != null) controls.SetApplying(false);
+                    if (AiExecutionScheduler.IsIdle) LaunchRequest();
+                    return;
+                }
                 if (controls != null) controls.SetApplying(continuation.Count > 0);
                 if (continuation.Count == 0)
                 {
-                    var now = JObject.FromObject(ticket).ToObject<Ticket>();
-                    now.revision = app.Game.Revision; now.actor = actor; now.generation = generation;
-                    var plan = coordinator.Take(now);
+                    var plan = coordinator.Take(ticket, app.Game.Revision, actor, generation);
                     if (plan == null)
                     {
                         if (coordinator.Finished && !coordinator.Ready) throw new InvalidOperationException(coordinator.Failure ?? "The AI did not produce a complete turn.");
@@ -152,13 +174,16 @@ namespace BrassLegacyAI
                     intent = plan.intent;
                     if (continuation.Count == 0) throw new InvalidOperationException("The AI returned an empty turn.");
                 }
+                // Restore rendering and registered effects before committing or
+                // dispatching move/replay presentation, even on a deadline take.
+                resources.Presenting();
                 var path = continuation.Dequeue(); var events = Events(); var live = Host.Capture(app, events);
                 // Validate before any mutation. A stale continuation can be replaced within the same allowance.
                 try { live.ValidateLiveAction(path, composition); }
                 catch (InvalidOperationException)
                 {
                     if (++replans > 1) throw;
-                    continuation.Clear(); coordinator.Dispose(); StartRequest(LocalGameState.Read(app.Metadata)); return;
+                    continuation.Clear(); StartRequest(LocalGameState.Read(app.Metadata)); return;
                 }
                 new LegacyBehavior(app, () => live.LiveCommit(path, composition)).GetNextAIMove(app)();
                 revision = app.Game.Revision;
@@ -168,7 +193,7 @@ namespace BrassLegacyAI
                     bool advance = endTurn; var output = presenter;
                     Stop(); if (advance) output.EndTurn(); return;
                 }
-                if (continuation.Count == 0) { coordinator.Dispose(); StartRequest(LocalGameState.Read(app.Metadata)); }
+                if (continuation.Count == 0) StartRequest(LocalGameState.Read(app.Metadata));
             }
             catch (Exception error)
             {
@@ -178,16 +203,19 @@ namespace BrassLegacyAI
         }
         void Stop()
         {
-            stopped = true; coordinator?.Dispose();
+            stopped = true; coordinator?.Dispose(); coordinator = null;
+            resources?.Dispose(); resources = null; pendingState = null; continuation.Clear();
             if (ReferenceEquals(active, this)) active = null;
             if (controls != null) Destroy(controls.gameObject);
             Destroy(gameObject);
         }
         void OnDestroy()
         {
-            stopped = true; coordinator?.Dispose();
+            stopped = true; coordinator?.Dispose(); coordinator = null;
+            resources?.Dispose(); resources = null; pendingState = null; continuation.Clear();
             if (ReferenceEquals(active, this)) active = null;
             if (controls != null) Destroy(controls.gameObject);
+            app = null; history = null; presenter = null; router = null; composition = null; intent = null;
         }
     }
     public sealed class AiTurnDispatch : MonoBehaviour

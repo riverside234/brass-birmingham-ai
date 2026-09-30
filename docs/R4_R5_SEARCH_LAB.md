@@ -1,17 +1,18 @@
 # R4 / R5 additional search experiments
 
-29 September 2026. R4 and S3 are implemented as additional experiments alongside
+30 September 2026. R4 and S3 are implemented as additional experiments alongside
 Step 5. Running them does not resume, edit or replace the current population
 trainer, its configuration, its frozen v3 opponents or its checkpoints. Their
 entry point is `scripts/r4r5.py`, with separate outputs under
 `/data/not_backed_up/yxu209/ai-training/artifacts/searchlab/`.
 
 Implementation is required; promotion is conditional. A working search is not
-evidence of stronger play. See [executed local checks](R4_R5_EXIT_CHECKS.md).
+evidence of stronger play. See [original local checks](R4_R5_EXIT_CHECKS.md) and
+[the current recovery revision checks](TRAINING_REVISION_1_1_EXIT_CHECKS.md).
 
 The lab preset now targets the reported **64 logical CPUs and 90 GB GPU**. It
 runs comparisons and S3 teacher collection in separate spawned processes, with
-larger game counts and distillation minibatches. The **quick smoke experiment**
+smaller routine panels and effective distillation minibatches. The **quick smoke experiment**
 still makes just one decision per variant. It is the quick execution check;
 the larger commands below are deliberate additional experiments using frozen
 Step 5 checkpoints. See [scaling check results](R4_R5_SCALING_CHECKS.md).
@@ -20,7 +21,7 @@ Step 5 checkpoints. See [scaling check results](R4_R5_SCALING_CHECKS.md).
 
 | Variant | Decisions and information | Purpose |
 | --- | --- | --- |
-| S2 control | Existing complete-turn proposals, matched hidden worlds, independently masked opponent replies, fresh finalist confirmation | Keep the current training/search baseline unchanged |
+| S2 control | Complete-turn proposals, matched hidden worlds, independently masked opponent replies, fresh finalist confirmation | Same baseline interfaces; the new lab variant distributes proposals/worlds over private replicas |
 | R4 OpenSpiel | Actual OpenSpiel ISMCTS node/prior/PUCT and resampling interfaces; root information-state decisions; fixed masked opponent policies; four-seat returns | Independent algorithm comparison using the same rules and model |
 | R5 S3 | Complete root-turn plans, root sampling, future root action/observation nodes, bounded particle histories, own-seat UCT selection, four-seat backups, fresh confirmation | Test whether one or two additional future root turns justify their cost |
 
@@ -90,32 +91,38 @@ Pass global `--config /data/not_backed_up/yxu209/ai-training/configs/searchlab/s
 
 | Setting | Larger default | Purpose |
 | --- | --- | --- |
-| `setups` | **64** | Held-out setups, each with four seat rotations and S2/R4/S3: **768 games**. |
+| `setups` | **2** | Development screen: four rotations and S2/R4/S3, **24 games**. |
 | `workers` | **8** | Independent comparison processes, each running one game at a time. |
-| `distill_games` | **64** | Fresh train-partition games for the separate S3 teacher experiment. |
+| `distill_games` | **8** | Fresh train-partition games for the separate S3 teacher experiment. |
 | `distill_workers` | **8** | Independent S3 teacher processes; all four seats use frozen S3 policies. |
 | `threads` | **1** | PyTorch CPU threads per search process. |
-| `simulations` | **128** | R4/S3 work cap, still bounded by the same whole-turn clock. S2 has its existing proposal/sample limits. |
+| `simulations` | **128** | Aggregate R4/S3 work cap across replicas; never 128 per replica. |
+| `search_workers` | **4** | Private search replicas within each turn, separate from concurrent games. |
+| `global_search_workers` | **32** | Eight concurrent games × four replicas; reject oversubscribed presets. |
+| `cpu_role` | **lab** | Separate identity from `laptop.json` (one game/replica, three seconds). |
 | `batch_size` | **64** | Shared same-model inference batch limit. |
 | `update.effective_batch_size` | **1024** | Optimizer batch for revised S3 distillation. |
 | `update.microbatch_size` | **512** | Memory microbatch, also bounded by candidate cells. |
 | `max_candidate_cells` | **131072** | Bound on padded legal-choice batches; oversized minibatches split without dropping choices. |
 | `distill_steps` | **8** | Update steps after completed teacher collection. |
-| `seconds` | **3** | Whole-turn allowance, shared by both actions; override for 1/3/10-second comparisons. |
+| `seconds` | **1** | Initial lab target, shared by both actions; compare three seconds if fresh confirmation is scarce. |
 | `future_turns` | **1** | Initial R4/S3 future-root-turn horizon; compare two separately. |
 
-The default now uses schema `searchlab-experiment/1.2.0`. Search workers retain
+The default now uses schema `searchlab-experiment/1.3.0`. Search workers retain
 private CPU models for identity/context, rules hosts, trees and RNG contexts;
 one coordinator service owns device models and dynamically batches same-model
-requests. Processes use `spawn` on Linux and Windows. Each game gets fresh
+requests. S2 distributes proposals and matched worlds; R4 merges public-root
+visits; S3 distributes four-seat UCT simulations with private observation trees
+and fresh matched finalist confirmation. Each has a resource-bound identity.
+Processes use `spawn` on Linux and Windows. Each game gets fresh
 policy context and a schedule-independent sampling seed. Workers publish
 validated completed replay shards.
 
-Independent search requests share inference, with a 2 ms partial flush and a
+Independent search requests share inference, with a 1 ms partial flush and a
 131,072 padded-candidate-cell limit. R4 caches combined policy/value predictions
 for the same complete permitted input, including own cards, context, model and
 ordered choices. Replies preserve identity, seat, revision and deadlines. Start
-with eight search processes and one tensor thread per worker; try 16 only after
+with eight game processes × four replicas and one tensor thread per worker; try 16 × 2 only after
 measuring CPU use, confirmed searches, memory and fresh-run games/second.
 Concurrency can reduce work finished per timed search even when aggregate
 throughput improves. There is no promise to fill 90 GB of GPU memory.
@@ -124,7 +131,10 @@ This revision also changes shared Step 5 source fingerprints. Use the fresh-run
 migration in [TRAINING_RECOVERY_LAB.md](TRAINING_RECOVERY_LAB.md). Existing R4/R5
 correctness records become stale; requalify the lab device before a full
 comparison or teacher run. Use fresh output directories. The prior schema is
-preserved in `previous-experiment.json` for historical comparisons.
+preserved in `recovery-v2-experiment.json` (1.2) and `previous-experiment.json`
+for historical comparisons. Dependency-aware retention quarantines excess
+development/teacher shards; formal raw evidence remains protected. See the
+[conda recovery guide](TRAINING_RECOVERY_LAB.md) for cleanup/restore/pin commands.
 
 ## Quick smoke experiment
 
@@ -174,8 +184,8 @@ change requires verification again. Do not copy a Windows pass to Linux.
 ## Larger paired comparison
 
 After the correctness gate passes for CUDA, choose existing immutable trained
-snapshots. The following example runs **64 setups × four seats × three variants
-= 768 complete games**, on eight worker processes:
+snapshots. The following example runs **2 setups × four seats × three variants
+= 24 complete games**, on eight game workers with four search replicas each:
 
 ```bash
 python /data/not_backed_up/yxu209/ai-training/scripts/r4r5.py \
@@ -184,7 +194,7 @@ python /data/not_backed_up/yxu209/ai-training/scripts/r4r5.py \
   compare \
   --checkpoint /data/not_backed_up/yxu209/ai-training/artifacts/step5/main-scaled/generation-0050.pt \
   --references /data/not_backed_up/yxu209/ai-training/artifacts/step5/main-scaled/generation-0025.pt /data/not_backed_up/yxu209/ai-training/artifacts/step5/main-scaled/generation-0010.pt \
-  --output /data/not_backed_up/yxu209/ai-training/artifacts/searchlab/scaled-g50-3s
+  --output /data/not_backed_up/yxu209/ai-training/artifacts/searchlab/revision11-g50-1s
 ```
 
 Replace checkpoint names with files that exist. For a smaller check using the
@@ -246,16 +256,17 @@ Prespecify the comparison, then run:
 
 1. One setup to check the selected checkpoints and device.
 2. Parallel validation screening at 1, 3 and 10 seconds in distinct output
-   directories: the 64-setup default is 768 games per three-variant comparison.
+   directories: the two-setup development default is 24 games per three-variant comparison.
    Use the same validation seed across variants; the runner already pairs them.
 3. Compare S3's `--future-turns 1` and `--future-turns 2` in distinct directories,
    keeping the same whole-turn cap. The work cap is now 128; try 256 only
    when telemetry shows the work limit is reached before the clock. More work
    is not assumed better.
-4. Confirm the selected comparison with `--workers 1 --setups 30` or more in a
+4. Confirm the selected comparison with `--workers 1 --setups 30 --search-workers 4` or more in a
    new directory. This is 360 games with all three variants, or 240 with
    `--variants s2 s3` / `--variants s2 r4`. Only this uncontended serial timing
-   comparison can meet the existing promotion gates.
+   comparison can meet the existing promotion gates. All variants receive the
+   same within-turn CPU allowance; one game worker can own four search replicas.
 5. Lock one candidate configuration before a fresh `--partition test` run with a
    different `--seed` (for example `4930000`). Test reports are final reporting
    evidence; the promotion command refuses using them for model selection.
@@ -281,7 +292,7 @@ Pottery in every game or claim an optimal strategy frequency.
 
 ## Evidence-gated promotion
 
-Promotion requires a current correctness pass, a **one-worker comparison**,
+Promotion requires a current correctness pass, a **one-game-worker comparison**,
 at least 30 paired validation
 setups with all four rotations, a positive lower 95% bound for paired win-share
 improvement over S2, no failed matches, no recorded over-budget turns in the
@@ -310,7 +321,7 @@ distillation update to an in-memory copy of the checkpoint. Its output must be
 separate from training. The first run uses an empty directory. Completed per-game
 teacher shards can be resumed with the exact spec; a completed report is reused
 without applying the update twice. The source checkpoint and main training state
-remain unchanged. The default is **64 games and eight workers**, followed by
+remain unchanged. The default is **8 games and eight game workers × four search replicas**, followed by
 confirmed-target updates on the coordinator with effective batches of **1,024**,
 memory microbatches up to **512**, and a cap of **eight optimizer steps**.
 Reports include actual useful rows and optimizer steps; a nominal budget cannot

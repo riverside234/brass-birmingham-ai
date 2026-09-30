@@ -1,0 +1,67 @@
+{
+  "format": "step5-evaluation-config/1.2.0",
+  "players": 4,
+  "host": "artifacts/r1-host/guarded",
+  "setups": 2,
+  "seed": 910000,
+  "partition": "validation",
+  "workers": 32,
+  "batch_size": 64,
+  "max_candidate_cells": 131072,
+  "threads": 4,
+  "parallel_hosts": true,
+  "legacy_workers": 8,
+  "search_workers": 8,
+  "include_legacy": true,
+  "use_search": false,
+  "focus": "neutral",
+  "search": {
+    "proposals": 12,
+    "finalists": 4,
+    "pilot_samples": 2,
+    "confirmation_samples": 4,
+    "max_plan_choices": 96,
+    "max_reply_choices": 256,
+    "seconds": 1.0,
+    "temperature": 0.1,
+    "turn_interval": 4,
+    "max_searches_per_seat": 0
+  },
+  "panel": "development",
+  "execution": {
+    "processes": 32,
+    "hosts_per_process": 1,
+    "heavy_processes": 8,
+    "batch_size": 64,
+    "max_candidate_cells": 131072,
+    "flush_ms": 1.0,
+    "worker_threads": 1,
+    "max_decisions": 2000,
+    "max_models": 16,
+    "shard_games": 8,
+    "shard_bytes": 268435456,
+    "feature_cache": true,
+    "policy_cache": 32,
+    "search_workers_per_turn": 4
+  },
+  "lineups": [
+    "mixed-neural",
+    "mixed-v3"
+  ],
+  "retention": {
+    "enabled": true,
+    "resume_checkpoints": 2,
+    "replay_rounds": 4,
+    "quarantine_hours": 24,
+    "evaluation_samples": 4,
+    "profile_traces": 2
+  },
+  "legacy_budget": {
+    "role": "lab",
+    "seconds": 1.0,
+    "search_workers": 4,
+    "global_workers": 32,
+    "calibration": "artifacts/search-budgets/lab-v3-calibration.json",
+    "work_multiplier": 3
+  }
+}

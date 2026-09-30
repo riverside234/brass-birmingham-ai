@@ -1,0 +1,123 @@
+{
+  "format": "step5-training/2.1.0",
+  "players": 4,
+  "model_size": "medium",
+  "host": "artifacts/r1-host/guarded",
+  "games_per_iteration": 320,
+  "threads": 4,
+  "learning_rate": 3e-05,
+  "weight_decay": 0.0001,
+  "exploration": 0.05,
+  "seed": 18510000,
+  "execution": {
+    "processes": 32,
+    "hosts_per_process": 1,
+    "heavy_processes": 16,
+    "batch_size": 64,
+    "max_candidate_cells": 131072,
+    "flush_ms": 1.0,
+    "worker_threads": 1,
+    "max_decisions": 2000,
+    "max_models": 16,
+    "shard_games": 8,
+    "shard_bytes": 268435456,
+    "feature_cache": true,
+    "policy_cache": 32,
+    "search_workers_per_turn": 2
+  },
+  "update": {
+    "effective_batch_size": 2048,
+    "microbatch_size": 512,
+    "max_candidate_cells": 131072,
+    "epochs": 2,
+    "clip": 0.2,
+    "target_kl": 0.01,
+    "entropy_weight": 0.005,
+    "value_weight": 0.5,
+    "grad_clip": 5.0,
+    "normalize_advantages": true,
+    "precision": "fp32",
+    "bucket": true,
+    "actor_nonforced": true,
+    "critic_batch_size": 2048,
+    "kl_probe_rows": 256
+  },
+  "curriculum": [
+    {
+      "until": 2000,
+      "selfplay": 40,
+      "historical": 20,
+      "legacy": 40
+    },
+    {
+      "until": 5000,
+      "selfplay": 55,
+      "historical": 25,
+      "legacy": 20
+    },
+    {
+      "until": 10000,
+      "selfplay": 65,
+      "historical": 25,
+      "legacy": 10
+    },
+    {
+      "until": null,
+      "selfplay": 70,
+      "historical": 25,
+      "legacy": 5
+    }
+  ],
+  "search_ready_games": 640,
+  "search_every_games": 1600,
+  "search_games": 4,
+  "distill_steps": 8,
+  "distill_weight": 0.25,
+  "search": {
+    "proposals": 12,
+    "finalists": 4,
+    "pilot_samples": 2,
+    "confirmation_samples": 4,
+    "max_plan_choices": 96,
+    "max_reply_choices": 256,
+    "seconds": 1.0,
+    "temperature": 0.1,
+    "turn_interval": 4,
+    "max_searches_per_seat": 4
+  },
+  "rehearsal_manifest": null,
+  "rehearsal_weight": 0.1,
+  "rehearsal_until": 10000,
+  "profile_steps": 0,
+  "retention": {
+    "enabled": true,
+    "resume_checkpoints": 2,
+    "replay_rounds": 4,
+    "quarantine_hours": 24,
+    "evaluation_samples": 4,
+    "profile_traces": 2
+  },
+  "population": {
+    "recent": 8,
+    "anchors": 4
+  },
+  "evaluation_schedule": {
+    "enabled": true,
+    "monitor_every_games": 1600,
+    "broader_every_games": 6400,
+    "monitor_setups": 2,
+    "broader_setups": 2,
+    "seed": 910000
+  },
+  "legacy_budget": {
+    "role": "lab",
+    "seconds": 1.0,
+    "search_workers": 2,
+    "global_workers": 32,
+    "calibration": "artifacts/search-budgets/lab-v3-calibration-2workers.json",
+    "work_multiplier": 3
+  },
+  "audit_workers": 8,
+  "overlap_pools": true,
+  "search_wall_fraction": 0.1
+}

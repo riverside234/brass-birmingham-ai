@@ -4,6 +4,7 @@ from contextlib import contextmanager, nullcontext
 import os
 import platform
 import time
+import math
 
 import torch
 
@@ -13,6 +14,7 @@ class Timings:
         self.totals = defaultdict(float)
         self.counts = defaultdict(int)
         self.samples = defaultdict(list)
+        self.maximum = defaultdict(float)
 
     @contextmanager
     def phase(self, name):
@@ -24,17 +26,21 @@ class Timings:
     def observe(self,name,elapsed):
         self.totals[name] += elapsed
         self.counts[name] += 1
+        self.maximum[name]=max(self.maximum[name],elapsed)
         # A bounded deterministic sample; totals/counts always include all calls.
         if len(self.samples[name]) < 1024:
             self.samples[name].append(elapsed)
 
     def report(self):
         def percentile(values, fraction):
-            return sorted(values)[min(len(values)-1, int((len(values)-1)*fraction))]
+            return sorted(values)[min(len(values)-1, max(0,math.ceil(len(values)*fraction)-1))]
         return {name: dict(seconds=seconds, calls=self.counts[name],
                 mean_seconds=seconds/self.counts[name],
                 p50_seconds=percentile(self.samples[name], .5),
                 p95_seconds=percentile(self.samples[name], .95),
+                max_seconds=self.maximum[name],first_seconds=self.samples[name][0],
+                steady_mean_seconds=(seconds-self.samples[name][0])/max(1,self.counts[name]-1),
+                percentile_scope='first bounded 1024 calls; totals and maximum include all calls',
                 percentile_sample_count=len(self.samples[name]))
                 for name, seconds in sorted(self.totals.items())}
 

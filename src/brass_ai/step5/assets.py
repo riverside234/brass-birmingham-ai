@@ -32,6 +32,10 @@ def runtime_files(root):
     bank = read(root / 'training/opponents/current.json')['bank']
     manifest = load_bank(root, bank)
     directories = ['artifacts/r1-host/guarded', 'artifacts/legacy-ai/bank/' + bank + '/runtime']
+    lab=root/'training/opponents/lab/current.json'
+    if lab.exists():
+        child=read(lab)['bank'];load_bank(root,child)
+        directories.append('artifacts/legacy-ai/bank/'+child+'/runtime')
     files = {}
     for directory in directories:
         runtime = read(root / directory / 'runtime.json')
@@ -58,7 +62,9 @@ def export_assets(root, *, bundle='artifacts/step5-transfer/private-rules-runtim
                 distribution_status='R2 scaffold/smoke weights; unqualified playing strength', origin_sha256=sha(root / source)))
         exported.append(dict(path=path.relative_to(root).as_posix(), sha256=sha(path),
             model_id=raw['model_id'], parameters=model.parameter_count, original_mode=raw['training'].get('mode')))
-    for name, directory, exe in [('r1', directories[0], 'BrassHost.exe'), ('v3', directories[1], 'BrassLegacyAI.exe')]:
+    workers=[('r1', directories[0], 'BrassHost.exe'), ('v3', directories[1], 'BrassLegacyAI.exe')]
+    if len(directories)>2: workers.append(('v3-lab',directories[2],'BrassLegacyAI.exe'))
+    for name, directory, exe in workers:
         path = root / 'training/runtime' / name / exe
         path.parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(root / directory / exe, path)

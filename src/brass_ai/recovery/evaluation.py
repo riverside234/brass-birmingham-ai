@@ -7,7 +7,7 @@ import torch
 from brass_ai.bank import read,sha,admission
 from brass_ai.learning.checkpoint import load_checkpoint
 from brass_ai.learning.contracts import digest,project_path,require
-from brass_ai.learning.replay import read_shards
+from .replay import read_shards
 from brass_ai.step5.evaluation import (evaluation_config,evaluation_jobs,check_evaluation_batch,
     outcome,summarize_outcomes)
 from brass_ai.step5.league import seeds_for,write_json,implementation_id,pottery_metrics
@@ -17,10 +17,15 @@ from .inference import InferenceService
 
 
 def evaluate(root,output,candidate_path,references,config,*,setups=None,seed=None,
-             partition=None,include_legacy=None,device='cpu',mono=None,search=None,focus=None):
+             partition=None,include_legacy=None,device='cpu',mono=None,search=None,focus=None,lineups=None):
     root=Path(root);directory=project_path(root,output)
+    if lineups is not None: include_legacy=any(n.endswith('v3') for n in lineups)
     config=evaluation_config(config,setups=setups,seed=seed,partition=partition,
-        include_legacy=include_legacy,use_search=search,focus=focus)
+        include_legacy=include_legacy,use_search=search,focus=focus,lineups=lineups)
+    if lineups is not None:
+        config.update(lineups=lineups,include_legacy=any(n.endswith('v3') for n in lineups))
+        from brass_ai.step5.evaluation import validate_evaluation_config
+        validate_evaluation_config(config)
     torch.set_num_threads(config['threads'])
     require(references,'Frozen references required')
     seeds,_=seeds_for(config['seed'],config['setups'],config['partition'])
@@ -32,13 +37,22 @@ def evaluate(root,output,candidate_path,references,config,*,setups=None,seed=Non
     require(entries[0]['model_id'] not in [e['model_id'] for e in entries[1:]],'Candidate cannot be its own reference')
     pool=read(root/'training/opponents/pool.json')
     profiles=sorted(pool['training']);held=sorted(pool['evaluation'])
-    lineups=['recent-neural']
-    if len({e['model_id'] for e in entries[1:]})>1: lineups.append('mixed-neural')
-    if config['include_legacy']:
+    lineups=config.get('lineups',['recent-neural']).copy()
+    if 'lineups' not in config and len({e['model_id'] for e in entries[1:]})>1: lineups.append('mixed-neural')
+    if 'lineups' not in config and config['include_legacy']:
         lineups.append('mixed-v3')
         if config['panel']=='full': lineups.append('heldout-pottery-v3')
+    require('mixed-neural' not in lineups or len({e['model_id'] for e in entries[1:]})>=2,
+        'mixed-neural requires two distinct frozen references')
+    from .legacy_search import legacy_spec
+    budget=config.get('legacy_budget') if config['panel']!='full' else None
+    teacher_specs={p:legacy_spec(root,p,budget) for p in profiles} if 'mixed-v3' in lineups else {}
+    held_specs={p:legacy_spec(root,p,None,'evaluation') for p in held} if 'heldout-pottery-v3' in lineups else {}
     spec=dict(format='step5-evaluation/2.0.0',purpose='evaluation',entries=entries,
-        config=config,seeds=seeds,lineups=lineups,implementation=implementation_id(),legacy_pool=pool)
+        config=config,seeds=seeds,lineups=lineups,implementation=implementation_id(),legacy_pool=pool,teachers=teacher_specs,held=held_specs)
+    if (directory/'report.json').exists() and read(directory/'report.json').get('raw_records_pruned'):
+        report=read(directory/'report.json');require(report['spec']==spec,'Evaluation specification changed')
+        return dict(report,cached_summary=True,promotion_eligible=False)
     if (directory/'spec.json').exists(): require(read(directory/'spec.json')==spec,'Evaluation specification changed')
     else:
         require(not directory.exists() or not any(directory.iterdir()),'Use a fresh evaluation directory')
@@ -60,15 +74,15 @@ def evaluate(root,output,candidate_path,references,config,*,setups=None,seed=Non
                         chosen=held if name=='heldout-pottery-v3' else profiles
                         require(chosen,'Missing evaluation bank')
                         purpose='evaluation' if name=='heldout-pottery-v3' else 'training'
-                        opponents=[dict(kind='legacy',policy_id=chosen[(i//4*3+s)%len(chosen)],purpose=purpose) for s in range(3)]
-                        for p in opponents: admission(root,p['policy_id'],purpose)
+                        specs=held_specs if name=='heldout-pottery-v3' else teacher_specs
+                        opponents=[specs[chosen[(i//4*3+s)%len(chosen)]] for s in range(3)]
                     provenance=dict(producer='recovery-evaluation/2.0.0',purpose='evaluation',kind=name,
                         seed=job['seed'],sampling_seed=job['sampling_seed'],rotation=job['seat'],spec=digest(spec))
                     jobs.append(dict(index=i,seed=job['seed'],rotation=job['seat'],sampling_seed=job['sampling_seed'],
                         policies=[candidate]+opponents,path=str(directory/f'{name}-{i:06d}.jsonl.gz'),provenance=provenance))
                 actor=heavy if config['use_search'] or name.endswith('v3') else ordinary
                 records=actor.collect(jobs)
-                games=read_shards([r['path'] for r in records])
+                games=read_shards([r['path'] for r in records],receipts={r['path']:r.get('features') for r in records})
                 candidate_id=games[0]['opponents'][jobs[0]['rotation']]
                 check_evaluation_batch(games,evaluation_jobs(seeds),candidate_id,config['partition'])
                 by_group={digest(dict(rules='steam-brass-patch-1.1.0',setup_seed=s)):s for s in seeds}
@@ -81,11 +95,17 @@ def evaluate(root,output,candidate_path,references,config,*,setups=None,seed=Non
         telemetry=service.report()
     trained={e['model_id'] for e in entries[1:] if modes[e['model_id']] in ('step5-population-ppo','step5-reptile')}
     neural=[r for k,r in results.items() if k.endswith('neural')]
-    eligible=(config['panel']=='full' and config['partition']=='validation' and config['setups']>=30 and len(trained)>=2
+    eligible=(config['panel']=='full' and set(lineups)=={'recent-neural','mixed-neural','mixed-v3','heldout-pottery-v3'} and
+        config['partition']=='validation' and config['setups']>=30 and len(trained)>=2
         and all(r['win_share_setup_bootstrap_95'][0]>.25 for r in neural)
         and not any(r['diversity']['pottery_warning'] for r in results.values()))
     report=dict(format='step5-evaluation-report/1.0.0',spec=spec,results=results,execution=execution,
         promotion_eligible=eligible,failed_games=0,candidate_sha256=entries[0]['sha256'],raw_record_sha256=evidence,
         inference=telemetry,elapsed_seconds=time.monotonic()-began,
+        games=sum(r['games'] for r in results.values()),setups_per_lineup=config['setups'],lineup_count=len(lineups),
         limitation='Development panels cannot promote. BC references do not satisfy trained-population gates. Cached replay time is not live throughput.')
-    write_json(directory/'report.json',report);return report
+    write_json(directory/'report.json',report)
+    if config.get('retention',{}).get('enabled'):
+        from .retention import prune
+        report['retention']=prune(root,directory,config['retention'],apply=True)
+    return report

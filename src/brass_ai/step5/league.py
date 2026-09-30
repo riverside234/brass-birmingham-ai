@@ -42,7 +42,7 @@ def implementation_id():
 
 
 def validate_config(config):
-    if config.get('format') == 'step5-training/2.0.0':
+    if config.get('format') in ('step5-training/2.0.0','step5-training/2.1.0'):
         from brass_ai.recovery.config import validate_config as recovery_config
         return recovery_config(config)
     expected = {'format', 'players', 'model_size', 'host', 'games_per_iteration', 'workers', 'batch_size',
@@ -194,7 +194,7 @@ def collect_search_games(root, directory, host, seeds, model, config, signature,
 
 
 def train(root, run_path, config, *, iterations=1, device='cpu', initial=None, mono=None, from_run=None):
-    if config.get('format') == 'step5-training/2.0.0':
+    if config.get('format') in ('step5-training/2.0.0','step5-training/2.1.0'):
         from brass_ai.recovery.league import train as recovery_train
         return recovery_train(root,run_path,config,iterations=iterations,device=device,initial=initial,mono=mono,from_run=from_run)
     root = Path(root).resolve(); run = project_path(root, run_path)

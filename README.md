@@ -23,7 +23,12 @@ the preceding package's **10-second** allowance. The research bank's work settin
 remains **240**, with unchanged S1 planning, adaptive intent and fallback behavior.
 The [1.4.5 initialization fix](docs/AI_MENU_INITIALIZATION_1.4.5.md) makes the new
 controls visible on first opening the menu, before any click or refresh.
-**Package 1.4.5 is installed and verified.**
+The [1.4.6 link replay repair](docs/LINK_PLACEMENT_REPLAY_1.4.6.md) fixes link
+placement replay. The [1.4.7 resource update](docs/AI_EXECUTION_RESOURCES_1.4.7.md)
+caps rendering at 30 FPS during computation, restores normal presentation,
+serializes retiring AI jobs and provides optional simulation suspension and
+cleanup contracts for future inference backends. It applies independently of
+search allowances and strategies. **Package 1.4.7 is installed and verified.**
 The [compatibility check](docs/UI_PATCH_RESEARCH_COMPATIBILITY.md)
 preserves the research bank and training interfaces. [Step 5](docs/STEP5_LAB_TRAINING.md)
 adds self-play-first population PPO, neural search distillation, diverse-opponent

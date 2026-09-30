@@ -16,8 +16,8 @@ foreach($file in $candidate.files){
 if(-not $validation.passed -or -not $validation.unityPlayerValidation.passed){throw 'Combined regression gates have not passed'}
 if(@($prior.methods|Where-Object {$_ -notin $woven.methods}).Count -gt 0){throw 'A previous patch hook was lost'}
 $previousAiHooks=$null
-if($candidate.version -in @('1.3.1','1.3.2','1.4.0','1.4.1','1.4.2','1.4.3','1.4.4','1.4.5')){
- $previousAiVersion=if($candidate.version -eq '1.4.5'){'1.4.4'}elseif($candidate.version -eq '1.4.4'){'1.4.3'}elseif($candidate.version -eq '1.4.3'){'1.4.2'}elseif($candidate.version -eq '1.4.2'){'1.4.1'}elseif($candidate.version -eq '1.4.1'){'1.4.0'}elseif($candidate.version -eq '1.4.0'){'1.3.2'}elseif($candidate.version -eq '1.3.2'){'1.3.1'}else{'1.3.0'}
+if($candidate.version -in @('1.3.1','1.3.2','1.4.0','1.4.1','1.4.2','1.4.3','1.4.4','1.4.5','1.4.6','1.4.7')){
+ $previousAiVersion=if($candidate.version -eq '1.4.7'){'1.4.6'}elseif($candidate.version -eq '1.4.6'){'1.4.5'}elseif($candidate.version -eq '1.4.5'){'1.4.4'}elseif($candidate.version -eq '1.4.4'){'1.4.3'}elseif($candidate.version -eq '1.4.3'){'1.4.2'}elseif($candidate.version -eq '1.4.2'){'1.4.1'}elseif($candidate.version -eq '1.4.1'){'1.4.0'}elseif($candidate.version -eq '1.4.0'){'1.3.2'}elseif($candidate.version -eq '1.3.2'){'1.3.1'}else{'1.3.0'}
  $aiPrior=Get-Content -LiteralPath (Join-Path $root ('artifacts/patch-releases/'+$previousAiVersion+'/Assembly-CSharp.dll.manifest.json')) -Raw|ConvertFrom-Json
  if(@($aiPrior.methods|Where-Object {$_ -notin $woven.methods}).Count -gt 0){throw ('A '+$previousAiVersion+' AI/UI hook was lost')}
  $previousAiHooks=$aiPrior.methods.Count
@@ -31,7 +31,7 @@ try{
  $menu=$assembly.MainModule.Types|Where-Object FullName -eq 'BrassApplication.UseCases.Menu.MainMenu.MainMenuUseCase'
  $method=$menu.Methods|Where-Object Name -eq 'ShowOnlineGamesView'
  if(-not($method.Body.Instructions|Where-Object {$_.Operand -and $_.Operand.ToString() -like '*BrassPatch.OfflineMode::ShowOnlineDisabled*'})){throw 'Offline menu hook missing'}
- if($candidate.version -in @('1.3.0','1.3.1','1.3.2','1.4.0','1.4.1','1.4.2','1.4.3','1.4.4','1.4.5')){
+ if($candidate.version -in @('1.3.0','1.3.1','1.3.2','1.4.0','1.4.1','1.4.2','1.4.3','1.4.4','1.4.5','1.4.6','1.4.7')){
   $previous=[Mono.Cecil.AssemblyDefinition]::ReadAssembly((Join-Path $root 'artifacts/patch-releases/1.2.0/Assembly-CSharp.dll'))
   try{
    $retained=0

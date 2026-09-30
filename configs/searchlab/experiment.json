@@ -1,12 +1,12 @@
 {
-  "format": "searchlab-experiment/1.2.0",
+  "format": "searchlab-experiment/1.3.0",
   "players": 4,
   "default_variants": [
     "s2",
     "r4",
     "s3"
   ],
-  "seconds": 3.0,
+  "seconds": 1.0,
   "validation_reserve_fraction": 0.1,
   "simulations": 128,
   "future_turns": 1,
@@ -17,9 +17,9 @@
   "promotion_min_setups": 30,
   "default_partition": "validation",
   "threads": 1,
-  "setups": 64,
+  "setups": 2,
   "workers": 8,
-  "distill_games": 64,
+  "distill_games": 8,
   "distill_workers": 8,
   "batch_size": 64,
   "minibatch_size": 512,
@@ -28,15 +28,20 @@
   "distill_weight": 0.25,
   "learning_rate": 0.0001,
   "execution": {
-    "processes": 8,
-    "hosts_per_process": 4,
+    "processes": 32,
+    "hosts_per_process": 1,
     "heavy_processes": 8,
     "batch_size": 64,
     "max_candidate_cells": 131072,
-    "flush_ms": 2.0,
+    "flush_ms": 1.0,
     "worker_threads": 1,
     "max_decisions": 2000,
-    "max_models": 16
+    "max_models": 16,
+    "shard_games": 8,
+    "shard_bytes": 268435456,
+    "feature_cache": true,
+    "policy_cache": 32,
+    "search_workers_per_turn": 4
   },
   "update": {
     "effective_batch_size": 1024,
@@ -50,6 +55,20 @@
     "grad_clip": 5.0,
     "normalize_advantages": true,
     "precision": "fp32",
-    "bucket": true
+    "bucket": true,
+    "actor_nonforced": true,
+    "critic_batch_size": 2048,
+    "kl_probe_rows": 256
+  },
+  "cpu_role": "lab",
+  "search_workers": 4,
+  "global_search_workers": 32,
+  "retention": {
+    "enabled": true,
+    "resume_checkpoints": 2,
+    "replay_rounds": 4,
+    "quarantine_hours": 24,
+    "evaluation_samples": 4,
+    "profile_traces": 2
   }
 }

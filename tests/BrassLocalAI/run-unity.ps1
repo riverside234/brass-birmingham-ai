@@ -18,7 +18,7 @@ if(-not(Test-Path -LiteralPath (Join-Path $isolated 'BrassBirminghamUnity.exe'))
 $compiler=Join-Path $root 'artifacts/patch-tools/microsoft.net.compilers.toolset.4.12.0/tasks/net472/csc.exe'
 if(-not $ExistingSuites){
  $rsp=Join-Path $testBuild 'local-ai-native.rsp'
- @('/nologo','/target:library','/langversion:7.3','/nostdlib+','/deterministic+',('/out:"'+(Join-Path $candidate 'LocalAiUnityTests.dll')+'"'))+@(Get-ChildItem -LiteralPath $candidate -Filter '*.dll'|Where-Object { $_.Name -notmatch 'Tests|Regression' }|ForEach-Object{'/reference:"'+$_.FullName+'"'})+@('"'+(Join-Path $PSScriptRoot 'LocalAiUnityTests.cs')+'"')|Set-Content -LiteralPath $rsp -Encoding UTF8
+ @('/nologo','/target:library','/langversion:7.3','/nostdlib+','/deterministic+',('/out:"'+(Join-Path $candidate 'LocalAiUnityTests.dll')+'"'))+@(Get-ChildItem -LiteralPath $candidate -Filter '*.dll'|Where-Object { $_.Name -notmatch 'Tests|Regression' }|ForEach-Object{'/reference:"'+$_.FullName+'"'})+@('LocalAiUnityTests.cs','AiExecutionResourceTests.cs'|ForEach-Object{'"'+(Join-Path $PSScriptRoot $_)+'"'})|Set-Content -LiteralPath $rsp -Encoding UTF8
  & $compiler ('@'+$rsp)
  if($LASTEXITCODE -ne 0){throw 'Local AI native test compilation failed'}
 }

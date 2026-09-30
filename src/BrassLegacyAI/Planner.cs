@@ -11,6 +11,9 @@ namespace BrassLegacyAI
     {
         public string id,mode="S1";
         public int player_count=4,work_limit=160,first_width=24,beam=10,second_width=12;
+        // Lab replicas partition root branches; each still produces a complete
+        // cash-safe incumbent. The installed/frozen profiles default to serial.
+        public int partition_index=0,partition_count=1;
         public double milliseconds=1000,credible_window=1.5,rail_preference=0;
         public string tactic="balanced";
         public bool intent_enabled=false;
@@ -23,6 +26,7 @@ namespace BrassLegacyAI
             var p=j.ToObject<Profile>();
             if(p.conversion_policy<0 || p.conversion_policy>1)throw new Exception("conversion_policy_contract");
             if(p.cash_policy<0 || p.cash_policy>1)throw new Exception("cash_policy_contract");
+            if(p.partition_count<1 || p.partition_count>32 || p.partition_index<0 || p.partition_index>=p.partition_count)throw new Exception("partition_contract");
             if(new[]{p.credible_window,p.rail_preference,p.style_weight,p.proposal_fraction}.Any(x=>double.IsNaN(x) || double.IsInfinity(x)))throw new Exception("nonfinite_profile");
             if(p.player_count!=4 || (p.mode!="S0" && p.mode!="S1" && p.mode!="S2") || p.work_limit<1 || p.milliseconds<0 || double.IsNaN(p.milliseconds) || double.IsInfinity(p.milliseconds) || p.first_width<1 || p.beam<1 || p.second_width<1 || string.IsNullOrEmpty(p.id) || !Tactics.Styles.Contains(p.tactic) || p.reply_candidates<1 || p.reply_scenarios<1 || p.reply_confirmation<1 || p.reply_work<1 || p.proposal_fraction<=0 || p.proposal_fraction>=1 || p.credible_window<0 || p.style_weight<0)throw new Exception("profile_contract");
             return p;
@@ -156,7 +160,10 @@ namespace BrassLegacyAI
         static List<Plan> Actions(Session s,List<string[]> before,int limit,bool firstStage=false)
         {
             var prefix=before.SelectMany(a=>a).ToList();var root=s.World(prefix);var view=s.View(root);var results=new List<Plan>();
-            foreach(var first in Proposals(view,root.Choices(),limit,s.profile,s.intent))
+            var proposals=Proposals(view,root.Choices(),limit,s.profile,s.intent);
+            if(before.Count==0 && limit>1 && s.profile.partition_count>1)
+                proposals=proposals.Where((c,i)=>i%s.profile.partition_count==s.profile.partition_index);
+            foreach(var first in proposals)
             {
                 if(s.Stop && results.Count>0)break;
                 if(firstStage && results.Count>=8 && (s.nodes>=s.profile.work_limit*0.45 || (!s.fixedWork && s.clock.Elapsed.TotalMilliseconds>=s.profile.milliseconds*0.45)))break;
@@ -179,7 +186,7 @@ namespace BrassLegacyAI
                     catch(InvalidOperationException){s.failures++;}
                 }
             }
-            if(results.Count==0)throw new Exception("no_complete_candidate");
+            if(results.Count==0 && !(before.Count==0 && limit>1 && s.profile.partition_count>1))throw new Exception("no_complete_candidate");
             return results.OrderByDescending(p=>p.score).ThenBy(p=>p.signature,StringComparer.Ordinal).ToList();
         }
         static Plan Complete(Session s,Plan p,int target)
@@ -297,8 +304,9 @@ namespace BrassLegacyAI
             best=Choose(finals,profile);
             return new Decision{profile=profile.id,mode=profile.mode,observation_hash=Wire.Hash(observation),status=cancel.IsCancellationRequested?"cancelled_with_incumbent":s.Stop?"budget":"complete",nodes=s.nodes,failures=s.failures,elapsed_ms=s.clock.Elapsed.TotalMilliseconds,overrun=!fixedWork && s.clock.Elapsed.TotalMilliseconds>profile.milliseconds,selected=best,alternatives=finals.GroupBy(p=>p.signature).Select(g=>g.First()).OrderByDescending(p=>p.score).Take(8).ToArray(),family_best=finals.GroupBy(p=>p.actions[0][0].Split('|')[0]).ToDictionary(g=>g.Key,g=>g.OrderByDescending(p=>p.score).ThenBy(p=>p.signature,StringComparer.Ordinal).First())};
         }
-        static Plan Choose(List<Plan> plans,Profile profile)
+        public static Plan Choose(List<Plan> plans,Profile profile)
         {
+            if(plans.Count==0)throw new Exception("no_complete_candidate");
             // Terminal win-share units cannot use the nonterminal VP style window.
             // Preserve outcome/rank before personality; equal outcomes can still vary.
             if(profile.conversion_policy==1 && plans.All(p=>p.ledger!=null && p.ledger.win_share.HasValue))

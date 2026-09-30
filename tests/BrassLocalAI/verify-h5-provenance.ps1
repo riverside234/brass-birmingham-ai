@@ -50,7 +50,7 @@ try{
   $profile=[Text.Encoding]::UTF8.GetString($bytes).TrimStart([char]0xFEFF)|ConvertFrom-Json
   if($profile.id -ne ('legacy-hard-'+$profileName) -or $profile.mode -ne 'S1' -or -not $profile.intent_enabled){throw 'Wrong strategy generation or search mode'}
   $profiles+=[ordered]@{strategy=$key;profile=$profileName;mode=$profile.mode;intentEnabled=$profile.intent_enabled;sha256=$hash;researchPool=$purpose}
-  if($candidate.version -in @('1.4.0','1.4.1','1.4.2','1.4.3','1.4.4','1.4.5')){
+  if($candidate.version -in @('1.4.0','1.4.1','1.4.2','1.4.3','1.4.4','1.4.5','1.4.6','1.4.7')){
    $v3Name=$key+'-v3'
    $resource=@($assembly.MainModule.Resources|Where-Object Name -eq ('BrassLegacyAI.Profiles.'+$v3Name+'.json'))
    if($resource.Count -ne 1){throw 'Missing version 3 resource'}
@@ -59,7 +59,7 @@ try{
    if($v3Hash -ne (Get-FileHash -LiteralPath (Join-Path $root ('configs/legacy-ai/'+$v3Name+'.json'))).Hash.ToLowerInvariant()){throw 'V3 embedded bytes differ from source'}
    $v3=[Text.Encoding]::UTF8.GetString($bytes).TrimStart([char]0xFEFF)|ConvertFrom-Json
    if($v3.id -ne ('legacy-hard-'+$v3Name) -or $v3.cash_policy -ne 1){throw 'Wrong V3 cash policy identity'}
-   $v3.PSObject.Properties.Remove('cash_policy');if($candidate.version -in @('1.4.1','1.4.2','1.4.3','1.4.4','1.4.5')){if($v3.conversion_policy -ne 1){throw 'Missing conversion policy'};$v3.PSObject.Properties.Remove('conversion_policy')};$v3.id=$profile.id
+   $v3.PSObject.Properties.Remove('cash_policy');if($candidate.version -in @('1.4.1','1.4.2','1.4.3','1.4.4','1.4.5','1.4.6','1.4.7')){if($v3.conversion_policy -ne 1){throw 'Missing conversion policy'};$v3.PSObject.Properties.Remove('conversion_policy')};$v3.id=$profile.id
    if(($v3|ConvertTo-Json -Depth 10 -Compress) -cne ($profile|ConvertTo-Json -Depth 10 -Compress)){throw 'V3 strategy settings differ beyond the cash policy and version'}
    $v3Profiles+=[ordered]@{strategy=$key;profile=$v3Name;sha256=$v3Hash;cashPolicy=1;researchPool='See current versioned v3 bank qualification; no v2 strength inherited'}
   }
@@ -78,18 +78,39 @@ $result=[ordered]@{passed=$true;checkedUtc=[DateTime]::UtcNow.ToString('o');inst
  bankManifestSha256=(Get-FileHash -LiteralPath $manifestPath).Hash;archivedResearchSourceFilesVerified=$sourceChecks;
  frozenRuntimeFilesVerified=@($manifest.payload.runtime_files).Count;aiDllSha256=$expected.sha256;profiles=$profiles;v3Profiles=$v3Profiles;deploymentSources=$sourcePins;
  scope='Six archived S1 v2 profiles exactly match H5. H3 tactics differ only in player-seat lookup. V3 profiles, when present, preserve those styles and enable the deployment cash repair with separate identities. Deployment behavior is not the frozen research worker or its qualified budget; new v3 requires separate admission.'}
-if($candidate.version -in @('1.4.1','1.4.2','1.4.3','1.4.4','1.4.5')){
+if($candidate.version -in @('1.4.1','1.4.2','1.4.3','1.4.4','1.4.5','1.4.6','1.4.7')){
  $current=Get-Content -LiteralPath (Join-Path $root 'training/opponents/current.json') -Raw|ConvertFrom-Json
+ $activeBank=$current.bank
+ if($candidate.version -eq '1.4.7'){
+  # Qualify the game's preserved policy against the immutable deployed bank.
+  # Concurrent research development is not an input to this game package.
+  $deployed=Get-Content -LiteralPath (Join-Path $root 'artifacts/patch-releases/1.4.6/local-ai-h5.json') -Raw|ConvertFrom-Json
+  if(-not $deployed.passed){throw 'Qualified deployed-bank provenance is required'}
+  $current=[pscustomobject]@{bank=$deployed.v3Bank}
+ }
  $v3Root=Join-Path $root ('training/opponents/bank/'+$current.bank)
  $v3Manifest=Get-Content -LiteralPath (Join-Path $v3Root 'manifest.json') -Raw|ConvertFrom-Json
- foreach($entry in $v3Manifest.payload.source_files.PSObject.Properties){foreach($path in (Join-Path $v3Root ('source/'+$entry.Name)),(Join-Path $root $entry.Name)){if((Get-FileHash -LiteralPath $path).Hash -ne $entry.Value){throw 'V3 bank source differs'}}}
+ if($candidate.version -eq '1.4.7' -and (Get-FileHash -LiteralPath (Join-Path $v3Root 'manifest.json')).Hash -ne $deployed.v3BankManifestSha256){throw 'Deployed immutable bank manifest changed'}
+ $activeDifferences=@()
+ foreach($entry in $v3Manifest.payload.source_files.PSObject.Properties){
+  $archived=Join-Path $v3Root ('source/'+$entry.Name)
+  if((Get-FileHash -LiteralPath $archived).Hash -ne $entry.Value){throw ('Frozen V3 bank source differs: '+$entry.Name)}
+  $active=Join-Path $root $entry.Name
+  if((Get-FileHash -LiteralPath $active).Hash -ne $entry.Value){
+   if($candidate.version -ne '1.4.7'){throw 'V3 bank source differs'}
+   $activeDifferences+=$entry.Name
+  }
+ }
  foreach($profile in $v3Profiles){$pin=$v3Manifest.payload.source_files.PSObject.Properties['configs/legacy-ai/'+$profile.profile+'.json'].Value;if($profile.sha256 -ne $pin){throw 'Embedded V3 profile differs from bank'}}
  foreach($name in 'Conversion','CashManagement','Evaluator'){
-  if((Source (Join-Path $root ('src/BrassLocalAI/Policy/'+$name+'.cs'))) -cne (Source (Join-Path $root ('src/BrassLegacyAI/'+$name+'.cs')))){throw 'Shared v3 policy sources differ'}
+  $reference=if($candidate.version -eq '1.4.7'){Join-Path $v3Root ('source/src/BrassLegacyAI/'+$name+'.cs')}else{Join-Path $root ('src/BrassLegacyAI/'+$name+'.cs')}
+  if((Source (Join-Path $root ('src/BrassLocalAI/Policy/'+$name+'.cs'))) -cne (Source $reference)){throw 'Shared v3 policy sources differ'}
  }
  $localPlanner=(Source (Join-Path $root 'src/BrassLocalAI/Policy/Planner.cs')).Replace('!Wire.ValidPlayerCount(p.player_count)','p.player_count!=4').Replace('(p.mode!="S0" && p.mode!="S1")','(p.mode!="S0" && p.mode!="S1" && p.mode!="S2")')
- if($localPlanner -cne (Source (Join-Path $root 'src/BrassLegacyAI/Planner.cs'))){throw 'Research/deployment planner differs beyond supported modes/counts'}
+ $reference=if($candidate.version -eq '1.4.7'){Join-Path $v3Root 'source/src/BrassLegacyAI/Planner.cs'}else{Join-Path $root 'src/BrassLegacyAI/Planner.cs'}
+ if($localPlanner -cne (Source $reference)){throw 'Frozen research/deployment planner differs beyond supported modes/counts'}
  $result.v3Bank=$current.bank;$result.v3BankManifestSha256=(Get-FileHash -LiteralPath (Join-Path $v3Root 'manifest.json')).Hash
+ if($candidate.version -eq '1.4.7'){$result|Add-Member -NotePropertyName activeResearchDifferences -NotePropertyValue $activeDifferences;$result|Add-Member -NotePropertyName activeResearchBank -NotePropertyValue $activeBank}
 }
 $name=if($Installed){'local-ai-h5-installed.json'}else{'local-ai-h5.json'}
 $result|ConvertTo-Json -Depth 10|Set-Content -LiteralPath (Join-Path $build $name) -Encoding UTF8

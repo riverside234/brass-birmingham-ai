@@ -21,6 +21,8 @@ def parser():
     for q in (c,d):
         q.add_argument('--seconds',type=float);q.add_argument('--future-turns',type=int,choices=[1,2]);q.add_argument('--simulations',type=int)
         q.add_argument('--workers',type=int,help='Independent processes; use 1 for a promotable equal-budget comparison')
+        q.add_argument('--search-workers',type=int,help='Private replicas WITHIN one turn; same CPU allowance for all variants')
+        q.add_argument('--cpu-role',choices=['lab','laptop','reference'])
         q.add_argument('--batch-size',type=int,help='Inference batch limit; current schema shares batches across workers')
     m=sub.add_parser('promote');m.add_argument('--report',required=True);m.add_argument('--variant',choices=['r4','s3'],required=True)
     m.add_argument('--output',default='artifacts/searchlab/promoted.json')
@@ -36,7 +38,7 @@ def main(argv=None):
         from brass_ai.searchlab.experiment import compare,promote,distill_s3,validate_config
         require(a.device!='cuda' or torch.cuda.is_available(),'CUDA requested but unavailable')
         config=validate_config(read_json(project_path(root,a.config)))
-        for field in ('seconds','future_turns','simulations','batch_size','minibatch_size','distill_steps'):
+        for field in ('seconds','future_turns','simulations','batch_size','minibatch_size','distill_steps','search_workers','cpu_role'):
             if getattr(a,field,None) is not None:config[field]=getattr(a,field)
         if 'execution' in config:
             config['execution']=dict(config['execution'],batch_size=config['batch_size'])

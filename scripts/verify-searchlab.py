@@ -21,6 +21,12 @@ if __name__=='__main__':
     if a.integration:
         from integration import run
         evidence=run(a.root.resolve(),a.mono,a.device)
+        from brass_ai.searchlab.experiment import quick_smoke
+        from brass_ai.learning.contracts import read_json
+        evidence['parallel_smoke']=quick_smoke(a.root.resolve(),
+            'training/models/releases/step5-selfplay-medium-smoke.pt',
+            read_json(a.root/'configs/searchlab/experiment.json'),workers=1,device=a.device,mono=a.mono)
+        require(evidence['parallel_smoke']['passed'],'Parallel search wiring failed')
         require(identity==gate_identity(a.root,a.device,a.mono),'Implementation/environment changed during qualification; rerun')
         report=dict(format='searchlab-correctness/1.0.0',passed=True,identity=identity,
             unit_tests=result.testsRun,evidence=evidence,seconds=time.monotonic()-began,promotion=False)

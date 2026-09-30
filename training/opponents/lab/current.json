@@ -1,0 +1,14 @@
+{
+  "format": "lab-v3-bank/1.0.0",
+  "signature": "192bd00fddaa3aff023c41984d2d6cc213f913f21ba2ec4c7b58de609577f928",
+  "bank": "bank-b880ac1fd5f1dfe8bcc2",
+  "parents": {
+    "bank-af17b1aadbe7f9b21fa7/balanced-v3": "bank-b880ac1fd5f1dfe8bcc2/balanced-v3-lab-1s",
+    "bank-af17b1aadbe7f9b21fa7/cotton-v3": "bank-b880ac1fd5f1dfe8bcc2/cotton-v3-lab-1s",
+    "bank-af17b1aadbe7f9b21fa7/goods-beer-v3": "bank-b880ac1fd5f1dfe8bcc2/goods-beer-v3-lab-1s",
+    "bank-af17b1aadbe7f9b21fa7/rail-tempo-v3": "bank-b880ac1fd5f1dfe8bcc2/rail-tempo-v3-lab-1s",
+    "bank-af17b1aadbe7f9b21fa7/supplier-v3": "bank-b880ac1fd5f1dfe8bcc2/supplier-v3-lab-1s"
+  },
+  "seconds": 1.0,
+  "limitation": "Not admitted until lab-calibrate passes on the target hardware; original bank unchanged"
+}

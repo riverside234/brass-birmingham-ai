@@ -6,6 +6,9 @@ $out=Join-Path $repo 'artifacts/patch-build'
 $managed=Join-Path $GameRoot 'BrassBirminghamUnity_Data/Managed'
 $stock=Join-Path $repo 'artifacts/patch-baseline/Assembly-CSharp.dll'
 $expected='600EBF309670B2726001C16A3375F8BBF3DE76A23C0202BE7CF198BA338981FB'
+$sourcePins=@(Get-ChildItem -LiteralPath (Join-Path $repo 'src/BrassPatch'),(Join-Path $repo 'src/BrassLocalAI') -Recurse -File|Where-Object Extension -in '.cs','.json'|Sort-Object FullName|ForEach-Object {
+    [ordered]@{path=[IO.Path]::GetRelativePath($repo,$_.FullName).Replace('\','/');sha256=(Get-FileHash -LiteralPath $_.FullName).Hash}
+})
 New-Item -ItemType Directory -Force -Path $toolsDir,$out,(Join-Path $out 'Managed'),(Split-Path $stock) | Out-Null
 if(-not (Test-Path -LiteralPath $stock)) {
     $installed=Join-Path $managed 'Assembly-CSharp.dll'
@@ -52,6 +55,7 @@ Get-ChildItem -LiteralPath $managed -Filter '*.dll' | Where-Object Name -notin @
 if($LASTEXITCODE -ne 0){throw 'Weaving failed. Installed game was not changed.'}
 & (Join-Path $PSScriptRoot 'build-local-ai.ps1') -Root $repo
 if($LASTEXITCODE -ne 0){throw 'Local AI build failed'}
-$manifest=[ordered]@{version='1.4.5';stockSha256=$expected;files=@(Get-Item $helper,(Join-Path $out 'Managed/BrassLegacyAI.dll'),(Join-Path $out 'Managed/Assembly-CSharp.dll')|ForEach-Object{[ordered]@{name=$_.Name;sha256=(Get-FileHash -LiteralPath $_.FullName).Hash}})}
+foreach($pin in $sourcePins){if((Get-FileHash -LiteralPath (Join-Path $repo $pin.path)).Hash -ne $pin.sha256){throw 'Runtime source changed during compilation; candidate was not published.'}}
+$manifest=[ordered]@{version='1.4.7';stockSha256=$expected;sourcePins=$sourcePins;files=@(Get-Item $helper,(Join-Path $out 'Managed/BrassLegacyAI.dll'),(Join-Path $out 'Managed/Assembly-CSharp.dll')|ForEach-Object{[ordered]@{name=$_.Name;sha256=(Get-FileHash -LiteralPath $_.FullName).Hash}})}
 $manifest|ConvertTo-Json -Depth 5|Set-Content -LiteralPath (Join-Path $out 'build-manifest.json') -Encoding UTF8
 Write-Output "Candidate patch built in $out. The installed game has not been modified."

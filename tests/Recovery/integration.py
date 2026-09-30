@@ -30,17 +30,19 @@ def run(root,device='cpu',mono=None):
         generate(root,output,1,config['execution'],partition=partition,mono=mono)
         generated+=list(output.glob('*.jsonl.gz'))
     manifest=directory/'demonstrations.json'
-    evidence=audit(root,generated,manifest,mono=mono)
-    update=dict(UPDATE,effective_batch_size=64,microbatch_size=8,max_candidate_cells=8192)
+    evidence=audit(root,generated,manifest,mono=mono,workers=2)
+    update=dict(config['update'],effective_batch_size=64,microbatch_size=8,max_candidate_cells=8192)
     bc=train_bc(root,directory/'bc',manifest,initial,update,device=device,epochs=1,min_epochs=1,patience=1)
     candidate=directory/'bc/best.pt'
+    config['evaluation_schedule'].update(enabled=True,monitor_every_games=4,monitor_setups=1)
     first=train(root,directory/'league',config,initial=candidate,iterations=1,device=device,mono=mono)
     second=train(root,directory/'league',config,iterations=1,device=device,mono=mono)
     state=read(directory/'league/state.json')
     assert state['iteration']==2 and state['games_done']==4
+    assert len(state['evaluations'])==1 and state['evaluations'][0]['games']==4
     assert first['checkpoint']['model_id']!=second['checkpoint']['model_id']
     eval_config=read(root/'configs/step5/development-evaluation.json')
-    eval_config.update(setups=1,include_legacy=False,threads=2,execution=config['execution'])
+    eval_config.update(setups=1,include_legacy=False,lineups=['recent-neural'],threads=2,execution=config['execution'],legacy_budget=config['legacy_budget'])
     ex=config['execution']
     eval_config.update(workers=ex['processes']*ex['hosts_per_process'],legacy_workers=ex['heavy_processes'],
         search_workers=ex['heavy_processes'],batch_size=ex['batch_size'],max_candidate_cells=ex['max_candidate_cells'])

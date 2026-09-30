@@ -4,11 +4,14 @@ The pinned R2 encoder remains unchanged. validated=True is used only after the
 recovery ingress boundary has checked the original permitted view and choices.
 """
 from collections import Counter
+from collections import OrderedDict
 from functools import lru_cache
 import numpy as np
 from brass_ai.runtime_contracts import validate
 from brass_ai.learning.contracts import finite_vector, require
 from brass_ai.learning.features import Encoder, Encoded
+from brass_ai.learning.contracts import digest
+from .inputs import BOUNDARY
 
 @lru_cache(maxsize=128)
 def vocabulary(values):
@@ -23,6 +26,11 @@ def categorical(value, values, empty):
     return tuple(out)
 
 class PreparedEncoder(Encoder):
+    def __init__(self, cache_size=256):
+        super().__init__()
+        self.cache = OrderedDict()
+        self.cache_size = cache_size
+
     @staticmethod
     def one(value, values, *, empty=False):
         return list(categorical(value,tuple(values),empty))
@@ -37,8 +45,11 @@ class PreparedEncoder(Encoder):
 
     def encode(self, view, choices, style=None, intent=None, *, validated=False):
         if not validated:
-            validate('observation', view)
-            validate('choices', choices)
+            BOUNDARY.check(view, choices)
+        key = digest(dict(view=view, choices=choices, style=style, intent=intent))
+        if key in self.cache:
+            self.cache.move_to_end(key)
+            return self.cache[key]
         require(view['context']['actor'] == view['seat'] and not view['context']['terminal'],
                 'Only the actual acting observer can submit a policy request')
         ids = tuple(c['id'] for c in choices)
@@ -101,4 +112,8 @@ class PreparedEncoder(Encoder):
         state = np.asarray(x, dtype=np.float32)
         require(state.shape == (self.state_dim,) and actions.shape == (len(choices), self.action_dim), 'Feature layout mismatch')
         require(np.isfinite(state).all() and np.isfinite(actions).all(), 'Non-finite features')
-        return Encoded(state, actions, np.asarray([relative(i) for i in range(4)], dtype=np.int64), ids)
+        encoded = Encoded(state, actions, np.asarray([relative(i) for i in range(4)], dtype=np.int64), ids)
+        for array in (encoded.state, encoded.actions, encoded.stable_to_relative): array.setflags(write=False)
+        self.cache[key] = encoded
+        while len(self.cache) > self.cache_size: self.cache.popitem(last=False)
+        return encoded

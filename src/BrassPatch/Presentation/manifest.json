@@ -1,6 +1,62 @@
 [
   {
     "targetType": "BoardView",
+    "targetMethod": "CreateLinkPlacedAnimation",
+    "parameterTypes": ["System.String", "BoardGameRules.Entities.Players.PlayerColor"],
+    "helperType": "BrassPatch.Presentation.LinkReplay",
+    "helperMethod": "PlaceLink",
+    "mode": "replace"
+  },
+  {
+    "targetType": "LinkView",
+    "targetMethod": "UpdateLink",
+    "parameterTypes": ["InterfaceAdapters.Game.Board.LinkViewModel", "BrassApplication.UseCases.Game.Actions.ILinkSelectedDelegate"],
+    "helperType": "BrassPatch.Presentation.LinkReplay",
+    "helperMethod": "BeforeLinkUpdate",
+    "mode": "prefix"
+  },
+  {
+    "targetType": "LinkView",
+    "targetMethod": "RemoveTokenAnimation",
+    "parameterTypes": ["System.Int32"],
+    "helperType": "BrassPatch.Presentation.LinkReplay",
+    "helperMethod": "RemoveLinkToken",
+    "mode": "replace"
+  },
+  {
+    "targetType": "LinkView",
+    "targetMethod": "OutlineAnimation",
+    "parameterTypes": [],
+    "helperType": "BrassPatch.Presentation.LinkReplay",
+    "helperMethod": "Outline",
+    "mode": "replace"
+  },
+  {
+    "targetType": "InterfaceAdapters.Game.Replay.ReplayPresenter",
+    "targetMethod": "ReplayEvent",
+    "parameterTypes": ["BoardGameRules.Entities.EventSourcing.Events.IEvent", "BrassApplication.UseCases.Game.Replay.IEventReplayDelegate"],
+    "helperType": "BrassPatch.Presentation.LinkReplay",
+    "helperMethod": "ReplayEvent",
+    "mode": "replace"
+  },
+  {
+    "targetType": "InterfaceAdapters.Game.Replay.ReplayPresenter",
+    "targetMethod": "CancelCurrentReplay",
+    "parameterTypes": [],
+    "helperType": "BrassPatch.Presentation.LinkReplay",
+    "helperMethod": "Cancel",
+    "mode": "prefix"
+  },
+  {
+    "targetType": "InterfaceAdapters.Game.Replay.ReplayPresenter",
+    "targetMethod": "FinishReplay",
+    "parameterTypes": [],
+    "helperType": "BrassPatch.Presentation.LinkReplay",
+    "helperMethod": "Cancel",
+    "mode": "prefix"
+  },
+  {
+    "targetType": "BoardView",
     "targetMethod": "CreateIndustryFlippedAnimation",
     "parameterTypes": [
       "BoardGameRules.Entities.Board.BuildingSlots.BuildingSlot"

@@ -16,22 +16,53 @@ CURRICULUM = [
     dict(until=10000, selfplay=65, historical=25, legacy=10),
     dict(until=None, selfplay=70, historical=25, legacy=5)]
 
+EXECUTION_V21 = dict(EXECUTION, processes=32, hosts_per_process=1, flush_ms=1.0,
+    shard_games=8, shard_bytes=268435456, feature_cache=True, policy_cache=32,search_workers_per_turn=4)
+UPDATE_V21 = dict(UPDATE, actor_nonforced=True, critic_batch_size=2048, kl_probe_rows=256)
+RETENTION = dict(enabled=True, resume_checkpoints=2, replay_rounds=4, quarantine_hours=24,
+    evaluation_samples=4, profile_traces=2)
+POPULATION = dict(recent=8, anchors=4)
+EVALUATION_SCHEDULE = dict(enabled=True, monitor_every_games=1600, broader_every_games=6400,
+    monitor_setups=2, broader_setups=2, seed=910000)
+LEGACY_BUDGET = dict(role='lab', seconds=1.0, search_workers=4, global_workers=32,
+    work_multiplier=3,calibration='artifacts/search-budgets/lab-v3-calibration.json')
+
 
 def positive(value, name, integer=False):
     require(type(value) is int if integer else type(value) in (int, float), 'Invalid '+name)
     require(math.isfinite(value) and value > 0, 'Invalid '+name)
 
 
+def bounded_fields(config, default, name):
+    require(type(config) is dict and set(config)==set(default),'Invalid '+name+' fields')
+    for key,value in config.items():
+        expected=default[key]
+        if type(expected) is bool: require(type(value) is bool,'Invalid '+name+'.'+key)
+        elif type(expected) in (int,float): positive(value,name+'.'+key,integer=type(expected) is int)
+        else: require(type(value) is str and value,'Invalid '+name+'.'+key)
+    return config
+
+
+def legacy_budget_config(config):
+    bounded_fields(config,LEGACY_BUDGET,'legacy_budget')
+    require(config['role'] in ('lab','laptop','reference'),'Unknown budget role')
+    return config
+
+
 def execution_config(config):
-    require(set(config) == set(EXECUTION), 'Unknown/missing execution field')
-    for key in EXECUTION:
+    require(set(config) in (set(EXECUTION),set(EXECUTION_V21)), 'Unknown/missing execution field')
+    for key in set(config)-{'feature_cache'}:
         positive(config[key], key, integer=key != 'flush_ms')
+    if 'feature_cache' in config: require(type(config['feature_cache']) is bool,'Invalid feature cache flag')
     require(config['flush_ms'] <= 50, 'Excessive inference queue delay')
     return config
 
 
 def update_config(config):
-    require(set(config) == set(UPDATE), 'Unknown/missing update field')
+    require(set(config) in (set(UPDATE),set(UPDATE_V21)), 'Unknown/missing update field')
+    if 'actor_nonforced' in config:
+        require(type(config['actor_nonforced']) is bool,'Invalid actor sampling flag')
+        for key in ('critic_batch_size','kl_probe_rows'): positive(config[key],key,integer=True)
     for key in ('effective_batch_size', 'microbatch_size', 'max_candidate_cells', 'epochs'):
         positive(config[key], key, integer=True)
     for key in ('clip', 'target_kl', 'grad_clip'):
@@ -65,8 +96,22 @@ def validate_config(config):
         'weight_decay','exploration','seed','execution','update','curriculum','search',
         'search_ready_games','search_every_games','search_games','distill_steps','distill_weight',
         'rehearsal_manifest','rehearsal_weight','rehearsal_until','profile_steps'}
-    require(set(config)==fields and config['format']=='step5-training/2.0.0' and config['players']==4,
-        'Recovery requires the strict four-player 2.0.0 config')
+    version=config.get('format')
+    if version=='step5-training/2.1.0':
+        fields|={'retention','population','evaluation_schedule','legacy_budget','audit_workers',
+                 'overlap_pools','search_wall_fraction'}
+        for key,default in [('retention',RETENTION),('population',POPULATION),('evaluation_schedule',EVALUATION_SCHEDULE),('legacy_budget',LEGACY_BUDGET)]:
+            bounded_fields(config[key],default,key)
+        legacy_budget_config(config['legacy_budget'])
+        require(config['legacy_budget']['search_workers']*config['execution']['heavy_processes']<=config['legacy_budget']['global_workers'],
+                'Heavy search workers exceed global CPU allowance')
+        require(config['execution']['search_workers_per_turn']*config['execution']['heavy_processes']<=config['legacy_budget']['global_workers'],
+                'Neural search workers exceed global CPU allowance')
+        positive(config['audit_workers'],'audit_workers',integer=True)
+        require(type(config['overlap_pools']) is bool and 0<config['search_wall_fraction']<=.25,'Invalid overlap/search fraction')
+        require(set(config['update'])==set(UPDATE_V21) and set(config['execution'])==set(EXECUTION_V21),'2.1 requires revised update/execution')
+    require(set(config)==fields and version in ('step5-training/2.0.0','step5-training/2.1.0') and config['players']==4,
+        'Recovery requires a strict four-player 2.0/2.1 config')
     require(config['model_size'] in ('small','medium','large'), 'Unknown model size')
     for key in ('games_per_iteration','threads','search_games','distill_steps','rehearsal_until'):
         positive(config[key],key,integer=True)

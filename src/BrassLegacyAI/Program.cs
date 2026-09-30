@@ -49,6 +49,7 @@ namespace BrassLegacyAI
                             host.CommitPlan(r["choices"].Select(x=>(string)x).ToArray());data=host.Context();break;
                         case "plan":data=planner.Decide((JObject)r["observation"],r["choices"].ToObject<System.Collections.Generic.List<Choice>>(),Profile.Read((JObject)r["profile"]),(bool?)r["fixed_work"]??false,(uint?)r["sampling_seed"]??1,intent:r["intent"]?.ToObject<IntentState>());break;
                         case "intent":data=Tactics.Refresh((JObject)r["observation"],Profile.Read((JObject)r["profile"]),r["intent"]?.ToObject<IntentState>());break;
+                        case "select_plans":data=Planner.Choose(r["plans"].ToObject<System.Collections.Generic.List<Plan>>(),Profile.Read((JObject)r["profile"]));break;
                         case "rollout_choice":data=ReplySearch.RolloutChoice((JObject)r["observation"],r["choices"].ToObject<System.Collections.Generic.List<Choice>>(),(string)r["style"]??"balanced");break;
                         case "scenario":
                             var telemetry=new ReplyTelemetry();var values=ReplySearch.Scenario((JObject)r["observation"],composition,r["plan"].ToObject<Plan>(),(uint?)r["sampling_seed"]??1,telemetry,()=>false);

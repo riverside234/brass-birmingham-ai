@@ -138,27 +138,22 @@ class SearchPolicy:
         setup_seed = rng.randrange(2**31)
         plans = []
         for index in indices:
-            context = self.reset_world(view, setup_seed, deadline)
-            require([c['id'] for c in self.host.choices()] == [c['id'] for c in choices],
-                    'Reconstructed legal choices differ')
-            path_rng = random.Random(rng.randrange(2**63))
-            self.base.contexts[path_rng] = self.context_features(view, rng)
-            path = []
-            for depth in range(self.config.max_plan_choices):
-                self.check(deadline)
-                current = self.host.observe(view['seat'])
-                legal = self.host.choices()
-                chosen = index if depth == 0 else self.base.select_batch([(current, legal, path_rng)])[0][0]
-                path.append(legal[chosen]['id'])
-                context = self.host.apply(context, legal[chosen])
-                if context['terminal'] or context['actor'] != view['seat'] or turn_key(context) != turn_key(view['context']):
-                    break
-            else:
-                raise SearchIncomplete('incomplete_current_turn')
+            path=self.propose_one(view,choices,index,setup_seed,rng.randrange(2**63),self.context_features(view,rng),deadline)
             if path not in plans:
                 plans.append(path)
         self.telemetry['proposed'] += len(plans)
         return plans
+
+    def propose_one(self,view,choices,index,setup_seed,path_seed,root_context,deadline):
+        context=self.reset_world(view,setup_seed,deadline)
+        require([c['id'] for c in self.host.choices()]==[c['id'] for c in choices], 'Reconstructed legal choices differ')
+        path_rng=random.Random(path_seed);self.base.contexts[path_rng]=root_context;path=[]
+        for depth in range(self.config.max_plan_choices):
+            self.check(deadline);current=self.host.observe(view['seat']);legal=self.host.choices()
+            chosen=index if depth==0 else self.base.select_batch([(current,legal,path_rng)])[0][0]
+            path.append(legal[chosen]['id']);context=self.host.apply(context,legal[chosen])
+            if context['terminal'] or context['actor']!=view['seat'] or turn_key(context)!=turn_key(view['context']): return path
+        raise SearchIncomplete('incomplete_current_turn')
 
     def scenario(self, view, plan, seed, root_context, deadline):
         context = self.reset_world(view, seed, deadline)

@@ -551,6 +551,7 @@ tensorboard/
 # Our original host/policy executables only, not proprietary game DLLs.
 !/training/runtime/r1/BrassHost.exe
 !/training/runtime/v3/BrassLegacyAI.exe
+!/training/runtime/v3-lab/BrassLegacyAI.exe
 !/training/runtime/search/BrassHost.exe
 
 # Local operating-system metadata.

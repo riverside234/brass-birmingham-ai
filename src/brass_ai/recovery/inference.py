@@ -103,6 +103,13 @@ class InferenceService:
             model,raw=load_checkpoint(path,device='cpu')
         return self.register(model)
 
+    def trim(self, identities):
+        """Called only after all round jobs/replies have finished."""
+        with self.lock:
+            keep=set(identities)
+            for key in list(self.models):
+                if key not in keep: self.models.pop(key);self.cache.pop(key,None)
+
     def channels(self,count):
         leases=self.mp.Queue()
         self.leases.append(leases)
