@@ -1,5 +1,11 @@
 # Personalities and difficulty calibration
 
+**30 September implementation update:** M0–M5 of [Masked ISMCTS](MASKED_ISMCTS_REVISION_PLAN.md#10-implementation-order-and-component-map) are implemented. Current training uses a fresh 1,840,109-parameter MLP-ResNet, CPU/GPU batching, separate legal/padding/expansion masks and completed root-visit teachers. Package 1.4.9 switches all six v3 styles to the shared C# backend, preserving 2/5/12 and old-save 10 seconds plus resource/UI management. The new lab bank uses one second directly. Historical S1/S2/S3/R4 variants and checkpoint-import commands below are archival. Use the [current lab guide](../docs/TRAINING_RECOVERY_LAB.md) and [exit record](../docs/MASKED_ISMCTS_EXIT_CHECKS.md).
+
+**Search dependency update, 30 September:** use the selected [Masked ISMCTS + NN](MASKED_ISMCTS_REVISION_PLAN.md) backend for this later stage. Root goal/style priors must respect its permitted-information contract. The separate S1/S2/S3/R4 search choices are retired from the plan; the post–Step 5 dependency, shared network/goal head and 16 visible presets / 128 hidden variants remain unchanged.
+
+**Fresh residual-model handoff:** Step 5 now starts an MLP-ResNet from random initialization, without existing neural checkpoints. This later stage imports only the selected checkpoint produced by that new run. The main model is ≤2M total parameters; small goal/context extensions may bring the complete model to at most **2.10M**, without widening the base trunk. CPU inference batching, dynamic legal masks and progressive policy top-K remain required during personality play/search.
+
 Planning update: 29 September 2026. This is the detailed design for [implementation step 7](IMPLEMENTATION_PLAN.md#7-add-personalities-and-calibrate-difficulty), extending [DESIGN.md](DESIGN.md) and [SEARCH_DESIGN.md](SEARCH_DESIGN.md). **Execute this stage after Step 5 self-play training finishes, using its existing self-trained AI as the starting point.** The new goal head, learned behavior archive, persona-aware search changes and calibrated difficulty profiles described here are proposed work, not implemented or qualified features.
 
 ## 1. Decisions and boundaries
@@ -14,10 +20,10 @@ These additions build on the current system:
 | Four-seat win-share, placement and VP outputs | Retain all three value outputs and their stable seat identities. Do not replace them with a two-player scalar value. |
 | Four style features and eight intent features | Define a versioned personality/intent contract; preserve the meaning of existing fields when importing old data. |
 | Persistent legacy intent and neural industry contexts | Learn coherent, revisable medium-term intent, including setup actions and competing plans. |
-| S2 complete-turn comparisons, R4 OpenSpiel ISMCTS, R5 S3 observation-tree experiment | Integrate bounded priors through each algorithm's actual interface, with separate qualification. |
+| Selected Masked ISMCTS with CPU batching, dynamic masks and progressive top-K | Add bounded root goal priors while preserving complete legality, pending-request isolation and protected/unpruned alternatives. |
 | Completed self-play-first Step 5 training | Warm-start from its selected trained checkpoint; discover and fine-tune styles in a separately identified post-training run. |
 
-The current medium backbone is approximately 1.9M parameters. If that is the selected Step 5 model, retain it; if Step 5 selects another supported size, preserve that trained backbone rather than replacing it merely to match this plan's default. Personality does not justify a larger base model by itself. Keep four initial pilot profiles: Industrialist, Networker, Supplier and Investor. The full personality roster targets **16 player-facing archetypes, each backed by eight qualified hidden micro-variants: 128 variants total**. The four pilot profiles can become members of the 16 after qualification; they are not four extra presets. Section 5 defines discovery, selection and runtime sampling.
+Use the residual backbone trained by the new fresh Step 5 run: its proposed layout is 1,840,109 total parameters, with a main-model ceiling of 2M. Preserve its trained trunk; do not substitute the earlier dense medium checkpoint. Later goal/context additions may bring the full model up to 2.10M, though the proposed base plus 100,000 extra parameters still fits below 2M. Keep four initial pilot profiles: Industrialist, Networker, Supplier and Investor. The roster remains **16 player-facing archetypes, each backed by eight qualified hidden micro-variants: 128 variants total**. The four pilots can become members of the 16 after qualification, not extra presets. Section 5 defines selection and sampling.
 
 Use three qualifications when implementing the user's proposal:
 
@@ -29,7 +35,7 @@ The shared policy/value foundation is inspired by [AlphaZero](https://arxiv.org/
 
 ### Entry gate: completed Step 5 self-training
 
-Begin implementation/training packages P0–P6 only after the Step 5 run is finished and its artifacts are available. Select a trained checkpoint using Step 5's validation results and compatibility checks; the last iteration is not automatically the best. Record an immutable entry bundle containing the model/checkpoint hash, architecture and feature versions, training implementation/configuration IDs, rules contract, split manifests, opponent-pool IDs and available evaluation reports.
+Begin packages P0–P6 only after the fresh residual-model Step 5 run finishes. Select a checkpoint produced by that run using validation and compatibility checks; the last iteration is not automatically the best. Do not substitute a checkpoint from an earlier experiment. Record the new-run lineage, model/checkpoint hash, residual architecture and feature versions, total parameter count, training/configuration IDs, rules, split manifests, opponent-pool IDs and evaluation reports.
 
 Keep that checkpoint as the **pre-personality control** for every relevant comparison. Reuse its learned state/candidate encoders, action scorer and four-seat values, plus compatible training-partition trajectories and historical neural opponents. Initialize only the newly introduced goal/context parameters. The fresh R2 bootstrap and local smoke weights are not substitutes for the completed self-trained AI at this stage.
 
@@ -77,7 +83,7 @@ Keep the existing candidate-based policy: Brass has variable, multi-step legal c
 
 Preserve the imported encoder's existing feature layout and context semantics. Add any new style/goal context through an explicitly versioned projection or appended features with zero initial contribution to the copied policy/value path. Before fine-tuning, the new model must reproduce the old policy/value outputs for the same old inputs and neutral new context. Merely copying matching tensor shapes is insufficient if a feature's meaning has changed.
 
-Start the auxiliary branch with a hidden width of 128. Aim for fewer than 100,000 additional parameters over the medium backbone, including any added context projections, then measure the actual count and inference overhead. This is an initial engineering budget, not a model-quality guarantee. Keep the existing 0.5M/2M/8M comparisons for later evidence-based sizing.
+Start the auxiliary branch with a hidden width of 128. Aim for at most 100,000 additional parameters over the new residual model, including every context projection: with the proposed base this totals at most 1,940,109. If more extension capacity is needed, the complete model may reach **2,100,000 total parameters**, a 5% allowance above 2M. Count frozen and trainable weights, all heads, biases, normalization and context parameters at construction/load/export; itemize the extension overhead. Keep the base trunk unchanged and retire the old 8M comparison. Measure batching latency as well as count; these are engineering limits, not strength guarantees.
 
 Use factorized goal outputs rather than a huge enumeration of exact future moves:
 

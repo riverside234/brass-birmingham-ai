@@ -1,4 +1,4 @@
-param([switch]$ExistingSuites,[switch]$MenuOnly)
+param([switch]$ExistingSuites,[switch]$MenuOnly,[switch]$MaskedQuick)
 $ErrorActionPreference='Stop'
 $root=Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 $candidate=Join-Path $root 'artifacts/patch-build/Managed'
@@ -32,6 +32,7 @@ if(Test-Path -LiteralPath $result){Remove-Item -LiteralPath $result}
 $flag=if($ExistingSuites){'--brass-patch-selftest'}else{'--brass-local-ai-test'}
 $arguments=@('-batchmode','-logFile',('"'+(Join-Path $testBuild ($name+'.log'))+'"'),$flag)
 if($MenuOnly){$arguments+='--brass-local-ai-smoke'}
+if($MaskedQuick){$arguments+='--brass-masked-quick'}
 $process=Start-Process -FilePath (Join-Path $isolated 'BrassBirminghamUnity.exe') -ArgumentList $arguments -WorkingDirectory $isolated -WindowStyle Hidden -PassThru
 Write-Output "Isolated Unity tests started (PID $($process.Id)); result: $result"
 $timer=[Diagnostics.Stopwatch]::StartNew()

@@ -84,6 +84,21 @@ def assert_compatible(actual):
     require(actual == compatibility(), 'Incompatible rules/features/four-seat targets/reference pins')
 
 
+def assert_heuristic_data_compatible(actual):
+    """A model-source change does not alter audited heuristic state/action data.
+
+    Every rules, feature, encoder, target and reference field must still match.
+    Callers must separately reject neural behavior and search teacher labels.
+    Checkpoints/NN replay continue using exact assert_compatible.
+    """
+    expected=compatibility();field='architecture_sha256'
+    require(type(actual) is dict and set(actual)==set(expected),'Invalid heuristic data compatibility fields')
+    token=actual[field]
+    require(type(token) is str and len(token)==64 and all(c in '0123456789abcdef' for c in token),'Invalid historical model-source digest')
+    require({k:v for k,v in actual.items() if k!=field}=={k:v for k,v in expected.items() if k!=field},
+            'Incompatible heuristic rules/features/encoder/four-seat targets')
+
+
 def load_config(path=None):
     config = read_json(path or CONFIG_DIR / 'lab.json')
     keys(config, ('players', 'project_root', 'host', 'output', 'model_size', 'device',

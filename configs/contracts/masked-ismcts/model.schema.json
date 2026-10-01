@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "masked-ismcts/1.0.0/model",
+  "type": "object",
+  "required": ["architecture", "parameters", "initialization"],
+  "properties": {
+    "architecture": {"const": "brass-four-seat-mlp-resnet/1.0.0"},
+    "parameters": {"type": "integer", "minimum": 1, "maximum": 2000000},
+    "initialization": {"const": "random"},
+    "later_extension_total_cap": {"const": 2100000}
+  },
+  "additionalProperties": false,
+  "$comment": "Total includes every trainable head, encoder, normalization and bias. Extension cap is reserved for the subsequent personality stage."
+}

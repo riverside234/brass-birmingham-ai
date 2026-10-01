@@ -11,6 +11,7 @@ New-Item -ItemType Directory -Force -Path $out|Out-Null
 Get-ChildItem -LiteralPath $managed -Filter '*.dll'|Copy-Item -Destination $out -Force
 $references=@(Get-ChildItem -LiteralPath $managed -Filter '*.dll'|ForEach-Object{'/reference:"'+$_.FullName+'"'})
 $files=@(Get-ChildItem -LiteralPath (Join-Path $repo 'src/BrassHost') -Filter '*.cs'|Where-Object Name -ne 'Program.cs')+@(Get-ChildItem -LiteralPath (Join-Path $repo 'src/BrassLegacyAI') -Filter '*.cs')
+$files+=@(Get-ChildItem -LiteralPath (Join-Path $repo 'src/BrassMaskedSearch') -Filter '*.cs')
 $sources=@($files|Sort-Object FullName|ForEach-Object{'"'+$_.FullName+'"'})
 $rsp=Join-Path $out 'build.rsp'
 @('/nologo','/target:exe','/main:BrassLegacyAI.Program','/langversion:7.3','/nostdlib+','/deterministic+','/optimize+',('/out:"'+(Join-Path $out 'BrassLegacyAI.exe')+'"'))+$references+$sources|Set-Content -LiteralPath $rsp -Encoding UTF8

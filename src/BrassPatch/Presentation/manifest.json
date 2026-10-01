@@ -120,9 +120,9 @@
     "targetType": "Frameworks.Routing.Router",
     "targetMethod": "ProcessInput",
     "parameterTypes": [],
-    "helperType": "BrassPatch.Presentation.PresentationLifecycle",
-    "helperMethod": "KeepInformationAccessible",
-    "mode": "prefix"
+    "helperType": "BrassPatch.Statistics.StatisticsEntryPoints",
+    "helperMethod": "ProcessInput",
+    "mode": "replace"
   },
   {
     "targetType": "Frameworks.View.Game.Replay.ReplayView",

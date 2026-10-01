@@ -11,7 +11,7 @@ import uuid
 import numpy as np
 import torch
 
-from brass_ai.learning.batching import collate, model_id
+from brass_ai.learning.batching import collate, model_id, predict_encoded
 from brass_ai.learning.contracts import require
 from brass_ai.learning.features import Encoded
 from .encoding import PreparedEncoder
@@ -45,6 +45,11 @@ class RemoteEvaluator:
 
     def predict(self, requests):
         if not requests: return []
+        return self.poll(self.submit(requests),wait=True)
+
+    def submit(self,requests):
+        require(requests,'Cannot submit an empty batch')
+        require(getattr(self.endpoint,'pending',None) is None,'Private reply channel is still in use')
         began=time.monotonic();token=uuid.uuid4().hex;frames=[]
         require(len({r.request_id for r in requests})==len(requests),'Duplicate inference request ID')
         for r in requests:
@@ -60,18 +65,26 @@ class RemoteEvaluator:
                 continue
             phase=time.monotonic();e=self.encoder.encode(r.view,r.choices,r.style,r.intent)
             self.telemetry['encoding_seconds']+=time.monotonic()-phase
-            require(len(e.choice_ids)<=self.max_candidate_cells,'Position exceeds candidate capacity')
             frames.append(dict(request_id=r.request_id,model=self.model_id,revision=r.view['context']['revision'],
                 seat=r.view['seat'],digest=r.input_digest,deadline=r.deadline,submitted=time.monotonic(),
                 cancelled=bool(r.cancelled and r.cancelled.is_set()),encoded=e))
         self.endpoint.requests.put(dict(lane=self.endpoint.lane,token=token,frames=frames))
+        ticket=dict(token=token,requests=list(requests),began=began)
+        self.endpoint.pending=ticket
+        return ticket
+
+    def poll(self,ticket,*,wait=False):
+        require(getattr(self.endpoint,'pending',None) is ticket,'Unknown/misrouted inference ticket')
+        if not wait and not self.endpoint.connection.poll(0):return None
         require(self.endpoint.connection.poll(self.endpoint.timeout),'Inference service timeout; incomplete game is aborted')
         response=self.endpoint.connection.recv()
-        require(response['token']==token,'Misrouted inference batch')
+        self.endpoint.pending=None
+        require(response['token']==ticket['token'],'Misrouted inference batch')
         require('error' not in response,response.get('error','Inference service failed'))
+        requests=ticket['requests']
         self.telemetry['batches']+=1;self.telemetry['positions']+=len(requests)
         self.telemetry['max_batch_positions']=max(self.telemetry['max_batch_positions'],len(requests))
-        self.telemetry['predict_seconds']+=time.monotonic()-began
+        self.telemetry['predict_seconds']+=time.monotonic()-ticket['began']
         for r,result in zip(requests,response['responses']):
             stopped=r.stopped()
             if stopped: result['status']=stopped
@@ -164,7 +177,7 @@ class InferenceService:
                 batch=[];maximum=0
                 while group and len(batch)<self.config['batch_size']:
                     key,frame=group[0];e=frame['encoded'];n=len(e.choice_ids)
-                    require(n>0 and n==len(set(e.choice_ids)) and n<=self.config['max_candidate_cells'],'Invalid encoded choices')
+                    require(n>0 and n==len(set(e.choice_ids)),'Invalid encoded choices')
                     require(e.state.shape==(model.config.state_dim,) and e.actions.shape==(n,model.config.action_dim),
                         'Encoded model dimensions differ')
                     require(np.isfinite(e.state).all() and np.isfinite(e.actions).all(),'Nonfinite encoded inputs')
@@ -180,14 +193,10 @@ class InferenceService:
                     else: live.append((key,frame))
                 if not live: continue
                 with torch.inference_mode():
-                    with self.timings.phase('inference.pack_transfer'):
-                        inputs=collate([f['encoded'] for _,f in live],self.device)
                     with self.timings.phase('inference.forward'):
-                        logits,win,rank,vp=model(*inputs)
-                    with self.timings.phase('inference.results'):
-                        arrays=[a.cpu().numpy() for a in (torch.softmax(logits.float(),-1),win,rank,vp)]
+                        arrays=predict_encoded(model,[f['encoded'] for _,f in live],self.device,self.config['max_candidate_cells'])
                 require(all(np.isfinite(a).all() for a in arrays),'Nonfinite inference output')
-                cells=len(live)*max(len(f['encoded'].choice_ids) for _,f in live)
+                cells=min(self.config['max_candidate_cells'],len(live)*max(len(f['encoded'].choice_ids) for _,f in live))
                 self.metrics['batches']+=1;self.metrics['positions']+=len(live)
                 self.metrics['max_batch_positions']=max(self.metrics['max_batch_positions'],len(live))
                 self.metrics['max_padded_candidate_cells']=max(self.metrics['max_padded_candidate_cells'],cells)

@@ -18,7 +18,7 @@ from brass_ai.beliefs import sample_world_setup
 from brass_ai.host import RulesHost
 from brass_ai.learning.contracts import LAB_ROOT, digest, read_json, require
 
-TYPE = pyspiel.GameType(short_name='python_brass_four', long_name='Brass four-player R1 comparison',
+TYPE = pyspiel.GameType(short_name='python_brass_four', long_name='Brass four-player Masked ISMCTS adapter',
     dynamics=pyspiel.GameType.Dynamics.SEQUENTIAL,
     chance_mode=pyspiel.GameType.ChanceMode.EXPLICIT_STOCHASTIC,
     information=pyspiel.GameType.Information.IMPERFECT_INFORMATION,
@@ -41,7 +41,7 @@ class BrassSpielGame(pyspiel.Game):
         self.root = Path(root or params.get('root', LAB_ROOT)).resolve()
         self.mono = mono or params.get('mono') or None
         directory = self.root / 'artifacts/r4-host'
-        require(read_json(directory/'runtime.json')['extension'] == 'brass-search-chance/1.0.0', 'Install R4 runtime first')
+        require(read_json(directory/'runtime.json')['extension'] == 'brass-search-chance/1.0.0', 'Import the isolated search runtime first')
         self.host = RulesHost(directory, mono=self.mono)
         self.lock, self.owner = threading.RLock(), None
         self.composition = read_json(self.root/'configs/contracts/v0.2.0/card-composition.json')

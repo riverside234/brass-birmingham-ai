@@ -1,4 +1,4 @@
-param([ValidateSet('1.0.0','1.1.0','1.2.0','1.3.0','1.3.1','1.3.2','1.4.0','1.4.1','1.4.2','1.4.3','1.4.4','1.4.5','1.4.6')][string]$PreviousRelease='1.3.1')
+param([ValidateSet('1.0.0','1.1.0','1.2.0','1.3.0','1.3.1','1.3.2','1.4.0','1.4.1','1.4.2','1.4.3','1.4.4','1.4.5','1.4.6','1.4.7')][string]$PreviousRelease='1.3.1')
 $ErrorActionPreference='Stop'
 Set-StrictMode -Version Latest
 $root=Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
@@ -53,7 +53,7 @@ $stream=[IO.File]::OpenWrite($candidateHelper);try{$stream.WriteByte(0)}finally{
 Run-Package 'install-patch.ps1' $false
 Assert-Candidate
 Copy-Item -LiteralPath (Join-Path $build 'Managed/BrassPatch.dll') -Destination $candidateHelper -Force
-if($manifest.version -in @('1.3.0','1.3.1','1.3.2','1.4.0','1.4.1','1.4.2','1.4.3','1.4.4','1.4.5','1.4.6','1.4.7')){
+if($manifest.version -in @('1.3.0','1.3.1','1.3.2','1.4.0','1.4.1','1.4.2','1.4.3','1.4.4','1.4.5','1.4.6','1.4.7','1.4.8')){
  $candidateAi=Join-Path $candidate 'Managed/BrassLegacyAI.dll'
  $stream=[IO.File]::OpenWrite($candidateAi);try{$stream.WriteByte(0)}finally{$stream.Dispose()}
  Run-Package 'install-patch.ps1' $false
@@ -84,7 +84,7 @@ Copy-Item -LiteralPath (Join-Path $previous 'Assembly-CSharp.dll') -Destination 
 Run-Package 'install-patch.ps1' $true
 Assert-Candidate
 if(Test-Path -LiteralPath (Join-Path $fixture 'artifacts/patch-installation.pending.json')){throw 'Completed upgrade retained pending intent'};$checks++
-if($manifest.version -in @('1.3.0','1.3.1','1.3.2','1.4.0','1.4.1','1.4.2','1.4.3','1.4.4','1.4.5','1.4.6','1.4.7')){
+if($manifest.version -in @('1.3.0','1.3.1','1.3.2','1.4.0','1.4.1','1.4.2','1.4.3','1.4.4','1.4.5','1.4.6','1.4.7','1.4.8')){
  # Simulate process termination after each dependency/assembly publication boundary.
  $order=@('BrassPatch.dll','BrassLegacyAI.dll','Assembly-CSharp.dll')
  foreach($boundary in 0..3){

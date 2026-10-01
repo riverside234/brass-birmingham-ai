@@ -67,12 +67,16 @@ class NeuralPolicy:
         require(focus in ('mixed', 'neutral') + INDUSTRIES, 'Invalid context mode')
         self.evaluator = evaluator if evaluator is not None else Evaluator(model, device=device,
             batch_size=batch_size, max_candidate_cells=max_candidate_cells)
+        self.owns_evaluator=evaluator is None
         self.exploration, self.temperature, self.focus = exploration, temperature, focus
         self.request_deadline = None
         self.contexts = weakref.WeakKeyDictionary()
         self.context_counter, self.context_offset = 0, None
         self.policy_id = 'step5-neural/' + digest(dict(model=self.evaluator.model_id,
             exploration=exploration, temperature=temperature, focus=focus, version=2))
+
+    def close(self):
+        if self.owns_evaluator:self.evaluator.close()
 
     def context_features(self, view, rng):
         if rng not in self.contexts:
@@ -93,7 +97,7 @@ class NeuralPolicy:
         requests = []
         for view, choices, rng in inputs:
             if self.request_deadline is not None and time.monotonic()>=self.request_deadline:
-                from .search import SearchIncomplete
+                from brass_ai.search.common import SearchIncomplete
                 raise SearchIncomplete('inference_deadline')
             style, intent = self.context_features(view, rng)
             requests.append(Request(uuid.uuid4().hex, self.evaluator.model_id, view, choices,
@@ -103,7 +107,7 @@ class NeuralPolicy:
         outputs = []
         for request, response in zip(requests, responses):
             if self.request_deadline is not None and (request.stopped() or response.get('status') in ('expired','cancelled')):
-                from .search import SearchIncomplete
+                from brass_ai.search.common import SearchIncomplete
                 raise SearchIncomplete('inference_deadline')
             accept_response(request, response, request.view['context']['revision'], self.evaluator.model_id)
             raw = np.asarray(response['probabilities'], dtype=np.float64)

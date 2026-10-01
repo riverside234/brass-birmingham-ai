@@ -1,5 +1,5 @@
 {
-  "format": "step5-training/2.1.0",
+  "format": "step5-training/2.2.0",
   "players": 4,
   "model_size": "medium",
   "host": "artifacts/r1-host/guarded",
@@ -10,7 +10,7 @@
   "exploration": 0.05,
   "seed": 18510000,
   "execution": {
-    "processes": 32,
+    "processes": 28,
     "hosts_per_process": 1,
     "heavy_processes": 8,
     "batch_size": 64,
@@ -74,14 +74,19 @@
   "distill_steps": 8,
   "distill_weight": 0.25,
   "search": {
-    "proposals": 12,
-    "finalists": 4,
-    "pilot_samples": 2,
-    "confirmation_samples": 4,
-    "max_plan_choices": 96,
-    "max_reply_choices": 256,
+    "backend": "masked_ismcts",
     "seconds": 1.0,
-    "temperature": 0.1,
+    "simulations": 100000,
+    "future_turns": 1,
+    "max_choices": 512,
+    "exploration": 1.4,
+    "root_top_k": 16,
+    "interior_top_k": 8,
+    "widening": 2.0,
+    "pending_paths": 8,
+    "batch_size": 8,
+    "flush_ms": 0.5,
+    "prior_mix": 0.1,
     "turn_interval": 4,
     "max_searches_per_seat": 4
   },
@@ -111,13 +116,21 @@
   },
   "legacy_budget": {
     "role": "reference",
-    "seconds": 3.0,
+    "seconds": 1.0,
     "search_workers": 1,
-    "global_workers": 32,
-    "calibration": "artifacts/search-budgets/lab-v3-calibration.json",
-    "work_multiplier": 1
+    "global_workers": 32
   },
   "audit_workers": 8,
   "overlap_pools": true,
-  "search_wall_fraction": 0.1
+  "search_wall_fraction": 0.1,
+  "architecture": "brass-four-seat-mlp-resnet/1.0.0",
+  "parameter_limit": 2000000,
+  "initialization": "random",
+  "imitation": {
+    "manifest": null,
+    "epochs": 10,
+    "patience": 2,
+    "min_epochs": 3,
+    "learning_rate": 0.0001
+  }
 }

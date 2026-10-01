@@ -35,7 +35,7 @@ namespace BrassLegacyAI
         Plan incumbent;
         bool taken,disposed;
         string failure;
-        public string Name {get{return "S1 local search";}}
+        public string Name {get{return "Masked ISMCTS v3";}}
         public AiExecutionJob Execution {get{return execution;}}
         public Task Worker {get{return execution.Completion;}}
         public bool Ready {get{lock(sync)return incumbent!=null && !taken && !disposed;}}

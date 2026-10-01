@@ -347,9 +347,11 @@ def supervised_epoch(model,optimizer,data,config,*,training=True,kind='bc',weigh
 
 def distill_update(model,optimizer,games,config,*,steps=8,weight=.25):
     require(all(g['split']=='train' for g in games),'Held-out search teachers')
+    require(all(r['teacher'] is None or r['teacher']['source']=='ismcts-root-visits/1.0.0' for g in games for r in g['records']),
+            'Historical neural/search replay cannot enter fresh distillation')
     eligible=lambda r:r['teacher'] is not None and r['teacher']['confidence']>0 and sum(r['teacher']['coverage'])>=2
     if not any(eligible(r) for g in games for r in g['records']):
-        return dict(updated=False,reason='No completed fresh-confirmation teacher labels')
+        return dict(updated=False,reason='No completed Masked ISMCTS visits on two alternatives')
     data=prepared(games,eligible)
     reports=[]
     # Sample effective batches; steps means optimizer steps, not whole epochs.

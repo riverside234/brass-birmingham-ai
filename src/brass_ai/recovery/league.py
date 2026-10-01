@@ -41,7 +41,8 @@ def train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=Non
 def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=None,from_run=None):
     root=Path(root).resolve();run=project_path(root,run_path);validate_config(config)
     require(iterations>0 and not(initial and from_run),'Invalid recovery initialization')
-    revised=config['format']=='step5-training/2.1.0'
+    require(initial is None and from_run is None,'Fresh residual workflow forbids previous checkpoint/run imports')
+    revised=True
     torch.set_num_threads(config['threads'])
     pool=read(root/'training/opponents/pool.json');profiles=sorted(pool['training'])
     for p in profiles: admission(root,p,'training')
@@ -51,37 +52,39 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
     state_path=run/'state.json'
     if state_path.exists():
         state=read(state_path)
-        require(state['format']=='step5-recovery-league/'+('2.1.0' if revised else '2.0.0') and state['signature']==signature,
+        require(state['format']=='step5-recovery-league/'+'2.2.0' and state['signature']==signature,
             'Run configuration/source changed; use a fresh recovery directory')
         require(initial is None and from_run is None,'Omit initialization when resuming')
         entry=state['history'][-1];require(sha(project_path(root,entry['path']))==entry['sha256'],'Snapshot changed')
         model,raw=load_checkpoint(project_path(root,entry['path']),device=device)
+        require(model.config==ModelConfig.preset(config['model_size']) and raw['training'].get('fresh_run')==run.relative_to(root).as_posix(),
+                'Resume must use this new run\'s residual checkpoint')
+        require(all(project_path(root,e['path']).is_relative_to(run) for e in state['history']),'Population contains an imported checkpoint')
     else:
-        require(not run.exists() or not any(p.name!='.active-run.json' for p in run.iterdir()),'New recovery directory must be empty')
+        # Before the first league commit, interrupted BC may have only its own
+        # identity-bound progress receipt. Restart it from the same random seed;
+        # never import partially trained or previous-run neural weights.
+        allowed={'.active-run.json','imitation-progress.json'} if config['imitation']['manifest'] else {'.active-run.json'}
+        require(not run.exists() or all(p.name in allowed for p in run.iterdir()),'New recovery directory must be empty')
         if revised: torch.manual_seed(config['seed'])
-        require(initial or from_run,'Initialize recovery from a compatible BC/trained checkpoint')
+        from brass_ai.learning.model import FourSeatNet
+        require(initial is None and from_run is None,'Fresh training rejects --initial and --from-run; resume this same new run instead')
         origin=None;history=[];previous_games=0;cursor=config['seed']
-        if from_run:
-            parent=read(project_path(root,from_run)/'state.json');entry=parent['history'][-1]
-            require(sha(project_path(root,entry['path']))==entry['sha256'],'Parent snapshot changed')
-            initial=entry['path'];history=parent.get('population',parent['history']);previous_games=parent['games_done']
-            cursor=parent['next_seed'];origin=dict(run=str(from_run),games=previous_games,checkpoint=entry)
-        model,raw=load_checkpoint(project_path(root,initial),device=device)
-        require(model.config==ModelConfig.preset(config['model_size']),'Recovery model size differs')
-        entry=dict(path=str(Path(initial).relative_to(root).as_posix()) if Path(initial).is_absolute() else initial,
-            sha256=sha(project_path(root,initial)),model_id=raw['model_id'],generation=0)
-        history=history or [entry]
-        state=dict(format='step5-recovery-league/'+('2.1.0' if revised else '2.0.0'),signature=signature,iteration=0,games_done=0,
-            previous_games=previous_games,next_seed=cursor,history=history,origin=origin,
-            next_search_games=config['search_ready_games'],context_counter=0,
-            evaluation_anchor=entry,evaluations=[],search_seconds=0.,ordinary_seconds=0.)
+        model=FourSeatNet(ModelConfig.preset(config['model_size'])).to(device)
+        model.validate_parameter_count()
+        state=dict(format='step5-recovery-league/2.2.0',signature=signature,iteration=0,games_done=0,
+            previous_games=0,next_seed=cursor,history=[],origin=dict(initialization='random',seed=config['seed'],parameters=model.parameter_count),
+            next_search_games=config['search_ready_games'],context_counter=0,evaluations=[],search_seconds=0.,ordinary_seconds=0.)
+        from .demonstrations import fresh_imitation
+        state['imitation']=fresh_imitation(root,model,config['imitation'],config['update'],run,device)
         # A new recipe never inherits the old full-epoch optimizer moments.
         optimizer=torch.optim.AdamW(model.parameters(),lr=config['learning_rate'],weight_decay=config['weight_decay'])
         init_path=run/'initial.pt'
-        save_checkpoint(init_path,model,optimizer,training=dict(mode='step5-recovery-initial',parent=raw['model_id']))
+        save_checkpoint(init_path,model,optimizer,training=dict(mode='step5-fresh-residual-initial',parent=None,initialization='random',fresh_run=run.relative_to(root).as_posix(),imitation=state['imitation']))
         raw=load_checkpoint(init_path,device=device)[1]
-        state['history']=history+[dict(path=init_path.relative_to(root).as_posix(),sha256=sha(init_path),
+        state['history']=[dict(path=init_path.relative_to(root).as_posix(),sha256=sha(init_path),
             model_id=raw['model_id'],generation=0)]
+        state['evaluation_anchor']=state['history'][0]
         if revised:
             from .retention import update_population
             update_population(root,run,state,config['population'])
@@ -164,10 +167,15 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                 search_budget_ok=not revised or search_seconds+estimate<=ordinary_seconds*config['search_wall_fraction']/(1-config['search_wall_fraction'])
                 if config['search_every_games'] and done>=next_search and search_budget_ok:
                     identity=service.register(model);search_jobs=[]
+                    rollout_entries=list({e['model_id']:e for e in state.get('population',state['history'])}.values())[-3:]
+                    for e in rollout_entries:
+                        path=project_path(root,e['path']);require(path.is_relative_to(run) and sha(path)==e['sha256'],'Imported/changed rollout model')
+                        if e['model_id'] not in service.models:service.register_checkpoint(path)
+                    rollout_ids=list(dict.fromkeys([identity]+[e['model_id'] for e in rollout_entries]))
                     for i in range(config['search_games']):
                         chosen,cursor=seeds_for(cursor,1);seed=chosen[0]
-                        spec=dict(kind='s2',model_id=identity,search=config['search'],focus='neutral',cpu_role=config.get('legacy_budget',{}).get('role','reference'))
-                        provenance=dict(producer='recovery/2.0.0',purpose='training',kind='s2-teacher',
+                        spec=dict(kind='masked_ismcts',model_id=identity,opponents=rollout_ids,search=config['search'],focus='neutral',cpu_role=config.get('legacy_budget',{}).get('role','reference'))
+                        provenance=dict(producer='recovery/2.0.0',purpose='training',kind='masked-ismcts-teacher',
                             seed=seed,sampling_seed=config['seed']*13+done+i,spec=digest(signature))
                         search_jobs.append(dict(index=i,seed=seed,rotation=0,sampling_seed=provenance['sampling_seed'],
                             policies=[spec]*4,path=str(directory/f'search-{i:06d}.jsonl.gz'),provenance=provenance))
@@ -178,7 +186,7 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                     while next_search<=done: next_search+=config['search_every_games']
                 elif not search_budget_ok: search=dict(updated=False,reason='Search wall-time allowance exceeded; postpone until ordinary collection catches up')
                 search_seconds+=time.monotonic()-updated if search.get('collection') else 0.
-                report=dict(format='step5-recovery-report/'+('2.1.0' if revised else '2.0.0'),iteration=iteration,composition=dict(composition),
+                report=dict(format='step5-recovery-report/'+'2.2.0',iteration=iteration,composition=dict(composition),
                     actor=update,search=search,**diagnostics,incoming_model_id=current,
                     games_done=done,cumulative_games=state['previous_games']+done,
                     timings=dict(collection_seconds=collected-began,ppo_seconds=updated-collected,
@@ -190,7 +198,7 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                 checkpoint_began=time.monotonic()
                 identity=save_checkpoint(output,model,optimizer,step=iteration+1,
                     training=dict(mode='step5-population-ppo',recipe='nonforced-actor-ppo/2.1.0' if revised else 'effective-minibatch-ppo/2.0.0',
-                        parent=current,signature=digest(signature),evidence=report))
+                        parent=current,signature=digest(signature),fresh_run=run.relative_to(root).as_posix(),initialization='random-lineage',evidence=report))
                 report['post_update_model_id']=identity
                 report['timings']['checkpoint_seconds']=time.monotonic()-checkpoint_began
                 write_json(directory/'report.json',report)

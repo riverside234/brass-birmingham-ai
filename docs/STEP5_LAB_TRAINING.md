@@ -1,5 +1,7 @@
 # Step 5: self-play, search distillation and meta-RL on the lab computer
 
+**Archived pre-2.2 instructions:** use [Fresh Masked ISMCTS training](TRAINING_RECOVERY_LAB.md) for current commands. This document records earlier recipes and checkpoint-import/search workflows; do not run those commands for the new random residual-model run.
+
 **30 September recovery revision:** the default trainer now uses audited v3 imitation, effective-minibatch PPO, a declining 40% → 20% → 10% → 5% v3 table curriculum, and persistent CPU actors with shared batched inference. Follow [TRAINING_RECOVERY_LAB.md](TRAINING_RECOVERY_LAB.md) for current commands and migration. The original recipe described below is retained as historical context in `configs/step5/previous-lab.json`; its initial 95% neural schedule does not describe the new default. Optional meta-RL retains that explicit historical config.
 
 The project root in every lab command is **`/data/not_backed_up/yxu209/ai-training/`**.

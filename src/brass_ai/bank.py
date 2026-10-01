@@ -8,7 +8,8 @@ from pathlib import Path
 from .legacy import LAB_ROOT, LegacyWorker
 
 ADAPTER_FILES=('src/brass_ai/legacy.py','src/brass_ai/bank.py',
-               'src/brass_ai/learning/legacy_policy.py','src/brass_ai/learning/runner.py')
+               'src/brass_ai/learning/legacy_policy.py','src/brass_ai/learning/runner.py',
+               'src/brass_ai/recovery/legacy_search.py','src/brass_ai/search/common.py')
 
 
 def read(path): return json.loads(Path(path).read_text(encoding='utf-8-sig'))
@@ -38,7 +39,9 @@ def freeze(root,profile_names,*,fixed_work=False):
                  profiles=profiles,fixed_work=fixed_work,platform='windows-dotnet-unity-mono',sampling_seed=1,
                  adapter_files=list(ADAPTER_FILES),compiler_sha256=sha(root/'artifacts/patch-tools/microsoft.net.compilers.toolset.4.12.0/tasks/net472/csc.exe'))
     identity='bank-'+digest(payload)[:20];directory=root/'training/opponents/bank'/identity
-    require(not directory.exists(),'Refusing to rewrite frozen bank '+identity)
+    if directory.exists():
+        load_bank(root,identity)
+        return identity
     directory.mkdir(parents=True)
     for path in files:
         destination=directory/'source'/path;destination.parent.mkdir(parents=True,exist_ok=True);shutil.copyfile(root/path,destination)
@@ -57,7 +60,9 @@ def load_bank(root,identity):
     require(payload['player_count']==4 and payload['wire']=='0.2.0' and payload['rules']=='steam-brass-patch-1.1.0','Incompatible bank contract')
     for name,h in payload['source_files'].items():require(sha(below(path/'source',name))==h,'Frozen source changed: '+name)
     for name,h in payload['source_files'].items():
-        if name.startswith('configs/contracts/') or name.startswith('configs/rules/') or name in payload['adapter_files']:
+        # Archived adapters are immutable evidence, not a restriction on all future
+        # clients. Wire/rules contracts still must agree with the active host.
+        if name.startswith('configs/contracts/') or name.startswith('configs/rules/'):
             require(sha(below(root,name))==h,'Active contract differs from frozen bank')
     return manifest
 
@@ -67,7 +72,16 @@ def admission(root,policy_id,purpose='training'):
     if purpose=='diagnostic':return
     pool=read(Path(root)/'training/opponents/pool.json')
     selected=pool[purpose];require(policy_id in selected,'Opponent is not admitted to '+purpose+' pool')
-    record=selected[policy_id];path=below(root,record['qualification'])
+    record=selected[policy_id]
+    if record.get('admission')=='user-directed-masked-ismcts/1.0.0':
+        bank,name=policy_id.split('/');manifest=load_bank(root,bank)
+        require(record['manifest_sha256']==sha(below(root,'training/opponents/bank/'+bank+'/manifest.json')),'Direct bank manifest changed')
+        profile=manifest['payload']['profiles'][name]
+        require(profile['mode']=='masked_ismcts' and profile['milliseconds']==1000 and profile['cash_policy']==profile['conversion_policy']==1,
+                'Direct one-second v3 contract changed')
+        require((purpose=='evaluation')==('pottery-flex' in name),'Pottery opponent holdout changed')
+        return
+    path=below(root,record['qualification'])
     require(sha(path)==record['sha256'],'Qualification report changed')
     report=read(path);require(report['bank']==policy_id.split('/')[0],'Qualification belongs to another bank')
     result=report['profiles'][record['profile']]

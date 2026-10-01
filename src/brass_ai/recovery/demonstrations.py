@@ -15,6 +15,7 @@ import numpy as np
 from brass_ai.bank import admission, read, sha
 from brass_ai.host import RulesHost
 from brass_ai.learning.checkpoint import load_checkpoint, save_checkpoint, resume_optimizer
+from brass_ai.learning.model import FourSeatNet,ModelConfig
 from brass_ai.learning.contracts import compatibility, digest, project_path, require
 from brass_ai.learning.replay import split_for
 from .replay import read_shards,write_cache,cache_receipt
@@ -35,7 +36,7 @@ def generate(root,output,games,config,*,seed=17100000,mono=None,partition=None,b
     require(profiles,'No admitted teachers')
     for p in profiles:
         admission(root,p,'training')
-        require(not p.endswith('/pottery-flex-v3'),'Held-out teacher selected')
+        require('pottery-flex' not in p,'Held-out teacher selected')
     from .legacy_search import legacy_spec
     teacher_specs={p:legacy_spec(root,p,budget) for p in profiles}
     spec=dict(format='v3-demonstration-collection/1.0.0',games=games,seed=seed,partition=partition,
@@ -74,10 +75,9 @@ def audit(root,paths,output,*,mono=None,workers=1,budget=None):
     allowed=set(read(root/'training/opponents/pool.json')['training'])
     for identity in allowed: admission(root,identity,'training')
     calibration=None
-    if budget and budget['role']=='lab':
-        from .legacy_search import teachers,require_calibration
-        allowed.update(teachers(root,budget));calibration=dict(budget=budget,
-            sha256=sha(project_path(root,budget['calibration'])),identity=require_calibration(root,budget)['identity'])
+    if budget:
+        from .legacy_search import teachers
+        allowed.update(teachers(root,budget));calibration=dict(format='direct-masked-budget/1.0.0',budget=budget)
     require(type(workers) is int and 1<=workers<=32,'Invalid audit CPU allowance')
     paths=sorted(set(str(project_path(root,p)) for p in paths))
     if workers>1:
@@ -179,15 +179,32 @@ def _audit_path(args):
 
 def load_dataset(root,manifest_path,partition):
     root=Path(root);manifest=read(project_path(root,manifest_path))
-    require(manifest['format']=='bc-dataset/1.0.0' and manifest['compatibility']==compatibility(),'Incompatible BC manifest')
+    require(manifest['format']=='bc-dataset/1.0.0','Incompatible BC manifest')
+    from brass_ai.learning.contracts import assert_heuristic_data_compatible
+    assert_heuristic_data_compatible(manifest['compatibility'])
     require(manifest['label_kind']=='qualified-v3-choice/1.0.0' and manifest['context']=='neutral-predecision/1.0.0','Invalid BC labels/context')
     allowed=set(manifest['teachers'])
     parents=set(read(root/'training/opponents/pool.json')['training']);admitted=set(parents)
+    # Reuse previously audited HEURISTIC data without admitting old planners or
+    # importing neural replay into the new population. Verify archived evidence.
+    archive=root/'training/opponents/archive/pre-masked-pool.json'
+    if archive.exists():
+        from brass_ai.bank import load_bank
+        for identity,record in read(archive)['training'].items():
+            evidence=project_path(root,record['qualification'])
+            require(sha(evidence)==record['sha256'],'Historical heuristic evidence changed')
+            report=read(evidence);name=record['profile'];bank=identity.split('/')[0]
+            load_bank(root,bank)
+            require(report['bank']==bank and report['profiles'][name]['training_eligible'],'Historical teacher evidence invalid')
+            admitted.add(identity)
     if manifest.get('calibration'):
-        from .legacy_search import teachers,require_calibration
-        c=manifest['calibration'];require(sha(project_path(root,c['budget']['calibration']))==c['sha256'],'Dataset calibration changed')
-        require(require_calibration(root,c['budget'])['identity']==c['identity'],'Dataset calibration identity differs')
-        admitted.update(teachers(root,c['budget']))
+        from .legacy_search import teachers
+        c=manifest['calibration']
+        if c.get('format')=='direct-masked-budget/1.0.0':admitted.update(teachers(root,c['budget']))
+        else:
+            path=project_path(root,c['budget']['calibration']);require(sha(path)==c['sha256'],'Archived dataset evidence changed')
+            report=read(path);require(report['identity']==c['identity'] and report['training_eligible'],'Archived dataset evidence invalid')
+            for child in c['identity']['bank']['parents'].values():admitted.add('lab-v3/'+digest(dict(child=child,identity=c['identity'])))
     require(allowed<=admitted,'Manifest teacher no longer admitted')
     for p in allowed&parents: admission(root,p,'training')
     chosen=[e for e in manifest['entries'] if e['split']==partition]
@@ -200,8 +217,10 @@ def load_dataset(root,manifest_path,partition):
     games=[]
     for path,ids in by_path.items():
         receipt=next((e.get('features') for e in chosen if project_path(root,e['path'])==path),None)
-        games.extend(g for g in read_shards([path],partition=partition,receipts={str(path):receipt}) if g['game_id'] in ids)
+        games.extend(g for g in read_shards([path],partition=partition,receipts={str(path):receipt},heuristic_only=True) if g['game_id'] in ids)
     require(len(games)==len(chosen),'Missing/duplicate demonstration games')
+    require(all(r['behavior']['kind']=='external' and r['behavior']['policy_id'] in allowed for g in games for r in g['records']),
+            'Fresh training prohibits imported neural replay; demonstrations must be entirely audited heuristics')
     data=prepared(games,lambda r:r['behavior']['kind']=='external' and r['behavior']['policy_id'] in allowed,neutral=True)
     return data,manifest
 
@@ -247,10 +266,11 @@ def _train_bc(root,run,manifest_path,initial,config,*,device='cpu',epochs=10,pat
     training,manifest=load_dataset(root,manifest_path,'train')
     validation,_=load_dataset(root,manifest_path,'validation')
     require({d[2][0] for d in training}.isdisjoint({d[2][0] for d in validation}),'BC game leakage')
-    signature=dict(format='bc-training/1.0.0',manifest_sha256=sha(project_path(root,manifest_path)),
+    require(initial is None,'Imitation starts from random residual weights; omit --initial')
+    signature=dict(format='bc-training/2.2.0',manifest_sha256=sha(project_path(root,manifest_path)),
         manifest_path=project_path(root,manifest_path).relative_to(root).as_posix(),
-        initial_path=project_path(root,initial).relative_to(root).as_posix(),retention=retention,
-        initial_sha256=sha(project_path(root,initial)),update=config,lr=lr,epochs=epochs,
+        initialization='random',seed=812771,retention=retention,
+        architecture=ModelConfig.preset('medium').to_dict(),update=config,lr=lr,epochs=epochs,
         patience=patience,min_epochs=min_epochs,implementation=implementation_id())
     state_path=out/'state.json'
     if state_path.exists():
@@ -260,8 +280,8 @@ def _train_bc(root,run,manifest_path,initial,config,*,device='cpu',epochs=10,pat
         require(raw['step']==state['epoch'],'BC epoch/checkpoint mismatch')
     else:
         require(not out.exists() or not any(p.name!='.active-run.json' for p in out.iterdir()),'Use a new BC run')
-        model,raw=load_checkpoint(project_path(root,initial),device=device)
-        state=dict(signature=signature,epoch=0,best_loss=None,bad_epochs=0,history=[],parent=raw['model_id'],stopped=False)
+        model=FourSeatNet(ModelConfig.preset('medium')).to(device)
+        state=dict(signature=signature,epoch=0,best_loss=None,bad_epochs=0,history=[],parent=None,stopped=False)
     optimizer=torch.optim.AdamW(model.parameters(),lr=lr,weight_decay=1e-4)
     if state_path.exists(): resume_optimizer(raw,optimizer)
     training=balance(training)
@@ -278,7 +298,7 @@ def _train_bc(root,run,manifest_path,initial,config,*,device='cpu',epochs=10,pat
         evidence=dict(epoch=epoch+1,train=train_report,validation=val_report,balanced_validation=balanced_val_report)
         state['history'].append(evidence);state['epoch']=epoch+1
         state['bad_epochs']=0 if improved else state['bad_epochs']+1
-        metadata=dict(mode='step5-v3-bc',parent=state['parent'],signature=digest(signature),
+        metadata=dict(mode='step5-v3-bc',parent=state['parent'],signature=digest(signature),fresh_run=out.relative_to(root).as_posix(),initialization='random',
             label_kind='qualified-v3-choice/1.0.0',context='neutral-predecision/1.0.0',
             manifest_sha256=signature['manifest_sha256'],evidence=evidence,promoted=False)
         filename=f'epoch-{epoch+1:04d}.pt'
@@ -299,3 +319,36 @@ def _train_bc(root,run,manifest_path,initial,config,*,device='cpu',epochs=10,pat
         history=state['history'],candidate=str(out/'best.pt'),candidate_sha256=sha(out/'best.pt'),
         environment=environment(device),promoted=False,note='Select with fresh gameplay evaluation; imitation loss alone is not strength')
     write_json(out/'report.json',report);return report
+
+
+def fresh_imitation(root,model,settings,update,run,device):
+    """Optional heuristic BC inside a new random run; no checkpoint is imported."""
+    if settings['manifest'] is None:return dict(enabled=False,initialization='random',note='No heuristic dataset supplied')
+    import copy
+    progress=run/'imitation-progress.json'
+    identity=dict(run=run.relative_to(root).as_posix(),settings=settings,update=update,
+        manifest_sha256=sha(project_path(root,settings['manifest'])),implementation=implementation_id(),model=model.config.to_dict())
+    if progress.exists():
+        previous=read(progress)
+        require(previous.get('identity')==identity,'Incomplete imitation belongs to a different recipe/source/dataset')
+        print('Restarting uncommitted imitation from this run\'s original random seed',flush=True)
+    write_json(progress,dict(format='fresh-imitation-progress/1.0.0',identity=identity,history=[]))
+    train_rows,manifest=load_dataset(root,settings['manifest'],'train')
+    val_rows,_=load_dataset(root,settings['manifest'],'validation')
+    require({d[2][0] for d in train_rows}.isdisjoint({d[2][0] for d in val_rows}),'Imitation setup leakage')
+    training=Dataset(balance(train_rows),device,policy=False);validation=Dataset(val_rows,device,policy=False)
+    optimizer=torch.optim.AdamW(model.parameters(),lr=settings['learning_rate'],weight_decay=1e-4)
+    best_loss=float('inf');best=None;bad=0;history=[]
+    for epoch in range(settings['epochs']):
+        train_report=supervised_epoch(model,optimizer,training,update)
+        val_report=supervised_epoch(model,None,validation,update,training=False)
+        improved=val_report['loss']<best_loss-1e-4
+        if improved:best_loss=val_report['loss'];best=copy.deepcopy(model.state_dict());bad=0
+        else:bad+=1
+        history.append(dict(epoch=epoch+1,train=train_report,validation=val_report,improved=improved))
+        write_json(progress,dict(format='fresh-imitation-progress/1.0.0',identity=identity,history=history))
+        print(f'Fresh imitation {epoch+1}: train {train_report["loss"]:.4f}, validation {val_report["loss"]:.4f}',flush=True)
+        if epoch+1>=settings['min_epochs'] and bad>=settings['patience']:break
+    model.load_state_dict(best);model.validate_parameter_count()
+    return dict(enabled=True,initialization='random',manifest=settings['manifest'],manifest_sha256=sha(project_path(root,settings['manifest'])),
+                history=history,best_validation=best_loss,optimizer_reset_before_ppo=True)

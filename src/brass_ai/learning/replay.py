@@ -28,8 +28,27 @@ def terminal_targets(result):
 def validate_teacher(teacher, count):
     if teacher is None:
         return
-    keys(teacher, ('source', 'probabilities', 'coverage', 'confidence', 'samples', 'horizon'))
-    require(teacher['source'] == 'fresh-finalist/1.0.0', 'Unsupported teacher target; visits are not probabilities')
+    base={'source', 'probabilities', 'coverage', 'confidence', 'samples', 'horizon'}
+    visits=teacher.get('source')=='ismcts-root-visits/1.0.0'
+    extra={'legal_ids','visits','priors','expansion','model_id','observer','worlds','prior_mix','search','fingerprint','source_fingerprint'} if visits else set()
+    keys(teacher,base|extra)
+    require(teacher['source'] in ('fresh-finalist/1.0.0','ismcts-root-visits/1.0.0'), 'Unsupported teacher target')
+    if visits:
+        from brass_ai.search.common import SearchConfig
+        SearchConfig(**teacher['search']).validate()
+        require(len(teacher['legal_ids'])==count and len(set(teacher['legal_ids']))==count,'Invalid teacher legal IDs')
+        require(len(teacher['visits'])==count and all(type(n) is int and n>=0 for n in teacher['visits']) and
+                sum(n>0 for n in teacher['visits'])>=2 and sum(teacher['visits'])==teacher['samples'],'Incomplete root-visit teacher')
+        finite_vector(teacher['priors'],count,0,1)
+        require(abs(sum(teacher['priors'])-1)<1e-6 and len(teacher['expansion'])==count and
+                all(type(x) is bool for x in teacher['expansion']), 'Invalid full-legal prior/expansion mask')
+        require(type(teacher['observer']) is int and 0<=teacher['observer']<4 and
+                type(teacher['worlds']) is int and teacher['worlds']>0 and 0<=teacher['prior_mix']<=.5,'Invalid visit provenance')
+        require(all(teacher['expansion'][i] or n==0 for i,n in enumerate(teacher['visits'])),'Visit outside expanded edge')
+        require(teacher['worlds']==teacher['samples'] and len(teacher['model_id'])==len(teacher['source_fingerprint'])==64,'Invalid teacher model/source/world identity')
+        require(teacher['fingerprint']==digest(dict(model=teacher['model_id'],config=teacher['search'],contract='masked-ismcts/1.0.0',source=teacher['source_fingerprint'])), 'Teacher source/config fingerprint differs')
+        expected=[(1-teacher['prior_mix'])*n/teacher['samples']+teacher['prior_mix']*p for n,p in zip(teacher['visits'],teacher['priors'])]
+        require(all(abs(a-b)<1e-6 for a,b in zip(expected,teacher['probabilities'])),'Teacher does not match completed visits/prior mixture')
     finite_vector(teacher['probabilities'], count, 0, 1)
     coverage = teacher['coverage']
     require(isinstance(coverage, list) and len(coverage) == count and
@@ -76,6 +95,8 @@ def validate_game(game):
         finite_vector([b['temperature']], 1, 0)
         finite_vector([row['seconds']], 1, 0)
         validate_teacher(row['teacher'], len(row['choices']))
+        if row['teacher'] is not None and row['teacher']['source']=='ismcts-root-visits/1.0.0':
+            require(row['teacher']['legal_ids']==[c['id'] for c in row['choices']] and row['teacher']['observer']==row['seat'], 'Teacher action order/observer mismatch')
     require({r['seat'] for r in game['records']} == set(range(4)), 'Missing seat trajectories')
     return game
 

@@ -178,16 +178,23 @@ def write_shard(path,games,provenance,*,cache=True):
     return checked
 
 
-def read_shards(paths,partition=None,receipts=None):
+def read_shards(paths,partition=None,receipts=None,*,heuristic_only=False):
     require(partition in (None,'train','validation','test'),'Unknown partition')
     output=[];identities=set()
     for path in dict.fromkeys(str(p) for p in paths):
         with gzip.open(path,'rt',encoding='utf-8') as stream:
             header=decode_json(next(stream));keys(header,('format','compatibility','provenance'))
-            require(header['format']=='four-seat-replay/1.0.0','Unsupported replay format');assert_compatible(header['compatibility'])
+            require(header['format']=='four-seat-replay/1.0.0','Unsupported replay format')
+            if heuristic_only:
+                from brass_ai.learning.contracts import assert_heuristic_data_compatible
+                assert_heuristic_data_compatible(header['compatibility'])
+            else:assert_compatible(header['compatibility'])
             require(type(header['provenance']) is dict,'Invalid provenance')
             require(partition!='train' or header['provenance'].get('purpose')!='evaluation','Evaluation replay in training')
             raw=[decode_json(line) for line in stream]
+        if heuristic_only:
+            require(all(r['behavior']['kind']=='external' and r['teacher'] is None for g in raw for r in g['records']),
+                    'Audited heuristic ingress prohibits neural behavior and search targets')
         arrays=load_cache(path,raw,(receipts or {}).get(str(path)));start=0
         for g in raw:
             count=len(g['records']);game=check_game(g,None if arrays is None else arrays[start:start+count],validated_inputs=arrays is not None);start+=count

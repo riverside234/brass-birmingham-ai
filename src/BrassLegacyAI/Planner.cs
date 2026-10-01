@@ -9,7 +9,9 @@ namespace BrassLegacyAI
 {
     public sealed class Profile
     {
-        public string id,mode="S1";
+        public string id,mode="masked_ismcts";
+        public int simulations=100000,root_top_k=16,interior_top_k=8,max_choices=512;
+        public double exploration=1.4;
         public int player_count=4,work_limit=160,first_width=24,beam=10,second_width=12;
         // Lab replicas partition root branches; each still produces a complete
         // cash-safe incumbent. The installed/frozen profiles default to serial.
@@ -28,7 +30,8 @@ namespace BrassLegacyAI
             if(p.cash_policy<0 || p.cash_policy>1)throw new Exception("cash_policy_contract");
             if(p.partition_count<1 || p.partition_count>32 || p.partition_index<0 || p.partition_index>=p.partition_count)throw new Exception("partition_contract");
             if(new[]{p.credible_window,p.rail_preference,p.style_weight,p.proposal_fraction}.Any(x=>double.IsNaN(x) || double.IsInfinity(x)))throw new Exception("nonfinite_profile");
-            if(p.player_count!=4 || (p.mode!="S0" && p.mode!="S1" && p.mode!="S2") || p.work_limit<1 || p.milliseconds<0 || double.IsNaN(p.milliseconds) || double.IsInfinity(p.milliseconds) || p.first_width<1 || p.beam<1 || p.second_width<1 || string.IsNullOrEmpty(p.id) || !Tactics.Styles.Contains(p.tactic) || p.reply_candidates<1 || p.reply_scenarios<1 || p.reply_confirmation<1 || p.reply_work<1 || p.proposal_fraction<=0 || p.proposal_fraction>=1 || p.credible_window<0 || p.style_weight<0)throw new Exception("profile_contract");
+            if(p.player_count!=4 || p.mode!="masked_ismcts" || p.work_limit<1 || p.milliseconds<0 || double.IsNaN(p.milliseconds) || double.IsInfinity(p.milliseconds) || p.first_width<1 || p.beam<1 || p.second_width<1 || string.IsNullOrEmpty(p.id) || !Tactics.Styles.Contains(p.tactic) || p.reply_candidates<1 || p.reply_scenarios<1 || p.reply_confirmation<1 || p.reply_work<1 || p.proposal_fraction<=0 || p.proposal_fraction>=1 || p.credible_window<0 || p.style_weight<0)throw new Exception("profile_contract");
+            if(p.simulations<1 || p.root_top_k<1 || p.interior_top_k<1 || p.max_choices<32 || p.max_choices>4096 || double.IsNaN(p.exploration) || double.IsInfinity(p.exploration) || p.exploration<=0)throw new Exception("masked_search_contract");
             return p;
         }
     }
@@ -50,11 +53,11 @@ namespace BrassLegacyAI
         public Plan selected;
         public Plan[] alternatives;
         public Dictionary<string,Plan> family_best;
-        public ReplyTelemetry replies;
+        public MaskedTelemetry search;
     }
     // Each request is independent. Policies receive only observation + semantic legal IDs.
     // There is no access to a real Host, BoardHelper, historical stock rule, or RNG.
-    public sealed class Planner
+    public sealed partial class Planner
     {
         readonly JObject composition;
         public Planner(JObject composition){this.composition=(JObject)composition.DeepClone();}
@@ -77,20 +80,9 @@ namespace BrassLegacyAI
         }
         static IEnumerable<Choice> Proposals(JObject view,List<Choice> legal,int limit,Profile profile,IntentState intent)
         {
-            // Retain semantic alternatives; do not let eight interchangeable discard
-            // cards consume the beam. Two discard options protect enabling continuations.
-            var ordered=legal.OrderByDescending(c=>Evaluator.Proposal(view,c,profile.conversion_policy==1)+Tactics.Bias(profile,intent,c)).ThenBy(c=>c.id,StringComparer.Ordinal).ToArray();
-            if(limit==1)return ordered.Take(1);
-            var distinct=ordered.GroupBy(c=>c.kind+"|"+c.target+"|"+c.industry+"|"+c.merchant+(c.kind=="scout"?"|"+c.id:"")).SelectMany(g=>g.Take(cappedCards(g.Key))).ToArray();
-            var result=new List<Choice>();
-            result.AddRange(distinct.Where(c=>c.kind=="sell").Take(1));
-            result.AddRange(distinct.Where(c=>c.kind=="build").GroupBy(c=>c.industry).Select(g=>g.First()));
-            foreach(string kind in new[]{"loan","network","develop","scout","pass"})
-                result.AddRange(distinct.Where(c=>c.kind==kind).Take(kind=="develop"?2:1));
-            foreach(var c in distinct)if(result.Count<limit && !result.Contains(c))result.Add(c);
-            return result.Take(Math.Max(limit,11));
+            // Used only for a fast complete legal incumbent, never a beam search.
+            return legal.OrderByDescending(c=>Evaluator.Proposal(view,c,profile.conversion_policy==1)+Tactics.Bias(profile,intent,c)).ThenBy(c=>c.id,StringComparer.Ordinal).Take(1);
         }
-        static int cappedCards(string key){return key.StartsWith("loan|") || key.StartsWith("develop|") || key.StartsWith("network|")?2:1;}
         static string[] GreedyFinish(Session s,List<string> prefix,string first,bool extend,int beerPreference=0)
         {
             var path=new List<string>(prefix);path.Add(first);
@@ -161,8 +153,7 @@ namespace BrassLegacyAI
         {
             var prefix=before.SelectMany(a=>a).ToList();var root=s.World(prefix);var view=s.View(root);var results=new List<Plan>();
             var proposals=Proposals(view,root.Choices(),limit,s.profile,s.intent);
-            if(before.Count==0 && limit>1 && s.profile.partition_count>1)
-                proposals=proposals.Where((c,i)=>i%s.profile.partition_count==s.profile.partition_index);
+
             foreach(var first in proposals)
             {
                 if(s.Stop && results.Count>0)break;
@@ -243,66 +234,6 @@ namespace BrassLegacyAI
                 }
             }
             return result;
-        }
-        public Decision Decide(JObject observation,List<Choice> legal,Profile profile,bool fixedWork=false,uint seed=1,CancellationToken cancel=default(CancellationToken),Action<Plan> incumbent=null,IntentState intent=null)
-        {
-            if(profile.mode=="S2")return ReplySearch.Decide(this,observation,legal,profile,composition,fixedWork,seed,cancel,incumbent,intent);
-            var s=new Session{root=(JObject)observation.DeepClone(),profile=profile,fixedWork=fixedWork,cancel=cancel,seat=(int)observation["seat"]};
-            if((int)observation["context"]["actor"]!=s.seat || observation["players"].Count()!=profile.player_count)throw new Exception("actor_or_player_count");
-            s.intent=Tactics.Refresh(s.root,profile,intent);
-            s.setup=Belief.Setup(s.root,composition,seed);
-            // Keep the public events needed for wildcard accounting. The evaluator uses
-            // the current public board, not a repeated serialization of every old move.
-            s.setup["position"]["history"]=new JArray(s.root["history"].Where(e=>(string)e["choice"]["kind"]=="scout" || ((string)e["choice"]["card"]??"").StartsWith("wild:")).Select(e=>e.DeepClone()));
-            var root=s.World(new string[0]);
-            if(!root.Choices().Select(c=>c.id).SequenceEqual(legal.OrderBy(c=>c.id,StringComparer.Ordinal).Select(c=>c.id)))throw new Exception("legal_contract_mismatch");
-            if(root.Phase!="action")
-            {
-                var ordered=legal.OrderByDescending(c=>Evaluator.Proposal(s.root,c,s.profile.conversion_policy==1)).ThenBy(c=>c.id,StringComparer.Ordinal).ToArray();
-                var selected=new Plan{intent=s.intent,actions=new List<string[]>{root.Phase=="debt"?new[]{ordered[0].id}:GreedyFinish(s,new List<string>(),ordered[0].id,true)}};
-                return new Decision{profile=profile.id,mode=profile.mode,observation_hash=Wire.Hash(observation),status="forced_or_resumed",selected=selected,alternatives=new[]{selected},nodes=s.nodes,elapsed_ms=s.clock.Elapsed.TotalMilliseconds};
-            }
-            int target=profile.mode=="S1"?Math.Min(2,root.Remaining):1;
-            // Seed a legal, useful incumbent before widening. No stock helper is called.
-            var quick=Actions(s,new List<string[]>(),1);
-            var finals=CashIncumbents(s,root,target,Complete(s,quick[0],target));
-            var best=Choose(finals,profile);incumbent?.Invoke(best);
-            if(!s.Stop)
-            {
-                var first=Actions(s,new List<string[]>(),profile.first_width,profile.mode=="S1");
-                if(target==1)finals.AddRange(first);
-                // Preserve setup families even when their one-action value is low.
-                var beam=new List<Plan>();
-                beam.AddRange(first.Take(3));
-                foreach(string kind in new[]{"loan|","develop|","scout|","network|"})
-                {var p=first.FirstOrDefault(x=>x.actions[0][0].StartsWith(kind));if(p!=null && !beam.Contains(p))beam.Add(p);}
-                if(profile.conversion_policy==1)
-                    foreach(var group in first.Where(p=>p.actions[0][0].StartsWith("build|")).GroupBy(p=>p.actions[0][0].Split('|')[2]))
-                    {var p=group.First();if(!beam.Contains(p))beam.Add(p);}
-                foreach(var p in first)if(beam.Count<profile.beam && !beam.Contains(p))beam.Add(p);
-                // Complete diverse first actions before spending the remaining
-                // budget widening one branch. A modest partial build can enable
-                // an immediate sale; a lucrative-looking loan can strand cash.
-                // Every published incumbent is still a full legal turn.
-                if(profile.conversion_policy==1 && target==2)
-                    foreach(var p in beam)
-                    {
-                        if(s.Stop)break;
-                        finals.Add(Complete(s,p,target));
-                        var next=Choose(finals,profile);
-                        if(next.signature!=best.signature){best=next;incumbent?.Invoke(best);}
-                    }
-                foreach(var p in beam)
-                {
-                    if(s.Stop)break;
-                    var candidates=target==1?new List<Plan>{p}:Actions(s,p.actions,profile.second_width);
-                    finals.AddRange(candidates);
-                    var next=Choose(finals,profile);
-                    if(next.signature!=best.signature){best=next;incumbent?.Invoke(best);}
-                }
-            }
-            best=Choose(finals,profile);
-            return new Decision{profile=profile.id,mode=profile.mode,observation_hash=Wire.Hash(observation),status=cancel.IsCancellationRequested?"cancelled_with_incumbent":s.Stop?"budget":"complete",nodes=s.nodes,failures=s.failures,elapsed_ms=s.clock.Elapsed.TotalMilliseconds,overrun=!fixedWork && s.clock.Elapsed.TotalMilliseconds>profile.milliseconds,selected=best,alternatives=finals.GroupBy(p=>p.signature).Select(g=>g.First()).OrderByDescending(p=>p.score).Take(8).ToArray(),family_best=finals.GroupBy(p=>p.actions[0][0].Split('|')[0]).ToDictionary(g=>g.Key,g=>g.OrderByDescending(p=>p.score).ThenBy(p=>p.signature,StringComparer.Ordinal).First())};
         }
         public static Plan Choose(List<Plan> plans,Profile profile)
         {

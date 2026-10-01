@@ -1,11 +1,23 @@
 # Brass: Birmingham AI training project
 
+**Current workflow:** M0–M5 of [Masked ISMCTS](ai-research/MASKED_ISMCTS_REVISION_PLAN.md) are implemented. Use the [current conda lab guide](docs/TRAINING_RECOVERY_LAB.md), [1.4.9 game release notes](docs/MASKED_ISMCTS_1.4.9.md), and [compact exit checks](docs/MASKED_ISMCTS_EXIT_CHECKS.md).
+
+Fresh Step 5 uses a randomly initialized **1,840,109-parameter MLP-ResNet**, audited heuristic imitation, population self-play and completed Masked ISMCTS visit distillation. Existing neural checkpoints and imported neural replay are rejected. CPU batching is implemented alongside GPU batching. Dynamic legality is separate from padding and progressive top-K expansion.
+
+Package **1.4.9** switches all six v3 styles to shared C# Masked ISMCTS, preserving **2/5/12 seconds**, old-save **10 seconds**, and the current rules/UI/resource lifecycle. The new lab bank uses **one second directly**. Pottery Flex's opponent identity is held out; all learner Pottery moves remain available.
+
+Only `masked_ismcts` is active. The [quick search probe](docs/R4_R5_SEARCH_LAB.md) compares that backend with its own NN prior and full-expansion setting. The descriptions and checkpoint-import commands below record previous implementations. Do not use them for the fresh recipe; old banks/results remain archival evidence. Strong neural play and lab throughput require measurement.
+
 Rules-host implementation and research for an offline replacement opponent in the
 Steam version of Brass: Birmingham. The target is four-player games with varied
 personalities and calibrated difficulty, trained on a lab GPU and played locally
 on a laptop.
 
-**Current status:** R0 reference pins, R1's four-player host, R2's model/training
+## Historical implementation notes
+
+The following describes earlier releases and recipes. The current workflow and clocks are stated above; historical checkpoint-import commands are not accepted by recipe 2.2.0.
+
+R0 reference pins, R1's four-player host, R2's model/training
 scaffold and R3's six-style CPU legacy bank are implemented locally. R3 includes
 persistent intent, complete-turn planning, required reply search, immutable
 versions and evidence-gated training/evaluation pools. See the
@@ -28,7 +40,7 @@ placement replay. The [1.4.7 resource update](docs/AI_EXECUTION_RESOURCES_1.4.7.
 caps rendering at 30 FPS during computation, restores normal presentation,
 serializes retiring AI jobs and provides optional simulation suspension and
 cleanup contracts for future inference backends. It applies independently of
-search allowances and strategies. **Package 1.4.7 is installed and verified.**
+search allowances and strategies. Package 1.4.7's lifecycle is retained by current 1.4.9.
 The [compatibility check](docs/UI_PATCH_RESEARCH_COMPATIBILITY.md)
 preserves the research bank and training interfaces. [Step 5](docs/STEP5_LAB_TRAINING.md)
 adds self-play-first population PPO, neural search distillation, diverse-opponent

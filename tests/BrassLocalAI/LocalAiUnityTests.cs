@@ -208,7 +208,7 @@ public sealed class LocalAiUnityDriver : MonoBehaviour
         Check(LocalGameState.Difficulty(state, LocalGameState.Assignment(state, (int)selected.PlayerStartConfiguration.Color)) == "easy", "selected difficulty saved with changed color");
         int randomColor = (int)Setup.PlayerMetadata[3].PlayerStartConfiguration.Color;
         string randomStrategy = (string)LocalGameState.Assignment(state, randomColor)["strategy"];
-        Check(ProfileCatalog.Keys.Contains(randomStrategy) && (string)LocalGameState.Assignment(state, randomColor)["profile"]["mode"] == "S1", "Random resolves to one of the six real S1 profiles");
+        Check(ProfileCatalog.Keys.Contains(randomStrategy) && (string)LocalGameState.Assignment(state, randomColor)["profile"]["mode"] == "masked_ismcts", "Random resolves to one of the six versioned Masked ISMCTS profiles");
         Check(LocalMenu.Strategy(Setup.PlayerMetadata[3]) == "random", "resolving Random does not change the next-game selection");
         Check((string)LocalGameState.Assignment(LocalGameState.Read(repository.Load(first.Metadata.GameId).Metadata), randomColor)["strategy"] == randomStrategy, "Random remains fixed after load");
         // Recreate a cold menu with a saved game. Both the parent menu and its
@@ -273,6 +273,14 @@ public sealed class LocalAiUnityDriver : MonoBehaviour
         aiView.Controller = new PlayAiTurnController(turn);
         foreach (int count in new[] { 2, 3, 4 }) foreach (bool intro in new[] { false, true }) foreach (string key in ProfileCatalog.Keys) foreach (string difficulty in DifficultyCatalog.Keys)
         {
+            if(Environment.GetCommandLineArgs().Contains("--brass-masked-quick"))
+            {
+                bool quickCase=(count==2 && !intro && key=="balanced" && (difficulty=="easy" || difficulty=="mid")) ||
+                    (count==4 && !intro && key=="balanced" && difficulty=="hard") ||
+                    (count==3 && intro && (key=="rail-tempo" || key=="pottery-flex") && difficulty=="easy") ||
+                    (count==4 && !intro && (key=="cotton" || key=="goods-beer" || key=="supplier") && difficulty=="easy");
+                if(!quickCase)continue;
+            }
             bool humanTransition = count == 2 && key == "balanced";
             var config = new GameStartConfiguration((NumberOfPlayers)count) { Seed = 92720 + count, IsIntroductoryGame = intro };
             var meta = new GameMetadata(config, GameType.Local);
@@ -345,7 +353,7 @@ public sealed class LocalAiUnityDriver : MonoBehaviour
                     var bridge = UnityEngine.Object.FindObjectOfType<LocalTurnBridge>();
                     var executing = Get<Profile>(bridge, "profile");
                     var bankProfile = ProfileCatalog.Create(key, count, intro);
-                    Check(Get<double>(bridge, "budget") == DifficultyCatalog.Milliseconds(difficulty) && executing.work_limit == 240 && executing.work_limit == bankProfile.work_limit && executing.reply_work == bankProfile.reply_work && executing.mode == "S1", "per-player allowance with research-bank node and reply limits");
+                    Check(Get<double>(bridge, "budget") == DifficultyCatalog.Milliseconds(difficulty) && executing.work_limit == 1000000 && executing.work_limit == bankProfile.work_limit && executing.mode == "masked_ismcts", "per-player original allowance with Masked ISMCTS safety guard");
                     for (int repeat = 0; repeat < 3; repeat++) foreach (var input in inputs) input();
                     Check(LocalTurnBridge.IsThinking && app.Game.Revision == revision && boardOutput.Builds == 0, "repeated clicks never cancel or skip a thinking turn");
                     // Visual visibility is not ownership of the turn. A popup must

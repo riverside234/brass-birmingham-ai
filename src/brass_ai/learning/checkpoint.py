@@ -10,6 +10,7 @@ from .model import FourSeatNet, ModelConfig
 
 
 def save_checkpoint(path, model, optimizer=None, *, step=0, training=None):
+    model.validate_parameter_count()
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     payload = {
@@ -39,6 +40,7 @@ def load_checkpoint(path, *, device='cpu'):
     require(type(raw['step']) is int and raw['step'] >= 0, 'Invalid training step')
     model = FourSeatNet(ModelConfig.from_dict(raw['model_config']))
     model.load_state_dict(raw['state_dict'], strict=True)
+    model.validate_parameter_count()
     require(all(torch.isfinite(v).all() for v in model.state_dict().values()), 'Non-finite weights')
     require(raw['model_id'] == model_id(model), 'Checkpoint weights/metadata digest mismatch')
     return model.to(device), raw

@@ -34,6 +34,9 @@ def evaluate(root,output,candidate_path,references,config,*,setups=None,seed=Non
         with torch.random.fork_rng(devices=[]): model,raw=load_checkpoint(project_path(root,path),device='cpu')
         entries.append(dict(path=str(path),sha256=sha(project_path(root,path)),model_id=raw['model_id']))
         modes[raw['model_id']]=raw['training'].get('mode')
+        require(model.config.architecture=='brass-four-seat-mlp-resnet/1.0.0' and raw['training'].get('fresh_run'),'Evaluation accepts only checkpoints from a new fresh residual run')
+        if entries[:-1]:require(raw['training']['fresh_run']==fresh_run,'Evaluation cannot import another run population')
+        fresh_run=raw['training']['fresh_run']
     require(entries[0]['model_id'] not in [e['model_id'] for e in entries[1:]],'Candidate cannot be its own reference')
     pool=read(root/'training/opponents/pool.json')
     profiles=sorted(pool['training']);held=sorted(pool['evaluation'])
@@ -45,9 +48,9 @@ def evaluate(root,output,candidate_path,references,config,*,setups=None,seed=Non
     require('mixed-neural' not in lineups or len({e['model_id'] for e in entries[1:]})>=2,
         'mixed-neural requires two distinct frozen references')
     from .legacy_search import legacy_spec
-    budget=config.get('legacy_budget') if config['panel']!='full' else None
+    budget=config.get('legacy_budget')
     teacher_specs={p:legacy_spec(root,p,budget) for p in profiles} if 'mixed-v3' in lineups else {}
-    held_specs={p:legacy_spec(root,p,None,'evaluation') for p in held} if 'heldout-pottery-v3' in lineups else {}
+    held_specs={p:legacy_spec(root,p,budget,'evaluation') for p in held} if 'heldout-pottery-v3' in lineups else {}
     spec=dict(format='step5-evaluation/2.0.0',purpose='evaluation',entries=entries,
         config=config,seeds=seeds,lineups=lineups,implementation=implementation_id(),legacy_pool=pool,teachers=teacher_specs,held=held_specs)
     if (directory/'report.json').exists() and read(directory/'report.json').get('raw_records_pruned'):
@@ -65,7 +68,7 @@ def evaluate(root,output,candidate_path,references,config,*,setups=None,seed=Non
                 jobs=[];lineup_began=time.monotonic()
                 for i,job in enumerate(evaluation_jobs(seeds)):
                     if config['use_search']:
-                        candidate=dict(kind='s2',model_id=entries[0]['model_id'],focus=config['focus'],search=config['search'])
+                        candidate=dict(kind='masked_ismcts',model_id=entries[0]['model_id'],focus=config['focus'],search=config['search'])
                     else: candidate=neural_spec(entries[0]['model_id'],0,config['focus'])
                     if name.endswith('neural'):
                         refs=entries[1:2] if name=='recent-neural' else entries[1:]

@@ -1,11 +1,11 @@
 {
-  "format": "step5-evaluation-config/1.2.0",
+  "format": "step5-evaluation-config/1.3.0",
   "players": 4,
   "host": "artifacts/r1-host/guarded",
   "setups": 2,
   "seed": 910000,
   "partition": "validation",
-  "workers": 32,
+  "workers": 28,
   "batch_size": 64,
   "max_candidate_cells": 131072,
   "threads": 4,
@@ -16,20 +16,25 @@
   "use_search": false,
   "focus": "neutral",
   "search": {
-    "proposals": 12,
-    "finalists": 4,
-    "pilot_samples": 2,
-    "confirmation_samples": 4,
-    "max_plan_choices": 96,
-    "max_reply_choices": 256,
-    "seconds": 1.0,
-    "temperature": 0.1,
+    "backend": "masked_ismcts",
+    "seconds": 3.0,
+    "simulations": 100000,
+    "future_turns": 1,
+    "max_choices": 512,
+    "exploration": 1.4,
+    "root_top_k": 16,
+    "interior_top_k": 8,
+    "widening": 2.0,
+    "pending_paths": 4,
+    "batch_size": 4,
+    "flush_ms": 0.5,
+    "prior_mix": 0.1,
     "turn_interval": 4,
-    "max_searches_per_seat": 0
+    "max_searches_per_seat": 4
   },
   "panel": "development",
   "execution": {
-    "processes": 32,
+    "processes": 28,
     "hosts_per_process": 1,
     "heavy_processes": 8,
     "batch_size": 64,
@@ -59,8 +64,6 @@
     "role": "lab",
     "seconds": 1.0,
     "search_workers": 4,
-    "global_workers": 32,
-    "calibration": "artifacts/search-budgets/lab-v3-calibration.json",
-    "work_multiplier": 3
+    "global_workers": 32
   }
 }

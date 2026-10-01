@@ -1,8 +1,11 @@
 # End-game statistics panel: design and implementation plan
 
-**Status:** Proposed; no code changes or installation in this request.  
-**Date:** 30 September 2026.  
-**Baseline:** Installed local-game patch 1.4.6, including the current AI, city highlights, presentation recovery and save compatibility fixes.  
+**Status:** Implemented, qualified and installed as patch 1.4.8. All ten pages are included; the installed player passes 523 statistics checks. See [release notes](../docs/END_GAME_STATISTICS_1.4.8.md).
+
+**Date:** 30 September 2026.
+
+**Implementation baseline:** Installed local-game patch 1.4.7, including the current AI, city highlights, presentation recovery and save compatibility fixes.
+
 **Scope:** A comprehensive, interactive review of one completed local match, available through a bottom-left **Statistics** button.
 
 **Revision:** Incorporates all nine groups of analytics suggested by the user, including turn-order tempo, cards, geography, investment conversion and player interaction. Section 4A maps each suggestion to a page and identifies measurements that require qualification.
@@ -25,7 +28,7 @@ The relevant rule foundations are: era scoring separates links and flipped indus
 
 [Dylan Ho's strategy article](https://dlaern.substack.com/p/how-to-dominate-brass-birmingham) discusses action efficiency, grouped sales, resource supply, network timing and loans. These suggest useful measurements, rather than fixed targets or claims about the strongest strategy. Its advice is personal and focuses on four-player games; calculate statistics from actual events for each match.
 
-The eight-page structure and interactions below are design recommendations inferred from these sources and the current code, rather than features specified by the rulebook.
+The ten-page structure and interactions below are design recommendations inferred from these sources and the current code, rather than features specified by the rulebook.
 
 ## 3. Entry points and panel behavior
 

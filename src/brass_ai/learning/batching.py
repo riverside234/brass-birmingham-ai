@@ -42,6 +42,30 @@ def collate(encoded, device='cpu'):
         np.stack([x.stable_to_relative for x in encoded])))
 
 
+def predict_encoded(model, encoded, device, candidate_limit):
+    """Score ALL legal candidates, chunking a large position before softmax.
+
+    The oversized path encodes its state once and never changes legality/order.
+    Smaller positions retain the normal padded, masked CPU/GPU batch path.
+    """
+    if max(len(e.choice_ids) for e in encoded)<=candidate_limit:
+        logits,win,rank,vp=model(*collate(encoded,device))
+        return [torch.softmax(logits.float(),-1).cpu().numpy()]+[a.cpu().numpy() for a in (win,rank,vp)]
+    require(len(encoded)==1,'Oversized position must have its own candidate batch')
+    e=encoded[0];state=torch.from_numpy(e.state[None].copy()).to(device)
+    context=model.state_encoder(state);parts=[]
+    for start in range(0,len(e.choice_ids),candidate_limit):
+        actions=torch.from_numpy(e.actions[None,start:start+candidate_limit].copy()).to(device)
+        candidates=model.action_encoder(actions)
+        parts.append(model.policy_scorer(torch.cat((context[:,None].expand(-1,actions.shape[1],-1),candidates),-1)).squeeze(-1))
+    logits=torch.cat(parts,1);outcomes=model.outcomes(context)
+    mapping=torch.from_numpy(e.stable_to_relative[None].copy()).to(device)
+    heads=(torch.softmax(outcomes[:,:4],-1).gather(1,mapping),
+           (1+3*torch.sigmoid(outcomes[:,4:8])).gather(1,mapping),
+           (100*outcomes[:,8:12]).gather(1,mapping))
+    return [torch.softmax(logits.float(),-1).cpu().numpy()]+[a.cpu().numpy() for a in heads]
+
+
 @dataclass(frozen=True)
 class Request:
     request_id: str
@@ -82,11 +106,40 @@ class Evaluator:
         self.model_id = model_id(self.model)
         self.device, self.batch_size = device, batch_size
         self.max_candidate_cells = max_candidate_cells
-        self.encoder = Encoder()
+        from brass_ai.recovery.encoding import PreparedEncoder
+        self.encoder = PreparedEncoder()
         self.telemetry = dict(batches=0, positions=0, max_batch_positions=0,
                               max_padded_candidate_cells=0, predict_seconds=0.0)
+        self._executor=None
+        self._pending=None
+
+    def submit(self,requests):
+        """Start one detached batch without blocking the planner's caller.
+
+        A cancelled Request suppresses its result, but the future remains live
+        until the actual tensor/device work retires. Only one batch is in flight
+        per evaluator; search path/position limits are independently bounded.
+        """
+        from concurrent.futures import ThreadPoolExecutor
+        require(self._pending is None or self._pending.done(),'Evaluator batch is still running')
+        if self._executor is None:self._executor=ThreadPoolExecutor(max_workers=1,thread_name_prefix='brass-cpu-inference')
+        self._pending=self._executor.submit(self._predict,list(requests))
+        return self._pending
+
+    def poll(self,ticket,*,wait=False):
+        require(ticket is self._pending,'Unknown evaluator ticket')
+        return ticket.result() if wait or ticket.done() else None
+
+    def close(self):
+        if self._executor is not None:
+            self._executor.shutdown(wait=True)
+            self._executor=None
+        self._pending=None
 
     def predict(self, requests):
+        return self.poll(self.submit(requests),wait=True)
+
+    def _predict(self, requests):
         began = time.monotonic()
         require(len({r.request_id for r in requests}) == len(requests), 'Duplicate request ID')
         responses, active = {}, []
@@ -100,7 +153,6 @@ class Evaluator:
                 responses[request.request_id] = self._response(request, stopped)
             else:
                 encoded = self.encoder.encode(request.view, request.choices, request.style, request.intent)
-                require(len(encoded.choice_ids) <= self.max_candidate_cells, 'Single position exceeds candidate capacity')
                 active.append((request, encoded))
         while active:
             group, maximum = [], 0
@@ -118,13 +170,11 @@ class Evaluator:
             if not live:
                 continue
             with torch.inference_mode():
-                logits, win, placement, vp = self.model(*collate([e for _, e in live], self.device))
-                probabilities = torch.softmax(logits, -1).cpu().numpy()
-                predictions = [a.cpu().numpy() for a in (win, placement, vp)]
+                probabilities,*predictions=predict_encoded(self.model,[e for _,e in live],self.device,self.max_candidate_cells)
             self.telemetry['batches'] += 1
             self.telemetry['positions'] += len(live)
             self.telemetry['max_batch_positions'] = max(self.telemetry['max_batch_positions'], len(live))
-            cells = len(live) * max(len(e.choice_ids) for _, e in live)
+            cells = min(self.max_candidate_cells,len(live) * max(len(e.choice_ids) for _, e in live))
             self.telemetry['max_padded_candidate_cells'] = max(self.telemetry['max_padded_candidate_cells'], cells)
             for i, (request, encoded) in enumerate(live):
                 status = request.stopped() or 'ok'

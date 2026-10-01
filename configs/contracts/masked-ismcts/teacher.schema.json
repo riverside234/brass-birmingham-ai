@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "masked-ismcts/1.0.0/teacher",
+  "type": "object",
+  "required": ["source", "legal_ids", "visits", "probabilities", "priors", "expansion", "coverage", "observer", "model_id", "worlds", "samples", "search", "fingerprint", "source_fingerprint"],
+  "properties": {
+    "source": {"const": "ismcts-root-visits/1.0.0"},
+    "legal_ids": {"type": "array", "uniqueItems": true, "minItems": 2, "items": {"type": "string"}},
+    "observer": {"type": "integer", "minimum": 0, "maximum": 3},
+    "visits": {"type": "array", "items": {"type": "integer", "minimum": 0}},
+    "coverage": {"type": "array", "items": {"const": true}},
+    "expansion": {"type": "array", "items": {"type": "boolean"}},
+    "worlds": {"type": "integer", "minimum": 2},
+    "samples": {"type": "integer", "minimum": 2},
+    "model_id": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "source_fingerprint": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+  },
+  "$comment": "Replay validation checks full legal order/observer, two visited alternatives, completed counts, the exact prior/visits mixture and source/config digest."
+}

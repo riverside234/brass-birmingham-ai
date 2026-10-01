@@ -1,0 +1,18 @@
+{
+  "format": "masked-ismcts/1.0.0",
+  "players": 4,
+  "observation": "brass-r1/0.2.0",
+  "information": "single-observer information sets; independently permitted fixed opponent policies",
+  "utility": "four stable-seat win shares, with root component for selection",
+  "masks": ["legal", "padding", "search_expansion"],
+  "teacher": "ismcts-root-visits/1.0.0",
+  "model": "brass-four-seat-mlp-resnet/1.0.0",
+  "main_parameter_limit": 2000000,
+  "later_goal_parameter_limit": 2100000,
+  "initialization": "random; no imported neural checkpoints or populations",
+  "lab_legacy_milliseconds": 1000,
+  "game_milliseconds": {"easy": 2000, "mid": 5000, "hard": 12000, "old_save": 10000},
+  "backups": "completed paths only; pending reservations are never visits",
+  "clock": "one monotonic deadline for both actions, batching and validation",
+  "cache": "model, permitted observer/history, style and complete legal order; excludes live hidden state"
+}

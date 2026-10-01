@@ -1,14 +1,17 @@
 {
-  "format": "lab-v3-bank/1.0.0",
-  "signature": "192bd00fddaa3aff023c41984d2d6cc213f913f21ba2ec4c7b58de609577f928",
-  "bank": "bank-b880ac1fd5f1dfe8bcc2",
-  "parents": {
-    "bank-af17b1aadbe7f9b21fa7/balanced-v3": "bank-b880ac1fd5f1dfe8bcc2/balanced-v3-lab-1s",
-    "bank-af17b1aadbe7f9b21fa7/cotton-v3": "bank-b880ac1fd5f1dfe8bcc2/cotton-v3-lab-1s",
-    "bank-af17b1aadbe7f9b21fa7/goods-beer-v3": "bank-b880ac1fd5f1dfe8bcc2/goods-beer-v3-lab-1s",
-    "bank-af17b1aadbe7f9b21fa7/rail-tempo-v3": "bank-b880ac1fd5f1dfe8bcc2/rail-tempo-v3-lab-1s",
-    "bank-af17b1aadbe7f9b21fa7/supplier-v3": "bank-b880ac1fd5f1dfe8bcc2/supplier-v3-lab-1s"
-  },
+  "format": "masked-v3-bank/1.0.0",
+  "bank": "bank-927c8ddec148897fa542",
+  "manifest_sha256": "2075067f68824f0aa452bd1bc676e74c7f7e1f8414dab8ba2c76f63170f8a7dd",
   "seconds": 1.0,
-  "limitation": "Not admitted until lab-calibrate passes on the target hardware; original bank unchanged"
+  "backend": "masked_ismcts",
+  "profiles": [
+    "balanced-v3-masked",
+    "rail-tempo-v3-masked",
+    "cotton-v3-masked",
+    "goods-beer-v3-masked",
+    "supplier-v3-masked",
+    "pottery-flex-v3-masked"
+  ],
+  "strength": "unmeasured",
+  "qualification_required": false
 }

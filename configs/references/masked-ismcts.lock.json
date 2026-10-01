@@ -1,0 +1,23 @@
+{
+  "format": "masked-ismcts-references/1.0.0",
+  "recorded_on": "2026-09-30",
+  "open_spiel": {
+    "repository": "google-deepmind/open_spiel",
+    "tag": "v2.0.2",
+    "commit": "d7c4fc2dac825cb34b50131042a151b43c12edc5",
+    "license": "Apache-2.0",
+    "files": [
+      {"path": "open_spiel/python/algorithms/ismcts.py", "sha256": "fed02dc439125278edd939ec6d73522bcd0ed7339cccf652aa1fffbec1cac5c3", "bytes": 13472},
+      {"path": "open_spiel/python/algorithms/mcts.py", "sha256": "f9e7c1bc8d6b737aa30647bfcff31cc78a0982cd752db3135bc6a019cda14dd4", "bytes": 18514},
+      {"path": "LICENSE", "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30", "bytes": 11358}
+    ]
+  },
+  "components": [
+    {"source": "open_spiel/python/algorithms/ismcts.py", "target": "src/brass_ai/search/ismcts.py", "contract": "masked-ismcts/1.0.0", "adaptation": "Single-observer PUCT with legal availability; fixed independently masked opponents, progressive top-K, private pending paths, completed-only four-seat backups."},
+    {"source": "src/brass_ai/searchlab/spiel.py", "target": "src/brass_ai/searchlab/spiel.py", "contract": "brass-search-chance/1.0.0", "adaptation": "Preserve explicit chance, information/recall keys and isolated restore; promoted as a main-search adapter."},
+    {"source": "Daiyu model/scorer, preserved R0/R2 pins", "target": "src/brass_ai/learning/model.py", "contract": "brass-four-seat-mlp-resnet/1.0.0", "adaptation": "Fresh 304-wide four-block residual MLP, candidate scorer, four stable-seat outputs; at most 2M total parameters. Preserve AGPL provenance."},
+    {"source": "ISMCTS mechanics", "target": "src/BrassMaskedSearch/MaskedSearch.cs", "contract": "masked-ismcts/1.0.0", "adaptation": "Authored C# port of the contract with heuristic priors/values and private belief worlds; shared research/game source."}
+  ],
+  "papers": ["https://eprints.whiterose.ac.uk/id/eprint/75048/1/CowlingPowleyWhitehouse2012.pdf", "https://arxiv.org/abs/2104.04278", "https://arxiv.org/abs/2006.14171", "https://arxiv.org/abs/1512.03385", "https://doi.org/10.1142/S1793005708001094"],
+  "historical_pins": "upstream.lock.json"
+}

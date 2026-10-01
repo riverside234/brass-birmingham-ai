@@ -1,0 +1,37 @@
+{
+  "format": "legacy-pools/1.0.0",
+  "training": {
+    "bank-af17b1aadbe7f9b21fa7/balanced-v3": {
+      "qualification": "training/opponents/evaluations/qualification-c487cd9f12a201a5690c/report.json",
+      "sha256": "790942901e25720a58afe0bfe6536f54d014cfba7ec4432cb3e8f1843f5520eb",
+      "profile": "balanced-v3"
+    },
+    "bank-af17b1aadbe7f9b21fa7/rail-tempo-v3": {
+      "qualification": "training/opponents/evaluations/qualification-c487cd9f12a201a5690c/report.json",
+      "sha256": "790942901e25720a58afe0bfe6536f54d014cfba7ec4432cb3e8f1843f5520eb",
+      "profile": "rail-tempo-v3"
+    },
+    "bank-af17b1aadbe7f9b21fa7/cotton-v3": {
+      "qualification": "training/opponents/evaluations/qualification-c487cd9f12a201a5690c/report.json",
+      "sha256": "790942901e25720a58afe0bfe6536f54d014cfba7ec4432cb3e8f1843f5520eb",
+      "profile": "cotton-v3"
+    },
+    "bank-af17b1aadbe7f9b21fa7/goods-beer-v3": {
+      "qualification": "training/opponents/evaluations/qualification-c487cd9f12a201a5690c/report.json",
+      "sha256": "790942901e25720a58afe0bfe6536f54d014cfba7ec4432cb3e8f1843f5520eb",
+      "profile": "goods-beer-v3"
+    },
+    "bank-af17b1aadbe7f9b21fa7/supplier-v3": {
+      "qualification": "training/opponents/evaluations/qualification-c487cd9f12a201a5690c/report.json",
+      "sha256": "790942901e25720a58afe0bfe6536f54d014cfba7ec4432cb3e8f1843f5520eb",
+      "profile": "supplier-v3"
+    }
+  },
+  "evaluation": {
+    "bank-af17b1aadbe7f9b21fa7/pottery-flex-v3": {
+      "qualification": "training/opponents/evaluations/qualification-c487cd9f12a201a5690c/report.json",
+      "sha256": "790942901e25720a58afe0bfe6536f54d014cfba7ec4432cb3e8f1843f5520eb",
+      "profile": "pottery-flex-v3"
+    }
+  }
+}

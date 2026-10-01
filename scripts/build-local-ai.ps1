@@ -6,11 +6,15 @@ $compiler=Join-Path $Root 'artifacts/patch-tools/microsoft.net.compilers.toolset
 $helper=Join-Path $managed 'BrassLegacyAI.dll'
 $references=@(Get-ChildItem -LiteralPath $managed -Filter '*.dll' | Where-Object Name -notin @('BrassLegacyAI.dll') | Where-Object { $_.Name -notmatch 'Tests|Regression' } | ForEach-Object {'/reference:"'+$_.FullName+'"'})
 $sources=@(Get-ChildItem -LiteralPath (Join-Path $Root 'src/BrassLocalAI') -Filter '*.cs' -Recurse | ForEach-Object {'"'+$_.FullName+'"'})
+$sources+=@(Get-ChildItem -LiteralPath (Join-Path $Root 'src/BrassMaskedSearch') -Filter '*.cs' | ForEach-Object {'"'+$_.FullName+'"'})
 $resources=@(foreach($key in 'balanced','rail-tempo','cotton','goods-beer','supplier','pottery-flex'){foreach($version in 'v2','v3'){
  '/resource:"'+(Join-Path $Root ('configs/legacy-ai/'+$key+'-'+$version+'.json'))+'",BrassLegacyAI.Profiles.'+$key+'-'+$version+'.json'
 }})
 $resources+=@(foreach($key in 'balanced','rail-tempo','cotton','goods-beer','supplier','pottery-flex'){
  '/resource:"'+(Join-Path $Root ('configs/legacy-ai/archive/1.4.0/'+$key+'-v3.json'))+'",BrassLegacyAI.Profiles.'+$key+'-v3-1.4.0.json'
+})
+$resources+=@(foreach($key in 'balanced','rail-tempo','cotton','goods-beer','supplier','pottery-flex'){
+ '/resource:"'+(Join-Path $Root ('configs/legacy-ai/'+$key+'-v3-masked.json'))+'",BrassLegacyAI.Profiles.'+$key+'-v3-masked.json'
 })
 $rsp=Join-Path $build 'local-ai.rsp'
 @('/nologo','/target:library','/langversion:7.3','/nostdlib+','/deterministic+','/optimize+',('/out:"'+$helper+'"'))+$references+$sources+$resources | Set-Content -LiteralPath $rsp -Encoding UTF8

@@ -21,7 +21,8 @@ from brass_ai.learning.contracts import CONFIG_DIR, digest, read_json, require
 from brass_ai.learning.replay import split_for, terminal_targets
 from brass_ai.learning.legacy_policy import LegacyPolicy
 from brass_ai.step5.policy import NeuralPolicy, context_for
-from brass_ai.step5.search import SearchPolicy, SearchConfig
+from brass_ai.search.ismcts import MaskedSearchPolicy
+from brass_ai.search.common import SearchConfig
 from .inference import RemoteEvaluator
 from .telemetry import Timings, instrument_host
 from .inputs import BOUNDARY
@@ -37,7 +38,7 @@ def neural_spec(identity,exploration=.05,focus='neutral'):
 def make_policy(spec,root,endpoint,config,mono):
     if spec['kind']=='lab-legacy':
         from .legacy_search import LabLegacyPolicy
-        policy=LabLegacyPolicy(root,spec['parent'],spec['budget'],mono=mono)
+        policy=LabLegacyPolicy(root,spec['parent'],spec['budget'],mono=mono,purpose=spec.get('purpose','training'))
         require(policy.policy_id==spec['policy_id'],'Lab teacher identity changed')
         return policy
     if spec['kind']=='legacy':
@@ -51,18 +52,17 @@ def make_policy(spec,root,endpoint,config,mono):
     opponents=[NeuralPolicy(None,exploration=.05,focus='neutral',
         evaluator=RemoteEvaluator(endpoints[0],p,config['batch_size'],config['max_candidate_cells']))
         for p in spec.get('opponents',[spec['model_id']])]
-    common=dict(config=SearchConfig(**spec['search']),mono=mono,focus=spec.get('focus','neutral'),
+    from dataclasses import replace
+    common=dict(config=replace(SearchConfig(**spec['search']),cpu_role=spec.get('cpu_role','reference')),mono=mono,focus=spec.get('focus','neutral'),
         opponents=opponents,evaluator=evaluator)
-    if spec['kind']=='s2': policy=SearchPolicy(None,root/'artifacts/r1-host/guarded',**common)
-    elif spec['kind']=='s3':
-        from brass_ai.searchlab.s3 import S3Policy, TreeConfig
-        policy=S3Policy(None,root/'artifacts/r1-host/guarded',tree=TreeConfig(**spec['tree']),**common)
-    else: raise ValueError('Unsupported actor policy')
+    require(spec['kind']=='masked_ismcts','Only Masked ISMCTS is an active search policy')
+    policy=MaskedSearchPolicy(None,root,**common)
     if len(endpoints)>1:
         from .parallel import parallelize
-        policy=parallelize(policy,spec['kind'],len(endpoints)-1,spec.get('cpu_role','lab'),
+        policy=parallelize(policy,len(endpoints)-1,spec.get('cpu_role','lab'),
             lambda i:make_policy(spec,root,endpoints[i+1],config,mono))
-    instrument_host(policy.host)
+    instrument_host(policy.game.host)
+    for game in policy.simulation_games:instrument_host(game.host)
     return policy
 
 
@@ -126,7 +126,10 @@ def _actor(root,host_path,jobs,results,lease,config,mono,lanes,search_channels):
                         for job in packet['jobs']:
                             policies=[];needed={digest(s) for s in job['policies']}
                             for key in list(cache):
-                                if key not in needed and len(cache)>=config.get('policy_cache',16):
+                                # Search owns persistent private simulator lanes.
+                                # Retire an unused model generation promptly;
+                                # the light NN cache can retain its normal bound.
+                                if key not in needed and (isinstance(cache[key],MaskedSearchPolicy) or len(cache)>=config.get('policy_cache',16)):
                                     old=cache.pop(key)
                                     if hasattr(old,'close'): old.close()
                             for spec in job['policies']:

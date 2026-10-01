@@ -1,0 +1,34 @@
+[
+  {
+    "targetType":"BrassApplication.UseCases.Game.FinishedGameReview.FinishedGameReviewUseCase",
+    "targetMethod":"StartGameReview",
+    "parameterTypes":["BrassApplication.Game.PlayerMetadata"],
+    "helperType":"BrassPatch.Statistics.StatisticsEntryPoints",
+    "helperMethod":"Capture",
+    "mode":"prefix"
+  },
+  {
+    "targetType":"BrassApplication.UseCases.Game.FinishedGameReview.FinishedGameReviewUseCase",
+    "targetMethod":"ReplayCompleted",
+    "parameterTypes":[],
+    "helperType":"BrassPatch.Statistics.StatisticsEntryPoints",
+    "helperMethod":"Ready",
+    "mode":"postfix"
+  },
+  {
+    "targetType":"Frameworks.View.Game.EndOfGameView",
+    "targetMethod":"SetOnExitGameButtonClicked",
+    "parameterTypes":["System.Action"],
+    "helperType":"BrassPatch.Statistics.StatisticsEntryPoints",
+    "helperMethod":"AttachResults",
+    "mode":"postfix"
+  },
+  {
+    "targetType":"BrassApplication.UseCases.Game.FinishedGameReview.FinishedGameReviewUseCase",
+    "targetMethod":"FinishGameReview",
+    "parameterTypes":[],
+    "helperType":"BrassPatch.Statistics.StatisticsEntryPoints",
+    "helperMethod":"Finish",
+    "mode":"prefix"
+  }
+]

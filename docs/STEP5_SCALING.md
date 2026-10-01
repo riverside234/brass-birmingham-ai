@@ -1,5 +1,7 @@
 # Larger Step 5 experiments on the lab server
 
+**Archived pre-2.2 instructions:** use [Fresh Masked ISMCTS training](TRAINING_RECOVERY_LAB.md) for current commands. This document records earlier recipes and checkpoint-import/search workflows; do not run those commands for the new random residual-model run.
+
 **Superseded default, 30 September:** follow [TRAINING_RECOVERY_LAB.md](TRAINING_RECOVERY_LAB.md) for the new imitation/minibatch/curriculum and central-inference recipe. This document preserves the original scaling experiment; its flat training schema is now `configs/step5/previous-lab.json`. Recipe 2.0 intentionally starts fresh optimizer moments in a new run.
 
 Updated 29 September 2026 for the reported 64 logical CPUs (`nproc`), approximately 90 GB of GPU memory and 755 GiB of system RAM. This scales the **current Step 5 self-training**, before the later personality/difficulty stage. Use the existing conda environment `ai-training`.

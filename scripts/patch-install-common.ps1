@@ -74,15 +74,26 @@ function Assert-BrassCandidate($Manifest,$Validation,[string]$Build){
     if(-not $Manifest -or $Manifest.stockSha256 -ne $BrassStockSha256){throw 'Candidate is not based on the supported stock game.'}
     if(-not $Validation -or -not $Validation.passed){throw 'Candidate validation must pass before installation.'}
     $expectedFiles='Assembly-CSharp.dll|BrassPatch.dll'
-    if($Manifest.version -in @('1.3.0','1.3.1','1.3.2','1.4.0','1.4.1','1.4.2','1.4.3','1.4.4','1.4.5','1.4.6','1.4.7')){
+    if($Manifest.version -in @('1.3.0','1.3.1','1.3.2','1.4.0','1.4.1','1.4.2','1.4.3','1.4.4','1.4.5','1.4.6','1.4.7','1.4.8','1.4.9')){
         $expectedFiles='Assembly-CSharp.dll|BrassLegacyAI.dll|BrassPatch.dll'
         if(-not $Validation.PSObject.Properties['localAi'] -or -not $Validation.localAi.passed){throw 'Combined AI and native UI qualification must pass before installation.'}
     }
     if((@($Manifest.files|ForEach-Object {$_.name}|Sort-Object)-join '|') -ne $expectedFiles){throw 'Unexpected candidate file list.'}
-    if($Manifest.version -eq '1.4.7'){
+    if($Manifest.version -in @('1.4.7','1.4.8','1.4.9')){
         if(-not $Manifest.PSObject.Properties['sourcePins'] -or -not $Validation.localAi.PSObject.Properties['sourcePins'] -or $Manifest.sourcePins.Count -ne $Validation.localAi.sourcePins.Count){throw 'Compiled runtime-source qualification is missing.'}
         foreach($pin in $Manifest.sourcePins){if(@($Validation.localAi.sourcePins|Where-Object {$_.path -eq $pin.path -and $_.sha256 -eq $pin.sha256}).Count -ne 1){throw 'Qualified runtime sources differ from compilation.'}}
         if(-not $Validation.localAi.resourceTests.passed -or $Validation.localAi.resourceTests.checks -lt 20 -or $Validation.localAi.executionStatistics.maximumRunning -ne 1 -or $Validation.localAi.executionStatistics.running){throw 'General AI execution/resource qualification must pass.'}
+    }
+    if($Manifest.version -eq '1.4.8'){
+        if(-not $Validation.PSObject.Properties['statistics'] -or -not $Validation.statistics.passed -or $Validation.statistics.matches -lt 6 -or $Validation.statistics.pages -ne 10){throw 'Native completed-match statistics qualification must pass.'}
+        foreach($file in $Manifest.files){if(@($Validation.statistics.testedFiles|Where-Object {$_.name -eq $file.name -and $_.sha256 -eq $file.sha256}).Count -ne 1){throw 'Statistics qualification belongs to a different build.'}}
+    }
+    if($Manifest.version -eq '1.4.9'){
+        if(-not $Validation.localAi.masked.passed -or $Validation.localAi.masked.backend -ne 'masked_ismcts' -or $Validation.localAi.masked.iterations -lt 2){throw 'Masked ISMCTS runtime qualification must pass.'}
+        if(-not $Validation.statistics.passed -or $Validation.statistics.retainedFrom -ne '1.4.8'){throw 'Retained statistics evidence is missing.'}
+        foreach($file in $Manifest.files|Where-Object name -ne 'BrassLegacyAI.dll'){
+            if(@($Validation.statistics.testedFiles|Where-Object {$_.name -eq $file.name -and $_.sha256 -eq $file.sha256}).Count -ne 1){throw 'Retained UI/rules evidence differs from the unchanged binary.'}
+        }
     }
     foreach($file in $Manifest.files){
         if((Get-FileHash -LiteralPath (Join-Path $Build ('Managed/'+$file.name))).Hash -ne $file.sha256){throw ('Changed candidate: '+$file.name)}

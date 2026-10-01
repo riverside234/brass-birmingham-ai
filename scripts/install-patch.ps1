@@ -10,7 +10,7 @@ $original=Join-Path $repo 'artifacts/patch-baseline/Assembly-CSharp.dll'
 $recordPath=Join-Path $repo 'artifacts/patch-installation.json'
 $intentPath=Join-Path $repo 'artifacts/patch-installation.pending.json'
 $manifest=Read-BrassJson (Join-Path $build 'build-manifest.json')
-if($manifest -and $manifest.version -in @('1.3.0','1.3.1','1.3.2','1.4.0','1.4.1','1.4.2','1.4.3','1.4.4','1.4.5','1.4.6','1.4.7')){
+if($manifest -and $manifest.version -in @('1.3.0','1.3.1','1.3.2','1.4.0','1.4.1','1.4.2','1.4.3','1.4.4','1.4.5','1.4.6','1.4.7','1.4.8','1.4.9')){
     & (Join-Path $PSScriptRoot 'install-combined-patch.ps1') -GameRoot $GameRoot -SaveDataPaths $SaveDataPaths
     return
 }

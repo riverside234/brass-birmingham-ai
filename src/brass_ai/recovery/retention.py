@@ -106,10 +106,10 @@ def references(root,run):
     for p in inventory['state.json']:
         if '.retention-trash' in p.parts: continue
         d=read(p)
-        if str(d.get('format','')).startswith('step5-recovery-league/2.1'):
+        if d.get('format') in ('step5-recovery-league/2.1.0','step5-recovery-league/2.2.0'):
             selected={k:d.get(k) for k in ('resume','population','origin','evaluation_anchor','pins')}
             cfg=d.get('signature',{}).get('config',{})
-            selected['datasets']=cfg.get('rehearsal_manifest');selected['calibration']=cfg.get('legacy_budget',{}).get('calibration')
+            selected['datasets']=[cfg.get('rehearsal_manifest'),cfg.get('imitation',{}).get('manifest')]
         elif 'best' in d and 'last' in d: selected={k:d.get(k) for k in ('best','last','signature')}
         else: selected=d
         control.append((p,selected,'active state'))
@@ -189,7 +189,7 @@ def plan(root,run,config=RETENTION):
     def candidate(path,reason):
         path=safe(run,path)
         if path.is_file() and path not in keep: candidates[path]=reason
-    if state.get('format')=='step5-recovery-league/2.1.0':
+    if state.get('format') in ('step5-recovery-league/2.1.0','step5-recovery-league/2.2.0'):
         for e in state['history'][-config['resume_checkpoints']:]:
             path=project_path(root,e['path'])
             if path.is_relative_to(run): keep.add(path);reasons[path]='recent resume checkpoint'

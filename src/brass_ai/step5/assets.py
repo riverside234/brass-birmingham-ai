@@ -21,21 +21,15 @@ from brass_ai.learning.runner import RandomPolicy, collect_games
 from .league import write_json
 
 
-MODEL_INPUTS = {
-    'r2-fresh-medium': 'artifacts/r2/dev-fresh.pt',
-    'r2-value-scaffold': 'artifacts/r2/exit-b2447dd7d79c/value.pt',
-    'r2-onpolicy-scaffold': 'artifacts/r2/exit-b2447dd7d79c/onpolicy.pt',
-}
+MODEL_INPUTS = {}  # Historical weights stay archived; no starting checkpoint.
 
 
 def runtime_files(root):
     bank = read(root / 'training/opponents/current.json')['bank']
     manifest = load_bank(root, bank)
-    directories = ['artifacts/r1-host/guarded', 'artifacts/legacy-ai/bank/' + bank + '/runtime']
-    lab=root/'training/opponents/lab/current.json'
-    if lab.exists():
-        child=read(lab)['bank'];load_bank(root,child)
-        directories.append('artifacts/legacy-ai/bank/'+child+'/runtime')
+    from brass_ai.searchlab.runtime import install
+    install(root)
+    directories = ['artifacts/r1-host/guarded', 'artifacts/legacy-ai/bank/' + bank + '/runtime','artifacts/r4-host']
     files = {}
     for directory in directories:
         runtime = read(root / directory / 'runtime.json')
@@ -63,14 +57,14 @@ def export_assets(root, *, bundle='artifacts/step5-transfer/private-rules-runtim
         exported.append(dict(path=path.relative_to(root).as_posix(), sha256=sha(path),
             model_id=raw['model_id'], parameters=model.parameter_count, original_mode=raw['training'].get('mode')))
     workers=[('r1', directories[0], 'BrassHost.exe'), ('v3', directories[1], 'BrassLegacyAI.exe')]
-    if len(directories)>2: workers.append(('v3-lab',directories[2],'BrassLegacyAI.exe'))
+    workers += [('v3-lab',directories[1],'BrassLegacyAI.exe'),('search',directories[2],'BrassHost.exe')]
     for name, directory, exe in workers:
         path = root / 'training/runtime' / name / exe
         path.parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(root / directory / exe, path)
         exported.append(dict(path=path.relative_to(root).as_posix(), sha256=sha(path),
                              kind='project-authored worker; requires private game dependencies'))
-    record = dict(format='step5-distribution/1.0.0', bank=bank,
+    record = dict(format='step5-distribution/2.2.0', bank=bank,initialization='random',backend='masked_ismcts',
                   assets=exported, private_runtime_files=private_files,
                   original_hard='stock-hard-guarded-1.1.0',
                   note='R3 policies are original C# sources and JSON profiles, not neural weights. Original Hard and game rules are privately transferred vendor DLLs.')
@@ -131,7 +125,7 @@ def preflight(root, *, device='cpu', mono=None, record_parity=False):
             load_checkpoint(project_path(root, asset['path']))
     bank, _, files = runtime_files(root)
     require(bank == distribution['bank'] and files == distribution['private_runtime_files'], 'Private runtime differs')
-    opponent = FrozenOpponent(root, bank + '/balanced-v3', purpose='diagnostic', mono=mono)
+    opponent = FrozenOpponent(root, bank + '/balanced-v3-masked', purpose='diagnostic', mono=mono)
     opponent.close()
     if device == 'cuda':
         require(torch.cuda.is_available(), 'CUDA is unavailable; install the pinned CUDA wheel/compatible driver')

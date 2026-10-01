@@ -38,7 +38,9 @@ namespace BrassLegacyAI
         readonly Queue<string[]> continuation = new Queue<string[]>();
         readonly Stopwatch clock = new Stopwatch();
         public const double ThinkingMilliseconds = DifficultyCatalog.ExistingMilliseconds;
-        public const int SearchWorkLimit = 240;
+        // A safety guard, not the old beam width/work target. The turn clock
+        // controls normal execution at the unchanged 2/5/12-second settings.
+        public const int SearchWorkLimit = 1000000;
         double budget;
         int planningRequests;
         double lastRequestMilliseconds;

@@ -1,7 +1,7 @@
 """Strict recovery schemas; optimizer batch and memory microbatch are distinct."""
 import math
 from brass_ai.learning.contracts import require
-from brass_ai.step5.search import SearchConfig
+from brass_ai.search.common import SearchConfig
 
 
 EXECUTION = dict(processes=8, hosts_per_process=4, heavy_processes=8,
@@ -24,8 +24,8 @@ RETENTION = dict(enabled=True, resume_checkpoints=2, replay_rounds=4, quarantine
 POPULATION = dict(recent=8, anchors=4)
 EVALUATION_SCHEDULE = dict(enabled=True, monitor_every_games=1600, broader_every_games=6400,
     monitor_setups=2, broader_setups=2, seed=910000)
-LEGACY_BUDGET = dict(role='lab', seconds=1.0, search_workers=4, global_workers=32,
-    work_multiplier=3,calibration='artifacts/search-budgets/lab-v3-calibration.json')
+LEGACY_BUDGET = dict(role='lab', seconds=1.0, search_workers=4, global_workers=32)
+IMITATION = dict(manifest=None,epochs=10,patience=2,min_epochs=3,learning_rate=1e-4)
 
 
 def positive(value, name, integer=False):
@@ -46,6 +46,7 @@ def bounded_fields(config, default, name):
 def legacy_budget_config(config):
     bounded_fields(config,LEGACY_BUDGET,'legacy_budget')
     require(config['role'] in ('lab','laptop','reference'),'Unknown budget role')
+    require(config['seconds']==1.0,'Training/evaluation v3 allowance must be exactly one second')
     return config
 
 
@@ -97,9 +98,17 @@ def validate_config(config):
         'search_ready_games','search_every_games','search_games','distill_steps','distill_weight',
         'rehearsal_manifest','rehearsal_weight','rehearsal_until','profile_steps'}
     version=config.get('format')
-    if version=='step5-training/2.1.0':
+    if version=='step5-training/2.2.0':
         fields|={'retention','population','evaluation_schedule','legacy_budget','audit_workers',
-                 'overlap_pools','search_wall_fraction'}
+                 'overlap_pools','search_wall_fraction','initialization','architecture','parameter_limit','imitation'}
+        require(config['initialization']=='random' and config['architecture']=='brass-four-seat-mlp-resnet/1.0.0'
+                and config['parameter_limit']==2000000,'Fresh residual-model contract required')
+        require(type(config['imitation']) is dict and set(config['imitation'])==set(IMITATION),'Invalid imitation fields')
+        imitation=config['imitation']
+        require(imitation['manifest'] is None or type(imitation['manifest']) is str,'Invalid imitation manifest')
+        for key in ('epochs','patience','min_epochs'):positive(imitation[key],key,integer=True)
+        positive(imitation['learning_rate'],'imitation.learning_rate')
+        require(imitation['epochs']>=imitation['min_epochs'],'Imitation minimum exceeds epochs')
         for key,default in [('retention',RETENTION),('population',POPULATION),('evaluation_schedule',EVALUATION_SCHEDULE),('legacy_budget',LEGACY_BUDGET)]:
             bounded_fields(config[key],default,key)
         legacy_budget_config(config['legacy_budget'])
@@ -110,9 +119,9 @@ def validate_config(config):
         positive(config['audit_workers'],'audit_workers',integer=True)
         require(type(config['overlap_pools']) is bool and 0<config['search_wall_fraction']<=.25,'Invalid overlap/search fraction')
         require(set(config['update'])==set(UPDATE_V21) and set(config['execution'])==set(EXECUTION_V21),'2.1 requires revised update/execution')
-    require(set(config)==fields and version in ('step5-training/2.0.0','step5-training/2.1.0') and config['players']==4,
-        'Recovery requires a strict four-player 2.0/2.1 config')
-    require(config['model_size'] in ('small','medium','large'), 'Unknown model size')
+    require(set(config)==fields and version=='step5-training/2.2.0' and config['players']==4,
+        'Use the fresh four-player Masked ISMCTS 2.2 recipe; historical runs cannot migrate in place')
+    require(config['model_size'] in ('small','medium'), 'Residual model size must fit the 2M cap')
     for key in ('games_per_iteration','threads','search_games','distill_steps','rehearsal_until'):
         positive(config[key],key,integer=True)
     for key in ('search_ready_games','search_every_games','seed','profile_steps'):

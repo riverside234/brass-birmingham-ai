@@ -46,7 +46,7 @@ namespace BrassLegacyAI
             var state = SaveExtensions.Get(metadata);
             if (state == null) return null;
             string runtime=(string)state["runtime"];
-            if (((string)state["format"] != Format && (string)state["format"] != PreviousFormat) || (runtime != ProfileCatalog.Runtime && runtime != ProfileCatalog.PreviousRuntime && runtime != ProfileCatalog.CashRuntime) || (string)state["rules"] != Wire.Rules ||
+            if (((string)state["format"] != Format && (string)state["format"] != PreviousFormat) || (runtime != ProfileCatalog.Runtime && runtime != ProfileCatalog.OriginalRuntime && runtime != ProfileCatalog.PreviousRuntime && runtime != ProfileCatalog.CashRuntime) || (string)state["rules"] != Wire.Rules ||
                 (string)state["schema"] != Wire.Version || (string)state["game_id"] != metadata.GameId ||
                 (!allowPending && (bool?)state["ready"] != true) || !JToken.DeepEquals(state["configuration"], Host.Configuration(metadata.GameStartConfiguration)) ||
                 (string)state["assignment_sha256"] != AssignmentHash(state) || !(state["records"] is JArray) || (string)state["records_sha256"] != Wire.Hash(state["records"]))

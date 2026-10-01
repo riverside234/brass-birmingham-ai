@@ -10,13 +10,12 @@ from brass_ai.learning.contracts import LAB_ROOT, project_path, read_json, requi
 from .assets import export_assets, import_runtime, preflight, require_preflight
 from .league import train, validate_config
 from .evaluation import evaluate, promote, validate_evaluation_config
-from .meta import meta_train, meta_evaluate
 
 
 def parser():
-    p = argparse.ArgumentParser(description='Four-player self-play-first neural training and optional Reptile meta-RL')
+    p = argparse.ArgumentParser(description='Fresh four-player MLP-ResNet training with Masked ISMCTS teachers')
     p.add_argument('--root', type=Path, default=LAB_ROOT)
-    p.add_argument('--config', help='Evaluation uses evaluation.json; recovery uses lab.json; optional meta-RL uses previous-lab.json')
+    p.add_argument('--config', help='Evaluation uses evaluation.json; recovery uses lab.json; historical recipes are archived')
     p.add_argument('--device', choices=['cpu', 'cuda'], default='cpu')
     p.add_argument('--mono')
     sub = p.add_subparsers(dest='command', required=True)
@@ -27,8 +26,9 @@ def parser():
     run.add_argument('--run', default='artifacts/step5/selfplay')
     initialization = run.add_mutually_exclusive_group()
     initialization.add_argument('--initial')
-    initialization.add_argument('--from-run', help='Fork committed weights/history/setup cursor into a NEW run; recipe 2.0 starts fresh optimizer moments')
+    initialization.add_argument('--from-run', help='Rejected: only this fresh run can resume its own checkpoints')
     run.add_argument('--iterations', type=int, default=1)
+    run.add_argument('--demonstrations',help='Audited heuristic manifest for fresh in-run imitation and rehearsal')
     demos = sub.add_parser('demo-generate')
     demos.add_argument('--output',default='artifacts/demonstrations/v3')
     demos.add_argument('--games',type=int,default=1000)
@@ -39,7 +39,7 @@ def parser():
     audit.add_argument('--output',default='training/datasets/v3-demonstrations.json')
     bc = sub.add_parser('imitate')
     bc.add_argument('--manifest',default='training/datasets/v3-demonstrations.json')
-    bc.add_argument('--initial',required=True)
+    bc.add_argument('--initial',help='Rejected: imitation now initializes random residual weights')
     bc.add_argument('--run',default='artifacts/step5/imitation')
     bc.add_argument('--epochs',type=int,default=10)
     bc.add_argument('--min-epochs',type=int,default=3)
@@ -47,8 +47,6 @@ def parser():
     bc.add_argument('--learning-rate',type=float,default=1e-4)
     bc.add_argument('--batch-size',type=int,default=1024,help='Effective supervised batch; memory microbatch stays in config')
     sub.add_parser('lab-bank-prepare')
-    calibration=sub.add_parser('lab-calibrate');calibration.add_argument('--games',type=int,default=25)
-    calibration.add_argument('--output')
     cleanup=sub.add_parser('cleanup');cleanup.add_argument('--run',required=True)
     cleanup.add_argument('--apply',action='store_true');cleanup.add_argument('--purge',action='store_true')
     restore=sub.add_parser('restore');restore.add_argument('--manifest',required=True)
@@ -64,17 +62,6 @@ def parser():
     evaluation.add_argument('--search', action=argparse.BooleanOptionalAction, default=None)
     evaluation.add_argument('--focus')
     evaluation.add_argument('--lineups',nargs='+',choices=['recent-neural','mixed-neural','mixed-v3','heldout-pottery-v3'])
-    meta = sub.add_parser('meta-train')
-    meta.add_argument('--initial', required=True); meta.add_argument('--references', nargs='+', required=True)
-    meta.add_argument('--run', default='artifacts/step5/meta')
-    meta.add_argument('--iterations', type=int, default=1); meta.add_argument('--tasks', type=int, default=3)
-    meta.add_argument('--fraction', type=float, default=.1)
-    metatest = sub.add_parser('meta-evaluate')
-    metatest.add_argument('--candidate', required=True); metatest.add_argument('--references', nargs=3, required=True)
-    metatest.add_argument('--output', required=True); metatest.add_argument('--seed', type=int, default=6510000)
-    for q in (meta, metatest):
-        q.add_argument('--inner-steps', type=int, default=2)
-        q.add_argument('--support-games', type=int, default=4); q.add_argument('--query-games', type=int, default=4)
     promotion = sub.add_parser('promote')
     promotion.add_argument('--checkpoint', required=True); promotion.add_argument('--report', required=True)
     promotion.add_argument('--output', default='training/models/promoted.json')
@@ -87,16 +74,12 @@ def main(argv=None):
     root = a.root.resolve()
     require(a.device != 'cuda' or torch.cuda.is_available(), 'CUDA requested but unavailable')
     default_config = 'configs/step5/evaluation.json' if a.command == 'evaluate' else 'configs/step5/lab.json'
-    if a.command in ('meta-train','meta-evaluate'): default_config='configs/step5/previous-lab.json'
     config = read_json(project_path(root, a.config or default_config))
     if a.command == 'evaluate' and config.get('format','').startswith('step5-evaluation-config/'):
         validate_evaluation_config(config)
     else:
         validate_config(config)
     torch.set_num_threads(config['threads'])
-    if a.command in ('meta-train','meta-evaluate'):
-        require(config['format'] not in ('step5-training/2.0.0','step5-training/2.1.0'),
-            'Meta-RL uses the separate historical recipe; pass configs/step5/previous-lab.json')
     if a.command == 'assets':
         result = export_assets(root, bundle=a.bundle)
     elif a.command == 'import-runtime':
@@ -129,12 +112,7 @@ def main(argv=None):
         result=prepare(root)
     else:
         require_preflight(root)
-        if a.command=='lab-calibrate':
-            from brass_ai.recovery.legacy_search import calibrate
-            require(config.get('legacy_budget',{}).get('role')=='lab','Select a lab budget config')
-            result=calibrate(root,config['legacy_budget'],games=a.games,mono=a.mono,output=a.output)
-            result={k:result[k] for k in ('format','qualification_games','training_eligible','work_ratio','limitation')}
-        elif a.command == 'demo-generate':
+        if a.command == 'demo-generate':
             from brass_ai.recovery.demonstrations import generate
             from brass_ai.recovery.config import EXECUTION
             result=generate(root,a.output,a.games,config.get('execution',EXECUTION),seed=a.seed,mono=a.mono,partition=a.partition,budget=config.get('legacy_budget'))
@@ -157,6 +135,9 @@ def main(argv=None):
                 epochs=a.epochs,min_epochs=a.min_epochs,patience=a.patience,lr=a.learning_rate,retention=config.get('retention'))
             result={k:result[k] for k in ('candidate','candidate_sha256','epochs','promoted')}
         elif a.command == 'train':
+            if a.demonstrations:
+                config['imitation']=dict(config['imitation'],manifest=a.demonstrations)
+                config['rehearsal_manifest']=a.demonstrations
             result = train(root, a.run, config, iterations=a.iterations, device=a.device, initial=a.initial,
                            mono=a.mono, from_run=a.from_run)
             result.pop('summaries', None)
@@ -165,12 +146,4 @@ def main(argv=None):
                 partition=a.partition, include_legacy=a.include_legacy, device=a.device, mono=a.mono,
                 search=a.search, focus=a.focus,lineups=a.lineups)
             result = {k: result[k] for k in ('promotion_eligible', 'failed_games', 'candidate_sha256')}
-        elif a.command == 'meta-train':
-            result = meta_train(root, a.run, a.initial, a.references, config, iterations=a.iterations, tasks=a.tasks,
-                inner_steps=a.inner_steps, support_games=a.support_games, query_games=a.query_games,
-                fraction=a.fraction, device=a.device, mono=a.mono)
-        else:
-            result = meta_evaluate(root, a.output, a.candidate, a.references, config, seed=a.seed,
-                inner_steps=a.inner_steps, support_games=a.support_games, query_games=a.query_games,
-                device=a.device, mono=a.mono)
     print(json.dumps(result, indent=2, allow_nan=False))

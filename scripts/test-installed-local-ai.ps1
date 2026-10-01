@@ -1,4 +1,4 @@
-param([switch]$Smoke)
+param([switch]$Smoke,[switch]$MaskedQuick)
 $ErrorActionPreference='Stop'
 . (Join-Path $PSScriptRoot 'patch-install-common.ps1')
 $root=Split-Path -Parent $PSScriptRoot
@@ -8,7 +8,7 @@ $validation=Read-BrassJson (Join-Path $build 'validation.json')
 $record=Read-BrassJson (Join-Path $root 'artifacts/patch-installation.json')
 Assert-BrassCandidate $manifest $validation $build
 if(Get-Process BrassBirminghamUnity -ErrorAction SilentlyContinue){throw 'Close the game before the installed-player check.'}
-if($record.status -ne 'installed' -or $record.version -notin @('1.3.0','1.3.1','1.3.2','1.4.0','1.4.1','1.4.2','1.4.3','1.4.4','1.4.5','1.4.6','1.4.7')){throw 'Combined release is not installed'}
+if($record.status -ne 'installed' -or $record.version -notin @('1.3.0','1.3.1','1.3.2','1.4.0','1.4.1','1.4.2','1.4.3','1.4.4','1.4.5','1.4.6','1.4.7','1.4.8','1.4.9')){throw 'Combined release is not installed'}
 function Verify-Installed {
  foreach($file in $manifest.files){
   if((Get-FileHash -LiteralPath (Join-Path $root ('BrassBirminghamUnity_Data/Managed/'+$file.name))).Hash -ne $file.sha256){throw 'Installed file differs from candidate'}
@@ -27,14 +27,16 @@ try{
  Remove-Item -LiteralPath $path
  $arguments=@('-batchmode','-logFile',('"'+(Join-Path $build 'local-ai-installed.log')+'"'),'--brass-local-ai-test')
  if($Smoke){$arguments+='--brass-local-ai-smoke'}
+ if($MaskedQuick){$arguments+='--brass-masked-quick'}
  $process=Start-Process -FilePath (Join-Path $root 'BrassBirminghamUnity.exe') -ArgumentList $arguments -WorkingDirectory $root -WindowStyle Hidden -PassThru
  $watch=[Diagnostics.Stopwatch]::StartNew()
  while(-not $process.HasExited){if($watch.Elapsed.TotalMinutes -gt 32){$process.Kill();throw 'Installed-player test timed out'};Start-Sleep -Milliseconds 500;$process.Refresh()}
  $result=Read-BrassJson $path
- if(-not $result -or -not $result.passed -or ($Smoke -and ($result.mode -ne 'startup-menu-smoke' -or $result.checks -lt 45)) -or (-not $Smoke -and $result.turns.Count -ne 108)){throw ('Installed AI test failed: '+$result.error)}
+ $expectedTurns=if($MaskedQuick){8}else{108}
+ if(-not $result -or -not $result.passed -or ($Smoke -and ($result.mode -ne 'startup-menu-smoke' -or $result.checks -lt 45)) -or (-not $Smoke -and $result.turns.Count -ne $expectedTurns)){throw ('Installed AI test failed: '+$result.error)}
  Verify-Installed
  $result|Add-Member -NotePropertyName testedFiles -NotePropertyValue $manifest.files -Force
  $result|Add-Member -NotePropertyName installedLocation -NotePropertyValue $root -Force
  $result|ConvertTo-Json -Depth 15|Set-Content -LiteralPath (Join-Path $build 'local-ai-installed.json') -Encoding UTF8
- Write-Output $(if($Smoke){'Installed-player startup, strategy-selection and game-creation smoke checks passed.'}else{'Installed-player menu, selection, persistence and 108 native AI turn checks passed.'})
+ Write-Output $(if($Smoke){'Installed-player startup, strategy-selection and game-creation smoke checks passed.'}else{'Installed-player menu, selection, persistence and native AI turn checks passed.'})
 }finally{[IO.File]::WriteAllBytes($path,$isolated)}

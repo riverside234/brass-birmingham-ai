@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "masked-ismcts/1.0.0/search",
+  "type": "object",
+  "required": ["backend", "seconds", "root_top_k", "interior_top_k", "pending_paths", "prior_mix"],
+  "properties": {
+    "backend": {"const": "masked_ismcts"},
+    "seconds": {"type": "number", "exclusiveMinimum": 0},
+    "root_top_k": {"type": "integer", "minimum": 1},
+    "interior_top_k": {"type": "integer", "minimum": 1},
+    "pending_paths": {"type": "integer", "minimum": 1, "maximum": 32},
+    "prior_mix": {"type": "number", "minimum": 0, "maximum": 0.5},
+    "workers": {"type": "integer", "minimum": 1, "maximum": 16}
+  },
+  "$comment": "The strict complete field/range validator is brass_ai.search.common.SearchConfig. Legal, padding and expansion masks are separate."
+}

@@ -18,6 +18,7 @@ OUTPUTS = ['policy_logits', 'win_share', 'placement', 'vp']
 
 
 def export_onnx(model, path, parity_batches):
+    model.validate_parameter_count()
     import onnx
     import onnxruntime as ort
     path = Path(path)
@@ -47,7 +48,8 @@ def export_onnx(model, path, parity_batches):
             for name, a, b in zip(OUTPUTS, actual, expected):
                 reference = b.numpy()
                 np.testing.assert_allclose(a, reference, rtol=2e-4, atol=2e-4, err_msg=name)
-                maximum_error = max(maximum_error, float(np.max(np.abs(a - reference))))
+                finite=np.isfinite(reference)
+                if finite.any():maximum_error = max(maximum_error, float(np.max(np.abs(a[finite] - reference[finite]))))
         temporary.replace(path)
     finally:
         temporary.unlink(missing_ok=True)
