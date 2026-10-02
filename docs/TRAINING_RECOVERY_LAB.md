@@ -6,6 +6,18 @@ Imitation and heuristic evaluation use searched Masked **v4** at **one second/fo
 
 ## Transfer and preflight
 
+**Windows/Linux metadata fix (2 October):** if `demo-generate` reports `Selected v4 bank differs`, update `src/brass_ai/bank.py` and `.gitattributes` from this revision. Git previously changed the v4 manifest and `selection.json` from CRLF to LF; the stored pins referred to the Windows bytes. Admission now accepts only byte-exact or LF/CRLF-equivalent JSON metadata. Content changes, reformatting, frozen-source edits and executable changes remain rejected. The selected v4 identity and all historical pins remain unchanged; do not replace the hashes manually or regenerate the bank/selection receipt.
+
+After syncing, run this quick admission check in conda before retrying the same `demo-generate` command:
+
+```sh
+conda activate ai-training
+cd /data/not_backed_up/yxu209/ai-training/
+PYTHONPATH=/data/not_backed_up/yxu209/ai-training/src python -c "from brass_ai.recovery.era_bank import current; print(current('/data/not_backed_up/yxu209/ai-training/')['bank'])"
+```
+
+It must print `bank-3dc65253a610191d66a5`. This checks all five training teachers and the evaluation-only Pottery identity without launching games. A failure before teacher admission creates no dataset spec, so the originally empty output directory can be reused. Existing dataset specs remain subject to their original resume checks.
+
 Keep conda `ai-training`. Use the project's pinned requirements; no new environment is needed if those dependencies already work.
 
 ```sh

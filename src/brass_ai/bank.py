@@ -16,6 +16,29 @@ ADAPTER_FILES=('src/brass_ai/legacy.py','src/brass_ai/bank.py',
 def read(path): return json.loads(Path(path).read_text(encoding='utf-8-sig'))
 def digest(value): return hashlib.sha256(json.dumps(value,sort_keys=True,separators=(',',':'),allow_nan=False).encode()).hexdigest()
 def sha(path): return hashlib.sha256(Path(path).read_bytes()).hexdigest()
+
+
+def json_sha_matches(path, expected):
+    """Match a legacy JSON pin with only Git's LF/CRLF conversion allowed.
+
+    Keep sha() byte-exact for binaries, frozen sources and private bundles.
+    Do not reserialize JSON: spaces, key order and all content remain pinned.
+    """
+    path = Path(path)
+    if path.suffix.lower() != '.json':
+        return False
+    data = path.read_bytes()
+    if hashlib.sha256(data).hexdigest() == expected:
+        return True
+    try:
+        json.loads(data.decode('utf-8-sig'))
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        return False
+    lf = data.replace(b'\r\n', b'\n')
+    return any(hashlib.sha256(form).hexdigest() == expected
+               for form in (lf, lf.replace(b'\n', b'\r\n')))
+
+
 def require(ok,message):
     if not ok: raise ValueError(message)
 def below(root,path):
@@ -83,8 +106,8 @@ def validate_admission(root,policy_id,record,purpose='training'):
     if record.get('admission')=='masked-v4-network-smoke/1.0.0':
         from .recovery.network_v4_bank import CONTROLS, ADMISSION
         identity,name=policy_id.split('/'); manifest=load_bank(root,identity)
-        require(record['manifest_sha256']==sha(below(root,'training/opponents/bank/'+identity+'/manifest.json')),'Network v4 manifest changed')
-        path=below(root,record['qualification']); require(sha(path)==record['sha256'],'Network v4 screen changed')
+        require(json_sha_matches(below(root,'training/opponents/bank/'+identity+'/manifest.json'),record['manifest_sha256']),'Network v4 manifest changed')
+        path=below(root,record['qualification']); require(json_sha_matches(path,record['sha256']),'Network v4 screen changed')
         report=read(path); p=manifest['payload']['profiles'][name]
         require(report['format']==ADMISSION and report['new_bank']==identity and report['passed'] and report['promote'] and
                 report['games']==24 and not report['failures'] and set(report['comparisons'])==set(CONTROLS),'Both completed winning controls are required')
@@ -102,11 +125,12 @@ def validate_admission(root,policy_id,record,purpose='training'):
     if record.get('admission')=='user-directed-masked-v4/1.0.0':
         from .recovery.v4_bank import SOURCE_BANK, ADMISSION
         identity,name=policy_id.split('/'); manifest=load_bank(root,identity)
-        require(identity==SOURCE_BANK and record['manifest_sha256']==sha(below(root,'training/opponents/bank/'+identity+'/manifest.json')), 'Selected v4 bank differs')
-        path=below(root,record['qualification']); require(sha(path)==record['sha256'],'V4 selection receipt changed')
+        manifest_path=below(root,'training/opponents/bank/'+identity+'/manifest.json')
+        require(identity==SOURCE_BANK and json_sha_matches(manifest_path,record['manifest_sha256']), 'Selected v4 bank differs')
+        path=below(root,record['qualification']); require(json_sha_matches(path,record['sha256']),'V4 selection receipt changed')
         report=read(path); profile=manifest['payload']['profiles'][name]
         require(report['format']==ADMISSION and report['passed'] and report['bank']==identity and
-                report['manifest_sha256']==record['manifest_sha256'] and report['runtime_files']==manifest['payload']['runtime_files'] and
+                json_sha_matches(manifest_path,report['manifest_sha256']) and report['runtime_files']==manifest['payload']['runtime_files'] and
                 report['generation']=='v4' and report['fixes']['productive_progress'] and report['fixes']['opening_candidate_bias'] and
                 not report['strength_promoted'] and report['fresh_strength_games']==0,'Missing explicit v4 selection/progress contract')
         require(report['seconds']==1. and report['search_workers']==4 and profile['mode']=='masked_ismcts' and
@@ -117,8 +141,8 @@ def validate_admission(root,policy_id,record,purpose='training'):
         from .recovery.economy_bank import CONTROLS, HISTORICAL_CONTROLS, ECONOMIC_CONTROL
         controls=CONTROLS if record['admission']=='masked-economy-smoke/1.3.0' else (ECONOMIC_CONTROL,) if record['admission']=='masked-economy-smoke/1.2.0' else HISTORICAL_CONTROLS
         identity,name=policy_id.split('/'); manifest=load_bank(root,identity)
-        require(record['manifest_sha256']==sha(below(root,'training/opponents/bank/'+identity+'/manifest.json')),'Economy manifest changed')
-        path=below(root,record['qualification']); require(sha(path)==record['sha256'],'Economy receipt changed')
+        require(json_sha_matches(below(root,'training/opponents/bank/'+identity+'/manifest.json'),record['manifest_sha256']),'Economy manifest changed')
+        path=below(root,record['qualification']); require(json_sha_matches(path,record['sha256']),'Economy receipt changed')
         report=read(path); p=manifest['payload']['profiles'][name]
         require(report['new_bank']==identity and report['passed'] and report['promote'] and report['games']==12*len(controls) and not report['failures'],'Missing completed winning screen')
         require(set(report['comparisons'])==set(controls),'Required immutable controls differ')
@@ -141,8 +165,8 @@ def validate_admission(root,policy_id,record,purpose='training'):
         return
     if record.get('admission')=='masked-industry-smoke/1.0.0':
         identity,name=policy_id.split('/');manifest=load_bank(root,identity)
-        require(record['manifest_sha256']==sha(below(root,'training/opponents/bank/'+identity+'/manifest.json')),'Industry bank manifest changed')
-        report_path=below(root,record['qualification']);require(sha(report_path)==record['sha256'],'Industry smoke receipt changed')
+        require(json_sha_matches(below(root,'training/opponents/bank/'+identity+'/manifest.json'),record['manifest_sha256']),'Industry bank manifest changed')
+        report_path=below(root,record['qualification']);require(json_sha_matches(report_path,record['sha256']),'Industry smoke receipt changed')
         report=read(report_path);p=manifest['payload']['profiles'][name]
         require(report['new_bank']==identity and report['passed'] and report['promote'] and report['games']==24 and not report['failures'],'Missing completed/improved industry smoke')
         require(set(report['comparisons'])=={'bank-3f7221cadcd472aafdb9','bank-d82438ccec287dbc8a64'},'Both requested controls are required')
@@ -157,8 +181,8 @@ def validate_admission(root,policy_id,record,purpose='training'):
         return
     if record.get('admission')=='masked-era-smoke/1.0.0':
         identity,name=policy_id.split('/');manifest=load_bank(root,identity)
-        require(record['manifest_sha256']==sha(below(root,'training/opponents/bank/'+identity+'/manifest.json')),'Era bank manifest changed')
-        report_path=below(root,record['qualification']);require(sha(report_path)==record['sha256'],'Era smoke receipt changed')
+        require(json_sha_matches(below(root,'training/opponents/bank/'+identity+'/manifest.json'),record['manifest_sha256']),'Era bank manifest changed')
+        report_path=below(root,record['qualification']);require(json_sha_matches(report_path,record['sha256']),'Era smoke receipt changed')
         report=read(report_path);p=manifest['payload']['profiles'][name]
         require(report['new_bank']==identity and report['passed'] and report['games']==8 and not report['failures'],'Missing completed era smoke')
         require(report['new_runtime_files']==manifest['payload']['runtime_files'],'Era smoke/runtime differs')
@@ -169,7 +193,7 @@ def validate_admission(root,policy_id,record,purpose='training'):
         return
     if record.get('admission')=='user-directed-v3-s1/1.0.0':
         bank,name=policy_id.split('/');manifest=load_bank(root,bank)
-        require(record['manifest_sha256']==sha(below(root,'training/opponents/bank/'+bank+'/manifest.json')),'S1 bank manifest changed')
+        require(json_sha_matches(below(root,'training/opponents/bank/'+bank+'/manifest.json'),record['manifest_sha256']),'S1 bank manifest changed')
         profile=manifest['payload']['profiles'][name]
         origin=manifest['payload']['training_origin']
         require(origin['source_bank']=='bank-b880ac1fd5f1dfe8bcc2' and origin['backend']=='S1','Original S1 source identity changed')
@@ -181,8 +205,8 @@ def validate_admission(root,policy_id,record,purpose='training'):
         return
     if record.get('admission')=='masked-strength-screen/1.1.0':
         identity,name=policy_id.split('/');manifest=load_bank(root,identity)
-        require(record['manifest_sha256']==sha(below(root,'training/opponents/bank/'+identity+'/manifest.json')),'Screened bank manifest changed')
-        report_path=below(root,record['qualification']);require(sha(report_path)==record['sha256'],'Strength receipt changed')
+        require(json_sha_matches(below(root,'training/opponents/bank/'+identity+'/manifest.json'),record['manifest_sha256']),'Screened bank manifest changed')
+        report_path=below(root,record['qualification']);require(json_sha_matches(report_path,record['sha256']),'Strength receipt changed')
         report=read(report_path);p=manifest['payload']['profiles'][name]
         require(report['bank']==identity and report['qualified'] and report['screen']['games']==20 and not report['screen']['failures'],'Missing matched strength screen')
         require(report['runtime_files']==manifest['payload']['runtime_files'],'Strength screen/runtime identity differs')
@@ -191,14 +215,14 @@ def validate_admission(root,policy_id,record,purpose='training'):
         return
     if record.get('admission')=='user-directed-masked-ismcts/1.0.0':
         bank,name=policy_id.split('/');manifest=load_bank(root,bank)
-        require(record['manifest_sha256']==sha(below(root,'training/opponents/bank/'+bank+'/manifest.json')),'Direct bank manifest changed')
+        require(json_sha_matches(below(root,'training/opponents/bank/'+bank+'/manifest.json'),record['manifest_sha256']),'Direct bank manifest changed')
         profile=manifest['payload']['profiles'][name]
         require(profile['mode']=='masked_ismcts' and profile['milliseconds']==1000 and profile['cash_policy']==profile['conversion_policy']==1,
                 'Direct one-second v3 contract changed')
         require((purpose=='evaluation')==('pottery-flex' in name),'Pottery opponent holdout changed')
         return
     path=below(root,record['qualification'])
-    require(sha(path)==record['sha256'],'Qualification report changed')
+    require(json_sha_matches(path,record['sha256']),'Qualification report changed')
     report=read(path);require(report['bank']==policy_id.split('/')[0],'Qualification belongs to another bank')
     result=report['profiles'][record['profile']]
     require(result['policy_id']==policy_id and result[purpose+'_eligible'] and result['niche_qualified'],
