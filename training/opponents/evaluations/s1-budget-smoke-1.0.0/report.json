@@ -1,0 +1,55 @@
+{
+  "format": "v3-s1-budget-smoke/1.0.0",
+  "passed": true,
+  "games": 8,
+  "setups": 2,
+  "rotations": 4,
+  "seed": 830100,
+  "bank": "bank-cfce2a6b186861f86c73",
+  "manifest_sha256": "634689cd000ec9066f826efc5e66ce586c20db28afa713b74c5b98a03ca6d873",
+  "seconds": 1.0,
+  "lab_preset": "16 concurrent tables x 2 private S1 workers; total work multiplier 3",
+  "local_tables": 2,
+  "platform": "Windows",
+  "logical_cpus": 14,
+  "policies": {
+    "serial": {
+      "games": 8,
+      "mean_vp": 39.125,
+      "win_rate": 0.25,
+      "first_place_rate": 0.25,
+      "mean_rank": 2.625,
+      "mean_nodes_per_game": 287.875,
+      "mean_turn_seconds": 1.110921875009808,
+      "max_turn_seconds": 1.906999999890104
+    },
+    "16x2": {
+      "games": 8,
+      "mean_vp": 46,
+      "win_rate": 0.0,
+      "first_place_rate": 0,
+      "mean_rank": 2.5,
+      "mean_nodes_per_game": 541.25,
+      "mean_turn_seconds": 1.1316093750065193,
+      "max_turn_seconds": 1.875
+    }
+  },
+  "failures": [],
+  "evidence": {
+    "game-00.json": "4508d5b0cac7dd902672e64a5003170d7d454876b78ea57ca5c35fe621652ebf",
+    "game-01.json": "a38be7ce4ee7b16eba5b2ee1eb3f78c252c3b3c24ac37148f34a4c84a810b752",
+    "game-02.json": "2738bf8a63763eec65f8587d93051eb5ac6c08d9fa36ca99eca6f0111b621b6c",
+    "game-03.json": "f52b3e4317284de45a5f9ee7ce5f3e947c2ebd9daa309ba10865fcfdd15e7cee",
+    "game-04.json": "1738d06f8b9858ad8778f2a40d6f8f864aea0debe61d7001a93edd52d362be65",
+    "game-05.json": "904831fe70cfbe06d807d824e9fdd615a7848d1966af67cb315d39a7d546594d",
+    "game-06.json": "5b673e01a750804c23114fae99e1038adc861a45b0ad874d62812b6642ce8f4d",
+    "game-07.json": "36787fb2c448d2a793183781035c200854f2a06f70bf99b32e28d59fc25fbc02"
+  },
+  "limitation": "Small matched smoke, not strength qualification. Win rate uses official split win shares; first place counts tied rank-one finishes. Table concurrency is throughput, not extra thinking time. No neural search settings changed.",
+  "active_bank": "bank-d82438ccec287dbc8a64",
+  "active_manifest_sha256": "7f440ee6af7aa7f4231feda35199c3ef45101f6bba2db597335efb377d538145",
+  "runtime_matches_active": true,
+  "profiles_match_active": true,
+  "packaging_note": "Only the source snapshot of the idempotent bank-preparation helper changed after the comparison. Compiled S1 bytes, profiles and decision adapters are identical.",
+  "clean_source_clone_reuse_passed": true
+}

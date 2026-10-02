@@ -8,7 +8,8 @@ namespace BrassLegacyAI
 {
     public sealed class Ledger
     {
-        public double banked,industries,links,finance,development,rival,liquidity,score;
+        public double banked,industries,links,secured_links,forecast_links,industry_reserve,finance,development,rival,liquidity,sale_tempo,canal_opportunity,inventory_risk,tempo,score;
+        public string era_strategy;
         public double? win_share;
         public int? rank;
         public int final_income,final_cash;
@@ -57,8 +58,7 @@ namespace BrassLegacyAI
         {
             // One forecast per board tile per evaluation, shared by industry
             // and link scoring for all seats. This cache never outlives a view.
-            return v["slots"].Where(s=>s["tile"]!=null && s["tile"].Type!=JTokenType.Null)
-                .ToDictionary(s=>(string)s["id"],s=>Completion(v,s,(int)s["tile"]["seat"],true));
+            return Conversion.Forecast(v);
         }
         static Ledger Seat(JObject v,int seat,bool conversion,Dictionary<string,double> forecast)
         {
@@ -68,7 +68,7 @@ namespace BrassLegacyAI
             bool fullGame=!Conversion.Intro(v); bool final= (!canal || !fullGame) && remaining==0;
             // Merchant VP is already credited in vp. bonus_vp is the era-summary
             // counter, not an additional pending award.
-            var d=new Ledger{banked=I(p,"vp")};
+            var d=new Ledger{banked=I(p,"vp"),era_strategy=EraEconomy.Strategy(v)};
             double pendingIncome=0;
             foreach(var s in v["slots"].Where(s=>s["tile"]!=null && I(s["tile"],"seat")==seat))
             {
@@ -80,11 +80,17 @@ namespace BrassLegacyAI
             foreach(var l in v["links"].Where(l=>l["owner"]!=null && (int)l["owner"]==seat))
             {
                 var regions=l["regions"].Select(x=>(string)x).ToArray();
-                d.links+=v["slots"].Where(s=>s["tile"]!=null && regions.Contains(Region(S(s,"id")))).Sum(s=>I(s["tile"],"link_vp")*(conversion?forecast[(string)s["id"]]:Completion(v,s,I(s["tile"],"seat"))));
+                foreach(var slot in v["slots"].Where(s=>s["tile"]!=null && regions.Contains(Region(S(s,"id")))))
+                {
+                    double prob=conversion?forecast[(string)slot["id"]]:Completion(v,slot,I(slot["tile"],"seat"));
+                    double points=I(slot["tile"],"link_vp")*(conversion?EraEconomy.LinkProbability(v,slot,seat,prob):prob);
+                    if(B(slot["tile"],"flipped"))d.secured_links+=points;else d.forecast_links+=points;
+                }
                 // A border REGION scores two, even with empty/incompatible merchant
                 // tiles. Merchant-slot count and beer availability are irrelevant.
-                d.links+=2*v["merchants"].Select(m=>Region(S(m,"id"))).Distinct().Count(regions.Contains);
+                d.secured_links+=2*v["merchants"].Select(m=>Region(S(m,"id"))).Distinct().Count(regions.Contains);
             }
+            d.links=d.secured_links+d.forecast_links;
             if(!final)
             {
                 // Exactly one resource forecast. No separate loan/cash/income bonuses.
@@ -98,9 +104,11 @@ namespace BrassLegacyAI
                 // Capital far beyond a few affordable investments has little marginal
                 // value. Otherwise a short search can hoard loans instead of using them.
                 double capacity=Math.Max(5,Math.Min(38,(remaining+(canal && fullGame?4:0))*7.0));
-                d.finance=money<0?money*0.55:capacity*0.32*(1-Math.Exp(-money/capacity));
+                d.industry_reserve=conversion?EraEconomy.InvestmentReserve(v,seat):0;
+                d.finance=conversion?EraEconomy.Finance(v,seat,money,capacity,d.industry_reserve):money<0?money*0.55:capacity*0.32*(1-Math.Exp(-money/capacity));
                 // Value development through reachable replacement investments, never a
                 // reward per discarded tile. Cost/action savings are counted here once.
+                var options=new List<double>();
                 foreach(var m in p["mat"])
                 {
                     var next=m["tiles"].FirstOrDefault();if(next==null || remaining<2)continue;
@@ -108,10 +116,16 @@ namespace BrassLegacyAI
                     bool card=seat==(int)v["seat"] && v["own_hand"].Any(c=>((string)c).StartsWith("wild:") || ((string)c).Contains(type) || ((string)c).StartsWith("location:"));
                     if(!card)continue;
                     bool slot=v["slots"].Any(s=>s["tile"]==null && s["types"].Any(t=>(string)t==type));
-                    if(slot && I(next,"level")>1)d.development+=Math.Min(3,I(next,"vp")*0.20)*(canal?1.3:0.65);
+                    if(conversion && seat==(int)v["seat"])options.Add(InvestmentOpportunity.MatValue(v,next));
+                    else if(slot && I(next,"level")>1)d.development+=Math.Min(3,I(next,"vp")*0.20)*(canal?1.3:0.65);
                 }
+                // Cards, money and actions cannot finance six simultaneous
+                // industry plans. A strongest investment plus a discounted
+                // alternative prevents farming unrelated mat-upgrade values.
+                if(conversion && seat==(int)v["seat"])d.development=InvestmentOpportunity.Portfolio(options);
             }
-            d.score=d.banked+d.industries+d.links+d.finance+d.development;return d;
+            if(conversion && !final){d.inventory_risk=-CompetitiveEconomy.InventoryRisk(v,seat,forecast);d.tempo=CompetitiveEconomy.Tempo(v,seat);}
+            d.score=d.banked+d.industries+d.links+d.finance+d.development+d.inventory_risk+d.tempo;return d;
         }
         public static Ledger Evaluate(JObject v,int seat,bool conversion=false)
         {
@@ -122,8 +136,41 @@ namespace BrassLegacyAI
                 double share=tie(player,ordered[0])?1.0/ordered.Count(x=>tie(x,ordered[0])):0;
                 return new Ledger{banked=I(player,"vp"),final_income=I(player,"income"),final_cash=I(player,"cash"),score=share,win_share=share,rank=Array.FindIndex(ordered,x=>tie(x,player))+1,units="official terminal win share; VP/income/cash tie break"};
             }
+            return EvaluateAll(v,conversion)[seat];
+        }
+        public static Dictionary<int,Ledger> EvaluateAll(JObject v,bool conversion=false)
+        {
+            var seats=Conversion.Seats(v);
+            if(B(v["context"],"terminal"))return seats.ToDictionary(x=>x,x=>Evaluate(v,x,conversion));
             var forecast=conversion?Forecast(v):null;
-            var d=Seat(v,seat,conversion,forecast);d.rival=Conversion.Seats(v).Where(s=>s!=seat).Max(s=>Seat(v,s,conversion,forecast).score)*0.18;d.score-=d.rival;return d;
+            var scores=seats.ToDictionary(x=>x,x=>Seat(v,x,conversion,forecast));
+            var raw=scores.ToDictionary(x=>x.Key,x=>x.Value.score);
+            double weight=conversion?CompetitiveEconomy.RivalWeight(v):.18;
+            foreach(int seat in seats){scores[seat].rival=seats.Where(x=>x!=seat).Max(x=>raw[x])*weight;scores[seat].score-=scores[seat].rival;}
+            return scores;
+        }
+        public static double[] ProposalValues(JObject v,List<Choice> choices,bool conversion)
+        {
+            var batch=HeuristicBatchQueue.Current;
+            return batch==null?ComputeProposals(v,choices,conversion):batch.Evaluate("proposal/"+conversion+"/"+HeuristicBatchQueue.Key(v)+"/"+Wire.Hash(choices),()=>ComputeProposals(v,choices,conversion));
+        }
+        static double[] ComputeProposals(JObject v,List<Choice> choices,bool conversion)
+        {
+            var cache=new Dictionary<string,double>();var values=new double[choices.Count];
+            var bonuses=conversion && choices.Any(c=>c.kind=="bonus_develop")?InvestmentOpportunity.FreeDevelopments(v):null;
+            for(int i=0;i<choices.Count;i++)
+            {
+                var c=choices[i];bool cardDependent=new[]{"build","network","develop","loan","pass","sell"}.Contains(c.kind);
+                string key=c.kind+"/"+c.target+"/"+c.industry+"/"+c.merchant;
+                double value;
+                if(!cardDependent)values[i]=bonuses!=null && c.kind=="bonus_develop"?bonuses[c.industry]:Proposal(v,c,conversion);
+                else
+                {
+                    if(!cache.TryGetValue(key,out value)){value=Proposal(v,c,conversion)+CardCost(v,c.card)*.15;cache.Add(key,value);}
+                    values[i]=value-CardCost(v,c.card)*.15;
+                }
+            }
+            return values;
         }
         public static JObject KnownFinalScore(JObject view)
         {
@@ -157,6 +204,7 @@ namespace BrassLegacyAI
             if(c.kind=="finish")return 0;
             if(c.kind=="sell")
             {
+                if(conversion)return score+SaleTiming.Proposal(v,c);
                 var tile=v["slots"].Single(s=>S(s,"id")==c.target)["tile"];
                 var merchant=v["merchants"].Single(m=>S(m,"id")==c.merchant);
                 return 30+I(tile,"vp")+(conversion && I(tile,"beer")>0 && I(merchant,"beer")>0?Conversion.MerchantBonus(v,merchant):0);
@@ -164,10 +212,21 @@ namespace BrassLegacyAI
             if(c.kind=="build")
             {
                 var t=p["mat"].Single(m=>S(m,"type")==c.industry)["tiles"].First();
-                score+=I(t,"vp")+I(t,"income")*0.4-I(t,"cost")*0.25;
+                int paid=conversion && EraEconomy.Rail(v)?EraEconomy.BuildCost(v,t,Region(c.target)):I(t,"cost");
+                score+=I(t,"vp")+I(t,"income")*0.4-paid*0.25;
                 if(conversion && Conversion.Actions(v,seat)<=1 && Conversion.Sellable(t))
                     score-=I(t,"vp")*2+10; // A build cannot also be a sale action.
                 if(c.industry=="IronWorks")score+=Math.Max(0,8-I(v,"iron_market"))*0.5;
+                if(conversion)score+=CompetitiveEconomy.ResourceProposal(v,t,Region(c.target))+CompetitiveEconomy.SellableProposal(v,t,Region(c.target));
+                if(conversion)
+                {
+                    // The rules mask has already authorized this build. Keep
+                    // a legal opponent resource overbuild visible to a short
+                    // clock: its denial value is otherwise lost in a location tie.
+                    var old=v["slots"].Single(x=>S(x,"id")==c.target)["tile"];
+                    if(old!=null && old.Type!=JTokenType.Null && I(old,"seat")!=seat)
+                        score+=CompetitiveEconomy.RivalWeight(v)*I(old,"vp")*(B(old,"flipped")?1:.5);
+                }
                 if(c.industry=="Brewery")
                 {
                     if(!conversion)score+=2;
@@ -178,6 +237,7 @@ namespace BrassLegacyAI
                         var imagined=(JObject)v["slots"].Single(s=>S(s,"id")==c.target).DeepClone();
                         imagined["tile"]=t.DeepClone();imagined["tile"]["resource"]=(string)v["context"]["era"]=="CanalEra"?1:2;
                         score-=I(t,"vp")*(1-Conversion.Completion(v,imagined,seat));
+                        score+=CompetitiveEconomy.BreweryPrivacy(v,Region(c.target));
                     }
                 }
                 if(c.industry=="Pottery" || c.industry=="CottonMill" || c.industry=="Manufacturer")
@@ -202,13 +262,15 @@ namespace BrassLegacyAI
                         int before=Conversion.MerchantDistance(v,region,type),after=Conversion.MerchantDistance(v,region,type,c.target);
                         if(after<before)score+=(after==0?6:2)+I(slot["tile"],"income")*0.4;
                     }
+                if(conversion)score+=CompetitiveEconomy.NetworkAccess(v,c);
+                if(conversion && EraEconomy.Rail(v))return score+EraEconomy.NetworkProposal(v,c)+1;
                 return score+v["slots"].Where(s=>s["tile"]!=null && regions.Contains(Region(S(s,"id")))).Sum(s=>I(s["tile"],"link_vp")*(B(s["tile"],"flipped")?1:0.55))+1;
             }
-            if(c.kind=="loan")return score+(I(p,"cash")<15?9:-4);
+            if(c.kind=="loan")return score+(conversion?InvestmentOpportunity.Loan(v):I(p,"cash")<15?9:-4);
             if(conversion && (c.kind=="bonus_develop" || c.kind=="bonus_skip"))return Conversion.BonusDevelopment(v,c);
-            if(c.kind=="develop" || c.kind=="bonus_develop")return score+(c.industry=="Brewery" || c.industry=="CottonMill"?3:1);
+            if(c.kind=="develop" || c.kind=="bonus_develop")return score+(conversion?InvestmentOpportunity.Development(v,c.industry):c.industry=="Brewery" || c.industry=="CottonMill"?3:1);
             if(c.kind=="scout")return -5-c.cards.Sum(x=>CardCost(v,x))*0.15;
-            if(c.kind=="pass")return -100+score;
+            if(c.kind=="pass")return (conversion?-1:-100)+score;
             if(c.kind=="bonus_skip")return -10;
             if(c.kind=="liquidate"){var t=v["slots"].Single(s=>S(s,"id")==c.target)["tile"];return I(t,"cost")*0.3-I(t,"vp")*(B(t,"flipped")?2:1);}
             if(c.target=="market")return -4;

@@ -23,6 +23,15 @@ public static class RuntimeChecks
     {
         try
         {
+            string repository=args.Length>1?args[1]:Path.GetFullPath(Path.Combine(Path.GetDirectoryName(args[0]),"../.."));
+            foreach(string key in ProfileCatalog.Keys)
+            {
+                using(var hash=System.Security.Cryptography.SHA256.Create())
+                {
+                    var source=File.ReadAllBytes(Path.Combine(repository,"configs/legacy-ai/"+key+"-v3-masked-economy.json"));
+                    Check(ProfileCatalog.SourceHash(key)==BitConverter.ToString(hash.ComputeHash(source)).Replace("-", "").ToLowerInvariant(),"packaged profile bytes match frozen config");
+                }
+            }
             foreach(int count in new[]{2,3,4})foreach(string style in count==4?ProfileCatalog.Keys:new[]{"balanced"})
             {
                 var h=SecondRound(count);var view=(JObject)Wire.Token(h.Observe(h.Actor));var legal=h.Choices();
@@ -39,11 +48,24 @@ public static class RuntimeChecks
                 Check(Planner.InformationKey(view,legal)==Planner.InformationKey((JObject)Wire.Token(sampled.Observe(h.Actor)),sampled.Choices()),"hidden-world root invariance");
             }
             var root=SecondRound(4);var v=(JObject)Wire.Token(root.Observe(root.Actor));var cards=Host.Composition(Config(4));
-            var profile=ProfileCatalog.Create("balanced",4);profile.work_limit=10000;profile.simulations=2;
+            var opening=new Host(843400,new JObject{["configuration"]=Config(4)});
+            var openingView=(JObject)Wire.Token(opening.Observe(opening.Actor));var openingProfile=ProfileCatalog.Create("balanced",4);
+            openingProfile.work_limit=10000;openingProfile.simulations=1;
+            var openingDecision=new Planner(cards).Decide(openingView,opening.Choices(),openingProfile,true);
+            Check(openingDecision.alternatives.Any(plan=>plan.actions[0][0].StartsWith("build|")),"one-action Canal opening compares a completed industry incumbent");
+            var profile=ProfileCatalog.Create("balanced",4);profile.work_limit=10000;profile.simulations=8;
             var searched=new Planner(cards).Decide(v,root.Choices(),profile,true);
-            Check(searched.search.completed==2,"finished real search iterations");
-            Check(searched.search.root.Values.Sum(e=>e.visits)==2,"root backup counted once per completed world");
+            Check(searched.search.completed==8,"finished real search iterations");
+            Check(searched.search.root.Values.Sum(e=>e.visits)==8,"root backup counted once per completed world");
             Check(searched.search.root.Values.All(e=>e.returns.Length==4 && e.returns.All(x=>x>=0 && x<=e.visits)),"four stable-seat bounded returns");
+            Check(searched.search.revisited_plans>=2 && searched.search.incumbent_visits>=2,"complete turns receive their own repeated credit");
+            Check(searched.search.normalization_uses>0,"normalization waits for two supported siblings");
+            Check(searched.search.plans.Values.All(e=>e.visits>=e.scenarios.Count && e.returns.Length==4),"raw plan evidence and scenario identity");
+            Check(searched.search.maximum_intervening_turns==0,"zero-reply lab cutoff settles current turn");
+            var easy=ProfileCatalog.Create("balanced",4);ProfileCatalog.ConfigureClock(easy,2000);
+            Check(easy.root_top_k==4 && easy.interior_top_k==2 && easy.opponent_turn_limit==1,"easy heuristic settings");
+            ProfileCatalog.ConfigureClock(easy,12000);Check(easy.root_top_k==8 && easy.interior_top_k==4 && easy.opponent_turn_limit==2,"hard heuristic settings");
+            Check(Math.Abs(SearchSelection.Transform(.26,.25,.251,.05)-.2)<1e-9,"Q regularization prevents tiny-range amplification");
             var cancelled=new CancellationTokenSource();cancelled.Cancel();
             var stopped=new Planner(cards).Decide(v,root.Choices(),profile,false,1,cancelled.Token);
             Check(stopped.selected.actions.Count==2 && stopped.search.completed==0 && stopped.search.root.Values.All(e=>e.visits==0),"cancelled search publishes only a complete legal incumbent");

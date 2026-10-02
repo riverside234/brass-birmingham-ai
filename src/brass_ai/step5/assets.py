@@ -23,6 +23,24 @@ from .league import write_json
 
 MODEL_INPUTS = {}  # Historical weights stay archived; no starting checkpoint.
 
+CONTROL_BANKS = {'v3-s1-control': 'bank-d82438ccec287dbc8a64',
+                 'v3-masked-control': 'bank-981744ddae4aaf07f1cf',
+                 'v3-era-control': 'bank-3f7221cadcd472aafdb9',
+                 'v3-industry-control': 'bank-340a20d72b23c652c267',
+                 'v3-economy-control': 'bank-f5107c644af2fbf4ac99',
+                 'v3-advanced-control': 'bank-3dc65253a610191d66a5'}
+
+
+def control_banks(root):
+    # A proposed comparison must not invalidate an already distributed lab
+    # runtime. Ship the additional economic/advanced controls only after the
+    # new admission receipt selects that bank for training.
+    current = read(root / 'training/opponents/current.json')
+    if current.get('format') in ('masked-v3-bank/1.3.0', 'masked-v4-bank/1.0.0'):
+        return CONTROL_BANKS
+    return {k: v for k, v in CONTROL_BANKS.items()
+            if k in ('v3-s1-control', 'v3-masked-control', 'v3-era-control')}
+
 
 def runtime_files(root):
     bank = read(root / 'training/opponents/current.json')['bank']
@@ -30,6 +48,12 @@ def runtime_files(root):
     from brass_ai.searchlab.runtime import install
     install(root)
     directories = ['artifacts/r1-host/guarded', 'artifacts/legacy-ai/bank/' + bank + '/runtime','artifacts/r4-host']
+    # Preserve frozen comparison opponents without admitting them to the league.
+    # Their proprietary dependencies remain in the private transfer only.
+    for control in control_banks(root).values():
+        if bank!=control and (root/'training/opponents/bank'/control/'manifest.json').exists():
+            load_bank(root,control)
+            directories.append('artifacts/legacy-ai/bank/'+control+'/runtime')
     files = {}
     for directory in directories:
         runtime = read(root / directory / 'runtime.json')
@@ -58,13 +82,16 @@ def export_assets(root, *, bundle='artifacts/step5-transfer/private-rules-runtim
             model_id=raw['model_id'], parameters=model.parameter_count, original_mode=raw['training'].get('mode')))
     workers=[('r1', directories[0], 'BrassHost.exe'), ('v3', directories[1], 'BrassLegacyAI.exe')]
     workers += [('v3-lab',directories[1],'BrassLegacyAI.exe'),('search',directories[2],'BrassHost.exe')]
+    for name,control in control_banks(root).items():
+        directory='artifacts/legacy-ai/bank/'+control+'/runtime'
+        if directory in directories:workers.append((name,directory,'BrassLegacyAI.exe'))
     for name, directory, exe in workers:
         path = root / 'training/runtime' / name / exe
         path.parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(root / directory / exe, path)
         exported.append(dict(path=path.relative_to(root).as_posix(), sha256=sha(path),
                              kind='project-authored worker; requires private game dependencies'))
-    record = dict(format='step5-distribution/2.2.0', bank=bank,initialization='random',backend='masked_ismcts',
+    record = dict(format='step5-distribution/2.2.0', bank=bank,initialization='random',backend='masked_ismcts',legacy_backend=read(root/'training/opponents/current.json')['backend'],
                   assets=exported, private_runtime_files=private_files,
                   original_hard='stock-hard-guarded-1.1.0',
                   note='R3 policies are original C# sources and JSON profiles, not neural weights. Original Hard and game rules are privately transferred vendor DLLs.')
@@ -125,7 +152,7 @@ def preflight(root, *, device='cpu', mono=None, record_parity=False):
             load_checkpoint(project_path(root, asset['path']))
     bank, _, files = runtime_files(root)
     require(bank == distribution['bank'] and files == distribution['private_runtime_files'], 'Private runtime differs')
-    opponent = FrozenOpponent(root, bank + '/balanced-v3-masked', purpose='diagnostic', mono=mono)
+    opponent = FrozenOpponent(root, bank + '/' + next(n for n in load_bank(root,bank)['payload']['profiles'] if n.startswith('balanced-v3')), purpose='diagnostic', mono=mono)
     opponent.close()
     if device == 'cuda':
         require(torch.cuda.is_available(), 'CUDA is unavailable; install the pinned CUDA wheel/compatible driver')

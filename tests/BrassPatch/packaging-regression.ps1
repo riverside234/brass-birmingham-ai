@@ -1,10 +1,11 @@
-param([ValidateSet('1.0.0','1.1.0','1.2.0','1.3.0','1.3.1','1.3.2','1.4.0','1.4.1','1.4.2','1.4.3','1.4.4','1.4.5','1.4.6','1.4.7')][string]$PreviousRelease='1.3.1')
+param([ValidateSet('1.0.0','1.1.0','1.2.0','1.3.0','1.3.1','1.3.2','1.4.0','1.4.1','1.4.2','1.4.3','1.4.4','1.4.5','1.4.6','1.4.7','1.4.8','1.4.9')][string]$PreviousRelease='1.3.1')
 $ErrorActionPreference='Stop'
 Set-StrictMode -Version Latest
 $root=Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 $build=Join-Path $root 'artifacts/patch-build'
 [ordered]@{passed=$false;status='running';previousRelease=$PreviousRelease;startedUtc=[DateTime]::UtcNow.ToString('o')}|ConvertTo-Json|Set-Content -LiteralPath (Join-Path $build 'packaging-results.json') -Encoding UTF8
 $previous=Join-Path $root ('artifacts/patch-releases/'+$PreviousRelease)
+function Prior-File([string]$name){if(Test-Path -LiteralPath (Join-Path $previous ('Managed/'+$name))){Join-Path $previous ('Managed/'+$name)}else{Join-Path $previous $name}}
 $fixture=Join-Path $root ('artifacts/packaging-upgrade-tests/'+[Guid]::NewGuid().ToString('N'))
 $game=Join-Path $fixture 'game'
 $managed=Join-Path $game 'BrassBirminghamUnity_Data/Managed'
@@ -15,11 +16,11 @@ $saves=Join-Path $fixture 'artificial-saves'
 New-Item -ItemType Directory -Path $managed,$scripts,(Join-Path $candidate 'Managed'),$baseline,$saves -Force | Out-Null
 foreach($name in @('install-patch.ps1','install-combined-patch.ps1','uninstall-patch.ps1','patch-install-common.ps1')){Copy-Item -LiteralPath (Join-Path $root ('scripts/'+$name)) -Destination $scripts}
 foreach($name in @('Assembly-CSharp.dll','BrassPatch.dll')){
- Copy-Item -LiteralPath (Join-Path $previous $name) -Destination $managed
+ Copy-Item -LiteralPath (Prior-File $name) -Destination $managed
  Copy-Item -LiteralPath (Join-Path $build ('Managed/'+$name)) -Destination (Join-Path $candidate 'Managed')
 }
 if(Test-Path -LiteralPath (Join-Path $build 'Managed/BrassLegacyAI.dll')){Copy-Item -LiteralPath (Join-Path $build 'Managed/BrassLegacyAI.dll') -Destination (Join-Path $candidate 'Managed')}
-if(Test-Path -LiteralPath (Join-Path $previous 'BrassLegacyAI.dll')){Copy-Item -LiteralPath (Join-Path $previous 'BrassLegacyAI.dll') -Destination $managed}
+if(Test-Path -LiteralPath (Prior-File 'BrassLegacyAI.dll')){Copy-Item -LiteralPath (Prior-File 'BrassLegacyAI.dll') -Destination $managed}
 Copy-Item -LiteralPath (Join-Path $root 'artifacts/patch-baseline/Assembly-CSharp.dll') -Destination $baseline
 foreach($name in @('build-manifest.json','validation.json')){Copy-Item -LiteralPath (Join-Path $build $name) -Destination $candidate}
 $recordPath=Join-Path $fixture 'artifacts/patch-installation.json'
@@ -29,7 +30,7 @@ $record|ConvertTo-Json -Depth 12|Set-Content -LiteralPath $recordPath -Encoding 
 $manifest=Get-Content -LiteralPath (Join-Path $candidate 'build-manifest.json') -Raw | ConvertFrom-Json
 $checks=0
 function Restore-Prior {
- foreach($file in $record.files){Copy-Item -LiteralPath (Join-Path $previous $file.name) -Destination (Join-Path $managed $file.name) -Force}
+ foreach($file in $record.files){Copy-Item -LiteralPath (Prior-File $file.name) -Destination (Join-Path $managed $file.name) -Force}
  $installedAi=Join-Path $managed 'BrassLegacyAI.dll'
  if('BrassLegacyAI.dll' -notin @($record.files|ForEach-Object name) -and (Test-Path -LiteralPath $installedAi)){Remove-Item -LiteralPath $installedAi}
 }
@@ -53,7 +54,7 @@ $stream=[IO.File]::OpenWrite($candidateHelper);try{$stream.WriteByte(0)}finally{
 Run-Package 'install-patch.ps1' $false
 Assert-Candidate
 Copy-Item -LiteralPath (Join-Path $build 'Managed/BrassPatch.dll') -Destination $candidateHelper -Force
-if($manifest.version -in @('1.3.0','1.3.1','1.3.2','1.4.0','1.4.1','1.4.2','1.4.3','1.4.4','1.4.5','1.4.6','1.4.7','1.4.8')){
+if($manifest.version -in @('1.3.0','1.3.1','1.3.2','1.4.0','1.4.1','1.4.2','1.4.3','1.4.4','1.4.5','1.4.6','1.4.7','1.4.8','1.4.9','1.4.10')){
  $candidateAi=Join-Path $candidate 'Managed/BrassLegacyAI.dll'
  $stream=[IO.File]::OpenWrite($candidateAi);try{$stream.WriteByte(0)}finally{$stream.Dispose()}
  Run-Package 'install-patch.ps1' $false
@@ -80,11 +81,11 @@ Assert-Candidate
 # intent identifies the old and candidate files, so rerunning installation heals it.
 $intent=[ordered]@{operation='install';gameRoot=$game;priorFiles=$record.files;candidateFiles=$manifest.files;saveDataPaths=@($saves)}
 $intent|ConvertTo-Json -Depth 10|Set-Content -LiteralPath (Join-Path $fixture 'artifacts/patch-installation.pending.json') -Encoding UTF8
-Copy-Item -LiteralPath (Join-Path $previous 'Assembly-CSharp.dll') -Destination (Join-Path $managed 'Assembly-CSharp.dll') -Force
+Copy-Item -LiteralPath (Prior-File 'Assembly-CSharp.dll') -Destination (Join-Path $managed 'Assembly-CSharp.dll') -Force
 Run-Package 'install-patch.ps1' $true
 Assert-Candidate
 if(Test-Path -LiteralPath (Join-Path $fixture 'artifacts/patch-installation.pending.json')){throw 'Completed upgrade retained pending intent'};$checks++
-if($manifest.version -in @('1.3.0','1.3.1','1.3.2','1.4.0','1.4.1','1.4.2','1.4.3','1.4.4','1.4.5','1.4.6','1.4.7','1.4.8')){
+if($manifest.version -in @('1.3.0','1.3.1','1.3.2','1.4.0','1.4.1','1.4.2','1.4.3','1.4.4','1.4.5','1.4.6','1.4.7','1.4.8','1.4.9','1.4.10')){
  # Simulate process termination after each dependency/assembly publication boundary.
  $order=@('BrassPatch.dll','BrassLegacyAI.dll','Assembly-CSharp.dll')
  foreach($boundary in 0..3){

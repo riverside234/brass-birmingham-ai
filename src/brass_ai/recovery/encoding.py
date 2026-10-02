@@ -30,6 +30,18 @@ class PreparedEncoder(Encoder):
         super().__init__()
         self.cache = OrderedDict()
         self.cache_size = cache_size
+        self.action_cache=OrderedDict()
+
+    def choice_features(self, choice):
+        # Semantic fields, including physical Scout multiplicity; IDs alone are
+        # not trusted as a cache key. The caller has validated the wire choice.
+        key=(choice['kind'],choice.get('target'),choice.get('merchant'),choice.get('industry'),
+             choice.get('card'),tuple(choice.get('cards',[])))
+        if key not in self.action_cache:
+            self.action_cache[key]=tuple(super().choice_features(choice))
+        self.action_cache.move_to_end(key)
+        while len(self.action_cache)>8192:self.action_cache.popitem(last=False)
+        return self.action_cache[key]
 
     @staticmethod
     def one(value, values, *, empty=False):

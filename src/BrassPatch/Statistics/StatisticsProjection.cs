@@ -22,6 +22,7 @@ namespace BrassPatch.Statistics
         readonly Dictionary<string, StatisticsAsset> active = new Dictionary<string, StatisticsAsset>();
         readonly Dictionary<string, string> saleMerchants = new Dictionary<string, string>();
         readonly Dictionary<string, StatisticsEntry> wildEpisodes = new Dictionary<string, StatisticsEntry>();
+        readonly Dictionary<PlayerColor,int> ownTurns = new Dictionary<PlayerColor,int>();
         BoardGameRulesGame game;
         StatisticsAction frame;
         StatisticsRound round;
@@ -42,11 +43,11 @@ namespace BrassPatch.Statistics
                 var startedRound = change as RoundStarted;
                 if (startedRound != null) { era = startedRound.GameEra.ToString() == "RailEra" ? 2 : 1; roundNumber = startedRound.RoundNumber; }
                 var startedTurn = change as TurnStarted;
-                if (startedTurn != null) { actor = startedTurn.PlayerColor; turn++; frame = null; pendingBuild = pendingLink = null; }
+                if (startedTurn != null) { actor = startedTurn.PlayerColor; turn++; int previous;ownTurns.TryGetValue(actor,out previous);ownTurns[actor]=previous+1; frame = null; pendingBuild = pendingLink = null; }
                 var player = Color(change);
                 string resource = name.StartsWith("Coal") ? "Coal" : name.StartsWith("Iron") ? "Iron" : name.StartsWith("Beer") ? "Beer" : null;
                 int quote = game.Board != null && (resource == "Coal" || resource == "Iron") ? Quote(resource) : 0;
-                if (name == "ScoreLinksPhaseStarted") { ScoreLinks(); Cities("Scoring", era); }
+                if (name == "ScoreLinksPhaseStarted") { Boundary("Scoring");ScoreLinks(); Cities("Scoring", era); }
                 if (name == "ScoreFlippedIndustryTilesPhaseStarted") ScoreIndustries(false);
                 if (name == "ScoreAdditionalIndustryPhaseStarted") ScoreIndustries(true);
                 var build = change as IndustryBuilt; if (build != null) Build(build);
@@ -79,7 +80,11 @@ namespace BrassPatch.Statistics
                 game.ApplyEvent(change);
                 if (name == "GameStarted") {
                     foreach (var p in report.players) { var initial = game.PlayersTrack.GetPlayerByColor(p.Color); p.OpeningCash = initial.Money; p.OpeningVP = initial.VP; }
+                    foreach(var region in game.Board.Regions)report.locations.Add(new StatisticsLocation{City=region.Name.ToString(),RegionColor=region.Color.ToString(),Merchant=region is BorderRegion,Farm=region.Name.ToString()=="SouthWest"||region.Name.ToString()=="Central",Neighbors=region.Links.SelectMany(Ends).Where(r=>r!=region).Select(r=>r.Name.ToString()).Distinct().ToArray()});
+                    Boundary("Setup");
                 }
+                if(startedRound!=null&&era==2&&roundNumber==1)Boundary("Rail entry");
+                if(developed!=null){var next=game.PlayersTrack.GetPlayerByColor(developed.Player).Mat.GetFirstBuildingOfType(developed.Type);var e=report.entries.Last(x=>x.Kind=="Development"&&x.Revision==revision);e.NextLevel=next==null?0:next.Level;e.NextRailBlocked=next!=null&&next.IsForCanalEra;}
                 if (startedRound != null) {
                     round = new StatisticsRound { Era = era, Round = roundNumber };
                     round.order.AddRange(game.PlayersTrack.Players.Select(p => p.Color)); report.rounds.Add(round);
@@ -97,14 +102,16 @@ namespace BrassPatch.Statistics
                 if (name == "CoalBought" || name == "IronBought" || name == "CoalSold" || name == "IronSold")
                     report.entries.Last(e => e.Revision == revision && e.Resource == resource).AfterQuote = Quote(resource);
                 foreach (var p in game.PlayersTrack.Players) {
+                    if(name=="IncomeMoneyPaid"){var payday=Entry(p.Color,"Payday","Income payment","Income payday");payday.Quantity=1;}
                     Balance old;
                     if (!before.TryGetValue(p.Color, out old)) { Sample(p, name); continue; }
                     int cash = p.Money - old.Cash, income = p.IncomeLevel - old.Income, marker = p.IncomeMarkerPosition - old.Marker, vp = p.VP - old.VP;
                     if (cash != 0 || income != 0 || marker != 0 || vp != 0) {
                         var entry = Entry(p.Color, "Balance", Category(name, vp), EventLabel(name, change));
+                        if(name=="MoneySpent"&&frame==null)entry.Category="Debt settlement";
                         entry.Cash = cash; entry.Income = income; entry.Marker = marker; entry.VP = vp;
                         entry.Detail = "Cash " + old.Cash + " → " + p.Money + "; income " + old.Income + " → " + p.IncomeLevel + "; VP " + old.VP + " → " + p.VP;
-                        if (frame != null && p.Color == actor && name == "MoneySpent") {
+                        if (frame != null && p.Color == actor && cash<0 && (name == "MoneySpent" || name == "CoalBought" || name == "IronBought")) {
                             frame.Spending -= cash;
                             if (round != null) { int existing; round.spending.TryGetValue(actor, out existing); round.spending[actor] = existing - cash; }
                         }
@@ -118,10 +125,12 @@ namespace BrassPatch.Statistics
                 }
                 if (name == "IndustryBuilt" || name.EndsWith("Supplied") || name == "CoalSold" || name == "IronSold") RefreshStock();
                 if (name == "CanalEraEnded") {
+                    Boundary("After cleanup");
                     Cities("After cleanup", 1);
                     foreach (var asset in active.Values) asset.Carried = true;
                 }
                 if (name == "ActionCountDecreased") Confirm();
+                if (name == "GameEnded") Boundary("Final");
             }
             if (!game.GameProgressInformation.IsGameOver) throw new InvalidDataException("Event history does not reconstruct a completed match.");
             foreach (var expected in report.players) {
@@ -149,19 +158,19 @@ namespace BrassPatch.Statistics
         }
         StatisticsAction EnsureFrame()
         {
-            if (frame == null) frame = new StatisticsAction { Key = "action-" + revision, Revision = revision, Era = era, Round = roundNumber, Turn = turn, Player = actor, Kind = "Unclassified" };
+            if (frame == null) frame = new StatisticsAction { Key = "action-" + revision, Revision = revision, Era = era, Round = roundNumber, Turn = turn, OwnTurn=Own(actor), Player = actor, Kind = "Unclassified" };
             return frame;
         }
         StatisticsEntry Entry(PlayerColor player, string kind, string category, string label)
         {
-            var entry = new StatisticsEntry { Revision = revision, Era = era, Round = roundNumber, Turn = turn, Player = player,
+            var entry = new StatisticsEntry { Revision = revision, Era = era, Round = roundNumber, Turn = turn, OwnTurn=Own(player), Player = player,
                 Kind = kind, Category = category, Label = label, ActionKey = frame == null ? null : frame.Key };
             report.entries.Add(entry); return entry;
         }
         void Sample(Player player, string annotation)
         {
             report.samples.Add(new StatisticsSample { Revision = revision, Era = era, Round = roundNumber, Turn = turn, Player = player.Color,
-                Cash = player.Money, Income = player.IncomeLevel, VP = player.VP, Annotation = annotation });
+                Cash = player.Money, Income = player.IncomeLevel, VP = player.VP, OwnTurn=Own(player.Color), Annotation = annotation });
         }
         void Build(IndustryBuilt change)
         {
@@ -175,6 +184,7 @@ namespace BrassPatch.Statistics
                 City = region.Name.ToString(), Type = change.Type.ToString(), Level = tile.Level, Player = change.Player,
                 Revision = revision, Era = era, Round = roundNumber, Turn = turn, PrintedVP = tile.VPForBuilding,
                 LinkIcons = tile.VPPerLink, BaseCost = tile.MoneyCost, CoalUsed = tile.CoalCost, IronUsed = tile.IronCost,
+                OwnTurn=Own(change.Player),Sellable=tile is BaseSellableIndustry,RegionColor=region.Color.ToString(),
                 OpponentOverbuild = opponent, LastSlot = !overbuild && region.BuildingSlots.Count(s => s.BuildedIndustry == null && s.BuildingTypes.Contains(change.Type)) == 1 };
             report.assets.Add(asset); active.Add(tile.UniqueId, asset); pendingBuild = tile.UniqueId;
             EnsureFrame().notes.Add("Build " + asset.Type + " " + asset.Level + " in " + asset.City + (asset.LastSlot ? " · last vacant matching slot" : ""));
@@ -192,7 +202,7 @@ namespace BrassPatch.Statistics
             var tile = game.PlayersTrack.GetPlayerByColor(change.Player).Mat.GetFirstBuildingOfType(change.Type);
             if (!merchantDevelopment) { EnsureFrame().Kind = "Develop"; EnsureFrame().Developed++; }
             var entry = Entry(change.Player, "Development", merchantDevelopment ? "Merchant" : "Develop action", change.Type + " " + tile.Level);
-            entry.Quantity = tile.Level; entry.Resource = change.Type.ToString(); entry.Detail = merchantDevelopment ? "Merchant development · no additional action/iron" : "Removed from player mat";
+            entry.Quantity = tile.Level; entry.Resource = change.Type.ToString();entry.TileId=tile.UniqueId; entry.Detail = merchantDevelopment ? "Merchant development · no additional action/iron" : "Removed from player mat";
             if (frame != null) frame.notes.Add(entry.Detail + ": " + entry.Label);
         }
         void Place(LinkPlaced change)
@@ -200,7 +210,7 @@ namespace BrassPatch.Statistics
             EnsureFrame().Kind = "Network"; EnsureFrame().Links++;
             var link = game.Board.GetLinkById(change.LinkId);
             var record = new StatisticsLink { Key = change.LinkId + "@" + revision, LinkId = change.LinkId, Player = change.Player,
-                Revision = revision, Era = era, Round = roundNumber, Turn = turn, Route = String.Join(" — ", Ends(link).Select(r => r.Name.ToString())) };
+                Revision = revision, Era = era, Round = roundNumber, Turn = turn,OwnTurn=Own(change.Player),Cities=Ends(link).Select(r=>r.Name.ToString()).ToArray(), Route = String.Join(" — ", Ends(link).Select(r => r.Name.ToString())) };
             report.links.Add(record); pendingLink = change.LinkId;
             EnsureFrame().notes.Add("Place " + record.Route);
         }
@@ -209,6 +219,9 @@ namespace BrassPatch.Statistics
             StatisticsAsset asset;
             if (!active.TryGetValue(change.IndustryUniqueId, out asset)) throw new InvalidDataException("Flip references an untracked industry.");
             asset.FlipTurn = turn; asset.FlipRevision = revision; asset.FlipEra = era;
+            asset.FlipOwnTurn=Own(asset.Player);
+            var trigger=report.entries.LastOrDefault(e=>e.AssetKey==asset.Key&&(e.Kind=="Resource use"||e.Kind=="Market sale")&&e.Turn==turn);
+            if(trigger!=null){asset.FlipActor=trigger.Player;asset.FlipTrigger=trigger.Kind=="Market sale"?"Automatic market sale":trigger.Player==asset.Player?"Self consumption":"Opponent consumption";}
             var tile = game.Board.GetIndustryByUniqueId(change.IndustryUniqueId);
             if (!(tile is BaseSellableIndustry)) return;
             EnsureFrame().Kind = "Sell"; EnsureFrame().Goods++;
@@ -296,6 +309,7 @@ namespace BrassPatch.Statistics
             var asset = active[tile.UniqueId]; asset.MarketReceipts += Number(change, "MoneyReceived");
             var entry = Entry(Color(change), "Market sale", resource, asset.City + " · " + resource);
             entry.Quantity = Number(change, "Amount"); entry.Resource = resource; entry.AssetKey = asset.Key; entry.BeforeQuote = quote;
+            entry.TotalPrice=Number(change,"MoneyReceived");
             entry.Detail = "Receipt " + StatisticsFormat.Money(Number(change, "MoneyReceived")) + "; producer " + report.Name(tile.Color);
         }
         void MarketBuy(IEvent change, string resource, int quote)
@@ -303,6 +317,7 @@ namespace BrassPatch.Statistics
             EnsureFrame().MarketCost += Number(change, "Price");
             var entry = Entry(Color(change), "Market purchase", resource, resource + " purchase");
             entry.Quantity = Number(change, "Amount"); entry.Resource = resource; entry.BeforeQuote = quote; entry.Source = "Market";
+            entry.TotalPrice=Number(change,"Price");
             entry.Detail = "Price " + StatisticsFormat.Money(Number(change, "Price"));
         }
         int Quote(string resource) { return resource == "Coal" ? game.Board.CoalMarket.GetBuyingPrice(1) : game.Board.IronMarket.GetBuyingPrice(1); }
@@ -343,10 +358,11 @@ namespace BrassPatch.Statistics
                 if (record == null) throw new InvalidDataException("Score references an untracked link.");
                 var notes = new List<string>();
                 foreach (var region in Ends(link)) {
-                    if (region is BorderRegion) { record.MerchantVP += 2; notes.Add(region.Name + ": merchant icons 2"); }
+                    if (region is BorderRegion) { record.MerchantVP += 2; notes.Add(region.Name + ": merchant icons 2");report.contributions.Add(new StatisticsLinkContribution{LinkKey=record.Key,City=region.Name.ToString(),RegionColor=region.Color.ToString(),Era=era,VP=2,Owner=record.Player}); }
                     else foreach (var tile in region.BuildingSlots.Select(s => s.BuildedIndustry).Where(t => t != null && t.IsFlipped)) {
                         if (tile.Color == record.Player) record.OwnVP += tile.VPPerLink; else record.OthersVP += tile.VPPerLink;
                         notes.Add(region.Name + ": " + report.Name(tile.Color) + " " + tile.BuildingType + " " + tile.Level + " · " + tile.VPPerLink);
+                        report.contributions.Add(new StatisticsLinkContribution{LinkKey=record.Key,City=region.Name.ToString(),RegionColor=region.Color.ToString(),Era=era,VP=tile.VPPerLink,Owner=record.Player,Supplier=tile.Color});
                     }
                 }
                 record.VP = record.OwnVP + record.OthersVP + record.MerchantVP; record.Scored = true; record.Contributions = String.Join("\n", notes);
@@ -357,6 +373,18 @@ namespace BrassPatch.Statistics
             foreach (var region in game.Board.Regions.Where(r => r.BuildingSlots.Count > 0))
             foreach (var player in report.players) report.cities.Add(new StatisticsCity { Boundary = boundary, Era = snapshotEra, City = region.Name.ToString(), Player = player.Color,
                 Slots = region.BuildingSlots.Count, Occupied = region.BuildingSlots.Count(s => s.BuildedIndustry != null), Owned = region.BuildingSlots.Count(s => s.BuildedIndustry != null && s.BuildedIndustry.Color == player.Color) });
+        }
+        int Own(PlayerColor player){int value;return ownTurns.TryGetValue(player,out value)?value:0;}
+        void Boundary(string name)
+        {
+            foreach(var player in game.PlayersTrack.Players){
+                report.boundaries.Add(new StatisticsBoundary{Name=name,Revision=revision,Era=era,Round=roundNumber,Turn=turn,OwnTurn=Own(player.Color),Player=player.Color,Cash=player.Money,Income=player.IncomeLevel});
+                foreach(var asset in active.Values.Where(a=>a.Player==player.Color))report.stocks.Add(new StatisticsStock{Boundary=name,AssetKey=asset.Key,Stock=game.Board.GetIndustryByUniqueId(asset.IndustryId).GetResource(),Revision=revision,Era=era,Round=roundNumber,Turn=turn,OwnTurn=Own(player.Color),Player=player.Color});
+                foreach(BuildingType type in StatisticsPages.IndustryTypes.Select(t=>(BuildingType)Enum.Parse(typeof(BuildingType),t))){
+                    var tile=player.Mat.GetFirstBuildingOfType(type);if(tile==null)continue;
+                    report.matTiles.Add(new StatisticsMatTile{Boundary=name,Revision=revision,Era=era,Round=roundNumber,Turn=turn,Player=player.Color,Type=type.ToString(),TileId=tile.UniqueId,Level=tile.Level,RailBlocked=tile.IsForCanalEra});
+                }
+            }
         }
         void Connection(Region from, Region to, string purpose)
         {
@@ -398,6 +426,7 @@ namespace BrassPatch.Statistics
             if (name == "CoalSold" || name == "IronSold") return "Market receipt";
             if (name == "IndustrySold") return "Liquidation receipt";
             if (name == "MoneySpent") return "Action spending";
+            if (name == "CoalBought" || name == "IronBought") return "Action spending";
             return "State change";
         }
         static string EventLabel(string name, object change)

@@ -38,7 +38,7 @@ def neural_spec(identity,exploration=.05,focus='neutral'):
 def make_policy(spec,root,endpoint,config,mono):
     if spec['kind']=='lab-legacy':
         from .legacy_search import LabLegacyPolicy
-        policy=LabLegacyPolicy(root,spec['parent'],spec['budget'],mono=mono,purpose=spec.get('purpose','training'))
+        policy=LabLegacyPolicy(root,spec['parent'],spec['budget'],mono=mono,purpose=spec.get('purpose','training'),search_free=spec.get('search_free',False))
         require(policy.policy_id==spec['policy_id'],'Lab teacher identity changed')
         return policy
     if spec['kind']=='legacy':
@@ -66,7 +66,7 @@ def make_policy(spec,root,endpoint,config,mono):
     return policy
 
 
-def run_game(host,job,policies,timings,max_decisions):
+def run_game(host,job,policies,timings,max_decisions,admission=None):
     pins=read_json(CONFIG_DIR/'host-1.0.0.json')
     with timings.phase('host.reset'): context=host.reset(job['seed'])
     assigned=[policies[(seat-job.get('rotation',0))%4] for seat in range(4)]
@@ -78,9 +78,20 @@ def run_game(host,job,policies,timings,max_decisions):
         if isinstance(p,NeuralPolicy) and p.focus=='mixed':
             p.contexts[rngs[seat]]=context_for(job.get('focuses',{}).get(str(seat),'neutral'))
     encoded=[];encoder=PreparedEncoder()
+    from .resources import TurnLease
+    lease=TurnLease(admission,timings)
+    with ExitStack() as cleanup:
+        cleanup.callback(lease.close)
+        return _run_turns(host,job,assigned,timings,max_decisions,context,game,rngs,encoded,encoder,lease)
+
+
+def _run_turns(host,job,assigned,timings,max_decisions,context,game,rngs,encoded,encoder,lease):
     for step in range(max_decisions):
         if context['terminal']: break
         seat=context['actor'];p=assigned[seat]
+        from brass_ai.search.common import turn_key
+        workers=p.config.workers if isinstance(p,MaskedSearchPolicy) else getattr(p,'cpu_workers',1)
+        lease.update(turn_key(context)+(seat,),workers)
         with timings.phase('host.observe'): view=host.observe(seat)
         with timings.phase('host.choices'): choices=host.choices()
         with timings.phase('inputs.validate'): BOUNDARY.check(view,choices)
@@ -107,7 +118,7 @@ def run_game(host,job,policies,timings,max_decisions):
     return CheckedGame(game).bind(encoded)
 
 
-def _actor(root,host_path,jobs,results,lease,config,mono,lanes,search_channels):
+def _actor(root,host_path,jobs,results,lease,config,mono,lanes,search_channels,admission):
     root=Path(root);torch.set_num_threads(config['worker_threads'])
     stop=threading.Event();slots=threading.Semaphore(2*lanes)
     with ThreadPoolExecutor(max_workers=1) as writer:
@@ -136,7 +147,7 @@ def _actor(root,host_path,jobs,results,lease,config,mono,lanes,search_channels):
                                 key=digest(spec)
                                 if key not in cache: cache[key]=make_policy(spec,root,endpoint,config,mono)
                                 cache.move_to_end(key);policies.append(cache[key])
-                            game=run_game(host,job,policies,timings,config['max_decisions'])
+                            game=run_game(host,job,policies,timings,config['max_decisions'],admission)
                             telemetry={}
                             for i,p in enumerate(policies):
                                 entry={}
@@ -200,7 +211,7 @@ class ActorPool:
         lease=self.service.channels((target-len(self.processes))*self.lanes*search_channels)
         for _ in range(target-len(self.processes)):
             p=self.mp.Process(target=_actor,args=(str(self.root),str(self.host),self.jobs,self.results,
-                lease,self.config,self.mono,self.lanes,search_channels))
+                lease,self.config,self.mono,self.lanes,search_channels,self.service.cpu))
             p.start();self.processes.append(p)
 
     def collect(self,jobs):

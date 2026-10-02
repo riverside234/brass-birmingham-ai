@@ -17,7 +17,7 @@ from brass_ai.learning.checkpoint import save_checkpoint,load_checkpoint
 from brass_ai.learning.features import Encoder
 from brass_ai.learning.replay import validate_teacher
 from brass_ai.search.common import SearchConfig,expansion_indices
-from brass_ai.search.ismcts import MaskedISMCTS,Node,Edge,visit_teacher
+from brass_ai.search.ismcts import MaskedISMCTS,Node,Edge,visit_teacher,select_edge,supported_continuation
 from brass_ai.recovery.parallel import merge_statistics
 from brass_ai.recovery.config import validate_config
 from brass_ai.step5.evaluation import validate_evaluation_config
@@ -48,6 +48,64 @@ class Core(unittest.TestCase):
             if config['format'].startswith('step5-training/'):validate_config(config)
             else:validate_evaluation_config(config)
         with self.assertRaises(ValueError):SearchConfig(backend='s3').validate()
+
+    def test_selection_support_and_branch_separation(self):
+        config=SearchConfig().validate()
+        node=Node(visits=4,returns=np.array([3.6,.2,.1,.1]),edges={'a':Edge(visits=4,returns=np.array([3.6,.2,.1,.1]))})
+        self.assertEqual(select_edge(node,['a','b'],[.95,.05],[0,1],0,config),0) # unseen has no unconditional priority
+        from brass_ai.learning.contracts import digest
+        weak=[('root','a'),('second','poor')];strong=[('root','a'),('second','good')]
+        stats=dict(plans={digest(weak):dict(signature=digest(weak),first='a',trace=weak,visits=1,returns=[1.,0.,0.,0.]),
+                          digest(strong):dict(signature=digest(strong),first='a',trace=strong,visits=2,returns=[.6,.6,.6,.2])})
+        self.assertEqual(supported_continuation(stats,'a',0),dict(strong))
+        with self.assertRaises(ValueError):replace(config,q_transform='regularized_sibling').validate()
+        with self.assertRaises(ValueError):replace(config,leaf_policy='settled_reply_prefix').validate()
+        with self.assertRaises(TypeError):SearchConfig(future_turns=1)
+
+    def test_virtual_loss_is_selection_only(self):
+        node=Node(visits=2,returns=np.array([1.595,0,0,0]),edges={
+            'a':Edge(visits=1,pending=1,returns=np.array([.8,0,0,0])),
+            'b':Edge(visits=1,returns=np.array([.795,0,0,0]))})
+        cfg=replace(SearchConfig(),exploration=1e-9)
+        self.assertEqual(select_edge(node,['a','b'],[.5,.5],[0,1],0,replace(cfg,virtual_loss=0)),0)
+        self.assertEqual(select_edge(node,['a','b'],[.5,.5],[0,1],0,cfg),1)
+        self.assertEqual(node.edges['a'].visits,1)
+        np.testing.assert_array_equal(node.edges['a'].returns,[.8,0,0,0])
+
+    def test_cpu_admission_and_semantic_action_cache(self):
+        import multiprocessing
+        from concurrent.futures import ThreadPoolExecutor
+        from brass_ai.recovery.resources import CPUAdmission
+        from brass_ai.recovery.telemetry import Timings
+        from brass_ai.recovery.encoding import PreparedEncoder
+        gate=CPUAdmission(multiprocessing.get_context('spawn'),6,2)
+        def work(_):
+            with gate.acquire(2,Timings()):time.sleep(.02)
+        with ThreadPoolExecutor(max_workers=6) as pool:list(pool.map(work,range(6)))
+        self.assertEqual(gate.report(),dict(capacity=4,active=0,peak=4,queued=0))
+        prepared=PreparedEncoder();pinned=Encoder()
+        for view,choices in self.positions:
+            actual=prepared.encode(view,choices);expected=pinned.encode(view,choices)
+            np.testing.assert_array_equal(actual.state,expected.state)
+            np.testing.assert_array_equal(actual.actions,expected.actions)
+        self.assertTrue(prepared.action_cache)
+
+    def test_dynamic_nn_queue_private_channel(self):
+        from brass_ai.recovery.inference import InferenceService,RemoteEvaluator
+        from brass_ai.recovery.config import EXECUTION_V21
+        from concurrent.futures import ThreadPoolExecutor
+        with InferenceService(dict(EXECUTION_V21,processes=1),'cpu') as service:
+            identity=service.register(self.model);lease=service.channels(4)
+            evaluators=[RemoteEvaluator(lease.acquire(),identity) for _ in range(4)]
+            rows=[Request('queued-'+str(i),identity,v,c,time.monotonic()+30) for i,(v,c) in enumerate(self.positions)]
+            ticket=evaluators[0].submit([rows[0]])
+            with self.assertRaises(ValueError):evaluators[0].submit([rows[0]])
+            evaluators[0].poll(ticket,wait=True)
+            with ThreadPoolExecutor(max_workers=4) as pool:
+                responses=list(pool.map(lambda i:evaluators[i].predict([rows[i]])[0],range(4)))
+            for row,response in zip(rows,responses):accept_response(row,response,row.view['context']['revision'],identity)
+            self.assertTrue(all(e.endpoint.pending is None for e in evaluators))
+            self.assertGreaterEqual(service.report()['positions'],5)
 
     def test_total_parameters_and_checkpoint(self):
         self.assertEqual(self.model.parameter_count,1840109)

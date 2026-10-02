@@ -1,39 +1,51 @@
 {
-  "format": "legacy-pool/2.0.0",
+  "format": "legacy-opponent-pool/1.0.0",
   "backend": "masked_ismcts",
+  "generation": "v4",
   "training": {
-    "bank-927c8ddec148897fa542/balanced-v3-masked": {
-      "admission": "user-directed-masked-ismcts/1.0.0",
-      "manifest_sha256": "2075067f68824f0aa452bd1bc676e74c7f7e1f8414dab8ba2c76f63170f8a7dd",
-      "profile": "balanced-v3-masked"
+    "bank-3dc65253a610191d66a5/balanced-v3-masked-economy": {
+      "admission": "user-directed-masked-v4/1.0.0",
+      "manifest_sha256": "20b753113cb8a5dbee15713174299806377f8eb25cdc7aba0c74ee598676b16b",
+      "qualification": "training/opponents/evaluations/user-directed-v4-1.0.0/selection.json",
+      "sha256": "004568f8092f2f604493667bf6cf79dadd47f60ebb046bbbb01d2bd9297ee184",
+      "profile": "balanced-v3-masked-economy"
     },
-    "bank-927c8ddec148897fa542/rail-tempo-v3-masked": {
-      "admission": "user-directed-masked-ismcts/1.0.0",
-      "manifest_sha256": "2075067f68824f0aa452bd1bc676e74c7f7e1f8414dab8ba2c76f63170f8a7dd",
-      "profile": "rail-tempo-v3-masked"
+    "bank-3dc65253a610191d66a5/rail-tempo-v3-masked-economy": {
+      "admission": "user-directed-masked-v4/1.0.0",
+      "manifest_sha256": "20b753113cb8a5dbee15713174299806377f8eb25cdc7aba0c74ee598676b16b",
+      "qualification": "training/opponents/evaluations/user-directed-v4-1.0.0/selection.json",
+      "sha256": "004568f8092f2f604493667bf6cf79dadd47f60ebb046bbbb01d2bd9297ee184",
+      "profile": "rail-tempo-v3-masked-economy"
     },
-    "bank-927c8ddec148897fa542/cotton-v3-masked": {
-      "admission": "user-directed-masked-ismcts/1.0.0",
-      "manifest_sha256": "2075067f68824f0aa452bd1bc676e74c7f7e1f8414dab8ba2c76f63170f8a7dd",
-      "profile": "cotton-v3-masked"
+    "bank-3dc65253a610191d66a5/cotton-v3-masked-economy": {
+      "admission": "user-directed-masked-v4/1.0.0",
+      "manifest_sha256": "20b753113cb8a5dbee15713174299806377f8eb25cdc7aba0c74ee598676b16b",
+      "qualification": "training/opponents/evaluations/user-directed-v4-1.0.0/selection.json",
+      "sha256": "004568f8092f2f604493667bf6cf79dadd47f60ebb046bbbb01d2bd9297ee184",
+      "profile": "cotton-v3-masked-economy"
     },
-    "bank-927c8ddec148897fa542/goods-beer-v3-masked": {
-      "admission": "user-directed-masked-ismcts/1.0.0",
-      "manifest_sha256": "2075067f68824f0aa452bd1bc676e74c7f7e1f8414dab8ba2c76f63170f8a7dd",
-      "profile": "goods-beer-v3-masked"
+    "bank-3dc65253a610191d66a5/goods-beer-v3-masked-economy": {
+      "admission": "user-directed-masked-v4/1.0.0",
+      "manifest_sha256": "20b753113cb8a5dbee15713174299806377f8eb25cdc7aba0c74ee598676b16b",
+      "qualification": "training/opponents/evaluations/user-directed-v4-1.0.0/selection.json",
+      "sha256": "004568f8092f2f604493667bf6cf79dadd47f60ebb046bbbb01d2bd9297ee184",
+      "profile": "goods-beer-v3-masked-economy"
     },
-    "bank-927c8ddec148897fa542/supplier-v3-masked": {
-      "admission": "user-directed-masked-ismcts/1.0.0",
-      "manifest_sha256": "2075067f68824f0aa452bd1bc676e74c7f7e1f8414dab8ba2c76f63170f8a7dd",
-      "profile": "supplier-v3-masked"
+    "bank-3dc65253a610191d66a5/supplier-v3-masked-economy": {
+      "admission": "user-directed-masked-v4/1.0.0",
+      "manifest_sha256": "20b753113cb8a5dbee15713174299806377f8eb25cdc7aba0c74ee598676b16b",
+      "qualification": "training/opponents/evaluations/user-directed-v4-1.0.0/selection.json",
+      "sha256": "004568f8092f2f604493667bf6cf79dadd47f60ebb046bbbb01d2bd9297ee184",
+      "profile": "supplier-v3-masked-economy"
     }
   },
   "evaluation": {
-    "bank-927c8ddec148897fa542/pottery-flex-v3-masked": {
-      "admission": "user-directed-masked-ismcts/1.0.0",
-      "manifest_sha256": "2075067f68824f0aa452bd1bc676e74c7f7e1f8414dab8ba2c76f63170f8a7dd",
-      "profile": "pottery-flex-v3-masked"
+    "bank-3dc65253a610191d66a5/pottery-flex-v3-masked-economy": {
+      "admission": "user-directed-masked-v4/1.0.0",
+      "manifest_sha256": "20b753113cb8a5dbee15713174299806377f8eb25cdc7aba0c74ee598676b16b",
+      "qualification": "training/opponents/evaluations/user-directed-v4-1.0.0/selection.json",
+      "sha256": "004568f8092f2f604493667bf6cf79dadd47f60ebb046bbbb01d2bd9297ee184",
+      "profile": "pottery-flex-v3-masked-economy"
     }
-  },
-  "note": "Direct user-selected 1s clocks; no calibration or strength qualification."
+  }
 }

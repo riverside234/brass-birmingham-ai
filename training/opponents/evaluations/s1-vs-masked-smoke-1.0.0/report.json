@@ -1,0 +1,52 @@
+{
+  "format": "v3-s1-masked-smoke/1.0.0",
+  "passed": true,
+  "games": 8,
+  "setups": 2,
+  "rotations": 4,
+  "seed": 830100,
+  "bank": "bank-d82438ccec287dbc8a64",
+  "manifest_sha256": "7f440ee6af7aa7f4231feda35199c3ef45101f6bba2db597335efb377d538145",
+  "seconds": 1.0,
+  "lab_preset": "16 concurrent tables x 2 private S1 workers; total work multiplier 3",
+  "local_tables": 2,
+  "platform": "Windows",
+  "logical_cpus": 14,
+  "policies": {
+    "s1-16x2": {
+      "games": 8,
+      "mean_vp": 42.5,
+      "win_rate": 0.25,
+      "first_place_rate": 0.25,
+      "mean_rank": 3,
+      "mean_nodes_per_game": 588,
+      "mean_turn_seconds": 1.1086484375100554,
+      "max_turn_seconds": 1.8900000001303852
+    },
+    "masked-16x2": {
+      "games": 8,
+      "mean_vp": 53.5,
+      "win_rate": 0.375,
+      "first_place_rate": 0.375,
+      "mean_rank": 1.875,
+      "mean_nodes_per_game": 771.375,
+      "mean_turn_seconds": 1.0963984375157452,
+      "max_turn_seconds": 1.8589999999385327
+    }
+  },
+  "failures": [],
+  "evidence": {
+    "game-01.json": "06f89bb9303f6b9173c55e201574c3511b28bde1632eb84a843151d069f04cf1",
+    "game-00.json": "60f2ee67475724f573ea53076c83c37995b41c6f833044382de0fc02796bc11e",
+    "game-02.json": "25cfc5ef6bfb6f170b01ba55712156fb781de316f37cf2e50b293d85d085786d",
+    "game-03.json": "d7cb487543a9973e7dfad4d39e09759a88c3475bc3c9fc28fa873c18d8751a5e",
+    "game-05.json": "5a2f5f0d71649d2cbc71cfadf2dbed9fc12096d29c5a596d7edd4b5499cd1484",
+    "game-04.json": "1339a378f99f1e71b8687b961ad1a2bf691c55f6350df5bb3ac4039ef1c035f9",
+    "game-06.json": "d075bbecb2af80d14e1e8cd20c4031c925d2d8bfca431ec9fba2c38d4b847af1",
+    "game-07.json": "77e9f6e3393ac628bf511e91c94145f3120540d0c9678561126c3ba1b44f0758"
+  },
+  "limitation": "Small matched smoke, not strength qualification. Win rate uses official split win shares; first place counts tied rank-one finishes. Table concurrency is throughput, not extra thinking time. No neural search settings changed.",
+  "masked_bank": "bank-981744ddae4aaf07f1cf",
+  "selection_rule": "Official win rate, then lower mean rank, then higher mean VP; exact tie keeps S1",
+  "selected_backend": "masked_ismcts"
+}

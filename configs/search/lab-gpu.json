@@ -5,12 +5,10 @@
     "backend": "masked_ismcts",
     "seconds": 3.0,
     "simulations": 100000,
-    "future_turns": 1,
     "max_choices": 512,
     "exploration": 1.4,
     "root_top_k": 16,
     "interior_top_k": 8,
-    "widening": 2.0,
     "pending_paths": 4,
     "batch_size": 4,
     "flush_ms": 0.5,
@@ -18,6 +16,16 @@
     "turn_interval": 1,
     "max_searches_per_seat": 0,
     "workers": 4,
-    "cpu_role": "lab"
+    "cpu_role": "lab",
+    "contract": "masked-ismcts/1.1.0",
+    "evaluator_kind": "neural",
+    "q_transform": "none",
+    "leaf_policy": "new_root_information_frontier",
+    "candidate_policy": "supported_progressive",
+    "fpu_reduction": 0.02,
+    "minimum_plan_visits": 2,
+    "reopen_support": 4,
+    "tail_admission": 0.05,
+    "virtual_loss": 0.02
   }
 }

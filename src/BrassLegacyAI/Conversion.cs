@@ -71,7 +71,7 @@ namespace BrassLegacyAI
                 // A nearby merchant is a concrete completion route. Allow for
                 // connecting, selling, and a beer/financing contingency; do not
                 // credit an inaccessible far-away tile like a one-link setup.
-                int cost=links*((string)v["context"]["era"]=="CanalEra"?3:7);
+                int cost=EraEconomy.ConnectionBudget(v,links);
                 var player=Player(v,seat);
                 int financing=(int)player["cash"]<cost?1:0;
                 bool canFinance=financing==0 || (int)player["income"]>=-7;
@@ -116,13 +116,45 @@ namespace BrassLegacyAI
                 (type=="IronWorks" || reach.Contains(Evaluator.Region((string)s["id"])) || (type=="Brewery" && (int)s["tile"]["seat"]==seat))).Sum(s=>(int)s["tile"]["resource"]);
             return Math.Min(0.85,demand/Math.Max(resource,supply));
         }
+        public static Dictionary<string,double> Forecast(JObject v)
+        {
+            var tiles=v["slots"].Where(Present).ToArray();
+            var result=tiles.ToDictionary(s=>(string)s["id"],s=>Completion(v,s,(int)s["tile"]["seat"]));
+            // A board barrel is promised once across the public conversion forecast.
+            // Ready sales can share one sale action; do not charge one action per tile.
+            var barrels=tiles.Where(s=>(string)s["tile"]["type"]=="Brewery")
+                .ToDictionary(s=>(string)s["id"],s=>(int)s["tile"]["resource"]);
+            var merchants=v["merchants"].ToDictionary(m=>(string)m["id"],m=>(int)m["beer"]);
+            var routes=new Dictionary<string,HashSet<string>>();
+            foreach(var slot in tiles.Where(s=>Sellable(s["tile"]) && !(bool)s["tile"]["flipped"])
+                .OrderByDescending(s=>(int)s["tile"]["vp"]+(int)s["tile"]["income"]*.4).ThenBy(s=>(string)s["id"],StringComparer.Ordinal))
+            {
+                int seat=(int)slot["tile"]["seat"],actions=Actions(v,seat),need=(int)slot["tile"]["beer"];
+                if(actions==0 || need==0)continue;
+                string region=Evaluator.Region((string)slot["id"]);HashSet<string> reach;
+                if(!routes.TryGetValue(region,out reach)){reach=Evaluator.Reach(v,region);routes.Add(region,reach);}
+                var buyers=v["merchants"].Where(m=>m["types"]!=null && m["types"].Type!=JTokenType.Null &&
+                    m["types"].Any(x=>(string)x==(string)slot["tile"]["type"]) && reach.Contains(Evaluator.Region((string)m["id"])))
+                    .OrderByDescending(m=>merchants[(string)m["id"]]).ThenBy(m=>(string)m["id"],StringComparer.Ordinal).ToArray();
+                if(buyers.Length==0)continue; // The independent setup forecast remains conservative.
+                var supply=tiles.Where(s=>(string)s["tile"]["type"]=="Brewery" &&
+                    ((int)s["tile"]["seat"]==seat || reach.Contains(Evaluator.Region((string)s["id"]))))
+                    .OrderByDescending(s=>(int)s["tile"]["seat"]==seat).ThenBy(s=>(string)s["id"],StringComparer.Ordinal).ToArray();
+                var buyer=buyers.First();string merchant=(string)buyer["id"];
+                if(supply.Sum(s=>barrels[(string)s["id"]])+merchants[merchant]<need)
+                {result[(string)slot["id"]]=Math.Min(result[(string)slot["id"]],actions<=1?0:.25);continue;}
+                int used=Math.Min(need,merchants[merchant]);merchants[merchant]-=used;need-=used;
+                foreach(var brewery in supply){string id=(string)brewery["id"];used=Math.Min(need,barrels[id]);barrels[id]-=used;need-=used;}
+            }
+            return result;
+        }
         public static double IndustryValue(JObject v,JToken slot,int seat,double? probability=null)
         {
             var t=slot["tile"];double p=probability??Completion(v,slot,seat);
             // Level 2+ survives Canal. Its next-era value is separate from the
             // expiring Canal award, so a viable carry-over investment stays legal.
             double later=(string)v["context"]["era"]=="CanalEra" && !Intro(v) && (int)t["level"]>1?
-                ((bool)t["flipped"]?0.80:0.45*(Sellable(t)?1:Math.Max(0.20,p))):0;
+                ((bool)t["flipped"]?0.80:Sellable(t)?Math.Max(0.45,0.80*p):0.45*Math.Max(0.20,p)):0;
             return (int)t["vp"]*(p+later);
         }
         public static double MerchantBonus(JObject v,JToken merchant)
@@ -131,19 +163,13 @@ namespace BrassLegacyAI
             if(bonus=="VP")return Evaluator.Region((string)merchant["id"])=="Shrewsbury"?4:3;
             if(bonus=="Money")return 5*0.32;
             if(bonus=="Income")return Math.Min(4,Actions(v,(int)v["seat"])*0.4);
-            if(bonus=="Develop")return Player(v,(int)v["seat"])["mat"].Any(m=>m["tiles"].Any() && (bool)m["tiles"][0]["developable"] && (int)m["tiles"][0]["level"]==1)?2:0;
+            if(bonus=="Develop")return Math.Max(0,InvestmentOpportunity.FreeDevelopments(v).Values.DefaultIfEmpty(0).Max());
             return 0;
         }
         public static double BonusDevelopment(JObject v,Choice c)
         {
             if(c.kind=="bonus_skip")return 0;
-            var tiles=Player(v,(int)v["seat"])["mat"].Single(m=>(string)m["type"]==c.industry)["tiles"].ToArray();
-            if(tiles.Length<2 || Actions(v,(int)v["seat"])==0)return -1;
-            // Spend a free development on an actual upgrade. Discarding the
-            // last useful tile, or removing tiles with no time to rebuild, loses
-            // to the legal skip. No automatic brewery/cotton preference.
-            return 1+Math.Max(0,(int)tiles[1]["vp"]-(int)tiles[0]["vp"])*0.3+
-                ((int)tiles[0]["level"]==1 && (int)tiles[1]["level"]>1?2:0);
+            return InvestmentOpportunity.FreeDevelopment(v,c.industry);
         }
         // Search compares complete afterstates for these three beer-source
         // preferences. No bonus is added to the final score a second time.
@@ -158,7 +184,9 @@ namespace BrassLegacyAI
             var slot=v["slots"].Single(s=>(string)s["id"]==c.target);var tile=slot["tile"];
             bool own=(int)tile["seat"]==(int)v["seat"];
             double flip=(int)tile["resource"]==1?(int)tile["vp"]*(1-Completion(v,slot,(int)tile["seat"])):0;
-            return own?(preference==1?20:preference==2?-10:1)+flip:-2-flip*0.18;
+            double reserve=own && (string)v["pending"]["kind"]=="network" &&
+                CompetitiveEconomy.OwnBeer(v,(int)v["seat"])<=CompetitiveEconomy.CommittedBeer(v,(int)v["seat"])?4:0;
+            return own?(preference==1?20:preference==2?-10:1)+flip-reserve:-2-flip*CompetitiveEconomy.RivalWeight(v);
         }
     }
 }

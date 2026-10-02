@@ -10,8 +10,8 @@ namespace BrassPatch.Statistics
 {
     internal static class StatisticsWidgets
     {
-        public static readonly Color Ivory = new Color(243f/255,231f/255,204f/255,1);
-        public static readonly Color Gold = new Color(210f/255,170f/255,85f/255,1);
+        public static readonly Color Ivory = new Color(250f/255,240f/255,218f/255,1);
+        public static readonly Color Gold = new Color(226f/255,186f/255,105f/255,1);
         public static RectTransform Rect(Transform parent,string name,Vector2 position,Vector2 size)
         {
             var rect=new GameObject(name,typeof(RectTransform)).GetComponent<RectTransform>(); rect.SetParent(parent,false);
@@ -38,6 +38,11 @@ namespace BrassPatch.Statistics
         }
         public static void Selected(Button button,bool selected)
         { var surface=button.GetComponent<StatisticsSurface>(); surface.Selected=selected; surface.SetVerticesDirty(); }
+        public static void Enabled(Button button,bool enabled)
+        {
+            if(button.interactable==enabled&&button.GetComponentInChildren<TextMeshProUGUI>().color.a==(enabled?1:.45f))return;
+            button.interactable=enabled;var text=button.GetComponentInChildren<TextMeshProUGUI>();var tint=text.color;tint.a=enabled?1:.45f;text.color=tint;
+        }
         public static TMP_InputField Search(Transform parent,TMP_FontAsset font,Vector2 position,Vector2 size,float fontSize,Action<string> changed)
         {
             var root=Rect(parent,"Find statistics",position,size); root.gameObject.AddComponent<StatisticsSurface>();
@@ -45,7 +50,7 @@ namespace BrassPatch.Statistics
             input.targetGraphic=root.GetComponent<StatisticsSurface>();
             var area=Rect(root,"Text area",Vector2.zero,size); Stretch(area,new Vector2(10,3),new Vector2(-10,-3)); area.gameObject.AddComponent<RectMask2D>();
             var label=Text(area,font,"Input","",Vector2.zero,size,fontSize); Stretch(label.rectTransform,Vector2.zero,Vector2.zero); label.raycastTarget=true;
-            var placeholder=Text(area,font,"Placeholder","Find city, industry or action…",Vector2.zero,size,fontSize); Stretch(placeholder.rectTransform,Vector2.zero,Vector2.zero); placeholder.color=new Color(.72f,.67f,.57f,1);
+            var placeholder=Text(area,font,"Placeholder","Find city, industry or action…",Vector2.zero,size,fontSize); Stretch(placeholder.rectTransform,Vector2.zero,Vector2.zero); placeholder.color=new Color(.83f,.78f,.68f,1);
             input.textViewport=area; input.textComponent=label; input.placeholder=placeholder; input.lineType=TMP_InputField.LineType.SingleLine; input.characterLimit=100; input.onValueChanged.AddListener(text=>changed(text)); return input;
         }
         public static ScrollRect Scroll(Transform parent,string name,Vector2 position,Vector2 size,float unit,bool horizontal=false)
@@ -102,12 +107,13 @@ namespace BrassPatch.Statistics
     {
         public bool Selected;
         public bool Panel;
+        public bool Row,Alternate;
         protected override void OnPopulateMesh(VertexHelper mesh)
         {
             mesh.Clear(); var rect=GetPixelAdjustedRect(); const int steps=6; int count=4*(steps+1);
             float radius=Mathf.Min(Panel?12:7,Mathf.Min(rect.width,rect.height)/2),border=Selected?2.2f:1;
-            Color32 edge=Selected?StatisticsWidgets.Gold:new Color(.46f,.38f,.26f,1);
-            Color32 fill=Selected?new Color(.31f,.25f,.16f,.99f):new Color(.125f,.11f,.09f,Panel ? .98f : .97f);
+            Color32 edge=Selected?StatisticsWidgets.Gold:Panel?new Color(.50f,.42f,.29f,1):new Color(.30f,.27f,.22f,1);
+            Color32 fill=Selected?new Color(.31f,.25f,.16f,1):Row?(Alternate?new Color(.205f,.183f,.15f,1):new Color(.145f,.133f,.113f,1)):new Color(.105f,.095f,.08f,Panel ? .99f : 1);
             mesh.AddVert(rect.center,fill,Vector2.zero);
             for(int ring=0;ring<2;ring++)for(int corner=0;corner<4;corner++)for(int step=0;step<=steps;step++) {
                 float angle=(corner*90+step*90f/steps)*Mathf.Deg2Rad;
@@ -121,6 +127,11 @@ namespace BrassPatch.Statistics
                 mesh.AddTriangle(1+i,1+next,1+count+i); mesh.AddTriangle(1+next,1+count+next,1+count+i);
             }
         }
+    }
+    public sealed class StatisticsFocusReveal : MonoBehaviour,ISelectHandler
+    {
+        public StatisticsPanel Panel;
+        public void OnSelect(BaseEventData data){if(Panel!=null)Panel.RevealFocus(GetComponent<Selectable>());}
     }
     public sealed class StatisticsTooltip : MonoBehaviour,IPointerEnterHandler,IPointerExitHandler,ISelectHandler,IDeselectHandler
     {
@@ -162,9 +173,9 @@ namespace BrassPatch.Statistics
                     StatisticsPoint last=null;
                     foreach(var point in series.Points) {
                         var at=new Vector2(x(point.X),y(point.Y));
-                        if(last!=null) { var prev=new Vector2(x(last.X),y(last.Y)); Segment(mesh,prev,new Vector2(at.x,prev.y),2,tint);Segment(mesh,new Vector2(at.x,prev.y),at,2,tint); }
-                        Quad(mesh,new Rect(at.x-2.5f,at.y-2.5f,5,5),tint);
-                        hits.Add(new Hit{Rect=new Rect(at.x-8,at.y-8,16,16),Series=series,Point=point}); last=point;
+                        if(last!=null) { var prev=new Vector2(x(last.X),y(last.Y)); Segment(mesh,prev,new Vector2(at.x,prev.y),2.6f,tint);Segment(mesh,new Vector2(at.x,prev.y),at,2.6f,tint); }
+                        Quad(mesh,new Rect(at.x-3.5f,at.y-3.5f,7,7),tint);
+                        hits.Add(new Hit{Rect=new Rect(at.x-11,at.y-11,22,22),Series=series,Point=point}); last=point;
                     }
                 } else if(Data.Stacked) {
                     var groups=series.Points.GroupBy(p=>p.X).ToArray();

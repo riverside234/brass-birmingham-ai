@@ -1,0 +1,50 @@
+{
+  "format": "legacy-opponent-pool/1.0.0",
+  "backend": "masked_ismcts",
+  "training": {
+    "bank-e809802ae27fe9f0ee14/balanced-v3-masked-era": {
+      "admission": "masked-era-smoke/1.0.0",
+      "manifest_sha256": "1feda3d78640bfe5cddad28605bac05d283dfe19b93e8ecc188de4d4341540e0",
+      "qualification": "training/opponents/evaluations/masked-era-1.0.0/report.json",
+      "sha256": "d8eadbeb8c2098ab6f05eb04dab79c627aa1b0980489f4bb07bc9e359006cae3",
+      "profile": "balanced-v3-masked-era"
+    },
+    "bank-e809802ae27fe9f0ee14/rail-tempo-v3-masked-era": {
+      "admission": "masked-era-smoke/1.0.0",
+      "manifest_sha256": "1feda3d78640bfe5cddad28605bac05d283dfe19b93e8ecc188de4d4341540e0",
+      "qualification": "training/opponents/evaluations/masked-era-1.0.0/report.json",
+      "sha256": "d8eadbeb8c2098ab6f05eb04dab79c627aa1b0980489f4bb07bc9e359006cae3",
+      "profile": "rail-tempo-v3-masked-era"
+    },
+    "bank-e809802ae27fe9f0ee14/cotton-v3-masked-era": {
+      "admission": "masked-era-smoke/1.0.0",
+      "manifest_sha256": "1feda3d78640bfe5cddad28605bac05d283dfe19b93e8ecc188de4d4341540e0",
+      "qualification": "training/opponents/evaluations/masked-era-1.0.0/report.json",
+      "sha256": "d8eadbeb8c2098ab6f05eb04dab79c627aa1b0980489f4bb07bc9e359006cae3",
+      "profile": "cotton-v3-masked-era"
+    },
+    "bank-e809802ae27fe9f0ee14/goods-beer-v3-masked-era": {
+      "admission": "masked-era-smoke/1.0.0",
+      "manifest_sha256": "1feda3d78640bfe5cddad28605bac05d283dfe19b93e8ecc188de4d4341540e0",
+      "qualification": "training/opponents/evaluations/masked-era-1.0.0/report.json",
+      "sha256": "d8eadbeb8c2098ab6f05eb04dab79c627aa1b0980489f4bb07bc9e359006cae3",
+      "profile": "goods-beer-v3-masked-era"
+    },
+    "bank-e809802ae27fe9f0ee14/supplier-v3-masked-era": {
+      "admission": "masked-era-smoke/1.0.0",
+      "manifest_sha256": "1feda3d78640bfe5cddad28605bac05d283dfe19b93e8ecc188de4d4341540e0",
+      "qualification": "training/opponents/evaluations/masked-era-1.0.0/report.json",
+      "sha256": "d8eadbeb8c2098ab6f05eb04dab79c627aa1b0980489f4bb07bc9e359006cae3",
+      "profile": "supplier-v3-masked-era"
+    }
+  },
+  "evaluation": {
+    "bank-e809802ae27fe9f0ee14/pottery-flex-v3-masked-era": {
+      "admission": "masked-era-smoke/1.0.0",
+      "manifest_sha256": "1feda3d78640bfe5cddad28605bac05d283dfe19b93e8ecc188de4d4341540e0",
+      "qualification": "training/opponents/evaluations/masked-era-1.0.0/report.json",
+      "sha256": "d8eadbeb8c2098ab6f05eb04dab79c627aa1b0980489f4bb07bc9e359006cae3",
+      "profile": "pottery-flex-v3-masked-era"
+    }
+  }
+}

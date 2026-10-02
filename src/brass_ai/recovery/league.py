@@ -48,6 +48,7 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
     for p in profiles: admission(root,p,'training')
     from .legacy_search import legacy_spec
     teacher_specs={p:legacy_spec(root,p,config.get('legacy_budget')) for p in profiles}
+    fast_specs={p:legacy_spec(root,p,config['legacy_budget'],search_free=True) for p in profiles}
     signature=dict(config=config,compatibility=compatibility(),implementation=implementation_id(),legacy_pool=pool['training'],teachers=teacher_specs)
     state_path=run/'state.json'
     if state_path.exists():
@@ -125,7 +126,8 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                         policies=[learner]+opponents
                     else:
                         # Rotate all profiles across the collection instead of fixing three for an entire chunk.
-                        policies=[learner]+[teacher_specs[profiles[(index*3+s)%len(profiles)]] for s in range(3)]
+                        selected_specs=fast_specs if index<config['legacy_opponents']['search_free_until_games'] else teacher_specs
+                        policies=[learner]+[selected_specs[profiles[(index*3+s)%len(profiles)]] for s in range(3)]
                     rotation=index%4;focuses={}
                     for seat in range(4):
                         if policies[(seat-rotation)%4]==learner:
@@ -134,12 +136,14 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                     provenance=dict(producer='recovery/2.0.0',purpose='training',kind=kind,
                         seed=seed,sampling_seed=config['seed']*7+index,spec=digest(signature),
                         policies=[p.get('policy_id',p.get('kind')) for p in policies],rotation=rotation)
+                    provenance['legacy_mode']='fast' if any(p.get('search_free') for p in policies) else ('searched' if kind=='legacy' else None)
                     jobs.append(dict(index=i,seed=seed,rotation=rotation,sampling_seed=config['seed']*7+index,
                         policies=policies,focuses=focuses,path=str(directory/f'actor-{i:06d}.jsonl.gz'),provenance=provenance))
                     kind_by_group[digest(dict(rules='steam-brass-patch-1.1.0',setup_seed=seed))]=kind
                     composition[kind]+=1
                 records=[]
-                normal=[j for j in jobs if j['provenance']['kind']!='legacy'];legacy=[j for j in jobs if j['provenance']['kind']=='legacy']
+                normal=[j for j in jobs if j['provenance']['legacy_mode']!='searched']
+                legacy=[j for j in jobs if j['provenance']['legacy_mode']=='searched']
                 if revised and config['overlap_pools'] and normal and legacy:
                     with ThreadPoolExecutor(max_workers=2) as coordinators:
                         pending=[coordinators.submit(ordinary.collect,normal),coordinators.submit(heavy.collect,legacy)]
@@ -193,6 +197,7 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                         replay_load_seconds=collected-load_began,
                         search_and_distill_seconds=time.monotonic()-updated),execution=records,
                     inference=service.report(),inference_scope='cumulative for this invocation',
+                    legacy_modes=dict(Counter(j['provenance']['legacy_mode'] for j in jobs if j['provenance']['legacy_mode'])),
                     environment=environment(device),strength='requires fresh post-update evaluation')
                 output=run/f'generation-{iteration+1:04d}.pt'
                 checkpoint_began=time.monotonic()

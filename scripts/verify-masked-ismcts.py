@@ -15,6 +15,8 @@ def main():
     if args.integration:
         sys.path.insert(0,str(ROOT/'tests/MaskedISMCTS'))
         from integration import run
-        print(run(ROOT))
+        result=run(ROOT)
+        import json
+        print(json.dumps({k:result[k] for k in ('passed','implementation','parameters','fresh_run','resumed_iteration','training_games','evaluation_games','completed_search','teacher_alternatives','distilled','cleanup_preserved')}))
 
 if __name__=='__main__':main()

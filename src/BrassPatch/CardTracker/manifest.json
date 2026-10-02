@@ -1,0 +1,10 @@
+[
+  {
+    "targetType":"InterfaceAdapters.Game.Board.BoardPresenter",
+    "targetMethod":"UpdateBoardView",
+    "parameterTypes":["BoardGameRules.Entities.Board.Board","BoardGameRules.Entities.GamePhases.GameEra","System.Action`1<BoardGameRules.Entities.Board.Regions.RegionName>"],
+    "helperType":"BrassPatch.CardTracker.CardTrackerEntryPoints",
+    "helperMethod":"AfterBoard",
+    "mode":"postfix"
+  }
+]

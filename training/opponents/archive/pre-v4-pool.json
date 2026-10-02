@@ -1,0 +1,50 @@
+{
+  "format": "legacy-opponent-pool/1.0.0",
+  "backend": "masked_ismcts",
+  "training": {
+    "bank-340a20d72b23c652c267/balanced-v3-masked-industry": {
+      "admission": "masked-industry-smoke/1.0.0",
+      "manifest_sha256": "8146d5a2d1de0692d76f3c00d0baa19ad99423b8b572c69218f7058909fac770",
+      "qualification": "training/opponents/evaluations/masked-industry-1.0.0/report.json",
+      "sha256": "f5b696300294a738d31e1b08aa9f4187dfdc00f773747fbb548f75f6b69fa001",
+      "profile": "balanced-v3-masked-industry"
+    },
+    "bank-340a20d72b23c652c267/rail-tempo-v3-masked-industry": {
+      "admission": "masked-industry-smoke/1.0.0",
+      "manifest_sha256": "8146d5a2d1de0692d76f3c00d0baa19ad99423b8b572c69218f7058909fac770",
+      "qualification": "training/opponents/evaluations/masked-industry-1.0.0/report.json",
+      "sha256": "f5b696300294a738d31e1b08aa9f4187dfdc00f773747fbb548f75f6b69fa001",
+      "profile": "rail-tempo-v3-masked-industry"
+    },
+    "bank-340a20d72b23c652c267/cotton-v3-masked-industry": {
+      "admission": "masked-industry-smoke/1.0.0",
+      "manifest_sha256": "8146d5a2d1de0692d76f3c00d0baa19ad99423b8b572c69218f7058909fac770",
+      "qualification": "training/opponents/evaluations/masked-industry-1.0.0/report.json",
+      "sha256": "f5b696300294a738d31e1b08aa9f4187dfdc00f773747fbb548f75f6b69fa001",
+      "profile": "cotton-v3-masked-industry"
+    },
+    "bank-340a20d72b23c652c267/goods-beer-v3-masked-industry": {
+      "admission": "masked-industry-smoke/1.0.0",
+      "manifest_sha256": "8146d5a2d1de0692d76f3c00d0baa19ad99423b8b572c69218f7058909fac770",
+      "qualification": "training/opponents/evaluations/masked-industry-1.0.0/report.json",
+      "sha256": "f5b696300294a738d31e1b08aa9f4187dfdc00f773747fbb548f75f6b69fa001",
+      "profile": "goods-beer-v3-masked-industry"
+    },
+    "bank-340a20d72b23c652c267/supplier-v3-masked-industry": {
+      "admission": "masked-industry-smoke/1.0.0",
+      "manifest_sha256": "8146d5a2d1de0692d76f3c00d0baa19ad99423b8b572c69218f7058909fac770",
+      "qualification": "training/opponents/evaluations/masked-industry-1.0.0/report.json",
+      "sha256": "f5b696300294a738d31e1b08aa9f4187dfdc00f773747fbb548f75f6b69fa001",
+      "profile": "supplier-v3-masked-industry"
+    }
+  },
+  "evaluation": {
+    "bank-340a20d72b23c652c267/pottery-flex-v3-masked-industry": {
+      "admission": "masked-industry-smoke/1.0.0",
+      "manifest_sha256": "8146d5a2d1de0692d76f3c00d0baa19ad99423b8b572c69218f7058909fac770",
+      "qualification": "training/opponents/evaluations/masked-industry-1.0.0/report.json",
+      "sha256": "f5b696300294a738d31e1b08aa9f4187dfdc00f773747fbb548f75f6b69fa001",
+      "profile": "pottery-flex-v3-masked-industry"
+    }
+  }
+}

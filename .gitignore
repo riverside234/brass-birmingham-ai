@@ -552,6 +552,12 @@ tensorboard/
 !/training/runtime/r1/BrassHost.exe
 !/training/runtime/v3/BrassLegacyAI.exe
 !/training/runtime/v3-lab/BrassLegacyAI.exe
+!/training/runtime/v3-s1-control/BrassLegacyAI.exe
+!/training/runtime/v3-masked-control/BrassLegacyAI.exe
+!/training/runtime/v3-era-control/BrassLegacyAI.exe
+!/training/runtime/v3-industry-control/BrassLegacyAI.exe
+!/training/runtime/v3-economy-control/BrassLegacyAI.exe
+!/training/runtime/v3-advanced-control/BrassLegacyAI.exe
 !/training/runtime/search/BrassHost.exe
 
 # Local operating-system metadata.

@@ -77,7 +77,9 @@ def audit(root,paths,output,*,mono=None,workers=1,budget=None):
     calibration=None
     if budget:
         from .legacy_search import teachers
-        allowed.update(teachers(root,budget));calibration=dict(format='direct-masked-budget/1.0.0',budget=budget)
+        mode=read(root/'training/opponents/pool.json').get('backend')
+        allowed.update(teachers(root,budget));calibration=dict(format='direct-v3-s1-budget/1.0.0' if mode=='S1' else 'direct-masked-budget/1.0.0',budget=budget,
+            parents=sorted(read(root/'training/opponents/pool.json')['training']))
     require(type(workers) is int and 1<=workers<=32,'Invalid audit CPU allowance')
     paths=sorted(set(str(project_path(root,p)) for p in paths))
     if workers>1:
@@ -187,20 +189,35 @@ def load_dataset(root,manifest_path,partition):
     parents=set(read(root/'training/opponents/pool.json')['training']);admitted=set(parents)
     # Reuse previously audited HEURISTIC data without admitting old planners or
     # importing neural replay into the new population. Verify archived evidence.
-    archive=root/'training/opponents/archive/pre-masked-pool.json'
-    if archive.exists():
-        from brass_ai.bank import load_bank
+    from brass_ai.bank import load_bank,validate_admission
+    historical={}
+    for filename in ('pre-masked-pool.json','pre-s1-training-pool.json','s1-training-smoke-pool.json','pre-era-pool.json','pre-era-r2-pool.json','pre-era-r3-pool.json','pre-industry-pool.json','pre-economy-pool.json'):
+        archive=root/'training/opponents/archive'/filename
+        if not archive.exists():continue
         for identity,record in read(archive)['training'].items():
-            evidence=project_path(root,record['qualification'])
-            require(sha(evidence)==record['sha256'],'Historical heuristic evidence changed')
-            report=read(evidence);name=record['profile'];bank=identity.split('/')[0]
-            load_bank(root,bank)
-            require(report['bank']==bank and report['profiles'][name]['training_eligible'],'Historical teacher evidence invalid')
-            admitted.add(identity)
+            validate_admission(root,identity,record,'training')
+            historical[identity]=record;admitted.add(identity)
     if manifest.get('calibration'):
         from .legacy_search import teachers
         c=manifest['calibration']
-        if c.get('format')=='direct-masked-budget/1.0.0':admitted.update(teachers(root,c['budget']))
+        if c.get('format')=='direct-v3-s1-budget/1.0.0':
+            from .config import legacy_budget_config
+            from .legacy_search import CONTRACT
+            legacy_budget_config(c['budget'])
+            require(set(c['parents'])<=admitted,'S1 dataset parent evidence missing')
+            for parent in c['parents']:
+                bank,name=parent.split('/');profile=load_bank(root,bank)['payload']['profiles'][name]
+                require(profile['mode']=='S1' and profile['milliseconds']==1000,'S1 dataset source differs')
+                admitted.add('v3-s1-forest/'+digest(dict(parent=parent,budget=c['budget'],contract=CONTRACT)))
+        elif c.get('format')=='direct-masked-budget/1.0.0':
+            admitted.update(teachers(root,c['budget']))
+            # Archived, audited heuristic choices remain reusable as BC only;
+            # their former forest identities never become active opponents.
+            for parent in set(historical)|parents:
+                bank,name=parent.split('/');profile=load_bank(root,bank)['payload']['profiles'][name]
+                if profile['mode']=='masked_ismcts':
+                    admitted.add('masked-v3-forest/'+digest(dict(parent=parent,budget=c['budget'],version=2)))
+                    admitted.add('masked-v3-forest/'+digest(dict(parent=parent,budget=c['budget'],search_free=False,version=3)))
         else:
             path=project_path(root,c['budget']['calibration']);require(sha(path)==c['sha256'],'Archived dataset evidence changed')
             report=read(path);require(report['identity']==c['identity'] and report['training_eligible'],'Archived dataset evidence invalid')

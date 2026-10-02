@@ -1,18 +1,45 @@
 {
-  "format": "masked-ismcts/1.0.0",
+  "format": "masked-ismcts/1.1.0",
   "players": 4,
   "observation": "brass-r1/0.2.0",
   "information": "single-observer information sets; independently permitted fixed opponent policies",
   "utility": "four stable-seat win shares, with root component for selection",
-  "masks": ["legal", "padding", "search_expansion"],
-  "teacher": "ismcts-root-visits/1.0.0",
+  "masks": [
+    "legal",
+    "padding",
+    "search_expansion"
+  ],
+  "teacher": "ismcts-root-visits/1.1.0",
   "model": "brass-four-seat-mlp-resnet/1.0.0",
   "main_parameter_limit": 2000000,
   "later_goal_parameter_limit": 2100000,
   "initialization": "random; no imported neural checkpoints or populations",
   "lab_legacy_milliseconds": 1000,
-  "game_milliseconds": {"easy": 2000, "mid": 5000, "hard": 12000, "old_save": 10000},
+  "game_milliseconds": {
+    "easy": 2000,
+    "mid": 5000,
+    "hard": 12000,
+    "old_save": 10000
+  },
   "backups": "completed paths only; pending reservations are never visits",
   "clock": "one monotonic deadline for both actions, batching and validation",
-  "cache": "model, permitted observer/history, style and complete legal order; excludes live hidden state"
+  "cache": "Model, evaluator kind, contract/horizon, permitted observation/history, style and complete legal order",
+  "heuristic": {
+    "q_transform": "regularized_sibling",
+    "q_min_span": 0.05,
+    "minimum_supported_siblings": 2,
+    "minimum_plan_visits": 2,
+    "lab_root_k": 4,
+    "lab_interior_k": 2,
+    "lab_opponent_turn_limit": 0,
+    "exploration": 0.6
+  },
+  "neural": {
+    "q_transform": "none",
+    "leaf_policy": "new_root_information_frontier",
+    "root_top_k": 16,
+    "interior_top_k": 8,
+    "frontier": "Acting root information sets; repeated completed visits may expand deeper; no heuristic reply cap"
+  },
+  "continuation": "Full-turn signature evidence; at least two completed supports; no last-sample continuation"
 }

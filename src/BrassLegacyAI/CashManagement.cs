@@ -7,7 +7,8 @@ namespace BrassLegacyAI
     public sealed class CashProjection
     {
         public bool collection, credit_blocked, future_credit_blocked;
-        public int payment, cash_after_income, shortfall, reserve_gap;
+        public int payment, cash_after_income, shortfall, reserve_gap, financing_actions;
+        public double investment_reserve;
         public double penalty;
     }
 
@@ -33,7 +34,12 @@ namespace BrassLegacyAI
             // not a ban on an investment that actually raises income this turn.
             if (!terminal && anotherTurn && result.credit_blocked)
                 result.reserve_gap = Math.Max(0, Math.Max(0, -income) + 7 - Math.Max(0, result.cash_after_income));
-            result.penalty = result.shortfall * 1.5 + result.reserve_gap * 0.75;
+            result.investment_reserve=EraEconomy.InvestmentReserve(view,seat);
+            if(EraEconomy.Rail(view) && Conversion.Actions(view,seat)>=4 && !result.credit_blocked && result.cash_after_income<result.investment_reserve)
+                result.financing_actions=1;
+            // The cash ledger prices spent money. This separate term prices a
+            // future financing ACTION; it never charges the rail payment twice.
+            result.penalty = result.shortfall * 1.5 + result.reserve_gap * 0.75 + result.financing_actions * 0.75;
             return result;
         }
     }

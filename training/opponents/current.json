@@ -1,17 +1,25 @@
 {
-  "format": "masked-v3-bank/1.0.0",
-  "bank": "bank-927c8ddec148897fa542",
-  "manifest_sha256": "2075067f68824f0aa452bd1bc676e74c7f7e1f8414dab8ba2c76f63170f8a7dd",
-  "seconds": 1.0,
-  "backend": "masked_ismcts",
+  "format": "masked-v4-bank/1.0.0",
+  "generation": "v4",
+  "bank": "bank-3dc65253a610191d66a5",
+  "manifest_sha256": "20b753113cb8a5dbee15713174299806377f8eb25cdc7aba0c74ee598676b16b",
   "profiles": [
-    "balanced-v3-masked",
-    "rail-tempo-v3-masked",
-    "cotton-v3-masked",
-    "goods-beer-v3-masked",
-    "supplier-v3-masked",
-    "pottery-flex-v3-masked"
+    "balanced-v3-masked-economy",
+    "rail-tempo-v3-masked-economy",
+    "cotton-v3-masked-economy",
+    "goods-beer-v3-masked-economy",
+    "supplier-v3-masked-economy",
+    "pottery-flex-v3-masked-economy"
   ],
-  "strength": "unmeasured",
-  "qualification_required": false
+  "backend": "masked_ismcts",
+  "seconds": 1.0,
+  "search_workers": 4,
+  "previous_bank": "bank-340a20d72b23c652c267",
+  "qualification": "training/opponents/evaluations/user-directed-v4-1.0.0/selection.json",
+  "qualification_sha256": "004568f8092f2f604493667bf6cf79dadd47f60ebb046bbbb01d2bd9297ee184",
+  "selection_basis": "user-directed-masked-v4/1.0.0",
+  "strength_promoted": false,
+  "productive_progress_fix": true,
+  "opening_candidate_bias": true,
+  "note": "Existing v3 profile identifiers are save/transfer aliases. Public generation is v4; no rejected network/Scout additions."
 }

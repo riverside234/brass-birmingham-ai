@@ -1,14 +1,15 @@
 """Private Masked ISMCTS root forests; merge only completed four-seat evidence."""
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import replace
+from threading import RLock
 import random
 import numpy as np
 from brass_ai.learning.contracts import require
-from brass_ai.search.ismcts import MaskedSearchPolicy,visit_teacher
+from brass_ai.search.ismcts import MaskedSearchPolicy,visit_teacher,supported_continuation
 
 def merge_statistics(items,choices):
     merged=dict(completed=0,interrupted=0,opponent_nodes=0,max_pending=0,opponent_choices=0,
-                root={},expansion=[False]*len(choices))
+                root={},plans={},expansion=[False]*len(choices))
     allowed={c['id'] for c in choices}
     for item in items:
         if item is None:continue
@@ -21,7 +22,14 @@ def merge_statistics(items,choices):
             require(len(e['returns'])==4 and e['visits']>0,'Incomplete or mis-seated edge')
             target=merged['root'].setdefault(identity,dict(visits=0,returns=np.zeros(4),available=0))
             target['visits']+=e['visits'];target['returns']+=np.asarray(e['returns']);target['available']+=e['available']
-    for e in merged['root'].values():e['returns']=e['returns'].tolist()
+        for signature,e in item.get('plans',{}).items():
+            require(e['first'] in allowed and e['visits']>0 and len(e['returns'])==4,'Invalid completed continuation')
+            from brass_ai.learning.contracts import digest
+            require(signature==e['signature']==digest(e['trace']) and e['trace'][0][1]==e['first'],'Continuation identity changed')
+            target=merged['plans'].setdefault(signature,dict(signature=signature,first=e['first'],trace=e['trace'],visits=0,returns=np.zeros(4)))
+            target['visits']+=e['visits'];target['returns']+=np.asarray(e['returns'])
+    for group in ('root','plans'):
+        for e in merged[group].values():e['returns']=e['returns'].tolist()
     return merged
 
 class ParallelMasked(MaskedSearchPolicy):
@@ -29,18 +37,24 @@ class ParallelMasked(MaskedSearchPolicy):
         require(1<=workers<=16 and role in ('lab','laptop','reference'),'Invalid CPU root forest')
         self.replicas=[]
         try:
-            for i in range(workers):self.replicas.append(factory(i))
+            for i in range(workers):
+                replica=factory(i);replica.partition_index=i;self.replicas.append(replica)
         except BaseException:
             for p in self.replicas:p.close()
             raise
         self.pool=ThreadPoolExecutor(max_workers=workers,thread_name_prefix='masked-private-root')
+        self.decision_lock=RLock()
         from brass_ai.learning.contracts import digest
         self.config=replace(self.config,workers=workers,cpu_role=role)
-        self.policy_id='masked-ismcts-forest/1.0.0/'+digest(dict(model=self.base.policy_id,config=self.config.to_dict()))
+        self.policy_id='masked-ismcts-forest/1.1.0/'+digest(dict(model=self.base.policy_id,config=self.config.to_dict()))
         self.telemetry.update(search_workers=workers,cpu_role=role)
         return self
 
     def decide(self,view,choices,rng,deadline,recall=None,tree=None,cache=None):
+        with self.decision_lock:
+            return self._decide(view,choices,rng,deadline,recall,tree,cache)
+
+    def _decide(self,view,choices,rng,deadline,recall=None,tree=None,cache=None):
         from brass_ai.step5.policy import inference_deadline
         from brass_ai.search.common import SearchIncomplete
         try:
@@ -69,8 +83,9 @@ class ParallelMasked(MaskedSearchPolicy):
         self.telemetry['searches']+=1;self.telemetry['simulations']+=stats['completed'];self.telemetry['incomplete']+=stats['interrupted']
         self.telemetry['max_pending']=max(self.telemetry['max_pending'],stats['max_pending'])
         chosen=max(range(len(choices)),key=lambda i:(stats['root'].get(choices[i]['id'],{}).get('visits',0),probabilities[i],-i))
-        traces=[item.get('continuations',{}).get(choices[chosen]['id']) for item in results if item]
-        if any(traces):self.last_continuation=dict(next(trace for trace in traces if trace))
+        continuation=supported_continuation(stats,choices[chosen]['id'],view['seat'],self.config.minimum_plan_visits)
+        if continuation is not None:self.last_continuation=continuation
+        else:chosen=int(np.argmax(probabilities))
         return chosen,1.,visit_teacher(choices,stats,probabilities,model=self.base.evaluator.model_id,observer=view['seat'],config=self.config)
 
     def close(self):

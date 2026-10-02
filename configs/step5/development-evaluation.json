@@ -10,8 +10,8 @@
   "max_candidate_cells": 131072,
   "threads": 4,
   "parallel_hosts": true,
-  "legacy_workers": 8,
-  "search_workers": 8,
+  "legacy_workers": 24,
+  "search_workers": 24,
   "include_legacy": false,
   "use_search": false,
   "focus": "neutral",
@@ -19,24 +19,32 @@
     "backend": "masked_ismcts",
     "seconds": 3.0,
     "simulations": 100000,
-    "future_turns": 1,
     "max_choices": 512,
     "exploration": 1.4,
     "root_top_k": 16,
     "interior_top_k": 8,
-    "widening": 2.0,
     "pending_paths": 4,
     "batch_size": 4,
     "flush_ms": 0.5,
     "prior_mix": 0.1,
     "turn_interval": 4,
-    "max_searches_per_seat": 4
+    "max_searches_per_seat": 4,
+    "contract": "masked-ismcts/1.1.0",
+    "evaluator_kind": "neural",
+    "q_transform": "none",
+    "leaf_policy": "new_root_information_frontier",
+    "candidate_policy": "supported_progressive",
+    "fpu_reduction": 0.02,
+    "minimum_plan_visits": 2,
+    "reopen_support": 4,
+    "tail_admission": 0.05,
+    "virtual_loss": 0.02
   },
   "panel": "development",
   "execution": {
     "processes": 28,
     "hosts_per_process": 1,
-    "heavy_processes": 8,
+    "heavy_processes": 24,
     "batch_size": 64,
     "max_candidate_cells": 131072,
     "flush_ms": 1.0,
@@ -47,7 +55,9 @@
     "shard_bytes": 268435456,
     "feature_cache": true,
     "policy_cache": 32,
-    "search_workers_per_turn": 4
+    "search_workers_per_turn": 4,
+    "cpu_budget": 64,
+    "cpu_reserve": 4
   },
   "lineups": [
     "recent-neural"
@@ -64,6 +74,7 @@
     "role": "lab",
     "seconds": 1.0,
     "search_workers": 4,
-    "global_workers": 32
+    "global_workers": 60,
+    "work_multiplier": 1
   }
 }

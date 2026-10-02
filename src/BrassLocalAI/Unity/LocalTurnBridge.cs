@@ -140,7 +140,7 @@ namespace BrassLegacyAI
             var view = (JObject)Wire.Token(host.Observe(actor));
             // Capturing/serializing the live board is preparation, not thinking time.
             if (!clock.IsRunning) clock.Start();
-            var cfg = Profile.Read(JObject.FromObject(profile)); cfg.milliseconds = Math.Max(0, budget - clock.Elapsed.TotalMilliseconds);
+            var cfg = Profile.Read(JObject.FromObject(profile)); ProfileCatalog.ConfigureClock(cfg,budget); cfg.milliseconds = Math.Max(0, budget - clock.Elapsed.TotalMilliseconds);
             planningRequests++; lastRequestMilliseconds = cfg.milliseconds;
             ticket = Ticket.Create(host.GameId, app.Game.Revision, actor, host.Phase, cfg);
             ticket.profile_fingerprint = (string)LocalGameState.Assignment(state, actor)["profile_sha256"];

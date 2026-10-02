@@ -1,0 +1,113 @@
+{
+  "format": "v3-teacher-selection-exit/1.0.0",
+  "passed": true,
+  "date": "2026-10-01",
+  "scope": "compact functional checks and two eight-game selection screens; no human-strength or Linux/CUDA qualification",
+  "selected_backend": "masked_ismcts",
+  "bank": "bank-981744ddae4aaf07f1cf",
+  "legacy_seconds": 1,
+  "main_lab_heavy_tables": 16,
+  "private_workers_per_v3": 2,
+  "original_qualification": {
+    "path": "training/opponents/evaluations/masked-strength-1.1.0/report.json",
+    "sha256": "d620d0b8397e3c01305835710076b124b5fd36e6ebf6ad9f2dab759da428108c"
+  },
+  "comparisons": [
+    {
+      "path": "training/opponents/evaluations/s1-budget-smoke-1.0.0/report.json",
+      "sha256": "a57c7450c6eeaaf1e04e4e63fac42899c1d9aa043ea860adfa4ba287b55d0fb2"
+    },
+    {
+      "path": "training/opponents/evaluations/s1-vs-masked-smoke-1.0.0/report.json",
+      "sha256": "8d85e8be10079b33ca12ce74b0cc8885b97a1a49ea163fe3ba4f2f8a8f382dc4"
+    }
+  ],
+  "selected_teacher_audit": {
+    "receipt": {
+      "path": "artifacts/s1-training-checks/1790880858443006900/report.json",
+      "sha256": "6cf1cdc66b8a3690b90914146467e2ec881abcf6fe768645f010bcb1de1e2362"
+    },
+    "backend": "masked_ismcts",
+    "games": 1,
+    "audited_rows": 351,
+    "held_out_training_rejected": true,
+    "external_actions_not_neural_targets": true,
+    "note": "Audit used work_multiplier=3 compatibility metadata, which Masked ignores; final active presets use 1. Final dispatch below verifies that budget."
+  },
+  "final_dispatch": {
+    "receipt": {
+      "path": "artifacts/s1-training-checks/selected-dispatch.json",
+      "sha256": "d3ce5f4e358d72b58d23c7c3ca7aa5e9fd7f8a60572f2485d8a8c169e9a9b051"
+    },
+    "configs": [
+      "broader-evaluation.json",
+      "development-evaluation.json",
+      "evaluation.json",
+      "lab-16x2.json",
+      "lab-reference.json",
+      "lab-small.json",
+      "lab.json",
+      "recovery-smoke.json",
+      "smoke.json"
+    ],
+    "controls": [
+      {
+        "bank": "bank-d82438ccec287dbc8a64",
+        "legal_choices": 2,
+        "mode": "S1"
+      },
+      {
+        "bank": "bank-981744ddae4aaf07f1cf",
+        "legal_choices": 2,
+        "mode": "masked_ismcts"
+      }
+    ]
+  },
+  "fresh_nn": {
+    "receipt": {
+      "path": "artifacts/masked-exit/integration-1790879537320814400/report.json",
+      "sha256": "109da692bdc4c1cc8b2d8fbebd22798f65e48585e20af0790c1e745698e98bf8"
+    },
+    "parameters": 1840109,
+    "initialization": "random",
+    "training_games": 2,
+    "resumed_iteration": 2,
+    "evaluation_games": 4,
+    "completed_search": 3,
+    "teacher_alternatives": 3,
+    "distilled": 1,
+    "onnx_parity_batches": 2,
+    "onnx_max_absolute_error": 2.384185791015625e-05,
+    "cleanup_preserved": true
+  },
+  "core_checks": {
+    "passed": true,
+    "tests": 6,
+    "command": "python tests/MaskedISMCTS/test_core.py -q"
+  },
+  "clean_source_clone_s1_reuse": {
+    "passed": true,
+    "original_private_runtime_required": false
+  },
+  "transfer": {
+    "bundle": {
+      "path": "artifacts/step5-transfer/private-rules-runtime.zip",
+      "sha256": "f69f6d8650af7eb0aac48f52aaf7f5ae2801bfa2c9afc38322fef41f282ad989"
+    },
+    "private_runtime_files": 452,
+    "distribution": {
+      "path": "training/runtime/distribution.json",
+      "sha256": "300d1a489c047a59446ca3fb6b3e236114f4db74d5022033e3698634e48add5e"
+    },
+    "preflight": {
+      "passed": true,
+      "platform": "Windows",
+      "device": "cpu",
+      "torch": "2.8.0+cpu",
+      "games": 2,
+      "parity_sha256": "95b16f50d935b66022611984dd1df8059c70bc3adcee1a3da5eea9dce8dbb5ff"
+    }
+  },
+  "game_patch_changed": false,
+  "rail_valuation_followup": "proposed only"
+}

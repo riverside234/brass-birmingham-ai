@@ -13,7 +13,7 @@ from .evaluation import evaluate, promote, validate_evaluation_config
 
 
 def parser():
-    p = argparse.ArgumentParser(description='Fresh four-player MLP-ResNet training with Masked ISMCTS teachers')
+    p = argparse.ArgumentParser(description='Fresh four-player MLP-ResNet training with frozen v3 opponents and Masked ISMCTS NN distillation')
     p.add_argument('--root', type=Path, default=LAB_ROOT)
     p.add_argument('--config', help='Evaluation uses evaluation.json; recovery uses lab.json; historical recipes are archived')
     p.add_argument('--device', choices=['cpu', 'cuda'], default='cpu')
@@ -108,8 +108,8 @@ def main(argv=None):
         previous['paths']=sorted(set(previous['paths']+[p.relative_to(root).as_posix() for p in paths]))
         write_json(path,previous);result=previous
     elif a.command=='lab-bank-prepare':
-        from brass_ai.recovery.legacy_search import prepare
-        result=prepare(root)
+        from brass_ai.recovery.era_bank import current
+        result=current(root)
     else:
         require_preflight(root)
         if a.command == 'demo-generate':

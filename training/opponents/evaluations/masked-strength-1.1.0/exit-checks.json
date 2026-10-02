@@ -1,0 +1,31 @@
+{
+  "format": "masked-strength-exit/1.1.0",
+  "passed": true,
+  "package": "1.4.11",
+  "bank": "bank-981744ddae4aaf07f1cf",
+  "implementation": "40ff1d7c0afd1e4f3ee98804badc33194cdaf8582144cb7f878a36e698ecffce",
+  "bundle_sha256": "568b53012fd83ebe00014a08804304cee1c3e9296d60c6cdf51a3f5497d7f561",
+  "neural": {
+    "report": "artifacts/masked-exit/integration-1790833698836831600/report.json",
+    "sha256": "c9fcfda5c017b62c7974698b50ab5294ca8c21cceb211166e60b9d668ed79db5",
+    "parameters": 1840109,
+    "training_games": 2,
+    "evaluation_games": 4,
+    "completed_search": 3,
+    "distilled": 1
+  },
+  "runtime_checks": 112,
+  "native_checks": 1223,
+  "installed_checks": 259,
+  "forest": {
+    "passed": true,
+    "workers": 4,
+    "completed": 21
+  },
+  "reports": {
+    "screen": "4f368e0d891ee3caead0e18aec9a62a5822703b7a5bd6f7fe1021c671dbc6abe",
+    "decisions": "ae143e87de787bf84ce6e83d4d428821519cf9873d309402306bf022199c9bb6",
+    "laptop-clocks": "af4cf6239bd04fbad7105d89e5b8fab5a48589548edc711a340ad770a0c909ef",
+    "legacy-forest": "8b5c3a29455b9dc9283e422568e4fc4b5494d4ae04c6e93e361d3c866b73f5b5"
+  }
+}

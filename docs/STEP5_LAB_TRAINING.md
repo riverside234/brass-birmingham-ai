@@ -1,6 +1,6 @@
 # Step 5: self-play, search distillation and meta-RL on the lab computer
 
-**Archived pre-2.2 instructions:** use [Fresh Masked ISMCTS training](TRAINING_RECOVERY_LAB.md) for current commands. This document records earlier recipes and checkpoint-import/search workflows; do not run those commands for the new random residual-model run.
+**Archived pre-2.2 instructions:** use [the current conda guide](TRAINING_RECOVERY_LAB.md) for selected **v4 + Masked ISMCTS** imitation/opponents (one second, **24 tables / four workers**), fresh MLP-ResNet training and Masked ISMCTS NN distillation. Original S1 remains a frozen diagnostic control. Internal `v3-*` names are compatibility aliases. This document records earlier recipes and checkpoint-import/search workflows; use the current guide for the new run.
 
 **30 September recovery revision:** the default trainer now uses audited v3 imitation, effective-minibatch PPO, a declining 40% → 20% → 10% → 5% v3 table curriculum, and persistent CPU actors with shared batched inference. Follow [TRAINING_RECOVERY_LAB.md](TRAINING_RECOVERY_LAB.md) for current commands and migration. The original recipe described below is retained as historical context in `configs/step5/previous-lab.json`; its initial 95% neural schedule does not describe the new default. Optional meta-RL retains that explicit historical config.
 
@@ -412,3 +412,8 @@ upload every replay or optimizer snapshot. Preserve the R3 frozen banks and the
 R2 bootstrap manifests. Step 5 does not install a trained neural model into the
 game; laptop search/inference integration, calibrated difficulty and human
 playtesting remain the later milestones in the main plan.
+
+
+## Superseding era/parallel revision
+
+Use [the current conda guide](TRAINING_RECOVERY_LAB.md) and [Masked v3 era repair](MASKED_V3_ERA_REPAIR.md). The active recipe queues **24 tables with four workers per search decision**, one second for searched v3, under a shared 60-slot admission gate. Early RL uses a separate search-free v3 incumbent; searched v3 resumes at 10,000 games/5% tables. Imitation and v3 evaluation remain searched. NN distillation and the additional Masked probe use four roots, central CPU/GPU batching and selection-only virtual loss. Historical S1/16�2 commands and results above remain evidence, not current recommendations. Read `training/opponents/current.json` for the current bank and `training/runtime/distribution.json` for the new private bundle. Start a new source-bound run.

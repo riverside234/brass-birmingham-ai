@@ -1,0 +1,39 @@
+{
+  "format": "legacy-pool/2.0.0",
+  "backend": "masked_ismcts",
+  "training": {
+    "bank-927c8ddec148897fa542/balanced-v3-masked": {
+      "admission": "user-directed-masked-ismcts/1.0.0",
+      "manifest_sha256": "2075067f68824f0aa452bd1bc676e74c7f7e1f8414dab8ba2c76f63170f8a7dd",
+      "profile": "balanced-v3-masked"
+    },
+    "bank-927c8ddec148897fa542/rail-tempo-v3-masked": {
+      "admission": "user-directed-masked-ismcts/1.0.0",
+      "manifest_sha256": "2075067f68824f0aa452bd1bc676e74c7f7e1f8414dab8ba2c76f63170f8a7dd",
+      "profile": "rail-tempo-v3-masked"
+    },
+    "bank-927c8ddec148897fa542/cotton-v3-masked": {
+      "admission": "user-directed-masked-ismcts/1.0.0",
+      "manifest_sha256": "2075067f68824f0aa452bd1bc676e74c7f7e1f8414dab8ba2c76f63170f8a7dd",
+      "profile": "cotton-v3-masked"
+    },
+    "bank-927c8ddec148897fa542/goods-beer-v3-masked": {
+      "admission": "user-directed-masked-ismcts/1.0.0",
+      "manifest_sha256": "2075067f68824f0aa452bd1bc676e74c7f7e1f8414dab8ba2c76f63170f8a7dd",
+      "profile": "goods-beer-v3-masked"
+    },
+    "bank-927c8ddec148897fa542/supplier-v3-masked": {
+      "admission": "user-directed-masked-ismcts/1.0.0",
+      "manifest_sha256": "2075067f68824f0aa452bd1bc676e74c7f7e1f8414dab8ba2c76f63170f8a7dd",
+      "profile": "supplier-v3-masked"
+    }
+  },
+  "evaluation": {
+    "bank-927c8ddec148897fa542/pottery-flex-v3-masked": {
+      "admission": "user-directed-masked-ismcts/1.0.0",
+      "manifest_sha256": "2075067f68824f0aa452bd1bc676e74c7f7e1f8414dab8ba2c76f63170f8a7dd",
+      "profile": "pottery-flex-v3-masked"
+    }
+  },
+  "note": "Direct user-selected 1s clocks; no calibration or strength qualification."
+}

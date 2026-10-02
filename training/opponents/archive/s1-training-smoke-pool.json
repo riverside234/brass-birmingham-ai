@@ -1,0 +1,39 @@
+{
+  "format": "legacy-pool/2.0.0",
+  "backend": "S1",
+  "training": {
+    "bank-d82438ccec287dbc8a64/balanced-v3-lab-1s": {
+      "admission": "user-directed-v3-s1/1.0.0",
+      "manifest_sha256": "7f440ee6af7aa7f4231feda35199c3ef45101f6bba2db597335efb377d538145",
+      "profile": "balanced-v3-lab-1s"
+    },
+    "bank-d82438ccec287dbc8a64/rail-tempo-v3-lab-1s": {
+      "admission": "user-directed-v3-s1/1.0.0",
+      "manifest_sha256": "7f440ee6af7aa7f4231feda35199c3ef45101f6bba2db597335efb377d538145",
+      "profile": "rail-tempo-v3-lab-1s"
+    },
+    "bank-d82438ccec287dbc8a64/cotton-v3-lab-1s": {
+      "admission": "user-directed-v3-s1/1.0.0",
+      "manifest_sha256": "7f440ee6af7aa7f4231feda35199c3ef45101f6bba2db597335efb377d538145",
+      "profile": "cotton-v3-lab-1s"
+    },
+    "bank-d82438ccec287dbc8a64/goods-beer-v3-lab-1s": {
+      "admission": "user-directed-v3-s1/1.0.0",
+      "manifest_sha256": "7f440ee6af7aa7f4231feda35199c3ef45101f6bba2db597335efb377d538145",
+      "profile": "goods-beer-v3-lab-1s"
+    },
+    "bank-d82438ccec287dbc8a64/supplier-v3-lab-1s": {
+      "admission": "user-directed-v3-s1/1.0.0",
+      "manifest_sha256": "7f440ee6af7aa7f4231feda35199c3ef45101f6bba2db597335efb377d538145",
+      "profile": "supplier-v3-lab-1s"
+    }
+  },
+  "evaluation": {
+    "bank-d82438ccec287dbc8a64/pottery-flex-v3-lab-1s": {
+      "admission": "user-directed-v3-s1/1.0.0",
+      "manifest_sha256": "7f440ee6af7aa7f4231feda35199c3ef45101f6bba2db597335efb377d538145",
+      "profile": "pottery-flex-v3-lab-1s"
+    }
+  },
+  "note": "User-selected original v3 S1, one second; training uses 16 tables x 2 workers. Pottery identity held out; learner Pottery unrestricted."
+}

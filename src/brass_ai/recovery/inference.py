@@ -2,6 +2,7 @@
 from collections import OrderedDict, defaultdict
 import copy
 from dataclasses import dataclass
+from dataclasses import field
 import multiprocessing
 import queue
 import threading
@@ -24,6 +25,8 @@ class Endpoint:
     connection: object
     lane: int
     timeout: float = 180.0
+    pending: object = None
+    lock: object = field(default_factory=threading.RLock)
 
 
 class ChannelLease:
@@ -48,6 +51,10 @@ class RemoteEvaluator:
         return self.poll(self.submit(requests),wait=True)
 
     def submit(self,requests):
+        with self.endpoint.lock:
+            return self._submit(requests)
+
+    def _submit(self,requests):
         require(requests,'Cannot submit an empty batch')
         require(getattr(self.endpoint,'pending',None) is None,'Private reply channel is still in use')
         began=time.monotonic();token=uuid.uuid4().hex;frames=[]
@@ -74,6 +81,10 @@ class RemoteEvaluator:
         return ticket
 
     def poll(self,ticket,*,wait=False):
+        with self.endpoint.lock:
+            return self._poll(ticket,wait=wait)
+
+    def _poll(self,ticket,*,wait=False):
         require(getattr(self.endpoint,'pending',None) is ticket,'Unknown/misrouted inference ticket')
         if not wait and not self.endpoint.connection.poll(0):return None
         require(self.endpoint.connection.poll(self.endpoint.timeout),'Inference service timeout; incomplete game is aborted')
@@ -95,6 +106,8 @@ class InferenceService:
     def __init__(self,config,device='cpu',profile=None,profile_steps=4):
         self.config,self.device=config,device
         self.mp=multiprocessing.get_context('spawn')
+        from .resources import CPUAdmission
+        self.cpu=CPUAdmission(self.mp,config.get('cpu_budget',64),config.get('cpu_reserve',4))
         self.requests=self.mp.Queue(maxsize=4*max(64,config['processes']*config['hosts_per_process']))
         self.connections={};self.children=[];self.leases=[];self.models={};self.cache=OrderedDict()
         self.lock=threading.RLock();self.stop=threading.Event();self.error=None
@@ -145,6 +158,7 @@ class InferenceService:
     def report(self):
         return dict(**self.metrics,timings=self.timings.report(),device=str(self.device),
             central_batching=True,memory=memory(self.device),
+            cpu_admission=self.cpu.report(),
             timing_note='Host elapsed time; CUDA forward kernel duration is in optional profiler traces',
             error=str(self.error) if self.error else None)
 
@@ -170,9 +184,11 @@ class InferenceService:
                 self.metrics[status+'_requests']+=1
                 responses[key]=self._response(frame,status)
             else: by_model[frame['model']].append((key,frame))
-        for identity,group in by_model.items():
+        for identity,group in sorted(by_model.items(),key=lambda pair:min(f['deadline'] for _,f in pair[1])):
             with self.lock: model=self._model(identity)
-            group.sort(key=lambda item:len(item[1]['encoded'].choice_ids))
+            # Earliest deadline first within size buckets, so a long choice list
+            # cannot starve behind an endless stream of short requests.
+            group.sort(key=lambda item:(int(item[1]['deadline']/.01),len(item[1]['encoded'].choice_ids)))
             while group:
                 batch=[];maximum=0
                 while group and len(batch)<self.config['batch_size']:

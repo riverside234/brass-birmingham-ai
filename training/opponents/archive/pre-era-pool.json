@@ -1,0 +1,51 @@
+{
+  "format": "legacy-pool/2.0.0",
+  "backend": "masked_ismcts",
+  "training": {
+    "bank-981744ddae4aaf07f1cf/balanced-v3-masked-strength": {
+      "admission": "masked-strength-screen/1.1.0",
+      "manifest_sha256": "162ac11c52de11fd02214a3122cc9b3418472d13fded20d066724bd9a8aa4a18",
+      "profile": "balanced-v3-masked-strength",
+      "qualification": "training/opponents/evaluations/masked-strength-1.1.0/report.json",
+      "sha256": "d620d0b8397e3c01305835710076b124b5fd36e6ebf6ad9f2dab759da428108c"
+    },
+    "bank-981744ddae4aaf07f1cf/rail-tempo-v3-masked-strength": {
+      "admission": "masked-strength-screen/1.1.0",
+      "manifest_sha256": "162ac11c52de11fd02214a3122cc9b3418472d13fded20d066724bd9a8aa4a18",
+      "profile": "rail-tempo-v3-masked-strength",
+      "qualification": "training/opponents/evaluations/masked-strength-1.1.0/report.json",
+      "sha256": "d620d0b8397e3c01305835710076b124b5fd36e6ebf6ad9f2dab759da428108c"
+    },
+    "bank-981744ddae4aaf07f1cf/cotton-v3-masked-strength": {
+      "admission": "masked-strength-screen/1.1.0",
+      "manifest_sha256": "162ac11c52de11fd02214a3122cc9b3418472d13fded20d066724bd9a8aa4a18",
+      "profile": "cotton-v3-masked-strength",
+      "qualification": "training/opponents/evaluations/masked-strength-1.1.0/report.json",
+      "sha256": "d620d0b8397e3c01305835710076b124b5fd36e6ebf6ad9f2dab759da428108c"
+    },
+    "bank-981744ddae4aaf07f1cf/goods-beer-v3-masked-strength": {
+      "admission": "masked-strength-screen/1.1.0",
+      "manifest_sha256": "162ac11c52de11fd02214a3122cc9b3418472d13fded20d066724bd9a8aa4a18",
+      "profile": "goods-beer-v3-masked-strength",
+      "qualification": "training/opponents/evaluations/masked-strength-1.1.0/report.json",
+      "sha256": "d620d0b8397e3c01305835710076b124b5fd36e6ebf6ad9f2dab759da428108c"
+    },
+    "bank-981744ddae4aaf07f1cf/supplier-v3-masked-strength": {
+      "admission": "masked-strength-screen/1.1.0",
+      "manifest_sha256": "162ac11c52de11fd02214a3122cc9b3418472d13fded20d066724bd9a8aa4a18",
+      "profile": "supplier-v3-masked-strength",
+      "qualification": "training/opponents/evaluations/masked-strength-1.1.0/report.json",
+      "sha256": "d620d0b8397e3c01305835710076b124b5fd36e6ebf6ad9f2dab759da428108c"
+    }
+  },
+  "evaluation": {
+    "bank-981744ddae4aaf07f1cf/pottery-flex-v3-masked-strength": {
+      "admission": "masked-strength-screen/1.1.0",
+      "manifest_sha256": "162ac11c52de11fd02214a3122cc9b3418472d13fded20d066724bd9a8aa4a18",
+      "profile": "pottery-flex-v3-masked-strength",
+      "qualification": "training/opponents/evaluations/masked-strength-1.1.0/report.json",
+      "sha256": "d620d0b8397e3c01305835710076b124b5fd36e6ebf6ad9f2dab759da428108c"
+    }
+  },
+  "note": "One-second clocks; Balanced repair screened against pre-repair v3. Other styles share the qualified engine and native correctness checks; no per-style strength claim."
+}

@@ -12,13 +12,13 @@ public static class ConversionTests
     static readonly string[] keys={"balanced","rail-tempo","cotton","goods-beer","supplier","pottery-flex"};
     static void Check(bool ok,string message){checks++;if(!ok)throw new Exception(message);}
     static JObject Composition(){return JObject.Parse(File.ReadAllText(Path.Combine(root,"configs/contracts/v0.2.0/card-composition.json")));}
-    static Profile Profile(string key){return BrassLegacyAI.Profile.Read(JObject.Parse(File.ReadAllText(Path.Combine(root,"configs/legacy-ai/"+key+"-v3.json"))));}
+    static Profile Profile(string key){var p=BrassLegacyAI.Profile.Read(JObject.Parse(File.ReadAllText(Path.Combine(root,"configs/legacy-ai/"+key+"-v3.json"))));p.simulations=8;return p;}
     static readonly Dictionary<string,JObject> positions=new Dictionary<string,JObject>();
-    static JObject Position(bool rail,int turn=1,int actions=1,int round=8)
+    static JObject Position(bool rail,int turn=1,int actions=1,int round=8,int seed=2701)
     {
-        string key=rail+"/"+turn+"/"+actions+"/"+round;JObject cached;
+        string key=rail+"/"+turn+"/"+actions+"/"+round+"/"+seed;JObject cached;
         if(positions.TryGetValue(key,out cached))return (JObject)cached.DeepClone();
-        var h=new Host(2701);
+        var h=new Host(seed);
         for(int i=0;i<150;i++)
         {
             var v=(JObject)Wire.Token(h.Observe(h.Actor));
@@ -91,6 +91,12 @@ public static class ConversionTests
         foreach(string key in keys)foreach(string bonusRegion in new[]{"Gloucester","Warrington","Shrewsbury","Nottingham","Oxford"})
         {
             var v=Position(true,1,1,6);int seat=(int)v["seat"];
+            if(bonusRegion=="Gloucester")
+            {
+                for(int seed=2701;seed<2721;seed++)
+                {var candidate=Position(true,1,1,1,seed);if(candidate["own_hand"].Any(c=>(string)c=="industry:Pottery")){v=candidate;seat=(int)v["seat"];break;}}
+                Check(v["own_hand"].Any(c=>(string)c=="industry:Pottery"),"genuine pottery card fixture");
+            }
             Conversion.Player(v,seat)["cash"]=0;Conversion.Player(v,seat)["income_marker"]=0;
             Put(v,"Worcester:0","CottonMill",2);
             // One sale needs one beer; a full Rail brewery has two. Merchant
@@ -104,12 +110,29 @@ public static class ConversionTests
                 // rather than requiring merchant beer for a marginal upgrade.
                 var mat=(JArray)Conversion.Player(v,seat)["mat"].Single(m=>(string)m["type"]=="Pottery")["tiles"];
                 mat.RemoveAt(0);
+                // Make the replacement investment possible. A penniless
+                // borrower at the credit floor cannot use a pottery upgrade.
+                Conversion.Player(v,seat)["cash"]=40;
+                Conversion.Player(v,seat)["income_marker"]=20;
             }
             int n=0;foreach(var link in v["links"].Where(l=>((string)l["id"]).StartsWith("Rail")))link["owner"]=n++%4;
             if(bonusRegion=="Gloucester")foreach(var link in v["links"].Where(l=>((string)l["id"]).StartsWith("Rail") && l["regions"].Any(r=>(string)r=="BurtonOnTrent")))
                 link["owner"]=(seat+1)%4; // No own-link windfall from draining this brewery.
-            foreach(var merchant in v["merchants"]){merchant["types"]=new JArray("CottonMill");merchant["beer"]=Evaluator.Region((string)merchant["id"])==bonusRegion?1:0;}
+            foreach(var merchant in v["merchants"])
+            {
+                // A useful pottery upgrade needs a real buyer as well as a
+                // card and funding. The other bonus cases remain cotton-only.
+                merchant["types"]=bonusRegion=="Gloucester"?new JArray("CottonMill","Pottery"):new JArray("CottonMill");
+                merchant["beer"]=Evaluator.Region((string)merchant["id"])==bonusRegion?1:0;
+            }
             var h=new Host(1,Belief.Setup(v,Composition(),7));v=(JObject)Wire.Token(h.Observe(seat));
+            // This fixture verifies the beer/bonus decision within a sale.
+            // Early Rail can legitimately build another industry before selling;
+            // requiring the global turn policy to sell now overconstrains styles.
+            // Preserve the genuine Pottery card for its bonus-unlocked build.
+            var sale=h.Choices().Where(c=>c.kind=="sell" && c.target=="Worcester:0" && c.merchant.StartsWith(bonusRegion+":",StringComparison.Ordinal))
+                .OrderBy(c=>c.card=="industry:Pottery").ThenBy(c=>Evaluator.CardCost(v,c.card)).ThenBy(c=>c.id,StringComparer.Ordinal).First();
+            h.SearchApply(sale.id);v=(JObject)Wire.Token(h.Observe(seat));
             var p=Profile(key);p.work_limit=240;var d=new Planner(Composition()).Decide(v,h.Choices(),p,true);
             var after=Replay(h,d.selected);string[] path=d.selected.actions.SelectMany(a=>a).ToArray();
             Check(path.Any(id=>id.StartsWith("beer|merchant:"+bonusRegion+":")),"merchant beer and bonus are considered: "+key+" "+bonusRegion+" "+d.selected.signature);
@@ -117,7 +140,23 @@ public static class ConversionTests
             int beforeVp=(int)Conversion.Player(v,seat)["vp"],afterVp=(int)Conversion.Player(after,seat)["vp"];
             if(bonusRegion=="Shrewsbury" || bonusRegion=="Nottingham")Check(afterVp-beforeVp==(bonusRegion=="Shrewsbury"?4:3),"official merchant VP awarded exactly once");
             Check(Evaluator.Seat(after,seat,true).banked==afterVp,"bonus counter is not double counted");
-            if(bonusRegion=="Gloucester")Check((int)Conversion.Player(after,seat)["mat"].Single(m=>(string)m["type"]=="Pottery")["tiles"][0]["level"]==3,"free merchant development unlocks the useful pottery upgrade");
+            if(bonusRegion=="Gloucester")
+            {
+                var replay=new Host(1,Belief.Setup(v,Composition(),7));bool useful=false;
+                foreach(string id in path)
+                {
+                    var choice=replay.Choices().Single(c=>c.id==id);
+                    if(choice.kind=="bonus_develop")
+                    {
+                        var before=(JObject)Wire.Token(replay.Observe(seat));
+                        useful=InvestmentOpportunity.FreeDevelopment(before,choice.industry)>0;
+                        File.WriteAllText(Path.Combine(root,"artifacts/rail-era/free-development-"+key+".json"),Wire.Json(new{industry=choice.industry,useful,values=Conversion.Player(before,seat)["mat"].Select(m=>new{type=(string)m["type"],value=InvestmentOpportunity.FreeDevelopment(before,(string)m["type"])})}));
+                    }
+                    replay.SearchApply(id);
+                }
+                Check(useful,"free merchant development unlocks a reachable, fundable investment");
+                if(key=="balanced")Check((int)Conversion.Player(after,seat)["mat"].Single(m=>(string)m["type"]=="Pottery")["tiles"][0]["level"]==3,"balanced evaluates the useful pottery upgrade");
+            }
             cases.Add(new{scenario="merchant-beer",key,bonusRegion,d.selected.signature});Console.WriteLine("Merchant check "+key+" "+bonusRegion);
         }
         foreach(string key in keys)

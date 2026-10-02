@@ -9,7 +9,8 @@ from .legacy import LAB_ROOT, LegacyWorker
 
 ADAPTER_FILES=('src/brass_ai/legacy.py','src/brass_ai/bank.py',
                'src/brass_ai/learning/legacy_policy.py','src/brass_ai/learning/runner.py',
-               'src/brass_ai/recovery/legacy_search.py','src/brass_ai/search/common.py')
+               'src/brass_ai/recovery/legacy_search.py','src/brass_ai/search/common.py',
+               'src/brass_ai/recovery/economy_bank.py','src/brass_ai/recovery/network_v4_bank.py')
 
 
 def read(path): return json.loads(Path(path).read_text(encoding='utf-8-sig'))
@@ -73,6 +74,121 @@ def admission(root,policy_id,purpose='training'):
     pool=read(Path(root)/'training/opponents/pool.json')
     selected=pool[purpose];require(policy_id in selected,'Opponent is not admitted to '+purpose+' pool')
     record=selected[policy_id]
+    validate_admission(root,policy_id,record,purpose)
+
+
+def validate_admission(root,policy_id,record,purpose='training'):
+    """Verify current or archived evidence without admitting an archived policy."""
+    require(purpose in ('training','evaluation'),'Unknown admission purpose')
+    if record.get('admission')=='masked-v4-network-smoke/1.0.0':
+        from .recovery.network_v4_bank import CONTROLS, ADMISSION
+        identity,name=policy_id.split('/'); manifest=load_bank(root,identity)
+        require(record['manifest_sha256']==sha(below(root,'training/opponents/bank/'+identity+'/manifest.json')),'Network v4 manifest changed')
+        path=below(root,record['qualification']); require(sha(path)==record['sha256'],'Network v4 screen changed')
+        report=read(path); p=manifest['payload']['profiles'][name]
+        require(report['format']==ADMISSION and report['new_bank']==identity and report['passed'] and report['promote'] and
+                report['games']==24 and not report['failures'] and set(report['comparisons'])==set(CONTROLS),'Both completed winning controls are required')
+        for bank,c in report['comparisons'].items():
+            n,o=c['policies']['new'],c['policies']['old']
+            require(c['games']==12 and c['runtime_files']==load_bank(root,bank)['payload']['runtime_files'] and c['all_metrics_improved'] and
+                    n['win_share']>o['win_share'] and n['first_places']>o['first_places'] and n['mean_vp']>o['mean_vp'] and n['mean_rank']<o['mean_rank'],
+                    'Improve wins, VP and rank against each control')
+        require(report['new_runtime_files']==manifest['payload']['runtime_files'] and report['seconds']==1. and report['search_workers']==4 and
+                p['mode']=='masked_ismcts' and p['milliseconds']==1000 and p['cash_policy']==p['conversion_policy']==1,'Network v4 runtime/budget differs')
+        paths=manifest['payload']['runtime_source_paths']
+        require('src/BrassMaskedSearch/NetworkOptions.cs' in paths and 'src/BrassMaskedSearch/NetworkAndHand.cs' not in paths,'Only the bounded network extension is admitted')
+        require((purpose=='evaluation')==name.startswith('pottery-flex'),'Pottery opponent holdout changed')
+        return
+    if record.get('admission')=='user-directed-masked-v4/1.0.0':
+        from .recovery.v4_bank import SOURCE_BANK, ADMISSION
+        identity,name=policy_id.split('/'); manifest=load_bank(root,identity)
+        require(identity==SOURCE_BANK and record['manifest_sha256']==sha(below(root,'training/opponents/bank/'+identity+'/manifest.json')), 'Selected v4 bank differs')
+        path=below(root,record['qualification']); require(sha(path)==record['sha256'],'V4 selection receipt changed')
+        report=read(path); profile=manifest['payload']['profiles'][name]
+        require(report['format']==ADMISSION and report['passed'] and report['bank']==identity and
+                report['manifest_sha256']==record['manifest_sha256'] and report['runtime_files']==manifest['payload']['runtime_files'] and
+                report['generation']=='v4' and report['fixes']['productive_progress'] and report['fixes']['opening_candidate_bias'] and
+                not report['strength_promoted'] and report['fresh_strength_games']==0,'Missing explicit v4 selection/progress contract')
+        require(report['seconds']==1. and report['search_workers']==4 and profile['mode']=='masked_ismcts' and
+                profile['milliseconds']==1000 and profile['cash_policy']==profile['conversion_policy']==1,'V4 teacher budget/evaluation differs')
+        require((purpose=='evaluation')==name.startswith('pottery-flex'),'Pottery opponent holdout changed')
+        return
+    if record.get('admission') in ('masked-economy-smoke/1.0.0','masked-economy-smoke/1.1.0','masked-economy-smoke/1.2.0','masked-economy-smoke/1.3.0'):
+        from .recovery.economy_bank import CONTROLS, HISTORICAL_CONTROLS, ECONOMIC_CONTROL
+        controls=CONTROLS if record['admission']=='masked-economy-smoke/1.3.0' else (ECONOMIC_CONTROL,) if record['admission']=='masked-economy-smoke/1.2.0' else HISTORICAL_CONTROLS
+        identity,name=policy_id.split('/'); manifest=load_bank(root,identity)
+        require(record['manifest_sha256']==sha(below(root,'training/opponents/bank/'+identity+'/manifest.json')),'Economy manifest changed')
+        path=below(root,record['qualification']); require(sha(path)==record['sha256'],'Economy receipt changed')
+        report=read(path); p=manifest['payload']['profiles'][name]
+        require(report['new_bank']==identity and report['passed'] and report['promote'] and report['games']==12*len(controls) and not report['failures'],'Missing completed winning screen')
+        require(set(report['comparisons'])==set(controls),'Required immutable controls differ')
+        for bank,c in report['comparisons'].items():
+            require(c['games']==12 and c['runtime_files']==load_bank(root,bank)['payload']['runtime_files'],'Frozen control differs')
+            require(c['policies']['new']['win_share']>c['policies']['old']['win_share'],'Fewer/equal wins cannot promote')
+            if record['admission']=='masked-economy-smoke/1.3.0' or record['admission'] in ('masked-economy-smoke/1.1.0','masked-economy-smoke/1.2.0') and bank==ECONOMIC_CONTROL:
+                n,o=c['policies']['new'],c['policies']['old']
+                require(report['format']==record['admission'] and c['all_metrics_improved'] and
+                        n['first_places']>o['first_places'] and n['mean_vp']>o['mean_vp'] and n['mean_rank']<o['mean_rank'],
+                          'Required control must improve on first places, VP AND rank')
+        require(report['new_runtime_files']==manifest['payload']['runtime_files'] and report['seconds']==1. and report['search_workers']==4,'Economy runtime/budget differs')
+        require(p['mode']=='masked_ismcts' and p['milliseconds']==1000 and p['cash_policy']==p['conversion_policy']==1,'Economy teacher contract differs')
+        require('src/BrassMaskedSearch/CompetitiveEconomy.cs' in manifest['payload']['runtime_source_paths'],'Economic/tempo repair missing')
+        if record['admission'] in ('masked-economy-smoke/1.1.0','masked-economy-smoke/1.2.0','masked-economy-smoke/1.3.0'):
+            require('src/BrassMaskedSearch/TournamentOpenings.cs' in manifest['payload']['runtime_source_paths'],'Attributed opening books missing')
+        if record['admission']=='masked-economy-smoke/1.3.0':
+            require('src/BrassMaskedSearch/NetworkAndHand.cs' in manifest['payload']['runtime_source_paths'],'Network/hand repair missing')
+        require((purpose=='evaluation')==name.startswith('pottery-flex'),'Pottery holdout changed')
+        return
+    if record.get('admission')=='masked-industry-smoke/1.0.0':
+        identity,name=policy_id.split('/');manifest=load_bank(root,identity)
+        require(record['manifest_sha256']==sha(below(root,'training/opponents/bank/'+identity+'/manifest.json')),'Industry bank manifest changed')
+        report_path=below(root,record['qualification']);require(sha(report_path)==record['sha256'],'Industry smoke receipt changed')
+        report=read(report_path);p=manifest['payload']['profiles'][name]
+        require(report['new_bank']==identity and report['passed'] and report['promote'] and report['games']==24 and not report['failures'],'Missing completed/improved industry smoke')
+        require(set(report['comparisons'])=={'bank-3f7221cadcd472aafdb9','bank-d82438ccec287dbc8a64'},'Both requested controls are required')
+        for bank,comparison in report['comparisons'].items():
+            require(comparison['games']==12 and comparison['runtime_files']==load_bank(root,bank)['payload']['runtime_files'],'Control evidence differs')
+            candidate,control=comparison['policies']['new'],comparison['policies']['old']
+            require(candidate['win_share']>control['win_share'] or candidate['mean_vp']>control['mean_vp'] or candidate['mean_rank']<control['mean_rank'],'No requested metric improved against a control')
+        require(report['new_runtime_files']==manifest['payload']['runtime_files'] and report['seconds']==1. and report['search_workers']==4,'Candidate runtime/budget differs')
+        require(p['mode']=='masked_ismcts' and p['milliseconds']==1000 and p['cash_policy']==p['conversion_policy']==1,'Industry teacher contract changed')
+        require('src/BrassMaskedSearch/SaleTiming.cs' in manifest['payload']['runtime_source_paths'],'Group-sale repair missing')
+        require((purpose=='evaluation')==name.startswith('pottery-flex'),'Pottery opponent holdout changed')
+        return
+    if record.get('admission')=='masked-era-smoke/1.0.0':
+        identity,name=policy_id.split('/');manifest=load_bank(root,identity)
+        require(record['manifest_sha256']==sha(below(root,'training/opponents/bank/'+identity+'/manifest.json')),'Era bank manifest changed')
+        report_path=below(root,record['qualification']);require(sha(report_path)==record['sha256'],'Era smoke receipt changed')
+        report=read(report_path);p=manifest['payload']['profiles'][name]
+        require(report['new_bank']==identity and report['passed'] and report['games']==8 and not report['failures'],'Missing completed era smoke')
+        require(report['new_runtime_files']==manifest['payload']['runtime_files'],'Era smoke/runtime differs')
+        require(p['mode']=='masked_ismcts' and p['milliseconds']==1000 and p['cash_policy']==p['conversion_policy']==1,'Era teacher contract changed')
+        require('src/BrassMaskedSearch/RootForest.cs' in manifest['payload']['runtime_source_paths'] and
+                'src/BrassMaskedSearch/EraEconomy.cs' in manifest['payload']['runtime_source_paths'],'Era repair/forest source missing')
+        require((purpose=='evaluation')==name.startswith('pottery-flex'),'Pottery opponent holdout changed')
+        return
+    if record.get('admission')=='user-directed-v3-s1/1.0.0':
+        bank,name=policy_id.split('/');manifest=load_bank(root,bank)
+        require(record['manifest_sha256']==sha(below(root,'training/opponents/bank/'+bank+'/manifest.json')),'S1 bank manifest changed')
+        profile=manifest['payload']['profiles'][name]
+        origin=manifest['payload']['training_origin']
+        require(origin['source_bank']=='bank-b880ac1fd5f1dfe8bcc2' and origin['backend']=='S1','Original S1 source identity changed')
+        source=load_bank(root,origin['source_bank'])['payload']
+        require(source['runtime_files']==manifest['payload']['runtime_files'],'S1 worker differs from frozen original')
+        require(profile['mode']=='S1' and profile['milliseconds']==1000 and profile['cash_policy']==profile['conversion_policy']==1,
+                'One-second S1 contract changed')
+        require((purpose=='evaluation')==name.startswith('pottery-flex'),'Pottery identity holdout changed')
+        return
+    if record.get('admission')=='masked-strength-screen/1.1.0':
+        identity,name=policy_id.split('/');manifest=load_bank(root,identity)
+        require(record['manifest_sha256']==sha(below(root,'training/opponents/bank/'+identity+'/manifest.json')),'Screened bank manifest changed')
+        report_path=below(root,record['qualification']);require(sha(report_path)==record['sha256'],'Strength receipt changed')
+        report=read(report_path);p=manifest['payload']['profiles'][name]
+        require(report['bank']==identity and report['qualified'] and report['screen']['games']==20 and not report['screen']['failures'],'Missing matched strength screen')
+        require(report['runtime_files']==manifest['payload']['runtime_files'],'Strength screen/runtime identity differs')
+        require(p['mode']=='masked_ismcts' and p['milliseconds']==1000 and p['search_contract']=='masked-ismcts/1.1.0' and p['evaluator_kind']=='heuristic','Screened search contract changed')
+        require((purpose=='evaluation')==name.startswith('pottery-flex'),'Pottery identity holdout changed')
+        return
     if record.get('admission')=='user-directed-masked-ismcts/1.0.0':
         bank,name=policy_id.split('/');manifest=load_bank(root,bank)
         require(record['manifest_sha256']==sha(below(root,'training/opponents/bank/'+bank+'/manifest.json')),'Direct bank manifest changed')

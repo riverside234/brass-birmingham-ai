@@ -2,6 +2,8 @@
 
 **Status:** Implemented, qualified and installed as patch 1.4.8. All ten pages are included; the installed player passes 523 statistics checks. See [release notes](../docs/END_GAME_STATISTICS_1.4.8.md).
 
+**Current follow-up:** The readability revision from 1.4.10 is retained in installed patch 1.4.13. See the [1 October improvement plan](END_GAME_STATISTICS_IMPROVEMENT_PLAN.md) for larger entry buttons, plot-first pages, additional metrics and an evidence-backed Match review page. That follow-up is a plan only; it does not install another patch or change the implementation described below.
+
 **Date:** 30 September 2026.
 
 **Implementation baseline:** Installed local-game patch 1.4.7, including the current AI, city highlights, presentation recovery and save compatibility fixes.
@@ -413,3 +415,16 @@ Research accessed 30 September 2026.
 3. [MeepleShelf: Brass: Birmingham score tracker](https://meepleshelf.com/games/brass-birmingham) — precedent for separating Canal/Rail industry and link totals. Used as UI inspiration, not rules authority.
 4. [Dylan Ho: How to Dominate Brass: Birmingham](https://dlaern.substack.com/p/how-to-dominate-brass-birmingham), 20 April 2025 — personal strategy observations motivating action, supply, sale and timing metrics. Used as inspiration, not a prescribed strategy or quantitative benchmark.
 5. Current local code and installed patch — linked in section 6; [1.4.6 release record](../docs/LINK_PLACEMENT_REPLAY_1.4.6.md) and [installation metadata](../artifacts/patch-installation.json).
+
+## 13. Readability refinement — 1.4.10
+
+The subsequent request to enlarge and improve the implemented panel adds:
+
+- Body/table text at 21 pixels, secondary labels at 18–19, section headings at 24, and page/title text at 30. A−/A+ offer a further 15% or 30% enlargement.
+- Taller controls and rows, wrapped and pinned headings, wider columns, alternating row backgrounds, brighter ivory text and clearer gold selected states.
+- A player/era/row-count status line, search clearing, reset of hidden chart series, collapse-all details and a Top button.
+- Fully measured expanded details, adaptive tooltips, larger chart hover targets, retained horizontal table positions, keyboard focus reveal and category-menu dismissal.
+
+The report calculations and gameplay/AI implementations remain unchanged. The readability release is qualified with completed-match/statistics fixtures and native renders at 720p, 1080p and 1440p, including Largest on every page at 720p and 1440p. Existing presentation, link replay, menu and managed regression checks run against the candidate before the atomic installation and installed-player checks.
+
+See [the readability release notes](../docs/STATISTICS_READABILITY_1.4.10.md) for implementation, qualification and recovery details.

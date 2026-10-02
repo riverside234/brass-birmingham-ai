@@ -123,7 +123,7 @@ public sealed class LocalAiUnityDriver : MonoBehaviour
         router.ShowView<ICreateOfflineGameView>(); yield return null;
         CheckFirstDisplay("cached menu reopened without refresh");
         var rows = Rows();
-        Check(Setup.PlayerMetadata.Skip(1).All(p => LocalMenu.Strategy(p) == "balanced"), "new bots default to Balanced");
+        Check(Setup.PlayerMetadata.Skip(1).All(p => LocalMenu.Strategy(p) == "balanced"), "new bots default to Adaptive Advanced Book");
         Check(Setup.PlayerMetadata.Skip(1).All(p => LocalMenu.Difficulty(p) == "hard"), "new bots default to Hard 12s");
         foreach (var row in rows.Skip(1))
         {
@@ -153,7 +153,7 @@ public sealed class LocalAiUnityDriver : MonoBehaviour
         menu.DecreaseNumberOfPlayers(); menu.DecreaseNumberOfPlayers(); menu.IncreaseNumberOfPlayers(); menu.IncreaseNumberOfPlayers();
         Check(LocalMenu.Strategy(Setup.PlayerMetadata[3]) == "pottery-flex", "remove/add preserves row strategy");
         Call(menu, "NextAiType", selected); Check(selected.AiType == AIType.Human && !Label(rows[1]).gameObject.activeSelf, "switch to human hides selector");
-        Call(menu, "NextAiType", selected); Check(LocalMenu.Strategy(selected) == "goods-beer" && Label(rows[1]).text == "Goods/Beer" && LocalMenu.Difficulty(selected) == "easy", "switch to bot restores strategy and difficulty");
+        Call(menu, "NextAiType", selected); Check(LocalMenu.Strategy(selected) == "goods-beer" && Label(rows[1]).text == "Worcester Iron-Cotton" && LocalMenu.Difficulty(selected) == "easy", "switch to bot restores strategy and difficulty");
         LocalMenu.Select(Setup.PlayerMetadata[3], "random"); Call(menu, "PresentGameConfiguration");
         Check(Label(rows[3]).text == "Random" && LocalMenu.CanStart(menu), "Random is selectable for a new bot");
         Capture("local-ai-custom-menu.png");
@@ -226,7 +226,7 @@ public sealed class LocalAiUnityDriver : MonoBehaviour
             Check(!Label(row).gameObject.activeInHierarchy && row.GetComponentsInChildren<TextMeshProUGUI>().Any(t => t.name == "Saved AI" && t.text.Contains("s</size>")), "cold Continue shows the saved summary without stock label overlap");
         }
         Check(LocalMenu.Strategy(Setup.PlayerMetadata[1]) == "goods-beer" && LocalMenu.Strategy(Setup.PlayerMetadata[3]) == "random", "saved defaults retain Random");
-        Check(Label(Rows(true)[1]).text == "Goods/Beer" && LocalMenu.Difficulty(Get<PlayerMetadata>(Rows(true)[1], "_playerMetadata")) == "easy", "resume shows saved style and difficulty");
+        Check(Label(Rows(true)[1]).text == "Worcester Iron-Cotton" && LocalMenu.Difficulty(Get<PlayerMetadata>(Rows(true)[1], "_playerMetadata")) == "easy", "resume shows saved style and difficulty");
         Check(Label(Rows(true)[3]).text == LocalMenu.ChoiceLabel(randomStrategy), "resume reveals the resolved Random strategy");
         Check(Rows(true).SelectMany(r => r.GetComponentsInChildren<Button>(true)).Where(b => Enumerable.Range(0, b.onClick.GetPersistentEventCount()).Any(i => b.onClick.GetPersistentMethodName(i).Contains("Difficulty"))).All(b => !b.interactable), "resume arrows disabled");
         Capture("local-ai-resume-menu.png");
@@ -568,3 +568,4 @@ public sealed class LocalAiUnityDriver : MonoBehaviour
         public T GetUseCase<T>() where T : IUseCase { return (T)UseCases[typeof(T)]; }
     }
 }
+

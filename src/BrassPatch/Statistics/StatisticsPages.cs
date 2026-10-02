@@ -12,8 +12,19 @@ namespace BrassPatch.Statistics
         public int Era;
         public string Search = "";
         public bool AllCashPayments;
+        public string Industry = "", Region = "", Action = "", Resource = "Beer";
+        public string Boundary = "Final";
+        public string MapMode = "Occupancy";
+        public int BoundaryEra;
+        public bool Outgoing, ShowAll;
+        public bool EvidenceRestricted;
+        public PlayerColor? Focus, Reference;
+        public readonly HashSet<string> Evidence = new HashSet<string>();
+        public bool Asset(StatisticsAsset a) { return Includes(a.Player,a.Era) && (Industry==""||Industry==a.Type) && (Region==""||Region==a.RegionColor) && (!EvidenceRestricted&&Evidence.Count==0||Evidence.Contains(a.Key)); }
+        public bool Frame(StatisticsAction a) { return Includes(a.Player,a.Era) && (Action==""||Action==a.Kind) && (!EvidenceRestricted&&Evidence.Count==0||Evidence.Contains(a.Key)); }
+        public bool Typed { get {return Industry!=""||Region!=""||Action!=""||EvidenceRestricted||Evidence.Count>0;} }
         public bool Includes(PlayerColor player, int era) { return Players.Contains(player) && (Era == 0 || Era == era); }
-        public void Reset(CompletedMatchStatistics report) { Players.Clear(); foreach (var p in report.Players) Players.Add(p.Color); Era = 0; Search = ""; AllCashPayments = false; }
+        public void Reset(CompletedMatchStatistics report) { Players.Clear(); foreach (var p in report.Players) Players.Add(p.Color); Era = 0; Search = ""; AllCashPayments = false; Industry=Region=Action="";Evidence.Clear();EvidenceRestricted=false;ShowAll=Outgoing=false;Boundary="Final";BoundaryEra=0;MapMode="Occupancy";Resource="Beer"; }
     }
     public sealed class StatisticsRow
     {
@@ -22,6 +33,7 @@ namespace BrassPatch.Statistics
         public PlayerColor? Player;
         public int TargetPage = -1;
         public string TargetSearch;
+        public StatisticsDrill Drill;
         public StatisticsRow(string key, string detail, params string[] cells) { Key = key; Detail = detail; Cells = cells; }
     }
     public sealed class StatisticsSection
@@ -53,7 +65,8 @@ namespace BrassPatch.Statistics
     }
     public static class StatisticsPages
     {
-        public static readonly string[] Names = { "Overview", "Scoring", "Industries", "Networks & Geography", "Economy", "Resources & Trade", "Actions & Cards", "Turn Order & Tempo", "Efficiency & Transition", "Timeline" };
+        public static readonly string[] Names = { "Overview", "Scoring", "Industries", "Networks & Geography", "Economy", "Resources & Trade", "Actions & Cards", "Turn Order & Tempo", "Efficiency & Transition", "Timeline", "Match review" };
+        public static readonly int[] NavigationOrder = {10,0,1,2,3,4,5,6,7,8,9};
         public static readonly string[] IndustryTypes = { "CottonMill", "Manufacturer", "Pottery", "Brewery", "CoalMine", "IronWorks" };
         public static readonly string[] ActionTypes = { "Build", "Network", "Develop", "Sell", "Loan", "Scout", "Pass", "Unclassified" };
         public static List<StatisticsSection> Build(int page, CompletedMatchStatistics report, StatisticsFilters filters)

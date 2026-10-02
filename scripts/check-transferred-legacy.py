@@ -5,7 +5,7 @@ from pathlib import Path
 import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'src'))
-from brass_ai.bank import LAB_ROOT, FrozenOpponent, below, read, require
+from brass_ai.bank import load_bank,LAB_ROOT, FrozenOpponent, below, read, require
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--root', type=Path, default=LAB_ROOT)
@@ -17,7 +17,7 @@ parser.add_argument('--output', default='artifacts/step5/transferred-legacy-chec
 args = parser.parse_args()
 root = args.root.resolve()
 bank = read(root / 'training/opponents/current.json')['bank']
-opponent = FrozenOpponent(root, bank + '/balanced-v3', purpose='diagnostic', mono=args.mono)
+opponent = FrozenOpponent(root, bank + '/' + next(n for n in load_bank(root,bank)['payload']['profiles'] if n.startswith('balanced-v3')), purpose='diagnostic', mono=args.mono)
 try:
     match = opponent.worker.call('run', seed=args.seed, player_count=4,
         candidate_seat=args.v3_seat, profile=opponent.profile, fixed_work=opponent.fixed_work,

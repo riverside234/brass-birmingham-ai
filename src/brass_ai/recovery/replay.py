@@ -169,7 +169,7 @@ def write_shard(path,games,provenance,*,cache=True):
     checked=[check_game(g,[g.encoded(r,encoder) for r in g['records']] if isinstance(g,CheckedGame) else None) for g in games]
     path.parent.mkdir(parents=True,exist_ok=True);tmp=path.with_name(path.name+'.tmp')
     try:
-        with gzip.open(tmp,'wt',encoding='utf-8') as stream:
+        with gzip.open(tmp,'wt',encoding='utf-8',compresslevel=1) as stream:
             stream.write(json.dumps(dict(format='four-seat-replay/1.0.0',compatibility=compatibility(),provenance=provenance))+'\n')
             for game in checked: stream.write(json.dumps(game,separators=(',',':'),allow_nan=False)+'\n')
         tmp.replace(path)

@@ -24,6 +24,11 @@ namespace BrassPatch.Statistics
         internal readonly List<StatisticsRound> rounds = new List<StatisticsRound>();
         internal readonly List<StatisticsCity> cities = new List<StatisticsCity>();
         internal readonly List<StatisticsConnection> connections = new List<StatisticsConnection>();
+        internal readonly List<StatisticsBoundary> boundaries = new List<StatisticsBoundary>();
+        internal readonly List<StatisticsMatTile> matTiles = new List<StatisticsMatTile>();
+        internal readonly List<StatisticsLinkContribution> contributions = new List<StatisticsLinkContribution>();
+        internal readonly List<StatisticsLocation> locations = new List<StatisticsLocation>();
+        internal readonly List<StatisticsStock> stocks = new List<StatisticsStock>();
         internal readonly List<string> warnings = new List<string>();
         public ReadOnlyCollection<StatisticsPlayer> Players { get { return players.AsReadOnly(); } }
         public ReadOnlyCollection<StatisticsAsset> Assets { get { return assets.AsReadOnly(); } }
@@ -34,6 +39,11 @@ namespace BrassPatch.Statistics
         public ReadOnlyCollection<StatisticsRound> Rounds { get { return rounds.AsReadOnly(); } }
         public ReadOnlyCollection<StatisticsCity> Cities { get { return cities.AsReadOnly(); } }
         public ReadOnlyCollection<StatisticsConnection> Connections { get { return connections.AsReadOnly(); } }
+        public ReadOnlyCollection<StatisticsBoundary> Boundaries { get { return boundaries.AsReadOnly(); } }
+        public ReadOnlyCollection<StatisticsMatTile> MatTiles { get { return matTiles.AsReadOnly(); } }
+        public ReadOnlyCollection<StatisticsLinkContribution> Contributions { get { return contributions.AsReadOnly(); } }
+        public ReadOnlyCollection<StatisticsLocation> Locations { get { return locations.AsReadOnly(); } }
+        public ReadOnlyCollection<StatisticsStock> Stocks { get { return stocks.AsReadOnly(); } }
         public ReadOnlyCollection<string> Warnings { get { return warnings.AsReadOnly(); } }
         public string Name(PlayerColor color) { var player = players.Find(p => p.Color == color); return player == null ? color.ToString() : player.Name; }
     }
@@ -56,6 +66,7 @@ namespace BrassPatch.Statistics
         public int Era { get; internal set; }
         public int Round { get; internal set; }
         public int Turn { get; internal set; }
+        public int OwnTurn { get; internal set; }
         public PlayerColor Player { get; internal set; }
         public string Position { get { return (Era == 2 ? "Rail" : "Canal") + " · round " + Round + " · turn " + Turn; } }
     }
@@ -80,6 +91,11 @@ namespace BrassPatch.Statistics
         public int FlipTurn { get; internal set; }
         public int FlipEra { get; internal set; }
         public int FlipRevision { get; internal set; }
+        public int FlipOwnTurn { get; internal set; }
+        public string FlipTrigger { get; internal set; }
+        public PlayerColor? FlipActor { get; internal set; }
+        public bool Sellable { get; internal set; }
+        public string RegionColor { get; internal set; }
         public int IncomeSpaces { get; internal set; }
         public int CanalVP { get; internal set; }
         public int RailVP { get; internal set; }
@@ -106,6 +122,7 @@ namespace BrassPatch.Statistics
         public int MerchantVP { get; internal set; }
         public bool Scored { get; internal set; }
         public string Contributions { get; internal set; }
+        public string[] Cities { get; internal set; }
     }
     public sealed class StatisticsAction : StatisticsPosition
     {
@@ -144,6 +161,10 @@ namespace BrassPatch.Statistics
         public bool DestinationDerived { get; internal set; }
         public int BeforeQuote { get; internal set; }
         public int AfterQuote { get; internal set; }
+        public int TotalPrice { get; internal set; }
+        public string TileId { get; internal set; }
+        public int NextLevel { get; internal set; }
+        public bool NextRailBlocked { get; internal set; }
     }
     public sealed class StatisticsSample : StatisticsPosition
     {
@@ -178,6 +199,45 @@ namespace BrassPatch.Statistics
         public string From { get; internal set; }
         public string To { get; internal set; }
         public bool OpponentRequired { get; internal set; }
+    }
+    public sealed class StatisticsBoundary : StatisticsPosition
+    {
+        public string Name { get; internal set; }
+        public int Cash { get; internal set; }
+        public int Income { get; internal set; }
+    }
+    public sealed class StatisticsMatTile : StatisticsPosition
+    {
+        public string Boundary {get;internal set;}
+        public string Type {get;internal set;}
+        public string TileId {get;internal set;}
+        public int Level {get;internal set;}
+        public bool RailBlocked {get;internal set;}
+    }
+    public sealed class StatisticsStock : StatisticsPosition
+    {
+        public string Boundary {get;internal set;}
+        public string AssetKey {get;internal set;}
+        public int Stock {get;internal set;}
+    }
+    public sealed class StatisticsLinkContribution
+    {
+        public string LinkKey {get;internal set;}
+        public string City {get;internal set;}
+        public string RegionColor {get;internal set;}
+        public int Era {get;internal set;}
+        public int VP {get;internal set;}
+        public PlayerColor Owner {get;internal set;}
+        public PlayerColor? Supplier {get;internal set;}
+    }
+    public sealed class StatisticsLocation
+    {
+        public string City {get;internal set;}
+        public string RegionColor {get;internal set;}
+        public bool Merchant {get;internal set;}
+        public bool Farm {get;internal set;}
+        string[] neighbors=new string[0];
+        public string[] Neighbors {get{return (string[])neighbors.Clone();}internal set{neighbors=value==null?new string[0]:(string[])value.Clone();}}
     }
     public static class StatisticsFormat
     {

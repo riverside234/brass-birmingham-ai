@@ -17,14 +17,16 @@ CURRICULUM = [
     dict(until=None, selfplay=70, historical=25, legacy=5)]
 
 EXECUTION_V21 = dict(EXECUTION, processes=32, hosts_per_process=1, flush_ms=1.0,
-    shard_games=8, shard_bytes=268435456, feature_cache=True, policy_cache=32,search_workers_per_turn=4)
+    shard_games=8, shard_bytes=268435456, feature_cache=True, policy_cache=32,search_workers_per_turn=4,
+    cpu_budget=64,cpu_reserve=4)
 UPDATE_V21 = dict(UPDATE, actor_nonforced=True, critic_batch_size=2048, kl_probe_rows=256)
 RETENTION = dict(enabled=True, resume_checkpoints=2, replay_rounds=4, quarantine_hours=24,
     evaluation_samples=4, profile_traces=2)
 POPULATION = dict(recent=8, anchors=4)
 EVALUATION_SCHEDULE = dict(enabled=True, monitor_every_games=1600, broader_every_games=6400,
     monitor_setups=2, broader_setups=2, seed=910000)
-LEGACY_BUDGET = dict(role='lab', seconds=1.0, search_workers=4, global_workers=32)
+LEGACY_BUDGET = dict(role='lab', seconds=1.0, search_workers=4, global_workers=60, work_multiplier=1)
+LEGACY_OPPONENTS = dict(search_free_until_games=10000)
 IMITATION = dict(manifest=None,epochs=10,patience=2,min_epochs=3,learning_rate=1e-4)
 
 
@@ -47,6 +49,7 @@ def legacy_budget_config(config):
     bounded_fields(config,LEGACY_BUDGET,'legacy_budget')
     require(config['role'] in ('lab','laptop','reference'),'Unknown budget role')
     require(config['seconds']==1.0,'Training/evaluation v3 allowance must be exactly one second')
+    require(config['search_workers']<=4 and config['work_multiplier']<=16,'Invalid legacy CPU allowance')
     return config
 
 
@@ -56,6 +59,8 @@ def execution_config(config):
         positive(config[key], key, integer=key != 'flush_ms')
     if 'feature_cache' in config: require(type(config['feature_cache']) is bool,'Invalid feature cache flag')
     require(config['flush_ms'] <= 50, 'Excessive inference queue delay')
+    if 'cpu_budget' in config:
+        require(config['cpu_reserve']<config['cpu_budget'],'CPU reserve exceeds allocation')
     return config
 
 
@@ -100,7 +105,7 @@ def validate_config(config):
     version=config.get('format')
     if version=='step5-training/2.2.0':
         fields|={'retention','population','evaluation_schedule','legacy_budget','audit_workers',
-                 'overlap_pools','search_wall_fraction','initialization','architecture','parameter_limit','imitation'}
+                 'overlap_pools','search_wall_fraction','initialization','architecture','parameter_limit','imitation','legacy_opponents'}
         require(config['initialization']=='random' and config['architecture']=='brass-four-seat-mlp-resnet/1.0.0'
                 and config['parameter_limit']==2000000,'Fresh residual-model contract required')
         require(type(config['imitation']) is dict and set(config['imitation'])==set(IMITATION),'Invalid imitation fields')
@@ -112,10 +117,11 @@ def validate_config(config):
         for key,default in [('retention',RETENTION),('population',POPULATION),('evaluation_schedule',EVALUATION_SCHEDULE),('legacy_budget',LEGACY_BUDGET)]:
             bounded_fields(config[key],default,key)
         legacy_budget_config(config['legacy_budget'])
-        require(config['legacy_budget']['search_workers']*config['execution']['heavy_processes']<=config['legacy_budget']['global_workers'],
-                'Heavy search workers exceed global CPU allowance')
-        require(config['execution']['search_workers_per_turn']*config['execution']['heavy_processes']<=config['legacy_budget']['global_workers'],
-                'Neural search workers exceed global CPU allowance')
+        bounded_fields(config['legacy_opponents'],LEGACY_OPPONENTS,'legacy_opponents')
+        available=config['execution']['cpu_budget']-config['execution']['cpu_reserve']
+        require(config['legacy_budget']['global_workers']==available and
+                max(config['legacy_budget']['search_workers'],config['execution']['search_workers_per_turn'])<=available,
+                'Search group exceeds queued CPU admission allowance')
         positive(config['audit_workers'],'audit_workers',integer=True)
         require(type(config['overlap_pools']) is bool and 0<config['search_wall_fraction']<=.25,'Invalid overlap/search fraction')
         require(set(config['update'])==set(UPDATE_V21) and set(config['execution'])==set(EXECUTION_V21),'2.1 requires revised update/execution')

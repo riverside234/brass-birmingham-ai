@@ -24,6 +24,7 @@ namespace BrassLegacyAI
     // copies only; neither its worker nor its callback receives a live engine object.
     public sealed class TurnCoordinator:IDisposable,IAiExecutionBackend,IAiTurnResources
     {
+        public const int SearchWorkers=2;
         readonly object sync=new object();
         readonly Stopwatch clock=Stopwatch.StartNew();
         readonly Ticket ticket;
@@ -57,7 +58,7 @@ namespace BrassLegacyAI
             {
                 if(cancellation.IsCancellationRequested)return Task.FromResult(0);
                 cfg.milliseconds=RemainingMilliseconds;
-                var d=new Planner(cards).Decide(view,legal,cfg,false,1,cancellation,Publish,ownIntent);
+                var d=RootForest.Decide(cards,view,legal,cfg,SearchWorkers,1,cancellation,Publish,ownIntent);
                 Publish(d.selected);
             }
             catch(Exception e){lock(sync)failure=e.GetType().Name+": "+e.Message;}

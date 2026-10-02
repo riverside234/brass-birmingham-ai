@@ -58,21 +58,11 @@ namespace BrassPatch.Statistics
             if(review==null)return;
             var parent=review.transform.Find("SafeArea")??review.transform;
             var font=Typeface(review.transform);
-            float unit=((RectTransform)review.transform).rect.width/Math.Max(1,Screen.width);if(unit<=0)unit=1;
-            var button=StatisticsWidgets.Button(parent,font,"Match statistics","Statistics",Vector2.zero,new Vector2(180,48)*unit,20*unit,()=>Open(session,false,session.BoardButton));
-            for(int i=0;i<3;i++) {
-                var bar=StatisticsWidgets.Rect(button.transform,"Chart icon "+i,new Vector2(12+i*6,-30+i*4)*unit,new Vector2(4,10+i*4)*unit);
-                bar.gameObject.AddComponent<Image>().color=StatisticsWidgets.Gold;bar.GetComponent<Image>().raycastTarget=false;
-            }
+            float unit=PixelUnit(parent);
+            var button=StatisticsEntrySurface.Create(parent,font,"Match statistics",new Vector2(240,64),unit,()=>Open(session,false,session.BoardButton));
             var rect=(RectTransform)button.transform;rect.anchorMin=rect.anchorMax=Vector2.zero;rect.pivot=Vector2.zero;
-            float bottom=20*unit;
-            // Stack above the existing review control when it occupies this corner.
-            foreach(var existing in parent.GetComponentsInChildren<Button>()) {
-                if(existing==button)continue;var er=(RectTransform)existing.transform;var corners=new Vector3[4];er.GetWorldCorners(corners);
-                var local=((RectTransform)parent).InverseTransformPoint(corners[1]);
-                if(local.x<-( ((RectTransform)parent).rect.width/2)+230*unit)bottom=Mathf.Max(bottom,local.y+((RectTransform)parent).rect.height/2+12*unit);
-            }
-            rect.anchoredPosition=new Vector2(20*unit,bottom);session.BoardButton=button;
+            session.BoardButton=button;
+            button.gameObject.AddComponent<StatisticsEntryGeometry>().Initialize(240,64,unit,true,session.Router);
             if(session.Router.IsViewCached<IEndOfGameView>())AttachResults(session.Router.GetView<IEndOfGameView>() as EndOfGameView,null);
         }
         public static void AttachResults(EndOfGameView view,Action exit)
@@ -80,14 +70,24 @@ namespace BrassPatch.Statistics
             if(view==null)return;var router=view.InputRegistration as Router;ReviewSession session;
             if(router==null||!routers.TryGetValue(router,out session)||!session.Ready||session.Disposed)return;
             var popup=view.transform.Find("SafeArea/Popup")??view.transform.Find("Popup");if(popup==null||popup.Find("Results statistics")!=null)return;
-            float unit=((RectTransform)view.transform).rect.width/Math.Max(1,Screen.width);if(unit<=0)unit=1;
-            Button button=null;button=StatisticsWidgets.Button(popup,Typeface(view.transform),"Results statistics","Statistics",Vector2.zero,new Vector2(168,44)*unit,20*unit,()=>Open(session,true,button));
-            var rect=(RectTransform)button.transform;rect.anchorMin=rect.anchorMax=new Vector2(.5f,0);rect.pivot=new Vector2(.5f,0);rect.anchoredPosition=new Vector2(0,30*unit);
+            float unit=PixelUnit(popup);
+            Button button=null;button=StatisticsEntrySurface.Create(popup,Typeface(view.transform),"Results statistics",new Vector2(240,60),unit,()=>Open(session,true,button));
+            var rect=(RectTransform)button.transform;rect.anchorMin=rect.anchorMax=new Vector2(.5f,0);rect.pivot=new Vector2(.5f,0);
+            button.gameObject.AddComponent<StatisticsEntryGeometry>().Initialize(240,60,unit,false,session.Router);
         }
         static TMP_FontAsset Typeface(Transform parent)
         {
             var label=parent.GetComponentsInChildren<TextMeshProUGUI>(true).FirstOrDefault(t=>t.font!=null);
             return label==null?TMP_Settings.defaultFontAsset:label.font;
+        }
+        internal static float PixelUnit(Transform target)
+        {
+            var rect=target as RectTransform;var canvas=target.GetComponentInParent<Canvas>();
+            if(rect==null||canvas==null)return 1;
+            var root=canvas.rootCanvas;var camera=root.renderMode==RenderMode.ScreenSpaceOverlay?null:root.worldCamera;
+            var corners=new Vector3[4];rect.GetWorldCorners(corners);
+            float pixels=Vector2.Distance(RectTransformUtility.WorldToScreenPoint(camera,corners[0]),RectTransformUtility.WorldToScreenPoint(camera,corners[3]));
+            return pixels<=0?1:rect.rect.width/pixels;
         }
         static void Open(ReviewSession session,bool results,Button opener)
         {
@@ -115,6 +115,7 @@ namespace BrassPatch.Statistics
         }
         public static void ProcessInput(Router router)
         {
+            if (BrassPatch.CardTracker.CardTrackerEntryPoints.ProcessInput(router)) return;
             ReviewSession session;
             if(routers.TryGetValue(router,out session)&&!session.Disposed) {
                 if(session.ClosedFrame==Time.frameCount)return;
@@ -148,6 +149,47 @@ namespace BrassPatch.Statistics
                 if(animations.TryGetValue(typeof(StatisticsPanel),out animation)){animation.Kill();animations.Remove(typeof(StatisticsPanel));}
                 UnityEngine.Object.Destroy(session.Panel.gameObject);
             }
+        }
+    }
+    public sealed class StatisticsEntryGeometry : MonoBehaviour
+    {
+        float width,height,previous;
+        bool board;
+        Router router;CanvasGroup group;
+        public void Initialize(float w,float h,float unit,bool onBoard,Router owner){width=w;height=h;previous=unit;board=onBoard;router=owner;group=gameObject.AddComponent<CanvasGroup>();Place(unit);}
+        static Rect Bounds(RectTransform parent,RectTransform child)
+        {var c=new Vector3[4];child.GetWorldCorners(c);var p=c.Select(v=>(Vector2)parent.InverseTransformPoint(v)).ToArray();return Rect.MinMaxRect(p.Min(v=>v.x),p.Min(v=>v.y),p.Max(v=>v.x),p.Max(v=>v.y));}
+        void Place(float unit)
+        {
+            var rect=(RectTransform)transform;var parent=(RectTransform)transform.parent;
+            if(board){
+                // Use the bottom row beside the original score-summary control.
+                // Do not climb above its animated/oversized parent panel.
+                float left=20*unit,bottom=20*unit;
+                foreach(var other in parent.GetComponentsInChildren<Button>()){
+                    if(other.transform==transform)continue;var bounds=Bounds(parent,(RectTransform)other.transform);
+                    var candidate=new Rect(parent.rect.xMin+left,parent.rect.yMin+bottom,width*unit,height*unit);
+                    if(candidate.Overlaps(bounds))left=Mathf.Max(left,bounds.xMax-parent.rect.xMin+12*unit);
+                }
+                rect.anchoredPosition=new Vector2(left,bottom);
+            }else{
+                // Center below the original results popup with a physical gap.
+                var safe=parent.parent as RectTransform;
+                float bottom=-(height+14)*unit;
+                if(safe!=null)bottom=Mathf.Max(bottom,Bounds(parent,safe).yMin-parent.rect.yMin+20*unit);
+                rect.anchoredPosition=new Vector2(0,bottom);
+            }
+        }
+        void LateUpdate()
+        {
+            if(width<=0)return;
+            if(board&&router!=null){bool visible=!router.IsViewVisible<IEndOfGameView>()&&!router.IsViewVisible<StatisticsPanel>();group.alpha=visible?1:0;group.interactable=group.blocksRaycasts=visible;}
+            float unit=StatisticsEntryPoints.PixelUnit(transform.parent);if(Mathf.Abs(unit-previous)<.001f)return;
+            var rect=(RectTransform)transform;rect.sizeDelta=new Vector2(width,height)*unit;
+            foreach(var label in GetComponentsInChildren<TextMeshProUGUI>()){label.fontSize=24*unit;label.rectTransform.offsetMin=new Vector2(45,2)*unit;label.rectTransform.offsetMax=new Vector2(-8,-2)*unit;}
+            foreach(Transform child in transform)if(child.name.StartsWith("Chart icon")){var icon=(RectTransform)child;icon.anchoredPosition*=unit/previous;icon.sizeDelta*=unit/previous;}
+            Place(unit);
+            previous=unit;
         }
     }
 }

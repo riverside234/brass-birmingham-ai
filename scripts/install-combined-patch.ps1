@@ -1,10 +1,10 @@
-param([string]$GameRoot=(Split-Path -Parent $PSScriptRoot),[string[]]$SaveDataPaths=@())
+param([string]$GameRoot=(Split-Path -Parent $PSScriptRoot),[string[]]$SaveDataPaths=@(),[string]$BuildDirectory)
 $ErrorActionPreference='Stop'
 . (Join-Path $PSScriptRoot 'patch-install-common.ps1')
 $repo=Split-Path -Parent $PSScriptRoot
 $game=(Resolve-Path -LiteralPath $GameRoot).Path
 $managed=Join-Path $game 'BrassBirminghamUnity_Data/Managed'
-$build=Join-Path $repo 'artifacts/patch-build'
+$build=if($BuildDirectory){(Resolve-Path -LiteralPath $BuildDirectory).Path}else{Join-Path $repo 'artifacts/patch-build'}
 $recordPath=Join-Path $repo 'artifacts/patch-installation.json'
 $intentPath=Join-Path $repo 'artifacts/patch-installation.pending.json'
 $manifest=Read-BrassJson (Join-Path $build 'build-manifest.json')
@@ -15,6 +15,11 @@ $original=Join-Path $repo 'artifacts/patch-baseline/Assembly-CSharp.dll'
 if(-not(Test-Path -LiteralPath $original) -or (Get-FileHash -LiteralPath $original).Hash -ne $BrassStockSha256){throw 'Original backup is missing or changed; no installation was performed.'}
 $previous=Read-BrassJson $recordPath
 $pending=Read-BrassJson $intentPath
+if($manifest.version -in @('1.4.12','1.4.13','1.4.15','1.4.16','1.4.17','1.4.18','1.4.19','1.4.20')){
+ if(-not $previous -or $previous.status -ne 'installed' -or $previous.version -notin @($manifest.baseVersion,$manifest.version)){throw 'This revision requires its qualified baseline or the same installed release; rebase before installing.'}
+ $expectedPrior=if($previous.version -eq $manifest.version){$manifest.files}else{$manifest.baseFiles}
+ foreach($file in $expectedPrior){if(@($previous.files|Where-Object {$_.name -eq $file.name -and $_.sha256 -eq $file.sha256}).Count -ne 1){throw 'Installed baseline record changed; rebase before installing.'}}
+}
 foreach($item in @($previous,$pending)){if($item -and $item.gameRoot -ne $game){throw 'Installation record belongs to a different game directory.'}}
 $paths=@(Get-BrassSaveDataPaths @($previous,$pending) $SaveDataPaths)
 $known=@($previous,$pending,$manifest)
@@ -68,5 +73,5 @@ try{
  }else{Write-Warning 'The installation was already incomplete. Its recovery record was retained; rerun installation after resolving the file error.'}
  throw $installError
 }
-Write-Output ("Installed combined patch " + $manifest.version + ": AI/gameplay repairs and city highlights. Online play remains disabled.")
+Write-Output ("Installed combined patch " + $manifest.version + ". Online play remains disabled.")
 

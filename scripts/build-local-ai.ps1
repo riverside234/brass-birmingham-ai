@@ -16,6 +16,9 @@ $resources+=@(foreach($key in 'balanced','rail-tempo','cotton','goods-beer','sup
 $resources+=@(foreach($key in 'balanced','rail-tempo','cotton','goods-beer','supplier','pottery-flex'){
  '/resource:"'+(Join-Path $Root ('configs/legacy-ai/'+$key+'-v3-masked.json'))+'",BrassLegacyAI.Profiles.'+$key+'-v3-masked.json'
 })
+$resources+=@(foreach($key in 'balanced','rail-tempo','cotton','goods-beer','supplier','pottery-flex'){
+ '/resource:"'+(Join-Path $Root ('configs/legacy-ai/'+$key+'-v3-masked-strength.json'))+'",BrassLegacyAI.Profiles.'+$key+'-v3-masked-strength.json'
+})
 $rsp=Join-Path $build 'local-ai.rsp'
 @('/nologo','/target:library','/langversion:7.3','/nostdlib+','/deterministic+','/optimize+',('/out:"'+$helper+'"'))+$references+$sources+$resources | Set-Content -LiteralPath $rsp -Encoding UTF8
 & $compiler ('@'+$rsp)

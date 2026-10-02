@@ -71,8 +71,10 @@ def validate_evaluation_config(config):
         require(config['include_legacy']==any(n.endswith('v3') for n in config['lineups']),'Legacy flag differs from selected lineups')
         require('heldout-pottery-v3' not in config['lineups'] or config['panel']=='full','Holdout belongs to formal panel')
         bounded_fields(config['retention'],RETENTION,'retention');legacy_budget_config(config['legacy_budget'])
-        require(max(config['execution'].get('search_workers_per_turn',1),config['legacy_budget']['search_workers'])*
-            config['legacy_workers']<=config['legacy_budget']['global_workers'],'Evaluation searches exceed global CPU allowance')
+        available=config['execution']['cpu_budget']-config['execution']['cpu_reserve']
+        require(config['legacy_budget']['global_workers']==available and
+            max(config['execution']['search_workers_per_turn'],config['legacy_budget']['search_workers'])<=available,
+            'Evaluation search group exceeds queued CPU admission allowance')
     require(set(config) == expected, 'Unknown or missing evaluation config field')
     require(config['format'] in ('step5-evaluation-config/1.3.0',) and config['players'] == 4,
             'Evaluation requires the four-player config')

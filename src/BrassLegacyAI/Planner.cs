@@ -7,11 +7,11 @@ using Newtonsoft.Json.Linq;
 using BrassHost;
 namespace BrassLegacyAI
 {
-    public sealed class Profile
+    public sealed partial class Profile
     {
         public string id,mode="masked_ismcts";
-        public int simulations=100000,root_top_k=16,interior_top_k=8,max_choices=512;
-        public double exploration=1.4;
+        public int simulations=100000,root_top_k=4,interior_top_k=2,max_choices=512;
+        public double exploration=0.6;
         public int player_count=4,work_limit=160,first_width=24,beam=10,second_width=12;
         // Lab replicas partition root branches; each still produces a complete
         // cash-safe incumbent. The installed/frozen profiles default to serial.
@@ -32,6 +32,7 @@ namespace BrassLegacyAI
             if(new[]{p.credible_window,p.rail_preference,p.style_weight,p.proposal_fraction}.Any(x=>double.IsNaN(x) || double.IsInfinity(x)))throw new Exception("nonfinite_profile");
             if(p.player_count!=4 || p.mode!="masked_ismcts" || p.work_limit<1 || p.milliseconds<0 || double.IsNaN(p.milliseconds) || double.IsInfinity(p.milliseconds) || p.first_width<1 || p.beam<1 || p.second_width<1 || string.IsNullOrEmpty(p.id) || !Tactics.Styles.Contains(p.tactic) || p.reply_candidates<1 || p.reply_scenarios<1 || p.reply_confirmation<1 || p.reply_work<1 || p.proposal_fraction<=0 || p.proposal_fraction>=1 || p.credible_window<0 || p.style_weight<0)throw new Exception("profile_contract");
             if(p.simulations<1 || p.root_top_k<1 || p.interior_top_k<1 || p.max_choices<32 || p.max_choices>4096 || double.IsNaN(p.exploration) || double.IsInfinity(p.exploration) || p.exploration<=0)throw new Exception("masked_search_contract");
+            ValidateSearch(p);
             return p;
         }
     }
@@ -81,7 +82,8 @@ namespace BrassLegacyAI
         static IEnumerable<Choice> Proposals(JObject view,List<Choice> legal,int limit,Profile profile,IntentState intent)
         {
             // Used only for a fast complete legal incumbent, never a beam search.
-            return legal.OrderByDescending(c=>Evaluator.Proposal(view,c,profile.conversion_policy==1)+Tactics.Bias(profile,intent,c)).ThenBy(c=>c.id,StringComparer.Ordinal).Take(1);
+            var values=Evaluator.ProposalValues(view,legal,profile.conversion_policy==1);
+            return legal.Select((c,i)=>new{c,value=values[i]+Tactics.Bias(profile,intent,c)}).OrderByDescending(x=>x.value).ThenBy(x=>x.c.id,StringComparer.Ordinal).Take(Math.Max(1,limit)).Select(x=>x.c);
         }
         static string[] GreedyFinish(Session s,List<string> prefix,string first,bool extend,int beerPreference=0)
         {
@@ -100,7 +102,7 @@ namespace BrassLegacyAI
                     if(c.kind=="develop" && choices.Any(x=>x.kind=="finish"))
                     {
                         var tile=Conversion.Player(view,s.seat)["mat"].Single(m=>(string)m["type"]==c.industry)["tiles"].First();
-                        if((int)tile["level"]>1)c=choices.Single(x=>x.kind=="finish");
+                        if(s.profile.conversion_policy==1?InvestmentOpportunity.Development(view,c.industry)<=0:(int)tile["level"]>1)c=choices.Single(x=>x.kind=="finish");
                     }
                 }
                 path.Add(c.id);h.SearchApply(c.id);
@@ -109,7 +111,11 @@ namespace BrassLegacyAI
         }
         static Plan Score(Session s,List<string[]> actions)
         {
-            var h=s.World(actions.SelectMany(a=>a));var view=s.View(h);
+            var h=s.World(actions.SelectMany(a=>a));return ScoreWorld(s,actions,h);
+        }
+        static Plan ScoreWorld(Session s,List<string[]> actions,Host h)
+        {
+            var view=s.View(h);
             if(h.Remaining==0 && ((string)view["context"]["era"]=="RailEra" || Conversion.Intro(view)) &&
                 (int)view["context"]["round"]==Conversion.RoundLimit(view) &&
                 (int)view["context"]["turn"]==s.profile.player_count)
@@ -136,7 +142,10 @@ namespace BrassLegacyAI
                 if(!h.Terminal)throw new InvalidOperationException("final_settlement_not_terminal");
                 view=s.View(h);
             }
-            var ledger=Evaluator.Evaluate(view,s.seat,s.profile.conversion_policy==1);var p=new Plan{actions=actions,ledger=ledger,score=ledger.score};
+            var ledger=Evaluator.Evaluate(view,s.seat,s.profile.conversion_policy==1);
+            if(s.profile.conversion_policy==1 && !ledger.win_share.HasValue)
+            {ledger.sale_tempo=-SaleTiming.SinglePenalty(s.root,actions);ledger.canal_opportunity=-NetworkOptions.CanalPenalty(s.root,actions);ledger.score+=ledger.sale_tempo+ledger.canal_opportunity;}
+            var p=new Plan{actions=actions,ledger=ledger,score=ledger.score};
             if(s.profile.cash_policy==1)
             {
                 p.cash=CashManagement.Project(view,s.seat);

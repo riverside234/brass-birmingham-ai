@@ -1,4 +1,4 @@
-param([string]$GameRoot=(Split-Path -Parent $PSScriptRoot),[string]$PackageVersion='1.4.9')
+param([string]$GameRoot=(Split-Path -Parent $PSScriptRoot),[string]$PackageVersion='1.4.11')
 $ErrorActionPreference='Stop'
 $repo=Split-Path -Parent $PSScriptRoot
 $toolsDir=Join-Path $repo 'artifacts/patch-tools'

@@ -1,0 +1,3623 @@
+{
+  "index": 1,
+  "control": "bank-d82438ccec287dbc8a64",
+  "seed": 843100,
+  "rotation": 1,
+  "completed": true,
+  "lineup": [
+    [
+      "old",
+      "rail-tempo"
+    ],
+    [
+      "new",
+      "balanced"
+    ],
+    [
+      "old",
+      "balanced"
+    ],
+    [
+      "new",
+      "rail-tempo"
+    ]
+  ],
+  "result": {
+    "objective": "win-share/1.0.0",
+    "seats": [
+      {
+        "seat": 0,
+        "vp": 56,
+        "income": 3,
+        "cash": 13,
+        "rank": 3,
+        "utility": 0.0
+      },
+      {
+        "seat": 1,
+        "vp": 72,
+        "income": 12,
+        "cash": 12,
+        "rank": 2,
+        "utility": 0.0
+      },
+      {
+        "seat": 2,
+        "vp": 35,
+        "income": -6,
+        "cash": 36,
+        "rank": 4,
+        "utility": 0.0
+      },
+      {
+        "seat": 3,
+        "vp": 72,
+        "income": 13,
+        "cash": 30,
+        "rank": 1,
+        "utility": 1.0
+      }
+    ]
+  },
+  "metrics": [
+    {
+      "role": "old",
+      "style": "rail-tempo",
+      "seat": 0,
+      "vp": 56,
+      "win_share": 0.0,
+      "first_place": 0,
+      "rank": 3,
+      "mean_turn_seconds": 1.2928124999889405,
+      "max_turn_seconds": 1.6559999999590218,
+      "nodes": 807,
+      "builds": 5,
+      "sum_build_level": 9,
+      "canal_builds": 4,
+      "canal_level2plus": 2,
+      "rail_builds": 1,
+      "rail_level3plus": 1,
+      "development_actions": 12,
+      "sale_actions": 1,
+      "sold_tiles": 1,
+      "group_sale_actions": 0
+    },
+    {
+      "role": "new",
+      "style": "balanced",
+      "seat": 1,
+      "vp": 72,
+      "win_share": 0.0,
+      "first_place": 0,
+      "rank": 2,
+      "mean_turn_seconds": 1.363187500013737,
+      "max_turn_seconds": 2.375,
+      "nodes": 641,
+      "builds": 14,
+      "sum_build_level": 31,
+      "canal_builds": 4,
+      "canal_level2plus": 0,
+      "rail_builds": 10,
+      "rail_level3plus": 5,
+      "development_actions": 3,
+      "sale_actions": 3,
+      "sold_tiles": 3,
+      "group_sale_actions": 0
+    },
+    {
+      "role": "old",
+      "style": "balanced",
+      "seat": 2,
+      "vp": 35,
+      "win_share": 0.0,
+      "first_place": 0,
+      "rank": 4,
+      "mean_turn_seconds": 1.1924375000380678,
+      "max_turn_seconds": 1.6560000001918525,
+      "nodes": 860,
+      "builds": 5,
+      "sum_build_level": 11,
+      "canal_builds": 5,
+      "canal_level2plus": 3,
+      "rail_builds": 0,
+      "rail_level3plus": 0,
+      "development_actions": 14,
+      "sale_actions": 2,
+      "sold_tiles": 2,
+      "group_sale_actions": 0
+    },
+    {
+      "role": "new",
+      "style": "rail-tempo",
+      "seat": 3,
+      "vp": 72,
+      "win_share": 1.0,
+      "first_place": 1,
+      "rank": 1,
+      "mean_turn_seconds": 1.254750000036438,
+      "max_turn_seconds": 2.0780000002123415,
+      "nodes": 527,
+      "builds": 14,
+      "sum_build_level": 25,
+      "canal_builds": 8,
+      "canal_level2plus": 2,
+      "rail_builds": 6,
+      "rail_level3plus": 2,
+      "development_actions": 2,
+      "sale_actions": 4,
+      "sold_tiles": 4,
+      "group_sale_actions": 0
+    }
+  ],
+  "turns": [
+    {
+      "seat": 1,
+      "era": "CanalEra",
+      "round": 1,
+      "seconds": 2.3280000002123415,
+      "nodes": 16,
+      "actions": [
+        "build"
+      ],
+      "complete_actions": [
+        [
+          "build|Derby:0|CottonMill|industry:CottonMill+Manufacturer||",
+          "finish|||||"
+        ]
+      ],
+      "events": [
+        {
+          "kind": "build",
+          "industry": "CottonMill",
+          "level": 1,
+          "target": "Derby:0"
+        }
+      ],
+      "cash": 17,
+      "income": 0,
+      "ledger": {
+        "banked": 0.0,
+        "industries": 3.0,
+        "links": 0.0,
+        "secured_links": 0.0,
+        "forecast_links": 0.0,
+        "industry_reserve": 0.0,
+        "finance": 2.250524690340308,
+        "development": 1.0625712499999997,
+        "rival": 0.7894819267848499,
+        "liquidity": 0.0,
+        "sale_tempo": 0.0,
+        "score": 5.5236140135554574,
+        "era_strategy": "income-conversion-and-carryover",
+        "final_income": 0,
+        "final_cash": 0,
+        "units": "heuristic VP equivalent, not a win probability"
+      },
+      "completed": 0,
+      "cpu_batching": {
+        "requests": 4,
+        "cache_hits": 0,
+        "coalesced": 3,
+        "batches": 1,
+        "max_batch": 1,
+        "pending": 0
+      }
+    },
+    {
+      "seat": 3,
+      "era": "CanalEra",
+      "round": 1,
+      "seconds": 2.0780000002123415,
+      "nodes": 16,
+      "actions": [
+        "build"
+      ],
+      "complete_actions": [
+        [
+          "build|Derby:1|CottonMill|industry:CottonMill+Manufacturer||",
+          "finish|||||"
+        ]
+      ],
+      "events": [
+        {
+          "kind": "build",
+          "industry": "CottonMill",
+          "level": 1,
+          "target": "Derby:1"
+        }
+      ],
+      "cash": 17,
+      "income": 0,
+      "ledger": {
+        "banked": 0.0,
+        "industries": 3.0,
+        "links": 0.0,
+        "secured_links": 0.0,
+        "forecast_links": 0.0,
+        "industry_reserve": 0.0,
+        "finance": 2.250524690340308,
+        "development": 0.642044,
+        "rival": 0.9450944442612554,
+        "liquidity": 0.0,
+        "sale_tempo": 0.0,
+        "score": 4.947474246079053,
+        "era_strategy": "income-conversion-and-carryover",
+        "final_income": 0,
+        "final_cash": 0,
+        "units": "heuristic VP equivalent, not a win probability"
+      },
+      "completed": 0,
+      "cpu_batching": {
+        "requests": 4,
+        "cache_hits": 0,
+        "coalesced": 3,
+        "batches": 1,
+        "max_batch": 1,
+        "pending": 0
+      }
+    },
+    {
+      "seat": 2,
+      "era": "CanalEra",
+      "round": 1,
+      "seconds": 1.6560000001918525,
+      "nodes": 16,
+      "actions": [
+        "build"
+      ],
+      "complete_actions": [
+        [
+          "build|Worcester:0|CottonMill|industry:CottonMill+Manufacturer||",
+          "finish|||||"
+        ]
+      ],
+      "events": [
+        {
+          "kind": "build",
+          "industry": "CottonMill",
+          "level": 1,
+          "target": "Worcester:0"
+        }
+      ],
+      "cash": 17,
+      "income": 0,
+      "ledger": {
+        "banked": 0.0,
+        "industries": 3.0,
+        "links": 0.0,
+        "finance": 2.250524690340308,
+        "development": 0.0,
+        "rival": 0.9450944442612554,
+        "liquidity": 0.0,
+        "score": 4.305430246079053,
+        "final_income": 0,
+        "final_cash": 0,
+        "units": "heuristic VP equivalent, not a win probability"
+      },
+      "completed": 0,
+      "cpu_batching": {}
+    },
+    {
+      "seat": 0,
+      "era": "CanalEra",
+      "round": 1,
+      "seconds": 1.625,
+      "nodes": 16,
+      "actions": [
+        "develop"
+      ],
+      "complete_actions": [
+        [
+          "develop||Brewery|location:Worcester||",
+          "iron|market||||",
+          "finish|||||"
+        ]
+      ],
+      "events": [
+        {
+          "kind": "develop",
+          "industry": "Brewery",
+          "level": 1,
+          "target": null
+        }
+      ],
+      "cash": 17,
+      "income": 0,
+      "ledger": {
+        "banked": 0.0,
+        "industries": 0.0,
+        "links": 0.0,
+        "finance": 3.965894662928537,
+        "development": 0.0,
+        "rival": 0.9450944442612554,
+        "liquidity": 0.0,
+        "score": 3.0208002186672815,
+        "final_income": 0,
+        "final_cash": 0,
+        "units": "heuristic VP equivalent, not a win probability"
+      },
+      "completed": 0,
+      "cpu_batching": {}
+    },
+    {
+      "seat": 0,
+      "era": "CanalEra",
+      "round": 2,
+      "seconds": 1.0309999999590218,
+      "nodes": 50,
+      "actions": [
+        "develop",
+        "loan"
+      ],
+      "complete_actions": [
+        [
+          "develop||Brewery|industry:CottonMill+Manufacturer||",
+          "iron|market||||",
+          "finish|||||"
+        ],
+        [
+          "loan|||industry:CottonMill+Manufacturer||",
+          "finish|||||"
+        ]
+      ],
+      "events": [
+        {
+          "kind": "develop",
+          "industry": "Brewery",
+          "level": 1,
+          "target": null
+        }
+      ],
+      "cash": 15,
+      "income": 0,
+      "ledger": {
+        "banked": 0.0,
+        "industries": 0.0,
+        "links": 0.0,
+        "finance": 6.242502672257128,
+        "development": 1.3,
+        "rival": 0.9431973989627299,
+        "liquidity": 0.0,
+        "score": 6.599305273294398,
+        "final_income": 0,
+        "final_cash": 0,
+        "units": "heuristic VP equivalent, not a win probability"
+      },
+      "completed": 0,
+      "cpu_batching": {}
+    },
+    {
+      "seat": 1,
+      "era": "CanalEra",
+      "round": 2,
+      "seconds": 1.0630000000819564,
+      "nodes": 52,
+      "actions": [
+        "network",
+        "sell"
+      ],
+      "complete_actions": [
+        [
+          "network|CanalDerbyNottingham||industry:CoalMine||",
+          "finish|||||"
+        ],
+        [
+          "sell|Derby:0||industry:IronWorks|Nottingham:1|",
+          "beer|merchant:Nottingham:1||||",
+          "finish|||||"
+        ]
+      ],
+      "events": [],
+      "cash": 5,
+      "income": 0,
+      "ledger": {
+        "banked": 3.0,
+        "industries": 5.0,
+        "links": 3.25,
+        "secured_links": 3.0,
+        "forecast_links": 0.25,
+        "industry_reserve": 0.0,
+        "finance": 4.5140230857958175,
+        "development": 0.9079979999999995,
+        "rival": 1.123650481006283,
+        "liquidity": 0.0,
+        "sale_tempo": 0.0,
+        "score": 15.548370604789532,
+        "era_strategy": "income-conversion-and-carryover",
+        "final_income": 0,
+        "final_cash": 0,
+        "units": "heuristic VP equivalent, not a win probability"
+      },
+      "completed": 0,
+      "cpu_batching": {
+        "requests": 20,
+        "cache_hits": 13,
+        "coalesced": 5,
+        "batches": 2,
+        "max_batch": 1,
+        "pending": 0
+      }
+    },
+    {
+      "seat": 3,
+      "era": "CanalEra",
+      "round": 2,
+      "seconds": 1.172000000020489,
+      "nodes": 36,
+      "actions": [
+        "loan",
+        "build"
+      ],
+      "complete_actions": [
+        [
+          "loan|||location:Derby||",
+          "finish|||||"
+        ],
+        [
+          "build|Coalbrookdale:0|Brewery|location:Coalbrookdale||",
+          "iron|market||||",
+          "finish|||||"
+        ]
+      ],
+      "events": [
+        {
+          "kind": "build",
+          "industry": "Brewery",
+          "level": 1,
+          "target": "Coalbrookdale:0"
+        }
+      ],
+      "cash": 5,
+      "income": 0,
+      "ledger": {
+        "banked": 0.0,
+        "industries": 7.5,
+        "links": 0.0,
+        "secured_links": 0.0,
+        "forecast_links": 0.0,
+        "industry_reserve": 0.0,
+        "finance": 5.400884504722286,
+        "development": 0.48081800000000013,
+        "rival": 2.940124155443247,
+        "liquidity": 0.0,
+        "sale_tempo": 0.0,
+        "score": 10.441578349279037,
+        "era_strategy": "income-conversion-and-carryover",
+        "final_income": 0,
+        "final_cash": 0,
+        "units": "heuristic VP equivalent, not a win probability"
+      },
+      "completed": 0,
+      "cpu_batching": {
+        "requests": 16,
+        "cache_hits": 10,
+        "coalesced": 4,
+        "batches": 2,
+        "max_batch": 1,
+        "pending": 0
+      }
+    },
+    {
+      "seat": 2,
+      "era": "CanalEra",
+      "round": 2,
+      "seconds": 1.3440000000409782,
+      "nodes": 66,
+      "actions": [
+        "network",
+        "sell"
+      ],
+      "complete_actions": [
+        [
+          "network|CanalWorcesterGloucester||industry:Brewery||",
+          "finish|||||"
+        ],
+        [
+          "sell|Worcester:0||industry:Pottery|Gloucester:0|",
+          "beer|merchant:Gloucester:0||||",
+          "bonus_develop||IronWorks|||",
+          "finish|||||"
+        ]
+      ],
+      "events": [
+        {
+          "kind": "bonus_develop",
+          "industry": "IronWorks",
+          "level": 1,
+          "target": null
+        }
+      ],
+      "cash": 5,
+      "income": 0,
+      "ledger": {
+        "banked": 0.0,
+        "industries": 5.0,
+        "links": 3.0,
+        "finance": 4.5140230857958175,
+        "development": 1.3,
+        "rival": 2.940124155443247,
+        "liquidity": 0.0,
+        "score": 10.87389893035257,
+        "final_income": 0,
+        "final_cash": 0,
+        "units": "heuristic VP equivalent, not a win probability"
+      },
+      "completed": 0,
+      "cpu_batching": {}
+    },
+    {
+      "seat": 0,
+      "era": "CanalEra",
+      "round": 3,
+      "seconds": 1.202999999979511,
+      "nodes": 44,
+      "actions": [
+        "build",
+        "network"
+      ],
+      "complete_actions": [
+        [
+          "build|Coventry:0|Pottery|industry:Pottery||",
+          "iron|market||||",
+          "finish|||||"
+        ],
+        [
+          "network|CanalBirminghamCoventry||industry:IronWorks||",
+          "finish|||||"
+        ]
+      ],
+      "events": [
+        {
+          "kind": "build",
+          "industry": "Pottery",
+          "level": 1,
+          "target": "Coventry:0"
+        }
+      ],
+      "cash": 40,
+      "income": -3,
+      "ledger": {
+        "banked": 0.0,
+        "industries": 6.0,
+        "links": 0.6,
+        "finance": 1.2963873444031329,
+        "development": 1.56,
+        "rival": 3.03696726743332,
+        "liquidity": 0.0,
+        "score": 6.419420076969812,
+        "final_income": 0,
+        "final_cash": 0,
+        "units": "heuristic VP equivalent, not a win probability"
+      },
+      "completed": 0,
+      "cpu_batching": {}
+    },
+    {
+      "seat": 1,
+      "era": "CanalEra",
+      "round": 3,
+      "seconds": 1.0939999998081475,
+      "nodes": 34,
+      "actions": [
+        "network",
+        "loan"
+      ],
+      "complete_actions": [
+        [
+          "network|CanalBelperDerby||location:Worcester||",
+          "finish|||||"
+        ],
+        [
+          "loan|||location:BurtonOnTrent||",
+          "finish|||||"
+        ]
+      ],
+      "events": [],
+      "cash": 5,
+      "income": 3,
+      "ledger": {
+        "banked": 3.0,
+        "industries": 5.0,
+        "links": 5.64,
+        "secured_links": 4.0,
+        "forecast_links": 1.64,
+        "industry_reserve": 0.0,
+        "finance": 6.921440199199187,
+        "development": 1.053,
+        "rival": 2.34936726743332,
+        "liquidity": 0.0,
+        "sale_tempo": 0.0,
+        "score": 19.26507293176587,
+        "era_strategy": "income-conversion-and-carryover",
+        "final_income": 0,
+        "final_cash": 0,
+        "units": "heuristic VP equivalent, not a win probability"
+      },
+      "completed": 0,
+      "cpu_batching": {
+        "requests": 17,
+        "cache_hits": 13,
+        "coalesced": 2,
+        "batches": 2,
+        "max_batch": 1,
+        "pending": 0
+      }
+    },
+    {
+      "seat": 2,
+      "era": "CanalEra",
+      "round": 3,
+      "seconds": 1.0940000000409782,
+      "nodes": 54,
+      "actions": [
+        "loan",
+        "develop"
+      ],
+      "complete_actions": [
+        [
+          "loan|||location:BurtonOnTrent||",
+          "finish|||||"
+        ],
+        [
+          "develop||Brewery|location:Dudley||",
+          "iron|market||||",
+          "develop||Brewery|||",
+          "iron|market||||",
+          "finish|||||"
+        ]
+      ],
+      "events": [
+        {
+          "kind": "develop",
+          "industry": "Brewery",
+          "level": 1,
+          "target": null
+        },
+        {
+          "kind": "develop",
+          "industry": "Brewery",
+          "level": 1,
+          "target": null
+        }
+      ],
+      "cash": 5,
+      "income": 3,
+      "ledger": {
+        "banked": 0.0,
+        "industries": 5.0,
+        "links": 3.0,
+        "finance": 6.1847522538513315,
+        "development": 2.6,
+        "rival": 3.701059235855854,
+        "liquidity": 0.0,
+        "score": 13.08369301799548,
+        "final_income": 0,
+        "final_cash": 0,
+        "units": "heuristic VP equivalent, not a win probability"
+      },
+      "completed": 0,
+      "cpu_batching": {}
+    },
+    {
+      "seat": 3,
+      "era": "CanalEra",
+      "round": 3,
+      "seconds": 1.077999999979511,
+      "nodes": 35,
+      "actions": [
+        "sell",
+        "build"
+      ],
+      "complete_actions": [
+        [
+          "sell|Derby:1||industry:CoalMine|Nottingham:1|",
+          "beer|Coalbrookdale:0||||",
+          "finish|||||"
+        ],
+        [
+          "build|Stafford:0|Brewery|location:Stafford||",
+          "iron|market||||",
+          "finish|||||"
+        ]
+      ],
+      "events": [
+        {
+          "kind": "build",
+          "industry": "Brewery",
+          "level": 1,
+          "target": "Stafford:0"
+        }
+      ],
+      "cash": 24,
+      "income": -3,
+      "ledger": {
+        "banked": 0.0,
+        "industries": 10.0,
+        "links": 0.0,
+        "secured_links": 0.0,
+        "forecast_links": 0.0,
+        "industry_reserve": 0.0,
+        "finance": 6.55099621774031,
+        "development": 0.9165,
+        "rival": 3.765859235855854,
+        "liquidity": 0.0,
+        "sale_tempo": 0.0,
+        "score": 13.701636981884455,
+        "era_strategy": "income-conversion-and-carryover",
+        "final_income": 0,
+        "final_cash": 0,
+        "units": "heuristic VP equivalent, not a win probability"
+      },
+      "completed": 0,
+      "cpu_batching": {
+        "requests": 12,
+        "cache_hits": 7,
+        "coalesced": 3,
+        "batches": 2,
+        "max_batch": 1,
+        "pending": 0
+      }
+    },
+    {
+      "seat": 1,
+      "era": "CanalEra",
+      "round": 4,
+      "seconds": 1.1410000000614673,
+      "nodes": 38,
+      "actions": [
+        "build",
+        "build"
+      ],
+      "complete_actions": [
+        [
+          "build|Belper:0|CottonMill|location:Belper||",
+          "finish|||||"
+        ],
+        [
+          "build|Stone:0|Brewery|location:Stone||",
+          "iron|market||||",
+          "finish|||||"
+        ]
+      ],
+      "events": [
+        {
+          "kind": "build",
+          "industry": "CottonMill",
+          "level": 1,
+          "target": "Belper:0"
+        },
+        {
+          "kind": "build",
+          "industry": "Brewery",
+          "level": 1,
+          "target": "Stone:0"
+        }
+      ],
+      "cash": 32,
+      "income": 0,
+      "ledger": {
+        "banked": 3.0,
+        "industries": 12.5,
+        "links": 6.82,
+        "secured_links": 6.0,
+        "forecast_links": 0.82,
+        "industry_reserve": 0.0,
+        "finance": 4.020642514141902,
+        "development": 2.270775,
+        "rival": 3.0489888718769076,
+        "liquidity": 0.0,
+        "sale_tempo": 0.0,
+        "score": 25.562428642264994,
+        "era_strategy": "income-conversion-and-carryover",
+        "final_income": 0,
+        "final_cash": 0,
+        "units": "heuristic VP equivalent, not a win probability"
+      },
+      "completed": 0,
+      "cpu_batching": {
+        "requests": 17,
+        "cache_hits": 9,
+        "coalesced": 6,
+        "batches": 2,
+        "max_batch": 1,
+        "pending": 0
+      }
+    },
+    {
+      "seat": 2,
+      "era": "CanalEra",
+      "round": 4,
+      "seconds": 1.125,
+      "nodes": 54,
+      "actions": [
+        "develop",
+        "build"
+      ],
+      "complete_actions": [
+        [
+          "develop||Brewery|industry:Brewery||",
+          "iron|market||||",
+          "finish|||||"
+        ],
+        [
+          "build|Kidderminster:1|CottonMill|location:Kidderminster||",
+          "finish|||||"
+        ]
+      ],
+      "events": [
+        {
+          "kind": "develop",
+          "industry": "Brewery",
+          "level": 2,
+          "target": null
+        },
+        {
+          "kind": "build",
+          "industry": "CottonMill",
+          "level": 1,
+          "target": "Kidderminster:1"
+        }
+      ],
+      "cash": 27,
+      "income": 0,
+      "ledger": {
+        "banked": 0.0,
+        "industries": 8.0,
+        "links": 3.0,
+        "finance": 3.2053907264188934,
+        "development": 2.6,
+        "rival": 4.741315652545542,
+        "liquidity": 0.0,
+        "score": 12.064075073873354,
+        "final_income": 0,
+        "final_cash": 0,
+        "units": "heuristic VP equivalent, not a win probability"
+      },
+      "completed": 0,
+      "cpu_batching": {}
+    },
+    {
+      "seat": 3,
+      "era": "CanalEra",
+      "round": 4,
+      "seconds": 1.218000000109896,
+      "nodes": 29,
+      "actions": [
+        "network",
+        "network"
+      ],
+      "complete_actions": [
+        [
+          "network|CanalKidderminsterCoalbrookdale||industry:CottonMill+Manufacturer||",
+          "finish|||||"
+        ],
+        [
+          "network|CanalStoneStafford||industry:CottonMill+Manufacturer||",
+          "finish|||||"
+        ]
+      ],
+      "events": [],
+      "cash": 17,
+      "income": 3,
+      "ledger": {
+        "banked": 0.0,
+        "industries": 9.5,
+        "links": 3.75,
+        "secured_links": 2.0,
+        "forecast_links": 1.75,
+        "industry_reserve": 0.0,
+        "finance": 6.045782398684163,
+        "development": 0.9165,
+        "rival": 4.453315652545542,
+        "liquidity": 0.0,
+        "sale_tempo": 0.0,
+        "score": 15.758966746138622,
+        "era_strategy": "income-conversion-and-carryover",
+        "final_income": 0,
+        "final_cash": 0,
+        "units": "heuristic VP equivalent, not a win probability"
+      },
+      "completed": 0,
+      "cpu_batching": {
+        "requests": 13,
+        "cache_hits": 6,
+        "coalesced": 5,
+        "batches": 2,
+        "max_batch": 1,
+        "pending": 0
+      }
+    },
+    {
+      "seat": 0,
+      "era": "CanalEra",
+      "round": 4,
+      "seconds": 1.4059999999590218,
+      "nodes": 66,
+      "actions": [
+        "network",
+        "loan"
+      ],
+      "complete_actions": [
+        [
+          "network|CanalBirminghamWorcester||location:Kidderminster||",
+          "finish|||||"
+        ],
+        [
+          "loan|||industry:Pottery||",
+          "finish|||||"
+        ]
+      ],
+      "events": [],
+      "cash": 14,
+      "income": -3,
+      "ledger": {
+        "banked": 0.0,
+        "industries": 3.8,
+        "links": 1.38,
+        "finance": 3.607822773954421,
+        "development": 1.56,
+        "rival": 4.4491756525455415,
+        "liquidity": 0.0,
+        "score": 5.89864712140888,
+        "final_income": 0,
+        "final_cash": 0,
+        "units": "heuristic VP equivalent, not a win probability"
+      },
+      "completed": 0,
+      "cpu_batching": {}
+    },
+    {
+      "seat": 0,
+      "era": "CanalEra",
+      "round": 5,
+      "seconds": 1.4379999998491257,
+      "nodes": 31,
+      "actions": [
+        "build",
+        "build"
+      ],
+      "complete_actions": [
+        [
+          "build|Derby:2|IronWorks|location:Derby||",
+          "coal|market||||",
+          "finish|||||"
+        ],
+        [
+          "build|Nuneaton:0|Brewery|location:Nuneaton||",
+          "iron|market||||",
+          "finish|||||"
+        ]
+      ],
+      "events": [
+        {
+          "kind": "build",
+          "industry": "IronWorks",
+          "level": 1,
+          "target": "Derby:2"
+        },
+        {
+          "kind": "build",
+          "industry": "Brewery",
+          "level": 2,
+          "target": "Nuneaton:0"
+        }
+      ],
+      "cash": 35,
+      "income": -6,
+      "ledger": {
+        "banked": 0.0,
+        "industries": 17.362499999999997,
+        "links": 1.8199999999999998,
+        "finance": 6.842023014802319,
+        "development": 2.8600000000000003,
+        "rival": 4.7975757063698286,
+        "liquidity": 0.0,
+        "score": 24.086947308432485,
+        "final_income": 0,
+        "final_cash": 0,
+        "units": "heuristic VP equivalent, not a win probability"
+      },
+      "completed": 0,
+      "cpu_batching": {}
+    },
+    {
+      "seat": 3,
+      "era": "CanalEra",
+      "round": 5,
+      "seconds": 1.1559999999590218,
+      "nodes": 36,
+      "actions": [
+        "build",
+        "build"
+      ],
+      "complete_actions": [
+        [
+          "build|Coventry:2|IronWorks|location:Coventry||",
+          "coal|market||||",
+          "finish|||||"
+        ],
+        [
+          "build|Coventry:2|IronWorks|industry:IronWorks||",
+          "coal|market||||",
+          "finish|||||"
+        ]
+      ],
+      "events": [
+        {
+          "kind": "build",
+          "industry": "IronWorks",
+          "level": 1,
+          "target": "Coventry:2"
+        },
+        {
+          "kind": "build",
+          "industry": "IronWorks",
+          "level": 2,
+          "target": "Coventry:2"
+        }
+      ],
+      "cash": 14,
+      "income": 3,
+      "ledger": {
+        "banked": 0.0,
+        "industries": 15.5465,
+        "links": 3.6475,
+        "secured_links": 2.0,
+        "forecast_links": 1.6475,
+        "industry_reserve": 0.0,
+        "finance": 7.762108983011722,
+        "development": 0.030602000000000008,
+        "rival": 4.826974142664417,
+        "liquidity": 0.0,
+        "sale_tempo": 0.0,
+        "score": 22.1597368403473,
+        "era_strategy": "income-conversion-and-carryover",
+        "final_income": 0,
+        "final_cash": 0,
+        "units": "heuristic VP equivalent, not a win probability"
+      },
+      "completed": 0,
+      "cpu_batching": {
+        "requests": 13,
+        "cache_hits": 6,
+        "coalesced": 5,
+        "batches": 2,
+        "max_batch": 1,
+        "pending": 0
+      }
+    },
+    {
+      "seat": 2,
+      "era": "CanalEra",
+      "round": 5,
+      "seconds": 1.3910000000614673,
+      "nodes": 64,
+      "actions": [
+        "network",
+        "loan"
+      ],
+      "complete_actions": [
+        [
+          "network|CanalWorcesterSouthWest||location:Derby||",
+          "finish|||||"
+        ],
+        [
+          "loan|||location:Leek||",
+          "finish|||||"
+        ]
+      ],
+      "events": [],
+      "cash": 9,
+      "income": 0,
+      "ledger": {
+        "banked": 0.0,
+        "industries": 6.9,
+        "links": 4.38,
+        "finance": 5.653944208655688,
+        "development": 2.6,
+        "rival": 4.805441642664417,
+        "liquidity": 0.0,
+        "score": 14.728502565991274,
+        "final_income": 0,
+        "final_cash": 0,
+        "units": "heuristic VP equivalent, not a win probability"
+      },
+      "completed": 0,
+      "cpu_batching": {}
+    },
+    {
+      "seat": 1,
+      "era": "CanalEra",
+      "round": 5,
+      "seconds": 1.125,
+      "nodes": 36,
+      "actions": [
+        "sell",
+        "network"
+      ],
+      "complete_actions": [
+        [
+          "sell|Belper:0||location:Coventry|Nottingham:1|",
+          "beer|Stone:0||||",
+          "finish|||||"
+        ],
+        [
+          "network|CanalDerbyBurtonOnTrent||location:Coventry||",
+          "finish|||||"
+        ]
+      ],
+      "events": [],
+      "cash": 10,
+      "income": 0,
+      "ledger": {
+        "banked": 3.0,
+        "industries": 14.0,
+        "links": 12.0,
+        "secured_links": 12.0,
+        "forecast_links": 0.0,
+        "industry_reserve": 0.0,
+        "finance": 6.872552379624687,
+        "development": 3.1091865000000016,
+        "rival": 5.114608442617968,
+        "liquidity": 0.0,
+        "sale_tempo": 0.0,
+        "score": 33.86713043700672,
+        "era_strategy": "income-conversion-and-carryover",
+        "final_income": 0,
+        "final_cash": 0,
+        "units": "heuristic VP equivalent, not a win probability"
+      },
+      "completed": 0,
+      "cpu_batching": {
+        "requests": 16,
+        "cache_hits": 9,
+        "coalesced": 5,
+        "batches": 2,
+        "max_batch": 1,
+        "pending": 0
+      }
+    },
+    {
+      "seat": 2,
+      "era": "CanalEra",
+      "round": 6,
+      "seconds": 1.1089999999385327,
+      "nodes": 50,
+      "actions": [
+        "build",
+        "build"
+      ],
+      "complete_actions": [
+        [
+          "build|Birmingham:2|IronWorks|location:Birmingham||",
+          "coal|market||||",
+          "finish|||||"
+        ],
+        [
+          "build|Birmingham:2|IronWorks|location:Birmingham||",
+          "coal|market||||",
+          "finish|||||"
+        ]
+      ],
+      "events": [
+        {
+          "kind": "build",
+          "industry": "IronWorks",
+          "level": 2,
+          "target": "Birmingham:2"
+        },
+        {
+          "kind": "build",
+          "industry": "IronWorks",
+          "level": 3,
+          "target": "Birmingham:2"
+        }
+      ],
+      "cash": 33,
+      "income": -3,
+      "ledger": {
+        "banked": 0.0,
+        "industries": 13.013683333333335,
+        "links": 4.38,
+        "finance": 0.48714956228534273,
+        "development": 3.6400000000000006,
+        "rival": 6.55917182821875,
+        "liquidity": 0.0,
+        "score": 14.961661067399929,
+        "final_income": 0,
+        "final_cash": 0,
+        "units": "heuristic VP equivalent, not a win probability"
+      },
+      "completed": 0,
+      "cpu_batching": {}
+    },
+    {
+      "seat": 1,
+      "era": "CanalEra",
+      "round": 6,
+      "seconds": 1.1400000001303852,
+      "nodes": 40,
+      "actions": [
+        "network",
+        "network"
+      ],
+      "complete_actions": [
+        [
+          "network|CanalStoneBurtonOnTrent||location:Cannock||",
+          "finish|||||"
+        ],
+        [
+          "network|CanalStoneStokeOnTrent||location:Coalbrookdale||",
+          "finish|||||"
+        ]
+      ],
+      "events": [],
+      "cash": 12,
+      "income": 5,
+      "ledger": {
+        "banked": 3.0,
+        "industries": 14.0,
+        "links": 16.0,
+        "secured_links": 16.0,
+        "forecast_links": 0.0,
+        "industry_reserve": 0.0,
+        "finance": 6.632494135227644,
+        "development": 1.4166150000000004,
+        "rival": 4.817247374449367,
+        "liquidity": 0.0,
+        "sale_tempo": 0.0,
+        "score": 36.23186176077828,
+        "era_strategy": "income-conversion-and-carryover",
+        "final_income": 0,
+        "final_cash": 0,
+        "units": "heuristic VP equivalent, not a win probability"
+      },
+      "completed": 0,
+      "cpu_batching": {
+        "requests": 20,
+        "cache_hits": 12,
+        "coalesced": 6,
+        "batches": 2,
+        "max_batch": 1,
+        "pending": 0
+      }
+    },
+    {
+      "seat": 3,
+      "era": "CanalEra",
+      "round": 6,
+      "seconds": 1.1089999999385327,
+      "nodes": 42,
+      "actions": [
+        "build",
+        "loan"
+      ],
+      "complete_actions": [
+        [
+          "build|Coventry:2|IronWorks|industry:IronWorks||",
+          "coal|market||||",
+          "finish|||||"
+        ],
+        [
+          "loan|||location:Stafford||",
+          "finish|||||"
+        ]
+      ],
+      "events": [
+        {
+          "kind": "build",
+          "industry": "IronWorks",
+          "level": 3,
+          "target": "Coventry:2"
+        }
+      ],
+      "cash": 19,
+      "income": 5,
+      "ledger": {
+        "banked": 0.0,
+        "industries": 12.471630000000001,
+        "links": 4.442,
+        "secured_links": 4.0,
+        "forecast_links": 0.442,
+        "industry_reserve": 0.0,
+        "finance": 8.495927339589018,
+        "development": 4.5882999999999985,
+        "rival": 7.133848944340976,
+        "liquidity": 0.0,
+        "sale_tempo": 0.0,
+        "score": 22.864008395248042,
+        "era_strategy": "income-conversion-and-carryover",
+        "final_income": 0,
+        "final_cash": 0,
+        "units": "heuristic VP equivalent, not a win probability"
+      },
+      "completed": 0,
+      "cpu_batching": {
+        "requests": 18,
+        "cache_hits": 10,
+        "coalesced": 6,
+        "batches": 2,
+        "max_batch": 1,
+        "pending": 0
+      }
+    },
+    {
+      "seat": 0,
+      "era": "CanalEra",
+      "round": 6,
+      "seconds": 1.172000000020489,
+      "nodes": 44,
+      "actions": [
+        "sell",
+        "build"
+      ],
+      "complete_actions": [
+        [
+          "sell|Coventry:0||industry:Brewery|Gloucester:0|",
+          "beer|Nuneaton:0||||",
+          "finish|||||"
+        ],
+        [
+          "build|StokeOnTrent:0|IronWorks|location:StokeOnTrent||",
+          "coal|market||||",
+          "finish|||||"
+        ]
+      ],
+      "events": [
+        {
+          "kind": "build",
+          "industry": "IronWorks",
+          "level": 2,
+          "target": "StokeOnTrent:0"
+        }
+      ],
+      "cash": 33,
+      "income": -3,
+      "ledger": {
+        "banked": 0.0,
+        "industries": 23.434285714285714,
+        "links": 2.5905714285714287,
+        "finance": 8.04438551037267,
+        "development": 3.38,
+        "rival": 7.169283230055261,
+        "liquidity": 0.0,
+        "score": 30.279959423174557,
+        "final_income": 0,
+        "final_cash": 0,
+        "units": "heuristic VP equivalent, not a win probability"
+      },
+      "completed": 0,
+      "cpu_batching": {}
+    },
+    {
+      "seat": 1,
+      "era": "CanalEra",
+      "round": 7,
+      "seconds": 1.1089999999385327,
+      "nodes": 42,
+      "actions": [
+        "build",
+        "loan"
+      ],
+      "complete_actions": [
+        [
+          "build|Coalbrookdale:1|IronWorks|location:Coalbrookdale||",
+          "coal|market||||",
+          "finish|||||"
+        ],
+        [
+          "loan|||location:Redditch||",
+          "finish|||||"
+        ]
+      ],
+      "events": [
+        {
+          "kind": "build",
+          "industry": "IronWorks",
+          "level": 1,
+          "target": "Coalbrookdale:1"
+        }
+      ],
+      "cash": 11,
+      "income": 5,
+      "ledger": {
+        "banked": 3.0,
+        "industries": 14.372666666666667,
+        "links": 16.13722222222222,
+        "secured_links": 16.0,
+        "forecast_links": 0.13722222222222225,
+        "industry_reserve": 0.0,
+        "finance": 7.9436226711698525,
+        "development": 0.0,
+        "rival": 6.10873610271709,
+        "liquidity": 0.0,
+        "sale_tempo": 0.0,
+        "score": 35.344775457341655,
+        "era_strategy": "income-conversion-and-carryover",
+        "final_income": 0,
+        "final_cash": 0,
+        "units": "heuristic VP equivalent, not a win probability"
+      },
+      "completed": 0,
+      "cpu_batching": {
+        "requests": 18,
+        "cache_hits": 14,
+        "coalesced": 1,
+        "batches": 3,
+        "max_batch": 1,
+        "pending": 0
+      }
+    },
+    {
+      "seat": 0,
+      "era": "CanalEra",
+      "round": 7,
+      "seconds": 1.0,
+      "nodes": 56,
+      "actions": [
+        "develop",
+        "develop"
+      ],
+      "complete_actions": [
+        [
+          "develop||Brewery|industry:CoalMine||",
+          "iron|StokeOnTrent:0||||",
+          "finish|||||"
+        ],
+        [
+          "develop||Brewery|location:Dudley||",
+          "iron|StokeOnTrent:0||||",
+          "finish|||||"
+        ]
+      ],
+      "events": [
+        {
+          "kind": "develop",
+          "industry": "Brewery",
+          "level": 2,
+          "target": null
+        },
+        {
+          "kind": "develop",
+          "industry": "Brewery",
+          "level": 3,
+          "target": null
+        }
+      ],
+      "cash": 26,
+      "income": 4,
+      "ledger": {
+        "banked": 0.0,
+        "industries": 23.059375,
+        "links": 2.4095000000000004,
+        "finance": 8.389645015094947,
+        "development": 3.9000000000000004,
+        "rival": 7.457602080810573,
+        "liquidity": 0.0,
+        "score": 30.30091793428437,
+        "final_income": 0,
+        "final_cash": 0,
+        "units": "heuristic VP equivalent, not a win probability"
+      },
+      "completed": 0,
+      "cpu_batching": {}
+    },
+    {
+      "seat": 3,
+      "era": "CanalEra",
+      "round": 7,
+      "seconds": 1.1089999999385327,
+      "nodes": 36,
+      "actions": [
+        "build",
+        "sell"
+      ],
+      "complete_actions": [
+        [
+          "build|StokeOnTrent:2|CottonMill|location:StokeOnTrent||",
+          "finish|||||"
+        ],
+        [
+          "sell|StokeOnTrent:2||location:Cannock|Nottingham:1|",
+          "beer|Stafford:0||||",
+          "finish|||||"
+        ]
+      ],
+      "events": [
+        {
+          "kind": "build",
+          "industry": "CottonMill",
+          "level": 1,
+          "target": "StokeOnTrent:2"
+        }
+      ],
+      "cash": 38,
+      "income": 2,
+      "ledger": {
+        "banked": 0.0,
+        "industries": 19.358,
+        "links": 6.354,
+        "secured_links": 6.0,
+        "forecast_links": 0.354,
+        "industry_reserve": 0.0,
+        "finance": 9.54283933907629,
+        "development": 0.0,
+        "rival": 7.624732080810573,
+        "liquidity": 0.0,
+        "sale_tempo": 0.0,
+        "score": 27.630107258265717,
+        "era_strategy": "income-conversion-and-carryover",
+        "final_income": 0,
+        "final_cash": 0,
+        "units": "heuristic VP equivalent, not a win probability"
+      },
+      "completed": 0,
+      "cpu_batching": {
+        "requests": 16,
+        "cache_hits": 12,
+        "coalesced": 2,
+        "batches": 2,
+        "max_batch": 1,
+        "pending": 0
+      }
+    },
+    {
+      "seat": 2,
+      "era": "CanalEra",
+      "round": 7,
+      "seconds": 1.0469999997876585,
+      "nodes": 64,
+      "actions": [
+        "loan",
+        "build"
+      ],
+      "complete_actions": [
+        [
+          "loan|||location:StokeOnTrent||",
+          "finish|||||"
+        ],
+        [
+          "build|Birmingham:2|IronWorks|location:Birmingham||",
+          "coal|market||||",
+          "finish|||||"
+        ]
+      ],
+      "events": [
+        {
+          "kind": "build",
+          "industry": "IronWorks",
+          "level": 4,
+          "target": "Birmingham:2"
+        }
+      ],
+      "cash": 8,
+      "income": -3,
+      "ledger": {
+        "banked": 0.0,
+        "industries": 8.439529411764706,
+        "links": 4.38,
+        "finance": -2.414608182885744,
+        "development": 1.3,
+        "rival": 7.608214433751749,
+        "liquidity": 0.0,
+        "score": 4.096706795127213,
+        "final_income": 0,
+        "final_cash": 0,
+        "units": "heuristic VP equivalent, not a win probability"
+      },
+      "completed": 0,
+      "cpu_batching": {}
+    },
+    {
+      "seat": 0,
+      "era": "CanalEra",
+      "round": 8,
+      "seconds": 1.0940000000409782,
+      "nodes": 79,
+      "actions": [
+        "network",
+        "develop"
+      ],
+      "complete_actions": [
+        [
+          "network|CanalNuneatonTamworth||industry:Brewery||",
+          "finish|||||"
+        ],
+        [
+          "develop||Brewery|location:Walsall||",
+          "iron|StokeOnTrent:0||||",
+          "finish|||||"
+        ]
+      ],
+      "events": [
+        {
+          "kind": "develop",
+          "industry": "Brewery",
+          "level": 3,
+          "target": null
+        }
+      ],
+      "cash": 30,
+      "income": 4,
+      "ledger": {
+        "banked": 0.0,
+        "industries": 22.718125,
+        "links": 4.20475,
+        "finance": 7.143217425350898,
+        "development": 0.0,
+        "rival": 7.62748280580353,
+        "liquidity": 0.0,
+        "score": 26.43860961954737,
+        "final_income": 0,
+        "final_cash": 0,
+        "units": "heuristic VP equivalent, not a win probability"
+      },
+      "completed": 0,
+      "cpu_batching": {}
+    },
+    {
+      "seat": 1,
+      "era": "CanalEra",
+      "round": 8,
+      "seconds": 1.1400000001303852,
+      "nodes": 43,
+      "actions": [
+        "network",
+        "network"
+      ],
+      "complete_actions": [
+        [
+          "network|CanalCoalbrookdaleShrewsbury||location:Uttoxeter||",
+          "finish|||||"
+        ],
+        [
+          "network|CanalCoalbrookdaleWolverhampton||location:Uttoxeter||",
+          "finish|||||"
+        ]
+      ],
+      "events": [],
+      "cash": 33,
+      "income": 2,
+      "ledger": {
+        "banked": 3.0,
+        "industries": 14.10725,
+        "links": 23.10725,
+        "secured_links": 23.0,
+        "forecast_links": 0.10725000000000001,
+        "industry_reserve": 0.0,
+        "finance": 6.468771862936846,
+        "development": 0.0,
+        "rival": 6.407638378944262,
+        "liquidity": 0.0,
+        "sale_tempo": 0.0,
+        "score": 40.275633483992586,
+        "era_strategy": "income-conversion-and-carryover",
+        "final_income": 0,
+        "final_cash": 0,
+        "units": "heuristic VP equivalent, not a win probability"
+      },
+      "completed": 0,
+      "cpu_batching": {
+        "requests": 22,
+        "cache_hits": 18,
+        "coalesced": 1,
+        "batches": 3,
+        "max_batch": 1,
+        "pending": 0
+      }
+    },
+    {
+      "seat": 3,
+      "era": "CanalEra",
+      "round": 8,
+      "seconds": 1.1560000001918525,
+      "nodes": 41,
+      "actions": [
+        "build",
+        "sell"
+      ],
+      "complete_actions": [
+        [
+          "build|Wolverhampton:0|Manufacturer|location:Wolverhampton||",
+          "coal|market||||",
+          "finish|||||"
+        ],
+        [
+          "sell|Wolverhampton:0||location:Wolverhampton|Gloucester:1|",
+          "beer|merchant:Gloucester:1||||",
+          "bonus_skip|||||",
+          "finish|||||"
+        ]
+      ],
+      "events": [
+        {
+          "kind": "build",
+          "industry": "Manufacturer",
+          "level": 1,
+          "target": "Wolverhampton:0"
+        }
+      ],
+      "cash": 33,
+      "income": 7,
+      "ledger": {
+        "banked": 0.0,
+        "industries": 21.755125,
+        "links": 6.697875,
+        "secured_links": 6.0,
+        "forecast_links": 0.697875,
+        "industry_reserve": 0.0,
+        "finance": 7.86197878320137,
+        "development": 0.0,
+        "rival": 8.743683935328633,
+        "liquidity": 0.0,
+        "sale_tempo": 0.0,
+        "score": 27.571294847872736,
+        "era_strategy": "income-conversion-and-carryover",
+        "final_income": 0,
+        "final_cash": 0,
+        "units": "heuristic VP equivalent, not a win probability"
+      },
+      "completed": 0,
+      "cpu_batching": {
+        "requests": 17,
+        "cache_hits": 14,
+        "coalesced": 0,
+        "batches": 3,
+        "max_batch": 1,
+        "pending": 0
+      }
+    },
+    {
+      "seat": 2,
+      "era": "CanalEra",
+      "round": 8,
+      "seconds": 1.0309999999590218,
+      "nodes": 64,
+      "actions": [
+        "sell",
+        "develop"
+      ],
+      "complete_actions": [
+        [
+          "sell|Kidderminster:1||location:Leek|Shrewsbury:0|",
+          "beer|merchant:Shrewsbury:0||||",
+          "finish|||||"
+        ],
+        [
+          "develop||Brewery|location:Tamworth||",
+          "iron|Birmingham:2||||",
+          "finish|||||"
+        ]
+      ],
+      "events": [
+        {
+          "kind": "develop",
+          "industry": "Brewery",
+          "level": 2,
+          "target": null
+        }
+      ],
+      "cash": 15,
+      "income": -6,
+      "ledger": {
+        "banked": 4.0,
+        "industries": 10.81,
+        "links": 5.0,
+        "finance": 2.8194747179939075,
+        "development": 0.0,
+        "rival": 8.724378935328632,
+        "liquidity": 0.0,
+        "score": 13.905095782665276,
+        "final_income": 0,
+        "final_cash": 0,
+        "units": "heuristic VP equivalent, not a win probability"
+      },
+      "completed": 0,
+      "cpu_batching": {}
+    },
+    {
+      "seat": 2,
+      "era": "RailEra",
+      "round": 1,
+      "seconds": 1.1560000001918525,
+      "nodes": 58,
+      "actions": [
+        "loan",
+        "develop"
+      ],
+      "complete_actions": [
+        [
+          "loan|||location:Nuneaton||",
+          "finish|||||"
+        ],
+        [
+          "develop||Brewery|industry:Brewery||",
+          "iron|Birmingham:2||||",
+          "finish|||||"
+        ]
+      ],
+      "events": [
+        {
+          "kind": "develop",
+          "industry": "Brewery",
+          "level": 3,
+          "target": null
+        }
+      ],
+      "cash": 14,
+      "income": -1,
+      "ledger": {
+        "banked": 19.0,
+        "industries": 7.6499999999999995,
+        "links": 0.0,
+        "finance": 6.234462001146924,
+        "development": 0.9100000000000001,
+        "rival": 8.929505453902193,
+        "liquidity": 0.0,
+        "score": 24.86495654724473,
+        "final_income": 0,
+        "final_cash": 0,
+        "units": "heuristic VP equivalent, not a win probability"
+      },
+      "completed": 0,
+      "cpu_batching": {}
+    },
+    {
+      "seat": 0,
+      "era": "RailEra",
+      "round": 1,
+      "seconds": 1.1409999998286366,
+      "nodes": 52,
+      "actions": [
+        "develop",
+        "network"
+      ],
+      "complete_actions": [
+        [
+          "develop||Brewery|industry:Brewery||",
+          "iron|StokeOnTrent:0||||",
+          "develop||CottonMill|||",
+          "iron|Birmingham:2||||",
+          "finish|||||"
+        ],
+        [
+          "network|RailStokeOnTrentWarrington||industry:Pottery||",
+          "coal|market||||",
+          "finish|||||"
+        ]
+      ],
+      "events": [
+        {
+          "kind": "develop",
+          "industry": "Brewery",
+          "level": 4,
+          "target": null
+        },
+        {
+          "kind": "develop",
+          "industry": "CottonMill",
+          "level": 1,
+          "target": null
+        }
+      ],
+      "cash": 31,
+      "income": 4,
+      "ledger": {
+        "banked": 22.0,
+        "industries": 10.0,
+        "links": 3.0,
+        "finance": 8.010166735557297,
+        "development": 1.04,
+        "rival": 8.929505453902193,
+        "liquidity": 0.0,
+        "score": 35.1206612816551,
+        "final_income": 0,
+        "final_cash": 0,
+        "units": "heuristic VP equivalent, not a win probability"
+      },
+      "completed": 0,
+      "cpu_batching": {}
+    },
+    {
+      "seat": 1,
+      "era": "RailEra",
+      "round": 1,
+      "seconds": 1.4059999999590218,
+      "nodes": 36,
+      "actions": [
+        "develop",
+        "build"
+      ],
+      "complete_actions": [
+        [
+          "develop||CoalMine|industry:Brewery||",
+          "iron|Birmingham:2||||",
+          "develop||Manufacturer|||",
+          "iron|Birmingham:2||||",
+          "finish|||||"
+        ],
+        [
+          "build|Kidderminster:0|CoalMine|location:Kidderminster||",
+          "finish|||||"
+        ]
+      ],
+      "events": [
+        {
+          "kind": "develop",
+          "industry": "CoalMine",
+          "level": 1,
+          "target": null
+        },
+        {
+          "kind": "develop",
+          "industry": "Manufacturer",
+          "level": 1,
+          "target": null
+        },
+        {
+          "kind": "build",
+          "industry": "CoalMine",
+          "level": 2,
+          "target": "Kidderminster:0"
+        }
+      ],
+      "cash": 29,
+      "income": 2,
+      "ledger": {
+        "banked": 42.0,
+        "industries": 1.7,
+        "links": 0.0,
+        "secured_links": 0.0,
+        "forecast_links": 0.0,
+        "industry_reserve": 7.0,
+        "finance": 6.792847265106005,
+        "development": 2.2971,
+        "rival": 7.797388230397731,
+        "liquidity": 0.0,
+        "sale_tempo": 0.0,
+        "score": 44.99255903470828,
+        "era_strategy": "industry-completion-and-funded-rail",
+        "final_income": 0,
+        "final_cash": 0,
+        "units": "heuristic VP equivalent, not a win probability"
+      },
+      "completed": 0,
+      "cpu_batching": {
+        "requests": 20,
+        "cache_hits": 7,
+        "coalesced": 8,
+        "batches": 5,
+        "max_batch": 1,
+        "pending": 0
+      }
+    },
+    {
+      "seat": 3,
+      "era": "RailEra",
+      "round": 1,
+      "seconds": 1.1560000001918525,
+      "nodes": 32,
+      "actions": [
+        "build",
+        "develop"
+      ],
+      "complete_actions": [
+        [
+          "build|Coventry:0|Pottery|location:Coventry||",
+          "iron|Coventry:2||||",
+          "finish|||||"
+        ],
+        [
+          "develop||CoalMine|industry:CottonMill+Manufacturer||",
+          "iron|Coventry:2||||",
+          "finish|||||"
+        ]
+      ],
+      "events": [
+        {
+          "kind": "build",
+          "industry": "Pottery",
+          "level": 1,
+          "target": "Coventry:0"
+        },
+        {
+          "kind": "develop",
+          "industry": "CoalMine",
+          "level": 1,
+          "target": null
+        }
+      ],
+      "cash": 28,
+      "income": 9,
+      "ledger": {
+        "banked": 28.0,
+        "industries": 9.55,
+        "links": 0.0,
+        "secured_links": 0.0,
+        "forecast_links": 0.0,
+        "industry_reserve": 7.0,
+        "finance": 8.324407356753545,
+        "development": 2.56737,
+        "rival": 9.08871250771908,
+        "liquidity": 0.0,
+        "sale_tempo": 0.0,
+        "score": 39.35306484903446,
+        "era_strategy": "industry-completion-and-funded-rail",
+        "final_income": 0,
+        "final_cash": 0,
+        "units": "heuristic VP equivalent, not a win probability"
+      },
+      "completed": 0,
+      "cpu_batching": {
+        "requests": 20,
+        "cache_hits": 7,
+        "coalesced": 8,
+        "batches": 5,
+        "max_batch": 1,
+        "pending": 0
+      }
+    },
+    {
+      "seat": 2,
+      "era": "RailEra",
+      "round": 2,
+      "seconds": 1.125,
+      "nodes": 66,
+      "actions": [
+        "develop",
+        "develop"
+      ],
+      "complete_actions": [
+        [
+          "develop||Brewery|industry:Brewery||",
+          "iron|Birmingham:2||||",
+          "finish|||||"
+        ],
+        [
+          "develop||Brewery|industry:Brewery||",
+          "iron|Coventry:2||||",
+          "develop||CottonMill|||",
+          "iron|Coventry:2||||",
+          "finish|||||"
+        ]
+      ],
+      "events": [
+        {
+          "kind": "develop",
+          "industry": "Brewery",
+          "level": 3,
+          "target": null
+        },
+        {
+          "kind": "develop",
+          "industry": "Brewery",
+          "level": 4,
+          "target": null
+        },
+        {
+          "kind": "develop",
+          "industry": "CottonMill",
+          "level": 1,
+          "target": null
+        }
+      ],
+      "cash": 40,
+      "income": -4,
+      "ledger": {
+        "banked": 19.0,
+        "industries": 9.0,
+        "links": 0.0,
+        "finance": 6.4009039339089355,
+        "development": 0.65,
+        "rival": 9.19392092159847,
+        "liquidity": 0.0,
+        "score": 25.856983012310465,
+        "final_income": 0,
+        "final_cash": 0,
+        "units": "heuristic VP equivalent, not a win probability"
+      },
+      "completed": 0,
+      "cpu_batching": {}
+    },
+    {
+      "seat": 1,
+      "era": "RailEra",
+      "round": 2,
+      "seconds": 1.1559999999590218,
+      "nodes": 32,
+      "actions": [
+        "build",
+        "build"
+      ],
+      "complete_actions": [
+        [
+          "build|Stone:1|CoalMine|location:Stone||",
+          "finish|||||"
+        ],
+        [
+          "build|Coalbrookdale:2|CoalMine|location:Coalbrookdale||",
+          "iron|Coventry:2||||",
+          "finish|||||"
+        ]
+      ],
+      "events": [
+        {
+          "kind": "build",
+          "industry": "CoalMine",
+          "level": 2,
+          "target": "Stone:1"
+        },
+        {
+          "kind": "build",
+          "industry": "CoalMine",
+          "level": 3,
+          "target": "Coalbrookdale:2"
+        }
+      ],
+      "cash": 24,
+      "income": 2,
+      "ledger": {
+        "banked": 42.0,
+        "industries": 5.542000000000001,
+        "links": 0.0,
+        "secured_links": 0.0,
+        "forecast_links": 0.0,
+        "industry_reserve": 7.0,
+        "finance": 5.695685677247228,
+        "development": 2.7393599999999996,
+        "rival": 8.779846065261063,
+        "liquidity": 0.0,
+        "sale_tempo": 0.0,
+        "score": 47.197199611986164,
+        "era_strategy": "industry-completion-and-funded-rail",
+        "final_income": 0,
+        "final_cash": 0,
+        "units": "heuristic VP equivalent, not a win probability"
+      },
+      "completed": 0,
+      "cpu_batching": {
+        "requests": 12,
+        "cache_hits": 5,
+        "coalesced": 5,
+        "batches": 2,
+        "max_batch": 1,
+        "pending": 0
+      }
+    },
+    {
+      "seat": 0,
+      "era": "RailEra",
+      "round": 2,
+      "seconds": 1.093000000109896,
+      "nodes": 56,
+      "actions": [
+        "build",
+        "loan"
+      ],
+      "complete_actions": [
+        [
+          "build|StokeOnTrent:0|IronWorks|location:StokeOnTrent||",
+          "coal|market||||",
+          "finish|||||"
+        ],
+        [
+          "loan|||location:Kidderminster||",
+          "finish|||||"
+        ]
+      ],
+      "events": [
+        {
+          "kind": "build",
+          "industry": "IronWorks",
+          "level": 3,
+          "target": "StokeOnTrent:0"
+        }
+      ],
+      "cash": 25,
+      "income": 5,
+      "ledger": {
+        "banked": 22.0,
+        "industries": 10.95,
+        "links": 2.85,
+        "finance": 8.77520002815945,
+        "development": 1.3000000000000003,
+        "rival": 9.631108217777905,
+        "liquidity": 0.0,
+        "score": 36.24409181038155,
+        "final_income": 0,
+        "final_cash": 0,
+        "units": "heuristic VP equivalent, not a win probability"
+      },
+      "completed": 0,
+      "cpu_batching": {}
+    },
+    {
+      "seat": 3,
+      "era": "RailEra",
+      "round": 2,
+      "seconds": 1.1410000000614673,
+      "nodes": 36,
+      "actions": [
+        "build",
+        "network"
+      ],
+      "complete_actions": [
+        [
+          "build|Coalbrookdale:1|IronWorks|location:Coalbrookdale||",
+          "coal|Coalbrookdale:2||||",
+          "finish|||||"
+        ],
+        [
+          "network|RailCoalbrookdaleShrewsbury||location:Coalbrookdale||",
+          "coal|Coalbrookdale:2||||",
+          "finish|||||"
+        ]
+      ],
+      "events": [
+        {
+          "kind": "build",
+          "industry": "IronWorks",
+          "level": 4,
+          "target": "Coalbrookdale:1"
+        }
+      ],
+      "cash": 20,
+      "income": 10,
+      "ledger": {
+        "banked": 28.0,
+        "industries": 17.364727272727272,
+        "links": 3.6016363636363637,
+        "secured_links": 2.0,
+        "forecast_links": 1.6016363636363637,
+        "industry_reserve": 7.0,
+        "finance": 6.881009522511789,
+        "development": 2.56737,
+        "rival": 9.7038060076783,
+        "liquidity": 0.0,
+        "sale_tempo": 0.0,
+        "score": 48.71093715119712,
+        "era_strategy": "industry-completion-and-funded-rail",
+        "final_income": 0,
+        "final_cash": 0,
+        "units": "heuristic VP equivalent, not a win probability"
+      },
+      "completed": 0,
+      "cpu_batching": {
+        "requests": 12,
+        "cache_hits": 6,
+        "coalesced": 4,
+        "batches": 2,
+        "max_batch": 1,
+        "pending": 0
+      }
+    },
+    {
+      "seat": 2,
+      "era": "RailEra",
+      "round": 3,
+      "seconds": 1.172000000020489,
+      "nodes": 53,
+      "actions": [
+        "develop",
+        "develop"
+      ],
+      "complete_actions": [
+        [
+          "develop||CottonMill|industry:CoalMine||",
+          "iron|Coalbrookdale:1||||",
+          "finish|||||"
+        ],
+        [
+          "develop||CottonMill|industry:CottonMill+Manufacturer||",
+          "iron|Coalbrookdale:1||||",
+          "finish|||||"
+        ]
+      ],
+      "events": [
+        {
+          "kind": "develop",
+          "industry": "CottonMill",
+          "level": 2,
+          "target": null
+        },
+        {
+          "kind": "develop",
+          "industry": "CottonMill",
+          "level": 2,
+          "target": null
+        }
+      ],
+      "cash": 37,
+      "income": -3,
+      "ledger": {
+        "banked": 19.0,
+        "industries": 9.0,
+        "links": 0.0,
+        "finance": 6.107575334855005,
+        "development": 1.1700000000000002,
+        "rival": 10.586120492767922,
+        "liquidity": 0.0,
+        "score": 24.691454842087087,
+        "final_income": 0,
+        "final_cash": 0,
+        "units": "heuristic VP equivalent, not a win probability"
+      },
+      "completed": 0,
+      "cpu_batching": {}
+    },
+    {
+      "seat": 1,
+      "era": "RailEra",
+      "round": 3,
+      "seconds": 1.4379999998491257,
+      "nodes": 28,
+      "actions": [
+        "build",
+        "loan"
+      ],
+      "complete_actions": [
+        [
+          "build|Coalbrookdale:0|IronWorks|industry:IronWorks||",
+          "coal|Coalbrookdale:2||||",
+          "finish|||||"
+        ],
+        [
+          "loan|||location:Coventry||",
+          "finish|||||"
+        ]
+      ],
+      "events": [
+        {
+          "kind": "build",
+          "industry": "IronWorks",
+          "level": 2,
+          "target": "Coalbrookdale:0"
+        }
+      ],
+      "cash": 11,
+      "income": 2,
+      "ledger": {
+        "banked": 42.0,
+        "industries": 8.6344,
+        "links": 0.0,
+        "secured_links": 0.0,
+        "forecast_links": 0.0,
+        "industry_reserve": 10.0,
+        "finance": 8.004621342546407,
+        "development": 1.8382,
+        "rival": 10.114198191378392,
+        "liquidity": 0.0,
+        "sale_tempo": 0.0,
+        "score": 50.363023151168015,
+        "era_strategy": "industry-completion-and-funded-rail",
+        "final_income": 0,
+        "final_cash": 0,
+        "units": "heuristic VP equivalent, not a win probability"
+      },
+      "completed": 0,
+      "cpu_batching": {
+        "requests": 8,
+        "cache_hits": 2,
+        "coalesced": 4,
+        "batches": 2,
+        "max_batch": 1,
+        "pending": 0
+      }
+    },
+    {
+      "seat": 0,
+      "era": "RailEra",
+      "round": 3,
+      "seconds": 1.6559999999590218,
+      "nodes": 60,
+      "actions": [
+        "network",
+        "develop"
+      ],
+      "complete_actions": [
+        [
+          "network|RailStoneStokeOnTrent||industry:CoalMine||",
+          "coal|Stone:1||||",
+          "finish|||||"
+        ],
+        [
+          "develop||CottonMill|industry:CottonMill+Manufacturer||",
+          "iron|StokeOnTrent:0||||",
+          "finish|||||"
+        ]
+      ],
+      "events": [
+        {
+          "kind": "develop",
+          "industry": "CottonMill",
+          "level": 1,
+          "target": null
+        }
+      ],
+      "cash": 41,
+      "income": 2,
+      "ledger": {
+        "banked": 22.0,
+        "industries": 9.186,
+        "links": 4.045999999999999,
+        "finance": 8.23726443909205,
+        "development": 1.3000000000000003,
+        "rival": 10.571048517402096,
+        "liquidity": 0.0,
+        "score": 34.19821592168995,
+        "final_income": 0,
+        "final_cash": 0,
+        "units": "heuristic VP equivalent, not a win probability"
+      },
+      "completed": 0,
+      "cpu_batching": {}
+    },
+    {
+      "seat": 3,
+      "era": "RailEra",
+      "round": 3,
+      "seconds": 1.375,
+      "nodes": 40,
+      "actions": [
+        "network",
+        "develop"
+      ],
+      "complete_actions": [
+        [
+          "network|RailKidderminsterCoalbrookdale||industry:CottonMill+Manufacturer||",
+          "coal|Kidderminster:0||||",
+          "finish|||||"
+        ],
+        [
+          "develop||CottonMill|industry:CottonMill+Manufacturer||",
+          "iron|Coalbrookdale:1||||",
+          "develop||CottonMill|||",
+          "iron|Coalbrookdale:1||||",
+          "finish|||||"
+        ]
+      ],
+      "events": [
+        {
+          "kind": "develop",
+          "industry": "CottonMill",
+          "level": 1,
+          "target": null
+        },
+        {
+          "kind": "develop",
+          "industry": "CottonMill",
+          "level": 2,
+          "target": null
+        }
+      ],
+      "cash": 13,
+      "income": 10,
+      "ledger": {
+        "banked": 28.0,
+        "industries": 16.801000000000002,
+        "links": 7.306,
+        "secured_links": 2.0,
+        "forecast_links": 5.306,
+        "industry_reserve": 14.0,
+        "finance": 8.037306587783073,
+        "development": 2.91597,
+        "rival": 10.651283997956655,
+        "liquidity": 0.0,
+        "sale_tempo": 0.0,
+        "score": 52.40899258982642,
+        "era_strategy": "industry-completion-and-funded-rail",
+        "final_income": 0,
+        "final_cash": 0,
+        "units": "heuristic VP equivalent, not a win probability"
+      },
+      "completed": 0,
+      "cpu_batching": {
+        "requests": 24,
+        "cache_hits": 9,
+        "coalesced": 9,
+        "batches": 6,
+        "max_batch": 1,
+        "pending": 0
+      }
+    },
+    {
+      "seat": 2,
+      "era": "RailEra",
+      "round": 4,
+      "seconds": 1.0630000000819564,
+      "nodes": 44,
+      "actions": [
+        "develop",
+        "develop"
+      ],
+      "complete_actions": [
+        [
+          "develop||CottonMill|industry:IronWorks||",
+          "iron|Coalbrookdale:0||||",
+          "finish|||||"
+        ],
+        [
+          "develop||CottonMill|industry:IronWorks||",
+          "iron|Coalbrookdale:0||||",
+          "finish|||||"
+        ]
+      ],
+      "events": [
+        {
+          "kind": "develop",
+          "industry": "CottonMill",
+          "level": 3,
+          "target": null
+        },
+        {
+          "kind": "develop",
+          "industry": "CottonMill",
+          "level": 3,
+          "target": null
+        }
+      ],
+      "cash": 34,
+      "income": -3,
+      "ledger": {
+        "banked": 19.0,
+        "industries": 9.0,
+        "links": 0.0,
+        "finance": 5.840042344122309,
+        "development": 1.1700000000000002,
+        "rival": 11.296672246321524,
+        "liquidity": 0.0,
+        "score": 23.713370097800787,
+        "final_income": 0,
+        "final_cash": 0,
+        "units": "heuristic VP equivalent, not a win probability"
+      },
+      "completed": 0,
+      "cpu_batching": {}
+    },
+    {
+      "seat": 0,
+      "era": "RailEra",
+      "round": 4,
+      "seconds": 1.077999999979511,
+      "nodes": 41,
+      "actions": [
+        "develop",
+        "develop"
+      ],
+      "complete_actions": [
+        [
+          "develop||CottonMill|industry:CoalMine||",
+          "iron|StokeOnTrent:0||||",
+          "finish|||||"
+        ],
+        [
+          "develop||CottonMill|location:BurtonOnTrent||",
+          "iron|StokeOnTrent:0||||",
+          "finish|||||"
+        ]
+      ],
+      "events": [
+        {
+          "kind": "develop",
+          "industry": "CottonMill",
+          "level": 1,
+          "target": null
+        },
+        {
+          "kind": "develop",
+          "industry": "CottonMill",
+          "level": 2,
+          "target": null
+        }
+      ],
+      "cash": 38,
+      "income": 2,
+      "ledger": {
+        "banked": 22.0,
+        "industries": 10.95,
+        "links": 4.55,
+        "finance": 8.479699629476176,
+        "development": 1.9500000000000002,
+        "rival": 11.354002246321524,
+        "liquidity": 0.0,
+        "score": 36.57569738315465,
+        "final_income": 0,
+        "final_cash": 0,
+        "units": "heuristic VP equivalent, not a win probability"
+      },
+      "completed": 0,
+      "cpu_batching": {}
+    },
+    {
+      "seat": 3,
+      "era": "RailEra",
+      "round": 4,
+      "seconds": 1.3130000000819564,
+      "nodes": 28,
+      "actions": [
+        "network",
+        "loan"
+      ],
+      "complete_actions": [
+        [
+          "network|RailCoalbrookdaleWolverhampton||location:Stone||",
+          "coal|Coalbrookdale:2||||",
+          "finish|||||"
+        ],
+        [
+          "loan|||industry:CottonMill+Manufacturer||",
+          "finish|||||"
+        ]
+      ],
+      "events": [],
+      "cash": 18,
+      "income": 10,
+      "ledger": {
+        "banked": 28.0,
+        "industries": 18.25,
+        "links": 10.95,
+        "secured_links": 5.0,
+        "forecast_links": 5.949999999999999,
+        "industry_reserve": 7.0,
+        "finance": 9.270743362618587,
+        "development": 2.2652448,
+        "rival": 10.96922401223656,
+        "liquidity": 0.0,
+        "sale_tempo": 0.0,
+        "score": 57.76676415038204,
+        "era_strategy": "industry-completion-and-funded-rail",
+        "final_income": 0,
+        "final_cash": 0,
+        "units": "heuristic VP equivalent, not a win probability"
+      },
+      "completed": 0,
+      "cpu_batching": {
+        "requests": 8,
+        "cache_hits": 0,
+        "coalesced": 6,
+        "batches": 2,
+        "max_batch": 1,
+        "pending": 0
+      }
+    },
+    {
+      "seat": 1,
+      "era": "RailEra",
+      "round": 4,
+      "seconds": 1.171000000089407,
+      "nodes": 32,
+      "actions": [
+        "build",
+        "develop"
+      ],
+      "complete_actions": [
+        [
+          "build|Coalbrookdale:0|IronWorks|industry:IronWorks||",
+          "coal|Kidderminster:0||||",
+          "finish|||||"
+        ],
+        [
+          "develop||CottonMill|industry:CottonMill+Manufacturer||",
+          "iron|Coalbrookdale:0||||",
+          "finish|||||"
+        ]
+      ],
+      "events": [
+        {
+          "kind": "build",
+          "industry": "IronWorks",
+          "level": 3,
+          "target": "Coalbrookdale:0"
+        },
+        {
+          "kind": "develop",
+          "industry": "CottonMill",
+          "level": 1,
+          "target": null
+        }
+      ],
+      "cash": 33,
+      "income": 3,
+      "ledger": {
+        "banked": 42.0,
+        "industries": 11.222999999999999,
+        "links": 0.0,
+        "secured_links": 0.0,
+        "forecast_links": 0.0,
+        "industry_reserve": 10.0,
+        "finance": 7.8057887300125515,
+        "development": 2.0939282,
+        "rival": 11.530033805271344,
+        "liquidity": 0.0,
+        "sale_tempo": 0.0,
+        "score": 51.59268312474121,
+        "era_strategy": "industry-completion-and-funded-rail",
+        "final_income": 0,
+        "final_cash": 0,
+        "units": "heuristic VP equivalent, not a win probability"
+      },
+      "completed": 0,
+      "cpu_batching": {
+        "requests": 16,
+        "cache_hits": 3,
+        "coalesced": 9,
+        "batches": 4,
+        "max_batch": 1,
+        "pending": 0
+      }
+    },
+    {
+      "seat": 2,
+      "era": "RailEra",
+      "round": 5,
+      "seconds": 1.0940000000409782,
+      "nodes": 36,
+      "actions": [
+        "develop",
+        "develop"
+      ],
+      "complete_actions": [
+        [
+          "develop||CottonMill|location:Coventry||",
+          "iron|Coalbrookdale:0||||",
+          "finish|||||"
+        ],
+        [
+          "develop||CottonMill|industry:Pottery||",
+          "iron|Coalbrookdale:0||||",
+          "finish|||||"
+        ]
+      ],
+      "events": [
+        {
+          "kind": "develop",
+          "industry": "CottonMill",
+          "level": 3,
+          "target": null
+        },
+        {
+          "kind": "develop",
+          "industry": "CottonMill",
+          "level": 4,
+          "target": null
+        }
+      ],
+      "cash": 31,
+      "income": -3,
+      "ledger": {
+        "banked": 19.0,
+        "industries": 9.0,
+        "links": 0.0,
+        "finance": 5.6121888128025414,
+        "development": 1.5600000000000003,
+        "rival": 12.123154285555167,
+        "liquidity": 0.0,
+        "score": 23.04903452724738,
+        "final_income": 0,
+        "final_cash": 0,
+        "units": "heuristic VP equivalent, not a win probability"
+      },
+      "completed": 0,
+      "cpu_batching": {}
+    },
+    {
+      "seat": 0,
+      "era": "RailEra",
+      "round": 5,
+      "seconds": 1.1559999999590218,
+      "nodes": 42,
+      "actions": [
+        "develop",
+        "develop"
+      ],
+      "complete_actions": [
+        [
+          "develop||CottonMill|industry:CottonMill+Manufacturer||",
+          "iron|StokeOnTrent:0||||",
+          "finish|||||"
+        ],
+        [
+          "develop||CottonMill|location:BurtonOnTrent||",
+          "iron|StokeOnTrent:0||||",
+          "finish|||||"
+        ]
+      ],
+      "events": [
+        {
+          "kind": "develop",
+          "industry": "CottonMill",
+          "level": 2,
+          "target": null
+        },
+        {
+          "kind": "develop",
+          "industry": "CottonMill",
+          "level": 3,
+          "target": null
+        }
+      ],
+      "cash": 40,
+      "income": 2,
+      "ledger": {
+        "banked": 22.0,
+        "industries": 12.0,
+        "links": 4.85,
+        "finance": 8.674010703955057,
+        "development": 2.47,
+        "rival": 12.123154285555167,
+        "liquidity": 0.0,
+        "score": 37.87085641839989,
+        "final_income": 0,
+        "final_cash": 0,
+        "units": "heuristic VP equivalent, not a win probability"
+      },
+      "completed": 0,
+      "cpu_batching": {}
+    },
+    {
+      "seat": 3,
+      "era": "RailEra",
+      "round": 5,
+      "seconds": 1.2189999998081475,
+      "nodes": 24,
+      "actions": [
+        "build",
+        "build"
+      ],
+      "complete_actions": [
+        [
+          "build|Cannock:1|CoalMine|location:Cannock||",
+          "finish|||||"
+        ],
+        [
+          "build|Dudley:0|CoalMine|location:Dudley||",
+          "finish|||||"
+        ]
+      ],
+      "events": [
+        {
+          "kind": "build",
+          "industry": "CoalMine",
+          "level": 2,
+          "target": "Cannock:1"
+        },
+        {
+          "kind": "build",
+          "industry": "CoalMine",
+          "level": 2,
+          "target": "Dudley:0"
+        }
+      ],
+      "cash": 50,
+      "income": 7,
+      "ledger": {
+        "banked": 28.0,
+        "industries": 20.154,
+        "links": 10.95,
+        "secured_links": 5.0,
+        "forecast_links": 5.949999999999999,
+        "industry_reserve": 7.0,
+        "finance": 8.731694617892433,
+        "development": 1.9855745000000002,
+        "rival": 11.252185407683726,
+        "liquidity": 0.0,
+        "sale_tempo": 0.0,
+        "score": 58.5690837102087,
+        "era_strategy": "industry-completion-and-funded-rail",
+        "final_income": 0,
+        "final_cash": 0,
+        "units": "heuristic VP equivalent, not a win probability"
+      },
+      "completed": 0,
+      "cpu_batching": {
+        "requests": 8,
+        "cache_hits": 0,
+        "coalesced": 6,
+        "batches": 2,
+        "max_batch": 1,
+        "pending": 0
+      }
+    },
+    {
+      "seat": 1,
+      "era": "RailEra",
+      "round": 5,
+      "seconds": 1.281999999890104,
+      "nodes": 32,
+      "actions": [
+        "build",
+        "build"
+      ],
+      "complete_actions": [
+        [
+          "build|Cannock:0|CoalMine|location:Cannock||",
+          "iron|Coalbrookdale:0||||",
+          "finish|||||"
+        ],
+        [
+          "build|Leek:1|CoalMine|location:Leek||",
+          "iron|Coalbrookdale:0||||",
+          "finish|||||"
+        ]
+      ],
+      "events": [
+        {
+          "kind": "build",
+          "industry": "CoalMine",
+          "level": 3,
+          "target": "Cannock:0"
+        },
+        {
+          "kind": "build",
+          "industry": "CoalMine",
+          "level": 4,
+          "target": "Leek:1"
+        }
+      ],
+      "cash": 27,
+      "income": 3,
+      "ledger": {
+        "banked": 42.0,
+        "industries": 15.040879999999998,
+        "links": 0.0,
+        "secured_links": 0.0,
+        "forecast_links": 0.0,
+        "industry_reserve": 10.0,
+        "finance": 5.485566851793463,
+        "development": 2.91837,
+        "rival": 12.16608402516536,
+        "liquidity": 0.0,
+        "sale_tempo": 0.0,
+        "score": 53.2787328266281,
+        "era_strategy": "industry-completion-and-funded-rail",
+        "final_income": 0,
+        "final_cash": 0,
+        "units": "heuristic VP equivalent, not a win probability"
+      },
+      "completed": 0,
+      "cpu_batching": {
+        "requests": 16,
+        "cache_hits": 6,
+        "coalesced": 6,
+        "batches": 4,
+        "max_batch": 1,
+        "pending": 0
+      }
+    },
+    {
+      "seat": 2,
+      "era": "RailEra",
+      "round": 6,
+      "seconds": 1.202999999979511,
+      "nodes": 47,
+      "actions": [
+        "develop",
+        "develop"
+      ],
+      "complete_actions": [
+        [
+          "develop||CottonMill|location:Dudley||",
+          "iron|Coalbrookdale:1||||",
+          "finish|||||"
+        ],
+        [
+          "develop||CottonMill|location:Stafford||",
+          "iron|Coalbrookdale:1||||",
+          "develop||CoalMine|||",
+          "iron|market||||",
+          "finish|||||"
+        ]
+      ],
+      "events": [
+        {
+          "kind": "develop",
+          "industry": "CottonMill",
+          "level": 4,
+          "target": null
+        },
+        {
+          "kind": "develop",
+          "industry": "CottonMill",
+          "level": 4,
+          "target": null
+        },
+        {
+          "kind": "develop",
+          "industry": "CoalMine",
+          "level": 1,
+          "target": null
+        }
+      ],
+      "cash": 28,
+      "income": -3,
+      "ledger": {
+        "banked": 19.0,
+        "industries": 9.0,
+        "links": 0.0,
+        "finance": 4.808438565726595,
+        "development": 0.26,
+        "rival": 12.628380163348922,
+        "liquidity": 0.0,
+        "score": 20.440058402377673,
+        "final_income": 0,
+        "final_cash": 0,
+        "units": "heuristic VP equivalent, not a win probability"
+      },
+      "completed": 0,
+      "cpu_batching": {}
+    },
+    {
+      "seat": 0,
+      "era": "RailEra",
+      "round": 6,
+      "seconds": 1.6090000001713634,
+      "nodes": 54,
+      "actions": [
+        "network",
+        "develop"
+      ],
+      "complete_actions": [
+        [
+          "network|RailStokeOnTrentLeek||location:Leek||",
+          "coal|Leek:1||||",
+          "finish|||||"
+        ],
+        [
+          "develop||CottonMill|location:Redditch||",
+          "iron|market||||",
+          "finish|||||"
+        ]
+      ],
+      "events": [
+        {
+          "kind": "develop",
+          "industry": "CottonMill",
+          "level": 3,
+          "target": null
+        }
+      ],
+      "cash": 43,
+      "income": 3,
+      "ledger": {
+        "banked": 22.0,
+        "industries": 12.0,
+        "links": 6.699999999999999,
+        "finance": 6.99333019981192,
+        "development": 2.47,
+        "rival": 12.612540163348923,
+        "liquidity": 0.0,
+        "score": 37.550790036463,
+        "final_income": 0,
+        "final_cash": 0,
+        "units": "heuristic VP equivalent, not a win probability"
+      },
+      "completed": 0,
+      "cpu_batching": {}
+    },
+    {
+      "seat": 3,
+      "era": "RailEra",
+      "round": 6,
+      "seconds": 1.2809999999590218,
+      "nodes": 32,
+      "actions": [
+        "build",
+        "build"
+      ],
+      "complete_actions": [
+        [
+          "build|Belper:1|CoalMine|location:Belper||",
+          "iron|market||||",
+          "finish|||||"
+        ],
+        [
+          "build|StokeOnTrent:1|Manufacturer|location:StokeOnTrent||",
+          "iron|market||||",
+          "finish|||||"
+        ]
+      ],
+      "events": [
+        {
+          "kind": "build",
+          "industry": "CoalMine",
+          "level": 3,
+          "target": "Belper:1"
+        },
+        {
+          "kind": "build",
+          "industry": "Manufacturer",
+          "level": 2,
+          "target": "StokeOnTrent:1"
+        }
+      ],
+      "cash": 43,
+      "income": 8,
+      "ledger": {
+        "banked": 28.0,
+        "industries": 23.2731,
+        "links": 11.85,
+        "secured_links": 11.0,
+        "forecast_links": 0.85,
+        "industry_reserve": 10.0,
+        "finance": 7.123512466274838,
+        "development": 0.8207712500000001,
+        "rival": 11.724471759454998,
+        "liquidity": 0.0,
+        "sale_tempo": 0.0,
+        "score": 59.34291195681985,
+        "era_strategy": "industry-completion-and-funded-rail",
+        "final_income": 0,
+        "final_cash": 0,
+        "units": "heuristic VP equivalent, not a win probability"
+      },
+      "completed": 0,
+      "cpu_batching": {
+        "requests": 8,
+        "cache_hits": 0,
+        "coalesced": 6,
+        "batches": 2,
+        "max_batch": 1,
+        "pending": 0
+      }
+    },
+    {
+      "seat": 1,
+      "era": "RailEra",
+      "round": 6,
+      "seconds": 1.5620000001508743,
+      "nodes": 32,
+      "actions": [
+        "build",
+        "build"
+      ],
+      "complete_actions": [
+        [
+          "build|Wolverhampton:1|CoalMine|location:Wolverhampton||",
+          "iron|market||||",
+          "finish|||||"
+        ],
+        [
+          "build|StokeOnTrent:2|Manufacturer|location:StokeOnTrent||",
+          "iron|market||||",
+          "finish|||||"
+        ]
+      ],
+      "events": [
+        {
+          "kind": "build",
+          "industry": "CoalMine",
+          "level": 4,
+          "target": "Wolverhampton:1"
+        },
+        {
+          "kind": "build",
+          "industry": "Manufacturer",
+          "level": 2,
+          "target": "StokeOnTrent:2"
+        }
+      ],
+      "cash": 13,
+      "income": 4,
+      "ledger": {
+        "banked": 42.0,
+        "industries": 21.7836,
+        "links": 0.0,
+        "secured_links": 0.0,
+        "forecast_links": 0.0,
+        "industry_reserve": 14.0,
+        "finance": 7.068429405721671,
+        "development": 0.65,
+        "rival": 13.211082891867903,
+        "liquidity": 0.0,
+        "sale_tempo": 0.0,
+        "score": 58.29094651385377,
+        "era_strategy": "industry-completion-and-funded-rail",
+        "final_income": 0,
+        "final_cash": 0,
+        "units": "heuristic VP equivalent, not a win probability"
+      },
+      "completed": 0,
+      "cpu_batching": {
+        "requests": 8,
+        "cache_hits": 6,
+        "coalesced": 0,
+        "batches": 2,
+        "max_batch": 1,
+        "pending": 0
+      }
+    },
+    {
+      "seat": 2,
+      "era": "RailEra",
+      "round": 7,
+      "seconds": 1.4060000001918525,
+      "nodes": 62,
+      "actions": [
+        "network",
+        "network"
+      ],
+      "complete_actions": [
+        [
+          "network|RailBirminghamDudley||location:Worcester||",
+          "coal|Dudley:0||||",
+          "finish|||||"
+        ],
+        [
+          "network|RailBirminghamNuneaton||location:Birmingham||",
+          "coal|Dudley:0||||",
+          "finish|||||"
+        ]
+      ],
+      "events": [],
+      "cash": 24,
+      "income": -3,
+      "ledger": {
+        "banked": 19.0,
+        "industries": 9.0,
+        "links": 4.85,
+        "finance": 2.4380427978904833,
+        "development": 0.26,
+        "rival": 13.256349225306094,
+        "liquidity": 0.0,
+        "score": 22.291693572584386,
+        "final_income": 0,
+        "final_cash": 0,
+        "units": "heuristic VP equivalent, not a win probability"
+      },
+      "completed": 0,
+      "cpu_batching": {}
+    },
+    {
+      "seat": 0,
+      "era": "RailEra",
+      "round": 7,
+      "seconds": 1.5149999998975545,
+      "nodes": 54,
+      "actions": [
+        "network",
+        "network"
+      ],
+      "complete_actions": [
+        [
+          "network|RailCoventryNuneaton||location:Wolverhampton||",
+          "coal|Dudley:0||||",
+          "finish|||||"
+        ],
+        [
+          "network|RailLeekBelper||location:Tamworth||",
+          "coal|Belper:1||||",
+          "finish|||||"
+        ]
+      ],
+      "events": [],
+      "cash": 40,
+      "income": 3,
+      "ledger": {
+        "banked": 22.0,
+        "industries": 12.0,
+        "links": 15.088000000000001,
+        "finance": 4.055787093036929,
+        "development": 2.47,
+        "rival": 13.885258808426705,
+        "liquidity": 0.0,
+        "score": 41.72852828461022,
+        "final_income": 0,
+        "final_cash": 0,
+        "units": "heuristic VP equivalent, not a win probability"
+      },
+      "completed": 0,
+      "cpu_batching": {}
+    },
+    {
+      "seat": 3,
+      "era": "RailEra",
+      "round": 7,
+      "seconds": 1.2030000002123415,
+      "nodes": 32,
+      "actions": [
+        "sell",
+        "network"
+      ],
+      "complete_actions": [
+        [
+          "sell|StokeOnTrent:1||industry:Pottery|Warrington:1|",
+          "beer|merchant:Warrington:1||||",
+          "finish|||||"
+        ],
+        [
+          "network|RailDudleyWolverhampton||location:Belper||",
+          "coal|Kidderminster:0||||",
+          "finish|||||"
+        ]
+      ],
+      "events": [],
+      "cash": 29,
+      "income": 11,
+      "ledger": {
+        "banked": 28.0,
+        "industries": 24.049599999999998,
+        "links": 15.0,
+        "secured_links": 15.0,
+        "forecast_links": 0.0,
+        "industry_reserve": 11.0,
+        "finance": 6.2366210327922325,
+        "development": 0.9412000000000003,
+        "rival": 12.555488874161023,
+        "liquidity": 0.0,
+        "sale_tempo": 0.0,
+        "score": 61.6719321586312,
+        "era_strategy": "industry-completion-and-funded-rail",
+        "final_income": 0,
+        "final_cash": 0,
+        "units": "heuristic VP equivalent, not a win probability"
+      },
+      "completed": 0,
+      "cpu_batching": {
+        "requests": 8,
+        "cache_hits": 1,
+        "coalesced": 5,
+        "batches": 2,
+        "max_batch": 1,
+        "pending": 0
+      }
+    },
+    {
+      "seat": 1,
+      "era": "RailEra",
+      "round": 7,
+      "seconds": 1.2809999999590218,
+      "nodes": 32,
+      "actions": [
+        "develop",
+        "build"
+      ],
+      "complete_actions": [
+        [
+          "develop||Brewery|location:Stafford||",
+          "iron|market||||",
+          "finish|||||"
+        ],
+        [
+          "build|Derby:0|Brewery|location:Derby||",
+          "iron|market||||",
+          "finish|||||"
+        ]
+      ],
+      "events": [
+        {
+          "kind": "develop",
+          "industry": "Brewery",
+          "level": 1,
+          "target": null
+        },
+        {
+          "kind": "build",
+          "industry": "Brewery",
+          "level": 2,
+          "target": "Derby:0"
+        }
+      ],
+      "cash": 22,
+      "income": 10,
+      "ledger": {
+        "banked": 42.0,
+        "industries": 22.9998,
+        "links": 0.0,
+        "secured_links": 0.0,
+        "forecast_links": 0.0,
+        "industry_reserve": 0.0,
+        "finance": 2.362341993554269,
+        "development": 0.0,
+        "rival": 13.207405220698497,
+        "liquidity": 0.0,
+        "sale_tempo": 0.0,
+        "score": 54.15473677285576,
+        "era_strategy": "industry-completion-and-funded-rail",
+        "final_income": 0,
+        "final_cash": 0,
+        "units": "heuristic VP equivalent, not a win probability"
+      },
+      "completed": 0,
+      "cpu_batching": {
+        "requests": 12,
+        "cache_hits": 6,
+        "coalesced": 3,
+        "batches": 3,
+        "max_batch": 1,
+        "pending": 0
+      }
+    },
+    {
+      "seat": 3,
+      "era": "RailEra",
+      "round": 8,
+      "seconds": 1.3119999999180436,
+      "nodes": 32,
+      "actions": [
+        "network",
+        "network"
+      ],
+      "complete_actions": [
+        [
+          "network|RailWolverhamptonCannock||location:Uttoxeter||",
+          "coal|Cannock:1||||",
+          "finish|||||"
+        ],
+        [
+          "network|RailBirminghamCoventry||location:Birmingham||",
+          "coal|Cannock:1||||",
+          "finish|||||"
+        ]
+      ],
+      "events": [],
+      "cash": 40,
+      "income": 11,
+      "ledger": {
+        "banked": 28.0,
+        "industries": 24.0164,
+        "links": 18.63,
+        "secured_links": 18.0,
+        "forecast_links": 0.63,
+        "industry_reserve": 0.0,
+        "finance": 0.0,
+        "development": 0.0,
+        "rival": 12.63033004939552,
+        "liquidity": 0.0,
+        "sale_tempo": 0.0,
+        "score": 58.01606995060448,
+        "era_strategy": "industry-completion-and-funded-rail",
+        "final_income": 0,
+        "final_cash": 0,
+        "units": "heuristic VP equivalent, not a win probability"
+      },
+      "completed": 0,
+      "cpu_batching": {
+        "requests": 24,
+        "cache_hits": 11,
+        "coalesced": 7,
+        "batches": 6,
+        "max_batch": 1,
+        "pending": 0
+      }
+    },
+    {
+      "seat": 2,
+      "era": "RailEra",
+      "round": 8,
+      "seconds": 1.0630000000819564,
+      "nodes": 62,
+      "actions": [
+        "loan",
+        "network"
+      ],
+      "complete_actions": [
+        [
+          "loan|||location:Derby||",
+          "finish|||||"
+        ],
+        [
+          "network|RailKidderminsterDudley||location:Birmingham||",
+          "coal|Cannock:0||||",
+          "finish|||||"
+        ]
+      ],
+      "events": [],
+      "cash": 11,
+      "income": -3,
+      "ledger": {
+        "banked": 19.0,
+        "industries": 9.0,
+        "links": 7.0,
+        "finance": 0.0,
+        "development": 0.0,
+        "rival": 12.658769999999999,
+        "liquidity": 0.0,
+        "score": 22.341230000000003,
+        "final_income": 0,
+        "final_cash": 0,
+        "units": "heuristic VP equivalent, not a win probability"
+      },
+      "completed": 0,
+      "cpu_batching": {}
+    },
+    {
+      "seat": 0,
+      "era": "RailEra",
+      "round": 8,
+      "seconds": 1.468000000109896,
+      "nodes": 62,
+      "actions": [
+        "network",
+        "network"
+      ],
+      "complete_actions": [
+        [
+          "network|RailNuneatonTamworth||location:Uttoxeter||",
+          "coal|Cannock:0||||",
+          "network|RailBelperDerby||||",
+          "coal|Belper:1||||",
+          "beer|Derby:0||||",
+          "finish|||||"
+        ],
+        [
+          "network|RailDerbyBurtonOnTrent||location:Walsall||",
+          "coal|Belper:1||||",
+          "finish|||||"
+        ]
+      ],
+      "events": [],
+      "cash": 33,
+      "income": 3,
+      "ledger": {
+        "banked": 22.0,
+        "industries": 12.0,
+        "links": 18.612000000000002,
+        "finance": 0.0,
+        "development": 0.0,
+        "rival": 12.592762078453026,
+        "liquidity": 0.0,
+        "score": 40.019237921546974,
+        "final_income": 0,
+        "final_cash": 0,
+        "units": "heuristic VP equivalent, not a win probability"
+      },
+      "completed": 0,
+      "cpu_batching": {}
+    },
+    {
+      "seat": 1,
+      "era": "RailEra",
+      "round": 8,
+      "seconds": 2.375,
+      "nodes": 116,
+      "actions": [
+        "sell",
+        "network"
+      ],
+      "complete_actions": [
+        [
+          "sell|StokeOnTrent:2||location:Derby|Warrington:1|",
+          "beer|Derby:0||||",
+          "finish|||||"
+        ],
+        [
+          "network|RailDerbyNottingham||location:Worcester||",
+          "coal|Belper:1||||",
+          "finish|||||"
+        ]
+      ],
+      "events": [],
+      "cash": 17,
+      "income": 10,
+      "ledger": {
+        "banked": 72.0,
+        "industries": 0.0,
+        "links": 0.0,
+        "secured_links": 0.0,
+        "forecast_links": 0.0,
+        "industry_reserve": 0.0,
+        "finance": 0.0,
+        "development": 0.0,
+        "rival": 0.0,
+        "liquidity": 0.0,
+        "sale_tempo": 0.0,
+        "score": 0.0,
+        "win_share": 0.0,
+        "rank": 2,
+        "final_income": 12,
+        "final_cash": 12,
+        "units": "official terminal win share; VP/income/cash tie break"
+      },
+      "completed": 0,
+      "cpu_batching": {
+        "requests": 24,
+        "cache_hits": 18,
+        "coalesced": 4,
+        "batches": 2,
+        "max_batch": 1,
+        "pending": 0
+      }
+    }
+  ],
+  "seconds": 109.70299999997951
+}
