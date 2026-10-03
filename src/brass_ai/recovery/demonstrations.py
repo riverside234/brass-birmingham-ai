@@ -1,6 +1,6 @@
 """Audited four-player demonstrations; BC labels never become PPO/search labels."""
 from collections import Counter
-from concurrent.futures import ProcessPoolExecutor
+from concurrent.futures import ProcessPoolExecutor, as_completed
 import multiprocessing
 import gzip
 import json
@@ -69,6 +69,31 @@ def source_seeds(header):
     return {digest(dict(rules='steam-brass-patch-1.1.0',setup_seed=s)):s for s in seeds}
 
 
+def _audit_receipts(paths):
+    """Reuse independently recorded generation receipts, never a cache's own claim."""
+    receipts={}
+    for directory in sorted({Path(p).parent for p in paths}):
+        try:
+            report=read(directory/'report.json')
+            if not isinstance(report,dict) or report.get('format')!='v3-demonstration-collection-report/1.0.0':continue
+            if report.get('spec')!=digest(read(directory/'spec.json')):continue
+            records=report.get('replays')
+            if not isinstance(records,list):continue
+        except (OSError,ValueError):
+            continue  # Older/unfinished collections still receive a full audit.
+        by_name={}
+        for record in records:
+            if not isinstance(record,dict) or not isinstance(record.get('path'),str):continue
+            receipt=record.get('features')
+            if not isinstance(receipt,dict) or record.get('sha256')!=receipt.get('replay_sha256'):continue
+            # Collections may have moved between Windows and the lab. The
+            # receipt pins the complete replay bytes, not its old absolute path.
+            name=Path(record['path'].replace('\\','/')).name
+            by_name[name]=receipt if name not in by_name or by_name[name]==receipt else None
+        receipts.update({str(directory/name):receipt for name,receipt in by_name.items() if receipt})
+    return receipts
+
+
 def audit(root,paths,output,*,mono=None,workers=1,budget=None):
     root=Path(root);out=project_path(root,output)
     require(not out.exists(),'Refusing to overwrite a demonstration manifest')
@@ -83,16 +108,29 @@ def audit(root,paths,output,*,mono=None,workers=1,budget=None):
     require(type(workers) is int and 1<=workers<=32,'Invalid audit CPU allowance')
     paths=sorted(set(str(project_path(root,p)) for p in paths))
     require(paths,'No demonstration replay paths supplied')
-    tasks=[(str(root),p,sorted(allowed),mono) for p in paths]
+    receipts=_audit_receipts(paths)
+    tasks=[(str(root),p,sorted(allowed),mono,receipts.get(p)) for p in paths]
+    next_progress=20
+    def report_progress(completed):
+        nonlocal next_progress
+        while next_progress<=100 and completed*100>=next_progress*len(tasks):
+            print(f'demo-audit: {next_progress}% ({completed}/{len(tasks)} replay files checked)',flush=True)
+            next_progress+=20
     if workers>1:
         with ProcessPoolExecutor(max_workers=min(workers,len(paths)),mp_context=multiprocessing.get_context('spawn')) as executor:
-            partial=list(executor.map(_audit_path,tasks))
+            pending={executor.submit(_audit_path,task):i for i,task in enumerate(tasks)}
+            partial=[None]*len(tasks)
+            for completed,future in enumerate(as_completed(pending),1):
+                # Report completion immediately, retaining source order for the
+                # existing manifest and duplicate-selection behavior.
+                partial[pending[future]]=future.result()
+                report_progress(completed)
     else:
         partial=map(_audit_path,tasks)
     # Commit a shard only after all its transitions pass. Serial and parallel
     # audits use the same eligibility rules and parent-owned deduplication.
     entries=[];excluded=[];seen=set();groups={}
-    for accepted,rejected in partial:
+    for completed,(accepted,rejected) in enumerate(partial,1):
         excluded.extend(rejected)
         for entry in accepted:
             if entry['semantic_sha256'] in seen:
@@ -100,6 +138,7 @@ def audit(root,paths,output,*,mono=None,workers=1,budget=None):
             seen.add(entry['semantic_sha256'])
             require(groups.setdefault(entry['setup_group'],entry['split'])==entry['split'],'Setup family crosses partitions')
             entries.append(entry)
+        if workers==1:report_progress(completed)
     return _manifest(root,out,entries,excluded,allowed,calibration,workers)
 
 
@@ -115,11 +154,17 @@ def _manifest(root,out,entries,excluded,allowed,calibration,workers):
 
 def _audit_path(args):
     """A fresh private rules host per shard; deduplication commits in the parent."""
-    root,name,allowed,mono=args;root=Path(root);path=Path(name);entries=[];excluded=[]
+    root,name,allowed,mono,*receipts=args;root=Path(root);path=Path(name);entries=[];excluded=[]
     try:
         with gzip.open(path,'rt',encoding='utf-8') as stream: header=json.loads(next(stream))
         require(header['provenance'].get('purpose')=='training','Source purpose is not training')
-        seeds=source_seeds(header);games=read_shards([path],heuristic_only=True)
+        receipt=receipts[0] if receipts else None
+        # Missing/stale derived data is rebuilt from the authoritative replay.
+        # Only an exact independent receipt can skip repeated input validation.
+        if receipt and receipt!=cache_receipt(path):receipt=None
+        seeds=source_seeds(header)
+        games=read_shards([path],heuristic_only=True,receipts={str(path):receipt})
+        replay_sha256=sha(path)
         with RulesHost(root/'artifacts/r1-host/guarded',mono=mono) as host:
             for game in games:
                 require(game['setup_group'] in seeds,'No reproducible setup seed')
@@ -134,12 +179,13 @@ def _audit_path(args):
                 require(context['terminal'] and host.call('result')==game['result'],'Replay terminal result differs')
                 signature=digest(dict(group=game['setup_group'],opponents=game['opponents'],
                     decisions=[(r['seat'],r['choices'][r['chosen']]['id']) for r in game['records']]))
-                entries.append(dict(path=path.relative_to(root).as_posix(),sha256=sha(path),game_id=game['game_id'],
+                entries.append(dict(path=path.relative_to(root).as_posix(),sha256=replay_sha256,game_id=game['game_id'],
                     setup_group=game['setup_group'],split=game['split'],semantic_sha256=signature,
                     teachers=dict(Counter(r['behavior']['policy_id'] for r in game['records'])),
                     label_kind='qualified-v3-choice/1.0.0',context='neutral-predecision/1.0.0',transitions_verified=True))
         write_cache(path,games)
-        for entry in entries: entry['features']=cache_receipt(path)
+        features=cache_receipt(path)
+        for entry in entries: entry['features']=features
     except (ValueError,KeyError,StopIteration,OSError,EOFError,UnicodeError) as error:
         entries=[]
         excluded.append(dict(path=path.relative_to(root).as_posix(),reason=str(error) or type(error).__name__))
