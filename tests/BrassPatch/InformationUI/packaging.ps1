@@ -1,6 +1,7 @@
+param([string]$BuildDirectory='artifacts/information-ui-build')
 $ErrorActionPreference='Stop'
 $trackerRoot=Split-Path -Parent (Split-Path -Parent (Split-Path -Parent $PSScriptRoot))
-$trackerBuild=Join-Path $trackerRoot 'artifacts/information-ui-build'
+$trackerBuild=Join-Path $trackerRoot $BuildDirectory
 $trackerManifest=Get-Content -LiteralPath (Join-Path $trackerBuild 'build-manifest.json') -Raw|ConvertFrom-Json
 $trackerBase=Join-Path $trackerBuild ('baseline/'+$trackerManifest.baseVersion)
 if(-not(Test-Path -LiteralPath $trackerBase)){$trackerBase=Join-Path $trackerRoot ('artifacts/patch-releases/'+$trackerManifest.baseVersion)}

@@ -16,7 +16,6 @@ using InterfaceAdapters.Routing;
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
-
 namespace BrassPatch.Statistics
 {
     public static class StatisticsEntryPoints

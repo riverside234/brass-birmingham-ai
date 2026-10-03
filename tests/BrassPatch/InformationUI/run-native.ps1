@@ -34,7 +34,7 @@ $trackerRsp=Join-Path $trackerBuild ($Suite+'-native.rsp')
 $trackerSources=@('"'+$trackerSource+'"')
 if($Suite -in 'presentation','link'){$trackerSources+='"'+(Join-Path $trackerRoot 'tests/BrassPatch/CityLocator/UnityCityLocatorRegression.cs')+'"'}
 if($Suite -eq 'menu'){$trackerSources+='"'+(Join-Path $trackerRoot 'tests/BrassLocalAI/AiExecutionResourceTests.cs')+'"'}
-if($Suite -eq 'statistics'){$trackerSources+='"'+(Join-Path $trackerRoot 'tests/BrassPatch/Statistics/StatisticsReviewChecks.cs')+'"'}
+if($Suite -eq 'statistics'){foreach($test in 'StatisticsReviewChecks.cs','StatisticsLightChecks.cs'){$trackerSources+='"'+(Join-Path $trackerRoot ('tests/BrassPatch/Statistics/'+$test))+'"'}}
 @('/nologo','/target:library','/langversion:7.3','/nostdlib+','/deterministic+',('/out:"'+$trackerDll+'"'))+@(Get-ChildItem -LiteralPath $trackerManaged -Filter '*.dll'|Where-Object {$_.Name -notmatch 'Tests|Regression'}|ForEach-Object {'/reference:"'+$_.FullName+'"'})+$trackerSources|Set-Content -LiteralPath $trackerRsp -Encoding utf8
 & (Join-Path $trackerRoot 'artifacts/patch-tools/microsoft.net.compilers.toolset.4.12.0/tasks/net472/csc.exe') ('@'+$trackerRsp)
 if($LASTEXITCODE -ne 0){throw 'Native tests compilation failed.'}

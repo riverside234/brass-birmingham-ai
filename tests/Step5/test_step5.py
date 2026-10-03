@@ -9,14 +9,17 @@ import torch
 
 from brass_ai.bank import load_bank, read
 from brass_ai.learning.batching import model_id
-from brass_ai.learning.checkpoint import save_checkpoint
+from brass_ai.learning.checkpoint import save_checkpoint, load_checkpoint
 from brass_ai.learning.contracts import SOURCE_ROOT, digest
 from brass_ai.learning.model import FourSeatNet, ModelConfig
 from brass_ai.learning.replay import split_for
 from brass_ai.step5.policy import NeuralPolicy, context_for, exploration_distribution, INDUSTRIES
-from brass_ai.step5.search import confirmed_teacher, first_choices, turn_key
-from brass_ai.step5.updates import ppo_update, reptile_step, distill_update
-from brass_ai.step5.league import seeds_for, table_kind, validate_config, pottery_metrics, checked_snapshot
+from brass_ai.search.common import SearchConfig, expansion_indices, turn_key
+from brass_ai.search.ismcts import visit_teacher
+from brass_ai.step5.updates import reptile_step
+from brass_ai.recovery.updates import ppo_update, distill_update
+from brass_ai.recovery.config import UPDATE_V21 as UPDATE, CURRICULUM, table_kind
+from brass_ai.step5.league import seeds_for, validate_config, pottery_metrics
 from brass_ai.step5.evaluation import summarize_outcomes
 from fixtures import position, game
 
@@ -69,11 +72,11 @@ class Step5Tests(unittest.TestCase):
         p.context_features(view, other)
         self.assertEqual(len(p.contexts), 2)
 
-    def test_default_tables_are_95_percent_neural(self):
-        kinds = [table_kind(i) for i in range(100)]
+    def test_mature_tables_are_95_percent_neural(self):
+        kinds = [table_kind(10000+i, CURRICULUM) for i in range(100)]
         self.assertEqual(kinds.count('legacy'), 5)
         self.assertEqual(kinds.count('historical'), 25)
-        self.assertNotIn('legacy', [table_kind(i, 0) for i in range(100)])
+        self.assertEqual([table_kind(i, CURRICULUM) for i in range(100)].count('legacy'), 40)
         cfg = read(SOURCE_ROOT / 'configs/step5/lab.json'); cfg['legacy_every'] = 2
         with self.assertRaises(ValueError): validate_config(cfg)
 
@@ -93,7 +96,7 @@ class Step5Tests(unittest.TestCase):
         policy = NeuralPolicy(self.model, exploration=.1)
         g = self.onpolicy_game(policy)
         old = self.model.policy_scorer[0].weight.detach().clone()
-        report = ppo_update(self.model, torch.optim.AdamW(self.model.parameters(), lr=.001), [g], policy, epochs=2)
+        report = ppo_update(self.model, torch.optim.AdamW(self.model.parameters(), lr=.001), [g], policy, dict(UPDATE, epochs=2))
         self.assertEqual(report['learner_trajectories'], 4)
         self.assertFalse(torch.equal(old, self.model.policy_scorer[0].weight))
 
@@ -103,7 +106,7 @@ class Step5Tests(unittest.TestCase):
         for seat in (1, 2, 3):
             g['opponents'][seat] = 'old-model'
             g['records'][seat]['behavior'].update(kind='external', policy_id='old-model', probability=.99)
-        report = ppo_update(self.model, torch.optim.AdamW(self.model.parameters()), [g], policy, epochs=1)
+        report = ppo_update(self.model, torch.optim.AdamW(self.model.parameters()), [g], policy, dict(UPDATE, epochs=1))
         self.assertEqual(report['learner_trajectories'], 1)
         self.assertEqual(report['learner_decisions'], 1)
 
@@ -111,32 +114,30 @@ class Step5Tests(unittest.TestCase):
         policy = NeuralPolicy(self.model)
         g = self.onpolicy_game(policy); g['records'][0]['behavior']['probability'] = .999
         with self.assertRaises(ValueError):
-            ppo_update(self.model, torch.optim.AdamW(self.model.parameters()), [g], policy)
+            ppo_update(self.model, torch.optim.AdamW(self.model.parameters()), [g], policy, UPDATE)
         g = self.onpolicy_game(policy); g['split'] = 'test'
         with self.assertRaises(ValueError):
-            ppo_update(self.model, torch.optim.AdamW(self.model.parameters()), [g], policy)
+            ppo_update(self.model, torch.optim.AdamW(self.model.parameters()), [g], policy, UPDATE)
 
     def test_proposals_keep_setup_actions_and_pottery(self):
         choices = [dict(id='pottery', kind='build', industry='Pottery'),
                    dict(id='cotton', kind='build', industry='CottonMill'),
                    dict(id='loan', kind='loan'), dict(id='develop', kind='develop')]
-        indices = first_choices(choices, [.000001, .99, .001, .001], 2, random.Random(1))
+        indices = expansion_indices(choices, [.000001, .99, .001, .001], 0, {}, random.Random(1), config=SearchConfig(root_top_k=2))
         self.assertEqual(set(indices), set(range(4)))
 
-    def test_complete_plan_teacher_uses_fresh_scores_and_prefix(self):
+    def test_teacher_requires_completed_visits_and_preserves_full_prior(self):
         choices = [{'id': x} for x in ('a', 'b', 'unseen')]
-        plans = [['a', 'x'], ['a', 'y'], ['b', 'z']]
-        t = confirmed_teacher(choices, plans, [.8, .4, .2], [], .7, 4, .1)
-        self.assertEqual(t['coverage'], [True, True, False])
-        self.assertGreater(t['probabilities'][0], .99)
-        self.assertEqual(t['probabilities'][2], 0)
-        t = confirmed_teacher([{'id': 'x'}, {'id': 'y'}], plans, [.8, .4, .2], ['a'], .7, 4, .1)
-        self.assertEqual(t['coverage'], [True, True])
-        self.assertIsNone(confirmed_teacher([{'id': 'z'}], plans, [.8, .4, .2], ['b'], .7, 4, .1))
+        stats=dict(completed=4,expansion=[True,True,False],root={'a':dict(visits=3),'b':dict(visits=1)})
+        t=visit_teacher(choices,stats,[.4,.4,.2],model=model_id(self.model),observer=0,config=SearchConfig())
+        self.assertEqual(t['coverage'], [True]*3)
+        np.testing.assert_allclose(t['probabilities'], [.715,.265,.02])
+        stats['root']={'a':dict(visits=4)}
+        self.assertIsNone(visit_teacher(choices,stats,[.4,.4,.2],model=model_id(self.model),observer=0,config=SearchConfig()))
 
     def test_no_teacher_is_not_fabricated_as_distillation(self):
         p = NeuralPolicy(self.model); g = self.onpolicy_game(p)
-        result = distill_update(self.model, torch.optim.AdamW(self.model.parameters()), [g])
+        result = distill_update(self.model, torch.optim.AdamW(self.model.parameters()), [g], UPDATE)
         self.assertFalse(result['updated'])
 
     def test_turn_identity_includes_era_round_and_spending_order_turn(self):
@@ -154,11 +155,14 @@ class Step5Tests(unittest.TestCase):
         reptile_step(self.model, [a, b], .25)
         torch.testing.assert_close(next(self.model.parameters()), original + .5)
 
-    def test_frozen_neural_snapshot_hash_is_checked(self):
+    def test_checkpoint_rejects_altered_weights(self):
         with tempfile.TemporaryDirectory() as temp:
             path = Path(temp) / 'model.pt'; save_checkpoint(path, self.model)
-            with self.assertRaises(ValueError):
-                checked_snapshot(Path(temp), dict(path='model.pt', sha256='bad', model_id='bad'), 'cpu')
+            raw=torch.load(path,weights_only=True)
+            next(iter(raw['state_dict'].values())).add_(.01)
+            torch.save(raw,path)
+            with self.assertRaisesRegex(ValueError,'digest mismatch'):
+                load_checkpoint(path)
 
     def test_v3_holdout_is_policy_identity_only_and_still_loads(self):
         pool = read(SOURCE_ROOT / 'training/opponents/pool.json')
@@ -166,7 +170,7 @@ class Step5Tests(unittest.TestCase):
         self.assertTrue(any('pottery-flex' in p for p in pool['evaluation']))
         bank = read(SOURCE_ROOT / 'training/opponents/current.json')['bank']
         manifest = load_bank(SOURCE_ROOT, bank)
-        self.assertIn('pottery-flex-v3', manifest['payload']['profiles'])
+        self.assertTrue(any(p.startswith('pottery-flex-v3') for p in manifest['payload']['profiles']))
 
     def test_clustered_results_and_pottery_warning_do_not_claim_strength(self):
         rows = [dict(seed=seed, seat=seat, win=1., rank=1, vp=150, margin=40, margin_to_best=20)

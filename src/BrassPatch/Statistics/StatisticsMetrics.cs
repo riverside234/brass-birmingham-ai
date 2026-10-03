@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using BoardGameRules.Entities.Players;
-
 namespace BrassPatch.Statistics
 {
     public sealed class StatisticsDrill
@@ -12,16 +11,10 @@ namespace BrassPatch.Statistics
         public PlayerColor? Player;
         public string Industry="", Region="", Action="", Resource="";
         public bool? Outgoing;
+        public string ResourceView;
+        public bool? AllCashPayments;
         public bool HasKeys;
         public readonly HashSet<string> Keys=new HashSet<string>();
-    }
-    public sealed class StatisticsObservation
-    {
-        public string Id, Title, Fact, Interpretation, Experiment, Coverage, Scope="Whole match";
-        public int RuleVersion=1,SampleSize;
-        public PlayerColor Player;
-        public bool Strength;
-        public StatisticsDrill Evidence;
     }
     public sealed class StatisticsLoanRecovery
     {
@@ -42,10 +35,10 @@ namespace BrassPatch.Statistics
         {return r.Actions.Where(f.Frame);}
         public static IEnumerable<StatisticsEntry> Entries(CompletedMatchStatistics r,StatisticsFilters f)
         {
-            var keys=new HashSet<string>(Assets(r,f).Select(a=>a.Key));
+            var keys=new HashSet<string>(r.Assets.Where(a=>f.Players.Contains(a.Player)&&(f.Industry==""||f.Industry==a.Type)&&(f.Region==""||f.Region==a.RegionColor)).Select(a=>a.Key));
             var actions=new HashSet<string>(Actions(r,f).Select(a=>a.Key));
             return r.Entries.Where(e=>f.Includes(e.Player,e.Era)&&(f.Industry==""&&f.Region==""||e.AssetKey!=null&&keys.Contains(e.AssetKey))
-                &&(f.Action==""||actions.Contains(e.ActionKey??""))&&(!f.EvidenceRestricted&&f.Evidence.Count==0||keys.Contains(e.AssetKey??"")||f.Evidence.Contains(e.ActionKey??"")||f.Evidence.Contains("entry-"+e.Revision+"-"+e.Player)));
+                &&(f.Action==""||actions.Contains(e.ActionKey??""))&&(!f.EvidenceRestricted&&f.Evidence.Count==0||f.Evidence.Contains(e.AssetKey??"")||f.Evidence.Contains(e.ActionKey??"")||f.Evidence.Contains("entry-"+e.Revision+"-"+e.Player)));
         }
         public static int AssetVP(StatisticsAsset a,int era=0)
         {return (era==2?0:a.CanalVP)+(era==1?0:a.RailVP)+(era==2?0:a.IntroVP);}
@@ -95,11 +88,11 @@ namespace BrassPatch.Statistics
                 foreach(var a in Assets(r,f))flips.Rows.Add(new StatisticsRow(a.Key,a.Position+" · built revision "+a.Revision+"; flip revision "+a.FlipRevision,new[]{r.Name(a.Player),IndustryName(a.Type)+" · "+a.City,a.Flipped?(a.FlipOwnTurn-a.OwnTurn).ToString():"Unflipped",a.Flipped?(a.FlipTurn-a.Turn).ToString():"—",a.FlipTrigger??(a.Sellable?"Goods sale":"Unrecorded"),AssetVP(a,f.Era).ToString()}){Player=a.Player});
                 output.Add(flips);
                 var develop=new StatisticsSection("Development follow-through","Later higher-level builds are observed follow-through, not proof development was necessary. Next mat tile uses the actual era restriction.","Player","Developed tile","Next level","Rail allowed","Later higher builds");
-                foreach(var e in Entries(r,f).Where(e=>e.Kind=="Development"))row(develop,e,e.Detail+" · tile "+e.TileId,new[]{r.Name(e.Player),IndustryName(e.Resource)+" L"+e.Quantity,e.NextLevel==0?"Exhausted":"L"+e.NextLevel,e.NextLevel==0?"—":e.NextRailBlocked?"Blocked (Canal only)":"Yes",DevelopmentBuilds(r,e,f.Era).ToString()});
+                foreach(var e in StatisticsChartQueries.Development(r,f))row(develop,e,e.Detail+" · tile "+e.TileId,new[]{r.Name(e.Player),IndustryName(e.Resource)+" L"+e.Quantity,e.NextLevel==0?"Exhausted":"L"+e.NextLevel,e.NextLevel==0?"—":e.NextRailBlocked?"Blocked (Canal only)":"Yes",DevelopmentBuilds(r,e,f.Era).ToString()});
                 output.Add(develop);
             }
             if(page==4||page==8){
-                var loans=new StatisticsSection("Income recovery after loans","Recovery means the income level first reaches its value immediately before this loan. Multiple loan episodes may overlap; this is not cash payback. Intervening income is actual cash, not loan profit.","Player","Loan turn / amount","Pre → post level","Recovery own turns / actions","Intervening income cash");
+                var loans=new StatisticsSection("Income recovery after loans","Era filters loan acquisition; recovery is observed through match end, including a later era. Recovery means the income level first reaches its value immediately before this loan. Multiple episodes may overlap; this is not cash payback. Intervening income is actual cash, not loan profit.","Player","Loan turn / amount","Pre → post level","Recovery own turns / actions","Intervening income cash");
                 foreach(var p in r.Players.Where(p=>f.Players.Contains(p.Color)))foreach(var l in Loans(r,p.Color).Where(l=>f.Era==0||l.Loan.Era==f.Era))row(loans,l.Loan,l.Loan.Position,new[]{p.Name,l.Loan.OwnTurn+" / "+StatisticsFormat.Money(l.Loan.Borrowed),l.Baseline+" → "+l.After,l.RecoveredOwnTurn.HasValue?(l.RecoveredOwnTurn-l.Loan.OwnTurn)+" / "+l.ActionsToRecover:"Not recovered",StatisticsFormat.Money(l.ActualIncomePaid)});
                 output.Add(loans);
                 var rail=new StatisticsSection("Rail entry and opening actions","Snapshot after Canal cleanup, before the first Rail turn. A Canal-only tile can block Rail construction even when its level is above I.","Player","Cash / income","Carried tiles","Rail-blocked industries","First two Rail actions");
@@ -115,7 +108,7 @@ namespace BrassPatch.Statistics
                 foreach(var e in Flow(r,f)){
                     var source=r.Assets.FirstOrDefault(a=>a.Key==e.AssetKey);var owner=f.Outgoing?e.Supplier:(PlayerColor?)e.Player;
                     var drill=new StatisticsDrill{Page=5,Player=owner,Resource=f.Resource,Outgoing=f.Outgoing,HasKeys=true};drill.Keys.Add("entry-"+e.Revision+"-"+e.Player);
-                    flow.Rows.Add(new StatisticsRow("entry-"+e.Revision+"-"+e.Player,e.Detail,e.Supplier.HasValue?r.Name(e.Supplier.Value):e.Source,r.Name(e.Player),e.Resource+" / "+e.Category,e.Quantity.ToString(),source==null?e.Source:IndustryName(source.Type)+" · "+source.City,e.Position){Player=owner,Drill=drill});
+                    flow.Rows.Add(new StatisticsRow(StatisticsChartQueries.RecordRowKey(e),e.Detail,e.Supplier.HasValue?r.Name(e.Supplier.Value):e.Source,r.Name(e.Player),e.Resource+" / "+e.Category,e.Quantity.ToString(),source==null?e.Source:IndustryName(source.Type)+" · "+source.City,e.Position){Player=owner,Drill=drill});
                 }output.Add(flow);
                 var prices=new StatisticsSection("Recorded market transaction prices",(f.Outgoing?"Outgoing mode: selected suppliers' market sales only. Switch to incoming for purchase records. ":"")+"Unit price = recorded total transaction price / quantity. Market sale receipts are not negative spending and are separate from units supplied to actions.","Player","Resource","Direction","Units","Total price","Price / unit","Quote before → after");
                 foreach(var e in Entries(r,f).Where(e=>(e.Kind=="Market sale"||!f.Outgoing&&e.Kind=="Market purchase")&&e.Resource==f.Resource))row(prices,e,e.Position,new[]{r.Name(e.Player),e.Resource,e.Kind,e.Quantity.ToString(),StatisticsFormat.Money(e.TotalPrice),StatisticsFormat.Ratio(e.TotalPrice,e.Quantity),e.BeforeQuote+" → "+e.AfterQuote});output.Add(prices);
@@ -131,10 +124,14 @@ namespace BrassPatch.Statistics
             var s=new StatisticsSection("Supporting records by identity","Exact evidence IDs and related recorded operations. Actor and supplier can differ; final tile state is labeled separately from historical event timing.","Record ID","Actor / owner","When","Operation / tile","Values","Context");
             foreach(var a in r.Assets.Where(a=>f.Evidence.Contains(a.Key)))s.Rows.Add(new StatisticsRow(a.Key,a.Position+" · flip revision "+a.FlipRevision+"; removal revision "+a.RemovedRevision,a.Key,r.Name(a.Player),a.Position,IndustryName(a.Type)+" L"+a.Level+" · "+a.City,"Cost "+StatisticsFormat.Money(a.BaseCost+a.MarketCost)+" · actual VP "+AssetVP(a,f.Era),"Final: "+(a.Remaining?(a.Flipped?"flipped":"unflipped"):a.Removal)){Player=a.Player});
             foreach(var l in r.Links.Where(l=>f.Evidence.Contains(l.Key)))s.Rows.Add(new StatisticsRow(l.Key,l.Contributions,l.Key,r.Name(l.Player),l.Position,l.Route,l.VP+" VP",l.OwnVP+" own / "+l.OthersVP+" opponents / "+l.MerchantVP+" merchant VP"){Player=l.Player});
+            foreach(var round in r.Rounds.Where(t=>f.Evidence.Contains(StatisticsChartQueries.RoundKey(t)))){
+                int index=r.Rounds.IndexOf(round);var previous=index>0?r.Rounds[index-1]:null;
+                s.Rows.Add(new StatisticsRow(StatisticsChartQueries.RoundKey(round),"Preceding spending: "+(previous==null||previous.Era!=round.Era?"Era entry; no preceding round":String.Join(" · ",previous.Order.Select(p=>r.Name(p)+" "+StatisticsFormat.Money(previous.Spent(p))))),StatisticsChartQueries.RoundKey(round),"Recorded round",(round.Era==1?"Canal":"Rail")+" · round "+round.Round,"Turn order",String.Join(" → ",round.Order.Select(r.Name)),"Current-round spending: "+String.Join(" · ",round.Order.Select(p=>r.Name(p)+" "+StatisticsFormat.Money(round.Spent(p))))));
+            }
             var entries=r.Entries.Where(e=>f.Evidence.Contains("entry-"+e.Revision+"-"+e.Player)||f.Evidence.Contains(e.AssetKey??"")||f.Evidence.Contains(e.ActionKey??"")).ToArray();
             var actions=new HashSet<string>(entries.Where(e=>e.ActionKey!=null).Select(e=>e.ActionKey));
             foreach(var a in r.Actions.Where(a=>f.Evidence.Contains(a.Key)||actions.Contains(a.Key)))s.Rows.Add(new StatisticsRow(a.Key,a.Details,a.Key,r.Name(a.Player),a.Position,a.Kind,StatisticsFormat.Money(a.Spending)+" spent · "+a.Goods+" goods · "+a.Links+" links",a.Cards){Player=a.Player});
-            foreach(var e in entries)s.Rows.Add(new StatisticsRow("entry-"+e.Revision+"-"+e.Player,e.Detail,"entry-"+e.Revision+"-"+e.Player,r.Name(e.Player)+(e.Supplier.HasValue?" ← "+r.Name(e.Supplier.Value):""),e.Position,e.Kind+" · "+e.Label,e.Quantity+" units · cash Δ "+StatisticsFormat.Money(e.Cash)+" · VP Δ "+e.VP,(e.Source??"")+" → "+(e.Destination??"")+" · "+e.Detail){Player=e.Player});
+            foreach(var e in entries)s.Rows.Add(new StatisticsRow(StatisticsChartQueries.RecordRowKey(e),e.Detail,"entry-"+e.Revision+"-"+e.Player,r.Name(e.Player)+(e.Supplier.HasValue?" ← "+r.Name(e.Supplier.Value):""),e.Position,e.Kind+" · "+e.Label,e.Quantity+" units · cash Δ "+StatisticsFormat.Money(e.Cash)+" · VP Δ "+e.VP,(e.Source??"")+" → "+(e.Destination??"")+" · "+e.Detail){Player=e.Player});
             return s;
         }
     }

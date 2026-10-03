@@ -11,7 +11,6 @@ using TMPro;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.UI;
-
 namespace BrassPatch.Statistics
 {
     // Owns only newly created controls. No game object, tile or player portrait is
@@ -29,7 +28,7 @@ namespace BrassPatch.Statistics
         }
         public CompletedMatchStatistics Report { get; private set; }
         public StatisticsFilters Filters { get; private set; } = new StatisticsFilters();
-        public int CurrentPage { get; private set; } = 10;
+        public int CurrentPage { get; private set; } = 0;
         public ScrollRect BodyScroll { get; private set; }
         public Button[] PageButtons { get; private set; }
         public float TextScale { get; private set; } = 1.15f;
@@ -52,11 +51,11 @@ namespace BrassPatch.Statistics
         bool renderPending,closing,revealPage=true;
         int screenWidth,screenHeight;
         Table pinned;
-
         protected override void Awake() { DestroyWhenClosed=false; DisableMenusUnderneath=false; }
         protected override void Start() { if(InputRegistration!=null)InputRegistration.RegisterKey(KeyEnum.Escape,this); }
         public void Initialize(CompletedMatchStatistics report,TMP_FontAsset typeface,Action<bool?> close)
         {
+            if(GetComponent<StatisticsTheme>()==null)gameObject.AddComponent<StatisticsTheme>();
             Report=report; font=typeface; OnClose=close; Filters.Reset(report); BuildLayout();
         }
         public void SetOpener(GameObject value) { opener=value; }
@@ -83,11 +82,12 @@ namespace BrassPatch.Statistics
         }
         public void SelectPage(int page)
         {
-            if(page<0||page>=StatisticsPages.Names.Length)return; if(BodyScroll!=null)positions[CurrentPage]=BodyScroll.verticalNormalizedPosition;
+            page=StatisticsPages.NormalizePage(page); if(BodyScroll!=null)positions[CurrentPage]=BodyScroll.verticalNormalizedPosition;
             CurrentPage=page; CloseCategories(); Tooltip(null); revealPage=true;renderPending=true;
         }
         public void Drill(int page,PlayerColor player,string query)
         {
+            page=StatisticsPages.NormalizePage(page);
             Filters.Players.Clear();Filters.Players.Add(player);Filters.Search=query??"";
             if(search!=null)search.SetTextWithoutNotify(Filters.Search);
             positions[page]=1; SelectPage(page);
@@ -133,61 +133,61 @@ namespace BrassPatch.Statistics
             if(unit<=0)unit=1; var safe=screenWidth==Screen.width&&screenHeight==Screen.height?Screen.safeArea:pixels;
             width=Mathf.Min(safe.width*.96f,1920)*unit;float height=Mathf.Min(safe.height*.96f,1200)*unit;
             var backdrop=StatisticsWidgets.Rect(transform,"Statistics input shield",Vector2.zero,root.rect.size);
-            StatisticsWidgets.Stretch(backdrop,Vector2.zero,Vector2.zero);backdrop.gameObject.AddComponent<Image>().color=new Color(0,0,0,.74f);
+            StatisticsWidgets.Stretch(backdrop,Vector2.zero,Vector2.zero);backdrop.gameObject.AddComponent<Image>().color=new Color(0,0,0,.50f);
             window=StatisticsWidgets.Rect(transform,"Statistics window",Vector2.zero,new Vector2(width,height));
             window.anchorMin=window.anchorMax=window.pivot=new Vector2(.5f,.5f);
             window.anchoredPosition=new Vector2(safe.center.x-pixels.center.x,safe.center.y-pixels.center.y)*unit;
             window.gameObject.AddComponent<StatisticsSurface>().Panel=true;
             StatisticsWidgets.Text(window,font,"Title","MATCH STATISTICS",V(22,10),new Vector2(width-360*unit,48*unit),F(30)).fontStyle=FontStyles.Bold;
-            StatisticsWidgets.Text(window,font,"Context",(Report.Introductory?"Introductory":"Full game")+" · "+Report.Players.Count+" players · "+(Report.CompleteHistory?"complete history":"partial history"),V(22,57),new Vector2(width-100*unit,30*unit),F(19));
+            StatisticsWidgets.Text(window,font,"Context",(Report.Introductory?"Introductory":"Full game")+" · "+Report.Players.Count+" players · "+(Report.CompleteHistory?"complete history":"partial history"),V(22,48),new Vector2(width-100*unit,30*unit),F(19));
             smallerText=StatisticsWidgets.Button(window,font,"Smaller text","A−",new Vector2(width-298*unit,-16*unit),Size(50,42),23*unit,()=>ChangeTextSize(-1));
             sizeLabel=StatisticsWidgets.Text(window,font,"Text size",new[]{"Large","Larger","Largest"}[Mathf.RoundToInt((TextScale-1)/.15f)],new Vector2(width-244*unit,-16*unit),Size(100,42),20*unit);
             sizeLabel.alignment=TextAlignmentOptions.Center;
             largerText=StatisticsWidgets.Button(window,font,"Larger text","A+",new Vector2(width-140*unit,-16*unit),Size(50,42),23*unit,()=>ChangeTextSize(1));
             StatisticsWidgets.Enabled(smallerText,TextScale>1.01f);StatisticsWidgets.Enabled(largerText,TextScale<1.29f);
-            Tip(smallerText,"Reduce text size. Even Large uses bigger text than the previous panel.");
+            Tip(smallerText,"Reduce text size; the selected page and filters are retained.");
             Tip(largerText,"Increase text size. Tables and navigation adapt; page position and filters are retained.");
             closeButton=StatisticsWidgets.Button(window,font,"Close statistics","×",new Vector2(width-70*unit,-16*unit),Size(48,42),28*unit,()=>Close());
             float x=22*unit;playerButtons.Clear();
             foreach(var p in Report.Players) {
                 var player=p;float w=Mathf.Min(192,(width/unit-330-130*TextScale-66)/Report.Players.Count-8)*unit;
-                var b=StatisticsWidgets.Button(window,font,"Filter "+p.Name,p.Name,new Vector2(x,-96*unit),new Vector2(w,44*unit),F(21),()=>{
+                var b=StatisticsWidgets.Button(window,font,"Filter "+p.Name,p.Name,new Vector2(x,-72*unit),new Vector2(w,44*unit),F(21),()=>{
                     if(!Filters.Players.Remove(player.Color))Filters.Players.Add(player.Color);QueueRender(false);
                 });
-                var label=b.GetComponentInChildren<TextMeshProUGUI>();label.color=StatisticsWidgets.PlayerColor(p.Color);
+                var label=b.GetComponentInChildren<TextMeshProUGUI>();label.color=StatisticsTheme.Player(p.Color);
                 Tip(b,p.Name+"\n"+p.Opponent+"\nToggle this player in all pages.");playerButtons.Add(b);x+=w+8*unit;
             }
             eraButtons.Clear();
             for(int i=0;i<(Report.Introductory?2:3);i++) {
                 int era=i;string name=new[]{"Whole game","Canal","Rail"}[i];float w=new[]{142,90,80}[i]*unit;
-                var b=StatisticsWidgets.Button(window,font,"Era "+name,name,new Vector2(x,-96*unit),new Vector2(w,44*unit),F(19),()=>{Filters.Era=era;QueueRender(false);});
+                var b=StatisticsWidgets.Button(window,font,"Era "+name,name,new Vector2(x,-72*unit),new Vector2(w,44*unit),F(19),()=>{Filters.Era=era;QueueRender(false);});
                 eraButtons.Add(b);x+=w+6*unit;
             }
-            var reset=StatisticsWidgets.Button(window,font,"Reset filters","Reset filters",new Vector2(width-22*unit-130*unit*TextScale,-96*unit),new Vector2(130*unit*TextScale,44*unit),F(19),ResetFilters);
+            var reset=StatisticsWidgets.Button(window,font,"Reset filters","Reset filters",new Vector2(width-22*unit-130*unit*TextScale,-72*unit),new Vector2(130*unit*TextScale,44*unit),F(19),ResetFilters);
             Tip(reset,"Show all players, the whole game and every chart series; clear the search.");
             float searchWidth=Mathf.Min(570*unit,width-44*unit-470*unit*TextScale);
-            search=StatisticsWidgets.Search(window,font,V(22,150),new Vector2(searchWidth,44*unit),F(21),value=>{Filters.Search=value;QueueRender(false);});
+            search=StatisticsWidgets.Search(window,font,V(22,118),new Vector2(searchWidth,44*unit),F(21),value=>{Filters.Search=value;QueueRender(false);});
             search.textViewport.offsetMax=new Vector2(-50*unit,-3*unit);
             search.SetTextWithoutNotify(Filters.Search);
             ((TextMeshProUGUI)search.placeholder).text="Search ledger: city, industry or action…";
             clearSearch=StatisticsWidgets.Button(search.transform,font,"Clear search","×",new Vector2(searchWidth-43*unit,-4*unit),Size(38,36),25*unit,()=>{search.text="";});
             Tip(clearSearch,"Clear the ledger search.");
             float toolsX=searchWidth+32*unit;
-            StatisticsWidgets.Button(window,font,"Find category","Filter detail…",new Vector2(toolsX,-150*unit),new Vector2(200*unit*TextScale,44*unit),F(19),ShowCategories);
+            StatisticsWidgets.Button(window,font,"Find category","Filter detail…",new Vector2(toolsX,-118*unit),new Vector2(200*unit*TextScale,44*unit),F(19),ShowCategories);
             toolsX+=210*unit*TextScale;
-            collapseRows=StatisticsWidgets.Button(window,font,"Collapse rows","Collapse rows",new Vector2(toolsX,-150*unit),new Vector2(160*unit*TextScale,44*unit),F(19),()=>{expanded.Clear();QueueRender(true);});
+            collapseRows=StatisticsWidgets.Button(window,font,"Collapse rows","Collapse rows",new Vector2(toolsX,-118*unit),new Vector2(160*unit*TextScale,44*unit),F(19),()=>{expanded.Clear();QueueRender(true);});
             Tip(collapseRows,"Collapse all expanded row details. Filters, sorting and scroll position are retained.");
             toolsX+=170*unit*TextScale;
-            topButton=StatisticsWidgets.Button(window,font,"Back to top","↑ Top",new Vector2(toolsX,-150*unit),new Vector2(80*unit*TextScale,44*unit),F(19),()=>{BodyScroll.verticalNormalizedPosition=1;positions[CurrentPage]=1;});
-            filterStatus=StatisticsWidgets.Text(window,font,"Filter summary","",V(22,199),new Vector2(width-44*unit,30*unit),F(18));
-            filterStatus.color=new Color(.84f,.80f,.71f,1);
-            float nav=(screenWidth<1500?218:248)*unit*TextScale;bodyY=236*unit;float bodyHeight=height-bodyY-66*unit;
+            topButton=StatisticsWidgets.Button(window,font,"Back to top","↑ Top",new Vector2(toolsX,-118*unit),new Vector2(80*unit*TextScale,44*unit),F(19),()=>{BodyScroll.verticalNormalizedPosition=1;positions[CurrentPage]=1;});
+            filterStatus=StatisticsWidgets.Text(window,font,"Filter summary","",new Vector2(Math.Max(toolsX+100*unit*TextScale,width*.70f),-118*unit),new Vector2(width-Math.Max(toolsX+100*unit*TextScale,width*.70f)-22*unit,44*unit),F(18));
+            filterStatus.color=StatisticsTheme.Muted;
+            float nav=258*unit;bodyY=174*unit;float bodyHeight=height-bodyY-66*unit;
             var navigation=StatisticsWidgets.Scroll(window,"Page navigation",new Vector2(16*unit,-bodyY),new Vector2(nav,bodyHeight),unit);
-            float pageHeight=68*unit*TextScale;
+            float pageHeight=56*unit*TextScale;
             navigation.content.sizeDelta=new Vector2(nav-14*unit,StatisticsPages.Names.Length*pageHeight);PageButtons=new Button[StatisticsPages.Names.Length];
             for(int i=0;i<StatisticsPages.NavigationOrder.Length;i++) {
-                int page=StatisticsPages.NavigationOrder[i]; PageButtons[page]=StatisticsWidgets.Button(navigation.content,font,"Page "+page,StatisticsPages.Names[page],new Vector2(0,-i*pageHeight),new Vector2(nav-19*unit,pageHeight-6*unit),F(21),()=>SelectPage(page));
-                PageButtons[page].GetComponentInChildren<TextMeshProUGUI>().enableWordWrapping=true;
+                int page=StatisticsPages.NavigationOrder[i]; PageButtons[page]=StatisticsWidgets.Button(navigation.content,font,"Page "+page,(page==3?"Networks &\nGeography":page==8?"Efficiency &\nTransition":StatisticsPages.Names[page]),new Vector2(0,-i*pageHeight),new Vector2(nav-19*unit,pageHeight-6*unit),F(21),()=>SelectPage(page));
+                PageButtons[page].GetComponentInChildren<TextMeshProUGUI>().enableWordWrapping=true;PageButtons[page].GetComponentInChildren<TextMeshProUGUI>().overflowMode=TextOverflowModes.Overflow;
             }
             BodyScroll=StatisticsWidgets.Scroll(window,"Statistics page",new Vector2(nav+32*unit,-bodyY),new Vector2(width-nav-48*unit,bodyHeight),unit);
             bodyWidth=BodyScroll.viewport.sizeDelta.x-8*unit;
@@ -221,7 +221,7 @@ namespace BrassPatch.Statistics
         void ShowCategories()
         {
             if(dropdown!=null){CloseCategories();return;}
-            bool industry=CurrentPage==1||CurrentPage==2||CurrentPage==8;
+            bool industry=CurrentPage==1||CurrentPage==2||CurrentPage==8||CurrentPage==5&&Filters.ResourceView=="Merchants";
             IEnumerable<string> values=industry?StatisticsPages.IndustryTypes:CurrentPage==5?new[]{"Coal","Iron","Beer"}:
                 CurrentPage==3?Report.Locations.Select(l=>l.RegionColor).Distinct().OrderBy(c=>c).ToArray():StatisticsPages.ActionTypes;
             var options=new[]{"Clear detail filters"}.Concat(values).ToArray();
@@ -252,11 +252,10 @@ namespace BrassPatch.Statistics
             var analytic=View();
             var sections=analytic.Ledgers.ToList();
             // Older historical ledgers remain available when no typed evidence scope is active.
-            if(!Filters.Typed&&CurrentPage!=10&&!(CurrentPage==5&&Filters.Outgoing))sections.AddRange(StatisticsPages.Build(CurrentPage,Report,Filters).Where(s=>s.Columns.Length>0));
-            if(!Report.CompleteHistory&&CurrentPage==10)sections.AddRange(StatisticsPages.Build(0,Report,Filters));
+            if(!Filters.Typed&&CurrentPage!=5)sections.AddRange(StatisticsPages.Build(CurrentPage,Report,Filters).Where(s=>s.Columns.Length>0));
             if(!String.IsNullOrWhiteSpace(Filters.Search))foreach(var s in sections)s.Rows.RemoveAll(r=>!(String.Join(" ",r.Cells)+" "+r.Detail).ToLowerInvariant().Contains(Filters.Search.Trim().ToLowerInvariant()));
             StatisticsWidgets.Enabled(clearSearch,!String.IsNullOrEmpty(Filters.Search));StatisticsWidgets.Enabled(collapseRows,expanded.Count>0);
-            filterStatus.text=(Filters.Players.Count==0?"No players selected · select a player above":Filters.Players.Count+" of "+Report.Players.Count+" players")+" · "+new[]{"Whole game","Canal era","Rail era"}[Filters.Era]+" · "+sections.Sum(s=>s.Rows.Count)+" ledger rows"+(String.IsNullOrWhiteSpace(Filters.Search)?"":" · Search filters tables");
+            filterStatus.text=(Filters.Players.Count==0?"No players selected · select a player above":Filters.Players.Count+"/"+Report.Players.Count+" players")+" · "+new[]{"Whole game","Canal era","Rail era"}[Filters.Era]+" · "+sections.Sum(s=>s.Rows.Count)+" rows"+(String.IsNullOrWhiteSpace(Filters.Search)?"":" · Search filters tables");
             float y=0;
             float titleHeight=Mathf.Max(44*unit,Measure(StatisticsPages.Names[CurrentPage],bodyWidth,30)+8*unit);
             pageLabel=StatisticsWidgets.Text(BodyScroll.content,font,"Page title",StatisticsPages.Names[CurrentPage],Vector2.zero,new Vector2(bodyWidth,titleHeight),F(30),true);
@@ -265,11 +264,7 @@ namespace BrassPatch.Statistics
             if(Report.Warnings.Count>0)availability+=(availability==""?"History note: ":" · ")+String.Join(" · ",Report.Warnings);
             if(!String.IsNullOrWhiteSpace(Filters.Search))availability+="\nSearch filters ledger rows; charts retain the player and era selection.";
             y+=Paragraph(BodyScroll.content,"Data coverage",availability,y,19);
-            y+=ReviewContent(analytic,y);
-            if(CurrentPage==8) {
-                StatisticsWidgets.Button(BodyScroll.content,font,"Cost denominator",Filters.AllCashPayments?"Cost: all cash payments (incl. debt)":"Cost: action spending",new Vector2(0,-y),new Vector2(Mathf.Min(bodyWidth,460*unit*TextScale),46*unit*TextScale),F(21),()=>{Filters.AllCashPayments=!Filters.AllCashPayments;QueueRender(true);});
-                y+=56*unit*TextScale;
-            }
+            y+=PlotContent(analytic,y);
             foreach(var section in sections) {
                 string ledgerKey=Key(section);
                 var disclosure=StatisticsWidgets.Button(BodyScroll.content,font,"Data "+section.Title,(openLedgers.Contains(ledgerKey)?"− Hide data · ":"+ Show data · ")+section.Title+" · "+section.Rows.Count+" records",new Vector2(0,-y),new Vector2(bodyWidth,56*unit*TextScale),F(21),()=>{if(!openLedgers.Remove(ledgerKey))openLedgers.Add(ledgerKey);QueueRender(true);});
@@ -284,6 +279,7 @@ namespace BrassPatch.Statistics
             }
             BodyScroll.content.sizeDelta=new Vector2(bodyWidth,Mathf.Max(y,BodyScroll.viewport.sizeDelta.y));
             Canvas.ForceUpdateCanvases();BodyScroll.verticalNormalizedPosition=positions[CurrentPage];
+            if(evidenceSection!=null){var target=tables.FirstOrDefault(t=>t.Section.Title==evidenceSection);if(target!=null){float range=BodyScroll.content.rect.height-BodyScroll.viewport.rect.height;BodyScroll.verticalNormalizedPosition=range<=0?1:Mathf.Clamp01(1-target.Y/range);positions[CurrentPage]=BodyScroll.verticalNormalizedPosition;}evidenceSection=null;}
             WireNavigation();
             if(revealPage){RevealFocus(PageButtons[CurrentPage]);revealPage=false;}
         }
@@ -313,7 +309,7 @@ namespace BrassPatch.Statistics
             }
             if(visible<rows.Count)h+=52*unit*TextScale;h+=18*unit;
             var scroll=StatisticsWidgets.Scroll(BodyScroll.content,section.Title+" table",new Vector2(0,-y),new Vector2(bodyWidth,h),unit,true);
-            scroll.content.sizeDelta=new Vector2(w,h-14*unit);scroll.viewport.gameObject.GetComponent<Image>().color=new Color(.10f,.095f,.08f,1);
+            scroll.content.sizeDelta=new Vector2(w,h-14*unit);scroll.viewport.gameObject.GetComponent<Image>().color=StatisticsTheme.Paper;
             if(horizontalPositions.ContainsKey(key))scroll.horizontalNormalizedPosition=horizontalPositions[key];
             var table=new Table{Section=section,Key=key,Scroll=scroll,Y=y,Height=h,Width=w,Column=col,Header=header};tables.Add(table);
             DrawHeaders(scroll.content,table);
@@ -326,7 +322,7 @@ namespace BrassPatch.Statistics
                 var surface=b.GetComponent<StatisticsSurface>();surface.Selected=expanded.Contains(id);surface.Row=true;surface.Alternate=i%2!=0;
                 Tip(b,"Click to "+(expanded.Contains(id)?"collapse":"expand")+" details.\n"+row.Detail);
                 if(row.Player.HasValue) {
-                    var stripe=StatisticsWidgets.Rect(b.transform,"Player marker",Size(4,-6),new Vector2(4*unit,rowHeight-14*unit));stripe.gameObject.AddComponent<Image>().color=StatisticsWidgets.PlayerColor(row.Player.Value);
+                    var stripe=StatisticsWidgets.Rect(b.transform,"Player marker",Size(4,-6),new Vector2(4*unit,rowHeight-14*unit));stripe.gameObject.AddComponent<Image>().color=StatisticsTheme.Player(row.Player.Value);
                 }
                 for(int c=0;c<row.Cells.Length;c++)
                     StatisticsWidgets.Text(b.transform,font,"Cell "+c,row.Cells[c],new Vector2(14*unit+c*col,0),new Vector2(col-22*unit,rowHeight-2*unit),F(21));

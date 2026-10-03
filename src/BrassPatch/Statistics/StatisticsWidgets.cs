@@ -5,7 +5,6 @@ using TMPro;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.UI;
-
 namespace BrassPatch.Statistics
 {
     internal static class StatisticsWidgets
@@ -22,7 +21,7 @@ namespace BrassPatch.Statistics
         public static TextMeshProUGUI Text(Transform parent,TMP_FontAsset font,string name,string value,Vector2 position,Vector2 size,float fontSize,bool wrap=false)
         {
             var rect=Rect(parent,name,position,size); var text=rect.gameObject.AddComponent<TextMeshProUGUI>();
-            text.font=font; text.fontStyle=FontStyles.Normal; text.fontSize=fontSize; text.color=Ivory; text.text=value;
+            text.font=font; text.fontStyle=FontStyles.Normal; text.fontSize=fontSize; text.color=StatisticsTheme.Light(parent)?StatisticsTheme.Ink:Ivory; text.text=value;
             text.enableWordWrapping=wrap; text.overflowMode=TextOverflowModes.Ellipsis; text.alignment=TextAlignmentOptions.MidlineLeft; text.raycastTarget=false;
             rect.anchorMin=rect.anchorMax=new Vector2(0,1); rect.pivot=new Vector2(0,1); rect.sizeDelta=size; rect.anchoredPosition=position;
             return text;
@@ -31,7 +30,7 @@ namespace BrassPatch.Statistics
         {
             var rect=Rect(parent,name,position,size); var surface=rect.gameObject.AddComponent<StatisticsSurface>();
             var button=rect.gameObject.AddComponent<Button>(); button.targetGraphic=surface;
-            var colors=button.colors; colors.normalColor=Color.white; colors.highlightedColor=new Color(1.3f,1.24f,1.1f,1); colors.selectedColor=colors.highlightedColor; colors.pressedColor=new Color(.8f,.8f,.8f,1); colors.fadeDuration=.08f; button.colors=colors;
+            var colors=button.colors; colors.normalColor=Color.white; colors.highlightedColor=new Color(1.3f,1.24f,1.1f,1); colors.selectedColor=colors.highlightedColor; colors.pressedColor=new Color(.8f,.8f,.8f,1); colors.fadeDuration=.08f; if(StatisticsTheme.Light(parent)){colors.highlightedColor=new Color(.94f,.92f,.88f,1);colors.selectedColor=new Color(.86f,.92f,.94f,1);colors.pressedColor=new Color(.85f,.81f,.73f,1);colors.disabledColor=new Color(.94f,.93f,.90f,1);colors.fadeDuration=0;} button.colors=colors;
             var label=Text(rect,font,"Label",value,Vector2.zero,size,fontSize); label.alignment=TextAlignmentOptions.Center;
             Stretch(label.rectTransform,new Vector2(8,2),new Vector2(-8,-2));
             if(click!=null)button.onClick.AddListener(()=>click()); return button;
@@ -50,7 +49,7 @@ namespace BrassPatch.Statistics
             input.targetGraphic=root.GetComponent<StatisticsSurface>();
             var area=Rect(root,"Text area",Vector2.zero,size); Stretch(area,new Vector2(10,3),new Vector2(-10,-3)); area.gameObject.AddComponent<RectMask2D>();
             var label=Text(area,font,"Input","",Vector2.zero,size,fontSize); Stretch(label.rectTransform,Vector2.zero,Vector2.zero); label.raycastTarget=true;
-            var placeholder=Text(area,font,"Placeholder","Find city, industry or action…",Vector2.zero,size,fontSize); Stretch(placeholder.rectTransform,Vector2.zero,Vector2.zero); placeholder.color=new Color(.83f,.78f,.68f,1);
+            var placeholder=Text(area,font,"Placeholder","Find city, industry or action…",Vector2.zero,size,fontSize); Stretch(placeholder.rectTransform,Vector2.zero,Vector2.zero); placeholder.color=StatisticsTheme.Light(parent)?StatisticsTheme.Muted:new Color(.83f,.78f,.68f,1);
             input.textViewport=area; input.textComponent=label; input.placeholder=placeholder; input.lineType=TMP_InputField.LineType.SingleLine; input.characterLimit=100; input.onValueChanged.AddListener(text=>changed(text)); return input;
         }
         public static ScrollRect Scroll(Transform parent,string name,Vector2 position,Vector2 size,float unit,bool horizontal=false)
@@ -61,9 +60,9 @@ namespace BrassPatch.Statistics
             var content=Rect(viewport,"Content",Vector2.zero,viewport.sizeDelta); content.pivot=new Vector2(0,1);
             scroll.viewport=viewport; scroll.content=content; scroll.horizontal=horizontal; scroll.vertical=!horizontal; scroll.movementType=ScrollRect.MovementType.Clamped; scroll.scrollSensitivity=34*unit; scroll.inertia=false;
             var track=Rect(root,"Scrollbar",horizontal?new Vector2(0,-size.y+12*unit):new Vector2(size.x-12*unit,0),horizontal?new Vector2(size.x,12*unit):new Vector2(12*unit,size.y));
-            track.gameObject.AddComponent<Image>().color=new Color(.16f,.14f,.11f,1);
+            track.gameObject.AddComponent<Image>().color=StatisticsTheme.Light(parent)?StatisticsTheme.Alternate:new Color(.16f,.14f,.11f,1);
             var sliding=Rect(track,"Sliding area",Vector2.zero,track.sizeDelta); Stretch(sliding,new Vector2(2,2),new Vector2(-2,-2));
-            var handle=Rect(sliding,"Handle",Vector2.zero,sliding.sizeDelta); Stretch(handle,Vector2.zero,Vector2.zero); var graphic=handle.gameObject.AddComponent<Image>(); graphic.color=Gold;
+            var handle=Rect(sliding,"Handle",Vector2.zero,sliding.sizeDelta); Stretch(handle,Vector2.zero,Vector2.zero); var graphic=handle.gameObject.AddComponent<Image>(); graphic.color=StatisticsTheme.Light(parent)?StatisticsTheme.Accent:Gold;
             var bar=track.gameObject.AddComponent<Scrollbar>(); bar.handleRect=handle; bar.targetGraphic=graphic; bar.direction=horizontal?Scrollbar.Direction.LeftToRight:Scrollbar.Direction.BottomToTop;
             if(horizontal)scroll.horizontalScrollbar=bar; else scroll.verticalScrollbar=bar; return scroll;
         }
@@ -114,6 +113,7 @@ namespace BrassPatch.Statistics
             float radius=Mathf.Min(Panel?12:7,Mathf.Min(rect.width,rect.height)/2),border=Selected?2.2f:1;
             Color32 edge=Selected?StatisticsWidgets.Gold:Panel?new Color(.50f,.42f,.29f,1):new Color(.30f,.27f,.22f,1);
             Color32 fill=Selected?new Color(.31f,.25f,.16f,1):Row?(Alternate?new Color(.205f,.183f,.15f,1):new Color(.145f,.133f,.113f,1)):new Color(.105f,.095f,.08f,Panel ? .99f : 1);
+            if(StatisticsTheme.Light(this)){edge=Selected?StatisticsTheme.Accent:StatisticsTheme.Border;fill=Selected?StatisticsTheme.Selected:Row?(Alternate?StatisticsTheme.Alternate:StatisticsTheme.Paper):Panel&&name=="Statistics window"?StatisticsTheme.Window:StatisticsTheme.Paper;}
             mesh.AddVert(rect.center,fill,Vector2.zero);
             for(int ring=0;ring<2;ring++)for(int corner=0;corner<4;corner++)for(int step=0;step<=steps;step++) {
                 float angle=(corner*90+step*90f/steps)*Mathf.Deg2Rad;

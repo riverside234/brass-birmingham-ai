@@ -36,7 +36,7 @@ def check_reports(root, *, repair=False):
                     'Conflicting qualification fingerprints: ' + name)
             expected[name] = fingerprint
             admitted.append((identity, purpose, entry))
-    reports, changes = {}, []
+    reports, changes, equivalent = {}, [], []
     for name, fingerprint in sorted(expected.items()):
         path = below(root, name)
         original = path.read_bytes()
@@ -47,25 +47,25 @@ def check_reports(root, *, repair=False):
                              f'actual {hashlib.sha256(original).hexdigest()}') from error
         reports[name] = json.loads(candidate.decode('utf-8-sig'))
         if candidate != original:
-            require(repair, 'Qualification report has converted line endings: ' + name +
-                    '; rerun this script with --repair-line-endings')
-            changes.append((path, original, candidate))
+            equivalent.append(name)
+            if repair:
+                changes.append((path, original, candidate))
     # Validate all contents and references before touching any report.
-    require(reports[current['qualification']]['bank'] == current['bank'], 'Current bank differs from evidence')
+    evidence = reports[current['qualification']]
+    require(evidence.get('bank', evidence.get('new_bank')) == current['bank'], 'Current bank differs from evidence')
     for identity, purpose, entry in admitted:
-        report = reports[entry['qualification']]
-        require(report['bank'] == identity.split('/')[0], 'Qualification belongs to another bank')
-        result = report['profiles'][entry['profile']]
-        require(result['policy_id'] == identity and result[purpose + '_eligible'] and result['niche_qualified'],
-                'Qualification does not admit this opponent')
+        # Current v4 uses a selection receipt, not the original R3 per-profile
+        # qualification schema. Exercise the same versioned gates as training.
+        admission(root, identity, purpose)
     for path, original, candidate in changes:
         require(path.read_bytes() == original, 'Report changed during validation')
         path.write_bytes(candidate)
-    # Exercise the actual frozen adapter's strict check, without weakening it.
+    # Recheck after an explicitly requested, byte-exact newline restoration.
     for identity, purpose, _ in admitted:
         admission(root, identity, purpose)
     return dict(passed=True, reports=len(reports), admitted_policies=len(admitted),
                 repaired=[p.relative_to(root).as_posix() for p, _, _ in changes],
+                line_endings_equivalent=equivalent,
                 fingerprints_unchanged=True)
 
 

@@ -47,7 +47,7 @@ public static class LocalAiUnityTests
         UnityEngine.Object.DontDestroyOnLoad(driver.gameObject);driver.Output=output;
     }
 }
-public sealed class StatisticsDriver : MonoBehaviour
+public sealed partial class StatisticsDriver : MonoBehaviour
 {
     public string Output;
     readonly List<object> cases=new List<object>();
@@ -59,6 +59,7 @@ public sealed class StatisticsDriver : MonoBehaviour
     static double PerformanceMedian(IEnumerable<double> source)
     {var values=source.OrderBy(v=>v).ToArray();return values.Length%2==1?values[values.Length/2]:(values[values.Length/2-1]+values[values.Length/2])/2;}
     int checks,failures,matches,pages;
+    readonly List<CompletedMatchStatistics> previewReports=new List<CompletedMatchStatistics>();
     readonly Vector2Int[] resolutions={new Vector2Int(1920,1200),new Vector2Int(1920,1080)};
     void Check(bool pass,string name,object detail=null){checks++;if(!pass)failures++;cases.Add(new{name,passed=pass,detail});}
     void Log(string text,string stack,LogType kind)
@@ -97,7 +98,9 @@ public sealed class StatisticsDriver : MonoBehaviour
             var behavior=app.Metadata.GetPlayerMetadataByColor(app.Game.GameProgressInformation.CurrentPlayer.Color).AIBehaviour;
             while(app.Game.TurnFlow.GetRemainingActionsCount()>0) {
                 if(passOnly) {
-                    var player=app.Game.GameProgressInformation.CurrentPlayer;app.Game.TurnFlow.StartPassAction().Pass(player.Hand[0],player);
+                    var player=app.Game.GameProgressInformation.CurrentPlayer;
+                    if(count==4&&turns==1){var scout=app.Game.TurnFlow.StartScoutAction();scout.DiscardCard(player.Hand[0],player);scout.Scout(player.Hand.Take(2).ToList(),player);}
+                    else app.Game.TurnFlow.StartPassAction().Pass(player.Hand.FirstOrDefault(c=>c.GetType().Name=="WildLocationCard")??player.Hand[0],player);
                 } else behavior.GetNextAIMove(app)();
                 app.Game.TurnFlow.ConfirmCurrentAction();
             }
@@ -111,9 +114,9 @@ public sealed class StatisticsDriver : MonoBehaviour
         var events=app.Game.GetUncommittedEvents().ToArray();
         string payload=JsonConvert.SerializeObject(events);int revision=app.Game.Revision;
         var bonus=DevelopMerchantBonus.Instance;
-        var report=StatisticsCollector.Collect(app,new IEvent[0],events);matches++;
+        var report=StatisticsCollector.Collect(app,new IEvent[0],events);matches++;previewReports.Add(report);
         performance.Add(new PerformanceSample{Operation="Detached collection",Scope=count+" players; "+(intro?"introductory":"full")+(passOnly?"; all Pass":""),Milliseconds=report.CollectionMilliseconds});
-        if(report.CompleteHistory)StatisticsReviewChecks.Projection(report,events,Check);
+        if(report.CompleteHistory){StatisticsReviewChecks.Projection(report,events,Check);StatisticsLightChecks.Projection(report,Check);}
         Check(report.CompleteHistory,"complete match reconstruction",new{count,intro,seed,report.Availability,report.CollectionMilliseconds});
         Check(JsonConvert.SerializeObject(events)==payload&&app.Game.Revision==revision&&ReferenceEquals(bonus,DevelopMerchantBonus.Instance),"collection leaves live events, revision and bonus scope untouched");
         int actions=intro?(count==2?19:count==3?17:15):(count==2?39:count==3?35:31);
@@ -147,7 +150,8 @@ public sealed class StatisticsDriver : MonoBehaviour
         var conflict=StatisticsCollector.Collect(app,events,new IEvent[]{wrong});
         Check(!conflict.CompleteHistory&&conflict.Availability.Contains("Conflicting events"),"conflicting overlapping revisions are rejected");
         if(passOnly) {
-            Check(report.Players.All(p=>p.Rank==1)&&report.Actions.All(a=>a.Kind=="Pass"),"unresolved draw and Pass actions stay explicit");
+            Check(report.Players.All(p=>p.Rank==1)&&report.Actions.All(a=>a.Kind=="Pass"||count==4&&a.Kind=="Scout"),"unresolved draw and Pass/Scout actions stay explicit");
+            if(count==4){var episodes=report.Entries.Where(e=>e.Kind=="Wildcard acquired").ToArray();Check(episodes.Length==2&&episodes.Select(e=>e.AssetKey).Distinct().Count()==2&&report.Entries.Any(e=>e.Kind=="Card"&&e.Label.StartsWith("Wild"))&&report.Entries.Where(e=>e.Kind=="Card"&&e.Label.StartsWith("Wild")).All(use=>episodes.Any(e=>e.AssetKey==use.AssetKey&&e.Category==use.Label)),"SD01 collected Scout acquisitions keep both card-specific episode associations");}
             var table=StatisticsPages.Build(8,report,filters).First(s=>s.Title=="Conversion and efficiency");
             Check(table.Rows.All(r=>r.Cells[2]=="—"),"zero-VP denominators display unavailable ratio");
         }
@@ -158,7 +162,7 @@ public sealed class StatisticsDriver : MonoBehaviour
     }
     IEnumerator Run()
     {
-        StatisticsReviewChecks.Run(Check);
+        StatisticsReviewChecks.Run(Check);StatisticsLightChecks.Run(Check);
         Match example=null;
         foreach(int count in new[]{2,3,4})foreach(bool intro in new[]{false,true}) {
             var match=Finish(count,intro,20260930+count+(intro?10:0));if(count==4&&!intro)example=match;yield return null;
@@ -192,7 +196,7 @@ public sealed class StatisticsDriver : MonoBehaviour
         var panel=router.GetView<StatisticsPanel>();Check(panel.IsOpen&&!router.IsViewVisible<IEndOfGameView>(),"statistics replaces the active result modal");
         Check(Math.Abs(panel.TextScale-1.15f)<.001f,"statistics defaults to the second text size");
         panel.GetComponentsInChildren<Button>().First(b=>b.name=="Smaller text").onClick.Invoke();yield return null;
-        Check(panel.CurrentPage==10&&StatisticsPages.NavigationOrder.First()==10,"Match review opens first without changing the original page IDs");
+        Check(panel.CurrentPage==0&&StatisticsPages.NavigationOrder.First()==0,"Overview opens first with ten stable factual page IDs");
         var entryCorners=new Vector3[4];((RectTransform)entry.transform).GetWorldCorners(entryCorners);
         float entryPixels=Vector2.Distance(RectTransformUtility.WorldToScreenPoint(camera,entryCorners[0]),RectTransformUtility.WorldToScreenPoint(camera,entryCorners[3]));
         Check(entryPixels>=239,"results Statistics entry is at least 240 physical pixels wide",entryPixels);
@@ -253,7 +257,7 @@ public sealed class StatisticsDriver : MonoBehaviour
         pages=StatisticsPages.Names.Length;
         // Capture later plots at an actual scroll position, rather than only page tops.
         var detailTarget=new RenderTexture(1920,1080,24,RenderTextureFormat.ARGB32);detailTarget.Create();camera.targetTexture=detailTarget;
-        foreach(int page in new[]{0,2,3,4,5,6,7,8,9,10}){
+        foreach(int page in new[]{0,2,3,4,5,6,7,8,9}){
             panel.SelectPage(page);yield return null;yield return null;
             foreach(var graphic in panel.GetComponentsInChildren<StatisticsPlotGraphic>()){
                 var plotRoot=(RectTransform)graphic.transform.parent.parent;var corners=new Vector3[4];plotRoot.GetWorldCorners(corners);
@@ -277,9 +281,8 @@ public sealed class StatisticsDriver : MonoBehaviour
         panel.GetComponentsInChildren<Button>().First(b=>b.name=="Flow direction").onClick.Invoke();yield return null;yield return null;
         Canvas.ForceUpdateCanvases();Measure("Filter response","Coal; all players; outgoing",response);
         Check(panel.Filters.Resource=="Coal"&&panel.Filters.Outgoing,"resource and direction controls use typed scopes");
-        panel.ResetFilters();panel.SelectPage(10);yield return null;yield return null;
-        var insight=StatisticsInsights.Build(panel.Report,StatisticsMetrics.Focus(panel.Report,panel.Filters).Color).FirstOrDefault();
-        if(insight!=null){panel.Drill(insight.Evidence);yield return null;yield return null;Check(panel.CurrentPage==insight.Evidence.Page&&panel.Filters.Era==0&&panel.Filters.Evidence.SetEquals(insight.Evidence.Keys),"review drill opens exact record evidence in whole-match scope");}
+        var light=LightPanelChecks(panel,camera);while(light.MoveNext())yield return light.Current;
+        var previews=LightSpecialPreviews(panel,camera,new[]{previewReports[0],previewReports[3],previewReports[8]});while(previews.MoveNext())yield return previews.Current;
         panel.ResetFilters();panel.SelectPage(0);yield return null;yield return null;
         for(int i=0;i<2;i++){panel.GetComponentsInChildren<Button>().First(b=>b.name=="Larger text").onClick.Invoke();yield return null;yield return null;}
         panel.SelectPage(0);yield return null;yield return null;
@@ -379,6 +382,7 @@ public sealed class StatisticsDriver : MonoBehaviour
         var labels=panel.GetComponentsInChildren<TextMeshProUGUI>().Where(t=>!String.IsNullOrWhiteSpace(t.text)).ToArray();
         Check(labels.All(t=>t.fontSize*canvas.scaleFactor>=17.9f),"visible text uses a readable physical size",new{width,page,scale=panel.TextScale,min=labels.Min(t=>t.fontSize*canvas.scaleFactor)});
         Check(labels.Where(t=>t.transform.parent.name.StartsWith("Sort ")).All(t=>t.GetPreferredValues(t.text,t.rectTransform.rect.width,0).y<=t.rectTransform.rect.height+1),"wrapped column headings fit their height",new{width,page,scale=panel.TextScale});
+        foreach(var plot in panel.GetComponentsInChildren<StatisticsPlotGraphic>())CheckAxisLabels(plot,panel);
         var window=(RectTransform)panel.transform.Find("Statistics window");
         Check(window.GetComponentsInChildren<Selectable>().Where(s=>s.transform.parent==window||s.transform.parent.name=="Find statistics").All(s=>{
             var corners=new Vector3[4];((RectTransform)s.transform).GetWorldCorners(corners);

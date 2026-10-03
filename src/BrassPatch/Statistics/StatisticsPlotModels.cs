@@ -1,10 +1,9 @@
 using System;
 using System.Collections.Generic;
 using BoardGameRules.Entities.Players;
-
 namespace BrassPatch.Statistics
 {
-    public enum StatisticsPlotKind { StackedBars, PairedBars, Dumbbell, Heatmap, Step, Waterfall, Lollipop, Scatter, EventLanes, Lifespans, MiniMap, DelayDots, Columns }
+    public enum StatisticsPlotKind { StackedBars, PairedBars, Dumbbell, Heatmap, Step, Waterfall, Lollipop, Scatter, EventLanes, Lifespans, MiniMap, DelayDots, Columns, Efficiency, StackedColumns }
     public enum StatisticsColorRole { Player, Industry, Resource, Category, Era }
     public sealed class StatisticsPlotSeries
     {
@@ -15,8 +14,10 @@ namespace BrassPatch.Statistics
     public sealed class StatisticsPlotMark
     {
         public string Series, Label, Detail;
+        public string ValueLabel, OtherLabel, Symbol, Metric;
+        public bool Missing;
         public double X,Y,End;
-        public int Row,Column;
+        public int Row,Column,Facet;
         public StatisticsDrill Target;
     }
     public sealed class StatisticsPlot
@@ -24,6 +25,10 @@ namespace BrassPatch.Statistics
         public string Id, Title, Definition, XLabel, YLabel;
         public StatisticsPlotKind Kind;
         public bool Percent, WholeMatch;
+        public bool DiscreteHeat;
+        public bool EraPairs;
+        public StatisticsAxisUnit XUnit=StatisticsAxisUnit.Count,YUnit=StatisticsAxisUnit.Count;
+        public double? SharedMax;
         public readonly List<string> Rows=new List<string>(),Columns=new List<string>();
         public readonly List<StatisticsPlotSeries> Series=new List<StatisticsPlotSeries>();
         public readonly List<StatisticsPlotMark> Marks=new List<StatisticsPlotMark>();

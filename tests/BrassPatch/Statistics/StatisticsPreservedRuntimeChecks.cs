@@ -27,11 +27,30 @@ public static class PreservedRuntimeChecks
             "\nvariables "+String.Join(",",method.Body.Variables.Select(v=>v.VariableType.FullName))+
             "\nhandlers "+String.Join(";",method.Body.ExceptionHandlers.Select(h=>h.HandlerType+":"+h.CatchType+":"+index(h.TryStart)+":"+index(h.TryEnd)+":"+index(h.HandlerStart)+":"+index(h.HandlerEnd)+":"+index(h.FilterStart)));
     }
+    static bool StatisticsGeneratedOnly(MethodDefinition method,Dictionary<string,MethodDefinition> methods)
+    {
+        var type=method.DeclaringType;
+        if(!type.FullName.StartsWith("<>f__AnonymousType")||!type.CustomAttributes.Any(a=>a.AttributeType.FullName=="System.Runtime.CompilerServices.CompilerGeneratedAttribute"))return false;
+        // Anonymous type ordinals are assigned across the compiled helper. New
+        // Statistics groupings can renumber them without changing game helpers.
+        // Exempt only types with no references from any non-Statistics runtime
+        // method/field. Never exempt an arbitrary compiler-generated closure.
+        foreach(var candidate in methods.Values){
+            if(candidate.DeclaringType.FullName.StartsWith("BrassPatch.Statistics.")||candidate.DeclaringType.FullName.StartsWith("<>f__AnonymousType"))continue;
+            if(candidate.FullName.Contains(type.FullName)||Body(candidate).Contains(type.FullName))return false;
+        }
+        foreach(var owner in Types(type.Module.Types)){
+            if(owner.FullName.StartsWith("BrassPatch.Statistics.")||owner.FullName.StartsWith("<>f__AnonymousType"))continue;
+            if(owner.Fields.Any(f=>f.FieldType.FullName.Contains(type.FullName)))return false;
+        }
+        return true;
+    }
     public static int Main(string[] args)
     {
         bool informationUi=args.Length>3&&args[3]=="information-ui";
         bool appearance=informationUi||args.Length>3&&(args[3]=="appearance"||args[3]=="statistics");
         string allowedNamespace=args.Length>3&&args[3]=="statistics"?"BrassPatch.Statistics.":"BrassPatch.CardTracker.";
+        bool statisticsOnly=args.Length>3&&args[3]=="statistics";
         string[] allowedTypes={"BrassPatch.CardTracker.CardTrackerOverlay","BrassPatch.Statistics.StatisticsEntryPoints","BrassPatch.Statistics.StatisticsEntryGeometry","BrassPatch.Statistics.StatisticsEntrySurface","BrassPatch.Statistics.StatisticsPanel"};
         Func<MethodDefinition,bool> uiMethod=m=>informationUi?allowedTypes.Any(t=>m.DeclaringType.FullName==t||m.DeclaringType.FullName.StartsWith(t+"/")):m.DeclaringType.FullName.StartsWith(allowedNamespace);
         var results=new List<object>();bool passed=true;
@@ -46,15 +65,18 @@ public static class PreservedRuntimeChecks
                     if(Body(pair.Value)!=Body(method))changed.Add(pair.Key);
                 }
                 var added=methods.Where(p=>!oldMethods.ContainsKey(p.Key)).Select(p=>p.Value).ToArray();
+                Func<MethodDefinition,bool> allowedOld=m=>uiMethod(m)||statisticsOnly&&StatisticsGeneratedOnly(m,oldMethods);
+                Func<MethodDefinition,bool> allowedNew=m=>uiMethod(m)||statisticsOnly&&StatisticsGeneratedOnly(m,methods);
                 bool allowed=appearance?(file=="Assembly-CSharp.dll"?missing.Count==0&&changed.Count==0&&added.Length==0:
-                    missing.All(m=>uiMethod(oldMethods[m]))&&
-                    changed.All(m=>uiMethod(methods[m]))&&
-                    added.All(m=>uiMethod(m)||m.DeclaringType.FullName.StartsWith("<PrivateImplementationDetails>"))):missing.Count==0 && (file=="Assembly-CSharp.dll"?
+                    missing.All(m=>allowedOld(oldMethods[m]))&&
+                    changed.All(m=>allowedOld(oldMethods[m])&&allowedNew(methods[m]))&&
+                    added.All(m=>allowedNew(m)||m.DeclaringType.FullName.StartsWith("<PrivateImplementationDetails>"))):missing.Count==0 && (file=="Assembly-CSharp.dll"?
                     changed.Count==1&&methods[changed[0]].DeclaringType.FullName=="InterfaceAdapters.Game.Board.BoardPresenter"&&methods[changed[0]].Name=="UpdateBoardView"&&
                     added.Length==0:
                     changed.Count==1&&methods[changed[0]].DeclaringType.FullName=="BrassPatch.Statistics.StatisticsEntryPoints"&&methods[changed[0]].Name=="ProcessInput"&&
                     added.All(m=>m.DeclaringType.FullName.StartsWith(allowedNamespace)||m.DeclaringType.FullName.StartsWith("<PrivateImplementationDetails>")));
-                passed&=allowed;results.Add(new{file,passed=allowed,existingMethods=oldMethods.Count,unchangedMethods=oldMethods.Count-changed.Count-missing.Count,changed,missing,added=added.Select(m=>m.FullName).ToArray()});
+                var generated=statisticsOnly?missing.Concat(changed).Select(m=>oldMethods[m]).Where(m=>!uiMethod(m)&&allowedOld(m)).Select(m=>m.DeclaringType.FullName).Concat(added.Where(m=>!uiMethod(m)&&StatisticsGeneratedOnly(m,methods)).Select(m=>m.DeclaringType.FullName)).Distinct().ToArray():new string[0];
+                passed&=allowed;results.Add(new{file,passed=allowed,existingMethods=oldMethods.Count,unchangedMethods=oldMethods.Count-changed.Count-missing.Count,changed,missing,added=added.Select(m=>m.FullName).ToArray(),statisticsOwnedAnonymousTypes=generated});
             }
         }
         File.WriteAllText(args[2],JsonConvert.SerializeObject(new{passed,assemblies=results},Formatting.Indented));

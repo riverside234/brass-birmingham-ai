@@ -5,6 +5,8 @@
 **Planning baseline:** Qualified patch **1.4.13**; the findings below describe that original helper implementation.  
 **Implementation baseline:** The then-current installed, qualified **1.4.16**. Its game and AI DLLs are retained byte-for-byte. The unchanged helper's verified 1.4.13 sources were reconstructed, then only the Statistics sources were revised. See the [1.4.17 release notes](../docs/END_GAME_STATISTICS_1.4.17.md).
 
+**Revision requested 2 October 2026:** The Match review/advice requirement and visual design below are superseded by the [light-theme and factual-chart revision plan](END_GAME_STATISTICS_LIGHT_THEME_REVISION_PLAN.md). The user requested removal of tactical verdicts and improvement suggestions, a light panel, clearer existing plots and additional plots from the current tables. This note does not change the historical implementation record; the new revision is planned, not implemented.
+
 ### Implementation record
 
 | Stage | Delivered in 1.4.17 |

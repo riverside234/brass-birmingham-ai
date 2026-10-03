@@ -162,7 +162,7 @@ class RecoveryTests(unittest.TestCase):
 
     def test_search_deadline_reaches_inference_and_restores_policy(self):
         from brass_ai.step5.policy import inference_deadline
-        from brass_ai.step5.search import SearchIncomplete
+        from brass_ai.search.common import SearchIncomplete
         import time
         policy=NeuralPolicy(self.model,focus='neutral')
         v,c=position();rng=random.Random(81)
@@ -189,14 +189,16 @@ class RecoveryTests(unittest.TestCase):
             run=directory/'bc'
             with patch.object(demos,'load_dataset',side_effect=lambda root,path,split:(data[split],{})), \
                  patch.object(demos,'supervised_epoch',return_value={'loss':1.0}) as update:
-                demos.train_bc(SOURCE_ROOT,run,manifest,initial,UPDATE,epochs=10,min_epochs=1,patience=1)
+                with self.assertRaisesRegex(ValueError,'random residual weights'):
+                    demos.train_bc(SOURCE_ROOT,run,manifest,initial,UPDATE,epochs=10,min_epochs=1,patience=1)
+                demos.train_bc(SOURCE_ROOT,run,manifest,None,UPDATE,epochs=10,min_epochs=1,patience=1)
                 self.assertEqual(update.call_count,6)  # Natural + balanced validation each epoch.
-                report=demos.train_bc(SOURCE_ROOT,run,manifest,initial,UPDATE,epochs=10,min_epochs=1,patience=1)
+                report=demos.train_bc(SOURCE_ROOT,run,manifest,None,UPDATE,epochs=10,min_epochs=1,patience=1)
                 self.assertEqual(report['epochs'],2);self.assertEqual(update.call_count,6)
                 state=read(run/'state.json');checkpoint=run/state['last']['path']
                 checkpoint.write_bytes(checkpoint.read_bytes()+b'changed')
                 with self.assertRaisesRegex(ValueError,'checkpoint changed'):
-                    demos.train_bc(SOURCE_ROOT,run,manifest,initial,UPDATE,epochs=10,min_epochs=1,patience=1)
+                    demos.train_bc(SOURCE_ROOT,run,manifest,None,UPDATE,epochs=10,min_epochs=1,patience=1)
 
 
 if __name__=='__main__': unittest.main()

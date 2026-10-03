@@ -74,12 +74,12 @@ function Assert-BrassCandidate($Manifest,$Validation,[string]$Build){
     if(-not $Manifest -or $Manifest.stockSha256 -ne $BrassStockSha256){throw 'Candidate is not based on the supported stock game.'}
     if(-not $Validation -or -not $Validation.passed){throw 'Candidate validation must pass before installation.'}
     $expectedFiles='Assembly-CSharp.dll|BrassPatch.dll'
-    if($Manifest.version -in @('1.3.0','1.3.1','1.3.2','1.4.0','1.4.1','1.4.2','1.4.3','1.4.4','1.4.5','1.4.6','1.4.7','1.4.8','1.4.9','1.4.10','1.4.11','1.4.12','1.4.13','1.4.15','1.4.16','1.4.17','1.4.18','1.4.19','1.4.20')){
+    if($Manifest.version -in @('1.3.0','1.3.1','1.3.2','1.4.0','1.4.1','1.4.2','1.4.3','1.4.4','1.4.5','1.4.6','1.4.7','1.4.8','1.4.9','1.4.10','1.4.11','1.4.12','1.4.13','1.4.15','1.4.16','1.4.17','1.4.18','1.4.19','1.4.20','1.4.21')){
         $expectedFiles='Assembly-CSharp.dll|BrassLegacyAI.dll|BrassPatch.dll'
         if(-not $Validation.PSObject.Properties['localAi'] -or -not $Validation.localAi.passed){throw 'Combined AI and native UI qualification must pass before installation.'}
     }
     if((@($Manifest.files|ForEach-Object {$_.name}|Sort-Object)-join '|') -ne $expectedFiles){throw 'Unexpected candidate file list.'}
-    if($Manifest.version -in @('1.4.7','1.4.8','1.4.9','1.4.10','1.4.11','1.4.12','1.4.13','1.4.15','1.4.16','1.4.17','1.4.18','1.4.19','1.4.20')){
+    if($Manifest.version -in @('1.4.7','1.4.8','1.4.9','1.4.10','1.4.11','1.4.12','1.4.13','1.4.15','1.4.16','1.4.17','1.4.18','1.4.19','1.4.20','1.4.21')){
         if(-not $Manifest.PSObject.Properties['sourcePins'] -or -not $Validation.localAi.PSObject.Properties['sourcePins'] -or $Manifest.sourcePins.Count -ne $Validation.localAi.sourcePins.Count){throw 'Compiled runtime-source qualification is missing.'}
         foreach($pin in $Manifest.sourcePins){if(@($Validation.localAi.sourcePins|Where-Object {$_.path -eq $pin.path -and $_.sha256 -eq $pin.sha256}).Count -ne 1){throw 'Qualified runtime sources differ from compilation.'}}
         if(-not $Validation.localAi.resourceTests.passed -or $Validation.localAi.resourceTests.checks -lt 20 -or $Validation.localAi.executionStatistics.maximumRunning -ne 1 -or $Validation.localAi.executionStatistics.running){throw 'General AI execution/resource qualification must pass.'}
@@ -184,6 +184,25 @@ function Assert-BrassCandidate($Manifest,$Validation,[string]$Build){
         if(@($Validation.sourceScope|Where-Object {$_ -notin $uiScope}).Count -or @($Manifest.sourceScope|Where-Object {$_ -notin $uiScope}).Count){throw 'Information UI contains an unrelated source change.'}
         foreach($report in $Validation.statistics,$Validation.cardTracker,$Validation.presentation,$Validation.linkReplay,$Validation.menu){
             foreach($file in $Manifest.files){if(@($report.testedFiles|Where-Object {$_.name -eq $file.name -and $_.sha256 -eq $file.sha256}).Count -ne 1){throw 'Information UI evidence belongs to a different candidate.'}}
+        }
+    }
+    if($Manifest.version -eq '1.4.21'){
+        if($Manifest.baseVersion -ne '1.4.20' -or $Manifest.helperSourceBaseVersion -ne '1.4.19' -or -not $Validation.preservedRuntime.passed -or -not $Validation.visualChecks.passed){throw 'Statistics revision requires accepted 1.4.20, preserved runtime and native visual qualification.'}
+        foreach($name in 'Assembly-CSharp.dll','BrassLegacyAI.dll'){
+            if(($Manifest.files|Where-Object name -eq $name).sha256 -ne ($Manifest.baseFiles|Where-Object name -eq $name).sha256){throw 'Statistics revision must preserve the current game and AI binaries.'}
+        }
+        if(-not $Validation.localAi.masked.passed -or $Validation.localAi.masked.backend -ne 'masked_ismcts' -or $Validation.localAi.retainedFrom -ne $Manifest.baseVersion -or $Validation.localAi.workers -ne 2){throw 'Accepted AI execution qualification is missing.'}
+        if(-not $Validation.statistics.passed -or $Validation.statistics.pages -ne 10 -or $Validation.statistics.matches -ne 9 -or $Validation.statistics.checks -lt 2700 -or -not $Validation.cardTracker.passed -or $Validation.cardTracker.checks -lt 430){throw 'Statistics and preserved Card Tracker qualification are incomplete.'}
+        foreach($report in $Validation.statistics,$Validation.cardTracker){
+            if(@($report.layouts).Count -ne 2 -or @($report.layouts|Where-Object {$_.width -eq 1920 -and $_.height -eq 1200}).Count -ne 1 -or @($report.layouts|Where-Object {$_.width -eq 1920 -and $_.height -eq 1080}).Count -ne 1){throw 'Requested 1200p and 1080p coverage is missing.'}
+        }
+        if(-not $Validation.presentation.passed -or $Validation.presentation.checks -lt 184 -or -not $Validation.linkReplay.passed -or $Validation.linkReplay.checks -lt 765 -or -not $Validation.menu.passed -or $Validation.menu.checks -lt 259){throw 'Preserved UI regression qualification is incomplete.'}
+        if(@($Validation.sourceScope|Where-Object {$_ -notlike 'src/BrassPatch/Statistics/*'}).Count -or @($Manifest.sourceScope|Where-Object {$_ -notlike 'src/BrassPatch/Statistics/*'}).Count -or ($Manifest.retiredSources -join '|') -ne 'src/BrassPatch/Statistics/StatisticsInsights.cs'){throw 'Statistics revision contains an unrelated source change.'}
+        foreach($id in 'SD01','SD02','SD03','SD04','SD05','SD06','SD07','SD08','SD09','SD10','SD11','N1','N2','N3','N4','N5','N6','N7'){
+            if(-not @($Validation.statistics.cases|Where-Object {$_.passed -and $_.name.Contains($id)}).Count){throw ('Required statistics regression missing: '+$id)}
+        }
+        foreach($report in $Validation.statistics,$Validation.cardTracker,$Validation.presentation,$Validation.linkReplay,$Validation.menu){
+            foreach($file in $Manifest.files){if(@($report.testedFiles|Where-Object {$_.name -eq $file.name -and $_.sha256 -eq $file.sha256}).Count -ne 1){throw 'Statistics/native preservation evidence belongs to another candidate.'}}
         }
     }
     foreach($file in $Manifest.files){

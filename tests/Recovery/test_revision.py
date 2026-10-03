@@ -145,20 +145,29 @@ class RevisionTests(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError,'active'): restore(SOURCE_ROOT,result['manifest'])
             with self.assertRaises(ValueError): prune(SOURCE_ROOT,SOURCE_ROOT/'results/1.1',apply=True)
 
-    def test_parallel_matched_matrix_private_hosts_and_deadlines(self):
-        from brass_ai.recovery.parallel import ParallelS2
-        from brass_ai.step5.search import SearchIncomplete
+    def test_parallel_masked_retires_all_workers_after_failure(self):
+        from brass_ai.recovery.parallel import ParallelMasked
+        from types import SimpleNamespace
+        from threading import Event,RLock
         import time
+        started,release,retired=Event(),Event(),Event()
         class Worker:
-            def __init__(self): self.base=type('Base',(),{'request_deadline':None})();self.rollouts=[];self.calls=[]
-            def scenario(self,view,plan,seed,context,deadline):
-                self.calls.append((tuple(plan),seed,view['seat'],self.base.request_deadline));return seed+len(plan)
-        planner=object.__new__(ParallelS2);planner.telemetry=dict(parallel_batches=0);planner.replicas=[Worker(),Worker()]
+            def __init__(self,index): self.index=index;self.base=SimpleNamespace(contexts={})
+            def decide(self,view,choices,rng,deadline,recall,tree,cache):
+                if self.index==0: raise ValueError('failed replica')
+                started.set()
+                if not release.wait(5): raise TimeoutError('test release')
+                retired.set()
+        planner=object.__new__(ParallelMasked)
+        planner.decision_lock=RLock();planner.replicas=[Worker(0),Worker(1)]
+        planner.base=SimpleNamespace(request_deadline=None,predict=lambda inputs:[(np.array([.5,.5]),{})])
+        planner.incumbent=lambda *args:{};planner.context_features=lambda *args:([0.]*4,[0.]*8)
         from concurrent.futures import ThreadPoolExecutor
-        with ThreadPoolExecutor(max_workers=2) as pool:
-            planner.parallel_pool=pool;deadline=time.monotonic()+1
-            values=planner.matrix(dict(seat=2),[['a'],['a','b']],[1,2],[[],[]],deadline)
-            self.assertEqual(values,[[2,3],[3,4]])
-            self.assertTrue(all(len(w.calls)==2 and w.calls[0][1]==w.calls[1][1] for w in planner.replicas))
-            self.assertTrue(all(w.base.request_deadline is None for w in planner.replicas))
-            with self.assertRaises(SearchIncomplete): planner.matrix(dict(seat=2),[['a']],[1],None,time.monotonic()-1)
+        with ThreadPoolExecutor(max_workers=2) as pool,ThreadPoolExecutor(max_workers=1) as caller:
+            planner.pool=pool
+            task=caller.submit(planner.decide,dict(seat=2),[dict(id='a'),dict(id='b')],random.Random(3),time.monotonic()+10)
+            try:
+                self.assertTrue(started.wait(5));self.assertFalse(task.done())
+            finally:release.set()
+            with self.assertRaisesRegex(ValueError,'failed replica'):task.result(timeout=5)
+            self.assertTrue(retired.is_set());self.assertIsNone(planner.base.request_deadline)

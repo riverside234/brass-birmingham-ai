@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
 using BoardGameRules.Entities.Players;
-
 namespace BrassPatch.Statistics
 {
     public sealed class StatisticsFilters
@@ -12,6 +11,9 @@ namespace BrassPatch.Statistics
         public int Era;
         public string Search = "";
         public bool AllCashPayments;
+        public string ResourceView="Supply",DevelopmentSource="All";
+        public bool ByPlayer,CardShare,LinkShare;
+        public bool ActionShare=true;
         public string Industry = "", Region = "", Action = "", Resource = "Beer";
         public string Boundary = "Final";
         public string MapMode = "Occupancy";
@@ -24,7 +26,7 @@ namespace BrassPatch.Statistics
         public bool Frame(StatisticsAction a) { return Includes(a.Player,a.Era) && (Action==""||Action==a.Kind) && (!EvidenceRestricted&&Evidence.Count==0||Evidence.Contains(a.Key)); }
         public bool Typed { get {return Industry!=""||Region!=""||Action!=""||EvidenceRestricted||Evidence.Count>0;} }
         public bool Includes(PlayerColor player, int era) { return Players.Contains(player) && (Era == 0 || Era == era); }
-        public void Reset(CompletedMatchStatistics report) { Players.Clear(); foreach (var p in report.Players) Players.Add(p.Color); Era = 0; Search = ""; AllCashPayments = false; Industry=Region=Action="";Evidence.Clear();EvidenceRestricted=false;ShowAll=Outgoing=false;Boundary="Final";BoundaryEra=0;MapMode="Occupancy";Resource="Beer"; }
+        public void Reset(CompletedMatchStatistics report) { Players.Clear(); foreach (var p in report.Players) Players.Add(p.Color); Era = 0; Search = ""; AllCashPayments = false; Industry=Region=Action="";Evidence.Clear();EvidenceRestricted=false;ShowAll=Outgoing=false;Boundary="Final";BoundaryEra=0;MapMode="Occupancy";Resource="Beer";ResourceView="Supply";DevelopmentSource="All";ByPlayer=CardShare=LinkShare=false;ActionShare=true; }
     }
     public sealed class StatisticsRow
     {
@@ -65,8 +67,9 @@ namespace BrassPatch.Statistics
     }
     public static class StatisticsPages
     {
-        public static readonly string[] Names = { "Overview", "Scoring", "Industries", "Networks & Geography", "Economy", "Resources & Trade", "Actions & Cards", "Turn Order & Tempo", "Efficiency & Transition", "Timeline", "Match review" };
-        public static readonly int[] NavigationOrder = {10,0,1,2,3,4,5,6,7,8,9};
+        public static readonly string[] Names = { "Overview", "Scoring", "Industries", "Networks & Geography", "Economy", "Resources & Trade", "Actions & Cards", "Turn Order & Tempo", "Efficiency & Transition", "Timeline" };
+        public static readonly int[] NavigationOrder = {0,1,2,3,4,5,6,7,8,9};
+        public static int NormalizePage(int page) {return page>=0&&page<Names.Length?page:0;}
         public static readonly string[] IndustryTypes = { "CottonMill", "Manufacturer", "Pottery", "Brewery", "CoalMine", "IronWorks" };
         public static readonly string[] ActionTypes = { "Build", "Network", "Develop", "Sell", "Loan", "Scout", "Pass", "Unclassified" };
         public static List<StatisticsSection> Build(int page, CompletedMatchStatistics report, StatisticsFilters filters)
@@ -302,10 +305,10 @@ namespace BrassPatch.Statistics
         static void Tempo(CompletedMatchStatistics r,StatisticsFilters f,List<StatisticsSection> output)
         {
             var seats=Section(output,"Round positions","Round percentages use known turns; nonexistent seats are omitted.","Player","Position","Rounds","Share");
-            var rounds=r.Rounds.Where(x=>f.Era==0||x.Era==f.Era).ToArray();
+            var rounds=StatisticsChartQueries.Rounds(r,f).ToArray();
             foreach(var p in Players(r,f))for(int seat=0;seat<r.Players.Count;seat++) {
                 int count=rounds.Count(x=>x.Order.Count>seat&&x.Order[seat]==p.Color);
-                Row(seats,"seat-"+p.Color+seat,p.Color,"Recorded round order, unaffected by temporary debt-choice ownership.",p.Name,N(seat+1),N(count),StatisticsFormat.Percent(count,rounds.Length));
+                Row(seats,"seat-"+p.Color+seat,p.Color,"Recorded round order, unaffected by temporary debt-choice ownership.",p.Name,N(seat+1),N(count),StatisticsFormat.Percent(count,rounds.Count(x=>x.Order.Contains(p.Color))));
             }
             var spend=Section(output,"Spending tempo","Action spending only. Volatility is population standard deviation; relative volatility = deviation / mean. No fixed strategy grade.","Player","Mean","Median","Min","Max","Std. deviation","Relative","Zero rounds");
             foreach(var p in Players(r,f)) {
@@ -321,7 +324,7 @@ namespace BrassPatch.Statistics
                 int opportunities=0,doubles=0,transition=0;
                 for(int i=1;i<r.Rounds.Count;i++) {
                     var a=r.Rounds[i-1];var b=r.Rounds[i];
-                    if(f.Era!=0&&b.Era!=f.Era)continue;
+                    if(!rounds.Contains(b)||!a.Order.Contains(p.Color)||!b.Order.Contains(p.Color))continue;
                     bool consecutive=a.Order.Count>0&&b.Order.Count>0&&a.Order.Last()==p.Color&&b.Order.First()==p.Color;
                     if(a.Era==b.Era){opportunities++;if(consecutive)doubles++;}else if(consecutive)transition++;
                 }
@@ -331,7 +334,7 @@ namespace BrassPatch.Statistics
             for(int i=1;i<r.Rounds.Count;i++) {
                 var previous=r.Rounds[i-1]; var next=r.Rounds[i];
                 if(previous.Order.Count==0||next.Order.Count==0||previous.Order.Last()!=next.Order.First())continue;
-                var p=next.Order.First(); if(!f.Players.Contains(p)||(f.Era!=0&&next.Era!=f.Era))continue;
+                var p=next.Order.First(); if(!f.Players.Contains(p)||!rounds.Contains(next))continue;
                 var left=r.Actions.Where(a=>a.Player==p&&a.Era==previous.Era&&a.Round==previous.Round).ToArray();
                 var right=r.Actions.Where(a=>a.Player==p&&a.Era==next.Era&&a.Round==next.Round).ToArray();
                 string label=previous.Era==next.Era?"Round "+previous.Round+" → "+next.Round:"Canal → Rail transition";
@@ -340,16 +343,7 @@ namespace BrassPatch.Statistics
         }
         static void Efficiency(CompletedMatchStatistics r,StatisticsFilters f,List<StatisticsSection> output)
         {
-            var ratios=Section(output,"Conversion and efficiency","Ratios are descriptive. Printed tile realization is not the maximum legal score. Resource purchases are counted once.","Player","VP / action","£ spent / VP","Industry VP","Printed opportunity","Realization");
-            foreach(var p in Players(r,f)) {
-                var frames=Frames(r,f).Where(a=>a.Player==p.Color).ToArray();
-                int vp=f.Era==0?p.FinalVP:Entries(r,f).Where(e=>e.Player==p.Color&&e.Kind=="Balance").Sum(e=>e.VP);
-                int spend=frames.Sum(a=>a.Spending);
-                if(f.AllCashPayments)spend=-Entries(r,f).Where(e=>e.Player==p.Color&&e.Kind=="Balance"&&e.Cash<0).Sum(e=>e.Cash);
-                var tiles=r.Assets.Where(a=>a.Player==p.Color).ToArray();
-                int actual=tiles.Sum(a=>(f.Era==2?0:a.CanalVP)+(f.Era==1?0:a.RailVP)), printed=tiles.Sum(a=>(f.Era==2?0:a.CanalPrinted)+(f.Era==1?0:a.RailPrinted));
-                Row(ratios,"ratio-"+p.Color,p.Color,"Actions "+frames.Length+"; VP "+vp+"; spending "+M(spend)+". Printed opportunity sums per-era snapshots, including carryover in both eras.",p.Name,StatisticsFormat.Ratio(vp,frames.Length),StatisticsFormat.Ratio(spend,vp),N(actual),N(printed),StatisticsFormat.Percent(actual,printed));
-            }
+            output.Add(StatisticsChartQueries.EfficiencyLedger(r,f));
             var cleanup=Section(output,"Level-1 Canal cleanup","Link points score before cleanup. Removed link icons do not subtract previously earned Canal VP.","Player","City / industry","Flipped","Canal VP earned","Stock removed","Link icons removed");
             foreach(var a in r.Assets.Where(a=>f.Players.Contains(a.Player)&&a.Removal=="Canal cleanup"&&(f.Era==0||f.Era==1)))
                 Row(cleanup,a.Key+"-cleanup",a.Player,AssetDetail(a),r.Name(a.Player),a.City+" · "+a.Type,a.Flipped?"Yes":"No",N(a.CanalVP),N(a.Stock),N(a.Flipped?a.LinkIcons:0));

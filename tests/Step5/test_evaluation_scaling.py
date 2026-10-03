@@ -1,22 +1,21 @@
 """Evaluation scale, explicit rotations, cache isolation and worker ownership."""
-import copy
 import hashlib
 import json
 from pathlib import Path
 import tempfile
-from threading import Lock
 import unittest
 from unittest.mock import patch
 import uuid
 
 import torch
 
-from brass_ai.bank import read
+from brass_ai.bank import read, sha
 from brass_ai.learning.checkpoint import save_checkpoint
 from brass_ai.learning.contracts import SOURCE_ROOT
 from brass_ai.learning.model import FourSeatNet, ModelConfig
 from brass_ai.learning.replay import read_shards, split_for
 from brass_ai.learning.runner import RandomPolicy
+from brass_ai.recovery.replay import write_shard, cache_receipt
 from brass_ai.step5.collector import collect_games
 from brass_ai.step5.cli import parser
 from brass_ai.step5.evaluation import (evaluate, evaluation_config, evaluation_jobs,
@@ -55,18 +54,23 @@ class TinyHost:
         pass
 
 
-def fixture_collect(host, seeds, policies, *, rotations, sampling_seeds, **kwargs):
-    games = []
-    for seed, rotation in zip(seeds, rotations):
+def fixture_collect(actor, jobs):
+    records = []
+    for job in jobs:
+        seed,rotation,policies=job['seed'],job['rotation'],job['policies']
+        path=Path(job['path'])
         episode = game()
         group = digest(dict(rules='steam-brass-patch-1.1.0', setup_seed=seed))
         assigned = [policies[(seat - rotation) % 4] for seat in range(4)]
         episode.update(game_id=uuid.uuid4().hex, setup_group=group, split=split_for(group),
-                       opponents=[p.policy_id for p in assigned])
+                       opponents=[p['policy_id'] for p in assigned])
         for row in episode['records']:
-            row['behavior'].update(kind=assigned[row['seat']].kind, policy_id=assigned[row['seat']].policy_id)
-        games.append(episode)
-    return games[::-1]  # Completion order is intentionally different from scheduling.
+            row['behavior'].update(kind='model', policy_id=assigned[row['seat']]['policy_id'])
+        cached=path.exists()
+        if not cached:write_shard(path,[episode],job['provenance'])
+        else:episode=read_shards([path])[0]
+        records.append(dict(job=job['index'],game_id=episode['game_id'],path=str(path),sha256=sha(path),features=cache_receipt(path),cached=cached))
+    return records[::-1]  # Completion order differs from scheduling.
 
 
 class EvaluationScalingTests(unittest.TestCase):
@@ -75,9 +79,9 @@ class EvaluationScalingTests(unittest.TestCase):
         torch.set_num_threads(2)
 
     def test_defaults_cli_overrides_and_strict_config(self):
-        config = read(SOURCE_ROOT / 'configs/step5/previous-evaluation.json')
-        self.assertEqual((config['setups'], config['workers'], config['batch_size']), (64, 32, 64))
-        self.assertEqual(config['legacy_workers'], 8)
+        config = read(SOURCE_ROOT / 'configs/step5/evaluation.json')
+        self.assertEqual((config['setups'], config['workers'], config['batch_size']), (30, 28, 64))
+        self.assertEqual(config['legacy_workers'], 24)
         for key, value in [('setups', 0), ('workers', True), ('legacy_workers', -1), ('partition', 'train'),
                            ('include_legacy', 1), ('focus', 'mixed')]:
             with self.subTest(key=key), self.assertRaises(ValueError):
@@ -128,13 +132,14 @@ class EvaluationScalingTests(unittest.TestCase):
         for seed in (3901, 3902, 3903):
             torch.manual_seed(seed)
             path = directory / (str(seed) + '.pt')
-            save_checkpoint(path, FourSeatNet(ModelConfig.preset('small')), training=dict(mode='evaluation-fixture'))
+            save_checkpoint(path, FourSeatNet(ModelConfig.preset('small')), training=dict(mode='evaluation-fixture',fresh_run=directory.relative_to(SOURCE_ROOT).as_posix()))
             paths.append(path)
         host = directory / 'host'; host.mkdir()
         (host / 'BrassHost.exe').write_bytes(b'fake-host')
-        config = read(SOURCE_ROOT / 'configs/step5/previous-evaluation.json')
-        config.update(host=str(host), setups=2, workers=4, legacy_workers=2, search_workers=2,
-                      include_legacy=False, threads=2)
+        config = evaluation_config(read(SOURCE_ROOT/'configs/step5/recovery-smoke.json'),setups=2,
+            include_legacy=False,lineups=['recent-neural','mixed-neural'])
+        config.update(host=str(host),threads=2)
+        config['retention']=dict(config['retention'],enabled=False)
         return paths, config
 
     def test_batched_evaluation_resume_and_holdout_enforcement(self):
@@ -143,18 +148,19 @@ class EvaluationScalingTests(unittest.TestCase):
             directory = Path(temporary)
             paths, config = self.assets(directory)
             output = directory / 'evaluation'
-            with patch('brass_ai.step5.evaluation.collect_games', side_effect=fixture_collect) as collect:
+            with patch('brass_ai.recovery.evaluation.ActorPool.collect', autospec=True, side_effect=fixture_collect) as collect:
                 report = evaluate(SOURCE_ROOT, output, paths[0], paths[1:], config)
-            self.assertEqual(collect.call_count, 4)  # Two batches in each of two lineups.
+            self.assertEqual(collect.call_count, 2)
             for entry in report['results'].values():
                 self.assertEqual(entry['games'], 8)
                 self.assertEqual(entry['seat_counts'], {str(s): 2 for s in range(4)})
             self.assertFalse(report['promotion_eligible'])
-            with patch('brass_ai.step5.evaluation.collect_games', side_effect=AssertionError('Replay should be cached')):
+            with patch('brass_ai.recovery.evaluation.ActorPool.collect', autospec=True, side_effect=fixture_collect), \
+                 patch(__name__+'.write_shard',side_effect=AssertionError('Replay should be cached')):
                 resumed = evaluate(SOURCE_ROOT, output, paths[0], paths[1:], config)
             self.assertEqual(report['results'], resumed['results'])
-            with self.assertRaisesRegex(ValueError, 'spec changed'):
-                evaluate(SOURCE_ROOT, output, paths[0], paths[1:], dict(config, workers=2))
+            with self.assertRaisesRegex(ValueError, 'specification changed'):
+                evaluate(SOURCE_ROOT, output, paths[0], paths[1:], dict(config, seed=config['seed']+1))
             with self.assertRaisesRegex(ValueError, 'Evaluation-only'):
                 read_shards(list(output.glob('*.jsonl.gz')), partition='train')
 
@@ -166,36 +172,34 @@ class EvaluationScalingTests(unittest.TestCase):
             output = directory / 'evaluation'
             def missing(*args, **kwargs):
                 return fixture_collect(*args, **kwargs)[:-1]
-            with patch('brass_ai.step5.evaluation.collect_games', side_effect=missing), self.assertRaisesRegex(ValueError, 'Missing'):
+            with patch('brass_ai.recovery.evaluation.ActorPool.collect', autospec=True, side_effect=missing), self.assertRaisesRegex(ValueError, 'Missing'):
                 evaluate(SOURCE_ROOT, output, paths[0], paths[1:], config)
             self.assertFalse((output / 'report.json').exists())
-            self.assertFalse(list(output.glob('*.jsonl.gz')))
+            self.assertTrue(list(output.glob('*.jsonl.gz')))  # Completed partial work remains available to resume.
 
-    def test_search_workers_own_their_policies_and_close_them(self):
-        parent = SOURCE_ROOT / 'artifacts/step5'; parent.mkdir(parents=True, exist_ok=True)
-        owners, closed = [], []
-        lock = Lock()
+    def test_search_workers_own_private_evaluator_channels(self):
+        from types import SimpleNamespace
+        from brass_ai.recovery.execution import make_policy
+        from brass_ai.recovery.config import EXECUTION_V21
+        from brass_ai.search.common import SearchConfig
+        owners=[]
         class SearchStub:
-            kind = 'external'
-            policy_id = 'independent-search-candidate'
             def __init__(self, *args, **kwargs):
-                with lock:
-                    owners.append(self)
-            def close(self):
-                with lock:
-                    closed.append(self)
-        with tempfile.TemporaryDirectory(dir=parent) as temporary:
-            directory = Path(temporary)
-            paths, config = self.assets(directory)
-            config.update(use_search=True, setups=1)
-            with patch('brass_ai.step5.evaluation.SearchPolicy', SearchStub), \
-                 patch('brass_ai.step5.evaluation.collect_games', side_effect=fixture_collect):
-                report = evaluate(SOURCE_ROOT, directory / 'evaluation', paths[0], paths[1:2], config)
-            self.assertEqual(len(owners), 2)
-            self.assertEqual(set(owners), set(closed))
-            self.assertEqual(report['execution']['recent-neural']['mode'], 'independent-game-workers')
-            self.assertEqual(report['execution']['recent-neural']['workers'], 2)
-            self.assertEqual(report['results']['recent-neural']['seat_counts'], {str(s): 1 for s in range(4)})
+                self.evaluator=kwargs['evaluator'];self.game=SimpleNamespace(host=object());self.simulation_games=[]
+                owners.append(self)
+        def forest(policy,workers,role,factory):
+            self.assertEqual((workers,role),(4,'lab'))
+            policy.replicas=[factory(i) for i in range(workers)]
+            return policy
+        endpoints=[object() for _ in range(5)]
+        spec=dict(kind='masked_ismcts',model_id='a'*64,search=SearchConfig().to_dict(),cpu_role='lab')
+        with patch('brass_ai.recovery.execution.MaskedSearchPolicy',SearchStub), \
+             patch('brass_ai.recovery.parallel.parallelize',side_effect=forest), \
+             patch('brass_ai.recovery.execution.instrument_host'):
+            policy=make_policy(spec,SOURCE_ROOT,endpoints,EXECUTION_V21,None)
+        self.assertEqual(len(owners),5)
+        self.assertEqual([p.evaluator.endpoint for p in owners],endpoints)
+        self.assertEqual(len(policy.replicas),4)
 
 
 if __name__ == '__main__':

@@ -86,7 +86,18 @@ def evaluate(root,output,candidate_path,references,config,*,setups=None,seed=Non
                 actor=heavy if config['use_search'] or name.endswith('v3') else ordinary
                 records=actor.collect(jobs)
                 games=read_shards([r['path'] for r in records],receipts={r['path']:r.get('features') for r in records})
-                candidate_id=games[0]['opponents'][jobs[0]['rotation']]
+                # Shards/worker completions need not have scheduling order.
+                # Attribute the candidate through its job/game receipt rather
+                # than interpreting the first replay as the first rotation.
+                scheduled={j['index']:j for j in jobs}
+                require(len(records)==len(jobs) and {r['job'] for r in records}==set(scheduled),
+                        'Missing, duplicate or foreign evaluation receipts')
+                rotations={r['game_id']:scheduled[r['job']]['rotation'] for r in records}
+                require(len(rotations)==len(records) and {g['game_id'] for g in games}==set(rotations),
+                        'Missing or duplicate evaluation replay identities')
+                candidate_ids={g['opponents'][rotations[g['game_id']]] for g in games}
+                require(len(candidate_ids)==1,'Evaluation candidate identity changed between rotations')
+                candidate_id=candidate_ids.pop()
                 check_evaluation_batch(games,evaluation_jobs(seeds),candidate_id,config['partition'])
                 by_group={digest(dict(rules='steam-brass-patch-1.1.0',setup_seed=s)):s for s in seeds}
                 rows=sorted((outcome(g,candidate_id,by_group[g['setup_group']]) for g in games),key=lambda r:(r['seed'],r['seat']))

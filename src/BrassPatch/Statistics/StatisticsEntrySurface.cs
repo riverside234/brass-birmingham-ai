@@ -2,7 +2,6 @@ using System;
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
-
 namespace BrassPatch.Statistics
 {
     // Entry controls have a light brass treatment without changing shared panel widgets.

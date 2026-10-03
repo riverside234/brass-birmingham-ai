@@ -6,6 +6,10 @@ Imitation and heuristic evaluation use searched Masked **v4** at **one second/fo
 
 ## Transfer and preflight
 
+**Pre-lab review (2 October):** the qualification checker now understands the selected v4 receipt and accepts the same LF/CRLF-only metadata conversion as training. Dataset audits share one serial/parallel validation path, exclude damaged shards before admission, and reject neural rows before creating a heuristic manifest. Evaluation attributes each replay through its job/game receipt, so shard order cannot change the candidate seat. BC and rehearsal use CPU legality metadata for eligibility counts instead of repeatedly reading individual CUDA flags; losses and effective-batch denominators are preserved.
+
+Sync these fixes **before starting the new run**. Completed, audited heuristic datasets remain usable. An unfinished demonstration collection or neural run remains bound to its original source/config signature: keep it intact and use a new output directory after updating the code. Do not edit its signature to bypass the check. The v4 bank, private bundle, 24-table/four-worker lab preset and fresh 1.84M-parameter model remain unchanged.
+
 **Windows/Linux metadata fix (2 October):** if `demo-generate` reports `Selected v4 bank differs`, update `src/brass_ai/bank.py` and `.gitattributes` from this revision. Git previously changed the v4 manifest and `selection.json` from CRLF to LF; the stored pins referred to the Windows bytes. Admission now accepts only byte-exact or LF/CRLF-equivalent JSON metadata. Content changes, reformatting, frozen-source edits and executable changes remain rejected. The selected v4 identity and all historical pins remain unchanged; do not replace the hashes manually or regenerate the bank/selection receipt.
 
 After syncing, run this quick admission check in conda before retrying the same `demo-generate` command:
@@ -30,10 +34,13 @@ Sync this revision's source/configs and tracked `training/` directory first. Rea
 
 ```sh
 python /data/not_backed_up/yxu209/ai-training/scripts/step5.py import-runtime --bundle /data/not_backed_up/yxu209/ai-training/artifacts/step5-transfer/private-rules-runtime-v4.zip
+python /data/not_backed_up/yxu209/ai-training/scripts/check_qualification_reports.py --root /data/not_backed_up/yxu209/ai-training/
 python /data/not_backed_up/yxu209/ai-training/scripts/step5.py --device cuda preflight
 ```
 
 The bundle importer verifies the full member inventory and hashes before writing. It refuses to replace different runtime files. If an old clone has conflicting privately generated runtime files, use a clean clone/checkout and retain the old run separately. Preflight checks full-game rules parity, the selected bank and a device backward pass. It is not a v3 clock calibration or strength tournament.
+
+Local review validation passed **82 focused Python tests**, the 71-file distribution check, and the two-game rules-parity preflight. The real-engine smoke generated two v4 demonstrations at 1s/four workers, audited them, ran one fresh BC epoch followed by four PPO games across a same-run restart, and completed seat-rotated evaluation. The final audit and evaluation changes were also checked against these actual replays/checkpoints. The four-worker NN probe completed 12 simulations across four alternatives on its warm repetition and produced a valid teacher; the cold repetition exhausted its 20-second test allowance without fabricating labels. This bounded CPU probe is not evidence that the lab's normal 3-second NN setting has enough completed search support. Check completed simulations/teacher rows on the lab; CUDA/Linux execution and throughput were not measured locally.
 
 Use the bundle exported with this source revision: **10 authored workers and 904 private runtime files**, including the selected bank and immutable S1, early Masked, prior Masked, industry, economic and advanced controls. Bundle SHA-256: `49103db526cf01d43b6374d45f124da2a0c6ac309543bc6a640e295c28764be8`. Current authored executables and frozen bank source/profiles are tracked under `training/`; vendor DLLs stay private. An old bundle is incompatible even if its filename matches. On a conflicting lab checkout, retain the old runs and import into a clean checkout.
 
@@ -81,7 +88,7 @@ Twenty iterations is a pipeline/early-learning run (6,400 ordinary games), not a
 
 The first search collection occurs at the end of a chunk after the ready threshold. Subsequent due points advance by 1,600 games. Search actions are external behavior: they never become PPO neural likelihoods. Distillation needs completed visits on at least two alternatives, mixes 90% normalized visits with 10% full-support prior, and uses a separate supervised loss. A search that cannot complete meaningful evidence skips distillation and reports the reason. NN teachers use a separate 3-second lab clock because full NN rollouts need more completed evidence; v3 stays exactly one second. Reference/smoke NN presets stay at one second. Do not fabricate labels or silently lengthen the v3 clock.
 
-For fewer resources, select `--config /data/not_backed_up/yxu209/ai-training/configs/step5/lab-small.json` before creating a new run. `lab-reference.json` uses one search worker; `lab-16x2.json` uses 16 heavy tables × 2 workers. All v3 presets still use one second. `recovery-smoke.json` is a compact local scaffold check. None of these is permission to migrate an old source-bound run in place.
+For fewer resources, select `--config /data/not_backed_up/yxu209/ai-training/configs/step5/lab-small.json` before creating a new run. `lab-reference.json` also uses four search workers; `lab-16x2.json` uses 16 heavy tables × 2 workers. All v3 presets still use one second. `recovery-smoke.json` is a compact local scaffold check. None of these is permission to migrate an old source-bound run in place.
 
 ## Evaluation and selected-backend probe
 

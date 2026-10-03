@@ -9,7 +9,6 @@ using BrassApplication.Game;
 using BrassApplication.GameHistory;
 using BrassPatch.Persistence;
 using Newtonsoft.Json;
-
 namespace BrassPatch.Statistics
 {
     public static class StatisticsCollector

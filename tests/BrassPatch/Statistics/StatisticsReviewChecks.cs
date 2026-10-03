@@ -29,13 +29,13 @@ public static class StatisticsReviewChecks
         Add(r,"entries",Use(PlayerColor.Blue,PlayerColor.Blue,2,11,"coal"),Use(PlayerColor.Red,PlayerColor.Blue,3,12,"coal"),Use(PlayerColor.Blue,PlayerColor.Red,1,13,"othercoal"),Use(PlayerColor.Blue,null,2,14,null,"Market"),Value<StatisticsEntry>("Kind","Market purchase","Resource","Coal","Player",PlayerColor.Blue,"Quantity",2,"TotalPrice",5,"Era",1,"Revision",14));
         var f=new StatisticsFilters();f.Reset(r);f.Players.Clear();f.Players.Add(PlayerColor.Blue);f.Resource="Coal";
         var allKinds=new HashSet<StatisticsPlotKind>();
-        for(int page=0;page<11;page++){
+        for(int page=0;page<10;page++){
             var v=StatisticsPlotPages.Build(page,r,f);check(v.Plots.Count>0,"hand-built page provides a plot",page);
             foreach(var p in v.Plots){allKinds.Add(p.Kind);check(p.Marks.All(m=>!Double.IsNaN(m.X)&&!Double.IsNaN(m.Y)&&!Double.IsInfinity(m.Y)),"finite exact plot values",p.Id);check(p.Series.Select(s=>s.Id).Distinct().Count()==p.Series.Count,"stable nonduplicate legend IDs",p.Id);check(p.Marks.All(m=>p.Series.Any(s=>s.Id==m.Series)),"every mark has a named legend",p.Id);}
         }
         check(allKinds.Count>=11,"varied plot families implemented",allKinds.Select(k=>k.ToString()).ToArray());
-        var gap=StatisticsPlotPages.Build(10,r,f).Plots.First(p=>p.Id=="gap");check(gap.Marks.Where(m=>m.Series!="total").Sum(m=>m.Y)==2&&gap.Marks.Last().Y==2,"signed gap including opening and penalties reconciles to 23 − 21",null);
-        f.Era=1;check(StatisticsPlotPages.Build(10,r,f).Plots.First(p=>p.Id=="gap").Marks.Last().Y==2,"summary gap stays whole match under era filter",null);f.Era=0;
+        var gap=StatisticsPlotPages.Build(1,r,f).Plots.First(p=>p.Id=="gap");check(gap.Marks.Where(m=>m.Series!="total").Sum(m=>m.Y)==2&&gap.Marks.Last().Y==2,"signed gap including opening and penalties reconciles to 23 − 21",null);
+        f.Era=1;check(StatisticsPlotPages.Build(1,r,f).Plots.First(p=>p.Id=="gap").Marks.Last().Y==2,"summary gap stays whole match under era filter",null);f.Era=0;
         var conversion=StatisticsPlotPages.Build(2,r,f).Plots.First(p=>p.Id=="conversion");check(conversion.Marks.Where(m=>m.Series=="built").Sum(m=>m.Y)==4&&conversion.Marks.Where(m=>m.Series=="flipped").Sum(m=>m.Y)==2,"built/flipped counts are distinct tiles",null);
         var delays=StatisticsPlotPages.Build(2,r,f).Plots.First(p=>p.Id=="flip-delay");check(delays.Marks.Count==2&&delays.Marks.All(m=>m.Y==1),"own-turn delays differ from 3/4 global-turn delays",null);
         check(StatisticsDetailMetrics.Median(new[]{1,2,4,9})==3&&Double.IsNaN(StatisticsDetailMetrics.Median(new int[0])),"independent even median and no-sample result",null);
@@ -59,13 +59,10 @@ public static class StatisticsReviewChecks
         var histogram=StatisticsPlotPages.Build(6,r,f).Plots.First(p=>p.Id=="sale-batches");check(histogram.Marks.Where(m=>m.Row==0).Sum(m=>m.Y)==1&&histogram.Marks.Where(m=>m.Row==1).Sum(m=>m.Y)==1,"single- and multi-tile sales occupy distinct bins",null);
         var share=StatisticsPlotPages.Build(6,r,f).Plots.First(p=>p.Id=="actions");check(share.Marks.Sum(m=>m.Y)==7,"double rail, Scout trades and Develop tiles are not extra actions",null);
         f.Industry="CottonMill";check(StatisticsMetrics.Assets(r,f).Count()==1&&StatisticsPlotPages.Build(2,r,f).Plots.First(p=>p.Id=="conversion").Rows.Count==1,"typed industry scope applies to counts and evidence",null);f.Industry="";
-        var insights=StatisticsInsights.Build(r,PlayerColor.Blue);check(insights.Any(o=>o.Title=="Efficient sale batching")&&insights.Any(o=>o.Title=="Carryover scored in both eras")&&insights.Any(o=>o.Title=="Unsold goods at the finish")&&insights.Any(o=>o.Title=="Debt cost victory points"),"insight families respond to independent factual patterns",null);
-        check(insights.All(o=>o.Id!=""&&o.RuleVersion==1&&o.Player==PlayerColor.Blue&&o.Coverage==r.Availability&&o.Evidence.Era==0),"versioned insights have explicit coverage, identity and scope",null);
-        check(insights.All(o=>!o.Interpretation.Contains("optimal")&&!o.Fact.Contains("lost potential VP")),"observations avoid invented optimal alternatives or attainable lost points",null);
         check(StatisticsMetrics.Focus(r,f).Color==PlayerColor.Blue&&StatisticsMetrics.Reference(r,f).Color==PlayerColor.Red,"default sole human and runner-up reference identities",null);
-        typeof(StatisticsPlayer).GetProperty("FinalVP").SetValue(r.Players[1],23,null);gap=StatisticsPlotPages.Build(10,r,f).Plots.First(p=>p.Id=="gap");check(gap.Marks.Last().Y==0,"VP tie remains zero despite ranked tie-break",null);
-        typeof(CompletedMatchStatistics).GetProperty("Introductory").SetValue(r,true,null);check(!StatisticsInsights.Build(r,PlayerColor.Blue).Any(o=>o.Title.StartsWith("Rail")||o.Title.StartsWith("Carryover")),"introductory review suppresses Rail-only advice",null);
-        typeof(CompletedMatchStatistics).GetProperty("CompleteHistory").SetValue(r,false,null);check(StatisticsInsights.Build(r,PlayerColor.Blue).Count==0&&StatisticsPlotPages.Build(2,r,f).Plots.Count==0,"missing history suppresses detailed charts and unsupported advice",null);
+        typeof(StatisticsPlayer).GetProperty("FinalVP").SetValue(r.Players[1],23,null);gap=StatisticsPlotPages.Build(1,r,f).Plots.First(p=>p.Id=="gap");check(gap.Marks.Last().Y==0,"VP tie remains zero despite ranked tie-break",null);
+        typeof(CompletedMatchStatistics).GetProperty("Introductory").SetValue(r,true,null);check(StatisticsPlotPages.Build(0,r,f).Plots.All(p=>p.Id!="era-comparison"),"introductory overview suppresses a nonexistent Rail comparison",null);
+        typeof(CompletedMatchStatistics).GetProperty("CompleteHistory").SetValue(r,false,null);check(StatisticsPlotPages.Build(2,r,f).Plots.Count==0,"missing history suppresses detailed charts and unsupported advice",null);
     }
     static StatisticsEntry Score(PlayerColor p,int era,string category,int vp){return Value<StatisticsEntry>("Player",p,"Era",era,"Kind","Balance","Category",category,"VP",vp);}
     static StatisticsEntry Use(PlayerColor consumer,PlayerColor? supplier,int amount,int revision,string asset,string source="Industry"){return Value<StatisticsEntry>("Player",consumer,"Supplier",supplier,"Kind","Resource use","Resource","Coal","Quantity",amount,"Revision",revision,"Era",1,"AssetKey",asset,"Source",source);}
@@ -82,7 +79,7 @@ public static class StatisticsReviewChecks
         check(r.Contributions.Sum(c=>c.VP)==r.Links.Sum(l=>l.VP),"typed three-region link contributions reconcile independently",null);
         check(r.Assets.All(a=>a.OwnTurn>0)&&r.Actions.All(a=>a.OwnTurn>0),"explicit own-turn ordinals are populated",null);
         foreach(var m in r.MatTiles)check(m.Type!="None"&&m.Level>0,"mat snapshots contain actual industry tiles",m.Type);
-        var f=new StatisticsFilters();f.Reset(r);foreach(var p in r.Players){f.Focus=p.Color;var gap=StatisticsPlotPages.Build(10,r,f).Plots.First(x=>x.Id=="gap");check(gap.Marks.Where(m=>m.Series!="total").Sum(m=>m.Y)==gap.Marks.Last().Y,"complete-match gap categories reconcile for each reference",p.Color);}
+        var f=new StatisticsFilters();f.Reset(r);foreach(var p in r.Players){f.Focus=p.Color;var gap=StatisticsPlotPages.Build(1,r,f).Plots.First(x=>x.Id=="gap");check(gap.Marks.Where(m=>m.Series!="total").Sum(m=>m.Y)==gap.Marks.Last().Y,"complete-match gap categories reconcile for each reference",p.Color);}
     }
     static int Number(object e,string property){return Convert.ToInt32(e.GetType().GetProperty(property).GetValue(e,null));}
 }

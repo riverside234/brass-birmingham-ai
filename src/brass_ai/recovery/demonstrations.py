@@ -82,65 +82,30 @@ def audit(root,paths,output,*,mono=None,workers=1,budget=None):
             parents=sorted(read(root/'training/opponents/pool.json')['training']))
     require(type(workers) is int and 1<=workers<=32,'Invalid audit CPU allowance')
     paths=sorted(set(str(project_path(root,p)) for p in paths))
+    require(paths,'No demonstration replay paths supplied')
+    tasks=[(str(root),p,sorted(allowed),mono) for p in paths]
     if workers>1:
         with ProcessPoolExecutor(max_workers=min(workers,len(paths)),mp_context=multiprocessing.get_context('spawn')) as executor:
-            partial=list(executor.map(_audit_path,[(str(root),p,sorted(allowed),mono) for p in paths]))
-        entries=[];excluded=[];seen=set();groups={}
-        for accepted,rejected in partial:
-            excluded.extend(rejected)
-            for entry in accepted:
-                if entry['semantic_sha256'] in seen:
-                    excluded.append(dict(path=entry['path'],game_id=entry['game_id'],reason='Duplicate semantic game'));continue
-                seen.add(entry['semantic_sha256'])
-                require(groups.setdefault(entry['setup_group'],entry['split'])==entry['split'],'Setup family crosses partitions')
-                entries.append(entry)
-        return _manifest(root,out,entries,excluded,allowed,calibration,workers)
+            partial=list(executor.map(_audit_path,tasks))
+    else:
+        partial=map(_audit_path,tasks)
+    # Commit a shard only after all its transitions pass. Serial and parallel
+    # audits use the same eligibility rules and parent-owned deduplication.
     entries=[];excluded=[];seen=set();groups={}
-    with RulesHost(root/'artifacts/r1-host/guarded',mono=mono) as host:
-        for name in sorted(set(str(project_path(root,p)) for p in paths)):
-            path=Path(name)
-            try:
-                with gzip.open(path,'rt',encoding='utf-8') as stream: header=json.loads(next(stream))
-                require(header['provenance'].get('purpose')=='training','Source purpose is not training')
-                seeds=source_seeds(header);games=read_shards([path])
-                for game in games:
-                    require(game['setup_group'] in seeds,'No reproducible setup seed in source provenance')
-                    teachers={r['behavior']['policy_id'] for r in game['records'] if r['behavior']['kind']=='external'}
-                    eligible=teachers & allowed
-                    require(eligible,'No current admitted v3 demonstration decisions')
-                    # Old/held-out external policies cannot silently enter a demo game.
-                    require(teachers<=allowed,'Old/unadmitted external opponent in demonstration')
-                    signature=digest(dict(group=game['setup_group'],opponents=game['opponents'],
-                        decisions=[(r['seat'],r['choices'][r['chosen']]['id']) for r in game['records']]))
-                    if signature in seen:
-                        excluded.append(dict(path=str(path.relative_to(root)),game_id=game['game_id'],reason='Duplicate semantic game'))
-                        continue
-                    context=host.reset(seeds[game['setup_group']])
-                    for row in game['records']:
-                        require(not context['terminal'] and context['actor']==row['seat'],'Replay acting seat differs')
-                        require(host.observe(row['seat'])==row['view'],'Permitted replay observation differs')
-                        legal=host.choices()
-                        require(legal==row['choices'],'Complete legal choices differ')
-                        context=host.apply(context,legal[row['chosen']])
-                    require(context['terminal'] and host.call('result')==game['result'],'Replay terminal result differs')
-                    seen.add(signature)
-                    require(groups.setdefault(game['setup_group'],game['split'])==game['split'],'Setup family crosses partitions')
-                    counts=Counter(r['behavior']['policy_id'] for r in game['records'] if r['behavior']['policy_id'] in eligible)
-                    entries.append(dict(path=path.relative_to(root).as_posix(),sha256=sha(path),game_id=game['game_id'],
-                        setup_group=game['setup_group'],split=game['split'],semantic_sha256=signature,
-                        teachers=dict(counts),label_kind='qualified-v3-choice/1.0.0',
-                        context='neutral-predecision/1.0.0',transitions_verified=True))
-                if games:
-                    write_cache(path,games)
-                    for entry in entries:
-                        if entry['path']==path.relative_to(root).as_posix(): entry['features']=cache_receipt(path)
-            except (ValueError,KeyError,StopIteration) as error:
-                excluded.append(dict(path=str(path.relative_to(root)),reason=str(error)))
+    for accepted,rejected in partial:
+        excluded.extend(rejected)
+        for entry in accepted:
+            if entry['semantic_sha256'] in seen:
+                excluded.append(dict(path=entry['path'],game_id=entry['game_id'],reason='Duplicate semantic game'));continue
+            seen.add(entry['semantic_sha256'])
+            require(groups.setdefault(entry['setup_group'],entry['split'])==entry['split'],'Setup family crosses partitions')
+            entries.append(entry)
     return _manifest(root,out,entries,excluded,allowed,calibration,workers)
 
 
 def _manifest(root,out,entries,excluded,allowed,calibration,workers):
-    require(entries,'No eligible demonstrations; generate fresh current-v3 training games')
+    require(entries,'No eligible demonstrations; generate fresh current-v4 training games. '+
+            '; '.join(e['reason'] for e in excluded[:3]))
     manifest=dict(format='bc-dataset/1.0.0',compatibility=compatibility(),implementation=implementation_id(),
         label_kind='qualified-v3-choice/1.0.0',context='neutral-predecision/1.0.0',teachers=sorted(allowed),
         entries=entries,excluded=excluded,partitions=dict(Counter(e['split'] for e in entries)),
@@ -151,10 +116,10 @@ def _manifest(root,out,entries,excluded,allowed,calibration,workers):
 def _audit_path(args):
     """A fresh private rules host per shard; deduplication commits in the parent."""
     root,name,allowed,mono=args;root=Path(root);path=Path(name);entries=[];excluded=[]
-    with gzip.open(path,'rt',encoding='utf-8') as stream: header=json.loads(next(stream))
     try:
+        with gzip.open(path,'rt',encoding='utf-8') as stream: header=json.loads(next(stream))
         require(header['provenance'].get('purpose')=='training','Source purpose is not training')
-        seeds=source_seeds(header);games=read_shards([path])
+        seeds=source_seeds(header);games=read_shards([path],heuristic_only=True)
         with RulesHost(root/'artifacts/r1-host/guarded',mono=mono) as host:
             for game in games:
                 require(game['setup_group'] in seeds,'No reproducible setup seed')
@@ -175,7 +140,9 @@ def _audit_path(args):
                     label_kind='qualified-v3-choice/1.0.0',context='neutral-predecision/1.0.0',transitions_verified=True))
         write_cache(path,games)
         for entry in entries: entry['features']=cache_receipt(path)
-    except (ValueError,KeyError,StopIteration) as error: excluded.append(dict(path=path.relative_to(root).as_posix(),reason=str(error)))
+    except (ValueError,KeyError,StopIteration,OSError,EOFError,UnicodeError) as error:
+        entries=[]
+        excluded.append(dict(path=path.relative_to(root).as_posix(),reason=str(error) or type(error).__name__))
     return entries,excluded
 
 

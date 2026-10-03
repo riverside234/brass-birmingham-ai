@@ -31,14 +31,16 @@ class QualificationDistributionTests(unittest.TestCase):
             qualification=name, qualification_sha256=fingerprint)))
         return path, pinned, identity
 
-    def test_linux_converted_report_reproduces_failure_then_exact_repair(self):
+    def test_linux_converted_report_is_accepted_without_rewriting_pins(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
             path, pinned, identity = self.fixture(root, stored_lf=True)
-            with self.assertRaisesRegex(ValueError, 'Qualification report changed'):
-                admission(root, identity)
-            with self.assertRaisesRegex(ValueError, 'converted line endings'):
-                check_reports(root)
+            original = path.read_bytes()
+            admission(root, identity)
+            checked = check_reports(root)
+            self.assertEqual(checked['repaired'], [])
+            self.assertEqual(len(checked['line_endings_equivalent']), 1)
+            self.assertEqual(path.read_bytes(), original)
             result = check_reports(root, repair=True)
             self.assertEqual(len(result['repaired']), 1)
             self.assertEqual(path.read_bytes(), pinned)

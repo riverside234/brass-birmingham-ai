@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Globalization;
 using BoardGameRules.Entities.Players;
-
 namespace BrassPatch.Statistics
 {
     // Value-only report. No domain objects, Unity transforms, RNG or repository survive collection.
@@ -143,6 +142,7 @@ namespace BrassPatch.Statistics
     }
     public sealed class StatisticsEntry : StatisticsPosition
     {
+        public int RecordOrdinal { get; internal set; }
         public string ActionKey { get; internal set; }
         public string Kind { get; internal set; }
         public string Category { get; internal set; }

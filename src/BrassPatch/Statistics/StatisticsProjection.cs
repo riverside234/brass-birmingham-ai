@@ -12,7 +12,6 @@ using BoardGameRules.Entities.Game;
 using BoardGameRules.Entities.GamePhases.Events;
 using BoardGameRules.Entities.Industries;
 using BoardGameRules.Entities.Players;
-
 namespace BrassPatch.Statistics
 {
     internal sealed class StatisticsProjection
@@ -96,6 +95,7 @@ namespace BrassPatch.Statistics
                 if (scouted != null) {
                     foreach (var card in game.PlayersTrack.GetPlayerByColor(scouted.Player).Hand.Where(c => c is WildIndustryCard || c is WildLocationCard)) {
                         var episode = Entry(scouted.Player, "Wildcard acquired", CardType(card), card.UniqueId); episode.Quantity = 1;
+                        episode.AssetKey = "wild@" + scouted.Player + "/" + revision + "/" + card.UniqueId;
                         wildEpisodes[card.UniqueId] = episode;
                     }
                 }
@@ -163,7 +163,7 @@ namespace BrassPatch.Statistics
         }
         StatisticsEntry Entry(PlayerColor player, string kind, string category, string label)
         {
-            var entry = new StatisticsEntry { Revision = revision, Era = era, Round = roundNumber, Turn = turn, OwnTurn=Own(player), Player = player,
+            var entry = new StatisticsEntry { RecordOrdinal=report.entries.Count, Revision = revision, Era = era, Round = roundNumber, Turn = turn, OwnTurn=Own(player), Player = player,
                 Kind = kind, Category = category, Label = label, ActionKey = frame == null ? null : frame.Key };
             report.entries.Add(entry); return entry;
         }
@@ -327,7 +327,7 @@ namespace BrassPatch.Statistics
             var entry = Entry(change.Player, "Card", "Payment", CardType(change.CardToDiscard)); entry.Quantity = 1; entry.Detail = change.CardToDiscard.ToString();
             if (change.CardToDiscard is WildIndustryCard || change.CardToDiscard is WildLocationCard) {
                 StatisticsEntry episode;
-                if (wildEpisodes.TryGetValue(change.CardToDiscard.UniqueId, out episode)) { entry.AssetKey = "wild@" + episode.Revision; wildEpisodes.Remove(change.CardToDiscard.UniqueId); }
+                if (wildEpisodes.TryGetValue(change.CardToDiscard.UniqueId, out episode)) { entry.AssetKey = episode.AssetKey; wildEpisodes.Remove(change.CardToDiscard.UniqueId); }
             }
         }
         void Confirm()

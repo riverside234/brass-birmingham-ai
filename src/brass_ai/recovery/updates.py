@@ -55,7 +55,8 @@ class Dataset:
         self.targets=tuple(torch.tensor([d[1][k] for d in data],device=device,dtype=torch.float32)
             for k in ('win_share','placement','vp'))
         self.q=[exploration_distribution(r['choices'],r['intent']).astype(np.float32) for r in self.rows] if policy else None
-        self.forced=torch.tensor([len(r['choices'])==1 for r in self.rows],device=device)
+        self.forced_cpu=[len(r['choices'])==1 for r in self.rows]
+        self.forced=torch.tensor(self.forced_cpu,device=device)
         self.bc_weights=torch.tensor([r.get('_bc_weight',1.0) for r in self.rows],device=device,dtype=torch.float32)
 
     def microbatches(self, indices, size, cells, bucket=True):
@@ -246,7 +247,7 @@ def ppo_nonforced(model,optimizer,games,behavior,config,*,profile=None,profile_s
                         value_totals+=torch.stack([v.detach().sum() for v in values]);critic_seen+=len(part)
                     if demo:
                         sample=torch.randint(len(demo.data),(min(config['effective_batch_size'],len(demo.data)),)).tolist()
-                        meaningful=[i for i in sample if not bool(demo.forced[i])]
+                        meaningful=[i for i in sample if not demo.forced_cpu[i]]
                         for part in demo.microbatches(meaningful,config['microbatch_size'],config['max_candidate_cells'],config['bucket']):
                             ix,inputs,_=demo.batch(part)
                             with autocast(config,device): out=model(*inputs)
@@ -289,6 +290,10 @@ def supervised_epoch(model,optimizer,data,config,*,training=True,kind='bc',weigh
     with torch.set_grad_enabled(training),profile_window(profile,device) as profiler:
         for start in range(0,count,config['effective_batch_size']):
             batch=order[start:start+config['effective_batch_size']]
+            # Eligibility comes from the legal-choice list already on the CPU.
+            # Reading a CUDA scalar for every row (again for every microbatch)
+            # introduces thousands of synchronizations per optimizer step.
+            actor_count=sum(not dataset.forced_cpu[i] for i in batch)
             if training: optimizer.zero_grad(set_to_none=True)
             with timings.phase('supervised.forward_backward'):
                 for part in dataset.microbatches(batch,config['microbatch_size'],config['max_candidate_cells'],config['bucket']):
@@ -312,7 +317,6 @@ def supervised_epoch(model,optimizer,data,config,*,training=True,kind='bc',weigh
                     value,win,rank,vp=value_losses(out,tuple(t[ix] for t in dataset.targets))
                     meaningful=~dataset.forced[ix]
                     if config.get('actor_nonforced'):
-                        actor_count=sum(not bool(dataset.forced[i]) for i in batch)
                         loss=weight*policy[meaningful].sum()/max(1,actor_count)+config['value_weight']*value.sum()/len(batch)
                     else: loss=(weight*policy+config['value_weight']*value).sum()/len(batch)
                     if training: loss.backward()
