@@ -1,8 +1,8 @@
 # AI selection panel — V4 and Gamma
 
 **Date:** 2 October 2026.  
-**Status:** Proposed implementation plan. No code changes or installation are part of this request.  
-**Verified baseline:** Installed patch **1.4.21**, including the current V4 AI and Statistics light theme. The relevant working UI/catalog/theme sources match the archived installed sources.  
+**Status:** UI phase implemented, qualified and installed as **1.4.22**. All **16 Gamma slots and Gamma Random remain unavailable**, as requested. Actual NN model/backend integration remains deferred. See the [release notes](../docs/AI_SELECTION_PANEL_1.4.22.md) and section 12 for implementation evidence.  
+**Verified implementation baseline:** Accepted patch **1.4.21**, including the current V4 AI and Statistics light theme. The implementation preserved all methods outside the allowed UI/catalog scope and all embedded AI profiles.  
 **Primary display:** **1920 × 1200**; also qualify **1920 × 1080**. Do not compromise the 1200p design to accommodate 720p.
 
 ## 1. Intended result
@@ -291,3 +291,34 @@ Synthetic Gamma captures validate layout and selection plumbing only. Label them
 The UI phase is complete when selecting V4 uses the new Statistics-style panel, Gamma presents its planned 16+Random roster with honest readiness states, existing settings/resume behavior remain compatible, and native 1200p/1080p qualification passes.
 
 Gamma gameplay is complete only after the 16 trained entries have checked model artifacts and a qualified game backend. Adding or updating roster metadata should then populate the existing Gamma page without requiring a new UI layout.
+
+## 12. Implementation record — 1.4.22
+
+The first UI release described in section 7 is installed. The earlier sections remain the design and future Gamma qualification checklist; requirements for real model artifacts, family-aware game assignments, inference dispatch and mixed-family gameplay are deferred while every Gamma choice is unavailable.
+
+Delivered:
+
+- Exactly two pages, **V4** and **Gamma**, with the installed Statistics palette, rounded surfaces, code-native icons and default **Larger / 115%** text.
+- V4's six profiles plus Random; Gamma's 16 named slots plus Random, with **zero available Gamma choices**. Catalog, panel callbacks and menu assignment checks reject unavailable identities.
+- A fixed search/Random/footer arrangement, per-page search and scroll state, full descriptions and keyboard access. All 16 Gamma cards fit at 1200p default; larger text uses scrolling with fixed controls.
+- Larger custom-game controls with family summaries, first-visible-frame initialization, player-bound selection, read-only Continue summaries and modal lifecycle/input guards.
+- A typed family/entry catalog and an opt-in neutral light-surface utility. No model discovery, loading, neural execution or saved-assignment schema changes are included.
+- Preserved V4 preferences, concrete Random resolution, adaptive intent and fallback, **Easy 2s / Mid 5s / Hard 12s**, the accepted search settings and **two game workers**.
+
+Qualification:
+
+| Evidence | Result |
+| --- | --- |
+| Native menu qualification | **492 assertions passed** |
+| Installed-game menu qualification | **492 assertions passed**, no native errors, candidate fingerprints matched |
+| Native layouts | **12 cases**: V4/Gamma × 1200p/1080p × three text presets |
+| Gamma availability | All **17** production choices unavailable; forced disabled callbacks preserve V4 assignment |
+| Future selection fixture | All **16 typed identities** selected correctly, including duplicate display names; self-test use only |
+| Native Statistics regression | **5,301 checks passed** |
+| Native Card Tracker regression | **458 checks passed** |
+| Installer/recovery fixtures | **58 checks passed** |
+| Runtime preservation | **14,266 existing method bodies** unchanged outside the UI scope; **48 embedded profiles** identical; game assembly byte-identical to 1.4.21 |
+
+Broader accepted AI search/rules/save evidence is retained through source/method preservation; these UI fixtures do not establish NN readiness or playing strength. Native tests use disposable saves and isolated menu preferences.
+
+The recoverable install receipt records `2026-10-03T03:38:49.1282215Z` (2 October in the user's timezone). Previous 1.4.21 files and receipt are retained under `artifacts/patch-recovery/2612eb7d831f460d8dfc871b40b723d8`; the qualified release is archived under `artifacts/patch-releases/1.4.22`. Online play remains disabled.

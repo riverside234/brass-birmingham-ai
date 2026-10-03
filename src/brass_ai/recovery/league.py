@@ -1,5 +1,6 @@
 """Recovery league: immutable rounds, BC-compatible weights, persistent curriculum counters."""
 from collections import Counter
+import copy
 from contextlib import ExitStack
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
@@ -31,17 +32,28 @@ class Behavior:
         self.policy_id=neural_spec(identity,exploration,'mixed')['policy_id']
 
 
-def train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=None,from_run=None):
+def train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=None,from_run=None,imitation_run=None):
     from .retention import owned,run_lock
     _,run=owned(root,run_path)
     with run_lock(run):
-        return _train(root,run_path,config,iterations=iterations,device=device,initial=initial,mono=mono,from_run=from_run)
+        return _train(root,run_path,config,iterations=iterations,device=device,initial=initial,mono=mono,from_run=from_run,imitation_run=imitation_run)
 
 
-def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=None,from_run=None):
+def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=None,from_run=None,imitation_run=None):
     root=Path(root).resolve();run=project_path(root,run_path);validate_config(config)
     require(iterations>0 and not(initial and from_run),'Invalid recovery initialization')
     require(initial is None and from_run is None,'Fresh residual workflow forbids previous checkpoint/run imports')
+    bc_model=bc_origin=None
+    if imitation_run is not None:
+        require(config['imitation']['manifest'] is None,'Use --imitation-run OR in-run imitation, not both')
+        from .demonstrations import completed_imitation
+        bc_model,bc_origin=completed_imitation(root,imitation_run)
+        require(project_path(root,imitation_run)!=run,'Self-play needs its own run directory')
+        require(bc_model.config==ModelConfig.preset(config['model_size']),'BC and self-play architecture differ')
+        config=copy.deepcopy(config)
+        if config['rehearsal_manifest'] is None:config['rehearsal_manifest']=bc_origin['manifest']
+        require(project_path(root,config['rehearsal_manifest'])==project_path(root,bc_origin['manifest']),
+                'Self-play rehearsal must use the completed imitation dataset')
     revised=True
     torch.set_num_threads(config['threads'])
     pool=read(root/'training/opponents/pool.json');profiles=sorted(pool['training'])
@@ -50,6 +62,7 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
     teacher_specs={p:legacy_spec(root,p,config.get('legacy_budget')) for p in profiles}
     fast_specs={p:legacy_spec(root,p,config['legacy_budget'],search_free=True) for p in profiles}
     signature=dict(config=config,compatibility=compatibility(),implementation=implementation_id(),legacy_pool=pool['training'],teachers=teacher_specs)
+    if bc_origin:signature['imitation_source']=bc_origin
     state_path=run/'state.json'
     if state_path.exists():
         state=read(state_path)
@@ -77,7 +90,14 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
             previous_games=0,next_seed=cursor,history=[],origin=dict(initialization='random',seed=config['seed'],parameters=model.parameter_count),
             next_search_games=config['search_ready_games'],context_counter=0,evaluations=[],search_seconds=0.,ordinary_seconds=0.)
         from .demonstrations import fresh_imitation
-        state['imitation']=fresh_imitation(root,model,config['imitation'],config['update'],run,device)
+        if bc_origin:
+            model.load_state_dict(bc_model.state_dict())
+            state['origin'].update(initialization='fresh-heuristic-imitation',**bc_origin)
+            state['imitation']=dict(enabled=True,source=bc_origin,optimizer_reset_before_ppo=True,
+                                    note='Completed standalone fresh imitation; no second BC pass')
+            print('Self-play starts from the completed imitation candidate; PPO optimizer is new',flush=True)
+        else:
+            state['imitation']=fresh_imitation(root,model,config['imitation'],config['update'],run,device,workers=config['audit_workers'])
         # A new recipe never inherits the old full-epoch optimizer moments.
         optimizer=torch.optim.AdamW(model.parameters(),lr=config['learning_rate'],weight_decay=config['weight_decay'])
         init_path=run/'initial.pt'
@@ -92,7 +112,7 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
         write_json(state_path,state)
     optimizer=torch.optim.AdamW(model.parameters(),lr=config['learning_rate'],weight_decay=config['weight_decay'])
     resume_optimizer(raw,optimizer)
-    rehearsal=load_dataset(root,config['rehearsal_manifest'],'train')[0] if config['rehearsal_manifest'] else None
+    rehearsal=load_dataset(root,config['rehearsal_manifest'],'train',workers=config['audit_workers'],progress=True,compact=True)[0] if config['rehearsal_manifest'] else None
     summaries=[]
     if revised: schedule_evaluations(root,run,state,device,mono)
     with InferenceService(config['execution'],device,profile=run/'profile-collection' if config['profile_steps'] else None,

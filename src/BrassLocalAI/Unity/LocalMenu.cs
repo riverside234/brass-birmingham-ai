@@ -23,7 +23,12 @@ namespace BrassLegacyAI
 {
     public static class LocalMenu
     {
-        sealed class Selection { public string Key = "balanced"; public string Difficulty = DifficultyCatalog.Default; public CreateOfflineGameUseCase Owner; }
+        sealed class Selection {
+            public AiChoice Choice = new AiChoice(AiFamily.V4, "balanced");
+            public string Key { get { return Choice.EntryId; } set { Choice = new AiChoice(AiFamily.V4, value); } }
+            public string DisplayFamily = "V4";
+            public string Difficulty = DifficultyCatalog.Default; public CreateOfflineGameUseCase Owner;
+        }
         sealed class SetupState { public bool ResumeError; }
         static readonly ConditionalWeakTable<PlayerMetadata, Selection> Selections = new ConditionalWeakTable<PlayerMetadata, Selection>();
         static readonly ConditionalWeakTable<CreateOfflineGameUseCase, SetupState> Setups = new ConditionalWeakTable<CreateOfflineGameUseCase, SetupState>();
@@ -49,6 +54,17 @@ namespace BrassLegacyAI
             Selection selection;
             return Selections.TryGetValue(player, out selection) ? selection.Difficulty : DifficultyCatalog.Default;
         }
+        public static AiChoice Choice(PlayerMetadata player)
+        { Selection selection; return Selections.TryGetValue(player, out selection) ? selection.Choice : new AiChoice(AiFamily.V4, "balanced"); }
+        public static string RowLabel(PlayerMetadata player)
+        { Selection selection; string family = Selections.TryGetValue(player, out selection) ? selection.DisplayFamily : "V4"; return family + " · " + ChoiceLabel(Strategy(player)); }
+        public static bool EditChoice(PlayerMetadata player, AiChoice choice)
+        {
+            // The menu catalog is a second validation boundary, independent of
+            // disabled controls. Gamma has no playable backend in this release.
+            if (choice.Family != AiFamily.V4 || !AiSelectionCatalog.CanChoose(choice) || !IsEditable(player)) return false;
+            Select(player, choice.EntryId); Refresh(Selections.GetValue(player, p => new Selection()).Owner); return true;
+        }
         public static void SelectDifficulty(PlayerMetadata player, string key)
         {
             if (!DifficultyCatalog.Contains(key)) throw new ArgumentException("Select Easy, Mid or Hard.", "key");
@@ -63,12 +79,12 @@ namespace BrassLegacyAI
         }
         public static bool EditStrategy(PlayerMetadata player, string key)
         {
-            if (!IsEditable(player)) return false;
+            if (AiSelectionPanel.IsOpen || !IsEditable(player)) return false;
             Select(player, key); Refresh(Selections.GetValue(player, p => new Selection()).Owner); return true;
         }
         public static bool EditDifficulty(PlayerMetadata player, string key)
         {
-            if (!IsEditable(player)) return false;
+            if (AiSelectionPanel.IsOpen || !IsEditable(player)) return false;
             SelectDifficulty(player, key); Refresh(Selections.GetValue(player, p => new Selection()).Owner); return true;
         }
         public static readonly string[] Choices = ProfileCatalog.Keys.Concat(new[] { "random" }).ToArray();
@@ -140,6 +156,7 @@ namespace BrassLegacyAI
         }
         public static BrassApplicationGame StartGame(CreateOfflineGameUseCase owner, int seed)
         {
+            if (IsCustom(owner) && AiSelectionPanel.BlocksMenuActivation) return null;
             if (!IsCustom(owner)) return (BrassApplicationGame)ReflectionAccess.Original(owner, "StartGame", new[] { typeof(int) }, seed);
             try
             {
@@ -216,6 +233,7 @@ namespace BrassLegacyAI
         }
         public static void Continue(CreateOfflineGameUseCase owner)
         {
+            if (IsCustom(owner) && AiSelectionPanel.BlocksMenuActivation) return;
             if (!IsCustom(owner)) { ReflectionAccess.Original(owner, "ContinueClicked", Type.EmptyTypes); return; }
             try
             {
@@ -235,6 +253,8 @@ namespace BrassLegacyAI
                 var row = LocalGameState.Assignment(state, (int)p.PlayerStartConfiguration.Color);
                 Select(p, (string)row["strategy"]);
                 var selection = Selections.GetValue(p, x => new Selection()); selection.Difficulty = LocalGameState.Difficulty(state, row); selection.Owner = null;
+                selection.DisplayFamily = (string)state["runtime"] == ProfileCatalog.Runtime ? "V4" :
+                    (string)state["runtime"] == ProfileCatalog.PreviousRuntime ? "V2" : "V3";
             }
         }
         public static void Back(CreateOfflineGameUseCase owner)
@@ -297,6 +317,7 @@ namespace BrassLegacyAI
             HideActive(); active = this;
             var parent = (RectTransform)canvas.rootCanvas.transform;
             var r = AiWidgets.Rect(parent, "AI selection help", Vector2.zero, new Vector2(400, 100)); panel = r.gameObject;
+            panel.AddComponent<BrassPatch.UI.LightUiTheme>();
             r.anchorMin = r.anchorMax = r.pivot = new Vector2(.5f, .5f);
             var surface = panel.AddComponent<AiControlSurface>(); surface.Panel = true; surface.raycastTarget = false;
             var text = AiWidgets.Text(r, font, "Explanation", Description, new Vector2(12, -10), new Vector2(376, 100), 19); text.enableWordWrapping = true;

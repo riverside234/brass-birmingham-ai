@@ -2,7 +2,7 @@
 
 Recipe `step5-training/2.2.0` uses a fresh **1,840,109-parameter MLP-ResNet** and **Masked ISMCTS + NN** for search/distillation. The source-based six-style revision and comparison requirements are documented in [the opening-book note](../ai-research/TOURNAMENT_STYLE_V3.md). The user selected the previous advanced bank, `bank-3dc65253a610191d66a5`, as **v4**, with productive-development stall reset and opening-biased candidates. Further strength tests were stopped; this is an explicit selection rather than a tournament promotion. The rejected network/Scout additions are excluded. `training/opponents/current.json` and the distribution both identify that exact bank. The main lab preset is **24 queued heavy tables, four private search workers per decision**, with one shared 60-slot CPU admission gate under your 64-core allocation. Waiting for admission does not consume the search clock.
 
-Imitation and heuristic evaluation use searched Masked **v4** at **one second/four workers**. Early RL uses its distinct search-free incumbent; at 10,000 games, when heuristic opponents occupy 5% of tables, it switches to searched v4. Internal `v3-*` profile IDs and `training/runtime/v3*` paths remain compatibility aliases for the selected bank. Neural weights, optimizers, populations and neural replay are not imported. Audited entirely heuristic datasets may be reused with their original receipts. Resume only within the same new run and unchanged source/config/dataset.
+Imitation and heuristic evaluation use searched Masked **v4** at **one second/four workers**. Early RL uses its distinct search-free incumbent; at 10,000 games, when heuristic opponents occupy 5% of tables, it switches to searched v4. Internal `v3-*` profile IDs and `training/runtime/v3*` paths remain compatibility aliases for the selected bank. Start the model from random weights. A completed, fresh standalone imitation run can now explicitly hand its selected weights to self-play via `--imitation-run`; its optimizer, population and neural replay are not imported. Audited entirely heuristic datasets may be reused with their original receipts. Resume only within the same new run and unchanged source/config/dataset.
 
 ## Transfer and preflight
 
@@ -61,13 +61,93 @@ Use a new manifest name: auditing never overwrites an existing receipt. Audit re
 
 ## Fresh imitation, then self-play
 
-One command initializes random residual weights, does heuristic BC inside that new run, resets optimizer moments, then starts population PPO. **Omit `--initial` and `--from-run`.** Both are rejected. Do not copy checkpoints or a previous population into this directory.
+You can run these three stages separately, inspect the evaluation, then start self-play. Keep conda `ai-training`. Use new output directories after this code update; existing audited demonstration data does **not** need regeneration. `--initial` and `--from-run` still reject arbitrary older neural checkpoints/populations.
+
+**1. Imitation only.** This initializes the 1.84M model randomly, learns the audited heuristic choices and selects `best.pt` using held-out validation. For the 64-core / 90-GB lab machine, start with 16 CPU replay readers, effective batches of 2,048, and microbatches up to 1,024 positions / 262,144 padded candidate cells. The larger microbatch changes memory/throughput, not the effective-batch loss denominator. BF16 is optional and requires PyTorch support on the selected CUDA GPU; use `--precision fp32` if unavailable.
+
+```sh
+conda activate ai-training
+python /data/not_backed_up/yxu209/ai-training/scripts/step5.py --device cuda imitate \
+  --manifest /data/not_backed_up/yxu209/ai-training/training/datasets/masked-24x4-tournament-v4.json \
+  --run /data/not_backed_up/yxu209/ai-training/artifacts/step5/v4-bc-check \
+  --epochs 10 --min-epochs 3 --patience 2 \
+  --workers 16 --batch-size 2048 --microbatch-size 1024 \
+  --max-candidate-cells 262144 --precision bf16
+```
+
+Without the optional performance flags, `imitate` uses the selected config (main defaults: 8 replay readers, effective batch 2,048, microbatch 512, FP32). `--device cuda` applies to the learner; parsing gzip/JSON and validating/encoding replays are CPU work. The initial loading stage is expected to have little GPU activity. Each reader has one tensor thread, and the number of readers is capped by the number of selected replay shards. Increasing Torch's tensor threads alone does not parallelize Python replay processing.
+
+Logs print **20%, 40%, 60%, 80%, 100%** separately for train/validation shard loading, tensor preparation, and each epoch's training, natural validation and balanced validation. Loading percentages count completed shards; epoch percentages count decisions. Percentages describe their named phase, not the entire command. Early stopping can finish before epoch 10. The command prints the requested device, precision, worker count and batch settings at startup.
+
+The loader preserves manifest order, validates hashes once per shard, and reuses the existing audited feature receipts. Worker results contain encoded arrays and compact training metadata instead of duplicated board histories. All legal choices and targets survive; train/validation partition checks are retained. During CUDA updates, two bounded background batch-preparation threads pin CPU buffers and submit nonblocking transfers. Diagnostic predictions/losses come back once per epoch instead of after every microbatch. This follows PyTorch's [data-loading performance guidance](https://docs.pytorch.org/tutorials/recipes/recipes/tuning_guide) and [multiprocessing guidance](https://docs.pytorch.org/docs/stable/notes/multiprocessing.html). Loading uses `spawn`; GPU model execution stays in the learner process.
+
+Monitor actual compute utilization in another terminal; a small network need not consume 90 GB:
+
+```sh
+nvidia-smi --query-gpu=utilization.gpu,memory.used,memory.total --format=csv --loop=2
+```
+
+**2. Evaluate the selected imitation model.** The same imitation run saves `initial.pt`, its random starting model, as a stable comparison. This command runs 16 games: two setups × four candidate-seat rotations, against the random anchor and searched v4 in separate panels. Treat this as a development screen; beating random is not a strength qualification. Check VP, rank, sales, stranded tiles and Pottery opportunities against the v4 panel. Evaluation games never become imitation or PPO training data.
+
+```sh
+python /data/not_backed_up/yxu209/ai-training/scripts/step5.py --device cuda \
+  --config /data/not_backed_up/yxu209/ai-training/configs/step5/development-evaluation.json evaluate \
+  --candidate /data/not_backed_up/yxu209/ai-training/artifacts/step5/v4-bc-check/best.pt \
+  --references /data/not_backed_up/yxu209/ai-training/artifacts/step5/v4-bc-check/initial.pt \
+  --output /data/not_backed_up/yxu209/ai-training/artifacts/step5/v4-bc-evaluation \
+  --setups 2 --lineups recent-neural mixed-v3
+```
+
+**3. Start self-play from that imitation result.** Use a separate empty self-play directory. The handoff verifies the completed report, source signature, architecture, manifest and immutable selected checkpoint. It loads the selected weights once, resets the PPO optimizer and game counters, and automatically uses the same audited manifest for the existing decaying rehearsal schedule. It does **not** repeat imitation. There is no automatic promotion based on the small evaluation above.
+
+```sh
+python /data/not_backed_up/yxu209/ai-training/scripts/step5.py --device cuda train \
+  --run /data/not_backed_up/yxu209/ai-training/artifacts/step5/v4-selfplay \
+  --imitation-run /data/not_backed_up/yxu209/ai-training/artifacts/step5/v4-bc-check \
+  --iterations 20
+```
+
+Repeat the identical command, including `--imitation-run`, to resume self-play. The completed imitation run must remain available and unchanged. Retention records its selected checkpoint as a dependency. Do not combine `--imitation-run` with `--demonstrations`, `--initial` or `--from-run`.
+
+### Train again with a different demonstration dataset
+
+After inspecting evaluation, generate additional **training-purpose** games with a different seed and audit a new manifest. Do not recycle the evaluation replays as demonstrations. You can audit just the new collection, or combine old and new collections to keep the earlier coverage and reduce forgetting:
+
+```sh
+python /data/not_backed_up/yxu209/ai-training/scripts/step5.py demo-generate \
+  --output /data/not_backed_up/yxu209/ai-training/artifacts/demonstrations/v4-round2 \
+  --games 1000 --seed 19100000
+python /data/not_backed_up/yxu209/ai-training/scripts/step5.py demo-audit \
+  --replays '/data/not_backed_up/yxu209/ai-training/artifacts/demonstrations/masked-24x4-tournament-v4/*.jsonl.gz' \
+            '/data/not_backed_up/yxu209/ai-training/artifacts/demonstrations/v4-round2/*.jsonl.gz' \
+  --output /data/not_backed_up/yxu209/ai-training/training/datasets/v4-round2-combined.json
+```
+
+To **continue the selected imitation weights** on that dataset, use `--from-imitation-run` with a new destination. This creates a new optimizer, early-stopping history and validation comparison for the new manifest. A lower learning rate is shown for this continuation. The parent model, dataset receipts and evaluation stay unchanged.
+
+```sh
+python /data/not_backed_up/yxu209/ai-training/scripts/step5.py --device cuda imitate \
+  --manifest /data/not_backed_up/yxu209/ai-training/training/datasets/v4-round2-combined.json \
+  --from-imitation-run /data/not_backed_up/yxu209/ai-training/artifacts/step5/v4-bc-check \
+  --run /data/not_backed_up/yxu209/ai-training/artifacts/step5/v4-bc-round2 \
+  --epochs 10 --min-epochs 3 --patience 2 --learning-rate 5e-5 \
+  --workers 16 --batch-size 2048 --microbatch-size 1024 \
+  --max-candidate-cells 262144 --precision bf16
+```
+
+To **start over randomly** on the new dataset, omit `--from-imitation-run` and choose another empty `--run`. Ordinary same-run resume still requires the same manifest; replacing it in place is rejected. Continuation accepts only completed imitation runs in the current fresh lineage, not arbitrary archived neural checkpoints or PPO runs. Keep the parent run and manifests available; hashes and lineage are checked again at handoff/resume.
+
+For a continuation, its `initial.pt` contains the **previous selected imitation model**, so use `v4-bc-round2/best.pt` versus `v4-bc-round2/initial.pt` in the evaluation command above and a new evaluation output directory. This directly measures whether the new training helped against its starting model. Then select `--imitation-run /data/not_backed_up/yxu209/ai-training/artifacts/step5/v4-bc-round2` with a **new** self-play directory. It cannot replace the weights inside an already-running self-play population.
+
+### Combined command
+
+The original combined command remains available when you do not want a separate evaluation between BC and PPO. It initializes random residual weights, performs imitation inside that new run, resets optimizer moments, then starts self-play:
 
 ```sh
 python /data/not_backed_up/yxu209/ai-training/scripts/step5.py --device cuda train --run /data/not_backed_up/yxu209/ai-training/artifacts/step5/masked-24x4-tournament-v4-fresh --demonstrations /data/not_backed_up/yxu209/ai-training/training/datasets/masked-24x4-tournament-v4.json --iterations 20
 ```
 
-Repeat the identical command to resume that run. The source/config signature, current checkpoint hash and every population path are checked. After a crash before the first league commit, an identity-matching imitation progress receipt permits BC to restart from the original random seed; it does not import partial weights. A config/code change requires a new directory. Run without `--demonstrations` only if deliberately testing random self-play; then there is no BC or rehearsal.
+Repeat the identical command to resume that run. The source/config signature, current checkpoint hash and every population path are checked. After a crash before the first league commit, an identity-matching imitation progress receipt permits BC to restart from the original random seed; it does not import partial weights. A config/code change requires a new directory. Run without either `--demonstrations` or `--imitation-run` only if deliberately testing random self-play; then there is no BC or rehearsal.
 
 Twenty iterations is a pipeline/early-learning run (6,400 ordinary games), not a promise of strong play. Continue based on held-out economics and opponent-panel progress, rather than loss alone. Monitor unflipped tiles, cash distress, sales/merchant beer, legal opportunities versus chosen industries, VP and seat-specific outcomes. Later self-play should establish strength beyond the heuristic teachers.
 

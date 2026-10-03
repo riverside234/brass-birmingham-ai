@@ -10,9 +10,9 @@ namespace BrassPatch.UI
     {
         public float PixelUnit = 1;
         public static bool Contains(Component component)
-        { return component != null && component.GetComponentInParent<LightUiTheme>() != null; }
+        { return component != null && component.GetComponentsInParent<LightUiTheme>(true).Length != 0; }
         public static float Unit(Component component)
-        { var theme = component.GetComponentInParent<LightUiTheme>(); return theme == null ? 1 : theme.PixelUnit; }
+        { var themes = component.GetComponentsInParent<LightUiTheme>(true); return themes.Length == 0 ? 1 : themes[0].PixelUnit; }
     }
     public enum LightSurfaceRole { Window, Card, Secondary }
     public static class LightUi

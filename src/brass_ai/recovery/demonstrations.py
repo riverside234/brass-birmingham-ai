@@ -25,6 +25,7 @@ from .execution import ActorPool
 from .inference import InferenceService
 from .updates import Dataset, prepared, supervised_epoch
 from .telemetry import environment
+from .progress import Progress
 
 
 def generate(root,output,games,config,*,seed=17100000,mono=None,partition=None,budget=None):
@@ -192,7 +193,38 @@ def _audit_path(args):
     return entries,excluded
 
 
-def load_dataset(root,manifest_path,partition):
+def _loader_init():
+    # Spawned readers do CPU work only, without one tensor thread pool per core.
+    torch.set_num_threads(1)
+
+
+def _prepared_shard(task):
+    path,entries,partition,allowed,compact=task;path=Path(path)
+    require(all(e['sha256']==entries[0]['sha256'] for e in entries),'Conflicting demonstration hashes')
+    require(sha(path)==entries[0]['sha256'],'Demonstration source changed')
+    ids={e['game_id'] for e in entries}
+    require(len(ids)==len(entries),'Missing/duplicate demonstration games')
+    receipts=[e.get('features') for e in entries]
+    require(all(r==receipts[0] for r in receipts),'Conflicting demonstration feature receipts')
+    games=[g for g in read_shards([path],partition=partition,receipts={str(path):receipts[0]},heuristic_only=True)
+           if g['game_id'] in ids]
+    require({g['game_id'] for g in games}==ids,'Missing/duplicate demonstration games')
+    require(all(r['behavior']['kind']=='external' and r['behavior']['policy_id'] in allowed for g in games for r in g['records']),
+            'Fresh training prohibits imported neural replay; demonstrations must be entirely audited heuristics')
+    data=prepared(games,neutral=True)
+    if compact:
+        # Features have crossed the full validation boundary. BC needs small
+        # label/diagnostic metadata, not repeated board/history JSON over IPC.
+        data=[(dict(seat=r['seat'],chosen=r['chosen'],behavior=r['behavior'],
+                    view=dict(context={k:r['view']['context'][k] for k in ('era','phase')}),
+                    choices=[{k:c[k] for k in ('id','kind','industry') if k in c} for c in r['choices']],
+                    style=r['style'],intent=r['intent'],teacher=None),target,identity,encoded)
+              for r,target,identity,encoded in data]
+    return data
+
+
+def load_dataset(root,manifest_path,partition,*,workers=1,progress=False,compact=False):
+    require(type(workers) is int and 1<=workers<=64,'Invalid imitation loader CPU allowance')
     root=Path(root);manifest=read(project_path(root,manifest_path))
     require(manifest['format']=='bc-dataset/1.0.0','Incompatible BC manifest')
     from brass_ai.learning.contracts import assert_heuristic_data_compatible
@@ -242,16 +274,31 @@ def load_dataset(root,manifest_path,partition):
     by_path={}
     for e in chosen:
         require(e['transitions_verified'] and e['split']==split_for(e['setup_group']),'Unaudited/relabeled demonstration')
-        path=project_path(root,e['path']);require(sha(path)==e['sha256'],'Demonstration source changed')
-        by_path.setdefault(path,set()).add(e['game_id'])
-    games=[]
-    for path,ids in by_path.items():
-        receipt=next((e.get('features') for e in chosen if project_path(root,e['path'])==path),None)
-        games.extend(g for g in read_shards([path],partition=partition,receipts={str(path):receipt},heuristic_only=True) if g['game_id'] in ids)
-    require(len(games)==len(chosen),'Missing/duplicate demonstration games')
-    require(all(r['behavior']['kind']=='external' and r['behavior']['policy_id'] in allowed for g in games for r in g['records']),
-            'Fresh training prohibits imported neural replay; demonstrations must be entirely audited heuristics')
-    data=prepared(games,lambda r:r['behavior']['kind']=='external' and r['behavior']['policy_id'] in allowed,neutral=True)
+        by_path.setdefault(project_path(root,e['path']),[]).append(e)
+    require(len({e['game_id'] for e in chosen})==len(chosen),'Missing/duplicate demonstration games')
+    tasks=[(str(path),entries,partition,allowed,compact) for path,entries in by_path.items()]
+    width=min(workers,len(tasks));parts=[None]*len(tasks)
+    log=Progress(f'imitation load {partition} (CPU, {width} workers)',len(tasks),'shards') if progress else None
+    if width>1:
+        with ProcessPoolExecutor(max_workers=width,mp_context=multiprocessing.get_context('spawn'),initializer=_loader_init) as executor:
+            # Bound queued results as well as live readers; retain manifest order.
+            remaining=iter(enumerate(tasks));pending={}
+            def submit():
+                item=next(remaining,None)
+                if item is not None:
+                    index,task=item;pending[executor.submit(_prepared_shard,task)]=index
+            for _ in range(min(len(tasks),2*width)):submit()
+            completed=0
+            while pending:
+                future=next(as_completed(pending));index=pending.pop(future)
+                parts[index]=future.result();completed+=1
+                if log:log(completed)
+                submit()
+    else:
+        for i,task in enumerate(tasks):
+            parts[i]=_prepared_shard(task)
+            if log:log(i+1)
+    data=[row for part in parts for row in part]
     return data,manifest
 
 
@@ -282,28 +329,42 @@ def checkpoint_alias(out,entry,name):
     temporary.replace(out/name)
 
 
-def train_bc(root,run,manifest_path,initial,config,*,device='cpu',epochs=10,patience=2,min_epochs=3,lr=1e-4,retention=None):
+def train_bc(root,run,manifest_path,initial,config,*,device='cpu',epochs=10,patience=2,min_epochs=3,lr=1e-4,retention=None,workers=1,from_imitation_run=None):
     from .retention import run_lock,owned
     _,out=owned(root,run)
     with run_lock(out):
-        return _train_bc(root,run,manifest_path,initial,config,device=device,epochs=epochs,patience=patience,min_epochs=min_epochs,lr=lr,retention=retention)
+        return _train_bc(root,run,manifest_path,initial,config,device=device,epochs=epochs,patience=patience,min_epochs=min_epochs,lr=lr,retention=retention,workers=workers,from_imitation_run=from_imitation_run)
 
 
-def _train_bc(root,run,manifest_path,initial,config,*,device='cpu',epochs=10,patience=2,min_epochs=3,lr=1e-4,retention=None):
+def _train_bc(root,run,manifest_path,initial,config,*,device='cpu',epochs=10,patience=2,min_epochs=3,lr=1e-4,retention=None,workers=1,from_imitation_run=None):
     root=Path(root);out=project_path(root,run)
     require(epochs>=min_epochs>=1 and patience>0,'Invalid BC stopping settings')
-    torch.manual_seed(812771)
-    training,manifest=load_dataset(root,manifest_path,'train')
-    validation,_=load_dataset(root,manifest_path,'validation')
-    require({d[2][0] for d in training}.isdisjoint({d[2][0] for d in validation}),'BC game leakage')
     require(initial is None,'Imitation starts from random residual weights; omit --initial')
+    from .config import update_config
+    from .updates import autocast
+    update_config(config);autocast(config,device)  # Fail unsupported precision before loading.
+    parent_model=parent_origin=None
+    if from_imitation_run is not None:
+        require(project_path(root,from_imitation_run)!=out,'A changed dataset needs a new imitation run directory')
+        parent_model,parent_origin=completed_imitation(root,from_imitation_run)
+        require(parent_model.config==ModelConfig.preset('medium'),'Imitation continuation architecture differs')
+    print(f'Imitation: device={device}, precision={config["precision"]}, loader_workers={workers}, '
+          f'tensor_threads={torch.get_num_threads()}, effective_batch={config["effective_batch_size"]}, '
+          f'microbatch={config["microbatch_size"]}; replay preparation uses CPU',flush=True)
+    torch.manual_seed(812771)
+    training,manifest=load_dataset(root,manifest_path,'train',workers=workers,progress=True,compact=True)
+    validation,_=load_dataset(root,manifest_path,'validation',workers=workers,progress=True,compact=True)
+    require({d[2][0] for d in training}.isdisjoint({d[2][0] for d in validation}),'BC game leakage')
     signature=dict(format='bc-training/2.2.0',manifest_sha256=sha(project_path(root,manifest_path)),
         manifest_path=project_path(root,manifest_path).relative_to(root).as_posix(),
         initialization='random',seed=812771,retention=retention,
         architecture=ModelConfig.preset('medium').to_dict(),update=config,lr=lr,epochs=epochs,
         patience=patience,min_epochs=min_epochs,implementation=implementation_id())
+    if parent_origin:
+        signature.update(initialization='fresh-imitation-continuation',parent_imitation=parent_origin)
     state_path=out/'state.json'
-    if state_path.exists():
+    resuming=state_path.exists()
+    if resuming:
         state=read(state_path);require(state['signature']==signature,'BC run settings/source changed')
         entry=state['last'];require(sha(out/entry['path'])==entry['sha256'],'BC checkpoint changed')
         model,raw=load_checkpoint(out/entry['path'],device=device)
@@ -311,24 +372,34 @@ def _train_bc(root,run,manifest_path,initial,config,*,device='cpu',epochs=10,pat
     else:
         require(not out.exists() or not any(p.name!='.active-run.json' for p in out.iterdir()),'Use a new BC run')
         model=FourSeatNet(ModelConfig.preset('medium')).to(device)
-        state=dict(signature=signature,epoch=0,best_loss=None,bad_epochs=0,history=[],parent=None,stopped=False)
+        if parent_model is not None:model.load_state_dict(parent_model.state_dict())
+        state=dict(signature=signature,epoch=0,best_loss=None,bad_epochs=0,history=[],
+            parent=parent_origin['model_id'] if parent_origin else None,stopped=False)
     optimizer=torch.optim.AdamW(model.parameters(),lr=lr,weight_decay=1e-4)
-    if state_path.exists(): resume_optimizer(raw,optimizer)
+    if resuming: resume_optimizer(raw,optimizer)
+    else:
+        # The same-run starting anchor is random for round one, or the previous
+        # selected BC model for an explicit new-dataset continuation.
+        save_checkpoint(out/'initial.pt',model,optimizer,training=dict(
+            mode='step5-bc-continuation-initial' if parent_origin else 'step5-bc-random-initial',
+            initialization=signature['initialization'],fresh_run=out.relative_to(root).as_posix(),signature=digest(signature)))
+        state['initial']=dict(path='initial.pt',sha256=sha(out/'initial.pt'))
+        state['last']=dict(state['initial']);write_json(state_path,state)
     training=balance(training)
     balanced_validation=balance(validation)
     # Reuse encoded arrays and device metadata across all supervised epochs.
-    training=Dataset(training,device,policy=False)
-    validation=Dataset(validation,device,policy=False)
-    balanced_validation=Dataset(balanced_validation,device,policy=False)
+    training=Dataset(training,device,policy=False,progress='imitation prepare training tensors')
+    validation=Dataset(validation,device,policy=False,progress='imitation prepare validation tensors')
+    balanced_validation=Dataset(balanced_validation,device,policy=False,progress='imitation prepare balanced validation tensors')
     for epoch in (() if state['stopped'] else range(state['epoch'],epochs)):
-        train_report=supervised_epoch(model,optimizer,training,config)
-        val_report=supervised_epoch(model,None,validation,config,training=False)
-        balanced_val_report=supervised_epoch(model,None,balanced_validation,config,training=False)
+        train_report=supervised_epoch(model,optimizer,training,config,progress=f'imitation epoch {epoch+1}/{epochs} train ({device})')
+        val_report=supervised_epoch(model,None,validation,config,training=False,progress=f'imitation epoch {epoch+1}/{epochs} validation ({device})')
+        balanced_val_report=supervised_epoch(model,None,balanced_validation,config,training=False,progress=f'imitation epoch {epoch+1}/{epochs} balanced validation ({device})')
         improved=state['best_loss'] is None or val_report['loss']<state['best_loss']-1e-4
         evidence=dict(epoch=epoch+1,train=train_report,validation=val_report,balanced_validation=balanced_val_report)
         state['history'].append(evidence);state['epoch']=epoch+1
         state['bad_epochs']=0 if improved else state['bad_epochs']+1
-        metadata=dict(mode='step5-v3-bc',parent=state['parent'],signature=digest(signature),fresh_run=out.relative_to(root).as_posix(),initialization='random',
+        metadata=dict(mode='step5-v3-bc',parent=state['parent'],signature=digest(signature),fresh_run=out.relative_to(root).as_posix(),initialization=signature['initialization'],
             label_kind='qualified-v3-choice/1.0.0',context='neutral-predecision/1.0.0',
             manifest_sha256=signature['manifest_sha256'],evidence=evidence,promoted=False)
         filename=f'epoch-{epoch+1:04d}.pt'
@@ -351,7 +422,48 @@ def _train_bc(root,run,manifest_path,initial,config,*,device='cpu',epochs=10,pat
     write_json(out/'report.json',report);return report
 
 
-def fresh_imitation(root,model,settings,update,run,device):
+def completed_imitation(root,run,*,_seen=None):
+    """Explicit fresh BC -> PPO handoff; never a general checkpoint importer."""
+    from .retention import owned,active
+    root,run=owned(root,run)
+    seen=set() if _seen is None else _seen
+    require(run not in seen,'Cyclic imitation lineage');seen.add(run)
+    require(not active(run),'Imitation is still active; finish it before self-play')
+    require((run/'state.json').is_file() and (run/'report.json').is_file(),'Finish the imitation run before handing off its weights')
+    state=read(run/'state.json');report=read(run/'report.json');signature=state['signature']
+    require(report.get('format')=='bc-training-report/1.0.0' and report.get('signature')==signature,
+            'Missing/mismatched completed imitation report')
+    initialization=signature.get('initialization')
+    require(initialization in ('random','fresh-imitation-continuation') and signature.get('implementation')==implementation_id(),
+            'Imitation must be fresh random training with the current source')
+    parent=None
+    if initialization=='fresh-imitation-continuation':
+        expected=signature['parent_imitation']
+        _,parent=completed_imitation(root,expected['bc_run'],_seen=seen)
+        require(parent==expected,'Imitation parent changed')
+    require(report['epochs']==state['epoch'] and (state['stopped'] or state['epoch']==signature['epochs']),
+            'Imitation has not completed')
+    manifest=project_path(root,signature['manifest_path'])
+    require(sha(manifest)==signature['manifest_sha256'],'Imitation dataset manifest changed')
+    entry=state['best'];path=project_path(root,run/entry['path'])
+    require(path.is_relative_to(run) and sha(path)==entry['sha256']==report['candidate_sha256'],
+            'Selected imitation checkpoint changed')
+    with torch.random.fork_rng(devices=[]):model,raw=load_checkpoint(path,device='cpu')
+    metadata=raw['training']
+    require(metadata.get('mode')=='step5-v3-bc' and metadata.get('initialization')==initialization
+            and metadata.get('parent')==(parent['model_id'] if parent else None)
+            and metadata.get('fresh_run')==run.relative_to(root).as_posix()
+            and metadata.get('signature')==digest(signature)
+            and metadata.get('manifest_sha256')==signature['manifest_sha256'],
+            'Checkpoint is not the completed fresh imitation candidate')
+    require(model.config.to_dict()==signature['architecture'],'Imitation architecture differs')
+    origin=dict(bc_run=run.relative_to(root).as_posix(),path=path.relative_to(root).as_posix(),
+        sha256=entry['sha256'],model_id=raw['model_id'],manifest=manifest.relative_to(root).as_posix(),
+        manifest_sha256=signature['manifest_sha256'],bc_signature=digest(signature))
+    return model,origin
+
+
+def fresh_imitation(root,model,settings,update,run,device,*,workers=1):
     """Optional heuristic BC inside a new random run; no checkpoint is imported."""
     if settings['manifest'] is None:return dict(enabled=False,initialization='random',note='No heuristic dataset supplied')
     import copy
@@ -363,15 +475,17 @@ def fresh_imitation(root,model,settings,update,run,device):
         require(previous.get('identity')==identity,'Incomplete imitation belongs to a different recipe/source/dataset')
         print('Restarting uncommitted imitation from this run\'s original random seed',flush=True)
     write_json(progress,dict(format='fresh-imitation-progress/1.0.0',identity=identity,history=[]))
-    train_rows,manifest=load_dataset(root,settings['manifest'],'train')
-    val_rows,_=load_dataset(root,settings['manifest'],'validation')
+    print(f'Fresh imitation: device={device}, loader_workers={workers}; replay preparation uses CPU',flush=True)
+    train_rows,manifest=load_dataset(root,settings['manifest'],'train',workers=workers,progress=True,compact=True)
+    val_rows,_=load_dataset(root,settings['manifest'],'validation',workers=workers,progress=True,compact=True)
     require({d[2][0] for d in train_rows}.isdisjoint({d[2][0] for d in val_rows}),'Imitation setup leakage')
-    training=Dataset(balance(train_rows),device,policy=False);validation=Dataset(val_rows,device,policy=False)
+    training=Dataset(balance(train_rows),device,policy=False,progress='imitation prepare training tensors')
+    validation=Dataset(val_rows,device,policy=False,progress='imitation prepare validation tensors')
     optimizer=torch.optim.AdamW(model.parameters(),lr=settings['learning_rate'],weight_decay=1e-4)
     best_loss=float('inf');best=None;bad=0;history=[]
     for epoch in range(settings['epochs']):
-        train_report=supervised_epoch(model,optimizer,training,update)
-        val_report=supervised_epoch(model,None,validation,update,training=False)
+        train_report=supervised_epoch(model,optimizer,training,update,progress=f'imitation epoch {epoch+1}/{settings["epochs"]} train ({device})')
+        val_report=supervised_epoch(model,None,validation,update,training=False,progress=f'imitation epoch {epoch+1}/{settings["epochs"]} validation ({device})')
         improved=val_report['loss']<best_loss-1e-4
         if improved:best_loss=val_report['loss'];best=copy.deepcopy(model.state_dict());bad=0
         else:bad+=1

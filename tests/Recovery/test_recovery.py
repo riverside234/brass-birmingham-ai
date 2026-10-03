@@ -187,7 +187,7 @@ class RecoveryTests(unittest.TestCase):
             save_checkpoint(initial,self.model)
             manifest=directory/'manifest.json';manifest.write_text('{}',encoding='utf-8')
             run=directory/'bc'
-            with patch.object(demos,'load_dataset',side_effect=lambda root,path,split:(data[split],{})), \
+            with patch.object(demos,'load_dataset',side_effect=lambda root,path,split,**kwargs:(data[split],{})), \
                  patch.object(demos,'supervised_epoch',return_value={'loss':1.0}) as update:
                 with self.assertRaisesRegex(ValueError,'random residual weights'):
                     demos.train_bc(SOURCE_ROOT,run,manifest,initial,UPDATE,epochs=10,min_epochs=1,patience=1)

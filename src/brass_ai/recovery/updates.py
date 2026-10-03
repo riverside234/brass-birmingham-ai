@@ -1,5 +1,7 @@
 """Effective minibatch PPO, full-legal-choice BC and vectorized four-seat losses."""
 from contextlib import nullcontext
+from collections import deque
+from concurrent.futures import ThreadPoolExecutor
 import math
 import numpy as np
 import torch
@@ -12,6 +14,7 @@ from brass_ai.step5.policy import exploration_distribution
 from brass_ai.step5.updates import bounded_batches
 from .encoding import PreparedEncoder
 from .telemetry import Timings, profile_window, memory
+from .progress import Progress
 
 
 def prepared(games, predicate=None, neutral=False):
@@ -45,19 +48,25 @@ def bc_loss(logits, chosen):
 
 
 class Dataset:
-    def __init__(self, data, device, policy=True):
+    def __init__(self, data, device, policy=True, progress=None):
         self.data, self.device = data, device
         self.rows=[d[0] for d in data]
         self.encoded=[d[3] for d in data]
+        log=Progress(progress,5,'tensor groups') if progress else None
         self.chosen=torch.tensor([r['chosen'] for r in self.rows],device=device)
         self.seats=torch.tensor([r['seat'] for r in self.rows],device=device)
         self.old=torch.tensor([r['behavior']['probability'] for r in self.rows],device=device)
+        if log:log(1)
         self.targets=tuple(torch.tensor([d[1][k] for d in data],device=device,dtype=torch.float32)
             for k in ('win_share','placement','vp'))
+        if log:log(2)
         self.q=[exploration_distribution(r['choices'],r['intent']).astype(np.float32) for r in self.rows] if policy else None
+        if log:log(3)
         self.forced_cpu=[len(r['choices'])==1 for r in self.rows]
         self.forced=torch.tensor(self.forced_cpu,device=device)
+        if log:log(4)
         self.bc_weights=torch.tensor([r.get('_bc_weight',1.0) for r in self.rows],device=device,dtype=torch.float32)
+        if log:log(5)
 
     def microbatches(self, indices, size, cells, bucket=True):
         indices=list(indices)
@@ -74,6 +83,29 @@ class Dataset:
         if exploration:
             for j,i in enumerate(indices): q[j,:len(self.q[i])]=self.q[i]
         return ix, inputs, torch.from_numpy(q).to(self.device)
+
+    def _pinned_batch(self, indices):
+        # A small background queue prepares/pins CPU tensors while CUDA trains.
+        # These private buffers are never mutated after asynchronous transfer.
+        return tuple(t.pin_memory() for t in (torch.tensor(indices),*collate([self.encoded[i] for i in indices])))
+
+    def supervised_batches(self, parts, executor=None):
+        if executor is None:
+            for part in parts:
+                ix,inputs,_=self.batch(part)
+                yield part,ix,inputs
+            return
+        parts=iter(parts);pending=deque()
+        def submit():
+            part=next(parts,None)
+            if part is not None:pending.append((part,executor.submit(self._pinned_batch,part)))
+        for _ in range(2):submit()
+        while pending:
+            part,future=pending.popleft()
+            host=future.result()
+            tensors=tuple(t.to(self.device,non_blocking=True) for t in host)
+            submit()
+            yield part,tensors[0],tensors[1:]
 
 
 def probabilities(logits, q, exploration, temperature):
@@ -277,7 +309,7 @@ def ppo_nonforced(model,optimizer,games,behavior,config,*,profile=None,profile_s
                 for phase in sorted({r['view']['context']['phase'] for r in ds.rows})},timings=timings.report(),memory=memory(device))
 
 
-def supervised_epoch(model,optimizer,data,config,*,training=True,kind='bc',weight=1.0,profile=None):
+def supervised_epoch(model,optimizer,data,config,*,training=True,kind='bc',weight=1.0,profile=None,progress=None):
     require(kind in ('bc','teacher'),'Unknown supervised label kind')
     timings=Timings();device=next(model.parameters()).device
     with timings.phase('supervised.prepare'):
@@ -286,8 +318,13 @@ def supervised_epoch(model,optimizer,data,config,*,training=True,kind='bc',weigh
     count=len(dataset.data);order=torch.randperm(count).tolist() if training else list(range(count))
     totals=torch.zeros(8,device=device);steps=0;clips=0
     diagnostics={}
+    log=Progress(progress,count) if progress else None
+    if kind=='bc':
+        predictions=torch.empty(count,device=device,dtype=torch.long)
+        row_losses=torch.empty(count,device=device)
     model.train(training)
-    with torch.set_grad_enabled(training),profile_window(profile,device) as profiler:
+    pool=ThreadPoolExecutor(max_workers=2) if device.type=='cuda' else nullcontext(None)
+    with pool as executor,torch.set_grad_enabled(training),profile_window(profile,device) as profiler:
         for start in range(0,count,config['effective_batch_size']):
             batch=order[start:start+config['effective_batch_size']]
             # Eligibility comes from the legal-choice list already on the CPU.
@@ -296,8 +333,8 @@ def supervised_epoch(model,optimizer,data,config,*,training=True,kind='bc',weigh
             actor_count=sum(not dataset.forced_cpu[i] for i in batch)
             if training: optimizer.zero_grad(set_to_none=True)
             with timings.phase('supervised.forward_backward'):
-                for part in dataset.microbatches(batch,config['microbatch_size'],config['max_candidate_cells'],config['bucket']):
-                    ix,inputs,_=dataset.batch(part)
+                parts=dataset.microbatches(batch,config['microbatch_size'],config['max_candidate_cells'],config['bucket'])
+                for part,ix,inputs in dataset.supervised_batches(parts,executor):
                     with autocast(config,device): out=model(*inputs)
                     if kind=='bc':
                         natural=bc_loss(out[0],dataset.chosen[ix])
@@ -317,25 +354,34 @@ def supervised_epoch(model,optimizer,data,config,*,training=True,kind='bc',weigh
                     value,win,rank,vp=value_losses(out,tuple(t[ix] for t in dataset.targets))
                     meaningful=~dataset.forced[ix]
                     if config.get('actor_nonforced'):
-                        loss=weight*policy[meaningful].sum()/max(1,actor_count)+config['value_weight']*value.sum()/len(batch)
+                        loss=weight*(policy*meaningful).sum()/max(1,actor_count)+config['value_weight']*value.sum()/len(batch)
                     else: loss=(weight*policy+config['value_weight']*value).sum()/len(batch)
                     if training: loss.backward()
                     correct=((out[0].argmax(-1)==dataset.chosen[ix]) & meaningful).float()
                     totals+=torch.stack([x.detach().sum() for x in (policy,value,win,rank,vp,correct,meaningful.float(),natural)])
                     if kind=='bc':
-                        predicted=out[0].detach().argmax(-1).cpu().tolist();losses=natural.detach().cpu().tolist()
-                        for j,i in enumerate(part):
-                            row=data[i][0]
-                            if len(row['choices'])==1: continue
-                            target=row['choices'][row['chosen']];guess=row['choices'][predicted[j]]
-                            key='|'.join([row['behavior']['policy_id'],row['view']['context']['era'],row['view']['context']['phase'],target['kind']])
-                            bucket=diagnostics.setdefault(key,dict(decisions=0,loss=0.,correct=0,family_correct=0))
-                            bucket['decisions']+=1;bucket['loss']+=losses[j];bucket['correct']+=predicted[j]==row['chosen']
-                            bucket['family_correct']+=(guess['kind'],guess.get('industry'))==(target['kind'],target.get('industry'))
+                        predictions[ix]=out[0].detach().argmax(-1);row_losses[ix]=natural.detach()
             if training:
                 norm=torch.nn.utils.clip_grad_norm_(model.parameters(),config['grad_clip'],error_if_nonfinite=True)
                 clips+=int(float(norm)>config['grad_clip']);optimizer.step();steps+=1
             if profiler: profiler.step()
+            if log:
+                completed=min(start+len(batch),count)
+                if device.type=='cuda' and completed*100>=log.next*count:
+                    torch.cuda.synchronize(device)  # Milestones report completed GPU work, not queued kernels.
+                log(completed)
+    if kind=='bc':
+        # One device read per diagnostic vector/epoch, not two per microbatch.
+        predicted=predictions.cpu().tolist();losses=row_losses.cpu().tolist()
+        with timings.phase('supervised.diagnostics'):
+            for i in order:
+                row=data[i][0]
+                if dataset.forced_cpu[i]:continue
+                target=row['choices'][row['chosen']];guess=row['choices'][predicted[i]]
+                key='|'.join([row['behavior']['policy_id'],row['view']['context']['era'],row['view']['context']['phase'],target['kind']])
+                bucket=diagnostics.setdefault(key,dict(decisions=0,loss=0.,correct=0,family_correct=0))
+                bucket['decisions']+=1;bucket['loss']+=losses[i];bucket['correct']+=predicted[i]==row['chosen']
+                bucket['family_correct']+=(guess['kind'],guess.get('industry'))==(target['kind'],target.get('industry'))
     p,v,w,r,vp,correct,meaningful,natural=totals.cpu().tolist()
     actor_denominator=max(1,meaningful) if config.get('actor_nonforced') else count
     return dict(policy_loss=p/actor_denominator,natural_policy_loss=natural/actor_denominator,value_loss=v/count,

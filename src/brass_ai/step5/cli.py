@@ -27,6 +27,7 @@ def parser():
     initialization = run.add_mutually_exclusive_group()
     initialization.add_argument('--initial')
     initialization.add_argument('--from-run', help='Rejected: only this fresh run can resume its own checkpoints')
+    initialization.add_argument('--imitation-run', help='Completed fresh standalone imitate run; starts PPO with its selected weights and a new optimizer')
     run.add_argument('--iterations', type=int, default=1)
     run.add_argument('--demonstrations',help='Audited heuristic manifest for fresh in-run imitation and rehearsal')
     demos = sub.add_parser('demo-generate')
@@ -39,13 +40,19 @@ def parser():
     audit.add_argument('--output',default='training/datasets/v3-demonstrations.json')
     bc = sub.add_parser('imitate')
     bc.add_argument('--manifest',default='training/datasets/v3-demonstrations.json')
-    bc.add_argument('--initial',help='Rejected: imitation now initializes random residual weights')
+    bc_initialization=bc.add_mutually_exclusive_group()
+    bc_initialization.add_argument('--initial',help='Rejected: imitation starts from random residual weights, not arbitrary checkpoints')
+    bc_initialization.add_argument('--from-imitation-run',help='Continue a completed fresh imitation model on this manifest in a new run directory')
     bc.add_argument('--run',default='artifacts/step5/imitation')
     bc.add_argument('--epochs',type=int,default=10)
     bc.add_argument('--min-epochs',type=int,default=3)
     bc.add_argument('--patience',type=int,default=2)
     bc.add_argument('--learning-rate',type=float,default=1e-4)
-    bc.add_argument('--batch-size',type=int,default=1024,help='Effective supervised batch; memory microbatch stays in config')
+    bc.add_argument('--batch-size',type=int,help='Effective supervised batch; defaults to the selected config')
+    bc.add_argument('--microbatch-size',type=int,help='Maximum positions per GPU forward/backward batch')
+    bc.add_argument('--max-candidate-cells',type=int,help='Bound padded legal-action cells per microbatch')
+    bc.add_argument('--workers',type=int,help='CPU replay/feature loader processes; defaults to audit_workers in config')
+    bc.add_argument('--precision',choices=['fp32','bf16'],help='Training precision; BF16 requires a supported CUDA GPU')
     sub.add_parser('lab-bank-prepare')
     cleanup=sub.add_parser('cleanup');cleanup.add_argument('--run',required=True)
     cleanup.add_argument('--apply',action='store_true');cleanup.add_argument('--purge',action='store_true')
@@ -130,16 +137,22 @@ def main(argv=None):
         elif a.command == 'imitate':
             from brass_ai.recovery.demonstrations import train_bc
             from brass_ai.recovery.config import UPDATE
-            update=dict(config.get('update',UPDATE),effective_batch_size=a.batch_size,value_weight=.5)
+            update=dict(config.get('update',UPDATE),value_weight=.5)
+            for key,value in [('effective_batch_size',a.batch_size),('microbatch_size',a.microbatch_size),
+                              ('max_candidate_cells',a.max_candidate_cells),('precision',a.precision)]:
+                if value is not None:update[key]=value
+            workers=a.workers if a.workers is not None else config.get('audit_workers',1)
             result=train_bc(root,a.run,a.manifest,a.initial,update,device=a.device,
-                epochs=a.epochs,min_epochs=a.min_epochs,patience=a.patience,lr=a.learning_rate,retention=config.get('retention'))
+                epochs=a.epochs,min_epochs=a.min_epochs,patience=a.patience,lr=a.learning_rate,retention=config.get('retention'),workers=workers,
+                from_imitation_run=a.from_imitation_run)
             result={k:result[k] for k in ('candidate','candidate_sha256','epochs','promoted')}
         elif a.command == 'train':
+            require(not (a.demonstrations and a.imitation_run),'Use --demonstrations OR --imitation-run')
             if a.demonstrations:
                 config['imitation']=dict(config['imitation'],manifest=a.demonstrations)
                 config['rehearsal_manifest']=a.demonstrations
             result = train(root, a.run, config, iterations=a.iterations, device=a.device, initial=a.initial,
-                           mono=a.mono, from_run=a.from_run)
+                           mono=a.mono, from_run=a.from_run,imitation_run=a.imitation_run)
             result.pop('summaries', None)
         elif a.command == 'evaluate':
             result = evaluate(root, a.output, a.candidate, a.references, config, setups=a.setups, seed=a.seed,
