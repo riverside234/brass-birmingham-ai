@@ -153,22 +153,25 @@ Twenty iterations is a pipeline/early-learning run (6,400 ordinary games), not a
 
 | Setting | Main lab preset |
 | --- | --- |
-| Ordinary collection | 320 games/iteration; 28 single-host actors |
+| Ordinary collection | 320 games/iteration; 48 single-host actors on the 64-core preset |
 | Heavy collection | 24 queued tables × 4 private workers; searched decisions share 60 active CPU slots |
 | CPU allowance | Shared FIFO gate: 60 active work slots + 4 reserved cores; ordinary turns cost one slot, searched turns four; not OS affinity |
 | v4 teacher clock | v4 + Masked ISMCTS; 1-second shared turn deadline after admission; 4 private roots; K 4/2 and guarded heuristic Q. Completion/selection may retire late and is measured |
 | NN search | 3-second teacher clock, K 16/8, raw Q, new-root-information frontier; 4 private root workers, selection-only virtual loss 0.02, 4 pending paths / batch per replica; independent warm simulator lanes |
 | Central CPU/GPU inference | Batch up to 64 positions, 131,072 candidate cells, 1 ms partial flush; CPU feature preparation |
 | PPO | Effective batch 2,048; microbatch 512; independent critic batch 2,048; 2 epochs; LR 3e-5; KL stop 0.01 |
+| Learner preparation | 8 persistent CPU readers (`audit_workers`), checked compact labels/features; two queued pinned CPU batches for CUDA PPO; 20/40/60/80/100% replay-preparation logs |
 | BC | LR 1e-4; main effective/microbatch settings; complete legal policy denominator |
 | Curriculum | v3 tables 40% → 20% → 10% → 5% at 2,000 / 5,000 / 10,000 games |
 | Search teachers | Eligible from 640 games; schedule every 1,600; 4 games; at most 10% collection/update wall-time share |
-| Routine evaluation | 8-game monitor every 1,600 games; 16-game broader screen every 6,400 |
-| Retention | 8 recent + 4 anchor weight-only opponents; 2 full resume checkpoints; 4 replay rounds; bounded development shards/traces |
+| Routine evaluation | 4-game monitor every 6,400 games; 8-game broader screen every 25,600 (20 / 80 main-preset iterations) |
+| Retention | 8 recent + 4 anchor weight-only opponents; 2 full resume checkpoints; initial evaluation anchor; 2 replay rounds; immediate deletion of retired unpinned files |
 
 The first search collection occurs at the end of a chunk after the ready threshold. Subsequent due points advance by 1,600 games. Search actions are external behavior: they never become PPO neural likelihoods. Distillation needs completed visits on at least two alternatives, mixes 90% normalized visits with 10% full-support prior, and uses a separate supervised loss. A search that cannot complete meaningful evidence skips distillation and reports the reason. NN teachers use a separate 3-second lab clock because full NN rollouts need more completed evidence; v3 stays exactly one second. Reference/smoke NN presets stay at one second. Do not fabricate labels or silently lengthen the v3 clock.
 
 For fewer resources, select `--config /data/not_backed_up/yxu209/ai-training/configs/step5/lab-small.json` before creating a new run. `lab-reference.json` also uses four search workers; `lab-16x2.json` uses 16 heavy tables × 2 workers. All v3 presets still use one second. `recovery-smoke.json` is a compact local scaffold check. None of these is permission to migrate an old source-bound run in place.
+
+The smaller 32-core preset retains 28 ordinary actors. Heavy tables stay at the selected 24 × 4 in the main preset, sharing the existing admission gate with ordinary games. Increasing ordinary actors supplies more concurrent neural requests; it does not change the v4 or NN search clocks. Keep the effective PPO batch and learning rate unchanged when comparing throughput. More GPU memory allocation alone is not a training improvement.
 
 ## Evaluation and selected-backend probe
 
@@ -180,6 +183,8 @@ python /data/not_backed_up/yxu209/ai-training/scripts/step5.py --device cuda --c
 
 Replace `REFERENCE_MODEL_ID` with a path recorded in the run's `state.json`. Broader and formal panels require two distinct same-run references. The full shortlist preset includes held-out Advanced Pottery Variants. Add `--search` to evaluate the selected search backend; ordinary monitor panels stay fast. Search/evaluation reports do not promote a model without their separate evidence gates.
 
+The automatic four-game monitor is one setup with all four seat rotations; the broader screen is one setup per lineup with all four rotations (eight games total). At 25,600 games both panels run: 12 evaluation games, versus the old 24 at that boundary. Over 25,600 training games the schedule uses 24 evaluation games instead of 192, an **87.5% reduction in game count**. Wall-time savings depend on opponent/search costs. These small screens are noisy learning alarms, not strength qualifications. Manual evaluation sizes and formal promotion gates remain unchanged.
+
 A quick decision probe compares only the selected backend against its own NN prior and, optionally, the same search with top-K fully opened. It is a coverage/latency check, not a tournament:
 
 ```sh
@@ -190,16 +195,32 @@ The CPU path is mandatory and uses `configs/search/lab-cpu.json`; laptop CPU use
 
 ## Storage and diagnostics
 
-Cleanup runs after committed iterations, preserves current/resume/population/evaluation-anchor weights and referenced dataset shards, and quarantines retired files for 24 hours. First inspect a manual plan:
+Cleanup runs after every committed iteration, including the last iteration requested on the command line. Main training presets now use `quarantine_hours: 0`: retired unreferenced files are journaled and deleted in the same cleanup, so they do not occupy another 24 hours of disk space. It retains two full resume checkpoints, up to twelve slim opponent checkpoints, the initial evaluation anchor, two replay/report rounds, and two recent completed development screens per panel. Extra explicitly pinned files and dataset/formal-evaluation dependencies are retained.
+
+Older round and development-screen metrics are consolidated into `retention-history.json`; their per-game execution receipts and expired raw replays are removed. Two completed cleanup receipts remain; unfinished receipts are preserved for recovery. Empty retired directories are removed. Historical lineage entries in `state.json` remain small audit metadata and may refer to retired full checkpoints: load opponents from the live `population` entries, and resume from the latest checkpoint. Weight-only opponents no longer carry optimizer state or full report copies, and full checkpoints contain a small update receipt instead of another copy of all game telemetry. The in-memory report list is also limited to the latest two rounds.
+
+First inspect a manual plan:
 
 ```sh
 python /data/not_backed_up/yxu209/ai-training/scripts/step5.py cleanup --run /data/not_backed_up/yxu209/ai-training/artifacts/step5/masked-24x4-tournament-v4-fresh
 python /data/not_backed_up/yxu209/ai-training/scripts/step5.py cleanup --run /data/not_backed_up/yxu209/ai-training/artifacts/step5/masked-24x4-tournament-v4-fresh --apply
 ```
 
-Use `pin --run ... --paths ...` before a long independent evaluation when retaining an older generation. `restore --manifest` accepts the exact quarantine receipt; `--apply --purge` deletes only matured, unreferenced quarantine entries inside the owned run. Active runs and outside-workspace paths are rejected.
+Use `pin --run ... --paths ...` before a long independent evaluation when retaining an older generation. For reversible delayed cleanup, set `quarantine_hours: 24` in a custom config **before** starting that run; `restore --manifest` then accepts an unpurged quarantine receipt. Zero-hour cleanup permanently deletes the retired bytes. Purge rechecks dependencies and restores newly pinned files; journals also recover an interrupted deletion. Active runs owned by another process and outside-workspace paths are rejected.
+
+The local six-game/three-iteration smoke verified resume, removal of the oldest full checkpoint and replay round, and an empty quarantine after the final iteration. Focused retention checks also cross iteration 10,000, preserve indirect dataset pins and formal evidence, and recover interrupted deletion. Directory metadata reuse and skipping an unnecessary second scan reduced a measured local no-op cleanup from roughly seven seconds to 1.81 seconds. Actual deletion time also depends on retained/pinned data and storage speed.
 
 Report inference batch positions/cells, padding, expired requests, queue/encoding/inference timing, host RPC/IPC timing, completed simulations, distinct alternatives and turn retirement. Warm private lanes avoid per-batch host swapping; obsolete search generations release their lanes instead of filling the lightweight policy cache. Parallel roots use private trees/channels/RNG and await actual completion before reuse. Device utilization is diagnostic: a 1.84M model does not need to fill 90 GB, and slower rule simulation may dominate. GPU/lab throughput and playing strength require fresh measurements on the server.
+
+Self-play now validates and prepares separate replay shards on up to eight CPU cores. Readers verify replay hashes, membership, split, labels, strict observations and feature receipts before returning compact training data. Full repeated board/history dictionaries stay in those readers. PPO stages its action/value/rehearsal batches in pinned CPU buffers while CUDA works, and likelihood/KL checks accumulate on-device before reading their result. Forced-action handling, the full legal denominator, four-seat targets and KL guards are preserved. Rehearsal is released after its decay reaches zero and is not reloaded on a later resume. Actor replay writers hash each shard once for its game receipts.
+
+Each round prints collection, preparation, PPO, evaluation and cleanup elapsed time, plus mean neural inference batch size. `report.json` adds `utilization` with **per-collection** inference deltas, aggregate actor phase times, padding and games/second; the existing `inference` section remains cumulative within one invocation. Phase sums overlap and are not CPU/GPU utilization percentages. To record actual GPU activity in another terminal during a lab run:
+
+```sh
+nvidia-smi --query-gpu=timestamp,utilization.gpu,utilization.memory,memory.used,power.draw --format=csv -l 5
+```
+
+Use `top` to inspect the Python reader/actor and Mono host processes together, not only the learner PID. In the older `results/1.1` two-game smoke, CPU preparation took about 95–96% of PPO wall time and neural batches averaged about one position. That does not measure the present 48-actor preset. A local two-game replay check measured 3.69 s for serial read/preparation/diagnostics versus 1.97 s with two warmed readers; process startup made the first parallel pass 5.22 s. Readers persist across rounds to amortize startup. CUDA throughput must be measured on the lab; local checks use CPU.
 
 The selected **v4 / patch 1.4.20** uses C# heuristic Masked ISMCTS, six advanced-opening styles, **two game workers** and the existing **2/5/12-second** options. Lab search remains at four workers. Its previous `smoke-7` screen tied 6–6 on wins and averaged 88.79 versus 84.71 VP against the economic control; the user then explicitly selected this bank and stopped further strength tests. This selection does not certify tournament superiority. Productive development resets intent age, and opening goals influence build/setup candidates. The [1.4.7 resource lifecycle](AI_EXECUTION_RESOURCES_1.4.7.md) remains in force. Trained NN deployment is a later qualification step.
 

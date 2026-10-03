@@ -23,8 +23,8 @@ UPDATE_V21 = dict(UPDATE, actor_nonforced=True, critic_batch_size=2048, kl_probe
 RETENTION = dict(enabled=True, resume_checkpoints=2, replay_rounds=4, quarantine_hours=24,
     evaluation_samples=4, profile_traces=2)
 POPULATION = dict(recent=8, anchors=4)
-EVALUATION_SCHEDULE = dict(enabled=True, monitor_every_games=1600, broader_every_games=6400,
-    monitor_setups=2, broader_setups=2, seed=910000)
+EVALUATION_SCHEDULE = dict(enabled=True, monitor_every_games=6400, broader_every_games=25600,
+    monitor_setups=1, broader_setups=1, seed=910000)
 LEGACY_BUDGET = dict(role='lab', seconds=1.0, search_workers=4, global_workers=60, work_multiplier=1)
 LEGACY_OPPONENTS = dict(search_free_until_games=10000)
 IMITATION = dict(manifest=None,epochs=10,patience=2,min_epochs=3,learning_rate=1e-4)
@@ -40,6 +40,8 @@ def bounded_fields(config, default, name):
     for key,value in config.items():
         expected=default[key]
         if type(expected) is bool: require(type(value) is bool,'Invalid '+name+'.'+key)
+        elif name=='retention' and key=='quarantine_hours':
+            require(type(value) is int and value>=0,'Invalid retention.quarantine_hours')
         elif type(expected) in (int,float): positive(value,name+'.'+key,integer=type(expected) is int)
         else: require(type(value) is str and value,'Invalid '+name+'.'+key)
     return config

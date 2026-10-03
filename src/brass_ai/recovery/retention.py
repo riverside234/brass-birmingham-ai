@@ -8,6 +8,7 @@ import json
 import os
 from pathlib import Path
 import socket
+import stat
 import time
 import uuid
 
@@ -21,7 +22,9 @@ from .config import RETENTION,POPULATION
 
 def link(path):
     path=Path(path)
-    return path.is_symlink() or (path.exists() and bool(getattr(path.lstat(),'st_file_attributes',0)&0x400))
+    try:info=path.lstat()
+    except FileNotFoundError:return False
+    return stat.S_ISLNK(info.st_mode) or bool(getattr(info,'st_file_attributes',0)&0x400)
 
 
 def owned(root,run):
@@ -88,17 +91,35 @@ def controls(artifacts):
     # Dependency runtimes have tens of thousands of files and contain no run
     # controls. Avoid walking them at every training commit.
     result={k:[] for k in ('state.json','spec.json','pins.json')}
-    for parent,dirs,files in os.walk(artifacts,followlinks=False):
-        dirs[:]=[d for d in dirs if d not in ('.retention-trash','patch-tools','node_modules','__pycache__','.git')
-                 and d not in ('r2-pythondeps','r4-deps','r0-validation-deps') and not link(Path(parent)/d)]
-        for name in result:
-            if name in files: result[name].append(Path(parent)/name)
+    excluded={'.retention-trash','patch-tools','node_modules','__pycache__','.git',
+              'r2-pythondeps','r4-deps','r4-pythondeps','r0-pythonlibs','r0-validation-deps'}
+    pending=[str(artifacts)]
+    while pending:
+        parent=pending.pop()
+        # DirEntry reuses metadata from directory enumeration. Path.lstat for
+        # every subdirectory added thousands of redundant Windows system calls.
+        try:entries=os.scandir(parent)
+        except FileNotFoundError:continue  # another owned run retired an empty directory
+        with entries:
+            for entry in entries:
+                if entry.is_dir(follow_symlinks=False):
+                    if entry.name in excluded:continue
+                    if os.name=='nt' and getattr(entry.stat(follow_symlinks=False),'st_file_attributes',0)&0x400:continue
+                    pending.append(entry.path)
+                elif entry.name in result:result[entry.name].append(Path(entry.path))
     return result
 
 
 def references(root,run):
     """Small control files only. Historical reports do not pin every old replay."""
-    pins={};control=[]
+    pins={};control=[];quarantined={}
+    for receipt in (run/'.retention').glob('cleanup-*.json'):
+        for entry in read(receipt)['entries']:
+            if entry['path'].endswith('.json') and entry.get('quarantine') and not (entry.get('deleted') or entry.get('restored')):
+                original=safe(run,run/entry['path']);stored=safe(run,run/entry['quarantine'])
+                if not original.exists() and stored.is_file():
+                    require(sha(stored)==entry['sha256'],'Quarantined manifest changed')
+                    quarantined[original]=stored
     for directory in (root/'training/datasets',root/'training/models'):
         if directory.exists(): control.extend((p,read(p),'dataset or model manifest') for p in directory.rglob('*.json'))
     artifacts=root/'artifacts'
@@ -132,15 +153,19 @@ def references(root,run):
             candidates=[root/value,p.parent/value] if not Path(value).is_absolute() else [Path(value)]
             for candidate in candidates:
                 resolved=candidate.resolve()
-                if resolved.is_relative_to(run) and resolved.exists(): pins[resolved]=reason+' '+str(p.relative_to(root))
-                if resolved.is_relative_to(root) and resolved.suffix=='.json' and resolved.is_file() and resolved not in visited:
-                    visited.add(resolved);control.append((resolved,read(resolved),'referenced manifest'))
+                # Remember dependencies even while their original path is in
+                # quarantine, so a new pin can rescue it before permanent purge.
+                if resolved.is_relative_to(run): pins[resolved]=reason+' '+str(p.relative_to(root))
+                if resolved.is_relative_to(root) and resolved.suffix=='.json' and resolved not in visited:
+                    source=resolved if resolved.is_file() else quarantined.get(resolved)
+                    if source is not None:
+                        visited.add(resolved);control.append((resolved,read(source),'referenced manifest'))
     # Derived caches travel with their authoritative dataset/evidence source.
     for path,reason in list(pins.items()):
         if str(path).endswith('.jsonl.gz'):
             for suffix in ('.features.npz','.features.json'):
                 derived=Path(str(path)+suffix)
-                if derived.exists(): pins[derived.resolve()]=reason
+                pins[derived.resolve()]=reason
     return pins
 
 
@@ -161,6 +186,8 @@ def slim_checkpoint(root,run,entry):
     destination=run/'population'/('weights-'+entry['model_id']+'.pt')
     if not destination.exists():
         raw=torch.load(path,map_location='cpu',weights_only=True);raw['optimizer']=None
+        # Opponents need model/compatibility/lineage, not copied per-game reports.
+        raw['training']={k:v for k,v in raw.get('training',{}).items() if k not in ('evidence','imitation')}
         destination.parent.mkdir(parents=True,exist_ok=True);temporary=destination.with_name(destination.name+'.tmp')
         torch.save(raw,temporary);temporary.replace(destination)
     return dict(entry,path=destination.relative_to(root).as_posix(),sha256=sha(destination),weights_only=True)
@@ -196,9 +223,28 @@ def plan(root,run,config=RETENTION):
         for e in state['history'][:-config['resume_checkpoints']]:
             if project_path(root,e['path']).is_relative_to(run): candidate(project_path(root,e['path']),'retired full checkpoint')
         for path in (run/'population').glob('*.pt'): candidate(path,'retired population weights')
-        rounds=sorted(p for p in run.glob('iteration-*') if p.is_dir() and (p/'report.json').exists())
+        rounds=sorted((p for p in run.glob('iteration-*') if p.is_dir() and p.name[10:].isdigit() and (p/'report.json').exists()),
+                      key=lambda p:int(p.name[10:]))
         for directory in rounds[:-config['replay_rounds']]:
             for p in directory.glob('*.jsonl.gz*'): candidate(p,'expired ordinary or unpinned teacher replay')
+            if int(directory.name.split('-')[-1])<state['iteration'] and str(read(directory/'report.json').get('format','')).startswith('step5-recovery-report/'):
+                candidate(directory/'report.json','archived iteration report')
+        # Keep two recent completed development screens per panel. Formal or
+        # unfinished experiments and explicitly referenced files remain pinned.
+        panels={}
+        for directory in sorted((run/'evaluations').glob('*')):
+            report=directory/'report.json'
+            if not directory.is_dir() or not report.is_file():continue
+            result=read(report)
+            if result.get('spec',{}).get('config',{}).get('panel')!='development':continue
+            panels.setdefault(directory.name.rsplit('-',1)[0],[]).append(directory)
+        for directories in panels.values():
+            for directory in directories[:-2]:
+                if any(p.is_relative_to(directory) for p in pins):continue
+                for pattern in ('*.jsonl.gz*','spec.json','report.json'):
+                    for p in directory.glob(pattern):candidate(p,'archived development screen')
+                for p in (directory/'.retention').glob('cleanup-*.json'):
+                    if settled(read(p)):candidate(p,'completed development cleanup receipt')
     elif 'best' in state and 'last' in state:
         for p in run.glob('epoch-*.pt'): candidate(p,'unused BC epoch')
     report_path=run/'report.json'
@@ -213,7 +259,7 @@ def plan(root,run,config=RETENTION):
                 candidate(p,'completed development screen')
                 for derived in run.glob(p.name+'.features.*'): candidate(derived,'derived development features')
     # Profiles are derived and not training data.
-    profiles=sorted(run.rglob('*.pt.trace.json'))
+    profiles=sorted(p for p in run.rglob('*.pt.trace.json') if '.retention-trash' not in p.parts)
     for p in profiles[:-config['profile_traces']]: candidate(p,'old profiler trace')
     entries=[dict(path=p.relative_to(run).as_posix(),sha256=sha(p),bytes=p.stat().st_size,reason=reason)
              for p,reason in sorted(candidates.items()) if p not in keep]
@@ -226,6 +272,22 @@ def plan(root,run,config=RETENTION):
 def prune(root,run,config=RETENTION,*,apply=False):
     root,run=owned(root,run);decision=plan(root,run,config)
     if not apply: return dict(decision,dry_run=True)
+    if not decision['entries']:
+        return dict(decision,dry_run=False,**purge(root,run,config,automatic=True))
+    # A single small history file retains learning/evaluation metrics, replacing
+    # one large report directory per retired round. Archive before moving bytes.
+    archived=[e for e in decision['entries'] if e['path'].endswith('/report.json') and e['reason'].startswith('archived')]
+    if archived:
+        history_path=run/'retention-history.json';history=read(history_path) if history_path.exists() else {}
+        for entry in archived:
+            report=read(safe(run,run/entry['path']))
+            history[entry['path']]=dict(sha256=entry['sha256'],summary={k:v for k,v in report.items()
+                if k not in ('execution','spec','raw_record_sha256','retention')})
+            # Search execution receipts are also large, and are not reusable
+            # teacher replay once those files have expired.
+            search=history[entry['path']]['summary'].get('search')
+            if isinstance(search,dict):search.pop('collection',None)
+        write_json(history_path,history)
     token=str(int(time.time()))+'-'+uuid.uuid4().hex[:8]
     manifest=run/'.retention'/('cleanup-'+token+'.json');trash=run/'.retention-trash'/token
     decision.update(dry_run=False,quarantine_hours=config['quarantine_hours'],status='moving')
@@ -243,18 +305,35 @@ def prune(root,run,config=RETENTION,*,apply=False):
     if report_path.exists() and any('development' in e['reason'] for e in decision['entries']):
         report=read(report_path);report.update(raw_records_pruned=True,promotion_eligible=False)
         report['retention_manifest']=manifest.relative_to(root).as_posix();write_json(report_path,report)
-    purge(root,run,config,automatic=True)
-    return dict(decision,manifest=str(manifest))
+    result=purge(root,run,config,automatic=True)
+    return dict(decision,manifest=str(manifest),**result)
+
+
+def settled(data):
+    return data.get('status')=='quarantined' and all(e.get('restored') or e.get('deleted') for e in data['entries'])
+
+
+def remove_empty_parents(run,path):
+    parent=Path(path).parent
+    while parent!=run:
+        safe(run,parent)
+        try:parent.rmdir()
+        except OSError:break
+        parent=parent.parent
 
 
 def purge(root,run,config=RETENTION,*,automatic=False):
     root,run=owned(root,run);require(not active(run,allow_owner=True),'Cannot purge an active run')
     state=read(run/'state.json') if (run/'state.json').exists() else {};generation=state.get('iteration',state.get('epoch',0))
-    count=0
-    for manifest in (run/'.retention').glob('cleanup-*.json'):
+    count=0;rescued=0;deleted_bytes=0;pins=None
+    for manifest in sorted((run/'.retention').glob('cleanup-*.json')):
         data=read(manifest)
         if time.time()-data['created']<data['quarantine_hours']*3600: continue
-        if automatic and generation<=data['generation']: continue
+        # Zero-hour mode is safe immediately AFTER a committed state. Delayed
+        # quarantine keeps its previous-generation guard.
+        if automatic and data['quarantine_hours'] and generation<=data['generation']: continue
+        if settled(data):continue
+        if pins is None:pins=references(root,run)
         for entry in data['entries']:
             if entry.get('moving') and not entry.get('moved'):
                 origin=safe(run,run/entry['path']);destination=safe(run,run/entry['quarantine'])
@@ -263,9 +342,34 @@ def purge(root,run,config=RETENTION,*,automatic=False):
                     require(sha(destination)==entry['sha256'],'Interrupted quarantine changed')
                     entry.update(moved=True,moving=False);write_json(manifest,data)
             if not entry.get('moved') or entry.get('restored') or entry.get('deleted'): continue
-            path=safe(run,run/entry['quarantine']);require(path.exists() and sha(path)==entry['sha256'],'Quarantine changed')
-            path.unlink();entry['deleted']=True;count+=1;write_json(manifest,data)
-    return dict(permanently_deleted_files=count)
+            path=safe(run,run/entry['quarantine']);origin=safe(run,run/entry['path'])
+            if entry.get('restoring') and not path.exists() and origin.exists():
+                require(sha(origin)==entry['sha256'],'Restored dependency changed')
+                entry.update(restored=True,restoring=False);write_json(manifest,data)
+                remove_empty_parents(run,path);continue
+            if entry.get('deleting') and not path.exists():
+                entry.update(deleted=True,deleting=False);write_json(manifest,data)
+                remove_empty_parents(run,path);remove_empty_parents(run,origin);continue
+            require(path.exists() and sha(path)==entry['sha256'],'Quarantine changed')
+            if origin in pins:
+                require(not origin.exists(),'Restoring dependency would overwrite a file')
+                entry['restoring']=True;write_json(manifest,data)
+                origin.parent.mkdir(parents=True,exist_ok=True);path.replace(origin)
+                entry.update(restored=True,restoring=False,deleting=False);rescued+=1;write_json(manifest,data)
+                remove_empty_parents(run,path);continue
+            entry['deleting']=True;write_json(manifest,data)
+            path.unlink();entry.update(deleted=True,deleting=False);count+=1;deleted_bytes+=entry['bytes'];write_json(manifest,data)
+            remove_empty_parents(run,path);remove_empty_parents(run,origin)
+    # Bound the cleanup journal too; unsettled receipts remain recoverable.
+    # With only two completed receipts, no fresh dependency scan is necessary.
+    if pins is None:
+        if len(list((run/'.retention').glob('cleanup-*.json')))<=2:
+            return dict(permanently_deleted_files=0,permanently_deleted_bytes=0,rescued_dependencies=0)
+        pins=references(root,run)
+    completed=sorted((p for p in (run/'.retention').glob('cleanup-*.json') if settled(read(p)) and p.resolve() not in pins),
+                     key=lambda p:read(p)['created'])
+    for path in completed[:-2]:safe(run,path).unlink()
+    return dict(permanently_deleted_files=count,permanently_deleted_bytes=deleted_bytes,rescued_dependencies=rescued)
 
 
 def restore(root,manifest):

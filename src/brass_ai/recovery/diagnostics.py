@@ -50,3 +50,48 @@ def summarize(games,learner_ids,kind_by_group=None):
         economy=economy(v,learner_ids),diversity=pottery_metrics(v,learner_ids)) for k,v in kinds.items()},
         economy=economy(games,learner_ids),diversity=pottery_metrics(games,learner_ids),
         measured_policy='frozen incoming collection policy, before this update')
+
+
+def merge_summaries(parts):
+    """Merge disjoint complete-game shards without transporting board history."""
+    def counters(items):
+        total=Counter()
+        for item in items:
+            for key,value in item.items():total[key]+=value
+        return dict(total)
+    def matches(items):
+        policies={}
+        for item in items:
+            for key,row in item['policies'].items():
+                out=policies.setdefault(key,dict(seat_games=0,win_share=0.,placement=0.,vp=0.,seat_counts=[0]*4))
+                out['seat_games']+=row['seat_games']
+                for metric in ('win_share','placement','vp'):out[metric]+=row[metric]*row['seat_games']
+                out['seat_counts']=[a+b for a,b in zip(out['seat_counts'],row['seat_counts'])]
+        for row in policies.values():
+            for metric in ('win_share','placement','vp'):row[metric]/=row['seat_games']
+        return dict(items[0],games=sum(p['games'] for p in items),policies=policies)
+    def economics(items):
+        out=dict(items[0]);counts=[sum(p['actions'].values()) for p in items];total=sum(counts)
+        for key in ('actions','phases','builds','observed_flips','last_seen_unflipped','merchant_beer_by_bonus'):
+            out[key]=counters([p[key] for p in items])
+        for key in ('forced_decisions','debt_decisions','feasible_sale_decisions','selected_sales'):
+            out[key]=sum(p[key] for p in items)
+        minima=[p['minimum_observed_cash'] for p in items if p['minimum_observed_cash'] is not None]
+        out['minimum_observed_cash']=min(minima) if minima else None
+        for key in ('mean_observed_cash','mean_observed_income'):
+            out[key]=sum(p[key]*n for p,n in zip(items,counts) if n)/total if total else None
+        return out
+    def diversity(items):
+        out=dict(items[0])
+        for key in ('builds','legal_build_opportunities','builds_matching_assigned_focus','seat_trajectory_contexts'):
+            out[key]=counters([p[key] for p in items])
+        out['pottery_warning']=out['legal_build_opportunities']['Pottery']>=30 and out['builds']['Pottery']==0
+        return out
+    def combine(items):
+        return dict(matches=matches([p['matches'] for p in items]),economy=economics([p['economy'] for p in items]),
+                    diversity=diversity([p['diversity'] for p in items]))
+    grouped=defaultdict(list)
+    for part in parts:
+        for key,value in part['by_composition'].items():grouped[key].append(value)
+    return dict(**combine(parts),by_composition={k:combine(v) for k,v in grouped.items()},
+                measured_policy=parts[0]['measured_policy'])

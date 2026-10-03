@@ -21,7 +21,8 @@ from .demonstrations import load_dataset
 from .diagnostics import summarize
 from .execution import ActorPool,neural_spec
 from .inference import InferenceService
-from .telemetry import environment
+from .ingress import load_collection,reader_pool
+from .telemetry import environment,iteration_utilization
 from .updates import ppo_update,distill_update
 
 
@@ -112,14 +113,16 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
         write_json(state_path,state)
     optimizer=torch.optim.AdamW(model.parameters(),lr=config['learning_rate'],weight_decay=config['weight_decay'])
     resume_optimizer(raw,optimizer)
-    rehearsal=load_dataset(root,config['rehearsal_manifest'],'train',workers=config['audit_workers'],progress=True,compact=True)[0] if config['rehearsal_manifest'] else None
+    needs_rehearsal=config['rehearsal_manifest'] and config['rehearsal_weight'] and state['games_done']<config['rehearsal_until']
+    rehearsal=load_dataset(root,config['rehearsal_manifest'],'train',workers=config['audit_workers'],progress=True,compact=True)[0] if needs_rehearsal else None
     summaries=[]
     if revised: schedule_evaluations(root,run,state,device,mono)
     with InferenceService(config['execution'],device,profile=run/'profile-collection' if config['profile_steps'] else None,
-                          profile_steps=config['profile_steps']) as service:
+                          profile_steps=config['profile_steps']) as service,reader_pool(config['audit_workers']) as readers:
         with ActorPool(root,config['host'],service,config['execution'],mono=mono) as ordinary,ActorPool(root,config['host'],service,config['execution'],mono=mono,heavy=True) as heavy:
             for _ in range(iterations):
                 iteration=state['iteration'];began=time.monotonic();directory=run/f'iteration-{iteration:04d}'
+                inference_before=service.report()
                 current=service.register(model);behavior=Behavior(current,config['exploration'])
                 snapshots={}
                 verified_snapshots=set()
@@ -172,16 +175,18 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                     if normal: records+=ordinary.collect(normal)
                     if legacy: records+=heavy.collect(legacy)
                 load_began=time.monotonic()
-                games=read_shards([r['path'] for r in sorted(records,key=lambda r:r['job'])],partition='train',
-                    receipts={r['path']:r.get('features') for r in records})
+                games,learner_data,diagnostics=load_collection(records,behavior.policy_id,kind_by_group,
+                    executor=readers,workers=config['audit_workers'])
                 collected=time.monotonic()
-                diagnostics=summarize(games,{behavior.policy_id},kind_by_group)
                 weight=config['rehearsal_weight']*max(0,1-state['games_done']/config['rehearsal_until'])
                 update=ppo_update(model,optimizer,games,behavior,config['update'],
                     profile=directory/'profile-ppo' if config['profile_steps'] else None,
                     profile_steps=config['profile_steps'],
-                    rehearsal=rehearsal,rehearsal_weight=weight)
+                    rehearsal=rehearsal,rehearsal_weight=weight,learner_data=learner_data)
                 updated=time.monotonic();done=state['games_done']+len(games)
+                ordinary_inference=service.report()
+                del learner_data
+                if done>=config['rehearsal_until']:rehearsal=None
                 search=dict(updated=False,reason='Persistent search schedule not due')
                 next_search=state['next_search_games']
                 ordinary_seconds=state.get('ordinary_seconds',0.)+updated-began
@@ -213,17 +218,21 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                 report=dict(format='step5-recovery-report/'+'2.2.0',iteration=iteration,composition=dict(composition),
                     actor=update,search=search,**diagnostics,incoming_model_id=current,
                     games_done=done,cumulative_games=state['previous_games']+done,
-                    timings=dict(collection_seconds=collected-began,ppo_seconds=updated-collected,
+                    timings=dict(collection_seconds=load_began-began,ppo_seconds=updated-collected,
                         replay_load_seconds=collected-load_began,
                         search_and_distill_seconds=time.monotonic()-updated),execution=records,
                     inference=service.report(),inference_scope='cumulative for this invocation',
                     legacy_modes=dict(Counter(j['provenance']['legacy_mode'] for j in jobs if j['provenance']['legacy_mode'])),
                     environment=environment(device),strength='requires fresh post-update evaluation')
+                report['utilization']=iteration_utilization(inference_before,ordinary_inference,records,
+                    load_began-began,len(games),config['execution'])
                 output=run/f'generation-{iteration+1:04d}.pt'
                 checkpoint_began=time.monotonic()
                 identity=save_checkpoint(output,model,optimizer,step=iteration+1,
                     training=dict(mode='step5-population-ppo',recipe='nonforced-actor-ppo/2.1.0' if revised else 'effective-minibatch-ppo/2.0.0',
-                        parent=current,signature=digest(signature),fresh_run=run.relative_to(root).as_posix(),initialization='random-lineage',evidence=report))
+                        parent=current,signature=digest(signature),fresh_run=run.relative_to(root).as_posix(),initialization='random-lineage',
+                        evidence=dict(iteration=iteration,games_done=done,report=(directory/'report.json').relative_to(root).as_posix(),
+                                      update_digest=digest(update))))
                 report['post_update_model_id']=identity
                 report['timings']['checkpoint_seconds']=time.monotonic()-checkpoint_began
                 write_json(directory/'report.json',report)
@@ -234,14 +243,27 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                 if revised:
                     from .retention import update_population
                     update_population(root,run,state,config['population'])
-                write_json(state_path,state);summaries.append(report)
+                write_json(state_path,state)
                 if revised:
+                    evaluation_began=time.monotonic()
                     schedule_evaluations(root,run,state,device,mono)
+                    report['timings']['evaluation_seconds']=time.monotonic()-evaluation_began
                     from .retention import prune
-                    if config['retention']['enabled']: prune(root,run,config['retention'],apply=True)
+                    cleanup_began=time.monotonic()
+                    if config['retention']['enabled']:
+                        cleanup=prune(root,run,config['retention'],apply=True)
+                        report['cleanup']={k:cleanup[k] for k in ('reclaimable_bytes','permanently_deleted_files','permanently_deleted_bytes')}
+                    report['timings']['cleanup_seconds']=time.monotonic()-cleanup_began
                     service.trim([e['model_id'] for e in state['population']]+[identity])
-                print(f'Recovery generation {iteration+1}: {done} games, {update["optimizer_steps"]} PPO steps',flush=True)
-    return dict(run=str(run),completed_iteration=state['iteration'],checkpoint=state['history'][-1],summaries=summaries)
+                report['timings']['iteration_seconds']=time.monotonic()-began
+                write_json(directory/'report.json',report)
+                summaries.append(report);summaries=summaries[-2:]
+                print(f'Recovery generation {iteration+1}: {done} games, {update["optimizer_steps"]} PPO steps; '
+                      f'collect={load_began-began:.1f}s prepare={collected-load_began:.1f}s PPO={updated-collected:.1f}s '
+                      f'eval={report["timings"].get("evaluation_seconds",0):.1f}s cleanup={report["timings"].get("cleanup_seconds",0):.1f}s; '
+                      f'NN batch mean={report["utilization"]["mean_inference_batch"]:.2f}',flush=True)
+    return dict(run=str(run),completed_iteration=state['iteration'],checkpoint=state['history'][-1],summaries=summaries,
+                summary_scope='latest two iterations in this invocation; older metrics in retention-history.json')
 
 
 def schedule_evaluations(root,run,state,device,mono):

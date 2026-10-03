@@ -98,6 +98,26 @@ def memory(device):
     return result
 
 
+def iteration_utilization(before,after,records,seconds,games,config):
+    """Per-collection deltas; elapsed RPC/wait time is not CPU or GPU busy time."""
+    batches=after.get('batches',0)-before.get('batches',0)
+    positions=after.get('positions',0)-before.get('positions',0)
+    phases=defaultdict(float)
+    for record in records:
+        for key,value in record.get('metrics',{}).items():phases[key]+=value['seconds']
+    inference={}
+    for key,value in after.get('timings',{}).items():
+        previous=before.get('timings',{}).get(key,{})
+        inference[key]=dict(seconds=value['seconds']-previous.get('seconds',0),calls=value['calls']-previous.get('calls',0))
+    cells=after.get('padded_candidate_cells',0)-before.get('padded_candidate_cells',0)
+    valid=after.get('valid_candidate_cells',0)-before.get('valid_candidate_cells',0)
+    return dict(games_per_second=games/max(seconds,1e-9),mean_inference_batch=positions/max(1,batches),
+        inference_batches=batches,inference_positions=positions,padding_fraction=1-valid/cells if cells else None,
+        actor_phase_seconds=dict(phases),inference_phase_deltas=inference,
+        ordinary_actors=config['processes']*config['hosts_per_process'],cpu_work_slots=config['cpu_budget']-config['cpu_reserve'],
+        scope='ordinary collection only; actor phases overlap; these are host elapsed times, not hardware utilization percentages')
+
+
 def profile_window(path, device, steps=4):
     """Call profiler.step after batches; only a short scheduled window is traced."""
     if path is None:

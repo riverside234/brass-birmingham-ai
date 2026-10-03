@@ -84,28 +84,40 @@ class Dataset:
             for j,i in enumerate(indices): q[j,:len(self.q[i])]=self.q[i]
         return ix, inputs, torch.from_numpy(q).to(self.device)
 
-    def _pinned_batch(self, indices):
+    def _pinned_batch(self, indices, exploration=0):
         # A small background queue prepares/pins CPU tensors while CUDA trains.
         # These private buffers are never mutated after asynchronous transfer.
-        return tuple(t.pin_memory() for t in (torch.tensor(indices),*collate([self.encoded[i] for i in indices])))
+        ix,inputs,q=self.batch_cpu(indices,exploration)
+        return tuple(t.pin_memory() for t in (ix,*inputs,q))
+
+    def batch_cpu(self, indices, exploration=0):
+        inputs=collate([self.encoded[i] for i in indices])
+        q=np.zeros((len(indices),inputs[1].shape[1]),dtype=np.float32)
+        if exploration:
+            for j,i in enumerate(indices):q[j,:len(self.q[i])]=self.q[i]
+        return torch.tensor(indices),inputs,torch.from_numpy(q)
 
     def supervised_batches(self, parts, executor=None):
+        for part,ix,inputs,_ in self.policy_batches(parts,executor=executor):
+            yield part,ix,inputs
+
+    def policy_batches(self, parts, exploration=0, executor=None):
         if executor is None:
             for part in parts:
-                ix,inputs,_=self.batch(part)
-                yield part,ix,inputs
+                ix,inputs,q=self.batch(part,exploration)
+                yield part,ix,inputs,q
             return
         parts=iter(parts);pending=deque()
         def submit():
             part=next(parts,None)
-            if part is not None:pending.append((part,executor.submit(self._pinned_batch,part)))
+            if part is not None:pending.append((part,executor.submit(self._pinned_batch,part,exploration)))
         for _ in range(2):submit()
         while pending:
             part,future=pending.popleft()
             host=future.result()
             tensors=tuple(t.to(self.device,non_blocking=True) for t in host)
             submit()
-            yield part,tensors[0],tensors[1:]
+            yield part,tensors[0],tensors[1:-1],tensors[-1]
 
 
 def probabilities(logits, q, exploration, temperature):
@@ -119,30 +131,32 @@ def autocast(config, device):
     return nullcontext()
 
 
-def policy_measure(model, dataset, indices, behavior, config, timings, verify=False, advantages=None):
+def policy_measure(model, dataset, indices, behavior, config, timings, verify=False, advantages=None, executor=None):
     indices=list(indices)
     if not indices: return 0.0
-    total=0.0
+    total=torch.zeros((),device=dataset.device);valid=torch.ones((),dtype=torch.bool,device=dataset.device)
     with torch.no_grad(), timings.phase('ppo.policy_measure'):
-        for part in dataset.microbatches(indices,config['microbatch_size'],config['max_candidate_cells'],config['bucket']):
-            ix,inputs,q=dataset.batch(part,behavior.exploration,behavior.temperature)
+        parts=dataset.microbatches(indices,config['microbatch_size'],config['max_candidate_cells'],config['bucket'])
+        for part,ix,inputs,q in dataset.policy_batches(parts,behavior.exploration,executor):
             out=model(*inputs)
             p=probabilities(out[0],q,behavior.exploration,behavior.temperature)
             selected=p.gather(1,dataset.chosen[ix,None]).squeeze(1).clamp_min(1e-30)
             old=dataset.old[ix]
             if verify:
-                require(torch.allclose(selected,old,rtol=3e-3,atol=3e-6),'Wrong/stale behavior probabilities')
+                valid &= torch.isclose(selected,old,rtol=3e-3,atol=3e-6).all()
             ratio=selected/old
-            total+=float(((ratio-1)-ratio.log()).sum())
+            total+=((ratio-1)-ratio.log()).sum()
             if advantages is not None:
                 advantages[ix]=dataset.targets[0][ix,dataset.seats[ix]]-out[1][torch.arange(len(ix),device=ix.device),dataset.seats[ix]]
-    return total/len(indices)
+        if verify:require(bool(valid),'Wrong/stale behavior probabilities')
+        result=float(total)/len(indices)
+    return result
 
 
-def ppo_update(model,optimizer,games,behavior,config,*,profile=None,profile_steps=4,rehearsal=None,rehearsal_weight=0):
+def ppo_update(model,optimizer,games,behavior,config,*,profile=None,profile_steps=4,rehearsal=None,rehearsal_weight=0,learner_data=None):
     if config.get('actor_nonforced'):
         return ppo_nonforced(model,optimizer,games,behavior,config,profile=profile,profile_steps=profile_steps,
-                             rehearsal=rehearsal,rehearsal_weight=rehearsal_weight)
+                             rehearsal=rehearsal,rehearsal_weight=rehearsal_weight,learner_data=learner_data)
     require(all(g['split']=='train' for g in games),'Held-out PPO data')
     require(model_id(model)==behavior.evaluator.model_id,'Collection model differs from learner')
     timings=Timings()
@@ -230,18 +244,26 @@ def phase_probe(dataset,indices,limit):
     return output
 
 
-def ppo_nonforced(model,optimizer,games,behavior,config,*,profile=None,profile_steps=4,rehearsal=None,rehearsal_weight=0):
+def ppo_nonforced(model,optimizer,games,behavior,config,*,profile=None,profile_steps=4,rehearsal=None,rehearsal_weight=0,learner_data=None):
+    cuda=next(model.parameters()).device.type=='cuda'
+    with (ThreadPoolExecutor(max_workers=2) if cuda else nullcontext(None)) as executor:
+        return _ppo_nonforced(model,optimizer,games,behavior,config,profile=profile,profile_steps=profile_steps,
+                              rehearsal=rehearsal,rehearsal_weight=rehearsal_weight,learner_data=learner_data,executor=executor)
+
+
+def _ppo_nonforced(model,optimizer,games,behavior,config,*,profile,profile_steps,rehearsal,rehearsal_weight,learner_data,executor):
     require(all(g['split']=='train' for g in games),'Held-out PPO data')
     require(model_id(model)==behavior.evaluator.model_id,'Collection model differs from learner')
     timings=Timings();device=next(model.parameters()).device
     with timings.phase('ppo.prepare'):
-        data=prepared(games,lambda r:r['behavior']['policy_id']==behavior.policy_id)
-        require(all(d[0]['behavior']['kind']=='model' for d in data),'External actions in PPO')
+        data=learner_data if learner_data is not None else prepared(games,lambda r:r['behavior']['policy_id']==behavior.policy_id)
+        require(data and all(d[0]['behavior']['kind']=='model' and d[0]['behavior']['policy_id']==behavior.policy_id for d in data),
+                'External or stale actions in PPO')
         ds=Dataset(data,device);demo=Dataset(rehearsal,device,policy=False) if rehearsal and rehearsal_weight else None
     count=len(data);actor_ids=(~ds.forced).nonzero().flatten().cpu().tolist()
     advantages=torch.zeros(count,device=device);model.eval()
     # Verify likelihoods for ALL rows, including deterministic continuation rows.
-    policy_measure(model,ds,range(count),behavior,config,timings,True,advantages)
+    policy_measure(model,ds,range(count),behavior,config,timings,True,advantages,executor)
     useful=advantages[actor_ids];mean=useful.mean() if actor_ids else torch.zeros((),device=device)
     std=useful.std(unbiased=False) if actor_ids else torch.zeros((),device=device)
     if config['normalize_advantages'] and actor_ids: advantages[actor_ids]=(useful-mean)/std.clamp_min(1e-8)
@@ -260,8 +282,8 @@ def ppo_nonforced(model,optimizer,games,behavior,config,*,profile=None,profile_s
                 crit=critic_order[critic_cursor:critic_cursor+config['critic_batch_size']];critic_cursor+=len(crit)
                 optimizer.zero_grad(set_to_none=True);model.train()
                 with timings.phase('ppo.forward_backward'):
-                    for part in ds.microbatches(batch,config['microbatch_size'],config['max_candidate_cells'],config['bucket']):
-                        ix,inputs,q=ds.batch(part,behavior.exploration,behavior.temperature)
+                    parts=ds.microbatches(batch,config['microbatch_size'],config['max_candidate_cells'],config['bucket'])
+                    for part,ix,inputs,q in ds.policy_batches(parts,behavior.exploration,executor):
                         with autocast(config,device): out=model(*inputs)
                         p=probabilities(out[0],q,behavior.exploration,behavior.temperature)
                         new=p.gather(1,ds.chosen[ix,None]).squeeze(1).clamp_min(1e-30)
@@ -271,8 +293,8 @@ def ppo_nonforced(model,optimizer,games,behavior,config,*,profile=None,profile_s
                         ((actor-config['entropy_weight']*entropy).sum()/len(batch)).backward()
                         actor_totals+=torch.stack([x.detach().sum() for x in (actor,entropy,((ratio-1).abs()>config['clip']).float())])
                         actor_seen+=len(part)
-                    for part in ds.microbatches(crit,config['microbatch_size'],config['max_candidate_cells'],config['bucket']):
-                        ix,inputs,_=ds.batch(part)
+                    parts=ds.microbatches(crit,config['microbatch_size'],config['max_candidate_cells'],config['bucket'])
+                    for part,ix,inputs in ds.supervised_batches(parts,executor):
                         with autocast(config,device): out=model(*inputs)
                         values=value_losses(out,tuple(t[ix] for t in ds.targets))
                         (config['value_weight']*values[0].sum()/len(crit)).backward()
@@ -280,8 +302,8 @@ def ppo_nonforced(model,optimizer,games,behavior,config,*,profile=None,profile_s
                     if demo:
                         sample=torch.randint(len(demo.data),(min(config['effective_batch_size'],len(demo.data)),)).tolist()
                         meaningful=[i for i in sample if not demo.forced_cpu[i]]
-                        for part in demo.microbatches(meaningful,config['microbatch_size'],config['max_candidate_cells'],config['bucket']):
-                            ix,inputs,_=demo.batch(part)
+                        parts=demo.microbatches(meaningful,config['microbatch_size'],config['max_candidate_cells'],config['bucket'])
+                        for part,ix,inputs in demo.supervised_batches(parts,executor):
                             with autocast(config,device): out=model(*inputs)
                             (rehearsal_weight*bc_loss(out[0],demo.chosen[ix]).sum()/len(meaningful)).backward()
                         rehearsal_steps+=int(bool(meaningful))
@@ -289,9 +311,9 @@ def ppo_nonforced(model,optimizer,games,behavior,config,*,profile=None,profile_s
                     norm=torch.nn.utils.clip_grad_norm_(model.parameters(),config['grad_clip'],error_if_nonfinite=True)
                     clips+=int(float(norm)>config['grad_clip']);optimizer.step();steps+=1
                 if profiler: profiler.step()
-                model.eval();kl=policy_measure(model,ds,probe,behavior,config,timings)
+                model.eval();kl=policy_measure(model,ds,probe,behavior,config,timings,executor=executor)
                 if kl>config['target_kl']: stopped=True;break
-            full=policy_measure(model,ds,actor_ids,behavior,config,timings)
+            full=policy_measure(model,ds,actor_ids,behavior,config,timings,executor=executor)
             aa=(actor_totals/max(1,actor_seen)).cpu().tolist();vv=(value_totals/max(1,critic_seen)).cpu().tolist()
             epochs.append(dict(epoch=epoch,actor=aa[0],entropy=aa[1],clip_fraction=aa[2],value=vv[0],
                 win_loss=vv[1],rank_loss=vv[2],vp_loss=vv[3],post_update_kl=full,probe_kl=kl,

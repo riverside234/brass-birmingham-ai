@@ -175,11 +175,13 @@ def _actor(root,host_path,jobs,results,lease,config,mono,lanes,search_channels,a
                                     provenance=dict(producer='recovery/2.1.0',purpose=part[0][1]['provenance']['purpose'],
                                         collection=packet['identity'],jobs=[dict(index=j['index'],seed=j['seed'],provenance=j['provenance']) for _,j,_,_ in part])
                                     write_shard(path,[g for g,_,_,_ in part],provenance,cache=config.get('feature_cache',False))
-                                    elapsed=time.monotonic()-began
+                                    receipt=cache_receipt(path);replay_hash=receipt['replay_sha256'] if receipt else sha(path)
                                     for g,j,metrics,telemetry in part:
-                                        records.append(dict(job=j['index'],game_id=g['game_id'],path=str(path),sha256=sha(path),cached=False,
-                                            features=cache_receipt(path),metrics=metrics,
-                                            replay_write_seconds=elapsed/len(completed),replay_write_scope='amortized packet',search=telemetry))
+                                        records.append(dict(job=j['index'],game_id=g['game_id'],path=str(path),sha256=replay_hash,cached=False,
+                                            features=receipt,metrics=metrics,search=telemetry))
+                                elapsed=time.monotonic()-began
+                                for record in records:
+                                    record.update(replay_write_seconds=elapsed/len(completed),replay_write_scope='amortized packet')
                                 results.put(dict(records=records))
                             except BaseException:
                                 stop.set();results.put(dict(error=traceback.format_exc()))

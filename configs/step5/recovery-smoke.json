@@ -107,9 +107,9 @@
   "retention": {
     "enabled": true,
     "resume_checkpoints": 2,
-    "replay_rounds": 4,
-    "quarantine_hours": 24,
-    "evaluation_samples": 4,
+    "replay_rounds": 2,
+    "quarantine_hours": 0,
+    "evaluation_samples": 1,
     "profile_traces": 2
   },
   "population": {
@@ -118,10 +118,10 @@
   },
   "evaluation_schedule": {
     "enabled": false,
-    "monitor_every_games": 1600,
-    "broader_every_games": 6400,
-    "monitor_setups": 2,
-    "broader_setups": 2,
+    "monitor_every_games": 6400,
+    "broader_every_games": 25600,
+    "monitor_setups": 1,
+    "broader_setups": 1,
     "seed": 910000
   },
   "legacy_budget": {
