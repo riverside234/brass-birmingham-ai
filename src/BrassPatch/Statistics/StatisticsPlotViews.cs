@@ -14,25 +14,26 @@ namespace BrassPatch.Statistics
             if(s.Player.HasValue)return StatisticsTheme.Player(s.Player.Value);
             string id=s.Id??"";if(id.Contains("/"))id=id.Substring(id.LastIndexOf('/')+1);
             switch(id) {
-                case "Blue": case "Canal": case "Links": case "Network": case "Market": case "Location": case "L1": return StatisticsTheme.Hex(0x287A9C);
-                case "Yellow": case "Rail": case "Merchant": case "Loan": case "Wild Location": case "L2":return StatisticsTheme.Hex(0x9D7024);
+                case "base-cash": case "awarded": case "delay": case "Blue": case "Canal": case "Links": case "Network": case "Market": case "Location": case "L1": return StatisticsTheme.Hex(0x287A9C);
+                case "resource-cash": case "Yellow": case "Rail": case "Merchant": case "Loan": case "Wild Location": case "L2":return StatisticsTheme.Hex(0x9D7024);
                 case "Purple":case "Violet":case "Iron":case "Opponents":case "Industry":case "Develop":case "L3+":return StatisticsTheme.Hex(0x77539D);
                 case "Red":case "Penalty":case "negative":case "Unsold goods":case "Removed unflipped":return StatisticsTheme.Hex(0xB34F45);
                 case "positive":case "flipped":case "Own":case "Other flipped":case "Beer":case "Sell":return StatisticsTheme.Hex(0x367B65);
                 case "Industries":return StatisticsTheme.Hex(0x396F4E);
+                case "VP":return StatisticsTheme.Hex(0x287A9C);
                 case "total":case "built":case "Build":case "Introductory":return StatisticsTheme.Hex(0x8A672B);
                 case "Coal":return StatisticsTheme.Hex(0x505B62);
                 case "Wild Industry":case "Scout":return StatisticsTheme.Hex(0xA44B78);
                 case "seat1":return StatisticsTheme.Hex(0x287A9C);case "seat2":return StatisticsTheme.Hex(0x9D7024);case "seat3":return StatisticsTheme.Hex(0x77539D);case "seat4":return StatisticsTheme.Hex(0xB34F45);
                 case "Cyan":case "Scored both eras":return StatisticsTheme.Hex(0x2E7C83);
                 case "CottonMill":return StatisticsTheme.Hex(0xA86B30);case "Manufacturer":return StatisticsTheme.Hex(0x287A9C);case "Pottery":return StatisticsTheme.Hex(0xA44B78);case "Brewery":return StatisticsTheme.Hex(0x367B65);case "CoalMine":return StatisticsTheme.Hex(0x505B62);case "IronWorks":return StatisticsTheme.Hex(0x77539D);
-                case "unflipped":case "Unflipped supplier":case "Pass":case "Unclassified":return StatisticsTheme.Hex(0x657078);
+                case "opportunity":return StatisticsTheme.Hex(0xCADBD9);case "unflipped":case "Unflipped supplier":case "Pass":case "Unclassified":return StatisticsTheme.Hex(0x657078);
                 default:return StatisticsTheme.Hex(0x657078);
             }
         }
         public static int Shape(string id)
         {
-            switch(id){case "Build":case "CottonMill":case "Blue":case "flipped":return 1;case "Network":case "CoalMine":case "Yellow":return 3;case "Develop":case "Pottery":case "Purple":case "Violet":case "farm":return 2;case "Loan":case "IronWorks":return 4;case "Scout":case "Manufacturer":return 5;case "Pass":return 6;case "Unclassified":return 7;case "merchant":return 3;default:return 0;}
+            switch(id){case "Build":case "CottonMill":case "Blue":case "flipped":return 1;case "Rail":case "Network":case "CoalMine":case "Yellow":return 3;case "Develop":case "Pottery":case "Purple":case "Violet":case "farm":return 2;case "Loan":case "IronWorks":return 4;case "Scout":case "Manufacturer":return 5;case "Pass":return 6;case "Unclassified":return 7;case "merchant":return 3;default:return 0;}
         }
     }
     public sealed class StatisticsPlotGraphic : MaskableGraphic,IPointerEnterHandler,IPointerExitHandler,IPointerClickHandler
@@ -51,9 +52,9 @@ namespace BrassPatch.Statistics
         public Vector2 Point(StatisticsPlotMark m)
         {
             float y=Area.yMax-(m.Row+.5f)*RowHeight;
-            if(Horizontal){double value=Plot.Kind==StatisticsPlotKind.Waterfall?m.X+m.Y:m.Y;
+            if(Horizontal){double value=Plot.Kind==StatisticsPlotKind.Waterfall?m.X+m.Y:(m.Missing||Double.IsNaN(m.Y)?0:m.Y);
                 if(Plot.Kind==StatisticsPlotKind.StackedBars){value=Plot.Marks.TakeWhile(x=>x!=m).Where(x=>x.Row==m.Row&&x.Facet==m.Facet&&Math.Sign(x.Y)==Math.Sign(m.Y)).Sum(x=>x.Y)+m.Y;double total=Plot.Marks.Where(x=>x.Row==m.Row&&x.Facet==m.Facet).Sum(x=>x.Y);if(Plot.Percent)value=total<=0?0:value*100/total;if(Plot.EraPairs)y+=(m.Facet==1?13:-13)*Unit;}
-                if(Plot.Kind==StatisticsPlotKind.PairedBars){int s=Plot.Series.FindIndex(x=>x.Id==m.Series);y+=((Plot.Series.Count-1)/2f-s)*Math.Min(18*Unit,RowHeight/(Plot.Series.Count+1));}
+                if(Plot.Kind==StatisticsPlotKind.PairedBars||Plot.Kind==StatisticsPlotKind.PairedLollipop){int s=Plot.Series.FindIndex(x=>x.Id==m.Series);y+=((Plot.Series.Count-1)/2f-s)*Math.Min((Plot.Kind==StatisticsPlotKind.PairedLollipop?44:18)*Unit,RowHeight/(Plot.Series.Count+1));}
                 if(Plot.Kind==StatisticsPlotKind.DelayDots)y+=((Plot.Marks.IndexOf(m)%5)-2)*3.5f*Unit;
                 return new Vector2(X(value),y);
             }
@@ -81,30 +82,33 @@ namespace BrassPatch.Statistics
         {
             Vector2 q=Point(m);
             if(Plot.Kind==StatisticsPlotKind.Heatmap)return new Rect(q.x-Area.width/Math.Max(1,Plot.Columns.Count)/2+2*Unit,q.y-RowHeight/2+2*Unit,Area.width/Math.Max(1,Plot.Columns.Count)-4*Unit,RowHeight-4*Unit);
-            if(Plot.Kind==StatisticsPlotKind.StackedBars){double total=Plot.Marks.Where(x=>x.Row==m.Row&&x.Facet==m.Facet).Sum(x=>x.Y),size=Plot.Percent?(total==0?0:m.Y*100/total):m.Y;float start=q.x-(X(size)-X(0));float h=Plot.EraPairs?18*Unit:26*Unit;return new Rect(Math.Min(start,q.x),q.y-h/2,Math.Max(1*Unit,Math.Abs(q.x-start)),h);}
+            if(Plot.Kind==StatisticsPlotKind.Bullet)return new Rect(X(0),q.y-14*Unit,Math.Max(Unit,X(Math.Max(m.End,m.Y))-X(0)),28*Unit);if(Plot.Kind==StatisticsPlotKind.StackedBars){double total=Plot.Marks.Where(x=>x.Row==m.Row&&x.Facet==m.Facet).Sum(x=>x.Y),size=Plot.Percent?(total==0?0:m.Y*100/total):m.Y;float start=q.x-(X(size)-X(0));float h=Plot.EraPairs?18*Unit:26*Unit;return new Rect(Math.Min(start,q.x),q.y-h/2,Math.Max(1*Unit,Math.Abs(q.x-start)),h);}
             if(Plot.Kind==StatisticsPlotKind.PairedBars||Plot.Kind==StatisticsPlotKind.Waterfall){float start=Plot.Kind==StatisticsPlotKind.Waterfall?X(m.X):X(0);float thick=Plot.Kind==StatisticsPlotKind.PairedBars?Math.Max(3*Unit,Math.Min(15*Unit,RowHeight/(Plot.Series.Count+1)-3*Unit)):26*Unit;return new Rect(Math.Min(start,q.x),q.y-thick/2,Math.Max(1*Unit,Math.Abs(q.x-start)),thick);}
             if(Plot.Kind==StatisticsPlotKind.Columns){float start=Y(0),width=ColumnBand()/Math.Max(1,Plot.Series.Count)*.84f;return new Rect(q.x-width/2,Math.Min(start,q.y),width,Math.Max(1*Unit,Math.Abs(q.y-start)));}
             if(Plot.Kind==StatisticsPlotKind.StackedColumns){float start=q.y-(Y(m.Y)-Y(0));return new Rect(q.x-ColumnBand()/2,Math.Min(start,q.y),ColumnBand(),Math.Max(1*Unit,Math.Abs(q.y-start)));}
             if(Plot.Kind==StatisticsPlotKind.Lifespans)return new Rect(Math.Min(q.x,X(m.End))-6*Unit,q.y-10*Unit,Math.Abs(X(m.End)-q.x)+12*Unit,20*Unit);
-            if(Plot.Kind==StatisticsPlotKind.Lollipop||Plot.Kind==StatisticsPlotKind.Dumbbell)return new Rect(q.x-12*Unit,q.y-12*Unit,24*Unit,24*Unit);
+            if(Plot.Kind==StatisticsPlotKind.PairedLollipop||Plot.Kind==StatisticsPlotKind.Lollipop||Plot.Kind==StatisticsPlotKind.Dumbbell)return new Rect(q.x-12*Unit,q.y-12*Unit,24*Unit,24*Unit);
             float radius=Plot.Kind==StatisticsPlotKind.MiniMap?Math.Min(18,8+m.Row*2)*Unit+6*Unit:12*Unit;
             return new Rect(q.x-radius,q.y-radius,radius*2,radius*2);
         }
         protected override void OnPopulateMesh(VertexHelper mesh)
         {
             mesh.Clear();if(Plot==null)return;
+            if(Horizontal||Plot.Kind==StatisticsPlotKind.EventLanes||Plot.Kind==StatisticsPlotKind.Lifespans)
+                for(int row=0;row<Plot.Rows.Count;row++)if(row%2==0){var band=StatisticsTheme.Alternate;band.a=.46f;Quad(mesh,new Rect(Area.xMin,Area.yMax-(row+1)*RowHeight,Area.width,RowHeight),band);}
             if(Plot.Kind==StatisticsPlotKind.MiniMap&&Panel!=null){foreach(var m in Plot.Marks){var city=Panel.Report.Locations.FirstOrDefault(l=>l.City==m.Label);if(city==null)continue;foreach(var neighbor in city.Neighbors){var other=Plot.Marks.FirstOrDefault(x=>x.Label==neighbor);if(other!=null&&String.CompareOrdinal(m.Label,other.Label)<0)Line(mesh,Point(m),Point(other),StatisticsTheme.Grid,1.4f*Unit);}}}
             else if(Plot.Kind!=StatisticsPlotKind.Heatmap) {
                 if(XAxis!=null)foreach(var tick in XAxis.Ticks)Line(mesh,new Vector2(X(tick.Value),Area.yMin),new Vector2(X(tick.Value),Area.yMax),Math.Abs(tick.Value)<1e-8?StatisticsTheme.Border:StatisticsTheme.Grid,(Math.Abs(tick.Value)<1e-8?1.8f:1)*Unit);
                 if(YAxis!=null)foreach(var tick in YAxis.Ticks)Line(mesh,new Vector2(Area.xMin,Y(tick.Value)),new Vector2(Area.xMax,Y(tick.Value)),Math.Abs(tick.Value)<1e-8?StatisticsTheme.Border:StatisticsTheme.Grid,(Math.Abs(tick.Value)<1e-8?1.8f:1)*Unit);
             }
+            if(Plot.Kind==StatisticsPlotKind.Bullet&&!Hidden.Contains("opportunity"))foreach(var m in Plot.Marks.Where(m=>!m.Missing&&m.Row>=0)){var q=Point(m);Quad(mesh,new Rect(X(0),q.y-14*Unit,Math.Max(Unit,X(m.End)-X(0)),28*Unit),Tint("opportunity"));}
             foreach(var m in Plot.Marks.Where(Visible)){
                 var q=Point(m);Color tint=Tint(m.Series);int shape=StatisticsPlotPalette.Shape(m.Symbol??m.Series);
                 if(Plot.Kind==StatisticsPlotKind.Heatmap)Quad(mesh,MarkBounds(m),HeatColor(m));
                 else if(Plot.Kind==StatisticsPlotKind.StackedBars||Plot.Kind==StatisticsPlotKind.PairedBars||Plot.Kind==StatisticsPlotKind.Waterfall||Plot.Kind==StatisticsPlotKind.Columns||Plot.Kind==StatisticsPlotKind.StackedColumns){Quad(mesh,MarkBounds(m),tint);if(Plot.Kind==StatisticsPlotKind.Waterfall){var next=Plot.Marks.FirstOrDefault(x=>x.Row==m.Row+1);if(next!=null)Line(mesh,new Vector2(X(m.X+m.Y),q.y-13*Unit),new Vector2(X(m.X+m.Y),Point(next).y+13*Unit),StatisticsTheme.Border,1.5f*Unit);}}
                 else if(Plot.Kind==StatisticsPlotKind.Step){var next=Plot.Marks.SkipWhile(x=>x!=m).Skip(1).FirstOrDefault(x=>x.Series==m.Series);if(next!=null){var to=Point(next);Line(mesh,q,new Vector2(to.x,q.y),tint,2.7f*Unit);Line(mesh,new Vector2(to.x,q.y),to,tint,2.7f*Unit);}Symbol(mesh,q,3.5f*Unit,tint,shape);}
                 else if(Plot.Kind==StatisticsPlotKind.Dumbbell){var pair=Plot.Marks.FirstOrDefault(x=>x.Row==m.Row&&x!=m&&Visible(x));if(pair!=null)Line(mesh,q,Point(pair),StatisticsTheme.Border,2.5f*Unit);Symbol(mesh,q,7*Unit,tint,shape);}
-                else if(Plot.Kind==StatisticsPlotKind.Lollipop){Line(mesh,new Vector2(X(0),q.y),q,tint,2.5f*Unit);Symbol(mesh,q,7*Unit,tint,shape);}
+                else if(Plot.Kind==StatisticsPlotKind.Bullet){Quad(mesh,new Rect(X(0),q.y-7*Unit,Math.Max(Unit,q.x-X(0)),14*Unit),tint);}else if(Plot.Kind==StatisticsPlotKind.Lollipop||Plot.Kind==StatisticsPlotKind.PairedLollipop){Line(mesh,new Vector2(X(0),q.y),q,tint,2.5f*Unit);Symbol(mesh,q,7*Unit,tint,shape);}
                 else if(Plot.Kind==StatisticsPlotKind.Lifespans){Line(mesh,q,new Vector2(X(m.End),q.y),tint,4*Unit);Symbol(mesh,q,5*Unit,tint,1);Symbol(mesh,new Vector2(X(m.End),q.y),6*Unit,tint,m.Symbol=="removed"?2:m.Symbol=="open"?1:0);}
                 else Symbol(mesh,q,Plot.Kind==StatisticsPlotKind.MiniMap?Math.Min(18,8+m.Row*2)*Unit:6.5f*Unit,tint,shape);
                 string selected;if(Panel!=null&&Panel.SelectedMarks.TryGetValue(Plot.Id,out selected)&&selected==Identity(m)){var bounds=MarkBounds(m);bounds.xMin-=3*Unit;bounds.xMax+=3*Unit;bounds.yMin-=3*Unit;bounds.yMax+=3*Unit;Outline(mesh,bounds,StatisticsTheme.Focus,2.5f*Unit);}
@@ -171,16 +175,17 @@ namespace BrassPatch.Statistics
                 legendBoxes.Add(new Rect(legendX,legendY,w,h));legendX+=w+8*scale;legendLine=Math.Max(legendLine,h);
             }
             float legendSpace=plot.Series.Count==0?12*scale:legendY+legendLine+16*scale;measuring.fontSize=24*scale;measuring.enableWordWrapping=false;
-            float rowHeight=(plot.Kind==StatisticsPlotKind.Heatmap?56:plot.Kind==StatisticsPlotKind.PairedBars?Math.Max(62,plot.Series.Count*24):plot.Kind==StatisticsPlotKind.Dumbbell?78:56)*scale;
+            float rowHeight=(plot.Kind==StatisticsPlotKind.Bullet?76:plot.Kind==StatisticsPlotKind.PairedLollipop?100:plot.Kind==StatisticsPlotKind.Heatmap?(plot.HeatTotals?56:76):plot.Kind==StatisticsPlotKind.PairedBars?Math.Max(62,plot.Series.Count*24):plot.Kind==StatisticsPlotKind.Dumbbell?78:56)*scale;
             float graphHeight=rows?Math.Max(132*scale,plot.Rows.Count*rowHeight):plot.Kind==StatisticsPlotKind.MiniMap?660*scale:330*scale;
             float labelWidth=rows?Math.Min(width*.30f,285*scale):90*scale;
             if(rows&&plot.Rows.Count>0){measuring.fontSize=21*scale;labelWidth=Math.Min(width*.36f,Math.Max(190*scale,plot.Rows.Max(s=>measure(s))+30*scale));measuring.fontSize=24*scale;}
+            if(rows&&plot.Rows.Count>0){measuring.fontSize=21*scale;measuring.enableWordWrapping=true;rowHeight=Math.Max(rowHeight,plot.Rows.Max(s=>measuring.GetPreferredValues(s,labelWidth-24*scale,0).y)+12*scale);graphHeight=Math.Max(132*scale,plot.Rows.Count*rowHeight);measuring.enableWordWrapping=false;measuring.fontSize=24*scale;}
             float graphWidth=width;
             float heatColumn=100*scale;
             if(plot.Kind==StatisticsPlotKind.Heatmap){measuring.fontSize=21*scale;heatColumn=Math.Min(320*scale,Math.Max(100*scale,plot.Columns.Select(measure).DefaultIfEmpty(100*scale).Max()+20*scale));graphWidth=Math.Max(width,labelWidth+Math.Max(1,plot.Columns.Count)*heatColumn+100*scale);measuring.fontSize=24*scale;}
             if(plot.Kind==StatisticsPlotKind.Columns||plot.Kind==StatisticsPlotKind.StackedColumns)graphWidth=Math.Max(width,110*scale+plot.Columns.Count*(plot.Kind==StatisticsPlotKind.StackedColumns?172:70)*scale);
             if(plot.Kind==StatisticsPlotKind.MiniMap)graphWidth=Math.Max(width,1280*scale);
-            float topSpace=plot.Kind==StatisticsPlotKind.Heatmap?100*scale:plot.Kind==StatisticsPlotKind.MiniMap?35*scale:38*scale;
+            float topSpace=plot.Kind==StatisticsPlotKind.Heatmap?100*scale:plot.Kind==StatisticsPlotKind.MiniMap?35*scale:horizontal||lanes?86*scale:38*scale;
             if(plot.Kind==StatisticsPlotKind.Heatmap){measuring.fontSize=21*scale;measuring.enableWordWrapping=true;float cellWidth=(graphWidth-labelWidth-95*scale)/Math.Max(1,plot.Columns.Count);topSpace=Math.Max(topSpace,plot.Columns.Select(s=>measuring.GetPreferredValues(s,cellWidth,0).y+44*scale).DefaultIfEmpty(topSpace).Max());measuring.enableWordWrapping=false;measuring.fontSize=24*scale;}
             float bottomSpace=plot.Kind==StatisticsPlotKind.StackedColumns?145*scale:plot.Kind==StatisticsPlotKind.Heatmap?95*scale:100*scale;
             float chartHeight=graphHeight+topSpace+bottomSpace;
@@ -188,7 +193,7 @@ namespace BrassPatch.Statistics
             Transform container=StatisticsWidgets.Rect(root,"Plot frame",new Vector2(0,-legendSpace),new Vector2(width,chartHeight));
             if(graphWidth>width+1){var scroll=StatisticsWidgets.Scroll(container,"Plot horizontal scroll",Vector2.zero,new Vector2(width,chartHeight+14*unit),unit,true);scroll.content.sizeDelta=new Vector2(graphWidth,chartHeight);container=scroll.content;}
             var chartRect=StatisticsWidgets.Rect(container,"Plot marks",Vector2.zero,new Vector2(graphWidth,chartHeight));var graphic=chartRect.gameObject.AddComponent<StatisticsPlotGraphic>();graphic.Plot=plot;graphic.Panel=panel;graphic.Unit=scale;graphic.RowHeight=rowHeight;
-            float rightGutter=plot.Id=="link-sources"||plot.Kind==StatisticsPlotKind.Dumbbell?235*scale:plot.Id=="conversion"?205*scale:plot.Kind==StatisticsPlotKind.Step||plot.Kind==StatisticsPlotKind.DelayDots?150*scale:plot.XUnit==StatisticsAxisUnit.Ratio||plot.XUnit==StatisticsAxisUnit.Price?195*scale:110*scale;
+            float rightGutter=plot.Kind==StatisticsPlotKind.Bullet?330*scale:plot.Id=="link-sources"||plot.Kind==StatisticsPlotKind.Dumbbell?235*scale:plot.Id=="conversion"?205*scale:plot.Kind==StatisticsPlotKind.Step||plot.Kind==StatisticsPlotKind.DelayDots?150*scale:plot.XUnit==StatisticsAxisUnit.Ratio||plot.XUnit==StatisticsAxisUnit.Price?195*scale:110*scale;
             graphic.Area=new Rect(labelWidth,-topSpace-graphHeight,graphWidth-labelWidth-rightGutter,graphHeight);
             if(plot.Kind==StatisticsPlotKind.Heatmap)graphic.Area=new Rect(labelWidth,-topSpace-graphHeight,graphWidth-labelWidth-95*scale,graphHeight);
             if(plot.Kind==StatisticsPlotKind.MiniMap)graphic.Area=new Rect(95*scale,-topSpace-graphHeight+55*scale,graphWidth-235*scale,graphHeight-120*scale);
@@ -197,13 +202,13 @@ namespace BrassPatch.Statistics
             if(horizontal){
                 if(plot.Kind==StatisticsPlotKind.StackedBars){minX=Math.Min(0,marks.GroupBy(m=>new{m.Row,m.Facet}).Select(g=>g.Where(m=>m.Y<0).Sum(m=>m.Y)).DefaultIfEmpty().Min());maxX=plot.Percent?100:marks.GroupBy(m=>new{m.Row,m.Facet}).Select(g=>g.Where(m=>m.Y>0).Sum(m=>m.Y)).DefaultIfEmpty().Max();}
                 else if(plot.Kind==StatisticsPlotKind.Waterfall){minX=marks.SelectMany(m=>new[]{m.X,m.X+m.Y}).DefaultIfEmpty().Min();maxX=marks.SelectMany(m=>new[]{m.X,m.X+m.Y}).DefaultIfEmpty().Max();}
-                else{minX=marks.Select(m=>m.Y).DefaultIfEmpty().Min();maxX=marks.Select(m=>m.Y).DefaultIfEmpty().Max();}
+                else{minX=marks.Select(m=>m.Y).DefaultIfEmpty().Min();maxX=marks.Select(m=>plot.Kind==StatisticsPlotKind.Bullet?Math.Max(m.Y,m.End):m.Y).DefaultIfEmpty().Max();}
             }else{minX=marks.Select(m=>m.X).DefaultIfEmpty().Min();maxX=marks.Select(m=>plot.Kind==StatisticsPlotKind.Lifespans?m.End:m.X).DefaultIfEmpty().Max();minY=marks.Select(m=>m.Y).DefaultIfEmpty().Min();maxY=plot.Kind==StatisticsPlotKind.StackedColumns?marks.GroupBy(m=>m.Row).Select(g=>g.Sum(m=>m.Y)).DefaultIfEmpty().Max():marks.Select(m=>m.Y).DefaultIfEmpty().Max();}
             if(plot.SharedMax.HasValue)maxX=plot.SharedMax.Value;
             bool category=plot.Kind==StatisticsPlotKind.Columns||plot.Kind==StatisticsPlotKind.StackedColumns;
             if(plot.Kind!=StatisticsPlotKind.Heatmap&&plot.Kind!=StatisticsPlotKind.MiniMap){
                 if(horizontal||lanes){graphic.XAxis=StatisticsAxisLayout.Create(minX,maxX,plot.Percent?StatisticsAxisUnit.Percent:lanes?StatisticsAxisUnit.Turn:plot.XUnit,graphic.Area.width,measure);graphic.XMin=graphic.XAxis.Min;graphic.XMax=graphic.XAxis.Max;}
-                else{graphic.YAxis=StatisticsAxisLayout.Create(minY,maxY,plot.YUnit,graphic.Area.height,s=>34*scale,true);float gutter=Math.Max(90*scale,graphic.YAxis.Ticks.Max(t=>measure(t.Label))+28*scale);graphic.Area=new Rect(gutter,graphic.Area.yMin,graphWidth-gutter-110*scale,graphic.Area.height);graphic.YMin=graphic.YAxis.Min;graphic.YMax=graphic.YAxis.Max;
+                else{graphic.YAxis=StatisticsAxisLayout.Create(minY,maxY,plot.YUnit,graphic.Area.height,s=>34*scale,true);float gutter=Math.Max(90*scale,graphic.YAxis.Ticks.Max(t=>measure(t.Label))+28*scale);graphic.Area=new Rect(gutter,graphic.Area.yMin,graphWidth-gutter-rightGutter,graphic.Area.height);graphic.YMin=graphic.YAxis.Min;graphic.YMax=graphic.YAxis.Max;
                     if(category){graphic.XMin=-.5;graphic.XMax=Math.Max(.5,plot.Columns.Count-.5);}
                     else {graphic.XAxis=StatisticsAxisLayout.Create(minX,maxX,plot.XUnit,graphic.Area.width,measure);graphic.XMin=graphic.XAxis.Min;graphic.XMax=graphic.XAxis.Max;}
                 }
@@ -211,20 +216,23 @@ namespace BrassPatch.Statistics
             if(rows)for(int i=0;i<plot.Rows.Count;i++)Label(container,font,"Axis row "+i,plot.Rows[i],new Vector2(12*scale,graphic.Area.yMax-i*rowHeight),new Vector2(labelWidth-24*scale,rowHeight),21*scale,true,TextAlignmentOptions.MidlineRight);
             if(plot.Kind==StatisticsPlotKind.Heatmap){
                 for(int c=0;c<plot.Columns.Count;c++)Label(container,font,"Axis column "+c,plot.Columns[c],new Vector2(graphic.Area.xMin+c*graphic.Area.width/plot.Columns.Count,-38*scale),new Vector2(graphic.Area.width/plot.Columns.Count,topSpace-42*scale),21*scale,true);
-                foreach(var m in plot.Marks.Where(m=>!graphic.Hidden.Contains(m.Series))){var q=graphic.Point(m);var text=Label(container,font,"Heat value",m.Missing||Double.IsNaN(m.Y)?"—":m.Y.ToString("0.##"),new Vector2(q.x-38*scale,q.y+18*scale),new Vector2(76*scale,36*scale),22*scale);text.color=StatisticsTheme.ReadableOn(graphic.HeatColor(m));}
-                if(!plot.DiscreteHeat){foreach(int row in Enumerable.Range(0,plot.Rows.Count))Label(container,font,"Heat row total",plot.Marks.Where(m=>m.Row==row&&!m.Missing).Sum(m=>m.Y).ToString("0"),new Vector2(graphic.Area.xMax+8*scale,graphic.Area.yMax-row*rowHeight),new Vector2(76*scale,rowHeight),21*scale);foreach(int col in Enumerable.Range(0,plot.Columns.Count))Label(container,font,"Heat column total",plot.Marks.Where(m=>m.Column==col&&!m.Missing).Sum(m=>m.Y).ToString("0"),new Vector2(graphic.Area.xMin+col*graphic.Area.width/Math.Max(1,plot.Columns.Count),graphic.Area.yMin-8*scale),new Vector2(graphic.Area.width/Math.Max(1,plot.Columns.Count),34*scale),21*scale);Label(container,font,"Heat totals key","Totals",new Vector2(graphic.Area.xMax,graphic.Area.yMin-8*scale),new Vector2(85*scale,34*scale),19*scale);}
+                foreach(var m in plot.Marks.Where(m=>!graphic.Hidden.Contains(m.Series))){var q=graphic.Point(m);var text=Label(container,font,"Heat value",m.Missing||Double.IsNaN(m.Y)?"—":m.Y.ToString("0.##"),new Vector2(q.x-38*scale,q.y+18*scale),new Vector2(76*scale,36*scale),22*scale);text.color=StatisticsTheme.ReadableOn(graphic.HeatColor(m));if(!plot.HeatTotals&&m.OtherLabel!=null){text.rectTransform.anchoredPosition+=new Vector2(0,12*scale);var sample=Label(container,font,"Heat sample",m.OtherLabel,new Vector2(q.x-45*scale,q.y-4*scale),new Vector2(90*scale,28*scale),18*scale);sample.color=text.color;}}
+                if(!plot.DiscreteHeat&&plot.HeatTotals){foreach(int row in Enumerable.Range(0,plot.Rows.Count))Label(container,font,"Heat row total",plot.Marks.Where(m=>m.Row==row&&!m.Missing).Sum(m=>m.Y).ToString("0"),new Vector2(graphic.Area.xMax+8*scale,graphic.Area.yMax-row*rowHeight),new Vector2(76*scale,rowHeight),21*scale);foreach(int col in Enumerable.Range(0,plot.Columns.Count))Label(container,font,"Heat column total",plot.Marks.Where(m=>m.Column==col&&!m.Missing).Sum(m=>m.Y).ToString("0"),new Vector2(graphic.Area.xMin+col*graphic.Area.width/Math.Max(1,plot.Columns.Count),graphic.Area.yMin-8*scale),new Vector2(graphic.Area.width/Math.Max(1,plot.Columns.Count),34*scale),21*scale);Label(container,font,"Heat totals key","Totals",new Vector2(graphic.Area.xMax,graphic.Area.yMin-8*scale),new Vector2(85*scale,34*scale),19*scale);}
                 Label(container,font,"Heat row axis",plot.YLabel,new Vector2(12*scale,-2*scale),new Vector2(labelWidth-24*scale,32*scale),20*scale,false,TextAlignmentOptions.MidlineRight);
                 Label(container,font,"Heat column axis",plot.XLabel,new Vector2(graphic.Area.xMin,graphic.Area.yMin-52*scale),new Vector2(graphic.Area.width,32*scale),21*scale);
-                Label(container,font,"Heat scale",plot.DiscreteHeat?"Positions: "+String.Join(" · ",new[]{"1st blue","2nd ochre","3rd violet","4th red"}.Take(panel.Report.Players.Count)):"Shared intensity: 0 → "+marks.Select(m=>m.Y).DefaultIfEmpty().Max()+" "+(plot.Id=="industry-vp"?"VP":"units"),new Vector2(labelWidth,-2*scale),new Vector2(graphWidth-labelWidth-20*scale,32*scale),20*scale);
+                HeatKey(container,font,graphic,scale,panel.Report.Players.Count,width);
+                if(!plot.DiscreteHeat&&plot.HeatTotals)Label(container,font,"Heat row totals heading","Total",new Vector2(graphic.Area.xMax+8*scale,-38*scale),new Vector2(76*scale,topSpace-42*scale),21*scale);
             }else if(plot.Kind==StatisticsPlotKind.MiniMap){MapLabels(container,font,graphic,scale);}
             else {
                 if(graphic.XAxis!=null)foreach(var tick in graphic.XAxis.Ticks) {
                     float w=Math.Max(44*scale,measure(tick.Label)+8*scale),x=graphic.X(tick.Value);Label(container,font,"Value tick X "+tick.Value,tick.Label,new Vector2(x-w/2,graphic.Area.yMin-10*scale),new Vector2(w,34*scale),24*scale);
+                    if(horizontal||lanes)Label(container,font,"Value tick top "+tick.Value,tick.Label,new Vector2(x-w/2,graphic.Area.yMax+42*scale),new Vector2(w,34*scale),24*scale);
                     var line=StatisticsWidgets.Rect(container,"X tick mark",new Vector2(x,graphic.Area.yMin),new Vector2(1.5f*scale,7*scale));line.gameObject.AddComponent<Image>().color=StatisticsTheme.Border;
                 }
                 if(graphic.YAxis!=null)foreach(var tick in graphic.YAxis.Ticks)Label(container,font,"Value tick Y "+tick.Value,tick.Label,new Vector2(8*scale,graphic.Y(tick.Value)+18*scale),new Vector2(graphic.Area.xMin-20*scale,36*scale),24*scale,false,TextAlignmentOptions.MidlineRight);
                 if(category){int every=Math.Max(1,(int)Math.Ceiling(plot.Columns.Count/(graphic.Area.width/(plot.Kind==StatisticsPlotKind.StackedColumns?150:66)/scale)));for(int c=0;c<plot.Columns.Count;c+=every){float band=graphic.Area.width/plot.Columns.Count;Label(container,font,"X category "+c,plot.Columns[c],new Vector2(graphic.X(c)-band/2,graphic.Area.yMin-12*scale),new Vector2(band,plot.Kind==StatisticsPlotKind.StackedColumns?94*scale:32*scale),21*scale,plot.Kind==StatisticsPlotKind.StackedColumns);}}
                 Label(container,font,"X axis",plot.XLabel,new Vector2(graphic.Area.xMin,graphic.Area.yMin-(category&&plot.Kind==StatisticsPlotKind.StackedColumns?106:55)*scale),new Vector2(graphic.Area.width,32*scale),21*scale);
+                if(horizontal||lanes)Label(container,font,"Top axis unit",plot.XLabel,new Vector2(graphic.Area.xMin,-2*scale),new Vector2(graphic.Area.width,32*scale),20*scale,false,TextAlignmentOptions.MidlineLeft);
                 if(!horizontal&&!lanes)Label(container,font,"Y axis",plot.YLabel,new Vector2(graphic.Area.xMin,-2*scale),new Vector2(graphic.Area.width,32*scale),21*scale);
                 DirectLabels(container,font,graphic,scale);
                 if((plot.Kind==StatisticsPlotKind.Step||lanes)&&panel!=null){var entry=panel.Report.Boundaries.FirstOrDefault(b=>b.Name=="Rail entry");if(entry!=null&&entry.Turn>=graphic.XMin&&entry.Turn<=graphic.XMax){var line=StatisticsWidgets.Rect(container,"Rail era boundary",new Vector2(graphic.X(entry.Turn),graphic.Area.yMax),new Vector2(2*scale,graphic.Area.height));line.gameObject.AddComponent<Image>().color=StatisticsTheme.Accent;line.GetComponent<Image>().raycastTarget=false;Label(container,font,"Era Canal band","Canal",new Vector2(graphic.Area.xMin,graphic.Area.yMin-78*scale),new Vector2(Math.Max(60*scale,graphic.X(entry.Turn)-graphic.Area.xMin),24*scale),19*scale);Label(container,font,"Era Rail band","Rail",new Vector2(graphic.X(entry.Turn),graphic.Area.yMin-78*scale),new Vector2(Math.Max(60*scale,graphic.Area.xMax-graphic.X(entry.Turn)),24*scale),19*scale);}}
@@ -242,30 +250,54 @@ namespace BrassPatch.Statistics
             }
             UnityEngine.Object.Destroy(measuring.gameObject);return root.sizeDelta.y+12*unit;
         }
+        static void HeatKey(Transform parent,TMP_FontAsset font,StatisticsPlotGraphic graphic,float scale,int players,float visibleWidth)
+        {
+            var plot=graphic.Plot;float left=graphic.Area.xMin,available=Math.Min(graphic.Area.width,visibleWidth-left-28*scale);
+            if(plot.DiscreteHeat){
+                for(int i=0;i<players;i++){
+                    float x=left+i*available/players;var glyph=StatisticsWidgets.Rect(parent,"Position key "+(i+1),new Vector2(x,-8*scale),new Vector2(18,18)*scale).gameObject.AddComponent<StatisticsLegendGlyph>();glyph.Identity="seat"+(i+1);glyph.color=StatisticsPlotPalette.Color(new StatisticsPlotSeries{Id=glyph.Identity});glyph.raycastTarget=false;
+                    Label(parent,font,"Position label "+(i+1),new[]{"1st · first","2nd","3rd","4th"}[i],new Vector2(x+25*scale,-2*scale),new Vector2(available/players-30*scale,32*scale),20*scale,false,TextAlignmentOptions.MidlineLeft);
+                }
+                return;
+            }
+            double max=plot.Marks.Where(m=>!m.Missing&&!Double.IsNaN(m.Y)).Select(m=>Math.Abs(m.Y)).DefaultIfEmpty().Max();
+            float barWidth=Math.Min(210*scale,available*.28f),start=left+34*scale;
+            Label(parent,font,"Heat scale zero","0",new Vector2(left,-2*scale),new Vector2(26*scale,32*scale),20*scale);
+            var tint=StatisticsPlotPalette.Color(plot.Series.FirstOrDefault()??new StatisticsPlotSeries());
+            for(int i=0;i<24;i++){var strip=StatisticsWidgets.Rect(parent,"Heat scale band",new Vector2(start+i*barWidth/24,-9*scale),new Vector2(barWidth/24+1,14*scale));var fill=strip.gameObject.AddComponent<Image>();fill.color=Color.Lerp(StatisticsTheme.Alternate,tint,i/23f);fill.raycastTarget=false;}
+            Label(parent,font,"Heat scale",max.ToString("0.##")+" "+(plot.HeatUnit??(plot.Id=="industry-vp"?"VP":"units"))+" · shared scale",new Vector2(start+barWidth+12*scale,-2*scale),new Vector2(Math.Max(1,available-barWidth-46*scale),32*scale),20*scale,false,TextAlignmentOptions.MidlineLeft);
+        }
         static void DirectLabels(Transform parent,TMP_FontAsset font,StatisticsPlotGraphic graphic,float scale)
         {
             var plot=graphic.Plot;var marks=plot.Marks.Where(m=>!graphic.Hidden.Contains(m.Series)&&m.Row>=0).ToArray();
+            if(plot.Kind==StatisticsPlotKind.StackedBars)foreach(var m in marks.Where(m=>!m.Missing&&m.Y>0)){
+                var bounds=graphic.MarkBounds(m);double total=plot.Marks.Where(x=>x.Row==m.Row&&x.Facet==m.Facet).Sum(x=>x.Y);
+                string value=plot.Percent?(total>0?(m.Y*100/total).ToString("0.#")+"%":""):m.Y.ToString("0.##");
+                var label=Label(parent,font,"Segment value",value,new Vector2(bounds.xMin+4*scale,bounds.center.y+14*scale),new Vector2(Math.Max(1,bounds.width-8*scale),28*scale),18*scale);
+                label.color=StatisticsTheme.ReadableOn(StatisticsPlotPalette.Color(plot.Series.First(s=>s.Id==m.Series)));
+                if(label.GetPreferredValues(value,0,0).x>bounds.width-12*scale)label.gameObject.SetActive(false);
+            }
             if(plot.Kind==StatisticsPlotKind.StackedBars){foreach(var row in plot.Marks.GroupBy(m=>new{m.Row,m.Facet}).Where(g=>g.Key.Row>=0)){
                 double total=row.Sum(m=>m.Y);float x=graphic.X(plot.Percent&&total>0?100:row.Where(m=>m.Y>0).Sum(m=>m.Y));
                 float cy=graphic.Area.yMax-(row.Key.Row+.5f)*graphic.RowHeight+(plot.EraPairs?(row.Key.Facet==1?13:-13)*scale:0);
-                string value=plot.Percent?(total>0?total.ToString("0")+" total":"—"):total.ToString("0");if(plot.Id=="link-sources")value+= " VP\n"+row.First().OtherLabel;if(plot.EraPairs)value=(row.Key.Facet==1?"C ":"R ")+value;
+                string value=plot.Percent?(total>0?total.ToString("0")+" total":"—"):StatisticsAxisLayout.Format(total,plot.XUnit);if(plot.Id=="link-sources")value+= " VP\n"+row.First().OtherLabel;if(plot.EraPairs)value=(row.Key.Facet==1?"C ":"R ")+value;
                 Label(parent,font,"Stack total",value,new Vector2(x+8*scale,cy+16*scale),new Vector2((plot.Id=="link-sources"?225:95)*scale,(plot.Id=="link-sources"?52:32)*scale),(plot.Id=="link-sources"?19:20)*scale,plot.Id=="link-sources",TextAlignmentOptions.MidlineLeft);
             }}
             if(plot.Kind==StatisticsPlotKind.StackedColumns){foreach(var row in plot.Marks.GroupBy(m=>m.Row)){double total=row.Sum(m=>m.Y);Label(parent,font,"Development total",total.ToString("0"),new Vector2(graphic.X(row.Key)-30*scale,graphic.Y(total)+34*scale),new Vector2(60*scale,32*scale),21*scale);}}
-            if(plot.Kind==StatisticsPlotKind.PairedBars||plot.Kind==StatisticsPlotKind.Waterfall||plot.Kind==StatisticsPlotKind.Lollipop||plot.Kind==StatisticsPlotKind.Dumbbell)foreach(var m in marks){
+            if(plot.Kind==StatisticsPlotKind.Bullet||plot.Kind==StatisticsPlotKind.PairedLollipop||plot.Kind==StatisticsPlotKind.PairedBars||plot.Kind==StatisticsPlotKind.Waterfall||plot.Kind==StatisticsPlotKind.Lollipop||plot.Kind==StatisticsPlotKind.Dumbbell)foreach(var m in marks){
                 var q=graphic.Point(m);string value=m.Missing?m.ValueLabel??"—":m.ValueLabel??StatisticsAxisLayout.Format(m.Y,plot.XUnit,1,true);
                 if(plot.Id=="conversion"&&m.Series=="flipped"){double built=plot.Marks.Where(x=>x.Row==m.Row&&x.Series=="built").Sum(x=>x.Y);value+=" · "+StatisticsFormat.Percent(m.Y,built);}
                 if(plot.Kind==StatisticsPlotKind.Waterfall&&m.Y>0&&m.Series!="total")value="+"+value;
                 bool market=plot.Id.StartsWith("market-");if(market&&m.OtherLabel!=null)value+="\n"+m.OtherLabel;
-                float w=plot.Id=="conversion"?185*scale:market?190*scale:plot.Kind==StatisticsPlotKind.Dumbbell?80*scale:plot.XUnit==StatisticsAxisUnit.Price||plot.XUnit==StatisticsAxisUnit.Ratio?165*scale:95*scale;
-                float labelY=q.y+16*scale;if(plot.Kind==StatisticsPlotKind.Dumbbell)labelY+=plot.Series.IndexOf(plot.Series.First(s=>s.Id==m.Series))==0?18*scale:-18*scale;
-                var label=Label(parent,font,"Direct value",value,new Vector2(Math.Min(q.x+10*scale,graphic.Area.xMax+10*scale),labelY),new Vector2(w,(market?50:32)*scale),(market?19:20)*scale,market,TextAlignmentOptions.MidlineLeft);
+                if(plot.Kind==StatisticsPlotKind.Bullet)value+="\n"+m.OtherLabel;float w=plot.Kind==StatisticsPlotKind.Bullet?305*scale:plot.Id=="conversion"?185*scale:market?190*scale:plot.Kind==StatisticsPlotKind.Dumbbell?80*scale:plot.XUnit==StatisticsAxisUnit.Price||plot.XUnit==StatisticsAxisUnit.Ratio?165*scale:95*scale;
+                float labelY=q.y+(plot.Kind==StatisticsPlotKind.Bullet?30:16)*scale;if(plot.Kind==StatisticsPlotKind.Dumbbell)labelY+=plot.Series.IndexOf(plot.Series.First(s=>s.Id==m.Series))==0?18*scale:-18*scale;
+                var label=Label(parent,font,"Direct value",value,new Vector2((plot.Kind==StatisticsPlotKind.Bullet?graphic.Area.xMax+12*scale:Math.Min(q.x+10*scale,graphic.Area.xMax+10*scale)),labelY),new Vector2(w,(plot.Kind==StatisticsPlotKind.Bullet?60:market?50:32)*scale),(market?19:20)*scale,market||plot.Kind==StatisticsPlotKind.Bullet,TextAlignmentOptions.MidlineLeft);
                 if(plot.Kind==StatisticsPlotKind.Waterfall&&m.Y<0){var background=StatisticsWidgets.Rect(parent,"Signed value surface",label.rectTransform.anchoredPosition-new Vector2(3*scale,0),new Vector2(label.GetPreferredValues(value,0,0).x+10*scale,32*scale));var surface=background.gameObject.AddComponent<StatisticsSurface>();surface.Panel=true;surface.raycastTarget=false;background.SetSiblingIndex(label.transform.GetSiblingIndex());}
             }
             if(plot.Kind==StatisticsPlotKind.Dumbbell)foreach(var row in marks.GroupBy(m=>m.Row).Where(g=>g.Count()==2)){double difference=row.Last().Y-row.First().Y;Label(parent,font,"Era difference","Δ "+(difference>0?"+":"")+StatisticsAxisLayout.Format(difference,StatisticsAxisUnit.Count)+" VP",new Vector2(graphic.Area.xMax+95*scale,graphic.Area.yMax-(row.Key+.5f)*graphic.RowHeight+16*scale),new Vector2(125*scale,32*scale),20*scale,false,TextAlignmentOptions.MidlineLeft);}
             if(plot.Kind==StatisticsPlotKind.Step){
                 var placed=new List<Rect>();foreach(var series in marks.GroupBy(m=>m.Series)){
-                    var last=series.Last();var q=graphic.Point(last);float labelY=q.y+16*scale;Rect chosen=new Rect();
+                    var last=series.Last();var q=graphic.Point(last);float labelY=q.y+(plot.Kind==StatisticsPlotKind.Bullet?30:16)*scale;Rect chosen=new Rect();
                     foreach(float offset in new[]{0f,36,-36,72,-72,108,-108,144,-144,180,-180}){
                         float candidateY=Mathf.Clamp(labelY+offset*scale,graphic.Area.yMin+34*scale,graphic.Area.yMax+16*scale);var candidate=new Rect(graphic.Area.xMax+8*scale,candidateY-32*scale,132*scale,32*scale);
                         if(!placed.Any(p=>p.Overlaps(candidate))){chosen=candidate;break;}
@@ -282,7 +314,7 @@ namespace BrassPatch.Statistics
         }
         static void MapLabels(Transform parent,TMP_FontAsset font,StatisticsPlotGraphic graphic,float scale)
         {
-            var placed=new List<Rect>();var points=graphic.Plot.Marks.Select(graphic.Point).ToArray();
+            var placed=new List<Rect>();var nodes=graphic.Plot.Marks.Select(graphic.MarkBounds).ToArray();
             foreach(var m in graphic.Plot.Marks.Where(m=>!graphic.Hidden.Contains(m.Series)).OrderByDescending(m=>m.Y)){
                 var q=graphic.Point(m);float w=160*scale,h=58*scale;var candidates=new List<Rect>();
                 foreach(float dy in new[]{-55f,55,-110,110,-165,165})foreach(float dx in new[]{0f,-100,100,-200,200}){
@@ -290,11 +322,21 @@ namespace BrassPatch.Statistics
                     if(r.xMin>=8*scale&&r.xMax<=graphic.rectTransform.rect.width-8*scale&&r.yMin>=graphic.rectTransform.rect.yMin+8*scale&&r.yMax<=-12*scale)candidates.Add(r);
                 }
                 var ordered=candidates.OrderBy(r=>(r.center-q).sqrMagnitude).ToArray();
-                var box=ordered.FirstOrDefault(r=>!placed.Any(p=>p.Overlaps(r))&&!points.Any(pt=>r.Contains(pt)));
+                var box=ordered.FirstOrDefault(r=>!placed.Any(p=>p.Overlaps(r))&&!nodes.Any(node=>r.Overlaps(node)));
+                // Dense southern cities can exhaust nearby candidates. Search the
+                // complete diagram before permitting a label to cover another.
+                if(box.width==0){
+                    var grid=new List<Rect>();
+                    for(float y=graphic.rectTransform.rect.yMin+8*scale;y+h<=-12*scale;y+=28*scale)
+                        for(float x=8*scale;x+w<=graphic.rectTransform.rect.width-8*scale;x+=32*scale)
+                            grid.Add(new Rect(x,y,w,h));
+                    box=grid.Where(r=>!placed.Any(p=>p.Overlaps(r))&&!nodes.Any(node=>r.Overlaps(node))).OrderBy(r=>(r.center-q).sqrMagnitude).FirstOrDefault();
+                    if(box.width==0)box=grid.Where(r=>!placed.Any(p=>p.Overlaps(r))).OrderBy(r=>(r.center-q).sqrMagnitude).FirstOrDefault();
+                }
                 if(box.width==0)box=ordered.FirstOrDefault(r=>!placed.Any(p=>p.Overlaps(r)));
-                if(box.width==0)box=ordered.FirstOrDefault();
                 placed.Add(box);
-                var text=Label(parent,font,"City "+m.Label,StatisticsPlotPages.CityName(m.Label)+"\n"+m.Row+" "+graphic.Plot.YLabel.ToLowerInvariant(),new Vector2(box.x,box.yMax),new Vector2(w,h),19*scale,true);text.color=StatisticsTheme.Ink;
+                var background=StatisticsWidgets.Rect(parent,"City label background",new Vector2(box.x,box.yMax),new Vector2(w,h));var paper=background.gameObject.AddComponent<Image>();var shade=StatisticsTheme.Paper;shade.a=.94f;paper.color=shade;paper.raycastTarget=false;
+                var text=Label(parent,font,"City "+m.Label,StatisticsPlotPages.CityName(m.Label)+"\n"+StatisticsPlotSemantics.Value(graphic.Plot,m),new Vector2(box.x,box.yMax),new Vector2(w,h),19*scale,true);text.color=StatisticsTheme.Ink;
                 Vector2 end=box.center;var delta=end-q;
                 var leader=StatisticsWidgets.Rect(parent,"City leader",q,new Vector2(delta.magnitude,1.4f*scale));leader.pivot=new Vector2(0,.5f);leader.localEulerAngles=new Vector3(0,0,Mathf.Atan2(delta.y,delta.x)*Mathf.Rad2Deg);leader.gameObject.AddComponent<Image>().color=StatisticsTheme.Border;leader.GetComponent<Image>().raycastTarget=false;leader.SetAsFirstSibling();
             }

@@ -45,11 +45,23 @@ $trackerStream=[IO.File]::OpenWrite($trackerHelper);try{$trackerStream.WriteByte
 Run-TrackerPackage $false;Assert-TrackerPackage $trackerManifest.files
 Copy-Item -LiteralPath (Join-Path $trackerBuild 'Managed/BrassPatch.dll') -Destination $trackerHelper -Force
 $trackerValidationPath=Join-Path $trackerFixtureBuild 'validation.json'
-foreach($scenario in 'failed-tracker','wrong-fingerprint','failed-statistics','failed-preservation','failed-visual'){
+$trackerScenarios=@('failed-tracker','wrong-fingerprint','failed-statistics','failed-preservation','failed-visual')
+if($trackerManifest.version -in '1.4.23','1.4.24','1.4.25','1.4.26'){$trackerScenarios+=@('failed-history','wrong-history-limit','wrong-history-schema','wrong-history-fingerprint')}
+if($trackerManifest.version -in '1.4.24','1.4.25','1.4.26'){$trackerScenarios+=@('failed-draft','gamma-enabled','wrong-player-layout')}
+if($trackerManifest.version -in '1.4.25','1.4.26'){$trackerScenarios+=@('failed-tracker-position','failed-tracker-theme')}
+foreach($scenario in $trackerScenarios){
  $trackerValidation=Get-Content -LiteralPath (Join-Path $trackerBuild 'validation.json') -Raw|ConvertFrom-Json
- if($scenario -eq 'failed-tracker'){$trackerValidation.cardTracker.passed=$false}elseif($scenario -eq 'failed-statistics'){$trackerValidation.statistics.passed=$false}elseif($scenario -eq 'failed-preservation'){$trackerValidation.preservedRuntime.passed=$false}elseif($scenario -eq 'failed-visual'){$trackerValidation.visualChecks.passed=$false}else{$trackerValidation.cardTracker.testedFiles[0].sha256='unexpected'}
+ if($scenario -eq 'failed-tracker-position'){foreach($case in $trackerValidation.cardTracker.cases|Where-Object name -Like 'CT25-POSITION*'){$case.passed=$false}}elseif($scenario -eq 'failed-tracker-theme'){foreach($case in $trackerValidation.cardTracker.cases|Where-Object name -Like 'CT25-THEME*'){$case.passed=$false}}elseif($scenario -eq 'failed-draft'){$trackerValidation.menu.selectionPanel.draftChecks=0}elseif($scenario -eq 'gamma-enabled'){$trackerValidation.menu.selectionPanel.gammaEnabled=$true}elseif($scenario -eq 'wrong-player-layout'){$trackerValidation.menu.selectionPanel.layouts[0].choices=99}elseif($scenario -eq 'failed-tracker'){$trackerValidation.cardTracker.passed=$false}elseif($scenario -eq 'failed-statistics'){$trackerValidation.statistics.passed=$false}elseif($scenario -eq 'failed-preservation'){$trackerValidation.preservedRuntime.passed=$false}elseif($scenario -eq 'failed-visual'){$trackerValidation.visualChecks.passed=$false}elseif($scenario -eq 'failed-history'){$trackerValidation.history.passed=$false}elseif($scenario -eq 'wrong-history-limit'){$trackerValidation.history.historyLimit=11}elseif($scenario -eq 'wrong-history-schema'){$trackerValidation.history.reportSchema=99}elseif($scenario -eq 'wrong-history-fingerprint'){$trackerValidation.history.testedFiles[0].sha256='unexpected'}else{$trackerValidation.cardTracker.testedFiles[0].sha256='unexpected'}
  $trackerValidation|ConvertTo-Json -Depth 30|Set-Content -LiteralPath $trackerValidationPath -Encoding utf8
  Run-TrackerPackage $false;Assert-TrackerPackage $trackerManifest.files
+}
+if($trackerManifest.version -eq '1.4.26'){
+ foreach($scenario in 'E26-DATA','E26-LIFECYCLE','E26-UI','performance'){
+  $trackerValidation=Get-Content -LiteralPath (Join-Path $trackerBuild 'validation.json') -Raw|ConvertFrom-Json
+  if($scenario -eq 'performance'){$trackerValidation.performance.passed=$false}else{foreach($case in $trackerValidation.statistics.cases|Where-Object {$_.name.StartsWith($scenario)}){$case.passed=$false}}
+  $trackerValidation|ConvertTo-Json -Depth 30|Set-Content -LiteralPath $trackerValidationPath -Encoding utf8
+  Run-TrackerPackage $false;Assert-TrackerPackage $trackerManifest.files
+ }
 }
 Copy-Item -LiteralPath (Join-Path $trackerBuild 'validation.json') -Destination $trackerValidationPath -Force
 $trackerRecord=Get-Content -LiteralPath $trackerRecordPath -Raw|ConvertFrom-Json;$trackerRecord.version='future-release'
@@ -69,3 +81,4 @@ Check-TrackerPackage (-not(Test-Path -LiteralPath $trackerPendingPath)) 'retry f
 foreach($file in $trackerManifest.files){Check-TrackerPackage ((Get-FileHash -LiteralPath (Join-Path $trackerBuild ('Managed/'+$file.name))).Hash -eq $file.sha256) ('qualification candidate unchanged '+$file.name)}
 [ordered]@{passed=$true;checks=$trackerChecks;cases=$trackerCases;fixture=$trackerFixture;testedFiles=$trackerManifest.files}|ConvertTo-Json -Depth 18|Set-Content -LiteralPath (Join-Path $trackerBuild 'packaging-results.json') -Encoding utf8
 Write-Output ('Information UI packaging: '+$trackerChecks+' checks passed using artificial files only.')
+

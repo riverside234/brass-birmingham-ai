@@ -26,6 +26,7 @@ namespace BrassPatch.Statistics
             public Router Router;
             public CompletedMatchStatistics Report;
             public StatisticsPanel Panel;
+            public StatisticsPresentationLease Presentation;
             public Button BoardButton;
             public bool Ready,Disposed,FromResults;
             public int ClosedFrame=-1;
@@ -38,13 +39,15 @@ namespace BrassPatch.Statistics
             // Called before ReplayUnseenActions is allowed to rewind presentation.
             try {
                 var history=ReflectionAccess.Get<IGameHistory>(owner,"_gameHistory");
-                if(history.CurrentGame==null||!history.CurrentGame.Game.GameProgressInformation.IsGameOver||history.CurrentGame.Metadata.GameType==GameType.Network)return;
-                var presenter=ReflectionAccess.Get(owner,"_presenter");var router=ReflectionAccess.Get(presenter,"_router") as Router;
-                if(router==null)return;
+                if(history.CurrentGame==null||!history.CurrentGame.Game.GameProgressInformation.IsGameOver||history.CurrentGame.Metadata.GameType!=GameType.Local)return;
                 ReviewSession previous;
                 if(owners.TryGetValue(owner,out previous))return;
+                var report=StatisticsCollector.Capture(history);
+                BrassPatch.History.HistoryRecording.Queue(report);
+                var presenter=ReflectionAccess.Get(owner,"_presenter");var router=ReflectionAccess.Get(presenter,"_router") as Router;
+                if(router==null)return;
                 if(routers.TryGetValue(router,out previous))Dispose(previous);
-                var session=new ReviewSession{Owner=owner,Router=router,Report=StatisticsCollector.Capture(history)};
+                var session=new ReviewSession{Owner=owner,Router=router,Report=report};
                 owners.Add(owner,session);routers.Add(router,session);
             } catch(MissingMemberException) { /* Non-Unity test presenters have no router. */ }
               catch(Exception error) { Debug.LogWarning("Statistics capture unavailable: "+error.Message); }
@@ -75,10 +78,7 @@ namespace BrassPatch.Statistics
             button.gameObject.AddComponent<StatisticsEntryGeometry>().Initialize(240,60,unit,false,session.Router);
         }
         static TMP_FontAsset Typeface(Transform parent)
-        {
-            var label=parent.GetComponentsInChildren<TextMeshProUGUI>(true).FirstOrDefault(t=>t.font!=null);
-            return label==null?TMP_Settings.defaultFontAsset:label.font;
-        }
+        { return StatisticsViewHost.Typeface(parent); }
         internal static float PixelUnit(Transform target)
         {
             var rect=target as RectTransform;var canvas=target.GetComponentInParent<Canvas>();
@@ -95,36 +95,40 @@ namespace BrassPatch.Statistics
             if(session.Panel==null) {
                 var factory=ReflectionAccess.Get(session.Router,"_viewFactory") as UnityViewFactory;
                 if(factory==null||factory.ParentTransform==null)return;
-                var root=StatisticsWidgets.Rect(factory.ParentTransform,"Completed match statistics",Vector2.zero,Vector2.zero);
-                StatisticsWidgets.Stretch(root,Vector2.zero,Vector2.zero);
-                var canvas=root.gameObject.AddComponent<Canvas>();canvas.overrideSorting=true;canvas.sortingOrder=500;
-                root.gameObject.AddComponent<GraphicRaycaster>();root.gameObject.AddComponent<CanvasGroup>();
-                session.Panel=root.gameObject.AddComponent<StatisticsPanel>();session.Panel.InputRegistration=session.Router;
+                session.Panel=StatisticsViewHost.Create<StatisticsPanel>(session.Router,"Completed match statistics");
                 session.Panel.Initialize(session.Report,Typeface(factory.ParentTransform),restore=>{
                     if(session.Disposed)return;
                     session.ClosedFrame=Time.frameCount;
                     session.Router.HideView<StatisticsPanel>();
                     if(restore??session.FromResults)session.Owner.ShowGameSummaryTable();
                 });
-                var cache=ReflectionAccess.Get<Dictionary<Type,IBaseView>>(session.Router,"_viewCache");cache[typeof(StatisticsPanel)]=session.Panel;
+                session.Panel.OnHidden=()=>ReleasePresentation(session);
             }
             session.Panel.SetOpener(opener==null?null:opener.gameObject);
             if(session.Router.IsViewVisible<IEndOfGameView>())session.Router.HideView<IEndOfGameView>();
-            session.Router.ShowView<StatisticsPanel>();
+            try {
+                ReleasePresentation(session);
+                var transitions=ReflectionAccess.Get<Dictionary<Type,IAnimation>>(session.Router,"_viewAnimations").Values.OfType<Frameworks.View.Animation.DOTweenAnimation>().Select(a=>(DG.Tweening.Tween)a.Sequence).ToArray();
+                session.Presentation=new StatisticsPresentationLease(session.Panel.transform.parent,session.Panel.transform,transitions);
+                session.Router.ShowView<StatisticsPanel>();
+            }catch {
+                ReleasePresentation(session);
+                if(session.Panel!=null){StatisticsViewHost.Dispose(session.Router,session.Panel);session.Panel=null;}
+                if(results)session.Owner.ShowGameSummaryTable();
+                throw;
+            }
         }
+        static void ReleasePresentation(ReviewSession session)
+        {var lease=session.Presentation;session.Presentation=null;if(lease!=null)lease.Dispose();}
         public static void ProcessInput(Router router)
         {
+            if(BrassPatch.History.HistoryEntryPoints.ProcessInput(router))return;
             if (BrassPatch.CardTracker.CardTrackerEntryPoints.ProcessInput(router)) return;
             ReviewSession session;
             if(routers.TryGetValue(router,out session)&&!session.Disposed) {
                 if(session.ClosedFrame==Time.frameCount)return;
                 if(session.Panel!=null&&session.Panel.IsOpen) {
-                    var source=ReflectionAccess.Get<IInputSource>(router,"_inputSource");
-                    foreach(var key in keys) {
-                        if(source.GetKeyDown(key))session.Panel.HandleKeyDown(key);
-                        if(!session.Panel.IsOpen)return;
-                        if(source.GetKey(key))session.Panel.HandleKey(key);
-                    }
+                    StatisticsViewHost.Keys(router,session.Panel,()=>session.Panel.IsOpen);
                     // Return/Space are handled by the panel's EventSystem controls.
                     // Never forward held keys to the board or old result dialog.
                     return;
@@ -138,15 +142,10 @@ namespace BrassPatch.Statistics
         static void Dispose(ReviewSession session)
         {
             if(session.Disposed)return;session.Disposed=true;owners.Remove(session.Owner);routers.Remove(session.Router);
+            ReleasePresentation(session);
             if(session.BoardButton!=null){session.BoardButton.gameObject.SetActive(false);UnityEngine.Object.Destroy(session.BoardButton.gameObject);}
             if(session.Panel!=null) {
-                session.Panel.gameObject.SetActive(false);
-                ReflectionAccess.Get<List<IBaseView>>(session.Router,"_viewStack").Remove(session.Panel);
-                ReflectionAccess.Get<Dictionary<Type,IBaseView>>(session.Router,"_viewCache").Remove(typeof(StatisticsPanel));
-                session.Router.UnregisterAllKeys(session.Panel);
-                var animations=ReflectionAccess.Get<Dictionary<Type,IAnimation>>(session.Router,"_viewAnimations");IAnimation animation;
-                if(animations.TryGetValue(typeof(StatisticsPanel),out animation)){animation.Kill();animations.Remove(typeof(StatisticsPanel));}
-                UnityEngine.Object.Destroy(session.Panel.gameObject);
+                StatisticsViewHost.Dispose(session.Router,session.Panel);
             }
         }
     }

@@ -299,6 +299,32 @@ namespace BrassLegacyAI
             Action close = () => router.HideView<IQuestionPopupView>();
             router.GetView<IQuestionPopupView>().Setup(message, false, "OK", "Close", close, close);
         }
+        public static object SetupIdentity(PlayerMetadata player)
+        { Selection selection; return player != null && Selections.TryGetValue(player, out selection) ? selection.Owner : null; }
+        public static bool CanConfigure(PlayerMetadata player)
+        {
+            var owner = SetupIdentity(player) as CreateOfflineGameUseCase;
+            if (owner == null || !IsCustom(owner)) return false;
+            var metadata = Metadata(owner);
+            return metadata != null && metadata.PlayerMetadata.Take(Field<int>(owner, "_numberOfPlayers")).Any(p => ReferenceEquals(p, player));
+        }
+        public static bool NeedsHuman(PlayerMetadata player)
+        {
+            var owner = SetupIdentity(player) as CreateOfflineGameUseCase;
+            return CanConfigure(player) && !Metadata(owner).PlayerMetadata.Take(Field<int>(owner, "_numberOfPlayers")).Any(p => p.AiType == AIType.Human);
+        }
+        public static bool ApplyPlayerSelection(PlayerMetadata player, object setupIdentity, PlayerSelectionDraft draft)
+        {
+            if (AiSelectionPanel.IsOpen || draft == null || !CanConfigure(player) || !ReferenceEquals(SetupIdentity(player), setupIdentity)) return false;
+            if (draft.Page != PlayerSelectionPage.Human && (draft.Page != PlayerSelectionPage.V4 || draft.Choice.Family != AiFamily.V4 ||
+                !AiSelectionCatalog.CanChoose(draft.Choice) || !DifficultyCatalog.Contains(draft.Difficulty))) return false;
+            var selection = Selections.GetValue(player, p => new Selection());
+            // Unlike the stock cycling control, changing controller does not
+            // overwrite the user's nickname. AI behavior is created at Start.
+            if (draft.Page == PlayerSelectionPage.Human) player.AiType = AIType.Human;
+            else { selection.Choice = draft.Choice; selection.Difficulty = draft.Difficulty; player.AiType = AIType.Hard; }
+            Refresh(selection.Owner); return true;
+        }
     }
     public sealed class StrategyTooltip : MonoBehaviour, IPointerEnterHandler, IPointerExitHandler, ISelectHandler, IDeselectHandler
     {
@@ -337,3 +363,4 @@ namespace BrassLegacyAI
         }
     }
 }
+

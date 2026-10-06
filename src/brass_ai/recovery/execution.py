@@ -53,14 +53,24 @@ def make_policy(spec,root,endpoint,config,mono):
         evaluator=RemoteEvaluator(endpoints[0],p,config['batch_size'],config['max_candidate_cells']))
         for p in spec.get('opponents',[spec['model_id']])]
     from dataclasses import replace
-    common=dict(config=replace(SearchConfig(**spec['search']),cpu_role=spec.get('cpu_role','reference')),mono=mono,focus=spec.get('focus','neutral'),
+    from .config import teacher_search_config
+    search_config=teacher_search_config(spec['search']) if spec.get('teacher_schedule') else SearchConfig(**spec['search'])
+    common=dict(config=replace(search_config,cpu_role=spec.get('cpu_role','reference')),mono=mono,focus=spec.get('focus','neutral'),
         opponents=opponents,evaluator=evaluator)
     require(spec['kind']=='masked_ismcts','Only Masked ISMCTS is an active search policy')
     policy=MaskedSearchPolicy(None,root,**common)
     if len(endpoints)>1:
         from .parallel import parallelize
+        replica_spec={k:v for k,v in spec.items() if k!='teacher_schedule'}
+        # Carry resolved training defaults into each private replica; only the
+        # coordinator schedules real turns. Generic evaluation remains unchanged.
+        if spec.get('teacher_schedule'):replica_spec['search']=search_config.to_dict()
         policy=parallelize(policy,len(endpoints)-1,spec.get('cpu_role','lab'),
-            lambda i:make_policy(spec,root,endpoints[i+1],config,mono))
+            lambda i:make_policy(replica_spec,root,endpoints[i+1],config,mono))
+    if spec.get('teacher_schedule'):
+        from .teacher_schedule import CONTRACT,training_teacher
+        require(spec['teacher_schedule']==CONTRACT,'Unknown training teacher schedule')
+        policy=training_teacher(policy)
     instrument_host(policy.game.host)
     for game in policy.simulation_games:instrument_host(game.host)
     return policy
@@ -75,6 +85,10 @@ def run_game(host,job,policies,timings,max_decisions,admission=None):
         opponents=[p.policy_id for p in assigned],result=None,records=[])
     rngs=[random.Random(digest(dict(sampling_seed=job['sampling_seed'],game=job.get('rng_index',0),seat=s))) for s in range(4)]
     for seat,p in enumerate(assigned):
+        if hasattr(p,'begin_teacher_game'):
+            require(job['provenance'].get('purpose')=='training' and job['provenance'].get('kind')=='masked-ismcts-teacher',
+                    'Reserved search schedule is only for training teacher games')
+            p.begin_teacher_game(rngs[seat],seat,job['seed'],job['sampling_seed'])
         if isinstance(p,NeuralPolicy) and p.focus=='mixed':
             p.contexts[rngs[seat]]=context_for(job.get('focuses',{}).get(str(seat),'neutral'))
     encoded=[];encoder=PreparedEncoder()
@@ -82,7 +96,10 @@ def run_game(host,job,policies,timings,max_decisions,admission=None):
     lease=TurnLease(admission,timings)
     with ExitStack() as cleanup:
         cleanup.callback(lease.close)
-        return _run_turns(host,job,assigned,timings,max_decisions,context,game,rngs,encoded,encoder,lease)
+        result=_run_turns(host,job,assigned,timings,max_decisions,context,game,rngs,encoded,encoder,lease)
+        teachers=[p.teacher_report(rngs[seat]) for seat,p in enumerate(assigned) if hasattr(p,'teacher_report')]
+        if teachers:result.teacher_phases=teachers
+        return result
 
 
 def _run_turns(host,job,assigned,timings,max_decisions,context,game,rngs,encoded,encoder,lease):
@@ -91,7 +108,9 @@ def _run_turns(host,job,assigned,timings,max_decisions,context,game,rngs,encoded
         seat=context['actor'];p=assigned[seat]
         from brass_ai.search.common import turn_key
         workers=p.config.workers if isinstance(p,MaskedSearchPolicy) else getattr(p,'cpu_workers',1)
+        if hasattr(p,'teacher_workers'):workers=p.teacher_workers(context,rngs[seat])
         lease.update(turn_key(context)+(seat,),workers)
+        if hasattr(p,'admit_teacher_turn'):p.admit_teacher_turn(context,rngs[seat])
         with timings.phase('host.observe'): view=host.observe(seat)
         with timings.phase('host.choices'): choices=host.choices()
         with timings.phase('inputs.validate'): BOUNDARY.check(view,choices)
@@ -112,6 +131,9 @@ def _run_turns(host,job,assigned,timings,max_decisions,context,game,rngs,encoded
         e=getattr(getattr(p,'evaluator',None),'encoder',encoder)
         with timings.phase('inputs.encode'): encoded.append(e.encode(view,choices,style,intent,validated=True))
         with timings.phase('host.apply'): context=host.apply(context,choices[chosen])
+        if hasattr(p,'finish_teacher_turn') and (context['terminal'] or context['actor']!=seat or
+                turn_key(context)!=turn_key(view['context']) or context['phase']=='debt'):
+            p.finish_teacher_turn(rngs[seat])
     require(context['terminal'],'Decision cap reached; incomplete game excluded')
     with timings.phase('host.result'): game['result']=host.call('result')
     terminal_targets(game['result'])
@@ -173,12 +195,14 @@ def _actor(root,host_path,jobs,results,lease,config,mono,lanes,search_channels,a
                                 for number,part in enumerate(parts,packet['part_start']):
                                     path=Path(packet['prefix']+f'-part-{number:04d}.jsonl.gz')
                                     provenance=dict(producer='recovery/2.1.0',purpose=part[0][1]['provenance']['purpose'],
-                                        collection=packet['identity'],jobs=[dict(index=j['index'],seed=j['seed'],provenance=j['provenance']) for _,j,_,_ in part])
+                                        collection=packet['identity'],jobs=[dict(index=j['index'],seed=j['seed'],provenance=j['provenance'],
+                                            **({'teacher_phases':g.teacher_phases} if hasattr(g,'teacher_phases') else {})) for g,j,_,_ in part])
                                     write_shard(path,[g for g,_,_,_ in part],provenance,cache=config.get('feature_cache',False))
                                     receipt=cache_receipt(path);replay_hash=receipt['replay_sha256'] if receipt else sha(path)
                                     for g,j,metrics,telemetry in part:
                                         records.append(dict(job=j['index'],game_id=g['game_id'],path=str(path),sha256=replay_hash,cached=False,
-                                            features=receipt,metrics=metrics,search=telemetry))
+                                            features=receipt,metrics=metrics,search=telemetry,
+                                            **({'teacher_phases':g.teacher_phases} if hasattr(g,'teacher_phases') else {})))
                                 elapsed=time.monotonic()-began
                                 for record in records:
                                     record.update(replay_write_seconds=elapsed/len(completed),replay_write_scope='amortized packet')
@@ -243,7 +267,8 @@ class ActorPool:
                         require(item['provenance']==expected[index]['provenance'],'Cached actor game differs')
                         require(game['setup_group']==digest(dict(rules='steam-brass-patch-1.1.0',setup_seed=expected[index]['seed'])),'Cached setup differs')
                         seen.add(index);records.append(dict(job=index,game_id=game['game_id'],path=str(path),sha256=sha(path),
-                            cached=True,features=cache_receipt(path)))
+                            cached=True,features=cache_receipt(path),
+                            **({'teacher_phases':item['teacher_phases']} if 'teacher_phases' in item else {})))
                 missing=[j for j in group if j['index'] not in seen]
                 if missing: pending.append(dict(jobs=missing,prefix=prefix,identity=identity,part_start=len(existing)))
         if pending:

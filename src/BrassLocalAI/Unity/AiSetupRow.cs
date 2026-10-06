@@ -16,55 +16,45 @@ namespace BrassLegacyAI
     {
         RectTransform root, nameRect;
         Vector2 namePosition;
-        TextMeshProUGUI template, originalType, originalStyle, summary;
+        TextMeshProUGUI template, originalType, originalStyle, summary, choiceLabel, choiceDetail;
         PlayerMetadata player;
         Frameworks.View.Menu.CreateGame.CreateOfflineGameView menu;
         bool editable;
+        public int BindingVersion { get; private set; }
         public Button StyleButton { get; private set; }
         public Button[] DifficultyButtons { get; private set; }
         public string SelectedStyle { get { return LocalMenu.Strategy(player); } }
         public PlayerMetadata Player { get { return player; } }
         public AiChoice SelectedChoice { get { return LocalMenu.Choice(player); } }
         public string SelectedDifficulty { get { return LocalMenu.Difficulty(player); } }
-        public bool CanEdit { get { return editable && menu != null && menu.IsViewVisible() && root != null && root.gameObject.activeInHierarchy && LocalMenu.IsEditable(player); } }
+        public bool CanEdit { get { return editable && menu != null && menu.IsViewVisible() && root != null && root.gameObject.activeInHierarchy && LocalMenu.CanConfigure(player); } }
 
         public void Bind(PlayerCreateGameView view, PlayerCreateGameViewModel model, bool known)
         {
             StrategyPicker.CloseFor(this);
             StrategyTooltip.HideActive();
+            BindingVersion++;
             if (root == null) Initialize(view);
             player = model.PlayerMetadata;
-            bool bot = player != null && model.PlayerNumber <= model.CurrentPlayerCount && model.AiType != AIType.Human;
-            editable = bot && known && model.Editable && LocalMenu.IsEditable(player);
-            root.gameObject.SetActive(bot);
-            nameRect.anchoredPosition = namePosition + (bot ? new Vector2(0, 24) : Vector2.zero);
-            originalType.gameObject.SetActive(!bot);
+            bool activeSlot = player != null && model.PlayerNumber <= model.CurrentPlayerCount;
+            bool human = activeSlot && model.AiType == AIType.Human;
+            editable = activeSlot && known && model.Editable && LocalMenu.CanConfigure(player);
+            root.gameObject.SetActive(activeSlot);
+            nameRect.anchoredPosition = namePosition + (activeSlot ? new Vector2(0, 24) : Vector2.zero);
+            originalType.gameObject.SetActive(false);
             originalStyle.gameObject.SetActive(false);
-            if (!bot) return;
+            if (model.Editable && known && LocalMenu.CanConfigure(player)) UpdateHumanNotice();
+            if (!activeSlot) return;
             StyleButton.gameObject.SetActive(editable);
-            foreach (var button in DifficultyButtons) button.gameObject.SetActive(editable);
             summary.gameObject.SetActive(!editable);
-            root.Find("Style caption").gameObject.SetActive(editable);
-            root.Find("Difficulty caption").gameObject.SetActive(editable);
             if (!editable) {
-                summary.text = known ? LocalMenu.RowLabel(player) + "\n<size=19>" + DifficultyCatalog.Summary(SelectedDifficulty) + "</size>" : "Original AI";
+                summary.text = human ? "Human\n<size=19>Local player</size>" : known ? LocalMenu.RowLabel(player) + "\n<size=19>" + DifficultyCatalog.Summary(SelectedDifficulty) + "</size>" : "Original AI";
                 return;
             }
-            StyleButton.GetComponentInChildren<TextMeshProUGUI>().text = LocalMenu.RowLabel(player);
-            StyleButton.GetComponent<StrategyTooltip>().Description = LocalMenu.ChoiceDescription(SelectedStyle);
-            for (int i = 0; i < DifficultyButtons.Length; i++) {
-                bool selected = SelectedDifficulty == DifficultyCatalog.Keys[i];
-                var surface = DifficultyButtons[i].GetComponent<AiControlSurface>();
-                surface.Selected = selected; surface.SetVerticesDirty();
-                DifficultyButtons[i].transform.Find("Selected mark").gameObject.SetActive(selected);
-            }
-            var nav = StyleButton.navigation; nav.mode = Navigation.Mode.Explicit;
-            nav.selectOnDown = DifficultyButtons[Math.Max(0, Array.IndexOf(DifficultyCatalog.Keys, SelectedDifficulty))]; StyleButton.navigation = nav;
-            for (int i = 0; i < DifficultyButtons.Length; i++) {
-                nav = DifficultyButtons[i].navigation; nav.mode = Navigation.Mode.Explicit; nav.selectOnUp = StyleButton;
-                nav.selectOnLeft = i > 0 ? DifficultyButtons[i - 1] : null; nav.selectOnRight = i < 2 ? DifficultyButtons[i + 1] : null;
-                DifficultyButtons[i].navigation = nav;
-            }
+            choiceLabel.text = human ? "Human" : LocalMenu.RowLabel(player);
+            choiceDetail.text = human ? "Local player" : DifficultyCatalog.Label(SelectedDifficulty) + " · up to " + DifficultyCatalog.Milliseconds(SelectedDifficulty) / 1000 + "s";
+            var icon = StyleButton.GetComponentInChildren<AiChoiceIcon>(); icon.Kind = human ? AiIconKind.Human : AiIconKind.V4; icon.SetVerticesDirty();
+            StyleButton.GetComponent<StrategyTooltip>().Description = human ? "You control this player locally. Multiple Human players can share this device." : LocalMenu.ChoiceDescription(SelectedStyle);
         }
         void Initialize(PlayerCreateGameView view)
         {
@@ -73,36 +63,44 @@ namespace BrassLegacyAI
             originalType = ReflectionAccess.Get<TextMeshProUGUI>(view, "_playerAITypeText");
             nameRect = ReflectionAccess.Get<TMP_InputField>(view, "_nicknameText").GetComponent<RectTransform>(); namePosition = nameRect.anchoredPosition;
             var reference = originalStyle.rectTransform;
-            root = AiWidgets.Rect(reference.parent, "Brass AI setup", Vector2.zero, new Vector2(330, 110));
+            root = AiWidgets.Rect(reference.parent, "Brass AI setup", Vector2.zero, new Vector2(330, 94));
             root.gameObject.AddComponent<LightUiTheme>();
             root.anchorMin = reference.anchorMin; root.anchorMax = reference.anchorMax; root.pivot = new Vector2(.5f, .5f);
             root.anchoredPosition = reference.anchoredPosition + new Vector2(18, 32);
-            AiWidgets.Text(root, template, "Style caption", "AI", new Vector2(0, 0), new Vector2(74, 52), 18).color = AiWidgets.Ivory;
-            AiWidgets.Text(root, template, "Difficulty caption", "Difficulty", new Vector2(0, -66), new Vector2(76, 26), 16).color = AiWidgets.Ivory;
-            StyleButton = AiWidgets.Button(root, template, "Choose style", "", new Vector2(80, 0), new Vector2(250, 52), 20);
-            StyleButton.GetComponentInChildren<TextMeshProUGUI>().rectTransform.offsetMax = new Vector2(-27, -2);
-            StyleButton.GetComponentInChildren<TextMeshProUGUI>().enableWordWrapping = true;
-            StyleButton.GetComponentInChildren<TextMeshProUGUI>().lineSpacing = -4;
-            AiWidgets.Text(StyleButton.transform, template, "Chevron", "v", new Vector2(226, -11), new Vector2(18, 30), 18);
+            StyleButton = AiWidgets.Button(root, template, "Choose player", "", new Vector2(0, 0), new Vector2(330, 92), 22);
+            choiceLabel = StyleButton.GetComponentInChildren<TextMeshProUGUI>();
+            choiceLabel.rectTransform.anchorMin = choiceLabel.rectTransform.anchorMax = choiceLabel.rectTransform.pivot = new Vector2(0, 1);
+            choiceLabel.rectTransform.anchoredPosition = new Vector2(45, -6); choiceLabel.rectTransform.sizeDelta = new Vector2(256, 54);
+            choiceLabel.enableWordWrapping = true; choiceLabel.lineSpacing = -4; choiceLabel.richText = false;
+            choiceLabel.overflowMode = TextOverflowModes.Ellipsis; choiceLabel.alignment = TextAlignmentOptions.MidlineLeft;
+            choiceDetail = AiWidgets.Text(StyleButton.transform, template, "Detail", "", new Vector2(45, -62), new Vector2(256, 25), 19);
+            choiceDetail.richText = false; choiceDetail.color = LightUi.Muted;
+            var icon = AiWidgets.Rect(StyleButton.transform, "Icon", new Vector2(12, -31), new Vector2(24, 24)).gameObject.AddComponent<AiChoiceIcon>(); icon.raycastTarget = false;
+            AiWidgets.Text(StyleButton.transform, template, "Chevron", "›", new Vector2(308, -28), new Vector2(16, 32), 25);
             StyleButton.onClick.AddListener(OpenPicker); StyleButton.gameObject.AddComponent<StrategyTooltip>();
-            DifficultyButtons = new Button[3];
-            for (int i = 0; i < 3; i++) {
-                string key = DifficultyCatalog.Keys[i];
-                var button = DifficultyButtons[i] = AiWidgets.Button(root, template, key, DifficultyCatalog.Label(key) + "\n<size=16>" + DifficultyCatalog.Milliseconds(key) / 1000 + "s</size>", new Vector2(80 + i * 85, -58), new Vector2(80, 48), 21);
-                button.onClick.AddListener(() => { if (CanEdit) LocalMenu.EditDifficulty(player, key); });
-                button.gameObject.AddComponent<StrategyTooltip>().Description = DifficultyCatalog.Description(key);
-                var mark = AiWidgets.Rect(button.transform, "Selected mark", new Vector2(65, -4), new Vector2(10, 10)); mark.gameObject.AddComponent<AiSelectionMark>().raycastTarget = false;
-            }
+            DifficultyButtons = new Button[0];
             summary = AiWidgets.Text(root, template, "Saved AI", "", new Vector2(0, -8), new Vector2(330, 64), 24);
             summary.color = AiWidgets.Ivory;
             summary.alignment = TextAlignmentOptions.Center;
         }
+        void UpdateHumanNotice()
+        {
+            var start = ReflectionAccess.Get<Button>(menu, "_startGameButton");
+            var notice = start.transform.Find("Human required");
+            if (notice == null) {
+                var label = AiWidgets.Text(start.transform, template, "Human required", "Choose at least one Human player.", new Vector2(0, -14), new Vector2(600, 36), 24);
+                label.alignment = TextAlignmentOptions.Center; label.color = AiWidgets.Ivory;
+                label.rectTransform.anchorMin = label.rectTransform.anchorMax = new Vector2(.5f, 0); label.rectTransform.pivot = new Vector2(.5f, 1);
+                notice = label.transform;
+            }
+            notice.gameObject.SetActive(LocalMenu.NeedsHuman(player));
+        }
         public void OpenPicker()
         {
             if (!CanEdit) return;
-            var captured = player;
-            AiSelectionPanel.Open(this, template, player.NickName, SelectedChoice,
-                choice => CanEdit && ReferenceEquals(captured, player) && LocalMenu.EditChoice(captured, choice));
+            var captured = player; var identity = LocalMenu.SetupIdentity(player); int version = BindingVersion;
+            AiSelectionPanel.OpenPlayer(this, template, draft => CanEdit && BindingVersion == version && ReferenceEquals(captured, player) &&
+                LocalMenu.ApplyPlayerSelection(captured, identity, draft));
         }
         void Update()
         {

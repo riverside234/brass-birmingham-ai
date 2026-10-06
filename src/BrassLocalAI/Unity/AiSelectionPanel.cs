@@ -15,16 +15,21 @@ namespace BrassLegacyAI
         static AiSelectionPanel active;
         static int closedFrame = -1;
         AiSetupRow owner;
-        TextMeshProUGUI template, empty, countLabel, detailText;
+        TextMeshProUGUI template, empty, countLabel, detailText, selectionText;
         Func<AiChoice, bool> choose;
-        AiChoice selected;
+        Func<PlayerSelectionDraft, bool> apply;
+        readonly Dictionary<AiFamily, AiChoice> drafts = new Dictionary<AiFamily, AiChoice>();
+        int ownerVersion;
+        bool fixture;
+        AiFamily Family { get { return CurrentPage == PlayerSelectionPage.Gamma ? AiFamily.Gamma : AiFamily.V4; } }
+        AiChoice selected { get { return drafts[Family]; } }
         string nickname, detail;
         RectTransform window, viewport, content;
         ScrollRect scroll, detailScroll;
         TMP_InputField filter;
         Button random, close, footerClose, clear, smaller, larger;
         readonly List<Button> tiles = new List<Button>();
-        readonly Dictionary<AiFamily, Button> pageButtons = new Dictionary<AiFamily, Button>();
+        readonly Dictionary<PlayerSelectionPage, Button> pageButtons = new Dictionary<PlayerSelectionPage, Button>();
         readonly Dictionary<AiFamily, string> queries = new Dictionary<AiFamily, string>();
         readonly Dictionary<AiFamily, float> positions = new Dictionary<AiFamily, float>();
         readonly Dictionary<AiFamily, IReadOnlyList<AiCatalogEntry>> catalogs = new Dictionary<AiFamily, IReadOnlyList<AiCatalogEntry>>();
@@ -34,11 +39,14 @@ namespace BrassLegacyAI
         float width, height, unit, gridWidth, cardHeight;
         int pixelWidth, pixelHeight, columns;
         public float TextScale { get; private set; } = 1.15f;
-        public AiFamily CurrentPage { get; private set; }
+        public PlayerSelectionPage CurrentPage { get; private set; }
+        public string DraftDifficulty { get; private set; }
+        public Button ApplyButton { get; private set; }
+        public Button[] DifficultyButtons { get; private set; } = new Button[0];
         public static bool IsOpen { get { return !ReferenceEquals(active, null); } }
         public static AiSelectionPanel Active { get { return active; } }
         public static bool BlocksMenuActivation { get { return IsOpen || closedFrame == Time.frameCount; } }
-        public IEnumerable<Button> Tiles { get { return new[] { random }.Concat(tiles); } }
+        public IEnumerable<Button> Tiles { get { return new[] { random }.Concat(tiles).Where(b => b != null); } }
         public TMP_InputField Filter { get { return filter; } }
         public RectTransform Window { get { return window; } }
         public ScrollRect GridScroll { get { return scroll; } }
@@ -47,18 +55,33 @@ namespace BrassLegacyAI
         public static AiSelectionPanel Open(AiSetupRow row, TextMeshProUGUI font, string playerName, AiChoice selectedChoice, Func<AiChoice, bool> onSelect,
             AiFamily? fixtureFamily = null, AiCatalogEntry[] fixtureEntries = null)
         {
-            if (fixtureEntries != null && !StartupFixes.IsSelfTest) throw new InvalidOperationException("Synthetic AI rosters are available only to the isolated UI test.");
+            if (!StartupFixes.IsSelfTest) throw new InvalidOperationException("Synthetic AI rosters are available only to the isolated UI test.");
+            var panel = OpenCore(row, font, playerName, selectedChoice, fixtureFamily, fixtureEntries);
+            panel.choose = onSelect; panel.fixture = true; panel.CurrentPage = selectedChoice.Family == AiFamily.V4 ? PlayerSelectionPage.V4 : PlayerSelectionPage.Gamma;
+            panel.Build(); panel.FocusSelection(); return panel;
+        }
+        public static AiSelectionPanel OpenPlayer(AiSetupRow row, TextMeshProUGUI font, Func<PlayerSelectionDraft, bool> onApply)
+        {
+            if (!row.CanEdit) return null;
+            var panel = OpenCore(row, font, row.Player.NickName, row.SelectedChoice, null, null);
+            panel.apply = onApply;
+            panel.CurrentPage = row.Player.AiType == BrassApplication.AI.AIType.Human ? PlayerSelectionPage.Human : PlayerSelectionPage.V4;
+            panel.Build(); panel.FocusSelection(); return panel;
+        }
+        static AiSelectionPanel OpenCore(AiSetupRow row, TextMeshProUGUI font, string playerName, AiChoice selectedChoice, AiFamily? fixtureFamily, AiCatalogEntry[] fixtureEntries)
+        {
             CloseActive(); StrategyTooltip.HideActive();
             var canvas = row.GetComponentInParent<Canvas>().rootCanvas;
             var root = AiWidgets.Rect(canvas.transform, "Brass AI selection panel", Vector2.zero, Vector2.zero);
             root.anchorMin = Vector2.zero; root.anchorMax = Vector2.one; root.offsetMin = root.offsetMax = Vector2.zero;
             var modalGroup = root.gameObject.AddComponent<CanvasGroup>(); modalGroup.ignoreParentGroups = true;
             var panel = active = root.gameObject.AddComponent<AiSelectionPanel>();
-            panel.owner = row; panel.template = font; panel.nickname = playerName; panel.selected = selectedChoice; panel.choose = onSelect;
-            panel.CurrentPage = selectedChoice.Family;
+            panel.owner = row; panel.ownerVersion = row.BindingVersion; panel.template = font; panel.nickname = playerName;
+            panel.DraftDifficulty = row.SelectedDifficulty;
             foreach (var family in new[] { AiFamily.V4, AiFamily.Gamma }) {
                 panel.catalogs[family] = fixtureFamily == family && fixtureEntries != null ? Array.AsReadOnly(fixtureEntries) : AiSelectionCatalog.Entries(family);
                 panel.queries[family] = ""; panel.positions[family] = 1;
+                panel.drafts[family] = selectedChoice.Family == family ? selectedChoice : new AiChoice(family, "random");
             }
             root.gameObject.AddComponent<LightUiTheme>();
             var menu = row.GetComponentsInParent<Frameworks.View.Menu.CreateGame.CreateOfflineGameView>(true).FirstOrDefault();
@@ -70,7 +93,7 @@ namespace BrassLegacyAI
                 panel.previousInteractable = panel.menuGroup.interactable; panel.previousRaycasts = panel.menuGroup.blocksRaycasts;
                 panel.menuGroup.interactable = false; panel.menuGroup.blocksRaycasts = false;
             }
-            panel.Build(); panel.FocusSelection(); return panel;
+            return panel;
         }
         Rect PixelBounds()
         {
@@ -89,16 +112,18 @@ namespace BrassLegacyAI
         Button Button(Transform parent, string name, string value, float x, float y, float w, float h, float size, Action action)
         {
             var button = AiWidgets.Button(parent, template, name, value, P(x, y), S(w, h), F(size));
-            button.onClick.AddListener(() => action()); return button;
+            button.onClick.AddListener(() => { if (IsCurrent) action(); }); return button;
         }
+        bool IsCurrent { get { return ReferenceEquals(active, this) && owner != null && owner.CanEdit && owner.BindingVersion == ownerVersion; } }
         void Remember()
-        { if (scroll != null) positions[CurrentPage] = scroll.verticalNormalizedPosition; }
+        { if (scroll != null) positions[Family] = scroll.verticalNormalizedPosition; }
         void Build()
         {
             rebuilding = true;
             if (EventSystem.current != null) EventSystem.current.SetSelectedGameObject(null);
             foreach (Transform child in transform) { child.gameObject.SetActive(false); Destroy(child.gameObject); }
-            tiles.Clear(); pageButtons.Clear();
+            tiles.Clear(); pageButtons.Clear(); filter = null; random = null; scroll = null; clear = null;
+            DifficultyButtons = new Button[0];
             Canvas.ForceUpdateCanvases(); var root = (RectTransform)transform; var pixels = PixelBounds();
             pixelWidth = (int)pixels.width; pixelHeight = (int)pixels.height;
             unit = root.rect.width / Math.Max(1, pixels.width); if (unit <= 0) unit = 1;
@@ -114,9 +139,9 @@ namespace BrassLegacyAI
             window.anchorMin = window.anchorMax = window.pivot = new Vector2(.5f, .5f);
             window.anchoredPosition = (safe.center - pixels.center) * unit;
             window.gameObject.AddComponent<LightUiSurface>().Role = LightSurfaceRole.Window;
-            var title = Text(window, "Title", "CHOOSE AI · " + nickname, 22, 10, width - 365, 46, 30);
+            var title = Text(window, "Title", "CHOOSE PLAYER · " + nickname, 22, 10, width - 365, 46, 30);
             title.fontStyle = FontStyles.Bold; title.overflowMode = TextOverflowModes.Ellipsis;
-            Text(window, "Context", "Player " + owner.Player.PlayerStartConfiguration.Color + " · Choose a computer opponent for this player.", 22, 55, width - 60, 32, 19).color = LightUi.Muted;
+            Text(window, "Context", "Player " + owner.Player.PlayerStartConfiguration.Color + " · Choose who plays this seat. Apply to confirm your selection.", 22, 55, width - 60, 32, 19).color = LightUi.Muted;
             smaller = Button(window, "Smaller text", "A−", width - 298, 16, 50, 42, 20, () => ChangeTextSize(-1));
             Text(window, "Text size", new[] { "Large", "Larger", "Largest" }[Mathf.RoundToInt((TextScale - 1) / .15f)], width - 244, 16, 100, 42, 18).alignment = TextAlignmentOptions.Center;
             larger = Button(window, "Larger text", "A+", width - 140, 16, 50, 42, 20, () => ChangeTextSize(1));
@@ -125,51 +150,78 @@ namespace BrassLegacyAI
             larger.GetComponent<AiControlSurface>().Available = larger.interactable;
             close = Button(window, "Close chooser", "×", width - 70, 16, 48, 42, 25, Close);
             float sidebar = 208, bodyX = sidebar + 40, bodyWidth = width - bodyX - 24;
-            foreach (var family in new[] { AiFamily.V4, AiFamily.Gamma }) {
-                var page = family;
-                var button = Button(window, "Page " + family, "", 22, 106 + (family == AiFamily.V4 ? 0 : 90), sidebar, 78, 24, () => SelectPage(page));
+            foreach (var page in new[] { PlayerSelectionPage.Human, PlayerSelectionPage.V4, PlayerSelectionPage.Gamma }) {
+                var button = Button(window, "Page " + page, "", 22, 106 + (int)page * 90, sidebar, 78, 24, () => SelectPage(page));
                 button.GetComponentInChildren<TextMeshProUGUI>().gameObject.SetActive(false);
-                AddIcon(button.transform, family == AiFamily.V4 ? AiIconKind.V4 : AiIconKind.Gamma, 12, 17, 30);
-                Text(button.transform, "Family", family.ToString(), 52, 8, sidebar - 64, 34, 24).fontStyle = FontStyles.Bold;
-                Text(button.transform, "Count", family == AiFamily.V4 ? "6 + Random" : "16 + Random", 52, 44, sidebar - 60, 24, 17).color = LightUi.Muted;
-                button.GetComponent<AiControlSurface>().Selected = CurrentPage == family; pageButtons[family] = button;
+                AddIcon(button.transform, page == PlayerSelectionPage.Human ? AiIconKind.Human : page == PlayerSelectionPage.V4 ? AiIconKind.V4 : AiIconKind.Gamma, 12, 17, 30);
+                Text(button.transform, "Family", page.ToString(), 52, 8, sidebar - 64, 34, 24).fontStyle = FontStyles.Bold;
+                Text(button.transform, "Count", page == PlayerSelectionPage.Human ? "Local player" : page == PlayerSelectionPage.V4 ? "6 + Random" : "16 + Random", 52, 44, sidebar - 60, 24, 17).color = LightUi.Muted;
+                button.GetComponent<AiControlSurface>().Selected = CurrentPage == page; pageButtons[page] = button;
             }
             Text(window, "Page title", CurrentPage.ToString(), bodyX, 100, 155, 38, 27).fontStyle = FontStyles.Bold;
             countLabel = Text(window, "Page count", "", bodyX + 165, 104, bodyWidth - 165, 34, 19); countLabel.color = LightUi.Muted;
-            var box = AiWidgets.Rect(window, "Find AI", P(bodyX, 148), S(bodyWidth - 88, 44)); box.gameObject.AddComponent<AiControlSurface>();
+            float footerHeight = 108 + Math.Max(0, TextScale - 1.15f) * 90;
+            if (CurrentPage == PlayerSelectionPage.Human) {
+                countLabel.text = "Local hotseat play";
+                var human = AiWidgets.Rect(window, "Human card", P(bodyX, 160), S(bodyWidth, 230));
+                human.gameObject.AddComponent<AiControlSurface>().Selected = true;
+                AddIcon(human, AiIconKind.Human, 26, 32, 54);
+                Text(human, "Human heading", "Human", 104, 22, bodyWidth - 130, 60, 32).fontStyle = FontStyles.Bold;
+                Text(human, "Human description", "You control this player locally.", 104, 94, bodyWidth - 130, 44, 24);
+                Text(human, "Hotseat", "Choose Human for more than one seat to play together on this device.", 104, 148, bodyWidth - 140, 68, 22, true).color = LightUi.Muted;
+            } else {
+            Text(window, "Difficulty caption", "Difficulty", bodyX, 146, 137, 46, 21);
+            DifficultyButtons = new Button[3];
+            bool enabled = CurrentPage == PlayerSelectionPage.V4 || fixture && catalogs[Family].Any(e => e.Available);
+            for (int i = 0; i < 3; i++) {
+                string key = DifficultyCatalog.Keys[i];
+                var button = DifficultyButtons[i] = Button(window, "Difficulty " + key, DifficultyCatalog.Label(key) + " · " + DifficultyCatalog.Milliseconds(key) / 1000 + "s", bodyX + 142 + i * 167, 146, 155, 46, 21, () => {
+                    if (CurrentPage == PlayerSelectionPage.Gamma && !fixture) return;
+                    DraftDifficulty = key; UpdateDifficulty(); UpdateSelection();
+                });
+                button.interactable = enabled; button.GetComponent<AiControlSurface>().Available = enabled;
+                var mark = AiWidgets.Rect(button.transform, "Selected mark", P(136, 17), S(11, 11)); mark.gameObject.AddComponent<AiSelectionMark>().raycastTarget = false;
+                button.GetComponentInChildren<TextMeshProUGUI>().rectTransform.offsetMax = new Vector2(-20 * unit, -2 * unit);
+            }
+            Text(window, "Difficulty help", CurrentPage == PlayerSelectionPage.Gamma ? "Gamma is not available yet." : "Maximum thinking time", bodyX + 656, 146, bodyWidth - 656, 46, 18, true).color = LightUi.Muted;
+            var box = AiWidgets.Rect(window, "Find AI", P(bodyX, 204), S(bodyWidth - 88, 44)); box.gameObject.AddComponent<AiControlSurface>();
             filter = box.gameObject.AddComponent<TMP_InputField>();
             var area = AiWidgets.Rect(box, "Text area", P(10, 3), S(bodyWidth - 110, 38)); area.gameObject.AddComponent<RectMask2D>();
             var inputText = Text(area, "Input", "", 0, 0, bodyWidth - 110, 38, 20);
             var placeholder = Text(area, "Placeholder", "Find AI…", 0, 0, bodyWidth - 110, 38, 20); placeholder.color = LightUi.Muted;
             filter.textViewport = area; filter.textComponent = inputText; filter.placeholder = placeholder; filter.characterLimit = 64;
-            filter.SetTextWithoutNotify(queries[CurrentPage]);
-            filter.onValueChanged.AddListener(value => { queries[CurrentPage] = value; positions[CurrentPage] = 1; RefreshGrid(); });
-            clear = Button(window, "Clear filter", "Clear", bodyX + bodyWidth - 80, 148, 80, 44, 18, () => { filter.text = ""; filter.ActivateInputField(); });
-            var randomEntry = RandomEntry(); random = Tile(randomEntry, window, bodyX, 206, bodyWidth, 84, true);
-            columns = CurrentPage == AiFamily.Gamma ? 4 : 3;
-            cardHeight = (CurrentPage == AiFamily.Gamma ? 146 : 216) * TextScale / 1.15f;
-            float footerHeight = 142 + Math.Max(0, TextScale - 1.15f) * 90;
-            float gridHeight = Mathf.Max(80, height - 304 - footerHeight - 16);
-            viewport = AiWidgets.Rect(window, "Styles viewport", P(bodyX, 304), S(bodyWidth, gridHeight)); viewport.gameObject.AddComponent<RectMask2D>();
+            filter.SetTextWithoutNotify(queries[Family]);
+            filter.onValueChanged.AddListener(value => { if (!IsCurrent) return; queries[Family] = value; positions[Family] = 1; RefreshGrid(); });
+            clear = Button(window, "Clear filter", "Clear", bodyX + bodyWidth - 80, 204, 80, 44, 18, () => { filter.text = ""; filter.ActivateInputField(); });
+            var randomEntry = RandomEntry(); random = Tile(randomEntry, window, bodyX, 260, bodyWidth, 68, true);
+            columns = Family == AiFamily.Gamma ? 4 : 3;
+            cardHeight = (Family == AiFamily.Gamma ? 146 : 216) * TextScale / 1.15f;
+            float gridHeight = Mathf.Max(80, height - 340 - footerHeight - 16);
+            viewport = AiWidgets.Rect(window, "Styles viewport", P(bodyX, 340), S(bodyWidth, gridHeight)); viewport.gameObject.AddComponent<RectMask2D>();
             viewport.gameObject.AddComponent<Image>().color = new Color(0, 0, 0, .001f);
             scroll = viewport.gameObject.AddComponent<ScrollRect>(); scroll.viewport = viewport; scroll.horizontal = false; scroll.vertical = true;
             scroll.scrollSensitivity = 38 * unit; scroll.movementType = ScrollRect.MovementType.Clamped;
             gridWidth = bodyWidth - 22;
             content = AiWidgets.Rect(viewport, "Styles", Vector2.zero, S(gridWidth, gridHeight)); scroll.content = content;
             empty = Text(viewport, "No results", "No matching AIs. Clear the search to see this page's roster.", 12, 12, bodyWidth - 32, 80, 21, true);
-            var scrollbar = Scrollbar(window, "AI grid scrollbar", bodyX + bodyWidth - 14, 304, 14, gridHeight);
+            var scrollbar = Scrollbar(window, "AI grid scrollbar", bodyX + bodyWidth - 14, 340, 14, gridHeight);
             scroll.verticalScrollbar = scrollbar; scroll.verticalScrollbarVisibility = ScrollRect.ScrollbarVisibility.AutoHide;
+            }
             float footerY = height - footerHeight;
-            Text(window, "Current AI", "Current: " + LocalMenu.RowLabel(owner.Player) + "    ·    " + DifficultyCatalog.Summary(owner.SelectedDifficulty),
-                22, footerY + 6, width - 225, 38, 21, false).overflowMode = TextOverflowModes.Ellipsis;
-            footerClose = Button(window, "Close panel", "Close", width - 192, footerY + 6, 170, 44, 21, Close);
+            selectionText = Text(window, "Current AI", "", 22, footerY + 6, width - 365, 42, 21);
+            selectionText.overflowMode = TextOverflowModes.Ellipsis;
+            footerClose = Button(window, "Close panel", "Cancel", width - 332, footerY + 6, 145, 44, 21, Close);
+            ApplyButton = Button(window, "Apply selection", "Apply", width - 172, footerY + 6, 150, 44, 21, Apply);
             var detailView = AiWidgets.Rect(window, "AI details", P(22, footerY + 54), S(width - 44, footerHeight - 66));
             detailView.gameObject.AddComponent<RectMask2D>(); detailView.gameObject.AddComponent<Image>().color = new Color(0, 0, 0, .001f);
             detailScroll = detailView.gameObject.AddComponent<ScrollRect>(); detailScroll.viewport = detailView; detailScroll.horizontal = false;
             detailScroll.movementType = ScrollRect.MovementType.Clamped; detailScroll.scrollSensitivity = 30 * unit;
             var detailContent = AiWidgets.Rect(detailView, "Description content", Vector2.zero, detailView.sizeDelta); detailScroll.content = detailContent;
             detailText = Text(detailContent, "Full description", "", 0, 0, width - 50, footerHeight - 66, 19, true); detailText.color = LightUi.Muted;
-            rebuilding = false; RefreshGrid(); ShowDetails(selected.Family == CurrentPage ? AiSelectionCatalog.Find(selected) ?? randomEntry : randomEntry);
+            rebuilding = false;
+            if (CurrentPage == PlayerSelectionPage.Human) SetDetails("Human · Local hotseat play. No AI difficulty or thinking allowance applies.");
+            else { RefreshGrid(); UpdateDifficulty(); ShowDetails(catalogs[Family].FirstOrDefault(e => e.Choice.Equals(selected)) ?? RandomEntry()); }
+            UpdateSelection(); UpdateNavigation();
         }
         void AddIcon(Transform parent, AiIconKind kind, float x, float y, float size)
         { var rect = AiWidgets.Rect(parent, "Icon", P(x, y), S(size, size)); var icon = rect.gameObject.AddComponent<AiChoiceIcon>(); icon.Kind = kind; icon.raycastTarget = false; }
@@ -184,22 +236,22 @@ namespace BrassLegacyAI
         }
         AiCatalogEntry RandomEntry()
         {
-            int available = catalogs[CurrentPage].Count(e => e.Available);
-            var canonical = AiSelectionCatalog.Random(CurrentPage);
-            return new AiCatalogEntry(CurrentPage, "random", "Random", canonical.Description, available > 0, available == 0 ? "Models not installed" : "");
+            int available = catalogs[Family].Count(e => e.Available);
+            var canonical = AiSelectionCatalog.Random(Family);
+            return new AiCatalogEntry(Family, "random", "Random", canonical.Description, available > 0, available == 0 ? "Models not installed" : "");
         }
         Button Tile(AiCatalogEntry entry, Transform parent, float x, float y, float w, float h, bool isRandom)
         {
             var button = AiWidgets.Button(parent, template, entry.Choice.EntryId, "", P(x, y), S(w, h), F(24));
             button.GetComponentInChildren<TextMeshProUGUI>().gameObject.SetActive(false); button.interactable = entry.Available;
-            var surface = button.GetComponent<AiControlSurface>(); surface.Selected = selected.Equals(entry.Choice); surface.Available = entry.Available;
+            var surface = button.GetComponent<AiControlSurface>(); surface.Selected = entry.Available && selected.Equals(entry.Choice); surface.Available = entry.Available;
             float nameX = isRandom ? 58 : 14, nameWidth = w - nameX - (isRandom ? 175 : 28);
             if (isRandom) AddIcon(button.transform, AiIconKind.Random, 14, 16, 30);
             var nameText = Text(button.transform, "Name", entry.Name, nameX, 8, nameWidth, 72 * TextScale / 1.15f, 24, true); nameText.fontStyle = FontStyles.Bold;
             float nameHeight = isRandom ? 34 : Mathf.Min(74 * TextScale / 1.15f, Mathf.Max(34 * TextScale / 1.15f, nameText.GetPreferredValues(entry.Name, nameWidth * unit, 0).y / unit + 4));
             nameText.rectTransform.sizeDelta = S(nameWidth, nameHeight);
-            string description = isRandom ? (CurrentPage == AiFamily.V4 ? "Choose from all six V4 styles at game start. Plans adapt." : "Available when trained Gamma models are installed.") : entry.Description;
-            float descriptionY = isRandom ? 46 : nameHeight + 13;
+            string description = isRandom ? (Family == AiFamily.V4 ? "Choose from all six V4 styles at game start. Plans adapt." : "Available when trained Gamma models are installed.") : entry.Description;
+            float descriptionY = isRandom ? 36 : nameHeight + 13;
             var descriptionText = Text(button.transform, "Description", description, nameX, descriptionY, w - nameX - 14,
                 isRandom ? 30 : Math.Max(24, h - descriptionY - 42), 19, true);
             descriptionText.overflowMode = TextOverflowModes.Ellipsis;
@@ -207,7 +259,7 @@ namespace BrassLegacyAI
             var stateText = Text(button.transform, "Status", state, isRandom ? w - 171 : 14, isRandom ? 13 : h - 33, isRandom ? 153 : w - 46, 28, 17);
             stateText.color = surface.Selected ? LightUi.Accent : LightUi.Muted;
             if (surface.Selected) {
-                var mark = AiWidgets.Rect(button.transform, "Selected mark", P(w - 26, isRandom ? 49 : h - 26), S(14, 14));
+                var mark = AiWidgets.Rect(button.transform, "Selected mark", P(w - 26, isRandom ? 44 : h - 26), S(14, 14));
                 mark.gameObject.AddComponent<AiSelectionMark>().raycastTarget = false;
             }
             var hint = button.gameObject.AddComponent<AiChoiceHint>(); hint.Panel = this; hint.Entry = entry;
@@ -215,18 +267,54 @@ namespace BrassLegacyAI
         }
         void Commit(AiCatalogEntry entry)
         {
+            if (!IsCurrent) return;
             if (!entry.Available) { ShowDetails(entry); return; }
-            if (owner == null || !owner.CanEdit) { Close(); return; }
-            var callback = choose; var choice = entry.Choice; Close(); callback(choice);
+            if (!fixture && !AiSelectionCatalog.CanChoose(entry.Choice)) return;
+            drafts[Family] = entry.Choice; Remember(); Build(); FocusSelection();
+        }
+        void UpdateDifficulty()
+        {
+            for (int i = 0; i < DifficultyButtons.Length; i++) {
+                bool chosen = DifficultyButtons[i].interactable && DraftDifficulty == DifficultyCatalog.Keys[i];
+                var surface = DifficultyButtons[i].GetComponent<AiControlSurface>(); surface.Selected = chosen; surface.SetVerticesDirty();
+                DifficultyButtons[i].transform.Find("Selected mark").gameObject.SetActive(chosen);
+            }
+        }
+        bool CanApply()
+        {
+            if (!IsCurrent) return false;
+            if (CurrentPage == PlayerSelectionPage.Human) return !fixture;
+            return DifficultyCatalog.Contains(DraftDifficulty) && (fixture ?
+                (selected.EntryId == "random" ? RandomEntry().Available : catalogs[Family].Any(e => e.Choice.Equals(selected) && e.Available)) :
+                CurrentPage == PlayerSelectionPage.V4 && AiSelectionCatalog.CanChoose(selected));
+        }
+        void UpdateSelection()
+        {
+            selectionText.text = CurrentPage == PlayerSelectionPage.Human ? "Selection: Human · Local player" : CurrentPage == PlayerSelectionPage.Gamma && !fixture ?
+                "Gamma is not available yet. Choose Human or V4 to play." :
+                "Selection: " + Family + " · " + (selected.EntryId == "random" ? "Random" : catalogs[Family].First(e => e.Choice.Equals(selected)).Name) +
+                " · " + DifficultyCatalog.Label(DraftDifficulty) + " · up to " + DifficultyCatalog.Milliseconds(DraftDifficulty) / 1000 + "s";
+            ApplyButton.interactable = CanApply(); var surface = ApplyButton.GetComponent<AiControlSurface>();
+            surface.Available = ApplyButton.interactable; surface.Selected = ApplyButton.interactable; surface.SetVerticesDirty();
+        }
+        void Apply()
+        {
+            if (!CanApply()) return;
+            var draft = new PlayerSelectionDraft(CurrentPage, selected, DraftDifficulty);
+            var onApply = apply; var onChoose = choose;
+            // Closing restores row input before its identity/generation checked
+            // callback commits the complete draft with one presenter refresh.
+            Close();
+            if (fixture) onChoose(draft.Choice); else onApply(draft);
         }
         void RefreshGrid()
         {
             if (rebuilding) return;
             foreach (var tile in tiles) { tile.gameObject.SetActive(false); Destroy(tile.gameObject); } tiles.Clear();
-            string query = queries[CurrentPage].Trim(); var entries = catalogs[CurrentPage];
+            string query = queries[Family].Trim(); var entries = catalogs[Family];
             var shown = entries.Where(e => query.Length == 0 || e.Name.IndexOf(query, StringComparison.OrdinalIgnoreCase) >= 0 ||
                 e.Description.IndexOf(query, StringComparison.OrdinalIgnoreCase) >= 0).ToArray();
-            countLabel.text = CurrentPage == AiFamily.Gamma ? shown.Length + " of " + entries.Count + " models · " + entries.Count(e => e.Available) + " available" +
+            countLabel.text = Family == AiFamily.Gamma ? shown.Length + " of " + entries.Count + " models · " + entries.Count(e => e.Available) + " available" +
                 (entries.Any(e => e.Available) ? "" : " · Models not installed") : shown.Length + " of " + entries.Count + " styles · Plans adapt during play";
             float w = (gridWidth - (columns - 1) * 12) / columns;
             for (int i = 0; i < shown.Length; i++) tiles.Add(Tile(shown[i], content, (i % columns) * (w + 12), (i / columns) * (cardHeight + 12), w, cardHeight, false));
@@ -235,12 +323,14 @@ namespace BrassLegacyAI
             empty.gameObject.SetActive(shown.Length == 0); Canvas.ForceUpdateCanvases();
             scroll.verticalScrollbar.size = Mathf.Clamp01(viewport.rect.height / content.sizeDelta.y);
             scroll.verticalScrollbar.gameObject.SetActive(content.sizeDelta.y > viewport.rect.height + .5f);
-            scroll.verticalNormalizedPosition = positions[CurrentPage]; UpdateNavigation();
+            scroll.verticalNormalizedPosition = positions[Family]; UpdateNavigation();
         }
         public void SelectPage(AiFamily family)
+        { SelectPage(family == AiFamily.V4 ? PlayerSelectionPage.V4 : PlayerSelectionPage.Gamma); }
+        public void SelectPage(PlayerSelectionPage page)
         {
-            if (family == CurrentPage || !catalogs.ContainsKey(family)) return;
-            Remember(); CurrentPage = family; Build(); pageButtons[family].Select();
+            if (!IsCurrent || page == CurrentPage || !Enum.IsDefined(typeof(PlayerSelectionPage), page)) return;
+            Remember(); CurrentPage = page; Build(); pageButtons[page].Select();
         }
         public void ChangeTextSize(int direction)
         {
@@ -250,8 +340,9 @@ namespace BrassLegacyAI
         }
         List<Selectable> FocusOrder()
         {
-            var controls = new List<Selectable> { pageButtons[AiFamily.V4], pageButtons[AiFamily.Gamma], filter, clear, random };
-            controls.AddRange(tiles); controls.AddRange(new[] { smaller, larger, close, footerClose });
+            var controls = new List<Selectable> { pageButtons[PlayerSelectionPage.Human], pageButtons[PlayerSelectionPage.V4], pageButtons[PlayerSelectionPage.Gamma] };
+            controls.AddRange(DifficultyButtons); controls.AddRange(new Selectable[] { filter, clear, random });
+            controls.AddRange(tiles); controls.AddRange(new[] { smaller, larger, close, footerClose, ApplyButton });
             return controls.Where(c => c != null && c.IsActive() && c.IsInteractable()).ToList();
         }
         void UpdateNavigation()
@@ -264,14 +355,14 @@ namespace BrassLegacyAI
                 var tile = tiles[i]; if (!tile.interactable) continue;
                 tile.navigation = new Navigation { mode = Navigation.Mode.Explicit,
                     selectOnLeft = i % columns > 0 ? tiles[i - 1] : pageButtons[CurrentPage],
-                    selectOnRight = i % columns < columns - 1 && i + 1 < tiles.Count ? tiles[i + 1] : footerClose,
+                    selectOnRight = i % columns < columns - 1 && i + 1 < tiles.Count ? tiles[i + 1] : ApplyButton,
                     selectOnUp = i >= columns ? tiles[i - columns] : random.interactable ? (Selectable)random : filter,
-                    selectOnDown = i + columns < tiles.Count ? tiles[i + columns] : footerClose };
+                    selectOnDown = i + columns < tiles.Count ? tiles[i + columns] : ApplyButton };
             }
         }
         void FocusSelection()
         {
-            var match = Tiles.FirstOrDefault(b => b.name == selected.EntryId && b.interactable);
+            var match = CurrentPage == PlayerSelectionPage.Human ? null : Tiles.FirstOrDefault(b => b.name == selected.EntryId && b.interactable);
             (match == null ? (Selectable)pageButtons[CurrentPage] : match).Select(); if (match != null) Reveal(match);
         }
         void Reveal(Button button)
@@ -284,7 +375,11 @@ namespace BrassLegacyAI
         internal void ShowDetails(AiCatalogEntry entry)
         {
             if (entry == null || detailText == null) return;
-            detail = entry.Name + " · " + (entry.Available ? entry.Description : entry.AvailabilityReason + ". " + entry.Description);
+            SetDetails(entry.Name + " · " + (entry.Available ? entry.Description : entry.AvailabilityReason + ". " + entry.Description));
+        }
+        void SetDetails(string value)
+        {
+            detail = value;
             detailText.text = detail;
             float h = Math.Max(detailScroll.viewport.rect.height, detailText.GetPreferredValues(detail, detailText.rectTransform.rect.width, 0).y + 4 * unit);
             detailText.rectTransform.sizeDelta = new Vector2(detailText.rectTransform.sizeDelta.x, h);
@@ -292,7 +387,7 @@ namespace BrassLegacyAI
         }
         void LateUpdate()
         {
-            if (owner == null || !owner.CanEdit) { Close(); return; }
+            if (!IsCurrent) { Close(); return; }
             var pixels = PixelBounds(); float currentUnit = ((RectTransform)transform).rect.width / Math.Max(1, pixels.width);
             if (pixelWidth != (int)pixels.width || pixelHeight != (int)pixels.height || Mathf.Abs(currentUnit - unit) > .001f) {
                 Remember(); Build(); pageButtons[CurrentPage].Select();
@@ -337,14 +432,20 @@ namespace BrassLegacyAI
         public void OnPointerEnter(PointerEventData data) { if (Panel != null) Panel.ShowDetails(Entry); }
         public void OnSelect(BaseEventData data) { if (Panel != null) Panel.ShowDetails(Entry); }
     }
-    public enum AiIconKind { V4, Gamma, Random }
+    public enum AiIconKind { V4, Gamma, Random, Human }
     public sealed class AiChoiceIcon : MaskableGraphic
     {
         public AiIconKind Kind;
         protected override void OnPopulateMesh(VertexHelper mesh)
         {
             mesh.Clear(); var r = GetPixelAdjustedRect(); Color32 ink = LightUi.Accent;
-            if (Kind == AiIconKind.Random) {
+            if (Kind == AiIconKind.Human) {
+                Dot(mesh, new Vector2(r.center.x, r.yMin + r.height * .73f), r.width * .16f, ink);
+                var left = new Vector2(r.xMin + r.width * .2f, r.yMin + r.height * .19f);
+                var right = new Vector2(r.xMin + r.width * .8f, left.y);
+                Line(mesh, left, right, r.height * .13f, ink);
+                Dot(mesh, new Vector2(r.center.x, r.yMin + r.height * .34f), r.width * .25f, ink);
+            } else if (Kind == AiIconKind.Random) {
                 LightUi.Paint(mesh, r, LightSurfaceRole.Card, false, false, false, true, LightUiTheme.Unit(this));
                 foreach (var point in new[] { new Vector2(.25f, .25f), new Vector2(.75f, .25f), new Vector2(.5f, .5f), new Vector2(.25f, .75f), new Vector2(.75f, .75f) })
                     Dot(mesh, new Vector2(r.xMin + r.width * point.x, r.yMin + r.height * point.y), r.width * .065f, ink);

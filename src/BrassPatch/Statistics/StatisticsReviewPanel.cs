@@ -13,11 +13,11 @@ namespace BrassPatch.Statistics
         // Cache analytical values only. UI objects and ledger-search results are never cached.
         StatisticsPageView View()
         {
-            string key=CurrentPage+"/"+Filters.Era+"/"+String.Join(",",Filters.Players.OrderBy(p=>(int)p))+"/"+Filters.Industry+"/"+Filters.Region+"/"+Filters.Action+"/"+Filters.Resource+"/"+Filters.Outgoing+"/"+Filters.ShowAll+"/"+Filters.Boundary+"/"+Filters.BoundaryEra+"/"+Filters.EvidenceRestricted+"/"+Filters.MapMode+"/"+Filters.Focus+"/"+Filters.Reference+"/"+Filters.AllCashPayments+"/"+Filters.ResourceView+"/"+Filters.DevelopmentSource+"/"+Filters.ByPlayer+"/"+Filters.ActionShare+"/"+Filters.CardShare+"/"+Filters.LinkShare+"/"+String.Join(",",Filters.Evidence.OrderBy(x=>x));
+            string key=CurrentPage+"/"+Filters.Era+"/"+String.Join(",",Filters.Players.OrderBy(p=>(int)p))+"/"+Filters.Industry+"/"+Filters.Region+"/"+Filters.Action+"/"+Filters.Resource+"/"+Filters.Outgoing+"/"+Filters.ShowAll+"/"+Filters.Boundary+"/"+Filters.BoundaryEra+"/"+Filters.EvidenceRestricted+"/"+Filters.MapMode+"/"+Filters.Focus+"/"+Filters.Reference+"/"+Filters.AllCashPayments+"/"+Filters.ResourceView+"/"+Filters.EfficiencyView+"/"+Filters.DevelopmentSource+"/"+Filters.ByPlayer+"/"+Filters.ActionShare+"/"+Filters.CardShare+"/"+Filters.LinkShare+"/"+String.Join(",",Filters.Evidence.OrderBy(x=>x));
             StatisticsPageView view;if(!views.TryGetValue(key,out view)){if(views.Count>64)views.Clear();view=StatisticsPlotPages.Build(CurrentPage,Report,Filters);views[key]=view;}
             // Clone row lists because text search must not mutate a cached view.
             var copy=new StatisticsPageView{Context=view.Context};copy.Headlines.AddRange(view.Headlines);copy.Plots.AddRange(view.Plots);
-            foreach(var s in view.Ledgers){var section=new StatisticsSection(s.Title,s.Definition,s.Columns);section.Rows.AddRange(s.Rows);copy.Ledgers.Add(section);}return copy;
+            foreach(var s in view.Ledgers){var section=new StatisticsSection(s.Title,s.Definition,s.Columns){Id=s.Id};section.Rows.AddRange(s.Rows);copy.Ledgers.Add(section);}return copy;
         }
         public void Drill(StatisticsDrill target)
         {
@@ -25,13 +25,13 @@ namespace BrassPatch.Statistics
             Filters.EvidenceRestricted=target.HasKeys||target.Keys.Count>0;
             if(target.Era.HasValue)Filters.Era=target.Era.Value;
             if(target.Resource!="")Filters.Resource=target.Resource;
-            if(target.ResourceView!=null)Filters.ResourceView=target.ResourceView;
+            if(target.ResourceView!=null)Filters.ResourceView=target.ResourceView;if(target.EfficiencyView!=null)Filters.EfficiencyView=target.EfficiencyView;
             if(target.AllCashPayments.HasValue)Filters.AllCashPayments=target.AllCashPayments.Value;
             if(target.Outgoing.HasValue)Filters.Outgoing=target.Outgoing.Value;
             if(target.Player.HasValue){Filters.Players.Clear();Filters.Players.Add(target.Player.Value);}
             Filters.Search="";if(search!=null)search.SetTextWithoutNotify("");positions[target.Page]=1;evidenceSection="Supporting records by identity";SelectPage(target.Page);
             // Evidence is visible immediately, without requiring another disclosure click.
-            var view=StatisticsPlotPages.Build(target.Page,Report,Filters);foreach(var s in view.Ledgers)openLedgers.Add(target.Page+":"+s.Title);
+            var view=StatisticsPlotPages.Build(target.Page,Report,Filters);foreach(var s in view.Ledgers)openLedgers.Add(target.Page+":"+s.Identity);
         }
         float PlotContent(StatisticsPageView view,float start)
         {
@@ -67,7 +67,7 @@ namespace BrassPatch.Statistics
                 var help=StatisticsWidgets.Button(BodyScroll.content,font,"About "+plot.Id,"About this chart",new Vector2(0,-y),new Vector2(200*unit*TextScale,36*unit*TextScale),F(18),()=>Tooltip(plot.Definition));Tip(help,plot.Definition);y+=44*unit*TextScale;
                 if(plot.Marks.Count==0)y+=Paragraph(BodyScroll.content,"Empty plot","No recorded values match this scope. Reset filters to restore the full view.",y,21);
                 else y+=StatisticsPlotView.Create(BodyScroll.content,font,plot,y,bodyWidth,unit,TextScale,this,hiddenSeries,()=>QueueRender(true));
-                var exact=StatisticsWidgets.Button(BodyScroll.content,font,"Exact data "+plot.Id,"Exact data · "+plot.Marks.Count+" marks",new Vector2(0,-y),new Vector2(280*unit*TextScale,40*unit*TextScale),F(19),()=>OpenChartData(plot.Title+" · exact data"));y+=48*unit*TextScale;
+                var exact=StatisticsWidgets.Button(BodyScroll.content,font,"Exact data "+plot.Id,"Exact data · "+plot.Marks.Count+" marks",new Vector2(0,-y),new Vector2(280*unit*TextScale,40*unit*TextScale),F(19),()=>OpenChartData("plot/"+plot.Id));y+=48*unit*TextScale;
                 if(plot.Context.Count>0)y+=Paragraph(BodyScroll.content,"Plot coverage",String.Join("\n",plot.Context),y,19);
                 y+=20*unit;
             }

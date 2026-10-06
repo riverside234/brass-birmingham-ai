@@ -12,6 +12,7 @@ using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 using BrassPatch.Statistics;
+using BrassPatch.UI;
 
 namespace BrassPatch.CardTracker
 {
@@ -40,13 +41,17 @@ namespace BrassPatch.CardTracker
         public CardTrackerOverlay(CardTrackerSession owner,RectTransform parent)
         {
             session=owner;root=parent;
+            // Opt in only on the tracker root; the board and other game panels
+            // retain their own appearance and input behavior.
+            root.gameObject.AddComponent<StatisticsTheme>();
+            root.gameObject.AddComponent<LightUiTheme>();
             var text=owner.Board.GetComponentsInChildren<TextMeshProUGUI>(true).FirstOrDefault(t=>t.font!=null);
             font=text==null?TMP_Settings.defaultFontAsset:text.font;
             UpdateUnit();
             Toggle=StatisticsWidgets.Button(root,font,"Card Tracker toggle","Card Tracker",Vector2.zero,new Vector2(200,50)*unit,20*unit*textScale,()=>{
                 if(session.IsOpen)session.Close();else session.Open();
             });
-            Translucent(Toggle.gameObject,.90f);
+            Translucent(Toggle.gameObject,.96f);
             toggleLabel=Toggle.GetComponentInChildren<TextMeshProUGUI>();
             Hover(Toggle.gameObject,"Four-player public card counts.\nAvailable on your turn, between actions, after animations finish.\nOpening pauses the game. Closing resumes it.");
             Layout();
@@ -56,6 +61,7 @@ namespace BrassPatch.CardTracker
             var canvas=root.GetComponent<Canvas>().rootCanvas;
             float pixels=canvas.worldCamera!=null?canvas.worldCamera.pixelWidth:Screen.width;
             unit=root.rect.width/Mathf.Max(1,pixels);if(unit<=0)unit=1;
+            root.GetComponent<LightUiTheme>().PixelUnit=unit;
         }
         RectTransform Rect(Transform parent,string name,Vector2 size)
         {
@@ -70,7 +76,7 @@ namespace BrassPatch.CardTracker
         Button Button(Transform parent,string name,string value,Vector2 pos,Vector2 size,Action click,float pixels=20)
         {
             var button=StatisticsWidgets.Button(parent,font,name,value,pos*unit,size*unit,pixels*unit*textScale,click);
-            Translucent(button.gameObject,.90f);return button;
+            Translucent(button.gameObject,.95f);return button;
         }
         static void Translucent(GameObject node,float opacity)
         {
@@ -92,6 +98,7 @@ namespace BrassPatch.CardTracker
         {
             if(Toggle==null||toggleLabel==null)return;
             StatisticsWidgets.Enabled(Toggle,enabled);StatisticsWidgets.Selected(Toggle,open);
+            toggleLabel.color=enabled?StatisticsTheme.Ink:StatisticsTheme.Muted;
             toggleLabel.text=open?"Resume game":"Card Tracker";
         }
         public void Show(CardTrackerProjection state)
@@ -129,19 +136,19 @@ namespace BrassPatch.CardTracker
             header=Rect(layer,"Tracker header",new Vector2(headerWidth,48));
             header.anchoredPosition=new Vector2(root.rect.xMin+12*unit,root.rect.yMax-60*unit);
             header.gameObject.AddComponent<StatisticsSurface>().Panel=true;
-            Translucent(header.gameObject,.86f);
-            Text(header,"Paused title","Card tracker",new Vector2(14,-6),new Vector2(212,36),22);
-            Text(header,"Paused state","Paused",new Vector2(224,-6),new Vector2(78,36),18).color=StatisticsWidgets.Gold;
+            Translucent(header.gameObject,.94f);
+            Text(header,"Paused title","Card tracker",new Vector2(14,-6),new Vector2(212,36),22).fontStyle=FontStyles.Bold;
+            Text(header,"Paused state","Paused",new Vector2(224,-6),new Vector2(78,36),18).color=StatisticsTheme.Accent;
             string summary=snapshot.Complete?(snapshot.Rail?"Rail":"Canal")+" · "+snapshot.Played+" played · "+snapshot.Unseen+" unseen":"Counts unknown";
-            Text(header,"Public summary",summary,new Vector2(308,-6),new Vector2(headerWidth-668,36),18);
+            Text(header,"Public summary",summary,new Vector2(308,-6),new Vector2(headerWidth-668,36),18).color=StatisticsTheme.Muted;
             Button(header,"Tracker card list","Card list",new Vector2(headerWidth-348,-6),new Vector2(108,36),()=>ShowList(),18);
             Button(header,"Tracker text size","Text "+(textScale<1.1f?"1":textScale<1.25f?"2":"3")+"/3",new Vector2(headerWidth-232,-6),new Vector2(108,36),()=>{textScale=textScale<1.1f?1.15f:textScale<1.25f?1.3f:1;Build();Layout();},18);
             Button(header,"Tracker resume","Resume",new Vector2(headerWidth-116,-6),new Vector2(104,36),()=>session.Close(),18);
             float wildRow=Mathf.Ceil(20*textScale+3),wildHeight=3*wildRow+2;
             wildHeader=StatisticsWidgets.Rect(header,"Wild cards strip",new Vector2(0,-54)*unit,new Vector2(headerWidth,wildHeight)*unit);
             var wildKey=StatisticsWidgets.Rect(wildHeader,"Wild cards key",Vector2.zero,new Vector2(142,wildHeight)*unit);
-            wildKey.gameObject.AddComponent<StatisticsSurface>();Translucent(wildKey.gameObject,.86f);
-            Text(wildKey,"Wild cards heading","Wild cards",new Vector2(8,-2),new Vector2(128,wildRow),18).color=StatisticsWidgets.Gold;
+            wildKey.gameObject.AddComponent<StatisticsSurface>();Translucent(wildKey.gameObject,.94f);
+            Text(wildKey,"Wild cards heading","Wild cards",new Vector2(8,-2),new Vector2(128,wildRow),18).color=StatisticsTheme.Accent;
             Text(wildKey,"Wild cards status key","1 held\n0 none",new Vector2(8,-wildRow-2),new Vector2(128,2*wildRow),17.5f,true);
             var players=session.History.CurrentGame.Metadata.PlayerMetadata.OrderBy(p=>(int)p.PlayerStartConfiguration.Color).ToArray();
             float available=headerWidth-150,chip=available/4;
@@ -149,8 +156,8 @@ namespace BrassPatch.CardTracker
                 var p=players[i];var color=p.PlayerStartConfiguration.Color;float x=150+i*chip;
                 var node=StatisticsWidgets.Rect(wildHeader,"Wild holder "+color,new Vector2(x,0)*unit,new Vector2(chip-8,wildHeight)*unit);
                 node.gameObject.AddComponent<StatisticsSurface>();
-                Translucent(node.gameObject,.78f);
-                Text(node,"Wild holder name",p.NickName,new Vector2(8,0),new Vector2(chip-24,wildRow),18).color=StatisticsWidgets.PlayerColor(color);
+                Translucent(node.gameObject,.92f);
+                Text(node,"Wild holder name",p.NickName,new Vector2(8,0),new Vector2(chip-24,wildRow),18).color=StatisticsTheme.Player(color);
                 for(int type=0;type<2;type++) {
                     bool[] held;bool known=snapshot.Complete&&snapshot.Wild.TryGetValue(color,out held);
                     bool acquired=known&&snapshot.Wild[color][type];
@@ -162,21 +169,23 @@ namespace BrassPatch.CardTracker
                     var graphic=StatisticsWidgets.Rect(button.transform,"Wild symbol",new Vector2(8,-(wildRow-18)/2)*unit,new Vector2(18,18)*unit).gameObject.AddComponent<CardTrackerGlyph>();
                     graphic.Kind=type+1;graphic.Held=acquired;graphic.Known=known;graphic.raycastTarget=false;Hover(button.gameObject,message);
                     var count=Text(button.transform,"Wild held count",!known?"?":acquired?"1":"0",new Vector2(chip-45,0),new Vector2(25,wildRow),19);
-                    count.color=acquired?StatisticsWidgets.Gold:StatisticsWidgets.Ivory;
+                    count.color=acquired?StatisticsTheme.Accent:StatisticsTheme.Muted;count.fontStyle=FontStyles.Bold;
                 }
             }
             foreach(var card in snapshot.Cards.Where(c=>c.City.HasValue)) {
                 var region=session.Board.GetRegionViewForGivenRegionName(card.City.Value) as RegionView;
                 if(region==null)continue;
                 var target=region.transform.Find("NameImage") as RectTransform;
-                float width=card.Total*19+(snapshot.Complete&&card.Unseen==0?24:10);
-                var badge=Button(layer,"City cards "+card.Name,snapshot.Complete?"":"?",Vector2.zero,new Vector2(width,30),()=>ShowDetail(snapshot.Description(card)));
-                Translucent(badge.gameObject,.84f);
+                float width=34+card.Total*20+(snapshot.Complete&&card.Unseen==0?20:0);
+                var badge=Button(layer,"City cards "+card.Name,"",Vector2.zero,new Vector2(width,34),()=>ShowDetail(snapshot.Description(card)));
+                Translucent(badge.gameObject,.96f);
+                var cardIcon=StatisticsWidgets.Rect(badge.transform,"City card symbol",new Vector2(8,-8)*unit,new Vector2(16,18)*unit).gameObject.AddComponent<CardTrackerGlyph>();
+                cardIcon.Kind=4;cardIcon.raycastTarget=false;
                 if(snapshot.Complete) {
-                    var graphic=StatisticsWidgets.Rect(badge.transform,"City card dots",Vector2.zero,new Vector2(width-8,26)*unit).gameObject.AddComponent<CardTrackerGlyph>();
-                    StatisticsWidgets.Stretch((RectTransform)graphic.transform,new Vector2(5,3)*unit,new Vector2(-5,-3)*unit);
+                    var graphic=StatisticsWidgets.Rect(badge.transform,"City card dots",Vector2.zero,new Vector2(width-34,28)*unit).gameObject.AddComponent<CardTrackerGlyph>();
+                    StatisticsWidgets.Stretch((RectTransform)graphic.transform,new Vector2(29,3)*unit,new Vector2(-5,-3)*unit);
                     graphic.Total=card.Total;graphic.Unseen=card.Unseen;graphic.raycastTarget=false;
-                }
+                }else Text(badge.transform,"Unknown city count","?",new Vector2(30,0),new Vector2(width-34,34),20);
                 var leader=Rect(layer,"City leader "+card.Name,Vector2.zero).gameObject.AddComponent<CardTrackerGlyph>();
                 ((RectTransform)leader.transform).pivot=new Vector2(.5f,.5f);
                 StatisticsWidgets.Stretch((RectTransform)leader.transform,Vector2.zero,Vector2.zero);leader.Kind=3;leader.raycastTarget=false;leader.transform.SetAsFirstSibling();
@@ -198,7 +207,12 @@ namespace BrassPatch.CardTracker
                 }
             }
             string legend=snapshot.Rail?"Rail: unseen cards are in hands or the draw deck.":"Canal includes 4 hidden setup discards.";
-            this.legend=Text(layer,"Tracker legend","Jade: unseen · crossed gray: played.  "+legend,Vector2.zero,new Vector2(Math.Max(460,root.rect.width/unit-410),60),18,true).rectTransform;
+            this.legend=Rect(layer,"Tracker legend panel",new Vector2(Math.Max(460,root.rect.width/unit-410),60));
+            this.legend.gameObject.AddComponent<StatisticsSurface>();Translucent(this.legend.gameObject,.92f);
+            var key=StatisticsWidgets.Rect(this.legend,"Count key",new Vector2(12,-18)*unit,new Vector2(40,22)*unit).gameObject.AddComponent<CardTrackerGlyph>();
+            key.Total=2;key.Unseen=1;key.raycastTarget=false;
+            var legendText=Text(this.legend,"Tracker legend","Red: unseen · crossed gray: played.  "+legend,Vector2.zero,Vector2.zero,18,true);
+            StatisticsWidgets.Stretch(legendText.rectTransform,new Vector2(66,6)*unit,new Vector2(-14,-6)*unit);
             Toggle.transform.SetAsLastSibling();header.SetAsLastSibling();
             if(listing)ShowList();
             Layout();Canvas.ForceUpdateCanvases();
@@ -233,7 +247,7 @@ namespace BrassPatch.CardTracker
             // Reserve the lower action band; never follow animated artwork bounds.
             var toggle=(RectTransform)Toggle.transform;
             toggle.anchorMin=toggle.anchorMax=new Vector2(1,0);toggle.pivot=new Vector2(1,0);
-            toggle.sizeDelta=new Vector2(200,50)*unit;toggle.anchoredPosition=new Vector2(-24,148)*unit;
+            toggle.sizeDelta=new Vector2(200,50)*unit;toggle.anchoredPosition=new Vector2(-24,220)*unit;
             toggleLabel.fontSize=20*unit*textScale;
             if(layer==null)return;
             if(legend!=null) {
@@ -256,15 +270,25 @@ namespace BrassPatch.CardTracker
                 var b=Bounds(anchor.Target);var size=anchor.Badge.rect.size;
                 bool visible=viewport.Overlaps(b);anchor.Badge.gameObject.SetActive(visible);anchor.Leader.gameObject.SetActive(visible);
                 if(!visible)continue;
-                Vector2[] candidates={new Vector2(b.center.x-size.x/2,b.yMin-size.y-4*unit),new Vector2(b.xMax+6*unit,b.center.y-size.y/2),
+                var candidates=new List<Vector2>{new Vector2(b.center.x-size.x/2,b.yMin-size.y-4*unit),new Vector2(b.xMax+6*unit,b.center.y-size.y/2),
                     new Vector2(b.xMin-size.x-6*unit,b.center.y-size.y/2),new Vector2(b.center.x-size.x/2,b.yMax+4*unit),
                     new Vector2(b.center.x-size.x/2,b.yMin-size.y-24*unit),new Vector2(b.xMin-size.x-26*unit,b.center.y-size.y/2),
                     new Vector2(b.xMax+26*unit,b.center.y-size.y/2)};
+                // Dense central cities need more than the four immediate sides.
+                // Keep the nearest clear badge and connect it to its city by a leader.
+                for(int ring=1;ring<=5;ring++) {
+                    float gap=(6+ring*18)*unit;
+                    for(int y=-1;y<=1;y++)for(int x=-1;x<=1;x++) {
+                        if(x==0&&y==0)continue;
+                        candidates.Add(b.center-size/2+new Vector2(x*(b.width/2+size.x/2+gap),y*(b.height/2+size.y/2+gap)));
+                    }
+                }
                 var point=candidates.Last();
                 foreach(var candidate in candidates) {
                     var possible=new Rect(candidate,size);
                     if(possible.xMin<viewport.xMin||possible.xMax>viewport.xMax||possible.yMin<viewport.yMin||possible.yMax>viewport.yMax)continue;
-                    if(occupied.Any(o=>o.Overlaps(possible))||names.Any(n=>n.Overlaps(possible)))continue;
+                    var clearance=new Rect(possible.x-2*unit,possible.y-2*unit,possible.width+4*unit,possible.height+4*unit);
+                    if(occupied.Any(o=>o.Overlaps(clearance))||names.Any(n=>n.Overlaps(clearance)))continue;
                     point=candidate;break;
                 }
                 anchor.Badge.anchorMin=anchor.Badge.anchorMax=new Vector2(.5f,.5f);anchor.Badge.pivot=Vector2.zero;
@@ -292,7 +316,7 @@ namespace BrassPatch.CardTracker
             detail=Rect(layer,"Tracker details",new Vector2(width,height));
             detail.anchoredPosition=new Vector2(root.rect.xMin+16*unit,FooterBottom()+70*unit);
             var surface=detail.gameObject.AddComponent<StatisticsSurface>();surface.Panel=true;surface.raycastTarget=pin;
-            Translucent(detail.gameObject,.90f);
+            Translucent(detail.gameObject,.97f);
             Text(detail,"Card definition",value,new Vector2(16,-12),new Vector2(width-32,height-42),19,true);
             if(pin)Button(detail,"Close tracker detail","Close",new Vector2(width-92,-height+35),new Vector2(78,28),()=>DismissDetail(),18);
             detail.SetAsLastSibling();Toggle.transform.SetAsLastSibling();
@@ -303,8 +327,8 @@ namespace BrassPatch.CardTracker
             float width=Mathf.Min(830,root.rect.width/unit-60),height=Mathf.Min(760,root.rect.height/unit-174);
             list=Rect(layer,"Tracker card list",new Vector2(width,height));list.pivot=new Vector2(.5f,.5f);list.anchoredPosition=new Vector2(0,-18*unit);
             list.gameObject.AddComponent<StatisticsSurface>().Panel=true;
-            Translucent(list.gameObject,.90f);
-            Text(list,"List heading","Public cards · "+(snapshot.Rail?"Rail":"Canal")+" era",new Vector2(18,-9),new Vector2(width-160,34),22);
+            Translucent(list.gameObject,.97f);
+            Text(list,"List heading","Public cards · "+(snapshot.Rail?"Rail":"Canal")+" era",new Vector2(18,-9),new Vector2(width-160,34),22).fontStyle=FontStyles.Bold;
             Button(list,"Close card list","Close",new Vector2(width-105,-8),new Vector2(85,32),()=>{Destroy(list);list=null;listing=false;},18);
             float rowWidth=width-49;
             Text(list,"List card label","Card",new Vector2(26,-47),new Vector2(rowWidth*.52f,35),19);
@@ -316,9 +340,10 @@ namespace BrassPatch.CardTracker
             foreach(var card in snapshot.Cards) {
                 var captured=card;string played=snapshot.Complete?card.Played.ToString():"?",unseen=snapshot.Complete?card.Unseen.ToString():"?";
                 var row=Button(scroll.content,"Tracked row "+card.Name,"",new Vector2(0,-y),new Vector2(width-49,rowHeight-4),()=>ShowDetail(snapshot.Description(captured)),19);
+                var rowSurface=row.GetComponent<StatisticsSurface>();rowSurface.Row=true;rowSurface.Alternate=((int)Math.Round(y/rowHeight))%2==1;
                 Text(row.transform,"Card name",card.Name,new Vector2(10,0),new Vector2((width-49)*.52f,rowHeight-4),19);
                 Text(row.transform,"Played count",played,new Vector2((width-49)*.55f,0),new Vector2(60,rowHeight-4),19);
-                Text(row.transform,"Unseen count",unseen,new Vector2((width-49)*.73f,0),new Vector2(60,rowHeight-4),19);
+                Text(row.transform,"Unseen count",unseen,new Vector2((width-49)*.73f,0),new Vector2(60,rowHeight-4),19).color=CardTrackerGlyph.Red;
                 Text(row.transform,"Total count",card.Total.ToString(),new Vector2((width-49)*.9f,0),new Vector2(50,rowHeight-4),19);y+=rowHeight;
             }
             scroll.content.sizeDelta=new Vector2(scroll.content.sizeDelta.x,y);list.SetAsLastSibling();Toggle.transform.SetAsLastSibling();

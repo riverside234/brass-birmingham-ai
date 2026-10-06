@@ -24,6 +24,7 @@ from .inference import InferenceService
 from .ingress import load_collection,reader_pool
 from .telemetry import environment,iteration_utilization
 from .updates import ppo_update,distill_update
+from .teacher_schedule import CONTRACT as TEACHER_SCHEDULE,estimate_collection,search_allowance,collection_report
 
 
 class Behavior:
@@ -191,9 +192,9 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                 next_search=state['next_search_games']
                 ordinary_seconds=state.get('ordinary_seconds',0.)+updated-began
                 search_seconds=state.get('search_seconds',0.)
-                estimate=config['search_games']*(config['search']['seconds']*4*(config['search']['max_searches_per_seat'] or 64)+
-                    (collected-began)/max(1,len(games)))
-                search_budget_ok=not revised or search_seconds+estimate<=ordinary_seconds*config['search_wall_fraction']/(1-config['search_wall_fraction'])
+                estimate=estimate_collection(config,(collected-began)/max(1,len(games)))
+                remaining_search_seconds=search_allowance(ordinary_seconds,search_seconds,config['search_wall_fraction'])
+                search_budget_ok=estimate<=remaining_search_seconds
                 if config['search_every_games'] and done>=next_search and search_budget_ok:
                     identity=service.register(model);search_jobs=[]
                     rollout_entries=list({e['model_id']:e for e in state.get('population',state['history'])}.values())[-3:]
@@ -203,17 +204,22 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                     rollout_ids=list(dict.fromkeys([identity]+[e['model_id'] for e in rollout_entries]))
                     for i in range(config['search_games']):
                         chosen,cursor=seeds_for(cursor,1);seed=chosen[0]
-                        spec=dict(kind='masked_ismcts',model_id=identity,opponents=rollout_ids,search=config['search'],focus='neutral',cpu_role=config.get('legacy_budget',{}).get('role','reference'))
+                        spec=dict(kind='masked_ismcts',model_id=identity,opponents=rollout_ids,search=config['search'],focus='neutral',
+                            cpu_role=config.get('legacy_budget',{}).get('role','reference'),teacher_schedule=TEACHER_SCHEDULE)
                         provenance=dict(producer='recovery/2.0.0',purpose='training',kind='masked-ismcts-teacher',
                             seed=seed,sampling_seed=config['seed']*13+done+i,spec=digest(signature))
                         search_jobs.append(dict(index=i,seed=seed,rotation=0,sampling_seed=provenance['sampling_seed'],
                             policies=[spec]*4,path=str(directory/f'search-{i:06d}.jsonl.gz'),provenance=provenance))
                     search_records=heavy.collect(search_jobs)
                     searched=read_shards([r['path'] for r in search_records],partition='train',receipts={r['path']:r.get('features') for r in search_records})
+                    teaching=collection_report(search_records,searched)
                     search=distill_update(model,optimizer,searched,config['update'],steps=config['distill_steps'],weight=config['distill_weight'])
                     search['collection']=search_records
+                    search['teaching']=teaching
                     while next_search<=done: next_search+=config['search_every_games']
                 elif not search_budget_ok: search=dict(updated=False,reason='Search wall-time allowance exceeded; postpone until ordinary collection catches up')
+                search['budget']=dict(wall_fraction=config['search_wall_fraction'],available_seconds=remaining_search_seconds,
+                    estimated_collection_seconds=estimate,admitted=bool(search.get('collection')))
                 search_seconds+=time.monotonic()-updated if search.get('collection') else 0.
                 report=dict(format='step5-recovery-report/'+'2.2.0',iteration=iteration,composition=dict(composition),
                     actor=update,search=search,**diagnostics,incoming_model_id=current,

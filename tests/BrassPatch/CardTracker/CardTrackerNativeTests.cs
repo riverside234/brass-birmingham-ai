@@ -40,6 +40,7 @@ using InterfaceAdapters.Game.IndustriesSummary;
 using InterfaceAdapters.Game.Market;
 using InterfaceAdapters.Game.HandOfCards;
 using InterfaceAdapters.Game.PlayerActions;
+using InterfaceAdapters.Game.PlayAiTurn;
 using InterfaceAdapters.Routing;
 using InterfaceAdapters.Utils;
 using Newtonsoft.Json;
@@ -201,10 +202,19 @@ public sealed class CardTrackerTestDriver : MonoBehaviour
             var ironPosition=iron.anchoredPosition;
             metadata=match.App.Metadata.GetPlayerMetadataByColor(match.App.Game.GameProgressInformation.CurrentPlayer.Color);
             metadata.AiType=AIType.Hard;session.Refresh();
+            var thinking=router.GetView<IPlayAiTurnView>() as PlayAiTurnView;thinking.InputRegistration=router;
+            thinking.SetCurrentPlayerName("Worcester Iron-Cotton AI");thinking.CreateShowViewImmediatelyAnimation();
+            var strategyStatus=BrassLegacyAI.AiTurnControls.Attach(router,"Worcester Iron-Cotton");
+            yield return null;Canvas.ForceUpdateCanvases();
+            var thinkingTexts=thinking.GetComponentsInChildren<TextMeshProUGUI>().Where(t=>!String.IsNullOrWhiteSpace(t.text)).ToArray();
+            var thinkingBounds=thinkingTexts.Select(t=>ScreenBounds(t.rectTransform,camera)).ToArray();
+            Check(thinkingTexts.Any(t=>t.name=="Strategy text")&&thinkingBounds.All(b=>!b.Overlaps(fixedButton)&&b.yMax+12<=fixedButton.yMin),"CT25-POSITION raised tracker clears native AI-thinking text",new{resolution.x,resolution.y,button=fixedButton.ToString(),labels=thinkingTexts.Select((t,i)=>new{t.name,t.text,bounds=thinkingBounds[i].ToString()}).ToArray()});
+            Check(!session.Toggle.interactable&&!session.Open(),"CT25-INPUT tracker remains disabled throughout AI-thinking presentation");
+            Capture(camera,target,"tracker-ai-thinking-"+resolution.x+"x"+resolution.y);
             var marketAnimation=iron.DOAnchorPos(ironPosition+new Vector2(180,180),.15f).SetId("AnimationFactory");
             yield return new WaitForSeconds(.08f);Canvas.ForceUpdateCanvases();
             Check(SameBounds(fixedButton,ScreenBounds((RectTransform)session.Toggle.transform,camera))&&!session.Toggle.interactable&&!session.Open(),"tracker stays fixed during another player's market animation",new{resolution.x,before=fixedButton.ToString(),after=ScreenBounds((RectTransform)session.Toggle.transform,camera).ToString(),session.Toggle.interactable,metadata.AiType});
-            marketAnimation.Complete();iron.anchoredPosition=ironPosition;metadata.AiType=AIType.Human;session.Refresh();
+            marketAnimation.Complete();iron.anchoredPosition=ironPosition;thinking.CreateHideViewAnimation();DOTween.CompleteAll();thinking.gameObject.SetActive(false);Destroy(strategyStatus.gameObject);metadata.AiType=AIType.Human;session.Refresh();
             yield return null;Canvas.ForceUpdateCanvases();Capture(camera,target,"tracker-button-placement-"+resolution.x+"x"+resolution.y);
             foreach(bool night in new[]{false,true}) {
                 builder.Settings.Night=night;typeof(BoardView).GetMethod("SetMapDayNight",ReflectionAccess.Flags).Invoke(board,null);
@@ -223,12 +233,12 @@ public sealed class CardTrackerTestDriver : MonoBehaviour
                 Check(headerBounds.height<=53&&headerBounds.width<=1261,"tracker toolbar uses compact physical dimensions",new{resolution.x,headerBounds.width,headerBounds.height});
                 Check(headerBounds.height+wildBounds.height+6<=140,"default tracker grouping reduces the solid header footprint",new{resolution.x,height=headerBounds.height+wildBounds.height+6});
                 Check(session.GetComponentsInChildren<RectTransform>().Where(t=>t.name.StartsWith("City cards ")||t.name.StartsWith("Industry cards ")).All(t=>!ScreenBounds(t,camera).Overlaps(headerBounds)&&!ScreenBounds(t,camera).Overlaps(wildBounds)),"all counters remain outside reserved header");
-                var footer=ScreenBounds(session.GetComponentsInChildren<RectTransform>().Single(t=>t.name=="Tracker legend"),camera);
+                var footer=ScreenBounds(session.GetComponentsInChildren<RectTransform>().Single(t=>t.name=="Tracker legend panel"),camera);
                 Check(!footer.Overlaps(ScreenBounds((RectTransform)session.Toggle.transform,camera)),"footer legend and resume toggle do not overlap");
                 var cardBounds=hand.GetComponentsInChildren<BaseCardView>().Select(c=>ScreenBounds((RectTransform)c.HolderObject,camera)).ToArray();
                 var toggleBounds=ScreenBounds((RectTransform)session.Toggle.transform,camera);
                 Check(cardBounds.Length>0&&cardBounds.All(b=>b.yMax+5<=footer.yMin&&!b.Overlaps(toggleBounds)),"tracker button and legend clear visible hand artwork",new{resolution.x,footerTop=footer.yMin,cards=cardBounds.Select(b=>new{b.xMin,b.xMax,b.yMin,b.yMax})});
-                Check(Math.Abs(toggleBounds.xMax-(resolution.x-24))<1&&Math.Abs(toggleBounds.yMin-148)<1,"tracker occupies fixed bottom-right position above action band",resolution.x);
+                Check(Math.Abs(toggleBounds.xMax-(resolution.x-24))<1&&Math.Abs(toggleBounds.yMin-220)<1,"tracker occupies fixed bottom-right position above action band",resolution.x);
                 var actionButtons=actions.GetComponentsInChildren<Button>().Where(b=>b.gameObject.activeInHierarchy).ToArray();
                 Check(actionButtons.Length>0&&actionButtons.All(b=>!ScreenBounds((RectTransform)b.transform,camera).Overlaps(toggleBounds)&&ScreenBounds((RectTransform)b.transform,camera).yMax+8<=toggleBounds.yMin),"fixed tracker button clears the native action controls",new{resolution.x,buttons=actionButtons.Select(b=>new{b.name,bounds=ScreenBounds((RectTransform)b.transform,camera).ToString()}).ToArray()});
                 var raisedCard=(RectTransform)hand.GetComponentsInChildren<BaseCardView>()[0].HolderObject;
@@ -238,7 +248,17 @@ public sealed class CardTrackerTestDriver : MonoBehaviour
                 Check(ScreenBounds(raisedCard,camera).yMax+5<=ScreenBounds(session.GetComponentsInChildren<RectTransform>().Single(t=>t.name=="Tracker legend"),camera).yMin&&SameBounds(toggleBounds,ScreenBounds((RectTransform)session.Toggle.transform,camera)),"raised and rotated hand moves only the legend, not tracker button",resolution.x);
                 raisedCard.anchoredPosition=cardPosition;raisedCard.localRotation=cardRotation;session.Overlay.Layout();Canvas.ForceUpdateCanvases();
                 var headerSurface=session.GetComponentsInChildren<BrassPatch.Statistics.StatisticsSurface>().Single(s=>s.name=="Tracker header");
-                Check(headerSurface.canvasRenderer.GetAlpha()>.80f&&headerSurface.canvasRenderer.GetAlpha()<.92f,"tracker header is mildly translucent");
+                Check(headerSurface.canvasRenderer.GetAlpha()>.90f&&headerSurface.canvasRenderer.GetAlpha()<.98f,"tracker header is mildly translucent");
+                Check(session.GetComponent<BrassPatch.Statistics.StatisticsTheme>()!=null&&board.GetComponent<BrassPatch.Statistics.StatisticsTheme>()==null,"CT25-THEME light theme is confined to tracker root");
+                var headerMesh=GraphicMesh(headerSurface);
+                Check(headerMesh.colors32.Length>0&&headerMesh.colors32[0].r>=245&&headerMesh.colors32[0].g>=240&&headerMesh.colors32[0].b>=220,"CT25-THEME header uses Game History ivory surface");Destroy(headerMesh);
+                Check(session.GetComponentsInChildren<TextMeshProUGUI>().Where(t=>t.name=="Paused title"||t.name=="Public summary"||t.name=="Wild type name"||t.name=="Tracker legend").All(t=>t.color.r<.5f&&t.color.g<.5f&&t.color.b<.5f),"CT25-THEME dark text remains legible on light panels");
+                Check(session.GetComponentsInChildren<CardTrackerGlyph>().Count(g=>g.Kind==4)==20,"CT25-CITY every city badge has a location-card symbol");
+                var cityDots=session.GetComponentsInChildren<CardTrackerGlyph>().Where(g=>g.Kind==0&&g.name=="City card dots"&&g.Unseen>0).ToArray();
+                Check(cityDots.Length>0&&cityDots.All(g=>{var mesh=GraphicMesh(g);bool red=mesh.colors32.Any(c=>c.r==195&&c.g==77&&c.b==72);Destroy(mesh);return red;}),"CT25-CITY unseen dots render red in actual geometry");
+                var cityRects=session.GetComponentsInChildren<RectTransform>().Where(t=>t.name.StartsWith("City cards ")).Select(t=>new{Name=t.name,Bounds=ScreenBounds(t,camera)}).ToArray();
+                var overlaps=cityRects.SelectMany((a,i)=>cityRects.Skip(i+1).Where(b=>a.Bounds.Overlaps(b.Bounds)).Select(b=>a.Name+" / "+b.Name)).ToArray();
+                Check(overlaps.Length==0,"CT25-CITY city badge hit areas do not overlap",overlaps);
                 Check(session.GetComponentsInChildren<TextMeshProUGUI>().Where(t=>t.name=="Paused title"||t.name=="Public summary"||t.name=="Wild holder name").All(t=>t.color.a==1),"tracker background transparency leaves text opaque");
                 var industryContainer=industries.transform.Find("SafeArea/Popup/RightPanelBackground/IndustriesContainer");
                 foreach(Transform row in industryContainer) {
@@ -259,10 +279,11 @@ public sealed class CardTrackerTestDriver : MonoBehaviour
                 if(resolution.x==1920&&!night) {
                     var glyph=session.GetComponentsInChildren<CardTrackerGlyph>().First(g=>g.Kind==0&&g.Total==3);int oldUnseen=glyph.Unseen;
                     var capsule=(RectTransform)glyph.transform.parent;var oldSize=capsule.sizeDelta;
-                    capsule.sizeDelta=new Vector2(81/canvas.scaleFactor,oldSize.y);
+                    capsule.sizeDelta=new Vector2(oldSize.x+20/canvas.scaleFactor,oldSize.y);
                     glyph.Unseen=0;glyph.SetVerticesDirty();yield return null;Capture(camera,target,"tracker-depleted-dots-"+resolution.x+"x"+resolution.y);glyph.Unseen=oldUnseen;capsule.sizeDelta=oldSize;glyph.SetVerticesDirty();
                 }
                 session.Overlay.ShowList();yield return null;
+                Check(session.GetComponentsInChildren<TextMeshProUGUI>().Where(t=>t.name=="List heading"||t.name=="Card name"||t.name=="Played count").All(t=>t.color==BrassPatch.Statistics.StatisticsTheme.Ink),"CT25-THEME card list also uses the light theme");
                 Check(session.Overlay.HasList&&session.GetComponentsInChildren<Button>().Count(t=>t.name.StartsWith("Tracked row "))==25,"scrolling card list includes all twenty-five physical categories");
                 var scroll=session.GetComponentsInChildren<ScrollRect>().Single(s=>s.name=="All card categories");scroll.OnScroll(new PointerEventData(events){scrollDelta=new Vector2(0,-8)});
                 Check(scroll.verticalNormalizedPosition<1,"card list scroll works while time is paused");
@@ -305,6 +326,13 @@ public sealed class CardTrackerTestDriver : MonoBehaviour
         Check(replaced!=null&&replaced.Open(),"replacement four-player match can open its own tracker");
         Destroy(root);Destroy(cameraNode);yield return null;
         Check(Time.timeScale==1&&DOTween.timeScale==1,"destroying an open board releases the global pause");
+    }
+    static Mesh GraphicMesh(Graphic graphic)
+    {
+        var mesh=new Mesh();using(var vertices=new VertexHelper()) {
+            graphic.GetType().GetMethod("OnPopulateMesh",ReflectionAccess.Flags,null,new[]{typeof(VertexHelper)},null).Invoke(graphic,new object[]{vertices});
+            vertices.FillMesh(mesh);
+        }return mesh;
     }
     static bool SameBounds(Rect a,Rect b){return Vector2.Distance(a.center,b.center)<.5f&&Vector2.Distance(a.size,b.size)<.5f;}
     Rect ScreenBounds(RectTransform rect,Camera camera)

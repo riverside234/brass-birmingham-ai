@@ -3,6 +3,7 @@ using TMPro;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.UI;
+using BrassPatch.Statistics;
 
 namespace BrassPatch.CardTracker
 {
@@ -20,12 +21,12 @@ namespace BrassPatch.CardTracker
     }
     public sealed class CardTrackerGlyph : MaskableGraphic
     {
-        public int Total, Unseen, Kind; // 0 dots, 1 location pin, 2 factory, 3 leader
+        public int Total, Unseen, Kind; // 0 dots, 1 location pin, 2 factory, 3 leader, 4 city card
         public bool Known = true, Held;
         public Vector2 From, To;
-        public static readonly Color Teal = new Color(116f/255,211f/255,174f/255,1);
-        public static readonly Color Gray = new Color(129f/255,143f/255,153f/255,1);
-        static readonly Color Gold = new Color(212f/255,180f/255,120f/255,1);
+        public static readonly Color Red = StatisticsTheme.Hex(0xC34D48);
+        public static readonly Color Gray = StatisticsTheme.Hex(0x929087);
+        static readonly Color RedEdge = StatisticsTheme.Hex(0x963B38), Spent = StatisticsTheme.Hex(0xE4DFD5);
         void Triangle(VertexHelper mesh,Vector2 a,Vector2 b,Vector2 c,Color color)
         { int at=mesh.currentVertCount;mesh.AddVert(a,color,Vector2.zero);mesh.AddVert(b,color,Vector2.zero);mesh.AddVert(c,color,Vector2.zero);mesh.AddTriangle(at,at+1,at+2); }
         void Box(VertexHelper mesh,Rect rect,Color color)
@@ -47,34 +48,43 @@ namespace BrassPatch.CardTracker
         protected override void OnPopulateMesh(VertexHelper mesh)
         {
             mesh.Clear();var r=GetPixelAdjustedRect();
-            if(Kind==3){Line(mesh,From,To,1.3f,new Color(.83f,.75f,.59f,.85f));return;}
+            if(Kind==3){Line(mesh,From,To,1.3f,new Color(.93f,.86f,.70f,.9f));return;}
+            if(Kind==4) {
+                var edge=StatisticsTheme.Muted;float stroke=Mathf.Min(r.width,r.height)/13;
+                var card=new Rect(r.xMin+r.width*.12f,r.yMin+r.height*.1f,r.width*.75f,r.height*.78f);
+                Box(mesh,card,edge);Box(mesh,new Rect(card.x+stroke,card.y+stroke,card.width-2*stroke,card.height-2*stroke),StatisticsTheme.Paper);
+                Circle(mesh,card.center+new Vector2(0,card.height*.1f),card.width*.18f,0,StatisticsTheme.Accent);
+                Triangle(mesh,card.center+new Vector2(-card.width*.15f,0),card.center+new Vector2(card.width*.15f,0),card.center-new Vector2(0,card.height*.26f),StatisticsTheme.Accent);
+                return;
+            }
             if(Kind==0) {
                 if(!Known)return;
                 var canvas=GetComponentInParent<Canvas>().rootCanvas;
                 float dotUnit=1/Mathf.Max(.01f,canvas.scaleFactor),gap=5*dotUnit;
-                float diameter=Mathf.Min(14*dotUnit,(r.width-(Unseen==0?21*dotUnit:0)-gap*(Total-1))/Mathf.Max(1,Total)),radius=diameter/2;
+                float diameter=Mathf.Max(2*dotUnit,Mathf.Min(15*dotUnit,(r.width-(Unseen==0?21*dotUnit:0)-gap*(Total-1))/Mathf.Max(1,Total))),radius=diameter/2;
                 float start=r.xMin+(r.width-(Unseen==0?21*dotUnit:0)-(Total*diameter+(Total-1)*gap))/2;
                 for(int i=0;i<Total;i++) {
                     var center=new Vector2(start+radius+i*(diameter+gap),r.center.y);
-                    Circle(mesh,center+new Vector2(0,-dotUnit),radius+dotUnit,0,new Color(0,0,0,.28f));
+                    Circle(mesh,center+new Vector2(0,-dotUnit),radius+.5f*dotUnit,0,new Color(.22f,.18f,.13f,.12f));
                     if(i<Unseen) {
-                        Circle(mesh,center,radius,0,new Color(.16f,.34f,.28f,1));
-                        Circle(mesh,center,radius-dotUnit,0,Teal);
-                        Circle(mesh,center+new Vector2(-radius*.28f,radius*.28f),1.25f*dotUnit,0,new Color(.91f,1,.94f,.75f));
+                        Circle(mesh,center,radius,0,RedEdge);
+                        Circle(mesh,center,radius-dotUnit,0,Red);
+                        Circle(mesh,center+new Vector2(-radius*.28f,radius*.28f),1.1f*dotUnit,0,new Color(1,.78f,.72f,.65f));
                     } else {
-                        Circle(mesh,center,radius,0,new Color(.22f,.26f,.28f,.95f));
+                        Circle(mesh,center,radius,0,Spent);
                         Circle(mesh,center,radius,radius-dotUnit,Gray);
-                        Line(mesh,center+new Vector2(-radius*.48f,-radius*.48f),center+new Vector2(radius*.48f,radius*.48f),1.4f*dotUnit,new Color(.70f,.73f,.73f,1));
+                        Line(mesh,center+new Vector2(-radius*.42f,-radius*.42f),center+new Vector2(radius*.42f,radius*.42f),1.3f*dotUnit,StatisticsTheme.Muted);
+                        Line(mesh,center+new Vector2(-radius*.42f,radius*.42f),center+new Vector2(radius*.42f,-radius*.42f),1.3f*dotUnit,StatisticsTheme.Muted);
                     }
                 }
                 if(Unseen==0) {
                     float x=r.xMax-9*dotUnit;Box(mesh,new Rect(x-7*dotUnit,r.center.y-8*dotUnit,13*dotUnit,16*dotUnit),Gray);
-                    Box(mesh,new Rect(x-5*dotUnit,r.center.y-6*dotUnit,9*dotUnit,12*dotUnit),new Color(.16f,.18f,.19f,1));
-                    Line(mesh,new Vector2(x-6*dotUnit,r.center.y-7*dotUnit),new Vector2(x+5*dotUnit,r.center.y+7*dotUnit),1.6f*dotUnit,new Color(.9f,.87f,.78f,1));
+                    Box(mesh,new Rect(x-5*dotUnit,r.center.y-6*dotUnit,9*dotUnit,12*dotUnit),StatisticsTheme.Paper);
+                    Line(mesh,new Vector2(x-6*dotUnit,r.center.y-7*dotUnit),new Vector2(x+5*dotUnit,r.center.y+7*dotUnit),1.6f*dotUnit,StatisticsTheme.Muted);
                 }
                 return;
             }
-            var tint=Known?(Held?Gold:Gray):Gray;
+            var tint=Known?(Held?StatisticsTheme.Accent:Gray):Gray;
             float unit=Mathf.Min(r.width,r.height)/32;var origin=r.center;
             if(Kind==1) {
                 Triangle(mesh,origin+new Vector2(-9,0)*unit,origin+new Vector2(9,0)*unit,origin+new Vector2(0,-14)*unit,tint);
@@ -84,10 +94,10 @@ namespace BrassPatch.CardTracker
                 Box(mesh,new Rect(origin.x-11*unit,origin.y+2*unit,5*unit,13*unit),tint);
                 Triangle(mesh,origin+new Vector2(-4,3)*unit,origin+new Vector2(4,3)*unit,origin+new Vector2(4,10)*unit,tint);
                 Triangle(mesh,origin+new Vector2(4,3)*unit,origin+new Vector2(12,3)*unit,origin+new Vector2(12,10)*unit,tint);
-                Box(mesh,new Rect(origin.x-6*unit,origin.y-7*unit,4*unit,5*unit),new Color(.16f,.15f,.13f,1));
-                Box(mesh,new Rect(origin.x+4*unit,origin.y-7*unit,4*unit,5*unit),new Color(.16f,.15f,.13f,1));
+                Box(mesh,new Rect(origin.x-6*unit,origin.y-7*unit,4*unit,5*unit),StatisticsTheme.Paper);
+                Box(mesh,new Rect(origin.x+4*unit,origin.y-7*unit,4*unit,5*unit),StatisticsTheme.Paper);
             }
-            if(Known&&!Held)Line(mesh,origin+new Vector2(-13,-13)*unit,origin+new Vector2(13,13)*unit,2*unit,new Color(.3f,.29f,.26f,1));
+            if(Known&&!Held)Line(mesh,origin+new Vector2(-13,-13)*unit,origin+new Vector2(13,13)*unit,2*unit,StatisticsTheme.Muted);
         }
     }
 }

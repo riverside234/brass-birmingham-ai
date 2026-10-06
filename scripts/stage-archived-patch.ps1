@@ -1,4 +1,4 @@
-param([Parameter(Mandatory=$true)][ValidateSet('1.4.8','1.4.9','1.4.10','1.4.11','1.4.12','1.4.13','1.4.15','1.4.16','1.4.17','1.4.18','1.4.19','1.4.20','1.4.21','1.4.22')][string]$Version,[switch]$VerifyOnly)
+param([Parameter(Mandatory=$true)][ValidateSet('1.4.8','1.4.9','1.4.10','1.4.11','1.4.12','1.4.13','1.4.15','1.4.16','1.4.17','1.4.18','1.4.19','1.4.20','1.4.21','1.4.22','1.4.23','1.4.24','1.4.25','1.4.26')][string]$Version,[switch]$VerifyOnly)
 $ErrorActionPreference='Stop'
 $root=Split-Path -Parent $PSScriptRoot
 . (Join-Path $PSScriptRoot 'patch-install-common.ps1')
@@ -33,3 +33,4 @@ foreach($name in 'build-manifest.json','validation.json','local-ai-qualification
 }
 Assert-BrassCandidate $manifest $validation $build
 Write-Output ('Staged qualified '+$Version+'. Run scripts/install-patch.ps1 to change the live installation.')
+

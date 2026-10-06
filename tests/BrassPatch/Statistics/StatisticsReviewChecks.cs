@@ -31,7 +31,7 @@ public static class StatisticsReviewChecks
         var allKinds=new HashSet<StatisticsPlotKind>();
         for(int page=0;page<10;page++){
             var v=StatisticsPlotPages.Build(page,r,f);check(v.Plots.Count>0,"hand-built page provides a plot",page);
-            foreach(var p in v.Plots){allKinds.Add(p.Kind);check(p.Marks.All(m=>!Double.IsNaN(m.X)&&!Double.IsNaN(m.Y)&&!Double.IsInfinity(m.Y)),"finite exact plot values",p.Id);check(p.Series.Select(s=>s.Id).Distinct().Count()==p.Series.Count,"stable nonduplicate legend IDs",p.Id);check(p.Marks.All(m=>p.Series.Any(s=>s.Id==m.Series)),"every mark has a named legend",p.Id);}
+            foreach(var p in v.Plots){allKinds.Add(p.Kind);check(p.Marks.All(m=>!Double.IsNaN(m.X)&&(m.Missing||!Double.IsNaN(m.Y))&&!Double.IsInfinity(m.Y)),"finite exact plot values",p.Id);check(p.Series.Select(s=>s.Id).Distinct().Count()==p.Series.Count,"stable nonduplicate legend IDs",p.Id);check(p.Marks.All(m=>p.Series.Any(s=>s.Id==m.Series)),"every mark has a named legend",p.Id);}
         }
         check(allKinds.Count>=11,"varied plot families implemented",allKinds.Select(k=>k.ToString()).ToArray());
         var gap=StatisticsPlotPages.Build(1,r,f).Plots.First(p=>p.Id=="gap");check(gap.Marks.Where(m=>m.Series!="total").Sum(m=>m.Y)==2&&gap.Marks.Last().Y==2,"signed gap including opening and penalties reconciles to 23 − 21",null);

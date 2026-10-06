@@ -7,7 +7,7 @@ namespace BrassPatch.Statistics
     public sealed class StatisticsEfficiencyTotal
     {
         public StatisticsPlayer Player;
-        public int VP,Actions,Spending,IndustryVP,Printed;
+        public int VP,Actions,Spending,IndustryVP,Printed,IntroVP;
         public double VPPerAction { get {return Actions>0?(double)VP/Actions:Double.NaN;} }
         public double CostPerVP { get {return VP>0?(double)Spending/VP:Double.NaN;} }
         public StatisticsDrill ActionEvidence,CostEvidence;
@@ -30,7 +30,8 @@ namespace BrassPatch.Statistics
                 var actions=r.Actions.Where(a=>a.Player==p.Color&&(f.Era==0||a.Era==f.Era)).ToArray();
                 var balances=r.Entries.Where(e=>e.Player==p.Color&&(f.Era==0||e.Era==f.Era)&&e.Kind=="Balance").ToArray();
                 var t=new StatisticsEfficiencyTotal{Player=p,VP=f.Era==0?p.FinalVP:balances.Sum(e=>e.VP),Actions=actions.Length,Spending=f.AllCashPayments?-balances.Where(e=>e.Cash<0).Sum(e=>e.Cash):actions.Sum(a=>a.Spending)};
-                t.IndustryVP=r.Assets.Where(a=>a.Player==p.Color).Sum(a=>StatisticsMetrics.AssetVP(a,f.Era));
+                t.IndustryVP=r.Assets.Where(a=>a.Player==p.Color).Sum(a=>(f.Era==2?0:a.CanalVP)+(f.Era==1?0:a.RailVP));
+                t.IntroVP=f.Era==2?0:r.Assets.Where(a=>a.Player==p.Color).Sum(a=>a.IntroVP);
                 t.Printed=r.Assets.Where(a=>a.Player==p.Color).Sum(a=>(f.Era==2?0:a.CanalPrinted)+(f.Era==1?0:a.RailPrinted));
                 t.ActionEvidence=new StatisticsDrill{Page=8,Player=p.Color,Era=f.Era,HasKeys=true,AllCashPayments=f.AllCashPayments};
                 t.CostEvidence=new StatisticsDrill{Page=8,Player=p.Color,Era=f.Era,HasKeys=true,AllCashPayments=f.AllCashPayments};
@@ -41,8 +42,8 @@ namespace BrassPatch.Statistics
         }
         public static StatisticsSection EfficiencyLedger(CompletedMatchStatistics r,StatisticsFilters f)
         {
-            var s=new StatisticsSection("Conversion and efficiency","Player/era totals; industry, action, region and evidence filters apply to the tile plots, not these ratios. Market costs are included once. Printed opportunity is nominal, not an optimal score.","Player","VP / action","£ spent / VP","Industry VP","Printed opportunity","Realization");
-            foreach(var t in Efficiency(r,f))s.Rows.Add(new StatisticsRow("ratio-"+t.Player.Color,"VP "+t.VP+"; confirmed actions "+t.Actions+"; "+(f.AllCashPayments?"all negative cash payments ":"action spending ")+StatisticsFormat.Money(t.Spending)+". Printed opportunity sums per-era snapshots, including carryover.",StatisticsMetrics.PlayerName(r,t.Player),Number(t.VPPerAction),Number(t.CostPerVP),t.IndustryVP.ToString(),t.Printed.ToString(),StatisticsFormat.Percent(t.IndustryVP,t.Printed)){Player=t.Player.Color,Drill=t.CostEvidence});
+            var s=new StatisticsSection("Conversion and efficiency","Player/era totals; industry, action, region and evidence filters apply to the tile plots, not these ratios. Market costs are included once. Printed opportunity is nominal, not an optimal score.","Player","VP / action","£ spent / VP","Industry VP","Printed opportunity","Realization","Intro bonus VP");
+            foreach(var t in Efficiency(r,f))s.Rows.Add(new StatisticsRow("ratio-"+t.Player.Color,"VP "+t.VP+"; confirmed actions "+t.Actions+"; "+(f.AllCashPayments?"all negative cash payments ":"action spending ")+StatisticsFormat.Money(t.Spending)+". Printed opportunity sums per-era snapshots, including carryover.",StatisticsMetrics.PlayerName(r,t.Player),Number(t.VPPerAction),Number(t.CostPerVP),t.IndustryVP.ToString(),t.Printed.ToString(),StatisticsFormat.Percent(t.IndustryVP,t.Printed),t.IntroVP.ToString()){Player=t.Player.Color,Drill=t.CostEvidence});
             return s;
         }
         public static string Number(double value){return Double.IsNaN(value)?"—":value.ToString("0.00",System.Globalization.CultureInfo.InvariantCulture);}

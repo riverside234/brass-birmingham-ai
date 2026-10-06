@@ -22,6 +22,9 @@ namespace BrassPatch.Statistics
         {
             var rect=Rect(parent,name,position,size); var text=rect.gameObject.AddComponent<TextMeshProUGUI>();
             text.font=font; text.fontStyle=FontStyles.Normal; text.fontSize=fontSize; text.color=StatisticsTheme.Light(parent)?StatisticsTheme.Ink:Ivory; text.text=value;
+            // Names and report values are literal text. A nickname containing TMP
+            // tags must not change measured geometry or hide chart labels.
+            if(parent.GetComponentInParent<StatisticsPanel>()!=null)text.richText=false;
             text.enableWordWrapping=wrap; text.overflowMode=TextOverflowModes.Ellipsis; text.alignment=TextAlignmentOptions.MidlineLeft; text.raycastTarget=false;
             rect.anchorMin=rect.anchorMax=new Vector2(0,1); rect.pivot=new Vector2(0,1); rect.sizeDelta=size; rect.anchoredPosition=position;
             return text;

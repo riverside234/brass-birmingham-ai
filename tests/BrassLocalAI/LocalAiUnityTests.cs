@@ -69,7 +69,7 @@ public sealed class LocalAiUnityDriver : MonoBehaviour
     readonly List<object> turns = new List<object>();
     readonly List<object> selectionLayouts = new List<object>();
     bool selectionCasesPassed;
-    int selectionFixtureChoices;
+    int selectionFixtureChoices, draftChecks;
     Router router; BrassGameHistory history; Settings settings;
     CreateOfflineGameUseCase menu; CreateOfflineGameView menuView;
     string saves;
@@ -137,12 +137,16 @@ public sealed class LocalAiUnityDriver : MonoBehaviour
                 controls.StyleButton.onClick.Invoke();
                 Check(StrategyPicker.IsOpen && StrategyPicker.Active.Tiles.Count() == 7, "seven direct style choices");
                 StrategyPicker.Active.Tiles.Single(b => b.name == key).onClick.Invoke();
+                Check(StrategyPicker.IsOpen, "card selection remains a draft");
+                StrategyPicker.Active.ApplyButton.onClick.Invoke();
                 Check(!StrategyPicker.IsOpen && LocalMenu.Strategy(p) == key && Label(row).text == LocalMenu.ChoiceLabel(key), "actual row directly selects " + key);
                 Check(controls.StyleButton.GetComponent<StrategyTooltip>().Description == LocalMenu.ChoiceDescription(key), "strategy tooltip " + key);
                 Check(LocalMenu.Difficulty(p) == "hard", "style never changes difficulty");
             }
             foreach (var difficulty in DifficultyCatalog.Keys) {
-                controls.DifficultyButtons[Array.IndexOf(DifficultyCatalog.Keys, difficulty)].onClick.Invoke();
+                controls.OpenPicker();
+                StrategyPicker.Active.DifficultyButtons[Array.IndexOf(DifficultyCatalog.Keys, difficulty)].onClick.Invoke();
+                StrategyPicker.Active.ApplyButton.onClick.Invoke();
                 Check(LocalMenu.Difficulty(p) == difficulty && LocalMenu.Strategy(p) == "random" && p.AiType == AIType.Hard, "difficulty independent of style and original engine enum");
             }
             controls.OpenPicker(); menu.BackClicked(); Check(!StrategyPicker.IsOpen && menuView.gameObject.activeInHierarchy, "Escape/back closes chooser without exiting menu");
@@ -155,8 +159,10 @@ public sealed class LocalAiUnityDriver : MonoBehaviour
         Check(selected.PlayerStartConfiguration.Color != priorColor && LocalMenu.Strategy(selected) == "goods-beer" && LocalMenu.Difficulty(selected) == "easy", "color swap retains player strategy and difficulty");
         menu.DecreaseNumberOfPlayers(); menu.DecreaseNumberOfPlayers(); menu.IncreaseNumberOfPlayers(); menu.IncreaseNumberOfPlayers();
         Check(LocalMenu.Strategy(Setup.PlayerMetadata[3]) == "pottery-flex", "remove/add preserves row strategy");
-        Call(menu, "NextAiType", selected); Check(selected.AiType == AIType.Human && !Label(rows[1]).gameObject.activeSelf, "switch to human hides selector");
-        Call(menu, "NextAiType", selected); Check(LocalMenu.Strategy(selected) == "goods-beer" && Label(rows[1]).text == "Worcester Iron-Cotton" && LocalMenu.Difficulty(selected) == "easy", "switch to bot restores strategy and difficulty");
+        rows[1].GetComponent<AiSetupRow>().OpenPicker(); StrategyPicker.Active.SelectPage(PlayerSelectionPage.Human); StrategyPicker.Active.ApplyButton.onClick.Invoke();
+        Check(selected.AiType == AIType.Human && rows[1].GetComponent<AiSetupRow>().CanEdit, "switch to Human retains unified selector");
+        rows[1].GetComponent<AiSetupRow>().OpenPicker(); StrategyPicker.Active.SelectPage(PlayerSelectionPage.V4); StrategyPicker.Active.ApplyButton.onClick.Invoke();
+        Check(LocalMenu.Strategy(selected) == "goods-beer" && Label(rows[1]).text == "Worcester Iron-Cotton" && LocalMenu.Difficulty(selected) == "easy", "switch to bot restores strategy and difficulty");
         LocalMenu.Select(Setup.PlayerMetadata[3], "random"); Call(menu, "PresentGameConfiguration");
         Check(Label(rows[3]).text == "Random" && LocalMenu.CanStart(menu), "Random is selectable for a new bot");
         Capture("local-ai-custom-menu.png");
@@ -190,6 +196,8 @@ public sealed class LocalAiUnityDriver : MonoBehaviour
         hiding = menuView.CreateHideViewAnimation(); hiding.Kill(); yield return null;
         Check(GameObject.Find("AI selection help") == null, "production fade visibility clears detached tooltip");
         router.ShowView<ICreateOfflineGameView>();
+        var draftCases = PlayerSelectionCases();
+        while (draftCases.MoveNext()) yield return draftCases.Current;
         var panelCases = SelectionPanelCases(rows[1].GetComponent<AiSetupRow>());
         while (panelCases.MoveNext()) yield return panelCases.Current;
         var expanded = Enumerable.Range(1, 16).Select(i => new AiStyleOption("test-" + i, "Style " + i, "Expanded catalog layout fixture " + i)).ToArray();
@@ -203,7 +211,7 @@ public sealed class LocalAiUnityDriver : MonoBehaviour
         Check(expandedPicker.Tiles.Count() == 17, "clear filter restores expanded catalog");
         expandedPicker.Filter.text = "Style 16";
         Check(expandedPicker.Tiles.Count() == 2, "filter selects the sixteenth style by name");
-        expandedPicker.Tiles.Single(b => b.name == "test-16").onClick.Invoke(); Check(chosen == "test-16", "last expanded style selectable by stable ID");
+        expandedPicker.Tiles.Single(b => b.name == "test-16").onClick.Invoke(); expandedPicker.ApplyButton.onClick.Invoke(); Check(chosen == "test-16", "last expanded style selectable by stable ID");
         foreach (var size in new[] { new Vector2Int(1920, 1200), new Vector2Int(1920, 1080) }) {
             router.Resize(size.x, size.y); yield return null; ui.OpenPicker();
             AssertInsideTarget(StrategyPicker.Active.transform.Find("Style chooser").GetComponent<RectTransform>(), "picker " + size.x);
@@ -213,6 +221,10 @@ public sealed class LocalAiUnityDriver : MonoBehaviour
         menu.SetIntroductoryGame(true); var first = menu.StartGame(92701);
         Check(first != null && first.Game.PlayersTrack.Players.Count == 4 && first.Game.GameStartConfiguration.IsIntroductoryGame, "actual StartGame publishes requested setup");
         var state = LocalGameState.Read(first.Metadata);
+        foreach (var p in first.Metadata.PlayerMetadata.Where(p => p.AiType != AIType.Human)) {
+            var assignment = LocalGameState.Assignment(state, (int)p.PlayerStartConfiguration.Color);
+            Check((int)assignment["execution"]["search_ms"] == DifficultyCatalog.Milliseconds(LocalGameState.Difficulty(state, assignment)), "game creation uses selected thinking allowance");
+        }
         Check((string)LocalGameState.Assignment(state, (int)selected.PlayerStartConfiguration.Color)["strategy"] == "goods-beer", "saved strategy follows changed color");
         Check(LocalGameState.Difficulty(state, LocalGameState.Assignment(state, (int)selected.PlayerStartConfiguration.Color)) == "easy", "selected difficulty saved with changed color");
         int randomColor = (int)Setup.PlayerMetadata[3].PlayerStartConfiguration.Color;
@@ -242,7 +254,7 @@ public sealed class LocalAiUnityDriver : MonoBehaviour
         Rows()[3].GetComponent<AiSetupRow>().OpenPicker(); Capture("local-ai-resume-picker.png"); StrategyPicker.CloseActive();
         router.Resize(1920, 1200); yield return null; Capture("local-ai-resume-1920x1200.png");
         foreach (var row in Rows().Where(r => r.GetComponent<AiSetupRow>().CanEdit))
-            foreach (var button in row.GetComponent<AiSetupRow>().DifficultyButtons) AssertInsideTarget(button.GetComponent<RectTransform>(), "small split menu controls");
+            AssertInsideTarget(row.GetComponent<AiSetupRow>().StyleButton.GetComponent<RectTransform>(), "single split menu control");
         Rows()[3].GetComponent<AiSetupRow>().OpenPicker(); AssertInsideTarget(StrategyPicker.Active.Window, "split picker"); Capture("local-ai-resume-picker-1920x1200.png"); StrategyPicker.CloseActive();
         router.Resize(1600, 900); yield return null;
         Check(Setup.PlayerMetadata.Skip(1).Select(LocalMenu.Difficulty).SequenceEqual(DifficultyCatalog.Keys), "next-game preferences preserve each difficulty independently of Continue");
@@ -440,7 +452,7 @@ public sealed class LocalAiUnityDriver : MonoBehaviour
     void Finish(Exception error)
     {
         done = true; LocalTurnBridge.CancelActive(); Application.logMessageReceived -= Log;
-        File.WriteAllText(Output, new JObject { ["passed"] = error == null, ["mode"] = Environment.GetCommandLineArgs().Contains("--brass-local-ai-smoke") ? "startup-menu-smoke" : "full", ["checks"] = checks, ["error"] = error == null ? null : error.ToString(), ["nativeErrors"] = JArray.FromObject(errors), ["environmentMessages"] = JArray.FromObject(environmentMessages), ["images"] = JArray.FromObject(images), ["turns"] = JArray.FromObject(turns), ["resourceTests"] = JObject.FromObject(new { passed = AiExecutionResourceTests.Passed, checks = AiExecutionResourceTests.Checks }), ["resourceMeasurements"] = AiExecutionResourceTests.Measurements == null ? null : JObject.FromObject(AiExecutionResourceTests.Measurements), ["executionStatistics"] = JObject.FromObject(BrassLegacyAI.Execution.AiExecutionScheduler.Statistics()), ["selectionPanel"] = JObject.FromObject(new { passed = selectionCasesPassed, gammaEnabled = AiSelectionCatalog.Entries(AiFamily.Gamma).Any(e => e.Available), fixtureChoices = selectionFixtureChoices, layouts = selectionLayouts }), ["unity"] = Application.unityVersion }.ToString());
+        File.WriteAllText(Output, new JObject { ["passed"] = error == null, ["mode"] = Environment.GetCommandLineArgs().Contains("--brass-local-ai-smoke") ? "startup-menu-smoke" : "full", ["checks"] = checks, ["error"] = error == null ? null : error.ToString(), ["nativeErrors"] = JArray.FromObject(errors), ["environmentMessages"] = JArray.FromObject(environmentMessages), ["images"] = JArray.FromObject(images), ["turns"] = JArray.FromObject(turns), ["resourceTests"] = JObject.FromObject(new { passed = AiExecutionResourceTests.Passed, checks = AiExecutionResourceTests.Checks }), ["resourceMeasurements"] = AiExecutionResourceTests.Measurements == null ? null : JObject.FromObject(AiExecutionResourceTests.Measurements), ["executionStatistics"] = JObject.FromObject(BrassLegacyAI.Execution.AiExecutionScheduler.Statistics()), ["selectionPanel"] = JObject.FromObject(new { passed = selectionCasesPassed, gammaEnabled = AiSelectionCatalog.Entries(AiFamily.Gamma).Any(e => e.Available), fixtureChoices = selectionFixtureChoices, draftChecks, layouts = selectionLayouts }), ["unity"] = Application.unityVersion }.ToString());
         Application.Quit(error == null ? 0 : 1);
     }
     void Capture(string file)
@@ -451,6 +463,75 @@ public sealed class LocalAiUnityDriver : MonoBehaviour
         texture.ReadPixels(new Rect(0, 0, texture.width, texture.height), 0, 0); texture.Apply(); RenderTexture.active = old;
         string path = Path.Combine(Path.GetDirectoryName(Output), file); File.WriteAllBytes(path, texture.EncodeToPNG()); images.Add(path); UnityEngine.Object.Destroy(texture);
     }
+    IEnumerator PlayerSelectionCases()
+    {
+        int initialChecks = checks;
+        var first = Rows()[0].GetComponent<AiSetupRow>(); var bot = Rows()[1].GetComponent<AiSetupRow>();
+        var identity = LocalMenu.SetupIdentity(bot.Player); var original = bot.SelectedChoice; string difficulty = bot.SelectedDifficulty;
+        var firstChoice = first.SelectedChoice; string firstDifficulty = first.SelectedDifficulty;
+        router.Resize(1920, 1200); yield return null;
+        first.OpenPicker(); var panel = AiSelectionPanel.Active;
+        Check(panel.CurrentPage == PlayerSelectionPage.Human && panel.Filter == null && !panel.Tiles.Any() && panel.DifficultyButtons.Length == 0, "Human page has no AI controls");
+        Check(panel.Window.Find("Page Human").GetSiblingIndex() < panel.Window.Find("Page V4").GetSiblingIndex(), "Human is first in navigation");
+        panel.SelectPage(PlayerSelectionPage.V4); panel.Tiles.Last().onClick.Invoke(); panel.DifficultyButtons[0].onClick.Invoke();
+        Check(first.Player.AiType == AIType.Human && first.SelectedChoice.Equals(firstChoice) && first.SelectedDifficulty == firstDifficulty, "Human AI edits stay in draft");
+        panel.Window.Find("Close panel").GetComponent<Button>().onClick.Invoke();
+        Check(first.Player.AiType == AIType.Human && first.SelectedChoice.Equals(firstChoice), "Cancel discards role/style/difficulty");
+        first.OpenPicker(); panel = AiSelectionPanel.Active; panel.SelectPage(PlayerSelectionPage.V4); panel.ApplyButton.onClick.Invoke();
+        yield return null;
+        Check(!LocalMenu.CanStart(menu) && LocalMenu.NeedsHuman(first.Player), "all-AI lineup requires Human");
+        Check(Get<Button>(menuView, "_startGameButton").transform.Find("Human required").gameObject.activeInHierarchy, "all-AI explanation visible");
+        Capture("player-selection-human-required-1200.png");
+        first.OpenPicker(); panel = AiSelectionPanel.Active; panel.SelectPage(PlayerSelectionPage.Human); panel.ApplyButton.onClick.Invoke();
+        yield return null;
+        Check(LocalMenu.CanStart(menu) && !LocalMenu.NeedsHuman(first.Player), "restoring Human re-enables game creation");
+        bot.OpenPicker(); panel = AiSelectionPanel.Active;
+        string alternate = original.EntryId == "cotton" ? "supplier" : "cotton";
+        panel.Tiles.Single(b => b.name == alternate).onClick.Invoke(); panel.DifficultyButtons[2].onClick.Invoke();
+        panel.SelectPage(PlayerSelectionPage.Human); panel.SelectPage(PlayerSelectionPage.V4);
+        Check(panel.Tiles.Single(b => b.name == alternate).GetComponent<AiControlSurface>().Selected && panel.DraftDifficulty == "hard", "draft survives Human roundtrip");
+        panel.SelectPage(PlayerSelectionPage.Gamma);
+        Check(panel.DifficultyButtons.All(b => !b.interactable) && !panel.ApplyButton.interactable, "Gamma difficulty and Apply disabled");
+        Check(panel.Tiles.Concat(panel.DifficultyButtons).All(b => !b.GetComponent<AiControlSurface>().Selected), "unavailable Gamma choices do not claim to be selected");
+        foreach (var b in panel.DifficultyButtons) b.onClick.Invoke(); panel.ApplyButton.onClick.Invoke();
+        Check(AiSelectionPanel.IsOpen && panel.DraftDifficulty == "hard" && bot.SelectedChoice.Equals(original), "forced Gamma callbacks cannot change or apply draft");
+        panel.SelectPage(PlayerSelectionPage.Human); panel.ApplyButton.onClick.Invoke();
+        Check(bot.Player.AiType == AIType.Human && bot.SelectedChoice.Equals(original) && bot.SelectedDifficulty == difficulty, "Human Apply preserves committed AI settings, discards unapplied AI edits");
+        bot.OpenPicker(); panel = AiSelectionPanel.Active; panel.SelectPage(PlayerSelectionPage.V4); panel.ApplyButton.onClick.Invoke();
+        Check(bot.Player.AiType == AIType.Hard && bot.SelectedChoice.Equals(original), "switch back restores committed AI");
+        bot.OpenPicker(); panel = AiSelectionPanel.Active; panel.DifficultyButtons[1].onClick.Invoke();
+        Check(bot.SelectedDifficulty == difficulty, "difficulty-only draft does not commit early");
+        panel.ApplyButton.onClick.Invoke(); Check(bot.SelectedDifficulty == "mid" && bot.SelectedChoice.Equals(original), "difficulty-only Apply commits without reselecting style");
+        bot.OpenPicker(); panel = AiSelectionPanel.Active; panel.DifficultyButtons[2].onClick.Invoke();
+        panel.OnCancel(new BaseEventData(EventSystem.current)); Check(bot.SelectedDifficulty == "mid", "keyboard cancel discards difficulty edit");
+        bot.OpenPicker(); panel = AiSelectionPanel.Active; panel.DifficultyButtons[2].onClick.Invoke();
+        var staleApply = panel.ApplyButton; Call(menu, "PresentGameConfiguration"); staleApply.onClick.Invoke();
+        Check(!AiSelectionPanel.IsOpen && bot.SelectedDifficulty == "mid", "stale Apply after rebind cannot mutate row");
+        foreach (var bad in new[] {
+            new PlayerSelectionDraft(PlayerSelectionPage.Gamma, new AiChoice(AiFamily.Gamma, "gamma-01"), "hard"),
+            new PlayerSelectionDraft(PlayerSelectionPage.V4, original, "unknown"),
+            new PlayerSelectionDraft(PlayerSelectionPage.V4, new AiChoice(AiFamily.V4, "missing"), "easy") })
+            Check(!LocalMenu.ApplyPlayerSelection(bot.Player, identity, bad) && bot.SelectedDifficulty == "mid" && bot.SelectedChoice.Equals(original), "invalid complete draft rejected atomically");
+        Check(!LocalMenu.ApplyPlayerSelection(bot.Player, new object(), new PlayerSelectionDraft(PlayerSelectionPage.Human, original, "hard")), "wrong setup identity rejected");
+        var last = Rows()[3].GetComponent<AiSetupRow>(); var removed = last.Player; last.OpenPicker(); staleApply = AiSelectionPanel.Active.ApplyButton;
+        menu.DecreaseNumberOfPlayers(); staleApply.onClick.Invoke();
+        yield return null; // The removed row is no longer presented; the panel's lifecycle check closes it this frame.
+        Check(!last.CanEdit && !AiSelectionPanel.IsOpen && !LocalMenu.CanConfigure(removed), "removed fourth slot loses edit authority: editable=" + last.CanEdit + ", open=" + AiSelectionPanel.IsOpen + ", old reference=" + LocalMenu.CanConfigure(removed) + ", count=" + Get<int>(menu, "_numberOfPlayers"));
+        menu.DecreaseNumberOfPlayers(); Check(Rows().Count(r => r.GetComponent<AiSetupRow>().CanEdit) == 2, "two-player setup has two unified controls");
+        menu.IncreaseNumberOfPlayers(); Check(Rows().Count(r => r.GetComponent<AiSetupRow>().CanEdit) == 3, "three-player setup has three unified controls");
+        menu.IncreaseNumberOfPlayers(); Check(Rows().Count(r => r.GetComponent<AiSetupRow>().CanEdit) == 4, "four-player setup has four unified controls");
+        foreach (var row in Rows().Skip(1)) { row.GetComponent<AiSetupRow>().OpenPicker(); panel = AiSelectionPanel.Active; panel.SelectPage(PlayerSelectionPage.Human); panel.ApplyButton.onClick.Invoke(); }
+        yield return null; Check(LocalMenu.CanStart(menu) && Setup.PlayerMetadata.All(p => p.AiType == AIType.Human), "all-Human hotseat remains playable");
+        Capture("player-selection-hotseat-1200.png");
+        foreach (var row in Rows().Skip(1)) { row.GetComponent<AiSetupRow>().OpenPicker(); panel = AiSelectionPanel.Active; panel.SelectPage(PlayerSelectionPage.V4); panel.ApplyButton.onClick.Invoke(); }
+        LocalMenu.SelectDifficulty(bot.Player, difficulty); Call(menu, "PresentGameConfiguration");
+        string originalName = first.Player.NickName; first.Player.NickName = "<b>Long literal player name & family</b>"; Call(menu, "PresentGameConfiguration");
+        first.OpenPicker(); panel = AiSelectionPanel.Active;
+        Check(!panel.Window.Find("Title").GetComponent<TextMeshProUGUI>().richText && panel.Window.Find("Title").GetComponent<TextMeshProUGUI>().text.Contains(first.Player.NickName), "nickname renders as literal text");
+        Capture("player-selection-literal-name-1200.png"); panel.Close(); first.Player.NickName = originalName; Call(menu, "PresentGameConfiguration");
+        draftChecks = checks - initialChecks;
+        yield return null;
+    }
     IEnumerator SelectionPanelCases(AiSetupRow ui)
     {
         string before = ui.SelectedStyle; string difficulty = ui.SelectedDifficulty;
@@ -459,7 +540,7 @@ public sealed class LocalAiUnityDriver : MonoBehaviour
         Check(!AiSelectionCatalog.CanChoose(new AiChoice(AiFamily.Gamma, "random")) && !AiSelectionCatalog.CanChoose(new AiChoice(AiFamily.V4, "unknown")), "empty Gamma Random and unknown identity rejected");
         Check(!LocalMenu.EditChoice(ui.Player, new AiChoice(AiFamily.Gamma, "gamma-01")) && !LocalMenu.EditChoice(ui.Player, new AiChoice(AiFamily.Gamma, "random")), "model and Random unavailable at menu boundary");
         ui.OpenPicker(); var panel = AiSelectionPanel.Active;
-        Check(panel.CurrentPage == AiFamily.V4 && Math.Abs(panel.TextScale - 1.15f) < .01f, "assigned V4 page and second text preset default");
+        Check(panel.CurrentPage == PlayerSelectionPage.V4 && Math.Abs(panel.TextScale - 1.15f) < .01f, "assigned V4 page and second text preset default");
         panel.SelectPage(AiFamily.Gamma);
         Check(panel.Tiles.Count() == 17 && panel.Tiles.All(b => !b.interactable), "Gamma has 16 unavailable models plus unavailable Random");
         Check(ui.CanEdit && ui.StyleButton.IsInteractable() == false, "modal keeps owner identity editable but underlying controls blocked");
@@ -482,21 +563,25 @@ public sealed class LocalAiUnityDriver : MonoBehaviour
                 ui.OpenPicker(); panel = AiSelectionPanel.Active;
                 if (preset == 0) panel.ChangeTextSize(-1); if (preset == 2) panel.ChangeTextSize(1);
                 Check(panel.Filter.text == "", "fresh panel clears searches");
-                foreach (var family in new[] { AiFamily.V4, AiFamily.Gamma }) {
+                foreach (var family in new[] { PlayerSelectionPage.Human, PlayerSelectionPage.V4, PlayerSelectionPage.Gamma }) {
                     panel.SelectPage(family); Canvas.ForceUpdateCanvases();
                     AssertInsideTarget(panel.Window, "selection window " + size + "/" + preset);
-                    foreach (var name in new[] { "Close chooser", "Close panel", "Find AI", "Clear filter", "Page V4", "Page Gamma", "random" })
+                    foreach (var name in new[] { "Close chooser", "Close panel", "Apply selection", "Page Human", "Page V4", "Page Gamma" })
                         AssertInsideTarget(panel.Window.Find(name).GetComponent<RectTransform>(), "fixed control " + name);
-                    Check(panel.Tiles.Count() == (family == AiFamily.V4 ? 7 : 17), "page count stable at resolution/text preset");
-                    Check(panel.Tiles.All(b => b.interactable == (family == AiFamily.V4)), "availability stable after rebuild");
-                    if (size.y == 1200 && preset == 1 && family == AiFamily.Gamma)
+                    Check(panel.Tiles.Count() == (family == PlayerSelectionPage.Human ? 0 : family == PlayerSelectionPage.V4 ? 7 : 17), "page count stable at resolution/text preset");
+                    Check(panel.Tiles.All(b => b.interactable == (family == PlayerSelectionPage.V4)), "availability stable after rebuild");
+                    if (family != PlayerSelectionPage.Human) {
+                    foreach (var name in new[] { "Find AI", "Clear filter", "random", "Difficulty easy", "Difficulty mid", "Difficulty hard" })
+                        AssertInsideTarget(panel.Window.Find(name).GetComponent<RectTransform>(), "fixed AI control " + name);
+                    if (size.y == 1200 && preset == 1 && family == PlayerSelectionPage.Gamma)
                         foreach (var tile in panel.Tiles.Skip(1)) Check(InsideViewport(tile.GetComponent<RectTransform>(), panel.GridScroll.viewport), "all Gamma cards visible at 1200 default: " + tile.name);
                     var closePosition = panel.Window.Find("Close panel").position;
                     panel.GridScroll.verticalNormalizedPosition = 0; Canvas.ForceUpdateCanvases();
                     Check(InsideViewport(panel.Tiles.Last().GetComponent<RectTransform>(), panel.GridScroll.viewport), "last card reachable with scroll");
                     Check(panel.Window.Find("Close panel").position == closePosition, "scroll does not move close control");
                     panel.GridScroll.verticalNormalizedPosition = 1;
-                    Capture("ai-selection-" + size.x + "x" + size.y + "-" + family + "-" + preset + ".png");
+                    }
+                    Capture("player-selection-" + size.x + "x" + size.y + "-" + family + "-" + preset + ".png");
                     selectionLayouts.Add(new { width = size.x, height = size.y, preset, family = family.ToString(), choices = panel.Tiles.Count(), available = panel.Tiles.Count(b => b.interactable) });
                 }
                 panel.Close(); yield return null;
@@ -511,6 +596,7 @@ public sealed class LocalAiUnityDriver : MonoBehaviour
             AiChoice chosen = default(AiChoice);
             panel = AiSelectionPanel.Open(ui, Label(Rows()[1]), "Synthetic fixture", LocalMenu.Choice(ui.Player), c => { chosen = c; return true; }, AiFamily.Gamma, fixture);
             panel.SelectPage(AiFamily.Gamma); panel.Tiles.Single(b => b.name == entry.Choice.EntryId).onClick.Invoke();
+            panel.ApplyButton.onClick.Invoke();
             Check(chosen.Equals(entry.Choice) && !AiSelectionPanel.IsOpen, "typed fixture selects " + entry.Choice);
             selectionFixtureChoices++;
         }
@@ -524,11 +610,11 @@ public sealed class LocalAiUnityDriver : MonoBehaviour
     }
     void CheckFirstDisplay(string phase)
     {
-        foreach (var row in Rows().Skip(1)) {
+        foreach (var row in Rows()) {
             var controls = row.GetComponent<AiSetupRow>();
             Check(controls != null && row.GetComponents<AiSetupRow>().Length == 1 && controls.CanEdit, phase + ": one bound editable component");
-            Check(controls.StyleButton.gameObject.activeInHierarchy && controls.DifficultyButtons.All(b => b.gameObject.activeInHierarchy), phase + ": style and difficulty visible before any click");
-            Check(controls.StyleButton.GetComponentInChildren<TextMeshProUGUI>().text == LocalMenu.RowLabel(controls.Player), phase + ": family summary visible immediately");
+            Check(controls.StyleButton.gameObject.activeInHierarchy && controls.DifficultyButtons.Length == 0 && controls.StyleButton.transform.parent.GetComponentsInChildren<Button>().Length == 1, phase + ": one selection button and no external difficulty controls");
+            Check(controls.StyleButton.GetComponentInChildren<TextMeshProUGUI>().text == (controls.Player.AiType == AIType.Human ? "Human" : LocalMenu.RowLabel(controls.Player)), phase + ": role/family summary visible immediately");
             Check(controls.StyleButton.GetComponentInChildren<TextMeshProUGUI>().color == BrassPatch.Statistics.StatisticsTheme.Ink &&
                 controls.DifficultyButtons.All(b => b.GetComponentInChildren<TextMeshProUGUI>().color == BrassPatch.Statistics.StatisticsTheme.Ink), phase + ": dark ink on light controls during cold binding");
             Check(!Label(row).gameObject.activeInHierarchy && !Get<TextMeshProUGUI>(row, "_playerAITypeText").gameObject.activeInHierarchy, phase + ": stock labels hidden");
@@ -651,4 +737,5 @@ public sealed class LocalAiUnityDriver : MonoBehaviour
         public T GetUseCase<T>() where T : IUseCase { return (T)UseCases[typeof(T)]; }
     }
 }
+
 

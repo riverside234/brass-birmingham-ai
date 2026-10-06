@@ -3,6 +3,17 @@ import math
 from brass_ai.learning.contracts import require
 from brass_ai.search.common import SearchConfig
 
+# Training-only defaults; evaluation/laptop SearchConfig defaults stay intact.
+SEARCH_EVERY_GAMES=320
+SEARCH_WALL_FRACTION=.25
+SEARCH_SECONDS=4.0
+SEARCH_WORKERS=4
+
+
+def teacher_search_config(options):
+    """Training defaults without changing standalone/evaluation search clocks."""
+    return SearchConfig(**dict({'seconds':SEARCH_SECONDS,'workers':SEARCH_WORKERS},**options)).validate()
+
 
 EXECUTION = dict(processes=8, hosts_per_process=4, heavy_processes=8,
     batch_size=64, max_candidate_cells=131072, flush_ms=2.0, worker_threads=1,

@@ -434,8 +434,16 @@ def completed_imitation(root,run,*,_seen=None):
     require(report.get('format')=='bc-training-report/1.0.0' and report.get('signature')==signature,
             'Missing/mismatched completed imitation report')
     initialization=signature.get('initialization')
-    require(initialization in ('random','fresh-imitation-continuation') and signature.get('implementation')==implementation_id(),
-            'Imitation must be fresh random training with the current source')
+    # This training-only teacher revision does not invalidate completed BC.
+    # Accept only the explicitly reviewed preceding source with exactly the same
+    # learning contracts; all completion/hash/lineage checks below still apply.
+    from brass_ai.learning.contracts import CONFIG_DIR
+    reviewed=read(CONFIG_DIR/'imitation-handoff-sources.json')['compatible_sources']
+    source_ok=signature.get('implementation')==implementation_id() or any(
+        signature.get('implementation')==entry['implementation'] and digest(compatibility())==entry['learning_compatibility']
+        for entry in reviewed)
+    require(initialization in ('random','fresh-imitation-continuation') and source_ok,
+            'Imitation must be fresh training from the current or reviewed compatible source')
     parent=None
     if initialization=='fresh-imitation-continuation':
         expected=signature['parent_imitation']

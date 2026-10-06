@@ -73,7 +73,7 @@ public sealed partial class StatisticsDriver : MonoBehaviour
             try{more=run.MoveNext();if(more)current=run.Current;}catch(Exception e){failure=e;}
             if(failure!=null||!more)break;yield return current;
         }
-        File.WriteAllText(Output,JsonConvert.SerializeObject(new{passed=failure==null&&failures==0&&errors.Count==0,checks,failures,matches,pages,cases,layouts=resolutions.Select(r=>new{width=r.x,height=r.y}).ToArray(),nativeErrors=errors,error=failure==null?null:failure.ToString(),performance=new{processor=SystemInfo.processorType,graphics=SystemInfo.graphicsDeviceName,definition="Native batch-player measurements; response samples include frame waits and layout, excluding PNG capture/encoding. Scroll samples are CPU layout/update time, not a frame-rate guarantee.",samples=performance,summary=performance.GroupBy(p=>p.Operation).Select(g=>new{operation=g.Key,samples=g.Count(),minimumMilliseconds=g.Min(p=>p.Milliseconds),medianMilliseconds=PerformanceMedian(g.Select(p=>p.Milliseconds)),maximumMilliseconds=g.Max(p=>p.Milliseconds)})}},Formatting.Indented));
+        File.WriteAllText(Output,JsonConvert.SerializeObject(new{passed=failure==null&&failures==0&&errors.Count==0,checks,failures,matches,pages,cases,captureSkipped=Environment.GetEnvironmentVariable("BRASS_STATS_FAST")=="1",layouts=resolutions.Select(r=>new{width=r.x,height=r.y}).ToArray(),nativeErrors=errors,error=failure==null?null:failure.ToString(),performance=new{processor=SystemInfo.processorType,graphics=SystemInfo.graphicsDeviceName,definition="Native batch-player measurements; response samples include frame waits and layout, excluding PNG capture/encoding. Scroll samples are CPU layout/update time, not a frame-rate guarantee.",samples=performance,summary=performance.GroupBy(p=>p.Operation).Select(g=>new{operation=g.Key,samples=g.Count(),minimumMilliseconds=g.Min(p=>p.Milliseconds),medianMilliseconds=PerformanceMedian(g.Select(p=>p.Milliseconds)),maximumMilliseconds=g.Max(p=>p.Milliseconds)})}},Formatting.Indented));
         Application.Quit(failure==null&&failures==0&&errors.Count==0?0:1);
     }
     sealed class Match
@@ -162,7 +162,7 @@ public sealed partial class StatisticsDriver : MonoBehaviour
     }
     IEnumerator Run()
     {
-        StatisticsReviewChecks.Run(Check);StatisticsLightChecks.Run(Check);
+        StatisticsReviewChecks.Run(Check);StatisticsLightChecks.Run(Check);StatisticsEfficiencyChecks.Data(Check);var leaseChecks=StatisticsEfficiencyChecks.Lease(Check);while(leaseChecks.MoveNext())yield return leaseChecks.Current;
         Match example=null;
         foreach(int count in new[]{2,3,4})foreach(bool intro in new[]{false,true}) {
             var match=Finish(count,intro,20260930+count+(intro?10:0));if(count==4&&!intro)example=match;yield return null;
@@ -256,7 +256,7 @@ public sealed partial class StatisticsDriver : MonoBehaviour
         }
         pages=StatisticsPages.Names.Length;
         // Capture later plots at an actual scroll position, rather than only page tops.
-        var detailTarget=new RenderTexture(1920,1080,24,RenderTextureFormat.ARGB32);detailTarget.Create();camera.targetTexture=detailTarget;
+        var detailTarget=new RenderTexture(1920,1200,24,RenderTextureFormat.ARGB32);detailTarget.Create();camera.targetTexture=detailTarget;
         foreach(int page in new[]{0,2,3,4,5,6,7,8,9}){
             panel.SelectPage(page);yield return null;yield return null;
             foreach(var graphic in panel.GetComponentsInChildren<StatisticsPlotGraphic>()){
@@ -283,6 +283,7 @@ public sealed partial class StatisticsDriver : MonoBehaviour
         Check(panel.Filters.Resource=="Coal"&&panel.Filters.Outgoing,"resource and direction controls use typed scopes");
         var light=LightPanelChecks(panel,camera);while(light.MoveNext())yield return light.Current;
         var previews=LightSpecialPreviews(panel,camera,new[]{previewReports[0],previewReports[3],previewReports[8]});while(previews.MoveNext())yield return previews.Current;
+        var currentReview=StatisticsHistoryReviewChecks.Run(panel,camera,Check,Capture,"live");while(currentReview.MoveNext())yield return currentReview.Current;
         panel.ResetFilters();panel.SelectPage(0);yield return null;yield return null;
         for(int i=0;i<2;i++){panel.GetComponentsInChildren<Button>().First(b=>b.name=="Larger text").onClick.Invoke();yield return null;yield return null;}
         panel.SelectPage(0);yield return null;yield return null;
@@ -363,11 +364,19 @@ public sealed partial class StatisticsDriver : MonoBehaviour
         var review=(BaseView)router.GetView<IFinishedGameReviewView>();var boardButton=review.GetComponentsInChildren<Button>().First(b=>b.name=="Match statistics");
         var boardEntryBounds=ScreenBounds((RectTransform)boardButton.transform,camera);
         Check(boardButton.GetComponent<CanvasGroup>().alpha==1&&boardEntryBounds.yMin<30&&review.GetComponentsInChildren<Button>().Where(b=>b!=boardButton).All(b=>!ScreenBounds((RectTransform)b.transform,camera).Overlaps(boardEntryBounds)),"board statistics entry returns in the bottom row beside original summary button",new{boardEntryBounds.xMin,boardEntryBounds.yMin,boardEntryBounds.width,boardEntryBounds.height});
-        for(int i=0;i<8;i++) {
+        for(int i=0;i<30;i++) {
             boardButton.onClick.Invoke();Tick(.1f);yield return null;panel.Close(false);Tick(.1f);yield return null;
         }
         Check(router.GetView<StatisticsPanel>()==panel&&root.GetComponentsInChildren<StatisticsPanel>(true).Length==1,"reopening reuses one panel and its state");
         Check(example.Repository.Load(example.App.Metadata.GameId)!=null,"panel closing never finishes review or deletes match");
+        boardButton.onClick.Invoke();Tick(.1f);yield return null;
+        var ownerTable=typeof(StatisticsEntryPoints).GetField("owners",System.Reflection.BindingFlags.Static|System.Reflection.BindingFlags.NonPublic).GetValue(null);var ownerArgs=new object[]{owner,null};ownerTable.GetType().GetMethod("TryGetValue").Invoke(ownerTable,ownerArgs);var reviewSession=ownerArgs[1];var leaseField=reviewSession.GetType().GetField("Presentation");
+        Check(leaseField.GetValue(reviewSession)!=null,"E26-LIFECYCLE live owner acquires one presentation lease");
+        router.HideView<StatisticsPanel>();Tick(.1f);yield return null;Check(leaseField.GetValue(reviewSession)==null,"E26-LIFECYCLE direct router hide restores background");
+        typeof(StatisticsPanel).GetProperty("Filters").SetValue(panel,null,null);bool injected=false;bool samePanel=ReferenceEquals(reviewSession.GetType().GetField("Panel").GetValue(reviewSession),panel);bool wasOpen=panel.IsOpen;
+        try{boardButton.onClick.Invoke();}catch(NullReferenceException){injected=true;}
+        Check(injected&&leaseField.GetValue(reviewSession)==null&&!router.IsViewCached<StatisticsPanel>(),"E26-LIFECYCLE injected render failure restores presentation and removes broken panel",new{injected,samePanel,wasOpen,lease=leaseField.GetValue(reviewSession)!=null,cached=router.IsViewCached<StatisticsPanel>(),ready=reviewSession.GetType().GetField("Ready").GetValue(reviewSession)});yield return null;
+        boardButton.onClick.Invoke();Tick(.1f);yield return null;panel=router.GetView<StatisticsPanel>();Check(panel.IsOpen,"E26-LIFECYCLE reopening after failed show recreates a working panel");panel.Close(false);Tick(.1f);yield return null;
         var staleClick=boardButton.onClick;owner.FinishGameReview();Tick(.1f);yield return null;
         Check(!router.IsViewCached<StatisticsPanel>()&&root.GetComponentsInChildren<StatisticsPanel>(true).Length==0,"review exit clears report UI and cached callbacks");
         staleClick.Invoke();Check(!router.IsViewCached<StatisticsPanel>(),"retired match callback cannot reopen a stale report");
@@ -391,6 +400,7 @@ public sealed partial class StatisticsDriver : MonoBehaviour
     }
     void Capture(RenderTexture target,Camera camera,string name)
     {
+        if(Environment.GetEnvironmentVariable("BRASS_STATS_FAST")=="1")return; // Diagnostic only; release runs always render captures.
         Canvas.ForceUpdateCanvases();camera.Render();var previousTarget=RenderTexture.active;RenderTexture.active=target;
         var image=new Texture2D(target.width,target.height,TextureFormat.RGB24,false);image.ReadPixels(new Rect(0,0,target.width,target.height),0,0);image.Apply();RenderTexture.active=previousTarget;
         File.WriteAllBytes(Path.Combine(Path.GetDirectoryName(Output),name+".png"),image.EncodeToPNG());Destroy(image);

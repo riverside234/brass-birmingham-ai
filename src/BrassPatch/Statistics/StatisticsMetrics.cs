@@ -11,7 +11,7 @@ namespace BrassPatch.Statistics
         public PlayerColor? Player;
         public string Industry="", Region="", Action="", Resource="";
         public bool? Outgoing;
-        public string ResourceView;
+        public string ResourceView,EfficiencyView;
         public bool? AllCashPayments;
         public bool HasKeys;
         public readonly HashSet<string> Keys=new HashSet<string>();

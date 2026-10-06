@@ -8,9 +8,7 @@ namespace BrassPatch
     {
         public static void ShowOnlineDisabled(MainMenuUseCase menu)
         {
-            var presenter = ReflectionAccess.Get<object>(menu, "_presenter");
-            var router = ReflectionAccess.Get<IRouter>(presenter, "_router");
-            ShowNotice(router);
+            BrassPatch.History.HistoryEntryPoints.Show(menu);
         }
 
         public static void ShowNotice(IRouter router)

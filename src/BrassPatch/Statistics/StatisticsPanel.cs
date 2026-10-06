@@ -35,6 +35,9 @@ namespace BrassPatch.Statistics
         public bool IsOpen { get { return _isViewVisible && gameObject.activeInHierarchy; } }
         public override IController Controller { get; set; } = new NullController();
         public Action<bool?> OnClose;
+        public Action OnHidden;
+        public StatisticsOpeningContext OpeningContext { get; private set; }
+        string archiveContext;
         TMP_FontAsset font;
         RectTransform window,sticky,tip,dropdown;
         TextMeshProUGUI tipText,pageLabel,filterStatus,measurement,sizeLabel;
@@ -54,9 +57,12 @@ namespace BrassPatch.Statistics
         protected override void Awake() { DestroyWhenClosed=false; DisableMenusUnderneath=false; }
         protected override void Start() { if(InputRegistration!=null)InputRegistration.RegisterKey(KeyEnum.Escape,this); }
         public void Initialize(CompletedMatchStatistics report,TMP_FontAsset typeface,Action<bool?> close)
+        { Initialize(report,typeface,close,StatisticsOpeningContext.LiveCompletedGame,null); }
+        public void Initialize(CompletedMatchStatistics report,TMP_FontAsset typeface,Action<bool?> close,StatisticsOpeningContext context,string recordedContext)
         {
             if(GetComponent<StatisticsTheme>()==null)gameObject.AddComponent<StatisticsTheme>();
-            Report=report; font=typeface; OnClose=close; Filters.Reset(report); BuildLayout();
+            Report=report; font=typeface; OnClose=close; OpeningContext=context;archiveContext=recordedContext;
+            Filters.Reset(report); BuildLayout();
         }
         public void SetOpener(GameObject value) { opener=value; }
         public override IAnimation CreateShowViewAnimation()
@@ -72,7 +78,8 @@ namespace BrassPatch.Statistics
             return new Frameworks.View.Animation.DOTweenAnimation(DOTween.Sequence().AppendInterval(.001f));
         }
         public override void SetInteractable(bool value) { GetComponent<CanvasGroup>().interactable=value; }
-        void OnDestroy() { if(InputRegistration!=null)InputRegistration.UnregisterAllKeys(this); }
+        void OnDisable() { if(OnHidden!=null)OnHidden(); }
+        void OnDestroy() { if(OnHidden!=null)OnHidden();if(InputRegistration!=null)InputRegistration.UnregisterAllKeys(this); }
         public void Close(bool? results=null)
         {
             if(closing||!IsOpen)return; closing=true; positions[CurrentPage]=BodyScroll.verticalNormalizedPosition;
@@ -93,7 +100,7 @@ namespace BrassPatch.Statistics
             positions[page]=1; SelectPage(page);
         }
         public void ResetFilters()
-        { Filters.Reset(Report);hiddenSeries.Clear();if(search!=null)search.SetTextWithoutNotify("");QueueRender(false); }
+        { Filters.Reset(Report);efficiencyPositions.Clear();hiddenSeries.Clear();if(search!=null)search.SetTextWithoutNotify("");QueueRender(false); }
         void QueueRender(bool retain)
         { CloseCategories();if(retain&&BodyScroll!=null)positions[CurrentPage]=BodyScroll.verticalNormalizedPosition;else positions[CurrentPage]=1;renderPending=true; }
         void ChangeTextSize(int direction)
@@ -139,7 +146,7 @@ namespace BrassPatch.Statistics
             window.anchoredPosition=new Vector2(safe.center.x-pixels.center.x,safe.center.y-pixels.center.y)*unit;
             window.gameObject.AddComponent<StatisticsSurface>().Panel=true;
             StatisticsWidgets.Text(window,font,"Title","MATCH STATISTICS",V(22,10),new Vector2(width-360*unit,48*unit),F(30)).fontStyle=FontStyles.Bold;
-            StatisticsWidgets.Text(window,font,"Context",(Report.Introductory?"Introductory":"Full game")+" · "+Report.Players.Count+" players · "+(Report.CompleteHistory?"complete history":"partial history"),V(22,48),new Vector2(width-100*unit,30*unit),F(19));
+            StatisticsWidgets.Text(window,font,"Context",(Report.Introductory?"Introductory":"Full game")+" · "+Report.Players.Count+" players · "+(Report.CompleteHistory?"complete history":"partial history")+(String.IsNullOrEmpty(archiveContext)?"":" · "+archiveContext),V(22,48),new Vector2(width-100*unit,30*unit),F(19));
             smallerText=StatisticsWidgets.Button(window,font,"Smaller text","A−",new Vector2(width-298*unit,-16*unit),Size(50,42),23*unit,()=>ChangeTextSize(-1));
             sizeLabel=StatisticsWidgets.Text(window,font,"Text size",new[]{"Large","Larger","Largest"}[Mathf.RoundToInt((TextScale-1)/.15f)],new Vector2(width-244*unit,-16*unit),Size(100,42),20*unit);
             sizeLabel.alignment=TextAlignmentOptions.Center;
@@ -193,8 +200,12 @@ namespace BrassPatch.Statistics
             bodyWidth=BodyScroll.viewport.sizeDelta.x-8*unit;
             sticky=StatisticsWidgets.Rect(BodyScroll.viewport,"Pinned column headings",Vector2.zero,new Vector2(bodyWidth,54*unit));sticky.gameObject.AddComponent<RectMask2D>();sticky.gameObject.SetActive(false);
             pinned=null;
-            StatisticsWidgets.Button(window,font,"Return to results","Return to results",new Vector2(22*unit,-height+54*unit),new Vector2(222*unit*TextScale,44*unit),F(21),()=>Close(true));
-            StatisticsWidgets.Button(window,font,"Return to board","Close · review board",new Vector2(width-22*unit-258*unit*TextScale,-height+54*unit),new Vector2(258*unit*TextScale,44*unit),F(21),()=>Close(false));
+            if(OpeningContext==StatisticsOpeningContext.ArchivedHistory)
+                StatisticsWidgets.Button(window,font,"Back to history","Back to history",new Vector2(22*unit,-height+54*unit),new Vector2(222*unit*TextScale,44*unit),F(21),()=>Close());
+            else {
+                StatisticsWidgets.Button(window,font,"Return to results","Return to results",new Vector2(22*unit,-height+54*unit),new Vector2(222*unit*TextScale,44*unit),F(21),()=>Close(true));
+                StatisticsWidgets.Button(window,font,"Return to board","Close · review board",new Vector2(width-22*unit-258*unit*TextScale,-height+54*unit),new Vector2(258*unit*TextScale,44*unit),F(21),()=>Close(false));
+            }
             var hint=StatisticsWidgets.Text(window,font,"Scroll hint","Wheel: scroll · Shift: sideways",new Vector2(238*unit*TextScale,-height+54*unit),new Vector2(width-518*unit*TextScale,44*unit),F(18));
             hint.alignment=TextAlignmentOptions.Center;hint.color=filterStatus.color;
             tip=StatisticsWidgets.Rect(window,"Exact values",Vector2.zero,Size(520,100));
@@ -252,7 +263,7 @@ namespace BrassPatch.Statistics
             var analytic=View();
             var sections=analytic.Ledgers.ToList();
             // Older historical ledgers remain available when no typed evidence scope is active.
-            if(!Filters.Typed&&CurrentPage!=5)sections.AddRange(StatisticsPages.Build(CurrentPage,Report,Filters).Where(s=>s.Columns.Length>0));
+            if(!Filters.Typed&&CurrentPage!=5&&CurrentPage!=8)sections.AddRange(StatisticsPages.Build(CurrentPage,Report,Filters).Where(s=>s.Columns.Length>0));sections=sections.GroupBy(s=>s.Identity).Select(g=>g.First()).ToList();
             if(!String.IsNullOrWhiteSpace(Filters.Search))foreach(var s in sections)s.Rows.RemoveAll(r=>!(String.Join(" ",r.Cells)+" "+r.Detail).ToLowerInvariant().Contains(Filters.Search.Trim().ToLowerInvariant()));
             StatisticsWidgets.Enabled(clearSearch,!String.IsNullOrEmpty(Filters.Search));StatisticsWidgets.Enabled(collapseRows,expanded.Count>0);
             filterStatus.text=(Filters.Players.Count==0?"No players selected · select a player above":Filters.Players.Count+"/"+Report.Players.Count+" players")+" · "+new[]{"Whole game","Canal era","Rail era"}[Filters.Era]+" · "+sections.Sum(s=>s.Rows.Count)+" rows"+(String.IsNullOrWhiteSpace(Filters.Search)?"":" · Search filters tables");
@@ -279,7 +290,7 @@ namespace BrassPatch.Statistics
             }
             BodyScroll.content.sizeDelta=new Vector2(bodyWidth,Mathf.Max(y,BodyScroll.viewport.sizeDelta.y));
             Canvas.ForceUpdateCanvases();BodyScroll.verticalNormalizedPosition=positions[CurrentPage];
-            if(evidenceSection!=null){var target=tables.FirstOrDefault(t=>t.Section.Title==evidenceSection);if(target!=null){float range=BodyScroll.content.rect.height-BodyScroll.viewport.rect.height;BodyScroll.verticalNormalizedPosition=range<=0?1:Mathf.Clamp01(1-target.Y/range);positions[CurrentPage]=BodyScroll.verticalNormalizedPosition;}evidenceSection=null;}
+            if(evidenceSection!=null){var target=tables.FirstOrDefault(t=>t.Section.Identity==evidenceSection);if(target!=null){float range=BodyScroll.content.rect.height-BodyScroll.viewport.rect.height;BodyScroll.verticalNormalizedPosition=range<=0?1:Mathf.Clamp01(1-target.Y/range);positions[CurrentPage]=BodyScroll.verticalNormalizedPosition;}evidenceSection=null;}
             WireNavigation();
             if(revealPage){RevealFocus(PageButtons[CurrentPage]);revealPage=false;}
         }
@@ -290,7 +301,7 @@ namespace BrassPatch.Statistics
             text.alignment=TextAlignmentOptions.TopLeft;
             float height=Mathf.Max(F(size)*1.4f,text.GetPreferredValues(value,bodyWidth,0).y+8*unit);text.rectTransform.sizeDelta=new Vector2(bodyWidth,height);return height+12*unit;
         }
-        string Key(StatisticsSection section) { return CurrentPage+":"+section.Title; }
+        string Key(StatisticsSection section) { return CurrentPage+":"+section.Identity; }
         float TableView(StatisticsSection section,float y)
         {
             string key=Key(section);int column=sortColumns.ContainsKey(key)?sortColumns[key]:-1;

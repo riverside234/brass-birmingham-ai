@@ -11,7 +11,7 @@ namespace BrassPatch.Statistics
         public int Era;
         public string Search = "";
         public bool AllCashPayments;
-        public string ResourceView="Supply",DevelopmentSource="All";
+        public string ResourceView="Supply",DevelopmentSource="All",EfficiencyView="Returns";
         public bool ByPlayer,CardShare,LinkShare;
         public bool ActionShare=true;
         public string Industry = "", Region = "", Action = "", Resource = "Beer";
@@ -26,7 +26,7 @@ namespace BrassPatch.Statistics
         public bool Frame(StatisticsAction a) { return Includes(a.Player,a.Era) && (Action==""||Action==a.Kind) && (!EvidenceRestricted&&Evidence.Count==0||Evidence.Contains(a.Key)); }
         public bool Typed { get {return Industry!=""||Region!=""||Action!=""||EvidenceRestricted||Evidence.Count>0;} }
         public bool Includes(PlayerColor player, int era) { return Players.Contains(player) && (Era == 0 || Era == era); }
-        public void Reset(CompletedMatchStatistics report) { Players.Clear(); foreach (var p in report.Players) Players.Add(p.Color); Era = 0; Search = ""; AllCashPayments = false; Industry=Region=Action="";Evidence.Clear();EvidenceRestricted=false;ShowAll=Outgoing=false;Boundary="Final";BoundaryEra=0;MapMode="Occupancy";Resource="Beer";ResourceView="Supply";DevelopmentSource="All";ByPlayer=CardShare=LinkShare=false;ActionShare=true; }
+        public void Reset(CompletedMatchStatistics report) { Players.Clear(); foreach (var p in report.Players) Players.Add(p.Color); Era = 0; Search = ""; AllCashPayments = false; Industry=Region=Action="";Evidence.Clear();EvidenceRestricted=false;ShowAll=Outgoing=false;Boundary="Final";BoundaryEra=0;MapMode="Occupancy";Resource="Beer";ResourceView="Supply";EfficiencyView="Returns";DevelopmentSource="All";ByPlayer=CardShare=LinkShare=false;ActionShare=true; }
     }
     public sealed class StatisticsRow
     {
@@ -41,6 +41,7 @@ namespace BrassPatch.Statistics
     public sealed class StatisticsSection
     {
         public string Title, Definition;
+        public string Id; public string Identity { get { return Id??Title; } }
         public string[] Columns;
         public readonly List<StatisticsRow> Rows = new List<StatisticsRow>();
         public StatisticsChart Chart;

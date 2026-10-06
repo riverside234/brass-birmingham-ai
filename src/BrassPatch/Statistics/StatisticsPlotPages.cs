@@ -33,17 +33,17 @@ namespace BrassPatch.Statistics
                 case 5:if(f.ResourceView=="Market")MarketProfile(v,r,f);else if(f.ResourceView=="Merchants")MerchantDestinations(v,r,f);else{Flows(v,r,f);Sources(v,r,f);}break;
                 case 6:ActionShare(v,r,f,actions);SaleHistogram(v,r,f,actions);CardPurpose(v,r,f);break;
                 case 7:Seats(v,r,f);Spending(v,r,f);PositionShare(v,r,f);break;
-                case 8:PlayerEfficiency(v,r,f);Efficiency(v,r,f,assets);Outcomes(v,r,f,assets);break;
+                case 8:EfficiencyTabs(v,r,f,assets);break;
                 case 9:Events(v,r,f,actions);Lifespans(v,r,f,assets);break;
             }
             Headlines(v,page,r,f,assets,actions);
             foreach(var plot in v.Plots){
-                var data=new StatisticsSection(plot.Title+" · exact data",plot.Definition,"Label","Series","Value","Other value / axis","Evidence");
+                var data=new StatisticsSection(plot.Title+" · exact data",plot.Definition,"Label","Series","Value","Other value / axis","Evidence"){Id="plot/"+plot.Id};
                 foreach(var m in plot.Marks){var series=plot.Series.FirstOrDefault(s=>s.Id==m.Series);data.Rows.Add(new StatisticsRow("plot-"+plot.Id+"-"+data.Rows.Count,StatisticsPlotSemantics.Description(plot,m),m.Label,series==null?m.Series:series.Label,StatisticsPlotSemantics.Value(plot,m),StatisticsPlotSemantics.Other(plot,m),m.Detail){Player=m.Target==null?null:m.Target.Player,Drill=m.Target});}
                 v.Ledgers.Add(data);
             }
-            if(page!=5||f.ResourceView=="Supply")v.Ledgers.AddRange(StatisticsMetrics.AdditionalLedgers(r,f,page));
-            if(page!=5||f.ResourceView=="Supply")v.Ledgers.AddRange(StatisticsDetailMetrics.Build(r,f,page));
+            if(page!=8&&(page!=5||f.ResourceView=="Supply"))v.Ledgers.AddRange(StatisticsMetrics.AdditionalLedgers(r,f,page));
+            if(page!=8&&(page!=5||f.ResourceView=="Supply"))v.Ledgers.AddRange(StatisticsDetailMetrics.Build(r,f,page));
             if(f.EvidenceRestricted||f.Evidence.Count>0)v.Ledgers.Insert(0,StatisticsMetrics.SupportingRecords(r,f));
             return v;
         }
@@ -201,7 +201,8 @@ namespace BrassPatch.Statistics
         {
             var plot=Plot(v,"tile-efficiency","Construction cost vs realized industry VP",StatisticsPlotKind.Scatter,"Each tile: base construction + bought resource cost versus actual industry VP. Income and network value are excluded, so suppliers can be useful at low VP. Exact overlap is offset visually, not numerically.","Construction + market resources (£)","Actual industry VP");
             foreach(var p in Players(r,f))Series(plot,p.Color.ToString(),StatisticsMetrics.PlayerName(r,p),StatisticsColorRole.Player,p.Color);
-            foreach(var a in assets){Mark(plot,a.Player.ToString(),StatisticsMetrics.IndustryName(a.Type)+" L"+a.Level+" · "+a.City,a.BaseCost+a.MarketCost,StatisticsMetrics.AssetVP(a,f.Era),detail:a.Flipped?"Flipped · income gain "+a.IncomeSpaces+" marker spaces":"Unflipped · printed VP "+a.PrintedVP+" is nominal",target:Target(2,a.Player,new[]{a.Key}));plot.Marks.Last().Symbol=a.Type;}
+            foreach(var a in assets){Mark(plot,a.Player.ToString(),StatisticsMetrics.IndustryName(a.Type)+" L"+a.Level+" · "+a.City,a.BaseCost+a.MarketCost,StatisticsMetrics.AssetVP(a,0),detail:TileFacts(a),target:EfficiencyTarget("Conversion",a.Player,new[]{a.Key}));plot.Marks.Last().Symbol=a.Type;}
+            plot.Context.Add(Cohort(f));
             plot.Context.Add("Player color; industry symbol: cotton square, manufactory cross, pottery triangle, brewery circle, coal diamond, iron plus. Exact data preserves overlapping tiles.");
         }
         static void Outcomes(StatisticsPageView v,CompletedMatchStatistics r,StatisticsFilters f,StatisticsAsset[] assets)

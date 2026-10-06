@@ -1,5 +1,7 @@
 # AI selection panel — V4 and Gamma
 
+**Planned follow-up:** [Unified player selection revision](PLAYER_SELECTION_PANEL_REVISION_PLAN.md) adds a single row button, Human first in the left navigation and difficulty inside each AI page. That plan supersedes the row layout and immediate-commit interaction below for the next revision; this file retains the 1.4.22 implementation record and Gamma integration requirements.
+
 **Date:** 2 October 2026.  
 **Status:** UI phase implemented, qualified and installed as **1.4.22**. All **16 Gamma slots and Gamma Random remain unavailable**, as requested. Actual NN model/backend integration remains deferred. See the [release notes](../docs/AI_SELECTION_PANEL_1.4.22.md) and section 12 for implementation evidence.  
 **Verified implementation baseline:** Accepted patch **1.4.21**, including the current V4 AI and Statistics light theme. The implementation preserved all methods outside the allowed UI/catalog scope and all embedded AI profiles.  

@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using BoardGameRules.Entities.Players;
 namespace BrassPatch.Statistics
 {
-    public enum StatisticsPlotKind { StackedBars, PairedBars, Dumbbell, Heatmap, Step, Waterfall, Lollipop, Scatter, EventLanes, Lifespans, MiniMap, DelayDots, Columns, Efficiency, StackedColumns }
+    public enum StatisticsPlotKind { StackedBars, PairedBars, Dumbbell, Heatmap, Step, Waterfall, Lollipop, Scatter, EventLanes, Lifespans, MiniMap, DelayDots, Columns, Efficiency, StackedColumns, Bullet, PairedLollipop }
     public enum StatisticsColorRole { Player, Industry, Resource, Category, Era }
     public sealed class StatisticsPlotSeries
     {
@@ -26,6 +26,8 @@ namespace BrassPatch.Statistics
         public StatisticsPlotKind Kind;
         public bool Percent, WholeMatch;
         public bool DiscreteHeat;
+        public bool HeatTotals=true;
+        public string HeatUnit;
         public bool EraPairs;
         public StatisticsAxisUnit XUnit=StatisticsAxisUnit.Count,YUnit=StatisticsAxisUnit.Count;
         public double? SharedMax;

@@ -54,7 +54,7 @@ public static class StatisticsLightChecks
         Add(r,"locations",V<StatisticsLocation>("City","Birmingham","RegionColor","Yellow","Neighbors",new string[0]),V<StatisticsLocation>("City","Walsall","RegionColor","Yellow","Neighbors",new string[0]));
         Add(r,"boundaries",V<StatisticsBoundary>("Name","Scoring","Player",PlayerColor.Blue,"Era",1,"Revision",80),V<StatisticsBoundary>("Name","Final","Player",PlayerColor.Blue,"Era",2,"Revision",100));
         f.MapMode="Link contributions";f.EvidenceRestricted=true;f.Evidence.Add("A");var map=StatisticsPlotPages.Build(3,r,f).Plots.Single(p=>p.Id=="geography");var city=map.Marks.Single(m=>m.Label=="Birmingham");check(city.Row==4&&map.Marks.Single(m=>m.Label=="Walsall").Row==0,"SD07 link evidence excludes unrelated map contributions",null);check(city.Target.Page==3&&city.Target.Keys.SetEquals(new[]{"A"}),"SD06 link map drills to actual contributing link records",null);
-        check(StatisticsPlotSemantics.Value(map,city)=="4 vp","SD05 map tooltips use quantity, never normalized Y",null);
+        check(StatisticsPlotSemantics.Value(map,city)=="4 VP","SD05 map tooltips use quantity, never normalized Y",null);
         check(StatisticsPlotPages.Build(3,r,f).Plots.Single(p=>p.Id=="link-sources").Marks.Sum(m=>m.Y)==4,"N2 own/others/merchant link VP partition",null);
         f.Evidence.Clear();f.EvidenceRestricted=false;f.ResourceView="Merchants";
         var sale=E("Goods sale",40,"CottonMill",quantity:1,action:"sell",asset:"carry");typeof(StatisticsEntry).GetProperty("Destination").SetValue(sale,"Unattributed",null);Add(r,"entries",sale);

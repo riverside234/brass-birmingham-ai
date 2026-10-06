@@ -1,0 +1,10 @@
+{
+  "format": "imitation-handoff-sources/1.0.0",
+  "compatible_sources": [
+    {
+      "implementation": "b044d0331c9cf1b05f5b32da3c167855e556996f708d1d159977d03830d5faf6",
+      "learning_compatibility": "c349e816f2e301ea2a3b438902059cffe868f48e131f7c120691d37cd1c409d2",
+      "reason": "Immediately preceding Step 5 version: only training teacher scheduling/budgets/telemetry and this handoff gate changed. BC data, model, loss and checkpoint formats are unchanged. Completed BC weights only; no PPO optimizer or population import."
+    }
+  ]
+}
