@@ -213,11 +213,13 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                     search_records=heavy.collect(search_jobs)
                     searched=read_shards([r['path'] for r in search_records],partition='train',receipts={r['path']:r.get('features') for r in search_records})
                     teaching=collection_report(search_records,searched)
-                    search=distill_update(model,optimizer,searched,config['update'],steps=config['distill_steps'],weight=config['distill_weight'])
+                    search=distill_update(model,optimizer,searched,config['update'],steps=config['distill_steps'],weight=config['distill_weight'],
+                        quality=config.get('distillation'))
                     search['collection']=search_records
                     search['teaching']=teaching
                     while next_search<=done: next_search+=config['search_every_games']
-                elif not search_budget_ok: search=dict(updated=False,reason='Search wall-time allowance exceeded; postpone until ordinary collection catches up')
+                elif config['search_every_games'] and done>=next_search and not search_budget_ok:
+                    search=dict(updated=False,reason='Search wall-time allowance exceeded; postpone until ordinary collection catches up')
                 search['budget']=dict(wall_fraction=config['search_wall_fraction'],available_seconds=remaining_search_seconds,
                     estimated_collection_seconds=estimate,admitted=bool(search.get('collection')))
                 search_seconds+=time.monotonic()-updated if search.get('collection') else 0.
@@ -246,6 +248,10 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                 state.update(iteration=iteration+1,games_done=done,next_seed=cursor,context_counter=context_counter,
                     history=state['history']+[entry],next_search_games=next_search,
                     search_seconds=search_seconds,ordinary_seconds=ordinary_seconds)
+                state['recent_training']=(state.get('recent_training',[])+[dict(iteration=iteration,games_done=done,
+                    learning_rate=config['learning_rate'],
+                    actor={k:v for k,v in update.items() if k not in ('timings','memory')},
+                    search={k:v for k,v in search.items() if k not in ('collection','updates')})])[-2:]
                 if revised:
                     from .retention import update_population
                     update_population(root,run,state,config['population'])
@@ -267,7 +273,10 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                 print(f'Recovery generation {iteration+1}: {done} games, {update["optimizer_steps"]} PPO steps; '
                       f'collect={load_began-began:.1f}s prepare={collected-load_began:.1f}s PPO={updated-collected:.1f}s '
                       f'eval={report["timings"].get("evaluation_seconds",0):.1f}s cleanup={report["timings"].get("cleanup_seconds",0):.1f}s; '
-                      f'NN batch mean={report["utilization"]["mean_inference_batch"]:.2f}',flush=True)
+                      f'NN batch mean={report["utilization"]["mean_inference_batch"]:.2f}; '
+                      f'LR={config["learning_rate"]:.1e} KL={update["epochs"][-1]["post_update_kl"]:.5f} '
+                      f'value={update["epochs"][-1]["value"]:.4f}; '
+                      f'teacher rows={search.get("teacher_rows",0)} steps={search.get("optimizer_steps",0)}',flush=True)
     return dict(run=str(run),completed_iteration=state['iteration'],checkpoint=state['history'][-1],summaries=summaries,
                 summary_scope='latest two iterations in this invocation; older metrics in retention-history.json')
 

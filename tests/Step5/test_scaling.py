@@ -91,11 +91,18 @@ class ScalingTests(unittest.TestCase):
 
     def test_distillation_memory_splits_preserve_teacher_weights(self):
         torch.manual_seed(271);first=FourSeatNet(ModelConfig.preset('small'));second=copy.deepcopy(first)
-        games=[onpolicy_game(NeuralPolicy(first))]
-        for row in games[0]['records']:
-            choices=row['choices'];stats=dict(completed=4,expansion=[True,True,False],
-                root={choices[0]['id']:dict(visits=3),choices[1]['id']:dict(visits=1)})
-            row['teacher']=visit_teacher(choices,stats,[.4,.4,.2],model=model_id(first),observer=row['seat'],config=SearchConfig())
+        from brass_ai.recovery.teacher_schedule import PHASES
+        games=[]
+        for i,(_,era,first_round,_) in enumerate(PHASES):
+            g=onpolicy_game(NeuralPolicy(first));seed=seeds_for(17130000+i*100,1)[0][0]
+            g.update(game_id=f'teacher-{i}',setup_group=digest(dict(rules='steam-brass-patch-1.1.0',setup_seed=seed)))
+            g['split']=split_for(g['setup_group'])
+            for row in g['records']:
+                row['view']['context'].update(era=era,round=first_round)
+                choices=row['choices'];stats=dict(completed=4,expansion=[True,True,False],
+                    root={choices[0]['id']:dict(visits=3),choices[1]['id']:dict(visits=1)})
+                row['teacher']=visit_teacher(choices,stats,[.4,.4,.2],model=model_id(first),observer=row['seat'],config=SearchConfig())
+            games.append(g)
         config=dict(UPDATE_V21,effective_batch_size=4,microbatch_size=4)
         torch.manual_seed(721)
         a=distill_update(first,torch.optim.AdamW(first.parameters(),lr=1e-4),games,config,steps=2)

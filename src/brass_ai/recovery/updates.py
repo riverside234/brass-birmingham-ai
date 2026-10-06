@@ -228,19 +228,26 @@ def ppo_update(model,optimizer,games,behavior,config,*,profile=None,profile_step
 
 
 def phase_probe(dataset,indices,limit):
-    """Bounded nonforced probe covering phases; full final KL remains required."""
+    """Proportional era/phase sample of the nonforced PPO decision population.
+
+    Equal quotas per phase over-represented rare bonus/payment choices, hiding
+    drift in the dominant action phase. Largest-remainder quotas preserve the
+    population mixture; the full final KL remains required.
+    """
     from collections import defaultdict
     groups=defaultdict(list)
-    for i in indices: groups[dataset.rows[i]['view']['context']['phase']].append(i)
-    queues=[]
-    for phase in sorted(groups):
-        group=groups[phase];queues.append([group[j] for j in torch.randperm(len(group)).tolist()])
+    for i in indices:
+        context=dataset.rows[i]['view']['context']
+        groups[(context['era'],context['phase'])].append(i)
+    count=sum(map(len,groups.values()));size=min(limit,count)
+    if not count:return []
+    quota={key:size*len(rows)//count for key,rows in groups.items()}
+    order=sorted(groups,key=lambda key:(-(size*len(groups[key])%count),key))
+    for key in order[:size-sum(quota.values())]:quota[key]+=1
     output=[]
-    while queues and len(output)<limit:
-        for q in list(queues):
-            if len(output)>=limit: break
-            output.append(q.pop())
-            if not q: queues.remove(q)
+    for key in sorted(groups):
+        rows=groups[key]
+        output.extend(rows[j] for j in torch.randperm(len(rows)).tolist()[:quota[key]])
     return output
 
 
@@ -324,7 +331,9 @@ def _ppo_nonforced(model,optimizer,games,behavior,config,*,profile,profile_steps
         learner_trajectories=len({d[2] for d in data}),effective_batch_size=config['effective_batch_size'],
         microbatch_size=config['microbatch_size'],critic_batch_size=config['critic_batch_size'],
         advantage=dict(mean=float(mean),std=float(std),scope='nonforced actor decisions'),
-        kl_probe_rows=len(probe),kl_early_stop=stopped,gradient_clip_steps=clips,
+        kl_probe_rows=len(probe),kl_probe_sampling='proportional-era-phase/1.0.0',
+        learning_rates=[group['lr'] for group in optimizer.param_groups],
+        kl_early_stop=stopped,gradient_clip_steps=clips,
         rehearsal_active=demo is not None,rehearsal_rows=len(demo.data) if demo else 0,
         rehearsal_steps=rehearsal_steps,rehearsal_weight=rehearsal_weight if demo else 0,
         phases={phase:sum(ds.rows[i]['view']['context']['phase']==phase for i in actor_ids)
@@ -333,6 +342,9 @@ def _ppo_nonforced(model,optimizer,games,behavior,config,*,profile,profile_steps
 
 def supervised_epoch(model,optimizer,data,config,*,training=True,kind='bc',weight=1.0,profile=None,progress=None):
     require(kind in ('bc','teacher'),'Unknown supervised label kind')
+    # Search visits teach a policy distribution. A sparse teacher's eventual
+    # game outcome is not a search value target. PPO/BC already fit the critic.
+    value_weight=config['value_weight'] if kind=='bc' else 0.
     timings=Timings();device=next(model.parameters()).device
     with timings.phase('supervised.prepare'):
         dataset=data if isinstance(data,Dataset) else Dataset(data,device,policy=False)
@@ -375,9 +387,15 @@ def supervised_epoch(model,optimizer,data,config,*,training=True,kind='bc',weigh
                         natural=policy
                     value,win,rank,vp=value_losses(out,tuple(t[ix] for t in dataset.targets))
                     meaningful=~dataset.forced[ix]
-                    if config.get('actor_nonforced'):
-                        loss=weight*(policy*meaningful).sum()/max(1,actor_count)+config['value_weight']*value.sum()/len(batch)
-                    else: loss=(weight*policy+config['value_weight']*value).sum()/len(batch)
+                    if kind=='bc':
+                        if config.get('actor_nonforced'):
+                            loss=weight*(policy*meaningful).sum()/max(1,actor_count)+config['value_weight']*value.sum()/len(batch)
+                        else:loss=(weight*policy+config['value_weight']*value).sum()/len(batch)
+                    else:
+                        # Do not attach a zero-weight value graph: Adam's old
+                        # moments/weight decay would still move value heads.
+                        loss=(weight*(policy*meaningful).sum()/max(1,actor_count) if config.get('actor_nonforced')
+                              else weight*policy.sum()/len(batch))
                     if training: loss.backward()
                     correct=((out[0].argmax(-1)==dataset.chosen[ix]) & meaningful).float()
                     totals+=torch.stack([x.detach().sum() for x in (policy,value,win,rank,vp,correct,meaningful.float(),natural)])
@@ -407,7 +425,7 @@ def supervised_epoch(model,optimizer,data,config,*,training=True,kind='bc',weigh
     p,v,w,r,vp,correct,meaningful,natural=totals.cpu().tolist()
     actor_denominator=max(1,meaningful) if config.get('actor_nonforced') else count
     return dict(policy_loss=p/actor_denominator,natural_policy_loss=natural/actor_denominator,value_loss=v/count,
-        loss=weight*p/actor_denominator+config['value_weight']*v/count,
+        loss=weight*p/actor_denominator+value_weight*v/count,value_loss_training=bool(value_weight),
         win_loss=w/count,rank_loss=r/count,vp_loss=vp/count,meaningful_top1=correct/max(1,meaningful),
         meaningful_decisions=int(meaningful),decisions=count,optimizer_steps=steps,gradient_clip_steps=clips,
         root_action_top1=sum(v['correct'] for k,v in diagnostics.items() if '|action|' in k)/max(1,sum(v['decisions'] for k,v in diagnostics.items() if '|action|' in k)),
@@ -417,17 +435,39 @@ def supervised_epoch(model,optimizer,data,config,*,training=True,kind='bc',weigh
         timings=timings.report(),memory=memory(device))
 
 
-def distill_update(model,optimizer,games,config,*,steps=8,weight=.25):
+def distill_update(model,optimizer,games,config,*,steps=8,weight=.25,quality=None):
+    from collections import Counter
+    from .config import DISTILLATION,bounded_fields
+    from .teacher_schedule import PHASES,phase_for
+    quality=dict(DISTILLATION if quality is None else quality)
+    bounded_fields(quality,DISTILLATION,'distillation')
+    require(type(steps) is int and steps>0,'Invalid distillation step cap')
     require(all(g['split']=='train' for g in games),'Held-out search teachers')
+    require(len({g['game_id'] for g in games})==len(games),'Duplicate search teacher games')
     require(all(r['teacher'] is None or r['teacher']['source']=='ismcts-root-visits/1.1.0' for g in games for r in g['records']),
             'Historical neural/search replay cannot enter fresh distillation')
-    eligible=lambda r:r['teacher'] is not None and r['teacher']['confidence']>0 and sum(r['teacher']['coverage'])>=2
-    if not any(eligible(r) for g in games for r in g['records']):
-        return dict(updated=False,reason='No completed Masked ISMCTS visits on two alternatives')
+    eligible=lambda r:len(r['choices'])>1 and r['teacher'] is not None and r['teacher']['confidence']>0 and sum(r['teacher']['coverage'])>=2
+    phases=Counter();setups=set();count=0
+    for game in games:
+        for row in game['records']:
+            if not eligible(row):continue
+            validate_teacher(row['teacher'],len(row['choices']))
+            phase=phase_for(row['view']['context']);require(phase is not None,'Unknown teacher phase')
+            count+=1;phases[phase]+=1;setups.add(game['setup_group'])
+    support=dict(teacher_rows=count,teacher_setups=len(setups),samples_by_phase={p:phases[p] for p,_,_,_ in PHASES},
+                 quality=quality,requested_steps=steps,value_loss_training=False)
+    if count<quality['min_samples'] or len(setups)<quality['min_games'] or any(phases[p]<quality['min_samples_per_phase'] for p,_,_,_ in PHASES):
+        return dict(updated=False,optimizer_steps=0,reason='Insufficient diverse search teachers; no optimizer update',**support)
     data=prepared(games,eligible)
-    reports=[]
-    # Sample effective batches; steps means optimizer steps, not whole epochs.
-    for _ in range(steps):
-        sample=[data[i] for i in torch.randint(len(data),(min(config['effective_batch_size'],len(data)),)).tolist()]
-        reports.append(supervised_epoch(model,optimizer,sample,config,kind='teacher',weight=weight))
-    return dict(updated=True,teacher_rows=len(data),optimizer_steps=sum(r['optimizer_steps'] for r in reports),updates=reports)
+    reports=[];seen=Counter();width=min(config['effective_batch_size'],quality['batch_size'])
+    teacher_config=dict(config,effective_batch_size=width)
+    for _ in range(quality['max_reuse']):
+        order=torch.randperm(len(data)).tolist()
+        for start in range(0,len(order),width):
+            if len(reports)>=steps:break
+            indices=order[start:start+width];seen.update(indices)
+            reports.append(supervised_epoch(model,optimizer,[data[i] for i in indices],teacher_config,kind='teacher',weight=weight))
+        if len(reports)>=steps:break
+    return dict(updated=True,optimizer_steps=sum(r['optimizer_steps'] for r in reports),updates=reports,
+        sample_presentations=sum(seen.values()),max_observed_reuse=max(seen.values()),
+        learning_rates=[group['lr'] for group in optimizer.param_groups],**support)

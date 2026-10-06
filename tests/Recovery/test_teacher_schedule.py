@@ -58,7 +58,7 @@ class Planner(schedule.TeacherTurns,Decider):
     def __init__(self,clock):
         self.clock=clock;self.calls=[];self.mode='success'
         self.teacher_states=weakref.WeakKeyDictionary();self.cancelled=Event()
-        self.config=SearchConfig(seconds=SEARCH_SECONDS,workers=SEARCH_WORKERS)
+        self.config=SearchConfig(seconds=4.,workers=SEARCH_WORKERS)
         self.base=SimpleNamespace(request_deadline=None,select_batch=lambda inputs:[(0,1.,None)]*len(inputs))
 
 
@@ -164,7 +164,7 @@ class TeacherScheduleTests(unittest.TestCase):
                 deadlines.append(deadline);self.last_statistics=evidence(view,choices,recall)
         planner=object.__new__(schedule.ScheduledParallelMasked)
         planner.teacher_states=weakref.WeakKeyDictionary();planner.cancelled=Event()
-        planner.config=SearchConfig(seconds=4,workers=4);planner.decision_lock=RLock()
+        planner.config=teacher_search_config({});planner.decision_lock=RLock()
         planner.replicas=[Replica() for _ in range(4)]
         planner.base=SimpleNamespace(request_deadline=None,evaluator=SimpleNamespace(model_id='a'*64),
             predict=lambda inputs:[(np.array([.6,.3,.1]),{})])
@@ -174,7 +174,7 @@ class TeacherScheduleTests(unittest.TestCase):
         with ThreadPoolExecutor(max_workers=4) as pool:
             planner.pool=pool
             self.assertIsNotNone(planner.select_batch([(view,choices,self.rng)])[0][2])
-        self.assertEqual(deadlines,[103.85]*4)
+        self.assertEqual(deadlines,[111.85]*4) # 12 seconds shared, including the 150 ms reserve
         self.assertEqual(planner.teacher_report(self.rng)['phases']['canal_early']['qualified_samples'],1)
 
     def test_exhausted_budget_does_not_restart_and_debt_is_not_reserved(self):
@@ -204,41 +204,60 @@ class TeacherScheduleTests(unittest.TestCase):
         episode['records'][0]['view']['context']['round']=6
         with self.assertRaisesRegex(ValueError,'outside reserved'):schedule.collection_report(records,[episode])
 
-    def test_active_presets_and_320_game_25_percent_default_20_percent_override(self):
-        self.assertEqual((SEARCH_EVERY_GAMES,SEARCH_WALL_FRACTION,SEARCH_SECONDS,SEARCH_WORKERS),(320,.25,4.,4))
+    def test_active_presets_and_320_game_50_percent_default_lower_overrides(self):
+        self.assertEqual((SEARCH_EVERY_GAMES,SEARCH_WALL_FRACTION,SEARCH_SECONDS,SEARCH_WORKERS),(320,.50,12.,4))
         for path in (SOURCE_ROOT/'configs/step5').glob('lab*.json'):
             cfg=read(path);validate_config(cfg)
-            self.assertEqual((cfg['search_ready_games'],cfg['search_every_games'],cfg['search_wall_fraction']),(640,320,.25))
-            self.assertEqual((cfg['search_games'],cfg['distill_steps'],cfg['search']['seconds'],cfg['execution']['search_workers_per_turn']),(4,8,4.,4))
+            self.assertEqual((cfg['search_ready_games'],cfg['search_every_games'],cfg['search_wall_fraction']),(640,320,.50))
+            self.assertEqual((cfg['search_games'],cfg['distill_steps'],cfg['search']['seconds'],cfg['execution']['search_workers_per_turn']),(4,8,12.,4))
+            self.assertEqual((cfg['search']['pending_paths'],cfg['search']['batch_size']),(2,2))
             self.assertEqual(cfg['legacy_budget']['seconds'],1.)
-            self.assertEqual(schedule.estimate_collection(cfg,5.),276.) # 4 games * (16 turns * 4 s + 5 s)
-        self.assertAlmostEqual(schedule.search_allowance(100,0),100/3)
+            self.assertEqual(schedule.estimate_collection(cfg,5.),788.) # 4 games * (16 turns * 12 s + 5 s)
+        self.assertEqual(schedule.search_allowance(100,0),100.)
+        self.assertEqual(schedule.search_allowance(100,30),70.)
+        self.assertEqual(schedule.search_allowance(100,120),0.)
+        self.assertAlmostEqual(schedule.search_allowance(100,0,.25),100/3)
         self.assertAlmostEqual(schedule.search_allowance(100,10,.20),15.)
         self.assertEqual(schedule.search_allowance(100,30,.20),0.)
         # Generic evaluation scheduling and clocks are unchanged.
         self.assertEqual((SearchConfig().seconds,SearchConfig().turn_interval),(1.,4))
-        self.assertEqual((teacher_search_config({}).seconds,teacher_search_config({}).workers),(4.,4))
+        self.assertEqual((teacher_search_config({}).seconds,teacher_search_config({}).workers),(12.,4))
+        self.assertEqual((teacher_search_config({}).pending_paths,teacher_search_config({}).batch_size),(2,2))
+
+    def test_search_wall_fraction_limit_and_admission_at_50_percent(self):
+        cfg=read(SOURCE_ROOT/'configs/step5/lab.json')
+        for fraction in (.20,.25,.50):
+            validate_config(dict(cfg,search_wall_fraction=fraction))
+        for fraction in (0.,-.1,.5001,1.):
+            with self.subTest(fraction=fraction):
+                with self.assertRaisesRegex(ValueError,'search fraction'):
+                    validate_config(dict(cfg,search_wall_fraction=fraction))
+                with self.assertRaisesRegex(ValueError,'search wall allowance'):
+                    schedule.search_allowance(100,0,fraction)
+        estimate=schedule.estimate_collection(cfg,5.)
+        self.assertLess(estimate,schedule.search_allowance(819,0))
+        self.assertGreater(estimate,schedule.search_allowance(819,0,.25))
+        self.assertGreater(estimate,schedule.search_allowance(819,100))
+        for name in ('smoke.json','recovery-smoke.json'):
+            self.assertEqual(validate_config(read(SOURCE_ROOT/'configs/step5'/name))['search_wall_fraction'],.50)
 
 
 class HandoffCompatibilityTests(unittest.TestCase):
-    def test_distillation_keeps_eight_steps_and_ignores_unlabelled_choices(self):
+    def test_distillation_keeps_eight_step_ceiling_and_ignores_unlabelled_choices(self):
         from brass_ai.learning.model import FourSeatNet,ModelConfig
         from brass_ai.recovery.updates import distill_update
-        from brass_ai.learning.replay import split_for
-        from brass_ai.step5.league import seeds_for
+        from test_selfplay_review import teacher_games
         torch.set_num_threads(2);torch.manual_seed(913)
-        episode=game();seed=seeds_for(17120000,1)[0][0]
-        episode['setup_group']=digest(dict(rules='steam-brass-patch-1.1.0',setup_seed=seed))
-        episode['split']=split_for(episode['setup_group'])
-        for row in episode['records'][:2]:
-            stats=evidence(row['view'],row['choices'],[])
-            row['teacher']=visit_teacher(row['choices'],stats,[.6,.3,.1],model='a'*64,observer=row['seat'],
-                config=SearchConfig(seconds=4,workers=4))
+        games=teacher_games()
+        for episode in games:
+            row=copy.deepcopy(episode['records'][-1]);row['teacher']=None;row['step']+=1
+            row['view']['context']['revision']+=1;episode['records'].append(row)
         model=FourSeatNet(ModelConfig.preset('small'))
-        report=distill_update(model,torch.optim.AdamW(model.parameters(),lr=3e-5),[episode],
-            dict(UPDATE_V21,effective_batch_size=4,microbatch_size=2),steps=8,weight=.25)
-        self.assertTrue(report['updated']);self.assertEqual(report['teacher_rows'],2)
+        report=distill_update(model,torch.optim.AdamW(model.parameters(),lr=1e-5),games,
+            dict(UPDATE_V21,effective_batch_size=2048,microbatch_size=8),steps=8,weight=.25)
+        self.assertTrue(report['updated']);self.assertEqual(report['teacher_rows'],64)
         self.assertEqual(report['optimizer_steps'],8)
+        self.assertEqual(report['max_observed_reuse'],2)
 
     def test_completed_pre_revision_il_is_accepted_but_unknown_source_is_not(self):
         from test_imitation import ImitationTests

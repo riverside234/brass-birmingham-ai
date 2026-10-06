@@ -5,7 +5,7 @@
   "host": "artifacts/r1-host/guarded",
   "games_per_iteration": 320,
   "threads": 4,
-  "learning_rate": 3e-05,
+  "learning_rate": 1e-05,
   "weight_decay": 0.0001,
   "exploration": 0.05,
   "seed": 18510000,
@@ -42,7 +42,7 @@
     "bucket": true,
     "actor_nonforced": true,
     "critic_batch_size": 2048,
-    "kl_probe_rows": 256
+    "kl_probe_rows": 2048
   },
   "curriculum": [
     {
@@ -74,17 +74,24 @@
   "search_every_games": 320,
   "search_games": 4,
   "distill_steps": 8,
+  "distillation": {
+    "min_samples": 16,
+    "min_games": 2,
+    "min_samples_per_phase": 2,
+    "batch_size": 16,
+    "max_reuse": 2
+  },
   "distill_weight": 0.25,
   "search": {
     "backend": "masked_ismcts",
-    "seconds": 4.0,
+    "seconds": 12.0,
     "simulations": 100000,
     "max_choices": 512,
     "exploration": 1.4,
     "root_top_k": 16,
     "interior_top_k": 8,
-    "pending_paths": 8,
-    "batch_size": 8,
+    "pending_paths": 2,
+    "batch_size": 2,
     "flush_ms": 0.5,
     "prior_mix": 0.1,
     "turn_interval": 4,
@@ -133,7 +140,7 @@
   },
   "audit_workers": 8,
   "overlap_pools": true,
-  "search_wall_fraction": 0.25,
+  "search_wall_fraction": 0.5,
   "architecture": "brass-four-seat-mlp-resnet/1.0.0",
   "parameter_limit": 2000000,
   "initialization": "random",

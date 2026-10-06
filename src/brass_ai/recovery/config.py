@@ -5,14 +5,20 @@ from brass_ai.search.common import SearchConfig
 
 # Training-only defaults; evaluation/laptop SearchConfig defaults stay intact.
 SEARCH_EVERY_GAMES=320
-SEARCH_WALL_FRACTION=.25
-SEARCH_SECONDS=4.0
+SEARCH_WALL_FRACTION=.50
+SEARCH_SECONDS=12.0
 SEARCH_WORKERS=4
+PPO_LEARNING_RATE=1e-5
+# A full 64-turn teacher collection can supply 8 batches of 16, at most twice
+# per sample. Missing evidence reduces or skips updates; it never fills a batch
+# by repeatedly sampling the one surviving teacher decision.
+DISTILLATION=dict(min_samples=16,min_games=2,min_samples_per_phase=2,batch_size=16,max_reuse=2)
 
 
 def teacher_search_config(options):
     """Training defaults without changing standalone/evaluation search clocks."""
-    return SearchConfig(**dict({'seconds':SEARCH_SECONDS,'workers':SEARCH_WORKERS},**options)).validate()
+    return SearchConfig(**dict({'seconds':SEARCH_SECONDS,'workers':SEARCH_WORKERS,
+                               'pending_paths':2,'batch_size':2},**options)).validate()
 
 
 EXECUTION = dict(processes=8, hosts_per_process=4, heavy_processes=8,
@@ -30,7 +36,7 @@ CURRICULUM = [
 EXECUTION_V21 = dict(EXECUTION, processes=32, hosts_per_process=1, flush_ms=1.0,
     shard_games=8, shard_bytes=268435456, feature_cache=True, policy_cache=32,search_workers_per_turn=4,
     cpu_budget=64,cpu_reserve=4)
-UPDATE_V21 = dict(UPDATE, actor_nonforced=True, critic_batch_size=2048, kl_probe_rows=256)
+UPDATE_V21 = dict(UPDATE, actor_nonforced=True, critic_batch_size=2048, kl_probe_rows=2048)
 RETENTION = dict(enabled=True, resume_checkpoints=2, replay_rounds=4, quarantine_hours=24,
     evaluation_samples=4, profile_traces=2)
 POPULATION = dict(recent=8, anchors=4)
@@ -116,6 +122,9 @@ def validate_config(config):
         'search_ready_games','search_every_games','search_games','distill_steps','distill_weight',
         'rehearsal_manifest','rehearsal_weight','rehearsal_until','profile_steps'}
     version=config.get('format')
+    if 'distillation' in config:
+        fields.add('distillation')
+        bounded_fields(config['distillation'],DISTILLATION,'distillation')
     if version=='step5-training/2.2.0':
         fields|={'retention','population','evaluation_schedule','legacy_budget','audit_workers',
                  'overlap_pools','search_wall_fraction','initialization','architecture','parameter_limit','imitation','legacy_opponents'}
@@ -136,7 +145,7 @@ def validate_config(config):
                 max(config['legacy_budget']['search_workers'],config['execution']['search_workers_per_turn'])<=available,
                 'Search group exceeds queued CPU admission allowance')
         positive(config['audit_workers'],'audit_workers',integer=True)
-        require(type(config['overlap_pools']) is bool and 0<config['search_wall_fraction']<=.25,'Invalid overlap/search fraction')
+        require(type(config['overlap_pools']) is bool and 0<config['search_wall_fraction']<=.50,'Invalid overlap/search fraction')
         require(set(config['update'])==set(UPDATE_V21) and set(config['execution'])==set(EXECUTION_V21),'2.1 requires revised update/execution')
     require(set(config)==fields and version=='step5-training/2.2.0' and config['players']==4,
         'Use the fresh four-player Masked ISMCTS 2.2 recipe; historical runs cannot migrate in place')

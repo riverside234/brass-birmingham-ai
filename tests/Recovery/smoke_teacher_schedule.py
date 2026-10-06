@@ -12,6 +12,7 @@ from brass_ai.bank import read
 from brass_ai.learning.contracts import SOURCE_ROOT,digest,require
 from brass_ai.learning.model import FourSeatNet,ModelConfig
 from brass_ai.recovery.execution import ActorPool
+from brass_ai.recovery.config import PPO_LEARNING_RATE
 from brass_ai.recovery.inference import InferenceService
 from brass_ai.recovery.replay import read_shards
 from brass_ai.recovery.teacher_schedule import CONTRACT,collection_report
@@ -51,9 +52,9 @@ def main():
     for phase in teaching['phases'].values():
         require(phase['scheduled_turns']==4 and phase['reached_turns']==4,'Missing reserved phase turns')
         require(phase['searched_turns']<=4,'Phase turn allocation exceeded')
-    update=distill_update(model,torch.optim.AdamW(model.parameters(),lr=3e-5),games,cfg['update'],
+    update=distill_update(model,torch.optim.AdamW(model.parameters(),lr=PPO_LEARNING_RATE),games,cfg['update'],
         steps=cfg['distill_steps'],weight=cfg['distill_weight'])
-    report=dict(games=len(games),seed=seed,sampling_seed=sampling,seconds_per_turn=4,workers=4,
+    report=dict(games=len(games),seed=seed,sampling_seed=sampling,seconds_per_turn=search['seconds'],workers=4,
         simulations_cap_per_worker=16,elapsed_seconds=time.monotonic()-began,device=args.device,
         replay_cache_verified=True,teaching=teaching,distillation=update,inference=inference,
         collection=records,note='Plumbing/coverage smoke with a fresh random network; not strength or lab GPU throughput evidence.')

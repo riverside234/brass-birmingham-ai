@@ -46,7 +46,7 @@ def counters():
 
 
 def search_allowance(ordinary_seconds,search_seconds,fraction=SEARCH_WALL_FRACTION):
-    require(0<fraction<=.25 and min(ordinary_seconds,search_seconds)>=0,'Invalid search wall allowance')
+    require(0<fraction<=.50 and min(ordinary_seconds,search_seconds)>=0,'Invalid search wall allowance')
     return max(0.,ordinary_seconds*fraction/(1-fraction)-search_seconds)
 
 
@@ -106,6 +106,10 @@ class TeacherTurns:
 
     def incumbent(self,view,choices,probabilities,rng,recall):
         """Bound the existing legal incumbent by the SAME search work deadline."""
+        # A private replica's returned choice is discarded by the coordinator;
+        # only its completed search statistics are merged. One real incumbent
+        # at the coordinator is enough and leaves replicas time for tree work.
+        if getattr(self,'teacher_replica',False):return {}
         deadline=self.teacher_work_deadline
         if time.monotonic()>=deadline:return {}
         state=self.game.from_observation(view,rng.randrange(2**63),recall)
@@ -199,12 +203,13 @@ class ScheduledMasked(TeacherTurns,MaskedSearchPolicy):pass
 class ScheduledParallelMasked(TeacherTurns,ParallelMasked):pass
 
 
-def training_teacher(policy):
+def training_teacher(policy,*,replica=False):
     require(isinstance(policy,MaskedSearchPolicy),'Training teacher must use Masked ISMCTS + NN')
     policy.__class__=ScheduledParallelMasked if isinstance(policy,ParallelMasked) else ScheduledMasked
     policy.teacher_states=weakref.WeakKeyDictionary()
+    policy.teacher_replica=replica
     policy.policy_id='step5-phase-teacher/'+digest(dict(parent=policy.policy_id,contract=CONTRACT))
-    for worker in getattr(policy,'replicas',[]):training_teacher(worker)
+    for worker in getattr(policy,'replicas',[]):training_teacher(worker,replica=True)
     return policy
 
 
