@@ -34,14 +34,14 @@ class Behavior:
         self.policy_id=neural_spec(identity,exploration,'mixed')['policy_id']
 
 
-def train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=None,from_run=None,imitation_run=None):
+def train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=None,from_run=None,imitation_run=None,resume_reviewed_source=False):
     from .retention import owned,run_lock
     _,run=owned(root,run_path)
     with run_lock(run):
-        return _train(root,run_path,config,iterations=iterations,device=device,initial=initial,mono=mono,from_run=from_run,imitation_run=imitation_run)
+        return _train(root,run_path,config,iterations=iterations,device=device,initial=initial,mono=mono,from_run=from_run,imitation_run=imitation_run,resume_reviewed_source=resume_reviewed_source)
 
 
-def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=None,from_run=None,imitation_run=None):
+def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=None,from_run=None,imitation_run=None,resume_reviewed_source=False):
     root=Path(root).resolve();run=project_path(root,run_path);validate_config(config)
     require(iterations>0 and not(initial and from_run),'Invalid recovery initialization')
     require(initial is None and from_run is None,'Fresh residual workflow forbids previous checkpoint/run imports')
@@ -66,16 +66,13 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
     signature=dict(config=config,compatibility=compatibility(),implementation=implementation_id(),legacy_pool=pool['training'],teachers=teacher_specs)
     if bc_origin:signature['imitation_source']=bc_origin
     state_path=run/'state.json'
+    source_changed=False
+    require(not resume_reviewed_source or state_path.exists(),'--resume-reviewed-source needs an existing same-run state.json')
     if state_path.exists():
         state=read(state_path)
-        require(state['format']=='step5-recovery-league/'+'2.2.0' and state['signature']==signature,
-            'Run configuration/source changed; use a fresh recovery directory')
         require(initial is None and from_run is None,'Omit initialization when resuming')
-        entry=state['history'][-1];require(sha(project_path(root,entry['path']))==entry['sha256'],'Snapshot changed')
-        model,raw=load_checkpoint(project_path(root,entry['path']),device=device)
-        require(model.config==ModelConfig.preset(config['model_size']) and raw['training'].get('fresh_run')==run.relative_to(root).as_posix(),
-                'Resume must use this new run\'s residual checkpoint')
-        require(all(project_path(root,e['path']).is_relative_to(run) for e in state['history']),'Population contains an imported checkpoint')
+        from .resume import load_resume
+        model,raw,source_changed=load_resume(root,run,state,signature,device=device,reviewed=resume_reviewed_source)
     else:
         # Before the first league commit, interrupted BC may have only its own
         # identity-bound progress receipt. Restart it from the same random seed;
@@ -114,6 +111,9 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
         write_json(state_path,state)
     optimizer=torch.optim.AdamW(model.parameters(),lr=config['learning_rate'],weight_decay=config['weight_decay'])
     resume_optimizer(raw,optimizer)
+    if source_changed:
+        from .resume import commit_transition
+        state=commit_transition(run,state,signature)
     needs_rehearsal=config['rehearsal_manifest'] and config['rehearsal_weight'] and state['games_done']<config['rehearsal_until']
     rehearsal=load_dataset(root,config['rehearsal_manifest'],'train',workers=config['audit_workers'],progress=True,compact=True)[0] if needs_rehearsal else None
     if rehearsal:

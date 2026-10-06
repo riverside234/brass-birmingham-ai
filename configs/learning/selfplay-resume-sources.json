@@ -1,0 +1,12 @@
+{
+  "format": "selfplay-resume-sources/1.0.0",
+  "transitions": [
+    {
+      "from_implementation": "f85a8c99fff8b4cff806bcf059e6fd4538d8d2be3b9c748c4d167bdf84897c08",
+      "to_implementation": "760778c9fd71fd2549d87e817b14e148be6cf555444cbcceb7e0cfc06d0d5830",
+      "learning_compatibility": "c349e816f2e301ea2a3b438902059cffe868f48e131f7c120691d37cd1c409d2",
+      "reviewed_from_commit": "2ee1bf9dc438fc1ab7a5ffd5d632eee962c2605c",
+      "reason": "Same-run selfplay-v2 continuation. Exact-schema cache, once-per-invocation rehearsal tensors and diagnostics preserve PPO, distillation, IL handoff and learning/search settings. Only the pinned source transition is allowed; every other signature field and checkpoint remains checked."
+    }
+  ]
+}
