@@ -23,7 +23,7 @@ from .execution import ActorPool,neural_spec
 from .inference import InferenceService
 from .ingress import load_collection,reader_pool
 from .telemetry import environment,iteration_utilization
-from .updates import ppo_update,distill_update
+from .updates import ppo_update,distill_update,rehearsal_dataset
 from .teacher_schedule import CONTRACT as TEACHER_SCHEDULE,estimate_collection,search_allowance,collection_report
 
 
@@ -116,6 +116,9 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
     resume_optimizer(raw,optimizer)
     needs_rehearsal=config['rehearsal_manifest'] and config['rehearsal_weight'] and state['games_done']<config['rehearsal_until']
     rehearsal=load_dataset(root,config['rehearsal_manifest'],'train',workers=config['audit_workers'],progress=True,compact=True)[0] if needs_rehearsal else None
+    if rehearsal:
+        prepared_at=time.monotonic();rehearsal=rehearsal_dataset(rehearsal,device)
+        print(f'Rehearsal tensors prepared once: {len(rehearsal.data)} rows in {time.monotonic()-prepared_at:.1f}s; reused until rehearsal expires',flush=True)
     summaries=[]
     if revised: schedule_evaluations(root,run,state,device,mono)
     with InferenceService(config['execution'],device,profile=run/'profile-collection' if config['profile_steps'] else None,

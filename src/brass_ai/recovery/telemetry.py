@@ -111,11 +111,17 @@ def iteration_utilization(before,after,records,seconds,games,config):
         inference[key]=dict(seconds=value['seconds']-previous.get('seconds',0),calls=value['calls']-previous.get('calls',0))
     cells=after.get('padded_candidate_cells',0)-before.get('padded_candidate_cells',0)
     valid=after.get('valid_candidate_cells',0)-before.get('valid_candidate_cells',0)
+    cpu=[r['actor_python_cpu_seconds'] for r in records if r.get('actor_python_cpu_seconds') is not None]
+    complete=bool(records) and len(cpu)==len(records)
     return dict(games_per_second=games/max(seconds,1e-9),mean_inference_batch=positions/max(1,batches),
         inference_batches=batches,inference_positions=positions,padding_fraction=1-valid/cells if cells else None,
         actor_phase_seconds=dict(phases),inference_phase_deltas=inference,
+        actor_python_cpu_seconds=sum(cpu) if complete else None,
+        actor_python_average_cores=sum(cpu)/max(seconds,1e-9) if complete else None,
+        actor_cpu_recorded_games=len(cpu),
+        actor_cpu_scope='Python actor process CPU during games; includes its threads, excludes Mono children and GPU; unavailable for cached games/multiple host lanes',
         ordinary_actors=config['processes']*config['hosts_per_process'],cpu_work_slots=config['cpu_budget']-config['cpu_reserve'],
-        scope='ordinary collection only; actor phases overlap; these are host elapsed times, not hardware utilization percentages')
+        scope='ordinary collection; actor/inference phase times overlap; actor_python_* measures process CPU, not total machine or GPU utilization')
 
 
 def profile_window(path, device, steps=4):

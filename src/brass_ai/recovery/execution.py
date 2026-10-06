@@ -169,7 +169,12 @@ def _actor(root,host_path,jobs,results,lease,config,mono,lanes,search_channels,a
                                 key=digest(spec)
                                 if key not in cache: cache[key]=make_policy(spec,root,endpoint,config,mono)
                                 cache.move_to_end(key);policies.append(cache[key])
+                            cpu_started=time.process_time()
                             game=run_game(host,job,policies,timings,config['max_decisions'],admission)
+                            # process_time counts actual Python-process CPU,
+                            # including its threads. Multiple simultaneous host
+                            # lanes would overlap this interval, so omit them.
+                            game.actor_python_cpu_seconds=time.process_time()-cpu_started if lanes==1 else None
                             telemetry={}
                             for i,p in enumerate(policies):
                                 entry={}
@@ -202,6 +207,7 @@ def _actor(root,host_path,jobs,results,lease,config,mono,lanes,search_channels,a
                                     for g,j,metrics,telemetry in part:
                                         records.append(dict(job=j['index'],game_id=g['game_id'],path=str(path),sha256=replay_hash,cached=False,
                                             features=receipt,metrics=metrics,search=telemetry,
+                                            actor_python_cpu_seconds=g.actor_python_cpu_seconds,
                                             **({'teacher_phases':g.teacher_phases} if hasattr(g,'teacher_phases') else {})))
                                 elapsed=time.monotonic()-began
                                 for record in records:

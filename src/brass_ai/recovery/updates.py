@@ -120,6 +120,15 @@ class Dataset:
             yield part,tensors[0],tensors[1:-1],tensors[-1]
 
 
+def rehearsal_dataset(data,device):
+    """Reuse immutable audited BC tensors across PPO rounds on one device."""
+    if isinstance(data,Dataset):
+        require(data.chosen.device==torch.empty(0,device=device).device,'Rehearsal device changed')
+        require(data.q is None,'Rehearsal must use supervised tensors')
+        return data
+    return Dataset(data,device,policy=False) if data else None
+
+
 def probabilities(logits, q, exploration, temperature):
     return (1-exploration)*F.softmax(logits.float()/temperature,-1)+exploration*q
 
@@ -165,7 +174,7 @@ def ppo_update(model,optimizer,games,behavior,config,*,profile=None,profile_step
         require(all(d[0]['behavior']['kind']=='model' for d in data),'External actions in PPO')
         device=next(model.parameters()).device
         dataset=Dataset(data,device)
-        demo=Dataset(rehearsal,device,policy=False) if rehearsal and rehearsal_weight else None
+        demo=rehearsal_dataset(rehearsal,device) if rehearsal_weight else None
     count=len(data)
     advantages=torch.zeros(count,device=device)
     model.eval()
@@ -266,7 +275,7 @@ def _ppo_nonforced(model,optimizer,games,behavior,config,*,profile,profile_steps
         data=learner_data if learner_data is not None else prepared(games,lambda r:r['behavior']['policy_id']==behavior.policy_id)
         require(data and all(d[0]['behavior']['kind']=='model' and d[0]['behavior']['policy_id']==behavior.policy_id for d in data),
                 'External or stale actions in PPO')
-        ds=Dataset(data,device);demo=Dataset(rehearsal,device,policy=False) if rehearsal and rehearsal_weight else None
+        ds=Dataset(data,device);demo=rehearsal_dataset(rehearsal,device) if rehearsal_weight else None
     count=len(data);actor_ids=(~ds.forced).nonzero().flatten().cpu().tolist()
     advantages=torch.zeros(count,device=device);model.eval()
     # Verify likelihoods for ALL rows, including deterministic continuation rows.
@@ -350,12 +359,11 @@ def supervised_epoch(model,optimizer,data,config,*,training=True,kind='bc',weigh
         dataset=data if isinstance(data,Dataset) else Dataset(data,device,policy=False)
     data=dataset.data
     count=len(dataset.data);order=torch.randperm(count).tolist() if training else list(range(count))
-    totals=torch.zeros(8,device=device);steps=0;clips=0
+    totals=torch.zeros(10,device=device);steps=0;clips=0
     diagnostics={}
     log=Progress(progress,count) if progress else None
-    if kind=='bc':
-        predictions=torch.empty(count,device=device,dtype=torch.long)
-        row_losses=torch.empty(count,device=device)
+    predictions=torch.empty(count,device=device,dtype=torch.long)
+    row_losses=torch.empty(count,device=device)
     model.train(training)
     pool=ThreadPoolExecutor(max_workers=2) if device.type=='cuda' else nullcontext(None)
     with pool as executor,torch.set_grad_enabled(training),profile_window(profile,device) as profiler:
@@ -373,6 +381,7 @@ def supervised_epoch(model,optimizer,data,config,*,training=True,kind='bc',weigh
                     if kind=='bc':
                         natural=bc_loss(out[0],dataset.chosen[ix])
                         policy=natural*dataset.bc_weights[ix]
+                        teacher_entropy=teacher_kl=torch.zeros_like(policy)
                     else:
                         width=out[0].shape[1]
                         coverage=np.zeros((len(part),width),dtype=bool);target=np.zeros((len(part),width),dtype=np.float32)
@@ -383,7 +392,10 @@ def supervised_epoch(model,optimizer,data,config,*,training=True,kind='bc',weigh
                             confidence.append(teacher['confidence'])
                         cov=torch.from_numpy(coverage).to(device);tar=torch.from_numpy(target).to(device)
                         logp=F.log_softmax(out[0].float().masked_fill(~cov,-1e9),-1)
-                        policy=-(tar*logp).sum(-1)*torch.tensor(confidence,device=device)
+                        confidence=torch.tensor(confidence,device=device)
+                        policy=-(tar*logp).sum(-1)*confidence
+                        teacher_entropy=-(tar*tar.clamp_min(1e-30).log()).sum(-1)*confidence
+                        teacher_kl=policy-teacher_entropy
                         natural=policy
                     value,win,rank,vp=value_losses(out,tuple(t[ix] for t in dataset.targets))
                     meaningful=~dataset.forced[ix]
@@ -398,9 +410,8 @@ def supervised_epoch(model,optimizer,data,config,*,training=True,kind='bc',weigh
                               else weight*policy.sum()/len(batch))
                     if training: loss.backward()
                     correct=((out[0].argmax(-1)==dataset.chosen[ix]) & meaningful).float()
-                    totals+=torch.stack([x.detach().sum() for x in (policy,value,win,rank,vp,correct,meaningful.float(),natural)])
-                    if kind=='bc':
-                        predictions[ix]=out[0].detach().argmax(-1);row_losses[ix]=natural.detach()
+                    totals+=torch.stack([x.detach().sum() for x in (policy,value,win,rank,vp,correct,meaningful.float(),natural,teacher_entropy,teacher_kl)])
+                    predictions[ix]=out[0].detach().argmax(-1);row_losses[ix]=natural.detach()
             if training:
                 norm=torch.nn.utils.clip_grad_norm_(model.parameters(),config['grad_clip'],error_if_nonfinite=True)
                 clips+=int(float(norm)>config['grad_clip']);optimizer.step();steps+=1
@@ -410,24 +421,24 @@ def supervised_epoch(model,optimizer,data,config,*,training=True,kind='bc',weigh
                 if device.type=='cuda' and completed*100>=log.next*count:
                     torch.cuda.synchronize(device)  # Milestones report completed GPU work, not queued kernels.
                 log(completed)
-    if kind=='bc':
-        # One device read per diagnostic vector/epoch, not two per microbatch.
-        predicted=predictions.cpu().tolist();losses=row_losses.cpu().tolist()
-        with timings.phase('supervised.diagnostics'):
-            for i in order:
-                row=data[i][0]
-                if dataset.forced_cpu[i]:continue
-                target=row['choices'][row['chosen']];guess=row['choices'][predicted[i]]
-                key='|'.join([row['behavior']['policy_id'],row['view']['context']['era'],row['view']['context']['phase'],target['kind']])
-                bucket=diagnostics.setdefault(key,dict(decisions=0,loss=0.,correct=0,family_correct=0))
-                bucket['decisions']+=1;bucket['loss']+=losses[i];bucket['correct']+=predicted[i]==row['chosen']
-                bucket['family_correct']+=(guess['kind'],guess.get('industry'))==(target['kind'],target.get('industry'))
-    p,v,w,r,vp,correct,meaningful,natural=totals.cpu().tolist()
+    # One device read per diagnostic vector/epoch, including searched teachers.
+    predicted=predictions.cpu().tolist();losses=row_losses.cpu().tolist()
+    with timings.phase('supervised.diagnostics'):
+        for i in order:
+            row=data[i][0]
+            if dataset.forced_cpu[i]:continue
+            target=row['choices'][row['chosen']];guess=row['choices'][predicted[i]]
+            key='|'.join([row['behavior']['policy_id'],row['view']['context']['era'],row['view']['context']['phase'],target['kind']])
+            bucket=diagnostics.setdefault(key,dict(decisions=0,loss=0.,correct=0,family_correct=0))
+            bucket['decisions']+=1;bucket['loss']+=losses[i];bucket['correct']+=predicted[i]==row['chosen']
+            bucket['family_correct']+=(guess['kind'],guess.get('industry'))==(target['kind'],target.get('industry'))
+    p,v,w,r,vp,correct,meaningful,natural,teacher_entropy,teacher_kl=totals.cpu().tolist()
     actor_denominator=max(1,meaningful) if config.get('actor_nonforced') else count
     return dict(policy_loss=p/actor_denominator,natural_policy_loss=natural/actor_denominator,value_loss=v/count,
         loss=weight*p/actor_denominator+value_weight*v/count,value_loss_training=bool(value_weight),
         win_loss=w/count,rank_loss=r/count,vp_loss=vp/count,meaningful_top1=correct/max(1,meaningful),
         meaningful_decisions=int(meaningful),decisions=count,optimizer_steps=steps,gradient_clip_steps=clips,
+        **(dict(teacher_entropy=teacher_entropy/actor_denominator,teacher_kl=teacher_kl/actor_denominator) if kind=='teacher' else {}),
         root_action_top1=sum(v['correct'] for k,v in diagnostics.items() if '|action|' in k)/max(1,sum(v['decisions'] for k,v in diagnostics.items() if '|action|' in k)),
         root_family_top1=sum(v['family_correct'] for k,v in diagnostics.items() if '|action|' in k)/max(1,sum(v['decisions'] for k,v in diagnostics.items() if '|action|' in k)),
         by_teacher_era_phase_action={k:dict(decisions=v['decisions'],natural_policy_loss=v['loss']/v['decisions'],
@@ -459,6 +470,10 @@ def distill_update(model,optimizer,games,config,*,steps=8,weight=.25,quality=Non
     if count<quality['min_samples'] or len(setups)<quality['min_games'] or any(phases[p]<quality['min_samples_per_phase'] for p,_,_,_ in PHASES):
         return dict(updated=False,optimizer_steps=0,reason='Insufficient diverse search teachers; no optimizer update',**support)
     data=prepared(games,eligible)
+    def fit():
+        report=supervised_epoch(model,None,data,config,training=False,kind='teacher',weight=weight)
+        return {k:report[k] for k in ('policy_loss','teacher_entropy','teacher_kl','meaningful_top1','root_action_top1','root_family_top1')}
+    before=fit()
     reports=[];seen=Counter();width=min(config['effective_batch_size'],quality['batch_size'])
     teacher_config=dict(config,effective_batch_size=width)
     for _ in range(quality['max_reuse']):
@@ -470,4 +485,5 @@ def distill_update(model,optimizer,games,config,*,steps=8,weight=.25,quality=Non
         if len(reports)>=steps:break
     return dict(updated=True,optimizer_steps=sum(r['optimizer_steps'] for r in reports),updates=reports,
         sample_presentations=sum(seen.values()),max_observed_reuse=max(seen.values()),
+        fit_before=before,fit_after=fit(),fit_scope='same qualified collection; training fit, not held-out strength',
         learning_rates=[group['lr'] for group in optimizer.param_groups],**support)
