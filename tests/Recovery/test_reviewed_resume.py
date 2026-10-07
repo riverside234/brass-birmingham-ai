@@ -47,8 +47,8 @@ class ReviewedResumeTests(unittest.TestCase):
         self.assertEqual(old['compatibility'], compatibility())
         current = read(SOURCE_ROOT / 'configs/step5/lab.json')
         current['rehearsal_manifest'] = old['imitation_source']['manifest']
-        self.assertEqual(current, old['config'])
-        target = dict(old, implementation=self.target)
+        self.assertEqual(current, dict(old['config'],search_wall_fraction=.70))
+        target = dict(old, config=current, implementation=self.target)
         self.assertTrue(check_signature(self.evidence, target, True))
         with self.assertRaisesRegex(ValueError, '--resume-reviewed-source'):
             check_signature(self.evidence, target)
@@ -94,6 +94,27 @@ class ReviewedResumeTests(unittest.TestCase):
         broken = copy.deepcopy(updated); broken['source_transitions'][0]['checkpoint']['sha256'] = 'bad'
         with self.assertRaisesRegex(ValueError, 'not bound'):
             load_resume(SOURCE_ROOT, run, broken, signature)
+
+    def test_only_pinned_50_to_70_budget_change_preserves_optimizer_and_progress(self):
+        run,state,signature,_,_=self.fixture()
+        signature=copy.deepcopy(signature);signature['config']['search_wall_fraction']=.70
+        model,raw,changed=load_resume(SOURCE_ROOT,run,state,signature,reviewed=True)
+        optimizer=torch.optim.AdamW(model.parameters(),lr=1e-5)
+        resume_optimizer(raw,optimizer)
+        self.assertEqual(optimizer.param_groups[0]['lr'],1e-5)
+        updated=commit_transition(run,state,signature)
+        self.assertEqual(updated['source_transitions'][-1]['config_changes'],
+                         dict(search_wall_fraction=dict(before=.5,after=.7)))
+        self.assertEqual((updated['games_done'],updated['next_search_games']),
+                         (state['games_done'],state['next_search_games']))
+        self.assertFalse(load_resume(SOURCE_ROOT,run,updated,signature)[2])
+        for fraction in (.6,.8):
+            other=copy.deepcopy(signature);other['config']['search_wall_fraction']=fraction
+            with self.assertRaisesRegex(ValueError,'unchanged'):
+                check_signature(state,other,True)
+        other=copy.deepcopy(signature);other['config']['learning_rate']=2e-5
+        with self.assertRaisesRegex(ValueError,'unchanged'):
+            check_signature(state,other,True)
 
     def test_partial_iteration_and_changed_checkpoint_are_not_overwritten(self):
         run, state, signature, _, _ = self.fixture()

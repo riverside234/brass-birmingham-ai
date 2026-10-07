@@ -28,6 +28,7 @@ namespace BrassLegacyAI
         readonly object sync=new object();
         readonly Stopwatch clock=Stopwatch.StartNew();
         readonly Ticket ticket;
+        readonly double finishingMargin,searchCutoff;
         readonly AiExecutionJob execution;
         JObject view,cards;
         System.Collections.Generic.List<Choice> legal;
@@ -36,6 +37,9 @@ namespace BrassLegacyAI
         Plan incumbent;
         bool taken,disposed;
         string failure;
+        double publishedMilliseconds,publicationCost;
+        int latePublications;
+        TurnSearchTiming timing;
         public string Name {get{return "Masked ISMCTS v3";}}
         public AiExecutionJob Execution {get{return execution;}}
         public Task Worker {get{return execution.Completion;}}
@@ -43,9 +47,12 @@ namespace BrassLegacyAI
         public bool Finished {get{return Worker.IsCompleted;}}
         public string Failure {get{lock(sync)return failure??execution.Failure;}}
         public double RemainingMilliseconds {get{return Math.Max(0,ticket.deadline_ms-clock.Elapsed.TotalMilliseconds);}}
+        public TurnSearchTiming Timing {get{lock(sync)return timing;}}
         public TurnCoordinator(Ticket request,JObject observation,System.Collections.Generic.List<Choice> choices,Profile profile,JObject composition,IntentState intent=null)
         {
             ticket=request.Copy();
+            finishingMargin=TurnFinishingBudget.MarginMilliseconds(ticket.deadline_ms);
+            searchCutoff=Math.Max(0,ticket.deadline_ms-finishingMargin);
             if(ticket.protocol!="legacy/0.1.0" || ticket.schema!=Wire.Version || ticket.rules!=Wire.Rules || ticket.profile!=profile.id || ticket.actor!=(int)observation["seat"])throw new Exception("ticket_contract");
             view=(JObject)observation.DeepClone();legal=JArray.FromObject(choices).ToObject<System.Collections.Generic.List<Choice>>();
             cfg=Profile.Read(JObject.FromObject(profile));cards=(JObject)composition.DeepClone();
@@ -57,9 +64,24 @@ namespace BrassLegacyAI
             try
             {
                 if(cancellation.IsCancellationRequested)return Task.FromResult(0);
-                cfg.milliseconds=RemainingMilliseconds;
-                var d=RootForest.Decide(cards,view,legal,cfg,SearchWorkers,1,cancellation,Publish,ownIntent);
-                Publish(d.selected);
+                // Both private roots share this one earlier stop signal. The
+                // scheduler still awaits every worker, the merge and publication.
+                // Neither a second action nor a replan receives a new turn clock.
+                using(var stop=CancellationTokenSource.CreateLinkedTokenSource(cancellation))
+                {
+                    cfg.milliseconds=Math.Max(0,searchCutoff-clock.Elapsed.TotalMilliseconds);
+                    stop.CancelAfter((int)Math.Min(int.MaxValue,Math.Floor(cfg.milliseconds)));
+                    var d=RootForest.Decide(cards,view,legal,cfg,SearchWorkers,1,stop.Token,Publish,ownIntent);
+                    // RootForest already publishes the merged final plan. Avoid
+                    // serializing/publishing that same plan a second time.
+                    double elapsed=clock.Elapsed.TotalMilliseconds;
+                    lock(sync)timing=new TurnSearchTiming{budget_ms=ticket.deadline_ms,margin_ms=finishingMargin,
+                        search_cutoff_ms=searchCutoff,elapsed_ms=elapsed,finalization_ms=Math.Max(0,elapsed-searchCutoff),
+                        final_publish_ms=publishedMilliseconds,publish_copy_ms=publicationCost,workers=SearchWorkers,
+                        completed=d.search.completed,interrupted=d.search.interrupted,nodes=d.nodes,failures=d.failures,
+                        late_publications_ignored=latePublications,cancelled=cancellation.IsCancellationRequested,
+                        deadline_overrun=elapsed>ticket.deadline_ms};
+                }
             }
             catch(Exception e){lock(sync)failure=e.GetType().Name+": "+e.Message;}
             return Task.FromResult(0);
@@ -67,11 +89,21 @@ namespace BrassLegacyAI
         public void ReleaseTurnResources() {view=null;legal=null;cfg=null;cards=null;ownIntent=null;}
         void Publish(Plan plan)
         {
-            lock(sync)if(taken || disposed)return;
+            lock(sync){if(taken || disposed)return;if(!TurnFinishingBudget.MayPublish(clock.Elapsed.TotalMilliseconds,ticket.deadline_ms,incumbent!=null)){latePublications++;return;}}
             // The detached copy is expensive; the game thread need not wait for
             // JSON serialization while it checks readiness/identity.
+            double began=clock.Elapsed.TotalMilliseconds;
             var copy=JObject.FromObject(plan).ToObject<Plan>();
-            lock(sync)if(!taken && !disposed)incumbent=copy;
+            lock(sync)
+            {
+                publicationCost+=clock.Elapsed.TotalMilliseconds-began;
+                if(taken || disposed)return;
+                // Recheck after copying: the main thread can take/dispose while
+                // serialization is in flight. Never overwrite its legal fallback.
+                double now=clock.Elapsed.TotalMilliseconds;
+                if(!TurnFinishingBudget.MayPublish(now,ticket.deadline_ms,incumbent!=null)){latePublications++;return;}
+                incumbent=copy;publishedMilliseconds=now;
+            }
         }
         public Plan Take(Ticket current,bool playNow=false)
         {return Take(current,current.revision,current.actor,current.generation,playNow);}

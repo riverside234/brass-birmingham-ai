@@ -46,13 +46,21 @@ def counters():
 
 
 def search_allowance(ordinary_seconds,search_seconds,fraction=SEARCH_WALL_FRACTION):
-    require(0<fraction<=.50 and min(ordinary_seconds,search_seconds)>=0,'Invalid search wall allowance')
+    require(0<fraction<=SEARCH_WALL_FRACTION and min(ordinary_seconds,search_seconds)>=0,'Invalid search wall allowance')
     return max(0.,ordinary_seconds*fraction/(1-fraction)-search_seconds)
 
 
 def estimate_collection(config,ordinary_game_seconds):
     # Four seats x four reserved TURNS. Workers/actions never multiply seconds.
     return config['search_games']*(4*len(PHASES)*teacher_search_config(config['search']).seconds+ordinary_game_seconds)
+
+
+def finalization_reserve(seconds):
+    # The 31-iteration lab run lost completed evidence to 0.15 s retirement
+    # margins (individual overruns up to 0.89 s in its last collection).
+    # Keep the whole-turn clock fixed; reserve 10%, capped at 1.2 s, for private
+    # workers to finish an in-flight host RPC, merge and validate their labels.
+    return min(1.2, seconds * .10)
 
 
 class TeacherTurns:
@@ -80,7 +88,7 @@ class TeacherTurns:
         # All workers/actions use this one deadline. Stop launching tree work
         # slightly earlier to leave bounded time for merging and label checks.
         state['current']=dict(key=key,phase=phase,started=started,deadline=deadline,
-            work_deadline=deadline-min(.15,self.config.seconds*.05),attempts=0,disabled=False,
+            work_deadline=deadline-finalization_reserve(self.config.seconds),attempts=0,disabled=False,
             tree={},cache=OrderedDict(),continuation={},qualified=0)
 
     def finish_teacher_turn(self,rng):

@@ -16,15 +16,22 @@ def check_signature(state, signature, reviewed=False):
         return False
     require(reviewed, 'Run configuration/source changed. For the reviewed selfplay-v2 source only, '
             'repeat with --resume-reviewed-source; otherwise use a fresh directory')
-    unchanged = lambda s: {k: v for k, v in s.items() if k != 'implementation'}
+    unchanged = lambda s: {k: v for k, v in s.items() if k not in ('implementation', 'config')}
     require(unchanged(previous) == unchanged(signature),
             'Reviewed resume requires unchanged config, data/IL, opponents and learning contracts')
     approvals = read(CONFIG_DIR / 'selfplay-resume-sources.json')
     require(approvals['format'] == 'selfplay-resume-sources/1.0.0', 'Unsupported source review receipt')
-    require(any(e['from_implementation'] == previous['implementation']
+    transitions = [e for e in approvals['transitions'] if e['from_implementation'] == previous['implementation']
                 and e['to_implementation'] == signature['implementation']
-                and e['learning_compatibility'] == digest(signature['compatibility'])
-                for e in approvals['transitions']), 'This self-play source transition has not been reviewed')
+                and e['learning_compatibility'] == digest(signature['compatibility'])]
+    require(transitions, 'This self-play source transition has not been reviewed')
+    config_ok = previous['config'] == signature['config']
+    for transition in transitions:
+        changes = transition.get('config_changes', {})
+        if changes and all(previous['config'].get(k) == v['from'] for k, v in changes.items()):
+            expected = dict(previous['config'], **{k: v['to'] for k, v in changes.items()})
+            config_ok |= expected == signature['config']
+    require(config_ok, 'Reviewed resume requires unchanged config except an explicitly pinned budget change')
     require(state['iteration'] > 0, 'Reviewed continuation requires a committed PPO generation')
     return True
 
@@ -84,9 +91,14 @@ def commit_transition(run, state, signature):
     updated.setdefault('source_transitions', []).append(dict(
         from_signature=previous['signature'], to_signature=digest(signature),
         checkpoint=copy.deepcopy(state['history'][-1]), iteration=state['iteration'],
-        games_done=state['games_done'], backup=backup.name))
+        games_done=state['games_done'], backup=backup.name,
+        config_changes={k:dict(before=previous['signature']['config'][k],after=v)
+                        for k,v in signature['config'].items() if previous['signature']['config'].get(k)!=v}))
     updated['signature'] = signature
     write_json(safe(run, run / 'state.json'), updated)
     print(f"Reviewed same-run continuation: generation {state['iteration']}, {state['games_done']} games; "
           'checkpoint, Adam/RNG, population and schedule counters preserved', flush=True)
+    changes=updated['source_transitions'][-1]['config_changes']
+    if changes:
+        print(f'Reviewed configuration changes: {changes}',flush=True)
     return updated

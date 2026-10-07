@@ -16,7 +16,7 @@ from brass_ai.learning.model import ModelConfig
 from .replay import read_shards
 from brass_ai.step5.league import write_json,seeds_for,implementation_id
 from brass_ai.step5.policy import INDUSTRIES
-from .config import validate_config,table_kind
+from .config import validate_config,table_kind,table_rotation
 from .demonstrations import load_dataset
 from .diagnostics import summarize
 from .execution import ActorPool,neural_spec
@@ -155,7 +155,7 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                         # Rotate all profiles across the collection instead of fixing three for an entire chunk.
                         selected_specs=fast_specs if index<config['legacy_opponents']['search_free_until_games'] else teacher_specs
                         policies=[learner]+[selected_specs[profiles[(index*3+s)%len(profiles)]] for s in range(3)]
-                    rotation=index%4;focuses={}
+                    rotation=table_rotation(index);focuses={}
                     for seat in range(4):
                         if policies[(seat-rotation)%4]==learner:
                             point=context_counter%12;context_counter+=1
@@ -179,8 +179,9 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                     if normal: records+=ordinary.collect(normal)
                     if legacy: records+=heavy.collect(legacy)
                 load_began=time.monotonic()
+                ingress_metrics={}
                 games,learner_data,diagnostics=load_collection(records,behavior.policy_id,kind_by_group,
-                    executor=readers,workers=config['audit_workers'])
+                    executor=readers,workers=config['audit_workers'],telemetry=ingress_metrics)
                 collected=time.monotonic()
                 weight=config['rehearsal_weight']*max(0,1-state['games_done']/config['rehearsal_until'])
                 update=ppo_update(model,optimizer,games,behavior,config['update'],
@@ -237,6 +238,7 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                     environment=environment(device),strength='requires fresh post-update evaluation')
                 report['utilization']=iteration_utilization(inference_before,ordinary_inference,records,
                     load_began-began,len(games),config['execution'])
+                report['utilization']['replay_ingress']=ingress_metrics
                 output=run/f'generation-{iteration+1:04d}.pt'
                 checkpoint_began=time.monotonic()
                 identity=save_checkpoint(output,model,optimizer,step=iteration+1,
@@ -298,7 +300,10 @@ def schedule_evaluations(root,run,state,device,mono):
         refs=list({e['model_id']:e for e in available if e['model_id']!=candidate['model_id']}.values())
         # Defer broader panels until two independently frozen neural versions exist.
         if len(refs)<(2 if name=='broader' else 1): continue
-        refs=refs[-2:]
+        # A four-game alarm against a moving near-neighbour can hide regression
+        # from IL. Keep its size/frequency, but compare against the fixed anchor.
+        refs=[state['evaluation_anchor']] if name=='monitor' else refs[-2:]
+        if refs[0]['model_id']==candidate['model_id']:continue
         cfg=evaluation_config(config,setups=schedule[name+'_setups'],seed=schedule['seed']+slot*1000,
             lineups=lineups,include_legacy=name=='broader',panel='development',use_search=False)
         directory=run/'evaluations'/f'{name}-{slot:04d}'

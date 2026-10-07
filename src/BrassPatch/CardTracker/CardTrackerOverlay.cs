@@ -8,6 +8,8 @@ using Frameworks.View.Game;
 using InterfaceAdapters.Game.IndustriesSummary;
 using InterfaceAdapters.Game.Market;
 using InterfaceAdapters.Game.HandOfCards;
+using InterfaceAdapters.Game.GameLogView;
+using InterfaceAdapters.Game.GameProgressSummary;
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
@@ -31,6 +33,10 @@ namespace BrassPatch.CardTracker
         float unit=1,textScale=1.15f,inspectionMinScale;
         CardTrackerProjection snapshot;
         TextMeshProUGUI toggleLabel;
+        RectTransform gameLogButton;
+        CanvasGroup toggleInput;
+        GameLogView logView;
+        CanvasGroup logPopup;
         public Button Toggle { get; private set; }
         public bool HasDetail { get { return detail != null; } }
         public bool HasList { get { return list != null; } }
@@ -48,10 +54,11 @@ namespace BrassPatch.CardTracker
             var text=owner.Board.GetComponentsInChildren<TextMeshProUGUI>(true).FirstOrDefault(t=>t.font!=null);
             font=text==null?TMP_Settings.defaultFontAsset:text.font;
             UpdateUnit();
-            Toggle=StatisticsWidgets.Button(root,font,"Card Tracker toggle","Card Tracker",Vector2.zero,new Vector2(200,50)*unit,20*unit*textScale,()=>{
+            Toggle=StatisticsWidgets.Button(root,font,"Card Tracker toggle","Card Tracker",Vector2.zero,new Vector2(152,36)*unit,18*unit*textScale,()=>{
                 if(session.IsOpen)session.Close();else session.Open();
             });
-            Translucent(Toggle.gameObject,.96f);
+            Translucent(Toggle.gameObject,.76f);
+            toggleInput=Toggle.gameObject.AddComponent<CanvasGroup>();
             toggleLabel=Toggle.GetComponentInChildren<TextMeshProUGUI>();
             Hover(Toggle.gameObject,"Four-player public card counts.\nAvailable on your turn, between actions, after animations finish.\nOpening pauses the game. Closing resumes it.");
             Layout();
@@ -97,6 +104,21 @@ namespace BrassPatch.CardTracker
         public void RefreshToggle(bool enabled,bool open)
         {
             if(Toggle==null||toggleLabel==null)return;
+            // Keep the small button readable above the board's decorative HUD
+            // fades, but inherit board ordering beneath an active Game Log.
+            // The popup alpha also covers the closing transition; cached log
+            // roots can remain active after their popup has completely faded.
+            var canvas=root.GetComponent<Canvas>();
+            var log=session.Router.IsViewCached<IGameLogView>()?session.Router.GetView<IGameLogView>() as GameLogView:null;
+            if(log!=null&&log!=logView) {
+                logView=log;var popup=ReflectionAccess.Get<GameObject>(log,"Popup");
+                logPopup=popup==null?null:popup.GetComponent<CanvasGroup>();
+            }
+            bool logVisible=log!=null&&log.gameObject.activeInHierarchy&&(log.IsViewVisible()||logPopup!=null&&logPopup.alpha>.001f);
+            bool aboveBoard=open||!logVisible;
+            if(canvas.overrideSorting!=aboveBoard)canvas.overrideSorting=aboveBoard;
+            toggleInput.blocksRaycasts=!logVisible;
+            enabled=enabled&&!logVisible;
             StatisticsWidgets.Enabled(Toggle,enabled);StatisticsWidgets.Selected(Toggle,open);
             toggleLabel.color=enabled?StatisticsTheme.Ink:StatisticsTheme.Muted;
             toggleLabel.text=open?"Resume game":"Card Tracker";
@@ -243,12 +265,20 @@ namespace BrassPatch.CardTracker
         public void Layout()
         {
             if(Toggle==null)return;UpdateUnit();
-            // A screen corner is stable throughout hand, market and map animations.
-            // Reserve the lower action band; never follow animated artwork bounds.
+            // Follow the fixed HUD control, never hand, market or map artwork.
+            if(gameLogButton==null&&session.Router.IsViewCached<IGameProgressSummaryView>()) {
+                var summary=session.Router.GetView<IGameProgressSummaryView>() as GameProgressSummaryView;
+                if(summary!=null)gameLogButton=summary.transform.Find("SafeArea/Popup/Buttons/ButtonGameLog") as RectTransform;
+            }
             var toggle=(RectTransform)Toggle.transform;
-            toggle.anchorMin=toggle.anchorMax=new Vector2(1,0);toggle.pivot=new Vector2(1,0);
-            toggle.sizeDelta=new Vector2(200,50)*unit;toggle.anchoredPosition=new Vector2(-24,220)*unit;
-            toggleLabel.fontSize=20*unit*textScale;
+            toggle.anchorMin=toggle.anchorMax=new Vector2(1,1);toggle.pivot=new Vector2(1,1);
+            toggle.sizeDelta=new Vector2(152,36)*unit;
+            toggle.anchoredPosition=new Vector2(-24,-106)*unit;
+            if(gameLogButton!=null) {
+                var log=Bounds(gameLogButton);
+                toggle.anchoredPosition=new Vector2(Mathf.Min(log.xMax,root.rect.xMax-16*unit)-root.rect.xMax,log.yMin-root.rect.yMax-8*unit);
+            }
+            toggleLabel.fontSize=18*unit*textScale;
             if(layer==null)return;
             if(legend!=null) {
                 legend.anchorMin=legend.anchorMax=new Vector2(.5f,.5f);legend.pivot=Vector2.zero;

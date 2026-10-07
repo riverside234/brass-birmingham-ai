@@ -74,12 +74,12 @@ function Assert-BrassCandidate($Manifest,$Validation,[string]$Build){
     if(-not $Manifest -or $Manifest.stockSha256 -ne $BrassStockSha256){throw 'Candidate is not based on the supported stock game.'}
     if(-not $Validation -or -not $Validation.passed){throw 'Candidate validation must pass before installation.'}
     $expectedFiles='Assembly-CSharp.dll|BrassPatch.dll'
-    if($Manifest.version -in @('1.3.0','1.3.1','1.3.2','1.4.0','1.4.1','1.4.2','1.4.3','1.4.4','1.4.5','1.4.6','1.4.7','1.4.8','1.4.9','1.4.10','1.4.11','1.4.12','1.4.13','1.4.15','1.4.16','1.4.17','1.4.18','1.4.19','1.4.20','1.4.21','1.4.22','1.4.23','1.4.24','1.4.25','1.4.26')){
+    if($Manifest.version -in @('1.3.0','1.3.1','1.3.2','1.4.0','1.4.1','1.4.2','1.4.3','1.4.4','1.4.5','1.4.6','1.4.7','1.4.8','1.4.9','1.4.10','1.4.11','1.4.12','1.4.13','1.4.15','1.4.16','1.4.17','1.4.18','1.4.19','1.4.20','1.4.21','1.4.22','1.4.23','1.4.24','1.4.25','1.4.26','1.4.27','1.4.28')){
         $expectedFiles='Assembly-CSharp.dll|BrassLegacyAI.dll|BrassPatch.dll'
         if(-not $Validation.PSObject.Properties['localAi'] -or -not $Validation.localAi.passed){throw 'Combined AI and native UI qualification must pass before installation.'}
     }
     if((@($Manifest.files|ForEach-Object {$_.name}|Sort-Object)-join '|') -ne $expectedFiles){throw 'Unexpected candidate file list.'}
-    if($Manifest.version -in @('1.4.7','1.4.8','1.4.9','1.4.10','1.4.11','1.4.12','1.4.13','1.4.15','1.4.16','1.4.17','1.4.18','1.4.19','1.4.20','1.4.21','1.4.22','1.4.23','1.4.24','1.4.25','1.4.26')){
+    if($Manifest.version -in @('1.4.7','1.4.8','1.4.9','1.4.10','1.4.11','1.4.12','1.4.13','1.4.15','1.4.16','1.4.17','1.4.18','1.4.19','1.4.20','1.4.21','1.4.22','1.4.23','1.4.24','1.4.25','1.4.26','1.4.27','1.4.28')){
         if(-not $Manifest.PSObject.Properties['sourcePins'] -or -not $Validation.localAi.PSObject.Properties['sourcePins'] -or $Manifest.sourcePins.Count -ne $Validation.localAi.sourcePins.Count){throw 'Compiled runtime-source qualification is missing.'}
         foreach($pin in $Manifest.sourcePins){if(@($Validation.localAi.sourcePins|Where-Object {$_.path -eq $pin.path -and $_.sha256 -eq $pin.sha256}).Count -ne 1){throw 'Qualified runtime sources differ from compilation.'}}
         if(-not $Validation.localAi.resourceTests.passed -or $Validation.localAi.resourceTests.checks -lt 20 -or $Validation.localAi.executionStatistics.maximumRunning -ne 1 -or $Validation.localAi.executionStatistics.running){throw 'General AI execution/resource qualification must pass.'}
@@ -282,6 +282,37 @@ function Assert-BrassCandidate($Manifest,$Validation,[string]$Build){
         $scope=@('StatisticsPages.cs','StatisticsMetrics.cs','StatisticsChartQueries.cs','StatisticsPlotModels.cs','StatisticsPlotPages.cs','StatisticsEfficiencyPages.cs','StatisticsPlotControls.cs','StatisticsMedal.cs','StatisticsReviewPanel.cs','StatisticsPanel.cs','StatisticsPlotSemantics.cs','StatisticsPlotViews.cs','StatisticsPresentationLease.cs','StatisticsEntryPoints.cs'|ForEach-Object {'src/BrassPatch/Statistics/'+$_})
         if(@($Manifest.sourceScope).Count -ne $scope.Count -or @($Manifest.sourceScope|Where-Object {$_ -notin $scope}).Count -or @($Validation.sourceScope|Where-Object {$_ -notin $scope}).Count){throw 'Unrelated runtime source in Statistics patch.'}
         foreach($report in $Validation.menu,$Validation.statistics,$Validation.history,$Validation.cardTracker,$Validation.performance){foreach($file in $Manifest.files){if(@($report.testedFiles|Where-Object {$_.name -eq $file.name -and $_.sha256 -eq $file.sha256}).Count -ne 1){throw 'Statistics evidence belongs to another candidate.'}}}
+    }
+    if($Manifest.version -eq '1.4.27'){
+        if($Manifest.baseVersion -ne '1.4.26' -or $Manifest.trackerButtonAnchor -ne 'below-game-log' -or ($Manifest.trackerButtonSize -join '|') -ne '152|36' -or $Manifest.trackerButtonOpacity -ne .76 -or -not $Manifest.trackerYieldsToGameLog -or $Manifest.gammaEnabled -ne $false -or $Manifest.searchWorkers -ne 2 -or $Manifest.historyLimit -ne 10 -or $Manifest.reportSchema -ne 1 -or -not $Manifest.livePresentationSuspension -or -not $Manifest.overviewMedals -or ($Manifest.efficiencyViews -join '|') -ne 'Returns|Conversion|Transition & networks'){throw 'Card Tracker button or preserved runtime contract differs.'}
+        foreach($name in 'Assembly-CSharp.dll','BrassLegacyAI.dll'){if(($Manifest.files|Where-Object name -eq $name).sha256 -ne ($Manifest.baseFiles|Where-Object name -eq $name).sha256){throw 'Button revision must preserve accepted game and AI binaries.'}}
+        if(@($Manifest.sourceScope).Count -ne 1 -or $Manifest.sourceScope[0] -ne 'src/BrassPatch/CardTracker/CardTrackerOverlay.cs' -or @($Validation.sourceScope|Where-Object {$_ -ne $Manifest.sourceScope[0]}).Count){throw 'Unrelated runtime source in Card Tracker button patch.'}
+        if(-not $Validation.preservedRuntime.passed -or -not $Validation.visualChecks.passed -or -not $Validation.cardTracker.passed -or $Validation.cardTracker.checks -lt 500 -or @($Validation.cardTracker.nativeErrors|Where-Object {$_}).Count){throw 'Native button, visual and preserved-runtime qualification required.'}
+        foreach($group in 'CT27-POSITION','CT27-STYLE','CT27-LAYER','CT25-POSITION','CT25-INPUT','CT25-THEME','CT25-CITY'){
+            $cases=@($Validation.cardTracker.cases|Where-Object {$_.name.StartsWith($group)})
+            if(-not $cases.Count -or @($cases|Where-Object {-not $_.passed}).Count){throw ('Missing/failed button regression: '+$group)}
+        }
+        foreach($resolution in 1080,1200){if(@($Validation.cardTracker.layouts|Where-Object {$_.width -eq 1920 -and $_.height -eq $resolution}).Count -ne 1){throw 'Required tracker layout coverage missing.'}}
+        if(-not $Validation.retainedUi.passed -or $Validation.retainedUi.release -ne $Manifest.baseVersion -or -not $Validation.retainedUi.validationSha256 -or -not $Validation.statistics.passed -or $Validation.statistics.checks -lt 5700 -or -not $Validation.history.passed -or $Validation.history.historyLimit -ne 10 -or $Validation.history.reportSchema -ne 1 -or -not $Validation.menu.passed -or -not $Validation.menu.selectionPanel.passed -or $Validation.menu.selectionPanel.draftChecks -lt 20 -or $Validation.menu.selectionPanel.gammaEnabled -or $Validation.menu.selectionPanel.layouts.Count -ne 18){throw 'Preserved Statistics, History and player-selection evidence incomplete.'}
+        foreach($layout in $Validation.menu.selectionPanel.layouts){if($layout.choices -ne $(if($layout.family -eq 'Human'){0}elseif($layout.family -eq 'V4'){7}else{17}) -or $layout.available -ne $(if($layout.family -eq 'V4'){7}else{0})){throw 'Preserved player selection layout differs.'}}
+        if(-not $Validation.localAi.masked.passed -or $Validation.localAi.workers -ne 2 -or $Validation.localAi.retainedFrom -ne $Manifest.baseVersion){throw 'Retained V4 execution evidence missing.'}
+        foreach($file in $Manifest.files){if(@($Validation.cardTracker.testedFiles|Where-Object {$_.name -eq $file.name -and $_.sha256 -eq $file.sha256}).Count -ne 1){throw 'Tracker evidence belongs to another candidate.'}}
+        foreach($report in $Validation.menu,$Validation.statistics,$Validation.history){foreach($file in $Manifest.baseFiles){if(@($report.testedFiles|Where-Object {$_.name -eq $file.name -and $_.sha256 -eq $file.sha256}).Count -ne 1){throw 'Retained evidence belongs to another baseline.'}}}
+    }
+    if($Manifest.version -eq '1.4.28'){
+        if($Manifest.baseVersion -ne '1.4.27' -or $Manifest.searchWorkers -ne 2 -or ($Manifest.turnOptionsMs -join '|') -ne '2000|5000|12000' -or -not $Validation.preservedRuntime.passed){throw 'Game finishing margin requires the accepted baseline and unchanged two-worker clocks.'}
+        $scope=@('src/BrassLocalAI/Policy/Coordinator.cs','src/BrassLocalAI/Policy/TurnFinishingBudget.cs')
+        if(@($Manifest.sourceScope).Count -ne 2 -or @($Manifest.sourceScope|Where-Object {$_ -notin $scope}).Count){throw 'Finishing margin contains an unrelated runtime source change.'}
+        foreach($name in 'Assembly-CSharp.dll','BrassPatch.dll'){if(($Manifest.files|Where-Object name -eq $name).sha256 -ne ($Manifest.baseFiles|Where-Object name -eq $name).sha256){throw 'Finishing margin must preserve the accepted rules and UI binaries.'}}
+        $timing=$Validation.localAi.deadlines
+        if(-not $timing.passed -or $timing.rows.Count -ne 9 -or @($timing.native_errors).Count){throw 'Fresh native deadline checks are required.'}
+        foreach($budget in 2000,5000,12000){
+            $rows=@($timing.rows|Where-Object budget_ms -eq $budget)
+            $margin=switch($budget){2000{250}5000{300}12000{400}}
+            if($rows.Count -ne 3 -or @($rows|Where-Object {$_.timing.margin_ms -ne $margin -or $_.timing.workers -ne 2 -or $_.timing.deadline_overrun -or $_.timing.elapsed_ms -ge $budget -or $_.timing.final_publish_ms -ge $budget -or $_.timing.late_publications_ignored -ne 0 -or $_.timing.failures -ne 0}).Count){throw 'Both workers and the merged legal plan must finish inside each unchanged turn allowance.'}
+        }
+        if(-not $Validation.localAi.native.passed -or -not $Validation.retainedUi.passed -or $Validation.retainedUi.release -ne $Manifest.baseVersion -or -not $Validation.trainingUnchanged){throw 'Native lifecycle, retained UI and training scope qualification must pass.'}
+        foreach($report in $timing,$Validation.localAi.native){foreach($file in $Manifest.files){if(@($report.testedFiles|Where-Object {$_.name -eq $file.name -and $_.sha256 -eq $file.sha256}).Count -ne 1){throw 'Finishing-margin evidence belongs to another candidate.'}}}
     }
     foreach($file in $Manifest.files){
         if((Get-FileHash -LiteralPath (Join-Path $Build ('Managed/'+$file.name))).Hash -ne $file.sha256){throw ('Changed candidate: '+$file.name)}

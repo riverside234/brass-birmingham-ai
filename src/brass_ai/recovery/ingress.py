@@ -2,6 +2,7 @@
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from contextlib import nullcontext
 import multiprocessing
+import time
 
 import torch
 
@@ -24,6 +25,7 @@ def reader_pool(workers):
 
 
 def _prepare(task):
+    began=time.perf_counter();cpu_began=time.process_time()
     records,policy_id,kinds=task
     first=records[0];path=first['path']
     require(all(r['sha256']==first['sha256'] and r.get('features')==first.get('features') for r in records),
@@ -33,9 +35,12 @@ def _prepare(task):
     require(all(g['split']=='train' for g in games),'Held-out PPO data')
     expected={r['game_id'] for r in records}
     require(len(expected)==len(records) and {g['game_id'] for g in games}==expected,'Self-play shard membership differs')
+    loaded=time.perf_counter()
     diagnostics=summarize(games,{policy_id},kinds)
+    diagnosed=time.perf_counter()
     data=prepared(games,lambda r:r['behavior']['policy_id']==policy_id)
     require(all(r['behavior']['kind']=='model' for r,_,_,_ in data),'External actions in PPO')
+    prepared_at=time.perf_counter()
     # Only verified features and learning labels cross IPC. No repeated private
     # hands, public history or board dictionaries are copied into the learner.
     compact=[(dict(seat=r['seat'],chosen=r['chosen'],behavior=r['behavior'],
@@ -43,12 +48,16 @@ def _prepare(task):
                    choices=r['choices'],style=r['style'],intent=r['intent'],teacher=r['teacher']),
               target,identity,encoded) for r,target,identity,encoded in data]
     headers=[{k:v for k,v in g.items() if k!='records'} for g in games]
-    return headers,compact,diagnostics
+    ended=time.perf_counter()
+    metrics=dict(worker_cpu_seconds=time.process_time()-cpu_began,worker_elapsed_seconds=ended-began,
+        read_validate_seconds=loaded-began,diagnostics_seconds=diagnosed-loaded,
+        prepare_seconds=prepared_at-diagnosed,compact_seconds=ended-prepared_at)
+    return headers,compact,diagnostics,metrics
 
 
-def load_collection(records,policy_id,kinds,*,executor=None,workers=1):
+def load_collection(records,policy_id,kinds,*,executor=None,workers=1,telemetry=None):
     """Retain deterministic shard order and the same validation/diagnostics."""
-    by_path={}
+    began=time.perf_counter();by_path={}
     ordered=sorted(records,key=lambda r:r['job'])
     require(ordered and len({r['job'] for r in ordered})==len(ordered),'Duplicate or empty collection jobs')
     require(len({r['game_id'] for r in ordered})==len(ordered),'Duplicate game across shards')
@@ -67,5 +76,14 @@ def load_collection(records,policy_id,kinds,*,executor=None,workers=1):
         while pending:
             future=next(as_completed(pending));index=pending.pop(future)
             parts[index]=future.result();completed+=1;log(completed);submit()
-    return ([g for games,_,_ in parts for g in games],
-            [row for _,data,_ in parts for row in data],merge_summaries([p[2] for p in parts]))
+    result=([g for games,_,_,_ in parts for g in games],
+            [row for _,data,_,_ in parts for row in data],merge_summaries([p[2] for p in parts]))
+    if telemetry is not None:
+        seconds=time.perf_counter()-began
+        totals={k:sum(p[3][k] for p in parts) for k in parts[0][3]}
+        telemetry.update(totals,wall_seconds=seconds,shards=len(tasks),learner_rows=len(result[1]),
+            readers=min(workers,len(tasks)) if executor is not None else 1,
+            worker_average_cores=totals['worker_cpu_seconds']/max(seconds,1e-9),
+            max_shard_seconds=max(p[3]['worker_elapsed_seconds'] for p in parts),
+            scope='Reader-task CPU excludes process startup and result serialization; worker elapsed phases overlap across readers. Wall includes queue/IPC and parent merge.')
+    return result

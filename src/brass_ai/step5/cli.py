@@ -30,7 +30,7 @@ def parser():
     initialization.add_argument('--imitation-run', help='Completed fresh standalone imitate run; starts PPO with its selected weights and a new optimizer')
     run.add_argument('--iterations', type=int, default=1)
     run.add_argument('--resume-reviewed-source',action='store_true',
-                     help='Continue this same PPO run across the explicitly reviewed selfplay-v2 source change; keep optimizer/counters')
+                     help='Continue this same PPO run across a pinned source/budget review; keep optimizer/counters')
     run.add_argument('--demonstrations',help='Audited heuristic manifest for fresh in-run imitation and rehearsal')
     demos = sub.add_parser('demo-generate')
     demos.add_argument('--output',default='artifacts/demonstrations/v3')

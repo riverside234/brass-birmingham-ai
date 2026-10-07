@@ -46,10 +46,15 @@ def summarize(games,learner_ids,kind_by_group=None):
     kinds=defaultdict(list)
     for game in games:
         kinds[(kind_by_group or {}).get(game['setup_group'],'unknown')].append(game)
-    return dict(matches=match_report(games),by_composition={k:dict(matches=match_report(v),
-        economy=economy(v,learner_ids),diversity=pottery_metrics(v,learner_ids)) for k,v in kinds.items()},
-        economy=economy(games,learner_ids),diversity=pottery_metrics(games,learner_ids),
-        measured_policy='frozen incoming collection policy, before this update')
+    # Derive the overall diagnostic from disjoint composition summaries. The
+    # previous path walked every board/history again for the same totals.
+    parts=[]
+    for kind,group in kinds.items():
+        summary=dict(matches=match_report(group),economy=economy(group,learner_ids),
+                     diversity=pottery_metrics(group,learner_ids))
+        parts.append(dict(**summary,by_composition={kind:summary},
+            measured_policy='frozen incoming collection policy, before this update'))
+    return merge_summaries(parts)
 
 
 def merge_summaries(parts):

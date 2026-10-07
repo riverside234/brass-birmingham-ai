@@ -5,7 +5,7 @@ from brass_ai.search.common import SearchConfig
 
 # Training-only defaults; evaluation/laptop SearchConfig defaults stay intact.
 SEARCH_EVERY_GAMES=320
-SEARCH_WALL_FRACTION=.50
+SEARCH_WALL_FRACTION=.70
 SEARCH_SECONDS=12.0
 SEARCH_WORKERS=4
 PPO_LEARNING_RATE=1e-5
@@ -145,7 +145,7 @@ def validate_config(config):
                 max(config['legacy_budget']['search_workers'],config['execution']['search_workers_per_turn'])<=available,
                 'Search group exceeds queued CPU admission allowance')
         positive(config['audit_workers'],'audit_workers',integer=True)
-        require(type(config['overlap_pools']) is bool and 0<config['search_wall_fraction']<=.50,'Invalid overlap/search fraction')
+        require(type(config['overlap_pools']) is bool and 0<config['search_wall_fraction']<=SEARCH_WALL_FRACTION,'Invalid overlap/search fraction')
         require(set(config['update'])==set(UPDATE_V21) and set(config['execution'])==set(EXECUTION_V21),'2.1 requires revised update/execution')
     require(set(config)==fields and version=='step5-training/2.2.0' and config['players']==4,
         'Use the fresh four-player Masked ISMCTS 2.2 recipe; historical runs cannot migrate in place')
@@ -171,3 +171,13 @@ def table_kind(index, stages):
     if point < stage['selfplay']: return 'selfplay'
     if point < stage['selfplay']+stage['historical']: return 'historical'
     return 'legacy'
+
+
+def table_rotation(index):
+    """Rotate each 20-table quota position through all four physical seats.
+
+    index % 4 aliases the quota period: at five percent legacy tables the
+    learner otherwise always occupies the same seat. This stays resumable from
+    the absolute game counter and changes no quota or setup-seed allocation.
+    """
+    return (index + index // 20) % 4

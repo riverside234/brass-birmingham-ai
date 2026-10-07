@@ -23,6 +23,7 @@ using BrassApplication.UseCases.Game.IndustriesSummary;
 using BrassApplication.UseCases.Game.Market;
 using BrassApplication.UseCases.Game.HandOfCards;
 using BrassApplication.UseCases.Game.Replay;
+using BrassApplication.UseCases.Game.GameProgressSummary;
 using BrassPatch;
 using BrassPatch.CardTracker;
 using DG.Tweening;
@@ -41,6 +42,8 @@ using InterfaceAdapters.Game.Market;
 using InterfaceAdapters.Game.HandOfCards;
 using InterfaceAdapters.Game.PlayerActions;
 using InterfaceAdapters.Game.PlayAiTurn;
+using InterfaceAdapters.Game.GameProgressSummary;
+using InterfaceAdapters.Game.GameLogView;
 using InterfaceAdapters.Routing;
 using InterfaceAdapters.Utils;
 using Newtonsoft.Json;
@@ -176,11 +179,13 @@ public sealed class CardTrackerTestDriver : MonoBehaviour
         var industries=router.GetView<IIndustriesSummaryView>() as IndustriesSummaryView;industries.InputRegistration=router;
         var hand=router.GetView<IHandOfCardsView>() as HandOfCardsView;hand.InputRegistration=router;
         var actions=router.GetView<IPlayerActionsView>() as BaseView;actions.InputRegistration=router;
+        var progress=router.GetView<IGameProgressSummaryView>() as GameProgressSummaryView;progress.InputRegistration=router;
         hand.UpdateHandCardsView(match.App.Game.GameProgressInformation.CurrentPlayer.Hand,false);
         board.UpdateBoardView(builder.BoardPresenter.Model(match.App));
         builder.Market.UpdateMarket();builder.Industries.UpdateIndustries();
         board.CreateShowViewImmediatelyAnimation();market.CreateShowViewImmediatelyAnimation();industries.CreateShowViewImmediatelyAnimation();hand.CreateShowViewImmediatelyAnimation();hand.ShowCards();
         actions.CreateShowViewImmediatelyAnimation();
+        progress.CreateShowViewImmediatelyAnimation();
         hand.EnableCardsLayoutGroup();
         yield return null;DOTween.CompleteAll();Canvas.ForceUpdateCanvases();
         LayoutRebuilder.ForceRebuildLayoutImmediate((RectTransform)hand.transform.Find("SafeArea/Popup/CardsContainer"));
@@ -198,6 +203,31 @@ public sealed class CardTrackerTestDriver : MonoBehaviour
             var target=new RenderTexture(resolution.x,resolution.y,24,RenderTextureFormat.ARGB32);target.Create();camera.targetTexture=target;yield return null;Canvas.ForceUpdateCanvases();
             session.Overlay.Layout();Canvas.ForceUpdateCanvases();
             var fixedButton=ScreenBounds((RectTransform)session.Toggle.transform,camera);
+            var logButton=progress.transform.Find("SafeArea/Popup/Buttons/ButtonGameLog").GetComponent<Button>();
+            var logButtonBounds=ScreenBounds((RectTransform)logButton.transform,camera);
+            Check(!fixedButton.Overlaps(logButtonBounds)&&Math.Abs(logButtonBounds.yMin-fixedButton.yMax-8)<1&&Math.Abs(fixedButton.xMax-logButtonBounds.xMax)<1,"CT27-POSITION tracker sits eight pixels below and right-aligned with native Game Log",new{resolution.x,resolution.y,tracker=fixedButton.ToString(),log=logButtonBounds.ToString()});
+            Check(Math.Abs(fixedButton.width-152)<1&&Math.Abs(fixedButton.height-36)<1,"CT27-STYLE compact button uses 152 by 36 physical pixels",new{fixedButton.width,fixedButton.height});
+            var toggleSurface=session.Toggle.GetComponent<BrassPatch.Statistics.StatisticsSurface>();
+            Check(Math.Abs(toggleSurface.canvasRenderer.GetAlpha()-.76f)<.02f&&session.Toggle.GetComponentInChildren<TextMeshProUGUI>().color.a==1,"CT27-STYLE button background is translucent while its label stays opaque");
+            Check(session.GetComponent<Canvas>().overrideSorting,"CT27-LAYER ordinary gameplay retains readable tracker above board decoration");
+            logButton.onClick.Invoke();session.Refresh();
+            Check(!session.GetComponent<Canvas>().overrideSorting&&!session.Toggle.GetComponent<CanvasGroup>().blocksRaycasts,"CT27-LAYER tracker yields immediately during Game Log opening transition");
+            DOTween.CompleteAll();yield return null;yield return null;Canvas.ForceUpdateCanvases();session.Refresh();
+            var log=router.GetView<IGameLogView>() as GameLogView;
+            Check(router.IsViewVisible<IGameLogView>()&&!session.Toggle.interactable&&!session.Toggle.GetComponent<CanvasGroup>().blocksRaycasts&&!session.GetComponent<Canvas>().overrideSorting,"CT27-LAYER opening native Game Log puts tracker beneath the log and blocks tracker input");
+            var logEvents=EventSystem.current;if(logEvents==null)logEvents=new GameObject("Tracker events",typeof(EventSystem)).GetComponent<EventSystem>();
+            var logHits=new List<RaycastResult>();logEvents.RaycastAll(new PointerEventData(logEvents){position=fixedButton.center},logHits);
+            Check(logHits.Count>0&&logHits[0].gameObject.transform.IsChildOf(log.transform)&&!logHits[0].gameObject.transform.IsChildOf(session.Toggle.transform),"CT27-LAYER log wins raycasts at tracker button position",logHits.Select(h=>h.gameObject.name).Take(4).ToArray());
+            Capture(camera,target,"tracker-under-game-log-"+resolution.x+"x"+resolution.y);
+            var logClose=log.GetComponentsInChildren<Button>(true).First(b=>b.name.IndexOf("Back",StringComparison.OrdinalIgnoreCase)>=0||b.name.IndexOf("Close",StringComparison.OrdinalIgnoreCase)>=0||Enumerable.Range(0,b.onClick.GetPersistentEventCount()).Any(i=>b.onClick.GetPersistentMethodName(i)=="OnBackButtonClicked"));
+            logClose.onClick.Invoke();session.Refresh();
+            Check(!session.GetComponent<Canvas>().overrideSorting&&!session.Toggle.GetComponent<CanvasGroup>().blocksRaycasts,"CT27-LAYER tracker remains beneath Game Log during closing transition");
+            DOTween.CompleteAll();yield return null;session.Refresh();
+            Check(!router.IsViewVisible<IGameLogView>()&&session.Toggle.interactable&&session.Toggle.GetComponent<CanvasGroup>().blocksRaycasts,"CT27-LAYER closing Game Log restores human tracker input");
+            session.Toggle.onClick.Invoke();yield return null;
+            Check(session.IsOpen&&session.GetComponent<Canvas>().overrideSorting,"CT27-LAYER inspection retains high-priority pause shield");
+            session.Close();yield return null;
+            Check(session.GetComponent<Canvas>().overrideSorting&&session.Toggle.interactable,"CT27-LAYER closing inspection restores readable gameplay button");
             var iron=(RectTransform)market.transform.Find("SafeArea/Popup/Markets/IronMarket");
             var ironPosition=iron.anchoredPosition;
             metadata=match.App.Metadata.GetPlayerMetadataByColor(match.App.Game.GameProgressInformation.CurrentPlayer.Color);
@@ -238,7 +268,7 @@ public sealed class CardTrackerTestDriver : MonoBehaviour
                 var cardBounds=hand.GetComponentsInChildren<BaseCardView>().Select(c=>ScreenBounds((RectTransform)c.HolderObject,camera)).ToArray();
                 var toggleBounds=ScreenBounds((RectTransform)session.Toggle.transform,camera);
                 Check(cardBounds.Length>0&&cardBounds.All(b=>b.yMax+5<=footer.yMin&&!b.Overlaps(toggleBounds)),"tracker button and legend clear visible hand artwork",new{resolution.x,footerTop=footer.yMin,cards=cardBounds.Select(b=>new{b.xMin,b.xMax,b.yMin,b.yMax})});
-                Check(Math.Abs(toggleBounds.xMax-(resolution.x-24))<1&&Math.Abs(toggleBounds.yMin-220)<1,"tracker occupies fixed bottom-right position above action band",resolution.x);
+                Check(SameBounds(fixedButton,toggleBounds),"CT27-POSITION tracker keeps its Game Log anchor while inspecting",resolution.x);
                 var actionButtons=actions.GetComponentsInChildren<Button>().Where(b=>b.gameObject.activeInHierarchy).ToArray();
                 Check(actionButtons.Length>0&&actionButtons.All(b=>!ScreenBounds((RectTransform)b.transform,camera).Overlaps(toggleBounds)&&ScreenBounds((RectTransform)b.transform,camera).yMax+8<=toggleBounds.yMin),"fixed tracker button clears the native action controls",new{resolution.x,buttons=actionButtons.Select(b=>new{b.name,bounds=ScreenBounds((RectTransform)b.transform,camera).ToString()}).ToArray()});
                 var raisedCard=(RectTransform)hand.GetComponentsInChildren<BaseCardView>()[0].HolderObject;
@@ -362,15 +392,24 @@ public sealed class CardTrackerTestDriver : MonoBehaviour
     }
     sealed class LoadPresenter:ILoadSceneOutput
     {public void DisplayTip(int id,bool last){}public void HideView(){}public bool GetWasLastTipNewGlobal(){return false;}public int GetLastTipIdGlobal(){return 1;}}
+    sealed class LogInput:BrassApplication.UseCases.Game.GameLog.IGameLogInput
+    {
+        readonly IRouter router;public LogInput(IRouter owner){router=owner;}
+        public void CloseGameLog(){router.HideView<IGameLogView>();}
+        public void UpdateGameLog(){}
+        public void UpdateReplaySummary(IList<IEvent> events,Action dismiss){}
+    }
     sealed class Builder:IUseCaseBuilder
     {
         readonly LoadSceneUseCase load=new LoadSceneUseCase(new LoadPresenter());
         public BoardUseCase Board;public MarketUseCase Market;public IndustriesSummaryUseCase Industries;public ReplayUseCase Replay;public Settings Settings=new Settings();public TestBoardPresenter BoardPresenter;
         public HandOfCardsUseCase Hand;
+        public GameProgressSummaryUseCase Progress;
         public Builder(IRouter router,IGameHistory history){
             var localization=new Localization();BoardPresenter=new TestBoardPresenter(router,localization);Board=new BoardUseCase(BoardPresenter,history,Settings);Board.SetAllowBuidlingFromBoard(false);
             Market=new MarketUseCase(new MarketPresenter(router,localization),history);Industries=new IndustriesSummaryUseCase(new IndustriesSummaryPresenter(router,localization),history);Replay=new ReplayUseCase(null,history);
             Hand=new HandOfCardsUseCase(new HandOfCardsPresenter(router,localization),history);
+            Progress=new GameProgressSummaryUseCase(new GameProgressSummaryPresenter(router,localization),history);
         }
         public void BuildUseCases(){}public void RestoreUseCases(){}public void RestoreUseCaseOfType(Type type){}
         public IController GetController(Type type){
@@ -378,6 +417,8 @@ public sealed class CardTrackerTestDriver : MonoBehaviour
             if(typeof(IMarketView).IsAssignableFrom(type))return new MarketController(Market);
             if(typeof(IIndustriesSummaryView).IsAssignableFrom(type))return new IndustriesSummaryController(Industries);
             if(typeof(IHandOfCardsView).IsAssignableFrom(type))return new HandOfCardsController(Hand);
+            if(typeof(IGameProgressSummaryView).IsAssignableFrom(type))return new GameProgressSummaryController(Progress);
+            if(typeof(IGameLogView).IsAssignableFrom(type))return new GameLogController(new LogInput(Utils.Global.Instance.Router));
             return null;
         }
         public T GetUseCase<T>()where T:IUseCase{

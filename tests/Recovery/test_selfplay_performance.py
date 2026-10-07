@@ -36,8 +36,13 @@ class SelfplayPerformanceTests(unittest.TestCase):
                 path=Path(temp)/f'{i}.jsonl.gz';write_shard(path,[episode],dict(purpose='training'))
                 records.append(dict(path=str(path),job=i,game_id=episode['game_id'],sha256=sha(path),features=cache_receipt(path)))
             original=read_shards([r['path'] for r in records],partition='train',receipts={r['path']:r['features'] for r in records})
+            ingress={}
             with reader_pool(2) as pool:
-                headers,data,metrics=load_collection(records,policy.policy_id,kinds,executor=pool,workers=2)
+                headers,data,metrics=load_collection(records,policy.policy_id,kinds,executor=pool,workers=2,telemetry=ingress)
+            self.assertEqual((ingress['shards'],ingress['readers'],ingress['learner_rows']),(2,2,len(data)))
+            self.assertGreater(ingress['worker_cpu_seconds'],0)
+            self.assertAlmostEqual(ingress['worker_elapsed_seconds'],sum(ingress[k] for k in (
+                'read_validate_seconds','diagnostics_seconds','prepare_seconds','compact_seconds')))
             self.assertEqual(metrics,summarize(original,{policy.policy_id},kinds))
             self.assertNotIn('records',headers[0]);self.assertNotIn('history',data[0][0]['view'])
             expected=prepared(original)
