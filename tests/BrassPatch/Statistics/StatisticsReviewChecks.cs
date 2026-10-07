@@ -30,7 +30,7 @@ public static class StatisticsReviewChecks
         var f=new StatisticsFilters();f.Reset(r);f.Players.Clear();f.Players.Add(PlayerColor.Blue);f.Resource="Coal";
         var allKinds=new HashSet<StatisticsPlotKind>();
         for(int page=0;page<10;page++){
-            var v=StatisticsPlotPages.Build(page,r,f);check(v.Plots.Count>0,"hand-built page provides a plot",page);
+            var v=StatisticsPlotPages.Build(page,r,f);check(v.Plots.Count>0||v.Map!=null,"hand-built page provides a plot or historical map",page);
             foreach(var p in v.Plots){allKinds.Add(p.Kind);check(p.Marks.All(m=>!Double.IsNaN(m.X)&&(m.Missing||!Double.IsNaN(m.Y))&&!Double.IsInfinity(m.Y)),"finite exact plot values",p.Id);check(p.Series.Select(s=>s.Id).Distinct().Count()==p.Series.Count,"stable nonduplicate legend IDs",p.Id);check(p.Marks.All(m=>p.Series.Any(s=>s.Id==m.Series)),"every mark has a named legend",p.Id);}
         }
         check(allKinds.Count>=11,"varied plot families implemented",allKinds.Select(k=>k.ToString()).ToArray());

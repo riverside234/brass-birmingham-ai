@@ -49,7 +49,7 @@ namespace BrassPatch.Statistics
         readonly Dictionary<string,float> horizontalPositions=new Dictionary<string,float>();
         readonly HashSet<string> descending=new HashSet<string>(),expanded=new HashSet<string>(),hiddenSeries=new HashSet<string>();
         readonly List<Table> tables=new List<Table>();
-        readonly List<Button> playerButtons=new List<Button>(),eraButtons=new List<Button>();
+        readonly List<Button> playerButtons=new List<Button>(),eraButtons=new List<Button>(),mapEraButtons=new List<Button>();
         float unit,width,bodyWidth,bodyY;
         bool renderPending,closing,revealPage=true;
         int screenWidth,screenHeight;
@@ -62,7 +62,7 @@ namespace BrassPatch.Statistics
         {
             if(GetComponent<StatisticsTheme>()==null)gameObject.AddComponent<StatisticsTheme>();
             Report=report; font=typeface; OnClose=close; OpeningContext=context;archiveContext=recordedContext;
-            Filters.Reset(report); BuildLayout();
+            views.Clear();Filters.Reset(report); BuildLayout();
         }
         public void SetOpener(GameObject value) { opener=value; }
         public override IAnimation CreateShowViewAnimation()
@@ -100,7 +100,7 @@ namespace BrassPatch.Statistics
             positions[page]=1; SelectPage(page);
         }
         public void ResetFilters()
-        { Filters.Reset(Report);efficiencyPositions.Clear();hiddenSeries.Clear();if(search!=null)search.SetTextWithoutNotify("");QueueRender(false); }
+        { Filters.Reset(Report);networkPositions.Clear();efficiencyPositions.Clear();hiddenSeries.Clear();if(search!=null)search.SetTextWithoutNotify("");QueueRender(false); }
         void QueueRender(bool retain)
         { CloseCategories();if(retain&&BodyScroll!=null)positions[CurrentPage]=BodyScroll.verticalNormalizedPosition;else positions[CurrentPage]=1;renderPending=true; }
         void ChangeTextSize(int direction)
@@ -164,6 +164,8 @@ namespace BrassPatch.Statistics
                 var label=b.GetComponentInChildren<TextMeshProUGUI>();label.color=StatisticsTheme.Player(p.Color);
                 Tip(b,p.Name+"\n"+p.Opponent+"\nToggle this player in all pages.");playerButtons.Add(b);x+=w+8*unit;
             }
+            mapEraButtons.Clear();
+            for(int m=1;m<=2;m++){int e=m;var mb=StatisticsWidgets.Button(window,font,"Map era "+e,e==1?"End of Canal":"End of Rail",new Vector2(x+(m-1)*186*unit,-72*unit),Size(180,44),F(19),()=>SetMapEra(e));mapEraButtons.Add(mb);StatisticsWidgets.Enabled(mb,e==1||!Report.Introductory);if(e==2&&Report.Introductory)Tip(mb,"No Rail era in this match.");}
             eraButtons.Clear();
             for(int i=0;i<(Report.Introductory?2:3);i++) {
                 int era=i;string name=new[]{"Whole game","Canal","Rail"}[i];float w=new[]{142,90,80}[i]*unit;
@@ -259,20 +261,21 @@ namespace BrassPatch.Statistics
                 PageButtons[i].GetComponentInChildren<TextMeshProUGUI>().fontStyle=CurrentPage==i?FontStyles.Bold:FontStyles.Normal;
             }
             for(int i=0;i<playerButtons.Count;i++)StatisticsWidgets.Selected(playerButtons[i],Filters.Players.Contains(Report.Players[i].Color));
-            for(int i=0;i<eraButtons.Count;i++)StatisticsWidgets.Selected(eraButtons[i],Filters.Era==i);
+            for(int i=0;i<eraButtons.Count;i++){eraButtons[i].gameObject.SetActive(!MapActive);StatisticsWidgets.Selected(eraButtons[i],Filters.Era==i);}
+            for(int i=0;i<mapEraButtons.Count;i++){mapEraButtons[i].gameObject.SetActive(MapActive);StatisticsWidgets.Selected(mapEraButtons[i],Filters.MapEra==i+1);}
             var analytic=View();
             var sections=analytic.Ledgers.ToList();
             // Older historical ledgers remain available when no typed evidence scope is active.
-            if(!Filters.Typed&&CurrentPage!=5&&CurrentPage!=8)sections.AddRange(StatisticsPages.Build(CurrentPage,Report,Filters).Where(s=>s.Columns.Length>0));sections=sections.GroupBy(s=>s.Identity).Select(g=>g.First()).ToList();
+            if(!MapActive&&!Filters.Typed&&CurrentPage!=5&&CurrentPage!=8)sections.AddRange(StatisticsPages.Build(CurrentPage,Report,Filters).Where(s=>s.Columns.Length>0));sections=sections.GroupBy(s=>s.Identity).Select(g=>g.First()).ToList();
             if(!String.IsNullOrWhiteSpace(Filters.Search))foreach(var s in sections)s.Rows.RemoveAll(r=>!(String.Join(" ",r.Cells)+" "+r.Detail).ToLowerInvariant().Contains(Filters.Search.Trim().ToLowerInvariant()));
             StatisticsWidgets.Enabled(clearSearch,!String.IsNullOrEmpty(Filters.Search));StatisticsWidgets.Enabled(collapseRows,expanded.Count>0);
-            filterStatus.text=(Filters.Players.Count==0?"No players selected · select a player above":Filters.Players.Count+"/"+Report.Players.Count+" players")+" · "+new[]{"Whole game","Canal era","Rail era"}[Filters.Era]+" · "+sections.Sum(s=>s.Rows.Count)+" rows"+(String.IsNullOrWhiteSpace(Filters.Search)?"":" · Search filters tables");
+            filterStatus.text=(Filters.Players.Count==0?"No players selected · select a player above":Filters.Players.Count+"/"+Report.Players.Count+" players")+" · "+(MapActive?(Filters.MapEra==1?"Canal end":"Rail end")+" · emphasis":new[]{"Whole game","Canal era","Rail era"}[Filters.Era])+" · "+sections.Sum(s=>s.Rows.Count)+" rows"+(String.IsNullOrWhiteSpace(Filters.Search)?"":" · Search filters tables");
             float y=0;
             float titleHeight=Mathf.Max(44*unit,Measure(StatisticsPages.Names[CurrentPage],bodyWidth,30)+8*unit);
             pageLabel=StatisticsWidgets.Text(BodyScroll.content,font,"Page title",StatisticsPages.Names[CurrentPage],Vector2.zero,new Vector2(bodyWidth,titleHeight),F(30),true);
             pageLabel.fontStyle=FontStyles.Bold;y+=titleHeight+10*unit;
             string availability=Report.CompleteHistory?"":Report.Availability;
-            if(Report.Warnings.Count>0)availability+=(availability==""?"History note: ":" · ")+String.Join(" · ",Report.Warnings);
+            if(!MapActive&&Report.Warnings.Count>0)availability+=(availability==""?"History note: ":" · ")+String.Join(" · ",Report.Warnings);
             if(!String.IsNullOrWhiteSpace(Filters.Search))availability+="\nSearch filters ledger rows; charts retain the player and era selection.";
             y+=Paragraph(BodyScroll.content,"Data coverage",availability,y,19);
             y+=PlotContent(analytic,y);

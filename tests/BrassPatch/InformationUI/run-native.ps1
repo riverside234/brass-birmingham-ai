@@ -34,7 +34,7 @@ $trackerSavedResult=if($Installed -and (Test-Path -LiteralPath $trackerResult)){
 try{
 $trackerRsp=Join-Path $trackerBuild ($Suite+'-native.rsp')
 $trackerSources=@('"'+$trackerSource+'"')
-if($Suite -in 'statistics','history'){$trackerSources+='"'+(Join-Path $trackerRoot 'tests/BrassPatch/Statistics/StatisticsHistoryReviewChecks.cs')+'"';$trackerSources+='"'+(Join-Path $trackerRoot 'tests/BrassPatch/Statistics/StatisticsEfficiencyChecks.cs')+'"'}
+if($Suite -in 'statistics','history'){$trackerSources+='"'+(Join-Path $trackerRoot 'tests/BrassPatch/Statistics/StatisticsGeographyChecks.cs')+'"';$trackerSources+='"'+(Join-Path $trackerRoot 'tests/BrassPatch/Statistics/StatisticsHistoryReviewChecks.cs')+'"';$trackerSources+='"'+(Join-Path $trackerRoot 'tests/BrassPatch/Statistics/StatisticsEfficiencyChecks.cs')+'"'}
 if($Suite -in 'presentation','link'){$trackerSources+='"'+(Join-Path $trackerRoot 'tests/BrassPatch/CityLocator/UnityCityLocatorRegression.cs')+'"'}
 if($Suite -eq 'menu'){$trackerSources+='"'+(Join-Path $trackerRoot 'tests/BrassLocalAI/AiExecutionResourceTests.cs')+'"'}
 if($Suite -eq 'history'){foreach($test in 'HistoryCoreChecks.cs','HistoryFixtures.cs'){$trackerSources+='"'+(Join-Path $trackerRoot ('tests/BrassPatch/History/'+$test))+'"'}}

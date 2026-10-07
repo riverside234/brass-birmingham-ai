@@ -222,7 +222,7 @@ namespace BrassPatch.Statistics
                 Label(container,font,"Heat column axis",plot.XLabel,new Vector2(graphic.Area.xMin,graphic.Area.yMin-52*scale),new Vector2(graphic.Area.width,32*scale),21*scale);
                 HeatKey(container,font,graphic,scale,panel.Report.Players.Count,width);
                 if(!plot.DiscreteHeat&&plot.HeatTotals)Label(container,font,"Heat row totals heading","Total",new Vector2(graphic.Area.xMax+8*scale,-38*scale),new Vector2(76*scale,topSpace-42*scale),21*scale);
-            }else if(plot.Kind==StatisticsPlotKind.MiniMap){MapLabels(container,font,graphic,scale);}
+            }
             else {
                 if(graphic.XAxis!=null)foreach(var tick in graphic.XAxis.Ticks) {
                     float w=Math.Max(44*scale,measure(tick.Label)+8*scale),x=graphic.X(tick.Value);Label(container,font,"Value tick X "+tick.Value,tick.Label,new Vector2(x-w/2,graphic.Area.yMin-10*scale),new Vector2(w,34*scale),24*scale);
@@ -310,35 +310,6 @@ namespace BrassPatch.Statistics
                 var ordered=row.Select(m=>m.Y).OrderBy(x=>x).ToArray();if(ordered.Length==0)continue;double median=(ordered[(ordered.Length-1)/2]+ordered[ordered.Length/2])/2;
                 Label(parent,font,"Delay sample",ordered.Length+" tiles · median "+median.ToString("0.#"),new Vector2(graphic.Area.xMax+8*scale,graphic.Area.yMax-(row.Key+.5f)*graphic.RowHeight+22*scale),new Vector2(140*scale,50*scale),19*scale,true,TextAlignmentOptions.MidlineLeft);
                 var tick=StatisticsWidgets.Rect(parent,"Delay median",new Vector2(graphic.X(median),graphic.Area.yMax-(row.Key+.5f)*graphic.RowHeight+14*scale),new Vector2(2*scale,28*scale));var image=tick.gameObject.AddComponent<Image>();image.color=StatisticsTheme.Ink;image.raycastTarget=false;
-            }
-        }
-        static void MapLabels(Transform parent,TMP_FontAsset font,StatisticsPlotGraphic graphic,float scale)
-        {
-            var placed=new List<Rect>();var nodes=graphic.Plot.Marks.Select(graphic.MarkBounds).ToArray();
-            foreach(var m in graphic.Plot.Marks.Where(m=>!graphic.Hidden.Contains(m.Series)).OrderByDescending(m=>m.Y)){
-                var q=graphic.Point(m);float w=160*scale,h=58*scale;var candidates=new List<Rect>();
-                foreach(float dy in new[]{-55f,55,-110,110,-165,165})foreach(float dx in new[]{0f,-100,100,-200,200}){
-                    var r=new Rect(q.x+dx*scale-w/2,q.y+dy*scale-h/2,w,h);
-                    if(r.xMin>=8*scale&&r.xMax<=graphic.rectTransform.rect.width-8*scale&&r.yMin>=graphic.rectTransform.rect.yMin+8*scale&&r.yMax<=-12*scale)candidates.Add(r);
-                }
-                var ordered=candidates.OrderBy(r=>(r.center-q).sqrMagnitude).ToArray();
-                var box=ordered.FirstOrDefault(r=>!placed.Any(p=>p.Overlaps(r))&&!nodes.Any(node=>r.Overlaps(node)));
-                // Dense southern cities can exhaust nearby candidates. Search the
-                // complete diagram before permitting a label to cover another.
-                if(box.width==0){
-                    var grid=new List<Rect>();
-                    for(float y=graphic.rectTransform.rect.yMin+8*scale;y+h<=-12*scale;y+=28*scale)
-                        for(float x=8*scale;x+w<=graphic.rectTransform.rect.width-8*scale;x+=32*scale)
-                            grid.Add(new Rect(x,y,w,h));
-                    box=grid.Where(r=>!placed.Any(p=>p.Overlaps(r))&&!nodes.Any(node=>r.Overlaps(node))).OrderBy(r=>(r.center-q).sqrMagnitude).FirstOrDefault();
-                    if(box.width==0)box=grid.Where(r=>!placed.Any(p=>p.Overlaps(r))).OrderBy(r=>(r.center-q).sqrMagnitude).FirstOrDefault();
-                }
-                if(box.width==0)box=ordered.FirstOrDefault(r=>!placed.Any(p=>p.Overlaps(r)));
-                placed.Add(box);
-                var background=StatisticsWidgets.Rect(parent,"City label background",new Vector2(box.x,box.yMax),new Vector2(w,h));var paper=background.gameObject.AddComponent<Image>();var shade=StatisticsTheme.Paper;shade.a=.94f;paper.color=shade;paper.raycastTarget=false;
-                var text=Label(parent,font,"City "+m.Label,StatisticsPlotPages.CityName(m.Label)+"\n"+StatisticsPlotSemantics.Value(graphic.Plot,m),new Vector2(box.x,box.yMax),new Vector2(w,h),19*scale,true);text.color=StatisticsTheme.Ink;
-                Vector2 end=box.center;var delta=end-q;
-                var leader=StatisticsWidgets.Rect(parent,"City leader",q,new Vector2(delta.magnitude,1.4f*scale));leader.pivot=new Vector2(0,.5f);leader.localEulerAngles=new Vector3(0,0,Mathf.Atan2(delta.y,delta.x)*Mathf.Rad2Deg);leader.gameObject.AddComponent<Image>().color=StatisticsTheme.Border;leader.GetComponent<Image>().raycastTarget=false;leader.SetAsFirstSibling();
             }
         }
     }

@@ -12,7 +12,7 @@ public static class StatisticsHistoryReviewChecks
 {
     public static IEnumerator Run(StatisticsPanel panel,Camera camera,Action<bool,string,object> check,Action<RenderTexture,Camera,string> capture,string prefix)
     {
-        var efficiency=StatisticsEfficiencyChecks.UI(panel,camera,check,capture,prefix);while(efficiency.MoveNext())yield return efficiency.Current;var report=panel.Report;var f=new StatisticsFilters();
+        var geography=StatisticsGeographyChecks.UI(panel,camera,check,capture,prefix);while(geography.MoveNext())yield return geography.Current;var efficiency=StatisticsEfficiencyChecks.UI(panel,camera,check,capture,prefix);while(efficiency.MoveNext())yield return efficiency.Current;var report=panel.Report;var f=new StatisticsFilters();
         foreach(var player in report.Players)foreach(int era in report.Introductory?new[]{0,1}:new[]{0,1,2}){
             f.Reset(report);f.Players.Clear();f.Players.Add(player.Color);f.Era=era;
             var actions=report.Actions.Where(a=>a.Player==player.Color&&(era==0||a.Era==era)).ToArray();
@@ -89,10 +89,5 @@ public static class StatisticsHistoryReviewChecks
         if(graphic.Plot.Kind==StatisticsPlotKind.Step)check(texts.Where(t=>t.name=="Curve endpoint").All(t=>t.rectTransform.anchoredPosition.x+t.rectTransform.rect.width<=graphic.rectTransform.rect.width+1),"S23-VISUAL curve labels fit the reserved right gutter",new{prefix,graphic.Plot.Id});
         if(graphic.Plot.Kind==StatisticsPlotKind.Heatmap)check(graphic.Plot.DiscreteHeat?texts.Any(t=>t.name=="Position label 1"):texts.Any(t=>t.name=="Heat row totals heading")&&graphic.transform.parent.GetComponentsInChildren<Image>().Any(i=>i.name=="Heat scale band"),"S23-VISUAL heatmap has an explicit color key and totals label",new{prefix,graphic.Plot.Id});
         if(graphic.Plot.DiscreteHeat){var scroll=graphic.GetComponentInParent<StatisticsTableScroll>();float visible=scroll==null?graphic.rectTransform.rect.width:scroll.viewport.rect.width;check(texts.Where(t=>t.name.StartsWith("Position label ")).All(t=>t.rectTransform.anchoredPosition.x+t.rectTransform.rect.width<=visible+1),"S23-VISUAL all position color keys fit the initial view",prefix);}
-        if(graphic.Plot.Kind==StatisticsPlotKind.MiniMap){
-            var boxes=texts.Where(t=>t.name.StartsWith("City ")).Select(t=>new Rect(t.rectTransform.anchoredPosition-new Vector2(0,t.rectTransform.rect.height),t.rectTransform.rect.size)).ToArray();
-            check(boxes.SelectMany((a,i)=>boxes.Skip(i+1).Select(b=>!a.Overlaps(b))).All(ok=>ok),"S23-LABEL geography city labels do not overlap",prefix);
-            check(boxes.All(box=>graphic.Plot.Marks.All(mark=>!box.Overlaps(graphic.MarkBounds(mark)))),"S23-VISUAL geography label backgrounds leave city symbols fully visible",prefix);
-        }
     }
 }

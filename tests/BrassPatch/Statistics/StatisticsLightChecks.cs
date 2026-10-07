@@ -53,8 +53,7 @@ public static class StatisticsLightChecks
         Add(r,"contributions",V<StatisticsLinkContribution>("LinkKey","A","Owner",PlayerColor.Blue,"Era",1,"City","Birmingham","RegionColor","Yellow","VP",4),V<StatisticsLinkContribution>("LinkKey","B","Owner",PlayerColor.Blue,"Era",1,"City","Walsall","RegionColor","Yellow","VP",10));
         Add(r,"locations",V<StatisticsLocation>("City","Birmingham","RegionColor","Yellow","Neighbors",new string[0]),V<StatisticsLocation>("City","Walsall","RegionColor","Yellow","Neighbors",new string[0]));
         Add(r,"boundaries",V<StatisticsBoundary>("Name","Scoring","Player",PlayerColor.Blue,"Era",1,"Revision",80),V<StatisticsBoundary>("Name","Final","Player",PlayerColor.Blue,"Era",2,"Revision",100));
-        f.MapMode="Link contributions";f.EvidenceRestricted=true;f.Evidence.Add("A");var map=StatisticsPlotPages.Build(3,r,f).Plots.Single(p=>p.Id=="geography");var city=map.Marks.Single(m=>m.Label=="Birmingham");check(city.Row==4&&map.Marks.Single(m=>m.Label=="Walsall").Row==0,"SD07 link evidence excludes unrelated map contributions",null);check(city.Target.Page==3&&city.Target.Keys.SetEquals(new[]{"A"}),"SD06 link map drills to actual contributing link records",null);
-        check(StatisticsPlotSemantics.Value(map,city)=="4 VP","SD05 map tooltips use quantity, never normalized Y",null);
+        f.NetworkView="Network results";f.EvidenceRestricted=true;f.Evidence.Add("A");
         check(StatisticsPlotPages.Build(3,r,f).Plots.Single(p=>p.Id=="link-sources").Marks.Sum(m=>m.Y)==4,"N2 own/others/merchant link VP partition",null);
         f.Evidence.Clear();f.EvidenceRestricted=false;f.ResourceView="Merchants";
         var sale=E("Goods sale",40,"CottonMill",quantity:1,action:"sell",asset:"carry");typeof(StatisticsEntry).GetProperty("Destination").SetValue(sale,"Unattributed",null);Add(r,"entries",sale);
@@ -93,7 +92,7 @@ public static class StatisticsLightChecks
         foreach(int era in r.Introductory?new[]{0,1}:new[]{0,1,2}){
             f.Era=era;var entries=r.Entries.Where(e=>era==0||e.Era==era).ToArray();
             var development=StatisticsPlotPages.Build(2,r,f).Plots.First(p=>p.Id=="development");check(development.Marks.Sum(m=>m.Y)==entries.Count(e=>e.Kind=="Development"),"collected N1 chart counts development records independent of tile levels",era);
-            var sources=StatisticsPlotPages.Build(3,r,f).Plots.First(p=>p.Id=="link-sources");check(sources.Marks.Sum(m=>m.Y)==r.Links.Where(l=>l.Scored&&(era==0||l.Era==era)).Sum(l=>l.VP),"collected N2 link sources equal actual scored VP",era);
+            f.NetworkView="Network results";var sources=StatisticsPlotPages.Build(3,r,f).Plots.First(p=>p.Id=="link-sources");check(sources.Marks.Sum(m=>m.Y)==r.Links.Where(l=>l.Scored&&(era==0||l.Era==era)).Sum(l=>l.VP),"collected N2 link sources equal actual scored VP",era);
             var cards=StatisticsPlotPages.Build(6,r,f).Plots.First(p=>p.Id=="card-purpose");check(cards.Marks.Sum(m=>m.Y)==entries.Count(e=>e.Kind=="Card"),"collected N4 chart partitions every played card and excludes acquisitions",era);
             f.ResourceView="Merchants";var sales=StatisticsPlotPages.Build(5,r,f).Plots.Single();check(sales.Marks.Sum(m=>m.Y)==entries.Where(e=>e.Kind=="Goods sale").Sum(e=>e.Quantity),"collected N5 destinations reconcile to sold industry tiles",era);
             f.ResourceView="Market";var market=StatisticsPlotPages.Build(5,r,f);

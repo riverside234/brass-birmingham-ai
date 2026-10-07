@@ -39,6 +39,7 @@ namespace BrassPatch.Statistics
     public sealed class StatisticsPageView
     {
         public string Context;
+        public StatisticsMapSnapshot Map;
         public readonly List<string> Headlines=new List<string>();
         public readonly List<StatisticsPlot> Plots=new List<StatisticsPlot>();
         public readonly List<StatisticsSection> Ledgers=new List<StatisticsSection>();

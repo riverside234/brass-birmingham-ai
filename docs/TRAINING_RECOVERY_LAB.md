@@ -46,6 +46,31 @@ Use the bundle exported with this source revision: **10 authored workers and 904
 
 The NN config declares `evaluator_kind: neural`, `q_transform: none` and `leaf_policy: new_root_information_frontier`. `future_turns` is removed. Search finishes the current turn, then evaluates a new ordinary acting-root information set; later supported visits can expand it further. Choice/tree/clock limits still interrupt safely. Heuristic reply limits and Q normalization are rejected by the NN schema. CPU batching, shared CUDA inference, self-play curriculum and retention remain enabled. Old search teachers are incompatible; generate new labels after this revision.
 
+## Recover evaluation startup after a missing working directory
+
+If evaluation fails in `multiprocessing.spawn.get_preparation_data()` at `os.getcwd()` with `FileNotFoundError`, the parent process has lost its working directory. This does not identify which directory disappeared, and does not mean a checkpoint or replay is missing. A nonempty `iteration-0039` folder does not establish the process's actual working directory. Cleanup of a retired launch folder is one possible cause, not a confirmed diagnosis of this lab failure.
+
+Update `scripts/step5.py` from this revision. The launcher now changes to its own project root before importing training dependencies, so new workers inherit a stable directory outside iteration cleanup. Config/artifact paths still resolve through `--root`. The learning/search implementation signature, hyperparameters, checkpoint format and generated data are unchanged; existing same-run and partial-evaluation receipts remain valid. No new source migration is required for this launcher-only fix.
+
+**For the reported generation-40 failure:** iteration folders are zero-based. `iteration-0039` produces `generation-0040.pt`. At the reported `schedule_evaluations` call, the trainer has already saved the new checkpoint and committed `state.json`. Keep both generations and let the saved state select the latest checkpoint; do not delete iteration 39 or restart from imitation. After syncing the fix, inspect the state from the stable project root:
+
+```sh
+conda activate ai-training
+cd /data/not_backed_up/yxu209/ai-training/
+python -c "import json; from pathlib import Path; s=json.loads(Path('/data/not_backed_up/yxu209/ai-training/artifacts/step5/selfplay-v2/state.json').read_text()); print('Next iteration:', s['iteration']); print('Resume checkpoint:', s['history'][-1]['path'])"
+```
+
+For this failure, expect next iteration `40` and a path ending in `generation-0040.pt`. Checkpoint hashes, optimizer state and lineage remain verified on resume. Retry the original command with the same run, config and IL origin; this example retries any due evaluation and then trains **one additional iteration**:
+
+```sh
+python /data/not_backed_up/yxu209/ai-training/scripts/step5.py --device cuda train \
+  --run /data/not_backed_up/yxu209/ai-training/artifacts/step5/selfplay-v2 \
+  --imitation-run /data/not_backed_up/yxu209/ai-training/artifacts/step5/v4-batch6 \
+  --resume-reviewed-source --iterations 1
+```
+
+Use the original run/IL paths if yours differ, and retain any original `--config` option. Increase `--iterations` for the desired additional training, not the total since imitation. The launcher fix does not require `--resume-reviewed-source`; it is retained here from the existing continuation command. The pending evaluation keeps its original specification and reuses valid completed games. Evaluation games remain outside training. The local checks exercise a removed launch folder, simulated missing `getcwd()`, real spawned children and unchanged continuation guards; the real POSIX unlink check is provided for Linux and skipped on Windows.
+
 ## Generate and audit heuristic demonstrations
 
 Read the active bank identity from `training/opponents/current.json`. Its five training styles use **1,000 ms per complete turn and four private root workers**, with K 4/2, guarded sibling Q and zero voluntary reply turns. The new worker implements the forest internally, sharing a CPU heuristic batching/cache queue instead of starting four separate policy processes. Advanced Pottery Variants's opponent identity remains evaluation-only; learner Pottery choices retain full legality and exploration support. Imitation supplies foundations; the mostly self-play curriculum establishes strength beyond the teachers.

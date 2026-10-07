@@ -73,7 +73,7 @@ public sealed partial class StatisticsDriver : MonoBehaviour
             try{more=run.MoveNext();if(more)current=run.Current;}catch(Exception e){failure=e;}
             if(failure!=null||!more)break;yield return current;
         }
-        File.WriteAllText(Output,JsonConvert.SerializeObject(new{passed=failure==null&&failures==0&&errors.Count==0,checks,failures,matches,pages,cases,captureSkipped=Environment.GetEnvironmentVariable("BRASS_STATS_FAST")=="1",layouts=resolutions.Select(r=>new{width=r.x,height=r.y}).ToArray(),nativeErrors=errors,error=failure==null?null:failure.ToString(),performance=new{processor=SystemInfo.processorType,graphics=SystemInfo.graphicsDeviceName,definition="Native batch-player measurements; response samples include frame waits and layout, excluding PNG capture/encoding. Scroll samples are CPU layout/update time, not a frame-rate guarantee.",samples=performance,summary=performance.GroupBy(p=>p.Operation).Select(g=>new{operation=g.Key,samples=g.Count(),minimumMilliseconds=g.Min(p=>p.Milliseconds),medianMilliseconds=PerformanceMedian(g.Select(p=>p.Milliseconds)),maximumMilliseconds=g.Max(p=>p.Milliseconds)})}},Formatting.Indented));
+        File.WriteAllText(Output,JsonConvert.SerializeObject(new{passed=failure==null&&failures==0&&errors.Count==0,checks,failures,matches,pages,cases,focused=Environment.GetEnvironmentVariable("BRASS_GEO_FOCUS")=="1",captureSkipped=Environment.GetEnvironmentVariable("BRASS_STATS_FAST")=="1",layouts=resolutions.Select(r=>new{width=r.x,height=r.y}).ToArray(),nativeErrors=errors,error=failure==null?null:failure.ToString(),performance=new{processor=SystemInfo.processorType,graphics=SystemInfo.graphicsDeviceName,definition="Native batch-player measurements; response samples include frame waits and layout, excluding PNG capture/encoding. Scroll samples are CPU layout/update time, not a frame-rate guarantee.",samples=performance,summary=performance.GroupBy(p=>p.Operation).Select(g=>new{operation=g.Key,samples=g.Count(),minimumMilliseconds=g.Min(p=>p.Milliseconds),medianMilliseconds=PerformanceMedian(g.Select(p=>p.Milliseconds)),maximumMilliseconds=g.Max(p=>p.Milliseconds)})}},Formatting.Indented));
         Application.Quit(failure==null&&failures==0&&errors.Count==0?0:1);
     }
     sealed class Match
@@ -195,6 +195,7 @@ public sealed partial class StatisticsDriver : MonoBehaviour
         Measure("First page response","4-player full match; includes collection and initial UI",response);
         var panel=router.GetView<StatisticsPanel>();Check(panel.IsOpen&&!router.IsViewVisible<IEndOfGameView>(),"statistics replaces the active result modal");
         Check(Math.Abs(panel.TextScale-1.15f)<.001f,"statistics defaults to the second text size");
+        if(Environment.GetEnvironmentVariable("BRASS_GEO_FOCUS")=="1"){var geo=StatisticsGeographyChecks.UI(panel,camera,Check,Capture,"live");while(geo.MoveNext())yield return geo.Current;yield break;}
         panel.GetComponentsInChildren<Button>().First(b=>b.name=="Smaller text").onClick.Invoke();yield return null;
         Check(panel.CurrentPage==0&&StatisticsPages.NavigationOrder.First()==0,"Overview opens first with ten stable factual page IDs");
         var entryCorners=new Vector3[4];((RectTransform)entry.transform).GetWorldCorners(entryCorners);
@@ -269,10 +270,9 @@ public sealed partial class StatisticsDriver : MonoBehaviour
         camera.targetTexture=null;detailTarget.Release();Destroy(detailTarget);
         panel.ResetFilters();panel.SelectPage(3);yield return null;yield return null;
         panel.GetComponentsInChildren<Button>().First(b=>b.name=="Map measure").onClick.Invoke();yield return null;yield return null;
-        Check(panel.Filters.MapMode=="Industry VP"&&panel.GetComponentsInChildren<StatisticsPlotGraphic>().Any(g=>g.Plot.Id=="geography"),"map measure changes without moving live board objects");
-        panel.GetComponentsInChildren<Button>().First(b=>b.name=="Map boundary").onClick.Invoke();
-        panel.GetComponentsInChildren<Button>().First(b=>b.name=="Historical boundary 1").onClick.Invoke();yield return null;yield return null;
-        Check(panel.Filters.Boundary=="Scoring"&&panel.Filters.BoundaryEra==1,"boundary selector distinguishes Canal scoring from final occupancy");
+        Check(panel.Filters.MapMode=="Industry VP"&&panel.GetComponentsInChildren<StatisticsMapView>().Any(),"map measure changes without moving live board objects");
+        panel.GetComponentsInChildren<Button>().First(b=>b.name=="Map era 1").onClick.Invoke();yield return null;yield return null;
+        Check(panel.Filters.MapEra==1,"boundary selector distinguishes Canal scoring from final occupancy");
         panel.ResetFilters();panel.SelectPage(5);yield return null;yield return null;
         response=System.Diagnostics.Stopwatch.StartNew();
         panel.GetComponentsInChildren<Button>().First(b=>b.name=="Resource Coal").onClick.Invoke();yield return null;yield return null;

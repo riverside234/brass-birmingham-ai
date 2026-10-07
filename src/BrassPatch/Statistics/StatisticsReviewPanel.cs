@@ -13,15 +13,15 @@ namespace BrassPatch.Statistics
         // Cache analytical values only. UI objects and ledger-search results are never cached.
         StatisticsPageView View()
         {
-            string key=CurrentPage+"/"+Filters.Era+"/"+String.Join(",",Filters.Players.OrderBy(p=>(int)p))+"/"+Filters.Industry+"/"+Filters.Region+"/"+Filters.Action+"/"+Filters.Resource+"/"+Filters.Outgoing+"/"+Filters.ShowAll+"/"+Filters.Boundary+"/"+Filters.BoundaryEra+"/"+Filters.EvidenceRestricted+"/"+Filters.MapMode+"/"+Filters.Focus+"/"+Filters.Reference+"/"+Filters.AllCashPayments+"/"+Filters.ResourceView+"/"+Filters.EfficiencyView+"/"+Filters.DevelopmentSource+"/"+Filters.ByPlayer+"/"+Filters.ActionShare+"/"+Filters.CardShare+"/"+Filters.LinkShare+"/"+String.Join(",",Filters.Evidence.OrderBy(x=>x));
+            string key=Filters.NetworkView+"/"+Filters.MapEra+"/"+CurrentPage+"/"+Filters.Era+"/"+String.Join(",",Filters.Players.OrderBy(p=>(int)p))+"/"+Filters.Industry+"/"+Filters.Region+"/"+Filters.Action+"/"+Filters.Resource+"/"+Filters.Outgoing+"/"+Filters.ShowAll+"/"+Filters.Boundary+"/"+Filters.BoundaryEra+"/"+Filters.EvidenceRestricted+"/"+Filters.MapMode+"/"+Filters.Focus+"/"+Filters.Reference+"/"+Filters.AllCashPayments+"/"+Filters.ResourceView+"/"+Filters.EfficiencyView+"/"+Filters.DevelopmentSource+"/"+Filters.ByPlayer+"/"+Filters.ActionShare+"/"+Filters.CardShare+"/"+Filters.LinkShare+"/"+String.Join(",",Filters.Evidence.OrderBy(x=>x));
             StatisticsPageView view;if(!views.TryGetValue(key,out view)){if(views.Count>64)views.Clear();view=StatisticsPlotPages.Build(CurrentPage,Report,Filters);views[key]=view;}
             // Clone row lists because text search must not mutate a cached view.
-            var copy=new StatisticsPageView{Context=view.Context};copy.Headlines.AddRange(view.Headlines);copy.Plots.AddRange(view.Plots);
+            var copy=new StatisticsPageView{Context=view.Context,Map=view.Map};copy.Headlines.AddRange(view.Headlines);copy.Plots.AddRange(view.Plots);
             foreach(var s in view.Ledgers){var section=new StatisticsSection(s.Title,s.Definition,s.Columns){Id=s.Id};section.Rows.AddRange(s.Rows);copy.Ledgers.Add(section);}return copy;
         }
         public void Drill(StatisticsDrill target)
         {
-            if(target==null)return;target.Page=StatisticsPages.NormalizePage(target.Page);Filters.Industry=target.Industry;Filters.Region=target.Region;Filters.Action=target.Action;Filters.Evidence.Clear();foreach(var key in target.Keys)Filters.Evidence.Add(key);
+            if(target==null)return;target.Page=StatisticsPages.NormalizePage(target.Page);if(target.Page==3)Filters.NetworkView="Network results";Filters.Industry=target.Industry;Filters.Region=target.Region;Filters.Action=target.Action;Filters.Evidence.Clear();foreach(var key in target.Keys)Filters.Evidence.Add(key);
             Filters.EvidenceRestricted=target.HasKeys||target.Keys.Count>0;
             if(target.Era.HasValue)Filters.Era=target.Era.Value;
             if(target.Resource!="")Filters.Resource=target.Resource;
@@ -36,6 +36,7 @@ namespace BrassPatch.Statistics
         float PlotContent(StatisticsPageView view,float start)
         {
             float y=start;
+            if(CurrentPage==3){y+=NetworkTabs(y);if(Filters.NetworkView=="Geography")return y-start+MapContent(view,y);}
             if(CurrentPage==1||CurrentPage==4){
                 var focus=StatisticsMetrics.Focus(Report,Filters);var reference=StatisticsMetrics.Reference(Report,Filters);
                 float w=Math.Min(bodyWidth/2-6*unit,380*unit*TextScale);
@@ -53,8 +54,7 @@ namespace BrassPatch.Statistics
             }
             if(CurrentPage==3||CurrentPage==9){
                 StatisticsWidgets.Button(BodyScroll.content,font,"Show all plot records",Filters.ShowAll?(CurrentPage==9?"Show first 8 intervals":"Group top 8 + Other"):"Show all plot records",new Vector2(0,-y),new Vector2(Math.Min(bodyWidth,300*unit*TextScale),46*unit*TextScale),F(21),()=>{Filters.ShowAll=!Filters.ShowAll;QueueRender(true);});
-                if(CurrentPage==3){var b=StatisticsWidgets.Button(BodyScroll.content,font,"Map boundary","Boundary: "+Filters.Boundary+(Filters.BoundaryEra==0?"":Filters.BoundaryEra==1?" · Canal":" · Rail"),new Vector2(310*unit*TextScale,-y),new Vector2(Math.Max(160*unit,bodyWidth-310*unit*TextScale),46*unit*TextScale),F(21),BoundaryChoice);Tip(b,"The schematic uses historical occupancy at this boundary, not final board state for every era.");}y+=58*unit*TextScale;
-                if(CurrentPage==3){StatisticsWidgets.Button(BodyScroll.content,font,"Map measure","Map: "+Filters.MapMode,new Vector2(0,-y),new Vector2(Math.Min(bodyWidth,320*unit*TextScale),46*unit*TextScale),F(21),()=>{string[] modes={"Occupancy","Industry VP","Link contributions"};Filters.MapMode=modes[(Array.IndexOf(modes,Filters.MapMode)+1)%modes.Length];QueueRender(true);});y+=58*unit*TextScale;}
+                y+=58*unit*TextScale;
             }
             y+=PlotControls(y);
             if(CurrentPage==0)y+=ResultStrip(y);

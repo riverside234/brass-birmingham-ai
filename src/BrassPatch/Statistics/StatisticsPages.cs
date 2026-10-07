@@ -18,6 +18,9 @@ namespace BrassPatch.Statistics
         public string Boundary = "Final";
         public string MapMode = "Occupancy";
         public int BoundaryEra;
+        public string NetworkView="Geography";
+        public int MapEra=2;
+        public bool PrintedRoutes=true;
         public bool Outgoing, ShowAll;
         public bool EvidenceRestricted;
         public PlayerColor? Focus, Reference;
@@ -26,7 +29,7 @@ namespace BrassPatch.Statistics
         public bool Frame(StatisticsAction a) { return Includes(a.Player,a.Era) && (Action==""||Action==a.Kind) && (!EvidenceRestricted&&Evidence.Count==0||Evidence.Contains(a.Key)); }
         public bool Typed { get {return Industry!=""||Region!=""||Action!=""||EvidenceRestricted||Evidence.Count>0;} }
         public bool Includes(PlayerColor player, int era) { return Players.Contains(player) && (Era == 0 || Era == era); }
-        public void Reset(CompletedMatchStatistics report) { Players.Clear(); foreach (var p in report.Players) Players.Add(p.Color); Era = 0; Search = ""; AllCashPayments = false; Industry=Region=Action="";Evidence.Clear();EvidenceRestricted=false;ShowAll=Outgoing=false;Boundary="Final";BoundaryEra=0;MapMode="Occupancy";Resource="Beer";ResourceView="Supply";EfficiencyView="Returns";DevelopmentSource="All";ByPlayer=CardShare=LinkShare=false;ActionShare=true; }
+        public void Reset(CompletedMatchStatistics report) { Players.Clear(); foreach (var p in report.Players) Players.Add(p.Color); Era = 0; NetworkView="Geography";MapEra=report.Introductory?1:2;PrintedRoutes=true; Search = ""; AllCashPayments = false; Industry=Region=Action="";Evidence.Clear();EvidenceRestricted=false;ShowAll=Outgoing=false;Boundary="Final";BoundaryEra=0;MapMode="Occupancy";Resource="Beer";ResourceView="Supply";EfficiencyView="Returns";DevelopmentSource="All";ByPlayer=CardShare=LinkShare=false;ActionShare=true; }
     }
     public sealed class StatisticsRow
     {

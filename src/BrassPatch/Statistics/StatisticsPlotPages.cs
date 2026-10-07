@@ -17,6 +17,7 @@ namespace BrassPatch.Statistics
         public static StatisticsPageView Build(int page,CompletedMatchStatistics r,StatisticsFilters f)
         {
             page=StatisticsPages.NormalizePage(page);
+            if(page==3&&f.NetworkView=="Geography")return StatisticsMapQueries.Page(r,f);
             var v=new StatisticsPageView();
             v.Context="Select a mark for exact values and evidence. Player / era filters affect plots; text search affects ledgers.";
             if(f.Typed)v.Context+="\nEvidence scope: "+String.Join(" · ",new[]{f.Industry,f.Region,f.Action,f.EvidenceRestricted||f.Evidence.Count>0?f.Evidence.Count+" record IDs":""}.Where(s=>s!=""))+". Reset filters to restore the complete view.";
@@ -28,7 +29,7 @@ namespace BrassPatch.Statistics
                 case 0:Composition(v,r,f);EraComparison(v,r,f);break;
                 case 1:IndustryHeat(v,r,f);Gap(v,r,StatisticsMetrics.Focus(r,f),StatisticsMetrics.Reference(r,f));break;
                 case 2:Conversion(v,r,f,assets);FlipDelay(v,r,f,assets);Development(v,r,f);break;
-                case 3:Routes(v,r,f);Map(v,r,f);LinkSources(v,r,f);break;
+                case 3:Routes(v,r,f);LinkSources(v,r,f);break;
                 case 4:Curve(v,r,f,false);Curve(v,r,f,true);CashFlow(v,r,f);break;
                 case 5:if(f.ResourceView=="Market")MarketProfile(v,r,f);else if(f.ResourceView=="Merchants")MerchantDestinations(v,r,f);else{Flows(v,r,f);Sources(v,r,f);}break;
                 case 6:ActionShare(v,r,f,actions);SaleHistogram(v,r,f,actions);CardPurpose(v,r,f);break;
@@ -114,31 +115,6 @@ namespace BrassPatch.Statistics
             if(links.Length>visible){Series(plot,"other","Other routes (aggregate)");Mark(plot,"other","Other · "+(links.Length-visible)+" routes",0,links.Skip(visible).Sum(l=>l.VP),-1,detail:"Exact sum of remaining routes; shown separately from individual-route scale",target:Target(3,keys:links.Skip(visible).Select(l=>l.Key)));plot.Context.Add("Other "+(links.Length-visible)+" routes contributed "+links.Skip(visible).Sum(l=>l.VP)+" VP in total. The route axis compares individual routes; this aggregate is in exact data.");}
             v.Headlines.Clear();v.Headlines.Add(links.Length+" links");v.Headlines.Add(links.Sum(l=>l.VP)+" link VP");v.Headlines.Add(StatisticsFormat.Ratio(links.Sum(l=>l.VP),links.Length)+" VP / link");var checks=r.Connections.Where(c=>f.Includes(c.Player,c.Era)).ToArray();v.Headlines.Add(checks.Count(c=>c.OpponentRequired)+" / "+checks.Length+" endpoint checks needed opponents' links");
         }
-        // A value-only topology schematic; city positions are explicit and never borrow live transforms.
-        public static readonly Dictionary<string,double[]> CityPositions=new Dictionary<string,double[]>{
-            {"SouthWest",new[]{.11,.14}},{"Central",new[]{.50,.50}},
-            {"Warrington",new[]{.14,.95}},{"Leek",new[]{.31,.88}},{"StokeOnTrent",new[]{.21,.78}},{"Stone",new[]{.25,.66}},{"Uttoxeter",new[]{.44,.74}},{"Belper",new[]{.68,.88}},{"Derby",new[]{.66,.74}},{"Nottingham",new[]{.91,.76}},{"BurtonOnTrent",new[]{.60,.61}},{"Stafford",new[]{.29,.55}},{"Shrewsbury",new[]{.06,.54}},{"Cannock",new[]{.41,.46}},{"Coalbrookdale",new[]{.18,.38}},{"Wolverhampton",new[]{.33,.34}},{"Walsall",new[]{.48,.33}},{"Tamworth",new[]{.66,.44}},{"Nuneaton",new[]{.83,.38}},{"Dudley",new[]{.39,.22}},{"Birmingham",new[]{.58,.23}},{"Coventry",new[]{.81,.22}},{"Kidderminster",new[]{.27,.15}},{"Worcester",new[]{.40,.05}},{"Redditch",new[]{.63,.10}},{"Gloucester",new[]{.20,.03}},{"Oxford",new[]{.91,.07}}
-        };
-        static void Map(StatisticsPageView v,CompletedMatchStatistics r,StatisticsFilters f)
-        {
-            var plot=Plot(v,"geography","Geography · "+f.MapMode+" · "+f.Boundary,StatisticsPlotKind.MiniMap,"Independent topology schematic; edges are board connections, not claims about routes used. Values aggregate selected players at the chosen boundary. Farms and merchants stay separate. Region labels use actual board region colors.","City",f.MapMode=="Occupancy"?"Owned tiles":"VP");
-            foreach(var region in r.Locations.Where(l=>!l.Merchant&&!l.Farm).Select(l=>l.RegionColor).Distinct())Series(plot,"region/"+region,region+" board region");
-            Series(plot,"merchant","Merchant (separate)");Series(plot,"farm","Farm brewery (separate)");
-            var representedLinks=new HashSet<string>(StatisticsChartQueries.Links(r,f).Select(l=>l.Key));
-            foreach(var location in r.Locations.Where(l=>f.Region==""||l.RegionColor==f.Region)){
-                var assets=r.Assets.Where(a=>f.Players.Contains(a.Player)&&a.City==location.City&&(f.Industry==""||a.Type==f.Industry)&&(!f.EvidenceRestricted&&f.Evidence.Count==0||f.Evidence.Contains(a.Key))&&StatisticsMetrics.At(a,StatisticsMetrics.Boundary(r,a.Player,f.Boundary,f.BoundaryEra))).ToArray();
-                double[] point;if(!CityPositions.TryGetValue(location.City,out point))point=new[]{.08+.18*plot.Marks.Count(m=>m.Series=="farm"),.92};
-                var b=ReportBoundary(r,f);Func<int,bool> scored=era=>{var scoring=r.Boundaries.FirstOrDefault(s=>s.Name=="Scoring"&&s.Era==era);return scoring!=null&&b!=null&&scoring.Revision<=b.Revision;};
-                int industry=assets.Sum(a=>(scored(1)&&f.Era!=2?a.CanalVP+a.IntroVP:0)+(scored(2)&&f.Era!=1?a.RailVP:0));
-                var contributions=r.Contributions.Where(c=>c.City==location.City&&representedLinks.Contains(c.LinkKey)&&scored(c.Era)).ToArray();int link=contributions.Sum(c=>c.VP);
-                string detail="Region "+location.RegionColor+" · "+assets.Length+" owned tiles · "+industry+" scored industry VP from these tiles · "+link+" scored link-contribution VP";
-                int value=f.MapMode=="Occupancy"?assets.Length:f.MapMode=="Industry VP"?industry:link;
-                var target=f.MapMode=="Link contributions"?Target(3,keys:contributions.Select(c=>c.LinkKey),region:location.RegionColor):Target(2,keys:assets.Select(a=>a.Key),region:location.RegionColor);
-                Mark(plot,location.Merchant?"merchant":location.Farm?"farm":"region/"+location.RegionColor,location.City,point[0],point[1],row:value,detail:detail,target:target);
-            }
-            foreach(var group in r.Locations.Where(l=>!l.Merchant).GroupBy(l=>l.RegionColor))plot.Context.Add(group.Key+" region: "+String.Join(", ",group.Select(l=>l.City)));
-        }
-        static StatisticsBoundary ReportBoundary(CompletedMatchStatistics r,StatisticsFilters f){return r.Boundaries.LastOrDefault(b=>b.Name==f.Boundary&&(f.BoundaryEra==0||b.Era==f.BoundaryEra));}
         static void Curve(StatisticsPageView v,CompletedMatchStatistics r,StatisticsFilters f,bool income)
         {
             var plot=Plot(v,income?"income-curve":"cash-curve",income?"Income level through the match":"Cash through the match",StatisticsPlotKind.Step,"Step changes from recorded balance events. X is global turn count; multiple changes within a turn share its x value. Hover or select a mark for the event.","Global turn",income?"Income level":"Cash (£)");

@@ -1,7 +1,7 @@
 # Statistics geography map revision plan
 
 Date: 7 October 2026  
-Status: **Planned — implementation and installation have not started.**  
+Status: **Implemented, installed and verified as patch 1.4.29 over 1.4.27.**  
 Reviewed baseline: installed patch **1.4.27**, current Statistics source, the existing 1920 × 1200 geography capture, and the locally archived official board/rulebook.  
 Applies to: the shared Statistics viewer opened from **end-game results and Game History**. Optimize the visual design and inspect rendered results at **1920 × 1200**.
 
@@ -254,7 +254,7 @@ Replace the old permanent-label assertions with explicit visibility/anchor tests
 5. **Qualification:** run focused data/native checks, inspect the requested 1200p captures, and verify unchanged Statistics pages and viewer lifecycle with the appropriate existing checks.
 6. **Future patch release:** reverify the installed baseline, build a candidate, qualify it, then install using the existing backup/receipt/archive workflow when implementation is requested. Preserve the current Card Tracker, AI and gameplay patches and unrelated working-tree changes. Choose the release number from the verified release state at that time.
 
-This request produces the plan only. No game binary, save, history record or installed patch is changed.
+Implementation followed the later request to install this revision over 1.4.27. See the [1.4.29 release notes](../docs/STATISTICS_GEOGRAPHY_1.4.29.md) for the implementation, qualification and installation record. Version 1.4.28 was previously withdrawn, so this release uses 1.4.29.
 
 ## References inspected
 
