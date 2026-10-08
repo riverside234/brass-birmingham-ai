@@ -4,8 +4,11 @@ from brass_ai.learning.contracts import require
 from brass_ai.search.common import SearchConfig
 
 # Training-only defaults; evaluation/laptop SearchConfig defaults stay intact.
-SEARCH_EVERY_GAMES=320
-SEARCH_WALL_FRACTION=.70
+SEARCH_EVERY_GAMES=160
+SEARCH_COLLECTIONS_PER_ITERATION=2
+# User-selected 1.5x the old allowance: .7/.3 * 1.5 = 3.5 search seconds
+# per ordinary second, or 7/9 of their combined accounted wall time.
+SEARCH_WALL_FRACTION=7/9
 SEARCH_SECONDS=12.0
 SEARCH_WORKERS=4
 PPO_LEARNING_RATE=1e-5
@@ -23,7 +26,7 @@ def teacher_search_config(options):
 
 EXECUTION = dict(processes=8, hosts_per_process=4, heavy_processes=8,
     batch_size=64, max_candidate_cells=131072, flush_ms=2.0, worker_threads=1,
-    max_decisions=2000, max_models=16)
+    max_decisions=2000, max_models=72)
 UPDATE = dict(effective_batch_size=2048, microbatch_size=512, max_candidate_cells=131072,
     epochs=2, clip=.2, target_kl=.01, entropy_weight=.005, value_weight=.5,
     grad_clip=5.0, normalize_advantages=True, precision='fp32', bucket=True)
@@ -39,12 +42,15 @@ EXECUTION_V21 = dict(EXECUTION, processes=32, hosts_per_process=1, flush_ms=1.0,
 UPDATE_V21 = dict(UPDATE, actor_nonforced=True, critic_batch_size=2048, kl_probe_rows=2048)
 RETENTION = dict(enabled=True, resume_checkpoints=2, replay_rounds=4, quarantine_hours=24,
     evaluation_samples=4, profile_traces=2)
-POPULATION = dict(recent=8, anchors=4)
+POPULATION = dict(recent=16, anchors=48)
 EVALUATION_SCHEDULE = dict(enabled=True, monitor_every_games=6400, broader_every_games=25600,
     monitor_setups=1, broader_setups=1, seed=910000)
 LEGACY_BUDGET = dict(role='lab', seconds=1.0, search_workers=4, global_workers=60, work_multiplier=1)
 LEGACY_OPPONENTS = dict(search_free_until_games=10000)
 IMITATION = dict(manifest=None,epochs=10,patience=2,min_epochs=3,learning_rate=1e-4)
+INSOLVENCY = dict(event_cost=.02,max_cost=.10)
+LEGACY_BOOST = dict(stages=[dict(games=20000,selfplay=15,historical=25,legacy=60),
+                          dict(games=10000,selfplay=45,historical=25,legacy=30)])
 
 
 def positive(value, name, integer=False):
@@ -122,6 +128,30 @@ def validate_config(config):
         'search_ready_games','search_every_games','search_games','distill_steps','distill_weight',
         'rehearsal_manifest','rehearsal_weight','rehearsal_until','profile_steps'}
     version=config.get('format')
+    if 'insolvency' in config:
+        fields.add('insolvency')
+        bounded_fields(config['insolvency'],INSOLVENCY,'insolvency')
+        require(config['insolvency']['event_cost']<=config['insolvency']['max_cost']<=.1,
+                'Insolvency costs must stay small relative to winning')
+    if 'legacy_boost' in config:
+        fields.add('legacy_boost')
+        boost=config['legacy_boost']
+        require(type(boost) is dict and set(boost)=={'stages'} and type(boost['stages']) is list and
+                1<=len(boost['stages'])<=2,'Invalid searched-v4 stages')
+        for stage in boost['stages']:
+            require(type(stage) is dict and set(stage)=={'games','selfplay','historical','legacy'},
+                    'Invalid searched-v4 stage fields')
+            positive(stage['games'],'legacy_boost.games',integer=True)
+            require(stage['games']%20==0 and
+                    all(type(stage[k]) is int and 0<=stage[k]<=100 and stage[k]%5==0
+                        for k in ('selfplay','historical','legacy')) and
+                    sum(stage[k] for k in ('selfplay','historical','legacy'))==100,
+                    'Invalid bounded searched-v4 quota window')
+        require(sum(s['games'] for s in boost['stages'])<=30000,'Excessive searched-v4 recovery duration')
+    if 'search_collections_per_iteration' in config:
+        fields.add('search_collections_per_iteration')
+        require(type(config['search_collections_per_iteration']) is int and
+                1<=config['search_collections_per_iteration']<=4,'Invalid teacher collection limit')
     if 'distillation' in config:
         fields.add('distillation')
         bounded_fields(config['distillation'],DISTILLATION,'distillation')
@@ -146,6 +176,8 @@ def validate_config(config):
                 'Search group exceeds queued CPU admission allowance')
         positive(config['audit_workers'],'audit_workers',integer=True)
         require(type(config['overlap_pools']) is bool and 0<config['search_wall_fraction']<=SEARCH_WALL_FRACTION,'Invalid overlap/search fraction')
+        require(config['execution']['max_models']>=sum(config['population'].values())+3,
+                'Model cache must cover frozen population plus learner/teacher versions')
         require(set(config['update'])==set(UPDATE_V21) and set(config['execution'])==set(EXECUTION_V21),'2.1 requires revised update/execution')
     require(set(config)==fields and version=='step5-training/2.2.0' and config['players']==4,
         'Use the fresh four-player Masked ISMCTS 2.2 recipe; historical runs cannot migrate in place')

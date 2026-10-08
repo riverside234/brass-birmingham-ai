@@ -145,12 +145,12 @@ class SelfplayV2ReviewTests(unittest.TestCase):
         self.assertIsNone(report['actor_python_average_cores'])
         self.assertEqual(report['actor_cpu_recorded_games'],2)
 
-    def test_stable_lab_learning_and_search_settings_are_preserved(self):
+    def test_stable_lab_learning_and_turn_clock_with_updated_search_cadence(self):
         for path in (SOURCE_ROOT/'configs/step5').glob('lab*.json'):
             cfg=read(path)
             self.assertEqual((cfg['learning_rate'],cfg['update']['target_kl']),(1e-5,.01))
             self.assertEqual((cfg['search']['seconds'],cfg['execution']['search_workers_per_turn']),(12.,4))
-            self.assertEqual((cfg['search_ready_games'],cfg['search_every_games'],cfg['search_wall_fraction']),(640,320,.7))
+            self.assertEqual((cfg['search_ready_games'],cfg['search_every_games'],cfg['search_wall_fraction']),(640,160,7/9))
 
 
 if __name__=='__main__':unittest.main()

@@ -133,7 +133,7 @@
   },
   "audit_workers": 2,
   "overlap_pools": true,
-  "search_wall_fraction": 0.7,
+  "search_wall_fraction": 0.7777777777777778,
   "architecture": "brass-four-seat-mlp-resnet/1.0.0",
   "parameter_limit": 2000000,
   "initialization": "random",
@@ -146,5 +146,10 @@
   },
   "legacy_opponents": {
     "search_free_until_games": 10000
+  },
+  "search_collections_per_iteration": 2,
+  "insolvency": {
+    "event_cost": 0.02,
+    "max_cost": 0.1
   }
 }

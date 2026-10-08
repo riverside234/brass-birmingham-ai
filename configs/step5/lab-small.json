@@ -18,7 +18,7 @@
     "flush_ms": 1.0,
     "worker_threads": 1,
     "max_decisions": 2000,
-    "max_models": 16,
+    "max_models": 72,
     "shard_games": 8,
     "shard_bytes": 268435456,
     "feature_cache": true,
@@ -71,7 +71,7 @@
     }
   ],
   "search_ready_games": 640,
-  "search_every_games": 320,
+  "search_every_games": 160,
   "search_games": 4,
   "distill_steps": 8,
   "distillation": {
@@ -120,8 +120,8 @@
     "profile_traces": 2
   },
   "population": {
-    "recent": 8,
-    "anchors": 4
+    "recent": 16,
+    "anchors": 48
   },
   "evaluation_schedule": {
     "enabled": true,
@@ -138,9 +138,9 @@
     "global_workers": 28,
     "work_multiplier": 1
   },
-  "audit_workers": 8,
+  "audit_workers": 16,
   "overlap_pools": true,
-  "search_wall_fraction": 0.7,
+  "search_wall_fraction": 0.7777777777777778,
   "architecture": "brass-four-seat-mlp-resnet/1.0.0",
   "parameter_limit": 2000000,
   "initialization": "random",
@@ -153,5 +153,26 @@
   },
   "legacy_opponents": {
     "search_free_until_games": 10000
+  },
+  "search_collections_per_iteration": 2,
+  "insolvency": {
+    "event_cost": 0.02,
+    "max_cost": 0.1
+  },
+  "legacy_boost": {
+    "stages": [
+      {
+        "games": 20000,
+        "selfplay": 15,
+        "historical": 25,
+        "legacy": 60
+      },
+      {
+        "games": 10000,
+        "selfplay": 45,
+        "historical": 25,
+        "legacy": 30
+      }
+    ]
   }
 }

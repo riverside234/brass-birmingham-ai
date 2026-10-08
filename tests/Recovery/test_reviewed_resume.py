@@ -21,7 +21,9 @@ class ReviewedResumeTests(unittest.TestCase):
     def setUpClass(cls):
         torch.set_num_threads(2)
         cls.evidence = read(SOURCE_ROOT / 'results/selfplay-v2/state.json')
-        cls.target = implementation_id()
+        # Keep exercising the historical 50% -> 70% transition itself. The
+        # generation-70 continuation has its own current-source coverage.
+        cls.target = read(SOURCE_ROOT/'results/selfplay-v2-70/state.json')['signature']['implementation']
 
     def fixture(self):
         temporary = tempfile.TemporaryDirectory(prefix='resume-', dir=SOURCE_ROOT / 'artifacts')
@@ -42,13 +44,14 @@ class ReviewedResumeTests(unittest.TestCase):
         signature = dict(state['signature'], implementation=self.target)
         return run, state, signature, model, optimizer
 
-    def test_real_v2_signature_matches_unchanged_lab_settings(self):
+    def test_real_v2_signature_has_exact_reviewed_active_lab_continuation(self):
         old = self.evidence['signature']
         self.assertEqual(old['compatibility'], compatibility())
         current = read(SOURCE_ROOT / 'configs/step5/lab.json')
         current['rehearsal_manifest'] = old['imitation_source']['manifest']
-        self.assertEqual(current, dict(old['config'],search_wall_fraction=.70))
-        target = dict(old, config=current, implementation=self.target)
+        for key in ('learning_rate','update','curriculum','search','imitation'):
+            self.assertEqual(current[key],old['config'][key])
+        target = dict(old, config=current, implementation=implementation_id())
         self.assertTrue(check_signature(self.evidence, target, True))
         with self.assertRaisesRegex(ValueError, '--resume-reviewed-source'):
             check_signature(self.evidence, target)

@@ -10,6 +10,16 @@
       "implementation": "b044d0331c9cf1b05f5b32da3c167855e556996f708d1d159977d03830d5faf6",
       "learning_compatibility": "c349e816f2e301ea2a3b438902059cffe868f48e131f7c120691d37cd1c409d2",
       "reason": "Immediately preceding Step 5 version: only training teacher scheduling/budgets/telemetry and this handoff gate changed. BC data, model, loss and checkpoint formats are unchanged. Completed BC weights only; no PPO optimizer or population import."
+    },
+    {
+      "implementation": "d95fe440ade5bf9a8ede3850757011b815700773a4271c625dee70eb946059b4",
+      "learning_compatibility": "c349e816f2e301ea2a3b438902059cffe868f48e131f7c120691d37cd1c409d2",
+      "reason": "70-iteration review changes only league scheduling/population/retention/config and runtime concurrency. Completed fresh IL architecture, data, losses and checkpoint contracts remain unchanged."
+    },
+    {
+      "implementation": "2ea375ddfa37d3aa07786eba035f3d17e38fd94876734fee5317bed58af68360",
+      "learning_compatibility": "c349e816f2e301ea2a3b438902059cffe868f48e131f7c120691d37cd1c409d2",
+      "reason": "Insolvency recovery changes only PPO actor returns, ordinary-game opponents and training diagnostics. Fresh IL model, supervised losses, replay and checkpoint contracts remain unchanged."
     }
   ]
 }

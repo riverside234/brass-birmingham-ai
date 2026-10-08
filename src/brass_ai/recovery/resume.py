@@ -31,7 +31,7 @@ def check_signature(state, signature, reviewed=False):
         if changes and all(previous['config'].get(k) == v['from'] for k, v in changes.items()):
             expected = dict(previous['config'], **{k: v['to'] for k, v in changes.items()})
             config_ok |= expected == signature['config']
-    require(config_ok, 'Reviewed resume requires unchanged config except an explicitly pinned budget change')
+    require(config_ok, 'Reviewed resume requires unchanged config except explicitly pinned review changes')
     require(state['iteration'] > 0, 'Reviewed continuation requires a committed PPO generation')
     return True
 
@@ -54,9 +54,11 @@ def load_resume(root, run, state, signature, *, device='cpu', reviewed=False):
     # A restart after the atomic source transition, before its first new PPO
     # commit, still has the original checkpoint. Accept only that exact binding.
     if not bound:
-        bound = any(t['checkpoint'] == entry and t['to_signature'] == digest(state['signature'])
-                    and raw['training'].get('signature') == digest(t['from_signature'])
-                    for t in state.get('source_transitions', []))
+        bindings={raw['training'].get('signature')}
+        for transition in state.get('source_transitions', []):
+            if transition['checkpoint']==entry and digest(transition['from_signature']) in bindings:
+                bindings.add(transition['to_signature'])
+        bound=digest(state['signature']) in bindings
     initial = (state['iteration'] == 0 and raw['training'].get('mode') == 'step5-fresh-residual-initial')
     require(bound or initial, 'Checkpoint is not bound to this run signature')
     if changed:
@@ -92,9 +94,23 @@ def commit_transition(run, state, signature):
         from_signature=previous['signature'], to_signature=digest(signature),
         checkpoint=copy.deepcopy(state['history'][-1]), iteration=state['iteration'],
         games_done=state['games_done'], backup=backup.name,
-        config_changes={k:dict(before=previous['signature']['config'][k],after=v)
+        config_changes={k:dict(before=previous['signature']['config'].get(k),after=v)
                         for k,v in signature['config'].items() if previous['signature']['config'].get(k)!=v}))
     updated['signature'] = signature
+    from .curriculum import activate_boost
+    activate_boost(updated,signature['config'])
+    if 'legacy_boost' in updated and 'legacy_boost' not in previous:
+        updated['source_transitions'][-1]['legacy_boost']=copy.deepcopy(updated['legacy_boost'])
+    old_interval=previous['signature']['config']['search_every_games']
+    interval=signature['config']['search_every_games']
+    if interval and interval!=old_interval:
+        warmup=signature['config']['search_ready_games'];done=state['games_done']
+        # Adopt the denser future cadence without replaying past allocations or
+        # resetting the warm-up. An already overdue reservation stays due.
+        future=warmup if done<warmup else warmup+((done-warmup)//interval+1)*interval
+        updated['next_search_games']=min(state['next_search_games'],future)
+        updated['source_transitions'][-1]['search_schedule']=dict(
+            before=state['next_search_games'],after=updated['next_search_games'])
     write_json(safe(run, run / 'state.json'), updated)
     print(f"Reviewed same-run continuation: generation {state['iteration']}, {state['games_done']} games; "
           'checkpoint, Adam/RNG, population and schedule counters preserved', flush=True)

@@ -13,18 +13,19 @@ from brass_ai.bank import admission,read,sha
 from brass_ai.learning.checkpoint import load_checkpoint,save_checkpoint,resume_optimizer
 from brass_ai.learning.contracts import compatibility,digest,project_path,require
 from brass_ai.learning.model import ModelConfig
-from .replay import read_shards
 from brass_ai.step5.league import write_json,seeds_for,implementation_id
 from brass_ai.step5.policy import INDUSTRIES
-from .config import validate_config,table_kind,table_rotation
+from .config import validate_config,table_rotation
 from .demonstrations import load_dataset
 from .diagnostics import summarize
 from .execution import ActorPool,neural_spec
 from .inference import InferenceService
 from .ingress import load_collection,reader_pool
 from .telemetry import environment,iteration_utilization
-from .updates import ppo_update,distill_update,rehearsal_dataset
-from .teacher_schedule import CONTRACT as TEACHER_SCHEDULE,estimate_collection,search_allowance,collection_report
+from .updates import ppo_update,rehearsal_dataset
+from .teacher_collection import collect_due
+from .population import sample_opponents
+from .curriculum import activate_boost,boost_window,training_table,searched_legacy,boost_report
 
 
 class Behavior:
@@ -105,6 +106,7 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
         state['history']=[dict(path=init_path.relative_to(root).as_posix(),sha256=sha(init_path),
             model_id=raw['model_id'],generation=0)]
         state['evaluation_anchor']=state['history'][0]
+        activate_boost(state,config)
         if revised:
             from .retention import update_population
             update_population(root,run,state,config['population'])
@@ -114,6 +116,10 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
     if source_changed:
         from .resume import commit_transition
         state=commit_transition(run,state,signature)
+    window=boost_window(state,config)
+    if window:
+        print(f'Searched-v4 recovery window: ordinary games {window["start_games"]} to {window["until_games"]}; '
+              f'{max(0,window["until_games"]-state["games_done"])} remaining',flush=True)
     needs_rehearsal=config['rehearsal_manifest'] and config['rehearsal_weight'] and state['games_done']<config['rehearsal_until']
     rehearsal=load_dataset(root,config['rehearsal_manifest'],'train',workers=config['audit_workers'],progress=True,compact=True)[0] if needs_rehearsal else None
     if rehearsal:
@@ -133,18 +139,19 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                 for entry in state.get('population',state['history']):
                     snapshots[entry['model_id']]=entry
                 jobs=[];kind_by_group={};composition=Counter();cursor=state['next_seed'];context_counter=state['context_counter']
+                historical_generations=Counter()
                 for i in range(config['games_per_iteration']):
-                    index=state['games_done']+i;kind=table_kind(index,config['curriculum'])
+                    index=state['games_done']+i;kind,boosted=training_table(index,config,window)
                     selected,cursor=seeds_for(cursor,1);seed=selected[0]
                     rng=random.Random(digest(dict(seed=config['seed'],index=index)))
                     learner=neural_spec(current,config['exploration'],'mixed')
                     if kind=='selfplay': policies=[learner]*4
                     elif kind=='historical':
-                        candidates=list(snapshots.values())
-                        if rng.random()<.5: candidates=candidates[-8:]
+                        candidates=sample_opponents(snapshots.values(),current,state['evaluation_anchor'],rng,config['population']['recent'])
                         opponents=[]
-                        for seat in range(3):
-                            entry=rng.choice(candidates);path=project_path(root,entry['path'])
+                        for entry in candidates:
+                            historical_generations[entry['generation']]+=1
+                            path=project_path(root,entry['path'])
                             if entry['model_id'] not in verified_snapshots:
                                 require(sha(path)==entry['sha256'],'Historical checkpoint changed')
                                 verified_snapshots.add(entry['model_id'])
@@ -153,7 +160,7 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                         policies=[learner]+opponents
                     else:
                         # Rotate all profiles across the collection instead of fixing three for an entire chunk.
-                        selected_specs=fast_specs if index<config['legacy_opponents']['search_free_until_games'] else teacher_specs
+                        selected_specs=teacher_specs if searched_legacy(index,config,boosted) else fast_specs
                         policies=[learner]+[selected_specs[profiles[(index*3+s)%len(profiles)]] for s in range(3)]
                     rotation=table_rotation(index);focuses={}
                     for seat in range(4):
@@ -181,53 +188,23 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                 load_began=time.monotonic()
                 ingress_metrics={}
                 games,learner_data,diagnostics=load_collection(records,behavior.policy_id,kind_by_group,
-                    executor=readers,workers=config['audit_workers'],telemetry=ingress_metrics)
+                    executor=readers,workers=config['audit_workers'],telemetry=ingress_metrics,insolvency=config.get('insolvency'))
                 collected=time.monotonic()
                 weight=config['rehearsal_weight']*max(0,1-state['games_done']/config['rehearsal_until'])
                 update=ppo_update(model,optimizer,games,behavior,config['update'],
                     profile=directory/'profile-ppo' if config['profile_steps'] else None,
                     profile_steps=config['profile_steps'],
-                    rehearsal=rehearsal,rehearsal_weight=weight,learner_data=learner_data)
+                    rehearsal=rehearsal,rehearsal_weight=weight,learner_data=learner_data,insolvency=config.get('insolvency'))
                 updated=time.monotonic();done=state['games_done']+len(games)
                 ordinary_inference=service.report()
                 del learner_data
                 if done>=config['rehearsal_until']:rehearsal=None
-                search=dict(updated=False,reason='Persistent search schedule not due')
-                next_search=state['next_search_games']
                 ordinary_seconds=state.get('ordinary_seconds',0.)+updated-began
-                search_seconds=state.get('search_seconds',0.)
-                estimate=estimate_collection(config,(collected-began)/max(1,len(games)))
-                remaining_search_seconds=search_allowance(ordinary_seconds,search_seconds,config['search_wall_fraction'])
-                search_budget_ok=estimate<=remaining_search_seconds
-                if config['search_every_games'] and done>=next_search and search_budget_ok:
-                    identity=service.register(model);search_jobs=[]
-                    rollout_entries=list({e['model_id']:e for e in state.get('population',state['history'])}.values())[-3:]
-                    for e in rollout_entries:
-                        path=project_path(root,e['path']);require(path.is_relative_to(run) and sha(path)==e['sha256'],'Imported/changed rollout model')
-                        if e['model_id'] not in service.models:service.register_checkpoint(path)
-                    rollout_ids=list(dict.fromkeys([identity]+[e['model_id'] for e in rollout_entries]))
-                    for i in range(config['search_games']):
-                        chosen,cursor=seeds_for(cursor,1);seed=chosen[0]
-                        spec=dict(kind='masked_ismcts',model_id=identity,opponents=rollout_ids,search=config['search'],focus='neutral',
-                            cpu_role=config.get('legacy_budget',{}).get('role','reference'),teacher_schedule=TEACHER_SCHEDULE)
-                        provenance=dict(producer='recovery/2.0.0',purpose='training',kind='masked-ismcts-teacher',
-                            seed=seed,sampling_seed=config['seed']*13+done+i,spec=digest(signature))
-                        search_jobs.append(dict(index=i,seed=seed,rotation=0,sampling_seed=provenance['sampling_seed'],
-                            policies=[spec]*4,path=str(directory/f'search-{i:06d}.jsonl.gz'),provenance=provenance))
-                    search_records=heavy.collect(search_jobs)
-                    searched=read_shards([r['path'] for r in search_records],partition='train',receipts={r['path']:r.get('features') for r in search_records})
-                    teaching=collection_report(search_records,searched)
-                    search=distill_update(model,optimizer,searched,config['update'],steps=config['distill_steps'],weight=config['distill_weight'],
-                        quality=config.get('distillation'))
-                    search['collection']=search_records
-                    search['teaching']=teaching
-                    while next_search<=done: next_search+=config['search_every_games']
-                elif config['search_every_games'] and done>=next_search and not search_budget_ok:
-                    search=dict(updated=False,reason='Search wall-time allowance exceeded; postpone until ordinary collection catches up')
-                search['budget']=dict(wall_fraction=config['search_wall_fraction'],available_seconds=remaining_search_seconds,
-                    estimated_collection_seconds=estimate,admitted=bool(search.get('collection')))
-                search_seconds+=time.monotonic()-updated if search.get('collection') else 0.
+                search,next_search,cursor,search_seconds=collect_due(root,run,directory,config,state,signature,
+                    model,optimizer,service,heavy,done=done,cursor=cursor,ordinary_seconds=ordinary_seconds,
+                    ordinary_game_seconds=(collected-began)/max(1,len(games)))
                 report=dict(format='step5-recovery-report/'+'2.2.0',iteration=iteration,composition=dict(composition),
+                    legacy_boost=boost_report(state['games_done'],done,config,window),
                     actor=update,search=search,**diagnostics,incoming_model_id=current,
                     games_done=done,cumulative_games=state['previous_games']+done,
                     timings=dict(collection_seconds=load_began-began,ppo_seconds=updated-collected,
@@ -235,6 +212,9 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                         search_and_distill_seconds=time.monotonic()-updated),execution=records,
                     inference=service.report(),inference_scope='cumulative for this invocation',
                     legacy_modes=dict(Counter(j['provenance']['legacy_mode'] for j in jobs if j['provenance']['legacy_mode'])),
+                    historical_opponents=dict(generation_seats=dict(sorted(historical_generations.items())),
+                        pool_generations=[e['generation'] for e in state.get('population',[])],
+                        sampling='25% initial/IL, 25% recent, 50% older reservoir; unavailable strata fall back'),
                     environment=environment(device),strength='requires fresh post-update evaluation')
                 report['utilization']=iteration_utilization(inference_before,ordinary_inference,records,
                     load_began-began,len(games),config['execution'])
@@ -281,6 +261,8 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                       f'NN batch mean={report["utilization"]["mean_inference_batch"]:.2f}; '
                       f'LR={config["learning_rate"]:.1e} KL={update["epochs"][-1]["post_update_kl"]:.5f} '
                       f'value={update["epochs"][-1]["value"]:.4f}; '
+                      f'insolvency events={update["insolvency"].get("events",0)} '
+                      f'mean cost={update["insolvency"].get("mean_cost_per_trajectory",0):.4f}; '
                       f'teacher rows={search.get("teacher_rows",0)} steps={search.get("optimizer_steps",0)}',flush=True)
     return dict(run=str(run),completed_iteration=state['iteration'],checkpoint=state['history'][-1],summaries=summaries,
                 summary_scope='latest two iterations in this invocation; older metrics in retention-history.json')

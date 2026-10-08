@@ -170,15 +170,8 @@ def references(root,run):
 
 
 def population_entries(history,config=POPULATION):
-    by_id={e['model_id']:e for e in history}
-    entries=list(by_id.values());recent=entries[-config['recent']:]
-    older=entries[:-config['recent']]
-    anchors=[]
-    if older:
-        for i in range(min(config['anchors'],len(older))):
-            index=round(i*(len(older)-1)/max(1,min(config['anchors'],len(older))-1))
-            anchors.append(older[index])
-    return list({e['model_id']:e for e in anchors+recent}.values())
+    from .population import retain
+    return retain(history,config)
 
 
 def slim_checkpoint(root,run,entry):

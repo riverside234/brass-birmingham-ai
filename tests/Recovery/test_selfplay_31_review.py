@@ -91,7 +91,9 @@ class Selfplay31ReviewTests(unittest.TestCase):
         state=read(SOURCE_ROOT/'results/selfplay-v2-31/state.json');old=state['signature']
         self.assertEqual((state['iteration'],state['games_done']),(32,10240))
         cfg=read(SOURCE_ROOT/'configs/step5/lab.json');cfg['rehearsal_manifest']=old['imitation_source']['manifest']
-        self.assertEqual(cfg,dict(old['config'],search_wall_fraction=.70));self.assertEqual(compatibility(),old['compatibility'])
+        for key in ('learning_rate','update','curriculum','search','imitation'):
+            self.assertEqual(cfg[key],old['config'][key])
+        self.assertEqual(compatibility(),old['compatibility'])
         signature=dict(old,config=cfg,implementation=implementation_id())
         self.assertTrue(check_signature(state,signature,True))
         with self.assertRaisesRegex(ValueError,'unchanged'):

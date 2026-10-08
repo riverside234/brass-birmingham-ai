@@ -15,17 +15,24 @@ from brass_ai.step5.updates import bounded_batches
 from .encoding import PreparedEncoder
 from .telemetry import Timings, profile_window, memory
 from .progress import Progress
+from .insolvency import returns as insolvency_returns,advantage_costs
 
 
-def prepared(games, predicate=None, neutral=False):
+def prepared(games, predicate=None, neutral=False, insolvency=None):
     """Targets once per game; filter BEFORE encoding; cached arrays survive epochs."""
     encoder, data = PreparedEncoder(), []
     for game in games:
         if hasattr(game,'assert_metadata'): game.assert_metadata()
         target = terminal_targets(game['result'])
-        for row in game['records']:
+        costs,summaries=insolvency_returns(game['records'],insolvency) if insolvency is not None else (None,None)
+        annotated=set()
+        for step,row in enumerate(game['records']):
             if predicate is None or predicate(row):
                 r = dict(row, style=[0.0]*4, intent=[0.0]*8) if neutral else row
+                if costs is not None:
+                    r=dict(r,_insolvency_cost_to_go=costs[step])
+                    if row['seat'] not in annotated:
+                        r['_insolvency_trajectory']=summaries[row['seat']];annotated.add(row['seat'])
                 encoded = game.encoded(r,encoder,allow_context=neutral) if hasattr(game,'encoded') else encoder.encode(r['view'], r['choices'], r['style'], r['intent'])
                 data.append((r, target, (game['game_id'],row['seat']), encoded))
     require(data, 'No eligible learning decisions')
@@ -162,10 +169,11 @@ def policy_measure(model, dataset, indices, behavior, config, timings, verify=Fa
     return result
 
 
-def ppo_update(model,optimizer,games,behavior,config,*,profile=None,profile_steps=4,rehearsal=None,rehearsal_weight=0,learner_data=None):
+def ppo_update(model,optimizer,games,behavior,config,*,profile=None,profile_steps=4,rehearsal=None,rehearsal_weight=0,learner_data=None,insolvency=None):
     if config.get('actor_nonforced'):
         return ppo_nonforced(model,optimizer,games,behavior,config,profile=profile,profile_steps=profile_steps,
-                             rehearsal=rehearsal,rehearsal_weight=rehearsal_weight,learner_data=learner_data)
+                             rehearsal=rehearsal,rehearsal_weight=rehearsal_weight,learner_data=learner_data,insolvency=insolvency)
+    require(insolvency is None,'Insolvency shaping requires the nonforced actor recipe')
     require(all(g['split']=='train' for g in games),'Held-out PPO data')
     require(model_id(model)==behavior.evaluator.model_id,'Collection model differs from learner')
     timings=Timings()
@@ -260,19 +268,19 @@ def phase_probe(dataset,indices,limit):
     return output
 
 
-def ppo_nonforced(model,optimizer,games,behavior,config,*,profile=None,profile_steps=4,rehearsal=None,rehearsal_weight=0,learner_data=None):
+def ppo_nonforced(model,optimizer,games,behavior,config,*,profile=None,profile_steps=4,rehearsal=None,rehearsal_weight=0,learner_data=None,insolvency=None):
     cuda=next(model.parameters()).device.type=='cuda'
     with (ThreadPoolExecutor(max_workers=2) if cuda else nullcontext(None)) as executor:
         return _ppo_nonforced(model,optimizer,games,behavior,config,profile=profile,profile_steps=profile_steps,
-                              rehearsal=rehearsal,rehearsal_weight=rehearsal_weight,learner_data=learner_data,executor=executor)
+                              rehearsal=rehearsal,rehearsal_weight=rehearsal_weight,learner_data=learner_data,executor=executor,insolvency=insolvency)
 
 
-def _ppo_nonforced(model,optimizer,games,behavior,config,*,profile,profile_steps,rehearsal,rehearsal_weight,learner_data,executor):
+def _ppo_nonforced(model,optimizer,games,behavior,config,*,profile,profile_steps,rehearsal,rehearsal_weight,learner_data,executor,insolvency):
     require(all(g['split']=='train' for g in games),'Held-out PPO data')
     require(model_id(model)==behavior.evaluator.model_id,'Collection model differs from learner')
     timings=Timings();device=next(model.parameters()).device
     with timings.phase('ppo.prepare'):
-        data=learner_data if learner_data is not None else prepared(games,lambda r:r['behavior']['policy_id']==behavior.policy_id)
+        data=learner_data if learner_data is not None else prepared(games,lambda r:r['behavior']['policy_id']==behavior.policy_id,insolvency=insolvency)
         require(data and all(d[0]['behavior']['kind']=='model' and d[0]['behavior']['policy_id']==behavior.policy_id for d in data),
                 'External or stale actions in PPO')
         ds=Dataset(data,device);demo=rehearsal_dataset(rehearsal,device) if rehearsal_weight else None
@@ -280,6 +288,11 @@ def _ppo_nonforced(model,optimizer,games,behavior,config,*,profile,profile_steps
     advantages=torch.zeros(count,device=device);model.eval()
     # Verify likelihoods for ALL rows, including deterministic continuation rows.
     policy_measure(model,ds,range(count),behavior,config,timings,True,advantages,executor)
+    costs,insolvency_report=advantage_costs(data,insolvency)
+    # Monte Carlo reward-to-go: the pre-update win estimate remains a valid
+    # action-independent baseline, even though it does not predict the costs.
+    # Do not relabel win probabilities or punish liquidation after debt arose.
+    advantages-=torch.tensor(costs,device=device,dtype=advantages.dtype)
     useful=advantages[actor_ids];mean=useful.mean() if actor_ids else torch.zeros((),device=device)
     std=useful.std(unbiased=False) if actor_ids else torch.zeros((),device=device)
     if config['normalize_advantages'] and actor_ids: advantages[actor_ids]=(useful-mean)/std.clamp_min(1e-8)
@@ -336,6 +349,7 @@ def _ppo_nonforced(model,optimizer,games,behavior,config,*,profile,profile_steps
                 gradient_norm=float(norm),actor_positions=actor_seen,critic_positions=critic_seen,positions=actor_seen))
             if stopped or full>config['target_kl']: stopped=True;break
     return dict(format='nonforced-actor-ppo/2.1.0',epochs=epochs,optimizer_steps=steps,
+        insolvency=insolvency_report,
         learner_decisions=count,meaningful_decisions=len(actor_ids),forced_decisions=int(ds.forced.sum()),
         learner_trajectories=len({d[2] for d in data}),effective_batch_size=config['effective_batch_size'],
         microbatch_size=config['microbatch_size'],critic_batch_size=config['critic_batch_size'],

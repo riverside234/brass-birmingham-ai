@@ -26,6 +26,556 @@
           "to": 0.7
         }
       }
+    },
+    {
+      "from_implementation": "f85a8c99fff8b4cff806bcf059e6fd4538d8d2be3b9c748c4d167bdf84897c08",
+      "to_implementation": "2ea375ddfa37d3aa07786eba035f3d17e38fd94876734fee5317bed58af68360",
+      "learning_compatibility": "c349e816f2e301ea2a3b438902059cffe868f48e131f7c120691d37cd1c409d2",
+      "reviewed_evidence": "results/selfplay-v2/state.json",
+      "reason": "70-iteration review: preserve PPO LR/loss, IL, model and data contracts; increase teachers to every 160 games with at most two four-game collections per iteration, 7/9 total accounted search time (1.5 times old allowance), 64-model streaming reservoir with explicit IL/recent/older sampling, 72 inference slots and 16 replay readers. Preserve weights, Adam/RNG and progress; rebase only the future teacher threshold.",
+      "config_changes": {
+        "execution": {
+          "from": {
+            "processes": 48,
+            "hosts_per_process": 1,
+            "heavy_processes": 24,
+            "batch_size": 64,
+            "max_candidate_cells": 131072,
+            "flush_ms": 1.0,
+            "worker_threads": 1,
+            "max_decisions": 2000,
+            "max_models": 16,
+            "shard_games": 8,
+            "shard_bytes": 268435456,
+            "feature_cache": true,
+            "policy_cache": 32,
+            "search_workers_per_turn": 4,
+            "cpu_budget": 64,
+            "cpu_reserve": 4
+          },
+          "to": {
+            "processes": 48,
+            "hosts_per_process": 1,
+            "heavy_processes": 24,
+            "batch_size": 64,
+            "max_candidate_cells": 131072,
+            "flush_ms": 1.0,
+            "worker_threads": 1,
+            "max_decisions": 2000,
+            "max_models": 72,
+            "shard_games": 8,
+            "shard_bytes": 268435456,
+            "feature_cache": true,
+            "policy_cache": 32,
+            "search_workers_per_turn": 4,
+            "cpu_budget": 64,
+            "cpu_reserve": 4
+          }
+        },
+        "search_every_games": {
+          "from": 320,
+          "to": 160
+        },
+        "population": {
+          "from": {
+            "recent": 8,
+            "anchors": 4
+          },
+          "to": {
+            "recent": 16,
+            "anchors": 48
+          }
+        },
+        "audit_workers": {
+          "from": 8,
+          "to": 16
+        },
+        "search_wall_fraction": {
+          "from": 0.5,
+          "to": 0.7777777777777778
+        },
+        "search_collections_per_iteration": {
+          "from": null,
+          "to": 2
+        }
+      }
+    },
+    {
+      "from_implementation": "760778c9fd71fd2549d87e817b14e148be6cf555444cbcceb7e0cfc06d0d5830",
+      "to_implementation": "2ea375ddfa37d3aa07786eba035f3d17e38fd94876734fee5317bed58af68360",
+      "learning_compatibility": "c349e816f2e301ea2a3b438902059cffe868f48e131f7c120691d37cd1c409d2",
+      "reviewed_evidence": "results/selfplay-v2-31/state.json",
+      "reason": "70-iteration review: preserve PPO LR/loss, IL, model and data contracts; increase teachers to every 160 games with at most two four-game collections per iteration, 7/9 total accounted search time (1.5 times old allowance), 64-model streaming reservoir with explicit IL/recent/older sampling, 72 inference slots and 16 replay readers. Preserve weights, Adam/RNG and progress; rebase only the future teacher threshold.",
+      "config_changes": {
+        "execution": {
+          "from": {
+            "processes": 48,
+            "hosts_per_process": 1,
+            "heavy_processes": 24,
+            "batch_size": 64,
+            "max_candidate_cells": 131072,
+            "flush_ms": 1.0,
+            "worker_threads": 1,
+            "max_decisions": 2000,
+            "max_models": 16,
+            "shard_games": 8,
+            "shard_bytes": 268435456,
+            "feature_cache": true,
+            "policy_cache": 32,
+            "search_workers_per_turn": 4,
+            "cpu_budget": 64,
+            "cpu_reserve": 4
+          },
+          "to": {
+            "processes": 48,
+            "hosts_per_process": 1,
+            "heavy_processes": 24,
+            "batch_size": 64,
+            "max_candidate_cells": 131072,
+            "flush_ms": 1.0,
+            "worker_threads": 1,
+            "max_decisions": 2000,
+            "max_models": 72,
+            "shard_games": 8,
+            "shard_bytes": 268435456,
+            "feature_cache": true,
+            "policy_cache": 32,
+            "search_workers_per_turn": 4,
+            "cpu_budget": 64,
+            "cpu_reserve": 4
+          }
+        },
+        "search_every_games": {
+          "from": 320,
+          "to": 160
+        },
+        "population": {
+          "from": {
+            "recent": 8,
+            "anchors": 4
+          },
+          "to": {
+            "recent": 16,
+            "anchors": 48
+          }
+        },
+        "audit_workers": {
+          "from": 8,
+          "to": 16
+        },
+        "search_wall_fraction": {
+          "from": 0.5,
+          "to": 0.7777777777777778
+        },
+        "search_collections_per_iteration": {
+          "from": null,
+          "to": 2
+        }
+      }
+    },
+    {
+      "from_implementation": "d95fe440ade5bf9a8ede3850757011b815700773a4271c625dee70eb946059b4",
+      "to_implementation": "2ea375ddfa37d3aa07786eba035f3d17e38fd94876734fee5317bed58af68360",
+      "learning_compatibility": "c349e816f2e301ea2a3b438902059cffe868f48e131f7c120691d37cd1c409d2",
+      "reviewed_evidence": "results/selfplay-v2-70/state.json",
+      "reason": "70-iteration review: preserve PPO LR/loss, IL, model and data contracts; increase teachers to every 160 games with at most two four-game collections per iteration, 7/9 total accounted search time (1.5 times old allowance), 64-model streaming reservoir with explicit IL/recent/older sampling, 72 inference slots and 16 replay readers. Preserve weights, Adam/RNG and progress; rebase only the future teacher threshold.",
+      "config_changes": {
+        "execution": {
+          "from": {
+            "processes": 48,
+            "hosts_per_process": 1,
+            "heavy_processes": 24,
+            "batch_size": 64,
+            "max_candidate_cells": 131072,
+            "flush_ms": 1.0,
+            "worker_threads": 1,
+            "max_decisions": 2000,
+            "max_models": 16,
+            "shard_games": 8,
+            "shard_bytes": 268435456,
+            "feature_cache": true,
+            "policy_cache": 32,
+            "search_workers_per_turn": 4,
+            "cpu_budget": 64,
+            "cpu_reserve": 4
+          },
+          "to": {
+            "processes": 48,
+            "hosts_per_process": 1,
+            "heavy_processes": 24,
+            "batch_size": 64,
+            "max_candidate_cells": 131072,
+            "flush_ms": 1.0,
+            "worker_threads": 1,
+            "max_decisions": 2000,
+            "max_models": 72,
+            "shard_games": 8,
+            "shard_bytes": 268435456,
+            "feature_cache": true,
+            "policy_cache": 32,
+            "search_workers_per_turn": 4,
+            "cpu_budget": 64,
+            "cpu_reserve": 4
+          }
+        },
+        "search_every_games": {
+          "from": 320,
+          "to": 160
+        },
+        "population": {
+          "from": {
+            "recent": 8,
+            "anchors": 4
+          },
+          "to": {
+            "recent": 16,
+            "anchors": 48
+          }
+        },
+        "audit_workers": {
+          "from": 8,
+          "to": 16
+        },
+        "search_wall_fraction": {
+          "from": 0.7,
+          "to": 0.7777777777777778
+        },
+        "search_collections_per_iteration": {
+          "from": null,
+          "to": 2
+        }
+      }
+    },
+    {
+      "from_implementation": "f85a8c99fff8b4cff806bcf059e6fd4538d8d2be3b9c748c4d167bdf84897c08",
+      "to_implementation": "ef111540f20d696496b13596791bbc113d8ce27843577d546b1e71a5e6a4c7e1",
+      "learning_compatibility": "c349e816f2e301ea2a3b438902059cffe868f48e131f7c120691d37cd1c409d2",
+      "reviewed_evidence": "results/selfplay-v2/state.json",
+      "reason": "Insolvency recovery: add 0.02 per observed round-end insolvency, capped at 0.10 per seat/game, to the actor Monte Carlo reward-to-go; retain official win/rank/VP critic labels. Activate one persistent ordinary-game recovery schedule at this same-run transition: 20,000 games with 15% self-play, 25% historical, 60% searched-v4 tables; then 10,000 games with 45% self-play, 25% historical, 30% searched v4 (1s/four workers). Preserve checkpoint, Adam/RNG, model/replay/IL contracts and preceding 70-iteration settings.",
+      "config_changes": {
+        "execution": {
+          "from": {
+            "processes": 48,
+            "hosts_per_process": 1,
+            "heavy_processes": 24,
+            "batch_size": 64,
+            "max_candidate_cells": 131072,
+            "flush_ms": 1.0,
+            "worker_threads": 1,
+            "max_decisions": 2000,
+            "max_models": 16,
+            "shard_games": 8,
+            "shard_bytes": 268435456,
+            "feature_cache": true,
+            "policy_cache": 32,
+            "search_workers_per_turn": 4,
+            "cpu_budget": 64,
+            "cpu_reserve": 4
+          },
+          "to": {
+            "processes": 48,
+            "hosts_per_process": 1,
+            "heavy_processes": 24,
+            "batch_size": 64,
+            "max_candidate_cells": 131072,
+            "flush_ms": 1.0,
+            "worker_threads": 1,
+            "max_decisions": 2000,
+            "max_models": 72,
+            "shard_games": 8,
+            "shard_bytes": 268435456,
+            "feature_cache": true,
+            "policy_cache": 32,
+            "search_workers_per_turn": 4,
+            "cpu_budget": 64,
+            "cpu_reserve": 4
+          }
+        },
+        "search_every_games": {
+          "from": 320,
+          "to": 160
+        },
+        "population": {
+          "from": {
+            "recent": 8,
+            "anchors": 4
+          },
+          "to": {
+            "recent": 16,
+            "anchors": 48
+          }
+        },
+        "audit_workers": {
+          "from": 8,
+          "to": 16
+        },
+        "search_wall_fraction": {
+          "from": 0.5,
+          "to": 0.7777777777777778
+        },
+        "search_collections_per_iteration": {
+          "from": null,
+          "to": 2
+        },
+        "insolvency": {
+          "from": null,
+          "to": {
+            "event_cost": 0.02,
+            "max_cost": 0.1
+          }
+        },
+        "legacy_boost": {
+          "from": null,
+          "to": {
+            "stages": [
+              {
+                "games": 20000,
+                "selfplay": 15,
+                "historical": 25,
+                "legacy": 60
+              },
+              {
+                "games": 10000,
+                "selfplay": 45,
+                "historical": 25,
+                "legacy": 30
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "from_implementation": "760778c9fd71fd2549d87e817b14e148be6cf555444cbcceb7e0cfc06d0d5830",
+      "to_implementation": "ef111540f20d696496b13596791bbc113d8ce27843577d546b1e71a5e6a4c7e1",
+      "learning_compatibility": "c349e816f2e301ea2a3b438902059cffe868f48e131f7c120691d37cd1c409d2",
+      "reviewed_evidence": "results/selfplay-v2-31/state.json",
+      "reason": "Insolvency recovery: add 0.02 per observed round-end insolvency, capped at 0.10 per seat/game, to the actor Monte Carlo reward-to-go; retain official win/rank/VP critic labels. Activate one persistent ordinary-game recovery schedule at this same-run transition: 20,000 games with 15% self-play, 25% historical, 60% searched-v4 tables; then 10,000 games with 45% self-play, 25% historical, 30% searched v4 (1s/four workers). Preserve checkpoint, Adam/RNG, model/replay/IL contracts and preceding 70-iteration settings.",
+      "config_changes": {
+        "execution": {
+          "from": {
+            "processes": 48,
+            "hosts_per_process": 1,
+            "heavy_processes": 24,
+            "batch_size": 64,
+            "max_candidate_cells": 131072,
+            "flush_ms": 1.0,
+            "worker_threads": 1,
+            "max_decisions": 2000,
+            "max_models": 16,
+            "shard_games": 8,
+            "shard_bytes": 268435456,
+            "feature_cache": true,
+            "policy_cache": 32,
+            "search_workers_per_turn": 4,
+            "cpu_budget": 64,
+            "cpu_reserve": 4
+          },
+          "to": {
+            "processes": 48,
+            "hosts_per_process": 1,
+            "heavy_processes": 24,
+            "batch_size": 64,
+            "max_candidate_cells": 131072,
+            "flush_ms": 1.0,
+            "worker_threads": 1,
+            "max_decisions": 2000,
+            "max_models": 72,
+            "shard_games": 8,
+            "shard_bytes": 268435456,
+            "feature_cache": true,
+            "policy_cache": 32,
+            "search_workers_per_turn": 4,
+            "cpu_budget": 64,
+            "cpu_reserve": 4
+          }
+        },
+        "search_every_games": {
+          "from": 320,
+          "to": 160
+        },
+        "population": {
+          "from": {
+            "recent": 8,
+            "anchors": 4
+          },
+          "to": {
+            "recent": 16,
+            "anchors": 48
+          }
+        },
+        "audit_workers": {
+          "from": 8,
+          "to": 16
+        },
+        "search_wall_fraction": {
+          "from": 0.5,
+          "to": 0.7777777777777778
+        },
+        "search_collections_per_iteration": {
+          "from": null,
+          "to": 2
+        },
+        "insolvency": {
+          "from": null,
+          "to": {
+            "event_cost": 0.02,
+            "max_cost": 0.1
+          }
+        },
+        "legacy_boost": {
+          "from": null,
+          "to": {
+            "stages": [
+              {
+                "games": 20000,
+                "selfplay": 15,
+                "historical": 25,
+                "legacy": 60
+              },
+              {
+                "games": 10000,
+                "selfplay": 45,
+                "historical": 25,
+                "legacy": 30
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "from_implementation": "d95fe440ade5bf9a8ede3850757011b815700773a4271c625dee70eb946059b4",
+      "to_implementation": "ef111540f20d696496b13596791bbc113d8ce27843577d546b1e71a5e6a4c7e1",
+      "learning_compatibility": "c349e816f2e301ea2a3b438902059cffe868f48e131f7c120691d37cd1c409d2",
+      "reviewed_evidence": "results/selfplay-v2-70/state.json",
+      "reason": "Insolvency recovery: add 0.02 per observed round-end insolvency, capped at 0.10 per seat/game, to the actor Monte Carlo reward-to-go; retain official win/rank/VP critic labels. Activate one persistent ordinary-game recovery schedule at this same-run transition: 20,000 games with 15% self-play, 25% historical, 60% searched-v4 tables; then 10,000 games with 45% self-play, 25% historical, 30% searched v4 (1s/four workers). Preserve checkpoint, Adam/RNG, model/replay/IL contracts and preceding 70-iteration settings.",
+      "config_changes": {
+        "execution": {
+          "from": {
+            "processes": 48,
+            "hosts_per_process": 1,
+            "heavy_processes": 24,
+            "batch_size": 64,
+            "max_candidate_cells": 131072,
+            "flush_ms": 1.0,
+            "worker_threads": 1,
+            "max_decisions": 2000,
+            "max_models": 16,
+            "shard_games": 8,
+            "shard_bytes": 268435456,
+            "feature_cache": true,
+            "policy_cache": 32,
+            "search_workers_per_turn": 4,
+            "cpu_budget": 64,
+            "cpu_reserve": 4
+          },
+          "to": {
+            "processes": 48,
+            "hosts_per_process": 1,
+            "heavy_processes": 24,
+            "batch_size": 64,
+            "max_candidate_cells": 131072,
+            "flush_ms": 1.0,
+            "worker_threads": 1,
+            "max_decisions": 2000,
+            "max_models": 72,
+            "shard_games": 8,
+            "shard_bytes": 268435456,
+            "feature_cache": true,
+            "policy_cache": 32,
+            "search_workers_per_turn": 4,
+            "cpu_budget": 64,
+            "cpu_reserve": 4
+          }
+        },
+        "search_every_games": {
+          "from": 320,
+          "to": 160
+        },
+        "population": {
+          "from": {
+            "recent": 8,
+            "anchors": 4
+          },
+          "to": {
+            "recent": 16,
+            "anchors": 48
+          }
+        },
+        "audit_workers": {
+          "from": 8,
+          "to": 16
+        },
+        "search_wall_fraction": {
+          "from": 0.7,
+          "to": 0.7777777777777778
+        },
+        "search_collections_per_iteration": {
+          "from": null,
+          "to": 2
+        },
+        "insolvency": {
+          "from": null,
+          "to": {
+            "event_cost": 0.02,
+            "max_cost": 0.1
+          }
+        },
+        "legacy_boost": {
+          "from": null,
+          "to": {
+            "stages": [
+              {
+                "games": 20000,
+                "selfplay": 15,
+                "historical": 25,
+                "legacy": 60
+              },
+              {
+                "games": 10000,
+                "selfplay": 45,
+                "historical": 25,
+                "legacy": 30
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "from_implementation": "2ea375ddfa37d3aa07786eba035f3d17e38fd94876734fee5317bed58af68360",
+      "to_implementation": "ef111540f20d696496b13596791bbc113d8ce27843577d546b1e71a5e6a4c7e1",
+      "learning_compatibility": "c349e816f2e301ea2a3b438902059cffe868f48e131f7c120691d37cd1c409d2",
+      "reason": "Insolvency recovery: add 0.02 per observed round-end insolvency, capped at 0.10 per seat/game, to the actor Monte Carlo reward-to-go; retain official win/rank/VP critic labels. Activate one persistent ordinary-game recovery schedule at this same-run transition: 20,000 games with 15% self-play, 25% historical, 60% searched-v4 tables; then 10,000 games with 45% self-play, 25% historical, 30% searched v4 (1s/four workers). Preserve checkpoint, Adam/RNG, model/replay/IL contracts and preceding 70-iteration settings.",
+      "config_changes": {
+        "insolvency": {
+          "from": null,
+          "to": {
+            "event_cost": 0.02,
+            "max_cost": 0.1
+          }
+        },
+        "legacy_boost": {
+          "from": null,
+          "to": {
+            "stages": [
+              {
+                "games": 20000,
+                "selfplay": 15,
+                "historical": 25,
+                "legacy": 60
+              },
+              {
+                "games": 10000,
+                "selfplay": 45,
+                "historical": 25,
+                "legacy": 30
+              }
+            ]
+          }
+        }
+      }
     }
   ]
 }
