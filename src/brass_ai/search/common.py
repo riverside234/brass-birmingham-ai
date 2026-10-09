@@ -42,14 +42,21 @@ class SearchConfig:
     workers: int = 1
     cpu_role: str = 'reference'
     virtual_loss: float = .02
+    reward: dict | None = None
+    utility_scale: float = 1.0
 
     def validate(self):
         require(self.backend == 'masked_ismcts', 'Only Masked ISMCTS is supported')
         require(math.isfinite(self.virtual_loss) and 0<=self.virtual_loss<=1,'Invalid selection-only virtual loss')
         require(type(self.workers) is int and 1<=self.workers<=16 and self.cpu_role in ('lab','laptop','reference'),'Invalid search CPU allowance')
-        require(self.contract=='masked-ismcts/1.1.0' and self.evaluator_kind=='neural' and self.q_transform=='none' and
+        require(self.contract in ('masked-ismcts/1.1.0','masked-ismcts/1.2.0') and self.evaluator_kind=='neural' and self.q_transform=='none' and
                 self.leaf_policy=='new_root_information_frontier' and self.candidate_policy=='supported_progressive',
                 'NN search cannot inherit heuristic Q transforms or reply/depth caps')
+        require(math.isfinite(self.utility_scale) and self.utility_scale>0,'Invalid fixed search utility scale')
+        require((self.reward is not None)==(self.contract=='masked-ismcts/1.2.0'),'Search reward/contract differs')
+        if self.reward is not None:
+            from brass_ai.learning.reward import validate
+            validate(self.reward)
         require(math.isfinite(self.fpu_reduction) and 0<=self.fpu_reduction<=1 and
                 math.isfinite(self.tail_admission) and 0<=self.tail_admission<=.5,'Invalid FPU/admission')
         require(type(self.minimum_plan_visits) is int and self.minimum_plan_visits>=2,'Insufficient complete-plan support')
@@ -62,7 +69,11 @@ class SearchConfig:
         require(self.flush_ms<=10 and 0<=self.prior_mix<=.5, 'Invalid batching/teacher mixture')
         return self
 
-    def to_dict(self): return asdict(self)
+    def to_dict(self):
+        result=asdict(self)
+        if self.reward is None:
+            result.pop('reward');result.pop('utility_scale')
+        return result
 
 
 def ranked_candidates(choices, priors):

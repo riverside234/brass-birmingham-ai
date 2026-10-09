@@ -20,6 +20,11 @@
       "implementation": "2ea375ddfa37d3aa07786eba035f3d17e38fd94876734fee5317bed58af68360",
       "learning_compatibility": "c349e816f2e301ea2a3b438902059cffe868f48e131f7c120691d37cd1c409d2",
       "reason": "Insolvency recovery changes only PPO actor returns, ordinary-game opponents and training diagnostics. Fresh IL model, supervised losses, replay and checkpoint contracts remain unchanged."
+    },
+    {
+      "implementation": "ef111540f20d696496b13596791bbc113d8ce27843577d546b1e71a5e6a4c7e1",
+      "learning_compatibility": "c349e816f2e301ea2a3b438902059cffe868f48e131f7c120691d37cd1c409d2",
+      "reason": "Completed fresh IL weights/data remain compatible. Shared reward adds a versioned head only after IL handoff, calibrated on new ordinary trajectories; same-run PPO optimizer restoration is separate."
     }
   ]
 }

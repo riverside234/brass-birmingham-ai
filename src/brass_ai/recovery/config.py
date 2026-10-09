@@ -6,9 +6,8 @@ from brass_ai.search.common import SearchConfig
 # Training-only defaults; evaluation/laptop SearchConfig defaults stay intact.
 SEARCH_EVERY_GAMES=160
 SEARCH_COLLECTIONS_PER_ITERATION=2
-# User-selected 1.5x the old allowance: .7/.3 * 1.5 = 3.5 search seconds
-# per ordinary second, or 7/9 of their combined accounted wall time.
-SEARCH_WALL_FRACTION=7/9
+# Cumulative search share: .9/.1 = nine search seconds per ordinary second.
+SEARCH_WALL_FRACTION=.90
 SEARCH_SECONDS=12.0
 SEARCH_WORKERS=4
 PPO_LEARNING_RATE=1e-5
@@ -128,6 +127,12 @@ def validate_config(config):
         'search_ready_games','search_every_games','search_games','distill_steps','distill_weight',
         'rehearsal_manifest','rehearsal_weight','rehearsal_until','profile_steps'}
     version=config.get('format')
+    if 'reward' in config:
+        fields.add('reward')
+        from .utility import reward_spec
+        spec=reward_spec(config)
+        require(config['search'].get('reward')==spec and config['search'].get('contract')=='masked-ismcts/1.2.0',
+                'PPO/search reward contracts must match')
     if 'insolvency' in config:
         fields.add('insolvency')
         bounded_fields(config['insolvency'],INSOLVENCY,'insolvency')

@@ -26,6 +26,7 @@ from .updates import ppo_update,rehearsal_dataset
 from .teacher_collection import collect_due
 from .population import sample_opponents
 from .curriculum import activate_boost,boost_window,training_table,searched_legacy,boost_report
+from .utility import migrate,reward_spec
 
 
 class Behavior:
@@ -113,6 +114,10 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
         write_json(state_path,state)
     optimizer=torch.optim.AdamW(model.parameters(),lr=config['learning_rate'],weight_decay=config['weight_decay'])
     resume_optimizer(raw,optimizer)
+    reward=reward_spec(config)
+    migration=migrate(model,optimizer,reward)
+    if migration:
+        print('Combined reward migration: compatible weights/Adam/RNG preserved; new utility head awaits fresh-rollout calibration',flush=True)
     if source_changed:
         from .resume import commit_transition
         state=commit_transition(run,state,signature)
@@ -188,13 +193,13 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                 load_began=time.monotonic()
                 ingress_metrics={}
                 games,learner_data,diagnostics=load_collection(records,behavior.policy_id,kind_by_group,
-                    executor=readers,workers=config['audit_workers'],telemetry=ingress_metrics,insolvency=config.get('insolvency'))
+                    executor=readers,workers=config['audit_workers'],telemetry=ingress_metrics,insolvency=config.get('insolvency'),reward=reward)
                 collected=time.monotonic()
                 weight=config['rehearsal_weight']*max(0,1-state['games_done']/config['rehearsal_until'])
                 update=ppo_update(model,optimizer,games,behavior,config['update'],
                     profile=directory/'profile-ppo' if config['profile_steps'] else None,
                     profile_steps=config['profile_steps'],
-                    rehearsal=rehearsal,rehearsal_weight=weight,learner_data=learner_data,insolvency=config.get('insolvency'))
+                    rehearsal=rehearsal,rehearsal_weight=weight,learner_data=learner_data,insolvency=config.get('insolvency'),reward=reward)
                 updated=time.monotonic();done=state['games_done']+len(games)
                 ordinary_inference=service.report()
                 del learner_data
@@ -204,6 +209,7 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                     model,optimizer,service,heavy,done=done,cursor=cursor,ordinary_seconds=ordinary_seconds,
                     ordinary_game_seconds=(collected-began)/max(1,len(games)))
                 report=dict(format='step5-recovery-report/'+'2.2.0',iteration=iteration,composition=dict(composition),
+                    reward_migration=migration if not summaries else None,
                     legacy_boost=boost_report(state['games_done'],done,config,window),
                     actor=update,search=search,**diagnostics,incoming_model_id=current,
                     games_done=done,cumulative_games=state['previous_games']+done,

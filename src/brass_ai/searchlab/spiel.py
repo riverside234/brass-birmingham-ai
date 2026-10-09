@@ -96,6 +96,7 @@ class BrassSpielState(pyspiel.State):
         self.views, self.recall, self.actions = [None]*4, [[] for _ in range(4)], []
         self.legal = []
         self.final_returns = None
+        self.final_result = None
 
     def current_player(self):
         if self.is_terminal(): return pyspiel.PlayerId.TERMINAL
@@ -173,7 +174,9 @@ class BrassSpielState(pyspiel.State):
             if not self.recall[s] or self.recall[s][-1]['hand'] != hand:
                 self.recall[s].append(dict(revision=view['context']['revision'], hand=list(hand)))
         self.legal = [] if self.is_terminal() else host.choices()
-        if self.is_terminal(): self.final_returns = [p['utility'] for p in host.call('result')['seats']]
+        if self.is_terminal():
+            self.final_result=host.call('result')
+            self.final_returns = [p['utility'] for p in self.final_result['seats']]
 
     def observation_string(self, player=None):
         player = self.current_player() if player is None else player

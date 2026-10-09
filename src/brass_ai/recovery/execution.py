@@ -103,6 +103,10 @@ def run_game(host,job,policies,timings,max_decisions,admission=None):
 
 
 def _run_turns(host,job,assigned,timings,max_decisions,context,game,rngs,encoded,encoder,lease):
+    rewards=[p.config.reward for p in assigned if isinstance(p,MaskedSearchPolicy) and p.config.reward is not None]
+    from brass_ai.learning.reward import CostLedger
+    ledger=CostLedger(rewards[0]) if rewards else None
+    require(not rewards or all(r==rewards[0] for r in rewards),'Mixed search reward contracts in one table')
     for step in range(max_decisions):
         if context['terminal']: break
         seat=context['actor'];p=assigned[seat]
@@ -115,6 +119,9 @@ def _run_turns(host,job,assigned,timings,max_decisions,context,game,rngs,encoded
         with timings.phase('host.choices'): choices=host.choices()
         with timings.phase('inputs.validate'): BOUNDARY.check(view,choices)
         require(view['seat']==seat and view['context']['revision']==context['revision'],'Stale actor observation')
+        if ledger is not None:
+            ledger.observe(view)
+            if isinstance(p,MaskedSearchPolicy) and p.config.reward is not None:p.set_reward_context(ledger)
         began=time.monotonic()
         with timings.phase('policy.'+p.kind):
             if type(p) is NeuralPolicy and len(choices)==1:
@@ -130,6 +137,7 @@ def _run_turns(host,job,assigned,timings,max_decisions,context,game,rngs,encoded
             behavior=dict(kind=p.kind,policy_id=p.policy_id,probability=probability,temperature=getattr(p,'temperature',1.0))))
         e=getattr(getattr(p,'evaluator',None),'encoder',encoder)
         with timings.phase('inputs.encode'): encoded.append(e.encode(view,choices,style,intent,validated=True))
+        if ledger is not None:ledger.chosen(view,choices[chosen])
         with timings.phase('host.apply'): context=host.apply(context,choices[chosen])
         if hasattr(p,'finish_teacher_turn') and (context['terminal'] or context['actor']!=seat or
                 turn_key(context)!=turn_key(view['context']) or context['phase']=='debt'):

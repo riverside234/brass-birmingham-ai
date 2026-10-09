@@ -29,14 +29,15 @@ def validate_teacher(teacher, count):
     if teacher is None:
         return
     base={'source', 'probabilities', 'coverage', 'confidence', 'samples', 'horizon'}
-    visits=teacher.get('source') in ('ismcts-root-visits/1.0.0','ismcts-root-visits/1.1.0')
+    visits=teacher.get('source') in ('ismcts-root-visits/1.0.0','ismcts-root-visits/1.1.0','ismcts-root-visits/1.2.0')
     extra={'legal_ids','visits','priors','expansion','model_id','observer','worlds','prior_mix','search','fingerprint','source_fingerprint'} if visits else set()
     keys(teacher,base|extra)
-    require(teacher['source'] in ('fresh-finalist/1.0.0','ismcts-root-visits/1.0.0','ismcts-root-visits/1.1.0'), 'Unsupported teacher target')
+    require(teacher['source'] in ('fresh-finalist/1.0.0','ismcts-root-visits/1.0.0','ismcts-root-visits/1.1.0','ismcts-root-visits/1.2.0'), 'Unsupported teacher target')
     if visits:
-        require(teacher['source']=='ismcts-root-visits/1.1.0','Archived search teacher uses obsolete selection/horizon contracts')
+        require(teacher['source'] in ('ismcts-root-visits/1.1.0','ismcts-root-visits/1.2.0'),'Archived search teacher uses obsolete selection/horizon contracts')
         from brass_ai.search.common import SearchConfig
         SearchConfig(**teacher['search']).validate()
+        require(teacher['search'].get('contract')=='masked-ismcts/'+teacher['source'].rsplit('/',1)[1],'Teacher reward version differs')
         require(len(teacher['legal_ids'])==count and len(set(teacher['legal_ids']))==count,'Invalid teacher legal IDs')
         require(len(teacher['visits'])==count and all(type(n) is int and n>=0 for n in teacher['visits']) and
                 sum(n>0 for n in teacher['visits'])>=2 and sum(teacher['visits'])==teacher['samples'],'Incomplete root-visit teacher')
@@ -96,7 +97,7 @@ def validate_game(game):
         finite_vector([b['temperature']], 1, 0)
         finite_vector([row['seconds']], 1, 0)
         validate_teacher(row['teacher'], len(row['choices']))
-        if row['teacher'] is not None and row['teacher']['source'] in ('ismcts-root-visits/1.0.0','ismcts-root-visits/1.1.0'):
+        if row['teacher'] is not None and row['teacher']['source'] in ('ismcts-root-visits/1.0.0','ismcts-root-visits/1.1.0','ismcts-root-visits/1.2.0'):
             require(row['teacher']['legal_ids']==[c['id'] for c in row['choices']] and row['teacher']['observer']==row['seat'], 'Teacher action order/observer mismatch')
     require({r['seat'] for r in game['records']} == set(range(4)), 'Missing seat trajectories')
     return game

@@ -47,6 +47,11 @@ def collect_due(root,run,directory,config,state,signature,model,optimizer,servic
     estimate=estimate_collection(config,ordinary_game_seconds);batches=[];blocked=False
     allowance_before=search_allowance(ordinary_seconds,search_seconds,config['search_wall_fraction'])
     due=due_collections(done,next_search,config)
+    if getattr(model.config,'utility',None) is not None:
+        from .utility import calibration_ready
+        require(model.config.utility==config['search'].get('reward'),'Teacher/model reward differs')
+        if not calibration_ready(model):
+            return dict(updated=False,reason='Utility head calibration not ready; collect fresh ordinary rollouts first',collection_count=0),next_search,cursor,search_seconds
     for batch_index in range(due):
         available=search_allowance(ordinary_seconds,search_seconds,config['search_wall_fraction'])
         if estimate>available:blocked=True;break

@@ -35,6 +35,10 @@ def evaluate(root,output,candidate_path,references,config,*,setups=None,seed=Non
         entries.append(dict(path=str(path),sha256=sha(project_path(root,path)),model_id=raw['model_id']))
         modes[raw['model_id']]=raw['training'].get('mode')
         require(model.config.architecture=='brass-four-seat-mlp-resnet/1.0.0' and raw['training'].get('fresh_run'),'Evaluation accepts only checkpoints from a new fresh residual run')
+        if len(entries)==1 and config['use_search'] and config['search'].get('reward') is not None:
+            from .utility import calibration_ready
+            require(model.config.utility==config['search']['reward'] and calibration_ready(model),
+                    'Combined search evaluation requires a calibrated matching-reward checkpoint')
         if entries[:-1]:require(raw['training']['fresh_run']==fresh_run,'Evaluation cannot import another run population')
         fresh_run=raw['training']['fresh_run']
     require(entries[0]['model_id'] not in [e['model_id'] for e in entries[1:]],'Candidate cannot be its own reference')

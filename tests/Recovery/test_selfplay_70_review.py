@@ -75,7 +75,7 @@ class TeacherCollectionTests(unittest.TestCase):
              patch('brass_ai.recovery.teacher_collection.distill_update',side_effect=lambda *a,**kw:copy.deepcopy(update)) as train, \
              patch('brass_ai.recovery.teacher_collection.time.monotonic',side_effect=[0.,200.,200.,400.]):
             result=collect_due(SOURCE_ROOT,SOURCE_ROOT/'artifacts/mock',SOURCE_ROOT/'artifacts/mock/iteration-0070',
-                cfg,state,{},None,None,service,heavy,done=960,cursor=18000000,
+                cfg,state,{},SimpleNamespace(config=SimpleNamespace(utility=cfg['search']['reward']),utility_calibration=dict(ready=True,reward_id=digest(cfg['search']['reward']))),None,service,heavy,done=960,cursor=18000000,
                 ordinary_seconds=ordinary,ordinary_game_seconds=1.)
             calls=list(train.call_args_list)
         return result,jobs,calls
@@ -90,7 +90,7 @@ class TeacherCollectionTests(unittest.TestCase):
         self.assertEqual(report['max_observed_reuse'],2)
 
     def test_budget_rechecked_before_second_collection_and_failure_never_retries(self):
-        (report,next_due,_,spent),jobs,calls=self.run_fixture(ordinary=250.)
+        (report,next_due,_,spent),jobs,calls=self.run_fixture(ordinary=100.)
         self.assertEqual((len(jobs),next_due,spent),(4,960,210.))
         self.assertTrue(report['budget']['deferred'])
         (report,next_due,_,_),jobs,calls=self.run_fixture(failed=True)
@@ -102,10 +102,10 @@ class TeacherCollectionTests(unittest.TestCase):
         self.assertEqual((due_collections(320,640,cfg),due_collections(640,640,cfg),due_collections(960,800,cfg)),(0,1,2))
         self.assertEqual(due_collections(50000,640,cfg),2)
         self.assertEqual(due_collections(50000,640,dict(cfg,search_every_games=0)),0)
-        self.assertEqual((SEARCH_EVERY_GAMES,SEARCH_WALL_FRACTION),(160,7/9))
-        self.assertAlmostEqual(search_allowance(100,0),350.)
-        self.assertAlmostEqual(search_allowance(100,300),50.)
-        self.assertEqual(search_allowance(100,400),0.)
+        self.assertEqual((SEARCH_EVERY_GAMES,SEARCH_WALL_FRACTION),(160,.9))
+        self.assertAlmostEqual(search_allowance(100,0),900.)
+        self.assertAlmostEqual(search_allowance(100,300),600.)
+        self.assertEqual(search_allowance(100,1000),0.)
         for p in (SOURCE_ROOT/'configs/step5').glob('lab*.json'):
             c=validate_config(read(p))
             self.assertEqual(c['population'],dict(recent=16,anchors=48))

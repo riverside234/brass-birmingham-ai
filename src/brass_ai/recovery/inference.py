@@ -68,13 +68,13 @@ class RemoteEvaluator:
                 # Preserve the R2 stopped-result contract before expensive encoding.
                 frames.append(dict(request_id=r.request_id,model=self.model_id,revision=r.view['context']['revision'],
                     seat=r.view['seat'],digest=r.input_digest,deadline=r.deadline,submitted=time.monotonic(),
-                    cancelled=bool(r.cancelled and r.cancelled.is_set()),encoded=None))
+                    cancelled=bool(r.cancelled and r.cancelled.is_set()),encoded=None,remaining=r.remaining))
                 continue
             phase=time.monotonic();e=self.encoder.encode(r.view,r.choices,r.style,r.intent)
             self.telemetry['encoding_seconds']+=time.monotonic()-phase
             frames.append(dict(request_id=r.request_id,model=self.model_id,revision=r.view['context']['revision'],
                 seat=r.view['seat'],digest=r.input_digest,deadline=r.deadline,submitted=time.monotonic(),
-                cancelled=bool(r.cancelled and r.cancelled.is_set()),encoded=e))
+                cancelled=bool(r.cancelled and r.cancelled.is_set()),encoded=e,remaining=r.remaining))
         self.endpoint.requests.put(dict(lane=self.endpoint.lane,token=token,frames=frames))
         ticket=dict(token=token,requests=list(requests),began=began)
         self.endpoint.pending=ticket
@@ -176,7 +176,8 @@ class InferenceService:
         # Each entry has only tensors derived from one permitted observer.
         by_model=defaultdict(list)
         for key,frame in items:
-            require(set(frame)=={'request_id','model','revision','seat','digest','deadline','submitted','cancelled','encoded'},'Invalid inference frame')
+            require(set(frame) in ({'request_id','model','revision','seat','digest','deadline','submitted','cancelled','encoded'},
+                                  {'request_id','model','revision','seat','digest','deadline','submitted','cancelled','encoded','remaining'}),'Invalid inference frame')
             require(type(frame['seat']) is int and 0<=frame['seat']<4 and np.isfinite(frame['deadline']),'Invalid inference attribution')
             self.timings.observe('inference.queue_wait',max(0,time.monotonic()-frame['submitted']))
             status='cancelled' if frame['cancelled'] else ('expired' if time.monotonic()>=frame['deadline'] else None)
@@ -210,7 +211,13 @@ class InferenceService:
                 if not live: continue
                 with torch.inference_mode():
                     with self.timings.phase('inference.forward'):
-                        arrays=predict_encoded(model,[f['encoded'] for _,f in live],self.device,self.config['max_candidate_cells'])
+                        remaining=None
+                        if getattr(model.config,'utility',None) is not None:
+                            budget=np.asarray([f.get('remaining') if f.get('remaining') is not None else [model.config.utility['insolvency']['max_cost']]*4 for _,f in live],dtype=np.float32)
+                            require(budget.shape==(len(live),4) and np.isfinite(budget).all() and
+                                    (budget>=0).all() and (budget<=model.config.utility['insolvency']['max_cost']+1e-8).all(),'Invalid inference utility budget')
+                            remaining=torch.from_numpy(budget).to(self.device)
+                        arrays=predict_encoded(model,[f['encoded'] for _,f in live],self.device,self.config['max_candidate_cells'],remaining)
                 require(all(np.isfinite(a).all() for a in arrays),'Nonfinite inference output')
                 cells=min(self.config['max_candidate_cells'],len(live)*max(len(f['encoded'].choice_ids) for _,f in live))
                 self.metrics['batches']+=1;self.metrics['positions']+=len(live)
@@ -225,6 +232,9 @@ class InferenceService:
                         r.update(choice_ids=list(frame['encoded'].choice_ids),
                             probabilities=arrays[0][j,:len(frame['encoded'].choice_ids)].tolist(),
                             win_share=arrays[1][j].tolist(),placement=arrays[2][j].tolist(),vp=arrays[3][j].tolist())
+                        if len(arrays)>4:
+                            from brass_ai.learning.contracts import digest
+                            r.update(utility=arrays[4][j].tolist(),reward_id=digest(model.config.utility))
                     responses[key]=r
         return responses
 

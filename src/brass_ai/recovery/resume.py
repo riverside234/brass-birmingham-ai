@@ -45,7 +45,10 @@ def load_resume(root, run, state, signature, *, device='cpu', reviewed=False):
     path = safe(run, project_path(root, entry['path']))
     require(sha(path) == entry['sha256'], 'Snapshot changed')
     model, raw = load_checkpoint(path, device=device)
-    require(model.config == ModelConfig.preset(signature['config']['model_size'])
+    from .utility import reward_spec
+    from brass_ai.learning.utility_model import utility_config
+    expected=ModelConfig.preset(signature['config']['model_size'])
+    require(model.config in (expected,utility_config(expected,reward_spec(signature['config'])))
             and raw['training'].get('fresh_run') == run.relative_to(root).as_posix(),
             "Resume must use this run's residual checkpoint")
     require(raw['model_id'] == entry['model_id'] and raw['step'] == entry['generation'] == state['iteration'],

@@ -22,6 +22,7 @@ from brass_ai.learning.contracts import digest, require
 from brass_ai.step5.policy import NeuralPolicy, inference_deadline
 from brass_ai.searchlab.spiel import BrassSpielGame, action_id
 from .common import SearchConfig, SearchIncomplete, expansion_indices, turn_key, ranked_candidates
+from brass_ai.learning.reward import CostLedger,terminal_utility
 
 
 def information_key(view,choices,recall):
@@ -56,13 +57,15 @@ class Node:
 
 def select_edge(node,ids,priors,active,observer,config):
     """Selection-only pending loss; completed returns and visits stay untouched."""
-    parent=float(node.returns[observer]/node.visits) if node.visits else float(node.bootstrap[observer])
+    scale=config.utility_scale if config.reward is not None else 1.
+    parent=(float(node.returns[observer]/node.visits) if node.visits else float(node.bootstrap[observer]))/scale
     mass=sum(priors[i] for i,identity in enumerate(ids) if identity in node.edges and node.edges[identity].visits>0)
-    fpu=max(0.,min(1.,parent-config.fpu_reduction*math.sqrt(mass)))
+    fpu=parent-config.fpu_reduction*math.sqrt(mass)
+    if config.reward is None:fpu=max(0.,min(1.,fpu))
     prior_mass=sum(priors[i] for i in active)
     def ucb(i):
         e=node.edges.get(ids[i]);n=e.visits+e.pending if e else 0
-        mean=float(e.returns[observer]/e.visits) if e and e.visits else fpu
+        mean=float(e.returns[observer]/e.visits)/scale if e and e.visits else fpu
         if e:mean-=config.virtual_loss*e.pending/max(1,n)
         return mean+config.exploration*(priors[i]/prior_mass)*math.sqrt(max(1,node.visits))/(1+n)
     return max(active,key=lambda i:(ucb(i),-i))
@@ -76,7 +79,7 @@ def supported_continuation(stats,first,observer,minimum=2):
 
 
 class MaskedISMCTS:
-    def __init__(self,game,base,opponents,config,root,context,rng,deadline,recall=None,tree=None,cache=None,lanes=None,cancelled=None,partition_index=0):
+    def __init__(self,game,base,opponents,config,root,context,rng,deadline,recall=None,tree=None,cache=None,lanes=None,cancelled=None,partition_index=0,reward_context=None):
         self.game,self.base,self.opponents,self.config=game,base,opponents,config
         self.owner=get_ident()
         self.root,self.context,self.rng,self.deadline,self.recall=root,context,rng,deadline,recall
@@ -84,6 +87,8 @@ class MaskedISMCTS:
         self.lanes=lanes or [game]
         self.cancelled=cancelled
         self.partition_index=partition_index
+        self.reward_context=reward_context
+        require(config.reward is None or reward_context is not None,'Combined search requires the real public insolvency ledger')
         self.cache=cache if cache is not None else OrderedDict()
         self.completed=self.interrupted=self.opponent_choices=self.max_pending=0
         self.root_key=None;self.plans={};self.opponent_statistics={};self.frontiers=0;self.unseen_competitions=0
@@ -94,17 +99,19 @@ class MaskedISMCTS:
         if self.cancelled is not None and self.cancelled.is_set():raise SearchIncomplete('cancelled')
         if time.monotonic()>=self.deadline:raise SearchIncomplete('whole_turn_deadline')
 
-    def request(self,policy,state,rng):
+    def request(self,policy,state,rng,ledger=None):
         actor=state.current_player()
         require(actor>=0,'No policy evaluation of a chance or terminal node')
         context=policy.context_features(state.views[actor],rng)
         key=digest(dict(contract=self.config.contract,evaluator=self.config.evaluator_kind,leaf=self.config.leaf_policy,view=state.views[actor],choices=state.legal,context=context,
-                        recall=state.recall[actor],model=policy.evaluator.model_id,policy=policy.policy_id))
+                        recall=state.recall[actor],model=policy.evaluator.model_id,policy=policy.policy_id,
+                        remaining=ledger.remaining if ledger is not None else None))
         if key in self.cache:
             self.metrics['cache_hits']+=1
             self.cache.move_to_end(key)
             return self.cache[key]
         self.metrics['requests']+=1
+        if ledger is not None:policy.utility_remaining[rng]=tuple(ledger.remaining)
         result=yield (key,policy,state.views[actor],state.legal,rng)
         self.check()
         self.cache[key]=result
@@ -117,18 +124,32 @@ class MaskedISMCTS:
         actor_rngs=[random.Random(digest(dict(seed=seed,seat=s))) for s in range(4)]
         assigned=[self.opponents[local.randrange(len(self.opponents))] for _ in range(4)]
         self.base.contexts[actor_rngs[self.root]]=self.context
+        ledger=CostLedger(self.config.reward,**self.reward_context) if self.config.reward is not None else None
+        initial_spent=ledger.spent.copy() if ledger is not None else None
+        def key_for(state):
+            key=node_key(state,self.root)
+            return digest(dict(information=key,remaining=ledger.remaining)) if ledger is not None else key
+        def values_for(response):
+            if ledger is None:return np.asarray(response['win_share'],dtype=float)
+            require(response.get('reward_id')==digest(self.config.reward),'Search leaf reward differs from terminal reward')
+            return np.asarray(response['utility'],dtype=float)
+        def apply(state,choice):
+            if ledger is not None:ledger.chosen(state.views[state.current_player()],choice)
+            state.apply_action(action_id(choice['id']))
         try:
             self.check()
             state=(game or self.game).from_observation(view,seed,self.recall)
             require([c['id'] for c in state.legal]==[c['id'] for c in choices], 'Belief changed current root legality')
-            key=node_key(state,self.root)
+            key=key_for(state)
             if self.root_key is None:self.root_key=key
             require(key==self.root_key,'Belief changed root permitted information/recall')
             initial_turn=turn_key(view['context'])
             for step in range(self.config.max_choices):
                 self.check()
+                if ledger is not None and not state.is_chance_node():ledger.observe(state.views[self.root])
                 if state.is_terminal():
-                    values=np.asarray(state.returns(),dtype=float);break
+                    values=terminal_utility(state.final_result,self.config.reward) if ledger is not None else np.asarray(state.returns(),dtype=float)
+                    break
                 if state.is_chance_node():
                     actions,weights=zip(*state.chance_outcomes())
                     state.apply_action(local.choices(actions,weights=weights)[0]);continue
@@ -136,25 +157,25 @@ class MaskedISMCTS:
                 if actor!=self.root:
                     if len(state.legal)==1:chosen=0
                     else:
-                        p,_=yield from self.request(assigned[actor],state,actor_rngs[actor])
+                        p,_=yield from self.request(assigned[actor],state,actor_rngs[actor],ledger)
                         chosen=local.choices(range(len(state.legal)),weights=p)[0]
-                    state.apply_action(action_id(state.legal[chosen]['id']));self.opponent_choices+=1
+                    apply(state,state.legal[chosen]);self.opponent_choices+=1
                     continue
-                current=turn_key(state.context);key=node_key(state,self.root)
+                current=turn_key(state.context);key=key_for(state)
                 if key not in self.tree and len(self.tree)>=16384:raise SearchIncomplete('tree_memory_cap')
                 node=self.tree.setdefault(key,Node())
                 # Leaf values are trained on acting-player observations. End the
                 # first visit at a NEW normal root information set, then allow
                 # later completed visits to expand it. No fixed future-turn cap.
                 if current!=initial_turn and state.context['phase']=='action' and node.frontier_visits==0:
-                    p,response=yield from self.request(self.base,state,actor_rngs[actor])
-                    values=np.asarray(response['win_share'],dtype=float)
+                    p,response=yield from self.request(self.base,state,actor_rngs[actor],ledger)
+                    values=values_for(response)
                     node.bootstrap=values.copy();node.priors=dict(zip((c['id'] for c in state.legal),map(float,p)))
                     frontier=node;break
                 if len(state.legal)==1:p=[1.]
                 else:
-                    p,response=yield from self.request(self.base,state,actor_rngs[actor])
-                    node.bootstrap=np.asarray(response['win_share'],dtype=float)
+                    p,response=yield from self.request(self.base,state,actor_rngs[actor],ledger)
+                    node.bootstrap=values_for(response)
                 ids=[c['id'] for c in state.legal]
                 if node.priors:require(set(node.priors)==set(ids),'Information node legality changed')
                 else:node.priors=dict(zip(ids,map(float,p)))
@@ -174,17 +195,20 @@ class MaskedISMCTS:
                 else:chosen=select_edge(node,ids,priors,active,self.root,self.config)
                 if ids[chosen] not in node.edges:node.edges[ids[chosen]]=Edge(available=node.visits)
                 identity=ids[chosen];edge=node.edges[identity];edge.pending+=1
-                path.append((node,edge))
+                path.append((node,edge,ledger.spent.copy() if ledger is not None else None))
                 if current==initial_turn:
-                    trace.append((key,identity))
-                state.apply_action(action_id(identity))
+                    trace.append((node_key(state,self.root),identity))
+                apply(state,state.legal[chosen])
             else:raise SearchIncomplete('simulation_choice_cap')
             self.check()
-            require(values.shape==(4,) and np.isfinite(values).all() and (values>=0).all() and (values<=1).all(), 'Invalid four-seat values')
-            for node,edge in path:
-                node.visits+=1;node.returns+=values;edge.visits+=1;edge.returns+=values
+            require(values.shape==(4,) and np.isfinite(values).all(), 'Invalid four-seat values')
+            if ledger is None:require((values>=0).all() and (values<=1).all(),'Invalid win probabilities')
+            for node,edge,spent in path:
+                future=values-(ledger.spent-spent) if ledger is not None else values
+                node.visits+=1;node.returns+=future;edge.visits+=1;edge.returns+=future
                 for available in node.edges.values():available.available=node.visits
             if frontier is not None:frontier.frontier_visits+=1;self.frontiers+=1
+            if ledger is not None:values=values-(ledger.spent-initial_spent)
             if trace:
                 signature=digest(trace)
                 evidence=self.plans.setdefault(signature,dict(signature=signature,first=trace[0][1],trace=trace,visits=0,returns=np.zeros(4)))
@@ -192,7 +216,7 @@ class MaskedISMCTS:
             self.completed+=1
             return values
         finally:
-            for _,edge in path:
+            for _,edge,_ in path:
                 edge.pending-=1
                 require(edge.pending>=0,'Reservation underflow')
 
@@ -260,11 +284,12 @@ def visit_teacher(choices,stats,priors,*,model,observer,config):
     target=(1-config.prior_mix)*np.asarray(visits,dtype=float)/count+config.prior_mix*prior
     from brass_ai.step5.league import implementation_id
     source=implementation_id()
-    return dict(source='ismcts-root-visits/1.1.0',probabilities=target.tolist(),coverage=[True]*len(ids),
+    version='1.2.0' if config.reward is not None else '1.1.0'
+    return dict(source='ismcts-root-visits/'+version,probabilities=target.tolist(),coverage=[True]*len(ids),
         confidence=1.,samples=count,horizon='new-root-information-frontier',
         legal_ids=ids,visits=visits,priors=prior.tolist(),expansion=stats['expansion'],model_id=model,
         observer=observer,worlds=count,prior_mix=config.prior_mix,source_fingerprint=source,
-        search=config.to_dict(),fingerprint=digest(dict(model=model,config=config.to_dict(),contract='masked-ismcts/1.1.0',source=source)))
+        search=config.to_dict(),fingerprint=digest(dict(model=model,config=config.to_dict(),contract='masked-ismcts/'+version,source=source)))
 
 
 class MaskedSearchPolicy:
@@ -290,6 +315,12 @@ class MaskedSearchPolicy:
         self.last_statistics=None
         self.last_continuation={}
         self.cancelled=Event()
+        self.reward_context=None
+
+    def set_reward_context(self,ledger):
+        require(self.config.reward==ledger.spec,'Real/search insolvency reward differs')
+        self.reward_context=ledger.snapshot()
+        for worker in getattr(self,'replicas',[]):worker.set_reward_context(ledger)
 
     def cancel(self):self.cancelled.set()
 
@@ -335,7 +366,7 @@ class MaskedSearchPolicy:
         self.last_continuation=self.incumbent(view,choices,probabilities,rng,recall)
         if len(choices)==1 or time.monotonic()>=deadline or self.cancelled.is_set():return fallback,1.,None
         bot=MaskedISMCTS(self.game,self.base,self.rollouts,self.config,view['seat'],
-            self.context_features(view,rng),rng,deadline,recall,tree,cache,self.simulation_games,self.cancelled,getattr(self,'partition_index',0))
+            self.context_features(view,rng),rng,deadline,recall,tree,cache,self.simulation_games,self.cancelled,getattr(self,'partition_index',0),self.reward_context)
         self.telemetry['searches']+=1
         with inference_deadline([self.base]+self.rollouts,deadline):stats=bot.run(view,choices)
         self.last_statistics=stats

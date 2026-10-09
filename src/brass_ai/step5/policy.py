@@ -71,6 +71,7 @@ class NeuralPolicy:
         self.exploration, self.temperature, self.focus = exploration, temperature, focus
         self.request_deadline = None
         self.contexts = weakref.WeakKeyDictionary()
+        self.utility_remaining = weakref.WeakKeyDictionary()
         self.context_counter, self.context_offset = 0, None
         self.policy_id = 'step5-neural/' + digest(dict(model=self.evaluator.model_id,
             exploration=exploration, temperature=temperature, focus=focus, version=2))
@@ -102,7 +103,7 @@ class NeuralPolicy:
             style, intent = self.context_features(view, rng)
             requests.append(Request(uuid.uuid4().hex, self.evaluator.model_id, view, choices,
                 min(time.monotonic()+120,self.request_deadline) if self.request_deadline is not None else time.monotonic()+120,
-                tuple(style), tuple(intent)))
+                tuple(style), tuple(intent),remaining=self.utility_remaining.get(rng)))
         responses = self.evaluator.predict(requests)
         outputs = []
         for request, response in zip(requests, responses):

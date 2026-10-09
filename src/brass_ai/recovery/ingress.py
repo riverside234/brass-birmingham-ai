@@ -26,7 +26,7 @@ def reader_pool(workers):
 
 def _prepare(task):
     began=time.perf_counter();cpu_began=time.process_time()
-    records,policy_id,kinds,insolvency=task
+    records,policy_id,kinds,insolvency,reward=task
     first=records[0];path=first['path']
     require(all(r['sha256']==first['sha256'] and r.get('features')==first.get('features') for r in records),
             'Conflicting self-play shard receipts')
@@ -38,7 +38,7 @@ def _prepare(task):
     loaded=time.perf_counter()
     diagnostics=summarize(games,{policy_id},kinds)
     diagnosed=time.perf_counter()
-    data=prepared(games,lambda r:r['behavior']['policy_id']==policy_id,insolvency=insolvency)
+    data=prepared(games,lambda r:r['behavior']['policy_id']==policy_id,insolvency=insolvency,reward=reward)
     require(all(r['behavior']['kind']=='model' for r,_,_,_ in data),'External actions in PPO')
     prepared_at=time.perf_counter()
     # Only verified features and learning labels cross IPC. No repeated private
@@ -46,7 +46,7 @@ def _prepare(task):
     compact=[(dict(seat=r['seat'],chosen=r['chosen'],behavior=r['behavior'],
                    view=dict(context={k:r['view']['context'][k] for k in ('era','phase')}),
                    choices=r['choices'],style=r['style'],intent=r['intent'],teacher=r['teacher'],
-                   **{k:r[k] for k in ('_insolvency_cost_to_go','_insolvency_trajectory') if k in r}),
+                   **{k:r[k] for k in ('_insolvency_cost_to_go','_insolvency_trajectory','_reward_return','_reward_remaining','_reward_id','_reward_trajectory') if k in r}),
               target,identity,encoded) for r,target,identity,encoded in data]
     headers=[{k:v for k,v in g.items() if k!='records'} for g in games]
     ended=time.perf_counter()
@@ -56,14 +56,14 @@ def _prepare(task):
     return headers,compact,diagnostics,metrics
 
 
-def load_collection(records,policy_id,kinds,*,executor=None,workers=1,telemetry=None,insolvency=None):
+def load_collection(records,policy_id,kinds,*,executor=None,workers=1,telemetry=None,insolvency=None,reward=None):
     """Retain deterministic shard order and the same validation/diagnostics."""
     began=time.perf_counter();by_path={}
     ordered=sorted(records,key=lambda r:r['job'])
     require(ordered and len({r['job'] for r in ordered})==len(ordered),'Duplicate or empty collection jobs')
     require(len({r['game_id'] for r in ordered})==len(ordered),'Duplicate game across shards')
     for record in ordered:by_path.setdefault(record['path'],[]).append(record)
-    tasks=[(group,policy_id,kinds,insolvency) for group in by_path.values()]
+    tasks=[(group,policy_id,kinds,insolvency,reward) for group in by_path.values()]
     parts=[None]*len(tasks);log=Progress(f'self-play prepare (CPU, {min(workers,len(tasks))} readers)',len(tasks),'shards')
     if executor is None:
         for i,task in enumerate(tasks):parts[i]=_prepare(task);log(i+1)

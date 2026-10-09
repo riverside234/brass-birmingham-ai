@@ -89,7 +89,7 @@
     "prior_mix": 0.1,
     "turn_interval": 4,
     "max_searches_per_seat": 4,
-    "contract": "masked-ismcts/1.1.0",
+    "contract": "masked-ismcts/1.2.0",
     "evaluator_kind": "neural",
     "q_transform": "none",
     "leaf_policy": "new_root_information_frontier",
@@ -98,7 +98,18 @@
     "minimum_plan_visits": 2,
     "reopen_support": 4,
     "tail_admission": 0.05,
-    "virtual_loss": 0.02
+    "virtual_loss": 0.02,
+    "reward": {
+      "version": "brass-combined-return/1.0.0",
+      "win": 1.0,
+      "placement": 0.1,
+      "vp": 0.0005,
+      "insolvency": {
+        "event_cost": 0.02,
+        "max_cost": 0.1
+      }
+    },
+    "utility_scale": 1.2
   },
   "rehearsal_manifest": null,
   "rehearsal_weight": 0.1,
@@ -133,7 +144,7 @@
   },
   "audit_workers": 2,
   "overlap_pools": true,
-  "search_wall_fraction": 0.7777777777777778,
+  "search_wall_fraction": 0.9,
   "architecture": "brass-four-seat-mlp-resnet/1.0.0",
   "parameter_limit": 2000000,
   "initialization": "random",
@@ -151,5 +162,10 @@
   "insolvency": {
     "event_cost": 0.02,
     "max_cost": 0.1
+  },
+  "reward": {
+    "win": 1.0,
+    "placement": 0.1,
+    "vp": 0.0005
   }
 }

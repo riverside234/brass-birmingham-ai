@@ -42,15 +42,15 @@ def collate(encoded, device='cpu'):
         np.stack([x.stable_to_relative for x in encoded])))
 
 
-def predict_encoded(model, encoded, device, candidate_limit):
+def predict_encoded(model, encoded, device, candidate_limit, remaining=None):
     """Score ALL legal candidates, chunking a large position before softmax.
 
     The oversized path encodes its state once and never changes legality/order.
     Smaller positions retain the normal padded, masked CPU/GPU batch path.
     """
     if max(len(e.choice_ids) for e in encoded)<=candidate_limit:
-        logits,win,rank,vp=model(*collate(encoded,device))
-        return [torch.softmax(logits.float(),-1).cpu().numpy()]+[a.cpu().numpy() for a in (win,rank,vp)]
+        outputs=(model(*collate(encoded,device),remaining=remaining) if getattr(model.config,'utility',None) is not None else model(*collate(encoded,device)))
+        return [torch.softmax(outputs[0].float(),-1).cpu().numpy()]+[a.cpu().numpy() for a in outputs[1:]]
     require(len(encoded)==1,'Oversized position must have its own candidate batch')
     e=encoded[0];state=torch.from_numpy(e.state[None].copy()).to(device)
     context=model.state_encoder(state);parts=[]
@@ -63,6 +63,7 @@ def predict_encoded(model, encoded, device, candidate_limit):
     heads=(torch.softmax(outcomes[:,:4],-1).gather(1,mapping),
            (1+3*torch.sigmoid(outcomes[:,4:8])).gather(1,mapping),
            (100*outcomes[:,8:12]).gather(1,mapping))
+    if getattr(model.config,'utility',None) is not None:heads=heads+(model.predict_utility(context,mapping,heads,remaining),)
     return [torch.softmax(logits.float(),-1).cpu().numpy()]+[a.cpu().numpy() for a in heads]
 
 
@@ -76,6 +77,7 @@ class Request:
     style: tuple = (0.0,) * 4
     intent: tuple = (0.0,) * 8
     cancelled: Event | None = None
+    remaining: tuple | None = None
     input_digest: str = field(init=False)
 
     def __post_init__(self):
@@ -85,11 +87,16 @@ class Request:
         object.__setattr__(self, 'choices', copy.deepcopy(self.choices))
         object.__setattr__(self, 'style', tuple(self.style))
         object.__setattr__(self, 'intent', tuple(self.intent))
+        if self.remaining is not None:
+            finite_vector(self.remaining,4,0,.1)
+            object.__setattr__(self,'remaining',tuple(self.remaining))
         object.__setattr__(self, 'input_digest', self.digest())
 
     def digest(self):
-        return digest({'view': self.view, 'choices': self.choices, 'style': self.style,
-                       'intent': self.intent, 'model': self.expected_model})
+        value={'view': self.view, 'choices': self.choices, 'style': self.style,
+               'intent': self.intent, 'model': self.expected_model}
+        if self.remaining is not None:value['remaining']=self.remaining
+        return digest(value)
 
     def stopped(self):
         if self.cancelled is not None and self.cancelled.is_set():
@@ -170,7 +177,10 @@ class Evaluator:
             if not live:
                 continue
             with torch.inference_mode():
-                probabilities,*predictions=predict_encoded(self.model,[e for _,e in live],self.device,self.max_candidate_cells)
+                remaining=None
+                if getattr(self.model.config,'utility',None) is not None:
+                    remaining=torch.tensor([r.remaining if r.remaining is not None else [self.model.config.utility['insolvency']['max_cost']]*4 for r,_ in live],device=self.device)
+                probabilities,*predictions=predict_encoded(self.model,[e for _,e in live],self.device,self.max_candidate_cells,remaining)
             self.telemetry['batches'] += 1
             self.telemetry['positions'] += len(live)
             self.telemetry['max_batch_positions'] = max(self.telemetry['max_batch_positions'], len(live))
@@ -184,6 +194,8 @@ class Evaluator:
                         probabilities=probabilities[i, :len(encoded.choice_ids)].tolist(),
                         win_share=predictions[0][i].tolist(), placement=predictions[1][i].tolist(),
                         vp=predictions[2][i].tolist())
+                    if len(predictions)>3:
+                        response.update(utility=predictions[3][i].tolist(),reward_id=digest(self.model.config.utility))
                     require(all(np.isfinite(response[k]).all() for k in ('probabilities', 'win_share', 'placement', 'vp')),
                             'Non-finite network output')
                 responses[request.request_id] = response
@@ -210,6 +222,7 @@ def accept_response(request, response, current_revision, current_model):
     finite_vector(response['win_share'], 4, 0, 1)
     finite_vector(response['placement'], 4, 1, 4)
     finite_vector(response['vp'], 4)
+    if 'utility' in response:finite_vector(response['utility'],4)
     require(abs(sum(response['probabilities']) - 1) < 1e-5 and
             abs(sum(response['win_share']) - 1) < 1e-5, 'Prediction probability sum mismatch')
     return response

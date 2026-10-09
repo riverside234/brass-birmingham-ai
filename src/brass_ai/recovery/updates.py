@@ -18,17 +18,27 @@ from .progress import Progress
 from .insolvency import returns as insolvency_returns,advantage_costs
 
 
-def prepared(games, predicate=None, neutral=False, insolvency=None):
+def prepared(games, predicate=None, neutral=False, insolvency=None, reward=None):
     """Targets once per game; filter BEFORE encoding; cached arrays survive epochs."""
+    require(reward is None or insolvency==reward['insolvency'],'Return/cost reward mismatch')
     encoder, data = PreparedEncoder(), []
     for game in games:
         if hasattr(game,'assert_metadata'): game.assert_metadata()
         target = terminal_targets(game['result'])
         costs,summaries=insolvency_returns(game['records'],insolvency) if insolvency is not None else (None,None)
+        if reward is not None:
+            from brass_ai.learning.reward import replay_returns
+            labels,rewards=replay_returns(game['records'],game['result'],reward)
         annotated=set()
         for step,row in enumerate(game['records']):
             if predicate is None or predicate(row):
                 r = dict(row, style=[0.0]*4, intent=[0.0]*8) if neutral else row
+                if reward is not None:
+                    r=dict(r,_reward_return=labels[step]['utility'],_reward_remaining=labels[step]['remaining'],_reward_id=rewards['reward_id'])
+                    if row['seat'] not in annotated:
+                        seat=row['seat']
+                        r['_reward_trajectory']=dict(**{k:v[seat] for k,v in rewards['components'].items()},
+                            cost=rewards['cost'][seat],utility=rewards['utility'][seat])
                 if costs is not None:
                     r=dict(r,_insolvency_cost_to_go=costs[step])
                     if row['seat'] not in annotated:
@@ -40,7 +50,7 @@ def prepared(games, predicate=None, neutral=False, insolvency=None):
 
 
 def value_losses(outputs, targets):
-    _, win, rank, vp = outputs
+    _, win, rank, vp = outputs[:4]
     win, rank, vp = win.float(), rank.float(), vp.float()
     w, r, v = targets
     ce = -(w * win.clamp_min(1e-9).log()).sum(-1)
@@ -66,6 +76,11 @@ class Dataset:
         if log:log(1)
         self.targets=tuple(torch.tensor([d[1][k] for d in data],device=device,dtype=torch.float32)
             for k in ('win_share','placement','vp'))
+        self.utility=self.remaining=None
+        if any('_reward_return' in r for r in self.rows):
+            require(all('_reward_return' in r and '_reward_remaining' in r for r in self.rows),'Mixed reward targets')
+            self.utility=torch.tensor([r['_reward_return'] for r in self.rows],device=device,dtype=torch.float32)
+            self.remaining=torch.tensor([r['_reward_remaining'] for r in self.rows],device=device,dtype=torch.float32)
         if log:log(2)
         self.q=[exploration_distribution(r['choices'],r['intent']).astype(np.float32) for r in self.rows] if policy else None
         if log:log(3)
@@ -154,7 +169,7 @@ def policy_measure(model, dataset, indices, behavior, config, timings, verify=Fa
     with torch.no_grad(), timings.phase('ppo.policy_measure'):
         parts=dataset.microbatches(indices,config['microbatch_size'],config['max_candidate_cells'],config['bucket'])
         for part,ix,inputs,q in dataset.policy_batches(parts,behavior.exploration,executor):
-            out=model(*inputs)
+            out=model(*inputs,remaining=dataset.remaining[ix]) if dataset.utility is not None else model(*inputs)
             p=probabilities(out[0],q,behavior.exploration,behavior.temperature)
             selected=p.gather(1,dataset.chosen[ix,None]).squeeze(1).clamp_min(1e-30)
             old=dataset.old[ix]
@@ -163,17 +178,19 @@ def policy_measure(model, dataset, indices, behavior, config, timings, verify=Fa
             ratio=selected/old
             total+=((ratio-1)-ratio.log()).sum()
             if advantages is not None:
-                advantages[ix]=dataset.targets[0][ix,dataset.seats[ix]]-out[1][torch.arange(len(ix),device=ix.device),dataset.seats[ix]]
+                target=dataset.utility if dataset.utility is not None else dataset.targets[0]
+                baseline=out[4] if dataset.utility is not None else out[1]
+                advantages[ix]=target[ix,dataset.seats[ix]]-baseline[torch.arange(len(ix),device=ix.device),dataset.seats[ix]]
         if verify:require(bool(valid),'Wrong/stale behavior probabilities')
         result=float(total)/len(indices)
     return result
 
 
-def ppo_update(model,optimizer,games,behavior,config,*,profile=None,profile_steps=4,rehearsal=None,rehearsal_weight=0,learner_data=None,insolvency=None):
+def ppo_update(model,optimizer,games,behavior,config,*,profile=None,profile_steps=4,rehearsal=None,rehearsal_weight=0,learner_data=None,insolvency=None,reward=None):
     if config.get('actor_nonforced'):
         return ppo_nonforced(model,optimizer,games,behavior,config,profile=profile,profile_steps=profile_steps,
-                             rehearsal=rehearsal,rehearsal_weight=rehearsal_weight,learner_data=learner_data,insolvency=insolvency)
-    require(insolvency is None,'Insolvency shaping requires the nonforced actor recipe')
+                             rehearsal=rehearsal,rehearsal_weight=rehearsal_weight,learner_data=learner_data,insolvency=insolvency,reward=reward)
+    require(insolvency is None and reward is None,'Combined reward requires the nonforced actor recipe')
     require(all(g['split']=='train' for g in games),'Held-out PPO data')
     require(model_id(model)==behavior.evaluator.model_id,'Collection model differs from learner')
     timings=Timings()
@@ -268,31 +285,45 @@ def phase_probe(dataset,indices,limit):
     return output
 
 
-def ppo_nonforced(model,optimizer,games,behavior,config,*,profile=None,profile_steps=4,rehearsal=None,rehearsal_weight=0,learner_data=None,insolvency=None):
+def ppo_nonforced(model,optimizer,games,behavior,config,*,profile=None,profile_steps=4,rehearsal=None,rehearsal_weight=0,learner_data=None,insolvency=None,reward=None):
     cuda=next(model.parameters()).device.type=='cuda'
     with (ThreadPoolExecutor(max_workers=2) if cuda else nullcontext(None)) as executor:
         return _ppo_nonforced(model,optimizer,games,behavior,config,profile=profile,profile_steps=profile_steps,
-                              rehearsal=rehearsal,rehearsal_weight=rehearsal_weight,learner_data=learner_data,executor=executor,insolvency=insolvency)
+                              rehearsal=rehearsal,rehearsal_weight=rehearsal_weight,learner_data=learner_data,executor=executor,insolvency=insolvency,reward=reward)
 
 
-def _ppo_nonforced(model,optimizer,games,behavior,config,*,profile,profile_steps,rehearsal,rehearsal_weight,learner_data,executor,insolvency):
+def _ppo_nonforced(model,optimizer,games,behavior,config,*,profile,profile_steps,rehearsal,rehearsal_weight,learner_data,executor,insolvency,reward):
     require(all(g['split']=='train' for g in games),'Held-out PPO data')
     require(model_id(model)==behavior.evaluator.model_id,'Collection model differs from learner')
     timings=Timings();device=next(model.parameters()).device
     with timings.phase('ppo.prepare'):
-        data=learner_data if learner_data is not None else prepared(games,lambda r:r['behavior']['policy_id']==behavior.policy_id,insolvency=insolvency)
+        data=learner_data if learner_data is not None else prepared(games,lambda r:r['behavior']['policy_id']==behavior.policy_id,insolvency=insolvency,reward=reward)
         require(data and all(d[0]['behavior']['kind']=='model' and d[0]['behavior']['policy_id']==behavior.policy_id for d in data),
                 'External or stale actions in PPO')
         ds=Dataset(data,device);demo=rehearsal_dataset(rehearsal,device) if rehearsal_weight else None
     count=len(data);actor_ids=(~ds.forced).nonzero().flatten().cpu().tolist()
+    calibration=None;reward_report=None
+    if reward is not None:
+        from brass_ai.learning.contracts import digest
+        from .utility import calibrate
+        require(insolvency==reward['insolvency'] and model.config.utility==reward and all(r['_reward_id']==digest(reward) for r in ds.rows),
+                'PPO model/return reward version differs')
+        require(all(r['teacher'] is None for r in ds.rows),'Search distributions cannot enter fresh PPO rollouts')
+        calibration=calibrate(model,optimizer,ds,config)
+        trajectories=[r['_reward_trajectory'] for r in ds.rows if '_reward_trajectory' in r]
+        require(len(trajectories)==len({d[2] for d in data}),'Missing reward components')
+        means={k:sum(t[k] for t in trajectories)/len(trajectories) for k in trajectories[0]}
+        reward_report=dict(spec=reward,undiscounted=True,components=means,
+            weighted={k:reward[k]*means[k] for k in ('win','placement','vp')},trajectories=len(trajectories))
     advantages=torch.zeros(count,device=device);model.eval()
     # Verify likelihoods for ALL rows, including deterministic continuation rows.
     policy_measure(model,ds,range(count),behavior,config,timings,True,advantages,executor)
     costs,insolvency_report=advantage_costs(data,insolvency)
-    # Monte Carlo reward-to-go: the pre-update win estimate remains a valid
-    # action-independent baseline, even though it does not predict the costs.
-    # Do not relabel win probabilities or punish liquidation after debt arose.
-    advantages-=torch.tensor(costs,device=device,dtype=advantages.dtype)
+    if reward is not None:
+        insolvency_report['objective']='Combined terminal utility minus future capped insolvency costs'
+    # Archived win-only recipes subtract costs here. The combined head already
+    # predicts the SAME cost-to-go as its target; never subtract costs twice.
+    if reward is None:advantages-=torch.tensor(costs,device=device,dtype=advantages.dtype)
     useful=advantages[actor_ids];mean=useful.mean() if actor_ids else torch.zeros((),device=device)
     std=useful.std(unbiased=False) if actor_ids else torch.zeros((),device=device)
     if config['normalize_advantages'] and actor_ids: advantages[actor_ids]=(useful-mean)/std.clamp_min(1e-8)
@@ -306,6 +337,7 @@ def _ppo_nonforced(model,optimizer,games,behavior,config,*,profile,profile_steps
             if not actor_batches: actor_batches=[[] for _ in range(math.ceil(count/config['critic_batch_size']))]
             actor_totals=torch.zeros(3,device=device);value_totals=torch.zeros(4,device=device)
             actor_seen=critic_seen=0;norm=torch.zeros((),device=device);kl=0.0
+            utility_squared=torch.zeros((),device=device);utility_absolute=torch.zeros((),device=device)
             for batch in actor_batches:
                 if critic_cursor>=count: critic_order=torch.randperm(count).tolist();critic_cursor=0
                 crit=critic_order[critic_cursor:critic_cursor+config['critic_batch_size']];critic_cursor+=len(crit)
@@ -324,9 +356,15 @@ def _ppo_nonforced(model,optimizer,games,behavior,config,*,profile,profile_steps
                         actor_seen+=len(part)
                     parts=ds.microbatches(crit,config['microbatch_size'],config['max_candidate_cells'],config['bucket'])
                     for part,ix,inputs in ds.supervised_batches(parts,executor):
-                        with autocast(config,device): out=model(*inputs)
+                        with autocast(config,device):
+                            out=model(*inputs,remaining=ds.remaining[ix]) if ds.utility is not None else model(*inputs)
                         values=value_losses(out,tuple(t[ix] for t in ds.targets))
-                        (config['value_weight']*values[0].sum()/len(crit)).backward()
+                        loss=values[0]
+                        if ds.utility is not None:
+                            diff=out[4].float()-ds.utility[ix]
+                            utility_squared+=diff.detach().square().sum();utility_absolute+=diff.detach().abs().sum()
+                            loss=loss+diff.square().mean(-1)
+                        (config['value_weight']*loss.sum()/len(crit)).backward()
                         value_totals+=torch.stack([v.detach().sum() for v in values]);critic_seen+=len(part)
                     if demo:
                         sample=torch.randint(len(demo.data),(min(config['effective_batch_size'],len(demo.data)),)).tolist()
@@ -347,9 +385,11 @@ def _ppo_nonforced(model,optimizer,games,behavior,config,*,profile,profile_steps
             epochs.append(dict(epoch=epoch,actor=aa[0],entropy=aa[1],clip_fraction=aa[2],value=vv[0],
                 win_loss=vv[1],rank_loss=vv[2],vp_loss=vv[3],post_update_kl=full,probe_kl=kl,
                 gradient_norm=float(norm),actor_positions=actor_seen,critic_positions=critic_seen,positions=actor_seen))
+            if reward is not None:epochs[-1]['utility_prediction']=dict(mse=float(utility_squared)/max(1,4*critic_seen),mae=float(utility_absolute)/max(1,4*critic_seen))
             if stopped or full>config['target_kl']: stopped=True;break
     return dict(format='nonforced-actor-ppo/2.1.0',epochs=epochs,optimizer_steps=steps,
         insolvency=insolvency_report,
+        reward=reward_report,utility_calibration=calibration,
         learner_decisions=count,meaningful_decisions=len(actor_ids),forced_decisions=int(ds.forced.sum()),
         learner_trajectories=len({d[2] for d in data}),effective_batch_size=config['effective_batch_size'],
         microbatch_size=config['microbatch_size'],critic_batch_size=config['critic_batch_size'],
@@ -469,7 +509,9 @@ def distill_update(model,optimizer,games,config,*,steps=8,weight=.25,quality=Non
     require(type(steps) is int and steps>0,'Invalid distillation step cap')
     require(all(g['split']=='train' for g in games),'Held-out search teachers')
     require(len({g['game_id'] for g in games})==len(games),'Duplicate search teacher games')
-    require(all(r['teacher'] is None or r['teacher']['source']=='ismcts-root-visits/1.1.0' for g in games for r in g['records']),
+    source='ismcts-root-visits/1.2.0' if getattr(model.config,'utility',None) is not None else 'ismcts-root-visits/1.1.0'
+    require(all(r['teacher'] is None or (r['teacher']['source']==source and
+                (getattr(model.config,'utility',None) is None or r['teacher']['search']['reward']==model.config.utility)) for g in games for r in g['records']),
             'Historical neural/search replay cannot enter fresh distillation')
     eligible=lambda r:len(r['choices'])>1 and r['teacher'] is not None and r['teacher']['confidence']>0 and sum(r['teacher']['coverage'])>=2
     phases=Counter();setups=set();count=0
@@ -483,6 +525,14 @@ def distill_update(model,optimizer,games,config,*,steps=8,weight=.25,quality=Non
                  quality=quality,requested_steps=steps,value_loss_training=False)
     if count<quality['min_samples'] or len(setups)<quality['min_games'] or any(phases[p]<quality['min_samples_per_phase'] for p,_,_,_ in PHASES):
         return dict(updated=False,optimizer_steps=0,reason='Insufficient diverse search teachers; no optimizer update',**support)
+    if getattr(model.config,'utility',None) is not None:
+        from .utility import calibration_ready
+        from brass_ai.step5.league import implementation_id
+        require(calibration_ready(model),'Calibrate the utility head before search teaching')
+        identity=model_id(model);source_id=implementation_id()
+        require(all(r['teacher']['model_id']==identity and r['teacher']['source_fingerprint']==source_id
+                    for g in games for r in g['records'] if eligible(r)),
+                'Search teaching requires fresh current-model/current-source targets')
     data=prepared(games,eligible)
     def fit():
         report=supervised_epoch(model,None,data,config,training=False,kind='teacher',weight=weight)
