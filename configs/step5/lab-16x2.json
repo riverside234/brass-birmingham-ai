@@ -110,10 +110,10 @@
       "version": "brass-combined-return/1.0.0",
       "win": 1.0,
       "placement": 0.1,
-      "vp": 0.0005,
+      "vp": 0.001,
       "insolvency": {
-        "event_cost": 0.02,
-        "max_cost": 0.1
+        "event_cost": 0.005,
+        "max_cost": 0.025
       }
     },
     "utility_scale": 1.2
@@ -128,7 +128,8 @@
     "replay_rounds": 2,
     "quarantine_hours": 0,
     "evaluation_samples": 1,
-    "profile_traces": 2
+    "profile_traces": 2,
+    "history_reports": 128
   },
   "population": {
     "recent": 16,
@@ -167,8 +168,8 @@
   },
   "search_collections_per_iteration": 2,
   "insolvency": {
-    "event_cost": 0.02,
-    "max_cost": 0.1
+    "event_cost": 0.005,
+    "max_cost": 0.025
   },
   "legacy_boost": {
     "stages": [
@@ -189,6 +190,13 @@
   "reward": {
     "win": 1.0,
     "placement": 0.1,
-    "vp": 0.0005
+    "vp": 0.001
+  },
+  "champion": {
+    "enabled": true,
+    "every_games": 6400,
+    "setups": 8,
+    "min_win_share": 0.55,
+    "seed": 1910000
   }
 }

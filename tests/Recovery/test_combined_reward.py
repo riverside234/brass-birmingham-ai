@@ -32,7 +32,10 @@ from brass_ai.step5.policy import NeuralPolicy
 import test_insolvency_recovery as debt_fixtures
 
 
-SPEC=specification()
+# Keep the original objective covered as an explicitly versioned checkpoint
+# contract. The revised defaults have separate coefficient/regression checks.
+INSOLVENCY=dict(event_cost=.02,max_cost=.10)
+SPEC=specification(dict(win=1.,placement=.1,vp=.0005),INSOLVENCY)
 
 
 def scored(scores):

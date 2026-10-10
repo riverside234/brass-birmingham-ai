@@ -6,12 +6,12 @@ from .contracts import digest, require
 from .replay import terminal_targets
 
 VERSION = 'brass-combined-return/1.0.0'
-COEFFICIENTS = dict(win=1.0, placement=.10, vp=.0005)
+COEFFICIENTS = dict(win=1.0, placement=.10, vp=.001)
 
 
 def specification(coefficients=None, insolvency=None):
     result=dict(version=VERSION, **(COEFFICIENTS if coefficients is None else coefficients),
-                insolvency=dict(event_cost=.02,max_cost=.10) if insolvency is None else dict(insolvency))
+                insolvency=dict(event_cost=.005,max_cost=.025) if insolvency is None else dict(insolvency))
     validate(result)
     return result
 

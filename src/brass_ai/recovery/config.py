@@ -40,14 +40,15 @@ EXECUTION_V21 = dict(EXECUTION, processes=32, hosts_per_process=1, flush_ms=1.0,
     cpu_budget=64,cpu_reserve=4)
 UPDATE_V21 = dict(UPDATE, actor_nonforced=True, critic_batch_size=2048, kl_probe_rows=2048)
 RETENTION = dict(enabled=True, resume_checkpoints=2, replay_rounds=4, quarantine_hours=24,
-    evaluation_samples=4, profile_traces=2)
+    evaluation_samples=4, profile_traces=2, history_reports=128)
+CHAMPION = dict(enabled=True, every_games=6400, setups=8, min_win_share=.55, seed=1910000)
 POPULATION = dict(recent=16, anchors=48)
 EVALUATION_SCHEDULE = dict(enabled=True, monitor_every_games=6400, broader_every_games=25600,
     monitor_setups=1, broader_setups=1, seed=910000)
 LEGACY_BUDGET = dict(role='lab', seconds=1.0, search_workers=4, global_workers=60, work_multiplier=1)
 LEGACY_OPPONENTS = dict(search_free_until_games=10000)
 IMITATION = dict(manifest=None,epochs=10,patience=2,min_epochs=3,learning_rate=1e-4)
-INSOLVENCY = dict(event_cost=.02,max_cost=.10)
+INSOLVENCY = dict(event_cost=.005,max_cost=.025)
 LEGACY_BOOST = dict(stages=[dict(games=20000,selfplay=15,historical=25,legacy=60),
                           dict(games=10000,selfplay=45,historical=25,legacy=30)])
 
@@ -58,7 +59,9 @@ def positive(value, name, integer=False):
 
 
 def bounded_fields(config, default, name):
-    require(type(config) is dict and set(config)==set(default),'Invalid '+name+' fields')
+    allowed=[set(default)]
+    if name=='retention':allowed.append(set(default)-{'history_reports'})
+    require(type(config) is dict and set(config) in allowed,'Invalid '+name+' fields')
     for key,value in config.items():
         expected=default[key]
         if type(expected) is bool: require(type(value) is bool,'Invalid '+name+'.'+key)
@@ -127,6 +130,11 @@ def validate_config(config):
         'search_ready_games','search_every_games','search_games','distill_steps','distill_weight',
         'rehearsal_manifest','rehearsal_weight','rehearsal_until','profile_steps'}
     version=config.get('format')
+    if 'champion' in config:
+        fields.add('champion')
+        bounded_fields(config['champion'],CHAMPION,'champion')
+        require(config['champion']['setups']>=8 and .5<config['champion']['min_win_share']<1,
+                'Champion gate requires at least eight independent setups and a winning majority')
     if 'reward' in config:
         fields.add('reward')
         from .utility import reward_spec

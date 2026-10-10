@@ -25,10 +25,10 @@ namespace BrassPatch.Statistics
                 var values=data.Cities.ToDictionary(c=>c.Location.City,c=>(float)(host.Filters.MapMode=="Industry VP"?StatisticsMapQueries.IndustryVP(data,c,host.Filters):StatisticsMapQueries.ContributionVP(host.Report,data,c,host.Filters)));
                 float max=Math.Max(1,values.Values.DefaultIfEmpty(0).Max());foreach(var p in values)if(p.Value>0)halo[p.Key]=NodeRadius+8*unit*Mathf.Sqrt(p.Value/max);
             }
-            var tag=StatisticsWidgets.Rect(transform,"City hover tag",Vector2.zero,new Vector2(Math.Min(470*scale,rectTransform.rect.width-24*unit),350*scale));
+            var tag=StatisticsWidgets.Rect(transform,"City hover tag",Vector2.zero,new Vector2(Math.Min(432*scale,rectTransform.rect.width-24*unit),190*scale));
             Tag=tag.gameObject.AddComponent<StatisticsCityTag>();Tag.Initialize(host,font,data,scale,tag.sizeDelta.x);
-            float height=Math.Max(160*unit,rectTransform.rect.height-Tag.MaximumHeight-48*unit);
-            float width=Math.Min(rectTransform.rect.width-120*unit,height*2.7f);
+            float height=Math.Max(160*unit,rectTransform.rect.height-Tag.MaximumHeight-44*unit);
+            float width=Math.Min(rectTransform.rect.width-90*unit,height*1.75f);
             Diagram=new Rect((rectTransform.rect.width-width)/2,-height-20*unit,width,height);
             foreach(var route in StatisticsBoardLayout.Routes.Where(r=>r.Era==data.Era))routes[StatisticsBoardLayout.Identity(route.Cities)]=StatisticsBoardLayout.Paths(route.Cities).Select(path=>path.Select(Project).ToArray()).ToArray();
             foreach(var city in data.Cities.Where(c=>StatisticsBoardLayout.Points.ContainsKey(c.Location.City))){
@@ -89,22 +89,64 @@ namespace BrassPatch.Statistics
                 Color color=StatisticsTheme.Player(link.Player);if(!Panel.Filters.Players.Contains(link.Player)||!region)color=Color.Lerp(color,StatisticsTheme.Paper,.64f);
                 bool hover=HoverCity!=null&&link.Cities.Contains(HoverCity);
                 foreach(var path in paths){Stroke(mesh,path,StatisticsTheme.Paper,(hover?8:6)*unit);Stroke(mesh,path,color,(hover?4.8f:3.4f)*unit);}
-                var main=paths[0];if(main.Length>1)StatisticsPlotGraphic.Symbol(mesh,(main[0]+main[1])*.5f,4.5f*unit,color,StatisticsPlotPalette.Shape(link.Player.ToString()));
+                var main=paths[0];if(main.Length>1)Symbol(mesh,(main[0]+main[1])*.5f,4.5f*unit,color,StatisticsPlotPalette.Shape(link.Player.ToString()),unit);
             }
             foreach(var city in Snapshot.Cities){
                 if(!StatisticsBoardLayout.Points.ContainsKey(city.Location.City))continue;
                 var q=Point(city.Location.City);Color tint=StatisticsPlotPalette.Color(new StatisticsPlotSeries{Id="region/"+city.Location.RegionColor});int shape=city.Location.Merchant?3:city.Location.Farm?2:0;
                 if(Panel.Filters.Region!=""&&Panel.Filters.Region!=city.Location.RegionColor)tint=Color.Lerp(tint,StatisticsTheme.Paper,.5f);
-                if(halo.ContainsKey(city.Location.City))StatisticsPlotGraphic.Symbol(mesh,q,halo[city.Location.City],Color.Lerp(tint,StatisticsTheme.Paper,.78f),shape);
-                if(HoverCity==city.Location.City){StatisticsPlotGraphic.Symbol(mesh,q,NodeRadius+5*unit,StatisticsTheme.Focus,shape);StatisticsPlotGraphic.Symbol(mesh,q,NodeRadius+3*unit,StatisticsTheme.Paper,shape);}
-                StatisticsPlotGraphic.Symbol(mesh,q,NodeRadius,tint,shape);StatisticsPlotGraphic.Symbol(mesh,q,NodeRadius-3*unit,StatisticsTheme.Paper,shape);
-                if(city.Tiles.Any(a=>Panel.Filters.Players.Contains(a.Player)))StatisticsPlotGraphic.Symbol(mesh,q,3.4f*unit,tint,shape);
+                if(halo.ContainsKey(city.Location.City))Symbol(mesh,q,halo[city.Location.City],Color.Lerp(tint,StatisticsTheme.Paper,.78f),shape,unit);
+                if(HoverCity==city.Location.City){Symbol(mesh,q,NodeRadius+5*unit,StatisticsTheme.Focus,shape,unit);Symbol(mesh,q,NodeRadius+3*unit,StatisticsTheme.Paper,shape,unit);}
+                Symbol(mesh,q,NodeRadius,tint,shape,unit);Symbol(mesh,q,NodeRadius-3*unit,StatisticsTheme.Paper,shape,unit);
+                if(city.Tiles.Any(a=>Panel.Filters.Players.Contains(a.Player)))Symbol(mesh,q,3.4f*unit,tint,shape,unit);
             }
         }
-        static void Stroke(VertexHelper mesh,Vector2[] path,Color tint,float width){for(int i=1;i<path.Length;i++)Line(mesh,path[i-1],path[i],tint,width);}
-        public static void Line(VertexHelper mesh,Vector2 a,Vector2 b,Color tint,float width)
+        void Stroke(VertexHelper mesh,Vector2[] path,Color tint,float width){Stroke(mesh,path,tint,width,unit);}
+        // UI meshes do not receive reliable camera MSAA in every Canvas mode. A
+        // narrow alpha fringe provides coverage at the actual display-pixel scale.
+        // Shared cross-sections avoid overlapping fades at polyline bends.
+        public static void Stroke(VertexHelper mesh,Vector2[] path,Color tint,float width,float pixel)
         {
-            if((b-a).sqrMagnitude<.00001f)return;var normal=new Vector2(-(b-a).y,(b-a).x).normalized*width/2;int i=mesh.currentVertCount;foreach(var q in new[]{a-normal,a+normal,b+normal,b-normal})mesh.AddVert(q,tint,Vector2.zero);mesh.AddTriangle(i,i+1,i+2);mesh.AddTriangle(i,i+2,i+3);
+            if(path==null||width<=0||tint.a<=0)return;
+            var points=new List<Vector2>();foreach(var p in path)if(points.Count==0||(p-points[points.Count-1]).sqrMagnitude>.00001f)points.Add(p);
+            if(points.Count<2)return;
+            float fringe=Math.Max(.001f,pixel)*.9f,half=Math.Max(width/2,fringe/2),inner=Math.Max(.001f,half-fringe/2),outer=half+fringe/2;
+            tint.a*=Math.Min(1,width/fringe);var clear=tint;clear.a=0;int first=mesh.currentVertCount;
+            for(int n=0;n<points.Count;n++){
+                var before=(points[n]-points[Math.Max(0,n-1)]).normalized;var after=(points[Math.Min(n+1,points.Count-1)]-points[n]).normalized;
+                if(n==0)before=after;if(n==points.Count-1)after=before;
+                var normal=new Vector2(-after.y,after.x);var miter=(normal+new Vector2(-before.y,before.x)).normalized;
+                float dot=Vector2.Dot(miter,normal);if(dot<.25f)miter=normal;else miter/=dot;
+                mesh.AddVert(points[n]-miter*outer,clear,Vector2.zero);mesh.AddVert(points[n]-miter*inner,tint,Vector2.zero);
+                mesh.AddVert(points[n]+miter*inner,tint,Vector2.zero);mesh.AddVert(points[n]+miter*outer,clear,Vector2.zero);
+                if(n>0)for(int band=0;band<3;band++){int a=first+(n-1)*4+band,b=a+4;mesh.AddTriangle(a,b,a+1);mesh.AddTriangle(a+1,b,b+1);}
+            }
+            Cap(mesh,points[0],(points[0]-points[1]).normalized,inner,outer,tint);
+            Cap(mesh,points[points.Count-1],(points[points.Count-1]-points[points.Count-2]).normalized,inner,outer,tint);
+        }
+        static void Cap(VertexHelper mesh,Vector2 center,Vector2 direction,float inner,float outer,Color tint)
+        {
+            const int steps=12;var normal=new Vector2(-direction.y,direction.x);var clear=tint;clear.a=0;int first=mesh.currentVertCount;mesh.AddVert(center,tint,Vector2.zero);
+            for(int n=0;n<=steps;n++){
+                float angle=-Mathf.PI/2+Mathf.PI*n/steps;var ray=direction*Mathf.Cos(angle)+normal*Mathf.Sin(angle);
+                mesh.AddVert(center+ray*inner,tint,Vector2.zero);mesh.AddVert(center+ray*outer,clear,Vector2.zero);
+                if(n>0){int a=first+1+(n-1)*2,b=a+2;mesh.AddTriangle(first,a,b);mesh.AddTriangle(a,a+1,b);mesh.AddTriangle(b,a+1,b+1);}
+            }
+        }
+        public static void Line(VertexHelper mesh,Vector2 a,Vector2 b,Color tint,float width,float pixel=1)
+        {Stroke(mesh,new[]{a,b},tint,width,pixel);}
+        public static void Symbol(VertexHelper mesh,Vector2 center,float size,Color tint,int shape,float pixel)
+        {
+            if(size<=0||tint.a<=0)return;
+            if(shape==4||shape==5){Vector2 a=shape==4?new Vector2(size,0):new Vector2(size,size)*.7f,b=shape==4?new Vector2(0,size):new Vector2(size,-size)*.7f;Line(mesh,center-a,center+a,tint,size*.5f,pixel);Line(mesh,center-b,center+b,tint,size*.5f,pixel);return;}
+            int count=shape==0?48:shape==2?3:shape==6?6:shape==7?5:4;float rotation=shape==1?Mathf.PI/4:0;
+            float fringe=Math.Max(.001f,pixel)*.45f/Mathf.Cos(Mathf.PI/count),inner=Math.Max(0,size-fringe),outer=size+fringe;
+            var clear=tint;clear.a=0;int first=mesh.currentVertCount;mesh.AddVert(center,tint,Vector2.zero);
+            for(int n=0;n<=count;n++){
+                float angle=rotation+Mathf.PI*2*n/count;var ray=new Vector2(Mathf.Sin(angle),Mathf.Cos(angle));
+                mesh.AddVert(center+ray*inner,tint,Vector2.zero);mesh.AddVert(center+ray*outer,clear,Vector2.zero);
+                if(n>0){int a=first+1+(n-1)*2,b=a+2;mesh.AddTriangle(first,a,b);mesh.AddTriangle(a,a+1,b);mesh.AddTriangle(b,a+1,b+1);}
+            }
         }
     }
     public sealed class StatisticsMapFocus : MonoBehaviour,ISelectHandler,IDeselectHandler

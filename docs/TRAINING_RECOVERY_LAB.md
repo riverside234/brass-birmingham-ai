@@ -2,7 +2,53 @@
 
 Recipe `step5-training/2.2.0` keeps the **1,840,109-parameter MLP-ResNet** for imitation, then extends it to **1,850,129 parameters** for PPO and **Masked ISMCTS + NN** with a shared combined-utility head. Existing completed IL and reviewed self-play checkpoints can continue through the versioned extension described below. The source-based six-style revision and comparison requirements are documented in [the opening-book note](../ai-research/TOURNAMENT_STYLE_V3.md). The user selected the previous advanced bank, `bank-3dc65253a610191d66a5`, as **v4**, with productive-development stall reset and opening-biased candidates. Further strength tests were stopped; this is an explicit selection rather than a tournament promotion. The rejected network/Scout additions are excluded. `training/opponents/current.json` and the distribution both identify that exact bank. The main lab preset is **24 queued heavy tables, four private search workers per decision**, with one shared 60-slot CPU admission gate under your 64-core allocation. Waiting for admission does not consume the search clock.
 
-Imitation and heuristic evaluation use searched Masked **v4** at **one second/four workers**. Active lab presets now apply a one-time recovery schedule: **60% searched-v4 tables for 20,000 ordinary games, then 30% for 10,000 games**. Historical opponents stay at 25%; current self-play occupies 15% then 45%. PPO and NN search share `W + 0.10*P + 0.0005*VP - future insolvency costs`; official performance heads remain separate. The schedule begins when a new run is created or when an existing run adopts this reviewed revision, and persists across restarts. Afterward the original mature curriculum resumes at 70% current self-play / 25% historical / 5% searched v4. Internal `v3-*` profile IDs and `training/runtime/v3*` paths remain compatibility aliases for the selected bank. Start a new model from random weights. A completed, fresh standalone imitation run can explicitly hand its selected weights to self-play via `--imitation-run`; its optimizer, population and neural replay are not imported. Audited entirely heuristic datasets may be reused with their original receipts. Same-run continuation from reviewed versions preserves existing PPO progress; see the 8 October shared-return continuation section below.
+Imitation and heuristic evaluation use searched Masked **v4** at **one second/four workers**. Active lab presets now apply a one-time recovery schedule: **60% searched-v4 tables for 20,000 ordinary games, then 30% for 10,000 games**. Historical opponents stay at 25%; current self-play occupies 15% then 45%. PPO and NN search share `W + 0.10*P + 0.001*VP - future insolvency costs`; official performance heads remain separate. The schedule begins when a new run is created or when an existing run adopts this reviewed revision, and persists across restarts. Afterward the original mature curriculum resumes at 70% current self-play / 25% historical / 5% searched v4. Internal `v3-*` profile IDs and `training/runtime/v3*` paths remain compatibility aliases for the selected bank. Start a new model from random weights. A completed, fresh standalone imitation run can explicitly hand its selected weights to self-play via `--imitation-run`; its optimizer, population and neural replay are not imported. Audited entirely heuristic datasets may be reused with their original receipts. Same-run continuation from reviewed versions preserves existing PPO progress; see the 9 October restart and incumbent-selection section below.
+
+## Reward revision and best accepted model (9 October)
+
+This section supersedes the 7–8 October reward coefficients below. Active training defaults now use **`W + 0.10*P + 0.001*VP - min(0.005*N, 0.025)`**, where `N` counts insolvency events, not removed tiles. Official tiebreakers/shared wins, pairwise placement ties, undiscounted returns, linear uncapped VP and causal future-cost accounting are unchanged. PPO and NN search share the exact configured objective and reward fingerprint. A previously collected teacher distribution with different coefficients cannot train the new objective. There is no Pass, loan, build, sale or industry-specific reward.
+
+### Start again from completed IL
+
+Use a new run directory. The IL policy, original performance heads and generated-data formats remain compatible; a fresh PPO optimizer and the new-objective utility head are initialized through the existing handoff. The head calibrates on fresh ordinary rollouts before teaching. Substitute your actual completed IL directory if it differs from `v4-batch6`.
+
+```sh
+conda activate ai-training
+cd /data/not_backed_up/yxu209/ai-training/
+python /data/not_backed_up/yxu209/ai-training/scripts/step5.py --device cuda train \
+  --run /data/not_backed_up/yxu209/ai-training/artifacts/step5/selfplay-best-v1 \
+  --imitation-run /data/not_backed_up/yxu209/ai-training/artifacts/step5/v4-batch6 \
+  --iterations 20
+```
+
+Repeat the same command to continue another 20 iterations. Resume restores the latest learner's optimizer/RNG and the separately selected incumbent. Do not relabel an 8 October combined-reward checkpoint with the new coefficients: that objective change is not approved for same-run continuation. Existing reviewed migrations from older, unheaded checkpoints remain explicit; the recommended workflow here is a fresh IL handoff.
+
+### Learner versus incumbent
+
+Keeping the best accepted self-play model follows **AlphaGo Zero**, whereas **AlphaZero** used the latest model. This implementation adapts incumbent selection to PPO: the learner keeps advancing with its own fresh, on-policy actions, while the `selfplay` table quota now means **one current learner against three frozen incumbent policies**. Only the learner seat supplies PPO samples. The initial incumbent is the IL/initial anchor. Rejected candidates do not replace it or reset the learner's Adam state. Historical and searched-v4 table quotas are unchanged. This yields fewer learner-seat trajectories per selfplay table than the previous four-learner setup; compare throughput per learner decision as well as per game.
+
+The selected weights are exported as **`best.pt`**, with their immutable source, identity and selection receipt in **`best.json`** and `state.json`. Full latest checkpoints remain for training resume. Cleanup protects the incumbent even when it leaves the historical reservoir. NN teacher labels still come from the calibrated current learner, with the incumbent additionally included in its bounded opponent ensemble.
+
+Every **6,400 ordinary games**, one candidate/incumbent gate runs **48 policy-only four-player games**: eight fresh validation setups, each with all six ways to place two candidate seats and two incumbent seats. These remain individual competitors, not cooperating teams. Both models use neutral policy play without search. The candidate's summed official win share across its two seats has a 50% symmetry baseline. Accept only at **55% or more**, with the lower endpoint of the setup-clustered 95% bootstrap interval above 50%. Report VP and place separately; training reward is not the promotion metric. Missing games, incomplete seat coverage and inconclusive results cannot promote. No favorable-batch retries or early stopping are used.
+
+This is a practical training-selection gate, not proof of global strength: 48 games and repeated selection have statistical limits, and this panel does not establish search-assisted strength or performance against every opponent. Existing periodic IL/v4 monitoring remains separate. An interrupted gate resumes the committed candidate and matching cached evidence before the next learner iteration. Gate games never become PPO or imitation data. The gate adds 48 evaluation games per 6,400 ordinary games (0.75% by game count; wall-time overhead depends on the workload).
+
+All other active training settings remain: PPO LR `1e-5` in lab presets, 320 ordinary games per main iteration, existing v4 schedule, 640-game teacher warm-up, collection every 160 games, four games/eight maximum updates per collection, at most two collections per iteration, **12-second/four-worker NN teacher turns and the 90% search wall-time cap**.
+
+### Compact retention history
+
+`retention.history_reports` defaults to **128**. `retention-history.json` retains at most that many compact report summaries: final loss/utility error, reward components, insolvency, phase teaching counts, learner results by composition and phase timings. It omits per-game execution receipts, inference/model telemetry trees, every optimizer epoch and repeated nested search collections. Existing large archives are converted on the next applied cleanup, even if no new files expire. Conversion is idempotent; older summaries beyond the cap are discarded. This file is diagnostic history, not checkpoint or restoration state.
+
+Normal resume files, population weights, pinned artifacts and unfinished cleanup journals retain their existing protections. Two recent completed gate directories and the current accepted gate evidence remain; expired gate replays are subject to the usual sample limit. To compact an old inactive run, use normal retention cleanup, which also retires its other eligible unused artifacts:
+
+```sh
+python /data/not_backed_up/yxu209/ai-training/scripts/step5.py cleanup \
+  --run /data/not_backed_up/yxu209/ai-training/artifacts/step5/selfplay-v2 --apply
+```
+
+For policy evaluation, select `/data/not_backed_up/yxu209/ai-training/artifacts/step5/selfplay-best-v1/best.pt` as `--candidate` and use `--no-search` for comparison with the incumbent-selection panel. Initially `best.pt` may still be the unextended IL anchor until a challenger passes. Installed game AI files are unaffected.
+
+Verification for this revision: **32 focused tests passed**, covering reward/insolvency accounting, compatibility, promotion and rejection, interrupted-gate recovery, and retention protections. A **five-game CPU smoke** completed four ordinary games across a resume plus one gate-format game; the incomplete gate correctly could not promote. Compacting an in-memory copy of the uploaded 70-iteration history reduced 69 report entries from **5,455,452 to 507,061 bytes (90.7%)** without modifying the original. The full 48-game gate, CUDA/Linux throughput and playing-strength gains have not been measured in this check.
 
 ## Transfer and preflight
 
@@ -188,7 +234,7 @@ Twenty iterations is a pipeline/early-learning run (6,400 ordinary games), not a
 | Learner preparation | 16 persistent CPU readers (`audit_workers`), checked compact labels/features; two queued pinned CPU batches for CUDA PPO; 20/40/60/80/100% replay-preparation logs |
 | BC | LR 1e-4; main effective/microbatch settings; complete legal policy denominator |
 | Curriculum | Next 20,000 games: 15% self-play / 25% historical / 60% searched v4; following 10,000: 45/25/30; afterward 70/25/5 |
-| Shared reward | PPO and NN search: W + 0.10*P + 0.0005*VP minus future insolvency costs; 0.02 per event, capped at 0.10 per seat/game; no Pass penalty |
+| Shared reward | PPO and NN search: W + 0.10*P + 0.001*VP minus future insolvency costs; 0.005 per event, capped at 0.025 per seat/game; no Pass penalty |
 | Search teachers | Warm-up 640 ordinary games; due every 160 games; at most 2 collections per iteration, each 4 games and at most 8 policy-only updates; 90% accounted wall-time limit (9 times ordinary time) |
 | Distillation evidence | At least 16 qualified decisions, 2 distinct setups, and 2 decisions in each phase; batch 16, at most 2 presentations per sample |
 | Routine evaluation | 4-game monitor every 6,400 games; 8-game broader screen every 25,600 (20 / 80 main-preset iterations) |
@@ -555,7 +601,7 @@ python /data/not_backed_up/yxu209/ai-training/scripts/masked-search.py --device 
 
 The CPU path is mandatory and uses `configs/search/lab-cpu.json`; laptop CPU uses `configs/search/laptop-cpu.json` (two private search workers, two tensor threads, eight pending paths per root). Standalone probes can override the NN clock with `--seconds`; this never changes the v3 bank's fixed one-second clock. The frozen S1 comparison remains a historical diagnostic control. S2/S3 and alternative neural-search comparisons remain retired.
 
-## Shared PPO / NN-search return and checkpoint continuation (8 October)
+## Shared PPO / NN-search return and checkpoint continuation (8 October; coefficients superseded above)
 
 The active lab presets now use this undiscounted objective for each stable seat:
 
@@ -634,7 +680,7 @@ That single teacher setup correctly failed the production sample/diversity gate,
 
 Cleanup runs after every committed iteration, including the last iteration requested on the command line. Main training presets now use `quarantine_hours: 0`: retired unreferenced files are journaled and deleted in the same cleanup, so they do not occupy another 24 hours of disk space. It retains two full resume checkpoints, up to 64 slim opponent checkpoints, the initial evaluation anchor, two replay/report rounds, and two recent completed development screens per panel. Extra explicitly pinned files and dataset/formal-evaluation dependencies are retained.
 
-Older round and development-screen metrics are consolidated into `retention-history.json`; their per-game execution receipts and expired raw replays are removed. Two completed cleanup receipts remain; unfinished receipts are preserved for recovery. Empty retired directories are removed. Historical lineage entries in `state.json` remain small audit metadata and may refer to retired full checkpoints: load opponents from the live `population` entries, and resume from the latest checkpoint. Weight-only opponents no longer carry optimizer state or full report copies, and full checkpoints contain a small update receipt instead of another copy of all game telemetry. The in-memory report list is also limited to the latest two rounds.
+Older round and development-screen metrics are consolidated into `retention-history.json`, capped at 128 compact summaries by default; their per-game execution receipts and expired raw replays are removed. Two completed cleanup receipts remain; unfinished receipts are preserved for recovery. Empty retired directories are removed. Historical lineage entries in `state.json` remain small audit metadata and may refer to retired full checkpoints: load opponents from the live `population` entries, and resume from the latest learner checkpoint. The selected incumbent is protected separately and exported as `best.pt`. Weight-only opponents no longer carry optimizer state or full report copies, and full checkpoints contain a small update receipt instead of another copy of all game telemetry. The in-memory report list is also limited to the latest two rounds.
 
 First inspect a manual plan:
 

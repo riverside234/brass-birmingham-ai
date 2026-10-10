@@ -59,6 +59,10 @@ def collect_due(root,run,directory,config,state,signature,model,optimizer,servic
         rng=random.Random(digest(dict(seed=config['seed'],done=done,threshold=next_search)))
         rollout_entries=rollout_opponents(state.get('population',state['history']),identity,
             state['evaluation_anchor'],rng,config['population']['recent'])
+        # Keep the accepted incumbent represented even after it leaves the
+        # general history reservoir. Labels still come from the current learner.
+        if state.get('champion') and state['champion']['model_id']!=identity:
+            rollout_entries=list({e['model_id']:e for e in rollout_entries+[state['champion']]}.values())
         for e in rollout_entries:
             path=project_path(root,e['path']);require(path.is_relative_to(run) and sha(path)==e['sha256'],'Imported/changed rollout model')
             if e['model_id'] not in service.models:service.register_checkpoint(path)

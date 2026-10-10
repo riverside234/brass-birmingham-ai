@@ -1278,6 +1278,863 @@
           }
         }
       }
+    },
+    {
+      "from_implementation": "f85a8c99fff8b4cff806bcf059e6fd4538d8d2be3b9c748c4d167bdf84897c08",
+      "to_implementation": "826b6beb04241a73a5d1ec0d712176ff9df4370a26cf01bb05ee92f7a05b4f16",
+      "learning_compatibility": "c349e816f2e301ea2a3b438902059cffe868f48e131f7c120691d37cd1c409d2",
+      "reviewed_evidence": "results/selfplay-v2/state.json",
+      "reason": "Champion/reward revision: Reviewed original unheaded checkpoint extension remains compatible. New combined coefficients, frozen champion opponents and compact retention are explicit; no old combined-objective checkpoint is silently relabeled. Fresh IL restart is recommended.",
+      "config_changes": {
+        "execution": {
+          "from": {
+            "processes": 48,
+            "hosts_per_process": 1,
+            "heavy_processes": 24,
+            "batch_size": 64,
+            "max_candidate_cells": 131072,
+            "flush_ms": 1.0,
+            "worker_threads": 1,
+            "max_decisions": 2000,
+            "max_models": 16,
+            "shard_games": 8,
+            "shard_bytes": 268435456,
+            "feature_cache": true,
+            "policy_cache": 32,
+            "search_workers_per_turn": 4,
+            "cpu_budget": 64,
+            "cpu_reserve": 4
+          },
+          "to": {
+            "processes": 48,
+            "hosts_per_process": 1,
+            "heavy_processes": 24,
+            "batch_size": 64,
+            "max_candidate_cells": 131072,
+            "flush_ms": 1.0,
+            "worker_threads": 1,
+            "max_decisions": 2000,
+            "max_models": 72,
+            "shard_games": 8,
+            "shard_bytes": 268435456,
+            "feature_cache": true,
+            "policy_cache": 32,
+            "search_workers_per_turn": 4,
+            "cpu_budget": 64,
+            "cpu_reserve": 4
+          }
+        },
+        "search_every_games": {
+          "from": 320,
+          "to": 160
+        },
+        "search": {
+          "from": {
+            "backend": "masked_ismcts",
+            "seconds": 12.0,
+            "simulations": 100000,
+            "max_choices": 512,
+            "exploration": 1.4,
+            "root_top_k": 16,
+            "interior_top_k": 8,
+            "pending_paths": 2,
+            "batch_size": 2,
+            "flush_ms": 0.5,
+            "prior_mix": 0.1,
+            "turn_interval": 4,
+            "max_searches_per_seat": 4,
+            "contract": "masked-ismcts/1.1.0",
+            "evaluator_kind": "neural",
+            "q_transform": "none",
+            "leaf_policy": "new_root_information_frontier",
+            "candidate_policy": "supported_progressive",
+            "fpu_reduction": 0.02,
+            "minimum_plan_visits": 2,
+            "reopen_support": 4,
+            "tail_admission": 0.05,
+            "virtual_loss": 0.02
+          },
+          "to": {
+            "backend": "masked_ismcts",
+            "seconds": 12.0,
+            "simulations": 100000,
+            "max_choices": 512,
+            "exploration": 1.4,
+            "root_top_k": 16,
+            "interior_top_k": 8,
+            "pending_paths": 2,
+            "batch_size": 2,
+            "flush_ms": 0.5,
+            "prior_mix": 0.1,
+            "turn_interval": 4,
+            "max_searches_per_seat": 4,
+            "contract": "masked-ismcts/1.2.0",
+            "evaluator_kind": "neural",
+            "q_transform": "none",
+            "leaf_policy": "new_root_information_frontier",
+            "candidate_policy": "supported_progressive",
+            "fpu_reduction": 0.02,
+            "minimum_plan_visits": 2,
+            "reopen_support": 4,
+            "tail_admission": 0.05,
+            "virtual_loss": 0.02,
+            "reward": {
+              "version": "brass-combined-return/1.0.0",
+              "win": 1.0,
+              "placement": 0.1,
+              "vp": 0.001,
+              "insolvency": {
+                "event_cost": 0.005,
+                "max_cost": 0.025
+              }
+            },
+            "utility_scale": 1.2
+          }
+        },
+        "retention": {
+          "from": {
+            "enabled": true,
+            "resume_checkpoints": 2,
+            "replay_rounds": 2,
+            "quarantine_hours": 0,
+            "evaluation_samples": 1,
+            "profile_traces": 2
+          },
+          "to": {
+            "enabled": true,
+            "resume_checkpoints": 2,
+            "replay_rounds": 2,
+            "quarantine_hours": 0,
+            "evaluation_samples": 1,
+            "profile_traces": 2,
+            "history_reports": 128
+          }
+        },
+        "population": {
+          "from": {
+            "recent": 8,
+            "anchors": 4
+          },
+          "to": {
+            "recent": 16,
+            "anchors": 48
+          }
+        },
+        "audit_workers": {
+          "from": 8,
+          "to": 16
+        },
+        "search_wall_fraction": {
+          "from": 0.5,
+          "to": 0.9
+        },
+        "search_collections_per_iteration": {
+          "from": null,
+          "to": 2
+        },
+        "insolvency": {
+          "from": null,
+          "to": {
+            "event_cost": 0.005,
+            "max_cost": 0.025
+          }
+        },
+        "legacy_boost": {
+          "from": null,
+          "to": {
+            "stages": [
+              {
+                "games": 20000,
+                "selfplay": 15,
+                "historical": 25,
+                "legacy": 60
+              },
+              {
+                "games": 10000,
+                "selfplay": 45,
+                "historical": 25,
+                "legacy": 30
+              }
+            ]
+          }
+        },
+        "reward": {
+          "from": null,
+          "to": {
+            "win": 1.0,
+            "placement": 0.1,
+            "vp": 0.001
+          }
+        },
+        "champion": {
+          "from": null,
+          "to": {
+            "enabled": true,
+            "every_games": 6400,
+            "setups": 8,
+            "min_win_share": 0.55,
+            "seed": 1910000
+          }
+        }
+      }
+    },
+    {
+      "from_implementation": "760778c9fd71fd2549d87e817b14e148be6cf555444cbcceb7e0cfc06d0d5830",
+      "to_implementation": "826b6beb04241a73a5d1ec0d712176ff9df4370a26cf01bb05ee92f7a05b4f16",
+      "learning_compatibility": "c349e816f2e301ea2a3b438902059cffe868f48e131f7c120691d37cd1c409d2",
+      "reviewed_evidence": "results/selfplay-v2-31/state.json",
+      "reason": "Champion/reward revision: Reviewed original unheaded checkpoint extension remains compatible. New combined coefficients, frozen champion opponents and compact retention are explicit; no old combined-objective checkpoint is silently relabeled. Fresh IL restart is recommended.",
+      "config_changes": {
+        "execution": {
+          "from": {
+            "processes": 48,
+            "hosts_per_process": 1,
+            "heavy_processes": 24,
+            "batch_size": 64,
+            "max_candidate_cells": 131072,
+            "flush_ms": 1.0,
+            "worker_threads": 1,
+            "max_decisions": 2000,
+            "max_models": 16,
+            "shard_games": 8,
+            "shard_bytes": 268435456,
+            "feature_cache": true,
+            "policy_cache": 32,
+            "search_workers_per_turn": 4,
+            "cpu_budget": 64,
+            "cpu_reserve": 4
+          },
+          "to": {
+            "processes": 48,
+            "hosts_per_process": 1,
+            "heavy_processes": 24,
+            "batch_size": 64,
+            "max_candidate_cells": 131072,
+            "flush_ms": 1.0,
+            "worker_threads": 1,
+            "max_decisions": 2000,
+            "max_models": 72,
+            "shard_games": 8,
+            "shard_bytes": 268435456,
+            "feature_cache": true,
+            "policy_cache": 32,
+            "search_workers_per_turn": 4,
+            "cpu_budget": 64,
+            "cpu_reserve": 4
+          }
+        },
+        "search_every_games": {
+          "from": 320,
+          "to": 160
+        },
+        "search": {
+          "from": {
+            "backend": "masked_ismcts",
+            "seconds": 12.0,
+            "simulations": 100000,
+            "max_choices": 512,
+            "exploration": 1.4,
+            "root_top_k": 16,
+            "interior_top_k": 8,
+            "pending_paths": 2,
+            "batch_size": 2,
+            "flush_ms": 0.5,
+            "prior_mix": 0.1,
+            "turn_interval": 4,
+            "max_searches_per_seat": 4,
+            "contract": "masked-ismcts/1.1.0",
+            "evaluator_kind": "neural",
+            "q_transform": "none",
+            "leaf_policy": "new_root_information_frontier",
+            "candidate_policy": "supported_progressive",
+            "fpu_reduction": 0.02,
+            "minimum_plan_visits": 2,
+            "reopen_support": 4,
+            "tail_admission": 0.05,
+            "virtual_loss": 0.02
+          },
+          "to": {
+            "backend": "masked_ismcts",
+            "seconds": 12.0,
+            "simulations": 100000,
+            "max_choices": 512,
+            "exploration": 1.4,
+            "root_top_k": 16,
+            "interior_top_k": 8,
+            "pending_paths": 2,
+            "batch_size": 2,
+            "flush_ms": 0.5,
+            "prior_mix": 0.1,
+            "turn_interval": 4,
+            "max_searches_per_seat": 4,
+            "contract": "masked-ismcts/1.2.0",
+            "evaluator_kind": "neural",
+            "q_transform": "none",
+            "leaf_policy": "new_root_information_frontier",
+            "candidate_policy": "supported_progressive",
+            "fpu_reduction": 0.02,
+            "minimum_plan_visits": 2,
+            "reopen_support": 4,
+            "tail_admission": 0.05,
+            "virtual_loss": 0.02,
+            "reward": {
+              "version": "brass-combined-return/1.0.0",
+              "win": 1.0,
+              "placement": 0.1,
+              "vp": 0.001,
+              "insolvency": {
+                "event_cost": 0.005,
+                "max_cost": 0.025
+              }
+            },
+            "utility_scale": 1.2
+          }
+        },
+        "retention": {
+          "from": {
+            "enabled": true,
+            "resume_checkpoints": 2,
+            "replay_rounds": 2,
+            "quarantine_hours": 0,
+            "evaluation_samples": 1,
+            "profile_traces": 2
+          },
+          "to": {
+            "enabled": true,
+            "resume_checkpoints": 2,
+            "replay_rounds": 2,
+            "quarantine_hours": 0,
+            "evaluation_samples": 1,
+            "profile_traces": 2,
+            "history_reports": 128
+          }
+        },
+        "population": {
+          "from": {
+            "recent": 8,
+            "anchors": 4
+          },
+          "to": {
+            "recent": 16,
+            "anchors": 48
+          }
+        },
+        "audit_workers": {
+          "from": 8,
+          "to": 16
+        },
+        "search_wall_fraction": {
+          "from": 0.5,
+          "to": 0.9
+        },
+        "search_collections_per_iteration": {
+          "from": null,
+          "to": 2
+        },
+        "insolvency": {
+          "from": null,
+          "to": {
+            "event_cost": 0.005,
+            "max_cost": 0.025
+          }
+        },
+        "legacy_boost": {
+          "from": null,
+          "to": {
+            "stages": [
+              {
+                "games": 20000,
+                "selfplay": 15,
+                "historical": 25,
+                "legacy": 60
+              },
+              {
+                "games": 10000,
+                "selfplay": 45,
+                "historical": 25,
+                "legacy": 30
+              }
+            ]
+          }
+        },
+        "reward": {
+          "from": null,
+          "to": {
+            "win": 1.0,
+            "placement": 0.1,
+            "vp": 0.001
+          }
+        },
+        "champion": {
+          "from": null,
+          "to": {
+            "enabled": true,
+            "every_games": 6400,
+            "setups": 8,
+            "min_win_share": 0.55,
+            "seed": 1910000
+          }
+        }
+      }
+    },
+    {
+      "from_implementation": "d95fe440ade5bf9a8ede3850757011b815700773a4271c625dee70eb946059b4",
+      "to_implementation": "826b6beb04241a73a5d1ec0d712176ff9df4370a26cf01bb05ee92f7a05b4f16",
+      "learning_compatibility": "c349e816f2e301ea2a3b438902059cffe868f48e131f7c120691d37cd1c409d2",
+      "reviewed_evidence": "results/selfplay-v2-70/state.json",
+      "reason": "Champion/reward revision: Reviewed original unheaded checkpoint extension remains compatible. New combined coefficients, frozen champion opponents and compact retention are explicit; no old combined-objective checkpoint is silently relabeled. Fresh IL restart is recommended.",
+      "config_changes": {
+        "execution": {
+          "from": {
+            "processes": 48,
+            "hosts_per_process": 1,
+            "heavy_processes": 24,
+            "batch_size": 64,
+            "max_candidate_cells": 131072,
+            "flush_ms": 1.0,
+            "worker_threads": 1,
+            "max_decisions": 2000,
+            "max_models": 16,
+            "shard_games": 8,
+            "shard_bytes": 268435456,
+            "feature_cache": true,
+            "policy_cache": 32,
+            "search_workers_per_turn": 4,
+            "cpu_budget": 64,
+            "cpu_reserve": 4
+          },
+          "to": {
+            "processes": 48,
+            "hosts_per_process": 1,
+            "heavy_processes": 24,
+            "batch_size": 64,
+            "max_candidate_cells": 131072,
+            "flush_ms": 1.0,
+            "worker_threads": 1,
+            "max_decisions": 2000,
+            "max_models": 72,
+            "shard_games": 8,
+            "shard_bytes": 268435456,
+            "feature_cache": true,
+            "policy_cache": 32,
+            "search_workers_per_turn": 4,
+            "cpu_budget": 64,
+            "cpu_reserve": 4
+          }
+        },
+        "search_every_games": {
+          "from": 320,
+          "to": 160
+        },
+        "search": {
+          "from": {
+            "backend": "masked_ismcts",
+            "seconds": 12.0,
+            "simulations": 100000,
+            "max_choices": 512,
+            "exploration": 1.4,
+            "root_top_k": 16,
+            "interior_top_k": 8,
+            "pending_paths": 2,
+            "batch_size": 2,
+            "flush_ms": 0.5,
+            "prior_mix": 0.1,
+            "turn_interval": 4,
+            "max_searches_per_seat": 4,
+            "contract": "masked-ismcts/1.1.0",
+            "evaluator_kind": "neural",
+            "q_transform": "none",
+            "leaf_policy": "new_root_information_frontier",
+            "candidate_policy": "supported_progressive",
+            "fpu_reduction": 0.02,
+            "minimum_plan_visits": 2,
+            "reopen_support": 4,
+            "tail_admission": 0.05,
+            "virtual_loss": 0.02
+          },
+          "to": {
+            "backend": "masked_ismcts",
+            "seconds": 12.0,
+            "simulations": 100000,
+            "max_choices": 512,
+            "exploration": 1.4,
+            "root_top_k": 16,
+            "interior_top_k": 8,
+            "pending_paths": 2,
+            "batch_size": 2,
+            "flush_ms": 0.5,
+            "prior_mix": 0.1,
+            "turn_interval": 4,
+            "max_searches_per_seat": 4,
+            "contract": "masked-ismcts/1.2.0",
+            "evaluator_kind": "neural",
+            "q_transform": "none",
+            "leaf_policy": "new_root_information_frontier",
+            "candidate_policy": "supported_progressive",
+            "fpu_reduction": 0.02,
+            "minimum_plan_visits": 2,
+            "reopen_support": 4,
+            "tail_admission": 0.05,
+            "virtual_loss": 0.02,
+            "reward": {
+              "version": "brass-combined-return/1.0.0",
+              "win": 1.0,
+              "placement": 0.1,
+              "vp": 0.001,
+              "insolvency": {
+                "event_cost": 0.005,
+                "max_cost": 0.025
+              }
+            },
+            "utility_scale": 1.2
+          }
+        },
+        "retention": {
+          "from": {
+            "enabled": true,
+            "resume_checkpoints": 2,
+            "replay_rounds": 2,
+            "quarantine_hours": 0,
+            "evaluation_samples": 1,
+            "profile_traces": 2
+          },
+          "to": {
+            "enabled": true,
+            "resume_checkpoints": 2,
+            "replay_rounds": 2,
+            "quarantine_hours": 0,
+            "evaluation_samples": 1,
+            "profile_traces": 2,
+            "history_reports": 128
+          }
+        },
+        "population": {
+          "from": {
+            "recent": 8,
+            "anchors": 4
+          },
+          "to": {
+            "recent": 16,
+            "anchors": 48
+          }
+        },
+        "audit_workers": {
+          "from": 8,
+          "to": 16
+        },
+        "search_wall_fraction": {
+          "from": 0.7,
+          "to": 0.9
+        },
+        "search_collections_per_iteration": {
+          "from": null,
+          "to": 2
+        },
+        "insolvency": {
+          "from": null,
+          "to": {
+            "event_cost": 0.005,
+            "max_cost": 0.025
+          }
+        },
+        "legacy_boost": {
+          "from": null,
+          "to": {
+            "stages": [
+              {
+                "games": 20000,
+                "selfplay": 15,
+                "historical": 25,
+                "legacy": 60
+              },
+              {
+                "games": 10000,
+                "selfplay": 45,
+                "historical": 25,
+                "legacy": 30
+              }
+            ]
+          }
+        },
+        "reward": {
+          "from": null,
+          "to": {
+            "win": 1.0,
+            "placement": 0.1,
+            "vp": 0.001
+          }
+        },
+        "champion": {
+          "from": null,
+          "to": {
+            "enabled": true,
+            "every_games": 6400,
+            "setups": 8,
+            "min_win_share": 0.55,
+            "seed": 1910000
+          }
+        }
+      }
+    },
+    {
+      "from_implementation": "2ea375ddfa37d3aa07786eba035f3d17e38fd94876734fee5317bed58af68360",
+      "to_implementation": "826b6beb04241a73a5d1ec0d712176ff9df4370a26cf01bb05ee92f7a05b4f16",
+      "learning_compatibility": "c349e816f2e301ea2a3b438902059cffe868f48e131f7c120691d37cd1c409d2",
+      "reason": "Champion/reward revision: Reviewed original unheaded checkpoint extension remains compatible. New combined coefficients, frozen champion opponents and compact retention are explicit; no old combined-objective checkpoint is silently relabeled. Fresh IL restart is recommended.",
+      "config_changes": {
+        "search": {
+          "from": {
+            "backend": "masked_ismcts",
+            "seconds": 12.0,
+            "simulations": 100000,
+            "max_choices": 512,
+            "exploration": 1.4,
+            "root_top_k": 16,
+            "interior_top_k": 8,
+            "pending_paths": 2,
+            "batch_size": 2,
+            "flush_ms": 0.5,
+            "prior_mix": 0.1,
+            "turn_interval": 4,
+            "max_searches_per_seat": 4,
+            "contract": "masked-ismcts/1.1.0",
+            "evaluator_kind": "neural",
+            "q_transform": "none",
+            "leaf_policy": "new_root_information_frontier",
+            "candidate_policy": "supported_progressive",
+            "fpu_reduction": 0.02,
+            "minimum_plan_visits": 2,
+            "reopen_support": 4,
+            "tail_admission": 0.05,
+            "virtual_loss": 0.02
+          },
+          "to": {
+            "backend": "masked_ismcts",
+            "seconds": 12.0,
+            "simulations": 100000,
+            "max_choices": 512,
+            "exploration": 1.4,
+            "root_top_k": 16,
+            "interior_top_k": 8,
+            "pending_paths": 2,
+            "batch_size": 2,
+            "flush_ms": 0.5,
+            "prior_mix": 0.1,
+            "turn_interval": 4,
+            "max_searches_per_seat": 4,
+            "contract": "masked-ismcts/1.2.0",
+            "evaluator_kind": "neural",
+            "q_transform": "none",
+            "leaf_policy": "new_root_information_frontier",
+            "candidate_policy": "supported_progressive",
+            "fpu_reduction": 0.02,
+            "minimum_plan_visits": 2,
+            "reopen_support": 4,
+            "tail_admission": 0.05,
+            "virtual_loss": 0.02,
+            "reward": {
+              "version": "brass-combined-return/1.0.0",
+              "win": 1.0,
+              "placement": 0.1,
+              "vp": 0.001,
+              "insolvency": {
+                "event_cost": 0.005,
+                "max_cost": 0.025
+              }
+            },
+            "utility_scale": 1.2
+          }
+        },
+        "retention": {
+          "from": {
+            "enabled": true,
+            "resume_checkpoints": 2,
+            "replay_rounds": 2,
+            "quarantine_hours": 0,
+            "evaluation_samples": 1,
+            "profile_traces": 2
+          },
+          "to": {
+            "enabled": true,
+            "resume_checkpoints": 2,
+            "replay_rounds": 2,
+            "quarantine_hours": 0,
+            "evaluation_samples": 1,
+            "profile_traces": 2,
+            "history_reports": 128
+          }
+        },
+        "search_wall_fraction": {
+          "from": 0.7777777777777778,
+          "to": 0.9
+        },
+        "insolvency": {
+          "from": null,
+          "to": {
+            "event_cost": 0.005,
+            "max_cost": 0.025
+          }
+        },
+        "legacy_boost": {
+          "from": null,
+          "to": {
+            "stages": [
+              {
+                "games": 20000,
+                "selfplay": 15,
+                "historical": 25,
+                "legacy": 60
+              },
+              {
+                "games": 10000,
+                "selfplay": 45,
+                "historical": 25,
+                "legacy": 30
+              }
+            ]
+          }
+        },
+        "reward": {
+          "from": null,
+          "to": {
+            "win": 1.0,
+            "placement": 0.1,
+            "vp": 0.001
+          }
+        },
+        "champion": {
+          "from": null,
+          "to": {
+            "enabled": true,
+            "every_games": 6400,
+            "setups": 8,
+            "min_win_share": 0.55,
+            "seed": 1910000
+          }
+        }
+      }
+    },
+    {
+      "from_implementation": "ef111540f20d696496b13596791bbc113d8ce27843577d546b1e71a5e6a4c7e1",
+      "to_implementation": "826b6beb04241a73a5d1ec0d712176ff9df4370a26cf01bb05ee92f7a05b4f16",
+      "learning_compatibility": "c349e816f2e301ea2a3b438902059cffe868f48e131f7c120691d37cd1c409d2",
+      "reason": "Champion/reward revision: Reviewed original unheaded checkpoint extension remains compatible. New combined coefficients, frozen champion opponents and compact retention are explicit; no old combined-objective checkpoint is silently relabeled. Fresh IL restart is recommended.",
+      "config_changes": {
+        "search": {
+          "from": {
+            "backend": "masked_ismcts",
+            "seconds": 12.0,
+            "simulations": 100000,
+            "max_choices": 512,
+            "exploration": 1.4,
+            "root_top_k": 16,
+            "interior_top_k": 8,
+            "pending_paths": 2,
+            "batch_size": 2,
+            "flush_ms": 0.5,
+            "prior_mix": 0.1,
+            "turn_interval": 4,
+            "max_searches_per_seat": 4,
+            "contract": "masked-ismcts/1.1.0",
+            "evaluator_kind": "neural",
+            "q_transform": "none",
+            "leaf_policy": "new_root_information_frontier",
+            "candidate_policy": "supported_progressive",
+            "fpu_reduction": 0.02,
+            "minimum_plan_visits": 2,
+            "reopen_support": 4,
+            "tail_admission": 0.05,
+            "virtual_loss": 0.02
+          },
+          "to": {
+            "backend": "masked_ismcts",
+            "seconds": 12.0,
+            "simulations": 100000,
+            "max_choices": 512,
+            "exploration": 1.4,
+            "root_top_k": 16,
+            "interior_top_k": 8,
+            "pending_paths": 2,
+            "batch_size": 2,
+            "flush_ms": 0.5,
+            "prior_mix": 0.1,
+            "turn_interval": 4,
+            "max_searches_per_seat": 4,
+            "contract": "masked-ismcts/1.2.0",
+            "evaluator_kind": "neural",
+            "q_transform": "none",
+            "leaf_policy": "new_root_information_frontier",
+            "candidate_policy": "supported_progressive",
+            "fpu_reduction": 0.02,
+            "minimum_plan_visits": 2,
+            "reopen_support": 4,
+            "tail_admission": 0.05,
+            "virtual_loss": 0.02,
+            "reward": {
+              "version": "brass-combined-return/1.0.0",
+              "win": 1.0,
+              "placement": 0.1,
+              "vp": 0.001,
+              "insolvency": {
+                "event_cost": 0.005,
+                "max_cost": 0.025
+              }
+            },
+            "utility_scale": 1.2
+          }
+        },
+        "retention": {
+          "from": {
+            "enabled": true,
+            "resume_checkpoints": 2,
+            "replay_rounds": 2,
+            "quarantine_hours": 0,
+            "evaluation_samples": 1,
+            "profile_traces": 2
+          },
+          "to": {
+            "enabled": true,
+            "resume_checkpoints": 2,
+            "replay_rounds": 2,
+            "quarantine_hours": 0,
+            "evaluation_samples": 1,
+            "profile_traces": 2,
+            "history_reports": 128
+          }
+        },
+        "search_wall_fraction": {
+          "from": 0.7777777777777778,
+          "to": 0.9
+        },
+        "insolvency": {
+          "from": {
+            "event_cost": 0.02,
+            "max_cost": 0.1
+          },
+          "to": {
+            "event_cost": 0.005,
+            "max_cost": 0.025
+          }
+        },
+        "reward": {
+          "from": null,
+          "to": {
+            "win": 1.0,
+            "placement": 0.1,
+            "vp": 0.001
+          }
+        },
+        "champion": {
+          "from": null,
+          "to": {
+            "enabled": true,
+            "every_games": 6400,
+            "setups": 8,
+            "min_win_share": 0.55,
+            "seed": 1910000
+          }
+        }
+      }
     }
   ]
 }

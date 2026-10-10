@@ -50,7 +50,7 @@ class InsolvencyTests(unittest.TestCase):
               row(0,phase='debt',kind='liquidate',debts={0:5}),
               row(0,phase='debt',kind='liquidate',debts={0:1}),row(0,round=2)]
         costs,summary=returns(rows,INSOLVENCY)
-        self.assertEqual(costs,[.02,0,0,0,0,0])
+        self.assertEqual(costs,[.005,0,0,0,0,0])
         self.assertEqual([s['events'] for s in summary],[1,0,1,0])
         self.assertEqual(summary[0]['shortfall'],5)
         self.assertEqual(summary[2]['shortfall'],2)
@@ -66,20 +66,20 @@ class InsolvencyTests(unittest.TestCase):
     def test_no_asset_automatic_settlement_and_final_canal(self):
         rows=[row(0),row(3,phase='continuation',kind='finish',cash={0:1},income={0:-4}),row(0,round=2)]
         costs,summary=returns(rows,INSOLVENCY)
-        self.assertEqual(costs,[.02,0,0]);self.assertEqual(summary[0]['shortfall'],3)
+        self.assertEqual(costs,[.005,0,0]);self.assertEqual(summary[0]['shortfall'],3)
         rows=[row(0,round=8),row(3,round=8,phase='continuation',kind='finish',cash={0:0},income={0:-2}),
               row(0,era='RailEra',round=1)]
-        self.assertEqual(returns(rows,INSOLVENCY)[0],[.02,0,0])
+        self.assertEqual(returns(rows,INSOLVENCY)[0],[.005,0,0])
 
     def test_repeated_events_cap_per_seat_not_per_tile_or_decision(self):
         rows=[]
         for n in range(1,8):
             rows.extend([row(0,round=n),row(0,round=n,phase='debt',kind='liquidate',debts={0:8})])
         costs,summary=returns(rows,INSOLVENCY)
-        self.assertEqual(summary[0]['events'],7);self.assertAlmostEqual(summary[0]['cost'],.10)
-        self.assertAlmostEqual(costs[0],.10);self.assertAlmostEqual(costs[1],.08)
+        self.assertEqual(summary[0]['events'],7);self.assertAlmostEqual(summary[0]['cost'],.025)
+        self.assertAlmostEqual(costs[0],.025);self.assertAlmostEqual(costs[1],.020)
         self.assertEqual(costs[-4:],[0,0,0,0])
-        self.assertTrue(all(0<=c<=.10000001 for c in costs))
+        self.assertTrue(all(0<=c<=.02500001 for c in costs))
 
     def test_actor_return_changes_but_official_labels_and_replay_do_not(self):
         model,policy,game=onpolicy_debt();original=copy.deepcopy(game)
@@ -88,14 +88,14 @@ class InsolvencyTests(unittest.TestCase):
         for a,b in zip(plain,shaped):self.assertEqual(a[1],b[1])
         self.assertEqual(shaped[0][1],terminal_targets(game['result']))
         costs,metrics=advantage_costs(shaped,INSOLVENCY)
-        self.assertEqual(costs,[.02,0,0,0]);self.assertEqual(metrics['events'],2)
+        self.assertEqual(costs,[.005,0,0,0]);self.assertEqual(metrics['events'],2)
         cfg=dict(UPDATE_V21,epochs=1,effective_batch_size=4,microbatch_size=2,critic_batch_size=4)
         results=[];models=[]
         for setting in (None,INSOLVENCY):
             net=copy.deepcopy(model);torch.manual_seed(42)
             results.append(ppo_update(net,torch.optim.AdamW(net.parameters(),lr=1e-5),[game],policy,cfg,insolvency=setting))
             models.append(net)
-        self.assertAlmostEqual(results[0]['advantage']['mean']-results[1]['advantage']['mean'],.02/3,places=6)
+        self.assertAlmostEqual(results[0]['advantage']['mean']-results[1]['advantage']['mean'],.005/3,places=6)
         self.assertEqual(results[1]['forced_decisions'],1)
         self.assertTrue(any(not torch.equal(v,models[1].state_dict()[k]) for k,v in models[0].state_dict().items()))
         self.assertFalse(results[0]['insolvency']['enabled'])

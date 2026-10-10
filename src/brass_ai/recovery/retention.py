@@ -128,7 +128,8 @@ def references(root,run):
         if '.retention-trash' in p.parts: continue
         d=read(p)
         if d.get('format') in ('step5-recovery-league/2.1.0','step5-recovery-league/2.2.0'):
-            selected={k:d.get(k) for k in ('resume','population','origin','evaluation_anchor','pins')}
+            selected={k:d.get(k) for k in ('resume','population','origin','evaluation_anchor','pins','champion')}
+            selected['accepted_gate']=d.get('champion_gate',{}).get('accepted_gate')
             cfg=d.get('signature',{}).get('config',{})
             selected['datasets']=[cfg.get('rehearsal_manifest'),cfg.get('imitation',{}).get('manifest')]
         elif 'best' in d and 'last' in d: selected={k:d.get(k) for k in ('best','last','signature')}
@@ -229,6 +230,15 @@ def plan(root,run,config=RETENTION):
             report=directory/'report.json'
             if not directory.is_dir() or not report.is_file():continue
             result=read(report)
+            if result.get('format')=='four-player-champion/1.0.0':
+                # Gate outcomes stay in the compact report. Completed raw games
+                # never train PPO and are not kept for every promotion attempt.
+                files=sorted(directory.glob('*.jsonl.gz'))
+                for p in files[config['evaluation_samples']:]:
+                    candidate(p,'completed champion selection game')
+                    for derived in directory.glob(p.name+'.features.*'):candidate(derived,'derived champion features')
+                panels.setdefault('champion',[]).append(directory)
+                continue
             if result.get('spec',{}).get('config',{}).get('panel')!='development':continue
             panels.setdefault(directory.name.rsplit('-',1)[0],[]).append(directory)
         for directories in panels.values():
@@ -265,22 +275,14 @@ def plan(root,run,config=RETENTION):
 def prune(root,run,config=RETENTION,*,apply=False):
     root,run=owned(root,run);decision=plan(root,run,config)
     if not apply: return dict(decision,dry_run=True)
+    from .history import compact_history
+    archived=[e for e in decision['entries'] if e['path'].endswith('/report.json') and e['reason'].startswith('archived')]
+    compact_history(run,[(e['path'],e['sha256'],read(safe(run,run/e['path']))) for e in archived],
+                    config.get('history_reports',128))
     if not decision['entries']:
         return dict(decision,dry_run=False,**purge(root,run,config,automatic=True))
     # A single small history file retains learning/evaluation metrics, replacing
     # one large report directory per retired round. Archive before moving bytes.
-    archived=[e for e in decision['entries'] if e['path'].endswith('/report.json') and e['reason'].startswith('archived')]
-    if archived:
-        history_path=run/'retention-history.json';history=read(history_path) if history_path.exists() else {}
-        for entry in archived:
-            report=read(safe(run,run/entry['path']))
-            history[entry['path']]=dict(sha256=entry['sha256'],summary={k:v for k,v in report.items()
-                if k not in ('execution','spec','raw_record_sha256','retention')})
-            # Search execution receipts are also large, and are not reusable
-            # teacher replay once those files have expired.
-            search=history[entry['path']]['summary'].get('search')
-            if isinstance(search,dict):search.pop('collection',None)
-        write_json(history_path,history)
     token=str(int(time.time()))+'-'+uuid.uuid4().hex[:8]
     manifest=run/'.retention'/('cleanup-'+token+'.json');trash=run/'.retention-trash'/token
     decision.update(dry_run=False,quarantine_hours=config['quarantine_hours'],status='moving')

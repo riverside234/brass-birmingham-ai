@@ -121,6 +121,8 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
     if source_changed:
         from .resume import commit_transition
         state=commit_transition(run,state,signature)
+    from .champion import initialize as initialize_champion,enabled as champion_enabled,selfplay_policies
+    initialize_champion(root,run,state)
     window=boost_window(state,config)
     if window:
         print(f'Searched-v4 recovery window: ordinary games {window["start_games"]} to {window["until_games"]}; '
@@ -135,10 +137,19 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
     with InferenceService(config['execution'],device,profile=run/'profile-collection' if config['profile_steps'] else None,
                           profile_steps=config['profile_steps']) as service,reader_pool(config['audit_workers']) as readers:
         with ActorPool(root,config['host'],service,config['execution'],mono=mono) as ordinary,ActorPool(root,config['host'],service,config['execution'],mono=mono,heavy=True) as heavy:
+            from .champion import schedule as schedule_champion
+            # Resume an interrupted gate for the committed candidate before
+            # advancing the learner or writing a new gate specification.
+            with torch.random.fork_rng(devices=[]):schedule_champion(root,run,state,service,ordinary)
             for _ in range(iterations):
                 iteration=state['iteration'];began=time.monotonic();directory=run/f'iteration-{iteration:04d}'
                 inference_before=service.report()
                 current=service.register(model);behavior=Behavior(current,config['exploration'])
+                incumbent=state.get('champion') if champion_enabled(config) else None
+                if incumbent:
+                    path=project_path(root,incumbent['path'])
+                    require(sha(path)==incumbent['sha256'],'Champion checkpoint changed')
+                    if incumbent['model_id'] not in service.models:service.register_checkpoint(path)
                 snapshots={}
                 verified_snapshots=set()
                 for entry in state.get('population',state['history']):
@@ -150,7 +161,7 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                     selected,cursor=seeds_for(cursor,1);seed=selected[0]
                     rng=random.Random(digest(dict(seed=config['seed'],index=index)))
                     learner=neural_spec(current,config['exploration'],'mixed')
-                    if kind=='selfplay': policies=[learner]*4
+                    if kind=='selfplay': policies=selfplay_policies(learner,incumbent) if incumbent else [learner]*4
                     elif kind=='historical':
                         candidates=sample_opponents(snapshots.values(),current,state['evaluation_anchor'],rng,config['population']['recent'])
                         opponents=[]
@@ -211,7 +222,8 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                 report=dict(format='step5-recovery-report/'+'2.2.0',iteration=iteration,composition=dict(composition),
                     reward_migration=migration if not summaries else None,
                     legacy_boost=boost_report(state['games_done'],done,config,window),
-                    actor=update,search=search,**diagnostics,incoming_model_id=current,
+                    actor=update,search=search,**diagnostics,incoming_model_id=current,incoming_policy_id=behavior.policy_id,
+                    selfplay_incumbent=incumbent,
                     games_done=done,cumulative_games=state['previous_games']+done,
                     timings=dict(collection_seconds=load_began-began,ppo_seconds=updated-collected,
                         replay_load_seconds=collected-load_began,
@@ -249,6 +261,9 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                 write_json(state_path,state)
                 if revised:
                     evaluation_began=time.monotonic()
+                    from .champion import schedule as schedule_champion
+                    with torch.random.fork_rng(devices=[]):
+                        report['champion_gate']=schedule_champion(root,run,state,service,ordinary)
                     schedule_evaluations(root,run,state,device,mono)
                     report['timings']['evaluation_seconds']=time.monotonic()-evaluation_began
                     from .retention import prune
@@ -257,7 +272,8 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                         cleanup=prune(root,run,config['retention'],apply=True)
                         report['cleanup']={k:cleanup[k] for k in ('reclaimable_bytes','permanently_deleted_files','permanently_deleted_bytes')}
                     report['timings']['cleanup_seconds']=time.monotonic()-cleanup_began
-                    service.trim([e['model_id'] for e in state['population']]+[identity])
+                    service.trim([e['model_id'] for e in state['population']]+[identity]+
+                                 ([state['champion']['model_id']] if incumbent else []))
                 report['timings']['iteration_seconds']=time.monotonic()-began
                 write_json(directory/'report.json',report)
                 summaries.append(report);summaries=summaries[-2:]
@@ -270,8 +286,9 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                       f'insolvency events={update["insolvency"].get("events",0)} '
                       f'mean cost={update["insolvency"].get("mean_cost_per_trajectory",0):.4f}; '
                       f'teacher rows={search.get("teacher_rows",0)} steps={search.get("optimizer_steps",0)}',flush=True)
-    return dict(run=str(run),completed_iteration=state['iteration'],checkpoint=state['history'][-1],summaries=summaries,
-                summary_scope='latest two iterations in this invocation; older metrics in retention-history.json')
+    return dict(run=str(run),completed_iteration=state['iteration'],checkpoint=state['history'][-1],
+                best=state.get('champion'),summaries=summaries,
+                summary_scope='latest two iterations; bounded compact older metrics in retention-history.json')
 
 
 def schedule_evaluations(root,run,state,device,mono):

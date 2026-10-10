@@ -48,6 +48,8 @@ public static class StatisticsGeographyChecks
     public static IEnumerator UI(StatisticsPanel panel,Camera camera,Action<bool,string,object> check,Action<RenderTexture,Camera,string> capture,string prefix)
     {
         Data(check);var rt=new RenderTexture(1920,1200,24);rt.Create();camera.targetTexture=rt;
+        yield return null;yield return null;
+        var edgeCheck=Antialiasing(panel,camera,rt,check,prefix);while(edgeCheck.MoveNext())yield return edgeCheck.Current;
         var decoded=GameHistoryStatisticsCodec.Decode(GameHistoryStatisticsCodec.Encode(panel.Report));
         foreach(int era in panel.Report.Introductory?new[]{1}:new[]{1,2}){
             var a=StatisticsMapQueries.Get(panel.Report,era);var b=StatisticsMapQueries.Get(decoded,era);
@@ -60,10 +62,14 @@ public static class StatisticsGeographyChecks
             foreach(int era in new[]{1,2}){
                 panel.ResetFilters();panel.SelectPage(3);panel.SetMapEra(era);yield return null;yield return null;Canvas.ForceUpdateCanvases();
                 var map=panel.GetComponentsInChildren<StatisticsMapView>().Single();
+                panel.BodyScroll.verticalNormalizedPosition=1;Canvas.ForceUpdateCanvases();
+                float pixelScale=rt.width/((RectTransform)panel.transform).rect.width;
+                check(map.Diagram.height*pixelScale>=(preset==1?490:450)&&map.Diagram.width/map.Diagram.height<1.85f,"GEO30-UI larger upright diagram at 1200p",new{prefix,era,preset,width=map.Diagram.width*pixelScale,height=map.Diagram.height*pixelScale});
                 check(!map.Tag.gameObject.activeSelf&&panel.GetComponentsInChildren<TextMeshProUGUI>().All(t=>!t.name.StartsWith("City ")),"GEO29-UI initial map has no city tags or permanent labels",new{prefix,era,preset});
                 var names=map.Snapshot.Cities.Select(c=>c.Location.City).ToArray();
                 if(era==1)canalPositions=names.ToDictionary(n=>n,map.Point);else check(names.All(n=>(map.Point(n)-canalPositions[n]).magnitude<.1f),"GEO29-UI switching era never rearranges or rescales the board",new{prefix,preset});
                 check(names.All(c=>map.Hit(map.Point(c))==c),"GEO29-UI every city has an unambiguous hit target",new{prefix,preset});
+                check(names.SelectMany((n,i)=>names.Skip(i+1).Select(other=>(map.Point(n)-map.Point(other)).magnitude*pixelScale)).Min()>44,"GEO30-UI city hit areas have breathing room",new{prefix,era,preset});
                 var focus=map.GetComponentsInChildren<StatisticsMapFocus>().First(c=>c.City=="Birmingham");
                 focus.OnSelect(new BaseEventData(EventSystem.current));
                 check(map.Tag.City=="Birmingham","GEO29-INPUT keyboard focus exposes the same historical city tag",new{prefix,era,preset});
@@ -82,17 +88,66 @@ public static class StatisticsGeographyChecks
                     check(corners.All(c=>viewport.rect.Contains(viewport.InverseTransformPoint(c))),"GEO29-TAG complete tag stays in visible viewport",new{prefix,city,era,preset});
                     check(!map.Tag.GetComponent<CanvasGroup>().blocksRaycasts&&map.Tag.GetComponentsInChildren<Graphic>().All(g=>!g.raycastTarget),"GEO29-INPUT hover tag never intercepts input",city);
                     check(map.Tag.GetComponentsInChildren<TextMeshProUGUI>().All(t=>t.GetPreferredValues(t.text,t.rectTransform.rect.width,0).y<=t.rectTransform.rect.height+2),"GEO29-TAG tag text fits measured rows",new{prefix,city,preset});
+                    var item=map.Snapshot.Cities.Single(c=>c.Location.City==city);var labels=map.Tag.GetComponentsInChildren<TextMeshProUGUI>();var glyphs=map.Tag.GetComponentsInChildren<StatisticsMapGlyph>();
+                    check(item.Location.Merchant||glyphs.Count(g=>g.Kind=="Occupied")==item.Occupied&&glyphs.Count(g=>g.Kind=="Vacant")==item.Slots-item.Occupied,"GEO30-TAG slot symbols preserve actual occupancy",new{prefix,city,era,preset});
+                    check(labels.Count(t=>t.name.StartsWith("Tile industry "))==item.Tiles.Length&&glyphs.Count(g=>g.name.StartsWith("Flip status ")&&g.Kind=="Check")==item.Tiles.Count(t=>t.FlipRevision>0&&t.FlipRevision<=map.Snapshot.Revision),"GEO30-TAG compact tiles retain each industry and its historical flip",new{prefix,city,era,preset});
+                    check(rect.rect.height*pixelScale<190*panel.TextScale/1.15f&&labels.All(t=>t.name!="City era metric"&&t.name!="Flip key"),"GEO30-TAG occupancy tag omits repeated VP prose and flip legend",new{prefix,city,era,preset,height=rect.rect.height*pixelScale});
                     if(city=="Birmingham"||era==2&&city=="Gloucester")capture(rt,camera,"geography-"+prefix+"-era"+era+"-text"+preset+"-"+city);
                 }
                 panel.BodyScroll.onValueChanged.Invoke(Vector2.zero);check(!map.Tag.gameObject.activeSelf,"GEO29-INPUT scrolling clears stale city tags",prefix);
                 int objects=map.GetComponentsInChildren<Transform>(true).Length;var timer=System.Diagnostics.Stopwatch.StartNew();
                 for(int i=0;i<100;i++){map.PreviewCity("Birmingham");map.PreviewCity("Oxford");}timer.Stop();
                 check(objects==map.GetComponentsInChildren<Transform>(true).Length&&panel.GetComponentsInChildren<StatisticsMapView>().Single()==map,"GEO29-INPUT repeated inspection reuses one tag without rebuilding the page",new{prefix,era,preset,updates=200,milliseconds=timer.Elapsed.TotalMilliseconds});map.HideTag();
+                foreach(string mode in new[]{"Industry VP","Link contributions"}){
+                    panel.GetComponentsInChildren<Button>().First(b=>b.name=="Map measure").onClick.Invoke();yield return null;yield return null;Canvas.ForceUpdateCanvases();map=panel.GetComponentsInChildren<StatisticsMapView>().Single();map.PreviewCity("Birmingham");
+                    var city=map.Snapshot.Cities.Single(c=>c.Location.City=="Birmingham");int vp=mode=="Industry VP"?StatisticsMapQueries.IndustryVP(map.Snapshot,city,panel.Filters):StatisticsMapQueries.ContributionVP(panel.Report,map.Snapshot,city,panel.Filters);
+                    string value=(mode=="Industry VP"?"Industry VP: ":"Link VP: ")+vp;
+                    check(panel.Filters.MapMode==mode&&map.Tag.GetComponentsInChildren<TextMeshProUGUI>().Any(t=>t.name=="City era metric"&&t.text.StartsWith(value)),"GEO30-DATA chosen measure retains labeled era VP",new{prefix,mode,era,preset});
+                    var corners=new Vector3[4];map.Tag.Rect.GetWorldCorners(corners);check(corners.All(c=>panel.BodyScroll.viewport.rect.Contains(panel.BodyScroll.viewport.InverseTransformPoint(c))),"GEO30-TAG VP view still fits below its source dot",new{prefix,mode,era,preset});
+                    if(era==2&&preset==1)capture(rt,camera,"geography-"+prefix+"-"+(mode=="Industry VP"?"industry-vp":"link-vp"));
+                }
+                map.HideTag();if(era==2&&preset==2){panel.GetComponentsInChildren<Button>().First(b=>b.name=="Map key").onClick.Invoke();Canvas.ForceUpdateCanvases();capture(rt,camera,"geography-"+prefix+"-key");panel.Tooltip(null);}
                 panel.SetNetworkView("Network results");yield return null;yield return null;
                 check(panel.GetComponentsInChildren<StatisticsMapView>().Length==0&&panel.GetComponentsInChildren<StatisticsPlotGraphic>().Any(g=>g.Plot.Id=="link-sources"),"GEO29-UI network results retain existing analytical charts",prefix);
             }
         }
         camera.targetTexture=null;rt.Release();UnityEngine.Object.Destroy(rt);panel.ResetFilters();panel.SelectPage(0);yield return null;yield return null;
+    }
+    static IEnumerator Antialiasing(StatisticsPanel panel,Camera camera,RenderTexture rt,Action<bool,string,object> check,string prefix)
+    {
+        // Render the shipping mesh functions at 1x MSAA. Tests must not hide hard
+        // edges by enabling a better render target than the real UI uses.
+        var obj=new GameObject("Geography pixel coverage probe",typeof(RectTransform));var rect=(RectTransform)obj.transform;
+        rect.SetParent(panel.transform,false);rect.anchorMin=Vector2.zero;rect.anchorMax=Vector2.one;rect.pivot=new Vector2(0,1);rect.offsetMin=rect.offsetMax=Vector2.zero;
+        var probe=obj.AddComponent<GeographyCoverageProbe>();probe.Pixel=((RectTransform)panel.transform).rect.width/rt.width;probe.raycastTarget=false;probe.SetVerticesDirty();
+        yield return null;Canvas.ForceUpdateCanvases();camera.Render();
+        var previous=RenderTexture.active;RenderTexture.active=rt;var image=new Texture2D(rt.width,rt.height,TextureFormat.RGB24,false);image.ReadPixels(new Rect(0,0,rt.width,rt.height),0,0);image.Apply();RenderTexture.active=previous;
+        var pixels=image.GetPixels32();
+        for(int i=0;i<GeographyCoverageProbe.Angles.Length;i++){
+            int cx=310+i%4*420,cy=1200-420-i/4*340;int blended=0,solid=0;double ink=0;
+            for(int y=cy-145;y<=cy+145;y++)for(int x=cx-145;x<=cx+145;x++){
+                byte value=pixels[y*rt.width+x].r;if(value>10&&value<245)blended++;if(value<10)solid++;ink+=1-value/255.0;
+            }
+            check(rt.antiAliasing==1&&blended>=160&&solid>=400&&ink>600&&ink<1050,"GEO30-AA smooth coverage and crisp width at 1x sampling",new{prefix,angle=GeographyCoverageProbe.Angles[i],blended,solid,ink});
+        }
+        // The production glyph uses the same physical fringe for both Canvas scales.
+        int circleBlend=0,circleSolid=0;for(int y=180;y<220;y++)for(int x=180;x<220;x++){byte value=pixels[y*rt.width+x].r;if(value>10&&value<245)circleBlend++;if(value<10)circleSolid++;}
+        check(circleBlend>=20&&circleSolid>=200,"GEO30-AA round markers preserve solid centres and soften boundaries",new{prefix,circleBlend,circleSolid});
+        UnityEngine.Object.Destroy(image);UnityEngine.Object.Destroy(obj);yield return null;
+    }
+}
+
+public sealed class GeographyCoverageProbe : MaskableGraphic
+{
+    public static readonly float[] Angles={0,7,23,45,68,83,90,137};public float Pixel=1;
+    protected override void OnPopulateMesh(VertexHelper mesh)
+    {
+        mesh.Clear();var r=rectTransform.rect;foreach(var p in new[]{new Vector2(r.xMin,r.yMin),new Vector2(r.xMin,r.yMax),new Vector2(r.xMax,r.yMax),new Vector2(r.xMax,r.yMin)})mesh.AddVert(p,Color.white,Vector2.zero);mesh.AddTriangle(0,1,2);mesh.AddTriangle(0,2,3);
+        for(int i=0;i<Angles.Length;i++){
+            var center=new Vector2(310+i%4*420,-420-i/4*340)*Pixel;float angle=Angles[i]*Mathf.Deg2Rad;var half=new Vector2(Mathf.Cos(angle),Mathf.Sin(angle))*120*Pixel;
+            StatisticsMapView.Line(mesh,center-half,center+half,Color.black,3.4f*Pixel,Pixel);
+        }
+        StatisticsMapView.Symbol(mesh,new Vector2(200,-1000)*Pixel,10*Pixel,Color.black,0,Pixel);
     }
 }
 
