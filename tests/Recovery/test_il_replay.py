@@ -65,23 +65,38 @@ class JointReplayTests(unittest.TestCase):
     def fixtures(self, directory, numbers=(7, 6)):
         return [self.receipt_run(directory, n, self.manifest(directory, n)) for n in numbers]
 
-    def test_all_six_batches_preserve_entries_splits_and_loader_compatibility(self):
+    def test_all_four_batches_preserve_entries_splits_and_loader_compatibility(self):
         with tempfile.TemporaryDirectory(dir=SOURCE_ROOT / 'artifacts') as temp:
             directory = Path(temp)
-            runs = self.fixtures(directory, (7, 6, 5, 4, 3, 2))
+            runs = self.fixtures(directory, (7, 6, 5, 4))
             merged = helper.merge_manifests(SOURCE_ROOT, runs)
-            self.assertEqual(merged['partitions'], dict(train=6, validation=6, test=6))
+            self.assertEqual(merged['partitions'], dict(train=4, validation=4, test=4))
             self.assertIsNone(merged['rehearsal']['latest_fraction'])
-            self.assertEqual([s['name'] for s in merged['rehearsal']['sources']], [f'v4-batch{n}' for n in range(7, 1, -1)])
-            originals = [entry for n in range(7, 1, -1) for entry in read(directory / f'manifest-{n}.json')['entries']]
+            self.assertEqual([s['name'] for s in merged['rehearsal']['sources']], [f'v4-batch{n}' for n in range(7, 3, -1)])
+            originals = [entry for n in range(7, 3, -1) for entry in read(directory / f'manifest-{n}.json')['entries']]
             self.assertEqual(merged['entries'], originals)
             path = directory / 'joint.json'; write_json(path, merged)
             training, _ = demos.load_dataset(SOURCE_ROOT, path, 'train', workers=1, compact=True)
             validation, _ = demos.load_dataset(SOURCE_ROOT, path, 'validation', workers=1, compact=True)
-            self.assertEqual(len(training), 24)
-            self.assertEqual(len(validation), 24)
+            self.assertEqual(len(training), 16)
+            self.assertEqual(len(validation), 16)
             self.assertTrue({x[2][0] for x in training}.isdisjoint({x[2][0] for x in validation}))
-            self.assertEqual(len({x[2][0] for x in training}), 6)
+            self.assertEqual(len({x[2][0] for x in training}), 4)
+
+    def test_default_prepare_without_deleted_batches_two_and_three(self):
+        with tempfile.TemporaryDirectory(dir=SOURCE_ROOT / 'artifacts') as temp:
+            directory = Path(temp)
+            self.fixtures(directory, (7, 6, 5, 4))
+            args = helper.parser().parse_args(['prepare'])
+            latest = directory / Path(args.latest_run).name
+            history = [directory / Path(p).name for p in args.history_runs]
+            with contextlib.redirect_stdout(io.StringIO()):
+                _, merged = helper.prepare(SOURCE_ROOT, latest, history, directory / 'experiment', directory / 'joint')
+            self.assertEqual([s['name'] for s in merged['rehearsal']['sources']],
+                             ['v4-batch7', 'v4-batch6', 'v4-batch5', 'v4-batch4'])
+            self.assertEqual(merged['partitions']['train'], 4)
+            for number in (2, 3):
+                self.assertFalse((directory / f'v4-batch{number}').exists())
 
     def test_overlap_is_deduplicated_and_latest_owns_shared_games(self):
         with tempfile.TemporaryDirectory(dir=SOURCE_ROOT / 'artifacts') as temp:
@@ -124,7 +139,7 @@ class JointReplayTests(unittest.TestCase):
 
     def test_cli_keeps_existing_trainer_and_baseline_selection(self):
         args = helper.parser().parse_args(['train'])
-        self.assertEqual(len(args.history_runs), 5)
+        self.assertEqual(args.history_runs, [f'artifacts/step5/v4-batch{i}' for i in (6, 5, 4)])
         command = helper.training_command(args, Path('/data/not_backed_up/yxu209/ai-training/joint.json'))
         self.assertIn('--from-imitation-run', command)
         self.assertNotIn('--initial', command)

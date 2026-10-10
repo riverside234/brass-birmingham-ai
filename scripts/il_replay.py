@@ -1,4 +1,4 @@
-"""Joint BC rehearsal over audited batch2--7 data, using the existing trainer.
+"""Joint BC rehearsal over audited batch4--7 data, using the existing trainer.
 
 This is full-data supervised experience replay, inspired by CLEAR's rehearsal
 principle, not an implementation of CLEAR's off-policy RL algorithm. No source
@@ -257,7 +257,7 @@ def parser():
     p.add_argument('action', choices=['prepare', 'train', 'validate', 'evaluate'])
     p.add_argument('--root', type=Path, default=LAB_ROOT)
     p.add_argument('--latest-run', default='artifacts/step5/v4-batch7')
-    p.add_argument('--history-runs', nargs='+', default=[f'artifacts/step5/v4-batch{i}' for i in range(6, 1, -1)])
+    p.add_argument('--history-runs', nargs='+', default=[f'artifacts/step5/v4-batch{i}' for i in range(6, 3, -1)])
     p.add_argument('--baseline-runs', nargs='*', default=['artifacts/step5/v4-batch6'])
     p.add_argument('--experiment', default='artifacts/il-replay/v4-batch7-joint')
     p.add_argument('--run', default='artifacts/step5/v4-batch7-joint')
