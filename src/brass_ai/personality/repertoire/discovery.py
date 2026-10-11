@@ -92,11 +92,22 @@ def load(directory):
     return value
 
 
-def jobs_for(proposal,seeds,partition,pool_size):
+def jobs_for(proposal,seeds,partition,pool_size,*,candidate_start=0,candidate_count=None):
     require(partition in ('train','validation'),'Final-test setups cannot tune discovery')
+    total=len(proposal['candidates'])
+    require(type(candidate_start) is int and 0<=candidate_start<total,'Invalid candidate slice start')
+    count=total-candidate_start if candidate_count is None else candidate_count
+    require(type(count) is int and 1<=count<=total-candidate_start,'Invalid candidate slice count')
+    seeds=list(seeds)
+    require(seeds and type(pool_size) is int and pool_size>0,'Discovery needs setup seeds and an opponent pool')
+    require(len(seeds)*count*4<=4096,'Split this pilot into candidate slices of at most 4096 games')
+    # Slice only the work list. IDs, setup/seat randomness and frozen proposal
+    # provenance stay unchanged. The control belongs only to the slice that
+    # contains index zero, so combining slices never duplicates its evidence.
+    candidates=proposal['candidates'][candidate_start:candidate_start+count]
     jobs=[]
     for seed in seeds:
-        for c in proposal['candidates']:
+        for c in candidates:
             for seat in range(4):
                 profiles=[Profile(style='neutral',alpha=0.).to_dict() for _ in range(4)];profiles[seat]=c['profile']
                 # Rotate the same three frozen references around every tested
@@ -105,11 +116,10 @@ def jobs_for(proposal,seeds,partition,pool_size):
                 for offset in range(1,4):refs[(seat+offset)%4]=(seed+offset-1)%pool_size
                 jobs.append(dict(index=len(jobs),seed=seed,sampling_seed=seed*17+seat,partition=partition,
                     neural_seats=[seat],profiles=profiles,controllers=[c['candidate_id']]*4,parent_indices=refs))
-    require(len(jobs)<=4096,'Split this pilot into collections of at most 4096 games')
     return jobs
 
 
-def execute(root,proposal,output,*,setups=2,partition='train',seed=83000000,tables=24,device='cpu',mono=None):
+def execute(root,proposal,output,*,setups=2,partition='train',seed=83000000,tables=24,device='cpu',mono=None,candidate_start=0,candidate_count=None):
     root=Path(root).resolve();proposal=project_path(root,proposal);p=load(proposal)
     ready_path=project_path(root,p['ready']);require(sha(ready_path/'ready.json')==p['ready_sha256'],'Frozen ready model changed')
     _,parents,ready,_,pool=load_ready(root,ready_path)
@@ -118,10 +128,12 @@ def execute(root,proposal,output,*,setups=2,partition='train',seed=83000000,tabl
     seeds,_=seeds_for(seed,setups,partition)
     from brass_ai.search.common import SearchConfig
     cfg=SearchConfig(**p['candidates'][0]['search']).validate()
-    result=collect(root,ready_path,output,jobs_for(p,seeds,partition,len(parents)),cfg,tables=tables,device=device,mono=mono,
+    jobs=jobs_for(p,seeds,partition,len(parents),candidate_start=candidate_start,candidate_count=candidate_count)
+    result=collect(root,ready_path,output,jobs,cfg,tables=tables,device=device,mono=mono,
         decision_mode=p['candidates'][0]['decision_mode'])
     receipt=dict(format=VERSION,contract=identity(),proposal=proposal.relative_to(root).as_posix(),
-        proposal_sha256=sha(proposal/'manifest.json'),proposal_id=p['id'],collection_id=result['id'],partition=partition,seeds=seeds)
+        proposal_sha256=sha(proposal/'manifest.json'),proposal_id=p['id'],collection_id=result['id'],partition=partition,seeds=seeds,
+        candidate_range=dict(start=candidate_start,count=len(jobs)//(len(seeds)*4)))
     receipt['id']=digest(receipt);out=project_path(root,output);write_json(out/'discovery.json',receipt)
     pins=read_json(out/'pins.json');pins['paths'].append(proposal.relative_to(root).as_posix()+'/manifest.json');write_json(out/'pins.json',pins)
     return dict(games=len(result['records']),seconds=result['seconds'],collection_id=result['id'],receipt=receipt)

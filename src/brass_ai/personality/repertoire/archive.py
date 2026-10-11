@@ -117,6 +117,11 @@ def build(root,proposal,encoder,discovery_collections,qualification_collections,
         accepted_proposals[ancestor['id']]=ancestor['sha256']
     if old:
         require(old['proposal_id'] in accepted_proposals and old['pool_id']==p['pool_id'],'New model/pool/search settings require a separately requalified archive')
+        for source in old['sources']:
+            directory=project_path(root,source['path'])
+            require(sha(directory/'manifest.json')==source['manifest_sha256']
+                and sha(directory/'discovery.json')==source['receipt_sha256'],
+                'Retained archive evidence changed; do not silently replace frozen sources')
         # A refit never keeps stale coordinates. Reload every retained source,
         # merge new evidence, then re-encode every retained controller below.
         discovery_collections=list(discovery_collections)+[s['path'] for s in old['sources'] if s['role']=='discovery']

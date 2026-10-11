@@ -71,6 +71,44 @@ class RepertoireTests(unittest.TestCase):
         values,mask=trajectory(game,0)
         self.assertTrue((values[mask,FIELDS.index('merchant_access_CottonMill')]==1).all())
 
+    def test_public_effects_follow_own_choices_not_opponent_turns(self):
+        game=episode(2);rows=copy.deepcopy([game['records'][i] for i in (0,1,2,3,8)])
+        for i,row in enumerate(rows):
+            row['step']=i
+            row['view']['players'][0]['cash']=[20,18,15,65,65][i]
+            for industry in ('Brewery','CottonMill'):
+                tile=copy.deepcopy(next(m['tiles'][0] for m in row['view']['players'][0]['mat'] if m['type']==industry))
+                tile.update(seat=0,flipped=(i>=1 if industry=='Brewery' else i>=3))
+                row['view']['slots'].append(dict(id=industry+':fixture',types=[industry],tile=tile))
+        # Our brewery payment flips our brewery and is followed by merchant
+        # beer. An opponent later flips our cotton. Only the adjacent own
+        # effect is attributed to this turn; the next turn sees both.
+        merchant=rows[0]['view']['merchants'][0]['id']
+        rows[0]['choices']=[dict(kind='beer',target='Brewery:fixture')];rows[0]['chosen']=0
+        rows[1]['choices']=[dict(kind='beer',target='merchant:'+merchant)];rows[1]['chosen']=0
+        game['records']=rows
+        x,mask=trajectory(game,0)
+        self.assertAlmostEqual(float(x[0,FIELDS.index('cash_change')]),-.05)
+        self.assertEqual(x[0,FIELDS.index('flips_Brewery')],1)
+        self.assertEqual(x[0,FIELDS.index('flips_CottonMill')],0)
+        self.assertEqual(x[0,FIELDS.index('merchant_beer_used')],1)
+        self.assertEqual(x[0,FIELDS.index('effects_observed')],1)
+
+    def test_era_clear_and_missing_terminal_effects_are_censored(self):
+        game=episode(2);rows=copy.deepcopy([game['records'][i] for i in (0,1,8)])
+        rows[2]['view']['context']['era']='RailEra'
+        rows[2]['view']['players'][0]['cash']=10000
+        tile=copy.deepcopy(next(m['tiles'][0] for m in rows[0]['view']['players'][0]['mat'] if m['type']=='CottonMill'))
+        for i in (0,1):
+            rows[i]['view']['slots'].append(dict(id='Canal:fixture',types=['CottonMill'],tile=dict(tile,seat=0,flipped=bool(i))))
+        game['records']=rows;x,_=trajectory(game,0)
+        self.assertEqual(x[0,FIELDS.index('flips_CottonMill')],1)
+        self.assertEqual(x[0,FIELDS.index('era_boundary')],1)
+        self.assertEqual(x[0,FIELDS.index('effects_observed')],.5)
+        self.assertAlmostEqual(float(x[0,FIELDS.index('cash_change')]),.30)
+        self.assertEqual(x[1,FIELDS.index('effects_observed')],0)
+        self.assertEqual(x[1,FIELDS.index('cash_change')],0)
+
     def test_seeded_proposals_share_weights_and_matched_rotations(self):
         cfg=search_config(specification());a=proposals('model','parent','pool',cfg,count=64)
         self.assertEqual(a,proposals('model','parent','pool',cfg,count=64));self.assertEqual(len({x['candidate_id'] for x in a}),64)
@@ -88,6 +126,50 @@ class RepertoireTests(unittest.TestCase):
         self.assertTrue(evidence(candidate,control,g)['qualified'])
         for r in candidate:r['metadata']['quality']['win_share']=0.;r['metadata']['quality']['vp']=1000.
         result=evidence(candidate,control,g);self.assertFalse(result['qualified']);self.assertEqual(result['mean_win'],0.)
+
+    def test_candidate_slices_preserve_matchups_and_bound_large_proposals(self):
+        cfg=search_config(specification());candidates=proposals('model','parent','pool',cfg,count=2050)
+        small=dict(candidates=candidates[:8]);full=jobs_for(small,[31,32],'train',4)
+        sliced=[]
+        for start,count in ((0,3),(3,5)):
+            sliced.extend(jobs_for(small,[31,32],'train',4,candidate_start=start,candidate_count=count))
+        def key(job):return (job['seed'],job['controllers'][0],job['neural_seats'][0])
+        def content(job):return {k:v for k,v in job.items() if k!='index'}
+        self.assertEqual({key(j):content(j) for j in full},{key(j):content(j) for j in sliced})
+        with self.assertRaisesRegex(ValueError,'4096'):
+            jobs_for(dict(candidates=candidates),[31],'train',4)
+        seen=set();all_ids=set();control=candidates[0]['candidate_id']
+        for start,count in ((0,1024),(1024,1024),(2048,2)):
+            jobs=jobs_for(dict(candidates=candidates),[31],'train',4,candidate_start=start,candidate_count=count)
+            self.assertEqual(len(jobs),count*4);self.assertLessEqual(len(jobs),4096)
+            ids={j['controllers'][0] for j in jobs};self.assertEqual(control in ids,start==0)
+            for j in jobs:self.assertNotIn(key(j),seen);seen.add(key(j))
+            all_ids.update(ids)
+        self.assertEqual(all_ids,{c['candidate_id'] for c in candidates})
+        for start,count in ((-1,2),(8,None),(0,0),(7,2)):
+            with self.assertRaisesRegex(ValueError,'candidate slice'):
+                jobs_for(small,[31],'train',4,candidate_start=start,candidate_count=count)
+        with self.assertRaisesRegex(ValueError,'candidate slice'):
+            jobs_for(dict(candidates=[]),[31],'train',4)
+
+    def test_sliced_collection_keeps_full_proposal_receipt(self):
+        with tempfile.TemporaryDirectory(dir=SOURCE_ROOT/'artifacts') as tmp:
+            out=Path(tmp);ready=out/'ready';ready.mkdir();write_json(ready/'ready.json',dict(fixture=True))
+            state=dict(id='ready',reward=specification(),model=dict(model_id='fixture'))
+            def collect(root,bundle,output,jobs,config,**kwargs):
+                Path(output).mkdir();write_json(Path(output)/'pins.json',dict(paths=[]))
+                self.assertEqual({j['controllers'][0] for j in jobs},{c['candidate_id'] for c in p['candidates'][2:4]})
+                return dict(id='slice',records=[dict(job=j['index']) for j in jobs],seconds=0.)
+            with patch.object(discovery,'load_ready',return_value=(None,[parent()],state,{},'pool')):
+                p=discovery.create(SOURCE_ROOT,ready,out/'proposal',count=8)
+                original_hash=sha(out/'proposal/manifest.json')
+                with patch.object(discovery,'collect',side_effect=collect):
+                    result=discovery.execute(SOURCE_ROOT,out/'proposal',out/'slice',setups=2,candidate_start=2,candidate_count=2)
+                self.assertEqual(result['games'],16)
+                self.assertEqual(result['receipt']['proposal_id'],p['id'])
+                self.assertEqual(result['receipt']['proposal_sha256'],original_hash)
+                self.assertEqual(result['receipt']['candidate_range'],dict(start=2,count=2))
+                self.assertEqual(sha(out/'proposal/manifest.json'),original_hash)
 
     def test_archive_filters_noise_and_shortlist_only_tested_members(self):
         entries=[dict(candidate_id=str(i),centroid=[float(i),float(i%3)],qualified=True,quality=dict(mean_win=.4,control_lower=.1)) for i in range(20)]
@@ -133,6 +215,12 @@ class RepertoireTests(unittest.TestCase):
                 for r in validation:r['metadata']['split']='train'
                 with self.assertRaisesRegex(ValueError,'split leakage'):
                     archive.build(root,proposal,out/'encoder',[],[],out/'bad',previous=out/'archive',gates=Gates(min_setups=2))
+                for r in validation:r['metadata']['split']='validation'
+                # A valid replacement collection still cannot silently replace
+                # the precise evidence retained in an immutable older archive.
+                write_json(out/'qualification/manifest.json',dict(replaced=True))
+                with self.assertRaisesRegex(ValueError,'Retained archive evidence changed'):
+                    archive.build(root,proposal,out/'encoder',[],[],out/'changed',previous=out/'archive',gates=Gates(min_setups=2))
 
     def test_elite_mutations_retain_ancestry_and_search_confirmation_resets_evidence(self):
         with tempfile.TemporaryDirectory(dir=SOURCE_ROOT/'artifacts') as tmp:

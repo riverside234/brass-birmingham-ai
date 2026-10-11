@@ -185,20 +185,29 @@ def geometry(value, rows, points, gates):
 def blind_jobs(value, jobs, gates):
     chosen=[]
     for g in value['archetypes']:
-        # One or more examples from every member, rather than just a lucky representative.
+        # Cover every member, then balance setups and seats. Taking each member's
+        # first job previously chose only the first deal and seat zero.
         candidates=[j for j in jobs if j['p4']['role']=='member' and j['p4']['group']==g['id']]
-        candidates.sort(key=lambda j:(j['p4']['member'],j['index']))
-        selected=[]
+        candidates.sort(key=lambda j:j['index'])
+        selected=[];setups=Counter();seats=Counter();members=Counter()
+        def choose(part):
+            best=min(part,key=lambda j:(setups[j['seed']],seats[j['neural_seats'][0]],members[j['p4']['member']],j['index']))
+            selected.append(best);setups[best['seed']]+=1;seats[best['neural_seats'][0]]+=1;members[best['p4']['member']]+=1
         for mid in g['members']:
             part=[j for j in candidates if j['p4']['member']==mid]
-            if part:selected.append(part[0])
-        selected.extend(j for j in candidates if j not in selected)
-        chosen.extend(j['index'] for j in selected[:max(gates.human_examples,len(g['members']))])
+            if part:choose(part)
+        while len(selected)<max(gates.human_examples,len(g['members'])):
+            remaining=[j for j in candidates if j not in selected]
+            if not remaining:break
+            choose(remaining)
+        chosen.extend(j['index'] for j in selected)
     return set(chosen)
 
 
 def blind_packet(value, panel, rows, gates):
-    selected=blind_jobs(value,[dict(index=r['index'],p4=r['arm']) for r in rows],gates)
+    # Partial chunks never replace missing prespecified review cases with other
+    # available games. Selection is independent of chunk order and outcomes.
+    selected=blind_jobs(value,panel['jobs'],gates)
     examples=[dict(id=digest(dict(panel=panel['id'],job=r['index'])), public_turns=r['behavior']['public_turns'],
                    public_boards=r['behavior'].get('public_boards',{})) for r in rows if r['index'] in selected]
     examples.sort(key=lambda e:e['id'])

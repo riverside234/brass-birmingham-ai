@@ -16,6 +16,8 @@ def main():
     a=sub.add_parser('collect');a.add_argument('--proposal',required=True);a.add_argument('--output',required=True);a.add_argument('--setups',type=int,default=2)
     a.add_argument('--partition',choices=('train','validation'),default='train');a.add_argument('--seed',type=int,default=83000000)
     a.add_argument('--tables',type=int,default=24);a.add_argument('--mono')
+    a.add_argument('--candidate-start',type=int,default=0,help='Zero-based index in the frozen full proposal')
+    a.add_argument('--candidate-count',type=int,help='Number of candidates in this slice; default: all remaining')
     a=sub.add_parser('fit');a.add_argument('--collections',nargs='+',required=True);a.add_argument('--output',required=True)
     a.add_argument('--epochs',type=int,default=30);a.add_argument('--seed',type=int,default=17051)
     a=sub.add_parser('archive');a.add_argument('--proposal',required=True);a.add_argument('--encoder',required=True);a.add_argument('--output',required=True)
@@ -28,7 +30,8 @@ def main():
         result=create(a.root,a.ready,a.output,count=a.count,seed=a.seed,seconds=a.seconds,workers=a.workers,decision_mode=a.decision_mode,from_archive=a.from_archive)
     elif a.command=='collect':
         from .discovery import execute
-        result=execute(a.root,a.proposal,a.output,setups=a.setups,partition=a.partition,seed=a.seed,tables=a.tables,device=a.device,mono=a.mono)
+        result=execute(a.root,a.proposal,a.output,setups=a.setups,partition=a.partition,seed=a.seed,tables=a.tables,device=a.device,mono=a.mono,
+            candidate_start=a.candidate_start,candidate_count=a.candidate_count)
     elif a.command=='fit':
         from .descriptor import fit
         result=fit(a.root,a.collections,a.output,epochs=a.epochs,seed=a.seed,device=a.device)

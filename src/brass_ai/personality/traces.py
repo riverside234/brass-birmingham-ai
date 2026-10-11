@@ -28,6 +28,11 @@ def examples(games,reward,*,metadata=None,learner_only=False,roots_only=False,ma
             i=row['step'];info=extra[i] if extra else None
             if info:
                 require(info['role'] in ('learner','incumbent'),'Unknown policy role')
+                # A matching ID and scalar likelihood are not enough to make
+                # externally selected/search actions on-policy. Bind the same
+                # sampling recipe used by collection before assigning PPO rows.
+                require(row['behavior']['kind']=='model' and row['behavior']['temperature']==1.
+                    and row['teacher'] is None,'P1 requires unsearched model behavior at temperature 1')
                 if info['role']=='learner':
                     require(info['model_id']==metadata['spec']['model_id'] and info['context'] is not None
                         and info['context']['saved_intent'] is None,'Wrong learner/context; P1 has no committed goal controller')

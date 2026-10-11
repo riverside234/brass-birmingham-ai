@@ -8,17 +8,18 @@ from brass_ai.learning.replay import terminal_targets
 from brass_ai.personality.contracts import INDUSTRIES,REGIONS
 from brass_ai.search.common import turn_key
 
-VERSION='public-behavior-trace/1.0.0'
+VERSION='public-behavior-trace/1.1.0'
 MAX_TURNS=32
 KINDS=('build','develop','sell','network','loan','pass','scout','coal','iron','beer','liquidate','bonus_develop','bonus_skip')
 INDUSTRY=INDUSTRIES[1:]
-FIELDS=('canal','rail','round','cash','cash_change','income','income_change','coal_market','iron_market','merchant_beer_used')+tuple('action_'+x for x in KINDS)+tuple(
+FIELDS=('canal','rail','round','cash','cash_change','income','income_change','coal_market','iron_market','merchant_beer_used','effects_observed','era_boundary')+tuple('action_'+x for x in KINDS)+tuple(
     f'{kind}_{industry}' for kind in ('build','built_level','develop','flips','unflipped','resources','vacancies','merchant_access') for industry in INDUSTRY)+tuple('area_'+x for x in REGIONS[1:])
 
 
 def schema():return dict(format=VERSION,features=list(FIELDS),max_turns=MAX_TURNS,
     excluded=['controller/style IDs','seeds','absolute seat ID','hands/deck','machine timing','final VP/win/rank'],
-    temporal='Ordered own turns, both eras; public subchoices aggregated within a turn')
+    temporal='Ordered own turns, both eras; public subchoices and their adjacent observed effects aggregated within a turn',
+    effects='effects_observed is the fraction of own choices with a same-era successor observation; era-clear and absent terminal observations are censored')
 
 
 def trajectory(game,seat):
@@ -32,13 +33,12 @@ def trajectory(game,seat):
     require(0<len(groups)<=MAX_TURNS,'Invalid/oversized behavior trajectory')
     x=np.zeros((MAX_TURNS,len(FIELDS)),dtype=np.float32);mask=np.zeros(MAX_TURNS,dtype=bool)
     for t,group in enumerate(groups):
-        start=group['indexes'][0];end=groups[t+1]['indexes'][0] if t+1<len(groups) else len(rows)-1
-        view=rows[start]['view'];after=rows[end]['view'];p=view['players'][seat];p2=after['players'][seat]
+        start=group['indexes'][0]
+        view=rows[start]['view'];p=view['players'][seat]
         values=dict.fromkeys(FIELDS,0.)
         values.update(canal=float(group['key'][0]=='CanalEra'),rail=float(group['key'][0]=='RailEra'),round=group['key'][1]/8,
-            cash=p['cash']/100,cash_change=(p2['cash']-p['cash'])/100,income=p['income']/30,income_change=(p2['income']-p['income'])/30,
+            cash=p['cash']/100,income=p['income']/30,
             coal_market=view['coal_market']/24,iron_market=view['iron_market']/24)
-        previous={s['id']:s.get('tile') for s in view['slots']}
         for s in view['slots']:
             tile=s.get('tile')
             if tile and tile['seat']==seat:
@@ -64,19 +64,31 @@ def trajectory(game,seat):
         for merchant in view['merchants']:
             for industry in merchant['types']:
                 if merchant['id'].split(':')[0] in reachable[industry]:values['merchant_access_'+industry]+=1
-        for s in after['slots']:
-            tile=s.get('tile');old=previous[s['id']]
-            if tile and tile['seat']==seat and tile['flipped'] and (not old or old['id']!=tile['id'] or not old['flipped']):
-                values['flips_'+tile['type']]+=1
         for i in group['indexes']:
             r=rows[i];c=r['choices'][r['chosen']];kind=c['kind']
+            # The next record is BEFORE the next action, so this transition
+            # contains only the just-selected choice's public effects. Waiting
+            # until our next turn instead attributes opponents' consumption to
+            # us and loses flipped level-I tiles at the Canal/Rail clear.
+            if i+1<len(rows):
+                before=r['view'];after=rows[i+1]['view']
+                if after['context']['era']==before['context']['era']:
+                    values['effects_observed']+=1/len(group['indexes'])
+                    values['cash_change']+=(after['players'][seat]['cash']-before['players'][seat]['cash'])/100
+                    values['income_change']+=(after['players'][seat]['income']-before['players'][seat]['income'])/30
+                    previous={s['id']:s.get('tile') for s in before['slots']}
+                    for s in after['slots']:
+                        tile=s.get('tile');old=previous.get(s['id'])
+                        if tile and tile['seat']==seat and tile['flipped'] and (not old or old['id']!=tile['id'] or not old['flipped']):
+                            values['flips_'+tile['type']]+=1
+                else:values['era_boundary']=1.
             if kind in KINDS:values['action_'+kind]+=1
             if kind=='build':
                 industry=c['industry'];values['build_'+industry]+=1
                 mat=next(m['tiles'] for m in r['view']['players'][seat]['mat'] if m['type']==industry)
                 values['built_level_'+industry]+=(mat[0]['level'] if mat else 0)/4
             if kind in ('develop','bonus_develop'):values['develop_'+c['industry']]+=1
-            if kind=='beer' and c['target'] in {m['id'] for m in r['view']['merchants']}:values['merchant_beer_used']+=1
+            if kind=='beer' and c['target'] in {'merchant:'+m['id'] for m in r['view']['merchants']}:values['merchant_beer_used']+=1
             if kind in ('build','sell','network'):
                 link=next((l for l in r['view']['links'] if l['id']==c['target']),None)
                 areas=link['regions'] if link else [c['target'].split(':')[0]]
@@ -95,9 +107,9 @@ def from_collection(directory,*,include_parents=False):
     for game,side in pairs:
         job=side['job'];targets=terminal_targets(game['result'])
         for seat in range(4):
-            x,mask=trajectory(game,seat)
             active=seat in job['neural_seats']
             if not active and not include_parents:continue
+            x,mask=trajectory(game,seat)
             controller=job['controllers'][seat] if active else game['opponents'][seat]
             # The descriptor API takes ONLY arrays. These fields are retained
             # separately for grouped splits, diagnostics and own-seat quality.

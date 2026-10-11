@@ -17,7 +17,7 @@ from brass_ai.personality.search.contracts import identity,Profile,search_config
 from brass_ai.personality.search.engine import teacher
 from brass_ai.personality.search import teachers
 from brass_ai.personality.search.continuation import continue_pilot
-from brass_ai.personality.search.readiness import confidence_calibration
+from brass_ai.personality.search.readiness import confidence_calibration,distilled_source
 from brass_ai.personality.search.calibration import examples as calibration_examples
 from brass_ai.personality.contracts import GOALS
 from brass_ai.recovery.teacher_schedule import PHASES
@@ -33,6 +33,29 @@ class TrainingTests(unittest.TestCase):
         labels=[dict(confidence=[[0.]*3]*6,confidence_mask=[[True]*3]*6) for _ in range(8)]
         result=confidence_calibration(np.zeros((8,6,3)),labels,['one']*4+['two']*4)
         self.assertFalse(result['bias_ready']);self.assertEqual(result['ece'],.5)
+
+    def test_distilled_readiness_requires_the_exact_pilot_generation(self):
+        with tempfile.TemporaryDirectory(dir=SOURCE_ROOT/'artifacts') as tmp:
+            directory=Path(tmp);pilot=directory/'pilot';pilot.mkdir();distilled=directory/'distilled';distilled.mkdir()
+            (distilled/'model.pt').write_bytes(b'authored-lineage-fixture')
+            state=dict(model_sha256='current-pilot')
+            ready=dict(id='ready',handoff_sha256='handoff',origin=dict(
+                pilot=pilot.relative_to(SOURCE_ROOT).as_posix(),pilot_model_sha256='current-pilot'))
+            report=dict(updated=True,contract=identity(),handoff_sha256='handoff',parent_ready_id='ready',
+                parent_ready='unused-mocked-ready',model_sha256=sha(distilled/'model.pt'))
+            write_json(distilled/'report.json',report)
+            with patch('brass_ai.personality.search.readiness.load',return_value=(None,None,ready,None,None)):
+                self.assertEqual(distilled_source(SOURCE_ROOT,pilot,state,distilled,'handoff'),distilled/'model.pt')
+                ready['origin']['pilot_model_sha256']='earlier-pilot-generation'
+                with self.assertRaisesRegex(ValueError,'PPO source changed'):
+                    distilled_source(SOURCE_ROOT,pilot,state,distilled,'handoff')
+                ready['origin']['pilot_model_sha256']='current-pilot'
+                ready['origin']['pilot']='artifacts/another-pilot'
+                with self.assertRaisesRegex(ValueError,'PPO source changed'):
+                    distilled_source(SOURCE_ROOT,pilot,state,distilled,'handoff')
+                ready['origin']['pilot']=pilot.relative_to(SOURCE_ROOT).as_posix();ready['id']='different-readiness'
+                with self.assertRaisesRegex(ValueError,'PPO source changed'):
+                    distilled_source(SOURCE_ROOT,pilot,state,distilled,'handoff')
 
     def test_calibration_uses_actual_saved_intent_and_is_never_ppo_or_discovery(self):
         from personality_fixtures import episode

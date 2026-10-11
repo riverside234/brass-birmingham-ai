@@ -1,8 +1,10 @@
 # Post-Step-5 P2 search and P3 learned repertoire
 
+**11 October review:** [P0–P4 corrections and compatibility notes](../ai-research/PERSONALITY_P0_P4_REVIEW.md). Rebuild personality artifacts under the current contracts. P3 now uses the 32×95 `public-behavior-trace/1.1.0` schema; the older verification below describes historical fixtures. Step 5 and base generated-data formats remain unchanged.
+
 Implemented 10 October 2026 as separate lab entry points. Finish Step 5 and the [P0/P1 handoff and goal pilot](PERSONALITY_P0_P1_LAB.md) first. Use the accepted, frozen lab parent; local smoke weights are test fixtures. No production personality model or qualified roster has been created locally.
 
-The installed game, Step 5 configs/readers, original generated-data formats, reward and P0/P1 checkpoint fingerprint are unchanged. New code lives in `personality/search/` and `personality/repertoire/`. These packages have their own source contracts. Finish a command before updating code; changed contracts require fresh preparation/collection rather than editing recorded hashes.
+The installed game, Step 5 configs/readers, original generated-data formats and reward are unchanged. P2/P3 code lives in `personality/search/` and `personality/repertoire/`. These packages have their own source contracts. Finish a command before updating code; changed contracts require fresh preparation/collection rather than editing recorded hashes. The accompanying P1 review fix also changes its source fingerprint.
 
 ## Environment and paths
 
@@ -98,7 +100,7 @@ python "$brass_root/scripts/personality.py" --device cuda joint-pilot \
 
 This creates a separate compatible pilot, preserves its imported control and joint counters, and transfers PPO Adam/RNG state when the source was a joint PPO checkpoint. The small teacher optimizer does not replace PPO Adam. It refuses to overwrite a learner that moved since teacher preparation. Joint training collects fresh current-model data, never teacher actions relabeled as PPO. Prepare the successor again before further search teaching.
 
-To use the distilled checkpoint directly for a frozen discovery pilot, run `prepare` with the original `--pilot`, a new `--output`, and `--distilled "$personality_root/distilled-v1"`. This recalibrates its utility and goal confidence. Do not point Step 5 `--initial` at a personality checkpoint.
+To use the distilled checkpoint directly for a frozen discovery pilot, run `prepare` with the original `--pilot`, a new `--output`, and `--distilled "$personality_root/distilled-v1"`. This recalibrates its utility and goal confidence. The original pilot must still match the exact generation used to prepare the teacher; sharing the same Step 5 parent is insufficient. Do not point Step 5 `--initial` at a personality checkpoint.
 
 ## P3: inexpensive discovery first
 
@@ -119,9 +121,25 @@ python "$brass_root/scripts/personality_repertoire.py" --device cuda fit \
 
 Sixty-four candidates × two setups × four seat rotations means **512 discovery games**. These are suggested lab commands, not a campaign run by this implementation task. Start smaller if inspecting operation; two candidate controls still require two setup groups to fit. Each call is bounded to 4,096 games and 24 tables. Search confirmation uses four workers per searched decision, within the same shared 64-core budget with four cores reserved; direct discovery uses one admitted host slot and creates no search hosts.
 
+Larger proposals can now use `--candidate-start` and `--candidate-count` without creating new proposals or changing the matched random streams. For an existing **2,048-candidate** proposal, two discovery setups fit into four slices:
+
+```sh
+for start in 0 512 1024 1536; do
+  python "$brass_root/scripts/personality_repertoire.py" --device cuda collect \
+    --proposal "$personality_root/proposals-large" \
+    --output "$personality_root/discovery-large-$start" --partition train \
+    --setups 2 --tables 24 --seed 83000000 \
+    --candidate-start "$start" --candidate-count 512
+done
+```
+
+Each slice contains 4,096 games; the loop is a lab campaign command, not a smoke test. Include **all four output directories** in `fit --collections` and `archive --discovery`. The neutral control is collected only in the slice containing candidate zero. Keep proposal, partition, setup count and seed identical across slices; use unique outputs and nonoverlapping candidate ranges. Eight-setup validation uses slices of **128 candidates**, the same validation seed across slices, and `archive --qualification` receives all slices. Duplicate candidate/setup/seat evidence is rejected.
+
 One frozen personality model is shared by every candidate. The neutral control and supported pilot styles are combined with small intent-profile mutations. Direct discovery applies no MCTS goal tilt; its α is zero. Candidate IDs bind model, profile, mode, reward, search contract and opponent pool. The tested seat plays against the same frozen neural reference mix under matched setup/sampling seeds and all four rotations. Archive entries refer to weights rather than duplicating models or optimizer state.
 
 Per-seat descriptors contain public chronological actions, economic changes, industry levels/resources, geographic activity and public merchant connectivity. Both eras and sequence masks are retained. No final win/rank/VP, actual hand/deck, controller/style labels, absolute seat, random seed or machine time enters the encoder. Such metadata is stored separately for quality and split diagnostics. The optional all-seat reader retains opponent trajectories for inspection; active candidate rows fit the descriptor.
+
+Cash/income changes and tile flips use the observation immediately after each own choice, rather than the next own turn after opponents act. `effects_observed` marks the fraction with observable same-era consequences; `era_boundary` marks censored era-clear transitions. Missing final/era-clear observations are not invented. Merchant beer follows the native `merchant:` target format. Existing descriptor weights must be refitted for these corrected 95 fields.
 
 The small masked GRU autoencoder produces a 2D descriptor. Normalization and a PCA comparison fit on **training/discovery groups only**. Reports include reconstruction loss, collapse detection, controller centroid dispersion, within/between variance, nearest neighbors, seat/setup associations and correlation with own win share. An authored action-summary baseline provides a third comparison. Low loss or widely separated points alone do not demonstrate human-recognizable personalities.
 

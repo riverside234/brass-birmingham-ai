@@ -178,5 +178,31 @@ class SearchTests(unittest.TestCase):
             session.cancelled.set();_,label,_=session.select(view,choices,rng,ledger);self.assertIsNone(label);self.assertEqual(len(deadlines),8)
             session.finish_turn();saved=json.loads(json.dumps(session.snapshot()));session.restore(saved);self.assertEqual(session.snapshot(),saved)
 
+    def test_forced_root_does_not_create_intent_from_payment_predictions(self):
+        from threading import RLock
+        session=object.__new__(SearchSession);session.config=search_config(specification());session.profiles=[Profile()]*4
+        session.search_enabled=False;session.calibration=dict(bias_ready=False);session.cancelled=Event();session.lock=RLock()
+        session.lease=SimpleNamespace(update=lambda *args:None,close=lambda:None);session.workers=[];session.turn=None
+        class Policy:
+            request_deadline=None
+            utility_remaining={}
+            def set_context(self,value):pass
+            def predict(self,inputs):
+                return [(np.full(len(c),1/len(c)),{}) for _,c,_ in inputs]
+        session.base=Policy();session.telemetry=dict(decisions=0)
+        session.begin(42,1);view,choices=position();ledger=CostLedger(specification());ledger.observe(view);rng=random.Random(1)
+        with patch.object(session.intents[0],'commit',return_value=None) as propose:
+            session.select(view,choices[:1],rng,ledger)
+            payment=copy.deepcopy(view);payment['context']['phase']='iron';payment['context']['revision']+=1
+            session.select(payment,choices,rng,ledger)
+            propose.assert_not_called();self.assertTrue(session.turn['proposed'])
+            view['context']['revision']+=2;view['context']['actions_remaining']=1
+            session.select(view,choices,rng,ledger)
+            propose.assert_not_called()
+            view['context']['round']+=1;view['context']['actions_remaining']=2
+            session.select(view,choices,rng,ledger)
+            propose.assert_called_once();self.assertTrue(session.turn['proposed'])
+        session.finish_turn()
+
 
 if __name__=='__main__':unittest.main()

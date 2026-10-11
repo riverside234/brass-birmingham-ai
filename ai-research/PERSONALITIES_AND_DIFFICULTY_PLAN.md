@@ -8,6 +8,8 @@ This is the detailed design for [implementation step 7](IMPLEMENTATION_PLAN.md#7
 
 ## 1. Decisions and boundaries
 
+**11 October 2026 correctness review:** [P0–P4 findings, fixes and verification](PERSONALITY_P0_P4_REVIEW.md). Corrections cover PPO behavior attribution, exact teacher/pilot lineage, action-root intent proposals, causal public behavior traces, bounded large-proposal collection, archive evidence integrity and P4 diversity/review sampling. P3's trace schema is now 32×95. Regenerate personality-stage artifacts under the revised contracts; the Step 5 parent/checkpoint format and installed game are unchanged. All 59 focused checks and one native fixture game passed; learned strength and style qualification remain pending lab evidence.
+
 Adopt the proposed **single shared policy/value/goal network with bounded soft goal priors**, and add an **AURORA-inspired offline quality-diversity workflow** for discovering further personalities. Preserve the original aim: enjoyable, coherent four-player opponents, several styles at each difficulty, and every shipped Easy style stronger than original Hard.
 
 These additions build on the current system:

@@ -166,10 +166,15 @@ class SearchSession:
         info=information_key(view,choices,self.recall[seat]);saved=turn['continuation'].get(info)
         if len(choices)==1:
             if turn['bucket'] is not None:turn['bucket']['forced_choices']+=1
+            if view['context']['phase']=='action' and not turn['proposed']:
+                # Goal supervision starts at the first action of an own turn.
+                # Keep a surviving commitment, but do not move a skipped fresh
+                # proposal into payments or the unsupervised second action.
+                turn['goal']=copy.deepcopy(turn['context']['saved_intent']);turn['proposed']=True
             return 0,None,dict(context=turn['context'],goal=turn['goal'],searched=False)
         if not turn['due']:
             with inference_deadline([self.base],time.monotonic()+120):p,response=self.base.predict([(view,choices,rng)])[0]
-            if not turn['proposed'] and view['context']['phase']!='debt':
+            if not turn['proposed'] and view['context']['phase']=='action':
                 turn['goal']=self.intents[seat].commit(response,view,self.calibration);turn['proposed']=True
             chosen=rng.choices(range(len(p)),weights=p,k=1)[0]
             return chosen,None,dict(context=turn['context'],goal=turn['goal'],searched=False)
@@ -182,7 +187,10 @@ class SearchSession:
         selected=TeacherTurns.cheap_choice(choices);label=None;stats=None;reason=None
         try:
             with inference_deadline([self.base],turn['work_deadline']):base,response=self.base.predict([(view,choices,rng)])[0]
-            if not turn['proposed']:
+            # Goal labels/calibration cover ordinary action roots. A forced
+            # root must not move proposal generation into an untrained payment
+            # subchoice.
+            if not turn['proposed'] and view['context']['phase']=='action':
                 turn['goal']=self.intents[seat].commit(response,view,self.calibration);turn['proposed']=True
             inject=not turn['injected'] and view['context']['phase']=='action'
             prior_started=time.perf_counter();g=alignment(view,choices,turn['goal']) if inject else np.zeros(len(choices))

@@ -1,5 +1,7 @@
 # Post-Step-5 personalities: P0 handoff and P1 goal head
 
+**11 October review:** [P0–P4 corrections and compatibility notes](../ai-research/PERSONALITY_P0_P4_REVIEW.md). P1 now rejects externally selected/search behavior and non-unit sampling temperature before PPO attribution. Personality source contracts changed; create a fresh P0 handoff and derived pilot after updating. The accepted Step 5 checkpoint and its training readers are unchanged.
+
 Implemented 10 October 2026. These commands use the **completed, stopped Step 5 run on the lab**. They do not need a model on the laptop. Wait for your current training run to finish; the importer refuses an active run. Replace `selfplay-best-v1` below with the actual completed run folder.
 
 P0/P1 is a separate, bounded experiment. The installed game and Step 5 training, IL handoff, search settings and checkpoint readers are unchanged. Goal-biased Masked ISMCTS, persistent intent and archive discovery are now implemented in the separate [P2/P3 workflow](PERSONALITY_P2_P3_LAB.md). The full personality league and release qualification remain later work. The four pilot profile codes are input controls, not yet proven playing personalities.

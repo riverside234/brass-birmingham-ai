@@ -32,6 +32,26 @@ def confidence_calibration(logits,labels,groups):
         scope='Post-hoc temperature on separate calibration setups; not release evidence')
 
 
+def distilled_source(root,pilot,state,distilled,handoff_sha256):
+    """Resolve only a teacher update of this exact, still-current P1 learner.
+
+    Sharing a handoff is insufficient: several pilots (and later generations
+    of one pilot) can have that parent while carrying different PPO weights and
+    optimizer moments. Do not attribute an old teacher branch to a newer pilot.
+    """
+    distilled=project_path(root,distilled);report=read_json(distilled/'report.json')
+    require(report.get('updated') and report['contract']==identity()
+        and report['handoff_sha256']==handoff_sha256,'Unversioned/distinct-parent distillation continuation')
+    _,_,parent_ready,_,_=load(root,report['parent_ready'])
+    require(report['parent_ready_id']==parent_ready['id']
+        and parent_ready['handoff_sha256']==handoff_sha256
+        and parent_ready['origin']['pilot']==pilot.relative_to(root).as_posix()
+        and parent_ready['origin']['pilot_model_sha256']==state['model_sha256'],
+        'PPO source changed since this distillation; prepare the matching learner')
+    path=distilled/'model.pt';require(sha(path)==report['model_sha256'],'Distilled model changed')
+    return path
+
+
 def prepare(root,bundle,pilot,output,*,games=20,calibration_games=8,workers=4,device='cpu',mono=None,distilled=None):
     root,out=owned(root,output);_,pilot=owned(root,pilot);bundle=project_path(root,bundle)
     require(not out.exists() and not out.is_relative_to(pilot),'Use a new separate P2 readiness directory')
@@ -42,10 +62,7 @@ def prepare(root,bundle,pilot,output,*,games=20,calibration_games=8,workers=4,de
         require(sha(pilot/'model.pt')==state['model_sha256'],'P1 checkpoint changed')
         model_path=pilot/'model.pt'
         if distilled is not None:
-            distilled=project_path(root,distilled);report=read_json(distilled/'report.json')
-            require(report.get('updated') and report['contract']==identity() and report['handoff_sha256']==sha(bundle/'manifest.json'),
-                'Unversioned/distinct-parent distillation continuation')
-            model_path=distilled/'model.pt';require(sha(model_path)==report['model_sha256'],'Distilled model changed')
+            model_path=distilled_source(root,pilot,state,distilled,sha(bundle/'manifest.json'))
         model,raw=checkpoint.load(model_path,device);parent=parent.to(device)
         origin=dict(model_id=checkpoint.model_id(model),sha256=sha(model_path),path=model_path.relative_to(root).as_posix(),
             pilot=pilot.relative_to(root).as_posix(),pilot_model_sha256=state['model_sha256'])

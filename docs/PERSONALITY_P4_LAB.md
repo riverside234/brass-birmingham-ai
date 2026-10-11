@@ -1,5 +1,7 @@
 # P4: unified deployment styles
 
+**11 October review:** [P0–P4 corrections and compatibility notes](../ai-research/PERSONALITY_P0_P4_REVIEW.md). Neighborhood selection now uses each pair's own noise threshold. Blind examples cover members across setups/seats and stay fixed when only partial chunks exist. Rebuild the upstream personality evidence and P4 artifacts under the revised contracts; the 10 October verification below describes historical fixtures.
+
 P4 implements the **one frozen shared network** option in [the personality plan](../ai-research/PERSONALITIES_AND_DIFFICULTY_PLAN.md#56-bring-discovered-behavior-back-into-one-network). It selects 16 archetypes, each containing its tested representative and seven nearby tested variants. There are 128 unique controllers and one set of neural weights. The five pilot neural profile inputs remain supported inputs; archetypes combine those trained inputs with tested intent/prior settings. Sixteen distinct behaviors must be demonstrated, not inferred from 128 different numbers.
 
 The actual Step 5 parent is still training on the lab. Complete the [P0/P1 handoff](PERSONALITY_P0_P1_LAB.md) and [P2/P3 calibration/discovery](PERSONALITY_P2_P3_LAB.md) first. Local authored fixtures do not qualify a learned roster. This workflow changes neither Step 5 nor the installed game. P5 handles difficulty and UI; P6 handles laptop export, once-per-game sampling/save restoration and installation.
@@ -10,7 +12,7 @@ Use a P3 archive with all candidates evaluated under **the same frozen ready mod
 
 Selection requires each member's existing P3 preliminary quality gate, at least eight matched setup groups, mean own-seat win share at least 0.20 and a control-difference lower endpoint of at least −0.05. It compares FPS and K-means representatives, uses the chosen method fixed before new calibration, and keeps actual tested recipes. Neither a cluster centroid nor an averaged set of weights becomes a style input.
 
-Neighborhoods are relative to each representative's nearest other representative, not one global radius. Defaults bound radius to 0.40 of that distance, retain a 0.10 separation margin and require member differences greater than 0.50 times their combined game-to-game dispersion. Missing, indistinguishable, noisy or shared members cause selection to fail with the affected count. Expand discovery instead of duplicating variants or lowering evidence gates after seeing the calibration results.
+Neighborhoods are relative to each representative's nearest other representative, not one global radius. Defaults bound radius to 0.40 of that distance, retain a 0.10 separation margin and require each pair of members to differ by more than 0.50 times that pair's combined game-to-game dispersion. An incompatible candidate is skipped while other eligible neighbors remain. Missing, indistinguishable, noisy or shared members cause selection to fail with the affected count. Expand discovery instead of duplicating variants or lowering evidence gates after seeing the calibration results.
 
 ## 2. Select and name a roster
 

@@ -85,6 +85,13 @@ class DeploymentTests(unittest.TestCase):
         es,reps=entries(2,8);es[0]['dispersion']=5.
         with self.assertRaisesRegex(ValueError,'variation'):roster.neighborhoods(es,reps,8,gates)
 
+    def test_neighborhood_noise_is_matched_to_each_pair(self):
+        es=[dict(candidate_id=k,centroid=[x,0.],dispersion=noise,qualified=True,quality=dict(control_lower=0.))
+            for k,x,noise in [('a',0.,.01),('a-wide',3.,.6),('a-small',.1,.01),
+                              ('b',10.,.01),('b1',10.1,.01),('b2',10.2,.01)]]
+        groups=roster.neighborhoods(es,['a','b'],3,Gates())
+        self.assertEqual(set(groups[0]['members']),{'a','a-wide','a-small'})
+
     def test_online_resolution_uses_tested_profile_not_descriptor(self):
         value=candidate();member=value['members'][0];p,cfg=resolve(value,member['id'])
         self.assertEqual(p.to_dict(),member['profile']);self.assertEqual(cfg.to_dict(),value['search'])
@@ -150,6 +157,7 @@ class DeploymentTests(unittest.TestCase):
             for i in range(8):
                 rows.append(dict(index=len(rows),arm=dict(role='member',member=group['members'][i%2],group=group['id']),
                                  behavior=dict(public_turns={e:[] for e in evaluation.ERAS})))
+        p['jobs']=[dict(index=r['index'],p4=r['arm'],seed=r['index']//4,neural_seats=[r['index']%4]) for r in rows]
         packet=evaluation.blind_packet(v,p,rows,Gates())
         truth={digest(dict(panel=p['id'],job=r['index'])):r['arm']['group'] for r in rows}
         review=dict(format='personality-blind-review/1.0.0',panel_id=p['id'],packet_id=packet['id'],labels=p['labels'],
@@ -165,8 +173,27 @@ class DeploymentTests(unittest.TestCase):
 
     def test_p4_sources_do_not_change_step5_or_p0_p3_contracts(self):
         self.assertEqual(implementation_id(),'826b6beb04241a73a5d1ec0d712176ff9df4370a26cf01bb05ee92f7a05b4f16')
-        self.assertEqual(source_id(),'e8e11585642e084845a62265880a20e23c94025c6f743c8c8633ad1edb4a19a1')
+        # P0/P1 fixes legitimately change their source contract. P4 remains a
+        # separate package; it must not enter the base source-file set.
+        base=SOURCE_ROOT/'src/brass_ai/personality'
+        self.assertEqual(source_id(),digest({p.name:p.read_text(encoding='utf-8') for p in sorted(base.glob('*.py'))}))
         self.assertTrue(identity()['source']);self.assertTrue(repertoire_identity()['source'])
+
+    def test_blind_cases_cover_seats_setups_members_and_do_not_change_with_chunk_order(self):
+        v=candidate(16,8);jobs=panels.jobs_for(v,list(range(8)),3)
+        selected=evaluation.blind_jobs(v,jobs,Gates())
+        self.assertEqual(selected,evaluation.blind_jobs(v,list(reversed(jobs)),Gates()))
+        for group in v['archetypes']:
+            cases=[j for j in jobs if j['index'] in selected and j['p4']['group']==group['id']]
+            self.assertEqual(len(cases),8)
+            self.assertEqual({j['seed'] for j in cases},set(range(8)))
+            self.assertEqual({j['neural_seats'][0] for j in cases},set(range(4)))
+            self.assertEqual({j['p4']['member'] for j in cases},set(group['members']))
+        # A partial check may show a missing case; it must never replace it with
+        # a later case whose board snapshots were not prespecified for review.
+        remaining=[j for j in jobs if j['index'] not in selected][:1]
+        rows=[dict(index=j['index'],arm=j['p4'],behavior=dict(public_turns={},public_boards={})) for j in remaining]
+        self.assertEqual(evaluation.blind_packet(v,dict(id='panel',jobs=jobs),rows,Gates())['examples'],[])
 
     def test_immutable_selection_pins_single_weight_and_rejects_mixed_generation(self):
         with tempfile.TemporaryDirectory(dir=SOURCE_ROOT/'artifacts') as tmp:
@@ -212,7 +239,7 @@ class DeploymentTests(unittest.TestCase):
         with tempfile.TemporaryDirectory(dir=SOURCE_ROOT/'artifacts') as tmp:
             out=Path(tmp);v=candidate();v['encoder']=dict(path='authored-encoder',id='encoder')
             panel_path=out/'panel';panel_path.mkdir();write_json(panel_path/'manifest.json',dict(fixture=True))
-            game=episode(4);job=dict(index=0,neural_seats=[0],p4=dict(role='member',group=v['archetypes'][0]['id'],member=v['members'][0]['id']))
+            game=episode(4);job=dict(index=0,seed=3,neural_seats=[0],p4=dict(role='member',group=v['archetypes'][0]['id'],member=v['members'][0]['id']))
             p=dict(id='panel',jobs=[job]+[dict(index=i,p4=dict(role='control')) for i in range(1,100)],labels=None)
             side=dict(job=job,seconds=1.,telemetry=dict(completed=2,searches=1,seconds=.2))
             with patch.object(panels,'read_chunks',return_value=(p,v,iter([(game,side)]),{0},[])),patch.object(evaluation.descriptor,'load',return_value=(dict(id='encoder'),None)):

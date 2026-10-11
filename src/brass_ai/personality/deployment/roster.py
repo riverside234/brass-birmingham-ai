@@ -43,14 +43,20 @@ def neighborhoods(entries, representatives, per_group, gates):
                 eligible.append(e)
         selected = [by_id[rep]]
         while len(selected) < per_group and eligible:
+            # Noise belongs to each pair. Comparing the nearest distance with
+            # the noisiest (possibly distant) member incorrectly discards good
+            # neighbors. An ineligible far candidate must not stop this search.
+            eligible = [e for e in eligible if all(
+                np.linalg.norm(np.asarray(e['centroid']) - np.asarray(s['centroid']))
+                > max(1e-6, gates.variant_signal * np.hypot(e['dispersion'], s['dispersion']))
+                for s in selected)]
+            if not eligible:
+                break
             # Spread members within the bounded same-theme neighborhood.
             def spread(e):
                 return min(np.linalg.norm(np.asarray(e['centroid']) - np.asarray(s['centroid']))
                            for s in selected)
             best = max(eligible, key=lambda e: (spread(e), e['quality']['control_lower'], e['candidate_id']))
-            noise = max(np.hypot(best['dispersion'], s['dispersion']) for s in selected)
-            if spread(best) <= max(1e-6, gates.variant_signal * noise):
-                break
             selected.append(best)
             eligible.remove(best)
         require(len(selected) == per_group,
