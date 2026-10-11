@@ -49,8 +49,24 @@ class ReviewedResumeTests(unittest.TestCase):
         self.assertEqual(old['compatibility'], compatibility())
         current = read(SOURCE_ROOT / 'configs/step5/lab.json')
         current['rehearsal_manifest'] = old['imitation_source']['manifest']
-        for key in ('learning_rate','update','curriculum','search','imitation'):
+        for key in ('learning_rate','update','curriculum','imitation'):
             self.assertEqual(current[key],old['config'][key])
+        # Search's objective contract was explicitly upgraded from win-only to
+        # combined utility. Keep every other search knob exact, and verify the
+        # changed fields against both the current reward and its signed review.
+        changed={'contract','reward','utility_scale'}
+        self.assertEqual({k:v for k,v in current['search'].items() if k not in changed},
+                         {k:v for k,v in old['config']['search'].items() if k not in changed})
+        self.assertEqual(old['config']['search']['contract'],'masked-ismcts/1.1.0')
+        self.assertEqual(current['search']['contract'],'masked-ismcts/1.2.0')
+        from brass_ai.recovery.utility import reward_spec
+        self.assertEqual(current['search']['reward'],reward_spec(current))
+        self.assertEqual(current['search']['utility_scale'],1.2)
+        reviews=read(SOURCE_ROOT/'configs/learning/selfplay-resume-sources.json')['transitions']
+        self.assertTrue(any(r['from_implementation']==old['implementation']
+                            and r['to_implementation']==implementation_id()
+                            and r.get('config_changes',{}).get('search')=={'from':old['config']['search'],'to':current['search']}
+                            for r in reviews))
         target = dict(old, config=current, implementation=implementation_id())
         self.assertTrue(check_signature(self.evidence, target, True))
         with self.assertRaisesRegex(ValueError, '--resume-reviewed-source'):

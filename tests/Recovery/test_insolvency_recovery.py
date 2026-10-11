@@ -204,7 +204,17 @@ class BoostTests(unittest.TestCase):
             previous='2ea375ddfa37d3aa07786eba035f3d17e38fd94876734fee5317bed58af68360'
             cfg=read(SOURCE_ROOT/'configs/step5/lab.json')
             cfg.update(model_size='small',rehearsal_manifest=state['signature']['imitation_source']['manifest'])
-            before=copy.deepcopy(cfg);before.pop('insolvency');before.pop('legacy_boost')
+            # Reconstruct the actual historical target from its pinned review.
+            # Copying today's preset imports later reward/champion/search fields
+            # and fabricates an unapproved historical configuration.
+            reviews=read(SOURCE_ROOT/'configs/learning/selfplay-resume-sources.json')['transitions']
+            review=next(r for r in reviews if r['from_implementation']==state['signature']['implementation']
+                        and r['to_implementation']==previous)
+            self.assertEqual(review['learning_compatibility'],digest(state['signature']['compatibility']))
+            before=copy.deepcopy(state['signature']['config'])
+            for key,change in review['config_changes'].items():
+                self.assertEqual(before.get(key),change['from'])
+                before[key]=copy.deepcopy(change['to'])
             signature=dict(state['signature'],implementation=previous,config=before)
             self.assertTrue(check_signature(state,signature,True))
             interim=commit_transition(run,state,signature)

@@ -30,6 +30,11 @@
       "implementation": "385ed27ab74225027936a722eb1b6572ea8da823f8f9bf779d552c5cef7c20f6",
       "learning_compatibility": "c349e816f2e301ea2a3b438902059cffe868f48e131f7c120691d37cd1c409d2",
       "reason": "Reward coefficients, champion selection and compact retention change after IL. Completed IL weights/data remain compatible; a new PPO run initializes its new-objective utility head."
+    },
+    {
+      "implementation": "826b6beb04241a73a5d1ec0d712176ff9df4370a26cf01bb05ee92f7a05b4f16",
+      "learning_compatibility": "c349e816f2e301ea2a3b438902059cffe868f48e131f7c120691d37cd1c409d2",
+      "reason": "October 11 self-play correctness review leaves completed fresh imitation model/data/loss/checkpoint contracts unchanged. Preserve its explicit IL origin on same-run PPO continuation; no optimizer/population import from IL."
     }
   ]
 }

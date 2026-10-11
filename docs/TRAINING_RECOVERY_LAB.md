@@ -4,6 +4,29 @@ Recipe `step5-training/2.2.0` keeps the **1,840,109-parameter MLP-ResNet** for i
 
 Imitation and heuristic evaluation use searched Masked **v4** at **one second/four workers**. Active lab presets now apply a one-time recovery schedule: **60% searched-v4 tables for 20,000 ordinary games, then 30% for 10,000 games**. Historical opponents stay at 25%; current self-play occupies 15% then 45%. PPO and NN search share `W + 0.10*P + 0.001*VP - future insolvency costs`; official performance heads remain separate. The schedule begins when a new run is created or when an existing run adopts this reviewed revision, and persists across restarts. Afterward the original mature curriculum resumes at 70% current self-play / 25% historical / 5% searched v4. Internal `v3-*` profile IDs and `training/runtime/v3*` paths remain compatibility aliases for the selected bank. Start a new model from random weights. A completed, fresh standalone imitation run can explicitly hand its selected weights to self-play via `--imitation-run`; its optimizer, population and neural replay are not imported. Audited entirely heuristic datasets may be reused with their original receipts. Same-run continuation from reviewed versions preserves existing PPO progress; see the 9 October restart and incumbent-selection section below.
 
+## Self-play correctness review and continuation (11 October)
+
+The [review report](../ai-research/SELFPLAY_REVIEW_20261011.md) describes the fixes and verification. **Continue the existing run; this fix does not require repeating IL or resetting PPO.** Stop at a committed iteration before updating. Repeat your original command with its same run, config and IL origin, adding `--resume-reviewed-source` for this approved source change. For the example run below:
+
+```sh
+conda activate ai-training
+cd /data/not_backed_up/yxu209/ai-training/
+python /data/not_backed_up/yxu209/ai-training/scripts/step5.py --device cuda train \
+  --run /data/not_backed_up/yxu209/ai-training/artifacts/step5/selfplay-best-v1 \
+  --imitation-run /data/not_backed_up/yxu209/ai-training/artifacts/step5/v4-batch6 \
+  --resume-reviewed-source --iterations 1
+```
+
+Substitute your actual saved paths and retain any original `--config` option. If your run used `--demonstrations` instead of `--imitation-run`, retain that original option. `--iterations 1` adds one iteration to the saved count; increase it for the intended continuation. Subsequent resumes may keep the review flag. Do not use `best.pt` as a new initializer: `state.json` selects the latest learner and separately retained incumbent.
+
+The transition preserves model weights, Adam/RNG state, game/seed/search counters, the historical pool, accepted best and the already-started v4 opponent window. It saves a `state-before-source-*.json` backup. Old utility readiness is cleared in memory, then the existing bounded head-only calibration uses fresh ordinary-game returns before search teaching. Successful distillation also clears readiness because it changes the shared encoder; the trainer recalibrates using **that iteration's ordinary returns**, with all other parameters frozen. Fit time is logged as `search.collections[*].post_distill_calibration_seconds` and charged to the search allowance. A failed fit defers any remaining teacher allocation, without consuming its seeds or reservation. Teacher game outcomes never become utility-fit targets.
+
+If a committed iteration has an interrupted monitor/broader/champion evaluation from the old source, its files are preserved. The current source uses a deterministic `*-source-<source-id>` directory with its own exact specification and fresh evidence; retrying reuses that new directory. An **uncommitted ordinary collection or next-generation checkpoint** still blocks a source upgrade: finish/recover that iteration with the previous source first. Never edit source signatures or delete partial data to bypass this check.
+
+Reward, PPO hyperparameters, the 90% allowance, 12-second/four-worker teacher turns, 160-game cadence, four games per collection and two-collection maximum remain unchanged. This revision does not authorize previously incompatible reward changes. Completed IL checkpoints from the preceding source remain explicitly compatible; base data and checkpoint formats are unchanged.
+
+Verification: 86 targeted checks passed after affected reruns, one CUDA-only check was skipped, and a four-game native continuation smoke passed across two iterations. This verifies execution and state preservation with fixtures; it does not measure the lab model's strength or GPU throughput.
+
 ## Reward revision and best accepted model (9 October)
 
 This section supersedes the 7–8 October reward coefficients below. Active training defaults now use **`W + 0.10*P + 0.001*VP - min(0.005*N, 0.025)`**, where `N` counts insolvency events, not removed tiles. Official tiebreakers/shared wins, pairwise placement ties, undiscounted returns, linear uncapped VP and causal future-cost accounting are unchanged. PPO and NN search share the exact configured objective and reward fingerprint. A previously collected teacher distribution with different coefficients cannot train the new objective. There is no Pass, loan, build, sale or industry-specific reward.
@@ -51,6 +74,8 @@ For policy evaluation, select `/data/not_backed_up/yxu209/ai-training/artifacts/
 Verification for this revision: **32 focused tests passed**, covering reward/insolvency accounting, compatibility, promotion and rejection, interrupted-gate recovery, and retention protections. A **five-game CPU smoke** completed four ordinary games across a resume plus one gate-format game; the incomplete gate correctly could not promote. Compacting an in-memory copy of the uploaded 70-iteration history reduced 69 report entries from **5,455,452 to 507,061 bytes (90.7%)** without modifying the original. The full 48-game gate, CUDA/Linux throughput and playing-strength gains have not been measured in this check.
 
 ## Transfer and preflight
+
+**Moving an already-running self-play project to another lab machine:** use the independent [Step 5 machine-transfer guide](STEP5_MACHINE_TRANSFER.md). A final iteration folder or `best.pt` alone is insufficient. The default compact export keeps continuation checkpoints, the live opponent pool/incumbent, IL lineage and still-needed rehearsal shards; it omits consumed replays, caches and unused files. Code/config comes from Git and private rules runtimes from the existing SSH transfer, both checked by hash before restore. Compressed content is deduplicated and split into **100,000,000-byte parts** for Git push; private runtimes are excluded in this default mode. Keep the same absolute project root, rerun preflight, then use the emitted continuation command. No learning-package source, checkpoint/state signature or training setting is changed.
 
 **Pre-lab review (2 October):** the qualification checker now understands the selected v4 receipt and accepts the same LF/CRLF-only metadata conversion as training. Dataset audits share one serial/parallel validation path, exclude damaged shards before admission, and reject neural rows before creating a heuristic manifest. Evaluation attributes each replay through its job/game receipt, so shard order cannot change the candidate seat. BC and rehearsal use CPU legality metadata for eligibility counts instead of repeatedly reading individual CUDA flags; losses and effective-batch denominators are preserved.
 

@@ -528,11 +528,11 @@ def distill_update(model,optimizer,games,config,*,steps=8,weight=.25,quality=Non
     if getattr(model.config,'utility',None) is not None:
         from .utility import calibration_ready
         from brass_ai.step5.league import implementation_id
-        require(calibration_ready(model),'Calibrate the utility head before search teaching')
         identity=model_id(model);source_id=implementation_id()
         require(all(r['teacher']['model_id']==identity and r['teacher']['source_fingerprint']==source_id
                     for g in games for r in g['records'] if eligible(r)),
                 'Search teaching requires fresh current-model/current-source targets')
+        require(calibration_ready(model),'Calibrate the utility head before search teaching')
     data=prepared(games,eligible)
     def fit():
         report=supervised_epoch(model,None,data,config,training=False,kind='teacher',weight=weight)
@@ -547,7 +547,17 @@ def distill_update(model,optimizer,games,config,*,steps=8,weight=.25,quality=Non
             indices=order[start:start+width];seen.update(indices)
             reports.append(supervised_epoch(model,optimizer,[data[i] for i in indices],teacher_config,kind='teacher',weight=weight))
         if len(reports)>=steps:break
+    after=fit()
+    invalidated=getattr(model.config,'utility',None) is not None and bool(reports)
+    if invalidated:
+        # Policy-only updates still move the shared state encoder, which feeds
+        # both official predictions and the remaining-utility correction. The
+        # old fit receipt cannot qualify a subsequent teacher from these weights.
+        # Fresh ordinary PPO data will run the existing bounded head calibration.
+        model.utility_calibration=dict(model.utility_calibration,ready=False,
+            invalidated_by='policy-distillation',reason='Shared trunk changed without a utility target')
     return dict(updated=True,optimizer_steps=sum(r['optimizer_steps'] for r in reports),updates=reports,
         sample_presentations=sum(seen.values()),max_observed_reuse=max(seen.values()),
-        fit_before=before,fit_after=fit(),fit_scope='same qualified collection; training fit, not held-out strength',
+        fit_before=before,fit_after=after,fit_scope='same qualified collection; training fit, not held-out strength',
+        utility_calibration_invalidated=invalidated,
         learning_rates=[group['lr'] for group in optimizer.param_groups],**support)

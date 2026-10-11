@@ -1,163 +1,104 @@
-# Brass: Birmingham AI training project
+# Brass: Birmingham AI
 
-**Current workflow:** M0–M5 of [Masked ISMCTS](ai-research/MASKED_ISMCTS_REVISION_PLAN.md) are implemented. Use the [current conda lab guide](docs/TRAINING_RECOVERY_LAB.md), [1.4.9 game release notes](docs/MASKED_ISMCTS_1.4.9.md), and [compact exit checks](docs/MASKED_ISMCTS_EXIT_CHECKS.md).
+**Offline game AI, imperfect-information search, and neural self-play for the Steam edition of Brass: Birmingham.**
 
-Fresh Step 5 uses a randomly initialized **1,840,109-parameter MLP-ResNet**, audited heuristic imitation, population self-play and completed Masked ISMCTS visit distillation. Existing neural checkpoints and imported neural replay are rejected. CPU batching is implemented alongside GPU batching. Dynamic legality is separate from padding and progressive top-K expansion.
+This project connects a Unity/C# rules engine to a Python/PyTorch training pipeline. It combines hidden-information search, heuristic imitation, population self-play, and evaluation across opponents and player seats. The goal is a stronger local opponent with varied playing styles and difficulty suited to laptop play.
 
-Package **1.4.9** switches all six v3 styles to shared C# Masked ISMCTS, preserving **2/5/12 seconds**, old-save **10 seconds**, and the current rules/UI/resource lifecycle. The new lab bank uses **one second directly**. Pottery Flex's opponent identity is held out; all learner Pottery moves remain available.
+**Current status:** Six heuristic search styles and the local game integration are implemented and verified. Neural self-play training is in progress; learned personalities, calibrated neural difficulty, and laptop neural deployment remain to be qualified.
 
-Only `masked_ismcts` is active. The [quick search probe](docs/R4_R5_SEARCH_LAB.md) compares that backend with its own NN prior and full-expansion setting. The descriptions and checkpoint-import commands below record previous implementations. Do not use them for the fresh recipe; old banks/results remain archival evidence. Strong neural play and lab throughput require measurement.
+**Stack:** Python · PyTorch · C# · Unity/Mono · ONNX · PowerShell
 
-Rules-host implementation and research for an offline replacement opponent in the
-Steam version of Brass: Birmingham. The target is four-player games with varied
-personalities and calibrated difficulty, trained on a lab GPU and played locally
-on a laptop.
+## Technical highlights
 
-## Historical implementation notes
+- **Search with hidden information.** A shared C# implementation of Masked Information Set Monte Carlo Tree Search (Masked ISMCTS) samples plausible hidden worlds from the acting player's permitted view. Opponent policies receive their own masked views, and completed simulations retain all four players' returns.
+- **Compact four-player model.** An MLP-ResNet scores variable legal-action sets and predicts four-seat win share, placement, and victory points. The model has **1,840,109 parameters** for imitation and **1,850,129** with the utility head used by PPO and neural search.
+- **Resumable training.** Audited heuristic imitation feeds population self-play with Proximal Policy Optimization (PPO) and search-visit distillation. CPU feature preparation, shared CPU/GPU inference, bounded worker admission, checkpoint lineage, and retention support long-running experiments.
+- **Evaluation controls.** Frozen opponents, held-out setups, seat rotations, and model selection using confidence intervals separate training progress from measured playing strength. Cancelled, late, or incomplete search work cannot supply teacher labels.
+- **Game integration.** Six V4 heuristic styles have independent **2/5/12-second** difficulty allowances. The local patch also adds public-information card tracking, end-game statistics, game history, rules repairs, and save/recovery fixes.
 
-The following describes earlier releases and recipes. The current workflow and clocks are stated above; historical checkpoint-import commands are not accepted by recipe 2.2.0.
+## How it works
 
-R0 reference pins, R1's four-player host, R2's model/training
-scaffold and R3's six-style CPU legacy bank are implemented locally. R3 includes
-persistent intent, complete-turn planning, required reply search, immutable
-versions and evidence-gated training/evaluation pools. See the
-[R3 guide](docs/R3_TACTICAL_BANK.md) and [exit checks](docs/R3_EXIT_CHECKS.md) for
-results and remaining gates. The [v3 update](docs/LOCAL_AI_V3_CONVERSION.md)
-adds cash protection, deadline-aware industry completion, merchant routes and beer
-bonuses to the six S1 Custom Game strategies and a matching frozen research bank
-(introduced in package 1.4.1; the bank uses the user-accepted 28-game limited validation).
-The [1.4.2 presentation and save update](docs/PRESENTATION_SAVE_1.4.2.md) repairs
-player-panel layout, white industry tiles, panel closing during animations and
-save/Continue defects. The [1.4.4 menu update](docs/AI_STYLE_AND_DIFFICULTY_1.4.4.md)
-adds a direct style chooser and independent **Easy 2s / Mid 5s / Hard 12s** search
-allowances for each bot. New setups default to Hard; existing local-AI saves retain
-the preceding package's **10-second** allowance. The research bank's work setting
-remains **240**, with unchanged S1 planning, adaptive intent and fallback behavior.
-The [1.4.5 initialization fix](docs/AI_MENU_INITIALIZATION_1.4.5.md) makes the new
-controls visible on first opening the menu, before any click or refresh.
-The [1.4.6 link replay repair](docs/LINK_PLACEMENT_REPLAY_1.4.6.md) fixes link
-placement replay. The [1.4.7 resource update](docs/AI_EXECUTION_RESOURCES_1.4.7.md)
-caps rendering at 30 FPS during computation, restores normal presentation,
-serializes retiring AI jobs and provides optional simulation suspension and
-cleanup contracts for future inference backends. It applies independently of
-search allowances and strategies. Package 1.4.7's lifecycle is retained by current 1.4.9.
-The [compatibility check](docs/UI_PATCH_RESEARCH_COMPATIBILITY.md)
-preserves the research bank and training interfaces. [Step 5](docs/STEP5_LAB_TRAINING.md)
-adds self-play-first population PPO, neural search distillation, diverse-opponent
-evaluation and optional Reptile meta-RL. Strong neural playing skill and calibrated
-difficulty remain to be demonstrated through substantial training and evaluation.
+Four-player Brass combines hidden cards, shared resources, a changing turn order, and long-term economic planning. The system must evaluate each player's outcome without treating the next player's value as its negative, and it must plan both actions of a turn within one search budget.
 
-[R4/R5 search experiments](docs/R4_R5_SEARCH_LAB.md) add the OpenSpiel adapter and
-POMCP-inspired future-observation search alongside Step 5. Separate correctness
-gates, frozen-checkpoint comparisons and promotion records preserve the current
-training run. Implementation does not establish a search advantage.
+```mermaid
+flowchart LR
+    H["C# rules host"] --> D["Audited heuristic demonstrations"]
+    D --> I["Fresh neural imitation"]
+    I --> P["Population self-play + PPO"]
+    P --> E["Held-out, seat-rotated evaluation"]
+    P --> S["Masked ISMCTS + NN"]
+    S -->|Completed-visit distillation| P
+```
 
-## Included work
+The rules host supplies permitted observations and complete legal choices. Dynamic legality, batch padding, and progressive search expansion have separate masks, so a large action set is processed in chunks rather than silently truncated. The shared search implementation serves both the heuristic game opponents and the research pipeline; trained neural models are not yet installed in the game.
 
-- [Feasibility review](ai-research/REVIEW.md)
-- [Model, hardware, personality and difficulty design](ai-research/DESIGN.md)
-- [Post–Step 5 personality fine-tuning, learned style discovery and difficulty calibration plan](ai-research/PERSONALITIES_AND_DIFFICULTY_PLAN.md)
-- [Turn planning, hidden information and thinking-time experiments](ai-research/SEARCH_DESIGN.md)
-- [Daiyu AI and OpenSpiel reference integration plan](ai-research/REFERENCE_INTEGRATION.md)
-- [Legacy Hard improvements and six tactical benchmark profiles](ai-research/LEGACY_HARD_AI_PLAN.md)
-- [Implementation plan](ai-research/IMPLEMENTATION_PLAN.md)
-- [Implemented R0 reference pins and contracts](docs/R0_CONTRACTS.md)
-- [R0 exit-check results](docs/R0_EXIT_CHECKS.md)
-- [R1 host setup, API and information boundary](docs/R1_HOST.md)
-- [R1 exit-check results and H0 capture](docs/R1_EXIT_CHECKS.md)
-- [R2 model, training and lab commands](docs/R2_TRAINING.md)
-- [R2 exit-check results](docs/R2_EXIT_CHECKS.md)
-- [R3 four-player legacy bank, planner and optional game bridge](docs/R3_LEGACY_BANK.md)
-- [R3 H0–H5 exit checks and qualification](docs/R3_EXIT_CHECKS.md)
-- [Step 5 self-play, search, meta-RL and lab transfer instructions](docs/STEP5_LAB_TRAINING.md)
-- [Step 5 larger lab preset, parallel simulators and continuing an existing trained run](docs/STEP5_SCALING.md)
-- [Step 5 larger evaluation preset, parallel seat rotations and lab commands](docs/STEP5_EVALUATION_SCALING.md)
-- [Step 5 executed local checks and unqualified smoke weights](docs/STEP5_EXIT_CHECKS.md)
-- [R4/R5 additional search experiments and lab instructions](docs/R4_R5_SEARCH_LAB.md)
-- [R4/R5 executed exit checks](docs/R4_R5_EXIT_CHECKS.md)
-- [Rules audit and proposed fixes](rules-audit/BUG_FIX_PLAN.md)
-- Original PowerShell/C# probe scripts under `ai-research/` and `rules-audit/`
+The active recipe begins with random weights and audited heuristic data. Compatible completed imitation runs can hand off to self-play, and reviewed runs can resume with their lineage and optimizer state preserved. Older bundled bootstrap checkpoints are archival artifacts, not initializers for the current recipe. See the [current training guide](docs/TRAINING_RECOVERY_LAB.md) for the exact workflow.
 
-Game executables, Unity assets, managed game assemblies, decompiled source,
-downloaded tools/reference documents, generated probe results and experiment
-checkpoints are excluded from Git. Curated weights under `training/models/` and
-the project-authored host/v3 workers under `training/runtime/` have explicit
-exceptions; their game dependencies still require a private transfer. References in the research reports to local
-decompiled files or generated results are inspection evidence, not files included
-in a clone. Some audit links refer to the original laptop's absolute paths.
+## Validation and current status
 
-## Clone on the lab computer
+The linked reports record checks executed against their stated source and runtime versions:
+
+| Area | Recorded evidence |
+| --- | --- |
+| Rules host and information boundary | Five complete four-player games, 46 restored checkpoints, and 328 counterfactual observation checks; standalone .NET and Unity Mono replay agreement. [Host validation](docs/R1_EXIT_CHECKS.md) |
+| Shared search and game opponents | All six V4 styles, legal turn completion, clocks, cancellation, resource lifecycle, and older saved profiles; **1,218 native assertions** in the selected V4 release. [V4 runtime checks](docs/MASKED_V4_1.4.20.md) |
+| Neural training pipeline | End-to-end imitation, self-play, resume, evaluation, CPU batching, and completed-visit distillation checks. [Search/training implementation checks](docs/MASKED_ISMCTS_EXIT_CHECKS.md) and [current training revisions](docs/TRAINING_RECOVERY_LAB.md) |
+| Statistics and game history | **5,805 Statistics checks** and **3,999 Game History checks**, plus native visual inspection, for patch 1.4.30. [Game UI validation](docs/STATISTICS_GEOGRAPHY_1.4.30.md) |
+
+These results establish tested behavior and compatibility within their documented scope. They do not establish stronger neural play or calibrated difficulty. The V4 bank was selected without a new qualifying strength tournament. The neural parent is still training, and the game's **Gamma** model slots remain unavailable. Local CPU checks also do not establish lab CUDA throughput or cross-platform qualification.
+
+## Getting started
+
+### Explore without game files or a GPU
 
 ```sh
-git clone https://github.com/riverside234/ai-training.git /data/not_backed_up/yxu209/ai-training/
-cd /data/not_backed_up/yxu209/ai-training/
+git clone https://github.com/riverside234/ai-training.git
+cd ai-training
 ```
 
-Keep your own game installation outside the clone. The host/bank builders may
-copy the required private assemblies under ignored `artifacts/`; those runtime
-dependencies are not downloaded or provided by this repository. R2 can train compatible replay shards without the
-engine. New match collection needs the verified R1 runtime until a separate
-implementation exists. The default lab root is
-`/data/not_backed_up/yxu209/ai-training/`; R2's [setup guide](docs/R2_TRAINING.md)
-includes CPU/CUDA installation, fresh initialization, collection, training and export.
-For the current population trainer, use the [Step 5 lab guide](docs/STEP5_LAB_TRAINING.md).
-It includes a fingerprint-checked private rules/runtime bundle, loadable R2
-bootstrap weights, CUDA/Mono preflight and resumable self-play/meta-RL commands.
-
-The R1 host was verified on Windows .NET Framework and Unity's actual Mono runtime.
-Point its builder at your patch-1.1.0 installation; the full managed dependency
-inventory is fingerprinted before use:
-
-```powershell
-python -m pip install -r requirements-r1.txt
-pwsh -NoProfile -File scripts/build-host.ps1 -GameRoot 'D:\SteamLibrary\steamapps\common\Brass Birmingham'
-python scripts/check-r1-traces.py
-python scripts/test-r1.py
-```
-
-Replace the example path with your installation directory. If `-GameRoot` is
-omitted, the builder uses the repository root. Generated assemblies and traces stay
-under ignored `artifacts/`. See the [R1 guide](docs/R1_HOST.md) for APIs, stock baseline
-capture and runtime parity checks. Linux and the lab machine have not been validated.
-
-The older `ai-research/headless-smoke.ps1` is a historical probe requiring the
-unmodified stock assembly. It is deliberately not retargeted to the patched host.
-
-The older `rules-audit` scripts currently expect the game directory at the
-repository root, and some require Windows PowerShell 5.1 / .NET Framework.
-They are retained as audit fixtures, not a portable training entry point.
-
-## Repository boundaries
-
-The root `.gitignore` retains the original Visual Studio rules and adds a default
-exclude policy for this Steam folder. It explicitly permits the research/audit
-source files and future project directories: `src`, `tests`, `training`, `configs`,
-`scripts`, `docs`, and `.github`. Add an intentional exception when introducing
-another project directory. Keep secrets and generated training artifacts local.
-
-Before committing, inspect what will be included:
+In an isolated **Python 3.10+** environment, run the reference and contract checks:
 
 ```sh
-git status --short
-git diff --cached --stat
-git ls-files
+python -m pip install -r requirements-r0.txt
+python scripts/verify-r0.py
+python -m unittest discover -s tests/R0 -p "test_*.py" -v
 ```
 
-Do not force-add excluded game files. `.gitignore` applies to untracked files;
-it does not remove files already committed to history.
+These checks need no game installation, GPU, or network access after dependency installation. They validate reference metadata, observation/action contracts, and four-player value semantics. See the [contract guide](docs/R0_CONTRACTS.md) for their scope.
 
-R3 snapshots contain original code/configuration and hashes; game runtime files
-stay private under ignored `artifacts/`. The [bank guide](docs/R3_TACTICAL_BANK.md)
-explains lab preparation, pool selection, mixed neural/legacy collection and R2
-value training. Linux/Mono and rendered human-play acceptance remain separate
-from the Windows automated checks.
-R0 validation can still run without game files; see its [commands and scope](docs/R0_CONTRACTS.md).
+### Train or evaluate against the game engine
 
-## Local rules patch
+Engine-backed collection requires your own compatible Steam game installation and a privately transferred, fingerprint-verified rules/runtime bundle. A clone alone does not supply those dependencies.
 
-A reversible local-game patch for the rules audit is implemented under `src/BrassPatch`,
-with a version-checked assembly weaver, regression tests, and installation/restoration
-scripts. See [patch documentation](docs/LOCAL_PATCH.md). R1's host consumes this
-patched engine; the R2 scaffold does not yet replace its AI. Online play is
-disabled while this patch is installed, and games created with its versioned IDs
-require the patch to continue.
+Start with the [current conda training guide](docs/TRAINING_RECOVERY_LAB.md) for runtime import, CPU/CUDA preflight, demonstration auditing, fresh imitation, self-play, and evaluation. The [rules-host guide](docs/R1_HOST.md) covers the Windows host build and APIs. Keep the game installation outside a new clone; generated runtime files and experiments belong under ignored `artifacts/`.
+
+### Use the local game patch
+
+Read the [patch build and restoration guide](docs/LOCAL_PATCH.md), [selected V4 opponent notes](docs/MASKED_V4_1.4.20.md), and [latest documented UI release](docs/STATISTICS_GEOGRAPHY_1.4.30.md). The patch is for offline play: online play is disabled while it is installed, and games created with its versioned identifiers require a compatible patch to continue.
+
+## Repository guide
+
+| Location | Contents |
+| --- | --- |
+| [src/brass_ai/](src/brass_ai/) | Python host client, models, training, search coordination, evaluation, and personality research |
+| [src/BrassHost/](src/BrassHost/) and [src/BrassSearchHost/](src/BrassSearchHost/) | C# rules-host and search-runtime adapters |
+| [src/BrassMaskedSearch/](src/BrassMaskedSearch/) | Shared Masked ISMCTS implementation |
+| [src/BrassLocalAI/](src/BrassLocalAI/) and [src/BrassPatch/](src/BrassPatch/) | Local AI integration, rules/save repairs, and game UI |
+| [configs/](configs/) and [training/](training/) | Versioned contracts, experiment presets, frozen opponent banks, and selected reproducibility artifacts |
+| [tests/](tests/) and [scripts/](scripts/) | Python/C# regression checks, runtime verification, builders, and experiment entry points |
+| [docs/](docs/) | Setup guides, implementation checks, and versioned release notes |
+| [ai-research/](ai-research/) and [rules-audit/](rules-audit/) | Design decisions, research reviews, rules audits, and historical probes |
+
+Earlier R2/R3 and R4/R5 recipes remain available as implementation history. Use the current training guide for active commands and compatibility rules.
+
+## Next milestones
+
+- Measure the trained model against frozen opponents on unseen setups and across all four seats.
+- Complete learned-style discovery and validate distinct personalities and difficulty levels. The [personality plan](ai-research/PERSONALITIES_AND_DIFFICULTY_PLAN.md) and [implemented research workflows](docs/PERSONALITY_P0_P1_LAB.md) describe this stage.
+- Qualify laptop inference and integrate trained neural opponents into the game.
+
+## Attribution and repository boundaries
+
+The project draws on pinned Daiyu AI and OpenSpiel references. See the [reference provenance](docs/R0_REFERENCE_NOTICES.md), [learning-component attribution](src/brass_ai/learning/NOTICE.md), and [learning-component license](src/brass_ai/learning/LICENSE) for scope and licensing.
+
+Game executables, Unity assets, proprietary managed assemblies, decompiled game source, private runtime bundles, bulk replay, and generated experiment checkpoints are excluded from Git. Selected weights and project-authored workers under `training/` have explicit exceptions; their private game dependencies are still required. Some historical audit links point to local files or generated evidence that is not included in a clone.

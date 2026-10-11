@@ -213,12 +213,20 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                     rehearsal=rehearsal,rehearsal_weight=weight,learner_data=learner_data,insolvency=config.get('insolvency'),reward=reward)
                 updated=time.monotonic();done=state['games_done']+len(games)
                 ordinary_inference=service.report()
-                del learner_data
                 if done>=config['rehearsal_until']:rehearsal=None
                 ordinary_seconds=state.get('ordinary_seconds',0.)+updated-began
+                def recalibrate_teacher_utility():
+                    # Policy distillation moves the shared encoder. Refit only
+                    # its utility head against this iteration's fresh ordinary
+                    # returns; teacher game outcomes are never value targets.
+                    from .updates import Dataset
+                    from .utility import calibrate
+                    return calibrate(model,optimizer,Dataset(learner_data,device,policy=False),config['update'])
                 search,next_search,cursor,search_seconds=collect_due(root,run,directory,config,state,signature,
                     model,optimizer,service,heavy,done=done,cursor=cursor,ordinary_seconds=ordinary_seconds,
-                    ordinary_game_seconds=(collected-began)/max(1,len(games)))
+                    ordinary_game_seconds=(collected-began)/max(1,len(games)),
+                    recalibrate=recalibrate_teacher_utility if reward is not None else None)
+                del learner_data
                 report=dict(format='step5-recovery-report/'+'2.2.0',iteration=iteration,composition=dict(composition),
                     reward_migration=migration if not summaries else None,
                     legacy_boost=boost_report(state['games_done'],done,config,window),
@@ -295,6 +303,7 @@ def schedule_evaluations(root,run,state,device,mono):
     """Committed game-count schedule; evaluation never advances the train cursor."""
     from brass_ai.step5.evaluation import evaluation_config
     from .evaluation import evaluate
+    from .resume import evaluation_directory
     config=state['signature']['config'];schedule=config['evaluation_schedule']
     if not schedule['enabled']: return
     for name,interval,lineups in [('monitor',schedule['monitor_every_games'],['recent-neural']),
@@ -311,7 +320,7 @@ def schedule_evaluations(root,run,state,device,mono):
         if refs[0]['model_id']==candidate['model_id']:continue
         cfg=evaluation_config(config,setups=schedule[name+'_setups'],seed=schedule['seed']+slot*1000,
             lineups=lineups,include_legacy=name=='broader',panel='development',use_search=False)
-        directory=run/'evaluations'/f'{name}-{slot:04d}'
+        directory=evaluation_directory(root,run,state,f'{name}-{slot:04d}')
         result=evaluate(root,directory,candidate['path'],[r['path'] for r in refs],cfg,device=device,mono=mono)
         require(result['failed_games']==0,'Incomplete scheduled evaluation')
         state['evaluations'].append(dict(panel=name,slot=slot,games_done=state['games_done'],candidate=candidate,

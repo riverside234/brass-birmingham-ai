@@ -264,7 +264,9 @@ class HandoffCompatibilityTests(unittest.TestCase):
         from brass_ai.recovery import demonstrations as demos
         from brass_ai.recovery.updates import prepared
         torch.set_num_threads(2)
-        entry=read(SOURCE_ROOT/'configs/learning/imitation-handoff-sources.json')['compatible_sources'][0]
+        # Exercise the immediately preceding reviewed source, including the
+        # completed IL origin reused when resuming an existing self-play run.
+        entry=read(SOURCE_ROOT/'configs/learning/imitation-handoff-sources.json')['compatible_sources'][-1]
         self.assertEqual(entry['learning_compatibility'],digest(compatibility()))
         with tempfile.TemporaryDirectory(dir=SOURCE_ROOT/'artifacts') as temp:
             directory=Path(temp);manifest=ImitationTests().fixture_manifest(directory)

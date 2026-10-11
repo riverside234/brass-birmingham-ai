@@ -119,7 +119,8 @@ def schedule(root,run,state,service,actor):
     # Advancing seeds makes repeat attempts independent; never replay a favorable
     # batch until it passes. At most one gate per committed iteration.
     seeds,_=seeds_for(cfg['seed']+threshold, cfg['setups'],'validation')
-    directory=run/'evaluations'/f'champion-{threshold:08d}'
+    from .resume import evaluation_directory
+    directory=evaluation_directory(root,run,state,f'champion-{threshold:08d}')
     spec=dict(format=CONTRACT,candidate=candidate,incumbent=incumbent,seeds=seeds,
               config=cfg,implementation=implementation_id(),execution=config['execution'])
     if (directory/'spec.json').exists():require(read(directory/'spec.json')==spec,'Champion gate specification changed')

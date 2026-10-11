@@ -240,7 +240,10 @@ def plan(root,run,config=RETENTION):
                 panels.setdefault('champion',[]).append(directory)
                 continue
             if result.get('spec',{}).get('config',{}).get('panel')!='development':continue
-            panels.setdefault(directory.name.rsplit('-',1)[0],[]).append(directory)
+            # A reviewed-source retry remains the same monitor/broader panel;
+            # its immutable source suffix must not create an immortal group.
+            panel_name=directory.name.split('-source-',1)[0].rsplit('-',1)[0]
+            panels.setdefault(panel_name,[]).append(directory)
         for directories in panels.values():
             for directory in directories[:-2]:
                 if any(p.is_relative_to(directory) for p in pins):continue

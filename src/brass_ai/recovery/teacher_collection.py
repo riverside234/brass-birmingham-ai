@@ -42,9 +42,10 @@ def summarize(batches):
 
 
 def collect_due(root,run,directory,config,state,signature,model,optimizer,service,heavy,*,
-                done,cursor,ordinary_seconds,ordinary_game_seconds):
+                done,cursor,ordinary_seconds,ordinary_game_seconds,recalibrate=None):
+    require(recalibrate is None or callable(recalibrate),'Invalid ordinary-data calibration callback')
     next_search=state['next_search_games'];search_seconds=state.get('search_seconds',0.)
-    estimate=estimate_collection(config,ordinary_game_seconds);batches=[];blocked=False
+    estimate=estimate_collection(config,ordinary_game_seconds);batches=[];deferred_reason=None
     allowance_before=search_allowance(ordinary_seconds,search_seconds,config['search_wall_fraction'])
     due=due_collections(done,next_search,config)
     if getattr(model.config,'utility',None) is not None:
@@ -53,8 +54,15 @@ def collect_due(root,run,directory,config,state,signature,model,optimizer,servic
         if not calibration_ready(model):
             return dict(updated=False,reason='Utility head calibration not ready; collect fresh ordinary rollouts first',collection_count=0),next_search,cursor,search_seconds
     for batch_index in range(due):
+        # A successful policy distillation can invalidate the shared critic.
+        # Re-check before reserving seeds, time or the next scheduled allocation.
+        if getattr(model.config,'utility',None) is not None and not calibration_ready(model):
+            deferred_reason='Utility calibration invalidated by distillation; postpone remaining collections until fresh ordinary PPO calibration'
+            break
         available=search_allowance(ordinary_seconds,search_seconds,config['search_wall_fraction'])
-        if estimate>available:blocked=True;break
+        if estimate>available:
+            deferred_reason='Search wall-time allowance exceeded; postpone remaining bounded collections'
+            break
         began=time.monotonic();identity=service.register(model)
         rng=random.Random(digest(dict(seed=config['seed'],done=done,threshold=next_search)))
         rollout_entries=rollout_opponents(state.get('population',state['history']),identity,
@@ -84,6 +92,13 @@ def collect_due(root,run,directory,config,state,signature,model,optimizer,servic
         teaching=collection_report(records,games)
         batch=distill_update(model,optimizer,games,config['update'],steps=config['distill_steps'],
                             weight=config['distill_weight'],quality=config.get('distillation'))
+        if batch['updated'] and getattr(model.config,'utility',None) is not None and not calibration_ready(model) and recalibrate is not None:
+            # The caller supplies only this iteration's fresh ordinary learner
+            # targets, never teacher terminal outcomes. This bounded fit keeps
+            # another due collection/checkpoint usable without a stale critic.
+            calibration_started=time.monotonic()
+            batch['post_distill_calibration']=recalibrate()
+            batch['post_distill_calibration_seconds']=time.monotonic()-calibration_started
         elapsed=time.monotonic()-began;search_seconds+=elapsed
         batch.update(collection=records,teaching=teaching,due_games=next_search,elapsed_seconds=elapsed,
             teacher_model_id=identity,rollout_generations=[e['generation'] for e in rollout_entries])
@@ -92,9 +107,9 @@ def collect_due(root,run,directory,config,state,signature,model,optimizer,servic
         # Never run extra games or retry to manufacture the minimum label count.
         next_search+=config['search_every_games']
     report=summarize(batches)
-    if blocked:report['reason']='Search wall-time allowance exceeded; postpone remaining bounded collections'
+    if deferred_reason:report['reason']=deferred_reason
     report['budget']=dict(wall_fraction=config['search_wall_fraction'],available_seconds=allowance_before,
         remaining_seconds=search_allowance(ordinary_seconds,search_seconds,config['search_wall_fraction']),
         estimated_collection_seconds=estimate,admitted=bool(batches),due_collections=due,
-        max_collections=config.get('search_collections_per_iteration',1),deferred=blocked)
+        max_collections=config.get('search_collections_per_iteration',1),deferred=bool(deferred_reason))
     return report,next_search,cursor,search_seconds

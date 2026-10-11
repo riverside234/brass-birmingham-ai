@@ -1,11 +1,12 @@
 """Explicit same-run continuation across a pinned, reviewed source transition."""
 import copy
+from pathlib import Path
 
 from brass_ai.bank import read, sha
 from brass_ai.learning.checkpoint import load_checkpoint
 from brass_ai.learning.contracts import CONFIG_DIR, digest, project_path, require
 from brass_ai.learning.model import ModelConfig
-from brass_ai.step5.league import write_json
+from brass_ai.step5.league import write_json, implementation_id
 from .retention import safe
 
 
@@ -75,13 +76,57 @@ def load_resume(root, run, state, signature, *, device='cpu', reviewed=False):
         # Old full history may already be retired; only the live population and
         # evaluation anchor must still be present. Latest snapshot checked above.
         verified = {entry['path']}
-        for frozen in state.get('population', []) + [state['evaluation_anchor']]:
+        frozen_entries=state.get('population', []) + [state['evaluation_anchor']]
+        if state.get('champion') is not None:frozen_entries.append(state['champion'])
+        for frozen in frozen_entries:
             if frozen['path'] in verified:
                 continue
             path = safe(run, project_path(root, frozen['path']))
             require(sha(path) == frozen['sha256'], 'Live opponent/evaluation checkpoint changed')
             verified.add(frozen['path'])
+    if getattr(model.config,'utility',None) is not None and raw['training'].get('signature')!=digest(signature):
+        # The old receipt can predate a post-calibration policy/distillation
+        # update. A reviewed source transition preserves its weights and Adam,
+        # but does not certify its leaf evaluator under the repaired pipeline.
+        # Replace (rather than mutate) the receipt shared with raw checkpoint
+        # metadata. This also covers a restart before the first new PPO commit.
+        model.utility_calibration=dict(ready=False,reward_id=digest(model.config.utility),
+            version='reviewed-source-utility-calibration/1.0.0',
+            reason='Reviewed source continuation requires fresh ordinary utility calibration',
+            checkpoint_signature=raw['training'].get('signature'),current_signature=digest(signature))
     return model, raw, changed
+
+
+def evaluation_directory(root, run, state, name):
+    """Keep old evaluation evidence intact across an approved source change.
+
+    A committed learner can still have an interrupted or unpublished screen.
+    Its old spec must not be silently relabeled with the current implementation,
+    nor should it prevent the checkpoint from continuing after a reviewed fix.
+    Use a deterministic fresh namespace; the caller still verifies every other
+    field of its normal evaluation specification before collecting/reusing data.
+    """
+    require(isinstance(name,str) and name not in ('','.','..') and Path(name).name==name,
+            'Expected a single evaluation directory name')
+    directory=safe(run,run/'evaluations'/name)
+    spec=directory/'spec.json'
+    if not spec.is_file():return directory
+    previous=read(spec);current=implementation_id()
+    if previous.get('implementation')==current:return directory
+    signature=state['signature']
+    require(signature['implementation']==current,'Evaluation run has not adopted the current reviewed source')
+    # Revalidate actual recorded transitions against pinned review receipts.
+    # Several source upgrades can occur before a pending screen is retried.
+    known={digest(signature):signature}
+    for transition in reversed(state.get('source_transitions',[])):
+        target=known.get(transition['to_signature'])
+        if target is None:continue
+        origin=transition['from_signature']
+        check_signature(dict(state,signature=origin),target,reviewed=True)
+        known[digest(origin)]=origin
+    require(previous.get('implementation') in {s['implementation'] for s in known.values()},
+            'Existing evaluation source is not in this run\'s reviewed transition history')
+    return safe(run,run/'evaluations'/f'{name}-source-{current[:16]}')
 
 
 def commit_transition(run, state, signature):
