@@ -50,6 +50,16 @@ Default evaluation uses **40 fresh validation setups × four seat rotations = 16
 
 The active evaluation preset controls the same v4 search budget for every model; NN candidates play without search. Cached reports are reused only under the existing exact-spec guards. Results go to `artifacts/il-replay/v4-batch7-joint/evaluations/comparison.json` and the component reports. Compare official win share and placement first, then VP and failure/low-score diagnostics; a score-only change does not establish a strength change. No automatic model replacement, installation, RL launch, or guarantee of stronger play is made.
 
+To answer the separate question **one joint candidate versus three original batch6 policies**, run:
+
+```sh
+python /data/not_backed_up/yxu209/ai-training/scripts/il_head_to_head.py --device cuda
+```
+
+This standalone evaluation uses the completed `best` checkpoint receipts from `artifacts/step5/v4-batch7-joint` and `artifacts/step5/v4-batch6`, preserving their original identities and checking their hashes/IL provenance. It does not use the joint run's `initial.pt` (which is batch7). Both sides use neutral NN policies without search. Defaults are the same seed cursor `1947000` and **40 validation setups × four candidate seats = 160 games**. CPU actors and GPU batching inherit the existing evaluation preset. No training, population import or automatic promotion occurs.
+
+Read `/data/not_backed_up/yxu209/ai-training/artifacts/il-replay/v4-batch7-joint/evaluations/joint-vs-batch6/summary.json` for win share, setup-bootstrap 95% interval, average rank/VP and seat counts. The adjacent `report.json` includes the per-game outcomes, exact model receipts and inference telemetry. The symmetric four-player reference is **25%**, not 50%; `lower_95_above_symmetric` is evidence for this matchup only. Repeat an identical command to resume cached games/reuse the completed report. Changing `--setups`, `--seed`, `--candidate-run`, `--reference-run` or config requires a new `--output` directory under this project's `artifacts`. For a four-game execution smoke use `--setups 1 --output /data/not_backed_up/yxu209/ai-training/artifacts/il-replay/joint-vs-batch6-smoke`; one setup cannot support a strength conclusion.
+
 After reviewing results, use the **chosen completed run directory**, not an arbitrary copied checkpoint, as the ordinary Step 5 `--imitation-run`. For example, if the joint candidate is chosen:
 
 ```sh
@@ -62,5 +72,7 @@ python /data/not_backed_up/yxu209/ai-training/scripts/step5.py --device cuda tra
 Keep the original batch lineage, source manifests, pooled manifest and selected run intact for the existing IL completion and PPO handoff checks. This helper deliberately does not delete historical datasets or alter model-retention rules.
 
 ## Local verification
+
+The separate head-to-head helper passed six focused checks, including a four-game native CPU smoke with two frozen small fixture models. Checks covered the exact one-versus-three lineup, all four candidate seats, official ties/tiebreakers, shuffled completion order, rejected wrong opponents/missing games, original identity preservation, protected output paths, matching cached reports and changed-spec rejection. The smoke completed all four games, preserved both checkpoint hashes and reused all four cached games on repetition. It did not evaluate the actual lab joint/batch6 checkpoints or measure CUDA performance.
 
 Focused checks cover source union and unchanged loader compatibility; semantic deduplication; conflicting identities, partitions and tampered receipts; idempotent preparation and protected sources; separate policy/value aggregation; baseline selection; common evaluation seeds and same-run references; automatic post-training validation; and a tiny CPU BC continuation/validation/handoff smoke using synthetic replay fixtures. The smoke preserved original checkpoint hashes and produced a child accepted by the existing completed-imitation checks. The default-source regression specifically prepares batches 4--7 while batch2/3 directories are absent. No lab batch4--7 data, CUDA throughput, native gameplay tournament or playing-strength gain was tested locally.
