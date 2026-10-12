@@ -1,0 +1,2 @@
+# Only the separate P5 grouped, multiplicity-adjusted calibration analysis.
+scipy>=1.10,<2

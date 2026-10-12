@@ -1,6 +1,7 @@
 """Bounded P1 head warm-up and fresh on-policy joint-loss pilot, not P2 search."""
 from pathlib import Path
 import math
+import shutil
 import numpy as np
 import torch
 
@@ -15,7 +16,7 @@ from brass_ai.recovery.updates import value_losses
 from brass_ai.recovery.replay import read_shards
 from brass_ai.step5.league import write_json
 from . import checkpoint,handoff
-from .contracts import contract,local_file
+from .contracts import contract,local_file,accepted_contract
 from .collection import collect,distribution
 from .labels import loss_rows,confidence_report
 from .model import import_parent,base_outputs
@@ -173,15 +174,16 @@ def initialize(root,bundle,run,device):
     manifest,parent=handoff.load(bundle)
     if (run/'state.json').exists():
         state=read_json(run/'state.json')
-        require(state['contract']==contract() and state['handoff_sha256']==sha(bundle/'manifest.json'),'P1 run/handoff changed')
-        require(sha(run/'model.pt')==state['model_sha256'],'P1 saved model changed')
-        model,raw=checkpoint.load(run/'model.pt',device)
+        accepted_contract(state['contract'])
+        require(state['handoff_sha256']==sha(bundle/'manifest.json'),'P1 run/handoff changed')
+        model,raw=checkpoint.load(checkpoint.committed_path(run,state),device)
+        require(raw['model_id']==state['model_id'],'P1 checkpoint identity changed')
         return root,run,manifest,parent.to(device),model,state,raw
     require(not run.exists() or not any(p.name!='.active-run.json' for p in run.iterdir()),'Use a new personality run')
     torch.manual_seed(2910000);model,transfer=import_parent(parent);model=model.to(device)
     run.mkdir(parents=True,exist_ok=True);checkpoint.save(run/'initial.pt',model,training=dict(handoff=manifest['parent'],transfer=transfer))
     identity=checkpoint.save(run/'model.pt',model,training=dict(phase='imported',handoff=manifest['parent']))
-    state=dict(format='personality-pilot/1.0.0',contract=contract(),handoff=bundle.relative_to(root).as_posix(),
+    state=dict(format=checkpoint.PILOT,model_path='model.pt',contract=contract(),handoff=bundle.relative_to(root).as_posix(),
         handoff_sha256=sha(bundle/'manifest.json'),model_id=identity,model_sha256=sha(run/'model.pt'),
         warmup_runs=0,joint_runs=0,validation_runs=0,reports=[],transfer=transfer)
     write_json(run/'state.json',state)
@@ -200,7 +202,7 @@ def execute(root,bundle,run,*,mode='warmup',epochs=3,games=0,workers=4,device='c
         require(mode!='warmup' or not state['joint_runs'],'Warm-up is frozen-core preparation; use a separate run after joint training')
         key=dict(warmup='warmup_runs',joint='joint_runs',validate='validation_runs')[mode]
         directory=run/f'{mode}-{state[key]:04d}'
-        require(not directory.exists(),'Uncommitted P1 phase exists; preserve it and use a new run for retry')
+        require(not directory.exists(),'Uncommitted P1 phase exists; preserve it under the run\'s interrupted/ directory, then retry from the committed checkpoint')
         reward=manifest['reward'];partition='validation' if mode=='validate' else 'train';cfg=resolved_config(manifest)
         if games:
             collect(project_path(root,manifest['signature']['config']['host']),model,parent,directory/'collection',
@@ -225,8 +227,12 @@ def execute(root,bundle,run,*,mode='warmup',epochs=3,games=0,workers=4,device='c
                 model.core.utility_calibration=dict(ready=False,reward_id=digest(reward),
                     version='personality-utility-review/1.0.0',reason='Joint P1 update; recheck before P2 teaching',
                     training_error=report['after']['utility_mse'],parent=manifest['utility_calibration'])
-            checkpoint.save(run/'model.pt',model,optimizer,training=dict(phase=mode,handoff=manifest['parent'],report=report))
-            state.update(model_id=checkpoint.model_id(model),model_sha256=sha(run/'model.pt'))
+            # Publish weights before the state pointer, keeping every committed
+            # checkpoint recoverable if the report/state write is interrupted.
+            model_path=directory/'model.pt'
+            checkpoint.save(model_path,model,optimizer,training=dict(phase=mode,handoff=manifest['parent'],report=report))
+            state.update(format=checkpoint.PILOT,contract=contract(),model_id=checkpoint.model_id(model),model_sha256=sha(model_path),
+                model_path=model_path.relative_to(run).as_posix())
         # Report official outcomes separately from utility or auxiliary fit.
         seats=[(g,next(i for i,p in enumerate(g['opponents']) if p.startswith('personality-pilot/'))) for g in episodes] if games else []
         report['official']=({k:float(np.mean([terminal_targets(g['result'])[k][s] for g,s in seats])) for k in ('win_share','placement','vp')} if seats else None)
@@ -248,4 +254,11 @@ def execute(root,bundle,run,*,mode='warmup',epochs=3,games=0,workers=4,device='c
         write_json(directory/'report.json',report)
         state[key]+=1;state['reports']=(state['reports']+[dict(path=(directory/'report.json').relative_to(root).as_posix(),phase=mode)])[-8:]
         write_json(run/'state.json',state)
+        if mode!='validate':
+            # Compatibility convenience copy only. Readers above and in P2 use
+            # the committed pointer even if this final copy is interrupted.
+            temporary=run/'model.pt.tmp'
+            try:
+                shutil.copyfile(model_path,temporary);temporary.replace(run/'model.pt')
+            finally:temporary.unlink(missing_ok=True)
     return report

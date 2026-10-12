@@ -4,7 +4,7 @@ import random
 import unittest
 import weakref
 from concurrent.futures import ThreadPoolExecutor
-from threading import Event,RLock
+from threading import Event,RLock,get_ident
 from types import SimpleNamespace
 from unittest.mock import patch
 
@@ -218,6 +218,7 @@ class TeacherWorkTests(unittest.TestCase):
     def test_kernel_reports_attempts_even_when_trajectories_fail(self):
         for failed in (False,True):
             bot=object.__new__(MaskedISMCTS);bot.config=SimpleNamespace(simulations=7,pending_paths=2)
+            bot.owner=get_ident();bot.cancelled=Event()
             bot.lanes=[None,None];bot.deadline=110.;bot.completed=bot.interrupted=bot.max_pending=0;bot.metrics={}
             def trajectory(*args):
                 if failed:raise SearchIncomplete('incomplete path')

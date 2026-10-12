@@ -14,7 +14,7 @@ from brass_ai.recovery.champion import CONTRACT as CHAMPION, decision
 from brass_ai.recovery.retention import owned, safe, run_lock, active
 from brass_ai.recovery.utility import calibration_ready, reward_spec
 from brass_ai.step5.league import write_json
-from .contracts import HANDOFF,contract,local_file,schema
+from .contracts import HANDOFF,contract,local_file,schema,accepted_contract
 
 
 def inspect(root,source,*,_owner=False):
@@ -111,10 +111,12 @@ def create(root,source,output,*,trace_shards=4,reference_count=3):
         sources=[project_path(root,parent['path']),data['report_path'],data['spec_path']]
         sources.extend(p for _,p in references)
         sources.extend(t[k] for t in traces for k in ('source','report'))
-        pins_path=run/'pins.json';pins=read_json(pins_path) if pins_path.exists() else dict(paths=[])
-        pins['paths']=sorted(set(pins['paths']+[p.relative_to(root).as_posix() for p in sources]))
-        write_json(pins_path,pins)
         out.mkdir(parents=True);files=[]
+        # Retention discovers pins across all owned artifact directories. Keep
+        # this handoff's source dependencies here so the completed training run
+        # (including any existing pins) stays unchanged, even if copying fails.
+        source_pins=[p.relative_to(root).as_posix() for p in sources]
+        write_json(out/'pins.json',dict(paths=sorted(set(source_pins))))
         def copy_file(path,destination):
             target=out/destination;target.parent.mkdir(parents=True,exist_ok=True)
             before=sha(path);shutil.copyfile(path,target)
@@ -151,7 +153,8 @@ def create(root,source,output,*,trace_shards=4,reference_count=3):
             trace_status='available' if traces else 'No retained ordinary traces; collect fresh P1 discovery games',
             source_run=run.relative_to(root).as_posix())
         write_json(out/'manifest.json',manifest)
-        write_json(out/'pins.json',dict(paths=[(out/f['path']).relative_to(root).as_posix() for f in files]))
+        write_json(out/'pins.json',dict(paths=sorted(set(source_pins+[
+            (out/f['path']).relative_to(root).as_posix() for f in files]))))
         load(out)
     return manifest
 
@@ -163,7 +166,8 @@ def _inspect_owned(root,run):
 
 def load(directory):
     directory=Path(directory);manifest=read_json(directory/'manifest.json')
-    require(manifest.get('format')==HANDOFF and manifest['contract']==contract(),'Handoff contract/source differs')
+    require(manifest.get('format')==HANDOFF,'Handoff format differs')
+    accepted_contract(manifest['contract'])
     for item in manifest['files']:
         require(sha(local_file(directory,item['path']))==item['sha256'],'Handoff dependency changed: '+item['path'])
     require(manifest['reward_id']==digest(manifest['reward']) and manifest['reward']==specification(),'Handoff reward differs')

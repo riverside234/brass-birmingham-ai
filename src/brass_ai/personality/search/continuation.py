@@ -5,6 +5,7 @@ import torch
 from brass_ai.bank import sha
 from brass_ai.learning.contracts import project_path,read_json,require
 from brass_ai.personality import checkpoint
+from brass_ai.personality.contracts import contract
 from brass_ai.recovery.retention import owned,run_lock
 from brass_ai.step5.league import write_json
 from .contracts import identity
@@ -16,13 +17,14 @@ def continue_pilot(root,pilot,distilled,output):
     require(not out.exists() and not out.is_relative_to(pilot),'Use a new successor pilot directory')
     with run_lock(pilot):
         state=read_json(pilot/'state.json');report=read_json(distilled/'report.json')
+        pilot_model=checkpoint.committed_path(pilot,state)
         require(report['updated'] and report['contract']==identity(),'Distillation source differs')
         _,_,ready,_,_=load(root,report['parent_ready'])
         require(report['parent_ready_id']==ready['id'] and ready['origin']['pilot']==pilot.relative_to(root).as_posix()
-            and ready['origin']['pilot_model_sha256']==state['model_sha256']==sha(pilot/'model.pt'),
+            and ready['origin']['pilot_model_sha256']==state['model_sha256'],
             'PPO source changed since this distillation; do not overwrite a newer learner')
         require(report['handoff_sha256']==state['handoff_sha256'] and sha(distilled/'model.pt')==report['model_sha256'],'Distilled lineage/weights differ')
-        model,new_raw=checkpoint.load(distilled/'model.pt');_,old_raw=checkpoint.load(pilot/'model.pt')
+        model,new_raw=checkpoint.load(distilled/'model.pt');_,old_raw=checkpoint.load(pilot_model)
         require(not model.core.utility_calibration['ready'],'Distilled model must await fresh utility checking')
         optimizer=None;phase='p2-distilled'
         if old_raw['training']['phase']=='joint' and old_raw['optimizer'] is not None:
@@ -37,7 +39,7 @@ def continue_pilot(root,pilot,distilled,output):
             torch.cuda.set_rng_state_all(old_raw['cuda_rng'])
         model_id=checkpoint.save(out/'model.pt',model,optimizer,training=dict(phase=phase,p2_distillation=report,
             scope='Fresh-rollout successor; old PPO moments retained when compatible'))
-        new_state=copy.deepcopy(state);new_state.update(model_id=model_id,model_sha256=sha(out/'model.pt'),
+        new_state=copy.deepcopy(state);new_state.update(format=checkpoint.PILOT,contract=contract(),model_id=model_id,model_sha256=sha(out/'model.pt'),model_path='model.pt',
             p2_parent=dict(pilot=pilot.relative_to(root).as_posix(),sha256=state['model_sha256'],teacher=report['teacher_id']))
         write_json(out/'state.json',new_state)
         write_json(out/'pins.json',dict(paths=[(out/'model.pt').relative_to(root).as_posix(),(out/'initial.pt').relative_to(root).as_posix(),

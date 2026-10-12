@@ -2,6 +2,7 @@
 from functools import lru_cache
 import hashlib
 import json
+import math
 from pathlib import Path
 
 from jsonschema import Draft202012Validator
@@ -30,8 +31,18 @@ def validate(kind, value):
         if len(value["own_hand"]) != value["players"][value["seat"]]["hand_count"]:
             raise ValueError("Private hand count inconsistent")
     if kind == "result":
-        if [s["seat"] for s in value["seats"]] != list(range(4)) or abs(sum(s["utility"] for s in value["seats"]) - 1) > 1e-9:
+        seats = value["seats"]
+        if ([s["seat"] for s in seats] != list(range(4)) or
+                any(not math.isfinite(s["utility"]) for s in seats) or
+                abs(sum(s["utility"] for s in seats) - 1) > 1e-9):
             raise ValueError("Invalid four-seat result")
+        scores = [(s["vp"], s["income"], s["cash"]) for s in seats]
+        ranks = [1 + sum(other > score for other in scores) for score in scores]
+        winners = ranks.count(1)
+        if any(s["rank"] != rank or
+               abs(s["utility"] - (1.0 / winners if rank == 1 else 0.0)) > 1e-9
+               for s, rank in zip(seats, ranks)):
+            raise ValueError("Result disagrees with official ranks/tiebreaks")
     return value
 
 

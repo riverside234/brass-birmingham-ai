@@ -126,7 +126,7 @@ class SelfplayReviewTests(unittest.TestCase):
             self.assertEqual(cfg['update']['kl_probe_rows'],2048);self.assertEqual(cfg['update']['target_kl'],.01)
             self.assertEqual((cfg['search']['seconds'],cfg['search']['pending_paths'],cfg['search']['batch_size']),(12.,2,2))
             self.assertEqual((cfg['search_every_games'],cfg['search_ready_games'],cfg['search_games'],cfg['distill_steps']),(160,640,4,8))
-            self.assertEqual(cfg['search_wall_fraction'],7/9);self.assertEqual(cfg['legacy_budget']['seconds'],1.)
+            self.assertEqual(cfg['search_wall_fraction'],.5);self.assertEqual(cfg['legacy_budget']['seconds'],1.)
 
 
 if __name__=='__main__':unittest.main()

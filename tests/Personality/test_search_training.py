@@ -118,6 +118,20 @@ class TrainingTests(unittest.TestCase):
             for key,state in before['optimizer']['state'].items():
                 for name,tensor in state.items():self.assertTrue(torch.equal(tensor,after['optimizer']['state'][key][name]))
             self.assertEqual(after['training']['phase'],'joint')
+            # P1's immutable pointer, not a stale convenience copy, also feeds
+            # the P2 distillation successor and its preserved Adam state.
+            committed=pilot/'joint-0020/model.pt';committed.parent.mkdir()
+            committed.write_bytes((pilot/'model.pt').read_bytes())
+            pilot_state=read_json(pilot/'state.json');pilot_state['model_path']='joint-0020/model.pt'
+            write_json(pilot/'state.json',pilot_state)
+            (pilot/'model.pt').write_bytes(b'stale convenience copy')
+            with patch('brass_ai.personality.search.continuation.load',return_value=(model,[],ready,{},'pool')):
+                pointed=continue_pilot(SOURCE_ROOT,pilot,directory/'distilled',directory/'successor-pointed')
+            self.assertTrue(pointed['ppo_optimizer_preserved'])
+            successor=read_json(directory/'successor-pointed/state.json')
+            self.assertEqual(successor['model_path'],'model.pt')
+            self.assertEqual(checkpoint.committed_path(directory/'successor-pointed',successor),
+                             directory/'successor-pointed/model.pt')
 
 
 if __name__=='__main__':unittest.main()

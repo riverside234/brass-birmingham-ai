@@ -68,15 +68,47 @@ def active(run,allow_owner=False):
 
 
 @contextmanager
+def _run_guard(run):
+    """Serialize marker replacement, including the stale-marker recovery gap.
+
+    Keep the guard inode stable outside the run; unlinking a locked guard would
+    let another contender lock a different inode. The OS releases it on crash.
+    """
+    from brass_ai.learning.contracts import digest
+    directory=run.parent/'.run-locks'
+    require(not link(directory),'Linked run guard directory')
+    directory.mkdir(exist_ok=True)
+    path=directory/(digest(os.path.normcase(str(run)))+'.lock')
+    require(not link(path),'Linked run guard')
+    with path.open('a+b') as handle:
+        handle.seek(0)
+        try:
+            if os.name=='nt':
+                import msvcrt
+                msvcrt.locking(handle.fileno(),msvcrt.LK_NBLCK,1)
+            else:
+                import fcntl
+                fcntl.flock(handle.fileno(),fcntl.LOCK_EX|fcntl.LOCK_NB)
+        except OSError as error:
+            raise ValueError('Run is active in another process') from error
+        try:yield
+        finally:
+            handle.seek(0)
+            if os.name=='nt':msvcrt.locking(handle.fileno(),msvcrt.LK_UNLCK,1)
+            else:fcntl.flock(handle.fileno(),fcntl.LOCK_UN)
+
+
+@contextmanager
 def run_lock(run):
-    run=Path(run);run.mkdir(parents=True,exist_ok=True);path=run/'.active-run.json'
-    require(not active(run),'Run is active in another process')
-    if path.exists(): path.unlink()
-    token=uuid.uuid4().hex
-    with path.open('x',encoding='utf-8') as f: json.dump(dict(pid=os.getpid(),host=socket.gethostname(),token=token),f)
-    try: yield
-    finally:
-        if path.exists() and read(path).get('token')==token: path.unlink()
+    run=Path(run).resolve();run.mkdir(parents=True,exist_ok=True);path=run/'.active-run.json'
+    with _run_guard(run):
+        require(not active(run),'Run is active in another process')
+        if path.exists(): path.unlink()
+        token=uuid.uuid4().hex
+        with path.open('x',encoding='utf-8') as f: json.dump(dict(pid=os.getpid(),host=socket.gethostname(),token=token),f)
+        try: yield
+        finally:
+            if path.exists() and read(path).get('token')==token: path.unlink()
 
 
 def strings(value):
@@ -111,6 +143,18 @@ def controls(artifacts):
 
 
 def references(root,run):
+    # Other owned runs can retire their control directories after enumeration.
+    # Rebuild the complete graph on that race instead of silently dropping an
+    # unread dependency or aborting training after an otherwise valid commit.
+    # Persistent missing inputs still fail closed; never delete from a partial
+    # graph and never reuse an earlier pass's pins.
+    for attempt in range(3):
+        try:return _references(root,run)
+        except FileNotFoundError:
+            if attempt==2:raise
+
+
+def _references(root,run):
     """Small control files only. Historical reports do not pin every old replay."""
     pins={};control=[];quarantined={}
     # Repeated manifests often name the same paths. Resolve once in this read
@@ -379,13 +423,28 @@ def purge(root,run,config=RETENTION,*,automatic=False):
 def restore(root,manifest):
     root=Path(root).resolve();manifest=project_path(root,manifest);data=read(manifest)
     _,run=owned(root,data['run']);safe(run,manifest);require(not active(run),'Cannot restore an active run')
+    with run_lock(run):
+        return _restore(run,manifest,read(manifest))
+
+
+def _restore(run,manifest,data):
     count=0
     for entry in data['entries']:
         if not (entry.get('moved') or entry.get('moving')) or entry.get('restored') or entry.get('deleted'): continue
         source=safe(run,run/entry['quarantine']);destination=safe(run,run/entry['path'])
+        # The rename and journal publication are separate durable operations.
+        # Complete an interrupted restore only when its recorded intent and
+        # exact destination bytes agree; never treat an arbitrary file as ours.
+        if entry.get('restoring') and not source.exists() and destination.exists():
+            require(sha(destination)==entry['sha256'],'Restored dependency changed')
+            entry.update(restored=True,restoring=False)
+            write_json(manifest,data);count+=1
+            continue
         if entry.get('moving') and destination.exists() and not source.exists(): continue
         require(not destination.exists(),'Restore would overwrite a current artifact')
         require(sha(source)==entry['sha256'],'Quarantine changed')
-        destination.parent.mkdir(parents=True,exist_ok=True);source.replace(destination);entry['restored']=True
+        entry['restoring']=True;write_json(manifest,data)
+        destination.parent.mkdir(parents=True,exist_ok=True);source.replace(destination)
+        entry.update(restored=True,restoring=False)
         write_json(manifest,data);count+=1
     return dict(restored_files=count)

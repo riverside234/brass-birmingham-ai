@@ -39,6 +39,23 @@ def contract():
     return dict(model=MODEL, goal_schema=digest(schema()), base=compatibility(), source=source_id())
 
 
+def accepted_contract(recorded):
+    """Only an exact, explicitly reviewed P0/P1 persistence migration is allowed."""
+    current=contract()
+    if recorded==current:return None
+    path=CONFIG_DIR.parent/'personality/source-migrations.json'
+    receipt=read_json(path) if path.is_file() else {}
+    require(receipt.get('format')=='personality-source-migrations/1.0.0',
+        'Personality contract/source differs; no reviewed migration')
+    matches=[entry for entry in receipt.get('migrations',[])
+        if entry.get('from_contract')==recorded and entry.get('to_contract')==current]
+    require(len(matches)==1 and {k:v for k,v in recorded.items() if k!='source'}==
+        {k:v for k,v in current.items() if k!='source'},'Personality contract/source differs')
+    require(matches[0].get('kind')=='p0-p1-persistence-only/1.0.0','Unsupported personality migration')
+    return dict(version=matches[0]['kind'],receipt=digest(matches[0]),
+        from_source=recorded['source'],to_source=current['source'])
+
+
 def context(profile='neutral', intent=None):
     value=dict(format=CONTEXT,profile=profile,saved_intent=intent)
     context_vector(value)

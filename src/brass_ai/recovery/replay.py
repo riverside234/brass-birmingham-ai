@@ -97,6 +97,9 @@ def check_game(game, arrays=None,*,validated_inputs=False):
         finite_vector([b['probability']],1,0,1); require(b['probability'] > 0,'Zero behavior probability')
         finite_vector([b['temperature']],1,0);finite_vector([row['seconds']],1,0)
         validate_teacher(row['teacher'],len(row['choices']))
+        if row['teacher'] is not None and row['teacher']['source'] in ('ismcts-root-visits/1.0.0','ismcts-root-visits/1.1.0','ismcts-root-visits/1.2.0'):
+            require(row['teacher']['legal_ids']==[c['id'] for c in row['choices']] and
+                    row['teacher']['observer']==row['seat'], 'Teacher action order/observer mismatch')
         encoded.append(e)
     require({r['seat'] for r in game['records']} == set(range(4)), 'Missing seat trajectories')
     return CheckedGame(game).bind(encoded)

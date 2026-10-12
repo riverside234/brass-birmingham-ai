@@ -46,15 +46,19 @@ class BrassSpielGame(pyspiel.Game):
             from brass_ai.recovery.host_runtime import training_host
             directory=training_host(self.root,'search')
         self.host = RulesHost(directory, mono=self.mono)
-        self.lock, self.owner = threading.RLock(), None
-        self.composition = read_json(self.root/'configs/contracts/v0.2.0/card-composition.json')
-        self.host.reset(1)
-        if fast:self.host.enable_fastpath()
-        template = self.host.call('checkpoint')['setup']
-        # Only public board slots and the full merchant multiset, not a sampled deal.
-        self.merchant_slots = [m['id'] for m in template['merchants']]
-        self.merchant_pool = Counter(json.dumps(m.get('types') or []) for m in template['merchants'])
-        require(len(self.merchant_slots)==9 and sum(self.merchant_pool.values())==9, 'Four-player merchant inventory changed')
+        try:
+            self.lock, self.owner = threading.RLock(), None
+            self.composition = read_json(self.root/'configs/contracts/v0.2.0/card-composition.json')
+            self.host.reset(1)
+            if fast:self.host.enable_fastpath()
+            template = self.host.call('checkpoint')['setup']
+            # Only public board slots and the full merchant multiset, not a sampled deal.
+            self.merchant_slots = [m['id'] for m in template['merchants']]
+            self.merchant_pool = Counter(json.dumps(m.get('types') or []) for m in template['merchants'])
+            require(len(self.merchant_slots)==9 and sum(self.merchant_pool.values())==9, 'Four-player merchant inventory changed')
+        except BaseException:
+            self.host.close()
+            raise
 
     def close(self): self.host.close()
 

@@ -172,12 +172,19 @@ class DeploymentTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError,'another'):evaluation.human_review(v,p,packet,rows,review,Gates())
 
     def test_p4_sources_do_not_change_step5_or_p0_p3_contracts(self):
-        self.assertEqual(implementation_id(),'f739475371ce3d0a7dfe1c505780513a130474de3c17b8bb4501da0b67b017b3')
+        from brass_ai.personality.search.contracts import identity as search_identity
         # P0/P1 fixes legitimately change their source contract. P4 remains a
         # separate package; it must not enter the base source-file set.
         base=SOURCE_ROOT/'src/brass_ai/personality'
-        self.assertEqual(source_id(),digest({p.name:p.read_text(encoding='utf-8') for p in sorted(base.glob('*.py'))}))
-        self.assertTrue(identity()['source']);self.assertTrue(repertoire_identity()['source'])
+        self.assertEqual(source_id(),digest({p.name:p.read_text(encoding='utf-8').replace('\r\n','\n') for p in sorted(base.glob('*.py'))}))
+        def upstream():return (implementation_id(),source_id(),search_identity.__wrapped__(),repertoire_identity())
+        before=upstream();deployment=identity.__wrapped__();read_text=Path.read_text
+        def changed(path,*args,**kwargs):
+            value=read_text(path,*args,**kwargs)
+            return value+'\n# changed P4 source fixture\n' if path.parent==base/'deployment' and path.suffix=='.py' else value
+        with patch.object(Path,'read_text',changed):
+            self.assertEqual(upstream(),before)
+            self.assertNotEqual(identity.__wrapped__()['source'],deployment['source'])
 
     def test_blind_cases_cover_seats_setups_members_and_do_not_change_with_chunk_order(self):
         v=candidate(16,8);jobs=panels.jobs_for(v,list(range(8)),3)

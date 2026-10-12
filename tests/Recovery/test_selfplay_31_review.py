@@ -14,6 +14,7 @@ from brass_ai.recovery.config import CURRICULUM, table_kind, table_rotation, tea
 from brass_ai.recovery import diagnostics, teacher_schedule as schedule
 from brass_ai.recovery.league import schedule_evaluations
 from brass_ai.recovery.resume import check_signature
+from brass_ai.recovery.utility import reward_spec
 from brass_ai.step5.league import implementation_id, pottery_metrics, write_json
 from fixtures import game, position
 from test_teacher_schedule import Clock, Planner, Decider
@@ -59,8 +60,14 @@ class Selfplay31ReviewTests(unittest.TestCase):
         games=[copy.deepcopy(game()) for _ in range(2)]
         for i,g in enumerate(games):g['game_id']=f'game-{i}';g['setup_group']=f'group-{i}'
         kinds={'group-0':'selfplay','group-1':'historical'}
+        def seat_totals(count):
+            return {str(seat):dict(seat_games=count,win_share_sum=count*win,
+                placement_sum=count*rank,vp_sum=count*vp,vp_square_sum=count*vp**2)
+                for seat,(win,rank,vp) in enumerate(((.5,1,100),(.5,1,100),(0.,3,80),(0.,4,50)))}
         expected=dict(matches=match_report(games),economy=diagnostics.economy(games),diversity=pottery_metrics(games),
-            by_composition={k:dict(matches=match_report([g]),economy=diagnostics.economy([g]),diversity=pottery_metrics([g]))
+            learner_by_seat=seat_totals(2),
+            by_composition={k:dict(matches=match_report([g]),economy=diagnostics.economy([g]),
+                                  diversity=pottery_metrics([g]),learner_by_seat=seat_totals(1))
                             for k,g in zip(kinds.values(),games)},
             measured_policy='frozen incoming collection policy, before this update')
         with patch.object(diagnostics,'economy',wraps=diagnostics.economy) as economy:
@@ -87,12 +94,15 @@ class Selfplay31ReviewTests(unittest.TestCase):
                 schedule_evaluations(SOURCE_ROOT,run,state,'cpu',None)
             self.assertEqual(measured.call_count,1);self.assertEqual(state['evaluations'][0]['games'],4)
 
-    def test_completed_32_generation_run_has_reviewed_same_config_continuation(self):
+    def test_completed_32_generation_run_has_reviewed_combined_reward_continuation(self):
         state=read(SOURCE_ROOT/'results/selfplay-v2-31/state.json');old=state['signature']
         self.assertEqual((state['iteration'],state['games_done']),(32,10240))
         cfg=read(SOURCE_ROOT/'configs/step5/lab.json');cfg['rehearsal_manifest']=old['imitation_source']['manifest']
-        for key in ('learning_rate','update','curriculum','search','imitation'):
+        for key in ('learning_rate','update','curriculum','imitation'):
             self.assertEqual(cfg[key],old['config'][key])
+        self.assertEqual(old['config']['search']['contract'],'masked-ismcts/1.1.0')
+        self.assertEqual(cfg['search'],dict(old['config']['search'],
+            contract='masked-ismcts/1.2.0',reward=reward_spec(cfg),utility_scale=1.2))
         self.assertEqual(compatibility(),old['compatibility'])
         signature=dict(old,config=cfg,implementation=implementation_id())
         self.assertTrue(check_signature(state,signature,True))

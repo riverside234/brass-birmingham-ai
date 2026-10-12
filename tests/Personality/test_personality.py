@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 import tempfile
 import unittest
+from unittest.mock import patch
 
 import numpy as np
 import torch
@@ -24,7 +25,8 @@ from brass_ai.personality.contracts import (context,context_vector,CONTEXT_DIM,F
 from brass_ai.personality.model import import_parent,base_outputs
 from brass_ai.personality.labels import goal_labels,loss_rows,confidence_report,events
 from brass_ai.personality.traces import examples
-from brass_ai.personality.training import fit,forward,execute
+from brass_ai.personality.training import fit,forward,execute,initialize
+from brass_ai.personality import training
 from brass_ai.personality.collection import distribution
 
 
@@ -67,9 +69,26 @@ class PersonalityTests(unittest.TestCase):
         optimizer2,_=fit(restored,data,'cpu',epochs=1,resume=raw)
         self.assertGreater(float(next(iter(optimizer2.state.values()))['step']),float(next(iter(optimizer.state.values()))['step']))
 
+    def test_legacy_pilot_layout_has_strict_hash_validation(self):
+        directory=self.temp();(directory/'model.pt').write_bytes(b'legacy-checkpoint-fixture')
+        state=dict(format='personality-pilot/1.0.0',model_sha256=sha(directory/'model.pt'))
+        self.assertEqual(checkpoint.committed_path(directory,state),directory/'model.pt')
+        state['format']=checkpoint.PILOT
+        with self.assertRaisesRegex(ValueError,'Missing committed'):
+            checkpoint.committed_path(directory,state)
+        state['model_path']='model.pt'
+        self.assertEqual(checkpoint.committed_path(directory,state),directory/'model.pt')
+        (directory/'model.pt').write_bytes(b'changed')
+        with self.assertRaisesRegex(ValueError,'saved model changed'):
+            checkpoint.committed_path(directory,state)
+
     def test_handoff_verifies_parent_copies_dependencies_and_pins_cleanup(self):
         directory=self.temp();run=qualified_run(directory/'source')
+        # Pinning must protect the source without editing the completed run.
+        write_json(run/'pins.json',dict(paths=[],note='pre-existing source pins'))
+        before={p.relative_to(run).as_posix():sha(p) for p in run.rglob('*') if p.is_file()}
         source=implementation_id();manifest=handoff.create(SOURCE_ROOT,run,directory/'handoff',reference_count=2)
+        self.assertEqual(before,{p.relative_to(run).as_posix():sha(p) for p in run.rglob('*') if p.is_file()})
         loaded,model=handoff.load(directory/'handoff')
         self.assertEqual(manifest,loaded);self.assertEqual(model.config.utility,specification())
         self.assertEqual(len(manifest['traces']),1);self.assertEqual(len(manifest['references']),1)
@@ -94,6 +113,16 @@ class PersonalityTests(unittest.TestCase):
         write_json(run/'best.json',best);write_json(run/'state.json',state)
         (run/'best.pt').write_bytes(b'tampered')
         with self.assertRaisesRegex(ValueError,'bytes changed'):handoff.inspect(SOURCE_ROOT,run)
+
+    def test_failed_handoff_does_not_change_source_and_keeps_external_pins(self):
+        directory=self.temp();run=qualified_run(directory/'source')
+        before={p.relative_to(run).as_posix():sha(p) for p in run.rglob('*') if p.is_file()}
+        with patch('brass_ai.personality.handoff.shutil.copyfile',side_effect=OSError('copy interrupted')):
+            with self.assertRaisesRegex(OSError,'copy interrupted'):
+                handoff.create(SOURCE_ROOT,run,directory/'handoff')
+        self.assertEqual(before,{p.relative_to(run).as_posix():sha(p) for p in run.rglob('*') if p.is_file()})
+        self.assertIn((run/'iteration-0000/games.jsonl.gz').resolve(),references(SOURCE_ROOT,run))
+        self.assertFalse((directory/'handoff/manifest.json').exists())
 
     def test_handoff_rejects_reward_and_gate_mismatch(self):
         directory=self.temp();run=qualified_run(directory/'source',traces=False)
@@ -189,6 +218,60 @@ class PersonalityTests(unittest.TestCase):
         state=read_json(directory/'pilot/state.json');self.assertEqual(state['warmup_runs'],2)
         self.assertEqual(before,sha(run/'state.json'))
         self.assertTrue(first['parent_outputs_preserved'] and second['parent_outputs_preserved'])
+
+    def test_interrupted_pilot_publication_preserves_committed_model_and_optimizer(self):
+        directory=self.temp();run=qualified_run(directory/'source')
+        bundle=directory/'handoff';pilot=directory/'pilot'
+        handoff.create(SOURCE_ROOT,run,bundle,trace_shards=1)
+        execute(SOURCE_ROOT,bundle,pilot,epochs=1)
+        state=read_json(pilot/'state.json');_,raw=checkpoint.load(pilot/'model.pt')
+        def interrupted(path,value):
+            if Path(path)==pilot/'state.json':raise OSError('state publication interrupted')
+            return write_json(path,value)
+        with patch.object(training,'write_json',side_effect=interrupted):
+            with self.assertRaisesRegex(OSError,'state publication interrupted'):
+                execute(SOURCE_ROOT,bundle,pilot,epochs=1)
+        *_,restored,restored_state,restored_raw=initialize(SOURCE_ROOT,bundle,pilot,'cpu')
+        self.assertEqual(restored_state,state)
+        self.assertEqual(checkpoint.model_id(restored),state['model_id'])
+        self.assertEqual(float(next(iter(restored_raw['optimizer']['state'].values()))['step']),
+                         float(next(iter(raw['optimizer']['state'].values()))['step']))
+        self.assertTrue((pilot/'warmup-0001/report.json').exists())
+        (pilot/'interrupted').mkdir()
+        (pilot/'warmup-0001').rename(pilot/'interrupted/warmup-0001')
+        execute(SOURCE_ROOT,bundle,pilot,epochs=1)
+        self.assertEqual(read_json(pilot/'state.json')['warmup_runs'],2)
+        self.assertTrue((pilot/'interrupted/warmup-0001/report.json').exists())
+
+    def test_committed_pointer_survives_interrupted_convenience_copy_and_resumes(self):
+        directory=self.temp();run=qualified_run(directory/'source')
+        bundle=directory/'handoff';pilot=directory/'pilot'
+        handoff.create(SOURCE_ROOT,run,bundle,trace_shards=1)
+        execute(SOURCE_ROOT,bundle,pilot,epochs=1)
+        old_alias=sha(pilot/'model.pt')
+        with patch.object(training.shutil,'copyfile',side_effect=OSError('convenience copy interrupted')):
+            with self.assertRaisesRegex(OSError,'convenience copy interrupted'):
+                execute(SOURCE_ROOT,bundle,pilot,epochs=1)
+        self.assertEqual(sha(pilot/'model.pt'),old_alias)
+        *_,model,state,raw=initialize(SOURCE_ROOT,bundle,pilot,'cpu')
+        self.assertEqual(state['warmup_runs'],2)
+        self.assertEqual(checkpoint.model_id(model),state['model_id'])
+        path=checkpoint.committed_path(pilot,state)
+        self.assertIn(path.resolve(),references(SOURCE_ROOT,pilot))
+        # The P2 preparation entry point must load the committed generation
+        # even though its convenience copy still contains the previous one.
+        from brass_ai.personality.search.readiness import prepare
+        def collected(*args,**kwargs):
+            self.assertEqual(checkpoint.model_id(args[2]),state['model_id'])
+            raise RuntimeError('reached P2 collection')
+        with patch('brass_ai.personality.search.readiness.collect_examples',side_effect=collected):
+            with self.assertRaisesRegex(RuntimeError,'reached P2 collection'):
+                prepare(SOURCE_ROOT,bundle,pilot,directory/'ready',games=1,calibration_games=1)
+        execute(SOURCE_ROOT,bundle,pilot,epochs=1)
+        self.assertEqual(read_json(pilot/'state.json')['warmup_runs'],3)
+        path.write_bytes(b'tampered authoritative checkpoint')
+        with self.assertRaisesRegex(ValueError,'saved model changed'):
+            checkpoint.committed_path(pilot,state)
 
 
 if __name__=='__main__':unittest.main()

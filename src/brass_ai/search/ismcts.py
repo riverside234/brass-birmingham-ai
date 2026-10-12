@@ -265,10 +265,10 @@ class MaskedISMCTS:
         except SearchIncomplete:self.interrupted+=max(1,len(slots))
         finally:
             for generator,_,_ in slots:generator.close()
-        if getattr(self,'time_budget_primary',False):
-            # Loop-boundary expiry also retires pending paths; none are backed
-            # up as completed evidence, and each launch is counted once.
-            self.interrupted=started-self.completed
+        # Every budget mode retires pending paths at loop-boundary expiry.
+        # Count only launched trajectories, including those closed above;
+        # cancellation before the first launch is not an interrupted attempt.
+        self.interrupted=started-self.completed
         self.metrics['attempted']=started
         self.metrics['elapsed_seconds']=time.monotonic()-search_began
         self.metrics['completed_per_second']=self.completed/max(1e-9,self.metrics['elapsed_seconds'])

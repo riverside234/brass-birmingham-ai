@@ -43,9 +43,15 @@ class LearningTests(unittest.TestCase):
         self.model = FourSeatNet(ModelConfig.preset('small')).eval()
 
     def test_size_presets_and_fresh_initialization(self):
-        for size, expected in [('small', 500000), ('medium', 2000000), ('large', 8000000)]:
+        # The active recipe uses the versioned residual architecture; the old
+        # R2 dense 8M preset remains loadable only through explicit old configs.
+        for size, expected in [('small', 619021), ('medium', 1840109)]:
             model = FourSeatNet(ModelConfig.preset(size))
-            self.assertLess(abs(model.parameter_count - expected), expected * 0.2)
+            self.assertEqual(model.config.architecture, 'brass-four-seat-mlp-resnet/1.0.0')
+            self.assertEqual(model.parameter_count, expected)
+            self.assertLessEqual(model.parameter_count, 2000000)
+        with self.assertRaisesRegex(ValueError, '<=2M residual models'):
+            ModelConfig.preset('large')
         second = FourSeatNet(ModelConfig.preset('small'))
         self.assertNotEqual(model_id(self.model), model_id(second))
 

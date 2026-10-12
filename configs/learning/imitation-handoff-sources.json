@@ -75,6 +75,12 @@
       "implementation": "f19424e3d4da14f8759fbc5877bfd459771ca54194d6945d2dfcb90ccc23aa5d",
       "learning_compatibility": "c349e816f2e301ea2a3b438902059cffe868f48e131f7c120691d37cd1c409d2",
       "reason": "Single-GPU throughput review 1.0.0: direct single-device service and automatic one-GPU CLI default, faster strict JSON decoding, content-sealed actor-writer validation reuse, replay-reader startup overlapped with collection, and pass-local retention path resolution. The replay reader/validator is byte-identical; existing feature-cache receipts remain valid. Architecture, encoding, PPO, rewards, budgets, schedules, reader/worker counts, data/checkpoint formats and IL losses are unchanged. Preserve committed weights, Adam/RNG and progress; refresh utility calibration on fresh ordinary rollouts and reject old-source teacher targets. Completed IL weights remain compatible."
+    },
+    {
+      "implementation": "aeef0917b3645bdbdfe8dcb9d2bfd34ab05593c8b5fb9433dbc1e988b4ef131f",
+      "learning_compatibility": "c349e816f2e301ea2a3b438902059cffe868f48e131f7c120691d37cd1c409d2",
+      "review_version": "step5-comprehensive-bug-audit/1.0.0",
+      "reason": "Reviewed host stderr/transport and manifest admission, search-constructor cleanup and archived-work accounting, atomic run ownership, interrupted retention restore, racing dependency scans and teacher ordered-action/observer attribution. Preserves model/encoder/loss/reward, learning compatibility, datasets, budgets, worker counts, opponent and evaluation schedules. Continue committed iterations with exact weights, Adam/RNG, counters, champion and population. Refresh utility calibration from fresh ordinary data; reject old-source search targets. Runtime validation code changes invalidate derived feature-cache receipts; authoritative audited heuristic data stays compatible. Completed fresh IL handoff retains original manifest/checkpoint/lineage validation."
     }
   ]
 }

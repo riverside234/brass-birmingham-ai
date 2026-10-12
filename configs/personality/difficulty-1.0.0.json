@@ -1,0 +1,14 @@
+{
+  "format": "personality-tier-profiles/1.0.0",
+  "hint_mode": "public",
+  "selection": "supported-root-visits",
+  "near_best_tolerance": 0.0,
+  "workers": 2,
+  "tensor_threads": 2,
+  "cpu_role": "laptop",
+  "tiers": {
+    "easy": {"seconds": 2.0},
+    "medium": {"seconds": 5.0},
+    "hard": {"seconds": 12.0}
+  }
+}

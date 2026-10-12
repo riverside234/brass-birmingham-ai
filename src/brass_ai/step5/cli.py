@@ -107,24 +107,26 @@ def main(argv=None):
     elif a.command == 'promote':
         result = promote(root, a.checkpoint, a.report, a.output)
     elif a.command=='cleanup':
-        from brass_ai.recovery.retention import prune,purge,active,owned
+        from brass_ai.recovery.retention import prune,purge,active,owned,run_lock
         from brass_ai.recovery.config import RETENTION
         _,run=owned(root,a.run);require(not active(run),'Cannot clean an active run')
-        result=prune(root,run,config.get('retention',RETENTION),apply=a.apply)
         require(not a.purge or a.apply,'Purge requires --apply')
-        if a.purge: result['purge']=purge(root,run,config.get('retention',RETENTION))
+        with run_lock(run):
+            result=prune(root,run,config.get('retention',RETENTION),apply=a.apply)
+            if a.purge: result['purge']=purge(root,run,config.get('retention',RETENTION))
     elif a.command=='restore':
         from brass_ai.recovery.retention import restore
         result=restore(root,a.manifest)
     elif a.command=='pin':
-        from brass_ai.recovery.retention import owned,safe,active
+        from brass_ai.recovery.retention import owned,safe,active,run_lock
         from brass_ai.step5.league import write_json
         _,run=owned(root,a.run);require(not active(run),'Cannot change pins for an active run')
-        paths=[safe(run,project_path(root,p)) for p in a.paths]
-        require(all(p.is_file() for p in paths),'Pin files must exist inside the owned run')
-        path=run/'pins.json';previous=read_json(path) if path.exists() else dict(paths=[])
-        previous['paths']=sorted(set(previous['paths']+[p.relative_to(root).as_posix() for p in paths]))
-        write_json(path,previous);result=previous
+        with run_lock(run):
+            paths=[safe(run,project_path(root,p)) for p in a.paths]
+            require(all(p.is_file() for p in paths),'Pin files must exist inside the owned run')
+            path=run/'pins.json';previous=read_json(path) if path.exists() else dict(paths=[])
+            previous['paths']=sorted(set(previous['paths']+[p.relative_to(root).as_posix() for p in paths]))
+            write_json(path,previous);result=previous
     elif a.command=='lab-bank-prepare':
         from brass_ai.recovery.era_bank import current
         result=current(root)

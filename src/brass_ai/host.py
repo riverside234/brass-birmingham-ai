@@ -8,8 +8,10 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+from collections import deque
 from pathlib import Path
 import subprocess
+import threading
 
 PROTOCOL = "0.2.0"
 ROOT = Path(__file__).resolve().parents[2]
@@ -26,6 +28,9 @@ class RulesHost:
             manifest = json.loads((directory / "runtime.json").read_text(encoding="utf-8-sig"))
             if manifest["rules"] != "steam-brass-patch-1.1.0":
                 raise HostError("Unknown rules manifest")
+            names = [entry["name"] for entry in manifest["files"]]
+            if names.count("BrassHost.exe") != 1 or len(names) != len(set(names)):
+                raise HostError("Runtime manifest must pin each dependency and BrassHost.exe exactly once")
             pins = json.loads((ROOT / "configs/rules/runtime-dependencies-1.1.0.json").read_text(encoding="utf-8-sig"))
             expected = {f["name"]: f["sha256"] for f in pins["files"]}
             found = {f["name"]: f["sha256"] for f in manifest["files"] if f["name"] != "BrassHost.exe"}
@@ -44,6 +49,15 @@ class RulesHost:
         self.last_native_timing = None
         self.fast = False
         self.fast_checked = False
+        # A worker can emit diagnostics while Python waits for its stdout reply.
+        # Drain fixed-size blocks so both pipe backpressure and retained output
+        # stay bounded even when diagnostics contain no newline.
+        self.errors = deque(maxlen=16)
+        def drain_errors():
+            while chunk := self.process.stderr.buffer.read(2048):
+                self.errors.append(chunk.decode("utf-8", errors="replace"))
+        self._stderr_thread = threading.Thread(target=drain_errors, daemon=True)
+        self._stderr_thread.start()
 
     def enable_fastpath(self):
         try:self.fast=self.call('capabilities').get('fast')=='training-host/1.0.0'
@@ -55,12 +69,22 @@ class RulesHost:
     def call(self, op, **arguments):
         self.sequence += 1
         request = {"id": str(self.sequence), "protocol": PROTOCOL, "op": op, **arguments}
-        self.process.stdin.write(json.dumps(request, separators=(",", ":")) + "\n")
-        self.process.stdin.flush()
-        line = self.process.stdout.readline()
+        payload = json.dumps(request, separators=(",", ":")) + "\n"
+        self.last_native_timing = None
+        try:
+            self.process.stdin.write(payload)
+            self.process.stdin.flush()
+            line = self.process.stdout.readline()
+        except (OSError, ValueError) as error:
+            raise HostError("Worker transport failed") from error
         if not line:
             raise HostError(f"Worker exited: {self.process.poll()}")
-        reply = json.loads(line)
+        try:
+            reply = json.loads(line)
+        except ValueError as error:
+            raise HostError("Worker returned invalid JSON") from error
+        if not isinstance(reply, dict) or type(reply.get("ok")) is not bool:
+            raise HostError("Worker returned an invalid response envelope")
         self.last_native_timing = reply.get('native')
         if reply.get("id") != request["id"]:
             raise HostError("Worker correlation mismatch")
@@ -87,13 +111,18 @@ class RulesHost:
         return self.call('step_decision',game_id=context['game_id'],revision=context['revision'],choice=choice['id'],forced_limit=forced_limit)
 
     def close(self):
-        if self.process.poll() is None:
+        # Closing stdin is required even after an unexpected worker exit.
+        try:
             self.process.stdin.close()
+        except (OSError, ValueError):
+            pass
+        if self.process.poll() is None:
             try:
                 self.process.wait(timeout=5)
             except subprocess.TimeoutExpired:
                 self.process.kill()
                 self.process.wait()
+        self._stderr_thread.join()
         self.process.stdout.close()
         self.process.stderr.close()
 

@@ -59,8 +59,7 @@ def prepare(root,bundle,pilot,output,*,games=20,calibration_games=8,workers=4,de
     with run_lock(pilot):
         manifest,parent=handoff.load(bundle);state=read_json(pilot/'state.json')
         require(state['warmup_runs']>0 and state['handoff_sha256']==sha(bundle/'manifest.json'),'Finish P1 warm-up with this handoff')
-        require(sha(pilot/'model.pt')==state['model_sha256'],'P1 checkpoint changed')
-        model_path=pilot/'model.pt'
+        model_path=checkpoint.committed_path(pilot,state)
         if distilled is not None:
             model_path=distilled_source(root,pilot,state,distilled,sha(bundle/'manifest.json'))
         model,raw=checkpoint.load(model_path,device);parent=parent.to(device)

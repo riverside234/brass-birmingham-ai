@@ -52,6 +52,9 @@ class ParallelMasked(MaskedSearchPolicy):
                 replica=factory(i);replica.partition_index=i;self.replicas.append(replica)
         except BaseException:
             for p in self.replicas:p.close()
+            # The caller never receives this partially configured policy.
+            # Retire its coordinator hosts/evaluators as well as its replicas.
+            super().close()
             raise
         self.pool=ThreadPoolExecutor(max_workers=workers,thread_name_prefix='masked-private-root')
         self.decision_lock=RLock()

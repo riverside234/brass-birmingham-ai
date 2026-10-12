@@ -43,7 +43,7 @@ class ChampionTests(unittest.TestCase):
         for name in ('lab','lab-16x2','lab-24x4','lab-small','lab-reference','smoke','recovery-smoke'):
             cfg=validate_config(read(SOURCE_ROOT/f'configs/step5/{name}.json'))
             self.assertEqual(cfg['search']['reward'],specification(cfg['reward'],cfg['insolvency']))
-            self.assertEqual(cfg['champion'],CHAMPION);self.assertEqual(cfg['search_wall_fraction'],.9)
+            self.assertEqual(cfg['champion'],CHAMPION);self.assertEqual(cfg['search_wall_fraction'],.5)
             if name.startswith('lab'):
                 self.assertEqual((cfg['search']['seconds'],cfg['execution']['search_workers_per_turn']),(12.,4))
                 self.assertEqual((cfg['learning_rate'],cfg['search_every_games'],cfg['search_games'],cfg['distill_steps']),(1e-5,160,4,8))
