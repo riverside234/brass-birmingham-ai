@@ -39,9 +39,10 @@ def generate(root,output,games,config,*,seed=17100000,mono=None,partition=None,b
         admission(root,p,'training')
         require('pottery-flex' not in p,'Held-out teacher selected')
     from .legacy_search import legacy_spec
-    from .config import LEGACY_BUDGET,LEGACY_OPPONENT_WORK_BUDGET,current_work_budget
+    from .config import LEGACY_BUDGET,LEGACY_TIME_BUDGET,legacy_opponent_work_budget_config
     budget=budget or LEGACY_BUDGET
-    work_budget=current_work_budget(work_budget,LEGACY_OPPONENT_WORK_BUDGET)
+    legacy_opponent_work_budget_config(work_budget)
+    work_budget=dict(LEGACY_TIME_BUDGET)
     teacher_specs={p:legacy_spec(root,p,budget,work_budget=work_budget) for p in profiles}
     spec=dict(format='v3-demonstration-collection/1.0.0',games=games,seed=seed,partition=partition,
         teachers=teacher_specs,execution=config,budget=budget,implementation=implementation_id(),compatibility=compatibility())
@@ -112,11 +113,13 @@ def audit(root,paths,output,*,mono=None,workers=1,budget=None,work_budget=None):
         allowed.update(teachers(root,budget));calibration=dict(format='direct-v3-s1-budget/1.0.0' if mode=='S1' else 'direct-masked-budget/1.0.0',budget=budget,
             parents=sorted(read(root/'training/opponents/pool.json')['training']))
         if mode=='masked_ismcts' and budget['role'] in ('lab','reference'):
-            from .config import LEGACY_OPPONENT_WORK_BUDGET,current_work_budget
+            from .config import LEGACY_OPPONENT_WORK_BUDGET,LEGACY_TIME_BUDGET,current_work_budget
             from .legacy_search import legacy_spec
-            work_budget=current_work_budget(work_budget,LEGACY_OPPONENT_WORK_BUDGET)
-            calibration['work_budgets']=[work_budget]
-            allowed.update(legacy_spec(root,p,budget,work_budget=work_budget)['policy_id'] for p in calibration['parents'])
+            work_budget=current_work_budget(work_budget,LEGACY_TIME_BUDGET)
+            old={k:v for k,v in LEGACY_OPPONENT_WORK_BUDGET.items() if k!='watchdog_seconds'}
+            old['contract']='legacy-opponent-turn-work/1.0.0'
+            calibration['work_budgets']=list({digest(w):w for w in (work_budget,LEGACY_TIME_BUDGET,LEGACY_OPPONENT_WORK_BUDGET,old)}.values())
+            allowed.update(legacy_spec(root,p,budget,work_budget=w)['policy_id'] for p in calibration['parents'] for w in calibration['work_budgets'])
     require(type(workers) is int and 1<=workers<=32,'Invalid audit CPU allowance')
     paths=sorted(set(str(project_path(root,p)) for p in paths))
     require(paths,'No demonstration replay paths supplied')

@@ -90,7 +90,7 @@ class TeacherCollectionTests(unittest.TestCase):
         self.assertEqual(report['max_observed_reuse'],2)
 
     def test_budget_rechecked_before_second_collection_and_failure_never_retries(self):
-        (report,next_due,_,spent),jobs,calls=self.run_fixture(ordinary=100.)
+        (report,next_due,_,spent),jobs,calls=self.run_fixture(ordinary=850.)
         self.assertEqual((len(jobs),next_due,spent),(4,960,210.))
         self.assertTrue(report['budget']['deferred'])
         (report,next_due,_,_),jobs,calls=self.run_fixture(failed=True)
@@ -102,9 +102,9 @@ class TeacherCollectionTests(unittest.TestCase):
         self.assertEqual((due_collections(320,640,cfg),due_collections(640,640,cfg),due_collections(960,800,cfg)),(0,1,2))
         self.assertEqual(due_collections(50000,640,cfg),2)
         self.assertEqual(due_collections(50000,640,dict(cfg,search_every_games=0)),0)
-        self.assertEqual((SEARCH_EVERY_GAMES,SEARCH_WALL_FRACTION),(160,.9))
-        self.assertAlmostEqual(search_allowance(100,0),900.)
-        self.assertAlmostEqual(search_allowance(100,300),600.)
+        self.assertEqual((SEARCH_EVERY_GAMES,SEARCH_WALL_FRACTION),(160,.5))
+        self.assertAlmostEqual(search_allowance(100,0),100.)
+        self.assertAlmostEqual(search_allowance(100,300),0.)
         self.assertEqual(search_allowance(100,1000),0.)
         for p in (SOURCE_ROOT/'configs/step5').glob('lab*.json'):
             c=validate_config(read(p))

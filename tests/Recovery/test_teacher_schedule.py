@@ -205,16 +205,16 @@ class TeacherScheduleTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError,'outside reserved'):schedule.collection_report(records,[episode])
 
     def test_active_presets_and_160_game_expanded_budget_default_lower_overrides(self):
-        self.assertEqual((SEARCH_EVERY_GAMES,SEARCH_WALL_FRACTION,SEARCH_SECONDS,SEARCH_WORKERS),(160,.9,12.,4))
+        self.assertEqual((SEARCH_EVERY_GAMES,SEARCH_WALL_FRACTION,SEARCH_SECONDS,SEARCH_WORKERS),(160,.5,12.,4))
         for path in (SOURCE_ROOT/'configs/step5').glob('lab*.json'):
             cfg=read(path);validate_config(cfg)
-            self.assertEqual((cfg['search_ready_games'],cfg['search_every_games'],cfg['search_wall_fraction']),(640,160,.9))
+            self.assertEqual((cfg['search_ready_games'],cfg['search_every_games'],cfg['search_wall_fraction']),(640,160,.5))
             self.assertEqual((cfg['search_games'],cfg['distill_steps'],cfg['search']['seconds'],cfg['execution']['search_workers_per_turn']),(4,8,12.,4))
             self.assertEqual((cfg['search']['pending_paths'],cfg['search']['batch_size']),(2,2))
             self.assertEqual(cfg['legacy_budget']['seconds'],1.)
             self.assertEqual(schedule.estimate_collection(cfg,5.),788.) # 4 games * (16 turns * 12 s + 5 s)
-        self.assertAlmostEqual(schedule.search_allowance(100,0),900.)
-        self.assertAlmostEqual(schedule.search_allowance(100,30),870.)
+        self.assertAlmostEqual(schedule.search_allowance(100,0),100.)
+        self.assertAlmostEqual(schedule.search_allowance(100,30),70.)
         self.assertEqual(schedule.search_allowance(100,960),0.)
         self.assertAlmostEqual(schedule.search_allowance(100,0,.25),100/3)
         self.assertAlmostEqual(schedule.search_allowance(100,10,.20),15.)
@@ -235,11 +235,11 @@ class TeacherScheduleTests(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError,'search wall allowance'):
                     schedule.search_allowance(100,0,fraction)
         estimate=schedule.estimate_collection(cfg,5.)
-        self.assertLess(estimate,schedule.search_allowance(400,0))
+        self.assertLess(estimate,schedule.search_allowance(400,0,.9))
         self.assertGreater(estimate,schedule.search_allowance(400,0,.50))
         self.assertGreater(estimate,schedule.search_allowance(400,2900))
         for name in ('smoke.json','recovery-smoke.json'):
-            self.assertEqual(validate_config(read(SOURCE_ROOT/'configs/step5'/name))['search_wall_fraction'],.9)
+            self.assertEqual(validate_config(read(SOURCE_ROOT/'configs/step5'/name))['search_wall_fraction'],.5)
 
 
 class HandoffCompatibilityTests(unittest.TestCase):

@@ -45,8 +45,13 @@ def check_signature(state, signature, reviewed=False):
     config_ok = previous['config'] == signature['config']
     for transition in transitions:
         changes = transition.get('config_changes', {})
-        if changes and all(previous['config'].get(k) == v['from'] for k, v in changes.items()):
+        if all(previous['config'].get(k) == v['from'] for k, v in changes.items()):
             expected = dict(previous['config'], **{k: v['to'] for k, v in changes.items()})
+            migration=transition.get('config_migration')
+            if migration is not None:
+                from .config import TIME_CONFIG_MIGRATION,time_budget_config
+                require(migration==TIME_CONFIG_MIGRATION,'Unknown reviewed configuration migration')
+                expected=time_budget_config(expected)
             config_ok |= expected == signature['config']
     require(config_ok, 'Reviewed resume requires unchanged config except explicitly pinned review changes')
     require(state['iteration'] > 0, 'Reviewed continuation requires a committed PPO generation')
@@ -161,6 +166,9 @@ def commit_transition(run, state, signature):
         config_changes={k:dict(before=previous['signature']['config'].get(k),after=v)
                         for k,v in signature['config'].items() if previous['signature']['config'].get(k)!=v}))
     updated['signature'] = signature
+    from .config import TIME_CONFIG_MIGRATION,time_budget_config
+    if signature['config']==time_budget_config(previous['signature']['config']):
+        updated['source_transitions'][-1]['config_migration']=TIME_CONFIG_MIGRATION
     from .curriculum import activate_boost
     activate_boost(updated,signature['config'])
     if 'legacy_boost' in updated and 'legacy_boost' not in previous:

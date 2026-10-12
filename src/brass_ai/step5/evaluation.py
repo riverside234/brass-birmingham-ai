@@ -52,7 +52,7 @@ def validate_evaluation_config(config):
     expected = {'format', 'players', 'host', 'setups', 'seed', 'partition', 'workers', 'batch_size',
                 'max_candidate_cells', 'threads', 'parallel_hosts', 'legacy_workers', 'search_workers',
                 'include_legacy', 'use_search', 'focus', 'search'}
-    from brass_ai.recovery.config import nn_work_budget_config,legacy_opponent_work_budget_config
+    from brass_ai.recovery.config import nn_work_budget_config,legacy_opponent_work_budget_config,time_budget
     for key,validator in (('nn_work_budget',nn_work_budget_config),
                           ('legacy_opponent_work_budget',legacy_opponent_work_budget_config)):
         if key in config:
@@ -91,12 +91,12 @@ def validate_evaluation_config(config):
     require(config['partition'] in ('validation', 'test'), 'Evaluation must use held-out setups')
     require(config['focus'] in ('neutral',) + INDUSTRIES, 'Evaluation needs a fixed neural focus')
     SearchConfig(**config['search']).validate()
-    if 'nn_work_budget' in config:
+    if 'nn_work_budget' in config and not time_budget(config['nn_work_budget']):
         count=config['nn_work_budget']['simulations_per_turn']
         workers=config['execution']['search_workers_per_turn']
         require(workers*config['search'].get('minimum_plan_visits',2)<=count<=workers*config['search']['simulations'],
                 'Evaluation NN work budget cannot support workers or exceeds simulation cap')
-    if config.get('legacy_opponent_work_budget') is not None:
+    if config.get('legacy_opponent_work_budget') is not None and not time_budget(config['legacy_opponent_work_budget']):
         count=config['legacy_opponent_work_budget']['simulations_per_turn']
         workers=config['legacy_budget']['search_workers']
         require(count%workers==0 and count//workers>=4,'Evaluation legacy work needs matched four-attempt blocks')
@@ -117,9 +117,14 @@ def evaluation_config(config, **overrides):
         elif result.get('format')=='step5-evaluation-config/1.3.0':
             result['legacy_budget']=dict(result['legacy_budget'],role='reference')
     else:raise ValueError('Historical search/evaluation recipes are retired; choose a fresh 2.2/1.3 config')
-    from brass_ai.recovery.config import NN_WORK_BUDGET,LEGACY_OPPONENT_WORK_BUDGET,current_work_budget
-    result['nn_work_budget']=current_work_budget(config.get('nn_work_budget'),NN_WORK_BUDGET)
-    result['legacy_opponent_work_budget']=current_work_budget(config.get('legacy_opponent_work_budget'),LEGACY_OPPONENT_WORK_BUDGET)
+    from brass_ai.recovery.config import NN_TIME_BUDGET,LEGACY_TIME_BUDGET,nn_work_budget_config,legacy_opponent_work_budget_config
+    # Active evaluations adopt the same versioned clocks. Archived specifications
+    # remain distinct and cannot be silently reused in an existing output folder.
+    if config.get('nn_work_budget') is not None:nn_work_budget_config(config['nn_work_budget'])
+    legacy_opponent_work_budget_config(config.get('legacy_opponent_work_budget'))
+    result['nn_work_budget']=dict(NN_TIME_BUDGET)
+    result['legacy_opponent_work_budget']=dict(LEGACY_TIME_BUDGET)
+    result['search']=dict(result['search'],seconds=NN_TIME_BUDGET['seconds_per_turn'])
     result.update({key: value for key, value in overrides.items() if value is not None})
     if 'lineups' in result and overrides.get('lineups') is None and overrides.get('include_legacy') is not None:
         result['lineups']=[n for n in result['lineups'] if not n.endswith('v3')]

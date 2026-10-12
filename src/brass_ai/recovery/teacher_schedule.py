@@ -16,14 +16,15 @@ from brass_ai.searchlab.spiel import action_id
 from brass_ai.step5.policy import inference_deadline
 from .parallel import ParallelMasked
 from .config import (SEARCH_WALL_FRACTION,teacher_search_config,teacher_work_budget_config,
-                     nn_work_budget_config)
+                     nn_work_budget_config,time_budget,TEACHER_TIME_BUDGET)
 
 
 CONTRACT='four-phase-teacher-turns/1.0.0'
 PHASES=(('canal_early','CanalEra',1,4),('canal_late','CanalEra',5,8),
         ('rail_early','RailEra',1,6),('rail_late','RailEra',7,8))
 WORK_COUNTERS=frozenset(('allocated_simulations','attempted_simulations','work_exhausted_turns',
-                        'deadline_limited_turns','work_budget_exhausted_choices'))
+                        'deadline_limited_turns','work_budget_exhausted_choices',
+                        'time_budget_exhausted_turns','finalization_seconds'))
 
 
 def phase_for(context):
@@ -47,12 +48,13 @@ def counters():
         cancelled=0,continuation_choices=0,budget_exhausted_choices=0,
         allocated_simulations=0,attempted_simulations=0,work_exhausted_turns=0,
         deadline_limited_turns=0,work_budget_exhausted_choices=0,
+        time_budget_exhausted_turns=0,finalization_seconds=0.,
         completed_rollouts=0,interrupted_rollouts=0,elapsed_seconds=0.,
         turn_elapsed_seconds=0.,deadline_overrun_seconds=0.)
 
 
 def search_allowance(ordinary_seconds,search_seconds,fraction=SEARCH_WALL_FRACTION):
-    require(0<fraction<=SEARCH_WALL_FRACTION and min(ordinary_seconds,search_seconds)>=0,'Invalid search wall allowance')
+    require(0<fraction<=.90 and min(ordinary_seconds,search_seconds)>=0,'Invalid search wall allowance')
     return max(0.,ordinary_seconds*fraction/(1-fraction)-search_seconds)
 
 
@@ -61,7 +63,11 @@ def estimate_collection(config,ordinary_game_seconds):
     return config['search_games']*(4*len(PHASES)*teacher_search_config(config['search']).seconds+ordinary_game_seconds)
 
 
-def finalization_reserve(seconds):
+def finalization_reserve(seconds,timed=False):
+    if timed:
+        # Small launch cutoff; no sleep or independent worker clock. Actual
+        # retirement can overrun on a stalled CPU/GPU, which disqualifies labels.
+        return min(.20,seconds/60.)
     # The 31-iteration lab run lost completed evidence to 0.15 s retirement
     # margins (individual overruns up to 0.89 s in its last collection).
     # Keep the whole-turn clock fixed; reserve 10%, capped at 1.2 s, for private
@@ -76,13 +82,14 @@ def turn_seconds(policy):
     Their configs/checkpoints are not silently relabelled as count-primary.
     """
     work=getattr(policy,'teacher_work_budget',None)
+    if time_budget(work):return work['seconds_per_turn']
     return work['watchdog_seconds'] if work and work['contract']=='teacher-turn-work/1.1.0' else policy.config.seconds
 
 
 def new_turn(policy,key,phase):
     started=time.monotonic();seconds=turn_seconds(policy);deadline=started+seconds
     return dict(key=key,phase=phase,started=started,deadline=deadline,
-        work_deadline=deadline-finalization_reserve(seconds),attempts=0,disabled=False,
+        work_deadline=deadline-finalization_reserve(seconds,time_budget(getattr(policy,'teacher_work_budget',None))),attempts=0,disabled=False,
         tree={},cache=OrderedDict(),continuation={},qualified=0,work_allocated=0)
 
 
@@ -99,7 +106,21 @@ class TurnSearch:
         if quota is not None and not isinstance(self,ParallelMasked):
             require(quota<=self.config.simulations,'Teacher work exceeds existing simulation cap')
             original=self.config;self.config=replace(original,simulations=quota)
-        try:return super().decide(view,choices,rng,deadline,recall,tree,cache)
+        try:
+            result=super().decide(view,choices,rng,deadline,recall,tree,cache)
+            stats=self.last_statistics or {}
+            if getattr(self,'time_budget_primary',False) and not getattr(self,'teacher_replica',False):
+                chosen=result[0]
+                if supported_continuation(stats,choices[chosen]['id'],view['seat'],self.config.minimum_plan_visits) is None:
+                    # Playing fallback may use a once-completed legal plan, but
+                    # teaching still requires repeat support and root coverage.
+                    legal={c['id']:i for i,c in enumerate(choices)}
+                    plans=[p for p in stats.get('plans',{}).values() if p['visits']>0 and p['first'] in legal]
+                    if plans:
+                        best=max(plans,key=lambda p:(p['visits'],p['returns'][view['seat']]/p['visits'],p['signature']))
+                        self.last_continuation=dict(best['trace'])
+                        result=(legal[best['first']],1.,None)
+            return result
         finally:
             if original is not None:self.config=original
 
@@ -159,7 +180,8 @@ class TurnSearch:
             if len(choices)==1:
                 bucket['forced_choices']+=1;output.append((0,1.,None));continue
             work_budget=getattr(self,'teacher_work_budget',None)
-            if work_budget is not None and current['work_allocated']:
+            timed=time_budget(work_budget)
+            if work_budget is not None and current['attempts']:
                 # Completed trajectories already cover both actions and their
                 # subchoices. Follow the supported plan; never replenish work
                 # at a new action, a forced choice, or an unsuccessful root.
@@ -174,7 +196,7 @@ class TurnSearch:
             bucket['searched_turns']+=int(current['attempts']==0)
             current['attempts']+=1;bucket['actual_searches']+=1
             self.last_statistics=None;self.last_continuation={};began=time.monotonic();reason=None;teacher=None
-            if work_budget is not None:
+            if work_budget is not None and not timed:
                 current['work_allocated']=work_budget['simulations_per_phase'][current['phase']]
                 bucket['allocated_simulations']+=current['work_allocated']
                 self.teacher_simulation_allowance=current['work_allocated']
@@ -191,7 +213,12 @@ class TurnSearch:
             bucket['interrupted_rollouts']+=stats.get('interrupted',0)
             attempted=stats.get('batching',{}).get('attempted',0)
             bucket['attempted_simulations']+=attempted
-            if work_budget is not None:
+            bucket['finalization_seconds']+=stats.get('finalization_seconds',0.)
+            if timed:
+                bucket['time_budget_exhausted_turns']+=int(ended>=current['work_deadline'])
+                # Normal time exhaustion keeps completed evidence; no quota is
+                # required. Errors, late publication and poor coverage still fail.
+            elif work_budget is not None:
                 require(attempted<=current['work_allocated'],'Teacher exceeded its shared simulation allowance')
                 bucket['deadline_limited_turns']+=int(ended>=current['work_deadline'])
                 bucket['work_exhausted_turns']+=int(attempted==current['work_allocated'] and not self.cancelled.is_set())
@@ -247,8 +274,7 @@ class TeacherTurns(TurnSearch):
         if phase is None or phase in state['consumed'] or context['round']!=state['rounds'][phase]:return
         state['consumed'].add(phase);bucket=state['phases'][phase]
         bucket['reached_turns']+=1;bucket['unreached_turns']=0
-        # Fixed work normally stops at the path count. The separate watchdog
-        # only bounds stalled hosts/inference; legacy recipes retain their clock.
+        # Start the one real-turn clock only after atomic CPU admission.
         state['current']=new_turn(self,key,phase)
 
     def finish_teacher_turn(self,rng):
@@ -274,7 +300,7 @@ class ScheduledParallelMasked(TeacherTurns,ParallelMasked):pass
 
 
 class WorkTurns(TurnSearch):
-    """Fixed work on the existing NN search cadence, separate from teachers."""
+    """Whole-turn budgets on the existing NN cadence, separate from teachers."""
     def begin_work_game(self,rng,seat):
         self.teacher_states[rng]=dict(seat=seat,recall=[],current=None,last_turn=None,turns=0,searches=0,due=False,
             phases={name:dict(counters(),scheduled_turns=0,unreached_turns=0) for name,_,_,_ in PHASES})
@@ -326,18 +352,21 @@ def work_search(policy,work_budget):
     require(isinstance(policy,MaskedSearchPolicy),'NN work policy must use Masked ISMCTS')
     work=nn_work_budget_config(work_budget)
     require(work is not None,'Missing NN whole-turn work budget')
-    require(work['simulations_per_turn']<=policy.config.workers*policy.config.simulations,
-            'NN work budget exceeds the private-tree simulation caps')
+    if not time_budget(work):
+        require(work['simulations_per_turn']<=policy.config.workers*policy.config.simulations,
+                'NN work budget exceeds the private-tree simulation caps')
     policy.__class__=WorkParallelMasked if isinstance(policy,ParallelMasked) else WorkMasked
     policy.teacher_states=weakref.WeakKeyDictionary();policy.teacher_replica=False
     policy.nn_work_budget=copy.deepcopy(work)
-    policy.teacher_work_budget=dict(contract='teacher-turn-work/1.1.0',mode='simulations',
+    policy.teacher_work_budget=copy.deepcopy(TEACHER_TIME_BUDGET) if time_budget(work) else dict(contract='teacher-turn-work/1.1.0',mode='simulations',
         simulations_per_phase={phase:work['simulations_per_turn'] for phase,_,_,_ in PHASES},
         watchdog_seconds=work['watchdog_seconds'])
     policy.policy_id='step5-work-search/'+digest(dict(parent=policy.policy_id,work_budget=work))
     # Replicas need the bounded incumbent and quota plumbing, not independent
     # real-turn schedules. Only the coordinator owns the whole-turn allocation.
-    for worker in getattr(policy,'replicas',[]):training_teacher(worker,replica=True)
+    policy.time_budget_primary=time_budget(work)
+    for worker in getattr(policy,'replicas',[]):
+        training_teacher(worker,replica=True);worker.time_budget_primary=policy.time_budget_primary
     return policy
 
 
@@ -348,10 +377,12 @@ def training_teacher(policy,work_budget=None,*,replica=False):
     policy.teacher_states=weakref.WeakKeyDictionary()
     policy.teacher_replica=replica
     policy.teacher_work_budget=copy.deepcopy(work_budget)
+    policy.time_budget_primary=time_budget(work_budget)
     identity=dict(parent=policy.policy_id,contract=CONTRACT)
     if work_budget is not None:identity['work_budget']=work_budget
     policy.policy_id='step5-phase-teacher/'+digest(identity)
-    for worker in getattr(policy,'replicas',[]):training_teacher(worker,replica=True)
+    for worker in getattr(policy,'replicas',[]):
+        training_teacher(worker,replica=True);worker.time_budget_primary=policy.time_budget_primary
     return policy
 
 
@@ -373,8 +404,12 @@ def collection_report(records,games):
                 counts=report['phases'][name]
                 require(counts['scheduled_turns']==1 and counts['reached_turns'] in (0,1) and
                         counts['reached_turns']+counts['unreached_turns']==1,'Teacher turn allocation exceeded')
-                if work_budget is not None:
-                    require(WORK_COUNTERS<=set(counts),'Missing teacher work counters')
+                if time_budget(work_budget):
+                    require(counts['actual_searches'] in (0,1) and counts['allocated_simulations']==0 and
+                            0<=counts['completed_rollouts']<=counts['attempted_simulations'],
+                            'Invalid whole-turn time receipt')
+                elif work_budget is not None:
+                    require(WORK_COUNTERS-{'time_budget_exhausted_turns','finalization_seconds'}<=set(counts),'Missing teacher work counters')
                     require(counts['actual_searches'] in (0,1) and
                             counts['allocated_simulations']==counts['actual_searches']*work_budget['simulations_per_phase'][name] and
                             0<=counts['completed_rollouts']<=counts['attempted_simulations']<=counts['allocated_simulations'],
@@ -395,4 +430,4 @@ def collection_report(records,games):
                 actual[phase]+=1
     require(all(actual[p]==phases[p]['qualified_samples'] for p in phases),'Teacher sample counts differ from replay')
     return dict(contract=CONTRACT,phases=phases,
-        note='Search calls and qualified decision labels are distinct from reserved turns; simulation allocations are shared across workers/actions. Elapsed search includes retirement, turn elapsed includes host/subchoice work.')
+        note='Search calls and qualified decision labels are distinct from reserved turns; clocks/archived simulation allocations are shared across workers/actions. Elapsed search includes retirement, turn elapsed includes host/subchoice work.')

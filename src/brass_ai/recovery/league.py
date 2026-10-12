@@ -44,10 +44,10 @@ def train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=Non
 
 
 def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=None,from_run=None,imitation_run=None,resume_reviewed_source=False,inference_devices=None):
-    from .config import fixed_work_config
+    from .config import time_budget_config
     from .inference import validate_inference_devices
     inference_devices=validate_inference_devices(inference_devices,device)
-    config=fixed_work_config(config)
+    config=time_budget_config(config)
     root=Path(root).resolve();run=project_path(root,run_path);validate_config(config)
     require(iterations>0 and not(initial and from_run),'Invalid recovery initialization')
     require(initial is None and from_run is None,'Fresh residual workflow forbids previous checkpoint/run imports')

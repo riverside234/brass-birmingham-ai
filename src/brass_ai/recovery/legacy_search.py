@@ -14,6 +14,7 @@ from brass_ai.learning.contracts import digest,require
 from brass_ai.learning.legacy_policy import LegacyPolicy
 from brass_ai.search.common import turn_key
 from brass_ai.step5.league import write_json
+from .config import time_budget
 
 STYLES=('balanced','rail-tempo','cotton','goods-beer','supplier','pottery-flex')
 
@@ -71,19 +72,20 @@ def legacy_spec(root,parent,budget=None,purpose='training',*,search_free=False,w
         legacy_opponent_work_budget_config(work_budget)
         require(purpose in ('training','evaluation') and budget and
                 (not fixed_simulations(work_budget) or budget['role'] in ('lab','reference')) and
-                (not search_free or fixed_simulations(work_budget)), 'Work-budget v4 requires a lab policy')
+                (not search_free or fixed_simulations(work_budget) or time_budget(work_budget)), 'Work-budget v4 requires a lab policy')
         require('src/BrassMaskedSearch/RootForest.cs' in payload['runtime_source_paths'],
                 'Work-budget v4 requires the frozen native root forest')
-        workers=budget['search_workers'];total=work_budget['simulations_per_turn']
-        require(total%workers==0 and workers*4<=total<=workers*profile['simulations'],
-                'Legacy work must divide across workers and retain matched four-attempt blocks')
+        if not time_budget(work_budget):
+            workers=budget['search_workers'];total=work_budget['simulations_per_turn']
+            require(total%workers==0 and workers*4<=total<=workers*profile['simulations'],
+                    'Legacy work must divide across workers and retain matched four-attempt blocks')
     if not budget:return dict(kind='legacy',policy_id=parent,purpose=purpose)
     identity=('masked-v3-fast/' if search_free else 'masked-v3-forest/')+digest(dict(parent=parent,budget=budget,search_free=search_free,version=3))
     result=dict(kind='lab-legacy',parent=parent,policy_id=identity,budget=budget,purpose=purpose,search_free=search_free)
     if work_budget is not None:
         result['work_budget']=copy.deepcopy(work_budget)
         identity=dict(parent=parent,budget=budget,work_budget=work_budget,version=1)
-        if fixed_simulations(work_budget):identity.update(version=2,search_free=search_free)
+        if fixed_simulations(work_budget) or time_budget(work_budget):identity.update(version=2,search_free=search_free)
         result['policy_id']=('masked-v4-work-fast/' if search_free else 'masked-v4-work/')+digest(identity)
     return result
 
@@ -107,6 +109,12 @@ class LabLegacyPolicy(LegacyPolicy):
         self.root,self.parent,self.budget=Path(root),parent,budget
         self.policy_id=legacy_spec(root,parent,budget,purpose,search_free=search_free,work_budget=work_budget)['policy_id']
         self.work_budget=copy.deepcopy(work_budget)
+        if search_free and time_budget(work_budget):
+            # Search-free planning retains its prior node cap and exceptional
+            # watchdog. The one-second clock applies only to searched v4.
+            from .config import LEGACY_OPPONENT_WORK_BUDGET
+            self.work_budget=copy.deepcopy(LEGACY_OPPONENT_WORK_BUDGET)
+            work_budget=self.work_budget
         self.search_free=search_free
         self.native_forest='src/BrassMaskedSearch/RootForest.cs' in load_bank(root,parent.split('/')[0])['payload']['runtime_source_paths']
         self.workers=[];self.contexts=weakref.WeakKeyDictionary()
@@ -118,6 +126,7 @@ class LabLegacyPolicy(LegacyPolicy):
         self.opponent=self.workers[0];self.pool=ThreadPoolExecutor(max_workers=len(self.workers))
         self.cpu_workers=1 if search_free else budget['search_workers']
         self.telemetry=dict(turns=0,branches=0,nodes=0,unique_plans=0,failures=0,over_budget_turns=0,max_turn_seconds=0.,seconds=budget['seconds'],search_workers=self.cpu_workers,search_free=search_free,completed=0,cpu_batching={})
+        self.telemetry.update(search_elapsed_seconds=0.,time_budget_exhausted_turns=0,deadline_fallback_choices=0)
         if work_budget is not None:
             self.telemetry.update(work_budget=copy.deepcopy(work_budget),allocated_simulations=0,attempted_simulations=0,
                 work_exhausted_turns=0,deadline_limited_turns=0,incumbent_only_decisions=0,forced_choices=0)
@@ -125,14 +134,33 @@ class LabLegacyPolicy(LegacyPolicy):
                 self.telemetry.update(timing_mode='simulation-count-with-watchdog',reference_seconds=budget['seconds'],
                     seconds=work_budget['watchdog_seconds'],watchdog_failures=0,incomplete_work_failures=0,
                     candidate_node_ceiling=4096)
+            elif time_budget(work_budget):self.telemetry['timing_mode']='shared-whole-turn-time'
+
+    def admit_legacy_turn(self,context,rng):
+        # The actor calls this after its whole worker group is admitted and
+        # before observation/encoding. Forced choices never reset the deadline.
+        if self.search_free or not time_budget(self.work_budget):return
+        self._start_turn(context,rng)
+
+    def _start_turn(self,context,rng):
+        key=turn_key(context)
+        state=self.contexts.setdefault(rng,dict(turn=None,revision=-1,intent=None,queue=deque(),work=0))
+        if state['turn']!=key:
+            began=time.monotonic()
+            state.update(turn=key,revision=-1,queue=deque(),work=0,work_allocated=0,overrun=False,
+                deadline=began+self.budget['seconds'],began=began,seed=rng.randrange(1,2**32))
+            self.telemetry['turns']+=1
+        return state
 
     def decision(self,view,choices,state):
         if self.native_forest or self.search_free:
-            profile=dict(self.opponent.profile,milliseconds=max(0,1000*(state['deadline']-time.monotonic())),
+            timed=time_budget(getattr(self,'work_budget',None)) and not self.search_free
+            profile=dict(self.opponent.profile,milliseconds=max(0,1000*(state['deadline']-time.monotonic()-(.02 if timed else 0.))),
                 incumbent_only=self.search_free,work_limit=max(1,self.opponent.profile['work_limit']-state['work']))
+            if timed:profile['simulations']=100000 # emergency guard, not a target/quota
             work_budget=getattr(self,'work_budget',None)
             allocated=0
-            if work_budget is not None:
+            if work_budget is not None and not time_budget(work_budget):
                 # The frozen native forest copies this cap to every worker.
                 # Issue it ONCE for the whole turn. Node-work limits are separate:
                 # nodes include setup/incumbent work, not simulation attempts.
@@ -149,8 +177,10 @@ class LabLegacyPolicy(LegacyPolicy):
                     # a per-owner cap; subtracting the sum from one owner's cap
                     # could incorrectly discard fallback candidate families.
                     profile['work_limit']=max(1,(cap*self.cpu_workers-state['work'])//self.cpu_workers)
+            began=time.monotonic()
             d=self.opponent.worker.call('plan_forest' if self.native_forest else 'plan',observation=view,choices=choices,
                 profile=profile,fixed_work=False,sampling_seed=state['seed'],intent=state['intent'],search_workers=self.cpu_workers)
+            self.telemetry['search_elapsed_seconds']+=time.monotonic()-began
             require(d['mode']=='masked_ismcts' and d['failures']==0,'Legacy search failed; reject incomplete game')
             state['work']+=d['nodes'];stats=d['search']
             require(stats['opponent_nodes']==0,'Opponent nodes cannot be merged')
@@ -158,7 +188,10 @@ class LabLegacyPolicy(LegacyPolicy):
             self.telemetry['completed']+=stats['completed'];self.telemetry['unique_plans']+=len(d.get('alternatives',[]))+1
             self.telemetry['cpu_batching']=stats.get('cpu_batching',{})
             if self.search_free:require(stats['completed']==0,'Fast opponent performed MCTS')
-            if work_budget is not None:
+            if time_budget(work_budget):
+                self.telemetry['attempted_simulations']+=stats['completed']+stats['interrupted']
+                self.telemetry['time_budget_exhausted_turns']+=int(d.get('overrun',False) or time.monotonic()>=state['deadline']-.02)
+            elif work_budget is not None:
                 # The frozen loop records exactly one completion/interruption
                 # per launched trajectory. There are no retries past its cap.
                 attempted=stats['completed']+stats['interrupted']
@@ -230,10 +263,13 @@ class LabLegacyPolicy(LegacyPolicy):
         for view,choices,rng in inputs:
             c=view['context'];key=turn_key(c);state=self.contexts.setdefault(rng,dict(turn=None,revision=-1,intent=None,queue=deque(),work=0))
             work_budget=getattr(self,'work_budget',None)
+            timed=time_budget(work_budget) and not self.search_free
             seconds=work_budget['watchdog_seconds'] if fixed_simulations(work_budget) else self.budget['seconds']
-            if state['turn']!=key or (c['revision']<=state['revision'] and work_budget is None):
+            if timed:state=self._start_turn(c,rng)
+            elif state['turn']!=key or (c['revision']<=state['revision'] and work_budget is None):
                 state.update(turn=key,revision=-1,queue=deque(),work=0,work_allocated=0,overrun=False,deadline=time.monotonic()+seconds,began=time.monotonic(),seed=rng.randrange(1,2**32));self.telemetry['turns']+=1
             elif c['revision']!=state['revision']+1:state['queue'].clear()
+            if timed and c['revision']!=state['revision']+1:state['queue'].clear()
             ids=[p['id'] for p in choices]
             if state['queue'] and state['queue'][0] not in ids:state['queue'].clear()
             if work_budget is not None and len(choices)==1:
@@ -241,7 +277,14 @@ class LabLegacyPolicy(LegacyPolicy):
                 self.telemetry['forced_choices']+=1;selected=ids[0]
             else:
                 if not state['queue']:
-                    plan=self.decision(view,choices,state);state['queue'].extend(x for a in plan['actions'] for x in a);state['intent']=plan.get('intent')
+                    if timed and time.monotonic()>=state['deadline']-.02:
+                        # An unexpected observation invalidated the completed
+                        # plan. Use current legal choices; never launch a new
+                        # incumbent RPC after expiry or invent another second.
+                        index=max(range(len(choices)),key=lambda i:(choices[i]['kind']=='finish',-i))
+                        state['queue'].append(ids[index]);self.telemetry['deadline_fallback_choices']+=1
+                    else:
+                        plan=self.decision(view,choices,state);state['queue'].extend(x for a in plan['actions'] for x in a);state['intent']=plan.get('intent')
                 selected=state['queue'].popleft()
             require(selected in ids,'Illegal legacy continuation')
             elapsed=time.monotonic()-state['began'];self.telemetry['max_turn_seconds']=max(self.telemetry['max_turn_seconds'],elapsed)

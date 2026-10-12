@@ -113,6 +113,12 @@ def controls(artifacts):
 def references(root,run):
     """Small control files only. Historical reports do not pin every old replay."""
     pins={};control=[];quarantined={}
+    # Repeated manifests often name the same paths. Resolve once in this read
+    # pass; never cache across cleanup passes or bypass safe() before deletion.
+    resolved_paths={}
+    def resolve(path):
+        if path not in resolved_paths:resolved_paths[path]=path.resolve()
+        return resolved_paths[path]
     for receipt in (run/'.retention').glob('cleanup-*.json'):
         for entry in read(receipt)['entries']:
             if entry['path'].endswith('.json') and entry.get('quarantine') and not (entry.get('deleted') or entry.get('restored')):
@@ -148,12 +154,12 @@ def references(root,run):
         if '.retention-trash' not in p.parts: control.append((p,read(p),'explicit pin'))
     visited=set()
     for p,data,reason in control:
-        visited.add(p.resolve())
-        for value in strings(data):
+        visited.add(resolve(p))
+        for value in dict.fromkeys(strings(data)):
             if not value.endswith(('.pt','.jsonl.gz','.npz','.json')): continue
             candidates=[root/value,p.parent/value] if not Path(value).is_absolute() else [Path(value)]
             for candidate in candidates:
-                resolved=candidate.resolve()
+                resolved=resolve(candidate)
                 # Remember dependencies even while their original path is in
                 # quarantine, so a new pin can rescue it before permanent purge.
                 if resolved.is_relative_to(run): pins[resolved]=reason+' '+str(p.relative_to(root))
@@ -166,7 +172,7 @@ def references(root,run):
         if str(path).endswith('.jsonl.gz'):
             for suffix in ('.features.npz','.features.json'):
                 derived=Path(str(path)+suffix)
-                pins[derived.resolve()]=reason
+                pins[resolve(derived)]=reason
     return pins
 
 

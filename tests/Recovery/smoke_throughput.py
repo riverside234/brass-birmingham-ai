@@ -47,6 +47,7 @@ def native_game(fast,seed):
 
 def main():
     p=argparse.ArgumentParser();p.add_argument('--output',type=Path,required=True);p.add_argument('--host-only',action='store_true');p.add_argument('--ppo-only',action='store_true')
+    p.add_argument('--device',choices=['cpu','cuda'],default='cpu')
     a=p.parse_args();out=a.output.resolve();require(out.is_relative_to(SOURCE_ROOT/'artifacts') and not out.exists(),'Use a fresh artifact directory')
     torch.set_num_threads(2)
     pairs=[]
@@ -64,7 +65,7 @@ def main():
         cfg['execution'].update(processes=1,hosts_per_process=2,heavy_processes=1)
         cfg['update']['epochs']=1;cfg['evaluation_schedule']['enabled']=False
         cfg['legacy_boost']=dict(stages=[dict(games=20,selfplay=95,historical=0,legacy=5)])
-        began=time.perf_counter();result=train(SOURCE_ROOT,out/'ppo',cfg,iterations=1)
+        began=time.perf_counter();result=train(SOURCE_ROOT,out/'ppo',cfg,iterations=1,device=a.device)
         summary=result['summaries'][0]
         require(summary['actor']['optimizer_steps']>0,'No PPO update')
         record=read(out/'ppo/iteration-0000/report.json')

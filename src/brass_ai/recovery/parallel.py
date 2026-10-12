@@ -3,6 +3,7 @@ from concurrent.futures import ThreadPoolExecutor
 from dataclasses import replace
 from threading import RLock
 import random
+import time
 import numpy as np
 from brass_ai.learning.contracts import require
 from brass_ai.search.ismcts import MaskedSearchPolicy,visit_teacher,supported_continuation
@@ -87,6 +88,11 @@ class ParallelMasked(MaskedSearchPolicy):
                 if quotas is not None:worker.config=replace(original,simulations=quotas[index])
                 worker.decide(view,choices,private,deadline,recall,private_trees.setdefault(index,{}),private_caches.setdefault(index,OrderedDict()))
                 return worker.last_statistics
+            except SearchIncomplete:
+                # An owner that starts late has no evidence; other owners'
+                # completed plans still survive normal whole-turn expiry.
+                if not getattr(self,'time_budget_primary',False):raise
+                return worker.last_statistics
             finally:
                 if original is not None:worker.config=original
         # Await actual retirement of ALL workers, including exceptions. No worker
@@ -97,15 +103,19 @@ class ParallelMasked(MaskedSearchPolicy):
             try:results.append(future.result())
             except BaseException as e:failure=failure or e
         if failure:raise failure
+        finalized=time.monotonic()
         stats=merge_statistics(results,choices);self.last_statistics=stats
         self.telemetry['searches']+=1;self.telemetry['simulations']+=stats['completed'];self.telemetry['incomplete']+=stats['interrupted']
+        self.telemetry['opponent_choices']=self.telemetry.get('opponent_choices',0)+stats['opponent_choices']
         self.telemetry['max_pending']=max(self.telemetry['max_pending'],stats['max_pending'])
         chosen=max(range(len(choices)),key=lambda i:(stats['root'].get(choices[i]['id'],{}).get('visits',0),probabilities[i],-i))
         continuation=supported_continuation(stats,choices[chosen]['id'],view['seat'],self.config.minimum_plan_visits)
         if continuation is not None:self.last_continuation=continuation
         else:chosen=int(np.argmax(probabilities))
         label_config=replace(self.config,simulations=total) if total is not None else self.config
-        return chosen,1.,visit_teacher(choices,stats,probabilities,model=self.base.evaluator.model_id,observer=view['seat'],config=label_config)
+        teacher=visit_teacher(choices,stats,probabilities,model=self.base.evaluator.model_id,observer=view['seat'],config=label_config)
+        stats['finalization_seconds']=time.monotonic()-finalized
+        return chosen,1.,teacher
 
     def close(self):
         self.cancel()
@@ -113,6 +123,10 @@ class ParallelMasked(MaskedSearchPolicy):
         self.pool.shutdown(wait=True)
         for worker in self.replicas:worker.close()
         super().close()
+
+    def cancel(self):
+        super().cancel()
+        for worker in getattr(self,'replicas',[]):worker.cancel()
 
 def parallelize(policy,workers,role,factory):
     if workers==1:return policy

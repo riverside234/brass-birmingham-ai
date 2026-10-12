@@ -18,10 +18,14 @@ def digest(value):
 
 def decode_json(text):
     def object_pairs(pairs):
-        result = {}
-        for key, value in pairs:
-            require(key not in result, f'Duplicate JSON key: {key}')
-            result[key] = value
+        # Most replay objects have unique keys. Build them in C, retaining the
+        # strict duplicate-key error (including the first duplicate) on failure.
+        result = dict(pairs)
+        if len(result) != len(pairs):
+            seen = set()
+            for key, _ in pairs:
+                require(key not in seen, f'Duplicate JSON key: {key}')
+                seen.add(key)
         return result
     def constant(value):
         raise ValueError(f'Non-finite JSON constant: {value}')

@@ -27,7 +27,27 @@ from .inference import RemoteEvaluator
 from .telemetry import Timings, instrument_host
 from .inputs import BOUNDARY
 from .encoding import PreparedEncoder
-from .replay import CheckedGame,SerializedGame,write_shard,read_shards,cache_receipt,write_cache
+from .replay import CheckedGame,SerializedGame,check_game,write_shard,read_shards,cache_receipt,write_cache
+
+
+class _ActorSerializedGame(SerializedGame):
+    """Reuse only the live actor's sealed input-validation proof.
+
+    Keep the replay reader/validator and its derived-cache version unchanged:
+    existing audited datasets must not need another schema/encoding pass.
+    """
+    def __init__(self,game):
+        if not isinstance(game,CheckedGame) or not getattr(game,'actor_validated',False):
+            super().__init__(game)
+            return
+        game.assert_metadata()
+        encoder=PreparedEncoder()
+        arrays=[game.encoded(row,encoder) for row in game['records']]
+        # Seals catch input, label and context mutations; check_game still
+        # verifies headers, decisions, choices and targets before publication.
+        self.game=check_game(game,arrays,validated_inputs=True)
+        self.line=json.dumps(self.game,separators=(',',':'),allow_nan=False)+'\n'
+        self.size=len(self.line.encode('utf-8'))
 
 
 def neural_spec(identity,exploration=.05,focus='neutral'):
@@ -54,8 +74,10 @@ def make_policy(spec,root,endpoint,config,mono,*,_replica=False):
         evaluator=RemoteEvaluator(endpoints[0],p,config['batch_size'],config['max_candidate_cells']))
         for p in spec.get('opponents',[spec['model_id']])]
     from dataclasses import replace
-    from .config import teacher_search_config
+    from .config import teacher_search_config,time_budget,TEACHER_TIME_BUDGET,NN_TIME_BUDGET
     search_config=teacher_search_config(spec['search']) if spec.get('teacher_schedule') else SearchConfig(**spec['search'])
+    clock=(spec.get('teacher_work_budget') or TEACHER_TIME_BUDGET) if spec.get('teacher_schedule') else (spec.get('nn_work_budget') or NN_TIME_BUDGET)
+    if not _replica and time_budget(clock):search_config=replace(search_config,seconds=clock['seconds_per_turn'])
     common=dict(config=replace(search_config,cpu_role=spec.get('cpu_role','reference')),mono=mono,focus=spec.get('focus','neutral'),
         opponents=opponents,evaluator=evaluator,fast_host=True)
     require(spec['kind']=='masked_ismcts','Only Masked ISMCTS is an active search policy')
@@ -64,24 +86,24 @@ def make_policy(spec,root,endpoint,config,mono,*,_replica=False):
         from .parallel import parallelize
         replica_spec={k:v for k,v in spec.items() if k not in ('teacher_schedule','teacher_work_budget','nn_work_budget')}
         # Carry resolved training defaults into each private replica; only the
-        # coordinator schedules real turns. Generic evaluation remains unchanged.
-        if spec.get('teacher_schedule'):replica_spec['search']=search_config.to_dict()
+        # coordinator schedules real turns; replicas receive no new turn clocks.
+        replica_spec['search']=search_config.to_dict()
         policy=parallelize(policy,len(endpoints)-1,spec.get('cpu_role','lab'),
             lambda i:make_policy(replica_spec,root,endpoints[i+1],config,mono,_replica=True))
     if spec.get('teacher_schedule'):
         require(not spec.get('nn_work_budget'),'Teacher phases and generic NN work cannot share a policy')
         from .teacher_schedule import CONTRACT,training_teacher
-        from .config import TEACHER_WORK_BUDGET,current_work_budget
+        from .config import TEACHER_TIME_BUDGET,current_work_budget
         require(spec['teacher_schedule']==CONTRACT,'Unknown training teacher schedule')
-        policy=training_teacher(policy,work_budget=current_work_budget(spec.get('teacher_work_budget'),TEACHER_WORK_BUDGET))
+        policy=training_teacher(policy,work_budget=current_work_budget(spec.get('teacher_work_budget'),TEACHER_TIME_BUDGET))
     elif not _replica:
         from .teacher_schedule import work_search
-        from .config import NN_WORK_BUDGET
+        from .config import NN_TIME_BUDGET
         # This factory is the lab actor boundary (not installed-game or
         # personality deployment). Explicit experiment/evaluation specs bind
-        # their quota; preflight/profiling callers receive the same fixed work.
+        # their budget; preflight/profiling callers receive the same shared clock.
         # Recursive private trees must not acquire independent turn budgets.
-        policy=work_search(policy,spec.get('nn_work_budget') or NN_WORK_BUDGET)
+        policy=work_search(policy,spec.get('nn_work_budget') or NN_TIME_BUDGET)
     instrument_host(policy.game.host)
     for game in policy.simulation_games:instrument_host(game.host)
     return policy
@@ -134,6 +156,7 @@ def _run_turns(host,job,assigned,timings,max_decisions,context,game,rngs,encoded
         lease.update(turn_key(context)+(seat,),workers)
         if hasattr(p,'admit_teacher_turn'):p.admit_teacher_turn(context,rngs[seat])
         if hasattr(p,'admit_work_turn'):p.admit_work_turn(context,rngs[seat])
+        if hasattr(p,'admit_legacy_turn'):p.admit_legacy_turn(context,rngs[seat])
         after_forced=None
         if buffered:
             entry=buffered.popleft();current=entry['before'];after_forced=entry['after']
@@ -186,7 +209,9 @@ def _run_turns(host,job,assigned,timings,max_decisions,context,game,rngs,encoded
     require(context['terminal'],'Decision cap reached; incomplete game excluded')
     with timings.phase('host.result'): game['result']=host.call('result')
     terminal_targets(game['result'])
-    return CheckedGame(game).bind(encoded)
+    result=CheckedGame(game).bind(encoded)
+    result.actor_validated=True  # every row crossed BOUNDARY.check above
+    return result
 
 
 def _actor(root,host_path,jobs,results,lease,config,mono,lanes,search_channels,admission):
@@ -243,7 +268,7 @@ def _actor(root,host_path,jobs,results,lease,config,mono,lanes,search_channels,a
                                 began=time.monotonic()
                                 parts=[];part=[];size=0;serialized={}
                                 for item in completed:
-                                    value=SerializedGame(item[0]);serialized[item[0]['game_id']]=value;weight=value.size
+                                    value=_ActorSerializedGame(item[0]);serialized[item[0]['game_id']]=value;weight=value.size
                                     if part and size+weight>config.get('shard_bytes',268435456): parts.append(part);part=[];size=0
                                     part.append(item);size+=weight
                                 if part: parts.append(part)

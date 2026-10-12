@@ -47,8 +47,8 @@ def collect_due(root,run,directory,config,state,signature,model,optimizer,servic
     next_search=state['next_search_games'];search_seconds=state.get('search_seconds',0.)
     estimate=estimate_collection(config,ordinary_game_seconds);batches=[];deferred_reason=None
     # This is an admission cost estimate, never a thinking-time limit. After
-    # the first count-budget collection, use its measured total cost plus 25%
-    # headroom. Bind it to the work recipe so changed quotas cannot reuse it.
+    # the first collection, use its measured total cost plus 25% headroom.
+    # Bind it to the recipe so changed time/count contracts cannot reuse it.
     recipe=digest(dict(work=config.get('teacher_work_budget'),search=config['search'],
         games=config['search_games'],execution=config['execution']))
     previous_cost=state.get('teacher_work_cost')
@@ -96,7 +96,8 @@ def collect_due(root,run,directory,config,state,signature,model,optimizer,servic
             jobs.append(dict(index=index,seed=seed,rotation=0,sampling_seed=provenance['sampling_seed'],
                 policies=[spec]*4,path=str(directory/f'search-{index:06d}.jsonl.gz'),provenance=provenance))
         work=config.get('teacher_work_budget')
-        budget_label=(f'whole-turn simulation attempts {work["simulations_per_phase"]}, '
+        budget_label=(f'{work["seconds_per_turn"]:g}s shared whole-turn deadline' if work and work['mode']=='time' else
+                      f'whole-turn simulation attempts {work["simulations_per_phase"]}, '
                       f'{work.get("watchdog_seconds",config["search"]["seconds"]):g}s stall watchdog' if work else
                       f'{config["search"]["seconds"]:g}s per turn')
         print(f'Teacher collection {batch_index+1}/{due}: due at {next_search} ordinary games, '

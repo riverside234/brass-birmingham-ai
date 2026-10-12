@@ -1,0 +1,165 @@
+name: Step 5 transfer release
+
+on:
+  workflow_dispatch:
+    inputs:
+      runner_label:
+        description: Unique label of the Linux runner on the source lab machine
+        required: true
+        type: string
+        default: step5-transfer
+      source_root:
+        description: Existing project root on that machine (not the Actions checkout)
+        required: true
+        type: string
+        default: /data/not_backed_up/yxu209/ai-training
+      run_path:
+        description: Stopped self-play run, relative to source_root
+        required: true
+        type: string
+        default: artifacts/step5/selfplay-best-v1
+      python_executable:
+        description: Python 3.11+ executable on the runner, with venv support
+        required: true
+        type: string
+        default: python3
+      threads:
+        description: Compression threads (0 = available CPUs, respecting SLURM allocation)
+        required: true
+        type: number
+        default: 0
+      zstd_level:
+        description: Zstd level (1-22, default 3)
+        required: true
+        type: number
+        default: 3
+      part_mb:
+        description: Maximum decimal MB per Release asset (1-2000)
+        required: true
+        type: number
+        default: 1900
+
+permissions:
+  contents: write
+
+concurrency:
+  group: step5-transfer-${{ inputs.runner_label }}
+  cancel-in-progress: false
+
+jobs:
+  package-and-release:
+    runs-on: [self-hosted, linux, "${{ inputs.runner_label }}"]
+    timeout-minutes: 360
+    defaults:
+      run:
+        shell: bash
+    env:
+      SOURCE_ROOT: ${{ inputs.source_root }}
+      SOURCE_RUN: ${{ inputs.run_path }}
+      TRANSFER_BOOTSTRAP_PYTHON: ${{ inputs.python_executable }}
+      TRANSFER_THREADS: ${{ inputs.threads }}
+      TRANSFER_ZSTD_LEVEL: ${{ inputs.zstd_level }}
+      TRANSFER_PART_MB: ${{ inputs.part_mb }}
+
+    steps:
+      # Deliberately no checkout/pull/reset: the saved run must keep its exact
+      # source revision. A GitHub-hosted runner cannot see these lab-local files.
+      - name: Check the source revision and prepare an isolated transfer environment
+        run: |
+          set -euo pipefail
+          command -v git
+          command -v gh
+          "$TRANSFER_BOOTSTRAP_PYTHON" - <<'PY'
+          import os
+          from pathlib import Path
+          import sys
+          if sys.version_info < (3, 11):
+              raise SystemExit('Use Python 3.11 or newer for the transfer tool.')
+          root = os.environ['SOURCE_ROOT']
+          if not Path(root).is_absolute() or '\n' in root or '\r' in root:
+              raise SystemExit('source_root must be an absolute, single-line path.')
+          if not 1 <= int(os.environ['TRANSFER_PART_MB']) <= 2000:
+              raise SystemExit('Release part_mb must be 1-2000.')
+          PY
+          test "$(git -C "$SOURCE_ROOT" rev-parse --show-toplevel)" = "$(realpath "$SOURCE_ROOT")"
+          if [[ "$(git -C "$SOURCE_ROOT" rev-parse HEAD)" != "$GITHUB_SHA" ]]; then
+            echo 'Select the same branch/tag revision as the saved source checkout. This workflow never updates training code.' >&2
+            exit 1
+          fi
+          changes="$(git -C "$SOURCE_ROOT" status --porcelain --untracked-files=normal -- src scripts configs training 'requirements*.txt')"
+          if [[ -n "$changes" ]]; then
+            echo 'Commit and push the matching code/config/runtime changes before exporting; the destination obtains these from Git.' >&2
+            printf '%s\n' "$changes" >&2
+            exit 1
+          fi
+          transfer_env="$RUNNER_TEMP/step5-transfer-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          "$TRANSFER_BOOTSTRAP_PYTHON" -m venv "$transfer_env"
+          "$transfer_env/bin/python" -m pip install --disable-pip-version-check -r "$SOURCE_ROOT/requirements-transfer.txt"
+          tag="step5-transfer-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          bundle_dir="$SOURCE_ROOT/artifacts/step5-transfer/$tag"
+          mkdir -p "$bundle_dir"
+          {
+            printf 'TRANSFER_PYTHON=%s\n' "$transfer_env/bin/python"
+            printf 'RELEASE_TAG=%s\n' "$tag"
+            printf 'BUNDLE_DIR=%s\n' "$bundle_dir"
+            printf 'BUNDLE=%s/selfplay-migration.tar.zst\n' "$bundle_dir"
+          } >> "$GITHUB_ENV"
+
+      - name: Export and validate the stopped run
+        run: |
+          set -euo pipefail
+          "$TRANSFER_PYTHON" "$SOURCE_ROOT/scripts/step5-transfer.py" export \
+            --root "$SOURCE_ROOT" --run "$SOURCE_RUN" --bundle "$BUNDLE" \
+            --mode compact --dependencies external --format zstd \
+            --zstd-level "$TRANSFER_ZSTD_LEVEL" --threads "$TRANSFER_THREADS" \
+            --part-mb "$TRANSFER_PART_MB" > "$BUNDLE_DIR/export-result.json"
+          "$TRANSFER_PYTHON" - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+          folder = Path(os.environ['BUNDLE_DIR'])
+          result = json.loads((folder / 'export-result.json').read_text())
+          index = Path(result['bundle'])
+          parts = json.loads(index.read_text())['parts']
+          if result['git_commit'] != os.environ['GITHUB_SHA']:
+              raise SystemExit('Source revision changed during export; do not publish this bundle.')
+          if len(parts) + 1 > 1000:
+              raise SystemExit('More than 1000 Release assets; use larger parts (up to 2000 MB).')
+          if any(p['bytes'] >= 2 ** 31 for p in parts) or index.stat().st_size >= 2 ** 31:
+              raise SystemExit('A Release asset exceeds the 2 GiB limit.')
+          notes = (
+              f"Stopped Step 5 run: `{result['run']}`\n\n"
+              f"Source commit: `{result['git_commit']}`\n"
+              f"Saved iteration: {result['iteration']}; games: {result['games_done']}\n"
+              f"Archive: tar.zst, level {result['zstd_level']}, {result['compression_threads']} threads\n"
+              f"Compressed bytes: {result['compressed_bytes']}; parts: {result['parts']}\n\n"
+              "Download every selfplay-migration.tar.zst.part* asset, including .parts.json. "
+              "Use scripts/step5-transfer.py restore with the .parts.json index. "
+              "Keep the same absolute project root; sync matching code and private runtime, "
+              "then run verify and a fresh preflight before continuing training.\n"
+          )
+          (folder / 'release-notes.md').write_text(notes, encoding='utf-8')
+          print(json.dumps(result, indent=2))
+          PY
+
+      - name: Upload all parts, then publish the Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          gh release create "$RELEASE_TAG" --draft --prerelease --latest=false \
+            --target "$GITHUB_SHA" --title "Step 5 transfer $RELEASE_TAG" \
+            --notes-file "$BUNDLE_DIR/release-notes.md"
+          # Upload the index last. Leave a draft if any upload fails; publishing
+          # only happens after every asset succeeds. Never overwrite old assets.
+          for part in "$BUNDLE".part[0-9]*; do
+            gh release upload "$RELEASE_TAG" "$part"
+          done
+          gh release upload "$RELEASE_TAG" "$BUNDLE.parts.json"
+          gh release edit "$RELEASE_TAG" --draft=false --prerelease --latest=false
+          release_url="$(gh release view "$RELEASE_TAG" --json url --jq .url)"
+          printf 'Transfer ready: [%s](%s)\n' "$RELEASE_TAG" "$release_url" >> "$GITHUB_STEP_SUMMARY"
+          printf '\nDownload on the destination machine:\n\n```sh\ngh release download %q --repo %q --pattern %q --dir %q\n```\n' \
+            "$RELEASE_TAG" "$GH_REPO" 'selfplay-migration.tar.zst.part*' \
+            "$SOURCE_ROOT/artifacts/step5-transfer/$RELEASE_TAG" >> "$GITHUB_STEP_SUMMARY"

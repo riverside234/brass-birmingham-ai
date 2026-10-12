@@ -25,8 +25,23 @@ def reader_init(admission=None):
 
 def reader_pool(workers,admission=None):
     require(type(workers) is int and 1<=workers<=64,'Invalid replay reader CPU allowance')
-    return (ProcessPoolExecutor(max_workers=workers,mp_context=multiprocessing.get_context('spawn'),
-                                initializer=reader_init,initargs=(admission,)) if workers>1 else _inline_reader(admission))
+    return _spawned_readers(workers,admission) if workers>1 else _inline_reader(admission)
+
+
+def _reader_ready():
+    return True
+
+
+@contextmanager
+def _spawned_readers(workers,admission):
+    with ProcessPoolExecutor(max_workers=workers,mp_context=multiprocessing.get_context('spawn'),
+                             initializer=reader_init,initargs=(admission,)) as pool:
+        # ProcessPoolExecutor starts lazily. Start its bounded readers while
+        # actors play, rather than making the first durable shards pay for
+        # Python/Torch imports. Do not insert a readiness barrier in collection.
+        ready=[pool.submit(_reader_ready) for _ in range(workers)]
+        yield pool
+        for future in ready:require(future.result() is True,'Replay reader initialization failed')
 
 
 @contextmanager

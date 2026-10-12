@@ -184,10 +184,17 @@ class InferenceService:
     def __new__(cls,config,device='cpu',profile=None,profile_steps=4,*,inference_devices=None):
         if inference_devices is not None:
             require(cls is InferenceService,'Explicit GPU replicas require the Step 5 inference service')
-            return MultiInferenceService(config,device,profile,profile_steps,inference_devices=inference_devices)
+            devices=validate_inference_devices(inference_devices,device)
+            if len(devices)>1:
+                return MultiInferenceService(config,device,profile,profile_steps,inference_devices=devices)
+            instance=super().__new__(cls)
+            instance._single_inference_device=devices[0]
+            return instance
         return super().__new__(cls)
 
     def __init__(self,config,device='cpu',profile=None,profile_steps=4,*,inference_devices=None):
+        self.learner_device=device
+        device=getattr(self,'_single_inference_device',device)
         self.config,self.device=config,device
         # CPU tensors already share host memory; packing them adds a copy.
         self.pack_outputs=torch.device(device).type=='cuda'
@@ -265,6 +272,7 @@ class InferenceService:
 
     def report(self):
         return dict(**self.metrics,timings=self.timings.report(),device=str(self.device),
+            learner_device=str(self.learner_device),inference_devices=[str(self.device)],replica_count=1,
             central_batching=True,memory=memory(self.device),
             cpu_admission=self.cpu.report(),
             timing_note='Host elapsed time; CUDA forward kernel duration is in optional profiler traces',

@@ -12,7 +12,7 @@ from brass_ai.learning.contracts import SOURCE_ROOT,compatibility,digest
 from brass_ai.learning.model import ModelConfig
 from brass_ai.learning.utility_model import UtilityNet,utility_config
 from brass_ai.recovery.config import (TEACHER_WORK_BUDGET,LEGACY_OPPONENT_WORK_BUDGET,
-    teacher_work_budget_config,legacy_opponent_work_budget_config,validate_config)
+    TEACHER_TIME_BUDGET,LEGACY_TIME_BUDGET,teacher_work_budget_config,legacy_opponent_work_budget_config,validate_config)
 from brass_ai.recovery.curriculum import activate_boost
 from brass_ai.recovery.resume import check_signature,load_resume,commit_transition
 from brass_ai.recovery.utility import reward_spec
@@ -20,6 +20,9 @@ from brass_ai.step5.league import implementation_id,write_json
 
 
 OLD='f9f94171ead6383c012d402aadf8781f51074a1f4cb5e6575cfb1487deb4e5f0'
+# These tests preserve the archived count migration. Current count -> time
+# continuation is exercised, with real optimizer state, in test_time_resume.
+COUNT_REVIEW='9a60a40aa1e4d8193243681d68de2f4661b82d2cf213b2d86f9e78bd3a6e5541'
 
 
 class TeacherWorkResumeTests(unittest.TestCase):
@@ -31,7 +34,7 @@ class TeacherWorkResumeTests(unittest.TestCase):
         cfg.pop('teacher_work_budget',None)
         cfg.pop('legacy_opponent_work_budget',None)
         old=dict(config=cfg,compatibility=compatibility(),implementation=OLD,legacy_pool={},teachers={})
-        new=copy.deepcopy(old);new['implementation']=implementation_id()
+        new=copy.deepcopy(old);new['implementation']=COUNT_REVIEW
         new['config']['teacher_work_budget']=copy.deepcopy(TEACHER_WORK_BUDGET)
         new['config']['legacy_opponent_work_budget']=copy.deepcopy(LEGACY_OPPONENT_WORK_BUDGET)
         return old,new
@@ -58,10 +61,10 @@ class TeacherWorkResumeTests(unittest.TestCase):
         for path in (SOURCE_ROOT/'configs/step5').glob('lab*.json'):
             with self.subTest(preset=path.name):
                 cfg=read(path);validate_config(cfg)
-                self.assertEqual(cfg['teacher_work_budget'],TEACHER_WORK_BUDGET)
-                self.assertEqual(teacher_work_budget_config(cfg['teacher_work_budget']),TEACHER_WORK_BUDGET)
-                self.assertEqual(cfg['legacy_opponent_work_budget'],LEGACY_OPPONENT_WORK_BUDGET)
-                self.assertEqual(legacy_opponent_work_budget_config(cfg['legacy_opponent_work_budget']),LEGACY_OPPONENT_WORK_BUDGET)
+                self.assertEqual(cfg['teacher_work_budget'],TEACHER_TIME_BUDGET)
+                self.assertEqual(teacher_work_budget_config(cfg['teacher_work_budget']),TEACHER_TIME_BUDGET)
+                self.assertEqual(cfg['legacy_opponent_work_budget'],LEGACY_TIME_BUDGET)
+                self.assertEqual(legacy_opponent_work_budget_config(cfg['legacy_opponent_work_budget']),LEGACY_TIME_BUDGET)
                 self.assertEqual(cfg['search']['seconds'],12.)
                 self.assertEqual(cfg['execution']['search_workers_per_turn'],4)
                 legacy=copy.deepcopy(cfg);legacy.pop('teacher_work_budget')

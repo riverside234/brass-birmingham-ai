@@ -17,7 +17,7 @@
   "focus": "neutral",
   "search": {
     "backend": "masked_ismcts",
-    "seconds": 3.0,
+    "seconds": 12.0,
     "simulations": 100000,
     "max_choices": 512,
     "exploration": 1.4,
@@ -82,15 +82,13 @@
     "work_multiplier": 1
   },
   "legacy_opponent_work_budget": {
-    "contract": "legacy-opponent-turn-work/1.1.0",
-    "mode": "simulations",
-    "simulations_per_turn": 16,
-    "watchdog_seconds": 120.0
+    "contract": "legacy-opponent-turn-time/1.0.0",
+    "mode": "time",
+    "seconds_per_turn": 1.0
   },
   "nn_work_budget": {
-    "contract": "nn-turn-work/1.0.0",
-    "mode": "simulations",
-    "simulations_per_turn": 16,
-    "watchdog_seconds": 120.0
+    "contract": "nn-turn-time/1.0.0",
+    "mode": "time",
+    "seconds_per_turn": 12.0
   }
 }

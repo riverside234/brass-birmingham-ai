@@ -16,8 +16,9 @@ def parser():
     p = argparse.ArgumentParser(description='Fresh four-player MLP-ResNet training with frozen v3 opponents and Masked ISMCTS NN distillation')
     p.add_argument('--root', type=Path, default=LAB_ROOT)
     p.add_argument('--config', help='Evaluation uses evaluation.json; recovery uses lab.json; historical recipes are archived')
-    p.add_argument('--device', choices=['cpu', 'cuda'], default='cpu')
-    p.add_argument('--inference-devices',help='Train/evaluate only: auto for all job-visible GPUs, or comma-separated cuda:N devices. Scope availability with CUDA_VISIBLE_DEVICES. Learner remains on --device.')
+    p.add_argument('--device', choices=['auto', 'cpu', 'cuda'], default='auto',
+                   help='Default: one visible CUDA GPU when available, otherwise CPU. Use CUDA_VISIBLE_DEVICES to select the allocated GPU.')
+    p.add_argument('--inference-devices',help='Optional train/evaluate override; omitted by default so inference shares the learner GPU without a router. Explicit cuda:N list or auto to opt into all visible GPUs.')
     p.add_argument('--mono')
     sub = p.add_subparsers(dest='command', required=True)
     assets = sub.add_parser('assets'); assets.add_argument('--bundle', default='artifacts/step5-transfer/private-rules-runtime.zip')
@@ -82,6 +83,8 @@ def main(argv=None):
     a = parser().parse_args(argv)
     require(a.root.is_absolute(), 'Pass an absolute --root on this platform')
     root = a.root.resolve()
+    if a.device=='auto':
+        a.device='cuda' if a.command in ('train','imitate','evaluate','preflight') and torch.cuda.is_available() else 'cpu'
     require(a.device != 'cuda' or torch.cuda.is_available(), 'CUDA requested but unavailable')
     inference_devices=None
     if a.inference_devices is not None:

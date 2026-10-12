@@ -1,8 +1,12 @@
 """Small archive/continuation checks; no game collection or learning campaign."""
 import importlib.util
+import io
 import os
 from pathlib import Path
 import socket
+import subprocess
+import sys
+import tarfile
 import tempfile
 import unittest
 from unittest.mock import patch
@@ -23,7 +27,7 @@ class TransferTests(unittest.TestCase):
         self.root.mkdir()
         self.run = self.root / 'artifacts/step5/selfplay'
         self.run.mkdir(parents=True)
-        self.bundle = self.area / 'migration.zip'
+        self.bundle = self.area / 'migration.tar.zst'
         for tree in transfer.CODE_TREES:
             (self.root / tree).mkdir(parents=True, exist_ok=True)
         for name in ('learning/runner.py', 'learning/batching.py', 'searchlab/spiel.py', 'beliefs.py', 'runtime_contracts.py', 'host.py'):
@@ -82,6 +86,11 @@ class TransferTests(unittest.TestCase):
 
     def export(self):
         return transfer.export(self.root, self.run, self.bundle, dependencies='bundled', part_mb=0)
+
+    def archive_bytes(self, bundle=None):
+        # Only small synthetic fixtures use this helper; production reads stream.
+        with transfer.open_bundle(bundle or self.bundle) as members:
+            return {name: stream.read() for name, size, stream in members}
 
     def move_source(self):
         # Simulate an empty second computer at the same absolute project path.
@@ -165,12 +174,12 @@ class TransferTests(unittest.TestCase):
     def test_corrupt_archive_is_rejected_before_destination_creation(self):
         self.export()
         bad = self.area / 'bad.zip'
-        with zipfile.ZipFile(self.bundle) as source, zipfile.ZipFile(bad, 'w') as out:
-            manifest = transfer.json.loads(source.read('transfer.json'))
+        source = self.archive_bytes()
+        with zipfile.ZipFile(bad, 'w') as out:
+            manifest = transfer.json.loads(source['transfer.json'])
             record = next(r for r in manifest['files'] if r['path'].endswith('generation-0002.pt'))
             payload = transfer.payload_name(manifest, record)
-            for name in source.namelist():
-                data = source.read(name)
+            for name, data in source.items():
                 if name == payload:
                     data = b'x' * len(data)
                 out.writestr(name, data)
@@ -186,7 +195,10 @@ class TransferTests(unittest.TestCase):
         result = transfer.export(self.root, self.run, self.bundle, dry_run=True)
         self.assertTrue(result['dry_run'])
         self.assertEqual(result['dependencies'], 'external')
-        self.assertEqual(result['part_mb'], 100)
+        self.assertEqual(result['part_mb'], 1900)
+        self.assertEqual(result['archive_format'], 'zstd')
+        self.assertEqual(result['zstd_level'], 3)
+        self.assertGreaterEqual(result['compression_threads'], 1)
         self.assertFalse(self.bundle.exists())
         self.assertFalse((self.run / '.active-run.json').exists())
 
@@ -259,7 +271,7 @@ class TransferTests(unittest.TestCase):
         names = {r['path'] for r in compact['files']}
         for name in unused + ['artifacts/step5/selfplay/iteration-0001/games.jsonl.gz']:
             self.assertNotIn(name, names)
-        full = transfer.export(self.root, self.run, self.area / 'full.zip', mode='full', part_mb=0)
+        full = transfer.export(self.root, self.run, self.area / 'full.tar.zst', mode='full', part_mb=0)
         self.assertGreater(full['bytes'], sum(r['bytes'] for r in compact['files']) + 500000)
         self.assertTrue((self.run / 'iteration-0001/games.jsonl.gz').exists())
 
@@ -298,9 +310,8 @@ class TransferTests(unittest.TestCase):
             self.assertIn(f'training/runtime/throughput/{kind}/BrassHost.exe', external)
         self.assertEqual(manifest['source_recipe'], 2)
         self.assertFalse(any(r['path'].startswith('artifacts/training-host/') for r in manifest['files']))
-        with transfer.open_bundle(result['bundle']) as archive:
-            dll = next(r for r in manifest['files'] if r['path'].endswith('engine.dll'))
-            self.assertNotIn(transfer.payload_name(manifest, dll), archive.namelist())
+        dll = next(r for r in manifest['files'] if r['path'].endswith('engine.dll'))
+        self.assertNotIn(transfer.payload_name(manifest, dll), self.archive_bytes(result['bundle']))
         backup = self.move_source()
         with self.assertRaisesRegex(ValueError, 'Missing external'):
             transfer.restore(self.root, result['bundle'])
@@ -322,11 +333,12 @@ class TransferTests(unittest.TestCase):
         result = self.export()
         manifest = transfer.inspect_bundle(self.bundle)
         included = [r for r in manifest['files'] if not r['external']]
-        with zipfile.ZipFile(self.bundle) as archive:
-            self.assertEqual(len(archive.namelist()) - 1, len({r['sha256'] for r in included}))
+        self.assertEqual(len(self.archive_bytes()) - 1, len({r['sha256'] for r in included}))
         self.assertLess(result['unique_payload_bytes'], result['bytes'])
         self.move_source(); transfer.restore(self.root, self.bundle)
         self.assertEqual((self.run / 'best.pt').read_bytes(), b'old opponent')
+        (self.run / 'best.pt').write_bytes(b'updated independently')
+        self.assertEqual((self.run / 'population/historical.pt').read_bytes(), b'old opponent')
 
     def test_repo_mode_omits_clean_tracked_files_but_includes_private_runtime(self):
         tracked = {'scripts/step5.py', 'src/brass_ai/beliefs.py', 'training/runtime/parity.json'}
@@ -346,7 +358,7 @@ class TransferTests(unittest.TestCase):
             self.put(name, (backup / name).read_bytes())
         self.assertTrue(transfer.restore(self.root, self.bundle)['verified'])
 
-    def test_parts_restore_without_joining_zip_and_detect_missing_or_changed_part(self):
+    def test_parts_restore_without_joining_archive_and_detect_missing_or_changed_part(self):
         pin = 'artifacts/step5/selfplay/extra.pt'
         self.put(pin, os.urandom(2_500_000))
         self.put('artifacts/step5/selfplay/pins.json', dict(paths=[pin]))
@@ -371,11 +383,12 @@ class TransferTests(unittest.TestCase):
     def test_previous_version_archives_still_restore(self):
         self.export()
         old = self.area / 'old.zip'
-        with zipfile.ZipFile(self.bundle) as src, zipfile.ZipFile(old, 'w') as dst:
-            manifest = transfer.json.loads(src.read('transfer.json'))
+        src = self.archive_bytes()
+        with zipfile.ZipFile(old, 'w') as dst:
+            manifest = transfer.json.loads(src['transfer.json'])
             for record in manifest['files']:
                 self.assertFalse(record.pop('external'))
-                dst.writestr('project/' + record['path'], src.read(transfer.payload_name(manifest, record)))
+                dst.writestr('project/' + record['path'], src[transfer.payload_name(manifest, record)])
             manifest['format'] = transfer.OLD_FORMAT
             manifest['id'] = transfer.digest({k: v for k, v in manifest.items() if k != 'id'})
             dst.writestr('transfer.json', transfer.encode(manifest))
@@ -388,15 +401,136 @@ class TransferTests(unittest.TestCase):
         with patch.object(transfer, 'SOURCE_RECIPE', 1):
             self.export()
         old = self.area / 'before-throughput.zip'
-        with zipfile.ZipFile(self.bundle) as src, zipfile.ZipFile(old, 'w') as dst:
-            manifest = transfer.json.loads(src.read('transfer.json'))
+        src = self.archive_bytes()
+        with zipfile.ZipFile(old, 'w') as dst:
+            manifest = transfer.json.loads(src['transfer.json'])
             manifest.pop('source_recipe')  # Actual old packages had no recipe field.
             manifest['id'] = transfer.digest({k: v for k, v in manifest.items() if k != 'id'})
-            for name in src.namelist():
-                dst.writestr(name, transfer.encode(manifest) if name == 'transfer.json' else src.read(name))
+            for name, data in src.items():
+                dst.writestr(name, transfer.encode(manifest) if name == 'transfer.json' else data)
         self.move_source()
         self.assertTrue(transfer.restore(self.root, old)['verified'])
         self.assertEqual(transfer.read(self.run / 'state.json'), self.state)
+
+    def test_default_zstd_multithreaded_archive_is_standard_tar_and_restores_large_payload(self):
+        pin = 'artifacts/step5/selfplay/extra.pt'
+        content = os.urandom(20_000_000)  # Larger than one zstd worker job.
+        self.put(pin, content)
+        self.put('artifacts/step5/selfplay/pins.json', dict(paths=[pin]))
+        with patch.object(transfer, 'available_cpus', return_value=2):
+            result = self.export()
+        self.assertEqual(result['archive_format'], 'zstd')
+        self.assertEqual(result['compression_threads'], 2)
+        with self.bundle.open('rb') as stream:
+            self.assertEqual(stream.read(4), transfer.ZSTD_MAGIC)
+        # Independently read with the standard tar parser and the zstd backend.
+        with transfer.zstd_backend().ZstdFile(self.bundle, 'rb') as decoded, tarfile.open(fileobj=decoded, mode='r|') as archive:
+            self.assertEqual(archive.next().name, 'transfer.json')
+        self.move_source()
+        self.assertTrue(transfer.restore(self.root, self.bundle)['verified'])
+        self.assertEqual((self.root / pin).read_bytes(), content)
+        self.assertFalse(list(self.area.glob('*.tar')))
+
+    def test_zip_export_and_split_restore_work_without_zstd(self):
+        pin = 'artifacts/step5/selfplay/extra.pt'
+        self.put(pin, os.urandom(1_200_000))
+        self.put('artifacts/step5/selfplay/pins.json', dict(paths=[pin]))
+        with patch.object(transfer, 'zstd_backend', side_effect=ValueError('missing zstd')):
+            single = self.area / 'legacy.zip'
+            split = self.area / 'legacy-parts.zip'
+            a = transfer.export(self.root, self.run, single, archive_format='zip', dependencies='bundled', part_mb=0)
+            b = transfer.export(self.root, self.run, split, archive_format='zip', dependencies='bundled', part_mb=1)
+            self.assertEqual(a['archive_format'], 'zip')
+            self.assertTrue(zipfile.is_zipfile(single))
+            self.assertGreaterEqual(b['parts'], 2)
+            self.move_source()
+            self.assertTrue(transfer.restore(self.root, b['bundle'])['verified'])
+            self.assertTrue(transfer.restore(self.root, single, verify_only=True)['verified'])
+
+    def test_truncated_corrupt_or_appended_zstd_is_rejected_before_writes(self):
+        self.export()
+        data = self.bundle.read_bytes()
+        zstd = transfer.zstd_backend()
+        invalid = [data[:-1], data[:-10], data[:len(data) // 2],
+                   data[:-1] + bytes([data[-1] ^ 1]), data + b'trailing garbage',
+                   data + zstd.compress(b'unexpected second tar')]
+        self.move_source()
+        for index, content in enumerate(invalid):
+            with self.subTest(case=index):
+                bad = self.area / f'bad-{index}.tar.zst'
+                bad.write_bytes(content)
+                with self.assertRaises((ValueError, EOFError, tarfile.TarError, zstd.ZstdError)):
+                    transfer.restore(self.root, bad)
+                self.assertFalse(self.root.exists())
+
+    def test_zstd_payload_hash_tampering_is_rejected_before_writes(self):
+        self.export()
+        zstd = transfer.zstd_backend()
+        raw = zstd.decompress(self.bundle.read_bytes())
+        original = b'checkpoint-with-Adam-and-RNG'
+        self.assertIn(original, raw)
+        bad = self.area / 'bad-content.tar.zst'
+        bad.write_bytes(zstd.compress(raw.replace(original, b'x' * len(original))))
+        self.move_source()
+        with self.assertRaisesRegex(ValueError, 'Corrupted transfer file'):
+            transfer.restore(self.root, bad)
+        self.assertFalse(self.root.exists())
+
+    def test_tar_links_unsafe_paths_duplicates_and_extra_members_are_rejected(self):
+        self.export()
+        source = self.archive_bytes()
+        self.move_source()
+        for name, kind in [('escape', tarfile.SYMTYPE), ('escape', tarfile.LNKTYPE),
+                           ('../escape', tarfile.REGTYPE), ('transfer.json', tarfile.REGTYPE),
+                           ('objects/unexpected', tarfile.REGTYPE)]:
+            with self.subTest(name=name, kind=kind):
+                raw = io.BytesIO()
+                with tarfile.open(fileobj=raw, mode='w') as archive:
+                    for member_name, content in source.items():
+                        info = tarfile.TarInfo(member_name); info.size = len(content)
+                        archive.addfile(info, io.BytesIO(content))
+                    info = tarfile.TarInfo(name); info.type = kind; info.linkname = '../outside'
+                    archive.addfile(info, io.BytesIO())
+                bad = self.area / 'invalid-members.tar.zst'
+                bad.write_bytes(transfer.zstd_backend().compress(raw.getvalue()))
+                with self.assertRaises(ValueError):
+                    transfer.restore(self.root, bad)
+                self.assertFalse(self.root.exists())
+
+    def test_missing_zstd_fails_before_writes_but_dry_run_still_works(self):
+        with patch.object(transfer, 'zstd_backend', side_effect=ValueError('missing zstd')):
+            self.assertTrue(transfer.export(self.root, self.run, self.bundle, dry_run=True)['dry_run'])
+            with self.assertRaisesRegex(ValueError, 'missing zstd'):
+                self.export()
+        self.assertFalse(self.bundle.exists())
+        self.assertFalse((self.run / '.active-run.json').exists())
+        self.assertFalse(list(self.area.glob('*.partial')))
+
+    def test_export_controls_and_release_sized_parts(self):
+        for options in [dict(archive_format='invalid'), dict(threads=-1), dict(zstd_level=0),
+                        dict(zstd_level=23), dict(part_mb=2001)]:
+            with self.subTest(options=options), self.assertRaises(ValueError):
+                transfer.export(self.root, self.run, self.bundle, **options)
+        result = transfer.export(self.root, self.run, self.bundle, dependencies='bundled',
+                                 part_mb=1900, threads=1, zstd_level=1)
+        self.assertEqual(result['compression_threads'], 1)
+        self.assertEqual(result['zstd_level'], 1)
+        self.assertEqual(result['part_mb'], 1900)
+        self.move_source()
+        self.assertTrue(transfer.restore(self.root, result['bundle'])['verified'])
+
+    def test_cli_default_zstd_and_auto_threads_respect_scheduler(self):
+        env = dict(os.environ, SLURM_CPUS_PER_TASK='2')
+        command = [sys.executable, str(ROOT / 'scripts/step5-transfer.py'), 'export',
+                   '--root', str(self.root), '--run', str(self.run), '--bundle', str(self.bundle),
+                   '--part-mb', '0', '--dependencies', 'bundled']
+        result = subprocess.run(command, env=env, capture_output=True, text=True, check=True)
+        self.assertIn('"archive_format": "zstd"', result.stdout)
+        with patch.dict(os.environ, SLURM_CPUS_PER_TASK='2'):
+            self.assertLessEqual(transfer.available_cpus(), 2)
+        self.assertEqual(self.bundle.read_bytes()[:4], transfer.ZSTD_MAGIC)
+        self.assertEqual(transfer.json.loads(result.stdout)['archive_format'], 'zstd')
+        self.assertTrue(transfer.restore(self.root, self.bundle)['verified'])
 
 
 if __name__ == '__main__':

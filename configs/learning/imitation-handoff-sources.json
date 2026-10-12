@@ -60,6 +60,21 @@
       "implementation": "fff450449f8fbceaa8c57cffcf826da006d53d44351c2fce4d985fc973d0df7c",
       "learning_compatibility": "c349e816f2e301ea2a3b438902059cffe868f48e131f7c120691d37cd1c409d2",
       "reason": "Completed IL remains compatible with the joint-7 diagnostic and PPO resume review."
+    },
+    {
+      "implementation": "9a60a40aa1e4d8193243681d68de2f4661b82d2cf213b2d86f9e78bd3a6e5541",
+      "learning_compatibility": "c349e816f2e301ea2a3b438902059cffe868f48e131f7c120691d37cd1c409d2",
+      "reason": "Whole-turn clock migration preserves completed IL weights, data/loss/checkpoint formats and original lineage; no PPO state is imported from IL."
+    },
+    {
+      "implementation": "6a4fce0541ce50802bc009330db2bf7026134ef40ced967f5a3b6863981dba62",
+      "learning_compatibility": "c349e816f2e301ea2a3b438902059cffe868f48e131f7c120691d37cd1c409d2",
+      "reason": "Search retirement review preserves completed fresh IL weights, labels, supervised loss and checkpoint/data contracts. Completed IL handoff retains its existing lineage checks."
+    },
+    {
+      "implementation": "f19424e3d4da14f8759fbc5877bfd459771ca54194d6945d2dfcb90ccc23aa5d",
+      "learning_compatibility": "c349e816f2e301ea2a3b438902059cffe868f48e131f7c120691d37cd1c409d2",
+      "reason": "Single-GPU throughput review 1.0.0: direct single-device service and automatic one-GPU CLI default, faster strict JSON decoding, content-sealed actor-writer validation reuse, replay-reader startup overlapped with collection, and pass-local retention path resolution. The replay reader/validator is byte-identical; existing feature-cache receipts remain valid. Architecture, encoding, PPO, rewards, budgets, schedules, reader/worker counts, data/checkpoint formats and IL losses are unchanged. Preserve committed weights, Adam/RNG and progress; refresh utility calibration on fresh ordinary rollouts and reject old-source teacher targets. Completed IL weights remain compatible."
     }
   ]
 }

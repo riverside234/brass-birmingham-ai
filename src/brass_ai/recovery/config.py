@@ -7,8 +7,8 @@ from brass_ai.search.common import SearchConfig
 # Training-only defaults; evaluation/laptop SearchConfig defaults stay intact.
 SEARCH_EVERY_GAMES=160
 SEARCH_COLLECTIONS_PER_ITERATION=2
-# Cumulative search share: .9/.1 = nine search seconds per ordinary second.
-SEARCH_WALL_FRACTION=.90
+# Cumulative collection admission: one search second per ordinary second.
+SEARCH_WALL_FRACTION=.50
 SEARCH_SECONDS=12.0
 SEARCH_WORKERS=4
 # Completed evidence in the saved 12-second lab searches suggests these
@@ -20,6 +20,22 @@ LEGACY_OPPONENT_WORK_BUDGET = dict(contract='legacy-opponent-turn-work/1.1.0',
     mode='simulations',simulations_per_turn=16,watchdog_seconds=120.0)
 NN_WORK_BUDGET = dict(contract='nn-turn-work/1.0.0',mode='simulations',
     simulations_per_turn=16,watchdog_seconds=120.0)
+# Keep the work contracts above readable for archived data and explicit small
+# comparisons. These versioned whole-turn clocks are the active Step 5 defaults.
+TEACHER_TIME_BUDGET = dict(contract='teacher-turn-time/1.0.0',mode='time',seconds_per_turn=12.0)
+LEGACY_TIME_BUDGET = dict(contract='legacy-opponent-turn-time/1.0.0',mode='time',seconds_per_turn=1.0)
+NN_TIME_BUDGET = dict(contract='nn-turn-time/1.0.0',mode='time',seconds_per_turn=12.0)
+TIME_CONFIG_MIGRATION = 'step5-whole-turn-time/1.0.0'
+
+
+def time_budget(value):
+    return isinstance(value,dict) and value.get('mode')=='time'
+
+
+def _time_fields(value,default):
+    require(value==default and set(value)==set(default) and
+            type(value['seconds_per_turn']) in (int,float),'Invalid whole-turn time contract')
+    return value
 PPO_LEARNING_RATE=1e-5
 # A full 64-turn teacher collection can supply 8 batches of 16, at most twice
 # per sample. Missing evidence reduces or skips updates; it never fills a batch
@@ -36,6 +52,7 @@ def teacher_search_config(options):
 def teacher_work_budget_config(value):
     """Validate current and archived receipts without relabelling old evidence."""
     if value is None:return None
+    if time_budget(value):return _time_fields(value,TEACHER_TIME_BUDGET)
     _work_fields(value,TEACHER_WORK_BUDGET,'teacher-turn-work/1.0.0')
     phases=value['simulations_per_phase']
     require(type(phases) is dict and set(phases)==set(TEACHER_WORK_BUDGET['simulations_per_phase']),
@@ -48,6 +65,7 @@ def teacher_work_budget_config(value):
 def legacy_opponent_work_budget_config(value):
     """Lab-only searched opponents, demonstrations and frozen evaluations."""
     if value is None:return None
+    if time_budget(value):return _time_fields(value,LEGACY_TIME_BUDGET)
     _work_fields(value,LEGACY_OPPONENT_WORK_BUDGET,'legacy-opponent-turn-work/1.0.0')
     require(type(value['simulations_per_turn']) is int and 4<=value['simulations_per_turn']<=100000,
             'Invalid legacy opponent simulation budget')
@@ -67,6 +85,7 @@ def _work_fields(value,default,archived=None):
 
 
 def nn_work_budget_config(value):
+    if time_budget(value):return _time_fields(value,NN_TIME_BUDGET)
     _work_fields(value,NN_WORK_BUDGET)
     require(type(value['simulations_per_turn']) is int and 1<=value['simulations_per_turn']<=100000,
             'Invalid NN turn simulation budget')
@@ -81,13 +100,22 @@ def current_work_budget(value,default):
     return result
 
 
-def fixed_work_config(config):
-    """All active Step 5 search uses counts; a changed resume signature needs review."""
+def time_budget_config(config):
+    """Explicit active-recipe upgrade; same-run signature changes require review."""
     result=copy.deepcopy(config)
-    for key,default in (('teacher_work_budget',TEACHER_WORK_BUDGET),
-                        ('legacy_opponent_work_budget',LEGACY_OPPONENT_WORK_BUDGET)):
-        result[key]=current_work_budget(result.get(key),default)
+    for key,default,validator in (('teacher_work_budget',TEACHER_TIME_BUDGET,teacher_work_budget_config),
+                        ('legacy_opponent_work_budget',LEGACY_TIME_BUDGET,legacy_opponent_work_budget_config)):
+        validator(result.get(key))
+        result[key]=copy.deepcopy(default)
+    result['search']['seconds']=SEARCH_SECONDS
+    fraction=result.get('search_wall_fraction',SEARCH_WALL_FRACTION)
+    require(type(fraction) in (int,float) and 0<fraction<=.90,'Invalid search wall fraction before migration')
+    result['search_wall_fraction']=min(fraction,SEARCH_WALL_FRACTION)
     return result
+
+
+# Import compatibility for preflight scripts; no silent fixed-work continuation.
+fixed_work_config=time_budget_config
 
 
 EXECUTION = dict(processes=8, hosts_per_process=4, heavy_processes=8,
@@ -204,7 +232,7 @@ def validate_config(config):
     if 'legacy_opponent_work_budget' in config:
         fields.add('legacy_opponent_work_budget')
         legacy_work=legacy_opponent_work_budget_config(config['legacy_opponent_work_budget'])
-        if legacy_work is not None:
+        if legacy_work is not None and not time_budget(legacy_work):
             workers=config['legacy_budget']['search_workers']
             count=legacy_work['simulations_per_turn']
             require(type(workers) is int and 1<=workers<=4,'Invalid legacy work worker count')
@@ -213,7 +241,7 @@ def validate_config(config):
     if 'teacher_work_budget' in config:
         fields.add('teacher_work_budget')
         work=teacher_work_budget_config(config['teacher_work_budget'])
-        if work is not None:
+        if work is not None and not time_budget(work):
             search=teacher_search_config(config['search'])
             workers=config['execution'].get('search_workers_per_turn',search.workers)
             require(all(workers*search.minimum_plan_visits<=n<=workers*search.simulations
@@ -277,7 +305,9 @@ def validate_config(config):
                 max(config['legacy_budget']['search_workers'],config['execution']['search_workers_per_turn'])<=available,
                 'Search group exceeds queued CPU admission allowance')
         positive(config['audit_workers'],'audit_workers',integer=True)
-        require(type(config['overlap_pools']) is bool and 0<config['search_wall_fraction']<=SEARCH_WALL_FRACTION,'Invalid overlap/search fraction')
+        # Historical configs remain readable; active entry points explicitly
+        # migrate the cumulative cap before signing/resuming the run.
+        require(type(config['overlap_pools']) is bool and 0<config['search_wall_fraction']<=.90,'Invalid overlap/search fraction')
         require(config['execution']['max_models']>=sum(config['population'].values())+3,
                 'Model cache must cover frozen population plus learner/teacher versions')
         require(set(config['update'])==set(UPDATE_V21) and

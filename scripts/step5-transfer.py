@@ -1,4 +1,7 @@
-"""Private, byte-preserving transfer of a stopped Step 5 run (stdlib only).
+"""Private, byte-preserving transfer of a stopped Step 5 run.
+
+Default: multithreaded tar.zst (backports.zstd on Python < 3.14).
+Legacy ZIP export/restore remains available with only the standard library.
 
 Keep this outside the source-bound learning packages: adding a transport tool
 must not invalidate a live PPO run's implementation identity. No checkpoints or
@@ -15,6 +18,8 @@ import shlex
 import socket
 import stat
 import subprocess
+import sys
+import tarfile
 import uuid
 import zipfile
 from bisect import bisect_right
@@ -26,6 +31,8 @@ PARTS_FORMAT = 'step5-transfer-parts/1.0.0'
 SOURCE_RECIPE = 2  # 1: Python-only; 2: additive training hosts and build inputs.
 SKIP = {'__pycache__', '.git', '.active-run.json'}
 CODE_TREES = ('src', 'scripts', 'configs', 'training/opponents', 'training/runtime')
+CHUNK = 1024 * 1024
+ZSTD_MAGIC = b'\x28\xb5\x2f\xfd'
 
 
 def require(ok, message):
@@ -304,9 +311,71 @@ def git_baseline(root):
         return None, set()  # Repo mode cannot omit files without a Git baseline.
 
 
-def export(root, run, bundle, *, dry_run=False, mode='compact', dependencies='external', part_mb=100):
+def zstd_backend():
+    try:
+        from compression import zstd
+    except ImportError:
+        try:
+            from backports import zstd
+        except ImportError as error:
+            raise ValueError('Zstandard support is missing. Run: python -m pip install -r requirements-transfer.txt '
+                             '(or python -m pip install backports.zstd). ZIP export: --format zip') from error
+    return zstd
+
+
+def available_cpus():
+    """Respect process affinity and a lab scheduler's per-task allocation."""
+    counts = [getattr(os, 'process_cpu_count', os.cpu_count)() or 1]
+    if hasattr(os, 'sched_getaffinity'):
+        counts.append(len(os.sched_getaffinity(0)))
+    allocated = os.environ.get('SLURM_CPUS_PER_TASK', '')
+    if allocated.isdecimal() and int(allocated) > 0:
+        counts.append(int(allocated))
+    return max(1, min(counts))
+
+
+@contextmanager
+def create_archive(path, archive_format, level, threads):
+    with ExitStack() as stack:
+        if archive_format == 'zip':
+            archive = stack.enter_context(zipfile.ZipFile(path, 'x', compression=zipfile.ZIP_DEFLATED,
+                                                          compresslevel=6, allowZip64=True))
+        else:
+            zstd = zstd_backend()
+            params = zstd.CompressionParameter
+            compressed = stack.enter_context(zstd.ZstdFile(path, 'xb', options={
+                params.compression_level: level, params.nb_workers: threads if threads > 1 else 0,
+                params.checksum_flag: 1}))
+            archive = stack.enter_context(tarfile.open(fileobj=compressed, mode='w|', bufsize=CHUNK))
+        yield archive
+
+
+def add_member(archive, name, source, size):
+    if isinstance(archive, zipfile.ZipFile):
+        if isinstance(source, Path):
+            archive.write(source, name)
+        else:
+            archive.writestr(name, source)
+    else:
+        info = tarfile.TarInfo(name)
+        info.size = size
+        info.mode = 0o600
+        with source.open('rb') if isinstance(source, Path) else io.BytesIO(source) as stream:
+            archive.addfile(info, stream)
+
+
+def export(root, run, bundle, *, dry_run=False, mode='compact', dependencies='external', part_mb=1900,
+           archive_format='zstd', zstd_level=3, threads=0):
     require(dependencies in ('repo', 'bundled', 'external'), 'Unknown dependency mode')
-    require(type(part_mb) is int and 0 <= part_mb <= 100, 'Part size must be 0 (unsplit) or 1–100 MB')
+    require(type(part_mb) is int and 0 <= part_mb <= 2000, 'Part size must be 0 (unsplit) or 1–2000 MB')
+    require(archive_format in ('zstd', 'zip'), 'Unknown archive format')
+    require(type(zstd_level) is int and 1 <= zstd_level <= 22, 'Zstd level must be 1–22')
+    require(type(threads) is int and threads >= 0, 'Threads must be 0 (auto) or a positive integer')
+    compression_threads = (threads or available_cpus()) if archive_format == 'zstd' else 1
+    if archive_format == 'zstd' and not dry_run:
+        zstd = zstd_backend()  # Fail before acquiring run leases or writing an archive.
+        worker_limit = zstd.CompressionParameter.nb_workers.bounds()[1]
+        require(compression_threads <= max(1, worker_limit), 'Too many compression threads for this zstd build')
     root = Path(root).resolve()
     run = below(root, run)
     require(not active(run), 'Run is active; wait for training to stop')
@@ -345,7 +414,8 @@ def export(root, run, bundle, *, dry_run=False, mode='compact', dependencies='ex
             external_files=len(records) - len(included), bytes=sum(r['bytes'] for r in included),
             unique_payload_bytes=sum(r['bytes'] for r in unique.values()), category_bytes=sizes,
             largest_files=sorted(included, key=lambda r: (-r['bytes'], r['path']))[:10],
-            part_mb=part_mb, dry_run=dry_run)
+            part_mb=part_mb, dry_run=dry_run, archive_format=archive_format,
+            zstd_level=zstd_level if archive_format == 'zstd' else None, compression_threads=compression_threads)
         if dry_run:
             return result
         target = Path(bundle).absolute()
@@ -354,22 +424,20 @@ def export(root, run, bundle, *, dry_run=False, mode='compact', dependencies='ex
         target.parent.mkdir(parents=True, exist_ok=True)
         temporary = target.with_name(target.name + '.' + uuid.uuid4().hex + '.partial')
         try:
-            with zipfile.ZipFile(temporary, 'x', compression=zipfile.ZIP_DEFLATED, compresslevel=6, allowZip64=True) as archive:
-                archive.writestr('transfer.json', encode(manifest))
+            with create_archive(temporary, archive_format, zstd_level, compression_threads) as archive:
+                manifest_bytes = encode(manifest)
+                add_member(archive, 'transfer.json', manifest_bytes, len(manifest_bytes))
                 written = set()
                 for index, record in enumerate(records, 1):
                     source = files[record['path']]
                     if not record['external'] and record['sha256'] not in written:
                         payload = payload_name(manifest, record)
-                        if isinstance(source, Path):
-                            archive.write(source, payload)
-                        else:
-                            archive.writestr(payload, source)
+                        add_member(archive, payload, source, record['bytes'])
                         written.add(record['sha256'])
                     if isinstance(source, Path):
                         require(sha(source) == record['sha256'], 'Source changed during export: ' + record['path'])
                     if index == len(records) or index % max(1, len(records) // 5) == 0:
-                        print(f'Transfer export: {index}/{len(records)} files', flush=True)
+                        print(f'Transfer export: {index}/{len(records)} files', file=sys.stderr, flush=True)
             require((run / 'state.json').read_bytes() == state_bytes, 'Run changed during export')
             require(source_identity(root) == manifest['implementation'], 'Training source changed during export')
             inspect_bundle(temporary)
@@ -391,7 +459,7 @@ def payload_name(manifest, record):
 
 
 def split_bundle(source, target, limit):
-    """Publish the small index last. Leave no duplicate monolithic ZIP."""
+    """Publish the small index last. Leave no duplicate monolithic archive."""
     target = Path(target)
     index = Path(str(target) + '.parts.json')
     count = (source.stat().st_size + limit - 1) // limit
@@ -420,7 +488,7 @@ def split_bundle(source, target, limit):
 
 
 class PartsReader(io.RawIOBase):
-    """Seek across validated parts without making another large joined ZIP."""
+    """Seek across validated parts without making another large joined archive."""
     def __init__(self, index):
         super().__init__()
         index = Path(index)
@@ -476,48 +544,80 @@ class PartsReader(io.RawIOBase):
 
 @contextmanager
 def open_bundle(bundle):
+    """Yield an iterator of (name, size, stream); consume streams in order.
+
+    Detect by bytes, so old ZIPs and either kind of parts index need no flags.
+    Tar payloads are never extracted or buffered as a complete intermediate file.
+    """
     path = Path(bundle)
     if not path.exists() and Path(str(path) + '.parts.json').exists():
         path = Path(str(path) + '.parts.json')
     with ExitStack() as stack:
-        source = stack.enter_context(PartsReader(path)) if path.name.endswith('.parts.json') else path
-        yield stack.enter_context(zipfile.ZipFile(source))
+        source = stack.enter_context(PartsReader(path) if path.name.endswith('.parts.json') else path.open('rb'))
+        magic = source.read(4)
+        source.seek(0)
+        if magic == ZSTD_MAGIC:
+            decoded = stack.enter_context(zstd_backend().ZstdFile(source, 'rb'))
+            archive = stack.enter_context(tarfile.open(fileobj=decoded, mode='r|', bufsize=CHUNK))
+
+            def members():
+                for info in archive:
+                    relative(info.name)
+                    require(info.isfile() and not info.issparse() and info.size >= 0, 'Invalid archive member')
+                    with archive.extractfile(info) as stream:
+                        yield info.name, info.size, stream
+                # Tar stops at its first zero end marker, possibly before zstd's
+                # final checksum. Drain buffered padding AND the decoder to EOF
+                # to reject a truncated frame, corrupt footer or appended data.
+                while block := archive.fileobj.read(CHUNK):
+                    require(not block.strip(b'\0'), 'Unexpected data after tar end')
+        else:
+            archive = stack.enter_context(zipfile.ZipFile(source))
+
+            def members():
+                for info in archive.infolist():
+                    relative(info.filename)
+                    require(not info.is_dir() and not stat.S_ISLNK(info.external_attr >> 16), 'Invalid archive member')
+                    with archive.open(info) as stream:
+                        yield info.filename, info.file_size, stream
+        yield members()
 
 
 def inspect_bundle(bundle):
-    with open_bundle(bundle) as archive:
-        require(archive.getinfo('transfer.json').file_size < 32_000_000, 'Oversized transfer manifest')
-        manifest = json.loads(archive.read('transfer.json'))
-        require(manifest['format'] in (FORMAT, OLD_FORMAT) and manifest['id'] == digest({k: v for k, v in manifest.items() if k != 'id'}), 'Invalid transfer manifest')
-        require(manifest.get('source_recipe', 1) in (1, 2), 'Unsupported implementation fingerprint recipe')
-        files = manifest['files']
-        names = [r['path'] for r in files]
-        require(len(names) == len({n.casefold() for n in names}), 'Duplicate/case-colliding transfer paths')
-        payloads = {payload_name(manifest, r) for r in files if not r.get('external', False)}
-        require(len(archive.namelist()) == len(payloads) + 1 and set(archive.namelist()) == {'transfer.json', *payloads}, 'Unexpected archive members')
-        checked = {}
-        for record in files:
-            relative(record['path'])
-            require(type(record.get('external', False)) is bool and type(record['bytes']) is int and record['bytes'] >= 0, 'Invalid file metadata')
-            require(len(record['sha256']) == 64 and all(c in '0123456789abcdef' for c in record['sha256']), 'Invalid file digest')
-            if record.get('external', False):
-                require(manifest['format'] == FORMAT, 'Old transfer cannot omit external files')
-                continue
-            payload = payload_name(manifest, record)
-            if payload in checked:
-                require(checked[payload] == record['bytes'], 'Inconsistent duplicate payload size')
-                continue
-            info = archive.getinfo(payload)
-            require(not info.is_dir() and not stat.S_ISLNK(info.external_attr >> 16) and info.file_size == record['bytes'], 'Invalid archive member')
-            with archive.open(info) as stream:
-                require(hashlib.file_digest(stream, 'sha256').hexdigest() == record['sha256'], 'Corrupted transfer file: ' + record['path'])
-            checked[payload] = record['bytes']
-        for name in [manifest['run'], manifest['config'], *manifest['runs']]:
-            relative(name)
-        require(manifest['run'] in manifest['runs'] and all(n.startswith('artifacts/') for n in manifest['runs']), 'Invalid run roots')
-        by_name = {r['path']: r for r in files}
-        require(by_name[manifest['run'] + '/state.json']['sha256'] == manifest['state_sha256'], 'State binding differs')
-        return manifest
+    actual = {}; seen = set(); manifest = None
+    with open_bundle(bundle) as members:
+        for name, size, stream in members:
+            require(name.casefold() not in seen, 'Duplicate/case-colliding archive members')
+            seen.add(name.casefold())
+            if name == 'transfer.json':
+                require(size < 32_000_000, 'Oversized transfer manifest')
+                manifest = json.loads(stream.read())
+            else:
+                actual[name] = (size, hashlib.file_digest(stream, 'sha256').hexdigest())
+    require(manifest is not None, 'Missing transfer manifest')
+    require(manifest['format'] in (FORMAT, OLD_FORMAT) and manifest['id'] == digest({k: v for k, v in manifest.items() if k != 'id'}), 'Invalid transfer manifest')
+    require(manifest.get('source_recipe', 1) in (1, 2), 'Unsupported implementation fingerprint recipe')
+    files = manifest['files']
+    names = [r['path'] for r in files]
+    require(len(names) == len({n.casefold() for n in names}), 'Duplicate/case-colliding transfer paths')
+    payloads = {payload_name(manifest, r) for r in files if not r.get('external', False)}
+    require(set(actual) == payloads, 'Unexpected archive members')
+    for record in files:
+        relative(record['path'])
+        require(type(record.get('external', False)) is bool and type(record['bytes']) is int and record['bytes'] >= 0, 'Invalid file metadata')
+        require(len(record['sha256']) == 64 and all(c in '0123456789abcdef' for c in record['sha256']), 'Invalid file digest')
+        if record.get('external', False):
+            require(manifest['format'] == FORMAT, 'Old transfer cannot omit external files')
+            continue
+        payload = payload_name(manifest, record)
+        require(actual[payload][0] == record['bytes'], 'Invalid archive member size')
+        require(actual[payload][1] == record['sha256'], 'Corrupted transfer file: ' + record['path'])
+    for name in [manifest['run'], manifest['config'], *manifest['runs']]:
+        relative(name)
+    require(manifest['run'] in manifest['runs'] and all(n.startswith('artifacts/') for n in manifest['runs']), 'Invalid run roots')
+    by_name = {r['path']: r for r in files}
+    require(by_name[manifest['run'] + '/state.json']['sha256'] == manifest['state_sha256'], 'State binding differs')
+    return manifest
 
 
 def commands(root, manifest, *, iterations=20, device='cuda'):
@@ -548,23 +648,34 @@ def restore(root, bundle, *, verify_only=False):
         with ExitStack() as leases:
             for run in runs:
                 leases.enter_context(lease(run))
-            with open_bundle(bundle) as archive:
-                for record in manifest['files']:
-                    path = below(root, record['path'])
-                    if path.exists():
-                        continue
-                    path.parent.mkdir(parents=True, exist_ok=True)
-                    temporary = path.with_name(path.name + '.' + uuid.uuid4().hex + '.partial')
-                    try:
-                        with archive.open(payload_name(manifest, record)) as source, temporary.open('xb') as target:
-                            while block := source.read(1024 * 1024):
-                                target.write(block)
-                        require(sha(temporary) == record['sha256'], 'Restored file hash differs')
-                        require(not path.exists(), 'Destination appeared during restore')
-                        temporary.rename(path)
-                    finally:
-                        if temporary.exists():
-                            temporary.unlink()
+            needed = {}
+            for record in manifest['files']:
+                if not below(root, record['path']).exists():
+                    needed.setdefault(payload_name(manifest, record), []).append(record)
+            with open_bundle(bundle) as members:
+                for name, size, stream in members:
+                    first = None
+                    for record in needed.pop(name, []):
+                        path = below(root, record['path'])
+                        path.parent.mkdir(parents=True, exist_ok=True)
+                        temporary = path.with_name(path.name + '.' + uuid.uuid4().hex + '.partial')
+                        try:
+                            # A deduplicated object is decoded once. Subsequent
+                            # paths get separate files, so training can mutate
+                            # them independently (no hard links).
+                            with ExitStack() as copying:
+                                source = stream if first is None else copying.enter_context(first.open('rb'))
+                                target = copying.enter_context(temporary.open('xb'))
+                                while block := source.read(CHUNK):
+                                    target.write(block)
+                            require(sha(temporary) == record['sha256'], 'Restored file hash differs')
+                            require(not path.exists(), 'Destination appeared during restore')
+                            temporary.rename(path)
+                            first = path
+                        finally:
+                            if temporary.exists():
+                                temporary.unlink()
+            require(not needed, 'Missing archive payloads during restore')
     # Archives written before the throughput hosts used the previous recipe.
     # Verify their original identity; never relabel it as the current source.
     require(source_identity(root, recipe=manifest.get('source_recipe', 1)) == manifest['implementation'],
@@ -582,14 +693,18 @@ def main():
     out.add_argument('--dry-run', action='store_true')
     out.add_argument('--mode', choices=('compact', 'full'), default='compact', help='Default: live checkpoints/evidence; omit consumed replays, caches, trash and unused IL epochs')
     out.add_argument('--dependencies', choices=('external', 'repo', 'bundled'), default='external', help='Default external: code from Git and private runtime from SSH, both hash-checked. Repo/bundled include private runtime and are for private file transfer only')
-    out.add_argument('--part-mb', type=int, default=100, help='100 decimal MB by default (below 100 MiB); 0 for one ZIP, 1–100 for bounded parts')
+    out.add_argument('--format', choices=('zstd', 'zip'), default='zstd', dest='archive_format', help='Default zstd: streaming .tar.zst; zip: legacy DEFLATE format')
+    out.add_argument('--zstd-level', type=int, default=3, help='Zstd compression level 1–22 (default 3)')
+    out.add_argument('--threads', type=int, default=0, help='Zstd compression threads: 0=available CPUs/SLURM allocation (default), 1=single thread')
+    out.add_argument('--part-mb', type=int, default=1900, help='Decimal MB: default 1900 for Release assets; use 100 for Git push; 0 for one archive; maximum 2000')
     for name in ('restore', 'verify'):
         cmd = sub.add_parser(name)
         cmd.add_argument('--root', required=True, type=Path)
         cmd.add_argument('--bundle', required=True, type=Path)
     a = parser.parse_args()
     if a.command == 'export':
-        result = export(a.root, a.run, a.bundle, dry_run=a.dry_run, mode=a.mode, dependencies=a.dependencies, part_mb=a.part_mb)
+        result = export(a.root, a.run, a.bundle, dry_run=a.dry_run, mode=a.mode, dependencies=a.dependencies, part_mb=a.part_mb,
+                        archive_format=a.archive_format, zstd_level=a.zstd_level, threads=a.threads)
     else:
         result = restore(a.root, a.bundle, verify_only=a.command == 'verify')
     print(json.dumps(result, indent=2, allow_nan=False))

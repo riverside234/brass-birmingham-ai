@@ -1,0 +1,3 @@
+# Standalone migration tool only; does not change the training environment/signature.
+# Python 3.14+ normally supplies compression.zstd in the standard library.
+backports.zstd==1.8.0; python_version < "3.14"

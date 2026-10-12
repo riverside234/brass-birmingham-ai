@@ -222,6 +222,8 @@ class MaskedISMCTS:
 
     def run(self,view,choices):
         slots=[];started=0;search_began=time.monotonic()
+        limit=None if getattr(self,'time_budget_primary',False) else self.config.simulations
+        available=lambda:limit is None or started<limit
         def advance(generator,result=None,first=False):
             try:return next(generator) if first else generator.send(result)
             except StopIteration:return None
@@ -229,8 +231,11 @@ class MaskedISMCTS:
         try:
             capacity=min(self.config.pending_paths,len(self.lanes))
             free=list(range(capacity))
-            while time.monotonic()<self.deadline and (started<self.config.simulations or slots):
-                while free and len(slots)<capacity and started<self.config.simulations and time.monotonic()<self.deadline:
+            while time.monotonic()<self.deadline and (available() or slots):
+                while free and len(slots)<capacity and available() and time.monotonic()<self.deadline:
+                    # Time-primary search has no finite attempt quota. A
+                    # cancelled trajectory must not be relaunched until expiry.
+                    self.check()
                     lane=free.pop();g=self.trajectory(view,choices,self.lanes[lane]);started+=1
                     waiting=advance(g,first=True)
                     if waiting is not None:slots.append((g,waiting,lane))
@@ -260,6 +265,10 @@ class MaskedISMCTS:
         except SearchIncomplete:self.interrupted+=max(1,len(slots))
         finally:
             for generator,_,_ in slots:generator.close()
+        if getattr(self,'time_budget_primary',False):
+            # Loop-boundary expiry also retires pending paths; none are backed
+            # up as completed evidence, and each launch is counted once.
+            self.interrupted=started-self.completed
         self.metrics['attempted']=started
         self.metrics['elapsed_seconds']=time.monotonic()-search_began
         self.metrics['completed_per_second']=self.completed/max(1e-9,self.metrics['elapsed_seconds'])
@@ -370,11 +379,16 @@ class MaskedSearchPolicy:
         if len(choices)==1 or time.monotonic()>=deadline or self.cancelled.is_set():return fallback,1.,None
         bot=MaskedISMCTS(self.game,self.base,self.rollouts,self.config,view['seat'],
             self.context_features(view,rng),rng,deadline,recall,tree,cache,self.simulation_games,self.cancelled,getattr(self,'partition_index',0),self.reward_context)
+        bot.time_budget_primary=getattr(self,'time_budget_primary',False)
         self.telemetry['searches']+=1
         with inference_deadline([self.base]+self.rollouts,deadline):stats=bot.run(view,choices)
         self.last_statistics=stats
         for name,source in [('simulations','completed'),('incomplete','interrupted'),('opponent_choices','opponent_choices')]:self.telemetry[name]+=stats[source]
         self.telemetry['max_pending']=max(self.telemetry['max_pending'],stats['max_pending'])
+        # Training forests consume only these completed statistics. Building
+        # discarded labels here repeats source hashing, allocation and plan
+        # ranking after every worker's deadline; the coordinator labels once.
+        if getattr(self,'teacher_replica',False):return fallback,1.,None
         selected=max(range(len(choices)),key=lambda i:(stats['root'].get(choices[i]['id'],{}).get('visits',0),probabilities[i],-i))
         teacher=visit_teacher(choices,stats,probabilities,model=self.base.evaluator.model_id,observer=view['seat'],config=self.config)
         continuation=supported_continuation(stats,choices[selected]['id'],view['seat'],self.config.minimum_plan_visits)

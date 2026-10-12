@@ -132,9 +132,10 @@ class MultiGPUInferenceTests(unittest.TestCase):
     def test_explicit_single_replica_and_legacy_default_preserve_lifecycle(self):
         selected=self.pool(['cuda:1'])
         self.assertEqual(selected.device,'cuda:1');self.assertEqual(selected.learner_device,'cuda:0')
-        self.assertEqual(len(selected.services),1)
+        self.assertIsInstance(selected,inference.InferenceService)
+        self.assertFalse(hasattr(selected,'services'));self.assertFalse(hasattr(selected,'router'))
         selected.__enter__();selected.__exit__(None,None,None);selected.__exit__(None,None,None)
-        self.assertTrue(selected.services[0].closed)
+        self.assertTrue(selected.closed)
         legacy=inference.InferenceService(self.config,'cpu')
         self.assertIsInstance(legacy,inference.InferenceService)
         legacy.__exit__(None,None,None)
