@@ -46,17 +46,17 @@ Run-TrackerPackage $false;Assert-TrackerPackage $trackerManifest.files
 Copy-Item -LiteralPath (Join-Path $trackerBuild 'Managed/BrassPatch.dll') -Destination $trackerHelper -Force
 $trackerValidationPath=Join-Path $trackerFixtureBuild 'validation.json'
 $trackerScenarios=@('failed-tracker','wrong-fingerprint','failed-statistics','failed-preservation','failed-visual')
-if($trackerManifest.version -in '1.4.23','1.4.24','1.4.25','1.4.26','1.4.27','1.4.29','1.4.30'){$trackerScenarios+=@('failed-history','wrong-history-limit','wrong-history-schema','wrong-history-fingerprint')}
-if($trackerManifest.version -in '1.4.24','1.4.25','1.4.26','1.4.27','1.4.29','1.4.30'){$trackerScenarios+=@('failed-draft','gamma-enabled','wrong-player-layout')}
+if($trackerManifest.version -in '1.4.23','1.4.24','1.4.25','1.4.26','1.4.27','1.4.29','1.4.30','1.4.31'){$trackerScenarios+=@('failed-history','wrong-history-limit','wrong-history-schema','wrong-history-fingerprint')}
+if($trackerManifest.version -in '1.4.24','1.4.25','1.4.26','1.4.27','1.4.29','1.4.30','1.4.31'){$trackerScenarios+=@('failed-draft','gamma-enabled','wrong-player-layout')}
 if($trackerManifest.version -in '1.4.25','1.4.26'){$trackerScenarios+='failed-tracker-position'}
-if($trackerManifest.version -in '1.4.25','1.4.26','1.4.27','1.4.29','1.4.30'){$trackerScenarios+='failed-tracker-theme'}
+if($trackerManifest.version -in '1.4.25','1.4.26','1.4.27','1.4.29','1.4.30','1.4.31'){$trackerScenarios+='failed-tracker-theme'}
 foreach($scenario in $trackerScenarios){
  $trackerValidation=Get-Content -LiteralPath (Join-Path $trackerBuild 'validation.json') -Raw|ConvertFrom-Json
  if($scenario -eq 'failed-tracker-position'){foreach($case in $trackerValidation.cardTracker.cases|Where-Object name -Like 'CT25-POSITION*'){$case.passed=$false}}elseif($scenario -eq 'failed-tracker-theme'){foreach($case in $trackerValidation.cardTracker.cases|Where-Object name -Like 'CT25-THEME*'){$case.passed=$false}}elseif($scenario -eq 'failed-draft'){$trackerValidation.menu.selectionPanel.draftChecks=0}elseif($scenario -eq 'gamma-enabled'){$trackerValidation.menu.selectionPanel.gammaEnabled=$true}elseif($scenario -eq 'wrong-player-layout'){$trackerValidation.menu.selectionPanel.layouts[0].choices=99}elseif($scenario -eq 'failed-tracker'){$trackerValidation.cardTracker.passed=$false}elseif($scenario -eq 'failed-statistics'){$trackerValidation.statistics.passed=$false}elseif($scenario -eq 'failed-preservation'){$trackerValidation.preservedRuntime.passed=$false}elseif($scenario -eq 'failed-visual'){$trackerValidation.visualChecks.passed=$false}elseif($scenario -eq 'failed-history'){$trackerValidation.history.passed=$false}elseif($scenario -eq 'wrong-history-limit'){$trackerValidation.history.historyLimit=11}elseif($scenario -eq 'wrong-history-schema'){$trackerValidation.history.reportSchema=99}elseif($scenario -eq 'wrong-history-fingerprint'){$trackerValidation.history.testedFiles[0].sha256='unexpected'}else{$trackerValidation.cardTracker.testedFiles[0].sha256='unexpected'}
  $trackerValidation|ConvertTo-Json -Depth 30|Set-Content -LiteralPath $trackerValidationPath -Encoding utf8
  Run-TrackerPackage $false;Assert-TrackerPackage $trackerManifest.files
 }
-if($trackerManifest.version -in '1.4.27','1.4.29','1.4.30'){
+if($trackerManifest.version -in '1.4.27','1.4.29','1.4.30','1.4.31'){
  foreach($scenario in 'CT27-LAYER','CT27-STYLE','CT27-POSITION'){
   $trackerValidation=Get-Content -LiteralPath (Join-Path $trackerBuild 'validation.json') -Raw|ConvertFrom-Json
   foreach($case in $trackerValidation.cardTracker.cases|Where-Object {$_.name.StartsWith($scenario)}){$case.passed=$false}
@@ -64,8 +64,9 @@ if($trackerManifest.version -in '1.4.27','1.4.29','1.4.30'){
   Run-TrackerPackage $false;Assert-TrackerPackage $trackerManifest.files
  }
 }
-if($trackerManifest.version -in '1.4.29','1.4.30'){
- $geoGroups=@('GEO29-DATA','GEO29-UI','GEO29-TAG','GEO29-INPUT');if($trackerManifest.version -eq '1.4.30'){$geoGroups+=@('GEO30-UI','GEO30-TAG','GEO30-DATA','GEO30-AA')}
+if($trackerManifest.version -in '1.4.29','1.4.30','1.4.31'){
+ $geoGroups=@('GEO29-DATA','GEO29-UI','GEO29-TAG','GEO29-INPUT');if($trackerManifest.version -in '1.4.30','1.4.31'){$geoGroups+=@('GEO30-UI','GEO30-TAG','GEO30-DATA','GEO30-AA')}
+ if($trackerManifest.version -eq '1.4.31'){$geoGroups+=@('GEO31-SIZE','GEO31-LAYOUT','GEO31-OCCUPANCY')}
  foreach($suite in 'statistics','history'){
   foreach($group in $geoGroups){
    $trackerValidation=Get-Content -LiteralPath (Join-Path $trackerBuild 'validation.json') -Raw|ConvertFrom-Json

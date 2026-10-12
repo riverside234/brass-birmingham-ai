@@ -50,6 +50,7 @@ public static class StatisticsGeographyChecks
         Data(check);var rt=new RenderTexture(1920,1200,24);rt.Create();camera.targetTexture=rt;
         yield return null;yield return null;
         var edgeCheck=Antialiasing(panel,camera,rt,check,prefix);while(edgeCheck.MoveNext())yield return edgeCheck.Current;
+        var sizing=Sizing(panel,camera,rt,check,capture,prefix);while(sizing.MoveNext())yield return sizing.Current;
         var decoded=GameHistoryStatisticsCodec.Decode(GameHistoryStatisticsCodec.Encode(panel.Report));
         foreach(int era in panel.Report.Introductory?new[]{1}:new[]{1,2}){
             var a=StatisticsMapQueries.Get(panel.Report,era);var b=StatisticsMapQueries.Get(decoded,era);
@@ -64,6 +65,7 @@ public static class StatisticsGeographyChecks
                 var map=panel.GetComponentsInChildren<StatisticsMapView>().Single();
                 panel.BodyScroll.verticalNormalizedPosition=1;Canvas.ForceUpdateCanvases();
                 float pixelScale=rt.width/((RectTransform)panel.transform).rect.width;
+                Occupancy(map,pixelScale,check,prefix);
                 check(map.Diagram.height*pixelScale>=(preset==1?490:450)&&map.Diagram.width/map.Diagram.height<1.85f,"GEO30-UI larger upright diagram at 1200p",new{prefix,era,preset,width=map.Diagram.width*pixelScale,height=map.Diagram.height*pixelScale});
                 check(!map.Tag.gameObject.activeSelf&&panel.GetComponentsInChildren<TextMeshProUGUI>().All(t=>!t.name.StartsWith("City ")),"GEO29-UI initial map has no city tags or permanent labels",new{prefix,era,preset});
                 var names=map.Snapshot.Cities.Select(c=>c.Location.City).ToArray();
@@ -81,9 +83,9 @@ public static class StatisticsGeographyChecks
                 map.OnPointerExit(pointer);
                 check(map.HoverCity==null&&!map.Tag.gameObject.activeSelf,"GEO29-INPUT leaving the map clears its tag",prefix);
                 capture(rt,camera,"geography-"+prefix+"-era"+era+"-text"+preset+"-overview");
-                foreach(string city in new[]{"Birmingham","SouthWest","Oxford","Shrewsbury","Gloucester"}){
+                foreach(string city in names){
                     map.PreviewCity(city);Canvas.ForceUpdateCanvases();var dot=map.Point(city);var rect=map.Tag.Rect;
-                    check(map.Tag.City==city&&rect.anchoredPosition.y<dot.y-map.NodeRadius&&rect.anchoredPosition.y-rect.rect.height>=-map.rectTransform.rect.height-1&&rect.anchoredPosition.x>=0&&rect.anchoredPosition.x+rect.rect.width<=map.rectTransform.rect.width,"GEO29-TAG tag is below dot and inside stage",new{prefix,city,era,preset,dot=dot.ToString(),position=rect.anchoredPosition.ToString(),size=rect.rect.ToString()});
+                    check(map.Tag.City==city&&rect.anchoredPosition.y<dot.y-map.Radius(city)&&rect.anchoredPosition.y-rect.rect.height>=-map.rectTransform.rect.height-1&&rect.anchoredPosition.x>=0&&rect.anchoredPosition.x+rect.rect.width<=map.rectTransform.rect.width,"GEO29-TAG tag is below dot and inside stage",new{prefix,city,era,preset,dot=dot.ToString(),position=rect.anchoredPosition.ToString(),size=rect.rect.ToString()});
                     var corners=new Vector3[4];rect.GetWorldCorners(corners);var viewport=panel.BodyScroll.viewport;
                     check(corners.All(c=>viewport.rect.Contains(viewport.InverseTransformPoint(c))),"GEO29-TAG complete tag stays in visible viewport",new{prefix,city,era,preset});
                     check(!map.Tag.GetComponent<CanvasGroup>().blocksRaycasts&&map.Tag.GetComponentsInChildren<Graphic>().All(g=>!g.raycastTarget),"GEO29-INPUT hover tag never intercepts input",city);
@@ -92,7 +94,7 @@ public static class StatisticsGeographyChecks
                     check(item.Location.Merchant||glyphs.Count(g=>g.Kind=="Occupied")==item.Occupied&&glyphs.Count(g=>g.Kind=="Vacant")==item.Slots-item.Occupied,"GEO30-TAG slot symbols preserve actual occupancy",new{prefix,city,era,preset});
                     check(labels.Count(t=>t.name.StartsWith("Tile industry "))==item.Tiles.Length&&glyphs.Count(g=>g.name.StartsWith("Flip status ")&&g.Kind=="Check")==item.Tiles.Count(t=>t.FlipRevision>0&&t.FlipRevision<=map.Snapshot.Revision),"GEO30-TAG compact tiles retain each industry and its historical flip",new{prefix,city,era,preset});
                     check(rect.rect.height*pixelScale<190*panel.TextScale/1.15f&&labels.All(t=>t.name!="City era metric"&&t.name!="Flip key"),"GEO30-TAG occupancy tag omits repeated VP prose and flip legend",new{prefix,city,era,preset,height=rect.rect.height*pixelScale});
-                    if(city=="Birmingham"||era==2&&city=="Gloucester")capture(rt,camera,"geography-"+prefix+"-era"+era+"-text"+preset+"-"+city);
+                    if(city=="Birmingham"||era==2&&(city=="Gloucester"||city=="Worcester"))capture(rt,camera,"geography-"+prefix+"-era"+era+"-text"+preset+"-"+city);
                 }
                 panel.BodyScroll.onValueChanged.Invoke(Vector2.zero);check(!map.Tag.gameObject.activeSelf,"GEO29-INPUT scrolling clears stale city tags",prefix);
                 int objects=map.GetComponentsInChildren<Transform>(true).Length;var timer=System.Diagnostics.Stopwatch.StartNew();
@@ -105,6 +107,9 @@ public static class StatisticsGeographyChecks
                     check(panel.Filters.MapMode==mode&&map.Tag.GetComponentsInChildren<TextMeshProUGUI>().Any(t=>t.name=="City era metric"&&t.text.StartsWith(value)),"GEO30-DATA chosen measure retains labeled era VP",new{prefix,mode,era,preset});
                     var corners=new Vector3[4];map.Tag.Rect.GetWorldCorners(corners);check(corners.All(c=>panel.BodyScroll.viewport.rect.Contains(panel.BodyScroll.viewport.InverseTransformPoint(c))),"GEO30-TAG VP view still fits below its source dot",new{prefix,mode,era,preset});
                     if(era==2&&preset==1)capture(rt,camera,"geography-"+prefix+"-"+(mode=="Industry VP"?"industry-vp":"link-vp"));
+                    Occupancy(map,pixelScale,check,prefix);
+                    foreach(string name in names){map.PreviewCity(name);Canvas.ForceUpdateCanvases();map.Tag.Rect.GetWorldCorners(corners);check(corners.All(c=>panel.BodyScroll.viewport.rect.Contains(panel.BodyScroll.viewport.InverseTransformPoint(c))),"GEO31-LAYOUT all VP tags fit below larger markers",new{prefix,mode,era,preset,city=name});}
+                    if(era==2&&preset==2){map.PreviewCity("Worcester");capture(rt,camera,"geography-"+prefix+"-largest-"+(mode=="Industry VP"?"industry-vp":"link-vp")+"-Worcester");}
                 }
                 map.HideTag();if(era==2&&preset==2){panel.GetComponentsInChildren<Button>().First(b=>b.name=="Map key").onClick.Invoke();Canvas.ForceUpdateCanvases();capture(rt,camera,"geography-"+prefix+"-key");panel.Tooltip(null);}
                 panel.SetNetworkView("Network results");yield return null;yield return null;
@@ -112,6 +117,43 @@ public static class StatisticsGeographyChecks
             }
         }
         camera.targetTexture=null;rt.Release();UnityEngine.Object.Destroy(rt);panel.ResetFilters();panel.SelectPage(0);yield return null;yield return null;
+    }
+    static IEnumerator Sizing(StatisticsPanel panel,Camera camera,RenderTexture rt,Action<bool,string,object> check,Action<RenderTexture,Camera,string> capture,string prefix)
+    {
+        panel.ResetFilters();panel.SelectPage(3);panel.SetNetworkView("Geography");panel.SetMapEra(2);yield return null;yield return null;
+        Vector2 size=Vector2.zero;Dictionary<string,Vector2> points=null;Dictionary<string,float> radii=null;float previousFont=0;
+        // Exercise the real text-size buttons while the map is open, including
+        // returning to the initial preset. Positions are measured in screen pixels.
+        foreach(int preset in new[]{0,1,2,1}){
+            float desired=1+preset*.15f;while(Math.Abs(panel.TextScale-desired)>.01f){panel.GetComponentsInChildren<Button>().First(b=>b.name==(panel.TextScale>desired?"Smaller text":"Larger text")).onClick.Invoke();yield return null;yield return null;}
+            panel.BodyScroll.verticalNormalizedPosition=1;Canvas.ForceUpdateCanvases();var map=panel.GetComponentsInChildren<StatisticsMapView>().Single();float pixelScale=rt.width/((RectTransform)panel.transform).rect.width;
+            var currentSize=map.Diagram.size*pixelScale;var currentPoints=map.Snapshot.Cities.ToDictionary(c=>c.Location.City,c=>RectTransformUtility.WorldToScreenPoint(camera,map.rectTransform.TransformPoint(map.Point(c.Location.City))));
+            if(points==null){size=currentSize;points=currentPoints;radii=currentPoints.Keys.ToDictionary(n=>n,n=>map.Radius(n)*pixelScale);}
+            check((currentSize-size).magnitude<.1f&&points.All(p=>(p.Value-currentPoints[p.Key]).magnitude<.5f),"GEO31-SIZE text buttons preserve map dimensions and screen positions",new{prefix,preset,width=currentSize.x,height=currentSize.y});
+            check(radii.All(p=>Math.Abs(map.Radius(p.Key)*pixelScale-p.Value)<.1f),"GEO31-SIZE text buttons preserve occupancy marker sizes",new{prefix,preset});
+            check(map.GetComponentsInChildren<StatisticsMapFocus>().All(f=>((RectTransform)f.transform).rect.width*pixelScale>=43.9f&&((RectTransform)f.transform).rect.width>=map.Radius(f.City)*2+11.9f/pixelScale)&&currentPoints.Keys.All(n=>map.Hit(map.Point(n)+Vector2.right*(map.Radius(n)+3/pixelScale))==n),"GEO31-SIZE pointer targets include each larger dot",new{prefix,preset});
+            map.PreviewCity("Birmingham");var title=map.Tag.GetComponentsInChildren<TextMeshProUGUI>().Single(t=>t.name=="City tag title");
+            check(preset!=2||title.fontSize>previousFont,"GEO31-SIZE text still enlarges inside a fixed diagram",new{prefix,preset,fontSize=title.fontSize*pixelScale});previousFont=title.fontSize;
+            var names=currentPoints.Keys.ToArray();float spacing=names.SelectMany((n,i)=>names.Skip(i+1).Select(other=>(currentPoints[n]-currentPoints[other]).magnitude)).Min();
+            check(spacing>=75,"GEO31-LAYOUT enlarged markers and hit targets remain separated",new{prefix,preset,minimumSpacing=spacing});
+            float clearance=float.MaxValue;
+            foreach(var route in StatisticsBoardLayout.Routes)foreach(var path in StatisticsBoardLayout.Paths(route.Cities))for(int i=1;i<path.Length;i++)foreach(var name in names.Where(n=>!route.Cities.Contains(n))){
+                var a=Vector2.Scale(path[i-1],map.Diagram.size);var b=Vector2.Scale(path[i],map.Diagram.size);var q=Vector2.Scale(StatisticsBoardLayout.Points[name],map.Diagram.size);var d=b-a;float t=Mathf.Clamp01(Vector2.Dot(q-a,d)/d.sqrMagnitude);clearance=Math.Min(clearance,(q-(a+t*d)).magnitude*pixelScale);
+            }
+            check(clearance>=28,"GEO31-LAYOUT routes stay clear of unrelated city dots",new{prefix,preset,minimumClearance=clearance});
+            map.HideTag();capture(rt,camera,"geography-"+prefix+"-fixed-text"+preset);yield return null;
+        }
+        var before=panel.GetComponentsInChildren<StatisticsMapView>().Single();var full=before.Snapshot.Cities.ToDictionary(c=>c.Location.City,c=>new{radius=before.Radius(c.Location.City),point=before.Point(c.Location.City)});
+        foreach(var player in panel.Report.Players){panel.GetComponentsInChildren<Button>().Single(b=>b.name=="Filter "+player.Name).onClick.Invoke();yield return null;yield return null;}
+        var filtered=panel.GetComponentsInChildren<StatisticsMapView>().Single();
+        check(panel.Filters.Players.Count==0&&full.All(p=>Math.Abs(filtered.Radius(p.Key)-p.Value.radius)<.001f&&(filtered.Point(p.Key)-p.Value.point).magnitude<.01f),"GEO31-OCCUPANCY player filtering cannot shrink cities or hide physical occupancy",prefix);
+        panel.ResetFilters();yield return null;yield return null;
+    }
+    static void Occupancy(StatisticsMapView map,float pixelScale,Action<bool,string,object> check,string prefix)
+    {
+        var cities=map.Snapshot.Cities.Where(c=>c.Available&&!c.Location.Merchant).ToArray();var groups=cities.GroupBy(c=>c.Occupied).OrderBy(g=>g.Key).ToArray();
+        check(groups.All(g=>g.All(c=>Math.Abs(map.Radius(c.Location.City)-map.Radius(g.First().Location.City))<.001f))&&groups.Zip(groups.Skip(1),(a,b)=>map.Radius(a.First().Location.City)<map.Radius(b.First().Location.City)).All(v=>v),"GEO31-OCCUPANCY dot size follows total industries irrespective of flip state",new{prefix,era=map.Snapshot.Era,mode=map.Panel.Filters.MapMode,unflippedCities=cities.Count(c=>c.Tiles.Any(t=>!map.Snapshot.Flipped(t))),sizes=groups.Select(g=>new{occupied=g.Key,diameter=map.Radius(g.First().Location.City)*pixelScale*2})});
+        check(cities.All(c=>map.Radius(c.Location.City)*pixelScale>=11.99f&&map.Radius(c.Location.City)*pixelScale<=20.01f)&&map.Snapshot.Cities.Where(c=>c.Location.Merchant).All(c=>Math.Abs(map.Radius(c.Location.City)*pixelScale-12)<.01f),"GEO31-OCCUPANCY visible size range and merchant symbols remain legible",prefix);
     }
     static IEnumerator Antialiasing(StatisticsPanel panel,Camera camera,RenderTexture rt,Action<bool,string,object> check,string prefix)
     {

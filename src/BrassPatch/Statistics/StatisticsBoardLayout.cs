@@ -13,33 +13,33 @@ namespace BrassPatch.Statistics
     {
         // Board-relative coordinates, stable across eras and report filters.
         public static readonly Dictionary<string,Vector2> Points=new Dictionary<string,Vector2>{
-            {"Warrington",new Vector2(0.200f,0.960f)},
-            {"StokeOnTrent",new Vector2(0.370f,0.860f)},
-            {"Leek",new Vector2(0.570f,0.965f)},
-            {"Belper",new Vector2(0.790f,0.950f)},
-            {"Nottingham",new Vector2(0.960f,0.830f)},
-            {"Stone",new Vector2(0.235f,0.715f)},
-            {"Uttoxeter",new Vector2(0.600f,0.740f)},
-            {"Derby",new Vector2(0.825f,0.695f)},
-            {"Stafford",new Vector2(0.365f,0.590f)},
-            {"BurtonOnTrent",new Vector2(0.735f,0.575f)},
-            {"Central",new Vector2(0.235f,0.475f)},
-            {"Cannock",new Vector2(0.480f,0.465f)},
-            {"Tamworth",new Vector2(0.790f,0.435f)},
-            {"Shrewsbury",new Vector2(0.035f,0.335f)},
-            {"Coalbrookdale",new Vector2(0.210f,0.320f)},
-            {"Wolverhampton",new Vector2(0.385f,0.350f)},
-            {"Walsall",new Vector2(0.580f,0.325f)},
-            {"Nuneaton",new Vector2(0.945f,0.320f)},
-            {"Dudley",new Vector2(0.430f,0.220f)},
-            {"Birmingham",new Vector2(0.700f,0.225f)},
-            {"Coventry",new Vector2(0.930f,0.180f)},
-            {"Kidderminster",new Vector2(0.310f,0.135f)},
-            {"SouthWest",new Vector2(0.210f,0.045f)},
-            {"Worcester",new Vector2(0.360f,0.020f)},
-            {"Redditch",new Vector2(0.680f,0.070f)},
-            {"Oxford",new Vector2(0.895f,0.045f)},
-            {"Gloucester",new Vector2(0.545f,0.015f)},
+            {"Warrington",new Vector2(0.160f,0.955f)},
+            {"StokeOnTrent",new Vector2(0.345f,0.850f)},
+            {"Leek",new Vector2(0.560f,0.965f)},
+            {"Belper",new Vector2(0.800f,0.950f)},
+            {"Nottingham",new Vector2(0.965f,0.835f)},
+            {"Stone",new Vector2(0.235f,0.735f)},
+            {"Uttoxeter",new Vector2(0.560f,0.745f)},
+            {"Derby",new Vector2(0.825f,0.745f)},
+            {"Stafford",new Vector2(0.370f,0.625f)},
+            {"BurtonOnTrent",new Vector2(0.745f,0.610f)},
+            {"Central",new Vector2(0.220f,0.535f)},
+            {"Cannock",new Vector2(0.470f,0.515f)},
+            {"Tamworth",new Vector2(0.805f,0.465f)},
+            {"Shrewsbury",new Vector2(0.045f,0.415f)},
+            {"Coalbrookdale",new Vector2(0.225f,0.385f)},
+            {"Wolverhampton",new Vector2(0.385f,0.415f)},
+            {"Walsall",new Vector2(0.580f,0.385f)},
+            {"Nuneaton",new Vector2(0.955f,0.365f)},
+            {"Dudley",new Vector2(0.430f,0.275f)},
+            {"Birmingham",new Vector2(0.715f,0.270f)},
+            {"Coventry",new Vector2(0.955f,0.205f)},
+            {"Kidderminster",new Vector2(0.320f,0.235f)},
+            {"SouthWest",new Vector2(0.205f,0.140f)},
+            {"Worcester",new Vector2(0.395f,0.115f)},
+            {"Redditch",new Vector2(0.695f,0.115f)},
+            {"Oxford",new Vector2(0.900f,0.055f)},
+            {"Gloucester",new Vector2(0.550f,0.040f)},
         };
         // Explicit era topology copied from Board.CreateLinks, including its one three-endpoint link.
         public static readonly StatisticsBoardRoute[] Routes={
@@ -117,12 +117,12 @@ namespace BrassPatch.Statistics
         public static Vector2[][] Paths(string[] cities)
         {
             if(cities.Any(c=>!Points.ContainsKey(c)))return new Vector2[0][];
-            if(cities.Length==3){var hub=new Vector2(.29f,.07f);return cities.Select(c=>new[]{Points[c],hub}).ToArray();}
+            if(cities.Length==3){var hub=new Vector2(.315f,.135f);return cities.Select(c=>new[]{Points[c],hub}).ToArray();}
             var a=Points[cities[0]];var b=Points[cities[1]];var key=Identity(cities);
             // Route bends keep long southern corridors away from unrelated city centers.
-            if(key=="Birmingham|Worcester")return new[]{new[]{a,new Vector2(.52f,.10f),b}};
-            if(key=="Birmingham|Oxford")return new[]{new[]{a,new Vector2(.82f,.16f),b}};
-            if(key=="Stone|BurtonOnTrent"||key=="BurtonOnTrent|Stone")return new[]{new[]{a,new Vector2(.50f,.665f),b}};
+            if(key=="Birmingham|Worcester")return new[]{new[]{a,new Vector2(.55f,.185f),b}};
+            if(key=="Birmingham|Oxford")return new[]{new[]{a,new Vector2(.83f,.180f),b}};
+            if(key=="Stone|BurtonOnTrent"||key=="BurtonOnTrent|Stone")return new[]{new[]{a,new Vector2(.50f,.695f),b}};
             return new[]{new[]{a,b}};
         }
     }

@@ -28,7 +28,7 @@ namespace BrassPatch.Statistics
                 var key=StatisticsWidgets.Button(BodyScroll.content,font,"Map key","Map key",new Vector2(x+523*s,-y),new Vector2(112*s,42*s),21*s,()=>Tooltip(MapKey));Tip(key,MapKey);
             }return 54*unit*TextScale;
         }
-        const string MapKey="ERA-END BOARD\nBefore link removal and Canal level-I cleanup. Hover a location; click for exact records.\n\nMAP\nDot rim = board region. Diamond = merchant; triangle = farm. Lines and owner shapes match the player key. Pale routes are printed routes.\n\nCITY TAG\nOpen slot rings = vacancies; solid dots = occupied slots. Vacancies include all players, not build permission. Tile marker = owner; number = industry level. A check means flipped; a dash means unflipped. Cotton / Goods / Pottery / Beer / Coal / Iron identify the six industries.\n\nLINKS & VP\nLinks counts each owner's directly touching links, not all reachable players. Choose a VP view for that era's selected-player value and magnitude halos. Link VP may reward several incident links; it is separate from industry VP.\n\nPlayer and region choices emphasize the full board. Other detail filters are suspended; search affects only the ledger.";
+        const string MapKey="ERA-END BOARD\nBefore link removal and Canal level-I cleanup. Hover a location; click for exact records.\n\nMAP\nDot area grows with occupied industry slots, flipped or unflipped, across all players. Rim = board region. Diamond = merchant; triangle = farm. Lines and owner shapes match the player key. Pale routes are printed routes.\n\nCITY TAG\nOpen slot rings = vacancies; solid dots = occupied slots. Vacancies include all players, not build permission. Tile marker = owner; number = industry level. A check means flipped; a dash means unflipped. Cotton / Goods / Pottery / Beer / Coal / Iron identify the six industries.\n\nLINKS & VP\nLinks counts each owner's directly touching links, not all reachable players. VP views add a value halo; the city core still shows occupancy. Link VP may reward several incident links; it is separate from industry VP.\n\nPlayer and region choices emphasize the full board. Other detail filters are suspended; search affects only the ledger.";
         float MapContent(StatisticsPageView view,float start)
         {
             float y=start,x=0,s=unit*TextScale/1.15f;
@@ -38,10 +38,14 @@ namespace BrassPatch.Statistics
                 var sample=StatisticsWidgets.Rect(BodyScroll.content,"Player route key "+p.Color,new Vector2(x,-y-12*s),new Vector2(32*s,5*s));var line=sample.gameObject.AddComponent<UnityEngine.UI.Image>();line.color=StatisticsTheme.Player(p.Color);line.raycastTarget=false;
                 var glyph=StatisticsWidgets.Rect(BodyScroll.content,"Route owner symbol",new Vector2(x+9*s,-y-6*s),new Vector2(16*s,16*s)).gameObject.AddComponent<StatisticsMapGlyph>();glyph.Pixel=unit;glyph.Kind="Owner";glyph.Owner=p.Color;glyph.color=line.color;glyph.raycastTarget=false;
                 var label=StatisticsWidgets.Text(BodyScroll.content,font,"Route owner "+p.Color,StatisticsMetrics.PlayerName(Report,p),new Vector2(x+40*s,-y),new Vector2((bodyWidth/Report.Players.Count)-50*s,32*s),21*s);label.color=line.color;x+=bodyWidth/Report.Players.Count;
-            }y+=39*s;
-            float height=Math.Max(490*unit,BodyScroll.viewport.rect.height-y-10*unit);
+            }
+            // Reserve one header band for every text preset. Bigger labels grow
+            // within it; they do not steal height from the board or move its dots.
+            y=Math.Max(180*unit,y+39*s);
+            float height=Math.Max(600*unit,BodyScroll.viewport.rect.height-190*unit);
             var stage=StatisticsWidgets.Rect(BodyScroll.content,"Geography map stage",new Vector2(0,-y),new Vector2(bodyWidth,height));
             stage.gameObject.AddComponent<StatisticsSurface>().Panel=true;
+            var sizeKey=StatisticsWidgets.Text(stage,font,"Map occupancy key","Dot size · occupied slots",new Vector2(16,-10)*unit,new Vector2(260*unit,32*s),21*s,true);sizeKey.color=StatisticsTheme.Muted;sizeKey.raycastTarget=false;
             var graphic=StatisticsWidgets.Rect(stage,"Geography map",Vector2.zero,stage.sizeDelta);
             var map=graphic.gameObject.AddComponent<StatisticsMapView>();map.Initialize(this,font,snapshot,unit,s);y+=height+12*unit;
             if(Filters.Typed)y+=Paragraph(BodyScroll.content,"Map detail scope","Industry, action and evidence filters are suspended here. Region and player choices emphasize the complete historical board.",y,18);

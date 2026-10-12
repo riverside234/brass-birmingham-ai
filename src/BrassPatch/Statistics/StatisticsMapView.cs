@@ -18,21 +18,29 @@ namespace BrassPatch.Statistics
         float unit,scale,changedAt;bool entered,focused;Camera pointerCamera;Vector2 lastPointer;Vector3 lastPosition;
         readonly Dictionary<string,Vector2[][]> routes=new Dictionary<string,Vector2[][]>();
         readonly Dictionary<string,float> halo=new Dictionary<string,float>();
+        readonly Dictionary<string,float> radii=new Dictionary<string,float>();
         public void Initialize(StatisticsPanel host,TMP_FontAsset font,StatisticsMapSnapshot data,float pixels,float text)
         {
-            Panel=host;Snapshot=data;unit=pixels;scale=text;NodeRadius=10*unit;
+            Panel=host;Snapshot=data;unit=pixels;scale=text;NodeRadius=12*unit;
+            // Count physical industries at this era boundary, including unflipped
+            // tiles and owners excluded by the emphasis filter. Added area per tile
+            // is constant; the base ring keeps an empty location visible.
+            foreach(var city in data.Cities)radii[city.Location.City]=unit*Mathf.Sqrt(144+64*(city.Available&&!city.Location.Merchant?Math.Max(0,city.Occupied):0));
             if(host.Filters.MapMode!="Occupancy"){
                 var values=data.Cities.ToDictionary(c=>c.Location.City,c=>(float)(host.Filters.MapMode=="Industry VP"?StatisticsMapQueries.IndustryVP(data,c,host.Filters):StatisticsMapQueries.ContributionVP(host.Report,data,c,host.Filters)));
-                float max=Math.Max(1,values.Values.DefaultIfEmpty(0).Max());foreach(var p in values)if(p.Value>0)halo[p.Key]=NodeRadius+8*unit*Mathf.Sqrt(p.Value/max);
+                float max=Math.Max(1,values.Values.DefaultIfEmpty(0).Max());foreach(var p in values)if(p.Value>0)halo[p.Key]=Radius(p.Key)+8*unit*Mathf.Sqrt(p.Value/max);
             }
             var tag=StatisticsWidgets.Rect(transform,"City hover tag",Vector2.zero,new Vector2(Math.Min(432*scale,rectTransform.rect.width-24*unit),190*scale));
             Tag=tag.gameObject.AddComponent<StatisticsCityTag>();Tag.Initialize(host,font,data,scale,tag.sizeDelta.x);
-            float height=Math.Max(160*unit,rectTransform.rect.height-Tag.MaximumHeight-44*unit);
+            // Diagram geometry uses display pixels, independently of text and tag
+            // size. The low cities are spaced to leave room for their largest tags.
+            float height=Math.Max(360*unit,rectTransform.rect.height-176*unit);
             float width=Math.Min(rectTransform.rect.width-90*unit,height*1.75f);
-            Diagram=new Rect((rectTransform.rect.width-width)/2,-height-20*unit,width,height);
+            height=Math.Min(height,width/1.75f);
+            Diagram=new Rect((rectTransform.rect.width-width)/2,-height-24*unit,width,height);
             foreach(var route in StatisticsBoardLayout.Routes.Where(r=>r.Era==data.Era))routes[StatisticsBoardLayout.Identity(route.Cities)]=StatisticsBoardLayout.Paths(route.Cities).Select(path=>path.Select(Project).ToArray()).ToArray();
             foreach(var city in data.Cities.Where(c=>StatisticsBoardLayout.Points.ContainsKey(c.Location.City))){
-                var p=Point(city.Location.City);var hit=StatisticsWidgets.Rect(transform,"Inspect city "+city.Location.City,p+new Vector2(-18,18)*unit,new Vector2(36,36)*unit);
+                var p=Point(city.Location.City);float hitRadius=HitRadius(city.Location.City);var hit=StatisticsWidgets.Rect(transform,"Inspect city "+city.Location.City,p+new Vector2(-hitRadius,hitRadius),Vector2.one*hitRadius*2);
                 var image=hit.gameObject.AddComponent<Image>();image.color=Color.clear;image.raycastTarget=false;
                 var b=hit.gameObject.AddComponent<Button>();b.targetGraphic=image;var colors=b.colors;colors.normalColor=colors.highlightedColor=colors.selectedColor=Color.clear;b.colors=colors;
                 var focus=hit.gameObject.AddComponent<StatisticsMapFocus>();focus.Map=this;focus.City=city.Location.City;b.onClick.AddListener(()=>InspectRecords(city));
@@ -41,10 +49,12 @@ namespace BrassPatch.Statistics
         }
         Vector2 Project(Vector2 p){return new Vector2(Diagram.x+p.x*Diagram.width,Diagram.y+p.y*Diagram.height);}
         public Vector2 Point(string city){return Project(StatisticsBoardLayout.Points[city]);}
+        public float Radius(string city){float value;return radii.TryGetValue(city,out value)?value:NodeRadius;}
+        float HitRadius(string city){return Math.Max(22*unit,Radius(city)+6*unit);}
         public string Hit(Vector2 p)
         {
-            string result=null;float distance=18*unit;
-            foreach(var city in Snapshot.Cities){if(!StatisticsBoardLayout.Points.ContainsKey(city.Location.City))continue;float d=(Point(city.Location.City)-p).magnitude;if(d<distance){result=city.Location.City;distance=d;}}
+            string result=null;float distance=float.MaxValue;
+            foreach(var city in Snapshot.Cities){if(!StatisticsBoardLayout.Points.ContainsKey(city.Location.City))continue;float d=(Point(city.Location.City)-p).magnitude;if(d<HitRadius(city.Location.City)&&d<distance){result=city.Location.City;distance=d;}}
             return result;
         }
         public void FocusCity(string city){focused=true;SetHover(city,true);}
@@ -54,7 +64,7 @@ namespace BrassPatch.Statistics
         {
             if(city!=HoverCity){HoverCity=city;changedAt=Time.unscaledTime;Tag.Hide();SetVerticesDirty();}
             if(city==null||Tag.City==city)return;
-            if(immediate||Time.unscaledTime-changedAt>=.10f){var item=Snapshot.Cities.FirstOrDefault(c=>c.Location.City==city);if(item!=null)Tag.Show(item,Point(city),halo.ContainsKey(city)?halo[city]+3*unit:NodeRadius+3*unit,rectTransform.rect.width);}
+            if(immediate||Time.unscaledTime-changedAt>=.10f){var item=Snapshot.Cities.FirstOrDefault(c=>c.Location.City==city);if(item!=null)Tag.Show(item,Point(city),halo.ContainsKey(city)?halo[city]+3*unit:Radius(city)+3*unit,rectTransform.rect.width);}
         }
         public void HideTag(){HoverCity=null;if(Tag!=null)Tag.Hide();SetVerticesDirty();}
         void Scrolled(Vector2 value){HideTag();changedAt=Time.unscaledTime;lastPointer=new Vector2(float.NaN,float.NaN);}
@@ -93,12 +103,12 @@ namespace BrassPatch.Statistics
             }
             foreach(var city in Snapshot.Cities){
                 if(!StatisticsBoardLayout.Points.ContainsKey(city.Location.City))continue;
-                var q=Point(city.Location.City);Color tint=StatisticsPlotPalette.Color(new StatisticsPlotSeries{Id="region/"+city.Location.RegionColor});int shape=city.Location.Merchant?3:city.Location.Farm?2:0;
+                var q=Point(city.Location.City);float radius=Radius(city.Location.City);Color tint=StatisticsPlotPalette.Color(new StatisticsPlotSeries{Id="region/"+city.Location.RegionColor});int shape=city.Location.Merchant?3:city.Location.Farm?2:0;
                 if(Panel.Filters.Region!=""&&Panel.Filters.Region!=city.Location.RegionColor)tint=Color.Lerp(tint,StatisticsTheme.Paper,.5f);
                 if(halo.ContainsKey(city.Location.City))Symbol(mesh,q,halo[city.Location.City],Color.Lerp(tint,StatisticsTheme.Paper,.78f),shape,unit);
-                if(HoverCity==city.Location.City){Symbol(mesh,q,NodeRadius+5*unit,StatisticsTheme.Focus,shape,unit);Symbol(mesh,q,NodeRadius+3*unit,StatisticsTheme.Paper,shape,unit);}
-                Symbol(mesh,q,NodeRadius,tint,shape,unit);Symbol(mesh,q,NodeRadius-3*unit,StatisticsTheme.Paper,shape,unit);
-                if(city.Tiles.Any(a=>Panel.Filters.Players.Contains(a.Player)))Symbol(mesh,q,3.4f*unit,tint,shape,unit);
+                if(HoverCity==city.Location.City){Symbol(mesh,q,radius+5*unit,StatisticsTheme.Focus,shape,unit);Symbol(mesh,q,radius+3*unit,StatisticsTheme.Paper,shape,unit);}
+                Symbol(mesh,q,radius,tint,shape,unit);Symbol(mesh,q,radius-3.8f*unit,StatisticsTheme.Paper,shape,unit);
+                if(city.Tiles.Any(a=>Panel.Filters.Players.Contains(a.Player)))Symbol(mesh,q,4.8f*unit,tint,shape,unit);
             }
         }
         void Stroke(VertexHelper mesh,Vector2[] path,Color tint,float width){Stroke(mesh,path,tint,width,unit);}

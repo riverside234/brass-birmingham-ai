@@ -1,0 +1,53 @@
+{
+  "format": "joint7-review-verification/1.0.0",
+  "implementation": "9a60a40aa1e4d8193243681d68de2f4661b82d2cf213b2d86f9e78bd3a6e5541",
+  "unique_focused_tests": 72,
+  "checks": [
+    {
+      "log": "artifacts/recovery/joint7-review-20261011/focused-tests.txt",
+      "sha256": "8c6e71b977878086b55d2e4044e6e04b365d08d3a0dfe8fbc1bca3af85f25cfc",
+      "tests": 71,
+      "status": "passed",
+      "scope": "Focused reward, PPO, teacher, resume and work-budget suite"
+    },
+    {
+      "log": "artifacts/recovery/joint7-review-20261011/generation60-test.txt",
+      "sha256": "0668d94cf3aee2fd67445e9faeb3cf0c93e764c8c10a4588cda9fa111fe24218",
+      "tests": 1,
+      "status": "passed",
+      "scope": "Additional synthetic generation-60 Adam/counter preservation fixture"
+    },
+    {
+      "log": "artifacts/recovery/joint7-review-20261011/final-review-tests.txt",
+      "sha256": "efce01945913fab0db4ab1764e84cb7dbba2f9ac5a8addb506921700f7e6f90d",
+      "tests": 7,
+      "status": "passed",
+      "scope": "Recheck seven review tests after retaining the last eight epochs; seven repeats, not additional unique tests"
+    }
+  ],
+  "smoke": {
+    "status": "passed",
+    "games": 2,
+    "optimizer_steps": 2,
+    "generation": 1,
+    "device": "cpu",
+    "implementation": "50008726b328e6c78aefd538532018294fa652dc56748c289ffeb09cfcf6b056",
+    "report": "artifacts/recovery/joint7-review-20261011/native-smoke/report.json",
+    "scope": "Fresh small fixture; no joint-7 checkpoint or GPU/search-teacher campaign. Final source differs from smoke source only in choosing the last eight retained epoch summaries, covered by final-review-tests."
+  },
+  "preflight_missing_run": {
+    "status": "expected rejection verified",
+    "created_run": false
+  },
+  "validated_commands": [
+    "pin",
+    "preflight",
+    "train",
+    "evaluate"
+  ],
+  "original_result_files_unchanged": 9,
+  "limitations": [
+    "Actual lab generation-60 checkpoint and IL ancestry are absent locally; lab preflight must verify them.",
+    "No playing-strength, CUDA or multi-GPU benchmark was run."
+  ]
+}

@@ -124,6 +124,8 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
         write_json(state_path,state)
     optimizer=torch.optim.AdamW(model.parameters(),lr=config['learning_rate'],weight_decay=config['weight_decay'])
     cuda_resume=resume_optimizer(raw,optimizer,allow_cuda_topology_change=True)
+    from .resume import apply_optimizer_config
+    optimizer_resume=apply_optimizer_config(optimizer,config)
     if cuda_resume and cuda_resume['saved_devices']!=cuda_resume['visible_devices']:
         print(f'CUDA resume: {cuda_resume["saved_devices"]} saved / {cuda_resume["visible_devices"]} visible GPUs; '
               f'restored {cuda_resume["restored_devices"]} matching logical-device RNG streams (learner stays on cuda:0)',flush=True)
@@ -248,9 +250,23 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                     model,optimizer,service,heavy,done=done,cursor=cursor,ordinary_seconds=ordinary_seconds,
                     ordinary_game_seconds=(collected-began)/max(1,len(games)),
                     recalibrate=recalibrate_teacher_utility if reward is not None else None)
+                # Search policy updates share the trunk/Adam but occur outside
+                # the PPO KL guard. Measure their TOTAL drift from collection.
+                # No resampling or RNG consumption, and no teacher PPO targets.
+                if search.get('updated'):
+                    from .updates import Dataset,policy_measure
+                    from .telemetry import Timings
+                    drift_data=Dataset(learner_data,device)
+                    meaningful=[i for i,forced in enumerate(drift_data.forced_cpu) if not forced]
+                    model.eval()
+                    search['post_teacher_sampled_kl']=policy_measure(model,drift_data,meaningful,
+                        behavior,config['update'],Timings())
+                    search['post_teacher_kl_scope']='Total drift from frozen ordinary behavior after PPO and teaching; all nonforced learner rows'
+                    del drift_data
                 del learner_data
                 report=dict(format='step5-recovery-report/'+'2.2.0',iteration=iteration,composition=dict(composition),
                     reward_migration=migration if not summaries else None,
+                    optimizer_resume=optimizer_resume if not summaries else None,
                     legacy_boost=boost_report(state['games_done'],done,config,window),
                     actor=update,search=search,**diagnostics,incoming_model_id=current,incoming_policy_id=behavior.policy_id,
                     selfplay_incumbent=incumbent,

@@ -315,6 +315,8 @@ def _ppo_nonforced(model,optimizer,games,behavior,config,*,profile,profile_steps
         means={k:sum(t[k] for t in trajectories)/len(trajectories) for k in trajectories[0]}
         reward_report=dict(spec=reward,undiscounted=True,components=means,
             weighted={k:reward[k]*means[k] for k in ('win','placement','vp')},trajectories=len(trajectories))
+        from .review_metrics import reward_distribution
+        reward_report['distribution']=reward_distribution(trajectories,reward)
     advantages=torch.zeros(count,device=device);model.eval()
     # Verify likelihoods for ALL rows, including deterministic continuation rows.
     policy_measure(model,ds,range(count),behavior,config,timings,True,advantages,executor)
@@ -326,8 +328,17 @@ def _ppo_nonforced(model,optimizer,games,behavior,config,*,profile,profile_steps
     if reward is None:advantages-=torch.tensor(costs,device=device,dtype=advantages.dtype)
     useful=advantages[actor_ids];mean=useful.mean() if actor_ids else torch.zeros((),device=device)
     std=useful.std(unbiased=False) if actor_ids else torch.zeros((),device=device)
+    from .review_metrics import distribution,CategoricalProbe
+    advantage_distribution=distribution(useful)
+    target=ds.utility if ds.utility is not None else ds.targets[0]
+    actor_returns=target[actor_ids,ds.seats[actor_ids]]
+    return_distribution=distribution(actor_returns)
+    variance=float(actor_returns.var(unbiased=False)) if actor_ids else 0.
+    explained_variance=1-float(useful.var(unbiased=False))/variance if variance>1e-12 else None
     if config['normalize_advantages'] and actor_ids: advantages[actor_ids]=(useful-mean)/std.clamp_min(1e-8)
     probe=phase_probe(ds,actor_ids,config['kl_probe_rows'])
+    categorical_probe=CategoricalProbe(model,ds,probe,behavior,config)
+    gradient_norms=[]
     epochs=[];steps=0;clips=0;stopped=False;rehearsal_steps=0
     with profile_window(profile,device,profile_steps) as profiler:
         for epoch in range(config['epochs']):
@@ -377,6 +388,7 @@ def _ppo_nonforced(model,optimizer,games,behavior,config,*,profile,profile_steps
                 with timings.phase('ppo.optimizer'):
                     norm=torch.nn.utils.clip_grad_norm_(model.parameters(),config['grad_clip'],error_if_nonfinite=True)
                     clips+=int(float(norm)>config['grad_clip']);optimizer.step();steps+=1
+                    gradient_norms.append(float(norm))
                 if profiler: profiler.step()
                 model.eval();kl=policy_measure(model,ds,probe,behavior,config,timings,executor=executor)
                 if kl>config['target_kl']: stopped=True;break
@@ -394,6 +406,12 @@ def _ppo_nonforced(model,optimizer,games,behavior,config,*,profile,profile_steps
         learner_trajectories=len({d[2] for d in data}),effective_batch_size=config['effective_batch_size'],
         microbatch_size=config['microbatch_size'],critic_batch_size=config['critic_batch_size'],
         advantage=dict(mean=float(mean),std=float(std),scope='nonforced actor decisions'),
+        advantage_distribution=advantage_distribution,return_distribution=return_distribution,
+        baseline_explained_variance=explained_variance,
+        baseline_scope='Before PPO, after any head calibration; nonforced learner decisions, in-sample',
+        legal_actions=distribution([len(ds.rows[i]['choices']) for i in actor_ids]),
+        categorical_probe=categorical_probe.measure(model),gradient_norms=distribution(gradient_norms),
+        kl_estimator='post_update_kl/probe_kl: sampled chosen-action ((ratio-1)-log(ratio)); full means all nonforced rows, not exact categorical KL',
         kl_probe_rows=len(probe),kl_probe_sampling='proportional-era-phase/1.0.0',
         learning_rates=[group['lr'] for group in optimizer.param_groups],
         kl_early_stop=stopped,gradient_clip_steps=clips,

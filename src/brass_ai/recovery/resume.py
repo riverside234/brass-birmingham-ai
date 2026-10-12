@@ -10,6 +10,22 @@ from brass_ai.step5.league import write_json, implementation_id
 from .retention import safe
 
 
+def apply_optimizer_config(optimizer, config):
+    """Apply the signature-validated settings AFTER Adam restores its groups.
+
+    load_state_dict restores the old LR/decay as well as moments. Changing only
+    the AdamW constructor therefore silently ignores a reviewed LR change.
+    Keep every moment, step, parameter and other optimizer option intact.
+    """
+    require(len(optimizer.param_groups)==1,'Step 5 expects a single AdamW group')
+    before=[dict(lr=g['lr'],weight_decay=g['weight_decay']) for g in optimizer.param_groups]
+    for group in optimizer.param_groups:
+        group['lr']=config['learning_rate']
+        group['weight_decay']=config['weight_decay']
+    return dict(before=before,after=[dict(lr=g['lr'],weight_decay=g['weight_decay']) for g in optimizer.param_groups],
+                preserved='Adam moments, steps, other group options and RNG')
+
+
 def check_signature(state, signature, reviewed=False):
     require(state['format'] == 'step5-recovery-league/2.2.0', 'Unsupported self-play resume format')
     previous = state['signature']

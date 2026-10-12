@@ -15,7 +15,7 @@ $original=Join-Path $repo 'artifacts/patch-baseline/Assembly-CSharp.dll'
 if(-not(Test-Path -LiteralPath $original) -or (Get-FileHash -LiteralPath $original).Hash -ne $BrassStockSha256){throw 'Original backup is missing or changed; no installation was performed.'}
 $previous=Read-BrassJson $recordPath
 $pending=Read-BrassJson $intentPath
-if($manifest.version -in @('1.4.12','1.4.13','1.4.15','1.4.16','1.4.17','1.4.18','1.4.19','1.4.20','1.4.21','1.4.22','1.4.23','1.4.24','1.4.25','1.4.26','1.4.27','1.4.28','1.4.29','1.4.30')){
+if($manifest.version -in @('1.4.12','1.4.13','1.4.15','1.4.16','1.4.17','1.4.18','1.4.19','1.4.20','1.4.21','1.4.22','1.4.23','1.4.24','1.4.25','1.4.26','1.4.27','1.4.28','1.4.29','1.4.30','1.4.31')){
  if(-not $previous -or $previous.status -ne 'installed' -or $previous.version -notin @($manifest.baseVersion,$manifest.version)){throw 'This revision requires its qualified baseline or the same installed release; rebase before installing.'}
  $expectedPrior=if($previous.version -eq $manifest.version){$manifest.files}else{$manifest.baseFiles}
  foreach($file in $expectedPrior){if(@($previous.files|Where-Object {$_.name -eq $file.name -and $_.sha256 -eq $file.sha256}).Count -ne 1){throw 'Installed baseline record changed; rebase before installing.'}}

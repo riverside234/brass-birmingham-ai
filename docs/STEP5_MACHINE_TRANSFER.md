@@ -4,6 +4,12 @@
 
 独立脚本 `scripts/step5-transfer.py` 默认使用 **compact + external + 100 MB 分卷**，适合目前的安排：新机器通过 Git clone/pull 获取当前代码，游戏规则运行时通过之前的 SSH zip 方法传输，其他训练文件由迁移分卷补齐。工具不改训练实现、签名、模型格式或超参数；本次工具更新不需要回退训练代码。
 
+## 11 October：适配新版 self-play
+
+迁移工具的源码指纹现已对齐当前训练器，包含 `host.py`、`src/BrassTrainingHost/*.cs`、两个 host 构建脚本和 `training/runtime/throughput/*/runtime.json`。新包记录指纹算法版本 `source_recipe: 2`；早期包仍按原算法校验，不会将旧训练状态重新标记为新版本。打包/恢复命令、100 MB 分卷和 IL 自动收集方式不变，两台机器均需同步更新后的迁移脚本。
+
+**代码更新与搬机器是两件事。** 如果 run 已用当前版本完成训练迭代，可直接导出；如果只是 Git pull 了新版代码，但 `state.json` 仍属于旧训练版本，先按[训练指南中的受支持续训流程](TRAINING_RECOVERY_LAB.md#six-throughput-changes-11-october)完成版本迁移，必要时使用原训练命令的 `--resume-reviewed-source`。待迭代提交并停止训练后再导出。迁移脚本仍拒绝真实的源码/状态不匹配，不自动修改 checkpoint 或绕过审核记录。
+
 ## 默认复制哪些文件
 
 | 内容 | 默认处理 |
@@ -19,6 +25,8 @@
 | 已消费的 PPO/teacher/已完成评估的 replay、feature caches | 省略，显式 pin 的文件除外 |
 | 无引用旧模型、retention 历史和隔离区 | 省略 |
 | 代码、仓库配置、冻结规则 AI 资料 | 从 Git 获取，分卷里只记录依赖哈希 |
+| 新版 ordinary/search 加速 worker 的 EXE 和清单 | 从 Git 的 `training/runtime/throughput/` 获取，不加入训练分卷 |
+| 自动生成的 `artifacts/training-host/` | 标准配置下无需复制；目标机 preflight 从 Git worker 和 SSH 规则 DLL 部署 |
 | 游戏规则运行时/DLL | 从 SSH 获取，分卷里只记录依赖哈希，**不打包到 Git 分卷** |
 | conda 环境、CUDA 驱动、其他 runs、旧机器 preflight 和进程锁 | 不复制 |
 
@@ -98,6 +106,8 @@ python "$ROOT/scripts/step5-transfer.py" verify --root "$ROOT" --bundle "$BUNDLE
 
 先执行 `preflight`，成功后执行 `resume`。已有 self-play state 会恢复 PPO checkpoint；`--imitation-run` 仅验证 IL 来源，不会重做 IL。课程表、历史池、teacher 预算和计数器保持原状态。
 
+新版 preflight 还会安装并检查两个加速 worker；输出中的 `throughput_workers` 应显示 ordinary/search 均为 `optimized: true`。现有规则运行时 zip 继续提供它们需要的私有 DLL，无需将这些 DLL 放进 Git 分卷。GPU 分配是目标机器的运行选项，不从旧机器自动复制；若要多卡推理，按新机器分配设置 `CUDA_VISIBLE_DEVICES`，并在输出的续训命令中、`train` 子命令之前加入 `--inference-devices auto`。不要把这个参数加到 `preflight` 命令。
+
 保留旧机器的 run，直到新机器成功续训。不同 GPU、库版本及搜索线程调度不保证后续结果逐步一致；本工具保证保存文件的字节完整性和恢复依赖，不保证跨机器游戏结果完全复现。
 
 ## 其他模式
@@ -109,6 +119,6 @@ python "$ROOT/scripts/step5-transfer.py" verify --root "$ROOT" --bundle "$BUNDLE
 
 ## 本地验证
 
-**17 项测试通过（24.7 秒）**，针对依赖选择、字节去重、分卷和续训，未启动训练 campaign 或修改游戏。覆盖新机器只有代码/SSH 运行时的恢复、缺失/冲突依赖、损坏或丢失分卷、活动/半成品 run、路径检查、过期 rehearsal 分片省略、当前历史池/未完成评估保留，以及旧版迁移包兼容。
+**19 项测试通过（49.9 秒）**，针对依赖选择、字节去重、分卷和续训，未启动训练 campaign 或修改游戏。覆盖新机器只有代码/SSH 运行时的恢复、缺失/冲突依赖、损坏或丢失分卷、活动/半成品 run、路径检查、过期 rehearsal 分片省略、当前历史池/未完成评估保留，以及旧版迁移包兼容。新增检查覆盖扩展源码指纹与真实训练器一致、六类新指纹输入及 LF/CRLF 一致性、新 worker 从 Git 复用，以及不含算法版本字段的旧包恢复。
 
-真实 PyTorch checkpoint 的导出→恢复→现有 `load_resume`/`resume_optimizer` 检查覆盖权重、Adam 状态、RNG 和训练计数器。训练实现指纹仍为 `826b6beb04241a73a5d1ec0d712176ff9df4370a26cf01bb05ee92f7a05b4f16`。尚未在两台实际 Linux lab 之间执行迁移；目标机器仍须实际运行 preflight。
+真实 PyTorch checkpoint 的导出→恢复→现有 `load_resume`/`resume_optimizer` 检查覆盖权重、Adam 状态、RNG 和训练计数器。当前训练实现指纹为 `fff450449f8fbceaa8c57cffcf826da006d53d44351c2fce4d985fc973d0df7c`，本次只改迁移工具、测试和说明，没有改变该指纹。尚未在两台实际 Linux lab 之间执行迁移或验证真实 CUDA 恢复；目标机器仍须实际运行 preflight。

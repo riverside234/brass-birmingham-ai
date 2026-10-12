@@ -12,25 +12,39 @@ def scalars(value,keys):
 
 
 def compact(report):
-    if report.get('summary_version')==2:return report
+    # Old compact summaries cannot recover fields that were already discarded.
+    # Preserve their version and missingness instead of relabelling as v3.
+    if report.get('summary_version') in (2,3):return report
     out=scalars(report,('format','iteration','games_done','cumulative_games','incoming_model_id','post_update_model_id',
                        'incoming_policy_id','elapsed_seconds','games','failed_games','promotion_eligible'))
-    out['summary_version']=2
+    out['summary_version']=3
     out['timings']=scalars(report.get('timings',{}),('collection_seconds','replay_load_seconds','ppo_seconds',
         'search_and_distill_seconds','checkpoint_seconds','evaluation_seconds','cleanup_seconds','iteration_seconds'))
     actor=report.get('actor',{})
-    out['actor']=scalars(actor,('optimizer_steps','actor_rows','critic_rows','learning_rate','kl_early_stop','rehearsal_weight'))
+    out['actor']=scalars(actor,('optimizer_steps','learner_decisions','meaningful_decisions','forced_decisions',
+        'learner_trajectories','kl_early_stop','rehearsal_weight','gradient_clip_steps','baseline_explained_variance',
+        'baseline_scope','kl_estimator','kl_probe_rows','kl_probe_sampling'))
+    out['actor']['learning_rates']=actor.get('learning_rates',[])[:8]
+    for key in ('advantage','advantage_distribution','return_distribution','legal_actions','categorical_probe','gradient_norms','phases'):
+        out['actor'][key]=scalars(actor.get(key,{}),actor.get(key,{}))
     epochs=actor.get('epochs',[])
     if epochs:
-        out['actor']['last_epoch']=scalars(epochs[-1],('policy','value','entropy','post_update_kl','clip_fraction','loss'))
+        out['actor']['epochs']=[dict(scalars(epoch,('epoch','actor','value','win_loss','rank_loss','vp_loss',
+            'entropy','post_update_kl','probe_kl','clip_fraction','gradient_norm','actor_positions','critic_positions')),
+            utility_prediction=scalars(epoch.get('utility_prediction',{}),('mse','mae'))) for epoch in epochs[-8:]]
+        out['actor']['last_epoch']=out['actor']['epochs'][-1]
         out['actor']['utility_prediction']=scalars(epochs[-1].get('utility_prediction',{}),('mse','mae'))
     out['actor']['insolvency']=scalars(actor.get('insolvency',{}),('events','affected_trajectories','learner_trajectories','mean_cost_per_trajectory'))
     reward=actor.get('reward',{})
     out['actor']['reward_components']=scalars(reward.get('components',{}),('win','placement','vp','cost','utility'))
+    out['actor']['reward_spec']=reward.get('spec')
+    out['actor']['reward_distribution']=reward.get('distribution')
     search=report.get('search',{})
-    out['search']=scalars(search,('updated','reason','collection_count','optimizer_steps','teacher_rows','teacher_setups'))
-    out['search']['phases']={name:scalars(row,('scheduled_turns','actual_searches','qualified_samples','failures',
-        'elapsed_seconds','completed_rollouts','failed_turns','timeouts','insufficient_coverage'))
+    out['search']=scalars(search,('updated','reason','collection_count','optimizer_steps','teacher_rows','teacher_setups',
+        'sample_presentations','max_observed_reuse','post_teacher_sampled_kl','post_teacher_kl_scope'))
+    for key in ('fit_before','fit_after','budget'):
+        out['search'][key]=scalars(search.get(key,{}),search.get(key,{}))
+    out['search']['phases']={name:scalars(row,row)
         for name,row in list(search.get('teaching',{}).get('phases',{}).items())[:4]}
     out['results']={name:scalars(row,('games','win_share','mean_rank','mean_vp'))
                     for name,row in list(report.get('results',{}).items())[:4]}
@@ -43,7 +57,19 @@ def compact(report):
         policies=row.get('matches',{}).get('policies',{})
         who=report.get('incoming_policy_id')
         selected={who:policies[who]} if who in policies else dict(list(policies.items())[:16])
-        out['by_composition'][name]={key:scalars(v,('seat_games','win_share','placement','vp')) for key,v in selected.items()}
+        out['by_composition'][name]={key:dict(scalars(v,('seat_games','win_share','placement','vp')),
+            seat_counts=v.get('seat_counts')) for key,v in selected.items()}
+    out['learner_by_seat']=report.get('learner_by_seat',{})
+    out['economy']={key:report.get('economy',{}).get(key) for key in
+        ('actions','actions_by_era','builds','build_levels','observed_flips','last_seen_unflipped',
+         'passes_with_nonpass_alternative','sale_actions_started','sale_continuations','merchant_beer_by_bonus')}
+    utilization=report.get('utilization',{})
+    out['utilization']={key:utilization.get(key) for key in ('games_per_second','mean_inference_batch',
+        'inference_batches','inference_positions','padding_fraction','actor_phase_seconds',
+        'inference_phase_deltas','replay_ingress','scope')}
+    out['selfplay_incumbent']=report.get('selfplay_incumbent')
+    out['historical_opponents']=report.get('historical_opponents')
+    out['optimizer_resume']=report.get('optimizer_resume')
     return out
 
 

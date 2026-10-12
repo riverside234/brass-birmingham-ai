@@ -23,6 +23,7 @@ from bisect import bisect_right
 FORMAT = 'step5-private-transfer/1.1.0'
 OLD_FORMAT = 'step5-private-transfer/1.0.0'
 PARTS_FORMAT = 'step5-transfer-parts/1.0.0'
+SOURCE_RECIPE = 2  # 1: Python-only; 2: additive training hosts and build inputs.
 SKIP = {'__pycache__', '.git', '.active-run.json'}
 CODE_TREES = ('src', 'scripts', 'configs', 'training/opponents', 'training/runtime')
 
@@ -74,12 +75,19 @@ def below(root, name):
     return p
 
 
-def source_identity(root):
+def source_identity(root, *, recipe=None):
     """The current implementation_id recipe, without importing torch/runtimes."""
+    recipe = SOURCE_RECIPE if recipe is None else recipe
+    require(recipe in (1, 2), 'Unsupported implementation fingerprint recipe')
     root = Path(root)
     base = root / 'src/brass_ai'
     paths = [p for group in ('step5', 'recovery', 'search', 'learning') for p in (base / group).glob('*.py')]
     paths += [base / p for p in ('learning/runner.py', 'learning/batching.py', 'searchlab/spiel.py', 'beliefs.py', 'runtime_contracts.py')]
+    if recipe == 2:
+        paths += [base / 'host.py']
+        paths += sorted((root / 'src/BrassTrainingHost').glob('*.cs'))
+        paths += [root / 'scripts/build-training-host.py', root / 'scripts/build-search-host.py']
+        paths += sorted((root / 'training/runtime/throughput').glob('*/runtime.json'))
     paths += sorted((root / 'configs/contracts/masked-ismcts').glob('*.json'))
     paths += [root / 'configs/references/masked-ismcts.lock.json']
     return digest({p.relative_to(root).as_posix(): p.read_text(encoding='utf-8').replace('\r\n', '\n') for p in sorted(paths)})
@@ -136,7 +144,8 @@ def inventory(root, run, *, mode='compact'):
     state = read(run / 'state.json')
     require(state.get('format') == 'step5-recovery-league/2.2.0', 'Unsupported self-play state')
     require(source_identity(root) == state['signature']['implementation'],
-            'Source differs from saved run. Use the matching source; migration does not authorize a source upgrade.')
+            'Source differs from saved run. Complete the supported reviewed source continuation on the old machine '
+            'before export, or use matching source. Transfer does not authorize a source upgrade.')
     pending = run / f"iteration-{state['iteration']:04d}"
     require(not pending.exists() or (pending.is_dir() and not any(pending.iterdir())),
             'Uncommitted iteration: finish/recover it on the source machine before export')
@@ -322,6 +331,7 @@ def export(root, run, bundle, *, dry_run=False, mode='compact', dependencies='ex
         manifest = dict(format=FORMAT, source_root=str(root), run=run.relative_to(root).as_posix(),
             runs=[p.relative_to(root).as_posix() for p in data['runs']], iteration=data['state']['iteration'],
             games_done=data['state']['games_done'], implementation=data['state']['signature']['implementation'],
+            source_recipe=SOURCE_RECIPE,
             state_sha256=state_hash, config=cfg_name, imitation_run=data['state']['signature'].get('imitation_source', {}).get('bc_run'),
             rehearsal_included=data['rehearsal_included'], mode=mode, dependencies=dependencies, git_commit=commit, files=records)
         manifest['id'] = digest(manifest)
@@ -479,6 +489,7 @@ def inspect_bundle(bundle):
         require(archive.getinfo('transfer.json').file_size < 32_000_000, 'Oversized transfer manifest')
         manifest = json.loads(archive.read('transfer.json'))
         require(manifest['format'] in (FORMAT, OLD_FORMAT) and manifest['id'] == digest({k: v for k, v in manifest.items() if k != 'id'}), 'Invalid transfer manifest')
+        require(manifest.get('source_recipe', 1) in (1, 2), 'Unsupported implementation fingerprint recipe')
         files = manifest['files']
         names = [r['path'] for r in files]
         require(len(names) == len({n.casefold() for n in names}), 'Duplicate/case-colliding transfer paths')
@@ -554,7 +565,10 @@ def restore(root, bundle, *, verify_only=False):
                     finally:
                         if temporary.exists():
                             temporary.unlink()
-    require(source_identity(root) == manifest['implementation'], 'Destination source identity differs')
+    # Archives written before the throughput hosts used the previous recipe.
+    # Verify their original identity; never relabel it as the current source.
+    require(source_identity(root, recipe=manifest.get('source_recipe', 1)) == manifest['implementation'],
+            'Destination source identity differs')
     return dict(summary(manifest), verified=True, **commands(root, manifest))
 
 

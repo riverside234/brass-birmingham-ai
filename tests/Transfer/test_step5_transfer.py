@@ -26,8 +26,15 @@ class TransferTests(unittest.TestCase):
         self.bundle = self.area / 'migration.zip'
         for tree in transfer.CODE_TREES:
             (self.root / tree).mkdir(parents=True, exist_ok=True)
-        for name in ('learning/runner.py', 'learning/batching.py', 'searchlab/spiel.py', 'beliefs.py', 'runtime_contracts.py'):
+        for name in ('learning/runner.py', 'learning/batching.py', 'searchlab/spiel.py', 'beliefs.py', 'runtime_contracts.py', 'host.py'):
             self.put('src/brass_ai/' + name, b'# fixture\n')
+        for name in ('build-training-host.py', 'build-search-host.py'):
+            self.put('scripts/' + name, b'# fixture builder\n')
+        self.put('src/BrassTrainingHost/FastHost.cs', b'// fixture\n')
+        for kind in ('ordinary', 'search'):
+            exe = self.put(f'training/runtime/throughput/{kind}/BrassHost.exe', b'authored-worker-' + kind.encode())
+            self.put(f'training/runtime/throughput/{kind}/runtime.json',
+                     dict(files=[dict(name='BrassHost.exe', sha256=transfer.sha(exe))]))
         self.put('configs/references/masked-ismcts.lock.json', {})
         self.put('scripts/step5.py', b'# fixture entry point\n')
         self.put('requirements-step5.txt', b'# fixture\n')
@@ -218,7 +225,25 @@ class TransferTests(unittest.TestCase):
     def test_transport_does_not_change_the_training_implementation(self):
         from brass_ai.step5.league import implementation_id
         self.assertEqual(transfer.source_identity(ROOT), implementation_id())
-        self.assertEqual(implementation_id(), '826b6beb04241a73a5d1ec0d712176ff9df4370a26cf01bb05ee92f7a05b4f16')
+
+    def test_source_recipe_covers_throughput_inputs_and_normalizes_newlines(self):
+        paths = ['src/brass_ai/host.py', 'src/BrassTrainingHost/FastHost.cs',
+                 'scripts/build-training-host.py', 'scripts/build-search-host.py',
+                 'training/runtime/throughput/ordinary/runtime.json',
+                 'training/runtime/throughput/search/runtime.json']
+        before = transfer.source_identity(self.root)
+        self.assertNotEqual(before, transfer.source_identity(self.root, recipe=1))
+        for name in paths:
+            with self.subTest(path=name):
+                file = self.root / name
+                original = file.read_bytes()
+                file.write_bytes(original + b'\n')
+                self.assertNotEqual(transfer.source_identity(self.root), before)
+                with self.assertRaisesRegex(ValueError, 'Source differs'):
+                    transfer.export(self.root, self.run, self.bundle, dry_run=True)
+                file.write_bytes(original.replace(b'\n', b'\r\n'))
+                self.assertEqual(transfer.source_identity(self.root), before)
+                file.write_bytes(original)
 
     def test_compact_omits_consumed_games_caches_trash_and_unused_IL_epochs(self):
         unused = ['artifacts/step5/selfplay/generation-0000.pt',
@@ -268,6 +293,11 @@ class TransferTests(unittest.TestCase):
         self.assertIn('scripts/step5.py', external)
         self.assertIn('artifacts/r1-host/guarded/engine.dll', external)
         self.assertIn('artifacts/r1-host/guarded/runtime.json', external)
+        for kind in ('ordinary', 'search'):
+            self.assertIn(f'training/runtime/throughput/{kind}/runtime.json', external)
+            self.assertIn(f'training/runtime/throughput/{kind}/BrassHost.exe', external)
+        self.assertEqual(manifest['source_recipe'], 2)
+        self.assertFalse(any(r['path'].startswith('artifacts/training-host/') for r in manifest['files']))
         with transfer.open_bundle(result['bundle']) as archive:
             dll = next(r for r in manifest['files'] if r['path'].endswith('engine.dll'))
             self.assertNotIn(transfer.payload_name(manifest, dll), archive.namelist())
@@ -351,6 +381,22 @@ class TransferTests(unittest.TestCase):
             dst.writestr('transfer.json', transfer.encode(manifest))
         self.move_source()
         self.assertTrue(transfer.restore(self.root, old)['verified'])
+
+    def test_archive_without_recipe_retains_original_python_only_identity(self):
+        self.state['signature']['implementation'] = transfer.source_identity(self.root, recipe=1)
+        self.put('artifacts/step5/selfplay/state.json', self.state)
+        with patch.object(transfer, 'SOURCE_RECIPE', 1):
+            self.export()
+        old = self.area / 'before-throughput.zip'
+        with zipfile.ZipFile(self.bundle) as src, zipfile.ZipFile(old, 'w') as dst:
+            manifest = transfer.json.loads(src.read('transfer.json'))
+            manifest.pop('source_recipe')  # Actual old packages had no recipe field.
+            manifest['id'] = transfer.digest({k: v for k, v in manifest.items() if k != 'id'})
+            for name in src.namelist():
+                dst.writestr(name, transfer.encode(manifest) if name == 'transfer.json' else src.read(name))
+        self.move_source()
+        self.assertTrue(transfer.restore(self.root, old)['verified'])
+        self.assertEqual(transfer.read(self.run / 'state.json'), self.state)
 
 
 if __name__ == '__main__':

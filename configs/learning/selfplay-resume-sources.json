@@ -13205,6 +13205,4162 @@
       "learning_compatibility": "c349e816f2e301ea2a3b438902059cffe868f48e131f7c120691d37cd1c409d2",
       "to_implementation": "fff450449f8fbceaa8c57cffcf826da006d53d44351c2fce4d985fc973d0df7c",
       "reason": "Post-throughput correctness review: abort shared CPU waiters before failed actor/reader cleanup; interrupt failed inference queues, send replies once and close private handles; apply admission to inline readers; pin the native transformation helper. Step 5 explicitly allows 2-6 visible GPU continuation while preserving matching logical CUDA RNG streams and CPU RNG/Adam/model tensors. Training settings, contracts, data formats, budgets, counters, bank and installed game unchanged. Fresh rollout provenance and utility recalibration on reviewed continuation."
+    },
+    {
+      "from_implementation": "f739475371ce3d0a7dfe1c505780513a130474de3c17b8bb4501da0b67b017b3",
+      "to_implementation": "9a60a40aa1e4d8193243681d68de2f4661b82d2cf213b2d86f9e78bd3a6e5541",
+      "learning_compatibility": "c349e816f2e301ea2a3b438902059cffe868f48e131f7c120691d37cd1c409d2",
+      "reason": "Joint-7 iteration-60 review: preserve weights, Adam moments/steps, RNG, counters, population and IL lineage; apply signature-validated LR after optimizer restoration; add bounded diagnostic/retention telemetry. Reward semantics unchanged. Fresh source-bound PPO and utility recalibration before teachers. All existing fixed-work and shared CPU limits preserved.",
+      "review_report": "docs/JOINT7_ITERATION60_REVIEW.md"
+    },
+    {
+      "from_implementation": "f739475371ce3d0a7dfe1c505780513a130474de3c17b8bb4501da0b67b017b3",
+      "to_implementation": "9a60a40aa1e4d8193243681d68de2f4661b82d2cf213b2d86f9e78bd3a6e5541",
+      "learning_compatibility": "c349e816f2e301ea2a3b438902059cffe868f48e131f7c120691d37cd1c409d2",
+      "reason": "Joint-7 iteration-60 review: preserve weights, Adam moments/steps, RNG, counters, population and IL lineage; apply signature-validated LR after optimizer restoration; add bounded diagnostic/retention telemetry. Reward semantics unchanged. Fresh source-bound PPO and utility recalibration before teachers. All existing fixed-work and shared CPU limits preserved.",
+      "config_changes": {
+        "execution": {
+          "to": {
+            "processes": 24,
+            "hosts_per_process": 2,
+            "heavy_processes": 24,
+            "batch_size": 64,
+            "max_candidate_cells": 131072,
+            "flush_ms": 1.0,
+            "worker_threads": 1,
+            "max_decisions": 2000,
+            "max_models": 72,
+            "shard_games": 8,
+            "shard_bytes": 268435456,
+            "feature_cache": true,
+            "policy_cache": 32,
+            "search_workers_per_turn": 4,
+            "cpu_budget": 64,
+            "cpu_reserve": 4,
+            "shared_slot_bytes": 2097152,
+            "inference_routing": "demand",
+            "replica_backlog": 32
+          },
+          "from": {
+            "processes": 48,
+            "hosts_per_process": 1,
+            "heavy_processes": 24,
+            "batch_size": 64,
+            "max_candidate_cells": 131072,
+            "flush_ms": 1.0,
+            "worker_threads": 1,
+            "max_decisions": 2000,
+            "max_models": 72,
+            "shard_games": 8,
+            "shard_bytes": 268435456,
+            "feature_cache": true,
+            "policy_cache": 32,
+            "search_workers_per_turn": 4,
+            "cpu_budget": 64,
+            "cpu_reserve": 4
+          }
+        }
+      },
+      "review_report": "docs/JOINT7_ITERATION60_REVIEW.md"
+    },
+    {
+      "from_implementation": "f739475371ce3d0a7dfe1c505780513a130474de3c17b8bb4501da0b67b017b3",
+      "to_implementation": "9a60a40aa1e4d8193243681d68de2f4661b82d2cf213b2d86f9e78bd3a6e5541",
+      "learning_compatibility": "c349e816f2e301ea2a3b438902059cffe868f48e131f7c120691d37cd1c409d2",
+      "reason": "Joint-7 iteration-60 review: preserve weights, Adam moments/steps, RNG, counters, population and IL lineage; apply signature-validated LR after optimizer restoration; add bounded diagnostic/retention telemetry. Reward semantics unchanged. Fresh source-bound PPO and utility recalibration before teachers. All existing fixed-work and shared CPU limits preserved.",
+      "config_changes": {
+        "execution": {
+          "to": {
+            "processes": 14,
+            "hosts_per_process": 2,
+            "heavy_processes": 6,
+            "batch_size": 64,
+            "max_candidate_cells": 131072,
+            "flush_ms": 1.0,
+            "worker_threads": 1,
+            "max_decisions": 2000,
+            "max_models": 72,
+            "shard_games": 8,
+            "shard_bytes": 268435456,
+            "feature_cache": true,
+            "policy_cache": 32,
+            "search_workers_per_turn": 4,
+            "cpu_budget": 32,
+            "cpu_reserve": 4,
+            "shared_slot_bytes": 2097152,
+            "inference_routing": "demand",
+            "replica_backlog": 32
+          },
+          "from": {
+            "processes": 28,
+            "hosts_per_process": 1,
+            "heavy_processes": 6,
+            "batch_size": 64,
+            "max_candidate_cells": 131072,
+            "flush_ms": 1.0,
+            "worker_threads": 1,
+            "max_decisions": 2000,
+            "max_models": 72,
+            "shard_games": 8,
+            "shard_bytes": 268435456,
+            "feature_cache": true,
+            "policy_cache": 32,
+            "search_workers_per_turn": 4,
+            "cpu_budget": 32,
+            "cpu_reserve": 4
+          }
+        }
+      },
+      "review_report": "docs/JOINT7_ITERATION60_REVIEW.md"
+    },
+    {
+      "from_implementation": "f739475371ce3d0a7dfe1c505780513a130474de3c17b8bb4501da0b67b017b3",
+      "to_implementation": "9a60a40aa1e4d8193243681d68de2f4661b82d2cf213b2d86f9e78bd3a6e5541",
+      "learning_compatibility": "c349e816f2e301ea2a3b438902059cffe868f48e131f7c120691d37cd1c409d2",
+      "reason": "Joint-7 iteration-60 review: preserve weights, Adam moments/steps, RNG, counters, population and IL lineage; apply signature-validated LR after optimizer restoration; add bounded diagnostic/retention telemetry. Reward semantics unchanged. Fresh source-bound PPO and utility recalibration before teachers. All existing fixed-work and shared CPU limits preserved.",
+      "config_changes": {
+        "execution": {
+          "to": {
+            "processes": 2,
+            "hosts_per_process": 1,
+            "heavy_processes": 2,
+            "batch_size": 16,
+            "max_candidate_cells": 8192,
+            "flush_ms": 1.0,
+            "worker_threads": 1,
+            "max_decisions": 2000,
+            "max_models": 16,
+            "shard_games": 2,
+            "shard_bytes": 268435456,
+            "feature_cache": true,
+            "policy_cache": 32,
+            "search_workers_per_turn": 4,
+            "cpu_budget": 12,
+            "cpu_reserve": 2,
+            "shared_slot_bytes": 2097152,
+            "inference_routing": "demand",
+            "replica_backlog": 32
+          },
+          "from": {
+            "processes": 2,
+            "hosts_per_process": 1,
+            "heavy_processes": 2,
+            "batch_size": 16,
+            "max_candidate_cells": 8192,
+            "flush_ms": 1.0,
+            "worker_threads": 1,
+            "max_decisions": 2000,
+            "max_models": 16,
+            "shard_games": 2,
+            "shard_bytes": 268435456,
+            "feature_cache": true,
+            "policy_cache": 32,
+            "search_workers_per_turn": 4,
+            "cpu_budget": 12,
+            "cpu_reserve": 2
+          }
+        }
+      },
+      "review_report": "docs/JOINT7_ITERATION60_REVIEW.md"
+    },
+    {
+      "from_implementation": "f85a8c99fff8b4cff806bcf059e6fd4538d8d2be3b9c748c4d167bdf84897c08",
+      "to_implementation": "9a60a40aa1e4d8193243681d68de2f4661b82d2cf213b2d86f9e78bd3a6e5541",
+      "learning_compatibility": "c349e816f2e301ea2a3b438902059cffe868f48e131f7c120691d37cd1c409d2",
+      "reviewed_evidence": "results/selfplay-v2/state.json",
+      "reason": "Joint-7 iteration-60 review: preserve weights, Adam moments/steps, RNG, counters, population and IL lineage; apply signature-validated LR after optimizer restoration; add bounded diagnostic/retention telemetry. Reward semantics unchanged. Fresh source-bound PPO and utility recalibration before teachers. All existing fixed-work and shared CPU limits preserved.",
+      "config_changes": {
+        "execution": {
+          "from": {
+            "processes": 48,
+            "hosts_per_process": 1,
+            "heavy_processes": 24,
+            "batch_size": 64,
+            "max_candidate_cells": 131072,
+            "flush_ms": 1.0,
+            "worker_threads": 1,
+            "max_decisions": 2000,
+            "max_models": 16,
+            "shard_games": 8,
+            "shard_bytes": 268435456,
+            "feature_cache": true,
+            "policy_cache": 32,
+            "search_workers_per_turn": 4,
+            "cpu_budget": 64,
+            "cpu_reserve": 4
+          },
+          "to": {
+            "processes": 48,
+            "hosts_per_process": 1,
+            "heavy_processes": 24,
+            "batch_size": 64,
+            "max_candidate_cells": 131072,
+            "flush_ms": 1.0,
+            "worker_threads": 1,
+            "max_decisions": 2000,
+            "max_models": 72,
+            "shard_games": 8,
+            "shard_bytes": 268435456,
+            "feature_cache": true,
+            "policy_cache": 32,
+            "search_workers_per_turn": 4,
+            "cpu_budget": 64,
+            "cpu_reserve": 4
+          }
+        },
+        "search_every_games": {
+          "from": 320,
+          "to": 160
+        },
+        "search": {
+          "from": {
+            "backend": "masked_ismcts",
+            "seconds": 12.0,
+            "simulations": 100000,
+            "max_choices": 512,
+            "exploration": 1.4,
+            "root_top_k": 16,
+            "interior_top_k": 8,
+            "pending_paths": 2,
+            "batch_size": 2,
+            "flush_ms": 0.5,
+            "prior_mix": 0.1,
+            "turn_interval": 4,
+            "max_searches_per_seat": 4,
+            "contract": "masked-ismcts/1.1.0",
+            "evaluator_kind": "neural",
+            "q_transform": "none",
+            "leaf_policy": "new_root_information_frontier",
+            "candidate_policy": "supported_progressive",
+            "fpu_reduction": 0.02,
+            "minimum_plan_visits": 2,
+            "reopen_support": 4,
+            "tail_admission": 0.05,
+            "virtual_loss": 0.02
+          },
+          "to": {
+            "backend": "masked_ismcts",
+            "seconds": 12.0,
+            "simulations": 100000,
+            "max_choices": 512,
+            "exploration": 1.4,
+            "root_top_k": 16,
+            "interior_top_k": 8,
+            "pending_paths": 2,
+            "batch_size": 2,
+            "flush_ms": 0.5,
+            "prior_mix": 0.1,
+            "turn_interval": 4,
+            "max_searches_per_seat": 4,
+            "contract": "masked-ismcts/1.2.0",
+            "evaluator_kind": "neural",
+            "q_transform": "none",
+            "leaf_policy": "new_root_information_frontier",
+            "candidate_policy": "supported_progressive",
+            "fpu_reduction": 0.02,
+            "minimum_plan_visits": 2,
+            "reopen_support": 4,
+            "tail_admission": 0.05,
+            "virtual_loss": 0.02,
+            "reward": {
+              "version": "brass-combined-return/1.0.0",
+              "win": 1.0,
+              "placement": 0.1,
+              "vp": 0.001,
+              "insolvency": {
+                "event_cost": 0.005,
+                "max_cost": 0.025
+              }
+            },
+            "utility_scale": 1.2
+          }
+        },
+        "retention": {
+          "from": {
+            "enabled": true,
+            "resume_checkpoints": 2,
+            "replay_rounds": 2,
+            "quarantine_hours": 0,
+            "evaluation_samples": 1,
+            "profile_traces": 2
+          },
+          "to": {
+            "enabled": true,
+            "resume_checkpoints": 2,
+            "replay_rounds": 2,
+            "quarantine_hours": 0,
+            "evaluation_samples": 1,
+            "profile_traces": 2,
+            "history_reports": 128
+          }
+        },
+        "population": {
+          "from": {
+            "recent": 8,
+            "anchors": 4
+          },
+          "to": {
+            "recent": 16,
+            "anchors": 48
+          }
+        },
+        "audit_workers": {
+          "from": 8,
+          "to": 16
+        },
+        "search_wall_fraction": {
+          "from": 0.5,
+          "to": 0.9
+        },
+        "search_collections_per_iteration": {
+          "from": null,
+          "to": 2
+        },
+        "insolvency": {
+          "from": null,
+          "to": {
+            "event_cost": 0.005,
+            "max_cost": 0.025
+          }
+        },
+        "legacy_boost": {
+          "from": null,
+          "to": {
+            "stages": [
+              {
+                "games": 20000,
+                "selfplay": 15,
+                "historical": 25,
+                "legacy": 60
+              },
+              {
+                "games": 10000,
+                "selfplay": 45,
+                "historical": 25,
+                "legacy": 30
+              }
+            ]
+          }
+        },
+        "reward": {
+          "from": null,
+          "to": {
+            "win": 1.0,
+            "placement": 0.1,
+            "vp": 0.001
+          }
+        },
+        "champion": {
+          "from": null,
+          "to": {
+            "enabled": true,
+            "every_games": 6400,
+            "setups": 8,
+            "min_win_share": 0.55,
+            "seed": 1910000
+          }
+        },
+        "teacher_work_budget": {
+          "from": null,
+          "to": {
+            "contract": "teacher-turn-work/1.1.0",
+            "watchdog_seconds": 120.0,
+            "mode": "simulations",
+            "simulations_per_phase": {
+              "canal_early": 32,
+              "canal_late": 16,
+              "rail_early": 16,
+              "rail_late": 16
+            }
+          }
+        },
+        "legacy_opponent_work_budget": {
+          "from": null,
+          "to": {
+            "contract": "legacy-opponent-turn-work/1.1.0",
+            "watchdog_seconds": 120.0,
+            "mode": "simulations",
+            "simulations_per_turn": 16
+          }
+        }
+      },
+      "review_report": "docs/JOINT7_ITERATION60_REVIEW.md"
+    },
+    {
+      "from_implementation": "f85a8c99fff8b4cff806bcf059e6fd4538d8d2be3b9c748c4d167bdf84897c08",
+      "to_implementation": "9a60a40aa1e4d8193243681d68de2f4661b82d2cf213b2d86f9e78bd3a6e5541",
+      "learning_compatibility": "c349e816f2e301ea2a3b438902059cffe868f48e131f7c120691d37cd1c409d2",
+      "reviewed_evidence": "results/selfplay-v2/state.json",
+      "reason": "Joint-7 iteration-60 review: preserve weights, Adam moments/steps, RNG, counters, population and IL lineage; apply signature-validated LR after optimizer restoration; add bounded diagnostic/retention telemetry. Reward semantics unchanged. Fresh source-bound PPO and utility recalibration before teachers. All existing fixed-work and shared CPU limits preserved.",
+      "config_changes": {
+        "execution": {
+          "from": {
+            "processes": 48,
+            "hosts_per_process": 1,
+            "heavy_processes": 24,
+            "batch_size": 64,
+            "max_candidate_cells": 131072,
+            "flush_ms": 1.0,
+            "worker_threads": 1,
+            "max_decisions": 2000,
+            "max_models": 16,
+            "shard_games": 8,
+            "shard_bytes": 268435456,
+            "feature_cache": true,
+            "policy_cache": 32,
+            "search_workers_per_turn": 4,
+            "cpu_budget": 64,
+            "cpu_reserve": 4
+          },
+          "to": {
+            "processes": 24,
+            "hosts_per_process": 2,
+            "heavy_processes": 24,
+            "batch_size": 64,
+            "max_candidate_cells": 131072,
+            "flush_ms": 1.0,
+            "worker_threads": 1,
+            "max_decisions": 2000,
+            "max_models": 72,
+            "shard_games": 8,
+            "shard_bytes": 268435456,
+            "feature_cache": true,
+            "policy_cache": 32,
+            "search_workers_per_turn": 4,
+            "cpu_budget": 64,
+            "cpu_reserve": 4,
+            "shared_slot_bytes": 2097152,
+            "inference_routing": "demand",
+            "replica_backlog": 32
+          }
+        },
+        "search_every_games": {
+          "from": 320,
+          "to": 160
+        },
+        "search": {
+          "from": {
+            "backend": "masked_ismcts",
+            "seconds": 12.0,
+            "simulations": 100000,
+            "max_choices": 512,
+            "exploration": 1.4,
+            "root_top_k": 16,
+            "interior_top_k": 8,
+            "pending_paths": 2,
+            "batch_size": 2,
+            "flush_ms": 0.5,
+            "prior_mix": 0.1,
+            "turn_interval": 4,
+            "max_searches_per_seat": 4,
+            "contract": "masked-ismcts/1.1.0",
+            "evaluator_kind": "neural",
+            "q_transform": "none",
+            "leaf_policy": "new_root_information_frontier",
+            "candidate_policy": "supported_progressive",
+            "fpu_reduction": 0.02,
+            "minimum_plan_visits": 2,
+            "reopen_support": 4,
+            "tail_admission": 0.05,
+            "virtual_loss": 0.02
+          },
+          "to": {
+            "backend": "masked_ismcts",
+            "seconds": 12.0,
+            "simulations": 100000,
+            "max_choices": 512,
+            "exploration": 1.4,
+            "root_top_k": 16,
+            "interior_top_k": 8,
+            "pending_paths": 2,
+            "batch_size": 2,
+            "flush_ms": 0.5,
+            "prior_mix": 0.1,
+            "turn_interval": 4,
+            "max_searches_per_seat": 4,
+            "contract": "masked-ismcts/1.2.0",
+            "evaluator_kind": "neural",
+            "q_transform": "none",
+            "leaf_policy": "new_root_information_frontier",
+            "candidate_policy": "supported_progressive",
+            "fpu_reduction": 0.02,
+            "minimum_plan_visits": 2,
+            "reopen_support": 4,
+            "tail_admission": 0.05,
+            "virtual_loss": 0.02,
+            "reward": {
+              "version": "brass-combined-return/1.0.0",
+              "win": 1.0,
+              "placement": 0.1,
+              "vp": 0.001,
+              "insolvency": {
+                "event_cost": 0.005,
+                "max_cost": 0.025
+              }
+            },
+            "utility_scale": 1.2
+          }
+        },
+        "retention": {
+          "from": {
+            "enabled": true,
+            "resume_checkpoints": 2,
+            "replay_rounds": 2,
+            "quarantine_hours": 0,
+            "evaluation_samples": 1,
+            "profile_traces": 2
+          },
+          "to": {
+            "enabled": true,
+            "resume_checkpoints": 2,
+            "replay_rounds": 2,
+            "quarantine_hours": 0,
+            "evaluation_samples": 1,
+            "profile_traces": 2,
+            "history_reports": 128
+          }
+        },
+        "population": {
+          "from": {
+            "recent": 8,
+            "anchors": 4
+          },
+          "to": {
+            "recent": 16,
+            "anchors": 48
+          }
+        },
+        "audit_workers": {
+          "from": 8,
+          "to": 16
+        },
+        "search_wall_fraction": {
+          "from": 0.5,
+          "to": 0.9
+        },
+        "search_collections_per_iteration": {
+          "from": null,
+          "to": 2
+        },
+        "insolvency": {
+          "from": null,
+          "to": {
+            "event_cost": 0.005,
+            "max_cost": 0.025
+          }
+        },
+        "legacy_boost": {
+          "from": null,
+          "to": {
+            "stages": [
+              {
+                "games": 20000,
+                "selfplay": 15,
+                "historical": 25,
+                "legacy": 60
+              },
+              {
+                "games": 10000,
+                "selfplay": 45,
+                "historical": 25,
+                "legacy": 30
+              }
+            ]
+          }
+        },
+        "reward": {
+          "from": null,
+          "to": {
+            "win": 1.0,
+            "placement": 0.1,
+            "vp": 0.001
+          }
+        },
+        "champion": {
+          "from": null,
+          "to": {
+            "enabled": true,
+            "every_games": 6400,
+            "setups": 8,
+            "min_win_share": 0.55,
+            "seed": 1910000
+          }
+        },
+        "teacher_work_budget": {
+          "from": null,
+          "to": {
+            "contract": "teacher-turn-work/1.1.0",
+            "watchdog_seconds": 120.0,
+            "mode": "simulations",
+            "simulations_per_phase": {
+              "canal_early": 32,
+              "canal_late": 16,
+              "rail_early": 16,
+              "rail_late": 16
+            }
+          }
+        },
+        "legacy_opponent_work_budget": {
+          "from": null,
+          "to": {
+            "contract": "legacy-opponent-turn-work/1.1.0",
+            "watchdog_seconds": 120.0,
+            "mode": "simulations",
+            "simulations_per_turn": 16
+          }
+        }
+      },
+      "review_report": "docs/JOINT7_ITERATION60_REVIEW.md"
+    },
+    {
+      "from_implementation": "760778c9fd71fd2549d87e817b14e148be6cf555444cbcceb7e0cfc06d0d5830",
+      "to_implementation": "9a60a40aa1e4d8193243681d68de2f4661b82d2cf213b2d86f9e78bd3a6e5541",
+      "learning_compatibility": "c349e816f2e301ea2a3b438902059cffe868f48e131f7c120691d37cd1c409d2",
+      "reviewed_evidence": "results/selfplay-v2-31/state.json",
+      "reason": "Joint-7 iteration-60 review: preserve weights, Adam moments/steps, RNG, counters, population and IL lineage; apply signature-validated LR after optimizer restoration; add bounded diagnostic/retention telemetry. Reward semantics unchanged. Fresh source-bound PPO and utility recalibration before teachers. All existing fixed-work and shared CPU limits preserved.",
+      "config_changes": {
+        "execution": {
+          "from": {
+            "processes": 48,
+            "hosts_per_process": 1,
+            "heavy_processes": 24,
+            "batch_size": 64,
+            "max_candidate_cells": 131072,
+            "flush_ms": 1.0,
+            "worker_threads": 1,
+            "max_decisions": 2000,
+            "max_models": 16,
+            "shard_games": 8,
+            "shard_bytes": 268435456,
+            "feature_cache": true,
+            "policy_cache": 32,
+            "search_workers_per_turn": 4,
+            "cpu_budget": 64,
+            "cpu_reserve": 4
+          },
+          "to": {
+            "processes": 48,
+            "hosts_per_process": 1,
+            "heavy_processes": 24,
+            "batch_size": 64,
+            "max_candidate_cells": 131072,
+            "flush_ms": 1.0,
+            "worker_threads": 1,
+            "max_decisions": 2000,
+            "max_models": 72,
+            "shard_games": 8,
+            "shard_bytes": 268435456,
+            "feature_cache": true,
+            "policy_cache": 32,
+            "search_workers_per_turn": 4,
+            "cpu_budget": 64,
+            "cpu_reserve": 4
+          }
+        },
+        "search_every_games": {
+          "from": 320,
+          "to": 160
+        },
+        "search": {
+          "from": {
+            "backend": "masked_ismcts",
+            "seconds": 12.0,
+            "simulations": 100000,
+            "max_choices": 512,
+            "exploration": 1.4,
+            "root_top_k": 16,
+            "interior_top_k": 8,
+            "pending_paths": 2,
+            "batch_size": 2,
+            "flush_ms": 0.5,
+            "prior_mix": 0.1,
+            "turn_interval": 4,
+            "max_searches_per_seat": 4,
+            "contract": "masked-ismcts/1.1.0",
+            "evaluator_kind": "neural",
+            "q_transform": "none",
+            "leaf_policy": "new_root_information_frontier",
+            "candidate_policy": "supported_progressive",
+            "fpu_reduction": 0.02,
+            "minimum_plan_visits": 2,
+            "reopen_support": 4,
+            "tail_admission": 0.05,
+            "virtual_loss": 0.02
+          },
+          "to": {
+            "backend": "masked_ismcts",
+            "seconds": 12.0,
+            "simulations": 100000,
+            "max_choices": 512,
+            "exploration": 1.4,
+            "root_top_k": 16,
+            "interior_top_k": 8,
+            "pending_paths": 2,
+            "batch_size": 2,
+            "flush_ms": 0.5,
+            "prior_mix": 0.1,
+            "turn_interval": 4,
+            "max_searches_per_seat": 4,
+            "contract": "masked-ismcts/1.2.0",
+            "evaluator_kind": "neural",
+            "q_transform": "none",
+            "leaf_policy": "new_root_information_frontier",
+            "candidate_policy": "supported_progressive",
+            "fpu_reduction": 0.02,
+            "minimum_plan_visits": 2,
+            "reopen_support": 4,
+            "tail_admission": 0.05,
+            "virtual_loss": 0.02,
+            "reward": {
+              "version": "brass-combined-return/1.0.0",
+              "win": 1.0,
+              "placement": 0.1,
+              "vp": 0.001,
+              "insolvency": {
+                "event_cost": 0.005,
+                "max_cost": 0.025
+              }
+            },
+            "utility_scale": 1.2
+          }
+        },
+        "retention": {
+          "from": {
+            "enabled": true,
+            "resume_checkpoints": 2,
+            "replay_rounds": 2,
+            "quarantine_hours": 0,
+            "evaluation_samples": 1,
+            "profile_traces": 2
+          },
+          "to": {
+            "enabled": true,
+            "resume_checkpoints": 2,
+            "replay_rounds": 2,
+            "quarantine_hours": 0,
+            "evaluation_samples": 1,
+            "profile_traces": 2,
+            "history_reports": 128
+          }
+        },
+        "population": {
+          "from": {
+            "recent": 8,
+            "anchors": 4
+          },
+          "to": {
+            "recent": 16,
+            "anchors": 48
+          }
+        },
+        "audit_workers": {
+          "from": 8,
+          "to": 16
+        },
+        "search_wall_fraction": {
+          "from": 0.5,
+          "to": 0.9
+        },
+        "search_collections_per_iteration": {
+          "from": null,
+          "to": 2
+        },
+        "insolvency": {
+          "from": null,
+          "to": {
+            "event_cost": 0.005,
+            "max_cost": 0.025
+          }
+        },
+        "legacy_boost": {
+          "from": null,
+          "to": {
+            "stages": [
+              {
+                "games": 20000,
+                "selfplay": 15,
+                "historical": 25,
+                "legacy": 60
+              },
+              {
+                "games": 10000,
+                "selfplay": 45,
+                "historical": 25,
+                "legacy": 30
+              }
+            ]
+          }
+        },
+        "reward": {
+          "from": null,
+          "to": {
+            "win": 1.0,
+            "placement": 0.1,
+            "vp": 0.001
+          }
+        },
+        "champion": {
+          "from": null,
+          "to": {
+            "enabled": true,
+            "every_games": 6400,
+            "setups": 8,
+            "min_win_share": 0.55,
+            "seed": 1910000
+          }
+        },
+        "teacher_work_budget": {
+          "from": null,
+          "to": {
+            "contract": "teacher-turn-work/1.1.0",
+            "watchdog_seconds": 120.0,
+            "mode": "simulations",
+            "simulations_per_phase": {
+              "canal_early": 32,
+              "canal_late": 16,
+              "rail_early": 16,
+              "rail_late": 16
+            }
+          }
+        },
+        "legacy_opponent_work_budget": {
+          "from": null,
+          "to": {
+            "contract": "legacy-opponent-turn-work/1.1.0",
+            "watchdog_seconds": 120.0,
+            "mode": "simulations",
+            "simulations_per_turn": 16
+          }
+        }
+      },
+      "review_report": "docs/JOINT7_ITERATION60_REVIEW.md"
+    },
+    {
+      "from_implementation": "760778c9fd71fd2549d87e817b14e148be6cf555444cbcceb7e0cfc06d0d5830",
+      "to_implementation": "9a60a40aa1e4d8193243681d68de2f4661b82d2cf213b2d86f9e78bd3a6e5541",
+      "learning_compatibility": "c349e816f2e301ea2a3b438902059cffe868f48e131f7c120691d37cd1c409d2",
+      "reviewed_evidence": "results/selfplay-v2-31/state.json",
+      "reason": "Joint-7 iteration-60 review: preserve weights, Adam moments/steps, RNG, counters, population and IL lineage; apply signature-validated LR after optimizer restoration; add bounded diagnostic/retention telemetry. Reward semantics unchanged. Fresh source-bound PPO and utility recalibration before teachers. All existing fixed-work and shared CPU limits preserved.",
+      "config_changes": {
+        "execution": {
+          "from": {
+            "processes": 48,
+            "hosts_per_process": 1,
+            "heavy_processes": 24,
+            "batch_size": 64,
+            "max_candidate_cells": 131072,
+            "flush_ms": 1.0,
+            "worker_threads": 1,
+            "max_decisions": 2000,
+            "max_models": 16,
+            "shard_games": 8,
+            "shard_bytes": 268435456,
+            "feature_cache": true,
+            "policy_cache": 32,
+            "search_workers_per_turn": 4,
+            "cpu_budget": 64,
+            "cpu_reserve": 4
+          },
+          "to": {
+            "processes": 24,
+            "hosts_per_process": 2,
+            "heavy_processes": 24,
+            "batch_size": 64,
+            "max_candidate_cells": 131072,
+            "flush_ms": 1.0,
+            "worker_threads": 1,
+            "max_decisions": 2000,
+            "max_models": 72,
+            "shard_games": 8,
+            "shard_bytes": 268435456,
+            "feature_cache": true,
+            "policy_cache": 32,
+            "search_workers_per_turn": 4,
+            "cpu_budget": 64,
+            "cpu_reserve": 4,
+            "shared_slot_bytes": 2097152,
+            "inference_routing": "demand",
+            "replica_backlog": 32
+          }
+        },
+        "search_every_games": {
+          "from": 320,
+          "to": 160
+        },
+        "search": {
+          "from": {
+            "backend": "masked_ismcts",
+            "seconds": 12.0,
+            "simulations": 100000,
+            "max_choices": 512,
+            "exploration": 1.4,
+            "root_top_k": 16,
+            "interior_top_k": 8,
+            "pending_paths": 2,
+            "batch_size": 2,
+            "flush_ms": 0.5,
+            "prior_mix": 0.1,
+            "turn_interval": 4,
+            "max_searches_per_seat": 4,
+            "contract": "masked-ismcts/1.1.0",
+            "evaluator_kind": "neural",
+            "q_transform": "none",
+            "leaf_policy": "new_root_information_frontier",
+            "candidate_policy": "supported_progressive",
+            "fpu_reduction": 0.02,
+            "minimum_plan_visits": 2,
+            "reopen_support": 4,
+            "tail_admission": 0.05,
+            "virtual_loss": 0.02
+          },
+          "to": {
+            "backend": "masked_ismcts",
+            "seconds": 12.0,
+            "simulations": 100000,
+            "max_choices": 512,
+            "exploration": 1.4,
+            "root_top_k": 16,
+            "interior_top_k": 8,
+            "pending_paths": 2,
+            "batch_size": 2,
+            "flush_ms": 0.5,
+            "prior_mix": 0.1,
+            "turn_interval": 4,
+            "max_searches_per_seat": 4,
+            "contract": "masked-ismcts/1.2.0",
+            "evaluator_kind": "neural",
+            "q_transform": "none",
+            "leaf_policy": "new_root_information_frontier",
+            "candidate_policy": "supported_progressive",
+            "fpu_reduction": 0.02,
+            "minimum_plan_visits": 2,
+            "reopen_support": 4,
+            "tail_admission": 0.05,
+            "virtual_loss": 0.02,
+            "reward": {
+              "version": "brass-combined-return/1.0.0",
+              "win": 1.0,
+              "placement": 0.1,
+              "vp": 0.001,
+              "insolvency": {
+                "event_cost": 0.005,
+                "max_cost": 0.025
+              }
+            },
+            "utility_scale": 1.2
+          }
+        },
+        "retention": {
+          "from": {
+            "enabled": true,
+            "resume_checkpoints": 2,
+            "replay_rounds": 2,
+            "quarantine_hours": 0,
+            "evaluation_samples": 1,
+            "profile_traces": 2
+          },
+          "to": {
+            "enabled": true,
+            "resume_checkpoints": 2,
+            "replay_rounds": 2,
+            "quarantine_hours": 0,
+            "evaluation_samples": 1,
+            "profile_traces": 2,
+            "history_reports": 128
+          }
+        },
+        "population": {
+          "from": {
+            "recent": 8,
+            "anchors": 4
+          },
+          "to": {
+            "recent": 16,
+            "anchors": 48
+          }
+        },
+        "audit_workers": {
+          "from": 8,
+          "to": 16
+        },
+        "search_wall_fraction": {
+          "from": 0.5,
+          "to": 0.9
+        },
+        "search_collections_per_iteration": {
+          "from": null,
+          "to": 2
+        },
+        "insolvency": {
+          "from": null,
+          "to": {
+            "event_cost": 0.005,
+            "max_cost": 0.025
+          }
+        },
+        "legacy_boost": {
+          "from": null,
+          "to": {
+            "stages": [
+              {
+                "games": 20000,
+                "selfplay": 15,
+                "historical": 25,
+                "legacy": 60
+              },
+              {
+                "games": 10000,
+                "selfplay": 45,
+                "historical": 25,
+                "legacy": 30
+              }
+            ]
+          }
+        },
+        "reward": {
+          "from": null,
+          "to": {
+            "win": 1.0,
+            "placement": 0.1,
+            "vp": 0.001
+          }
+        },
+        "champion": {
+          "from": null,
+          "to": {
+            "enabled": true,
+            "every_games": 6400,
+            "setups": 8,
+            "min_win_share": 0.55,
+            "seed": 1910000
+          }
+        },
+        "teacher_work_budget": {
+          "from": null,
+          "to": {
+            "contract": "teacher-turn-work/1.1.0",
+            "watchdog_seconds": 120.0,
+            "mode": "simulations",
+            "simulations_per_phase": {
+              "canal_early": 32,
+              "canal_late": 16,
+              "rail_early": 16,
+              "rail_late": 16
+            }
+          }
+        },
+        "legacy_opponent_work_budget": {
+          "from": null,
+          "to": {
+            "contract": "legacy-opponent-turn-work/1.1.0",
+            "watchdog_seconds": 120.0,
+            "mode": "simulations",
+            "simulations_per_turn": 16
+          }
+        }
+      },
+      "review_report": "docs/JOINT7_ITERATION60_REVIEW.md"
+    },
+    {
+      "from_implementation": "d95fe440ade5bf9a8ede3850757011b815700773a4271c625dee70eb946059b4",
+      "to_implementation": "9a60a40aa1e4d8193243681d68de2f4661b82d2cf213b2d86f9e78bd3a6e5541",
+      "learning_compatibility": "c349e816f2e301ea2a3b438902059cffe868f48e131f7c120691d37cd1c409d2",
+      "reviewed_evidence": "results/selfplay-v2-70/state.json",
+      "reason": "Joint-7 iteration-60 review: preserve weights, Adam moments/steps, RNG, counters, population and IL lineage; apply signature-validated LR after optimizer restoration; add bounded diagnostic/retention telemetry. Reward semantics unchanged. Fresh source-bound PPO and utility recalibration before teachers. All existing fixed-work and shared CPU limits preserved.",
+      "config_changes": {
+        "execution": {
+          "from": {
+            "processes": 48,
+            "hosts_per_process": 1,
+            "heavy_processes": 24,
+            "batch_size": 64,
+            "max_candidate_cells": 131072,
+            "flush_ms": 1.0,
+            "worker_threads": 1,
+            "max_decisions": 2000,
+            "max_models": 16,
+            "shard_games": 8,
+            "shard_bytes": 268435456,
+            "feature_cache": true,
+            "policy_cache": 32,
+            "search_workers_per_turn": 4,
+            "cpu_budget": 64,
+            "cpu_reserve": 4
+          },
+          "to": {
+            "processes": 48,
+            "hosts_per_process": 1,
+            "heavy_processes": 24,
+            "batch_size": 64,
+            "max_candidate_cells": 131072,
+            "flush_ms": 1.0,
+            "worker_threads": 1,
+            "max_decisions": 2000,
+            "max_models": 72,
+            "shard_games": 8,
+            "shard_bytes": 268435456,
+            "feature_cache": true,
+            "policy_cache": 32,
+            "search_workers_per_turn": 4,
+            "cpu_budget": 64,
+            "cpu_reserve": 4
+          }
+        },
+        "search_every_games": {
+          "from": 320,
+          "to": 160
+        },
+        "search": {
+          "from": {
+            "backend": "masked_ismcts",
+            "seconds": 12.0,
+            "simulations": 100000,
+            "max_choices": 512,
+            "exploration": 1.4,
+            "root_top_k": 16,
+            "interior_top_k": 8,
+            "pending_paths": 2,
+            "batch_size": 2,
+            "flush_ms": 0.5,
+            "prior_mix": 0.1,
+            "turn_interval": 4,
+            "max_searches_per_seat": 4,
+            "contract": "masked-ismcts/1.1.0",
+            "evaluator_kind": "neural",
+            "q_transform": "none",
+            "leaf_policy": "new_root_information_frontier",
+            "candidate_policy": "supported_progressive",
+            "fpu_reduction": 0.02,
+            "minimum_plan_visits": 2,
+            "reopen_support": 4,
+            "tail_admission": 0.05,
+            "virtual_loss": 0.02
+          },
+          "to": {
+            "backend": "masked_ismcts",
+            "seconds": 12.0,
+            "simulations": 100000,
+            "max_choices": 512,
+            "exploration": 1.4,
+            "root_top_k": 16,
+            "interior_top_k": 8,
+            "pending_paths": 2,
+            "batch_size": 2,
+            "flush_ms": 0.5,
+            "prior_mix": 0.1,
+            "turn_interval": 4,
+            "max_searches_per_seat": 4,
+            "contract": "masked-ismcts/1.2.0",
+            "evaluator_kind": "neural",
+            "q_transform": "none",
+            "leaf_policy": "new_root_information_frontier",
+            "candidate_policy": "supported_progressive",
+            "fpu_reduction": 0.02,
+            "minimum_plan_visits": 2,
+            "reopen_support": 4,
+            "tail_admission": 0.05,
+            "virtual_loss": 0.02,
+            "reward": {
+              "version": "brass-combined-return/1.0.0",
+              "win": 1.0,
+              "placement": 0.1,
+              "vp": 0.001,
+              "insolvency": {
+                "event_cost": 0.005,
+                "max_cost": 0.025
+              }
+            },
+            "utility_scale": 1.2
+          }
+        },
+        "retention": {
+          "from": {
+            "enabled": true,
+            "resume_checkpoints": 2,
+            "replay_rounds": 2,
+            "quarantine_hours": 0,
+            "evaluation_samples": 1,
+            "profile_traces": 2
+          },
+          "to": {
+            "enabled": true,
+            "resume_checkpoints": 2,
+            "replay_rounds": 2,
+            "quarantine_hours": 0,
+            "evaluation_samples": 1,
+            "profile_traces": 2,
+            "history_reports": 128
+          }
+        },
+        "population": {
+          "from": {
+            "recent": 8,
+            "anchors": 4
+          },
+          "to": {
+            "recent": 16,
+            "anchors": 48
+          }
+        },
+        "audit_workers": {
+          "from": 8,
+          "to": 16
+        },
+        "search_wall_fraction": {
+          "from": 0.7,
+          "to": 0.9
+        },
+        "search_collections_per_iteration": {
+          "from": null,
+          "to": 2
+        },
+        "insolvency": {
+          "from": null,
+          "to": {
+            "event_cost": 0.005,
+            "max_cost": 0.025
+          }
+        },
+        "legacy_boost": {
+          "from": null,
+          "to": {
+            "stages": [
+              {
+                "games": 20000,
+                "selfplay": 15,
+                "historical": 25,
+                "legacy": 60
+              },
+              {
+                "games": 10000,
+                "selfplay": 45,
+                "historical": 25,
+                "legacy": 30
+              }
+            ]
+          }
+        },
+        "reward": {
+          "from": null,
+          "to": {
+            "win": 1.0,
+            "placement": 0.1,
+            "vp": 0.001
+          }
+        },
+        "champion": {
+          "from": null,
+          "to": {
+            "enabled": true,
+            "every_games": 6400,
+            "setups": 8,
+            "min_win_share": 0.55,
+            "seed": 1910000
+          }
+        },
+        "teacher_work_budget": {
+          "from": null,
+          "to": {
+            "contract": "teacher-turn-work/1.1.0",
+            "watchdog_seconds": 120.0,
+            "mode": "simulations",
+            "simulations_per_phase": {
+              "canal_early": 32,
+              "canal_late": 16,
+              "rail_early": 16,
+              "rail_late": 16
+            }
+          }
+        },
+        "legacy_opponent_work_budget": {
+          "from": null,
+          "to": {
+            "contract": "legacy-opponent-turn-work/1.1.0",
+            "watchdog_seconds": 120.0,
+            "mode": "simulations",
+            "simulations_per_turn": 16
+          }
+        }
+      },
+      "review_report": "docs/JOINT7_ITERATION60_REVIEW.md"
+    },
+    {
+      "from_implementation": "d95fe440ade5bf9a8ede3850757011b815700773a4271c625dee70eb946059b4",
+      "to_implementation": "9a60a40aa1e4d8193243681d68de2f4661b82d2cf213b2d86f9e78bd3a6e5541",
+      "learning_compatibility": "c349e816f2e301ea2a3b438902059cffe868f48e131f7c120691d37cd1c409d2",
+      "reviewed_evidence": "results/selfplay-v2-70/state.json",
+      "reason": "Joint-7 iteration-60 review: preserve weights, Adam moments/steps, RNG, counters, population and IL lineage; apply signature-validated LR after optimizer restoration; add bounded diagnostic/retention telemetry. Reward semantics unchanged. Fresh source-bound PPO and utility recalibration before teachers. All existing fixed-work and shared CPU limits preserved.",
+      "config_changes": {
+        "execution": {
+          "from": {
+            "processes": 48,
+            "hosts_per_process": 1,
+            "heavy_processes": 24,
+            "batch_size": 64,
+            "max_candidate_cells": 131072,
+            "flush_ms": 1.0,
+            "worker_threads": 1,
+            "max_decisions": 2000,
+            "max_models": 16,
+            "shard_games": 8,
+            "shard_bytes": 268435456,
+            "feature_cache": true,
+            "policy_cache": 32,
+            "search_workers_per_turn": 4,
+            "cpu_budget": 64,
+            "cpu_reserve": 4
+          },
+          "to": {
+            "processes": 24,
+            "hosts_per_process": 2,
+            "heavy_processes": 24,
+            "batch_size": 64,
+            "max_candidate_cells": 131072,
+            "flush_ms": 1.0,
+            "worker_threads": 1,
+            "max_decisions": 2000,
+            "max_models": 72,
+            "shard_games": 8,
+            "shard_bytes": 268435456,
+            "feature_cache": true,
+            "policy_cache": 32,
+            "search_workers_per_turn": 4,
+            "cpu_budget": 64,
+            "cpu_reserve": 4,
+            "shared_slot_bytes": 2097152,
+            "inference_routing": "demand",
+            "replica_backlog": 32
+          }
+        },
+        "search_every_games": {
+          "from": 320,
+          "to": 160
+        },
+        "search": {
+          "from": {
+            "backend": "masked_ismcts",
+            "seconds": 12.0,
+            "simulations": 100000,
+            "max_choices": 512,
+            "exploration": 1.4,
+            "root_top_k": 16,
+            "interior_top_k": 8,
+            "pending_paths": 2,
+            "batch_size": 2,
+            "flush_ms": 0.5,
+            "prior_mix": 0.1,
+            "turn_interval": 4,
+            "max_searches_per_seat": 4,
+            "contract": "masked-ismcts/1.1.0",
+            "evaluator_kind": "neural",
+            "q_transform": "none",
+            "leaf_policy": "new_root_information_frontier",
+            "candidate_policy": "supported_progressive",
+            "fpu_reduction": 0.02,
+            "minimum_plan_visits": 2,
+            "reopen_support": 4,
+            "tail_admission": 0.05,
+            "virtual_loss": 0.02
+          },
+          "to": {
+            "backend": "masked_ismcts",
+            "seconds": 12.0,
+            "simulations": 100000,
+            "max_choices": 512,
+            "exploration": 1.4,
+            "root_top_k": 16,
+            "interior_top_k": 8,
+            "pending_paths": 2,
+            "batch_size": 2,
+            "flush_ms": 0.5,
+            "prior_mix": 0.1,
+            "turn_interval": 4,
+            "max_searches_per_seat": 4,
+            "contract": "masked-ismcts/1.2.0",
+            "evaluator_kind": "neural",
+            "q_transform": "none",
+            "leaf_policy": "new_root_information_frontier",
+            "candidate_policy": "supported_progressive",
+            "fpu_reduction": 0.02,
+            "minimum_plan_visits": 2,
+            "reopen_support": 4,
+            "tail_admission": 0.05,
+            "virtual_loss": 0.02,
+            "reward": {
+              "version": "brass-combined-return/1.0.0",
+              "win": 1.0,
+              "placement": 0.1,
+              "vp": 0.001,
+              "insolvency": {
+                "event_cost": 0.005,
+                "max_cost": 0.025
+              }
+            },
+            "utility_scale": 1.2
+          }
+        },
+        "retention": {
+          "from": {
+            "enabled": true,
+            "resume_checkpoints": 2,
+            "replay_rounds": 2,
+            "quarantine_hours": 0,
+            "evaluation_samples": 1,
+            "profile_traces": 2
+          },
+          "to": {
+            "enabled": true,
+            "resume_checkpoints": 2,
+            "replay_rounds": 2,
+            "quarantine_hours": 0,
+            "evaluation_samples": 1,
+            "profile_traces": 2,
+            "history_reports": 128
+          }
+        },
+        "population": {
+          "from": {
+            "recent": 8,
+            "anchors": 4
+          },
+          "to": {
+            "recent": 16,
+            "anchors": 48
+          }
+        },
+        "audit_workers": {
+          "from": 8,
+          "to": 16
+        },
+        "search_wall_fraction": {
+          "from": 0.7,
+          "to": 0.9
+        },
+        "search_collections_per_iteration": {
+          "from": null,
+          "to": 2
+        },
+        "insolvency": {
+          "from": null,
+          "to": {
+            "event_cost": 0.005,
+            "max_cost": 0.025
+          }
+        },
+        "legacy_boost": {
+          "from": null,
+          "to": {
+            "stages": [
+              {
+                "games": 20000,
+                "selfplay": 15,
+                "historical": 25,
+                "legacy": 60
+              },
+              {
+                "games": 10000,
+                "selfplay": 45,
+                "historical": 25,
+                "legacy": 30
+              }
+            ]
+          }
+        },
+        "reward": {
+          "from": null,
+          "to": {
+            "win": 1.0,
+            "placement": 0.1,
+            "vp": 0.001
+          }
+        },
+        "champion": {
+          "from": null,
+          "to": {
+            "enabled": true,
+            "every_games": 6400,
+            "setups": 8,
+            "min_win_share": 0.55,
+            "seed": 1910000
+          }
+        },
+        "teacher_work_budget": {
+          "from": null,
+          "to": {
+            "contract": "teacher-turn-work/1.1.0",
+            "watchdog_seconds": 120.0,
+            "mode": "simulations",
+            "simulations_per_phase": {
+              "canal_early": 32,
+              "canal_late": 16,
+              "rail_early": 16,
+              "rail_late": 16
+            }
+          }
+        },
+        "legacy_opponent_work_budget": {
+          "from": null,
+          "to": {
+            "contract": "legacy-opponent-turn-work/1.1.0",
+            "watchdog_seconds": 120.0,
+            "mode": "simulations",
+            "simulations_per_turn": 16
+          }
+        }
+      },
+      "review_report": "docs/JOINT7_ITERATION60_REVIEW.md"
+    },
+    {
+      "from_implementation": "2ea375ddfa37d3aa07786eba035f3d17e38fd94876734fee5317bed58af68360",
+      "to_implementation": "9a60a40aa1e4d8193243681d68de2f4661b82d2cf213b2d86f9e78bd3a6e5541",
+      "learning_compatibility": "c349e816f2e301ea2a3b438902059cffe868f48e131f7c120691d37cd1c409d2",
+      "reason": "Joint-7 iteration-60 review: preserve weights, Adam moments/steps, RNG, counters, population and IL lineage; apply signature-validated LR after optimizer restoration; add bounded diagnostic/retention telemetry. Reward semantics unchanged. Fresh source-bound PPO and utility recalibration before teachers. All existing fixed-work and shared CPU limits preserved.",
+      "config_changes": {
+        "search": {
+          "from": {
+            "backend": "masked_ismcts",
+            "seconds": 12.0,
+            "simulations": 100000,
+            "max_choices": 512,
+            "exploration": 1.4,
+            "root_top_k": 16,
+            "interior_top_k": 8,
+            "pending_paths": 2,
+            "batch_size": 2,
+            "flush_ms": 0.5,
+            "prior_mix": 0.1,
+            "turn_interval": 4,
+            "max_searches_per_seat": 4,
+            "contract": "masked-ismcts/1.1.0",
+            "evaluator_kind": "neural",
+            "q_transform": "none",
+            "leaf_policy": "new_root_information_frontier",
+            "candidate_policy": "supported_progressive",
+            "fpu_reduction": 0.02,
+            "minimum_plan_visits": 2,
+            "reopen_support": 4,
+            "tail_admission": 0.05,
+            "virtual_loss": 0.02
+          },
+          "to": {
+            "backend": "masked_ismcts",
+            "seconds": 12.0,
+            "simulations": 100000,
+            "max_choices": 512,
+            "exploration": 1.4,
+            "root_top_k": 16,
+            "interior_top_k": 8,
+            "pending_paths": 2,
+            "batch_size": 2,
+            "flush_ms": 0.5,
+            "prior_mix": 0.1,
+            "turn_interval": 4,
+            "max_searches_per_seat": 4,
+            "contract": "masked-ismcts/1.2.0",
+            "evaluator_kind": "neural",
+            "q_transform": "none",
+            "leaf_policy": "new_root_information_frontier",
+            "candidate_policy": "supported_progressive",
+            "fpu_reduction": 0.02,
+            "minimum_plan_visits": 2,
+            "reopen_support": 4,
+            "tail_admission": 0.05,
+            "virtual_loss": 0.02,
+            "reward": {
+              "version": "brass-combined-return/1.0.0",
+              "win": 1.0,
+              "placement": 0.1,
+              "vp": 0.001,
+              "insolvency": {
+                "event_cost": 0.005,
+                "max_cost": 0.025
+              }
+            },
+            "utility_scale": 1.2
+          }
+        },
+        "retention": {
+          "from": {
+            "enabled": true,
+            "resume_checkpoints": 2,
+            "replay_rounds": 2,
+            "quarantine_hours": 0,
+            "evaluation_samples": 1,
+            "profile_traces": 2
+          },
+          "to": {
+            "enabled": true,
+            "resume_checkpoints": 2,
+            "replay_rounds": 2,
+            "quarantine_hours": 0,
+            "evaluation_samples": 1,
+            "profile_traces": 2,
+            "history_reports": 128
+          }
+        },
+        "search_wall_fraction": {
+          "from": 0.7777777777777778,
+          "to": 0.9
+        },
+        "insolvency": {
+          "from": null,
+          "to": {
+            "event_cost": 0.005,
+            "max_cost": 0.025
+          }
+        },
+        "legacy_boost": {
+          "from": null,
+          "to": {
+            "stages": [
+              {
+                "games": 20000,
+                "selfplay": 15,
+                "historical": 25,
+                "legacy": 60
+              },
+              {
+                "games": 10000,
+                "selfplay": 45,
+                "historical": 25,
+                "legacy": 30
+              }
+            ]
+          }
+        },
+        "reward": {
+          "from": null,
+          "to": {
+            "win": 1.0,
+            "placement": 0.1,
+            "vp": 0.001
+          }
+        },
+        "champion": {
+          "from": null,
+          "to": {
+            "enabled": true,
+            "every_games": 6400,
+            "setups": 8,
+            "min_win_share": 0.55,
+            "seed": 1910000
+          }
+        },
+        "teacher_work_budget": {
+          "from": null,
+          "to": {
+            "contract": "teacher-turn-work/1.1.0",
+            "watchdog_seconds": 120.0,
+            "mode": "simulations",
+            "simulations_per_phase": {
+              "canal_early": 32,
+              "canal_late": 16,
+              "rail_early": 16,
+              "rail_late": 16
+            }
+          }
+        },
+        "legacy_opponent_work_budget": {
+          "from": null,
+          "to": {
+            "contract": "legacy-opponent-turn-work/1.1.0",
+            "watchdog_seconds": 120.0,
+            "mode": "simulations",
+            "simulations_per_turn": 16
+          }
+        }
+      },
+      "review_report": "docs/JOINT7_ITERATION60_REVIEW.md"
+    },
+    {
+      "from_implementation": "2ea375ddfa37d3aa07786eba035f3d17e38fd94876734fee5317bed58af68360",
+      "to_implementation": "9a60a40aa1e4d8193243681d68de2f4661b82d2cf213b2d86f9e78bd3a6e5541",
+      "learning_compatibility": "c349e816f2e301ea2a3b438902059cffe868f48e131f7c120691d37cd1c409d2",
+      "reason": "Joint-7 iteration-60 review: preserve weights, Adam moments/steps, RNG, counters, population and IL lineage; apply signature-validated LR after optimizer restoration; add bounded diagnostic/retention telemetry. Reward semantics unchanged. Fresh source-bound PPO and utility recalibration before teachers. All existing fixed-work and shared CPU limits preserved.",
+      "config_changes": {
+        "search": {
+          "from": {
+            "backend": "masked_ismcts",
+            "seconds": 12.0,
+            "simulations": 100000,
+            "max_choices": 512,
+            "exploration": 1.4,
+            "root_top_k": 16,
+            "interior_top_k": 8,
+            "pending_paths": 2,
+            "batch_size": 2,
+            "flush_ms": 0.5,
+            "prior_mix": 0.1,
+            "turn_interval": 4,
+            "max_searches_per_seat": 4,
+            "contract": "masked-ismcts/1.1.0",
+            "evaluator_kind": "neural",
+            "q_transform": "none",
+            "leaf_policy": "new_root_information_frontier",
+            "candidate_policy": "supported_progressive",
+            "fpu_reduction": 0.02,
+            "minimum_plan_visits": 2,
+            "reopen_support": 4,
+            "tail_admission": 0.05,
+            "virtual_loss": 0.02
+          },
+          "to": {
+            "backend": "masked_ismcts",
+            "seconds": 12.0,
+            "simulations": 100000,
+            "max_choices": 512,
+            "exploration": 1.4,
+            "root_top_k": 16,
+            "interior_top_k": 8,
+            "pending_paths": 2,
+            "batch_size": 2,
+            "flush_ms": 0.5,
+            "prior_mix": 0.1,
+            "turn_interval": 4,
+            "max_searches_per_seat": 4,
+            "contract": "masked-ismcts/1.2.0",
+            "evaluator_kind": "neural",
+            "q_transform": "none",
+            "leaf_policy": "new_root_information_frontier",
+            "candidate_policy": "supported_progressive",
+            "fpu_reduction": 0.02,
+            "minimum_plan_visits": 2,
+            "reopen_support": 4,
+            "tail_admission": 0.05,
+            "virtual_loss": 0.02,
+            "reward": {
+              "version": "brass-combined-return/1.0.0",
+              "win": 1.0,
+              "placement": 0.1,
+              "vp": 0.001,
+              "insolvency": {
+                "event_cost": 0.005,
+                "max_cost": 0.025
+              }
+            },
+            "utility_scale": 1.2
+          }
+        },
+        "retention": {
+          "from": {
+            "enabled": true,
+            "resume_checkpoints": 2,
+            "replay_rounds": 2,
+            "quarantine_hours": 0,
+            "evaluation_samples": 1,
+            "profile_traces": 2
+          },
+          "to": {
+            "enabled": true,
+            "resume_checkpoints": 2,
+            "replay_rounds": 2,
+            "quarantine_hours": 0,
+            "evaluation_samples": 1,
+            "profile_traces": 2,
+            "history_reports": 128
+          }
+        },
+        "search_wall_fraction": {
+          "from": 0.7777777777777778,
+          "to": 0.9
+        },
+        "insolvency": {
+          "from": null,
+          "to": {
+            "event_cost": 0.005,
+            "max_cost": 0.025
+          }
+        },
+        "legacy_boost": {
+          "from": null,
+          "to": {
+            "stages": [
+              {
+                "games": 20000,
+                "selfplay": 15,
+                "historical": 25,
+                "legacy": 60
+              },
+              {
+                "games": 10000,
+                "selfplay": 45,
+                "historical": 25,
+                "legacy": 30
+              }
+            ]
+          }
+        },
+        "reward": {
+          "from": null,
+          "to": {
+            "win": 1.0,
+            "placement": 0.1,
+            "vp": 0.001
+          }
+        },
+        "champion": {
+          "from": null,
+          "to": {
+            "enabled": true,
+            "every_games": 6400,
+            "setups": 8,
+            "min_win_share": 0.55,
+            "seed": 1910000
+          }
+        },
+        "teacher_work_budget": {
+          "from": null,
+          "to": {
+            "contract": "teacher-turn-work/1.1.0",
+            "watchdog_seconds": 120.0,
+            "mode": "simulations",
+            "simulations_per_phase": {
+              "canal_early": 32,
+              "canal_late": 16,
+              "rail_early": 16,
+              "rail_late": 16
+            }
+          }
+        },
+        "legacy_opponent_work_budget": {
+          "from": null,
+          "to": {
+            "contract": "legacy-opponent-turn-work/1.1.0",
+            "watchdog_seconds": 120.0,
+            "mode": "simulations",
+            "simulations_per_turn": 16
+          }
+        },
+        "execution": {
+          "to": {
+            "processes": 24,
+            "hosts_per_process": 2,
+            "heavy_processes": 24,
+            "batch_size": 64,
+            "max_candidate_cells": 131072,
+            "flush_ms": 1.0,
+            "worker_threads": 1,
+            "max_decisions": 2000,
+            "max_models": 72,
+            "shard_games": 8,
+            "shard_bytes": 268435456,
+            "feature_cache": true,
+            "policy_cache": 32,
+            "search_workers_per_turn": 4,
+            "cpu_budget": 64,
+            "cpu_reserve": 4,
+            "shared_slot_bytes": 2097152,
+            "inference_routing": "demand",
+            "replica_backlog": 32
+          },
+          "from": {
+            "processes": 48,
+            "hosts_per_process": 1,
+            "heavy_processes": 24,
+            "batch_size": 64,
+            "max_candidate_cells": 131072,
+            "flush_ms": 1.0,
+            "worker_threads": 1,
+            "max_decisions": 2000,
+            "max_models": 72,
+            "shard_games": 8,
+            "shard_bytes": 268435456,
+            "feature_cache": true,
+            "policy_cache": 32,
+            "search_workers_per_turn": 4,
+            "cpu_budget": 64,
+            "cpu_reserve": 4
+          }
+        }
+      },
+      "review_report": "docs/JOINT7_ITERATION60_REVIEW.md"
+    },
+    {
+      "from_implementation": "2ea375ddfa37d3aa07786eba035f3d17e38fd94876734fee5317bed58af68360",
+      "to_implementation": "9a60a40aa1e4d8193243681d68de2f4661b82d2cf213b2d86f9e78bd3a6e5541",
+      "learning_compatibility": "c349e816f2e301ea2a3b438902059cffe868f48e131f7c120691d37cd1c409d2",
+      "reason": "Joint-7 iteration-60 review: preserve weights, Adam moments/steps, RNG, counters, population and IL lineage; apply signature-validated LR after optimizer restoration; add bounded diagnostic/retention telemetry. Reward semantics unchanged. Fresh source-bound PPO and utility recalibration before teachers. All existing fixed-work and shared CPU limits preserved.",
+      "config_changes": {
+        "search": {
+          "from": {
+            "backend": "masked_ismcts",
+            "seconds": 12.0,
+            "simulations": 100000,
+            "max_choices": 512,
+            "exploration": 1.4,
+            "root_top_k": 16,
+            "interior_top_k": 8,
+            "pending_paths": 2,
+            "batch_size": 2,
+            "flush_ms": 0.5,
+            "prior_mix": 0.1,
+            "turn_interval": 4,
+            "max_searches_per_seat": 4,
+            "contract": "masked-ismcts/1.1.0",
+            "evaluator_kind": "neural",
+            "q_transform": "none",
+            "leaf_policy": "new_root_information_frontier",
+            "candidate_policy": "supported_progressive",
+            "fpu_reduction": 0.02,
+            "minimum_plan_visits": 2,
+            "reopen_support": 4,
+            "tail_admission": 0.05,
+            "virtual_loss": 0.02
+          },
+          "to": {
+            "backend": "masked_ismcts",
+            "seconds": 12.0,
+            "simulations": 100000,
+            "max_choices": 512,
+            "exploration": 1.4,
+            "root_top_k": 16,
+            "interior_top_k": 8,
+            "pending_paths": 2,
+            "batch_size": 2,
+            "flush_ms": 0.5,
+            "prior_mix": 0.1,
+            "turn_interval": 4,
+            "max_searches_per_seat": 4,
+            "contract": "masked-ismcts/1.2.0",
+            "evaluator_kind": "neural",
+            "q_transform": "none",
+            "leaf_policy": "new_root_information_frontier",
+            "candidate_policy": "supported_progressive",
+            "fpu_reduction": 0.02,
+            "minimum_plan_visits": 2,
+            "reopen_support": 4,
+            "tail_admission": 0.05,
+            "virtual_loss": 0.02,
+            "reward": {
+              "version": "brass-combined-return/1.0.0",
+              "win": 1.0,
+              "placement": 0.1,
+              "vp": 0.001,
+              "insolvency": {
+                "event_cost": 0.005,
+                "max_cost": 0.025
+              }
+            },
+            "utility_scale": 1.2
+          }
+        },
+        "retention": {
+          "from": {
+            "enabled": true,
+            "resume_checkpoints": 2,
+            "replay_rounds": 2,
+            "quarantine_hours": 0,
+            "evaluation_samples": 1,
+            "profile_traces": 2
+          },
+          "to": {
+            "enabled": true,
+            "resume_checkpoints": 2,
+            "replay_rounds": 2,
+            "quarantine_hours": 0,
+            "evaluation_samples": 1,
+            "profile_traces": 2,
+            "history_reports": 128
+          }
+        },
+        "search_wall_fraction": {
+          "from": 0.7777777777777778,
+          "to": 0.9
+        },
+        "insolvency": {
+          "from": null,
+          "to": {
+            "event_cost": 0.005,
+            "max_cost": 0.025
+          }
+        },
+        "legacy_boost": {
+          "from": null,
+          "to": {
+            "stages": [
+              {
+                "games": 20000,
+                "selfplay": 15,
+                "historical": 25,
+                "legacy": 60
+              },
+              {
+                "games": 10000,
+                "selfplay": 45,
+                "historical": 25,
+                "legacy": 30
+              }
+            ]
+          }
+        },
+        "reward": {
+          "from": null,
+          "to": {
+            "win": 1.0,
+            "placement": 0.1,
+            "vp": 0.001
+          }
+        },
+        "champion": {
+          "from": null,
+          "to": {
+            "enabled": true,
+            "every_games": 6400,
+            "setups": 8,
+            "min_win_share": 0.55,
+            "seed": 1910000
+          }
+        },
+        "teacher_work_budget": {
+          "from": null,
+          "to": {
+            "contract": "teacher-turn-work/1.1.0",
+            "watchdog_seconds": 120.0,
+            "mode": "simulations",
+            "simulations_per_phase": {
+              "canal_early": 32,
+              "canal_late": 16,
+              "rail_early": 16,
+              "rail_late": 16
+            }
+          }
+        },
+        "legacy_opponent_work_budget": {
+          "from": null,
+          "to": {
+            "contract": "legacy-opponent-turn-work/1.1.0",
+            "watchdog_seconds": 120.0,
+            "mode": "simulations",
+            "simulations_per_turn": 16
+          }
+        },
+        "execution": {
+          "to": {
+            "processes": 14,
+            "hosts_per_process": 2,
+            "heavy_processes": 6,
+            "batch_size": 64,
+            "max_candidate_cells": 131072,
+            "flush_ms": 1.0,
+            "worker_threads": 1,
+            "max_decisions": 2000,
+            "max_models": 72,
+            "shard_games": 8,
+            "shard_bytes": 268435456,
+            "feature_cache": true,
+            "policy_cache": 32,
+            "search_workers_per_turn": 4,
+            "cpu_budget": 32,
+            "cpu_reserve": 4,
+            "shared_slot_bytes": 2097152,
+            "inference_routing": "demand",
+            "replica_backlog": 32
+          },
+          "from": {
+            "processes": 28,
+            "hosts_per_process": 1,
+            "heavy_processes": 6,
+            "batch_size": 64,
+            "max_candidate_cells": 131072,
+            "flush_ms": 1.0,
+            "worker_threads": 1,
+            "max_decisions": 2000,
+            "max_models": 72,
+            "shard_games": 8,
+            "shard_bytes": 268435456,
+            "feature_cache": true,
+            "policy_cache": 32,
+            "search_workers_per_turn": 4,
+            "cpu_budget": 32,
+            "cpu_reserve": 4
+          }
+        }
+      },
+      "review_report": "docs/JOINT7_ITERATION60_REVIEW.md"
+    },
+    {
+      "from_implementation": "2ea375ddfa37d3aa07786eba035f3d17e38fd94876734fee5317bed58af68360",
+      "to_implementation": "9a60a40aa1e4d8193243681d68de2f4661b82d2cf213b2d86f9e78bd3a6e5541",
+      "learning_compatibility": "c349e816f2e301ea2a3b438902059cffe868f48e131f7c120691d37cd1c409d2",
+      "reason": "Joint-7 iteration-60 review: preserve weights, Adam moments/steps, RNG, counters, population and IL lineage; apply signature-validated LR after optimizer restoration; add bounded diagnostic/retention telemetry. Reward semantics unchanged. Fresh source-bound PPO and utility recalibration before teachers. All existing fixed-work and shared CPU limits preserved.",
+      "config_changes": {
+        "search": {
+          "from": {
+            "backend": "masked_ismcts",
+            "seconds": 12.0,
+            "simulations": 100000,
+            "max_choices": 512,
+            "exploration": 1.4,
+            "root_top_k": 16,
+            "interior_top_k": 8,
+            "pending_paths": 2,
+            "batch_size": 2,
+            "flush_ms": 0.5,
+            "prior_mix": 0.1,
+            "turn_interval": 4,
+            "max_searches_per_seat": 4,
+            "contract": "masked-ismcts/1.1.0",
+            "evaluator_kind": "neural",
+            "q_transform": "none",
+            "leaf_policy": "new_root_information_frontier",
+            "candidate_policy": "supported_progressive",
+            "fpu_reduction": 0.02,
+            "minimum_plan_visits": 2,
+            "reopen_support": 4,
+            "tail_admission": 0.05,
+            "virtual_loss": 0.02
+          },
+          "to": {
+            "backend": "masked_ismcts",
+            "seconds": 12.0,
+            "simulations": 100000,
+            "max_choices": 512,
+            "exploration": 1.4,
+            "root_top_k": 16,
+            "interior_top_k": 8,
+            "pending_paths": 2,
+            "batch_size": 2,
+            "flush_ms": 0.5,
+            "prior_mix": 0.1,
+            "turn_interval": 4,
+            "max_searches_per_seat": 4,
+            "contract": "masked-ismcts/1.2.0",
+            "evaluator_kind": "neural",
+            "q_transform": "none",
+            "leaf_policy": "new_root_information_frontier",
+            "candidate_policy": "supported_progressive",
+            "fpu_reduction": 0.02,
+            "minimum_plan_visits": 2,
+            "reopen_support": 4,
+            "tail_admission": 0.05,
+            "virtual_loss": 0.02,
+            "reward": {
+              "version": "brass-combined-return/1.0.0",
+              "win": 1.0,
+              "placement": 0.1,
+              "vp": 0.001,
+              "insolvency": {
+                "event_cost": 0.005,
+                "max_cost": 0.025
+              }
+            },
+            "utility_scale": 1.2
+          }
+        },
+        "retention": {
+          "from": {
+            "enabled": true,
+            "resume_checkpoints": 2,
+            "replay_rounds": 2,
+            "quarantine_hours": 0,
+            "evaluation_samples": 1,
+            "profile_traces": 2
+          },
+          "to": {
+            "enabled": true,
+            "resume_checkpoints": 2,
+            "replay_rounds": 2,
+            "quarantine_hours": 0,
+            "evaluation_samples": 1,
+            "profile_traces": 2,
+            "history_reports": 128
+          }
+        },
+        "search_wall_fraction": {
+          "from": 0.7777777777777778,
+          "to": 0.9
+        },
+        "insolvency": {
+          "from": null,
+          "to": {
+            "event_cost": 0.005,
+            "max_cost": 0.025
+          }
+        },
+        "legacy_boost": {
+          "from": null,
+          "to": {
+            "stages": [
+              {
+                "games": 20000,
+                "selfplay": 15,
+                "historical": 25,
+                "legacy": 60
+              },
+              {
+                "games": 10000,
+                "selfplay": 45,
+                "historical": 25,
+                "legacy": 30
+              }
+            ]
+          }
+        },
+        "reward": {
+          "from": null,
+          "to": {
+            "win": 1.0,
+            "placement": 0.1,
+            "vp": 0.001
+          }
+        },
+        "champion": {
+          "from": null,
+          "to": {
+            "enabled": true,
+            "every_games": 6400,
+            "setups": 8,
+            "min_win_share": 0.55,
+            "seed": 1910000
+          }
+        },
+        "teacher_work_budget": {
+          "from": null,
+          "to": {
+            "contract": "teacher-turn-work/1.1.0",
+            "watchdog_seconds": 120.0,
+            "mode": "simulations",
+            "simulations_per_phase": {
+              "canal_early": 32,
+              "canal_late": 16,
+              "rail_early": 16,
+              "rail_late": 16
+            }
+          }
+        },
+        "legacy_opponent_work_budget": {
+          "from": null,
+          "to": {
+            "contract": "legacy-opponent-turn-work/1.1.0",
+            "watchdog_seconds": 120.0,
+            "mode": "simulations",
+            "simulations_per_turn": 16
+          }
+        },
+        "execution": {
+          "to": {
+            "processes": 2,
+            "hosts_per_process": 1,
+            "heavy_processes": 2,
+            "batch_size": 16,
+            "max_candidate_cells": 8192,
+            "flush_ms": 1.0,
+            "worker_threads": 1,
+            "max_decisions": 2000,
+            "max_models": 16,
+            "shard_games": 2,
+            "shard_bytes": 268435456,
+            "feature_cache": true,
+            "policy_cache": 32,
+            "search_workers_per_turn": 4,
+            "cpu_budget": 12,
+            "cpu_reserve": 2,
+            "shared_slot_bytes": 2097152,
+            "inference_routing": "demand",
+            "replica_backlog": 32
+          },
+          "from": {
+            "processes": 2,
+            "hosts_per_process": 1,
+            "heavy_processes": 2,
+            "batch_size": 16,
+            "max_candidate_cells": 8192,
+            "flush_ms": 1.0,
+            "worker_threads": 1,
+            "max_decisions": 2000,
+            "max_models": 16,
+            "shard_games": 2,
+            "shard_bytes": 268435456,
+            "feature_cache": true,
+            "policy_cache": 32,
+            "search_workers_per_turn": 4,
+            "cpu_budget": 12,
+            "cpu_reserve": 2
+          }
+        }
+      },
+      "review_report": "docs/JOINT7_ITERATION60_REVIEW.md"
+    },
+    {
+      "from_implementation": "ef111540f20d696496b13596791bbc113d8ce27843577d546b1e71a5e6a4c7e1",
+      "to_implementation": "9a60a40aa1e4d8193243681d68de2f4661b82d2cf213b2d86f9e78bd3a6e5541",
+      "learning_compatibility": "c349e816f2e301ea2a3b438902059cffe868f48e131f7c120691d37cd1c409d2",
+      "reason": "Joint-7 iteration-60 review: preserve weights, Adam moments/steps, RNG, counters, population and IL lineage; apply signature-validated LR after optimizer restoration; add bounded diagnostic/retention telemetry. Reward semantics unchanged. Fresh source-bound PPO and utility recalibration before teachers. All existing fixed-work and shared CPU limits preserved.",
+      "config_changes": {
+        "search": {
+          "from": {
+            "backend": "masked_ismcts",
+            "seconds": 12.0,
+            "simulations": 100000,
+            "max_choices": 512,
+            "exploration": 1.4,
+            "root_top_k": 16,
+            "interior_top_k": 8,
+            "pending_paths": 2,
+            "batch_size": 2,
+            "flush_ms": 0.5,
+            "prior_mix": 0.1,
+            "turn_interval": 4,
+            "max_searches_per_seat": 4,
+            "contract": "masked-ismcts/1.1.0",
+            "evaluator_kind": "neural",
+            "q_transform": "none",
+            "leaf_policy": "new_root_information_frontier",
+            "candidate_policy": "supported_progressive",
+            "fpu_reduction": 0.02,
+            "minimum_plan_visits": 2,
+            "reopen_support": 4,
+            "tail_admission": 0.05,
+            "virtual_loss": 0.02
+          },
+          "to": {
+            "backend": "masked_ismcts",
+            "seconds": 12.0,
+            "simulations": 100000,
+            "max_choices": 512,
+            "exploration": 1.4,
+            "root_top_k": 16,
+            "interior_top_k": 8,
+            "pending_paths": 2,
+            "batch_size": 2,
+            "flush_ms": 0.5,
+            "prior_mix": 0.1,
+            "turn_interval": 4,
+            "max_searches_per_seat": 4,
+            "contract": "masked-ismcts/1.2.0",
+            "evaluator_kind": "neural",
+            "q_transform": "none",
+            "leaf_policy": "new_root_information_frontier",
+            "candidate_policy": "supported_progressive",
+            "fpu_reduction": 0.02,
+            "minimum_plan_visits": 2,
+            "reopen_support": 4,
+            "tail_admission": 0.05,
+            "virtual_loss": 0.02,
+            "reward": {
+              "version": "brass-combined-return/1.0.0",
+              "win": 1.0,
+              "placement": 0.1,
+              "vp": 0.001,
+              "insolvency": {
+                "event_cost": 0.005,
+                "max_cost": 0.025
+              }
+            },
+            "utility_scale": 1.2
+          }
+        },
+        "retention": {
+          "from": {
+            "enabled": true,
+            "resume_checkpoints": 2,
+            "replay_rounds": 2,
+            "quarantine_hours": 0,
+            "evaluation_samples": 1,
+            "profile_traces": 2
+          },
+          "to": {
+            "enabled": true,
+            "resume_checkpoints": 2,
+            "replay_rounds": 2,
+            "quarantine_hours": 0,
+            "evaluation_samples": 1,
+            "profile_traces": 2,
+            "history_reports": 128
+          }
+        },
+        "search_wall_fraction": {
+          "from": 0.7777777777777778,
+          "to": 0.9
+        },
+        "insolvency": {
+          "from": {
+            "event_cost": 0.02,
+            "max_cost": 0.1
+          },
+          "to": {
+            "event_cost": 0.005,
+            "max_cost": 0.025
+          }
+        },
+        "reward": {
+          "from": null,
+          "to": {
+            "win": 1.0,
+            "placement": 0.1,
+            "vp": 0.001
+          }
+        },
+        "champion": {
+          "from": null,
+          "to": {
+            "enabled": true,
+            "every_games": 6400,
+            "setups": 8,
+            "min_win_share": 0.55,
+            "seed": 1910000
+          }
+        },
+        "teacher_work_budget": {
+          "from": null,
+          "to": {
+            "contract": "teacher-turn-work/1.1.0",
+            "watchdog_seconds": 120.0,
+            "mode": "simulations",
+            "simulations_per_phase": {
+              "canal_early": 32,
+              "canal_late": 16,
+              "rail_early": 16,
+              "rail_late": 16
+            }
+          }
+        },
+        "legacy_opponent_work_budget": {
+          "from": null,
+          "to": {
+            "contract": "legacy-opponent-turn-work/1.1.0",
+            "watchdog_seconds": 120.0,
+            "mode": "simulations",
+            "simulations_per_turn": 16
+          }
+        }
+      },
+      "review_report": "docs/JOINT7_ITERATION60_REVIEW.md"
+    },
+    {
+      "from_implementation": "ef111540f20d696496b13596791bbc113d8ce27843577d546b1e71a5e6a4c7e1",
+      "to_implementation": "9a60a40aa1e4d8193243681d68de2f4661b82d2cf213b2d86f9e78bd3a6e5541",
+      "learning_compatibility": "c349e816f2e301ea2a3b438902059cffe868f48e131f7c120691d37cd1c409d2",
+      "reason": "Joint-7 iteration-60 review: preserve weights, Adam moments/steps, RNG, counters, population and IL lineage; apply signature-validated LR after optimizer restoration; add bounded diagnostic/retention telemetry. Reward semantics unchanged. Fresh source-bound PPO and utility recalibration before teachers. All existing fixed-work and shared CPU limits preserved.",
+      "config_changes": {
+        "search": {
+          "from": {
+            "backend": "masked_ismcts",
+            "seconds": 12.0,
+            "simulations": 100000,
+            "max_choices": 512,
+            "exploration": 1.4,
+            "root_top_k": 16,
+            "interior_top_k": 8,
+            "pending_paths": 2,
+            "batch_size": 2,
+            "flush_ms": 0.5,
+            "prior_mix": 0.1,
+            "turn_interval": 4,
+            "max_searches_per_seat": 4,
+            "contract": "masked-ismcts/1.1.0",
+            "evaluator_kind": "neural",
+            "q_transform": "none",
+            "leaf_policy": "new_root_information_frontier",
+            "candidate_policy": "supported_progressive",
+            "fpu_reduction": 0.02,
+            "minimum_plan_visits": 2,
+            "reopen_support": 4,
+            "tail_admission": 0.05,
+            "virtual_loss": 0.02
+          },
+          "to": {
+            "backend": "masked_ismcts",
+            "seconds": 12.0,
+            "simulations": 100000,
+            "max_choices": 512,
+            "exploration": 1.4,
+            "root_top_k": 16,
+            "interior_top_k": 8,
+            "pending_paths": 2,
+            "batch_size": 2,
+            "flush_ms": 0.5,
+            "prior_mix": 0.1,
+            "turn_interval": 4,
+            "max_searches_per_seat": 4,
+            "contract": "masked-ismcts/1.2.0",
+            "evaluator_kind": "neural",
+            "q_transform": "none",
+            "leaf_policy": "new_root_information_frontier",
+            "candidate_policy": "supported_progressive",
+            "fpu_reduction": 0.02,
+            "minimum_plan_visits": 2,
+            "reopen_support": 4,
+            "tail_admission": 0.05,
+            "virtual_loss": 0.02,
+            "reward": {
+              "version": "brass-combined-return/1.0.0",
+              "win": 1.0,
+              "placement": 0.1,
+              "vp": 0.001,
+              "insolvency": {
+                "event_cost": 0.005,
+                "max_cost": 0.025
+              }
+            },
+            "utility_scale": 1.2
+          }
+        },
+        "retention": {
+          "from": {
+            "enabled": true,
+            "resume_checkpoints": 2,
+            "replay_rounds": 2,
+            "quarantine_hours": 0,
+            "evaluation_samples": 1,
+            "profile_traces": 2
+          },
+          "to": {
+            "enabled": true,
+            "resume_checkpoints": 2,
+            "replay_rounds": 2,
+            "quarantine_hours": 0,
+            "evaluation_samples": 1,
+            "profile_traces": 2,
+            "history_reports": 128
+          }
+        },
+        "search_wall_fraction": {
+          "from": 0.7777777777777778,
+          "to": 0.9
+        },
+        "insolvency": {
+          "from": {
+            "event_cost": 0.02,
+            "max_cost": 0.1
+          },
+          "to": {
+            "event_cost": 0.005,
+            "max_cost": 0.025
+          }
+        },
+        "reward": {
+          "from": null,
+          "to": {
+            "win": 1.0,
+            "placement": 0.1,
+            "vp": 0.001
+          }
+        },
+        "champion": {
+          "from": null,
+          "to": {
+            "enabled": true,
+            "every_games": 6400,
+            "setups": 8,
+            "min_win_share": 0.55,
+            "seed": 1910000
+          }
+        },
+        "teacher_work_budget": {
+          "from": null,
+          "to": {
+            "contract": "teacher-turn-work/1.1.0",
+            "watchdog_seconds": 120.0,
+            "mode": "simulations",
+            "simulations_per_phase": {
+              "canal_early": 32,
+              "canal_late": 16,
+              "rail_early": 16,
+              "rail_late": 16
+            }
+          }
+        },
+        "legacy_opponent_work_budget": {
+          "from": null,
+          "to": {
+            "contract": "legacy-opponent-turn-work/1.1.0",
+            "watchdog_seconds": 120.0,
+            "mode": "simulations",
+            "simulations_per_turn": 16
+          }
+        },
+        "execution": {
+          "to": {
+            "processes": 24,
+            "hosts_per_process": 2,
+            "heavy_processes": 24,
+            "batch_size": 64,
+            "max_candidate_cells": 131072,
+            "flush_ms": 1.0,
+            "worker_threads": 1,
+            "max_decisions": 2000,
+            "max_models": 72,
+            "shard_games": 8,
+            "shard_bytes": 268435456,
+            "feature_cache": true,
+            "policy_cache": 32,
+            "search_workers_per_turn": 4,
+            "cpu_budget": 64,
+            "cpu_reserve": 4,
+            "shared_slot_bytes": 2097152,
+            "inference_routing": "demand",
+            "replica_backlog": 32
+          },
+          "from": {
+            "processes": 48,
+            "hosts_per_process": 1,
+            "heavy_processes": 24,
+            "batch_size": 64,
+            "max_candidate_cells": 131072,
+            "flush_ms": 1.0,
+            "worker_threads": 1,
+            "max_decisions": 2000,
+            "max_models": 72,
+            "shard_games": 8,
+            "shard_bytes": 268435456,
+            "feature_cache": true,
+            "policy_cache": 32,
+            "search_workers_per_turn": 4,
+            "cpu_budget": 64,
+            "cpu_reserve": 4
+          }
+        }
+      },
+      "review_report": "docs/JOINT7_ITERATION60_REVIEW.md"
+    },
+    {
+      "from_implementation": "ef111540f20d696496b13596791bbc113d8ce27843577d546b1e71a5e6a4c7e1",
+      "to_implementation": "9a60a40aa1e4d8193243681d68de2f4661b82d2cf213b2d86f9e78bd3a6e5541",
+      "learning_compatibility": "c349e816f2e301ea2a3b438902059cffe868f48e131f7c120691d37cd1c409d2",
+      "reason": "Joint-7 iteration-60 review: preserve weights, Adam moments/steps, RNG, counters, population and IL lineage; apply signature-validated LR after optimizer restoration; add bounded diagnostic/retention telemetry. Reward semantics unchanged. Fresh source-bound PPO and utility recalibration before teachers. All existing fixed-work and shared CPU limits preserved.",
+      "config_changes": {
+        "search": {
+          "from": {
+            "backend": "masked_ismcts",
+            "seconds": 12.0,
+            "simulations": 100000,
+            "max_choices": 512,
+            "exploration": 1.4,
+            "root_top_k": 16,
+            "interior_top_k": 8,
+            "pending_paths": 2,
+            "batch_size": 2,
+            "flush_ms": 0.5,
+            "prior_mix": 0.1,
+            "turn_interval": 4,
+            "max_searches_per_seat": 4,
+            "contract": "masked-ismcts/1.1.0",
+            "evaluator_kind": "neural",
+            "q_transform": "none",
+            "leaf_policy": "new_root_information_frontier",
+            "candidate_policy": "supported_progressive",
+            "fpu_reduction": 0.02,
+            "minimum_plan_visits": 2,
+            "reopen_support": 4,
+            "tail_admission": 0.05,
+            "virtual_loss": 0.02
+          },
+          "to": {
+            "backend": "masked_ismcts",
+            "seconds": 12.0,
+            "simulations": 100000,
+            "max_choices": 512,
+            "exploration": 1.4,
+            "root_top_k": 16,
+            "interior_top_k": 8,
+            "pending_paths": 2,
+            "batch_size": 2,
+            "flush_ms": 0.5,
+            "prior_mix": 0.1,
+            "turn_interval": 4,
+            "max_searches_per_seat": 4,
+            "contract": "masked-ismcts/1.2.0",
+            "evaluator_kind": "neural",
+            "q_transform": "none",
+            "leaf_policy": "new_root_information_frontier",
+            "candidate_policy": "supported_progressive",
+            "fpu_reduction": 0.02,
+            "minimum_plan_visits": 2,
+            "reopen_support": 4,
+            "tail_admission": 0.05,
+            "virtual_loss": 0.02,
+            "reward": {
+              "version": "brass-combined-return/1.0.0",
+              "win": 1.0,
+              "placement": 0.1,
+              "vp": 0.001,
+              "insolvency": {
+                "event_cost": 0.005,
+                "max_cost": 0.025
+              }
+            },
+            "utility_scale": 1.2
+          }
+        },
+        "retention": {
+          "from": {
+            "enabled": true,
+            "resume_checkpoints": 2,
+            "replay_rounds": 2,
+            "quarantine_hours": 0,
+            "evaluation_samples": 1,
+            "profile_traces": 2
+          },
+          "to": {
+            "enabled": true,
+            "resume_checkpoints": 2,
+            "replay_rounds": 2,
+            "quarantine_hours": 0,
+            "evaluation_samples": 1,
+            "profile_traces": 2,
+            "history_reports": 128
+          }
+        },
+        "search_wall_fraction": {
+          "from": 0.7777777777777778,
+          "to": 0.9
+        },
+        "insolvency": {
+          "from": {
+            "event_cost": 0.02,
+            "max_cost": 0.1
+          },
+          "to": {
+            "event_cost": 0.005,
+            "max_cost": 0.025
+          }
+        },
+        "reward": {
+          "from": null,
+          "to": {
+            "win": 1.0,
+            "placement": 0.1,
+            "vp": 0.001
+          }
+        },
+        "champion": {
+          "from": null,
+          "to": {
+            "enabled": true,
+            "every_games": 6400,
+            "setups": 8,
+            "min_win_share": 0.55,
+            "seed": 1910000
+          }
+        },
+        "teacher_work_budget": {
+          "from": null,
+          "to": {
+            "contract": "teacher-turn-work/1.1.0",
+            "watchdog_seconds": 120.0,
+            "mode": "simulations",
+            "simulations_per_phase": {
+              "canal_early": 32,
+              "canal_late": 16,
+              "rail_early": 16,
+              "rail_late": 16
+            }
+          }
+        },
+        "legacy_opponent_work_budget": {
+          "from": null,
+          "to": {
+            "contract": "legacy-opponent-turn-work/1.1.0",
+            "watchdog_seconds": 120.0,
+            "mode": "simulations",
+            "simulations_per_turn": 16
+          }
+        },
+        "execution": {
+          "to": {
+            "processes": 14,
+            "hosts_per_process": 2,
+            "heavy_processes": 6,
+            "batch_size": 64,
+            "max_candidate_cells": 131072,
+            "flush_ms": 1.0,
+            "worker_threads": 1,
+            "max_decisions": 2000,
+            "max_models": 72,
+            "shard_games": 8,
+            "shard_bytes": 268435456,
+            "feature_cache": true,
+            "policy_cache": 32,
+            "search_workers_per_turn": 4,
+            "cpu_budget": 32,
+            "cpu_reserve": 4,
+            "shared_slot_bytes": 2097152,
+            "inference_routing": "demand",
+            "replica_backlog": 32
+          },
+          "from": {
+            "processes": 28,
+            "hosts_per_process": 1,
+            "heavy_processes": 6,
+            "batch_size": 64,
+            "max_candidate_cells": 131072,
+            "flush_ms": 1.0,
+            "worker_threads": 1,
+            "max_decisions": 2000,
+            "max_models": 72,
+            "shard_games": 8,
+            "shard_bytes": 268435456,
+            "feature_cache": true,
+            "policy_cache": 32,
+            "search_workers_per_turn": 4,
+            "cpu_budget": 32,
+            "cpu_reserve": 4
+          }
+        }
+      },
+      "review_report": "docs/JOINT7_ITERATION60_REVIEW.md"
+    },
+    {
+      "from_implementation": "ef111540f20d696496b13596791bbc113d8ce27843577d546b1e71a5e6a4c7e1",
+      "to_implementation": "9a60a40aa1e4d8193243681d68de2f4661b82d2cf213b2d86f9e78bd3a6e5541",
+      "learning_compatibility": "c349e816f2e301ea2a3b438902059cffe868f48e131f7c120691d37cd1c409d2",
+      "reason": "Joint-7 iteration-60 review: preserve weights, Adam moments/steps, RNG, counters, population and IL lineage; apply signature-validated LR after optimizer restoration; add bounded diagnostic/retention telemetry. Reward semantics unchanged. Fresh source-bound PPO and utility recalibration before teachers. All existing fixed-work and shared CPU limits preserved.",
+      "config_changes": {
+        "search": {
+          "from": {
+            "backend": "masked_ismcts",
+            "seconds": 12.0,
+            "simulations": 100000,
+            "max_choices": 512,
+            "exploration": 1.4,
+            "root_top_k": 16,
+            "interior_top_k": 8,
+            "pending_paths": 2,
+            "batch_size": 2,
+            "flush_ms": 0.5,
+            "prior_mix": 0.1,
+            "turn_interval": 4,
+            "max_searches_per_seat": 4,
+            "contract": "masked-ismcts/1.1.0",
+            "evaluator_kind": "neural",
+            "q_transform": "none",
+            "leaf_policy": "new_root_information_frontier",
+            "candidate_policy": "supported_progressive",
+            "fpu_reduction": 0.02,
+            "minimum_plan_visits": 2,
+            "reopen_support": 4,
+            "tail_admission": 0.05,
+            "virtual_loss": 0.02
+          },
+          "to": {
+            "backend": "masked_ismcts",
+            "seconds": 12.0,
+            "simulations": 100000,
+            "max_choices": 512,
+            "exploration": 1.4,
+            "root_top_k": 16,
+            "interior_top_k": 8,
+            "pending_paths": 2,
+            "batch_size": 2,
+            "flush_ms": 0.5,
+            "prior_mix": 0.1,
+            "turn_interval": 4,
+            "max_searches_per_seat": 4,
+            "contract": "masked-ismcts/1.2.0",
+            "evaluator_kind": "neural",
+            "q_transform": "none",
+            "leaf_policy": "new_root_information_frontier",
+            "candidate_policy": "supported_progressive",
+            "fpu_reduction": 0.02,
+            "minimum_plan_visits": 2,
+            "reopen_support": 4,
+            "tail_admission": 0.05,
+            "virtual_loss": 0.02,
+            "reward": {
+              "version": "brass-combined-return/1.0.0",
+              "win": 1.0,
+              "placement": 0.1,
+              "vp": 0.001,
+              "insolvency": {
+                "event_cost": 0.005,
+                "max_cost": 0.025
+              }
+            },
+            "utility_scale": 1.2
+          }
+        },
+        "retention": {
+          "from": {
+            "enabled": true,
+            "resume_checkpoints": 2,
+            "replay_rounds": 2,
+            "quarantine_hours": 0,
+            "evaluation_samples": 1,
+            "profile_traces": 2
+          },
+          "to": {
+            "enabled": true,
+            "resume_checkpoints": 2,
+            "replay_rounds": 2,
+            "quarantine_hours": 0,
+            "evaluation_samples": 1,
+            "profile_traces": 2,
+            "history_reports": 128
+          }
+        },
+        "search_wall_fraction": {
+          "from": 0.7777777777777778,
+          "to": 0.9
+        },
+        "insolvency": {
+          "from": {
+            "event_cost": 0.02,
+            "max_cost": 0.1
+          },
+          "to": {
+            "event_cost": 0.005,
+            "max_cost": 0.025
+          }
+        },
+        "reward": {
+          "from": null,
+          "to": {
+            "win": 1.0,
+            "placement": 0.1,
+            "vp": 0.001
+          }
+        },
+        "champion": {
+          "from": null,
+          "to": {
+            "enabled": true,
+            "every_games": 6400,
+            "setups": 8,
+            "min_win_share": 0.55,
+            "seed": 1910000
+          }
+        },
+        "teacher_work_budget": {
+          "from": null,
+          "to": {
+            "contract": "teacher-turn-work/1.1.0",
+            "watchdog_seconds": 120.0,
+            "mode": "simulations",
+            "simulations_per_phase": {
+              "canal_early": 32,
+              "canal_late": 16,
+              "rail_early": 16,
+              "rail_late": 16
+            }
+          }
+        },
+        "legacy_opponent_work_budget": {
+          "from": null,
+          "to": {
+            "contract": "legacy-opponent-turn-work/1.1.0",
+            "watchdog_seconds": 120.0,
+            "mode": "simulations",
+            "simulations_per_turn": 16
+          }
+        },
+        "execution": {
+          "to": {
+            "processes": 2,
+            "hosts_per_process": 1,
+            "heavy_processes": 2,
+            "batch_size": 16,
+            "max_candidate_cells": 8192,
+            "flush_ms": 1.0,
+            "worker_threads": 1,
+            "max_decisions": 2000,
+            "max_models": 16,
+            "shard_games": 2,
+            "shard_bytes": 268435456,
+            "feature_cache": true,
+            "policy_cache": 32,
+            "search_workers_per_turn": 4,
+            "cpu_budget": 12,
+            "cpu_reserve": 2,
+            "shared_slot_bytes": 2097152,
+            "inference_routing": "demand",
+            "replica_backlog": 32
+          },
+          "from": {
+            "processes": 2,
+            "hosts_per_process": 1,
+            "heavy_processes": 2,
+            "batch_size": 16,
+            "max_candidate_cells": 8192,
+            "flush_ms": 1.0,
+            "worker_threads": 1,
+            "max_decisions": 2000,
+            "max_models": 16,
+            "shard_games": 2,
+            "shard_bytes": 268435456,
+            "feature_cache": true,
+            "policy_cache": 32,
+            "search_workers_per_turn": 4,
+            "cpu_budget": 12,
+            "cpu_reserve": 2
+          }
+        }
+      },
+      "review_report": "docs/JOINT7_ITERATION60_REVIEW.md"
+    },
+    {
+      "from_implementation": "826b6beb04241a73a5d1ec0d712176ff9df4370a26cf01bb05ee92f7a05b4f16",
+      "to_implementation": "9a60a40aa1e4d8193243681d68de2f4661b82d2cf213b2d86f9e78bd3a6e5541",
+      "learning_compatibility": "c349e816f2e301ea2a3b438902059cffe868f48e131f7c120691d37cd1c409d2",
+      "reason": "Joint-7 iteration-60 review: preserve weights, Adam moments/steps, RNG, counters, population and IL lineage; apply signature-validated LR after optimizer restoration; add bounded diagnostic/retention telemetry. Reward semantics unchanged. Fresh source-bound PPO and utility recalibration before teachers. All existing fixed-work and shared CPU limits preserved.",
+      "review_report": "docs/JOINT7_ITERATION60_REVIEW.md",
+      "config_changes": {
+        "teacher_work_budget": {
+          "from": null,
+          "to": {
+            "contract": "teacher-turn-work/1.1.0",
+            "watchdog_seconds": 120.0,
+            "mode": "simulations",
+            "simulations_per_phase": {
+              "canal_early": 32,
+              "canal_late": 16,
+              "rail_early": 16,
+              "rail_late": 16
+            }
+          }
+        },
+        "legacy_opponent_work_budget": {
+          "from": null,
+          "to": {
+            "contract": "legacy-opponent-turn-work/1.1.0",
+            "watchdog_seconds": 120.0,
+            "mode": "simulations",
+            "simulations_per_turn": 16
+          }
+        }
+      }
+    },
+    {
+      "from_implementation": "826b6beb04241a73a5d1ec0d712176ff9df4370a26cf01bb05ee92f7a05b4f16",
+      "to_implementation": "9a60a40aa1e4d8193243681d68de2f4661b82d2cf213b2d86f9e78bd3a6e5541",
+      "learning_compatibility": "c349e816f2e301ea2a3b438902059cffe868f48e131f7c120691d37cd1c409d2",
+      "reason": "Joint-7 iteration-60 review: preserve weights, Adam moments/steps, RNG, counters, population and IL lineage; apply signature-validated LR after optimizer restoration; add bounded diagnostic/retention telemetry. Reward semantics unchanged. Fresh source-bound PPO and utility recalibration before teachers. All existing fixed-work and shared CPU limits preserved.",
+      "review_report": "docs/JOINT7_ITERATION60_REVIEW.md",
+      "config_changes": {
+        "teacher_work_budget": {
+          "from": null,
+          "to": {
+            "contract": "teacher-turn-work/1.1.0",
+            "watchdog_seconds": 120.0,
+            "mode": "simulations",
+            "simulations_per_phase": {
+              "canal_early": 32,
+              "canal_late": 16,
+              "rail_early": 16,
+              "rail_late": 16
+            }
+          }
+        },
+        "legacy_opponent_work_budget": {
+          "from": null,
+          "to": {
+            "contract": "legacy-opponent-turn-work/1.1.0",
+            "watchdog_seconds": 120.0,
+            "mode": "simulations",
+            "simulations_per_turn": 16
+          }
+        },
+        "execution": {
+          "to": {
+            "processes": 24,
+            "hosts_per_process": 2,
+            "heavy_processes": 24,
+            "batch_size": 64,
+            "max_candidate_cells": 131072,
+            "flush_ms": 1.0,
+            "worker_threads": 1,
+            "max_decisions": 2000,
+            "max_models": 72,
+            "shard_games": 8,
+            "shard_bytes": 268435456,
+            "feature_cache": true,
+            "policy_cache": 32,
+            "search_workers_per_turn": 4,
+            "cpu_budget": 64,
+            "cpu_reserve": 4,
+            "shared_slot_bytes": 2097152,
+            "inference_routing": "demand",
+            "replica_backlog": 32
+          },
+          "from": {
+            "processes": 48,
+            "hosts_per_process": 1,
+            "heavy_processes": 24,
+            "batch_size": 64,
+            "max_candidate_cells": 131072,
+            "flush_ms": 1.0,
+            "worker_threads": 1,
+            "max_decisions": 2000,
+            "max_models": 72,
+            "shard_games": 8,
+            "shard_bytes": 268435456,
+            "feature_cache": true,
+            "policy_cache": 32,
+            "search_workers_per_turn": 4,
+            "cpu_budget": 64,
+            "cpu_reserve": 4
+          }
+        }
+      }
+    },
+    {
+      "from_implementation": "826b6beb04241a73a5d1ec0d712176ff9df4370a26cf01bb05ee92f7a05b4f16",
+      "to_implementation": "9a60a40aa1e4d8193243681d68de2f4661b82d2cf213b2d86f9e78bd3a6e5541",
+      "learning_compatibility": "c349e816f2e301ea2a3b438902059cffe868f48e131f7c120691d37cd1c409d2",
+      "reason": "Joint-7 iteration-60 review: preserve weights, Adam moments/steps, RNG, counters, population and IL lineage; apply signature-validated LR after optimizer restoration; add bounded diagnostic/retention telemetry. Reward semantics unchanged. Fresh source-bound PPO and utility recalibration before teachers. All existing fixed-work and shared CPU limits preserved.",
+      "review_report": "docs/JOINT7_ITERATION60_REVIEW.md",
+      "config_changes": {
+        "teacher_work_budget": {
+          "from": null,
+          "to": {
+            "contract": "teacher-turn-work/1.1.0",
+            "watchdog_seconds": 120.0,
+            "mode": "simulations",
+            "simulations_per_phase": {
+              "canal_early": 32,
+              "canal_late": 16,
+              "rail_early": 16,
+              "rail_late": 16
+            }
+          }
+        },
+        "legacy_opponent_work_budget": {
+          "from": null,
+          "to": {
+            "contract": "legacy-opponent-turn-work/1.1.0",
+            "watchdog_seconds": 120.0,
+            "mode": "simulations",
+            "simulations_per_turn": 16
+          }
+        },
+        "execution": {
+          "to": {
+            "processes": 14,
+            "hosts_per_process": 2,
+            "heavy_processes": 6,
+            "batch_size": 64,
+            "max_candidate_cells": 131072,
+            "flush_ms": 1.0,
+            "worker_threads": 1,
+            "max_decisions": 2000,
+            "max_models": 72,
+            "shard_games": 8,
+            "shard_bytes": 268435456,
+            "feature_cache": true,
+            "policy_cache": 32,
+            "search_workers_per_turn": 4,
+            "cpu_budget": 32,
+            "cpu_reserve": 4,
+            "shared_slot_bytes": 2097152,
+            "inference_routing": "demand",
+            "replica_backlog": 32
+          },
+          "from": {
+            "processes": 28,
+            "hosts_per_process": 1,
+            "heavy_processes": 6,
+            "batch_size": 64,
+            "max_candidate_cells": 131072,
+            "flush_ms": 1.0,
+            "worker_threads": 1,
+            "max_decisions": 2000,
+            "max_models": 72,
+            "shard_games": 8,
+            "shard_bytes": 268435456,
+            "feature_cache": true,
+            "policy_cache": 32,
+            "search_workers_per_turn": 4,
+            "cpu_budget": 32,
+            "cpu_reserve": 4
+          }
+        }
+      }
+    },
+    {
+      "from_implementation": "826b6beb04241a73a5d1ec0d712176ff9df4370a26cf01bb05ee92f7a05b4f16",
+      "to_implementation": "9a60a40aa1e4d8193243681d68de2f4661b82d2cf213b2d86f9e78bd3a6e5541",
+      "learning_compatibility": "c349e816f2e301ea2a3b438902059cffe868f48e131f7c120691d37cd1c409d2",
+      "reason": "Joint-7 iteration-60 review: preserve weights, Adam moments/steps, RNG, counters, population and IL lineage; apply signature-validated LR after optimizer restoration; add bounded diagnostic/retention telemetry. Reward semantics unchanged. Fresh source-bound PPO and utility recalibration before teachers. All existing fixed-work and shared CPU limits preserved.",
+      "review_report": "docs/JOINT7_ITERATION60_REVIEW.md",
+      "config_changes": {
+        "teacher_work_budget": {
+          "from": null,
+          "to": {
+            "contract": "teacher-turn-work/1.1.0",
+            "watchdog_seconds": 120.0,
+            "mode": "simulations",
+            "simulations_per_phase": {
+              "canal_early": 32,
+              "canal_late": 16,
+              "rail_early": 16,
+              "rail_late": 16
+            }
+          }
+        },
+        "legacy_opponent_work_budget": {
+          "from": null,
+          "to": {
+            "contract": "legacy-opponent-turn-work/1.1.0",
+            "watchdog_seconds": 120.0,
+            "mode": "simulations",
+            "simulations_per_turn": 16
+          }
+        },
+        "execution": {
+          "to": {
+            "processes": 2,
+            "hosts_per_process": 1,
+            "heavy_processes": 2,
+            "batch_size": 16,
+            "max_candidate_cells": 8192,
+            "flush_ms": 1.0,
+            "worker_threads": 1,
+            "max_decisions": 2000,
+            "max_models": 16,
+            "shard_games": 2,
+            "shard_bytes": 268435456,
+            "feature_cache": true,
+            "policy_cache": 32,
+            "search_workers_per_turn": 4,
+            "cpu_budget": 12,
+            "cpu_reserve": 2,
+            "shared_slot_bytes": 2097152,
+            "inference_routing": "demand",
+            "replica_backlog": 32
+          },
+          "from": {
+            "processes": 2,
+            "hosts_per_process": 1,
+            "heavy_processes": 2,
+            "batch_size": 16,
+            "max_candidate_cells": 8192,
+            "flush_ms": 1.0,
+            "worker_threads": 1,
+            "max_decisions": 2000,
+            "max_models": 16,
+            "shard_games": 2,
+            "shard_bytes": 268435456,
+            "feature_cache": true,
+            "policy_cache": 32,
+            "search_workers_per_turn": 4,
+            "cpu_budget": 12,
+            "cpu_reserve": 2
+          }
+        }
+      }
+    },
+    {
+      "from_implementation": "f9f94171ead6383c012d402aadf8781f51074a1f4cb5e6575cfb1487deb4e5f0",
+      "learning_compatibility": "c349e816f2e301ea2a3b438902059cffe868f48e131f7c120691d37cd1c409d2",
+      "to_implementation": "9a60a40aa1e4d8193243681d68de2f4661b82d2cf213b2d86f9e78bd3a6e5541",
+      "config_changes": {
+        "teacher_work_budget": {
+          "from": null,
+          "to": {
+            "contract": "teacher-turn-work/1.1.0",
+            "watchdog_seconds": 120.0,
+            "mode": "simulations",
+            "simulations_per_phase": {
+              "canal_early": 32,
+              "canal_late": 16,
+              "rail_early": 16,
+              "rail_late": 16
+            }
+          }
+        },
+        "legacy_opponent_work_budget": {
+          "from": null,
+          "to": {
+            "contract": "legacy-opponent-turn-work/1.1.0",
+            "watchdog_seconds": 120.0,
+            "mode": "simulations",
+            "simulations_per_turn": 16
+          }
+        }
+      },
+      "reason": "Joint-7 iteration-60 review: preserve weights, Adam moments/steps, RNG, counters, population and IL lineage; apply signature-validated LR after optimizer restoration; add bounded diagnostic/retention telemetry. Reward semantics unchanged. Fresh source-bound PPO and utility recalibration before teachers. All existing fixed-work and shared CPU limits preserved.",
+      "review_report": "docs/JOINT7_ITERATION60_REVIEW.md"
+    },
+    {
+      "from_implementation": "f9f94171ead6383c012d402aadf8781f51074a1f4cb5e6575cfb1487deb4e5f0",
+      "learning_compatibility": "c349e816f2e301ea2a3b438902059cffe868f48e131f7c120691d37cd1c409d2",
+      "to_implementation": "9a60a40aa1e4d8193243681d68de2f4661b82d2cf213b2d86f9e78bd3a6e5541",
+      "config_changes": {
+        "teacher_work_budget": {
+          "from": null,
+          "to": {
+            "contract": "teacher-turn-work/1.1.0",
+            "watchdog_seconds": 120.0,
+            "mode": "simulations",
+            "simulations_per_phase": {
+              "canal_early": 32,
+              "canal_late": 16,
+              "rail_early": 16,
+              "rail_late": 16
+            }
+          }
+        },
+        "legacy_opponent_work_budget": {
+          "from": null,
+          "to": {
+            "contract": "legacy-opponent-turn-work/1.1.0",
+            "watchdog_seconds": 120.0,
+            "mode": "simulations",
+            "simulations_per_turn": 16
+          }
+        },
+        "execution": {
+          "to": {
+            "processes": 24,
+            "hosts_per_process": 2,
+            "heavy_processes": 24,
+            "batch_size": 64,
+            "max_candidate_cells": 131072,
+            "flush_ms": 1.0,
+            "worker_threads": 1,
+            "max_decisions": 2000,
+            "max_models": 72,
+            "shard_games": 8,
+            "shard_bytes": 268435456,
+            "feature_cache": true,
+            "policy_cache": 32,
+            "search_workers_per_turn": 4,
+            "cpu_budget": 64,
+            "cpu_reserve": 4,
+            "shared_slot_bytes": 2097152,
+            "inference_routing": "demand",
+            "replica_backlog": 32
+          },
+          "from": {
+            "processes": 48,
+            "hosts_per_process": 1,
+            "heavy_processes": 24,
+            "batch_size": 64,
+            "max_candidate_cells": 131072,
+            "flush_ms": 1.0,
+            "worker_threads": 1,
+            "max_decisions": 2000,
+            "max_models": 72,
+            "shard_games": 8,
+            "shard_bytes": 268435456,
+            "feature_cache": true,
+            "policy_cache": 32,
+            "search_workers_per_turn": 4,
+            "cpu_budget": 64,
+            "cpu_reserve": 4
+          }
+        }
+      },
+      "reason": "Joint-7 iteration-60 review: preserve weights, Adam moments/steps, RNG, counters, population and IL lineage; apply signature-validated LR after optimizer restoration; add bounded diagnostic/retention telemetry. Reward semantics unchanged. Fresh source-bound PPO and utility recalibration before teachers. All existing fixed-work and shared CPU limits preserved.",
+      "review_report": "docs/JOINT7_ITERATION60_REVIEW.md"
+    },
+    {
+      "from_implementation": "f9f94171ead6383c012d402aadf8781f51074a1f4cb5e6575cfb1487deb4e5f0",
+      "learning_compatibility": "c349e816f2e301ea2a3b438902059cffe868f48e131f7c120691d37cd1c409d2",
+      "to_implementation": "9a60a40aa1e4d8193243681d68de2f4661b82d2cf213b2d86f9e78bd3a6e5541",
+      "config_changes": {
+        "teacher_work_budget": {
+          "from": null,
+          "to": {
+            "contract": "teacher-turn-work/1.1.0",
+            "watchdog_seconds": 120.0,
+            "mode": "simulations",
+            "simulations_per_phase": {
+              "canal_early": 32,
+              "canal_late": 16,
+              "rail_early": 16,
+              "rail_late": 16
+            }
+          }
+        },
+        "legacy_opponent_work_budget": {
+          "from": null,
+          "to": {
+            "contract": "legacy-opponent-turn-work/1.1.0",
+            "watchdog_seconds": 120.0,
+            "mode": "simulations",
+            "simulations_per_turn": 16
+          }
+        },
+        "execution": {
+          "to": {
+            "processes": 14,
+            "hosts_per_process": 2,
+            "heavy_processes": 6,
+            "batch_size": 64,
+            "max_candidate_cells": 131072,
+            "flush_ms": 1.0,
+            "worker_threads": 1,
+            "max_decisions": 2000,
+            "max_models": 72,
+            "shard_games": 8,
+            "shard_bytes": 268435456,
+            "feature_cache": true,
+            "policy_cache": 32,
+            "search_workers_per_turn": 4,
+            "cpu_budget": 32,
+            "cpu_reserve": 4,
+            "shared_slot_bytes": 2097152,
+            "inference_routing": "demand",
+            "replica_backlog": 32
+          },
+          "from": {
+            "processes": 28,
+            "hosts_per_process": 1,
+            "heavy_processes": 6,
+            "batch_size": 64,
+            "max_candidate_cells": 131072,
+            "flush_ms": 1.0,
+            "worker_threads": 1,
+            "max_decisions": 2000,
+            "max_models": 72,
+            "shard_games": 8,
+            "shard_bytes": 268435456,
+            "feature_cache": true,
+            "policy_cache": 32,
+            "search_workers_per_turn": 4,
+            "cpu_budget": 32,
+            "cpu_reserve": 4
+          }
+        }
+      },
+      "reason": "Joint-7 iteration-60 review: preserve weights, Adam moments/steps, RNG, counters, population and IL lineage; apply signature-validated LR after optimizer restoration; add bounded diagnostic/retention telemetry. Reward semantics unchanged. Fresh source-bound PPO and utility recalibration before teachers. All existing fixed-work and shared CPU limits preserved.",
+      "review_report": "docs/JOINT7_ITERATION60_REVIEW.md"
+    },
+    {
+      "from_implementation": "f9f94171ead6383c012d402aadf8781f51074a1f4cb5e6575cfb1487deb4e5f0",
+      "learning_compatibility": "c349e816f2e301ea2a3b438902059cffe868f48e131f7c120691d37cd1c409d2",
+      "to_implementation": "9a60a40aa1e4d8193243681d68de2f4661b82d2cf213b2d86f9e78bd3a6e5541",
+      "config_changes": {
+        "teacher_work_budget": {
+          "from": null,
+          "to": {
+            "contract": "teacher-turn-work/1.1.0",
+            "watchdog_seconds": 120.0,
+            "mode": "simulations",
+            "simulations_per_phase": {
+              "canal_early": 32,
+              "canal_late": 16,
+              "rail_early": 16,
+              "rail_late": 16
+            }
+          }
+        },
+        "legacy_opponent_work_budget": {
+          "from": null,
+          "to": {
+            "contract": "legacy-opponent-turn-work/1.1.0",
+            "watchdog_seconds": 120.0,
+            "mode": "simulations",
+            "simulations_per_turn": 16
+          }
+        },
+        "execution": {
+          "to": {
+            "processes": 2,
+            "hosts_per_process": 1,
+            "heavy_processes": 2,
+            "batch_size": 16,
+            "max_candidate_cells": 8192,
+            "flush_ms": 1.0,
+            "worker_threads": 1,
+            "max_decisions": 2000,
+            "max_models": 16,
+            "shard_games": 2,
+            "shard_bytes": 268435456,
+            "feature_cache": true,
+            "policy_cache": 32,
+            "search_workers_per_turn": 4,
+            "cpu_budget": 12,
+            "cpu_reserve": 2,
+            "shared_slot_bytes": 2097152,
+            "inference_routing": "demand",
+            "replica_backlog": 32
+          },
+          "from": {
+            "processes": 2,
+            "hosts_per_process": 1,
+            "heavy_processes": 2,
+            "batch_size": 16,
+            "max_candidate_cells": 8192,
+            "flush_ms": 1.0,
+            "worker_threads": 1,
+            "max_decisions": 2000,
+            "max_models": 16,
+            "shard_games": 2,
+            "shard_bytes": 268435456,
+            "feature_cache": true,
+            "policy_cache": 32,
+            "search_workers_per_turn": 4,
+            "cpu_budget": 12,
+            "cpu_reserve": 2
+          }
+        }
+      },
+      "reason": "Joint-7 iteration-60 review: preserve weights, Adam moments/steps, RNG, counters, population and IL lineage; apply signature-validated LR after optimizer restoration; add bounded diagnostic/retention telemetry. Reward semantics unchanged. Fresh source-bound PPO and utility recalibration before teachers. All existing fixed-work and shared CPU limits preserved.",
+      "review_report": "docs/JOINT7_ITERATION60_REVIEW.md"
+    },
+    {
+      "from_implementation": "c7bffaf7bbfd2d7495da1af9bd9c8a63cba55c9be2a699b29827065bf1bf4f38",
+      "to_implementation": "9a60a40aa1e4d8193243681d68de2f4661b82d2cf213b2d86f9e78bd3a6e5541",
+      "learning_compatibility": "c349e816f2e301ea2a3b438902059cffe868f48e131f7c120691d37cd1c409d2",
+      "reason": "Joint-7 iteration-60 review: preserve weights, Adam moments/steps, RNG, counters, population and IL lineage; apply signature-validated LR after optimizer restoration; add bounded diagnostic/retention telemetry. Reward semantics unchanged. Fresh source-bound PPO and utility recalibration before teachers. All existing fixed-work and shared CPU limits preserved.",
+      "config_changes": {
+        "teacher_work_budget": {
+          "from": {
+            "contract": "teacher-turn-work/1.0.0",
+            "mode": "simulations",
+            "simulations_per_phase": {
+              "canal_early": 32,
+              "canal_late": 16,
+              "rail_early": 16,
+              "rail_late": 16
+            }
+          },
+          "to": {
+            "contract": "teacher-turn-work/1.1.0",
+            "watchdog_seconds": 120.0,
+            "mode": "simulations",
+            "simulations_per_phase": {
+              "canal_early": 32,
+              "canal_late": 16,
+              "rail_early": 16,
+              "rail_late": 16
+            }
+          }
+        },
+        "legacy_opponent_work_budget": {
+          "from": {
+            "contract": "legacy-opponent-turn-work/1.0.0",
+            "mode": "simulations",
+            "simulations_per_turn": 16
+          },
+          "to": {
+            "contract": "legacy-opponent-turn-work/1.1.0",
+            "watchdog_seconds": 120.0,
+            "mode": "simulations",
+            "simulations_per_turn": 16
+          }
+        }
+      },
+      "review_report": "docs/JOINT7_ITERATION60_REVIEW.md"
+    },
+    {
+      "from_implementation": "c7bffaf7bbfd2d7495da1af9bd9c8a63cba55c9be2a699b29827065bf1bf4f38",
+      "to_implementation": "9a60a40aa1e4d8193243681d68de2f4661b82d2cf213b2d86f9e78bd3a6e5541",
+      "learning_compatibility": "c349e816f2e301ea2a3b438902059cffe868f48e131f7c120691d37cd1c409d2",
+      "reason": "Joint-7 iteration-60 review: preserve weights, Adam moments/steps, RNG, counters, population and IL lineage; apply signature-validated LR after optimizer restoration; add bounded diagnostic/retention telemetry. Reward semantics unchanged. Fresh source-bound PPO and utility recalibration before teachers. All existing fixed-work and shared CPU limits preserved.",
+      "config_changes": {
+        "teacher_work_budget": {
+          "from": {
+            "contract": "teacher-turn-work/1.0.0",
+            "mode": "simulations",
+            "simulations_per_phase": {
+              "canal_early": 32,
+              "canal_late": 16,
+              "rail_early": 16,
+              "rail_late": 16
+            }
+          },
+          "to": {
+            "contract": "teacher-turn-work/1.1.0",
+            "watchdog_seconds": 120.0,
+            "mode": "simulations",
+            "simulations_per_phase": {
+              "canal_early": 32,
+              "canal_late": 16,
+              "rail_early": 16,
+              "rail_late": 16
+            }
+          }
+        },
+        "legacy_opponent_work_budget": {
+          "from": {
+            "contract": "legacy-opponent-turn-work/1.0.0",
+            "mode": "simulations",
+            "simulations_per_turn": 16
+          },
+          "to": {
+            "contract": "legacy-opponent-turn-work/1.1.0",
+            "watchdog_seconds": 120.0,
+            "mode": "simulations",
+            "simulations_per_turn": 16
+          }
+        },
+        "execution": {
+          "to": {
+            "processes": 24,
+            "hosts_per_process": 2,
+            "heavy_processes": 24,
+            "batch_size": 64,
+            "max_candidate_cells": 131072,
+            "flush_ms": 1.0,
+            "worker_threads": 1,
+            "max_decisions": 2000,
+            "max_models": 72,
+            "shard_games": 8,
+            "shard_bytes": 268435456,
+            "feature_cache": true,
+            "policy_cache": 32,
+            "search_workers_per_turn": 4,
+            "cpu_budget": 64,
+            "cpu_reserve": 4,
+            "shared_slot_bytes": 2097152,
+            "inference_routing": "demand",
+            "replica_backlog": 32
+          },
+          "from": {
+            "processes": 48,
+            "hosts_per_process": 1,
+            "heavy_processes": 24,
+            "batch_size": 64,
+            "max_candidate_cells": 131072,
+            "flush_ms": 1.0,
+            "worker_threads": 1,
+            "max_decisions": 2000,
+            "max_models": 72,
+            "shard_games": 8,
+            "shard_bytes": 268435456,
+            "feature_cache": true,
+            "policy_cache": 32,
+            "search_workers_per_turn": 4,
+            "cpu_budget": 64,
+            "cpu_reserve": 4
+          }
+        }
+      },
+      "review_report": "docs/JOINT7_ITERATION60_REVIEW.md"
+    },
+    {
+      "from_implementation": "c7bffaf7bbfd2d7495da1af9bd9c8a63cba55c9be2a699b29827065bf1bf4f38",
+      "to_implementation": "9a60a40aa1e4d8193243681d68de2f4661b82d2cf213b2d86f9e78bd3a6e5541",
+      "learning_compatibility": "c349e816f2e301ea2a3b438902059cffe868f48e131f7c120691d37cd1c409d2",
+      "reason": "Joint-7 iteration-60 review: preserve weights, Adam moments/steps, RNG, counters, population and IL lineage; apply signature-validated LR after optimizer restoration; add bounded diagnostic/retention telemetry. Reward semantics unchanged. Fresh source-bound PPO and utility recalibration before teachers. All existing fixed-work and shared CPU limits preserved.",
+      "config_changes": {
+        "teacher_work_budget": {
+          "from": {
+            "contract": "teacher-turn-work/1.0.0",
+            "mode": "simulations",
+            "simulations_per_phase": {
+              "canal_early": 32,
+              "canal_late": 16,
+              "rail_early": 16,
+              "rail_late": 16
+            }
+          },
+          "to": {
+            "contract": "teacher-turn-work/1.1.0",
+            "watchdog_seconds": 120.0,
+            "mode": "simulations",
+            "simulations_per_phase": {
+              "canal_early": 32,
+              "canal_late": 16,
+              "rail_early": 16,
+              "rail_late": 16
+            }
+          }
+        },
+        "legacy_opponent_work_budget": {
+          "from": {
+            "contract": "legacy-opponent-turn-work/1.0.0",
+            "mode": "simulations",
+            "simulations_per_turn": 16
+          },
+          "to": {
+            "contract": "legacy-opponent-turn-work/1.1.0",
+            "watchdog_seconds": 120.0,
+            "mode": "simulations",
+            "simulations_per_turn": 16
+          }
+        },
+        "execution": {
+          "to": {
+            "processes": 14,
+            "hosts_per_process": 2,
+            "heavy_processes": 6,
+            "batch_size": 64,
+            "max_candidate_cells": 131072,
+            "flush_ms": 1.0,
+            "worker_threads": 1,
+            "max_decisions": 2000,
+            "max_models": 72,
+            "shard_games": 8,
+            "shard_bytes": 268435456,
+            "feature_cache": true,
+            "policy_cache": 32,
+            "search_workers_per_turn": 4,
+            "cpu_budget": 32,
+            "cpu_reserve": 4,
+            "shared_slot_bytes": 2097152,
+            "inference_routing": "demand",
+            "replica_backlog": 32
+          },
+          "from": {
+            "processes": 28,
+            "hosts_per_process": 1,
+            "heavy_processes": 6,
+            "batch_size": 64,
+            "max_candidate_cells": 131072,
+            "flush_ms": 1.0,
+            "worker_threads": 1,
+            "max_decisions": 2000,
+            "max_models": 72,
+            "shard_games": 8,
+            "shard_bytes": 268435456,
+            "feature_cache": true,
+            "policy_cache": 32,
+            "search_workers_per_turn": 4,
+            "cpu_budget": 32,
+            "cpu_reserve": 4
+          }
+        }
+      },
+      "review_report": "docs/JOINT7_ITERATION60_REVIEW.md"
+    },
+    {
+      "from_implementation": "c7bffaf7bbfd2d7495da1af9bd9c8a63cba55c9be2a699b29827065bf1bf4f38",
+      "to_implementation": "9a60a40aa1e4d8193243681d68de2f4661b82d2cf213b2d86f9e78bd3a6e5541",
+      "learning_compatibility": "c349e816f2e301ea2a3b438902059cffe868f48e131f7c120691d37cd1c409d2",
+      "reason": "Joint-7 iteration-60 review: preserve weights, Adam moments/steps, RNG, counters, population and IL lineage; apply signature-validated LR after optimizer restoration; add bounded diagnostic/retention telemetry. Reward semantics unchanged. Fresh source-bound PPO and utility recalibration before teachers. All existing fixed-work and shared CPU limits preserved.",
+      "config_changes": {
+        "teacher_work_budget": {
+          "from": {
+            "contract": "teacher-turn-work/1.0.0",
+            "mode": "simulations",
+            "simulations_per_phase": {
+              "canal_early": 32,
+              "canal_late": 16,
+              "rail_early": 16,
+              "rail_late": 16
+            }
+          },
+          "to": {
+            "contract": "teacher-turn-work/1.1.0",
+            "watchdog_seconds": 120.0,
+            "mode": "simulations",
+            "simulations_per_phase": {
+              "canal_early": 32,
+              "canal_late": 16,
+              "rail_early": 16,
+              "rail_late": 16
+            }
+          }
+        },
+        "legacy_opponent_work_budget": {
+          "from": {
+            "contract": "legacy-opponent-turn-work/1.0.0",
+            "mode": "simulations",
+            "simulations_per_turn": 16
+          },
+          "to": {
+            "contract": "legacy-opponent-turn-work/1.1.0",
+            "watchdog_seconds": 120.0,
+            "mode": "simulations",
+            "simulations_per_turn": 16
+          }
+        },
+        "execution": {
+          "to": {
+            "processes": 2,
+            "hosts_per_process": 1,
+            "heavy_processes": 2,
+            "batch_size": 16,
+            "max_candidate_cells": 8192,
+            "flush_ms": 1.0,
+            "worker_threads": 1,
+            "max_decisions": 2000,
+            "max_models": 16,
+            "shard_games": 2,
+            "shard_bytes": 268435456,
+            "feature_cache": true,
+            "policy_cache": 32,
+            "search_workers_per_turn": 4,
+            "cpu_budget": 12,
+            "cpu_reserve": 2,
+            "shared_slot_bytes": 2097152,
+            "inference_routing": "demand",
+            "replica_backlog": 32
+          },
+          "from": {
+            "processes": 2,
+            "hosts_per_process": 1,
+            "heavy_processes": 2,
+            "batch_size": 16,
+            "max_candidate_cells": 8192,
+            "flush_ms": 1.0,
+            "worker_threads": 1,
+            "max_decisions": 2000,
+            "max_models": 16,
+            "shard_games": 2,
+            "shard_bytes": 268435456,
+            "feature_cache": true,
+            "policy_cache": 32,
+            "search_workers_per_turn": 4,
+            "cpu_budget": 12,
+            "cpu_reserve": 2
+          }
+        }
+      },
+      "review_report": "docs/JOINT7_ITERATION60_REVIEW.md"
+    },
+    {
+      "from_implementation": "c7bffaf7bbfd2d7495da1af9bd9c8a63cba55c9be2a699b29827065bf1bf4f38",
+      "to_implementation": "9a60a40aa1e4d8193243681d68de2f4661b82d2cf213b2d86f9e78bd3a6e5541",
+      "learning_compatibility": "c349e816f2e301ea2a3b438902059cffe868f48e131f7c120691d37cd1c409d2",
+      "reason": "Joint-7 iteration-60 review: preserve weights, Adam moments/steps, RNG, counters, population and IL lineage; apply signature-validated LR after optimizer restoration; add bounded diagnostic/retention telemetry. Reward semantics unchanged. Fresh source-bound PPO and utility recalibration before teachers. All existing fixed-work and shared CPU limits preserved.",
+      "config_changes": {
+        "teacher_work_budget": {
+          "from": null,
+          "to": {
+            "contract": "teacher-turn-work/1.1.0",
+            "watchdog_seconds": 120.0,
+            "mode": "simulations",
+            "simulations_per_phase": {
+              "canal_early": 32,
+              "canal_late": 16,
+              "rail_early": 16,
+              "rail_late": 16
+            }
+          }
+        },
+        "legacy_opponent_work_budget": {
+          "from": null,
+          "to": {
+            "contract": "legacy-opponent-turn-work/1.1.0",
+            "watchdog_seconds": 120.0,
+            "mode": "simulations",
+            "simulations_per_turn": 16
+          }
+        }
+      },
+      "review_report": "docs/JOINT7_ITERATION60_REVIEW.md"
+    },
+    {
+      "from_implementation": "c7bffaf7bbfd2d7495da1af9bd9c8a63cba55c9be2a699b29827065bf1bf4f38",
+      "to_implementation": "9a60a40aa1e4d8193243681d68de2f4661b82d2cf213b2d86f9e78bd3a6e5541",
+      "learning_compatibility": "c349e816f2e301ea2a3b438902059cffe868f48e131f7c120691d37cd1c409d2",
+      "reason": "Joint-7 iteration-60 review: preserve weights, Adam moments/steps, RNG, counters, population and IL lineage; apply signature-validated LR after optimizer restoration; add bounded diagnostic/retention telemetry. Reward semantics unchanged. Fresh source-bound PPO and utility recalibration before teachers. All existing fixed-work and shared CPU limits preserved.",
+      "config_changes": {
+        "teacher_work_budget": {
+          "from": null,
+          "to": {
+            "contract": "teacher-turn-work/1.1.0",
+            "watchdog_seconds": 120.0,
+            "mode": "simulations",
+            "simulations_per_phase": {
+              "canal_early": 32,
+              "canal_late": 16,
+              "rail_early": 16,
+              "rail_late": 16
+            }
+          }
+        },
+        "legacy_opponent_work_budget": {
+          "from": null,
+          "to": {
+            "contract": "legacy-opponent-turn-work/1.1.0",
+            "watchdog_seconds": 120.0,
+            "mode": "simulations",
+            "simulations_per_turn": 16
+          }
+        },
+        "execution": {
+          "to": {
+            "processes": 24,
+            "hosts_per_process": 2,
+            "heavy_processes": 24,
+            "batch_size": 64,
+            "max_candidate_cells": 131072,
+            "flush_ms": 1.0,
+            "worker_threads": 1,
+            "max_decisions": 2000,
+            "max_models": 72,
+            "shard_games": 8,
+            "shard_bytes": 268435456,
+            "feature_cache": true,
+            "policy_cache": 32,
+            "search_workers_per_turn": 4,
+            "cpu_budget": 64,
+            "cpu_reserve": 4,
+            "shared_slot_bytes": 2097152,
+            "inference_routing": "demand",
+            "replica_backlog": 32
+          },
+          "from": {
+            "processes": 48,
+            "hosts_per_process": 1,
+            "heavy_processes": 24,
+            "batch_size": 64,
+            "max_candidate_cells": 131072,
+            "flush_ms": 1.0,
+            "worker_threads": 1,
+            "max_decisions": 2000,
+            "max_models": 72,
+            "shard_games": 8,
+            "shard_bytes": 268435456,
+            "feature_cache": true,
+            "policy_cache": 32,
+            "search_workers_per_turn": 4,
+            "cpu_budget": 64,
+            "cpu_reserve": 4
+          }
+        }
+      },
+      "review_report": "docs/JOINT7_ITERATION60_REVIEW.md"
+    },
+    {
+      "from_implementation": "c7bffaf7bbfd2d7495da1af9bd9c8a63cba55c9be2a699b29827065bf1bf4f38",
+      "to_implementation": "9a60a40aa1e4d8193243681d68de2f4661b82d2cf213b2d86f9e78bd3a6e5541",
+      "learning_compatibility": "c349e816f2e301ea2a3b438902059cffe868f48e131f7c120691d37cd1c409d2",
+      "reason": "Joint-7 iteration-60 review: preserve weights, Adam moments/steps, RNG, counters, population and IL lineage; apply signature-validated LR after optimizer restoration; add bounded diagnostic/retention telemetry. Reward semantics unchanged. Fresh source-bound PPO and utility recalibration before teachers. All existing fixed-work and shared CPU limits preserved.",
+      "config_changes": {
+        "teacher_work_budget": {
+          "from": null,
+          "to": {
+            "contract": "teacher-turn-work/1.1.0",
+            "watchdog_seconds": 120.0,
+            "mode": "simulations",
+            "simulations_per_phase": {
+              "canal_early": 32,
+              "canal_late": 16,
+              "rail_early": 16,
+              "rail_late": 16
+            }
+          }
+        },
+        "legacy_opponent_work_budget": {
+          "from": null,
+          "to": {
+            "contract": "legacy-opponent-turn-work/1.1.0",
+            "watchdog_seconds": 120.0,
+            "mode": "simulations",
+            "simulations_per_turn": 16
+          }
+        },
+        "execution": {
+          "to": {
+            "processes": 14,
+            "hosts_per_process": 2,
+            "heavy_processes": 6,
+            "batch_size": 64,
+            "max_candidate_cells": 131072,
+            "flush_ms": 1.0,
+            "worker_threads": 1,
+            "max_decisions": 2000,
+            "max_models": 72,
+            "shard_games": 8,
+            "shard_bytes": 268435456,
+            "feature_cache": true,
+            "policy_cache": 32,
+            "search_workers_per_turn": 4,
+            "cpu_budget": 32,
+            "cpu_reserve": 4,
+            "shared_slot_bytes": 2097152,
+            "inference_routing": "demand",
+            "replica_backlog": 32
+          },
+          "from": {
+            "processes": 28,
+            "hosts_per_process": 1,
+            "heavy_processes": 6,
+            "batch_size": 64,
+            "max_candidate_cells": 131072,
+            "flush_ms": 1.0,
+            "worker_threads": 1,
+            "max_decisions": 2000,
+            "max_models": 72,
+            "shard_games": 8,
+            "shard_bytes": 268435456,
+            "feature_cache": true,
+            "policy_cache": 32,
+            "search_workers_per_turn": 4,
+            "cpu_budget": 32,
+            "cpu_reserve": 4
+          }
+        }
+      },
+      "review_report": "docs/JOINT7_ITERATION60_REVIEW.md"
+    },
+    {
+      "from_implementation": "c7bffaf7bbfd2d7495da1af9bd9c8a63cba55c9be2a699b29827065bf1bf4f38",
+      "to_implementation": "9a60a40aa1e4d8193243681d68de2f4661b82d2cf213b2d86f9e78bd3a6e5541",
+      "learning_compatibility": "c349e816f2e301ea2a3b438902059cffe868f48e131f7c120691d37cd1c409d2",
+      "reason": "Joint-7 iteration-60 review: preserve weights, Adam moments/steps, RNG, counters, population and IL lineage; apply signature-validated LR after optimizer restoration; add bounded diagnostic/retention telemetry. Reward semantics unchanged. Fresh source-bound PPO and utility recalibration before teachers. All existing fixed-work and shared CPU limits preserved.",
+      "config_changes": {
+        "teacher_work_budget": {
+          "from": null,
+          "to": {
+            "contract": "teacher-turn-work/1.1.0",
+            "watchdog_seconds": 120.0,
+            "mode": "simulations",
+            "simulations_per_phase": {
+              "canal_early": 32,
+              "canal_late": 16,
+              "rail_early": 16,
+              "rail_late": 16
+            }
+          }
+        },
+        "legacy_opponent_work_budget": {
+          "from": null,
+          "to": {
+            "contract": "legacy-opponent-turn-work/1.1.0",
+            "watchdog_seconds": 120.0,
+            "mode": "simulations",
+            "simulations_per_turn": 16
+          }
+        },
+        "execution": {
+          "to": {
+            "processes": 2,
+            "hosts_per_process": 1,
+            "heavy_processes": 2,
+            "batch_size": 16,
+            "max_candidate_cells": 8192,
+            "flush_ms": 1.0,
+            "worker_threads": 1,
+            "max_decisions": 2000,
+            "max_models": 16,
+            "shard_games": 2,
+            "shard_bytes": 268435456,
+            "feature_cache": true,
+            "policy_cache": 32,
+            "search_workers_per_turn": 4,
+            "cpu_budget": 12,
+            "cpu_reserve": 2,
+            "shared_slot_bytes": 2097152,
+            "inference_routing": "demand",
+            "replica_backlog": 32
+          },
+          "from": {
+            "processes": 2,
+            "hosts_per_process": 1,
+            "heavy_processes": 2,
+            "batch_size": 16,
+            "max_candidate_cells": 8192,
+            "flush_ms": 1.0,
+            "worker_threads": 1,
+            "max_decisions": 2000,
+            "max_models": 16,
+            "shard_games": 2,
+            "shard_bytes": 268435456,
+            "feature_cache": true,
+            "policy_cache": 32,
+            "search_workers_per_turn": 4,
+            "cpu_budget": 12,
+            "cpu_reserve": 2
+          }
+        }
+      },
+      "review_report": "docs/JOINT7_ITERATION60_REVIEW.md"
+    },
+    {
+      "from_implementation": "b883eac48cd8e01b1e197ec842ab33461da19aac82082cbe9a8d5466935c080d",
+      "learning_compatibility": "c349e816f2e301ea2a3b438902059cffe868f48e131f7c120691d37cd1c409d2",
+      "to_implementation": "9a60a40aa1e4d8193243681d68de2f4661b82d2cf213b2d86f9e78bd3a6e5541",
+      "reason": "Joint-7 iteration-60 review: preserve weights, Adam moments/steps, RNG, counters, population and IL lineage; apply signature-validated LR after optimizer restoration; add bounded diagnostic/retention telemetry. Reward semantics unchanged. Fresh source-bound PPO and utility recalibration before teachers. All existing fixed-work and shared CPU limits preserved.",
+      "review_report": "docs/JOINT7_ITERATION60_REVIEW.md"
+    },
+    {
+      "to_implementation": "9a60a40aa1e4d8193243681d68de2f4661b82d2cf213b2d86f9e78bd3a6e5541",
+      "learning_compatibility": "c349e816f2e301ea2a3b438902059cffe868f48e131f7c120691d37cd1c409d2",
+      "reason": "Joint-7 iteration-60 review: preserve weights, Adam moments/steps, RNG, counters, population and IL lineage; apply signature-validated LR after optimizer restoration; add bounded diagnostic/retention telemetry. Reward semantics unchanged. Fresh source-bound PPO and utility recalibration before teachers. All existing fixed-work and shared CPU limits preserved.",
+      "review_report": "docs/JOINT7_ITERATION60_REVIEW.md",
+      "from_implementation": "fff450449f8fbceaa8c57cffcf826da006d53d44351c2fce4d985fc973d0df7c"
+    },
+    {
+      "to_implementation": "9a60a40aa1e4d8193243681d68de2f4661b82d2cf213b2d86f9e78bd3a6e5541",
+      "learning_compatibility": "c349e816f2e301ea2a3b438902059cffe868f48e131f7c120691d37cd1c409d2",
+      "reason": "Joint-7 iteration-60 review: preserve weights, Adam moments/steps, RNG, counters, population and IL lineage; apply signature-validated LR after optimizer restoration; add bounded diagnostic/retention telemetry. Reward semantics unchanged. Fresh source-bound PPO and utility recalibration before teachers. All existing fixed-work and shared CPU limits preserved.",
+      "review_report": "docs/JOINT7_ITERATION60_REVIEW.md",
+      "from_implementation": "826b6beb04241a73a5d1ec0d712176ff9df4370a26cf01bb05ee92f7a05b4f16",
+      "config_changes": {
+        "evaluation_schedule": {
+          "from": {
+            "enabled": true,
+            "monitor_every_games": 6400,
+            "broader_every_games": 25600,
+            "monitor_setups": 1,
+            "broader_setups": 1,
+            "seed": 910000
+          },
+          "to": {
+            "enabled": true,
+            "monitor_every_games": 6400,
+            "broader_every_games": 25600,
+            "monitor_setups": 16,
+            "broader_setups": 16,
+            "seed": 910000
+          }
+        },
+        "teacher_work_budget": {
+          "from": null,
+          "to": {
+            "contract": "teacher-turn-work/1.1.0",
+            "mode": "simulations",
+            "watchdog_seconds": 120.0,
+            "simulations_per_phase": {
+              "canal_early": 32,
+              "canal_late": 16,
+              "rail_early": 16,
+              "rail_late": 16
+            }
+          }
+        },
+        "legacy_opponent_work_budget": {
+          "from": null,
+          "to": {
+            "contract": "legacy-opponent-turn-work/1.1.0",
+            "mode": "simulations",
+            "simulations_per_turn": 16,
+            "watchdog_seconds": 120.0
+          }
+        }
+      }
+    },
+    {
+      "to_implementation": "9a60a40aa1e4d8193243681d68de2f4661b82d2cf213b2d86f9e78bd3a6e5541",
+      "learning_compatibility": "c349e816f2e301ea2a3b438902059cffe868f48e131f7c120691d37cd1c409d2",
+      "reason": "Joint-7 iteration-60 review: preserve weights, Adam moments/steps, RNG, counters, population and IL lineage; apply signature-validated LR after optimizer restoration; add bounded diagnostic/retention telemetry. Reward semantics unchanged. Fresh source-bound PPO and utility recalibration before teachers. All existing fixed-work and shared CPU limits preserved.",
+      "review_report": "docs/JOINT7_ITERATION60_REVIEW.md",
+      "from_implementation": "826b6beb04241a73a5d1ec0d712176ff9df4370a26cf01bb05ee92f7a05b4f16",
+      "config_changes": {
+        "learning_rate": {
+          "from": 1e-05,
+          "to": 5e-06
+        },
+        "evaluation_schedule": {
+          "from": {
+            "enabled": true,
+            "monitor_every_games": 6400,
+            "broader_every_games": 25600,
+            "monitor_setups": 1,
+            "broader_setups": 1,
+            "seed": 910000
+          },
+          "to": {
+            "enabled": true,
+            "monitor_every_games": 6400,
+            "broader_every_games": 25600,
+            "monitor_setups": 16,
+            "broader_setups": 16,
+            "seed": 910000
+          }
+        },
+        "teacher_work_budget": {
+          "from": null,
+          "to": {
+            "contract": "teacher-turn-work/1.1.0",
+            "mode": "simulations",
+            "watchdog_seconds": 120.0,
+            "simulations_per_phase": {
+              "canal_early": 32,
+              "canal_late": 16,
+              "rail_early": 16,
+              "rail_late": 16
+            }
+          }
+        },
+        "legacy_opponent_work_budget": {
+          "from": null,
+          "to": {
+            "contract": "legacy-opponent-turn-work/1.1.0",
+            "mode": "simulations",
+            "simulations_per_turn": 16,
+            "watchdog_seconds": 120.0
+          }
+        }
+      }
     }
   ]
 }
