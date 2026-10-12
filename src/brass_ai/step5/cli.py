@@ -17,6 +17,7 @@ def parser():
     p.add_argument('--root', type=Path, default=LAB_ROOT)
     p.add_argument('--config', help='Evaluation uses evaluation.json; recovery uses lab.json; historical recipes are archived')
     p.add_argument('--device', choices=['cpu', 'cuda'], default='cpu')
+    p.add_argument('--inference-devices',help='Train/evaluate only: auto for all job-visible GPUs, or comma-separated cuda:N devices. Scope availability with CUDA_VISIBLE_DEVICES. Learner remains on --device.')
     p.add_argument('--mono')
     sub = p.add_subparsers(dest='command', required=True)
     assets = sub.add_parser('assets'); assets.add_argument('--bundle', default='artifacts/step5-transfer/private-rules-runtime.zip')
@@ -82,6 +83,11 @@ def main(argv=None):
     require(a.root.is_absolute(), 'Pass an absolute --root on this platform')
     root = a.root.resolve()
     require(a.device != 'cuda' or torch.cuda.is_available(), 'CUDA requested but unavailable')
+    inference_devices=None
+    if a.inference_devices is not None:
+        require(a.command in ('train','evaluate'),'--inference-devices applies only to train/evaluate')
+        from brass_ai.recovery.inference import validate_inference_devices
+        inference_devices=validate_inference_devices([name.strip() for name in a.inference_devices.split(',')],a.device)
     default_config = 'configs/step5/evaluation.json' if a.command == 'evaluate' else 'configs/step5/lab.json'
     config = read_json(project_path(root, a.config or default_config))
     if a.command == 'evaluate' and config.get('format','').startswith('step5-evaluation-config/'):
@@ -124,7 +130,8 @@ def main(argv=None):
         if a.command == 'demo-generate':
             from brass_ai.recovery.demonstrations import generate
             from brass_ai.recovery.config import EXECUTION
-            result=generate(root,a.output,a.games,config.get('execution',EXECUTION),seed=a.seed,mono=a.mono,partition=a.partition,budget=config.get('legacy_budget'))
+            result=generate(root,a.output,a.games,config.get('execution',EXECUTION),seed=a.seed,mono=a.mono,partition=a.partition,
+                budget=config.get('legacy_budget'),work_budget=config.get('legacy_opponent_work_budget'))
             result={k:result[k] for k in ('format','games','eligible_for_bc','note')}
         elif a.command == 'demo-audit':
             from brass_ai.recovery.demonstrations import audit
@@ -133,7 +140,8 @@ def main(argv=None):
                 path=project_path(root,pattern)
                 paths.extend(root.glob(path.relative_to(root).as_posix()))
             require(paths,'No replay paths matched')
-            manifest=audit(root,paths,a.output,mono=a.mono,workers=config.get('audit_workers',1),budget=config.get('legacy_budget'))
+            manifest=audit(root,paths,a.output,mono=a.mono,workers=config.get('audit_workers',1),budget=config.get('legacy_budget'),
+                work_budget=config.get('legacy_opponent_work_budget'))
             result=dict(manifest=str(project_path(root,a.output)),partitions=manifest['partitions'],
                 eligible_games=len(manifest['entries']),excluded=len(manifest['excluded']))
         elif a.command == 'imitate':
@@ -154,11 +162,13 @@ def main(argv=None):
                 config['imitation']=dict(config['imitation'],manifest=a.demonstrations)
                 config['rehearsal_manifest']=a.demonstrations
             result = train(root, a.run, config, iterations=a.iterations, device=a.device, initial=a.initial,
-                           mono=a.mono, from_run=a.from_run,imitation_run=a.imitation_run,resume_reviewed_source=a.resume_reviewed_source)
+                           mono=a.mono, from_run=a.from_run,imitation_run=a.imitation_run,resume_reviewed_source=a.resume_reviewed_source,
+                           inference_devices=inference_devices)
             result.pop('summaries', None)
         elif a.command == 'evaluate':
             result = evaluate(root, a.output, a.candidate, a.references, config, setups=a.setups, seed=a.seed,
                 partition=a.partition, include_legacy=a.include_legacy, device=a.device, mono=a.mono,
-                search=a.search, focus=a.focus,lineups=a.lineups)
+                search=a.search, focus=a.focus,lineups=a.lineups,
+                inference_devices=inference_devices)
             result = {k: result[k] for k in ('promotion_eligible', 'failed_games', 'candidate_sha256')}
     print(json.dumps(result, indent=2, allow_nan=False))

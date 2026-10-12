@@ -160,18 +160,28 @@ def load_cache(path, games, receipt=None):
     return out
 
 
+class SerializedGame:
+    """Writer-owned validated game and its single immutable JSON encoding."""
+    def __init__(self,game):
+        encoder=PreparedEncoder()
+        if isinstance(game,CheckedGame):game.assert_metadata()
+        self.game=check_game(game,[game.encoded(r,encoder) for r in game['records']] if isinstance(game,CheckedGame) else None)
+        self.line=json.dumps(self.game,separators=(',',':'),allow_nan=False)+'\n'
+        self.size=len(self.line.encode('utf-8'))
+
+
 def write_shard(path,games,provenance,*,cache=True):
     path=Path(path);require(not path.exists() and games,'Existing or empty shard')
+    serialized=[g if isinstance(g,SerializedGame) else SerializedGame(g) for g in games]
+    games=[g.game for g in serialized]
     require(len({g['game_id'] for g in games})==len(games),'Duplicate game IDs')
-    encoder=PreparedEncoder()
-    for game in games:
-        if isinstance(game,CheckedGame): game.assert_metadata()
-    checked=[check_game(g,[g.encoded(r,encoder) for r in g['records']] if isinstance(g,CheckedGame) else None) for g in games]
+    for game in games:game.assert_metadata()
+    checked=games
     path.parent.mkdir(parents=True,exist_ok=True);tmp=path.with_name(path.name+'.tmp')
     try:
         with gzip.open(tmp,'wt',encoding='utf-8',compresslevel=1) as stream:
             stream.write(json.dumps(dict(format='four-seat-replay/1.0.0',compatibility=compatibility(),provenance=provenance))+'\n')
-            for game in checked: stream.write(json.dumps(game,separators=(',',':'),allow_nan=False)+'\n')
+            for game in serialized:stream.write(game.line)
         tmp.replace(path)
         if cache: write_cache(path,checked)
     finally: tmp.unlink(missing_ok=True)

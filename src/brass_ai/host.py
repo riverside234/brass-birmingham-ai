@@ -41,6 +41,16 @@ class RulesHost:
                                         stderr=subprocess.PIPE, text=True, encoding="utf-8",
                                         creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
         self.sequence = 0
+        self.last_native_timing = None
+        self.fast = False
+        self.fast_checked = False
+
+    def enable_fastpath(self):
+        try:self.fast=self.call('capabilities').get('fast')=='training-host/1.0.0'
+        except HostError as error:
+            if str(error)!='unknown_operation':raise
+        self.fast_checked = True
+        return self.fast
 
     def call(self, op, **arguments):
         self.sequence += 1
@@ -51,6 +61,7 @@ class RulesHost:
         if not line:
             raise HostError(f"Worker exited: {self.process.poll()}")
         reply = json.loads(line)
+        self.last_native_timing = reply.get('native')
         if reply.get("id") != request["id"]:
             raise HostError("Worker correlation mismatch")
         if not reply["ok"]:
@@ -68,6 +79,12 @@ class RulesHost:
 
     def apply(self, context, choice):
         return self.call("apply", game_id=context["game_id"], revision=context["revision"], choice=choice["id"])
+
+    def decision(self):
+        return self.call('decision')
+
+    def step_decision(self,context,choice,forced_limit=0):
+        return self.call('step_decision',game_id=context['game_id'],revision=context['revision'],choice=choice['id'],forced_limit=forced_limit)
 
     def close(self):
         if self.process.poll() is None:

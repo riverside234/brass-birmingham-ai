@@ -1,8 +1,171 @@
 # Fresh training in conda: selected v4 teachers and Masked ISMCTS NN
 
-Recipe `step5-training/2.2.0` keeps the **1,840,109-parameter MLP-ResNet** for imitation, then extends it to **1,850,129 parameters** for PPO and **Masked ISMCTS + NN** with a shared combined-utility head. Existing completed IL and reviewed self-play checkpoints can continue through the versioned extension described below. The source-based six-style revision and comparison requirements are documented in [the opening-book note](../ai-research/TOURNAMENT_STYLE_V3.md). The user selected the previous advanced bank, `bank-3dc65253a610191d66a5`, as **v4**, with productive-development stall reset and opening-biased candidates. Further strength tests were stopped; this is an explicit selection rather than a tournament promotion. The rejected network/Scout additions are excluded. `training/opponents/current.json` and the distribution both identify that exact bank. The main lab preset is **24 queued heavy tables, four private search workers per decision**, with one shared 60-slot CPU admission gate under your 64-core allocation. Waiting for admission does not consume the search clock.
+Recipe `step5-training/2.2.0` keeps the **1,840,109-parameter MLP-ResNet** for imitation, then extends it to **1,850,129 parameters** for PPO and **Masked ISMCTS + NN** with a shared combined-utility head. Existing completed IL and reviewed self-play checkpoints can continue through the versioned extension described below. The source-based six-style revision and comparison requirements are documented in [the opening-book note](../ai-research/TOURNAMENT_STYLE_V3.md). The user selected the previous advanced bank, `bank-3dc65253a610191d66a5`, as **v4**, with productive-development stall reset and opening-biased candidates. Further strength tests were stopped; this is an explicit selection rather than a tournament promotion. The rejected network/Scout additions are excluded. `training/opponents/current.json` and the distribution both identify that exact bank. The main lab preset is **24 queued heavy tables, four private search workers per decision**, with one shared 60-slot CPU admission gate under your 64-core allocation. Waiting for admission does not consume the simulation allocation or stall watchdog.
 
-Imitation and heuristic evaluation use searched Masked **v4** at **one second/four workers**. Active lab presets now apply a one-time recovery schedule: **60% searched-v4 tables for 20,000 ordinary games, then 30% for 10,000 games**. Historical opponents stay at 25%; current self-play occupies 15% then 45%. PPO and NN search share `W + 0.10*P + 0.001*VP - future insolvency costs`; official performance heads remain separate. The schedule begins when a new run is created or when an existing run adopts this reviewed revision, and persists across restarts. Afterward the original mature curriculum resumes at 70% current self-play / 25% historical / 5% searched v4. Internal `v3-*` profile IDs and `training/runtime/v3*` paths remain compatibility aliases for the selected bank. Start a new model from random weights. A completed, fresh standalone imitation run can explicitly hand its selected weights to self-play via `--imitation-run`; its optimizer, population and neural replay are not imported. Audited entirely heuristic datasets may be reused with their original receipts. Same-run continuation from reviewed versions preserves existing PPO progress; see the 9 October restart and incumbent-selection section below.
+New imitation data, searched RL opponents and heuristic evaluation use Masked **v4** with **16 total simulation attempts/four workers**. Active lab presets now apply a one-time recovery schedule: **60% searched-v4 tables for 20,000 ordinary games, then 30% for 10,000 games**. Historical opponents stay at 25%; current self-play occupies 15% then 45%. PPO and NN search share `W + 0.10*P + 0.001*VP - future insolvency costs`; official performance heads remain separate. The schedule begins when a new run is created or when an existing run adopts this reviewed revision, and persists across restarts. Afterward the original mature curriculum resumes at 70% current self-play / 25% historical / 5% searched v4. Internal `v3-*` profile IDs and `training/runtime/v3*` paths remain compatibility aliases for the selected bank. Start a new model from random weights. A completed, fresh standalone imitation run can explicitly hand its selected weights to self-play via `--imitation-run`; its optimizer, population and neural replay are not imported. Audited entirely heuristic datasets may be reused with their original receipts. Same-run continuation from reviewed versions preserves existing PPO progress; see the 9 October restart and incumbent-selection section below.
+
+## Fixed simulation budgets throughout Step 5 (11 October)
+
+This section supersedes the time-budget recipes below. **All active Step 5 search uses fixed simulation allocations.** There is no artificial wait or CPU-speed multiplier. The old `search.seconds: 12` and `legacy_budget.seconds: 1` remain reference/compatibility metadata, not the normal stopping condition. The installed game and frozen bank files are unchanged.
+
+| Active path | Total attempts per whole turn | Workers | Normal stopping rule |
+|---|---:|---:|---|
+| NN teacher, early Canal | 32 | 4 | Exhaust the shared allocation |
+| NN teacher, late Canal / early Rail / late Rail | 16 | 4 | Exhaust the shared allocation |
+| Searched NN evaluation | 16 | 4 | Exhaust the shared allocation on each scheduled search turn |
+| Searched v4 RL opponents, new demonstrations and evaluation | 16 | 4 | Four paired attempts per private worker |
+| Search-free v4, ordinary neural PPO, policy-only monitor/champion panels | 0 | Existing actor allowance | No MCTS; bounded incumbent planning or one policy inference |
+
+The active lab, smoke and evaluation presets declare these budgets. Custom old training configs are upgraded to the current defaults before constructing the run signature, so they cannot silently retain the old time cutoff. Archived data and old budget receipts remain readable. NN policies constructed through the lab actor pipeline also receive the work default when an explicit budget is absent.
+
+```json
+"teacher_work_budget": {
+  "contract": "teacher-turn-work/1.1.0",
+  "mode": "simulations",
+  "watchdog_seconds": 120.0,
+  "simulations_per_phase": {
+    "canal_early": 32, "canal_late": 16, "rail_early": 16, "rail_late": 16
+  }
+},
+"legacy_opponent_work_budget": {
+  "contract": "legacy-opponent-turn-work/1.1.0",
+  "mode": "simulations",
+  "simulations_per_turn": 16,
+  "watchdog_seconds": 120.0
+}
+```
+
+Searched evaluation additionally uses `nn_work_budget` with contract `nn-turn-work/1.0.0`, `mode: simulations`, `simulations_per_turn: 16`, and `watchdog_seconds: 120.0`. Worker/action counts never multiply the total. Counts are **attempts**, not a guarantee of qualified completed trajectories: interrupted simulations consume their allocation and cannot retry indefinitely. Reports separate allocations, attempts, completions and useful teaching samples.
+
+One allocation covers both actions and all subchoices. The first nonforced choice performs search; subsequent choices follow a supported complete legal plan or an unlabelled legal fallback. Teacher games retain their reproducible four reserved phase turns per NN seat. Generic searched evaluations preserve `turn_interval` and `max_searches_per_seat` (normally every fourth turn, at most four searches per seat); only the work per selected turn changes. Teacher phase reservations remain separate. Forced choices and debt resolution do not create another allocation. Private forests retire before channels are reused.
+
+A separate **120-second cooperative stall watchdog** starts after CPU admission. It bounds a failed/abnormally slow search; it is not a target thinking time, and normal searches return immediately at the count limit. Cancellation remains active. Native RPC retirement can exceed a cooperative deadline, so this is not a hard process-kill guarantee. Watchdog-truncated NN teachers cannot supply successful teaching labels; v4 incomplete allocations fail the game rather than enter the dataset as successful work. Native candidate planning also has deterministic node limits, preserving its bounded candidate families. The native `fixed_work` flag remains false because the frozen root forest hardcodes clock support; its clock is now the exceptional watchdog instead of one second.
+
+### Counts are a workload choice, not an exact “12-second equivalent”
+
+Saved lab teacher searches had completed-path medians **15.5 / 9 / 8 / 9** and upper quartiles **30.25 / 15.75 / 8.5 / 13.25**, in phase order. The current provisional counts approximate the upper-quartile workload with enough repeated alternatives. They are not strength-qualified. One Brass simulation may include both actions, subchoices and opponents' replies; it is not comparable to one chess tree expansion. The old v4 one-second runs often completed very few simulations. Completing sixteen can therefore be **slower** than that truncated baseline, especially on a laptop. Faster hardware shortens a fixed workload; it does not make additional work free.
+
+Warm-up, 160-game teacher cadence, four teacher games, at most two collections per iteration, at most eight distillation updates, PPO/reward settings, opponent schedules, four search workers and the **90% cumulative search wall-time allowance** stay unchanged. The wall allowance controls whether another collection can start, not how long an admitted search must think. Admission begins with the historical cost estimate and conservatively incorporates the last measured collection cost plus 25% headroom. Actual collection/distillation/recalibration time is charged; unused work does not trigger extra games or retries. An estimated admission cannot guarantee an exact wall-share cap for an unexpectedly slow collection.
+
+### Why fast self-play systems are fast
+
+[AlphaZero's paper](https://arxiv.org/html/1712.01815v1) used 800 simulations per training search, 5,000 first-generation TPUs for game generation and 64 second-generation TPUs for learning. Its reported per-search times depended on the game; its millions of games were produced with far more hardware than one lab server. We borrow fixed work, not its count or throughput claims.
+
+[SEED RL](https://research.google/blog/massively-scaling-reinforcement-learning-with-seed-rl/) centralizes accelerated inference, batching observations from many CPU actors and using fast asynchronous communication. [Sample Factory](https://vladlen.info/papers/sample-factory.pdf) similarly separates simulation, inference and learning and reduces actor idle time. Our pipeline already has persistent private simulators, central GPU inference and parallel replay readers. Its PPO collection/update barrier deliberately preserves fresh on-policy likelihoods; copying an asynchronous off-policy learner would change the algorithm and require different correction/validation.
+
+The saved `results/selfplay-v2-70/report.json` records 320 ordinary games in **237.3 s**, inference forward elapsed time **38.0 s** across **33,324 batches**, mean batch **1.47 positions**, and replay preparation **41.3 s** with eight readers. Actor validation and encoding cost **539.4 / 128.0 s summed across overlapping actors**. These are historical host elapsed/CPU measurements, not current GPU kernel utilization. Current lab presets already use sixteen replay readers. Increasing batch capacity or filling 90 GB of VRAM cannot help a GPU waiting for observations from the rules engine.
+
+The encoder/output revision removes a duplicate full-board/choice fingerprint while keeping input validation, and packs neural outputs into one CUDA-to-host transfer instead of four/five separate transfers. The CPU path retains its cheaper zero-copy behavior. The six throughput changes below now keep **48 ordinary game lanes in 24 processes**, 24 queued heavy tables, four workers per search and 60 shared CPU slots under the known 64-core allocation. The 2M model and PPO batches stay unchanged. GPU routing accepts your **2–6 available RTX 6000 Pro GPUs**, concentrating sparse requests before activating additional replicas. The PPO learner stays on its selected GPU; its optimizer is not replicated.
+
+### Six throughput changes (11 October)
+
+| Change | Active implementation and limits |
+|---|---|
+| Native simulator work | Separate authored ordinary/search workers fuse observation, legal choices and state transitions. Choices and known-wild summaries cache by revision. Rollback copies the old journal prefix only on failure, retaining its pre-mutation hash and restoration checks. Ordinary neural play batches at most 16 forced subchoices within the same player/turn, preserving every replay row and RNG draw. |
+| Double-buffered actors | Main lab presets use `processes: 24`, `hosts_per_process: 2`; `lab-small` uses 14 × 2. Two private host lanes overlap blocking native/inference IO, with separate policies, RNG and reply channels. This changes process layout, not the 48/28 concurrent game capacity. Heavy search remains 24 tables/four workers. |
+| Shared-memory transport | Each reply lane owns a bounded 2 MiB numeric slot (`shared_slot_bytes: 2097152`). Model, observer, revision, choice IDs, cancellation and deadlines remain checked metadata. Oversized batches use the original queue path, retaining every candidate. Slots are released at shutdown, including service failures. |
+| Demand-based GPU routing | `inference_routing: demand`, `replica_backlog: 32`. Requests favor the same frozen-model replica until pending demand warrants another GPU. Existing batch/candidate/flush bounds still apply. Models are frozen once on CPU and moved to a device lazily; additional visible GPUs need not become busy. |
+| Ready-leaf batching | Ready leaves from a private forest, including different frozen opponent models, share one transport submission. Services regroup by model and candidate size; other games/workers can join compatible batches. Observer-specific features remain separate. Simulation allocations, tree reservations, legality and teacher qualification do not change. |
+| Incremental replay preparation | Validated finished shards start CPU preparation while other games continue. Readers share the 60-slot admission gate and have a bounded pending queue. The actor serializes each game once. Learner rows merge in deterministic job order; PPO still waits for the complete fresh collection before any optimizer update. |
+
+These apply to the shared training collection infrastructure, including new demonstrations and evaluations where relevant. Rule-based v4 search remains CPU-only with its unchanged frozen bank; it cannot use GPU neural batching. Search-free policy choices retain the same probabilities and sampling. Search batching preserves the objective and count limits but thread timing can change the order of completed tree work, so bitwise identical searched games are not promised.
+
+The optimized EXEs/manifests are under `training/runtime/throughput/{ordinary,search}` and are included in Git. They reuse the existing privately transferred R1 dependencies. The installer checks the qualified baseline, dependency hashes, authored source hashes and builder fingerprint, then materializes separate workers under `artifacts/training-host/`. **No game installation, qualified R1 binary or frozen v4 bank is replaced.** Rebuilding is only needed for authored C# changes (`scripts/build-training-host.py`); the lab can use the shipped workers with Mono.
+
+After syncing, use the existing preflight command. Its output now includes `throughput_workers`, with `optimized: true` for both workers and their manifest hashes; it exercises fused snapshots, legal choices, observations and restoration in addition to the existing full-game parity check:
+
+```sh
+conda activate ai-training
+cd /data/not_backed_up/yxu209/ai-training/
+python /data/not_backed_up/yxu209/ai-training/scripts/step5.py --device cuda preflight
+```
+
+The implementation borrows separation/overlap principles from [Sample Factory's double buffering](https://www.samplefactory.dev/07-advanced-topics/double-buffered/), bounded transport and actor throughput from [EnvPool](https://arxiv.org/abs/2206.10558), centralized inference from [SEED RL](https://arxiv.org/abs/1910.06591), and leaf batching from [Batch MCTS](https://arxiv.org/abs/2104.04278). It retains this project's Masked ISMCTS and PPO contracts; it does not replace the simulator or make PPO asynchronously off-policy.
+
+### Flexible GPU allocation (2–6 GPUs)
+
+GPU placement is a **runtime option**, not a learning hyperparameter. You can change it between committed resumes without resetting weights, optimizer, population or curriculum. Without `--inference-devices`, existing single-device behavior remains available.
+
+Limit visibility to GPUs allocated to this job, then use `auto` to use exactly that visible set. CUDA indices in the program are remapped by `CUDA_VISIBLE_DEVICES`:
+
+```sh
+# Example: physical GPUs 1 and 3 are available for this run.
+export CUDA_VISIBLE_DEVICES=1,3
+python /data/not_backed_up/yxu209/ai-training/scripts/step5.py \
+  --device cuda --inference-devices auto train \
+  --run /data/not_backed_up/yxu209/ai-training/artifacts/step5/selfplay-best-v1 \
+  --imitation-run /data/not_backed_up/yxu209/ai-training/artifacts/step5/v4-batch6 \
+  --resume-reviewed-source --iterations 1
+```
+
+For another run allocation, set visibility to the two through six GPUs actually available; the same command adapts. `auto` does **not** detect who else is using a GPU or reserve hardware. Alternatively, supply explicit visible indices, e.g. `--inference-devices cuda:0,cuda:1`. The same option works with `evaluate`. A central demand router sends each private reply envelope to a selected GPU's bounded queue/cache, keeping sparse compatible requests together. All replicas and replay readers share the existing 60 CPU slots. Simulation counts remain totals across four search workers, never multiplied by GPU count. The PPO learner uses the first visible GPU with `--device cuda`; collection and optimizer updates retain the existing on-policy phase boundary. Demonstration generation uses CPU v4 search and does not need GPU inference.
+
+For monitoring during a comparison, keep model/checkpoint, seeds, ordinary games, search counts and CPU settings fixed. Inspect the per-device inference reports as well as total games/second. Six GPUs need not beat two when the CPU simulator is the limiting stage. Multi-GPU inference is optional; distributed PPO/all-reduce training is not part of this change.
+
+### Continue the existing run
+
+Stop after a committed iteration, update the repository, then repeat the **same run, config and IL-origin arguments** with `--resume-reviewed-source`. No IL restart is needed. For example (substitute your existing run paths):
+
+```sh
+conda activate ai-training
+cd /data/not_backed_up/yxu209/ai-training/
+python /data/not_backed_up/yxu209/ai-training/scripts/step5.py --device cuda train \
+  --run /data/not_backed_up/yxu209/ai-training/artifacts/step5/selfplay-best-v1 \
+  --imitation-run /data/not_backed_up/yxu209/ai-training/artifacts/step5/v4-batch6 \
+  --resume-reviewed-source --iterations 1
+```
+
+The exact source transition preserves model tensors, Adam/RNG, committed counters, accepted best, historical pool and the active v4 recovery window. It permits the reviewed work blocks plus the exact active-preset execution changes above; arbitrary learning or CPU-budget changes remain rejected. Unchanged custom execution settings can continue through the source-only transition. Old partial iterations require recovery with their original source before upgrading. New PPO rollouts and teacher distributions carry the new identity. Existing heuristic replay/manifest formats and completed IL handoff remain compatible. The feature-cache implementation fingerprint changes, so old derived caches may be validated and rebuilt once from authoritative replay.
+
+For new demonstrations, use a **new output directory** because the teacher identity changed. Existing audited datasets remain usable as-is; audit recognizes both old time-budget teachers and the new fixed-work teachers. New searched evaluations likewise need a fresh output directory; completed old reports are not relabelled. Scheduled evaluations use the existing reviewed source-namespace handling.
+
+### Correctness review after the throughput revision (11 October)
+
+The reviewed source is now `fff450449f8fbceaa8c57cffcf826da006d53d44351c2fce4d985fc973d0df7c`. This fixes failure handling and runtime verification without changing training settings, search allocations, reward, replay formats or installed game AI:
+
+- **Changing GPU count can resume.** Step 5 previously rejected a checkpoint when its saved CUDA RNG list differed from the visible GPU count, despite supporting flexible inference placement. Step 5 now restores CPU RNG/Adam and every matching logical CUDA stream, including its `cuda:0` learner, when growing or shrinking the visible set. New inference-only devices keep their initialized streams. Other checkpoint callers retain the strict topology default. Logical device order defines the mapping; physical GPU IDs are not encoded in older checkpoints.
+- **Failed collections wake CPU waiters.** A terminated actor could strand a slot or queue ticket, leaving replay readers or the other actor pool waiting forever during executor cleanup. A shared abort flag now wakes waiters and rejects new admission before actors are terminated. Overlapping collection observes the first failed future immediately. Failed partial games cannot enter PPO; restarting creates a fresh admission gate.
+- **Inference failure cleanup is bounded.** Shutdown no longer joins a feeder with queued messages and no consumer. A saturated GPU route uses interruptible queue writes. Each envelope receives one reply attempt, so a broken actor pipe cannot duplicate a successful reply or prevent delivery to another lane. Private endpoint handles close, and fatal inference failures abort CPU waiters.
+- **The single-reader path respects CPU admission.** `audit_workers: 1` now binds and restores the same shared allowance used by spawned replay readers, without altering the learner's tensor-thread setting.
+- **Compiled search transformations are pinned.** Additive host manifests now include `scripts/build-search-host.py`; editing that helper cannot silently leave the old EXE active. The rebuild changed manifest fingerprints but produced identical EXE hashes. Qualified R1 and frozen v4 files are unchanged.
+
+Use the continuation command above from a committed iteration. The immediate previous throughput source and previously supported sources have explicit review receipts. The old checkpoint bytes, model tensors, Adam state, RNG, population, accepted best, v4 recovery window and counters remain preserved. Old-source uncommitted iterations still require recovery with their original source; this review does not relabel partial replay. Existing completed IL handoff remains supported.
+
+Verification: **65 focused checks passed; one CUDA-only check was skipped**. The suite includes 2→6 / 6→2 logical GPU restoration with mocked CUDA APIs, actual checkpoint/Adam/RNG continuation, a spawned CPU waiter released on abort, dead-reply and saturated-queue cleanup, partial-shard recovery, and native branch/chance/restore checks. An injected engine error after mutation rolled back to the exact saved checkpoint and allowed legal continuation. A two-game PPO smoke committed two optimizer steps; separate four-worker search turns completed **16/16 and 32/32** attempts without timeouts, with one qualified teacher label. Both worker preflight probes and frozen-bank/distribution hashes passed. Reports are under [the review artifact directory](../artifacts/recovery/post-throughput-review-20261011/). These are local CPU checks, not a real multi-GPU/Linux throughput benchmark or playing-strength qualification.
+
+### Verify throughput on the lab
+
+First run one continued iteration, then compare `timings`, `utilization.mean_inference_batch`, `utilization.actor_phase_seconds`, `utilization.replay_ingress`, inference queue/forward time and GPU memory separately. Teacher `search.teaching.phases` reports attempted/completed work, qualified samples, fallbacks, failures, watchdog limitations and elapsed time. Searched evaluations add `search_work` receipts; legacy telemetry includes its work contract and attempted/completed totals. Compare **games/second and qualified labels/second**, not VRAM allocation or attempts alone. Keep official VP, placement and win evaluation separate from this systems comparison.
+
+New native metrics distinguish `host.native.cpu_seconds`, native elapsed and materialization/serialization from `host.ipc.stdout.read_wait`. Native process CPU has platform timer granularity; elapsed phases overlap across hosts. With two lanes, per-game Python-process CPU is omitted to avoid double-counting shared threads. Use OS process metrics alongside the native totals. `shared_requests`, `shared_replies` and `inline_requests` show transport use; multi-GPU `routing.requests_per_replica` and `per_device` show demand distribution. Replay `wall_seconds` is now the remaining join/merge after collection, while `stream_elapsed_seconds` spans overlapping preparation; `worker_average_cores` uses that full interval. Do not add overlapping phase times or compare only the shortened replay tail.
+
+In a second terminal, capture actual GPU compute utilization during that one iteration:
+
+```sh
+nvidia-smi --query-gpu=index,name,utilization.gpu,utilization.memory,memory.used,power.draw --format=csv -l 1
+```
+
+If the inference queue is mostly empty and batches are tiny, improve actor/rules/encoding throughput first. If a sustained queue builds and GPU compute is high, test a larger batch or a separate inference GPU with a controlled comparison. A larger model solely to consume VRAM is not a throughput optimization. No multi-GPU speedup or end-to-end lab speedup is claimed from local CPU tests.
+
+### Local verification of the six throughput changes
+
+Initial throughput source fingerprint: `b883eac48cd8e01b1e197ec842ab33461da19aac82082cbe9a8d5466935c080d` (superseded by the correctness review above). **79 targeted checks passed; one CUDA-only IL check was skipped** on this laptop. Coverage includes private model/seat attribution, shared-memory bounds and failure cleanup, sparse/backlogged routing, exact replay preparation, fused native state/chance/restoration, fixed search allocations and checkpoint/Adam/RNG/IL continuation. Reviewed transitions accept the exact new preset execution layouts and preserve previously supported source upgrades. The [verification receipt](../artifacts/recovery/throughput-20261011/verification.json) records the scope.
+
+Two matched full native games, with alternating run order, preserved every observation/choice trace and final state/result. The optimized host took **18.57 vs 30.99 s** and **17.10 vs 26.95 s**, a **1.58–1.67×** speedup for that random-legal-play simulator workload. These compare fused RPCs/caching/forced-choice handling against the pinned R1 host; they are not a neural training or v4 search benchmark. See the [paired native results](../artifacts/recovery/throughput-smoke-20261011-a/native.json).
+
+A [two-game PPO smoke](../artifacts/recovery/throughput-smoke-20261011-b/report.json) exercised two host lanes, shared inference transport and streaming preparation, then committed two optimizer steps. Its two tiny shards did not finish preparing before collection ended, so this check demonstrates pipeline correctness rather than a replay-overlap speedup. [Two native NN turns](../artifacts/recovery/throughput-nn-turns-20261011/report.json) completed **16/16** and **32/32** attempts across four workers, without timeouts; the teacher supplied one qualified label and evaluation exported none. Whole-turn times were **10.81 / 17.83 s** in that small CPU fixture. Earlier turn timings were not an interleaved control, so do not treat their difference as a measured search speedup.
+
+Both optimized workers passed local preflight probes. The selected bank's 158 pinned source/runtime files and all ten original distributed assets passed their hashes. Only the two new authored EXEs/manifests are added to the Git-ready runtime. No trained lab checkpoint, long campaign, installed-game change or CUDA/Linux throughput measurement was used. The smoke receipts retain their source fingerprints; the final revision additionally includes telemetry/preflight and continuation checks.
+
+### Local verification of the fixed-work prerequisite
+
+Previous fixed-work source fingerprint: `f739475371ce3d0a7dfe1c505780513a130474de3c17b8bb4501da0b67b017b3`. Its nine incoming review receipts covered the previous capped-work revision and previously supported self-play sources. The targeted work, scheduling, legality, input parity, inference, GPU routing, config and continuation checks passed. That continuation suite passed **21 tests**, including actual checkpoint/Adam/RNG preservation, old source upgrade, evaluation namespaces, partial-iteration rejection and the personality contract guard. Pipeline/CLI/scheduled-evaluation checks passed **7 tests**. The GPU pool's six checks used real spawned processes with CPU-backed replicas; they do not prove CUDA performance.
+
+The [encoder benchmark](../artifacts/recovery/inference-performance-20261011/encoding-benchmark.json) used 24 saved real positions, both eras and five paired trials. Median time for the measured encode-plus-cache-reuse path fell from **3.027 s to 2.308 s (23.7%)**, with bit-identical features. This is an isolated component result, not a whole-training speedup. Packing outputs was slightly slower on CPU, so that optimization is enabled only on CUDA; actual CUDA benefit remains unmeasured.
+
+[Native NN turn checks](../artifacts/recovery/fixed-work-turns-20261011/report.json) completed **16/16** attempts for generic searched evaluation and **32/32** for the teacher across four workers, with legal complete turns and no watchdog interruption. Search took **35.19 / 60.59 s** on this laptop's CPU fixture; these confirm removal of the former 12-second cutoff, not speed or strength improvement. Evaluation emitted no teacher label; the teacher produced one qualified label.
+
+[Native v4 checks](../artifacts/recovery/legacy-opponent-fixed-work-smoke-20261011/report.json) completed **16/16** attempts in each of one Canal and one Rail turn, with legal continuation and incumbent-only replanning after intentionally discarding the queued plan. All 161 frozen bank/runtime files remained unchanged. The native first Canal search took about **9.41 s** on this laptop; the previous one-second-limited check completed zero simulations. Whole-turn timings include the deliberate extra fallback construction and are not normal game throughput. Native checks ran while unrelated Python integration changes were in progress; their reports retain start/end source fingerprints. No trained lab checkpoint, CUDA benchmark, installed-game modification or long training campaign was used.
 
 ## Self-play correctness review and continuation (11 October)
 
@@ -278,7 +441,7 @@ Each NN seat in a **training teacher game** reserves exactly one seeded random r
 
 Sampling uses the setup seed, sampling seed, absolute seat and independent phase streams. Policy RNG consumption, worker completion order and failed searches cannot change later reservations. The old `turn_interval` / `max_searches_per_seat` fields remain readable for compatibility and generic search/evaluation; training teacher games use these four reservations instead. An unproductive reservation is not redrawn or moved to another phase. A normal four-game collection therefore schedules 64 whole turns: 16 per phase across four seats per game.
 
-The **12-second clock starts immediately after CPU admission**, before observing the turn. Both actions, resource payments and all other subchoices retain that deadline; four workers receive the same remaining time. Tree work stops 1.2 seconds early to leave time for merging and label validation. Native calls already in progress retire before private channels/hosts are reused; any decision returned after the hard deadline loses its teaching label and reports the overrun. This is a cooperative deadline, not process termination. Workers, actions and forced choices never get another 12 seconds. A timeout, fallback or insufficient-coverage result disables further searches in that turn; legal completion can use the supported continuation or the unlabelled fallback without restarting search. Training replicas reuse the coordinator's fallback rather than redundantly simulating their own discarded fallback plans; their private tree statistics still merge normally.
+With the active work budget above, search returns when its shared simulation allowance finishes. The **12-second safety clock starts immediately after CPU admission**, before observing the turn. Both actions, resource payments and all other subchoices retain that deadline; four workers receive the same remaining time. Tree work stops 1.2 seconds early to leave time for merging and label validation. Native calls already in progress retire before private channels/hosts are reused; any decision returned after the hard deadline loses its teaching label and reports the overrun. This is a cooperative deadline, not process termination. Workers, actions and forced choices never get another 12 seconds. A timeout, fallback or insufficient-coverage result disables further searches in that turn; legal completion can use the supported continuation or the unlabelled fallback without restarting search. Training replicas reuse the coordinator's fallback rather than redundantly simulating their own discarded fallback plans; their private tree statistics still merge normally.
 
 Teaching requires a nonforced choice, completed visits on at least two distinct alternatives, and a supported complete-turn continuation for the chosen visit-leading action. The target still mixes 90% normalized visits with 10% full-support prior. Forced choices, missing evidence, cancelled/late results and prior fallbacks produce no label. Incomplete in-flight rollouts are counted separately; only completed evidence can qualify.
 
@@ -290,7 +453,7 @@ In each round's `report.json`, inspect `search.teaching.phases`: `scheduled_turn
 
 The wall-time gate can postpone a due collection. Its available allowance is `ordinary_seconds * fraction / (1 - fraction) - prior_search_seconds`, now **`9 * ordinary_seconds - prior_search_seconds`** under the requested **90%** cumulative share. This is a maximum, not a target to fill. Each four-game collection still requires a conservative estimate of **768 seconds plus overhead** before admission, although parallel tables can finish sooner. The gate is checked separately before each collection; actual elapsed collection/distillation time is charged before checking the next. At most two collections run per main-preset iteration; missed or inadequate teachers never trigger extra games or unlimited catch-up. `search.budget` records admitted/deferred work. The 12-second whole-turn deadline and four workers are unchanged.
 
-Generated demonstrations, replay/teacher schemas and model/checkpoint formats are unchanged. Existing completed fresh IL checkpoints from the immediately preceding, explicitly reviewed compatible source still work with `--imitation-run` or `--from-imitation-run`; model/data compatibility, completion, lineage and hash checks remain required. Do not regenerate your audited demonstrations for this scheduler change. Use a **new self-play run directory** with the existing completed IL run: source-bound PPO runs cannot silently change recipes during resume. IL training itself, generic search/evaluation scheduling and installed game AI are unchanged.
+Generated demonstrations, replay/teacher schemas and model/checkpoint formats are unchanged. Existing completed fresh IL checkpoints from the immediately preceding, explicitly reviewed compatible source still work with `--imitation-run` or `--from-imitation-run`; model/data compatibility, completion, lineage and hash checks remain required. Do not regenerate your audited demonstrations for this scheduler change. For the exact reviewed same-run transition, retain your existing directory and add `--resume-reviewed-source`, as described above; source-bound PPO runs cannot silently change recipes. IL training itself, generic search/evaluation scheduling and installed game AI are unchanged.
 
 The 5 October scheduler check passed 15 focused tests, including seeded/late-Rail reservations, after-admission shared deadlines, failed-label rejection, an eight-step distillation update, PPO guards and compatible IL handoff. One complete native CPU teacher game reached/searched all 16 reservations (four in late Rail), and cached replay loading preserved its receipts. The fresh random network produced **zero qualified labels**: five searches lacked completed coverage and eleven timed out, so no distillation update ran. Native retirement exceeded individual deadlines by a measured aggregate 1.378 seconds; all late outputs were excluded. This verifies failure handling and scheduling, not useful teacher coverage on the GPU server. The supported-label fixture separately verified the positive eight-step update path.
 

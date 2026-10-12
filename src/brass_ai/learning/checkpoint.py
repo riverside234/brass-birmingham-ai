@@ -53,11 +53,18 @@ def load_checkpoint(path, *, device='cpu'):
     return model.to(device), raw
 
 
-def resume_optimizer(raw, optimizer, *, restore_rng=True):
+def resume_optimizer(raw, optimizer, *, restore_rng=True, allow_cuda_topology_change=False):
     require(raw['optimizer'] is not None, 'Checkpoint has no optimizer state')
     optimizer.load_state_dict(raw['optimizer'])
     if restore_rng:
         torch.set_rng_state(raw['rng'])
         if raw['cuda_rng'] and torch.cuda.is_available():
-            require(len(raw['cuda_rng']) == torch.cuda.device_count(), 'CUDA device topology differs on resume')
-            torch.cuda.set_rng_state_all(raw['cuda_rng'])
+            saved=len(raw['cuda_rng']);visible=torch.cuda.device_count()
+            require(allow_cuda_topology_change or saved==visible, 'CUDA device topology differs on resume')
+            # Step 5 keeps its learner on logical cuda:0. Additional visible
+            # devices only serve deterministic frozen-model inference. Keep
+            # existing logical streams; new inference devices retain their
+            # initialized stream instead of addressing missing CUDA indices.
+            restored=min(saved,visible)
+            for index in range(restored):torch.cuda.set_rng_state(raw['cuda_rng'][index],index)
+            return dict(saved_devices=saved,visible_devices=visible,restored_devices=restored)

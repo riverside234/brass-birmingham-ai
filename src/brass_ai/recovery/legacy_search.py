@@ -4,6 +4,7 @@ The strength receipt is a small Balanced repair screen, not per-style ranking.
 Historical banks, reports and their original clocks are preserved unchanged.
 """
 from collections import deque
+import copy
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 import time
@@ -57,23 +58,55 @@ def prepare(root, *, publish=True):
         write_json(root/'training/opponents/lab/current.json',record)
     return record
 
-def legacy_spec(root,parent,budget=None,purpose='training',*,search_free=False):
+def legacy_spec(root,parent,budget=None,purpose='training',*,search_free=False,work_budget=None):
     admission(root,parent,purpose)
-    profile=load_bank(root,parent.split('/')[0])['payload']['profiles'][parent.split('/')[1]]
+    payload=load_bank(root,parent.split('/')[0])['payload']
+    profile=payload['profiles'][parent.split('/')[1]]
     require(profile['mode']=='masked_ismcts','Historical search is not an active opponent')
+    if budget:
+        from .config import legacy_budget_config
+        legacy_budget_config(budget)
+    if work_budget is not None:
+        from .config import legacy_opponent_work_budget_config
+        legacy_opponent_work_budget_config(work_budget)
+        require(purpose in ('training','evaluation') and budget and
+                (not fixed_simulations(work_budget) or budget['role'] in ('lab','reference')) and
+                (not search_free or fixed_simulations(work_budget)), 'Work-budget v4 requires a lab policy')
+        require('src/BrassMaskedSearch/RootForest.cs' in payload['runtime_source_paths'],
+                'Work-budget v4 requires the frozen native root forest')
+        workers=budget['search_workers'];total=work_budget['simulations_per_turn']
+        require(total%workers==0 and workers*4<=total<=workers*profile['simulations'],
+                'Legacy work must divide across workers and retain matched four-attempt blocks')
     if not budget:return dict(kind='legacy',policy_id=parent,purpose=purpose)
-    from .config import legacy_budget_config
-    legacy_budget_config(budget)
     identity=('masked-v3-fast/' if search_free else 'masked-v3-forest/')+digest(dict(parent=parent,budget=budget,search_free=search_free,version=3))
-    return dict(kind='lab-legacy',parent=parent,policy_id=identity,budget=budget,purpose=purpose,search_free=search_free)
+    result=dict(kind='lab-legacy',parent=parent,policy_id=identity,budget=budget,purpose=purpose,search_free=search_free)
+    if work_budget is not None:
+        result['work_budget']=copy.deepcopy(work_budget)
+        identity=dict(parent=parent,budget=budget,work_budget=work_budget,version=1)
+        if fixed_simulations(work_budget):identity.update(version=2,search_free=search_free)
+        result['policy_id']=('masked-v4-work-fast/' if search_free else 'masked-v4-work/')+digest(identity)
+    return result
 
-def teachers(root,budget=None):
-    return {legacy_spec(root,p,budget)['policy_id'] for p in read(Path(root)/'training/opponents/pool.json')['training']}
+def teachers(root,budget=None,work_budget=None):
+    return {legacy_spec(root,p,budget,work_budget=work_budget)['policy_id'] for p in read(Path(root)/'training/opponents/pool.json')['training']}
+
+
+def fixed_simulations(work_budget):
+    return work_budget is not None and work_budget['contract']=='legacy-opponent-turn-work/1.1.0'
+
+
+def native_node_ceiling(profile,simulations):
+    # The frozen FastIncumbents has at most 26 FastPlans, each at most 96
+    # choices plus one world setup. 4096 keeps every one of those candidate
+    # families and leaves headroom; each simulation adds <= max_choices+1.
+    # This is a deterministic safety bound, not a replacement for simulations.
+    return min(profile['work_limit'],4096+simulations*(profile.get('max_choices',512)+1))
 
 class LabLegacyPolicy(LegacyPolicy):
-    def __init__(self,root,parent,budget,*,mono=None,purpose='training',diagnostic=False,search_free=False):
+    def __init__(self,root,parent,budget,*,mono=None,purpose='training',diagnostic=False,search_free=False,work_budget=None):
         self.root,self.parent,self.budget=Path(root),parent,budget
-        self.policy_id=legacy_spec(root,parent,budget,purpose,search_free=search_free)['policy_id']
+        self.policy_id=legacy_spec(root,parent,budget,purpose,search_free=search_free,work_budget=work_budget)['policy_id']
+        self.work_budget=copy.deepcopy(work_budget)
         self.search_free=search_free
         self.native_forest='src/BrassMaskedSearch/RootForest.cs' in load_bank(root,parent.split('/')[0])['payload']['runtime_source_paths']
         self.workers=[];self.contexts=weakref.WeakKeyDictionary()
@@ -85,11 +118,37 @@ class LabLegacyPolicy(LegacyPolicy):
         self.opponent=self.workers[0];self.pool=ThreadPoolExecutor(max_workers=len(self.workers))
         self.cpu_workers=1 if search_free else budget['search_workers']
         self.telemetry=dict(turns=0,branches=0,nodes=0,unique_plans=0,failures=0,over_budget_turns=0,max_turn_seconds=0.,seconds=budget['seconds'],search_workers=self.cpu_workers,search_free=search_free,completed=0,cpu_batching={})
+        if work_budget is not None:
+            self.telemetry.update(work_budget=copy.deepcopy(work_budget),allocated_simulations=0,attempted_simulations=0,
+                work_exhausted_turns=0,deadline_limited_turns=0,incumbent_only_decisions=0,forced_choices=0)
+            if fixed_simulations(work_budget):
+                self.telemetry.update(timing_mode='simulation-count-with-watchdog',reference_seconds=budget['seconds'],
+                    seconds=work_budget['watchdog_seconds'],watchdog_failures=0,incomplete_work_failures=0,
+                    candidate_node_ceiling=4096)
 
     def decision(self,view,choices,state):
         if self.native_forest or self.search_free:
             profile=dict(self.opponent.profile,milliseconds=max(0,1000*(state['deadline']-time.monotonic())),
                 incumbent_only=self.search_free,work_limit=max(1,self.opponent.profile['work_limit']-state['work']))
+            work_budget=getattr(self,'work_budget',None)
+            allocated=0
+            if work_budget is not None:
+                # The frozen native forest copies this cap to every worker.
+                # Issue it ONCE for the whole turn. Node-work limits are separate:
+                # nodes include setup/incumbent work, not simulation attempts.
+                if not self.search_free and not state['work_allocated'] and view['context']['phase']!='debt' and len(choices)>1:
+                    allocated=work_budget['simulations_per_turn']
+                    state['work_allocated']=allocated;self.telemetry['allocated_simulations']+=allocated
+                    profile['simulations']=allocated//self.cpu_workers
+                else:
+                    profile['incumbent_only']=True;self.telemetry['incumbent_only_decisions']+=1
+                if fixed_simulations(work_budget):
+                    cap=native_node_ceiling(self.opponent.profile,0 if self.search_free else work_budget['simulations_per_turn']//self.cpu_workers)
+                    # Native reports SUM every private owner's node work. Keep
+                    # the remaining allowance in forest units before assigning
+                    # a per-owner cap; subtracting the sum from one owner's cap
+                    # could incorrectly discard fallback candidate families.
+                    profile['work_limit']=max(1,(cap*self.cpu_workers-state['work'])//self.cpu_workers)
             d=self.opponent.worker.call('plan_forest' if self.native_forest else 'plan',observation=view,choices=choices,
                 profile=profile,fixed_work=False,sampling_seed=state['seed'],intent=state['intent'],search_workers=self.cpu_workers)
             require(d['mode']=='masked_ismcts' and d['failures']==0,'Legacy search failed; reject incomplete game')
@@ -99,6 +158,24 @@ class LabLegacyPolicy(LegacyPolicy):
             self.telemetry['completed']+=stats['completed'];self.telemetry['unique_plans']+=len(d.get('alternatives',[]))+1
             self.telemetry['cpu_batching']=stats.get('cpu_batching',{})
             if self.search_free:require(stats['completed']==0,'Fast opponent performed MCTS')
+            if work_budget is not None:
+                # The frozen loop records exactly one completion/interruption
+                # per launched trajectory. There are no retries past its cap.
+                attempted=stats['completed']+stats['interrupted']
+                require(0<=stats['completed']<=attempted<=allocated,'Legacy forest exceeded its shared turn allowance')
+                self.telemetry['attempted_simulations']+=attempted
+                if allocated:
+                    self.telemetry['work_exhausted_turns']+=int(attempted==allocated)
+                    self.telemetry['deadline_limited_turns']+=int(d.get('overrun',False) or time.monotonic()>=state['deadline'])
+                if fixed_simulations(work_budget):
+                    timed_out=d.get('overrun',False) or time.monotonic()>=state['deadline']
+                    if timed_out or attempted!=allocated:
+                        self.telemetry['watchdog_failures']+=int(timed_out)
+                        self.telemetry['incomplete_work_failures']+=int(attempted!=allocated)
+                        self.telemetry['failures']+=1
+                        raise TimeoutError('Legacy fixed-work search incomplete: '
+                            f'allocated={allocated}, attempted={attempted}, completed={stats["completed"]}, '
+                            f'interrupted={stats["interrupted"]}, nodes={d["nodes"]}, watchdog_expired={timed_out}')
             self.last_decision=dict(d,root=stats['root'],plans=stats['plans'],completed=stats['completed'],opponent_nodes=0)
             return d['selected']
         def branch(index):
@@ -152,16 +229,23 @@ class LabLegacyPolicy(LegacyPolicy):
         output=[]
         for view,choices,rng in inputs:
             c=view['context'];key=turn_key(c);state=self.contexts.setdefault(rng,dict(turn=None,revision=-1,intent=None,queue=deque(),work=0))
-            if state['turn']!=key or c['revision']<=state['revision']:
-                state.update(turn=key,revision=-1,queue=deque(),work=0,overrun=False,deadline=time.monotonic()+self.budget['seconds'],began=time.monotonic(),seed=rng.randrange(1,2**32));self.telemetry['turns']+=1
+            work_budget=getattr(self,'work_budget',None)
+            seconds=work_budget['watchdog_seconds'] if fixed_simulations(work_budget) else self.budget['seconds']
+            if state['turn']!=key or (c['revision']<=state['revision'] and work_budget is None):
+                state.update(turn=key,revision=-1,queue=deque(),work=0,work_allocated=0,overrun=False,deadline=time.monotonic()+seconds,began=time.monotonic(),seed=rng.randrange(1,2**32));self.telemetry['turns']+=1
             elif c['revision']!=state['revision']+1:state['queue'].clear()
             ids=[p['id'] for p in choices]
             if state['queue'] and state['queue'][0] not in ids:state['queue'].clear()
-            if not state['queue']:
-                plan=self.decision(view,choices,state);state['queue'].extend(x for a in plan['actions'] for x in a);state['intent']=plan.get('intent')
-            selected=state['queue'].popleft();require(selected in ids,'Illegal legacy continuation')
+            if work_budget is not None and len(choices)==1:
+                if state['queue']:state['queue'].popleft()
+                self.telemetry['forced_choices']+=1;selected=ids[0]
+            else:
+                if not state['queue']:
+                    plan=self.decision(view,choices,state);state['queue'].extend(x for a in plan['actions'] for x in a);state['intent']=plan.get('intent')
+                selected=state['queue'].popleft()
+            require(selected in ids,'Illegal legacy continuation')
             elapsed=time.monotonic()-state['began'];self.telemetry['max_turn_seconds']=max(self.telemetry['max_turn_seconds'],elapsed)
-            if elapsed>self.budget['seconds'] and not state['overrun']:self.telemetry['over_budget_turns']+=1;state['overrun']=True
+            if elapsed>seconds and not state['overrun']:self.telemetry['over_budget_turns']+=1;state['overrun']=True
             state['revision']=c['revision'];output.append((ids.index(selected),1.,None))
         return output
 

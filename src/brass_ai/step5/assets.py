@@ -165,11 +165,13 @@ def preflight(root, *, device='cpu', mono=None, record_parity=False):
         require(os.name == 'nt' and not path.exists(), 'Record the initial parity evidence once on the qualified Windows runtime')
         write_json(path, actual)
     require(read(path) == actual, 'Cross-platform full-game parity failed; do not start lab self-play')
+    from brass_ai.recovery.host_runtime import preflight_workers
+    workers=preflight_workers(root,mono=mono)
     result = dict(format='step5-preflight/1.0.0', passed=True, platform=platform.system(),
                   distribution_sha256=sha(root / 'training/runtime/distribution.json'),
                   parity_sha256=sha(path), device=device, torch=torch.__version__,
                   gpu=torch.cuda.get_device_name(0) if device == 'cuda' else None,
-                  runtime=bank, games=len(actual['games']))
+                  runtime=bank, games=len(actual['games']),throughput_workers=workers)
     write_json(root / 'artifacts/step5/preflight.json', result)
     return result
 

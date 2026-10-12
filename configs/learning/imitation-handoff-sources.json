@@ -35,6 +35,26 @@
       "implementation": "826b6beb04241a73a5d1ec0d712176ff9df4370a26cf01bb05ee92f7a05b4f16",
       "learning_compatibility": "c349e816f2e301ea2a3b438902059cffe868f48e131f7c120691d37cd1c409d2",
       "reason": "October 11 self-play correctness review leaves completed fresh imitation model/data/loss/checkpoint contracts unchanged. Preserve its explicit IL origin on same-run PPO continuation; no optimizer/population import from IL."
+    },
+    {
+      "implementation": "f9f94171ead6383c012d402aadf8781f51074a1f4cb5e6575cfb1487deb4e5f0",
+      "learning_compatibility": "c349e816f2e301ea2a3b438902059cffe868f48e131f7c120691d37cd1c409d2",
+      "reason": "Work-budget-only NN distillation revision leaves completed fresh IL architecture, supervised loss, data and checkpoint formats unchanged. Preserve explicit original IL lineage; PPO resumes its own optimizer."
+    },
+    {
+      "implementation": "c7bffaf7bbfd2d7495da1af9bd9c8a63cba55c9be2a699b29827065bf1bf4f38",
+      "learning_compatibility": "c349e816f2e301ea2a3b438902059cffe868f48e131f7c120691d37cd1c409d2",
+      "reason": "Fixed-work pipeline and optional GPU inference replicas preserve IL model tensors, labels, loss and data/checkpoint contracts. Encoding parity checked; only derived feature caches invalidate. Completed IL weights remain accepted, never PPO population/replay import."
+    },
+    {
+      "implementation": "f739475371ce3d0a7dfe1c505780513a130474de3c17b8bb4501da0b67b017b3",
+      "learning_compatibility": "c349e816f2e301ea2a3b438902059cffe868f48e131f7c120691d37cd1c409d2",
+      "reason": "Training throughput changes preserve completed fresh IL weights, data, supervised loss and checkpoint formats. Derived caches rebuild from authoritative replay; original IL lineage remains required."
+    },
+    {
+      "implementation": "b883eac48cd8e01b1e197ec842ab33461da19aac82082cbe9a8d5466935c080d",
+      "learning_compatibility": "c349e816f2e301ea2a3b438902059cffe868f48e131f7c120691d37cd1c409d2",
+      "reason": "Post-throughput failure cleanup/runtime/GPU placement fixes leave completed fresh IL data, loss, model weights and checkpoints compatible. Original lineage required; no PPO optimizer/population imported from IL."
     }
   ]
 }

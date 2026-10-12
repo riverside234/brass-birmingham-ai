@@ -27,7 +27,7 @@ from .inference import RemoteEvaluator
 from .telemetry import Timings, instrument_host
 from .inputs import BOUNDARY
 from .encoding import PreparedEncoder
-from .replay import CheckedGame,write_shard,read_shards,cache_receipt,write_cache
+from .replay import CheckedGame,SerializedGame,write_shard,read_shards,cache_receipt,write_cache
 
 
 def neural_spec(identity,exploration=.05,focus='neutral'):
@@ -35,10 +35,11 @@ def neural_spec(identity,exploration=.05,focus='neutral'):
     return dict(kind='neural',model_id=identity,exploration=exploration,focus=focus,policy_id=policy_id)
 
 
-def make_policy(spec,root,endpoint,config,mono):
+def make_policy(spec,root,endpoint,config,mono,*,_replica=False):
     if spec['kind']=='lab-legacy':
         from .legacy_search import LabLegacyPolicy
-        policy=LabLegacyPolicy(root,spec['parent'],spec['budget'],mono=mono,purpose=spec.get('purpose','training'),search_free=spec.get('search_free',False))
+        policy=LabLegacyPolicy(root,spec['parent'],spec['budget'],mono=mono,purpose=spec.get('purpose','training'),
+            search_free=spec.get('search_free',False),work_budget=spec.get('work_budget'))
         require(policy.policy_id==spec['policy_id'],'Lab teacher identity changed')
         return policy
     if spec['kind']=='legacy':
@@ -56,21 +57,31 @@ def make_policy(spec,root,endpoint,config,mono):
     from .config import teacher_search_config
     search_config=teacher_search_config(spec['search']) if spec.get('teacher_schedule') else SearchConfig(**spec['search'])
     common=dict(config=replace(search_config,cpu_role=spec.get('cpu_role','reference')),mono=mono,focus=spec.get('focus','neutral'),
-        opponents=opponents,evaluator=evaluator)
+        opponents=opponents,evaluator=evaluator,fast_host=True)
     require(spec['kind']=='masked_ismcts','Only Masked ISMCTS is an active search policy')
     policy=MaskedSearchPolicy(None,root,**common)
     if len(endpoints)>1:
         from .parallel import parallelize
-        replica_spec={k:v for k,v in spec.items() if k!='teacher_schedule'}
+        replica_spec={k:v for k,v in spec.items() if k not in ('teacher_schedule','teacher_work_budget','nn_work_budget')}
         # Carry resolved training defaults into each private replica; only the
         # coordinator schedules real turns. Generic evaluation remains unchanged.
         if spec.get('teacher_schedule'):replica_spec['search']=search_config.to_dict()
         policy=parallelize(policy,len(endpoints)-1,spec.get('cpu_role','lab'),
-            lambda i:make_policy(replica_spec,root,endpoints[i+1],config,mono))
+            lambda i:make_policy(replica_spec,root,endpoints[i+1],config,mono,_replica=True))
     if spec.get('teacher_schedule'):
+        require(not spec.get('nn_work_budget'),'Teacher phases and generic NN work cannot share a policy')
         from .teacher_schedule import CONTRACT,training_teacher
+        from .config import TEACHER_WORK_BUDGET,current_work_budget
         require(spec['teacher_schedule']==CONTRACT,'Unknown training teacher schedule')
-        policy=training_teacher(policy)
+        policy=training_teacher(policy,work_budget=current_work_budget(spec.get('teacher_work_budget'),TEACHER_WORK_BUDGET))
+    elif not _replica:
+        from .teacher_schedule import work_search
+        from .config import NN_WORK_BUDGET
+        # This factory is the lab actor boundary (not installed-game or
+        # personality deployment). Explicit experiment/evaluation specs bind
+        # their quota; preflight/profiling callers receive the same fixed work.
+        # Recursive private trees must not acquire independent turn budgets.
+        policy=work_search(policy,spec.get('nn_work_budget') or NN_WORK_BUDGET)
     instrument_host(policy.game.host)
     for game in policy.simulation_games:instrument_host(game.host)
     return policy
@@ -79,6 +90,7 @@ def make_policy(spec,root,endpoint,config,mono):
 def run_game(host,job,policies,timings,max_decisions,admission=None):
     pins=read_json(CONFIG_DIR/'host-1.0.0.json')
     with timings.phase('host.reset'): context=host.reset(job['seed'])
+    if hasattr(host,'enable_fastpath') and not host.fast_checked:host.enable_fastpath()
     assigned=[policies[(seat-job.get('rotation',0))%4] for seat in range(4)]
     group=digest(dict(rules=pins['rules'],setup_seed=job['seed']))
     game=dict(game_id=uuid.uuid4().hex,setup_group=group,players=4,split=split_for(group),
@@ -89,6 +101,7 @@ def run_game(host,job,policies,timings,max_decisions,admission=None):
             require(job['provenance'].get('purpose')=='training' and job['provenance'].get('kind')=='masked-ismcts-teacher',
                     'Reserved search schedule is only for training teacher games')
             p.begin_teacher_game(rngs[seat],seat,job['seed'],job['sampling_seed'])
+        if hasattr(p,'begin_work_game'):p.begin_work_game(rngs[seat],seat)
         if isinstance(p,NeuralPolicy) and p.focus=='mixed':
             p.contexts[rngs[seat]]=context_for(job.get('focuses',{}).get(str(seat),'neutral'))
     encoded=[];encoder=PreparedEncoder()
@@ -99,6 +112,8 @@ def run_game(host,job,policies,timings,max_decisions,admission=None):
         result=_run_turns(host,job,assigned,timings,max_decisions,context,game,rngs,encoded,encoder,lease)
         teachers=[p.teacher_report(rngs[seat]) for seat,p in enumerate(assigned) if hasattr(p,'teacher_report')]
         if teachers:result.teacher_phases=teachers
+        work=[p.work_report(rngs[seat]) for seat,p in enumerate(assigned) if hasattr(p,'work_report')]
+        if work:result.search_work=work
         return result
 
 
@@ -107,16 +122,30 @@ def _run_turns(host,job,assigned,timings,max_decisions,context,game,rngs,encoded
     from brass_ai.learning.reward import CostLedger
     ledger=CostLedger(rewards[0]) if rewards else None
     require(not rewards or all(r==rewards[0] for r in rewards),'Mixed search reward contracts in one table')
+    from collections import deque
+    buffered=deque();decision=None
     for step in range(max_decisions):
         if context['terminal']: break
         seat=context['actor'];p=assigned[seat]
         from brass_ai.search.common import turn_key
         workers=p.config.workers if isinstance(p,MaskedSearchPolicy) else getattr(p,'cpu_workers',1)
         if hasattr(p,'teacher_workers'):workers=p.teacher_workers(context,rngs[seat])
+        if hasattr(p,'work_workers'):workers=p.work_workers(context,rngs[seat])
         lease.update(turn_key(context)+(seat,),workers)
         if hasattr(p,'admit_teacher_turn'):p.admit_teacher_turn(context,rngs[seat])
-        with timings.phase('host.observe'): view=host.observe(seat)
-        with timings.phase('host.choices'): choices=host.choices()
+        if hasattr(p,'admit_work_turn'):p.admit_work_turn(context,rngs[seat])
+        after_forced=None
+        if buffered:
+            entry=buffered.popleft();current=entry['before'];after_forced=entry['after']
+            require(current['context']==context,'Forced trace context changed')
+        elif getattr(host,'fast',False):
+            with timings.phase('host.decision'):current=decision or host.decision()
+            require(current['context']==context,'Fused decision context changed')
+        else:current=None
+        if current is not None:view,choices=current['view'],current['choices']
+        else:
+            with timings.phase('host.observe'): view=host.observe(seat)
+            with timings.phase('host.choices'): choices=host.choices()
         with timings.phase('inputs.validate'): BOUNDARY.check(view,choices)
         require(view['seat']==seat and view['context']['revision']==context['revision'],'Stale actor observation')
         if ledger is not None:
@@ -138,10 +167,22 @@ def _run_turns(host,job,assigned,timings,max_decisions,context,game,rngs,encoded
         e=getattr(getattr(p,'evaluator',None),'encoder',encoder)
         with timings.phase('inputs.encode'): encoded.append(e.encode(view,choices,style,intent,validated=True))
         if ledger is not None:ledger.chosen(view,choices[chosen])
-        with timings.phase('host.apply'): context=host.apply(context,choices[chosen])
+        with timings.phase('host.apply'):
+            if after_forced is not None:
+                require(type(p) is NeuralPolicy and len(choices)==1 and chosen==0,'Unsafe forced trace')
+                context=after_forced
+            elif getattr(host,'fast',False):
+                limit=min(16,max_decisions-step-1) if type(p) is NeuralPolicy else 0
+                reply=host.step_decision(context,choices[chosen],limit)
+                decision=reply['decision'];buffered.extend(reply['forced'])
+                context=buffered[0]['before']['context'] if buffered else decision['context']
+            else:context=host.apply(context,choices[chosen])
         if hasattr(p,'finish_teacher_turn') and (context['terminal'] or context['actor']!=seat or
                 turn_key(context)!=turn_key(view['context']) or context['phase']=='debt'):
             p.finish_teacher_turn(rngs[seat])
+        if hasattr(p,'finish_work_turn') and (context['terminal'] or context['actor']!=seat or
+                turn_key(context)!=turn_key(view['context']) or context['phase']=='debt'):
+            p.finish_work_turn(rngs[seat])
     require(context['terminal'],'Decision cap reached; incomplete game excluded')
     with timings.phase('host.result'): game['result']=host.call('result')
     terminal_targets(game['result'])
@@ -158,7 +199,9 @@ def _actor(root,host_path,jobs,results,lease,config,mono,lanes,search_channels,a
             try:
                 with ExitStack() as stack:
                     with timings.phase('host.startup'):
-                        host=stack.enter_context(RulesHost(root/host_path,mono=mono))
+                        from .host_runtime import training_host
+                        selected=training_host(root) if Path(host_path).as_posix()=='artifacts/r1-host/guarded' else root/host_path
+                        host=stack.enter_context(RulesHost(selected,mono=mono))
                     instrument_host(host,timings)
                     while not stop.is_set():
                         packet=jobs.get()
@@ -198,9 +241,9 @@ def _actor(root,host_path,jobs,results,lease,config,mono,lanes,search_channels,a
                         def publish(completed=completed,packet=packet):
                             try:
                                 began=time.monotonic()
-                                parts=[];part=[];size=0
+                                parts=[];part=[];size=0;serialized={}
                                 for item in completed:
-                                    weight=len(json.dumps(item[0],separators=(',',':')))
+                                    value=SerializedGame(item[0]);serialized[item[0]['game_id']]=value;weight=value.size
                                     if part and size+weight>config.get('shard_bytes',268435456): parts.append(part);part=[];size=0
                                     part.append(item);size+=weight
                                 if part: parts.append(part)
@@ -209,14 +252,16 @@ def _actor(root,host_path,jobs,results,lease,config,mono,lanes,search_channels,a
                                     path=Path(packet['prefix']+f'-part-{number:04d}.jsonl.gz')
                                     provenance=dict(producer='recovery/2.1.0',purpose=part[0][1]['provenance']['purpose'],
                                         collection=packet['identity'],jobs=[dict(index=j['index'],seed=j['seed'],provenance=j['provenance'],
-                                            **({'teacher_phases':g.teacher_phases} if hasattr(g,'teacher_phases') else {})) for g,j,_,_ in part])
-                                    write_shard(path,[g for g,_,_,_ in part],provenance,cache=config.get('feature_cache',False))
+                                            **({'teacher_phases':g.teacher_phases} if hasattr(g,'teacher_phases') else {}),
+                                            **({'search_work':g.search_work} if hasattr(g,'search_work') else {})) for g,j,_,_ in part])
+                                    write_shard(path,[serialized[g['game_id']] for g,_,_,_ in part],provenance,cache=config.get('feature_cache',False))
                                     receipt=cache_receipt(path);replay_hash=receipt['replay_sha256'] if receipt else sha(path)
                                     for g,j,metrics,telemetry in part:
                                         records.append(dict(job=j['index'],game_id=g['game_id'],path=str(path),sha256=replay_hash,cached=False,
                                             features=receipt,metrics=metrics,search=telemetry,
                                             actor_python_cpu_seconds=g.actor_python_cpu_seconds,
-                                            **({'teacher_phases':g.teacher_phases} if hasattr(g,'teacher_phases') else {})))
+                                            **({'teacher_phases':g.teacher_phases} if hasattr(g,'teacher_phases') else {}),
+                                            **({'search_work':g.search_work} if hasattr(g,'search_work') else {})))
                                 elapsed=time.monotonic()-began
                                 for record in records:
                                     record.update(replay_write_seconds=elapsed/len(completed),replay_write_scope='amortized packet')
@@ -230,6 +275,7 @@ def _actor(root,host_path,jobs,results,lease,config,mono,lanes,search_channels,a
             finally:
                 for p in cache.values():
                     if hasattr(p,'close'): p.close()
+                for e in endpoint:e.close()
         with ThreadPoolExecutor(max_workers=lanes) as actors:
             futures=[actors.submit(lane) for _ in range(lanes)]
             for future in futures: future.result()
@@ -247,6 +293,9 @@ class ActorPool:
     def start(self,target=None):
         target=min(self.width,target or self.width)
         if len(self.processes)>=target: return
+        from .host_runtime import training_host
+        training_host(self.root)
+        if self.heavy:training_host(self.root,'search')
         search_channels=(1+self.config.get('search_workers_per_turn',1)) if self.heavy and self.config.get('search_workers_per_turn',1)>1 else 1
         lease=self.service.channels((target-len(self.processes))*self.lanes*search_channels)
         for _ in range(target-len(self.processes)):
@@ -254,7 +303,18 @@ class ActorPool:
                 lease,self.config,self.mono,self.lanes,search_channels,self.service.cpu))
             p.start();self.processes.append(p)
 
-    def collect(self,jobs):
+    def collect(self,jobs,*,on_records=None):
+        try:
+            return self._collect(jobs,on_records=on_records)
+        except BaseException:
+            # Readers and other actor pools share this admission queue. A
+            # failed actor may own slots or a queued ticket that will never be
+            # released once its process is terminated; wake every waiter before
+            # any enclosing executor starts waiting for its workers to exit.
+            self.service.cpu.abort()
+            raise
+
+    def _collect(self,jobs,*,on_records=None):
         require(jobs and len({j['index'] for j in jobs})==len(jobs),'Missing/duplicate actor jobs')
         records=[];pending=[]
         buckets=defaultdict(list)
@@ -276,13 +336,17 @@ class ActorPool:
                     # A crash may leave an uncommitted derived cache. Recreate it
                     # from authoritative validated records before issuing a receipt.
                     if self.config.get('feature_cache'): write_cache(path,games)
+                    loaded=[]
                     for item,game in zip(proof['jobs'],games):
                         index=item['index'];require(index in expected and index not in seen,'Duplicate/foreign cached job')
                         require(item['provenance']==expected[index]['provenance'],'Cached actor game differs')
                         require(game['setup_group']==digest(dict(rules='steam-brass-patch-1.1.0',setup_seed=expected[index]['seed'])),'Cached setup differs')
-                        seen.add(index);records.append(dict(job=index,game_id=game['game_id'],path=str(path),sha256=sha(path),
+                        seen.add(index);loaded.append(dict(job=index,game_id=game['game_id'],path=str(path),sha256=sha(path),
                             cached=True,features=cache_receipt(path),
-                            **({'teacher_phases':item['teacher_phases']} if 'teacher_phases' in item else {})))
+                            **({'teacher_phases':item['teacher_phases']} if 'teacher_phases' in item else {}),
+                            **({'search_work':item['search_work']} if 'search_work' in item else {})))
+                    records.extend(loaded)
+                    if on_records is not None:on_records(loaded)
                 missing=[j for j in group if j['index'] not in seen]
                 if missing: pending.append(dict(jobs=missing,prefix=prefix,identity=identity,part_start=len(existing)))
         if pending:
@@ -292,6 +356,7 @@ class ActorPool:
             while outstanding:
                 try: record=self.results.get(timeout=1)
                 except queue.Empty:
+                    self.service.cpu.check()
                     require(all(p.is_alive() for p in self.processes),'Actor process exited before completing its games')
                     require(self.service.error is None,'Inference service failed')
                     continue
@@ -299,11 +364,13 @@ class ActorPool:
                 for item in record['records']:
                     require(item['job'] in outstanding,'Duplicate/misrouted actor result')
                     outstanding.remove(item['job']);records.append(item)
+                if on_records is not None:on_records(record['records'])
                 print(json.dumps(dict(phase='collection',complete=len(records),of=len(jobs),heavy=self.heavy)),flush=True)
         return sorted(records,key=lambda r:r['job'])
 
     def close(self,failed=False):
         if failed:
+            self.service.cpu.abort()
             for p in self.processes:
                 if p.is_alive(): p.terminate()
         else:

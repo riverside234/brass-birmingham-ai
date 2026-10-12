@@ -28,7 +28,7 @@ from .telemetry import environment
 from .progress import Progress
 
 
-def generate(root,output,games,config,*,seed=17100000,mono=None,partition=None,budget=None):
+def generate(root,output,games,config,*,seed=17100000,mono=None,partition=None,budget=None,work_budget=None):
     """A deterministic 80/10/10 setup partition, with balanced admitted profiles."""
     root=Path(root);out=project_path(root,output)
     require(type(games) is int and games>0,'Positive demonstration game count required')
@@ -39,7 +39,10 @@ def generate(root,output,games,config,*,seed=17100000,mono=None,partition=None,b
         admission(root,p,'training')
         require('pottery-flex' not in p,'Held-out teacher selected')
     from .legacy_search import legacy_spec
-    teacher_specs={p:legacy_spec(root,p,budget) for p in profiles}
+    from .config import LEGACY_BUDGET,LEGACY_OPPONENT_WORK_BUDGET,current_work_budget
+    budget=budget or LEGACY_BUDGET
+    work_budget=current_work_budget(work_budget,LEGACY_OPPONENT_WORK_BUDGET)
+    teacher_specs={p:legacy_spec(root,p,budget,work_budget=work_budget) for p in profiles}
     spec=dict(format='v3-demonstration-collection/1.0.0',games=games,seed=seed,partition=partition,
         teachers=teacher_specs,execution=config,budget=budget,implementation=implementation_id(),compatibility=compatibility())
     if (out/'spec.json').exists(): require(read(out/'spec.json')==spec,'Demonstration spec changed')
@@ -95,8 +98,10 @@ def _audit_receipts(paths):
     return receipts
 
 
-def audit(root,paths,output,*,mono=None,workers=1,budget=None):
+def audit(root,paths,output,*,mono=None,workers=1,budget=None,work_budget=None):
     root=Path(root);out=project_path(root,output)
+    from .config import LEGACY_BUDGET
+    budget=budget or LEGACY_BUDGET
     require(not out.exists(),'Refusing to overwrite a demonstration manifest')
     allowed=set(read(root/'training/opponents/pool.json')['training'])
     for identity in allowed: admission(root,identity,'training')
@@ -106,6 +111,12 @@ def audit(root,paths,output,*,mono=None,workers=1,budget=None):
         mode=read(root/'training/opponents/pool.json').get('backend')
         allowed.update(teachers(root,budget));calibration=dict(format='direct-v3-s1-budget/1.0.0' if mode=='S1' else 'direct-masked-budget/1.0.0',budget=budget,
             parents=sorted(read(root/'training/opponents/pool.json')['training']))
+        if mode=='masked_ismcts' and budget['role'] in ('lab','reference'):
+            from .config import LEGACY_OPPONENT_WORK_BUDGET,current_work_budget
+            from .legacy_search import legacy_spec
+            work_budget=current_work_budget(work_budget,LEGACY_OPPONENT_WORK_BUDGET)
+            calibration['work_budgets']=[work_budget]
+            allowed.update(legacy_spec(root,p,budget,work_budget=work_budget)['policy_id'] for p in calibration['parents'])
     require(type(workers) is int and 1<=workers<=32,'Invalid audit CPU allowance')
     paths=sorted(set(str(project_path(root,p)) for p in paths))
     require(paths,'No demonstration replay paths supplied')
@@ -256,6 +267,11 @@ def load_dataset(root,manifest_path,partition,*,workers=1,progress=False,compact
                 admitted.add('v3-s1-forest/'+digest(dict(parent=parent,budget=c['budget'],contract=CONTRACT)))
         elif c.get('format')=='direct-masked-budget/1.0.0':
             admitted.update(teachers(root,c['budget']))
+            from .legacy_search import legacy_spec
+            from .config import legacy_opponent_work_budget_config
+            for work in c.get('work_budgets',[]):
+                legacy_opponent_work_budget_config(work)
+                admitted.update(legacy_spec(root,p,c['budget'],work_budget=work)['policy_id'] for p in c['parents'])
             # Archived, audited heuristic choices remain reusable as BC only;
             # their former forest identities never become active opponents.
             for parent in set(historical)|parents:

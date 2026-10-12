@@ -17,7 +17,10 @@ def implementation_id():
     base = Path(__file__).parent.parent
     paths = [p for group in ('step5','recovery','search','learning') for p in (base/group).glob('*.py')]
     paths += [base / 'learning/runner.py', base / 'learning/batching.py']
-    paths += [base/'searchlab/spiel.py',base/'beliefs.py',base/'runtime_contracts.py']
+    paths += [base/'searchlab/spiel.py',base/'beliefs.py',base/'runtime_contracts.py',base/'host.py']
+    paths += sorted((SOURCE_ROOT/'src/BrassTrainingHost').glob('*.cs'))
+    paths += [SOURCE_ROOT/'scripts/build-training-host.py',SOURCE_ROOT/'scripts/build-search-host.py']
+    paths += sorted((SOURCE_ROOT/'training/runtime/throughput').glob('*/runtime.json'))
     paths += sorted((SOURCE_ROOT/'configs/contracts/masked-ismcts').glob('*.json'))
     paths += [SOURCE_ROOT/'configs/references/masked-ismcts.lock.json']
     return digest({p.relative_to(SOURCE_ROOT).as_posix(): p.read_text(encoding='utf-8').replace('\r\n', '\n')

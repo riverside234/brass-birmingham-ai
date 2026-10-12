@@ -18,16 +18,33 @@ class CPUAdmission:
         self.peak = mp.Value('i', 0)
         self.next_ticket = mp.Value('q', 0)
         self.serving = mp.Value('q', 0)
+        self.aborted = mp.Value('b', False)
+
+    def check(self):
+        require(not self.aborted.value, 'CPU admission aborted')
+
+    def abort(self):
+        """Wake queued actors/readers before terminating any lease owner.
+
+        A failed process may never release its slots or ticket. This gate is
+        unusable after abort; a resumed run creates a new gate and fresh actors.
+        """
+        with self.condition:
+            self.aborted.value = True
+            self.condition.notify_all()
 
     @contextmanager
     def acquire(self, workers, timings):
         require(1 <= workers <= self.capacity, 'CPU group exceeds admission capacity')
         began = time.monotonic()
         with self.condition:
+            self.check()
             ticket = self.next_ticket.value
             self.next_ticket.value += 1
             while ticket != self.serving.value or self.used.value+workers > self.capacity:
+                self.check()
                 self.condition.wait(timeout=1)
+            self.check()
             self.used.value += workers
             self.peak.value = max(self.peak.value, self.used.value)
             self.serving.value += 1
@@ -44,7 +61,8 @@ class CPUAdmission:
     def report(self):
         with self.condition:
             return dict(capacity=self.capacity, active=self.used.value,
-                        peak=self.peak.value, queued=self.next_ticket.value-self.serving.value)
+                        peak=self.peak.value, queued=self.next_ticket.value-self.serving.value,
+                        aborted=bool(self.aborted.value))
 
 
 class TurnLease:

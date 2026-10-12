@@ -46,6 +46,14 @@ def collect_due(root,run,directory,config,state,signature,model,optimizer,servic
     require(recalibrate is None or callable(recalibrate),'Invalid ordinary-data calibration callback')
     next_search=state['next_search_games'];search_seconds=state.get('search_seconds',0.)
     estimate=estimate_collection(config,ordinary_game_seconds);batches=[];deferred_reason=None
+    # This is an admission cost estimate, never a thinking-time limit. After
+    # the first count-budget collection, use its measured total cost plus 25%
+    # headroom. Bind it to the work recipe so changed quotas cannot reuse it.
+    recipe=digest(dict(work=config.get('teacher_work_budget'),search=config['search'],
+        games=config['search_games'],execution=config['execution']))
+    previous_cost=state.get('teacher_work_cost')
+    if previous_cost and previous_cost['recipe']==recipe:
+        estimate=max(estimate,1.25*previous_cost['seconds'])
     allowance_before=search_allowance(ordinary_seconds,search_seconds,config['search_wall_fraction'])
     due=due_collections(done,next_search,config)
     if getattr(model.config,'utility',None) is not None:
@@ -81,12 +89,18 @@ def collect_due(root,run,directory,config,state,signature,model,optimizer,servic
             index=batch_index*config['search_games']+i
             spec=dict(kind='masked_ismcts',model_id=identity,opponents=rollout_ids,search=config['search'],focus='neutral',
                 cpu_role=config.get('legacy_budget',{}).get('role','reference'),teacher_schedule=CONTRACT)
+            if config.get('teacher_work_budget') is not None:
+                spec['teacher_work_budget']=config['teacher_work_budget']
             provenance=dict(producer='recovery/2.0.0',purpose='training',kind='masked-ismcts-teacher',
                 seed=seed,sampling_seed=config['seed']*13+done+index,spec=digest(signature))
             jobs.append(dict(index=index,seed=seed,rotation=0,sampling_seed=provenance['sampling_seed'],
                 policies=[spec]*4,path=str(directory/f'search-{index:06d}.jsonl.gz'),provenance=provenance))
+        work=config.get('teacher_work_budget')
+        budget_label=(f'whole-turn simulation attempts {work["simulations_per_phase"]}, '
+                      f'{work.get("watchdog_seconds",config["search"]["seconds"]):g}s stall watchdog' if work else
+                      f'{config["search"]["seconds"]:g}s per turn')
         print(f'Teacher collection {batch_index+1}/{due}: due at {next_search} ordinary games, '
-              f'{len(jobs)} games, {config["search"]["seconds"]:g}s per turn',flush=True)
+              f'{len(jobs)} games, {budget_label}',flush=True)
         records=heavy.collect(jobs)
         games=read_shards([r['path'] for r in records],partition='train',receipts={r['path']:r.get('features') for r in records})
         teaching=collection_report(records,games)
@@ -100,6 +114,9 @@ def collect_due(root,run,directory,config,state,signature,model,optimizer,servic
             batch['post_distill_calibration']=recalibrate()
             batch['post_distill_calibration_seconds']=time.monotonic()-calibration_started
         elapsed=time.monotonic()-began;search_seconds+=elapsed
+        if not any(r.get('cached') for r in records):
+            state['teacher_work_cost']=dict(recipe=recipe,seconds=elapsed)
+            estimate=max(estimate,1.25*elapsed)
         batch.update(collection=records,teaching=teaching,due_games=next_search,elapsed_seconds=elapsed,
             teacher_model_id=identity,rollout_generations=[e['generation'] for e in rollout_entries])
         batches.append(batch)

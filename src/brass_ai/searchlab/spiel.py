@@ -35,17 +35,21 @@ def action_id(semantic):
 
 
 class BrassSpielGame(pyspiel.Game):
-    def __init__(self, params=None, *, root=None, mono=None):
+    def __init__(self, params=None, *, root=None, mono=None, fast=False):
         params = params or {}
         super().__init__(TYPE, INFO, params)
         self.root = Path(root or params.get('root', LAB_ROOT)).resolve()
         self.mono = mono or params.get('mono') or None
         directory = self.root / 'artifacts/r4-host'
         require(read_json(directory/'runtime.json')['extension'] == 'brass-search-chance/1.0.0', 'Import the isolated search runtime first')
+        if fast:
+            from brass_ai.recovery.host_runtime import training_host
+            directory=training_host(self.root,'search')
         self.host = RulesHost(directory, mono=self.mono)
         self.lock, self.owner = threading.RLock(), None
         self.composition = read_json(self.root/'configs/contracts/v0.2.0/card-composition.json')
         self.host.reset(1)
+        if fast:self.host.enable_fastpath()
         template = self.host.call('checkpoint')['setup']
         # Only public board slots and the full merchant multiset, not a sampled deal.
         self.merchant_slots = [m['id'] for m in template['merchants']]
@@ -154,28 +158,33 @@ class BrassSpielState(pyspiel.State):
                         self.refresh(self.game.host)
         else:
             with self.game.access(self) as host:
-                if self.pending:
+                if host.fast:
+                    arguments=dict(card=name[len('chance:card:'):]) if self.pending else dict(choice=name)
+                    snapshot=host.call('search_step',game_id=self.context['game_id'],revision=self.context['revision'],**arguments)
+                    self.context=snapshot['context'];self.refresh(host,snapshot)
+                elif self.pending:
                     self.context = host.call('chance_apply', game_id=self.context['game_id'],
                         revision=self.context['revision'], card=name[len('chance:card:'):])
                 else:
                     self.context = host.apply(self.context, next(c for c in self.legal if c['id']==name))
-                self.refresh(host)
+                if not host.fast:self.refresh(host)
         self.actions.append(int(action))
 
-    def refresh(self, host):
-        self.pending = host.call('chance')
-        self.checkpoint = host.call('checkpoint')
+    def refresh(self, host, snapshot=None):
+        if host.fast and snapshot is None:snapshot=host.call('search_snapshot')
+        self.pending = snapshot.get('chance') if snapshot is not None else host.call('chance')
+        self.checkpoint = snapshot['checkpoint'] if snapshot is not None else host.call('checkpoint')
         if self.pending:
             self.legal = []  # Do not expose temporary draws or the temporary Rail deal.
             return
-        self.views = [host.observe(s) for s in range(4)]
+        self.views = snapshot['views'] if snapshot is not None else [host.observe(s) for s in range(4)]
         for s,view in enumerate(self.views):
             hand = view['own_hand']
             if not self.recall[s] or self.recall[s][-1]['hand'] != hand:
                 self.recall[s].append(dict(revision=view['context']['revision'], hand=list(hand)))
-        self.legal = [] if self.is_terminal() else host.choices()
+        self.legal = snapshot['choices'] if snapshot is not None else ([] if self.is_terminal() else host.choices())
         if self.is_terminal():
-            self.final_result=host.call('result')
+            self.final_result=snapshot['result'] if snapshot is not None else host.call('result')
             self.final_returns = [p['utility'] for p in self.final_result['seats']]
 
     def observation_string(self, player=None):

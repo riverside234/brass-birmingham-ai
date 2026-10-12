@@ -94,7 +94,7 @@ class NeuralPolicy:
             self.contexts[rng] = context_for(focus)
         return self.contexts[rng]
 
-    def predict(self, inputs):
+    def prediction_requests(self, inputs):
         requests = []
         for view, choices, rng in inputs:
             if self.request_deadline is not None and time.monotonic()>=self.request_deadline:
@@ -104,7 +104,10 @@ class NeuralPolicy:
             requests.append(Request(uuid.uuid4().hex, self.evaluator.model_id, view, choices,
                 min(time.monotonic()+120,self.request_deadline) if self.request_deadline is not None else time.monotonic()+120,
                 tuple(style), tuple(intent),remaining=self.utility_remaining.get(rng)))
-        responses = self.evaluator.predict(requests)
+        return requests
+
+    def prediction_outputs(self,requests,responses):
+        require(len(requests)==len(responses),'Missing policy inference response')
         outputs = []
         for request, response in zip(requests, responses):
             if self.request_deadline is not None and (request.stopped() or response.get('status') in ('expired','cancelled')):
@@ -120,9 +123,30 @@ class NeuralPolicy:
             outputs.append((probabilities, response))
         return outputs
 
+    def predict(self,inputs):
+        requests=self.prediction_requests(inputs)
+        return self.prediction_outputs(requests,self.evaluator.predict(requests))
+
     def select_batch(self, inputs):
         output = []
         for (probabilities, _), (_, _, rng) in zip(self.predict(inputs), inputs):
             selected = rng.choices(range(len(probabilities)), weights=probabilities, k=1)[0]
             output.append((selected, float(probabilities[selected]), None))
         return output
+
+
+def predict_groups(groups):
+    """Submit already-ready leaves together; search statistics are untouched.
+
+    Only the unmodified Step 5 policy opts in. Personality-specific prediction
+    overrides and local evaluators keep their established prediction path.
+    """
+    require(groups,'Missing prediction groups')
+    endpoints=[getattr(p.evaluator,'endpoint',None) for p,inputs in groups]
+    first=groups[0][0].evaluator
+    if (all(type(p) is NeuralPolicy for p,_ in groups) and endpoints[0] is not None and
+            all(e is endpoints[0] for e in endpoints) and hasattr(first,'predict_mixed')):
+        requests=[p.prediction_requests(inputs) for p,inputs in groups]
+        responses=first.predict_mixed([(p.evaluator,r) for (p,_),r in zip(groups,requests)])
+        return [p.prediction_outputs(r,out) for (p,_),r,out in zip(groups,requests,responses)]
+    return [p.predict(inputs) for p,inputs in groups]

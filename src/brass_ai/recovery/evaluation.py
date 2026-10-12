@@ -17,7 +17,9 @@ from .inference import InferenceService
 
 
 def evaluate(root,output,candidate_path,references,config,*,setups=None,seed=None,
-             partition=None,include_legacy=None,device='cpu',mono=None,search=None,focus=None,lineups=None):
+             partition=None,include_legacy=None,device='cpu',mono=None,search=None,focus=None,lineups=None,inference_devices=None):
+    from .inference import validate_inference_devices
+    inference_devices=validate_inference_devices(inference_devices,device)
     root=Path(root);directory=project_path(root,output)
     if lineups is not None: include_legacy=any(n.endswith('v3') for n in lineups)
     config=evaluation_config(config,setups=setups,seed=seed,partition=partition,
@@ -53,8 +55,9 @@ def evaluate(root,output,candidate_path,references,config,*,setups=None,seed=Non
         'mixed-neural requires two distinct frozen references')
     from .legacy_search import legacy_spec
     budget=config.get('legacy_budget')
-    teacher_specs={p:legacy_spec(root,p,budget) for p in profiles} if 'mixed-v3' in lineups else {}
-    held_specs={p:legacy_spec(root,p,budget,'evaluation') for p in held} if 'heldout-pottery-v3' in lineups else {}
+    work=config['legacy_opponent_work_budget']
+    teacher_specs={p:legacy_spec(root,p,budget,work_budget=work) for p in profiles} if 'mixed-v3' in lineups else {}
+    held_specs={p:legacy_spec(root,p,budget,'evaluation',work_budget=work) for p in held} if 'heldout-pottery-v3' in lineups else {}
     spec=dict(format='step5-evaluation/2.0.0',purpose='evaluation',entries=entries,
         config=config,seeds=seeds,lineups=lineups,implementation=implementation_id(),legacy_pool=pool,teachers=teacher_specs,held=held_specs)
     if (directory/'report.json').exists() and read(directory/'report.json').get('raw_records_pruned'):
@@ -65,14 +68,15 @@ def evaluate(root,output,candidate_path,references,config,*,setups=None,seed=Non
         require(not directory.exists() or not any(directory.iterdir()),'Use a fresh evaluation directory')
         write_json(directory/'spec.json',spec)
     results={};execution={};evidence={};began=time.monotonic()
-    with InferenceService(config['execution'],device) as service:
+    with InferenceService(config['execution'],device,inference_devices=inference_devices) as service:
         for e in entries: service.register_checkpoint(project_path(root,e['path']))
         with ActorPool(root,config['host'],service,config['execution'],mono=mono) as ordinary,ActorPool(root,config['host'],service,config['execution'],mono=mono,heavy=True) as heavy:
             for name in lineups:
                 jobs=[];lineup_began=time.monotonic()
                 for i,job in enumerate(evaluation_jobs(seeds)):
                     if config['use_search']:
-                        candidate=dict(kind='masked_ismcts',model_id=entries[0]['model_id'],focus=config['focus'],search=config['search'])
+                        candidate=dict(kind='masked_ismcts',model_id=entries[0]['model_id'],focus=config['focus'],
+                            search=config['search'],nn_work_budget=config['nn_work_budget'])
                     else: candidate=neural_spec(entries[0]['model_id'],0,config['focus'])
                     if name.endswith('neural'):
                         refs=entries[1:2] if name=='recent-neural' else entries[1:]

@@ -172,7 +172,7 @@ class DeploymentTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError,'another'):evaluation.human_review(v,p,packet,rows,review,Gates())
 
     def test_p4_sources_do_not_change_step5_or_p0_p3_contracts(self):
-        self.assertEqual(implementation_id(),'f9f94171ead6383c012d402aadf8781f51074a1f4cb5e6575cfb1487deb4e5f0')
+        self.assertEqual(implementation_id(),'f739475371ce3d0a7dfe1c505780513a130474de3c17b8bb4501da0b67b017b3')
         # P0/P1 fixes legitimately change their source contract. P4 remains a
         # separate package; it must not enter the base source-file set.
         base=SOURCE_ROOT/'src/brass_ai/personality'

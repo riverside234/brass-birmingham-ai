@@ -56,9 +56,11 @@ class PreparedEncoder(Encoder):
         return out
 
     def encode(self, view, choices, style=None, intent=None, *, validated=False):
-        if not validated:
-            BOUNDARY.check(view, choices)
-        key = digest(dict(view=view, choices=choices, style=style, intent=intent))
+        # The boundary already hashed the complete permitted inputs. Reuse that
+        # immutable content identity instead of serializing the whole growing
+        # history again merely to append twelve policy-context values.
+        source = digest(dict(view=view, choices=choices)) if validated else BOUNDARY.check(view, choices)
+        key = digest(dict(input=source, style=style, intent=intent))
         if key in self.cache:
             self.cache.move_to_end(key)
             return self.cache[key]

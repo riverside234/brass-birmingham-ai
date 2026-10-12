@@ -68,7 +68,12 @@ def instrument_host(host,timings=None):
         return host
     metrics=HostMetrics(timings);original=host.call
     def call(op,**arguments):
-        with metrics.timings.phase('host.rpc.'+op): return original(op,**arguments)
+        with metrics.timings.phase('host.rpc.'+op): result=original(op,**arguments)
+        native=getattr(host,'last_native_timing',None)
+        if native:
+            for key in ('elapsed_seconds','cpu_seconds','materialize_serialize_seconds'):
+                metrics.timings.observe('host.native.'+key,float(native[key]))
+        return result
     host.call=call;host.recovery_metrics=metrics
     host.process.stdin=_MeasuredStream(host.process.stdin,metrics,'host.ipc.stdin')
     host.process.stdout=_MeasuredStream(host.process.stdout,metrics,'host.ipc.stdout')

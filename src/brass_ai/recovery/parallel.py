@@ -9,12 +9,13 @@ from brass_ai.search.ismcts import MaskedSearchPolicy,visit_teacher,supported_co
 
 def merge_statistics(items,choices):
     merged=dict(completed=0,interrupted=0,opponent_nodes=0,max_pending=0,opponent_choices=0,
-                root={},plans={},expansion=[False]*len(choices))
+                root={},plans={},expansion=[False]*len(choices),batching=dict(attempted=0))
     allowed={c['id'] for c in choices}
     for item in items:
         if item is None:continue
         require(item['opponent_nodes']==0 and set(item['root'])<=allowed,'Unsafe root forest merge')
         for field in ('completed','interrupted','opponent_choices'):merged[field]+=item[field]
+        merged['batching']['attempted']+=item.get('batching',{}).get('attempted',0)
         merged['max_pending']=max(merged['max_pending'],item['max_pending'])
         require(len(item['expansion'])==len(choices),'Forest legal order differs')
         merged['expansion']=[a or b for a,b in zip(merged['expansion'],item['expansion'])]
@@ -31,6 +32,15 @@ def merge_statistics(items,choices):
     for group in ('root','plans'):
         for e in merged[group].values():e['returns']=e['returns'].tolist()
     return merged
+
+
+def simulation_quotas(total,workers,per_worker_limit):
+    """Partition a TURN allowance, never multiply it by private-tree count."""
+    require(type(total) is int and total>0 and type(workers) is int and workers>0,
+            'Invalid shared simulation allowance')
+    require(type(per_worker_limit) is int and per_worker_limit>0 and total<=workers*per_worker_limit,
+            'Shared simulation allowance exceeds existing worker cap')
+    return [total//workers+int(i<total%workers) for i in range(workers)]
 
 class ParallelMasked(MaskedSearchPolicy):
     def configure(self,workers,role,factory):
@@ -65,15 +75,23 @@ class ParallelMasked(MaskedSearchPolicy):
         seeds=[rng.randrange(2**63) for _ in self.replicas];context=self.context_features(view,rng)
         private_trees=(tree if tree is not None else {}).setdefault('__private_forest__',{})
         private_caches=(cache if cache is not None else {}).setdefault('__private_forest__',{})
+        total=getattr(self,'teacher_simulation_allowance',None)
+        quotas=(simulation_quotas(total,len(self.replicas),min(w.config.simulations for w in self.replicas))
+                if total is not None else None)
         def run(index):
             from collections import OrderedDict
             worker=self.replicas[index];private=random.Random(seeds[index]);worker.base.contexts[private]=context
             worker.last_statistics=None
-            worker.decide(view,choices,private,deadline,recall,private_trees.setdefault(index,{}),private_caches.setdefault(index,OrderedDict()))
-            return worker.last_statistics
+            original=worker.config if quotas is not None else None
+            try:
+                if quotas is not None:worker.config=replace(original,simulations=quotas[index])
+                worker.decide(view,choices,private,deadline,recall,private_trees.setdefault(index,{}),private_caches.setdefault(index,OrderedDict()))
+                return worker.last_statistics
+            finally:
+                if original is not None:worker.config=original
         # Await actual retirement of ALL workers, including exceptions. No worker
         # continues to use a reply channel after the actor submits its next request.
-        pending=[self.pool.submit(run,i) for i in range(len(self.replicas))]
+        pending=[self.pool.submit(run,i) for i in range(len(self.replicas)) if quotas is None or quotas[i]>0]
         results=[];failure=None
         for future in pending:
             try:results.append(future.result())
@@ -86,7 +104,8 @@ class ParallelMasked(MaskedSearchPolicy):
         continuation=supported_continuation(stats,choices[chosen]['id'],view['seat'],self.config.minimum_plan_visits)
         if continuation is not None:self.last_continuation=continuation
         else:chosen=int(np.argmax(probabilities))
-        return chosen,1.,visit_teacher(choices,stats,probabilities,model=self.base.evaluator.model_id,observer=view['seat'],config=self.config)
+        label_config=replace(self.config,simulations=total) if total is not None else self.config
+        return chosen,1.,visit_teacher(choices,stats,probabilities,model=self.base.evaluator.model_id,observer=view['seat'],config=label_config)
 
     def close(self):
         self.cancel()

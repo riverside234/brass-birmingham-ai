@@ -19,7 +19,7 @@ from threading import Event, get_ident
 import numpy as np
 
 from brass_ai.learning.contracts import digest, require
-from brass_ai.step5.policy import NeuralPolicy, inference_deadline
+from brass_ai.step5.policy import NeuralPolicy, inference_deadline, predict_groups
 from brass_ai.searchlab.spiel import BrassSpielGame, action_id
 from .common import SearchConfig, SearchIncomplete, expansion_indices, turn_key, ranked_candidates
 from brass_ai.learning.reward import CostLedger,terminal_utility
@@ -242,13 +242,15 @@ class MaskedISMCTS:
                 self.metrics['coalesced']+=len(slots)-len(unique)
                 predicted={}
                 for key,policy,v,c,rng in unique.values():groups[policy].append((key,v,c,rng))
-                for policy,group in groups.items():
-                    for start in range(0,len(group),self.config.batch_size):
-                        self.check();part=group[start:start+self.config.batch_size]
-                        began=time.monotonic();outputs=policy.predict([(v,c,rng) for _,v,c,rng in part])
-                        self.metrics['inference_seconds']+=time.monotonic()-began
-                        self.metrics['batches']+=1;self.metrics['positions']+=len(part);self.metrics['max_batch']=max(self.metrics['max_batch'],len(part))
-                        self.check();predicted.update((row[0],out) for row,out in zip(part,outputs))
+                parts=[(policy,group[start:start+self.config.batch_size]) for policy,group in groups.items()
+                       for start in range(0,len(group),self.config.batch_size)]
+                self.check();began=time.monotonic()
+                outputs=predict_groups([(policy,[(v,c,rng) for _,v,c,rng in part]) for policy,part in parts])
+                self.metrics['inference_seconds']+=time.monotonic()-began
+                self.metrics['batches']+=len(parts);self.metrics['positions']+=len(unique)
+                self.metrics['max_batch']=max(self.metrics['max_batch'],max(len(part) for _,part in parts))
+                self.check()
+                for (_,part),out in zip(parts,outputs):predicted.update((row[0],value) for row,value in zip(part,out))
                 next_slots=[]
                 for generator,request,lane in slots:
                     waiting=advance(generator,predicted[request[0]])
@@ -258,6 +260,7 @@ class MaskedISMCTS:
         except SearchIncomplete:self.interrupted+=max(1,len(slots))
         finally:
             for generator,_,_ in slots:generator.close()
+        self.metrics['attempted']=started
         self.metrics['elapsed_seconds']=time.monotonic()-search_began
         self.metrics['completed_per_second']=self.completed/max(1e-9,self.metrics['elapsed_seconds'])
         return self.statistics(choices)
@@ -294,17 +297,17 @@ def visit_teacher(choices,stats,priors,*,model,observer,config):
 
 class MaskedSearchPolicy:
     kind='external'
-    def __init__(self,model,root,device='cpu',*,config=None,mono=None,focus='neutral',opponents=None,evaluator=None):
+    def __init__(self,model,root,device='cpu',*,config=None,mono=None,focus='neutral',opponents=None,evaluator=None,fast_host=False):
         self.config=(config or SearchConfig()).validate()
         self.base=NeuralPolicy(model,device,exploration=.1,focus=focus,evaluator=evaluator)
         self.rollouts=opponents or [NeuralPolicy(model,device,exploration=.05,focus='neutral',evaluator=evaluator)]
         require(all(isinstance(p,NeuralPolicy) and p.focus=='neutral' for p in self.rollouts),'Fixed masked rollout policies required')
-        self.game=BrassSpielGame(root=root,mono=mono)
+        self.game=BrassSpielGame(root=root,mono=mono,fast=fast_host)
         # Persistent bounded lanes, not a new process per leaf. A pending path
         # advances in its own warm engine; NN batching never swaps live contexts.
         self.simulation_games=[]
         try:
-            for _ in range(self.config.pending_paths):self.simulation_games.append(BrassSpielGame(root=root,mono=mono))
+            for _ in range(self.config.pending_paths):self.simulation_games.append(BrassSpielGame(root=root,mono=mono,fast=fast_host))
         except BaseException:
             self.game.close()
             for game in self.simulation_games:game.close()

@@ -57,7 +57,10 @@
     "policy_cache": 32,
     "search_workers_per_turn": 4,
     "cpu_budget": 64,
-    "cpu_reserve": 4
+    "cpu_reserve": 4,
+    "shared_slot_bytes": 2097152,
+    "inference_routing": "demand",
+    "replica_backlog": 32
   },
   "lineups": [
     "recent-neural"
@@ -76,5 +79,17 @@
     "search_workers": 4,
     "global_workers": 60,
     "work_multiplier": 1
+  },
+  "legacy_opponent_work_budget": {
+    "contract": "legacy-opponent-turn-work/1.1.0",
+    "mode": "simulations",
+    "simulations_per_turn": 16,
+    "watchdog_seconds": 120.0
+  },
+  "nn_work_budget": {
+    "contract": "nn-turn-work/1.0.0",
+    "mode": "simulations",
+    "simulations_per_turn": 16,
+    "watchdog_seconds": 120.0
   }
 }

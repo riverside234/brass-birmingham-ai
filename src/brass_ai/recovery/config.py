@@ -1,5 +1,6 @@
 """Strict recovery schemas; optimizer batch and memory microbatch are distinct."""
 import math
+import copy
 from brass_ai.learning.contracts import require
 from brass_ai.search.common import SearchConfig
 
@@ -10,6 +11,15 @@ SEARCH_COLLECTIONS_PER_ITERATION=2
 SEARCH_WALL_FRACTION=.90
 SEARCH_SECONDS=12.0
 SEARCH_WORKERS=4
+# Completed evidence in the saved 12-second lab searches suggests these
+# provisional work caps (rounded phase upper quartiles, at least four paths per
+# worker). These are attempts across the WHOLE forest/turn, not per worker.
+TEACHER_WORK_BUDGET = dict(contract='teacher-turn-work/1.1.0',mode='simulations',watchdog_seconds=120.0,
+    simulations_per_phase=dict(canal_early=32,canal_late=16,rail_early=16,rail_late=16))
+LEGACY_OPPONENT_WORK_BUDGET = dict(contract='legacy-opponent-turn-work/1.1.0',
+    mode='simulations',simulations_per_turn=16,watchdog_seconds=120.0)
+NN_WORK_BUDGET = dict(contract='nn-turn-work/1.0.0',mode='simulations',
+    simulations_per_turn=16,watchdog_seconds=120.0)
 PPO_LEARNING_RATE=1e-5
 # A full 64-turn teacher collection can supply 8 batches of 16, at most twice
 # per sample. Missing evidence reduces or skips updates; it never fills a batch
@@ -21,6 +31,63 @@ def teacher_search_config(options):
     """Training defaults without changing standalone/evaluation search clocks."""
     return SearchConfig(**dict({'seconds':SEARCH_SECONDS,'workers':SEARCH_WORKERS,
                                'pending_paths':2,'batch_size':2},**options)).validate()
+
+
+def teacher_work_budget_config(value):
+    """Validate current and archived receipts without relabelling old evidence."""
+    if value is None:return None
+    _work_fields(value,TEACHER_WORK_BUDGET,'teacher-turn-work/1.0.0')
+    phases=value['simulations_per_phase']
+    require(type(phases) is dict and set(phases)==set(TEACHER_WORK_BUDGET['simulations_per_phase']),
+            'Missing teacher work phase')
+    require(all(type(n) is int and 1<=n<=100000 for n in phases.values()),
+            'Invalid teacher phase simulation budget')
+    return value
+
+
+def legacy_opponent_work_budget_config(value):
+    """Lab-only searched opponents, demonstrations and frozen evaluations."""
+    if value is None:return None
+    _work_fields(value,LEGACY_OPPONENT_WORK_BUDGET,'legacy-opponent-turn-work/1.0.0')
+    require(type(value['simulations_per_turn']) is int and 4<=value['simulations_per_turn']<=100000,
+            'Invalid legacy opponent simulation budget')
+    return value
+
+
+def _work_fields(value,default,archived=None):
+    require(type(value) is dict,'Invalid work budget')
+    old=value.get('contract')==archived and archived is not None
+    require(set(value)==set(default)-({'watchdog_seconds'} if old else set()),'Invalid work budget fields')
+    require(value['contract'] in ((default['contract'],archived) if archived is not None else (default['contract'],)) and value['mode']=='simulations',
+            'Unknown work budget contract/mode')
+    if not old:
+        watchdog=value['watchdog_seconds']
+        require(type(watchdog) in (int,float) and math.isfinite(watchdog) and 30<=watchdog<=600,
+                'Work watchdog must be finite and between 30 and 600 seconds')
+
+
+def nn_work_budget_config(value):
+    _work_fields(value,NN_WORK_BUDGET)
+    require(type(value['simulations_per_turn']) is int and 1<=value['simulations_per_turn']<=100000,
+            'Invalid NN turn simulation budget')
+    return value
+
+
+def current_work_budget(value,default):
+    """Explicitly upgrade active configuration, never stored traces/teacher labels."""
+    result=copy.deepcopy(default if value is None else value)
+    if default['contract'].endswith('/1.1.0') and result.get('contract')==default['contract'].replace('/1.1.0','/1.0.0'):
+        result.update(contract=default['contract'],watchdog_seconds=default['watchdog_seconds'])
+    return result
+
+
+def fixed_work_config(config):
+    """All active Step 5 search uses counts; a changed resume signature needs review."""
+    result=copy.deepcopy(config)
+    for key,default in (('teacher_work_budget',TEACHER_WORK_BUDGET),
+                        ('legacy_opponent_work_budget',LEGACY_OPPONENT_WORK_BUDGET)):
+        result[key]=current_work_budget(result.get(key),default)
+    return result
 
 
 EXECUTION = dict(processes=8, hosts_per_process=4, heavy_processes=8,
@@ -35,7 +102,7 @@ CURRICULUM = [
     dict(until=10000, selfplay=65, historical=25, legacy=10),
     dict(until=None, selfplay=70, historical=25, legacy=5)]
 
-EXECUTION_V21 = dict(EXECUTION, processes=32, hosts_per_process=1, flush_ms=1.0,
+EXECUTION_V21 = dict(EXECUTION, processes=24, hosts_per_process=2, flush_ms=1.0,
     shard_games=8, shard_bytes=268435456, feature_cache=True, policy_cache=32,search_workers_per_turn=4,
     cpu_budget=64,cpu_reserve=4)
 UPDATE_V21 = dict(UPDATE, actor_nonforced=True, critic_batch_size=2048, kl_probe_rows=2048)
@@ -81,9 +148,13 @@ def legacy_budget_config(config):
 
 
 def execution_config(config):
-    require(set(config) in (set(EXECUTION),set(EXECUTION_V21)), 'Unknown/missing execution field')
-    for key in set(config)-{'feature_cache'}:
+    optional={'shared_slot_bytes','inference_routing','replica_backlog'}
+    require(set(config)-optional in (set(EXECUTION),set(EXECUTION_V21)), 'Unknown/missing execution field')
+    for key in set(config)-{'feature_cache','shared_slot_bytes','inference_routing'}:
         positive(config[key], key, integer=key != 'flush_ms')
+    if 'shared_slot_bytes' in config:
+        require(type(config['shared_slot_bytes']) is int and (config['shared_slot_bytes']==0 or 65536<=config['shared_slot_bytes']<=16777216),'Invalid shared slot capacity')
+    if 'inference_routing' in config:require(config['inference_routing'] in ('demand','round_robin'),'Invalid inference routing')
     if 'feature_cache' in config: require(type(config['feature_cache']) is bool,'Invalid feature cache flag')
     require(config['flush_ms'] <= 50, 'Excessive inference queue delay')
     if 'cpu_budget' in config:
@@ -130,6 +201,24 @@ def validate_config(config):
         'search_ready_games','search_every_games','search_games','distill_steps','distill_weight',
         'rehearsal_manifest','rehearsal_weight','rehearsal_until','profile_steps'}
     version=config.get('format')
+    if 'legacy_opponent_work_budget' in config:
+        fields.add('legacy_opponent_work_budget')
+        legacy_work=legacy_opponent_work_budget_config(config['legacy_opponent_work_budget'])
+        if legacy_work is not None:
+            workers=config['legacy_budget']['search_workers']
+            count=legacy_work['simulations_per_turn']
+            require(type(workers) is int and 1<=workers<=4,'Invalid legacy work worker count')
+            require(count%workers==0 and count//workers>=4,
+                    'Legacy work budget must retain a four-attempt paired block per worker')
+    if 'teacher_work_budget' in config:
+        fields.add('teacher_work_budget')
+        work=teacher_work_budget_config(config['teacher_work_budget'])
+        if work is not None:
+            search=teacher_search_config(config['search'])
+            workers=config['execution'].get('search_workers_per_turn',search.workers)
+            require(all(workers*search.minimum_plan_visits<=n<=workers*search.simulations
+                        for n in work['simulations_per_phase'].values()),
+                    'Teacher work budget cannot support workers or exceeds simulation cap')
     if 'champion' in config:
         fields.add('champion')
         bounded_fields(config['champion'],CHAMPION,'champion')
@@ -191,7 +280,9 @@ def validate_config(config):
         require(type(config['overlap_pools']) is bool and 0<config['search_wall_fraction']<=SEARCH_WALL_FRACTION,'Invalid overlap/search fraction')
         require(config['execution']['max_models']>=sum(config['population'].values())+3,
                 'Model cache must cover frozen population plus learner/teacher versions')
-        require(set(config['update'])==set(UPDATE_V21) and set(config['execution'])==set(EXECUTION_V21),'2.1 requires revised update/execution')
+        require(set(config['update'])==set(UPDATE_V21) and
+                set(config['execution'])-{'shared_slot_bytes','inference_routing','replica_backlog'}==set(EXECUTION_V21),
+                '2.1 requires revised update/execution')
     require(set(config)==fields and version=='step5-training/2.2.0' and config['players']==4,
         'Use the fresh four-player Masked ISMCTS 2.2 recipe; historical runs cannot migrate in place')
     require(config['model_size'] in ('small','medium'), 'Residual model size must fit the 2M cap')

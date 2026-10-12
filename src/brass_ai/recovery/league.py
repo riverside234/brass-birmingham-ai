@@ -2,7 +2,7 @@
 from collections import Counter
 import copy
 from contextlib import ExitStack
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 import random
 import time
@@ -36,14 +36,18 @@ class Behavior:
         self.policy_id=neural_spec(identity,exploration,'mixed')['policy_id']
 
 
-def train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=None,from_run=None,imitation_run=None,resume_reviewed_source=False):
+def train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=None,from_run=None,imitation_run=None,resume_reviewed_source=False,inference_devices=None):
     from .retention import owned,run_lock
     _,run=owned(root,run_path)
     with run_lock(run):
-        return _train(root,run_path,config,iterations=iterations,device=device,initial=initial,mono=mono,from_run=from_run,imitation_run=imitation_run,resume_reviewed_source=resume_reviewed_source)
+        return _train(root,run_path,config,iterations=iterations,device=device,initial=initial,mono=mono,from_run=from_run,imitation_run=imitation_run,resume_reviewed_source=resume_reviewed_source,inference_devices=inference_devices)
 
 
-def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=None,from_run=None,imitation_run=None,resume_reviewed_source=False):
+def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=None,from_run=None,imitation_run=None,resume_reviewed_source=False,inference_devices=None):
+    from .config import fixed_work_config
+    from .inference import validate_inference_devices
+    inference_devices=validate_inference_devices(inference_devices,device)
+    config=fixed_work_config(config)
     root=Path(root).resolve();run=project_path(root,run_path);validate_config(config)
     require(iterations>0 and not(initial and from_run),'Invalid recovery initialization')
     require(initial is None and from_run is None,'Fresh residual workflow forbids previous checkpoint/run imports')
@@ -64,7 +68,13 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
     for p in profiles: admission(root,p,'training')
     from .legacy_search import legacy_spec
     teacher_specs={p:legacy_spec(root,p,config.get('legacy_budget')) for p in profiles}
-    fast_specs={p:legacy_spec(root,p,config['legacy_budget'],search_free=True) for p in profiles}
+    # Keep the admitted demonstration/teacher bindings stable for existing IL
+    # origins. The optional RL-only variant is bound by config AND each job's
+    # policy spec; it does not relabel the qualified frozen bank or old data.
+    opponent_specs={p:legacy_spec(root,p,config.get('legacy_budget'),
+        work_budget=config.get('legacy_opponent_work_budget')) for p in profiles}
+    fast_specs={p:legacy_spec(root,p,config['legacy_budget'],search_free=True,
+        work_budget=config['legacy_opponent_work_budget']) for p in profiles}
     signature=dict(config=config,compatibility=compatibility(),implementation=implementation_id(),legacy_pool=pool['training'],teachers=teacher_specs)
     if bc_origin:signature['imitation_source']=bc_origin
     state_path=run/'state.json'
@@ -113,7 +123,10 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
             update_population(root,run,state,config['population'])
         write_json(state_path,state)
     optimizer=torch.optim.AdamW(model.parameters(),lr=config['learning_rate'],weight_decay=config['weight_decay'])
-    resume_optimizer(raw,optimizer)
+    cuda_resume=resume_optimizer(raw,optimizer,allow_cuda_topology_change=True)
+    if cuda_resume and cuda_resume['saved_devices']!=cuda_resume['visible_devices']:
+        print(f'CUDA resume: {cuda_resume["saved_devices"]} saved / {cuda_resume["visible_devices"]} visible GPUs; '
+              f'restored {cuda_resume["restored_devices"]} matching logical-device RNG streams (learner stays on cuda:0)',flush=True)
     reward=reward_spec(config)
     migration=migrate(model,optimizer,reward)
     if migration:
@@ -133,9 +146,9 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
         prepared_at=time.monotonic();rehearsal=rehearsal_dataset(rehearsal,device)
         print(f'Rehearsal tensors prepared once: {len(rehearsal.data)} rows in {time.monotonic()-prepared_at:.1f}s; reused until rehearsal expires',flush=True)
     summaries=[]
-    if revised: schedule_evaluations(root,run,state,device,mono)
+    if revised: schedule_evaluations(root,run,state,device,mono,inference_devices=inference_devices)
     with InferenceService(config['execution'],device,profile=run/'profile-collection' if config['profile_steps'] else None,
-                          profile_steps=config['profile_steps']) as service,reader_pool(config['audit_workers']) as readers:
+                          profile_steps=config['profile_steps'],inference_devices=inference_devices) as service,reader_pool(config['audit_workers'],admission=service.cpu) as readers:
         with ActorPool(root,config['host'],service,config['execution'],mono=mono) as ordinary,ActorPool(root,config['host'],service,config['execution'],mono=mono,heavy=True) as heavy:
             from .champion import schedule as schedule_champion
             # Resume an interrupted gate for the committed candidate before
@@ -176,7 +189,7 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                         policies=[learner]+opponents
                     else:
                         # Rotate all profiles across the collection instead of fixing three for an entire chunk.
-                        selected_specs=teacher_specs if searched_legacy(index,config,boosted) else fast_specs
+                        selected_specs=opponent_specs if searched_legacy(index,config,boosted) else fast_specs
                         policies=[learner]+[selected_specs[profiles[(index*3+s)%len(profiles)]] for s in range(3)]
                     rotation=table_rotation(index);focuses={}
                     for seat in range(4):
@@ -194,17 +207,26 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                 records=[]
                 normal=[j for j in jobs if j['provenance']['legacy_mode']!='searched']
                 legacy=[j for j in jobs if j['provenance']['legacy_mode']=='searched']
-                if revised and config['overlap_pools'] and normal and legacy:
-                    with ThreadPoolExecutor(max_workers=2) as coordinators:
-                        pending=[coordinators.submit(ordinary.collect,normal),coordinators.submit(heavy.collect,legacy)]
-                        for future in pending: records+=future.result()
-                else:
-                    if normal: records+=ordinary.collect(normal)
-                    if legacy: records+=heavy.collect(legacy)
-                load_began=time.monotonic()
-                ingress_metrics={}
-                games,learner_data,diagnostics=load_collection(records,behavior.policy_id,kind_by_group,
-                    executor=readers,workers=config['audit_workers'],telemetry=ingress_metrics,insolvency=config.get('insolvency'),reward=reward)
+                from .ingress import StreamingCollection
+                with StreamingCollection(readers,config['audit_workers'],behavior.policy_id,kind_by_group,
+                                         config.get('insolvency'),reward) as prepared_collection:
+                    if revised and config['overlap_pools'] and normal and legacy:
+                        with ThreadPoolExecutor(max_workers=2) as coordinators:
+                            pending=[coordinators.submit(ordinary.collect,normal,on_records=prepared_collection.submit),
+                                     coordinators.submit(heavy.collect,legacy,on_records=prepared_collection.submit)]
+                            try:
+                                for future in as_completed(pending):records+=future.result()
+                            except BaseException:
+                                # Signal before coordinator/executor joins. A
+                                # failed actor may have stranded a CPU ticket.
+                                service.cpu.abort()
+                                for future in pending:future.cancel()
+                                raise
+                    else:
+                        if normal: records+=ordinary.collect(normal,on_records=prepared_collection.submit)
+                        if legacy: records+=heavy.collect(legacy,on_records=prepared_collection.submit)
+                    load_began=time.monotonic();ingress_metrics={}
+                    games,learner_data,diagnostics=prepared_collection.finish(records,ingress_metrics)
                 collected=time.monotonic()
                 weight=config['rehearsal_weight']*max(0,1-state['games_done']/config['rehearsal_until'])
                 update=ppo_update(model,optimizer,games,behavior,config['update'],
@@ -272,7 +294,7 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                     from .champion import schedule as schedule_champion
                     with torch.random.fork_rng(devices=[]):
                         report['champion_gate']=schedule_champion(root,run,state,service,ordinary)
-                    schedule_evaluations(root,run,state,device,mono)
+                    schedule_evaluations(root,run,state,device,mono,inference_devices=inference_devices)
                     report['timings']['evaluation_seconds']=time.monotonic()-evaluation_began
                     from .retention import prune
                     cleanup_began=time.monotonic()
@@ -299,7 +321,7 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                 summary_scope='latest two iterations; bounded compact older metrics in retention-history.json')
 
 
-def schedule_evaluations(root,run,state,device,mono):
+def schedule_evaluations(root,run,state,device,mono,*,inference_devices=None):
     """Committed game-count schedule; evaluation never advances the train cursor."""
     from brass_ai.step5.evaluation import evaluation_config
     from .evaluation import evaluate
@@ -321,7 +343,7 @@ def schedule_evaluations(root,run,state,device,mono):
         cfg=evaluation_config(config,setups=schedule[name+'_setups'],seed=schedule['seed']+slot*1000,
             lineups=lineups,include_legacy=name=='broader',panel='development',use_search=False)
         directory=evaluation_directory(root,run,state,f'{name}-{slot:04d}')
-        result=evaluate(root,directory,candidate['path'],[r['path'] for r in refs],cfg,device=device,mono=mono)
+        result=evaluate(root,directory,candidate['path'],[r['path'] for r in refs],cfg,device=device,mono=mono,inference_devices=inference_devices)
         require(result['failed_games']==0,'Incomplete scheduled evaluation')
         state['evaluations'].append(dict(panel=name,slot=slot,games_done=state['games_done'],candidate=candidate,
             references=refs,games=result['games'],spec_sha256=sha(directory/'spec.json'),

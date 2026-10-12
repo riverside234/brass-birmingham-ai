@@ -11,14 +11,7 @@ ROOT=Path(__file__).resolve().parents[1]
 
 def sha(p): return hashlib.sha256(p.read_bytes()).hexdigest()
 
-def build(root=ROOT, mono=None):
-    base=root/'artifacts/r1-host/guarded'
-    out=root/'artifacts/r4-host';out.mkdir(parents=True,exist_ok=True)
-    manifest=json.loads((base/'runtime.json').read_text(encoding='utf-8-sig'))
-    for f in manifest['files']:
-        assert sha(base/f['name'])==f['sha256'], 'Changed R1 runtime'
-        if f['name']!='BrassHost.exe':shutil.copyfile(base/f['name'],out/f['name'])
-    source=(root/'src/BrassHost/Host.cs').read_text(encoding='utf-8-sig')
+def search_source(source):
     edits=[
         ('Game=other.Game;', 'AdoptChance(other); Game=other.Game;'),
         ('if(Terminal){Phase="terminal";return;}', 'if(ChancePending)return; if(Terminal){Phase="terminal";return;}'),
@@ -32,6 +25,16 @@ def build(root=ROOT, mono=None):
     for old,new in edits:
         assert source.count(old)==1, 'R1 hook changed: '+old
         source=source.replace(old,new)
+    return source
+
+def build(root=ROOT, mono=None):
+    base=root/'artifacts/r1-host/guarded'
+    out=root/'artifacts/r4-host';out.mkdir(parents=True,exist_ok=True)
+    manifest=json.loads((base/'runtime.json').read_text(encoding='utf-8-sig'))
+    for f in manifest['files']:
+        assert sha(base/f['name'])==f['sha256'], 'Changed R1 runtime'
+        if f['name']!='BrassHost.exe':shutil.copyfile(base/f['name'],out/f['name'])
+    source=search_source((root/'src/BrassHost/Host.cs').read_text(encoding='utf-8-sig'))
     generated=out/'Host.cs';generated.write_text(source,encoding='utf-8',newline='\n')
     sources=[generated]+[root/'src/BrassHost'/n for n in ('Choices.cs','Model.cs','Observation.cs','Position.cs')]
     sources+=sorted((root/'src/BrassSearchHost').glob('*.cs'))

@@ -195,11 +195,13 @@ class EvaluationScalingTests(unittest.TestCase):
         spec=dict(kind='masked_ismcts',model_id='a'*64,search=SearchConfig().to_dict(),cpu_role='lab')
         with patch('brass_ai.recovery.execution.MaskedSearchPolicy',SearchStub), \
              patch('brass_ai.recovery.parallel.parallelize',side_effect=forest), \
+             patch('brass_ai.recovery.teacher_schedule.work_search',side_effect=lambda p,w:p) as wrap, \
              patch('brass_ai.recovery.execution.instrument_host'):
             policy=make_policy(spec,SOURCE_ROOT,endpoints,EXECUTION_V21,None)
         self.assertEqual(len(owners),5)
         self.assertEqual([p.evaluator.endpoint for p in owners],endpoints)
         self.assertEqual(len(policy.replicas),4)
+        self.assertEqual(wrap.call_count,1)  # One whole-turn budget, not one per replica.
 
 
 if __name__ == '__main__':

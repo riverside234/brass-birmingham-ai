@@ -25,7 +25,10 @@
     "policy_cache": 32,
     "search_workers_per_turn": 4,
     "cpu_budget": 12,
-    "cpu_reserve": 2
+    "cpu_reserve": 2,
+    "shared_slot_bytes": 2097152,
+    "inference_routing": "demand",
+    "replica_backlog": 32
   },
   "update": {
     "effective_batch_size": 64,
@@ -175,5 +178,22 @@
     "setups": 8,
     "min_win_share": 0.55,
     "seed": 1910000
+  },
+  "legacy_opponent_work_budget": {
+    "contract": "legacy-opponent-turn-work/1.1.0",
+    "mode": "simulations",
+    "simulations_per_turn": 16,
+    "watchdog_seconds": 120.0
+  },
+  "teacher_work_budget": {
+    "contract": "teacher-turn-work/1.1.0",
+    "mode": "simulations",
+    "watchdog_seconds": 120.0,
+    "simulations_per_phase": {
+      "canal_early": 32,
+      "canal_late": 16,
+      "rail_early": 16,
+      "rail_late": 16
+    }
   }
 }
