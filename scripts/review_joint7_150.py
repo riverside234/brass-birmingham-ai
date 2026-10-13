@@ -7,6 +7,7 @@ from pathlib import Path
 import statistics
 
 from review_joint7 import audit as earlier_audit
+from evidence_storage import atomic_write
 
 
 EXPORT = 'results/v4-selfplay-joint-g0150-20261013T173011108713Z'
@@ -22,6 +23,8 @@ def read_metrics(path):
     """Load either report version, verifying v2's complete iteration sidecar."""
     path = Path(path)
     summary = read(path)
+    if not isinstance(summary, dict):
+        raise ValueError('Expected a generation-150 audit object')
     if summary.get('format') == EXPANDED_FORMAT:
         if not isinstance(summary.get('iterations'), list) or 'iterations_ref' in summary:
             raise ValueError('Invalid expanded audit iterations')
@@ -55,7 +58,7 @@ def read_metrics(path):
 def write_metrics(path, data):
     """Publish compact evidence without losing details or replacing live sidecars."""
     path = Path(path)
-    if (data.get('format') != EXPANDED_FORMAT or
+    if (not isinstance(data, dict) or data.get('format') != EXPANDED_FORMAT or
             not isinstance(data.get('iterations'), list) or 'iterations_ref' in data):
         raise ValueError('Expected expanded generation-150 audit data')
     raw = json.dumps(data['iterations'], separators=(',', ':'), allow_nan=False).encode('utf-8')
@@ -74,9 +77,7 @@ def write_metrics(path, data):
     for target, payload in ((detail, compressed), (path, summary_bytes)):
         if target.exists() and target.read_bytes() == payload:
             continue
-        temporary = target.with_name(target.name + '.tmp')
-        temporary.write_bytes(payload)
-        temporary.replace(target)
+        atomic_write(target, payload)
     return summary
 
 

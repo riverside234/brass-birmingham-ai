@@ -46,6 +46,11 @@ unchanged output is not rewritten. Keep the referenced sidecar with the summary
 when copying evidence. A changed report can produce another sidecar; any old
 one can be removed once no retained summary references it.
 
+Both writers use a separate temporary file for each write and clean it up on
+failure. Overlapping exports or compactions cannot overwrite each other's
+temporary files; the last completed summary publication selects its matching
+sidecar. Invalid report types are rejected before any output is written.
+
 Regenerate both files with `python scripts/review_joint7_150.py`. To load the
 complete original v1 data structure, including checksum/count validation:
 

@@ -67,6 +67,43 @@ class CompactAuditTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, 'checksum'):
                 report.read_metrics(path)
 
+    def test_non_object_inputs_are_rejected_before_writing(self):
+        with tempfile.TemporaryDirectory(dir=ROOT / 'artifacts') as folder:
+            path = Path(folder) / 'metrics.json'
+            for value in (None, [], 42, 'invalid'):
+                self.save(path, value)
+                before = path.read_bytes()
+                with self.subTest(value=value), self.assertRaisesRegex(ValueError, 'audit object'):
+                    report.read_metrics(path)
+                with self.assertRaisesRegex(ValueError, 'Expected expanded'):
+                    report.write_metrics(path, value)
+                self.assertEqual(path.read_bytes(), before)
+                self.assertEqual(list(path.parent.iterdir()), [path])
+
+    def test_overlapping_exports_use_independent_temporaries(self):
+        with tempfile.TemporaryDirectory(dir=ROOT / 'artifacts') as folder:
+            path = Path(folder) / 'metrics.json'
+            first = self.data()
+            second = self.data()
+            second['iterations'].append({'iteration': 2})
+            second['windows'][0]['mean'] = 2.0
+            replace = Path.replace
+            temporaries = []
+
+            def interleaved_publish(source, target):
+                if target == path:
+                    temporaries.append(source)
+                    if len(temporaries) == 1:
+                        report.write_metrics(path, second)
+                        self.assertEqual(report.read_metrics(path), second)
+                return replace(source, target)
+
+            with patch.object(Path, 'replace', interleaved_publish):
+                report.write_metrics(path, first)
+            self.assertEqual(report.read_metrics(path), first)
+            self.assertEqual(len(set(temporaries)), 2)
+            self.assertFalse(list(path.parent.glob('*.tmp')))
+
     def test_failed_summary_publication_keeps_previous_report_readable(self):
         with tempfile.TemporaryDirectory(dir=ROOT / 'artifacts') as folder:
             path = Path(folder) / 'metrics.json'
@@ -84,6 +121,21 @@ class CompactAuditTests(unittest.TestCase):
             with patch.object(Path, 'replace', fail_summary), self.assertRaises(OSError):
                 report.write_metrics(path, changed)
             self.assertEqual(report.read_metrics(path), original)
+            self.assertFalse(list(path.parent.glob('*.tmp')))
+
+    def test_failed_sidecar_publication_preserves_previous_report(self):
+        with tempfile.TemporaryDirectory(dir=ROOT / 'artifacts') as folder:
+            path = Path(folder) / 'metrics.json'
+            original = self.data()
+            report.write_metrics(path, original)
+            before = {p.name: p.read_bytes() for p in path.parent.iterdir()}
+            changed = self.data()
+            changed['iterations'].append({'iteration': 2})
+            with patch.object(Path, 'replace', side_effect=OSError('interrupted sidecar publication')):
+                with self.assertRaises(OSError):
+                    report.write_metrics(path, changed)
+            self.assertEqual(report.read_metrics(path), original)
+            self.assertEqual({p.name: p.read_bytes() for p in path.parent.iterdir()}, before)
 
     def test_committed_evidence_contains_all_original_iteration_records(self):
         path = ROOT / 'docs/joint7-150-evidence/metrics.json'

@@ -6,6 +6,7 @@ import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'src'))
 from brass_ai.recovery.source_reviews import compact_source_reviews
+from evidence_storage import atomic_write
 
 
 def main():
@@ -17,9 +18,7 @@ def main():
     receipt = compact_source_reviews(json.loads(before.decode('utf-8-sig')))
     after = (json.dumps(receipt, indent=2, allow_nan=False) + '\n').encode('utf-8')
     if before != after:
-        temporary = args.path.with_name(args.path.name + '.tmp')
-        temporary.write_bytes(after)
-        temporary.replace(args.path)
+        atomic_write(args.path, after)
     print(f'{len(receipt["transitions"])} approvals; {len(before):,} -> {len(after):,} bytes')
 
 
