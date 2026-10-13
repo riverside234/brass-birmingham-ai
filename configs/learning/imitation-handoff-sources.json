@@ -123,6 +123,12 @@
       "implementation": "aa41d2a962ded63fb83f89ec4b31fddc47a550ecab0ef8be8654d56262911f46",
       "learning_compatibility": "c349e816f2e301ea2a3b438902059cffe868f48e131f7c120691d37cd1c409d2",
       "reason": "Remaining self-play bug review: bind ordered replay membership and filtered causal inputs, restore optimizer settings after initial calibration failure, fully retire a failed forest executor, bind actor caches to actual execution recipes, and preserve population cache integrity receipts. Preserve model, feature, reward, optimizer and raw replay contracts, all current search clocks, workloads, teacher schedules and training settings. Continue exact committed weights, Adam/RNG, population, champion, counters and lineage; old uncommitted iterations and stale teacher labels remain rejected. Derived features may be rebuilt under the stronger replay validation. Completed IL still requires the original model, audited dataset and lineage evidence."
+    },
+    {
+      "implementation": "40ef5e2adf1903f4ab6e473599c8c9a50a35c5cfaf5320d6e70fe2c353660a52",
+      "learning_compatibility": "c349e816f2e301ea2a3b438902059cffe868f48e131f7c120691d37cd1c409d2",
+      "review_version": "training-evidence-compaction/1.0.0",
+      "reason": "Lossless approval/evidence storage only. Completed fresh IL model, data, losses, checkpoint formats and original lineage checks are unchanged."
     }
   ]
 }

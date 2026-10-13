@@ -1,5 +1,6 @@
 """Reproduce the generation-150 joint-7 audit using retained JSON only."""
 import argparse
+import gzip
 import hashlib
 import json
 from pathlib import Path
@@ -9,10 +10,74 @@ from review_joint7 import audit as earlier_audit
 
 
 EXPORT = 'results/v4-selfplay-joint-g0150-20261013T173011108713Z'
+EXPANDED_FORMAT = 'joint7-generation150-audit/1.0.0'
+COMPACT_FORMAT = 'joint7-generation150-audit/2.0.0'
 
 
 def read(path):
     return json.loads(path.read_text(encoding='utf-8-sig'))
+
+
+def read_metrics(path):
+    """Load either report version, verifying v2's complete iteration sidecar."""
+    path = Path(path)
+    summary = read(path)
+    if summary.get('format') == EXPANDED_FORMAT:
+        if not isinstance(summary.get('iterations'), list) or 'iterations_ref' in summary:
+            raise ValueError('Invalid expanded audit iterations')
+        return summary
+    if summary.get('format') != COMPACT_FORMAT:
+        raise ValueError('Unsupported generation-150 audit format')
+    reference = summary.get('iterations_ref')
+    if not isinstance(reference, dict) or 'iterations' in summary:
+        raise ValueError('Invalid audit iteration reference')
+    digest = reference.get('sha256')
+    count = reference.get('count')
+    if (not isinstance(digest, str) or len(digest) != 64 or
+            any(c not in '0123456789abcdef' for c in digest) or
+            type(count) is not int or count < 0 or
+            reference.get('path') != f'iterations-{digest}.json.gz'):
+        raise ValueError('Invalid audit iteration reference')
+    detail = path.parent / reference['path']
+    if detail.resolve().parent != path.parent.resolve():
+        raise ValueError('Audit iteration sidecar must be in the report directory')
+    payload = detail.read_bytes()
+    if hashlib.sha256(payload).hexdigest() != digest:
+        raise ValueError('Audit iteration sidecar checksum mismatch')
+    iterations = json.loads(gzip.decompress(payload).decode('utf-8'))
+    if not isinstance(iterations, list) or len(iterations) != count:
+        raise ValueError('Audit iteration sidecar count mismatch')
+    result = {key: value for key, value in summary.items() if key != 'iterations_ref'}
+    result.update(format=EXPANDED_FORMAT, iterations=iterations)
+    return result
+
+
+def write_metrics(path, data):
+    """Publish compact evidence without losing details or replacing live sidecars."""
+    path = Path(path)
+    if (data.get('format') != EXPANDED_FORMAT or
+            not isinstance(data.get('iterations'), list) or 'iterations_ref' in data):
+        raise ValueError('Expected expanded generation-150 audit data')
+    raw = json.dumps(data['iterations'], separators=(',', ':'), allow_nan=False).encode('utf-8')
+    # Remove timestamps and platform-specific gzip header bytes.
+    compressed = gzip.compress(raw, compresslevel=9, mtime=0)
+    compressed = compressed[:9] + b'\xff' + compressed[10:]
+    digest = hashlib.sha256(compressed).hexdigest()
+    reference = dict(path=f'iterations-{digest}.json.gz', sha256=digest, count=len(data['iterations']))
+    summary = {key: value for key, value in data.items() if key != 'iterations'}
+    summary.update(format=COMPACT_FORMAT, iterations_ref=reference)
+    summary_bytes = (json.dumps(summary, indent=2, allow_nan=False) + '\n').encode('utf-8')
+    path.parent.mkdir(parents=True, exist_ok=True)
+    detail = path.parent / reference['path']
+    # Publish the immutable, content-addressed sidecar before pointing to it.
+    # A failed summary write leaves the previous summary/sidecar pair readable.
+    for target, payload in ((detail, compressed), (path, summary_bytes)):
+        if target.exists() and target.read_bytes() == payload:
+            continue
+        temporary = target.with_name(target.name + '.tmp')
+        temporary.write_bytes(payload)
+        temporary.replace(target)
+    return summary
 
 
 def stats(values):
@@ -175,7 +240,7 @@ def main():
     data = audit(args.root)
     output = args.root/'docs/joint7-150-evidence'
     output.mkdir(parents=True, exist_ok=True)
-    (output/'metrics.json').write_text(json.dumps(data,indent=2,allow_nan=False)+'\n',encoding='utf-8')
+    write_metrics(output/'metrics.json', data)
     (output/'tables.md').write_text(tables(data),encoding='utf-8')
     print(output)
 

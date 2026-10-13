@@ -15,6 +15,8 @@ Primary evidence: [export manifest](../results/v4-selfplay-joint-g0150-20261013T
 
 Reproduce aggregation with `python scripts/review_joint7_150.py`. Outputs: [metrics and input hashes](joint7-150-evidence/metrics.json), [all windows and rolling tables](joint7-150-evidence/tables.md), [source identities](joint7-150-evidence/source-versions.json), and [verification receipt](joint7-150-evidence/verification.json).
 
+The metrics summary now references a compressed file containing all 150 complete iteration records. Its filename, SHA-256 and count are recorded in `iterations_ref`; [compact evidence documentation](COMPACT_TRAINING_EVIDENCE.md) explains how to load or regenerate the complete report.
+
 The manifest lists 30 files, no warnings, and 20 missing paths: five old champion and five old monitor report/spec pairs. All 30 **LF-normalized** hashes match; raw local hashes differ because this Git checkout uses CRLF. Both hashes are recorded and inputs remain intact. This verifies normalized text identity, not absent checkpoint bytes. Seven completed IL ancestors have exported state/report pairs; their checkpoint/dataset files still require lab preflight.
 
 Combining the exports recovers learner outcomes for all iterations 0–149, including iteration 58 missing from the earlier review's last window. New retained summaries cover 24–147; full reports survive for 59, 148 and 149. All 90 new iterations have the new PPO/reward/teaching diagnostics. Complete per-collection calibration receipts survive only in the latest two full reports. Older missing telemetry is not backfilled or counted as zero. Monitor-80/100 per-game evidence is unavailable.

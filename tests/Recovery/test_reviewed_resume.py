@@ -12,6 +12,7 @@ from brass_ai.learning.checkpoint import save_checkpoint, load_checkpoint, resum
 from brass_ai.learning.contracts import SOURCE_ROOT, compatibility, digest
 from brass_ai.learning.model import FourSeatNet, ModelConfig
 from brass_ai.recovery.resume import check_signature, load_resume, commit_transition
+from brass_ai.recovery.source_reviews import expand_source_reviews
 from brass_ai.step5.cli import parser
 from brass_ai.step5.league import implementation_id, write_json
 
@@ -62,7 +63,7 @@ class ReviewedResumeTests(unittest.TestCase):
         from brass_ai.recovery.utility import reward_spec
         self.assertEqual(current['search']['reward'],reward_spec(current))
         self.assertEqual(current['search']['utility_scale'],1.2)
-        reviews=read(SOURCE_ROOT/'configs/learning/selfplay-resume-sources.json')['transitions']
+        reviews=expand_source_reviews(read(SOURCE_ROOT/'configs/learning/selfplay-resume-sources.json'))['transitions']
         self.assertTrue(any(r['from_implementation']==old['implementation']
                             and r['to_implementation']==implementation_id()
                             and r.get('config_changes',{}).get('search')=={'from':old['config']['search'],'to':current['search']}

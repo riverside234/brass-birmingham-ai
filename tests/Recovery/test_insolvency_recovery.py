@@ -17,6 +17,7 @@ from brass_ai.recovery.insolvency import events,returns,advantage_costs
 from brass_ai.recovery.ingress import load_collection,reader_pool
 from brass_ai.recovery.replay import write_shard,read_shards,cache_receipt
 from brass_ai.recovery.resume import check_signature,commit_transition
+from brass_ai.recovery.source_reviews import expand_source_reviews
 from brass_ai.recovery.updates import prepared,ppo_update
 from brass_ai.step5.league import implementation_id,write_json
 from test_revision import RevisionTests
@@ -207,7 +208,7 @@ class BoostTests(unittest.TestCase):
             # Reconstruct the actual historical target from its pinned review.
             # Copying today's preset imports later reward/champion/search fields
             # and fabricates an unapproved historical configuration.
-            reviews=read(SOURCE_ROOT/'configs/learning/selfplay-resume-sources.json')['transitions']
+            reviews=expand_source_reviews(read(SOURCE_ROOT/'configs/learning/selfplay-resume-sources.json'))['transitions']
             review=next(r for r in reviews if r['from_implementation']==state['signature']['implementation']
                         and r['to_implementation']==previous)
             self.assertEqual(review['learning_compatibility'],digest(state['signature']['compatibility']))

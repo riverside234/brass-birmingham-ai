@@ -8,6 +8,7 @@ from brass_ai.learning.contracts import CONFIG_DIR, digest, project_path, requir
 from brass_ai.learning.model import ModelConfig
 from brass_ai.step5.league import write_json, implementation_id
 from .retention import safe
+from .source_reviews import expand_source_reviews
 
 
 def apply_optimizer_config(optimizer, config):
@@ -36,8 +37,7 @@ def check_signature(state, signature, reviewed=False):
     unchanged = lambda s: {k: v for k, v in s.items() if k not in ('implementation', 'config')}
     require(unchanged(previous) == unchanged(signature),
             'Reviewed resume requires unchanged config, data/IL, opponents and learning contracts')
-    approvals = read(CONFIG_DIR / 'selfplay-resume-sources.json')
-    require(approvals['format'] == 'selfplay-resume-sources/1.0.0', 'Unsupported source review receipt')
+    approvals = expand_source_reviews(read(CONFIG_DIR / 'selfplay-resume-sources.json'))
     transitions = [e for e in approvals['transitions'] if e['from_implementation'] == previous['implementation']
                 and e['to_implementation'] == signature['implementation']
                 and e['learning_compatibility'] == digest(signature['compatibility'])]
