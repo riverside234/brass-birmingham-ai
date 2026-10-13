@@ -222,8 +222,9 @@ class DifficultyTests(unittest.TestCase):
         seeds,_=seeds_for(151000000,2,'validation')
         p['jobs']=panels.jobs_for(v,seeds,2,p['profiles'],repetitions=1)
         with tempfile.TemporaryDirectory(dir=SOURCE_ROOT/'artifacts') as tmp:
-            directory=Path(tmp);chunk=directory/'chunk';chunk.mkdir()
+            directory=Path(tmp);chunk=directory/'chunk'
             write_json(directory/'manifest.json',p)
+            collection.reserve(SOURCE_ROOT,directory,chunk,p,[p['jobs'][0]])
             r=c.sealed(dict(record(p['jobs'][0]),format=c.RECORD,contract=c.identity(),panel_id=p['id']))
             path=chunk/'game.json';write_json(path,r)
             item=dict(job=0,path=path.name,sha256=sha(path),id=r['id'])

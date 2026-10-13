@@ -73,7 +73,7 @@ class Runtime:
     def __init__(self,directory,backend='ort-cpu',*,fixture=False,mono=None):
         self.directory=Path(directory).resolve();self.package=validate(directory,allow_fixture=fixture)
         self.root=self.directory/'runtime';self.mono=mono;self.lock=RLock();self.interrupted=Event();self.cancelled=Event()
-        self.sessions={};self.channels={};self.active=None;self.boundary=InputBoundary()
+        self.sessions={};self.channels={};self.active=None;self.closed=False;self.boundary=InputBoundary()
         self.service=PortableInference(self.directory,self.package['models'],backend)
         self.service.__enter__()
         try:self.game=BrassSpielGame(root=self.root,mono=mono)
@@ -82,9 +82,16 @@ class Runtime:
     def close(self):
         self.interrupt(cancel=True)
         with self.lock:
-            for session in self.sessions.values():session.close()
-            for channels in self.channels.values():channels.close()
-            self.game.close();self.service.__exit__()
+            if self.closed:return
+            self.closed=True
+            try:
+                for session in self.sessions.values():session.close()
+            finally:
+                try:
+                    for channels in self.channels.values():channels.close()
+                finally:
+                    try:self.game.close()
+                    finally:self.service.__exit__()
 
     def interrupt(self,*,cancel=False):
         # No lock that a planning thread owns: Play Now/cancel must be immediate.
@@ -100,16 +107,24 @@ class Runtime:
         if key not in self.sessions:
             config=SearchConfig(**p['searches'][tier]).validate()
             parents=[m['model_id'] for m in p['models'][1:]]
-            channels=TrackedChannels(self.service.channels(1+config.workers*(1+len(parents))))
+            channels=None
             try:
+                channels=TrackedChannels(self.service.channels(1+config.workers*(1+len(parents))))
                 s=SearchSession(self.root,self.service,channels,p['models'][0]['model_id'],parents,config,
                     [profile if i==seat else Profile(alpha=0.) for i in range(4)],p['calibration'],mono=self.mono)
-            except BaseException:channels.close();raise
+            except BaseException:
+                # The persistent service owns the other pipe ends, shared slots
+                # and lease queue. Retire it too; retry must start a fresh runtime.
+                try:
+                    if channels is not None:channels.close()
+                finally:self.close()
+                raise
             self.sessions[key]=s;self.channels[key]=channels
         return self.sessions[key]
 
     def plan(self,request):
         with self.lock:
+            require(not self.closed,'Runtime has retired')
             try:return self._plan(request)
             finally:
                 if self.active is not None:self.active.finish_turn();self.active.cancelled.clear()

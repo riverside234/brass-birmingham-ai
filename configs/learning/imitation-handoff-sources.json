@@ -81,6 +81,18 @@
       "learning_compatibility": "c349e816f2e301ea2a3b438902059cffe868f48e131f7c120691d37cd1c409d2",
       "review_version": "step5-comprehensive-bug-audit/1.0.0",
       "reason": "Reviewed host stderr/transport and manifest admission, search-constructor cleanup and archived-work accounting, atomic run ownership, interrupted retention restore, racing dependency scans and teacher ordered-action/observer attribution. Preserves model/encoder/loss/reward, learning compatibility, datasets, budgets, worker counts, opponent and evaluation schedules. Continue committed iterations with exact weights, Adam/RNG, counters, champion and population. Refresh utility calibration from fresh ordinary data; reject old-source search targets. Runtime validation code changes invalidate derived feature-cache receipts; authoritative audited heuristic data stays compatible. Completed fresh IL handoff retains original manifest/checkpoint/lineage validation."
+    },
+    {
+      "implementation": "8d19aff88a93edd9b734561a73c83a440f5d3517429be007d9913aceab8cffd1",
+      "learning_compatibility": "c349e816f2e301ea2a3b438902059cffe868f48e131f7c120691d37cd1c409d2",
+      "review_version": "step5-project-relocation/1.0.0",
+      "reason": "Reviewed component-based project relocation and persistent confined root mappings. Historical checkpoint/state/config/report bytes and signature representations remain unchanged; verify model/Adam/RNG, IL ancestry, dataset/calibration hashes, evaluation bindings and runtime pins at access time. No model, encoder, reward, loss, optimizer, budget, schedule, opponent or learning-contract changes. The existing reviewed-source calibration refresh and old-source teacher rejection still apply. Completed fresh IL weights retain their exact original manifest/checkpoint/parent lineage."
+    },
+    {
+      "implementation": "c9c9bb914477feea94b61b1698db93fd5e767d0f2f88b0c715f0cfea12074140",
+      "learning_compatibility": "c349e816f2e301ea2a3b438902059cffe868f48e131f7c120691d37cd1c409d2",
+      "review_version": "step5-project-relocation/1.1.0",
+      "reason": "Reviewed relocation audit: preserve historical evaluation host spelling after component-wise identity checks; confine runtime installation including cached outputs; reject blocked path parents. Transfer validates archive topology and reserved controls and includes pending evaluation/runtime source dependencies. Historical checkpoint/state/config/report bytes and all model/optimizer/RNG/signature/checksum checks remain intact. No model, encoder, reward, loss, optimizer, budget, schedule, opponent or learning-contract change. Existing utility recalibration and old-source teacher rejection remain required. Only completed fresh IL handoff; original manifest/checkpoint/parent lineage stays bound."
     }
   ]
 }

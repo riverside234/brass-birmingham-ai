@@ -24,13 +24,13 @@ from brass_ai.personality.search.engine import SearchSession
 from brass_ai.personality.search.inference import SharedInference
 from brass_ai.personality.search.readiness import load as load_ready
 from brass_ai.recovery.inference import RemoteEvaluator
-from brass_ai.recovery.retention import owned
+from brass_ai.recovery.retention import owned, run_lock
 from brass_ai.recovery.telemetry import Timings
 from brass_ai.search.common import SearchConfig, turn_key
 from brass_ai.step5.league import write_json
 from brass_ai.step5.policy import NeuralPolicy
 from . import panels
-from .contracts import CHUNK, RECORD, identity, sealed, read_sealed
+from .contracts import CHUNK, RECORD, RESERVATIONS, identity, sealed, read_sealed
 from .ui import IntentDisplay, PublicAction, PUBLIC_TEXT
 
 
@@ -52,6 +52,31 @@ def environment(device):
                 gpu=torch.cuda.get_device_name(device) if str(device).startswith('cuda') else None)
 
 
+def reserve(root, directory, out, panel, jobs):
+    """Commit panel-wide ownership before any game can run, including failed jobs.
+
+    The short OS-backed lock only serializes reservation writes. A crash after
+    the ledger commits leaves jobs reserved; another output cannot retry them.
+    """
+    root, out = owned(root, out)
+    _, directory = owned(root, directory)
+    with run_lock(directory):
+        require(not out.exists(), 'Immutable chunk: do not overwrite failed or selected results')
+        path = directory/'reservations.json'
+        ledger = read_sealed(path, RESERVATIONS) if path.exists() else dict(
+            format=RESERVATIONS, contract=identity(), panel_id=panel['id'], jobs={})
+        require(ledger['panel_id'] == panel['id'], 'Reservation panel changed')
+        indices = [j['index'] for j in jobs]
+        require(indices and len(set(indices)) == len(indices)
+                and all(type(i) is int and 0 <= i < len(panel['jobs']) for i in indices), 'Invalid reservation jobs')
+        require(all(str(i) not in ledger['jobs'] for i in indices),
+                'Panel job already reserved; preserve the failed attempt and explicitly amend the study')
+        claims = dict(ledger['jobs'], **{str(i): out.relative_to(root).as_posix() for i in indices})
+        write_json(path, sealed(dict(format=RESERVATIONS, contract=identity(), panel_id=panel['id'], jobs=claims)))
+        out.mkdir(parents=True)
+        write_json(out/'reservation.json', dict(panel_id=panel['id'], jobs=indices, fixture=panel['fixture']))
+
+
 def execute(root, panel_directory, output, *, start=0, games=16, tables=24, device='cpu', mono=None,
             fixture_direct=False):
     root, out = owned(root, output)
@@ -67,21 +92,26 @@ def execute(root, panel_directory, output, *, start=0, games=16, tables=24, devi
     execution = dict(handoff['signature']['config']['execution'], processes=tables, hosts_per_process=1,
                      tensor_threads=panel['profiles']['tensor_threads'])
     torch.set_num_threads(panel['profiles']['tensor_threads'])
-    out.mkdir(parents=True)
-    write_json(out/'reservation.json', dict(panel_id=panel['id'], jobs=[j['index'] for j in jobs], fixture=panel['fixture']))
+    reserve(root, panel_directory, out, panel, jobs)
     by_member = {m['id']: m for m in value['members']}; began = time.monotonic()
     service = SharedInference(execution, device=device)
-    ident = service.register(model); parent_ids = [service.register(m) for m in parents]
-    require(ident == value['shared_model']['model_id'] and parent_ids == [model_id(m) for m in parents], 'Model registration differs')
-    environments = environment(device)
-    # Channel allocation mutates the service's lane table. Do it before threads
-    # start, not concurrently from per-table lazy session creation.
-    channels = []
-    for lane in range(tables):
-        tiers = {s['tier'] for j in jobs[lane::tables] for s in j['table'] if s['kind']=='personality'}
-        count = 1 + panel['profiles']['workers']*(1+len(parent_ids)) if not fixture_direct else 1
-        channels.append(dict(opponent=TrackedChannels(service.channels(1)),
-                             tiers={t:TrackedChannels(service.channels(count)) for t in sorted(tiers)}))
+    try:
+        ident = service.register(model); parent_ids = [service.register(m) for m in parents]
+        require(ident == value['shared_model']['model_id'] and parent_ids == [model_id(m) for m in parents], 'Model registration differs')
+        environments = environment(device)
+        # Channel allocation mutates the service's lane table. Do it before threads
+        # start, not concurrently from per-table lazy session creation.
+        channels = []
+        for lane in range(tables):
+            tiers = {s['tier'] for j in jobs[lane::tables] for s in j['table'] if s['kind']=='personality'}
+            count = 1 + panel['profiles']['workers']*(1+len(parent_ids)) if not fixture_direct else 1
+            channels.append(dict(opponent=TrackedChannels(service.channels(1)),
+                                 tiers={t:TrackedChannels(service.channels(count)) for t in sorted(tiers)}))
+    except BaseException:
+        # Registration/channel allocation owns queues, pipes and shared buffers
+        # even before the inference thread's context has started.
+        service.__exit__()
+        raise
 
     def table_loop(lane_index):
         receipts = []; sessions = {}; lane = channels[lane_index]
@@ -211,6 +241,8 @@ def execute(root, panel_directory, output, *, start=0, games=16, tables=24, devi
 def read_chunks(root, directory, chunks):
     panel, value = panels.load(root, directory); seen = set(); sources = []
     def records():
+        ledger = read_sealed(project_path(root, directory)/'reservations.json', RESERVATIONS)
+        require(ledger['panel_id'] == panel['id'], 'Reservation panel changed')
         for chunk in chunks:
             chunk = project_path(root, chunk); receipt = read_sealed(chunk/'manifest.json', CHUNK)
             require(receipt['panel_id'] == panel['id'] and receipt['fixture'] == panel['fixture']
@@ -219,6 +251,8 @@ def read_chunks(root, directory, chunks):
             reservation = read_json(chunk/'reservation.json')
             require(reservation == dict(panel_id=panel['id'], fixture=panel['fixture'], jobs=[r['job'] for r in receipt['records']]),
                     'Chunk omitted or substituted a reserved job')
+            require(all(ledger['jobs'].get(str(r['job'])) == chunk.relative_to(Path(root).resolve()).as_posix()
+                        for r in receipt['records']), 'Chunk does not own these reserved jobs')
             sources.append(dict(path=chunk.relative_to(Path(root).resolve()).as_posix(), sha256=sha(chunk/'manifest.json')))
             for item in receipt['records']:
                 path = (chunk/item['path']).resolve()

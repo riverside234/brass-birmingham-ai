@@ -30,7 +30,7 @@ class TransferTests(unittest.TestCase):
         self.bundle = self.area / 'migration.tar.zst'
         for tree in transfer.CODE_TREES:
             (self.root / tree).mkdir(parents=True, exist_ok=True)
-        for name in ('learning/runner.py', 'learning/batching.py', 'searchlab/spiel.py', 'beliefs.py', 'runtime_contracts.py', 'host.py'):
+        for name in ('learning/runner.py', 'learning/batching.py', 'searchlab/spiel.py', 'beliefs.py', 'runtime_contracts.py', 'host.py', 'bank.py', 'legacy.py'):
             self.put('src/brass_ai/' + name, b'# fixture\n')
         for name in ('build-training-host.py', 'build-search-host.py'):
             self.put('scripts/' + name, b'# fixture builder\n')
@@ -194,7 +194,8 @@ class TransferTests(unittest.TestCase):
                 transfer.relative(name)
         result = transfer.export(self.root, self.run, self.bundle, dry_run=True)
         self.assertTrue(result['dry_run'])
-        self.assertEqual(result['dependencies'], 'external')
+        self.assertEqual(result['dependencies'], 'repo')
+        self.assertEqual(result['runtime_files'], result['bundled_runtime_files'])
         self.assertEqual(result['part_mb'], 1900)
         self.assertEqual(result['archive_format'], 'zstd')
         self.assertEqual(result['zstd_level'], 3)
@@ -206,10 +207,19 @@ class TransferTests(unittest.TestCase):
         import torch
         from brass_ai.learning.checkpoint import save_checkpoint, resume_optimizer
         from brass_ai.learning.contracts import digest
-        from brass_ai.learning.model import FourSeatNet, ModelConfig
+        from brass_ai.learning.model import ModelConfig
+        from brass_ai.learning.utility_model import UtilityNet, utility_config
+        from brass_ai.recovery.utility import reward_spec
         from brass_ai.recovery.resume import load_resume
         torch.set_num_threads(2)
-        model = FourSeatNet(ModelConfig.preset('small'))
+        # Use today's full recipe (utility head, whole-turn time budgets and
+        # cumulative teacher accounting), not just a minimal legacy config.
+        cfg = transfer.read(ROOT / 'configs/step5/lab.json')
+        cfg.update(self.state['signature']['config'])
+        self.state['signature']['config'] = cfg
+        self.state['source_transitions'] = []
+        self.state['previous_games'] = 320
+        model = UtilityNet(utility_config(ModelConfig.preset('small'), reward_spec(cfg)))
         optimizer = torch.optim.AdamW(model.parameters(), lr=1e-5)
         sum(p.square().mean() for p in model.parameters()).backward(); optimizer.step()
         path = self.run / 'generation-0002.pt'
@@ -218,7 +228,18 @@ class TransferTests(unittest.TestCase):
         entry = dict(path='artifacts/step5/selfplay/generation-0002.pt', sha256=transfer.sha(path), model_id=identity, generation=2)
         self.state['history'][-1] = entry; self.state['resume'] = [entry]
         self.put('artifacts/step5/selfplay/state.json', self.state)
-        self.export(); self.move_source(); transfer.restore(self.root, self.bundle)
+        tracked = {p.relative_to(self.root).as_posix() for prefix in transfer.CODE_TREES
+                   for p in (self.root / prefix).rglob('*') if p.is_file()}
+        # Save only what a Git checkout provides before the source disappears.
+        checkout = {name: (self.root / name).read_bytes() for name in tracked}
+        with patch.object(transfer, 'git_baseline', return_value=('fixture-commit', tracked)):
+            transfer.export(self.root, self.run, self.bundle, part_mb=0)
+        self.move_source()
+        for name, content in checkout.items():
+            self.put(name, content)
+        self.assertFalse((self.root / cfg['host']).exists())
+        transfer.restore(self.root, self.bundle)
+        self.assertEqual((self.root / cfg['host'] / 'engine.dll').read_bytes(), b'private-runtime')
         state = transfer.read(self.run / 'state.json')
         restored, raw, changed = load_resume(self.root, self.run, state, state['signature'])
         restored_optimizer = torch.optim.AdamW(restored.parameters(), lr=1e-5)
@@ -297,8 +318,8 @@ class TransferTests(unittest.TestCase):
         names = {r['path'] for r in transfer.inspect_bundle(self.bundle)['files']}
         self.assertIn(candidate['path'], names)
 
-    def test_default_external_reuses_clone_and_ssh_runtime_without_packing_them(self):
-        result = transfer.export(self.root, self.run, self.bundle)
+    def test_explicit_external_reuses_clone_and_ssh_runtime_without_packing_them(self):
+        result = transfer.export(self.root, self.run, self.bundle, dependencies='external')
         self.assertEqual(result['dependencies'], 'external')
         manifest = transfer.inspect_bundle(result['bundle'])
         external = {r['path'] for r in manifest['files'] if r['external']}
@@ -308,7 +329,7 @@ class TransferTests(unittest.TestCase):
         for kind in ('ordinary', 'search'):
             self.assertIn(f'training/runtime/throughput/{kind}/runtime.json', external)
             self.assertIn(f'training/runtime/throughput/{kind}/BrassHost.exe', external)
-        self.assertEqual(manifest['source_recipe'], 2)
+        self.assertEqual(manifest['source_recipe'], transfer.SOURCE_RECIPE)
         self.assertFalse(any(r['path'].startswith('artifacts/training-host/') for r in manifest['files']))
         dll = next(r for r in manifest['files'] if r['path'].endswith('engine.dll'))
         self.assertNotIn(transfer.payload_name(manifest, dll), self.archive_bytes(result['bundle']))
@@ -340,14 +361,17 @@ class TransferTests(unittest.TestCase):
         (self.run / 'best.pt').write_bytes(b'updated independently')
         self.assertEqual((self.run / 'population/historical.pt').read_bytes(), b'old opponent')
 
-    def test_repo_mode_omits_clean_tracked_files_but_includes_private_runtime(self):
+    def test_default_repo_omits_clean_tracked_files_but_includes_private_runtime(self):
         tracked = {'scripts/step5.py', 'src/brass_ai/beliefs.py', 'training/runtime/parity.json'}
         with patch.object(transfer, 'git_baseline', return_value=('test-commit', tracked)):
-            result = transfer.export(self.root, self.run, self.bundle, dependencies='repo', part_mb=0)
+            result = transfer.export(self.root, self.run, self.bundle, part_mb=0)
         manifest = transfer.inspect_bundle(self.bundle)
         external = {r['path'] for r in manifest['files'] if r['external']}
         self.assertEqual(external, tracked)
         self.assertEqual(result['git_commit'], 'test-commit')
+        self.assertEqual(result['dependencies'], 'repo')
+        self.assertEqual(result['bundled_runtime_files'], 2)
+        self.assertEqual(result['bundled_runtime_files'], result['runtime_files'])
         private = next(r for r in manifest['files'] if r['path'].endswith('engine.dll'))
         self.assertFalse(private['external'])
         backup = self.move_source()
@@ -357,6 +381,37 @@ class TransferTests(unittest.TestCase):
         for name in tracked:
             self.put(name, (backup / name).read_bytes())
         self.assertTrue(transfer.restore(self.root, self.bundle)['verified'])
+
+    def test_repo_keeps_all_runtime_in_assets_even_if_a_runtime_file_is_tracked(self):
+        runtime = {'artifacts/r1-host/guarded/engine.dll', 'artifacts/r1-host/guarded/runtime.json'}
+        with patch.object(transfer, 'git_baseline', return_value=('test-commit', runtime)):
+            result = transfer.export(self.root, self.run, self.bundle, part_mb=0)
+        manifest = transfer.inspect_bundle(self.bundle)
+        self.assertTrue(all(not r['external'] for r in manifest['files'] if r['path'] in runtime))
+        self.assertEqual(result['runtime_files'], result['bundled_runtime_files'])
+        self.move_source()
+        self.assertTrue(transfer.restore(self.root, self.bundle)['verified'])
+
+    def test_missing_or_changed_rules_dll_fails_before_creating_bundle(self):
+        dll = self.root / 'artifacts/r1-host/guarded/engine.dll'
+        dll.unlink()
+        with self.assertRaisesRegex(ValueError, 'Missing dependency'):
+            transfer.export(self.root, self.run, self.bundle)
+        self.assertFalse(self.bundle.exists())
+        dll.write_bytes(b'changed rules')
+        with self.assertRaisesRegex(ValueError, 'Dependency hash differs'):
+            transfer.export(self.root, self.run, self.bundle)
+        self.assertFalse(self.bundle.exists())
+
+    def test_restore_near_windows_path_limit_uses_short_temporary_filename(self):
+        name = 'weights-' + 'a' * (240 - len(str(self.run)) - 12) + '.pt'
+        path = self.put('artifacts/step5/selfplay/' + name, b'pinned model')
+        self.assertEqual(len(str(path)), 240)
+        self.put('artifacts/step5/selfplay/pins.json', dict(paths=[path.relative_to(self.root).as_posix()]))
+        self.export()
+        self.move_source()
+        self.assertTrue(transfer.restore(self.root, self.bundle)['verified'])
+        self.assertEqual(path.read_bytes(), b'pinned model')
 
     def test_parts_restore_without_joining_archive_and_detect_missing_or_changed_part(self):
         pin = 'artifacts/step5/selfplay/extra.pt'
@@ -411,6 +466,7 @@ class TransferTests(unittest.TestCase):
         self.move_source()
         self.assertTrue(transfer.restore(self.root, old)['verified'])
         self.assertEqual(transfer.read(self.run / 'state.json'), self.state)
+        self.assertFalse(transfer.restore(self.root, old, verify_only=True)['requires_code_update'])
 
     def test_default_zstd_multithreaded_archive_is_standard_tar_and_restores_large_payload(self):
         pin = 'artifacts/step5/selfplay/extra.pt'
@@ -523,13 +579,16 @@ class TransferTests(unittest.TestCase):
         env = dict(os.environ, SLURM_CPUS_PER_TASK='2')
         command = [sys.executable, str(ROOT / 'scripts/step5-transfer.py'), 'export',
                    '--root', str(self.root), '--run', str(self.run), '--bundle', str(self.bundle),
-                   '--part-mb', '0', '--dependencies', 'bundled']
+                   '--part-mb', '0']
         result = subprocess.run(command, env=env, capture_output=True, text=True, check=True)
         self.assertIn('"archive_format": "zstd"', result.stdout)
         with patch.dict(os.environ, SLURM_CPUS_PER_TASK='2'):
             self.assertLessEqual(transfer.available_cpus(), 2)
         self.assertEqual(self.bundle.read_bytes()[:4], transfer.ZSTD_MAGIC)
-        self.assertEqual(transfer.json.loads(result.stdout)['archive_format'], 'zstd')
+        output = transfer.json.loads(result.stdout)
+        self.assertEqual(output['archive_format'], 'zstd')
+        self.assertEqual(output['dependencies'], 'repo')
+        self.assertEqual(output['bundled_runtime_files'], 2)
         self.assertTrue(transfer.restore(self.root, self.bundle)['verified'])
 
 

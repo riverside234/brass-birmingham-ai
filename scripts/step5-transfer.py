@@ -1,11 +1,12 @@
-"""Private, byte-preserving transfer of a stopped Step 5 run.
+"""Byte-preserving transfer of a stopped Step 5 run.
 
-Default: multithreaded tar.zst (backports.zstd on Python < 3.14).
+Default: Git code plus bundled private runtime, in multithreaded tar.zst
+(backports.zstd on Python < 3.14). Publish through GitHub Release assets.
 Legacy ZIP export/restore remains available with only the standard library.
 
-Keep this outside the source-bound learning packages: adding a transport tool
-must not invalidate a live PPO run's implementation identity. No checkpoints or
-state signatures are rewritten, and no game/training process is launched.
+The transport itself stays outside the training fingerprint. The shared path
+resolver is source-bound and older trainers need a reviewed source transition.
+No checkpoints or state signatures are rewritten and no training is launched.
 """
 import argparse
 from contextlib import contextmanager, ExitStack
@@ -24,12 +25,16 @@ import uuid
 import zipfile
 from bisect import bisect_right
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'src'))
+from brass_ai.learning.paths import (RELOCATION_FILE, confined, make_relocation, read_relocation,
+    reference_suffix, resolve_project_path, root_key, source_roots, validate_roots)
 
 FORMAT = 'step5-private-transfer/1.1.0'
 OLD_FORMAT = 'step5-private-transfer/1.0.0'
 PARTS_FORMAT = 'step5-transfer-parts/1.0.0'
-SOURCE_RECIPE = 2  # 1: Python-only; 2: additive training hosts and build inputs.
-SKIP = {'__pycache__', '.git', '.active-run.json'}
+SOURCE_RECIPE = 3  # 1: Python; 2: hosts/build inputs; 3: bank/legacy path resolvers.
+RELOCATION_VERSION = 'step5-project-relocation/1.1.0'
+SKIP = {'__pycache__', '.git', '.active-run.json', '.run-locks'}
 CODE_TREES = ('src', 'scripts', 'configs', 'training/opponents', 'training/runtime')
 CHUNK = 1024 * 1024
 ZSTD_MAGIC = b'\x28\xb5\x2f\xfd'
@@ -57,44 +62,49 @@ def sha(path):
         return hashlib.file_digest(stream, 'sha256').hexdigest()
 
 
+def publish(temporary, path):
+    """Atomic publication that cannot overwrite a racing destination file."""
+    if os.name == 'nt':
+        temporary.rename(path)  # Windows rename fails if the destination exists.
+    else:
+        os.link(temporary, path)
+        temporary.unlink()
+
+
 def relative(name):
     require(isinstance(name, str) and name and '\\' not in name and ':' not in name, 'Invalid portable path')
     p = PurePosixPath(name)
     require(not p.is_absolute() and p.as_posix() == name
             and all(x not in ('.', '..') and not x.endswith((' ', '.')) for x in p.parts), 'Unsafe archive path: ' + name)
-    require(not any(x in ('.git', '.aws', '.ssh', '.codex', '.agents') for x in p.parts), 'Private configuration path forbidden')
+    require(not any(x.casefold() in ('.git', '.aws', '.ssh', '.codex', '.agents') for x in p.parts), 'Private configuration path forbidden')
+    require(not any(any(c in x for c in '<>"|?*') or x.split('.')[0].upper() in
+                    {'CON','PRN','AUX','NUL',*(f'COM{i}' for i in range(1,10)),*(f'LPT{i}' for i in range(1,10))}
+                    for x in p.parts), 'Non-portable archive path: ' + name)
     return p
 
 
 def below(root, name):
     root = Path(root).resolve()
-    p = Path(name)
-    p = p if p.is_absolute() else root / p
-    require(p.is_relative_to(root) and p != root, 'Path outside project root: ' + str(name))
-    for item in (p, *p.parents):
-        if item == root:
-            break
-        if item.exists() or item.is_symlink():
-            info = item.lstat()
-            require(not stat.S_ISLNK(info.st_mode) and not getattr(info, 'st_file_attributes', 0) & 0x400,
-                    'Linked transfer path: ' + str(item))
-    require(p.resolve().is_relative_to(root), 'Resolved path outside project')
+    p = resolve_project_path(root, name)
+    require(p != root, 'Expected a path below project root: ' + str(name))
     return p
 
 
 def source_identity(root, *, recipe=None):
     """The current implementation_id recipe, without importing torch/runtimes."""
     recipe = SOURCE_RECIPE if recipe is None else recipe
-    require(recipe in (1, 2), 'Unsupported implementation fingerprint recipe')
+    require(recipe in (1, 2, 3), 'Unsupported implementation fingerprint recipe')
     root = Path(root)
     base = root / 'src/brass_ai'
     paths = [p for group in ('step5', 'recovery', 'search', 'learning') for p in (base / group).glob('*.py')]
     paths += [base / p for p in ('learning/runner.py', 'learning/batching.py', 'searchlab/spiel.py', 'beliefs.py', 'runtime_contracts.py')]
-    if recipe == 2:
+    if recipe >= 2:
         paths += [base / 'host.py']
         paths += sorted((root / 'src/BrassTrainingHost').glob('*.cs'))
         paths += [root / 'scripts/build-training-host.py', root / 'scripts/build-search-host.py']
         paths += sorted((root / 'training/runtime/throughput').glob('*/runtime.json'))
+    if recipe >= 3:
+        paths += [base / 'bank.py', base / 'legacy.py']
     paths += sorted((root / 'configs/contracts/masked-ismcts').glob('*.json'))
     paths += [root / 'configs/references/masked-ismcts.lock.json']
     return digest({p.relative_to(root).as_posix(): p.read_text(encoding='utf-8').replace('\r\n', '\n') for p in sorted(paths)})
@@ -159,6 +169,7 @@ def inventory(root, run, *, mode='compact'):
     require(not (run / f"generation-{state['iteration'] + 1:04d}.pt").exists(), 'Uncommitted checkpoint; recover before export')
     files = {}
     runs = {run}
+    hosts = {below(root, state['signature']['config']['host'])}
     def add(path, expected=None):
         path = below(root, path)
         require(path.is_file(), 'Missing dependency: ' + str(path))
@@ -194,30 +205,33 @@ def inventory(root, run, *, mode='compact'):
         latest_report = run / f"iteration-{state['iteration'] - 1:04d}" / 'report.json'
         if latest_report.is_file():
             add(latest_report)
-        for folder in sorted((run / 'evaluations').glob('*')):
-            if not folder.is_dir():
-                continue
-            if (folder / 'spec.json').is_file() and not (folder / 'report.json').is_file():
-                tree(folder)
-                def references(value):
-                    if isinstance(value, dict):
-                        if isinstance(value.get('path'), str) and value.get('sha256'):
-                            path = below(root, value['path'])
-                            if path.is_relative_to(run):
-                                add(path, value['sha256'])
-                        for child in value.values():
-                            references(child)
-                    elif isinstance(value, list):
-                        for child in value:
-                            references(child)
-                references(read(folder / 'spec.json'))
-            else:
-                for name in ('spec.json', 'report.json'):
-                    if (folder / name).is_file():
-                        add(folder / name)
         if (run / 'pins.json').is_file():
             for name in read(run / 'pins.json')['paths']:
                 add(name)
+    # A pending screen can select a different host or models outside this run.
+    # Full mode includes its local files, but still needs these dependencies.
+    for folder in sorted((run / 'evaluations').glob('*')):
+        if not folder.is_dir():
+            continue
+        if (folder / 'spec.json').is_file() and not (folder / 'report.json').is_file():
+            tree(folder)
+            spec = read(folder / 'spec.json')
+            if spec.get('config', {}).get('host'):
+                hosts.add(below(root, spec['config']['host']))
+            def references(value):
+                if isinstance(value, dict):
+                    if isinstance(value.get('path'), str) and value.get('sha256'):
+                        add(value['path'], value['sha256'])
+                    for child in value.values():
+                        references(child)
+                elif isinstance(value, list):
+                    for child in value:
+                        references(child)
+            references(spec)
+        else:
+            for name in ('spec.json', 'report.json'):
+                if (folder / name).is_file():
+                    add(folder / name)
     live = state.get('resume', []) + state.get('population', []) + [state['history'][-1], state['evaluation_anchor']]
     # update_population also considers historical checkpoints still on disk.
     # Keep any such candidate not already represented in the live weight pool;
@@ -234,19 +248,38 @@ def inventory(root, run, *, mode='compact'):
         add(gate['report'], gate['report_sha256'])
         add(below(root, gate['report']).parent / 'spec.json')
     distribution = read(root / 'training/runtime/distribution.json')
+    runtime = {below(root, name).relative_to(root).as_posix() for name in distribution['private_runtime_files']}
     for name, expected in distribution['private_runtime_files'].items():
         add(name, expected)
     for entry in distribution['assets']:
         add(entry['path'], entry['sha256'])
     # Runtime metadata/receipts are preserved byte-for-byte. No new parity
     # receipt travels: preflight must run on the destination computer.
-    host = below(root, state['signature']['config']['host'])
-    add(host / 'runtime.json')
-    for entry in read(host / 'runtime.json')['files']:
-        add(host / entry['name'], entry['sha256'])
+    for host in sorted(hosts):
+        add(host / 'runtime.json')
+        runtime.add((host / 'runtime.json').relative_to(root).as_posix())
+        for entry in read(host / 'runtime.json')['files']:
+            require(len(relative(entry['name']).parts) == 1, 'Unsafe runtime filename: ' + entry['name'])
+            add(host / entry['name'], entry['sha256'])
+            runtime.add((host / entry['name']).relative_to(root).as_posix())
+    # LegacyWorker checks path/sha256 source pins at startup; additive hosts
+    # check LF-normalized authored_sources. These are live dependencies even
+    # when a custom host keeps its sources outside the usual code trees.
+    metadata_paths = {root / n for n in runtime if n.endswith('/runtime.json')}
+    metadata_paths.update((root / 'training/runtime/throughput').glob('*/runtime.json'))
+    for metadata_path in sorted(metadata_paths):
+        metadata = read(metadata_path)
+        for entry in metadata.get('sources', []):
+            if 'path' in entry:
+                add(entry['path'], entry['sha256'])
+        for name, expected in metadata.get('authored_sources', {}).items():
+            path = below(root, name)
+            add(path)
+            require(hashlib.sha256(path.read_text(encoding='utf-8-sig').replace('\r\n', '\n').encode()).hexdigest() == expected,
+                    'Runtime authored source hash differs: ' + name)
     environment = {name for name in files if any(name.startswith(p + '/') for p in CODE_TREES)
-                   or name.startswith('requirements') or name in distribution['private_runtime_files']
-                   or below(root, name).is_relative_to(host)}
+                   or name.startswith('requirements') or name in runtime
+                   or any(below(root, name).is_relative_to(host) for host in hosts)}
     manifests = set()
     def dataset(name, expected=None, replay=False):
         path = below(root, name)
@@ -275,6 +308,10 @@ def inventory(root, run, *, mode='compact'):
         s = read(folder / 'state.json')
         require((folder / 'report.json').is_file(), 'Missing completed IL report')
         add(origin['path'], origin['sha256'])
+        if s.get('best'):
+            selected = resolve_project_path(root, s['best']['path'], base=folder)
+            require(selected.is_relative_to(folder), 'IL checkpoint outside its owned run')
+            add(selected, s['best']['sha256'])
         dataset(origin['manifest'], origin['manifest_sha256'])
         parent = s['signature'].get('parent_imitation')
         if parent:
@@ -290,11 +327,11 @@ def inventory(root, run, *, mode='compact'):
     if state.get('imitation', {}).get('manifest'):
         dataset(state['imitation']['manifest'], state['imitation']['manifest_sha256'])
     return dict(root=root, run=run, runs=sorted(runs), state=state, files=files,
-                rehearsal_included=rehearsal, datasets=sorted(manifests), environment=environment)
+                rehearsal_included=rehearsal, datasets=sorted(manifests), environment=environment, runtime=runtime)
 
 
 def summary(manifest):
-    return {k: manifest[k] for k in ('format', 'source_root', 'run', 'iteration', 'games_done', 'rehearsal_included')}
+    return {k: manifest[k] for k in ('format', 'source_root', 'run', 'config', 'iteration', 'games_done', 'rehearsal_included')}
 
 
 def git_baseline(root):
@@ -364,7 +401,7 @@ def add_member(archive, name, source, size):
             archive.addfile(info, stream)
 
 
-def export(root, run, bundle, *, dry_run=False, mode='compact', dependencies='external', part_mb=1900,
+def export(root, run, bundle, *, dry_run=False, mode='compact', dependencies='repo', part_mb=1900,
            archive_format='zstd', zstd_level=3, threads=0):
     require(dependencies in ('repo', 'bundled', 'external'), 'Unknown dependency mode')
     require(type(part_mb) is int and 0 <= part_mb <= 2000, 'Part size must be 0 (unsplit) or 1–2000 MB')
@@ -396,15 +433,18 @@ def export(root, run, bundle, *, dry_run=False, mode='compact', dependencies='ex
         commit, tracked = git_baseline(root) if dependencies in ('repo', 'external') else (None, set())
         records = [dict(path=name, sha256=sha(source) if isinstance(source, Path) else hashlib.sha256(source).hexdigest(),
                         bytes=source.stat().st_size if isinstance(source, Path) else len(source),
-                        external=name in data['environment'] and (dependencies == 'external' or name in tracked)) for name, source in sorted(files.items())]
+                        external=name in data['environment'] and (dependencies == 'external' or
+                            (name in tracked and name not in data['runtime']))) for name, source in sorted(files.items())]
         manifest = dict(format=FORMAT, source_root=str(root), run=run.relative_to(root).as_posix(),
             runs=[p.relative_to(root).as_posix() for p in data['runs']], iteration=data['state']['iteration'],
             games_done=data['state']['games_done'], implementation=data['state']['signature']['implementation'],
-            source_recipe=SOURCE_RECIPE,
-            state_sha256=state_hash, config=cfg_name, imitation_run=data['state']['signature'].get('imitation_source', {}).get('bc_run'),
+            source_recipe=SOURCE_RECIPE, path_roots=source_roots(root), relocation_version=RELOCATION_VERSION,
+            state_sha256=state_hash, config=cfg_name, imitation_run=(below(root, data['state']['signature']['imitation_source']['bc_run']).relative_to(root).as_posix()
+                if data['state']['signature'].get('imitation_source') else None),
             rehearsal_included=data['rehearsal_included'], mode=mode, dependencies=dependencies, git_commit=commit, files=records)
         manifest['id'] = digest(manifest)
         included = [r for r in records if not r['external']]
+        bundled_runtime = [r for r in included if r['path'] in data['runtime']]
         unique = {r['sha256']: r for r in included}
         sizes = {}
         for record in included:
@@ -412,6 +452,8 @@ def export(root, run, bundle, *, dry_run=False, mode='compact', dependencies='ex
             sizes[category] = sizes.get(category, 0) + record['bytes']
         result = dict(summary(manifest), mode=mode, dependencies=dependencies, git_commit=commit, files=len(included),
             external_files=len(records) - len(included), bytes=sum(r['bytes'] for r in included),
+            runtime_files=len(data['runtime']), bundled_runtime_files=len(bundled_runtime),
+            bundled_runtime_bytes=sum(r['bytes'] for r in bundled_runtime),
             unique_payload_bytes=sum(r['bytes'] for r in unique.values()), category_bytes=sizes,
             largest_files=sorted(included, key=lambda r: (-r['bytes'], r['path']))[:10],
             part_mb=part_mb, dry_run=dry_run, archive_format=archive_format,
@@ -596,14 +638,30 @@ def inspect_bundle(bundle):
                 actual[name] = (size, hashlib.file_digest(stream, 'sha256').hexdigest())
     require(manifest is not None, 'Missing transfer manifest')
     require(manifest['format'] in (FORMAT, OLD_FORMAT) and manifest['id'] == digest({k: v for k, v in manifest.items() if k != 'id'}), 'Invalid transfer manifest')
-    require(manifest.get('source_recipe', 1) in (1, 2), 'Unsupported implementation fingerprint recipe')
+    require(manifest.get('source_recipe', 1) in (1, 2, 3), 'Unsupported implementation fingerprint recipe')
+    roots = validate_roots(manifest.get('path_roots', [manifest['source_root']]))
+    require(roots and root_key(roots[0]) == root_key(manifest['source_root']), 'Transfer source root binding differs')
+    if manifest.get('imitation_run'):
+        suffix = reference_suffix(roots, manifest['imitation_run'])
+        relative('/'.join(suffix) if suffix is not None else manifest['imitation_run'])
     files = manifest['files']
     names = [r['path'] for r in files]
     require(len(names) == len({n.casefold() for n in names}), 'Duplicate/case-colliding transfer paths')
+    folded = {n.casefold() for n in names}
+    for name in names:
+        parts = relative(name).parts
+        # Only the marker is created/deleted by transfer's lease. Old full
+        # archives may contain inert OS guard files; preserve their bytes like
+        # any other file, with normal hash/path checks. New exports omit them.
+        require(not any(p.casefold() == '.active-run.json' for p in parts),
+                'Archive contains reserved run lease/control path: ' + name)
+        require(not any('/'.join(parts[:i]).casefold() in folded for i in range(1, len(parts))),
+                'Transfer file collides with a required directory: ' + name)
     payloads = {payload_name(manifest, r) for r in files if not r.get('external', False)}
     require(set(actual) == payloads, 'Unexpected archive members')
     for record in files:
         relative(record['path'])
+        require(record['path'].casefold() != RELOCATION_FILE.casefold(), 'Archive cannot supply relocation metadata')
         require(type(record.get('external', False)) is bool and type(record['bytes']) is int and record['bytes'] >= 0, 'Invalid file metadata')
         require(len(record['sha256']) == 64 and all(c in '0123456789abcdef' for c in record['sha256']), 'Invalid file digest')
         if record.get('external', False):
@@ -616,6 +674,8 @@ def inspect_bundle(bundle):
         relative(name)
     require(manifest['run'] in manifest['runs'] and all(n.startswith('artifacts/') for n in manifest['runs']), 'Invalid run roots')
     by_name = {r['path']: r for r in files}
+    require(manifest['config'] in by_name, 'Missing saved resume config')
+    require(not any(n.casefold() in folded for n in manifest['runs']), 'Run root collides with a transfer file')
     require(by_name[manifest['run'] + '/state.json']['sha256'] == manifest['state_sha256'], 'State binding differs')
     return manifest
 
@@ -625,17 +685,33 @@ def commands(root, manifest, *, iterations=20, device='cuda'):
     base = ['python', str(root / 'scripts/step5.py'), '--root', str(root), '--config', str(root / manifest['config']), '--device', device]
     resume = base + ['train', '--run', str(root / manifest['run']), '--iterations', str(iterations)]
     if manifest['imitation_run']:
-        resume += ['--imitation-run', str(root / manifest['imitation_run'])]
+        resume += ['--imitation-run', str(below(root, manifest['imitation_run']))]
     return dict(preflight=shlex.join(base + ['preflight']), resume=shlex.join(resume))
 
 
-def restore(root, bundle, *, verify_only=False):
+def restore(root, bundle, *, verify_only=False, relocate=False):
     root = Path(root).resolve()
     manifest = inspect_bundle(bundle)  # verify all archive bytes BEFORE filesystem writes
-    require(str(root) == manifest['source_root'],
-            'Preserve the original absolute project root on the new machine: ' + manifest['source_root'] +
-            '. Stored reports/configs may contain absolute paths; this tool never rewrites signed evidence.')
+    existing = read_relocation(root)
+    same_root = root_key(str(root)) == root_key(manifest['source_root'])
+    metadata = make_relocation(root, manifest.get('path_roots', [manifest['source_root']]), manifest['id'])
+    metadata_bytes = encode(metadata)
+    # Match the shared runtime reader's limit before creating any files. A
+    # manifest's individually valid roots can still exceed that combined limit.
+    require(len(metadata_bytes) < 65536, 'Oversized relocation metadata; historical root mappings exceed 64 KiB')
+    needs_mapping = bool(metadata['source_roots'])
+    # Re-exporting an already relocated project produces a new archive ID.
+    # Verification at that source must retain its original sidecar receipt;
+    # the identical mapping and all archive file hashes are still checked.
+    matching_metadata = existing == metadata or (same_root and existing is not None and
+                                                existing['source_roots'] == metadata['source_roots'])
+    require(same_root or relocate or existing == metadata,
+            'Destination differs from the original absolute project root: ' + manifest['source_root'] +
+            '. Use --relocate to map historical paths without rewriting signed evidence.')
+    require(existing is None or matching_metadata, 'Conflicting destination relocation metadata; nothing overwritten')
+    require(not (verify_only and needs_mapping and existing is None), 'Missing relocation metadata; run restore --relocate first')
     runs = [below(root, n) for n in manifest['runs']]
+    require(all(not p.exists() or p.is_dir() for p in runs), 'Conflicting destination run directory')
     require(all(not active(p) for p in runs), 'Destination run is active')
     for record in manifest['files']:
         path = below(root, record['path'])
@@ -658,7 +734,9 @@ def restore(root, bundle, *, verify_only=False):
                     for record in needed.pop(name, []):
                         path = below(root, record['path'])
                         path.parent.mkdir(parents=True, exist_ok=True)
-                        temporary = path.with_name(path.name + '.' + uuid.uuid4().hex + '.partial')
+                        # Model filenames already contain a full digest. Do not
+                        # append another long suffix and exceed Windows limits.
+                        temporary = path.with_name('.transfer-' + uuid.uuid4().hex + '.partial')
                         try:
                             # A deduplicated object is decoded once. Subsequent
                             # paths get separate files, so training can mutate
@@ -670,7 +748,7 @@ def restore(root, bundle, *, verify_only=False):
                                     target.write(block)
                             require(sha(temporary) == record['sha256'], 'Restored file hash differs')
                             require(not path.exists(), 'Destination appeared during restore')
-                            temporary.rename(path)
+                            publish(temporary, path)
                             first = path
                         finally:
                             if temporary.exists():
@@ -680,7 +758,22 @@ def restore(root, bundle, *, verify_only=False):
     # Verify their original identity; never relabel it as the current source.
     require(source_identity(root, recipe=manifest.get('source_recipe', 1)) == manifest['implementation'],
             'Destination source identity differs')
-    return dict(summary(manifest), verified=True, **commands(root, manifest))
+    if needs_mapping and existing is None:
+        path = confined(root, (RELOCATION_FILE,))
+        temporary = path.with_name('.transfer-' + uuid.uuid4().hex + '.partial')
+        try:
+            with temporary.open('xb') as out:
+                out.write(metadata_bytes)
+            # No replacement: concurrent/unrelated destination metadata must win.
+            publish(temporary, path)
+        finally:
+            temporary.unlink(missing_ok=True)
+    return dict(summary(manifest), verified=True, destination_root=str(root), relocated=needs_mapping,
+                imitation_run=(below(root, manifest['imitation_run']).relative_to(root).as_posix()
+                               if manifest['imitation_run'] else None),
+                requires_code_update=needs_mapping and (manifest.get('source_recipe', 1) < 3 or
+                                                        manifest.get('relocation_version') != RELOCATION_VERSION),
+                **commands(root, manifest))
 
 
 def main():
@@ -692,7 +785,7 @@ def main():
     out.add_argument('--bundle', required=True, type=Path)
     out.add_argument('--dry-run', action='store_true')
     out.add_argument('--mode', choices=('compact', 'full'), default='compact', help='Default: live checkpoints/evidence; omit consumed replays, caches, trash and unused IL epochs')
-    out.add_argument('--dependencies', choices=('external', 'repo', 'bundled'), default='external', help='Default external: code from Git and private runtime from SSH, both hash-checked. Repo/bundled include private runtime and are for private file transfer only')
+    out.add_argument('--dependencies', choices=('repo', 'bundled', 'external'), default='repo', help='Default repo: unchanged code from Git, game runtime included for Release assets. Bundled: also include code. External: legacy mode requiring separately installed code and runtime')
     out.add_argument('--format', choices=('zstd', 'zip'), default='zstd', dest='archive_format', help='Default zstd: streaming .tar.zst; zip: legacy DEFLATE format')
     out.add_argument('--zstd-level', type=int, default=3, help='Zstd compression level 1–22 (default 3)')
     out.add_argument('--threads', type=int, default=0, help='Zstd compression threads: 0=available CPUs/SLURM allocation (default), 1=single thread')
@@ -701,12 +794,13 @@ def main():
         cmd = sub.add_parser(name)
         cmd.add_argument('--root', required=True, type=Path)
         cmd.add_argument('--bundle', required=True, type=Path)
+        cmd.add_argument('--relocate', action='store_true', help='Use --root as a new project directory; preserve signed files and persist confined old-root mappings')
     a = parser.parse_args()
     if a.command == 'export':
         result = export(a.root, a.run, a.bundle, dry_run=a.dry_run, mode=a.mode, dependencies=a.dependencies, part_mb=a.part_mb,
                         archive_format=a.archive_format, zstd_level=a.zstd_level, threads=a.threads)
     else:
-        result = restore(a.root, a.bundle, verify_only=a.command == 'verify')
+        result = restore(a.root, a.bundle, verify_only=a.command == 'verify', relocate=a.relocate)
     print(json.dumps(result, indent=2, allow_nan=False))
 
 

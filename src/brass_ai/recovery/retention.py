@@ -160,9 +160,10 @@ def _references(root,run):
     # Repeated manifests often name the same paths. Resolve once in this read
     # pass; never cache across cleanup passes or bypass safe() before deletion.
     resolved_paths={}
-    def resolve(path):
-        if path not in resolved_paths:resolved_paths[path]=path.resolve()
-        return resolved_paths[path]
+    def resolve(path,base=None):
+        key=(path,base)
+        if key not in resolved_paths:resolved_paths[key]=project_path(root,path,base=base)
+        return resolved_paths[key]
     for receipt in (run/'.retention').glob('cleanup-*.json'):
         for entry in read(receipt)['entries']:
             if entry['path'].endswith('.json') and entry.get('quarantine') and not (entry.get('deleted') or entry.get('restored')):
@@ -201,9 +202,7 @@ def _references(root,run):
         visited.add(resolve(p))
         for value in dict.fromkeys(strings(data)):
             if not value.endswith(('.pt','.jsonl.gz','.npz','.json')): continue
-            candidates=[root/value,p.parent/value] if not Path(value).is_absolute() else [Path(value)]
-            for candidate in candidates:
-                resolved=resolve(candidate)
+            for resolved in dict.fromkeys((resolve(value),resolve(value,base=p.parent))):
                 # Remember dependencies even while their original path is in
                 # quarantine, so a new pin can rescue it before permanent purge.
                 if resolved.is_relative_to(run): pins[resolved]=reason+' '+str(p.relative_to(root))

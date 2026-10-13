@@ -17,7 +17,7 @@ import torch
 
 from brass_ai.bank import sha
 from brass_ai.host import RulesHost
-from brass_ai.learning.contracts import CONFIG_DIR, digest, read_json, require
+from brass_ai.learning.contracts import CONFIG_DIR, digest, read_json, require, project_path
 from brass_ai.learning.replay import split_for, terminal_targets
 from brass_ai.learning.legacy_policy import LegacyPolicy
 from brass_ai.step5.policy import NeuralPolicy, context_for
@@ -225,7 +225,8 @@ def _actor(root,host_path,jobs,results,lease,config,mono,lanes,search_channels,a
                 with ExitStack() as stack:
                     with timings.phase('host.startup'):
                         from .host_runtime import training_host
-                        selected=training_host(root) if Path(host_path).as_posix()=='artifacts/r1-host/guarded' else root/host_path
+                        selected=project_path(root,host_path)
+                        if selected==root/'artifacts/r1-host/guarded':selected=training_host(root)
                         host=stack.enter_context(RulesHost(selected,mono=mono))
                     instrument_host(host,timings)
                     while not stop.is_set():

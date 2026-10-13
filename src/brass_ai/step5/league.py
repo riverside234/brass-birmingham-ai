@@ -17,7 +17,7 @@ def implementation_id():
     base = Path(__file__).parent.parent
     paths = [p for group in ('step5','recovery','search','learning') for p in (base/group).glob('*.py')]
     paths += [base / 'learning/runner.py', base / 'learning/batching.py']
-    paths += [base/'searchlab/spiel.py',base/'beliefs.py',base/'runtime_contracts.py',base/'host.py']
+    paths += [base/'searchlab/spiel.py',base/'beliefs.py',base/'runtime_contracts.py',base/'host.py',base/'bank.py',base/'legacy.py']
     paths += sorted((SOURCE_ROOT/'src/BrassTrainingHost').glob('*.cs'))
     paths += [SOURCE_ROOT/'scripts/build-training-host.py',SOURCE_ROOT/'scripts/build-search-host.py']
     paths += sorted((SOURCE_ROOT/'training/runtime/throughput').glob('*/runtime.json'))

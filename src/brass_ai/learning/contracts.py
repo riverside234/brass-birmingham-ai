@@ -5,6 +5,7 @@ import hashlib
 import json
 import math
 from pathlib import Path, PurePosixPath
+from .paths import resolve_project_path
 
 LAB_ROOT = Path('/data/not_backed_up/yxu209/ai-training/')
 SOURCE_ROOT = Path(__file__).resolve().parents[3]
@@ -54,12 +55,9 @@ def finite_vector(value, length, low=None, high=None):
             'Invalid vector values')
 
 
-def project_path(root, relative):
+def project_path(root, relative, *, base=None):
     """All generated paths are under the declared project root; no cwd default."""
-    root = Path(root).resolve()
-    candidate = (root / relative).resolve()
-    require(candidate.is_relative_to(root), 'Path escapes project root')
-    return candidate
+    return resolve_project_path(root, relative, base=base)
 
 
 def compatibility():

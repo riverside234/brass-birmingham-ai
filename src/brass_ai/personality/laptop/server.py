@@ -31,6 +31,7 @@ def serve(directory,backend='ort-cpu',*,fixture=False,mono=None):
             result=runtime.plan(request['body'])
             return dict(protocol=PROTOCOL,id=request['id'],ok=True,data=result)
         except Exception as error:
+            if runtime is not None and runtime.closed:runtime=None
             # No private observations in diagnostics/UI.
             return dict(protocol=PROTOCOL,id=request['id'],ok=False,error=public_error(error))
     try:
@@ -38,7 +39,8 @@ def serve(directory,backend='ort-cpu',*,fixture=False,mono=None):
             request={}
             try:
                 require(len(line)<=8*1024*1024,'Oversized game request')
-                request=json.loads(line);require(request.get('protocol')==PROTOCOL and isinstance(request.get('id'),str),'Invalid service envelope')
+                value=json.loads(line);require(isinstance(value,dict),'Invalid service envelope')
+                request=value;require(request.get('protocol')==PROTOCOL and isinstance(request.get('id'),str),'Invalid service envelope')
                 op=request.get('op')
                 if op in ('cancel','play-now'):
                     # Late UI controls cannot interrupt the next turn or leave

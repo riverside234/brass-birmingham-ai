@@ -4,7 +4,7 @@ import shutil
 import threading
 
 from brass_ai.bank import sha
-from brass_ai.learning.contracts import read_json, require
+from brass_ai.learning.contracts import read_json, require, project_path
 
 _lock=threading.Lock()
 _ready={}
@@ -12,28 +12,37 @@ _ready={}
 def training_host(root,kind='ordinary'):
     root=Path(root).resolve()
     require(kind in ('ordinary','search'),'Unknown training host kind')
-    source=root/'training/runtime/throughput'/kind
+    source=project_path(root,'training/runtime/throughput/'+kind)
     if not (source/'runtime.json').exists():
         # Older installations remain usable; the guide makes the selected
         # runtime and missing fast-path package visible in preflight.
-        return root/('artifacts/r4-host' if kind=='search' else 'artifacts/r1-host/guarded')
-    identity=sha(source/'runtime.json');key=(str(root),kind,identity)
+        return project_path(root,'artifacts/r4-host' if kind=='search' else 'artifacts/r1-host/guarded')
+    metadata=project_path(root,source/'runtime.json')
+    identity=sha(metadata);key=(str(root),kind,identity)
     with _lock:
+        manifest=read_json(metadata)
+        out=project_path(root,'artifacts/training-host/'+kind)
+        project_path(root,out/'runtime.json')
+        base=project_path(root,'artifacts/r1-host/guarded')
+        for entry in manifest['files']:
+            name=entry['name'];require(Path(name).name==name and name not in ('.','..'),'Unsafe runtime filename')
+            project_path(root,out/name)
+            project_path(root,(source if name=='BrassHost.exe' else base)/name)
+        # Cached setup may skip repeated DLL hashes, never path containment.
         if key in _ready:return _ready[key]
-        manifest=read_json(source/'runtime.json')
-        base=root/'artifacts/r1-host/guarded';original=read_json(base/'runtime.json')
+        original=read_json(project_path(root,base/'runtime.json'))
         require(manifest['optimization']=='training-host/1.0.0' and manifest['kind']==kind,'Unknown training runtime')
         import hashlib
         require(hashlib.sha256((root/'scripts/build-training-host.py').read_text(encoding='utf-8-sig').replace('\r\n','\n').encode()).hexdigest()==manifest['builder_sha256'],
                 'Training builder changed; rebuild additive runtime')
         for relative,expected in manifest['authored_sources'].items():
-            path=(root/relative).resolve();require(path.is_relative_to(root),'Unsafe authored source path')
+            path=project_path(root,relative)
             require(hashlib.sha256(path.read_text(encoding='utf-8-sig').replace('\r\n','\n').encode()).hexdigest()==expected,
                     'Training host source changed; rebuild additive runtime: '+relative)
         require(manifest['baseline_host_sha256']==sha(base/'BrassHost.exe'),'Training runtime baseline changed')
         require({f['name']:f['sha256'] for f in manifest['files'] if f['name']!='BrassHost.exe'}==
                 {f['name']:f['sha256'] for f in original['files'] if f['name']!='BrassHost.exe'},'Training rules dependencies changed')
-        out=root/'artifacts/training-host'/kind;out.mkdir(parents=True,exist_ok=True)
+        out.mkdir(parents=True,exist_ok=True)
         # Multiple spawned actors may initialize concurrently. Same immutable
         # source bytes, private temporary names and atomic replacements.
         import os

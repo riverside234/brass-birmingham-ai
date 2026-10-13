@@ -12,6 +12,7 @@ import torch
 from brass_ai.bank import admission,read,sha
 from brass_ai.learning.checkpoint import load_checkpoint,save_checkpoint,resume_optimizer
 from brass_ai.learning.contracts import compatibility,digest,project_path,require
+from brass_ai.learning.paths import bound_reference
 from brass_ai.learning.model import ModelConfig
 from brass_ai.step5.league import write_json,seeds_for,implementation_id
 from brass_ai.step5.policy import INDUSTRIES
@@ -82,6 +83,9 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
     require(not resume_reviewed_source or state_path.exists(),'--resume-reviewed-source needs an existing same-run state.json')
     if state_path.exists():
         state=read(state_path)
+        if bc_origin:
+            signature['imitation_source']=bound_reference(root,bc_origin,state['signature'].get('imitation_source'),
+                ('bc_run','path','manifest'))
         require(initial is None and from_run is None,'Omit initialization when resuming')
         from .resume import load_resume
         model,raw,source_changed=load_resume(root,run,state,signature,device=device,reviewed=resume_reviewed_source)

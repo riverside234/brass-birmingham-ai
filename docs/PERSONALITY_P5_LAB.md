@@ -2,6 +2,8 @@
 
 P5 tools are implemented. **Real calibration, human review, and qualification are pending.** The actual Step 5 parent is still training, and there is no qualified P4 roster yet. All local P5 results are explicitly untrained fixtures. No Easy/Medium/Hard level is currently certified, and this package does not install or export a game AI.
 
+The current verifier is `personality-difficulty/1.2.0`. The [P5/P6 audit](PERSONALITY_P5_P6_AUDIT_2026-10-12.md) added panel-wide job ownership, full derived-report revalidation and preparation-failure cleanup. Earlier P5 evidence must be regenerated under new panels; Step 5 and P0–P4 continuation are unchanged.
+
 The separate `scripts/personality_difficulty.py` command reuses P0's handoff, P1's unchanged shared network, P2's intent/search/central inference, and P4's roster, profiles, frozen reference pool and pinned qualification evidence. It neither resumes nor writes into Step 5. Existing datasets, IL handoff, model weights, optimizer state and training progress retain their existing contracts; **P5 requires no Step 5 checkpoint migration**.
 
 ## 1. Environment and prerequisites
@@ -84,7 +86,7 @@ python "$ROOT/scripts/personality_difficulty.py" --root "$ROOT" --device cuda co
 
 Continue disjoint slices only when the study is budgeted. A command accepts at most 4,096 games. `--tables` must match the frozen plan; fewer remaining jobs naturally activate fewer tables. CPU admission comes from the pinned handoff's allocation. Do not run a second calibration workload alongside training if training already occupies that allocation.
 
-A reservation is written before collection. Expected game failures are retained as failures, without legal-policy replacements or favorable retries. A crashed invocation can leave an incomplete reservation; it is not valid evidence. Diagnose/recover under an explicit study amendment rather than overwriting it, skipping the failed jobs or silently rerunning for a better result. Changed models, search profiles, sources or runtime bytes require new evidence; no hash rewriting is supported.
+A sealed panel-owned `reservations.json` assigns jobs to chunk paths before collection under an OS-backed lock. A different output directory cannot retry an already reserved job, and copied chunks cannot replace its evidence. Expected game failures are retained as failures, without legal-policy replacements or favorable retries. A crashed invocation can leave an incomplete reservation; it is not valid evidence. Preserve the ledger and diagnose/recover under an explicit study amendment rather than overwriting it, skipping the failed jobs or silently rerunning for a better result. Changed models, search profiles, sources or runtime bytes require new evidence; no hash rewriting is supported.
 
 Reports include completed/interrupted simulations, fallbacks, prior/search seconds, overruns, game time, admission/batching telemetry and the measured machine/backend. Timing on the lab is not a laptop certificate. A changed table allowance, backend or clock does not inherit an existing strength claim. For eventual laptop validation, make a separate declared panel with its actual resources; P6 owns integration and runtime timing.
 
@@ -204,7 +206,7 @@ Local evidence is under `artifacts/personality/p5-20261012/`: `targeted-final-fi
 
 ### P5/P6 review corrections
 
-The P5 verifier is now `personality-difficulty/1.1.0`. A qualified flag alone cannot enable tiers: the portable summary must contain all named gates, the complete member/mixture/tier set, source identities, release coverage and human review. Loading a report also recomputes its metrics and gates from the pinned game records. An original-Hard failure is disqualifying even if a record inconsistently omits the outer failure flag.
+The earlier review introduced `personality-difficulty/1.1.0`, now superseded by 1.2.0 above. A qualified flag alone cannot enable tiers: the portable summary must contain all named gates, the complete member/mixture/tier set, source identities, release coverage and human review. Loading a report also recomputes its metrics and gates from the pinned game records. An original-Hard failure is disqualifying even if a record inconsistently omits the outer failure flag.
 
 Release planning and loading now follow the calibration report's underlying chunk/game/review dependencies, check its exact recipe, and preserve the excluded training/calibration setup groups. Keeping a report after deleting its evidence cannot support qualification. Public menus remain disabled for incomplete evidence.
 

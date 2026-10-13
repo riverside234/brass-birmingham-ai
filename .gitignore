@@ -567,6 +567,7 @@ tensorboard/
 .DS_Store
 Thumbs.db
 Desktop.ini
+/.step5-relocation.json
 
 # Generated patch validation data and isolated artificial saves.
 /tests/BrassPatch/**/*.rsp

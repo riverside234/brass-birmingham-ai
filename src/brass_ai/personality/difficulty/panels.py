@@ -128,7 +128,7 @@ def plan(root, source, output, *, profiles=None, setups=32, repetitions=2, seed=
         p = project_path(root, calibration); old = calibration_report(root, p)
         require(old['roster_id'] == value['id'] and old['profiles'] == profiles and old['stage'] == 'calibration'
                 and old['gates'] == asdict(gates) and old['tables'] == tables and old['hardware_label'] == hardware_label
-                and old['fixture'] == fixture and old['checks']['complete_panel'] and not old['failures'],
+                and old['fixture'] == fixture and old['checks']['complete_panel'] and old['checks']['no_failed_games'],
                 'Calibration must be complete under these exact recipes')
         forbidden.update(old['setup_groups']); preceding = dict(path=p.relative_to(root).as_posix(), sha256=sha(p/'report.json'))
     split = 'test' if stage == 'release' else 'validation'; seeds = []; cursor = seed
@@ -147,7 +147,8 @@ def plan(root, source, output, *, profiles=None, setups=32, repetitions=2, seed=
         jobs=jobs_for(value, seeds, count, profiles, repetitions=repetitions, seed=seed, partition=split),
         scope='P5 evaluation only; never PPO/IL/teacher/descriptor data. Fixtures cannot qualify tiers or release.'))
     out.mkdir(parents=True); write_json(out/'manifest.json', result)
-    paths=[result['roster']+'/manifest.json',result['baseline']['host']+'/runtime.json']
+    paths=[result['roster']+'/manifest.json',result['baseline']['host']+'/runtime.json',
+           out.relative_to(root).as_posix()+'/reservations.json']
     if preceding: paths.append(preceding['path']+'/report.json')
     write_json(out/'pins.json', dict(paths=paths))
     return result
@@ -171,7 +172,7 @@ def load(root, directory, *, sources=True):
         if panel['calibration']:
             require(sha(project_path(root, panel['calibration']['path'])/'report.json') == panel['calibration']['sha256'], 'Calibration changed')
             old=calibration_report(root,panel['calibration']['path'])
-            require(old['roster_id']==value['id'] and old['checks']['complete_panel'] and not old['failures']
+            require(old['roster_id']==value['id'] and old['checks']['complete_panel'] and old['checks']['no_failed_games']
                     and all(old[k]==panel[k] for k in ('profiles','gates','tables','hardware_label','fixture')),
                     'Calibration recipe/coverage changed')
             forbidden.update(old['setup_groups'])

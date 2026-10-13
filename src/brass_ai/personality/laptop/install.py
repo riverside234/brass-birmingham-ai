@@ -48,14 +48,16 @@ def certify(package,build,benchmark,acceptance,output,*,backend='ort-cpu'):
     require('intel' in cpu and '135u' in cpu, 'Measured target laptop CPU is missing or different')
     runs=[r for r in report['results'] if r['backend']==backend and r['available']];require(len(runs)==1,'Backend has no valid whole-turn measurement')
     rows=runs[0]['records'];ordinary=[r for r in rows if not r['interrupt']]
+    completed_turns=[r for r in rows if not r['interrupt'] or r['interrupt']=='play-now']
     require(all(r['status']=='ok' and r['metrics']['deadline_resets']==0 and
-        r['metrics']['turn_overrun_seconds']<=.05 for r in ordinary),'Deadline/failure gate failed')
+        r['metrics']['turn_overrun_seconds']<=.05 for r in completed_turns),'Deadline/failure gate failed')
     require(all(len({r['seed'] for r in ordinary if r['tier']==t and r['era']==era})>=2
         and sum(r['metrics']['completed'] for r in ordinary if r['tier']==t and r['era']==era)>0
         for t in ('easy','medium','hard') for era in ('CanalEra','RailEra')), 'Both eras, two seeds and useful search required for every tier')
     require({'build','develop','sell','network'}<=set(k for r in ordinary for k in r['available_kinds']), 'Representative investment/sale/network positions missing')
-    require(any(r['interrupt']=='cancel' and r['status']=='cancelled' for r in rows) and
-            any(r['interrupt']=='play-now' and r['status']=='ok' for r in rows),'Measured cancellation/Play Now missing')
+    require(any(r['interrupt']=='cancel' and r['status']=='cancelled' and r['metrics'].get('cancelled') is True for r in rows) and
+            any(r['interrupt']=='play-now' and r['status']=='ok' and r['metrics'].get('play_now') is True
+                and r['metrics'].get('cancelled') is False for r in rows),'Measured cancellation/Play Now missing')
     checks=('four_player_game','sixteen_styles','save_load_pending_action','history_rewind','play_now','menu_cancel','resource_restoration','old_save_unchanged','same_profile_strength_review')
     require(review.get('format')=='personality-laptop-acceptance/1.0.0' and review.get('package_id')==p['id'] and review.get('build_id')==b['id']
         and review.get('backend')==backend and review.get('target')=='Intel Core Ultra 5 135U' and review.get('reviewer')

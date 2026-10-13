@@ -2,6 +2,8 @@
 
 P6 tooling is implemented. **No trained personality package is qualified or installed.** The current Step 5 model is still on the lab server, and the real P4 roster and P5 difficulty evidence are pending. The local authored fixtures exercise deployment mechanics only; they do not establish playing strength, recognizable styles or Easy/Medium/Hard difficulty.
 
+The [P5/P6 implementation audit](PERSONALITY_P5_P6_AUDIT_2026-10-12.md) fixes first-save integrity, rollout-pool validation, persistent-service failure cleanup and malformed requests. Certification now requires observed controls and valid Play Now clocks. Re-export/restage candidates for the new source identities and P5 verifier 1.2.0; preserve old immutable packages for their existing valid saves.
+
 ## Prerequisites and boundaries
 
 | Stage | Available implementation | Still required for a release |

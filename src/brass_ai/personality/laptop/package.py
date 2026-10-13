@@ -94,6 +94,8 @@ def validate(directory,*,allow_fixture=True):
     require(read(directory/'public-menu.json')==ui.menu(value,report,fixture=m['fixture']),'Public menu differs')
     require(len(m['models']) in range(2,6) and sum(x['actor'] for x in m['models'])==1 and m['models'][0]['actor'], 'One actor and a frozen rollout pool required')
     require(m['models'][0]['model_id']==value['shared_model']['model_id'], 'Actor differs from qualified roster')
+    require(digest([entry['model_id'] for entry in m['models'][1:]])==m['pool_id']==value['pool_id'],
+            'Exported rollout pool differs from qualified roster')
     for entry in m['models']:
         graph=child(directory,entry['path']);meta=validate_metadata(read(graph.with_suffix('.json')))
         require(meta['model_id']==entry['model_id'] and meta['actor']==entry['actor'] and meta['parity']['passed']

@@ -17,6 +17,7 @@ from brass_ai.host import RulesHost
 from brass_ai.learning.checkpoint import load_checkpoint, save_checkpoint, resume_optimizer
 from brass_ai.learning.model import FourSeatNet,ModelConfig
 from brass_ai.learning.contracts import compatibility, digest, project_path, require
+from brass_ai.learning.paths import bound_reference
 from brass_ai.learning.replay import split_for
 from .replay import read_shards,write_cache,cache_receipt
 from brass_ai.step5.league import write_json, seeds_for, implementation_id
@@ -338,8 +339,9 @@ def balance(data):
     return [(dict(d[0],_bc_weight=min(3.,high*w)),*d[1:]) for d,w in zip(data,weights)]
 
 
-def checkpoint_alias(out,entry,name):
-    source=out/entry['path']
+def checkpoint_alias(out,entry,name,*,root=None):
+    source=project_path(root or out,entry['path'],base=out)
+    require(source.is_relative_to(out),'BC checkpoint outside its run')
     require(sha(source)==entry['sha256'],'BC checkpoint changed')
     temporary=out/(name+'.tmp')
     temporary.unlink(missing_ok=True)
@@ -384,9 +386,17 @@ def _train_bc(root,run,manifest_path,initial,config,*,device='cpu',epochs=10,pat
     state_path=out/'state.json'
     resuming=state_path.exists()
     if resuming:
-        state=read(state_path);require(state['signature']==signature,'BC run settings/source changed')
-        entry=state['last'];require(sha(out/entry['path'])==entry['sha256'],'BC checkpoint changed')
-        model,raw=load_checkpoint(out/entry['path'],device=device)
+        state=read(state_path)
+        if parent_origin:
+            signature['parent_imitation']=bound_reference(root,parent_origin,state['signature'].get('parent_imitation'),('bc_run','path','manifest'))
+        require({k:v for k,v in state['signature'].items() if k!='manifest_path'}==
+                {k:v for k,v in signature.items() if k!='manifest_path'} and
+                project_path(root,state['signature']['manifest_path'])==project_path(root,signature['manifest_path']),
+                'BC run settings/source changed')
+        signature=state['signature']
+        entry=state['last'];path=project_path(root,entry['path'],base=out)
+        require(path.is_relative_to(out) and sha(path)==entry['sha256'],'BC checkpoint changed')
+        model,raw=load_checkpoint(path,device=device)
         require(raw['step']==state['epoch'],'BC epoch/checkpoint mismatch')
     else:
         require(not out.exists() or not any(p.name!='.active-run.json' for p in out.iterdir()),'Use a new BC run')
@@ -428,15 +438,15 @@ def _train_bc(root,run,manifest_path,initial,config,*,device='cpu',epochs=10,pat
         state['stopped']=epoch+1>=min_epochs and state['bad_epochs']>=patience
         # Commit an immutable checkpoint pointer before materializing aliases.
         write_json(state_path,state)
-        checkpoint_alias(out,state['best'],'best.pt');checkpoint_alias(out,state['last'],'last.pt')
+        checkpoint_alias(out,state['best'],'best.pt',root=root);checkpoint_alias(out,state['last'],'last.pt',root=root)
         if retention and retention['enabled']:
             from .retention import prune
             prune(root,out,retention,apply=True)
         print(json.dumps(dict(epoch=epoch+1,train_loss=train_report['loss'],validation_loss=val_report['loss'],best=improved)),flush=True)
         if state['stopped']: break
-    checkpoint_alias(out,state['best'],'best.pt');checkpoint_alias(out,state['last'],'last.pt')
+    checkpoint_alias(out,state['best'],'best.pt',root=root);checkpoint_alias(out,state['last'],'last.pt',root=root)
     report=dict(format='bc-training-report/1.0.0',signature=signature,epochs=state['epoch'],
-        history=state['history'],candidate=str(out/'best.pt'),candidate_sha256=sha(out/'best.pt'),
+        history=state['history'],candidate=(out/'best.pt').relative_to(root).as_posix(),candidate_sha256=sha(out/'best.pt'),
         environment=environment(device),promoted=False,note='Select with fresh gameplay evaluation; imitation loss alone is not strength')
     write_json(out/'report.json',report);return report
 
@@ -467,19 +477,19 @@ def completed_imitation(root,run,*,_seen=None):
     if initialization=='fresh-imitation-continuation':
         expected=signature['parent_imitation']
         _,parent=completed_imitation(root,expected['bc_run'],_seen=seen)
-        require(parent==expected,'Imitation parent changed')
+        parent=bound_reference(root,parent,expected,('bc_run','path','manifest'))
     require(report['epochs']==state['epoch'] and (state['stopped'] or state['epoch']==signature['epochs']),
             'Imitation has not completed')
     manifest=project_path(root,signature['manifest_path'])
     require(sha(manifest)==signature['manifest_sha256'],'Imitation dataset manifest changed')
-    entry=state['best'];path=project_path(root,run/entry['path'])
+    entry=state['best'];path=project_path(root,entry['path'],base=run)
     require(path.is_relative_to(run) and sha(path)==entry['sha256']==report['candidate_sha256'],
             'Selected imitation checkpoint changed')
     with torch.random.fork_rng(devices=[]):model,raw=load_checkpoint(path,device='cpu')
     metadata=raw['training']
     require(metadata.get('mode')=='step5-v3-bc' and metadata.get('initialization')==initialization
             and metadata.get('parent')==(parent['model_id'] if parent else None)
-            and metadata.get('fresh_run')==run.relative_to(root).as_posix()
+            and metadata.get('fresh_run') and project_path(root,metadata['fresh_run'])==run
             and metadata.get('signature')==digest(signature)
             and metadata.get('manifest_sha256')==signature['manifest_sha256'],
             'Checkpoint is not the completed fresh imitation candidate')

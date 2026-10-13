@@ -8,10 +8,13 @@ from brass_ai.learning.contracts import digest, read_json, require
 from brass_ai.personality.deployment.contracts import identity as p4_identity
 from brass_ai.search.common import SearchConfig
 
-VERSION = 'personality-difficulty/1.1.0'
+# 1.2 requires panel-wide job ownership and rechecks every derived failure/timing
+# summary. Older P5 evidence must be regenerated, never relabeled or migrated.
+VERSION = 'personality-difficulty/1.2.0'
 PROFILES = 'personality-tier-profiles/1.0.0'
 PANEL = 'personality-difficulty-panel/1.0.0'
 CHUNK = 'personality-difficulty-chunk/1.0.0'
+RESERVATIONS = 'personality-difficulty-reservations/1.0.0'
 REPORT = 'personality-difficulty-report/1.0.0'
 RECORD = 'personality-difficulty-game/1.0.0'
 UI = 'personality-public-ui/1.0.0'

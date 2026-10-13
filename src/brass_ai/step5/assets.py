@@ -46,6 +46,18 @@ def runtime_files(root):
     bank = read(root / 'training/opponents/current.json')['bank']
     manifest = load_bank(root, bank)
     from brass_ai.searchlab.runtime import install
+    # The installer writes its destination before runtime_files checks hashes.
+    # Validate both sides first, including existing target files, so a linked
+    # generated directory cannot receive writes outside this project.
+    search_source=project_path(root,'training/runtime/search')
+    search_target=project_path(root,'artifacts/r4-host')
+    project_path(root,search_target/'runtime.json')
+    search_runtime=read(project_path(root,search_source/'runtime.json'))
+    for entry in search_runtime['files']:
+        name=entry['name']
+        require(Path(name).name==name and name not in ('.','..'),'Unsafe search runtime filename')
+        project_path(root,search_target/name)
+        project_path(root,(search_source if name=='BrassHost.exe' else root/'artifacts/r1-host/guarded')/name)
     install(root)
     directories = ['artifacts/r1-host/guarded', 'artifacts/legacy-ai/bank/' + bank + '/runtime','artifacts/r4-host']
     # Preserve frozen comparison opponents without admitting them to the league.
@@ -151,7 +163,8 @@ def preflight(root, *, device='cpu', mono=None, record_parity=False):
         if asset['path'].endswith('.pt'):
             load_checkpoint(project_path(root, asset['path']))
     bank, _, files = runtime_files(root)
-    require(bank == distribution['bank'] and files == distribution['private_runtime_files'], 'Private runtime differs')
+    private={project_path(root,p).relative_to(root).as_posix():h for p,h in distribution['private_runtime_files'].items()}
+    require(len(private)==len(distribution['private_runtime_files']) and bank == distribution['bank'] and files == private, 'Private runtime differs')
     opponent = FrozenOpponent(root, bank + '/' + next(n for n in load_bank(root,bank)['payload']['profiles'] if n.startswith('balanced-v3')), purpose='diagnostic', mono=mono)
     opponent.close()
     if device == 'cuda':

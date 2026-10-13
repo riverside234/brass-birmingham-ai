@@ -6,6 +6,7 @@ import re
 import shutil
 from pathlib import Path
 from .legacy import LAB_ROOT, LegacyWorker
+from .learning.paths import resolve_project_path
 
 ADAPTER_FILES=('src/brass_ai/legacy.py','src/brass_ai/bank.py',
                'src/brass_ai/learning/legacy_policy.py','src/brass_ai/learning/runner.py',
@@ -42,8 +43,7 @@ def json_sha_matches(path, expected):
 def require(ok,message):
     if not ok: raise ValueError(message)
 def below(root,path):
-    root=Path(root).resolve();out=(root/path).resolve()
-    require(out.is_relative_to(root),'Bank path escapes project root');return out
+    return resolve_project_path(root,path)
 
 
 def freeze(root,profile_names,*,fixed_work=False):

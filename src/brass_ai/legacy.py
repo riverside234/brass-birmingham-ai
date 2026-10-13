@@ -11,6 +11,7 @@ from pathlib import Path
 import queue
 import subprocess
 import threading
+from .learning.paths import resolve_project_path
 
 LAB_ROOT = Path('/data/not_backed_up/yxu209/ai-training/')
 
@@ -18,7 +19,7 @@ LAB_ROOT = Path('/data/not_backed_up/yxu209/ai-training/')
 class LegacyWorker:
     def __init__(self, root=LAB_ROOT, *, mono=None, timeout=120, runtime_directory=None):
         self.root = Path(root).resolve()
-        directory = (self.root / (runtime_directory or 'artifacts/legacy-ai/runtime')).resolve()
+        directory = resolve_project_path(self.root, runtime_directory or 'artifacts/legacy-ai/runtime')
         if not directory.is_relative_to(self.root):
             raise ValueError('Runtime must remain below the project root')
         self.manifest = json.loads((directory / 'runtime.json').read_text(encoding='utf-8-sig'))
@@ -32,7 +33,7 @@ class LegacyWorker:
             if file.parent != directory or hashlib.sha256(file.read_bytes()).hexdigest() != p['sha256']:
                 raise ValueError(f'Runtime fingerprint mismatch: {p["name"]}')
         for p in self.manifest['sources']:
-            file = (self.root / p['path']).resolve()
+            file = resolve_project_path(self.root, p['path'])
             if not file.is_relative_to(self.root) or hashlib.sha256(file.read_bytes()).hexdigest() != p['sha256']:
                 raise ValueError(f'Rebuild legacy runtime after source change: {p["path"]}')
         exe = str(directory / 'BrassLegacyAI.exe')

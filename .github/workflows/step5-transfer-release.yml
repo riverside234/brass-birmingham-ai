@@ -110,7 +110,7 @@ jobs:
           set -euo pipefail
           "$TRANSFER_PYTHON" "$SOURCE_ROOT/scripts/step5-transfer.py" export \
             --root "$SOURCE_ROOT" --run "$SOURCE_RUN" --bundle "$BUNDLE" \
-            --mode compact --dependencies external --format zstd \
+            --mode compact --dependencies repo --format zstd \
             --zstd-level "$TRANSFER_ZSTD_LEVEL" --threads "$TRANSFER_THREADS" \
             --part-mb "$TRANSFER_PART_MB" > "$BUNDLE_DIR/export-result.json"
           "$TRANSFER_PYTHON" - <<'PY'
@@ -123,6 +123,9 @@ jobs:
           parts = json.loads(index.read_text())['parts']
           if result['git_commit'] != os.environ['GITHUB_SHA']:
               raise SystemExit('Source revision changed during export; do not publish this bundle.')
+          if (result['dependencies'] != 'repo' or result['runtime_files'] <= 0 or
+                  result['bundled_runtime_files'] != result['runtime_files']):
+              raise SystemExit('Incomplete rules runtime bundle; do not publish this Release.')
           if len(parts) + 1 > 1000:
               raise SystemExit('More than 1000 Release assets; use larger parts (up to 2000 MB).')
           if any(p['bytes'] >= 2 ** 31 for p in parts) or index.stat().st_size >= 2 ** 31:
@@ -130,13 +133,20 @@ jobs:
           notes = (
               f"Stopped Step 5 run: `{result['run']}`\n\n"
               f"Source commit: `{result['git_commit']}`\n"
+              f"Original project root: `{result['source_root']}`\n"
               f"Saved iteration: {result['iteration']}; games: {result['games_done']}\n"
+              f"Rules runtime/host files included: {result['bundled_runtime_files']} "
+              f"({result['bundled_runtime_bytes']} logical bytes, deduplicated in the archive)\n"
               f"Archive: tar.zst, level {result['zstd_level']}, {result['compression_threads']} threads\n"
               f"Compressed bytes: {result['compressed_bytes']}; parts: {result['parts']}\n\n"
               "Download every selfplay-migration.tar.zst.part* asset, including .parts.json. "
               "Use scripts/step5-transfer.py restore with the .parts.json index. "
-              "Keep the same absolute project root; sync matching code and private runtime, "
-              "then run verify and a fresh preflight before continuing training.\n"
+              "Clone this repository at the Release tag/commit into your destination project directory. "
+              "If its absolute path differs, use restore --relocate --root <destination>; see "
+              "docs/STEP5_MACHINE_TRANSFER.md for old-archive source-version upgrade instructions. "
+              "The assets contain the rules DLLs and continuation state; no source-machine access or separate "
+              "runtime ZIP is required after upload. Restore, verify, then run a fresh destination preflight "
+              "before continuing training. Install the documented Python/Mono/CUDA environment separately.\n"
           )
           (folder / 'release-notes.md').write_text(notes, encoding='utf-8')
           print(json.dumps(result, indent=2))
@@ -160,6 +170,8 @@ jobs:
           gh release edit "$RELEASE_TAG" --draft=false --prerelease --latest=false
           release_url="$(gh release view "$RELEASE_TAG" --json url --jq .url)"
           printf 'Transfer ready: [%s](%s)\n' "$RELEASE_TAG" "$release_url" >> "$GITHUB_STEP_SUMMARY"
+          printf '\nRules DLLs are included. Clone this repository at `%s` into `%s` before restoring. The source runner is no longer needed for this snapshot.\n' \
+            "$RELEASE_TAG" "$SOURCE_ROOT" >> "$GITHUB_STEP_SUMMARY"
           printf '\nDownload on the destination machine:\n\n```sh\ngh release download %q --repo %q --pattern %q --dir %q\n```\n' \
             "$RELEASE_TAG" "$GH_REPO" 'selfplay-migration.tar.zst.part*' \
             "$SOURCE_ROOT/artifacts/step5-transfer/$RELEASE_TAG" >> "$GITHUB_STEP_SUMMARY"

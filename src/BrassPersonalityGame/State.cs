@@ -42,7 +42,9 @@ namespace BrassLegacyAI
             if(assignments.Count==0){SaveExtensions.Set(metadata,legacy);return;}
             if((int)metadata.GameStartConfiguration.NumberOfPlayers!=4 || metadata.GameStartConfiguration.IsIntroductoryGame)throw new InvalidDataException("Neural personalities require standard four-player rules");
             var initial=PersonalityRpc.Call("initialize",new JObject{["game_id"]=metadata.GameId,["seed"]=Guid.NewGuid().ToString("N"),["assignments"]=assignments});
-            var outer=new JObject{["format"]=Format,["package_id"]=PersonalityPackage.Manifest["id"],["legacy"]=legacy,
+            // The metadata persistence hook binds game_id on every save. Include
+            // it before sealing so that the first native save preserves integrity.
+            var outer=new JObject{["format"]=Format,["game_id"]=metadata.GameId,["package_id"]=PersonalityPackage.Manifest["id"],["legacy"]=legacy,
                 ["initial"]=initial,["journal"]=new JArray()};Seal(outer);SaveExtensions.Set(metadata,outer);
         }
         public static JObject Snapshot(GameMetadata metadata,int revision,IList<IEvent> events,out JArray pending) {

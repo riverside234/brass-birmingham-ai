@@ -7,6 +7,7 @@ import torch
 from brass_ai.bank import read,sha,admission
 from brass_ai.learning.checkpoint import load_checkpoint
 from brass_ai.learning.contracts import digest,project_path,require
+from brass_ai.learning.paths import bound_reference
 from .replay import read_shards
 from brass_ai.step5.evaluation import (evaluation_config,evaluation_jobs,check_evaluation_batch,
     outcome,summarize_outcomes)
@@ -20,7 +21,7 @@ def evaluate(root,output,candidate_path,references,config,*,setups=None,seed=Non
              partition=None,include_legacy=None,device='cpu',mono=None,search=None,focus=None,lineups=None,inference_devices=None):
     from .inference import validate_inference_devices
     inference_devices=validate_inference_devices(inference_devices,device)
-    root=Path(root);directory=project_path(root,output)
+    root=Path(root).resolve();directory=project_path(root,output)
     if lineups is not None: include_legacy=any(n.endswith('v3') for n in lineups)
     config=evaluation_config(config,setups=setups,seed=seed,partition=partition,
         include_legacy=include_legacy,use_search=search,focus=focus,lineups=lineups)
@@ -34,14 +35,14 @@ def evaluate(root,output,candidate_path,references,config,*,setups=None,seed=Non
     entries=[];modes={}
     for path in [candidate_path]+list(references):
         with torch.random.fork_rng(devices=[]): model,raw=load_checkpoint(project_path(root,path),device='cpu')
-        entries.append(dict(path=str(path),sha256=sha(project_path(root,path)),model_id=raw['model_id']))
+        entries.append(dict(path=project_path(root,path).relative_to(root).as_posix(),sha256=sha(project_path(root,path)),model_id=raw['model_id']))
         modes[raw['model_id']]=raw['training'].get('mode')
         require(model.config.architecture=='brass-four-seat-mlp-resnet/1.0.0' and raw['training'].get('fresh_run'),'Evaluation accepts only checkpoints from a new fresh residual run')
         if len(entries)==1 and config['use_search'] and config['search'].get('reward') is not None:
             from .utility import calibration_ready
             require(model.config.utility==config['search']['reward'] and calibration_ready(model),
                     'Combined search evaluation requires a calibrated matching-reward checkpoint')
-        if entries[:-1]:require(raw['training']['fresh_run']==fresh_run,'Evaluation cannot import another run population')
+        if entries[:-1]:require(project_path(root,raw['training']['fresh_run'])==project_path(root,fresh_run),'Evaluation cannot import another run population')
         fresh_run=raw['training']['fresh_run']
     require(entries[0]['model_id'] not in [e['model_id'] for e in entries[1:]],'Candidate cannot be its own reference')
     pool=read(root/'training/opponents/pool.json')
@@ -58,6 +59,19 @@ def evaluate(root,output,candidate_path,references,config,*,setups=None,seed=Non
     work=config['legacy_opponent_work_budget']
     teacher_specs={p:legacy_spec(root,p,budget,work_budget=work) for p in profiles} if 'mixed-v3' in lineups else {}
     held_specs={p:legacy_spec(root,p,budget,'evaluation',work_budget=work) for p in held} if 'heldout-pottery-v3' in lineups else {}
+    prior=None
+    if (directory/'spec.json').exists():prior=read(directory/'spec.json')
+    elif (directory/'report.json').exists() and read(directory/'report.json').get('raw_records_pruned'):
+        prior=read(directory/'report.json')['spec']
+    if prior is not None:
+        require(len(entries)==len(prior['entries']),'Evaluation specification changed')
+        entries=[bound_reference(root,actual,recorded,('path',)) for actual,recorded in zip(entries,prior['entries'])]
+        # A destination config may spell the same host relatively or using its
+        # new root. Retain the old spec/provenance digest after exact validation
+        # of every non-path setting; never relabel cached games.
+        require({k:v for k,v in config.items() if k!='host'}==
+                {k:v for k,v in prior['config'].items() if k!='host'}, 'Evaluation specification changed')
+        config=bound_reference(root,config,prior['config'],('host',))
     spec=dict(format='step5-evaluation/2.0.0',purpose='evaluation',entries=entries,
         config=config,seeds=seeds,lineups=lineups,implementation=implementation_id(),legacy_pool=pool,teachers=teacher_specs,held=held_specs)
     if (directory/'report.json').exists() and read(directory/'report.json').get('raw_records_pruned'):

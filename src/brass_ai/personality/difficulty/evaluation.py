@@ -201,18 +201,23 @@ def evidence_checks(value, panel, records, seen, humans, metric_checks):
         human_play_review=humans['passed'])
 
 
+def record_summary(records):
+    return dict(failures=[dict(index=r['job']['index'], **r['failure']) for r in records if r['failure']],
+        stock_failures=[dict(index=r['job']['index'], failures=r['baseline_failures']) for r in records if r['baseline_failures']],
+        timing=dict(game_seconds=sum(r['seconds'] for r in records),
+            **{k:sum(t.get(k,0) for r in records for t in r['telemetry'].values())
+               for k in ('searches','completed','interrupted','fallbacks','seconds','prior_seconds','overruns')}),
+        environment=records[0]['environment'])
+
+
 def check(root, directory, chunks, output, *, review=None):
     root, out = owned(root, output); require(not out.exists(), 'Use a new immutable analysis directory')
     panel, value, stream, seen, sources = collection.read_chunks(root, directory, chunks)
     records = list(stream); require(records, 'No reserved P5 games supplied')
     metrics = automatic(value,panel,records)
-    failures = [dict(index=r['job']['index'], **r['failure']) for r in records if r['failure']]
     humans = human_review(panel,value,read_json(project_path(root,review)) if review else None)
     checks = evidence_checks(value,panel,records,seen,humans,metrics.pop('checks'))
     qualified = bool(all(checks.values()))
-    timing = dict(game_seconds=sum(r['seconds'] for r in records),
-                  **{k:sum(t.get(k,0) for r in records for t in r['telemetry'].values())
-                     for k in ('searches','completed','interrupted','fallbacks','seconds','prior_seconds','overruns')})
     result = sealed(dict(format=REPORT, contract=identity(), panel_id=panel['id'], roster_id=value['id'],
         fixture=panel['fixture'], stage=panel['stage'], profiles=panel['profiles'], gates=panel['gates'],
         tables=panel['tables'], hardware_label=panel['hardware_label'],
@@ -223,9 +228,8 @@ def check(root, directory, chunks, output, *, review=None):
         status='P5 qualified for the measured configuration; P6 pending' if qualified else
                ('FIXTURE — unqualified' if panel['fixture'] else 'Difficulty qualification pending'),
         games=len(records), expected_games=len(panel['jobs']), missing_jobs=sorted(set(range(len(panel['jobs'])))-seen),
-        setup_groups=sorted({r['job']['setup_group'] for r in records}), sources=sources, failures=failures,
-        stock_failures=[dict(index=r['job']['index'], failures=r['baseline_failures']) for r in records if r['baseline_failures']],
-        baseline=panel['baseline'], timing=timing, environment=records[0]['environment'], human=humans, **metrics,
+        setup_groups=sorted({r['job']['setup_group'] for r in records}), sources=sources,
+        baseline=panel['baseline'], human=humans, **record_summary(records), **metrics,
         limits='Multiplicity-adjusted setup-level Student-t intervals assume sufficiently regular independent setup means; '
                '32 groups is a minimum, not guaranteed power. Wide intervals remain unresolved. VP is corroborative, '
                'not capped/normalized. This is not laptop timing, human tournament strength or P6 deployment authorization.'))
@@ -246,7 +250,7 @@ def load_report(root, directory):
         r=report['review_source'];require(sha(project_path(root,r['path']))==r['sha256'],'Human review evidence changed')
     for source in report['sources']:
         require(sha(project_path(root,source['path'])/'manifest.json')==source['sha256'],'Qualification chunk changed')
-    panel,value,records,seen,_=collection.read_chunks(root,report['panel'],[s['path'] for s in report['sources']])
+    panel,value,records,seen,sources=collection.read_chunks(root,report['panel'],[s['path'] for s in report['sources']])
     records=list(records)
     validate_report_summary(report,value)
     require(panel['id']==report['panel_id'] and len(records)==report['games']
@@ -258,5 +262,7 @@ def load_report(root, directory):
     metrics=automatic(value,panel,records)
     humans=human_review(panel,value,read_json(project_path(root,report['review_source']['path'])) if report['review_source'] else None)
     require(report['checks']==evidence_checks(value,panel,records,seen,humans,metrics.pop('checks'))
-            and report['human']==humans and all(report[k]==v for k,v in metrics.items()), 'Report results differ from pinned evidence')
+            and report['human']==humans and all(report[k]==v for k,v in metrics.items())
+            and all(report[k]==v for k,v in record_summary(records).items())
+            and report['sources']==sources, 'Report results differ from pinned evidence')
     return report
