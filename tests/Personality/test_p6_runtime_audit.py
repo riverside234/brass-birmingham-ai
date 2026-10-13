@@ -83,6 +83,10 @@ class P6RuntimeAuditTests(unittest.TestCase):
             count += 1
             if count == 1:
                 return allocate()
+            # Let the Windows feeder finish copying the first real handle
+            # before teardown closes it. The partial service allocations are
+            # still live and must be retired by Runtime.session's failure path.
+            runtime.service.leases[-1].get(timeout=5)[0].close()
             raise OSError('Injected partial channel allocation failure')
 
         try:

@@ -7,12 +7,12 @@ import math
 from brass_ai.learning.contracts import digest, read_json, require
 from brass_ai.personality.search.contracts import Profile, identity as search_identity
 
-VERSION = 'personality-deployment/1.0.0'
-ROSTER = 'personality-roster/1.0.0'
+VERSION = 'personality-deployment/1.1.0'
+ROSTER = 'personality-roster/1.1.0'
 ARCHETYPE = 'personality-profile/1.0.0'
 MEMBER = 'personality-micro-variant/1.0.0'
 PANEL = 'personality-roster-panel/1.0.0'
-REPORT = 'personality-roster-check/1.0.0'
+REPORT = 'personality-roster-check/1.1.0'
 SAMPLING = 'uniform-archetype-members/1.0.0'
 
 
@@ -93,9 +93,11 @@ def validate_roster(value):
         require(m['tier_settings'] == {} and m['fallback'] is None,
                 'Tier settings/fallback require P5 qualification')
     require(value['release_qualified'] is False, 'P4 does not authorize a laptop release')
+    require(type(value.get('fixture', True)) is bool, 'Invalid fixture provenance')
     require(value['full_size'] == (len(groups)==16 and len(members)==128), 'False full-roster claim')
     require(not value['p4_qualified'] or (value['full_size'] and value['decision_mode']=='searched'
-            and 'qualification' in value), 'Preview or unreviewed roster cannot qualify P4')
+            and value.get('fixture', True) is False and 'qualification' in value),
+            'Fixture, preview or unreviewed roster cannot qualify P4')
     return value
 
 

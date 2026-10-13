@@ -72,11 +72,16 @@ def load(directory):
     return validate_roster(read_sealed(Path(directory) / 'manifest.json', ROSTER))
 
 
+def fixture_origin(ready, handoff):
+    return bool(handoff.get('origin', {}).get('fixture') or 'fixture' in ready.get('scope', '').lower())
+
+
 def validate_sources(root, value):
     """Check pinned evidence and weights before collection or requalification."""
     for source in value['dependencies']:
         require(sha(project_path(root, source['path'])) == source['sha256'], 'Roster dependency changed')
-    _, parents, ready, _, pool = load_ready(root, value['shared_model']['ready'])
+    _, parents, ready, handoff, pool = load_ready(root, value['shared_model']['ready'])
+    require(value.get('fixture') is fixture_origin(ready, handoff), 'Roster fixture provenance changed')
     require(ready['id'] == value['shared_model']['ready_id']
             and ready['model']['model_id'] == value['shared_model']['model_id']
             and pool == value['pool_id'] and ready['reward'] == value['search']['reward'],
@@ -136,7 +141,7 @@ def select(root, source_archive, output, *, groups=16, members=8, method='fps', 
     enc, _ = descriptor.load(encoder_path)
     require(enc['id'] == a['encoder']['id'] and sha(encoder_path/'manifest.json') == a['encoder']['sha256']
             and not enc['report']['collapsed'], 'Descriptor changed/collapsed')
-    _, parents, ready, _, pool = load_ready(root, p['ready'])
+    _, parents, ready, handoff, pool = load_ready(root, p['ready'])
     require(ready['id'] == p['ready_id'] and sha(project_path(root, p['ready'])/'ready.json') == p['ready_sha256']
             and pool == a['pool_id'] == p['pool_id'], 'Archive readiness/pool changed')
     mode = p['candidates'][0]['decision_mode']
@@ -194,7 +199,8 @@ def select(root, source_archive, output, *, groups=16, members=8, method='fps', 
     controls = [controller(ready['model']['model_id'], model_id(parents[0]),
                            Profile(style=s, alpha=0. if s == 'neutral' or mode == 'direct' else .15), cfg, pool,
                            decision_mode=mode) for s in PROFILES]
-    value = dict(format=ROSTER, contract=identity(), counts=dict(archetypes=groups, per_archetype=members),
+    value = dict(format=ROSTER, contract=identity(), fixture=fixture_origin(ready, handoff),
+                 counts=dict(archetypes=groups, per_archetype=members),
                  shared_model=dict(ready=p['ready'], ready_id=ready['id'], model_id=ready['model']['model_id']),
                  strategy='shared-frozen-network/no-distillation', decision_mode=mode, pool_id=pool, search=search,
                  archive_id=a['id'], encoder=a['encoder'], selection=dict(method=method, seed=seed, alternatives=alternatives),

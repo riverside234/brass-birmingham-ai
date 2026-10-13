@@ -8,7 +8,7 @@ from brass_ai.learning.contracts import digest, require
 from brass_ai.bank import sha
 from brass_ai.personality.difficulty.contracts import identity as p5_identity
 
-PACKAGE='personality-laptop-package/1.1.0'
+PACKAGE='personality-laptop-package/1.2.0'
 EXPORT='personality-named-onnx/1.0.0'
 SAVE='personality-runtime-save/1.0.0'
 PROTOCOL='personality-game-rpc/1.0.0'

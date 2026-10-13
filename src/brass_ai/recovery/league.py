@@ -250,6 +250,10 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                     from .updates import Dataset
                     from .utility import calibrate
                     return calibrate(model,optimizer,Dataset(learner_data,device,policy=False),config['update'])
+                from .teacher_collection import due_collections
+                from .review_metrics import teacher_drift_probe
+                teaching_probe=(teacher_drift_probe(model,learner_data,behavior,config['update'])
+                    if due_collections(done,state['next_search_games'],config) else None)
                 search,next_search,cursor,search_seconds=collect_due(root,run,directory,config,state,signature,
                     model,optimizer,service,heavy,done=done,cursor=cursor,ordinary_seconds=ordinary_seconds,
                     ordinary_game_seconds=(collected-began)/max(1,len(games)),
@@ -267,6 +271,10 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                         behavior,config['update'],Timings())
                     search['post_teacher_kl_scope']='Total drift from frozen ordinary behavior after PPO and teaching; all nonforced learner rows'
                     del drift_data
+                    if teaching_probe is not None:
+                        search['teaching_only_categorical_probe']=dict(teaching_probe.measure(model),
+                            scope='Exact KL(post-PPO behavior || post-teaching behavior); bounded proportional era/phase probe, RNG-neutral; diagnostic only')
+                del teaching_probe
                 del learner_data
                 report=dict(format='step5-recovery-report/'+'2.2.0',iteration=iteration,composition=dict(composition),
                     reward_migration=migration if not summaries else None,

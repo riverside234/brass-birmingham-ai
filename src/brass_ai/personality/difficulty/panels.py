@@ -91,13 +91,13 @@ def source_check(root, value, fixture):
 
 def validate_p4_evidence(value, report):
     """P5/P6 require the complete pinned P4 claim, not a bare roster flag."""
-    expected = {'complete_panel','full_size','searched','both_eras','individual_quality','mixture_quality',
+    expected = {'complete_panel','full_size','real_artifacts','searched','both_eras','individual_quality','mixture_quality',
                 'search_support','coherent_distinct_members','replayability','pottery_coverage','blind_recognition_and_tactics'}
     q = value['qualification']
     require(value['p4_qualified'] and report['format'] == P4_REPORT
             and report['contract'] == identity()['p4']
             and report['id'] == digest({k:v for k,v in report.items() if k!='id'})
-            and report['p4_qualified'] is True and set(report['checks']) == expected
+            and report['p4_qualified'] is True and report['fixture'] is False and set(report['checks']) == expected
             and all(v is True for v in report['checks'].values())
             and report['roster_id'] == q['source_roster'] and report['panel_id'] == q['panel_id']
             and report['games'] == report['expected_games'] > 0 and not report['missing_jobs']

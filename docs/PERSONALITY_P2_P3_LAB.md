@@ -1,5 +1,7 @@
 # Post-Step-5 P2 search and P3 learned repertoire
 
+**13 October audit:** [P0–P6 findings and verification](PERSONALITY_P0_P6_AUDIT_2026-10-13.md). Readiness calibration must match the saved model receipt and count only setups with observed labels. Teacher context, goal, profile and search settings must match the executed collection. Preparation failures now retire inference resources. Regenerate downstream evidence after the P0/P1 source migration; P3 schemas and selection settings are unchanged.
+
 **11 October review:** [P0–P4 corrections and compatibility notes](../ai-research/PERSONALITY_P0_P4_REVIEW.md). Rebuild personality artifacts under the current contracts. P3 now uses the 32×95 `public-behavior-trace/1.1.0` schema; the older verification below describes historical fixtures. Step 5 and base generated-data formats remain unchanged.
 
 Implemented 10 October 2026 as separate lab entry points. Finish Step 5 and the [P0/P1 handoff and goal pilot](PERSONALITY_P0_P1_LAB.md) first. Use the accepted, frozen lab parent; local smoke weights are test fixtures. No production personality model or qualified roster has been created locally.
@@ -73,6 +75,8 @@ If not due or over budget, this writes the accounting state and returns a reason
 Each due collection has four all-NN games and at most two collections may be charged to one committed ordinary iteration. For every NN seat, deterministic independent seeds reserve one own turn in Canal 1–4, Canal 5–8, Rail 1–6 and Rail 7–8. Earlier failures cannot consume later phases. Counters distinguish scheduled/reached turns, actual searches, completed simulations, qualified samples, failures and elapsed time per phase.
 
 The **90% wall allowance** is retained: accounted search time may be at most nine times ordinary collection time. Admission reserves an estimated full collection before launch; actual elapsed time, including failures, replaces the reservation on completion. A crashed attempt remains charged, has no unbounded retry and cannot silently gain another allocation. The teacher clock is 12 seconds/four workers, never 12 seconds per action or worker.
+
+The master personality plan §4.4 instead specifies a 50% accounted ceiling, matching current Step 5. This is an unresolved specification discrepancy: active P2 code and this workflow use 90%. The 13 October audit preserves that behavior and all clocks/worker counts; choose and explicitly version the intended P2 accounting policy before a real teacher campaign.
 
 ```sh
 python "$brass_root/scripts/personality_search.py" --device cuda distill \

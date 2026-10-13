@@ -1,5 +1,7 @@
 # P6: laptop packaging and game integration
 
+**13 October audit:** [P0–P6 findings and verification](PERSONALITY_P0_P6_AUDIT_2026-10-13.md). New bundles use `personality-laptop-package/1.2.0`. Validation now binds the roster's content hash, search reward, P5 profiles and copied `readiness.json` calibration to the same evidence chain. A late benchmark button timer cannot affect the following case. Re-export/restage candidates after regenerating upstream evidence; preserve old immutable packages with their matching runtimes/helpers for existing saves. The save schema is unchanged.
+
 P6 tooling is implemented. **No trained personality package is qualified or installed.** The current Step 5 model is still on the lab server, and the real P4 roster and P5 difficulty evidence are pending. The local authored fixtures exercise deployment mechanics only; they do not establish playing strength, recognizable styles or Easy/Medium/Hard difficulty.
 
 The [P5/P6 implementation audit](PERSONALITY_P5_P6_AUDIT_2026-10-12.md) fixes first-save integrity, rollout-pool validation, persistent-service failure cleanup and malformed requests. Certification now requires observed controls and valid Play Now clocks. Re-export/restage candidates for the new source identities and P5 verifier 1.2.0; preserve old immutable packages for their existing valid saves.

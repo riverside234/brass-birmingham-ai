@@ -11,13 +11,44 @@ def scalars(value,keys):
     return {k:value[k] for k in keys if k in value and (value[k] is None or type(value[k]) in (int,float,bool,str))}
 
 
+def calibration(value):
+    if not isinstance(value,dict):return None
+    out=scalars(value,('required','ready','version','reward_id','decisions','games','steps','reason','scope'))
+    for key in ('before','after'):
+        if isinstance(value.get(key),dict):out[key]=scalars(value[key],('mse','mae'))
+    if isinstance(value.get('receipt'),dict):out['receipt']=calibration(value['receipt'])
+    return out
+
+
+def evaluation_evidence(report):
+    """Keep comparable setup/seat evidence when full reports are retired."""
+    spec=report.get('spec',{})
+    out=dict(spec={k:spec[k] for k in ('format','implementation','config','seeds','lineups','entries','candidate','incumbent',
+        'legacy_pool','teachers','held') if k in spec})
+    def panel(row):
+        result=scalars(row,('games','setups','win_share','mean_rank','mean_vp','accepted','candidate_win_share',
+            'candidate_vp','incumbent_vp','candidate_rank','incumbent_rank','threshold','scope',
+            'stage','protocol','planned_setups','min_ci_lower'))
+        for key in ('win_share_setup_bootstrap_95','setup_bootstrap_95','seat_counts','screen','confirmation'):
+            if key in row:result[key]=row[key]
+        outcomes=row.get('outcomes',[])
+        result.update(outcomes=outcomes[:1024],outcomes_total=len(outcomes),outcomes_truncated=len(outcomes)>1024)
+        return result
+    if 'outcomes' in report:
+        out['champion']=panel(dict(report.get('result',{}),outcomes=report['outcomes']))
+    out['panels']={k:panel(v) for k,v in list(report.get('results',{}).items())[:4]}
+    return out
+
+
 def compact(report):
     # Old compact summaries cannot recover fields that were already discarded.
-    # Preserve their version and missingness instead of relabelling as v3.
-    if report.get('summary_version') in (2,3):return report
+    # Preserve their version and missingness instead of relabelling as v4.
+    if report.get('summary_version') in (2,3,4):return report
     out=scalars(report,('format','iteration','games_done','cumulative_games','incoming_model_id','post_update_model_id',
                        'incoming_policy_id','elapsed_seconds','games','failed_games','promotion_eligible'))
-    out['summary_version']=3
+    out['summary_version']=4
+    if report.get('format') in ('step5-evaluation-report/1.0.0','four-player-champion/1.0.0'):
+        out['evaluation_evidence']=evaluation_evidence(report)
     out['timings']=scalars(report.get('timings',{}),('collection_seconds','replay_load_seconds','ppo_seconds',
         'search_and_distill_seconds','checkpoint_seconds','evaluation_seconds','cleanup_seconds','iteration_seconds'))
     actor=report.get('actor',{})
@@ -39,17 +70,37 @@ def compact(report):
     out['actor']['reward_components']=scalars(reward.get('components',{}),('win','placement','vp','cost','utility'))
     out['actor']['reward_spec']=reward.get('spec')
     out['actor']['reward_distribution']=reward.get('distribution')
+    out['actor']['utility_calibration']=calibration(actor.get('utility_calibration'))
     search=report.get('search',{})
     out['search']=scalars(search,('updated','reason','collection_count','optimizer_steps','teacher_rows','teacher_setups',
-        'sample_presentations','max_observed_reuse','post_teacher_sampled_kl','post_teacher_kl_scope'))
+        'sample_presentations','max_observed_reuse','distinct_labels_used','unused_qualified_labels',
+        'post_teacher_sampled_kl','post_teacher_kl_scope'))
     for key in ('fit_before','fit_after','budget'):
         out['search'][key]=scalars(search.get(key,{}),search.get(key,{}))
+    out['search']['teaching_only_categorical_probe']=search.get('teaching_only_categorical_probe')
+    for key in ('samples_by_phase','used_samples_by_phase','unused_samples_by_phase','sample_presentations_by_phase'):
+        if key in search:out['search'][key]=search[key]
+    out['search']['collection_summaries']=[dict(
+        scalars(batch,('teacher_model_id','due_games','elapsed_seconds','teacher_rows','optimizer_steps',
+            'sample_presentations','max_observed_reuse','distinct_labels_used','unused_qualified_labels',
+            'distill_batch_size','sample_presentation_cap','utility_calibration_invalidated','post_distill_calibration_seconds')),
+        teacher_policy_drift=batch.get('teacher_policy_drift'),
+        sample_usage={key:batch[key] for key in ('samples_by_phase','used_samples_by_phase','unused_samples_by_phase',
+            'sample_presentations_by_phase') if key in batch},
+        phases=batch.get('teaching',{}).get('phases',{}),
+        rollout_generations=batch.get('rollout_generations',[])[:65],learning_rates=batch.get('learning_rates',[])[:8],
+        post_distill_calibration=calibration(batch.get('post_distill_calibration')))
+        for batch in search.get('collections',[])[:8]]
     out['search']['phases']={name:scalars(row,row)
         for name,row in list(search.get('teaching',{}).get('phases',{}).items())[:4]}
     out['results']={name:scalars(row,('games','win_share','mean_rank','mean_vp'))
                     for name,row in list(report.get('results',{}).items())[:4]}
     out['champion_gate']=scalars(report.get('result',report.get('champion_gate')),
-        ('accepted','candidate_win_share','candidate_vp','incumbent_vp','candidate_rank','incumbent_rank'))
+        ('accepted','candidate_win_share','candidate_vp','incumbent_vp','candidate_rank','incumbent_rank',
+         'games','setups','stage','protocol','planned_setups','threshold','min_ci_lower'))
+    gate=report.get('result',report.get('champion_gate')) or {}
+    for key in ('setup_bootstrap_95','screen','confirmation'):
+        if key in gate:out['champion_gate'][key]=gate[key]
     # Report only learner metrics for new runs; older summaries retain at most
     # sixteen policy rows per composition, rather than arbitrary telemetry trees.
     out['by_composition']={}
@@ -60,6 +111,7 @@ def compact(report):
         out['by_composition'][name]={key:dict(scalars(v,('seat_games','win_share','placement','vp')),
             seat_counts=v.get('seat_counts')) for key,v in selected.items()}
     out['learner_by_seat']=report.get('learner_by_seat',{})
+    out['learner_by_composition_seat']={k:v.get('learner_by_seat',{}) for k,v in list(report.get('by_composition',{}).items())[:3]}
     out['economy']={key:report.get('economy',{}).get(key) for key in
         ('actions','actions_by_era','builds','build_levels','observed_flips','last_seen_unflipped',
          'passes_with_nonpass_alternative','sale_actions_started','sale_continuations','merchant_beer_by_bonus')}

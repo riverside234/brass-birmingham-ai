@@ -1,5 +1,7 @@
 # P5: difficulty calibration and intent interfaces
 
+**13 October audit:** [P0–P6 findings and verification](PERSONALITY_P0_P6_AUDIT_2026-10-13.md). P5 now requires the P4 1.1.0 report's explicit nonfixture provenance and `real_artifacts` gate. The P5 version remains 1.2.0, but its nested source contract changed: regenerate panels and reports from current P4 evidence. No additional independent P5 defect was confirmed in this pass.
+
 P5 tools are implemented. **Real calibration, human review, and qualification are pending.** The actual Step 5 parent is still training, and there is no qualified P4 roster yet. All local P5 results are explicitly untrained fixtures. No Easy/Medium/Hard level is currently certified, and this package does not install or export a game AI.
 
 The current verifier is `personality-difficulty/1.2.0`. The [P5/P6 audit](PERSONALITY_P5_P6_AUDIT_2026-10-12.md) added panel-wide job ownership, full derived-report revalidation and preparation-failure cleanup. Earlier P5 evidence must be regenerated under new panels; Step 5 and P0–P4 continuation are unchanged.

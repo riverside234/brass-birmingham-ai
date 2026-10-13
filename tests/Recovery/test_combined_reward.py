@@ -283,15 +283,15 @@ class SearchTests(unittest.TestCase):
             for n in nonroot:self.assertAlmostEqual(n.returns[0],leaf[0])
             self.assertTrue(all(e.pending==0 for n in bot.tree.values() for e in n.edges.values()))
 
-    def test_active_presets_preserve_other_settings_and_fifty_percent_budget(self):
+    def test_active_presets_preserve_other_settings_and_disable_cumulative_budget(self):
         from brass_ai.recovery.teacher_schedule import search_allowance
         from brass_ai.recovery.config import SEARCH_WALL_FRACTION
-        self.assertEqual(SEARCH_WALL_FRACTION,.5);self.assertAlmostEqual(search_allowance(100,0),100.)
+        self.assertIsNone(SEARCH_WALL_FRACTION);self.assertIsNone(search_allowance(100,0))
         for name in ('lab','lab-16x2','lab-24x4','lab-reference','lab-small','smoke','recovery-smoke'):
             cfg=validate_config(read(SOURCE_ROOT/f'configs/step5/{name}.json'))
-            self.assertEqual(reward_spec(cfg),cfg['search']['reward']);self.assertEqual(cfg['search_wall_fraction'],.5)
+            self.assertEqual(reward_spec(cfg),cfg['search']['reward']);self.assertEqual(cfg['search_wall_fraction'],None)
             if name.startswith('lab'):
-                self.assertEqual((cfg['search_every_games'],cfg['search_games'],cfg['distill_steps']),(160,4,8))
+                self.assertEqual((cfg['search_every_games'],cfg['search_games'],cfg['distill_steps']),(160,5,8))
                 self.assertEqual((cfg['search']['seconds'],cfg['execution']['search_workers_per_turn']),(12.,4))
                 self.assertEqual(cfg['learning_rate'],1e-5)
 

@@ -42,6 +42,9 @@ def measure(directory,cases,output,*,backends=('ort-cpu',),tiers=('easy','medium
             package_id=runtime.package['id']
             for tier in tiers:
                 for index,case in enumerate(cases):
+                    # Previous timers are cancelled and joined below, but one
+                    # can fire just after that turn's final control reset.
+                    runtime.interrupted.clear();runtime.cancelled.clear()
                     view=case['view'];seat=view['seat'];save=new_save(runtime.package,f'benchmark-{index}',str(case.get('seed',index)),
                         [dict(seat=seat,archetype=runtime.package['roster']['archetypes'][index%16]['id'],tier=tier)])
                     if case.get('interrupt'):

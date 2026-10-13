@@ -55,8 +55,8 @@ def calibrate(model,optimizer,dataset,config):
                 squared+=float(diff.square().sum());absolute+=float(diff.abs().sum())
         n=4*len(dataset.data)
         return dict(mse=squared/n,mae=absolute/n)
-    before=error()
     try:
+        before=error()
         for _ in range(3):
             order=torch.randperm(len(dataset.data)).tolist()
             for start in range(0,len(order),config['effective_batch_size']):

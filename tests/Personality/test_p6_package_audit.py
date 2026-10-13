@@ -9,14 +9,20 @@ from test_difficulty import named
 from brass_ai.learning.contracts import SOURCE_ROOT,compatibility,digest
 from brass_ai.personality.difficulty import contracts as difficulty,ui
 from brass_ai.personality.laptop import contracts,export,install,package
+from brass_ai.personality.search.contracts import READY,identity as search_identity
 
 
 class PackageAuditTests(unittest.TestCase):
     def fixture(self,directory):
         roster=named(16,8);references=['parent-a','parent-b']
         roster['pool_id']=digest(references)
-        roster=contracts.seal({k:v for k,v in roster.items() if k!='id'})
         profiles=difficulty.default_profiles();reward=roster['search']['reward']
+        calibration=dict(temperature=1.,brier=.2,ece=.05,labels=64,setups=2,bias_ready=True,scope='Authored fixture only')
+        ready=contracts.seal(dict(format=READY,contract=search_identity(),
+            model=dict(model_id=roster['shared_model']['model_id']),reward=reward,
+            utility_ready=True,goal_calibration=calibration))
+        roster['shared_model']['ready_id']=ready['id']
+        roster=contracts.seal({k:v for k,v in roster.items() if k!='id'})
         compact=dict(id=roster['id'],archetypes=[{k:g[k] for k in ('id','name','description','members')} for g in roster['archetypes']],
                      members=[{k:m[k] for k in ('id','archetype_id','profile')} for m in roster['members']])
         graphs=[dict(path=f'models/{i}.onnx',model_id=ident,actor=i==0)
@@ -24,9 +30,10 @@ class PackageAuditTests(unittest.TestCase):
         files=[dict(path=g['path'],sha256=str(i)*64,bytes=1) for i,g in enumerate(graphs)]
         manifest=dict(format=contracts.PACKAGE,contract=contracts.identity(),fixture=True,release_qualified=False,
             roster=compact,p4_id=roster['id'],profiles=profiles,reward=reward,pool_id=roster['pool_id'],models=graphs,
-            qualified_sources=False,files=files,searches={t:difficulty.resolve_search(roster,profiles,t).to_dict() for t in difficulty.TIERS})
+            calibration=calibration,qualified_sources=False,files=files,
+            searches={t:difficulty.resolve_search(roster,profiles,t).to_dict() for t in difficulty.TIERS})
         documents={'manifest.json':contracts.seal(manifest),'roster.json':roster,'qualification.json':None,
-            'profiles.json':profiles,'public-menu.json':ui.menu(roster,fixture=True)}
+            'readiness.json':ready,'profiles.json':profiles,'public-menu.json':ui.menu(roster,fixture=True)}
         for g,f in zip(graphs,files):
             documents[str(Path(g['path']).with_suffix('.json')).replace('\\','/')]=dict(
                 format=contracts.EXPORT,actor=g['actor'],model_id=g['model_id'],sha256=f['sha256'],

@@ -55,6 +55,15 @@ def neural_spec(identity,exploration=.05,focus='neutral'):
     return dict(kind='neural',model_id=identity,exploration=exploration,focus=focus,policy_id=policy_id)
 
 
+def _collection_recipe(jobs,config):
+    # Provenance describes the caller's intent, but older callers omit actual
+    # model/opponent IDs or mixed-policy focuses. Bind all execution inputs;
+    # output paths are transport locations and may change on relocation.
+    return dict(format='actor-collection/1.0.0',execution=config,
+        jobs=[dict(rotation=0,rng_index=0,focuses={})|{k:v for k,v in job.items() if k!='path'}
+              for job in jobs])
+
+
 def make_policy(spec,root,endpoint,config,mono,*,_replica=False):
     if spec['kind']=='lab-legacy':
         from .legacy_search import LabLegacyPolicy
@@ -74,10 +83,14 @@ def make_policy(spec,root,endpoint,config,mono,*,_replica=False):
         evaluator=RemoteEvaluator(endpoints[0],p,config['batch_size'],config['max_candidate_cells']))
         for p in spec.get('opponents',[spec['model_id']])]
     from dataclasses import replace
-    from .config import teacher_search_config,time_budget,TEACHER_TIME_BUDGET,NN_TIME_BUDGET
+    from .config import teacher_search_config,time_budget,TEACHER_TIME_BUDGET,NN_TIME_BUDGET,teacher_time_seconds
     search_config=teacher_search_config(spec['search']) if spec.get('teacher_schedule') else SearchConfig(**spec['search'])
     clock=(spec.get('teacher_work_budget') or TEACHER_TIME_BUDGET) if spec.get('teacher_schedule') else (spec.get('nn_work_budget') or NN_TIME_BUDGET)
-    if not _replica and time_budget(clock):search_config=replace(search_config,seconds=clock['seconds_per_turn'])
+    if not _replica and time_budget(clock):
+        # The coordinator binds each phase at admission. This maximum only
+        # initializes the policy; replicas inherit the same absolute deadline.
+        seconds=teacher_time_seconds(clock) if spec.get('teacher_schedule') else clock['seconds_per_turn']
+        search_config=replace(search_config,seconds=seconds)
     common=dict(config=replace(search_config,cpu_role=spec.get('cpu_role','reference')),mono=mono,focus=spec.get('focus','neutral'),
         opponents=opponents,evaluator=evaluator,fast_host=True)
     require(spec['kind']=='masked_ismcts','Only Masked ISMCTS is an active search policy')
@@ -277,7 +290,8 @@ def _actor(root,host_path,jobs,results,lease,config,mono,lanes,search_channels,a
                                 for number,part in enumerate(parts,packet['part_start']):
                                     path=Path(packet['prefix']+f'-part-{number:04d}.jsonl.gz')
                                     provenance=dict(producer='recovery/2.1.0',purpose=part[0][1]['provenance']['purpose'],
-                                        collection=packet['identity'],jobs=[dict(index=j['index'],seed=j['seed'],provenance=j['provenance'],
+                                        collection=packet['identity'],recipe=packet['recipe'],
+                                        jobs=[dict(index=j['index'],seed=j['seed'],provenance=j['provenance'],
                                             **({'teacher_phases':g.teacher_phases} if hasattr(g,'teacher_phases') else {}),
                                             **({'search_work':g.search_work} if hasattr(g,'search_work') else {})) for g,j,_,_ in part])
                                     write_shard(path,[serialized[g['game_id']] for g,_,_,_ in part],provenance,cache=config.get('feature_cache',False))
@@ -351,13 +365,14 @@ class ActorPool:
             size=min(self.config.get('shard_games',1),max(1,len(bucket)//(self.width*self.lanes)))
             for start in range(0,len(bucket),size):
                 group=bucket[start:start+size]
-                identity=digest([j['provenance'] for j in group])
+                recipe=_collection_recipe(group,self.config);identity=digest(recipe)
                 prefix=str(Path(group[0]['path']).parent/('games-'+identity[:16]))
                 expected={j['index']:j for j in group};existing=sorted(Path(prefix).parent.glob(Path(prefix).name+'-part-*.jsonl.gz'))
                 seen=set()
                 for path in existing:
                     with gzip.open(path,'rt',encoding='utf-8') as stream: header=json.loads(next(stream))
                     proof=header['provenance'];require(proof.get('collection')==identity,'Cached collection differs')
+                    require(proof.get('recipe')==recipe,'Cached actor execution recipe differs')
                     games=read_shards([path]);require(len(games)==len(proof['jobs']),'Cached shard membership differs')
                     # A crash may leave an uncommitted derived cache. Recreate it
                     # from authoritative validated records before issuing a receipt.
@@ -374,7 +389,7 @@ class ActorPool:
                     records.extend(loaded)
                     if on_records is not None:on_records(loaded)
                 missing=[j for j in group if j['index'] not in seen]
-                if missing: pending.append(dict(jobs=missing,prefix=prefix,identity=identity,part_start=len(existing)))
+                if missing: pending.append(dict(jobs=missing,prefix=prefix,identity=identity,recipe=recipe,part_start=len(existing)))
         if pending:
             self.start(len(pending))
             for packet in pending: self.jobs.put(packet)

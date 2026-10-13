@@ -100,12 +100,24 @@ class ParallelMasked(MaskedSearchPolicy):
                 if original is not None:worker.config=original
         # Await actual retirement of ALL workers, including exceptions. No worker
         # continues to use a reply channel after the actor submits its next request.
-        pending=[self.pool.submit(run,i) for i in range(len(self.replicas)) if quotas is None or quotas[i]>0]
-        results=[];failure=None
+        pending=[];failure=None;retirement_failure=None
+        try:
+            for i in range(len(self.replicas)):
+                if quotas is None or quotas[i]>0:pending.append(self.pool.submit(run,i))
+        except BaseException as e:
+            # submit() can enqueue work before thread startup fails, without
+            # returning its future. Retire the entire failed executor so even
+            # that unreturned owner cannot outlive this decision.
+            failure=e
+            try:self.pool.shutdown(wait=True,cancel_futures=True)
+            except BaseException as e:retirement_failure=e
+        results=[]
         for future in pending:
             try:results.append(future.result())
             except BaseException as e:failure=failure or e
-        if failure:raise failure
+        if failure:
+            if retirement_failure is not None:raise failure from retirement_failure
+            raise failure
         finalized=time.monotonic()
         stats=merge_statistics(results,choices);self.last_statistics=stats
         self.telemetry['searches']+=1;self.telemetry['simulations']+=stats['completed'];self.telemetry['incomplete']+=stats['interrupted']

@@ -39,7 +39,8 @@ class CheckedGame(dict):
         return self
 
     def assert_metadata(self):
-        require(len(self['records'])==len(self.seals) and digest({k:v for k,v in self.items() if k!='records'})==self.header_seal,
+        require([(r['step'],r['seat']) for r in self['records']]==list(self.seals)
+                and digest({k:v for k,v in self.items() if k!='records'})==self.header_seal,
                 'Validated game metadata changed')
 
     def encoded(self, row, encoder,*,allow_context=False):

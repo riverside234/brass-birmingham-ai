@@ -31,6 +31,10 @@ class TeacherWorkResumeTests(unittest.TestCase):
 
     def signatures(self):
         cfg=read(SOURCE_ROOT/'configs/step5/lab.json');cfg['model_size']='small'
+        # This fixture represents the archived count-era source, which did not
+        # support null admission or five-game defaults. Current migrations are
+        # exercised separately by test_time_resume and test_teacher_phase_revision.
+        cfg.update(search_wall_fraction=.5,search_games=4)
         cfg.pop('teacher_work_budget',None)
         cfg.pop('legacy_opponent_work_budget',None)
         old=dict(config=cfg,compatibility=compatibility(),implementation=OLD,legacy_pool={},teachers={})

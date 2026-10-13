@@ -1,0 +1,70 @@
+{
+  "format": "teacher-early-rail16-review/1.0.0",
+  "before": "48831bc83887a8d6beb563fd908dff18ee6b180dd8d7da6824724f4c53d9e596",
+  "after": "c875dde1baa158108f2a23d05cf0b60b82b0592462e3c85b33d3d5510a8e6f73",
+  "learning_compatibility": "c349e816f2e301ea2a3b438902059cffe868f48e131f7c120691d37cd1c409d2",
+  "preserved_prior_transitions": 637,
+  "added_transitions": 98,
+  "phase_seconds": {
+    "canal_early": 12.0,
+    "canal_late": 12.0,
+    "rail_early": 16.0,
+    "rail_late": 24.0
+  },
+  "changed_presets": [
+    "configs/step5/joint7-control.json",
+    "configs/step5/joint7-g150-control.json",
+    "configs/step5/joint7-g150-distill4.json",
+    "configs/step5/joint7-g150-gate72.json",
+    "configs/step5/joint7-lr-half.json",
+    "configs/step5/joint7-review.json",
+    "configs/step5/lab-16x2.json",
+    "configs/step5/lab-24x4.json",
+    "configs/step5/lab-reference.json",
+    "configs/step5/lab-small.json",
+    "configs/step5/lab.json",
+    "configs/step5/recovery-smoke.json",
+    "configs/step5/smoke.json"
+  ],
+  "search_games": 5,
+  "distill_steps": 8,
+  "search_wall_fraction": null,
+  "tests": {
+    "count": 66,
+    "passed": true,
+    "seconds": 61.336,
+    "log": "artifacts/recovery/early-rail16/tests.log",
+    "sha256": "d8d3977fac87b0a806e853c4e758706e06162ecc7511c3d4839b6784c872d50b",
+    "modules": [
+      "test_teacher_phase_revision",
+      "test_teacher_schedule",
+      "test_time_budgets",
+      "test_time_resume",
+      "test_teacher_work_resume",
+      "test_joint7_150_review",
+      "test_resume_evaluations"
+    ]
+  },
+  "reserved_search_seconds": {
+    "previous_collection": 1200,
+    "current_collection": 1280,
+    "current_two_collections": 2560,
+    "increase_fraction": 0.06666666666666667
+  },
+  "preserved": [
+    "PPO",
+    "reward",
+    "champion gate",
+    "opponent search",
+    "weights",
+    "Adam moments and steps",
+    "RNG",
+    "training progress",
+    "population",
+    "checkpoint and IL lineage",
+    "phase reservations",
+    "cadence",
+    "quality and calibration safeguards"
+  ],
+  "measurement_limits": "No new native search benchmark or lab training was run for the early-Rail 16-second setting. The preceding 12/12/12/24 smoke receipt remains historical; these tests establish configuration, budget sharing, accounting and continuation behavior, not label yield or playing strength."
+}

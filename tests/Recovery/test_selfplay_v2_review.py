@@ -150,7 +150,7 @@ class SelfplayV2ReviewTests(unittest.TestCase):
             cfg=read(path)
             self.assertEqual((cfg['learning_rate'],cfg['update']['target_kl']),(1e-5,.01))
             self.assertEqual((cfg['search']['seconds'],cfg['execution']['search_workers_per_turn']),(12.,4))
-            self.assertEqual((cfg['search_ready_games'],cfg['search_every_games'],cfg['search_wall_fraction']),(640,160,.5))
+            self.assertEqual((cfg['search_ready_games'],cfg['search_every_games'],cfg['search_wall_fraction']),(640,160,None))
 
 
 if __name__=='__main__':unittest.main()

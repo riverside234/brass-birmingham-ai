@@ -40,7 +40,7 @@ def contract():
 
 
 def accepted_contract(recorded):
-    """Only an exact, explicitly reviewed P0/P1 persistence migration is allowed."""
+    """Only exact, explicitly reviewed P0/P1 continuation sources are allowed."""
     current=contract()
     if recorded==current:return None
     path=CONFIG_DIR.parent/'personality/source-migrations.json'
@@ -51,7 +51,8 @@ def accepted_contract(recorded):
         if entry.get('from_contract')==recorded and entry.get('to_contract')==current]
     require(len(matches)==1 and {k:v for k,v in recorded.items() if k!='source'}==
         {k:v for k,v in current.items() if k!='source'},'Personality contract/source differs')
-    require(matches[0].get('kind')=='p0-p1-persistence-only/1.0.0','Unsupported personality migration')
+    require(matches[0].get('kind') in ('p0-p1-persistence-only/1.0.0',
+        'p0-p1-audit-continuation/1.0.0'),'Unsupported personality migration')
     return dict(version=matches[0]['kind'],receipt=digest(matches[0]),
         from_source=recorded['source'],to_source=current['source'])
 

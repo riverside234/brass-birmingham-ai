@@ -93,6 +93,36 @@
       "learning_compatibility": "c349e816f2e301ea2a3b438902059cffe868f48e131f7c120691d37cd1c409d2",
       "review_version": "step5-project-relocation/1.1.0",
       "reason": "Reviewed relocation audit: preserve historical evaluation host spelling after component-wise identity checks; confine runtime installation including cached outputs; reject blocked path parents. Transfer validates archive topology and reserved controls and includes pending evaluation/runtime source dependencies. Historical checkpoint/state/config/report bytes and all model/optimizer/RNG/signature/checksum checks remain intact. No model, encoder, reward, loss, optimizer, budget, schedule, opponent or learning-contract change. Existing utility recalibration and old-source teacher rejection remain required. Only completed fresh IL handoff; original manifest/checkpoint/parent lineage stays bound."
+    },
+    {
+      "implementation": "f6f8028538c13fdaa5cbcd40ffde5e81fe5d9cb58b649875d8a5cd1ea8487191",
+      "learning_compatibility": "c349e816f2e301ea2a3b438902059cffe868f48e131f7c120691d37cd1c409d2",
+      "reason": "Generation-150 review: bounded RNG-neutral post-PPO teacher-only categorical drift, calibration/opponent/setup evidence retention v4, and champion spec preservation. No model, reward, PPO, optimizer, RNG, game rules or current time-search contract changes. Keep current runtime/time settings. Compatible weights, Adam, counters, champion, population and IL ancestry persist; fresh utility calibration and current-source teacher labels remain required. Completed IL checkpoint contracts remain unchanged."
+    },
+    {
+      "implementation": "3de301188b2eb777a7929da14a3e8d3362f106e75e54129eef8776864809f8e6",
+      "learning_compatibility": "c349e816f2e301ea2a3b438902059cffe868f48e131f7c120691d37cd1c409d2",
+      "reason": "Champion gate/stage evidence revision only; completed fresh IL model, data, supervised losses and checkpoint format remain unchanged. Preserve original IL lineage; same-run PPO restores its own Adam/RNG."
+    },
+    {
+      "implementation": "3db61ed932779f2cd8d8e149509ab0c1b7232af63102213f17d5666c2d338130",
+      "learning_compatibility": "c349e816f2e301ea2a3b438902059cffe868f48e131f7c120691d37cd1c409d2",
+      "reason": "Preceding two-stage champion source; teacher phase support preserves completed IL model/feature contracts."
+    },
+    {
+      "implementation": "48831bc83887a8d6beb563fd908dff18ee6b180dd8d7da6824724f4c53d9e596",
+      "learning_compatibility": "c349e816f2e301ea2a3b438902059cffe868f48e131f7c120691d37cd1c409d2",
+      "reason": "Early Rail teacher timing revision preserves completed fresh IL model, data, loss and checkpoint contracts; original IL lineage remains required. Same-run PPO restores its own model and Adam/RNG."
+    },
+    {
+      "implementation": "c875dde1baa158108f2a23d05cf0b60b82b0592462e3c85b33d3d5510a8e6f73",
+      "learning_compatibility": "c349e816f2e301ea2a3b438902059cffe868f48e131f7c120691d37cd1c409d2",
+      "reason": "Player-mat validation caching and exact reviewed-resume routing. Preserve the exact original wire schema, all feature/model/reward/training contracts and every current search clock, worker count and schedule. Retain checkpoint weights, Adam/RNG, champion, population, counters and lineage. Only unchanged nested mat content reuses validation; any changed content is checked again. Completed IL provenance and original checkpoint checks remain required. An exact unchanged-configuration continuation bypasses irrelevant archived configuration upgrades; changed settings still require an exact reviewed migration."
+    },
+    {
+      "implementation": "aa41d2a962ded63fb83f89ec4b31fddc47a550ecab0ef8be8654d56262911f46",
+      "learning_compatibility": "c349e816f2e301ea2a3b438902059cffe868f48e131f7c120691d37cd1c409d2",
+      "reason": "Remaining self-play bug review: bind ordered replay membership and filtered causal inputs, restore optimizer settings after initial calibration failure, fully retire a failed forest executor, bind actor caches to actual execution recipes, and preserve population cache integrity receipts. Preserve model, feature, reward, optimizer and raw replay contracts, all current search clocks, workloads, teacher schedules and training settings. Continue exact committed weights, Adam/RNG, population, champion, counters and lineage; old uncommitted iterations and stale teacher labels remain rejected. Derived features may be rebuilt under the stronger replay validation. Completed IL still requires the original model, audited dataset and lineage evidence."
     }
   ]
 }

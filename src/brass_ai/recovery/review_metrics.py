@@ -64,3 +64,22 @@ class CategoricalProbe:
                     entropy=entropy/max(1,self.positions),
                     entropy_over_log_legal=relative_entropy/max(1,self.positions),
                     scope='Exact categorical KL(old behavior || new behavior) on the proportional era/phase nonforced probe; diagnostic only')
+
+
+def teacher_drift_probe(model, data, behavior, config):
+    """Snapshot a bounded post-PPO policy probe without advancing training RNG.
+
+    Only the selected rows are tensorized. The resulting KL isolates subsequent
+    teaching from PPO; it is not the difference between two total KL values.
+    """
+    from types import SimpleNamespace
+    from .updates import Dataset, phase_probe
+    rows = [entry[0] for entry in data]
+    meaningful = [i for i, row in enumerate(rows) if len(row['choices']) > 1]
+    with torch.random.fork_rng(devices=[]):
+        selected = phase_probe(SimpleNamespace(rows=rows), meaningful, config['kl_probe_rows'])
+    if not selected:
+        return None
+    dataset = Dataset([data[i] for i in selected], next(model.parameters()).device)
+    model.eval()
+    return CategoricalProbe(model, dataset, list(range(len(selected))), behavior, config)

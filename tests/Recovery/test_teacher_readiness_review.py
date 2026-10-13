@@ -102,7 +102,7 @@ class TeacherReadinessReviewTests(unittest.TestCase):
         from brass_ai.step5.league import seeds_for
         expected=18000000
         for _ in range(cfg['search_games']):_,expected=seeds_for(expected,1)
-        self.assertEqual((len(jobs),train.call_count,report['collection_count']),(4,1,1))
+        self.assertEqual((len(jobs),train.call_count,report['collection_count']),(5,1,1))
         self.assertEqual((next_due,cursor,spent),(960,expected,210.))
         self.assertEqual((report['budget']['due_collections'],report['budget']['max_collections']),(2,2))
         self.assertTrue(report['budget']['deferred']);self.assertIn('Utility calibration invalidated',report['reason'])
@@ -131,7 +131,7 @@ class TeacherReadinessReviewTests(unittest.TestCase):
             report,next_due,_,spent=collect_due(SOURCE_ROOT,SOURCE_ROOT/'artifacts/mock',SOURCE_ROOT/'artifacts/mock/iteration-0070',
                 cfg,state,{},model,None,service,heavy,done=960,cursor=18000000,ordinary_seconds=10000.,ordinary_game_seconds=1.,
                 recalibrate=callback)
-        self.assertEqual((len(jobs),callback.call_count,report['collection_count'],next_due),(8,2,2,1120))
+        self.assertEqual((len(jobs),callback.call_count,report['collection_count'],next_due),(10,2,2,1120))
         self.assertEqual(spent,160.);self.assertFalse(report['budget']['deferred']);self.assertTrue(calibration_ready(model))
         self.assertTrue(all(b['post_distill_calibration']['receipt']['ready'] for b in report['collections']))
         self.assertEqual([b['post_distill_calibration_seconds'] for b in report['collections']],[25.,25.])
@@ -155,7 +155,7 @@ class TeacherReadinessReviewTests(unittest.TestCase):
             report,next_due,_,spent=collect_due(SOURCE_ROOT,SOURCE_ROOT/'artifacts/mock',SOURCE_ROOT/'artifacts/mock/iteration-0070',
                 cfg,state,{},model,None,service,heavy,done=960,cursor=18000000,ordinary_seconds=10000.,ordinary_game_seconds=1.,
                 recalibrate=callback)
-        self.assertEqual((len(jobs),train.call_count,callback.call_count,next_due,spent),(4,1,1,960,210.))
+        self.assertEqual((len(jobs),train.call_count,callback.call_count,next_due,spent),(5,1,1,960,210.))
         self.assertFalse(calibration_ready(model));self.assertTrue(report['budget']['deferred'])
         self.assertFalse(report['collections'][0]['post_distill_calibration']['receipt']['ready'])
         self.assertEqual(report['collections'][0]['post_distill_calibration_seconds'],25.)

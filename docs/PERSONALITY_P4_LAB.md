@@ -1,5 +1,7 @@
 # P4: unified deployment styles
 
+**13 October audit:** [P0–P6 findings and verification](PERSONALITY_P0_P6_AUDIT_2026-10-13.md). Deployment, roster and roster-check contracts are now **1.1.0**. Rosters retain fixture provenance from their handoff/readiness; qualification requires explicit nonfixture provenance and the new `real_artifacts` gate. Full synthetic panels cannot qualify even if every statistical gate passes. Regenerate P4 evidence and dependent P5/P6 artifacts; do not retag old reports.
+
 **11 October review:** [P0–P4 corrections and compatibility notes](../ai-research/PERSONALITY_P0_P4_REVIEW.md). Neighborhood selection now uses each pair's own noise threshold. Blind examples cover members across setups/seats and stay fixed when only partial chunks exist. Rebuild the upstream personality evidence and P4 artifacts under the revised contracts; the 10 October verification below describes historical fixtures.
 
 P4 implements the **one frozen shared network** option in [the personality plan](../ai-research/PERSONALITIES_AND_DIFFICULTY_PLAN.md#56-bring-discovered-behavior-back-into-one-network). It selects 16 archetypes, each containing its tested representative and seven nearby tested variants. There are 128 unique controllers and one set of neural weights. The five pilot neural profile inputs remain supported inputs; archetypes combine those trained inputs with tested intent/prior settings. Sixteen distinct behaviors must be demonstrated, not inferred from 128 different numbers.

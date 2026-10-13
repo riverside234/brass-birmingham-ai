@@ -33,10 +33,12 @@ def fixture(out):
             value=dict(family='industry_sequence',industry='CottonMill',region='unspecified',horizon=4)[name]
             head.bias[FACTORS[name].index(value)]=3.
         model.confidence_head.weight.zero_();model.confidence_head.bias.fill_(3.)
-    directory=out/'ready';ident=checkpoint.save(directory/'model.pt',model,training=dict(fixture=True))
+    goal_calibration=dict(temperature=1.,bias_ready=True,brier=.01,ece=.01,labels=72,setups=2,
+        scope='Authored smoke calibration fixture only')
+    directory=out/'ready';ident=checkpoint.save(directory/'model.pt',model,training=dict(fixture=True,goal_calibration=goal_calibration))
     receipt=dict(format=READY,contract=identity(),model=dict(path='model.pt',sha256=sha(directory/'model.pt'),model_id=ident),
         handoff=(out/'handoff').relative_to(ROOT).as_posix(),handoff_sha256=sha(out/'handoff/manifest.json'),
-        reward=manifest['reward'],utility_ready=True,goal_calibration=dict(temperature=1.,bias_ready=True,scope='Authored smoke calibration fixture only'),
+        reward=manifest['reward'],utility_ready=True,goal_calibration=goal_calibration,
         data=[],scope='Untrained model/authored readiness fixture, never production qualification')
     receipt['id']=digest(receipt);write_json(directory/'ready.json',receipt)
     return directory

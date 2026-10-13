@@ -5,10 +5,11 @@ import shutil
 from brass_ai.bank import sha
 from brass_ai.learning.contracts import require,digest
 from brass_ai.personality.deployment import roster
-from brass_ai.personality.deployment.contracts import validate_roster
+from brass_ai.personality.deployment.contracts import ROSTER,validate_roster
 from brass_ai.personality.difficulty import panels,evaluation,ui
 from brass_ai.personality.difficulty.contracts import default_profiles,validate_profiles,resolve_search,TIERS,validate_report_summary
-from brass_ai.personality.search.readiness import load as load_ready
+from brass_ai.personality.search.readiness import load as load_ready,validate_goal_calibration
+from brass_ai.personality.search.contracts import READY
 from brass_ai.search.common import SearchConfig
 from .contracts import PACKAGE,identity,read,write,seal,unseal,child,inventory
 from .export import export,validate_metadata
@@ -35,6 +36,7 @@ def build(root,roster_directory,output,*,qualification=None,fixture=False):
     # The auxiliary frozen rollout pool preserves P2's opponent model. One actor
     # serves all 128 members; no descriptor, optimizer or learner is shipped.
     write(out/'roster.json',value);write(out/'qualification.json',report)
+    write(out/'readiness.json',ready)
     if not fixture:
         # Retain the exact P4 qualification receipt as portable provenance; its
         # original byte hash is pinned by the roster. Raw games remain on the lab.
@@ -83,6 +85,8 @@ def validate(directory,*,allow_fixture=True):
     # inventory() already checks paths and hashes every byte; do not reread the
     # whole package a second time on every laptop service start.
     value=read(directory/'roster.json');validate_roster(value)
+    require(value['format']==ROSTER and value['contract']==m['contract']['p5']['p4']
+            and value['id']==digest({k:v for k,v in value.items() if k!='id'}), 'Roster contract or content hash differs')
     require(value['id']==m['p4_id']==m['roster']['id'] and value['full_size'],'Roster identity differs')
     expected=dict(id=value['id'],archetypes=[{k:g[k] for k in ('id','name','description','members')} for g in value['archetypes']],
                  members=[{k:r[k] for k in ('id','archetype_id','profile')} for r in value['members']])
@@ -90,7 +94,16 @@ def validate(directory,*,allow_fixture=True):
     report=read(directory/'qualification.json');p=validate_profiles(read(directory/'profiles.json'))
     if report is not None:validate_report_summary(report,value)
     require(m['profiles']==p and p['workers']==2 and p['cpu_role']=='laptop','Laptop resource profile differs')
+    require(report is None or p==report['profiles'],'Exported profiles differ from difficulty evidence')
     require(m['searches']=={t:resolve_search(value,p,t).to_dict() for t in TIERS},'Search behavior differs')
+    require(m['reward']==value['search']['reward'],'Exported reward differs from qualified search')
+    ready=unseal(read(directory/'readiness.json'),READY)
+    require(ready['id']==value['shared_model']['ready_id']
+            and ready['contract']==m['contract']['p5']['p4']['search']
+            and ready['model']['model_id']==value['shared_model']['model_id']
+            and ready['utility_ready'] is True and ready['reward']==m['reward'], 'Readiness differs from qualified roster')
+    require(m['calibration']==validate_goal_calibration(ready['goal_calibration']),
+            'Exported goal calibration differs from pinned readiness')
     require(read(directory/'public-menu.json')==ui.menu(value,report,fixture=m['fixture']),'Public menu differs')
     require(len(m['models']) in range(2,6) and sum(x['actor'] for x in m['models'])==1 and m['models'][0]['actor'], 'One actor and a frozen rollout pool required')
     require(m['models'][0]['model_id']==value['shared_model']['model_id'], 'Actor differs from qualified roster')

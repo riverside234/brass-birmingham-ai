@@ -25,6 +25,15 @@ def split_validators():
     outer=type(original)(schema)
     items={name:original.evolve(schema=dict(original.schema,
         **{'$ref':f'#/$defs/observation/properties/{name}/items'})) for name in GROUPS}
+    # Cash, spending and hand counts change much more often than industry
+    # stacks. Rechecking every tile whenever a player changes dominates the
+    # actor boundary. Keep the complete player/array constraints and validate
+    # each mat against its original schema, cached by current content below.
+    players=copy.deepcopy(items['players'].schema)
+    players['$defs']['observation']['properties']['players']['items']['properties']['mat'].pop('items')
+    items['players']=type(original)(players)
+    items['player_mat']=original.evolve(schema=dict(original.schema,
+        **{'$ref':'#/$defs/observation/properties/players/items/properties/mat/items'}))
     choice_schema=copy.deepcopy(validator('choices').schema)
     choice_schema['$defs']['choices'].pop('items')
     choices_outer=type(original)(choice_schema)
@@ -72,8 +81,12 @@ class InputBoundary:
                 return key
         outer,choices_outer,items,branches=split_validators()
         outer.validate(view);choices_outer.validate(choices)
+        def player(value):
+            items['players'].validate(value)
+            for mat in value['mat']:self._part('player_mat',mat,items['player_mat'].validate)
         for name in GROUPS[:-1]:
-            for item in view[name]:self._part(name,item,items[name].validate)
+            check=player if name=='players' else items[name].validate
+            for item in view[name]:self._part(name,item,check)
         # These are the same cross-field checks as runtime_contracts.validate.
         require([p['seat'] for p in view['players']]==list(range(4)) and sorted(view['order'])==list(range(4)),
                 'Four stable seats required')

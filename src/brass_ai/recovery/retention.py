@@ -6,7 +6,7 @@ unfinished jobs and formal evaluation evidence are dependencies, not garbage.
 from contextlib import contextmanager
 import json
 import os
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 import socket
 import stat
 import time
@@ -161,7 +161,9 @@ def _references(root,run):
     # pass; never cache across cleanup passes or bypass safe() before deletion.
     resolved_paths={}
     def resolve(path,base=None):
-        key=(path,base)
+        # Absolute (including relocated Windows) references ignore a local base.
+        # Reuse their checked resolution for both schema interpretations.
+        key=(path,None if Path(path).is_absolute() or PureWindowsPath(path).is_absolute() else base)
         if key not in resolved_paths:resolved_paths[key]=project_path(root,path,base=base)
         return resolved_paths[key]
     for receipt in (run/'.retention').glob('cleanup-*.json'):
@@ -224,21 +226,51 @@ def population_entries(history,config=POPULATION):
     return retain(history,config)
 
 
-def slim_checkpoint(root,run,entry):
+def _same_payload(left,right):
+    if type(left) is not type(right):return False
+    if isinstance(left,torch.Tensor):
+        return left.dtype==right.dtype and left.shape==right.shape and torch.equal(left,right)
+    if isinstance(left,dict):
+        return left.keys()==right.keys() and all(_same_payload(left[k],right[k]) for k in left)
+    if isinstance(left,(list,tuple)):
+        return len(left)==len(right) and all(_same_payload(a,b) for a,b in zip(left,right))
+    return left==right
+
+
+def slim_checkpoint(root,run,entry,existing=None):
     path=project_path(root,entry['path']);require(sha(path)==entry['sha256'],'Population checkpoint changed')
     destination=run/'population'/('weights-'+entry['model_id']+'.pt')
-    if not destination.exists():
+    if existing is not None:
+        require(existing['model_id']==entry['model_id'] and project_path(root,existing['path'])==destination,
+                'Population cache receipt changed')
+        require(destination.is_file() and sha(destination)==existing['sha256'],'Population cache changed')
+        cached_sha=existing['sha256']
+    elif path==destination:
+        cached_sha=entry['sha256']
+    else:
         raw=torch.load(path,map_location='cpu',weights_only=True);raw['optimizer']=None
         # Opponents need model/compatibility/lineage, not copied per-game reports.
         raw['training']={k:v for k,v in raw.get('training',{}).items() if k not in ('evidence','imitation')}
-        destination.parent.mkdir(parents=True,exist_ok=True);temporary=destination.with_name(destination.name+'.tmp')
-        torch.save(raw,temporary);temporary.replace(destination)
-    return dict(entry,path=destination.relative_to(root).as_posix(),sha256=sha(destination),weights_only=True)
+        if destination.exists():
+            # An interrupted publication has no committed checksum yet. Verify
+            # the complete derived payload, including calibration and lineage.
+            cached=torch.load(destination,map_location='cpu',weights_only=True)
+            require(_same_payload(raw,cached),'Population cache content changed')
+        else:
+            destination.parent.mkdir(parents=True,exist_ok=True);temporary=destination.with_name(destination.name+'.tmp')
+            torch.save(raw,temporary);temporary.replace(destination)
+        cached_sha=sha(destination)
+    return dict(entry,path=destination.relative_to(root).as_posix(),sha256=cached_sha,weights_only=True)
 
 
 def update_population(root,run,state,config=POPULATION):
     # Retired generations retain immutable metadata but are not candidates.
-    available={e['model_id']:e for e in state.get('population',[])}
+    committed={e['model_id']:e for e in state.get('population',[])}
+    available=dict(committed)
+    # A frozen champion may outlive the bounded population. Its cache receipt
+    # remains authoritative if unchanged weights later re-enter the population.
+    champion=state.get('champion')
+    if champion and champion.get('weights_only'):committed.setdefault(champion['model_id'],champion)
     for e in state['history']:
         path=project_path(root,e['path'])
         if path.exists(): available[e['model_id']]=e
@@ -246,7 +278,7 @@ def update_population(root,run,state,config=POPULATION):
     # must not reorder it. Lineage order also survives a fresh recipe migration.
     order={e['model_id']:i for i,e in enumerate(state['history'])}
     selected=population_entries(sorted(available.values(),key=lambda e:order[e['model_id']]),config)
-    state['population']=[slim_checkpoint(root,run,e) for e in selected]
+    state['population']=[slim_checkpoint(root,run,e,committed.get(e['model_id'])) for e in selected]
     state['resume']=state['history'][-state['signature']['config'].get('retention',RETENTION)['resume_checkpoints']:]
     return state
 
@@ -296,7 +328,7 @@ def plan(root,run,config=RETENTION):
         for directories in panels.values():
             for directory in directories[:-2]:
                 if any(p.is_relative_to(directory) for p in pins):continue
-                for pattern in ('*.jsonl.gz*','spec.json','report.json'):
+                for pattern in ('*.jsonl.gz*','spec.json','report.json','screen-report.json','confirmation-report.json'):
                     for p in directory.glob(pattern):candidate(p,'archived development screen')
                 for p in (directory/'.retention').glob('cleanup-*.json'):
                     if settled(read(p)):candidate(p,'completed development cleanup receipt')

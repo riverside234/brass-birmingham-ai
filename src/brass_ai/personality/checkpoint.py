@@ -31,6 +31,14 @@ def committed_path(run,state):
     return path
 
 
+def restore_rng(raw):
+    """Restore the pilot stream independently of its optimizer parameter set."""
+    torch.set_rng_state(raw['rng'])
+    if raw['cuda_rng'] and torch.cuda.is_available():
+        require(len(raw['cuda_rng'])==torch.cuda.device_count(),'CUDA topology changed on P1 resume')
+        torch.cuda.set_rng_state_all(raw['cuda_rng'])
+
+
 def save(path,model,optimizer=None,*,training=None):
     model.validate_parameter_count();path=Path(path);path.parent.mkdir(parents=True,exist_ok=True)
     training=dict(training or {})

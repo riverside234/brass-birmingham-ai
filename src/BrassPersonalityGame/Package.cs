@@ -43,7 +43,7 @@ namespace BrassLegacyAI
                 var m=JObject.Parse(File.ReadAllText(Path.Combine(directory,"manifest.json")));
                 ReviewMode=(bool?)pointer["review_only"]==true && Environment.GetCommandLineArgs().Contains("--brass-personality-review") &&
                     root.Split(Path.DirectorySeparatorChar,Path.AltDirectorySeparatorChar).Contains("artifacts") && File.Exists(Path.Combine(root,".p6-fixture-sandbox"));
-                if((!ReviewMode && ((bool?)m["fixture"]!=false || (bool?)m["qualified_sources"]!=true)) || (string)m["format"]!="personality-laptop-package/1.1.0")throw new InvalidDataException("Unqualified/fixture package");
+                if((!ReviewMode && ((bool?)m["fixture"]!=false || (bool?)m["qualified_sources"]!=true)) || (string)m["format"]!="personality-laptop-package/1.2.0")throw new InvalidDataException("Unqualified/fixture package");
                 foreach(var file in m["files"])if(Hash(Below(directory,(string)file["path"]))!=(string)file["sha256"])throw new InvalidDataException("Neural package file changed");
                 if(Hash(typeof(PersonalityPackage).Assembly.Location)!=(string)pointer["installed_helper_sha256"])throw new InvalidDataException("Neural helper changed");
                 foreach(var f in ((JObject)pointer["installed_files"]).Properties())

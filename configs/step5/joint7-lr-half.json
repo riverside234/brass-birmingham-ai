@@ -72,7 +72,7 @@
   ],
   "search_ready_games": 640,
   "search_every_games": 160,
-  "search_games": 4,
+  "search_games": 5,
   "distill_steps": 8,
   "distillation": {
     "min_samples": 16,
@@ -152,7 +152,7 @@
   },
   "audit_workers": 16,
   "overlap_pools": true,
-  "search_wall_fraction": 0.5,
+  "search_wall_fraction": null,
   "architecture": "brass-four-seat-mlp-resnet/1.0.0",
   "parameter_limit": 2000000,
   "initialization": "random",
@@ -200,9 +200,14 @@
     "seed": 1910000
   },
   "teacher_work_budget": {
-    "contract": "teacher-turn-time/1.0.0",
+    "contract": "teacher-turn-time/1.1.0",
     "mode": "time",
-    "seconds_per_turn": 12.0
+    "seconds_per_phase": {
+      "canal_early": 12.0,
+      "canal_late": 12.0,
+      "rail_early": 16.0,
+      "rail_late": 24.0
+    }
   },
   "legacy_opponent_work_budget": {
     "contract": "legacy-opponent-turn-time/1.0.0",

@@ -17,11 +17,8 @@ from brass_ai.step5.league import write_json
 from .contracts import HANDOFF,contract,local_file,schema,accepted_contract
 
 
-def inspect(root,source,*,_owner=False):
-    root,run=owned(root,source)
-    require(not active(run,allow_owner=_owner),'Step 5 is still active; wait for the run to stop before handoff')
-    require(all((run/n).is_file() for n in ('state.json','best.json','best.pt')),'Completed Step 5 selection files are not available yet')
-    state=read_json(run/'state.json');best=read_json(run/'best.json')
+def selection_evidence(state,best,report,gate_spec):
+    """The same selection proof applies to a stopped run and its portable copy."""
     require(state.get('format')=='step5-recovery-league/2.2.0','Unsupported Step 5 run')
     require(best.get('format')==CHAMPION and best['checkpoint']==state.get('champion'),
             'Best receipt differs from selected incumbent')
@@ -30,11 +27,6 @@ def inspect(root,source,*,_owner=False):
             'No accepted post-IL PPO parent; initial/IL incumbent is not eligible')
     require(best['selected_games']==state['champion_gate']['accepted_games']==gate['games_done']
         and gate['candidate_generation']==entry['generation'],'Selected generation/gate differs')
-    path=safe(run,project_path(root,entry['path']))
-    require(sha(path)==entry['sha256']==sha(run/'best.pt'),'Selected parent bytes changed')
-    report_path=safe(run,project_path(root,gate['report']))
-    require(sha(report_path)==gate['report_sha256'],'Accepted gate report changed')
-    report=read_json(report_path);spec_path=report_path.parent/'spec.json';gate_spec=read_json(spec_path)
     require(report['format']==CHAMPION and digest(gate_spec)==report['spec_id'],'Gate specification differs')
     require(gate_spec['format']==CHAMPION and set(gate_spec['seeds'])=={r['seed'] for r in report['outcomes']},'Gate setup identities differ')
     require(gate_spec['candidate']['model_id']==entry['model_id'] and
@@ -42,6 +34,22 @@ def inspect(root,source,*,_owner=False):
     outcome=decision(report['outcomes'],gate_spec['config'])
     require(outcome==report['result'] and outcome['accepted'] and report['failed_games']==0
         and all(gate.get(k)==v for k,v in outcome.items()),'Incomplete/unaccepted gate evidence')
+    return entry,gate
+
+
+def inspect(root,source,*,_owner=False):
+    root,run=owned(root,source)
+    require(not active(run,allow_owner=_owner),'Step 5 is still active; wait for the run to stop before handoff')
+    require(all((run/n).is_file() for n in ('state.json','best.json','best.pt')),'Completed Step 5 selection files are not available yet')
+    state=read_json(run/'state.json');best=read_json(run/'best.json')
+    gate=state.get('champion_gate',{}).get('accepted_gate')
+    require(gate,'No accepted post-IL PPO parent; initial/IL incumbent is not eligible')
+    report_path=safe(run,project_path(root,gate['report']))
+    require(sha(report_path)==gate['report_sha256'],'Accepted gate report changed')
+    report=read_json(report_path);spec_path=report_path.parent/'spec.json';gate_spec=read_json(spec_path)
+    entry,gate=selection_evidence(state,best,report,gate_spec)
+    path=safe(run,project_path(root,entry['path']))
+    require(sha(path)==entry['sha256']==sha(run/'best.pt'),'Selected parent bytes changed')
     signature=state['signature'];assert_compatible(signature['compatibility'])
     reward=reward_spec(signature['config'])
     require(reward==specification(),'Parent uses another reward; explicit personality migration required')
@@ -168,10 +176,40 @@ def load(directory):
     directory=Path(directory);manifest=read_json(directory/'manifest.json')
     require(manifest.get('format')==HANDOFF,'Handoff format differs')
     accepted_contract(manifest['contract'])
+    files={item['path']:item['sha256'] for item in manifest['files']}
+    require(len(files)==len(manifest['files']),'Duplicate handoff evidence files')
     for item in manifest['files']:
         require(sha(local_file(directory,item['path']))==item['sha256'],'Handoff dependency changed: '+item['path'])
+    def included(item):
+        require(files.get(item['path'])==item['sha256'],'Unlisted handoff dependency evidence')
+    included(manifest['parent'])
+    for item in manifest['references']:included(item)
+    for item in manifest['traces']:
+        included(item);included(item['receipt'])
+    required=('step5-state','best','accepted-report','accepted-spec')
+    require(all('evidence/'+name+'.snapshot' in files for name in required),'Missing authoritative handoff evidence')
+    state,best,report,gate_spec=[read_json(local_file(directory,'evidence/'+name+'.snapshot')) for name in required]
+    entry,gate=selection_evidence(state,best,report,gate_spec)
+    require(files['evidence/accepted-report.snapshot']==gate['report_sha256']
+        and manifest['signature']==state['signature'] and manifest['origin']==state['origin']
+        and manifest['selection']['gate']==gate and manifest['parent']['generation']==entry['generation']
+        and manifest['parent']['model_id']==entry['model_id'] and manifest['parent']['sha256']==entry['sha256'],
+        'Handoff claims differ from authoritative source evidence')
+    available={e['model_id']:e for e in [state['evaluation_anchor']]+list(state.get('population',[]))}
+    require(len({r['model_id'] for r in manifest['references']})==len(manifest['references'])
+        and all(r['model_id']!=entry['model_id'] and r['model_id'] in available
+            and all(r[k]==available[r['model_id']][k] for k in ('sha256','generation'))
+            for r in manifest['references']), 'Handoff reference evidence differs')
+    assert_compatible(manifest['signature']['compatibility'])
     require(manifest['reward_id']==digest(manifest['reward']) and manifest['reward']==specification(),'Handoff reward differs')
     with torch.random.fork_rng(devices=[]): model,raw=load_checkpoint(local_file(directory,manifest['parent']['path']))
     require(raw['model_id']==manifest['parent']['model_id'] and model.config.utility==manifest['reward']
         and model.utility_calibration==manifest['utility_calibration'] and calibration_ready(model),'Handoff model/calibration differs')
+    require(raw['format']=='four-seat-checkpoint/2.0.0' and raw['training'].get('mode')=='step5-population-ppo'
+        and raw['step']==manifest['parent']['generation']
+        and raw['training'].get('fresh_run')==manifest['parent']['fresh_run']==manifest['source_run']
+        and raw['training'].get('signature')==manifest['parent']['training_signature']
+        and raw['model_config']==manifest['model_config'] and model.parameter_count==manifest['parent']['parameters']
+        and manifest['goal_schema']==schema() and reward_spec(manifest['signature']['config'])==manifest['reward'],
+        'Handoff model/provenance evidence differs')
     return manifest,model

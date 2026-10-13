@@ -68,6 +68,20 @@ files during copying abort publication and request a retry. A run-lock marker an
 missing final iteration timing are recorded in the manifest. No training lock is
 created or removed by this script.
 
+For the generation-150 comparison, include the independent panels with
+`--extra artifacts/joint7-g150-panel` and the paired comparison with
+`--extra artifacts/joint7-g150-comparison` in the project where each resides.
+`comparison.json`, evaluation specifications/results, and new teaching/calibration
+fields in full iteration reports are already included. See the
+[generation-150 review](JOINT7_GENERATION150_REVIEW.md) for exact continuation and
+comparison commands. Exports contain reports; complete game replays and checkpoint
+tensors remain separate when an investigation needs them.
+
+The [teacher phase support update](TEACHER_PHASE_SUPPORT.md) adds per-phase work,
+coverage and timing, distinct used/unused labels, and distillation policy drift.
+These fields are included automatically in iteration reports and compact history;
+`null` cumulative allowance means the wall-fraction restriction is disabled.
+
 Verification: `python -m unittest discover -s tests/Reports -v` covers report
 selection, original bytes, lineage, missing evidence, output protection, concurrent
 changes, and a smoke export using the supplied generation-60 JSON evidence.

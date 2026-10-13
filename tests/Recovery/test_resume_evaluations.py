@@ -86,8 +86,10 @@ class EvaluationResumeTests(unittest.TestCase):
 
     def test_champion_source_upgrade_preserves_old_report_and_reuses_only_new_report(self):
         from brass_ai.recovery.champion import initialize,schedule
+        from brass_ai.recovery.config import CHAMPION_LEGACY
         from test_champion import rows
         run=self.temp();sigs=self.signatures()[::2];entries=[]
+        for sig in sigs:sig['config']['champion']=copy.deepcopy(CHAMPION_LEGACY)
         for generation in (0,1):
             path=run/f'generation-{generation:04d}.pt';path.write_bytes(str(generation).encode())
             entries.append(dict(path=path.relative_to(SOURCE_ROOT).as_posix(),sha256=sha(path),
@@ -95,7 +97,7 @@ class EvaluationResumeTests(unittest.TestCase):
         state=dict(format='step5-recovery-league/2.2.0',iteration=1,signature=sigs[0],games_done=0,
             history=entries[:1],evaluation_anchor=entries[0])
         service=SimpleNamespace(models={'0':None,'1':None});actor=SimpleNamespace(collect=lambda jobs:[])
-        with patch('brass_ai.recovery.retention.slim_checkpoint',side_effect=lambda root,run,e:e):
+        with patch('brass_ai.recovery.retention.slim_checkpoint',side_effect=lambda root,run,e,existing=None:e):
             initialize(SOURCE_ROOT,run,state);state.update(history=entries,games_done=6400)
             before=copy.deepcopy(state)
             with patch('brass_ai.recovery.champion.implementation_id',return_value=OLD),\

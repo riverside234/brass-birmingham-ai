@@ -45,6 +45,10 @@ def prepared(games, predicate=None, neutral=False, insolvency=None, reward=None)
                         r['_insolvency_trajectory']=summaries[row['seat']];annotated.add(row['seat'])
                 encoded = game.encoded(r,encoder,allow_context=neutral) if hasattr(game,'encoded') else encoder.encode(r['view'], r['choices'], r['style'], r['intent'])
                 data.append((r, target, (game['game_id'],row['seat']), encoded))
+            elif costs is not None and hasattr(game,'encoded'):
+                # Opponent observations also determine the learner's causal
+                # costs. Filtering their training rows cannot waive the seal.
+                game.encoded(row,encoder)
     require(data, 'No eligible learning decisions')
     return data
 
@@ -532,17 +536,32 @@ def distill_update(model,optimizer,games,config,*,steps=8,weight=.25,quality=Non
                 (getattr(model.config,'utility',None) is None or r['teacher']['search']['reward']==model.config.utility)) for g in games for r in g['records']),
             'Historical neural/search replay cannot enter fresh distillation')
     eligible=lambda r:len(r['choices'])>1 and r['teacher'] is not None and r['teacher']['confidence']>0 and sum(r['teacher']['coverage'])>=2
-    phases=Counter();setups=set();count=0
+    phases=Counter();setups=set();positions=set();count=0
     for game in games:
         for row in game['records']:
             if not eligible(row):continue
             validate_teacher(row['teacher'],len(row['choices']))
             phase=phase_for(row['view']['context']);require(phase is not None,'Unknown teacher phase')
+            position=(game['setup_group'],row['seat'],row['view']['context']['revision'])
+            require(position not in positions,'Duplicate qualified teacher position')
+            positions.add(position)
             count+=1;phases[phase]+=1;setups.add(game['setup_group'])
+    width=min(config['effective_batch_size'],quality['batch_size'])
     support=dict(teacher_rows=count,teacher_setups=len(setups),samples_by_phase={p:phases[p] for p,_,_,_ in PHASES},
-                 quality=quality,requested_steps=steps,value_loss_training=False)
+                 quality=quality,requested_steps=steps,value_loss_training=False,
+                 distill_batch_size=width,sample_presentation_cap=width*steps)
+    def usage(seen,data):
+        used=Counter(phase_for(data[i][0]['view']['context']) for i in seen)
+        presented=Counter()
+        for i,n in seen.items():presented[phase_for(data[i][0]['view']['context'])]+=n
+        return dict(distinct_labels_used=len(seen),unused_qualified_labels=count-len(seen),
+            sample_presentations=sum(seen.values()),max_observed_reuse=max(seen.values(),default=0),
+            used_samples_by_phase={p:used[p] for p,_,_,_ in PHASES},
+            unused_samples_by_phase={p:phases[p]-used[p] for p,_,_,_ in PHASES},
+            sample_presentations_by_phase={p:presented[p] for p,_,_,_ in PHASES})
     if count<quality['min_samples'] or len(setups)<quality['min_games'] or any(phases[p]<quality['min_samples_per_phase'] for p,_,_,_ in PHASES):
-        return dict(updated=False,optimizer_steps=0,reason='Insufficient diverse search teachers; no optimizer update',**support)
+        return dict(updated=False,optimizer_steps=0,reason='Insufficient diverse search teachers; no optimizer update',
+                    teacher_policy_drift=None,**usage({},[]),**support)
     if getattr(model.config,'utility',None) is not None:
         from .utility import calibration_ready
         from brass_ai.step5.league import implementation_id
@@ -552,11 +571,14 @@ def distill_update(model,optimizer,games,config,*,steps=8,weight=.25,quality=Non
                 'Search teaching requires fresh current-model/current-source targets')
         require(calibration_ready(model),'Calibrate the utility head before search teaching')
     data=prepared(games,eligible)
+    from .review_metrics import teacher_drift_probe
+    from types import SimpleNamespace
+    probe=teacher_drift_probe(model,data,SimpleNamespace(exploration=0.,temperature=1.),config)
     def fit():
         report=supervised_epoch(model,None,data,config,training=False,kind='teacher',weight=weight)
         return {k:report[k] for k in ('policy_loss','teacher_entropy','teacher_kl','meaningful_top1','root_action_top1','root_family_top1')}
     before=fit()
-    reports=[];seen=Counter();width=min(config['effective_batch_size'],quality['batch_size'])
+    reports=[];seen=Counter()
     teacher_config=dict(config,effective_batch_size=width)
     for _ in range(quality['max_reuse']):
         order=torch.randperm(len(data)).tolist()
@@ -566,6 +588,8 @@ def distill_update(model,optimizer,games,config,*,steps=8,weight=.25,quality=Non
             reports.append(supervised_epoch(model,optimizer,[data[i] for i in indices],teacher_config,kind='teacher',weight=weight))
         if len(reports)>=steps:break
     after=fit()
+    drift=probe.measure(model) if probe is not None else None
+    if drift is not None:drift['scope']='Exact KL(pre-distillation policy || post-distillation policy) on a bounded qualified-label probe; before utility recalibration, training data, not playing strength'
     invalidated=getattr(model.config,'utility',None) is not None and bool(reports)
     if invalidated:
         # Policy-only updates still move the shared state encoder, which feeds
@@ -575,7 +599,7 @@ def distill_update(model,optimizer,games,config,*,steps=8,weight=.25,quality=Non
         model.utility_calibration=dict(model.utility_calibration,ready=False,
             invalidated_by='policy-distillation',reason='Shared trunk changed without a utility target')
     return dict(updated=True,optimizer_steps=sum(r['optimizer_steps'] for r in reports),updates=reports,
-        sample_presentations=sum(seen.values()),max_observed_reuse=max(seen.values()),
+        **usage(seen,data),teacher_policy_drift=drift,
         fit_before=before,fit_after=after,fit_scope='same qualified collection; training fit, not held-out strength',
         utility_calibration_invalidated=invalidated,
         learning_rates=[group['lr'] for group in optimizer.param_groups],**support)

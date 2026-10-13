@@ -44,14 +44,21 @@ def check_signature(state, signature, reviewed=False):
     require(transitions, 'This self-play source transition has not been reviewed')
     config_ok = previous['config'] == signature['config']
     for transition in transitions:
+        # An exact unchanged configuration needs no historical upgrade path.
+        if config_ok:break
         changes = transition.get('config_changes', {})
         if all(previous['config'].get(k) == v['from'] for k, v in changes.items()):
             expected = dict(previous['config'], **{k: v['to'] for k, v in changes.items()})
-            migration=transition.get('config_migration')
-            if migration is not None:
-                from .config import TIME_CONFIG_MIGRATION,time_budget_config
-                require(migration==TIME_CONFIG_MIGRATION,'Unknown reviewed configuration migration')
-                expected=time_budget_config(expected)
+            migrations=transition.get('config_migrations',([transition['config_migration']] if 'config_migration' in transition else []))
+            from .config import (TIME_CONFIG_MIGRATION,time_budget_config,
+                                 ARCHIVED_PHASE_TIME_CONFIG_MIGRATION,archived_phase_time_budget_config,
+                                 ARCHIVED_TIME_CONFIG_MIGRATION,archived_time_budget_config)
+            handlers={TIME_CONFIG_MIGRATION:time_budget_config,
+                      ARCHIVED_PHASE_TIME_CONFIG_MIGRATION:archived_phase_time_budget_config,
+                      ARCHIVED_TIME_CONFIG_MIGRATION:archived_time_budget_config}
+            for migration in migrations:
+                require(migration in handlers,'Unknown reviewed configuration migration')
+                expected=handlers[migration](expected)
             config_ok |= expected == signature['config']
     require(config_ok, 'Reviewed resume requires unchanged config except explicitly pinned review changes')
     require(state['iteration'] > 0, 'Reviewed continuation requires a committed PPO generation')

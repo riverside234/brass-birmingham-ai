@@ -88,10 +88,7 @@ def fit(model,data,device,*,epochs=3,joint=False,cfg=None,resume=None):
         lr=cfg['learning_rate'] if joint else cfg['goal_learning_rate'],weight_decay=.0001)
     if resume is not None:
         require(resume['optimizer'] is not None,'Missing P1 optimizer resume state')
-        optimizer.load_state_dict(resume['optimizer']);torch.set_rng_state(resume['rng'])
-        if resume['cuda_rng'] and torch.cuda.is_available():
-            require(len(resume['cuda_rng'])==torch.cuda.device_count(),'CUDA topology changed on P1 resume')
-            torch.cuda.set_rng_state_all(resume['cuda_rng'])
+        optimizer.load_state_dict(resume['optimizer']);checkpoint.restore_rng(resume)
     before=metrics(model,data,device,cfg);frozen={k:t.detach().cpu().clone() for k,t in model.core.state_dict().items()} if not joint else None
     old=[];advantages=torch.zeros(len(data),device=device)
     actor_ids=[i for i,d in enumerate(data) if len(d['row']['choices'])>1]
@@ -219,6 +216,9 @@ def execute(root,bundle,run,*,mode='warmup',epochs=3,games=0,workers=4,device='c
                 scope='No gradients or model promotion; confidence remains diagnostic')
         else:
             continuing=raw if raw and raw['training']['phase']==mode else None
+            # Enlarging the trainable parameter set starts fresh Adam groups,
+            # while the saved pilot RNG still governs the next minibatch order.
+            if raw is not None and continuing is None:checkpoint.restore_rng(raw)
             optimizer,report=fit(model,data,device,epochs=epochs,joint=mode=='joint',cfg=cfg,resume=continuing)
             report['parent_outputs_preserved']=mode=='warmup'
             if mode=='joint':

@@ -1,10 +1,12 @@
 """Reserved phase turns for training teachers only; replay/label schemas unchanged."""
 from collections import OrderedDict
 import copy
+import math
 from dataclasses import replace
 import random
 import time
 import weakref
+from types import SimpleNamespace
 
 import numpy as np
 
@@ -16,7 +18,8 @@ from brass_ai.searchlab.spiel import action_id
 from brass_ai.step5.policy import inference_deadline
 from .parallel import ParallelMasked
 from .config import (SEARCH_WALL_FRACTION,teacher_search_config,teacher_work_budget_config,
-                     nn_work_budget_config,time_budget,TEACHER_TIME_BUDGET)
+                     nn_work_budget_config,time_budget,TEACHER_TIME_BUDGET,TEACHER_TIME_BUDGET_V1,
+                     teacher_time_seconds,search_wall_fraction)
 
 
 CONTRACT='four-phase-teacher-turns/1.0.0'
@@ -25,6 +28,8 @@ PHASES=(('canal_early','CanalEra',1,4),('canal_late','CanalEra',5,8),
 WORK_COUNTERS=frozenset(('allocated_simulations','attempted_simulations','work_exhausted_turns',
                         'deadline_limited_turns','work_budget_exhausted_choices',
                         'time_budget_exhausted_turns','finalization_seconds'))
+SUPPORT_COUNTERS=frozenset(('allocated_seconds','completed_searches','legal_root_actions',
+                          'visited_root_actions','revisited_root_actions','supported_plans'))
 
 
 def phase_for(context):
@@ -50,17 +55,23 @@ def counters():
         deadline_limited_turns=0,work_budget_exhausted_choices=0,
         time_budget_exhausted_turns=0,finalization_seconds=0.,
         completed_rollouts=0,interrupted_rollouts=0,elapsed_seconds=0.,
-        turn_elapsed_seconds=0.,deadline_overrun_seconds=0.)
+        turn_elapsed_seconds=0.,deadline_overrun_seconds=0.,allocated_seconds=0.,
+        completed_searches=0,legal_root_actions=0,visited_root_actions=0,revisited_root_actions=0,supported_plans=0)
 
 
 def search_allowance(ordinary_seconds,search_seconds,fraction=SEARCH_WALL_FRACTION):
-    require(0<fraction<=.90 and min(ordinary_seconds,search_seconds)>=0,'Invalid search wall allowance')
+    search_wall_fraction(fraction)
+    require(all(type(n) in (int,float) and math.isfinite(n) and n>=0 for n in (ordinary_seconds,search_seconds)),
+            'Invalid search wall allowance')
+    if fraction is None:return None
     return max(0.,ordinary_seconds*fraction/(1-fraction)-search_seconds)
 
 
 def estimate_collection(config,ordinary_game_seconds):
     # Four seats x four reserved TURNS. Workers/actions never multiply seconds.
-    return config['search_games']*(4*len(PHASES)*teacher_search_config(config['search']).seconds+ordinary_game_seconds)
+    policy=SimpleNamespace(config=teacher_search_config(config['search']),
+                           teacher_work_budget=config.get('teacher_work_budget') or TEACHER_TIME_BUDGET)
+    return config['search_games']*(4*sum(turn_seconds(policy,p) for p,_,_,_ in PHASES)+ordinary_game_seconds)
 
 
 def finalization_reserve(seconds,timed=False):
@@ -75,19 +86,19 @@ def finalization_reserve(seconds,timed=False):
     return min(1.2, seconds * .10)
 
 
-def turn_seconds(policy):
+def turn_seconds(policy,phase=None):
     """Fixed work has an exceptional watchdog, never a normal think clock.
 
     Explicit old work/1.0 receipts keep their original capped-time semantics.
     Their configs/checkpoints are not silently relabelled as count-primary.
     """
     work=getattr(policy,'teacher_work_budget',None)
-    if time_budget(work):return work['seconds_per_turn']
+    if time_budget(work):return teacher_time_seconds(work,phase)
     return work['watchdog_seconds'] if work and work['contract']=='teacher-turn-work/1.1.0' else policy.config.seconds
 
 
 def new_turn(policy,key,phase):
-    started=time.monotonic();seconds=turn_seconds(policy);deadline=started+seconds
+    started=time.monotonic();seconds=turn_seconds(policy,phase);deadline=started+seconds
     return dict(key=key,phase=phase,started=started,deadline=deadline,
         work_deadline=deadline-finalization_reserve(seconds,time_budget(getattr(policy,'teacher_work_budget',None))),attempts=0,disabled=False,
         tree={},cache=OrderedDict(),continuation={},qualified=0,work_allocated=0)
@@ -100,12 +111,14 @@ class TurnSearch:
         self.teacher_work_deadline=deadline
         if time.monotonic()>=deadline or self.cancelled.is_set():raise SearchIncomplete('teacher_deadline_or_cancel')
         quota=getattr(self,'teacher_simulation_allowance',None)
-        original=None
+        original=self.config
+        if time_budget(getattr(self,'teacher_work_budget',None)):
+            self.config=replace(original,seconds=turn_seconds(self,phase_for(view['context'])))
         # A forest divides its own shared allowance. A single private tree can
         # directly use the existing bounded simulation loop.
         if quota is not None and not isinstance(self,ParallelMasked):
             require(quota<=self.config.simulations,'Teacher work exceeds existing simulation cap')
-            original=self.config;self.config=replace(original,simulations=quota)
+            self.config=replace(self.config,simulations=quota)
         try:
             result=super().decide(view,choices,rng,deadline,recall,tree,cache)
             stats=self.last_statistics or {}
@@ -122,7 +135,7 @@ class TurnSearch:
                         result=(legal[best['first']],1.,None)
             return result
         finally:
-            if original is not None:self.config=original
+            self.config=original
 
     def incumbent(self,view,choices,probabilities,rng,recall):
         """Bound the existing legal incumbent by the SAME search work deadline."""
@@ -211,6 +224,12 @@ class TurnSearch:
             bucket['elapsed_seconds']+=ended-began
             bucket['completed_rollouts']+=stats.get('completed',0)
             bucket['interrupted_rollouts']+=stats.get('interrupted',0)
+            bucket['completed_searches']+=int(stats.get('completed',0)>0)
+            bucket['legal_root_actions']+=len(choices)
+            visits=[stats.get('root',{}).get(c['id'],{}).get('visits',0) for c in choices]
+            bucket['visited_root_actions']+=sum(n>0 for n in visits)
+            bucket['revisited_root_actions']+=sum(n>=self.config.minimum_plan_visits for n in visits)
+            bucket['supported_plans']+=sum(p['visits']>=self.config.minimum_plan_visits for p in stats.get('plans',{}).values())
             attempted=stats.get('batching',{}).get('attempted',0)
             bucket['attempted_simulations']+=attempted
             bucket['finalization_seconds']+=stats.get('finalization_seconds',0.)
@@ -276,6 +295,7 @@ class TeacherTurns(TurnSearch):
         bucket['reached_turns']+=1;bucket['unreached_turns']=0
         # Start the one real-turn clock only after atomic CPU admission.
         state['current']=new_turn(self,key,phase)
+        bucket['allocated_seconds']+=turn_seconds(self,phase)
 
     def finish_teacher_turn(self,rng):
         state=self.teacher_states[rng];current=state['current']
@@ -289,7 +309,8 @@ class TeacherTurns(TurnSearch):
     def teacher_report(self,rng):
         self.finish_teacher_turn(rng);state=self.teacher_states[rng]
         return dict(contract=CONTRACT,seat=state['seat'],reserved_rounds=dict(state['rounds']),
-                    seconds_per_turn=self.config.seconds,workers=self.config.workers,
+                    seconds_per_turn=(None if 'seconds_per_phase' in (getattr(self,'teacher_work_budget',None) or {}) else self.config.seconds),
+                    seconds_per_phase={p:turn_seconds(self,p) for p,_,_,_ in PHASES},workers=self.config.workers,
                     watchdog_seconds=turn_seconds(self),
                     work_budget=copy.deepcopy(getattr(self,'teacher_work_budget',None)),phases=copy.deepcopy(state['phases']))
 
@@ -328,6 +349,7 @@ class WorkTurns(TurnSearch):
         state['phases'][phase]['scheduled_turns']+=1
         state['phases'][phase]['reached_turns']+=1
         state['current']=new_turn(self,key,phase)
+        state['phases'][phase]['allocated_seconds']+=turn_seconds(self,phase)
 
     finish_work_turn=TeacherTurns.finish_teacher_turn
 
@@ -358,7 +380,7 @@ def work_search(policy,work_budget):
     policy.__class__=WorkParallelMasked if isinstance(policy,ParallelMasked) else WorkMasked
     policy.teacher_states=weakref.WeakKeyDictionary();policy.teacher_replica=False
     policy.nn_work_budget=copy.deepcopy(work)
-    policy.teacher_work_budget=copy.deepcopy(TEACHER_TIME_BUDGET) if time_budget(work) else dict(contract='teacher-turn-work/1.1.0',mode='simulations',
+    policy.teacher_work_budget=copy.deepcopy(TEACHER_TIME_BUDGET_V1) if time_budget(work) else dict(contract='teacher-turn-work/1.1.0',mode='simulations',
         simulations_per_phase={phase:work['simulations_per_turn'] for phase,_,_,_ in PHASES},
         watchdog_seconds=work['watchdog_seconds'])
     policy.policy_id='step5-work-search/'+digest(dict(parent=policy.policy_id,work_budget=work))
@@ -366,7 +388,7 @@ def work_search(policy,work_budget):
     # real-turn schedules. Only the coordinator owns the whole-turn allocation.
     policy.time_budget_primary=time_budget(work)
     for worker in getattr(policy,'replicas',[]):
-        training_teacher(worker,replica=True);worker.time_budget_primary=policy.time_budget_primary
+        training_teacher(worker,work_budget=policy.teacher_work_budget,replica=True);worker.time_budget_primary=policy.time_budget_primary
     return policy
 
 
@@ -382,7 +404,7 @@ def training_teacher(policy,work_budget=None,*,replica=False):
     if work_budget is not None:identity['work_budget']=work_budget
     policy.policy_id='step5-phase-teacher/'+digest(identity)
     for worker in getattr(policy,'replicas',[]):
-        training_teacher(worker,replica=True);worker.time_budget_primary=policy.time_budget_primary
+        training_teacher(worker,work_budget=work_budget,replica=True);worker.time_budget_primary=policy.time_budget_primary
     return policy
 
 
@@ -405,6 +427,11 @@ def collection_report(records,games):
                 require(counts['scheduled_turns']==1 and counts['reached_turns'] in (0,1) and
                         counts['reached_turns']+counts['unreached_turns']==1,'Teacher turn allocation exceeded')
                 if time_budget(work_budget):
+                    if 'seconds_per_phase' in work_budget:
+                        seconds=teacher_time_seconds(work_budget,name)
+                        require(report.get('seconds_per_phase',{}).get(name)==seconds and
+                                counts.get('allocated_seconds')==counts['reached_turns']*seconds,
+                                'Teacher phase clock receipt differs from allocation')
                     require(counts['actual_searches'] in (0,1) and counts['allocated_simulations']==0 and
                             0<=counts['completed_rollouts']<=counts['attempted_simulations'],
                             'Invalid whole-turn time receipt')
@@ -417,7 +444,7 @@ def collection_report(records,games):
             for phase in phases:
                 for key in phases[phase]:
                     counts=report['phases'][phase]
-                    phases[phase][key]+=counts.get(key,0) if key in WORK_COUNTERS else counts[key]
+                    phases[phase][key]+=counts.get(key,0) if key in WORK_COUNTERS|SUPPORT_COUNTERS else counts[key]
     require({g['game_id'] for g in games}==set(receipts),'Teacher receipts differ from collected games')
     actual={name:0 for name in phases}
     for game in games:

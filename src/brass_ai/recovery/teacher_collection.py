@@ -20,13 +20,16 @@ def due_collections(done,next_search,config):
 def summarize(batches):
     if not batches:return dict(updated=False,reason='Persistent search schedule not due',collection_count=0)
     totals={k:sum(b.get(k,0) for b in batches) for k in
-        ('optimizer_steps','sample_presentations','teacher_rows','teacher_setups','requested_steps')}
+        ('optimizer_steps','sample_presentations','teacher_rows','teacher_setups','requested_steps',
+         'distinct_labels_used','unused_qualified_labels')}
     totals.update(updated=any(b['updated'] for b in batches),collection_count=len(batches),
         max_observed_reuse=max(b.get('max_observed_reuse',0) for b in batches),value_loss_training=False,
         samples_by_phase={p:sum(b['samples_by_phase'][p] for b in batches) for p,_,_,_ in PHASES},
         collection=[r for b in batches for r in b['collection']],
         updates=[r for b in batches for r in b.get('updates',[])],
         collections=[{k:v for k,v in b.items() if k not in ('collection','updates')} for b in batches])
+    for key in ('used_samples_by_phase','unused_samples_by_phase','sample_presentations_by_phase'):
+        totals[key]={p:sum(b.get(key,{}).get(p,0) for b in batches) for p,_,_,_ in PHASES}
     for key in ('quality','learning_rates'):
         if key in batches[-1]:totals[key]=batches[-1][key]
     first=batches[0]['teaching']
@@ -56,11 +59,18 @@ def collect_due(root,run,directory,config,state,signature,model,optimizer,servic
         estimate=max(estimate,1.25*previous_cost['seconds'])
     allowance_before=search_allowance(ordinary_seconds,search_seconds,config['search_wall_fraction'])
     due=due_collections(done,next_search,config)
+    def budget_report(deferred):
+        return dict(wall_fraction=config['search_wall_fraction'],available_seconds=allowance_before,
+            wall_fraction_enabled=config['search_wall_fraction'] is not None,
+            remaining_seconds=search_allowance(ordinary_seconds,search_seconds,config['search_wall_fraction']),
+            estimated_collection_seconds=estimate,admitted=bool(batches),due_collections=due,
+            max_collections=config.get('search_collections_per_iteration',1),deferred=deferred)
     if getattr(model.config,'utility',None) is not None:
         from .utility import calibration_ready
         require(model.config.utility==config['search'].get('reward'),'Teacher/model reward differs')
         if not calibration_ready(model):
-            return dict(updated=False,reason='Utility head calibration not ready; collect fresh ordinary rollouts first',collection_count=0),next_search,cursor,search_seconds
+            return dict(updated=False,reason='Utility head calibration not ready; collect fresh ordinary rollouts first',
+                        collection_count=0,budget=budget_report(True)),next_search,cursor,search_seconds
     for batch_index in range(due):
         # A successful policy distillation can invalidate the shared critic.
         # Re-check before reserving seeds, time or the next scheduled allocation.
@@ -68,7 +78,7 @@ def collect_due(root,run,directory,config,state,signature,model,optimizer,servic
             deferred_reason='Utility calibration invalidated by distillation; postpone remaining collections until fresh ordinary PPO calibration'
             break
         available=search_allowance(ordinary_seconds,search_seconds,config['search_wall_fraction'])
-        if estimate>available:
+        if available is not None and estimate>available:
             deferred_reason='Search wall-time allowance exceeded; postpone remaining bounded collections'
             break
         began=time.monotonic();identity=service.register(model)
@@ -96,7 +106,8 @@ def collect_due(root,run,directory,config,state,signature,model,optimizer,servic
             jobs.append(dict(index=index,seed=seed,rotation=0,sampling_seed=provenance['sampling_seed'],
                 policies=[spec]*4,path=str(directory/f'search-{index:06d}.jsonl.gz'),provenance=provenance))
         work=config.get('teacher_work_budget')
-        budget_label=(f'{work["seconds_per_turn"]:g}s shared whole-turn deadline' if work and work['mode']=='time' else
+        from .config import teacher_time_seconds
+        budget_label=(f'{ {p:teacher_time_seconds(work,p) for p,_,_,_ in PHASES} } seconds per shared whole turn' if work and work['mode']=='time' else
                       f'whole-turn simulation attempts {work["simulations_per_phase"]}, '
                       f'{work.get("watchdog_seconds",config["search"]["seconds"]):g}s stall watchdog' if work else
                       f'{config["search"]["seconds"]:g}s per turn')
@@ -126,8 +137,5 @@ def collect_due(root,run,directory,config,state,signature,model,optimizer,servic
         next_search+=config['search_every_games']
     report=summarize(batches)
     if deferred_reason:report['reason']=deferred_reason
-    report['budget']=dict(wall_fraction=config['search_wall_fraction'],available_seconds=allowance_before,
-        remaining_seconds=search_allowance(ordinary_seconds,search_seconds,config['search_wall_fraction']),
-        estimated_collection_seconds=estimate,admitted=bool(batches),due_collections=due,
-        max_collections=config.get('search_collections_per_iteration',1),deferred=bool(deferred_reason))
+    report['budget']=budget_report(bool(deferred_reason))
     return report,next_search,cursor,search_seconds

@@ -6,6 +6,7 @@ import torch
 from brass_ai.bank import read
 from brass_ai.learning.contracts import SOURCE_ROOT,compatibility
 from brass_ai.learning.checkpoint import resume_optimizer
+from brass_ai.recovery.config import TEACHER_TIME_BUDGET_V1
 from brass_ai.recovery.resume import check_signature,load_resume,commit_transition
 from brass_ai.step5.league import implementation_id
 
@@ -16,6 +17,11 @@ def signatures(name='lab.json'):
     cfg=read(SOURCE_ROOT/'configs/step5'/name);cfg['model_size']='small'
     new=dict(config=cfg,compatibility=compatibility(),implementation=implementation_id(),legacy_pool={},teachers={})
     old=copy.deepcopy(new);old['implementation']=OLD
+    # This source predates phase clocks and the disabled wall-fraction cap.
+    # Use its actual clock shape before exercising the recorded migrations.
+    old['config']['teacher_work_budget']=copy.deepcopy(TEACHER_TIME_BUDGET_V1)
+    old['config']['search_wall_fraction']=.50
+    if old['config']['search_games']==5:old['config']['search_games']=4
     execution=old['config']['execution']
     for key in ('shared_slot_bytes','inference_routing','replica_backlog'):execution.pop(key)
     if name.startswith('lab'):
@@ -39,6 +45,8 @@ class ThroughputResumeTests(unittest.TestCase):
                 changed=copy.deepcopy(new);changed['config']['execution']['cpu_budget']+=4
                 with self.assertRaises(ValueError):check_signature(state,changed,True)
                 with self.assertRaisesRegex(ValueError,'resume-reviewed-source'):check_signature(state,new)
+                invalid=copy.deepcopy(state);invalid['signature']['config']['search_wall_fraction']=None
+                with self.assertRaises(ValueError):check_signature(invalid,new,True)
 
     def test_weights_adam_rng_and_committed_state_survive_layout_upgrade(self):
         from test_teacher_work_resume import TeacherWorkResumeTests

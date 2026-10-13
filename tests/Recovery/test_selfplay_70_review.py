@@ -58,14 +58,15 @@ class TeacherCollectionTests(unittest.TestCase):
             jobs_seen.extend(jobs)
             return [dict(path=j['path'],game_id=str(j['seed'])) for j in jobs]
         heavy=SimpleNamespace(collect=collect)
-        teaching=dict(contract=CONTRACT,phases={p:dict(counters(),scheduled_turns=16,qualified_samples=16)
+        teaching=dict(contract=CONTRACT,phases={p:dict(counters(),scheduled_turns=20,qualified_samples=20)
                                                for p,_,_,_ in PHASES})
-        update=dict(updated=True,optimizer_steps=8,teacher_rows=64,teacher_setups=4,sample_presentations=128,
-            requested_steps=8,max_observed_reuse=2,samples_by_phase={p:16 for p,_,_,_ in PHASES})
+        update=dict(updated=True,optimizer_steps=8,teacher_rows=80,teacher_setups=5,sample_presentations=128,
+            requested_steps=8,max_observed_reuse=2,samples_by_phase={p:20 for p,_,_,_ in PHASES})
         return cfg,state,service,heavy,teaching,update,jobs_seen
 
-    def run_fixture(self,ordinary=10000.,failed=False):
+    def run_fixture(self,ordinary=10000.,failed=False,fraction=None):
         cfg,state,service,heavy,teaching,update,jobs=self.fixture()
+        cfg['search_wall_fraction']=fraction
         if failed:update.update(updated=False,optimizer_steps=0,teacher_rows=0)
         # Avoid starting the engine: these tests exercise the actual collection
         # coordinator's fresh jobs, budget accounting and per-batch update cap.
@@ -83,18 +84,18 @@ class TeacherCollectionTests(unittest.TestCase):
     def test_two_due_collections_have_distinct_seeds_paths_and_eight_steps_each(self):
         (report,next_due,cursor,spent),jobs,calls=self.run_fixture()
         self.assertEqual((report['collection_count'],next_due,spent),(2,1120,410.))
-        self.assertEqual((len(jobs),report['teacher_rows'],report['optimizer_steps']),(8,128,16))
-        for key in ('path','seed','sampling_seed','index'):self.assertEqual(len({j[key] for j in jobs}),8)
+        self.assertEqual((len(jobs),report['teacher_rows'],report['optimizer_steps']),(10,160,16))
+        for key in ('path','seed','sampling_seed','index'):self.assertEqual(len({j[key] for j in jobs}),10)
         self.assertEqual([c.kwargs['steps'] for c in calls],[8,8])
-        self.assertEqual(report['teaching']['phases']['rail_late']['scheduled_turns'],32)
+        self.assertEqual(report['teaching']['phases']['rail_late']['scheduled_turns'],40)
         self.assertEqual(report['max_observed_reuse'],2)
 
     def test_budget_rechecked_before_second_collection_and_failure_never_retries(self):
-        (report,next_due,_,spent),jobs,calls=self.run_fixture(ordinary=850.)
-        self.assertEqual((len(jobs),next_due,spent),(4,960,210.))
+        (report,next_due,_,spent),jobs,calls=self.run_fixture(ordinary=1350.,fraction=.5)
+        self.assertEqual((len(jobs),next_due,spent),(5,960,210.))
         self.assertTrue(report['budget']['deferred'])
         (report,next_due,_,_),jobs,calls=self.run_fixture(failed=True)
-        self.assertEqual((len(jobs),len(calls),next_due),(8,2,1120))
+        self.assertEqual((len(jobs),len(calls),next_due),(10,2,1120))
         self.assertFalse(report['updated']);self.assertEqual(report['optimizer_steps'],0)
 
     def test_warmup_no_backlog_burst_disabled_and_budget(self):
@@ -102,16 +103,16 @@ class TeacherCollectionTests(unittest.TestCase):
         self.assertEqual((due_collections(320,640,cfg),due_collections(640,640,cfg),due_collections(960,800,cfg)),(0,1,2))
         self.assertEqual(due_collections(50000,640,cfg),2)
         self.assertEqual(due_collections(50000,640,dict(cfg,search_every_games=0)),0)
-        self.assertEqual((SEARCH_EVERY_GAMES,SEARCH_WALL_FRACTION),(160,.5))
-        self.assertAlmostEqual(search_allowance(100,0),100.)
-        self.assertAlmostEqual(search_allowance(100,300),0.)
-        self.assertEqual(search_allowance(100,1000),0.)
+        self.assertEqual((SEARCH_EVERY_GAMES,SEARCH_WALL_FRACTION),(160,None))
+        self.assertAlmostEqual(search_allowance(100,0,.5),100.)
+        self.assertAlmostEqual(search_allowance(100,300,.5),0.)
+        self.assertIsNone(search_allowance(100,1000))
         for p in (SOURCE_ROOT/'configs/step5').glob('lab*.json'):
             c=validate_config(read(p))
             self.assertEqual(c['population'],dict(recent=16,anchors=48))
             self.assertEqual((c['audit_workers'],c['execution']['max_models']),(16,72))
             self.assertEqual((c['search_every_games'],c['search_collections_per_iteration']),(160,2))
-            self.assertEqual((c['search']['seconds'],c['distill_steps'],c['search_games']),(12.,8,4))
+            self.assertEqual((c['search']['seconds'],c['distill_steps'],c['search_games']),(12.,8,5))
 
 
 class Review70ResumeTests(unittest.TestCase):

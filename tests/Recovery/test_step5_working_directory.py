@@ -72,7 +72,11 @@ class Step5WorkingDirectoryTests(unittest.TestCase):
                 sys.argv=[script,'--device','cuda','train','--run','artifacts/step5/selfplay-v2','--iterations','1']
                 runpy.run_path(script,run_name='__main__')
             '''),encoding='utf-8')
-            result=subprocess.run([sys.executable,str(shim),str(SCRIPT),mode],cwd=launch,env=env,
+            # A Windows venv redirector keeps its own launch-directory handle
+            # after the Python child chdirs. This stdlib-only probe can use the
+            # base interpreter directly, so retiring cwd tests the launcher.
+            executable=sys._base_executable if os.name=='nt' else sys.executable
+            result=subprocess.run([executable,str(shim),str(SCRIPT),mode],cwd=launch,env=env,
                                   capture_output=True,text=True,timeout=40)
             self.assertEqual(result.returncode,0,result.stdout+'\n'+result.stderr)
             report=json.loads(output.read_text());child=json.loads(output.with_suffix('.child.json').read_text())

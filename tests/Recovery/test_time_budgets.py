@@ -111,10 +111,10 @@ class TimeTeacherTests(unittest.TestCase):
                 self.assertEqual(stats['rail_late']['qualified_samples'],1)
 
     def test_half_cap_uses_old_accumulated_cost_and_defers_without_reset(self):
-        self.assertEqual(SEARCH_WALL_FRACTION,.5)
-        self.assertEqual(schedule.search_allowance(100.,80.),20.)
-        self.assertEqual(schedule.search_allowance(100.,300.),0.)
-        self.assertEqual(schedule.search_allowance(400.,300.),100.)
+        self.assertIsNone(SEARCH_WALL_FRACTION)
+        self.assertEqual(schedule.search_allowance(100.,80.,.5),20.)
+        self.assertEqual(schedule.search_allowance(100.,300.,.5),0.)
+        self.assertEqual(schedule.search_allowance(400.,300.,.5),100.)
         self.assertEqual(schedule.search_allowance(100.,80.,.2),0.)
         with self.assertRaises(ValueError):schedule.search_allowance(10.,0.,1.)
 
@@ -192,14 +192,14 @@ class TimeTeacherTests(unittest.TestCase):
     def test_collection_admission_defers_whole_batches_and_never_retries(self):
         from test_selfplay_70_review import TeacherCollectionTests
         fixture=TeacherCollectionTests()
-        (report,next_due,cursor,spent),jobs,calls=fixture.run_fixture(ordinary=100.)
+        (report,next_due,cursor,spent),jobs,calls=fixture.run_fixture(ordinary=100.,fraction=.5)
         self.assertEqual((len(jobs),len(calls),next_due,cursor,spent),(0,0,800,18000000,10.))
         self.assertTrue(report['budget']['deferred']);self.assertEqual(report['budget']['wall_fraction'],.5)
-        (report,next_due,_,spent),jobs,calls=fixture.run_fixture(ordinary=850.)
-        self.assertEqual((len(jobs),len(calls),next_due,spent),(4,1,960,210.))
+        (report,next_due,_,spent),jobs,calls=fixture.run_fixture(ordinary=1350.,fraction=.5)
+        self.assertEqual((len(jobs),len(calls),next_due,spent),(5,1,960,210.))
         self.assertTrue(report['budget']['deferred'])
         (report,next_due,_,spent),jobs,calls=fixture.run_fixture(ordinary=10000.,failed=True)
-        self.assertEqual((len(jobs),len(calls),next_due,spent),(8,2,1120,410.))
+        self.assertEqual((len(jobs),len(calls),next_due,spent),(10,2,1120,410.))
         self.assertFalse(report['updated'])
 
 
@@ -249,7 +249,7 @@ class TimeConfigTests(unittest.TestCase):
             if cfg['format']=='step5-training/2.2.0':
                 validate_config(cfg);self.assertEqual(time_budget_config(cfg),cfg)
                 self.assertEqual(cfg['teacher_work_budget'],TEACHER_TIME_BUDGET)
-                self.assertEqual(cfg['search_wall_fraction'],.5)
+                self.assertIsNone(cfg['search_wall_fraction'])
             else:self.assertEqual(evaluation_config(cfg),cfg);self.assertEqual(cfg['nn_work_budget'],NN_TIME_BUDGET)
             self.assertEqual(cfg['legacy_opponent_work_budget'],LEGACY_TIME_BUDGET)
             self.assertEqual(cfg['search']['seconds'],12.)
@@ -260,7 +260,7 @@ class TimeConfigTests(unittest.TestCase):
     def test_no_mixed_or_multiplied_budget_contract(self):
         for value,validator in ((TEACHER_TIME_BUDGET,teacher_work_budget_config),(NN_TIME_BUDGET,nn_work_budget_config),
                                 (LEGACY_TIME_BUDGET,legacy_opponent_work_budget_config)):
-            for changed in (dict(value,simulations_per_turn=16),dict(value,seconds_per_turn=value['seconds_per_turn']*4),
+            for changed in (dict(value,simulations_per_turn=16),dict(value,seconds_per_turn=value.get('seconds_per_turn',12)*4),
                             dict(value,seconds_per_turn=True),dict(value,mode='simulations')):
                 with self.assertRaises(ValueError):validator(changed)
         cfg=read(SOURCE_ROOT/'configs/step5/lab.json')

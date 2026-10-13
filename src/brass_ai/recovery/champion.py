@@ -14,6 +14,7 @@ from brass_ai.learning.contracts import digest,project_path,require
 from brass_ai.learning.replay import terminal_targets
 from brass_ai.qualification import grouped_interval
 from brass_ai.step5.league import seeds_for,write_json,implementation_id
+from .config import champion_config
 from .execution import neural_spec
 from .replay import read_shards
 
@@ -40,7 +41,9 @@ def initialize(root,run,state):
     if not enabled(state['signature']['config']):return
     if 'champion' not in state:
         from .retention import slim_checkpoint
-        state['champion']=slim_checkpoint(root,run,state['evaluation_anchor'])
+        entry=state['evaluation_anchor']
+        existing=next((e for e in state.get('population',[]) if e['model_id']==entry['model_id']),None)
+        state['champion']=slim_checkpoint(root,run,entry,existing)
         interval=state['signature']['config']['champion']['every_games']
         state['champion_gate']=dict(next_games=(state['games_done']//interval+1)*interval,
             accepted_games=0,accepted_gate=None,recent=[])
@@ -89,23 +92,75 @@ def gate_rows(games,records,jobs):
     return sorted(rows,key=lambda r:(r['seed'],r['candidate_seats']))
 
 
-def decision(rows,config):
+def _metrics(rows,setups,*,bootstrap=True):
     groups={r['seed'] for r in rows}
-    require(len(groups)==config['setups'] and len(rows)==6*len(groups) and
+    require(len(groups)==setups and len(rows)==6*len(groups) and
             all(sorted(tuple(r['candidate_seats']) for r in rows if r['seed']==seed)==list(combinations(range(4),2))
                 for seed in groups),'Champion gate needs all six seat pairs per setup')
-    share=statistics.mean(r['win'] for r in rows);interval=grouped_interval(rows,'win',samples=4000)
-    accepted=share>=config['min_win_share'] and interval is not None and interval[0]>.5
-    return dict(accepted=accepted,games=len(rows),setups=len(groups),candidate_win_share=share,
-        setup_bootstrap_95=interval,threshold=config['min_win_share'],
-        **{k:statistics.mean(r[k] for r in rows) for k in ('candidate_vp','incumbent_vp','candidate_rank','incumbent_rank')},
-        scope='Two independent seats per model, neutral policy play, no search; repeated training-selection screen, not formal promotion')
+    require(all(type(r['win']) in (int,float) and 0<=r['win']<=1 for r in rows),'Invalid champion win share')
+    result=dict(games=len(rows),setups=len(groups),candidate_win_share=statistics.mean(r['win'] for r in rows),
+        **{k:statistics.mean(r[k] for r in rows) for k in ('candidate_vp','incumbent_vp','candidate_rank','incumbent_rank')})
+    if bootstrap:result['setup_bootstrap_95']=grouped_interval(rows,'win',samples=4000)
+    return result
+
+
+def decision(rows,config):
+    champion_config(config)
+    scope='Two independent seats per model, neutral policy play, no search; repeated training-selection screen, not formal promotion'
+    if 'protocol' not in config:
+        # Historical reports are recalculated by resume and downstream handoff.
+        # Preserve their exact result schema and original >50% confidence rule.
+        result=_metrics(rows,config['setups']);interval=result['setup_bootstrap_95']
+        return dict(accepted=result['candidate_win_share']>=config['min_win_share'] and interval is not None and interval[0]>.5,
+                    **result,threshold=config['min_win_share'],scope=scope)
+    seeds=sorted({r['seed'] for r in rows});screen_count=config['setups']
+    total=screen_count+config['confirmation_setups']
+    require(len(seeds) in (screen_count,total),'Champion gate needs exactly 8 or 72 complete setups')
+    # seeds_for precommits ascending seeds; the first eight are always screening.
+    screen_seeds=set(seeds[:screen_count]);screen_rows=[r for r in rows if r['seed'] in screen_seeds]
+    screen=_metrics(screen_rows,screen_count,bootstrap=False)
+    screen.update(threshold=config['screen_min_win_share'],passed=screen['candidate_win_share']>=config['screen_min_win_share'])
+    result=dict(accepted=False,**_metrics(rows,len(seeds)),threshold=config['min_win_share'],
+        min_ci_lower=config['min_ci_lower'],protocol=config['protocol'],planned_setups=total,screen=screen,scope=scope)
+    if len(seeds)==screen_count:
+        result['stage']='confirmation_required' if screen['passed'] else 'screen_rejected'
+        return result  # The first 48 games can never promote a candidate.
+    require(screen['passed'],'Confirmation must follow a passed champion screen')
+    result['confirmation']=_metrics([r for r in rows if r['seed'] not in screen_seeds],config['confirmation_setups'],bootstrap=False)
+    interval=result['setup_bootstrap_95']
+    result['accepted']=result['candidate_win_share']>=config['min_win_share'] and interval is not None and interval[0]>config['min_ci_lower']
+    result['stage']='combined'
+    return result
+
+
+def _collect_rows(actor,jobs):
+    records=actor.collect(jobs)
+    games=read_shards([r['path'] for r in records],partition='validation',receipts={r['path']:r.get('features') for r in records})
+    return gate_rows(games,records,jobs)
+
+
+def _stage_rows(actor,jobs,directory,spec_id,stage):
+    """An interrupted confirmation reuses the exact committed screening sample."""
+    path=directory/f'{stage}-report.json'
+    if path.exists():
+        report=read(path)
+        require(report.get('format')=='four-player-champion-stage/1.0.0' and report['spec_id']==spec_id and
+                report['stage']==stage and report['failed_games']==0,'Champion stage specification changed')
+        rows=report['outcomes']
+    else:
+        began=time.monotonic();rows=_collect_rows(actor,jobs)
+        report=dict(format='four-player-champion-stage/1.0.0',spec_id=spec_id,stage=stage,
+                    outcomes=rows,failed_games=0,seconds=time.monotonic()-began)
+    require({r['seed'] for r in rows}=={j['seed'] for j in jobs},'Champion stage setup identities changed')
+    _metrics(rows,len({j['seed'] for j in jobs}),bootstrap=False)
+    if not path.exists():write_json(path,report)
+    return rows
 
 
 def schedule(root,run,state,service,actor):
     config=state['signature']['config']
     if not enabled(config):return None
-    gate=state['champion_gate'];cfg=config['champion'];done=state['games_done']
+    gate=state['champion_gate'];cfg=champion_config(config['champion']);done=state['games_done']
     if done<gate['next_games']:return None
     candidate=state['history'][-1];incumbent=state['champion'];threshold=gate['next_games']
     if candidate['model_id']==incumbent['model_id']:
@@ -118,7 +173,8 @@ def schedule(root,run,state,service,actor):
         if entry['model_id'] not in service.models:service.register_checkpoint(path)
     # Advancing seeds makes repeat attempts independent; never replay a favorable
     # batch until it passes. At most one gate per committed iteration.
-    seeds,_=seeds_for(cfg['seed']+threshold, cfg['setups'],'validation')
+    staged='protocol' in cfg
+    seeds,_=seeds_for(cfg['seed']+threshold,cfg['setups']+cfg.get('confirmation_setups',0),'validation')
     from .resume import evaluation_directory
     directory=evaluation_directory(root,run,state,f'champion-{threshold:08d}')
     spec=dict(format=CONTRACT,candidate=candidate,incumbent=incumbent,seeds=seeds,
@@ -130,20 +186,34 @@ def schedule(root,run,state,service,actor):
         require(report['spec_id']==digest(spec),'Champion report specification changed')
         result=decision(report['outcomes'],cfg)
         require(result==report['result'],'Champion result changed')
+        if staged:
+            require(result['stage']!='confirmation_required' and report['failed_games']==0 and report['spec']==spec,
+                    'Incomplete champion confirmation report')
+            expected=seeds if result['stage']=='combined' else seeds[:cfg['setups']]
+            require({r['seed'] for r in report['outcomes']}==set(expected),'Champion report setup identities changed')
     else:
-        print(f'Champion gate: generation {candidate["generation"]} vs {incumbent["generation"]}, {6*len(seeds)} policy games',flush=True)
+        print(f'Champion gate: generation {candidate["generation"]} vs {incumbent["generation"]}, '
+              f'{6*cfg["setups"]} screening policy games'+(f', up to {6*len(seeds)} total' if staged else ''),flush=True)
         jobs=jobs_for(seeds,candidate,incumbent,directory,digest(spec));began=time.monotonic()
-        records=actor.collect(jobs)
-        games=read_shards([r['path'] for r in records],partition='validation',receipts={r['path']:r.get('features') for r in records})
-        rows=gate_rows(games,records,jobs);result=decision(rows,cfg)
-        report=dict(format=CONTRACT,spec_id=digest(spec),result=result,outcomes=rows,games_done=done,
+        if staged:
+            split=6*cfg['setups']
+            rows=_stage_rows(actor,jobs[:split],directory,digest(spec),'screen');result=decision(rows,cfg)
+            if result['screen']['passed']:
+                print(f'Champion screen passed ({result["candidate_win_share"]:.3f}); '
+                      f'collecting all {cfg["confirmation_setups"]} new setups / {len(jobs)-split} policy games',flush=True)
+                rows+=_stage_rows(actor,jobs[split:],directory,digest(spec),'confirmation')
+                result=decision(rows,cfg)
+        else:
+            rows=_collect_rows(actor,jobs);result=decision(rows,cfg)
+        report=dict(format=CONTRACT,spec_id=digest(spec),spec=spec,result=result,outcomes=rows,games_done=done,
             failed_games=0,seconds=time.monotonic()-began)
         write_json(directory/'report.json',report)
     receipt=dict(games_done=done,candidate_generation=candidate['generation'],incumbent_generation=incumbent['generation'],
                  **result,report=(directory/'report.json').relative_to(root).as_posix(),report_sha256=sha(directory/'report.json'))
     if result['accepted']:
         from .retention import slim_checkpoint
-        state['champion']=slim_checkpoint(root,run,candidate)
+        existing=next((e for e in state.get('population',[]) if e['model_id']==candidate['model_id']),None)
+        state['champion']=slim_checkpoint(root,run,candidate,existing)
         gate.update(accepted_games=done,accepted_gate=receipt)
     gate['next_games']=(done//cfg['every_games']+1)*cfg['every_games']
     gate['recent']=(gate['recent']+[receipt])[-16:]

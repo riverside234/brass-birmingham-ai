@@ -7,8 +7,8 @@ from brass_ai.search.common import SearchConfig
 # Training-only defaults; evaluation/laptop SearchConfig defaults stay intact.
 SEARCH_EVERY_GAMES=160
 SEARCH_COLLECTIONS_PER_ITERATION=2
-# Cumulative collection admission: one search second per ordinary second.
-SEARCH_WALL_FRACTION=.50
+# None disables only cumulative admission; each reserved turn still has a clock.
+SEARCH_WALL_FRACTION=None
 SEARCH_SECONDS=12.0
 SEARCH_WORKERS=4
 # Completed evidence in the saved 12-second lab searches suggests these
@@ -22,10 +22,16 @@ NN_WORK_BUDGET = dict(contract='nn-turn-work/1.0.0',mode='simulations',
     simulations_per_turn=16,watchdog_seconds=120.0)
 # Keep the work contracts above readable for archived data and explicit small
 # comparisons. These versioned whole-turn clocks are the active Step 5 defaults.
-TEACHER_TIME_BUDGET = dict(contract='teacher-turn-time/1.0.0',mode='time',seconds_per_turn=12.0)
+TEACHER_TIME_BUDGET_V1 = dict(contract='teacher-turn-time/1.0.0',mode='time',seconds_per_turn=12.0)
+TEACHER_PHASE_TIME_BUDGET_V1 = dict(contract='teacher-turn-time/1.1.0',mode='time',
+    seconds_per_phase=dict(canal_early=12.0,canal_late=12.0,rail_early=12.0,rail_late=24.0))
+TEACHER_TIME_BUDGET = dict(contract='teacher-turn-time/1.1.0',mode='time',
+    seconds_per_phase=dict(canal_early=12.0,canal_late=12.0,rail_early=16.0,rail_late=24.0))
 LEGACY_TIME_BUDGET = dict(contract='legacy-opponent-turn-time/1.0.0',mode='time',seconds_per_turn=1.0)
 NN_TIME_BUDGET = dict(contract='nn-turn-time/1.0.0',mode='time',seconds_per_turn=12.0)
-TIME_CONFIG_MIGRATION = 'step5-whole-turn-time/1.0.0'
+ARCHIVED_TIME_CONFIG_MIGRATION = 'step5-whole-turn-time/1.0.0'
+ARCHIVED_PHASE_TIME_CONFIG_MIGRATION = 'step5-phase-teacher-time/1.0.0'
+TIME_CONFIG_MIGRATION = 'step5-phase-teacher-time/1.1.0'
 
 
 def time_budget(value):
@@ -37,9 +43,9 @@ def _time_fields(value,default):
             type(value['seconds_per_turn']) in (int,float),'Invalid whole-turn time contract')
     return value
 PPO_LEARNING_RATE=1e-5
-# A full 64-turn teacher collection can supply 8 batches of 16, at most twice
-# per sample. Missing evidence reduces or skips updates; it never fills a batch
-# by repeatedly sampling the one surviving teacher decision.
+# A full 80-turn collection supplies 8 batches of 16 using all 80 positions,
+# then 48 second presentations. Missing evidence reduces or skips updates;
+# a surviving decision is never repeated to fill an otherwise empty batch.
 DISTILLATION=dict(min_samples=16,min_games=2,min_samples_per_phase=2,batch_size=16,max_reuse=2)
 
 
@@ -52,13 +58,38 @@ def teacher_search_config(options):
 def teacher_work_budget_config(value):
     """Validate current and archived receipts without relabelling old evidence."""
     if value is None:return None
-    if time_budget(value):return _time_fields(value,TEACHER_TIME_BUDGET)
+    if time_budget(value):
+        if value.get('contract')==TEACHER_TIME_BUDGET_V1['contract']:
+            return _time_fields(value,TEACHER_TIME_BUDGET_V1)
+        require(set(value)==set(TEACHER_TIME_BUDGET) and value.get('contract')==TEACHER_TIME_BUDGET['contract'],
+                'Invalid phase-specific teacher time contract')
+        phases=value['seconds_per_phase']
+        require(type(phases) is dict and set(phases)==set(TEACHER_TIME_BUDGET['seconds_per_phase']),
+                'Missing teacher time phase')
+        require(all(type(n) in (int,float) and math.isfinite(n) and 0<n<=120 for n in phases.values()),
+                'Teacher phase seconds must be finite and at most 120')
+        return value
     _work_fields(value,TEACHER_WORK_BUDGET,'teacher-turn-work/1.0.0')
     phases=value['simulations_per_phase']
     require(type(phases) is dict and set(phases)==set(TEACHER_WORK_BUDGET['simulations_per_phase']),
             'Missing teacher work phase')
     require(all(type(n) is int and 1<=n<=100000 for n in phases.values()),
             'Invalid teacher phase simulation budget')
+    return value
+
+
+def teacher_time_seconds(value,phase=None):
+    """Resolve one shared turn clock; no phase means the maximum failure bound."""
+    teacher_work_budget_config(value)
+    require(time_budget(value),'Expected teacher time budget')
+    if 'seconds_per_turn' in value:return value['seconds_per_turn']
+    phases=value['seconds_per_phase']
+    return max(phases.values()) if phase is None else phases[phase]
+
+
+def search_wall_fraction(value):
+    require(value is None or (type(value) in (int,float) and math.isfinite(value) and 0<value<=.90),
+            'Invalid search fraction: use null/None or a number in (0, .90]')
     return value
 
 
@@ -95,22 +126,46 @@ def nn_work_budget_config(value):
 def current_work_budget(value,default):
     """Explicitly upgrade active configuration, never stored traces/teacher labels."""
     result=copy.deepcopy(default if value is None else value)
-    if default['contract'].endswith('/1.1.0') and result.get('contract')==default['contract'].replace('/1.1.0','/1.0.0'):
+    if 'watchdog_seconds' in default and default['contract'].endswith('/1.1.0') and result.get('contract')==default['contract'].replace('/1.1.0','/1.0.0'):
         result.update(contract=default['contract'],watchdog_seconds=default['watchdog_seconds'])
     return result
 
 
 def time_budget_config(config):
     """Explicit active-recipe upgrade; same-run signature changes require review."""
+    result=archived_phase_time_budget_config(config)
+    # Upgrade only the exact preceding default, preserving custom phase clocks.
+    if result['teacher_work_budget']==TEACHER_PHASE_TIME_BUDGET_V1:
+        result['teacher_work_budget']=copy.deepcopy(TEACHER_TIME_BUDGET)
+    return result
+
+
+def archived_phase_time_budget_config(config):
+    """Keep the first phase migration's 12/12/12/24 receipts reproducible."""
     result=copy.deepcopy(config)
-    for key,default,validator in (('teacher_work_budget',TEACHER_TIME_BUDGET,teacher_work_budget_config),
+    work=teacher_work_budget_config(result.get('teacher_work_budget'))
+    archived=not work or work.get('contract')!=TEACHER_PHASE_TIME_BUDGET_V1['contract']
+    for key,default,validator in (('teacher_work_budget',TEACHER_PHASE_TIME_BUDGET_V1,teacher_work_budget_config),
                         ('legacy_opponent_work_budget',LEGACY_TIME_BUDGET,legacy_opponent_work_budget_config)):
         validator(result.get(key))
-        result[key]=copy.deepcopy(default)
+        if key!='teacher_work_budget' or archived:result[key]=copy.deepcopy(default)
     result['search']['seconds']=SEARCH_SECONDS
-    fraction=result.get('search_wall_fraction',SEARCH_WALL_FRACTION)
-    require(type(fraction) in (int,float) and 0<fraction<=.90,'Invalid search wall fraction before migration')
-    result['search_wall_fraction']=min(fraction,SEARCH_WALL_FRACTION)
+    fraction=search_wall_fraction(result.get('search_wall_fraction',SEARCH_WALL_FRACTION))
+    result['search_wall_fraction']=None if archived else fraction
+    if archived and result.get('search_games')==4:result['search_games']=5
+    return result
+
+
+def archived_time_budget_config(config):
+    """Exact old migration, solely for validating historical source receipts."""
+    result=copy.deepcopy(config)
+    for key,default,validator in (('teacher_work_budget',TEACHER_TIME_BUDGET_V1,teacher_work_budget_config),
+                        ('legacy_opponent_work_budget',LEGACY_TIME_BUDGET,legacy_opponent_work_budget_config)):
+        validator(result.get(key));result[key]=copy.deepcopy(default)
+    result['search']['seconds']=SEARCH_SECONDS
+    fraction=search_wall_fraction(result.get('search_wall_fraction',.50))
+    require(fraction is not None,'Archived migration requires a numeric search fraction')
+    result['search_wall_fraction']=min(fraction,.50)
     return result
 
 
@@ -136,7 +191,10 @@ EXECUTION_V21 = dict(EXECUTION, processes=24, hosts_per_process=2, flush_ms=1.0,
 UPDATE_V21 = dict(UPDATE, actor_nonforced=True, critic_batch_size=2048, kl_probe_rows=2048)
 RETENTION = dict(enabled=True, resume_checkpoints=2, replay_rounds=4, quarantine_hours=24,
     evaluation_samples=4, profile_traces=2, history_reports=128)
-CHAMPION = dict(enabled=True, every_games=6400, setups=8, min_win_share=.55, seed=1910000)
+CHAMPION_LEGACY = dict(enabled=True, every_games=6400, setups=8, min_win_share=.55, seed=1910000)
+CHAMPION_PROTOCOL = 'two-stage-champion/1.0.0'
+CHAMPION = dict(CHAMPION_LEGACY, protocol=CHAMPION_PROTOCOL, confirmation_setups=64,
+    screen_min_win_share=.56, min_ci_lower=.49)
 POPULATION = dict(recent=16, anchors=48)
 EVALUATION_SCHEDULE = dict(enabled=True, monitor_every_games=6400, broader_every_games=25600,
     monitor_setups=1, broader_setups=1, seed=910000)
@@ -172,6 +230,21 @@ def legacy_budget_config(config):
     require(config['role'] in ('lab','laptop','reference'),'Unknown budget role')
     require(config['seconds']==1.0,'Training/evaluation v3 allowance must be exactly one second')
     require(config['search_workers']<=4 and config['work_multiplier']<=16,'Invalid legacy CPU allowance')
+    return config
+
+
+def champion_config(config):
+    """Keep archived single-stage evidence readable; new recipes opt in explicitly."""
+    staged='protocol' in config
+    bounded_fields(config,CHAMPION if staged else CHAMPION_LEGACY,'champion')
+    require(config['setups']>=8 and .5<config['min_win_share']<1,
+            'Champion gate requires at least eight independent setups and a winning majority')
+    if staged:
+        require(config['protocol']==CHAMPION_PROTOCOL,'Unknown champion protocol')
+        require(config['setups']==8 and config['confirmation_setups']==64,
+                'Two-stage champion gate requires 8 screening and 64 new confirmation setups')
+        require(.5<config['screen_min_win_share']<1 and 0<config['min_ci_lower']<1,
+                'Invalid champion screening/confidence thresholds')
     return config
 
 
@@ -249,9 +322,7 @@ def validate_config(config):
                     'Teacher work budget cannot support workers or exceeds simulation cap')
     if 'champion' in config:
         fields.add('champion')
-        bounded_fields(config['champion'],CHAMPION,'champion')
-        require(config['champion']['setups']>=8 and .5<config['champion']['min_win_share']<1,
-                'Champion gate requires at least eight independent setups and a winning majority')
+        champion_config(config['champion'])
     if 'reward' in config:
         fields.add('reward')
         from .utility import reward_spec
@@ -307,7 +378,8 @@ def validate_config(config):
         positive(config['audit_workers'],'audit_workers',integer=True)
         # Historical configs remain readable; active entry points explicitly
         # migrate the cumulative cap before signing/resuming the run.
-        require(type(config['overlap_pools']) is bool and 0<config['search_wall_fraction']<=.90,'Invalid overlap/search fraction')
+        require(type(config['overlap_pools']) is bool,'Invalid overlap flag')
+        search_wall_fraction(config['search_wall_fraction'])
         require(config['execution']['max_models']>=sum(config['population'].values())+3,
                 'Model cache must cover frozen population plus learner/teacher versions')
         require(set(config['update'])==set(UPDATE_V21) and

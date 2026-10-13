@@ -1,5 +1,6 @@
 """Bounded fresh-data utility check and separate goal-confidence calibration."""
 import copy
+import math
 from pathlib import Path
 import numpy as np
 import torch
@@ -16,9 +17,27 @@ from .contracts import READY,identity
 from .calibration import collect_examples
 
 
+def validate_goal_calibration(value):
+    """Validate a fitted readiness receipt, not an unqualified direct probe."""
+    require(isinstance(value,dict) and {'temperature','brier','ece','labels','setups','bias_ready','scope'}<=set(value),
+        'Incomplete goal calibration')
+    require(type(value['temperature']) in (int,float) and value['temperature'] in (.5,.75,1.,1.5,2.)
+        and type(value['bias_ready']) is bool,'Invalid goal calibration temperature/readiness')
+    require(type(value['labels']) is int and type(value['setups']) is int
+        and 0<=value['setups']<=value['labels'] and (value['setups']>0)==(value['labels']>0),
+        'Invalid goal calibration support')
+    require(type(value['brier']) in (int,float) and math.isfinite(value['brier']) and 0<=value['brier']<=1
+        and ((value['labels']==0 and value['ece'] is None) or
+             (value['labels']>0 and type(value['ece']) in (int,float) and math.isfinite(value['ece']) and 0<=value['ece']<=1)),
+        'Invalid goal calibration error')
+    require(not value['bias_ready'] or (value['labels']>=64 and value['setups']>=2 and value['brier']<=.25 and value['ece']<=.10),
+        'Insufficient goal calibration for bias')
+    return value
+
+
 def confidence_calibration(logits,labels,groups):
     x=np.asarray(logits,dtype=float);y=np.asarray([d['confidence'] for d in labels]);mask=np.asarray([d['confidence_mask'] for d in labels],dtype=bool)
-    require(x.shape==y.shape==mask.shape and np.isfinite(x).all(),'Goal calibration shape differs')
+    require(x.shape==y.shape==mask.shape and len(groups)==len(labels) and np.isfinite(x).all(),'Goal calibration shape differs')
     temperatures=(.5,.75,1.,1.5,2.)
     def loss(t):
         p=1/(1+np.exp(-np.clip(x/t,-50,50)))
@@ -27,9 +46,10 @@ def confidence_calibration(logits,labels,groups):
     probability=1/(1+np.exp(-np.clip(x/t,-50,50)))
     from brass_ai.personality.labels import confidence_report
     calibration=confidence_report(probability,labels)
-    return dict(temperature=t,brier=loss(t),ece=calibration['ece'],labels=int(mask.sum()),setups=len(set(groups)),
-        bias_ready=len(set(groups))>=2 and mask.sum()>=64 and loss(t)<=.25 and calibration['ece']<=.10,
-        scope='Post-hoc temperature on separate calibration setups; not release evidence')
+    setups=len({group for group,observed in zip(groups,mask) if observed.any()})
+    return validate_goal_calibration(dict(temperature=t,brier=loss(t),ece=calibration['ece'],labels=int(mask.sum()),setups=setups,
+        bias_ready=bool(setups>=2 and mask.sum()>=64 and loss(t)<=.25 and calibration['ece']<=.10),
+        scope='Post-hoc temperature on separate calibration setups; not release evidence'))
 
 
 def distilled_source(root,pilot,state,distilled,handoff_sha256):
@@ -115,7 +135,9 @@ def load(root,directory,device='cpu'):
     require(receipt['utility_ready'],'P2 utility fit failed; collect new calibration data')
     for data in receipt['data']:require(sha(local_file(directory,data['path']))==data['sha256'],'Readiness calibration data changed')
     path=local_file(directory,receipt['model']['path']);require(sha(path)==receipt['model']['sha256'],'Ready model changed')
-    model,_=checkpoint.load(path,device);require(checkpoint.model_id(model)==receipt['model']['model_id'],'Ready model identity differs')
+    model,raw=checkpoint.load(path,device);require(checkpoint.model_id(model)==receipt['model']['model_id'],'Ready model identity differs')
+    require(receipt['goal_calibration']==raw['training'].get('goal_calibration'),'Goal calibration differs from saved model')
+    validate_goal_calibration(receipt['goal_calibration'])
     bundle=project_path(root,receipt['handoff']);require(sha(bundle/'manifest.json')==receipt['handoff_sha256'],'Handoff changed')
     manifest,parent=handoff.load(bundle)
     require(model.core.config.utility==receipt['reward']==manifest['reward'] and model.core.utility_calibration['ready']

@@ -1,0 +1,17 @@
+{
+  "checkout_before_review": {
+    "commit": "72bd43ff01a10a8d917705617b3805f6df41e924",
+    "implementation": "f6f8028538c13fdaa5cbcd40ffde5e81fe5d9cb58b649875d8a5cd1ea8487191"
+  },
+  "a4cd1a7": {
+    "implementation": "9a60a40aa1e4d8193243681d68de2f4661b82d2cf213b2d86f9e78bd3a6e5541",
+    "source_files": 77
+  },
+  "a873a78": {
+    "implementation": "aeef0917b3645bdbdfe8dcb9d2bfd34ab05593c8b5fb9433dbc1e988b4ef131f",
+    "source_files": 77
+  },
+  "reviewed_checkout": {
+    "implementation": "3de301188b2eb777a7929da14a3e8d3362f106e75e54129eef8776864809f8e6"
+  }
+}

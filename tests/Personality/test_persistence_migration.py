@@ -24,8 +24,10 @@ class PersistenceMigrationTests(unittest.TestCase):
     def previous_contract(self):
         receipt=read_json(CONFIG_DIR.parent/'personality/source-migrations.json')
         self.assertEqual(receipt['format'],'personality-source-migrations/1.0.0')
-        self.assertEqual(receipt['migrations'][0]['to_contract'],contract())
-        return receipt['migrations'][0]['from_contract']
+        previous=receipt['migrations'][0]['from_contract']
+        matches=[m for m in receipt['migrations'] if m['from_contract']==previous and m['to_contract']==contract()]
+        self.assertEqual(len(matches),1)
+        return previous
 
     def test_exact_reviewed_source_load_preserves_weights_optimizer_and_rng(self):
         old=self.previous_contract();model,_=import_parent(parent())
@@ -70,7 +72,9 @@ class PersistenceMigrationTests(unittest.TestCase):
     def test_receipt_must_pin_this_exact_target_source(self):
         old=self.previous_contract()
         receipt=read_json(CONFIG_DIR.parent/'personality/source-migrations.json')
-        receipt['migrations'][0]['to_contract']['source']='0'*64
+        for entry in receipt['migrations']:
+            if entry['from_contract']==old and entry['to_contract']==contract():
+                entry['to_contract']['source']='0'*64
         with patch('brass_ai.personality.contracts.read_json',return_value=receipt):
             with self.assertRaisesRegex(ValueError,'contract/source differs'):accepted_contract(old)
 

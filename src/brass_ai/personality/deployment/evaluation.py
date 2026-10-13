@@ -282,14 +282,17 @@ def check(root, panel_directory, chunks, output, *, review=None, device='cpu'):
                              for f,r in zip(features,rows) if r['arm']['role']=='member'))
     # An opportunity-conditioned coverage gate, NOT a per-style action quota or reward.
     pottery['passed']=pottery['opportunity_decisions']>0 and pottery['builds']>0 and pottery['flips']>0
-    tests=dict(complete_panel=complete,full_size=value['full_size'],searched=value['decision_mode']=='searched',
+    fixture=value.get('fixture', True)
+    tests=dict(complete_panel=complete,full_size=value['full_size'],real_artifacts=fixture is False,
+               searched=value['decision_mode']=='searched',
                both_eras=all(r['behavior']['both_eras'] for r in rows),
                individual_quality=all(r['passed'] for r in quality_by_member.values()),
                mixture_quality=all(r['passed'] for r in mixtures.values()),
                search_support=all(r['completed']>0 for r in throughput.values()),
                coherent_distinct_members=geom['passed'],replayability=all(v['passed'] for v in variations.values()),
                pottery_coverage=pottery['passed'],blind_recognition_and_tactics=human['passed'])
-    result=sealed(dict(format=REPORT,contract=identity(),panel_id=panel['id'],roster_id=value['id'],gates=asdict(gates),
+    result=sealed(dict(format=REPORT,contract=identity(),fixture=fixture,
+                       panel_id=panel['id'],roster_id=value['id'],gates=asdict(gates),
                        games=len(rows),expected_games=len(panel['jobs']),missing_jobs=sorted(set(range(len(panel['jobs']))) - seen),
                        sources=sources,checks=tests,p4_qualified=all(tests.values()),release_qualified=False,
                        members=quality_by_member,mixtures=mixtures,variety=variations,geometry=geom,pottery=pottery,human=human,

@@ -10,7 +10,7 @@ from unittest.mock import Mock, patch
 from brass_ai.bank import sha
 from brass_ai.learning.contracts import SOURCE_ROOT,digest
 from brass_ai.learning.replay import split_for
-from brass_ai.recovery.execution import ActorPool
+from brass_ai.recovery.execution import ActorPool, _collection_recipe
 from brass_ai.recovery.ingress import reader_pool, _prepare
 from brass_ai.recovery.replay import write_shard
 from brass_ai.step5.league import seeds_for
@@ -82,12 +82,13 @@ class ReplayLifecycleReviewTests(unittest.TestCase):
             directory=Path(temp);seeds=seeds_for(17100000,2)[0]
             jobs=[dict(index=i,seed=seed,path=str(directory/f'actor-{i}.jsonl.gz'),
                 provenance=dict(purpose='training',seed=seed,policy='frozen-behavior')) for i,seed in enumerate(seeds)]
-            identity=digest([j['provenance'] for j in jobs]);prefix=directory/('games-'+identity[:16])
+            recipe=_collection_recipe(jobs,pool.config)
+            identity=digest(recipe);prefix=directory/('games-'+identity[:16])
             def publish(job,path):
                 episode=copy.deepcopy(game());episode['game_id']='partial-'+str(job['index'])
                 episode['setup_group']=digest(dict(rules='steam-brass-patch-1.1.0',setup_seed=job['seed']))
                 episode['split']=split_for(episode['setup_group'])
-                write_shard(path,[episode],dict(purpose='training',collection=identity,
+                write_shard(path,[episode],dict(purpose='training',collection=identity,recipe=recipe,
                     jobs=[dict(index=job['index'],seed=job['seed'],provenance=job['provenance'])]),cache=False)
                 return dict(job=job['index'],game_id=episode['game_id'],path=str(path),sha256=sha(path),cached=False,features=None)
             original=Path(str(prefix)+'-part-0000.jsonl.gz');publish(jobs[0],original)

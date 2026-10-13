@@ -1,6 +1,8 @@
 # Personalities and difficulty calibration
 
-**Updated 12 October 2026: P0–P6 tooling implemented; real-model qualification and game release pending.** Real personality experiments begin **after the revised Step 5 run finishes**, using its accepted self-trained incumbent as the proposed parent. Tool/interface development and explicitly unqualified fixtures may precede that handoff. The recommended Step 5 restart hands a completed fresh imitation run's 1,840,109-parameter MLP-ResNet into a new self-play run, extends it to **1,850,129 parameters** with the four-seat combined-utility head, and continues PPO plus separate Masked ISMCTS NN distillation. Step 5 distinguishes the continuing learner from the accepted best opponent. This later stage adds personalities to the trained result; it does not restart from random weights or silently change the game-return objective.
+**Updated 13 October 2026: P0–P6 tooling implemented; real-model qualification and game release pending.** Real personality experiments begin **after the revised Step 5 run finishes**, using its accepted self-trained incumbent as the proposed parent. Tool/interface development and explicitly unqualified fixtures may precede that handoff. The recommended Step 5 restart hands a completed fresh imitation run's 1,840,109-parameter MLP-ResNet into a new self-play run, extends it to **1,850,129 parameters** with the four-seat combined-utility head, and continues PPO plus separate Masked ISMCTS NN distillation. Step 5 distinguishes the continuing learner from the accepted best opponent. This later stage adds personalities to the trained result; it does not restart from random weights or silently change the game-return objective.
+
+The [13 October P0–P6 audit](../docs/PERSONALITY_P0_P6_AUDIT_2026-10-13.md) tightens handoff, calibration, fixture qualification and export provenance, preserves compatible P1 continuation through exact receipts, and reports the unresolved P2 teacher accounting discrepancy in §4.4. Local fixture verification does not qualify a trained roster or release.
 
 The only personality search backend is **Masked ISMCTS + NN**. S1/S2/S3 and the separate R4/OpenSpiel comparison branches are retired implementation dependencies. Heuristic Masked v4 has different evaluation/search settings and remains an occasional opponent. The shared policy/value/goal architecture and **16 visible archetypes × eight hidden variants = 128** remain the product target.
 
@@ -262,6 +264,8 @@ Retain current qualification minima: **16 usable samples from at least two setup
 
 The **50% accounted search wall-time ceiling** allows at most one search second per accounted ordinary second; it is not a GPU utilization target or a requirement to spend that time. Preserve conservative whole-collection admission and deferral, including failed work in accounting. Do not restart clocks or inflate the allowance for every style. A calibrated teacher uses the current learner; its neutral rollout ensemble includes the accepted incumbent plus bounded IL/recent/older references. Styled simulated opponents remain a separately versioned extension, as required in section 4.2.
 
+**Audit discrepancy, 13 October:** the active P2 implementation (`search/teachers.py`, `WALL_FRACTION=.9`) and P2 lab guide retain a 90% allowance. This differs from the 50% design statement above and current Step 5. The audit changed neither policy; resolve and explicitly version the intended P2 accounting policy before a real teacher campaign.
+
 ## 5. AURORA-inspired discovery of additional personalities
 
 ### 5.0 Product target: 16 visible archetypes and 128 hidden variants
@@ -473,7 +477,7 @@ The following contracts define the interfaces. Handoff/model/goal/descriptor, P4
 | `goal-schema/1.0.0` | Goal factors, compatible combinations, public regions, own-turn horizons, realization labels, confidence calibration and revision rules. |
 | `personality-profile/1.0.0` | Stable archetype ID, public name/description, representative member ID, exactly eight micro-variant IDs, supported tiers and group-level evidence. |
 | `personality-micro-variant/1.0.0` | Stable member/parent IDs, shared model ID, tested online style code, per-tier search/intent/bias settings, hint mode, quality/coherence evidence and qualified same-archetype fallback. |
-| `personality-roster/1.0.0` | Versioned mapping of 16 archetypes to 128 unique members, encoder/archive provenance, membership checks, per-tier qualification status, uniform sampling weights/version and save compatibility. |
+| `personality-roster/1.1.0` | Versioned mapping of 16 archetypes to 128 unique members, encoder/archive and explicit fixture provenance, membership checks, per-tier qualification status, uniform sampling weights/version and save compatibility. |
 | `behavior-descriptor/1.0.0` | Trace schema, split provenance, fitted normalization/encoder hash, latent dimension, distance metric and archive rebuild version. |
 | `personality-tier-profiles/1.0.0` | Prespecified Easy/Medium/Hard clocks, worker/tensor settings, selection recipe and hint mode. Resolves against the unchanged P4 model/member/search contracts; initial labels are unqualified candidates. |
 | `personality-difficulty-panel/1.0.0` and `personality-difficulty-report/1.0.0` | Immutable member/mixture/stock/direct jobs, reserved fresh setup groups, source/runtime pins, simultaneous grouped intervals, equivalence/order gates, human session evidence and measured hardware. Fixtures and partial panels cannot qualify. |

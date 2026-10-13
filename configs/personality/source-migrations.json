@@ -63,6 +63,132 @@
         "model": "four-seat-personality/2.0.0",
         "source": "31b8d44872bbfcd9b89c8e3cc591ef38337fe39fbdebf64d4dc8a76ba46464ff"
       }
+    },
+    {
+      "from_contract": {
+        "base": {
+          "architecture_sha256": "298f254039fb4d9ffda39428fea60aec80c840f6a7c832bf993984f4b59cd129",
+          "choices": "phase-choice/0.2.0",
+          "encoder_sha256": "6937346f9b1092589ebede368aba40ebcdc0c9373ea21a438d6b75a01b64ef9f",
+          "features_sha256": "991308b11eea442f4b071c46cd6361ad288c9877fbd4eedc4b241819f7769094",
+          "heads": [
+            "policy_logits",
+            "win_share_4",
+            "placement_4",
+            "vp_4"
+          ],
+          "learning_contract": "four-seat-learning/1.0.0",
+          "loss": "win-ce+0.25-rank-huber+0.1-vp-huber/1.0.0",
+          "objective": "win-share/1.0.0",
+          "observation": "public-state/0.2.0",
+          "placement": "competition-rank/1.0.0",
+          "players": 4,
+          "producer_profile_sha256": "ffae2fa230bcc42c3877d7817a584b608b60961c0b719316884d6c694a1384d7",
+          "reference_lock_sha256": "9cf98163e7ed9cbeef0cd9ce9178c4eeea933063d361f5a5e42d2fdddcdd5158",
+          "rules": "steam-brass-patch-1.1.0",
+          "seat_order": "stable-0-1-2-3",
+          "vp_scale": 100.0,
+          "wire_sha256": "fabe2ef3e1de73aa9f3ddd05b67c08f9ef564a25ab4ff42963a03ab6fe3b6e3d"
+        },
+        "goal_schema": "b54280a5e807037baff50133f9a4257f6d6ed445ff595548b029e2f93597c60c",
+        "model": "four-seat-personality/2.0.0",
+        "source": "3bb0eab8a753a5fb29e33b595e19e6ac0ab6d2e2d09875c059e93c9387bee068"
+      },
+      "kind": "p0-p1-audit-continuation/1.0.0",
+      "reviewed_revision": "72bd43ff01a10a8d917705617b3805f6df41e924",
+      "scope": "P0 copied evidence is revalidated and P1 phase changes retain saved RNG while starting the required fresh optimizer. Compatible model, goal, feature, reward, weight, optimizer and RNG payloads are preserved on import. No old trace, P2 readiness, teacher, discovery or qualification receipt is relabeled; regenerate downstream evidence under the changed source.",
+      "to_contract": {
+        "base": {
+          "architecture_sha256": "298f254039fb4d9ffda39428fea60aec80c840f6a7c832bf993984f4b59cd129",
+          "choices": "phase-choice/0.2.0",
+          "encoder_sha256": "6937346f9b1092589ebede368aba40ebcdc0c9373ea21a438d6b75a01b64ef9f",
+          "features_sha256": "991308b11eea442f4b071c46cd6361ad288c9877fbd4eedc4b241819f7769094",
+          "heads": [
+            "policy_logits",
+            "win_share_4",
+            "placement_4",
+            "vp_4"
+          ],
+          "learning_contract": "four-seat-learning/1.0.0",
+          "loss": "win-ce+0.25-rank-huber+0.1-vp-huber/1.0.0",
+          "objective": "win-share/1.0.0",
+          "observation": "public-state/0.2.0",
+          "placement": "competition-rank/1.0.0",
+          "players": 4,
+          "producer_profile_sha256": "ffae2fa230bcc42c3877d7817a584b608b60961c0b719316884d6c694a1384d7",
+          "reference_lock_sha256": "9cf98163e7ed9cbeef0cd9ce9178c4eeea933063d361f5a5e42d2fdddcdd5158",
+          "rules": "steam-brass-patch-1.1.0",
+          "seat_order": "stable-0-1-2-3",
+          "vp_scale": 100.0,
+          "wire_sha256": "fabe2ef3e1de73aa9f3ddd05b67c08f9ef564a25ab4ff42963a03ab6fe3b6e3d"
+        },
+        "goal_schema": "b54280a5e807037baff50133f9a4257f6d6ed445ff595548b029e2f93597c60c",
+        "model": "four-seat-personality/2.0.0",
+        "source": "7857312a03491be8102a621826f1bcfc58018eaa4416f9dca26de5049ae54176"
+      }
+    },
+    {
+      "from_contract": {
+        "base": {
+          "architecture_sha256": "298f254039fb4d9ffda39428fea60aec80c840f6a7c832bf993984f4b59cd129",
+          "choices": "phase-choice/0.2.0",
+          "encoder_sha256": "6937346f9b1092589ebede368aba40ebcdc0c9373ea21a438d6b75a01b64ef9f",
+          "features_sha256": "991308b11eea442f4b071c46cd6361ad288c9877fbd4eedc4b241819f7769094",
+          "heads": [
+            "policy_logits",
+            "win_share_4",
+            "placement_4",
+            "vp_4"
+          ],
+          "learning_contract": "four-seat-learning/1.0.0",
+          "loss": "win-ce+0.25-rank-huber+0.1-vp-huber/1.0.0",
+          "objective": "win-share/1.0.0",
+          "observation": "public-state/0.2.0",
+          "placement": "competition-rank/1.0.0",
+          "players": 4,
+          "producer_profile_sha256": "ffae2fa230bcc42c3877d7817a584b608b60961c0b719316884d6c694a1384d7",
+          "reference_lock_sha256": "9cf98163e7ed9cbeef0cd9ce9178c4eeea933063d361f5a5e42d2fdddcdd5158",
+          "rules": "steam-brass-patch-1.1.0",
+          "seat_order": "stable-0-1-2-3",
+          "vp_scale": 100.0,
+          "wire_sha256": "fabe2ef3e1de73aa9f3ddd05b67c08f9ef564a25ab4ff42963a03ab6fe3b6e3d"
+        },
+        "goal_schema": "b54280a5e807037baff50133f9a4257f6d6ed445ff595548b029e2f93597c60c",
+        "model": "four-seat-personality/2.0.0",
+        "source": "31b8d44872bbfcd9b89c8e3cc591ef38337fe39fbdebf64d4dc8a76ba46464ff"
+      },
+      "kind": "p0-p1-audit-continuation/1.0.0",
+      "reviewed_revision": "72bd43ff01a10a8d917705617b3805f6df41e924",
+      "scope": "P0 copied evidence is revalidated and P1 phase changes retain saved RNG while starting the required fresh optimizer. Compatible model, goal, feature, reward, weight, optimizer and RNG payloads are preserved on import. No old trace, P2 readiness, teacher, discovery or qualification receipt is relabeled; regenerate downstream evidence under the changed source.",
+      "to_contract": {
+        "base": {
+          "architecture_sha256": "298f254039fb4d9ffda39428fea60aec80c840f6a7c832bf993984f4b59cd129",
+          "choices": "phase-choice/0.2.0",
+          "encoder_sha256": "6937346f9b1092589ebede368aba40ebcdc0c9373ea21a438d6b75a01b64ef9f",
+          "features_sha256": "991308b11eea442f4b071c46cd6361ad288c9877fbd4eedc4b241819f7769094",
+          "heads": [
+            "policy_logits",
+            "win_share_4",
+            "placement_4",
+            "vp_4"
+          ],
+          "learning_contract": "four-seat-learning/1.0.0",
+          "loss": "win-ce+0.25-rank-huber+0.1-vp-huber/1.0.0",
+          "objective": "win-share/1.0.0",
+          "observation": "public-state/0.2.0",
+          "placement": "competition-rank/1.0.0",
+          "players": 4,
+          "producer_profile_sha256": "ffae2fa230bcc42c3877d7817a584b608b60961c0b719316884d6c694a1384d7",
+          "reference_lock_sha256": "9cf98163e7ed9cbeef0cd9ce9178c4eeea933063d361f5a5e42d2fdddcdd5158",
+          "rules": "steam-brass-patch-1.1.0",
+          "seat_order": "stable-0-1-2-3",
+          "vp_scale": 100.0,
+          "wire_sha256": "fabe2ef3e1de73aa9f3ddd05b67c08f9ef564a25ab4ff42963a03ab6fe3b6e3d"
+        },
+        "goal_schema": "b54280a5e807037baff50133f9a4257f6d6ed445ff595548b029e2f93597c60c",
+        "model": "four-seat-personality/2.0.0",
+        "source": "7857312a03491be8102a621826f1bcfc58018eaa4416f9dca26de5049ae54176"
+      }
     }
   ]
 }

@@ -1,0 +1,160 @@
+{
+  "date": "2026-10-13",
+  "implementation": "3de301188b2eb777a7929da14a3e8d3362f106e75e54129eef8776864809f8e6",
+  "tests": {
+    "unique_cases": 139,
+    "modules": {
+      "test_joint7_150_review": 4,
+      "test_compare_training_panels": 3,
+      "test_export_training_reports": 7,
+      "test_combined_reward": 15,
+      "test_insolvency_recovery": 18,
+      "test_teacher_readiness_review": 6,
+      "test_teacher_work": 11,
+      "test_reviewed_resume": 7,
+      "test_teacher_work_resume": 6,
+      "test_throughput_resume": 2,
+      "test_resume_evaluations": 7,
+      "test_champion": 8,
+      "test_time_budgets": 14,
+      "test_single_gpu_performance": 10,
+      "test_search_retirement_review": 5,
+      "test_joint7_review": 7,
+      "test_time_resume": 3,
+      "test_audit_retention": 6
+    },
+    "initial_suite": {
+      "cases": 123,
+      "passed": 121,
+      "failures": [
+        "New fixture mocked full origin instead of imitation_source; corrected.",
+        "Existing absolute dependency resolved twice under two bases; corrected cache key."
+      ]
+    },
+    "targeted_rerun": {
+      "cases": 24,
+      "passed": 24,
+      "seconds": 6.313
+    },
+    "final_preflight_and_retention": {
+      "cases": 10,
+      "passed": 10,
+      "seconds": 4.184
+    },
+    "prior_joint7_time_tests": "Ten additional unique cases passed in targeted rerun; all 139 unique cases passed after fixes."
+  },
+  "smoke": {
+    "native": [],
+    "implementation": "3de301188b2eb777a7929da14a3e8d3362f106e75e54129eef8776864809f8e6",
+    "scope": "Local CPU, matched random legal play; not lab GPU or playing strength",
+    "ppo": {
+      "seconds": 78.17747869994491,
+      "checkpoint": {
+        "path": "artifacts/recovery/joint7-150-review-20261013/native-smoke/ppo/generation-0001.pt",
+        "sha256": "6308bb1d20a9726e5b843291ca749078a32cdd851d600f2f2630c0e3fbb022ee",
+        "model_id": "7d26dce2ed28114321f93c3a96f638e60c2ab8a18b49984eab16cf4ebb7c4ad1",
+        "generation": 1
+      },
+      "games": 2,
+      "optimizer_steps": 2,
+      "utilization": {
+        "games_per_second": 0.04680114194767585,
+        "mean_inference_batch": 1.0073529411764706,
+        "inference_batches": 272,
+        "inference_positions": 274,
+        "padding_fraction": 0.004874140348534395,
+        "actor_phase_seconds": {
+          "cpu.admission.wait": 0.0,
+          "host.apply": 13.437650601379573,
+          "host.decision": 0.2291370048187673,
+          "host.ipc.stdin.flush": 0.21633910154923797,
+          "host.ipc.stdin.write": 0.00795480189844966,
+          "host.ipc.stdout.read_wait": 13.4377236017026,
+          "host.native.cpu_seconds": 10.515625,
+          "host.native.elapsed_seconds": 11.0667185,
+          "host.native.materialize_serialize_seconds": 0.5187944000000002,
+          "host.reset": 0.657177799846977,
+          "host.result": 0.002811799291521311,
+          "host.rpc.capabilities": 0.003162600100040436,
+          "host.rpc.decision": 0.22256889985874295,
+          "host.rpc.reset": 0.6568026002496481,
+          "host.rpc.result": 0.002737400121986866,
+          "host.rpc.step_decision": 13.389916800893843,
+          "host.startup": 5.804716299753636,
+          "inputs.encode": 0.9132823026739061,
+          "inputs.validate": 4.505563001148403,
+          "policy.model": 6.850904697552323
+        },
+        "inference_phase_deltas": {
+          "inference.batch": {
+            "seconds": 0.9915251028724015,
+            "calls": 272
+          },
+          "inference.forward": {
+            "seconds": 0.7471867995336652,
+            "calls": 272
+          },
+          "inference.queue_wait": {
+            "seconds": 3.8630000012926757,
+            "calls": 274
+          }
+        },
+        "actor_python_cpu_seconds": null,
+        "actor_python_average_cores": null,
+        "actor_cpu_recorded_games": 0,
+        "actor_cpu_scope": "Python actor process CPU during games; includes its threads, excludes Mono children and GPU; unavailable for cached games/multiple host lanes",
+        "ordinary_actors": 2,
+        "cpu_work_slots": 10,
+        "scope": "ordinary collection; actor/inference phase times overlap; actor_python_* measures process CPU, not total machine or GPU utilization",
+        "replay_ingress": {
+          "worker_cpu_seconds": 1.65625,
+          "worker_elapsed_seconds": 1.645882099866867,
+          "read_validate_seconds": 1.5149763999506831,
+          "diagnostics_seconds": 0.006163300015032291,
+          "prepare_seconds": 0.12436700006946921,
+          "compact_seconds": 0.0003753998316824436,
+          "wall_seconds": 0.8117496999911964,
+          "shards": 2,
+          "learner_rows": 143,
+          "readers": 2,
+          "worker_average_cores": 0.03806113321900827,
+          "max_shard_seconds": 0.8623220999725163,
+          "scope": "Reader-task CPU excludes process startup and result serialization; worker elapsed phases overlap across readers. Wall is the final join/merge; average cores uses the full streaming interval when enabled.",
+          "streaming": true,
+          "stream_elapsed_seconds": 43.51551989978179,
+          "prepared_before_collection_end": 1
+        }
+      }
+    }
+  },
+  "inputs": {
+    "files_checked": 30,
+    "raw_bytes_unchanged": true,
+    "manifest_identity": "All LF-normalized hashes match; raw Git checkout uses CRLF",
+    "results_git_diff_empty": true
+  },
+  "comparison_checks": {
+    "real_unmatched_monitor_120_140_rejected": true,
+    "real_monitor_identity_zero_delta": true
+  },
+  "limitations": [
+    "Actual generation-150 checkpoint/Adam and full IL dependencies are available only on the lab; not restored here.",
+    "Native smoke: two fresh small-model CPU games, search disabled; no playing-strength claim.",
+    "No long training or matched endpoint strength campaign was launched.",
+    "1-6 GPU throughput/timed-budget strength requires matched lab runs."
+  ],
+  "documentation_checks": {
+    "bash_syntax": "Passed with bash -n; required read-only retry outside the Windows process sandbox after MSYS startup was denied.",
+    "embedded_python_syntax": "passed",
+    "step5_cli_examples": "parsed",
+    "all_relative_links_exist": true,
+    "scoped_git_diff_check": "passed; unrelated concurrent personality edits left unchanged"
+  },
+  "commands": {
+    "focused": "python -m unittest test_joint7_150_review test_compare_training_panels test_export_training_reports test_combined_reward test_insolvency_recovery test_teacher_readiness_review test_teacher_work test_reviewed_resume test_teacher_work_resume test_throughput_resume test_resume_evaluations test_champion test_time_budgets test_single_gpu_performance test_search_retirement_review",
+    "targeted": "python -m unittest test_joint7_150_review test_single_gpu_performance test_joint7_review test_time_resume",
+    "final": "python -m unittest test_joint7_150_review test_audit_retention",
+    "smoke": "python tests/Recovery/smoke_throughput.py --ppo-only --output artifacts/recovery/joint7-150-review-20261013/native-smoke",
+    "analysis": "python scripts/review_joint7_150.py"
+  }
+}

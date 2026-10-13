@@ -39,16 +39,22 @@ def collect(root,bundle,output,jobs,config,*,tables=4,device='cpu',mono=None,tea
         bundle=project_path(root,bundle).relative_to(root).as_posix(),pool_id=pool_id,parent_incumbent_id=base_id(parents[0]),
         search=config.to_dict(),teacher_game=teacher_game,jobs=jobs,tables=tables,decision_mode=decision_mode,calibration_probe=_calibration is not None)
     out.mkdir(parents=True);write_json(out/'spec.json',spec);began=time.monotonic()
-    service=SharedInference(execution,device=device);ident=service.register(model);parent_ids=[service.register(m) for m in parents]
-    require(ident==spec['model_id'],'Frozen collection model changed')
-    channel_count=2+config.workers*(1+len(parent_ids)) if decision_mode=='searched' else 2
-    channels=[service.channels(channel_count) for _ in range(min(tables,len(jobs)))]
+    service=SharedInference(execution,device=device)
+    try:
+        ident=service.register(model);parent_ids=[service.register(m) for m in parents]
+        require(ident==spec['model_id'],'Frozen collection model changed')
+        channel_count=2+config.workers*(1+len(parent_ids)) if decision_mode=='searched' else 2
+        channels=[service.channels(channel_count) for _ in range(min(tables,len(jobs)))]
+    except BaseException:
+        # Queues and partial pipe/shared-buffer allocations already belong to
+        # the service before its inference thread has started.
+        service.__exit__();raise
     def run_table(index):
         lane=channels[index];receipts=[]
         session=SearchSession(root,service,lane,ident,parent_ids,config,[Profile()]*4,ready['goal_calibration'],mono=mono,search_enabled=decision_mode=='searched')
-        opponent_endpoint=lane.acquire()
-        policies={p:NeuralPolicy(None,evaluator=RemoteEvaluator(opponent_endpoint,p),focus='neutral',exploration=.05) for p in parent_ids}
         try:
+            opponent_endpoint=lane.acquire()
+            policies={p:NeuralPolicy(None,evaluator=RemoteEvaluator(opponent_endpoint,p),focus='neutral',exploration=.05) for p in parent_ids}
             with RulesHost(project_path(root,handoff['signature']['config']['host']),mono=mono) as host:
                 for job in jobs[index::len(channels)]:
                     profiles=[Profile.parse(p) for p in job['profiles']]
@@ -153,5 +159,10 @@ def iter_pairs(directory,manifest):
                 require(ctx['model_id']==manifest['spec']['model_id'] and ctx['candidate_id']==job['controllers'][row['seat']]
                     and ctx['context']['profile']==job['profiles'][row['seat']]['style'],'Controller attribution differs')
             else:require(ctx['role']=='parent' and ctx['teacher'] is None and ctx['context'] is None,'Parent actions cannot teach a personality')
-            if ctx['teacher'] is not None:validate_personality_teacher(ctx['teacher'],row,manifest['spec']['model_id'],manifest['spec']['search']['reward'])
+            if ctx['teacher'] is not None:
+                label=validate_personality_teacher(ctx['teacher'],row,spec['model_id'],spec['search']['reward'])
+                require(label['personality']==ctx['context'] and label['goal']==ctx['goal'],
+                    'Teacher context differs from executed decision')
+                require(label['profile']==job['profiles'][row['seat']] and label['target']['search']==spec['search'],
+                    'Teacher recipe differs from executed controller')
         yield games[0],extra

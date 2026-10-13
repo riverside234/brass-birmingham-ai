@@ -12,7 +12,7 @@ from brass_ai.bank import read,sha
 from brass_ai.learning.contracts import SOURCE_ROOT,digest
 from brass_ai.learning.reward import specification,terminal_utility,replay_returns
 from brass_ai.recovery.champion import decision,jobs_for,gate_rows,selfplay_policies,initialize,schedule
-from brass_ai.recovery.config import CHAMPION,RETENTION,INSOLVENCY,validate_config
+from brass_ai.recovery.config import CHAMPION as CHAMPION_STAGED,CHAMPION_LEGACY as CHAMPION,RETENTION,INSOLVENCY,validate_config
 from brass_ai.recovery.history import compact_history
 from brass_ai.recovery.retention import plan,prune
 from brass_ai.recovery.execution import neural_spec
@@ -43,10 +43,10 @@ class ChampionTests(unittest.TestCase):
         for name in ('lab','lab-16x2','lab-24x4','lab-small','lab-reference','smoke','recovery-smoke'):
             cfg=validate_config(read(SOURCE_ROOT/f'configs/step5/{name}.json'))
             self.assertEqual(cfg['search']['reward'],specification(cfg['reward'],cfg['insolvency']))
-            self.assertEqual(cfg['champion'],CHAMPION);self.assertEqual(cfg['search_wall_fraction'],.5)
+            self.assertEqual(cfg['champion'],CHAMPION_STAGED);self.assertEqual(cfg['search_wall_fraction'],None)
             if name.startswith('lab'):
                 self.assertEqual((cfg['search']['seconds'],cfg['execution']['search_workers_per_turn']),(12.,4))
-                self.assertEqual((cfg['learning_rate'],cfg['search_every_games'],cfg['search_games'],cfg['distill_steps']),(1e-5,160,4,8))
+                self.assertEqual((cfg['learning_rate'],cfg['search_every_games'],cfg['search_games'],cfg['distill_steps']),(1e-5,160,5,8))
 
     def test_gate_balance_ties_and_uncertainty(self):
         self.assertTrue(decision(rows(),CHAMPION)['accepted'])
@@ -86,8 +86,9 @@ class ChampionTests(unittest.TestCase):
             for gen in (0,1):
                 path=run/f'generation-{gen:04d}.pt';path.write_bytes(str(gen).encode())
                 entries.append(dict(path=path.relative_to(SOURCE_ROOT).as_posix(),sha256=sha(path),model_id=str(gen),generation=gen))
-            cfg=read(SOURCE_ROOT/'configs/step5/lab.json');state=dict(signature=dict(config=cfg),games_done=0,history=entries[:1],evaluation_anchor=entries[0])
-            with patch('brass_ai.recovery.retention.slim_checkpoint',side_effect=lambda root,run,e:e):
+            cfg=read(SOURCE_ROOT/'configs/step5/lab.json');cfg['champion']=copy.deepcopy(CHAMPION)
+            state=dict(signature=dict(config=cfg),games_done=0,history=entries[:1],evaluation_anchor=entries[0])
+            with patch('brass_ai.recovery.retention.slim_checkpoint',side_effect=lambda root,run,e,existing=None:e):
                 initialize(SOURCE_ROOT,run,state)
                 self.assertEqual((run/'best.pt').read_bytes(),b'0')
                 state.update(games_done=6400,history=entries)

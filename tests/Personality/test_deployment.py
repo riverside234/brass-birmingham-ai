@@ -50,7 +50,7 @@ def candidate(groups=2,members=2):
                                       profile=e['controller']['profile'],centroid=e['centroid'],dispersion=e['dispersion'],tier_settings={},fallback=None))
     controls=[controller('fixture','parent',Profile(style=s,alpha=0. if s=='neutral' else .15),search_config(specification()),'pool')
               for s in ('neutral','industrialist','networker','supplier','investor')]
-    return sealed(dict(format=ROSTER,contract=identity(),counts=dict(archetypes=groups,per_archetype=members),
+    return sealed(dict(format=ROSTER,contract=identity(),fixture=True,counts=dict(archetypes=groups,per_archetype=members),
                        archetypes=gs,members=vs,shared_model=dict(ready='fixture-ready',ready_id='ready',model_id='fixture'),
                        controls=controls,search=search_config(specification()).to_dict(),decision_mode='searched',pool_id='pool',
                        full_size=groups==16 and members==8,release_qualified=False,p4_qualified=False,dependencies=[],forbidden_groups=[],gates=asdict(Gates())))
