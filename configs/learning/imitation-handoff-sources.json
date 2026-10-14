@@ -129,6 +129,13 @@
       "learning_compatibility": "c349e816f2e301ea2a3b438902059cffe868f48e131f7c120691d37cd1c409d2",
       "review_version": "training-evidence-compaction/1.0.0",
       "reason": "Lossless approval/evidence storage only. Completed fresh IL model, data, losses, checkpoint formats and original lineage checks are unchanged."
+    },
+    {
+      "implementation": "56f229de63ee148b7bd9e41245ae4d0b8953d59d85c16440d7b4e00c6d52f4ac",
+      "learning_compatibility": "c349e816f2e301ea2a3b438902059cffe868f48e131f7c120691d37cd1c409d2",
+      "reason": "Handle inference deadline/cancellation races at the strict response acceptance gate as normal search interruption. Preserve deadlines, search budgets, recipes, model/feature/reward contracts, checkpoint weights, Adam/RNG, champion, population and counters. Explicit interrupted-iteration recovery archives partial evidence without adopting it or modifying the committed state; ordinary reviewed-source resume guards remain required.",
+      "review_version": "inference-deadline-race/1.0.0",
+      "review_report": "docs/INFERENCE_DEADLINE_RECOVERY_2026-10-14.md"
     }
   ]
 }

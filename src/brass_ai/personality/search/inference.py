@@ -7,7 +7,7 @@ import uuid
 import numpy as np
 import torch
 
-from brass_ai.learning.batching import Request,accept_response,collate
+from brass_ai.learning.batching import Request,RequestStopped,accept_response,collate
 from brass_ai.learning.contracts import digest,require
 from brass_ai.personality.checkpoint import model_id
 from brass_ai.personality.contracts import context,context_vector
@@ -141,7 +141,10 @@ class PersonalityPolicy(NeuralPolicy):
         require(len(requests)==len(responses),'Incomplete inference replies')
         for r,response in zip(requests,responses):
             if r.stopped() or response.get('status') in ('expired','cancelled'):raise SearchIncomplete('personality inference deadline/cancel')
-            accept_response(r,response,r.view['context']['revision'],self.evaluator.model_id)
+            try:
+                accept_response(r,response,r.view['context']['revision'],self.evaluator.model_id)
+            except RequestStopped as error:
+                raise SearchIncomplete('personality inference deadline/cancel') from error
             require(response['context_id']==digest(self.personality),'Private personality context changed')
             p=np.asarray(response['probabilities'],dtype=float)
             p=(1-self.exploration)*p+self.exploration*exploration_distribution(r.choices,r.intent)

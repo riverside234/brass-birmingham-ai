@@ -1,5 +1,7 @@
 # Fresh training in conda: selected v4 teachers and Masked ISMCTS NN
 
+**14 October teacher crash fix:** [deadline-race repair and generation 170 recovery commands](INFERENCE_DEADLINE_RECOVERY_2026-10-14.md). `Request no longer live` at the final inference gate now retires search normally. The explicit recovery tool preserves unfinished iteration evidence before retrying from the committed checkpoint. Current training settings and search clocks are unchanged.
+
 **13 October self-play review:** [remaining bugs, repairs and continuation evidence](SELFPLAY_MAJOR_REVIEW_2026-10-13.md). Five confirmed issues are repaired in replay integrity, calibration cleanup, worker retirement, actor cache identity and population checkpoint reuse. Current search clocks and all Step 5 configurations are unchanged. Update source and review receipts together, then continue a committed run with its existing config and `--resume-reviewed-source`.
 
 **13 October performance update:** [measurements and continuation instructions](STEP5_PERFORMANCE_2026-10-13.md). Unchanged industry mats reuse validated content instead of rechecking every tile after cash/hand-count changes. Current configurations and search clocks are unchanged: teacher phases remain 12/12/16/24 seconds and v4 opponents one second per whole turn. Exact source receipts preserve checkpoint/Adam/RNG/progress continuation. Old derived caches require normal source revalidation; no lab-GPU or complete-iteration speedup is claimed from the local CPU measurements.

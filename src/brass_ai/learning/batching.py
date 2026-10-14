@@ -208,9 +208,19 @@ class Evaluator:
                 'observer': request.view['seat'], 'input_digest': request.input_digest, 'status': status}
 
 
+class RequestStopped(ValueError):
+    """The request expired/cancelled at the final response acceptance gate."""
+
+    def __init__(self, reason):
+        super().__init__('Request no longer live')
+        self.reason = reason
+
+
 def accept_response(request, response, current_revision, current_model):
     """Coordinator gate before using a prediction; identities never enter tensors."""
-    require(not request.stopped(), 'Request no longer live')
+    stopped = request.stopped()
+    if stopped:
+        raise RequestStopped(stopped)
     require(response['status'] == 'ok' and response['protocol'] == 'four-seat-inference/1.0.0', 'No usable prediction')
     require(response['request_id'] == request.request_id and
             response['model_id'] == current_model == request.expected_model and

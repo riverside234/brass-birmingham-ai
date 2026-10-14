@@ -9,7 +9,7 @@ import weakref
 
 import numpy as np
 
-from brass_ai.learning.batching import Evaluator, Request, accept_response
+from brass_ai.learning.batching import Evaluator, Request, RequestStopped, accept_response
 from brass_ai.learning.contracts import digest, require
 
 INDUSTRIES = ('CottonMill', 'Manufacturer', 'Pottery', 'Brewery', 'IronWorks', 'CoalMine')
@@ -113,7 +113,15 @@ class NeuralPolicy:
             if self.request_deadline is not None and (request.stopped() or response.get('status') in ('expired','cancelled')):
                 from brass_ai.search.common import SearchIncomplete
                 raise SearchIncomplete('inference_deadline')
-            accept_response(request, response, request.view['context']['revision'], self.evaluator.model_id)
+            try:
+                accept_response(request, response, request.view['context']['revision'], self.evaluator.model_id)
+            except RequestStopped as error:
+                # The turn can expire after the precheck above. Only liveness
+                # failures end search normally; invalid predictions still fail.
+                if self.request_deadline is None:
+                    raise
+                from brass_ai.search.common import SearchIncomplete
+                raise SearchIncomplete('inference_deadline') from error
             raw = np.asarray(response['probabilities'], dtype=np.float64)
             raw = np.power(raw.clip(1e-30), 1 / self.temperature)
             raw /= raw.sum()
