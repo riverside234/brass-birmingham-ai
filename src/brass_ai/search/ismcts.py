@@ -112,6 +112,7 @@ class MaskedISMCTS:
             return self.cache[key]
         self.metrics['requests']+=1
         if ledger is not None:policy.utility_remaining[rng]=tuple(ledger.remaining)
+        else:policy.utility_remaining.pop(rng,None)
         result=yield (key,policy,state.views[actor],state.legal,rng)
         self.check()
         self.cache[key]=result
@@ -157,7 +158,11 @@ class MaskedISMCTS:
                 if actor!=self.root:
                     if len(state.legal)==1:chosen=0
                     else:
-                        p,_=yield from self.request(assigned[actor],state,actor_rngs[actor],ledger)
+                        # Frozen opponents supply actions only. Their policy is
+                        # independent of utility remaining, and an older model
+                        # may have a smaller reward cap than the learner. Use
+                        # its own default context; never borrow its leaf value.
+                        p,_=yield from self.request(assigned[actor],state,actor_rngs[actor])
                         chosen=local.choices(range(len(state.legal)),weights=p)[0]
                     apply(state,state.legal[chosen]);self.opponent_choices+=1
                     continue

@@ -1,15 +1,182 @@
 # Fresh training in conda: selected v4 teachers and Masked ISMCTS NN
 
+## 14 October follow-up self-play correctness review
+
+The follow-up review reproduced and repaired three additional failure cases:
+
+- Local evaluation accepted a utility budget above the frozen model's reward
+  cap while shared inference rejected it. Both paths now use one strict
+  per-model validator; valid predictions and older four-head models retain
+  their behavior.
+- Multi-device inference could replace the original replica error with a later
+  broken pipe or generic router error. A shared first-failure record now
+  preserves the cause. The replica records that cause before exposing its
+  local error to the router, closing a reproduced publication race.
+- Failed-iteration archival checked the population, champion and evaluation
+  anchor but omitted the rollout's separately retained previous champion.
+  It now verifies both rollout anchor/previous checkpoint hashes before any
+  archival mutation. Missing or changed required opponents leave the partial
+  iteration and committed state untouched.
+
+The current reviewed source is
+`b24eef15976abc2895afebbf6191fa465bec85ad8ea49568f324f528ecaddaab`.
+Update source and **both** `configs/learning/*-sources.json` registries together.
+All 1,782 preceding expanded approvals remain intact; 117 exact continuation
+and manual champion-cap routes were added. Learning compatibility and all 19
+Step 5 presets are unchanged. This preserves insolvency **0.005/0.075**, teacher
+clocks **12/16/20/20 seconds**, five teacher games, the 160-game cadence, eight
+steps, `search_wall_fraction: null`, PPO/reward/gate/opponent settings, staged
+champion exposure and the 64-model capacity. The approved 47-model restored
+pool continues growing normally. Checkpoints, Adam/RNG, committed counters and
+lineage are preserved.
+
+Validation: **164 distinct focused tests passed**. Affected inference and
+source/resume tests were rerun after the final race fix. Tests cover inline and
+shared transports, real queued inference through two CPU-backed replicas,
+original-error attribution during a concurrent router failure, ordinary model
+compatibility and cancellation, rollout/checkpoint retention, phase budgets,
+label/source guards, and an actual generation-160 checkpoint/Adam/RNG retry.
+Population tests verify growth from 47 to 64 across restarts. Two stale tests
+still expected the old 0.025 reward cap; they now retain historical coverage and
+also verify the requested 0.075 cap, including fifteen insolvency events.
+
+The broad exploratory suite was stopped in the slow many-commit retention
+performance test; a complete suite pass is not claimed. CUDA hardware and the
+remote lab were not exercised. The multi-device tests validate routing/error
+behavior using CPU replicas, not multi-GPU performance.
+
+The final native smoke used four workers, a small calibrated test model, frozen
+0.025-cap opponents, and one observed two-action turn per phase:
+
+| Phase | Search attempts/completions | Simulation attempts/completions | Qualified labels | Visited/legal root actions | Insufficient coverage | Search / turn seconds |
+| --- | --- | --- | --- | --- | --- | --- |
+| Early Canal | 1/1 | 16/8 | 1 | 4/328 | 0 | 11.844 / 12.032 |
+| Late Canal | 1/1 | 24/16 | 1 | 5/151 | 0 | 15.891 / 16.266 |
+| Early Rail | 1/1 | 30/23 | 1 | 7/55 | 0 | 19.890 / 20.078 |
+| Late Rail | 1/1 | 32/24 | 1 | 3/3 | 0 | 19.938 / 20.203 |
+
+The probe took **92.703 seconds** including setup/calibration and exercised
+833 frozen-opponent requests. No fatal inference error, CPU-admission abort,
+teacher failure or insufficient-coverage rejection occurred. There were
+4 ordinary deadline-expired inference requests. Search time remains shared
+across workers, both actions and continuations; turn timing also includes
+retirement/action application. The 4 qualified diagnostic labels produced
+**0 distinct training samples used**. No distillation update occurred, so
+teacher policy drift is **not measured**, rather than zero.
+
+The smoke helper now records legitimate label-rejection counts instead of
+asserting that every searched turn must produce a label before saving its
+report. An earlier probe hit that overly strict assertion; its exact rejection
+reason was not retained. The trainer's label-acceptance criteria are unchanged.
+The successful final probe validates execution, not improved yield, training
+stability or playing strength. This fix adds no teacher search time; the current
+collection ceiling remains 1,360 shared teacher turn-seconds.
+
+Machine-readable evidence and test logs are under
+`artifacts/recovery/selfplay-followup-review/`, with the final probe in
+`native-final/report.json` and the review summary in `review.json`.
+
+Use the safe interrupted-iteration continuation command in the next section
+if the lab is still committed at generation 160. Its expected-generation guard
+rejects a newer committed run. Archive only the failed partial iteration; do not
+rerun the generation-160 restore or replace the current population.
+
+## 14 October teacher crash after the generation-160 restore
+
+The reported attempt completed 320 ordinary games and replay preparation, then
+failed in the first five-game teacher collection due at 51,360 ordinary games.
+`CPU admission aborted` is a secondary failure: inference aborts the shared CPU
+admission queue, and another actor can report that abort before the original
+inference error reaches the parent. The pasted traceback alone does not identify
+the original error.
+
+A local reproduction using the actual search and inference service identifies
+a defect consistent with this restore: the learner's new `max_cost=0.075`
+ledger was also passed to frozen historical opponents whose utility heads still
+use `max_cost=0.025`. The strict inference check rejects that request with
+`Invalid inference utility budget`, then aborts shared admission. Both inline
+and shared-memory inference reproduce the failure before the fix.
+
+Search now requests only the frozen opponent's action probabilities with that
+model's own default utility context. Those probabilities do not depend on the
+remaining insolvency budget; opponent utility outputs never supply search leaf
+values. Learner root/frontier evaluations retain the current ledger and exact
+reward-ID checks. Frozen opponent weights/configs and inference validation are
+unchanged. Stale policy-only request budgets are cleared. The parent collector
+also surfaces the original service error, and later broken replies cannot
+overwrite it; cancellation and failure aborts remain active.
+
+The initial reviewed source for this fix was
+`0733832dde1cd773a3a593a4c49fa74c3a18cb4338508d31aae2a8c2ca8b1d79`;
+the follow-up review above supersedes it.
+Update source and **both** `configs/learning/*-sources.json` registries together.
+All Step 5 preset contents are unchanged. This includes the 12/16/20/20-second
+teacher clocks, five games per collection, 160-game cadence, eight distillation
+steps, `search_wall_fraction: null`, insolvency 0.005/0.075, and staged champion
+opponents. Population capacity remains 64; the approved 47-model restore adds
+new distinct generations normally (52 after five commits, 64 after seventeen,
+assuming distinct new models).
+
+Validation: **105 focused tests passed**. Coverage includes mixed-cap frozen
+opponents, unchanged leaf/inference guards, original-error reporting, phase
+clocks and shared deadlines, source reviews, 47-to-64 population growth, and an
+actual checkpoint/Adam/RNG retry through the original 0.025-cap generation 160,
+its already-recorded 0.075 source transition, partial-iteration archival and the
+new source. That retry preserves the rollout and all progress counters.
+
+Bounded native validation used four search workers, a small calibrated test
+model, frozen 0.025-cap opponents and one observed two-action turn per phase:
+
+| Phase | Search attempts/completions | Simulation attempts/completions | Qualified labels | Visited/legal root actions | Insufficient coverage | Search seconds |
+| --- | --- | --- | --- | --- | --- | --- |
+| Early Canal | 1/1 | 16/8 | 1 | 4/328 | 0 | 11.890 |
+| Late Canal | 1/1 | 24/16 | 1 | 5/151 | 0 | 15.828 |
+| Early Rail | 1/1 | 40/32 | 1 | 9/55 | 0 | 19.875 |
+| Late Rail | 1/1 | 40/32 | 1 | 3/3 | 0 | 19.860 |
+
+The full local probe took 90.593 seconds including setup/calibration. All 998
+frozen-opponent requests succeeded; no inference abort or teacher failure was
+recorded. The four qualified labels are diagnostic partial-turn evidence:
+**zero labels entered distillation**, and teacher policy drift was not measured
+because there was no policy update. This verifies the repaired execution path,
+not an improvement in label yield, training stability or playing strength. The
+training budget is unchanged: up to 1,360 teacher turn-seconds per collection,
+shared across workers/actions/continuations; elapsed lab time depends on actual
+parallelism and search completion. Details are in
+`artifacts/recovery/teacher-opponent-cap-fix/native/report.json`.
+
+For the already-restored lab run, archive only its failed uncommitted iteration
+and retry from the committed generation 160. Run from the repository directory:
+
+```bash
+python scripts/recover-step5-iteration.py \
+  --root /data/not_backed_up/yxu209/ai-training \
+  --run artifacts/step5/v4-selfplay-joint \
+  --expected-iteration 160 --apply && \
+python scripts/step5.py --config configs/step5/joint7-g150-gate72.json train \
+  --run artifacts/step5/v4-selfplay-joint \
+  --imitation-run artifacts/step5/v4-batch7-joint \
+  --resume-reviewed-source --expected-generation 160 --iterations 1
+```
+
+The archive command validates the committed checkpoint/Adam, source lineage and
+live opponents, then preserves the partial replays under `.interrupted-iterations/`.
+It leaves state/checkpoint bytes unchanged. The 320 ordinary games from the
+failed attempt must be recollected under the new source, followed by fresh
+utility calibration and teacher collection. Do not rerun `joint7_restart160.py`:
+the requested restore has already happened. No lab files were accessed or
+training launched during this local fix.
+
 ## 14 October teacher phase-clock revision
 
 The current teacher defaults use one shared budget per reserved turn:
 
 | Phase | Reserved round range | Seconds |
 | --- | --- | --- |
-| Early Canal | Canal 1–4 | 12 |
-| Late Canal | Canal 5–8 | 16 |
-| Early Rail | Rail 1–6 | 20 |
-| Late Rail | Rail 7–8 | 20 |
+| Early Canal | Canal 1â€“4 | 12 |
+| Late Canal | Canal 5â€“8 | 16 |
+| Early Rail | Rail 1â€“6 | 20 |
+| Late Rail | Rail 7â€“8 | 20 |
 
 Workers, both actions and continuation choices share that turn's deadline.
 Cancellation, failure timeouts and label-quality requirements still apply.
@@ -41,8 +208,8 @@ publication remain intact. Each champion's exposure uses frozen checkpoints:
 
 | Committed ordinary games since introduction/promotion | Self-play opponents |
 | --- | --- |
-| 0–1,599 | One champion, one previous/distinct older model, fixed IL anchor |
-| 1,600–3,199 | Half of tables have one champion, half two; every table keeps the IL anchor |
+| 0â€“1,599 | One champion, one previous/distinct older model, fixed IL anchor |
+| 1,600â€“3,199 | Half of tables have one champion, half two; every table keeps the IL anchor |
 | 3,200 onward | Two champions and the fixed IL anchor |
 
 These durations are five configured iterations at 320 games each. Both the
@@ -68,7 +235,7 @@ no automatic rollback thresholds. Changing this option preserves the original
 rollout clock. Other configuration changes still require their own review.
 
 The insolvency cost is now **0.005 per event, capped at 0.075** (15 events).
-The narrow reviewed 0.025→0.075 migration preserves all model tensors, Adam
+The narrow reviewed 0.025â†’0.075 migration preserves all model tensors, Adam
 moments/steps and RNG. The utility evaluator must recalibrate on fresh ordinary
 games before teaching. Teacher clocks follow the phase table above. The PPO
 settings, gate, opponent search, five teacher games, collection cadence, eight distillation
@@ -93,7 +260,7 @@ The archived directory is evidence/rollback storage; its checkpoint run bindings
 still name the original path. No generation-160 partial replay is reused.
 
 The reported restore failure omitted 17 historical opponents, at generations
-23, 24, 33, 34, 75, 115, 146–151 and 153–157. It did **not** report the full
+23, 24, 33, 34, 75, 115, 146â€“151 and 153â€“157. It did **not** report the full
 generation-160 checkpoint as missing. `history` and `retention-history.json`
 retain metadata and metrics, not deleted model parameters. With the previous
 zero-hour quarantine, retired unpinned opponents can already be deleted.
@@ -142,7 +309,7 @@ available in the local workspace. No lab training was launched for this revision
 
 Reduced-pool validation passed **nine focused tests**, including a real 47-model checkpoint restoration with
 exact learner bytes, Adam/RNG and archived future evidence preserved. A bounded
-commit simulation verifies 47→52→64 growth across state reloads, anchor retention,
+commit simulation verifies 47â†’52â†’64 growth across state reloads, anchor retention,
 and the hard 64-model capacity; this is not a playing-strength measurement.
 
 Validation: focused tests cover boundaries, deterministic allocation, promotion,
@@ -177,7 +344,7 @@ Unlike the earlier throughput-only revision below, this audit changes replay/run
 
 Use **one allocated RTX 6000 Pro** for the learner and the shared inference service. The CLI now defaults to `--device auto`: train, imitate, evaluate and preflight select one visible CUDA GPU when available, otherwise CPU. The `scripts/step5.py` entry point restricts visibility to the first job-visible GPU before importing Torch, so checkpoint RNG capture cannot initialize additional idle GPUs. An explicit inference override preserves the caller's device indices and visibility. `--device cuda` remains useful to fail explicitly if the lab GPU is unavailable. Demonstration generation and audit remain CPU jobs. Omit `--inference-devices`; even an explicit single-device list or `auto` with only one visible GPU now uses the direct service, with no multi-device router, second queue, or replica coordination. Multiple GPUs are an explicit override only.
 
-The lab presets keep **24 actor processes × 2 overlapped ordinary hosts**, 24 queued heavy tables, four search workers, the shared **60 CPU work slots / 64 allocated cores**, 16 replay readers, inference batch limit 64, 1 ms flush and 131,072 padded candidate cells. PPO/IL effective batch sizes, microbatches, precision and model architecture are unchanged. These are bounded concurrency limits, not a guarantee of 96 simultaneous search workers. There is no evidence here to justify larger batches or more CPU workers on the lab hardware.
+The lab presets keep **24 actor processes Ã— 2 overlapped ordinary hosts**, 24 queued heavy tables, four search workers, the shared **60 CPU work slots / 64 allocated cores**, 16 replay readers, inference batch limit 64, 1 ms flush and 131,072 padded candidate cells. PPO/IL effective batch sizes, microbatches, precision and model architecture are unchanged. These are bounded concurrency limits, not a guarantee of 96 simultaneous search workers. There is no evidence here to justify larger batches or more CPU workers on the lab hardware.
 
 The measured CPU changes apply to shared pipeline code:
 
@@ -335,14 +502,14 @@ After continuing **one committed iteration** with the existing command below, co
 
 The saved `results/selfplay-v2-70/report.json` records 320 ordinary games in **237.3 s**, inference forward elapsed time **38.0 s** across **33,324 batches**, mean batch **1.47 positions**, and replay preparation **41.3 s** with eight readers. Actor validation and encoding cost **539.4 / 128.0 s summed across overlapping actors**. These are historical host elapsed/CPU measurements, not current GPU kernel utilization. Current lab presets already use sixteen replay readers. Increasing batch capacity or filling 90 GB of VRAM cannot help a GPU waiting for observations from the rules engine.
 
-The encoder/output revision removes a duplicate full-board/choice fingerprint while keeping input validation, and packs neural outputs into one CUDA-to-host transfer instead of four/five separate transfers. The CPU path retains its cheaper zero-copy behavior. The six throughput changes below now keep **48 ordinary game lanes in 24 processes**, 24 queued heavy tables, four workers per search and 60 shared CPU slots under the known 64-core allocation. The 2M model and PPO batches stay unchanged. GPU routing accepts your **2–6 available RTX 6000 Pro GPUs**, concentrating sparse requests before activating additional replicas. The PPO learner stays on its selected GPU; its optimizer is not replicated.
+The encoder/output revision removes a duplicate full-board/choice fingerprint while keeping input validation, and packs neural outputs into one CUDA-to-host transfer instead of four/five separate transfers. The CPU path retains its cheaper zero-copy behavior. The six throughput changes below now keep **48 ordinary game lanes in 24 processes**, 24 queued heavy tables, four workers per search and 60 shared CPU slots under the known 64-core allocation. The 2M model and PPO batches stay unchanged. GPU routing accepts your **2â€“6 available RTX 6000 Pro GPUs**, concentrating sparse requests before activating additional replicas. The PPO learner stays on its selected GPU; its optimizer is not replicated.
 
 ### Six throughput changes (11 October)
 
 | Change | Active implementation and limits |
 |---|---|
 | Native simulator work | Separate authored ordinary/search workers fuse observation, legal choices and state transitions. Choices and known-wild summaries cache by revision. Rollback copies the old journal prefix only on failure, retaining its pre-mutation hash and restoration checks. Ordinary neural play batches at most 16 forced subchoices within the same player/turn, preserving every replay row and RNG draw. |
-| Double-buffered actors | Main lab presets use `processes: 24`, `hosts_per_process: 2`; `lab-small` uses 14 × 2. Two private host lanes overlap blocking native/inference IO, with separate policies, RNG and reply channels. This changes process layout, not the 48/28 concurrent game capacity. Heavy search remains 24 tables/four workers. |
+| Double-buffered actors | Main lab presets use `processes: 24`, `hosts_per_process: 2`; `lab-small` uses 14 Ã— 2. Two private host lanes overlap blocking native/inference IO, with separate policies, RNG and reply channels. This changes process layout, not the 48/28 concurrent game capacity. Heavy search remains 24 tables/four workers. |
 | Shared-memory transport | Each reply lane owns a bounded 2 MiB numeric slot (`shared_slot_bytes: 2097152`). Model, observer, revision, choice IDs, cancellation and deadlines remain checked metadata. Oversized batches use the original queue path, retaining every candidate. Slots are released at shutdown, including service failures. |
 | Demand-based GPU routing | `inference_routing: demand`, `replica_backlog: 32`. Requests favor the same frozen-model replica until pending demand warrants another GPU. Existing batch/candidate/flush bounds still apply. Models are frozen once on CPU and moved to a device lazily; additional visible GPUs need not become busy. |
 | Ready-leaf batching | Ready leaves from a private forest, including different frozen opponent models, share one transport submission. Services regroup by model and candidate size; other games/workers can join compatible batches. Observer-specific features remain separate. Shared deadlines, tree reservations, legality and teacher qualification remain enforced. |
@@ -413,7 +580,7 @@ That earlier review used source `fff450449f8fbceaa8c57cffcf826da006d53d44351c2fc
 
 Use the continuation command above from a committed iteration. The immediate previous throughput source and previously supported sources have explicit review receipts. The old checkpoint bytes, model tensors, Adam state, RNG, population, accepted best, v4 recovery window and counters remain preserved. Old-source uncommitted iterations still require recovery with their original source; this review does not relabel partial replay. Existing completed IL handoff remains supported.
 
-Verification: **65 focused checks passed; one CUDA-only check was skipped**. The suite includes 2→6 / 6→2 logical GPU restoration with mocked CUDA APIs, actual checkpoint/Adam/RNG continuation, a spawned CPU waiter released on abort, dead-reply and saturated-queue cleanup, partial-shard recovery, and native branch/chance/restore checks. An injected engine error after mutation rolled back to the exact saved checkpoint and allowed legal continuation. A two-game PPO smoke committed two optimizer steps; separate four-worker search turns completed **16/16 and 32/32** attempts without timeouts, with one qualified teacher label. Both worker preflight probes and frozen-bank/distribution hashes passed. Reports are under [the review artifact directory](../artifacts/recovery/post-throughput-review-20261011/). These are local CPU checks, not a real multi-GPU/Linux throughput benchmark or playing-strength qualification.
+Verification: **65 focused checks passed; one CUDA-only check was skipped**. The suite includes 2â†’6 / 6â†’2 logical GPU restoration with mocked CUDA APIs, actual checkpoint/Adam/RNG continuation, a spawned CPU waiter released on abort, dead-reply and saturated-queue cleanup, partial-shard recovery, and native branch/chance/restore checks. An injected engine error after mutation rolled back to the exact saved checkpoint and allowed legal continuation. A two-game PPO smoke committed two optimizer steps; separate four-worker search turns completed **16/16 and 32/32** attempts without timeouts, with one qualified teacher label. Both worker preflight probes and frozen-bank/distribution hashes passed. Reports are under [the review artifact directory](../artifacts/recovery/post-throughput-review-20261011/). These are local CPU checks, not a real multi-GPU/Linux throughput benchmark or playing-strength qualification.
 
 ### Verify throughput on the lab
 
@@ -433,7 +600,7 @@ If the inference queue is mostly empty and batches are tiny, improve actor/rules
 
 Initial throughput source fingerprint: `b883eac48cd8e01b1e197ec842ab33461da19aac82082cbe9a8d5466935c080d` (superseded by the correctness review above). **79 targeted checks passed; one CUDA-only IL check was skipped** on this laptop. Coverage includes private model/seat attribution, shared-memory bounds and failure cleanup, sparse/backlogged routing, exact replay preparation, fused native state/chance/restoration, fixed search allocations and checkpoint/Adam/RNG/IL continuation. Reviewed transitions accept the exact new preset execution layouts and preserve previously supported source upgrades. The [verification receipt](../artifacts/recovery/throughput-20261011/verification.json) records the scope.
 
-Two matched full native games, with alternating run order, preserved every observation/choice trace and final state/result. The optimized host took **18.57 vs 30.99 s** and **17.10 vs 26.95 s**, a **1.58–1.67×** speedup for that random-legal-play simulator workload. These compare fused RPCs/caching/forced-choice handling against the pinned R1 host; they are not a neural training or v4 search benchmark. See the [paired native results](../artifacts/recovery/throughput-smoke-20261011-a/native.json).
+Two matched full native games, with alternating run order, preserved every observation/choice trace and final state/result. The optimized host took **18.57 vs 30.99 s** and **17.10 vs 26.95 s**, a **1.58â€“1.67Ã—** speedup for that random-legal-play simulator workload. These compare fused RPCs/caching/forced-choice handling against the pinned R1 host; they are not a neural training or v4 search benchmark. See the [paired native results](../artifacts/recovery/throughput-smoke-20261011-a/native.json).
 
 A [two-game PPO smoke](../artifacts/recovery/throughput-smoke-20261011-b/report.json) exercised two host lanes, shared inference transport and streaming preparation, then committed two optimizer steps. Its two tiny shards did not finish preparing before collection ended, so this check demonstrates pipeline correctness rather than a replay-overlap speedup. [Two native NN turns](../artifacts/recovery/throughput-nn-turns-20261011/report.json) completed **16/16** and **32/32** attempts across four workers, without timeouts; the teacher supplied one qualified label and evaluation exported none. Whole-turn times were **10.81 / 17.83 s** in that small CPU fixture. Earlier turn timings were not an interleaved control, so do not treat their difference as a measured search speedup.
 
@@ -474,7 +641,7 @@ Verification: 86 targeted checks passed after affected reruns, one CUDA-only che
 
 ## Reward revision and best accepted model (9 October)
 
-This section supersedes the 7–8 October reward coefficients below. Active training defaults now use **`W + 0.10*P + 0.001*VP - min(0.005*N, 0.025)`**, where `N` counts insolvency events, not removed tiles. Official tiebreakers/shared wins, pairwise placement ties, undiscounted returns, linear uncapped VP and causal future-cost accounting are unchanged. PPO and NN search share the exact configured objective and reward fingerprint. A previously collected teacher distribution with different coefficients cannot train the new objective. There is no Pass, loan, build, sale or industry-specific reward.
+This section supersedes the 7â€“8 October reward coefficients below. Active training defaults now use **`W + 0.10*P + 0.001*VP - min(0.005*N, 0.025)`**, where `N` counts insolvency events, not removed tiles. Official tiebreakers/shared wins, pairwise placement ties, undiscounted returns, linear uncapped VP and causal future-cost accounting are unchanged. PPO and NN search share the exact configured objective and reward fingerprint. A previously collected teacher distribution with different coefficients cannot train the new objective. There is no Pass, loan, build, sale or industry-specific reward.
 
 ### Start again from completed IL
 
@@ -593,7 +760,7 @@ Use the original run/IL paths if yours differ, and retain any original `--config
 
 Read the active bank identity from `training/opponents/current.json`. Its five training styles use **1,000 ms per complete turn and four private root workers**, with K 4/2, guarded sibling Q and zero voluntary reply turns. The new worker implements the forest internally, sharing a CPU heuristic batching/cache queue instead of starting four separate policy processes. Advanced Pottery Variants's opponent identity remains evaluation-only; learner Pottery choices retain full legality and exploration support. Imitation supplies foundations; the mostly self-play curriculum establishes strength beyond the teachers.
 
-For a first dataset, 500â€“1,000 complete games gives independent train/validation/test setups and broad style coverage. Start smaller to verify throughput. New generation rotates the five admitted teachers. Existing audited heuristic manifests can be loaded with their immutable archived provenance; do not pass old neural replay to `demo-audit`.
+For a first dataset, 500Ã¢â‚¬â€œ1,000 complete games gives independent train/validation/test setups and broad style coverage. Start smaller to verify throughput. New generation rotates the five admitted teachers. Existing audited heuristic manifests can be loaded with their immutable archived provenance; do not pass old neural replay to `demo-audit`.
 
 ```sh
 python /data/not_backed_up/yxu209/ai-training/scripts/step5.py demo-generate --output /data/not_backed_up/yxu209/ai-training/artifacts/demonstrations/masked-24x4-tournament-v4 --games 1000
@@ -630,7 +797,7 @@ Monitor actual compute utilization in another terminal; a small network need not
 nvidia-smi --query-gpu=utilization.gpu,memory.used,memory.total --format=csv --loop=2
 ```
 
-**2. Evaluate the selected imitation model.** The same imitation run saves `initial.pt`, its random starting model, as a stable comparison. This command runs 16 games: two setups Ã— four candidate-seat rotations, against the random anchor and searched v4 in separate panels. Treat this as a development screen; beating random is not a strength qualification. Check VP, rank, sales, stranded tiles and Pottery opportunities against the v4 panel. Evaluation games never become imitation or PPO training data.
+**2. Evaluate the selected imitation model.** The same imitation run saves `initial.pt`, its random starting model, as a stable comparison. This command runs 16 games: two setups Ãƒâ€” four candidate-seat rotations, against the random anchor and searched v4 in separate panels. Treat this as a development screen; beating random is not a strength qualification. Check VP, rank, sales, stranded tiles and Pottery opportunities against the v4 panel. Evaluation games never become imitation or PPO training data.
 
 ```sh
 python /data/not_backed_up/yxu209/ai-training/scripts/step5.py --device cuda \
@@ -697,7 +864,7 @@ Twenty iterations is a pipeline/early-learning run (6,400 ordinary games), not a
 | Setting | Main lab preset |
 | --- | --- |
 | Ordinary collection | 320 games/iteration; 48 single-host actors on the 64-core preset |
-| Heavy collection | 24 queued tables Ã— 4 private workers; searched decisions share 60 active CPU slots |
+| Heavy collection | 24 queued tables Ãƒâ€” 4 private workers; searched decisions share 60 active CPU slots |
 | CPU allowance | Shared FIFO gate: 60 active work slots + 4 reserved cores; ordinary turns cost one slot, searched turns four; not OS affinity |
 | v4 teacher clock | v4 + Masked ISMCTS; 1-second shared turn deadline after admission; 4 private roots; K 4/2 and guarded heuristic Q. Completion/selection may retire late and is measured |
 | NN search | 12-second whole-turn teacher allowance after CPU admission, shared by both actions, subchoices and 4 private root workers; K 16/8, unbounded utility with fixed selection scale 1.2, new-root-information frontier, selection-only virtual loss 0.02, 2 pending paths / batch per replica |
@@ -718,10 +885,10 @@ Each NN seat in a **training teacher game** reserves exactly one seeded random r
 
 | Phase in `search.teaching.phases` | Reserved round |
 | --- | --- |
-| `canal_early` | Canal 1â€“4 |
-| `canal_late` | Canal 5â€“8 |
-| `rail_early` | Rail 1â€“6 |
-| `rail_late` | Rail 7â€“8 |
+| `canal_early` | Canal 1Ã¢â‚¬â€œ4 |
+| `canal_late` | Canal 5Ã¢â‚¬â€œ8 |
+| `rail_early` | Rail 1Ã¢â‚¬â€œ6 |
+| `rail_late` | Rail 7Ã¢â‚¬â€œ8 |
 
 Sampling uses the setup seed, sampling seed, absolute seat and independent phase streams. Policy RNG consumption, worker completion order and failed searches cannot change later reservations. The old `turn_interval` / `max_searches_per_seat` fields remain readable for compatibility and generic search/evaluation; training teacher games use these four reservations instead. An unproductive reservation is not redrawn or moved to another phase. A normal four-game collection therefore schedules 64 whole turns: 16 per phase across four seats per game.
 
@@ -750,7 +917,7 @@ PYTHONPATH=/data/not_backed_up/yxu209/ai-training/src python /data/not_backed_up
 
 For fewer resources, select `--config /data/not_backed_up/yxu209/ai-training/configs/step5/lab-small.json` before creating a new run. All active lab presets retain four NN search workers and now use the 12-second teacher allowance. The historical filename `lab-16x2.json` currently aliases the 24-table/four-worker preset. All v3/v4 heuristic presets still use one second. `recovery-smoke.json` is a compact local scaffold check with periodic teachers disabled by default. None of these is permission to migrate an old source-bound run in place.
 
-The smaller 32-core preset retains 28 ordinary actors. Heavy tables stay at the selected 24 Ã— 4 in the main preset, sharing the existing admission gate with ordinary games. Increasing ordinary actors supplies more concurrent neural requests; it does not change the v4 or NN search clocks. Keep the effective PPO batch and learning rate unchanged when comparing throughput. More GPU memory allocation alone is not a training improvement.
+The smaller 32-core preset retains 28 ordinary actors. Heavy tables stay at the selected 24 Ãƒâ€” 4 in the main preset, sharing the existing admission gate with ordinary games. Increasing ordinary actors supplies more concurrent neural requests; it does not change the v4 or NN search clocks. Keep the effective PPO batch and learning rate unchanged when comparing throughput. More GPU memory allocation alone is not a training improvement.
 
 ## Review of the first post-IL self-play run (6 October)
 
@@ -775,9 +942,9 @@ Value prediction improved on these training samples, and entropy did not collaps
 
 **PPO change:** lower LR from **3e-5 to 1e-5**; keep clip 0.2, target KL 0.01, two-epoch ceiling, entropy/value weights and rehearsal. The old 256-row probe allotted similar counts to very different phases: in iteration 0000, action choices represented 21,741 of 27,433 meaningful decisions (79%), but were underrepresented in that probe. This can hide drift in the common action phase; the logged full KL reached 0.02946 while the probe read 0.01024. The reports do not contain per-phase KL to attribute the entire gap to sampling. The new **2,048-row, proportional era/phase probe** represents the actual actor distribution, with the full final KL check retained. The rate is a conservative starting adjustment, not an optimized value. The reason to keep the guard is that PPO clipping does not itself bound the policy change; [Spinning Up's PPO documentation](https://spinningup.openai.com/en/latest/algorithms/ppo.html) describes KL-based early stopping.
 
-**Search/distillation change:** the four teacher games at iteration 0001 reached all **64 reserved turns** but produced only **one qualified label**, in early Canal. There were 14 completed rollouts against 790 interrupted rollouts; 14 turns timed out and 49 lacked sufficient coverage. The former update nevertheless sampled that one label eight times and trained its game-outcome critic each time: win loss fell **0.9903 â†’ 0.0004**, while VP loss worsened **0.1671 â†’ 0.2558**. The falling combined loss was one-point fitting, not evidence of better search or play. The revised policy-only update, diversity gate and reuse bound prevent this case. The longer 12-second shared allowance, two pending paths per replica and removal of duplicate replica fallback work aim to yield more completed evidence; they do not relax legality, hidden-information or continuation checks. Useful lab teacher coverage still needs measurement.
+**Search/distillation change:** the four teacher games at iteration 0001 reached all **64 reserved turns** but produced only **one qualified label**, in early Canal. There were 14 completed rollouts against 790 interrupted rollouts; 14 turns timed out and 49 lacked sufficient coverage. The former update nevertheless sampled that one label eight times and trained its game-outcome critic each time: win loss fell **0.9903 Ã¢â€ â€™ 0.0004**, while VP loss worsened **0.1671 Ã¢â€ â€™ 0.2558**. The falling combined loss was one-point fitting, not evidence of better search or play. The revised policy-only update, diversity gate and reuse bound prevent this case. The longer 12-second shared allowance, two pending paths per replica and removal of duplicate replica fallback work aim to yield more completed evidence; they do not relax legality, hidden-information or continuation checks. Useful lab teacher coverage still needs measurement.
 
-**Runtime:** CUDA was active. Mean ordinary inference batches were only 1.34 and 1.27 positions; collection dominated, while PPO took 13â€“21 seconds. Aggregate host/validation/legacy timings overlap, and host-reported neural forward time is not GPU utilization. The 1.84M model need not fill 90 GB of memory. Keep the existing actor/batch sizes for this comparison; do not increase them merely to allocate memory. Teacher collection plus update cost 114.3 seconds, or 12.24% of accounted ordinary-plus-search time. That recorded run used a 25% admission limit; the 6 October update raised it to 50%, and the current 7 October presets use **70%** at the user's request.
+**Runtime:** CUDA was active. Mean ordinary inference batches were only 1.34 and 1.27 positions; collection dominated, while PPO took 13Ã¢â‚¬â€œ21 seconds. Aggregate host/validation/legacy timings overlap, and host-reported neural forward time is not GPU utilization. The 1.84M model need not fill 90 GB of memory. Keep the existing actor/batch sizes for this comparison; do not increase them merely to allocate memory. Teacher collection plus update cost 114.3 seconds, or 12.24% of accounted ordinary-plus-search time. That recorded run used a 25% admission limit; the 6 October update raised it to 50%, and the current 7 October presets use **70%** at the user's request.
 
 Start a **new PPO run from the same completed IL run** after syncing the changed source/configs. Its source identity is explicitly included in the reviewed IL handoff allowlist; no demonstration regeneration or repeat imitation is needed. The older PPO run remains source/config-bound and cannot resume with changed settings. This command requests six short main-preset iterations (1,920 ordinary games), rather than a long campaign:
 
@@ -824,9 +991,9 @@ The six minibatch policy losses ranged from 1.437 to 1.812 and used different sa
 
 The learner remains weak: in the second iteration it won **0 of 128** games against three search-free v4 opponents, averaging **73.55 VP / 3.828 place**. Pure self-play averaged 69.84 VP. Those are incoming-policy collection diagnostics, before this iteration's PPO/distillation, with different trajectories from v1. They do not prove that the newly saved checkpoint regressed or improved. Pottery had 694 builds and no diversity warning. Keep the curriculum, exploration, rewards, model size and evaluation frequency unchanged; measure more than two early iterations before making strategic or strength claims.
 
-**Verification:** 35 distinct focused tests passed (37 executions, including two repeated checks). They cover exact schema/mutation rejection, bounded caches, cached-versus-rebuilt rehearsal producing identical PPO updates, teacher metrics, value-head protection, IL handoff and search scheduling. The [local validation benchmark](../artifacts/recovery/selfplay-v2-review-20261006/validation-benchmark.json) used the same 128 saved permitted positions with fresh caches over three repetitions: median **4.307 s â†’ 1.093 s (3.94Ã—)**. This is validation speed only, not a measured whole-training or lab speedup. A [two-game native CPU smoke](../artifacts/recovery/selfplay-v2-review-20261006/native/report.json) completed, verified exact R2 feature parity at 32 positions, reused replay caches, recorded process CPU, and ran five PPO updates. No GPU benchmark, strength tournament or long training campaign was launched.
+**Verification:** 35 distinct focused tests passed (37 executions, including two repeated checks). They cover exact schema/mutation rejection, bounded caches, cached-versus-rebuilt rehearsal producing identical PPO updates, teacher metrics, value-head protection, IL handoff and search scheduling. The [local validation benchmark](../artifacts/recovery/selfplay-v2-review-20261006/validation-benchmark.json) used the same 128 saved permitted positions with fresh caches over three repetitions: median **4.307 s Ã¢â€ â€™ 1.093 s (3.94Ãƒâ€”)**. This is validation speed only, not a measured whole-training or lab speedup. A [two-game native CPU smoke](../artifacts/recovery/selfplay-v2-review-20261006/native/report.json) completed, verified exact R2 feature parity at 32 positions, reused replay caches, recorded process CPU, and ran five PPO updates. No GPU benchmark, strength tournament or long training campaign was launched.
 
-**Continue the existing `selfplay-v2` run.** This review changed performance and reporting, while preserving the learning/search settings. The explicit `--resume-reviewed-source` path accepts only pinned source transitions, including the supplied original v2 source (`f85a8c99â€¦`, commit `2ee1bf9`). Signature fields must match exactly: config, data/IL receipts, rules/features, teacher bank and budgets, except for the subsequently requested **50% â†’ 70% search-wall limit** explicitly recorded in the review receipt. The approval is recorded in `configs/learning/selfplay-resume-sources.json`; this is not a general source/config-check bypass.
+**Continue the existing `selfplay-v2` run.** This review changed performance and reporting, while preserving the learning/search settings. The explicit `--resume-reviewed-source` path accepts only pinned source transitions, including the supplied original v2 source (`f85a8c99Ã¢â‚¬Â¦`, commit `2ee1bf9`). Signature fields must match exactly: config, data/IL receipts, rules/features, teacher bank and budgets, except for the subsequently requested **50% Ã¢â€ â€™ 70% search-wall limit** explicitly recorded in the review receipt. The approval is recorded in `configs/learning/selfplay-resume-sources.json`; this is not a general source/config-check bypass.
 
 Sync the revision to the lab, let any active training invocation finish, then run:
 
@@ -855,7 +1022,7 @@ Evidence: [`state.json`](../results/selfplay-v2-31/state.json), [`retention-hist
 
 ### Learning and playing behaviour
 
-| Measurement | First two iterations | Iterations 24â€“31 |
+| Measurement | First two iterations | Iterations 24Ã¢â‚¬â€œ31 |
 | --- | ---: | ---: |
 | Mean final-epoch value loss | 1.1568 | 0.9263 |
 | Mean final-epoch win loss | 1.1390 | 0.9130 |
@@ -866,15 +1033,15 @@ Evidence: [`state.json`](../results/selfplay-v2-31/state.json), [`retention-hist
 
 **Keep LR 1e-5, two PPO epochs, target KL 0.01, clip 0.2, entropy weight 0.005 and the existing batch sizes.** There is no exploding loss or KL overshoot trend in the continuation. Later iterations complete both epochs, with lower loss and a moderate change in policy entropy. Lowering LR again is unsupported; increasing it simply to fill the KL allowance risks accelerating an undesirable strategy. Win cross-entropy is not a playing-strength score, and the changing opponent mixture changes its difficulty.
 
-Against three search-free v4 opponents, the incoming learner improved from **77.30 VP / 3.703 average place / 2.73% win share** over iterations 2â€“5 (512 games) to **87.07 VP / 3.396 place / 7.81% win share** over iterations 24â€“29 (192 games). These are different training setups with a seat-balance defect described below, not a controlled head-to-head result. The last report's **95.3 VP / 2.85 place / 15% wins** covers only 20 games, mixing eight fast-v4 and twelve searched-v4 tables as the run crosses 10,000 games; it cannot establish a new win rate.
+Against three search-free v4 opponents, the incoming learner improved from **77.30 VP / 3.703 average place / 2.73% win share** over iterations 2Ã¢â‚¬â€œ5 (512 games) to **87.07 VP / 3.396 place / 7.81% win share** over iterations 24Ã¢â‚¬â€œ29 (192 games). These are different training setups with a seat-balance defect described below, not a controlled head-to-head result. The last report's **95.3 VP / 2.85 place / 15% wins** covers only 20 games, mixing eight fast-v4 and twelve searched-v4 tables as the run crosses 10,000 games; it cannot establish a new win rate.
 
-There is a late economic warning in pure self-play: mean VP falls from roughly 73â€“75 in iterations 16â€“23 to 66.34 in iteration 31. Comparing iterations 2 and 31, coal builds increase from **2.68 to 4.06 per seat**, sales decrease from **2.61 to 2.11**, development decreases from **5.57 to 3.73**, and liquidation decisions increase from **0.43 to 0.92**. Pottery remains near **one build per seat**, with no missing-Pottery warning. Rehearsal simultaneously decays from 0.0936 to 0.0008 and expires at 10,000 games. This correlation does not prove that forgetting IL caused the decline: stronger competition can also lower total VP. Keep the current reward and rehearsal schedule while checking the frozen IL comparison below; do not hard-code a coal penalty or force Pottery from these aggregate counts.
+There is a late economic warning in pure self-play: mean VP falls from roughly 73Ã¢â‚¬â€œ75 in iterations 16Ã¢â‚¬â€œ23 to 66.34 in iteration 31. Comparing iterations 2 and 31, coal builds increase from **2.68 to 4.06 per seat**, sales decrease from **2.61 to 2.11**, development decreases from **5.57 to 3.73**, and liquidation decisions increase from **0.43 to 0.92**. Pottery remains near **one build per seat**, with no missing-Pottery warning. Rehearsal simultaneously decays from 0.0936 to 0.0008 and expires at 10,000 games. This correlation does not prove that forgetting IL caused the decline: stronger competition can also lower total VP. Keep the current reward and rehearsal schedule while checking the frozen IL comparison below; do not hard-code a coal penalty or force Pottery from these aggregate counts.
 
 Only a four-game monitor at 6,400 games is recorded, and its outcome report is absent from this upload. It compared the candidate against a recent checkpoint. The supplied logs therefore do not establish post-update strength or retention of IL skill.
 
 ### Search teachers and runtime
 
-The 30 continued iterations collected **1,361 qualified teacher decisions from 1,920 reserved turns (70.9%)**, using 194 bounded distillation steps. Mean fixed-sample teacher KL improved **0.4024 â†’ 0.3573** after each update; this is fit to searched training labels, not a test-set result. Phase qualification was early Canal **395/480**, late Canal **369/480**, early Rail **308/480**, late Rail **289/480**. There were **413 timeouts**, 41 fallbacks and 102 insufficient-coverage turns. Failed/forced choices remained excluded. Keep four teacher games per due collection, the 320-game interval, maximum eight distillation steps, two uses per sample and all diversity/coverage guards. The user requested increasing the wall-time admission ceiling from **50% to 70%**; active lab/smoke presets and defaults now apply that one config change. It does not increase the 12-second turn clock or force spending 70% when the existing collection schedule needs less.
+The 30 continued iterations collected **1,361 qualified teacher decisions from 1,920 reserved turns (70.9%)**, using 194 bounded distillation steps. Mean fixed-sample teacher KL improved **0.4024 Ã¢â€ â€™ 0.3573** after each update; this is fit to searched training labels, not a test-set result. Phase qualification was early Canal **395/480**, late Canal **369/480**, early Rail **308/480**, late Rail **289/480**. There were **413 timeouts**, 41 fallbacks and 102 insufficient-coverage turns. Failed/forced choices remained excluded. Keep four teacher games per due collection, the 320-game interval, maximum eight distillation steps, two uses per sample and all diversity/coverage guards. The user requested increasing the wall-time admission ceiling from **50% to 70%**; active lab/smoke presets and defaults now apply that one config change. It does not increase the 12-second turn clock or force spending 70% when the existing collection schedule needs less.
 
 The latest iteration took **229.0 s collection + 41.8 s replay loading + 12.6 s PPO + 248.3 s search/distillation + 8.4 s cleanup**, about **540.4 s** overall. Search consumed **42.1%** of cumulative accounted ordinary-plus-search time. PPO preparation was 1.67 s, forward/backward 6.04 s and policy/KL measurement 4.43 s. Peak allocated CUDA memory was about **1.27 GB** (4.05 GB reserved); ordinary inference averaged **1.46 positions per batch**. Enlarging GPU batches or model size to fill VRAM will not fix the dominant simulation/search costs.
 
@@ -886,7 +1053,7 @@ The recorded **6.85 average Python actor cores** excludes Mono engine processes,
 2. **Retain the 12-second whole-turn budget, with 1.2 seconds reserved for retirement/merge/validation.** The old reserve was 0.15 seconds. In the last collection, individual finalization overruns reached 0.89 seconds and caused 14 timeouts despite completed search work. Training teachers now stop tree work at 10.8 seconds into the admitted turn. All workers and actions still share the one 12-second deadline; no extra allowance, retry or late-label acceptance is introduced. This trades a little simulation time for usable evidence; measure qualified Rail coverage and completed rollouts on the lab. Standalone search/evaluation clocks and the installed game AI are unaffected.
 3. **Use the fixed initial/IL checkpoint for the scheduled four-game monitor.** It remains every 6,400 games with the same seat rotations and cost. This gives a stable forgetting/progress alarm instead of comparing only neighbouring PPO generations. The broader population/legacy panel remains every 25,600 games. Existing saved monitor results are not rewritten.
 4. **Remove duplicate diagnostic board walks and measure replay preparation.** Overall diagnostics are combined from the already computed disjoint table-type summaries. Counts and weighted metrics are preserved; floating-point means can differ only by rounding. `utilization.replay_ingress` now reports reader-task CPU, overlapping worker time, read/validation, diagnostics, feature preparation, compaction and parent wall time. CPU totals explicitly exclude process startup/result serialization. Replay validation, legal choices, targets, features and generated-data formats are unchanged.
-5. **Allow the reviewed continuation from the supplied source `760778c9â€¦`.** The exact source transition and optional **`search_wall_fraction: 0.5 â†’ 0.7`** change are pinned in `configs/learning/selfplay-resume-sources.json`. All other config fields, model/data/IL contracts, opponents and checkpoint hashes must still match. The transition prints and records the budget change. Model weights, Adam/RNG, population, warm-up and scheduling counters are retained; this is not a restart from imitation.
+5. **Allow the reviewed continuation from the supplied source `760778c9Ã¢â‚¬Â¦`.** The exact source transition and optional **`search_wall_fraction: 0.5 Ã¢â€ â€™ 0.7`** change are pinned in `configs/learning/selfplay-resume-sources.json`. All other config fields, model/data/IL contracts, opponents and checkpoint hashes must still match. The transition prints and records the budget change. Model weights, Adam/RNG, population, warm-up and scheduling counters are retained; this is not a restart from imitation.
 
 ### Lab commands
 
@@ -915,15 +1082,15 @@ python /data/not_backed_up/yxu209/ai-training/scripts/step5.py --device cuda tra
 
 The lab's actual `state.json` chooses the latest committed generation. Keep the original IL run/manifest for lineage verification; imitation is not repeated. An active run or old-source unfinished next iteration remains protected by the existing lock and transition guards. Keep LR/search/batch settings fixed for this comparison. Assess the anchor result, per-seat legacy counts, Rail teacher coverage/timeouts, sales/liquidation trends and replay phase CPU before another tuning change. The fixes do not claim a measured playing-strength improvement.
 
-**Local verification:** 37 focused tests passed, covering the 70% admission calculation, allowed checkpoint continuation, seat balance, teacher deadlines, diagnostic parity and parallel replay ingestion. One real native teacher game reached all 16 reserved turns and qualified **14/16** samples, with **zero timeouts, deadline overruns or fallbacks**; two insufficient-coverage samples were excluded. Its 14 labels and single setup correctly failed the minimum-data gate for an optimizer update. This used a fresh CPU model and a small simulation cap, so it verifies execution and qualification rather than trained strength or lab GPU speed. A five-repeat comparison on two saved native games (641 decisions) preserved diagnostic outputs and reduced median diagnostic-only time from **13.33 ms to 6.53 ms** (2.04Ã—). Replay read/validation, IPC and the rest of training are excluded from that microbenchmark; no end-to-end speedup is claimed. Reports are under `artifacts/recovery/selfplay-v2-31-review-20261007/`.
+**Local verification:** 37 focused tests passed, covering the 70% admission calculation, allowed checkpoint continuation, seat balance, teacher deadlines, diagnostic parity and parallel replay ingestion. One real native teacher game reached all 16 reserved turns and qualified **14/16** samples, with **zero timeouts, deadline overruns or fallbacks**; two insufficient-coverage samples were excluded. Its 14 labels and single setup correctly failed the minimum-data gate for an optimizer update. This used a fresh CPU model and a small simulation cap, so it verifies execution and qualification rather than trained strength or lab GPU speed. A five-repeat comparison on two saved native games (641 decisions) preserved diagnostic outputs and reduced median diagnostic-only time from **13.33 ms to 6.53 ms** (2.04Ãƒâ€”). Replay read/validation, IPC and the rest of training are excluded from that microbenchmark; no end-to-end speedup is claimed. Reports are under `artifacts/recovery/selfplay-v2-31-review-20261007/`.
 
 ## Review of selfplay-v2-70 (7 October)
 
-Evidence: [`state.json`](../results/selfplay-v2-70/state.json), [`retention-history.json`](../results/selfplay-v2-70/retention-history.json), and the final [`report.json`](../results/selfplay-v2-70/report.json). This is **70 committed iterations / 22,400 ordinary games**, ending at `generation-0070.pt`. Folder/report indices are zero-based. Full reports cover iterations 0â€“67 and 69; iteration 68 supplies loss/teacher summaries in state but no full match/runtime report. The aggregates below therefore use nine full reports for the last ten iterations. They describe the incoming collection policy, before that iteration's PPO/distillation update.
+Evidence: [`state.json`](../results/selfplay-v2-70/state.json), [`retention-history.json`](../results/selfplay-v2-70/retention-history.json), and the final [`report.json`](../results/selfplay-v2-70/report.json). This is **70 committed iterations / 22,400 ordinary games**, ending at `generation-0070.pt`. Folder/report indices are zero-based. Full reports cover iterations 0Ã¢â‚¬â€œ67 and 69; iteration 68 supplies loss/teacher summaries in state but no full match/runtime report. The aggregates below therefore use nine full reports for the last ten iterations. They describe the incoming collection policy, before that iteration's PPO/distillation update.
 
 ### Findings and decisions
 
-| Metric | Iterations 16â€“23 | Iterations 60â€“69 |
+| Metric | Iterations 16Ã¢â‚¬â€œ23 | Iterations 60Ã¢â‚¬â€œ69 |
 | --- | ---: | ---: |
 | Mean last-epoch value loss | 0.9685 | 0.8756 |
 | Mean last-epoch policy KL | 0.00491 | 0.00398 |
@@ -940,15 +1107,15 @@ Evidence: [`state.json`](../results/selfplay-v2-70/state.json), [`retention-hist
 
 PPO is numerically controlled: the latest ten iterations have no KL early stops, their final mean KL is below the 0.01 guard, and their 40 steps/iteration complete at LR `1e-5`. Mean entropy declines from 1.84 to 1.67, but these are different legal-choice distributions, not an isolated entropy experiment. A smaller value loss only means better fitting the current targets; it does not establish stronger play. LR, two epochs, entropy/value coefficients, clipping and batches remain unchanged. The follow-up adds a bounded insolvency cost to the actor's win-share return, preserving official critic labels. Do not increase PPO update size to fill GPU memory.
 
-The worsening self-play economy warrants intervention, although aggregate self-play VP alone cannot distinguish regression from competition for resources. Against the **same searched-v4 opponent mode**, the learner's aggregate training win share changes from 8.13% over 160 seat-games in iterations 40â€“49 to 4.86% over 144 seat-games in the available final reports; VP changes from 83.44 to 79.71 and mean place from 3.34 to 3.56. Seeds differ and samples are small, so these are warning signs, not a controlled strength result. The latest individual iteration reaches only 42.01 self-play VP. No coal penalty, Pottery quota or reset to IL is introduced. Pottery stays fully legal and exploration-supported. The user-requested follow-up below adds the insolvency return separately.
+The worsening self-play economy warrants intervention, although aggregate self-play VP alone cannot distinguish regression from competition for resources. Against the **same searched-v4 opponent mode**, the learner's aggregate training win share changes from 8.13% over 160 seat-games in iterations 40Ã¢â‚¬â€œ49 to 4.86% over 144 seat-games in the available final reports; VP changes from 83.44 to 79.71 and mean place from 3.34 to 3.56. Seeds differ and samples are small, so these are warning signs, not a controlled strength result. The latest individual iteration reaches only 42.01 self-play VP. No coal penalty, Pottery quota or reset to IL is introduced. Pottery stays fully legal and exploration-supported. The user-requested follow-up below adds the insolvency return separately.
 
-Teacher reliability improved after the earlier retirement fix: the last ten collections qualify **552/640 reserved turns (86.25%)**, with **zero timeouts or deadline overruns**. Phase counts are 160/160 early Canal, 135/160 late Canal, 129/160 early Rail and 128/160 late Rail. There are 21 fallback and 66 insufficient-coverage events; failures still produce no labels. Mean same-collection teacher KL improves 0.3518 â†’ 0.3209, but the incoming policy already agrees with the teacher's top action about 95.9% of the time. This is training fit, not proof of search strength. More independent teaching and varied opponent models are preferable to repeatedly fitting these same sparse labels. Keep **12 seconds/four workers**, with the current **200-ms finalization reserve** (the historical review used 1.2 seconds), and keep the existing coverage gates and two-use limit.
+Teacher reliability improved after the earlier retirement fix: the last ten collections qualify **552/640 reserved turns (86.25%)**, with **zero timeouts or deadline overruns**. Phase counts are 160/160 early Canal, 135/160 late Canal, 129/160 early Rail and 128/160 late Rail. There are 21 fallback and 66 insufficient-coverage events; failures still produce no labels. Mean same-collection teacher KL improves 0.3518 Ã¢â€ â€™ 0.3209, but the incoming policy already agrees with the teacher's top action about 95.9% of the time. This is training fit, not proof of search strength. More independent teaching and varied opponent models are preferable to repeatedly fitting these same sparse labels. Keep **12 seconds/four workers**, with the current **200-ms finalization reserve** (the historical review used 1.2 seconds), and keep the existing coverage gates and two-use limit.
 
 The latest iteration spends **237.3 s in collection, 41.3 s in replay preparation, 11.6 s in PPO, 203.1 s in teacher collection/distillation and 8.5 s in cleanup**. Replay readers use about 7.02 CPU cores out of eight allocated; they run after collection. Increase lab `audit_workers` to **16**, preserving all validation and replay formats. Keep 48 ordinary actors, 24 queued heavy tables, four search workers and the 60-slot admission gate. Ordinary inference averages only 1.47 positions/batch. Peak allocated CUDA memory is about 1.07 GB, with 5.53 GB reserved. These are memory/host-phase metrics, not a measured GPU activity percentage; whole-server CPU includes Mono work absent from Python actor counters. No lab end-to-end speedup is claimed until measured.
 
 ### Historical population and paper comparison
 
-The uploaded pool contains only generations **0, 1, 61â€“70**. Its old selection repeatedly spaced an already-pruned list; middle generations gradually disappeared. Merely enlarging that same algorithm would not reliably preserve history.
+The uploaded pool contains only generations **0, 1, 61Ã¢â‚¬â€œ70**. Its old selection repeatedly spaced an already-pruned list; middle generations gradually disappeared. Merely enlarging that same algorithm would not reliably preserve history.
 
 AlphaGo Zero generated self-play with its best accepted network; AlphaZero used the continually updated latest network. Neither method uniformly sampled all historical opponent checkpoints. This distinction is explicit in the [AlphaZero paper](https://arxiv.org/html/1712.01815v1). A league mixing current and historical opponents is closer to [AlphaStar](https://storage.googleapis.com/deepmind-media/research/alphastar/AlphaStar_unformatted.pdf), which also used performance-based opponent sampling to address forgetting. Here a simple stratified mixture is used; noisy four-player table results are not converted into two-player PFSP ratings.
 
@@ -958,7 +1125,7 @@ Within historical tables, each opponent slot samples **25% initial/IL, 25% recen
 
 ### More teaching, with a bounded budget
 
-The clarified request is **150% of the previous search-time allowance**, not an impossible 150% share of total time. The cap rises from 70% to **7/9 â‰ˆ 77.78%** of accounted ordinary-plus-search time, equivalent to search using **3.5Ã— ordinary time**. The supplied run actually used about **41.24%**, so the old cap was not the bottleneck.
+The clarified request is **150% of the previous search-time allowance**, not an impossible 150% share of total time. The cap rises from 70% to **7/9 Ã¢â€°Ë† 77.78%** of accounted ordinary-plus-search time, equivalent to search using **3.5Ãƒâ€” ordinary time**. The supplied run actually used about **41.24%**, so the old cap was not the bottleneck.
 
 Active lab presets now schedule teaching every **160 ordinary games**, at most **two collections per iteration**, with **four games and at most eight updates per collection**. With the main 320-game iteration this usually means eight teacher games and at most 16 policy-only updates; samples are independent and each collection passes its own diversity/phase gate. Ordinary PPO still collects 320 games and updates once per iteration. Warm-up remains 640 games. Budget admission is rechecked after charging the first collection's actual time; insufficient/failed evidence never triggers extra collection retries. Aggregate `search.teaching` counts both collections, while `search.collections` keeps their distinct source models, thresholds, fit results and elapsed times. Aggregate fit numbers are sample-weighted per-collection comparisons, not one fixed held-out evaluation.
 
@@ -966,7 +1133,7 @@ At the observed timings, a second roughly 203-second teacher collection would in
 
 ### Continue generation 70 on the lab
 
-The exact source/config transition is pinned in `configs/learning/selfplay-resume-sources.json`. Checkpoint hashes, Adam/RNG, IL lineage, model/data contracts, population and all ordinary progress remain checked and preserved. The future teacher threshold changes **22,720 â†’ 22,560**, so the first new 320-game iteration can serve reservations at 22,560 and 22,720 without replaying past allocations. A partially collected old-source next iteration still blocks migration until recovered with its original source. Completed IL and generated-data formats stay compatible. Installed game files are unaffected.
+The exact source/config transition is pinned in `configs/learning/selfplay-resume-sources.json`. Checkpoint hashes, Adam/RNG, IL lineage, model/data contracts, population and all ordinary progress remain checked and preserved. The future teacher threshold changes **22,720 Ã¢â€ â€™ 22,560**, so the first new 320-game iteration can serve reservations at 22,560 and 22,720 without replaying past allocations. A partially collected old-source next iteration still blocks migration until recovered with its original source. Completed IL and generated-data formats stay compatible. Installed game files are unaffected.
 
 After syncing this revision, first take a small fixed-IL screen before the generation-70 full checkpoint can be retired. Its 16 games are a learning check, not promotion evidence. The uploaded monitor receipts name evaluations at generations 40 and 60, but their outcome reports were not supplied here, so their results are not inferred:
 
@@ -1016,7 +1183,7 @@ The 7 October implementation used a win-only baseline and subtracted future capp
 
 A v4 table contains one learner and three admitted searched-v4 opponents at **1 second/four workers per complete turn**. The percentages describe table composition, not the fraction of all player seats. The temporary schedule overrides the search-free warm-up while active. It retains the 24-table heavy queue and shared CPU admission gate; it does not raise the core allowance. Main 320-game iterations wholly within stage one contain 48 self-play, 80 historical and 192 v4 tables; stage two uses 144/80/96. Expect more collection time and fewer learner trajectories per iteration than the old 70/25/5 mix.
 
-`state.legacy_boost` persists the activation counter, final counter and configuration digest. `report.legacy_boost.stages` records both boundaries and actual games from each stage, including iterations that cross a boundary. Teacher, evaluation and IL games do not advance this schedule. It never rearms on restart. From the uploaded generation-70 state, boundaries are **22,400 â†’ 42,400 â†’ 52,400 ordinary games**. If the run has advanced, both boundaries move with the actual adoption counter; no absolute counter is hardcoded.
+`state.legacy_boost` persists the activation counter, final counter and configuration digest. `report.legacy_boost.stages` records both boundaries and actual games from each stage, including iterations that cross a boundary. Teacher, evaluation and IL games do not advance this schedule. It never rearms on restart. From the uploaded generation-70 state, boundaries are **22,400 Ã¢â€ â€™ 42,400 Ã¢â€ â€™ 52,400 ordinary games**. If the run has advanced, both boundaries move with the actual adoption counter; no absolute counter is hardcoded.
 
 Update the lab checkout, activate the existing conda environment, then continue from the same run and original IL source:
 
@@ -1049,7 +1216,7 @@ Lower self-play VP alongside fairly stable results against fixed v4 opponents do
 
 If the probe shows excessive distillation movement, compare a teacher-only learning-rate factor of **0.5** and a tentative **0.005 mean full-legal KL allowance across the entire iteration's distillation**, not a separate allowance for every collection. Add a small policy-anchor term only if needed. These are proposed starting values, not tuned defaults or a proof of improvement. Also report KL by era/phase so a low overall mean cannot hide Rail-specific movement. Any rejection must restore weights, Adam moments/step counters and RNG consistently, with at most two reduced-step retries; skipped updates must remain skipped rather than requesting more teacher games. A probe-based gate is an empirical bound on sampled states, not a universal trust-region guarantee.
 
-Compare this against unchanged distillation using matched fixed-IL, searched-v4 and older-NN panels. Preserve frozen collection policies and exact stored likelihoods; avoid live weight smoothing during collection. If testing EMA separately, initialize an evaluation copy at adoption and update only after a complete PPO-plus-distillation iteration. A proposed 10-iteration half-life gives decay `2**(-1/10) â‰ˆ 0.933`, with only the restart state and one candidate retained. [PyTorch's averaging utilities](https://docs.pytorch.org/docs/stable/generated/torch.optim.swa_utils.AveragedModel.html) provide the averaging mechanism.
+Compare this against unchanged distillation using matched fixed-IL, searched-v4 and older-NN panels. Preserve frozen collection policies and exact stored likelihoods; avoid live weight smoothing during collection. If testing EMA separately, initialize an evaluation copy at adoption and update only after a complete PPO-plus-distillation iteration. A proposed 10-iteration half-life gives decay `2**(-1/10) Ã¢â€°Ë† 0.933`, with only the restart state and one candidate retained. [PyTorch's averaging utilities](https://docs.pytorch.org/docs/stable/generated/torch.optim.swa_utils.AveragedModel.html) provide the averaging mechanism.
 
 **No additional soft-update algorithm is enabled in this revision.** The active changes are the requested insolvency return and two-stage opponent schedule. KL-anchored, bounded distillation is the first recommended experiment after measuring the missing policy/value movement, rather than assuming that smoother weights imply stronger play.
 
@@ -1175,15 +1342,15 @@ Each round prints collection, preparation, PPO, evaluation and cleanup elapsed t
 nvidia-smi --query-gpu=timestamp,utilization.gpu,utilization.memory,memory.used,power.draw --format=csv -l 5
 ```
 
-Use `top` to inspect the Python reader/actor and Mono host processes together, not only the learner PID. In the older `results/1.1` two-game smoke, CPU preparation took about 95â€“96% of PPO wall time and neural batches averaged about one position. That does not measure the present 48-actor preset. A local two-game replay check measured 3.69 s for serial read/preparation/diagnostics versus 1.97 s with two warmed readers; process startup made the first parallel pass 5.22 s. Readers persist across rounds to amortize startup. CUDA throughput must be measured on the lab; local checks use CPU.
+Use `top` to inspect the Python reader/actor and Mono host processes together, not only the learner PID. In the older `results/1.1` two-game smoke, CPU preparation took about 95Ã¢â‚¬â€œ96% of PPO wall time and neural batches averaged about one position. That does not measure the present 48-actor preset. A local two-game replay check measured 3.69 s for serial read/preparation/diagnostics versus 1.97 s with two warmed readers; process startup made the first parallel pass 5.22 s. Readers persist across rounds to amortize startup. CUDA throughput must be measured on the lab; local checks use CPU.
 
-The selected **v4 / patch 1.4.20** uses C# heuristic Masked ISMCTS, six advanced-opening styles, **two game workers** and the existing **2/5/12-second** options. Lab search remains at four workers. Its previous `smoke-7` screen tied 6â€“6 on wins and averaged 88.79 versus 84.71 VP against the economic control; the user then explicitly selected this bank and stopped further strength tests. This selection does not certify tournament superiority. Productive development resets intent age, and opening goals influence build/setup candidates. The [1.4.7 resource lifecycle](AI_EXECUTION_RESOURCES_1.4.7.md) remains in force. Trained NN deployment is a later qualification step.
+The selected **v4 / patch 1.4.20** uses C# heuristic Masked ISMCTS, six advanced-opening styles, **two game workers** and the existing **2/5/12-second** options. Lab search remains at four workers. Its previous `smoke-7` screen tied 6Ã¢â‚¬â€œ6 on wins and averaged 88.79 versus 84.71 VP against the economic control; the user then explicitly selected this bank and stopped further strength tests. This selection does not certify tournament superiority. Productive development resets intent age, and opening goals influence build/setup candidates. The [1.4.7 resource lifecycle](AI_EXECUTION_RESOURCES_1.4.7.md) remains in force. Trained NN deployment is a later qualification step.
 
 ## Historical rule-based comparison commands
 
 These commands document earlier S1/Masked diagnostics. They are not required for the v4 transfer or fresh training, and no further strength comparison was run for this selection.
 
-Run eight matched four-player games (two setups Ã— four seat rotations). Each table has one Balanced serial 1s/240-work opponent, one Balanced 1s/two-worker/720-total-work opponent, and two rotating serial S1 styles.
+Run eight matched four-player games (two setups Ãƒâ€” four seat rotations). Each table has one Balanced serial 1s/240-work opponent, one Balanced 1s/two-worker/720-total-work opponent, and two rotating serial S1 styles.
 
 ```sh
 python /data/not_backed_up/yxu209/ai-training/scripts/smoke-s1-training.py --tables 16 --setups 2 --output /data/not_backed_up/yxu209/ai-training/artifacts/s1-training-smoke/lab

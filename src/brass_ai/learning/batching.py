@@ -73,6 +73,17 @@ def collate(encoded, device='cpu'):
         np.stack([x.stable_to_relative for x in encoded])))
 
 
+def utility_budget(model, values):
+    """Validate each live request against its actual frozen model's reward cap."""
+    reward=getattr(model.config,'utility',None)
+    if reward is None:return None
+    cap=reward['insolvency']['max_cost']
+    budget=np.asarray([value if value is not None else [cap]*4 for value in values],dtype=np.float32)
+    require(budget.shape==(len(values),4) and np.isfinite(budget).all() and
+            (budget>=0).all() and (budget<=cap+1e-8).all(),'Invalid inference utility budget')
+    return budget
+
+
 def predict_encoded(model, encoded, device, candidate_limit, remaining=None):
     """Score ALL legal candidates, chunking a large position before softmax.
 
@@ -208,9 +219,8 @@ class Evaluator:
             if not live:
                 continue
             with torch.inference_mode():
-                remaining=None
-                if getattr(self.model.config,'utility',None) is not None:
-                    remaining=torch.tensor([r.remaining if r.remaining is not None else [self.model.config.utility['insolvency']['max_cost']]*4 for r,_ in live],device=self.device)
+                budget=utility_budget(self.model,[r.remaining for r,_ in live])
+                remaining=torch.from_numpy(budget).to(self.device) if budget is not None else None
                 probabilities,*predictions=predict_encoded(self.model,[e for _,e in live],self.device,self.max_candidate_cells,remaining)
             self.telemetry['batches'] += 1
             self.telemetry['positions'] += len(live)

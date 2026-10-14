@@ -14,7 +14,7 @@ import uuid
 import numpy as np
 import torch
 
-from brass_ai.learning.batching import collate, model_id, predict_encoded
+from brass_ai.learning.batching import collate, model_id, predict_encoded, utility_budget
 from brass_ai.learning.contracts import require
 from brass_ai.learning.features import Encoded
 from .encoding import PreparedEncoder
@@ -209,7 +209,7 @@ class InferenceService:
         self.metrics=dict(batches=0,positions=0,model_cache_hits=0,valid_candidate_cells=0,padded_candidate_cells=0,
             max_batch_positions=0,max_padded_candidate_cells=0,expired_requests=0,cancelled_requests=0,
             packed_output_batches=0,shared_requests=0,shared_replies=0,inline_requests=0)
-        self.on_complete=None
+        self.on_complete=self.on_failure=None
         self.thread=threading.Thread(target=self._serve,name='brass-inference',daemon=True)
 
     def register(self,model):
@@ -327,12 +327,8 @@ class InferenceService:
                 if not live: continue
                 with torch.inference_mode():
                     with self.timings.phase('inference.forward'):
-                        remaining=None
-                        if getattr(model.config,'utility',None) is not None:
-                            budget=np.asarray([f.get('remaining') if f.get('remaining') is not None else [model.config.utility['insolvency']['max_cost']]*4 for _,f in live],dtype=np.float32)
-                            require(budget.shape==(len(live),4) and np.isfinite(budget).all() and
-                                    (budget>=0).all() and (budget<=model.config.utility['insolvency']['max_cost']+1e-8).all(),'Invalid inference utility budget')
-                            remaining=torch.from_numpy(budget).to(self.device)
+                        budget=utility_budget(model,[f.get('remaining') for _,f in live])
+                        remaining=torch.from_numpy(budget).to(self.device) if budget is not None else None
                         predict=predict_packed if self.pack_outputs else predict_encoded
                         arrays=predict(model,[f['encoded'] for _,f in live],self.device,self.config['max_candidate_cells'],remaining)
                         if self.pack_outputs and max(len(f['encoded'].choice_ids) for _,f in live)<=self.config['max_candidate_cells']:
@@ -364,7 +360,12 @@ class InferenceService:
 
     def _failed(self,error):
         # Exception contexts may retain numpy views into shared slots.
-        self.error=RuntimeError(str(error))
+        # Later broken replies must not overwrite the original inference error.
+        with self.lock:
+            original=self.error if self.error is not None else RuntimeError(str(error))
+            # Publish to the pool before exposing a local failure to its router.
+            if self.on_failure is not None:self.on_failure(original)
+            self.error=original
         self.cpu.abort()
 
     def _reply(self,message,response):
@@ -442,6 +443,7 @@ class MultiInferenceService:
         self.routing=config.get('inference_routing','demand')
         require(self.routing in ('demand','round_robin'),'Unknown inference routing mode')
         self.router_stop=threading.Event();self.router_error=None;self.router_lock=threading.Lock()
+        self.failure_lock=threading.Lock();self.first_error=None
         self.loads=[0]*len(self.devices);self.dispatches=[0]*len(self.devices);self.affinity={}
         self.router_started=False
         try:
@@ -453,6 +455,7 @@ class MultiInferenceService:
                 self.services.append(_single_service(config,target,trace,profile_steps))
             self.cpu=self.services[0].cpu
             for service in self.services[1:]:service.cpu=self.cpu
+            for service in self.services:service.on_failure=self._record_failure
             if self.routing=='demand':
                 self.requests=self.mp.Queue(maxsize=4*max(64,config['processes']*config['hosts_per_process']))
                 for index,service in enumerate(self.services):
@@ -468,7 +471,13 @@ class MultiInferenceService:
     def models(self):return self.services[0].models
 
     @property
-    def error(self):return self.router_error or next((s.error for s in self.services if s.error is not None),None)
+    def error(self):return self.first_error or self.router_error or next((s.error for s in self.services if s.error is not None),None)
+
+    def _record_failure(self,error):
+        # Device order and later router/pipe errors must not choose the cause.
+        # Share one first-failure receipt across the router and every replica.
+        with self.failure_lock:
+            if self.first_error is None:self.first_error=RuntimeError(str(error))
 
     @property
     def metrics(self):
@@ -574,7 +583,7 @@ class MultiInferenceService:
                         self._complete(index,[message])
                         break
         except BaseException as error:
-            self.router_error=RuntimeError(str(error));self.cpu.abort()
+            self.router_error=RuntimeError(str(error));self._record_failure(error);self.cpu.abort()
 
     def report(self):
         reports=[s.report() for s in self.services]

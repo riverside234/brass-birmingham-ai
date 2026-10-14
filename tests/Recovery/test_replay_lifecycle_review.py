@@ -42,6 +42,23 @@ class ReplayLifecycleReviewTests(unittest.TestCase):
         pool.close(failed=True)
         self.assertEqual(events,['abort','terminate'])
 
+    def test_collection_surfaces_original_inference_error_after_admission_abort(self):
+        pool=self.pool()
+        pool.service.error=RuntimeError('Invalid inference utility budget')
+        secondary=ValueError('CPU admission aborted')
+        with patch.object(pool,'_collect',side_effect=secondary):
+            with self.assertRaisesRegex(ValueError,'Inference service failed: Invalid inference utility budget') as raised:
+                pool.collect([dict(index=0)])
+        self.assertIs(raised.exception.__cause__,secondary)
+        pool.service.cpu.abort.assert_called_once_with()
+
+    def test_user_interrupt_is_not_replaced_by_service_error(self):
+        pool=self.pool()
+        pool.service.error=RuntimeError('actor exited')
+        with patch.object(pool,'_collect',side_effect=KeyboardInterrupt):
+            with self.assertRaises(KeyboardInterrupt):pool.collect([dict(index=0)])
+        pool.service.cpu.abort.assert_called_once_with()
+
     def test_successful_collection_keeps_other_pools_alive(self):
         pool=self.pool();records=[dict(job=0)]
         with patch.object(pool,'_collect',return_value=records):

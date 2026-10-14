@@ -96,6 +96,14 @@ class InferenceFailureReviewTests(unittest.TestCase):
             self.assertTrue(endpoint.connection.closed)
             self.assertIsNone(endpoint._slot)
 
+    def test_first_inference_error_survives_later_broken_replies(self):
+        with inference.InferenceService(dict(EXECUTION), 'cpu') as service:
+            service._failed(ValueError('Invalid inference utility budget'))
+            service._failed(BrokenPipeError('actor exited'))
+            self.assertEqual(str(service.error), 'Invalid inference utility budget')
+            self.assertIsNone(service.error.__context__)
+            self.assertTrue(service.cpu.aborted.value)
+
     def test_saturated_replica_routing_is_interruptible(self):
         config = dict(EXECUTION, processes=1, hosts_per_process=1, inference_routing='demand')
         with patch.object(torch.cuda, 'is_available', return_value=True), \

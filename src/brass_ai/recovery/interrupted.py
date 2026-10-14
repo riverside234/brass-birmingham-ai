@@ -35,8 +35,11 @@ def archive_uncommitted_iteration(root, run, *, expected_iteration, apply=False)
         model, raw, _ = load_resume(root, run, state, state['signature'])
         optimizer = torch.optim.AdamW(model.parameters(), lr=state['signature']['config']['learning_rate'])
         resume_optimizer(raw, optimizer, restore_rng=False)
-        for entry in state.get('population', []) + [state['evaluation_anchor']] + (
-                [state['champion']] if state.get('champion') else []):
+        opponents=state.get('population', []) + [state['evaluation_anchor']] + (
+            [state['champion']] if state.get('champion') else [])
+        if 'champion_mix' in state:
+            opponents+=[state['champion_mix'][key] for key in ('anchor','previous')]
+        for entry in opponents:
             require(sha(safe(run, project_path(root, entry['path']))) == entry['sha256'],
                     'Live opponent/evaluation checkpoint changed')
         output = safe(run, run/f'generation-{expected_iteration+1:04d}.pt')

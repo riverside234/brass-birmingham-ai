@@ -346,12 +346,17 @@ class ActorPool:
     def collect(self,jobs,*,on_records=None):
         try:
             return self._collect(jobs,on_records=on_records)
-        except BaseException:
+        except BaseException as error:
             # Readers and other actor pools share this admission queue. A
             # failed actor may own slots or a queued ticket that will never be
             # released once its process is terminated; wake every waiter before
             # any enclosing executor starts waiting for its workers to exit.
             self.service.cpu.abort()
+            # Another actor may report only the resulting admission abort.
+            # Surface the service's original failure while retaining that
+            # actor traceback and preserving explicit user interruptions.
+            if isinstance(error,Exception) and self.service.error is not None:
+                raise ValueError('Inference service failed: '+str(self.service.error)) from error
             raise
 
     def _collect(self,jobs,*,on_records=None):

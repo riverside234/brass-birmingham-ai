@@ -73,14 +73,22 @@ class InsolvencyTests(unittest.TestCase):
         self.assertEqual(returns(rows,INSOLVENCY)[0],[.005,0,0])
 
     def test_repeated_events_cap_per_seat_not_per_tile_or_decision(self):
-        rows=[]
-        for n in range(1,8):
-            rows.extend([row(0,round=n),row(0,round=n,phase='debt',kind='liquidate',debts={0:8})])
-        costs,summary=returns(rows,INSOLVENCY)
-        self.assertEqual(summary[0]['events'],7);self.assertAlmostEqual(summary[0]['cost'],.025)
-        self.assertAlmostEqual(costs[0],.025);self.assertAlmostEqual(costs[1],.020)
-        self.assertEqual(costs[-4:],[0,0,0,0])
-        self.assertTrue(all(0<=c<=.02500001 for c in costs))
+        self.assertEqual(INSOLVENCY,dict(event_cost=.005,max_cost=.075))
+        # Preserve the historical five-event cap, and explicitly exercise the
+        # current seven-event and full fifteen-event costs across both eras.
+        for cap,count,total,after_first in ((.025,7,.025,.020),(.075,7,.035,.030),(.075,15,.075,.070)):
+            with self.subTest(cap=cap,events=count):
+                rows=[]
+                for n in range(count):
+                    phase=dict(round=n%8+1,era='CanalEra' if n<8 else 'RailEra')
+                    rows.extend([row(0,**phase),row(0,**phase,phase='debt',kind='liquidate',debts={0:8})])
+                costs,summary=returns(rows,dict(event_cost=.005,max_cost=cap))
+                self.assertEqual(summary[0]['events'],count);self.assertAlmostEqual(summary[0]['cost'],total)
+                self.assertAlmostEqual(costs[0],total);self.assertAlmostEqual(costs[1],after_first)
+                if cap==.025:self.assertEqual(costs[-4:],[0,0,0,0])
+                else:
+                    self.assertAlmostEqual(costs[-2],.005);self.assertAlmostEqual(costs[-1],0.)
+                self.assertTrue(all(0<=c<=cap+1e-8 for c in costs))
 
     def test_actor_return_changes_but_official_labels_and_replay_do_not(self):
         model,policy,game=onpolicy_debt();original=copy.deepcopy(game)

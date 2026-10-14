@@ -115,7 +115,10 @@ class ReviewTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError,'resume-reviewed-source'):check_signature(state,signature)
             bad=copy.deepcopy(signature);bad['config']['reward']['vp']=.002
             with self.assertRaisesRegex(ValueError,'unchanged'):check_signature(state,bad,True)
-            self.assertEqual(digest(config['search']['reward']),digest(state['signature']['config']['search']['reward']))
+            expected=copy.deepcopy(state['signature']['config']['search']['reward'])
+            self.assertEqual(expected['insolvency'],dict(event_cost=.005,max_cost=.025))
+            expected['insolvency']['max_cost']=.075
+            self.assertEqual(config['search']['reward'],expected)
 
     def test_generation60_fixture_restores_adam_and_counters_then_repeats_resume(self):
         from brass_ai.learning.model import ModelConfig
