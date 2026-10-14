@@ -84,7 +84,7 @@ implementation checks, not evidence of improved economic stability or strength.
 
 For the specifically reviewed generation-179 joint-7 run, restore generation
 160 before continuing. The tool cross-checks deterministic seed/context/teacher
-counters against the separately saved generation-170 state. It requires the
+counters against the separately saved generation-170 state. Strict mode requires the
 **original complete generation-0160.pt** with Adam/RNG plus all 64 target
 population/anchor models. JSON reports and weight-only `best.pt` are insufficient.
 It validates files before staging, archives the entire later run, and publishes
@@ -92,18 +92,41 @@ the restored files at the original run path without rewriting checkpoint bytes.
 The archived directory is evidence/rollback storage; its checkpoint run bindings
 still name the original path. No generation-160 partial replay is reused.
 
+The reported restore failure omitted 17 historical opponents, at generations
+23, 24, 33, 34, 75, 115, 146–151 and 153–157. It did **not** report the full
+generation-160 checkpoint as missing. `history` and `retention-history.json`
+retain metadata and metrics, not deleted model parameters. With the previous
+zero-hour quarantine, retired unpinned opponents can already be deleted.
+
+The user-approved **`--allow-reduced-population`** option permits only those
+reported missing opponents. It keeps at least **47 distinct verified models**,
+including the initial anchor and generation-160 champion, and still requires the
+complete learner checkpoint. Missing required files, extra missing generations,
+future models and invalid model identities remain errors. The original later
+run is archived before replacement; no future models fill the missing slots.
+The dropped identities and retained counts are recorded in `restart160.json`
+and `state.json` under `restart_origin.population_recovery`.
+
+Population capacity stays **64: 16 recent + 48 historical/anchor models**.
+Normal committed new models refill the pool without dropping available models
+while it is below capacity. Starting at 47, five distinct new commits give 52;
+17 give 64 (generation 177). Restarting does not reset this growth. Repeated
+identical models do not count as new entries. Once full, normal retention resumes.
+
 From the lab repository, inspect first (no training or run replacement):
 
 ```bash
-python scripts/joint7_restart160.py
+python scripts/joint7_restart160.py --allow-reduced-population
 ```
 
 If retention removed a required file, supply `--backup-run /path/to/old-run-backup`
 and/or `--checkpoint-backup /path/to/generation-0160.pt`. A missing or mismatched
-checkpoint stops recovery; optimizer state is never fabricated. Then:
+learner checkpoint stops recovery; optimizer state is never fabricated. Omit
+`--allow-reduced-population` to require all 64 original opponents. For the
+approved 47-model recovery, use:
 
 ```bash
-python scripts/joint7_restart160.py --apply && \
+python scripts/joint7_restart160.py --allow-reduced-population --apply && \
 python scripts/step5.py --config configs/step5/joint7-g150-gate72.json train \
   --run artifacts/step5/v4-selfplay-joint \
   --imitation-run artifacts/step5/v4-batch7-joint \
@@ -116,6 +139,11 @@ command. The generation check prevents accidentally continuing from 179. The
 local exported-state audit is `results/reviews/joint7-g0179/restart160-plan.json`;
 it explicitly records `applied: false` because lab checkpoint files are not
 available in the local workspace. No lab training was launched for this revision.
+
+Reduced-pool validation passed **nine focused tests**, including a real 47-model checkpoint restoration with
+exact learner bytes, Adam/RNG and archived future evidence preserved. A bounded
+commit simulation verifies 47→52→64 growth across state reloads, anchor retention,
+and the hard 64-model capacity; this is not a playing-strength measurement.
 
 Validation: focused tests cover boundaries, deterministic allocation, promotion,
 retention, resume and exact Adam/RNG preservation. The bounded CPU smoke executed

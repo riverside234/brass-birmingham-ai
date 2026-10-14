@@ -4,6 +4,8 @@ Default is a read-only check. --apply stages verified files, archives the curren
 run by rename, and publishes generation 160 at its ORIGINAL path. Checkpoint
 bytes (including Adam/RNG and fresh_run binding) are never rewritten. Exported
 JSON does not substitute for a missing full checkpoint or historical opponent.
+The explicit --allow-reduced-population option permits the 17 reported missing
+older opponents only; it retains at least 47 models and the configured 64 slots.
 """
 import argparse
 import copy
@@ -29,6 +31,7 @@ from brass_ai.step5.league import seeds_for,implementation_id,write_json
 EXPORT='results/v4-selfplay-joint-g0179-20261014T200020968013Z'
 TARGET_SHA='19c16fe4a7a7903d3ff338a59640bbd9defeeb735147fe09dfbde13910056b33'
 COUNTERS=('games_done','next_seed','next_search_games','context_counter','ordinary_seconds','search_seconds')
+REVIEWED_MISSING_GENERATIONS=frozenset((23,24,33,34,75,115,146,147,148,149,150,151,153,154,155,156,157))
 
 
 def verified_export(folder):
@@ -148,6 +151,39 @@ def resolve_models(root,run,state,*,backup_run=None,checkpoint_backup=None):
     return files,sorted(set(missing))
 
 
+def reduce_population(state,missing):
+    """Explicitly accept the reviewed missing opponents, never missing resume data.
+
+    Call only after resolve_models has validated every available file. The
+    configuration and immutable checkpoint history stay intact. Normal commits
+    replenish the pool with distinct models, up to the existing 64-model cap.
+    """
+    missing=set(missing);original=state['population'];cfg=state['signature']['config']['population']
+    require(state['iteration']==state['history'][-1]['generation']==160,'Reduced recovery is only for generation 160')
+    required=[state['history'][-1],state['evaluation_anchor'],state['champion']]
+    if 'champion_mix' in state:required.extend(state['champion_mix'][k] for k in ('anchor','previous'))
+    require(not missing.intersection(e['path'] for e in required),
+            'Reduced population cannot omit the full generation-160 checkpoint, anchor or required champion opponents')
+    require(missing<={e['path'] for e in original},'Only missing historical population files may be omitted')
+    dropped=[e for e in original if e['path'] in missing]
+    kept=[e for e in original if e['path'] not in missing]
+    require(all(e['generation'] in REVIEWED_MISSING_GENERATIONS for e in dropped),
+            'Additional missing opponents were not approved for this recovery')
+    require(cfg==dict(recent=16,anchors=48) and len(original)==64 and len(kept)>=47,
+            'Reduced recovery requires the original 64 slots and at least 47 retained models')
+    require(len({e['model_id'] for e in kept})==len(kept) and
+            all(e['generation']<=160 for e in kept),'Recovery cannot duplicate models or import future generations')
+    require({e['model_id'] for e in required}<={e['model_id'] for e in kept},
+            'Required learner/anchor/champion model missing from retained population')
+    recovery=dict(format='joint7-population-recovery/1.0.0',original_count=len(original),retained_count=len(kept),
+        target_capacity=64,population_config=copy.deepcopy(cfg),dropped=copy.deepcopy(dropped),
+        retained_generations=[e['generation'] for e in kept],distinct_models_to_full=64-len(kept),
+        refill='Normal committed distinct learner checkpoints; retain all available models until capacity 64',
+        scope='Explicit reduced historical-opponent pool; learner checkpoint, Adam/RNG and counters unchanged')
+    state['population']=kept
+    return recovery
+
+
 def publish(root,run,state,history,files,receipt):
     """Caller holds the original run lock. Both destinations are verified siblings."""
     require(digest(read(run/'state.json'))==receipt['source_state_digest'],'Live run advanced since the audited export')
@@ -175,6 +211,8 @@ def publish(root,run,state,history,files,receipt):
     receipt=dict(receipt,applied=True,archive=archive.relative_to(root).as_posix(),checkpoint_bytes_unchanged=True)
     state['restart_origin']=dict(archive=receipt['archive'],source_state_digest=receipt['source_state_digest'],
         target_checkpoint=copy.deepcopy(state['history'][-1]),receipt=(run/'restart160.json').relative_to(root).as_posix())
+    if 'population_recovery' in receipt:
+        state['restart_origin']['population_recovery']=copy.deepcopy(receipt['population_recovery'])
     write_json(staging/'state.json',state);write_json(staging/'retention-history.json',history)
     write_json(staging/'restart160.json',receipt)
     # Absolute resolved sibling paths are checked before either directory move.
@@ -201,6 +239,8 @@ def main():
     p.add_argument('--backup-run',type=Path,help='Read-only earlier full-run backup containing retired opponent files')
     p.add_argument('--checkpoint-backup',type=Path,help='Original full generation-0160.pt, exact reviewed SHA required')
     p.add_argument('--plan-only',action='store_true',help='Audit exported counters without claiming checkpoints exist')
+    p.add_argument('--allow-reduced-population',action='store_true',
+        help='Explicitly omit only the 17 reviewed missing older models; keep at least 47 and refill to the unchanged 64-model cap')
     p.add_argument('--apply',action='store_true');p.add_argument('--report',type=Path)
     a=p.parse_args();root=a.root.resolve();_,run=owned(root,a.run)
     state,history,receipt=reconstruct(project_path(root,a.evidence))
@@ -210,6 +250,8 @@ def main():
     check_signature(state,signature,reviewed=True)
     receipt.update(config_id=digest(config),ready=False,applied=False)
     require(not (a.plan_only and a.apply),'--plan-only cannot apply a restart')
+    require(not (a.plan_only and a.allow_reduced_population),
+            'Reduced population requires actual model verification; omit --plan-only for a read-only check')
     if not a.plan_only:
         require((run/'state.json').is_file(),'Actual lab run unavailable; report JSON alone cannot resume Adam/RNG')
         backup=a.backup_run.resolve() if a.backup_run else None
@@ -217,9 +259,13 @@ def main():
         with run_lock(run):
             require(digest(read(run/'state.json'))==receipt['source_state_digest'],'Live run differs from the generation-179 review')
             files,missing=resolve_models(root,run,state,backup_run=backup,checkpoint_backup=a.checkpoint_backup)
-            receipt.update(ready=not missing,missing=missing,verified_model_files=len(files))
+            blocking=list(missing)
+            if a.allow_reduced_population:
+                receipt['population_recovery']=reduce_population(state,missing)
+                blocking=[]
+            receipt.update(ready=not blocking,missing=missing,blocking_missing=blocking,verified_model_files=len(files))
             if a.apply:
-                require(not missing,'Cannot restore complete generation 160; missing files: '+', '.join(missing))
+                require(not blocking,'Cannot restore complete generation 160; missing files: '+', '.join(blocking))
                 receipt=publish(root,run,state,history,files,receipt)
     if a.report:write_json(a.report,receipt)
     print(json.dumps(receipt,indent=2))
