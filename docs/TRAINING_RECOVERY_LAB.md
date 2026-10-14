@@ -1,5 +1,9 @@
 # Fresh training in conda: selected v4 teachers and Masked ISMCTS NN
 
+**14 October explicit container-check revert:** [current behavior, measurements and continuation receipts](STEP5_CONTAINER_CHECK_REVERT_2026-10-14.md). The extra recursive scans from the [performance correctness audit](STEP5_PERFORMANCE_AUDIT_2026-10-14.md) are removed at the user's request. The known JSON-equivalent list/tuple cache-validation gap is accepted; schema validators, content hashes, attribution, finite-value checks and deadlines remain. Update source and both review registries together; training settings and search clocks are unchanged.
+
+**14 October CPU performance update:** [measurements, benchmark commands and exact continuation](STEP5_PERFORMANCE_2026-10-14.md). Request snapshots and public-history validation do less repeated Python work; reports now separate teacher collection/distillation and expose total iteration time. Search clocks and all training settings remain unchanged. Local CPU savings are measured; a complete single-GPU training speedup is not established.
+
 **14 October teacher crash fix:** [deadline-race repair and generation 170 recovery commands](INFERENCE_DEADLINE_RECOVERY_2026-10-14.md). `Request no longer live` at the final inference gate now retires search normally. The explicit recovery tool preserves unfinished iteration evidence before retrying from the committed checkpoint. Current training settings and search clocks are unchanged.
 
 **13 October self-play review:** [remaining bugs, repairs and continuation evidence](SELFPLAY_MAJOR_REVIEW_2026-10-13.md). Five confirmed issues are repaired in replay integrity, calibration cleanup, worker retirement, actor cache identity and population checkpoint reuse. Current search clocks and all Step 5 configurations are unchanged. Update source and review receipts together, then continue a committed run with its existing config and `--resume-reviewed-source`.

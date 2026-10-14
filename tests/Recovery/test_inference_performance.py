@@ -29,7 +29,7 @@ class InferencePerformanceTests(unittest.TestCase):
             self.assertEqual(set(hashed.call_args.args[0]),{'input','style','intent'})
             second=encoder.encode(view,choices,validated=True)
             self.assertIs(first,second)
-            self.assertEqual(hashed.call_count,3)  # validated path still hashes its current inputs.
+            self.assertEqual(hashed.call_count,3)  # input + context on the prevalidated path.
         self.assertEqual(boundary.checked_frames,1)
         for array in (first.state,first.actions,first.stable_to_relative):self.assertFalse(array.flags.writeable)
 

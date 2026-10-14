@@ -96,7 +96,7 @@ class TeacherReadinessReviewTests(unittest.TestCase):
              patch('brass_ai.recovery.teacher_collection.read_shards',return_value=[]), \
              patch('brass_ai.recovery.teacher_collection.collection_report',return_value=teaching), \
              patch('brass_ai.recovery.teacher_collection.distill_update',side_effect=trained) as train, \
-             patch('brass_ai.recovery.teacher_collection.time.monotonic',side_effect=[0.,200.]):
+             patch('brass_ai.recovery.teacher_collection.time.monotonic',side_effect=[0.,0.,200.,200.,200.,200.]):
             report,next_due,cursor,spent=collect_due(SOURCE_ROOT,SOURCE_ROOT/'artifacts/mock',SOURCE_ROOT/'artifacts/mock/iteration-0070',
                 cfg,state,{},model,None,service,heavy,done=960,cursor=18000000,ordinary_seconds=10000.,ordinary_game_seconds=1.)
         from brass_ai.step5.league import seeds_for
@@ -135,6 +135,14 @@ class TeacherReadinessReviewTests(unittest.TestCase):
         self.assertEqual(spent,160.);self.assertFalse(report['budget']['deferred']);self.assertTrue(calibration_ready(model))
         self.assertTrue(all(b['post_distill_calibration']['receipt']['ready'] for b in report['collections']))
         self.assertEqual([b['post_distill_calibration_seconds'] for b in report['collections']],[25.,25.])
+        self.assertEqual(report['timings'],dict(setup_seconds=0.,collection_seconds=80.,prepare_seconds=0.,
+            distill_seconds=20.,post_distill_calibration_seconds=50.,total_seconds=150.))
+        self.assertEqual(sum(b['elapsed_seconds'] for b in report['collections']),150.)
+        from brass_ai.recovery.history import compact
+        archived=compact(dict(search=report))['search']
+        self.assertEqual(archived['timings'],report['timings'])
+        self.assertEqual([b['timings'] for b in archived['collection_summaries']],
+                         [b['timings'] for b in report['collections']])
 
     def test_failed_calibration_fit_remains_unready_and_defers_remaining_collection(self):
         cfg,state,service,heavy,teaching,update,jobs=collection_fixtures.TeacherCollectionTests().fixture()
@@ -150,7 +158,7 @@ class TeacherReadinessReviewTests(unittest.TestCase):
              patch('brass_ai.recovery.teacher_collection.read_shards',return_value=[]), \
              patch('brass_ai.recovery.teacher_collection.collection_report',return_value=teaching), \
              patch('brass_ai.recovery.teacher_collection.distill_update',side_effect=trained) as train, \
-             patch('brass_ai.recovery.teacher_collection.time.monotonic',side_effect=[0.,175.,200.,200.]), \
+             patch('brass_ai.recovery.teacher_collection.time.monotonic',side_effect=[0.,0.,175.,175.,175.,175.,200.,200.]), \
              patch.object(SimpleNamespace(run=failed_fit),'run',side_effect=failed_fit) as callback:
             report,next_due,_,spent=collect_due(SOURCE_ROOT,SOURCE_ROOT/'artifacts/mock',SOURCE_ROOT/'artifacts/mock/iteration-0070',
                 cfg,state,{},model,None,service,heavy,done=960,cursor=18000000,ordinary_seconds=10000.,ordinary_game_seconds=1.,

@@ -1,7 +1,9 @@
 """Exact wire validation, caching independent subtrees by immutable content.
 
-The pinned schema still checks every new value. Only item traversal is split
-from the outer schema; array bounds, unknown fields and seat/hand checks remain.
+The pinned schema checks cache misses. Canonical JSON hashes intentionally do
+not distinguish equivalent lists and tuples on cache hits; that known gap is
+accepted to keep the fast paths free of additional recursive container scans.
+Array bounds, unknown fields and seat/hand checks remain in the validators.
 """
 from collections import OrderedDict
 import copy
@@ -73,6 +75,16 @@ class InputBoundary:
         with self.lock:
             self._remember(self.parts,key,self.part_limit);self.checked_parts+=1
 
+    def _history(self, history):
+        for event in history:
+            token = digest(event)
+            with self.lock: known = token in self.events
+            if not known:
+                validate('history_entry', event)
+                with self.lock:
+                    self._remember(self.events, token, self.event_limit)
+                    self.checked_events += 1
+
     def check(self, view, choices):
         key = digest(dict(view=view, choices=choices))
         with self.lock:
@@ -97,14 +109,12 @@ class InputBoundary:
             self._part('choice',choice,(branch or validator('choice')).validate)
         history = view['history']
         require(type(history) is list, 'Observation history must be an array')
-        for event in history:
-            token = digest(event)
-            with self.lock: known = token in self.events
-            if not known:
-                validate('history_entry', event)
-                with self.lock:
-                    self._remember(self.events, token, self.event_limit)
-                    self.checked_events += 1
+        # Public history usually grows by appending one event. Hash bounded
+        # chunks in the JSON encoder instead of rehashing every prior event in
+        # Python at every subchoice. Content keys still detect edits anywhere;
+        # misses use the same exact per-event validator and bounded caches.
+        for start in range(0, len(history), 32):
+            self._part('history_chunk', history[start:start+32], self._history)
         with self.lock:
             self._remember(self.frames, key, self.frame_limit)
             self.checked_frames += 1

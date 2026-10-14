@@ -337,7 +337,9 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                 summaries.append(report);summaries=summaries[-2:]
                 print(f'Recovery generation {iteration+1}: {done} games, {update["optimizer_steps"]} PPO steps; '
                       f'collect={load_began-began:.1f}s prepare={collected-load_began:.1f}s PPO={updated-collected:.1f}s '
+                      f'teacher={report["timings"]["search_and_distill_seconds"]:.1f}s '
                       f'eval={report["timings"].get("evaluation_seconds",0):.1f}s cleanup={report["timings"].get("cleanup_seconds",0):.1f}s; '
+                      f'total={report["timings"]["iteration_seconds"]:.1f}s; '
                       f'NN batch mean={report["utilization"]["mean_inference_batch"]:.2f}; '
                       f'LR={config["learning_rate"]:.1e} KL={update["epochs"][-1]["post_update_kl"]:.5f} '
                       f'value={update["epochs"][-1]["value"]:.4f}; '

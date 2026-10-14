@@ -28,6 +28,9 @@ def summarize(batches):
         collection=[r for b in batches for r in b['collection']],
         updates=[r for b in batches for r in b.get('updates',[])],
         collections=[{k:v for k,v in b.items() if k not in ('collection','updates')} for b in batches])
+    totals['timings']={key:sum(b.get('timings',{}).get(key,0.) for b in batches)
+                      for key in ('setup_seconds','collection_seconds','prepare_seconds','distill_seconds',
+                                  'post_distill_calibration_seconds','total_seconds')}
     for key in ('used_samples_by_phase','unused_samples_by_phase','sample_presentations_by_phase'):
         totals[key]={p:sum(b.get(key,{}).get(p,0) for b in batches) for p,_,_,_ in PHASES}
     for key in ('quality','learning_rates'):
@@ -113,11 +116,15 @@ def collect_due(root,run,directory,config,state,signature,model,optimizer,servic
                       f'{config["search"]["seconds"]:g}s per turn')
         print(f'Teacher collection {batch_index+1}/{due}: due at {next_search} ordinary games, '
               f'{len(jobs)} games, {budget_label}',flush=True)
+        collection_started=time.monotonic()
         records=heavy.collect(jobs)
+        collected=time.monotonic()
         games=read_shards([r['path'] for r in records],partition='train',receipts={r['path']:r.get('features') for r in records})
         teaching=collection_report(records,games)
+        prepared=time.monotonic()
         batch=distill_update(model,optimizer,games,config['update'],steps=config['distill_steps'],
                             weight=config['distill_weight'],quality=config.get('distillation'))
+        distilled=time.monotonic()
         if batch['updated'] and getattr(model.config,'utility',None) is not None and not calibration_ready(model) and recalibrate is not None:
             # The caller supplies only this iteration's fresh ordinary learner
             # targets, never teacher terminal outcomes. This bounded fit keeps
@@ -130,6 +137,10 @@ def collect_due(root,run,directory,config,state,signature,model,optimizer,servic
             state['teacher_work_cost']=dict(recipe=recipe,seconds=elapsed)
             estimate=max(estimate,1.25*elapsed)
         batch.update(collection=records,teaching=teaching,due_games=next_search,elapsed_seconds=elapsed,
+            timings=dict(setup_seconds=collection_started-began,collection_seconds=collected-collection_started,
+                         prepare_seconds=prepared-collected,distill_seconds=distilled-prepared,
+                         post_distill_calibration_seconds=batch.get('post_distill_calibration_seconds',0.),
+                         total_seconds=elapsed),
             teacher_model_id=identity,rollout_generations=[e['generation'] for e in rollout_entries])
         batches.append(batch)
         # Failed/insufficient teaching still consumes this collection's allocation.

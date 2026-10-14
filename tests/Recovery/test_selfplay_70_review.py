@@ -74,7 +74,8 @@ class TeacherCollectionTests(unittest.TestCase):
              patch('brass_ai.recovery.teacher_collection.read_shards',return_value=[]), \
              patch('brass_ai.recovery.teacher_collection.collection_report',return_value=teaching), \
              patch('brass_ai.recovery.teacher_collection.distill_update',side_effect=lambda *a,**kw:copy.deepcopy(update)) as train, \
-             patch('brass_ai.recovery.teacher_collection.time.monotonic',side_effect=[0.,200.,200.,400.]):
+             patch('brass_ai.recovery.teacher_collection.time.monotonic',
+                   side_effect=[0.,0.,200.,200.,200.,200.,200.,200.,400.,400.,400.,400.]):
             result=collect_due(SOURCE_ROOT,SOURCE_ROOT/'artifacts/mock',SOURCE_ROOT/'artifacts/mock/iteration-0070',
                 cfg,state,{},SimpleNamespace(config=SimpleNamespace(utility=cfg['search']['reward']),utility_calibration=dict(ready=True,reward_id=digest(cfg['search']['reward']))),None,service,heavy,done=960,cursor=18000000,
                 ordinary_seconds=ordinary,ordinary_game_seconds=1.)

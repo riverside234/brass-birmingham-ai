@@ -75,7 +75,7 @@ def compact(report):
     out['search']=scalars(search,('updated','reason','collection_count','optimizer_steps','teacher_rows','teacher_setups',
         'sample_presentations','max_observed_reuse','distinct_labels_used','unused_qualified_labels',
         'post_teacher_sampled_kl','post_teacher_kl_scope'))
-    for key in ('fit_before','fit_after','budget'):
+    for key in ('fit_before','fit_after','budget','timings'):
         out['search'][key]=scalars(search.get(key,{}),search.get(key,{}))
     out['search']['teaching_only_categorical_probe']=search.get('teaching_only_categorical_probe')
     for key in ('samples_by_phase','used_samples_by_phase','unused_samples_by_phase','sample_presentations_by_phase'):
@@ -85,6 +85,7 @@ def compact(report):
             'sample_presentations','max_observed_reuse','distinct_labels_used','unused_qualified_labels',
             'distill_batch_size','sample_presentation_cap','utility_calibration_invalidated','post_distill_calibration_seconds')),
         teacher_policy_drift=batch.get('teacher_policy_drift'),
+        timings=scalars(batch.get('timings',{}),batch.get('timings',{})),
         sample_usage={key:batch[key] for key in ('samples_by_phase','used_samples_by_phase','unused_samples_by_phase',
             'sample_presentations_by_phase') if key in batch},
         phases=batch.get('teaching',{}).get('phases',{}),

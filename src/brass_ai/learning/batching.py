@@ -19,6 +19,37 @@ from .contracts import compatibility, digest, finite_vector, require
 from .features import Encoder
 
 
+_INPUT_ATOMS = frozenset((str, int, float, bool, type(None)))
+
+
+def _snapshot_input(value, memo=None):
+    """Detach wire containers without deepcopy's per-scalar dispatch overhead.
+
+    Exact built-in types only: subclasses and non-JSON values retain deepcopy's
+    behavior, so copying never turns an invalid wire type into a valid one.
+    Memoization preserves aliases/cycles just as deepcopy does; validation and
+    the request's content digest still decide whether the snapshot is usable.
+    """
+    kind = type(value)
+    if kind in _INPUT_ATOMS:
+        return value
+    if memo is None:
+        memo = {}
+    key = id(value)
+    if key in memo:
+        return memo[key]
+    if kind is dict:
+        result = {}; memo[key] = result
+        for k, item in value.items():
+            result[_snapshot_input(k, memo)] = _snapshot_input(item, memo)
+        return result
+    if kind is list:
+        result = []; memo[key] = result
+        result.extend(_snapshot_input(item, memo) for item in value)
+        return result
+    return copy.deepcopy(value, memo)
+
+
 def model_id(model):
     value = hashlib.sha256(digest({'compatibility': compatibility(), 'model': model.config.to_dict()}).encode())
     for name, tensor in sorted(model.state_dict().items()):
@@ -83,8 +114,8 @@ class Request:
     def __post_init__(self):
         # The coordinator may advance/reuse its buffers while a request waits.
         # Snapshot the permitted inputs and bind the response to this snapshot.
-        object.__setattr__(self, 'view', copy.deepcopy(self.view))
-        object.__setattr__(self, 'choices', copy.deepcopy(self.choices))
+        object.__setattr__(self, 'view', _snapshot_input(self.view))
+        object.__setattr__(self, 'choices', _snapshot_input(self.choices))
         object.__setattr__(self, 'style', tuple(self.style))
         object.__setattr__(self, 'intent', tuple(self.intent))
         if self.remaining is not None:

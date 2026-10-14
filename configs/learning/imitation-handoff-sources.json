@@ -136,6 +136,23 @@
       "reason": "Handle inference deadline/cancellation races at the strict response acceptance gate as normal search interruption. Preserve deadlines, search budgets, recipes, model/feature/reward contracts, checkpoint weights, Adam/RNG, champion, population and counters. Explicit interrupted-iteration recovery archives partial evidence without adopting it or modifying the committed state; ordinary reviewed-source resume guards remain required.",
       "review_version": "inference-deadline-race/1.0.0",
       "review_report": "docs/INFERENCE_DEADLINE_RECOVERY_2026-10-14.md"
+    },
+    {
+      "implementation": "6446834c236ef81c720c1f166a5f281798c64a2a4c7cba9419382e18531dc4ad",
+      "learning_compatibility": "c349e816f2e301ea2a3b438902059cffe868f48e131f7c120691d37cd1c409d2",
+      "reason": "Reduce CPU input work with exact-type detached request snapshots and content-keyed public-history chunks; add teacher component/total iteration timings. Preserve original strict schemas, mutation checks, privacy, deadline retirement, completed-only search backups and qualification; preserve all search clocks, CPU budgets, worker counts, learning configuration, model/feature/reward contracts and IL lineage. Exact committed weights, Adam/RNG, population, champion and counters continue; incompatible partial data remains rejected. Old derived feature caches require authoritative replay revalidation.",
+      "review_version": "step5-cpu-input-performance/1.0.0",
+      "review_report": "docs/STEP5_PERFORMANCE_2026-10-14.md"
+    },
+    {
+      "implementation": "c45e7b5338ad4ce4367ec42cbb2723135e1a0f23c302b2ec0aa4e0d4c9717c2c",
+      "learning_compatibility": "c349e816f2e301ea2a3b438902059cffe868f48e131f7c120691d37cd1c409d2",
+      "reason": "Validation cache correctness repair preserves completed IL model, features, supervised loss, data and checkpoint contracts. Keep explicit original IL lineage. Same-run PPO continuation restores its own optimizer and population."
+    },
+    {
+      "implementation": "c3e45029ffbbfab1d3a0410d4cd5eb597ff7c3275ede907882132393cdcadcc4",
+      "learning_compatibility": "c349e816f2e301ea2a3b438902059cffe868f48e131f7c120691d37cd1c409d2",
+      "reason": "Explicitly accepted list/tuple cache-validation gap restores previous hash paths; completed IL weights, features, loss, data and checkpoint contracts are unchanged. Preserve original IL lineage; same-run PPO continuation restores its own optimizer and population."
     }
   ]
 }
