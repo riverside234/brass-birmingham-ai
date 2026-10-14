@@ -121,6 +121,7 @@ def compact(report):
         'inference_batches','inference_positions','padding_fraction','actor_phase_seconds',
         'inference_phase_deltas','replay_ingress','scope')}
     out['selfplay_incumbent']=report.get('selfplay_incumbent')
+    out['selfplay_opponents']=report.get('selfplay_opponents')
     out['historical_opponents']=report.get('historical_opponents')
     out['optimizer_resume']=report.get('optimizer_resume')
     return out

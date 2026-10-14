@@ -31,6 +31,7 @@ def parser():
     initialization.add_argument('--from-run', help='Rejected: only this fresh run can resume its own checkpoints')
     initialization.add_argument('--imitation-run', help='Completed fresh standalone imitate run; starts PPO with its selected weights and a new optimizer')
     run.add_argument('--iterations', type=int, default=1)
+    run.add_argument('--expected-generation',type=int,help='Refuse to train unless the committed starting generation matches')
     run.add_argument('--resume-reviewed-source',action='store_true',
                      help='Continue this same PPO run across a pinned source/budget review; keep optimizer/counters')
     run.add_argument('--demonstrations',help='Audited heuristic manifest for fresh in-run imitation and rehearsal')
@@ -168,6 +169,7 @@ def main(argv=None):
                 config['rehearsal_manifest']=a.demonstrations
             result = train(root, a.run, config, iterations=a.iterations, device=a.device, initial=a.initial,
                            mono=a.mono, from_run=a.from_run,imitation_run=a.imitation_run,resume_reviewed_source=a.resume_reviewed_source,
+                           expected_generation=a.expected_generation,
                            inference_devices=inference_devices)
             result.pop('summaries', None)
         elif a.command == 'evaluate':

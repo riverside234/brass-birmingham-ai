@@ -153,6 +153,21 @@
       "implementation": "c3e45029ffbbfab1d3a0410d4cd5eb597ff7c3275ede907882132393cdcadcc4",
       "learning_compatibility": "c349e816f2e301ea2a3b438902059cffe868f48e131f7c120691d37cd1c409d2",
       "reason": "Explicitly accepted list/tuple cache-validation gap restores previous hash paths; completed IL weights, features, loss, data and checkpoint contracts are unchanged. Preserve original IL lineage; same-run PPO continuation restores its own optimizer and population."
+    },
+    {
+      "implementation": "9b7dcf9e1ea59602bca328a2c094a12944995265d248d9856760293cef4d4099",
+      "learning_compatibility": "c349e816f2e301ea2a3b438902059cffe868f48e131f7c120691d37cd1c409d2",
+      "reason": "Champion rollout and explicit PPO/search insolvency-cap revision leave completed IL data, supervised loss, model architecture and checkpoint formats unchanged. Same-run PPO resumes its own Adam/RNG and preserves lineage."
+    },
+    {
+      "implementation": "201a2b00d5e5c1c8485cfa26fd2d3e062375d510a4bbae74257dba99e54b6e9d",
+      "learning_compatibility": "c349e816f2e301ea2a3b438902059cffe868f48e131f7c120691d37cd1c409d2",
+      "reason": "Champion rollout and explicit PPO/search insolvency-cap revision leave completed IL data, supervised loss, model architecture and checkpoint formats unchanged. Same-run PPO resumes its own Adam/RNG and preserves lineage."
+    },
+    {
+      "implementation": "699bab353343458523eda073f07172ec4e70f679e4e1d1595c7d052a2d78e61c",
+      "learning_compatibility": "c349e816f2e301ea2a3b438902059cffe868f48e131f7c120691d37cd1c409d2",
+      "reason": "Training-only phase clock revision to 12/16/20/20 seconds leaves completed fresh IL weights, data, loss and checkpoint contracts unchanged. Same-run PPO continuation remains separately pinned and reviewed."
     }
   ]
 }

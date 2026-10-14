@@ -18,6 +18,7 @@ from brass_ai.learning.model import FourSeatNet,ModelConfig
 from brass_ai.recovery import teacher_schedule as schedule
 from brass_ai.recovery.config import (TEACHER_TIME_BUDGET,TEACHER_TIME_BUDGET_V1,TEACHER_WORK_BUDGET,
     TEACHER_PHASE_TIME_BUDGET_V1,archived_phase_time_budget_config,
+    TEACHER_PHASE_TIME_BUDGET_V2,archived_early_rail_time_budget_config,teacher_time_seconds,
     UPDATE_V21,SEARCH_WALL_FRACTION,time_budget_config,archived_time_budget_config,
     teacher_work_budget_config,teacher_search_config,validate_config)
 from brass_ai.recovery.history import compact
@@ -40,7 +41,7 @@ class PhaseClockTests(unittest.TestCase):
             self.clock.now=200.;view,choices=self.view(phase)
             self.policy.admit_teacher_turn(view['context'],self.rng)
             current=self.policy.teacher_states[self.rng]['current']
-            seconds={'canal_early':12.,'canal_late':12.,'rail_early':16.,'rail_late':24.}[phase]
+            seconds={'canal_early':12.,'canal_late':16.,'rail_early':20.,'rail_late':20.}[phase]
             self.assertEqual(current['deadline'],200.+seconds)
             self.assertIsNone(self.policy.select_batch([(view,choices[:1],self.rng)])[0][2])
             future=copy.deepcopy(view);future['context'].update(phase='continuation',revision=1,actions_remaining=1)
@@ -56,11 +57,11 @@ class PhaseClockTests(unittest.TestCase):
         self.assertEqual(len(self.policy.calls),4);self.assertIsNone(report['seconds_per_turn'])
         self.assertEqual(report['seconds_per_phase'],TEACHER_TIME_BUDGET['seconds_per_phase'])
         counts=report['phases']['rail_late']
-        self.assertEqual((counts['allocated_seconds'],counts['completed_searches'],counts['qualified_samples']),(24.,1,1))
+        self.assertEqual((counts['allocated_seconds'],counts['completed_searches'],counts['qualified_samples']),(20.,1,1))
         self.assertEqual((counts['legal_root_actions'],counts['visited_root_actions'],counts['revisited_root_actions']),(3,2,2))
 
-    def test_four_workers_share_rail_deadlines(self):
-        for phase,seconds in (('rail_early',16.),('rail_late',24.)):
+    def test_four_workers_share_phase_deadlines(self):
+        for phase,seconds in (('canal_late',16.),('rail_early',20.),('rail_late',20.)):
             with self.subTest(phase=phase):self.check_worker_deadlines(phase,seconds)
 
     def check_worker_deadlines(self,phase,seconds):
@@ -121,9 +122,10 @@ class PhaseConfigTests(unittest.TestCase):
 
     def test_collection_cost_and_phase_schema(self):
         cfg=read(SOURCE_ROOT/'configs/step5/lab.json')
-        self.assertEqual(schedule.estimate_collection(cfg,5.),1305.) # 5 * (4*(12+12+16+24) + 5)
+        self.assertEqual(schedule.estimate_collection(cfg,5.),1385.) # 5 * (4*(12+16+20+20) + 5)
+        self.assertEqual(teacher_time_seconds(TEACHER_TIME_BUDGET),20.)
         missing=dict(cfg);missing.pop('teacher_work_budget')
-        self.assertEqual(schedule.estimate_collection(missing,5.),1305.)
+        self.assertEqual(schedule.estimate_collection(missing,5.),1385.)
         self.assertEqual(schedule.estimate_collection(dict(cfg,teacher_work_budget=TEACHER_TIME_BUDGET_V1),5.),985.)
         for phase in TEACHER_TIME_BUDGET['seconds_per_phase']:
             broken=copy.deepcopy(TEACHER_TIME_BUDGET);del broken['seconds_per_phase'][phase]
@@ -132,7 +134,7 @@ class PhaseConfigTests(unittest.TestCase):
             broken=copy.deepcopy(TEACHER_TIME_BUDGET);broken['seconds_per_phase']['rail_late']=value
             with self.assertRaises(ValueError):teacher_work_budget_config(broken)
 
-    def test_early_rail_upgrade_preserves_archived_receipts_and_custom_settings(self):
+    def test_phase_upgrades_preserve_archived_receipts_and_custom_settings(self):
         cfg=read(SOURCE_ROOT/'configs/step5/lab.json')
         prior=dict(cfg,teacher_work_budget=copy.deepcopy(TEACHER_PHASE_TIME_BUDGET_V1))
         original=copy.deepcopy(prior)
@@ -140,6 +142,12 @@ class PhaseConfigTests(unittest.TestCase):
         self.assertEqual(archived_phase_time_budget_config(prior),prior)
         uniform=dict(prior,teacher_work_budget=TEACHER_TIME_BUDGET_V1,search_games=4,search_wall_fraction=.5)
         self.assertEqual(archived_phase_time_budget_config(uniform),prior)
+        preceding=dict(prior,teacher_work_budget=copy.deepcopy(TEACHER_PHASE_TIME_BUDGET_V2))
+        preceding_original=copy.deepcopy(preceding)
+        self.assertEqual(archived_early_rail_time_budget_config(uniform),preceding)
+        self.assertEqual(archived_early_rail_time_budget_config(prior),preceding)
+        self.assertEqual(archived_early_rail_time_budget_config(preceding),preceding)
+        self.assertEqual(time_budget_config(preceding),cfg);self.assertEqual(preceding,preceding_original)
         numeric=dict(prior,search_wall_fraction=.3)
         self.assertEqual(time_budget_config(numeric),dict(cfg,search_wall_fraction=.3))
         custom=copy.deepcopy(prior);custom['teacher_work_budget']['seconds_per_phase']['rail_early']=18.
@@ -274,6 +282,26 @@ class EarlyRailResumeTests(CurrentTeacherResumeTests):
         _,state,new,_,_=self.fixture();prior=state['signature']
         old=copy.deepcopy(prior);old['implementation']=CurrentTeacherResumeTests.previous_implementation
         old['config'].update(teacher_work_budget=TEACHER_TIME_BUDGET_V1,search_games=4,search_wall_fraction=.5)
+        self.assertTrue(check_signature(dict(state,signature=old),prior,True))
+        self.assertTrue(check_signature(state,new,True))
+        self.assertTrue(check_signature(dict(state,signature=old),new,True))
+        with self.assertRaises(ValueError):
+            check_signature(dict(state,signature=old),dict(prior,config=new['config']),True)
+        changes={k for k in prior['config'] if prior['config'][k]!=new['config'][k]}
+        self.assertEqual(changes,{'teacher_work_budget'})
+
+
+class RevisedPhaseResumeTests(CurrentTeacherResumeTests):
+    previous_implementation='201a2b00d5e5c1c8485cfa26fd2d3e062375d510a4bbae74257dba99e54b6e9d'
+    previous_budget=TEACHER_PHASE_TIME_BUDGET_V2
+    previous_games=5
+    previous_fraction=None
+
+    def test_historical_early_rail_receipt_cannot_approve_new_clocks(self):
+        from brass_ai.recovery.resume import check_signature
+        _,state,new,_,_=self.fixture();prior=state['signature']
+        old=copy.deepcopy(prior);old['implementation']=EarlyRailResumeTests.previous_implementation
+        old['config']['teacher_work_budget']=copy.deepcopy(TEACHER_PHASE_TIME_BUDGET_V1)
         self.assertTrue(check_signature(dict(state,signature=old),prior,True))
         self.assertTrue(check_signature(state,new,True))
         self.assertTrue(check_signature(dict(state,signature=old),new,True))

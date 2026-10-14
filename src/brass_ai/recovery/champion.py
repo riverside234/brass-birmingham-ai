@@ -48,6 +48,8 @@ def initialize(root,run,state):
         state['champion_gate']=dict(next_games=(state['games_done']//interval+1)*interval,
             accepted_games=0,accepted_gate=None,recent=[])
         write_json(run/'state.json',state)
+    from .champion_mix import initialize as initialize_mix
+    if initialize_mix(root,run,state):write_json(run/'state.json',state)
     publish_best(root,run,state)
 
 
@@ -214,6 +216,8 @@ def schedule(root,run,state,service,actor):
         from .retention import slim_checkpoint
         existing=next((e for e in state.get('population',[]) if e['model_id']==candidate['model_id']),None)
         state['champion']=slim_checkpoint(root,run,candidate,existing)
+        from .champion_mix import enabled as mix_enabled,promoted
+        if mix_enabled(config):promoted(state,incumbent)
         gate.update(accepted_games=done,accepted_gate=receipt)
     gate['next_games']=(done//cfg['every_games']+1)*cfg['every_games']
     gate['recent']=(gate['recent']+[receipt])[-16:]

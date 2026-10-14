@@ -25,13 +25,16 @@ NN_WORK_BUDGET = dict(contract='nn-turn-work/1.0.0',mode='simulations',
 TEACHER_TIME_BUDGET_V1 = dict(contract='teacher-turn-time/1.0.0',mode='time',seconds_per_turn=12.0)
 TEACHER_PHASE_TIME_BUDGET_V1 = dict(contract='teacher-turn-time/1.1.0',mode='time',
     seconds_per_phase=dict(canal_early=12.0,canal_late=12.0,rail_early=12.0,rail_late=24.0))
-TEACHER_TIME_BUDGET = dict(contract='teacher-turn-time/1.1.0',mode='time',
+TEACHER_PHASE_TIME_BUDGET_V2 = dict(contract='teacher-turn-time/1.1.0',mode='time',
     seconds_per_phase=dict(canal_early=12.0,canal_late=12.0,rail_early=16.0,rail_late=24.0))
+TEACHER_TIME_BUDGET = dict(contract='teacher-turn-time/1.1.0',mode='time',
+    seconds_per_phase=dict(canal_early=12.0,canal_late=16.0,rail_early=20.0,rail_late=20.0))
 LEGACY_TIME_BUDGET = dict(contract='legacy-opponent-turn-time/1.0.0',mode='time',seconds_per_turn=1.0)
 NN_TIME_BUDGET = dict(contract='nn-turn-time/1.0.0',mode='time',seconds_per_turn=12.0)
 ARCHIVED_TIME_CONFIG_MIGRATION = 'step5-whole-turn-time/1.0.0'
 ARCHIVED_PHASE_TIME_CONFIG_MIGRATION = 'step5-phase-teacher-time/1.0.0'
-TIME_CONFIG_MIGRATION = 'step5-phase-teacher-time/1.1.0'
+ARCHIVED_EARLY_RAIL_TIME_CONFIG_MIGRATION = 'step5-phase-teacher-time/1.1.0'
+TIME_CONFIG_MIGRATION = 'step5-phase-teacher-time/1.2.0'
 
 
 def time_budget(value):
@@ -133,10 +136,18 @@ def current_work_budget(value,default):
 
 def time_budget_config(config):
     """Explicit active-recipe upgrade; same-run signature changes require review."""
-    result=archived_phase_time_budget_config(config)
+    result=archived_early_rail_time_budget_config(config)
     # Upgrade only the exact preceding default, preserving custom phase clocks.
-    if result['teacher_work_budget']==TEACHER_PHASE_TIME_BUDGET_V1:
+    if result['teacher_work_budget']==TEACHER_PHASE_TIME_BUDGET_V2:
         result['teacher_work_budget']=copy.deepcopy(TEACHER_TIME_BUDGET)
+    return result
+
+
+def archived_early_rail_time_budget_config(config):
+    """Keep the preceding 12/12/16/24 migration's receipts reproducible."""
+    result=archived_phase_time_budget_config(config)
+    if result['teacher_work_budget']==TEACHER_PHASE_TIME_BUDGET_V1:
+        result['teacher_work_budget']=copy.deepcopy(TEACHER_PHASE_TIME_BUDGET_V2)
     return result
 
 
@@ -201,9 +212,25 @@ EVALUATION_SCHEDULE = dict(enabled=True, monitor_every_games=6400, broader_every
 LEGACY_BUDGET = dict(role='lab', seconds=1.0, search_workers=4, global_workers=60, work_multiplier=1)
 LEGACY_OPPONENTS = dict(search_free_until_games=10000)
 IMITATION = dict(manifest=None,epochs=10,patience=2,min_epochs=3,learning_rate=1e-4)
-INSOLVENCY = dict(event_cost=.005,max_cost=.025)
+INSOLVENCY = dict(event_cost=.005,max_cost=.075)
+CHAMPION_OPPONENTS = dict(contract='staged-champion-opponents/1.0.0',stage_iterations=5,max_champion_opponents=2)
+CHAMPION_MIX_CONFIG_MIGRATION = 'step5-staged-champion-opponents/1.0.0'
 LEGACY_BOOST = dict(stages=[dict(games=20000,selfplay=15,historical=25,legacy=60),
                           dict(games=10000,selfplay=45,historical=25,legacy=30)])
+
+
+def champion_mix_config(config):
+    """Reviewed upgrade of the preceding default; keep custom reward recipes."""
+    result=copy.deepcopy(config)
+    if result.get('champion',{}).get('enabled'):
+        result.setdefault('champion_opponents',copy.deepcopy(CHAMPION_OPPONENTS))
+    if result.get('insolvency')==dict(event_cost=.005,max_cost=.025):
+        old=result.get('search',{}).get('reward')
+        if old is not None:
+            require(old['insolvency']==result['insolvency'],'Search/learner insolvency differs')
+            old['insolvency']=copy.deepcopy(INSOLVENCY)
+        result['insolvency']=copy.deepcopy(INSOLVENCY)
+    return result
 
 
 def positive(value, name, integer=False):
@@ -323,6 +350,15 @@ def validate_config(config):
     if 'champion' in config:
         fields.add('champion')
         champion_config(config['champion'])
+    if 'champion_opponents' in config:
+        fields.add('champion_opponents')
+        mix=config['champion_opponents']
+        require(set(mix)==set(CHAMPION_OPPONENTS) and mix['contract']==CHAMPION_OPPONENTS['contract'],
+                'Invalid champion opponent mixture')
+        require(type(mix['stage_iterations']) is int and mix['stage_iterations']>0 and
+                type(mix['max_champion_opponents']) is int and mix['max_champion_opponents'] in (1,2),
+                'Champion rollout requires positive stages and a one/two opponent limit')
+        require(config.get('champion',{}).get('enabled'),'Champion mixture needs champion selection')
     if 'reward' in config:
         fields.add('reward')
         from .utility import reward_spec

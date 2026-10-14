@@ -212,7 +212,7 @@ class TeacherScheduleTests(unittest.TestCase):
             self.assertEqual((cfg['search_games'],cfg['distill_steps'],cfg['search']['seconds'],cfg['execution']['search_workers_per_turn']),(5,8,12.,4))
             self.assertEqual((cfg['search']['pending_paths'],cfg['search']['batch_size']),(2,2))
             self.assertEqual(cfg['legacy_budget']['seconds'],1.)
-            self.assertEqual(schedule.estimate_collection(cfg,5.),1305.) # 5 games * (4*(12+12+16+24) + 5)
+            self.assertEqual(schedule.estimate_collection(cfg,5.),1385.) # 5 games * (4*(12+16+20+20) + 5)
         self.assertAlmostEqual(schedule.search_allowance(100,0,.5),100.)
         self.assertAlmostEqual(schedule.search_allowance(100,30,.5),70.)
         self.assertEqual(schedule.search_allowance(100,960,.5),0.)

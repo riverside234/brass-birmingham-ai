@@ -51,9 +51,13 @@ def check_signature(state, signature, reviewed=False):
             expected = dict(previous['config'], **{k: v['to'] for k, v in changes.items()})
             migrations=transition.get('config_migrations',([transition['config_migration']] if 'config_migration' in transition else []))
             from .config import (TIME_CONFIG_MIGRATION,time_budget_config,
+                                 CHAMPION_MIX_CONFIG_MIGRATION,champion_mix_config,
+                                 ARCHIVED_EARLY_RAIL_TIME_CONFIG_MIGRATION,archived_early_rail_time_budget_config,
                                  ARCHIVED_PHASE_TIME_CONFIG_MIGRATION,archived_phase_time_budget_config,
                                  ARCHIVED_TIME_CONFIG_MIGRATION,archived_time_budget_config)
             handlers={TIME_CONFIG_MIGRATION:time_budget_config,
+                      CHAMPION_MIX_CONFIG_MIGRATION:champion_mix_config,
+                      ARCHIVED_EARLY_RAIL_TIME_CONFIG_MIGRATION:archived_early_rail_time_budget_config,
                       ARCHIVED_PHASE_TIME_CONFIG_MIGRATION:archived_phase_time_budget_config,
                       ARCHIVED_TIME_CONFIG_MIGRATION:archived_time_budget_config}
             for migration in migrations:
@@ -74,11 +78,27 @@ def load_resume(root, run, state, signature, *, device='cpu', reviewed=False):
     path = safe(run, project_path(root, entry['path']))
     require(sha(path) == entry['sha256'], 'Snapshot changed')
     model, raw = load_checkpoint(path, device=device)
-    from .utility import reward_spec
+    from .utility import reward_spec,cap_upgrade
     from brass_ai.learning.utility_model import utility_config
     expected=ModelConfig.preset(signature['config']['model_size'])
-    require(model.config in (expected,utility_config(expected,reward_spec(signature['config'])))
-            and raw['training'].get('fresh_run') and project_path(root, raw['training']['fresh_run']) == run,
+    target_reward=reward_spec(signature['config'])
+    architecture_ok=model.config in (expected,utility_config(expected,target_reward))
+    upgrading=cap_upgrade(getattr(model.config,'utility',None),target_reward)
+    if upgrading:
+        require(model.config==utility_config(expected,model.config.utility),'Reward upgrade architecture differs')
+        # The original reward must be bound either to the reviewed source we
+        # are leaving or to an exact, pinned transition on this same checkpoint.
+        known={digest(state['signature']):state['signature']}
+        for transition in reversed(state.get('source_transitions',[])):
+            target=known.get(transition['to_signature'])
+            if target is None or transition['checkpoint']!=entry:continue
+            origin=transition['from_signature']
+            check_signature(dict(state,signature=origin),target,reviewed=True)
+            known[digest(origin)]=origin
+        architecture_ok=any(reward_spec(s['config'])==model.config.utility for s in known.values())
+        require(architecture_ok,'Checkpoint reward upgrade has no reviewed origin')
+        model._reviewed_cap_upgrade=True
+    require(architecture_ok and raw['training'].get('fresh_run') and project_path(root, raw['training']['fresh_run']) == run,
             "Resume must use this run's residual checkpoint")
     require(raw['model_id'] == entry['model_id'] and raw['step'] == entry['generation'] == state['iteration'],
             'Resume checkpoint generation/model identity differs')
@@ -106,6 +126,7 @@ def load_resume(root, run, state, signature, *, device='cpu', reviewed=False):
         verified = {entry['path']}
         frozen_entries=state.get('population', []) + [state['evaluation_anchor']]
         if state.get('champion') is not None:frozen_entries.append(state['champion'])
+        if 'champion_mix' in state:frozen_entries.extend(state['champion_mix'][k] for k in ('anchor','previous'))
         for frozen in frozen_entries:
             if frozen['path'] in verified:
                 continue
@@ -176,6 +197,10 @@ def commit_transition(run, state, signature):
     from .config import TIME_CONFIG_MIGRATION,time_budget_config
     if signature['config']==time_budget_config(previous['signature']['config']):
         updated['source_transitions'][-1]['config_migration']=TIME_CONFIG_MIGRATION
+    from .config import CHAMPION_MIX_CONFIG_MIGRATION,champion_mix_config
+    if (champion_mix_config(previous['signature']['config'])!=previous['signature']['config'] and
+            signature['config']==champion_mix_config(time_budget_config(previous['signature']['config']))):
+        updated['source_transitions'][-1]['config_migration']=CHAMPION_MIX_CONFIG_MIGRATION
     from .curriculum import activate_boost
     activate_boost(updated,signature['config'])
     if 'legacy_boost' in updated and 'legacy_boost' not in previous:

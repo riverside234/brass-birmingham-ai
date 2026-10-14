@@ -15,7 +15,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'src'))
 from brass_ai.bank import read, sha
 from brass_ai.learning.checkpoint import resume_optimizer
 from brass_ai.learning.contracts import LAB_ROOT, compatibility, digest, project_path, require
-from brass_ai.recovery.config import time_budget_config, validate_config
+from brass_ai.recovery.config import time_budget_config, champion_mix_config, validate_config
 from brass_ai.recovery.demonstrations import completed_imitation
 from brass_ai.recovery.resume import apply_optimizer_config, load_resume
 from brass_ai.recovery.retention import owned, run_lock, link
@@ -36,7 +36,7 @@ def inspect(root, run, config, evidence_path=None):
     for key in ('history','population','champion','next_seed','context_counter','next_search_games',
                 'ordinary_seconds','search_seconds','legacy_boost'):
         require(state.get(key)==evidence.get(key),f'Exported generation-{generation} {key} differs')
-    config=time_budget_config(config);validate_config(config)
+    config=champion_mix_config(time_budget_config(config));validate_config(config)
     signature=dict(state['signature'],config=config,implementation=implementation_id())
     require(signature['compatibility']==compatibility(),'Learning contracts changed')
     require(read(root/'training/opponents/pool.json')['training']==signature['legacy_pool'],'Opponent bank changed')

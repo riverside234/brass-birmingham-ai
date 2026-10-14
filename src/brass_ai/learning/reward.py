@@ -11,7 +11,7 @@ COEFFICIENTS = dict(win=1.0, placement=.10, vp=.001)
 
 def specification(coefficients=None, insolvency=None):
     result=dict(version=VERSION, **(COEFFICIENTS if coefficients is None else coefficients),
-                insolvency=dict(event_cost=.005,max_cost=.025) if insolvency is None else dict(insolvency))
+                insolvency=dict(event_cost=.005,max_cost=.075) if insolvency is None else dict(insolvency))
     validate(result)
     return result
 

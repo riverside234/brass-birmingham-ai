@@ -1,4 +1,4 @@
-"""Bounded native phase searches; paired 12/24-second late-Rail positions.
+"""Bounded native phase searches with a 12-second late-Rail baseline.
 
 Uses observed positions from complete ordinary training replays, never edits the
 engine state. The separate authored five-game update checks sample accounting;

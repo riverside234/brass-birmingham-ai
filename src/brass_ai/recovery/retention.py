@@ -181,7 +181,7 @@ def _references(root,run):
         if '.retention-trash' in p.parts: continue
         d=read(p)
         if d.get('format') in ('step5-recovery-league/2.1.0','step5-recovery-league/2.2.0'):
-            selected={k:d.get(k) for k in ('resume','population','origin','evaluation_anchor','pins','champion')}
+            selected={k:d.get(k) for k in ('resume','population','origin','evaluation_anchor','pins','champion','champion_mix')}
             selected['accepted_gate']=d.get('champion_gate',{}).get('accepted_gate')
             cfg=d.get('signature',{}).get('config',{})
             selected['datasets']=[cfg.get('rehearsal_manifest'),cfg.get('imitation',{}).get('manifest')]
@@ -269,8 +269,8 @@ def update_population(root,run,state,config=POPULATION):
     available=dict(committed)
     # A frozen champion may outlive the bounded population. Its cache receipt
     # remains authoritative if unchanged weights later re-enter the population.
-    champion=state.get('champion')
-    if champion and champion.get('weights_only'):committed.setdefault(champion['model_id'],champion)
+    for champion in (state.get('champion'),state.get('champion_mix',{}).get('previous')):
+        if champion and champion.get('weights_only'):committed.setdefault(champion['model_id'],champion)
     for e in state['history']:
         path=project_path(root,e['path'])
         if path.exists(): available[e['model_id']]=e

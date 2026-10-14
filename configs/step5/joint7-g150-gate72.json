@@ -116,7 +116,7 @@
       "vp": 0.001,
       "insolvency": {
         "event_cost": 0.005,
-        "max_cost": 0.025
+        "max_cost": 0.075
       }
     },
     "utility_scale": 1.2
@@ -172,7 +172,7 @@
   "search_collections_per_iteration": 2,
   "insolvency": {
     "event_cost": 0.005,
-    "max_cost": 0.025
+    "max_cost": 0.075
   },
   "legacy_boost": {
     "stages": [
@@ -211,14 +211,19 @@
     "mode": "time",
     "seconds_per_phase": {
       "canal_early": 12.0,
-      "canal_late": 12.0,
-      "rail_early": 16.0,
-      "rail_late": 24.0
+      "canal_late": 16.0,
+      "rail_early": 20.0,
+      "rail_late": 20.0
     }
   },
   "legacy_opponent_work_budget": {
     "contract": "legacy-opponent-turn-time/1.0.0",
     "mode": "time",
     "seconds_per_turn": 1.0
+  },
+  "champion_opponents": {
+    "contract": "staged-champion-opponents/1.0.0",
+    "stage_iterations": 5,
+    "max_champion_opponents": 2
   }
 }

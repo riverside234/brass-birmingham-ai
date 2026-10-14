@@ -1,5 +1,6 @@
 """Explicit checkpoint extension and bounded, head-only return calibration."""
 import copy
+from dataclasses import replace
 import torch
 
 from brass_ai.learning.contracts import digest,require
@@ -12,11 +13,25 @@ MIGRATION='four-seat-utility-extension/1.0.0'
 def reward_spec(config):return specification(config['reward'],config['insolvency']) if 'reward' in config else None
 
 
+def cap_upgrade(previous,current):
+    if not isinstance(previous,dict) or not isinstance(current,dict):return False
+    expected=copy.deepcopy(previous)
+    if expected.get('insolvency')!=dict(event_cost=.005,max_cost=.025):return False
+    expected['insolvency']=dict(event_cost=.005,max_cost=.075)
+    return expected==current
+
+
 def migrate(model,optimizer,spec):
     if spec is None:return None
     if getattr(model.config,'utility',None) is not None:
-        require(model.config.utility==spec,'Checkpoint reward differs; explicit reward migration required')
-        return None
+        if model.config.utility==spec:return None
+        require(getattr(model,'_reviewed_cap_upgrade',False) and cap_upgrade(model.config.utility,spec),
+                'Checkpoint reward differs; explicit reward migration required')
+        before=model.config.to_dict()
+        model.config=replace(model.config,utility=copy.deepcopy(spec))
+        model.utility_calibration=None;model._reviewed_cap_upgrade=False
+        return dict(version='insolvency-cap-extension/1.0.0',from_config=before,to_config=model.config.to_dict(),
+                    preserved='All weights, Adam moments/steps and RNG; fresh ordinary utility calibration required')
     before=model.config.to_dict();device=next(model.parameters()).device
     # Do not perturb the restored rollout/PPO RNG or compatible tensors/moments.
     with torch.random.fork_rng(devices=[]):

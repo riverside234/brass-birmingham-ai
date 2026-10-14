@@ -195,7 +195,7 @@ class TimeTeacherTests(unittest.TestCase):
         (report,next_due,cursor,spent),jobs,calls=fixture.run_fixture(ordinary=100.,fraction=.5)
         self.assertEqual((len(jobs),len(calls),next_due,cursor,spent),(0,0,800,18000000,10.))
         self.assertTrue(report['budget']['deferred']);self.assertEqual(report['budget']['wall_fraction'],.5)
-        (report,next_due,_,spent),jobs,calls=fixture.run_fixture(ordinary=1350.,fraction=.5)
+        (report,next_due,_,spent),jobs,calls=fixture.run_fixture(ordinary=1430.,fraction=.5)
         self.assertEqual((len(jobs),len(calls),next_due,spent),(5,1,960,210.))
         self.assertTrue(report['budget']['deferred'])
         (report,next_due,_,spent),jobs,calls=fixture.run_fixture(ordinary=10000.,failed=True)

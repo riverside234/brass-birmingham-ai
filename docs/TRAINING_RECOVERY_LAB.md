@@ -1,5 +1,130 @@
 # Fresh training in conda: selected v4 teachers and Masked ISMCTS NN
 
+## 14 October teacher phase-clock revision
+
+The current teacher defaults use one shared budget per reserved turn:
+
+| Phase | Reserved round range | Seconds |
+| --- | --- | --- |
+| Early Canal | Canal 1–4 | 12 |
+| Late Canal | Canal 5–8 | 16 |
+| Early Rail | Rail 1–6 | 20 |
+| Late Rail | Rail 7–8 | 20 |
+
+Workers, both actions and continuation choices share that turn's deadline.
+Cancellation, failure timeouts and label-quality requirements still apply.
+Five games with four seats and one reservation per phase allocate up to
+**1,360 teacher turn-seconds per collection**, versus 1,280 previously (6.25%
+more). Parallel collection and actual search completion determine elapsed wall
+time; this is a budget estimate, not a measured runtime or strength improvement.
+Collection-cost estimates and the maximum failure bound read the same phase map.
+
+The reviewed `step5-phase-teacher-time/1.2.0` migration adopts these clocks from
+the exact preceding default. Earlier migration receipts remain reproducible;
+custom clocks are preserved. Update source, presets and both source registries
+together, then use the generation-160 continuation command below. Checkpoint,
+Adam/RNG, progress, population and lineage are retained. Teacher games/cadence,
+distillation, `search_wall_fraction: null`, the staged champion rollout and
+insolvency `event_cost=0.005, max_cost=0.075` retain their current settings.
+
+Validation: **77 focused tests passed**, including shared worker/action deadlines,
+collection accounting, disabled cumulative admission, historical receipt checks,
+and exact checkpoint/Adam/RNG continuation. The exported generation-160 restore
+plan also accepts the new configuration; no lab restore or training was run.
+
+## 14 October champion rollout and generation-160 restart
+
+Current defaults replace the previous three-incumbent self-play lineup. Only
+self-play tables change; the mature **70/25/5 table composition**, seat rotation,
+learner-only PPO attribution, immediate champion gate/promotion and `best.pt`
+publication remain intact. Each champion's exposure uses frozen checkpoints:
+
+| Committed ordinary games since introduction/promotion | Self-play opponents |
+| --- | --- |
+| 0–1,599 | One champion, one previous/distinct older model, fixed IL anchor |
+| 1,600–3,199 | Half of tables have one champion, half two; every table keeps the IL anchor |
+| 3,200 onward | Two champions and the fixed IL anchor |
+
+These durations are five configured iterations at 320 games each. Both the
+origin and duration are persisted. Introducing the feature into an existing run
+starts at its current committed progress. Future accepted promotions reset that
+origin; failed gates and restarts do not. Transition tables use deterministic
+shuffled pairs, one of each lineup per pair, with the pair cursor committed
+alongside normal training counters. An odd collection carries the unmatched
+table into the next collection. No phase uses three champion opponents.
+
+The anchor remains the initial/IL evaluation model. Additional older slots
+prefer a distinct previous champion, then older population models; limited
+populations can duplicate the anchor. Before the first distinct promotion, the
+champion itself is the initial anchor. That bootstrap case explicitly uses one
+copy plus two fixed admitted search-free v4 opponents, avoiding three identical
+champion copies. The report records this fallback. Anchor and previous-champion
+checkpoints remain retention dependencies even outside the population.
+
+Set `champion_opponents.max_champion_opponents` to **1** to stay at one champion
+opponent. Continue with `--resume-reviewed-source` after a committed iteration;
+the exact same-source one/two-cap switches are explicitly reviewed. There are
+no automatic rollback thresholds. Changing this option preserves the original
+rollout clock. Other configuration changes still require their own review.
+
+The insolvency cost is now **0.005 per event, capped at 0.075** (15 events).
+The narrow reviewed 0.025→0.075 migration preserves all model tensors, Adam
+moments/steps and RNG. The utility evaluator must recalibrate on fresh ordinary
+games before teaching. Teacher clocks follow the phase table above. The PPO
+settings, gate, opponent search, five teacher games, collection cadence, eight distillation
+steps and **`search_wall_fraction: null`** remain unchanged. The extra opponent
+models may add inference cache/batch overhead; no additional teacher or gate
+games are scheduled. The first resumed iteration includes utility recalibration.
+
+`selfplay_opponents` in each full and compact report records stage, origin,
+duration, elapsed ordinary games, anchor identity, actual one/two-champion table
+counts, sampled generations and fallback counts. At 320 games per iteration,
+the expected self-play counts are 224/0, then 112/112, then 0/224. These are
+implementation checks, not evidence of improved economic stability or strength.
+
+For the specifically reviewed generation-179 joint-7 run, restore generation
+160 before continuing. The tool cross-checks deterministic seed/context/teacher
+counters against the separately saved generation-170 state. It requires the
+**original complete generation-0160.pt** with Adam/RNG plus all 64 target
+population/anchor models. JSON reports and weight-only `best.pt` are insufficient.
+It validates files before staging, archives the entire later run, and publishes
+the restored files at the original run path without rewriting checkpoint bytes.
+The archived directory is evidence/rollback storage; its checkpoint run bindings
+still name the original path. No generation-160 partial replay is reused.
+
+From the lab repository, inspect first (no training or run replacement):
+
+```bash
+python scripts/joint7_restart160.py
+```
+
+If retention removed a required file, supply `--backup-run /path/to/old-run-backup`
+and/or `--checkpoint-backup /path/to/generation-0160.pt`. A missing or mismatched
+checkpoint stops recovery; optimizer state is never fabricated. Then:
+
+```bash
+python scripts/joint7_restart160.py --apply && \
+python scripts/step5.py --config configs/step5/joint7-g150-gate72.json train \
+  --run artifacts/step5/v4-selfplay-joint \
+  --imitation-run artifacts/step5/v4-batch7-joint \
+  --resume-reviewed-source --expected-generation 160 --iterations 5
+```
+
+Repeat any needed backup flags on the `--apply` command. After those five
+iterations, continue normally without `--expected-generation 160` or the restore
+command. The generation check prevents accidentally continuing from 179. The
+local exported-state audit is `results/reviews/joint7-g0179/restart160-plan.json`;
+it explicitly records `applied: false` because lab checkpoint files are not
+available in the local workspace. No lab training was launched for this revision.
+
+Validation: focused tests cover boundaries, deterministic allocation, promotion,
+retention, resume and exact Adam/RNG preservation. The bounded CPU smoke executed
+11 real games in about 208 seconds: four ordinary games over two resumed PPO
+iterations, six games spanning all three exposure stages, and one gate-format
+game that cannot promote. No full evaluation campaign or strength comparison was
+run. Reproduce with `tests/Recovery/smoke_champion.py --output <new-artifact-dir>`
+using the repository's normal Python dependencies.
+
 **14 October explicit container-check revert:** [current behavior, measurements and continuation receipts](STEP5_CONTAINER_CHECK_REVERT_2026-10-14.md). The extra recursive scans from the [performance correctness audit](STEP5_PERFORMANCE_AUDIT_2026-10-14.md) are removed at the user's request. The known JSON-equivalent list/tuple cache-validation gap is accepted; schema validators, content hashes, attribution, finite-value checks and deadlines remain. Update source and both review registries together; training settings and search clocks are unchanged.
 
 **14 October CPU performance update:** [measurements, benchmark commands and exact continuation](STEP5_PERFORMANCE_2026-10-14.md). Request snapshots and public-history validation do less repeated Python work; reports now separate teacher collection/distillation and expose total iteration time. Search clocks and all training settings remain unchanged. Local CPU savings are measured; a complete single-GPU training speedup is not established.

@@ -37,18 +37,27 @@ class Behavior:
         self.policy_id=neural_spec(identity,exploration,'mixed')['policy_id']
 
 
-def train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=None,from_run=None,imitation_run=None,resume_reviewed_source=False,inference_devices=None):
+def train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=None,from_run=None,imitation_run=None,resume_reviewed_source=False,inference_devices=None,expected_generation=None):
     from .retention import owned,run_lock
     _,run=owned(root,run_path)
     with run_lock(run):
+        require_start_generation(run,expected_generation)
         return _train(root,run_path,config,iterations=iterations,device=device,initial=initial,mono=mono,from_run=from_run,imitation_run=imitation_run,resume_reviewed_source=resume_reviewed_source,inference_devices=inference_devices)
 
 
+def require_start_generation(run,expected):
+    if expected is None:return
+    require(type(expected) is int and expected>=0,'Invalid expected generation')
+    path=run/'state.json'
+    require(path.is_file() and read(path)['iteration']==expected,
+            f'Expected committed generation {expected}; refusing to start from a different checkpoint')
+
+
 def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=None,from_run=None,imitation_run=None,resume_reviewed_source=False,inference_devices=None):
-    from .config import time_budget_config
+    from .config import time_budget_config,champion_mix_config
     from .inference import validate_inference_devices
     inference_devices=validate_inference_devices(inference_devices,device)
-    config=time_budget_config(config)
+    config=champion_mix_config(time_budget_config(config))
     root=Path(root).resolve();run=project_path(root,run_path);validate_config(config)
     require(iterations>0 and not(initial and from_run),'Invalid recovery initialization')
     require(initial is None and from_run is None,'Fresh residual workflow forbids previous checkpoint/run imports')
@@ -136,11 +145,12 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
     reward=reward_spec(config)
     migration=migrate(model,optimizer,reward)
     if migration:
-        print('Combined reward migration: compatible weights/Adam/RNG preserved; new utility head awaits fresh-rollout calibration',flush=True)
+        print('Combined reward migration: compatible weights/Adam/RNG preserved; utility head awaits fresh-rollout calibration',flush=True)
     if source_changed:
         from .resume import commit_transition
         state=commit_transition(run,state,signature)
     from .champion import initialize as initialize_champion,enabled as champion_enabled,selfplay_policies
+    from . import champion_mix
     initialize_champion(root,run,state)
     window=boost_window(state,config)
     if window:
@@ -174,13 +184,27 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                 for entry in state.get('population',state['history']):
                     snapshots[entry['model_id']]=entry
                 jobs=[];kind_by_group={};composition=Counter();cursor=state['next_seed'];context_counter=state['context_counter']
-                historical_generations=Counter()
+                historical_generations=Counter();mix_receipts=[];transition_added=0
                 for i in range(config['games_per_iteration']):
                     index=state['games_done']+i;kind,boosted=training_table(index,config,window)
                     selected,cursor=seeds_for(cursor,1);seed=selected[0]
                     rng=random.Random(digest(dict(seed=config['seed'],index=index)))
                     learner=neural_spec(current,config['exploration'],'mixed')
-                    if kind=='selfplay': policies=selfplay_policies(learner,incumbent) if incumbent else [learner]*4
+                    mix_receipt=None
+                    if kind=='selfplay' and champion_mix.enabled(config):
+                        entries,mix_receipt=champion_mix.opponents(state,config,rng,current_id=current,
+                            transition_index=state['champion_mix']['transition_tables']+transition_added)
+                        for entry in entries:
+                            if entry is None:continue
+                            path=project_path(root,entry['path'])
+                            if entry['model_id'] not in verified_snapshots:
+                                require(sha(path)==entry['sha256'],'Champion rollout checkpoint changed')
+                                verified_snapshots.add(entry['model_id'])
+                            if entry['model_id'] not in service.models:service.register_checkpoint(path)
+                        policies=champion_mix.policies(learner,entries,[fast_specs[p] for p in profiles[:2]])
+                        mix_receipts.append(mix_receipt)
+                        transition_added+=int(mix_receipt['stage']=='balanced_transition')
+                    elif kind=='selfplay': policies=selfplay_policies(learner,incumbent) if incumbent else [learner]*4
                     elif kind=='historical':
                         candidates=sample_opponents(snapshots.values(),current,state['evaluation_anchor'],rng,config['population']['recent'])
                         opponents=[]
@@ -206,6 +230,7 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                         seed=seed,sampling_seed=config['seed']*7+index,spec=digest(signature),
                         policies=[p.get('policy_id',p.get('kind')) for p in policies],rotation=rotation)
                     provenance['legacy_mode']='fast' if any(p.get('search_free') for p in policies) else ('searched' if kind=='legacy' else None)
+                    if mix_receipt is not None:provenance['champion_rollout']=mix_receipt
                     jobs.append(dict(index=i,seed=seed,rotation=rotation,sampling_seed=config['seed']*7+index,
                         policies=policies,focuses=focuses,path=str(directory/f'actor-{i:06d}.jsonl.gz'),provenance=provenance))
                     kind_by_group[digest(dict(rules='steam-brass-patch-1.1.0',setup_seed=seed))]=kind
@@ -282,6 +307,7 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                     legacy_boost=boost_report(state['games_done'],done,config,window),
                     actor=update,search=search,**diagnostics,incoming_model_id=current,incoming_policy_id=behavior.policy_id,
                     selfplay_incumbent=incumbent,
+                    selfplay_opponents=champion_mix.summarize(state,config,mix_receipts) if champion_mix.enabled(config) else None,
                     games_done=done,cumulative_games=state['previous_games']+done,
                     timings=dict(collection_seconds=load_began-began,ppo_seconds=updated-collected,
                         replay_load_seconds=collected-load_began,
@@ -309,6 +335,7 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                 state.update(iteration=iteration+1,games_done=done,next_seed=cursor,context_counter=context_counter,
                     history=state['history']+[entry],next_search_games=next_search,
                     search_seconds=search_seconds,ordinary_seconds=ordinary_seconds)
+                if champion_mix.enabled(config):state['champion_mix']['transition_tables']+=transition_added
                 state['recent_training']=(state.get('recent_training',[])+[dict(iteration=iteration,games_done=done,
                     learning_rate=config['learning_rate'],
                     actor={k:v for k,v in update.items() if k not in ('timings','memory')},
@@ -331,7 +358,8 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                         report['cleanup']={k:cleanup[k] for k in ('reclaimable_bytes','permanently_deleted_files','permanently_deleted_bytes')}
                     report['timings']['cleanup_seconds']=time.monotonic()-cleanup_began
                     service.trim([e['model_id'] for e in state['population']]+[identity]+
-                                 ([state['champion']['model_id']] if incumbent else []))
+                                 ([state['champion']['model_id']] if incumbent else [])+
+                                 ([state['champion_mix'][k]['model_id'] for k in ('anchor','previous')] if champion_mix.enabled(config) else []))
                 report['timings']['iteration_seconds']=time.monotonic()-began
                 write_json(directory/'report.json',report)
                 summaries.append(report);summaries=summaries[-2:]

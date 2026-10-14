@@ -92,7 +92,7 @@ class TeacherCollectionTests(unittest.TestCase):
         self.assertEqual(report['max_observed_reuse'],2)
 
     def test_budget_rechecked_before_second_collection_and_failure_never_retries(self):
-        (report,next_due,_,spent),jobs,calls=self.run_fixture(ordinary=1350.,fraction=.5)
+        (report,next_due,_,spent),jobs,calls=self.run_fixture(ordinary=1430.,fraction=.5)
         self.assertEqual((len(jobs),next_due,spent),(5,960,210.))
         self.assertTrue(report['budget']['deferred'])
         (report,next_due,_,_),jobs,calls=self.run_fixture(failed=True)

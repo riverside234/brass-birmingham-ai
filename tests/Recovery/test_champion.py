@@ -33,9 +33,9 @@ class ChampionTests(unittest.TestCase):
         for vp in (50,200,100000):
             a=scored([(vp,0,0)]*4);b=scored([(vp+10,0,0)]*4)
             self.assertAlmostEqual(terminal_utility(b,spec)[0]-terminal_utility(a,spec)[0],.01)
-        episode=[r for n in range(1,8) for r in (row(0,round=n),row(0,round=n,phase='debt',kind='liquidate',debts={0:5}))]
+        episode=[r for n in range(1,18) for r in (row(0,round=n),row(0,round=n,phase='debt',kind='liquidate',debts={0:5}))]
         labels,summary=replay_returns(episode,scored([(100,0,0)]*4),spec)
-        self.assertAlmostEqual(summary['cost'][0],.025)
+        self.assertAlmostEqual(summary['cost'][0],.075)
         self.assertAlmostEqual(labels[1]['utility'][0]-labels[0]['utility'][0],.005)
         self.assertEqual(labels[-1]['remaining'][0],0)
 
@@ -105,10 +105,12 @@ class ChampionTests(unittest.TestCase):
                 self.assertTrue(schedule(SOURCE_ROOT,run,state,service,actor)['accepted'])
                 # A later rejected candidate leaves the immutable best intact.
                 state['history']=list(reversed(entries));state['games_done']=12800
+                rollout_before=copy.deepcopy(state['champion_mix'])
                 actor.collect=lambda jobs:[]
                 with patch('brass_ai.recovery.champion.read_shards',return_value=[]),patch('brass_ai.recovery.champion.gate_rows',return_value=rows(.5)):
                     self.assertFalse(schedule(SOURCE_ROOT,run,state,service,actor)['accepted'])
                 self.assertEqual((run/'best.pt').read_bytes(),b'1')
+                self.assertEqual(state['champion_mix'],rollout_before)
 
     def test_compact_history_migrates_old_files_is_bounded_and_idempotent(self):
         with tempfile.TemporaryDirectory(dir=SOURCE_ROOT/'artifacts') as temp:
