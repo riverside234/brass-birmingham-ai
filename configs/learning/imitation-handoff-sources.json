@@ -193,6 +193,11 @@
       "implementation": "34a62056d352342da5d33662b34e4c35eeb11146c5d1a5be4e6ee3cc6a7141f7",
       "learning_compatibility": "565dff0e8ff0973214ee7c85b43c81dabc9ef6b6409aaa2e0becdd2c122c4ecf",
       "reason": "Completed v7 grouped IL remains compatible: identical model, layout, feature and checkpoint contracts, losses, validation metrics and selection. Validation forward reuse changes runtime only. Retain original completion/hash/lineage requirements; no old-architecture admission or PPO-state import."
+    },
+    {
+      "implementation": "63c9da11e4aa582af8ad41ea32c85781728ff6418c953a2df1170f7718d5d9b4",
+      "learning_compatibility": "747216b5ab873126a6e048ade198883593113f70a815b9012ce40b8f66d443cb",
+      "reason": "Compact v9 encoder-cache lifetime/sharing and teacher 9/12/12/12 clocks. Exact feature/model/loss/checkpoint contracts and outputs are unchanged; retain all resume/freshness/label guards. Only the preceding v9 implementation is admitted, with unchanged config or this exact teacher-budget change."
     }
   ]
 }

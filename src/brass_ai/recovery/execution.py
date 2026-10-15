@@ -23,7 +23,7 @@ from brass_ai.learning.legacy_policy import LegacyPolicy
 from brass_ai.step5.policy import NeuralPolicy, context_for
 from brass_ai.search.ismcts import MaskedSearchPolicy
 from brass_ai.search.common import SearchConfig
-from .inference import RemoteEvaluator
+from .inference import RemoteEvaluator, endpoint_encoder, share_encoder_cache
 from .telemetry import Timings, instrument_host
 from .inputs import BOUNDARY
 from .encoding import PreparedEncoder
@@ -74,6 +74,12 @@ def make_policy(spec,root,endpoint,config,mono,*,_replica=False):
     if spec['kind']=='legacy':
         return LegacyPolicy(root,spec['policy_id'],purpose=spec.get('purpose','training'),mono=mono)
     endpoints=endpoint if isinstance(endpoint,list) else [endpoint]
+    # A heavy actor can alternate legacy/ordinary searches and teacher games.
+    # Reserve enough channels for either role, but only create the requested
+    # role's forest. Teacher widening must not change evaluation opponents.
+    from .config import search_workers_per_turn
+    workers=search_workers_per_turn(config,teacher=bool(spec.get('teacher_schedule')))
+    endpoints=endpoints[:1+workers if workers>1 else 1]
     evaluator=RemoteEvaluator(endpoints[0],spec['model_id'],config['batch_size'],config['max_candidate_cells'])
     if spec['kind']=='neural':
         policy=NeuralPolicy(None,exploration=spec['exploration'],focus=spec['focus'],evaluator=evaluator)
@@ -122,7 +128,12 @@ def make_policy(spec,root,endpoint,config,mono,*,_replica=False):
     return policy
 
 
-def run_game(host,job,policies,timings,max_decisions,admission=None):
+def policy_encoder(policy,fallback=None):
+    evaluator=getattr(policy,'evaluator',None) or getattr(getattr(policy,'base',None),'evaluator',None)
+    return getattr(evaluator,'encoder',fallback)
+
+
+def run_game(host,job,policies,timings,max_decisions,admission=None,encoder=None):
     pins=read_json(CONFIG_DIR/'host-1.0.0.json')
     with timings.phase('host.reset'): context=host.reset(job['seed'])
     if hasattr(host,'enable_fastpath') and not host.fast_checked:host.enable_fastpath()
@@ -139,7 +150,10 @@ def run_game(host,job,policies,timings,max_decisions,admission=None):
         if hasattr(p,'begin_work_game'):p.begin_work_game(rngs[seat],seat)
         if isinstance(p,NeuralPolicy) and p.focus=='mixed':
             p.contexts[rngs[seat]]=context_for(job.get('focuses',{}).get(str(seat),'neutral'))
-    encoded=[];encoder=PreparedEncoder()
+    encoded=[]
+    if encoder is None:
+        encoder=next((e for p in assigned if (e:=policy_encoder(p)) is not None),None)
+        if encoder is None:encoder=PreparedEncoder()
     from .resources import TurnLease
     lease=TurnLease(admission,timings)
     with ExitStack() as cleanup:
@@ -200,7 +214,7 @@ def _run_turns(host,job,assigned,timings,max_decisions,context,game,rngs,encoded
         game['records'].append(dict(step=step,seat=seat,view=view,choices=choices,chosen=chosen,
             teacher=teacher,style=style,intent=intent,seconds=time.monotonic()-began,
             behavior=dict(kind=p.kind,policy_id=p.policy_id,probability=probability,temperature=getattr(p,'temperature',1.0))))
-        e=getattr(getattr(p,'evaluator',None),'encoder',encoder)
+        e=policy_encoder(p,encoder)
         with timings.phase('inputs.encode'): encoded.append(e.encode(view,choices,style,intent,validated=True))
         if ledger is not None:ledger.chosen(view,choices[chosen])
         with timings.phase('host.apply'):
@@ -233,6 +247,7 @@ def _actor(root,host_path,jobs,results,lease,config,mono,lanes,search_channels,a
     with ThreadPoolExecutor(max_workers=1) as writer:
         def lane():
             endpoint=[lease.acquire() for _ in range(search_channels)];timings=Timings()
+            encoding_cache=share_encoder_cache(endpoint)
             cache=OrderedDict()
             try:
                 with ExitStack() as stack:
@@ -260,12 +275,18 @@ def _actor(root,host_path,jobs,results,lease,config,mono,lanes,search_channels,a
                                 if key not in cache: cache[key]=make_policy(spec,root,endpoint,config,mono)
                                 cache.move_to_end(key);policies.append(cache[key])
                             cpu_started=time.process_time()
-                            game=run_game(host,job,policies,timings,config['max_decisions'],admission)
+                            encoding_before=encoding_cache.report()
+                            game=run_game(host,job,policies,timings,config['max_decisions'],admission,
+                                          encoder=endpoint_encoder(endpoint[0]))
                             # process_time counts actual Python-process CPU,
                             # including its threads. Multiple simultaneous host
                             # lanes would overlap this interval, so omit them.
                             game.actor_python_cpu_seconds=time.process_time()-cpu_started if lanes==1 else None
-                            telemetry={}
+                            after=encoding_cache.report()
+                            telemetry={'encoding_cache':dict(
+                                **{k:after[k]-encoding_before[k] for k in ('warm_hit','miss','evictions')},
+                                retained=after['retained'],capacity=after['capacity'],
+                                scope='one game; shared coordinator/private-worker input cache')}
                             for i,p in enumerate(policies):
                                 entry={}
                                 if hasattr(p,'telemetry'): entry['search']=dict(p.telemetry)
@@ -336,7 +357,9 @@ class ActorPool:
         from .host_runtime import training_host
         training_host(self.root)
         if self.heavy:training_host(self.root,'search')
-        search_channels=(1+self.config.get('search_workers_per_turn',1)) if self.heavy and self.config.get('search_workers_per_turn',1)>1 else 1
+        from .config import search_workers_per_turn
+        workers=max(search_workers_per_turn(self.config),search_workers_per_turn(self.config,teacher=True))
+        search_channels=1+workers if self.heavy and workers>1 else 1
         lease=self.service.channels((target-len(self.processes))*self.lanes*search_channels)
         for _ in range(target-len(self.processes)):
             p=self.mp.Process(target=_actor,args=(str(self.root),str(self.host),self.jobs,self.results,

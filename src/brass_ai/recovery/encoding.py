@@ -6,6 +6,7 @@ recovery ingress boundary has checked the original permitted view and choices.
 from collections import Counter
 from collections import OrderedDict
 from functools import lru_cache
+from threading import RLock
 import numpy as np
 from brass_ai.runtime_contracts import validate
 from brass_ai.learning.contracts import finite_vector, require
@@ -26,11 +27,49 @@ def categorical(value, values, empty):
     out[vocabulary(values)[value]]=1.0
     return tuple(out)
 
+class EncodingCache:
+    """Bounded, shared completed inputs; never model outputs or mutable builders.
+
+    Private search lanes keep independent categorical/derived scratch state.
+    Only lookup/publication hold this lock; unrelated cache misses run in parallel.
+    Concurrent misses may compute twice, but may only publish complete arrays.
+    """
+    def __init__(self, capacity=256):
+        require(type(capacity) is int and capacity>=0,'Invalid encoding cache capacity')
+        self.capacity=capacity;self.values=OrderedDict();self.lock=RLock()
+        self.hits=self.misses=self.evictions=0
+
+    def get(self,key):
+        with self.lock:
+            value=self.values.get(key)
+            if value is None:self.misses+=1
+            else:self.hits+=1;self.values.move_to_end(key)
+            return value
+
+    def put(self,key,value):
+        with self.lock:
+            if not self.capacity:return
+            self.values[key]=value;self.values.move_to_end(key)
+            while len(self.values)>self.capacity:
+                self.values.popitem(last=False);self.evictions+=1
+
+    def clear(self):
+        with self.lock:self.values.clear()
+
+    def __len__(self):
+        with self.lock:return len(self.values)
+
+    def report(self):
+        with self.lock:
+            return dict(warm_hit=self.hits,miss=self.misses,evictions=self.evictions,
+                        retained=len(self.values),capacity=self.capacity)
+
+
 class PreparedEncoder(Encoder):
-    def __init__(self, cache_size=256):
+    def __init__(self, cache_size=256, *, context_cache=None):
         super().__init__()
-        self.cache = OrderedDict()
-        self.cache_size = cache_size
+        self.cache = context_cache if context_cache is not None else EncodingCache(cache_size)
+        self.cache_size = self.cache.capacity
         self.action_cache=OrderedDict()
         # The complete encoded context cache owns reuse; derived numeric effects
         # are local to each miss and never share the categorical action cache.
@@ -66,9 +105,10 @@ class PreparedEncoder(Encoder):
         source = digest(dict(view=view, choices=choices)) if validated else BOUNDARY.check(view, choices)
         key = digest(dict(schema=self.derived.schema,input=source, style=style, intent=intent))
         check_budget(deadline,cancelled)
-        if key in self.cache:
-            self.cache.move_to_end(key)
-            return self.cache[key]
+        cached=self.cache.get(key)
+        if cached is not None:
+            check_budget(deadline,cancelled)
+            return cached
         require(view['context']['actor'] == view['seat'] and not view['context']['terminal'],
                 'Only the actual acting observer can submit a policy request')
         ids = tuple(c['id'] for c in choices)
@@ -131,6 +171,5 @@ class PreparedEncoder(Encoder):
         encoded = Encoded(state, actions, np.asarray([relative(i) for i in range(4)], dtype=np.int64), ids)
         for array in (encoded.state, encoded.actions, encoded.stable_to_relative): array.setflags(write=False)
         check_budget(deadline,cancelled)
-        self.cache[key] = encoded
-        while len(self.cache) > self.cache_size: self.cache.popitem(last=False)
+        self.cache.put(key,encoded)
         return encoded

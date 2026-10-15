@@ -62,8 +62,13 @@ def collect_due(root,run,directory,config,state,signature,model,optimizer,servic
         estimate=max(estimate,1.25*previous_cost['seconds'])
     allowance_before=search_allowance(ordinary_seconds,search_seconds,config['search_wall_fraction'])
     due=due_collections(done,next_search,config)
+    from .config import search_workers_per_turn
+    workers=search_workers_per_turn(config['execution'],teacher=True)
+    parallel_games=min(config['search_games'],config['execution']['heavy_processes'])
     def budget_report(deferred):
         return dict(wall_fraction=config['search_wall_fraction'],available_seconds=allowance_before,
+            search_workers_per_game=workers,parallel_game_capacity=parallel_games,
+            total_search_worker_capacity=parallel_games*workers,
             wall_fraction_enabled=config['search_wall_fraction'] is not None,
             remaining_seconds=search_allowance(ordinary_seconds,search_seconds,config['search_wall_fraction']),
             estimated_collection_seconds=estimate,admitted=bool(batches),due_collections=due,
@@ -115,7 +120,7 @@ def collect_due(root,run,directory,config,state,signature,model,optimizer,servic
                       f'{work.get("watchdog_seconds",config["search"]["seconds"]):g}s stall watchdog' if work else
                       f'{config["search"]["seconds"]:g}s per turn')
         print(f'Teacher collection {batch_index+1}/{due}: due at {next_search} ordinary games, '
-              f'{len(jobs)} games, {budget_label}',flush=True)
+              f'{len(jobs)} games, {workers} search workers/game ({parallel_games*workers} total capacity), {budget_label}',flush=True)
         collection_started=time.monotonic()
         records=heavy.collect(jobs)
         collected=time.monotonic()

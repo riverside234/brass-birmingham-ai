@@ -2,6 +2,8 @@
 
 **Date:** 15 October 2026  
 **Status:** Implemented FC0–FC3 as compact grouped v8 (Features-4 / layout-4). Two focused checks and one isolated lifecycle smoke passed; see [implementation receipt](FEATURE_ENGINEERING_COMPACTION_REPORT.md).  
+**Follow-up:** The later width-only request is implemented as v9 (32/64/48/192/224/48, fusion 620 -> 304) without changing Features-4 data. See [receipt](FEATURE_ENGINEERING_WIDTH_REVISION_REPORT.md). The original compaction proposal below is preserved.
+
 **Scope:** Review all state groups and candidate-action inputs, remove selected redundancy, revise projection widths, and perform only focused debugging and one small isolated smoke.
 
 ## 1. Target and boundaries

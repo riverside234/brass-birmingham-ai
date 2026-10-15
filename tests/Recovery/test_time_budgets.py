@@ -67,7 +67,7 @@ class TimeTeacherTests(unittest.TestCase):
     def test_admission_starts_single_deadline_and_expiry_keeps_partial_evidence(self):
         view,choices=self.view();self.clock.now+=40 # CPU admission queue
         self.policy.admit_teacher_turn(view['context'],self.rng)
-        current=self.policy.teacher_states[self.rng]['current'];self.assertEqual(current['deadline'],152.)
+        current=self.policy.teacher_states[self.rng]['current'];self.assertEqual(current['deadline'],149.)
         for phase in ('payment','action','continuation'):
             future=copy.deepcopy(view);future['context'].update(phase=phase,revision=len(self.policy.next_views)+1,actions_remaining=1)
             self.policy.next_views.append(future)
@@ -77,8 +77,8 @@ class TimeTeacherTests(unittest.TestCase):
             self.policy.admit_teacher_turn(future['context'],self.rng)
             self.clock.now+=.01
             self.assertEqual(self.policy.select_batch([(future,choices,self.rng)])[0],(1,1.,None))
-            self.assertEqual(current['deadline'],152.)
-        self.assertEqual(self.policy.calls,[151.8])
+            self.assertEqual(current['deadline'],149.)
+        self.assertEqual(self.policy.calls,[148.85])
         stats=self.policy.teacher_report(self.rng)['phases']['canal_early']
         self.assertEqual(stats['attempted_simulations'],5) # Former quota was 32.
         self.assertEqual(stats['qualified_samples'],1);self.assertEqual(stats['timeouts'],0)
@@ -142,7 +142,7 @@ class TimeTeacherTests(unittest.TestCase):
         with ThreadPoolExecutor(max_workers=4) as pool:
             planner.pool=pool
             self.assertIsNotNone(planner.select_batch([(view,choices,self.rng)])[0][2])
-        self.assertEqual(deadlines,[111.8]*4);self.assertEqual(set(retired),set(range(4)))
+        self.assertEqual(deadlines,[108.85]*4);self.assertEqual(set(retired),set(range(4)))
         self.assertEqual(planner.last_statistics['completed'],15)
 
     def test_best_once_completed_plan_survives_without_a_teacher_label(self):

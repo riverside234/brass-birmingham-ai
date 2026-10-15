@@ -47,9 +47,9 @@ class GroupedProjectionTests(unittest.TestCase):
         self.assertEqual([len(g.indices) for g in a.groups],[31,218,109,1314,1247,197,12])
         self.assertEqual([g.width for g in a.groups[:-1]],list(PROJECTION_WIDTHS))
         self.assertEqual(a.groups[-1].indices,tuple(range(3116,3128)))
-        self.assertEqual(PROJECTION_WIDTHS,(32,64,48,160,192,48))
-        self.assertEqual(sum(PROJECTION_WIDTHS),544)
-        self.assertEqual(sum(g.width for g in a.groups),556)
+        self.assertEqual(PROJECTION_WIDTHS,(32,64,48,192,224,48))
+        self.assertEqual(sum(PROJECTION_WIDTHS),608)
+        self.assertEqual(sum(g.width for g in a.groups),620)
         owner={i:g.name for g in a.groups for i in g.indices}
         for segment in a.segments:
             self.assertEqual({owner[i] for i in range(segment.start,segment.stop)},{segment.group})
@@ -83,8 +83,8 @@ class GroupedProjectionTests(unittest.TestCase):
         fusion_inputs=[]
         hook=model.state_encoder.fusion[0].register_forward_pre_hook(lambda _,args:fusion_inputs.append(args[0]))
         h=model.state_encoder(x);hook.remove()
-        self.assertEqual(tuple(h.shape),(2,304));self.assertEqual(tuple(fusion_inputs[0].shape),(2,556))
-        self.assertEqual(model.state_encoder.fusion[0].in_features,556)
+        self.assertEqual(tuple(h.shape),(2,304));self.assertEqual(tuple(fusion_inputs[0].shape),(2,620))
+        self.assertEqual(model.state_encoder.fusion[0].in_features,620)
         self.assertEqual([p[0].out_features for p in model.state_encoder.projections],list(PROJECTION_WIDTHS))
         torch.testing.assert_close(fusion_inputs[0][:,-12:],x[:,-12:])
         (h*torch.randn_like(h)).sum().backward()
@@ -97,18 +97,18 @@ class GroupedProjectionTests(unittest.TestCase):
 
     def test_parameter_and_linear_mac_budgets_for_all_heads(self):
         base,utility,actor=self.models()
-        for model,count,fixed in ((base,1904445,1797760),(utility,1914465,1807744),(actor,1980298,1873392)):
+        for model,count,fixed in ((base,2005917,1899168),(utility,2015937,1909152),(actor,2081770,1974800)):
             self.assertEqual(model.parameter_count,count)
             mac=dense_multiply_adds(model)
             self.assertEqual(mac['fixed_per_position'],fixed);self.assertEqual(mac['per_padded_candidate'],97280)
-        self.assertEqual(sum(p.numel() for p in base.state_encoder.parameters()),1766064)
+        self.assertEqual(sum(p.numel() for p in base.state_encoder.parameters()),1867536)
         self.assertEqual([sum(p.numel() for p in g.parameters()) for g in base.state_encoder.projections],
-                         [1024,14016,5280,210400,239616,9504])
-        self.assertEqual(sum(p.numel() for p in base.state_encoder.fusion.parameters()),169328)
+                         [1024,14016,5280,252480,279552,9504])
+        self.assertEqual(sum(p.numel() for p in base.state_encoder.fusion.parameters()),188784)
         for small,count,fixed in (
-                (FourSeatNet(ModelConfig.preset('small')),844397,764992),
-                (UtilityNet(utility_config(ModelConfig.preset('small'),self.reward)),848785,769344),
-                (PersonalityNet(PersonalityConfig(utility_config(ModelConfig.preset('small'),self.reward).to_dict())),884170,804544)):
+                (FourSeatNet(ModelConfig.preset('small')),934605,855136),
+                (UtilityNet(utility_config(ModelConfig.preset('small'),self.reward)),938993,859488),
+                (PersonalityNet(PersonalityConfig(utility_config(ModelConfig.preset('small'),self.reward).to_dict())),974378,894688)):
             self.assertEqual(small.parameter_count,count)
             self.assertEqual(dense_multiply_adds(small)['fixed_per_position'],fixed)
             self.assertEqual(dense_multiply_adds(small)['per_padded_candidate'],74752)
@@ -165,7 +165,7 @@ class GroupedProjectionTests(unittest.TestCase):
                 if name=='actor':raw['contract']={}
                 else:raw['compatibility']={}
                 raw['state_dict']={};torch.save(raw,path);before=path.read_bytes()
-                with self.assertRaisesRegex(ValueError,'fresh version-8.*old architectures'):
+                with self.assertRaisesRegex(ValueError,'fresh version-9.*old architectures'):
                     (load_personality if name=='actor' else load_checkpoint)(path)
                 self.assertEqual(path.read_bytes(),before)
 
@@ -240,11 +240,11 @@ class GroupedProjectionTests(unittest.TestCase):
                 path=Path(directory)/(name+'.onnx');meta=export(model,path)
                 self.assertTrue(meta['parity']['passed']);self.assertEqual(meta['config']['group_layout'],self.layout.identity)
                 self.assertEqual(meta['config']['residual_blocks'],6)
-                self.assertEqual(meta['config']['architecture'],'brass-four-seat-mlp-resnet/8.0.0')
+                self.assertEqual(meta['config']['architecture'],'brass-four-seat-mlp-resnet/9.0.0')
                 self.assertEqual(meta['parity']['shapes'],[[1,1],[2,7],[4,31],[1,257]])
                 self.assertEqual(Graph(path).meta['config']['projection_widths'],list(PROJECTION_WIDTHS))
                 old=copy.deepcopy(meta);old['config']['architecture']='brass-four-seat-mlp-resnet/5.0.0'
-                with self.assertRaisesRegex(ValueError,'fresh version-8'):validate_metadata(old)
+                with self.assertRaisesRegex(ValueError,'fresh version-9'):validate_metadata(old)
 
     def test_base_export_dynamic_parity_and_old_grouped_metadata_rejected(self):
         model=FourSeatNet();encoded=[Encoder().encode(r['view'],r['choices']) for r in self.positions[:3]]
@@ -254,7 +254,7 @@ class GroupedProjectionTests(unittest.TestCase):
             _,loaded=load_export(path);self.assertEqual(loaded['model_config']['group_layout'],self.layout.identity)
             meta['model_config']['architecture']='brass-four-seat-mlp-resnet/5.0.0';meta['compatibility']={}
             path.with_suffix('.json').write_text(json.dumps(meta),encoding='utf-8')
-            with self.assertRaisesRegex(ValueError,'fresh version-8'):load_export(path)
+            with self.assertRaisesRegex(ValueError,'fresh version-9'):load_export(path)
 
 
 if __name__=='__main__':unittest.main()

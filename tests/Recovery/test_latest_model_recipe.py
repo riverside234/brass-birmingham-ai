@@ -48,9 +48,10 @@ class RecipeTests(unittest.TestCase):
         self.assertFalse(CHAMPION['enabled']);self.assertEqual(cfg,latest_model_config(before,cfg['imitation_checkpoint']))
         self.assertEqual(cfg,champion_mix_config(time_budget_config(cfg)));self.assertEqual(cfg,validate_config(cfg))
         changes={k for k in set(before)|set(cfg) if before.get(k)!=cfg.get(k)}
-        self.assertEqual(changes,{'selfplay_recipe','imitation_checkpoint','curriculum','legacy_boost','champion','champion_opponents','teacher_work_budget','exploration','architecture','parameter_limit'})
+        self.assertEqual(changes,{'selfplay_recipe','imitation_checkpoint','curriculum','legacy_boost','champion','champion_opponents','teacher_work_budget','exploration','architecture','parameter_limit','execution'})
         self.assertIsNone(cfg['search_wall_fraction']);self.assertEqual(cfg['teacher_work_budget'],TEACHER_TIME_BUDGET)
-        self.assertEqual(TEACHER_TIME_BUDGET['seconds_per_phase'],dict(canal_early=12.,canal_late=12.,rail_early=16.,rail_late=24.))
+        self.assertEqual(TEACHER_TIME_BUDGET['seconds_per_phase'],dict(canal_early=9.,canal_late=12.,rail_early=12.,rail_late=12.))
+        self.assertEqual(cfg['execution'],dict(before['execution'],teacher_search_workers_per_turn=8))
         old=copy.deepcopy(cfg);old['insolvency']['max_cost']=old['search']['reward']['insolvency']['max_cost']=.025
         migrated=champion_mix_config(old)
         self.assertEqual(migrated['insolvency']['max_cost'],.075);self.assertNotIn('champion_opponents',migrated)

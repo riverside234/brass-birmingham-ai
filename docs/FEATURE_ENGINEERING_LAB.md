@@ -1,104 +1,144 @@
-# Compact grouped v8: lab instructions
+# Widened compact grouped v9: lab instructions
 
 Use the ai-training environment at /data/not_backed_up/yxu209/ai-training/.
-The main target is **3,128 state / 327 action inputs**, projections **32/64/48/160/192/48 + 12**, fusion **556 → 304**, and **six width-304 residual blocks**. The candidate encoder remains width 128. Base/utility/personality counts are **1,904,445 / 1,914,465 / 1,980,298**.
+The main target is **3,128 state / 327 action inputs**, projections **32/64/48/192/224/48 + 12**, fusion **620 -> 304**, and **six width-304 residual blocks**. The candidate encoder remains width 128. Base/utility/personality counts are **2,005,917 / 2,015,937 / 2,081,770**.
 
-See [the active model contract](../ai-research/GROUPED_PROJECTION_CONTRACT.md) and [the implementation receipt](../ai-research/FEATURE_ENGINEERING_COMPACTION_REPORT.md). Feature/layout/model identities are respectively 4.0.0 / 4.0.0 / 8.0.0. Old runs are not converted or reset.
+See [the active model contract](../ai-research/GROUPED_PROJECTION_CONTRACT.md) and [revision receipt](../ai-research/FEATURE_ENGINEERING_WIDTH_REVISION_REPORT.md). Feature/layout/model identities are **4.0.0 / 5.0.0 / 9.0.0**.
 
-## Preserved recipe
+## Reuse the dataset already generated from joint7
 
-Generate from configs/step5/joint7-latest.json. Exploration stays 0.08, temperature 1, entropy/value weights 0.005/0.5, with the existing family/industry exploration distribution, curriculum, latest-model four-seat collection and learner-only collection against frozen opponents. The champion gate stays disabled. Insolvency remains 0.005 per event capped at 0.075.
+**Do not rerun conversion** if you already completed the previous lab command producing:
 
-Teacher collection remains five games, cadence 160, eight distillation steps and the existing minibatch/reuse/quality checks. Effective phase clocks remain **12/12/16/24 seconds** (early Canal / late Canal / early Rail / late Rail), shared across workers, actions and continuations. search_wall_fraction=null disables only the cumulative allowance. Deadlines, cancellation, failure timeouts, source freshness and utility calibration remain active. Deployment search settings are unchanged.
+~~~text
+artifacts/il-replay/features4-compact-v8-batch7/manifest.json
+~~~
+
+That Features-4 dataset remains compatible. Its directory name can still contain v8: this is a data path, not a checkpoint architecture. The feature manifest, reference encoder, derived semantics, input order and dimensions are unchanged. Normal IL loading preserves labels/splits, verifies all existing admission rules, and re-encodes stale architecture/source-bound caches in memory. It does not overwrite the dataset or repeat the native transition audit. Initial loading can therefore take longer than a cache hit.
+
+Use your actual converted manifest path if different. The unconverted original v4-batch7-joint dataset still needs the original conversion step; this width revision does not make older feature versions compatible. Conversion is needed only when no Features-4 conversion exists:
+
+~~~bash
+python scripts/feature-engineering.py convert \
+  --manifest artifacts/il-replay/v4-batch7-joint/manifest.json \
+  --output artifacts/il-replay/features4-compact-v8-batch7 \
+  --workers 48
+~~~
+
+## Effective self-play settings
+
+Generate from configs/step5/joint7-latest.json. Teacher collection uses five games, cadence 160, eight distillation steps and the existing minibatch/reuse/quality checks.
+
+| Phase | Reserved rounds | Shared turn budget |
+| --- | --- | ---: |
+| Early Canal | Canal 1-4 | 9 s |
+| Late Canal | Canal 5-8 | 12 s |
+| Early Rail | Rail 1-6 | 12 s |
+| Late Rail | Rail 7-8 | 12 s |
+
+The new execution.teacher_search_workers_per_turn is **8**: five concurrent teacher games provide **40 private search workers**, plus coordinators and inference. The existing global CPU admission queue remains active. Each clock is shared across workers, both actions and continuations. Worker count never multiplies the turn's seconds. Generic execution.search_workers_per_turn and v4 search_workers remain **4**, preserving evaluation/opponent search.
+
+search_wall_fraction=null disables only the cumulative allowance. Deadlines, cancellation, failure timeouts, source freshness and utility calibration remain active. Startup/collection logs and compact history report teacher workers per game and total capacity; these are capacity figures, not a promise that every worker is busy throughout collection.
+
+The four clocks allocate 180 reserved seconds per teacher game, or 900 summed seconds per five-game collection before ordinary moves/overhead. Concurrent games mean this is not elapsed wall time. The maximum phase timeout initialization is now 12 seconds.
+
+Each actor keeps one encoder per reply lane across frozen-model replacements. Its coordinator and private search workers share a bounded cache of completed, read-only feature arrays; mutable feature builders remain private. Per-game execution records expose search.encoding_cache (warm_hit, miss, evictions and retained entries), counting the shared cache once rather than once per seat/model. See [the encoder benchmark and its scope](../ai-research/ENCODER_REUSE_REPORT.md).
+
+Exploration stays 0.08, temperature 1, entropy/value weights 0.005/0.5, with the existing family/industry distribution, curriculum, latest-model four-seat collection and learner-only collection against frozen opponents. The champion gate stays disabled. Insolvency remains 0.005 per event capped at 0.075. Deployment search settings are unchanged.
+
+## Fresh v9 IL, using the existing dataset
+
+The width change requires fresh model weights. Existing v8 IL/self-play checkpoints cannot resume into v9, even though their heuristic dataset is reusable. Use new model/run directories and leave prior runs intact.
 
 ~~~bash
 conda activate ai-training
 cd /data/not_backed_up/yxu209/ai-training/
-python /data/not_backed_up/yxu209/ai-training/scripts/feature-engineering.py inspect
-~~~
 
-## Re-encode compatible raw demonstrations
+python scripts/feature-engineering.py inspect
 
-Use a new output directory and an actual qualified heuristic source manifest. The converter verifies source hashes, rules/wire/target pins, external behavior, absence of search teachers, splits/labels and every native transition, then creates new encoded caches. Existing files remain untouched. Do not relabel old neural PPO probabilities or teacher targets.
-
-~~~bash
-python /data/not_backed_up/yxu209/ai-training/scripts/feature-engineering.py convert \
-  --manifest /data/not_backed_up/yxu209/ai-training/artifacts/il-replay/v4-batch7-joint/manifest.json \
-  --output /data/not_backed_up/yxu209/ai-training/artifacts/il-replay/features4-compact-v8-batch7 \
-  --workers 48
-~~~
-
-Check conversion.json and nonempty train/validation partitions. Worker count is capped by CPU allocation and shard count; lower it for memory/storage constraints. Unsupported static board/catalogue variants fail admission and require a new contract.
-
-## Fresh IL and separate self-play
-
-Existing layouts/checkpoints cannot continue into this target. These are full lab commands; implementation validation used only the tiny smoke below. Do not use an existing output directory or the smoke checkpoint for production.
-
-~~~bash
-python /data/not_backed_up/yxu209/ai-training/scripts/step5.py \
-  --config /data/not_backed_up/yxu209/ai-training/configs/step5/joint7-latest.json \
-  imitate \
-  --manifest /data/not_backed_up/yxu209/ai-training/artifacts/il-replay/features4-compact-v8-batch7/manifest.json \
-  --run /data/not_backed_up/yxu209/ai-training/artifacts/step5/features4-compact-v8-batch7-il \
+python scripts/step5.py --config configs/step5/joint7-latest.json imitate \
+  --manifest artifacts/il-replay/features4-compact-v8-batch7/manifest.json \
+  --run artifacts/step5/features4-compact-v9-batch7-il \
   --epochs 10 --min-epochs 3 --patience 2
+~~~
 
-python /data/not_backed_up/yxu209/ai-training/scripts/feature-engineering.py configure \
-  --imitation-run /data/not_backed_up/yxu209/ai-training/artifacts/step5/features4-compact-v8-batch7-il \
-  --output /data/not_backed_up/yxu209/ai-training/configs/step5/joint7-features4-compact-v8-batch7.json
+After IL completes, generate a new configuration. This binds initialization and rehearsal to that completed v9 IL checkpoint and the same existing dataset, and applies the new teacher settings:
 
-python /data/not_backed_up/yxu209/ai-training/scripts/step5.py \
-  --config /data/not_backed_up/yxu209/ai-training/configs/step5/joint7-features4-compact-v8-batch7.json \
-  train --fresh \
-  --run /data/not_backed_up/yxu209/ai-training/artifacts/step5/joint7-features4-compact-v8 \
-  --imitation-run /data/not_backed_up/yxu209/ai-training/artifacts/step5/features4-compact-v8-batch7-il \
+~~~bash
+python scripts/feature-engineering.py configure \
+  --imitation-run artifacts/step5/features4-compact-v9-batch7-il \
+  --output configs/step5/joint7-features4-compact-v9-batch7.json
+
+python scripts/step5.py \
+  --config configs/step5/joint7-features4-compact-v9-batch7.json train --fresh \
+  --run artifacts/step5/joint7-features4-compact-v9 \
+  --imitation-run artifacts/step5/features4-compact-v9-batch7-il \
   --iterations 1
 ~~~
 
-The generator binds initialization **and rehearsal** to completed target IL and its re-encoded dataset. The checked-in base config's older IL reference is not target-compatible. Use the generated config. PPO inherits those IL weights but starts with a new optimizer. Device selection follows the existing environment/configuration.
+The checked-in base config has an older IL reference; use the generated config for self-play. PPO inherits the new IL weights and starts with an empty optimizer. These are production commands, not commands run during implementation validation.
 
-After the first committed target iteration, continue for 20 additional iterations:
+## Continue the same v9 run
+
+After its first committed iteration, continue for 20 additional iterations:
 
 ~~~bash
-python /data/not_backed_up/yxu209/ai-training/scripts/step5.py \
-  --config /data/not_backed_up/yxu209/ai-training/configs/step5/joint7-features4-compact-v8-batch7.json \
-  train \
-  --run /data/not_backed_up/yxu209/ai-training/artifacts/step5/joint7-features4-compact-v8 \
-  --imitation-run /data/not_backed_up/yxu209/ai-training/artifacts/step5/features4-compact-v8-batch7-il \
+python scripts/step5.py \
+  --config configs/step5/joint7-features4-compact-v9-batch7.json train \
+  --run artifacts/step5/joint7-features4-compact-v9 \
+  --imitation-run artifacts/step5/features4-compact-v9-batch7-il \
   --expected-generation 1 --iterations 20
 ~~~
 
---expected-generation is optional: use the actual committed target generation or omit it. Same-target continuation preserves weights, Adam/RNG, counters, completed games, population, curriculum and lineage. Source-review flags cannot bypass incompatible features/layouts.
+--expected-generation is optional: use the actual committed generation or omit it. Same-target continuation preserves weights, Adam/RNG, progress, population, curriculum and lineage. Do not regenerate or edit a signed run's configuration casually; source-review flags cannot bypass incompatible weights or feature contracts.
+
+### Adopt the cache revision in an existing preceding-v9 run
+
+The preceding v9 implementation (63c9da11e4aa582af8ad41ea32c85781728ff6418c953a2df1170f7718d5d9b4) has an exact reviewed transition. Completed IL from that source remains usable; no IL retraining is needed for this cache/timing change. An unfinished IL run remains bound to its original source.
+
+For an already-generated self-play config, change only teacher_work_budget.seconds_per_phase to:
+
+~~~json
+{"canal_early": 9.0, "canal_late": 12.0, "rail_early": 12.0, "rail_late": 12.0}
+~~~
+
+At a committed iteration boundary, run the same continuation command with --resume-reviewed-source once:
+
+~~~bash
+python scripts/step5.py \
+  --config configs/step5/joint7-features4-compact-v9-batch7.json train \
+  --run artifacts/step5/joint7-features4-compact-v9 \
+  --imitation-run artifacts/step5/features4-compact-v9-batch7-il \
+  --resume-reviewed-source --iterations 20
+~~~
+
+This exact transition preserves weights, Adam/RNG, counters, population and lineage; the existing source-change safeguard requests fresh utility calibration. A pending old-source collection still blocks the transition. Other source identities or unrelated config changes are not approved by this entry. Fresh configuration generation automatically uses 9/12/12/12; explicitly configured historical clocks are not silently rewritten.
 
 ## Named CPU export
 
-Choose a retained utility checkpoint from this new run and a new destination:
+Choose a retained v9 utility checkpoint and a new destination:
 
 ~~~bash
-python /data/not_backed_up/yxu209/ai-training/scripts/feature-engineering.py export \
-  --checkpoint /data/not_backed_up/yxu209/ai-training/artifacts/step5/joint7-features4-compact-v8/generation-0001.pt \
-  --output /data/not_backed_up/yxu209/ai-training/artifacts/exports/compact-v8-g0001 \
+python scripts/feature-engineering.py export \
+  --checkpoint artifacts/step5/joint7-features4-compact-v9/generation-0001.pt \
+  --output artifacts/exports/compact-v9-g0001 \
   --include-personality
 ~~~
 
-This checks named CPU ONNX outputs. The optional personality flag imports the exact utility parent into an initialized goal extension; its goals are untrained and it is diagnostic, not release-qualified. Omit it for utility-only export. Qualified personality/package workflows retain their gates and carry the current feature/layout manifests.
+The optional personality export imports the exact utility parent into an initialized goal extension. Its goals are untrained and diagnostic. Omit the flag for utility-only export. Qualified package workflows retain their gates and carry Features-4 and layout-5 metadata.
 
-## Minimal debugging workflow
+## Bounded debugging only
 
-~~~bash
-export PYTHONPATH=/data/not_backed_up/yxu209/ai-training/src:/data/not_backed_up/yxu209/ai-training/tests/R2:/data/not_backed_up/yxu209/ai-training/tests/Recovery:/data/not_backed_up/yxu209/ai-training/tests/FeatureEngineering:/data/not_backed_up/yxu209/ai-training/tests/Personality
-python -m unittest test_compaction -v
-~~~
-
-Use a tiny existing qualified heuristic manifest with exactly one complete training and one complete validation game. The smoke performs re-audit/conversion itself, selects eight IL examples per partition as a test fixture, and collects one current-model game:
+The width revision was checked with focused model, admission, timing and worker-allocation regressions, then one tiny IL/handoff/export smoke. It collected no games and ran no timed teacher search. For a concrete regression, run only the relevant tests; a full suite, long training, comparison campaign or benchmark is not needed.
 
 ~~~bash
-python /data/not_backed_up/yxu209/ai-training/tests/FeatureEngineering/smoke_compaction.py \
-  --manifest /data/not_backed_up/yxu209/ai-training/artifacts/il-replay/tiny-qualified-heuristic/manifest.json \
-  --output /data/not_backed_up/yxu209/ai-training/artifacts/feature-engineering/compact-v8-smoke-lab
+export PYTHONPATH=src:tests/R2:tests/Recovery:tests/FeatureEngineering:tests/Personality
+python -m unittest test_compact_widths test_compaction \
+  test_teacher_phase_revision.PhaseClockTests -v
+
+# Requires an existing tiny Features-4 manifest: one train + one validation game.
+python tests/FeatureEngineering/smoke_compact_widths.py \
+  --manifest artifacts/il-replay/tiny-qualified-features4/manifest.json \
+  --output artifacts/feature-engineering/compact-v9-smoke-lab
 ~~~
 
-The smoke checks fresh IL handoff, actual behavior probabilities, utility calibration, checkpoint/Adam/RNG restoration, population/lineage, a spawned teacher leaf request and actor ONNX parity on two small shapes. It uses one IL update and one PPO optimizer step, with three head-only calibration steps reported separately. Resume is checked without another training iteration.
-
-Only the fixture uses CPU two threads, one actor/host, reduced minibatches, no rehearsal/evaluation/retention and explicit current-model table selection. Production curriculum/teacher settings are preserved. --resume-debug can finish an incomplete current-source fixture after a harness fix; it refuses another game after generation 1 is committed. Completed smoke directories are immutable.
-
-Stop after these checks pass. Broaden only to diagnose a concrete failure. No full suite, seed sweeps, timed teacher collection, benchmark, old-model comparison or strength evaluation is required. The smoke proves neither strength preservation nor deployment speedup.
+The smoke admits the existing dataset through the production loader, uses eight examples per partition for one IL optimizer step, checks completed-IL handoff and configuration generation, then verifies named ONNX parity on two small shapes. Source dataset/cache files stay unchanged. It does not establish label yield, training stability or playing strength.

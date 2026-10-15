@@ -1,4 +1,4 @@
-"""Immutable index metadata for compact Features-4 and grouped v8.
+"""Immutable index metadata for compact Features-4 and widened grouped v9.
 
 This describes the original emission order; it neither computes nor reorders
 encoded features. Both encoders use its dimensions, and models gather its groups.
@@ -8,11 +8,11 @@ from functools import lru_cache
 
 from .contracts import CONFIG_DIR,FEATURE_SCHEMA,FEATURE_VERSION,digest,read_json,require
 
-LAYOUT_VERSION='grouped-state-layout/4.0.0'
-LAYOUT_FILE='state-groups-4.0.0.json'
+LAYOUT_VERSION='grouped-state-layout/5.0.0'
+LAYOUT_FILE='state-groups-5.0.0.json'
 GROUP_NAMES=('turn_global','cards_history','player_economy','industry_development',
              'board_resources','current_action','policy_context')
-PROJECTION_WIDTHS=(32,64,48,160,192,48)
+PROJECTION_WIDTHS=(32,64,48,192,224,48)
 
 
 @dataclass(frozen=True)
@@ -62,7 +62,10 @@ def build_state_layout(schema):
     segments=[];offset=0
     require(schema['version']==FEATURE_VERSION,'Incompatible feature manifest; explicitly re-encode raw data')
     groups=schema['raw_groups']
-    require(tuple(schema['projection_widths'])==PROJECTION_WIDTHS,'Feature manifest projection widths differ')
+    # Features-4 remains byte-identical for existing audited IL datasets. Its
+    # projection_widths records the original v8 proposal, not tensor semantics.
+    # Active widths belong to the separately versioned model/layout contract;
+    # the frozen layout still binds the entire unchanged feature manifest.
     def add(name,group,size,owner='global',source='raw',components=()):
         nonlocal offset
         require(type(size) is int and size>0 and group in GROUP_NAMES,'Invalid state-layout segment')

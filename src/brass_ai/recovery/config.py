@@ -11,6 +11,7 @@ SEARCH_COLLECTIONS_PER_ITERATION=2
 SEARCH_WALL_FRACTION=None
 SEARCH_SECONDS=12.0
 SEARCH_WORKERS=4
+TEACHER_SEARCH_WORKERS=8
 # Completed evidence in the saved 12-second lab searches suggests these
 # provisional work caps (rounded phase upper quartiles, at least four paths per
 # worker). These are attempts across the WHOLE forest/turn, not per worker.
@@ -29,7 +30,11 @@ TEACHER_PHASE_TIME_BUDGET_V2 = dict(contract='teacher-turn-time/1.1.0',mode='tim
     seconds_per_phase=dict(canal_early=12.0,canal_late=12.0,rail_early=16.0,rail_late=24.0))
 TEACHER_PHASE_TIME_BUDGET_V3 = dict(contract='teacher-turn-time/1.1.0',mode='time',
     seconds_per_phase=dict(canal_early=12.0,canal_late=16.0,rail_early=20.0,rail_late=20.0))
-TEACHER_TIME_BUDGET = copy.deepcopy(TEACHER_PHASE_TIME_BUDGET_V2)
+TEACHER_PHASE_TIME_BUDGET_V4 = dict(contract='teacher-turn-time/1.1.0',mode='time',
+    seconds_per_phase=dict(canal_early=9.0,canal_late=9.0,rail_early=12.0,rail_late=16.0))
+TEACHER_PHASE_TIME_BUDGET_V5 = dict(contract='teacher-turn-time/1.1.0',mode='time',
+    seconds_per_phase=dict(canal_early=9.0,canal_late=12.0,rail_early=12.0,rail_late=12.0))
+TEACHER_TIME_BUDGET = copy.deepcopy(TEACHER_PHASE_TIME_BUDGET_V5)
 LEGACY_TIME_BUDGET = dict(contract='legacy-opponent-turn-time/1.0.0',mode='time',seconds_per_turn=1.0)
 NN_TIME_BUDGET = dict(contract='nn-turn-time/1.0.0',mode='time',seconds_per_turn=12.0)
 ARCHIVED_TIME_CONFIG_MIGRATION = 'step5-whole-turn-time/1.0.0'
@@ -240,6 +245,7 @@ def latest_model_config(config,imitation_checkpoint):
         teacher_work_budget=copy.deepcopy(TEACHER_TIME_BUDGET),search_wall_fraction=None,
         imitation_checkpoint=copy.deepcopy(imitation_checkpoint),exploration=ORDINARY_LEARNER_EXPLORATION)
     result.pop('champion_opponents',None)
+    result['execution']['teacher_search_workers_per_turn']=TEACHER_SEARCH_WORKERS
     return validate_config(champion_mix_config(result))
 
 
@@ -299,8 +305,13 @@ def champion_config(config):
     return config
 
 
+def search_workers_per_turn(config,*,teacher=False):
+    ordinary=config.get('search_workers_per_turn',1)
+    return config.get('teacher_search_workers_per_turn',ordinary) if teacher else ordinary
+
+
 def execution_config(config):
-    optional={'shared_slot_bytes','inference_routing','replica_backlog'}
+    optional={'shared_slot_bytes','inference_routing','replica_backlog','teacher_search_workers_per_turn'}
     require(set(config)-optional in (set(EXECUTION),set(EXECUTION_V21)), 'Unknown/missing execution field')
     for key in set(config)-{'feature_cache','shared_slot_bytes','inference_routing'}:
         positive(config[key], key, integer=key != 'flush_ms')
@@ -311,6 +322,11 @@ def execution_config(config):
     require(config['flush_ms'] <= 50, 'Excessive inference queue delay')
     if 'cpu_budget' in config:
         require(config['cpu_reserve']<config['cpu_budget'],'CPU reserve exceeds allocation')
+    if 'teacher_search_workers_per_turn' in config:
+        require(config['teacher_search_workers_per_turn']<=16,'Teacher root forest supports at most 16 workers')
+        if 'cpu_budget' in config:
+            require(config['teacher_search_workers_per_turn']<=config['cpu_budget']-config['cpu_reserve'],
+                    'Teacher search group exceeds queued CPU admission allowance')
     return config
 
 
@@ -381,7 +397,7 @@ def validate_config(config):
         work=teacher_work_budget_config(config['teacher_work_budget'])
         if work is not None and not time_budget(work):
             search=teacher_search_config(config['search'])
-            workers=config['execution'].get('search_workers_per_turn',search.workers)
+            workers=search_workers_per_turn(config['execution'],teacher=True)
             require(all(workers*search.minimum_plan_visits<=n<=workers*search.simulations
                         for n in work['simulations_per_phase'].values()),
                     'Teacher work budget cannot support workers or exceeds simulation cap')
@@ -463,7 +479,7 @@ def validate_config(config):
         require(config['execution']['max_models']>=sum(config['population'].values())+3,
                 'Model cache must cover frozen population plus learner/teacher versions')
         require(set(config['update'])==set(UPDATE_V21) and
-                set(config['execution'])-{'shared_slot_bytes','inference_routing','replica_backlog'}==set(EXECUTION_V21),
+                set(config['execution'])-{'shared_slot_bytes','inference_routing','replica_backlog','teacher_search_workers_per_turn'}==set(EXECUTION_V21),
                 '2.1 requires revised update/execution')
     require(set(config)==fields and version=='step5-training/2.2.0' and config['players']==4,
         'Use the fresh four-player Masked ISMCTS 2.2 recipe; historical runs cannot migrate in place')

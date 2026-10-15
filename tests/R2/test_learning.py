@@ -44,12 +44,12 @@ class LearningTests(unittest.TestCase):
 
     def test_size_presets_and_fresh_initialization(self):
         # Features 3 requires fresh residual weights with the explicit 3M cap.
-        for size, expected in [('small', 844397), ('medium', 1904445)]:
+        for size, expected in [('small', 934605), ('medium', 2005917)]:
             model = FourSeatNet(ModelConfig.preset(size))
-            self.assertEqual(model.config.architecture, 'brass-four-seat-mlp-resnet/8.0.0')
+            self.assertEqual(model.config.architecture, 'brass-four-seat-mlp-resnet/9.0.0')
             self.assertEqual(model.parameter_count, expected)
             self.assertLessEqual(model.parameter_count, 3000000)
-        with self.assertRaisesRegex(ValueError, 'version-8 grouped model preset'):
+        with self.assertRaisesRegex(ValueError, 'version-9 grouped model preset'):
             ModelConfig.preset('large')
         second = FourSeatNet(ModelConfig.preset('small'))
         self.assertNotEqual(model_id(self.model), model_id(second))

@@ -24,6 +24,7 @@
     "feature_cache": true,
     "policy_cache": 32,
     "search_workers_per_turn": 4,
+    "teacher_search_workers_per_turn": 8,
     "cpu_budget": 64,
     "cpu_reserve": 4,
     "shared_slot_bytes": 2097152,
@@ -150,7 +151,7 @@
   "audit_workers": 16,
   "overlap_pools": true,
   "search_wall_fraction": null,
-  "architecture": "brass-four-seat-mlp-resnet/8.0.0",
+  "architecture": "brass-four-seat-mlp-resnet/9.0.0",
   "parameter_limit": 3000000,
   "initialization": "random",
   "imitation": {
@@ -204,10 +205,10 @@
     "contract": "teacher-turn-time/1.1.0",
     "mode": "time",
     "seconds_per_phase": {
-      "canal_early": 12.0,
+      "canal_early": 9.0,
       "canal_late": 12.0,
-      "rail_early": 16.0,
-      "rail_late": 24.0
+      "rail_early": 12.0,
+      "rail_late": 12.0
     }
   },
   "legacy_opponent_work_budget": {

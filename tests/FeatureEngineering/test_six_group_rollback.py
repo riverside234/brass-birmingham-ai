@@ -47,16 +47,16 @@ class SixGroupRollbackTests(unittest.TestCase):
         self.assertEqual(a.feature_version,'permitted-features/4.0.0')
 
     def test_six_real_residual_blocks_for_default_and_presets(self):
-        for size,count in (('small',844397),('medium',1904445)):
+        for size,count in (('small',934605),('medium',2005917)):
             model=FourSeatNet(ModelConfig.preset(size))
             self.assertEqual(model.config.residual_blocks,6)
             self.assertEqual(sum(isinstance(m,ResidualBlock) for m in model.modules()),6)
             self.assertEqual(model.parameter_count,count)
-            self.assertEqual(model.config.architecture,'brass-four-seat-mlp-resnet/8.0.0')
+            self.assertEqual(model.config.architecture,'brass-four-seat-mlp-resnet/9.0.0')
         model=FourSeatNet();self.assertEqual(model.config.hidden,304)
         utility=UtilityNet(utility_config(model.config,reward_spec(read_json(SOURCE_ROOT/'configs/step5/joint7-latest.json'))))
-        self.assertEqual(utility.parameter_count,1914465)
-        self.assertEqual(PersonalityNet(PersonalityConfig(utility.config.to_dict())).parameter_count,1980298)
+        self.assertEqual(utility.parameter_count,2015937)
+        self.assertEqual(PersonalityNet(PersonalityConfig(utility.config.to_dict())).parameter_count,2081770)
 
     def test_archived_hand_tensors_and_old_model_versions_rejected(self):
         p=self.position;e=Encoder().encode(p['view'],p['choices'])

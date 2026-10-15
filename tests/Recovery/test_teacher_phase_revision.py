@@ -41,7 +41,7 @@ class PhaseClockTests(unittest.TestCase):
             self.clock.now=200.;view,choices=self.view(phase)
             self.policy.admit_teacher_turn(view['context'],self.rng)
             current=self.policy.teacher_states[self.rng]['current']
-            seconds={'canal_early':12.,'canal_late':12.,'rail_early':16.,'rail_late':24.}[phase]
+            seconds={'canal_early':9.,'canal_late':12.,'rail_early':12.,'rail_late':12.}[phase]
             self.assertEqual(current['deadline'],200.+seconds)
             self.assertIsNone(self.policy.select_batch([(view,choices[:1],self.rng)])[0][2])
             future=copy.deepcopy(view);future['context'].update(phase='continuation',revision=1,actions_remaining=1)
@@ -51,17 +51,17 @@ class PhaseClockTests(unittest.TestCase):
             self.policy.admit_teacher_turn(future['context'],self.rng)
             self.assertEqual(self.policy.select_batch([(future,choices,self.rng)])[0],(1,1.,None))
             self.assertEqual(current['deadline'],200.+seconds)
-            self.assertAlmostEqual(self.policy.calls[-1],200.+seconds-.2)
+            self.assertAlmostEqual(self.policy.calls[-1],200.+seconds-schedule.finalization_reserve(seconds,True))
             self.policy.finish_teacher_turn(self.rng)
         report=self.policy.teacher_report(self.rng)
         self.assertEqual(len(self.policy.calls),4);self.assertIsNone(report['seconds_per_turn'])
         self.assertEqual(report['seconds_per_phase'],TEACHER_TIME_BUDGET['seconds_per_phase'])
         counts=report['phases']['rail_late']
-        self.assertEqual((counts['allocated_seconds'],counts['completed_searches'],counts['qualified_samples']),(24.,1,1))
+        self.assertEqual((counts['allocated_seconds'],counts['completed_searches'],counts['qualified_samples']),(12.,1,1))
         self.assertEqual((counts['legal_root_actions'],counts['visited_root_actions'],counts['revisited_root_actions']),(3,2,2))
 
-    def test_four_workers_share_phase_deadlines(self):
-        for phase,seconds in (('canal_late',12.),('rail_early',16.),('rail_late',24.)):
+    def test_eight_workers_share_phase_deadlines(self):
+        for phase,seconds in (('canal_early',9.),('canal_late',12.),('rail_early',12.),('rail_late',12.)):
             with self.subTest(phase=phase):self.check_worker_deadlines(phase,seconds)
 
     def check_worker_deadlines(self,phase,seconds):
@@ -74,15 +74,16 @@ class PhaseClockTests(unittest.TestCase):
         planner=object.__new__(schedule.ScheduledParallelMasked)
         planner.teacher_states=weakref.WeakKeyDictionary();planner.cancelled=Event();planner.decision_lock=RLock()
         planner.teacher_work_budget=TEACHER_TIME_BUDGET;planner.time_budget_primary=True
-        planner.config=teacher_search_config({});planner.replicas=[Replica() for _ in range(4)]
+        planner.config=teacher_search_config({'workers':8});planner.replicas=[Replica() for _ in range(8)]
         planner.base=SimpleNamespace(request_deadline=None,evaluator=SimpleNamespace(model_id='a'*64),
             predict=lambda inputs:[(np.array([.6,.3,.1]),{})])
         planner.incumbent=lambda *args:{};planner.context_features=lambda *args:([0.]*4,[0.]*8)
         planner.telemetry=dict(searches=0,simulations=0,incomplete=0,max_pending=0)
         planner.begin_teacher_game(self.rng,0,21,33);planner.admit_teacher_turn(view['context'],self.rng)
-        with ThreadPoolExecutor(max_workers=4) as pool:
+        with ThreadPoolExecutor(max_workers=8) as pool:
             planner.pool=pool;label=planner.select_batch([(view,choices,self.rng)])[0][2]
-        self.assertEqual(deadlines,[100.+seconds-.2]*4);self.assertEqual(label['search']['seconds'],seconds)
+        self.assertEqual(deadlines,[100.+seconds-schedule.finalization_reserve(seconds,True)]*8)
+        self.assertEqual(label['search']['seconds'],seconds);self.assertEqual(label['search']['workers'],8)
         self.assertEqual(planner.teacher_states[self.rng]['current']['deadline'],100.+seconds)
 
     def test_late_failure_timeout_and_cancel_still_disqualify(self):
@@ -123,9 +124,9 @@ class PhaseConfigTests(unittest.TestCase):
     def test_collection_cost_and_phase_schema(self):
         cfg=read(SOURCE_ROOT/'configs/step5/lab.json')
         self.assertEqual(schedule.estimate_collection(cfg,5.),1385.) # 5 * (4*(12+16+20+20) + 5)
-        self.assertEqual(teacher_time_seconds(TEACHER_TIME_BUDGET),24.)
+        self.assertEqual(teacher_time_seconds(TEACHER_TIME_BUDGET),12.)
         missing=dict(cfg);missing.pop('teacher_work_budget')
-        self.assertEqual(schedule.estimate_collection(missing,5.),1305.) # latest default: 5 * (4*64 + 5)
+        self.assertEqual(schedule.estimate_collection(missing,5.),925.) # latest default: 5 * (4*45 + 5)
         self.assertEqual(schedule.estimate_collection(dict(cfg,teacher_work_budget=TEACHER_TIME_BUDGET_V1),5.),985.)
         for phase in TEACHER_TIME_BUDGET['seconds_per_phase']:
             broken=copy.deepcopy(TEACHER_TIME_BUDGET);del broken['seconds_per_phase'][phase]

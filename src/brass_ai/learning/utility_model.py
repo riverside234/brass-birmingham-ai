@@ -15,7 +15,7 @@ class UtilityConfig(ModelConfig):
     @classmethod
     def from_dict(cls,raw):
         require(raw.get('architecture')==ARCHITECTURE,
-                'Use fresh version-8 grouped model weights; old architectures cannot migrate')
+                'Use fresh version-9 grouped model weights; old architectures cannot migrate')
         require(set(raw)==set(cls.__dataclass_fields__),'Invalid utility model config')
         result=cls(**raw);result.validate();return result
 

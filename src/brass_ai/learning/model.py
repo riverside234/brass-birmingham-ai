@@ -12,7 +12,7 @@ from .contracts import keys, require
 from .features import Encoder
 from .state_layout import state_layout,PROJECTION_WIDTHS
 
-ARCHITECTURE='brass-four-seat-mlp-resnet/8.0.0'
+ARCHITECTURE='brass-four-seat-mlp-resnet/9.0.0'
 PARAMETER_LIMIT=3000000
 
 
@@ -37,7 +37,7 @@ class ModelConfig:
     @classmethod
     def preset(cls, size='medium'):
         encoder = Encoder()
-        require(size in ('small', 'medium'), 'Unknown version-8 grouped model preset')
+        require(size in ('small', 'medium'), 'Unknown version-9 grouped model preset')
         width = {'small': 128, 'medium': 304}[size]
         return cls(encoder.state_dim, encoder.action_dim, width, 128,
                    architecture=ARCHITECTURE, residual_blocks=6)
@@ -46,7 +46,7 @@ class ModelConfig:
     def from_dict(cls, raw):
         allowed=set(cls.__dataclass_fields__)
         require(raw.get('architecture')==ARCHITECTURE,
-                'Use fresh version-8 grouped model weights; old architectures cannot migrate')
+                'Use fresh version-9 grouped model weights; old architectures cannot migrate')
         require(set(raw)==allowed, 'Invalid grouped model config fields')
         config = cls(**raw)
         config.validate()
@@ -55,14 +55,14 @@ class ModelConfig:
     def validate(self):
         encoder = Encoder()
         require(type(self.players) is int and self.players == 4, 'Four-seat model required')
-        require(self.architecture==ARCHITECTURE, 'Use fresh version-8 grouped model weights; old architectures cannot migrate')
+        require(self.architecture==ARCHITECTURE, 'Use fresh version-9 grouped model weights; old architectures cannot migrate')
         require((self.state_dim, self.action_dim) == (encoder.state_dim, encoder.action_dim), 'Feature dimensions differ')
         require(type(self.hidden) is int and 32 <= self.hidden <= 2048 and
                 type(self.action_hidden) is int and 16 <= self.action_hidden <= 1024, 'Invalid hidden size')
         if self.architecture==ARCHITECTURE:
             require(type(self.residual_blocks) is int and 1<=self.residual_blocks<=8 and
                     type(self.head_hidden) is int and 16<=self.head_hidden<=256 and
-                    self.parameter_limit==PARAMETER_LIMIT, 'Version-8 grouped model/budget contract')
+                    self.parameter_limit==PARAMETER_LIMIT, 'Version-9 grouped model/budget contract')
         require(self.group_layout==state_layout().identity,'Grouped state layout identity differs')
         require(type(self.projection_widths) is tuple and all(type(n) is int for n in self.projection_widths)
                 and self.projection_widths==PROJECTION_WIDTHS,'Grouped projection widths differ')

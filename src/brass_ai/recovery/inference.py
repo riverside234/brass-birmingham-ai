@@ -18,7 +18,7 @@ from brass_ai.learning.batching import collate, model_id, predict_encoded, utili
 from brass_ai.learning.contracts import require
 from brass_ai.learning.features import Encoded
 from brass_ai.learning.encoding_budget import EncodingStopped
-from .encoding import PreparedEncoder
+from .encoding import PreparedEncoder, EncodingCache
 from .telemetry import Timings, profile_window, memory
 
 
@@ -72,6 +72,8 @@ class Endpoint:
     lock: object = field(default_factory=threading.RLock)
     shared: object = None
     _slot: object = None
+    _encoder: object = None
+    encoding_cache: object = None
 
     def slot(self):
         if self.shared is not None and self._slot is None:
@@ -83,6 +85,28 @@ class Endpoint:
         with self.lock:
             if self._slot is not None:self._slot.close();self._slot=None
             self.connection.close()
+            self._encoder=None;self.encoding_cache=None
+
+
+def share_encoder_cache(endpoints):
+    """Bind a fresh actor's coordinator/private lanes before creating policies."""
+    require(endpoints and all(getattr(e,'_encoder',None) is None and
+            getattr(e,'encoding_cache',None) is None for e in endpoints),
+            'Bind actor encoding cache before creating evaluators')
+    # Keep the former aggregate bound of 256 entries per private reply lane;
+    # sharing across frozen models does not multiply retained feature arrays.
+    cache=EncodingCache(256*len(endpoints))
+    for endpoint in endpoints:endpoint.encoding_cache=cache
+    return cache
+
+
+def endpoint_encoder(endpoint):
+    # A frozen model replacement keeps the channel, hence its encoder/cache.
+    # _submit serializes each channel; its mutable feature builders are private.
+    with endpoint.lock:
+        if getattr(endpoint,'_encoder',None) is None:
+            endpoint._encoder=PreparedEncoder(context_cache=getattr(endpoint,'encoding_cache',None))
+        return endpoint._encoder
 
 
 class ChannelLease:
@@ -107,7 +131,7 @@ class RemoteEvaluator:
     def __init__(self, endpoint, identity, batch_size=64, max_candidate_cells=131072):
         self.endpoint,self.model_id=endpoint,identity
         self.batch_size,self.max_candidate_cells=batch_size,max_candidate_cells
-        self.encoder=PreparedEncoder()
+        self.encoder=endpoint_encoder(endpoint)
         self.telemetry=dict(batches=0,positions=0,max_batch_positions=0,max_padded_candidate_cells=0,predict_seconds=0.0)
         self.telemetry.update(validation_seconds=0.0,encoding_seconds=0.0)
 

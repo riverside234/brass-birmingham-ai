@@ -52,7 +52,7 @@ class PersonalityTests(unittest.TestCase):
             actual=model(*args,personality=torch.zeros(4,CONTEXT_DIM),remaining=budget)
         for a,b in zip(expected,base_outputs(actual)):self.assertTrue(torch.equal(a,b))
         self.assertTrue((actual['remaining_utility_4']>1.).all())  # Not clipped to probabilities.
-        self.assertEqual(report['parameters'],dict(base=1914465,extension=65833,total=1980298))
+        self.assertEqual(report['parameters'],dict(base=2015937,extension=65833,total=2081770))
         self.assertEqual(set(actual['goals']),{'family','industry','region','horizon'})
         self.assertEqual(actual['confidence_logits'].shape,(4,6,3))
         self.assertFalse(report['rejected']);self.assertEqual(len(report['copied']),len(source.state_dict()))

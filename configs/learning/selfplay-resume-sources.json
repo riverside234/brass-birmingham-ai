@@ -23513,6 +23513,14 @@
       "reason_ref": "93",
       "review_version": "il-selfplay-performance-review/1.0.0",
       "review_report": "docs/IL_SELFPLAY_PERFORMANCE_REVIEW_2026-10-15.md"
+    },
+    {
+      "from_implementation": "63c9da11e4aa582af8ad41ea32c85781728ff6418c953a2df1170f7718d5d9b4",
+      "to_implementation": "e794a86e13b891d56fcb21a8a7580a8af1c754bc54065a8b636dd5b04f6792f8",
+      "reviewed_evidence": "ai-research/ENCODER_REUSE_REPORT.md",
+      "reason_ref": "94",
+      "learning_compatibility_ref": "2",
+      "config_changes_ref": "78"
     }
   ],
   "definitions": {
@@ -23610,7 +23618,8 @@
       "90": "Follow-up inference/recovery review: apply the same per-model utility-budget validation to local and shared inference, preserve the first failure across inference replicas/router, and check all staged rollout anchor/previous checkpoints before archiving a failed collection. No configuration, valid prediction, reward, PPO, gate, search-clock, distillation, checkpoint/optimizer/RNG, population or progress changes.",
       "91": "Latest-model recipe is an explicit fresh IL run with pinned origin, four-seat learner sampling, zero-start 20k/100k curriculum and no gate. Same-run recipe switching is forbidden even with review. Existing explicitly selected historical recipes retain their prior configuration/migrations, opponent selection, PPO/reward/optimizer/RNG, checkpoints and lineage; additive sample accounting and frozen collection planning preserve valid behavior.",
       "92": "Ordinary learner exploration defaults to 0.08 using the unchanged legal-family/industry/context mixture, temperature 1 and probabilistic sampling. Collection and PPO share the exploration setting and policy identity. Explicit 0.05 to 0.08 continuation changes future collections only; strict pending/cache/behavior checks remain. Weights, Adam/RNG, counters, population, lineage, curriculum, PPO/reward/teacher/search and evaluation policies are preserved. Unchanged historical configurations remain unchanged; no recipe conversion is approved.",
-      "93": "Behavior-preserving v7 IL/self-play performance review: reuse ordinary/balanced IL validation forwards; avoid unused candidate scoring/copies for stock state-only PPO critic and utility-calibration heads; pack base-service prediction arrays directly into shared replies with legacy subclass fallback. Exact model/feature/layout/precision/reward/optimizer contracts and settings/search clocks are unchanged. Preserve committed weights, Adam/RNG, population, counters, original IL lineage and all resume guards. Accept the existing JSON-equivalent list/tuple cache gap. This does not approve older architectures or feature schemas."
+      "93": "Behavior-preserving v7 IL/self-play performance review: reuse ordinary/balanced IL validation forwards; avoid unused candidate scoring/copies for stock state-only PPO critic and utility-calibration heads; pack base-service prediction arrays directly into shared replies with legacy subclass fallback. Exact model/feature/layout/precision/reward/optimizer contracts and settings/search clocks are unchanged. Preserve committed weights, Adam/RNG, population, counters, original IL lineage and all resume guards. Accept the existing JSON-equivalent list/tuple cache gap. This does not approve older architectures or feature schemas.",
+      "94": "Compact v9 encoder-cache lifetime/sharing and teacher 9/12/12/12 clocks. Exact feature/model/loss/checkpoint contracts and outputs are unchanged; retain all resume/freshness/label guards. Only the preceding v9 implementation is admitted, with unchanged config or this exact teacher-budget change."
     },
     "config_changes": {
       "0": {
@@ -32574,6 +32583,30 @@
           "to": 0.08,
           "from": 0.05
         }
+      },
+      "78": {
+        "teacher_work_budget": {
+          "from": {
+            "contract": "teacher-turn-time/1.1.0",
+            "mode": "time",
+            "seconds_per_phase": {
+              "canal_early": 9.0,
+              "canal_late": 9.0,
+              "rail_early": 12.0,
+              "rail_late": 16.0
+            }
+          },
+          "to": {
+            "contract": "teacher-turn-time/1.1.0",
+            "mode": "time",
+            "seconds_per_phase": {
+              "canal_early": 9.0,
+              "canal_late": 12.0,
+              "rail_early": 12.0,
+              "rail_late": 12.0
+            }
+          }
+        }
       }
     },
     "config_migrations": {
@@ -32644,7 +32677,8 @@
     },
     "learning_compatibility": {
       "0": "c349e816f2e301ea2a3b438902059cffe868f48e131f7c120691d37cd1c409d2",
-      "1": "565dff0e8ff0973214ee7c85b43c81dabc9ef6b6409aaa2e0becdd2c122c4ecf"
+      "1": "565dff0e8ff0973214ee7c85b43c81dabc9ef6b6409aaa2e0becdd2c122c4ecf",
+      "2": "747216b5ab873126a6e048ade198883593113f70a815b9012ce40b8f66d443cb"
     }
   }
 }

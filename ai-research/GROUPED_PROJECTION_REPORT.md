@@ -1,6 +1,6 @@
 # Main grouped target v7 — implementation and validation
 
-> Historical v7 document. The active target is now [compact grouped v8](GROUPED_PROJECTION_CONTRACT.md), implemented from [the compaction plan](FEATURE_ENGINEERING_COMPACTION_PLAN.md). Earlier evidence below remains historical.
+> Historical v7 document. The active target is now [widened compact grouped v9](GROUPED_PROJECTION_CONTRACT.md). Its subsequent [encoder reuse benchmark](ENCODER_REUSE_REPORT.md) revisits new_encoder/persistent_miss/warm_hit on the current feature contract. Earlier evidence and timings below remain historical.
 
 15 October 2026. **Implemented and validated for the requested bounded scope.** The main target uses **32/80/64/256/256/64**, the unchanged 12-value context tail, **764 -> 304 joint fusion**, and **six width-304 residual blocks**. Only the current target was trained, exported and profiled. This is an experimental capacity choice; playing-strength improvement is unproven.
 

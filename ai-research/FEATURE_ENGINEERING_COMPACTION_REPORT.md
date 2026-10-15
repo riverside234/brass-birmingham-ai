@@ -1,3 +1,5 @@
+> Historical v8 compaction receipt. Active widths and teacher settings are now v9; see [the follow-up receipt](FEATURE_ENGINEERING_WIDTH_REVISION_REPORT.md). Features-4 data remains reusable.
+
 # Feature compaction implementation receipt — v8
 
 Implemented FC0–FC3 on 15 October 2026. The [active contract](GROUPED_PROJECTION_CONTRACT.md) supersedes earlier targets; [lab instructions](../docs/FEATURE_ENGINEERING_LAB.md) contain exact new-data/new-model and continuation commands.
