@@ -38,12 +38,16 @@ def load_checkpoint(path, *, device='cpu'):
     keys(raw, ('format', 'compatibility', 'model_config', 'model_id', 'state_dict',
                'optimizer', 'step', 'training', 'rng', 'cuda_rng'))
     require(raw['format'] in ('four-seat-checkpoint/1.0.0','four-seat-checkpoint/2.0.0'), 'Unsupported checkpoint format')
-    assert_compatible(raw['compatibility'])
-    require(type(raw['step']) is int and raw['step'] >= 0, 'Invalid training step')
+    # Reject a different tensor layout before the generic source-fingerprint
+    # check, so old grouped checkpoints explain that fresh weights are needed.
+    model_type,config_type=FourSeatNet,ModelConfig
     if raw['format']=='four-seat-checkpoint/2.0.0':
         from .utility_model import UtilityNet,UtilityConfig
-        model=UtilityNet(UtilityConfig.from_dict(raw['model_config']))
-    else:model = FourSeatNet(ModelConfig.from_dict(raw['model_config']))
+        model_type,config_type=UtilityNet,UtilityConfig
+    config=config_type.from_dict(raw['model_config'])
+    assert_compatible(raw['compatibility'])
+    require(type(raw['step']) is int and raw['step'] >= 0, 'Invalid training step')
+    model=model_type(config)
     require((getattr(model.config,'utility',None) is not None)==(raw['format']=='four-seat-checkpoint/2.0.0'),'Checkpoint utility version differs')
     model.utility_calibration=raw['training'].get('utility_calibration')
     model.load_state_dict(raw['state_dict'], strict=True)

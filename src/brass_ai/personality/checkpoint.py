@@ -58,9 +58,11 @@ def load(path,device='cpu'):
     raw=torch.load(path,map_location='cpu',weights_only=True)
     keys(raw,('format','contract','config','model_id','state_dict','optimizer','training','utility_calibration','rng','cuda_rng'))
     require(raw['format']==CHECKPOINT,'Personality checkpoint format differs')
+    config=PersonalityConfig.from_dict(raw['config'])
     migration=accepted_contract(raw['contract'])
-    with torch.random.fork_rng(devices=[]): model=PersonalityNet(PersonalityConfig.from_dict(raw['config']))
+    with torch.random.fork_rng(devices=[]): model=PersonalityNet(config)
     model.load_state_dict(raw['state_dict'],strict=True);model.core.utility_calibration=raw['utility_calibration']
+    model.validate_parameter_count()
     require(all(torch.isfinite(t).all() for t in model.state_dict().values()),'Nonfinite personality weights')
     require(raw['model_id']==_model_id(model,raw['contract']),'Personality weights changed')
     if migration:

@@ -44,6 +44,9 @@ def episode(rounds=6):
 def qualified_run(directory,*,traces=True,size='small'):
     root=SOURCE_ROOT;run=Path(directory);run.mkdir(parents=True)
     cfg=read_json(root/'configs/step5/lab.json')
+    # This fixture authors accepted gate evidence. Ordinary latest-model runs
+    # deliberately disable that gate and must not be relabelled as qualified.
+    cfg['champion']['enabled']=True
     signature=dict(config=cfg,compatibility=compatibility(),implementation=implementation_id(),
         legacy_pool=read_json(root/'training/opponents/pool.json'),teachers={})
     model=parent(size);entries=[]
@@ -54,7 +57,9 @@ def qualified_run(directory,*,traces=True,size='small'):
             fresh_run=run.relative_to(root).as_posix(),signature=digest(signature),fixture=True))
         entries.append(dict(path=path.relative_to(root).as_posix(),sha256=sha(path),model_id=identity,generation=gen))
     gate_dir=run/'evaluations/champion-00006400';gate_dir.mkdir(parents=True)
-    seeds=seeds_for(3920000,8,'validation')[0]
+    # Screening-only rows cannot pass the current two-stage gate.
+    count=cfg['champion']['setups']+cfg['champion'].get('confirmation_setups',0)
+    seeds=seeds_for(3920000,count,'validation')[0]
     spec=dict(format=CONTRACT,candidate=entries[1],incumbent=entries[0],seeds=seeds,config=cfg['champion'])
     rows=[dict(seed=s,candidate_seats=list(pair),win=1.,candidate_vp=100.,incumbent_vp=70.,
         candidate_rank=1.5,incumbent_rank=3.5) for s in seeds for pair in combinations(range(4),2)]

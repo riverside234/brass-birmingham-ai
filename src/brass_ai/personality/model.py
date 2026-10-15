@@ -47,6 +47,7 @@ class PersonalityNet(nn.Module):
     def parameter_count(self):return sum(p.numel() for p in self.parameters())
 
     def validate_parameter_count(self):
+        self.core.validate_parameter_count()
         require(self.parameter_count<=self.config.parameter_limit and
             self.parameter_count-self.core.parameter_count<=self.config.extension_limit,'Personality parameter budget exceeded')
         return dict(base=self.core.parameter_count,extension=self.parameter_count-self.core.parameter_count,total=self.parameter_count)

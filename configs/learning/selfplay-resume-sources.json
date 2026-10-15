@@ -23505,6 +23505,14 @@
       "reason_ref": "92",
       "review_version": "step5-ordinary-exploration/1.0.0",
       "review_report": "docs/TRAINING_RECOVERY_LAB.md"
+    },
+    {
+      "from_implementation": "34a62056d352342da5d33662b34e4c35eeb11146c5d1a5be4e6ee3cc6a7141f7",
+      "to_implementation": "a882234d3003a052ccb12e9a489469e772d78ec054f24a71adfeaaea9bcc6cfc",
+      "learning_compatibility_ref": "1",
+      "reason_ref": "93",
+      "review_version": "il-selfplay-performance-review/1.0.0",
+      "review_report": "docs/IL_SELFPLAY_PERFORMANCE_REVIEW_2026-10-15.md"
     }
   ],
   "definitions": {
@@ -23601,7 +23609,8 @@
       "89": "Explicit manual one/two-champion seat cap switch only; retain rollout origin, duration, counters and all other settings. No automatic rollback thresholds. Follow-up inference/recovery review: apply the same per-model utility-budget validation to local and shared inference, preserve the first failure across inference replicas/router, and check all staged rollout anchor/previous checkpoints before archiving a failed collection. No configuration, valid prediction, reward, PPO, gate, search-clock, distillation, checkpoint/optimizer/RNG, population or progress changes.",
       "90": "Follow-up inference/recovery review: apply the same per-model utility-budget validation to local and shared inference, preserve the first failure across inference replicas/router, and check all staged rollout anchor/previous checkpoints before archiving a failed collection. No configuration, valid prediction, reward, PPO, gate, search-clock, distillation, checkpoint/optimizer/RNG, population or progress changes.",
       "91": "Latest-model recipe is an explicit fresh IL run with pinned origin, four-seat learner sampling, zero-start 20k/100k curriculum and no gate. Same-run recipe switching is forbidden even with review. Existing explicitly selected historical recipes retain their prior configuration/migrations, opponent selection, PPO/reward/optimizer/RNG, checkpoints and lineage; additive sample accounting and frozen collection planning preserve valid behavior.",
-      "92": "Ordinary learner exploration defaults to 0.08 using the unchanged legal-family/industry/context mixture, temperature 1 and probabilistic sampling. Collection and PPO share the exploration setting and policy identity. Explicit 0.05 to 0.08 continuation changes future collections only; strict pending/cache/behavior checks remain. Weights, Adam/RNG, counters, population, lineage, curriculum, PPO/reward/teacher/search and evaluation policies are preserved. Unchanged historical configurations remain unchanged; no recipe conversion is approved."
+      "92": "Ordinary learner exploration defaults to 0.08 using the unchanged legal-family/industry/context mixture, temperature 1 and probabilistic sampling. Collection and PPO share the exploration setting and policy identity. Explicit 0.05 to 0.08 continuation changes future collections only; strict pending/cache/behavior checks remain. Weights, Adam/RNG, counters, population, lineage, curriculum, PPO/reward/teacher/search and evaluation policies are preserved. Unchanged historical configurations remain unchanged; no recipe conversion is approved.",
+      "93": "Behavior-preserving v7 IL/self-play performance review: reuse ordinary/balanced IL validation forwards; avoid unused candidate scoring/copies for stock state-only PPO critic and utility-calibration heads; pack base-service prediction arrays directly into shared replies with legacy subclass fallback. Exact model/feature/layout/precision/reward/optimizer contracts and settings/search clocks are unchanged. Preserve committed weights, Adam/RNG, population, counters, original IL lineage and all resume guards. Accept the existing JSON-equivalent list/tuple cache gap. This does not approve older architectures or feature schemas."
     },
     "config_changes": {
       "0": {
@@ -32634,7 +32643,8 @@
       "2": "step5-phase-teacher-time/1.1.0"
     },
     "learning_compatibility": {
-      "0": "c349e816f2e301ea2a3b438902059cffe868f48e131f7c120691d37cd1c409d2"
+      "0": "c349e816f2e301ea2a3b438902059cffe868f48e131f7c120691d37cd1c409d2",
+      "1": "565dff0e8ff0973214ee7c85b43c81dabc9ef6b6409aaa2e0becdd2c122c4ecf"
     }
   }
 }

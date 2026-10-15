@@ -415,15 +415,14 @@ def _train_bc(root,run,manifest_path,initial,config,*,device='cpu',epochs=10,pat
         state['initial']=dict(path='initial.pt',sha256=sha(out/'initial.pt'))
         state['last']=dict(state['initial']);write_json(state_path,state)
     training=balance(training)
-    balanced_validation=balance(validation)
+    validation_weights=[row['_bc_weight'] for row,_,_,_ in balance(validation)]
     # Reuse encoded arrays and device metadata across all supervised epochs.
     training=Dataset(training,device,policy=False,progress='imitation prepare training tensors')
     validation=Dataset(validation,device,policy=False,progress='imitation prepare validation tensors')
-    balanced_validation=Dataset(balanced_validation,device,policy=False,progress='imitation prepare balanced validation tensors')
     for epoch in (() if state['stopped'] else range(state['epoch'],epochs)):
         train_report=supervised_epoch(model,optimizer,training,config,progress=f'imitation epoch {epoch+1}/{epochs} train ({device})')
-        val_report=supervised_epoch(model,None,validation,config,training=False,progress=f'imitation epoch {epoch+1}/{epochs} validation ({device})')
-        balanced_val_report=supervised_epoch(model,None,balanced_validation,config,training=False,progress=f'imitation epoch {epoch+1}/{epochs} balanced validation ({device})')
+        val_report,balanced_val_report=supervised_epoch(model,None,validation,config,training=False,
+            validation_weights=validation_weights,progress=f'imitation epoch {epoch+1}/{epochs} validation ({device})')
         improved=state['best_loss'] is None or val_report['loss']<state['best_loss']-1e-4
         evidence=dict(epoch=epoch+1,train=train_report,validation=val_report,balanced_validation=balanced_val_report)
         state['history'].append(evidence);state['epoch']=epoch+1

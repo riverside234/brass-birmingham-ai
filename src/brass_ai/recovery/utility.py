@@ -65,7 +65,7 @@ def calibrate(model,optimizer,dataset,config):
         squared=absolute=0.
         with torch.no_grad():
             for part in dataset.microbatches(range(len(dataset.data)),config['microbatch_size'],config['max_candidate_cells'],config['bucket']):
-                ix,inputs,_=dataset.batch(part)
+                ix,inputs,_=dataset.value_batch(part,model)
                 diff=model(*inputs,remaining=dataset.remaining[ix])[-1].float()-dataset.utility[ix]
                 squared+=float(diff.square().sum());absolute+=float(diff.abs().sum())
         n=4*len(dataset.data)
@@ -77,7 +77,7 @@ def calibrate(model,optimizer,dataset,config):
             for start in range(0,len(order),config['effective_batch_size']):
                 batch=order[start:start+config['effective_batch_size']];optimizer.zero_grad(set_to_none=True)
                 for part in dataset.microbatches(batch,config['microbatch_size'],config['max_candidate_cells'],config['bucket']):
-                    ix,inputs,_=dataset.batch(part)
+                    ix,inputs,_=dataset.value_batch(part,model)
                     diff=model(*inputs,remaining=dataset.remaining[ix])[-1].float()-dataset.utility[ix]
                     (diff.square().mean(-1).sum()/len(batch)).backward()
                 torch.nn.utils.clip_grad_norm_(model.utility_head.parameters(),config['grad_clip'],error_if_nonfinite=True)

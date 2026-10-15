@@ -14,7 +14,7 @@ import numpy as np
 from brass_ai.bank import sha
 from brass_ai.learning.contracts import (SOURCE_ROOT, assert_compatible, compatibility, decode_json, digest,
                                         finite_vector, keys, require)
-from brass_ai.learning.features import Encoded
+from brass_ai.learning.features import Encoded,check_encoded
 from brass_ai.learning.replay import split_for, terminal_targets, validate_teacher
 from .encoding import PreparedEncoder
 from .inputs import BOUNDARY
@@ -83,6 +83,7 @@ def check_game(game, arrays=None,*,validated_inputs=False):
             e = encoder.encode(row['view'],row['choices'],row['style'],row['intent'],validated=True)
         else:
             e = arrays[step]
+            check_encoded(e)
             finite_vector(row['style'],4,-1,1);finite_vector(row['intent'],8,-1,1)
             require(e.state.shape == (encoder.state_dim,) and e.actions.shape == (len(row['choices']),encoder.action_dim),
                     'Cached feature dimensions differ')
@@ -108,7 +109,7 @@ def check_game(game, arrays=None,*,validated_inputs=False):
 
 def _cache_paths(path):
     path=Path(path)
-    return path.with_name(path.name+'.features-v2.npz'), path.with_name(path.name+'.features-v2.json')
+    return path.with_name(path.name+'.features-v4.npz'), path.with_name(path.name+'.features-v4.json')
 
 
 def cache_version():
@@ -131,7 +132,7 @@ def write_cache(path, games):
             offsets=np.cumsum([0]+[len(e.choice_ids) for e in arrays]),
             seats=np.stack([e.stable_to_relative for e in arrays]))
     temporary.replace(data)
-    meta=dict(format='derived-features/2.0.0',replay_sha256=sha(path),data_sha256=sha(data),
+    meta=dict(format='derived-features/4.0.0',replay_sha256=sha(path),data_sha256=sha(data),
         compatibility=compatibility(),encoder=cache_version(),rows=[row_key(r) for r in rows])
     temp=manifest.with_name(manifest.name+'.tmp');temp.write_text(json.dumps(meta),encoding='utf-8');temp.replace(manifest)
 
@@ -143,7 +144,7 @@ def load_cache(path, games, receipt=None):
     if receipt is None or receipt.get('validator')!=cache_version() or not manifest.exists() or not data.exists(): return None
     require(receipt==cache_receipt(path),'Derived feature receipt changed')
     meta=decode_json(manifest.read_text(encoding='utf-8'))
-    require(meta.get('format')=='derived-features/2.0.0', 'Unknown derived feature cache')
+    require(meta.get('format')=='derived-features/4.0.0', 'Unknown derived feature cache; explicitly re-encode raw data')
     # A changed source invalidates derived data, never the authoritative replay.
     if meta['replay_sha256']!=sha(path) or meta['compatibility']!=compatibility() or meta.get('encoder')!=cache_version(): return None
     require(meta['data_sha256']==sha(data),'Derived feature cache changed')
@@ -159,6 +160,7 @@ def load_cache(path, games, receipt=None):
         out=[]
         for i,row in enumerate(rows):
             e=Encoded(states[i],actions[offsets[i]:offsets[i+1]],seats[i],tuple(c['id'] for c in row['choices']))
+            check_encoded(e)
             for a in (e.state,e.actions,e.stable_to_relative): a.setflags(write=False)
             out.append(e)
     return out

@@ -1,16 +1,20 @@
-"""Frozen A–F field ordering/masks/scales for permitted-features/2.0.0."""
-from dataclasses import dataclass
+"""Full rule facts and explicitly selected, field-specific neural encodings.
+
+Omitting a neural field never removes a fact used by accounting or audit.
+"""
+from dataclasses import dataclass,asdict
 from functools import lru_cache
 import math
 
 from brass_ai.learning.contracts import require
 
-VERSION='permitted-derived-context/1.0.0'
+VERSION='permitted-derived-context/3.0.0'
 RULES='steam-brass-patch-1.1.0'
 INDUSTRIES=('Brewery','CoalMine','CottonMill','IronWorks','Manufacturer','Pottery')
 SALEABLE=('CottonMill','Manufacturer','Pottery')
 KINDS=('beer','bonus_develop','bonus_skip','build','coal','develop','finish','iron','liquidate','loan','network','pass','scout','sell')
 COMPONENTS=('value','known','applicable','lower','lower_known','upper','upper_known')
+COMPACT_COMPONENTS=COMPONENTS[:3]
 
 
 @dataclass(frozen=True)
@@ -43,6 +47,11 @@ class Measure:
     def tensor(self,scale):
         return (self.value/scale,float(self.known),float(self.applicable),self.lower/scale,
                 float(self.lower_known),self.upper/scale,float(self.upper_known))
+
+    def compact_tensor(self,scale):
+        require(self.known or not(self.lower_known or self.upper_known),
+                'Compact field cannot discard an interval or one-sided bound')
+        return (self.value/scale if self.known else 0.,float(self.known),float(self.applicable))
 
 
 @dataclass(frozen=True)
@@ -114,17 +123,85 @@ STATE_FIELDS=state_fields()
 ACTION_FIELDS=action_fields()
 
 
+@dataclass(frozen=True)
+class InputField:
+    name: str
+    fact: str
+    scale: float
+    group: str
+    components: tuple
+
+    def tensor(self,value):
+        return value.tensor(self.scale) if self.components==COMPONENTS else value.compact_tensor(self.scale)
+
+
+# Explicit omission ledger, checked against the complete internal fact contract.
+# No catch-all prefix filter may hide new/unexpected rule facts.
+STATE_OMISSIONS={
+    **{f'finance.{seat}.public_debt':'retained raw player debt' for seat in range(4)},
+    **{f'finance.{seat}.settlement':'shared finance.0.settlement' for seat in range(1,4)},
+    'order.0.spending_difference':'observer spending minus itself',
+    'opportunities.main_action_available':'retained phase',
+    **{f'opportunities.{kind}.available':'targets > 0 with the same applicability' for kind in KINDS},
+    **{f'development.{kind}.current.{name}':'retained raw mat head'
+       for kind in INDUSTRIES for name in ('present',*TILE_FIELDS)},
+    **{f'development.{kind}.{horizon}_target.{name}':reason
+       for kind in INDUSTRIES for horizon in ('current','next_era') for name,reason in dict(
+           already_unlocked='strictly higher target index cannot be zero',
+           blocked='present and not reachable',survives_canal='present strict-higher level > 1',
+           delta_canal_eligible='target eligibility minus retained mat-head eligibility',
+           delta_rail_eligible='target eligibility minus retained mat-head eligibility').items()},
+}
+ACTION_OMISSIONS={
+    **{f'{kind}_used':'selected resource kind' for kind in ('coal','iron','beer')},
+    **{f'effects.{seat}.immediate_vp':'incremental rule awards direct VP only to actor' for seat in range(1,4)},
+    'develop.removed_tiles':'one guaranteed removal when development applies',
+    'develop.free':'bonus_develop kind',
+    'develop.result.survives_canal':'result level > 1 with same applicability',
+    **{f'develop.{prefix}removals_before':'retained removals_after + 1; same unknown/inapplicable status'
+       for prefix in ('','next_era_')},
+}
+
+
+def input_fields(fields,omitted,*,state):
+    names={f.name for f in fields}
+    require(len(names)==len(fields) and set(omitted)<=names,'Unknown/duplicate semantic field in compaction ledger')
+    result=[]
+    bounded={'realization.card_supported_actions'} if state else {
+        'portion_cash_spent','portion_cash_proceeds','portion_cash_after','portion_projected_cash','portion_shortfall'}
+    timing={'realization.own_action_slots','realization.card_supported_actions','realization.current_action_in_progress'}
+    for f in fields:
+        if f.name in omitted:continue
+        name='finance.settlement' if state and f.name=='finance.0.settlement' else f.name
+        if not state:group='candidate_action'
+        elif f.name in timing or name=='finance.settlement':group='turn_global'
+        else:group=dict(finance='player_economy',order='player_economy',opportunities='current_action',
+                        realization='board_resources',development='industry_development')[f.name.split('.')[0]]
+        result.append(InputField(name,f.name,f.scale,group,COMPONENTS if f.name in bounded else COMPACT_COMPONENTS))
+    require({f.fact for f in result}|set(omitted)==names and not({f.fact for f in result}&set(omitted)),
+            'Neural field coverage differs from the semantic contract')
+    return tuple(result)
+
+
+STATE_INPUTS=input_fields(STATE_FIELDS,STATE_OMISSIONS,state=True)
+ACTION_INPUTS=input_fields(ACTION_FIELDS,ACTION_OMISSIONS,state=False)
+
+
 def tensorize(facts,fields):
+    require(fields in (STATE_FIELDS,ACTION_FIELDS),'Unknown semantic field contract')
     require(set(facts)=={f.name for f in fields},'Incomplete or mixed-version derived context')
-    return tuple(x for f in fields for x in facts[f.name].tensor(f.scale))
+    emitted=STATE_INPUTS if fields==STATE_FIELDS else ACTION_INPUTS
+    return tuple(x for f in emitted for x in f.tensor(facts[f.fact]))
 
 
 def specification():
-    from dataclasses import asdict
-    return dict(version=VERSION,feature_version='permitted-features/2.0.0',production_enabled=True,
-        rules=RULES,components=COMPONENTS,seat_order='observer-clockwise-relative',
-        status='frozen FE4 layout; state block precedes final style[4]/intent[8], action block follows categorical fields',
-        state=[asdict(f) for f in STATE_FIELDS],actions=[asdict(f) for f in ACTION_FIELDS])
+    from brass_ai.learning.contracts import FEATURE_VERSION
+    return dict(version=VERSION,feature_version=FEATURE_VERSION,production_enabled=True,
+        rules=RULES,seat_order='observer-clockwise-relative',
+        status='field-specific compact encoding; complete internal facts retained; final style[4]/intent[8] unchanged',
+        semantic_state=[asdict(f) for f in STATE_FIELDS],semantic_actions=[asdict(f) for f in ACTION_FIELDS],
+        state=[asdict(f) for f in STATE_INPUTS],actions=[asdict(f) for f in ACTION_INPUTS],
+        omitted_state=STATE_OMISSIONS,omitted_actions=ACTION_OMISSIONS)
 
 
 @lru_cache(maxsize=1)

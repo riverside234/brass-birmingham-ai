@@ -14,9 +14,12 @@ def write_json(path, value):
 
 def implementation_id():
     # Source-bound runs cannot silently resume with changed learning/search code.
+    from brass_ai.learning.state_layout import LAYOUT_FILE
+    from brass_ai.learning.contracts import FEATURE_SCHEMA
     base = Path(__file__).parent.parent
     paths = [p for group in ('step5','recovery','search','learning','feature_engineering') for p in (base/group).glob('*.py')]
-    paths += [SOURCE_ROOT/'configs/learning/features-2.0.0.json']
+    paths += [SOURCE_ROOT/'configs/learning'/FEATURE_SCHEMA]
+    paths += [SOURCE_ROOT/'configs/learning'/LAYOUT_FILE]
     paths += [base / 'learning/runner.py', base / 'learning/batching.py']
     paths += [base/'searchlab/spiel.py',base/'beliefs.py',base/'runtime_contracts.py',base/'host.py',base/'bank.py',base/'legacy.py']
     paths += sorted((SOURCE_ROOT/'src/BrassTrainingHost').glob('*.cs'))

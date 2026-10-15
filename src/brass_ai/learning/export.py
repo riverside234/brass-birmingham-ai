@@ -69,12 +69,12 @@ def load_export(path):
     path = Path(path)
     manifest = read_json(path.with_suffix('.json'))
     require(manifest['format'] == 'four-seat-onnx/1.0.0', 'Unknown export format')
+    config = ModelConfig.from_dict(manifest['model_config'])
     assert_compatible(manifest['compatibility'])
     require(hashlib.sha256(path.read_bytes()).hexdigest() == manifest['onnx_sha256'], 'ONNX fingerprint mismatch')
     require(manifest['inputs'] == INPUTS and manifest['outputs'] == OUTPUTS, 'Export tensor contract mismatch')
     options = ort.SessionOptions()
     options.intra_op_num_threads = 1
-    config = ModelConfig.from_dict(manifest['model_config'])
     session = ort.InferenceSession(str(path), options, providers=['CPUExecutionProvider'])
     require([x.name for x in session.get_inputs()] == INPUTS and
             [x.name for x in session.get_outputs()] == OUTPUTS, 'ONNX graph names differ from manifest')

@@ -43,7 +43,7 @@ class FeatureSchemaTests(unittest.TestCase):
 
     def test_reference_optimized_parity_dynamic_candidates_context_and_all_seats(self):
         reference=Encoder();fast=PreparedEncoder()
-        self.assertEqual((reference.state_dim,reference.action_dim),(5489,548))
+        self.assertEqual((reference.state_dim,reference.action_dim),(3128,327))
         for row in self.positions:
             for shift in range(4):
                 view=rotate(row['view'],shift);choices=row['choices'];style=[.2,0,0,0];intent=[0,1,0,0,0,0,0,0]
@@ -63,18 +63,18 @@ class FeatureSchemaTests(unittest.TestCase):
         self.assertFalse(np.array_equal(a.actions[:,184:],b.actions[:,184:]))
         model=UtilityNet(utility_config(ModelConfig.preset(),reward_spec(read_json(SOURCE_ROOT/'configs/step5/joint7-latest.json'))))
         # The same augmented state embedding feeds policy, official and utility heads.
-        self.assertEqual(model.state_encoder[0].in_features,5489)
-        self.assertEqual(model.action_encoder[0].in_features,548)
+        self.assertEqual(model.state_encoder.input_dim,3128)
+        self.assertEqual(model.action_encoder[0].in_features,327)
         with torch.no_grad():outputs=model(*collate([a,b]))
         for values in outputs[1:]:self.assertEqual(tuple(values.shape),(2,4))
         self.assertFalse(torch.equal(outputs[1][0],outputs[1][1]))
 
     def test_frozen_layout_width_and_explicit_parameter_budgets(self):
-        schema=read_json(SOURCE_ROOT/'configs/learning/features-2.0.0.json')
+        schema=read_json(SOURCE_ROOT/'configs/learning/features-4.0.0.json')
         self.assertEqual(schema['derived'],json.loads(json.dumps(specification())))
         self.assertEqual((len(STATE_FIELDS),len(ACTION_FIELDS)),(326,52))
         model=FourSeatNet();self.assertEqual(model.config.hidden,304)
-        self.assertEqual(model.parameter_count,2766477);self.assertGreater(model.parameter_count,2000000)
+        self.assertEqual(model.parameter_count,1904445);self.assertLess(model.parameter_count,model.config.parameter_limit)
         self.assertEqual(model.config.parameter_limit,3000000)
         bad=model.config.to_dict();bad['parameter_limit']=2000000
         with self.assertRaisesRegex(ValueError,'budget'):ModelConfig.from_dict(bad)
@@ -93,7 +93,7 @@ class FeatureSchemaTests(unittest.TestCase):
 
     def test_mixed_old_arrays_and_versions_rejected_before_batch_or_update(self):
         row=self.positions[0];current=PreparedEncoder().encode(row['view'],row['choices'])
-        for old in (Encoded(current.state[:3207],current.actions[:,:184],current.stable_to_relative,current.choice_ids),
+        for old in (Encoded(current.state[:2539],current.actions[:,:184],current.stable_to_relative,current.choice_ids),
                     Encoded(current.state,current.actions,current.stable_to_relative,current.choice_ids,'permitted-features/1.0.0')):
             with self.assertRaisesRegex(ValueError,'mixed-version'):collate([current,old])
             r=game()['records'][0]
@@ -117,7 +117,7 @@ class FeatureSchemaTests(unittest.TestCase):
         with tempfile.TemporaryDirectory(dir=SOURCE_ROOT/'artifacts') as directory:
             path=Path(directory)/'raw.jsonl.gz';write_shard(path,[episode],dict(purpose='training'))
             receipt=cache_receipt(path);self.assertEqual(receipt['validator'],cache_version())
-            self.assertTrue(path.with_name(path.name+'.features-v2.npz').exists())
+            self.assertTrue(path.with_name(path.name+'.features-v4.npz').exists())
             self.assertFalse(path.with_name(path.name+'.features.npz').exists())
             old=dict(receipt,validator='0'*64);self.assertIsNone(load_cache(path,[episode],old))
             restored=read_shards([path],receipts={str(path):receipt})[0]
@@ -182,7 +182,7 @@ class FeatureSchemaTests(unittest.TestCase):
             np.testing.assert_array_equal(rows[0].actions,unpacked.actions)
             packed[0]['encoded']['feature_version']='old'
             with self.assertRaisesRegex(ValueError,'mixed-version'):slot.unpack_frames(packed,'a'*32)
-            huge=Encoded(rows[0].state,np.zeros((2000,548),np.float32),rows[0].stable_to_relative,tuple(map(str,range(2000))))
+            huge=Encoded(rows[0].state,np.zeros((2000,327),np.float32),rows[0].stable_to_relative,tuple(map(str,range(2000))))
             self.assertIsNone(slot.pack_frames([dict(encoded=huge)],'b'*32))
         finally:slot.close()
 
@@ -197,7 +197,7 @@ class FeatureSchemaTests(unittest.TestCase):
             self.assertLess(report['parity_max_absolute_error'],.005);load_export(directory/'official.onnx')
             utility=UtilityNet(utility_config(ModelConfig.preset(),reward_spec(read_json(SOURCE_ROOT/'configs/step5/joint7-latest.json'))))
             model=PersonalityNet(PersonalityConfig(utility.config.to_dict()))
-            self.assertEqual(model.parameter_count,2842330)
+            self.assertEqual(model.parameter_count,1980298)
             self.assertEqual(model.config.parameter_limit,3100000)
             save(directory/'goals.pt',model);restored,_=load(directory/'goals.pt')
             with torch.no_grad():

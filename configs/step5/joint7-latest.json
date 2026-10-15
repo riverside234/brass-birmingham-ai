@@ -150,7 +150,7 @@
   "audit_workers": 16,
   "overlap_pools": true,
   "search_wall_fraction": null,
-  "architecture": "brass-four-seat-mlp-resnet/4.0.0",
+  "architecture": "brass-four-seat-mlp-resnet/8.0.0",
   "parameter_limit": 3000000,
   "initialization": "random",
   "imitation": {

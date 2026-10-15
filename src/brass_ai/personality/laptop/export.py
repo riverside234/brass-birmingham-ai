@@ -20,6 +20,8 @@ GOAL_OUTPUTS=['goal_'+k for k in FACTORS]+['confidence_logits']
 
 
 def validate_metadata(meta):
+    from brass_ai.learning.utility_model import UtilityConfig
+    UtilityConfig.from_dict(meta['config'])
     require(meta['format']==EXPORT and type(meta['actor']) is bool
             and meta['compatibility']==compatibility() and meta['precision']=='float32' and meta['opset']==17
             and meta['inputs']==BASE_INPUTS+(['personality'] if meta['actor'] else [])
@@ -112,6 +114,8 @@ def compare(expected,actual,mask):
 
 def export(model,path):
     import onnx
+    model.validate_parameter_count()
+    if isinstance(model,PersonalityNet):model.core.validate_parameter_count()
     path=Path(path);path.parent.mkdir(parents=True,exist_ok=True)
     require(not path.exists(),'Do not overwrite an immutable export')
     actor=isinstance(model,PersonalityNet);config=(model.core.config if actor else model.config).to_dict()

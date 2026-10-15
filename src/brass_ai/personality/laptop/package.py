@@ -57,7 +57,8 @@ def build(root,roster_directory,output,*,qualification=None,fixture=False):
     write(out/'runtime/artifacts/r4-host/runtime.json',runtime)
     for name in ('configs/rules/runtime-dependencies-1.1.0.json','configs/contracts/v0.2.0/card-composition.json',
                  'configs/contracts/v0.2.0/wire.schema.json','configs/contracts/v0.2.0/manifest.json',
-                 'configs/learning/features-1.0.0.json','configs/learning/features-2.0.0.json','configs/learning/features-3.0.0.json','configs/learning/host-1.0.0.json','configs/references/upstream.lock.json'):
+                 'configs/learning/features-1.0.0.json','configs/learning/features-2.0.0.json','configs/learning/features-3.0.0.json','configs/learning/features-4.0.0.json',
+                 'configs/learning/state-groups-4.0.0.json','configs/learning/host-1.0.0.json','configs/references/upstream.lock.json'):
         dest=out/'runtime'/name;dest.parent.mkdir(parents=True,exist_ok=True);shutil.copyfile(root/name,dest)
     # The search dependencies stay byte-identical. No training entry point or
     # training artifacts are included; Python modules are library dependencies.

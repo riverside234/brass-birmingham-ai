@@ -435,7 +435,9 @@ def validate_config(config):
                  'overlap_pools','search_wall_fraction','initialization','architecture','parameter_limit','imitation','legacy_opponents'}
         from brass_ai.learning.model import ARCHITECTURE,PARAMETER_LIMIT
         require(config['initialization']=='random' and (config['architecture'],config['parameter_limit']) in
-                ((ARCHITECTURE,PARAMETER_LIMIT),('brass-four-seat-mlp-resnet/3.0.0',3000000),
+                ((ARCHITECTURE,PARAMETER_LIMIT),('brass-four-seat-mlp-resnet/5.0.0',3000000),
+                 ('brass-four-seat-mlp-resnet/4.0.0',3000000),
+                 ('brass-four-seat-mlp-resnet/3.0.0',3000000),
                  ('brass-four-seat-mlp-resnet/2.0.0',3000000),
                  ('brass-four-seat-mlp-resnet/1.0.0',2000000)),
                 'Fresh versioned residual-model contract required')

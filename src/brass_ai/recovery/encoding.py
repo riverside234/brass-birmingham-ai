@@ -1,4 +1,4 @@
-"""Six-group version-2 layout, with separate categorical/context caches.
+"""Six-group compact version-4 layout, with separate categorical/context caches.
 
 The original raw fields retain their meaning. validated=True is used only after the
 recovery ingress boundary has checked the original permitted view and choices.
@@ -105,17 +105,14 @@ class PreparedEncoder(Encoder):
                 item = by_id[identity]
                 if group == 'slots':
                     tile = item.get('tile')
-                    x += self.counts(item['types'], self.industries)
-                    x += self.tile(tile)[:1]
                     x += self.one(relative(tile['seat']) if tile else None, list(range(4)), empty=True)
                     x += self.one(tile['type'] if tile else None, self.industries, empty=True)
-                    x += self.tile(tile)[1:]
+                    x += self.board_tile(tile)
                 elif group == 'links':
                     x += self.one(relative(item['owner']) if 'owner' in item else None, list(range(4)), empty=True)
                 else:
                     x += self.counts(item.get('types', []), self.industries)
                     x += [item['beer']]
-                    x += self.one(item['bonus'], ['Develop', 'VP', 'Income', 'Money'])
         x += [view['coal_market'] / 14, view['iron_market'] / 10, view['deck_count'] / 64,
               view['wild_industry_count'] / 4, view['wild_location_count'] / 4]
         pending = view['pending']
@@ -125,7 +122,7 @@ class PreparedEncoder(Encoder):
         x += [pending[k] / 4 for k in ('parts', 'coal', 'iron', 'beer')]
         counts = Counter((relative(e['seat']), e['era'], e['choice']['kind']) for e in view['history'])
         x += [counts[(seat, era, kind)] / 32 for seat in range(4)
-              for era in ('CanalEra', 'RailEra') for kind in self.kinds]
+              for era in ('CanalEra', 'RailEra') for kind in s['history_kinds']]
         x += list(style) + list(intent)
         actions = np.asarray([self.choice_features(c) for c in choices], dtype=np.float32)
         state,actions = self.append_derived(x,actions,view,choices,style,intent,source=source,deadline=deadline,cancelled=cancelled)

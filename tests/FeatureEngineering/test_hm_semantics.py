@@ -3,7 +3,7 @@ import copy
 import unittest
 import numpy as np
 
-from brass_ai.feature_engineering.contracts import ACTION_FIELDS,STATE_FIELDS
+from brass_ai.feature_engineering.contracts import ACTION_INPUTS,STATE_INPUTS
 from brass_ai.feature_engineering.context import DerivedContextBuilder
 from brass_ai.recovery.encoding import PreparedEncoder
 from fixtures import rotate
@@ -15,13 +15,13 @@ class ExistingFeatureSemanticsTests(unittest.TestCase):
 
     def encoded_action(self,view,choices,index,name):
         encoder=PreparedEncoder();row=encoder.encode(view,choices)
-        i=next(i for i,f in enumerate(ACTION_FIELDS) if f.name==name);field=ACTION_FIELDS[i]
-        return row.actions[index,encoder.base_action_dim+i*7]*field.scale
+        i=next(i for i,f in enumerate(ACTION_INPUTS) if f.name==name);field=ACTION_INPUTS[i]
+        return row.actions[index,encoder.base_action_dim+sum(len(f.components) for f in ACTION_INPUTS[:i])]*field.scale
 
     def encoded_state(self,view,choices,name):
         encoder=PreparedEncoder();row=encoder.encode(view,choices)
-        i=next(i for i,f in enumerate(STATE_FIELDS) if f.name==name);field=STATE_FIELDS[i]
-        return row.state[encoder.base_state_dim-12+i*7]*field.scale
+        i=next(i for i,f in enumerate(STATE_INPUTS) if f.name==name);field=STATE_INPUTS[i]
+        return row.state[encoder.base_state_dim-12+sum(len(f.components) for f in STATE_INPUTS[:i])]*field.scale
 
     def test_last_resource_flips_credit_actual_owner_in_native_and_encoded_seats(self):
         for other in (False,True):
@@ -39,7 +39,8 @@ class ExistingFeatureSemanticsTests(unittest.TestCase):
                 for name,value in expected.items():
                     key=f'effects.{rel}.{name}'
                     self.assertEqual(effect[key].value,value)
-                    self.assertAlmostEqual(self.encoded_action(v,c,index,key),value,places=5)
+                    if any(f.name==key for f in ACTION_INPUTS):
+                        self.assertAlmostEqual(self.encoded_action(v,c,index,key),value,places=5)
             for shift in range(4):
                 rotated=rotate(v,shift)
                 np.testing.assert_array_equal(PreparedEncoder().encode(v,c).actions,PreparedEncoder().encode(rotated,c).actions)

@@ -2,7 +2,7 @@
 
 IDs identify public board locations, never hidden state. Internal player slots run
 clockwise from the observer. Model outputs are converted back to stable seat IDs.
-The version-2 layout contains the six permitted feature groups A–F.
+The version-4 layout compacts selected fields without changing raw rule facts.
 """
 from __future__ import annotations
 
@@ -14,6 +14,7 @@ import numpy as np
 from brass_ai.runtime_contracts import validate
 from .contracts import CONFIG_DIR, FEATURE_SCHEMA, FEATURE_VERSION, digest, finite_vector, read_json, require
 from .encoding_budget import check_budget
+from .state_layout import state_layout
 
 
 @dataclass
@@ -26,30 +27,32 @@ class Encoded:
 
 
 def check_encoded(row):
-    require(getattr(row,'feature_version',None)==FEATURE_VERSION and row.state.shape==(5489,) and
-            row.actions.shape==(len(row.choice_ids),548),'Incompatible or mixed-version encoded features')
+    schema=feature_schema()
+    require(getattr(row,'feature_version',None)==FEATURE_VERSION and row.state.shape==(schema['state_dim'],) and
+            row.actions.shape==(len(row.choice_ids),schema['action_dim']),'Incompatible or mixed-version encoded features; explicitly re-encode raw data')
+
+
+from functools import lru_cache
+
+@lru_cache(maxsize=1)
+def feature_schema():return read_json(CONFIG_DIR/FEATURE_SCHEMA)
 
 
 class Encoder:
     def __init__(self):
         from brass_ai.feature_engineering.context import DerivedContextBuilder
-        from brass_ai.feature_engineering.contracts import STATE_FIELDS,ACTION_FIELDS,COMPONENTS
+        from brass_ai.feature_engineering.contracts import STATE_INPUTS,ACTION_INPUTS
         self.schema = s = read_json(CONFIG_DIR / FEATURE_SCHEMA)
         self.derived = DerivedContextBuilder(cache_size=0)
         require(digest(s['derived'])==self.derived.schema,'Frozen derived feature layout differs')
         self.cards, self.industries, self.kinds = s['card_types'], s['industries'], s['kinds']
         self.targets = s['slots'] + s['links'] + ['merchant:' + x for x in s['merchants']] + ['market']
         self.action_dim = len(self.kinds) + len(self.targets) + len(s['merchants']) + len(self.industries) + len(self.cards)
-        tile_dim = len(s['tile_fields'])
-        self.state_dim = (2 + len(s['phases']) + 3 + 4 + 16 + len(self.cards) +
-            4 * (len(s['player_fields']) + len(self.cards) + 2 + 6 * (8 + 2 * (1 + tile_dim))) +
-            len(s['slots']) * (6 + 1 + 4 + 6 + tile_dim) +
-            len(s['links']) * 4 + len(s['merchants']) * (6 + 1 + 4) +
-            5 + len(self.kinds) + len(self.targets) + len(s['merchants']) + 4 +
-            4 * 2 * len(self.kinds) + 4 + s['intent_dim'])
+        self.state_layout = state_layout()
+        self.state_dim = self.state_layout.raw_dimension
         self.base_state_dim,self.base_action_dim=self.state_dim,self.action_dim
-        self.state_dim+=len(STATE_FIELDS)*len(COMPONENTS)
-        self.action_dim+=len(ACTION_FIELDS)*len(COMPONENTS)
+        self.state_dim+=sum(len(f.components) for f in STATE_INPUTS)
+        self.action_dim+=sum(len(f.components) for f in ACTION_INPUTS)
         require((self.state_dim,self.action_dim)==(s['state_dim'],s['action_dim']),'Frozen input dimensions differ')
 
     def append_derived(self,x,actions,view,choices,style,intent,*,source=None,deadline=None,cancelled=None):
@@ -79,6 +82,10 @@ class Encoder:
             return [0.0] * (1 + len(self.schema['tile_fields']))
         require(1 <= tile['level'] <= 8, 'Unknown tile level')
         return [1.0] + [float(tile[k]) / self.schema['tile_fields'][k] for k in sorted(self.schema['tile_fields'])]
+
+    def board_tile(self,tile):
+        fields=self.schema['board_tile_fields']
+        return [float(tile[k])/fields[k] for k in sorted(fields)] if tile is not None else [0.]*len(fields)
 
     def choice_features(self, choice):
         # Scout discards three physical cards, possibly with repeated semantics.
@@ -128,17 +135,14 @@ class Encoder:
                 item = by_id[identity]
                 if group == 'slots':
                     tile = item.get('tile')
-                    x += self.counts(item['types'], self.industries)
-                    x += self.tile(tile)[:1]
                     x += self.one(relative(tile['seat']) if tile else None, list(range(4)), empty=True)
                     x += self.one(tile['type'] if tile else None, self.industries, empty=True)
-                    x += self.tile(tile)[1:]
+                    x += self.board_tile(tile)
                 elif group == 'links':
                     x += self.one(relative(item['owner']) if 'owner' in item else None, list(range(4)), empty=True)
                 else:
                     x += self.counts(item.get('types', []), self.industries)
                     x += [item['beer']]
-                    x += self.one(item['bonus'], ['Develop', 'VP', 'Income', 'Money'])
         x += [view['coal_market'] / 14, view['iron_market'] / 10, view['deck_count'] / 64,
               view['wild_industry_count'] / 4, view['wild_location_count'] / 4]
         pending = view['pending']
@@ -148,7 +152,7 @@ class Encoder:
         x += [pending[k] / 4 for k in ('parts', 'coal', 'iron', 'beer')]
         counts = Counter((relative(e['seat']), e['era'], e['choice']['kind']) for e in view['history'])
         x += [counts[(seat, era, kind)] / 32 for seat in range(4)
-              for era in ('CanalEra', 'RailEra') for kind in self.kinds]
+              for era in ('CanalEra', 'RailEra') for kind in s['history_kinds']]
         x += list(style) + list(intent)
         actions = np.asarray([self.choice_features(c) for c in choices], dtype=np.float32)
         state,actions = self.append_derived(x,actions,view,choices,style,intent)

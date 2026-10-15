@@ -22,12 +22,23 @@ class PersistenceMigrationTests(unittest.TestCase):
     def setUpClass(cls):torch.set_num_threads(2)
 
     def previous_contract(self):
-        receipt=read_json(CONFIG_DIR.parent/'personality/source-migrations.json')
-        self.assertEqual(receipt['format'],'personality-source-migrations/1.0.0')
-        previous=receipt['migrations'][0]['from_contract']
-        matches=[m for m in receipt['migrations'] if m['from_contract']==previous and m['to_contract']==contract()]
-        self.assertEqual(len(matches),1)
+        # Exercise a hypothetical source-only review in an isolated receipt.
+        # A new architecture is intentionally absent from production approvals.
+        current=contract();previous=copy.deepcopy(current);previous['source']='f'*64
+        self.migration_receipt=dict(format='personality-source-migrations/1.0.0',migrations=[dict(
+            from_contract=previous,to_contract=current,kind='p0-p1-persistence-only/1.0.0',
+            scope='Authored unit-test receipt only; never a production source approval')])
+        original=read_json
+        stub=patch('brass_ai.personality.contracts.read_json',side_effect=lambda path:
+            copy.deepcopy(self.migration_receipt) if Path(path).name=='source-migrations.json' else original(path))
+        stub.start();self.addCleanup(stub.stop)
         return previous
+
+    def test_live_receipts_do_not_authorize_new_architecture(self):
+        receipt=read_json(CONFIG_DIR.parent/'personality/source-migrations.json')
+        self.assertFalse(any(m['to_contract']==contract() for m in receipt['migrations']))
+        for m in receipt['migrations']:
+            with self.assertRaisesRegex(ValueError,'contract/source differs'):accepted_contract(m['from_contract'])
 
     def test_exact_reviewed_source_load_preserves_weights_optimizer_and_rng(self):
         old=self.previous_contract();model,_=import_parent(parent())
@@ -66,12 +77,12 @@ class PersistenceMigrationTests(unittest.TestCase):
             path=Path(tmp)/'old.pt'
             with patch.object(checkpoint,'contract',return_value=old):checkpoint.save(path,model)
             raw=torch.load(path,map_location='cpu',weights_only=True)
-            next(iter(raw['state_dict'].values())).add_(.1);torch.save(raw,path)
+            next(t for t in raw['state_dict'].values() if t.is_floating_point()).add_(.1);torch.save(raw,path)
             with self.assertRaisesRegex(ValueError,'weights changed'):checkpoint.load(path)
 
     def test_receipt_must_pin_this_exact_target_source(self):
         old=self.previous_contract()
-        receipt=read_json(CONFIG_DIR.parent/'personality/source-migrations.json')
+        receipt=copy.deepcopy(self.migration_receipt)
         for entry in receipt['migrations']:
             if entry['from_contract']==old and entry['to_contract']==contract():
                 entry['to_contract']['source']='0'*64

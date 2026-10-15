@@ -3,13 +3,14 @@ from collections import OrderedDict
 from dataclasses import dataclass
 from types import MappingProxyType
 
-from brass_ai.learning.contracts import digest,finite_vector,require,read_json,CONFIG_DIR
+from brass_ai.learning.contracts import digest,finite_vector,require,read_json,CONFIG_DIR,FEATURE_SCHEMA
 from brass_ai.learning.encoding_budget import check_budget
 from .contracts import VERSION,RULES,STATE_FIELDS,ACTION_FIELDS,layout_identity,tensorize
 from .finance import financial,provisional_order,opportunities
 from .industry import realization,development
 from .effects import action_effects
 from .rules import BoardFacts,income_level
+from .static_profile import admit_static
 
 
 @dataclass(frozen=True)
@@ -38,7 +39,7 @@ class DerivedContextBuilder:
         require(type(cache_size) is int and cache_size>=0 and type(static_cache_size) is int and static_cache_size>=0,'Invalid feature cache bounds')
         self.cache_size,self.static_cache_size=cache_size,static_cache_size
         self.cache=OrderedDict();self.static=OrderedDict();self.schema=layout_identity()
-        self.board_schema=read_json(CONFIG_DIR/'features-1.0.0.json')
+        self.board_schema=read_json(CONFIG_DIR/FEATURE_SCHEMA)
         self.hits=self.misses=self.dynamic_calculations=0
 
     def build(self,view,choices,style=None,intent=None,*,deadline=None,cancelled=None,validated=False,input_identity=None):
@@ -50,6 +51,7 @@ class DerivedContextBuilder:
             from brass_ai.recovery.inputs import BOUNDARY
             input_identity=BOUNDARY.check(view,choices)
         require(view['rules']==RULES and view['context']['actor']==view['seat'] and not view['context']['terminal'],'Derived features require the acting permitted observer')
+        admit_static(view,self.board_schema)
         for group in ('slots','links','merchants'):
             actual=[x['id'] for x in view[group]]
             require(len(actual)==len(set(actual)) and set(actual)==set(self.board_schema[group]),'Missing/duplicate required public board facts')

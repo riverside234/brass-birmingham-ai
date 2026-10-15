@@ -294,8 +294,11 @@ class InferenceService:
         while len(self.cache)>self.config['max_models']: self.cache.popitem(last=False)
         return self.cache[identity]
 
-    def _evaluate(self,items):
+    def _evaluate(self,items,*,array_responses=False):
         responses={}
+        # Shared replies copy arrays directly into the owned slot; only the
+        # receiver needs detached lists. Direct callers keep the list contract.
+        values=lambda array:array if array_responses else array.tolist()
         # Each entry has only tensors derived from one permitted observer.
         by_model=defaultdict(list)
         for key,frame in items:
@@ -352,11 +355,11 @@ class InferenceService:
                     if r['status']=='expired': self.metrics['expired_requests']+=1
                     if r['status']=='ok':
                         r.update(choice_ids=list(frame['encoded'].choice_ids),
-                            probabilities=arrays[0][j,:len(frame['encoded'].choice_ids)].tolist(),
-                            win_share=arrays[1][j].tolist(),placement=arrays[2][j].tolist(),vp=arrays[3][j].tolist())
+                            probabilities=values(arrays[0][j,:len(frame['encoded'].choice_ids)]),
+                            win_share=values(arrays[1][j]),placement=values(arrays[2][j]),vp=values(arrays[3][j]))
                         if len(arrays)>4:
                             from brass_ai.learning.contracts import digest
-                            r.update(utility=arrays[4][j].tolist(),reward_id=digest(model.config.utility))
+                            r.update(utility=values(arrays[4][j]),reward_id=digest(model.config.utility))
                     responses[key]=r
         return responses
 
@@ -406,13 +409,24 @@ class InferenceService:
                                     rows=self.slots[m['lane']].unpack_frames(m['frames'],m['token']);self.metrics['shared_requests']+=1
                                 else:rows=m['frames'];self.metrics['inline_requests']+=1
                                 frames.extend(((i,j),f) for j,f in enumerate(rows))
-                            replies=self._evaluate(frames)
+                            # Existing subclasses/instrumentation own their
+                            # evaluator contract and still return normal lists.
+                            evaluate=self._evaluate
+                            replies=(evaluate(frames,array_responses=True)
+                                if getattr(evaluate,'__func__',None) is InferenceService._evaluate
+                                else evaluate(frames))
                             # Release ndarray views before reusing/unmapping slots.
                             frames.clear();rows=None
                         for i,m in enumerate(messages):
                             output=[replies[i,j] for j in range(len(m['frames']))]
                             slot=self.slots.get(m['lane']);packed=slot.pack_responses(output,m['token']) if slot else None
                             if packed is not None:self.metrics['shared_replies']+=1
+                            else:
+                                # Disabled or full slots retain the existing
+                                # list wire format, with exactly one conversion.
+                                for response in output:
+                                    for key in ('probabilities','win_share','placement','vp','utility'):
+                                        if isinstance(response.get(key),np.ndarray):response[key]=response[key].tolist()
                             outbound.append(dict(token=m['token'],shared=packed is not None,
                                 responses=packed if packed is not None else output))
                         if profiler: profiler.step()

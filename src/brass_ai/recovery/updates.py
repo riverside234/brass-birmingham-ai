@@ -103,23 +103,34 @@ class Dataset:
         for start, part in bounded_batches(selected,size,cells):
             yield indices[start:start+len(part)]
 
-    def batch(self, indices, exploration=0, temperature=1):
+    def _batch_rows(self, indices, value_only=False):
+        rows=[self.encoded[i] for i in indices]
+        if value_only:
+            from brass_ai.learning.features import Encoded,check_encoded
+            # Check the original shapes before narrowing: slicing must not
+            # hide a changed action/choice count after Dataset construction.
+            for row in rows:check_encoded(row)
+            rows=[Encoded(row.state,row.actions[:1],row.stable_to_relative,
+                          row.choice_ids[:1],row.feature_version) for row in rows]
+        return rows
+
+    def batch(self, indices, exploration=0, temperature=1, *, value_only=False):
         ix=torch.tensor(indices,device=self.device)
-        inputs=collate([self.encoded[i] for i in indices],self.device)
+        inputs=collate(self._batch_rows(indices,value_only),self.device)
         width=inputs[1].shape[1]
         q=np.zeros((len(indices),width),dtype=np.float32)
         if exploration:
             for j,i in enumerate(indices): q[j,:len(self.q[i])]=self.q[i]
         return ix, inputs, torch.from_numpy(q).to(self.device)
 
-    def _pinned_batch(self, indices, exploration=0):
+    def _pinned_batch(self, indices, exploration=0, *, value_only=False):
         # A small background queue prepares/pins CPU tensors while CUDA trains.
         # These private buffers are never mutated after asynchronous transfer.
-        ix,inputs,q=self.batch_cpu(indices,exploration)
+        ix,inputs,q=self.batch_cpu(indices,exploration,value_only=value_only)
         return tuple(t.pin_memory() for t in (ix,*inputs,q))
 
-    def batch_cpu(self, indices, exploration=0):
-        inputs=collate([self.encoded[i] for i in indices])
+    def batch_cpu(self, indices, exploration=0, *, value_only=False):
+        inputs=collate(self._batch_rows(indices,value_only))
         q=np.zeros((len(indices),inputs[1].shape[1]),dtype=np.float32)
         if exploration:
             for j,i in enumerate(indices):q[j,:len(self.q[i])]=self.q[i]
@@ -129,16 +140,23 @@ class Dataset:
         for part,ix,inputs,_ in self.policy_batches(parts,executor=executor):
             yield part,ix,inputs
 
-    def policy_batches(self, parts, exploration=0, executor=None):
+    def value_batch(self, indices, model):
+        return self.batch(indices,value_only=state_value_model(model))
+
+    def value_batches(self, parts, model, executor=None):
+        for part,ix,inputs,_ in self.policy_batches(parts,executor=executor,value_only=state_value_model(model)):
+            yield part,ix,inputs
+
+    def policy_batches(self, parts, exploration=0, executor=None, *, value_only=False):
         if executor is None:
             for part in parts:
-                ix,inputs,q=self.batch(part,exploration)
+                ix,inputs,q=self.batch(part,exploration,value_only=value_only)
                 yield part,ix,inputs,q
             return
         parts=iter(parts);pending=deque()
         def submit():
             part=next(parts,None)
-            if part is not None:pending.append((part,executor.submit(self._pinned_batch,part,exploration)))
+            if part is not None:pending.append((part,executor.submit(self._pinned_batch,part,exploration,value_only=value_only)))
         for _ in range(2):submit()
         while pending:
             part,future=pending.popleft()
@@ -146,6 +164,18 @@ class Dataset:
             tensors=tuple(t.to(self.device,non_blocking=True) for t in host)
             submit()
             yield part,tensors[0],tensors[1:-1],tensors[-1]
+
+
+def state_value_model(model):
+    """Only stock state-only value heads can omit unused candidate scoring.
+
+    Keep one real legal candidate for the unchanged forward signature. Value
+    phases discard its logits; policy, BC and teacher phases retain all choices.
+    Subclasses may define action-dependent values and keep the full batch.
+    """
+    from brass_ai.learning.model import FourSeatNet
+    from brass_ai.learning.utility_model import UtilityNet
+    return type(model) in (FourSeatNet,UtilityNet)
 
 
 def rehearsal_dataset(data,device):
@@ -374,7 +404,7 @@ def _ppo_nonforced(model,optimizer,games,behavior,config,*,profile,profile_steps
                         actor_totals+=torch.stack([x.detach().sum() for x in (actor,entropy,((ratio-1).abs()>config['clip']).float())])
                         actor_seen+=len(part)
                     parts=ds.microbatches(crit,config['microbatch_size'],config['max_candidate_cells'],config['bucket'])
-                    for part,ix,inputs in ds.supervised_batches(parts,executor):
+                    for part,ix,inputs in ds.value_batches(parts,model,executor):
                         with autocast(config,device):
                             out=model(*inputs,remaining=ds.remaining[ix]) if ds.utility is not None else model(*inputs)
                         values=value_losses(out,tuple(t[ix] for t in ds.targets))
@@ -434,7 +464,8 @@ def _ppo_nonforced(model,optimizer,games,behavior,config,*,profile,profile_steps
                 for phase in sorted({r['view']['context']['phase'] for r in ds.rows})},timings=timings.report(),memory=memory(device))
 
 
-def supervised_epoch(model,optimizer,data,config,*,training=True,kind='bc',weight=1.0,profile=None,progress=None):
+def supervised_epoch(model,optimizer,data,config,*,training=True,kind='bc',weight=1.0,profile=None,progress=None,validation_weights=None):
+    """Optionally report a second BC weighting from the same validation outputs."""
     require(kind in ('bc','teacher'),'Unknown supervised label kind')
     # Search visits teach a policy distribution. A sparse teacher's eventual
     # game outcome is not a search value target. PPO/BC already fit the critic.
@@ -444,6 +475,13 @@ def supervised_epoch(model,optimizer,data,config,*,training=True,kind='bc',weigh
         dataset=data if isinstance(data,Dataset) else Dataset(data,device,policy=False)
     data=dataset.data
     count=len(dataset.data);order=torch.randperm(count).tolist() if training else list(range(count))
+    reweighted=None
+    if validation_weights is not None:
+        require(not training and kind=='bc','Additional BC weights are validation-only')
+        validation_weights=torch.as_tensor(validation_weights,device=device,dtype=torch.float32)
+        require(validation_weights.shape==(count,) and bool(torch.isfinite(validation_weights).all())
+                and bool((validation_weights>0).all()),'Invalid validation weights')
+        reweighted=torch.zeros((),device=device)
     totals=torch.zeros(10,device=device);steps=0;clips=0
     diagnostics={}
     log=Progress(progress,count) if progress else None
@@ -466,6 +504,11 @@ def supervised_epoch(model,optimizer,data,config,*,training=True,kind='bc',weigh
                     if kind=='bc':
                         natural=bc_loss(out[0],dataset.chosen[ix])
                         policy=natural*dataset.bc_weights[ix]
+                        if reweighted is not None:
+                            # Balanced validation changes only the BC weights.
+                            # Keep the original per-microbatch reduction order,
+                            # sharing predictions/value losses from this pass.
+                            reweighted+=(natural*validation_weights[ix]).sum()
                         teacher_entropy=teacher_kl=torch.zeros_like(policy)
                     else:
                         width=out[0].shape[1]
@@ -519,7 +562,7 @@ def supervised_epoch(model,optimizer,data,config,*,training=True,kind='bc',weigh
             bucket['family_correct']+=(guess['kind'],guess.get('industry'))==(target['kind'],target.get('industry'))
     p,v,w,r,vp,correct,meaningful,natural,teacher_entropy,teacher_kl=totals.cpu().tolist()
     actor_denominator=max(1,meaningful) if config.get('actor_nonforced') else count
-    return dict(policy_loss=p/actor_denominator,natural_policy_loss=natural/actor_denominator,value_loss=v/count,
+    report=dict(policy_loss=p/actor_denominator,natural_policy_loss=natural/actor_denominator,value_loss=v/count,
         loss=weight*p/actor_denominator+value_weight*v/count,value_loss_training=bool(value_weight),
         win_loss=w/count,rank_loss=r/count,vp_loss=vp/count,meaningful_top1=correct/max(1,meaningful),
         meaningful_decisions=int(meaningful),decisions=count,optimizer_steps=steps,gradient_clip_steps=clips,
@@ -529,6 +572,11 @@ def supervised_epoch(model,optimizer,data,config,*,training=True,kind='bc',weigh
         by_teacher_era_phase_action={k:dict(decisions=v['decisions'],natural_policy_loss=v['loss']/v['decisions'],
             top1=v['correct']/v['decisions'],family_top1=v['family_correct']/v['decisions']) for k,v in diagnostics.items()},
         timings=timings.report(),memory=memory(device))
+    if reweighted is None:return report
+    from copy import deepcopy
+    balanced_total=float(reweighted)
+    return report,dict(deepcopy(report),policy_loss=balanced_total/actor_denominator,
+                       loss=weight*balanced_total/actor_denominator+value_weight*v/count)
 
 
 def distill_update(model,optimizer,games,config,*,steps=8,weight=.25,quality=None):

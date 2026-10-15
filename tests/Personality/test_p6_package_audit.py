@@ -7,6 +7,8 @@ from unittest.mock import patch
 
 from test_difficulty import named
 from brass_ai.learning.contracts import SOURCE_ROOT,compatibility,digest
+from brass_ai.learning.model import ModelConfig
+from brass_ai.learning.utility_model import utility_config
 from brass_ai.personality.difficulty import contracts as difficulty,ui
 from brass_ai.personality.laptop import contracts,export,install,package
 from brass_ai.personality.search.contracts import READY,identity as search_identity
@@ -40,7 +42,8 @@ class PackageAuditTests(unittest.TestCase):
                 compatibility=compatibility(),precision='float32',opset=17,
                 inputs=export.BASE_INPUTS+(['personality'] if g['actor'] else []),
                 outputs=export.BASE_OUTPUTS+(export.GOAL_OUTPUTS if g['actor'] else []),
-                config=dict(utility=reward),reward_id=digest(reward),parity=dict(passed=True))
+                config=utility_config(ModelConfig.preset('small'),reward).to_dict(),
+                reward_id=digest(reward),parity=dict(passed=True))
         return documents,files
 
     def test_reference_model_order_and_roster_pool_are_bound(self):

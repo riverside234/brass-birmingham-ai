@@ -6,7 +6,7 @@ from brass_ai.bank import sha
 from brass_ai.learning.contracts import (CONFIG_DIR,FEATURE_VERSION,compatibility,decode_json,
     digest,project_path,read_json,require)
 
-CONVERSION='heuristic-raw-to-features2/2.0.0'
+CONVERSION='heuristic-raw-to-features4/1.0.0'
 
 
 def raw_compatible(actual):
@@ -17,7 +17,7 @@ def raw_compatible(actual):
     """
     current=compatibility()
     require(type(actual) is dict,'Unsupported raw feature contract; regenerate demonstrations')
-    generation={'four-seat-learning/1.0.0':1,'four-seat-learning/2.0.0':2,'four-seat-learning/3.0.0':3}.get(actual.get('learning_contract'))
+    generation={'four-seat-learning/1.0.0':1,'four-seat-learning/2.0.0':2,'four-seat-learning/3.0.0':3,'four-seat-learning/4.0.0':4}.get(actual.get('learning_contract'))
     require(generation is not None,'Unsupported raw feature contract; regenerate demonstrations')
     legacy=generation==1
     omitted={'feature_version','derived_source_sha256'} if legacy else set()

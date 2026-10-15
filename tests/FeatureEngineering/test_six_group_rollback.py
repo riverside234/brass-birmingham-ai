@@ -1,4 +1,4 @@
-"""Six-group rollback, five-block architecture and retained lab binding fix."""
+"""Six-group feature rollback, current grouped model and retained lab binding fix."""
 from contextlib import redirect_stdout
 import copy
 import io
@@ -34,7 +34,7 @@ class SixGroupRollbackTests(unittest.TestCase):
         cls.position=benchmark_positions()[0]
 
     def test_exact_six_group_layout_without_hand_coverage(self):
-        schema=read_json(SOURCE_ROOT/'configs/learning/features-2.0.0.json')
+        schema=read_json(SOURCE_ROOT/'configs/learning/features-4.0.0.json')
         self.assertEqual(digest(specification()),digest(schema['derived']))
         self.assertEqual((len(STATE_FIELDS),len(ACTION_FIELDS)),(326,52))
         self.assertFalse(any(f.name.startswith('hand.') for f in STATE_FIELDS+ACTION_FIELDS))
@@ -42,28 +42,28 @@ class SixGroupRollbackTests(unittest.TestCase):
         self.assertFalse(any(k.startswith('hand.') for k in context.state))
         self.assertTrue(all(not any(k.startswith('hand.') for k in a) for a in context.actions))
         a=Encoder().encode(p['view'],p['choices']);b=PreparedEncoder().encode(p['view'],p['choices'])
-        self.assertEqual((a.state.shape,a.actions.shape),((5489,),(len(p['choices']),548)))
+        self.assertEqual((a.state.shape,a.actions.shape),((3128,),(len(p['choices']),327)))
         np.testing.assert_array_equal(a.state,b.state);np.testing.assert_array_equal(a.actions,b.actions)
-        self.assertEqual(a.feature_version,'permitted-features/2.0.0')
+        self.assertEqual(a.feature_version,'permitted-features/4.0.0')
 
-    def test_five_real_residual_blocks_for_default_and_presets(self):
-        for size,count in (('small',990989),('medium',2766477)):
+    def test_six_real_residual_blocks_for_default_and_presets(self):
+        for size,count in (('small',844397),('medium',1904445)):
             model=FourSeatNet(ModelConfig.preset(size))
-            self.assertEqual(model.config.residual_blocks,5)
-            self.assertEqual(sum(isinstance(m,ResidualBlock) for m in model.modules()),5)
+            self.assertEqual(model.config.residual_blocks,6)
+            self.assertEqual(sum(isinstance(m,ResidualBlock) for m in model.modules()),6)
             self.assertEqual(model.parameter_count,count)
-            self.assertEqual(model.config.architecture,'brass-four-seat-mlp-resnet/4.0.0')
+            self.assertEqual(model.config.architecture,'brass-four-seat-mlp-resnet/8.0.0')
         model=FourSeatNet();self.assertEqual(model.config.hidden,304)
         utility=UtilityNet(utility_config(model.config,reward_spec(read_json(SOURCE_ROOT/'configs/step5/joint7-latest.json'))))
-        self.assertEqual(utility.parameter_count,2776497)
-        self.assertEqual(PersonalityNet(PersonalityConfig(utility.config.to_dict())).parameter_count,2842330)
+        self.assertEqual(utility.parameter_count,1914465)
+        self.assertEqual(PersonalityNet(PersonalityConfig(utility.config.to_dict())).parameter_count,1980298)
 
     def test_archived_hand_tensors_and_old_model_versions_rejected(self):
         p=self.position;e=Encoder().encode(p['view'],p['choices'])
         hand=Encoded(np.zeros(5685,np.float32),np.zeros((len(e.choice_ids),576),np.float32),
             e.stable_to_relative,e.choice_ids,'permitted-features/3.0.0')
         with self.assertRaisesRegex(ValueError,'mixed-version'):collate([hand])
-        for old in (1,2,3):
+        for old in (1,2,3,4,5):
             raw=ModelConfig.preset().to_dict();raw.update(architecture=f'brass-four-seat-mlp-resnet/{old}.0.0',residual_blocks=4)
             with self.assertRaisesRegex(ValueError,'old architectures'):ModelConfig.from_dict(raw)
 
