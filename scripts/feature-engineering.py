@@ -1,4 +1,4 @@
-"""Inspect features 2, explicitly convert heuristic raw data, or bind fresh IL."""
+"""Inspect six-group features and five-block models, re-audit raw data, or bind IL."""
 import argparse
 from pathlib import Path
 import sys
@@ -31,9 +31,13 @@ def main():
         from brass_ai.recovery.demonstrations import completed_imitation
         from brass_ai.recovery.config import latest_model_config,time_budget_config,champion_mix_config
         model,origin=completed_imitation(root,a.imitation_run)
-        require(model.config==ModelConfig.preset('medium'),'Production FE2 recipe requires width 304')
+        require(model.config==ModelConfig.preset('medium'),'Production five-block recipe requires width 304')
         path=project_path(root,a.output);require(not path.exists(),'Use a new feature-revision config path')
-        result=champion_mix_config(time_budget_config(latest_model_config(read_json(project_path(root,a.base)),origin)))
+        base=read_json(project_path(root,a.base))
+        # Fresh IL owns both initialization and rehearsal. Keeping the old
+        # recipe's dataset would reject the handoff or admit incompatible data.
+        base['rehearsal_manifest']=origin['manifest']
+        result=champion_mix_config(time_budget_config(latest_model_config(base,origin)))
         write_json(path,result)
     else:
         from brass_ai.learning.utility_model import UtilityNet,utility_config

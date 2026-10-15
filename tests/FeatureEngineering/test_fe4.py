@@ -74,7 +74,7 @@ class FeatureSchemaTests(unittest.TestCase):
         self.assertEqual(schema['derived'],json.loads(json.dumps(specification())))
         self.assertEqual((len(STATE_FIELDS),len(ACTION_FIELDS)),(326,52))
         model=FourSeatNet();self.assertEqual(model.config.hidden,304)
-        self.assertEqual(model.parameter_count,2580429);self.assertGreater(model.parameter_count,2000000)
+        self.assertEqual(model.parameter_count,2766477);self.assertGreater(model.parameter_count,2000000)
         self.assertEqual(model.config.parameter_limit,3000000)
         bad=model.config.to_dict();bad['parameter_limit']=2000000
         with self.assertRaisesRegex(ValueError,'budget'):ModelConfig.from_dict(bad)
@@ -197,7 +197,7 @@ class FeatureSchemaTests(unittest.TestCase):
             self.assertLess(report['parity_max_absolute_error'],.005);load_export(directory/'official.onnx')
             utility=UtilityNet(utility_config(ModelConfig.preset(),reward_spec(read_json(SOURCE_ROOT/'configs/step5/joint7-latest.json'))))
             model=PersonalityNet(PersonalityConfig(utility.config.to_dict()))
-            self.assertEqual(model.parameter_count,2656282)
+            self.assertEqual(model.parameter_count,2842330)
             self.assertEqual(model.config.parameter_limit,3100000)
             save(directory/'goals.pt',model);restored,_=load(directory/'goals.pt')
             with torch.no_grad():

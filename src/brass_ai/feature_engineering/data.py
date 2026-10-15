@@ -6,6 +6,8 @@ from brass_ai.bank import sha
 from brass_ai.learning.contracts import (CONFIG_DIR,FEATURE_VERSION,compatibility,decode_json,
     digest,project_path,read_json,require)
 
+CONVERSION='heuristic-raw-to-features2/2.0.0'
+
 
 def raw_compatible(actual):
     """Admission of complete raw wire facts, followed by a new native audit.
@@ -15,20 +17,22 @@ def raw_compatible(actual):
     """
     current=compatibility()
     require(type(actual) is dict,'Unsupported raw feature contract; regenerate demonstrations')
-    legacy=actual.get('learning_contract')=='four-seat-learning/1.0.0'
+    generation={'four-seat-learning/1.0.0':1,'four-seat-learning/2.0.0':2,'four-seat-learning/3.0.0':3}.get(actual.get('learning_contract'))
+    require(generation is not None,'Unsupported raw feature contract; regenerate demonstrations')
+    legacy=generation==1
     omitted={'feature_version','derived_source_sha256'} if legacy else set()
-    require(set(actual)==set(current)-omitted and actual['learning_contract'] in
-            ('four-seat-learning/1.0.0','four-seat-learning/2.0.0'),
+    require(set(actual)==set(current)-omitted,
             'Unsupported raw feature contract; regenerate demonstrations')
-    schema='features-1.0.0.json' if legacy else 'features-2.0.0.json'
+    schema=f'features-{generation}.0.0.json'
     require(actual['features_sha256']==digest(read_json(CONFIG_DIR/schema)),
             'Unknown raw layout; regenerate demonstrations')
     # This function grants permission for a full native re-audit of raw facts,
     # never permission to reuse old tensors, neural probabilities or teachers.
-    # A features-2 source repair need not force heuristic games to be replayed
-    # by their expensive original teacher when the recorded wire facts suffice.
+    # Complete older wire recordings contain the current hand and full legal
+    # list; new dimensions alone do not require new expensive teacher games.
     fingerprints={'encoder_sha256','architecture_sha256'}|({'derived_source_sha256'} if not legacy else set())
-    ignored={'learning_contract','features_sha256'}|fingerprints|omitted
+    if not legacy:require(actual['feature_version']==f'permitted-features/{generation}.0.0','Unknown raw feature version')
+    ignored={'learning_contract','features_sha256','feature_version'}|fingerprints|omitted
     require({k:v for k,v in actual.items() if k not in ignored}==
             {k:v for k,v in current.items() if k not in ignored},
             'Raw rules/wire/targets differ; regenerate demonstrations')
@@ -67,7 +71,7 @@ def convert(root,manifest_path,output,*,mono=None):
                         'Only training heuristic replays can be converted')
                 original_contract=header['compatibility'];header['compatibility']=compatibility()
                 header['provenance']=dict(header['provenance'],feature_conversion=dict(
-                    version='heuristic-raw-to-features2/1.0.0',source_sha256=before,
+                    version=CONVERSION,source_sha256=before,
                     source_compatibility=original_contract,feature_version=FEATURE_VERSION))
                 import json
                 outgoing.write(json.dumps(header)+'\n')
@@ -101,7 +105,7 @@ def convert(root,manifest_path,output,*,mono=None):
                 remedy='Required raw facts/rules are incompatible. Regenerate demonstrations in a new directory; do not zero-fill missing groups.'))
             raise ValueError(f'Feature conversion failed for {name}: {error}') from error
     result=_manifest(root,out/'manifest.json',entries,[],manifest['teachers'],manifest.get('calibration'),1)
-    receipt=dict(format='heuristic-raw-to-features2/1.0.0',source_manifest=source.relative_to(root).as_posix(),
+    receipt=dict(format=CONVERSION,source_manifest=source.relative_to(root).as_posix(),
         source_manifest_sha256=sha(source),feature_version=FEATURE_VERSION,compatibility=compatibility(),
         inputs=originals,games=len(entries),partitions=result['partitions'],native_transitions_verified=True,
         preserved='Raw game/record objects, setup/splits, choices/IDs, chosen indices, behavior and provenance; only the new shard header describes re-encoding.',

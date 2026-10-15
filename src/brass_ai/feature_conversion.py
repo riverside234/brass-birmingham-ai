@@ -91,7 +91,7 @@ def convert(root, manifest_path, output, *, mono=None, workers=None):
     replay records cross process boundaries. The final manifest is parent-owned
     and is never published after a worker/duplicate/source-integrity failure.
     """
-    from brass_ai.feature_engineering.data import raw_compatible
+    from brass_ai.feature_engineering.data import raw_compatible, CONVERSION
     from brass_ai.recovery.demonstrations import _manifest
     from brass_ai.step5.league import write_json
 
@@ -178,7 +178,7 @@ def convert(root, manifest_path, output, *, mono=None, workers=None):
             worker_pids=sorted({p['pid'] for p in parts}), seconds=time.monotonic()-started)
         result = _manifest(root, out/'manifest.json', entries, [], manifest['teachers'],
                            manifest.get('calibration'), width)
-        receipt = dict(format='heuristic-raw-to-features2/1.0.0',
+        receipt = dict(format=CONVERSION,
             source_manifest=source.relative_to(root).as_posix(), source_manifest_sha256=source_sha256,
             feature_version=compatibility()['feature_version'], compatibility=compatibility(),
             inputs=originals, games=len(entries), partitions=result['partitions'],

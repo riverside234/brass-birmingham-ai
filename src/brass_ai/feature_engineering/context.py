@@ -30,7 +30,7 @@ class DerivedContext:
         for action in self.actions:
             token=id(action)
             if token not in converted:converted[token]=tensorize(action,ACTION_FIELDS)
-        return tuple(converted[id(a)] for a in self.actions)
+        return tuple(converted[id(action)] for action in self.actions)
 
 
 class DerivedContextBuilder:

@@ -1,4 +1,4 @@
-"""Version-2 raw and derived layout, with separate categorical/context caches.
+"""Six-group version-2 layout, with separate categorical/context caches.
 
 The original raw fields retain their meaning. validated=True is used only after the
 recovery ingress boundary has checked the original permitted view and choices.

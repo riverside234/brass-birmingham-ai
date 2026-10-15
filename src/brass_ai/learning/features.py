@@ -2,7 +2,7 @@
 
 IDs identify public board locations, never hidden state. Internal player slots run
 clockwise from the observer. Model outputs are converted back to stable seat IDs.
-The version-2 layout retains raw history/stack summaries and adds all A–F groups.
+The version-2 layout contains the six permitted feature groups A–F.
 """
 from __future__ import annotations
 

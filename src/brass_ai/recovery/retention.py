@@ -142,6 +142,12 @@ def controls(artifacts):
     return result
 
 
+def feature_sidecars(path):
+    """All admitted generations accompany the same authoritative raw replay."""
+    return tuple(Path(str(path)+'.features'+version+'.'+ext)
+        for version in ('','-v2','-v3') for ext in ('npz','json'))
+
+
 def references(root,run):
     # Other owned runs can retire their control directories after enumeration.
     # Rebuild the complete graph on that race instead of silently dropping an
@@ -215,8 +221,7 @@ def _references(root,run):
     # Derived caches travel with their authoritative dataset/evidence source.
     for path,reason in list(pins.items()):
         if str(path).endswith('.jsonl.gz'):
-            for suffix in ('.features.npz','.features.json'):
-                derived=Path(str(path)+suffix)
+            for derived in feature_sidecars(path):
                 pins[resolve(derived)]=reason
     return pins
 
@@ -317,7 +322,7 @@ def plan(root,run,config=RETENTION):
                 files=sorted(directory.glob('*.jsonl.gz'))
                 for p in files[config['evaluation_samples']:]:
                     candidate(p,'completed champion selection game')
-                    for derived in directory.glob(p.name+'.features.*'):candidate(derived,'derived champion features')
+                    for derived in feature_sidecars(p):candidate(derived,'derived champion features')
                 panels.setdefault('champion',[]).append(directory)
                 continue
             if result.get('spec',{}).get('config',{}).get('panel')!='development':continue
@@ -344,7 +349,7 @@ def plan(root,run,config=RETENTION):
             files=sorted(run.glob('*.jsonl.gz'))
             for p in files[config['evaluation_samples']:]:
                 candidate(p,'completed development screen')
-                for derived in run.glob(p.name+'.features.*'): candidate(derived,'derived development features')
+                for derived in feature_sidecars(p): candidate(derived,'derived development features')
     # Profiles are derived and not training data.
     profiles=sorted(p for p in run.rglob('*.pt.trace.json') if '.retention-trash' not in p.parts)
     for p in profiles[:-config['profile_traces']]: candidate(p,'old profiler trace')

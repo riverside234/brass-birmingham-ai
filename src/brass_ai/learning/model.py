@@ -11,7 +11,7 @@ from torch import nn
 from .contracts import keys, require
 from .features import Encoder
 
-ARCHITECTURE='brass-four-seat-mlp-resnet/2.0.0'
+ARCHITECTURE='brass-four-seat-mlp-resnet/4.0.0'
 PARAMETER_LIMIT=3000000
 
 
@@ -23,17 +23,17 @@ class ModelConfig:
     action_hidden: int
     players: int = 4
     architecture: str = ARCHITECTURE
-    residual_blocks: int = 4
+    residual_blocks: int = 5
     head_hidden: int = 128
     parameter_limit: int = PARAMETER_LIMIT
 
     @classmethod
     def preset(cls, size='medium'):
         encoder = Encoder()
-        require(size in ('small', 'medium'), 'Unknown version-2 residual model preset')
+        require(size in ('small', 'medium'), 'Unknown version-4 residual model preset')
         width = {'small': 128, 'medium': 304}[size]
         return cls(encoder.state_dim, encoder.action_dim, width, 128,
-                   architecture=ARCHITECTURE, residual_blocks=4)
+                   architecture=ARCHITECTURE, residual_blocks=5)
 
     @classmethod
     def from_dict(cls, raw):
@@ -47,14 +47,14 @@ class ModelConfig:
     def validate(self):
         encoder = Encoder()
         require(type(self.players) is int and self.players == 4, 'Four-seat model required')
-        require(self.architecture==ARCHITECTURE, 'Use fresh version-2 feature/model weights; old architectures cannot migrate')
+        require(self.architecture==ARCHITECTURE, 'Use fresh version-4 five-block model weights; old architectures cannot migrate')
         require((self.state_dim, self.action_dim) == (encoder.state_dim, encoder.action_dim), 'Feature dimensions differ')
         require(type(self.hidden) is int and 32 <= self.hidden <= 2048 and
                 type(self.action_hidden) is int and 16 <= self.action_hidden <= 1024, 'Invalid hidden size')
         if self.architecture==ARCHITECTURE:
             require(type(self.residual_blocks) is int and 1<=self.residual_blocks<=8 and
                     type(self.head_hidden) is int and 16<=self.head_hidden<=256 and
-                    self.parameter_limit==PARAMETER_LIMIT, 'Version-2 residual model/budget contract')
+                    self.parameter_limit==PARAMETER_LIMIT, 'Version-4 residual model/budget contract')
 
     def to_dict(self):
         raw=asdict(self)
