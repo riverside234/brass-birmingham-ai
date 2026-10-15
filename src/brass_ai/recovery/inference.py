@@ -17,6 +17,7 @@ import torch
 from brass_ai.learning.batching import collate, model_id, predict_encoded, utility_budget
 from brass_ai.learning.contracts import require
 from brass_ai.learning.features import Encoded
+from brass_ai.learning.encoding_budget import EncodingStopped
 from .encoding import PreparedEncoder
 from .telemetry import Timings, profile_window, memory
 
@@ -134,11 +135,17 @@ class RemoteEvaluator:
                     seat=r.view['seat'],digest=r.input_digest,deadline=r.deadline,submitted=time.monotonic(),
                     cancelled=bool(r.cancelled and r.cancelled.is_set()),encoded=None,remaining=r.remaining))
                 continue
-            phase=time.monotonic();e=owner.encoder.encode(r.view,r.choices,r.style,r.intent)
+            phase=time.monotonic();encoding_stopped=None
+            try:
+                e=owner.encoder.encode(r.view,r.choices,r.style,r.intent,deadline=r.deadline,cancelled=r.cancelled)
+            except EncodingStopped as error:
+                # A normal turn-clock stop must not abort the actor or poison
+                # the shared inference service; the frame retires as stopped.
+                e=None;encoding_stopped=error.reason
             self.telemetry['encoding_seconds']+=time.monotonic()-phase
             frames.append(dict(request_id=r.request_id,model=owner.model_id,revision=r.view['context']['revision'],
                 seat=r.view['seat'],digest=r.input_digest,deadline=r.deadline,submitted=time.monotonic(),
-                cancelled=bool(r.cancelled and r.cancelled.is_set()),encoded=e,remaining=r.remaining))
+                cancelled=bool(encoding_stopped=='cancelled' or r.cancelled and r.cancelled.is_set()),encoded=e,remaining=r.remaining))
         slot=self.endpoint.slot();packed=slot.pack_frames(frames,token) if slot is not None else None
         self.endpoint.requests.put(dict(lane=self.endpoint.lane,token=token,frames=packed if packed is not None else frames,shared=packed is not None))
         ticket=dict(token=token,requests=list(requests),began=began)

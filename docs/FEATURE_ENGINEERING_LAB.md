@@ -51,6 +51,29 @@ objects, choice IDs/order, chosen labels, setup groups, train/validation/test sp
 behavior records and teacher admission metadata. The source files are not changed.
 Normal training still checks the qualified heuristic bank/admission evidence.
 
+The explicit converter also accepts earlier Features-2 **heuristic raw** recordings
+after an encoder/source repair, provided the frozen raw layout, rules, wire and
+target contracts still match. It performs the full native audit again and records
+the original compatibility in the new shard header. Source changes invalidate
+encoded-cache receipts; never edit fingerprints to reuse old tensors. Neural
+behavior, search targets and checkpoints do not gain a migration exception.
+If `features2-batch7` was converted before the review fixes, use a new output:
+
+```bash
+python /data/not_backed_up/yxu209/ai-training/scripts/feature-engineering.py convert \
+  --manifest /data/not_backed_up/yxu209/ai-training/artifacts/il-replay/features2-batch7/manifest.json \
+  --output /data/not_backed_up/yxu209/ai-training/artifacts/il-replay/features2-reviewed-batch7 \
+  --workers 48
+```
+
+Use that new manifest for subsequent fresh IL. These fixes change exact encoder
+and source fingerprints despite the verified identical numeric tensors. Previously
+created neural checkpoints remain usable with their pinned runtime; the current
+loader rejects them, and `--resume-reviewed-source` does not override a learning
+compatibility mismatch. This patch supplies no checkpoint migration or rewrite.
+See the [post-implementation review](../ai-research/FEATURE_ENGINEERING_REVIEW.md)
+for the fixes, feature-quality checks and their measurement limits.
+
 The following example uses the existing batch-7 manifest path. Substitute the
 actual audited manifest if that dataset has a different location. The output
 directory must not exist.
@@ -58,8 +81,21 @@ directory must not exist.
 ```bash
 python /data/not_backed_up/yxu209/ai-training/scripts/feature-engineering.py convert \
   --manifest /data/not_backed_up/yxu209/ai-training/artifacts/il-replay/v4-batch7-joint/manifest.json \
-  --output /data/not_backed_up/yxu209/ai-training/artifacts/il-replay/features2-batch7
+  --output /data/not_backed_up/yxu209/ai-training/artifacts/il-replay/features2-batch7 \
+  --workers 48
 ```
+
+Conversion uses separate CPU processes and private rules hosts per replay shard.
+The default is up to 48 workers, capped by available CPUs (including process
+affinity and `SLURM_CPUS_PER_TASK`) and the number of shards. `--workers 1` runs
+serially. Each worker uses one tensor thread; reduce `--workers` if memory or
+storage throughput limits concurrency. A single replay shard remains one job.
+Completion progress is reported immediately; the final manifest retains source
+order and is committed only after all audits and duplicate checks pass.
+`conversion.json` records the effective worker count, process IDs and elapsed time.
+If an earlier conversion created the output directory, use a new output name;
+the converter refuses to overwrite it. This scheduling change leaves feature
+encoding and model compatibility unchanged.
 
 Read `conversion.json` and the new `manifest.json`. Missing required source facts
 produce a failure, never zero-filled feature groups. Neural behavior and search
@@ -89,9 +125,10 @@ Run the focused implementation suites before starting a lab campaign:
 
 ```bash
 PYTHONPATH=/data/not_backed_up/yxu209/ai-training/src:/data/not_backed_up/yxu209/ai-training/tests/R2:/data/not_backed_up/yxu209/ai-training/tests/Recovery:/data/not_backed_up/yxu209/ai-training/tests/FeatureEngineering \
-python -m unittest test_fe1 test_fe2 test_fe3 test_fe4 test_recovery \
+python -m unittest test_fe1 test_fe2 test_fe3 test_fe4 test_fe_review test_conversion_workers test_learning test_recovery \
   test_exploration08 test_latest_model_recipe test_teacher_phase_revision \
-  test_time_budgets test_inference_deadline_race test_teacher_readiness_review -q
+  test_time_budgets test_inference_deadline_race test_teacher_readiness_review \
+  test_inference_performance test_followup_inference_review -q
 ```
 
 For a small native integration smoke, create a separate conversion manifest with

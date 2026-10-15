@@ -1,4 +1,4 @@
-"""Explicit v1 heuristic raw-data conversion; never a neural replay migration."""
+"""Explicit heuristic raw-data re-audit; never a neural replay migration."""
 import gzip
 from pathlib import Path
 
@@ -14,22 +14,28 @@ def raw_compatible(actual):
     Rules, wire, targets and reference/producer pins must still match exactly.
     """
     current=compatibility()
-    if actual.get('learning_contract')=='four-seat-learning/2.0.0':
-        from brass_ai.learning.contracts import assert_heuristic_data_compatible
-        assert_heuristic_data_compatible(actual);return
-    omitted={'feature_version','derived_source_sha256'}
-    require(set(actual)==set(current)-omitted and actual['learning_contract']=='four-seat-learning/1.0.0',
+    require(type(actual) is dict,'Unsupported raw feature contract; regenerate demonstrations')
+    legacy=actual.get('learning_contract')=='four-seat-learning/1.0.0'
+    omitted={'feature_version','derived_source_sha256'} if legacy else set()
+    require(set(actual)==set(current)-omitted and actual['learning_contract'] in
+            ('four-seat-learning/1.0.0','four-seat-learning/2.0.0'),
             'Unsupported raw feature contract; regenerate demonstrations')
-    require(actual['features_sha256']==digest(read_json(CONFIG_DIR/'features-1.0.0.json')),
-            'Unknown legacy raw layout; regenerate demonstrations')
-    ignored={'learning_contract','features_sha256','encoder_sha256','architecture_sha256'}|omitted
+    schema='features-1.0.0.json' if legacy else 'features-2.0.0.json'
+    require(actual['features_sha256']==digest(read_json(CONFIG_DIR/schema)),
+            'Unknown raw layout; regenerate demonstrations')
+    # This function grants permission for a full native re-audit of raw facts,
+    # never permission to reuse old tensors, neural probabilities or teachers.
+    # A features-2 source repair need not force heuristic games to be replayed
+    # by their expensive original teacher when the recorded wire facts suffice.
+    fingerprints={'encoder_sha256','architecture_sha256'}|({'derived_source_sha256'} if not legacy else set())
+    ignored={'learning_contract','features_sha256'}|fingerprints|omitted
     require({k:v for k,v in actual.items() if k not in ignored}==
             {k:v for k,v in current.items() if k not in ignored},
             'Raw rules/wire/targets differ; regenerate demonstrations')
-    for field in ('encoder_sha256','architecture_sha256'):
+    for field in fingerprints:
         value=actual[field]
         require(type(value) is str and len(value)==64 and all(c in '0123456789abcdef' for c in value),
-                'Invalid legacy source fingerprint')
+                'Invalid raw source fingerprint')
 
 
 def convert(root,manifest_path,output,*,mono=None):
@@ -59,9 +65,10 @@ def convert(root,manifest_path,output,*,mono=None):
                 header=decode_json(next(incoming));raw_compatible(header['compatibility'])
                 require(header['format']=='four-seat-replay/1.0.0' and header['provenance'].get('purpose')=='training',
                         'Only training heuristic replays can be converted')
-                header['compatibility']=compatibility()
+                original_contract=header['compatibility'];header['compatibility']=compatibility()
                 header['provenance']=dict(header['provenance'],feature_conversion=dict(
-                    version='heuristic-raw-to-features2/1.0.0',source_sha256=before,feature_version=FEATURE_VERSION))
+                    version='heuristic-raw-to-features2/1.0.0',source_sha256=before,
+                    source_compatibility=original_contract,feature_version=FEATURE_VERSION))
                 import json
                 outgoing.write(json.dumps(header)+'\n')
                 for line in incoming:

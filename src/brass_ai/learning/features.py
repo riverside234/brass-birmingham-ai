@@ -13,6 +13,7 @@ import numpy as np
 
 from brass_ai.runtime_contracts import validate
 from .contracts import CONFIG_DIR, FEATURE_SCHEMA, FEATURE_VERSION, digest, finite_vector, read_json, require
+from .encoding_budget import check_budget
 
 
 @dataclass
@@ -51,12 +52,14 @@ class Encoder:
         self.action_dim+=len(ACTION_FIELDS)*len(COMPONENTS)
         require((self.state_dim,self.action_dim)==(s['state_dim'],s['action_dim']),'Frozen input dimensions differ')
 
-    def append_derived(self,x,actions,view,choices,style,intent,*,source=None,deadline=None):
-        context=self.derived.build(view,choices,style,intent,validated=True,input_identity=source,deadline=deadline)
+    def append_derived(self,x,actions,view,choices,style,intent,*,source=None,deadline=None,cancelled=None):
+        context=self.derived.build(view,choices,style,intent,validated=True,input_identity=source,deadline=deadline,cancelled=cancelled)
         # Keep the existing neutral-BC/personality tail contract explicit.
         state=np.asarray(list(x[:-12])+list(context.state_tensor())+list(x[-12:]),dtype=np.float32)
         dynamic=np.asarray(context.action_tensors(),dtype=np.float32)
-        return state,np.concatenate((actions,dynamic),axis=1)
+        actions=np.concatenate((actions,dynamic),axis=1)
+        check_budget(deadline,cancelled)
+        return state,actions
 
     @staticmethod
     def one(value, vocabulary, *, empty=False):

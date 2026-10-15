@@ -10,6 +10,7 @@ import numpy as np
 from brass_ai.runtime_contracts import validate
 from brass_ai.learning.contracts import finite_vector, require
 from brass_ai.learning.features import Encoder, Encoded
+from brass_ai.learning.encoding_budget import check_budget
 from brass_ai.learning.contracts import digest
 from .inputs import BOUNDARY
 
@@ -57,13 +58,14 @@ class PreparedEncoder(Encoder):
             out[indices[value]]=count/scale
         return out
 
-    def encode(self, view, choices, style=None, intent=None, *, validated=False,deadline=None):
+    def encode(self, view, choices, style=None, intent=None, *, validated=False,deadline=None,cancelled=None):
         # The boundary already hashed the complete permitted inputs. Reuse that
         # immutable content identity instead of serializing the whole growing
         # history again merely to append twelve policy-context values.
+        check_budget(deadline,cancelled)
         source = digest(dict(view=view, choices=choices)) if validated else BOUNDARY.check(view, choices)
-        require(deadline is None or __import__('time').monotonic()<deadline,'Feature decision deadline expired')
         key = digest(dict(schema=self.derived.schema,input=source, style=style, intent=intent))
+        check_budget(deadline,cancelled)
         if key in self.cache:
             self.cache.move_to_end(key)
             return self.cache[key]
@@ -126,11 +128,12 @@ class PreparedEncoder(Encoder):
               for era in ('CanalEra', 'RailEra') for kind in self.kinds]
         x += list(style) + list(intent)
         actions = np.asarray([self.choice_features(c) for c in choices], dtype=np.float32)
-        state,actions = self.append_derived(x,actions,view,choices,style,intent,source=source,deadline=deadline)
+        state,actions = self.append_derived(x,actions,view,choices,style,intent,source=source,deadline=deadline,cancelled=cancelled)
         require(state.shape == (self.state_dim,) and actions.shape == (len(choices), self.action_dim), 'Feature layout mismatch')
         require(np.isfinite(state).all() and np.isfinite(actions).all(), 'Non-finite features')
         encoded = Encoded(state, actions, np.asarray([relative(i) for i in range(4)], dtype=np.int64), ids)
         for array in (encoded.state, encoded.actions, encoded.stable_to_relative): array.setflags(write=False)
+        check_budget(deadline,cancelled)
         self.cache[key] = encoded
         while len(self.cache) > self.cache_size: self.cache.popitem(last=False)
         return encoded

@@ -18,13 +18,15 @@ def main():
     conversion=sub.add_parser('convert')
     conversion.add_argument('--manifest',required=True);conversion.add_argument('--output',required=True)
     conversion.add_argument('--mono')
+    conversion.add_argument('--workers',type=int,
+        help='CPU processes (1-48); default: up to 48, capped by available CPUs and replay shards')
     config=sub.add_parser('configure')
     config.add_argument('--imitation-run',required=True);config.add_argument('--output',required=True)
     config.add_argument('--base',default='configs/step5/joint7-latest.json')
     a=parser.parse_args();root=a.root.resolve()
     if a.command=='convert':
-        from brass_ai.feature_engineering.data import convert
-        result=convert(root,a.manifest,a.output,mono=a.mono)
+        from brass_ai.feature_conversion import convert
+        result=convert(root,a.manifest,a.output,mono=a.mono,workers=a.workers)
     elif a.command=='configure':
         from brass_ai.recovery.demonstrations import completed_imitation
         from brass_ai.recovery.config import latest_model_config,time_budget_config,champion_mix_config

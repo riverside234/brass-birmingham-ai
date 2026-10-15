@@ -26,7 +26,8 @@ class InferencePerformanceTests(unittest.TestCase):
         with patch.object(encoding,'BOUNDARY',boundary),patch.object(encoding,'digest',wraps=digest) as hashed:
             first=encoder.encode(view,choices)
             self.assertEqual(hashed.call_count,1)
-            self.assertEqual(set(hashed.call_args.args[0]),{'input','style','intent'})
+            self.assertEqual(set(hashed.call_args.args[0]),{'schema','input','style','intent'})
+            self.assertEqual(hashed.call_args.args[0]['schema'],encoder.derived.schema)
             second=encoder.encode(view,choices,validated=True)
             self.assertIs(first,second)
             self.assertEqual(hashed.call_count,3)  # input + context on the prevalidated path.

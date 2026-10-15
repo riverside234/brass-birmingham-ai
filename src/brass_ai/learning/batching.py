@@ -17,6 +17,7 @@ import torch
 
 from .contracts import compatibility, digest, finite_vector, require
 from .features import Encoder,check_encoded
+from .encoding_budget import EncodingStopped
 
 
 _INPUT_ATOMS = frozenset((str, int, float, bool, type(None)))
@@ -203,7 +204,12 @@ class Evaluator:
             if stopped:
                 responses[request.request_id] = self._response(request, stopped)
             else:
-                encoded = self.encoder.encode(request.view, request.choices, request.style, request.intent)
+                try:
+                    encoded = self.encoder.encode(request.view, request.choices, request.style, request.intent,
+                                                  deadline=request.deadline,cancelled=request.cancelled)
+                except EncodingStopped as error:
+                    responses[request.request_id] = self._response(request,error.reason)
+                    continue
                 active.append((request, encoded))
         while active:
             group, maximum = [], 0

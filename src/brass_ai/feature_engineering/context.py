@@ -1,10 +1,10 @@
 """Complete FE0–FE3 context assembly with separate bounded static/dynamic caches."""
 from collections import OrderedDict
 from dataclasses import dataclass
-import time
 from types import MappingProxyType
 
 from brass_ai.learning.contracts import digest,finite_vector,require,read_json,CONFIG_DIR
+from brass_ai.learning.encoding_budget import check_budget
 from .contracts import VERSION,RULES,STATE_FIELDS,ACTION_FIELDS,layout_identity,tensorize
 from .finance import financial,provisional_order,opportunities
 from .industry import realization,development
@@ -41,8 +41,8 @@ class DerivedContextBuilder:
         self.board_schema=read_json(CONFIG_DIR/'features-1.0.0.json')
         self.hits=self.misses=self.dynamic_calculations=0
 
-    def build(self,view,choices,style=None,intent=None,*,deadline=None,validated=False,input_identity=None):
-        def admitted():require(deadline is None or time.monotonic()<deadline,'Derived features exceeded admitted decision deadline')
+    def build(self,view,choices,style=None,intent=None,*,deadline=None,cancelled=None,validated=False,input_identity=None):
+        def admitted():check_budget(deadline,cancelled)
         admitted()
         # Internal encoders reuse ingress admission. Public calls cross the same
         # exact, bounded split-schema validator as replay and inference.

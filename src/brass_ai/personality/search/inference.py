@@ -8,6 +8,7 @@ import numpy as np
 import torch
 
 from brass_ai.learning.batching import Request,RequestStopped,accept_response,collate
+from brass_ai.learning.encoding_budget import EncodingStopped
 from brass_ai.learning.contracts import digest,require
 from brass_ai.personality.checkpoint import model_id
 from brass_ai.personality.contracts import context,context_vector
@@ -38,10 +39,15 @@ class PersonalityRemote(RemoteEvaluator):
             require(isinstance(r,PersonalityRequest) and r.expected_model==self.model_id and r.digest()==r.input_digest,'Changed personality request')
             require(np.isfinite(r.deadline),'Invalid inference deadline')
             stopped=r.stopped()
-            encoded=None if stopped else self.encoder.encode(r.view,r.choices,r.style,r.intent)
+            encoded=None
+            if not stopped:
+                try:
+                    encoded=self.encoder.encode(r.view,r.choices,r.style,r.intent,deadline=r.deadline,cancelled=r.cancelled)
+                except EncodingStopped as error:
+                    stopped=error.reason
             frames.append(dict(request_id=r.request_id,model=self.model_id,revision=r.view['context']['revision'],
                 seat=r.view['seat'],digest=r.input_digest,deadline=r.deadline,submitted=began,
-                cancelled=bool(r.cancelled and r.cancelled.is_set()),encoded=encoded,remaining=r.remaining,
+                cancelled=bool(stopped=='cancelled' or r.cancelled and r.cancelled.is_set()),encoded=encoded,remaining=r.remaining,
                 personality=r.personality))
         self.endpoint.requests.put(dict(lane=self.endpoint.lane,token=token,frames=frames))
         ticket=dict(token=token,requests=list(requests),began=began);self.endpoint.pending=ticket

@@ -43,14 +43,13 @@ class LearningTests(unittest.TestCase):
         self.model = FourSeatNet(ModelConfig.preset('small')).eval()
 
     def test_size_presets_and_fresh_initialization(self):
-        # The active recipe uses the versioned residual architecture; the old
-        # R2 dense 8M preset remains loadable only through explicit old configs.
-        for size, expected in [('small', 619021), ('medium', 1840109)]:
+        # Features 2 requires fresh residual weights with the explicit 3M cap.
+        for size, expected in [('small', 957709), ('medium', 2580429)]:
             model = FourSeatNet(ModelConfig.preset(size))
-            self.assertEqual(model.config.architecture, 'brass-four-seat-mlp-resnet/1.0.0')
+            self.assertEqual(model.config.architecture, 'brass-four-seat-mlp-resnet/2.0.0')
             self.assertEqual(model.parameter_count, expected)
-            self.assertLessEqual(model.parameter_count, 2000000)
-        with self.assertRaisesRegex(ValueError, '<=2M residual models'):
+            self.assertLessEqual(model.parameter_count, 3000000)
+        with self.assertRaisesRegex(ValueError, 'version-2 residual model preset'):
             ModelConfig.preset('large')
         second = FourSeatNet(ModelConfig.preset('small'))
         self.assertNotEqual(model_id(self.model), model_id(second))
@@ -72,8 +71,10 @@ class LearningTests(unittest.TestCase):
             batched = self.model(*collate([self.encoded, shuffled]))
             single = self.model(*collate([self.encoded]))
         np.testing.assert_allclose(batched[0][1].numpy()[::-1], single[0][0], atol=2e-6)
-        for a, b in zip(batched[1:], single[1:]):
-            np.testing.assert_allclose(a.numpy(), b.numpy().repeat(2, axis=0), atol=1e-5)
+        for head,(a,b) in enumerate(zip(batched[1:],single[1:])):
+            # Different FP32 matrix shapes differ by a few ulps. The wider
+            # state encoder can produce up to 0.00005 VP of rounding noise.
+            np.testing.assert_allclose(a.numpy(),b.numpy().repeat(2,axis=0),atol=5e-5 if head==2 else 1e-5)
 
     def test_clockwise_rotation_encoding_and_outputs(self):
         with torch.inference_mode():
@@ -126,13 +127,15 @@ class LearningTests(unittest.TestCase):
         choice = {'id':'scout', 'kind':'scout', 'card':'industry:CoalMine',
                   'cards':['industry:CoalMine', 'location:Birmingham']}
         encoded = self.encoder.encode(self.view, [choice])
-        offset = self.encoder.action_dim - len(self.encoder.cards)
+        offset = self.encoder.base_action_dim - len(self.encoder.cards)
         self.assertAlmostEqual(encoded.actions[0, offset + self.encoder.cards.index('industry:CoalMine')], 2/3)
         kinds = [{'id':k, 'kind':k} for k in ('finish','bonus_skip')]
         kinds += [dict(id='x',kind='bonus_develop',industry='Pottery')]
         kinds += [dict(id='x',kind=k,target=self.encoder.schema['slots'][0]) for k in ('beer','coal','iron','liquidate')]
         for choice in kinds:
-            self.assertTrue(np.isfinite(self.encoder.encode(self.view, [choice]).actions).all())
+            # Categorical vocabulary coverage does not make these fabricated
+            # subchoices legal in this opening. FE3 tests native consequences.
+            self.assertTrue(np.isfinite(self.encoder.choice_features(choice)).all())
 
     def test_terminal_ties_ranks_and_no_sign_flip(self):
         targets = terminal_targets(result())
