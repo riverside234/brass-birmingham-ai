@@ -9,18 +9,18 @@ from unittest.mock import patch
 from brass_ai.bank import read
 from brass_ai.learning.contracts import SOURCE_ROOT
 from brass_ai.recovery.config import (TEACHER_WORK_BUDGET,LEGACY_OPPONENT_WORK_BUDGET,
-    NN_WORK_BUDGET,TEACHER_TIME_BUDGET,LEGACY_TIME_BUDGET,NN_TIME_BUDGET,
-    fixed_work_config,validate_config,nn_work_budget_config)
+    NN_WORK_BUDGET,TEACHER_TIME_BUDGET,TEACHER_PHASE_TIME_BUDGET_V3,LEGACY_TIME_BUDGET,NN_TIME_BUDGET,
+    fixed_work_config,validate_config,nn_work_budget_config,latest_model_recipe)
 from brass_ai.step5.evaluation import evaluation_config,validate_evaluation_config
 
 
 class PipelineWorkTests(unittest.TestCase):
     def test_all_active_training_and_evaluation_presets(self):
         folder=SOURCE_ROOT/'configs/step5'
-        for p in [*folder.glob('lab*.json'),folder/'smoke.json',folder/'recovery-smoke.json']:
+        for p in [*folder.glob('lab*.json'),folder/'smoke.json',folder/'recovery-smoke.json',folder/'joint7-latest.json']:
             with self.subTest(preset=p.name):
                 cfg=read(p);validate_config(cfg)
-                self.assertEqual(cfg['teacher_work_budget'],TEACHER_TIME_BUDGET)
+                self.assertEqual(cfg['teacher_work_budget'],TEACHER_TIME_BUDGET if latest_model_recipe(cfg) else TEACHER_PHASE_TIME_BUDGET_V3)
                 self.assertEqual(cfg['legacy_opponent_work_budget'],LEGACY_TIME_BUDGET)
                 self.assertEqual(fixed_work_config(cfg),cfg)
         for name in ('evaluation.json','development-evaluation.json','broader-evaluation.json'):
@@ -34,7 +34,7 @@ class PipelineWorkTests(unittest.TestCase):
         new=fixed_work_config(cfg)
         self.assertEqual(cfg,original)
         for key in cfg:self.assertEqual(new[key],cfg[key])
-        self.assertEqual(new['teacher_work_budget'],TEACHER_TIME_BUDGET)
+        self.assertEqual(new['teacher_work_budget'],TEACHER_PHASE_TIME_BUDGET_V3)
         self.assertEqual(new['legacy_opponent_work_budget'],LEGACY_TIME_BUDGET)
         new['teacher_work_budget']=copy.deepcopy(TEACHER_WORK_BUDGET)
         new['legacy_opponent_work_budget']=copy.deepcopy(LEGACY_OPPONENT_WORK_BUDGET)
@@ -88,7 +88,7 @@ class PipelineWorkTests(unittest.TestCase):
     def test_gpu_selection_is_forwarded_as_runtime_placement_not_learning_config(self):
         import torch
         from brass_ai.step5 import cli
-        original=read(SOURCE_ROOT/'configs/step5/lab.json')
+        original=read(SOURCE_ROOT/'configs/step5/joint7-latest.json')
         for count in (2,6):
             with self.subTest(devices=count),patch.object(torch.cuda,'is_available',return_value=True),\
                  patch.object(torch.cuda,'device_count',return_value=count),patch.object(cli,'require_preflight'),\
@@ -99,6 +99,7 @@ class PipelineWorkTests(unittest.TestCase):
                 self.assertEqual(train.call_args.kwargs['inference_devices'],['cuda:'+str(i) for i in range(count)])
                 self.assertEqual(train.call_args.args[2],original)
                 self.assertTrue(train.call_args.kwargs['resume_reviewed_source'])
+                self.assertFalse(train.call_args.kwargs['fresh'])
 
 
 if __name__=='__main__':unittest.main()

@@ -7,7 +7,7 @@ Oversized frames use the original queue transport, never truncate candidates.
 from multiprocessing.shared_memory import SharedMemory
 import numpy as np
 from brass_ai.learning.contracts import require
-from brass_ai.learning.features import Encoded
+from brass_ai.learning.features import Encoded,check_encoded
 
 HEADER=64
 
@@ -61,10 +61,11 @@ class SharedSlot:
         for f in frames:
             e=f['encoded'];f=dict(f)
             if e is not None:
+                check_encoded(e)
                 descriptors=[]
                 for a in (e.state,e.actions,e.stable_to_relative):
                     descriptor,offset=self.put(a,offset);descriptors.append(descriptor)
-                f['encoded']=dict(shared=descriptors,choice_ids=e.choice_ids)
+                f['encoded']=dict(shared=descriptors,choice_ids=e.choice_ids,feature_version=e.feature_version)
             result.append(f)
         return result
 
@@ -73,8 +74,9 @@ class SharedSlot:
         for f in frames:
             f=dict(f);e=f['encoded']
             if e is not None:
-                require(set(e)=={'shared','choice_ids'} and len(e['shared'])==3,'Invalid shared encoding')
-                f['encoded']=Encoded(*(self.get(d) for d in e['shared']),tuple(e['choice_ids']))
+                require(set(e)=={'shared','choice_ids','feature_version'} and len(e['shared'])==3,'Invalid shared encoding')
+                f['encoded']=Encoded(*(self.get(d) for d in e['shared']),tuple(e['choice_ids']),e['feature_version'])
+                check_encoded(f['encoded'])
             out.append(f)
         return out
 

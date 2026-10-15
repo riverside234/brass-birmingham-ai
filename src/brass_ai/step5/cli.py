@@ -15,7 +15,7 @@ from .evaluation import evaluate, promote, validate_evaluation_config
 def parser():
     p = argparse.ArgumentParser(description='Fresh four-player MLP-ResNet training with frozen v3 opponents and Masked ISMCTS NN distillation')
     p.add_argument('--root', type=Path, default=LAB_ROOT)
-    p.add_argument('--config', help='Evaluation uses evaluation.json; recovery uses lab.json; historical recipes are archived')
+    p.add_argument('--config', help='Training defaults to joint7-latest.json; evaluation uses evaluation.json; other commands use lab.json')
     p.add_argument('--device', choices=['auto', 'cpu', 'cuda'], default='auto',
                    help='Default: one visible CUDA GPU when available, otherwise CPU. Use CUDA_VISIBLE_DEVICES to select the allocated GPU.')
     p.add_argument('--inference-devices',help='Optional train/evaluate override; omitted by default so inference shares the learner GPU without a router. Explicit cuda:N list or auto to opt into all visible GPUs.')
@@ -31,6 +31,7 @@ def parser():
     initialization.add_argument('--from-run', help='Rejected: only this fresh run can resume its own checkpoints')
     initialization.add_argument('--imitation-run', help='Completed fresh standalone imitate run; starts PPO with its selected weights and a new optimizer')
     run.add_argument('--iterations', type=int, default=1)
+    run.add_argument('--fresh',action='store_true',help='Require a new run directory; refuse to resume or overwrite existing progress')
     run.add_argument('--expected-generation',type=int,help='Refuse to train unless the committed starting generation matches')
     run.add_argument('--resume-reviewed-source',action='store_true',
                      help='Continue this same PPO run across a pinned source/budget review; keep optimizer/counters')
@@ -92,7 +93,8 @@ def main(argv=None):
         require(a.command in ('train','evaluate'),'--inference-devices applies only to train/evaluate')
         from brass_ai.recovery.inference import validate_inference_devices
         inference_devices=validate_inference_devices([name.strip() for name in a.inference_devices.split(',')],a.device)
-    default_config = 'configs/step5/evaluation.json' if a.command == 'evaluate' else 'configs/step5/lab.json'
+    default_config = 'configs/step5/evaluation.json' if a.command == 'evaluate' else (
+        'configs/step5/joint7-latest.json' if a.command=='train' else 'configs/step5/lab.json')
     config = read_json(project_path(root, a.config or default_config))
     if a.command == 'evaluate' and config.get('format','').startswith('step5-evaluation-config/'):
         validate_evaluation_config(config)
@@ -169,7 +171,7 @@ def main(argv=None):
                 config['rehearsal_manifest']=a.demonstrations
             result = train(root, a.run, config, iterations=a.iterations, device=a.device, initial=a.initial,
                            mono=a.mono, from_run=a.from_run,imitation_run=a.imitation_run,resume_reviewed_source=a.resume_reviewed_source,
-                           expected_generation=a.expected_generation,
+                           expected_generation=a.expected_generation,fresh=a.fresh,
                            inference_devices=inference_devices)
             result.pop('summaries', None)
         elif a.command == 'evaluate':

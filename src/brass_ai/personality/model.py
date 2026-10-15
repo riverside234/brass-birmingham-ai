@@ -14,12 +14,12 @@ class PersonalityConfig:
     base: dict
     model: str = MODEL
     goal_hidden: int = 128
-    parameter_limit: int = 2100000
+    parameter_limit: int = 3100000
     extension_limit: int = 100000
 
     def validate(self):
         UtilityConfig.from_dict(self.base)
-        require(self.model==MODEL and self.goal_hidden==128 and self.parameter_limit==2100000
+        require(self.model==MODEL and self.goal_hidden==128 and self.parameter_limit==3100000
             and self.extension_limit==100000,'Unknown personality layout/budget')
         return self
 

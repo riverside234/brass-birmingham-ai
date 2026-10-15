@@ -22,7 +22,7 @@ from test_teacher_schedule import Clock, Planner, Decider
 
 class Selfplay31ReviewTests(unittest.TestCase):
     def test_each_curriculum_kind_covers_all_seats_and_resume_offsets(self):
-        for start in (0, 2080, 5040, 10000):
+        for start in (0, 20000, 100000):
             counts=Counter((table_kind(i,CURRICULUM),table_rotation(i)) for i in range(start,start+320))
             kinds={kind for kind,_ in counts}
             for kind in kinds:
@@ -31,8 +31,10 @@ class Selfplay31ReviewTests(unittest.TestCase):
             full=[table_rotation(i) for i in range(start,start+320)]
             pieces=[table_rotation(i) for i in range(start,start+117)]+[table_rotation(i) for i in range(start+117,start+320)]
             self.assertEqual(full,pieces)
-        old={i%4 for i in range(10000,10320) if table_kind(i,CURRICULUM)=='legacy'}
-        new={table_rotation(i) for i in range(10000,10320) if table_kind(i,CURRICULUM)=='legacy'}
+        # Retain the original 5%-v4 seat-aliasing regression with its old recipe.
+        archived=read(SOURCE_ROOT/'configs/step5/lab.json')['curriculum']
+        old={i%4 for i in range(10000,10320) if table_kind(i,archived)=='legacy'}
+        new={table_rotation(i) for i in range(10000,10320) if table_kind(i,archived)=='legacy'}
         self.assertEqual(len(old),1);self.assertEqual(new,set(range(4)))
 
     def test_retirement_reserve_stays_inside_one_clock_and_late_labels_fail(self):

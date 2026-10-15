@@ -178,6 +178,16 @@
       "implementation": "b24eef15976abc2895afebbf6191fa465bec85ad8ea49568f324f528ecaddaab",
       "learning_compatibility": "c349e816f2e301ea2a3b438902059cffe868f48e131f7c120691d37cd1c409d2",
       "reason": "Follow-up inference/recovery review: apply the same per-model utility-budget validation to local and shared inference, preserve the first failure across inference replicas/router, and check all staged rollout anchor/previous checkpoints before archiving a failed collection. No configuration, valid prediction, reward, PPO, gate, search-clock, distillation, checkpoint/optimizer/RNG, population or progress changes. Completed fresh IL weights remain compatible; no PPO optimizer or population import."
+    },
+    {
+      "implementation": "f71f3b85f1b68a4d128d57dbc85ff0f61526385804029f71078e869ce594911f",
+      "learning_compatibility": "c349e816f2e301ea2a3b438902059cffe868f48e131f7c120691d37cd1c409d2",
+      "reason": "Fresh latest-model PPO from the pinned completed IL policy. IL architecture, data, loss, completion/hash/lineage checks and checkpoint format are unchanged; a new PPO optimizer/progress/population is required."
+    },
+    {
+      "implementation": "ab5e74f8d374c9a348d1949c0d7e3361b39f17c44e0edbe9c7caac241bda5a2d",
+      "learning_compatibility": "c349e816f2e301ea2a3b438902059cffe868f48e131f7c120691d37cd1c409d2",
+      "reason": "Only ordinary learner exploration defaults/provenance changed; completed IL weights/data/architecture/loss contracts and teacher/evaluation policies remain compatible. No PPO state import into a different recipe."
     }
   ]
 }

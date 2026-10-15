@@ -1,5 +1,325 @@
 # Fresh training in conda: selected v4 teachers and Masked ISMCTS NN
 
+## Features 2: fresh IL and a new self-play run
+
+The current encoder/model uses `permitted-features/2.0.0`, width 304 and an explicit
+3M parameter cap. Follow [FEATURE_ENGINEERING_LAB.md](FEATURE_ENGINEERING_LAB.md)
+to audit/re-encode heuristic demonstrations, train fresh IL, bind its new config
+and resume a new-schema self-play run. Old-schema checkpoint continuation commands
+below apply only with their original pinned runtime; source-review flags cannot
+convert those weights/optimizer states into the new input layout.
+
+## 14 October ordinary learner exploration experiment
+
+The current `joint7-latest.json` preset and `latest_model_config` helper now use
+**0.08 exploration** for the current learner in ordinary training. All four
+latest-model self-play seats share this setting and contribute eligible data to
+the same learner. Historical/v4 tables use it only at their one learner seat.
+Frozen historical opponents retain **0.05**, teacher rollout policies retain
+their existing settings, and evaluation neural policies retain **0**. The v4
+policies and their search budgets are unchanged.
+
+The existing mixture is preserved:
+
+```text
+behavior_probability = 0.92 * policy_probability + 0.08 * exploration_distribution
+```
+
+The exploration distribution still groups legal choices by action family and
+build/develop industry, with the existing context weighting. It is not uniform
+over individual legal actions. Temperature remains **1.0**, entropy weight
+**0.005**, value weight **0.5**, and actions are sampled probabilistically. No
+schedule, opening temperature, Dirichlet noise, new starting positions or
+Dropout was added. The latest-model curriculum, four-seat learner collection,
+disabled gate, reward/insolvency, teacher clocks/cadence/quality, null cumulative
+teacher allowance, population and retention settings remain intact.
+
+`recovery/ordinary.py` reports the exploration/temperature/policy identity in
+ordinary job provenance and `sampling.behavior`. Existing compact history retains
+this report. Neural policy identities already include exploration; collection
+and PPO reconstruction both use the same configured value and family/context
+distribution. Each sampled action still records its actual mixture probability.
+The strict likelihood verification, masking and forced-action filtering are
+unchanged. A 0.05 collection is not relabeled as 0.08. Collection cache identities
+bind policies/settings/provenance, and a pending iteration from the previous
+source/configuration must be resolved through existing recovery rules before
+the continuation can begin.
+
+Continue the existing latest-model run from its committed checkpoint:
+
+```bash
+cd /data/not_backed_up/yxu209/ai-training
+python scripts/step5.py --config configs/step5/joint7-latest.json train \
+  --run artifacts/step5/v4-selfplay-joint-latest \
+  --imitation-run artifacts/step5/v4-batch7-joint \
+  --resume-reviewed-source --iterations 20
+```
+
+`--resume-reviewed-source` is required on the first reviewed source/configuration
+change. Once this run commits the new source and 0.08 setting, ordinary same-source
+resumes can omit it. Keep the existing run directory; this change does not reset
+weights, Adam/RNG, iteration/game/seed counters, population, checkpoint lineage
+or the persisted zero-to-100,000 curriculum window. For an explicitly configured
+run using another copied preset, change only its `exploration` field from 0.05
+to 0.08 and use the same reviewed continuation flag. Older preset files retain
+their explicit 0.05 setting.
+
+The current reviewed source is
+`ab5e74f8d374c9a348d1949c0d7e3361b39f17c44e0edbe9c7caac241bda5a2d`.
+Update source and both learning source registries together. All **2,017**
+preceding expanded approvals are preserved; **121** exact routes were appended,
+including the preceding source to current source with only 0.05 → 0.08 changed,
+and the same change for a run already on this source. Config changes beyond the
+pinned review still fail validation. IL/data/model compatibility is unchanged.
+
+Files changed in this adjustment:
+
+- `configs/step5/joint7-latest.json` and `src/brass_ai/recovery/config.py`:
+  learner exploration default/configuration generation.
+- `src/brass_ai/recovery/ordinary.py`: explicit behavior settings in provenance
+  and sampling reports.
+- `configs/learning/selfplay-resume-sources.json` and
+  `configs/learning/imitation-handoff-sources.json`: pinned continuation/handoff
+  source reviews.
+- `tests/Recovery/test_exploration08.py`,
+  `tests/Recovery/smoke_exploration.py`, and
+  `tests/Recovery/test_latest_model_recipe.py`: focused coverage and bounded
+  cross-source native smoke.
+- This training note.
+
+Validation: **26 focused tests passed** in 15.700 seconds. Tests cover normalized
+0.08 mixtures, zero masked probability, preserved family/industry/context mass,
+4/1/1 learner attribution, historical opponent exploration, real likelihood
+reconstruction before PPO, stale/relabelled behavior rejection, cache identity
+and stale-shard rejection, exact reviewed continuation and pending-iteration
+refusal. Weights, Adam, CPU RNG, counters, population, lineage and curriculum
+were checked across a committed generation-75 / 24,000-game transition and
+restart. A follow-up assertion confirms that changing ordinary exploration does
+not change the derived evaluation configuration.
+
+Evidence is under `artifacts/recovery/exploration08-review/`. The native smoke
+uses a separate directory and authored small IL-format fixture weights, with
+CPU inference and reduced actor concurrency. Rehearsal, diagnostic panels and
+retention are disabled only in the fixture; teacher readiness/cadence and
+ordinary v4 clocks remain active. No production checkpoint is modified.
+
+The cross-source native smoke passed: three games at 0.05 on the preceding
+source, then a reviewed continuation for three games at 0.08 on the new source.
+The stages took **84.109 / 145.218 seconds** (**229.327 seconds** combined).
+At continuation admission, the incoming weights, Adam state, CPU RNG, counters,
+population, lineage and curriculum matched the prior commit. The old checkpoint
+was byte-identical afterward. Progress advanced normally from iteration 1 / 3
+ordinary games to iteration 2 / 6 ordinary games. No gate or teacher collection
+ran. The existing utility freshness rule required three calibration steps on
+the new ordinary data after the source change.
+
+The 0.08 collection had **one self-play table and two v4 tables**, producing six
+learner trajectories. It supplied **491 learner decisions**, including **278
+forced decisions** excluded from actor updates. PPO used all **213 eligible
+actor decisions**, with **426 presentations**, **491 distinct critic decisions**,
+**two PPO steps**, final KL **0.000002404**, and no early stop. Historical-seat
+0.08/0.05 attribution is covered by the planner and real-likelihood focused
+tests; the small native continuation did not include a historical table.
+
+Before calibration/PPO, mean mixture entropy over all **213 nonforced ordinary
+learner decisions** was **3.176290 nats**. Recomputing the same model, legal
+choices and contexts at 0.05 gave **3.176810 nats**. Raising the exploration
+coefficient does not necessarily increase entropy because the exploration
+distribution is family/context weighted. Maximum error between recorded and
+reconstructed selected-action probability was **5.96e-8**.
+
+| Sampled action family | Count | Fraction of 213 nonforced learner decisions |
+| --- | --- | --- |
+| Build | 18 | 8.45% |
+| Develop | 65 | 30.52% |
+| Finish | 3 | 1.41% |
+| Liquidate | 2 | 0.94% |
+| Loan | 21 | 9.86% |
+| Network | 21 | 9.86% |
+| Pass | 62 | 29.11% |
+| Scout | 20 | 9.39% |
+| Sell | 1 | 0.47% |
+
+The 83 sampled build/develop choices were CottonMill 19, CoalMine 20, IronWorks
+13, Manufacturer 16, Brewery 15 and Pottery 0. These counts describe selected
+actions in six test player trajectories, including continuations; they are not
+root-only, per-industry coverage guarantees, independent samples or a strength
+panel. The 0.05 baseline used different games and earlier weights, so its
+entropy/frequencies are not a controlled before/after strength comparison.
+The exact same-position comparison above isolates only the mixture coefficient.
+Raw receipts are in `native/report.json`, with the audit in `review.json`.
+
+The larger mixture coefficient adds no forward pass, search worker or optimizer
+step. Runtime depends on the game paths generated by the new behavior. This is
+a modest experiment; entropy and action-frequency observations alone do not
+demonstrate improved playing strength.
+
+## 14 October fresh joint-7 latest-model recipe
+
+`configs/step5/joint7-latest.json` is the new default for `train`. It starts a
+separate run from completed joint-7 imitation; it cannot import G160/G179 PPO
+state or convert those runs, even with `--resume-reviewed-source`. Explicit
+older presets and their reviewed continuation routes remain available.
+
+| Completed ordinary games | Latest-model tables | Historical tables | v4 tables |
+| --- | --- | --- | --- |
+| 0–19,999 | 15% | 25% | 60% |
+| 20,000–99,999 | 45% | 25% | 30% |
+| 100,000 onward | 60% | 25% | 15% |
+
+These quotas refer to tables. Scheduling uses each game's absolute ordinary
+index, including iterations crossing 20,000 or 100,000. Teacher/evaluation
+games, trajectories and optimizer steps never advance this clock. The persisted
+v4 window starts at zero and ends at 100,000; validation prevents an older boost
+schedule from overriding the base curriculum or resetting on resume.
+
+Every self-play table uses the same frozen current-learner snapshot at all four
+seats, with all four eligible trajectories updating one shared learner. The next
+collection registers the updated snapshot. Historical and v4 tables retain one
+learner seat; frozen opponent decisions are excluded. Seat rotation, exploration,
+contexts, behavior-probability checks and forced-action handling are preserved.
+At 320 tables wholly within the final phase, the counts are 192/80/48 tables and
+768/80/48 learner trajectories: 896 trajectories before decision filtering.
+
+This recipe does not initialize or schedule champion gates, promote champions,
+mix champion opponents or publish gate-selected `best.pt`. Regular checkpoints
+and latest tracking continue. Monitor/broader panels remain diagnostic. Recipe
+validation and resume guards reject champion configuration/state. Older explicit
+gate recipes keep their behavior. The helper still applies the unrelated
+insolvency reward migration.
+
+The production configuration was derived from the current joint-7 preset, not
+an archived run configuration. PPO, reward coefficients, insolvency
+`event_cost=0.005` / `max_cost=0.075`, opponent search, population capacity 64,
+retention, and evaluation schedules are unchanged. Teacher settings are the
+requested **12/12/16/24 seconds** for early/late Canal and early/late Rail,
+five games, eight distillation steps, the existing 160-game cadence/readiness,
+phase reservations and quality/freshness/reuse/calibration guards.
+`search_wall_fraction: null` disables only the cumulative teacher allowance;
+shared per-turn deadlines, cancellation and failure timeouts remain active.
+Explicit older recipes keep their previous clock migration behavior.
+
+Resolved original IL lineage:
+
+- Run: `artifacts/step5/v4-batch7-joint`.
+- Selected checkpoint: `artifacts/step5/v4-batch7-joint/epoch-0006.pt`.
+- SHA-256: `29e7577bc374321f54d99b663800c4ccf762659ef0c02cf08a2eb8c1817317cf`.
+- Model identity: `ea1d9e4da5820a9bfa60647570d498ecf705dacceeb58221c87a77bbcbb26a53`.
+- Manifest: `artifacts/il-replay/v4-batch7-joint/manifest.json`.
+- Manifest SHA-256: `7da7720287d7de4ccaae486c70f8f2f4696ae7b409d3b821580d30a8674e954e`.
+- IL signature: `08ab674205d8603ebf1827009809a1a3479e00b85a716b521d36e4c64cb101c4`.
+
+G150/G179 exported lineage and both IL completion records agree on this origin.
+The actual checkpoint/dataset are absent from the local checkout; their binary
+verification must occur on the lab machine. Startup uses the existing completed
+imitation validator and checks the pinned origin before creating a learner
+checkpoint. Missing, incomplete or changed IL fails without random/checkpoint
+substitution. IL weights transfer into a fresh PPO optimizer, zero counters and
+a new population rooted at the IL anchor; existing reward-head adaptation and
+fresh utility calibration remain active. Subsequent resumes retain this run's
+weights, Adam, RNG, scheduling, population and lineage.
+
+Start from the lab repository; this command runs 20 iterations from zero:
+
+```bash
+cd /data/not_backed_up/yxu209/ai-training
+python scripts/step5.py --config configs/step5/joint7-latest.json train \
+  --run artifacts/step5/v4-selfplay-joint-latest \
+  --imitation-run artifacts/step5/v4-batch7-joint \
+  --fresh --iterations 20
+```
+
+The production directory is
+`/data/not_backed_up/yxu209/ai-training/artifacts/step5/v4-selfplay-joint-latest`.
+It has not been created or trained by local validation. `--fresh` refuses an
+existing state; the ordinary initialization path also rejects a nonempty run
+directory. Resume this new run later with another 20 iterations:
+
+```bash
+cd /data/not_backed_up/yxu209/ai-training
+python scripts/step5.py --config configs/step5/joint7-latest.json train \
+  --run artifacts/step5/v4-selfplay-joint-latest \
+  --imitation-run artifacts/step5/v4-batch7-joint \
+  --iterations 20
+```
+
+`--expected-generation` is optional: it asserts the committed starting generation
+and does not select a checkpoint. No `--resume-reviewed-source` is needed when
+resuming with this same source/configuration. Future code changes still require
+the existing exact source-review process.
+
+Iteration reports and compact history retain actual table counts, learner
+trajectories, all/eligible/forced decisions, and distinct PPO actor/critic samples
+used per table type. `actor.sample_usage` also records repeated presentations
+and unused eligible decisions, including KL-stopped batches. Calibration,
+rehearsal and teacher updates are excluded from these PPO sample counts. Table,
+trajectory and actual PPO sample fractions are separate fields.
+
+At fixed 320-table collections, the three phases produce 464, 752 and 896 learner
+trajectories before filtering. Four-seat sampling increases replay preparation,
+inference and PPO work; unchanged batching and KL stops determine actual work.
+The longer 30% v4 phase and permanent 15% v4 quota retain more searched opponents
+than the earlier 5% mature recipe. Gate evaluation cost disappears. No
+proportional throughput change or playing-strength improvement is established.
+
+The reviewed source for that preceding recipe revision was
+`f71f3b85f1b68a4d128d57dbc85ff0f61526385804029f71078e869ce594911f`.
+Update source and both `configs/learning/*-sources.json` registries together.
+Learning compatibility and all 1,899 preceding expanded continuation approvals
+are preserved; 118 routes were added for the unchanged older recipes. These
+approvals do not permit importing old PPO state into the new recipe.
+
+Validation: **151 distinct focused tests passed** across the recipe and
+compatibility checks. The 79-test primary run passed in 52.242 seconds. An older
+CLI placement test still expected `lab.json`; it now asserts the new default,
+and all six tests in that affected module passed on rerun. Coverage includes
+both curriculum boundaries/crossing batches, persisted progress, actual
+collection planning and seat attribution, behavior verification, real PPO sample
+usage and KL stopping, completed-IL handoff, fresh optimizer/zero counters,
+gate-free startup/resume, teacher timing/null allowance and existing exact
+Adam/RNG/source-review safeguards. All 24 existing Step 5 JSON configurations
+remain unchanged. Local evidence is under
+`artifacts/recovery/latest-model-recipe-review/`; `review.json` records test
+coverage, the resolved assertion and the configuration/lineage audit.
+
+The bounded native smoke completed **six games in 241.078 seconds**, in a
+separate directory with a small authored IL-format fixture, CPU inference and
+reduced actor concurrency. It ran one three-game iteration, restarted from its
+checkpoint, then ran another three. These are functional test weights, not the
+trained joint-7 checkpoint. Fixture rehearsal, scheduled diagnostic panels and
+retention cleanup were disabled; production settings are unchanged. Ordinary
+v4 search retained its one-second shared
+turn budget and four workers. The two iterations used snapshots with the
+expected first-output/second-input model identity, and resume restored Adam and
+CPU RNG exactly. No gate function was called; the prior checkpoint remained
+byte-identical and progress advanced from 3 to 6 ordinary games.
+
+| Smoke table type | Actual tables | Learner trajectories | Eligible actor decisions | Distinct actor decisions used |
+| --- | --- | --- | --- | --- |
+| Latest-model self-play | 2 | 8 | 278 | 278 |
+| Historical | 1 | 1 | 32 | 32 |
+| v4 | 3 | 3 | 119 | 119 |
+| Total | 6 | 12 | 429 | 429 |
+
+The small smoke spans only the first six table slots, not a complete quota
+block. Its table fractions were 33.3% / 16.7% / 50.0%, trajectory fractions
+66.7% / 8.3% / 25.0%, and actor sample fractions 64.8% / 7.5% / 27.7%.
+All **968 learner decisions** entered the critic dataset, including **539
+forced decisions** excluded from actor updates. Two epochs per iteration gave
+**858 actor presentations**, **1,936 critic presentations**, **four PPO steps**,
+and zero unused eligible actor decisions. Final KL was **0.000004585** and
+**0.000003014** for the two iterations; neither stopped early at target 0.01.
+A separate focused test forces a KL stop and verifies unused-sample reporting.
+Fresh utility-head calibration took three separate steps on the first
+collection; resume reused its calibration receipt without repeating them.
+
+The smoke did not reach the unchanged teacher readiness threshold, so it ran
+zero teacher collections/distillation updates and does not measure teacher
+policy drift or label yield. Teacher timing and null wall-limit handling are
+covered by focused tests. No production iterations, GPU performance benchmark,
+or playing-strength evaluation was run. See `native/report.json` for the raw
+sampling/update receipts and `preservation.json` for the configuration audit.
+
 ## 14 October follow-up self-play correctness review
 
 The follow-up review reproduced and repaired three additional failure cases:
@@ -18,7 +338,7 @@ The follow-up review reproduced and repaired three additional failure cases:
   archival mutation. Missing or changed required opponents leave the partial
   iteration and committed state untouched.
 
-The current reviewed source is
+The reviewed source for that preceding recipe was
 `b24eef15976abc2895afebbf6191fa465bec85ad8ea49568f324f528ecaddaab`.
 Update source and **both** `configs/learning/*-sources.json` registries together.
 All 1,782 preceding expanded approvals remain intact; 117 exact continuation

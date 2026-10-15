@@ -11,6 +11,9 @@ from torch import nn
 from .contracts import keys, require
 from .features import Encoder
 
+ARCHITECTURE='brass-four-seat-mlp-resnet/2.0.0'
+PARAMETER_LIMIT=3000000
+
 
 @dataclass(frozen=True)
 class ModelConfig:
@@ -19,18 +22,18 @@ class ModelConfig:
     hidden: int
     action_hidden: int
     players: int = 4
-    architecture: str = 'daiyu-four-seat-dense/1.0.0'
-    residual_blocks: int = 0
+    architecture: str = ARCHITECTURE
+    residual_blocks: int = 4
     head_hidden: int = 128
-    parameter_limit: int = 2000000
+    parameter_limit: int = PARAMETER_LIMIT
 
     @classmethod
     def preset(cls, size='medium'):
         encoder = Encoder()
-        require(size in ('small', 'medium'), 'Main training supports only <=2M residual models')
+        require(size in ('small', 'medium'), 'Unknown version-2 residual model preset')
         width = {'small': 128, 'medium': 304}[size]
         return cls(encoder.state_dim, encoder.action_dim, width, 128,
-                   architecture='brass-four-seat-mlp-resnet/1.0.0', residual_blocks=4)
+                   architecture=ARCHITECTURE, residual_blocks=4)
 
     @classmethod
     def from_dict(cls, raw):
@@ -44,14 +47,14 @@ class ModelConfig:
     def validate(self):
         encoder = Encoder()
         require(type(self.players) is int and self.players == 4, 'Four-seat model required')
-        require(self.architecture in ('daiyu-four-seat-dense/1.0.0','brass-four-seat-mlp-resnet/1.0.0'), 'Unknown model architecture')
+        require(self.architecture==ARCHITECTURE, 'Use fresh version-2 feature/model weights; old architectures cannot migrate')
         require((self.state_dim, self.action_dim) == (encoder.state_dim, encoder.action_dim), 'Feature dimensions differ')
         require(type(self.hidden) is int and 32 <= self.hidden <= 2048 and
                 type(self.action_hidden) is int and 16 <= self.action_hidden <= 1024, 'Invalid hidden size')
-        if self.architecture=='brass-four-seat-mlp-resnet/1.0.0':
+        if self.architecture==ARCHITECTURE:
             require(type(self.residual_blocks) is int and 1<=self.residual_blocks<=8 and
                     type(self.head_hidden) is int and 16<=self.head_hidden<=256 and
-                    self.parameter_limit==2000000, 'Residual model contract')
+                    self.parameter_limit==PARAMETER_LIMIT, 'Version-2 residual model/budget contract')
 
     def to_dict(self):
         raw=asdict(self)
@@ -75,7 +78,7 @@ class FourSeatNet(nn.Module):
         super().__init__()
         self.config = c = config or ModelConfig.preset()
         c.validate()
-        residual=c.architecture=='brass-four-seat-mlp-resnet/1.0.0'
+        residual=c.architecture==ARCHITECTURE
         self.state_encoder = (nn.Sequential(nn.Linear(c.state_dim,c.hidden),nn.GELU(),
             *[ResidualBlock(c.hidden) for _ in range(c.residual_blocks)],nn.LayerNorm(c.hidden)) if residual else
             nn.Sequential(nn.Linear(c.state_dim, c.hidden), nn.GELU(),
@@ -92,8 +95,8 @@ class FourSeatNet(nn.Module):
         self.validate_parameter_count()
 
     def validate_parameter_count(self):
-        if self.config.architecture=='brass-four-seat-mlp-resnet/1.0.0':
-            require(self.parameter_count<=self.config.parameter_limit,'Residual model exceeds 2M total parameters')
+        if self.config.architecture==ARCHITECTURE:
+            require(self.parameter_count<=self.config.parameter_limit,'Residual model exceeds versioned parameter limit')
         return self.parameter_count
 
     def forward(self, states, actions, legal_mask, stable_to_relative):

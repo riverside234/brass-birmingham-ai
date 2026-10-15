@@ -174,12 +174,14 @@ class BoostTests(unittest.TestCase):
         for name in ('lab','lab-16x2','lab-24x4','lab-small','lab-reference','smoke','recovery-smoke'):
             cfg=validate_config(read(SOURCE_ROOT/f'configs/step5/{name}.json'))
             self.assertEqual(cfg['insolvency'],INSOLVENCY)
-            if name.startswith('lab'):self.assertEqual(cfg['legacy_boost'],LEGACY_BOOST)
+            if name.startswith('lab'):
+                self.assertEqual(cfg['legacy_boost'],dict(stages=[LEGACY_BOOST['stages'][0],
+                    dict(LEGACY_BOOST['stages'][1],games=10000)]))
         for key,change in [('insolvency',dict(event_cost=.2,max_cost=.2)),
                            ('insolvency',dict(event_cost=-.01,max_cost=.1)),
                            ('legacy_boost',dict(stages=[dict(LEGACY_BOOST['stages'][0],games=20001)])),
                            ('legacy_boost',dict(stages=[dict(LEGACY_BOOST['stages'][0],selfplay=70)])),
-                           ('legacy_boost',dict(stages=[dict(LEGACY_BOOST['stages'][0],games=30020)]))]:
+                           ('legacy_boost',dict(stages=[dict(LEGACY_BOOST['stages'][0],games=100020)]))]:
             cfg,_=self.fixture();cfg[key]=change
             with self.assertRaises(ValueError):validate_config(cfg)
 

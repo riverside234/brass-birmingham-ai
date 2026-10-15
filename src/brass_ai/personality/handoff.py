@@ -143,7 +143,7 @@ def create(root,source,output,*,trace_shards=4,reference_count=3):
         copy_file(data['report_path'],'evidence/accepted-report.snapshot')
         copy_file(data['spec_path'],'evidence/accepted-spec.snapshot')
         metadata=('configs/contracts/v0.2.0/manifest.json','configs/contracts/v0.2.0/wire.schema.json',
-            'configs/learning/features-1.0.0.json','configs/learning/host-1.0.0.json',
+            'configs/learning/features-1.0.0.json','configs/learning/features-2.0.0.json','configs/learning/host-1.0.0.json',
             'training/opponents/current.json','training/opponents/pool.json','training/runtime/distribution.json')
         for i,name in enumerate(metadata):copy_file(root/name,f'evidence/runtime-{i}.snapshot')
         current=read_json(root/'training/opponents/current.json')

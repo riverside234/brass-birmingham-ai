@@ -1,6 +1,6 @@
-"""Same R2 tensor layout, with cached categorical lookups.
+"""Version-2 raw and derived layout, with separate categorical/context caches.
 
-The pinned R2 encoder remains unchanged. validated=True is used only after the
+The original raw fields retain their meaning. validated=True is used only after the
 recovery ingress boundary has checked the original permitted view and choices.
 """
 from collections import Counter
@@ -31,6 +31,8 @@ class PreparedEncoder(Encoder):
         self.cache = OrderedDict()
         self.cache_size = cache_size
         self.action_cache=OrderedDict()
+        # The complete encoded context cache owns reuse; derived numeric effects
+        # are local to each miss and never share the categorical action cache.
 
     def choice_features(self, choice):
         # Semantic fields, including physical Scout multiplicity; IDs alone are
@@ -55,12 +57,13 @@ class PreparedEncoder(Encoder):
             out[indices[value]]=count/scale
         return out
 
-    def encode(self, view, choices, style=None, intent=None, *, validated=False):
+    def encode(self, view, choices, style=None, intent=None, *, validated=False,deadline=None):
         # The boundary already hashed the complete permitted inputs. Reuse that
         # immutable content identity instead of serializing the whole growing
         # history again merely to append twelve policy-context values.
         source = digest(dict(view=view, choices=choices)) if validated else BOUNDARY.check(view, choices)
-        key = digest(dict(input=source, style=style, intent=intent))
+        require(deadline is None or __import__('time').monotonic()<deadline,'Feature decision deadline expired')
+        key = digest(dict(schema=self.derived.schema,input=source, style=style, intent=intent))
         if key in self.cache:
             self.cache.move_to_end(key)
             return self.cache[key]
@@ -123,7 +126,7 @@ class PreparedEncoder(Encoder):
               for era in ('CanalEra', 'RailEra') for kind in self.kinds]
         x += list(style) + list(intent)
         actions = np.asarray([self.choice_features(c) for c in choices], dtype=np.float32)
-        state = np.asarray(x, dtype=np.float32)
+        state,actions = self.append_derived(x,actions,view,choices,style,intent,source=source,deadline=deadline)
         require(state.shape == (self.state_dim,) and actions.shape == (len(choices), self.action_dim), 'Feature layout mismatch')
         require(np.isfinite(state).all() and np.isfinite(actions).all(), 'Non-finite features')
         encoded = Encoded(state, actions, np.asarray([relative(i) for i in range(4)], dtype=np.int64), ids)

@@ -123,7 +123,7 @@ class RecoveryTests(unittest.TestCase):
         self.assertTrue(report['kl_early_stop']);self.assertEqual(report['optimizer_steps'],1)
 
     def test_curriculum_quotas_and_resume_offset(self):
-        for start,expected in [(0,(128,64,128)),(2400,(176,80,64)),(6000,(208,80,32)),(11000,(224,80,16))]:
+        for start,expected in [(0,(48,80,192)),(20000,(144,80,96)),(100000,(192,80,48))]:
             kinds=[table_kind(i,CURRICULUM) for i in range(start,start+320)]
             self.assertEqual(tuple(kinds.count(k) for k in ('selfplay','historical','legacy')),expected)
         whole=[table_kind(i,CURRICULUM) for i in range(320)]

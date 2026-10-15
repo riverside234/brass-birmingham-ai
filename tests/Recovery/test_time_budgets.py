@@ -17,7 +17,7 @@ from brass_ai.recovery import teacher_schedule as schedule
 from brass_ai.recovery.config import (TEACHER_TIME_BUDGET,NN_TIME_BUDGET,LEGACY_TIME_BUDGET,
     TEACHER_WORK_BUDGET,LEGACY_OPPONENT_WORK_BUDGET,teacher_search_config,
     teacher_work_budget_config,nn_work_budget_config,legacy_opponent_work_budget_config,
-    time_budget_config,validate_config,SEARCH_WALL_FRACTION)
+    time_budget_config,validate_config,SEARCH_WALL_FRACTION,TEACHER_PHASE_TIME_BUDGET_V3,latest_model_recipe)
 from brass_ai.recovery.legacy_search import LabLegacyPolicy
 from brass_ai.recovery.resume import check_signature
 from brass_ai.search.common import SearchIncomplete
@@ -248,7 +248,7 @@ class TimeConfigTests(unittest.TestCase):
             cfg=read(path)
             if cfg['format']=='step5-training/2.2.0':
                 validate_config(cfg);self.assertEqual(time_budget_config(cfg),cfg)
-                self.assertEqual(cfg['teacher_work_budget'],TEACHER_TIME_BUDGET)
+                self.assertEqual(cfg['teacher_work_budget'],TEACHER_TIME_BUDGET if latest_model_recipe(cfg) else TEACHER_PHASE_TIME_BUDGET_V3)
                 self.assertIsNone(cfg['search_wall_fraction'])
             else:self.assertEqual(evaluation_config(cfg),cfg);self.assertEqual(cfg['nn_work_budget'],NN_TIME_BUDGET)
             self.assertEqual(cfg['legacy_opponent_work_budget'],LEGACY_TIME_BUDGET)

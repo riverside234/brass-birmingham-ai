@@ -11,12 +11,16 @@ from brass_ai.bank import read,sha
 from brass_ai.learning.contracts import SOURCE_ROOT,digest
 from brass_ai.qualification import grouped_interval
 from brass_ai.recovery.champion import CONTRACT,decision,initialize,schedule
-from brass_ai.recovery.config import CHAMPION,CHAMPION_LEGACY,RETENTION,champion_config,validate_config
+from brass_ai.recovery.config import CHAMPION as DEFAULT_CHAMPION,CHAMPION_LEGACY,RETENTION,champion_config,validate_config
 from brass_ai.recovery.history import compact
 from brass_ai.recovery.resume import check_signature
 from brass_ai.recovery.retention import plan
 from brass_ai.step5.league import implementation_id,write_json
 from test_combined_reward import scored
+
+
+# Exercise the explicitly enabled historical recipe, not the new gate-free default.
+CHAMPION=dict(DEFAULT_CHAMPION,enabled=True)
 
 
 def outcomes(screen=.56,confirmation=.60,complete=True):

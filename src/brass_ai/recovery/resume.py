@@ -30,6 +30,16 @@ def apply_optimizer_config(optimizer, config):
 def check_signature(state, signature, reviewed=False):
     require(state['format'] == 'step5-recovery-league/2.2.0', 'Unsupported self-play resume format')
     previous = state['signature']
+    # The latest-model recipe starts from completed IL, never a PPO generation
+    # or an old run's population. It also cannot later resume as a gate recipe.
+    require(previous['config'].get('selfplay_recipe')==signature['config'].get('selfplay_recipe'),
+            'Changing self-play recipe requires a fresh IL run')
+    from .config import latest_model_recipe
+    if latest_model_recipe(signature['config']):
+        require(not any(k in state for k in ('champion','champion_gate','champion_mix')),
+                'Latest-model run contains forbidden champion state')
+        from .curriculum import boost_window
+        boost_window(state,signature['config'])
     if previous == signature:
         return False
     require(reviewed, 'Run configuration/source changed. For the reviewed selfplay-v2 source only, '

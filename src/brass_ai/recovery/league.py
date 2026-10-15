@@ -4,7 +4,6 @@ import copy
 from contextlib import ExitStack
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
-import random
 import time
 
 import torch
@@ -15,8 +14,7 @@ from brass_ai.learning.contracts import compatibility,digest,project_path,requir
 from brass_ai.learning.paths import bound_reference
 from brass_ai.learning.model import ModelConfig
 from brass_ai.step5.league import write_json,seeds_for,implementation_id
-from brass_ai.step5.policy import INDUSTRIES
-from .config import validate_config,table_rotation
+from .config import validate_config
 from .demonstrations import load_dataset
 from .diagnostics import summarize
 from .execution import ActorPool,neural_spec
@@ -25,8 +23,7 @@ from .ingress import load_collection,reader_pool
 from .telemetry import environment,iteration_utilization
 from .updates import ppo_update,rehearsal_dataset
 from .teacher_collection import collect_due
-from .population import sample_opponents
-from .curriculum import activate_boost,boost_window,training_table,searched_legacy,boost_report
+from .curriculum import activate_boost,boost_window,boost_report,curriculum_report
 from .utility import migrate,reward_spec
 
 
@@ -37,10 +34,11 @@ class Behavior:
         self.policy_id=neural_spec(identity,exploration,'mixed')['policy_id']
 
 
-def train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=None,from_run=None,imitation_run=None,resume_reviewed_source=False,inference_devices=None,expected_generation=None):
+def train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=None,from_run=None,imitation_run=None,resume_reviewed_source=False,inference_devices=None,expected_generation=None,fresh=False):
     from .retention import owned,run_lock
     _,run=owned(root,run_path)
     with run_lock(run):
+        require(not fresh or not (run/'state.json').exists(),'--fresh requires a new run; existing progress will not be overwritten')
         require_start_generation(run,expected_generation)
         return _train(root,run_path,config,iterations=iterations,device=device,initial=initial,mono=mono,from_run=from_run,imitation_run=imitation_run,resume_reviewed_source=resume_reviewed_source,inference_devices=inference_devices)
 
@@ -54,18 +52,25 @@ def require_start_generation(run,expected):
 
 
 def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=None,from_run=None,imitation_run=None,resume_reviewed_source=False,inference_devices=None):
-    from .config import time_budget_config,champion_mix_config
+    from .config import time_budget_config,champion_mix_config,latest_model_recipe
     from .inference import validate_inference_devices
     inference_devices=validate_inference_devices(inference_devices,device)
     config=champion_mix_config(time_budget_config(config))
     root=Path(root).resolve();run=project_path(root,run_path);validate_config(config)
+    from brass_ai.learning.model import ARCHITECTURE,PARAMETER_LIMIT
+    require((config['architecture'],config['parameter_limit'])==(ARCHITECTURE,PARAMETER_LIMIT),
+            'Fresh features-2 training requires an explicitly configured version-2 model and 3M limit; use feature-engineering.py configure')
     require(iterations>0 and not(initial and from_run),'Invalid recovery initialization')
     require(initial is None and from_run is None,'Fresh residual workflow forbids previous checkpoint/run imports')
     bc_model=bc_origin=None
+    if latest_model_recipe(config):
+        require(imitation_run is not None,'Latest-model recipe requires the pinned completed --imitation-run')
     if imitation_run is not None:
         require(config['imitation']['manifest'] is None,'Use --imitation-run OR in-run imitation, not both')
         from .demonstrations import completed_imitation
         bc_model,bc_origin=completed_imitation(root,imitation_run)
+        if latest_model_recipe(config):
+            bound_reference(root,bc_origin,config['imitation_checkpoint'],('bc_run','path','manifest'))
         require(project_path(root,imitation_run)!=run,'Self-play needs its own run directory')
         require(bc_model.config==ModelConfig.preset(config['model_size']),'BC and self-play architecture differ')
         config=copy.deepcopy(config)
@@ -125,7 +130,7 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
         # A new recipe never inherits the old full-epoch optimizer moments.
         optimizer=torch.optim.AdamW(model.parameters(),lr=config['learning_rate'],weight_decay=config['weight_decay'])
         init_path=run/'initial.pt'
-        save_checkpoint(init_path,model,optimizer,training=dict(mode='step5-fresh-residual-initial',parent=None,initialization='random',fresh_run=run.relative_to(root).as_posix(),imitation=state['imitation']))
+        save_checkpoint(init_path,model,optimizer,training=dict(mode='step5-fresh-residual-initial',parent=None,initialization=state['origin']['initialization'],fresh_run=run.relative_to(root).as_posix(),imitation=state['imitation']))
         raw=load_checkpoint(init_path,device=device)[1]
         state['history']=[dict(path=init_path.relative_to(root).as_posix(),sha256=sha(init_path),
             model_id=raw['model_id'],generation=0)]
@@ -151,7 +156,7 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
         state=commit_transition(run,state,signature)
     from .champion import initialize as initialize_champion,enabled as champion_enabled,selfplay_policies
     from . import champion_mix
-    initialize_champion(root,run,state)
+    if champion_enabled(config):initialize_champion(root,run,state)
     window=boost_window(state,config)
     if window:
         print(f'Searched-v4 recovery window: ordinary games {window["start_games"]} to {window["until_games"]}; '
@@ -169,72 +174,19 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
             from .champion import schedule as schedule_champion
             # Resume an interrupted gate for the committed candidate before
             # advancing the learner or writing a new gate specification.
-            with torch.random.fork_rng(devices=[]):schedule_champion(root,run,state,service,ordinary)
+            if champion_enabled(config):
+                with torch.random.fork_rng(devices=[]):schedule_champion(root,run,state,service,ordinary)
             for _ in range(iterations):
                 iteration=state['iteration'];began=time.monotonic();directory=run/f'iteration-{iteration:04d}'
                 inference_before=service.report()
                 current=service.register(model);behavior=Behavior(current,config['exploration'])
-                incumbent=state.get('champion') if champion_enabled(config) else None
-                if incumbent:
-                    path=project_path(root,incumbent['path'])
-                    require(sha(path)==incumbent['sha256'],'Champion checkpoint changed')
-                    if incumbent['model_id'] not in service.models:service.register_checkpoint(path)
-                snapshots={}
-                verified_snapshots=set()
-                for entry in state.get('population',state['history']):
-                    snapshots[entry['model_id']]=entry
-                jobs=[];kind_by_group={};composition=Counter();cursor=state['next_seed'];context_counter=state['context_counter']
-                historical_generations=Counter();mix_receipts=[];transition_added=0
-                for i in range(config['games_per_iteration']):
-                    index=state['games_done']+i;kind,boosted=training_table(index,config,window)
-                    selected,cursor=seeds_for(cursor,1);seed=selected[0]
-                    rng=random.Random(digest(dict(seed=config['seed'],index=index)))
-                    learner=neural_spec(current,config['exploration'],'mixed')
-                    mix_receipt=None
-                    if kind=='selfplay' and champion_mix.enabled(config):
-                        entries,mix_receipt=champion_mix.opponents(state,config,rng,current_id=current,
-                            transition_index=state['champion_mix']['transition_tables']+transition_added)
-                        for entry in entries:
-                            if entry is None:continue
-                            path=project_path(root,entry['path'])
-                            if entry['model_id'] not in verified_snapshots:
-                                require(sha(path)==entry['sha256'],'Champion rollout checkpoint changed')
-                                verified_snapshots.add(entry['model_id'])
-                            if entry['model_id'] not in service.models:service.register_checkpoint(path)
-                        policies=champion_mix.policies(learner,entries,[fast_specs[p] for p in profiles[:2]])
-                        mix_receipts.append(mix_receipt)
-                        transition_added+=int(mix_receipt['stage']=='balanced_transition')
-                    elif kind=='selfplay': policies=selfplay_policies(learner,incumbent) if incumbent else [learner]*4
-                    elif kind=='historical':
-                        candidates=sample_opponents(snapshots.values(),current,state['evaluation_anchor'],rng,config['population']['recent'])
-                        opponents=[]
-                        for entry in candidates:
-                            historical_generations[entry['generation']]+=1
-                            path=project_path(root,entry['path'])
-                            if entry['model_id'] not in verified_snapshots:
-                                require(sha(path)==entry['sha256'],'Historical checkpoint changed')
-                                verified_snapshots.add(entry['model_id'])
-                            if entry['model_id'] not in service.models: service.register_checkpoint(path)
-                            opponents.append(neural_spec(entry['model_id'],.05,'neutral'))
-                        policies=[learner]+opponents
-                    else:
-                        # Rotate all profiles across the collection instead of fixing three for an entire chunk.
-                        selected_specs=opponent_specs if searched_legacy(index,config,boosted) else fast_specs
-                        policies=[learner]+[selected_specs[profiles[(index*3+s)%len(profiles)]] for s in range(3)]
-                    rotation=table_rotation(index);focuses={}
-                    for seat in range(4):
-                        if policies[(seat-rotation)%4]==learner:
-                            point=context_counter%12;context_counter+=1
-                            focuses[str(seat)]='neutral' if point%2==0 else INDUSTRIES[point//2]
-                    provenance=dict(producer='recovery/2.0.0',purpose='training',kind=kind,
-                        seed=seed,sampling_seed=config['seed']*7+index,spec=digest(signature),
-                        policies=[p.get('policy_id',p.get('kind')) for p in policies],rotation=rotation)
-                    provenance['legacy_mode']='fast' if any(p.get('search_free') for p in policies) else ('searched' if kind=='legacy' else None)
-                    if mix_receipt is not None:provenance['champion_rollout']=mix_receipt
-                    jobs.append(dict(index=i,seed=seed,rotation=rotation,sampling_seed=config['seed']*7+index,
-                        policies=policies,focuses=focuses,path=str(directory/f'actor-{i:06d}.jsonl.gz'),provenance=provenance))
-                    kind_by_group[digest(dict(rules='steam-brass-patch-1.1.0',setup_seed=seed))]=kind
-                    composition[kind]+=1
+                from .ordinary import plan_collection,sampling_report
+                plan=plan_collection(root,directory,state,config,signature,service,current,
+                                     profiles,opponent_specs,fast_specs,window)
+                jobs=plan['jobs'];kind_by_group=plan['kind_by_group'];composition=plan['composition']
+                cursor=plan['cursor'];context_counter=plan['context_counter'];incumbent=plan['incumbent']
+                historical_generations=plan['historical_generations'];mix_receipts=plan['mix_receipts']
+                transition_added=plan['transition_added']
                 records=[]
                 normal=[j for j in jobs if j['provenance']['legacy_mode']!='searched']
                 legacy=[j for j in jobs if j['provenance']['legacy_mode']=='searched']
@@ -259,11 +211,13 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                     load_began=time.monotonic();ingress_metrics={}
                     games,learner_data,diagnostics=prepared_collection.finish(records,ingress_metrics)
                 collected=time.monotonic()
+                sampling=sampling_report(games,learner_data,behavior.policy_id,kind_by_group,config)
                 weight=config['rehearsal_weight']*max(0,1-state['games_done']/config['rehearsal_until'])
                 update=ppo_update(model,optimizer,games,behavior,config['update'],
                     profile=directory/'profile-ppo' if config['profile_steps'] else None,
                     profile_steps=config['profile_steps'],
-                    rehearsal=rehearsal,rehearsal_weight=weight,learner_data=learner_data,insolvency=config.get('insolvency'),reward=reward)
+                    rehearsal=rehearsal,rehearsal_weight=weight,learner_data=learner_data,insolvency=config.get('insolvency'),reward=reward,
+                    sample_groups={g['game_id']:kind_by_group[g['setup_group']] for g in games})
                 updated=time.monotonic();done=state['games_done']+len(games)
                 ordinary_inference=service.report()
                 if done>=config['rehearsal_until']:rehearsal=None
@@ -302,6 +256,7 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                 del teaching_probe
                 del learner_data
                 report=dict(format='step5-recovery-report/'+'2.2.0',iteration=iteration,composition=dict(composition),
+                    sampling=sampling,curriculum=curriculum_report(state['games_done'],done,config) if latest_model_recipe(config) else None,
                     reward_migration=migration if not summaries else None,
                     optimizer_resume=optimizer_resume if not summaries else None,
                     legacy_boost=boost_report(state['games_done'],done,config,window),
@@ -337,6 +292,7 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                     search_seconds=search_seconds,ordinary_seconds=ordinary_seconds)
                 if champion_mix.enabled(config):state['champion_mix']['transition_tables']+=transition_added
                 state['recent_training']=(state.get('recent_training',[])+[dict(iteration=iteration,games_done=done,
+                    sampling=sampling,curriculum=report['curriculum'],
                     learning_rate=config['learning_rate'],
                     actor={k:v for k,v in update.items() if k not in ('timings','memory')},
                     search={k:v for k,v in search.items() if k not in ('collection','updates')})])[-2:]
@@ -347,8 +303,9 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                 if revised:
                     evaluation_began=time.monotonic()
                     from .champion import schedule as schedule_champion
-                    with torch.random.fork_rng(devices=[]):
-                        report['champion_gate']=schedule_champion(root,run,state,service,ordinary)
+                    if champion_enabled(config):
+                        with torch.random.fork_rng(devices=[]):
+                            report['champion_gate']=schedule_champion(root,run,state,service,ordinary)
                     schedule_evaluations(root,run,state,device,mono,inference_devices=inference_devices)
                     report['timings']['evaluation_seconds']=time.monotonic()-evaluation_began
                     from .retention import prune

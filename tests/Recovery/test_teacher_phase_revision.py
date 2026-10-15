@@ -41,7 +41,7 @@ class PhaseClockTests(unittest.TestCase):
             self.clock.now=200.;view,choices=self.view(phase)
             self.policy.admit_teacher_turn(view['context'],self.rng)
             current=self.policy.teacher_states[self.rng]['current']
-            seconds={'canal_early':12.,'canal_late':16.,'rail_early':20.,'rail_late':20.}[phase]
+            seconds={'canal_early':12.,'canal_late':12.,'rail_early':16.,'rail_late':24.}[phase]
             self.assertEqual(current['deadline'],200.+seconds)
             self.assertIsNone(self.policy.select_batch([(view,choices[:1],self.rng)])[0][2])
             future=copy.deepcopy(view);future['context'].update(phase='continuation',revision=1,actions_remaining=1)
@@ -57,11 +57,11 @@ class PhaseClockTests(unittest.TestCase):
         self.assertEqual(len(self.policy.calls),4);self.assertIsNone(report['seconds_per_turn'])
         self.assertEqual(report['seconds_per_phase'],TEACHER_TIME_BUDGET['seconds_per_phase'])
         counts=report['phases']['rail_late']
-        self.assertEqual((counts['allocated_seconds'],counts['completed_searches'],counts['qualified_samples']),(20.,1,1))
+        self.assertEqual((counts['allocated_seconds'],counts['completed_searches'],counts['qualified_samples']),(24.,1,1))
         self.assertEqual((counts['legal_root_actions'],counts['visited_root_actions'],counts['revisited_root_actions']),(3,2,2))
 
     def test_four_workers_share_phase_deadlines(self):
-        for phase,seconds in (('canal_late',16.),('rail_early',20.),('rail_late',20.)):
+        for phase,seconds in (('canal_late',12.),('rail_early',16.),('rail_late',24.)):
             with self.subTest(phase=phase):self.check_worker_deadlines(phase,seconds)
 
     def check_worker_deadlines(self,phase,seconds):
@@ -123,9 +123,9 @@ class PhaseConfigTests(unittest.TestCase):
     def test_collection_cost_and_phase_schema(self):
         cfg=read(SOURCE_ROOT/'configs/step5/lab.json')
         self.assertEqual(schedule.estimate_collection(cfg,5.),1385.) # 5 * (4*(12+16+20+20) + 5)
-        self.assertEqual(teacher_time_seconds(TEACHER_TIME_BUDGET),20.)
+        self.assertEqual(teacher_time_seconds(TEACHER_TIME_BUDGET),24.)
         missing=dict(cfg);missing.pop('teacher_work_budget')
-        self.assertEqual(schedule.estimate_collection(missing,5.),1385.)
+        self.assertEqual(schedule.estimate_collection(missing,5.),1305.) # latest default: 5 * (4*64 + 5)
         self.assertEqual(schedule.estimate_collection(dict(cfg,teacher_work_budget=TEACHER_TIME_BUDGET_V1),5.),985.)
         for phase in TEACHER_TIME_BUDGET['seconds_per_phase']:
             broken=copy.deepcopy(TEACHER_TIME_BUDGET);del broken['seconds_per_phase'][phase]
@@ -242,10 +242,14 @@ class CurrentTeacherResumeTests(unittest.TestCase):
 
     def fixture(self):
         from test_teacher_work_resume import TeacherWorkResumeTests
+        from review_fixture import phase_clocks
+        from brass_ai.learning.model import ARCHITECTURE,PARAMETER_LIMIT
+        phase_clocks(self)
         from brass_ai.learning.contracts import compatibility
         from brass_ai.step5.league import implementation_id
         def signatures():
-            cfg=read(SOURCE_ROOT/'configs/step5/joint7-g150-gate72.json');cfg['model_size']='small'
+            cfg=time_budget_config(read(SOURCE_ROOT/'configs/step5/joint7-g150-gate72.json'))
+            cfg.update(model_size='small',architecture=ARCHITECTURE,parameter_limit=PARAMETER_LIMIT)
             new=dict(config=cfg,compatibility=compatibility(),implementation=implementation_id(),legacy_pool={},teachers={})
             old=copy.deepcopy(new);old['implementation']=self.previous_implementation
             old['config'].update(teacher_work_budget=copy.deepcopy(self.previous_budget),

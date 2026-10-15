@@ -22,7 +22,9 @@ from .replay import read_shards
 CONTRACT='four-player-champion/1.0.0'
 
 
-def enabled(config):return config.get('champion',{}).get('enabled',False)
+def enabled(config):
+    from .config import latest_model_recipe
+    return not latest_model_recipe(config) and config.get('champion',{}).get('enabled',False)
 
 
 def publish_best(root,run,state):

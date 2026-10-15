@@ -12,7 +12,7 @@ from brass_ai.learning.contracts import SOURCE_ROOT,compatibility,digest
 from brass_ai.learning.model import ModelConfig
 from brass_ai.learning.utility_model import UtilityNet,utility_config
 from brass_ai.recovery.config import (TEACHER_WORK_BUDGET,LEGACY_OPPONENT_WORK_BUDGET,
-    TEACHER_TIME_BUDGET,LEGACY_TIME_BUDGET,teacher_work_budget_config,legacy_opponent_work_budget_config,validate_config)
+    TEACHER_PHASE_TIME_BUDGET_V3,LEGACY_TIME_BUDGET,teacher_work_budget_config,legacy_opponent_work_budget_config,validate_config)
 from brass_ai.recovery.curriculum import activate_boost
 from brass_ai.recovery.resume import check_signature,load_resume,commit_transition
 from brass_ai.recovery.utility import reward_spec
@@ -61,12 +61,12 @@ class TeacherWorkResumeTests(unittest.TestCase):
         activate_boost(state,old['config']);write_json(run/'state.json',state)
         return run,state,new,model,optimizer
 
-    def test_all_active_lab_presets_adopt_only_training_work_budget(self):
+    def test_archived_lab_presets_keep_their_explicit_training_work_budget(self):
         for path in (SOURCE_ROOT/'configs/step5').glob('lab*.json'):
             with self.subTest(preset=path.name):
                 cfg=read(path);validate_config(cfg)
-                self.assertEqual(cfg['teacher_work_budget'],TEACHER_TIME_BUDGET)
-                self.assertEqual(teacher_work_budget_config(cfg['teacher_work_budget']),TEACHER_TIME_BUDGET)
+                self.assertEqual(cfg['teacher_work_budget'],TEACHER_PHASE_TIME_BUDGET_V3)
+                self.assertEqual(teacher_work_budget_config(cfg['teacher_work_budget']),TEACHER_PHASE_TIME_BUDGET_V3)
                 self.assertEqual(cfg['legacy_opponent_work_budget'],LEGACY_TIME_BUDGET)
                 self.assertEqual(legacy_opponent_work_budget_config(cfg['legacy_opponent_work_budget']),LEGACY_TIME_BUDGET)
                 self.assertEqual(cfg['search']['seconds'],12.)

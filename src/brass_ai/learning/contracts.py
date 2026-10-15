@@ -10,6 +10,8 @@ from .paths import resolve_project_path
 LAB_ROOT = Path('/data/not_backed_up/yxu209/ai-training/')
 SOURCE_ROOT = Path(__file__).resolve().parents[3]
 CONFIG_DIR = SOURCE_ROOT / 'configs/learning'
+FEATURE_SCHEMA = 'features-2.0.0.json'
+FEATURE_VERSION = 'permitted-features/2.0.0'
 
 
 def digest(value):
@@ -65,14 +67,17 @@ def compatibility():
     wire = SOURCE_ROOT / 'configs/contracts/v0.2.0/wire.schema.json'
     require(hashlib.sha256(wire.read_bytes()).hexdigest() == runtime['contract_sha256'],
             'R1 contract fingerprint mismatch')
-    schema = read_json(CONFIG_DIR / 'features-1.0.0.json')
+    schema = read_json(CONFIG_DIR / FEATURE_SCHEMA)
     return {
-        'learning_contract': 'four-seat-learning/1.0.0', 'players': 4,
+        'learning_contract': 'four-seat-learning/2.0.0', 'players': 4,
         'rules': runtime['rules_profile_id'], 'wire_sha256': runtime['contract_sha256'],
         'observation': runtime['observation_schema'], 'choices': runtime['action_schema'],
         'objective': 'win-share/1.0.0', 'placement': 'competition-rank/1.0.0',
         'seat_order': 'stable-0-1-2-3', 'vp_scale': 100.0,
         'features_sha256': digest(schema),
+        'feature_version': FEATURE_VERSION,
+        'derived_source_sha256': digest({p.name:p.read_text(encoding='utf-8').replace('\r\n','\n')
+            for p in sorted((SOURCE_ROOT/'src/brass_ai/feature_engineering').glob('*.py'))}),
         'producer_profile_sha256': digest(read_json(CONFIG_DIR / 'host-1.0.0.json')),
         'encoder_sha256': hashlib.sha256((Path(__file__).parent / 'features.py').read_text().replace('\r\n', '\n').encode()).hexdigest(),
         'architecture_sha256': hashlib.sha256((Path(__file__).parent / 'model.py').read_text().replace('\r\n', '\n').encode()).hexdigest(),

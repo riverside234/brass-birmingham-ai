@@ -1,6 +1,6 @@
 """Validated complete-game shards and fingerprinted derived feature caches.
 
-The authoritative replay wire format and pinned R2 encoder stay unchanged.
+The authoritative raw replay wire format stays unchanged; encodings are versioned.
 Imported records are validated on ingress. Independently recorded validation
 receipts allow exact byte reuse; an unsigned sidecar never grants trust.
 An in-memory game binds each reusable row to its complete input digest.
@@ -108,12 +108,12 @@ def check_game(game, arrays=None,*,validated_inputs=False):
 
 def _cache_paths(path):
     path=Path(path)
-    return path.with_name(path.name+'.features.npz'), path.with_name(path.name+'.features.json')
+    return path.with_name(path.name+'.features-v2.npz'), path.with_name(path.name+'.features-v2.json')
 
 
 def cache_version():
     paths=['recovery/'+n for n in ('encoding.py','inputs.py','replay.py')]+['runtime_contracts.py']
-    return digest({name:sha(SOURCE_ROOT/'src/brass_ai'/name) for name in paths})
+    return digest(dict(source={name:sha(SOURCE_ROOT/'src/brass_ai'/name) for name in paths},compatibility=compatibility()))
 
 
 def cache_receipt(path):
@@ -131,7 +131,7 @@ def write_cache(path, games):
             offsets=np.cumsum([0]+[len(e.choice_ids) for e in arrays]),
             seats=np.stack([e.stable_to_relative for e in arrays]))
     temporary.replace(data)
-    meta=dict(format='derived-features/1.1.0',replay_sha256=sha(path),data_sha256=sha(data),
+    meta=dict(format='derived-features/2.0.0',replay_sha256=sha(path),data_sha256=sha(data),
         compatibility=compatibility(),encoder=cache_version(),rows=[row_key(r) for r in rows])
     temp=manifest.with_name(manifest.name+'.tmp');temp.write_text(json.dumps(meta),encoding='utf-8');temp.replace(manifest)
 
@@ -143,7 +143,7 @@ def load_cache(path, games, receipt=None):
     if receipt is None or receipt.get('validator')!=cache_version() or not manifest.exists() or not data.exists(): return None
     require(receipt==cache_receipt(path),'Derived feature receipt changed')
     meta=decode_json(manifest.read_text(encoding='utf-8'))
-    require(meta.get('format')=='derived-features/1.1.0', 'Unknown derived feature cache')
+    require(meta.get('format')=='derived-features/2.0.0', 'Unknown derived feature cache')
     # A changed source invalidates derived data, never the authoritative replay.
     if meta['replay_sha256']!=sha(path) or meta['compatibility']!=compatibility() or meta.get('encoder')!=cache_version(): return None
     require(meta['data_sha256']==sha(data),'Derived feature cache changed')

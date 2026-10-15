@@ -6,7 +6,7 @@ from brass_ai.learning.contracts import (CONFIG_DIR, compatibility, digest, fini
     keys, read_json, require)
 
 HANDOFF = 'personality-handoff/1.0.0'
-MODEL = 'four-seat-personality/2.0.0'
+MODEL = 'four-seat-personality/3.0.0'
 CHECKPOINT = 'personality-checkpoint/1.0.0'
 GOALS = 'goal-schema/1.0.0'
 CONTEXT = 'personality-context/1.0.0'

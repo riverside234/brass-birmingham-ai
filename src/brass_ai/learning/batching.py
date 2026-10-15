@@ -16,7 +16,7 @@ import numpy as np
 import torch
 
 from .contracts import compatibility, digest, finite_vector, require
-from .features import Encoder
+from .features import Encoder,check_encoded
 
 
 _INPUT_ATOMS = frozenset((str, int, float, bool, type(None)))
@@ -60,6 +60,7 @@ def model_id(model):
 
 def collate(encoded, device='cpu'):
     require(bool(encoded), 'Cannot batch zero positions')
+    for row in encoded:check_encoded(row)
     count, maximum = len(encoded), max(len(x.choice_ids) for x in encoded)
     require(maximum > 0, 'No legal choices')
     actions = np.zeros((count, maximum, encoded[0].actions.shape[-1]), dtype=np.float32)
@@ -90,6 +91,7 @@ def predict_encoded(model, encoded, device, candidate_limit, remaining=None):
     The oversized path encodes its state once and never changes legality/order.
     Smaller positions retain the normal padded, masked CPU/GPU batch path.
     """
+    for row in encoded:check_encoded(row)
     if max(len(e.choice_ids) for e in encoded)<=candidate_limit:
         outputs=(model(*collate(encoded,device),remaining=remaining) if getattr(model.config,'utility',None) is not None else model(*collate(encoded,device)))
         return [torch.softmax(outputs[0].float(),-1).cpu().numpy()]+[a.cpu().numpy() for a in outputs[1:]]

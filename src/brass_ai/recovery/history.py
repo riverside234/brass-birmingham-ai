@@ -56,6 +56,7 @@ def compact(report):
         'learner_trajectories','kl_early_stop','rehearsal_weight','gradient_clip_steps','baseline_explained_variance',
         'baseline_scope','kl_estimator','kl_probe_rows','kl_probe_sampling'))
     out['actor']['learning_rates']=actor.get('learning_rates',[])[:8]
+    out['actor']['sample_usage']=actor.get('sample_usage')
     for key in ('advantage','advantage_distribution','return_distribution','legal_actions','categorical_probe','gradient_norms','phases'):
         out['actor'][key]=scalars(actor.get(key,{}),actor.get(key,{}))
     epochs=actor.get('epochs',[])
@@ -66,7 +67,7 @@ def compact(report):
         out['actor']['last_epoch']=out['actor']['epochs'][-1]
         out['actor']['utility_prediction']=scalars(epochs[-1].get('utility_prediction',{}),('mse','mae'))
     out['actor']['insolvency']=scalars(actor.get('insolvency',{}),('events','affected_trajectories','learner_trajectories','mean_cost_per_trajectory'))
-    reward=actor.get('reward',{})
+    reward=actor.get('reward') or {}
     out['actor']['reward_components']=scalars(reward.get('components',{}),('win','placement','vp','cost','utility'))
     out['actor']['reward_spec']=reward.get('spec')
     out['actor']['reward_distribution']=reward.get('distribution')
@@ -124,6 +125,8 @@ def compact(report):
     out['selfplay_opponents']=report.get('selfplay_opponents')
     out['historical_opponents']=report.get('historical_opponents')
     out['optimizer_resume']=report.get('optimizer_resume')
+    for key in ('composition','sampling','curriculum'):
+        if key in report:out[key]=report[key]
     return out
 
 

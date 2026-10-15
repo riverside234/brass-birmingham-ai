@@ -1,6 +1,6 @@
 """Effective minibatch PPO, full-legal-choice BC and vectorized four-seat losses."""
 from contextlib import nullcontext
-from collections import deque
+from collections import deque,Counter
 from concurrent.futures import ThreadPoolExecutor
 import math
 import numpy as np
@@ -73,6 +73,8 @@ class Dataset:
         self.data, self.device = data, device
         self.rows=[d[0] for d in data]
         self.encoded=[d[3] for d in data]
+        from brass_ai.learning.features import check_encoded
+        for row in self.encoded:check_encoded(row)
         log=Progress(progress,5,'tensor groups') if progress else None
         self.chosen=torch.tensor([r['chosen'] for r in self.rows],device=device)
         self.seats=torch.tensor([r['seat'] for r in self.rows],device=device)
@@ -190,10 +192,10 @@ def policy_measure(model, dataset, indices, behavior, config, timings, verify=Fa
     return result
 
 
-def ppo_update(model,optimizer,games,behavior,config,*,profile=None,profile_steps=4,rehearsal=None,rehearsal_weight=0,learner_data=None,insolvency=None,reward=None):
+def ppo_update(model,optimizer,games,behavior,config,*,profile=None,profile_steps=4,rehearsal=None,rehearsal_weight=0,learner_data=None,insolvency=None,reward=None,sample_groups=None):
     if config.get('actor_nonforced'):
         return ppo_nonforced(model,optimizer,games,behavior,config,profile=profile,profile_steps=profile_steps,
-                             rehearsal=rehearsal,rehearsal_weight=rehearsal_weight,learner_data=learner_data,insolvency=insolvency,reward=reward)
+                             rehearsal=rehearsal,rehearsal_weight=rehearsal_weight,learner_data=learner_data,insolvency=insolvency,reward=reward,sample_groups=sample_groups)
     require(insolvency is None and reward is None,'Combined reward requires the nonforced actor recipe')
     require(all(g['split']=='train' for g in games),'Held-out PPO data')
     require(model_id(model)==behavior.evaluator.model_id,'Collection model differs from learner')
@@ -289,14 +291,14 @@ def phase_probe(dataset,indices,limit):
     return output
 
 
-def ppo_nonforced(model,optimizer,games,behavior,config,*,profile=None,profile_steps=4,rehearsal=None,rehearsal_weight=0,learner_data=None,insolvency=None,reward=None):
+def ppo_nonforced(model,optimizer,games,behavior,config,*,profile=None,profile_steps=4,rehearsal=None,rehearsal_weight=0,learner_data=None,insolvency=None,reward=None,sample_groups=None):
     cuda=next(model.parameters()).device.type=='cuda'
     with (ThreadPoolExecutor(max_workers=2) if cuda else nullcontext(None)) as executor:
         return _ppo_nonforced(model,optimizer,games,behavior,config,profile=profile,profile_steps=profile_steps,
-                              rehearsal=rehearsal,rehearsal_weight=rehearsal_weight,learner_data=learner_data,executor=executor,insolvency=insolvency,reward=reward)
+                              rehearsal=rehearsal,rehearsal_weight=rehearsal_weight,learner_data=learner_data,executor=executor,insolvency=insolvency,reward=reward,sample_groups=sample_groups)
 
 
-def _ppo_nonforced(model,optimizer,games,behavior,config,*,profile,profile_steps,rehearsal,rehearsal_weight,learner_data,executor,insolvency,reward):
+def _ppo_nonforced(model,optimizer,games,behavior,config,*,profile,profile_steps,rehearsal,rehearsal_weight,learner_data,executor,insolvency,reward,sample_groups=None):
     require(all(g['split']=='train' for g in games),'Held-out PPO data')
     require(model_id(model)==behavior.evaluator.model_id,'Collection model differs from learner')
     timings=Timings();device=next(model.parameters()).device
@@ -344,6 +346,8 @@ def _ppo_nonforced(model,optimizer,games,behavior,config,*,profile,profile_steps
     categorical_probe=CategoricalProbe(model,ds,probe,behavior,config)
     gradient_norms=[]
     epochs=[];steps=0;clips=0;stopped=False;rehearsal_steps=0
+    actor_used=set();critic_used=set();actor_presentations=Counter();critic_presentations=Counter()
+    groups=[(sample_groups or {}).get(d[2][0],'unknown') for d in data]
     with profile_window(profile,device,profile_steps) as profiler:
         for epoch in range(config['epochs']):
             order=[actor_ids[j] for j in torch.randperm(len(actor_ids)).tolist()]
@@ -393,6 +397,9 @@ def _ppo_nonforced(model,optimizer,games,behavior,config,*,profile,profile_steps
                     norm=torch.nn.utils.clip_grad_norm_(model.parameters(),config['grad_clip'],error_if_nonfinite=True)
                     clips+=int(float(norm)>config['grad_clip']);optimizer.step();steps+=1
                     gradient_norms.append(float(norm))
+                    actor_used.update(batch);critic_used.update(crit)
+                    actor_presentations.update(groups[i] for i in batch)
+                    critic_presentations.update(groups[i] for i in crit)
                 if profiler: profiler.step()
                 model.eval();kl=policy_measure(model,ds,probe,behavior,config,timings,executor=executor)
                 if kl>config['target_kl']: stopped=True;break
@@ -403,7 +410,9 @@ def _ppo_nonforced(model,optimizer,games,behavior,config,*,profile,profile_steps
                 gradient_norm=float(norm),actor_positions=actor_seen,critic_positions=critic_seen,positions=actor_seen))
             if reward is not None:epochs[-1]['utility_prediction']=dict(mse=float(utility_squared)/max(1,4*critic_seen),mae=float(utility_absolute)/max(1,4*critic_seen))
             if stopped or full>config['target_kl']: stopped=True;break
+    from .ordinary import sample_usage
     return dict(format='nonforced-actor-ppo/2.1.0',epochs=epochs,optimizer_steps=steps,
+        sample_usage=sample_usage(groups,actor_ids,actor_used,critic_used,actor_presentations,critic_presentations),
         insolvency=insolvency_report,
         reward=reward_report,utility_calibration=calibration,
         learner_decisions=count,meaningful_decisions=len(actor_ids),forced_decisions=int(ds.forced.sum()),

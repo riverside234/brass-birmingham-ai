@@ -4,7 +4,7 @@ import torch
 from torch import nn
 
 from .contracts import require
-from .model import FourSeatNet,ModelConfig
+from .model import FourSeatNet,ModelConfig,ARCHITECTURE
 from .reward import validate
 
 
@@ -19,7 +19,7 @@ class UtilityConfig(ModelConfig):
 
     def validate(self):
         super().validate()
-        require(self.architecture=='brass-four-seat-mlp-resnet/1.0.0','Utility head requires the residual backbone')
+        require(self.architecture==ARCHITECTURE,'Utility head requires the version-2 residual backbone')
         validate(self.utility)
 
 

@@ -37,7 +37,8 @@ def evaluate(root,output,candidate_path,references,config,*,setups=None,seed=Non
         with torch.random.fork_rng(devices=[]): model,raw=load_checkpoint(project_path(root,path),device='cpu')
         entries.append(dict(path=project_path(root,path).relative_to(root).as_posix(),sha256=sha(project_path(root,path)),model_id=raw['model_id']))
         modes[raw['model_id']]=raw['training'].get('mode')
-        require(model.config.architecture=='brass-four-seat-mlp-resnet/1.0.0' and raw['training'].get('fresh_run'),'Evaluation accepts only checkpoints from a new fresh residual run')
+        from brass_ai.learning.model import ARCHITECTURE
+        require(model.config.architecture==ARCHITECTURE and raw['training'].get('fresh_run'),'Evaluation accepts only checkpoints from a new fresh residual run')
         if len(entries)==1 and config['use_search'] and config['search'].get('reward') is not None:
             from .utility import calibration_ready
             require(model.config.utility==config['search']['reward'] and calibration_ready(model),

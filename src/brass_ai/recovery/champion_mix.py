@@ -10,7 +10,9 @@ from .population import ordered
 CONTRACT='staged-champion-opponents/1.0.0'
 
 
-def enabled(config):return 'champion_opponents' in config
+def enabled(config):
+    from .config import latest_model_recipe
+    return not latest_model_recipe(config) and 'champion_opponents' in config
 
 
 def promoted(state,previous,*,reason='promotion'):

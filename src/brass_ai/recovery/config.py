@@ -27,8 +27,9 @@ TEACHER_PHASE_TIME_BUDGET_V1 = dict(contract='teacher-turn-time/1.1.0',mode='tim
     seconds_per_phase=dict(canal_early=12.0,canal_late=12.0,rail_early=12.0,rail_late=24.0))
 TEACHER_PHASE_TIME_BUDGET_V2 = dict(contract='teacher-turn-time/1.1.0',mode='time',
     seconds_per_phase=dict(canal_early=12.0,canal_late=12.0,rail_early=16.0,rail_late=24.0))
-TEACHER_TIME_BUDGET = dict(contract='teacher-turn-time/1.1.0',mode='time',
+TEACHER_PHASE_TIME_BUDGET_V3 = dict(contract='teacher-turn-time/1.1.0',mode='time',
     seconds_per_phase=dict(canal_early=12.0,canal_late=16.0,rail_early=20.0,rail_late=20.0))
+TEACHER_TIME_BUDGET = copy.deepcopy(TEACHER_PHASE_TIME_BUDGET_V2)
 LEGACY_TIME_BUDGET = dict(contract='legacy-opponent-turn-time/1.0.0',mode='time',seconds_per_turn=1.0)
 NN_TIME_BUDGET = dict(contract='nn-turn-time/1.0.0',mode='time',seconds_per_turn=12.0)
 ARCHIVED_TIME_CONFIG_MIGRATION = 'step5-whole-turn-time/1.0.0'
@@ -136,10 +137,15 @@ def current_work_budget(value,default):
 
 def time_budget_config(config):
     """Explicit active-recipe upgrade; same-run signature changes require review."""
+    if latest_model_recipe(config):
+        # This recipe already pins its clocks. Do not replay an archived clock
+        # migration merely because its explicit values match an older default.
+        teacher_work_budget_config(config['teacher_work_budget'])
+        return copy.deepcopy(config)
     result=archived_early_rail_time_budget_config(config)
     # Upgrade only the exact preceding default, preserving custom phase clocks.
     if result['teacher_work_budget']==TEACHER_PHASE_TIME_BUDGET_V2:
-        result['teacher_work_budget']=copy.deepcopy(TEACHER_TIME_BUDGET)
+        result['teacher_work_budget']=copy.deepcopy(TEACHER_PHASE_TIME_BUDGET_V3)
     return result
 
 
@@ -191,10 +197,11 @@ UPDATE = dict(effective_batch_size=2048, microbatch_size=512, max_candidate_cell
     epochs=2, clip=.2, target_kl=.01, entropy_weight=.005, value_weight=.5,
     grad_clip=5.0, normalize_advantages=True, precision='fp32', bucket=True)
 CURRICULUM = [
-    dict(until=2000, selfplay=40, historical=20, legacy=40),
-    dict(until=5000, selfplay=55, historical=25, legacy=20),
-    dict(until=10000, selfplay=65, historical=25, legacy=10),
-    dict(until=None, selfplay=70, historical=25, legacy=5)]
+    dict(until=20000, selfplay=15, historical=25, legacy=60),
+    dict(until=100000, selfplay=45, historical=25, legacy=30),
+    dict(until=None, selfplay=60, historical=25, legacy=15)]
+LATEST_MODEL_RECIPE='latest-model-selfplay/1.0.0'
+ORDINARY_LEARNER_EXPLORATION=.08
 
 EXECUTION_V21 = dict(EXECUTION, processes=24, hosts_per_process=2, flush_ms=1.0,
     shard_games=8, shard_bytes=268435456, feature_cache=True, policy_cache=32,search_workers_per_turn=4,
@@ -204,7 +211,7 @@ RETENTION = dict(enabled=True, resume_checkpoints=2, replay_rounds=4, quarantine
     evaluation_samples=4, profile_traces=2, history_reports=128)
 CHAMPION_LEGACY = dict(enabled=True, every_games=6400, setups=8, min_win_share=.55, seed=1910000)
 CHAMPION_PROTOCOL = 'two-stage-champion/1.0.0'
-CHAMPION = dict(CHAMPION_LEGACY, protocol=CHAMPION_PROTOCOL, confirmation_setups=64,
+CHAMPION = dict(CHAMPION_LEGACY, enabled=False, protocol=CHAMPION_PROTOCOL, confirmation_setups=64,
     screen_min_win_share=.56, min_ci_lower=.49)
 POPULATION = dict(recent=16, anchors=48)
 EVALUATION_SCHEDULE = dict(enabled=True, monitor_every_games=6400, broader_every_games=25600,
@@ -216,13 +223,30 @@ INSOLVENCY = dict(event_cost=.005,max_cost=.075)
 CHAMPION_OPPONENTS = dict(contract='staged-champion-opponents/1.0.0',stage_iterations=5,max_champion_opponents=2)
 CHAMPION_MIX_CONFIG_MIGRATION = 'step5-staged-champion-opponents/1.0.0'
 LEGACY_BOOST = dict(stages=[dict(games=20000,selfplay=15,historical=25,legacy=60),
-                          dict(games=10000,selfplay=45,historical=25,legacy=30)])
+                          dict(games=80000,selfplay=45,historical=25,legacy=30)])
+
+
+def latest_model_recipe(config):
+    return config.get('selfplay_recipe')==LATEST_MODEL_RECIPE
+
+
+def latest_model_config(config,imitation_checkpoint):
+    """Generate a fresh IL recipe from current settings, never a run snapshot."""
+    result=copy.deepcopy(config)
+    from brass_ai.learning.model import ARCHITECTURE,PARAMETER_LIMIT
+    result.update(architecture=ARCHITECTURE,parameter_limit=PARAMETER_LIMIT)
+    result.update(selfplay_recipe=LATEST_MODEL_RECIPE,curriculum=copy.deepcopy(CURRICULUM),
+        legacy_boost=copy.deepcopy(LEGACY_BOOST),champion=dict(result.get('champion',CHAMPION),enabled=False),
+        teacher_work_budget=copy.deepcopy(TEACHER_TIME_BUDGET),search_wall_fraction=None,
+        imitation_checkpoint=copy.deepcopy(imitation_checkpoint),exploration=ORDINARY_LEARNER_EXPLORATION)
+    result.pop('champion_opponents',None)
+    return validate_config(champion_mix_config(result))
 
 
 def champion_mix_config(config):
     """Reviewed upgrade of the preceding default; keep custom reward recipes."""
     result=copy.deepcopy(config)
-    if result.get('champion',{}).get('enabled'):
+    if not latest_model_recipe(result) and result.get('champion',{}).get('enabled'):
         result.setdefault('champion_opponents',copy.deepcopy(CHAMPION_OPPONENTS))
     if result.get('insolvency')==dict(event_cost=.005,max_cost=.025):
         old=result.get('search',{}).get('reward')
@@ -316,7 +340,7 @@ def curriculum_config(stages):
         require(sum(stage[k] for k in ('selfplay','historical','legacy'))==100, 'Quotas must sum to 100')
         require(all(stage[k]%5==0 for k in ('selfplay','historical','legacy')), 'Twenty-table quotas must use multiples of five')
         if i == len(stages)-1:
-            require(stage['until'] is None and stage['legacy']==5, 'Mature curriculum must end at five percent v3 tables')
+            require(stage['until'] is None, 'Mature curriculum must have no end')
         else:
             require(type(stage['until']) is int and stage['until'] > previous, 'Unordered curriculum')
             previous=stage['until']
@@ -329,6 +353,20 @@ def validate_config(config):
         'search_ready_games','search_every_games','search_games','distill_steps','distill_weight',
         'rehearsal_manifest','rehearsal_weight','rehearsal_until','profile_steps'}
     version=config.get('format')
+    if 'selfplay_recipe' in config:
+        fields|={'selfplay_recipe','imitation_checkpoint'}
+        require(latest_model_recipe(config),'Unknown self-play recipe')
+        require(config.get('champion',{}).get('enabled') is False and 'champion_opponents' not in config,
+                'Latest-model self-play forbids champion gates and mixing')
+        require(config['curriculum']==CURRICULUM and config.get('legacy_boost')==LEGACY_BOOST,
+                'Latest-model curriculum and v4 window must agree at 20000/100000 games')
+        require(config.get('search_wall_fraction') is None,'Latest-model recipe disables the cumulative teacher wall limit')
+        origin=config.get('imitation_checkpoint')
+        require(type(origin) is dict and set(origin)=={'bc_run','path','sha256','model_id','manifest','manifest_sha256','bc_signature'},
+                'Pin the completed imitation checkpoint and lineage')
+        require(all(type(v) is str and v for v in origin.values()),'Invalid imitation checkpoint identity')
+        require(all(len(origin[k])==64 and all(c in '0123456789abcdef' for c in origin[k])
+                    for k in ('sha256','model_id','manifest_sha256','bc_signature')),'Invalid imitation checkpoint hashes')
     if 'legacy_opponent_work_budget' in config:
         fields.add('legacy_opponent_work_budget')
         legacy_work=legacy_opponent_work_budget_config(config['legacy_opponent_work_budget'])
@@ -384,7 +422,7 @@ def validate_config(config):
                         for k in ('selfplay','historical','legacy')) and
                     sum(stage[k] for k in ('selfplay','historical','legacy'))==100,
                     'Invalid bounded searched-v4 quota window')
-        require(sum(s['games'] for s in boost['stages'])<=30000,'Excessive searched-v4 recovery duration')
+        require(sum(s['games'] for s in boost['stages'])<=100000,'Excessive searched-v4 recovery duration')
     if 'search_collections_per_iteration' in config:
         fields.add('search_collections_per_iteration')
         require(type(config['search_collections_per_iteration']) is int and
@@ -395,8 +433,10 @@ def validate_config(config):
     if version=='step5-training/2.2.0':
         fields|={'retention','population','evaluation_schedule','legacy_budget','audit_workers',
                  'overlap_pools','search_wall_fraction','initialization','architecture','parameter_limit','imitation','legacy_opponents'}
-        require(config['initialization']=='random' and config['architecture']=='brass-four-seat-mlp-resnet/1.0.0'
-                and config['parameter_limit']==2000000,'Fresh residual-model contract required')
+        from brass_ai.learning.model import ARCHITECTURE,PARAMETER_LIMIT
+        require(config['initialization']=='random' and (config['architecture'],config['parameter_limit']) in
+                ((ARCHITECTURE,PARAMETER_LIMIT),('brass-four-seat-mlp-resnet/1.0.0',2000000)),
+                'Fresh versioned residual-model contract required')
         require(type(config['imitation']) is dict and set(config['imitation'])==set(IMITATION),'Invalid imitation fields')
         imitation=config['imitation']
         require(imitation['manifest'] is None or type(imitation['manifest']) is str,'Invalid imitation manifest')
@@ -423,7 +463,7 @@ def validate_config(config):
                 '2.1 requires revised update/execution')
     require(set(config)==fields and version=='step5-training/2.2.0' and config['players']==4,
         'Use the fresh four-player Masked ISMCTS 2.2 recipe; historical runs cannot migrate in place')
-    require(config['model_size'] in ('small','medium'), 'Residual model size must fit the 2M cap')
+    require(config['model_size'] in ('small','medium'), 'Unknown residual model preset')
     for key in ('games_per_iteration','threads','search_games','distill_steps','rehearsal_until'):
         positive(config[key],key,integer=True)
     for key in ('search_ready_games','search_every_games','seed','profile_steps'):

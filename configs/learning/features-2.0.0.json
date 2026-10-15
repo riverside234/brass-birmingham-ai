@@ -1,0 +1,3303 @@
+{
+  "slots": [
+    "Belper:0",
+    "Belper:1",
+    "Belper:2",
+    "Birmingham:0",
+    "Birmingham:1",
+    "Birmingham:2",
+    "Birmingham:3",
+    "BurtonOnTrent:0",
+    "BurtonOnTrent:1",
+    "Cannock:0",
+    "Cannock:1",
+    "Central:0",
+    "Coalbrookdale:0",
+    "Coalbrookdale:1",
+    "Coalbrookdale:2",
+    "Coventry:0",
+    "Coventry:1",
+    "Coventry:2",
+    "Derby:0",
+    "Derby:1",
+    "Derby:2",
+    "Dudley:0",
+    "Dudley:1",
+    "Kidderminster:0",
+    "Kidderminster:1",
+    "Leek:0",
+    "Leek:1",
+    "Nuneaton:0",
+    "Nuneaton:1",
+    "Redditch:0",
+    "Redditch:1",
+    "SouthWest:0",
+    "Stafford:0",
+    "Stafford:1",
+    "StokeOnTrent:0",
+    "StokeOnTrent:1",
+    "StokeOnTrent:2",
+    "Stone:0",
+    "Stone:1",
+    "Tamworth:0",
+    "Tamworth:1",
+    "Uttoxeter:0",
+    "Uttoxeter:1",
+    "Walsall:0",
+    "Walsall:1",
+    "Wolverhampton:0",
+    "Wolverhampton:1",
+    "Worcester:0",
+    "Worcester:1"
+  ],
+  "links": [
+    "CanalBelperDerby",
+    "CanalBirminghamCoventry",
+    "CanalBirminghamDudley",
+    "CanalBirminghamOxford",
+    "CanalBirminghamTamworth",
+    "CanalBirminghamWalsall",
+    "CanalBirminghamWorcester",
+    "CanalCannockCentral",
+    "CanalCannockStafford",
+    "CanalCoalbrookdaleShrewsbury",
+    "CanalCoalbrookdaleWolverhampton",
+    "CanalDerbyBurtonOnTrent",
+    "CanalDerbyNottingham",
+    "CanalDudleyWolverhampton",
+    "CanalKidderminsterCoalbrookdale",
+    "CanalKidderminsterDudley",
+    "CanalNuneatonTamworth",
+    "CanalRedditchGloucester",
+    "CanalRedditchOxford",
+    "CanalStokeOnTrentLeek",
+    "CanalStokeOnTrentWarrington",
+    "CanalStoneBurtonOnTrent",
+    "CanalStoneStafford",
+    "CanalStoneStokeOnTrent",
+    "CanalTamworthBurtonOnTrent",
+    "CanalWalsallBurtonOnTrent",
+    "CanalWalsallCannock",
+    "CanalWolverhamptonCannock",
+    "CanalWolverhamptonWalsall",
+    "CanalWorcesterGloucester",
+    "CanalWorcesterSouthWest",
+    "RailBelperDerby",
+    "RailBirminghamCoventry",
+    "RailBirminghamDudley",
+    "RailBirminghamNuneaton",
+    "RailBirminghamOxford",
+    "RailBirminghamRedditch",
+    "RailBirminghamTamworth",
+    "RailBirminghamWalsall",
+    "RailBirminghamWorcester",
+    "RailCannockBurtonOnTrent",
+    "RailCannockCentral",
+    "RailCannockStafford",
+    "RailCoalbrookdaleShrewsbury",
+    "RailCoalbrookdaleWolverhampton",
+    "RailCoventryNuneaton",
+    "RailDerbyBurtonOnTrent",
+    "RailDerbyNottingham",
+    "RailDerbyUttoxeter",
+    "RailDudleyWolverhampton",
+    "RailKidderminsterCoalbrookdale",
+    "RailKidderminsterDudley",
+    "RailLeekBelper",
+    "RailNuneatonTamworth",
+    "RailRedditchGloucester",
+    "RailRedditchOxford",
+    "RailStokeOnTrentLeek",
+    "RailStokeOnTrentWarrington",
+    "RailStoneBurtonOnTrent",
+    "RailStoneStafford",
+    "RailStoneStokeOnTrent",
+    "RailStoneUttoxeter",
+    "RailTamworthBurtonOnTrent",
+    "RailWalsallCannock",
+    "RailWalsallTamworth",
+    "RailWolverhamptonCannock",
+    "RailWolverhamptonWalsall",
+    "RailWorcesterGloucester",
+    "RailWorcesterSouthWest"
+  ],
+  "merchants": [
+    "Gloucester:0",
+    "Gloucester:1",
+    "Nottingham:0",
+    "Nottingham:1",
+    "Oxford:0",
+    "Oxford:1",
+    "Shrewsbury:0",
+    "Warrington:0",
+    "Warrington:1"
+  ],
+  "version": "permitted-features/2.0.0",
+  "players": 4,
+  "seat_encoding": "observer-clockwise-relative",
+  "card_types": [
+    "industry:Brewery",
+    "industry:CoalMine",
+    "industry:CottonMill+Manufacturer",
+    "industry:IronWorks",
+    "industry:Pottery",
+    "location:Belper",
+    "location:Birmingham",
+    "location:BurtonOnTrent",
+    "location:Cannock",
+    "location:Coalbrookdale",
+    "location:Coventry",
+    "location:Derby",
+    "location:Dudley",
+    "location:Kidderminster",
+    "location:Leek",
+    "location:Nuneaton",
+    "location:Redditch",
+    "location:Stafford",
+    "location:StokeOnTrent",
+    "location:Stone",
+    "location:Tamworth",
+    "location:Uttoxeter",
+    "location:Walsall",
+    "location:Wolverhampton",
+    "location:Worcester",
+    "wild:industry",
+    "wild:location"
+  ],
+  "industries": [
+    "Brewery",
+    "CoalMine",
+    "CottonMill",
+    "IronWorks",
+    "Manufacturer",
+    "Pottery"
+  ],
+  "kinds": [
+    "beer",
+    "bonus_develop",
+    "bonus_skip",
+    "build",
+    "coal",
+    "develop",
+    "finish",
+    "iron",
+    "liquidate",
+    "loan",
+    "network",
+    "pass",
+    "scout",
+    "sell"
+  ],
+  "phases": [
+    "action",
+    "payment",
+    "continuation",
+    "bonus",
+    "debt",
+    "terminal"
+  ],
+  "tile_fields": {
+    "level": 8,
+    "flipped": 1,
+    "resource": 8,
+    "vp": 20,
+    "link_vp": 2,
+    "income": 12,
+    "cost": 30,
+    "coal": 2,
+    "iron": 2,
+    "beer": 2,
+    "developable": 1,
+    "canal_only": 1,
+    "rail_only": 1
+  },
+  "player_fields": {
+    "cash": 100,
+    "income_marker": 100,
+    "income": 30,
+    "vp": 100,
+    "bonus_vp": 20,
+    "link_tiles": 14,
+    "hand_count": 8,
+    "spent": 100,
+    "hidden_discards": 1,
+    "debt": 100
+  },
+  "styles": [
+    "industrialist",
+    "networker",
+    "supplier",
+    "investor"
+  ],
+  "intent_dim": 8,
+  "history": "counts-by-relative-seat-era-kind",
+  "mat": "counts-by-level-1-through-8-and-top-two-tiles",
+  "feature_layout": "explicit-field-order/1.0.0",
+  "clipping": "none",
+  "excluded": [
+    "seed",
+    "game_id",
+    "revision",
+    "tile.id",
+    "choice.id",
+    "opponent_hands",
+    "deck_order",
+    "checkpoint"
+  ],
+  "derived": {
+    "version": "permitted-derived-context/1.0.0",
+    "feature_version": "permitted-features/2.0.0",
+    "production_enabled": true,
+    "rules": "steam-brass-patch-1.1.0",
+    "components": [
+      "value",
+      "known",
+      "applicable",
+      "lower",
+      "lower_known",
+      "upper",
+      "upper_known"
+    ],
+    "seat_order": "observer-clockwise-relative",
+    "status": "frozen FE4 layout; state block precedes final style[4]/intent[8], action block follows categorical fields",
+    "state": [
+      {
+        "name": "finance.0.settlement",
+        "scale": 1,
+        "owner": "observer-relative seat 0",
+        "source": "players cash/income/debt; context phase/era/round",
+        "units": "bool",
+        "basis": "next income settlement, fixed current position; debt projection unknown"
+      },
+      {
+        "name": "finance.0.negative_payment",
+        "scale": 100,
+        "owner": "observer-relative seat 0",
+        "source": "players cash/income/debt; context phase/era/round",
+        "units": "GBP",
+        "basis": "next income settlement, fixed current position; debt projection unknown"
+      },
+      {
+        "name": "finance.0.projected_cash",
+        "scale": 100,
+        "owner": "observer-relative seat 0",
+        "source": "players cash/income/debt; context phase/era/round",
+        "units": "GBP",
+        "basis": "next income settlement, fixed current position; debt projection unknown"
+      },
+      {
+        "name": "finance.0.shortfall",
+        "scale": 100,
+        "owner": "observer-relative seat 0",
+        "source": "players cash/income/debt; context phase/era/round",
+        "units": "GBP",
+        "basis": "next income settlement, fixed current position; debt projection unknown"
+      },
+      {
+        "name": "finance.0.public_debt",
+        "scale": 100,
+        "owner": "observer-relative seat 0",
+        "source": "players cash/income/debt; context phase/era/round",
+        "units": "GBP",
+        "basis": "next income settlement, fixed current position; debt projection unknown"
+      },
+      {
+        "name": "finance.1.settlement",
+        "scale": 1,
+        "owner": "observer-relative seat 1",
+        "source": "players cash/income/debt; context phase/era/round",
+        "units": "bool",
+        "basis": "next income settlement, fixed current position; debt projection unknown"
+      },
+      {
+        "name": "finance.1.negative_payment",
+        "scale": 100,
+        "owner": "observer-relative seat 1",
+        "source": "players cash/income/debt; context phase/era/round",
+        "units": "GBP",
+        "basis": "next income settlement, fixed current position; debt projection unknown"
+      },
+      {
+        "name": "finance.1.projected_cash",
+        "scale": 100,
+        "owner": "observer-relative seat 1",
+        "source": "players cash/income/debt; context phase/era/round",
+        "units": "GBP",
+        "basis": "next income settlement, fixed current position; debt projection unknown"
+      },
+      {
+        "name": "finance.1.shortfall",
+        "scale": 100,
+        "owner": "observer-relative seat 1",
+        "source": "players cash/income/debt; context phase/era/round",
+        "units": "GBP",
+        "basis": "next income settlement, fixed current position; debt projection unknown"
+      },
+      {
+        "name": "finance.1.public_debt",
+        "scale": 100,
+        "owner": "observer-relative seat 1",
+        "source": "players cash/income/debt; context phase/era/round",
+        "units": "GBP",
+        "basis": "next income settlement, fixed current position; debt projection unknown"
+      },
+      {
+        "name": "finance.2.settlement",
+        "scale": 1,
+        "owner": "observer-relative seat 2",
+        "source": "players cash/income/debt; context phase/era/round",
+        "units": "bool",
+        "basis": "next income settlement, fixed current position; debt projection unknown"
+      },
+      {
+        "name": "finance.2.negative_payment",
+        "scale": 100,
+        "owner": "observer-relative seat 2",
+        "source": "players cash/income/debt; context phase/era/round",
+        "units": "GBP",
+        "basis": "next income settlement, fixed current position; debt projection unknown"
+      },
+      {
+        "name": "finance.2.projected_cash",
+        "scale": 100,
+        "owner": "observer-relative seat 2",
+        "source": "players cash/income/debt; context phase/era/round",
+        "units": "GBP",
+        "basis": "next income settlement, fixed current position; debt projection unknown"
+      },
+      {
+        "name": "finance.2.shortfall",
+        "scale": 100,
+        "owner": "observer-relative seat 2",
+        "source": "players cash/income/debt; context phase/era/round",
+        "units": "GBP",
+        "basis": "next income settlement, fixed current position; debt projection unknown"
+      },
+      {
+        "name": "finance.2.public_debt",
+        "scale": 100,
+        "owner": "observer-relative seat 2",
+        "source": "players cash/income/debt; context phase/era/round",
+        "units": "GBP",
+        "basis": "next income settlement, fixed current position; debt projection unknown"
+      },
+      {
+        "name": "finance.3.settlement",
+        "scale": 1,
+        "owner": "observer-relative seat 3",
+        "source": "players cash/income/debt; context phase/era/round",
+        "units": "bool",
+        "basis": "next income settlement, fixed current position; debt projection unknown"
+      },
+      {
+        "name": "finance.3.negative_payment",
+        "scale": 100,
+        "owner": "observer-relative seat 3",
+        "source": "players cash/income/debt; context phase/era/round",
+        "units": "GBP",
+        "basis": "next income settlement, fixed current position; debt projection unknown"
+      },
+      {
+        "name": "finance.3.projected_cash",
+        "scale": 100,
+        "owner": "observer-relative seat 3",
+        "source": "players cash/income/debt; context phase/era/round",
+        "units": "GBP",
+        "basis": "next income settlement, fixed current position; debt projection unknown"
+      },
+      {
+        "name": "finance.3.shortfall",
+        "scale": 100,
+        "owner": "observer-relative seat 3",
+        "source": "players cash/income/debt; context phase/era/round",
+        "units": "GBP",
+        "basis": "next income settlement, fixed current position; debt projection unknown"
+      },
+      {
+        "name": "finance.3.public_debt",
+        "scale": 100,
+        "owner": "observer-relative seat 3",
+        "source": "players cash/income/debt; context phase/era/round",
+        "units": "GBP",
+        "basis": "next income settlement, fixed current position; debt projection unknown"
+      },
+      {
+        "name": "order.0.position",
+        "scale": 3,
+        "owner": "observer-relative seat 0",
+        "source": "public order; spending",
+        "units": "zero-based rank",
+        "basis": "provisional next round, stable current-order ties; final Rail inapplicable"
+      },
+      {
+        "name": "order.0.spending_difference",
+        "scale": 100,
+        "owner": "observer-relative seat 0",
+        "source": "public spending",
+        "units": "GBP",
+        "basis": "observer spending minus this player spending"
+      },
+      {
+        "name": "order.1.position",
+        "scale": 3,
+        "owner": "observer-relative seat 1",
+        "source": "public order; spending",
+        "units": "zero-based rank",
+        "basis": "provisional next round, stable current-order ties; final Rail inapplicable"
+      },
+      {
+        "name": "order.1.spending_difference",
+        "scale": 100,
+        "owner": "observer-relative seat 1",
+        "source": "public spending",
+        "units": "GBP",
+        "basis": "observer spending minus this player spending"
+      },
+      {
+        "name": "order.2.position",
+        "scale": 3,
+        "owner": "observer-relative seat 2",
+        "source": "public order; spending",
+        "units": "zero-based rank",
+        "basis": "provisional next round, stable current-order ties; final Rail inapplicable"
+      },
+      {
+        "name": "order.2.spending_difference",
+        "scale": 100,
+        "owner": "observer-relative seat 2",
+        "source": "public spending",
+        "units": "GBP",
+        "basis": "observer spending minus this player spending"
+      },
+      {
+        "name": "order.3.position",
+        "scale": 3,
+        "owner": "observer-relative seat 3",
+        "source": "public order; spending",
+        "units": "zero-based rank",
+        "basis": "provisional next round, stable current-order ties; final Rail inapplicable"
+      },
+      {
+        "name": "order.3.spending_difference",
+        "scale": 100,
+        "owner": "observer-relative seat 3",
+        "source": "public spending",
+        "units": "GBP",
+        "basis": "observer spending minus this player spending"
+      },
+      {
+        "name": "opportunities.main_action_available",
+        "scale": 1,
+        "owner": "observer",
+        "source": "context phase",
+        "units": "bool",
+        "basis": "current permitted position"
+      },
+      {
+        "name": "opportunities.beer.available",
+        "scale": 1,
+        "owner": "observer",
+        "source": "admitted legal list",
+        "units": "bool",
+        "basis": "current UI phase only; main-action absence during subchoices is inapplicable"
+      },
+      {
+        "name": "opportunities.beer.targets",
+        "scale": 512,
+        "owner": "observer",
+        "source": "admitted legal list",
+        "units": "deduplicated opportunities",
+        "basis": "current UI phase only; main-action absence during subchoices is inapplicable"
+      },
+      {
+        "name": "opportunities.bonus_develop.available",
+        "scale": 1,
+        "owner": "observer",
+        "source": "admitted legal list",
+        "units": "bool",
+        "basis": "current UI phase only; main-action absence during subchoices is inapplicable"
+      },
+      {
+        "name": "opportunities.bonus_develop.targets",
+        "scale": 512,
+        "owner": "observer",
+        "source": "admitted legal list",
+        "units": "deduplicated opportunities",
+        "basis": "current UI phase only; main-action absence during subchoices is inapplicable"
+      },
+      {
+        "name": "opportunities.bonus_skip.available",
+        "scale": 1,
+        "owner": "observer",
+        "source": "admitted legal list",
+        "units": "bool",
+        "basis": "current UI phase only; main-action absence during subchoices is inapplicable"
+      },
+      {
+        "name": "opportunities.bonus_skip.targets",
+        "scale": 512,
+        "owner": "observer",
+        "source": "admitted legal list",
+        "units": "deduplicated opportunities",
+        "basis": "current UI phase only; main-action absence during subchoices is inapplicable"
+      },
+      {
+        "name": "opportunities.build.available",
+        "scale": 1,
+        "owner": "observer",
+        "source": "admitted legal list",
+        "units": "bool",
+        "basis": "current UI phase only; main-action absence during subchoices is inapplicable"
+      },
+      {
+        "name": "opportunities.build.targets",
+        "scale": 512,
+        "owner": "observer",
+        "source": "admitted legal list",
+        "units": "deduplicated opportunities",
+        "basis": "current UI phase only; main-action absence during subchoices is inapplicable"
+      },
+      {
+        "name": "opportunities.coal.available",
+        "scale": 1,
+        "owner": "observer",
+        "source": "admitted legal list",
+        "units": "bool",
+        "basis": "current UI phase only; main-action absence during subchoices is inapplicable"
+      },
+      {
+        "name": "opportunities.coal.targets",
+        "scale": 512,
+        "owner": "observer",
+        "source": "admitted legal list",
+        "units": "deduplicated opportunities",
+        "basis": "current UI phase only; main-action absence during subchoices is inapplicable"
+      },
+      {
+        "name": "opportunities.develop.available",
+        "scale": 1,
+        "owner": "observer",
+        "source": "admitted legal list",
+        "units": "bool",
+        "basis": "current UI phase only; main-action absence during subchoices is inapplicable"
+      },
+      {
+        "name": "opportunities.develop.targets",
+        "scale": 512,
+        "owner": "observer",
+        "source": "admitted legal list",
+        "units": "deduplicated opportunities",
+        "basis": "current UI phase only; main-action absence during subchoices is inapplicable"
+      },
+      {
+        "name": "opportunities.finish.available",
+        "scale": 1,
+        "owner": "observer",
+        "source": "admitted legal list",
+        "units": "bool",
+        "basis": "current UI phase only; main-action absence during subchoices is inapplicable"
+      },
+      {
+        "name": "opportunities.finish.targets",
+        "scale": 512,
+        "owner": "observer",
+        "source": "admitted legal list",
+        "units": "deduplicated opportunities",
+        "basis": "current UI phase only; main-action absence during subchoices is inapplicable"
+      },
+      {
+        "name": "opportunities.iron.available",
+        "scale": 1,
+        "owner": "observer",
+        "source": "admitted legal list",
+        "units": "bool",
+        "basis": "current UI phase only; main-action absence during subchoices is inapplicable"
+      },
+      {
+        "name": "opportunities.iron.targets",
+        "scale": 512,
+        "owner": "observer",
+        "source": "admitted legal list",
+        "units": "deduplicated opportunities",
+        "basis": "current UI phase only; main-action absence during subchoices is inapplicable"
+      },
+      {
+        "name": "opportunities.liquidate.available",
+        "scale": 1,
+        "owner": "observer",
+        "source": "admitted legal list",
+        "units": "bool",
+        "basis": "current UI phase only; main-action absence during subchoices is inapplicable"
+      },
+      {
+        "name": "opportunities.liquidate.targets",
+        "scale": 512,
+        "owner": "observer",
+        "source": "admitted legal list",
+        "units": "deduplicated opportunities",
+        "basis": "current UI phase only; main-action absence during subchoices is inapplicable"
+      },
+      {
+        "name": "opportunities.loan.available",
+        "scale": 1,
+        "owner": "observer",
+        "source": "admitted legal list",
+        "units": "bool",
+        "basis": "current UI phase only; main-action absence during subchoices is inapplicable"
+      },
+      {
+        "name": "opportunities.loan.targets",
+        "scale": 512,
+        "owner": "observer",
+        "source": "admitted legal list",
+        "units": "deduplicated opportunities",
+        "basis": "current UI phase only; main-action absence during subchoices is inapplicable"
+      },
+      {
+        "name": "opportunities.network.available",
+        "scale": 1,
+        "owner": "observer",
+        "source": "admitted legal list",
+        "units": "bool",
+        "basis": "current UI phase only; main-action absence during subchoices is inapplicable"
+      },
+      {
+        "name": "opportunities.network.targets",
+        "scale": 512,
+        "owner": "observer",
+        "source": "admitted legal list",
+        "units": "deduplicated opportunities",
+        "basis": "current UI phase only; main-action absence during subchoices is inapplicable"
+      },
+      {
+        "name": "opportunities.pass.available",
+        "scale": 1,
+        "owner": "observer",
+        "source": "admitted legal list",
+        "units": "bool",
+        "basis": "current UI phase only; main-action absence during subchoices is inapplicable"
+      },
+      {
+        "name": "opportunities.pass.targets",
+        "scale": 512,
+        "owner": "observer",
+        "source": "admitted legal list",
+        "units": "deduplicated opportunities",
+        "basis": "current UI phase only; main-action absence during subchoices is inapplicable"
+      },
+      {
+        "name": "opportunities.scout.available",
+        "scale": 1,
+        "owner": "observer",
+        "source": "admitted legal list",
+        "units": "bool",
+        "basis": "current UI phase only; main-action absence during subchoices is inapplicable"
+      },
+      {
+        "name": "opportunities.scout.targets",
+        "scale": 512,
+        "owner": "observer",
+        "source": "admitted legal list",
+        "units": "deduplicated opportunities",
+        "basis": "current UI phase only; main-action absence during subchoices is inapplicable"
+      },
+      {
+        "name": "opportunities.sell.available",
+        "scale": 1,
+        "owner": "observer",
+        "source": "admitted legal list",
+        "units": "bool",
+        "basis": "current UI phase only; main-action absence during subchoices is inapplicable"
+      },
+      {
+        "name": "opportunities.sell.targets",
+        "scale": 512,
+        "owner": "observer",
+        "source": "admitted legal list",
+        "units": "deduplicated opportunities",
+        "basis": "current UI phase only; main-action absence during subchoices is inapplicable"
+      },
+      {
+        "name": "realization.saleable_count",
+        "scale": 32,
+        "owner": "observer",
+        "source": "public tiles/graph/merchants/beer; own hand; context",
+        "units": "count",
+        "basis": "individual feasibility, not joint sales; slots include in-progress main action; card support bounds exclude future guarantees"
+      },
+      {
+        "name": "realization.potential_sale_vp",
+        "scale": 100,
+        "owner": "observer",
+        "source": "public tiles/graph/merchants/beer; own hand; context",
+        "units": "VP",
+        "basis": "individual feasibility, not joint sales; slots include in-progress main action; card support bounds exclude future guarantees"
+      },
+      {
+        "name": "realization.beer_needed",
+        "scale": 32,
+        "owner": "observer",
+        "source": "public tiles/graph/merchants/beer; own hand; context",
+        "units": "count",
+        "basis": "individual feasibility, not joint sales; slots include in-progress main action; card support bounds exclude future guarantees"
+      },
+      {
+        "name": "realization.individually_saleable_count",
+        "scale": 32,
+        "owner": "observer",
+        "source": "public tiles/graph/merchants/beer; own hand; context",
+        "units": "count",
+        "basis": "individual feasibility, not joint sales; slots include in-progress main action; card support bounds exclude future guarantees"
+      },
+      {
+        "name": "realization.individually_saleable_vp",
+        "scale": 100,
+        "owner": "observer",
+        "source": "public tiles/graph/merchants/beer; own hand; context",
+        "units": "VP",
+        "basis": "individual feasibility, not joint sales; slots include in-progress main action; card support bounds exclude future guarantees"
+      },
+      {
+        "name": "realization.unflipped_level_one_count",
+        "scale": 32,
+        "owner": "observer",
+        "source": "public tiles/graph/merchants/beer; own hand; context",
+        "units": "count",
+        "basis": "individual feasibility, not joint sales; slots include in-progress main action; card support bounds exclude future guarantees"
+      },
+      {
+        "name": "realization.unflipped_level_one_vp",
+        "scale": 100,
+        "owner": "observer",
+        "source": "public tiles/graph/merchants/beer; own hand; context",
+        "units": "VP",
+        "basis": "individual feasibility, not joint sales; slots include in-progress main action; card support bounds exclude future guarantees"
+      },
+      {
+        "name": "realization.secured_industry_vp",
+        "scale": 100,
+        "owner": "observer",
+        "source": "public tiles/graph/merchants/beer; own hand; context",
+        "units": "VP",
+        "basis": "individual feasibility, not joint sales; slots include in-progress main action; card support bounds exclude future guarantees"
+      },
+      {
+        "name": "realization.own_action_slots",
+        "scale": 16,
+        "owner": "observer",
+        "source": "public tiles/graph/merchants/beer; own hand; context",
+        "units": "count",
+        "basis": "individual feasibility, not joint sales; slots include in-progress main action; card support bounds exclude future guarantees"
+      },
+      {
+        "name": "realization.card_supported_actions",
+        "scale": 16,
+        "owner": "observer",
+        "source": "public tiles/graph/merchants/beer; own hand; context",
+        "units": "count",
+        "basis": "individual feasibility, not joint sales; slots include in-progress main action; card support bounds exclude future guarantees"
+      },
+      {
+        "name": "realization.current_action_in_progress",
+        "scale": 1,
+        "owner": "observer",
+        "source": "public tiles/graph/merchants/beer; own hand; context",
+        "units": "count",
+        "basis": "individual feasibility, not joint sales; slots include in-progress main action; card support bounds exclude future guarantees"
+      },
+      {
+        "name": "development.Brewery.current.present",
+        "scale": 1,
+        "owner": "observer",
+        "source": "full ordered mat",
+        "units": "tile property",
+        "basis": "head of stack, never skip era-ineligible/undevelopable tiles"
+      },
+      {
+        "name": "development.Brewery.current.already_unlocked",
+        "scale": 1,
+        "owner": "observer",
+        "source": "full ordered mat",
+        "units": "tile property",
+        "basis": "head of stack, never skip era-ineligible/undevelopable tiles"
+      },
+      {
+        "name": "development.Brewery.current.level",
+        "scale": 8,
+        "owner": "observer",
+        "source": "full ordered mat",
+        "units": "tile property",
+        "basis": "head of stack, never skip era-ineligible/undevelopable tiles"
+      },
+      {
+        "name": "development.Brewery.current.cash_cost",
+        "scale": 100,
+        "owner": "observer",
+        "source": "full ordered mat",
+        "units": "tile property",
+        "basis": "head of stack, never skip era-ineligible/undevelopable tiles"
+      },
+      {
+        "name": "development.Brewery.current.vp",
+        "scale": 100,
+        "owner": "observer",
+        "source": "full ordered mat",
+        "units": "tile property",
+        "basis": "head of stack, never skip era-ineligible/undevelopable tiles"
+      },
+      {
+        "name": "development.Brewery.current.beer",
+        "scale": 8,
+        "owner": "observer",
+        "source": "full ordered mat",
+        "units": "tile property",
+        "basis": "head of stack, never skip era-ineligible/undevelopable tiles"
+      },
+      {
+        "name": "development.Brewery.current.canal_eligible",
+        "scale": 1,
+        "owner": "observer",
+        "source": "full ordered mat",
+        "units": "tile property",
+        "basis": "head of stack, never skip era-ineligible/undevelopable tiles"
+      },
+      {
+        "name": "development.Brewery.current.rail_eligible",
+        "scale": 1,
+        "owner": "observer",
+        "source": "full ordered mat",
+        "units": "tile property",
+        "basis": "head of stack, never skip era-ineligible/undevelopable tiles"
+      },
+      {
+        "name": "development.Brewery.current.survives_canal",
+        "scale": 1,
+        "owner": "observer",
+        "source": "full ordered mat",
+        "units": "tile property",
+        "basis": "head of stack, never skip era-ineligible/undevelopable tiles"
+      },
+      {
+        "name": "development.Brewery.current_target.present",
+        "scale": 1,
+        "owner": "observer",
+        "source": "full ordered mat; era rules",
+        "units": "tile property or tile removals",
+        "basis": "first strictly higher eligible level in stack order; development-only reachability; next_era only in Canal"
+      },
+      {
+        "name": "development.Brewery.current_target.reachable",
+        "scale": 1,
+        "owner": "observer",
+        "source": "full ordered mat; era rules",
+        "units": "tile property or tile removals",
+        "basis": "first strictly higher eligible level in stack order; development-only reachability; next_era only in Canal"
+      },
+      {
+        "name": "development.Brewery.current_target.blocked",
+        "scale": 1,
+        "owner": "observer",
+        "source": "full ordered mat; era rules",
+        "units": "tile property or tile removals",
+        "basis": "first strictly higher eligible level in stack order; development-only reachability; next_era only in Canal"
+      },
+      {
+        "name": "development.Brewery.current_target.already_unlocked",
+        "scale": 1,
+        "owner": "observer",
+        "source": "full ordered mat; era rules",
+        "units": "tile property or tile removals",
+        "basis": "first strictly higher eligible level in stack order; development-only reachability; next_era only in Canal"
+      },
+      {
+        "name": "development.Brewery.current_target.removals",
+        "scale": 16,
+        "owner": "observer",
+        "source": "full ordered mat; era rules",
+        "units": "tile property or tile removals",
+        "basis": "first strictly higher eligible level in stack order; development-only reachability; next_era only in Canal"
+      },
+      {
+        "name": "development.Brewery.current_target.level",
+        "scale": 8,
+        "owner": "observer",
+        "source": "full ordered mat; era rules",
+        "units": "tile property or tile removals",
+        "basis": "first strictly higher eligible level in stack order; development-only reachability; next_era only in Canal"
+      },
+      {
+        "name": "development.Brewery.current_target.cash_cost",
+        "scale": 100,
+        "owner": "observer",
+        "source": "full ordered mat; era rules",
+        "units": "tile property or tile removals",
+        "basis": "first strictly higher eligible level in stack order; development-only reachability; next_era only in Canal"
+      },
+      {
+        "name": "development.Brewery.current_target.vp",
+        "scale": 100,
+        "owner": "observer",
+        "source": "full ordered mat; era rules",
+        "units": "tile property or tile removals",
+        "basis": "first strictly higher eligible level in stack order; development-only reachability; next_era only in Canal"
+      },
+      {
+        "name": "development.Brewery.current_target.beer",
+        "scale": 8,
+        "owner": "observer",
+        "source": "full ordered mat; era rules",
+        "units": "tile property or tile removals",
+        "basis": "first strictly higher eligible level in stack order; development-only reachability; next_era only in Canal"
+      },
+      {
+        "name": "development.Brewery.current_target.canal_eligible",
+        "scale": 1,
+        "owner": "observer",
+        "source": "full ordered mat; era rules",
+        "units": "tile property or tile removals",
+        "basis": "first strictly higher eligible level in stack order; development-only reachability; next_era only in Canal"
+      },
+      {
+        "name": "development.Brewery.current_target.rail_eligible",
+        "scale": 1,
+        "owner": "observer",
+        "source": "full ordered mat; era rules",
+        "units": "tile property or tile removals",
+        "basis": "first strictly higher eligible level in stack order; development-only reachability; next_era only in Canal"
+      },
+      {
+        "name": "development.Brewery.current_target.survives_canal",
+        "scale": 1,
+        "owner": "observer",
+        "source": "full ordered mat; era rules",
+        "units": "tile property or tile removals",
+        "basis": "first strictly higher eligible level in stack order; development-only reachability; next_era only in Canal"
+      },
+      {
+        "name": "development.Brewery.current_target.delta_cost",
+        "scale": 100,
+        "owner": "observer",
+        "source": "full ordered mat; era rules",
+        "units": "tile property or tile removals",
+        "basis": "first strictly higher eligible level in stack order; development-only reachability; next_era only in Canal"
+      },
+      {
+        "name": "development.Brewery.current_target.delta_vp",
+        "scale": 100,
+        "owner": "observer",
+        "source": "full ordered mat; era rules",
+        "units": "tile property or tile removals",
+        "basis": "first strictly higher eligible level in stack order; development-only reachability; next_era only in Canal"
+      },
+      {
+        "name": "development.Brewery.current_target.delta_beer",
+        "scale": 8,
+        "owner": "observer",
+        "source": "full ordered mat; era rules",
+        "units": "tile property or tile removals",
+        "basis": "first strictly higher eligible level in stack order; development-only reachability; next_era only in Canal"
+      },
+      {
+        "name": "development.Brewery.current_target.delta_canal_eligible",
+        "scale": 1,
+        "owner": "observer",
+        "source": "full ordered mat; era rules",
+        "units": "tile property or tile removals",
+        "basis": "first strictly higher eligible level in stack order; development-only reachability; next_era only in Canal"
+      },
+      {
+        "name": "development.Brewery.current_target.delta_rail_eligible",
+        "scale": 1,
+        "owner": "observer",
+        "source": "full ordered mat; era rules",
+        "units": "tile property or tile removals",
+        "basis": "first strictly higher eligible level in stack order; development-only reachability; next_era only in Canal"
+      },
+      {
+        "name": "development.Brewery.next_era_target.present",
+        "scale": 1,
+        "owner": "observer",
+        "source": "full ordered mat; era rules",
+        "units": "tile property or tile removals",
+        "basis": "first strictly higher eligible level in stack order; development-only reachability; next_era only in Canal"
+      },
+      {
+        "name": "development.Brewery.next_era_target.reachable",
+        "scale": 1,
+        "owner": "observer",
+        "source": "full ordered mat; era rules",
+        "units": "tile property or tile removals",
+        "basis": "first strictly higher eligible level in stack order; development-only reachability; next_era only in Canal"
+      },
+      {
+        "name": "development.Brewery.next_era_target.blocked",
+        "scale": 1,
+        "owner": "observer",
+        "source": "full ordered mat; era rules",
+        "units": "tile property or tile removals",
+        "basis": "first strictly higher eligible level in stack order; development-only reachability; next_era only in Canal"
+      },
+      {
+        "name": "development.Brewery.next_era_target.already_unlocked",
+        "scale": 1,
+        "owner": "observer",
+        "source": "full ordered mat; era rules",
+        "units": "tile property or tile removals",
+        "basis": "first strictly higher eligible level in stack order; development-only reachability; next_era only in Canal"
+      },
+      {
+        "name": "development.Brewery.next_era_target.removals",
+        "scale": 16,
+        "owner": "observer",
+        "source": "full ordered mat; era rules",
+        "units": "tile property or tile removals",
+        "basis": "first strictly higher eligible level in stack order; development-only reachability; next_era only in Canal"
+      },
+      {
+        "name": "development.Brewery.next_era_target.level",
+        "scale": 8,
+        "owner": "observer",
+        "source": "full ordered mat; era rules",
+        "units": "tile property or tile removals",
+        "basis": "first strictly higher eligible level in stack order; development-only reachability; next_era only in Canal"
+      },
+      {
+        "name": "development.Brewery.next_era_target.cash_cost",
+        "scale": 100,
+        "owner": "observer",
+        "source": "full ordered mat; era rules",
+        "units": "tile property or tile removals",
+        "basis": "first strictly higher eligible level in stack order; development-only reachability; next_era only in Canal"
+      },
+      {
+        "name": "development.Brewery.next_era_target.vp",
+        "scale": 100,
+        "owner": "observer",
+        "source": "full ordered mat; era rules",
+        "units": "tile property or tile removals",
+        "basis": "first strictly higher eligible level in stack order; development-only reachability; next_era only in Canal"
+      },
+      {
+        "name": "development.Brewery.next_era_target.beer",
+        "scale": 8,
+        "owner": "observer",
+        "source": "full ordered mat; era rules",
+        "units": "tile property or tile removals",
+        "basis": "first strictly higher eligible level in stack order; development-only reachability; next_era only in Canal"
+      },
+      {
+        "name": "development.Brewery.next_era_target.canal_eligible",
+        "scale": 1,
+        "owner": "observer",
+        "source": "full ordered mat; era rules",
+        "units": "tile property or tile removals",
+        "basis": "first strictly higher eligible level in stack order; development-only reachability; next_era only in Canal"
+      },
+      {
+        "name": "development.Brewery.next_era_target.rail_eligible",
+        "scale": 1,
+        "owner": "observer",
+        "source": "full ordered mat; era rules",
+        "units": "tile property or tile removals",
+        "basis": "first strictly higher eligible level in stack order; development-only reachability; next_era only in Canal"
+      },
+      {
+        "name": "development.Brewery.next_era_target.survives_canal",
+        "scale": 1,
+        "owner": "observer",
+        "source": "full ordered mat; era rules",
+        "units": "tile property or tile removals",
+        "basis": "first strictly higher eligible level in stack order; development-only reachability; next_era only in Canal"
+      },
+      {
+        "name": "development.Brewery.next_era_target.delta_cost",
+        "scale": 100,
+        "owner": "observer",
+        "source": "full ordered mat; era rules",
+        "units": "tile property or tile removals",
+        "basis": "first strictly higher eligible level in stack order; development-only reachability; next_era only in Canal"
+      },
+      {
+        "name": "development.Brewery.next_era_target.delta_vp",
+        "scale": 100,
+        "owner": "observer",
+        "source": "full ordered mat; era rules",
+        "units": "tile property or tile removals",
+        "basis": "first strictly higher eligible level in stack order; development-only reachability; next_era only in Canal"
+      },
+      {
+        "name": "development.Brewery.next_era_target.delta_beer",
+        "scale": 8,
+        "owner": "observer",
+        "source": "full ordered mat; era rules",
+        "units": "tile property or tile removals",
+        "basis": "first strictly higher eligible level in stack order; development-only reachability; next_era only in Canal"
+      },
+      {
+        "name": "development.Brewery.next_era_target.delta_canal_eligible",
+        "scale": 1,
+        "owner": "observer",
+        "source": "full ordered mat; era rules",
+        "units": "tile property or tile removals",
+        "basis": "first strictly higher eligible level in stack order; development-only reachability; next_era only in Canal"
+      },
+      {
+        "name": "development.Brewery.next_era_target.delta_rail_eligible",
+        "scale": 1,
+        "owner": "observer",
+        "source": "full ordered mat; era rules",
+        "units": "tile property or tile removals",
+        "basis": "first strictly higher eligible level in stack order; development-only reachability; next_era only in Canal"
+      },
+      {
+        "name": "development.CoalMine.current.present",
+        "scale": 1,
+        "owner": "observer",
+        "source": "full ordered mat",
+        "units": "tile property",
+        "basis": "head of stack, never skip era-ineligible/undevelopable tiles"
+      },
+      {
+        "name": "development.CoalMine.current.already_unlocked",
+        "scale": 1,
+        "owner": "observer",
+        "source": "full ordered mat",
+        "units": "tile property",
+        "basis": "head of stack, never skip era-ineligible/undevelopable tiles"
+      },
+      {
+        "name": "development.CoalMine.current.level",
+        "scale": 8,
+        "owner": "observer",
+        "source": "full ordered mat",
+        "units": "tile property",
+        "basis": "head of stack, never skip era-ineligible/undevelopable tiles"
+      },
+      {
+        "name": "development.CoalMine.current.cash_cost",
+        "scale": 100,
+        "owner": "observer",
+        "source": "full ordered mat",
+        "units": "tile property",
+        "basis": "head of stack, never skip era-ineligible/undevelopable tiles"
+      },
+      {
+        "name": "development.CoalMine.current.vp",
+        "scale": 100,
+        "owner": "observer",
+        "source": "full ordered mat",
+        "units": "tile property",
+        "basis": "head of stack, never skip era-ineligible/undevelopable tiles"
+      },
+      {
+        "name": "development.CoalMine.current.beer",
+        "scale": 8,
+        "owner": "observer",
+        "source": "full ordered mat",
+        "units": "tile property",
+        "basis": "head of stack, never skip era-ineligible/undevelopable tiles"
+      },
+      {
+        "name": "development.CoalMine.current.canal_eligible",
+        "scale": 1,
+        "owner": "observer",
+        "source": "full ordered mat",
+        "units": "tile property",
+        "basis": "head of stack, never skip era-ineligible/undevelopable tiles"
+      },
+      {
+        "name": "development.CoalMine.current.rail_eligible",
+        "scale": 1,
+        "owner": "observer",
+        "source": "full ordered mat",
+        "units": "tile property",
+        "basis": "head of stack, never skip era-ineligible/undevelopable tiles"
+      },
+      {
+        "name": "development.CoalMine.current.survives_canal",
+        "scale": 1,
+        "owner": "observer",
+        "source": "full ordered mat",
+        "units": "tile property",
+        "basis": "head of stack, never skip era-ineligible/undevelopable tiles"
+      },
+      {
+        "name": "development.CoalMine.current_target.present",
+        "scale": 1,
+        "owner": "observer",
+        "source": "full ordered mat; era rules",
+        "units": "tile property or tile removals",
+        "basis": "first strictly higher eligible level in stack order; development-only reachability; next_era only in Canal"
+      },
+      {
+        "name": "development.CoalMine.current_target.reachable",
+        "scale": 1,
+        "owner": "observer",
+        "source": "full ordered mat; era rules",
+        "units": "tile property or tile removals",
+        "basis": "first strictly higher eligible level in stack order; development-only reachability; next_era only in Canal"
+      },
+      {
+        "name": "development.CoalMine.current_target.blocked",
+        "scale": 1,
+        "owner": "observer",
+        "source": "full ordered mat; era rules",
+        "units": "tile property or tile removals",
+        "basis": "first strictly higher eligible level in stack order; development-only reachability; next_era only in Canal"
+      },
+      {
+        "name": "development.CoalMine.current_target.already_unlocked",
+        "scale": 1,
+        "owner": "observer",
+        "source": "full ordered mat; era rules",
+        "units": "tile property or tile removals",
+        "basis": "first strictly higher eligible level in stack order; development-only reachability; next_era only in Canal"
+      },
+      {
+        "name": "development.CoalMine.current_target.removals",
+        "scale": 16,
+        "owner": "observer",
+        "source": "full ordered mat; era rules",
+        "units": "tile property or tile removals",
+        "basis": "first strictly higher eligible level in stack order; development-only reachability; next_era only in Canal"
+      },
+      {
+        "name": "development.CoalMine.current_target.level",
+        "scale": 8,
+        "owner": "observer",
+        "source": "full ordered mat; era rules",
+        "units": "tile property or tile removals",
+        "basis": "first strictly higher eligible level in stack order; development-only reachability; next_era only in Canal"
+      },
+      {
+        "name": "development.CoalMine.current_target.cash_cost",
+        "scale": 100,
+        "owner": "observer",
+        "source": "full ordered mat; era rules",
+        "units": "tile property or tile removals",
+        "basis": "first strictly higher eligible level in stack order; development-only reachability; next_era only in Canal"
+      },
+      {
+        "name": "development.CoalMine.current_target.vp",
+        "scale": 100,
+        "owner": "observer",
+        "source": "full ordered mat; era rules",
+        "units": "tile property or tile removals",
+        "basis": "first strictly higher eligible level in stack order; development-only reachability; next_era only in Canal"
+      },
+      {
+        "name": "development.CoalMine.current_target.beer",
+        "scale": 8,
+        "owner": "observer",
+        "source": "full ordered mat; era rules",
+        "units": "tile property or tile removals",
+        "basis": "first strictly higher eligible level in stack order; development-only reachability; next_era only in Canal"
+      },
+      {
+        "name": "development.CoalMine.current_target.canal_eligible",
+        "scale": 1,
+        "owner": "observer",
+        "source": "full ordered mat; era rules",
+        "units": "tile property or tile removals",
+        "basis": "first strictly higher eligible level in stack order; development-only reachability; next_era only in Canal"
+      },
+      {
+        "name": "development.CoalMine.current_target.rail_eligible",
+        "scale": 1,
+        "owner": "observer",
+        "source": "full ordered mat; era rules",
+        "units": "tile property or tile removals",
+        "basis": "first strictly higher eligible level in stack order; development-only reachability; next_era only in Canal"
+      },
+      {
+        "name": "development.CoalMine.current_target.survives_canal",
+        "scale": 1,
+        "owner": "observer",
+        "source": "full ordered mat; era rules",
+        "units": "tile property or tile removals",
+        "basis": "first strictly higher eligible level in stack order; development-only reachability; next_era only in Canal"
+      },
+      {
+        "name": "development.CoalMine.current_target.delta_cost",
+        "scale": 100,
+        "owner": "observer",
+        "source": "full ordered mat; era rules",
+        "units": "tile property or tile removals",
+        "basis": "first strictly higher eligible level in stack order; development-only reachability; next_era only in Canal"
+      },
+      {
+        "name": "development.CoalMine.current_target.delta_vp",
+        "scale": 100,
+        "owner": "observer",
+        "source": "full ordered mat; era rules",
+        "units": "tile property or tile removals",
+        "basis": "first strictly higher eligible level in stack order; development-only reachability; next_era only in Canal"
+      },
+      {
+        "name": "development.CoalMine.current_target.delta_beer",
+        "scale": 8,
+        "owner": "observer",
+        "source": "full ordered mat; era rules",
+        "units": "tile property or tile removals",
+        "basis": "first strictly higher eligible level in stack order; development-only reachability; next_era only in Canal"
+      },
+      {
+        "name": "development.CoalMine.current_target.delta_canal_eligible",
+        "scale": 1,
+        "owner": "observer",
+        "source": "full ordered mat; era rules",
+        "units": "tile property or tile removals",
+        "basis": "first strictly higher eligible level in stack order; development-only reachability; next_era only in Canal"
+      },
+      {
+        "name": "development.CoalMine.current_target.delta_rail_eligible",
+        "scale": 1,
+        "owner": "observer",
+        "source": "full ordered mat; era rules",
+        "units": "tile property or tile removals",
+        "basis": "first strictly higher eligible level in stack order; development-only reachability; next_era only in Canal"
+      },
+      {
+        "name": "development.CoalMine.next_era_target.present",
+        "scale": 1,
+        "owner": "observer",
+        "source": "full ordered mat; era rules",
+        "units": "tile property or tile removals",
+        "basis": "first strictly higher eligible level in stack order; development-only reachability; next_era only in Canal"
+      },
+      {
+        "name": "development.CoalMine.next_era_target.reachable",
+        "scale": 1,
+        "owner": "observer",
+        "source": "full ordered mat; era rules",
+        "units": "tile property or tile removals",
+        "basis": "first strictly higher eligible level in stack order; development-only reachability; next_era only in Canal"
+      },
+      {
+        "name": "development.CoalMine.next_era_target.blocked",
+        "scale": 1,
+        "owner": "observer",
+        "source": "full ordered mat; era rules",
+        "units": "tile property or tile removals",
+        "basis": "first strictly higher eligible level in stack order; development-only reachability; next_era only in Canal"
+      },
+      {
+        "name": "development.CoalMine.next_era_target.already_unlocked",
+        "scale": 1,
+        "owner": "observer",
+        "source": "full ordered mat; era rules",
+        "units": "tile property or tile removals",
+        "basis": "first strictly higher eligible level in stack order; development-only reachability; next_era only in Canal"
+      },
+      {
+        "name": "development.CoalMine.next_era_target.removals",
+        "scale": 16,
+        "owner": "observer",
+        "source": "full ordered mat; era rules",
+        "units": "tile property or tile removals",
+        "basis": "first strictly higher eligible level in stack order; development-only reachability; next_era only in Canal"
+      },
+      {
+        "name": "development.CoalMine.next_era_target.level",
+        "scale": 8,
+        "owner": "observer",
+        "source": "full ordered mat; era rules",
+        "units": "tile property or tile removals",
+        "basis": "first strictly higher eligible level in stack order; development-only reachability; next_era only in Canal"
+      },
+      {
+        "name": "development.CoalMine.next_era_target.cash_cost",
+        "scale": 100,
+        "owner": "observer",
+        "source": "full ordered mat; era rules",
+        "units": "tile property or tile removals",
+        "basis": "first strictly higher eligible level in stack order; development-only reachability; next_era only in Canal"
+      },
+      {
+        "name": "development.CoalMine.next_era_target.vp",
+        "scale": 100,
+        "owner": "observer",
+        "source": "full ordered mat; era rules",
+        "units": "tile property or tile removals",
+        "basis": "first strictly higher eligible level in stack order; development-only reachability; next_era only in Canal"
+      },
+      {
+        "name": "development.CoalMine.next_era_target.beer",
+        "scale": 8,
+        "owner": "observer",
+        "source": "full ordered mat; era rules",
+        "units": "tile property or tile removals",
+        "basis": "first strictly higher eligible level in stack order; development-only reachability; next_era only in Canal"
+      },
+      {
+        "name": "development.CoalMine.next_era_target.canal_eligible",
+        "scale": 1,
+        "owner": "observer",
+        "source": "full ordered mat; era rules",
+        "units": "tile property or tile removals",
+        "basis": "first strictly higher eligible level in stack order; development-only reachability; next_era only in Canal"
+      },
+      {
+        "name": "development.CoalMine.next_era_target.rail_eligible",
+        "scale": 1,
+        "owner": "observer",
+        "source": "full ordered mat; era rules",
+        "units": "tile property or tile removals",
+        "basis": "first strictly higher eligible level in stack order; development-only reachability; next_era only in Canal"
+      },
+      {
+        "name": "development.CoalMine.next_era_target.survives_canal",
+        "scale": 1,
+        "owner": "observer",
+        "source": "full ordered mat; era rules",
+        "units": "tile property or tile removals",
+        "basis": "first strictly higher eligible level in stack order; development-only reachability; next_era only in Canal"
+      },
+      {
+        "name": "development.CoalMine.next_era_target.delta_cost",
+        "scale": 100,
+        "owner": "observer",
+        "source": "full ordered mat; era rules",
+        "units": "tile property or tile removals",
+        "basis": "first strictly higher eligible level in stack order; development-only reachability; next_era only in Canal"
+      },
+      {
+        "name": "development.CoalMine.next_era_target.delta_vp",
+        "scale": 100,
+        "owner": "observer",
+        "source": "full ordered mat; era rules",
+        "units": "tile property or tile removals",
+        "basis": "first strictly higher eligible level in stack order; development-only reachability; next_era only in Canal"
+      },
+      {
+        "name": "development.CoalMine.next_era_target.delta_beer",
+        "scale": 8,
+        "owner": "observer",
+        "source": "full ordered mat; era rules",
+        "units": "tile property or tile removals",
+        "basis": "first strictly higher eligible level in stack order; development-only reachability; next_era only in Canal"
+      },
+      {
+        "name": "development.CoalMine.next_era_target.delta_canal_eligible",
+        "scale": 1,
+        "owner": "observer",
+        "source": "full ordered mat; era rules",
+        "units": "tile property or tile removals",
+        "basis": "first strictly higher eligible level in stack order; development-only reachability; next_era only in Canal"
+      },
+      {
+        "name": "development.CoalMine.next_era_target.delta_rail_eligible",
+        "scale": 1,
+        "owner": "observer",
+        "source": "full ordered mat; era rules",
+        "units": "tile property or tile removals",
+        "basis": "first strictly higher eligible level in stack order; development-only reachability; next_era only in Canal"
+      },
+      {
+        "name": "development.CottonMill.current.present",
+        "scale": 1,
+        "owner": "observer",
+        "source": "full ordered mat",
+        "units": "tile property",
+        "basis": "head of stack, never skip era-ineligible/undevelopable tiles"
+      },
+      {
+        "name": "development.CottonMill.current.already_unlocked",
+        "scale": 1,
+        "owner": "observer",
+        "source": "full ordered mat",
+        "units": "tile property",
+        "basis": "head of stack, never skip era-ineligible/undevelopable tiles"
+      },
+      {
+        "name": "development.CottonMill.current.level",
+        "scale": 8,
+        "owner": "observer",
+        "source": "full ordered mat",
+        "units": "tile property",
+        "basis": "head of stack, never skip era-ineligible/undevelopable tiles"
+      },
+      {
+        "name": "development.CottonMill.current.cash_cost",
+        "scale": 100,
+        "owner": "observer",
+        "source": "full ordered mat",
+        "units": "tile property",
+        "basis": "head of stack, never skip era-ineligible/undevelopable tiles"
+      },
+      {
+        "name": "development.CottonMill.current.vp",
+        "scale": 100,
+        "owner": "observer",
+        "source": "full ordered mat",
+        "units": "tile property",
+        "basis": "head of stack, never skip era-ineligible/undevelopable tiles"
+      },
+      {
+        "name": "development.CottonMill.current.beer",
+        "scale": 8,
+        "owner": "observer",
+        "source": "full ordered mat",
+        "units": "tile property",
+        "basis": "head of stack, never skip era-ineligible/undevelopable tiles"
+      },
+      {
+        "name": "development.CottonMill.current.canal_eligible",
+        "scale": 1,
+        "owner": "observer",
+        "source": "full ordered mat",
+        "units": "tile property",
+        "basis": "head of stack, never skip era-ineligible/undevelopable tiles"
+      },
+      {
+        "name": "development.CottonMill.current.rail_eligible",
+        "scale": 1,
+        "owner": "observer",
+        "source": "full ordered mat",
+        "units": "tile property",
+        "basis": "head of stack, never skip era-ineligible/undevelopable tiles"
+      },
+      {
+        "name": "development.CottonMill.current.survives_canal",
+        "scale": 1,
+        "owner": "observer",
+        "source": "full ordered mat",
+        "units": "tile property",
+        "basis": "head of stack, never skip era-ineligible/undevelopable tiles"
+      },
+      {
+        "name": "development.CottonMill.current_target.present",
+        "scale": 1,
+        "owner": "observer",
+        "source": "full ordered mat; era rules",
+        "units": "tile property or tile removals",
+        "basis": "first strictly higher eligible level in stack order; development-only reachability; next_era only in Canal"
+      },
+      {
+        "name": "development.CottonMill.current_target.reachable",
+        "scale": 1,
+        "owner": "observer",
+        "source": "full ordered mat; era rules",
+        "units": "tile property or tile removals",
+        "basis": "first strictly higher eligible level in stack order; development-only reachability; next_era only in Canal"
+      },
+      {
+        "name": "development.CottonMill.current_target.blocked",
+        "scale": 1,
+        "owner": "observer",
+        "source": "full ordered mat; era rules",
+        "units": "tile property or tile removals",
+        "basis": "first strictly higher eligible level in stack order; development-only reachability; next_era only in Canal"
+      },
+      {
+        "name": "development.CottonMill.current_target.already_unlocked",
+        "scale": 1,
+        "owner": "observer",
+        "source": "full ordered mat; era rules",
+        "units": "tile property or tile removals",
+        "basis": "first strictly higher eligible level in stack order; development-only reachability; next_era only in Canal"
+      },
+      {
+        "name": "development.CottonMill.current_target.removals",
+        "scale": 16,
+        "owner": "observer",
+        "source": "full ordered mat; era rules",
+        "units": "tile property or tile removals",
+        "basis": "first strictly higher eligible level in stack order; development-only reachability; next_era only in Canal"
+      },
+      {
+        "name": "development.CottonMill.current_target.level",
+        "scale": 8,
+        "owner": "observer",
+        "source": "full ordered mat; era rules",
+        "units": "tile property or tile removals",
+        "basis": "first strictly higher eligible level in stack order; development-only reachability; next_era only in Canal"
+      },
+      {
+        "name": "development.CottonMill.current_target.cash_cost",
+        "scale": 100,
+        "owner": "observer",
+        "source": "full ordered mat; era rules",
+        "units": "tile property or tile removals",
+        "basis": "first strictly higher eligible level in stack order; development-only reachability; next_era only in Canal"
+      },
+      {
+        "name": "development.CottonMill.current_target.vp",
+        "scale": 100,
+        "owner": "observer",
+        "source": "full ordered mat; era rules",
+        "units": "tile property or tile removals",
+        "basis": "first strictly higher eligible level in stack order; development-only reachability; next_era only in Canal"
+      },
+      {
+        "name": "development.CottonMill.current_target.beer",
+        "scale": 8,
+        "owner": "observer",
+        "source": "full ordered mat; era rules",
+        "units": "tile property or tile removals",
+        "basis": "first strictly higher eligible level in stack order; development-only reachability; next_era only in Canal"
+      },
+      {
+        "name": "development.CottonMill.current_target.canal_eligible",
+        "scale": 1,
+        "owner": "observer",
+        "source": "full ordered mat; era rules",
+        "units": "tile property or tile removals",
+        "basis": "first strictly higher eligible level in stack order; development-only reachability; next_era only in Canal"
+      },
+      {
+        "name": "development.CottonMill.current_target.rail_eligible",
+        "scale": 1,
+        "owner": "observer",
+        "source": "full ordered mat; era rules",
+        "units": "tile property or tile removals",
+        "basis": "first strictly higher eligible level in stack order; development-only reachability; next_era only in Canal"
+      },
+      {
+        "name": "development.CottonMill.current_target.survives_canal",
+        "scale": 1,
+        "owner": "observer",
+        "source": "full ordered mat; era rules",
+        "units": "tile property or tile removals",
+        "basis": "first strictly higher eligible level in stack order; development-only reachability; next_era only in Canal"
+      },
+      {
+        "name": "development.CottonMill.current_target.delta_cost",
+        "scale": 100,
+        "owner": "observer",
+        "source": "full ordered mat; era rules",
+        "units": "tile property or tile removals",
+        "basis": "first strictly higher eligible level in stack order; development-only reachability; next_era only in Canal"
+      },
+      {
+        "name": "development.CottonMill.current_target.delta_vp",
+        "scale": 100,
+        "owner": "observer",
+        "source": "full ordered mat; era rules",
+        "units": "tile property or tile removals",
+        "basis": "first strictly higher eligible level in stack order; development-only reachability; next_era only in Canal"
+      },
+      {
+        "name": "development.CottonMill.current_target.delta_beer",
+        "scale": 8,
+        "owner": "observer",
+        "source": "full ordered mat; era rules",
+        "units": "tile property or tile removals",
+        "basis": "first strictly higher eligible level in stack order; development-only reachability; next_era only in Canal"
+      },
+      {
+        "name": "development.CottonMill.current_target.delta_canal_eligible",
+        "scale": 1,
+        "owner": "observer",
+        "source": "full ordered mat; era rules",
+        "units": "tile property or tile removals",
+        "basis": "first strictly higher eligible level in stack order; development-only reachability; next_era only in Canal"
+      },
+      {
+        "name": "development.CottonMill.current_target.delta_rail_eligible",
+        "scale": 1,
+        "owner": "observer",
+        "source": "full ordered mat; era rules",
+        "units": "tile property or tile removals",
+        "basis": "first strictly higher eligible level in stack order; development-only reachability; next_era only in Canal"
+      },
+      {
+        "name": "development.CottonMill.next_era_target.present",
+        "scale": 1,
+        "owner": "observer",
+        "source": "full ordered mat; era rules",
+        "units": "tile property or tile removals",
+        "basis": "first strictly higher eligible level in stack order; development-only reachability; next_era only in Canal"
+      },
+      {
+        "name": "development.CottonMill.next_era_target.reachable",
+        "scale": 1,
+        "owner": "observer",
+        "source": "full ordered mat; era rules",
+        "units": "tile property or tile removals",
+        "basis": "first strictly higher eligible level in stack order; development-only reachability; next_era only in Canal"
+      },
+      {
+        "name": "development.CottonMill.next_era_target.blocked",
+        "scale": 1,
+        "owner": "observer",
+        "source": "full ordered mat; era rules",
+        "units": "tile property or tile removals",
+        "basis": "first strictly higher eligible level in stack order; development-only reachability; next_era only in Canal"
+      },
+      {
+        "name": "development.CottonMill.next_era_target.already_unlocked",
+        "scale": 1,
+        "owner": "observer",
+        "source": "full ordered mat; era rules",
+        "units": "tile property or tile removals",
+        "basis": "first strictly higher eligible level in stack order; development-only reachability; next_era only in Canal"
+      },
+      {
+        "name": "development.CottonMill.next_era_target.removals",
+        "scale": 16,
+        "owner": "observer",
+        "source": "full ordered mat; era rules",
+        "units": "tile property or tile removals",
+        "basis": "first strictly higher eligible level in stack order; development-only reachability; next_era only in Canal"
+      },
+      {
+        "name": "development.CottonMill.next_era_target.level",
+        "scale": 8,
+        "owner": "observer",
+        "source": "full ordered mat; era rules",
+        "units": "tile property or tile removals",
+        "basis": "first strictly higher eligible level in stack order; development-only reachability; next_era only in Canal"
+      },
+      {
+        "name": "development.CottonMill.next_era_target.cash_cost",
+        "scale": 100,
+        "owner": "observer",
+        "source": "full ordered mat; era rules",
+        "units": "tile property or tile removals",
+        "basis": "first strictly higher eligible level in stack order; development-only reachability; next_era only in Canal"
+      },
+      {
+        "name": "development.CottonMill.next_era_target.vp",
+        "scale": 100,
+        "owner": "observer",
+        "source": "full ordered mat; era rules",
+        "units": "tile property or tile removals",
+        "basis": "first strictly higher eligible level in stack order; development-only reachability; next_era only in Canal"
+      },
+      {
+        "name": "development.CottonMill.next_era_target.beer",
+        "scale": 8,
+        "owner": "observer",
+        "source": "full ordered mat; era rules",
+        "units": "tile property or tile removals",
+        "basis": "first strictly higher eligible level in stack order; development-only reachability; next_era only in Canal"
+      },
+      {
+        "name": "development.CottonMill.next_era_target.canal_eligible",
+        "scale": 1,
+        "owner": "observer",
+        "source": "full ordered mat; era rules",
+        "units": "tile property or tile removals",
+        "basis": "first strictly higher eligible level in stack order; development-only reachability; next_era only in Canal"
+      },
+      {
+        "name": "development.CottonMill.next_era_target.rail_eligible",
+        "scale": 1,
+        "owner": "observer",
+        "source": "full ordered mat; era rules",
+        "units": "tile property or tile removals",
+        "basis": "first strictly higher eligible level in stack order; development-only reachability; next_era only in Canal"
+      },
+      {
+        "name": "development.CottonMill.next_era_target.survives_canal",
+        "scale": 1,
+        "owner": "observer",
+        "source": "full ordered mat; era rules",
+        "units": "tile property or tile removals",
+        "basis": "first strictly higher eligible level in stack order; development-only reachability; next_era only in Canal"
+      },
+      {
+        "name": "development.CottonMill.next_era_target.delta_cost",
+        "scale": 100,
+        "owner": "observer",
+        "source": "full ordered mat; era rules",
+        "units": "tile property or tile removals",
+        "basis": "first strictly higher eligible level in stack order; development-only reachability; next_era only in Canal"
+      },
+      {
+        "name": "development.CottonMill.next_era_target.delta_vp",
+        "scale": 100,
+        "owner": "observer",
+        "source": "full ordered mat; era rules",
+        "units": "tile property or tile removals",
+        "basis": "first strictly higher eligible level in stack order; development-only reachability; next_era only in Canal"
+      },
+      {
+        "name": "development.CottonMill.next_era_target.delta_beer",
+        "scale": 8,
+        "owner": "observer",
+        "source": "full ordered mat; era rules",
+        "units": "tile property or tile removals",
+        "basis": "first strictly higher eligible level in stack order; development-only reachability; next_era only in Canal"
+      },
+      {
+        "name": "development.CottonMill.next_era_target.delta_canal_eligible",
+        "scale": 1,
+        "owner": "observer",
+        "source": "full ordered mat; era rules",
+        "units": "tile property or tile removals",
+        "basis": "first strictly higher eligible level in stack order; development-only reachability; next_era only in Canal"
+      },
+      {
+        "name": "development.CottonMill.next_era_target.delta_rail_eligible",
+        "scale": 1,
+        "owner": "observer",
+        "source": "full ordered mat; era rules",
+        "units": "tile property or tile removals",
+        "basis": "first strictly higher eligible level in stack order; development-only reachability; next_era only in Canal"
+      },
+      {
+        "name": "development.IronWorks.current.present",
+        "scale": 1,
+        "owner": "observer",
+        "source": "full ordered mat",
+        "units": "tile property",
+        "basis": "head of stack, never skip era-ineligible/undevelopable tiles"
+      },
+      {
+        "name": "development.IronWorks.current.already_unlocked",
+        "scale": 1,
+        "owner": "observer",
+        "source": "full ordered mat",
+        "units": "tile property",
+        "basis": "head of stack, never skip era-ineligible/undevelopable tiles"
+      },
+      {
+        "name": "development.IronWorks.current.level",
+        "scale": 8,
+        "owner": "observer",
+        "source": "full ordered mat",
+        "units": "tile property",
+        "basis": "head of stack, never skip era-ineligible/undevelopable tiles"
+      },
+      {
+        "name": "development.IronWorks.current.cash_cost",
+        "scale": 100,
+        "owner": "observer",
+        "source": "full ordered mat",
+        "units": "tile property",
+        "basis": "head of stack, never skip era-ineligible/undevelopable tiles"
+      },
+      {
+        "name": "development.IronWorks.current.vp",
+        "scale": 100,
+        "owner": "observer",
+        "source": "full ordered mat",
+        "units": "tile property",
+        "basis": "head of stack, never skip era-ineligible/undevelopable tiles"
+      },
+      {
+        "name": "development.IronWorks.current.beer",
+        "scale": 8,
+        "owner": "observer",
+        "source": "full ordered mat",
+        "units": "tile property",
+        "basis": "head of stack, never skip era-ineligible/undevelopable tiles"
+      },
+      {
+        "name": "development.IronWorks.current.canal_eligible",
+        "scale": 1,
+        "owner": "observer",
+        "source": "full ordered mat",
+        "units": "tile property",
+        "basis": "head of stack, never skip era-ineligible/undevelopable tiles"
+      },
+      {
+        "name": "development.IronWorks.current.rail_eligible",
+        "scale": 1,
+        "owner": "observer",
+        "source": "full ordered mat",
+        "units": "tile property",
+        "basis": "head of stack, never skip era-ineligible/undevelopable tiles"
+      },
+      {
+        "name": "development.IronWorks.current.survives_canal",
+        "scale": 1,
+        "owner": "observer",
+        "source": "full ordered mat",
+        "units": "tile property",
+        "basis": "head of stack, never skip era-ineligible/undevelopable tiles"
+      },
+      {
+        "name": "development.IronWorks.current_target.present",
+        "scale": 1,
+        "owner": "observer",
+        "source": "full ordered mat; era rules",
+        "units": "tile property or tile removals",
+        "basis": "first strictly higher eligible level in stack order; development-only reachability; next_era only in Canal"
+      },
+      {
+        "name": "development.IronWorks.current_target.reachable",
+        "scale": 1,
+        "owner": "observer",
+        "source": "full ordered mat; era rules",
+        "units": "tile property or tile removals",
+        "basis": "first strictly higher eligible level in stack order; development-only reachability; next_era only in Canal"
+      },
+      {
+        "name": "development.IronWorks.current_target.blocked",
+        "scale": 1,
+        "owner": "observer",
+        "source": "full ordered mat; era rules",
+        "units": "tile property or tile removals",
+        "basis": "first strictly higher eligible level in stack order; development-only reachability; next_era only in Canal"
+      },
+      {
+        "name": "development.IronWorks.current_target.already_unlocked",
+        "scale": 1,
+        "owner": "observer",
+        "source": "full ordered mat; era rules",
+        "units": "tile property or tile removals",
+        "basis": "first strictly higher eligible level in stack order; development-only reachability; next_era only in Canal"
+      },
+      {
+        "name": "development.IronWorks.current_target.removals",
+        "scale": 16,
+        "owner": "observer",
+        "source": "full ordered mat; era rules",
+        "units": "tile property or tile removals",
+        "basis": "first strictly higher eligible level in stack order; development-only reachability; next_era only in Canal"
+      },
+      {
+        "name": "development.IronWorks.current_target.level",
+        "scale": 8,
+        "owner": "observer",
+        "source": "full ordered mat; era rules",
+        "units": "tile property or tile removals",
+        "basis": "first strictly higher eligible level in stack order; development-only reachability; next_era only in Canal"
+      },
+      {
+        "name": "development.IronWorks.current_target.cash_cost",
+        "scale": 100,
+        "owner": "observer",
+        "source": "full ordered mat; era rules",
+        "units": "tile property or tile removals",
+        "basis": "first strictly higher eligible level in stack order; development-only reachability; next_era only in Canal"
+      },
+      {
+        "name": "development.IronWorks.current_target.vp",
+        "scale": 100,
+        "owner": "observer",
+        "source": "full ordered mat; era rules",
+        "units": "tile property or tile removals",
+        "basis": "first strictly higher eligible level in stack order; development-only reachability; next_era only in Canal"
+      },
+      {
+        "name": "development.IronWorks.current_target.beer",
+        "scale": 8,
+        "owner": "observer",
+        "source": "full ordered mat; era rules",
+        "units": "tile property or tile removals",
+        "basis": "first strictly higher eligible level in stack order; development-only reachability; next_era only in Canal"
+      },
+      {
+        "name": "development.IronWorks.current_target.canal_eligible",
+        "scale": 1,
+        "owner": "observer",
+        "source": "full ordered mat; era rules",
+        "units": "tile property or tile removals",
+        "basis": "first strictly higher eligible level in stack order; development-only reachability; next_era only in Canal"
+      },
+      {
+        "name": "development.IronWorks.current_target.rail_eligible",
+        "scale": 1,
+        "owner": "observer",
+        "source": "full ordered mat; era rules",
+        "units": "tile property or tile removals",
+        "basis": "first strictly higher eligible level in stack order; development-only reachability; next_era only in Canal"
+      },
+      {
+        "name": "development.IronWorks.current_target.survives_canal",
+        "scale": 1,
+        "owner": "observer",
+        "source": "full ordered mat; era rules",
+        "units": "tile property or tile removals",
+        "basis": "first strictly higher eligible level in stack order; development-only reachability; next_era only in Canal"
+      },
+      {
+        "name": "development.IronWorks.current_target.delta_cost",
+        "scale": 100,
+        "owner": "observer",
+        "source": "full ordered mat; era rules",
+        "units": "tile property or tile removals",
+        "basis": "first strictly higher eligible level in stack order; development-only reachability; next_era only in Canal"
+      },
+      {
+        "name": "development.IronWorks.current_target.delta_vp",
+        "scale": 100,
+        "owner": "observer",
+        "source": "full ordered mat; era rules",
+        "units": "tile property or tile removals",
+        "basis": "first strictly higher eligible level in stack order; development-only reachability; next_era only in Canal"
+      },
+      {
+        "name": "development.IronWorks.current_target.delta_beer",
+        "scale": 8,
+        "owner": "observer",
+        "source": "full ordered mat; era rules",
+        "units": "tile property or tile removals",
+        "basis": "first strictly higher eligible level in stack order; development-only reachability; next_era only in Canal"
+      },
+      {
+        "name": "development.IronWorks.current_target.delta_canal_eligible",
+        "scale": 1,
+        "owner": "observer",
+        "source": "full ordered mat; era rules",
+        "units": "tile property or tile removals",
+        "basis": "first strictly higher eligible level in stack order; development-only reachability; next_era only in Canal"
+      },
+      {
+        "name": "development.IronWorks.current_target.delta_rail_eligible",
+        "scale": 1,
+        "owner": "observer",
+        "source": "full ordered mat; era rules",
+        "units": "tile property or tile removals",
+        "basis": "first strictly higher eligible level in stack order; development-only reachability; next_era only in Canal"
+      },
+      {
+        "name": "development.IronWorks.next_era_target.present",
+        "scale": 1,
+        "owner": "observer",
+        "source": "full ordered mat; era rules",
+        "units": "tile property or tile removals",
+        "basis": "first strictly higher eligible level in stack order; development-only reachability; next_era only in Canal"
+      },
+      {
+        "name": "development.IronWorks.next_era_target.reachable",
+        "scale": 1,
+        "owner": "observer",
+        "source": "full ordered mat; era rules",
+        "units": "tile property or tile removals",
+        "basis": "first strictly higher eligible level in stack order; development-only reachability; next_era only in Canal"
+      },
+      {
+        "name": "development.IronWorks.next_era_target.blocked",
+        "scale": 1,
+        "owner": "observer",
+        "source": "full ordered mat; era rules",
+        "units": "tile property or tile removals",
+        "basis": "first strictly higher eligible level in stack order; development-only reachability; next_era only in Canal"
+      },
+      {
+        "name": "development.IronWorks.next_era_target.already_unlocked",
+        "scale": 1,
+        "owner": "observer",
+        "source": "full ordered mat; era rules",
+        "units": "tile property or tile removals",
+        "basis": "first strictly higher eligible level in stack order; development-only reachability; next_era only in Canal"
+      },
+      {
+        "name": "development.IronWorks.next_era_target.removals",
+        "scale": 16,
+        "owner": "observer",
+        "source": "full ordered mat; era rules",
+        "units": "tile property or tile removals",
+        "basis": "first strictly higher eligible level in stack order; development-only reachability; next_era only in Canal"
+      },
+      {
+        "name": "development.IronWorks.next_era_target.level",
+        "scale": 8,
+        "owner": "observer",
+        "source": "full ordered mat; era rules",
+        "units": "tile property or tile removals",
+        "basis": "first strictly higher eligible level in stack order; development-only reachability; next_era only in Canal"
+      },
+      {
+        "name": "development.IronWorks.next_era_target.cash_cost",
+        "scale": 100,
+        "owner": "observer",
+        "source": "full ordered mat; era rules",
+        "units": "tile property or tile removals",
+        "basis": "first strictly higher eligible level in stack order; development-only reachability; next_era only in Canal"
+      },
+      {
+        "name": "development.IronWorks.next_era_target.vp",
+        "scale": 100,
+        "owner": "observer",
+        "source": "full ordered mat; era rules",
+        "units": "tile property or tile removals",
+        "basis": "first strictly higher eligible level in stack order; development-only reachability; next_era only in Canal"
+      },
+      {
+        "name": "development.IronWorks.next_era_target.beer",
+        "scale": 8,
+        "owner": "observer",
+        "source": "full ordered mat; era rules",
+        "units": "tile property or tile removals",
+        "basis": "first strictly higher eligible level in stack order; development-only reachability; next_era only in Canal"
+      },
+      {
+        "name": "development.IronWorks.next_era_target.canal_eligible",
+        "scale": 1,
+        "owner": "observer",
+        "source": "full ordered mat; era rules",
+        "units": "tile property or tile removals",
+        "basis": "first strictly higher eligible level in stack order; development-only reachability; next_era only in Canal"
+      },
+      {
+        "name": "development.IronWorks.next_era_target.rail_eligible",
+        "scale": 1,
+        "owner": "observer",
+        "source": "full ordered mat; era rules",
+        "units": "tile property or tile removals",
+        "basis": "first strictly higher eligible level in stack order; development-only reachability; next_era only in Canal"
+      },
+      {
+        "name": "development.IronWorks.next_era_target.survives_canal",
+        "scale": 1,
+        "owner": "observer",
+        "source": "full ordered mat; era rules",
+        "units": "tile property or tile removals",
+        "basis": "first strictly higher eligible level in stack order; development-only reachability; next_era only in Canal"
+      },
+      {
+        "name": "development.IronWorks.next_era_target.delta_cost",
+        "scale": 100,
+        "owner": "observer",
+        "source": "full ordered mat; era rules",
+        "units": "tile property or tile removals",
+        "basis": "first strictly higher eligible level in stack order; development-only reachability; next_era only in Canal"
+      },
+      {
+        "name": "development.IronWorks.next_era_target.delta_vp",
+        "scale": 100,
+        "owner": "observer",
+        "source": "full ordered mat; era rules",
+        "units": "tile property or tile removals",
+        "basis": "first strictly higher eligible level in stack order; development-only reachability; next_era only in Canal"
+      },
+      {
+        "name": "development.IronWorks.next_era_target.delta_beer",
+        "scale": 8,
+        "owner": "observer",
+        "source": "full ordered mat; era rules",
+        "units": "tile property or tile removals",
+        "basis": "first strictly higher eligible level in stack order; development-only reachability; next_era only in Canal"
+      },
+      {
+        "name": "development.IronWorks.next_era_target.delta_canal_eligible",
+        "scale": 1,
+        "owner": "observer",
+        "source": "full ordered mat; era rules",
+        "units": "tile property or tile removals",
+        "basis": "first strictly higher eligible level in stack order; development-only reachability; next_era only in Canal"
+      },
+      {
+        "name": "development.IronWorks.next_era_target.delta_rail_eligible",
+        "scale": 1,
+        "owner": "observer",
+        "source": "full ordered mat; era rules",
+        "units": "tile property or tile removals",
+        "basis": "first strictly higher eligible level in stack order; development-only reachability; next_era only in Canal"
+      },
+      {
+        "name": "development.Manufacturer.current.present",
+        "scale": 1,
+        "owner": "observer",
+        "source": "full ordered mat",
+        "units": "tile property",
+        "basis": "head of stack, never skip era-ineligible/undevelopable tiles"
+      },
+      {
+        "name": "development.Manufacturer.current.already_unlocked",
+        "scale": 1,
+        "owner": "observer",
+        "source": "full ordered mat",
+        "units": "tile property",
+        "basis": "head of stack, never skip era-ineligible/undevelopable tiles"
+      },
+      {
+        "name": "development.Manufacturer.current.level",
+        "scale": 8,
+        "owner": "observer",
+        "source": "full ordered mat",
+        "units": "tile property",
+        "basis": "head of stack, never skip era-ineligible/undevelopable tiles"
+      },
+      {
+        "name": "development.Manufacturer.current.cash_cost",
+        "scale": 100,
+        "owner": "observer",
+        "source": "full ordered mat",
+        "units": "tile property",
+        "basis": "head of stack, never skip era-ineligible/undevelopable tiles"
+      },
+      {
+        "name": "development.Manufacturer.current.vp",
+        "scale": 100,
+        "owner": "observer",
+        "source": "full ordered mat",
+        "units": "tile property",
+        "basis": "head of stack, never skip era-ineligible/undevelopable tiles"
+      },
+      {
+        "name": "development.Manufacturer.current.beer",
+        "scale": 8,
+        "owner": "observer",
+        "source": "full ordered mat",
+        "units": "tile property",
+        "basis": "head of stack, never skip era-ineligible/undevelopable tiles"
+      },
+      {
+        "name": "development.Manufacturer.current.canal_eligible",
+        "scale": 1,
+        "owner": "observer",
+        "source": "full ordered mat",
+        "units": "tile property",
+        "basis": "head of stack, never skip era-ineligible/undevelopable tiles"
+      },
+      {
+        "name": "development.Manufacturer.current.rail_eligible",
+        "scale": 1,
+        "owner": "observer",
+        "source": "full ordered mat",
+        "units": "tile property",
+        "basis": "head of stack, never skip era-ineligible/undevelopable tiles"
+      },
+      {
+        "name": "development.Manufacturer.current.survives_canal",
+        "scale": 1,
+        "owner": "observer",
+        "source": "full ordered mat",
+        "units": "tile property",
+        "basis": "head of stack, never skip era-ineligible/undevelopable tiles"
+      },
+      {
+        "name": "development.Manufacturer.current_target.present",
+        "scale": 1,
+        "owner": "observer",
+        "source": "full ordered mat; era rules",
+        "units": "tile property or tile removals",
+        "basis": "first strictly higher eligible level in stack order; development-only reachability; next_era only in Canal"
+      },
+      {
+        "name": "development.Manufacturer.current_target.reachable",
+        "scale": 1,
+        "owner": "observer",
+        "source": "full ordered mat; era rules",
+        "units": "tile property or tile removals",
+        "basis": "first strictly higher eligible level in stack order; development-only reachability; next_era only in Canal"
+      },
+      {
+        "name": "development.Manufacturer.current_target.blocked",
+        "scale": 1,
+        "owner": "observer",
+        "source": "full ordered mat; era rules",
+        "units": "tile property or tile removals",
+        "basis": "first strictly higher eligible level in stack order; development-only reachability; next_era only in Canal"
+      },
+      {
+        "name": "development.Manufacturer.current_target.already_unlocked",
+        "scale": 1,
+        "owner": "observer",
+        "source": "full ordered mat; era rules",
+        "units": "tile property or tile removals",
+        "basis": "first strictly higher eligible level in stack order; development-only reachability; next_era only in Canal"
+      },
+      {
+        "name": "development.Manufacturer.current_target.removals",
+        "scale": 16,
+        "owner": "observer",
+        "source": "full ordered mat; era rules",
+        "units": "tile property or tile removals",
+        "basis": "first strictly higher eligible level in stack order; development-only reachability; next_era only in Canal"
+      },
+      {
+        "name": "development.Manufacturer.current_target.level",
+        "scale": 8,
+        "owner": "observer",
+        "source": "full ordered mat; era rules",
+        "units": "tile property or tile removals",
+        "basis": "first strictly higher eligible level in stack order; development-only reachability; next_era only in Canal"
+      },
+      {
+        "name": "development.Manufacturer.current_target.cash_cost",
+        "scale": 100,
+        "owner": "observer",
+        "source": "full ordered mat; era rules",
+        "units": "tile property or tile removals",
+        "basis": "first strictly higher eligible level in stack order; development-only reachability; next_era only in Canal"
+      },
+      {
+        "name": "development.Manufacturer.current_target.vp",
+        "scale": 100,
+        "owner": "observer",
+        "source": "full ordered mat; era rules",
+        "units": "tile property or tile removals",
+        "basis": "first strictly higher eligible level in stack order; development-only reachability; next_era only in Canal"
+      },
+      {
+        "name": "development.Manufacturer.current_target.beer",
+        "scale": 8,
+        "owner": "observer",
+        "source": "full ordered mat; era rules",
+        "units": "tile property or tile removals",
+        "basis": "first strictly higher eligible level in stack order; development-only reachability; next_era only in Canal"
+      },
+      {
+        "name": "development.Manufacturer.current_target.canal_eligible",
+        "scale": 1,
+        "owner": "observer",
+        "source": "full ordered mat; era rules",
+        "units": "tile property or tile removals",
+        "basis": "first strictly higher eligible level in stack order; development-only reachability; next_era only in Canal"
+      },
+      {
+        "name": "development.Manufacturer.current_target.rail_eligible",
+        "scale": 1,
+        "owner": "observer",
+        "source": "full ordered mat; era rules",
+        "units": "tile property or tile removals",
+        "basis": "first strictly higher eligible level in stack order; development-only reachability; next_era only in Canal"
+      },
+      {
+        "name": "development.Manufacturer.current_target.survives_canal",
+        "scale": 1,
+        "owner": "observer",
+        "source": "full ordered mat; era rules",
+        "units": "tile property or tile removals",
+        "basis": "first strictly higher eligible level in stack order; development-only reachability; next_era only in Canal"
+      },
+      {
+        "name": "development.Manufacturer.current_target.delta_cost",
+        "scale": 100,
+        "owner": "observer",
+        "source": "full ordered mat; era rules",
+        "units": "tile property or tile removals",
+        "basis": "first strictly higher eligible level in stack order; development-only reachability; next_era only in Canal"
+      },
+      {
+        "name": "development.Manufacturer.current_target.delta_vp",
+        "scale": 100,
+        "owner": "observer",
+        "source": "full ordered mat; era rules",
+        "units": "tile property or tile removals",
+        "basis": "first strictly higher eligible level in stack order; development-only reachability; next_era only in Canal"
+      },
+      {
+        "name": "development.Manufacturer.current_target.delta_beer",
+        "scale": 8,
+        "owner": "observer",
+        "source": "full ordered mat; era rules",
+        "units": "tile property or tile removals",
+        "basis": "first strictly higher eligible level in stack order; development-only reachability; next_era only in Canal"
+      },
+      {
+        "name": "development.Manufacturer.current_target.delta_canal_eligible",
+        "scale": 1,
+        "owner": "observer",
+        "source": "full ordered mat; era rules",
+        "units": "tile property or tile removals",
+        "basis": "first strictly higher eligible level in stack order; development-only reachability; next_era only in Canal"
+      },
+      {
+        "name": "development.Manufacturer.current_target.delta_rail_eligible",
+        "scale": 1,
+        "owner": "observer",
+        "source": "full ordered mat; era rules",
+        "units": "tile property or tile removals",
+        "basis": "first strictly higher eligible level in stack order; development-only reachability; next_era only in Canal"
+      },
+      {
+        "name": "development.Manufacturer.next_era_target.present",
+        "scale": 1,
+        "owner": "observer",
+        "source": "full ordered mat; era rules",
+        "units": "tile property or tile removals",
+        "basis": "first strictly higher eligible level in stack order; development-only reachability; next_era only in Canal"
+      },
+      {
+        "name": "development.Manufacturer.next_era_target.reachable",
+        "scale": 1,
+        "owner": "observer",
+        "source": "full ordered mat; era rules",
+        "units": "tile property or tile removals",
+        "basis": "first strictly higher eligible level in stack order; development-only reachability; next_era only in Canal"
+      },
+      {
+        "name": "development.Manufacturer.next_era_target.blocked",
+        "scale": 1,
+        "owner": "observer",
+        "source": "full ordered mat; era rules",
+        "units": "tile property or tile removals",
+        "basis": "first strictly higher eligible level in stack order; development-only reachability; next_era only in Canal"
+      },
+      {
+        "name": "development.Manufacturer.next_era_target.already_unlocked",
+        "scale": 1,
+        "owner": "observer",
+        "source": "full ordered mat; era rules",
+        "units": "tile property or tile removals",
+        "basis": "first strictly higher eligible level in stack order; development-only reachability; next_era only in Canal"
+      },
+      {
+        "name": "development.Manufacturer.next_era_target.removals",
+        "scale": 16,
+        "owner": "observer",
+        "source": "full ordered mat; era rules",
+        "units": "tile property or tile removals",
+        "basis": "first strictly higher eligible level in stack order; development-only reachability; next_era only in Canal"
+      },
+      {
+        "name": "development.Manufacturer.next_era_target.level",
+        "scale": 8,
+        "owner": "observer",
+        "source": "full ordered mat; era rules",
+        "units": "tile property or tile removals",
+        "basis": "first strictly higher eligible level in stack order; development-only reachability; next_era only in Canal"
+      },
+      {
+        "name": "development.Manufacturer.next_era_target.cash_cost",
+        "scale": 100,
+        "owner": "observer",
+        "source": "full ordered mat; era rules",
+        "units": "tile property or tile removals",
+        "basis": "first strictly higher eligible level in stack order; development-only reachability; next_era only in Canal"
+      },
+      {
+        "name": "development.Manufacturer.next_era_target.vp",
+        "scale": 100,
+        "owner": "observer",
+        "source": "full ordered mat; era rules",
+        "units": "tile property or tile removals",
+        "basis": "first strictly higher eligible level in stack order; development-only reachability; next_era only in Canal"
+      },
+      {
+        "name": "development.Manufacturer.next_era_target.beer",
+        "scale": 8,
+        "owner": "observer",
+        "source": "full ordered mat; era rules",
+        "units": "tile property or tile removals",
+        "basis": "first strictly higher eligible level in stack order; development-only reachability; next_era only in Canal"
+      },
+      {
+        "name": "development.Manufacturer.next_era_target.canal_eligible",
+        "scale": 1,
+        "owner": "observer",
+        "source": "full ordered mat; era rules",
+        "units": "tile property or tile removals",
+        "basis": "first strictly higher eligible level in stack order; development-only reachability; next_era only in Canal"
+      },
+      {
+        "name": "development.Manufacturer.next_era_target.rail_eligible",
+        "scale": 1,
+        "owner": "observer",
+        "source": "full ordered mat; era rules",
+        "units": "tile property or tile removals",
+        "basis": "first strictly higher eligible level in stack order; development-only reachability; next_era only in Canal"
+      },
+      {
+        "name": "development.Manufacturer.next_era_target.survives_canal",
+        "scale": 1,
+        "owner": "observer",
+        "source": "full ordered mat; era rules",
+        "units": "tile property or tile removals",
+        "basis": "first strictly higher eligible level in stack order; development-only reachability; next_era only in Canal"
+      },
+      {
+        "name": "development.Manufacturer.next_era_target.delta_cost",
+        "scale": 100,
+        "owner": "observer",
+        "source": "full ordered mat; era rules",
+        "units": "tile property or tile removals",
+        "basis": "first strictly higher eligible level in stack order; development-only reachability; next_era only in Canal"
+      },
+      {
+        "name": "development.Manufacturer.next_era_target.delta_vp",
+        "scale": 100,
+        "owner": "observer",
+        "source": "full ordered mat; era rules",
+        "units": "tile property or tile removals",
+        "basis": "first strictly higher eligible level in stack order; development-only reachability; next_era only in Canal"
+      },
+      {
+        "name": "development.Manufacturer.next_era_target.delta_beer",
+        "scale": 8,
+        "owner": "observer",
+        "source": "full ordered mat; era rules",
+        "units": "tile property or tile removals",
+        "basis": "first strictly higher eligible level in stack order; development-only reachability; next_era only in Canal"
+      },
+      {
+        "name": "development.Manufacturer.next_era_target.delta_canal_eligible",
+        "scale": 1,
+        "owner": "observer",
+        "source": "full ordered mat; era rules",
+        "units": "tile property or tile removals",
+        "basis": "first strictly higher eligible level in stack order; development-only reachability; next_era only in Canal"
+      },
+      {
+        "name": "development.Manufacturer.next_era_target.delta_rail_eligible",
+        "scale": 1,
+        "owner": "observer",
+        "source": "full ordered mat; era rules",
+        "units": "tile property or tile removals",
+        "basis": "first strictly higher eligible level in stack order; development-only reachability; next_era only in Canal"
+      },
+      {
+        "name": "development.Pottery.current.present",
+        "scale": 1,
+        "owner": "observer",
+        "source": "full ordered mat",
+        "units": "tile property",
+        "basis": "head of stack, never skip era-ineligible/undevelopable tiles"
+      },
+      {
+        "name": "development.Pottery.current.already_unlocked",
+        "scale": 1,
+        "owner": "observer",
+        "source": "full ordered mat",
+        "units": "tile property",
+        "basis": "head of stack, never skip era-ineligible/undevelopable tiles"
+      },
+      {
+        "name": "development.Pottery.current.level",
+        "scale": 8,
+        "owner": "observer",
+        "source": "full ordered mat",
+        "units": "tile property",
+        "basis": "head of stack, never skip era-ineligible/undevelopable tiles"
+      },
+      {
+        "name": "development.Pottery.current.cash_cost",
+        "scale": 100,
+        "owner": "observer",
+        "source": "full ordered mat",
+        "units": "tile property",
+        "basis": "head of stack, never skip era-ineligible/undevelopable tiles"
+      },
+      {
+        "name": "development.Pottery.current.vp",
+        "scale": 100,
+        "owner": "observer",
+        "source": "full ordered mat",
+        "units": "tile property",
+        "basis": "head of stack, never skip era-ineligible/undevelopable tiles"
+      },
+      {
+        "name": "development.Pottery.current.beer",
+        "scale": 8,
+        "owner": "observer",
+        "source": "full ordered mat",
+        "units": "tile property",
+        "basis": "head of stack, never skip era-ineligible/undevelopable tiles"
+      },
+      {
+        "name": "development.Pottery.current.canal_eligible",
+        "scale": 1,
+        "owner": "observer",
+        "source": "full ordered mat",
+        "units": "tile property",
+        "basis": "head of stack, never skip era-ineligible/undevelopable tiles"
+      },
+      {
+        "name": "development.Pottery.current.rail_eligible",
+        "scale": 1,
+        "owner": "observer",
+        "source": "full ordered mat",
+        "units": "tile property",
+        "basis": "head of stack, never skip era-ineligible/undevelopable tiles"
+      },
+      {
+        "name": "development.Pottery.current.survives_canal",
+        "scale": 1,
+        "owner": "observer",
+        "source": "full ordered mat",
+        "units": "tile property",
+        "basis": "head of stack, never skip era-ineligible/undevelopable tiles"
+      },
+      {
+        "name": "development.Pottery.current_target.present",
+        "scale": 1,
+        "owner": "observer",
+        "source": "full ordered mat; era rules",
+        "units": "tile property or tile removals",
+        "basis": "first strictly higher eligible level in stack order; development-only reachability; next_era only in Canal"
+      },
+      {
+        "name": "development.Pottery.current_target.reachable",
+        "scale": 1,
+        "owner": "observer",
+        "source": "full ordered mat; era rules",
+        "units": "tile property or tile removals",
+        "basis": "first strictly higher eligible level in stack order; development-only reachability; next_era only in Canal"
+      },
+      {
+        "name": "development.Pottery.current_target.blocked",
+        "scale": 1,
+        "owner": "observer",
+        "source": "full ordered mat; era rules",
+        "units": "tile property or tile removals",
+        "basis": "first strictly higher eligible level in stack order; development-only reachability; next_era only in Canal"
+      },
+      {
+        "name": "development.Pottery.current_target.already_unlocked",
+        "scale": 1,
+        "owner": "observer",
+        "source": "full ordered mat; era rules",
+        "units": "tile property or tile removals",
+        "basis": "first strictly higher eligible level in stack order; development-only reachability; next_era only in Canal"
+      },
+      {
+        "name": "development.Pottery.current_target.removals",
+        "scale": 16,
+        "owner": "observer",
+        "source": "full ordered mat; era rules",
+        "units": "tile property or tile removals",
+        "basis": "first strictly higher eligible level in stack order; development-only reachability; next_era only in Canal"
+      },
+      {
+        "name": "development.Pottery.current_target.level",
+        "scale": 8,
+        "owner": "observer",
+        "source": "full ordered mat; era rules",
+        "units": "tile property or tile removals",
+        "basis": "first strictly higher eligible level in stack order; development-only reachability; next_era only in Canal"
+      },
+      {
+        "name": "development.Pottery.current_target.cash_cost",
+        "scale": 100,
+        "owner": "observer",
+        "source": "full ordered mat; era rules",
+        "units": "tile property or tile removals",
+        "basis": "first strictly higher eligible level in stack order; development-only reachability; next_era only in Canal"
+      },
+      {
+        "name": "development.Pottery.current_target.vp",
+        "scale": 100,
+        "owner": "observer",
+        "source": "full ordered mat; era rules",
+        "units": "tile property or tile removals",
+        "basis": "first strictly higher eligible level in stack order; development-only reachability; next_era only in Canal"
+      },
+      {
+        "name": "development.Pottery.current_target.beer",
+        "scale": 8,
+        "owner": "observer",
+        "source": "full ordered mat; era rules",
+        "units": "tile property or tile removals",
+        "basis": "first strictly higher eligible level in stack order; development-only reachability; next_era only in Canal"
+      },
+      {
+        "name": "development.Pottery.current_target.canal_eligible",
+        "scale": 1,
+        "owner": "observer",
+        "source": "full ordered mat; era rules",
+        "units": "tile property or tile removals",
+        "basis": "first strictly higher eligible level in stack order; development-only reachability; next_era only in Canal"
+      },
+      {
+        "name": "development.Pottery.current_target.rail_eligible",
+        "scale": 1,
+        "owner": "observer",
+        "source": "full ordered mat; era rules",
+        "units": "tile property or tile removals",
+        "basis": "first strictly higher eligible level in stack order; development-only reachability; next_era only in Canal"
+      },
+      {
+        "name": "development.Pottery.current_target.survives_canal",
+        "scale": 1,
+        "owner": "observer",
+        "source": "full ordered mat; era rules",
+        "units": "tile property or tile removals",
+        "basis": "first strictly higher eligible level in stack order; development-only reachability; next_era only in Canal"
+      },
+      {
+        "name": "development.Pottery.current_target.delta_cost",
+        "scale": 100,
+        "owner": "observer",
+        "source": "full ordered mat; era rules",
+        "units": "tile property or tile removals",
+        "basis": "first strictly higher eligible level in stack order; development-only reachability; next_era only in Canal"
+      },
+      {
+        "name": "development.Pottery.current_target.delta_vp",
+        "scale": 100,
+        "owner": "observer",
+        "source": "full ordered mat; era rules",
+        "units": "tile property or tile removals",
+        "basis": "first strictly higher eligible level in stack order; development-only reachability; next_era only in Canal"
+      },
+      {
+        "name": "development.Pottery.current_target.delta_beer",
+        "scale": 8,
+        "owner": "observer",
+        "source": "full ordered mat; era rules",
+        "units": "tile property or tile removals",
+        "basis": "first strictly higher eligible level in stack order; development-only reachability; next_era only in Canal"
+      },
+      {
+        "name": "development.Pottery.current_target.delta_canal_eligible",
+        "scale": 1,
+        "owner": "observer",
+        "source": "full ordered mat; era rules",
+        "units": "tile property or tile removals",
+        "basis": "first strictly higher eligible level in stack order; development-only reachability; next_era only in Canal"
+      },
+      {
+        "name": "development.Pottery.current_target.delta_rail_eligible",
+        "scale": 1,
+        "owner": "observer",
+        "source": "full ordered mat; era rules",
+        "units": "tile property or tile removals",
+        "basis": "first strictly higher eligible level in stack order; development-only reachability; next_era only in Canal"
+      },
+      {
+        "name": "development.Pottery.next_era_target.present",
+        "scale": 1,
+        "owner": "observer",
+        "source": "full ordered mat; era rules",
+        "units": "tile property or tile removals",
+        "basis": "first strictly higher eligible level in stack order; development-only reachability; next_era only in Canal"
+      },
+      {
+        "name": "development.Pottery.next_era_target.reachable",
+        "scale": 1,
+        "owner": "observer",
+        "source": "full ordered mat; era rules",
+        "units": "tile property or tile removals",
+        "basis": "first strictly higher eligible level in stack order; development-only reachability; next_era only in Canal"
+      },
+      {
+        "name": "development.Pottery.next_era_target.blocked",
+        "scale": 1,
+        "owner": "observer",
+        "source": "full ordered mat; era rules",
+        "units": "tile property or tile removals",
+        "basis": "first strictly higher eligible level in stack order; development-only reachability; next_era only in Canal"
+      },
+      {
+        "name": "development.Pottery.next_era_target.already_unlocked",
+        "scale": 1,
+        "owner": "observer",
+        "source": "full ordered mat; era rules",
+        "units": "tile property or tile removals",
+        "basis": "first strictly higher eligible level in stack order; development-only reachability; next_era only in Canal"
+      },
+      {
+        "name": "development.Pottery.next_era_target.removals",
+        "scale": 16,
+        "owner": "observer",
+        "source": "full ordered mat; era rules",
+        "units": "tile property or tile removals",
+        "basis": "first strictly higher eligible level in stack order; development-only reachability; next_era only in Canal"
+      },
+      {
+        "name": "development.Pottery.next_era_target.level",
+        "scale": 8,
+        "owner": "observer",
+        "source": "full ordered mat; era rules",
+        "units": "tile property or tile removals",
+        "basis": "first strictly higher eligible level in stack order; development-only reachability; next_era only in Canal"
+      },
+      {
+        "name": "development.Pottery.next_era_target.cash_cost",
+        "scale": 100,
+        "owner": "observer",
+        "source": "full ordered mat; era rules",
+        "units": "tile property or tile removals",
+        "basis": "first strictly higher eligible level in stack order; development-only reachability; next_era only in Canal"
+      },
+      {
+        "name": "development.Pottery.next_era_target.vp",
+        "scale": 100,
+        "owner": "observer",
+        "source": "full ordered mat; era rules",
+        "units": "tile property or tile removals",
+        "basis": "first strictly higher eligible level in stack order; development-only reachability; next_era only in Canal"
+      },
+      {
+        "name": "development.Pottery.next_era_target.beer",
+        "scale": 8,
+        "owner": "observer",
+        "source": "full ordered mat; era rules",
+        "units": "tile property or tile removals",
+        "basis": "first strictly higher eligible level in stack order; development-only reachability; next_era only in Canal"
+      },
+      {
+        "name": "development.Pottery.next_era_target.canal_eligible",
+        "scale": 1,
+        "owner": "observer",
+        "source": "full ordered mat; era rules",
+        "units": "tile property or tile removals",
+        "basis": "first strictly higher eligible level in stack order; development-only reachability; next_era only in Canal"
+      },
+      {
+        "name": "development.Pottery.next_era_target.rail_eligible",
+        "scale": 1,
+        "owner": "observer",
+        "source": "full ordered mat; era rules",
+        "units": "tile property or tile removals",
+        "basis": "first strictly higher eligible level in stack order; development-only reachability; next_era only in Canal"
+      },
+      {
+        "name": "development.Pottery.next_era_target.survives_canal",
+        "scale": 1,
+        "owner": "observer",
+        "source": "full ordered mat; era rules",
+        "units": "tile property or tile removals",
+        "basis": "first strictly higher eligible level in stack order; development-only reachability; next_era only in Canal"
+      },
+      {
+        "name": "development.Pottery.next_era_target.delta_cost",
+        "scale": 100,
+        "owner": "observer",
+        "source": "full ordered mat; era rules",
+        "units": "tile property or tile removals",
+        "basis": "first strictly higher eligible level in stack order; development-only reachability; next_era only in Canal"
+      },
+      {
+        "name": "development.Pottery.next_era_target.delta_vp",
+        "scale": 100,
+        "owner": "observer",
+        "source": "full ordered mat; era rules",
+        "units": "tile property or tile removals",
+        "basis": "first strictly higher eligible level in stack order; development-only reachability; next_era only in Canal"
+      },
+      {
+        "name": "development.Pottery.next_era_target.delta_beer",
+        "scale": 8,
+        "owner": "observer",
+        "source": "full ordered mat; era rules",
+        "units": "tile property or tile removals",
+        "basis": "first strictly higher eligible level in stack order; development-only reachability; next_era only in Canal"
+      },
+      {
+        "name": "development.Pottery.next_era_target.delta_canal_eligible",
+        "scale": 1,
+        "owner": "observer",
+        "source": "full ordered mat; era rules",
+        "units": "tile property or tile removals",
+        "basis": "first strictly higher eligible level in stack order; development-only reachability; next_era only in Canal"
+      },
+      {
+        "name": "development.Pottery.next_era_target.delta_rail_eligible",
+        "scale": 1,
+        "owner": "observer",
+        "source": "full ordered mat; era rules",
+        "units": "tile property or tile removals",
+        "basis": "first strictly higher eligible level in stack order; development-only reachability; next_era only in Canal"
+      }
+    ],
+    "actions": [
+      {
+        "name": "cash_spent",
+        "scale": 100,
+        "owner": "observer",
+        "source": "choice, public money/income/market/debt",
+        "units": "GBP",
+        "basis": "incremental chosen action portion, before automatic turn/round advancement"
+      },
+      {
+        "name": "cash_proceeds",
+        "scale": 100,
+        "owner": "observer",
+        "source": "choice, public money/income/market/debt",
+        "units": "GBP",
+        "basis": "incremental chosen action portion, before automatic turn/round advancement"
+      },
+      {
+        "name": "cash_after",
+        "scale": 100,
+        "owner": "observer",
+        "source": "choice, public money/income/market/debt",
+        "units": "GBP",
+        "basis": "incremental chosen action portion, before automatic turn/round advancement"
+      },
+      {
+        "name": "projected_cash",
+        "scale": 100,
+        "owner": "observer",
+        "source": "choice, public money/income/market/debt",
+        "units": "GBP",
+        "basis": "incremental chosen action portion, before automatic turn/round advancement"
+      },
+      {
+        "name": "shortfall",
+        "scale": 100,
+        "owner": "observer",
+        "source": "choice, public money/income/market/debt",
+        "units": "GBP",
+        "basis": "incremental chosen action portion, before automatic turn/round advancement"
+      },
+      {
+        "name": "debt_after",
+        "scale": 100,
+        "owner": "observer",
+        "source": "choice, public money/income/market/debt",
+        "units": "GBP",
+        "basis": "incremental chosen action portion, before automatic turn/round advancement"
+      },
+      {
+        "name": "coal_used",
+        "scale": 8,
+        "owner": "observer",
+        "source": "selected source choice",
+        "units": "cubes",
+        "basis": "this one choice only; root resource commitments are separate"
+      },
+      {
+        "name": "portion_coal",
+        "scale": 8,
+        "owner": "observer",
+        "source": "selected tile/link/part or remaining pending counters",
+        "units": "cubes",
+        "basis": "chosen determined part through its mandatory payments; no unselected second part"
+      },
+      {
+        "name": "iron_used",
+        "scale": 8,
+        "owner": "observer",
+        "source": "selected source choice",
+        "units": "cubes",
+        "basis": "this one choice only; root resource commitments are separate"
+      },
+      {
+        "name": "portion_iron",
+        "scale": 8,
+        "owner": "observer",
+        "source": "selected tile/link/part or remaining pending counters",
+        "units": "cubes",
+        "basis": "chosen determined part through its mandatory payments; no unselected second part"
+      },
+      {
+        "name": "beer_used",
+        "scale": 8,
+        "owner": "observer",
+        "source": "selected source choice",
+        "units": "cubes",
+        "basis": "this one choice only; root resource commitments are separate"
+      },
+      {
+        "name": "portion_beer",
+        "scale": 8,
+        "owner": "observer",
+        "source": "selected tile/link/part or remaining pending counters",
+        "units": "cubes",
+        "basis": "chosen determined part through its mandatory payments; no unselected second part"
+      },
+      {
+        "name": "portion_cash_spent",
+        "scale": 100,
+        "owner": "observer",
+        "source": "base charge plus mandatory remaining market/resource facts",
+        "units": "GBP",
+        "basis": "selected determined part from now; excludes previous charges and optional later parts"
+      },
+      {
+        "name": "portion_cash_proceeds",
+        "scale": 100,
+        "owner": "observer",
+        "source": "base charge plus mandatory remaining market/resource facts",
+        "units": "GBP",
+        "basis": "selected determined part from now; excludes previous charges and optional later parts"
+      },
+      {
+        "name": "portion_cash_after",
+        "scale": 100,
+        "owner": "observer",
+        "source": "base charge plus mandatory remaining market/resource facts",
+        "units": "GBP",
+        "basis": "selected determined part from now; excludes previous charges and optional later parts"
+      },
+      {
+        "name": "portion_projected_cash",
+        "scale": 100,
+        "owner": "observer",
+        "source": "base charge plus mandatory remaining market/resource facts",
+        "units": "GBP",
+        "basis": "selected determined part from now; excludes previous charges and optional later parts"
+      },
+      {
+        "name": "portion_shortfall",
+        "scale": 100,
+        "owner": "observer",
+        "source": "base charge plus mandatory remaining market/resource facts",
+        "units": "GBP",
+        "basis": "selected determined part from now; excludes previous charges and optional later parts"
+      },
+      {
+        "name": "merchant_free_develop",
+        "scale": 1,
+        "owner": "observer",
+        "source": "selected merchant beer bonus",
+        "units": "bool",
+        "basis": "this choice creates a free development opportunity, not an assumed removal"
+      },
+      {
+        "name": "effects.0.flips",
+        "scale": 8,
+        "owner": "observer-relative seat 0",
+        "source": "chosen resource/industry plus public owner and income track",
+        "units": "count or income",
+        "basis": "chosen action portion only; secured era VP is not immediately awarded VP"
+      },
+      {
+        "name": "effects.0.income_marker_delta",
+        "scale": 100,
+        "owner": "observer-relative seat 0",
+        "source": "chosen resource/industry plus public owner and income track",
+        "units": "count or income",
+        "basis": "chosen action portion only; secured era VP is not immediately awarded VP"
+      },
+      {
+        "name": "effects.0.income_delta",
+        "scale": 30,
+        "owner": "observer-relative seat 0",
+        "source": "chosen resource/industry plus public owner and income track",
+        "units": "count or income",
+        "basis": "chosen action portion only; secured era VP is not immediately awarded VP"
+      },
+      {
+        "name": "effects.0.immediate_vp",
+        "scale": 100,
+        "owner": "observer-relative seat 0",
+        "source": "chosen resource/industry plus public owner and income track",
+        "units": "VP",
+        "basis": "chosen action portion only; secured era VP is not immediately awarded VP"
+      },
+      {
+        "name": "effects.0.secured_era_vp_delta",
+        "scale": 100,
+        "owner": "observer-relative seat 0",
+        "source": "chosen resource/industry plus public owner and income track",
+        "units": "VP",
+        "basis": "chosen action portion only; secured era VP is not immediately awarded VP"
+      },
+      {
+        "name": "effects.1.flips",
+        "scale": 8,
+        "owner": "observer-relative seat 1",
+        "source": "chosen resource/industry plus public owner and income track",
+        "units": "count or income",
+        "basis": "chosen action portion only; secured era VP is not immediately awarded VP"
+      },
+      {
+        "name": "effects.1.income_marker_delta",
+        "scale": 100,
+        "owner": "observer-relative seat 1",
+        "source": "chosen resource/industry plus public owner and income track",
+        "units": "count or income",
+        "basis": "chosen action portion only; secured era VP is not immediately awarded VP"
+      },
+      {
+        "name": "effects.1.income_delta",
+        "scale": 30,
+        "owner": "observer-relative seat 1",
+        "source": "chosen resource/industry plus public owner and income track",
+        "units": "count or income",
+        "basis": "chosen action portion only; secured era VP is not immediately awarded VP"
+      },
+      {
+        "name": "effects.1.immediate_vp",
+        "scale": 100,
+        "owner": "observer-relative seat 1",
+        "source": "chosen resource/industry plus public owner and income track",
+        "units": "VP",
+        "basis": "chosen action portion only; secured era VP is not immediately awarded VP"
+      },
+      {
+        "name": "effects.1.secured_era_vp_delta",
+        "scale": 100,
+        "owner": "observer-relative seat 1",
+        "source": "chosen resource/industry plus public owner and income track",
+        "units": "VP",
+        "basis": "chosen action portion only; secured era VP is not immediately awarded VP"
+      },
+      {
+        "name": "effects.2.flips",
+        "scale": 8,
+        "owner": "observer-relative seat 2",
+        "source": "chosen resource/industry plus public owner and income track",
+        "units": "count or income",
+        "basis": "chosen action portion only; secured era VP is not immediately awarded VP"
+      },
+      {
+        "name": "effects.2.income_marker_delta",
+        "scale": 100,
+        "owner": "observer-relative seat 2",
+        "source": "chosen resource/industry plus public owner and income track",
+        "units": "count or income",
+        "basis": "chosen action portion only; secured era VP is not immediately awarded VP"
+      },
+      {
+        "name": "effects.2.income_delta",
+        "scale": 30,
+        "owner": "observer-relative seat 2",
+        "source": "chosen resource/industry plus public owner and income track",
+        "units": "count or income",
+        "basis": "chosen action portion only; secured era VP is not immediately awarded VP"
+      },
+      {
+        "name": "effects.2.immediate_vp",
+        "scale": 100,
+        "owner": "observer-relative seat 2",
+        "source": "chosen resource/industry plus public owner and income track",
+        "units": "VP",
+        "basis": "chosen action portion only; secured era VP is not immediately awarded VP"
+      },
+      {
+        "name": "effects.2.secured_era_vp_delta",
+        "scale": 100,
+        "owner": "observer-relative seat 2",
+        "source": "chosen resource/industry plus public owner and income track",
+        "units": "VP",
+        "basis": "chosen action portion only; secured era VP is not immediately awarded VP"
+      },
+      {
+        "name": "effects.3.flips",
+        "scale": 8,
+        "owner": "observer-relative seat 3",
+        "source": "chosen resource/industry plus public owner and income track",
+        "units": "count or income",
+        "basis": "chosen action portion only; secured era VP is not immediately awarded VP"
+      },
+      {
+        "name": "effects.3.income_marker_delta",
+        "scale": 100,
+        "owner": "observer-relative seat 3",
+        "source": "chosen resource/industry plus public owner and income track",
+        "units": "count or income",
+        "basis": "chosen action portion only; secured era VP is not immediately awarded VP"
+      },
+      {
+        "name": "effects.3.income_delta",
+        "scale": 30,
+        "owner": "observer-relative seat 3",
+        "source": "chosen resource/industry plus public owner and income track",
+        "units": "count or income",
+        "basis": "chosen action portion only; secured era VP is not immediately awarded VP"
+      },
+      {
+        "name": "effects.3.immediate_vp",
+        "scale": 100,
+        "owner": "observer-relative seat 3",
+        "source": "chosen resource/industry plus public owner and income track",
+        "units": "VP",
+        "basis": "chosen action portion only; secured era VP is not immediately awarded VP"
+      },
+      {
+        "name": "effects.3.secured_era_vp_delta",
+        "scale": 100,
+        "owner": "observer-relative seat 3",
+        "source": "chosen resource/industry plus public owner and income track",
+        "units": "VP",
+        "basis": "chosen action portion only; secured era VP is not immediately awarded VP"
+      },
+      {
+        "name": "develop.removals_before",
+        "scale": 16,
+        "owner": "observer",
+        "source": "selected first tile, full mat and era",
+        "units": "tile count or bool",
+        "basis": "one guaranteed removal; do not assume second development or merchant bonus selection"
+      },
+      {
+        "name": "develop.removals_after",
+        "scale": 16,
+        "owner": "observer",
+        "source": "selected first tile, full mat and era",
+        "units": "tile count or bool",
+        "basis": "one guaranteed removal; do not assume second development or merchant bonus selection"
+      },
+      {
+        "name": "develop.next_era_removals_before",
+        "scale": 16,
+        "owner": "observer",
+        "source": "selected first tile, full mat and era",
+        "units": "tile count or bool",
+        "basis": "one guaranteed removal; do not assume second development or merchant bonus selection"
+      },
+      {
+        "name": "develop.next_era_removals_after",
+        "scale": 16,
+        "owner": "observer",
+        "source": "selected first tile, full mat and era",
+        "units": "tile count or bool",
+        "basis": "one guaranteed removal; do not assume second development or merchant bonus selection"
+      },
+      {
+        "name": "develop.removed_tiles",
+        "scale": 1,
+        "owner": "observer",
+        "source": "selected first tile, full mat and era",
+        "units": "tile count or bool",
+        "basis": "one guaranteed removal; do not assume second development or merchant bonus selection"
+      },
+      {
+        "name": "develop.immediately_unlocks",
+        "scale": 1,
+        "owner": "observer",
+        "source": "selected first tile, full mat and era",
+        "units": "tile count or bool",
+        "basis": "one guaranteed removal; do not assume second development or merchant bonus selection"
+      },
+      {
+        "name": "develop.free",
+        "scale": 1,
+        "owner": "observer",
+        "source": "selected first tile, full mat and era",
+        "units": "tile count or bool",
+        "basis": "one guaranteed removal; do not assume second development or merchant bonus selection"
+      },
+      {
+        "name": "develop.result.level",
+        "scale": 8,
+        "owner": "observer",
+        "source": "stack after one removal",
+        "units": "tile property",
+        "basis": "actual resulting stack head; era eligibility remains explicit"
+      },
+      {
+        "name": "develop.result.cash_cost",
+        "scale": 100,
+        "owner": "observer",
+        "source": "stack after one removal",
+        "units": "tile property",
+        "basis": "actual resulting stack head; era eligibility remains explicit"
+      },
+      {
+        "name": "develop.result.vp",
+        "scale": 100,
+        "owner": "observer",
+        "source": "stack after one removal",
+        "units": "tile property",
+        "basis": "actual resulting stack head; era eligibility remains explicit"
+      },
+      {
+        "name": "develop.result.beer",
+        "scale": 8,
+        "owner": "observer",
+        "source": "stack after one removal",
+        "units": "tile property",
+        "basis": "actual resulting stack head; era eligibility remains explicit"
+      },
+      {
+        "name": "develop.result.canal_eligible",
+        "scale": 1,
+        "owner": "observer",
+        "source": "stack after one removal",
+        "units": "tile property",
+        "basis": "actual resulting stack head; era eligibility remains explicit"
+      },
+      {
+        "name": "develop.result.rail_eligible",
+        "scale": 1,
+        "owner": "observer",
+        "source": "stack after one removal",
+        "units": "tile property",
+        "basis": "actual resulting stack head; era eligibility remains explicit"
+      },
+      {
+        "name": "develop.result.survives_canal",
+        "scale": 1,
+        "owner": "observer",
+        "source": "stack after one removal",
+        "units": "tile property",
+        "basis": "actual resulting stack head; era eligibility remains explicit"
+      }
+    ]
+  },
+  "state_dim": 5489,
+  "action_dim": 548,
+  "state_layout": "legacy raw state excluding final style/intent; all ordered derived state facts; style[4]; intent[8]",
+  "action_layout": "legacy categorical action fields; all ordered derived action facts",
+  "model_budget": {
+    "architecture": "brass-four-seat-mlp-resnet/2.0.0",
+    "hidden": 304,
+    "parameter_limit": 3000000,
+    "personality_parameter_limit": 3100000,
+    "personality_extension_limit": 100000
+  }
+}

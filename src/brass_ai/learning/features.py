@@ -2,7 +2,7 @@
 
 IDs identify public board locations, never hidden state. Internal player slots run
 clockwise from the observer. Model outputs are converted back to stable seat IDs.
-This first encoding compresses public history and tile stacks (see the schema).
+The version-2 layout retains raw history/stack summaries and adds all A–F groups.
 """
 from __future__ import annotations
 
@@ -12,7 +12,7 @@ from dataclasses import dataclass
 import numpy as np
 
 from brass_ai.runtime_contracts import validate
-from .contracts import CONFIG_DIR, finite_vector, read_json, require
+from .contracts import CONFIG_DIR, FEATURE_SCHEMA, FEATURE_VERSION, digest, finite_vector, read_json, require
 
 
 @dataclass
@@ -21,11 +21,21 @@ class Encoded:
     actions: np.ndarray
     stable_to_relative: np.ndarray
     choice_ids: tuple[str, ...]
+    feature_version: str = FEATURE_VERSION
+
+
+def check_encoded(row):
+    require(getattr(row,'feature_version',None)==FEATURE_VERSION and row.state.shape==(5489,) and
+            row.actions.shape==(len(row.choice_ids),548),'Incompatible or mixed-version encoded features')
 
 
 class Encoder:
     def __init__(self):
-        self.schema = s = read_json(CONFIG_DIR / 'features-1.0.0.json')
+        from brass_ai.feature_engineering.context import DerivedContextBuilder
+        from brass_ai.feature_engineering.contracts import STATE_FIELDS,ACTION_FIELDS,COMPONENTS
+        self.schema = s = read_json(CONFIG_DIR / FEATURE_SCHEMA)
+        self.derived = DerivedContextBuilder(cache_size=0)
+        require(digest(s['derived'])==self.derived.schema,'Frozen derived feature layout differs')
         self.cards, self.industries, self.kinds = s['card_types'], s['industries'], s['kinds']
         self.targets = s['slots'] + s['links'] + ['merchant:' + x for x in s['merchants']] + ['market']
         self.action_dim = len(self.kinds) + len(self.targets) + len(s['merchants']) + len(self.industries) + len(self.cards)
@@ -36,6 +46,17 @@ class Encoder:
             len(s['links']) * 4 + len(s['merchants']) * (6 + 1 + 4) +
             5 + len(self.kinds) + len(self.targets) + len(s['merchants']) + 4 +
             4 * 2 * len(self.kinds) + 4 + s['intent_dim'])
+        self.base_state_dim,self.base_action_dim=self.state_dim,self.action_dim
+        self.state_dim+=len(STATE_FIELDS)*len(COMPONENTS)
+        self.action_dim+=len(ACTION_FIELDS)*len(COMPONENTS)
+        require((self.state_dim,self.action_dim)==(s['state_dim'],s['action_dim']),'Frozen input dimensions differ')
+
+    def append_derived(self,x,actions,view,choices,style,intent,*,source=None,deadline=None):
+        context=self.derived.build(view,choices,style,intent,validated=True,input_identity=source,deadline=deadline)
+        # Keep the existing neutral-BC/personality tail contract explicit.
+        state=np.asarray(list(x[:-12])+list(context.state_tensor())+list(x[-12:]),dtype=np.float32)
+        dynamic=np.asarray(context.action_tensors(),dtype=np.float32)
+        return state,np.concatenate((actions,dynamic),axis=1)
 
     @staticmethod
     def one(value, vocabulary, *, empty=False):
@@ -127,7 +148,7 @@ class Encoder:
               for era in ('CanalEra', 'RailEra') for kind in self.kinds]
         x += list(style) + list(intent)
         actions = np.asarray([self.choice_features(c) for c in choices], dtype=np.float32)
-        state = np.asarray(x, dtype=np.float32)
+        state,actions = self.append_derived(x,actions,view,choices,style,intent)
         require(state.shape == (self.state_dim,) and actions.shape == (len(choices), self.action_dim), 'Feature layout mismatch')
         require(np.isfinite(state).all() and np.isfinite(actions).all(), 'Non-finite features')
         return Encoded(state, actions, np.asarray([relative(i) for i in range(4)], dtype=np.int64), ids)
