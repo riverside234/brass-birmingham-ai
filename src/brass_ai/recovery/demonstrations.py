@@ -1,5 +1,6 @@
 """Audited four-player demonstrations; BC labels never become PPO/search labels."""
 from collections import Counter
+from contextlib import ExitStack
 from concurrent.futures import ProcessPoolExecutor, as_completed
 import multiprocessing
 import gzip
@@ -238,7 +239,7 @@ def _prepared_shard(task):
     return data
 
 
-def load_dataset(root,manifest_path,partition,*,workers=1,progress=False,compact=False):
+def load_dataset(root,manifest_path,partition,*,workers=1,progress=False,compact=False,storage=None):
     require(type(workers) is int and 1<=workers<=64,'Invalid imitation loader CPU allowance')
     root=Path(root);manifest=read(project_path(root,manifest_path))
     require(manifest['format']=='bc-dataset/1.0.0','Incompatible BC manifest')
@@ -297,6 +298,11 @@ def load_dataset(root,manifest_path,partition,*,workers=1,progress=False,compact
         by_path.setdefault(project_path(root,e['path']),[]).append(e)
     require(len({e['game_id'] for e in chosen})==len(chosen),'Missing/duplicate demonstration games')
     tasks=[(str(path),entries,partition,allowed,compact) for path,entries in by_path.items()]
+    if storage is not None:
+        from .prepared_store import prepare
+        from .retention import owned
+        _,directory=owned(root,storage)
+        return prepare(tasks,directory,workers,partition,progress),manifest
     width=min(workers,len(tasks));parts=[None]*len(tasks)
     log=Progress(f'imitation load {partition} (CPU, {width} workers)',len(tasks),'shards') if progress else None
     if width>1:
@@ -322,12 +328,15 @@ def load_dataset(root,manifest_path,partition,*,workers=1,progress=False,compact
     return data,manifest
 
 
-def balance(data):
-    counts=Counter((d[0]['behavior']['policy_id'],d[0]['view']['context']['era'],d[0]['choices'][d[0]['chosen']]['kind']) for d in data)
-    weights=[]
-    for d in data:
-        key=(d[0]['behavior']['policy_id'],d[0]['view']['context']['era'],d[0]['choices'][d[0]['chosen']]['kind'])
-        weights.append(min(3.0,len(data)/(len(counts)*counts[key])))
+def balance_weights(data):
+    from .prepared_store import PreparedRows
+    if isinstance(data,PreparedRows):
+        groups=data.columns['groups'];counts=np.bincount(groups,minlength=len(data.group_keys))
+        weights=np.minimum(3.,len(data)/(len(counts)*counts[groups]))
+    else:
+        keys=[(d[0]['behavior']['policy_id'],d[0]['view']['context']['era'],d[0]['choices'][d[0]['chosen']]['kind']) for d in data]
+        counts=Counter(keys)
+        weights=[min(3.0,len(data)/(len(counts)*counts[key])) for key in keys]
     # Normalize while retaining the declared threefold cap, even for rare bins.
     weights=np.asarray(weights,dtype=np.float64)
     low,high=0.,1.
@@ -336,7 +345,11 @@ def balance(data):
         middle=(low+high)/2
         if np.minimum(3.,middle*weights).mean()<1: low=middle
         else: high=middle
-    return [(dict(d[0],_bc_weight=min(3.,high*w)),*d[1:]) for d,w in zip(data,weights)]
+    return np.minimum(3.,high*weights)
+
+
+def balance(data):
+    return [(dict(d[0],_bc_weight=float(w)),*d[1:]) for d,w in zip(data,balance_weights(data))]
 
 
 def checkpoint_alias(out,entry,name,*,root=None):
@@ -353,11 +366,11 @@ def checkpoint_alias(out,entry,name,*,root=None):
 def train_bc(root,run,manifest_path,initial,config,*,device='cpu',epochs=10,patience=2,min_epochs=3,lr=1e-4,retention=None,workers=1,from_imitation_run=None):
     from .retention import run_lock,owned
     _,out=owned(root,run)
-    with run_lock(out):
-        return _train_bc(root,run,manifest_path,initial,config,device=device,epochs=epochs,patience=patience,min_epochs=min_epochs,lr=lr,retention=retention,workers=workers,from_imitation_run=from_imitation_run)
+    with run_lock(out),ExitStack() as resources:
+        return _train_bc(root,run,manifest_path,initial,config,device=device,epochs=epochs,patience=patience,min_epochs=min_epochs,lr=lr,retention=retention,workers=workers,from_imitation_run=from_imitation_run,resources=resources)
 
 
-def _train_bc(root,run,manifest_path,initial,config,*,device='cpu',epochs=10,patience=2,min_epochs=3,lr=1e-4,retention=None,workers=1,from_imitation_run=None):
+def _train_bc(root,run,manifest_path,initial,config,*,device='cpu',epochs=10,patience=2,min_epochs=3,lr=1e-4,retention=None,workers=1,from_imitation_run=None,resources):
     root=Path(root);out=project_path(root,run)
     require(epochs>=min_epochs>=1 and patience>0,'Invalid BC stopping settings')
     require(initial is None,'Imitation starts from random residual weights; omit --initial')
@@ -373,9 +386,18 @@ def _train_bc(root,run,manifest_path,initial,config,*,device='cpu',epochs=10,pat
           f'tensor_threads={torch.get_num_threads()}, effective_batch={config["effective_batch_size"]}, '
           f'microbatch={config["microbatch_size"]}; replay preparation uses CPU',flush=True)
     torch.manual_seed(812771)
-    training,manifest=load_dataset(root,manifest_path,'train',workers=workers,progress=True,compact=True)
-    validation,_=load_dataset(root,manifest_path,'validation',workers=workers,progress=True,compact=True)
-    require({d[2][0] for d in training}.isdisjoint({d[2][0] for d in validation}),'BC game leakage')
+    from .prepared_store import PreparedRows,PreparedDataset
+    preparation={}
+    def load_partition(partition):
+        data,manifest=load_dataset(root,manifest_path,partition,workers=workers,progress=True,compact=True,
+                                   storage=out/'.imitation-cache'/partition)
+        if isinstance(data,PreparedRows):
+            resources.callback(data.close);preparation[partition]=data.report
+        return data,manifest
+    training,manifest=load_partition('train')
+    validation,_=load_partition('validation')
+    def game_ids(data):return data.game_ids if isinstance(data,PreparedRows) else {d[2][0] for d in data}
+    require(game_ids(training).isdisjoint(game_ids(validation)),'BC game leakage')
     signature=dict(format='bc-training/2.2.0',manifest_sha256=sha(project_path(root,manifest_path)),
         manifest_path=project_path(root,manifest_path).relative_to(root).as_posix(),
         initialization='random',seed=812771,retention=retention,
@@ -399,7 +421,7 @@ def _train_bc(root,run,manifest_path,initial,config,*,device='cpu',epochs=10,pat
         model,raw=load_checkpoint(path,device=device)
         require(raw['step']==state['epoch'],'BC epoch/checkpoint mismatch')
     else:
-        require(not out.exists() or not any(p.name!='.active-run.json' for p in out.iterdir()),'Use a new BC run')
+        require(not out.exists() or not any(p.name not in ('.active-run.json','.imitation-cache') for p in out.iterdir()),'Use a new BC run')
         model=FourSeatNet(ModelConfig.preset('medium')).to(device)
         if parent_model is not None:model.load_state_dict(parent_model.state_dict())
         state=dict(signature=signature,epoch=0,best_loss=None,bad_epochs=0,history=[],
@@ -414,11 +436,12 @@ def _train_bc(root,run,manifest_path,initial,config,*,device='cpu',epochs=10,pat
             initialization=signature['initialization'],fresh_run=out.relative_to(root).as_posix(),signature=digest(signature)))
         state['initial']=dict(path='initial.pt',sha256=sha(out/'initial.pt'))
         state['last']=dict(state['initial']);write_json(state_path,state)
-    training=balance(training)
-    validation_weights=[row['_bc_weight'] for row,_,_,_ in balance(validation)]
-    # Reuse encoded arrays and device metadata across all supervised epochs.
-    training=Dataset(training,device,policy=False,progress='imitation prepare training tensors')
-    validation=Dataset(validation,device,policy=False,progress='imitation prepare validation tensors')
+    validation_weights=balance_weights(validation)
+    # Keep small label tensors across epochs; fetch dense features per minibatch.
+    training=(PreparedDataset(training,device,balance_weights(training)) if isinstance(training,PreparedRows)
+              else Dataset(balance(training),device,policy=False,progress='imitation prepare training tensors'))
+    validation=(PreparedDataset(validation,device) if isinstance(validation,PreparedRows)
+                else Dataset(validation,device,policy=False,progress='imitation prepare validation tensors'))
     for epoch in (() if state['stopped'] else range(state['epoch'],epochs)):
         train_report=supervised_epoch(model,optimizer,training,config,progress=f'imitation epoch {epoch+1}/{epochs} train ({device})')
         val_report,balanced_val_report=supervised_epoch(model,None,validation,config,training=False,
@@ -446,7 +469,7 @@ def _train_bc(root,run,manifest_path,initial,config,*,device='cpu',epochs=10,pat
     checkpoint_alias(out,state['best'],'best.pt',root=root);checkpoint_alias(out,state['last'],'last.pt',root=root)
     report=dict(format='bc-training-report/1.0.0',signature=signature,epochs=state['epoch'],
         history=state['history'],candidate=(out/'best.pt').relative_to(root).as_posix(),candidate_sha256=sha(out/'best.pt'),
-        environment=environment(device),promoted=False,note='Select with fresh gameplay evaluation; imitation loss alone is not strength')
+        environment=environment(device),preparation=preparation,promoted=False,note='Select with fresh gameplay evaluation; imitation loss alone is not strength')
     write_json(out/'report.json',report);return report
 
 

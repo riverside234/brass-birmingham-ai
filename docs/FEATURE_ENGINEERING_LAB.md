@@ -13,7 +13,7 @@ See [the active model contract](../ai-research/GROUPED_PROJECTION_CONTRACT.md) a
 artifacts/il-replay/features4-compact-v8-batch7/manifest.json
 ~~~
 
-That Features-4 dataset remains compatible. Its directory name can still contain v8: this is a data path, not a checkpoint architecture. The feature manifest, reference encoder, derived semantics, input order and dimensions are unchanged. Normal IL loading preserves labels/splits, verifies all existing admission rules, and re-encodes stale architecture/source-bound caches in memory. It does not overwrite the dataset or repeat the native transition audit. Initial loading can therefore take longer than a cache hit.
+That Features-4 dataset remains compatible. Its directory name can still contain v8: this is a data path, not a checkpoint architecture. The feature manifest, reference encoder, derived semantics, input order and dimensions are unchanged. Normal IL loading preserves labels/splits, verifies all existing admission rules, and re-encodes stale architecture/source-bound caches one shard at a time in workers. Standalone IL keeps the prepared results under the run's `.imitation-cache/` and reads dense features per minibatch. It does not overwrite the dataset or repeat the native transition audit. Initial loading can therefore take longer than a cache hit.
 
 Use your actual converted manifest path if different. The unconverted original v4-batch7-joint dataset still needs the original conversion step; this width revision does not make older feature versions compatible. Conversion is needed only when no Features-4 conversion exists:
 
@@ -60,6 +60,25 @@ python scripts/step5.py --config configs/step5/joint7-latest.json imitate \
   --run artifacts/step5/features4-compact-v9-batch7-il \
   --epochs 10 --min-epochs 3 --patience 2
 ~~~
+
+### Retry a worker failure during IL loading
+
+After updating the checkout, rerun the **same** `imitate` command, manifest and run directory. For the documented run, a conservative initial worker cap is:
+
+~~~bash
+python scripts/step5.py --config configs/step5/joint7-latest.json imitate \
+  --manifest artifacts/il-replay/features4-compact-v8-batch7/manifest.json \
+  --run artifacts/step5/features4-compact-v9-batch7-il \
+  --epochs 10 --min-epochs 3 --patience 2 --workers 8
+~~~
+
+Keep your original epoch, patience, learning-rate, batch and device options if they differ. `--workers` controls CPU preparation only; it does not change training batches or labels. The previous 16-worker default remains available. An abrupt child-process failure now halves preparation concurrency and retries unfinished shards, down to one worker. Persistent failure at one worker stops with source context; no shard is skipped.
+
+A failure while loading the first training split occurs before this new run's initial model/state is saved. It can be retried in the same directory without resetting or regenerating anything. The older loader did not save its completed preparation, so the first retry after this repair must prepare those shards again. The repaired loader commits each prepared shard and reuses it on later retries after verifying the raw SHA, preparation identity and output checksums. Corrupt derived cache is rebuilt; changed raw data or failed admission is still fatal.
+
+Prepared features are uncompressed and require additional disk space. The startup report includes `prepared_bytes`, `resident_index_bytes`, `cache_hits`, elapsed preparation time and worker retries. `resident_index_bytes` counts numeric indexes only, not total process/GPU memory. RAM still includes one raw/prepared shard per live worker, small dataset-wide label/index columns and bounded minibatches. Disk reads replace the previous all-dataset RAM retention; epoch speed depends on storage. Prefer sufficient fast local storage and inspect OS/scheduler logs if a worker is still killed. `BrokenProcessPool` alone does not establish OOM.
+
+See [the loader repair and validation report](IL_LOADER_RECOVERY_2026-10-15.md). Existing committed unfinished IL remains source-bound; this repair does not silently reset or re-sign it. Completed v9 IL from the immediately preceding cache revision remains accepted for handoff. Existing self-play from that exact source can use its normal command with `--resume-reviewed-source` once at a committed boundary, without changing its configuration. The previously reviewed v9 clock transition remains available with the same restrictions.
 
 After IL completes, generate a new configuration. This binds initialization and rehearsal to that completed v9 IL checkpoint and the same existing dataset, and applies the new teacher settings:
 

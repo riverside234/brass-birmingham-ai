@@ -198,6 +198,11 @@
       "implementation": "63c9da11e4aa582af8ad41ea32c85781728ff6418c953a2df1170f7718d5d9b4",
       "learning_compatibility": "747216b5ab873126a6e048ade198883593113f70a815b9012ce40b8f66d443cb",
       "reason": "Compact v9 encoder-cache lifetime/sharing and teacher 9/12/12/12 clocks. Exact feature/model/loss/checkpoint contracts and outputs are unchanged; retain all resume/freshness/label guards. Only the preceding v9 implementation is admitted, with unchanged config or this exact teacher-budget change."
+    },
+    {
+      "implementation": "e794a86e13b891d56fcb21a8a7580a8af1c754bc54065a8b636dd5b04f6792f8",
+      "learning_compatibility": "747216b5ab873126a6e048ade198883593113f70a815b9012ce40b8f66d443cb",
+      "reason": "Disk-backed supervised IL ingress prevents retention of the entire dense dataset in parent RAM; shard receipts, bounded worker retries and minibatch reads preserve audited source/label checks, exact features, order, balancing, losses and optimizer updates. Model/layout/checkpoint contracts and all self-play/reward/search settings are unchanged. Preserve Adam/RNG, progress, population, lineage and pending-collection/source guards; no blanket old-source or architecture admission."
     }
   ]
 }
