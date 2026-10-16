@@ -47,7 +47,7 @@ class ReviewTests(unittest.TestCase):
         source=read(SOURCE_ROOT/'results/selfplay-joint/iter59.json')
         before=copy.deepcopy(source);out=compact(source)
         self.assertEqual(source,before)
-        self.assertEqual(out['summary_version'],4)
+        self.assertEqual(out['summary_version'],5)
         self.assertEqual(out['actor']['learner_decisions'],28645)
         self.assertEqual(out['actor']['learning_rates'],[1e-5])
         self.assertEqual(out['actor']['last_epoch']['actor'],source['actor']['epochs'][-1]['actor'])

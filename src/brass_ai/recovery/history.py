@@ -13,10 +13,41 @@ def scalars(value,keys):
 
 def calibration(value):
     if not isinstance(value,dict):return None
-    out=scalars(value,('required','ready','version','reward_id','decisions','games','steps','reason','scope'))
-    for key in ('before','after'):
+    out=scalars(value,('required','ready','version','reward_id','decisions','games','steps','reason','scope',
+        'ordinary_fraction','teacher_fraction','teacher_decisions','teacher_games','teacher_seconds',
+        'teacher_sample_presentations','teacher_optimizer_steps','readiness_gate'))
+    for key in ('before','after','ordinary_before','ordinary_after','teacher_before','teacher_after'):
         if isinstance(value.get(key),dict):out[key]=scalars(value[key],('mse','mae'))
     if isinstance(value.get('receipt'),dict):out['receipt']=calibration(value['receipt'])
+    return out
+
+
+def teacher_value(value):
+    """Bounded totals/four-phase probes only, never per-position arrays."""
+    if not isinstance(value,dict):return None
+    out=scalars(value,('enabled','contract','target_source','reward_id','distinct_completed_games','valid_value_positions',
+        'selected_positions','distinct_positions_trained','unused_positions','sample_presentations','max_auxiliary_reuse',
+        'ordinary_positions_trained','ordinary_sample_presentations','auxiliary_distinct_positions','auxiliary_presentations',
+        'calibration_distinct_positions','calibration_presentations','loss_weight','ordinary_fraction','teacher_fraction',
+        'weighting_scope','preparation_seconds','auxiliary_training_seconds','policy_kl','skip_reason','reason','collections','scope',
+        'ordinary_mean_loss','teacher_mean_loss','weighted_auxiliary_loss'))
+    out['provenance']=scalars(value.get('provenance'),('contract','model_id','implementation','reward_id','config_id'))
+    out['phases']={p:scalars(v,('valid','trained','unused','presentations')) for p,v in list(value.get('phases',{}).items())[:4]}
+    probe=value.get('diagnostics',{})
+    out['diagnostics']=scalars(probe,('enabled','reason','positions','games','sampling','scope','elapsed_seconds',
+        'extra_forward_passes','extra_forward_positions','reused_fit_positions','reused_calibration_positions',
+        'prediction_precision','iteration_overhead_target'))
+    out['diagnostics']['phases']=scalars(probe.get('phases'),('canal_early','canal_late','rail_early','rail_late'))
+    out['diagnostics']['stages']={}
+    for stage in ('before','post_update','post_calibration'):
+        data=probe.get('stages',{}).get(stage)
+        if not isinstance(data,dict):continue
+        row=scalars(data,('available','reason'))
+        row['errors']=scalars(data.get('errors'),('win_share_brier','rank_mae','vp_mae','utility_mae','utility_mse'))
+        changes=data.get('prediction_change_from_before') or {}
+        row['prediction_change_from_before']={k:scalars(changes[k],('mean_absolute','maximum_absolute'))
+            for k in ('win_share','rank','vp','utility') if k in changes}
+        out['diagnostics']['stages'][stage]=row
     return out
 
 
@@ -42,11 +73,11 @@ def evaluation_evidence(report):
 
 def compact(report):
     # Old compact summaries cannot recover fields that were already discarded.
-    # Preserve their version and missingness instead of relabelling as v4.
-    if report.get('summary_version') in (2,3,4):return report
+    # Preserve their version and missingness instead of relabelling as v5.
+    if report.get('summary_version') in (2,3,4,5):return report
     out=scalars(report,('format','iteration','games_done','cumulative_games','incoming_model_id','post_update_model_id',
                        'incoming_policy_id','elapsed_seconds','games','failed_games','promotion_eligible'))
-    out['summary_version']=4
+    out['summary_version']=5
     if report.get('format') in ('step5-evaluation-report/1.0.0','four-player-champion/1.0.0'):
         out['evaluation_evidence']=evaluation_evidence(report)
     out['timings']=scalars(report.get('timings',{}),('collection_seconds','replay_load_seconds','ppo_seconds',
@@ -56,6 +87,9 @@ def compact(report):
         'learner_trajectories','kl_early_stop','rehearsal_weight','gradient_clip_steps','baseline_explained_variance',
         'baseline_scope','kl_estimator','kl_probe_rows','kl_probe_sampling'))
     out['actor']['learning_rates']=actor.get('learning_rates',[])[:8]
+    schedule=actor.get('learning_rate_schedule')
+    out['actor']['learning_rate_schedule']=scalars(schedule,('contract','kind','base_lr','steps','start_factor',
+        'completed_steps','effective_lr','next_lr')) if schedule else None
     out['actor']['sample_usage']=actor.get('sample_usage')
     for key in ('advantage','advantage_distribution','return_distribution','legal_actions','categorical_probe','gradient_norms','phases'):
         out['actor'][key]=scalars(actor.get(key,{}),actor.get(key,{}))
@@ -79,6 +113,7 @@ def compact(report):
     for key in ('fit_before','fit_after','budget','timings'):
         out['search'][key]=scalars(search.get(key,{}),search.get(key,{}))
     out['search']['teaching_only_categorical_probe']=search.get('teaching_only_categorical_probe')
+    out['search']['teacher_value']=teacher_value(search.get('teacher_value'))
     for key in ('samples_by_phase','used_samples_by_phase','unused_samples_by_phase','sample_presentations_by_phase'):
         if key in search:out['search'][key]=search[key]
     out['search']['collection_summaries']=[dict(
@@ -86,6 +121,7 @@ def compact(report):
             'sample_presentations','max_observed_reuse','distinct_labels_used','unused_qualified_labels',
             'distill_batch_size','sample_presentation_cap','utility_calibration_invalidated','post_distill_calibration_seconds')),
         teacher_policy_drift=batch.get('teacher_policy_drift'),
+        teacher_value=teacher_value(batch.get('teacher_value')),
         timings=scalars(batch.get('timings',{}),batch.get('timings',{})),
         sample_usage={key:batch[key] for key in ('samples_by_phase','used_samples_by_phase','unused_samples_by_phase',
             'sample_presentations_by_phase') if key in batch},

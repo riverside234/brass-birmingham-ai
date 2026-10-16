@@ -40,7 +40,7 @@ class CompactWidthTests(unittest.TestCase):
         # Identical inputs do not make v8 checkpoints valid for wider weights.
         bad=dict(ModelConfig.preset().to_dict(),architecture='brass-four-seat-mlp-resnet/8.0.0',
                  group_layout=old['layout_sha256'],projection_widths=[g['projection_width'] for g in old['groups'][:-1]])
-        with self.assertRaisesRegex(ValueError,'fresh version-9'):ModelConfig.from_dict(bad)
+        with self.assertRaisesRegex(ValueError,'fresh version-11'):ModelConfig.from_dict(bad)
 
     def test_existing_heuristic_data_admitted_without_relabeling_neural_replay(self):
         old=dict(compatibility(),architecture_sha256='a'*64)

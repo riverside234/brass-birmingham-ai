@@ -76,7 +76,7 @@ class Runtime:
         self.sessions={};self.channels={};self.active=None;self.closed=False;self.boundary=InputBoundary()
         self.service=PortableInference(self.directory,self.package['models'],backend)
         self.service.__enter__()
-        try:self.game=BrassSpielGame(root=self.root,mono=mono)
+        try:self.game=BrassSpielGame(root=self.root,mono=mono,fast=True)
         except BaseException:self.service.__exit__();raise
 
     def close(self):

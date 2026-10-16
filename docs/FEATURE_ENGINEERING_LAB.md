@@ -1,7 +1,11 @@
-# Widened compact grouped v9: lab instructions
+# Widened compact grouped v9: archived lab instructions
+
+**For the current v11 MLP, use [MLP_V11_LAB.md](MLP_V11_LAB.md).** The commands and equivalent-source continuation guidance below describe v9. V11 reuses the Features-4 dataset but requires fresh IL weights and a separate self-play run; source review cannot convert old model architectures.
 
 Use the ai-training environment at /data/not_backed_up/yxu209/ai-training/.
 The main target is **3,128 state / 327 action inputs**, projections **32/64/48/192/224/48 + 12**, fusion **620 -> 304**, and **six width-304 residual blocks**. The candidate encoder remains width 128. Base/utility/personality counts are **2,005,917 / 2,015,937 / 2,081,770**.
+
+The [scorer factorization](../ai-research/SCORER_FACTORIZATION_REPORT.md) now projects the state part of the existing policy-scoring weight once per position, including across candidate chunks. It is automatic in PyTorch training/inference and newly exported ONNX graphs. It preserves v9 checkpoint tensors, Adam layout and the completed IL handoff: no IL retraining or dataset regeneration is needed. Fresh self-play uses the same commands below; an existing signed run uses `--resume-reviewed-source` once at a committed boundary. Pending old-source collections remain blocked. Re-export existing ONNX files to obtain the optimization in deployment.
 
 See [the active model contract](../ai-research/GROUPED_PROJECTION_CONTRACT.md) and [revision receipt](../ai-research/FEATURE_ENGINEERING_WIDTH_REVISION_REPORT.md). Feature/layout/model identities are **4.0.0 / 5.0.0 / 9.0.0**.
 
@@ -80,7 +84,7 @@ Prepared features are uncompressed and require additional disk space. The startu
 
 See [the loader repair and validation report](IL_LOADER_RECOVERY_2026-10-15.md). Existing committed unfinished IL remains source-bound; this repair does not silently reset or re-sign it. Completed v9 IL from the immediately preceding cache revision remains accepted for handoff. Existing self-play from that exact source can use its normal command with `--resume-reviewed-source` once at a committed boundary, without changing its configuration. The previously reviewed v9 clock transition remains available with the same restrictions.
 
-After IL completes, generate a new configuration. This binds initialization and rehearsal to that completed v9 IL checkpoint and the same existing dataset, and applies the new teacher settings:
+After IL completes, generate a new configuration. This binds initialization and rehearsal to that completed v9 IL checkpoint and the same existing dataset, and applies the new teacher settings, including `teacher_value.enabled: true` (`diagnostics: false`). An already-completed compatible v9 IL run does not need retraining:
 
 ~~~bash
 python scripts/feature-engineering.py configure \
@@ -95,6 +99,8 @@ python scripts/step5.py \
 ~~~
 
 The checked-in base config has an older IL reference; use the generated config for self-play. PPO inherits the new IL weights and starts with an empty optimizer. These are production commands, not commands run during implementation validation.
+
+If that generated config path already exists from before this default changed, choose a new output filename and use it in the training command. Explicit `teacher_value.enabled: false` remains an opt-out; existing files and runs are not rewritten automatically. Start the new self-play run with `--fresh`, without `--resume-reviewed-source`.
 
 ## Continue the same v9 run
 
@@ -131,6 +137,12 @@ python scripts/step5.py \
 ~~~
 
 This exact transition preserves weights, Adam/RNG, counters, population and lineage; the existing source-change safeguard requests fresh utility calibration. A pending old-source collection still blocks the transition. Other source identities or unrelated config changes are not approved by this entry. Fresh configuration generation automatically uses 9/12/12/12; explicitly configured historical clocks are not silently rewritten.
+
+## Default teacher outcome auxiliary value update
+
+Newly generated self-play configurations enable `teacher_value.enabled: true` and keep `teacher_value.diagnostics: false`. Use the fresh-start commands above with your completed IL run. Auxiliary learning starts when teacher collections become eligible under the existing readiness/cadence rules. It adds ordinary/teacher value gradients within the existing distillation steps and matching utility calibration; it adds no teacher games or searches. The current 9/12/12/12-second shared clocks, five games, eight search workers per game and eight-step cap remain unchanged.
+
+See [the implementation report and fresh-start/continuation commands](TEACHER_AUXILIARY_VALUE_REPORT.md) for configuration, counts, readiness checks, separate calibration reuse and measured component overhead. Existing signed runs with an omitted block retain policy-only teaching; an explicit configuration change in an existing run still requires reviewed continuation. Diagnostics are independently opt-in; the ≤1% full-iteration overhead target remains unverified. Existing unfinished IL is still bound to its source; this self-play revision does not re-sign it.
 
 ## Named CPU export
 

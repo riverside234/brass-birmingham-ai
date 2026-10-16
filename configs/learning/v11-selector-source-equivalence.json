@@ -1,0 +1,6 @@
+{
+  "format": "architecture-source-equivalence/1.0.0",
+  "original_sha256": "c7df5bf97fbe02f605aabeea89c9cc24d74981c5a4355a15f050f6b97f0cae39",
+  "equivalent_sha256": "e47b24492bd2a3d4905046fb7e6f50ea03ce9a2d27cf9a0e04b251dd0da87235",
+  "reason": "V11 selector optimization: admitted target/merchant/industry fields are binary one-hot or absent. Gather the selected projected bank row; absent references use a prepended zero row. Preserve all parameter/buffer keys, shapes, config, feature semantics and learned gradients. Entity and four-seat encoders were already batched. Only this exact reviewed model/layout source maps to the original v11 checkpoint identity; implementation/source freshness remains separate."
+}

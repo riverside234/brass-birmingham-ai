@@ -2,9 +2,9 @@
 
 [Documentation index and required follow-up](README.md) | [Design](DESIGN.md#design) | [Audit history](AUDIT_HISTORY.md)
 
-Sections: [P4 rosters](#p4) | [P5 difficulty](#p5) | [P6 deployment](#p6). Required encoder reuse improvements are tracked centrally in [the pending checklist](README.md#encoder-reuse-follow-up). Existing commands and historical verification records are preserved.
+Sections: [P4 rosters](#p4) | [P5 difficulty](#p5) | [P6 deployment](#p6). See [encoder reuse status and remaining validation](README.md#encoder-reuse-follow-up) and [deployment performance](DEPLOYMENT_PERFORMANCE.md). Existing commands and historical verification records are preserved.
 
-**15 October background update:** Use the [implemented Step 5 encoder reuse techniques and evidence](README.md#step5-encoder-reference) as the reference for shared-session evaluation and packaged-runtime improvements. Some endpoint behavior is inherited already; cross-worker sharing, production hit rates and P4-P6 throughput remain to be verified. Preserve each tier's declared budgets and qualification evidence; the Step 5 benchmark is not a personality release result.
+**Deployment performance update (`20261016` evidence):** Cross-worker feature sharing, fused native snapshots and snapshot-local public-view reuse are implemented. Local initialized-model tests measured 12/10 completed simulations with two workers and 15/12 with three workers on Canal/Rail fixtures; v9 and W352 matched in this short test. These results do not qualify P4/P5 or change their declared resources, tier budgets or evidence requirements. See [measured scope and limits](DEPLOYMENT_PERFORMANCE.md#measurements).
 
 <a id="p4"></a>
 
@@ -403,6 +403,8 @@ Review verification: **54 targeted Python checks passed**, including the P0 chec
 
 ## P6: laptop packaging and game integration
 
+**Current runtime performance:** New source-built packages select the verified optimized native search host, and both private search workers and plan revalidation request its fused path. Legacy runtime capability fallback remains supported. The [performance guide](DEPLOYMENT_PERFORMANCE.md) explains shared encoding, private-hand isolation, benchmark reproduction and future proposals. Existing packages are immutable and do not receive these changes automatically; regenerate compatible evidence and build a new candidate through the normal qualification flow. The three-worker and W352 comparison was an isolated experiment, not a supported replacement for the required two-worker laptop qualification profile.
+
 **13 October audit:** [P0–P6 findings and verification](AUDIT_HISTORY.md#audit-2026-10-13-p0-p6). New bundles use `personality-laptop-package/1.2.0`. Validation now binds the roster's content hash, search reward, P5 profiles and copied `readiness.json` calibration to the same evidence chain. A late benchmark button timer cannot affect the following case. Re-export/restage candidates after regenerating upstream evidence; preserve old immutable packages with their matching runtimes/helpers for existing saves. The save schema is unchanged.
 
 P6 tooling is implemented. **No trained personality package is qualified or installed.** The current Step 5 model is still on the lab server, and the real P4 roster and P5 difficulty evidence are pending. The local authored fixtures exercise deployment mechanics only; they do not establish playing strength, recognizable styles or Easy/Medium/Hard difficulty.
@@ -432,6 +434,8 @@ Native simulator dependencies include proprietary game DLLs. These are **private
 ### Export on the lab server
 
 Use the existing conda environment and native R4 host prerequisites. Existing R2/search/personality requirements must already be installed.
+
+The exporter uses the source-checked additive search runtime from `training/runtime/throughput/search` when present, verifies its native dependencies and bundles the compiled host under `runtime/artifacts/r4-host`. The deployed package needs neither a compiler nor a training directory. If the additive runtime is absent, the legacy host remains usable but does not provide the measured fused-path gain. Source/binary mismatches fail validation; do not suppress them. See [runtime provenance and reproduction](DEPLOYMENT_PERFORMANCE.md#reproduction) before building a new candidate.
 
 ```bash
 conda activate ai-training

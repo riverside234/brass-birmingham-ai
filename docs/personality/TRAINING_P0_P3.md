@@ -2,9 +2,9 @@
 
 [Documentation index and required follow-up](README.md) | [Design](DESIGN.md#design) | [Audit history](AUDIT_HISTORY.md)
 
-Sections: [P0/P1](#p0-p1) | [P2/P3](#p2-p3). Required encoder reuse improvements are tracked centrally in [the pending checklist](README.md#encoder-reuse-follow-up). Existing commands and historical verification records are preserved.
+Sections: [P0/P1](#p0-p1) | [P2/P3](#p2-p3). See [encoder reuse status and remaining validation](README.md#encoder-reuse-follow-up). Existing commands and historical verification records are preserved.
 
-**15 October background update:** Step 5 now has endpoint-owned encoders, bounded shared feature caches and replay reuse; see [implemented techniques and measured evidence](README.md#step5-encoder-reference). Personality evaluators inherit endpoint reuse, while cross-worker sharing and stage-level performance still require inspection/integration. Reuse the existing mechanisms without copying Step 5 search budgets or treating its component benchmark as P1-P3 validation.
+**Performance update (`20261016` deployment evidence):** Step 5's [endpoint encoders and shared feature caches](README.md#step5-encoder-reference) are now integrated across personality `SearchSession` coordinator/worker/opponent lanes. The session also requests fused native snapshots. [Local deployment measurements](DEPLOYMENT_PERFORMANCE.md) cover the shared search path, not real P1-P3 collection throughput. Keep P1 direct, retain current teacher cadence/quality/accounting and preserve each stage's recipe. The experimental one-path batching, three-worker comparison and W352 model do not change training defaults or existing checkpoints.
 
 <a id="p0-p1"></a>
 

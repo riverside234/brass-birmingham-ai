@@ -14,13 +14,13 @@ class PersonalityConfig:
     base: dict
     model: str = MODEL
     goal_hidden: int = 128
-    parameter_limit: int = 3100000
-    extension_limit: int = 100000
+    parameter_limit: int = 6600000
+    extension_limit: int = 110000
 
     def validate(self):
         UtilityConfig.from_dict(self.base)
-        require(self.model==MODEL and self.goal_hidden==128 and self.parameter_limit==3100000
-            and self.extension_limit==100000,'Unknown personality layout/budget')
+        require(self.model==MODEL and self.goal_hidden==128 and self.parameter_limit==6600000
+            and self.extension_limit==110000,'Unknown personality layout/budget')
         return self
 
     def to_dict(self):return asdict(self)
@@ -56,14 +56,10 @@ class PersonalityNet(nn.Module):
         require(personality.shape==(len(states),CONTEXT_DIM),'Personality tensor shape mismatch')
         require(remaining.shape==(len(states),4),'Remaining utility budgets required')
         h=self.core.state_encoder(states)+self.context_projection(personality)
-        a=self.core.action_encoder(actions)
-        logits=self.core.policy_scorer(torch.cat((h[:,None].expand(-1,a.shape[1],-1),a),-1)).squeeze(-1)
+        encoded=self.core.encode_state(states,context=h)
+        logits=self.core.score_prepared(actions,self.core.prepare_candidates(encoded))
         logits=logits.masked_fill(~legal_mask,-torch.inf)
-        outcomes=self.core.outcomes(h)
-        w=torch.softmax(outcomes[:,:4],-1).gather(1,stable_to_relative)
-        r=(1+3*torch.sigmoid(outcomes[:,4:8])).gather(1,stable_to_relative)
-        v=(100*outcomes[:,8:12]).gather(1,stable_to_relative)
-        utility=self.core.predict_utility(h,stable_to_relative,(w,r,v),remaining)
+        w,r,v,utility=self.core.heads_from_encoded(encoded,stable_to_relative,remaining)
         g=self.goal_trunk(torch.cat((h,personality),-1))
         return dict(policy_logits=logits,win_share_4=w,placement_4=r,vp_4=v,
             remaining_utility_4=utility,goals={k:head(g) for k,head in self.goal_heads.items()},

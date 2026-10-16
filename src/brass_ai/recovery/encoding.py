@@ -102,6 +102,8 @@ class PreparedEncoder(Encoder):
         # immutable content identity instead of serializing the whole growing
         # history again merely to append twelve policy-context values.
         check_budget(deadline,cancelled)
+        from brass_ai.learning.board_topology import admit_topology
+        admit_topology(view)
         source = digest(dict(view=view, choices=choices)) if validated else BOUNDARY.check(view, choices)
         key = digest(dict(schema=self.derived.schema,input=source, style=style, intent=intent))
         check_budget(deadline,cancelled)

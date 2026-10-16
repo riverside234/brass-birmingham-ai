@@ -5,7 +5,7 @@
   "host": "artifacts/r1-host/guarded",
   "games_per_iteration": 320,
   "threads": 4,
-  "learning_rate": 1e-05,
+  "learning_rate": 6e-06,
   "weight_decay": 0.0001,
   "exploration": 0.08,
   "seed": 18510000,
@@ -40,7 +40,7 @@
     "target_kl": 0.01,
     "entropy_weight": 0.005,
     "value_weight": 0.5,
-    "grad_clip": 5.0,
+    "grad_clip": 1.0,
     "normalize_advantages": true,
     "precision": "fp32",
     "bucket": true,
@@ -72,6 +72,17 @@
   "search_every_games": 160,
   "search_games": 5,
   "distill_steps": 8,
+  "teacher_value": {
+    "contract": "teacher-outcome-value/1.0.0",
+    "enabled": true,
+    "loss_weight": 0.1,
+    "teacher_fraction": 0.25,
+    "samples_per_game": 24,
+    "max_samples": 128,
+    "max_reuse": 2,
+    "diagnostics": false,
+    "probe_positions": 128
+  },
   "distillation": {
     "min_samples": 16,
     "min_games": 2,
@@ -151,15 +162,15 @@
   "audit_workers": 16,
   "overlap_pools": true,
   "search_wall_fraction": null,
-  "architecture": "brass-four-seat-mlp-resnet/9.0.0",
-  "parameter_limit": 3000000,
+  "architecture": "brass-four-seat-mlp-resnet/11.0.0",
+  "parameter_limit": 6500000,
   "initialization": "random",
   "imitation": {
     "manifest": null,
     "epochs": 10,
     "patience": 2,
     "min_epochs": 3,
-    "learning_rate": 0.0001
+    "learning_rate": 6e-05
   },
   "legacy_opponents": {
     "search_free_until_games": 10000
@@ -225,5 +236,11 @@
     "manifest": "artifacts/il-replay/v4-batch7-joint/manifest.json",
     "manifest_sha256": "7da7720287d7de4ccaae486c70f8f2f4696ae7b409d3b821580d30a8674e954e",
     "bc_signature": "08ab674205d8603ebf1827009809a1a3479e00b85a716b521d36e4c64cb101c4"
+  },
+  "learning_rate_warmup": {
+    "contract": "linear-update-warmup/1.0.0",
+    "imitation_steps": 500,
+    "selfplay_steps": 100,
+    "start_factor": 0.1
   }
 }

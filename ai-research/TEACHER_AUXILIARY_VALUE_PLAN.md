@@ -1,8 +1,8 @@
 # Teacher Outcome Auxiliary Value Plan
 
-Status: proposed; not implemented.
+Status: implemented as `teacher-outcome-value/1.0.0`; enabled by default for fresh self-play at the user's subsequent request. Diagnostics remain opt-in. See [implementation, validation and lab instructions](../docs/TEACHER_AUXILIARY_VALUE_REPORT.md). The representative full-iteration diagnostic overhead target remains unverified.
 
-Implement an **opt-in auxiliary value update using existing completed teacher games**.
+Implement a **configurable auxiliary value update using existing completed teacher games**.
 
 1. **Preserve collection settings.** Keep five teacher games per collection, existing search budgets, cadence, eight distillation steps, and policy-label quality checks.
 
@@ -12,7 +12,7 @@ Implement an **opt-in auxiliary value update using existing completed teacher ga
 
 4. **Keep training semantics consistent.** Teacher trajectories stay outside PPO actor updates. For enabled runs, define explicit ordinary/teacher weighting for the shared critic and matching utility calibration. Preserve freshness and readiness safeguards.
 
-5. **Record and preserve state.** Version configuration/provenance, preserve continuation state, and add the bounded teacher-value diagnostics below to collection reports and compact training history. Default the auxiliary training feature to disabled.
+5. **Record and preserve state.** Version configuration/provenance, preserve continuation state, and add the bounded teacher-value diagnostics below to collection reports and compact training history. Enable auxiliary training in fresh self-play defaults; preserve explicit opt-out and omitted-block semantics in existing signed configurations. Keep diagnostics disabled by default.
 
 6. **Validate in isolation.** Test seat mapping, cost-to-go accounting, stale-data rejection, calibration, and resume behavior. Run a bounded comparison against policy-only distillation using identical teacher data; report overhead without claiming improved playing strength.
 

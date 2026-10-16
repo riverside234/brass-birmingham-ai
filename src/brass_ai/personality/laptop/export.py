@@ -40,6 +40,7 @@ class Named(nn.Module):
 
 
 def samples(config,personality,seed=661):
+    from brass_ai.learning.local_entities import entity_layout
     rng=np.random.default_rng(seed);cap=config['utility']['insolvency']['max_cost']
     result=[]
     for batch,candidates in ((1,1),(2,7),(4,31),(1,257)):
@@ -50,6 +51,13 @@ def samples(config,personality,seed=661):
             legal_mask=masks,stable_to_relative=np.array([[(s-i)%4 for s in range(4)] for i in range(batch)],dtype='int64'),
             remaining=rng.uniform(0,cap,(batch,4)).astype('float32'))
         if personality:data['personality']=rng.uniform(0,1,(batch,CONTEXT_DIM)).astype('float32')
+        # References are categorical constants, including the all-zero sentinel.
+        # Random soft selectors would not be valid production model inputs.
+        for field in entity_layout()['action_fields'].values():
+            selector=data['actions'][...,field['start']:field['stop']];selector.fill(0)
+            selected=rng.integers(0,selector.shape[-1]+1,(batch,candidates))
+            rows,cols=np.nonzero(selected<selector.shape[-1])
+            selector[rows,cols,selected[rows,cols]]=1
         result.append(data)
     return result
 

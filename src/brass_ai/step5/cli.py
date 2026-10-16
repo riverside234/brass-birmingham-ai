@@ -53,7 +53,8 @@ def parser():
     bc.add_argument('--epochs',type=int,default=10)
     bc.add_argument('--min-epochs',type=int,default=3)
     bc.add_argument('--patience',type=int,default=2)
-    bc.add_argument('--learning-rate',type=float,default=1e-4)
+    bc.add_argument('--learning-rate',type=float,help='Peak IL rate; defaults to the selected config (v11: 6e-5)')
+    bc.add_argument('--warmup-steps',type=int,help='IL shared-network optimizer warmup steps; v11 default 500')
     bc.add_argument('--batch-size',type=int,help='Effective supervised batch; defaults to the selected config')
     bc.add_argument('--microbatch-size',type=int,help='Maximum positions per GPU forward/backward batch')
     bc.add_argument('--max-candidate-cells',type=int,help='Bound padded legal-action cells per microbatch')
@@ -160,9 +161,13 @@ def main(argv=None):
                               ('max_candidate_cells',a.max_candidate_cells),('precision',a.precision)]:
                 if value is not None:update[key]=value
             workers=a.workers if a.workers is not None else config.get('audit_workers',1)
+            from brass_ai.recovery.learning_rate import DEFAULT_WARMUP
+            warmup=config.get('learning_rate_warmup',DEFAULT_WARMUP)
             result=train_bc(root,a.run,a.manifest,a.initial,update,device=a.device,
-                epochs=a.epochs,min_epochs=a.min_epochs,patience=a.patience,lr=a.learning_rate,retention=config.get('retention'),workers=workers,
-                from_imitation_run=a.from_imitation_run)
+                epochs=a.epochs,min_epochs=a.min_epochs,patience=a.patience,
+                lr=a.learning_rate if a.learning_rate is not None else config.get('imitation',{}).get('learning_rate',6e-5),
+                retention=config.get('retention'),workers=workers,from_imitation_run=a.from_imitation_run,
+                warmup_steps=a.warmup_steps if a.warmup_steps is not None else warmup['imitation_steps'],warmup_start_factor=warmup['start_factor'])
             result={k:result[k] for k in ('candidate','candidate_sha256','epochs','promoted')}
         elif a.command == 'train':
             require(not (a.demonstrations and a.imitation_run),'Use --demonstrations OR --imitation-run')

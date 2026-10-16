@@ -50,7 +50,7 @@ def calibration_ready(model):
     return bool(receipt and receipt.get('reward_id')==digest(model.config.utility) and receipt.get('ready'))
 
 
-def calibrate(model,optimizer,dataset,config):
+def calibrate(model,optimizer,dataset,config,*,auxiliary=None):
     if calibration_ready(model):return dict(required=False,receipt=model.utility_calibration)
     require(dataset.utility is not None,'Calibration requires fresh complete-game utility targets')
     # Fixed three head-only passes. No extra games, retries or policy/value drift.
@@ -61,6 +61,17 @@ def calibrate(model,optimizer,dataset,config):
     for p in model.utility_head.parameters():p.requires_grad_(True)
     for g in optimizer.param_groups:g['lr']=1e-3
     model.eval();steps=0
+    teacher=auxiliary.teacher if auxiliary is not None and auxiliary.seen else None
+    fraction=auxiliary.options['teacher_fraction'] if teacher is not None else 0.
+    teacher_seconds=0.;teacher_presentations=0;teacher_steps=0
+    def teacher_error():
+        predictions=torch.empty_like(teacher.utility)
+        with torch.no_grad():
+            for part in teacher.microbatches(range(len(teacher.data)),config['microbatch_size'],config['max_candidate_cells'],config['bucket']):
+                ix,inputs,_=teacher.value_batch(part,model)
+                predictions[ix]=model(*inputs,remaining=teacher.remaining[ix])[-1].float()
+        diff=predictions-teacher.utility
+        return dict(mse=float(diff.square().mean()),mae=float(diff.abs().mean())),predictions
     def error():
         squared=absolute=0.
         with torch.no_grad():
@@ -72,6 +83,12 @@ def calibrate(model,optimizer,dataset,config):
         return dict(mse=squared/n,mae=absolute/n)
     try:
         before=error()
+        ordinary_before=before
+        teacher_before=teacher_after=None
+        if teacher is not None:
+            import time
+            began=time.perf_counter();teacher_before,_=teacher_error();teacher_seconds+=time.perf_counter()-began
+            before={k:(1-fraction)*before[k]+fraction*teacher_before[k] for k in before}
         for _ in range(3):
             order=torch.randperm(len(dataset.data)).tolist()
             for start in range(0,len(order),config['effective_batch_size']):
@@ -79,10 +96,28 @@ def calibrate(model,optimizer,dataset,config):
                 for part in dataset.microbatches(batch,config['microbatch_size'],config['max_candidate_cells'],config['bucket']):
                     ix,inputs,_=dataset.value_batch(part,model)
                     diff=model(*inputs,remaining=dataset.remaining[ix])[-1].float()-dataset.utility[ix]
-                    (diff.square().mean(-1).sum()/len(batch)).backward()
+                    ((1-fraction)*diff.square().mean(-1).sum()/len(batch)).backward()
+                if teacher is not None:
+                    began=time.perf_counter()
+                    # A bounded whole teacher set alongside each already
+                    # scheduled ordinary calibration step: no new steps and
+                    # exactly the same mixture used by the auxiliary loss.
+                    for part in teacher.microbatches(range(len(teacher.data)),config['microbatch_size'],config['max_candidate_cells'],config['bucket']):
+                        ix,inputs,_=teacher.value_batch(part,model)
+                        diff=model(*inputs,remaining=teacher.remaining[ix])[-1].float()-teacher.utility[ix]
+                        (fraction*diff.square().mean(-1).sum()/len(teacher.data)).backward()
+                    teacher_presentations+=len(teacher.data);teacher_steps+=1
+                    auxiliary.calibration_seen.update(range(len(teacher.data)))
+                    if teacher.device.type=='cuda':torch.cuda.synchronize(teacher.device)
+                    teacher_seconds+=time.perf_counter()-began
                 torch.nn.utils.clip_grad_norm_(model.utility_head.parameters(),config['grad_clip'],error_if_nonfinite=True)
                 optimizer.step();steps+=1
         after=error()
+        ordinary_after=after
+        if teacher is not None:
+            began=time.perf_counter();teacher_after,predictions=teacher_error();teacher_seconds+=time.perf_counter()-began
+            after={k:(1-fraction)*after[k]+fraction*teacher_after[k] for k in after}
+            if auxiliary.probe:auxiliary.probe.after_calibration(predictions)
     finally:
         optimizer.zero_grad(set_to_none=True)
         for p,flag in zip(parameters,flags):p.requires_grad_(flag)
@@ -90,7 +125,19 @@ def calibrate(model,optimizer,dataset,config):
     require(all(torch.isfinite(p).all() for p in model.utility_head.parameters()),'Nonfinite calibrated utility')
     # Numerical and fit gate; more fresh ordinary data can improve a poor fit.
     ready=after['mse']<=before['mse']+1e-8
+    if teacher is not None:
+        # A better weighted fit must not waive the existing ordinary-return
+        # readiness gate. A failed ordinary fit still defers later searches.
+        ready=ready and ordinary_after['mse']<=ordinary_before['mse']+1e-8
     model.utility_calibration=dict(version=MIGRATION,reward_id=digest(model.config.utility),ready=ready,
         decisions=len(dataset.data),games=len({d[2][0] for d in dataset.data}),steps=steps,
         before=before,after=after,scope='Fresh ordinary trajectories, in-sample calibration; not a strength guarantee')
+    if teacher is not None:
+        model.utility_calibration.update(version='teacher-mixed-utility-calibration/1.0.0',
+            scope='Fresh ordinary + recorded mixed-search/direct teacher outcomes; weighted in-sample fit, not playing strength',
+            readiness_gate='Both ordinary MSE and weighted mixture MSE must not increase',
+            ordinary_fraction=1-fraction,teacher_fraction=fraction,teacher_decisions=len(teacher.data),
+            teacher_games=auxiliary.games,teacher_target_source=auxiliary.binding,
+            ordinary_before=ordinary_before,ordinary_after=ordinary_after,teacher_before=teacher_before,teacher_after=teacher_after,
+            teacher_seconds=teacher_seconds,teacher_sample_presentations=teacher_presentations,teacher_optimizer_steps=teacher_steps)
     return dict(required=True,receipt=model.utility_calibration)

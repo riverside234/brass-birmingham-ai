@@ -23,6 +23,10 @@ def apply_optimizer_config(optimizer, config):
     for group in optimizer.param_groups:
         group['lr']=config['learning_rate']
         group['weight_decay']=config['weight_decay']
+    if 'learning_rate_warmup' in config:
+        from .learning_rate import configure
+        warmup=config['learning_rate_warmup']
+        configure(optimizer,config['learning_rate'],warmup['selfplay_steps'],warmup['start_factor'],'selfplay')
     return dict(before=before,after=[dict(lr=g['lr'],weight_decay=g['weight_decay']) for g in optimizer.param_groups],
                 preserved='Adam moments, steps, other group options and RNG')
 
@@ -56,6 +60,16 @@ def check_signature(state, signature, reviewed=False):
     for transition in transitions:
         # An exact unchanged configuration needs no historical upgrade path.
         if config_ok:break
+        if transition.get('teacher_value_changes'):
+            # Only this separately versioned opt-in block may vary. Explicit
+            # reviewed continuation still rejects pending old collections and
+            # preserves every unrelated optimizer/curriculum/search setting.
+            from .config import teacher_value_config
+            teacher_value_config(previous['config'].get('teacher_value'))
+            teacher_value_config(signature['config'].get('teacher_value'))
+            without=lambda c:{k:v for k,v in c.items() if k!='teacher_value'}
+            config_ok |= without(previous['config'])==without(signature['config'])
+            if config_ok:break
         changes = transition.get('config_changes', {})
         if all(previous['config'].get(k) == v['from'] for k, v in changes.items()):
             expected = dict(previous['config'], **{k: v['to'] for k, v in changes.items()})
@@ -73,6 +87,9 @@ def check_signature(state, signature, reviewed=False):
             for migration in migrations:
                 require(migration in handlers,'Unknown reviewed configuration migration')
                 expected=handlers[migration](expected)
+            if transition.get('teacher_value_changes'):
+                expected.pop('teacher_value',None)
+                if 'teacher_value' in signature['config']:expected['teacher_value']=signature['config']['teacher_value']
             config_ok |= expected == signature['config']
     require(config_ok, 'Reviewed resume requires unchanged config except explicitly pinned review changes')
     require(state['iteration'] > 0, 'Reviewed continuation requires a committed PPO generation')

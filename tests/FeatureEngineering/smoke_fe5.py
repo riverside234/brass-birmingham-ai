@@ -1,4 +1,4 @@
-"""Bounded width-304 fresh IL -> six ordinary games -> resume -> four eval games.
+"""Bounded width-512 fresh IL -> six ordinary games -> resume -> four eval games.
 
 Optional four real teacher turns use the exact current phase clocks and quality
 gates. Partial teacher probes never masquerade as complete training games.
@@ -131,8 +131,8 @@ def main():
     il=out/'imitation'
     bc=train_bc(SOURCE_ROOT,il,args.manifest,None,update,epochs=1,min_epochs=1,patience=1,workers=1)
     original,origin=completed_imitation(SOURCE_ROOT,il)
-    require(original.config.hidden==304 and original.config.residual_blocks==6 and original.parameter_count==2005917,
-        'Smoke must use production width 304 and six grouped residual blocks')
+    require(original.config.hidden==512 and original.config.residual_blocks==8 and original.parameter_count==5904644,
+        'Smoke must use production width 512 and eight grouped residual blocks')
     # Same-version BC resume of the completed one-epoch run preserves progress.
     before_bc=read(il/'state.json');before_il=sha(SOURCE_ROOT/origin['path'])
     train_bc(SOURCE_ROOT,il,args.manifest,None,update,epochs=1,min_epochs=1,patience=1,workers=1)
@@ -177,7 +177,7 @@ def main():
         teacher=teacher_probe(model,games,cfg,out/'teacher')
     require(source==implementation_id(),'Source changed during smoke')
     write_json(out/'report.json',dict(implementation=source,compatibility=compatibility(),elapsed_seconds=time.monotonic()-began,
-        IL=dict(epochs=bc['epochs'],width=304,parameters=original.parameter_count,resume_exact=True,origin=origin),
+        IL=dict(epochs=bc['epochs'],width=512,parameters=original.parameter_count,resume_exact=True,origin=origin),
         PPO=dict(iterations=2,games=state['games_done'],initial_weights_exact=True,initial_optimizer_empty=True,resume=receipts,
             previous_checkpoint_unchanged=True,sampling=[r['sampling'] for r in reports],
             updates=[r['actor'] for r in reports],inference=[r['inference'] for r in reports]),

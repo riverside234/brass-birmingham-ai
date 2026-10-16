@@ -43,13 +43,13 @@ class LearningTests(unittest.TestCase):
         self.model = FourSeatNet(ModelConfig.preset('small')).eval()
 
     def test_size_presets_and_fresh_initialization(self):
-        # Features 3 requires fresh residual weights with the explicit 3M cap.
-        for size, expected in [('small', 934605), ('medium', 2005917)]:
+        # Features-4 data is reusable; v11 requires fresh weights and a 6.5M cap.
+        for size, expected in [('small', 1499780), ('medium', 5904644)]:
             model = FourSeatNet(ModelConfig.preset(size))
-            self.assertEqual(model.config.architecture, 'brass-four-seat-mlp-resnet/9.0.0')
+            self.assertEqual(model.config.architecture, 'brass-four-seat-mlp-resnet/11.0.0')
             self.assertEqual(model.parameter_count, expected)
-            self.assertLessEqual(model.parameter_count, 3000000)
-        with self.assertRaisesRegex(ValueError, 'version-9 grouped model preset'):
+            self.assertLessEqual(model.parameter_count, 6500000)
+        with self.assertRaisesRegex(ValueError, 'version-11 grouped model preset'):
             ModelConfig.preset('large')
         second = FourSeatNet(ModelConfig.preset('small'))
         self.assertNotEqual(model_id(self.model), model_id(second))
@@ -91,8 +91,10 @@ class LearningTests(unittest.TestCase):
         with torch.no_grad():
             for p in self.model.parameters():
                 p.zero_()
-            self.model.outcomes[-1].bias[:4].copy_(torch.tensor([-2., -1., 0., 1.]))
-        base = torch.softmax(torch.tensor([-2., -1., 0., 1.]), -1).numpy()
+            self.model.entity_encoder.player_identity.weight[:,0].copy_(torch.tensor([-2., -1., 0., 1.]))
+            self.model.outcomes[0].weight[0,self.model.config.hidden]=1
+            self.model.outcomes[-1].weight[0,0]=1
+        base = torch.softmax(torch.nn.functional.gelu(torch.tensor([-2., -1., 0., 1.])), -1).numpy()
         for observer, order in itertools.product(range(4), itertools.permutations(range(4))):
             view, choices = position(observer)
             view['order'] = list(order)

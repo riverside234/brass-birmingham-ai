@@ -5,6 +5,7 @@ from concurrent.futures import ThreadPoolExecutor
 import math
 import numpy as np
 import torch
+from .learning_rate import step as scheduled_step,report as learning_rate_report
 from torch.nn import functional as F
 
 from brass_ai.learning.batching import collate, model_id
@@ -18,13 +19,13 @@ from .progress import Progress
 from .insolvency import returns as insolvency_returns,advantage_costs
 
 
-def prepared(games, predicate=None, neutral=False, insolvency=None, reward=None):
+def prepared(games, predicate=None, neutral=False, insolvency=None, reward=None, outcome_targets=None):
     """Targets once per game; filter BEFORE encoding; cached arrays survive epochs."""
     require(reward is None or insolvency==reward['insolvency'],'Return/cost reward mismatch')
     encoder, data = PreparedEncoder(), []
     for game in games:
         if hasattr(game,'assert_metadata'): game.assert_metadata()
-        target = terminal_targets(game['result'])
+        target = terminal_targets(game['result']) if outcome_targets is None else outcome_targets[game['game_id']]
         costs,summaries=insolvency_returns(game['records'],insolvency) if insolvency is not None else (None,None)
         if reward is not None:
             from brass_ai.learning.reward import replay_returns
@@ -74,7 +75,9 @@ class Dataset:
         self.rows=[d[0] for d in data]
         self.encoded=[d[3] for d in data]
         from brass_ai.learning.features import check_encoded
-        for row in self.encoded:check_encoded(row)
+        from brass_ai.learning.local_entities import check_action_selectors
+        for row in self.encoded:
+            check_encoded(row);check_action_selectors(row.actions)
         log=Progress(progress,5,'tensor groups') if progress else None
         self.chosen=torch.tensor([r['chosen'] for r in self.rows],device=device)
         self.seats=torch.tensor([r['seat'] for r in self.rows],device=device)
@@ -277,7 +280,7 @@ def ppo_update(model,optimizer,games,behavior,config,*,profile=None,profile_step
                 with timings.phase('ppo.optimizer'):
                     norm=torch.nn.utils.clip_grad_norm_(model.parameters(),config['grad_clip'],error_if_nonfinite=True)
                     clip_events+=int(float(norm)>config['grad_clip'])
-                    optimizer.step();steps+=1
+                    scheduled_step(optimizer);steps+=1
                 if profiler: profiler.step()
                 model.eval()
                 kl=policy_measure(model,dataset,probe,behavior,config,timings)
@@ -290,6 +293,7 @@ def ppo_update(model,optimizer,games,behavior,config,*,profile=None,profile_step
                 post_update_kl=full_kl,probe_kl=kl,gradient_norm=float(norm),positions=seen))
             if stopped or full_kl>config['target_kl']: stopped=True;break
     return dict(format='effective-minibatch-ppo/2.0.0',epochs=epochs,optimizer_steps=steps,
+        learning_rates=[group['lr'] for group in optimizer.param_groups],learning_rate_schedule=learning_rate_report(optimizer),
         learner_decisions=count,learner_trajectories=len({d[2] for d in data}),forced_decisions=int(dataset.forced.sum()),
         effective_batch_size=config['effective_batch_size'],microbatch_size=config['microbatch_size'],
         advantage=stats,kl_probe_rows=len(probe),kl_early_stop=stopped,gradient_clip_steps=clip_events,
@@ -425,7 +429,7 @@ def _ppo_nonforced(model,optimizer,games,behavior,config,*,profile,profile_steps
                         rehearsal_steps+=int(bool(meaningful))
                 with timings.phase('ppo.optimizer'):
                     norm=torch.nn.utils.clip_grad_norm_(model.parameters(),config['grad_clip'],error_if_nonfinite=True)
-                    clips+=int(float(norm)>config['grad_clip']);optimizer.step();steps+=1
+                    clips+=int(float(norm)>config['grad_clip']);scheduled_step(optimizer);steps+=1
                     gradient_norms.append(float(norm))
                     actor_used.update(batch);critic_used.update(crit)
                     actor_presentations.update(groups[i] for i in batch)
@@ -456,7 +460,7 @@ def _ppo_nonforced(model,optimizer,games,behavior,config,*,profile,profile_steps
         categorical_probe=categorical_probe.measure(model),gradient_norms=distribution(gradient_norms),
         kl_estimator='post_update_kl/probe_kl: sampled chosen-action ((ratio-1)-log(ratio)); full means all nonforced rows, not exact categorical KL',
         kl_probe_rows=len(probe),kl_probe_sampling='proportional-era-phase/1.0.0',
-        learning_rates=[group['lr'] for group in optimizer.param_groups],
+        learning_rates=[group['lr'] for group in optimizer.param_groups],learning_rate_schedule=learning_rate_report(optimizer),
         kl_early_stop=stopped,gradient_clip_steps=clips,
         rehearsal_active=demo is not None,rehearsal_rows=len(demo.data) if demo else 0,
         rehearsal_steps=rehearsal_steps,rehearsal_weight=rehearsal_weight if demo else 0,
@@ -464,12 +468,15 @@ def _ppo_nonforced(model,optimizer,games,behavior,config,*,profile,profile_steps
                 for phase in sorted({r['view']['context']['phase'] for r in ds.rows})},timings=timings.report(),memory=memory(device))
 
 
-def supervised_epoch(model,optimizer,data,config,*,training=True,kind='bc',weight=1.0,profile=None,progress=None,validation_weights=None):
+def supervised_epoch(model,optimizer,data,config,*,training=True,kind='bc',weight=1.0,profile=None,progress=None,validation_weights=None,auxiliary_step=None,fit_observer=None):
     """Optionally report a second BC weighting from the same validation outputs."""
     require(kind in ('bc','teacher'),'Unknown supervised label kind')
+    require(auxiliary_step is None or (training and kind=='teacher'),'Auxiliary gradients require a teacher training step')
+    require(fit_observer is None or (not training and kind=='teacher'),'Fit observation is diagnostic only')
     # Search visits teach a policy distribution. A sparse teacher's eventual
     # game outcome is not a search value target. PPO/BC already fit the critic.
     value_weight=config['value_weight'] if kind=='bc' else 0.
+    auxiliary_used=False
     timings=Timings();device=next(model.parameters()).device
     with timings.phase('supervised.prepare'):
         dataset=data if isinstance(data,Dataset) else Dataset(data,device,policy=False)
@@ -501,6 +508,7 @@ def supervised_epoch(model,optimizer,data,config,*,training=True,kind='bc',weigh
                 parts=dataset.microbatches(batch,config['microbatch_size'],config['max_candidate_cells'],config['bucket'])
                 for part,ix,inputs in dataset.supervised_batches(parts,executor):
                     with autocast(config,device): out=model(*inputs)
+                    if fit_observer is not None:fit_observer(part,data,out)
                     if kind=='bc':
                         natural=bc_loss(out[0],dataset.chosen[ix])
                         policy=natural*dataset.bc_weights[ix]
@@ -541,8 +549,9 @@ def supervised_epoch(model,optimizer,data,config,*,training=True,kind='bc',weigh
                     totals+=torch.stack([x.detach().sum() for x in (policy,value,win,rank,vp,correct,meaningful.float(),natural,teacher_entropy,teacher_kl)])
                     predictions[ix]=out[0].detach().argmax(-1);row_losses[ix]=natural.detach()
             if training:
+                if auxiliary_step is not None:auxiliary_used |= bool(auxiliary_step())
                 norm=torch.nn.utils.clip_grad_norm_(model.parameters(),config['grad_clip'],error_if_nonfinite=True)
-                clips+=int(float(norm)>config['grad_clip']);optimizer.step();steps+=1
+                clips+=int(float(norm)>config['grad_clip']);scheduled_step(optimizer);steps+=1
             if profiler: profiler.step()
             if log:
                 completed=min(start+len(batch),count)
@@ -566,12 +575,16 @@ def supervised_epoch(model,optimizer,data,config,*,training=True,kind='bc',weigh
         loss=weight*p/actor_denominator+value_weight*v/count,value_loss_training=bool(value_weight),
         win_loss=w/count,rank_loss=r/count,vp_loss=vp/count,meaningful_top1=correct/max(1,meaningful),
         meaningful_decisions=int(meaningful),decisions=count,optimizer_steps=steps,gradient_clip_steps=clips,
+        learning_rate_schedule=learning_rate_report(optimizer),
         **(dict(teacher_entropy=teacher_entropy/actor_denominator,teacher_kl=teacher_kl/actor_denominator) if kind=='teacher' else {}),
         root_action_top1=sum(v['correct'] for k,v in diagnostics.items() if '|action|' in k)/max(1,sum(v['decisions'] for k,v in diagnostics.items() if '|action|' in k)),
         root_family_top1=sum(v['family_correct'] for k,v in diagnostics.items() if '|action|' in k)/max(1,sum(v['decisions'] for k,v in diagnostics.items() if '|action|' in k)),
         by_teacher_era_phase_action={k:dict(decisions=v['decisions'],natural_policy_loss=v['loss']/v['decisions'],
             top1=v['correct']/v['decisions'],family_top1=v['family_correct']/v['decisions']) for k,v in diagnostics.items()},
         timings=timings.report(),memory=memory(device))
+    if auxiliary_used:
+        report.update(value_loss_training=True,
+            loss_scope='Policy loss only here; added auxiliary value loss and usage are reported in collection.teacher_value')
     if reweighted is None:return report
     from copy import deepcopy
     balanced_total=float(reweighted)
@@ -579,7 +592,7 @@ def supervised_epoch(model,optimizer,data,config,*,training=True,kind='bc',weigh
                        loss=weight*balanced_total/actor_denominator+value_weight*v/count)
 
 
-def distill_update(model,optimizer,games,config,*,steps=8,weight=.25,quality=None):
+def distill_update(model,optimizer,games,config,*,steps=8,weight=.25,quality=None,auxiliary=None):
     from collections import Counter
     from .config import DISTILLATION,bounded_fields
     from .teacher_schedule import PHASES,phase_for
@@ -627,14 +640,18 @@ def distill_update(model,optimizer,games,config,*,steps=8,weight=.25,quality=Non
                     for g in games for r in g['records'] if eligible(r)),
                 'Search teaching requires fresh current-model/current-source targets')
         require(calibration_ready(model),'Calibrate the utility head before search teaching')
-    data=prepared(games,eligible)
+    data=prepared(games,eligible,outcome_targets=auxiliary.outcome_targets if auxiliary is not None else None)
     from .review_metrics import teacher_drift_probe
     from types import SimpleNamespace
     probe=teacher_drift_probe(model,data,SimpleNamespace(exploration=0.,temperature=1.),config)
     def fit():
-        report=supervised_epoch(model,None,data,config,training=False,kind='teacher',weight=weight)
+        probe=auxiliary.probe if auxiliary is not None else None
+        if probe:probe.start_fit()
+        report=supervised_epoch(model,None,data,config,training=False,kind='teacher',weight=weight,
+                                fit_observer=probe.observe_fit if probe else None)
         return {k:report[k] for k in ('policy_loss','teacher_entropy','teacher_kl','meaningful_top1','root_action_top1','root_family_top1')}
     before=fit()
+    if auxiliary is not None:auxiliary.begin(model)
     reports=[];seen=Counter()
     teacher_config=dict(config,effective_batch_size=width)
     for _ in range(quality['max_reuse']):
@@ -642,9 +659,12 @@ def distill_update(model,optimizer,games,config,*,steps=8,weight=.25,quality=Non
         for start in range(0,len(order),width):
             if len(reports)>=steps:break
             indices=order[start:start+width];seen.update(indices)
-            reports.append(supervised_epoch(model,optimizer,[data[i] for i in indices],teacher_config,kind='teacher',weight=weight))
+            auxiliary_step=(lambda:auxiliary.backward(model,len(reports),width)) if auxiliary is not None else None
+            reports.append(supervised_epoch(model,optimizer,[data[i] for i in indices],teacher_config,kind='teacher',weight=weight,
+                                            auxiliary_step=auxiliary_step))
         if len(reports)>=steps:break
     after=fit()
+    if auxiliary is not None:auxiliary.post_update(model)
     drift=probe.measure(model) if probe is not None else None
     if drift is not None:drift['scope']='Exact KL(pre-distillation policy || post-distillation policy) on a bounded qualified-label probe; before utility recalibration, training data, not playing strength'
     invalidated=getattr(model.config,'utility',None) is not None and bool(reports)
@@ -654,7 +674,9 @@ def distill_update(model,optimizer,games,config,*,steps=8,weight=.25,quality=Non
         # old fit receipt cannot qualify a subsequent teacher from these weights.
         # Fresh ordinary PPO data will run the existing bounded head calibration.
         model.utility_calibration=dict(model.utility_calibration,ready=False,
-            invalidated_by='policy-distillation',reason='Shared trunk changed without a utility target')
+            invalidated_by='teacher-mixed-value' if auxiliary is not None else 'policy-distillation',
+            reason='Shared trunk changed; fresh matching utility calibration required')
+    support['value_loss_training']=auxiliary is not None and bool(auxiliary.seen)
     return dict(updated=True,optimizer_steps=sum(r['optimizer_steps'] for r in reports),updates=reports,
         **usage(seen,data),teacher_policy_drift=drift,
         fit_before=before,fit_after=after,fit_scope='same qualified collection; training fit, not held-out strength',

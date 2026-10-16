@@ -11,8 +11,27 @@ from brass_ai.personality.difficulty.contracts import default_profiles,validate_
 from brass_ai.personality.search.readiness import load as load_ready,validate_goal_calibration
 from brass_ai.personality.search.contracts import READY
 from brass_ai.search.common import SearchConfig
+from brass_ai.recovery.host_runtime import training_host
 from .contracts import PACKAGE,identity,read,write,seal,unseal,child,inventory
 from .export import export,validate_metadata
+
+
+def _copy_search_runtime(root,out):
+    # Validate the additive authored host and its unchanged licensed dependencies
+    # before bundling it. The portable runtime uses this ready binary directly;
+    # it needs neither a training directory nor a compiler on the laptop.
+    native=training_host(root,'search');runtime=read(native/'runtime.json')
+    if runtime.get('optimization')=='training-host/1.0.0':
+        require(runtime.get('kind')=='search','Not an explicit-chance search runtime')
+        runtime=dict(runtime,extension='brass-search-chance/1.0.0')
+    require(runtime.get('extension')=='brass-search-chance/1.0.0','Missing explicit-chance search runtime')
+    deps=read(root/'configs/rules/runtime-dependencies-1.1.0.json')
+    require({x['name']:x['sha256'] for x in runtime['files'] if x['name']!='BrassHost.exe'}==
+            {x['name']:x['sha256'] for x in deps['files']},'Native rules dependencies differ')
+    for entry in runtime['files']:
+        source=child(native,entry['name']);require(sha(source)==entry['sha256'],'Native dependency changed')
+        target=out/'runtime/artifacts/r4-host'/entry['name'];target.parent.mkdir(parents=True,exist_ok=True);shutil.copyfile(source,target)
+    write(out/'runtime/artifacts/r4-host/runtime.json',runtime)
 
 
 def build(root,roster_directory,output,*,qualification=None,fixture=False):
@@ -45,20 +64,20 @@ def build(root,roster_directory,output,*,qualification=None,fixture=False):
     write(out/'profiles.json',profiles)
     compact=dict(id=value['id'],archetypes=[{k:g[k] for k in ('id','name','description','members')} for g in value['archetypes']],
                  members=[{k:m[k] for k in ('id','archetype_id','profile')} for m in value['members']])
-    # Carry the existing, fingerprint-checked native search host. These licensed
+    # Carry the fingerprint-checked fused search host. These licensed
     # game dependencies are a private local bundle, not a redistributable asset.
-    native=root/'artifacts/r4-host';runtime=read(native/'runtime.json')
-    deps=read(root/'configs/rules/runtime-dependencies-1.1.0.json')
-    require({x['name']:x['sha256'] for x in runtime['files'] if x['name']!='BrassHost.exe'}==
-            {x['name']:x['sha256'] for x in deps['files']},'Native rules dependencies differ')
-    for entry in runtime['files']:
-        source=child(native,entry['name']);require(sha(source)==entry['sha256'],'Native dependency changed')
-        target=out/'runtime/artifacts/r4-host'/entry['name'];target.parent.mkdir(parents=True,exist_ok=True);shutil.copyfile(source,target)
-    write(out/'runtime/artifacts/r4-host/runtime.json',runtime)
+    _copy_search_runtime(root,out)
     for name in ('configs/rules/runtime-dependencies-1.1.0.json','configs/contracts/v0.2.0/card-composition.json',
                  'configs/contracts/v0.2.0/wire.schema.json','configs/contracts/v0.2.0/manifest.json',
                  'configs/learning/features-1.0.0.json','configs/learning/features-2.0.0.json','configs/learning/features-3.0.0.json','configs/learning/features-4.0.0.json',
-                 'configs/learning/state-groups-5.0.0.json','configs/learning/host-1.0.0.json','configs/references/upstream.lock.json'):
+                 'configs/learning/state-groups-5.0.0.json','configs/learning/state-groups-6.0.0.json',
+                 'configs/learning/local-entity-topology-2.0.0.json','configs/learning/entity-board-1.0.0.json',
+                 'configs/learning/architecture-source-equivalence.json','configs/learning/v11-selector-source-equivalence.json',
+                 'configs/learning/host-1.0.0.json','configs/references/upstream.lock.json'):
+        dest=out/'runtime'/name;dest.parent.mkdir(parents=True,exist_ok=True);shutil.copyfile(root/name,dest)
+    # V11 admits its omitted topology against the exact board-definition sources.
+    board=read(root/'configs/learning/entity-board-1.0.0.json')
+    for name in board['provenance']['sources']:
         dest=out/'runtime'/name;dest.parent.mkdir(parents=True,exist_ok=True);shutil.copyfile(root/name,dest)
     # The search dependencies stay byte-identical. No training entry point or
     # training artifacts are included; Python modules are library dependencies.

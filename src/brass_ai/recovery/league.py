@@ -59,7 +59,7 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
     root=Path(root).resolve();run=project_path(root,run_path);validate_config(config)
     from brass_ai.learning.model import ARCHITECTURE,PARAMETER_LIMIT
     require((config['architecture'],config['parameter_limit'])==(ARCHITECTURE,PARAMETER_LIMIT),
-            'Fresh grouped training requires an explicitly configured version-9 model and 3M limit; use feature-engineering.py configure')
+            'Fresh grouped training requires an explicitly configured version-11 model and 3M limit; use feature-engineering.py configure')
     require(iterations>0 and not(initial and from_run),'Invalid recovery initialization')
     require(initial is None and from_run is None,'Fresh residual workflow forbids previous checkpoint/run imports')
     bc_model=bc_origin=None
@@ -126,9 +126,13 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                                     note='Completed standalone fresh imitation; no second BC pass')
             print('Self-play starts from the completed imitation candidate; PPO optimizer is new',flush=True)
         else:
-            state['imitation']=fresh_imitation(root,model,config['imitation'],config['update'],run,device,workers=config['audit_workers'])
+            state['imitation']=fresh_imitation(root,model,config['imitation'],config['update'],run,device,workers=config['audit_workers'],warmup=config.get('learning_rate_warmup'))
         # A new recipe never inherits the old full-epoch optimizer moments.
         optimizer=torch.optim.AdamW(model.parameters(),lr=config['learning_rate'],weight_decay=config['weight_decay'])
+        if 'learning_rate_warmup' in config:
+            from .learning_rate import configure
+            warmup=config['learning_rate_warmup']
+            configure(optimizer,config['learning_rate'],warmup['selfplay_steps'],warmup['start_factor'],'selfplay')
         init_path=run/'initial.pt'
         save_checkpoint(init_path,model,optimizer,training=dict(mode='step5-fresh-residual-initial',parent=None,initialization=state['origin']['initialization'],fresh_run=run.relative_to(root).as_posix(),imitation=state['imitation']))
         raw=load_checkpoint(init_path,device=device)[1]
@@ -222,13 +226,13 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                 ordinary_inference=service.report()
                 if done>=config['rehearsal_until']:rehearsal=None
                 ordinary_seconds=state.get('ordinary_seconds',0.)+updated-began
-                def recalibrate_teacher_utility():
+                def recalibrate_teacher_utility(auxiliary=None):
                     # Policy distillation moves the shared encoder. Refit only
                     # its utility head against this iteration's fresh ordinary
-                    # returns; teacher game outcomes are never value targets.
+                    # returns and the explicitly opted-in teacher mixture.
                     from .updates import Dataset
                     from .utility import calibrate
-                    return calibrate(model,optimizer,Dataset(learner_data,device,policy=False),config['update'])
+                    return calibrate(model,optimizer,Dataset(learner_data,device,policy=False),config['update'],auxiliary=auxiliary)
                 from .teacher_collection import due_collections
                 from .review_metrics import teacher_drift_probe
                 teaching_probe=(teacher_drift_probe(model,learner_data,behavior,config['update'])
@@ -236,7 +240,8 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                 search,next_search,cursor,search_seconds=collect_due(root,run,directory,config,state,signature,
                     model,optimizer,service,heavy,done=done,cursor=cursor,ordinary_seconds=ordinary_seconds,
                     ordinary_game_seconds=(collected-began)/max(1,len(games)),
-                    recalibrate=recalibrate_teacher_utility if reward is not None else None)
+                    recalibrate=recalibrate_teacher_utility if reward is not None else None,
+                    ordinary_data=learner_data,ordinary_policy_id=behavior.policy_id)
                 # Search policy updates share the trunk/Adam but occur outside
                 # the PPO KL guard. Measure their TOTAL drift from collection.
                 # No resampling or RNG consumption, and no teacher PPO targets.
@@ -293,7 +298,7 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                 if champion_mix.enabled(config):state['champion_mix']['transition_tables']+=transition_added
                 state['recent_training']=(state.get('recent_training',[])+[dict(iteration=iteration,games_done=done,
                     sampling=sampling,curriculum=report['curriculum'],
-                    learning_rate=config['learning_rate'],
+                    learning_rate=config['learning_rate'],learning_rate_schedule=update.get('learning_rate_schedule'),
                     actor={k:v for k,v in update.items() if k not in ('timings','memory')},
                     search={k:v for k,v in search.items() if k not in ('collection','updates')})])[-2:]
                 if revised:
@@ -326,7 +331,7 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                       f'eval={report["timings"].get("evaluation_seconds",0):.1f}s cleanup={report["timings"].get("cleanup_seconds",0):.1f}s; '
                       f'total={report["timings"]["iteration_seconds"]:.1f}s; '
                       f'NN batch mean={report["utilization"]["mean_inference_batch"]:.2f}; '
-                      f'LR={config["learning_rate"]:.1e} KL={update["epochs"][-1]["post_update_kl"]:.5f} '
+                      f'LR={update["learning_rates"][0]:.1e} KL={update["epochs"][-1]["post_update_kl"]:.5f} '
                       f'value={update["epochs"][-1]["value"]:.4f}; '
                       f'insolvency events={update["insolvency"].get("events",0)} '
                       f'mean cost={update["insolvency"].get("mean_cost_per_trajectory",0):.4f}; '

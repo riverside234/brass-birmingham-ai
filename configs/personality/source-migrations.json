@@ -189,6 +189,72 @@
         "model": "four-seat-personality/2.0.0",
         "source": "7857312a03491be8102a621826f1bcfc58018eaa4416f9dca26de5049ae54176"
       }
+    },
+    {
+      "kind": "factored-policy-scorer/1.0.0",
+      "from_contract": {
+        "model": "four-seat-personality/3.0.0",
+        "goal_schema": "b54280a5e807037baff50133f9a4257f6d6ed445ff595548b029e2f93597c60c",
+        "base": {
+          "learning_contract": "four-seat-learning/4.0.0",
+          "players": 4,
+          "rules": "steam-brass-patch-1.1.0",
+          "wire_sha256": "fabe2ef3e1de73aa9f3ddd05b67c08f9ef564a25ab4ff42963a03ab6fe3b6e3d",
+          "observation": "public-state/0.2.0",
+          "choices": "phase-choice/0.2.0",
+          "objective": "win-share/1.0.0",
+          "placement": "competition-rank/1.0.0",
+          "seat_order": "stable-0-1-2-3",
+          "vp_scale": 100.0,
+          "features_sha256": "59facdd72a386b6046abbb875daf3e1051b92e580ff55d0ab37250dd0c1dfb6a",
+          "feature_version": "permitted-features/4.0.0",
+          "derived_source_sha256": "47afe02b5e98549081f5ab119a2dca2c90448c74fba8020fc7e04cb6bc16f260",
+          "producer_profile_sha256": "ffae2fa230bcc42c3877d7817a584b608b60961c0b719316884d6c694a1384d7",
+          "encoder_sha256": "7d21b3052bf65c2d272a59859eebc6b3be1117b77e906a677402784b5ab90f06",
+          "architecture_sha256": "9c5ad1e2a20f7dfb0483e04ecbf7b77b6d1c6808641283e1a5e72b23a3bb2173",
+          "loss": "win-ce+0.25-rank-huber+0.1-vp-huber/1.0.0",
+          "reference_lock_sha256": "9cf98163e7ed9cbeef0cd9ce9178c4eeea933063d361f5a5e42d2fdddcdd5158",
+          "heads": [
+            "policy_logits",
+            "win_share_4",
+            "placement_4",
+            "vp_4"
+          ]
+        },
+        "source": "499391d425e7d3401fd652c13cb3d86f8b74644a8352335988c33c3fa789ea97"
+      },
+      "to_contract": {
+        "model": "four-seat-personality/3.0.0",
+        "goal_schema": "b54280a5e807037baff50133f9a4257f6d6ed445ff595548b029e2f93597c60c",
+        "base": {
+          "learning_contract": "four-seat-learning/4.0.0",
+          "players": 4,
+          "rules": "steam-brass-patch-1.1.0",
+          "wire_sha256": "fabe2ef3e1de73aa9f3ddd05b67c08f9ef564a25ab4ff42963a03ab6fe3b6e3d",
+          "observation": "public-state/0.2.0",
+          "choices": "phase-choice/0.2.0",
+          "objective": "win-share/1.0.0",
+          "placement": "competition-rank/1.0.0",
+          "seat_order": "stable-0-1-2-3",
+          "vp_scale": 100.0,
+          "features_sha256": "59facdd72a386b6046abbb875daf3e1051b92e580ff55d0ab37250dd0c1dfb6a",
+          "feature_version": "permitted-features/4.0.0",
+          "derived_source_sha256": "47afe02b5e98549081f5ab119a2dca2c90448c74fba8020fc7e04cb6bc16f260",
+          "producer_profile_sha256": "ffae2fa230bcc42c3877d7817a584b608b60961c0b719316884d6c694a1384d7",
+          "encoder_sha256": "7d21b3052bf65c2d272a59859eebc6b3be1117b77e906a677402784b5ab90f06",
+          "architecture_sha256": "9c5ad1e2a20f7dfb0483e04ecbf7b77b6d1c6808641283e1a5e72b23a3bb2173",
+          "loss": "win-ce+0.25-rank-huber+0.1-vp-huber/1.0.0",
+          "reference_lock_sha256": "9cf98163e7ed9cbeef0cd9ce9178c4eeea933063d361f5a5e42d2fdddcdd5158",
+          "heads": [
+            "policy_logits",
+            "win_share_4",
+            "placement_4",
+            "vp_4"
+          ]
+        },
+        "source": "fcbaf06bc782b112176de7a698888f900e42dbbfc979cbd907e99a363791a264"
+      },
+      "reason": "Exact v9 factorization W[state,candidate]+b = W_state*state + W_candidate*candidate + b before the existing GELU. Preserve all Parameter keys/shapes/order, model config, features, heads and checkpoint/Adam tensors. Only floating-point summation order changes; unknown architecture-source hashes are not mapped."
     }
   ]
 }

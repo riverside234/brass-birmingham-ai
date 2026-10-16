@@ -168,9 +168,9 @@ class CompactionTests(unittest.TestCase):
         for p in model.state_encoder.projections:self.assertGreater(p[0].weight.grad.abs().sum().item(),0)
         self.assertGreater(model.state_encoder.fusion[0].weight.grad.abs().sum().item(),0)
         self.assertTrue(all(p.grad is None or torch.isfinite(p.grad).all() for p in model.parameters()))
-        self.assertEqual(model.state_encoder.fusion[0].in_features,620)
-        self.assertEqual((model.action_encoder[0].in_features,model.action_encoder[0].out_features),(327,128))
-        self.assertEqual(sum(isinstance(m,ResidualBlock) for m in model.modules()),6)
+        self.assertEqual(model.state_encoder.fusion[0].in_features,876)
+        self.assertEqual((model.action_encoder[0].in_features,model.action_encoder[0].out_features),(327,160))
+        self.assertEqual(sum(isinstance(m,ResidualBlock) for m in model.modules()),8)
         for block in model.state_encoder.backbone[:-1]:self.assertEqual(block.branch[-1].weight.count_nonzero(),0)
         reward=reward_spec(read_json(SOURCE_ROOT/'configs/step5/joint7-latest.json'))
         utility=UtilityNet(utility_config(model.config,reward));actor=PersonalityNet(PersonalityConfig(utility.config.to_dict()))
@@ -180,9 +180,9 @@ class CompactionTests(unittest.TestCase):
             from brass_ai.personality.contracts import CONTEXT_DIM
             p=actor(*inputs,remaining=remaining,personality=torch.zeros(2,CONTEXT_DIM))
         self.assertTrue(torch.isfinite(u[-1]).all());self.assertTrue(torch.isfinite(p['remaining_utility_4']).all())
-        self.assertEqual([m.parameter_count for m in (model,utility,actor)],[2005917,2015937,2081770])
-        self.assertEqual(dense_multiply_adds(model)['fixed_per_position'],1899168)
-        self.assertEqual(dense_multiply_adds(model)['per_padded_candidate'],97280)
+        self.assertEqual([m.parameter_count for m in (model,utility,actor)],[5904644,5921320,6023137])
+        self.assertEqual(dense_multiply_adds(model)['fixed_per_position'],8235232)
+        self.assertEqual(dense_multiply_adds(model)['per_padded_candidate'],83232)
         # Metadata-only mismatches; no old architecture/checkpoint is constructed.
         for key,value in (('architecture','brass-four-seat-mlp-resnet/7.0.0'),('state_dim',5489),
                           ('action_dim',548),('group_layout','f'*64),('projection_widths',[64,32,48,160,192,48])):

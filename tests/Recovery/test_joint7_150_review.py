@@ -113,7 +113,7 @@ class Review150Tests(unittest.TestCase):
         source = read(EVIDENCE/'iteration-0149/report.json');before = copy.deepcopy(source)
         retained = compact(source)
         self.assertEqual(source, before)
-        self.assertEqual(retained['summary_version'], 4)
+        self.assertEqual(retained['summary_version'], 5)
         self.assertEqual(retained['learner_by_composition_seat']['legacy'], source['by_composition']['legacy']['learner_by_seat'])
         self.assertEqual(len(retained['search']['collection_summaries']), 2)
         for row, old in zip(retained['search']['collection_summaries'], source['search']['collections']):

@@ -26,6 +26,8 @@ def validator(kind):
 def validate(kind, value):
     validator(kind).validate(value)
     if kind == "observation":
+        from brass_ai.learning.board_topology import admit_topology
+        admit_topology(value)
         if [p["seat"] for p in value["players"]] != list(range(4)) or sorted(value["order"]) != list(range(4)):
             raise ValueError("Four stable seats required")
         if len(value["own_hand"]) != value["players"][value["seat"]]["hand_count"]:

@@ -23,7 +23,8 @@ def summarize(batches):
         ('optimizer_steps','sample_presentations','teacher_rows','teacher_setups','requested_steps',
          'distinct_labels_used','unused_qualified_labels')}
     totals.update(updated=any(b['updated'] for b in batches),collection_count=len(batches),
-        max_observed_reuse=max(b.get('max_observed_reuse',0) for b in batches),value_loss_training=False,
+        max_observed_reuse=max(b.get('max_observed_reuse',0) for b in batches),
+        value_loss_training=any(b.get('value_loss_training',False) for b in batches),
         samples_by_phase={p:sum(b['samples_by_phase'][p] for b in batches) for p,_,_,_ in PHASES},
         collection=[r for b in batches for r in b['collection']],
         updates=[r for b in batches for r in b.get('updates',[])],
@@ -44,11 +45,21 @@ def summarize(batches):
             totals[field]={k:sum(b[field][k]*b['teacher_rows'] for b in fitted)/sum(b['teacher_rows'] for b in fitted)
                 for k in fitted[0][field]}
         totals['fit_scope']='Sample-weighted separate collection fits; not one fixed evaluation set or held-out strength'
+    auxiliary=[b['teacher_value'] for b in batches if b.get('teacher_value',{}).get('enabled')]
+    if auxiliary:
+        totals['teacher_value']=dict(enabled=True,collections=len(auxiliary),
+            **{k:sum(a[k] for a in auxiliary) for k in ('distinct_completed_games','valid_value_positions',
+                'selected_positions','distinct_positions_trained','unused_positions','sample_presentations',
+                'auxiliary_training_seconds','preparation_seconds')},
+            phases={p:{k:sum(a['phases'][p][k] for a in auxiliary) for k in auxiliary[0]['phases'][p]} for p,_,_,_ in PHASES},
+            scope='Totals across distinct collections; per-collection fixed-probe stages below')
+        for key in ('auxiliary_training_seconds','teacher_value_diagnostics_seconds','teacher_value_prepare_seconds'):
+            totals['timings'][key]=sum(b.get('timings',{}).get(key,0.) for b in batches)
     return totals
 
 
 def collect_due(root,run,directory,config,state,signature,model,optimizer,service,heavy,*,
-                done,cursor,ordinary_seconds,ordinary_game_seconds,recalibrate=None):
+                done,cursor,ordinary_seconds,ordinary_game_seconds,recalibrate=None,ordinary_data=None,ordinary_policy_id=None):
     require(recalibrate is None or callable(recalibrate),'Invalid ordinary-data calibration callback')
     next_search=state['next_search_games'];search_seconds=state.get('search_seconds',0.)
     estimate=estimate_collection(config,ordinary_game_seconds);batches=[];deferred_reason=None
@@ -56,7 +67,12 @@ def collect_due(root,run,directory,config,state,signature,model,optimizer,servic
     # the first collection, use its measured total cost plus 25% headroom.
     # Bind it to the recipe so changed time/count contracts cannot reuse it.
     recipe=digest(dict(work=config.get('teacher_work_budget'),search=config['search'],
-        games=config['search_games'],execution=config['execution']))
+        games=config['search_games'],execution=config['execution'],teacher_value=config.get('teacher_value')))
+    from .config import teacher_value_config
+    auxiliary_config=teacher_value_config(config.get('teacher_value'))
+    if auxiliary_config['enabled']:
+        require(ordinary_data and ordinary_policy_id and recalibrate is not None,
+                'Teacher value requires this iteration\'s ordinary learner data and matching calibration')
     previous_cost=state.get('teacher_work_cost')
     if previous_cost and previous_cost['recipe']==recipe:
         estimate=max(estimate,1.25*previous_cost['seconds'])
@@ -90,6 +106,10 @@ def collect_due(root,run,directory,config,state,signature,model,optimizer,servic
             deferred_reason='Search wall-time allowance exceeded; postpone remaining bounded collections'
             break
         began=time.monotonic();identity=service.register(model)
+        auxiliary_proof=None
+        if auxiliary_config['enabled']:
+            from .teacher_value import provenance as value_provenance
+            auxiliary_proof=value_provenance(identity,model.config.utility,auxiliary_config)
         rng=random.Random(digest(dict(seed=config['seed'],done=done,threshold=next_search)))
         rollout_entries=rollout_opponents(state.get('population',state['history']),identity,
             state['evaluation_anchor'],rng,config['population']['recent'])
@@ -111,6 +131,7 @@ def collect_due(root,run,directory,config,state,signature,model,optimizer,servic
                 spec['teacher_work_budget']=config['teacher_work_budget']
             provenance=dict(producer='recovery/2.0.0',purpose='training',kind='masked-ismcts-teacher',
                 seed=seed,sampling_seed=config['seed']*13+done+index,spec=digest(signature))
+            if auxiliary_proof is not None:provenance['teacher_value']=auxiliary_proof
             jobs.append(dict(index=index,seed=seed,rotation=0,sampling_seed=provenance['sampling_seed'],
                 policies=[spec]*4,path=str(directory/f'search-{index:06d}.jsonl.gz'),provenance=provenance))
         work=config.get('teacher_work_budget')
@@ -126,17 +147,25 @@ def collect_due(root,run,directory,config,state,signature,model,optimizer,servic
         collected=time.monotonic()
         games=read_shards([r['path'] for r in records],partition='train',receipts={r['path']:r.get('features') for r in records})
         teaching=collection_report(records,games)
+        auxiliary=None
+        if auxiliary_config['enabled']:
+            from .teacher_value import TeacherValue,admit_collection
+            bindings=admit_collection(games,records,jobs,auxiliary_proof)
+            auxiliary=TeacherValue(model,games,ordinary_data,auxiliary_config,config['update'],bindings,
+                                   ordinary_policy_id=ordinary_policy_id)
         prepared=time.monotonic()
         batch=distill_update(model,optimizer,games,config['update'],steps=config['distill_steps'],
-                            weight=config['distill_weight'],quality=config.get('distillation'))
+                            weight=config['distill_weight'],quality=config.get('distillation'),
+                            **(dict(auxiliary=auxiliary) if auxiliary is not None else {}))
         distilled=time.monotonic()
         if batch['updated'] and getattr(model.config,'utility',None) is not None and not calibration_ready(model) and recalibrate is not None:
-            # The caller supplies only this iteration's fresh ordinary learner
-            # targets, never teacher terminal outcomes. This bounded fit keeps
-            # another due collection/checkpoint usable without a stale critic.
+            # The default refits on fresh ordinary data. The explicit auxiliary
+            # opt-in adds its admitted teacher targets with matching weights.
+            # Another due collection still requires a successful readiness fit.
             calibration_started=time.monotonic()
-            batch['post_distill_calibration']=recalibrate()
+            batch['post_distill_calibration']=recalibrate(auxiliary) if auxiliary is not None else recalibrate()
             batch['post_distill_calibration_seconds']=time.monotonic()-calibration_started
+        if auxiliary is not None:batch['teacher_value']=auxiliary.report()
         elapsed=time.monotonic()-began;search_seconds+=elapsed
         if not any(r.get('cached') for r in records):
             state['teacher_work_cost']=dict(recipe=recipe,seconds=elapsed)
@@ -147,11 +176,17 @@ def collect_due(root,run,directory,config,state,signature,model,optimizer,servic
                          post_distill_calibration_seconds=batch.get('post_distill_calibration_seconds',0.),
                          total_seconds=elapsed),
             teacher_model_id=identity,rollout_generations=[e['generation'] for e in rollout_entries])
+        if auxiliary is not None:
+            batch['timings'].update(auxiliary_training_seconds=auxiliary.training_seconds,
+                teacher_value_prepare_seconds=auxiliary.preparation_seconds,
+                teacher_value_diagnostics_seconds=auxiliary.probe.seconds if auxiliary.probe else 0.)
         batches.append(batch)
         # Failed/insufficient teaching still consumes this collection's allocation.
         # Never run extra games or retry to manufacture the minimum label count.
         next_search+=config['search_every_games']
     report=summarize(batches)
+    report.setdefault('teacher_value',dict(enabled=auxiliary_config['enabled'],
+        reason='No teacher value collection updated' if auxiliary_config['enabled'] else 'Opt-in auxiliary value disabled'))
     if deferred_reason:report['reason']=deferred_reason
     report['budget']=budget_report(bool(deferred_reason))
     return report,next_search,cursor,search_seconds

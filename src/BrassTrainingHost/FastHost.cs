@@ -70,10 +70,25 @@ namespace BrassHost
             return new{decision=Decision(),forced};
         }
 #if TRAINING_SEARCH
+        object[] SearchViews()
+        {
+            // Observe's allowlist has only two seat-dependent fields: seat and
+            // own_hand. Materialize the public board once for this snapshot,
+            // then replace both private fields before exposing any other seat.
+            // These tokens never outlive this reply or span a rules mutation.
+            var first=(JObject)Wire.Token(Observe(0));
+            return Enumerable.Range(0,4).Select(seat=>{
+                var view=first.Properties().ToDictionary(p=>p.Name,p=>(object)p.Value);
+                view["seat"]=seat;
+                view["own_hand"]=Seats.Single(p=>(int)p.Color==seat).Hand
+                    .Select(Wire.Card).OrderBy(x=>x,StringComparer.Ordinal).ToArray();
+                return (object)view;
+            }).ToArray();
+        }
         public object SearchSnapshot()
         {
             return new{context=SearchContext(),chance=ChanceOutcomes(),checkpoint=Checkpoint(),
-                views=ChancePending?null:Enumerable.Range(0,4).Select(Observe).ToArray(),
+                views=ChancePending?null:SearchViews(),
                 choices=ChancePending?new List<Choice>():Choices(),result=Result()};
         }
 #endif

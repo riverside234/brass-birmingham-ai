@@ -15,13 +15,13 @@ class UtilityConfig(ModelConfig):
     @classmethod
     def from_dict(cls,raw):
         require(raw.get('architecture')==ARCHITECTURE,
-                'Use fresh version-9 grouped model weights; old architectures cannot migrate')
+                'Use fresh version-11 grouped model weights; old architectures cannot migrate')
         require(set(raw)==set(cls.__dataclass_fields__),'Invalid utility model config')
         result=cls(**raw);result.validate();return result
 
     def validate(self):
         super().validate()
-        require(self.architecture==ARCHITECTURE,'Utility head requires the version-2 residual backbone')
+        require(self.architecture==ARCHITECTURE,'Utility head requires the current versioned residual backbone')
         validate(self.utility)
 
 
@@ -48,13 +48,6 @@ class UtilityNet(FourSeatNet):
         prior=(c['win']*win+c['placement']*(4-rank)/3+c['vp']*vp).detach()
         return prior+residual
 
-    def forward(self,states,actions,legal_mask,stable_to_relative,remaining=None):
-        context=self.state_encoder(states);candidates=self.action_encoder(actions)
-        expanded=context.unsqueeze(1).expand(-1,actions.shape[1],-1)
-        logits=self.policy_scorer(torch.cat((expanded,candidates),dim=-1)).squeeze(-1)
-        logits=logits.masked_fill(~legal_mask,-torch.inf)
-        outcomes=self.outcomes(context)
-        win=torch.softmax(outcomes[:,:4],dim=-1).gather(1,stable_to_relative)
-        placement=(1+3*torch.sigmoid(outcomes[:,4:8])).gather(1,stable_to_relative)
-        vp=(100*outcomes[:,8:12]).gather(1,stable_to_relative)
-        return logits,win,placement,vp,self.predict_utility(context,stable_to_relative,(win,placement,vp),remaining)
+    def heads_from_encoded(self,encoded,mapping,remaining=None):
+        heads=self.official_heads(encoded,mapping)
+        return heads+(self.predict_utility(encoded.context,mapping,heads,remaining),)

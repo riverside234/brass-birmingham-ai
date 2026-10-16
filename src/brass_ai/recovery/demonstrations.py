@@ -363,20 +363,22 @@ def checkpoint_alias(out,entry,name,*,root=None):
     temporary.replace(out/name)
 
 
-def train_bc(root,run,manifest_path,initial,config,*,device='cpu',epochs=10,patience=2,min_epochs=3,lr=1e-4,retention=None,workers=1,from_imitation_run=None):
+def train_bc(root,run,manifest_path,initial,config,*,device='cpu',epochs=10,patience=2,min_epochs=3,lr=6e-5,retention=None,workers=1,from_imitation_run=None,warmup_steps=500,warmup_start_factor=.1):
     from .retention import run_lock,owned
     _,out=owned(root,run)
     with run_lock(out),ExitStack() as resources:
-        return _train_bc(root,run,manifest_path,initial,config,device=device,epochs=epochs,patience=patience,min_epochs=min_epochs,lr=lr,retention=retention,workers=workers,from_imitation_run=from_imitation_run,resources=resources)
+        return _train_bc(root,run,manifest_path,initial,config,device=device,epochs=epochs,patience=patience,min_epochs=min_epochs,lr=lr,retention=retention,workers=workers,from_imitation_run=from_imitation_run,resources=resources,warmup_steps=warmup_steps,warmup_start_factor=warmup_start_factor)
 
 
-def _train_bc(root,run,manifest_path,initial,config,*,device='cpu',epochs=10,patience=2,min_epochs=3,lr=1e-4,retention=None,workers=1,from_imitation_run=None,resources):
+def _train_bc(root,run,manifest_path,initial,config,*,device='cpu',epochs=10,patience=2,min_epochs=3,lr=6e-5,retention=None,workers=1,from_imitation_run=None,resources,warmup_steps=500,warmup_start_factor=.1):
     root=Path(root);out=project_path(root,run)
     require(epochs>=min_epochs>=1 and patience>0,'Invalid BC stopping settings')
     require(initial is None,'Imitation starts from random residual weights; omit --initial')
     from .config import update_config
     from .updates import autocast
     update_config(config);autocast(config,device)  # Fail unsupported precision before loading.
+    from .learning_rate import configure as configure_warmup,validate_warmup,DEFAULT_WARMUP
+    validate_warmup(dict(DEFAULT_WARMUP,imitation_steps=warmup_steps,start_factor=warmup_start_factor))
     parent_model=parent_origin=None
     if from_imitation_run is not None:
         require(project_path(root,from_imitation_run)!=out,'A changed dataset needs a new imitation run directory')
@@ -402,6 +404,7 @@ def _train_bc(root,run,manifest_path,initial,config,*,device='cpu',epochs=10,pat
         manifest_path=project_path(root,manifest_path).relative_to(root).as_posix(),
         initialization='random',seed=812771,retention=retention,
         architecture=ModelConfig.preset('medium').to_dict(),update=config,lr=lr,epochs=epochs,
+        learning_rate_warmup=dict(steps=warmup_steps,start_factor=warmup_start_factor),
         patience=patience,min_epochs=min_epochs,implementation=implementation_id())
     if parent_origin:
         signature.update(initialization='fresh-imitation-continuation',parent_imitation=parent_origin)
@@ -428,7 +431,8 @@ def _train_bc(root,run,manifest_path,initial,config,*,device='cpu',epochs=10,pat
             parent=parent_origin['model_id'] if parent_origin else None,stopped=False)
     optimizer=torch.optim.AdamW(model.parameters(),lr=lr,weight_decay=1e-4)
     if resuming: resume_optimizer(raw,optimizer)
-    else:
+    configure_warmup(optimizer,lr,warmup_steps,warmup_start_factor,'imitation')
+    if not resuming:
         # The same-run starting anchor is random for round one, or the previous
         # selected BC model for an explicit new-dataset continuation.
         save_checkpoint(out/'initial.pt',model,optimizer,training=dict(
@@ -522,12 +526,15 @@ def completed_imitation(root,run,*,_seen=None):
     return model,origin
 
 
-def fresh_imitation(root,model,settings,update,run,device,*,workers=1):
+def fresh_imitation(root,model,settings,update,run,device,*,workers=1,warmup=None):
     """Optional heuristic BC inside a new random run; no checkpoint is imported."""
     if settings['manifest'] is None:return dict(enabled=False,initialization='random',note='No heuristic dataset supplied')
     import copy
+    from .learning_rate import configure,DEFAULT_WARMUP,validate_warmup
+    warmup=validate_warmup(warmup or DEFAULT_WARMUP)
     progress=run/'imitation-progress.json'
     identity=dict(run=run.relative_to(root).as_posix(),settings=settings,update=update,
+        learning_rate_warmup=warmup,
         manifest_sha256=sha(project_path(root,settings['manifest'])),implementation=implementation_id(),model=model.config.to_dict())
     if progress.exists():
         previous=read(progress)
@@ -541,6 +548,7 @@ def fresh_imitation(root,model,settings,update,run,device,*,workers=1):
     training=Dataset(balance(train_rows),device,policy=False,progress='imitation prepare training tensors')
     validation=Dataset(val_rows,device,policy=False,progress='imitation prepare validation tensors')
     optimizer=torch.optim.AdamW(model.parameters(),lr=settings['learning_rate'],weight_decay=1e-4)
+    configure(optimizer,settings['learning_rate'],warmup['imitation_steps'],warmup['start_factor'],'imitation')
     best_loss=float('inf');best=None;bad=0;history=[]
     for epoch in range(settings['epochs']):
         train_report=supervised_epoch(model,optimizer,training,update,progress=f'imitation epoch {epoch+1}/{settings["epochs"]} train ({device})')

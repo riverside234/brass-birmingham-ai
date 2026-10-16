@@ -35,7 +35,7 @@ def main():
         from brass_ai.recovery.demonstrations import completed_imitation
         from brass_ai.recovery.config import latest_model_config,time_budget_config,champion_mix_config
         model,origin=completed_imitation(root,a.imitation_run)
-        require(model.config==ModelConfig.preset('medium'),'Production grouped recipe requires width 304 and the pinned layout')
+        require(model.config==ModelConfig.preset('medium'),'Production grouped recipe requires width 512 and the pinned layout')
         path=project_path(root,a.output);require(not path.exists(),'Use a new feature-revision config path')
         base=read_json(project_path(root,a.base))
         # Fresh IL owns both initialization and rehearsal. Keeping the old
@@ -48,7 +48,7 @@ def main():
         from brass_ai.bank import sha
         from brass_ai.learning.checkpoint import load_checkpoint
         from brass_ai.learning.utility_model import UtilityNet
-        from brass_ai.learning.state_layout import state_layout,LAYOUT_FILE
+        from brass_ai.learning.state_layout import model_layout as state_layout,MODEL_LAYOUT_FILE as LAYOUT_FILE,MODEL_LAYOUT_VERSION
         from brass_ai.personality.model import import_parent
         from brass_ai.personality.checkpoint import save
         from brass_ai.personality.laptop.export import export
@@ -58,7 +58,7 @@ def main():
         model,raw=load_checkpoint(checkpoint)
         require(type(model) is UtilityNet,'Export requires the target self-play utility checkpoint')
         model_config={k:v for k,v in model.config.to_dict().items() if k!='utility'}
-        require(ModelConfig.from_dict(model_config)==ModelConfig.preset('medium'),'Export the width-304 target preset')
+        require(ModelConfig.from_dict(model_config)==ModelConfig.preset('medium'),'Export the width-512 target preset')
         torch.set_num_threads(2);out.mkdir(parents=True)
         meta=export(model,out/'utility.onnx')
         models=dict(utility=dict(path='utility.onnx',model_id=meta['model_id'],actor=False,metadata=meta))
@@ -69,7 +69,7 @@ def main():
             meta=export(actor,out/'actor.onnx')
             models['actor']=dict(path='actor.onnx',model_id=meta['model_id'],actor=True,metadata=meta,
                 checkpoint='actor.pt',import_receipt=import_receipt,goals_trained=False)
-        write_json(out/LAYOUT_FILE,state_layout().specification())
+        write_json(out/LAYOUT_FILE,state_layout().specification(version=MODEL_LAYOUT_VERSION))
         result=dict(format='grouped-target-export/1.0.0',implementation=implementation_id(),
             checkpoint=dict(path=checkpoint.relative_to(root).as_posix(),sha256=sha(checkpoint),model_id=raw['model_id']),
             layout_file=LAYOUT_FILE,layout_sha256=state_layout().identity,models=models,
@@ -77,7 +77,8 @@ def main():
         write_json(out/'receipt.json',result)
     else:
         from brass_ai.learning.utility_model import UtilityNet,utility_config
-        from brass_ai.learning.state_layout import state_layout,LAYOUT_VERSION,LAYOUT_FILE
+        from brass_ai.learning.state_layout import model_layout as state_layout,MODEL_LAYOUT_VERSION as LAYOUT_VERSION,MODEL_LAYOUT_FILE as LAYOUT_FILE
+        from brass_ai.learning.local_entities import entity_layout,COUNTS,WIDTHS
         from brass_ai.recovery.utility import reward_spec
         from brass_ai.personality.model import PersonalityNet,PersonalityConfig
         from brass_ai.feature_engineering.contracts import STATE_INPUTS,ACTION_INPUTS,STATE_OMISSIONS,ACTION_OMISSIONS
@@ -85,6 +86,10 @@ def main():
         utility=UtilityNet(utility_config(model.config,reward_spec(read_json(root/'configs/step5/joint7-latest.json'))))
         goals=PersonalityNet(PersonalityConfig(utility.config.to_dict()))
         result=dict(compatibility=compatibility(),model=model.config.to_dict(),
+            local_entities=dict(contract=entity_layout()['format'],layout_sha256=entity_layout()['identity'],
+                hidden=model.config.entity_hidden,
+                groups={name:dict(count=COUNTS[name],inputs=WIDTHS[name]) for name in COUNTS},
+                action_roles=list(entity_layout()['action_fields']),shared_player_outcome_head=True),
             state_projection=dict(layout_version=LAYOUT_VERSION,layout_file=LAYOUT_FILE,
                 fusion_inputs=sum(g.width for g in state_layout().groups),context_passthrough=12,
                 groups=[dict(name=g.name,inputs=len(g.indices),outputs=g.width) for g in state_layout().groups]),

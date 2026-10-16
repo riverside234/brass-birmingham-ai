@@ -23,16 +23,17 @@ import test_selfplay_70_review as collection_fixtures
 
 class TeacherReadinessReviewTests(unittest.TestCase):
     @classmethod
-    def setUpClass(cls):torch.set_num_threads(2)
+    def setUpClass(cls):
+        torch.set_num_threads(2)
+        from test_teacher_value import TeacherValueTests
+        TeacherValueTests.setUpClass()
 
     def fixture(self):
-        model,opt=reward_fixtures.ModelTests().model()
-        model.utility_calibration=dict(ready=True,reward_id=digest(model.config.utility),scope='authored test receipt')
-        identity=model_id(model);episode=game();episode['split']='train'
-        for row,(era,round_) in zip(episode['records'],[('CanalEra',1),('CanalEra',5),('RailEra',1),('RailEra',7)]):
-            row['view']['context'].update(era=era,round=round_)
-            stats=dict(root={c['id']:dict(visits=n) for c,n in zip(row['choices'],[9,1,1])},expansion=[True]*3)
-            row['teacher']=visit_teacher(row['choices'],stats,[.8,.1,.1],model=identity,observer=row['seat'],config=reward_fixtures.config())
+        # Current compact features require the native fixed board constants;
+        # the old synthetic R2 board is no longer a valid encoding fixture.
+        from test_teacher_value import TeacherValueTests
+        model,opt,games,*_=TeacherValueTests().fixture()
+        episode=games[0]
         cfg=dict(UPDATE_V21,effective_batch_size=4,microbatch_size=2)
         quality=dict(min_samples=4,min_games=1,min_samples_per_phase=1,batch_size=4,max_reuse=1)
         return model,opt,episode,cfg,quality
@@ -68,7 +69,8 @@ class TeacherReadinessReviewTests(unittest.TestCase):
         model,opt,episode,cfg,quality=self.fixture()
         distill_update(model,opt,[episode],cfg,steps=1,quality=quality)
         self.assertFalse(calibration_ready(model))
-        ordinary=game();ordinary['game_id']='separate-fresh-ordinary-game'
+        ordinary=copy.deepcopy(dict(episode));ordinary['game_id']='separate-fresh-ordinary-game'
+        for row in ordinary['records']:row['teacher']=None
         self.assertTrue(all(row['teacher'] is None for row in ordinary['records']))
         data=prepared([ordinary],insolvency=model.config.utility['insolvency'],reward=model.config.utility)
         dataset=Dataset(data,'cpu',policy=False)
@@ -77,7 +79,7 @@ class TeacherReadinessReviewTests(unittest.TestCase):
         with torch.inference_mode():outputs=[v.clone() for v in model(*inputs,remaining=dataset.remaining[indices])[:4]]
         receipt=calibrate(model,opt,dataset,cfg)
         self.assertTrue(receipt['required']);self.assertTrue(calibration_ready(model))
-        self.assertEqual(receipt['receipt']['games'],1);self.assertEqual(receipt['receipt']['steps'],3)
+        self.assertEqual(receipt['receipt']['games'],1);self.assertEqual(receipt['receipt']['steps'],12)
         self.assertEqual([g['lr'] for g in opt.param_groups],rates)
         for k,v in before.items():
             if not k.startswith('utility_head.'):torch.testing.assert_close(v,model.state_dict()[k],rtol=0,atol=0)

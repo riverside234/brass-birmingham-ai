@@ -4,7 +4,21 @@
 
 Historical evidence, preserved by date. These reports describe the source revisions and fixtures they reviewed; their test counts are not new results from this documentation reorganization.
 
-Reviews: [11 October: P0-P4](#audit-2026-10-11-p0-p4) | [12 October: P5/P6](#audit-2026-10-12-p5-p6) | [13 October: P0-P6](#audit-2026-10-13-p0-p6).
+Reviews: [11 October: P0-P4](#audit-2026-10-11-p0-p4) | [12 October: P5/P6](#audit-2026-10-12-p5-p6) | [13 October: P0-P6](#audit-2026-10-13-p0-p6) | [Deployment performance: 20261016 evidence](#audit-deployment-performance-20261016).
+
+<a id="audit-deployment-performance-20261016"></a>
+
+## Deployment performance revision — evidence run 20261016
+
+This records the completed local performance work; no new test run is implied by the documentation update. [Deployment performance](DEPLOYMENT_PERFORMANCE.md) is the maintained summary, with the detailed [experiment report](../../ai-research/DEPLOY_SEARCH_PERFORMANCE_REPORT_20261016.md) retaining the original measurement scope.
+
+- Implemented shared immutable input features across personality search lanes, fused rules/snapshot RPCs, public-view construction once per snapshot and portable packaging of the verified optimized native host. Per-seat private hands, private mutable workers, legal masks, source checks and shared whole-turn budgets remain enforced.
+- Final initialized-model comparison: v9 and W352 each completed **12/10** simulations on Canal/Rail roots with two workers, and **15/12** with three. Eight final turns took **10.953–11.063 seconds** under shared 12-second budgets. No trained-model strength or release claim follows.
+- **33 focused tests passed in 56.746 seconds**, with native/private-view and encoding parity, chance/restore/rollback checks, cache/cancellation behavior, portable-host validation and ONNX/batch parity recorded in the [validation receipt](../../artifacts/feature-engineering/deploy-public-views-20261016/validation.json) and [export metadata](../../artifacts/feature-engineering/deploy-public-views-20261016/prepared.json). These are separate validation activities; the 33-test count does not include the benchmark export checks.
+- **Existing issue retained:** some roots reconstructed from mid-game observations fail clone/replay restoration with `checkpoint_hash_mismatch` on both legacy and optimized hosts. The persistent-lane benchmark does not rely on those restores. No hash check was bypassed; investigate before introducing checkpoint/delta-state reuse. [Reproduction evidence](../../artifacts/feature-engineering/deploy-transport-20261016/existing-restore-limitation.json).
+- All eight temporary ONNX models from the transport/public-view phases were deleted, with cleanup receipts retained. No training checkpoints, installed game package, model defaults or qualified worker profiles were changed.
+
+Earlier audits below retain their original dates and claims. Pending measurements and proposed improvements are tracked in [the performance follow-up](DEPLOYMENT_PERFORMANCE.md#further-improvements).
 
 <a id="audit-2026-10-11-p0-p4"></a>
 

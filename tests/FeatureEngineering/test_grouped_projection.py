@@ -14,7 +14,7 @@ from brass_ai.learning.contracts import SOURCE_ROOT,CONFIG_DIR,read_json,digest
 from brass_ai.learning.features import Encoder
 from brass_ai.learning.batching import collate
 from brass_ai.learning.model import ModelConfig,FourSeatNet,ResidualBlock,dense_multiply_adds
-from brass_ai.learning.state_layout import state_layout,build_state_layout,PROJECTION_WIDTHS,LAYOUT_FILE,LAYOUT_VERSION
+from brass_ai.learning.state_layout import state_layout,build_state_layout,PROJECTION_WIDTHS,LAYOUT_FILE,LAYOUT_VERSION,model_layout,MODEL_PROJECTION_WIDTHS
 from brass_ai.learning.checkpoint import save_checkpoint,load_checkpoint,resume_optimizer
 from brass_ai.learning.export import export_onnx,load_export
 from brass_ai.learning.utility_model import UtilityNet,utility_config
@@ -83,9 +83,9 @@ class GroupedProjectionTests(unittest.TestCase):
         fusion_inputs=[]
         hook=model.state_encoder.fusion[0].register_forward_pre_hook(lambda _,args:fusion_inputs.append(args[0]))
         h=model.state_encoder(x);hook.remove()
-        self.assertEqual(tuple(h.shape),(2,304));self.assertEqual(tuple(fusion_inputs[0].shape),(2,620))
-        self.assertEqual(model.state_encoder.fusion[0].in_features,620)
-        self.assertEqual([p[0].out_features for p in model.state_encoder.projections],list(PROJECTION_WIDTHS))
+        self.assertEqual(tuple(h.shape),(2,512));self.assertEqual(tuple(fusion_inputs[0].shape),(2,876))
+        self.assertEqual(model.state_encoder.fusion[0].in_features,876)
+        self.assertEqual([p[0].out_features for p in model.state_encoder.projections],list(MODEL_PROJECTION_WIDTHS))
         torch.testing.assert_close(fusion_inputs[0][:,-12:],x[:,-12:])
         (h*torch.randn_like(h)).sum().backward()
         for projection,group in zip(model.state_encoder.projections,self.layout.groups):
@@ -93,28 +93,28 @@ class GroupedProjectionTests(unittest.TestCase):
             self.assertGreater(float(x.grad[:,list(group.indices)].abs().sum()),0.)
         self.assertGreater(float(x.grad[:,-12:].abs().sum()),0.)
         self.assertGreater(float(model.state_encoder.fusion[0].weight.grad.abs().sum()),0.)
-        self.assertEqual(sum(isinstance(m,ResidualBlock) for m in model.modules()),6)
+        self.assertEqual(sum(isinstance(m,ResidualBlock) for m in model.modules()),8)
 
     def test_parameter_and_linear_mac_budgets_for_all_heads(self):
         base,utility,actor=self.models()
-        for model,count,fixed in ((base,2005917,1899168),(utility,2015937,1909152),(actor,2081770,1974800)):
+        for model,count,fixed in ((base,5904644,8235232),(utility,5921320,8251872),(actor,6023137,8353504)):
             self.assertEqual(model.parameter_count,count)
             mac=dense_multiply_adds(model)
-            self.assertEqual(mac['fixed_per_position'],fixed);self.assertEqual(mac['per_padded_candidate'],97280)
-        self.assertEqual(sum(p.numel() for p in base.state_encoder.parameters()),1867536)
+            self.assertEqual(mac['fixed_per_position'],fixed);self.assertEqual(mac['per_padded_candidate'],83232)
+        self.assertEqual(sum(p.numel() for p in base.state_encoder.parameters()),5550656)
         self.assertEqual([sum(p.numel() for p in g.parameters()) for g in base.state_encoder.projections],
-                         [1024,14016,5280,252480,279552,9504])
-        self.assertEqual(sum(p.numel() for p in base.state_encoder.fusion.parameters()),188784)
+                         [1024,14016,5280,420800,439296,9504])
+        self.assertEqual(sum(p.numel() for p in base.state_encoder.fusion.parameters()),449024)
         for small,count,fixed in (
-                (FourSeatNet(ModelConfig.preset('small')),934605,855136),
-                (UtilityNet(utility_config(ModelConfig.preset('small'),self.reward)),938993,859488),
-                (PersonalityNet(PersonalityConfig(utility_config(ModelConfig.preset('small'),self.reward).to_dict())),974378,894688)):
+                (FourSeatNet(ModelConfig.preset('small')),1499780,3843808),
+                (UtilityNet(utility_config(ModelConfig.preset('small'),self.reward)),1504168,3848160),
+                (PersonalityNet(PersonalityConfig(utility_config(ModelConfig.preset('small'),self.reward).to_dict())),1539553,3883360)):
             self.assertEqual(small.parameter_count,count)
             self.assertEqual(dense_multiply_adds(small)['fixed_per_position'],fixed)
-            self.assertEqual(dense_multiply_adds(small)['per_padded_candidate'],74752)
+            self.assertEqual(dense_multiply_adds(small)['per_padded_candidate'],83232)
         config=ModelConfig.from_dict(json.loads(json.dumps(base.config.to_dict())))
         self.assertEqual(config,base.config)
-        self.assertEqual(config.group_layout,self.layout.identity)
+        self.assertEqual(config.group_layout,model_layout().identity)
 
     def test_wrong_layout_widths_and_flat_architecture_are_rejected(self):
         config=ModelConfig.preset().to_dict()
@@ -165,7 +165,7 @@ class GroupedProjectionTests(unittest.TestCase):
                 if name=='actor':raw['contract']={}
                 else:raw['compatibility']={}
                 raw['state_dict']={};torch.save(raw,path);before=path.read_bytes()
-                with self.assertRaisesRegex(ValueError,'fresh version-9.*old architectures'):
+                with self.assertRaisesRegex(ValueError,'fresh version-11.*old architectures'):
                     (load_personality if name=='actor' else load_checkpoint)(path)
                 self.assertEqual(path.read_bytes(),before)
 
@@ -179,8 +179,8 @@ class GroupedProjectionTests(unittest.TestCase):
             resume_optimizer(raw,adam)
             self.assertEqual(raw['step'],23);self.assertEqual(raw['training']['ordinary_games'],960)
             self.assertEqual(raw['training']['lineage'],'isolated-fixture')
-            self.assertEqual(raw['model_config']['projection_widths'],list(PROJECTION_WIDTHS))
-            self.assertEqual(raw['model_config']['group_layout'],self.layout.identity)
+            self.assertEqual(raw['model_config']['projection_widths'],list(MODEL_PROJECTION_WIDTHS))
+            self.assertEqual(raw['model_config']['group_layout'],model_layout().identity)
             self.assertTrue(torch.equal(raw['rng'],torch.get_rng_state()))
             for a,b in zip(model.state_dict().values(),restored.state_dict().values()):torch.testing.assert_close(a,b,rtol=0,atol=0)
             for parameter,loaded in zip(model.parameters(),restored.parameters()):
@@ -191,12 +191,12 @@ class GroupedProjectionTests(unittest.TestCase):
         for model in self.models():
             core=model.core if isinstance(model,PersonalityNet) else model
             blocks=list(core.state_encoder.backbone.children())
-            self.assertEqual(len(blocks),7);self.assertIsInstance(blocks[-1],torch.nn.LayerNorm)
+            self.assertEqual(len(blocks),9);self.assertIsInstance(blocks[-1],torch.nn.LayerNorm)
             for block in blocks[:-1]:
                 self.assertEqual([type(m) for m in block.branch],
                     [torch.nn.LayerNorm,torch.nn.Linear,torch.nn.GELU,torch.nn.Linear])
-                self.assertEqual(block.branch[1].in_features,304)
-                self.assertEqual(block.branch[-1].out_features,304)
+                self.assertEqual(block.branch[1].in_features,512)
+                self.assertEqual(block.branch[-1].out_features,512)
                 self.assertEqual(torch.count_nonzero(block.branch[-1].weight).item(),0)
                 self.assertEqual(torch.count_nonzero(block.branch[-1].bias).item(),0)
             calls=[];hook=core.state_encoder.register_forward_hook(lambda *args:calls.append(1))
@@ -211,8 +211,8 @@ class GroupedProjectionTests(unittest.TestCase):
             hook.remove();self.assertEqual(calls,[1])
             logits=output['policy_logits'] if isinstance(output,dict) else output[0]
             self.assertTrue(torch.isneginf(logits[~mask]).all());self.assertTrue(torch.isfinite(logits[mask]).all())
-            self.assertEqual((core.action_encoder[0].in_features,core.action_encoder[0].out_features),(327,128))
-            self.assertEqual((core.policy_scorer[0].in_features,core.policy_scorer[0].out_features),(432,128))
+            self.assertEqual((core.action_encoder[0].in_features,core.action_encoder[0].out_features),(327,160))
+            self.assertEqual((core.policy_scorer[0].in_features,core.policy_scorer[0].out_features),(672,192))
 
     def test_semantic_component_composition(self):
         segments=self.layout.segments
@@ -238,23 +238,23 @@ class GroupedProjectionTests(unittest.TestCase):
         with tempfile.TemporaryDirectory(dir=SOURCE_ROOT/'artifacts') as directory:
             for name,model in (('utility',utility),('actor',actor)):
                 path=Path(directory)/(name+'.onnx');meta=export(model,path)
-                self.assertTrue(meta['parity']['passed']);self.assertEqual(meta['config']['group_layout'],self.layout.identity)
-                self.assertEqual(meta['config']['residual_blocks'],6)
-                self.assertEqual(meta['config']['architecture'],'brass-four-seat-mlp-resnet/9.0.0')
+                self.assertTrue(meta['parity']['passed']);self.assertEqual(meta['config']['group_layout'],model_layout().identity)
+                self.assertEqual(meta['config']['residual_blocks'],8)
+                self.assertEqual(meta['config']['architecture'],'brass-four-seat-mlp-resnet/11.0.0')
                 self.assertEqual(meta['parity']['shapes'],[[1,1],[2,7],[4,31],[1,257]])
-                self.assertEqual(Graph(path).meta['config']['projection_widths'],list(PROJECTION_WIDTHS))
+                self.assertEqual(Graph(path).meta['config']['projection_widths'],list(MODEL_PROJECTION_WIDTHS))
                 old=copy.deepcopy(meta);old['config']['architecture']='brass-four-seat-mlp-resnet/5.0.0'
-                with self.assertRaisesRegex(ValueError,'fresh version-9'):validate_metadata(old)
+                with self.assertRaisesRegex(ValueError,'fresh version-11'):validate_metadata(old)
 
     def test_base_export_dynamic_parity_and_old_grouped_metadata_rejected(self):
         model=FourSeatNet();encoded=[Encoder().encode(r['view'],r['choices']) for r in self.positions[:3]]
         with tempfile.TemporaryDirectory(dir=SOURCE_ROOT/'artifacts') as directory:
             path=Path(directory)/'base.onnx';meta=export_onnx(model,path,[encoded[:1],encoded[1:]])
             self.assertLess(meta['parity_max_absolute_error'],2e-4)
-            _,loaded=load_export(path);self.assertEqual(loaded['model_config']['group_layout'],self.layout.identity)
+            _,loaded=load_export(path);self.assertEqual(loaded['model_config']['group_layout'],model_layout().identity)
             meta['model_config']['architecture']='brass-four-seat-mlp-resnet/5.0.0';meta['compatibility']={}
             path.with_suffix('.json').write_text(json.dumps(meta),encoding='utf-8')
-            with self.assertRaisesRegex(ValueError,'fresh version-9'):load_export(path)
+            with self.assertRaisesRegex(ValueError,'fresh version-11'):load_export(path)
 
 
 if __name__=='__main__':unittest.main()

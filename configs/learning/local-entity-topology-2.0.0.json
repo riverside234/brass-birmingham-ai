@@ -1,0 +1,574 @@
+{
+  "format": "grouped-mlp-topology/2.0.0",
+  "rules": "steam-brass-patch-1.1.0",
+  "board_sha256": "04c0b6cacda6c32aff16a89089b40045d8d98e563962b31b1961b8b26126248b",
+  "location_slots": {
+    "Belper": [
+      "Belper:0",
+      "Belper:1",
+      "Belper:2"
+    ],
+    "Birmingham": [
+      "Birmingham:0",
+      "Birmingham:1",
+      "Birmingham:2",
+      "Birmingham:3"
+    ],
+    "BurtonOnTrent": [
+      "BurtonOnTrent:0",
+      "BurtonOnTrent:1"
+    ],
+    "Cannock": [
+      "Cannock:0",
+      "Cannock:1"
+    ],
+    "Central": [
+      "Central:0"
+    ],
+    "Coalbrookdale": [
+      "Coalbrookdale:0",
+      "Coalbrookdale:1",
+      "Coalbrookdale:2"
+    ],
+    "Coventry": [
+      "Coventry:0",
+      "Coventry:1",
+      "Coventry:2"
+    ],
+    "Derby": [
+      "Derby:0",
+      "Derby:1",
+      "Derby:2"
+    ],
+    "Dudley": [
+      "Dudley:0",
+      "Dudley:1"
+    ],
+    "Kidderminster": [
+      "Kidderminster:0",
+      "Kidderminster:1"
+    ],
+    "Leek": [
+      "Leek:0",
+      "Leek:1"
+    ],
+    "Nuneaton": [
+      "Nuneaton:0",
+      "Nuneaton:1"
+    ],
+    "Redditch": [
+      "Redditch:0",
+      "Redditch:1"
+    ],
+    "SouthWest": [
+      "SouthWest:0"
+    ],
+    "Stafford": [
+      "Stafford:0",
+      "Stafford:1"
+    ],
+    "StokeOnTrent": [
+      "StokeOnTrent:0",
+      "StokeOnTrent:1",
+      "StokeOnTrent:2"
+    ],
+    "Stone": [
+      "Stone:0",
+      "Stone:1"
+    ],
+    "Tamworth": [
+      "Tamworth:0",
+      "Tamworth:1"
+    ],
+    "Uttoxeter": [
+      "Uttoxeter:0",
+      "Uttoxeter:1"
+    ],
+    "Walsall": [
+      "Walsall:0",
+      "Walsall:1"
+    ],
+    "Wolverhampton": [
+      "Wolverhampton:0",
+      "Wolverhampton:1"
+    ],
+    "Worcester": [
+      "Worcester:0",
+      "Worcester:1"
+    ]
+  },
+  "link_endpoints": {
+    "CanalBelperDerby": [
+      "Belper",
+      "Derby"
+    ],
+    "CanalBirminghamCoventry": [
+      "Birmingham",
+      "Coventry"
+    ],
+    "CanalBirminghamDudley": [
+      "Birmingham",
+      "Dudley"
+    ],
+    "CanalBirminghamOxford": [
+      "Birmingham",
+      "Oxford"
+    ],
+    "CanalBirminghamTamworth": [
+      "Birmingham",
+      "Tamworth"
+    ],
+    "CanalBirminghamWalsall": [
+      "Birmingham",
+      "Walsall"
+    ],
+    "CanalBirminghamWorcester": [
+      "Birmingham",
+      "Worcester"
+    ],
+    "CanalCannockCentral": [
+      "Cannock",
+      "Central"
+    ],
+    "CanalCannockStafford": [
+      "Cannock",
+      "Stafford"
+    ],
+    "CanalCoalbrookdaleShrewsbury": [
+      "Coalbrookdale",
+      "Shrewsbury"
+    ],
+    "CanalCoalbrookdaleWolverhampton": [
+      "Coalbrookdale",
+      "Wolverhampton"
+    ],
+    "CanalDerbyBurtonOnTrent": [
+      "Derby",
+      "BurtonOnTrent"
+    ],
+    "CanalDerbyNottingham": [
+      "Derby",
+      "Nottingham"
+    ],
+    "CanalDudleyWolverhampton": [
+      "Dudley",
+      "Wolverhampton"
+    ],
+    "CanalKidderminsterCoalbrookdale": [
+      "Kidderminster",
+      "Coalbrookdale"
+    ],
+    "CanalKidderminsterDudley": [
+      "Kidderminster",
+      "Dudley"
+    ],
+    "CanalNuneatonTamworth": [
+      "Nuneaton",
+      "Tamworth"
+    ],
+    "CanalRedditchGloucester": [
+      "Redditch",
+      "Gloucester"
+    ],
+    "CanalRedditchOxford": [
+      "Redditch",
+      "Oxford"
+    ],
+    "CanalStokeOnTrentLeek": [
+      "StokeOnTrent",
+      "Leek"
+    ],
+    "CanalStokeOnTrentWarrington": [
+      "StokeOnTrent",
+      "Warrington"
+    ],
+    "CanalStoneBurtonOnTrent": [
+      "Stone",
+      "BurtonOnTrent"
+    ],
+    "CanalStoneStafford": [
+      "Stone",
+      "Stafford"
+    ],
+    "CanalStoneStokeOnTrent": [
+      "Stone",
+      "StokeOnTrent"
+    ],
+    "CanalTamworthBurtonOnTrent": [
+      "Tamworth",
+      "BurtonOnTrent"
+    ],
+    "CanalWalsallBurtonOnTrent": [
+      "Walsall",
+      "BurtonOnTrent"
+    ],
+    "CanalWalsallCannock": [
+      "Walsall",
+      "Cannock"
+    ],
+    "CanalWolverhamptonCannock": [
+      "Wolverhampton",
+      "Cannock"
+    ],
+    "CanalWolverhamptonWalsall": [
+      "Wolverhampton",
+      "Walsall"
+    ],
+    "CanalWorcesterGloucester": [
+      "Worcester",
+      "Gloucester"
+    ],
+    "CanalWorcesterSouthWest": [
+      "Worcester",
+      "SouthWest",
+      "Kidderminster"
+    ],
+    "RailBelperDerby": [
+      "Belper",
+      "Derby"
+    ],
+    "RailBirminghamCoventry": [
+      "Birmingham",
+      "Coventry"
+    ],
+    "RailBirminghamDudley": [
+      "Birmingham",
+      "Dudley"
+    ],
+    "RailBirminghamNuneaton": [
+      "Birmingham",
+      "Nuneaton"
+    ],
+    "RailBirminghamOxford": [
+      "Birmingham",
+      "Oxford"
+    ],
+    "RailBirminghamRedditch": [
+      "Birmingham",
+      "Redditch"
+    ],
+    "RailBirminghamTamworth": [
+      "Birmingham",
+      "Tamworth"
+    ],
+    "RailBirminghamWalsall": [
+      "Birmingham",
+      "Walsall"
+    ],
+    "RailBirminghamWorcester": [
+      "Birmingham",
+      "Worcester"
+    ],
+    "RailCannockBurtonOnTrent": [
+      "Cannock",
+      "BurtonOnTrent"
+    ],
+    "RailCannockCentral": [
+      "Cannock",
+      "Central"
+    ],
+    "RailCannockStafford": [
+      "Cannock",
+      "Stafford"
+    ],
+    "RailCoalbrookdaleShrewsbury": [
+      "Coalbrookdale",
+      "Shrewsbury"
+    ],
+    "RailCoalbrookdaleWolverhampton": [
+      "Coalbrookdale",
+      "Wolverhampton"
+    ],
+    "RailCoventryNuneaton": [
+      "Coventry",
+      "Nuneaton"
+    ],
+    "RailDerbyBurtonOnTrent": [
+      "Derby",
+      "BurtonOnTrent"
+    ],
+    "RailDerbyNottingham": [
+      "Derby",
+      "Nottingham"
+    ],
+    "RailDerbyUttoxeter": [
+      "Derby",
+      "Uttoxeter"
+    ],
+    "RailDudleyWolverhampton": [
+      "Dudley",
+      "Wolverhampton"
+    ],
+    "RailKidderminsterCoalbrookdale": [
+      "Kidderminster",
+      "Coalbrookdale"
+    ],
+    "RailKidderminsterDudley": [
+      "Kidderminster",
+      "Dudley"
+    ],
+    "RailLeekBelper": [
+      "Leek",
+      "Belper"
+    ],
+    "RailNuneatonTamworth": [
+      "Nuneaton",
+      "Tamworth"
+    ],
+    "RailRedditchGloucester": [
+      "Redditch",
+      "Gloucester"
+    ],
+    "RailRedditchOxford": [
+      "Redditch",
+      "Oxford"
+    ],
+    "RailStokeOnTrentLeek": [
+      "StokeOnTrent",
+      "Leek"
+    ],
+    "RailStokeOnTrentWarrington": [
+      "StokeOnTrent",
+      "Warrington"
+    ],
+    "RailStoneBurtonOnTrent": [
+      "Stone",
+      "BurtonOnTrent"
+    ],
+    "RailStoneStafford": [
+      "Stone",
+      "Stafford"
+    ],
+    "RailStoneStokeOnTrent": [
+      "Stone",
+      "StokeOnTrent"
+    ],
+    "RailStoneUttoxeter": [
+      "Stone",
+      "Uttoxeter"
+    ],
+    "RailTamworthBurtonOnTrent": [
+      "Tamworth",
+      "BurtonOnTrent"
+    ],
+    "RailWalsallCannock": [
+      "Walsall",
+      "Cannock"
+    ],
+    "RailWalsallTamworth": [
+      "Walsall",
+      "Tamworth"
+    ],
+    "RailWolverhamptonCannock": [
+      "Wolverhampton",
+      "Cannock"
+    ],
+    "RailWolverhamptonWalsall": [
+      "Wolverhampton",
+      "Walsall"
+    ],
+    "RailWorcesterGloucester": [
+      "Worcester",
+      "Gloucester"
+    ],
+    "RailWorcesterSouthWest": [
+      "Worcester",
+      "SouthWest",
+      "Kidderminster"
+    ]
+  },
+  "link_eras": {
+    "CanalBelperDerby": "Canal",
+    "CanalBirminghamCoventry": "Canal",
+    "CanalBirminghamDudley": "Canal",
+    "CanalBirminghamOxford": "Canal",
+    "CanalBirminghamTamworth": "Canal",
+    "CanalBirminghamWalsall": "Canal",
+    "CanalBirminghamWorcester": "Canal",
+    "CanalCannockCentral": "Canal",
+    "CanalCannockStafford": "Canal",
+    "CanalCoalbrookdaleShrewsbury": "Canal",
+    "CanalCoalbrookdaleWolverhampton": "Canal",
+    "CanalDerbyBurtonOnTrent": "Canal",
+    "CanalDerbyNottingham": "Canal",
+    "CanalDudleyWolverhampton": "Canal",
+    "CanalKidderminsterCoalbrookdale": "Canal",
+    "CanalKidderminsterDudley": "Canal",
+    "CanalNuneatonTamworth": "Canal",
+    "CanalRedditchGloucester": "Canal",
+    "CanalRedditchOxford": "Canal",
+    "CanalStokeOnTrentLeek": "Canal",
+    "CanalStokeOnTrentWarrington": "Canal",
+    "CanalStoneBurtonOnTrent": "Canal",
+    "CanalStoneStafford": "Canal",
+    "CanalStoneStokeOnTrent": "Canal",
+    "CanalTamworthBurtonOnTrent": "Canal",
+    "CanalWalsallBurtonOnTrent": "Canal",
+    "CanalWalsallCannock": "Canal",
+    "CanalWolverhamptonCannock": "Canal",
+    "CanalWolverhamptonWalsall": "Canal",
+    "CanalWorcesterGloucester": "Canal",
+    "CanalWorcesterSouthWest": "Canal",
+    "RailBelperDerby": "Rail",
+    "RailBirminghamCoventry": "Rail",
+    "RailBirminghamDudley": "Rail",
+    "RailBirminghamNuneaton": "Rail",
+    "RailBirminghamOxford": "Rail",
+    "RailBirminghamRedditch": "Rail",
+    "RailBirminghamTamworth": "Rail",
+    "RailBirminghamWalsall": "Rail",
+    "RailBirminghamWorcester": "Rail",
+    "RailCannockBurtonOnTrent": "Rail",
+    "RailCannockCentral": "Rail",
+    "RailCannockStafford": "Rail",
+    "RailCoalbrookdaleShrewsbury": "Rail",
+    "RailCoalbrookdaleWolverhampton": "Rail",
+    "RailCoventryNuneaton": "Rail",
+    "RailDerbyBurtonOnTrent": "Rail",
+    "RailDerbyNottingham": "Rail",
+    "RailDerbyUttoxeter": "Rail",
+    "RailDudleyWolverhampton": "Rail",
+    "RailKidderminsterCoalbrookdale": "Rail",
+    "RailKidderminsterDudley": "Rail",
+    "RailLeekBelper": "Rail",
+    "RailNuneatonTamworth": "Rail",
+    "RailRedditchGloucester": "Rail",
+    "RailRedditchOxford": "Rail",
+    "RailStokeOnTrentLeek": "Rail",
+    "RailStokeOnTrentWarrington": "Rail",
+    "RailStoneBurtonOnTrent": "Rail",
+    "RailStoneStafford": "Rail",
+    "RailStoneStokeOnTrent": "Rail",
+    "RailStoneUttoxeter": "Rail",
+    "RailTamworthBurtonOnTrent": "Rail",
+    "RailWalsallCannock": "Rail",
+    "RailWalsallTamworth": "Rail",
+    "RailWolverhamptonCannock": "Rail",
+    "RailWolverhamptonWalsall": "Rail",
+    "RailWorcesterGloucester": "Rail",
+    "RailWorcesterSouthWest": "Rail"
+  },
+  "slot_order": [
+    "Belper:0",
+    "Belper:1",
+    "Belper:2",
+    "Birmingham:0",
+    "Birmingham:1",
+    "Birmingham:2",
+    "Birmingham:3",
+    "BurtonOnTrent:0",
+    "BurtonOnTrent:1",
+    "Cannock:0",
+    "Cannock:1",
+    "Central:0",
+    "Coalbrookdale:0",
+    "Coalbrookdale:1",
+    "Coalbrookdale:2",
+    "Coventry:0",
+    "Coventry:1",
+    "Coventry:2",
+    "Derby:0",
+    "Derby:1",
+    "Derby:2",
+    "Dudley:0",
+    "Dudley:1",
+    "Kidderminster:0",
+    "Kidderminster:1",
+    "Leek:0",
+    "Leek:1",
+    "Nuneaton:0",
+    "Nuneaton:1",
+    "Redditch:0",
+    "Redditch:1",
+    "SouthWest:0",
+    "Stafford:0",
+    "Stafford:1",
+    "StokeOnTrent:0",
+    "StokeOnTrent:1",
+    "StokeOnTrent:2",
+    "Stone:0",
+    "Stone:1",
+    "Tamworth:0",
+    "Tamworth:1",
+    "Uttoxeter:0",
+    "Uttoxeter:1",
+    "Walsall:0",
+    "Walsall:1",
+    "Wolverhampton:0",
+    "Wolverhampton:1",
+    "Worcester:0",
+    "Worcester:1"
+  ],
+  "link_order": [
+    "CanalBelperDerby",
+    "CanalBirminghamCoventry",
+    "CanalBirminghamDudley",
+    "CanalBirminghamOxford",
+    "CanalBirminghamTamworth",
+    "CanalBirminghamWalsall",
+    "CanalBirminghamWorcester",
+    "CanalCannockCentral",
+    "CanalCannockStafford",
+    "CanalCoalbrookdaleShrewsbury",
+    "CanalCoalbrookdaleWolverhampton",
+    "CanalDerbyBurtonOnTrent",
+    "CanalDerbyNottingham",
+    "CanalDudleyWolverhampton",
+    "CanalKidderminsterCoalbrookdale",
+    "CanalKidderminsterDudley",
+    "CanalNuneatonTamworth",
+    "CanalRedditchGloucester",
+    "CanalRedditchOxford",
+    "CanalStokeOnTrentLeek",
+    "CanalStokeOnTrentWarrington",
+    "CanalStoneBurtonOnTrent",
+    "CanalStoneStafford",
+    "CanalStoneStokeOnTrent",
+    "CanalTamworthBurtonOnTrent",
+    "CanalWalsallBurtonOnTrent",
+    "CanalWalsallCannock",
+    "CanalWolverhamptonCannock",
+    "CanalWolverhamptonWalsall",
+    "CanalWorcesterGloucester",
+    "CanalWorcesterSouthWest",
+    "RailBelperDerby",
+    "RailBirminghamCoventry",
+    "RailBirminghamDudley",
+    "RailBirminghamNuneaton",
+    "RailBirminghamOxford",
+    "RailBirminghamRedditch",
+    "RailBirminghamTamworth",
+    "RailBirminghamWalsall",
+    "RailBirminghamWorcester",
+    "RailCannockBurtonOnTrent",
+    "RailCannockCentral",
+    "RailCannockStafford",
+    "RailCoalbrookdaleShrewsbury",
+    "RailCoalbrookdaleWolverhampton",
+    "RailCoventryNuneaton",
+    "RailDerbyBurtonOnTrent",
+    "RailDerbyNottingham",
+    "RailDerbyUttoxeter",
+    "RailDudleyWolverhampton",
+    "RailKidderminsterCoalbrookdale",
+    "RailKidderminsterDudley",
+    "RailLeekBelper",
+    "RailNuneatonTamworth",
+    "RailRedditchGloucester",
+    "RailRedditchOxford",
+    "RailStokeOnTrentLeek",
+    "RailStokeOnTrentWarrington",
+    "RailStoneBurtonOnTrent",
+    "RailStoneStafford",
+    "RailStoneStokeOnTrent",
+    "RailStoneUttoxeter",
+    "RailTamworthBurtonOnTrent",
+    "RailWalsallCannock",
+    "RailWalsallTamworth",
+    "RailWolverhamptonCannock",
+    "RailWolverhamptonWalsall",
+    "RailWorcesterGloucester",
+    "RailWorcesterSouthWest"
+  ],
+  "ordering": "slot: own first, then schema-order siblings; link: native region order, schema-order slots; pad trailing zeros"
+}

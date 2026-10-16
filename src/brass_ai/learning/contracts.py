@@ -80,12 +80,32 @@ def compatibility():
             for p in sorted((SOURCE_ROOT/'src/brass_ai/feature_engineering').glob('*.py'))}),
         'producer_profile_sha256': digest(read_json(CONFIG_DIR / 'host-1.0.0.json')),
         'encoder_sha256': hashlib.sha256((Path(__file__).parent / 'features.py').read_text().replace('\r\n', '\n').encode()).hexdigest(),
-        'architecture_sha256': digest({name:(Path(__file__).parent/name).read_text(encoding='utf-8').replace('\r\n','\n')
-                                      for name in ('model.py','state_layout.py')}),
+        'architecture_sha256': architecture_fingerprint(),
         'loss': 'win-ce+0.25-rank-huber+0.1-vp-huber/1.0.0',
         'reference_lock_sha256': digest(read_json(SOURCE_ROOT / 'configs/references/upstream.lock.json')),
         'heads': ['policy_logits', 'win_share_4', 'placement_4', 'vp_4'],
     }
+
+
+def architecture_fingerprint():
+    """Keep tensor identity only for an explicitly reviewed equivalent source.
+
+    Unknown edits still receive their own digest. Full implementation identity
+    separately binds the optimized code and this receipt for resume/freshness.
+    """
+    actual=digest({name:(Path(__file__).parent/name).read_text(encoding='utf-8').replace('\r\n','\n')
+                   for name in ('model.py','state_layout.py','local_entities.py','board_topology.py')})
+    matches=[]
+    for name in ('architecture-source-equivalence.json','v11-selector-source-equivalence.json'):
+        receipt=read_json(CONFIG_DIR/name)
+        keys(receipt,('format','original_sha256','equivalent_sha256','reason'))
+        require(receipt['format']=='architecture-source-equivalence/1.0.0' and
+                all(type(receipt[k]) is str and len(receipt[k])==64 and
+                    all(c in '0123456789abcdef' for c in receipt[k])
+                    for k in ('original_sha256','equivalent_sha256')),'Invalid architecture source equivalence')
+        if actual==receipt['equivalent_sha256']:matches.append(receipt['original_sha256'])
+    require(len(matches)<=1,'Ambiguous architecture source equivalence')
+    return matches[0] if matches else actual
 
 
 def assert_compatible(actual):

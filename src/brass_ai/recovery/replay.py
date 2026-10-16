@@ -15,6 +15,7 @@ from brass_ai.bank import sha
 from brass_ai.learning.contracts import (SOURCE_ROOT, assert_compatible, compatibility, decode_json, digest,
                                         finite_vector, keys, require)
 from brass_ai.learning.features import Encoded,check_encoded
+from brass_ai.learning.local_entities import check_action_selectors
 from brass_ai.learning.replay import split_for, terminal_targets, validate_teacher
 from .encoding import PreparedEncoder
 from .inputs import BOUNDARY
@@ -74,6 +75,8 @@ def check_game(game, arrays=None,*,validated_inputs=False):
     require(type(game['records']) is list and game['records'], 'Empty game')
     encoder = PreparedEncoder(); encoded = []; previous = -1
     for step, row in enumerate(game['records']):
+        from brass_ai.learning.board_topology import admit_topology
+        admit_topology(row['view'])
         keys(row, ('step','seat','view','choices','chosen','behavior','style','intent','teacher','seconds'))
         require(type(row['step']) is int and row['step'] == step, 'Non-contiguous decision sequence')
         require(type(row['seat']) is int and 0 <= row['seat'] < 4 and
@@ -89,6 +92,7 @@ def check_game(game, arrays=None,*,validated_inputs=False):
                     'Cached feature dimensions differ')
             require(e.choice_ids == tuple(c['id'] for c in row['choices']) and
                     np.array_equal(e.stable_to_relative,[(s-row['seat'])%4 for s in range(4)]), 'Cached choices/seats differ')
+        check_action_selectors(e.actions)
         require(len(e.choice_ids)==len(set(e.choice_ids)),'Duplicate cached choice IDs')
         require(type(row['chosen']) is int and 0 <= row['chosen'] < len(row['choices']), 'Illegal chosen index')
         revision = row['view']['context']['revision']
@@ -161,6 +165,7 @@ def load_cache(path, games, receipt=None):
         for i,row in enumerate(rows):
             e=Encoded(states[i],actions[offsets[i]:offsets[i+1]],seats[i],tuple(c['id'] for c in row['choices']))
             check_encoded(e)
+            check_action_selectors(e.actions)
             for a in (e.state,e.actions,e.stable_to_relative): a.setflags(write=False)
             out.append(e)
     return out

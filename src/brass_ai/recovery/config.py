@@ -56,6 +56,27 @@ PPO_LEARNING_RATE=1e-5
 # then 48 second presentations. Missing evidence reduces or skips updates;
 # a surviving decision is never repeated to fill an otherwise empty batch.
 DISTILLATION=dict(min_samples=16,min_games=2,min_samples_per_phase=2,batch_size=16,max_reuse=2)
+# Enabled in fresh self-play recipes; no additional games or optimizer steps.
+# Diagnostics are independently opt-in
+# until their full-iteration overhead has been measured on representative runs.
+TEACHER_VALUE=dict(contract='teacher-outcome-value/1.0.0',enabled=True,loss_weight=.1,
+    teacher_fraction=.25,samples_per_game=24,max_samples=128,max_reuse=2,
+    diagnostics=False,probe_positions=128)
+
+
+def teacher_value_config(value=None):
+    # Fresh recipes explicitly write TEACHER_VALUE. Omission belongs to older
+    # signed configurations and must retain their policy-only teaching behavior.
+    value=copy.deepcopy(dict(TEACHER_VALUE,enabled=False) if value is None else value)
+    require(type(value) is dict and set(value)==set(TEACHER_VALUE) and
+            value['contract']==TEACHER_VALUE['contract'],'Invalid teacher auxiliary value contract')
+    require(all(type(value[k]) is bool for k in ('enabled','diagnostics')),'Invalid teacher value switches')
+    for key,limit in (('samples_per_game',128),('max_samples',128),('max_reuse',2),('probe_positions',128)):
+        require(type(value[key]) is int and 1<=value[key]<=limit,'Invalid bounded teacher value '+key)
+    for key in ('loss_weight','teacher_fraction'):
+        require(type(value[key]) in (int,float) and math.isfinite(value[key]) and 0<value[key]<1,
+                'Invalid teacher value '+key)
+    return value
 
 
 def teacher_search_config(options):
@@ -200,7 +221,7 @@ EXECUTION = dict(processes=8, hosts_per_process=4, heavy_processes=8,
     max_decisions=2000, max_models=72)
 UPDATE = dict(effective_batch_size=2048, microbatch_size=512, max_candidate_cells=131072,
     epochs=2, clip=.2, target_kl=.01, entropy_weight=.005, value_weight=.5,
-    grad_clip=5.0, normalize_advantages=True, precision='fp32', bucket=True)
+    grad_clip=1.0, normalize_advantages=True, precision='fp32', bucket=True)
 CURRICULUM = [
     dict(until=20000, selfplay=15, historical=25, legacy=60),
     dict(until=100000, selfplay=45, historical=25, legacy=30),
@@ -223,7 +244,7 @@ EVALUATION_SCHEDULE = dict(enabled=True, monitor_every_games=6400, broader_every
     monitor_setups=1, broader_setups=1, seed=910000)
 LEGACY_BUDGET = dict(role='lab', seconds=1.0, search_workers=4, global_workers=60, work_multiplier=1)
 LEGACY_OPPONENTS = dict(search_free_until_games=10000)
-IMITATION = dict(manifest=None,epochs=10,patience=2,min_epochs=3,learning_rate=1e-4)
+IMITATION = dict(manifest=None,epochs=10,patience=2,min_epochs=3,learning_rate=6e-5)
 INSOLVENCY = dict(event_cost=.005,max_cost=.075)
 CHAMPION_OPPONENTS = dict(contract='staged-champion-opponents/1.0.0',stage_iterations=5,max_champion_opponents=2)
 CHAMPION_MIX_CONFIG_MIGRATION = 'step5-staged-champion-opponents/1.0.0'
@@ -239,11 +260,18 @@ def latest_model_config(config,imitation_checkpoint):
     """Generate a fresh IL recipe from current settings, never a run snapshot."""
     result=copy.deepcopy(config)
     from brass_ai.learning.model import ARCHITECTURE,PARAMETER_LIMIT
+    from .learning_rate import DEFAULT_WARMUP
+    if result.get('architecture')!=ARCHITECTURE:
+        result['learning_rate']*=.6
+        result['imitation']['learning_rate']*=.6
+        result['update']['grad_clip']=min(result['update']['grad_clip'],1.)
+    result.setdefault('learning_rate_warmup',copy.deepcopy(DEFAULT_WARMUP))
     result.update(architecture=ARCHITECTURE,parameter_limit=PARAMETER_LIMIT)
     result.update(selfplay_recipe=LATEST_MODEL_RECIPE,curriculum=copy.deepcopy(CURRICULUM),
         legacy_boost=copy.deepcopy(LEGACY_BOOST),champion=dict(result.get('champion',CHAMPION),enabled=False),
         teacher_work_budget=copy.deepcopy(TEACHER_TIME_BUDGET),search_wall_fraction=None,
         imitation_checkpoint=copy.deepcopy(imitation_checkpoint),exploration=ORDINARY_LEARNER_EXPLORATION)
+    result.setdefault('teacher_value',copy.deepcopy(TEACHER_VALUE))
     result.pop('champion_opponents',None)
     result['execution']['teacher_search_workers_per_turn']=TEACHER_SEARCH_WORKERS
     return validate_config(champion_mix_config(result))
@@ -369,6 +397,14 @@ def validate_config(config):
         'search_ready_games','search_every_games','search_games','distill_steps','distill_weight',
         'rehearsal_manifest','rehearsal_weight','rehearsal_until','profile_steps'}
     version=config.get('format')
+    if 'learning_rate_warmup' in config:
+        from .learning_rate import validate_warmup
+        fields.add('learning_rate_warmup');validate_warmup(config['learning_rate_warmup'])
+    if 'teacher_value' in config:
+        fields.add('teacher_value')
+        auxiliary=teacher_value_config(config['teacher_value'])
+        require(not auxiliary['enabled'] or ('reward' in config and config['update'].get('actor_nonforced')),
+                'Teacher value requires the current combined-return critic')
     if 'selfplay_recipe' in config:
         fields|={'selfplay_recipe','imitation_checkpoint'}
         require(latest_model_recipe(config),'Unknown self-play recipe')

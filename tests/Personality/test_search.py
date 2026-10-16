@@ -93,12 +93,17 @@ class SearchTests(unittest.TestCase):
             actual,_=finish(bot.request(bot.base,state,random.Random(1)));np.testing.assert_array_equal(actual,p)
 
     def test_central_queue_named_heads_context_cancel_and_expiry(self):
+        from fe_fixtures import Factory
+        from fixtures import rotate
+        factory=Factory()
+        try:view,choices=factory.position()
+        finally:factory.close()
         model,_=import_parent(parent());execution=read_json(SOURCE_ROOT/'configs/step5/lab.json')['execution']
         service=SharedInference(execution);ident=service.register(model);channels=service.channels(4)
         remotes=[PersonalityRemote(channels.acquire(),ident) for _ in range(4)]
+        for remote in remotes:self.addCleanup(remote.endpoint.close)
         def request(i,deadline=None,cancel=None):
-            view,choices=position(i)
-            return PersonalityRequest(str(i),ident,view,choices,deadline or time.monotonic()+5,
+            return PersonalityRequest(str(i),ident,rotate(view,i),choices,deadline or time.monotonic()+5,
                 cancelled=cancel,remaining=(.025,)*4,personality=context('networker' if i else 'neutral'))
         with service:
             requests=[request(i) for i in range(4)]

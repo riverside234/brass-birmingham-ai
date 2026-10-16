@@ -4,6 +4,8 @@
 
 Consolidated from the existing design. Dated settings and verification claims retain their original scope; see the index for pending work and historical-reading notes.
 
+**Current deployment performance record:** [Implemented runtime improvements and measured limits](DEPLOYMENT_PERFORMANCE.md) supersede earlier statements that personality cross-worker encoder sharing was still pending. Shared feature caches, fused native transport and snapshot-local public-view reuse are implemented. Historical architecture sizes and resource settings below remain dated design context; the W352 comparison did not change the main model, qualified profiles or training contracts.
+
 <a id="design"></a>
 
 ## Personalities and difficulty calibration

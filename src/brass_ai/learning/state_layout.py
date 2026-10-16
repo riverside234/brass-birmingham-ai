@@ -13,6 +13,9 @@ LAYOUT_FILE='state-groups-5.0.0.json'
 GROUP_NAMES=('turn_global','cards_history','player_economy','industry_development',
              'board_resources','current_action','policy_context')
 PROJECTION_WIDTHS=(32,64,48,192,224,48)
+MODEL_LAYOUT_VERSION='grouped-state-layout/6.0.0'
+MODEL_LAYOUT_FILE='state-groups-6.0.0.json'
+MODEL_PROJECTION_WIDTHS=(32,64,48,320,352,48)
 
 
 @dataclass(frozen=True)
@@ -41,12 +44,13 @@ class StateLayout:
     segments: tuple
     groups: tuple
     identity: str=''
+    version: str=LAYOUT_VERSION
 
     @property
     def permutation(self):return tuple(i for g in self.groups for i in g.indices)
 
-    def specification(self,*,with_identity=True):
-        result=dict(format=LAYOUT_VERSION,feature_version=FEATURE_VERSION,
+    def specification(self,*,with_identity=True,version=None):
+        result=dict(format=self.version if version is None else version,feature_version=FEATURE_VERSION,
             feature_schema_sha256=self.feature_schema_sha256,state_dim=self.dimension,
             raw_state_dim=self.raw_dimension,fusion_inputs=sum(g.width for g in self.groups),
             groups=[dict(name=g.name,input_dim=len(g.indices),indices=list(g.indices),projection_width=g.width,
@@ -133,4 +137,17 @@ def state_layout():
     layout=build_state_layout(read_json(CONFIG_DIR/FEATURE_SCHEMA))
     require(layout.specification()==read_json(CONFIG_DIR/LAYOUT_FILE),
         'Frozen grouped state layout differs; do not relabel a layout identity')
+    return layout
+
+
+@lru_cache(maxsize=1)
+def model_layout():
+    """V11 learned widths; keep the original input/token layout immutable."""
+    original=state_layout()
+    groups=tuple(replace(g,width=MODEL_PROJECTION_WIDTHS[i] if i<6 else 12)
+                 for i,g in enumerate(original.groups))
+    layout=replace(original,groups=groups,identity='',version=MODEL_LAYOUT_VERSION)
+    layout=replace(layout,identity=digest(layout.specification(with_identity=False,version=MODEL_LAYOUT_VERSION)))
+    require(layout.specification(version=MODEL_LAYOUT_VERSION)==read_json(CONFIG_DIR/MODEL_LAYOUT_FILE),
+            'Frozen v11 grouped model layout differs')
     return layout

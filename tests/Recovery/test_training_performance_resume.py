@@ -151,7 +151,7 @@ class TrainingPerformanceResumeTests(unittest.TestCase):
         raw=torch.load(path,weights_only=True)
         raw['model_config']['architecture']='brass-four-seat-mlp-resnet/4.0.0'
         torch.save(raw,path);state['history'][-1]['sha256']=sha(path);before=path.read_bytes()
-        with self.assertRaisesRegex(ValueError,'fresh version-9'):
+        with self.assertRaisesRegex(ValueError,'fresh version-11'):
             load_resume(SOURCE_ROOT,run,state,current,reviewed=True)
         self.assertEqual(path.read_bytes(),before)
 

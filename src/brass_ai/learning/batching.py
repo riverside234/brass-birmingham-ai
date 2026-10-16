@@ -17,6 +17,7 @@ import torch
 
 from .contracts import compatibility, digest, finite_vector, require
 from .features import Encoder,check_encoded
+from .local_entities import check_action_selectors
 from .encoding_budget import EncodingStopped
 
 
@@ -61,7 +62,8 @@ def model_id(model):
 
 def collate(encoded, device='cpu'):
     require(bool(encoded), 'Cannot batch zero positions')
-    for row in encoded:check_encoded(row)
+    for row in encoded:
+        check_encoded(row);check_action_selectors(row.actions)
     count, maximum = len(encoded), max(len(x.choice_ids) for x in encoded)
     require(maximum > 0, 'No legal choices')
     actions = np.zeros((count, maximum, encoded[0].actions.shape[-1]), dtype=np.float32)
@@ -97,18 +99,15 @@ def predict_encoded(model, encoded, device, candidate_limit, remaining=None):
         outputs=(model(*collate(encoded,device),remaining=remaining) if getattr(model.config,'utility',None) is not None else model(*collate(encoded,device)))
         return [torch.softmax(outputs[0].float(),-1).cpu().numpy()]+[a.cpu().numpy() for a in outputs[1:]]
     require(len(encoded)==1,'Oversized position must have its own candidate batch')
-    e=encoded[0];state=torch.from_numpy(e.state[None].copy()).to(device)
-    context=model.state_encoder(state);parts=[]
+    e=encoded[0];check_action_selectors(e.actions)
+    state=torch.from_numpy(e.state[None].copy()).to(device)
+    entities=model.encode_state(state);prepared=model.prepare_candidates(entities);parts=[]
     for start in range(0,len(e.choice_ids),candidate_limit):
         actions=torch.from_numpy(e.actions[None,start:start+candidate_limit].copy()).to(device)
-        candidates=model.action_encoder(actions)
-        parts.append(model.policy_scorer(torch.cat((context[:,None].expand(-1,actions.shape[1],-1),candidates),-1)).squeeze(-1))
-    logits=torch.cat(parts,1);outcomes=model.outcomes(context)
+        parts.append(model.score_prepared(actions,prepared))
+    logits=torch.cat(parts,1)
     mapping=torch.from_numpy(e.stable_to_relative[None].copy()).to(device)
-    heads=(torch.softmax(outcomes[:,:4],-1).gather(1,mapping),
-           (1+3*torch.sigmoid(outcomes[:,4:8])).gather(1,mapping),
-           (100*outcomes[:,8:12]).gather(1,mapping))
-    if getattr(model.config,'utility',None) is not None:heads=heads+(model.predict_utility(context,mapping,heads,remaining),)
+    heads=model.heads_from_encoded(entities,mapping,remaining)
     return [torch.softmax(logits.float(),-1).cpu().numpy()]+[a.cpu().numpy() for a in heads]
 
 

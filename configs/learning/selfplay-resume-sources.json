@@ -23536,6 +23536,126 @@
       "reason_ref": "95",
       "learning_compatibility_ref": "2",
       "config_changes_ref": "78"
+    },
+    {
+      "from_implementation": "014ac0ca4f920053eef265cb58b65f58901b7d35b2f6b1c1a1eaf8dbe92a5809",
+      "to_implementation": "061e72ea27f3fd4ca8f113971cf8e8711211cd8adaae116d8a8dbcea42421a7f",
+      "reason_ref": "96",
+      "learning_compatibility_ref": "2",
+      "teacher_value_changes": true
+    },
+    {
+      "from_implementation": "e794a86e13b891d56fcb21a8a7580a8af1c754bc54065a8b636dd5b04f6792f8",
+      "to_implementation": "061e72ea27f3fd4ca8f113971cf8e8711211cd8adaae116d8a8dbcea42421a7f",
+      "learning_compatibility_ref": "2",
+      "reason_ref": "96",
+      "reviewed_evidence": "docs/IL_LOADER_RECOVERY_2026-10-15.md",
+      "teacher_value_changes": true
+    },
+    {
+      "from_implementation": "63c9da11e4aa582af8ad41ea32c85781728ff6418c953a2df1170f7718d5d9b4",
+      "to_implementation": "061e72ea27f3fd4ca8f113971cf8e8711211cd8adaae116d8a8dbcea42421a7f",
+      "reviewed_evidence": "docs/IL_LOADER_RECOVERY_2026-10-15.md",
+      "reason_ref": "96",
+      "learning_compatibility_ref": "2",
+      "config_changes_ref": "78",
+      "teacher_value_changes": true
+    },
+    {
+      "from_implementation": "061e72ea27f3fd4ca8f113971cf8e8711211cd8adaae116d8a8dbcea42421a7f",
+      "to_implementation": "061e72ea27f3fd4ca8f113971cf8e8711211cd8adaae116d8a8dbcea42421a7f",
+      "reason_ref": "96",
+      "learning_compatibility_ref": "2",
+      "teacher_value_changes": true
+    },
+    {
+      "from_implementation": "014ac0ca4f920053eef265cb58b65f58901b7d35b2f6b1c1a1eaf8dbe92a5809",
+      "to_implementation": "d36679503fe60596a50741b3059bcf343f74785a9443473a6b46438506d899ea",
+      "reason_ref": "97",
+      "learning_compatibility_ref": "2",
+      "teacher_value_changes": true
+    },
+    {
+      "from_implementation": "e794a86e13b891d56fcb21a8a7580a8af1c754bc54065a8b636dd5b04f6792f8",
+      "to_implementation": "d36679503fe60596a50741b3059bcf343f74785a9443473a6b46438506d899ea",
+      "learning_compatibility_ref": "2",
+      "reason_ref": "97",
+      "reviewed_evidence": "docs/IL_LOADER_RECOVERY_2026-10-15.md",
+      "teacher_value_changes": true
+    },
+    {
+      "from_implementation": "63c9da11e4aa582af8ad41ea32c85781728ff6418c953a2df1170f7718d5d9b4",
+      "to_implementation": "d36679503fe60596a50741b3059bcf343f74785a9443473a6b46438506d899ea",
+      "reviewed_evidence": "docs/IL_LOADER_RECOVERY_2026-10-15.md",
+      "reason_ref": "97",
+      "learning_compatibility_ref": "2",
+      "config_changes_ref": "78",
+      "teacher_value_changes": true
+    },
+    {
+      "from_implementation": "061e72ea27f3fd4ca8f113971cf8e8711211cd8adaae116d8a8dbcea42421a7f",
+      "to_implementation": "d36679503fe60596a50741b3059bcf343f74785a9443473a6b46438506d899ea",
+      "reason_ref": "97",
+      "learning_compatibility_ref": "2",
+      "teacher_value_changes": true
+    },
+    {
+      "from_implementation": "d36679503fe60596a50741b3059bcf343f74785a9443473a6b46438506d899ea",
+      "to_implementation": "d36679503fe60596a50741b3059bcf343f74785a9443473a6b46438506d899ea",
+      "learning_compatibility_ref": "2",
+      "reason_ref": "97",
+      "teacher_value_changes": true
+    },
+    {
+      "from_implementation": "014ac0ca4f920053eef265cb58b65f58901b7d35b2f6b1c1a1eaf8dbe92a5809",
+      "to_implementation": "67174f91c5fe6f5e8c087949946a98a065f6a3f2e8e441f8681e7fd3812c14cd",
+      "reason_ref": "98",
+      "learning_compatibility_ref": "2",
+      "teacher_value_changes": true
+    },
+    {
+      "from_implementation": "e794a86e13b891d56fcb21a8a7580a8af1c754bc54065a8b636dd5b04f6792f8",
+      "to_implementation": "67174f91c5fe6f5e8c087949946a98a065f6a3f2e8e441f8681e7fd3812c14cd",
+      "learning_compatibility_ref": "2",
+      "reason_ref": "98",
+      "reviewed_evidence": "docs/IL_LOADER_RECOVERY_2026-10-15.md",
+      "teacher_value_changes": true
+    },
+    {
+      "from_implementation": "63c9da11e4aa582af8ad41ea32c85781728ff6418c953a2df1170f7718d5d9b4",
+      "to_implementation": "67174f91c5fe6f5e8c087949946a98a065f6a3f2e8e441f8681e7fd3812c14cd",
+      "reviewed_evidence": "docs/IL_LOADER_RECOVERY_2026-10-15.md",
+      "reason_ref": "98",
+      "learning_compatibility_ref": "2",
+      "config_changes_ref": "78",
+      "teacher_value_changes": true
+    },
+    {
+      "from_implementation": "061e72ea27f3fd4ca8f113971cf8e8711211cd8adaae116d8a8dbcea42421a7f",
+      "to_implementation": "67174f91c5fe6f5e8c087949946a98a065f6a3f2e8e441f8681e7fd3812c14cd",
+      "reason_ref": "98",
+      "learning_compatibility_ref": "2",
+      "teacher_value_changes": true
+    },
+    {
+      "from_implementation": "d36679503fe60596a50741b3059bcf343f74785a9443473a6b46438506d899ea",
+      "to_implementation": "67174f91c5fe6f5e8c087949946a98a065f6a3f2e8e441f8681e7fd3812c14cd",
+      "learning_compatibility_ref": "2",
+      "reason_ref": "98",
+      "teacher_value_changes": true
+    },
+    {
+      "from_implementation": "67174f91c5fe6f5e8c087949946a98a065f6a3f2e8e441f8681e7fd3812c14cd",
+      "to_implementation": "67174f91c5fe6f5e8c087949946a98a065f6a3f2e8e441f8681e7fd3812c14cd",
+      "learning_compatibility_ref": "2",
+      "reason_ref": "98",
+      "teacher_value_changes": true
+    },
+    {
+      "from_implementation": "c4b6b899d4c28aa83fc91706dbf2812233c0ca2ad3f59b4bee07e9ace3c12168",
+      "to_implementation": "77d472dc0e3ef42b4301ca2b03dd86ddf806d7e1211507354b0683998797bd37",
+      "learning_compatibility_ref": "3",
+      "reason_ref": "99"
     }
   ],
   "definitions": {
@@ -23635,7 +23755,11 @@
       "92": "Ordinary learner exploration defaults to 0.08 using the unchanged legal-family/industry/context mixture, temperature 1 and probabilistic sampling. Collection and PPO share the exploration setting and policy identity. Explicit 0.05 to 0.08 continuation changes future collections only; strict pending/cache/behavior checks remain. Weights, Adam/RNG, counters, population, lineage, curriculum, PPO/reward/teacher/search and evaluation policies are preserved. Unchanged historical configurations remain unchanged; no recipe conversion is approved.",
       "93": "Behavior-preserving v7 IL/self-play performance review: reuse ordinary/balanced IL validation forwards; avoid unused candidate scoring/copies for stock state-only PPO critic and utility-calibration heads; pack base-service prediction arrays directly into shared replies with legacy subclass fallback. Exact model/feature/layout/precision/reward/optimizer contracts and settings/search clocks are unchanged. Preserve committed weights, Adam/RNG, population, counters, original IL lineage and all resume guards. Accept the existing JSON-equivalent list/tuple cache gap. This does not approve older architectures or feature schemas.",
       "94": "Compact v9 encoder-cache lifetime/sharing and teacher 9/12/12/12 clocks. Exact feature/model/loss/checkpoint contracts and outputs are unchanged; retain all resume/freshness/label guards. Only the preceding v9 implementation is admitted, with unchanged config or this exact teacher-budget change.",
-      "95": "Disk-backed supervised IL ingress prevents retention of the entire dense dataset in parent RAM; shard receipts, bounded worker retries and minibatch reads preserve audited source/label checks, exact features, order, balancing, losses and optimizer updates. Model/layout/checkpoint contracts and all self-play/reward/search settings are unchanged. Preserve Adam/RNG, progress, population, lineage and pending-collection/source guards; no blanket old-source or architecture admission."
+      "95": "Disk-backed supervised IL ingress prevents retention of the entire dense dataset in parent RAM; shard receipts, bounded worker retries and minibatch reads preserve audited source/label checks, exact features, order, balancing, losses and optimizer updates. Model/layout/checkpoint contracts and all self-play/reward/search settings are unchanged. Preserve Adam/RNG, progress, population, lineage and pending-collection/source guards; no blanket old-source or architecture admission.",
+      "96": "Opt-in teacher outcome value loss within existing policy-distillation steps, with independently admitted mixed search/direct game returns, deterministic bounded sampling, matching ordinary/teacher utility calibration and optional RNG-neutral bounded telemetry. Default disabled. Exact v9 feature/model/checkpoint contracts and existing recipes remain unchanged. Preserve weights, Adam/RNG, committed progress, population, lineage and pending-collection guards. Only the versioned teacher_value configuration block may change, or an already-pinned preceding clock transition.",
+      "97": "Enable teacher auxiliary value learning in fresh self-play defaults; keep explicit opt-out and omitted archived configurations policy-only. No model/layout/feature/checkpoint or IL training changes. Preserve exact completed IL lineage, existing configuration/state, Adam/RNG, progress and pending-work guards. Teacher value changes still require explicit reviewed continuation.",
+      "98": "Factor the unchanged first policy scorer Parameter into shared state and candidate projections before its existing GELU. Exact tensor shapes/keys/order, IL/checkpoint/Adam/RNG and semantic architecture identity are preserved under the pinned source-equivalence receipt. The full implementation identity changes, pending old collections remain rejected, and existing freshness/label/calibration guards remain active. Preserve the prior explicit configuration-change restrictions.",
+      "99": "V11 selector-only optimization: validated one-hot/absent target, merchant and industry references use bank index lookups with exact zero sentinels. Preserve model and optimizer tensors, config, data semantics, RNG, progress, population and lineage. Existing pending-collection, source, reward/calibration and strict behavior-probability guards stay active; no configuration migration or old-architecture admission. The final shared loader/model-ID path dispatches MLP directly instead of through the removed Transformer factory; this receipt admits only the unchanged v11 MLP learning contract, not Transformer checkpoints."
     },
     "config_changes": {
       "0": {
@@ -32694,7 +32818,8 @@
     "learning_compatibility": {
       "0": "c349e816f2e301ea2a3b438902059cffe868f48e131f7c120691d37cd1c409d2",
       "1": "565dff0e8ff0973214ee7c85b43c81dabc9ef6b6409aaa2e0becdd2c122c4ecf",
-      "2": "747216b5ab873126a6e048ade198883593113f70a815b9012ce40b8f66d443cb"
+      "2": "747216b5ab873126a6e048ade198883593113f70a815b9012ce40b8f66d443cb",
+      "3": "9ff2f9336c188d303981534d869414e37ea24528a432e6adac855deccfd227d3"
     }
   }
 }

@@ -10,7 +10,7 @@ import numpy as np
 
 from brass_ai.learning.contracts import digest,require
 from brass_ai.learning.replay import validate_teacher
-from brass_ai.recovery.inference import RemoteEvaluator
+from brass_ai.recovery.inference import RemoteEvaluator,share_encoder_cache
 from brass_ai.recovery.parallel import merge_statistics
 from brass_ai.recovery.resources import TurnLease
 from brass_ai.recovery.teacher_schedule import reserved_rounds,counters,phase_for,finalization_reserve,TeacherTurns
@@ -42,7 +42,10 @@ class RootMasked(MaskedISMCTS):
 
 class Worker(MaskedSearchPolicy):
     def __init__(self,root,config,base,opponents,mono,cancelled,index):
-        super().__init__(None,root,config=config,mono=mono,evaluator=base.evaluator,opponents=opponents)
+        # Fused native snapshots advance rules and return checkpoint, permitted
+        # views and choices in one reply. Older bundles retain the checked
+        # capability fallback; each simulation still owns its private host.
+        super().__init__(None,root,config=config,mono=mono,evaluator=base.evaluator,opponents=opponents,fast_host=True)
         self.base=base;self.cancelled=cancelled;self.partition_index=index;self.scope=None
 
     def decide(self,view,choices,rng,deadline,recall=None,tree=None,cache=None):
@@ -100,12 +103,20 @@ class SearchSession:
         self.lease=TurnLease(service.cpu,self.timings);self.model_id=model_id
         self.intents=[IntentState(s,profiles[s]) for s in range(4)];self.recall=[[] for _ in range(4)]
         self.rounds=None;self.phases=[{} for _ in range(4)];self.turn=None;self.workers=[]
-        self.base=PersonalityPolicy(PersonalityRemote(channels.acquire(),model_id),exploration=.1,cancelled=self.cancelled)
         self.pool=ThreadPoolExecutor(max_workers=config.workers,thread_name_prefix='personality-private-root')
         try:
-            for i in range(config.workers if search_enabled else 0):
-                base=PersonalityPolicy(PersonalityRemote(channels.acquire(),model_id),exploration=.1,cancelled=self.cancelled)
-                opponents=[NeuralPolicy(None,evaluator=RemoteEvaluator(channels.acquire(),p),focus='neutral',exploration=.05) for p in parent_ids]
+            count=config.workers if search_enabled else 0
+            endpoints=[channels.acquire() for _ in range(1+count*(1+len(parent_ids)))]
+            # The coordinator warms the root before the private forests start.
+            # Reuse completed, immutable features across every lane/model in
+            # this table, while keeping mutable builders and reply pipes private.
+            # Preserve the former aggregate bound of 256 entries per lane.
+            self.encoding_cache=share_encoder_cache(endpoints)
+            lanes=iter(endpoints)
+            self.base=PersonalityPolicy(PersonalityRemote(next(lanes),model_id),exploration=.1,cancelled=self.cancelled)
+            for i in range(count):
+                base=PersonalityPolicy(PersonalityRemote(next(lanes),model_id),exploration=.1,cancelled=self.cancelled)
+                opponents=[NeuralPolicy(None,evaluator=RemoteEvaluator(next(lanes),p),focus='neutral',exploration=.05) for p in parent_ids]
                 self.workers.append(Worker(root,config,base,opponents,mono,self.cancelled,i))
         except BaseException:self.close();raise
         self.game=self.workers[0].game if self.workers else None

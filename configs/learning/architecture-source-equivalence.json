@@ -1,0 +1,6 @@
+{
+  "format": "architecture-source-equivalence/1.0.0",
+  "original_sha256": "9c5ad1e2a20f7dfb0483e04ecbf7b77b6d1c6808641283e1a5e72b23a3bb2173",
+  "equivalent_sha256": "0b88759d9e988dddb27e03b340eb2b7fe6d831205c21466ae7b9bb4d59c324f9",
+  "reason": "Exact v9 factorization W[state,candidate]+b = W_state*state + W_candidate*candidate + b before the existing GELU. Preserve all Parameter keys/shapes/order, model config, features, heads and checkpoint/Adam tensors. Only floating-point summation order changes; unknown architecture-source hashes are not mapped."
+}

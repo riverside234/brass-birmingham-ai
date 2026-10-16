@@ -203,6 +203,26 @@
       "implementation": "e794a86e13b891d56fcb21a8a7580a8af1c754bc54065a8b636dd5b04f6792f8",
       "learning_compatibility": "747216b5ab873126a6e048ade198883593113f70a815b9012ce40b8f66d443cb",
       "reason": "Disk-backed supervised IL ingress prevents retention of the entire dense dataset in parent RAM; shard receipts, bounded worker retries and minibatch reads preserve audited source/label checks, exact features, order, balancing, losses and optimizer updates. Model/layout/checkpoint contracts and all self-play/reward/search settings are unchanged. Preserve Adam/RNG, progress, population, lineage and pending-collection/source guards; no blanket old-source or architecture admission."
+    },
+    {
+      "implementation": "014ac0ca4f920053eef265cb58b65f58901b7d35b2f6b1c1a1eaf8dbe92a5809",
+      "learning_compatibility": "747216b5ab873126a6e048ade198883593113f70a815b9012ce40b8f66d443cb",
+      "reason": "Only opt-in self-play auxiliary value learning and bounded reports changed. Completed current v9 IL retains identical model/layout/features, targets, losses, optimizer, checkpoint and dataset contracts. Preserve original completion/hash/source/lineage checks; no old-architecture admission or unfinished-IL relabelling."
+    },
+    {
+      "implementation": "061e72ea27f3fd4ca8f113971cf8e8711211cd8adaae116d8a8dbcea42421a7f",
+      "learning_compatibility": "747216b5ab873126a6e048ade198883593113f70a815b9012ce40b8f66d443cb",
+      "reason": "Enable the existing teacher auxiliary value update by default for newly generated self-play configurations only. Completed IL model/layout/features, losses, data and checkpoint contracts are identical; preserve completion, hash and original lineage checks. No retraining or relabelling of unfinished IL."
+    },
+    {
+      "implementation": "d36679503fe60596a50741b3059bcf343f74785a9443473a6b46438506d899ea",
+      "learning_compatibility": "747216b5ab873126a6e048ade198883593113f70a815b9012ce40b8f66d443cb",
+      "reason": "Equivalent scorer factorization preserves completed v9 IL weights, keys, optimizer layout, features and targets. Exact source equivalence and existing completion/hash/lineage checks are required; no old-architecture admission or unfinished-IL relabelling."
+    },
+    {
+      "implementation": "c4b6b899d4c28aa83fc91706dbf2812233c0ca2ad3f59b4bee07e9ace3c12168",
+      "learning_compatibility": "9ff2f9336c188d303981534d869414e37ea24528a432e6adac855deccfd227d3",
+      "reason": "V11 selector-only optimization: validated one-hot/absent target, merchant and industry references use bank index lookups with exact zero sentinels. Preserve model and optimizer tensors, config, data semantics, RNG, progress, population and lineage. Existing pending-collection, source, reward/calibration and strict behavior-probability guards stay active; no configuration migration or old-architecture admission."
     }
   ]
 }
