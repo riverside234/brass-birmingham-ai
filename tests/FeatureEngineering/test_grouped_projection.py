@@ -240,8 +240,8 @@ class GroupedProjectionTests(unittest.TestCase):
                 path=Path(directory)/(name+'.onnx');meta=export(model,path)
                 self.assertTrue(meta['parity']['passed']);self.assertEqual(meta['config']['group_layout'],model_layout().identity)
                 self.assertEqual(meta['config']['residual_blocks'],8)
-                self.assertEqual(meta['config']['architecture'],'brass-four-seat-mlp-resnet/11.0.0')
-                self.assertEqual(meta['parity']['shapes'],[[1,1],[2,7],[4,31],[1,257]])
+                self.assertEqual(meta['config']['architecture'],'brass-four-seat-mlp-resnet/11.1.0')
+                self.assertEqual(meta['parity']['shapes'],[[1,1],[2,7],[4,31],[1,257],[1,772],[2,772]])
                 self.assertEqual(Graph(path).meta['config']['projection_widths'],list(MODEL_PROJECTION_WIDTHS))
                 old=copy.deepcopy(meta);old['config']['architecture']='brass-four-seat-mlp-resnet/5.0.0'
                 with self.assertRaisesRegex(ValueError,'fresh version-11'):validate_metadata(old)

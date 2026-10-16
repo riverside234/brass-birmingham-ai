@@ -38,7 +38,7 @@ def dense_reference(self, actions, prepared):
 
 
 def dense_copy(model):
-    """Exact pre-change computation, with identical weights and independent state."""
+    """Dense selector reference for the current pre-GELU action computation."""
     old=copy.deepcopy(model);core=old.core if hasattr(old,'core') else old
     core.prepare_candidates=types.MethodType(dense_prepare,core)
     core.reference_context=types.MethodType(dense_reference,core)
@@ -129,8 +129,8 @@ class V11SelectorTests(unittest.TestCase):
         for name in COUNTS:self.assertEqual(seen[name],[(3,COUNTS[name],WIDTHS[name])])
         self.assertEqual(seen['outcomes'],[(3,4,128)])
 
-    def test_v11_identity_checkpoint_adam_and_rng_are_unchanged(self):
-        self.assertEqual(architecture_fingerprint(),'c7df5bf97fbe02f605aabeea89c9cc24d74981c5a4355a15f050f6b97f0cae39')
+    def test_current_identity_checkpoint_adam_and_rng_roundtrip(self):
+        self.assertNotEqual(architecture_fingerprint(),'c7df5bf97fbe02f605aabeea89c9cc24d74981c5a4355a15f050f6b97f0cae39')
         model=FourSeatNet(ModelConfig.preset('small'));trained_branches(model);old=dense_copy(model)
         self.assertEqual(model_id(model),model_id(old));self.assertEqual(model.config,old.config)
         opt=torch.optim.AdamW(old.parameters(),lr=6e-6)

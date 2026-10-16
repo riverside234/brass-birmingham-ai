@@ -9,6 +9,8 @@ from torch import nn
 from brass_ai.bank import sha
 from brass_ai.learning.contracts import require,digest,compatibility
 from brass_ai.learning.batching import model_id as base_id
+from brass_ai.learning.onnx_tools import cpu_options, prepare_export, simplify_export, inspect_runtime_fusions, candidate_export_metadata
+from brass_ai.learning.local_entities import check_action_selectors
 from brass_ai.personality.checkpoint import model_id
 from brass_ai.personality.contracts import CONTEXT_DIM,FACTORS
 from brass_ai.personality.model import PersonalityNet
@@ -43,7 +45,7 @@ def samples(config,personality,seed=661):
     from brass_ai.learning.local_entities import entity_layout
     rng=np.random.default_rng(seed);cap=config['utility']['insolvency']['max_cost']
     result=[]
-    for batch,candidates in ((1,1),(2,7),(4,31),(1,257)):
+    for batch,candidates in ((1,1),(2,7),(4,31),(1,257),(1,772),(2,772)):
         masks=np.ones((batch,candidates),bool)
         if candidates>1:masks[-1,candidates//2:]=False
         data=dict(states=rng.normal(0,.2,(batch,config['state_dim'])).astype('float32'),
@@ -71,9 +73,7 @@ class Graph:
         self.inputs=self.meta['inputs'];self.outputs=self.meta['outputs'];self.calls=0;self.seconds=0.
         if backend=='ort-cpu':
             import onnxruntime as ort
-            options=ort.SessionOptions();options.intra_op_num_threads=threads;options.inter_op_num_threads=1
-            options.execution_mode=ort.ExecutionMode.ORT_SEQUENTIAL
-            options.add_session_config_entry('session.intra_op.allow_spinning','0')
+            options=cpu_options(threads)
             self.engine=ort.InferenceSession(str(path),options,providers=['CPUExecutionProvider'])
             require([x.name for x in self.engine.get_inputs()]==self.inputs and
                     [x.name for x in self.engine.get_outputs()]==self.outputs,'Graph tensor names differ')
@@ -89,6 +89,9 @@ class Graph:
 
     def run(self,inputs):
         require(set(inputs)==set(self.inputs),'Wrong inference inputs')
+        actions=inputs['actions']
+        require(actions.ndim==3 and actions.shape[-1]==327,'Invalid batched action selector shape')
+        check_action_selectors(actions.reshape(-1,327))
         start=time.perf_counter()
         if self.backend=='ort-cpu':out=self.engine.run(self.outputs,inputs)
         else:
@@ -120,7 +123,7 @@ def compare(expected,actual,mask):
     return errors
 
 
-def export(model,path):
+def export(model,path,*,optimize=True):
     import onnx
     model.validate_parameter_count()
     if isinstance(model,PersonalityNet):model.core.validate_parameter_count()
@@ -128,20 +131,27 @@ def export(model,path):
     require(not path.exists(),'Do not overwrite an immutable export')
     actor=isinstance(model,PersonalityNet);config=(model.core.config if actor else model.config).to_dict()
     inputs=BASE_INPUTS+(['personality'] if actor else []);outputs=BASE_OUTPUTS+(GOAL_OUTPUTS if actor else [])
-    batches=samples(config,actor);frozen=Named(copy.deepcopy(model).cpu().eval())
+    batches=samples(config,actor);reference=Named(copy.deepcopy(model).cpu().eval())
+    frozen=Named(prepare_export(model)) if optimize else reference
     axes={name:{0:'positions'} for name in inputs+outputs}
     for name in ('actions','legal_mask','policy_logits'):axes[name][1]='candidates'
     with torch.inference_mode():
         torch.onnx.export(frozen,tuple(torch.from_numpy(batches[0][k]) for k in inputs),str(path),
             input_names=inputs,output_names=outputs,dynamic_axes=axes,opset_version=17,dynamo=False)
     onnx.checker.check_model(onnx.load(str(path)))
+    optimization=simplify_export(path) if optimize else None
+    if optimize:
+        optimization['seat_encoding']='one grouped MatMul; original own/other weights and affine parameters'
+        optimization['candidate_encoding']=candidate_export_metadata()
+        optimization['execution']=inspect_runtime_fusions(path)
     meta=dict(format=EXPORT,sha256=sha(path),model_id=model_id(model) if actor else base_id(model),
         actor=actor,config=config,inputs=inputs,outputs=outputs,compatibility=compatibility(),
-        reward_id=digest(config['utility']),precision='float32',opset=17,parity=None)
+        reward_id=digest(config['utility']),precision='float32',opset=17,parity=None,
+        optimization=optimization)
     write(path.with_suffix('.json'),meta);runtime=Graph(path)
     errors={name:0. for name in outputs};stored={}
     for i,batch in enumerate(batches):
-        with torch.inference_mode():out=frozen(*(torch.from_numpy(batch[k]) for k in inputs))
+        with torch.inference_mode():out=reference(*(torch.from_numpy(batch[k]) for k in inputs))
         expected={k:v.numpy() for k,v in zip(outputs,out)}
         for key,value in compare(expected,runtime.run(batch),batch['legal_mask']).items():errors[key]=max(errors[key],value)
         for key,value in batch.items():stored[f'{i}:input:{key}']=value
@@ -155,7 +165,7 @@ def export(model,path):
 def check_backend(graph):
     errors={k:0. for k in graph.outputs}
     with np.load(graph.path.with_suffix('.parity.npz'),allow_pickle=False) as data:
-        for i in range(4):
+        for i in range(len(graph.meta['parity']['shapes'])):
             inputs={k:data[f'{i}:input:{k}'] for k in graph.inputs}
             expected={k:data[f'{i}:output:{k}'] for k in graph.outputs}
             for name,value in compare(expected,graph.run(inputs),inputs['legal_mask']).items():errors[name]=max(errors[name],value)

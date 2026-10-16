@@ -261,7 +261,9 @@ def latest_model_config(config,imitation_checkpoint):
     result=copy.deepcopy(config)
     from brass_ai.learning.model import ARCHITECTURE,PARAMETER_LIMIT
     from .learning_rate import DEFAULT_WARMUP
-    if result.get('architecture')!=ARCHITECTURE:
+    # The width-512 learning-rate adjustment was introduced with v11. Moving
+    # the local addition in v11.1 must not apply that adjustment a second time.
+    if result.get('architecture') not in (ARCHITECTURE,'brass-four-seat-mlp-resnet/11.0.0'):
         result['learning_rate']*=.6
         result['imitation']['learning_rate']*=.6
         result['update']['grad_clip']=min(result['update']['grad_clip'],1.)

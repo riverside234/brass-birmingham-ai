@@ -50,7 +50,7 @@ class V11ModelTests(unittest.TestCase):
     def test_same_feature_tensor_contract_and_named_entity_coverage(self):
         model=self.model; layout=entity_layout(); segments={s.name:s for s in state_layout().segments}
         self.assertEqual((model.config.state_dim,model.config.action_dim),(3128,327))
-        self.assertEqual(model.config.architecture,'brass-four-seat-mlp-resnet/11.0.0')
+        self.assertEqual(model.config.architecture,'brass-four-seat-mlp-resnet/11.1.0')
         self.assertEqual(model.config.entity_layout,layout['identity'])
         states=torch.arange(3128,dtype=torch.float32)[None]
         for name in COUNTS:

@@ -15,7 +15,7 @@ from .state_layout import model_layout as state_layout,MODEL_PROJECTION_WIDTHS a
 from .local_entities import (ENTITY_HIDDEN, COUNTS, LocalEntityEncoder, LocalCandidates,
                             entity_layout)
 
-ARCHITECTURE='brass-four-seat-mlp-resnet/11.0.0'
+ARCHITECTURE='brass-four-seat-mlp-resnet/11.1.0'
 PARAMETER_LIMIT=6500000
 
 
@@ -52,7 +52,7 @@ class ModelConfig:
     def from_dict(cls, raw):
         allowed=set(cls.__dataclass_fields__)
         require(raw.get('architecture')==ARCHITECTURE,
-                'Use fresh version-11 grouped model weights; old architectures cannot migrate')
+                'Use fresh version-11.1 IL weights; old architectures including v11 cannot migrate')
         require(set(raw)==allowed, 'Invalid grouped model config fields')
         config = cls(**raw)
         config.validate()
@@ -61,7 +61,7 @@ class ModelConfig:
     def validate(self):
         encoder = Encoder()
         require(type(self.players) is int and self.players == 4, 'Four-seat model required')
-        require(self.architecture==ARCHITECTURE, 'Use fresh version-11 grouped model weights; old architectures cannot migrate')
+        require(self.architecture==ARCHITECTURE, 'Use fresh version-11.1 IL weights; old architectures including v11 cannot migrate')
         require((self.state_dim, self.action_dim) == (encoder.state_dim, encoder.action_dim), 'Feature dimensions differ')
         require(type(self.hidden) is int and 32 <= self.hidden <= 2048 and
                 type(self.action_hidden) is int and 16 <= self.action_hidden <= 1024, 'Invalid hidden size')
@@ -179,7 +179,11 @@ class FourSeatNet(nn.Module):
         return result
 
     def score_prepared(self, actions, prepared):
-        candidates = self.action_encoder(actions) + self.reference_context(actions, prepared)
+        # Local information participates in the same nonlinearity/normalization
+        # as the action features. Zero-initialized roles preserve the no-local
+        # policy exactly at initialization; v11's post-LN addition is different.
+        pre = self.action_encoder[0](actions) + self.reference_context(actions, prepared)
+        candidates = self.action_encoder[2](self.action_encoder[1](pre))
         return self.score_candidates(candidates, prepared.context)
 
     def official_heads(self, encoded, mapping):

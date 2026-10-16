@@ -21,7 +21,7 @@ class V11ArchitectureTests(unittest.TestCase):
 
     def test_exact_medium_dimensions_and_new_identities(self):
         model=FourSeatNet();c=model.config
-        self.assertEqual(c.architecture,'brass-four-seat-mlp-resnet/11.0.0')
+        self.assertEqual(c.architecture,'brass-four-seat-mlp-resnet/11.1.0')
         self.assertEqual(c.projection_widths,(32,64,48,320,352,48))
         self.assertEqual((model.state_encoder.fusion[0].in_features,c.hidden),(876,512))
         self.assertEqual(sum(isinstance(m,ResidualBlock) for m in model.modules()),8)

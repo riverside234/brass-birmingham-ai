@@ -52,7 +52,7 @@ class SixGroupRollbackTests(unittest.TestCase):
             self.assertEqual(model.config.residual_blocks,8)
             self.assertEqual(sum(isinstance(m,ResidualBlock) for m in model.modules()),8)
             self.assertEqual(model.parameter_count,count)
-            self.assertEqual(model.config.architecture,'brass-four-seat-mlp-resnet/11.0.0')
+            self.assertEqual(model.config.architecture,'brass-four-seat-mlp-resnet/11.1.0')
         model=FourSeatNet();self.assertEqual(model.config.hidden,512)
         utility=UtilityNet(utility_config(model.config,reward_spec(read_json(SOURCE_ROOT/'configs/step5/joint7-latest.json'))))
         self.assertEqual(utility.parameter_count,5921320)

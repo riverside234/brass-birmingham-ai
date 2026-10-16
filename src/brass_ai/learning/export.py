@@ -12,6 +12,7 @@ import torch
 from .batching import collate, model_id
 from .contracts import assert_compatible, compatibility, read_json, require
 from .model import ModelConfig
+from .onnx_tools import cpu_options, prepare_export, simplify_export, inspect_runtime_fusions, candidate_export_metadata
 
 INPUTS = ['states', 'actions', 'legal_mask', 'stable_to_relative']
 OUTPUTS = ['policy_logits', 'win_share', 'placement', 'vp']
@@ -25,7 +26,8 @@ def export_onnx(model, path, parity_batches):
     require(len(parity_batches) >= 2, 'Export requires multiple shape checks')
     batches = [collate(batch) for batch in parity_batches]
     require(len({(b[0].shape[0], b[1].shape[1]) for b in batches}) >= 2, 'Parity checks must exercise dynamic shapes')
-    frozen = copy.deepcopy(model).cpu().eval()
+    reference_model = copy.deepcopy(model).cpu().eval()
+    frozen = prepare_export(model)
     path.parent.mkdir(parents=True, exist_ok=True)
     temporary = path.with_name(path.name + '.tmp')
     axes = {name: {0: 'positions'} for name in INPUTS + OUTPUTS}
@@ -37,20 +39,29 @@ def export_onnx(model, path, parity_batches):
         torch.onnx.export(frozen, batches[0], str(temporary), input_names=INPUTS,
             output_names=OUTPUTS, dynamic_axes=axes, opset_version=17, dynamo=False)
         onnx.checker.check_model(onnx.load(str(temporary)))
-        options = ort.SessionOptions()
-        options.intra_op_num_threads = 1
+        optimization = simplify_export(temporary)
+        optimization['seat_encoding'] = 'one grouped MatMul; original own/other weights and affine parameters'
+        optimization['candidate_encoding'] = candidate_export_metadata()
+        optimization['execution'] = inspect_runtime_fusions(temporary)
+        options = cpu_options()
         session = ort.InferenceSession(str(temporary), options, providers=['CPUExecutionProvider'])
         maximum_error = 0.0
-        for batch in batches:
+        stored = {}
+        for i, batch in enumerate(batches):
             with torch.inference_mode():
-                expected = frozen(*batch)
+                expected = reference_model(*batch)
             actual = session.run(OUTPUTS, {k: t.numpy() for k, t in zip(INPUTS, batch)})
+            for name, tensor in zip(INPUTS, batch):
+                stored[f'{i}:input:{name}'] = tensor.numpy()
+            for name, tensor in zip(OUTPUTS, expected):
+                stored[f'{i}:output:{name}'] = tensor.numpy()
             for name, a, b in zip(OUTPUTS, actual, expected):
                 reference = b.numpy()
                 np.testing.assert_allclose(a, reference, rtol=2e-4, atol=2e-4, err_msg=name)
                 finite=np.isfinite(reference)
                 if finite.any():maximum_error = max(maximum_error, float(np.max(np.abs(a[finite] - reference[finite]))))
         temporary.replace(path)
+        np.savez_compressed(path.with_suffix('.parity.npz'), **stored)
     finally:
         temporary.unlink(missing_ok=True)
     manifest = {'format': 'four-seat-onnx/1.0.0', 'compatibility': compatibility(),
@@ -58,7 +69,7 @@ def export_onnx(model, path, parity_batches):
         'onnx_sha256': hashlib.sha256(path.read_bytes()).hexdigest(),
         'inputs': INPUTS, 'outputs': OUTPUTS, 'parameter_count': model.parameter_count,
         'parity_batches': len(batches), 'parity_max_absolute_error': maximum_error,
-        'opset': 17, 'provider_tested': 'CPUExecutionProvider'}
+        'opset': 17, 'provider_tested': 'CPUExecutionProvider', 'optimization': optimization}
     path.with_suffix('.json').write_text(json.dumps(manifest, indent=2) + '\n', encoding='utf-8')
     return manifest
 
@@ -73,8 +84,7 @@ def load_export(path):
     assert_compatible(manifest['compatibility'])
     require(hashlib.sha256(path.read_bytes()).hexdigest() == manifest['onnx_sha256'], 'ONNX fingerprint mismatch')
     require(manifest['inputs'] == INPUTS and manifest['outputs'] == OUTPUTS, 'Export tensor contract mismatch')
-    options = ort.SessionOptions()
-    options.intra_op_num_threads = 1
+    options = cpu_options()
     session = ort.InferenceSession(str(path), options, providers=['CPUExecutionProvider'])
     require([x.name for x in session.get_inputs()] == INPUTS and
             [x.name for x in session.get_outputs()] == OUTPUTS, 'ONNX graph names differ from manifest')

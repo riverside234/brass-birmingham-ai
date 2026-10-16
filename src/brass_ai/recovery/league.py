@@ -59,7 +59,7 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
     root=Path(root).resolve();run=project_path(root,run_path);validate_config(config)
     from brass_ai.learning.model import ARCHITECTURE,PARAMETER_LIMIT
     require((config['architecture'],config['parameter_limit'])==(ARCHITECTURE,PARAMETER_LIMIT),
-            'Fresh grouped training requires an explicitly configured version-11 model and 3M limit; use feature-engineering.py configure')
+            f'Fresh grouped training requires {ARCHITECTURE} and parameter limit {PARAMETER_LIMIT}; use feature-engineering.py configure')
     require(iterations>0 and not(initial and from_run),'Invalid recovery initialization')
     require(initial is None and from_run is None,'Fresh residual workflow forbids previous checkpoint/run imports')
     bc_model=bc_origin=None

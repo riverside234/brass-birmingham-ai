@@ -1,6 +1,7 @@
 # Install after the existing P0-P5 requirements, in the conda ai-training env.
 onnx==1.19.0
 onnxruntime==1.22.1
+onnxsim==0.8.1
 psutil>=5.9,<8
 # Optional Intel CPU/iGPU comparison: pip install "openvino>=2025,<2027"
 # A GPU driver is required; explicit GPU selection fails if unavailable.
