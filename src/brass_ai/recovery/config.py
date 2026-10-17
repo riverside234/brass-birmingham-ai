@@ -222,11 +222,13 @@ EXECUTION = dict(processes=8, hosts_per_process=4, heavy_processes=8,
 UPDATE = dict(effective_batch_size=2048, microbatch_size=512, max_candidate_cells=131072,
     epochs=2, clip=.2, target_kl=.01, entropy_weight=.005, value_weight=.5,
     grad_clip=1.0, normalize_advantages=True, precision='fp32', bucket=True)
-CURRICULUM = [
+ARCHIVED_CURRICULUM = [
     dict(until=20000, selfplay=15, historical=25, legacy=60),
     dict(until=100000, selfplay=45, historical=25, legacy=30),
     dict(until=None, selfplay=60, historical=25, legacy=15)]
-LATEST_MODEL_RECIPE='latest-model-selfplay/1.0.0'
+CURRICULUM = [dict(until=None,selfplay=60,historical=30,legacy=10)]
+ARCHIVED_LATEST_MODEL_RECIPE='latest-model-selfplay/1.0.0'
+LATEST_MODEL_RECIPE='latest-model-selfplay/2.0.0'
 ORDINARY_LEARNER_EXPLORATION=.08
 
 EXECUTION_V21 = dict(EXECUTION, processes=24, hosts_per_process=2, flush_ms=1.0,
@@ -239,7 +241,7 @@ CHAMPION_LEGACY = dict(enabled=True, every_games=6400, setups=8, min_win_share=.
 CHAMPION_PROTOCOL = 'two-stage-champion/1.0.0'
 CHAMPION = dict(CHAMPION_LEGACY, enabled=False, protocol=CHAMPION_PROTOCOL, confirmation_setups=64,
     screen_min_win_share=.56, min_ci_lower=.49)
-POPULATION = dict(recent=16, anchors=48)
+POPULATION = dict(recent=4, anchors=12)
 EVALUATION_SCHEDULE = dict(enabled=True, monitor_every_games=6400, broader_every_games=25600,
     monitor_setups=1, broader_setups=1, seed=910000)
 LEGACY_BUDGET = dict(role='lab', seconds=1.0, search_workers=4, global_workers=60, work_multiplier=1)
@@ -253,7 +255,15 @@ LEGACY_BOOST = dict(stages=[dict(games=20000,selfplay=15,historical=25,legacy=60
 
 
 def latest_model_recipe(config):
+    return config.get('selfplay_recipe') in (ARCHIVED_LATEST_MODEL_RECIPE,LATEST_MODEL_RECIPE)
+
+
+def fixed_selfplay_recipe(config):
     return config.get('selfplay_recipe')==LATEST_MODEL_RECIPE
+
+
+def learner_seats_per_table(config,kind):
+    return 4 if kind=='selfplay' else 2 if fixed_selfplay_recipe(config) else 1
 
 
 def latest_model_config(config,imitation_checkpoint):
@@ -261,6 +271,9 @@ def latest_model_config(config,imitation_checkpoint):
     result=copy.deepcopy(config)
     from brass_ai.learning.model import ARCHITECTURE,PARAMETER_LIMIT
     from .learning_rate import DEFAULT_WARMUP
+    from .lr_controller import AUTO_CONTROLLER,AUTO_CONTRACT
+    from .il_kl_limit import DEFAULT as AUTO_IL_KL
+    from .rehearsal import DEFAULT_FLOOR
     # The width-512 learning-rate adjustment was introduced with v11. Moving
     # the local addition in v11.1 must not apply that adjustment a second time.
     if result.get('architecture') not in (ARCHITECTURE,'brass-four-seat-mlp-resnet/11.0.0'):
@@ -270,9 +283,15 @@ def latest_model_config(config,imitation_checkpoint):
     result.setdefault('learning_rate_warmup',copy.deepcopy(DEFAULT_WARMUP))
     result.update(architecture=ARCHITECTURE,parameter_limit=PARAMETER_LIMIT)
     result.update(selfplay_recipe=LATEST_MODEL_RECIPE,curriculum=copy.deepcopy(CURRICULUM),
-        legacy_boost=copy.deepcopy(LEGACY_BOOST),champion=dict(result.get('champion',CHAMPION),enabled=False),
+        champion=dict(result.get('champion',CHAMPION),enabled=False),
         teacher_work_budget=copy.deepcopy(TEACHER_TIME_BUDGET),search_wall_fraction=None,
-        imitation_checkpoint=copy.deepcopy(imitation_checkpoint),exploration=ORDINARY_LEARNER_EXPLORATION)
+        imitation_checkpoint=copy.deepcopy(imitation_checkpoint),exploration=ORDINARY_LEARNER_EXPLORATION,
+        teacher_enabled=False,population=copy.deepcopy(POPULATION),legacy_opponents=dict(search_free_until_games=0))
+    result.setdefault('ppo_lr_controller',copy.deepcopy(AUTO_CONTROLLER))
+    if result['ppo_lr_controller']['contract']==AUTO_CONTRACT:
+        result.setdefault('il_kl_limit',copy.deepcopy(AUTO_IL_KL))
+    result.setdefault('rehearsal_floor',copy.deepcopy(DEFAULT_FLOOR))
+    result.pop('legacy_boost',None)
     result.setdefault('teacher_value',copy.deepcopy(TEACHER_VALUE))
     result.pop('champion_opponents',None)
     result['execution']['teacher_search_workers_per_turn']=TEACHER_SEARCH_WORKERS
@@ -307,6 +326,8 @@ def bounded_fields(config, default, name):
         if type(expected) is bool: require(type(value) is bool,'Invalid '+name+'.'+key)
         elif name=='retention' and key=='quarantine_hours':
             require(type(value) is int and value>=0,'Invalid retention.quarantine_hours')
+        elif name=='legacy_opponents' and key=='search_free_until_games':
+            require(type(value) is int and value>=0,'Invalid legacy_opponents.search_free_until_games')
         elif type(expected) in (int,float): positive(value,name+'.'+key,integer=type(expected) is int)
         else: require(type(value) is str and value,'Invalid '+name+'.'+key)
     return config
@@ -402,6 +423,27 @@ def validate_config(config):
     if 'learning_rate_warmup' in config:
         from .learning_rate import validate_warmup
         fields.add('learning_rate_warmup');validate_warmup(config['learning_rate_warmup'])
+    if 'ppo_lr_controller' in config:
+        from .lr_controller import validate_config as validate_controller
+        fields.add('ppo_lr_controller');validate_controller(config['ppo_lr_controller'],config['update'])
+        require('learning_rate_warmup' in config,'PPO LR controller requires persisted warmup state')
+    if 'rehearsal_floor' in config:
+        from .rehearsal import validate as validate_floor
+        fields.add('rehearsal_floor');validate_floor(config['rehearsal_floor'])
+    from .lr_controller import AUTO_CONTRACT
+    auto=config.get('ppo_lr_controller',{}).get('contract')==AUTO_CONTRACT
+    require(auto==('il_kl_limit' in config),'Calibrated IL-KL requires LR controller 1.2 and its limit block together')
+    if auto:
+        from .il_kl_limit import validate as validate_limit
+        fields.add('il_kl_limit');limit=validate_limit(config['il_kl_limit']);controller=config['ppo_lr_controller']
+        require(controller['anchor_kl_budget']==limit['initial_limit'] and
+                controller['anchor_group_kl_budget']==limit['group_factor']*limit['initial_limit'] and
+                controller['anchor_group_min_positions']==limit['group_min_positions'],
+                'Initial overall/group IL-KL settings must match the calibrated limits')
+        require(config.get('selfplay_recipe')==LATEST_MODEL_RECIPE and config.get('teacher_enabled') is False,
+                'Auto IL-KL is for fresh latest-model self-play with teaching disabled')
+    if 'teacher_enabled' in config:
+        fields.add('teacher_enabled');require(type(config['teacher_enabled']) is bool,'Invalid teacher enabled flag')
     if 'teacher_value' in config:
         fields.add('teacher_value')
         auxiliary=teacher_value_config(config['teacher_value'])
@@ -412,8 +454,13 @@ def validate_config(config):
         require(latest_model_recipe(config),'Unknown self-play recipe')
         require(config.get('champion',{}).get('enabled') is False and 'champion_opponents' not in config,
                 'Latest-model self-play forbids champion gates and mixing')
-        require(config['curriculum']==CURRICULUM and config.get('legacy_boost')==LEGACY_BOOST,
-                'Latest-model curriculum and v4 window must agree at 20000/100000 games')
+        if fixed_selfplay_recipe(config):
+            require(config['curriculum']==CURRICULUM and 'legacy_boost' not in config and
+                    config['legacy_opponents']==dict(search_free_until_games=0),
+                    'Fixed self-play requires 60/30/10 at all games, with searched v4 and no boost window')
+        else:
+            require(config['curriculum']==ARCHIVED_CURRICULUM and config.get('legacy_boost')==LEGACY_BOOST,
+                    'Archived latest-model curriculum and v4 window must agree at 20000/100000 games')
         require(config.get('search_wall_fraction') is None,'Latest-model recipe disables the cumulative teacher wall limit')
         origin=config.get('imitation_checkpoint')
         require(type(origin) is dict and set(origin)=={'bc_run','path','sha256','model_id','manifest','manifest_sha256','bc_signature'},

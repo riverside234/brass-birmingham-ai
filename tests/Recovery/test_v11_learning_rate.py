@@ -31,6 +31,8 @@ class V11LearningRateTests(unittest.TestCase):
         torch.manual_seed(112);model=FourSeatNet(ModelConfig.preset('small'))
         optimizer=torch.optim.AdamW(model.parameters(),lr=6e-6,weight_decay=1e-4)
         configure(optimizer,6e-6,100,.1,'selfplay')
+        from brass_ai.recovery.lr_controller import configure as configure_controller,DEFAULT_CONTROLLER
+        configure_controller(optimizer,DEFAULT_CONTROLLER)
         def update(net,opt):
             opt.zero_grad(set_to_none=True)
             sum(p.square().mean() for p in net.parameters()).backward()

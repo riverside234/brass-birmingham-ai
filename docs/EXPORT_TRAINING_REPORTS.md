@@ -6,15 +6,18 @@ models or launch training.
 ```sh
 conda activate ai-training
 cd /data/not_backed_up/yxu209/ai-training/
-python scripts/export-training-reports.py --output results/joint7-review-0060
+python scripts/export-training-reports.py
 ```
 
-The default source is `artifacts/step5/v4-selfplay-joint`. Choose any new folder
-under `results/`; existing output folders are never overwritten. Omit `--output`
-to generate a folder named with the run, committed generation, and UTC timestamp:
+The default source is **`artifacts/step5/joint7-v11-1-grouped-lr`**, matching the
+[current fresh-start and continuation commands](MLP_V11_LAB.md#fresh-self-play-from-completed-v111-il).
+The destination is automatically named with the run, committed generation, and
+UTC timestamp, for example `results/joint7-v11-1-grouped-lr-g0021-<timestamp>/`.
+Choose another new folder under `results/` with `--output`; existing output
+folders are never overwritten:
 
 ```sh
-python scripts/export-training-reports.py
+python scripts/export-training-reports.py --output results/joint7-v11-1-grouped-lr-review
 ```
 
 The script copies:
@@ -23,6 +26,22 @@ The script copies:
 - The latest **two committed iteration** reports and associated JSON reports/receipts.
 - All available reports and specifications under the run's `evaluations/`, including champion, monitor, and broader panels.
 - The originating IL run's state/report and available ancestor IL states/reports.
+- The fixed IL-KL probe's `il-kl/manifest.json` and `il-kl/initial-report.json`, when present.
+
+For the current v11.1 recipe, full iteration reports and compact history retain
+the PPO LR controller, exact categorical KL, overall and per-group IL-anchor
+distance/counts/status, warmup, optimizer steps, actual sample usage, fixed
+60/30/10 table counts and learner-seat attribution. Disabled teacher search and
+an absent champion gate need no substitute reports. The IL source is read from
+the saved run lineage; its existing directory/file names are preserved. No IL
+retraining or renaming is needed.
+
+The calibrated-limit revision also retains `il_kl_limit` (health baseline,
+behavior checks, overall/group limits, recovery latch and hold/raise/tighten
+decision), `rehearsal_schedule`, and zero-VP/insolvency counts by table type.
+The probe manifest carries selected-position identities and source/cache hashes;
+its dense `probe.npz` and `.prepared/` validation cache are excluded from this
+report-only bundle.
 
 It also writes `recorded-config.json` from the saved run state and an
 `export-manifest.json` containing source paths, SHA-256 hashes, file sizes, missing
@@ -30,17 +49,17 @@ files, and report/receipt mismatches. Missing or pruned reports are listed rathe
 than reconstructed. Iteration/evaluation folder names are preserved, for example:
 
 ```text
-results/joint7-review-0060/
+results/joint7-v11-1-grouped-lr-g0021-<timestamp>/
   state.json
   retention-history.json
   recorded-config.json
   export-manifest.json
-  iteration-0058/report.json
-  iteration-0059/report.json
-  evaluations/champion-00019200/report.json
-  evaluations/champion-00019200/spec.json
-  evaluations/monitor-0003/report.json
-  lineage/artifacts/step5/v4-batch7-joint/report.json
+  iteration-0019/report.json
+  iteration-0020/report.json
+  evaluations/monitor-<games>/report.json
+  evaluations/monitor-<games>/spec.json
+  lineage/artifacts/step5/features4-v11-1-batch7-il/state.json
+  lineage/artifacts/step5/features4-v11-1-batch7-il/report.json
   ...
 ```
 
@@ -55,10 +74,10 @@ and repeat `--extra` to include independent comparisons outside the run director
 
 ```sh
 python scripts/export-training-reports.py \
-  --run artifacts/step5/v4-selfplay-joint \
-  --output results/joint7-review-next \
+  --run artifacts/step5/joint7-v11-1-grouped-lr \
+  --output results/joint7-v11-1-grouped-lr-review-next \
   --latest 4 \
-  --extra artifacts/joint7-review/evaluation-g0060-fixed16
+  --extra artifacts/joint7-v11-1-grouped-lr-comparison
 ```
 
 Use `--root /data/not_backed_up/yxu209/ai-training/` when invoking the script
@@ -66,7 +85,15 @@ against an explicit project root. Export after an iteration finishes for its
 final timings. Read-only exports during training are allowed; changes to selected
 files during copying abort publication and request a retry. A run-lock marker and
 missing final iteration timing are recorded in the manifest. No training lock is
-created or removed by this script.
+created or removed by this script. Publication retries transient Windows handle
+errors for at most 0.75 seconds, checking that the destination is still unused
+before each attempt.
+
+Before any reports have been archived, `retention-history.json` may not exist;
+the manifest lists it as missing and still exports the committed reports. No
+evaluation files are expected until an evaluation has actually run. For an older
+run, select it explicitly, for example
+`python scripts/export-training-reports.py --run artifacts/step5/v4-selfplay-joint`.
 
 For the generation-150 comparison, include the independent panels with
 `--extra artifacts/joint7-g150-panel` and the paired comparison with
@@ -84,4 +111,19 @@ These fields are included automatically in iteration reports and compact history
 
 Verification: `python -m unittest discover -s tests/Reports -v` covers report
 selection, original bytes, lineage, missing evidence, output protection, concurrent
-changes, and a smoke export using the supplied generation-60 JSON evidence.
+changes, the new default run and grouped LR/anchor metrics, and a smoke export
+using the supplied generation-60 JSON evidence.
+
+October 16 validation: **26 report tests passed**, and a read-only export of the
+existing v11.1 three-game smoke copied four source reports with matching bytes
+and checksums, preserving grouped anchor/LR fields and the original IL path.
+Its first-generation archive was absent as expected. Evidence is in
+`artifacts/report-export-grouped-lr-20261016/`.
+
+October 17 validation: the 67-test focused controller/report suite passed. An
+actual export of the final three-game calibrated-limit smoke copied six source
+JSON files with matching bytes/checksums, including `il-kl/manifest.json` and
+`il-kl/initial-report.json`. Dense probe tensors and `.prepared/` data were
+excluded. The missing first-generation archive was recorded; no warnings were
+reported. Evidence: `artifacts/auto-il-kl-20261017/validation.json` and
+`artifacts/auto-il-kl-20261017/report-bundle/`.

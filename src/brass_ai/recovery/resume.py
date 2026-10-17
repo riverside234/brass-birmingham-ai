@@ -27,6 +27,9 @@ def apply_optimizer_config(optimizer, config):
         from .learning_rate import configure
         warmup=config['learning_rate_warmup']
         configure(optimizer,config['learning_rate'],warmup['selfplay_steps'],warmup['start_factor'],'selfplay')
+    if 'ppo_lr_controller' in config:
+        from .lr_controller import configure
+        configure(optimizer,config['ppo_lr_controller'])
     return dict(before=before,after=[dict(lr=g['lr'],weight_decay=g['weight_decay']) for g in optimizer.param_groups],
                 preserved='Adam moments, steps, other group options and RNG')
 

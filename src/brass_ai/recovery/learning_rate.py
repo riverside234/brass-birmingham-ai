@@ -43,9 +43,12 @@ def configure(optimizer,base_lr,steps,start_factor,kind):
     return report(optimizer)
 
 
-def step(optimizer):
+def step(optimizer,*,ppo=False):
     for group in optimizer.param_groups:
         if KEY in group:group['lr']=rate(group[KEY],group[KEY]['completed_steps']+1)
+        if ppo:
+            from .lr_controller import multiplier
+            group['lr']*=multiplier(group)
     optimizer.step()
     for group in optimizer.param_groups:
         if KEY in group:group[KEY]['completed_steps']+=1

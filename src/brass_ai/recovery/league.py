@@ -93,6 +93,7 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
     signature=dict(config=config,compatibility=compatibility(),implementation=implementation_id(),legacy_pool=pool['training'],teachers=teacher_specs)
     if bc_origin:signature['imitation_source']=bc_origin
     state_path=run/'state.json'
+    fixed_probe=None
     source_changed=False
     require(not resume_reviewed_source or state_path.exists(),'--resume-reviewed-source needs an existing same-run state.json')
     if state_path.exists():
@@ -108,6 +109,7 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
         # identity-bound progress receipt. Restart it from the same random seed;
         # never import partially trained or previous-run neural weights.
         allowed={'.active-run.json','imitation-progress.json'} if config['imitation']['manifest'] else {'.active-run.json'}
+        if 'il_kl_limit' in config:allowed.add('il-kl')
         require(not run.exists() or all(p.name in allowed for p in run.iterdir()),'New recovery directory must be empty')
         if revised: torch.manual_seed(config['seed'])
         from brass_ai.learning.model import FourSeatNet
@@ -133,8 +135,23 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
             from .learning_rate import configure
             warmup=config['learning_rate_warmup']
             configure(optimizer,config['learning_rate'],warmup['selfplay_steps'],warmup['start_factor'],'selfplay')
+        if 'ppo_lr_controller' in config:
+            from .lr_controller import configure as configure_controller
+            configure_controller(optimizer,config['ppo_lr_controller'])
+        if 'il_kl_limit' in config:
+            from .il_kl_probe import load as load_probe
+            from .il_kl_limit import initial_state
+            fixed_probe,receipt=load_probe(root,run,bc_origin,model,config['il_kl_limit'],config['update'],config['audit_workers'])
+            initial_measure=fixed_probe.measure(model,config['update'])
+            require(abs(initial_measure['kl_mean'])<=1e-10 and initial_measure['behavior']['ok'],
+                    'Generation-zero IL probe must reproduce the original IL policy')
+            state['il_kl_limit']=initial_state(config['il_kl_limit'],receipt)
+            write_json(run/'il-kl/initial-report.json',dict(generation=0,measurement=initial_measure,
+                limit=config['il_kl_limit']['initial_limit'],
+                group_limit=config['il_kl_limit']['group_factor']*config['il_kl_limit']['initial_limit'],probe=receipt))
         init_path=run/'initial.pt'
-        save_checkpoint(init_path,model,optimizer,training=dict(mode='step5-fresh-residual-initial',parent=None,initialization=state['origin']['initialization'],fresh_run=run.relative_to(root).as_posix(),imitation=state['imitation']))
+        save_checkpoint(init_path,model,optimizer,training=dict(mode='step5-fresh-residual-initial',parent=None,initialization=state['origin']['initialization'],fresh_run=run.relative_to(root).as_posix(),imitation=state['imitation'],
+            **({'il_kl_limit':state['il_kl_limit']} if 'il_kl_limit' in config else {})))
         raw=load_checkpoint(init_path,device=device)[1]
         state['history']=[dict(path=init_path.relative_to(root).as_posix(),sha256=sha(init_path),
             model_id=raw['model_id'],generation=0)]
@@ -148,6 +165,22 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
     cuda_resume=resume_optimizer(raw,optimizer,allow_cuda_topology_change=True)
     from .resume import apply_optimizer_config
     optimizer_resume=apply_optimizer_config(optimizer,config)
+    anchor_model=None
+    if 'il_kl_limit' in config:
+        from .il_kl_limit import validate_state
+        from .il_kl_probe import load as load_probe
+        validate_state(state.get('il_kl_limit'),config['il_kl_limit'],state['iteration'])
+        require(raw['training'].get('il_kl_limit')==state['il_kl_limit'],'IL-KL state differs from committed checkpoint')
+        if fixed_probe is None:
+            fixed_probe,_=load_probe(root,run,bc_origin,bc_model,config['il_kl_limit'],config['update'],
+                config['audit_workers'],receipt=state['il_kl_limit']['probe'])
+    elif config.get('ppo_lr_controller',{}).get('mode','off')!='off':
+        anchor=state['evaluation_anchor'];path=project_path(root,anchor['path'])
+        require(sha(path)==anchor['sha256'],'LR health anchor checkpoint changed')
+        with torch.random.fork_rng(devices=[]):
+            anchor_model,anchor_raw=load_checkpoint(path,device=device)
+        require(anchor_raw['model_id']==anchor['model_id'],'LR health anchor identity differs')
+        anchor_model.eval().requires_grad_(False)
     if cuda_resume and cuda_resume['saved_devices']!=cuda_resume['visible_devices']:
         print(f'CUDA resume: {cuda_resume["saved_devices"]} saved / {cuda_resume["visible_devices"]} visible GPUs; '
               f'restored {cuda_resume["restored_devices"]} matching logical-device RNG streams (learner stays on cuda:0)',flush=True)
@@ -165,7 +198,8 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
     if window:
         print(f'Searched-v4 recovery window: ordinary games {window["start_games"]} to {window["until_games"]}; '
               f'{max(0,window["until_games"]-state["games_done"])} remaining',flush=True)
-    needs_rehearsal=config['rehearsal_manifest'] and config['rehearsal_weight'] and state['games_done']<config['rehearsal_until']
+    from .rehearsal import schedule as rehearsal_schedule
+    needs_rehearsal=rehearsal_schedule(config,state['games_done'],state['iteration'])['weight']>0
     rehearsal=load_dataset(root,config['rehearsal_manifest'],'train',workers=config['audit_workers'],progress=True,compact=True)[0] if needs_rehearsal else None
     if rehearsal:
         prepared_at=time.monotonic();rehearsal=rehearsal_dataset(rehearsal,device)
@@ -216,15 +250,26 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                     games,learner_data,diagnostics=prepared_collection.finish(records,ingress_metrics)
                 collected=time.monotonic()
                 sampling=sampling_report(games,learner_data,behavior.policy_id,kind_by_group,config)
-                weight=config['rehearsal_weight']*max(0,1-state['games_done']/config['rehearsal_until'])
+                rehearsal_status=rehearsal_schedule(config,state['games_done'],iteration)
+                weight=rehearsal_status['weight']
                 update=ppo_update(model,optimizer,games,behavior,config['update'],
                     profile=directory/'profile-ppo' if config['profile_steps'] else None,
                     profile_steps=config['profile_steps'],
                     rehearsal=rehearsal,rehearsal_weight=weight,learner_data=learner_data,insolvency=config.get('insolvency'),reward=reward,
-                    sample_groups={g['game_id']:kind_by_group[g['setup_group']] for g in games})
+                    sample_groups={g['game_id']:kind_by_group[g['setup_group']] for g in games},anchor_model=anchor_model)
+                next_limit=limit_report=None
+                if fixed_probe is not None:
+                    from .il_kl_limit import advance
+                    counts=diagnostics.get('by_composition',{}).get('selfplay',{}).get('health_counts')
+                    if counts and counts['all_learner_tables']!=counts['tables']:counts=None
+                    next_limit,limit_report=advance(state['il_kl_limit'],fixed_probe.measure(model,config['update']),
+                        counts,generation=iteration+1,warmup_done=update['controller_warmup_done'])
+                from .lr_controller import finish_iteration
+                update['lr_controller']=finish_iteration(optimizer,update,config,sampling,games,behavior.policy_id,
+                    kind_by_group,state['evaluation_anchor'],calibrated_anchor=limit_report['lr_gate'] if limit_report else None)
                 updated=time.monotonic();done=state['games_done']+len(games)
                 ordinary_inference=service.report()
-                if done>=config['rehearsal_until']:rehearsal=None
+                if rehearsal_schedule(config,done,iteration+1)['weight']==0:rehearsal=None
                 ordinary_seconds=state.get('ordinary_seconds',0.)+updated-began
                 def recalibrate_teacher_utility(auxiliary=None):
                     # Policy distillation moves the shared encoder. Refit only
@@ -261,6 +306,7 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                 del teaching_probe
                 del learner_data
                 report=dict(format='step5-recovery-report/'+'2.2.0',iteration=iteration,composition=dict(composition),
+                    il_kl_limit=limit_report,rehearsal_schedule=rehearsal_status,
                     sampling=sampling,curriculum=curriculum_report(state['games_done'],done,config) if latest_model_recipe(config) else None,
                     reward_migration=migration if not summaries else None,
                     optimizer_resume=optimizer_resume if not summaries else None,
@@ -287,7 +333,8 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                     training=dict(mode='step5-population-ppo',recipe='nonforced-actor-ppo/2.1.0' if revised else 'effective-minibatch-ppo/2.0.0',
                         parent=current,signature=digest(signature),fresh_run=run.relative_to(root).as_posix(),initialization='random-lineage',
                         evidence=dict(iteration=iteration,games_done=done,report=(directory/'report.json').relative_to(root).as_posix(),
-                                      update_digest=digest(update))))
+                                      update_digest=digest(update)),
+                        **({'il_kl_limit':next_limit} if next_limit is not None else {})))
                 report['post_update_model_id']=identity
                 report['timings']['checkpoint_seconds']=time.monotonic()-checkpoint_began
                 write_json(directory/'report.json',report)
@@ -295,8 +342,12 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                 state.update(iteration=iteration+1,games_done=done,next_seed=cursor,context_counter=context_counter,
                     history=state['history']+[entry],next_search_games=next_search,
                     search_seconds=search_seconds,ordinary_seconds=ordinary_seconds)
+                if next_limit is not None:state['il_kl_limit']=next_limit
                 if champion_mix.enabled(config):state['champion_mix']['transition_tables']+=transition_added
                 state['recent_training']=(state.get('recent_training',[])+[dict(iteration=iteration,games_done=done,
+                    il_kl_limit=limit_report,rehearsal_schedule=rehearsal_status,
+                    health_counts=diagnostics.get('health_counts'),
+                    health_by_composition={k:v.get('health_counts') for k,v in diagnostics.get('by_composition',{}).items()},
                     sampling=sampling,curriculum=report['curriculum'],
                     learning_rate=config['learning_rate'],learning_rate_schedule=update.get('learning_rate_schedule'),
                     actor={k:v for k,v in update.items() if k not in ('timings','memory')},
@@ -325,13 +376,20 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                 report['timings']['iteration_seconds']=time.monotonic()-began
                 write_json(directory/'report.json',report)
                 summaries.append(report);summaries=summaries[-2:]
+                control=update.get('lr_controller')
+                controller_line=(f' LRmult={control["multiplier_after"]:.3f} {control["mode"]}:{control["decision"]}' if control else '')
+                if limit_report:
+                    controller_line+=(f' ILKL={limit_report["measurement"]["kl_mean"]:.4f}/{limit_report["limit_after"]:.4f}'
+                        f' group_limit={limit_report["group_limit_after"]:.4f} {limit_report["decision"]}')
                 print(f'Recovery generation {iteration+1}: {done} games, {update["optimizer_steps"]} PPO steps; '
                       f'collect={load_began-began:.1f}s prepare={collected-load_began:.1f}s PPO={updated-collected:.1f}s '
                       f'teacher={report["timings"]["search_and_distill_seconds"]:.1f}s '
                       f'eval={report["timings"].get("evaluation_seconds",0):.1f}s cleanup={report["timings"].get("cleanup_seconds",0):.1f}s; '
                       f'total={report["timings"]["iteration_seconds"]:.1f}s; '
                       f'NN batch mean={report["utilization"]["mean_inference_batch"]:.2f}; '
-                      f'LR={update["learning_rates"][0]:.1e} KL={update["epochs"][-1]["post_update_kl"]:.5f} '
+                      f'LR={update["learning_rates"][0]:.1e}{controller_line} '
+                      f'KLcat={update.get("categorical_probe",{}).get("categorical_kl",0.):.5f} '
+                      f'KLsample={update["epochs"][-1]["post_update_kl"]:.5f} '
                       f'value={update["epochs"][-1]["value"]:.4f}; '
                       f'insolvency events={update["insolvency"].get("events",0)} '
                       f'mean cost={update["insolvency"].get("mean_cost_per_trajectory",0):.4f}; '

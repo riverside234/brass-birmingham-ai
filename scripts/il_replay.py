@@ -49,8 +49,13 @@ def dataset_source(root, run):
     signature = state['signature']
     require(report.get('format') == 'bc-training-report/1.0.0' and report.get('signature') == signature,
             f'Incomplete or mismatched imitation run: {run}')
+    from brass_ai.recovery.imitation_extension import epoch_limit
+    limit = epoch_limit(state)
+    if state.get('epoch_extensions'):
+        require(report.get('epoch_limit') == limit and report.get('epoch_extensions') == state['epoch_extensions'],
+                f'Incomplete or mismatched imitation extension: {run}')
     require(report['epochs'] == state['epoch'] and
-            (state['stopped'] or state['epoch'] == signature['epochs']), f'Imitation still incomplete: {run}')
+            (state['stopped'] or state['epoch'] == limit), f'Imitation still incomplete: {run}')
     manifest = project_path(root, signature['manifest_path'])
     require(sha(manifest) == signature['manifest_sha256'], f'Source manifest changed: {manifest}')
     return dict(name=run.name, run=run.relative_to(root).as_posix(),

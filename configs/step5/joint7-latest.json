@@ -50,22 +50,10 @@
   },
   "curriculum": [
     {
-      "until": 20000,
-      "selfplay": 15,
-      "historical": 25,
-      "legacy": 60
-    },
-    {
-      "until": 100000,
-      "selfplay": 45,
-      "historical": 25,
-      "legacy": 30
-    },
-    {
       "until": null,
       "selfplay": 60,
-      "historical": 25,
-      "legacy": 15
+      "historical": 30,
+      "legacy": 10
     }
   ],
   "search_ready_games": 640,
@@ -141,8 +129,8 @@
     "history_reports": 128
   },
   "population": {
-    "recent": 16,
-    "anchors": 48
+    "recent": 4,
+    "anchors": 12
   },
   "evaluation_schedule": {
     "enabled": true,
@@ -173,28 +161,12 @@
     "learning_rate": 6e-05
   },
   "legacy_opponents": {
-    "search_free_until_games": 10000
+    "search_free_until_games": 0
   },
   "search_collections_per_iteration": 2,
   "insolvency": {
     "event_cost": 0.005,
     "max_cost": 0.075
-  },
-  "legacy_boost": {
-    "stages": [
-      {
-        "games": 20000,
-        "selfplay": 15,
-        "historical": 25,
-        "legacy": 60
-      },
-      {
-        "games": 80000,
-        "selfplay": 45,
-        "historical": 25,
-        "legacy": 30
-      }
-    ]
   },
   "reward": {
     "win": 1.0,
@@ -227,7 +199,7 @@
     "mode": "time",
     "seconds_per_turn": 1.0
   },
-  "selfplay_recipe": "latest-model-selfplay/1.0.0",
+  "selfplay_recipe": "latest-model-selfplay/2.0.0",
   "imitation_checkpoint": {
     "bc_run": "artifacts/step5/v4-batch7-joint",
     "path": "artifacts/step5/v4-batch7-joint/epoch-0006.pt",
@@ -242,5 +214,55 @@
     "imitation_steps": 500,
     "selfplay_steps": 100,
     "start_factor": 0.1
+  },
+  "teacher_enabled": false,
+  "ppo_lr_controller": {
+    "contract": "ppo-categorical-kl-lr/1.2.0",
+    "mode": "apply",
+    "target_kl": 0.01,
+    "raise_factor": 1.25,
+    "cut_divisor": 1.5,
+    "low_ratio": 0.45,
+    "high_ratio": 1.5,
+    "window_iterations": 3,
+    "cooldown_iterations": 3,
+    "min_multiplier": 0.5,
+    "max_multiplier": 3.0,
+    "anchor_kl_budget": 0.15,
+    "anchor_group_kl_budget": 0.3,
+    "anchor_group_min_positions": 64,
+    "vp_max_drop": 0.1,
+    "zero_vp_max_fraction": 0.05
+  },
+  "il_kl_limit": {
+    "contract": "auto-il-kl-limit/1.0.0",
+    "probe_positions": 2048,
+    "probe_seed": 710193,
+    "probability_floor": 1e-06,
+    "initial_limit": 0.15,
+    "minimum_limit": 0.05,
+    "maximum_limit": 1.0,
+    "group_factor": 2.0,
+    "growth_factor": 1.25,
+    "recovery_factor": 0.8,
+    "alarm_factor": 2.0,
+    "update_interval": 10,
+    "baseline_iterations": 10,
+    "rolling_iterations": 5,
+    "group_min_positions": 64,
+    "vp_ratio": 0.85,
+    "sells_ratio": 0.7,
+    "pass_factor": 2.0,
+    "pass_allowance": 0.5,
+    "zero_vp_floor": 0.05,
+    "zero_vp_factor": 2.0,
+    "insolvency_allowance": 0.1
+  },
+  "rehearsal_floor": {
+    "contract": "rehearsal-floor/1.0.0",
+    "initial": 0.03,
+    "hold_iterations": 60,
+    "decrement": 0.01,
+    "interval_iterations": 30
   }
 }

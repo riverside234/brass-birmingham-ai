@@ -188,6 +188,7 @@ def _references(root,run):
         d=read(p)
         if d.get('format') in ('step5-recovery-league/2.1.0','step5-recovery-league/2.2.0'):
             selected={k:d.get(k) for k in ('resume','population','origin','evaluation_anchor','pins','champion','champion_mix')}
+            selected['il_kl_probe']=d.get('il_kl_limit',{}).get('probe')
             selected['accepted_gate']=d.get('champion_gate',{}).get('accepted_gate')
             cfg=d.get('signature',{}).get('config',{})
             selected['datasets']=[cfg.get('rehearsal_manifest'),cfg.get('imitation',{}).get('manifest')]

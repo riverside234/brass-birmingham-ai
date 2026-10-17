@@ -6,7 +6,7 @@ from brass_ai.bank import sha
 from brass_ai.learning.contracts import digest,project_path,require
 from brass_ai.step5.league import seeds_for
 from brass_ai.step5.policy import INDUSTRIES
-from .config import table_rotation,latest_model_recipe
+from .config import table_rotation,latest_model_recipe,learner_seats_per_table
 from .curriculum import training_table,searched_legacy
 from .execution import neural_spec
 from .population import sample_opponents
@@ -31,6 +31,7 @@ def plan_collection(root,directory,state,config,signature,service,current,profil
         selected,cursor=seeds_for(cursor,1);seed=selected[0]
         rng=random.Random(digest(dict(seed=config['seed'],index=index)))
         learner=neural_spec(current,config['exploration'],'mixed')
+        learner_count=learner_seats_per_table(config,kind)
         mix_receipt=None
         if kind=='selfplay' and champion_mix.enabled(config):
             entries,mix_receipt=champion_mix.opponents(state,config,rng,current_id=current,
@@ -47,7 +48,7 @@ def plan_collection(root,directory,state,config,signature,service,current,profil
             transition_added+=int(mix_receipt['stage']=='balanced_transition')
         elif kind=='selfplay': policies=selfplay_policies(learner,incumbent) if incumbent else [learner]*4
         elif kind=='historical':
-            candidates=sample_opponents(snapshots.values(),current,state['evaluation_anchor'],rng,config['population']['recent'])
+            candidates=sample_opponents(snapshots.values(),current,state['evaluation_anchor'],rng,config['population']['recent'],count=4-learner_count)
             opponents=[]
             for entry in candidates:
                 historical_generations[entry['generation']]+=1
@@ -57,11 +58,11 @@ def plan_collection(root,directory,state,config,signature,service,current,profil
                     verified_snapshots.add(entry['model_id'])
                 if entry['model_id'] not in service.models: service.register_checkpoint(path)
                 opponents.append(neural_spec(entry['model_id'],.05,'neutral'))
-            policies=[learner]+opponents
+            policies=[learner]*learner_count+opponents
         else:
             # Rotate all profiles across the collection instead of fixing three for an entire chunk.
             selected_specs=opponent_specs if searched_legacy(index,config,boosted) else fast_specs
-            policies=[learner]+[selected_specs[profiles[(index*3+s)%len(profiles)]] for s in range(3)]
+            policies=[learner]*learner_count+[selected_specs[profiles[(index*3+s)%len(profiles)]] for s in range(4-learner_count)]
         rotation=table_rotation(index);focuses={}
         for seat in range(4):
             if policies[(seat-rotation)%4]==learner:
@@ -92,7 +93,7 @@ def sampling_report(games,data,policy_id,kinds,config):
         kind=kinds[game['setup_group']];groups[game['game_id']]=kind
         seats=[s for s,p in enumerate(game['opponents']) if p==policy_id]
         if latest_model_recipe(config):
-            require(len(seats)==(4 if kind=='selfplay' else 1),'Ordinary table learner attribution differs')
+            require(len(seats)==learner_seats_per_table(config,kind),'Ordinary table learner attribution differs')
         trajectories.update((game['game_id'],s) for s in seats)
         by_kind[kind]['tables']+=1;by_kind[kind]['learner_trajectories']+=len(seats)
     require({d[2] for d in data}==trajectories,'Missing or external ordinary player trajectories')

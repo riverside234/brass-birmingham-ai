@@ -19,6 +19,27 @@ def learner_seats(games,learner_ids):
     return result
 
 
+def health_counts(games,learner_ids):
+    """Exact complete-game learner seat counts, before replay IPC compaction."""
+    from .insolvency import events
+    out=dict(tables=len(games),all_learner_tables=0,seat_games=0,vp_sum=0.,sells=0,
+             passes_with_alternative=0,zero_vp_seats=0,insolvent_seats=0,insolvency_events=0)
+    for game in games:
+        seats={s for s,p in enumerate(game['opponents']) if learner_ids is None or p in learner_ids}
+        vp=terminal_targets(game['result'])['vp']
+        out['all_learner_tables']+=int(len(seats)==4)
+        out['seat_games']+=len(seats);out['vp_sum']+=sum(vp[s] for s in seats)
+        out['zero_vp_seats']+=sum(vp[s]==0 for s in seats)
+        found=[e for e in events(game['records']) if e['seat'] in seats]
+        out['insolvency_events']+=len(found);out['insolvent_seats']+=len({e['seat'] for e in found})
+        for row in game['records']:
+            if row['seat'] not in seats:continue
+            kind=row['choices'][row['chosen']]['kind']
+            out['sells']+=int(kind=='sell')
+            out['passes_with_alternative']+=int(kind=='pass' and any(c['kind']!='pass' for c in row['choices']))
+    return out
+
+
 def economy(games,learner_ids=None):
     actions=Counter();phases=Counter();builds=Counter();flipped=Counter();merchant=Counter()
     cash=[];income=[];forced=0;debt=0;feasible_sales=0;selected_sales=0;seen_tiles=set();tile_states={}
@@ -77,7 +98,8 @@ def summarize(games,learner_ids,kind_by_group=None):
     parts=[]
     for kind,group in kinds.items():
         summary=dict(matches=match_report(group),economy=economy(group,learner_ids),
-                     diversity=pottery_metrics(group,learner_ids),learner_by_seat=learner_seats(group,learner_ids))
+                     diversity=pottery_metrics(group,learner_ids),learner_by_seat=learner_seats(group,learner_ids),
+                     health_counts=health_counts(group,learner_ids))
         parts.append(dict(**summary,by_composition={kind:summary},
             measured_policy='frozen incoming collection policy, before this update'))
     return merge_summaries(parts)
@@ -123,6 +145,7 @@ def merge_summaries(parts):
     def combine(items):
         return dict(matches=matches([p['matches'] for p in items]),economy=economics([p['economy'] for p in items]),
                     diversity=diversity([p['diversity'] for p in items]),
+                    health_counts=counters([p.get('health_counts',{}) for p in items]),
                     learner_by_seat={str(s):counters([p.get('learner_by_seat',{}).get(str(s),{}) for p in items]) for s in range(4)})
     grouped=defaultdict(list)
     for part in parts:

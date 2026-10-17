@@ -225,10 +225,10 @@ def policy_measure(model, dataset, indices, behavior, config, timings, verify=Fa
     return result
 
 
-def ppo_update(model,optimizer,games,behavior,config,*,profile=None,profile_steps=4,rehearsal=None,rehearsal_weight=0,learner_data=None,insolvency=None,reward=None,sample_groups=None):
+def ppo_update(model,optimizer,games,behavior,config,*,profile=None,profile_steps=4,rehearsal=None,rehearsal_weight=0,learner_data=None,insolvency=None,reward=None,sample_groups=None,anchor_model=None):
     if config.get('actor_nonforced'):
         return ppo_nonforced(model,optimizer,games,behavior,config,profile=profile,profile_steps=profile_steps,
-                             rehearsal=rehearsal,rehearsal_weight=rehearsal_weight,learner_data=learner_data,insolvency=insolvency,reward=reward,sample_groups=sample_groups)
+                             rehearsal=rehearsal,rehearsal_weight=rehearsal_weight,learner_data=learner_data,insolvency=insolvency,reward=reward,sample_groups=sample_groups,anchor_model=anchor_model)
     require(insolvency is None and reward is None,'Combined reward requires the nonforced actor recipe')
     require(all(g['split']=='train' for g in games),'Held-out PPO data')
     require(model_id(model)==behavior.evaluator.model_id,'Collection model differs from learner')
@@ -280,7 +280,7 @@ def ppo_update(model,optimizer,games,behavior,config,*,profile=None,profile_step
                 with timings.phase('ppo.optimizer'):
                     norm=torch.nn.utils.clip_grad_norm_(model.parameters(),config['grad_clip'],error_if_nonfinite=True)
                     clip_events+=int(float(norm)>config['grad_clip'])
-                    scheduled_step(optimizer);steps+=1
+                    scheduled_step(optimizer,ppo=True);steps+=1
                 if profiler: profiler.step()
                 model.eval()
                 kl=policy_measure(model,dataset,probe,behavior,config,timings)
@@ -325,23 +325,27 @@ def phase_probe(dataset,indices,limit):
     return output
 
 
-def ppo_nonforced(model,optimizer,games,behavior,config,*,profile=None,profile_steps=4,rehearsal=None,rehearsal_weight=0,learner_data=None,insolvency=None,reward=None,sample_groups=None):
+def ppo_nonforced(model,optimizer,games,behavior,config,*,profile=None,profile_steps=4,rehearsal=None,rehearsal_weight=0,learner_data=None,insolvency=None,reward=None,sample_groups=None,anchor_model=None):
     cuda=next(model.parameters()).device.type=='cuda'
     with (ThreadPoolExecutor(max_workers=2) if cuda else nullcontext(None)) as executor:
         return _ppo_nonforced(model,optimizer,games,behavior,config,profile=profile,profile_steps=profile_steps,
-                              rehearsal=rehearsal,rehearsal_weight=rehearsal_weight,learner_data=learner_data,executor=executor,insolvency=insolvency,reward=reward,sample_groups=sample_groups)
+                              rehearsal=rehearsal,rehearsal_weight=rehearsal_weight,learner_data=learner_data,executor=executor,insolvency=insolvency,reward=reward,sample_groups=sample_groups,anchor_model=anchor_model)
 
 
-def _ppo_nonforced(model,optimizer,games,behavior,config,*,profile,profile_steps,rehearsal,rehearsal_weight,learner_data,executor,insolvency,reward,sample_groups=None):
+def _ppo_nonforced(model,optimizer,games,behavior,config,*,profile,profile_steps,rehearsal,rehearsal_weight,learner_data,executor,insolvency,reward,sample_groups=None,anchor_model=None):
     require(all(g['split']=='train' for g in games),'Held-out PPO data')
     require(model_id(model)==behavior.evaluator.model_id,'Collection model differs from learner')
     timings=Timings();device=next(model.parameters()).device
+    from .learning_rate import KEY as WARMUP_KEY
+    warmup=optimizer.param_groups[0].get(WARMUP_KEY)
+    warmup_done=warmup is None or warmup['completed_steps']>=warmup['steps']
     with timings.phase('ppo.prepare'):
         data=learner_data if learner_data is not None else prepared(games,lambda r:r['behavior']['policy_id']==behavior.policy_id,insolvency=insolvency,reward=reward)
         require(data and all(d[0]['behavior']['kind']=='model' and d[0]['behavior']['policy_id']==behavior.policy_id for d in data),
                 'External or stale actions in PPO')
         ds=Dataset(data,device);demo=rehearsal_dataset(rehearsal,device) if rehearsal_weight else None
     count=len(data);actor_ids=(~ds.forced).nonzero().flatten().cpu().tolist()
+    planned_steps=config['epochs']*math.ceil(len(actor_ids)/config['effective_batch_size'] if actor_ids else count/config['critic_batch_size'])
     calibration=None;reward_report=None
     if reward is not None:
         from brass_ai.learning.contracts import digest
@@ -429,7 +433,7 @@ def _ppo_nonforced(model,optimizer,games,behavior,config,*,profile,profile_steps
                         rehearsal_steps+=int(bool(meaningful))
                 with timings.phase('ppo.optimizer'):
                     norm=torch.nn.utils.clip_grad_norm_(model.parameters(),config['grad_clip'],error_if_nonfinite=True)
-                    clips+=int(float(norm)>config['grad_clip']);scheduled_step(optimizer);steps+=1
+                    clips+=int(float(norm)>config['grad_clip']);scheduled_step(optimizer,ppo=True);steps+=1
                     gradient_norms.append(float(norm))
                     actor_used.update(batch);critic_used.update(crit)
                     actor_presentations.update(groups[i] for i in batch)
@@ -446,6 +450,8 @@ def _ppo_nonforced(model,optimizer,games,behavior,config,*,profile,profile_steps
             if stopped or full>config['target_kl']: stopped=True;break
     from .ordinary import sample_usage
     return dict(format='nonforced-actor-ppo/2.1.0',epochs=epochs,optimizer_steps=steps,
+        optimizer_steps_planned=planned_steps,optimizer_steps_fraction=steps/planned_steps if planned_steps else None,
+        controller_warmup_done=warmup_done,
         sample_usage=sample_usage(groups,actor_ids,actor_used,critic_used,actor_presentations,critic_presentations),
         insolvency=insolvency_report,
         reward=reward_report,utility_calibration=calibration,
@@ -457,7 +463,7 @@ def _ppo_nonforced(model,optimizer,games,behavior,config,*,profile,profile_steps
         baseline_explained_variance=explained_variance,
         baseline_scope='Before PPO, after any head calibration; nonforced learner decisions, in-sample',
         legal_actions=distribution([len(ds.rows[i]['choices']) for i in actor_ids]),
-        categorical_probe=categorical_probe.measure(model),gradient_norms=distribution(gradient_norms),
+        categorical_probe=categorical_probe.measure(model,anchor=anchor_model),gradient_norms=distribution(gradient_norms),
         kl_estimator='post_update_kl/probe_kl: sampled chosen-action ((ratio-1)-log(ratio)); full means all nonforced rows, not exact categorical KL',
         kl_probe_rows=len(probe),kl_probe_sampling='proportional-era-phase/1.0.0',
         learning_rates=[group['lr'] for group in optimizer.param_groups],learning_rate_schedule=learning_rate_report(optimizer),

@@ -47,9 +47,15 @@ class CategoricalProbe:
                 p = probabilities(model(*inputs)[0], q, behavior.exploration, behavior.temperature)
                 self.parts.append((part, p.detach().cpu()))
 
-    def measure(self, model):
+    def measure(self, model, anchor=None):
         from .updates import probabilities
-        kl = entropy = relative_entropy = 0.
+        kl = entropy = relative_entropy = anchor_kl = 0.
+        groups={};unassigned=0
+        if anchor is not None:
+            # Reuse the existing round boundaries, not the action/payment phase
+            # labels used to stratify the probe. Do not resample or reweight it.
+            from .teacher_schedule import PHASES,phase_for
+            groups={name:dict(positions=0,total=0.) for name,_,_,_ in PHASES}
         with torch.no_grad():
             for part, before in self.parts:
                 _, inputs, q = self.dataset.batch(part, self.behavior.exploration)
@@ -60,10 +66,27 @@ class CategoricalProbe:
                 legal = inputs[2].sum(-1).float()
                 entropy += float(ent.sum())
                 relative_entropy += float((ent/legal.log().clamp_min(1e-8)).sum())
+                if anchor is not None:
+                    reference=probabilities(anchor(*inputs)[0],q,self.behavior.exploration,self.behavior.temperature)
+                    distances=(reference*(reference.clamp_min(1e-30).log()-p.clamp_min(1e-30).log())).sum(-1).cpu().tolist()
+                    anchor_kl+=sum(distances)
+                    for index,distance in zip(part,distances):
+                        context=self.dataset.rows[index].get('view',{}).get('context',{})
+                        name=phase_for(context) if 'era' in context and type(context.get('round')) is int else None
+                        if name is None:unassigned+=1
+                        else:
+                            groups[name]['positions']+=1;groups[name]['total']+=distance
+        group_means={name:dict(positions=row['positions'],
+            anchor_distance=row['total']/row['positions'] if row['positions'] and np.isfinite(row['total']) else None)
+            for name,row in groups.items()}
         return dict(positions=self.positions, categorical_kl=kl/max(1,self.positions),
                     entropy=entropy/max(1,self.positions),
                     entropy_over_log_legal=relative_entropy/max(1,self.positions),
-                    scope='Exact categorical KL(old behavior || new behavior) on the proportional era/phase nonforced probe; diagnostic only')
+                    **(dict(anchor_distance=anchor_kl/self.positions if self.positions else None,
+                        anchor_groups=group_means,anchor_unassigned_positions=unassigned,
+                        anchor_group_scope='Four existing era/round groups; per-position means on the unchanged nonforced probe',
+                        anchor_scope='Exact KL(fixed IL behavior || post-PPO behavior), same probe and exploration mixture') if anchor is not None else {}),
+                    scope='Exact categorical KL(old behavior || new behavior) on the proportional era/phase nonforced probe; optional PPO LR feedback, unchanged sampled early-stop guard')
 
 
 def teacher_drift_probe(model, data, behavior, config):

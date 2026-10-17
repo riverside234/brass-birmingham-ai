@@ -223,6 +223,26 @@
       "implementation": "c4b6b899d4c28aa83fc91706dbf2812233c0ca2ad3f59b4bee07e9ace3c12168",
       "learning_compatibility": "9ff2f9336c188d303981534d869414e37ea24528a432e6adac855deccfd227d3",
       "reason": "V11 selector-only optimization: validated one-hot/absent target, merchant and industry references use bank index lookups with exact zero sentinels. Preserve model and optimizer tensors, config, data semantics, RNG, progress, population and lineage. Existing pending-collection, source, reward/calibration and strict behavior-probability guards stay active; no configuration migration or old-architecture admission."
+    },
+    {
+      "implementation": "647d019877a38a6023926803956bf794186d23a81fd6b6a35124684ca86046e4",
+      "learning_compatibility": "b3b944dbc492bc1483c41bdb5a9d566f13e2b2a8b7988dbeec8fcb9ebb372674",
+      "reason": "Fresh self-play recipe and PPO-only LR feedback change. Completed v11.1 IL keeps identical model/feature/target/checkpoint and supervised-update semantics. Accept only this exact reviewed source with unchanged learning contracts and all completion/hash/lineage checks; no old architecture or PPO run migration."
+    },
+    {
+      "implementation": "e4fb9b106be898d2c6522fa9ab945f1360de755bd7e58e910e784ba58cb9c302",
+      "learning_compatibility": "b3b944dbc492bc1483c41bdb5a9d566f13e2b2a8b7988dbeec8fcb9ebb372674",
+      "reason": "Fresh v11.1 self-play adds a fixed validation probe, calibrated IL-KL increase gate and committed rehearsal floor. Completed IL model/features, supervised loss, validation, checkpoint and dataset contracts are unchanged; retain exact completion/hash/lineage admission. No in-place PPO source/config migration."
+    },
+    {
+      "implementation": "f2bb7f8155aa772dbe2720311a2b13c55031fe4f2fbbc55fbf037ad6cd321162",
+      "learning_compatibility": "b3b944dbc492bc1483c41bdb5a9d566f13e2b2a8b7988dbeec8fcb9ebb372674",
+      "reason": "Explicit IL epoch-extension review: unchanged v11.1 model, feature, dataset and supervised-update semantics. Completed IL handoff retains original signature/hash/lineage checks; exact optimizer continuation requires the separate pinned extension review."
+    },
+    {
+      "implementation": "6869d1f9bcf0b97937892b4b856a829e3d3a60fd71191ac50be7dbcbf9bfe4a9",
+      "learning_compatibility": "b3b944dbc492bc1483c41bdb5a9d566f13e2b2a8b7988dbeec8fcb9ebb372674",
+      "reason": "Explicit IL epoch-extension review: unchanged v11.1 model, feature, dataset and supervised-update semantics. Completed IL handoff retains original signature/hash/lineage checks; exact optimizer continuation requires the separate pinned extension review."
     }
   ]
 }

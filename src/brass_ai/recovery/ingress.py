@@ -81,8 +81,10 @@ def _prepare_inner(task):
     prepared_at=time.perf_counter()
     # Only verified features and learning labels cross IPC. No repeated private
     # hands, public history or board dictionaries are copied into the learner.
+    # Keep round for the four-phase anchor probe; era/action phase alone cannot
+    # distinguish early/late Canal or Rail after these rows cross IPC.
     compact=[(dict(seat=r['seat'],chosen=r['chosen'],behavior=r['behavior'],
-                   view=dict(context={k:r['view']['context'][k] for k in ('era','phase')}),
+                   view=dict(context={k:r['view']['context'][k] for k in ('era','phase','round')}),
                    choices=r['choices'],style=r['style'],intent=r['intent'],teacher=r['teacher'],
                    **{k:r[k] for k in ('_insolvency_cost_to_go','_insolvency_trajectory','_reward_return','_reward_remaining','_reward_id','_reward_trajectory') if k in r}),
               target,identity,encoded) for r,target,identity,encoded in data]

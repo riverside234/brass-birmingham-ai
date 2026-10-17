@@ -11,9 +11,11 @@ import os
 from pathlib import Path
 import stat
 import tempfile
+import time
 
 
 ROOT = Path(__file__).resolve().parents[1]
+DEFAULT_RUN = 'artifacts/step5/joint7-v11-1-grouped-lr'
 FORMAT = 'selfplay-report-export/1.0.0'
 REPORT_NAMES = {'state.json', 'retention-history.json', 'report.json', 'spec.json',
                 'config.json', 'best.json', 'summary.json', 'comparison.json',
@@ -66,6 +68,20 @@ def report_files(root, directory):
         for name in sorted(files):
             if name in REPORT_NAMES or name.endswith(('-report.json', '-receipt.json')):
                 yield below(root, Path(parent) / name)
+
+
+def publish(stage, output):
+    """Allow short Windows file-handle contention without overwriting a bundle."""
+    for attempt, delay in enumerate((0, .05, .1, .2, .4)):
+        if delay:
+            time.sleep(delay)
+        require(not output.exists(), f'Output appeared during export: {output}')
+        try:
+            stage.rename(output)
+            return
+        except PermissionError as error:
+            if os.name != 'nt' or getattr(error, 'winerror', None) not in (5, 32, 33) or attempt == 4:
+                raise
 
 
 def export(root, run, output=None, *, latest=2, extras=()):
@@ -129,10 +145,13 @@ def export(root, run, output=None, *, latest=2, extras=()):
                 add(path, path.relative_to(run), 'Related iteration/teaching report')
     for path in report_files(root, run / 'evaluations'):
         add(path, path.relative_to(run), 'Evaluation report or specification')
+    for path in report_files(root, run / 'il-kl'):
+        add(path, path.relative_to(run), 'Fixed IL-KL probe manifest or initial measurement')
 
     # State receipts also reveal evaluations whose files retention has removed.
-    receipts = list(state.get('evaluations', [])) + list(state.get('champion_gate', {}).get('recent', []))
-    accepted = state.get('champion_gate', {}).get('accepted_gate')
+    gate = state.get('champion_gate') or {}
+    receipts = list(state.get('evaluations', [])) + list(gate.get('recent', []))
+    accepted = gate.get('accepted_gate')
     if isinstance(accepted, dict):
         receipts.append(accepted)
     for receipt in receipts:
@@ -204,15 +223,14 @@ def export(root, run, output=None, *, latest=2, extras=()):
         for entry, raw in files.values():
             require(below(root, entry['source']).read_bytes() == raw,
                     f"Report changed during export; retry: {entry['source']}")
-        require(not output.exists(), f'Output appeared during export: {output}')
-        stage.rename(output)
+        publish(stage, output)
     return output, manifest
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--root', type=Path, default=ROOT, help='Project root; defaults to this script\'s project')
-    parser.add_argument('--run', default='artifacts/step5/v4-selfplay-joint', help='Self-play run under artifacts/')
+    parser.add_argument('--run', default=DEFAULT_RUN, help=f'Self-play run under artifacts/ (default: {DEFAULT_RUN})')
     parser.add_argument('--output', help='New results/ folder; default includes run, generation and UTC timestamp')
     parser.add_argument('--latest', type=int, default=2, help='Number of latest committed iteration reports (default: 2)')
     parser.add_argument('--extra', action='append', default=[], help='Additional JSON report or directory; repeat as needed')

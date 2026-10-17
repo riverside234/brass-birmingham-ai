@@ -12,6 +12,7 @@ from .updates import distill_update
 
 
 def due_collections(done,next_search,config):
+    if not config.get('teacher_enabled',True):return 0
     interval=config['search_every_games']
     return min(config.get('search_collections_per_iteration',1),
         1+(done-next_search)//interval) if interval and done>=next_search else 0
@@ -62,6 +63,11 @@ def collect_due(root,run,directory,config,state,signature,model,optimizer,servic
                 done,cursor,ordinary_seconds,ordinary_game_seconds,recalibrate=None,ordinary_data=None,ordinary_policy_id=None):
     require(recalibrate is None or callable(recalibrate),'Invalid ordinary-data calibration callback')
     next_search=state['next_search_games'];search_seconds=state.get('search_seconds',0.)
+    if not config.get('teacher_enabled',True):
+        return (dict(enabled=False,updated=False,reason='Teacher search and distillation disabled by configuration',
+                    collection_count=0,optimizer_steps=0,teacher_rows=0,
+                    teacher_value=dict(enabled=False,reason='No teacher collection while teacher_enabled=false')),
+                    next_search,cursor,search_seconds)
     estimate=estimate_collection(config,ordinary_game_seconds);batches=[];deferred_reason=None
     # This is an admission cost estimate, never a thinking-time limit. After
     # the first collection, use its measured total cost plus 25% headroom.

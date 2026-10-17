@@ -150,6 +150,15 @@ def prepare(tasks, directory, workers, partition, progress=False):
     started=time.perf_counter()
     directory=Path(directory);directory.mkdir(parents=True,exist_ok=True)
     identity=preparation_identity();keys=[task_key(t,identity) for t in tasks]
+    # Training-only epoch extension does not change prepared features/labels.
+    # Reuse only explicitly reviewed keys; workers still verify raw/output hashes.
+    from .imitation_extension import equivalent_preparations
+    from .replay import cache_version
+    legacy=equivalent_preparations(FORMAT,cache_version())
+    existing={p.stem for p in directory.glob('*.json')}
+    for i,task in enumerate(tasks):
+        if keys[i] not in existing:
+            keys[i]=next((key for old in legacy if (key:=task_key(task,old)) in existing),keys[i])
     receipts=[None]*len(tasks);width=min(workers,len(tasks));cached=0;retries=[]
     log=Progress(f'imitation load {partition} (disk-backed, CPU, {width} workers)',len(tasks),'shards') if progress else None
     while any(r is None for r in receipts):

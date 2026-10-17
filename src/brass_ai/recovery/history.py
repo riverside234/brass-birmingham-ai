@@ -78,6 +78,10 @@ def compact(report):
     out=scalars(report,('format','iteration','games_done','cumulative_games','incoming_model_id','post_update_model_id',
                        'incoming_policy_id','elapsed_seconds','games','failed_games','promotion_eligible'))
     out['summary_version']=5
+    for key in ('il_kl_limit','rehearsal_schedule','health_counts'):
+        if key in report:out[key]=report[key]
+    out['health_by_composition']={k:v['health_counts'] for k,v in report.get('by_composition',{}).items()
+                                  if 'health_counts' in v}
     if report.get('format') in ('step5-evaluation-report/1.0.0','four-player-champion/1.0.0'):
         out['evaluation_evidence']=evaluation_evidence(report)
     out['timings']=scalars(report.get('timings',{}),('collection_seconds','replay_load_seconds','ppo_seconds',
@@ -87,6 +91,9 @@ def compact(report):
         'learner_trajectories','kl_early_stop','rehearsal_weight','gradient_clip_steps','baseline_explained_variance',
         'baseline_scope','kl_estimator','kl_probe_rows','kl_probe_sampling'))
     out['actor']['learning_rates']=actor.get('learning_rates',[])[:8]
+    out['actor']['lr_controller']=actor.get('lr_controller')
+    out['actor']['optimizer_steps_planned']=actor.get('optimizer_steps_planned')
+    out['actor']['optimizer_steps_fraction']=actor.get('optimizer_steps_fraction')
     schedule=actor.get('learning_rate_schedule')
     out['actor']['learning_rate_schedule']=scalars(schedule,('contract','kind','base_lr','steps','start_factor',
         'completed_steps','effective_lr','next_lr')) if schedule else None
@@ -107,7 +114,7 @@ def compact(report):
     out['actor']['reward_distribution']=reward.get('distribution')
     out['actor']['utility_calibration']=calibration(actor.get('utility_calibration'))
     search=report.get('search',{})
-    out['search']=scalars(search,('updated','reason','collection_count','optimizer_steps','teacher_rows','teacher_setups',
+    out['search']=scalars(search,('enabled','updated','reason','collection_count','optimizer_steps','teacher_rows','teacher_setups',
         'sample_presentations','max_observed_reuse','distinct_labels_used','unused_qualified_labels',
         'post_teacher_sampled_kl','post_teacher_kl_scope'))
     for key in ('fit_before','fit_after','budget','timings'):

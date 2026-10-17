@@ -51,6 +51,8 @@ def parser():
     bc_initialization.add_argument('--from-imitation-run',help='Continue a completed fresh imitation model on this manifest in a new run directory')
     bc.add_argument('--run',default='artifacts/step5/imitation')
     bc.add_argument('--epochs',type=int,default=10)
+    bc.add_argument('--extend-to-epochs',type=int,
+                    help='Explicitly extend a completed IL epoch cap to this total; keep original --epochs/settings and restore Adam/RNG/warmup')
     bc.add_argument('--min-epochs',type=int,default=3)
     bc.add_argument('--patience',type=int,default=2)
     bc.add_argument('--learning-rate',type=float,help='Peak IL rate; defaults to the selected config (v11: 6e-5)')
@@ -164,7 +166,7 @@ def main(argv=None):
             from brass_ai.recovery.learning_rate import DEFAULT_WARMUP
             warmup=config.get('learning_rate_warmup',DEFAULT_WARMUP)
             result=train_bc(root,a.run,a.manifest,a.initial,update,device=a.device,
-                epochs=a.epochs,min_epochs=a.min_epochs,patience=a.patience,
+                epochs=a.epochs,min_epochs=a.min_epochs,patience=a.patience,extend_to_epochs=a.extend_to_epochs,
                 lr=a.learning_rate if a.learning_rate is not None else config.get('imitation',{}).get('learning_rate',6e-5),
                 retention=config.get('retention'),workers=workers,from_imitation_run=a.from_imitation_run,
                 warmup_steps=a.warmup_steps if a.warmup_steps is not None else warmup['imitation_steps'],warmup_start_factor=warmup['start_factor'])
