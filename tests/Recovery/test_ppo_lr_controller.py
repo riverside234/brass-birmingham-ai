@@ -37,6 +37,9 @@ def config():
     value=read_json(SOURCE_ROOT/'configs/step5/joint7-latest.json')
     value['ppo_lr_controller']['contract']=controller.CONTRACT
     value.pop('il_kl_limit',None)
+    for key in ('table_plan','opponent_pool','rating','v4_search_enabled'):value.pop(key,None)
+    value.update(selfplay_recipe='latest-model-selfplay/2.0.0',
+        curriculum=[dict(until=None,selfplay=60,historical=30,legacy=10)],population=dict(recent=4,anchors=12))
     return value
 
 
@@ -206,16 +209,15 @@ class OptimizerIntegration(unittest.TestCase):
         torch.manual_seed(33);model=FourSeatNet(ModelConfig.preset('small'));anchor=copy.deepcopy(model).eval()
         behavior,data=self.data(model);opt=self.optimizer(model);opt.param_groups[0][controller.KEY]['multiplier']=1.25
         cfg=dict(config()['update'],effective_batch_size=2,microbatch_size=2,critic_batch_size=2)
-        from brass_ai.recovery import updates
-        real=updates.policy_measure
-        def stop(*args,**kw):
-            result=real(*args,**kw)
-            verify=kw.get('verify',args[6] if len(args)>6 else False)
-            return result if verify else .02
-        with patch.object(updates,'policy_measure',side_effect=stop):
+        from brass_ai.recovery.review_metrics import CategoricalProbe
+        real=CategoricalProbe.measure_step
+        def stop(probe,*args,**kw):
+            return dict(real(probe,*args,**kw),categorical_kl=.02)
+        with patch.object(CategoricalProbe,'measure_step',stop):
             report=ppo_update(model,opt,[dict(split='train')],behavior,cfg,learner_data=data,anchor_model=anchor)
         self.assertEqual(report['optimizer_steps_planned'],8);self.assertEqual(report['optimizer_steps'],1)
         self.assertTrue(report['kl_early_stop']);self.assertEqual(report['learning_rates'],[7.5e-6])
+        self.assertEqual(report['kl_guard']['stop_reason'],'categorical_probe')
         self.assertEqual(report['categorical_probe']['positions'],8)
         self.assertEqual(report['categorical_probe']['anchor_unassigned_positions'],0)
         self.assertEqual({p:r['positions'] for p,r in report['categorical_probe']['anchor_groups'].items()},
@@ -251,7 +253,8 @@ class OptimizerIntegration(unittest.TestCase):
 
 class FixedRecipe(unittest.TestCase):
     def test_defaults_generator_and_archived_recipe_validation(self):
-        cfg=config();self.assertEqual(latest_model_config(cfg,cfg['imitation_checkpoint']),cfg)
+        cfg=config();current=read_json(SOURCE_ROOT/'configs/step5/joint7-latest.json')
+        self.assertEqual(latest_model_config(cfg,cfg['imitation_checkpoint']),current)
         self.assertFalse(cfg['teacher_enabled']);self.assertEqual(cfg['population'],dict(recent=4,anchors=12))
         self.assertEqual(cfg['architecture'],'brass-four-seat-mlp-resnet/11.1.0')
         for start in (0,19920,20000,99920,100000,500000):

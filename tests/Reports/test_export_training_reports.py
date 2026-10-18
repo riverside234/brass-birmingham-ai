@@ -123,6 +123,18 @@ class ExportTests(unittest.TestCase):
             reports.export(self.root, 'artifacts/missing')
         self.assertFalse((self.root / 'artifacts/missing').exists())
 
+    def test_compacted_rating_history_is_copied_with_exact_bytes_and_checksum(self):
+        raw=reports.encode(dict(format='plackett-luce-history/1.0.0',slots=[dict(generation=10)],games=[]))
+        path=self.put(self.run+'/ratings/history-'+reports.checksum(raw)+'.json',raw)
+        self.state['ratings']=dict(slots=[],archive=dict(path=path.relative_to(self.root).as_posix(),sha256=reports.checksum(raw)))
+        self.put(self.run+'/state.json',self.state)
+        output,manifest=self.export()
+        self.assertEqual((output/path.relative_to(self.root/self.run)).read_bytes(),raw)
+        self.assertTrue(any(e['source']==path.relative_to(self.root).as_posix() for e in manifest['files']))
+        path.write_bytes(raw+b' ')
+        with self.assertRaisesRegex(ValueError,'Archived rating evidence changed'):
+            self.export(output='results/tampered-archive')
+
     def modern_run(self, generation):
         self.run = 'artifacts/step5/joint7-v11-1-grouped-lr'
         il_run = 'artifacts/step5/features4-v11-1-batch7-il'
@@ -271,6 +283,31 @@ class ExportTests(unittest.TestCase):
             self.assertAlmostEqual(sum(call.args[0] for call in sleep.call_args_list), .75)
         self.assertFalse(output.exists())
         self.assertTrue((stage / 'report.json').is_file())
+
+    def test_rating_outcomes_panels_and_curves_preserve_bytes_without_dense_caches(self):
+        directory=self.run+'/ratings/slots/generation-000060'
+        paths={
+            'records':self.put(directory+'/games.jsonl',b'{"game_id":"held-out","slot":60}\n'),
+            'panels':self.put(directory+'/panels.json',dict(qualified=None,reason='Review required')),
+            'report':self.put(directory+'/report.json',dict(ratings={'generation-0':dict(points=0)})),
+            'spec':self.put(directory+'/spec.json',dict(exploration=0)),
+        }
+        curve=self.put(directory+'/progress.svg',b'<svg xmlns="http://www.w3.org/2000/svg"/>\n')
+        self.put(directory+'/bootstrap.npz',b'large dense bootstrap array')
+        self.put(directory+'/game-000001.jsonl.gz',b'full replay')
+        self.put(self.run+'/opponent-pool/probes/member.npz',b'large probability cache')
+        self.state['ratings']=dict(slots=[dict(generation=60,**{
+            key:dict(path=p.relative_to(self.root).as_posix(),sha256=reports.checksum(p.read_bytes()))
+            for key,p in paths.items()})])
+        self.state['quality_pool']=dict(members=[dict(q=-.2,p=.4)],max_members=24)
+        self.put(self.run+'/state.json',self.state)
+        output,manifest=self.export()
+        for path in [*paths.values(),curve]:
+            self.assertEqual((output/path.relative_to(self.root/self.run)).read_bytes(),path.read_bytes())
+        self.assertFalse(any(p.suffix in ('.npz','.gz','.pt') for p in output.rglob('*')))
+        self.assertEqual(json.loads((output/'state.json').read_text())['quality_pool'],self.state['quality_pool'])
+        paths['records'].write_bytes(b'{"changed":true}\n')
+        with self.assertRaisesRegex(ValueError,'evidence changed'):self.export()
 
     def test_real_iteration60_exports_can_be_bundled_without_models_or_torch(self):
         # Reconstruct only report paths in a temporary fixture, never the real run.

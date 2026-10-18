@@ -372,7 +372,7 @@ def _ppo_nonforced(model,optimizer,games,behavior,config,*,profile,profile_steps
     if reward is None:advantages-=torch.tensor(costs,device=device,dtype=advantages.dtype)
     useful=advantages[actor_ids];mean=useful.mean() if actor_ids else torch.zeros((),device=device)
     std=useful.std(unbiased=False) if actor_ids else torch.zeros((),device=device)
-    from .review_metrics import distribution,CategoricalProbe
+    from .review_metrics import distribution,CategoricalProbe,PPO_KL_GUARD
     advantage_distribution=distribution(useful)
     target=ds.utility if ds.utility is not None else ds.targets[0]
     actor_returns=target[actor_ids,ds.seats[actor_ids]]
@@ -384,6 +384,7 @@ def _ppo_nonforced(model,optimizer,games,behavior,config,*,profile,profile_steps
     categorical_probe=CategoricalProbe(model,ds,probe,behavior,config)
     gradient_norms=[]
     epochs=[];steps=0;clips=0;stopped=False;rehearsal_steps=0
+    stop_reason=None;max_categorical_kl=0.
     actor_used=set();critic_used=set();actor_presentations=Counter();critic_presentations=Counter()
     groups=[(sample_groups or {}).get(d[2][0],'unknown') for d in data]
     with profile_window(profile,device,profile_steps) as profiler:
@@ -393,7 +394,7 @@ def _ppo_nonforced(model,optimizer,games,behavior,config,*,profile,profile_steps
             actor_batches=[order[i:i+config['effective_batch_size']] for i in range(0,len(order),config['effective_batch_size'])]
             if not actor_batches: actor_batches=[[] for _ in range(math.ceil(count/config['critic_batch_size']))]
             actor_totals=torch.zeros(3,device=device);value_totals=torch.zeros(4,device=device)
-            actor_seen=critic_seen=0;norm=torch.zeros((),device=device);kl=0.0
+            actor_seen=critic_seen=0;norm=torch.zeros((),device=device);kl=exact_kl=0.0
             utility_squared=torch.zeros((),device=device);utility_absolute=torch.zeros((),device=device)
             for batch in actor_batches:
                 if critic_cursor>=count: critic_order=torch.randperm(count).tolist();critic_cursor=0
@@ -439,15 +440,23 @@ def _ppo_nonforced(model,optimizer,games,behavior,config,*,profile,profile_steps
                     actor_presentations.update(groups[i] for i in batch)
                     critic_presentations.update(groups[i] for i in crit)
                 if profiler: profiler.step()
-                model.eval();kl=policy_measure(model,ds,probe,behavior,config,timings,executor=executor)
-                if kl>config['target_kl']: stopped=True;break
+                model.eval()
+                with timings.phase('ppo.kl_probe'):
+                    measured=categorical_probe.measure_step(model,executor=executor)
+                exact_kl=measured['categorical_kl'];kl=measured['sampled_kl']
+                max_categorical_kl=max(max_categorical_kl,exact_kl)
+                if exact_kl>config['target_kl']:
+                    stopped=True;stop_reason='categorical_probe';break
             full=policy_measure(model,ds,actor_ids,behavior,config,timings,executor=executor)
+            require(math.isfinite(full),'Nonfinite full-dataset PPO sampled KL; refusing further updates')
+            if not stopped and full>config['target_kl']:
+                stopped=True;stop_reason='sampled_full_dataset'
             aa=(actor_totals/max(1,actor_seen)).cpu().tolist();vv=(value_totals/max(1,critic_seen)).cpu().tolist()
             epochs.append(dict(epoch=epoch,actor=aa[0],entropy=aa[1],clip_fraction=aa[2],value=vv[0],
-                win_loss=vv[1],rank_loss=vv[2],vp_loss=vv[3],post_update_kl=full,probe_kl=kl,
+                win_loss=vv[1],rank_loss=vv[2],vp_loss=vv[3],post_update_kl=full,probe_kl=kl,probe_categorical_kl=exact_kl,
                 gradient_norm=float(norm),actor_positions=actor_seen,critic_positions=critic_seen,positions=actor_seen))
             if reward is not None:epochs[-1]['utility_prediction']=dict(mse=float(utility_squared)/max(1,4*critic_seen),mae=float(utility_absolute)/max(1,4*critic_seen))
-            if stopped or full>config['target_kl']: stopped=True;break
+            if stopped:break
     from .ordinary import sample_usage
     return dict(format='nonforced-actor-ppo/2.1.0',epochs=epochs,optimizer_steps=steps,
         optimizer_steps_planned=planned_steps,optimizer_steps_fraction=steps/planned_steps if planned_steps else None,
@@ -464,7 +473,10 @@ def _ppo_nonforced(model,optimizer,games,behavior,config,*,profile,profile_steps
         baseline_scope='Before PPO, after any head calibration; nonforced learner decisions, in-sample',
         legal_actions=distribution([len(ds.rows[i]['choices']) for i in actor_ids]),
         categorical_probe=categorical_probe.measure(model,anchor=anchor_model),gradient_norms=distribution(gradient_norms),
-        kl_estimator='post_update_kl/probe_kl: sampled chosen-action ((ratio-1)-log(ratio)); full means all nonforced rows, not exact categorical KL',
+        kl_estimator='probe_categorical_kl: exact KL(old behavior || current behavior), per-step guard; post_update_kl/probe_kl: sampled chosen-action ((ratio-1)-log(ratio)); full means all nonforced rows, retained as secondary epoch guard',
+        kl_guard=dict(contract=PPO_KL_GUARD,target_kl=config['target_kl'],probe_positions=len(probe),
+            probe_checks=steps,full_dataset_checks=len(epochs),max_categorical_kl=max_categorical_kl,
+            stop_reason=stop_reason,stop_step=steps if stopped else None),
         kl_probe_rows=len(probe),kl_probe_sampling='proportional-era-phase/1.0.0',
         learning_rates=[group['lr'] for group in optimizer.param_groups],learning_rate_schedule=learning_rate_report(optimizer),
         kl_early_stop=stopped,gradient_clip_steps=clips,

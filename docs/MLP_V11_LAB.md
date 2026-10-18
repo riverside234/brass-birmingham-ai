@@ -2,7 +2,7 @@
 
 V11.1 is the current MLP default: projections **32/64/48/320/352/48 + 12**, fusion **876 → 512**, **eight width-512 residual blocks**, a width-160 action encoder, and a 192-wide policy scorer. Local slot/link/industry banks include neighboring slots and opponents' industry mats; their bias-free role projections start at zero. The shared per-player outcome head remains width 128. See the [model contract](../ai-research/GROUPED_PROJECTION_CONTRACT.md) and [validation report](../ai-research/MLP_V11_1_REPORT.md).
 
-The October 16 self-play recipe revision reuses **completed v11.1 IL without retraining**. Skip the IL commands below if it is already complete. Generate a new bound self-play config and use a new run directory. Model tensors, features, and IL losses are unchanged; the exact preceding v11.1 implementation is admitted by the completed-IL source receipt.
+The October 18 quality-pool/rating revision reuses **completed v11.1 IL without retraining**. Skip the IL commands below if it is already complete. Generate a new bound self-play config and use a new run directory. Model tensors, features, and IL losses are unchanged; the exact preceding v11.1 implementation is admitted by the completed-IL source receipt. This revision does not authorize converting an existing PPO run.
 
 ## Existing joint7 IL data
 
@@ -78,16 +78,18 @@ Repeat the **same extension command** after interruption; the saved total cap is
 
 ## Fresh self-play from completed v11.1 IL
 
-After IL completes, generate a config bound to its selected checkpoint. The helper requires a new output filename.
+Install the self-play dependencies and generate a fresh config from the updated default template, bound to your completed IL checkpoint. The commands below use new `joint7-v11-1-grouped-lr-quality` config/run names so your earlier `joint7-v11-1-grouped-lr.json` is left unchanged. The new config includes all current updates: 50/45/5 tables, the 24-member quality-score pool, PL ratings, auto IL-KL/LR controls, rehearsal floor, teaching disabled, `v4_search_enabled=false`, and Monitor/Broader Evaluation disabled. Keep the completed IL directory unchanged; another IL run is not required. The generator refuses to overwrite a config. If the new names also exist, choose another unused suffix consistently in generation, training, continuation and report export.
 
 ```bash
+python -m pip install -r requirements-step5.txt
+
 python scripts/feature-engineering.py configure \
   --imitation-run artifacts/step5/features4-v11-1-batch7-il \
-  --output configs/step5/joint7-v11-1-grouped-lr.json
+  --output configs/step5/joint7-v11-1-grouped-lr-quality.json
 
-python scripts/step5.py --config configs/step5/joint7-v11-1-grouped-lr.json train \
+python scripts/step5.py --config configs/step5/joint7-v11-1-grouped-lr-quality.json train \
   --fresh \
-  --run artifacts/step5/joint7-v11-1-grouped-lr \
+  --run artifacts/step5/joint7-v11-1-grouped-lr-quality \
   --imitation-run artifacts/step5/features4-v11-1-batch7-il \
   --iterations 1
 ```
@@ -96,19 +98,53 @@ The initial PPO model copies the completed IL weights exactly. PPO receives a fr
 
 Use your actual completed v11.1 IL path in both commands. The shipped `joint7-latest.json` is a template; `configure` binds the selected IL checkpoint and its rehearsal manifest instead of importing the template's historical lineage.
 
-The new `latest-model-selfplay/2.0.0` recipe uses the same quotas from game zero onward:
+The new `latest-model-selfplay/3.0.0` recipe uses the same quotas from game zero onward:
 
 | Tables | Quota | Learners | Frozen opponents |
 | --- | ---: | ---: | --- |
-| Self-play | 60% | 4 | None |
-| History | 30% | 2 | 2 history policies |
-| v4 | 10% | 2 | 2 searched v4 bots |
+| Self-play | 50% | 4 | None |
+| History | 45% | 2 | 2 independently sampled history policies |
+| v4 | 5% | 2 | 2 search-free v4 bots |
 
-At 320 games this is **192 / 96 / 32 tables**, or **768 / 192 / 64 learner seat trajectories** before forced-action filtering. Deterministic seat rotation and contextual family exploration remain unchanged. The learner uses exploration **0.08**, temperature **1.0**; frozen historical policies retain **0.05**. There is no v4 curriculum/boost window or later fast-to-searched transition. The existing one-second shared v4 turn budget remains active.
+At 320 games this is **160 / 144 / 16 tables**, or **640 / 288 / 32 learner seat trajectories: 960 total** before forced-action filtering. Each mixed table type cycles deterministically through the six learner seat pairs, carrying its position across iterations/resumes. History uses each pair exactly 24 times per iteration; 16 v4 tables use each pair two or three times, balancing over successive iterations. Exact equality across six pairs is impossible for 16 tables. Normal table rotation and contextual family exploration remain intact. The learner uses exploration **0.08**, temperature **1.0**; frozen historical policies retain **0.05**. There is no v4 curriculum/boost window or later fast-to-searched transition. `v4_search_enabled=false` disables MCTS in all ordinary and scheduled self-play evaluation v4 seats, including held-out profiles. The bots use their existing incumbent-only policy. The one-second search budget is stored but inactive; cancellation and failure watchdogs remain active. This signed, strictly boolean setting defaults to false in newly generated configs; old configs without the field keep their historical behavior and cannot silently reuse search-free collection caches.
 
-The historical model pool is **16**: **4 recent + 12 anchors/reservoir**, preserving the initial IL anchor. Resume checkpoints and separately pinned evidence remain protected by the existing retention rules; 16 is the population limit, not a cap on every file in the run.
+Scheduled **Monitor** and **Broader Evaluation** are disabled (`evaluation_schedule.enabled=false`) at startup/resume and after iteration commits. The independent Plackett–Luce ratings and their diagnostic panels remain enabled every ten iterations. Newly generated configs inherit this setting; the older generated config is left unchanged.
+
+The historical pool has at most **24 members: pinned IL + 23 scored snapshots**. The `population` fields remain a compatibility capacity declaration (2 + 22); selection and eviction in recipe 3 are governed by `opponent_pool`, not the previous recent/reservoir sampler. Resume checkpoints and independently rated snapshots remain protected; 24 is the training-pool limit, not a cap on every checkpoint file.
 
 `teacher_enabled=false` disables teacher games, search, policy distillation and teacher auxiliary values. The stored teacher settings remain **9/12/12/12 seconds**, five games, eight workers per turn, eight distillation steps and `search_wall_fraction=null`, ready for a separately reviewed future change. Ordinary utility calibration is still required. PPO reward, entropy/value weights, evaluation and the disabled champion gate are unchanged. Rehearsal follows the floor schedule below.
+
+## Quality-score history opponents
+
+Each history seat is sampled independently: 20% pinned IL, otherwise `p_i = 0.8 * softmax(q)_i + 0.2 / N` over the scored members. Until the first admission, every history seat uses IL. Both opponent seats may select the same model. The quality probability is conditional on selecting the scored pool; its per-seat probability is `0.8 * p_i`.
+
+After collection, every learner/opponent seat pair contributes its official-tiebreak outcome (win 1, tie 0.5, loss 0). A scored member receives `q_i -= 0.01 * outcome / (N * p_i)`, using the probabilities frozen when the collection was planned. Recenter by subtracting the largest q. IL outcomes are reported but never change a score. No rating result enters this sampler.
+
+Every five committed iterations, admit the current model only after five recorded healthy iterations and when every `KL(member || candidate)` is at least 0.02 on the fixed IL validation probe. Health uses the existing baseline/behavior/evidence checks below; its window is not backfilled. Consequently the first admission can be later than generation 15. New q is the current maximum. When full, evict the lowest-q eligible member, breaking exact q ties by smallest KL to another member. IL, the two newest members, and members younger than 20 iterations are protected. If all are protected, skip admission.
+
+`state.json` stores members, scores, planning probabilities, cached-probe receipts, health window and membership events. Each generation checkpoint binds this state by digest; resume checks it. Reports and compact history retain q/p, seats, comparisons, raw and five-iteration outrank rates, and admission/eviction reasons. Active probability caches, pool checkpoints and all rated checkpoints survive retention cleanup.
+
+## Held-out Plackett–Luce ratings
+
+Every ten committed generations, collect **32 fixed validation setups × 4 candidate-seat rotations = 128 main games**, with exploration 0, neutral focus and no search for either neural or v4 policies. Half the setups have an IL reference seat, half v4. The other seats use the eight nearest rated checkpoints, estimating the new candidate from the latest rated checkpoint. Startup explicitly falls back to IL + v4; with one rated checkpoint it fills both extra seats. Previously evicted training-pool models remain available as rated opponents.
+
+Every slot additionally runs **eight setups × four rotations for each diagnostic panel**: one learner versus three v4 bots, and two learners versus two IL opponents. The all-learner health panel comes from recorded ordinary self-play. This adds **64 games**, so the default total is **192 held-out games per 3,200 training games (6% extra game volume)**, plus fitting and I/O. Scheduled Monitor and Broader Evaluation add no games while disabled. Held-out games never train PPO. Rating v4 is the pinned `balanced-v3-masked-economy` profile in the configured reference bank, with search disabled, matching the search-free setting throughout the new self-play recipe.
+
+The MAP model fixes IL theta at zero, uses agent priors N(0, 2²), and four zero-sum seat effects with priors N(0, 0.5²). Official residual ties use a seeded shuffle. Every slot refits all main games with L-BFGS and runs 200 setup-cluster bootstrap refits, preserving pairing across slots and rotations. Reports give 173.7×theta points, 95% intervals, seat-neutral outrank probabilities versus IL/v4, and paired difference intervals. Only a difference interval excluding zero supports a directional strength claim within this model. The nominal intervals require adequate real-game evidence; neither ±40 points nor actual 95% coverage is guaranteed.
+
+Committed compact games, slot specifications, fit reports, panel results, bootstrap arrays and `progress.svg` live under `ratings/slots/generation-NNNNNN/`. Rating work finishes before further PPO on resume; an interrupted slot reuses verified games. Reports flag a new upper interval more than 50 points below the best point estimate and a strict decline in v4 win share over three slots. **The mixture stays 50/45/5. Deployment qualification requires manual panel review; no model is automatically deployed or published.** The highest lower-bound candidate is reported as a review aid.
+
+With automatic retention enabled, full rating folders cover the **most recent 100 committed training iterations**: normally ten rating folders at the every-ten-iteration cadence. At generation 110, generation 10 is retired and generations 20–110 remain. Before cleanup, older compact outcomes and panel summaries are consolidated into one checksummed `ratings/history-<digest>.json`, referenced by `state.json` under `ratings.archive`. Cumulative PL fits, paired bootstrap refits, alerts and resume still use all outcomes. Older full reports, curves, bootstrap arrays and sampled replays are cleaned through the existing retention/quarantine mechanism; explicit pins are honored. Required rated model checkpoints remain protected. The latest fit is always kept, including with a custom rating interval over 100. This change applies to rating output folders; existing exported `results/` bundles are untouched.
+
+The versioned `table_plan`, `opponent_pool` and `rating` blocks join the run signature. SciPy and Matplotlib are in `requirements-step5.txt`. To refit existing evidence into a new review directory without collecting games:
+
+```bash
+python scripts/strength-ratings.py \
+  --run artifacts/step5/joint7-v11-1-grouped-lr-quality \
+  --output artifacts/joint7-v11-1-grouped-lr-quality-rating-review
+```
+
+See the [implementation and bounded validation report](../ai-research/SELFPLAY_QUALITY_RATING_REPORT.md).
 
 ## Rehearsal floor
 
@@ -128,7 +164,15 @@ The floor uses committed iteration progress, so restarting preserves its stage:
 
 Fresh configs now use **`ppo-categorical-kl-lr/1.2.0`** plus the strict **`auto-il-kl-limit/1.0.0`** block. Both are part of the run signature. Completed v11.1 IL remains compatible; its directory and selected weights are reused. Generate a new bound config before starting. A previously generated config does not silently acquire these settings; the helper requires a new output filename. Existing committed runs require a separately reviewed source/config transition.
 
-The per-update LR signal remains exact **KL(old behavior || post-PPO behavior)** on the ordinary proportional probe, capped at 2,048 nonforced rows. The sampled-action early-stop guard is unchanged. Raise by 1.25 after a full three-valid-iteration median below 0.0045 with no stops, no cooldown and passing health/anchor checks. Cut by 1.5 immediately on an early stop before half the planned steps, two stops in three valid iterations, or current exact KL above 0.015. Cuts start a three-valid-iteration cooldown; multiplier bounds remain 0.5–3. Warmup, empty/nonfinite update handling, shadow/off modes and PPO-only multiplier application remain unchanged. **Protective LR cuts never depend on anchor/health approval.**
+The per-update LR signal remains exact **KL(old behavior || post-PPO behavior)** on the ordinary proportional probe, capped at 2,048 nonforced rows. The active PPO trainer now also uses this exact categorical KL after **each optimizer step**, stopping further steps when it exceeds `update.target_kl=0.01`. The old probabilities and probe positions stay fixed throughout all PPO epochs; both distributions use the same legal masks, temperature and 0.08 exploration mixture. The sampled-action estimate on **all nonforced rows** remains a secondary guard at each epoch end. Nonfinite probe or full-dataset KL aborts the update before any further optimizer steps or checkpoint publication. No KL penalty is added to the loss, and stopping does not undo the last step.
+
+The exact and sampled probe values share one forward pass per microbatch. Reports and compact history retain `actor.kl_guard` (contract `ppo-categorical-kl-guard/1.0.0`, checks, maximum exact KL, stop reason and step), plus each epoch's `probe_categorical_kl`. Existing `probe_kl` and `post_update_kl` retain their sampled-action meaning. The console prints `KLstop=categorical_probe`, `sampled_full_dataset` or `none`; the LR report records the same stop reason and actual completed/planned steps.
+
+Raise by 1.25 after a full three-valid-iteration median below 0.0045 with no stops, no cooldown and passing health/anchor checks. Cut by 1.5 immediately on an early stop before half the planned steps, two stops in three valid iterations, or current exact KL above 0.015. Cuts start a three-valid-iteration cooldown; multiplier bounds remain 0.5–3. Warmup, empty/nonfinite update handling, shadow/off modes and PPO-only multiplier application remain unchanged. **Protective LR cuts never depend on anchor/health approval.**
+
+The categorical guard remains enabled and its preceding guard-only source approvals are preserved. Those approvals do **not** authorize the new quality-pool/rating recipe on an existing PPO run. For this revision, generate a new recipe-3 config and use the earlier `--fresh` command without a source-resume flag. Completed v11.1 IL remains usable; the PPO guard does not alter supervised IL updates. Signed older recipes are not silently upgraded, and pending-collection safeguards remain active.
+
+Validation (2026-10-18): 59 focused regressions passed, covering exact/masked behavior KL, stop boundaries, nonfinite values, sample accounting, LR feedback, reviewed resume and IL extension/cache reuse. A separate CPU smoke with fresh current v11.1 weights and the utility head completed two six-step PPO updates; checkpoint restoration produced bitwise matching next-update weights and Adam state. On a 2,048-position synthetic probe (2–32 candidates, microbatch 128, two CPU threads, three timed repeats), median guard time was 0.990 s for sampled-only versus 1.008 s for exact plus sampled. This measures probe overhead only; CUDA, full collection throughput and playing strength were not measured. The reproducible smoke is `tests/Recovery/smoke_categorical_kl_guard.py` and requires a new `--output` directory under `artifacts/`.
 
 The IL-distance gate now uses a separate **fixed validation probe**, built at generation 0 from the completed IL dataset. It selects up to 2,048 distinct nonforced positions with seed 710193, balanced across era × decision-phase strata using deterministic hash priority; exhausted strata redistribute their allocation. The manifest, selected identities, source hashes and cached IL probabilities live under `il-kl/`. No training RNG is used. The generation-zero report verifies KL(IL || IL) = 0. Validation positions never enter PPO or rehearsal updates; rehearsal still uses the training split.
 
@@ -167,8 +211,8 @@ Probe preparation/validation happens at startup; normal iterations evaluate only
 After the one-iteration run commits generation 1:
 
 ```bash
-python scripts/step5.py --config configs/step5/joint7-v11-1-grouped-lr.json train \
-  --run artifacts/step5/joint7-v11-1-grouped-lr \
+python scripts/step5.py --config configs/step5/joint7-v11-1-grouped-lr-quality.json train \
+  --run artifacts/step5/joint7-v11-1-grouped-lr-quality \
   --imitation-run artifacts/step5/features4-v11-1-batch7-il \
   --expected-generation 1 \
   --iterations 20
@@ -185,10 +229,11 @@ Existing signed runs and checkpoints are left untouched. Do not point these comm
 After an iteration finishes, collect the analysis bundle with:
 
 ```bash
-python scripts/export-training-reports.py
+python scripts/export-training-reports.py \
+  --run artifacts/step5/joint7-v11-1-grouped-lr-quality
 ```
 
-The default source is `artifacts/step5/joint7-v11-1-grouped-lr`; the destination is a new `results/joint7-v11-1-grouped-lr-gNNNN-<UTC timestamp>/` folder. It includes the latest two committed full iteration reports, available compact history and evaluation reports, the saved config, and the originating IL reports. Exact categorical KL, grouped anchor evidence, LR decisions, actual learner/sample usage and disabled-teacher status are preserved. Use `--run` if your self-play directory differs. The completed IL directory remains `artifacts/step5/features4-v11-1-batch7-il`. See [export options](EXPORT_TRAINING_REPORTS.md).
+The explicit `--run` selects the new quality run; the script's older default run name is unchanged. The destination is a new `results/joint7-v11-1-grouped-lr-quality-gNNNN-<UTC timestamp>/` folder. It includes the latest two committed full iteration reports, available compact history and evaluation reports, the saved config, and the originating IL reports. Exact categorical KL, grouped anchor evidence, LR decisions, actual learner/sample usage, quality scores/membership and disabled-teacher status are preserved. Recent rating specs/reports, compact outcome JSONL, panels and SVG curves are included together with the active cumulative rating archive; dense probe/bootstrap tensors and full replay shards are excluded. Use your actual `--run` if it differs. The completed IL directory remains `artifacts/step5/features4-v11-1-batch7-il`. See [export options](EXPORT_TRAINING_REPORTS.md).
 
 ## Small local checks
 
@@ -200,6 +245,7 @@ PYTHONPATH=src:tests/FeatureEngineering:tests/R2:tests/Recovery \
 
 PYTHONPATH=src:tests/FeatureEngineering:tests/R2:tests/Recovery:tests/Reports \
   python -B -m unittest test_auto_il_kl test_ppo_lr_controller test_anchor_group_gate \
+    test_categorical_kl_guard test_quality_pool test_strength_rating test_audit_retention \
     test_v11_learning_rate test_source_reviews.SourceReviewTests test_export_training_reports -v
 
 PYTHONPATH=src:tests/FeatureEngineering python -B tests/FeatureEngineering/benchmark_v11_1.py \

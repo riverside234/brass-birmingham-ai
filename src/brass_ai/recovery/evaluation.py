@@ -56,10 +56,12 @@ def evaluate(root,output,candidate_path,references,config,*,setups=None,seed=Non
     require('mixed-neural' not in lineups or len({e['model_id'] for e in entries[1:]})>=2,
         'mixed-neural requires two distinct frozen references')
     from .legacy_search import legacy_spec
+    from .config import v4_search_enabled
     budget=config.get('legacy_budget')
     work=config['legacy_opponent_work_budget']
-    teacher_specs={p:legacy_spec(root,p,budget,work_budget=work) for p in profiles} if 'mixed-v3' in lineups else {}
-    held_specs={p:legacy_spec(root,p,budget,'evaluation',work_budget=work) for p in held} if 'heldout-pottery-v3' in lineups else {}
+    v4_search=v4_search_enabled(config)
+    teacher_specs={p:legacy_spec(root,p,budget,search_free=not v4_search,work_budget=work) for p in profiles} if 'mixed-v3' in lineups else {}
+    held_specs={p:legacy_spec(root,p,budget,'evaluation',search_free=not v4_search,work_budget=work) for p in held} if 'heldout-pottery-v3' in lineups else {}
     prior=None
     if (directory/'spec.json').exists():prior=read(directory/'spec.json')
     elif (directory/'report.json').exists() and read(directory/'report.json').get('raw_records_pruned'):
@@ -106,7 +108,7 @@ def evaluate(root,output,candidate_path,references,config,*,setups=None,seed=Non
                         seed=job['seed'],sampling_seed=job['sampling_seed'],rotation=job['seat'],spec=digest(spec))
                     jobs.append(dict(index=i,seed=job['seed'],rotation=job['seat'],sampling_seed=job['sampling_seed'],
                         policies=[candidate]+opponents,path=str(directory/f'{name}-{i:06d}.jsonl.gz'),provenance=provenance))
-                actor=heavy if config['use_search'] or name.endswith('v3') else ordinary
+                actor=heavy if config['use_search'] or (v4_search and name.endswith('v3')) else ordinary
                 records=actor.collect(jobs)
                 games=read_shards([r['path'] for r in records],receipts={r['path']:r.get('features') for r in records})
                 # Shards/worker completions need not have scheduling order.
@@ -138,7 +140,7 @@ def evaluate(root,output,candidate_path,references,config,*,setups=None,seed=Non
         and not any(r['diversity']['pottery_warning'] for r in results.values()))
     report=dict(format='step5-evaluation-report/1.0.0',spec=spec,results=results,execution=execution,
         promotion_eligible=eligible,failed_games=0,candidate_sha256=entries[0]['sha256'],raw_record_sha256=evidence,
-        inference=telemetry,elapsed_seconds=time.monotonic()-began,
+        inference=telemetry,elapsed_seconds=time.monotonic()-began,v4_search_enabled=v4_search,
         games=sum(r['games'] for r in results.values()),setups_per_lineup=config['setups'],lineup_count=len(lineups),
         limitation='Development panels cannot promote. BC references do not satisfy trained-population gates. Cached replay time is not live throughput.')
     write_json(directory/'report.json',report)

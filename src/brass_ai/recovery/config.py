@@ -226,9 +226,11 @@ ARCHIVED_CURRICULUM = [
     dict(until=20000, selfplay=15, historical=25, legacy=60),
     dict(until=100000, selfplay=45, historical=25, legacy=30),
     dict(until=None, selfplay=60, historical=25, legacy=15)]
-CURRICULUM = [dict(until=None,selfplay=60,historical=30,legacy=10)]
+PREVIOUS_FIXED_CURRICULUM = [dict(until=None,selfplay=60,historical=30,legacy=10)]
+CURRICULUM = [dict(until=None,selfplay=50,historical=45,legacy=5)]
 ARCHIVED_LATEST_MODEL_RECIPE='latest-model-selfplay/1.0.0'
-LATEST_MODEL_RECIPE='latest-model-selfplay/2.0.0'
+PREVIOUS_FIXED_RECIPE='latest-model-selfplay/2.0.0'
+LATEST_MODEL_RECIPE='latest-model-selfplay/3.0.0'
 ORDINARY_LEARNER_EXPLORATION=.08
 
 EXECUTION_V21 = dict(EXECUTION, processes=24, hosts_per_process=2, flush_ms=1.0,
@@ -241,8 +243,8 @@ CHAMPION_LEGACY = dict(enabled=True, every_games=6400, setups=8, min_win_share=.
 CHAMPION_PROTOCOL = 'two-stage-champion/1.0.0'
 CHAMPION = dict(CHAMPION_LEGACY, enabled=False, protocol=CHAMPION_PROTOCOL, confirmation_setups=64,
     screen_min_win_share=.56, min_ci_lower=.49)
-POPULATION = dict(recent=4, anchors=12)
-EVALUATION_SCHEDULE = dict(enabled=True, monitor_every_games=6400, broader_every_games=25600,
+POPULATION = dict(recent=2, anchors=22)
+EVALUATION_SCHEDULE = dict(enabled=False, monitor_every_games=6400, broader_every_games=25600,
     monitor_setups=1, broader_setups=1, seed=910000)
 LEGACY_BUDGET = dict(role='lab', seconds=1.0, search_workers=4, global_workers=60, work_multiplier=1)
 LEGACY_OPPONENTS = dict(search_free_until_games=10000)
@@ -255,15 +257,26 @@ LEGACY_BOOST = dict(stages=[dict(games=20000,selfplay=15,historical=25,legacy=60
 
 
 def latest_model_recipe(config):
-    return config.get('selfplay_recipe') in (ARCHIVED_LATEST_MODEL_RECIPE,LATEST_MODEL_RECIPE)
+    return config.get('selfplay_recipe') in (ARCHIVED_LATEST_MODEL_RECIPE,PREVIOUS_FIXED_RECIPE,LATEST_MODEL_RECIPE)
 
 
 def fixed_selfplay_recipe(config):
+    return config.get('selfplay_recipe') in (PREVIOUS_FIXED_RECIPE,LATEST_MODEL_RECIPE)
+
+
+def quality_selfplay_recipe(config):
     return config.get('selfplay_recipe')==LATEST_MODEL_RECIPE
 
 
 def learner_seats_per_table(config,kind):
     return 4 if kind=='selfplay' else 2 if fixed_selfplay_recipe(config) else 1
+
+
+def v4_search_enabled(config):
+    """Missing means the historical setting; fresh recipes explicitly disable it."""
+    value=config.get('v4_search_enabled',True)
+    require(type(value) is bool,'Invalid v4_search_enabled flag')
+    return value
 
 
 def latest_model_config(config,imitation_checkpoint):
@@ -274,6 +287,7 @@ def latest_model_config(config,imitation_checkpoint):
     from .lr_controller import AUTO_CONTROLLER,AUTO_CONTRACT
     from .il_kl_limit import DEFAULT as AUTO_IL_KL
     from .rehearsal import DEFAULT_FLOOR
+    from .quality_config import TABLE_PLAN,OPPONENT_POOL,RATING
     # The width-512 learning-rate adjustment was introduced with v11. Moving
     # the local addition in v11.1 must not apply that adjustment a second time.
     if result.get('architecture') not in (ARCHITECTURE,'brass-four-seat-mlp-resnet/11.0.0'):
@@ -284,13 +298,21 @@ def latest_model_config(config,imitation_checkpoint):
     result.update(architecture=ARCHITECTURE,parameter_limit=PARAMETER_LIMIT)
     result.update(selfplay_recipe=LATEST_MODEL_RECIPE,curriculum=copy.deepcopy(CURRICULUM),
         champion=dict(result.get('champion',CHAMPION),enabled=False),
+        evaluation_schedule=dict(result.get('evaluation_schedule',EVALUATION_SCHEDULE),enabled=False),
         teacher_work_budget=copy.deepcopy(TEACHER_TIME_BUDGET),search_wall_fraction=None,
         imitation_checkpoint=copy.deepcopy(imitation_checkpoint),exploration=ORDINARY_LEARNER_EXPLORATION,
-        teacher_enabled=False,population=copy.deepcopy(POPULATION),legacy_opponents=dict(search_free_until_games=0))
-    result.setdefault('ppo_lr_controller',copy.deepcopy(AUTO_CONTROLLER))
+        teacher_enabled=False,v4_search_enabled=False,
+        population=copy.deepcopy(POPULATION),legacy_opponents=dict(search_free_until_games=0))
+    # This helper explicitly creates a new recipe; signed old configs still
+    # validate unchanged and are never upgraded by the continuation loader.
+    result['ppo_lr_controller']=dict(AUTO_CONTROLLER,**result.get('ppo_lr_controller',{}))
+    result['ppo_lr_controller']['contract']=AUTO_CONTRACT
     if result['ppo_lr_controller']['contract']==AUTO_CONTRACT:
         result.setdefault('il_kl_limit',copy.deepcopy(AUTO_IL_KL))
     result.setdefault('rehearsal_floor',copy.deepcopy(DEFAULT_FLOOR))
+    result.setdefault('table_plan',copy.deepcopy(TABLE_PLAN))
+    result.setdefault('opponent_pool',copy.deepcopy(OPPONENT_POOL))
+    result.setdefault('rating',copy.deepcopy(RATING))
     result.pop('legacy_boost',None)
     result.setdefault('teacher_value',copy.deepcopy(TEACHER_VALUE))
     result.pop('champion_opponents',None)
@@ -420,6 +442,8 @@ def validate_config(config):
         'search_ready_games','search_every_games','search_games','distill_steps','distill_weight',
         'rehearsal_manifest','rehearsal_weight','rehearsal_until','profile_steps'}
     version=config.get('format')
+    if 'v4_search_enabled' in config:
+        fields.add('v4_search_enabled');v4_search_enabled(config)
     if 'learning_rate_warmup' in config:
         from .learning_rate import validate_warmup
         fields.add('learning_rate_warmup');validate_warmup(config['learning_rate_warmup'])
@@ -440,8 +464,19 @@ def validate_config(config):
                 controller['anchor_group_kl_budget']==limit['group_factor']*limit['initial_limit'] and
                 controller['anchor_group_min_positions']==limit['group_min_positions'],
                 'Initial overall/group IL-KL settings must match the calibrated limits')
-        require(config.get('selfplay_recipe')==LATEST_MODEL_RECIPE and config.get('teacher_enabled') is False,
+        require(fixed_selfplay_recipe(config) and config.get('teacher_enabled') is False,
                 'Auto IL-KL is for fresh latest-model self-play with teaching disabled')
+    quality=quality_selfplay_recipe(config)
+    require(quality==all(k in config for k in ('table_plan','opponent_pool','rating')) and
+            (quality or not any(k in config for k in ('table_plan','opponent_pool','rating'))),
+            'Table plan, quality pool and ratings require the fresh 3.0 recipe together')
+    if quality:
+        from .quality_config import TABLE_PLAN,validate_pool,validate_rating
+        fields|={'table_plan','opponent_pool','rating'}
+        require(config['table_plan']==TABLE_PLAN,'Quality recipe requires fixed 50/45/5 and six seat pairs')
+        validate_pool(config['opponent_pool']);validate_rating(config['rating'])
+        require(auto and sum(config['population'].values())==config['opponent_pool']['max_members'],
+                'Quality pool requires calibrated health and matching population capacity')
     if 'teacher_enabled' in config:
         fields.add('teacher_enabled');require(type(config['teacher_enabled']) is bool,'Invalid teacher enabled flag')
     if 'teacher_value' in config:
@@ -455,9 +490,10 @@ def validate_config(config):
         require(config.get('champion',{}).get('enabled') is False and 'champion_opponents' not in config,
                 'Latest-model self-play forbids champion gates and mixing')
         if fixed_selfplay_recipe(config):
-            require(config['curriculum']==CURRICULUM and 'legacy_boost' not in config and
+            expected_curriculum=CURRICULUM if quality else PREVIOUS_FIXED_CURRICULUM
+            require(config['curriculum']==expected_curriculum and 'legacy_boost' not in config and
                     config['legacy_opponents']==dict(search_free_until_games=0),
-                    'Fixed self-play requires 60/30/10 at all games, with searched v4 and no boost window')
+                    'Fixed self-play curriculum differs from its versioned recipe')
         else:
             require(config['curriculum']==ARCHIVED_CURRICULUM and config.get('legacy_boost')==LEGACY_BOOST,
                     'Archived latest-model curriculum and v4 window must agree at 20000/100000 games')

@@ -78,7 +78,7 @@ def compact(report):
     out=scalars(report,('format','iteration','games_done','cumulative_games','incoming_model_id','post_update_model_id',
                        'incoming_policy_id','elapsed_seconds','games','failed_games','promotion_eligible'))
     out['summary_version']=5
-    for key in ('il_kl_limit','rehearsal_schedule','health_counts'):
+    for key in ('il_kl_limit','rehearsal_schedule','health_counts','quality_pool','strength_rating'):
         if key in report:out[key]=report[key]
     out['health_by_composition']={k:v['health_counts'] for k,v in report.get('by_composition',{}).items()
                                   if 'health_counts' in v}
@@ -98,12 +98,13 @@ def compact(report):
     out['actor']['learning_rate_schedule']=scalars(schedule,('contract','kind','base_lr','steps','start_factor',
         'completed_steps','effective_lr','next_lr')) if schedule else None
     out['actor']['sample_usage']=actor.get('sample_usage')
+    if 'kl_guard' in actor:out['actor']['kl_guard']=dict(actor['kl_guard'])
     for key in ('advantage','advantage_distribution','return_distribution','legal_actions','categorical_probe','gradient_norms','phases'):
         out['actor'][key]=scalars(actor.get(key,{}),actor.get(key,{}))
     epochs=actor.get('epochs',[])
     if epochs:
         out['actor']['epochs']=[dict(scalars(epoch,('epoch','actor','value','win_loss','rank_loss','vp_loss',
-            'entropy','post_update_kl','probe_kl','clip_fraction','gradient_norm','actor_positions','critic_positions')),
+            'entropy','post_update_kl','probe_kl','probe_categorical_kl','clip_fraction','gradient_norm','actor_positions','critic_positions')),
             utility_prediction=scalars(epoch.get('utility_prediction',{}),('mse','mae'))) for epoch in epochs[-8:]]
         out['actor']['last_epoch']=out['actor']['epochs'][-1]
         out['actor']['utility_prediction']=scalars(epochs[-1].get('utility_prediction',{}),('mse','mae'))

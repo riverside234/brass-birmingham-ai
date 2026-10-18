@@ -1,6 +1,6 @@
 """Persistent, bounded searched-v4 recovery window for ordinary training games."""
 from brass_ai.learning.contracts import digest,require
-from .config import table_kind,latest_model_recipe
+from .config import table_kind,latest_model_recipe,v4_search_enabled
 
 
 def activate_boost(state,config):
@@ -55,7 +55,7 @@ def curriculum_report(start,done,config):
 
 
 def searched_legacy(index,config,boosted):
-    return boosted or index>=config['legacy_opponents']['search_free_until_games']
+    return v4_search_enabled(config) and (boosted or index>=config['legacy_opponents']['search_free_until_games'])
 
 
 def boost_report(start,done,config,window):

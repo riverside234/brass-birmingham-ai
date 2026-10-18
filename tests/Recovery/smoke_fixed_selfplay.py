@@ -43,6 +43,14 @@ def main():
     require(_same_payload(model.state_dict(),initial.state_dict()),'IL weights changed during handoff')
     require(not raw['optimizer']['state'],'IL optimizer leaked into PPO')
     require(state['games_done']==3 and state['iteration']==1,'Smoke exceeded its bound')
+    if 'quality_pool' in state:
+        from brass_ai.recovery.quality_pool import state_digest,validate_state
+        validate_state(state['quality_pool'],cfg['opponent_pool'],1)
+        require(len(state['quality_pool']['members'])==1 and cfg['opponent_pool']['max_members']==24,
+                'Quality pool did not start with pinned IL only')
+        require(state['ratings']['slots']==[] and len(state['ratings']['seeds'])==32,
+                'Unexpected rating campaign in the three-game smoke')
+        require(report['quality_pool']['members'][0]['comparisons']==4,'IL diagnostic pair count differs')
     require(report['composition']==dict(selfplay=2,historical=1),'Unexpected smoke table assignment')
     require(report['sampling']['learner_trajectories']==10,'Expected eight self-play and two history learner seats')
     require(report['search']['enabled'] is False and report['search']['optimizer_steps']==0,'Teacher ran while disabled')
@@ -70,6 +78,9 @@ def main():
     require('legacy_boost' not in state,'Old v4 schedule activated')
     before=copy.deepcopy(state)
     restored,checkpoint,changed=load_resume(SOURCE_ROOT,out/'run',state,state['signature'])
+    if 'quality_pool' in state:
+        require(checkpoint['training']['quality_pool_digest']==state_digest(state['quality_pool']),
+                'Quality pool state/checkpoint digest differs')
     optimizer=torch.optim.AdamW(restored.parameters(),lr=cfg['learning_rate'])
     resume_optimizer(checkpoint,optimizer)
     adam=copy.deepcopy(optimizer.state_dict()['state']);control=copy.deepcopy(optimizer.param_groups[0][KEY])
@@ -93,6 +104,7 @@ def main():
         composition=report['composition'],sampling=report['sampling'],controller=report['actor']['lr_controller'],
         categorical_probe=report['actor']['categorical_probe'],teacher=report['search'],
         il_kl_limit=report.get('il_kl_limit'),rehearsal_schedule=report.get('rehearsal_schedule'),
+        quality_pool=report.get('quality_pool'),rating_slots=len(state.get('ratings',{}).get('slots',[])),
         ppo_steps=report['actor']['optimizer_steps'],ppo_steps_planned=report['actor']['optimizer_steps_planned'],
         checkpoint_adam_rng_controller_resume_exact=True,compact_history=bool((out/'run/retention-history.json').exists()),
         scope='Three CPU games, production v11.1 model and old-source completed diagnostic IL. No v4 search, teacher collection or strength evaluation; LR decisions held during warmup.')

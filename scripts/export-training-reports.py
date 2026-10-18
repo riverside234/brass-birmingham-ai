@@ -107,7 +107,7 @@ def export(root, run, output=None, *, latest=2, extras=()):
     files, missing, warnings = {}, {}, []
     selected_iterations = list(range(max(0, generation - latest), generation))
 
-    def add(path, destination, reason, *, expected=False):
+    def add(path, destination, reason, *, expected=False, document='json'):
         path = below(root, path)
         name = Path(destination).as_posix()
         require(not Path(name).is_absolute() and '..' not in Path(name).parts, 'Unsafe bundle path')
@@ -116,7 +116,17 @@ def export(root, run, output=None, *, latest=2, extras=()):
                 missing[path.relative_to(root).as_posix()] = reason
             return None
         raw = path.read_bytes()
-        value = json.loads(raw.decode('utf-8-sig'))  # Never publish a partial JSON write.
+        # Validate complete documents before publication. Only explicitly
+        # selected compact rating outcomes/curves may use these other formats.
+        if document == 'json':
+            value = json.loads(raw.decode('utf-8-sig'))
+        elif document == 'jsonl':
+            value = [json.loads(line) for line in raw.decode('utf-8-sig').splitlines()]
+        elif document == 'svg':
+            import xml.etree.ElementTree as ET
+            ET.fromstring(raw); value = None
+        else:
+            raise ValueError('Unknown report document format')
         entry = dict(source=path.relative_to(root).as_posix(), path=name,
                      bytes=len(raw), sha256=checksum(raw), reason=reason)
         if name in files:
@@ -147,6 +157,25 @@ def export(root, run, output=None, *, latest=2, extras=()):
         add(path, path.relative_to(run), 'Evaluation report or specification')
     for path in report_files(root, run / 'il-kl'):
         add(path, path.relative_to(run), 'Fixed IL-KL probe manifest or initial measurement')
+    for path in report_files(root, run / 'ratings'):
+        add(path, path.relative_to(run), 'Plackett-Luce strength report or specification')
+    archive = state.get('ratings', {}).get('archive')
+    if archive is not None:
+        path = below(root, archive['path'])
+        require(path.is_relative_to(run / 'ratings'), 'Rating archive points outside this run')
+        require(checksum(path.read_bytes()) == archive['sha256'], 'Archived rating evidence changed')
+        add(path, path.relative_to(run), 'Compact cumulative rating outcomes and diagnostic-panel history')
+    for slot in state.get('ratings', {}).get('slots', []):
+        for key in ('records', 'panels', 'report', 'spec'):
+            reference = slot[key]
+            path = below(root, reference['path'])
+            require(checksum(path.read_bytes()) == reference['sha256'], 'Committed rating evidence changed')
+            if path.relative_to(run).as_posix() not in files:
+                add(path, path.relative_to(run), 'Append-only held-out rating outcomes or separate panel results',
+                    document='jsonl' if key == 'records' else 'json')
+        curve = below(root, Path(slot['report']['path']).parent / 'progress.svg')
+        if curve.exists():
+            add(curve, curve.relative_to(run), 'Strength progress curve', document='svg')
 
     # State receipts also reveal evaluations whose files retention has removed.
     gate = state.get('champion_gate') or {}

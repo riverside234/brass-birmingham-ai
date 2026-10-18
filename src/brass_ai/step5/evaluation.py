@@ -52,7 +52,9 @@ def validate_evaluation_config(config):
     expected = {'format', 'players', 'host', 'setups', 'seed', 'partition', 'workers', 'batch_size',
                 'max_candidate_cells', 'threads', 'parallel_hosts', 'legacy_workers', 'search_workers',
                 'include_legacy', 'use_search', 'focus', 'search'}
-    from brass_ai.recovery.config import nn_work_budget_config,legacy_opponent_work_budget_config,time_budget
+    from brass_ai.recovery.config import nn_work_budget_config,legacy_opponent_work_budget_config,time_budget,v4_search_enabled
+    if 'v4_search_enabled' in config:
+        expected.add('v4_search_enabled');v4_search_enabled(config)
     for key,validator in (('nn_work_budget',nn_work_budget_config),
                           ('legacy_opponent_work_budget',legacy_opponent_work_budget_config)):
         if key in config:
@@ -110,6 +112,7 @@ def evaluation_config(config, **overrides):
         result = read(SOURCE_ROOT / 'configs/step5/development-evaluation.json')
         result.update(host=config['host'],threads=config['threads'],search=config['search'],
             execution=config['execution'])
+        if 'v4_search_enabled' in config:result['v4_search_enabled']=config['v4_search_enabled']
         ex=config['execution']
         result.update(workers=ex['processes']*ex['hosts_per_process'],legacy_workers=ex['heavy_processes'],
             search_workers=ex['heavy_processes'],batch_size=ex['batch_size'],max_candidate_cells=ex['max_candidate_cells'])

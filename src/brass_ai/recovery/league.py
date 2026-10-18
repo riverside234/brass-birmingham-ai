@@ -52,11 +52,17 @@ def require_start_generation(run,expected):
 
 
 def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=None,from_run=None,imitation_run=None,resume_reviewed_source=False,inference_devices=None):
-    from .config import time_budget_config,champion_mix_config,latest_model_recipe
+    from .config import time_budget_config,champion_mix_config,latest_model_recipe,quality_selfplay_recipe
     from .inference import validate_inference_devices
     inference_devices=validate_inference_devices(inference_devices,device)
     config=champion_mix_config(time_budget_config(config))
     root=Path(root).resolve();run=project_path(root,run_path);validate_config(config)
+    quality=quality_selfplay_recipe(config)
+    if quality and config['rating']['enabled']:
+        from .ratings import check_dependencies
+        check_dependencies()
+        try:import matplotlib
+        except ImportError as error:raise ValueError('Strength plots need matplotlib; install requirements-step5.txt') from error
     from brass_ai.learning.model import ARCHITECTURE,PARAMETER_LIMIT
     require((config['architecture'],config['parameter_limit'])==(ARCHITECTURE,PARAMETER_LIMIT),
             f'Fresh grouped training requires {ARCHITECTURE} and parameter limit {PARAMETER_LIMIT}; use feature-engineering.py configure')
@@ -82,11 +88,13 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
     pool=read(root/'training/opponents/pool.json');profiles=sorted(pool['training'])
     for p in profiles: admission(root,p,'training')
     from .legacy_search import legacy_spec
+    from .config import v4_search_enabled
     teacher_specs={p:legacy_spec(root,p,config.get('legacy_budget')) for p in profiles}
     # Keep the admitted demonstration/teacher bindings stable for existing IL
     # origins. The optional RL-only variant is bound by config AND each job's
     # policy spec; it does not relabel the qualified frozen bank or old data.
     opponent_specs={p:legacy_spec(root,p,config.get('legacy_budget'),
+        search_free=not v4_search_enabled(config),
         work_budget=config.get('legacy_opponent_work_budget')) for p in profiles}
     fast_specs={p:legacy_spec(root,p,config['legacy_budget'],search_free=True,
         work_budget=config['legacy_opponent_work_budget']) for p in profiles}
@@ -150,21 +158,37 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                 limit=config['il_kl_limit']['initial_limit'],
                 group_limit=config['il_kl_limit']['group_factor']*config['il_kl_limit']['initial_limit'],probe=receipt))
         init_path=run/'initial.pt'
+        if quality:
+            from . import quality_pool
+            from brass_ai.learning.batching import model_id
+            anchor=dict(path=init_path.relative_to(root).as_posix(),sha256='pending',model_id=model_id(model),generation=0)
+            probe_ref=dict(fixed_probe.metadata['cache'],probe_hash=fixed_probe.metadata['probe_hash'])
+            state['quality_pool']=quality_pool.initial(anchor,config['opponent_pool'],probe_ref)
         save_checkpoint(init_path,model,optimizer,training=dict(mode='step5-fresh-residual-initial',parent=None,initialization=state['origin']['initialization'],fresh_run=run.relative_to(root).as_posix(),imitation=state['imitation'],
-            **({'il_kl_limit':state['il_kl_limit']} if 'il_kl_limit' in config else {})))
+            **({'il_kl_limit':state['il_kl_limit']} if 'il_kl_limit' in config else {}),
+            **({'quality_pool_digest':quality_pool.state_digest(state['quality_pool'])} if quality else {})))
         raw=load_checkpoint(init_path,device=device)[1]
         state['history']=[dict(path=init_path.relative_to(root).as_posix(),sha256=sha(init_path),
             model_id=raw['model_id'],generation=0)]
         state['evaluation_anchor']=state['history'][0]
+        if quality:state['quality_pool']['members'][0].update(state['evaluation_anchor'])
         activate_boost(state,config)
         if revised:
             from .retention import update_population
             update_population(root,run,state,config['population'])
+        if quality:
+            from .ratings import initialize as initialize_ratings
+            state['ratings']=initialize_ratings(root,run,state,config)
         write_json(state_path,state)
     optimizer=torch.optim.AdamW(model.parameters(),lr=config['learning_rate'],weight_decay=config['weight_decay'])
     cuda_resume=resume_optimizer(raw,optimizer,allow_cuda_topology_change=True)
     from .resume import apply_optimizer_config
     optimizer_resume=apply_optimizer_config(optimizer,config)
+    if quality:
+        from . import quality_pool
+        quality_pool.validate_state(state['quality_pool'],config['opponent_pool'],state['iteration'])
+        require(raw['training'].get('quality_pool_digest')==quality_pool.state_digest(state['quality_pool']),
+                'Quality pool state differs from the committed checkpoint')
     anchor_model=None
     if 'il_kl_limit' in config:
         from .il_kl_limit import validate_state
@@ -206,6 +230,9 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
         print(f'Rehearsal tensors prepared once: {len(rehearsal.data)} rows in {time.monotonic()-prepared_at:.1f}s; reused until rehearsal expires',flush=True)
     summaries=[]
     if revised: schedule_evaluations(root,run,state,device,mono,inference_devices=inference_devices)
+    if quality:
+        from .ratings import schedule as schedule_ratings
+        with torch.random.fork_rng(devices=[]):schedule_ratings(root,run,state,config,device=device,mono=mono,inference_devices=inference_devices)
     with InferenceService(config['execution'],device,profile=run/'profile-collection' if config['profile_steps'] else None,
                           profile_steps=config['profile_steps'],inference_devices=inference_devices) as service,reader_pool(config['audit_workers'],admission=service.cpu) as readers:
         with ActorPool(root,config['host'],service,config['execution'],mono=mono) as ordinary,ActorPool(root,config['host'],service,config['execution'],mono=mono,heavy=True) as heavy:
@@ -250,6 +277,10 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                     games,learner_data,diagnostics=prepared_collection.finish(records,ingress_metrics)
                 collected=time.monotonic()
                 sampling=sampling_report(games,learner_data,behavior.policy_id,kind_by_group,config)
+                next_quality=quality_report=None
+                if quality:
+                    next_quality,quality_report=quality_pool.update_scores(state['quality_pool'],games,
+                        plan['quality_tables'],plan['quality_planning'],generation=iteration+1)
                 rehearsal_status=rehearsal_schedule(config,state['games_done'],iteration)
                 weight=rehearsal_status['weight']
                 update=ppo_update(model,optimizer,games,behavior,config['update'],
@@ -305,7 +336,19 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                             scope='Exact KL(post-PPO behavior || post-teaching behavior); bounded proportional era/phase probe, RNG-neutral; diagnostic only')
                 del teaching_probe
                 del learner_data
+                output=run/f'generation-{iteration+1:04d}.pt'
+                if quality:
+                    from brass_ai.learning.batching import model_id
+                    pending_entry=dict(path=output.relative_to(root).as_posix(),sha256='pending',
+                        model_id=model_id(model),generation=iteration+1)
+                    next_quality,pool_admission=quality_pool.finish(root,run,next_quality,model,pending_entry,
+                        fixed_probe,config['update'],limit_report)
+                    quality_report.update(admission=pool_admission,next_distribution=quality_pool.distribution(next_quality),
+                        size=len(next_quality['members']),max_members=config['opponent_pool']['max_members'],
+                        eta=config['opponent_pool']['eta'],uniform_floor=config['opponent_pool']['uniform_floor'],
+                        pinned_seat_share=config['opponent_pool']['pinned_seat_share'])
                 report=dict(format='step5-recovery-report/'+'2.2.0',iteration=iteration,composition=dict(composition),
+                    quality_pool=quality_report,
                     il_kl_limit=limit_report,rehearsal_schedule=rehearsal_status,
                     sampling=sampling,curriculum=curriculum_report(state['games_done'],done,config) if latest_model_recipe(config) else None,
                     reward_migration=migration if not summaries else None,
@@ -322,19 +365,20 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                     legacy_modes=dict(Counter(j['provenance']['legacy_mode'] for j in jobs if j['provenance']['legacy_mode'])),
                     historical_opponents=dict(generation_seats=dict(sorted(historical_generations.items())),
                         pool_generations=[e['generation'] for e in state.get('population',[])],
-                        sampling='25% initial/IL, 25% recent, 50% older reservoir; unavailable strata fall back'),
+                        sampling=('Independent seats: 20% IL, 80% quality distribution (80% softmax + 20% uniform)'
+                                  if quality else '25% initial/IL, 25% recent, 50% older reservoir; unavailable strata fall back')),
                     environment=environment(device),strength='requires fresh post-update evaluation')
                 report['utilization']=iteration_utilization(inference_before,ordinary_inference,records,
                     load_began-began,len(games),config['execution'])
                 report['utilization']['replay_ingress']=ingress_metrics
-                output=run/f'generation-{iteration+1:04d}.pt'
                 checkpoint_began=time.monotonic()
                 identity=save_checkpoint(output,model,optimizer,step=iteration+1,
                     training=dict(mode='step5-population-ppo',recipe='nonforced-actor-ppo/2.1.0' if revised else 'effective-minibatch-ppo/2.0.0',
                         parent=current,signature=digest(signature),fresh_run=run.relative_to(root).as_posix(),initialization='random-lineage',
                         evidence=dict(iteration=iteration,games_done=done,report=(directory/'report.json').relative_to(root).as_posix(),
                                       update_digest=digest(update)),
-                        **({'il_kl_limit':next_limit} if next_limit is not None else {})))
+                        **({'il_kl_limit':next_limit} if next_limit is not None else {}),
+                        **({'quality_pool_digest':quality_pool.state_digest(next_quality)} if quality else {})))
                 report['post_update_model_id']=identity
                 report['timings']['checkpoint_seconds']=time.monotonic()-checkpoint_began
                 write_json(directory/'report.json',report)
@@ -343,8 +387,13 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                     history=state['history']+[entry],next_search_games=next_search,
                     search_seconds=search_seconds,ordinary_seconds=ordinary_seconds)
                 if next_limit is not None:state['il_kl_limit']=next_limit
+                if quality:
+                    for member in next_quality['members']:
+                        if member['generation']==iteration+1:member.update(entry)
+                    state['quality_pool']=next_quality
                 if champion_mix.enabled(config):state['champion_mix']['transition_tables']+=transition_added
                 state['recent_training']=(state.get('recent_training',[])+[dict(iteration=iteration,games_done=done,
+                    quality_pool=quality_report,
                     il_kl_limit=limit_report,rehearsal_schedule=rehearsal_status,
                     health_counts=diagnostics.get('health_counts'),
                     health_by_composition={k:v.get('health_counts') for k,v in diagnostics.get('by_composition',{}).items()},
@@ -363,6 +412,9 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                         with torch.random.fork_rng(devices=[]):
                             report['champion_gate']=schedule_champion(root,run,state,service,ordinary)
                     schedule_evaluations(root,run,state,device,mono,inference_devices=inference_devices)
+                    if quality:
+                        with torch.random.fork_rng(devices=[]):
+                            report['strength_rating']=schedule_ratings(root,run,state,config,device=device,mono=mono,inference_devices=inference_devices)
                     report['timings']['evaluation_seconds']=time.monotonic()-evaluation_began
                     from .retention import prune
                     cleanup_began=time.monotonic()
@@ -381,6 +433,7 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                 if limit_report:
                     controller_line+=(f' ILKL={limit_report["measurement"]["kl_mean"]:.4f}/{limit_report["limit_after"]:.4f}'
                         f' group_limit={limit_report["group_limit_after"]:.4f} {limit_report["decision"]}')
+                if quality_report:controller_line+=f' history={quality_report["size"]}/24 {quality_report["admission"]["reason"]}'
                 print(f'Recovery generation {iteration+1}: {done} games, {update["optimizer_steps"]} PPO steps; '
                       f'collect={load_began-began:.1f}s prepare={collected-load_began:.1f}s PPO={updated-collected:.1f}s '
                       f'teacher={report["timings"]["search_and_distill_seconds"]:.1f}s '
@@ -390,6 +443,7 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                       f'LR={update["learning_rates"][0]:.1e}{controller_line} '
                       f'KLcat={update.get("categorical_probe",{}).get("categorical_kl",0.):.5f} '
                       f'KLsample={update["epochs"][-1]["post_update_kl"]:.5f} '
+                      f'KLstop={update.get("kl_guard",{}).get("stop_reason") or "none"} '
                       f'value={update["epochs"][-1]["value"]:.4f}; '
                       f'insolvency events={update["insolvency"].get("events",0)} '
                       f'mean cost={update["insolvency"].get("mean_cost_per_trajectory",0):.4f}; '

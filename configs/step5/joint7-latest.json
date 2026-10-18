@@ -51,9 +51,9 @@
   "curriculum": [
     {
       "until": null,
-      "selfplay": 60,
-      "historical": 30,
-      "legacy": 10
+      "selfplay": 50,
+      "historical": 45,
+      "legacy": 5
     }
   ],
   "search_ready_games": 640,
@@ -129,11 +129,11 @@
     "history_reports": 128
   },
   "population": {
-    "recent": 4,
-    "anchors": 12
+    "recent": 2,
+    "anchors": 22
   },
   "evaluation_schedule": {
-    "enabled": true,
+    "enabled": false,
     "monitor_every_games": 6400,
     "broader_every_games": 25600,
     "monitor_setups": 16,
@@ -199,7 +199,7 @@
     "mode": "time",
     "seconds_per_turn": 1.0
   },
-  "selfplay_recipe": "latest-model-selfplay/2.0.0",
+  "selfplay_recipe": "latest-model-selfplay/3.0.0",
   "imitation_checkpoint": {
     "bc_run": "artifacts/step5/v4-batch7-joint",
     "path": "artifacts/step5/v4-batch7-joint/epoch-0006.pt",
@@ -264,5 +264,53 @@
     "hold_iterations": 60,
     "decrement": 0.01,
     "interval_iterations": 30
-  }
+  },
+  "table_plan": {
+    "quotas": {
+      "selfplay": 50,
+      "historical": 45,
+      "legacy": 5
+    },
+    "learner_seats": {
+      "selfplay": 4,
+      "historical": 2,
+      "legacy": 2
+    },
+    "pair_rotation": "six-pairs"
+  },
+  "opponent_pool": {
+    "contract": "quality-score-pool/1.0.0",
+    "max_members": 24,
+    "pinned": [
+      "generation-0"
+    ],
+    "pinned_seat_share": 0.2,
+    "eta": 0.01,
+    "uniform_floor": 0.2,
+    "admit_every_iterations": 5,
+    "admit_health_iterations": 5,
+    "admit_min_kl": 0.02,
+    "evict_min_age_iterations": 20,
+    "protect_newest": 2
+  },
+  "rating": {
+    "contract": "plackett-luce-rating/1.0.0",
+    "enabled": true,
+    "every_iterations": 10,
+    "setups": 32,
+    "seat_rotations": 4,
+    "references": [
+      "generation-0",
+      "v4"
+    ],
+    "nearest_opponents": 8,
+    "theta_prior_sd": 2.0,
+    "seat_prior_sd": 0.5,
+    "bootstrap": 200,
+    "elo_scale": 173.7,
+    "seed": 910517,
+    "panel_setups": 8,
+    "v4_profile": "bank-3dc65253a610191d66a5/balanced-v3-masked-economy"
+  },
+  "v4_search_enabled": false
 }

@@ -243,6 +243,26 @@
       "implementation": "6869d1f9bcf0b97937892b4b856a829e3d3a60fd71191ac50be7dbcbf9bfe4a9",
       "learning_compatibility": "b3b944dbc492bc1483c41bdb5a9d566f13e2b2a8b7988dbeec8fcb9ebb372674",
       "reason": "Explicit IL epoch-extension review: unchanged v11.1 model, feature, dataset and supervised-update semantics. Completed IL handoff retains original signature/hash/lineage checks; exact optimizer continuation requires the separate pinned extension review."
+    },
+    {
+      "implementation": "0c96c4a3ae6ce4d93ac1c1861fe9603b83143c3a844c094919579585cd6548ac",
+      "learning_compatibility": "b3b944dbc492bc1483c41bdb5a9d566f13e2b2a8b7988dbeec8fcb9ebb372674",
+      "reason": "PPO categorical stopping/reporting change only; v11.1 architecture, Features-4 data, supervised_epoch, targets and IL checkpoint semantics are unchanged. Retain completed-IL signature, hash and lineage admission. Exact optimizer continuation requires its separate pinned extension review."
+    },
+    {
+      "implementation": "33b925447d6e6dc0e8ec0b2a928f5ffba50738ea93abafab83101f3a1b491439",
+      "learning_compatibility": "b3b944dbc492bc1483c41bdb5a9d566f13e2b2a8b7988dbeec8fcb9ebb372674",
+      "reason": "Fresh v11.1 quality-score opponent pool and held-out PL ratings; unchanged completed IL tensors, features, supervised loss and dataset contracts. Exact completion/hash/lineage admission remains required; no PPO run conversion."
+    },
+    {
+      "implementation": "43bd782b1a1d8915a26011a1bf5db7722d1f3b711fa043e720264aa4bc78a214",
+      "learning_compatibility": "b3b944dbc492bc1483c41bdb5a9d566f13e2b2a8b7988dbeec8fcb9ebb372674",
+      "reason": "Disable v4 search for fresh self-play ordinary games and scheduled evaluations. Completed v11.1 IL tensors, features, supervised loss, checkpoint and dataset contracts are unchanged. Retain exact completion/hash/lineage checks; no PPO run conversion."
+    },
+    {
+      "implementation": "3a3a5d230b62f31451664bedeacf83e1d8a87d4c15e924b5b6fe2d1d35fe2c71",
+      "learning_compatibility": "b3b944dbc492bc1483c41bdb5a9d566f13e2b2a8b7988dbeec8fcb9ebb372674",
+      "reason": "Disable automatic Monitor and Broader Evaluation in newly generated self-play configs. Model, features, supervised IL updates, checkpoint and dataset contracts remain unchanged. Preserve completed-IL hash/lineage admission; no PPO run conversion."
     }
   ]
 }

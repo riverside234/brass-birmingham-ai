@@ -189,6 +189,8 @@ def _references(root,run):
         if d.get('format') in ('step5-recovery-league/2.1.0','step5-recovery-league/2.2.0'):
             selected={k:d.get(k) for k in ('resume','population','origin','evaluation_anchor','pins','champion','champion_mix')}
             selected['il_kl_probe']=d.get('il_kl_limit',{}).get('probe')
+            selected['quality_members']=d.get('quality_pool',{}).get('members')
+            selected['ratings']=d.get('ratings')
             selected['accepted_gate']=d.get('champion_gate',{}).get('accepted_gate')
             cfg=d.get('signature',{}).get('config',{})
             selected['datasets']=[cfg.get('rehearsal_manifest'),cfg.get('imitation',{}).get('manifest')]
@@ -210,7 +212,7 @@ def _references(root,run):
     for p,data,reason in control:
         visited.add(resolve(p))
         for value in dict.fromkeys(strings(data)):
-            if not value.endswith(('.pt','.jsonl.gz','.npz','.json')): continue
+            if not value.endswith(('.pt','.jsonl.gz','.jsonl','.npz','.json','.svg')): continue
             for resolved in dict.fromkeys((resolve(value),resolve(value,base=p.parent))):
                 # Remember dependencies even while their original path is in
                 # quarantine, so a new pin can rescue it before permanent purge.
@@ -270,6 +272,17 @@ def slim_checkpoint(root,run,entry,existing=None):
 
 
 def update_population(root,run,state,config=POPULATION):
+    if 'quality_pool' in state:
+        from .quality_pool import reference
+        members=[]
+        for member in state['quality_pool']['members']:
+            previous=member if member.get('weights_only') else None
+            frozen=slim_checkpoint(root,run,reference(member),previous)
+            members.append(dict(member,**frozen))
+        state['quality_pool']['members']=members
+        state['population']=[reference(m) for m in members]
+        state['resume']=state['history'][-state['signature']['config'].get('retention',RETENTION)['resume_checkpoints']:]
+        return state
     # Retired generations retain immutable metadata but are not candidates.
     committed={e['model_id']:e for e in state.get('population',[])}
     available=dict(committed)
@@ -298,6 +311,31 @@ def plan(root,run,config=RETENTION):
         path=safe(run,path)
         if path.is_file() and path not in keep: candidates[path]=reason
     if state.get('format') in ('step5-recovery-league/2.1.0','step5-recovery-league/2.2.0'):
+        # Old full rating slots are retired only after their compact cumulative
+        # outcomes/panels have been archived and committed in state.json.
+        from .ratings import archived_history,ARCHIVE_FORMAT
+        archived=archived_history(root,state.get('ratings',{}))
+        for slot in archived['slots']:
+            directory=safe(run,run/'ratings'/'slots'/f'generation-{slot["generation"]:06d}')
+            for name in ('spec.json','report.json','panels.json','progress.svg','bootstrap.npz','games.jsonl','games-manifest.json'):
+                candidate(directory/name,'retired strength-rating slot')
+            for p in directory.glob('*.jsonl.gz*'):candidate(p,'retired strength-rating replay or features')
+        # Only the active content-addressed archive stays pinned. Abandoned
+        # pre-commit publications and superseded archives can be regenerated.
+        for path in (run/'ratings').glob('history-*.json'):
+            token=path.stem.removeprefix('history-')
+            if len(token)==64 and all(c in '0123456789abcdef' for c in token) and path not in keep:
+                require(read(safe(run,path)).get('format')==ARCHIVE_FORMAT,'Unknown rating archive')
+                candidate(path,'superseded compact rating history')
+        # Recent full actor replays are diagnostic samples, never future PPO
+        # data or a fitting dependency.
+        for slot in state.get('ratings',{}).get('slots',[]):
+            directory=project_path(root,slot['report']['path']).parent
+            for p in sorted(directory.glob('*.jsonl.gz'))[config['evaluation_samples']:]:
+                candidate(p,'completed strength-rating replay')
+                for derived in feature_sidecars(p):candidate(derived,'derived strength-rating features')
+        for p in (run/'opponent-pool'/'probes').glob('*.npz'):
+            candidate(p,'evicted or uncommitted quality-pool probabilities')
         for e in state['history'][-config['resume_checkpoints']:]:
             path=project_path(root,e['path'])
             if path.is_relative_to(run): keep.add(path);reasons[path]='recent resume checkpoint'

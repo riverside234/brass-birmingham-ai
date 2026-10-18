@@ -1,21 +1,24 @@
 {
   "format": "imitation-epoch-extension/1.0.0",
-  "target_implementation": "0c96c4a3ae6ce4d93ac1c1861fe9603b83143c3a844c094919579585cd6548ac",
+  "target_implementation": "33b925447d6e6dc0e8ec0b2a928f5ffba50738ea93abafab83101f3a1b491439",
   "learning_compatibility": "b3b944dbc492bc1483c41bdb5a9d566f13e2b2a8b7988dbeec8fcb9ebb372674",
   "from_implementations": [
     "647d019877a38a6023926803956bf794186d23a81fd6b6a35124684ca86046e4",
     "f2bb7f8155aa772dbe2720311a2b13c55031fe4f2fbbc55fbf037ad6cd321162",
     "e4fb9b106be898d2c6522fa9ab945f1360de755bd7e58e910e784ba58cb9c302",
-    "6869d1f9bcf0b97937892b4b856a829e3d3a60fd71191ac50be7dbcbf9bfe4a9"
+    "6869d1f9bcf0b97937892b4b856a829e3d3a60fd71191ac50be7dbcbf9bfe4a9",
+    "0c96c4a3ae6ce4d93ac1c1861fe9603b83143c3a844c094919579585cd6548ac"
   ],
   "prepared_source_hashes": {
     "demonstrations.py": [
       "7ecde6dda6a8658929f231dffb2ca1544b265b50b570d96fc525929bbb103a48",
-      "58f295d92d8a6d80c8befb3223b43883698f403dcf7c9e2519d36e7edd2c4e26"
+      "58f295d92d8a6d80c8befb3223b43883698f403dcf7c9e2519d36e7edd2c4e26",
+      "8c21cb5e3322e13dccd72d05f85933efc18bf17295b793d19efb7058b46edfad"
     ],
     "prepared_store.py": [
       "80df5bdf95e34c69f41f4f4cef14c4155e6b3f101af4bcb7b8f0af5e631f44fc",
-      "6383841be8c32672350aab07ee6399a630cdfbbfd1ad2372aeee58127855c8b2"
+      "6383841be8c32672350aab07ee6399a630cdfbbfd1ad2372aeee58127855c8b2",
+      "34a30284e05ae86c6e338e0f9cf4ae7d2893861ecfc8948a748439c27d28e389"
     ],
     "updates.py": [
       "48984a34a5169088dd75674838ab74b0721fe1f1ee41c2ff03d2fa6d9d22afdc",
@@ -25,5 +28,5 @@
       "9af7955c00d842b82a94c1e28836554f00086ed5788164937c0b9de28e670a3d"
     ]
   },
-  "reason": "Explicit same-run IL epoch-cap extension only. Original recipe/signature, best/history/patience and checkpoint lineage remain immutable; restore latest weights, Adam, CPU/CUDA RNG and warmup. Reviewed v11.1 supervised_epoch, data preparation, balancing and non-PPO optimizer math are unchanged. Exact reviewed prepared source hashes may reuse existing caches only with raw, data, index and receipt checksums verified. Unknown sources/settings and patience resets remain rejected."
+  "reason": "Explicit same-run IL epoch-cap extension only. Original recipe/signature, best/history/patience and checkpoint lineage remain immutable; restore latest weights, Adam, CPU/CUDA RNG and warmup. Reviewed v11.1 supervised_epoch, data preparation, balancing and non-PPO optimizer math are unchanged. Exact reviewed prepared source hashes may reuse existing caches only with raw, data, index and receipt checksums verified. Unknown sources/settings and patience resets remain rejected. PPO categorical stopping/reporting revision leaves supervised_epoch and preparation math unchanged; include the immediately preceding v11.1 source and its exact prepared-cache hashes."
 }

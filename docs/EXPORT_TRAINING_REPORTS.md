@@ -27,11 +27,12 @@ The script copies:
 - All available reports and specifications under the run's `evaluations/`, including champion, monitor, and broader panels.
 - The originating IL run's state/report and available ancestor IL states/reports.
 - The fixed IL-KL probe's `il-kl/manifest.json` and `il-kl/initial-report.json`, when present.
+- PL rating specifications/reports, separate panel reports, committed compact game outcomes (`games.jsonl`), and progress curves (`progress.svg`).
 
 For the current v11.1 recipe, full iteration reports and compact history retain
 the PPO LR controller, exact categorical KL, overall and per-group IL-anchor
 distance/counts/status, warmup, optimizer steps, actual sample usage, fixed
-60/30/10 table counts and learner-seat attribution. Disabled teacher search and
+50/45/5 table counts and learner-seat attribution. Disabled teacher search and
 an absent champion gate need no substitute reports. The IL source is read from
 the saved run lineage; its existing directory/file names are preserved. No IL
 retraining or renaming is needed.
@@ -42,6 +43,15 @@ decision), `rehearsal_schedule`, and zero-VP/insolvency counts by table type.
 The probe manifest carries selected-position identities and source/cache hashes;
 its dense `probe.npz` and `.prepared/` validation cache are excluded from this
 report-only bundle.
+
+The quality-pool revision retains per-member scores, frozen planning probabilities,
+seat/comparison counts, outrank diagnostics and admission/eviction decisions. The
+24-member training pool and the independently retained rated agents are visible in
+state. Compact held-out rating JSONL files are included because they are the complete
+input to future refits; they contain outcomes, not PPO trajectories. Committed outcome
+and panel hashes are verified before export. Dense opponent-probe caches and
+`bootstrap.npz` are excluded. Rating reports retain uncertainty, paired differences,
+v4/regression warnings and the pending manual deployment-review status.
 
 It also writes `recorded-config.json` from the saved run state and an
 `export-manifest.json` containing source paths, SHA-256 hashes, file sizes, missing
@@ -58,6 +68,11 @@ results/joint7-v11-1-grouped-lr-g0021-<timestamp>/
   iteration-0020/report.json
   evaluations/monitor-<games>/report.json
   evaluations/monitor-<games>/spec.json
+  ratings/slots/generation-000020/games.jsonl
+  ratings/slots/generation-000020/panels.json
+  ratings/slots/generation-000020/report.json
+  ratings/slots/generation-000020/spec.json
+  ratings/slots/generation-000020/progress.svg
   lineage/artifacts/step5/features4-v11-1-batch7-il/state.json
   lineage/artifacts/step5/features4-v11-1-batch7-il/report.json
   ...
@@ -109,6 +124,15 @@ coverage and timing, distinct used/unused labels, and distillation policy drift.
 These fields are included automatically in iteration reports and compact history;
 `null` cumulative allowance means the wall-fraction restriction is disabled.
 
+Rating retention keeps full slot folders for the most recent 100 training
+iterations, normally ten slots. Older compact outcomes and diagnostic panels
+are consolidated into the checksummed `ratings/history-<digest>.json` named by
+`state.json` → `ratings.archive`. Export verifies and copies that archive along
+with the recent slot evidence. Historical games still support cumulative PL
+fits and paired bootstrap refits; older per-slot bootstrap tensors and full
+reports/curves can be cleaned. Existing bundles already under `results/` are
+not automatically removed.
+
 Verification: `python -m unittest discover -s tests/Reports -v` covers report
 selection, original bytes, lineage, missing evidence, output protection, concurrent
 changes, the new default run and grouped LR/anchor metrics, and a smoke export
@@ -119,6 +143,13 @@ existing v11.1 three-game smoke copied four source reports with matching bytes
 and checksums, preserving grouped anchor/LR fields and the original IL path.
 Its first-generation archive was absent as expected. Evidence is in
 `artifacts/report-export-grouped-lr-20261016/`.
+
+October 18 quality-pool/rating validation: the expanded focused suite passes,
+including immutable rating outcome/panel/spec/report checks, original JSONL/SVG
+bytes and dense-cache exclusion. Exporting the final three-game native smoke
+copied six files with matching hashes and no warnings; the first-generation
+compact archive was correctly reported missing. Evidence is in
+`artifacts/quality-rating-20261018/validation.json` and `report-bundle/` there.
 
 October 17 validation: the 67-test focused controller/report suite passed. An
 actual export of the final three-game calibrated-limit smoke copied six source

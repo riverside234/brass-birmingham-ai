@@ -49,8 +49,13 @@ class Rules(unittest.TestCase):
             bad=copy.deepcopy(cfg);bad['il_kl_limit'].update(change)
             with self.assertRaises(ValueError):validate_config(bad)
         old=copy.deepcopy(cfg);old.pop('il_kl_limit');old['ppo_lr_controller']['contract']=lr.CONTRACT
+        for key in ('table_plan','opponent_pool','rating'):old.pop(key,None)
+        old.update(selfplay_recipe='latest-model-selfplay/2.0.0',
+            curriculum=[dict(until=None,selfplay=60,historical=30,legacy=10)],population=dict(recent=4,anchors=12))
         validate_config(old)
-        self.assertNotIn('il_kl_limit',latest_model_config(old,old['imitation_checkpoint']))
+        self.assertNotIn('il_kl_limit',old)
+        # Explicit fresh config generation opts into the new health-gated pool.
+        self.assertEqual(latest_model_config(old,old['imitation_checkpoint']),cfg)
 
     def test_rehearsal_floor_boundaries_and_restart_use_committed_progress(self):
         cfg=dict(rehearsal_manifest='completed.json',rehearsal_weight=.1,rehearsal_until=10000,rehearsal_floor=DEFAULT_FLOOR)

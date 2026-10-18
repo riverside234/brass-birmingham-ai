@@ -1,6 +1,17 @@
-"""Bounded diagnostics; no reward normalization, RNG draws or optimizer writes."""
+"""Bounded policy measurements; no RNG draws or optimizer writes."""
+import math
 import numpy as np
 import torch
+
+from brass_ai.learning.contracts import require
+
+
+PPO_KL_GUARD = 'ppo-categorical-kl-guard/1.0.0'
+
+
+def categorical_kl(old, current):
+    """Sum over legal actions; masked probabilities are exactly zero."""
+    return (old*(old.clamp_min(1e-30).log()-current.clamp_min(1e-30).log())).sum()
 
 
 def distribution(values):
@@ -31,8 +42,8 @@ def reward_distribution(trajectories, spec):
 class CategoricalProbe:
     """Exact action-distribution KL on the existing bounded nonforced probe.
 
-    Old probabilities are captured before any update. This observes drift but
-    does not alter the existing sampled-action early-stop rule or RNG stream.
+    Old probabilities are captured once before PPO and remain fixed across all
+    steps/epochs. The same probe drives early stopping and post-update reporting.
     Each stored CPU tensor is bounded by the ordinary candidate-cell limit.
     """
     def __init__(self, model, dataset, indices, behavior, config):
@@ -46,6 +57,28 @@ class CategoricalProbe:
                 _, inputs, q = dataset.batch(part, behavior.exploration)
                 p = probabilities(model(*inputs)[0], q, behavior.exploration, behavior.temperature)
                 self.parts.append((part, p.detach().cpu()))
+
+    def measure_step(self, model, *, executor=None):
+        """Exact and sampled KL from ONE forward pass per cached microbatch.
+
+        Reuse the bounded CPU snapshots and optional pinned-input pipeline.
+        Accumulate on-device, then synchronize once; do not reevaluate the IL
+        anchor, resample positions or advance training RNG inside the guard.
+        """
+        from .updates import probabilities
+        totals = torch.zeros(2, device=self.dataset.device)
+        parts = (part for part, _ in self.parts)
+        batches = self.dataset.policy_batches(parts, self.behavior.exploration, executor)
+        with torch.no_grad():
+            for (_, before), (_, ix, inputs, q) in zip(self.parts, batches):
+                p = probabilities(model(*inputs)[0], q, self.behavior.exploration, self.behavior.temperature)
+                old = before.to(p.device)
+                selected = p.gather(1, self.dataset.chosen[ix, None]).squeeze(1).clamp_min(1e-30)
+                ratio = selected/self.dataset.old[ix]
+                totals += torch.stack((categorical_kl(old, p), ((ratio-1)-ratio.log()).sum()))
+        exact, sampled = (value/max(1, self.positions) for value in totals.cpu().tolist())
+        require(math.isfinite(exact) and math.isfinite(sampled), 'Nonfinite PPO KL probe; refusing further updates')
+        return dict(positions=self.positions, categorical_kl=exact, sampled_kl=sampled)
 
     def measure(self, model, anchor=None):
         from .updates import probabilities
@@ -61,7 +94,7 @@ class CategoricalProbe:
                 _, inputs, q = self.dataset.batch(part, self.behavior.exploration)
                 p = probabilities(model(*inputs)[0], q, self.behavior.exploration, self.behavior.temperature)
                 old = before.to(p.device)
-                kl += float((old*(old.clamp_min(1e-30).log()-p.clamp_min(1e-30).log())).sum())
+                kl += float(categorical_kl(old, p))
                 ent = -(p*p.clamp_min(1e-30).log()).sum(-1)
                 legal = inputs[2].sum(-1).float()
                 entropy += float(ent.sum())
@@ -86,7 +119,7 @@ class CategoricalProbe:
                         anchor_groups=group_means,anchor_unassigned_positions=unassigned,
                         anchor_group_scope='Four existing era/round groups; per-position means on the unchanged nonforced probe',
                         anchor_scope='Exact KL(fixed IL behavior || post-PPO behavior), same probe and exploration mixture') if anchor is not None else {}),
-                    scope='Exact categorical KL(old behavior || new behavior) on the proportional era/phase nonforced probe; optional PPO LR feedback, unchanged sampled early-stop guard')
+                    scope='Exact categorical KL(old behavior || new behavior) on the proportional era/phase nonforced probe; PPO per-step early stopping and optional LR feedback')
 
 
 def teacher_drift_probe(model, data, behavior, config):

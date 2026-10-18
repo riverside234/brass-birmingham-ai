@@ -134,6 +134,20 @@ class Probe:
             elapsed_seconds=time.perf_counter()-began,probability_floor=self.config['probability_floor'],
             scope='Fixed IL validation positions; raw temperature-1 policies, no exploration; symmetric floor/renormalization for KL, raw behavior checks')
 
+    def probabilities(self,model,update):
+        """Raw immutable snapshot for quality-pool novelty checks, no RNG."""
+        result=np.empty_like(self.arrays['reference']);device=next(model.parameters()).device
+        was_training=model.training;model.eval()
+        try:
+            with torch.no_grad():
+                for part in self.parts(update):
+                    inputs=collate([self.encoded[i] for i in part],device)
+                    values=raw_probabilities(model(*inputs)[0],inputs[2]).cpu().numpy()
+                    for j,i in enumerate(part):
+                        a,b=map(int,self.arrays['offsets'][i:i+2]);result[a:b]=values[j,:b-a]
+        finally:model.train(was_training)
+        return result
+
 
 def source_binding(root,origin):
     path=project_path(root,origin['manifest'])

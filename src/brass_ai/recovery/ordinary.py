@@ -6,7 +6,7 @@ from brass_ai.bank import sha
 from brass_ai.learning.contracts import digest,project_path,require
 from brass_ai.step5.league import seeds_for
 from brass_ai.step5.policy import INDUSTRIES
-from .config import table_rotation,latest_model_recipe,learner_seats_per_table
+from .config import table_rotation,latest_model_recipe,learner_seats_per_table,quality_selfplay_recipe
 from .curriculum import training_table,searched_legacy
 from .execution import neural_spec
 from .population import sample_opponents
@@ -26,13 +26,18 @@ def plan_collection(root,directory,state,config,signature,service,current,profil
         snapshots[entry['model_id']]=entry
     jobs=[];kind_by_group={};composition=Counter();cursor=state['next_seed'];context_counter=state['context_counter']
     historical_generations=Counter();mix_receipts=[];transition_added=0
+    quality=quality_selfplay_recipe(config);quality_tables={};quality_planning=None
+    if quality:
+        from . import quality_pool
+        quality_pool.validate_state(state['quality_pool'],config['opponent_pool'],state['iteration'])
+        quality_planning=quality_pool.distribution(state['quality_pool'])
     for i in range(config['games_per_iteration']):
         index=state['games_done']+i;kind,boosted=training_table(index,config,window)
         selected,cursor=seeds_for(cursor,1);seed=selected[0]
         rng=random.Random(digest(dict(seed=config['seed'],index=index)))
         learner=neural_spec(current,config['exploration'],'mixed')
         learner_count=learner_seats_per_table(config,kind)
-        mix_receipt=None
+        mix_receipt=None;quality_receipts=[]
         if kind=='selfplay' and champion_mix.enabled(config):
             entries,mix_receipt=champion_mix.opponents(state,config,rng,current_id=current,
                 transition_index=state['champion_mix']['transition_tables']+transition_added)
@@ -48,7 +53,11 @@ def plan_collection(root,directory,state,config,signature,service,current,profil
             transition_added+=int(mix_receipt['stage']=='balanced_transition')
         elif kind=='selfplay': policies=selfplay_policies(learner,incumbent) if incumbent else [learner]*4
         elif kind=='historical':
-            candidates=sample_opponents(snapshots.values(),current,state['evaluation_anchor'],rng,config['population']['recent'],count=4-learner_count)
+            if quality:
+                draws=[quality_pool.draw(state['quality_pool'],quality_planning,rng) for _ in range(2)]
+                candidates=[d[0] for d in draws];quality_receipts=[d[1] for d in draws]
+            else:
+                candidates=sample_opponents(snapshots.values(),current,state['evaluation_anchor'],rng,config['population']['recent'],count=4-learner_count)
             opponents=[]
             for entry in candidates:
                 historical_generations[entry['generation']]+=1
@@ -64,6 +73,11 @@ def plan_collection(root,directory,state,config,signature,service,current,profil
             selected_specs=opponent_specs if searched_legacy(index,config,boosted) else fast_specs
             policies=[learner]*learner_count+[selected_specs[profiles[(index*3+s)%len(profiles)]] for s in range(4-learner_count)]
         rotation=table_rotation(index);focuses={}
+        if quality and learner_count==2:
+            pair=quality_pool.learner_pair(index,kind,config['table_plan']['quotas'])
+            other=iter(policies[learner_count:]);physical=[learner if s in pair else next(other) for s in range(4)]
+            policies=[physical[(s+rotation)%4] for s in range(4)]
+            for seat,receipt in zip((s for s in range(4) if s not in pair),quality_receipts):receipt['seat']=seat
         for seat in range(4):
             if policies[(seat-rotation)%4]==learner:
                 point=context_counter%12;context_counter+=1
@@ -75,13 +89,19 @@ def plan_collection(root,directory,state,config,signature,service,current,profil
                                   exploration=config['exploration'],temperature=1.0,focus='mixed'))
         provenance['legacy_mode']='fast' if any(p.get('search_free') for p in policies) else ('searched' if kind=='legacy' else None)
         if mix_receipt is not None:provenance['champion_rollout']=mix_receipt
+        setup=digest(dict(rules='steam-brass-patch-1.1.0',setup_seed=seed))
+        if quality_receipts:
+            provenance['quality_opponents']=quality_receipts
+            quality_tables[setup]=dict(index=index,learner_seats=list(pair),opponents=quality_receipts,
+                policy_ids=[policies[(s-rotation)%4]['policy_id'] for s in range(4)])
         jobs.append(dict(index=i,seed=seed,rotation=rotation,sampling_seed=config['seed']*7+index,
             policies=policies,focuses=focuses,path=str(directory/f'actor-{i:06d}.jsonl.gz'),provenance=provenance))
-        kind_by_group[digest(dict(rules='steam-brass-patch-1.1.0',setup_seed=seed))]=kind
+        kind_by_group[setup]=kind
         composition[kind]+=1
     return dict(jobs=jobs,kind_by_group=kind_by_group,composition=composition,cursor=cursor,
         context_counter=context_counter,historical_generations=historical_generations,
-        mix_receipts=mix_receipts,transition_added=transition_added,incumbent=incumbent)
+        mix_receipts=mix_receipts,transition_added=transition_added,incumbent=incumbent,
+        quality_planning=quality_planning,quality_tables=quality_tables)
 
 
 def sampling_report(games,data,policy_id,kinds,config):

@@ -124,6 +124,9 @@ class LearningTests(unittest.TestCase):
     def setUpClass(cls):torch.set_num_threads(2)
 
     def examples(self,exploration=None):
+        from brass_ai.learning.board_topology import topology
+        from brass_ai.learning.features import feature_schema
+        board=topology();static=feature_schema()['static_profile']
         torch.manual_seed(470);model=FourSeatNet(ModelConfig.preset('small'))
         learner=NeuralPolicy(model,focus='mixed',exploration=recipe()['exploration'] if exploration is None else exploration)
         opponent=NeuralPolicy(model,focus='neutral',exploration=.05)
@@ -133,6 +136,13 @@ class LearningTests(unittest.TestCase):
             g=game();g.update(game_id=kind,setup_group=kind,split='train')
             g['opponents']=[learner.policy_id]*4 if kind=='selfplay' else [learner.policy_id]+[opponent.policy_id if kind=='historical' else 'v4']*3
             for row in g['records']:
+                # Replace old R2 static placeholders with the pinned board
+                # facts required by Features-4/v11 admission.
+                for link in row['view']['links']:
+                    link['regions']=list(board['link_endpoints'][link['id']])
+                    link['era']=board['link_eras'][link['id']]
+                for slot in row['view']['slots']:slot['types']=static['slot_types'][slot['id']]
+                for merchant in row['view']['merchants']:merchant['bonus']=static['merchant_bonus'][merchant['id']]
                 rng=random.Random(index*4+row['seat']);is_learner=kind=='selfplay' or row['seat']==0
                 if index==0 and row['seat']==3:row['choices']=row['choices'][:1]
                 if kind=='legacy' and not is_learner:
@@ -147,7 +157,11 @@ class LearningTests(unittest.TestCase):
 
     def test_four_plus_one_plus_one_trajectories_and_real_behavior_verification(self):
         model,policy,games,kinds,data=self.examples()
-        sampling=sampling_report(games,data,policy.policy_id,kinds,recipe())
+        from brass_ai.recovery.config import ARCHIVED_LATEST_MODEL_RECIPE
+        # This fixture intentionally covers the archived 4/1/1 attribution;
+        # current 4/2/2 tables are covered by test_ppo_lr_controller.FixedRecipe.
+        sampling=sampling_report(games,data,policy.policy_id,kinds,
+            dict(recipe(),selfplay_recipe=ARCHIVED_LATEST_MODEL_RECIPE))
         self.assertEqual([r['learner_trajectories'] for r in sampling['by_composition'].values()],[4,1,1])
         self.assertEqual(sampling['actor_eligible_decisions'],5);self.assertEqual(len(data),6)
         cfg=dict(recipe()['update'],effective_batch_size=2,critic_batch_size=2,microbatch_size=2)
@@ -160,12 +174,12 @@ class LearningTests(unittest.TestCase):
 
     def test_early_stop_reports_unused_rows_and_rejects_stale_behavior(self):
         model,policy,games,kinds,data=self.examples();cfg=dict(recipe()['update'],effective_batch_size=2,critic_batch_size=2,microbatch_size=2)
-        original=updates.policy_measure
-        def stop(*args,**kwargs):
-            result=original(*args,**kwargs)
-            verify=kwargs.get('verify',args[6] if len(args)>6 else False)
-            return result if verify else max(.02,result)
-        with patch.object(updates,'policy_measure',side_effect=stop):
+        from brass_ai.recovery.review_metrics import CategoricalProbe
+        original=CategoricalProbe.measure_step
+        def stop(probe,*args,**kwargs):
+            result=original(probe,*args,**kwargs)
+            return dict(result,categorical_kl=max(.02,result['categorical_kl']))
+        with patch.object(CategoricalProbe,'measure_step',stop):
             r=updates.ppo_update(model,torch.optim.AdamW(model.parameters(),lr=1e-5),games,policy,cfg,learner_data=data,sample_groups=kinds)
         self.assertTrue(r['kl_early_stop']);self.assertEqual(r['optimizer_steps'],1)
         self.assertEqual(r['sample_usage']['actor_unused_eligible'],3)

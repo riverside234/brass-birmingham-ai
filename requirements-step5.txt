@@ -1,2 +1,4 @@
 -r requirements-r2.txt
-# Step 5 reuses the pinned R2 dependencies; no external RL framework is required.
+# Plackett-Luce MAP fitting; no external RL framework is required.
+scipy==1.18.1
+matplotlib==3.10.7

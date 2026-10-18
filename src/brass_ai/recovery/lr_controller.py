@@ -1,7 +1,8 @@
 """Deterministic, checkpointed PPO-only learning-rate feedback.
 
-The exact post-PPO categorical probe is separate from the existing sampled
-early-stop guard. No RNG calls, model updates, or teacher targets live here.
+The post-PPO categorical measurement shares its fixed old policy/probe with
+the per-step early-stop guard. No RNG calls, model updates, or teacher targets
+live here.
 """
 import copy
 import math
@@ -247,6 +248,7 @@ def finish_iteration(optimizer,update,config,sampling,games,policy_id,kinds,anch
         anchor_groups=probe.get('anchor_groups'),anchor_unassigned_positions=probe.get('anchor_unassigned_positions'),
         anchor_identity=anchor,calibrated_anchor=calibrated_anchor,**game_health(games,policy_id,kinds))
     group[KEY],report=decide(group[KEY],measurements)
+    report['early_stop_reason']=update.get('kl_guard',{}).get('stop_reason')
     from .learning_rate import KEY as WARMUP_KEY,rate
     warmup=group[WARMUP_KEY]
     report.update(effective_lr=update['learning_rates'][0],
