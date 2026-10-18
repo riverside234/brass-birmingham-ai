@@ -8,13 +8,17 @@ V11.2 is the current default: projections **32/64/48/320/352/48 + 12**, fusion *
 
 The official heuristic strategy remains **v4, `bank-3dc65253a610191d66a5`**. Names such as `balanced-v3-masked-economy` are retained profile aliases; Network/Scout candidates are not enabled. Game and lab now compile the shared search core and the same game policy helpers. New collections have a separate search-runtime fingerprint; old bank/data identities are not rewritten. Reuse completed IL and its dataset unchanged.
 
-After pulling search/strategy source changes, build the versioned lab worker once before **new demonstration generation or self-play** (including search-free v4 opponents). This writes only a new directory under `artifacts/legacy-ai/search/`, using the existing private pinned DLLs/compiler; it does not update a model, configuration, frozen bank or installed game:
+After pulling search/strategy source changes **and the matching prebuilt files under `training/runtime/shared-search/`**, prepare the versioned lab worker once before **new demonstration generation or self-play** (including search-free v4 opponents). The command prefers the locally compiled portable executable, so the lab does **not** need Roslyn or `csc.exe`. It checks the executable, source/profile reference and private DLL fingerprints, then writes a new directory under `artifacts/legacy-ai/search/`. It does not update a model, configuration, frozen bank or installed game:
 
 ```bash
 python scripts/build-shared-search.py --root .
 ```
 
-Linux uses Mono (`--mono /path/to/mono` if needed). If the original bank runtime is absent, provide `--managed` pointing to the existing private pinned dependency directory below the project root. A missing/stale build fails explicitly; there is no silent fallback to old search. Teacher and v4 search remain disabled by the generated self-play config. Explicitly enabled searches share deadline admission; fixed simulation quotas retain their watchdog and exact allocation. See [shared-search integration](personality/DEPLOYMENT_PERFORMANCE.md#shared-official-v4-search-for-game-il-and-self-play).
+Linux still uses Mono to run the prepared worker, with the same existing training runtime setup. If the original bank runtime is absent, provide `--managed` pointing to the existing private pinned dependency directory below the project root. Only `BrassLegacyAI.exe` and `prebuilt.json` are distributed; licensed game DLLs remain private. A missing/stale bundle fails explicitly; there is no silent fallback to old search. Git LF/CRLF conversion is accepted only after normalized source fingerprints match; the executable's byte hash remains exact.
+
+On the build machine, regenerate and publish the bundle with `python scripts/build-shared-search.py --root . --compile --publish`, then transfer/commit the updated source **and both bundle files** together. Compiling requires the complete pinned Roslyn 4.12.0 toolset, including its adjacent assemblies; copying `csc.exe` alone is insufficient. `--compiler` selects an existing complete toolset, and `--mono` selects Mono for compilation on Linux. Normal lab preparation requires neither compiler nor downloads.
+
+Teacher and v4 search remain disabled by the generated self-play config. Explicitly enabled searches share deadline admission; fixed simulation quotas retain their watchdog and exact allocation. See [shared-search integration](personality/DEPLOYMENT_PERFORMANCE.md#shared-official-v4-search-for-game-il-and-self-play).
 
 Reuse the already converted, audited **Features-4** dataset as-is. The state/action dimensions remain **3,128 / 327**, and feature, encoder, derived-feature, rules and target contracts are unchanged. The new model checks the static board topology as part of admission. Existing native-board data satisfies those checks, including the three-region Worcester/SouthWest/Kidderminster links.
 

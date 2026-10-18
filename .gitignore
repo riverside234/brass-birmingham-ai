@@ -562,6 +562,7 @@ tensorboard/
 !/training/runtime/search/BrassHost.exe
 !/training/runtime/throughput/ordinary/BrassHost.exe
 !/training/runtime/throughput/search/BrassHost.exe
+!/training/runtime/shared-search/*/BrassLegacyAI.exe
 
 # Local operating-system metadata.
 /configs/legacy-ai/live.json

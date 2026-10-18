@@ -339,12 +339,18 @@ Shared code boundaries:
   training keeps its existing inference batching/service; sharing the search
   algorithm does not force an ORT CPU execution policy onto a training GPU.
 
-Run `python scripts/build-shared-search.py --root .` after source changes and
-before new IL generation or self-play. It creates a content-addressed worker
+Run `python scripts/build-shared-search.py --root .` after pulling source changes
+and the matching `training/runtime/shared-search/` bundle, before new IL generation
+or self-play. It prefers the precompiled authored executable and creates a content-addressed worker
 under `artifacts/legacy-ai/search/`, leaving frozen banks, models, configurations
-and installed game binaries intact. Linux uses the existing Mono/compiler and
-private pinned DLLs; `--mono`, `--compiler` and `--managed` can select their
-locations. Missing or stale workers fail explicitly. Game builds likewise need
+and installed game binaries intact. Linux uses the existing Mono and private
+pinned DLLs; **no lab compiler is needed with the matching bundle**. `--managed`
+can select another pinned DLL directory. Only the authored executable and its
+source/binary/dependency receipt are distributed. Missing or stale workers fail
+explicitly. To regenerate a bundle on the build machine, use
+`python scripts/build-shared-search.py --root . --compile --publish`; that path
+requires the full pinned compiler toolset (`--compiler`, and `--mono` on Linux).
+Source and bundle must be transferred together. Game builds likewise need
 recompilation/deployment; editing a shared source does not modify an installed
 DLL. Historical release reproduction scripts intentionally remain pinned.
 
