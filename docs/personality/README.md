@@ -25,7 +25,7 @@ The goal-enabled commands and results below are retained as historical reference
 
 ## Current discovery direction: reuse one frozen network
 
-**18 October 2026:** Start post-Step-5 style discovery with one frozen trained network and a small set of supported context/control settings. Reuse the existing discovery and qualification framework before considering additional policy training. Keep the main self-play run and its Five-style history sampling/retention unchanged. This is a documentation decision; the goal-free integration described here is still pending.
+**18 October 2026:** The first experiment is to measure how many useful, reproducible styles the frozen Step 5 model's existing contexts actually produce. Start with those supported inputs and reuse the existing discovery and qualification framework before considering additional policy training. Continue to skip the goal-head stage. Keep the main self-play run and its Five-style history sampling/retention unchanged. This is a documentation decision; the goal-free integration described here is still pending.
 
 | Capability | Verified implementation status |
 | --- | --- |
@@ -39,9 +39,17 @@ The first proposed goal-free candidates are the existing Step 5 `neutral` contex
 
 The old proposal generator varies `style`, `alpha`, `patience` and `hysteresis`. The latter three control goal bias or goal persistence. Once those mechanisms are skipped, changes to inactive fields must not create supposedly distinct style candidates. Setting `alpha=0` alone does not remove the model/readiness dependencies or all saved-intent behavior. A future goal-free adapter must identify effective controls, deduplicate equivalent recipes, and preserve source/model identities, legal-action handling and qualification safeguards.
 
-After that adaptation, begin with a bounded direct-policy comparison against the same frozen reference pool, using matched setups and seat rotations. Retain only reproducible behavioral differences with acceptable held-out playing quality; separately confirm any searched deployment recipe. A smaller preliminary set is useful if fewer styles qualify. Keep the 16-archetype/eight-variant product target, but do not duplicate candidates, relabel noise or relax release gates to fill it. Removing candidate policy training does not remove evaluation costs or establish a measured speedup.
+After that adaptation, evaluate all seven existing contexts in a bounded direct-policy comparison against the same frozen reference pool, using matched setups and seat rotations. Seven input choices do not imply seven distinct qualified styles. Report the tested contexts, repeat-game behavior dispersion, distinguishable behavior groups, held-out playing quality relative to the neutral control, and the number of useful styles supported by the evidence. Retain only reproducible behavioral differences with acceptable held-out playing quality; separately confirm any searched deployment recipe. A smaller preliminary set is useful if fewer styles qualify. Keep the 16-archetype/eight-variant product target, but do not duplicate candidates, relabel noise or relax release gates to fill it. Removing candidate policy training does not remove evaluation costs or establish a measured speedup.
 
-PGA-MAP-Elites, neural-weight mutation, independent PPO fine-tuning branches, new conditional-policy training and subsequent multi-policy distillation are deferred. Reconsider them only if the frozen-network experiment shows insufficient useful diversity and a separate experiment is approved. Ordinary PPO branches with the same win objective do not guarantee distinct styles; multiple resulting weight sets would also need additional work to meet the single-network deployment goal.
+<a id="optional-ppga-experiment"></a>
+
+### Optional follow-up: evaluate PPGA adaptation in a separate experiment
+
+If the frozen-context experiment provides insufficient useful diversity and learning new behavior requires changing policy weights, optionally evaluate adapting [Proximal Policy Gradient Arborescence (PPGA)](https://arxiv.org/abs/2305.13795). PPGA combines PPO with differentiable quality-diversity optimization. Its published locomotion results motivate investigation; they do not establish compatibility, compute savings or stronger play in Brass. This is an optional follow-up, not a required stage or an implemented training path.
+
+A future feasibility review should address the categorical policy over variable legal-action sets, behavior-descriptor learning signals, fresh PPO data and exact behavior probabilities, and evaluation against a controlled opponent pool. Use a bounded pilot with its own output directory, model/optimizer state, contracts and source lineage, retaining the original frozen parent as a control. Goal-head training is not a prerequisite. Compare useful behavioral coverage, held-out playing quality, repeatability and total collection/training/evaluation cost; diversity or training reward alone is insufficient evidence of success.
+
+Ordinary PPO branches with the same win objective are not automatically PPGA and do not guarantee distinct styles. A multi-policy archive also does not satisfy the single-network deployment goal: any later conditional training or distillation would be separate work requiring fresh behavior and strength qualification. No PPGA implementation, policy training, automatic fallback or experiment launch is part of this documentation update. PGA-MAP-Elites and ad hoc weight-mutation/fine-tuning alternatives remain deferred rather than being selected by this note.
 
 ## Reading order and search use
 

@@ -10,6 +10,8 @@ Sections: [P4 rosters](#p4) | [P5 difficulty](#p5) | [P6 deployment](#p6). See [
 
 **Frozen-network discovery follow-up (18 October 2026):** The [current direction](README.md#frozen-network-discovery) is to reuse one frozen Step 5 network and initially test its supported neutral/industry contexts after adapting the goal-free entry path. Preserve the existing quality, repeatability and deployed-controller checks. A smaller preliminary set is acceptable for investigation, but it does not satisfy the full 16-by-8 roster contract. Inactive goal parameters, duplicate recipes or renamed behaviors cannot supply missing members. The goal-free P4-P6 model/readiness/export integration remains pending; no new trained roster or runtime compatibility is established by this note.
 
+Report how many distinct, useful styles the frozen-context evaluation supports before expanding the workflow. The [optional PPGA experiment](README.md#optional-ppga-experiment) would produce separate research candidates if weight training is needed. Changed weights require fresh behavior and playing-quality evidence; neither the frozen-parent qualification nor archive diversity transfers automatically. A collection of separately trained policies does not satisfy the existing one-network roster/export contract without additional integration and qualification.
+
 <a id="p4"></a>
 
 ## P4: unified deployment styles

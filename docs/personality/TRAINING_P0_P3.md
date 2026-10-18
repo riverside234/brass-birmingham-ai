@@ -280,6 +280,8 @@ To use the distilled checkpoint directly for a frozen discovery pilot, run `prep
 
 **Current direction (18 October 2026):** [Reuse one frozen network with supported contexts](README.md#frozen-network-discovery), without goal-head training or policy fine-tuning. The commands below describe the existing goal-enabled pipeline; they are not yet runnable instructions for handing the current Step 5 checkpoint directly into a goal-free discovery run. First adapt the checkpoint/readiness path and candidate inputs. Start with the source run's supported `neutral` and six industry-focus contexts, not the separate five personality profiles. Remove inactive goal controls from candidate identity/variation rather than counting different `alpha`, `patience` or `hysteresis` values as additional styles. Preserve matched evaluations, held-out quality checks and provenance. No code or command-line bypass is implemented by this note.
 
+The first experiment should report the measured number of useful styles and separately identify indistinguishable or inconclusive candidates, rather than assume a 16-style roster. If that evidence motivates learning new behaviors through weight updates, [PPGA adaptation is an optional independent experiment](README.md#optional-ppga-experiment). Define and validate that adaptation before running a bounded pilot; the historical commands below do not implement PPGA or automatically launch weight training.
+
 ```sh
 python "$brass_root/scripts/personality_repertoire.py" propose \
   --ready "$personality_root/search-ready-v1" \
