@@ -6,6 +6,7 @@ import contextlib
 import io
 import gzip
 import json
+import os
 from pathlib import Path
 import random
 import tempfile
@@ -25,6 +26,9 @@ import test_bounded_imitation as fixture
 import test_auto_il_kl as probe_fixture
 
 
+def killed_rehearsal_reader(job):os._exit(93)
+
+
 class RehearsalWindowTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):fixture.BoundedImitationTests.setUpClass()
@@ -39,9 +43,9 @@ class RehearsalWindowTests(unittest.TestCase):
         self.run=self.directory/'selfplay'
         self.config=dict(windows.DEFAULT,rows_per_iteration=8,shard_draws=4,max_cache_bytes=16*1024**2)
 
-    def window(self,index=None,iteration=0,config=None):
+    def window(self,index=None,iteration=0,config=None,**execution):
         return windows.window(SOURCE_ROOT,self.run,index or windows.TrainIndex(SOURCE_ROOT,self.manifest),
-            config or self.config,seed=49,iteration=iteration,device='cpu')
+            config or self.config,seed=49,iteration=iteration,device='cpu',**execution)
 
     def test_manifest_only_index_selection_rotation_and_rng_continuity(self):
         with patch.object(demos,'_prepared_shard',side_effect=AssertionError('Eager shard read')):
@@ -68,7 +72,7 @@ class RehearsalWindowTests(unittest.TestCase):
         for task in index.tasks:
             for path in Path(task[0]).parent.glob(Path(task[0]).name+'.features-v4.*'):path.unlink()
         pinned={p:sha(p) for p in self.directory.iterdir() if p.is_file()}
-        def tracked(task):calls.append(task[0]);return original(task)
+        def tracked(task,**kwargs):calls.append(task[0]);return original(task,**kwargs)
         rng=torch.get_rng_state().clone()
         with patch.object(demos,'_prepared_shard',side_effect=tracked),contextlib.redirect_stdout(io.StringIO()):
             with self.window(index) as dataset:
@@ -92,6 +96,71 @@ class RehearsalWindowTests(unittest.TestCase):
         self.assertTrue(torch.equal(rng,torch.get_rng_state()))
         self.assertEqual(pinned,{p:sha(p) for p in pinned})
         self.assertFalse(any(self.directory.glob('0.jsonl.gz.features*')))
+
+    def test_selected_neutral_preparation_is_exact_with_repeats_and_skips_unused_rows(self):
+        task=self.fixture.tasks[0];task[1][0]['teachers']={next(iter(task[3])):4}
+        full=demos._prepared_shard(task);draws=[3,0,3,2];real=demos.prepared;prepared_counts=[]
+        def prepare(*args,**kwargs):
+            data=real(*args,**kwargs);prepared_counts.append(len(data));return data
+        with patch.object(demos,'prepared',side_effect=prepare):chosen=demos._prepared_shard(task,selection=draws)
+        self.assertEqual(prepared_counts,[3])
+        for actual,i in zip(chosen,draws):
+            self.assertEqual(actual[:3],full[i][:3])
+            for field in ('state','actions','stable_to_relative'):
+                np.testing.assert_array_equal(getattr(actual[3],field),getattr(full[i][3],field))
+        # An illegal label in an UNSELECTED row must still be rejected.
+        path=Path(task[0])
+        with gzip.open(path,'rt',encoding='utf-8') as handle:header,episode=[json.loads(line) for line in handle]
+        episode['records'][1]['chosen']=len(episode['records'][1]['choices'])
+        with gzip.open(path,'wt',encoding='utf-8') as handle:
+            handle.write(json.dumps(header)+'\n'+json.dumps(episode)+'\n')
+        task[1][0].update(sha256=sha(path),features=None)
+        with self.assertRaisesRegex(ValueError,'Illegal chosen'):
+            demos._prepared_shard(task,selection=draws)
+
+    def test_parallel_reuses_readers_preserves_sample_order_bytes_and_rng(self):
+        from brass_ai.recovery.ingress import reader_pool
+        index=windows.TrainIndex(SOURCE_ROOT,self.manifest)
+        def snapshot(ds):
+            return (ds.identities,[(r['data_sha256'],r['index_sha256']) for r in ds.data.receipts],
+                    copy.deepcopy(ds.report))
+        rng=torch.get_rng_state().clone()
+        with contextlib.redirect_stdout(io.StringIO()),self.window(index) as ds:serial=snapshot(ds)
+        with reader_pool(2) as readers,contextlib.redirect_stdout(io.StringIO()):
+            with self.window(index,workers=2,executor=readers) as ds:parallel=snapshot(ds)
+        self.assertEqual(serial[:2],parallel[:2])
+        self.assertEqual(serial[2]['selection_sha256'],parallel[2]['selection_sha256'])
+        self.assertTrue(parallel[2]['reused_reader_pool']);self.assertEqual(parallel[2]['workers'],2)
+        self.assertEqual(parallel[2]['dense_ipc_bytes'],0)
+        self.assertTrue(torch.equal(rng,torch.get_rng_state()))
+        self.assertFalse((self.run/'.rehearsal-cache').exists())
+
+    def test_parallel_budget_is_shared_and_failures_join_writers_before_cleanup(self):
+        # Both shards individually fit; their combined output does not. Serial
+        # and parallel must reject rather than give each worker its own cap.
+        with contextlib.redirect_stdout(io.StringIO()),self.window() as ds:
+            sizes=[sum(p.stat().st_size for p in f.values()) for f in ds.data.files]
+        cap=max(sizes)+65536+8192
+        self.assertLess(cap,sum(sizes))
+        with contextlib.redirect_stdout(io.StringIO()):
+            for workers in (1,2):
+                with self.assertRaisesRegex(ValueError,'max_cache_bytes'):
+                    with self.window(config=dict(self.config,max_cache_bytes=cap),workers=workers):pass
+                self.assertFalse((self.run/'.rehearsal-cache').exists())
+            with self.assertRaisesRegex(ValueError,'source changed'):
+                index=windows.TrainIndex(SOURCE_ROOT,self.manifest)
+                path=Path(index.tasks[0][0]);path.write_bytes(path.read_bytes()+b'changed')
+                with self.window(index,workers=2):pass
+            self.assertFalse((self.run/'.rehearsal-cache').exists())
+
+    def test_dead_parallel_reader_does_not_leave_writers_or_partial_cache(self):
+        from concurrent.futures.process import BrokenProcessPool
+        pinned={p:sha(p) for p in self.directory.iterdir() if p.is_file()}
+        with patch.object(windows,'_prepare_selection',killed_rehearsal_reader),contextlib.redirect_stdout(io.StringIO()):
+            with self.assertRaises(BrokenProcessPool):
+                with self.window(workers=2):pass
+        self.assertFalse((self.run/'.rehearsal-cache').exists())
+        self.assertEqual(pinned,{p:sha(p) for p in pinned})
 
     def test_disk_window_preserves_ppo_loss_for_identical_selected_rows(self):
         from brass_ai.learning.model import FourSeatNet,ModelConfig

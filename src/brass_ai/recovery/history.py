@@ -85,6 +85,8 @@ def compact(report):
     if report.get('format') in ('step5-evaluation-report/1.0.0','four-player-champion/1.0.0'):
         out['evaluation_evidence']=evaluation_evidence(report)
     out['timings']=scalars(report.get('timings',{}),('collection_seconds','replay_load_seconds','ppo_seconds',
+        'sampling_seconds','rehearsal_prepare_seconds','rehearsal_cleanup_seconds',
+        'post_ppo_diagnostics_seconds','final_diagnostics_seconds',
         'value_phase_seconds','search_and_distill_seconds','checkpoint_seconds','evaluation_seconds','cleanup_seconds','iteration_seconds'))
     actor=report.get('actor',{})
     out['actor']=scalars(actor,('optimizer_steps','learner_decisions','meaningful_decisions','forced_decisions',
@@ -104,7 +106,9 @@ def compact(report):
     if isinstance(sampling,dict):out['actor']['rehearsal_sampling']=scalars(sampling,(
         'contract','iteration','source_rows','source_games','source_shards','selected_shards','selected_rows',
         'distinct_rows_selected','nonforced_rows_selected','used_presentations','distinct_rows_used',
-        'selection_sha256','manifest_sha256','max_cache_bytes','peak_cache_bytes','preparation_seconds','cache_deleted','scope'))
+        'selection_sha256','manifest_sha256','max_cache_bytes','peak_cache_bytes','preparation_seconds','cache_deleted','scope',
+        'workers_requested','workers','reused_reader_pool','worker_read_prepare_seconds','worker_write_seconds',
+        'worker_cpu_seconds','dense_ipc_bytes'))
     if 'kl_guard' in actor:out['actor']['kl_guard']=dict(actor['kl_guard'])
     for key in ('advantage','advantage_distribution','return_distribution','legal_actions','categorical_probe','gradient_norms','phases'):
         out['actor'][key]=scalars(actor.get(key,{}),actor.get(key,{}))

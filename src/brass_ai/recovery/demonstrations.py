@@ -245,7 +245,7 @@ def _loader_init():
     torch.set_num_threads(1)
 
 
-def _prepared_shard(task):
+def _prepared_shard(task,selection=None):
     path,entries,partition,allowed,compact=task;path=Path(path)
     require(all(e['sha256']==entries[0]['sha256'] for e in entries),'Conflicting demonstration hashes')
     require(sha(path)==entries[0]['sha256'],'Demonstration source changed')
@@ -258,7 +258,20 @@ def _prepared_shard(task):
     require({g['game_id'] for g in games}==ids,'Missing/duplicate demonstration games')
     require(all(r['behavior']['kind']=='external' and r['behavior']['policy_id'] in allowed for g in games for r in g['records']),
             'Fresh training prohibits imported neural replay; demonstrations must be entirely audited heuristics')
-    data=prepared(games,neutral=True)
+    # Rehearsal still admits every raw record above. Only its sampled rows need
+    # a second, neutral-context encoding/seal check and compact metadata. Keep
+    # source order here, then restore the draw order (including repeats) below.
+    predicate=None
+    if selection is not None:
+        expected={e['game_id']:sum(e['teachers'].values()) for e in entries}
+        require({g['game_id']:len(g['records']) for g in games}==expected,
+                'Audited rehearsal decision counts differ from replay')
+        rows=[r for g in games for r in g['records']]
+        require(selection and all(type(i) is int and 0<=i<len(rows) for i in selection),
+                'Invalid rehearsal source row selection')
+        unique=sorted(set(selection));selected={id(rows[i]) for i in unique}
+        predicate=lambda r:id(r) in selected
+    data=prepared(games,predicate=predicate,neutral=True)
     if compact:
         # Features have crossed the full validation boundary. BC needs small
         # label/diagnostic metadata, not repeated board/history JSON over IPC.
@@ -267,6 +280,9 @@ def _prepared_shard(task):
                     choices=[{k:c[k] for k in ('id','kind','industry') if k in c} for c in r['choices']],
                     style=r['style'],intent=r['intent'],teacher=None),target,identity,encoded)
               for r,target,identity,encoded in data]
+    if selection is not None:
+        require(len(data)==len(unique),'Rehearsal selection lost source rows')
+        by_index=dict(zip(unique,data));data=[by_index[i] for i in selection]
     return data
 
 

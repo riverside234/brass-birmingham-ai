@@ -155,6 +155,7 @@ def fit(model,optimizer,dataset,train_ids,heldout_ids,actor_ids,probe_ids,config
         beta_clone=beta,learning_rate=config['learning_rate'],train_rows=len(value_train_ids),heldout_rows=len(heldout_ids),
         current_train_rows=len(train_ids),previous_train_rows=len(value_train_ids)-len(train_ids),
         distinct_value_rows_used=0,value_presentations=0,clone_presentations=0,
+        attempted_value_presentations=0,attempted_clone_presentations=0,
         distinct_current_rows_used=0,distinct_previous_rows_used=0,current_presentations=0,previous_presentations=0,
         scope='Critic: current plus configured previous iteration; validation/cloning/probes: current only; separate Adam/base LR, no PPO counters')
     if not config['enabled']:report['early_stop_reason']='disabled'
@@ -195,6 +196,8 @@ def fit(model,optimizer,dataset,train_ids,heldout_ids,actor_ids,probe_ids,config
             if measured>config['kl_cap']:
                 report.update(early_stop_reason='policy_kl_cap',kl_guard_tripped=True);break
         report['attempted_steps']+=attempted;report['attempted_epochs']+=1
+        report['attempted_value_presentations']+=epoch_presentations
+        report['attempted_clone_presentations']+=epoch_clones
         last_attempt=metrics(model,validation_dataset,heldout_ids,update)
         if report['early_stop_reason'] is None and last_attempt['loss']>current['loss']:
             report['early_stop_reason']='heldout_loss_increased'
@@ -210,7 +213,9 @@ def fit(model,optimizer,dataset,train_ids,heldout_ids,actor_ids,probe_ids,config
     optimizer.zero_grad(set_to_none=True);model.eval()
     # One fresh receipt for the final accepted weights. No head refit on the
     # holdout, and no stale pre-value-phase receipt after trunk movement.
-    train_after=metrics(model,value_dataset,value_train_ids,update)
+    # A fully rejected phase restored the exact post-PPO weights. Reuse its
+    # already measured train metrics instead of scanning the whole buffer again.
+    train_after=metrics(model,value_dataset,value_train_ids,update) if report['optimizer_steps'] else copy.deepcopy(train_before)
     if report['optimizer_steps']:
         ready=train_after['utility_mse']<=train_before['utility_mse']+1e-8
         model.utility_calibration=dict(version=CONTRACT,reward_id=digest(model.config.utility),ready=ready,
@@ -229,6 +234,7 @@ def fit(model,optimizer,dataset,train_ids,heldout_ids,actor_ids,probe_ids,config
         distinct_previous_rows_used=sum(i>=current_count for i in used),
         current_presentations=presentations-previous_presentations,previous_presentations=previous_presentations,
         epoch_reports=epochs,calibration_receipt=copy.deepcopy(model.utility_calibration),
+        train_metrics_reused=not bool(report['optimizer_steps']),
         seconds=time.perf_counter()-began)
     unknown_metrics=metrics(model,validation_dataset,heldout_ids,update,unknown=True)
     from .critic_data import learner_ev

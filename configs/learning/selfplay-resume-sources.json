@@ -23662,6 +23662,13 @@
       "to_implementation": "33b925447d6e6dc0e8ec0b2a928f5ffba50738ea93abafab83101f3a1b491439",
       "learning_compatibility_ref": "4",
       "reason_ref": "100"
+    },
+    {
+      "from_implementation": "de2aac3edd606da9c23fad732c6bc4d8dc6118ad2d801af8b9ae6ffb9326f314",
+      "to_implementation": "e2b6bf879c8b9da5b043c8f4c8aedf76b45bec9095867e4246b7decd1c316144",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "101",
+      "config_changes_ref": "44"
     }
   ],
   "definitions": {
@@ -23766,7 +23773,8 @@
       "97": "Enable teacher auxiliary value learning in fresh self-play defaults; keep explicit opt-out and omitted archived configurations policy-only. No model/layout/feature/checkpoint or IL training changes. Preserve exact completed IL lineage, existing configuration/state, Adam/RNG, progress and pending-work guards. Teacher value changes still require explicit reviewed continuation.",
       "98": "Factor the unchanged first policy scorer Parameter into shared state and candidate projections before its existing GELU. Exact tensor shapes/keys/order, IL/checkpoint/Adam/RNG and semantic architecture identity are preserved under the pinned source-equivalence receipt. The full implementation identity changes, pending old collections remain rejected, and existing freshness/label/calibration guards remain active. Preserve the prior explicit configuration-change restrictions.",
       "99": "V11 selector-only optimization: validated one-hot/absent target, merchant and industry references use bank index lookups with exact zero sentinels. Preserve model and optimizer tensors, config, data semantics, RNG, progress, population and lineage. Existing pending-collection, source, reward/calibration and strict behavior-probability guards stay active; no configuration migration or old-architecture admission. The final shared loader/model-ID path dispatches MLP directly instead of through the removed Transformer factory; this receipt admits only the unchanged v11 MLP learning contract, not Transformer checkpoints.",
-      "100": "Exact categorical PPO early-stop guard on the fixed pre-update behavior probe after every optimizer step. Preserve model and optimizer tensors, warmup/LR-controller state, RNG, configuration, committed progress, population and checkpoint lineage. Retain sampled full-dataset epoch guard, strict behavior verification and pending-collection/source safeguards. No KL loss penalty, architecture change or configuration migration."
+      "100": "Exact categorical PPO early-stop guard on the fixed pre-update behavior probe after every optimizer step. Preserve model and optimizer tensors, warmup/LR-controller state, RNG, configuration, committed progress, population and checkpoint lineage. Retain sampled full-dataset epoch guard, strict behavior verification and pending-collection/source safeguards. No KL loss penalty, architecture change or configuration migration.",
+      "101": "Reviewed v11.2 rehearsal loading/reporting performance fix: reuse the configured audit reader pool (16 in the active recipe), keep seeded draws and row order/bytes, validate all raw records, prepare neutral metadata only for selected rows, enforce a shared scratch-byte cap and join writers before cleanup. Reuse metrics only when value rollback restored exact weights; expose attempted value work and separate timings. Model/encoding/targets/losses, PPO/value optimizers, RNG, gates, existing IL/probe, population and run config stay unchanged. Pending old collections remain rejected."
     },
     "config_changes": {
       "0": {
@@ -32827,7 +32835,8 @@
       "1": "565dff0e8ff0973214ee7c85b43c81dabc9ef6b6409aaa2e0becdd2c122c4ecf",
       "2": "747216b5ab873126a6e048ade198883593113f70a815b9012ce40b8f66d443cb",
       "3": "9ff2f9336c188d303981534d869414e37ea24528a432e6adac855deccfd227d3",
-      "4": "b3b944dbc492bc1483c41bdb5a9d566f13e2b2a8b7988dbeec8fcb9ebb372674"
+      "4": "b3b944dbc492bc1483c41bdb5a9d566f13e2b2a8b7988dbeec8fcb9ebb372674",
+      "5": "ef6a1b5126de42da8f3277dc9357b6ffb94a435f3faa7fee8dd312bb5a242a54"
     }
   }
 }

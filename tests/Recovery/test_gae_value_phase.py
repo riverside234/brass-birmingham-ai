@@ -269,8 +269,15 @@ class ValuePhase(unittest.TestCase):
         def measurement(ref,*args,**kwargs):
             calls.append(1)
             return .003 if len(calls)==1 else real(ref,*args,**kwargs)
-        with patch.object(value_phase.RawPolicyReference,'measure',measurement):value=phases.fit(model)
+        with patch.object(value_phase.RawPolicyReference,'measure',measurement),patch.object(
+                value_phase,'metrics',wraps=value_phase.metrics) as metrics:value=phases.fit(model)
         self.assertEqual(value['optimizer_steps'],0);self.assertEqual(value['early_stop_reason'],'policy_kl_cap')
+        self.assertTrue(value['train_metrics_reused'])
+        self.assertEqual(value['train_before'],value['train_after'])
+        self.assertEqual(metrics.call_count,4)  # train before, holdout before/attempt, unknown holdout
+        self.assertEqual(value['attempted_value_presentations'],min(len(phases.train_ids),cfg['value_phase']['batch_size']))
+        self.assertGreater(value['attempted_clone_presentations'],0)
+        self.assertEqual(value['value_presentations'],0)
         self.assertTrue(_same_payload(initial,model.state_dict()));self.assertTrue(_same_payload(adam,phases.optimizer.state_dict()))
         phases.trips=[True,False,True,False];finish(phases,report,1)
         self.assertEqual(phases.beta,2.);self.assertEqual(value['beta_clone_next'],2.)

@@ -283,6 +283,11 @@
       "implementation": "419e6a74a223db78b2c5209ffdd5b86d50e3449f5b31a70c22daa96587a0b421",
       "learning_compatibility": "b3b944dbc492bc1483c41bdb5a9d566f13e2b2a8b7988dbeec8fcb9ebb372674",
       "reason": "Explicit completed v11.1 IL audit for the new-directory v11.2 zero-column critic upgrade. No silent PPO/checkpoint reinterpretation."
+    },
+    {
+      "implementation": "de2aac3edd606da9c23fad732c6bc4d8dc6118ad2d801af8b9ae6ffb9326f314",
+      "learning_compatibility": "ef6a1b5126de42da8f3277dc9357b6ffb94a435f3faa7fee8dd312bb5a242a54",
+      "reason": "Rehearsal loading and self-play reporting only; completed IL/checkpoint/encoder/labels/supervised math unchanged. Preserve hashes and lineage."
     }
   ]
 }

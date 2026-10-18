@@ -53,11 +53,11 @@ def compute(out):
         scope='Authored Features-4 mixed tables, medium v11.2 CPU/two threads. Snapshot mode forced on to exercise rows; production starts with auto gate. No strength evidence.'))
 
 
-def native(out,imitation):
+def native(out,imitation,workers=2):
     from brass_ai.recovery.league import train
     _,origin=completed_imitation(SOURCE_ROOT,imitation)
     cfg=latest_model_config(read(SOURCE_ROOT/'configs/step5/joint7-latest.json'),origin)
-    cfg.update(games_per_iteration=1,threads=2,audit_workers=1,profile_steps=0,seed=18570000,rehearsal_manifest=origin['manifest'])
+    cfg.update(games_per_iteration=1,threads=2,audit_workers=workers,profile_steps=0,seed=18570000,rehearsal_manifest=origin['manifest'])
     cfg['execution'].update(processes=1,hosts_per_process=2,heavy_processes=1,worker_threads=1,
         batch_size=64,max_candidate_cells=131072,shared_slot_bytes=2097152)
     cfg['update'].update(effective_batch_size=512,critic_batch_size=64,microbatch_size=16,max_candidate_cells=8192,epochs=1)
@@ -76,17 +76,29 @@ def native(out,imitation):
     require(sha(project_path(SOURCE_ROOT,first['path']))==first['sha256'],'Native smoke changed committed checkpoint')
     require(protected=={p:sha(Path(p)) for p in protected},'Completed IL or dataset changed')
     require(reports[1]['value_phase']['buffer']['rebuilt_from_replay'] and not cache.exists(),'Cache rebuild/cleanup failed')
+    for report in reports:
+        sampling=report['actor']['rehearsal_sampling']
+        require(sampling['workers_requested']==workers and sampling['reused_reader_pool']==(workers>1)
+                and sampling['cache_deleted'],'Rehearsal reader pool/cleanup integration differs')
+        timings=report['timings']
+        require(all(timings[k]>=0 for k in ('rehearsal_prepare_seconds','ppo_seconds','value_phase_seconds',
+                'search_and_distill_seconds','post_ppo_diagnostics_seconds','final_diagnostics_seconds')),
+                'Missing/invalid separate iteration timings')
+        if not report['value_phase']['optimizer_steps']:
+            final=report['actor']['final_categorical_probe'];initial=report['actor']['categorical_probe']
+            require(final['reused_post_ppo'] and all(final[k]==v for k,v in initial.items() if k!='scope'),
+                    'Unchanged post-PPO metrics were not reused exactly')
     require(implementation==implementation_id(),'Source changed during native smoke')
     write_json(out/'report.json',dict(passed=True,implementation=implementation,seconds=time.perf_counter()-began,
         iterations=2,games=2,source_files_unchanged=True,cache_rebuilt_and_expired_deleted=True,
-        updates=[dict(actor=r['actor'],value_phase=r['value_phase'],fingerprints=r['seat_fingerprints'],composition=r['composition']) for r in reports],
+        updates=[dict(actor=r['actor'],value_phase=r['value_phase'],fingerprints=r['seat_fingerprints'],composition=r['composition'],timings=r['timings']) for r in reports],
         scope='Real trainer and native games, fresh upgraded diagnostic IL then resume. One-game hash holdouts can be empty; gates must remain closed without evidence. No evaluation campaign.'))
 
 
 if __name__=='__main__':
-    p=argparse.ArgumentParser(description=__doc__);p.add_argument('--output',required=True);p.add_argument('--native',action='store_true');p.add_argument('--imitation-run')
+    p=argparse.ArgumentParser(description=__doc__);p.add_argument('--output',required=True);p.add_argument('--native',action='store_true');p.add_argument('--imitation-run');p.add_argument('--workers',type=int,default=2)
     a=p.parse_args();out=project_path(SOURCE_ROOT,a.output);torch.set_num_threads(2)
     require(out.is_relative_to(SOURCE_ROOT/'artifacts') and not out.exists(),'Use an unused isolated artifacts directory')
     out.mkdir(parents=True)
-    if a.native:native(out,a.imitation_run)
+    if a.native:native(out,a.imitation_run,a.workers)
     else:compute(out)

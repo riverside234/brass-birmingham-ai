@@ -318,17 +318,22 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                         plan['quality_tables'],plan['quality_planning'],generation=iteration+1)
                 rehearsal_status=rehearsal_schedule(config,state['games_done'],iteration)
                 weight=rehearsal_status['weight']
+                sampling_finished=time.monotonic();rehearsal_seconds=0.
                 with ExitStack() as rehearsal_scope:
                     active_rehearsal=rehearsal
                     if rehearsal_index is not None and weight:
                         active_rehearsal=rehearsal_scope.enter_context(rehearsal_window(root,run,rehearsal_index,
-                            config['rehearsal_sampling'],seed=config['seed'],iteration=iteration,device=device))
+                            config['rehearsal_sampling'],seed=config['seed'],iteration=iteration,device=device,
+                            workers=config['audit_workers'],executor=readers))
+                    ppo_began=time.monotonic();rehearsal_seconds=ppo_began-sampling_finished
                     update=ppo_update(model,optimizer,games,behavior,config['update'],
                         profile=directory/'profile-ppo' if config['profile_steps'] else None,
                         profile_steps=config['profile_steps'],
                         rehearsal=active_rehearsal,rehearsal_weight=weight,learner_data=learner_data,insolvency=config.get('insolvency'),reward=reward,
                         sample_groups={g['game_id']:kind_by_group[g['setup_group']] for g in games},anchor_model=anchor_model,phases=phases)
                     if rehearsal_index is not None and weight:update['rehearsal_sampling']=active_rehearsal.report
+                    ppo_ended=time.monotonic()
+                rehearsal_cleaned=time.monotonic()
                 active_rehearsal=None
                 next_limit=limit_report=None
                 if fixed_probe is not None:
@@ -381,15 +386,19 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                         search['teaching_only_categorical_probe']=dict(teaching_probe.measure(model),
                             scope='Exact KL(post-PPO behavior || post-teaching behavior); bounded proportional era/phase probe, RNG-neutral; diagnostic only')
                 del teaching_probe
+                teaching_finished=time.monotonic()
+                weights_changed=bool((value_report or {}).get('optimizer_steps') or search.get('updated'))
                 # The LR decision above retains its exact post-PPO signal.
                 # Final limits, quality admission and checkpoint probes include
                 # shared-trunk movement from the separate value/teacher phases.
-                if fixed_probe is not None and (phases is not None or search.get('updated')):
+                if fixed_probe is not None and weights_changed:
                     next_limit,limit_report=advance(state['il_kl_limit'],fixed_probe.measure(model,config['update']),
                         counts,generation=iteration+1,warmup_done=update['controller_warmup_done'])
                 if phases is not None:
                     from .gae import rating_evidence
-                    update['final_categorical_probe']=dict(phases.ppo_probe.measure(model,anchor=anchor_model),
+                    final_probe=(phases.ppo_probe.measure(model,anchor=anchor_model) if weights_changed
+                                 else update['categorical_probe'])
+                    update['final_categorical_probe']=dict(final_probe,reused_post_ppo=not weights_changed,
                         scope='Final checkpoint weights after PPO, value phase and any teaching; reference is collection behavior')
                     phases.finish(generation=iteration+1,update=update,
                         anchor_gate=limit_report['lr_gate'] if limit_report else (update.get('lr_controller') or {}).get('health'),
@@ -407,6 +416,7 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                         size=len(next_quality['members']),max_members=config['opponent_pool']['max_members'],
                         eta=config['opponent_pool']['eta'],uniform_floor=config['opponent_pool']['uniform_floor'],
                         pinned_seat_share=config['opponent_pool']['pinned_seat_share'])
+                diagnostics_finished=time.monotonic()
                 report=dict(format='step5-recovery-report/'+'2.2.0',iteration=iteration,composition=dict(composition),
                     quality_pool=quality_report,
                     il_kl_limit=limit_report,rehearsal_schedule=rehearsal_status,
@@ -419,10 +429,15 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                     selfplay_incumbent=incumbent,
                     selfplay_opponents=champion_mix.summarize(state,config,mix_receipts) if champion_mix.enabled(config) else None,
                     games_done=done,cumulative_games=state['previous_games']+done,
-                    timings=dict(collection_seconds=load_began-began,ppo_seconds=ppo_finished-collected,
+                    timings=dict(collection_seconds=load_began-began,
+                        sampling_seconds=sampling_finished-collected,
+                        rehearsal_prepare_seconds=rehearsal_seconds,ppo_seconds=ppo_ended-ppo_began,
+                        rehearsal_cleanup_seconds=rehearsal_cleaned-ppo_ended,
+                        post_ppo_diagnostics_seconds=ppo_finished-rehearsal_cleaned,
                         value_phase_seconds=updated-ppo_finished,
                         replay_load_seconds=collected-load_began,
-                        search_and_distill_seconds=time.monotonic()-updated),execution=records,
+                        search_and_distill_seconds=teaching_finished-updated,
+                        final_diagnostics_seconds=diagnostics_finished-teaching_finished),execution=records,
                     inference=service.report(),inference_scope='cumulative for this invocation',
                     legacy_modes=dict(Counter(j['provenance']['legacy_mode'] for j in jobs if j['provenance']['legacy_mode'])),
                     historical_opponents=dict(generation_seats=dict(sorted(historical_generations.items())),
@@ -498,6 +513,7 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                 if phases is not None:
                     gate=update['gae']['gate']
                     controller_line+=f' GAE={gate["lambda_used"]:.2f}->{gate["lambda_next"]:.2f} value_steps={value_report["optimizer_steps"]}'
+                    controller_line+=f'/{value_report["attempted_steps"]} value_stop={value_report["early_stop_reason"] or "none"}'
                     if phases.buffer:
                         controller_line+=f' value_rows={value_report["distinct_current_rows_used"]}+{value_report["distinct_previous_rows_used"]}'
                     if phases.critic_state is not None:
@@ -508,8 +524,11 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                         f' group_limit={limit_report["group_limit_after"]:.4f} {limit_report["decision"]}')
                 if quality_report:controller_line+=f' history={quality_report["size"]}/24 {quality_report["admission"]["reason"]}'
                 print(f'Recovery generation {iteration+1}: {done} games, {update["optimizer_steps"]} PPO steps; '
-                      f'collect={load_began-began:.1f}s prepare={collected-load_began:.1f}s PPO={updated-collected:.1f}s '
+                      f'collect={load_began-began:.1f}s prepare={collected-load_began:.1f}s '
+                      f'rehearsal={rehearsal_seconds:.1f}s PPO={report["timings"]["ppo_seconds"]:.1f}s '
+                      f'value_phase={report["timings"]["value_phase_seconds"]:.1f}s '
                       f'teacher={report["timings"]["search_and_distill_seconds"]:.1f}s '
+                      f'diagnostics={report["timings"]["post_ppo_diagnostics_seconds"]+report["timings"]["final_diagnostics_seconds"]:.1f}s '
                       f'eval={report["timings"].get("evaluation_seconds",0):.1f}s cleanup={report["timings"].get("cleanup_seconds",0):.1f}s; '
                       f'total={report["timings"]["iteration_seconds"]:.1f}s; '
                       f'NN batch mean={report["utilization"]["mean_inference_batch"]:.2f}; '
