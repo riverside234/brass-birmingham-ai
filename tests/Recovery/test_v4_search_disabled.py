@@ -27,7 +27,8 @@ class V4SearchDisabled(unittest.TestCase):
         old=read_json(SOURCE_ROOT/'configs/step5/joint7-v11-1-grouped-lr.json')
         before=copy.deepcopy(old);new=latest_model_config(old,old['imitation_checkpoint'])
         self.assertEqual(old,before)
-        allowed={'selfplay_recipe','curriculum','population','table_plan','opponent_pool','rating','v4_search_enabled','evaluation_schedule'}
+        allowed={'selfplay_recipe','curriculum','population','table_plan','opponent_pool','rating','v4_search_enabled',
+                 'evaluation_schedule','rehearsal_sampling','advantage','value_phase'}
         self.assertTrue({k for k in set(old)|set(new) if old.get(k)!=new.get(k)}<=allowed)
         self.assertFalse(new['v4_search_enabled']);self.assertFalse(new['teacher_enabled'])
         self.assertEqual(new['evaluation_schedule'],dict(old['evaluation_schedule'],enabled=False))

@@ -7,20 +7,20 @@ using BrassHost;
 
 namespace BrassLegacyAI
 {
-    // A turn-local dynamic CPU queue. Private trees never share mutable nodes.
-    // One caller drains batches outside the lock; identical permitted inputs
-    // coalesce. No extra evaluation thread competes with simulator workers.
+    // Turn-local single-flight cache. Unrelated evaluations run concurrently
+    // on their requesting search threads; only identical permitted inputs wait.
+    // Private trees and mutable simulation worlds are never shared.
     public sealed class HeuristicBatchQueue
     {
         [ThreadStatic] public static HeuristicBatchQueue Current;
         sealed class Request
-        {public string key;public Func<double[]> compute;public double[] value;public Exception error;public bool done;}
+        {public int owner;public double[] value;public Exception error;public bool done;}
         readonly object sync=new object();
-        readonly Queue<Request> queue=new Queue<Request>();
         readonly Dictionary<string,Request> pending=new Dictionary<string,Request>();
         readonly Dictionary<string,double[]> cache=new Dictionary<string,double[]>();
         readonly Queue<string> order=new Queue<string>();
-        bool draining;
+        int active,max_concurrent;
+        long compute_ticks,wait_ticks;
         public int requests,cache_hits,coalesced,batches,max_batch;
         public static string Key(JObject v)
         {
@@ -33,47 +33,53 @@ namespace BrassLegacyAI
         {readonly HeuristicBatchQueue previous;public Binding(HeuristicBatchQueue owner){previous=Current;Current=owner;}public void Dispose(){Current=previous;}}
         public double[] Evaluate(string key,Func<double[]> compute)
         {
-            Request request;bool lead=false;
+            Request request;bool lead=false;long waiting=0;
             lock(sync)
             {
                 requests++;double[] found;
                 if(cache.TryGetValue(key,out found)){cache_hits++;return (double[])found.Clone();}
-                if(pending.TryGetValue(key,out request))coalesced++;
-                else{request=new Request{key=key,compute=compute};pending.Add(key,request);queue.Enqueue(request);}
-                if(!draining){draining=true;lead=true;}
+                if(pending.TryGetValue(key,out request))
+                {
+                    // Recursive evaluation of the SAME key is a programming
+                    // error, not a reason to deadlock its own owner.
+                    if(request.owner==Thread.CurrentThread.ManagedThreadId)throw new InvalidOperationException("recursive_heuristic_key");
+                    coalesced++;waiting=Stopwatch.GetTimestamp();
+                }
+                else
+                {
+                    request=new Request{owner=Thread.CurrentThread.ManagedThreadId};pending.Add(key,request);lead=true;
+                    active++;max_concurrent=Math.Max(max_concurrent,active);batches++;max_batch=1;
+                }
             }
-            if(lead)Drain();
-            lock(sync){while(!request.done)Monitor.Wait(sync);if(request.error!=null)throw new InvalidOperationException("heuristic_batch_failed",request.error);return (double[])request.value.Clone();}
-        }
-        void Drain()
-        {
-            // Short adaptive flush; complete clocks and queued latency are measured
-            // by the enclosing turn. Cache/pending keys include observer and hand.
-            var flush=Stopwatch.StartNew();while(flush.Elapsed.TotalMilliseconds<0.15)Thread.Yield();
-            while(true)
+            if(lead)
             {
-                var batch=new List<Request>();
+                double[] value=null;Exception failure=null;long began=Stopwatch.GetTimestamp();
+                try
+                {
+                    value=compute();
+                    if(value==null || Array.Exists(value,x=>double.IsNaN(x)||double.IsInfinity(x)))throw new Exception("nonfinite_heuristic_batch");
+                    value=(double[])value.Clone();
+                }
+                catch(Exception error){failure=error;}
                 lock(sync)
                 {
-                    while(queue.Count>0 && batch.Count<16)batch.Add(queue.Dequeue());
-                    if(batch.Count==0){draining=false;Monitor.PulseAll(sync);return;}
-                    batches++;max_batch=Math.Max(max_batch,batch.Count);
+                    compute_ticks+=Stopwatch.GetTimestamp()-began;active--;
+                    request.value=value;request.error=failure;request.done=true;pending.Remove(key);
+                    if(failure==null){cache[key]=value;order.Enqueue(key);while(order.Count>512)cache.Remove(order.Dequeue());}
+                    Monitor.PulseAll(sync);
                 }
-                foreach(var request in batch)
-                {
-                    double[] value=null;Exception failure=null;
-                    try{value=request.compute();if(value==null || Array.Exists(value,x=>double.IsNaN(x)||double.IsInfinity(x)))throw new Exception("nonfinite_heuristic_batch");}
-                    catch(Exception error){failure=error;}
-                    lock(sync)
-                    {
-                        request.value=value;request.error=failure;request.done=true;pending.Remove(request.key);
-                        if(failure==null){cache[request.key]=(double[])value.Clone();order.Enqueue(request.key);while(order.Count>512)cache.Remove(order.Dequeue());}
-                        Monitor.PulseAll(sync);
-                    }
-                }
+            }
+            lock(sync)
+            {
+                while(!request.done)Monitor.Wait(sync);
+                if(!lead)wait_ticks+=Stopwatch.GetTimestamp()-waiting;
+                if(request.error!=null)throw new InvalidOperationException("heuristic_batch_failed",request.error);
+                return (double[])request.value.Clone();
             }
         }
         public Dictionary<string,int> Report()
-        {lock(sync)return new Dictionary<string,int>{{"requests",requests},{"cache_hits",cache_hits},{"coalesced",coalesced},{"batches",batches},{"max_batch",max_batch},{"pending",pending.Count}};}
+        {lock(sync)return new Dictionary<string,int>{{"requests",requests},{"cache_hits",cache_hits},{"coalesced",coalesced},{"batches",batches},{"max_batch",max_batch},{"pending",pending.Count},
+            {"max_concurrent",max_concurrent},{"active",active},{"cache_entries",cache.Count},
+            {"compute_ms",(int)(compute_ticks*1000.0/Stopwatch.Frequency)},{"coalesced_wait_ms",(int)(wait_ticks*1000.0/Stopwatch.Frequency)}};}
     }
 }

@@ -134,7 +134,7 @@ class V111Tests(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, 'one-hot or absent'):check_action_selectors(bad.actions)
 
     def test_new_identity_rejects_v11_weights_but_reuses_heuristic_data_and_recipe(self):
-        self.assertEqual(ARCHITECTURE, 'brass-four-seat-mlp-resnet/11.1.0')
+        self.assertEqual(ARCHITECTURE, 'brass-four-seat-mlp-resnet/11.2.0')
         self.assertNotEqual(architecture_fingerprint(), 'c7df5bf97fbe02f605aabeea89c9cc24d74981c5a4355a15f050f6b97f0cae39')
         old = dict(compatibility(), architecture_sha256='c7df5bf97fbe02f605aabeea89c9cc24d74981c5a4355a15f050f6b97f0cae39')
         assert_heuristic_data_compatible(old)
@@ -150,7 +150,7 @@ class V111Tests(unittest.TestCase):
                 raw['model_config']['architecture'] = 'brass-four-seat-mlp-resnet/11.0.0'
                 raw['compatibility'] = old
                 torch.save(raw, path); before = path.read_bytes()
-                with self.assertRaisesRegex(ValueError, 'fresh version-11.1 IL'):load_checkpoint(path)
+                with self.assertRaisesRegex(ValueError, 'Architecture 11.2 required'):load_checkpoint(path)
                 self.assertEqual(path.read_bytes(), before)
 
     def test_onnx_static_weights_one_local_multiply_dynamic_shapes_and_fusions(self):
@@ -189,6 +189,8 @@ class V111Tests(unittest.TestCase):
                         x, a, mask, mapping = varied_inputs(b, n)
                         remaining = torch.full((b, 4), .075)
                         data = dict(zip(BASE_INPUTS, [t.numpy() for t in (x, a, mask, mapping, remaining)]))
+                        from brass_ai.learning.seat_descriptors import unknown_numpy
+                        data['descriptors'] = np.stack([unknown_numpy() for _ in range(b)])
                         with torch.inference_mode():
                             if name == 'actor':
                                 from brass_ai.personality.laptop.export import Named

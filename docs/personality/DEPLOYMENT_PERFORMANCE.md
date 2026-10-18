@@ -140,3 +140,258 @@ Evidence locations:
 - [Final summary](../../artifacts/feature-engineering/deploy-public-views-20261016/summary.json) and cleanup receipts for [transport](../../artifacts/feature-engineering/deploy-transport-20261016/model-cleanup.json) and [public-view reuse](../../artifacts/feature-engineering/deploy-public-views-20261016/model-cleanup.json).
 
 All eight temporary ONNX models from the two revision phases were deleted (**58,889,648 bytes**); both model directories were verified empty. Reports and receipts remain. No `.pt` checkpoint was created, and unrelated retained models were not removed by the revision. Raw `artifacts/` evidence may be local-only; the linked reports preserve its scope and measurements for other checkouts.
+
+## 2026-10-18: independent CPU sessions and less discarded search work
+
+Implemented in the current source, with isolated builds and benchmarks on an
+Intel Core Ultra 5 135U. This implements part of the queue/scheduling proposals
+above. It does not install a game update or change an immutable opponent bank,
+existing training checkpoint, model weights, feature layout or training recipe.
+
+ORT CPU now defaults to **two independent sessions per frozen model, one thread
+per session**. Each session has its own inference owner and timing/counter state.
+Both consumers take complete requests from the existing queue; replies and
+shared slots retain their private owner. Requests are handled as B1 immediately,
+without the former 1 ms batch flush. The thread allowance remains two inference
+threads plus the existing search workers. Multi-model and personality routing,
+legal masks, complete-action probabilities, feature-cache identities, model
+fingerprints and export admission remain checked. OpenVINO CPU/GPU keep their
+previous single-session defaults; GPU training inference is unchanged.
+
+Independent sessions retain an extra copy of each model's packed weights and
+session workspace. Native calls are synchronous: cancel/close waits for **both**
+owners to retire before unmapping shared memory, then releases the graphs.
+`report()` includes replica count, threads per session, per-replica metrics and
+parity, and summed timing totals. Replica elapsed times can overlap; their sum
+is not turn wall time. CPU session comparisons can explicitly construct
+`PortableInference(directory, models, sessions=1, threads=2)` or `(sessions=2,
+threads=1)`; larger total thread allowances are rejected.
+
+The shared C# rule search now uses a turn-local single-flight cache: identical
+permitted inputs still coalesce, while unrelated evaluations execute on their
+requesting search workers. It no longer has a single serial drain owner or a
+busy-yield flush. Completed arrays are copied, failures wake waiters and remain
+retryable, cache capacity stays 512, and no extra evaluation threads are added.
+The search also reuses the root choices it just validated and avoids generating
+an unused next-player observation/choice list at an already reached leaf boundary.
+Leaf horizons, opponent policies, matched scenario IDs and promotion/support
+criteria are unchanged.
+
+Both timed rule search and laptop NN search have optimistic late-launch
+admission. After at least four completed simulations at the current root, the
+estimate is the lower quartile of the latest eight completed durations. A worker
+with less time than that estimate stops launching new paths and drains any
+pending paths against the **same** deadline. It never invents an attempt, credits
+a partial simulation, shortens a leaf horizon or extends the turn budget. Fixed
+work C# runs bypass it. The follow-up below also enables it for timed NN
+training/teacher searches, while fixed-count training retains its watchdog.
+There is no cross-position timing history. Cold/slow searches with fewer than
+four completions retain the old launch behavior.
+
+Added telemetry includes `deadline_stops`, the duration estimate and remaining
+worker time, `skipped_leaf_observations`, `reused_root_choices`, and heuristic
+cache concurrency/wait time. Laptop game metrics also retain attempted paths and
+`deadline_unused_worker_seconds` (a sum of worker clocks, not turn elapsed time).
+
+### Measured scope and results
+
+The initial rule comparison uses the **same pre-change working-source snapshot**
+(which contained the inactive Network candidate; not the installed official v4),
+four recorded roots (one per phase), two repeats, alternating order, two workers,
+and a shared 2-second clock. Its lab profile uses the existing zero-opponent-turn
+settled leaf; it is not a measurement of every installed game difficulty.
+
+| Rule search, all eight decisions per version | Before | After |
+| --- | ---: | ---: |
+| Completed simulations | 99 | 129 |
+| Interrupted simulations | 16 | 4 |
+| Sum of distinct root alternatives per decision | 22 | 23 |
+| Supported plans (at least two visits, summed per decision) | 18 | 21 |
+| Mean request wall time, including native IPC | 2.053 s | 1.992 s |
+
+| Phase, two decisions per version | Completed before → after | Interrupted before → after |
+| --- | ---: | ---: |
+| Early Canal | 18 → 26 | 4 → 0 |
+| Late Canal | 61 → 74 | 4 → 0 |
+| Early Rail | 16 → 18 | 4 → 2 |
+| Late Rail | 4 → 11 | 4 → 2 |
+
+An intermediate version with only cache concurrency and launch admission reduced
+interruptions but slightly reduced completions (54 → 51). The redundant leaf
+observation/choice work was then removed and the final paired test above rerun.
+Timing varies between runs; compare paired controls, not totals across runs.
+
+The NN test uses a deterministic, freshly initialized **current medium model**,
+the same export in both modes, four permitted roots, two private search workers
+and two pending paths per worker. It exercises the Python/native portable search
+path; the earlier Rust experiment is separate. No trained IL artifact is modified.
+
+| NN measurement | One session × two threads | Two sessions × one thread |
+| --- | ---: | ---: |
+| Warm queue processing, 24 requests, first run | 219 ms | 172 ms |
+| Warm queue processing, 24 requests, second run | 390 ms | 266 ms |
+| Completed simulations, four 8-second roots | 8 | 10 |
+| Interrupted simulations, four 8-second roots | 16 | 15 |
+| Distinct root alternatives, summed over those roots | 4 | 6 |
+| Revisited complete plans | 0 | 0 |
+| Mean search wall time | 8.004 s | 8.043 s |
+
+The 8-second per-phase completion counts are Early Canal 4 → 4, Late Canal 0 → 0,
+Early Rail 0 → 2, Late Rail 4 → 4. A preliminary 3-second test had only 1 → 3
+completions over eight roots per version, so it was insufficient for assessing
+full-search throughput. **The NN timing admission did not activate in these
+small samples**; its launch/drain semantics are covered by controlled tests.
+NN outputs match across queue configurations at `rtol=2e-5, atol=2e-6` for policy
+and all value heads; each session also passes the export's Torch/ORT parity cases.
+
+These measurements support reduced queue delay and less wasted rule-search
+work on these fixtures. They do not establish improved playing strength, robust
+teacher-label yield, or universal end-to-end speedup. NN native rules/encoding
+and transport still dominate much of the elapsed time. In-flight synchronous
+operations can retire after the deadline (the largest observed NN request was
+8.109 s for an 8-second allowance); expired work is not backed up. Cold startup,
+Unity responsiveness and peak memory are not qualified here. RSS was unavailable
+from this environment's memory reporter; the additional session memory has not
+been quantified.
+
+### Validation and reproduction
+
+- 43 focused Python tests passed, covering deadlines shared by workers/both
+  actions, cancellation, partial thread/host creation, legal masks, batching,
+  shared encoding parity, private replies and completed-evidence accounting.
+  The final resource/backend-default cleanup passed 14 targeted tests, including
+  one added session/thread startup failure case.
+- C# passed 23 cache/concurrency/deadline checks, 93 real game runtime checks
+  (two, three and four players), and 30 existing Network behavior checks.
+- On all four benchmark phases, fixed-work runs of eight simulations had
+  **exactly equal selected plans, root returns and complete-plan evidence**.
+  Additional two-simulation checks preserve exact evidence for one/two opponent
+  reply turns and the actual-next-root leaf policy.
+- An expanded legacy `tests/MaskedISMCTS/test_core.py` run also found three
+  unrelated stale expectations: archived configurations treated as current,
+  the CPU gate report omitting its existing `aborted` field, and an old 1,840,109
+  parameter count versus the current 5,910,916 base model. Those assertions were
+  not rewritten as part of this search change; this is not a whole-repository
+  green-test claim.
+
+Reproduce from the repository root in the existing dependency environment, using
+fresh output paths. The baseline argument is the saved **pre-change source**,
+not a frozen opponent with a different strategy revision:
+
+```powershell
+python tests/MaskedISMCTS/benchmark_parallel.py `
+  --output artifacts/search-parallel-new/rule `
+  --baseline-source artifacts/search-parallel-20261018
+python tests/Personality/benchmark_parallel_search.py `
+  --output artifacts/search-parallel-new/nn `
+  --baseline-inference artifacts/search-parallel-20261018/baseline_inference.py `
+  --seconds 8 --repeats 1
+```
+
+The rule harness compiles both the standalone planner and the game helper into
+its own directory; it does not run an installer. The NN harness creates one
+diagnostic export without saving a training checkpoint. Normal inference
+packaging takes the new ORT CPU default from source and still requires matching
+package/source evidence. Frozen rule banks keep their old source and binaries.
+New lab collections use the separate versioned runtime described below.
+
+Implementation files: `src/BrassMaskedSearch/{HeuristicBatchQueue,DeadlineAdmission,
+MaskedSearch,RootForest}.cs`, `src/brass_ai/personality/laptop/inference.py`,
+`src/brass_ai/personality/search/engine.py`, and
+`src/brass_ai/search/{ismcts,deadline}.py`. Focused tests and bounded harnesses are
+under `tests/MaskedISMCTS/` and `tests/Personality/`.
+
+Evidence: [final rule comparison](../../artifacts/search-parallel-20261018/rule-final/report.json),
+[C# checks](../../artifacts/search-parallel-20261018/rule-final/checks.json),
+[additional leaf parity](../../artifacts/search-parallel-20261018/rule-final/additional-leaf-parity.json),
+[8-second NN comparison](../../artifacts/search-parallel-20261018/nn-8s/report.json),
+[3-second NN pilot](../../artifacts/search-parallel-20261018/nn-benchmark/report.json),
+[focused test log](../../artifacts/search-parallel-20261018/focused-tests.txt),
+and [final resource tests](../../artifacts/search-parallel-20261018/final-resource-tests.txt).
+
+## Shared official v4 search for game, IL and self-play
+
+The selected strategy is **official v4: `bank-3dc65253a610191d66a5`**.
+The `*-v3-masked-economy` profile filenames are historical aliases, not evidence
+that Economic v3 is active. Network v4 (`bank-29b8fdbbd14ff00c7c88`) and the
+Network/Scout experiment remain unselected. The installed game AI DLL hash
+`366adb638e64a951db87eaa7f52222690ca62d866e64d938ddd0f0f214a69b42` matches
+the archived 1.4.31 release; that archive has no NetworkOptions strategy calls.
+The working source previously contained candidate strategy hooks. Those active
+hooks are now aligned with the official v4 used by IL, retaining search
+performance changes. Candidate source/history is preserved for reference.
+
+Shared code boundaries:
+
+- `BrassMaskedSearch/MaskedSearchExecution.cs` owns the search loop, completed
+  backups, root-choice reuse and settled-leaf cutoff. `DeadlineAdmission.cs`,
+  `HeuristicBatchQueue.cs` and `RootForest.cs` are shared by game and lab builds.
+- `MaskedSearch.cs` retains official v4 priors, rollout decisions and incumbent
+  construction. Lab builds link the exact game `Behavior`, `CashManagement`,
+  `Conversion`, `Evaluator` and `Tactics` files. Platform hosts/coordinators
+  remain separate; the game supports two to four players, the lab uses four.
+- NN game/personality and training use `search/ismcts.py`, `search/deadline.py`
+  and `recovery/parallel.py`. The common clock hook enables tail admission for
+  timed searches, including teachers. Explicit simulation quotas disable that
+  optimization and retain their watchdog. Pending owners still retire before
+  return; incomplete work never becomes completed evidence.
+- The ORT CPU backend retains two independent single-thread sessions. GPU
+  training keeps its existing inference batching/service; sharing the search
+  algorithm does not force an ORT CPU execution policy onto a training GPU.
+
+Run `python scripts/build-shared-search.py --root .` after source changes and
+before new IL generation or self-play. It creates a content-addressed worker
+under `artifacts/legacy-ai/search/`, leaving frozen banks, models, configurations
+and installed game binaries intact. Linux uses the existing Mono/compiler and
+private pinned DLLs; `--mono`, `--compiler` and `--managed` can select their
+locations. Missing or stale workers fail explicitly. Game builds likewise need
+recompilation/deployment; editing a shared source does not modify an installed
+DLL. Historical release reproduction scripts intentionally remain pinned.
+
+New lab policy IDs bind the shared source/profile/runtime reference. Actor specs
+retain it across dispatch, and source changes participate in reviewed resume
+and cache freshness. IL manifests retain generation references; older audited
+BC data remains admitted without requiring its old search executable or
+relabelling its decisions. Self-play teacher search and v4 search stay **off**;
+the search-free v4 path uses the same strategy/runtime with zero simulations.
+Per-phase teacher reports retain admission stops and unused **worker-seconds**
+(summed across owners, not a second turn allowance).
+
+Validation: 52 focused Python tests passed, followed by 14 personality/search
+identity tests and the final shared-entry-point tests. Game compilation passed
+99 runtime checks (including two/three/four-player operation) and 23 parallel,
+cache and deadline checks. The separate Network candidate test expects extra
+double-rail construction and correctly does not describe the official v4;
+it remains available only through `include_candidates=True` in the harness.
+An expanded older training suite had nine stale fixture/expectation failures
+(old board topology, a teacher fixture missing setup, and pre-descriptor config/
+fingerprint assumptions); these unrelated tests were not rewritten here.
+
+The official-v4 smoke completed in **42.8 seconds**. At four fixed roots, eight
+simulations per root produced exactly the same selected plans, root returns and
+complete-plan evidence as the original frozen v4. It also exercised the real
+IL/self-play adapter both searched and search-free; all fast decisions ran zero
+simulations, and protected bank/config/installed files were unchanged.
+
+Warm native comparison, two workers, one shared second, one root per phase,
+alternating version order (a small diagnostic, not a strength evaluation):
+
+| Phase | Completed old → shared | Interrupted old → shared |
+| --- | ---: | ---: |
+| Early Canal | 6 → 8 | 2 → 0 |
+| Late Canal | 9 → 10 | 2 → 0 |
+| Early Rail | 4 → 4 | 2 → 2 |
+| Late Rail | 1 → 0 | 2 → 1 |
+| Total | **20 → 22** | **8 → 3** |
+
+Mean native request wall time was 1.036 → 1.011 seconds. The shared version
+withheld launches in four worker searches. Late Rail still had zero completed
+simulations in this short sample; fewer discarded attempts does not prove
+better coverage, labels or playing strength. Cold fresh-process adapter calls
+were around 1.3–1.4 seconds for the one-second search setting: JIT/IPC and
+in-flight operations can exceed the clock, and are reported rather than hidden.
+
+Evidence: [official v4 smoke and paired timings](../../artifacts/search-shared-v4-20261018/official-v4-final/report.json),
+[game runtime checks](../../artifacts/search-shared-v4-20261018/game-checks/RuntimeChecks.json).
+Reproduce with `python tests/Recovery/smoke_shared_search.py --output artifacts/shared-v4-new`.
+No long training or strength campaign was run.

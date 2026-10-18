@@ -4,6 +4,8 @@
 
 Sections: [P0/P1](#p0-p1) | [P2/P3](#p2-p3). See [encoder reuse status and remaining validation](README.md#encoder-reuse-follow-up). Existing commands and historical verification records are preserved.
 
+**Current workflow decision (18 October 2026):** [Skip the goal-head stage](README.md#goal-head-skipped). Its code is implemented, but the real-model workflow has not been run. Keep the code and skip the goal-head warm-up, `validate-goals`, and the existing goal-loss `joint-pilot` commands below. Also skip goal-generated intent and goal-alignment search bias. These commands remain as historical reference, not the next lab instructions. Existing style inputs and the separate 16-style objective are retained; P2/P3 model and readiness dependencies require a validated goal-free adaptation before proceeding without P1.
+
 **Performance update (`20261016` deployment evidence):** Step 5's [endpoint encoders and shared feature caches](README.md#step5-encoder-reference) are now integrated across personality `SearchSession` coordinator/worker/opponent lanes. The session also requests fused native snapshots. [Local deployment measurements](DEPLOYMENT_PERFORMANCE.md) cover the shared search path, not real P1-P3 collection throughput. Keep P1 direct, retain current teacher cadence/quality/accounting and preserve each stage's recipe. The experimental one-path batching, three-worker comparison and W352 model do not change training defaults or existing checkpoints.
 
 <a id="p0-p1"></a>
@@ -67,7 +69,7 @@ This command is the existing cleanup dry run; do not add `--apply` merely to ins
 
 <a id="p0-p1-3-warm-up-the-new-head-with-the-core-frozen"></a>
 
-### 3. Warm up the new head with the core frozen
+### 3. Warm up the new head with the core frozen - skipped
 
 ```sh
 python /data/not_backed_up/yxu209/ai-training/scripts/personality.py --device cuda warmup \
@@ -86,7 +88,7 @@ Goal labels use **public realized outcomes**, never future features or opponents
 
 <a id="p0-p1-4-measure-held-out-goal-diagnostics-then-run-a-small-joint-pilot"></a>
 
-### 4. Measure held-out goal diagnostics, then run a small joint pilot
+### 4. Measure held-out goal diagnostics, then run a small joint pilot - skipped
 
 ```sh
 python /data/not_backed_up/yxu209/ai-training/scripts/personality.py --device cuda validate-goals \
@@ -153,6 +155,8 @@ Local CPU verification does not establish CUDA throughput, playing strength, rea
 <a id="p2-p3"></a>
 
 ## Post-Step-5 P2 search and P3 learned repertoire
+
+**Current scope:** The [goal-head skip decision](README.md#goal-head-skipped) supersedes this historical section's instruction to finish the goal pilot first. Goal-generated intent and goal-biased search are deferred. The existing commands still require goal-enabled model/readiness artifacts; they are not yet a validated goal-free continuation path.
 
 **13 October audit:** [P0–P6 findings and verification](AUDIT_HISTORY.md#audit-2026-10-13-p0-p6). Readiness calibration must match the saved model receipt and count only setups with observed labels. Teacher context, goal, profile and search settings must match the executed collection. Preparation failures now retire inference resources. Regenerate downstream evidence after the P0/P1 source migration; P3 schemas and selection settings are unchanged.
 
@@ -273,6 +277,8 @@ To use the distilled checkpoint directly for a frozen discovery pilot, run `prep
 <a id="p2-p3-p3-inexpensive-discovery-first"></a>
 
 ### P3: inexpensive discovery first
+
+**Current direction (18 October 2026):** [Reuse one frozen network with supported contexts](README.md#frozen-network-discovery), without goal-head training or policy fine-tuning. The commands below describe the existing goal-enabled pipeline; they are not yet runnable instructions for handing the current Step 5 checkpoint directly into a goal-free discovery run. First adapt the checkpoint/readiness path and candidate inputs. Start with the source run's supported `neutral` and six industry-focus contexts, not the separate five personality profiles. Remove inactive goal controls from candidate identity/variation rather than counting different `alpha`, `patience` or `hysteresis` values as additional styles. Preserve matched evaluations, held-out quality checks and provenance. No code or command-line bypass is implemented by this note.
 
 ```sh
 python "$brass_root/scripts/personality_repertoire.py" propose \

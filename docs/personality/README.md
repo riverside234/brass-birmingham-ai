@@ -11,12 +11,44 @@ Consolidated on 15 October 2026. This directory is the single maintained locatio
 | [Audit history](AUDIT_HISTORY.md) | Dated correctness reviews, deployment performance evidence and continuation notes |
 | [Encoder reuse background and follow-up](#encoder-reuse-follow-up) | Completed shared-session integration, Step 5 background and remaining stage-level validation |
 
+<a id="goal-head-skipped"></a>
+
+## Current workflow decision: skip the goal-head stage
+
+**18 October 2026:** The goal-head code is already implemented, but the real-model goal-head workflow has not been run. Keep that implementation for possible future use and **skip this stage in the upcoming post-Step-5 workflow**. Do not run goal-head warm-up, goal calibration (`validate-goals`), or the existing goal-loss joint pilot. Goal-generated short-term intent, goal-alignment search bias and goal-head UI hints are also outside the current workflow. Re-enable this branch only after an explicit future decision.
+
+The existing Step 5 style/industry-focus inputs remain separate from the skipped goal head. The later 16-style discovery objective also remains separate: those styles are measured behavioral archetypes, not goal-head classes. This decision changes the documented workflow only; it does not delete implemented code or alter models, checkpoints or current self-play training.
+
+The goal-enabled commands and results below are retained as historical reference. Existing P2-P6 tooling still depends on personality/goal model contracts and readiness artifacts. **Skipping P1 is not yet a supported command-level bypass into that tooling.** Adapt and validate those dependencies for a goal-free workflow before using the downstream commands; do not fabricate a completed P1 receipt or weaken qualification checks.
+
+<a id="frozen-network-discovery"></a>
+
+## Current discovery direction: reuse one frozen network
+
+**18 October 2026:** Start post-Step-5 style discovery with one frozen trained network and a small set of supported context/control settings. Reuse the existing discovery and qualification framework before considering additional policy training. Keep the main self-play run and its Five-style history sampling/retention unchanged. This is a documentation decision; the goal-free integration described here is still pending.
+
+| Capability | Verified implementation status |
+| --- | --- |
+| Shared frozen weights, candidate proposals and elite-profile mutations | Implemented in [discovery.py](../../src/brass_ai/personality/repertoire/discovery.py) for the existing goal-enabled personality model. |
+| Matched setups, four-seat rotations, public behavior descriptors and independent quality screening | Implemented in the existing P3 workflow. Fixture checks do not qualify a real trained model. |
+| Behavior archive and representative selection | Implemented in [archive.py](../../src/brass_ai/personality/repertoire/archive.py) as an unstructured quality/novelty archive, rather than the original grid-based MAP-Elites algorithm. |
+| Direct use of the current Step 5 checkpoint without P1 | Not yet supported. [readiness.py](../../src/brass_ai/personality/search/readiness.py) still requires P1 warm-up, a personality checkpoint and goal-calibration artifacts. |
+| Sixteen stable, competitive styles from the goal-free path | Not demonstrated; different parameter values alone are not evidence of different behaviors. |
+
+The first proposed goal-free candidates are the existing Step 5 `neutral` context and its six industry focuses: `CottonMill`, `Manufacturer`, `Pottery`, `Brewery`, `IronWorks` and `CoalMine`. [Ordinary collection](../../src/brass_ai/recovery/ordinary.py) uses these contexts, and [policy.py](../../src/brass_ai/step5/policy.py) defines their encoding and exploration weighting. Verify their coverage in the selected source run. They are distinct from the old personality profiles (`neutral`, `industrialist`, `networker`, `supplier`, `investor`), which use a separate context contract and projection; do not substitute one vocabulary for the other or introduce untrained continuous context inputs.
+
+The old proposal generator varies `style`, `alpha`, `patience` and `hysteresis`. The latter three control goal bias or goal persistence. Once those mechanisms are skipped, changes to inactive fields must not create supposedly distinct style candidates. Setting `alpha=0` alone does not remove the model/readiness dependencies or all saved-intent behavior. A future goal-free adapter must identify effective controls, deduplicate equivalent recipes, and preserve source/model identities, legal-action handling and qualification safeguards.
+
+After that adaptation, begin with a bounded direct-policy comparison against the same frozen reference pool, using matched setups and seat rotations. Retain only reproducible behavioral differences with acceptable held-out playing quality; separately confirm any searched deployment recipe. A smaller preliminary set is useful if fewer styles qualify. Keep the 16-archetype/eight-variant product target, but do not duplicate candidates, relabel noise or relax release gates to fill it. Removing candidate policy training does not remove evaluation costs or establish a measured speedup.
+
+PGA-MAP-Elites, neural-weight mutation, independent PPO fine-tuning branches, new conditional-policy training and subsequent multi-policy distillation are deferred. Reconsider them only if the frozen-network experiment shows insufficient useful diversity and a separate experiment is approved. Ordinary PPO branches with the same win objective do not guarantee distinct styles; multiple resulting weight sets would also need additional work to meet the single-network deployment goal.
+
 ## Reading order and search use
 
 | Stage | Guide | Search use |
 | --- | --- | --- |
 | P0 | [Handoff](TRAINING_P0_P3.md#p0-p1) | No search; validates and freezes the eligible source |
-| P1 | [Goal head and joint PPO](TRAINING_P0_P3.md#p0-p1) | Direct policy collection; searched behavior is excluded from ordinary PPO |
+| P1 | [Goal head and joint PPO - skipped](TRAINING_P0_P3.md#p0-p1) | Implemented code retained; do not run in the upcoming workflow |
 | P2 | [Readiness, search and teachers](TRAINING_P0_P3.md#p2-p3) | Direct readiness collection, then searched probes/teachers and policy distillation |
 | P3 | [Repertoire discovery](TRAINING_P0_P3.md#p2-p3-p3-inexpensive-discovery-first) | Direct discovery followed by searched-controller confirmation; descriptor fitting itself needs no search |
 | P4 | [Roster qualification](QUALIFICATION_P4_P6.md#p4) | Searched member/mixture evaluation of the frozen shared model |
@@ -81,7 +113,7 @@ Use these mechanisms and focused checks as the starting point for the remaining 
 | Stage | Search role | Required follow-up |
 | --- | --- | --- |
 | P0 handoff | No search | Carry the correct feature/layout/source identities into downstream artifacts; this work must not mutate the completed source run. |
-| P1 goal warm-up and joint PPO | Direct policy collection | Check encoder reuse in direct collection as well as fresh learner transitions. Preserve behavior-probability verification and the exclusion of searched actions from ordinary PPO. Do not introduce search into P1. |
+| P1 goal warm-up and joint PPO - skipped | Historical direct policy collection | No current goal-head collection or training. These checks apply only if the branch is explicitly re-enabled. |
 | P2 intent search and teachers | Search probes, reserved teacher collection and distillation inputs; readiness collection is direct | Shared-session construction is implemented. Measure actual teacher/root/continuation reuse and label yield, plus direct readiness collection. Preserve independent mutable worker state and current acceptance rules. |
 | P3 repertoire discovery | Direct discovery, then searched-controller confirmation | Cover both collection modes, especially repeated inference during searched confirmation. Descriptor fitting itself needs no search; preserve its split and provenance rules. |
 | P4 roster validation | Frozen shared model with searched member/mixture panels | Verify reuse across repeated requests without mixing seats, controller inputs or panel jobs. Preserve tested member identities and qualification evidence. |

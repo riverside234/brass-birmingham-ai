@@ -32,6 +32,7 @@ def parser():
     initialization.add_argument('--imitation-run', help='Completed fresh standalone imitate run; starts PPO with its selected weights and a new optimizer')
     run.add_argument('--iterations', type=int, default=1)
     run.add_argument('--fresh',action='store_true',help='Require a new run directory; refuse to resume or overwrite existing progress')
+    run.add_argument('--il-kl-probe-from-run',help='New run only: verify and copy the fixed validation probe from this stopped self-play run; never import its training state')
     run.add_argument('--expected-generation',type=int,help='Refuse to train unless the committed starting generation matches')
     run.add_argument('--resume-reviewed-source',action='store_true',
                      help='Continue this same PPO run across a pinned source/budget review; keep optimizer/counters')
@@ -178,7 +179,7 @@ def main(argv=None):
                 config['rehearsal_manifest']=a.demonstrations
             result = train(root, a.run, config, iterations=a.iterations, device=a.device, initial=a.initial,
                            mono=a.mono, from_run=a.from_run,imitation_run=a.imitation_run,resume_reviewed_source=a.resume_reviewed_source,
-                           expected_generation=a.expected_generation,fresh=a.fresh,
+                           expected_generation=a.expected_generation,fresh=a.fresh,il_kl_probe_from_run=a.il_kl_probe_from_run,
                            inference_devices=inference_devices)
             result.pop('summaries', None)
         elif a.command == 'evaluate':

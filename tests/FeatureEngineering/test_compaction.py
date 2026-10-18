@@ -180,8 +180,8 @@ class CompactionTests(unittest.TestCase):
             from brass_ai.personality.contracts import CONTEXT_DIM
             p=actor(*inputs,remaining=remaining,personality=torch.zeros(2,CONTEXT_DIM))
         self.assertTrue(torch.isfinite(u[-1]).all());self.assertTrue(torch.isfinite(p['remaining_utility_4']).all())
-        self.assertEqual([m.parameter_count for m in (model,utility,actor)],[5904644,5921320,6023137])
-        self.assertEqual(dense_multiply_adds(model)['fixed_per_position'],8235232)
+        self.assertEqual([m.parameter_count for m in (model,utility,actor)],[5910916,5928616,6030433])
+        self.assertEqual(dense_multiply_adds(model)['fixed_per_position'],8260064)
         self.assertEqual(dense_multiply_adds(model)['per_padded_candidate'],83232)
         # Metadata-only mismatches; no old architecture/checkpoint is constructed.
         for key,value in (('architecture','brass-four-seat-mlp-resnet/7.0.0'),('state_dim',5489),

@@ -22,6 +22,7 @@ from brass_ai.learning.contracts import digest, require
 from brass_ai.step5.policy import NeuralPolicy, inference_deadline, predict_groups
 from brass_ai.searchlab.spiel import BrassSpielGame, action_id
 from .common import SearchConfig, SearchIncomplete, expansion_indices, turn_key, ranked_candidates
+from .deadline import DeadlineAdmission,configure_clock
 from brass_ai.learning.reward import CostLedger,terminal_utility
 
 
@@ -227,12 +228,22 @@ class MaskedISMCTS:
 
     def run(self,view,choices):
         slots=[];started=0;search_began=time.monotonic()
+        admission=DeadlineAdmission();launched={};launch_closed=False
+        # All timed entry points share admission. Count-primary work must
+        # consume its quota; its deadline remains an exceptional watchdog.
+        use_admission=getattr(self,'deadline_admission',getattr(self,'time_budget_primary',False))
+        self.metrics.update(deadline_stops=0,deadline_remaining_seconds=0.,simulation_estimate_seconds=0.)
         limit=None if getattr(self,'time_budget_primary',False) else self.config.simulations
-        available=lambda:limit is None or started<limit
+        available=lambda:not launch_closed and (limit is None or started<limit)
         def advance(generator,result=None,first=False):
+            before=self.completed
             try:return next(generator) if first else generator.send(result)
-            except StopIteration:return None
-            except SearchIncomplete:self.interrupted+=1;return None
+            except StopIteration:
+                began=launched.pop(generator)
+                if self.completed>before:admission.observe(time.monotonic()-began)
+                return None
+            except SearchIncomplete:
+                launched.pop(generator);self.interrupted+=1;return None
         try:
             capacity=min(self.config.pending_paths,len(self.lanes))
             free=list(range(capacity))
@@ -241,7 +252,13 @@ class MaskedISMCTS:
                     # Time-primary search has no finite attempt quota. A
                     # cancelled trajectory must not be relaunched until expiry.
                     self.check()
+                    remaining=self.deadline-time.monotonic()
+                    if use_admission and not admission.admit(remaining):
+                        launch_closed=True;self.metrics['deadline_stops']+=1
+                        self.metrics['deadline_remaining_seconds']=max(0.,remaining)
+                        break
                     lane=free.pop();g=self.trajectory(view,choices,self.lanes[lane]);started+=1
+                    launched[g]=time.monotonic()
                     waiting=advance(g,first=True)
                     if waiting is not None:slots.append((g,waiting,lane))
                     else:free.append(lane)
@@ -270,11 +287,13 @@ class MaskedISMCTS:
         except SearchIncomplete:self.interrupted+=max(1,len(slots))
         finally:
             for generator,_,_ in slots:generator.close()
+            launched.clear()
         # Every budget mode retires pending paths at loop-boundary expiry.
         # Count only launched trajectories, including those closed above;
         # cancellation before the first launch is not an interrupted attempt.
         self.interrupted=started-self.completed
         self.metrics['attempted']=started
+        self.metrics['simulation_estimate_seconds']=admission.estimate
         self.metrics['elapsed_seconds']=time.monotonic()-search_began
         self.metrics['completed_per_second']=self.completed/max(1e-9,self.metrics['elapsed_seconds'])
         return self.statistics(choices)
@@ -384,7 +403,7 @@ class MaskedSearchPolicy:
         if len(choices)==1 or time.monotonic()>=deadline or self.cancelled.is_set():return fallback,1.,None
         bot=MaskedISMCTS(self.game,self.base,self.rollouts,self.config,view['seat'],
             self.context_features(view,rng),rng,deadline,recall,tree,cache,self.simulation_games,self.cancelled,getattr(self,'partition_index',0),self.reward_context)
-        bot.time_budget_primary=getattr(self,'time_budget_primary',False)
+        configure_clock(bot,self)
         self.telemetry['searches']+=1
         with inference_deadline([self.base]+self.rollouts,deadline):stats=bot.run(view,choices)
         self.last_statistics=stats

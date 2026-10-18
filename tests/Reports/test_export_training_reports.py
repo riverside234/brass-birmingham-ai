@@ -73,6 +73,20 @@ class ExportTests(unittest.TestCase):
             self.assertEqual(raw, before[self.root / entry['source']])
             self.assertEqual(reports.checksum(raw), entry['sha256'])
         self.assertEqual(before, {p: p.read_bytes() for p in before})
+
+    def test_completed_il_critic_upgrade_receipt_and_original_reports_are_exported(self):
+        self.put(self.run+'/evaluations/monitor-0003/report.json',{})
+        self.put(self.run+'/evaluations/monitor-0003/spec.json',{})
+        self.put('artifacts/step5/il/upgrade.json', dict(contract='completed-il-critic-upgrade/1.0.0',
+            parent=dict(bc_run='artifacts/step5/parent')))
+        self.put('artifacts/step5/il/candidate.pt',b'weights excluded')
+        self.put('artifacts/step5/parent/state.json',dict(signature={}))
+        self.put('artifacts/step5/parent/report.json',dict(epochs=20))
+        output,manifest=self.export()
+        self.assertEqual(manifest['missing'],[])
+        self.assertTrue((output/'lineage/artifacts/step5/il/upgrade.json').exists())
+        self.assertTrue((output/'lineage/artifacts/step5/parent/report.json').exists())
+        self.assertFalse(any(p.suffix=='.pt' for p in output.rglob('*')))
         self.assertEqual(json.loads((output / 'recorded-config.json').read_text()), self.state['signature']['config'])
 
     def test_missing_reports_are_explicit_not_reconstructed_from_summaries(self):

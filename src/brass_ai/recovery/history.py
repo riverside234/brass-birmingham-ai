@@ -74,18 +74,18 @@ def evaluation_evidence(report):
 def compact(report):
     # Old compact summaries cannot recover fields that were already discarded.
     # Preserve their version and missingness instead of relabelling as v5.
-    if report.get('summary_version') in (2,3,4,5):return report
+    if report.get('summary_version') in (2,3,4,5,6):return report
     out=scalars(report,('format','iteration','games_done','cumulative_games','incoming_model_id','post_update_model_id',
                        'incoming_policy_id','elapsed_seconds','games','failed_games','promotion_eligible'))
-    out['summary_version']=5
-    for key in ('il_kl_limit','rehearsal_schedule','health_counts','quality_pool','strength_rating'):
+    out['summary_version']=6 if report.get('value_phase') is not None or 'gae' in report.get('actor',{}) else 5
+    for key in ('il_kl_limit','rehearsal_schedule','health_counts','quality_pool','strength_rating','value_phase','seat_fingerprints'):
         if key in report:out[key]=report[key]
     out['health_by_composition']={k:v['health_counts'] for k,v in report.get('by_composition',{}).items()
                                   if 'health_counts' in v}
     if report.get('format') in ('step5-evaluation-report/1.0.0','four-player-champion/1.0.0'):
         out['evaluation_evidence']=evaluation_evidence(report)
     out['timings']=scalars(report.get('timings',{}),('collection_seconds','replay_load_seconds','ppo_seconds',
-        'search_and_distill_seconds','checkpoint_seconds','evaluation_seconds','cleanup_seconds','iteration_seconds'))
+        'value_phase_seconds','search_and_distill_seconds','checkpoint_seconds','evaluation_seconds','cleanup_seconds','iteration_seconds'))
     actor=report.get('actor',{})
     out['actor']=scalars(actor,('optimizer_steps','learner_decisions','meaningful_decisions','forced_decisions',
         'learner_trajectories','kl_early_stop','rehearsal_weight','gradient_clip_steps','baseline_explained_variance',
@@ -98,6 +98,13 @@ def compact(report):
     out['actor']['learning_rate_schedule']=scalars(schedule,('contract','kind','base_lr','steps','start_factor',
         'completed_steps','effective_lr','next_lr')) if schedule else None
     out['actor']['sample_usage']=actor.get('sample_usage')
+    for key in ('gae','critic_split','critic_rows','final_categorical_probe'):
+        if key in actor:out['actor'][key]=actor[key]
+    sampling=actor.get('rehearsal_sampling')
+    if isinstance(sampling,dict):out['actor']['rehearsal_sampling']=scalars(sampling,(
+        'contract','iteration','source_rows','source_games','source_shards','selected_shards','selected_rows',
+        'distinct_rows_selected','nonforced_rows_selected','used_presentations','distinct_rows_used',
+        'selection_sha256','manifest_sha256','max_cache_bytes','peak_cache_bytes','preparation_seconds','cache_deleted','scope'))
     if 'kl_guard' in actor:out['actor']['kl_guard']=dict(actor['kl_guard'])
     for key in ('advantage','advantage_distribution','return_distribution','legal_actions','categorical_probe','gradient_norms','phases'):
         out['actor'][key]=scalars(actor.get(key,{}),actor.get(key,{}))

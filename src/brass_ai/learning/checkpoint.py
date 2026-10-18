@@ -32,7 +32,7 @@ def save_checkpoint(path, model, optimizer=None, *, step=0, training=None):
     return payload['model_id']
 
 
-def load_checkpoint(path, *, device='cpu'):
+def load_checkpoint(path, *, device='cpu', _legacy_il_upgrade=False):
     # No fallback to arbitrary-pickle loading for old or foreign checkpoints.
     raw = torch.load(path, map_location='cpu', weights_only=True)
     keys(raw, ('format', 'compatibility', 'model_config', 'model_id', 'state_dict',
@@ -44,8 +44,15 @@ def load_checkpoint(path, *, device='cpu'):
     if raw['format']=='four-seat-checkpoint/2.0.0':
         from .utility_model import UtilityNet,UtilityConfig
         model_type,config_type=UtilityNet,UtilityConfig
-    config=config_type.from_dict(raw['model_config'])
-    assert_compatible(raw['compatibility'])
+    config=config_type.from_dict(raw['model_config'],allow_legacy=_legacy_il_upgrade)
+    if _legacy_il_upgrade:
+        from .model import LEGACY_ARCHITECTURE
+        from .contracts import assert_heuristic_data_compatible
+        require(raw['format']=='four-seat-checkpoint/1.0.0' and config.architecture==LEGACY_ARCHITECTURE
+            and raw['compatibility']['architecture_sha256']=='fb085f74f1387258ba6fe8a66fdf40deaf6c6010e513f0c3c310e15129a75302',
+            'Only the explicitly pinned completed v11.1 base IL architecture can upgrade')
+        assert_heuristic_data_compatible(raw['compatibility'])
+    else:assert_compatible(raw['compatibility'])
     require(type(raw['step']) is int and raw['step'] >= 0, 'Invalid training step')
     model=model_type(config)
     require((getattr(model.config,'utility',None) is not None)==(raw['format']=='four-seat-checkpoint/2.0.0'),'Checkpoint utility version differs')
@@ -53,7 +60,7 @@ def load_checkpoint(path, *, device='cpu'):
     model.load_state_dict(raw['state_dict'], strict=True)
     model.validate_parameter_count()
     require(all(torch.isfinite(v).all() for v in model.state_dict().values()), 'Non-finite weights')
-    require(raw['model_id'] == model_id(model), 'Checkpoint weights/metadata digest mismatch')
+    require(raw['model_id'] == model_id(model,contracts=raw['compatibility']), 'Checkpoint weights/metadata digest mismatch')
     return model.to(device), raw
 
 

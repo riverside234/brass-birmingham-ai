@@ -1,4 +1,4 @@
-"""Portable named-head backend on the existing private batched inference queue."""
+"""Portable named heads with private replies and independent CPU sessions."""
 from collections import defaultdict
 import time
 import numpy as np
@@ -18,18 +18,19 @@ def execution():
         shared_slot_bytes=2*1024*1024)
 
 
-class PortableInference(InferenceService):
-    def __init__(self,directory,models,backend='ort-cpu'):
-        import torch
-        torch.set_num_threads(2)
-        super().__init__(execution(),'cpu');self.graphs={};self.parity=[]
+class _GraphService(InferenceService):
+    def __new__(cls,*args,**kwargs):
+        return object.__new__(cls)
+
+    def __init__(self,directory,models,backend,threads,config):
+        super().__init__(config,'cpu');self.graphs={};self.parity=[]
         try:
             for entry in models:
-                graph=Graph(directory/entry['path'],backend,2)
+                graph=Graph(directory/entry['path'],backend,threads)
                 require(graph.meta['model_id']==entry['model_id'],'Portable model identity changed')
                 self.parity.append(check_backend(graph));self.graphs[entry['model_id']]=graph
         except BaseException:
-            self.__exit__();raise
+            InferenceService.__exit__(self);raise
 
     def _evaluate(self,items):
         replies={};groups=defaultdict(list)
@@ -87,3 +88,92 @@ class PortableInference(InferenceService):
                     else:self.metrics['expired_requests']+=1
                     replies[key]=r
         return replies
+
+
+class PortableInference(_GraphService):
+    """Two single-thread ORT CPU replicas, using the private-envelope queue.
+
+    A free replica consumes the next complete envelope. There is no replica
+    affinity tied to reply-lane parity (each worker has several reply lanes).
+    Each replica exclusively owns its sessions, metrics and timing samples.
+    Shared slots still have exactly one outstanding owner until its reply.
+    """
+    def __init__(self,directory,models,backend='ort-cpu',*,sessions=None,threads=None):
+        import torch
+        cpu=backend in ('ort-cpu','openvino-cpu')
+        # The measured default is ORT CPU. Other backends keep their existing
+        # single-session recipe unless a CPU comparison explicitly requests two.
+        sessions=(2 if backend=='ort-cpu' else 1) if sessions is None else sessions
+        threads=(1 if sessions==2 else 2) if threads is None else threads
+        require(type(sessions) is int and sessions in (1,2) and type(threads) is int
+                and threads in (1,2) and sessions*threads<=2 and (cpu or sessions==1),
+                'Portable inference has a two-core allowance; GPU uses one session')
+        torch.set_num_threads(2)
+        config=execution()
+        if sessions>1:
+            # CPU graphs serve small requests immediately. Do not make both
+            # consumers wait for a batching flush, or serialize into a B=2 call.
+            config.update(batch_size=1,flush_ms=0.)
+        self.replicas=[];self.session_threads=threads
+        super().__init__(directory,models,backend,threads,config)
+        self.replicas.append(self)
+        self.thread.name='brass-portable-inference-0'
+        try:
+            for _ in range(1,sessions):
+                replica=_GraphService(directory,models,backend,threads,config)
+                # No channels have been allocated on this replica. The facade
+                # alone owns transport lifetime; both consumers use its queue.
+                replica.requests.close()
+                replica.requests=self.requests;replica.connections=self.connections
+                replica.slots=self.slots;replica.cpu=self.cpu;replica.stop=self.stop
+                replica.on_failure=self._failed
+                replica.thread.name='brass-portable-inference-'+str(len(self.replicas))
+                self.replicas.append(replica)
+        except BaseException:
+            self.__exit__();raise
+
+    def __enter__(self):
+        require(not self.started and not self.closed,'Inference service is already started/closed')
+        try:
+            for replica in self.replicas[1:]:
+                replica.thread.start();replica.started=True
+            return super().__enter__()
+        except BaseException:
+            self.__exit__();raise
+
+    def __exit__(self,*args):
+        if self.closed:return
+        self.stop.set()
+        for child in self.children:child.close()
+        # Retire EVERY synchronous graph invocation before unmapping a slot or
+        # closing its private reply pipe. Cancellation is not retirement.
+        until=time.monotonic()+30
+        for replica in self.replicas:
+            if replica.started:
+                replica.thread.join(timeout=max(0.,until-time.monotonic()))
+                require(not replica.thread.is_alive(),'Portable inference replica did not shut down')
+        super().__exit__(*args)
+        for replica in self.replicas:
+            replica.graphs.clear();replica.closed=True
+
+    def report(self):
+        result=super().report()
+        replicas=[dict(index=i,threads=self.session_threads,**r.metrics,timings=r.timings.report(),parity=r.parity,
+                       error=str(r.error) if r.error else None) for i,r in enumerate(self.replicas)]
+        for key in self.metrics:
+            values=[r[key] for r in replicas]
+            result[key]=max(values) if key.startswith('max_') else sum(values)
+        # Preserve per-replica distributions; a percentile of percentiles is
+        # not a pooled percentile. Totals below include both session owners.
+        names={key for r in replicas for key in r['timings']}
+        result['timings']={}
+        for name in sorted(names):
+            rows=[r['timings'][name] for r in replicas if name in r['timings']]
+            seconds=sum(r['seconds'] for r in rows);calls=sum(r['calls'] for r in rows)
+            result['timings'][name]=dict(seconds=seconds,calls=calls,mean_seconds=seconds/calls,
+                max_seconds=max(r['max_seconds'] for r in rows),
+                percentile_scope='See independent replica distributions')
+        result.update(replica_count=len(replicas),session_threads=self.session_threads,replicas=replicas,
+            central_batching=len(replicas)==1,routing='next-idle-private-envelope',
+            timing_note='Summed CPU replica elapsed times can overlap; wall time belongs to the whole turn')
+        return result

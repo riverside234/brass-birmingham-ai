@@ -68,7 +68,7 @@ def make_policy(spec,root,endpoint,config,mono,*,_replica=False):
     if spec['kind']=='lab-legacy':
         from .legacy_search import LabLegacyPolicy
         policy=LabLegacyPolicy(root,spec['parent'],spec['budget'],mono=mono,purpose=spec.get('purpose','training'),
-            search_free=spec.get('search_free',False),work_budget=spec.get('work_budget'))
+            search_free=spec.get('search_free',False),work_budget=spec.get('work_budget'),search_runtime=spec.get('search_runtime',False))
         require(policy.policy_id==spec['policy_id'],'Lab teacher identity changed')
         return policy
     if spec['kind']=='legacy':

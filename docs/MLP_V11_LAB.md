@@ -1,16 +1,26 @@
-# Grouped MLP v11.1: fresh IL and self-play
+# Grouped MLP v11.2: completed IL upgrade and fresh self-play
 
-V11.1 is the current MLP default: projections **32/64/48/320/352/48 + 12**, fusion **876 → 512**, **eight width-512 residual blocks**, a width-160 action encoder, and a 192-wide policy scorer. Local slot/link/industry banks include neighboring slots and opponents' industry mats; their bias-free role projections start at zero. The shared per-player outcome head remains width 128. See the [model contract](../ai-research/GROUPED_PROJECTION_CONTRACT.md) and [validation report](../ai-research/MLP_V11_1_REPORT.md).
+V11.2 is the current default: projections **32/64/48/320/352/48 + 12**, fusion **876 → 512**, **eight width-512 residual blocks**, a width-160 action encoder and a 192-wide policy scorer. The trunk and actor are unchanged from v11.1. A shared **34 → 32 → 32** seat-descriptor encoder feeds only the outcome and utility heads. Their new columns start at zero. The base model has **5,910,916 parameters**; the utility model has **5,928,616**. See the [critic revision and validation report](../ai-research/OPPONENT_CRITIC_DESCRIPTORS_REPORT.md).
 
-The October 18 quality-pool/rating revision reuses **completed v11.1 IL without retraining**. Skip the IL commands below if it is already complete. Generate a new bound self-play config and use a new run directory. Model tensors, features, and IL losses are unchanged; the exact preceding v11.1 implementation is admitted by the completed-IL source receipt. This revision does not authorize converting an existing PPO run.
+**Completed v11.1 IL is reused without retraining**, through the explicit upgrade below. Keep `artifacts/step5/features4-v11-1-batch7-il` unchanged. The upgrade writes a new v11.2 handoff directory and proves that every original tensor is copied; policy and original critic outputs match exactly at initialization. It does not convert an existing PPO run or copy its optimizer/progress. Use a newly generated config and a new self-play directory.
 
 ## Existing joint7 IL data
+
+The official heuristic strategy remains **v4, `bank-3dc65253a610191d66a5`**. Names such as `balanced-v3-masked-economy` are retained profile aliases; Network/Scout candidates are not enabled. Game and lab now compile the shared search core and the same game policy helpers. New collections have a separate search-runtime fingerprint; old bank/data identities are not rewritten. Reuse completed IL and its dataset unchanged.
+
+After pulling search/strategy source changes, build the versioned lab worker once before **new demonstration generation or self-play** (including search-free v4 opponents). This writes only a new directory under `artifacts/legacy-ai/search/`, using the existing private pinned DLLs/compiler; it does not update a model, configuration, frozen bank or installed game:
+
+```bash
+python scripts/build-shared-search.py --root .
+```
+
+Linux uses Mono (`--mono /path/to/mono` if needed). If the original bank runtime is absent, provide `--managed` pointing to the existing private pinned dependency directory below the project root. A missing/stale build fails explicitly; there is no silent fallback to old search. Teacher and v4 search remain disabled by the generated self-play config. Explicitly enabled searches share deadline admission; fixed simulation quotas retain their watchdog and exact allocation. See [shared-search integration](personality/DEPLOYMENT_PERFORMANCE.md#shared-official-v4-search-for-game-il-and-self-play).
 
 Reuse the already converted, audited **Features-4** dataset as-is. The state/action dimensions remain **3,128 / 327**, and feature, encoder, derived-feature, rules and target contracts are unchanged. The new model checks the static board topology as part of admission. Existing native-board data satisfies those checks, including the three-region Worcester/SouthWest/Kidderminster links.
 
 Keep the manifest, labels, split assignments and raw shards. The normal loader may rebuild source-bound tensor caches in the new IL run's `.imitation-cache/`; do not regenerate demonstrations solely for this upgrade. A path containing v8 is still valid when its contents are Features-4.
 
-Use **fresh v11.1 IL weights and a new self-play directory**. V11 and all earlier checkpoints cannot be resumed or reinterpreted as v11.1, including with source-review flags. Old neural PPO trajectories are not current behavior data.
+Use the explicit completed-v11.1 upgrade, or fresh v11.2 IL if no completed v11.1 model exists. V11 and earlier checkpoints are incompatible. The regular loader also rejects v11.1 weights until the explicit upgrade is performed; source-review flags cannot bypass architecture checks. Old neural PPO trajectories are not current behavior data.
 
 ## Training defaults
 
@@ -38,9 +48,9 @@ The selected JSON config contains:
 
 It also sets `imitation.learning_rate=0.00006` and `update.grad_clip=1.0`. To try clipping 0.5, change that value in a new explicitly selected training configuration. `imitate --learning-rate` and `--warmup-steps` override the IL rate and warmup length. Zero warmup steps explicitly disables the ramp. Reported effective rates can be lower than the peak during warmup; full and compact self-play histories retain the schedule counter.
 
-## Fresh v11.1 IL
+## Optional: fresh v11.2 IL
 
-Use the actual converted manifest path if yours differs. New run paths avoid modifying previous checkpoints.
+Skip this section when v11.1 IL is already complete; use the upgrade below. For an entirely new IL run, use the actual converted manifest path if yours differs and a new output directory.
 
 ```bash
 conda activate ai-training
@@ -50,20 +60,20 @@ python scripts/feature-engineering.py inspect
 
 python scripts/step5.py --config configs/step5/joint7-latest.json imitate \
   --manifest artifacts/il-replay/features4-compact-v8-batch7/manifest.json \
-  --run artifacts/step5/features4-v11-1-batch7-il \
+  --run artifacts/step5/features4-v11-2-batch7-il \
   --epochs 10 --min-epochs 3 --patience 3 --workers 12
 ```
 
-The epoch/loader-worker arguments are example lab settings. Inspection should show architecture `brass-four-seat-mlp-resnet/11.1.0`, local layout `grouped-mlp-local-entities/2.0.0` and **5,904,644 base parameters**. The IL CLI now takes its default learning rate from the selected config, so it does not silently retain the old hard-coded 1e-4.
+The epoch/loader-worker arguments are example lab settings. Inspection should show architecture `brass-four-seat-mlp-resnet/11.2.0`, local layout `grouped-mlp-local-entities/2.0.0` and **5,910,916 base parameters**. The IL CLI now takes its default learning rate from the selected config, so it does not silently retain the old hard-coded 1e-4.
 
-To resume an interrupted v11.1 IL run at its committed epoch, repeat the same command with identical settings and source. Warmup, Adam and RNG restore from its checkpoint. Do not use `--from-imitation-run` to load an older architecture.
+To resume an interrupted v11.2 IL run at its committed epoch, repeat the same command with identical settings and source. Warmup, Adam and RNG restore from its checkpoint. Do not use `--from-imitation-run` to load an older architecture.
 
 To extend this completed 10-epoch run to **20 total epochs**, use the same run and its original settings:
 
 ```bash
 python scripts/step5.py --config configs/step5/joint7-latest.json imitate \
   --manifest artifacts/il-replay/features4-compact-v8-batch7/manifest.json \
-  --run artifacts/step5/features4-v11-1-batch7-il \
+  --run artifacts/step5/features4-v11-2-batch7-il \
   --epochs 10 --extend-to-epochs 20 \
   --min-epochs 3 --patience 3 --workers 12
 ```
@@ -72,31 +82,49 @@ python scripts/step5.py --config configs/step5/joint7-latest.json imitate \
 
 The extension restores the latest checkpoint's weights, Adam moments, CPU/CUDA RNG and warmup counter. It retains all validation history, the previous best checkpoint, the patience counter and the original dataset/checkpoint lineage. Existing prepared shards are reused only through the pinned preparation-equivalence review, with raw-input and cache checksums still verified. No dataset generation or warmup restart is needed.
 
-Repeat the **same extension command** after interruption; the saved total cap is idempotent. It cannot revive a run stopped by patience or silently change the model, dataset, learning rate, batching, loss, precision or other original settings. The exact preceding v11.1 sources are explicitly reviewed; unknown source changes remain rejected. The original signature remains immutable, with the increased cap and actual executing source recorded in `state.json`/`report.json` as `epoch_extensions` and in subsequent checkpoints. After this extension commits, self-play handoff requires it to finish (at the cap or by patience); a stale 10-epoch report is rejected. Generate a new self-play config after choosing the final completed IL checkpoint.
+Repeat the **same extension command** after interruption; the saved total cap is idempotent. It cannot revive a run stopped by patience or silently change the model, dataset, learning rate, batching, loss, precision or other original settings. The extension requires a matching architecture and an explicitly reviewed source; unknown changes remain rejected. The original signature remains immutable, with the increased cap and actual executing source recorded in `state.json`/`report.json` as `epoch_extensions` and in subsequent checkpoints. After this extension commits, self-play handoff requires it to finish (at the cap or by patience); a stale 10-epoch report is rejected. Generate a new self-play config after choosing the final completed IL checkpoint.
 
 `--from-imitation-run` remains a separate weights-only continuation into a **new** run and resets Adam/RNG/warmup. Do not use it for the exact extension above.
 
 ## Fresh self-play from completed v11.1 IL
 
-Install the self-play dependencies and generate a fresh config from the updated default template, bound to your completed IL checkpoint. The commands below use new `joint7-v11-1-grouped-lr-quality` config/run names so your earlier `joint7-v11-1-grouped-lr.json` is left unchanged. The new config includes all current updates: 50/45/5 tables, the 24-member quality-score pool, PL ratings, auto IL-KL/LR controls, rehearsal floor, teaching disabled, `v4_search_enabled=false`, and Monitor/Broader Evaluation disabled. Keep the completed IL directory unchanged; another IL run is not required. The generator refuses to overwrite a config. If the new names also exist, choose another unused suffix consistently in generation, training, continuation and report export.
+Install dependencies, upgrade the completed IL into a new directory, and generate a config bound to that upgraded candidate. No IL optimization runs in the upgrade. The original IL directory and Features-4 dataset are not renamed or overwritten. The helper refuses an existing output directory/config; choose another unused suffix consistently if these names already exist.
 
 ```bash
+conda activate ai-training
+cd /data/not_backed_up/yxu209/ai-training/
 python -m pip install -r requirements-step5.txt
 
-python scripts/feature-engineering.py configure \
+python scripts/feature-engineering.py upgrade-imitation \
   --imitation-run artifacts/step5/features4-v11-1-batch7-il \
-  --output configs/step5/joint7-v11-1-grouped-lr-quality.json
+  --output artifacts/step5/features4-v11-2-batch7-il
 
-python scripts/step5.py --config configs/step5/joint7-v11-1-grouped-lr-quality.json train \
+python scripts/feature-engineering.py configure \
+  --imitation-run artifacts/step5/features4-v11-2-batch7-il \
+  --output configs/step5/joint7-v11-2-grouped-lr-critic.json
+
+python scripts/step5.py --config configs/step5/joint7-v11-2-grouped-lr-critic.json train \
   --fresh \
-  --run artifacts/step5/joint7-v11-1-grouped-lr-quality \
-  --imitation-run artifacts/step5/features4-v11-1-batch7-il \
+  --run artifacts/step5/joint7-v11-2-grouped-lr-critic \
+  --imitation-run artifacts/step5/features4-v11-2-batch7-il \
   --iterations 1
 ```
 
-The initial PPO model copies the completed IL weights exactly. PPO receives a fresh Adam optimizer and its own warmup counter. The utility extension is initialized/calibrated through the existing guarded path.
+The generated config includes the automatic critic/snapshot and per-table GAE gates, two-iteration disk-backed PPG, bounded rehearsal, 50/45/5 tables, the 24-member quality pool, PL ratings and auto IL-KL/LR controls. Teaching, all v4 search, Monitor and Broader Evaluation stay disabled. PPO starts with a fresh Adam and warmup; the utility extension follows the existing calibration path. The upgrade retains the parent IL checkpoint, dataset, source review and lineage in `upgrade.json`, and verifies the deterministic extension at handoff.
 
-Use your actual completed v11.1 IL path in both commands. The shipped `joint7-latest.json` is a template; `configure` binds the selected IL checkpoint and its rehearsal manifest instead of importing the template's historical lineage.
+The first v11.2 run rebuilds its fixed validation probe with recorded chosen moves and industry metadata. A v11.1 probe cannot be silently imported. The optional `--il-kl-probe-from-run` remains available for a stopped, committed **compatible v11.2** donor using the same upgraded IL/dataset and probe settings. Use it only on a new run's first command; it copies the probe, never PPO state or the donor's large prepared cache. Omit it on continuation.
+
+Fresh configs now include `rehearsal_sampling` (`rotating-train-window/1.0.0`): **16,384 sampled rows per iteration**, **32 shard draws**, **4 GiB maximum temporary train-cache bytes**, and `delete_after_update=true`. A lightweight index reads audited per-game decision counts from the train manifest. Each iteration samples shards proportional to their decision count, then samples rows uniformly with replacement inside those draws. Every train decision retains a uniform marginal probability of selection. This is a rotating, correlated sample, not IID full-corpus sampling for every minibatch; repeats are possible and reported. At 10 million decisions, the default window is at most about 0.16% of the corpus, renewed at the next committed iteration.
+
+Only selected source shards are read, one at a time. Existing independently attested feature sidecars are checked and reused when present. Missing sidecars are reconstructed in memory without writing full-shard caches. Only the selected rows are written under the **new run's** `.rehearsal-cache`, with features loaded for training minibatches. The byte cap covers this temporary disk cache, not the transient decoded source shard, PPO data, GPU tensors or original dataset. If a selected window would exceed the cap, preparation fails and cleans up rather than silently dropping large-action examples; reduce `rows_per_iteration` in a new config if necessary.
+
+Full train caches deleted after IL are not required. Each source shard's raw hash, audited membership/counts, labels, encodings and legal selectors are checked before its rows can train. The temporary train cache is removed immediately after PPO, including exceptions/Ctrl+C; a hard-kill remnant is removed on the next locked startup. Dataset files and the fixed validation probe are never cleaned by this mechanism. The window selection is deterministic from the manifest hash, run seed and committed iteration, and consumes no PPO RNG. Resume regenerates the same uncommitted window. Existing signed configs without this block keep their previous loading behavior; regenerate the new config to opt in.
+
+Iteration reports and compact history include source/selected/distinct/used row counts, selected shards, selection hash, preparation time, peak cache bytes and cleanup status in `actor.rehearsal_sampling`. Rehearsal weights/floor, PPO losses and behavior checks are unchanged. This reduces eager loading and disk requirements; its training-quality and whole-run throughput effects need ordinary training logs.
+
+Validation on 18 October: **27 focused checks passed**, covering train-only indexing, weighted sampling, deterministic restart, missing feature caches, encoding parity, identical PPO loss/weights/RNG for identical sampled rows, byte caps, interrupt cleanup, probe import/rejection and the existing IL-KL/IL loader regressions. The isolated [smoke report](../artifacts/rehearsal-window-20261018/smoke/report.json) records two one-game CPU iterations (fresh start, then resume), 310.1 seconds total. Each used a 64-row window from a 345-decision diagnostic train game: 55/57 distinct sampled rows, 14/14 distinct rows actually trained, and 21/25 presentations after forced filtering. Temporary caches were 4.70/4.71 MiB and were deleted after each update; preparation took 17.0/7.6 seconds. The 144-position validation probe was reused with identical semantic identity, and donor/IL files and the previous checkpoint stayed unchanged. These small-fixture timings do not measure full joint7 throughput or playing strength.
+
+Use your actual completed v11.1 path for the upgrade, and the new v11.2 handoff path for config generation and training. The shipped `joint7-latest.json` is a template; `configure` binds the selected IL checkpoint and its rehearsal manifest instead of importing the template's historical lineage.
 
 The new `latest-model-selfplay/3.0.0` recipe uses the same quotas from game zero onward:
 
@@ -113,6 +141,48 @@ Scheduled **Monitor** and **Broader Evaluation** are disabled (`evaluation_sched
 The historical pool has at most **24 members: pinned IL + 23 scored snapshots**. The `population` fields remain a compatibility capacity declaration (2 + 22); selection and eviction in recipe 3 are governed by `opponent_pool`, not the previous recent/reservoir sampler. Resume checkpoints and independently rated snapshots remain protected; 24 is the training-pool limit, not a cap on every checkpoint file.
 
 `teacher_enabled=false` disables teacher games, search, policy distillation and teacher auxiliary values. The stored teacher settings remain **9/12/12/12 seconds**, five games, eight workers per turn, eight distillation steps and `search_wall_fraction=null`, ready for a separately reviewed future change. Ordinary utility calibration is still required. PPO reward, entropy/value weights, evaluation and the disabled champion gate are unchanged. Rehearsal follows the floor schedule below.
+
+## Opponent critic rows and seat descriptors
+
+Only nonforced **current learner** decisions train the actor. The critic uses all learner decisions, including forced ones, plus scored snapshot decisions after its gate opens. IL/gen0 and v4 decision rows never train either. Learner rows from history/v4 tables remain eligible. A 5% game-id hash holdout excludes every seat in those games from all critic fitting; their learner decisions can still train the actor. A frozen snapshot with the same weights as the learner is distinguished by its behavior-policy identity.
+
+Each recorded table carries four descriptors, reordered into the observing seat's relative order: five role flags, clipped log-scaled generation lag, and 28 style values. The fingerprint contains eight action-family masses and six build-conditional industry masses for each era. Nonempty groups sum to one; absent eras/builds report zero groups. Learner fingerprints use one incoming raw-temperature-1 pass over the fixed IL validation action rows each iteration. Snapshot fingerprints are cached at admission, IL once, and v4 fingerprints use the probe's recorded choices without additional games. Unknown descriptors have only the unknown role set.
+
+Critic training replaces all four descriptors with unknown for 25% of games, chosen deterministically per game/epoch. Advantages, calibration and held-out metrics always use true descriptors. Descriptors cannot directly alter policy logits. The outcome head consumes its own seat embedding; the utility head consumes their mean. ONNX accepts `[B,4,34]` with an overridable all-unknown default, including when the caller omits it. Search defaults to unknown. Choosing unknown versus learner descriptors for own-copy search still requires a later PL experiment; no choice is claimed from these smoke tests.
+
+The signed `critic_data.rollout.mode=auto` starts with learner-only critic fitting. Accepted value fitting, nonnegative learner held-out EV gain over unknown, and existing health/KL checks enable snapshot rows **next iteration**, initially weight 1.0. That iteration's learner EV becomes the Phase-1 baseline. A later drop of more than 0.02 reduces snapshot weight to 0.5. The state and fingerprint history persist in the generation checkpoint. `learner_only` is available for an explicitly configured diagnostic run; no automatic playing-strength claim or rollback is made.
+
+Reports and compact history retain loss/EV by table and row role, true-versus-unknown descriptor gain, learner EV versus the Phase-1 baseline, fingerprint drift, actual critic row usage and gate decisions. The sequential snapshot EV comparison is a diagnostic, not a controlled causal estimate.
+
+## Gated GAE and PPG-style value fitting
+
+Fresh configs include the signed `advantage` and `value_phase` blocks. GAE starts at **lambda 1**, preserving the original `return - value` advantages exactly. Gamma remains 1. Chains group by game and learner seat, skip forced decisions, and use differences of the existing utility returns as rewards. Forced-decision insolvency costs are already included in those differences. Critic targets remain Monte Carlo returns and terminal outcomes. The actor's normalization, legal masking, behavior-probability verification and exploration mixture are unchanged.
+
+The lighter automatic gate uses committed iterations only:
+
+- Move to **0.98** after at least ten iterations with accepted value-phase steps and self-play learner held-out utility explained variance of at least 0.5 for five consecutive iterations. The fallback is thirty iterations with accepted value steps. Both paths require current healthy evidence.
+- Move from **0.98 to 0.95** after **twenty consecutive healthy iterations**, with a nonnegative rating slope and no existing PL regression/v4-watch alert. The slope uses the last three rated checkpoints from the latest common PL fit. Missing or declining rating evidence delays this second transition. No extra rating games or fork runs are launched.
+- Health requires the existing final calibrated IL-KL/behavior/economic gate, completed PPO warmup, a finite nonempty PPO update without early stopping, accepted value steps with finite held-out EV, and no value-phase KL trip. An unhealthy iteration resets the twenty-iteration streak. A held-out-loss stop after earlier accepted epochs can still be healthy: the rejected epoch has been restored.
+
+Changes apply on the **next** iteration. Lambda never automatically drops below 0.95 or rolls back. These thresholds are experimental; a nonnegative point-estimate slope is a progression check, not statistically demonstrated strength. Setting `advantage.gate.mode` to `fixed` in a newly generated config permits an explicit fixed lambda instead. Lambda below 1 requires the combined-return recipe.
+
+History and v4 learner advantages remain at **lambda 1** independently. Each table type adopts the current staged self-play lambda only after **ten consecutive healthy iterations with accepted value fitting** and learner held-out EV at least `selfplay learner EV - 0.05`. Missing/invalid EV resets that table's streak; snapshot EV cannot qualify the gate. Activation takes effect next iteration, persists across restart and follows subsequent staged lambda changes. The report exposes each streak, activation generation and used/next lambda. After 30 iterations since extension, it flags review of common PL rating evidence and per-table advantage standard deviation. It does not invent automatic rollback thresholds or schedule extra evaluation games.
+
+The value phase runs after PPO, using the current iteration plus the previous committed iteration's critic-train rows. The first iteration has only current rows. Set `value_phase.buffer_iterations=2` (default, `ppg-value-phase/2.0.0`); an explicit value of 1 keeps current-only fitting. A stable game-id hash assigns approximately **5% of complete games** to the critic holdout; all seats from those games are excluded from PPO critic batches, head-only utility calibration and value-phase fitting. Their nonforced rows remain eligible for actor and policy-cloning losses. This is a critic holdout, not a completely untouched policy evaluation set. Small collections can have no held-out games; the value phase skips with an explicit reason rather than changing the split.
+
+The previous rows live in `<run>/.ppg-value-cache/` as checksummed NumPy memory-mapped arrays. Cache only the critic inputs: state, one real legal candidate, seat mapping, MC/utility/remaining-cost targets, true descriptors, role/table labels, descriptor generation and game/phase identity. Forced rows are included; hash-held-out games are never cached. Previous behavior probabilities never enter PPO, GAE, head-only ordinary calibration, clone references or policy probes. Cloning and holdout validation continue to use current rows only. The batch mixes current and previous critic rows without duplicating either population within an epoch.
+
+Publication is transactional: write the current cache before saving the checkpoint, bind its receipt to `training.actor_value_phases.buffer`, commit `state.json`, then delete the previous cache. After a successful iteration, only that iteration's cache remains for the next update. Interrupted updates retain their committed input; restart removes uncommitted cache output. Missing/corrupt cache files rebuild shard by shard from the checkpoint's verified ordinary replay receipts and must reproduce the original checksum. Missing or changed authoritative replays cause a clear error, never silent loss of previous data. Retention requires at least **two replay rounds**, including manual cleanup; the current fresh template keeps two. Do not manually delete the newest replay rounds if recovery is needed.
+
+At the current 3,128-state / 327-action dimensions, each cached row is **14,503 bytes** plus the array header. At the plan's illustrative 86k learner + 21k snapshot rows, a 95% train split is about **1.47 GB per cache**, with two arrays coexisting until commit (about **2.95 GB**). Phase 1 has fewer eligible rows. At this size, two iterations give about 50 value minibatches per epoch, up to 150 across three epochs; guard stops can reduce work. Descriptors and small targets are resident tensors; full state/action features remain memory mapped. Missing-cache reconstruction uses bounded learner then snapshot passes to reproduce the staged order. Collection and rating game counts are unchanged. Additional costs are snapshot critic work, one incoming fingerprint probe pass and unknown-descriptor holdout evaluation; production GPU/disk throughput remains unmeasured.
+
+Up to **three value epochs**, batches of **4,096**, fit the existing win/rank/VP losses plus utility MSE. A frozen raw post-PPO policy supplies up to **8,192 nonforced clone rows**, sampled in batches of **512**, with beta initially **1**. Value batches retain one legal candidate for the state-only value path; clone batches retain every legal action. The separate **Adam** runs at base PPO LR **6e-6**, without PPO warmup or the LR multiplier. It does not advance PPO counters or modify PPO moments.
+
+After every value optimizer step, exact raw-policy KL is checked on the **same position IDs as the PPO probe**, against the post-PPO raw policy. An attempted epoch is rolled back, including its value Adam state, if this KL exceeds **0.002** or held-out value loss rises. Accepted epochs remain. Three KL trips in the last five iterations double beta up to **8**; that sliding window persists across resume. Reports distinguish attempted and accepted work. A final accepted fit issues a new utility-calibration receipt; a skipped or fully rejected fit clears the stale receipt for the next ordinary calibration.
+
+The order is collection → critic-train-only head calibration → advantages → PPO → PPO probes/LR decision → value phase → any teaching → final IL-KL/probes → checkpoint. LR feedback keeps the post-PPO signal. Final calibrated IL-KL limits and quality-pool admission see the final weights. Generation checkpoints include both optimizers, the GAE gate's progress/streaks, clone beta/trip history and RNG. Existing runs without these blocks retain their recipe; use a new config and run for this change.
+
+Each iteration and compact history retain `actor.gae` (lambda, TD-error spread, shadows at 1/0.98/0.95/0.9, sign/correlation and era/phase means), `actor.critic_split`, `actor.final_categorical_probe`, and `value_phase` (held-out/train EV, utility MSE, value loss, ten-bin win calibration, accepted/attempted steps, cloning/probe KL, stop reason and seconds). The `value_phase.buffer` report adds cache generations/bytes, rebuild and cleanup results; value totals distinguish current/previous available rows, distinct accepted rows and presentations. Console lines show used/next lambda, accepted value steps and current+previous rows actually used. The report exporter preserves these fields automatically. See [implementation and validation](../ai-research/GAE_VALUE_PHASE_REPORT.md).
 
 ## Quality-score history opponents
 
@@ -162,7 +232,7 @@ The floor uses committed iteration progress, so restarting preserves its stage:
 
 ## PPO learning-rate controller and calibrated IL-KL limits
 
-Fresh configs now use **`ppo-categorical-kl-lr/1.2.0`** plus the strict **`auto-il-kl-limit/1.0.0`** block. Both are part of the run signature. Completed v11.1 IL remains compatible; its directory and selected weights are reused. Generate a new bound config before starting. A previously generated config does not silently acquire these settings; the helper requires a new output filename. Existing committed runs require a separately reviewed source/config transition.
+Fresh configs now use **`ppo-categorical-kl-lr/1.2.0`** plus the strict **`auto-il-kl-limit/1.0.0`** block. Both are part of the run signature. Completed v11.1 IL remains usable through the explicit v11.2 upgrade; its original directory and selected weights stay intact. Generate a new bound config before starting. A previously generated config does not silently acquire these settings; the helper requires a new output filename. Existing committed runs require a separately reviewed source/config transition.
 
 The per-update LR signal remains exact **KL(old behavior || post-PPO behavior)** on the ordinary proportional probe, capped at 2,048 nonforced rows. The active PPO trainer now also uses this exact categorical KL after **each optimizer step**, stopping further steps when it exceeds `update.target_kl=0.01`. The old probabilities and probe positions stay fixed throughout all PPO epochs; both distributions use the same legal masks, temperature and 0.08 exploration mixture. The sampled-action estimate on **all nonforced rows** remains a secondary guard at each epoch end. Nonfinite probe or full-dataset KL aborts the update before any further optimizer steps or checkpoint publication. No KL penalty is added to the loss, and stopping does not undo the last step.
 
@@ -206,23 +276,21 @@ Full/compact reports retain the fixed-probe measurements, four group means/count
 
 Probe preparation/validation happens at startup; normal iterations evaluate only the cached probe. Preparation scans the audited validation partition using disk-backed storage. Resume checks source hashes. These costs and the ongoing rehearsal floor are separate from the per-iteration forward-pass cost; the plan's approximate one-second timing is not a guarantee on every device. The limits and rehearsal schedule are experimental, with no demonstrated playing-strength improvement.
 
-## Continue v11.1 self-play
+## Continue v11.2 self-play
 
 After the one-iteration run commits generation 1:
 
 ```bash
-python scripts/step5.py --config configs/step5/joint7-v11-1-grouped-lr-quality.json train \
-  --run artifacts/step5/joint7-v11-1-grouped-lr-quality \
-  --imitation-run artifacts/step5/features4-v11-1-batch7-il \
+python scripts/step5.py --config configs/step5/joint7-v11-2-grouped-lr-critic.json train \
+  --run artifacts/step5/joint7-v11-2-grouped-lr-critic \
+  --imitation-run artifacts/step5/features4-v11-2-batch7-il \
   --expected-generation 1 \
   --iterations 20
 ```
 
-Use the actual generation for the optional guard, or omit it to resume the current committed generation. Matching-source continuation preserves weights, Adam/RNG, warmup, LR controller, counters, population and checkpoint lineage. Existing freshness/source-review rules remain active for later source changes and pending collections. This new recipe starts fresh; it does not silently convert an existing staged-curriculum run.
+Use the actual generation for the optional guard, or omit it to resume the current committed generation. Matching-source continuation preserves weights, both Adam optimizers, RNG, the per-table GAE gates, snapshot gate/weight, recorded descriptors/fingerprints, clone coefficient/history, warmup, LR controller, counters, population and checkpoint lineage. Existing freshness/source-review rules remain active for later source changes and pending collections. This new recipe starts fresh; it does not silently convert an existing run.
 
-V11.1 adds the selected local vectors **before action GELU and LayerNorm**. Training keeps indexed selectors; new ONNX exports use the fixed action linear weights plus one `143 × 160` per-position projected-bank multiply. The exporter simplifies the graph, checks exact GELU/LayerNorm fusion, and runs ORT at `ORT_ENABLE_ALL`. Role projections still initialize at zero. The Features-4 data is unchanged, but this is a different learned function from v11: **fresh IL is required**, and no source-review receipt bridges v11 weights. See the [v11.1 report](../ai-research/MLP_V11_1_REPORT.md).
-
-Existing signed runs and checkpoints are left untouched. Do not point these commands at an old v11 run directory. The rates remain IL `6e-5` / self-play `6e-6`; config generation from v11 does not apply the earlier 0.6 rate adjustment again.
+V11.2 retains v11.1's pre-GELU local action context, fixed-weight action projection and selector-multiply export. Descriptor conditioning affects only critic heads. Existing signed runs/checkpoints stay untouched. The rates remain IL `6e-5` / self-play `6e-6`; config generation does not repeat the earlier width-related rate reduction.
 
 ## Export self-play reports
 
@@ -230,26 +298,24 @@ After an iteration finishes, collect the analysis bundle with:
 
 ```bash
 python scripts/export-training-reports.py \
-  --run artifacts/step5/joint7-v11-1-grouped-lr-quality
+  --run artifacts/step5/joint7-v11-2-grouped-lr-critic
 ```
 
-The explicit `--run` selects the new quality run; the script's older default run name is unchanged. The destination is a new `results/joint7-v11-1-grouped-lr-quality-gNNNN-<UTC timestamp>/` folder. It includes the latest two committed full iteration reports, available compact history and evaluation reports, the saved config, and the originating IL reports. Exact categorical KL, grouped anchor evidence, LR decisions, actual learner/sample usage, quality scores/membership and disabled-teacher status are preserved. Recent rating specs/reports, compact outcome JSONL, panels and SVG curves are included together with the active cumulative rating archive; dense probe/bootstrap tensors and full replay shards are excluded. Use your actual `--run` if it differs. The completed IL directory remains `artifacts/step5/features4-v11-1-batch7-il`. See [export options](EXPORT_TRAINING_REPORTS.md).
+The explicit `--run` selects the new GAE/value run; the script's older default run name is unchanged. The destination is a new `results/joint7-v11-2-grouped-lr-critic-gNNNN-<UTC timestamp>/` folder. It includes the latest two committed full iteration reports, available compact history and evaluation reports, the saved config, and the originating IL reports. Descriptor/role/EV gate diagnostics, GAE/value diagnostics, exact categorical KL, grouped anchor evidence, LR decisions, actual learner/sample usage, quality scores/membership and disabled-teacher status are preserved. Recent rating specs/reports, compact outcome JSONL, panels and SVG curves are included together with the active cumulative rating archive; dense probe/bootstrap tensors and full replay shards are excluded. Use your actual `--run` if it differs. The original completed IL stays at `artifacts/step5/features4-v11-1-batch7-il`; the new handoff is `artifacts/step5/features4-v11-2-batch7-il`. See [export options](EXPORT_TRAINING_REPORTS.md).
 
 ## Small local checks
 
 With the repository Python dependencies available:
 
 ```bash
-PYTHONPATH=src:tests/FeatureEngineering:tests/R2:tests/Recovery \
-  python -B -m unittest test_v11_1 test_mlp_v11 test_v11_architecture test_v11_learning_rate -v
-
 PYTHONPATH=src:tests/FeatureEngineering:tests/R2:tests/Recovery:tests/Reports \
-  python -B -m unittest test_auto_il_kl test_ppo_lr_controller test_anchor_group_gate \
-    test_categorical_kl_guard test_quality_pool test_strength_rating test_audit_retention \
-    test_v11_learning_rate test_source_reviews.SourceReviewTests test_export_training_reports -v
+  python -B -m unittest test_critic_descriptors test_critic_export test_gae_value_phase \
+    test_value_buffer test_quality_pool test_auto_il_kl test_rehearsal_window \
+    test_export_training_reports -v
 
-PYTHONPATH=src:tests/FeatureEngineering python -B tests/FeatureEngineering/benchmark_v11_1.py \
-  --output artifacts/feature-engineering/v11-1-local-benchmark
+PYTHONPATH=src:tests/FeatureEngineering:tests/R2:tests/Recovery \
+  python -B tests/Recovery/smoke_critic_descriptors.py \
+    --output artifacts/critic-descriptors-local-smoke
 ```
 
-The benchmark compares the indexed and selector-multiply execution forms of the same v11.1 model. It measures CPU tensor-ready inference only. Neither smoke tests nor these timings establish improved playing strength.
+The compute smoke exercises mixed learner/snapshot rows and an exact two-optimizer restart. The optional `--native --imitation-run <upgraded-IL>` uses two one-game trainer iterations in a new directory and checks cache reconstruction/cleanup. Both are bounded diagnostics, not evidence of playing-strength improvement. See the [revision report](../ai-research/OPPONENT_CRITIC_DESCRIPTORS_REPORT.md) for measured results and scope.

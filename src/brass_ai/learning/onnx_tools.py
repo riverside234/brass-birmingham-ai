@@ -63,13 +63,25 @@ class SelectorMatmulExport(nn.Module):
         candidates = encoder[2](encoder[1](pre))
         return self.source.score_candidates(candidates, prepared.context)
 
-    def heads_from_encoded(self, encoded, mapping, remaining=None):
-        return self.source.heads_from_encoded(encoded, mapping, remaining)
+    def heads_from_encoded(self, encoded, mapping, remaining=None, descriptors=None):
+        return self.source.heads_from_encoded(encoded, mapping, remaining,descriptors)
 
-    def forward(self, states, actions, legal_mask, stable_to_relative, remaining=None):
+    def forward(self, states, actions, legal_mask, stable_to_relative, remaining=None, descriptors=None):
         encoded = self.encode_state(states)
         logits = self.score_prepared(actions, self.prepare_candidates(encoded))
-        return (logits.masked_fill(~legal_mask, -torch.inf),) + self.heads_from_encoded(encoded, stable_to_relative, remaining)
+        return (logits.masked_fill(~legal_mask, -torch.inf),) + self.heads_from_encoded(encoded, stable_to_relative, remaining,descriptors)
+
+
+def descriptor_default(path):
+    """An overridable ONNX initializer: unknown seats, broadcasts over positions."""
+    import onnx
+    from onnx import numpy_helper
+    from .seat_descriptors import unknown_numpy
+    model=onnx.load(str(path))
+    require('descriptors' in {v.name for v in model.graph.input},'Missing ONNX critic descriptor input')
+    require('descriptors' not in {v.name for v in model.graph.initializer},'Duplicate descriptor default')
+    model.graph.initializer.append(numpy_helper.from_array(unknown_numpy()[None],name='descriptors'))
+    onnx.checker.check_model(model);onnx.save(model,str(path))
 
 
 class BatchedSeatEncoder(nn.Module):

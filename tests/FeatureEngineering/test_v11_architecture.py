@@ -21,14 +21,14 @@ class V11ArchitectureTests(unittest.TestCase):
 
     def test_exact_medium_dimensions_and_new_identities(self):
         model=FourSeatNet();c=model.config
-        self.assertEqual(c.architecture,'brass-four-seat-mlp-resnet/11.1.0')
+        self.assertEqual(c.architecture,'brass-four-seat-mlp-resnet/11.2.0')
         self.assertEqual(c.projection_widths,(32,64,48,320,352,48))
         self.assertEqual((model.state_encoder.fusion[0].in_features,c.hidden),(876,512))
         self.assertEqual(sum(isinstance(m,ResidualBlock) for m in model.modules()),8)
         self.assertEqual((model.action_encoder[0].in_features,c.action_hidden),(327,160))
         self.assertEqual((model.policy_scorer[0].in_features,model.policy_scorer[0].out_features),(672,192))
-        self.assertEqual((model.outcomes[0].in_features,model.outcomes[0].out_features,model.outcomes[-1].out_features),(576,128,3))
-        self.assertEqual((model.parameter_count,c.parameter_limit),(5904644,6500000))
+        self.assertEqual((model.outcomes[0].in_features,model.outcomes[0].out_features,model.outcomes[-1].out_features),(608,128,3))
+        self.assertEqual((model.parameter_count,c.parameter_limit),(5910916,6500000))
         self.assertEqual(entity_layout()['format'],'grouped-mlp-local-entities/2.0.0')
         self.assertEqual((WIDTHS['slot'],WIDTHS['link'],WIDTHS['industry']),(72,148,219))
         record=model_layout().specification(version=MODEL_LAYOUT_VERSION)

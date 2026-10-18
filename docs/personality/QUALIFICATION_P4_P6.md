@@ -4,7 +4,11 @@
 
 Sections: [P4 rosters](#p4) | [P5 difficulty](#p5) | [P6 deployment](#p6). See [encoder reuse status and remaining validation](README.md#encoder-reuse-follow-up) and [deployment performance](DEPLOYMENT_PERFORMANCE.md). Existing commands and historical verification records are preserved.
 
+**Current workflow decision (18 October 2026):** [Skip the already implemented goal-head stage](README.md#goal-head-skipped); retain its code for possible future use. Goal-head training, goal-generated intent/search bias and goal-head UI hints are excluded from the upcoming workflow. The 16-style objective remains separate and unchanged. The goal-enabled model, readiness, roster and export requirements below are retained historical contracts; they must be adapted and validated for a goal-free path before these commands can qualify or deploy that path. This documentation change does not bypass existing checks or declare a goal-free runtime implemented.
+
 **Deployment performance update (`20261016` evidence):** Cross-worker feature sharing, fused native snapshots and snapshot-local public-view reuse are implemented. Local initialized-model tests measured 12/10 completed simulations with two workers and 15/12 with three workers on Canal/Rail fixtures; v9 and W352 matched in this short test. These results do not qualify P4/P5 or change their declared resources, tier budgets or evidence requirements. See [measured scope and limits](DEPLOYMENT_PERFORMANCE.md#measurements).
+
+**Frozen-network discovery follow-up (18 October 2026):** The [current direction](README.md#frozen-network-discovery) is to reuse one frozen Step 5 network and initially test its supported neutral/industry contexts after adapting the goal-free entry path. Preserve the existing quality, repeatability and deployed-controller checks. A smaller preliminary set is acceptable for investigation, but it does not satisfy the full 16-by-8 roster contract. Inactive goal parameters, duplicate recipes or renamed behaviors cannot supply missing members. The goal-free P4-P6 model/readiness/export integration remains pending; no new trained roster or runtime compatibility is established by this note.
 
 <a id="p4"></a>
 

@@ -45,6 +45,9 @@ def prepared(games, predicate=None, neutral=False, insolvency=None, reward=None,
                     if row['seat'] not in annotated:
                         r['_insolvency_trajectory']=summaries[row['seat']];annotated.add(row['seat'])
                 encoded = game.encoded(r,encoder,allow_context=neutral) if hasattr(game,'encoded') else encoder.encode(r['view'], r['choices'], r['style'], r['intent'])
+                if hasattr(game,'critic_table'):
+                    from .critic_data import annotate
+                    r=annotate(r,encoded,game.critic_table,game.table_kind)
                 data.append((r, target, (game['game_id'],row['seat']), encoded))
             elif costs is not None and hasattr(game,'encoded'):
                 # Opponent observations also determine the learner's causal
@@ -81,6 +84,11 @@ class Dataset:
         log=Progress(progress,5,'tensor groups') if progress else None
         self.chosen=torch.tensor([r['chosen'] for r in self.rows],device=device)
         self.seats=torch.tensor([r['seat'] for r in self.rows],device=device)
+        from brass_ai.learning.seat_descriptors import unknown_numpy,validate
+        self.descriptors=torch.tensor(np.stack([validate(r.get('_seat_descriptors',unknown_numpy())) for r in self.rows]),device=device)
+        self.roles=[r.get('_critic_role','learner') for r in self.rows]
+        self.tables=[r.get('_table_kind','selfplay') for r in self.rows]
+        self.critic_weights=torch.ones(len(data),device=device)
         self.old=torch.tensor([r['behavior']['probability'] for r in self.rows],device=device)
         if log:log(1)
         self.targets=tuple(torch.tensor([d[1][k] for d in data],device=device,dtype=torch.float32)
@@ -181,6 +189,17 @@ def state_value_model(model):
     return type(model) in (FourSeatNet,UtilityNet)
 
 
+def value_output(model,inputs,dataset,indices,*,dropout=None,unknown=False):
+    from brass_ai.learning.model import ARCHITECTURE
+    from brass_ai.learning.seat_descriptors import critic_inputs
+    extra={}
+    if getattr(model.config,'architecture',None)==ARCHITECTURE:
+        ids=indices.detach().cpu().tolist() if isinstance(indices,torch.Tensor) else list(indices)
+        extra['descriptors']=critic_inputs(dataset,ids,dropout=dropout,unknown=unknown)
+    if dataset.remaining is not None:extra['remaining']=dataset.remaining[indices]
+    return model(*inputs,**extra)
+
+
 def rehearsal_dataset(data,device):
     """Reuse immutable audited BC tensors across PPO rounds on one device."""
     if isinstance(data,Dataset):
@@ -208,7 +227,7 @@ def policy_measure(model, dataset, indices, behavior, config, timings, verify=Fa
     with torch.no_grad(), timings.phase('ppo.policy_measure'):
         parts=dataset.microbatches(indices,config['microbatch_size'],config['max_candidate_cells'],config['bucket'])
         for part,ix,inputs,q in dataset.policy_batches(parts,behavior.exploration,executor):
-            out=model(*inputs,remaining=dataset.remaining[ix]) if dataset.utility is not None else model(*inputs)
+            out=value_output(model,inputs,dataset,ix)
             p=probabilities(out[0],q,behavior.exploration,behavior.temperature)
             selected=p.gather(1,dataset.chosen[ix,None]).squeeze(1).clamp_min(1e-30)
             old=dataset.old[ix]
@@ -225,10 +244,11 @@ def policy_measure(model, dataset, indices, behavior, config, timings, verify=Fa
     return result
 
 
-def ppo_update(model,optimizer,games,behavior,config,*,profile=None,profile_steps=4,rehearsal=None,rehearsal_weight=0,learner_data=None,insolvency=None,reward=None,sample_groups=None,anchor_model=None):
+def ppo_update(model,optimizer,games,behavior,config,*,profile=None,profile_steps=4,rehearsal=None,rehearsal_weight=0,learner_data=None,insolvency=None,reward=None,sample_groups=None,anchor_model=None,phases=None):
     if config.get('actor_nonforced'):
         return ppo_nonforced(model,optimizer,games,behavior,config,profile=profile,profile_steps=profile_steps,
-                             rehearsal=rehearsal,rehearsal_weight=rehearsal_weight,learner_data=learner_data,insolvency=insolvency,reward=reward,sample_groups=sample_groups,anchor_model=anchor_model)
+                             rehearsal=rehearsal,rehearsal_weight=rehearsal_weight,learner_data=learner_data,insolvency=insolvency,reward=reward,sample_groups=sample_groups,anchor_model=anchor_model,phases=phases)
+    require(phases is None,'GAE/value phase requires the nonforced actor recipe')
     require(insolvency is None and reward is None,'Combined reward requires the nonforced actor recipe')
     require(all(g['split']=='train' for g in games),'Held-out PPO data')
     require(model_id(model)==behavior.evaluator.model_id,'Collection model differs from learner')
@@ -325,14 +345,14 @@ def phase_probe(dataset,indices,limit):
     return output
 
 
-def ppo_nonforced(model,optimizer,games,behavior,config,*,profile=None,profile_steps=4,rehearsal=None,rehearsal_weight=0,learner_data=None,insolvency=None,reward=None,sample_groups=None,anchor_model=None):
+def ppo_nonforced(model,optimizer,games,behavior,config,*,profile=None,profile_steps=4,rehearsal=None,rehearsal_weight=0,learner_data=None,insolvency=None,reward=None,sample_groups=None,anchor_model=None,phases=None):
     cuda=next(model.parameters()).device.type=='cuda'
     with (ThreadPoolExecutor(max_workers=2) if cuda else nullcontext(None)) as executor:
         return _ppo_nonforced(model,optimizer,games,behavior,config,profile=profile,profile_steps=profile_steps,
-                              rehearsal=rehearsal,rehearsal_weight=rehearsal_weight,learner_data=learner_data,executor=executor,insolvency=insolvency,reward=reward,sample_groups=sample_groups,anchor_model=anchor_model)
+                              rehearsal=rehearsal,rehearsal_weight=rehearsal_weight,learner_data=learner_data,executor=executor,insolvency=insolvency,reward=reward,sample_groups=sample_groups,anchor_model=anchor_model,phases=phases)
 
 
-def _ppo_nonforced(model,optimizer,games,behavior,config,*,profile,profile_steps,rehearsal,rehearsal_weight,learner_data,executor,insolvency,reward,sample_groups=None,anchor_model=None):
+def _ppo_nonforced(model,optimizer,games,behavior,config,*,profile,profile_steps,rehearsal,rehearsal_weight,learner_data,executor,insolvency,reward,sample_groups=None,anchor_model=None,phases=None):
     require(all(g['split']=='train' for g in games),'Held-out PPO data')
     require(model_id(model)==behavior.evaluator.model_id,'Collection model differs from learner')
     timings=Timings();device=next(model.parameters()).device
@@ -341,11 +361,15 @@ def _ppo_nonforced(model,optimizer,games,behavior,config,*,profile,profile_steps
     warmup_done=warmup is None or warmup['completed_steps']>=warmup['steps']
     with timings.phase('ppo.prepare'):
         data=learner_data if learner_data is not None else prepared(games,lambda r:r['behavior']['policy_id']==behavior.policy_id,insolvency=insolvency,reward=reward)
-        require(data and all(d[0]['behavior']['kind']=='model' and d[0]['behavior']['policy_id']==behavior.policy_id for d in data),
+        require(data and all(d[0]['behavior']['kind']=='model' and d[0]['behavior']['policy_id']==behavior.policy_id
+                            and d[0].get('_critic_role','learner')=='learner' for d in data),
                 'External or stale actions in PPO')
         ds=Dataset(data,device);demo=rehearsal_dataset(rehearsal,device) if rehearsal_weight else None
     count=len(data);actor_ids=(~ds.forced).nonzero().flatten().cpu().tolist()
-    planned_steps=config['epochs']*math.ceil(len(actor_ids)/config['effective_batch_size'] if actor_ids else count/config['critic_batch_size'])
+    critic_ids=phases.prepare(ds) if phases is not None else list(range(count))
+    critic_ds=phases.critic_dataset if phases is not None else ds
+    critic_count=len(critic_ids)
+    planned_steps=config['epochs']*math.ceil(len(actor_ids)/config['effective_batch_size'] if actor_ids else critic_count/config['critic_batch_size'])
     calibration=None;reward_report=None
     if reward is not None:
         from brass_ai.learning.contracts import digest
@@ -353,7 +377,7 @@ def _ppo_nonforced(model,optimizer,games,behavior,config,*,profile,profile_steps
         require(insolvency==reward['insolvency'] and model.config.utility==reward and all(r['_reward_id']==digest(reward) for r in ds.rows),
                 'PPO model/return reward version differs')
         require(all(r['teacher'] is None for r in ds.rows),'Search distributions cannot enter fresh PPO rollouts')
-        calibration=calibrate(model,optimizer,ds,config)
+        calibration=calibrate(model,optimizer,critic_ds,config,indices=critic_ids)
         trajectories=[r['_reward_trajectory'] for r in ds.rows if '_reward_trajectory' in r]
         require(len(trajectories)==len({d[2] for d in data}),'Missing reward components')
         means={k:sum(t[k] for t in trajectories)/len(trajectories) for k in trajectories[0]}
@@ -370,6 +394,9 @@ def _ppo_nonforced(model,optimizer,games,behavior,config,*,profile,profile_steps
     # Archived win-only recipes subtract costs here. The combined head already
     # predicts the SAME cost-to-go as its target; never subtract costs twice.
     if reward is None:advantages-=torch.tensor(costs,device=device,dtype=advantages.dtype)
+    mc_useful=advantages[actor_ids]
+    gae_report=None
+    if phases is not None:advantages,gae_report=phases.advantages(advantages,actor_ids)
     useful=advantages[actor_ids];mean=useful.mean() if actor_ids else torch.zeros((),device=device)
     std=useful.std(unbiased=False) if actor_ids else torch.zeros((),device=device)
     from .review_metrics import distribution,CategoricalProbe,PPO_KL_GUARD
@@ -378,26 +405,26 @@ def _ppo_nonforced(model,optimizer,games,behavior,config,*,profile,profile_steps
     actor_returns=target[actor_ids,ds.seats[actor_ids]]
     return_distribution=distribution(actor_returns)
     variance=float(actor_returns.var(unbiased=False)) if actor_ids else 0.
-    explained_variance=1-float(useful.var(unbiased=False))/variance if variance>1e-12 else None
+    explained_variance=1-float(mc_useful.var(unbiased=False))/variance if variance>1e-12 else None
     if config['normalize_advantages'] and actor_ids: advantages[actor_ids]=(useful-mean)/std.clamp_min(1e-8)
     probe=phase_probe(ds,actor_ids,config['kl_probe_rows'])
     categorical_probe=CategoricalProbe(model,ds,probe,behavior,config)
     gradient_norms=[]
     epochs=[];steps=0;clips=0;stopped=False;rehearsal_steps=0
     stop_reason=None;max_categorical_kl=0.
-    actor_used=set();critic_used=set();actor_presentations=Counter();critic_presentations=Counter()
+    actor_used=set();critic_used=set();actor_presentations=Counter();critic_presentations=Counter();critic_roles=Counter()
     groups=[(sample_groups or {}).get(d[2][0],'unknown') for d in data]
     with profile_window(profile,device,profile_steps) as profiler:
         for epoch in range(config['epochs']):
             order=[actor_ids[j] for j in torch.randperm(len(actor_ids)).tolist()]
-            critic_order=torch.randperm(count).tolist();critic_cursor=0
+            critic_order=[critic_ids[j] for j in torch.randperm(critic_count).tolist()];critic_cursor=0
             actor_batches=[order[i:i+config['effective_batch_size']] for i in range(0,len(order),config['effective_batch_size'])]
-            if not actor_batches: actor_batches=[[] for _ in range(math.ceil(count/config['critic_batch_size']))]
+            if not actor_batches: actor_batches=[[] for _ in range(math.ceil(critic_count/config['critic_batch_size']))]
             actor_totals=torch.zeros(3,device=device);value_totals=torch.zeros(4,device=device)
             actor_seen=critic_seen=0;norm=torch.zeros((),device=device);kl=exact_kl=0.0
             utility_squared=torch.zeros((),device=device);utility_absolute=torch.zeros((),device=device)
             for batch in actor_batches:
-                if critic_cursor>=count: critic_order=torch.randperm(count).tolist();critic_cursor=0
+                if critic_cursor>=critic_count: critic_order=[critic_ids[j] for j in torch.randperm(critic_count).tolist()];critic_cursor=0
                 crit=critic_order[critic_cursor:critic_cursor+config['critic_batch_size']];critic_cursor+=len(crit)
                 optimizer.zero_grad(set_to_none=True);model.train()
                 with timings.phase('ppo.forward_backward'):
@@ -412,17 +439,17 @@ def _ppo_nonforced(model,optimizer,games,behavior,config,*,profile,profile_steps
                         ((actor-config['entropy_weight']*entropy).sum()/len(batch)).backward()
                         actor_totals+=torch.stack([x.detach().sum() for x in (actor,entropy,((ratio-1).abs()>config['clip']).float())])
                         actor_seen+=len(part)
-                    parts=ds.microbatches(crit,config['microbatch_size'],config['max_candidate_cells'],config['bucket'])
-                    for part,ix,inputs in ds.value_batches(parts,model,executor):
+                    parts=critic_ds.microbatches(crit,config['microbatch_size'],config['max_candidate_cells'],config['bucket'])
+                    for part,ix,inputs in critic_ds.value_batches(parts,model,executor):
                         with autocast(config,device):
-                            out=model(*inputs,remaining=ds.remaining[ix]) if ds.utility is not None else model(*inputs)
-                        values=value_losses(out,tuple(t[ix] for t in ds.targets))
+                            out=value_output(model,inputs,critic_ds,ix,dropout=phases.dropout(epoch,'ppo') if phases is not None else None)
+                        values=value_losses(out,tuple(t[ix] for t in critic_ds.targets))
                         loss=values[0]
-                        if ds.utility is not None:
-                            diff=out[4].float()-ds.utility[ix]
+                        if critic_ds.utility is not None:
+                            diff=out[4].float()-critic_ds.utility[ix]
                             utility_squared+=diff.detach().square().sum();utility_absolute+=diff.detach().abs().sum()
                             loss=loss+diff.square().mean(-1)
-                        (config['value_weight']*loss.sum()/len(crit)).backward()
+                        (config['value_weight']*(loss*critic_ds.critic_weights[ix]).sum()/len(crit)).backward()
                         value_totals+=torch.stack([v.detach().sum() for v in values]);critic_seen+=len(part)
                     if demo:
                         sample=torch.randint(len(demo.data),(min(config['effective_batch_size'],len(demo.data)),)).tolist()
@@ -438,7 +465,8 @@ def _ppo_nonforced(model,optimizer,games,behavior,config,*,profile,profile_steps
                     gradient_norms.append(float(norm))
                     actor_used.update(batch);critic_used.update(crit)
                     actor_presentations.update(groups[i] for i in batch)
-                    critic_presentations.update(groups[i] for i in crit)
+                    critic_presentations.update(groups[i] for i in crit if i<count and critic_ds.roles[i]=='learner')
+                    critic_roles.update(critic_ds.roles[i] for i in crit)
                 if profiler: profiler.step()
                 model.eval()
                 with timings.phase('ppo.kl_probe'):
@@ -458,10 +486,20 @@ def _ppo_nonforced(model,optimizer,games,behavior,config,*,profile,profile_steps
             if reward is not None:epochs[-1]['utility_prediction']=dict(mse=float(utility_squared)/max(1,4*critic_seen),mae=float(utility_absolute)/max(1,4*critic_seen))
             if stopped:break
     from .ordinary import sample_usage
+    if phases is not None:phases.after_ppo(model,actor_ids,probe,categorical_probe)
     return dict(format='nonforced-actor-ppo/2.1.0',epochs=epochs,optimizer_steps=steps,
+        **(dict(gae=gae_report,critic_split=phases.split) if phases is not None else {}),
         optimizer_steps_planned=planned_steps,optimizer_steps_fraction=steps/planned_steps if planned_steps else None,
         controller_warmup_done=warmup_done,
-        sample_usage=sample_usage(groups,actor_ids,actor_used,critic_used,actor_presentations,critic_presentations),
+        sample_usage=sample_usage(groups,actor_ids,actor_used,{i for i in critic_used if i<count},actor_presentations,
+            Counter({k:v for k,v in critic_presentations.items()})),
+        critic_rows=dict(available=len(critic_ds.data),train=len(critic_ids),
+            available_by_role=dict(Counter(critic_ds.roles)),
+            train_by_role=dict(Counter(critic_ds.roles[i] for i in critic_ids)),
+            presentations_by_role=dict(critic_roles),
+            learner_distinct_used=sum(critic_ds.roles[i]=='learner' for i in critic_used),
+            snapshot_distinct_used=sum(critic_ds.roles[i]=='snapshot' for i in critic_used),
+            snapshot_weight=phases.critic_state['snapshot_weight'] if phases is not None and phases.critic_state else None),
         insolvency=insolvency_report,
         reward=reward_report,utility_calibration=calibration,
         learner_decisions=count,meaningful_decisions=len(actor_ids),forced_decisions=int(ds.forced.sum()),

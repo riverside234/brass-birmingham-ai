@@ -32,6 +32,11 @@ def implementation_id():
     paths += sorted((SOURCE_ROOT/'training/runtime/throughput').glob('*/runtime.json'))
     paths += sorted((SOURCE_ROOT/'configs/contracts/masked-ismcts').glob('*.json'))
     paths += [SOURCE_ROOT/'configs/references/masked-ismcts.lock.json']
+    # Current heuristic opponents share game policy/search sources. A C# or
+    # profile edit is a reviewed continuation, just like a Python search edit.
+    from brass_ai.search.legacy_runtime import source_paths
+    paths += source_paths(SOURCE_ROOT)
+    paths += sorted((SOURCE_ROOT/'configs/legacy-ai').glob('*.json'))
     return digest({p.relative_to(SOURCE_ROOT).as_posix(): p.read_text(encoding='utf-8').replace('\r\n', '\n')
                    for p in sorted(paths)})
 

@@ -16,7 +16,7 @@ from brass_ai.personality.contracts import CONTEXT_DIM,FACTORS
 from brass_ai.personality.model import PersonalityNet
 from .contracts import EXPORT,BACKENDS,write,read
 
-BASE_INPUTS=['states','actions','legal_mask','stable_to_relative','remaining']
+BASE_INPUTS=['states','actions','legal_mask','stable_to_relative','remaining','descriptors']
 BASE_OUTPUTS=['policy_logits','win_share_4','placement_4','vp_4','remaining_utility_4']
 GOAL_OUTPUTS=['goal_'+k for k in FACTORS]+['confidence_logits']
 
@@ -34,11 +34,11 @@ def validate_metadata(meta):
 
 class Named(nn.Module):
     def __init__(self,model):super().__init__();self.model=model
-    def forward(self,states,actions,legal_mask,stable_to_relative,remaining,personality=None):
+    def forward(self,states,actions,legal_mask,stable_to_relative,remaining,descriptors,personality=None):
         if isinstance(self.model,PersonalityNet):
-            out=self.model(states,actions,legal_mask,stable_to_relative,remaining=remaining,personality=personality)
+            out=self.model(states,actions,legal_mask,stable_to_relative,remaining=remaining,personality=personality,descriptors=descriptors)
             return tuple(out[k] for k in BASE_OUTPUTS)+tuple(out['goals'][k] for k in FACTORS)+(out['confidence_logits'],)
-        return self.model(states,actions,legal_mask,stable_to_relative,remaining=remaining)
+        return self.model(states,actions,legal_mask,stable_to_relative,remaining=remaining,descriptors=descriptors)
 
 
 def samples(config,personality,seed=661):
@@ -53,6 +53,11 @@ def samples(config,personality,seed=661):
             legal_mask=masks,stable_to_relative=np.array([[(s-i)%4 for s in range(4)] for i in range(batch)],dtype='int64'),
             remaining=rng.uniform(0,cap,(batch,4)).astype('float32'))
         if personality:data['personality']=rng.uniform(0,1,(batch,CONTEXT_DIM)).astype('float32')
+        from brass_ai.learning.seat_descriptors import unknown_numpy
+        data['descriptors']=np.stack([unknown_numpy() for _ in range(batch)])
+        if batch>1:
+            data['descriptors'][1,:,:5]=np.eye(5,dtype=np.float32)[:4]
+            data['descriptors'][1,:,5:]=rng.uniform(0,1,(4,29))
         # References are categorical constants, including the all-zero sentinel.
         # Random soft selectors would not be valid production model inputs.
         for field in entity_layout()['action_fields'].values():
@@ -75,7 +80,8 @@ class Graph:
             import onnxruntime as ort
             options=cpu_options(threads)
             self.engine=ort.InferenceSession(str(path),options,providers=['CPUExecutionProvider'])
-            require([x.name for x in self.engine.get_inputs()]==self.inputs and
+            names={x.name for x in self.engine.get_inputs()+self.engine.get_overridable_initializers()}
+            require(names==set(self.inputs) and
                     [x.name for x in self.engine.get_outputs()]==self.outputs,'Graph tensor names differ')
             self.version=ort.__version__;self.hardware='CPUExecutionProvider'
         else:
@@ -88,7 +94,13 @@ class Graph:
             self.version=ov.__version__;self.hardware=core.get_property(device,'FULL_DEVICE_NAME')
 
     def run(self,inputs):
+        if 'descriptors' not in inputs:
+            from brass_ai.learning.seat_descriptors import unknown_numpy
+            inputs=dict(inputs,descriptors=np.stack([unknown_numpy() for _ in range(len(inputs['states']))]))
         require(set(inputs)==set(self.inputs),'Wrong inference inputs')
+        from brass_ai.learning.seat_descriptors import validate
+        require(inputs['descriptors'].shape==(len(inputs['states']),4,34),'Invalid descriptor batch shape')
+        for descriptors in inputs['descriptors']:validate(descriptors)
         actions=inputs['actions']
         require(actions.ndim==3 and actions.shape[-1]==327,'Invalid batched action selector shape')
         check_action_selectors(actions.reshape(-1,327))
@@ -134,6 +146,7 @@ def export(model,path,*,optimize=True):
     batches=samples(config,actor);reference=Named(copy.deepcopy(model).cpu().eval())
     frozen=Named(prepare_export(model)) if optimize else reference
     axes={name:{0:'positions'} for name in inputs+outputs}
+    axes['descriptors']={0:'descriptor_positions'}
     for name in ('actions','legal_mask','policy_logits'):axes[name][1]='candidates'
     with torch.inference_mode():
         torch.onnx.export(frozen,tuple(torch.from_numpy(batches[0][k]) for k in inputs),str(path),
@@ -144,9 +157,12 @@ def export(model,path,*,optimize=True):
         optimization['seat_encoding']='one grouped MatMul; original own/other weights and affine parameters'
         optimization['candidate_encoding']=candidate_export_metadata()
         optimization['execution']=inspect_runtime_fusions(path)
+    from brass_ai.learning.onnx_tools import descriptor_default
+    descriptor_default(path)
     meta=dict(format=EXPORT,sha256=sha(path),model_id=model_id(model) if actor else base_id(model),
         actor=actor,config=config,inputs=inputs,outputs=outputs,compatibility=compatibility(),
         reward_id=digest(config['utility']),precision='float32',opset=17,parity=None,
+        descriptor_default='unknown, all seats; relative seat order; per-position shape [4,34]',
         optimization=optimization)
     write(path.with_suffix('.json'),meta);runtime=Graph(path)
     errors={name:0. for name in outputs};stored={}

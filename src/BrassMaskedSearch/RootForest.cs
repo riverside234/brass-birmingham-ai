@@ -36,6 +36,9 @@ namespace BrassLegacyAI
             {
                 var s=part.search;if(s.opponent_nodes!=0)throw new Exception("opponent_tree_merge");
                 log.completed+=s.completed;log.interrupted+=s.interrupted;log.opponent_choices+=s.opponent_choices;
+                log.deadline_stops+=s.deadline_stops;log.deadline_remaining_ms+=s.deadline_remaining_ms;
+                log.simulation_estimate_ms=Math.Max(log.simulation_estimate_ms,s.simulation_estimate_ms);
+                log.skipped_leaf_observations+=s.skipped_leaf_observations;log.reused_root_choices+=s.reused_root_choices;
                 log.network_candidates+=s.network_candidates;log.network_completed+=s.network_completed;log.network_rejected+=s.network_rejected;
                 foreach(var timing in s.timing_ms){double value;log.timing_ms.TryGetValue(timing.Key,out value);log.timing_ms[timing.Key]=value+timing.Value;}
                 log.maximum_intervening_turns=Math.Max(log.maximum_intervening_turns,s.maximum_intervening_turns);

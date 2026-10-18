@@ -50,7 +50,7 @@ class V11ModelTests(unittest.TestCase):
     def test_same_feature_tensor_contract_and_named_entity_coverage(self):
         model=self.model; layout=entity_layout(); segments={s.name:s for s in state_layout().segments}
         self.assertEqual((model.config.state_dim,model.config.action_dim),(3128,327))
-        self.assertEqual(model.config.architecture,'brass-four-seat-mlp-resnet/11.1.0')
+        self.assertEqual(model.config.architecture,'brass-four-seat-mlp-resnet/11.2.0')
         self.assertEqual(model.config.entity_layout,layout['identity'])
         states=torch.arange(3128,dtype=torch.float32)[None]
         for name in COUNTS:
@@ -102,11 +102,12 @@ class V11ModelTests(unittest.TestCase):
     def test_shared_player_head_reference_mapping_and_candidate_independence(self):
         model=self.model; x,a,mask,mapping=inputs(2)
         e=model.encode_state(x)
-        raw=model.outcomes(torch.cat((e.context[:,None].expand(-1,4,-1),e.players),-1))
+        embeddings=model.descriptor_embeddings(e)
+        raw=model.outcomes(torch.cat((e.context[:,None].expand(-1,4,-1),e.players,embeddings),-1))
         expected=(raw[:,:,0].softmax(-1).gather(1,mapping),
                   (1+3*raw[:,:,1].sigmoid()).gather(1,mapping),
                   (100*raw[:,:,2]).gather(1,mapping))
-        for value,reference in zip(model.official_heads(e,mapping),expected):
+        for value,reference in zip(model.official_heads(e,mapping,embeddings),expected):
             torch.testing.assert_close(value,reference,rtol=2e-5,atol=2e-6)
         before=model(x,a,mask,mapping)
         after=model(x,a[:,:1]*3,mask[:,:1],mapping)
@@ -172,7 +173,7 @@ class V11ModelTests(unittest.TestCase):
 
     def test_v10_rejected_and_static_gather_tampering_detected(self):
         raw=self.model.config.to_dict();raw['architecture']='brass-four-seat-mlp-resnet/10.0.0'
-        with self.assertRaisesRegex(ValueError,'fresh version-11'):ModelConfig.from_dict(raw)
+        with self.assertRaisesRegex(ValueError,'11.2'):ModelConfig.from_dict(raw)
         with tempfile.TemporaryDirectory(dir=SOURCE_ROOT/'artifacts') as directory:
             path=Path(directory)/'tampered.pt';save_checkpoint(path,self.model)
             payload=torch.load(path,weights_only=True)

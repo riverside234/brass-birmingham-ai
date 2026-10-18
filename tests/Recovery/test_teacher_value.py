@@ -272,7 +272,7 @@ class TeacherValueTests(unittest.TestCase):
         from brass_ai.recovery.history import compact
         fixture=self.fixture();model,opt,games,ordinary,opts,cfg,quality,bindings=fixture
         config=read(SOURCE_ROOT/'configs/step5/joint7-latest.json')
-        config.update(teacher_value=opts,update=cfg,distillation=quality,search_games=2)
+        config.update(teacher_enabled=True,teacher_value=opts,update=cfg,distillation=quality,search_games=2)
         state=dict(next_search_games=640,search_seconds=0.,history=[],population=[],evaluation_anchor={})
         service=SimpleNamespace(register=model_id,models={})
         with tempfile.TemporaryDirectory(dir=SOURCE_ROOT/'artifacts') as tmp:

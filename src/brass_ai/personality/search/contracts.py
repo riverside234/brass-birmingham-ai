@@ -14,7 +14,10 @@ READY='personality-search-ready/1.0.0'
 
 
 def source_id():
-    return digest({p.name:p.read_text(encoding='utf-8') for p in sorted(Path(__file__).parent.glob('*.py'))})
+    base=Path(__file__).parents[2]
+    paths=list(Path(__file__).parent.glob('*.py'))+list((base/'search').glob('*.py'))
+    paths += [base/'recovery/parallel.py',base/'recovery/teacher_schedule.py']
+    return digest({p.relative_to(base).as_posix():p.read_text(encoding='utf-8').replace('\r\n','\n') for p in sorted(paths)})
 
 
 @lru_cache(maxsize=1)

@@ -4,7 +4,11 @@
 
 Consolidated from the existing design. Dated settings and verification claims retain their original scope; see the index for pending work and historical-reading notes.
 
+**Current workflow decision (18 October 2026):** [Skip the already implemented goal-head stage](README.md#goal-head-skipped). The real-model goal-head workflow has not been run. Retain its code, but skip goal-head training, its auxiliary loss, goal-generated short-term commitments and goal-alignment search bias in the upcoming workflow. The goal architecture, labels, losses and experiments below describe the retained optional branch, not current implementation instructions. Existing style inputs and the separate 16-style discovery objective remain in scope; a compatible goal-free downstream path still needs adaptation and validation.
+
 **Current deployment performance record:** [Implemented runtime improvements and measured limits](DEPLOYMENT_PERFORMANCE.md) supersede earlier statements that personality cross-worker encoder sharing was still pending. Shared feature caches, fused native transport and snapshot-local public-view reuse are implemented. Historical architecture sizes and resource settings below remain dated design context; the W352 comparison did not change the main model, qualified profiles or training contracts.
+
+**Discovery direction (18 October 2026):** [Prefer the frozen-network experiment first](README.md#frozen-network-discovery). Reuse implemented discovery/quality screening with the selected Step 5 model's supported contexts after completing the pending goal-free integration. The old five-profile personality inputs are not interchangeable with Step 5's neutral/six-industry inputs. Additional policy training, PGA-MAP-Elites and multi-model distillation remain deferred; 16 archetypes are a qualification target, not an assumed result of generating many parameter recipes. This decision supersedes conflicting upcoming-work instructions in the historical design below without changing current code or training.
 
 <a id="design"></a>
 
@@ -611,7 +615,7 @@ These packages refine implementation step 7 and all begin after the completed-St
 | Package | Deliverable | Focused exit check |
 | --- | --- | --- |
 | P0: trained-model handoff, contracts and traces | Code implemented: immutable accepted parent, best/gate receipts, reference weights, reward/calibration records, splits, style/intent/goal contracts and explicit utility-v2 importer. Real lab handoff awaits the completed eligible run. | Reject an IL-only incumbent or reward mismatch; verify all model/copy hashes and lineage; cleanup preserves pinned dependencies; neutral policy, official heads and remaining utility reproduce the parent; old readers reject new versions clearly. |
-| P1: shared goal head | Code implemented: new model, goal labels, frozen-core warm-up and conservative joint-loss pilot. Real-parent goal quality and skill preservation remain to be measured. | Correct shapes/masks and useful gradients; all copied heads and public cost budgets preserved; fresh learner-only PPO targets and exact probabilities; reward remains linear/undiscounted without style bonuses. |
+| P1: shared goal head - skipped | Code already implemented; real-model workflow not run. Retain the implementation and skip this stage in the upcoming workflow. | No goal-head training or goal-bias qualification is required for the current scope. Existing goal-dependent downstream contracts must be adapted and validated before a goal-free workflow can use them. |
 | P2: search integration | Code implemented: root-only bounded prior, saved per-seat intent, private forests/shared batching, four-phase teachers, readiness checks, policy-only distillation and compatible PPO successor pilots. Real-parent calibration and equal-budget skill preservation remain pending. | Focused zero-bias/mask/privacy/restore/deadline/teacher checks and native fixture search. Raw utility and node-local costs reuse the existing engine. Report measured throughput separately from playing strength. |
 | P3: learned repertoire | Code implemented: frozen direct/search controller proposals, batched rotated discovery, masked temporal AE/PCA comparison, repeated-controller descriptors, elite mutations, immutable re-encoded archives and tested-member FPS/K-means. Actual trained repertoire remains pending. | Focused split/privacy, noisy-candidate, dependency/weight deduplication, all-entry refit and shortlist checks. Real-parent repeatability, quality and recognizable 16/128 membership require later lab evidence. |
 | P4: unified deployment styles | Code implemented through the common frozen-network path: exact 16 archetypes/eight members, small previews, reference cards, fresh matched panels and shared-weight qualification manifests. Mixed-checkpoint consolidation is not required for this path. Actual trained membership/qualification awaits lab evidence. | Reject duplicates, missing/noisy neighbors, changed weights and reused/incomplete evidence. Re-encode deployed members; compare individual/mixture quality, pilot separation and representative-randomness variety in both eras; require Pottery coverage and blind tactical/recognition review. Full P4 qualification does not certify P5 tiers or a P6 release. |
@@ -620,7 +624,7 @@ These packages refine implementation step 7 and all begin after the completed-St
 
 Use a few focused assertions for delicate boundaries rather than a new sprawling test framework. Reuse existing legality, hidden-information and timing checks where they cover the new path. Add new tests when new context/prior/archive behavior creates a failure mode they do not cover.
 
-Required comparison order is deliberately small:
+The retained goal-enabled branch has the following comparison order, only if explicitly re-enabled:
 
 1. Frozen completed-Step-5 model with its existing style contexts, no new goal head/bias.
 2. New auxiliary head with `alpha = 0`, to isolate representation/training effects.
@@ -632,6 +636,8 @@ Do not sweep model size, all loss weights, all latent dimensions and all difficu
 <a id="design-10-first-lab-experiment-after-step-5-finishes"></a>
 
 ### 10. First lab experiment after Step 5 finishes
+
+**Workflow override:** The goal-enabled sequence below is historical reference. Under the [18 October decision](README.md#goal-head-skipped), skip `warmup`, `validate-goals`, the existing goal-loss `joint-pilot`, and goal-bias experiments. Do not execute the downstream sequence by assuming that its P1/model/readiness dependencies have already been bypassed. Updating those dependencies is separate implementation work; existing code and artifacts are retained.
 
 After Step 5 finishes, run `scripts/personality.py inspect` and `handoff` as described in the [lab guide](TRAINING_P0_P3.md#p0-p1). These resolve the accepted parent from `best.json` and its immutable checkpoint entry, confirm a matching-reward calibrated post-IL PPO model, and pin gate evidence, reference weights and needed traces before cleanup. Create a separate personality experiment; do not supply `--initial` to the Step 5 command or replace the parent with the latest learner. Reuse training traces only for labels their schema supports. If extra context is absent, leave it absent or recollect. Retain all trained heads and use four pilot codes plus a neutral control. The bounded P1 operation uses one learner against three frozen parent seats; adopt the mature 70/25/5 mixture when the later full personality league is implemented, without restarting the v4 recovery window.
 

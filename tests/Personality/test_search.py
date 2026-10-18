@@ -170,16 +170,19 @@ class SearchTests(unittest.TestCase):
             def decide(self,view,choices,rng,deadline,*_):
                 deadlines.append(deadline);clock[0]+=.2;trace=[(self.scope['information'],choices[0]['id'])];sig=digest(trace)
                 return dict(context_id=self.scope['id'],completed=3,interrupted=0,opponent_nodes=0,max_pending=0,opponent_choices=1,
+                    batching=dict(attempted=3,deadline_stops=0,deadline_remaining_seconds=0.),
                     expansion=[True]*3,root={c['id']:dict(visits=n,returns=[1.]*4,available=3) for c,n in zip(choices,[2,1,0]) if n},
                     plans={sig:dict(signature=sig,first=choices[0]['id'],trace=trace,visits=2,returns=[1.]*4)})
         session.lease=Lease();session.pool=Pool();session.workers=[FakeWorker() for _ in range(4)];session.base=Policy();session.game=None
-        session.turn=None;session.telemetry=dict(decisions=0,searches=0,completed=0,interrupted=0,fallbacks=0,seconds=0.,prior_seconds=0.,overruns=0.)
+        session.turn=None;session.telemetry=dict(decisions=0,searches=0,completed=0,interrupted=0,fallbacks=0,seconds=0.,prior_seconds=0.,overruns=0.,
+            attempted=0,deadline_stops=0,deadline_unused_worker_seconds=0.)
         session.begin(42,1);view,choices=position();ledger=CostLedger(specification());ledger.observe(view);rng=random.Random(17)
         with patch('time.monotonic',side_effect=lambda:clock[0]),patch('brass_ai.recovery.teacher_schedule.TeacherTurns.incumbent',return_value={}):
             _,label,_=session.select(view,choices,rng,ledger);self.assertIsNotNone(label);self.assertEqual(session.turn['deadline'],114.)
             view=copy.deepcopy(view);view['context']['revision']+=1;view['context']['actions_remaining']=1
             session.select(view,choices,rng,ledger)
             self.assertEqual(len(deadlines),8);self.assertTrue(all(x==112.8 for x in deadlines));self.assertEqual(admitted,[4])
+            self.assertEqual(session.telemetry['attempted'],24);self.assertEqual(session.telemetry['deadline_stops'],0)
             session.cancelled.set();_,label,_=session.select(view,choices,rng,ledger);self.assertIsNone(label);self.assertEqual(len(deadlines),8)
             session.finish_turn();saved=json.loads(json.dumps(session.snapshot()));session.restore(saved);self.assertEqual(session.snapshot(),saved)
 

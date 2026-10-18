@@ -97,7 +97,7 @@ class GroupedProjectionTests(unittest.TestCase):
 
     def test_parameter_and_linear_mac_budgets_for_all_heads(self):
         base,utility,actor=self.models()
-        for model,count,fixed in ((base,5904644,8235232),(utility,5921320,8251872),(actor,6023137,8353504)):
+        for model,count,fixed in ((base,5910916,8260064),(utility,5928616,8277728),(actor,6030433,8379360)):
             self.assertEqual(model.parameter_count,count)
             mac=dense_multiply_adds(model)
             self.assertEqual(mac['fixed_per_position'],fixed);self.assertEqual(mac['per_padded_candidate'],83232)
@@ -106,9 +106,9 @@ class GroupedProjectionTests(unittest.TestCase):
                          [1024,14016,5280,420800,439296,9504])
         self.assertEqual(sum(p.numel() for p in base.state_encoder.fusion.parameters()),449024)
         for small,count,fixed in (
-                (FourSeatNet(ModelConfig.preset('small')),1499780,3843808),
-                (UtilityNet(utility_config(ModelConfig.preset('small'),self.reward)),1504168,3848160),
-                (PersonalityNet(PersonalityConfig(utility_config(ModelConfig.preset('small'),self.reward).to_dict())),1539553,3883360)):
+                (FourSeatNet(ModelConfig.preset('small')),1506052,3868640),
+                (UtilityNet(utility_config(ModelConfig.preset('small'),self.reward)),1511464,3874016),
+                (PersonalityNet(PersonalityConfig(utility_config(ModelConfig.preset('small'),self.reward).to_dict())),1546849,3909216)):
             self.assertEqual(small.parameter_count,count)
             self.assertEqual(dense_multiply_adds(small)['fixed_per_position'],fixed)
             self.assertEqual(dense_multiply_adds(small)['per_padded_candidate'],83232)
@@ -123,7 +123,7 @@ class GroupedProjectionTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError,'layout|widths'):ModelConfig.from_dict(bad)
         flat=copy.deepcopy(config);flat['architecture']='brass-four-seat-mlp-resnet/4.0.0'
         flat.pop('group_layout');flat.pop('projection_widths')
-        with self.assertRaisesRegex(ValueError,'old architectures'):ModelConfig.from_dict(flat)
+        with self.assertRaisesRegex(ValueError,'Architecture 11.2 required'):ModelConfig.from_dict(flat)
         meta=dict(config=utility_config(ModelConfig.preset(),self.reward).to_dict())
         meta['config']['group_layout']='0'*64
         with self.assertRaisesRegex(ValueError,'layout'):validate_metadata(meta)
@@ -165,7 +165,7 @@ class GroupedProjectionTests(unittest.TestCase):
                 if name=='actor':raw['contract']={}
                 else:raw['compatibility']={}
                 raw['state_dict']={};torch.save(raw,path);before=path.read_bytes()
-                with self.assertRaisesRegex(ValueError,'fresh version-11.*old architectures'):
+                with self.assertRaisesRegex(ValueError,'Architecture 11.2 required'):
                     (load_personality if name=='actor' else load_checkpoint)(path)
                 self.assertEqual(path.read_bytes(),before)
 
@@ -240,11 +240,11 @@ class GroupedProjectionTests(unittest.TestCase):
                 path=Path(directory)/(name+'.onnx');meta=export(model,path)
                 self.assertTrue(meta['parity']['passed']);self.assertEqual(meta['config']['group_layout'],model_layout().identity)
                 self.assertEqual(meta['config']['residual_blocks'],8)
-                self.assertEqual(meta['config']['architecture'],'brass-four-seat-mlp-resnet/11.1.0')
+                self.assertEqual(meta['config']['architecture'],'brass-four-seat-mlp-resnet/11.2.0')
                 self.assertEqual(meta['parity']['shapes'],[[1,1],[2,7],[4,31],[1,257],[1,772],[2,772]])
                 self.assertEqual(Graph(path).meta['config']['projection_widths'],list(MODEL_PROJECTION_WIDTHS))
                 old=copy.deepcopy(meta);old['config']['architecture']='brass-four-seat-mlp-resnet/5.0.0'
-                with self.assertRaisesRegex(ValueError,'fresh version-11'):validate_metadata(old)
+                with self.assertRaisesRegex(ValueError,'11.2'):validate_metadata(old)
 
     def test_base_export_dynamic_parity_and_old_grouped_metadata_rejected(self):
         model=FourSeatNet();encoded=[Encoder().encode(r['view'],r['choices']) for r in self.positions[:3]]
@@ -254,7 +254,7 @@ class GroupedProjectionTests(unittest.TestCase):
             _,loaded=load_export(path);self.assertEqual(loaded['model_config']['group_layout'],model_layout().identity)
             meta['model_config']['architecture']='brass-four-seat-mlp-resnet/5.0.0';meta['compatibility']={}
             path.with_suffix('.json').write_text(json.dumps(meta),encoding='utf-8')
-            with self.assertRaisesRegex(ValueError,'fresh version-11'):load_export(path)
+            with self.assertRaisesRegex(ValueError,'11.2'):load_export(path)
 
 
 if __name__=='__main__':unittest.main()

@@ -217,9 +217,16 @@ def read_shards(paths,partition=None,receipts=None,*,heuristic_only=False):
             require(all(r['behavior']['kind']=='external' and r['teacher'] is None for g in raw for r in g['records']),
                     'Audited heuristic ingress prohibits neural behavior and search targets')
         arrays=load_cache(path,raw,(receipts or {}).get(str(path)));start=0
-        for g in raw:
+        jobs=header['provenance'].get('jobs')
+        if jobs is not None:require(len(jobs)==len(raw),'Replay provenance job count differs')
+        for ordinal,g in enumerate(raw):
             count=len(g['records']);game=check_game(g,None if arrays is None else arrays[start:start+count],validated_inputs=arrays is not None);start+=count
             require(game['game_id'] not in identities,'Duplicate game across shards');identities.add(game['game_id'])
+            # Descriptors are table metadata, separate from the immutable board
+            # observation/Features-4 contract. The enclosing replay hash seals it.
+            proof=jobs[ordinal]['provenance'] if jobs is not None else header['provenance']
+            if 'critic_table' in proof:
+                game.critic_table=proof['critic_table'];game.table_kind=proof['kind']
             if partition is None or game['split']==partition: output.append(game)
     require(output,'No complete games in requested partition')
     return output

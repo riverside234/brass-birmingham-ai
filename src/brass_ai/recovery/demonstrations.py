@@ -76,6 +76,25 @@ def source_seeds(header):
     return {digest(dict(rules='steam-brass-patch-1.1.0',setup_seed=s)):s for s in seeds}
 
 
+def shared_teacher_references(root,paths,parents,budget):
+    """Retain versioned generation provenance for BC across later source builds."""
+    from .legacy_search import legacy_spec
+    refs={}
+    for directory in sorted({Path(p).parent for p in paths}):
+        path=directory/'spec.json'
+        if not path.exists():continue
+        spec=read(path)
+        if spec.get('format')!='v3-demonstration-collection/1.0.0':continue
+        for parent,teacher in spec.get('teachers',{}).items():
+            ref=teacher.get('search_runtime')
+            if not ref:continue
+            require(parent in parents and teacher['budget']==budget,'Shared IL teacher parent/budget changed')
+            expected=legacy_spec(root,parent,budget,work_budget=teacher.get('work_budget'),search_runtime=ref)
+            require(expected==teacher,'Shared IL teacher provenance changed')
+            refs[ref['id']]=ref
+    return [refs[key] for key in sorted(refs)]
+
+
 def _audit_receipts(paths):
     """Reuse independently recorded generation receipts, never a cache's own claim."""
     receipts={}
@@ -122,9 +141,21 @@ def audit(root,paths,output,*,mono=None,workers=1,budget=None,work_budget=None):
             old['contract']='legacy-opponent-turn-work/1.0.0'
             calibration['work_budgets']=list({digest(w):w for w in (work_budget,LEGACY_TIME_BUDGET,LEGACY_OPPONENT_WORK_BUDGET,old)}.values())
             allowed.update(legacy_spec(root,p,budget,work_budget=w)['policy_id'] for p in calibration['parents'] for w in calibration['work_budgets'])
+            # Previously generated IL data retain their original frozen search
+            # identity. A shared-runtime upgrade does not relabel those rows.
+            allowed.update(legacy_spec(root,p,budget,work_budget=w,search_runtime=False)['policy_id']
+                           for p in calibration['parents'] for w in calibration['work_budgets'])
     require(type(workers) is int and 1<=workers<=32,'Invalid audit CPU allowance')
     paths=sorted(set(str(project_path(root,p)) for p in paths))
     require(paths,'No demonstration replay paths supplied')
+    if calibration and calibration['format']=='direct-masked-budget/1.0.0':
+        refs=shared_teacher_references(root,paths,calibration['parents'],budget)
+        calibration['search_runtimes']=refs
+        for ref in refs:
+            for parent in calibration['parents']:
+                if parent.split('/')[0]!=ref['recipe']['bank']:continue
+                allowed.update(legacy_spec(root,parent,budget,work_budget=w,search_runtime=ref)['policy_id']
+                               for w in calibration.get('work_budgets',[]))
     receipts=_audit_receipts(paths)
     tasks=[(str(root),p,sorted(allowed),mono,receipts.get(p)) for p in paths]
     next_progress=20
@@ -239,8 +270,9 @@ def _prepared_shard(task):
     return data
 
 
-def load_dataset(root,manifest_path,partition,*,workers=1,progress=False,compact=False,storage=None):
-    require(type(workers) is int and 1<=workers<=64,'Invalid imitation loader CPU allowance')
+def dataset_tasks(root,manifest_path,partition,*,compact=False):
+    """Validate manifest admission without opening or preparing replay shards."""
+    require(partition in ('train','validation','test'),'Unknown demonstration partition')
     root=Path(root);manifest=read(project_path(root,manifest_path))
     require(manifest['format']=='bc-dataset/1.0.0','Incompatible BC manifest')
     from brass_ai.learning.contracts import assert_heuristic_data_compatible
@@ -276,7 +308,10 @@ def load_dataset(root,manifest_path,partition,*,workers=1,progress=False,compact
             from .config import legacy_opponent_work_budget_config
             for work in c.get('work_budgets',[]):
                 legacy_opponent_work_budget_config(work)
-                admitted.update(legacy_spec(root,p,c['budget'],work_budget=work)['policy_id'] for p in c['parents'])
+                admitted.update(legacy_spec(root,p,c['budget'],work_budget=work,search_runtime=False)['policy_id'] for p in c['parents'])
+                for ref in c.get('search_runtimes',[]):
+                    admitted.update(legacy_spec(root,p,c['budget'],work_budget=work,search_runtime=ref)['policy_id']
+                                    for p in c['parents'] if p.split('/')[0]==ref['recipe']['bank'])
             # Archived, audited heuristic choices remain reusable as BC only;
             # their former forest identities never become active opponents.
             for parent in set(historical)|parents:
@@ -298,6 +333,12 @@ def load_dataset(root,manifest_path,partition,*,workers=1,progress=False,compact
         by_path.setdefault(project_path(root,e['path']),[]).append(e)
     require(len({e['game_id'] for e in chosen})==len(chosen),'Missing/duplicate demonstration games')
     tasks=[(str(path),entries,partition,allowed,compact) for path,entries in by_path.items()]
+    return tasks,manifest
+
+
+def load_dataset(root,manifest_path,partition,*,workers=1,progress=False,compact=False,storage=None):
+    require(type(workers) is int and 1<=workers<=64,'Invalid imitation loader CPU allowance')
+    tasks,manifest=dataset_tasks(root,manifest_path,partition,compact=compact)
     if storage is not None:
         from .prepared_store import prepare
         from .retention import owned
@@ -491,13 +532,17 @@ def _train_bc(root,run,manifest_path,initial,config,*,device='cpu',epochs=10,pat
     write_json(out/'report.json',report);return report
 
 
-def completed_imitation(root,run,*,_seen=None):
+def completed_imitation(root,run,*,_seen=None,_legacy_upgrade=False):
     """Explicit fresh BC -> PPO handoff; never a general checkpoint importer."""
     from .retention import owned,active
     root,run=owned(root,run)
     seen=set() if _seen is None else _seen
     require(run not in seen,'Cyclic imitation lineage');seen.add(run)
     require(not active(run),'Imitation is still active; finish it before self-play')
+    if (run/'upgrade.json').is_file():
+        require(not _legacy_upgrade,'An upgraded IL cannot be upgraded again')
+        from .critic_upgrade import completed
+        return completed(root,run,seen)
     require((run/'state.json').is_file() and (run/'report.json').is_file(),'Finish the imitation run before handing off its weights')
     state=read(run/'state.json');report=read(run/'report.json');signature=state['signature']
     require(report.get('format')=='bc-training-report/1.0.0' and report.get('signature')==signature,
@@ -508,7 +553,8 @@ def completed_imitation(root,run,*,_seen=None):
     # learning contracts; all completion/hash/lineage checks below still apply.
     from brass_ai.learning.contracts import CONFIG_DIR
     reviewed=read(CONFIG_DIR/'imitation-handoff-sources.json')['compatible_sources']
-    current_source=implementation_id();learning_contracts=digest(compatibility())
+    current_source=implementation_id();learning_contracts=('b3b944dbc492bc1483c41bdb5a9d566f13e2b2a8b7988dbeec8fcb9ebb372674'
+        if _legacy_upgrade else digest(compatibility()))
     def source_ok_for(source):
         return source==current_source or any(source==entry['implementation'] and
             learning_contracts==entry['learning_compatibility'] for entry in reviewed)
@@ -518,7 +564,7 @@ def completed_imitation(root,run,*,_seen=None):
     parent=None
     if initialization=='fresh-imitation-continuation':
         expected=signature['parent_imitation']
-        _,parent=completed_imitation(root,expected['bc_run'],_seen=seen)
+        _,parent=completed_imitation(root,expected['bc_run'],_seen=seen,_legacy_upgrade=_legacy_upgrade)
         parent=bound_reference(root,parent,expected,('bc_run','path','manifest'))
     from .imitation_extension import epoch_limit,checkpoint_extension
     limit=epoch_limit(state)
@@ -533,7 +579,7 @@ def completed_imitation(root,run,*,_seen=None):
     entry=state['best'];path=project_path(root,entry['path'],base=run)
     require(path.is_relative_to(run) and sha(path)==entry['sha256']==report['candidate_sha256'],
             'Selected imitation checkpoint changed')
-    with torch.random.fork_rng(devices=[]):model,raw=load_checkpoint(path,device='cpu')
+    with torch.random.fork_rng(devices=[]):model,raw=load_checkpoint(path,device='cpu',_legacy_il_upgrade=_legacy_upgrade)
     metadata=raw['training']
     require(metadata.get('mode')=='step5-v3-bc' and metadata.get('initialization')==initialization
             and metadata.get('parent')==(parent['model_id'] if parent else None)

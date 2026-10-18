@@ -34,13 +34,16 @@ class Behavior:
         self.policy_id=neural_spec(identity,exploration,'mixed')['policy_id']
 
 
-def train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=None,from_run=None,imitation_run=None,resume_reviewed_source=False,inference_devices=None,expected_generation=None,fresh=False):
+def train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=None,from_run=None,imitation_run=None,resume_reviewed_source=False,inference_devices=None,expected_generation=None,fresh=False,il_kl_probe_from_run=None):
     from .retention import owned,run_lock
     _,run=owned(root,run_path)
     with run_lock(run):
         require(not fresh or not (run/'state.json').exists(),'--fresh requires a new run; existing progress will not be overwritten')
         require_start_generation(run,expected_generation)
-        return _train(root,run_path,config,iterations=iterations,device=device,initial=initial,mono=mono,from_run=from_run,imitation_run=imitation_run,resume_reviewed_source=resume_reviewed_source,inference_devices=inference_devices)
+        if 'rehearsal_sampling' in config:
+            from .rehearsal_window import cleanup
+            cleanup(root,run)
+        return _train(root,run_path,config,iterations=iterations,device=device,initial=initial,mono=mono,from_run=from_run,imitation_run=imitation_run,resume_reviewed_source=resume_reviewed_source,inference_devices=inference_devices,il_kl_probe_from_run=il_kl_probe_from_run)
 
 
 def require_start_generation(run,expected):
@@ -51,7 +54,7 @@ def require_start_generation(run,expected):
             f'Expected committed generation {expected}; refusing to start from a different checkpoint')
 
 
-def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=None,from_run=None,imitation_run=None,resume_reviewed_source=False,inference_devices=None):
+def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=None,from_run=None,imitation_run=None,resume_reviewed_source=False,inference_devices=None,il_kl_probe_from_run=None):
     from .config import time_budget_config,champion_mix_config,latest_model_recipe,quality_selfplay_recipe
     from .inference import validate_inference_devices
     inference_devices=validate_inference_devices(inference_devices,device)
@@ -101,6 +104,8 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
     signature=dict(config=config,compatibility=compatibility(),implementation=implementation_id(),legacy_pool=pool['training'],teachers=teacher_specs)
     if bc_origin:signature['imitation_source']=bc_origin
     state_path=run/'state.json'
+    require(il_kl_probe_from_run is None or (not state_path.exists() and bc_origin is not None and 'il_kl_limit' in config),
+            '--il-kl-probe-from-run is only for a new self-play run from completed IL')
     fixed_probe=None
     source_changed=False
     require(not resume_reviewed_source or state_path.exists(),'--resume-reviewed-source needs an existing same-run state.json')
@@ -149,7 +154,11 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
         if 'il_kl_limit' in config:
             from .il_kl_probe import load as load_probe
             from .il_kl_limit import initial_state
-            fixed_probe,receipt=load_probe(root,run,bc_origin,model,config['il_kl_limit'],config['update'],config['audit_workers'])
+            if il_kl_probe_from_run is not None:
+                from .il_kl_probe import import_probe
+                fixed_probe,receipt=import_probe(root,run,il_kl_probe_from_run,bc_origin,model,config['il_kl_limit'],config['update'])
+            else:
+                fixed_probe,receipt=load_probe(root,run,bc_origin,model,config['il_kl_limit'],config['update'],config['audit_workers'])
             initial_measure=fixed_probe.measure(model,config['update'])
             require(abs(initial_measure['kl_mean'])<=1e-10 and initial_measure['behavior']['ok'],
                     'Generation-zero IL probe must reproduce the original IL policy')
@@ -164,6 +173,9 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
             anchor=dict(path=init_path.relative_to(root).as_posix(),sha256='pending',model_id=model_id(model),generation=0)
             probe_ref=dict(fixed_probe.metadata['cache'],probe_hash=fixed_probe.metadata['probe_hash'])
             state['quality_pool']=quality_pool.initial(anchor,config['opponent_pool'],probe_ref)
+            if 'critic_data' in config:
+                from .critic_data import fingerprint
+                state['quality_pool']['members'][0]['fingerprint']=fingerprint(fixed_probe,fixed_probe.arrays['reference'])
         save_checkpoint(init_path,model,optimizer,training=dict(mode='step5-fresh-residual-initial',parent=None,initialization=state['origin']['initialization'],fresh_run=run.relative_to(root).as_posix(),imitation=state['imitation'],
             **({'il_kl_limit':state['il_kl_limit']} if 'il_kl_limit' in config else {}),
             **({'quality_pool_digest':quality_pool.state_digest(state['quality_pool'])} if quality else {})))
@@ -210,6 +222,10 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
               f'restored {cuda_resume["restored_devices"]} matching logical-device RNG streams (learner stays on cuda:0)',flush=True)
     reward=reward_spec(config)
     migration=migrate(model,optimizer,reward)
+    phases=None
+    if 'advantage' in config:
+        from .actor_value import TrainingPhases
+        phases=TrainingPhases(model,config,raw=raw,generation=state['iteration'],root=root,run=run)
     if migration:
         print('Combined reward migration: compatible weights/Adam/RNG preserved; utility head awaits fresh-rollout calibration',flush=True)
     if source_changed:
@@ -224,7 +240,14 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
               f'{max(0,window["until_games"]-state["games_done"])} remaining',flush=True)
     from .rehearsal import schedule as rehearsal_schedule
     needs_rehearsal=rehearsal_schedule(config,state['games_done'],state['iteration'])['weight']>0
-    rehearsal=load_dataset(root,config['rehearsal_manifest'],'train',workers=config['audit_workers'],progress=True,compact=True)[0] if needs_rehearsal else None
+    rehearsal_index=None;rehearsal=None
+    if needs_rehearsal and 'rehearsal_sampling' in config:
+        from .rehearsal_window import TrainIndex,window as rehearsal_window
+        rehearsal_index=TrainIndex(root,config['rehearsal_manifest'])
+        print(f'Rehearsal lightweight index: {rehearsal_index.rows} train decisions, {rehearsal_index.games} games; '
+              f'at most {config["rehearsal_sampling"]["rows_per_iteration"]} rows sampled per iteration',flush=True)
+    elif needs_rehearsal:
+        rehearsal=load_dataset(root,config['rehearsal_manifest'],'train',workers=config['audit_workers'],progress=True,compact=True)[0]
     if rehearsal:
         prepared_at=time.monotonic();rehearsal=rehearsal_dataset(rehearsal,device)
         print(f'Rehearsal tensors prepared once: {len(rehearsal.data)} rows in {time.monotonic()-prepared_at:.1f}s; reused until rehearsal expires',flush=True)
@@ -245,9 +268,15 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                 iteration=state['iteration'];began=time.monotonic();directory=run/f'iteration-{iteration:04d}'
                 inference_before=service.report()
                 current=service.register(model);behavior=Behavior(current,config['exploration'])
+                fingerprints=None
+                if 'critic_data' in config:
+                    from .critic_data import fingerprint
+                    fingerprints=dict(learner=fingerprint(fixed_probe,fixed_probe.probabilities(model,config['update'])),
+                        rule_bot=fingerprint(fixed_probe,rule_bot=True))
+                    phases.fingerprint=fingerprints['learner']
                 from .ordinary import plan_collection,sampling_report
                 plan=plan_collection(root,directory,state,config,signature,service,current,
-                                     profiles,opponent_specs,fast_specs,window)
+                                     profiles,opponent_specs,fast_specs,window,fingerprints=fingerprints)
                 jobs=plan['jobs'];kind_by_group=plan['kind_by_group'];composition=plan['composition']
                 cursor=plan['cursor'];context_counter=plan['context_counter'];incumbent=plan['incumbent']
                 historical_generations=plan['historical_generations'];mix_receipts=plan['mix_receipts']
@@ -275,6 +304,12 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                         if legacy: records+=heavy.collect(legacy,on_records=prepared_collection.submit)
                     load_began=time.monotonic();ingress_metrics={}
                     games,learner_data,diagnostics=prepared_collection.finish(records,ingress_metrics)
+                if 'critic_data' in config:
+                    require(all('_seat_descriptors' in d[0] and d[0].get('_descriptor_generation')==iteration for d in learner_data),
+                            'Ordinary collection missing current-generation seat descriptors')
+                    phases.snapshot_data=[d for d in learner_data if d[0]['_critic_role']=='snapshot']
+                    learner_data=[d for d in learner_data if d[0]['_critic_role']=='learner']
+                if phases is not None:phases.collection(records,behavior.policy_id,kind_by_group,current)
                 collected=time.monotonic()
                 sampling=sampling_report(games,learner_data,behavior.policy_id,kind_by_group,config)
                 next_quality=quality_report=None
@@ -283,11 +318,18 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                         plan['quality_tables'],plan['quality_planning'],generation=iteration+1)
                 rehearsal_status=rehearsal_schedule(config,state['games_done'],iteration)
                 weight=rehearsal_status['weight']
-                update=ppo_update(model,optimizer,games,behavior,config['update'],
-                    profile=directory/'profile-ppo' if config['profile_steps'] else None,
-                    profile_steps=config['profile_steps'],
-                    rehearsal=rehearsal,rehearsal_weight=weight,learner_data=learner_data,insolvency=config.get('insolvency'),reward=reward,
-                    sample_groups={g['game_id']:kind_by_group[g['setup_group']] for g in games},anchor_model=anchor_model)
+                with ExitStack() as rehearsal_scope:
+                    active_rehearsal=rehearsal
+                    if rehearsal_index is not None and weight:
+                        active_rehearsal=rehearsal_scope.enter_context(rehearsal_window(root,run,rehearsal_index,
+                            config['rehearsal_sampling'],seed=config['seed'],iteration=iteration,device=device))
+                    update=ppo_update(model,optimizer,games,behavior,config['update'],
+                        profile=directory/'profile-ppo' if config['profile_steps'] else None,
+                        profile_steps=config['profile_steps'],
+                        rehearsal=active_rehearsal,rehearsal_weight=weight,learner_data=learner_data,insolvency=config.get('insolvency'),reward=reward,
+                        sample_groups={g['game_id']:kind_by_group[g['setup_group']] for g in games},anchor_model=anchor_model,phases=phases)
+                    if rehearsal_index is not None and weight:update['rehearsal_sampling']=active_rehearsal.report
+                active_rehearsal=None
                 next_limit=limit_report=None
                 if fixed_probe is not None:
                     from .il_kl_limit import advance
@@ -298,6 +340,8 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                 from .lr_controller import finish_iteration
                 update['lr_controller']=finish_iteration(optimizer,update,config,sampling,games,behavior.policy_id,
                     kind_by_group,state['evaluation_anchor'],calibrated_anchor=limit_report['lr_gate'] if limit_report else None)
+                ppo_finished=time.monotonic()
+                value_report=phases.fit(model) if phases is not None else None
                 updated=time.monotonic();done=state['games_done']+len(games)
                 ordinary_inference=service.report()
                 if rehearsal_schedule(config,done,iteration+1)['weight']==0:rehearsal=None
@@ -308,7 +352,8 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                     # returns and the explicitly opted-in teacher mixture.
                     from .updates import Dataset
                     from .utility import calibrate
-                    return calibrate(model,optimizer,Dataset(learner_data,device,policy=False),config['update'],auxiliary=auxiliary)
+                    return calibrate(model,optimizer,Dataset(learner_data,device,policy=False),config['update'],auxiliary=auxiliary,
+                                     indices=phases.learner_train_ids if phases is not None else None)
                 from .teacher_collection import due_collections
                 from .review_metrics import teacher_drift_probe
                 teaching_probe=(teacher_drift_probe(model,learner_data,behavior,config['update'])
@@ -317,7 +362,8 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                     model,optimizer,service,heavy,done=done,cursor=cursor,ordinary_seconds=ordinary_seconds,
                     ordinary_game_seconds=(collected-began)/max(1,len(games)),
                     recalibrate=recalibrate_teacher_utility if reward is not None else None,
-                    ordinary_data=learner_data,ordinary_policy_id=behavior.policy_id)
+                    ordinary_data=([learner_data[i] for i in phases.learner_train_ids] if phases is not None else learner_data),
+                    ordinary_policy_id=behavior.policy_id)
                 # Search policy updates share the trunk/Adam but occur outside
                 # the PPO KL guard. Measure their TOTAL drift from collection.
                 # No resampling or RNG consumption, and no teacher PPO targets.
@@ -335,6 +381,20 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                         search['teaching_only_categorical_probe']=dict(teaching_probe.measure(model),
                             scope='Exact KL(post-PPO behavior || post-teaching behavior); bounded proportional era/phase probe, RNG-neutral; diagnostic only')
                 del teaching_probe
+                # The LR decision above retains its exact post-PPO signal.
+                # Final limits, quality admission and checkpoint probes include
+                # shared-trunk movement from the separate value/teacher phases.
+                if fixed_probe is not None and (phases is not None or search.get('updated')):
+                    next_limit,limit_report=advance(state['il_kl_limit'],fixed_probe.measure(model,config['update']),
+                        counts,generation=iteration+1,warmup_done=update['controller_warmup_done'])
+                if phases is not None:
+                    from .gae import rating_evidence
+                    update['final_categorical_probe']=dict(phases.ppo_probe.measure(model,anchor=anchor_model),
+                        scope='Final checkpoint weights after PPO, value phase and any teaching; reference is collection behavior')
+                    phases.finish(generation=iteration+1,update=update,
+                        anchor_gate=limit_report['lr_gate'] if limit_report else (update.get('lr_controller') or {}).get('health'),
+                        rating=rating_evidence(root,state,config['advantage']['gate']))
+                    phases.release()
                 del learner_data
                 output=run/f'generation-{iteration+1:04d}.pt'
                 if quality:
@@ -354,11 +414,13 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                     reward_migration=migration if not summaries else None,
                     optimizer_resume=optimizer_resume if not summaries else None,
                     legacy_boost=boost_report(state['games_done'],done,config,window),
-                    actor=update,search=search,**diagnostics,incoming_model_id=current,incoming_policy_id=behavior.policy_id,
+                    actor=update,value_phase=value_report,search=search,**diagnostics,incoming_model_id=current,incoming_policy_id=behavior.policy_id,
+                    seat_fingerprints=fingerprints,
                     selfplay_incumbent=incumbent,
                     selfplay_opponents=champion_mix.summarize(state,config,mix_receipts) if champion_mix.enabled(config) else None,
                     games_done=done,cumulative_games=state['previous_games']+done,
-                    timings=dict(collection_seconds=load_began-began,ppo_seconds=updated-collected,
+                    timings=dict(collection_seconds=load_began-began,ppo_seconds=ppo_finished-collected,
+                        value_phase_seconds=updated-ppo_finished,
                         replay_load_seconds=collected-load_began,
                         search_and_distill_seconds=time.monotonic()-updated),execution=records,
                     inference=service.report(),inference_scope='cumulative for this invocation',
@@ -378,6 +440,7 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                         evidence=dict(iteration=iteration,games_done=done,report=(directory/'report.json').relative_to(root).as_posix(),
                                       update_digest=digest(update)),
                         **({'il_kl_limit':next_limit} if next_limit is not None else {}),
+                        **({'actor_value_phases':phases.payload()} if phases is not None else {}),
                         **({'quality_pool_digest':quality_pool.state_digest(next_quality)} if quality else {})))
                 report['post_update_model_id']=identity
                 report['timings']['checkpoint_seconds']=time.monotonic()-checkpoint_began
@@ -395,6 +458,7 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                 state['recent_training']=(state.get('recent_training',[])+[dict(iteration=iteration,games_done=done,
                     quality_pool=quality_report,
                     il_kl_limit=limit_report,rehearsal_schedule=rehearsal_status,
+                    value_phase=value_report,
                     health_counts=diagnostics.get('health_counts'),
                     health_by_composition={k:v.get('health_counts') for k,v in diagnostics.get('by_composition',{}).items()},
                     sampling=sampling,curriculum=report['curriculum'],
@@ -405,6 +469,7 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                     from .retention import update_population
                     update_population(root,run,state,config['population'])
                 write_json(state_path,state)
+                if phases is not None:phases.committed(iteration+1)
                 if revised:
                     evaluation_began=time.monotonic()
                     from .champion import schedule as schedule_champion
@@ -430,6 +495,14 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                 summaries.append(report);summaries=summaries[-2:]
                 control=update.get('lr_controller')
                 controller_line=(f' LRmult={control["multiplier_after"]:.3f} {control["mode"]}:{control["decision"]}' if control else '')
+                if phases is not None:
+                    gate=update['gae']['gate']
+                    controller_line+=f' GAE={gate["lambda_used"]:.2f}->{gate["lambda_next"]:.2f} value_steps={value_report["optimizer_steps"]}'
+                    if phases.buffer:
+                        controller_line+=f' value_rows={value_report["distinct_current_rows_used"]}+{value_report["distinct_previous_rows_used"]}'
+                    if phases.critic_state is not None:
+                        controller_line+=f' snapshots={int(phases.critic_state["snapshots_active"])}@{phases.critic_state["snapshot_weight"]:.2f}'
+                        controller_line+=' GAE-mixed='+','.join(f'{k}:{v["lambda_next"]:.2f}[{v["streak"]}/10]' for k,v in gate['table_gate'].items())
                 if limit_report:
                     controller_line+=(f' ILKL={limit_report["measurement"]["kl_mean"]:.4f}/{limit_report["limit_after"]:.4f}'
                         f' group_limit={limit_report["group_limit_after"]:.4f} {limit_report["decision"]}')

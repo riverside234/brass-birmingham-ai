@@ -2,6 +2,11 @@
   "format": "imitation-handoff-sources/1.0.0",
   "compatible_sources": [
     {
+      "implementation": "ecf5e94ee67d1ca39145ad6962db5d72527cfc2dc87f024128e25cb0a713d311",
+      "learning_compatibility": "b3b944dbc492bc1483c41bdb5a9d566f13e2b2a8b7988dbeec8fcb9ebb372674",
+      "reason": "Fresh self-play rotating train rehearsal and verified fixed-validation-probe import only. Completed IL model, encoder, labels, loss and checkpoint semantics remain unchanged. Retain completion/hash/lineage checks; no PPO source transition or old run conversion."
+    },
+    {
       "implementation": "86fd379b6fe6fb4da8e2b977d9c6ef98aca870d0cd35cb6a6c0f9b2080f2916a",
       "learning_compatibility": "c349e816f2e301ea2a3b438902059cffe868f48e131f7c120691d37cd1c409d2",
       "reason": "Selfplay-v1 review: PPO probe/rate, training teacher clocks, evidence gates and policy-only distillation changed. Completed fresh BC weights and learning/data contracts remain compatible; PPO populations and optimizer state are not imported."
@@ -263,6 +268,21 @@
       "implementation": "3a3a5d230b62f31451664bedeacf83e1d8a87d4c15e924b5b6fe2d1d35fe2c71",
       "learning_compatibility": "b3b944dbc492bc1483c41bdb5a9d566f13e2b2a8b7988dbeec8fcb9ebb372674",
       "reason": "Disable automatic Monitor and Broader Evaluation in newly generated self-play configs. Model, features, supervised IL updates, checkpoint and dataset contracts remain unchanged. Preserve completed-IL hash/lineage admission; no PPO run conversion."
+    },
+    {
+      "implementation": "6a11bc82f7239dc2f8422b1839588b92294b9a3b7e0a7394d7c062795a242347",
+      "learning_compatibility": "b3b944dbc492bc1483c41bdb5a9d566f13e2b2a8b7988dbeec8fcb9ebb372674",
+      "reason": "GAE and separate PPG-style critic phase for newly configured self-play only. Completed v11.1 IL architecture, feature encoding, dataset, supervised update and checkpoint contracts remain unchanged. Keep exact completed-IL hash/lineage admission; no old PPO migration."
+    },
+    {
+      "implementation": "e21348a9f87705983350b5d5b49fc8d17178ed540c9107d79011090cc6b80b2e",
+      "learning_compatibility": "b3b944dbc492bc1483c41bdb5a9d566f13e2b2a8b7988dbeec8fcb9ebb372674",
+      "reason": "Two-iteration disk-backed critic buffer for newly configured self-play only. Completed IL tensors, encoding, data, supervised update and checkpoint contracts remain unchanged. Retain completed-IL admission and source review; no silent conversion of existing PPO runs."
+    },
+    {
+      "implementation": "419e6a74a223db78b2c5209ffdd5b86d50e3449f5b31a70c22daa96587a0b421",
+      "learning_compatibility": "b3b944dbc492bc1483c41bdb5a9d566f13e2b2a8b7988dbeec8fcb9ebb372674",
+      "reason": "Explicit completed v11.1 IL audit for the new-directory v11.2 zero-column critic upgrade. No silent PPO/checkpoint reinterpretation."
     }
   ]
 }

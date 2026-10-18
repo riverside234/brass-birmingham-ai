@@ -10,13 +10,18 @@ from brass_ai.search.ismcts import MaskedSearchPolicy,visit_teacher,supported_co
 
 def merge_statistics(items,choices):
     merged=dict(completed=0,interrupted=0,opponent_nodes=0,max_pending=0,opponent_choices=0,
-                root={},plans={},expansion=[False]*len(choices),batching=dict(attempted=0))
+                root={},plans={},expansion=[False]*len(choices),batching=dict(attempted=0,
+                    deadline_stops=0,deadline_remaining_seconds=0.,simulation_estimate_seconds=0.))
     allowed={c['id'] for c in choices}
     for item in items:
         if item is None:continue
         require(item['opponent_nodes']==0 and set(item['root'])<=allowed,'Unsafe root forest merge')
         for field in ('completed','interrupted','opponent_choices'):merged[field]+=item[field]
         merged['batching']['attempted']+=item.get('batching',{}).get('attempted',0)
+        for field in ('deadline_stops','deadline_remaining_seconds'):
+            merged['batching'][field]+=item.get('batching',{}).get(field,0)
+        merged['batching']['simulation_estimate_seconds']=max(merged['batching']['simulation_estimate_seconds'],
+            item.get('batching',{}).get('simulation_estimate_seconds',0.))
         merged['max_pending']=max(merged['max_pending'],item['max_pending'])
         require(len(item['expansion'])==len(choices),'Forest legal order differs')
         merged['expansion']=[a or b for a,b in zip(merged['expansion'],item['expansion'])]

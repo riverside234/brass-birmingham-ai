@@ -94,7 +94,7 @@ def architecture_fingerprint():
     separately binds the optimized code and this receipt for resume/freshness.
     """
     actual=digest({name:(Path(__file__).parent/name).read_text(encoding='utf-8').replace('\r\n','\n')
-                   for name in ('model.py','state_layout.py','local_entities.py','board_topology.py')})
+                   for name in ('model.py','utility_model.py','seat_descriptors.py','state_layout.py','local_entities.py','board_topology.py')})
     matches=[]
     for name in ('architecture-source-equivalence.json','v11-selector-source-equivalence.json'):
         receipt=read_json(CONFIG_DIR/name)

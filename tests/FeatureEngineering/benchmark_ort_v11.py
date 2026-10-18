@@ -62,7 +62,7 @@ def main():
     require([len(chosen[k]['choices']) for k in chosen]==[119,387], 'V9 fixture shapes changed')
     utility=UtilityNet(utility_config(ModelConfig.preset(), specification())).eval()
     actor,_=import_parent(utility);actor.eval()
-    require(utility.parameter_count==5921320 and actor.parameter_count==6023137, 'V11 architecture changed')
+    require(utility.parameter_count==5928616 and actor.parameter_count==6030433, 'V11 architecture changed')
     output.mkdir(parents=True);models=output/'models';models.mkdir()
     report=dict(format='v11-onnx-runtime-benchmark/1.0.0', source=source, seed=610352,
         environment=dict(platform=platform.platform(), processor=platform.processor(), python=platform.python_version(),

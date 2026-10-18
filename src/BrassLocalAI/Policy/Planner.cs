@@ -144,7 +144,7 @@ namespace BrassLegacyAI
             }
             var ledger=Evaluator.Evaluate(view,s.seat,s.profile.conversion_policy==1);
             if(s.profile.conversion_policy==1 && !ledger.win_share.HasValue)
-            {ledger.sale_tempo=-SaleTiming.SinglePenalty(s.root,actions);ledger.canal_opportunity=-NetworkOptions.CanalPenalty(s.root,actions);ledger.score+=ledger.sale_tempo+ledger.canal_opportunity;}
+            {ledger.sale_tempo=-SaleTiming.SinglePenalty(s.root,actions);ledger.score+=ledger.sale_tempo;}
             var p=new Plan{actions=actions,ledger=ledger,score=ledger.score};
             if(s.profile.cash_policy==1)
             {

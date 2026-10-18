@@ -213,4 +213,7 @@ def finish(root,run,pool,model,entry,probe,update,limit_report):
     result,event=admission(pool,entry,health,distances,pair)
     if event['admitted']:
         member=result['members'][-1];member['probe']=cache_candidate(root,run,entry,values,probe)
+        if 'fingerprint' in pool['members'][0]:
+            from .critic_data import fingerprint
+            member['fingerprint']=fingerprint(probe,values)
     return result,event

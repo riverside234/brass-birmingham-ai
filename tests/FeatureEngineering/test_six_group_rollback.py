@@ -47,16 +47,16 @@ class SixGroupRollbackTests(unittest.TestCase):
         self.assertEqual(a.feature_version,'permitted-features/4.0.0')
 
     def test_eight_real_residual_blocks_for_default_and_presets(self):
-        for size,count in (('small',1499780),('medium',5904644)):
+        for size,count in (('small',1506052),('medium',5910916)):
             model=FourSeatNet(ModelConfig.preset(size))
             self.assertEqual(model.config.residual_blocks,8)
             self.assertEqual(sum(isinstance(m,ResidualBlock) for m in model.modules()),8)
             self.assertEqual(model.parameter_count,count)
-            self.assertEqual(model.config.architecture,'brass-four-seat-mlp-resnet/11.1.0')
+            self.assertEqual(model.config.architecture,'brass-four-seat-mlp-resnet/11.2.0')
         model=FourSeatNet();self.assertEqual(model.config.hidden,512)
         utility=UtilityNet(utility_config(model.config,reward_spec(read_json(SOURCE_ROOT/'configs/step5/joint7-latest.json'))))
-        self.assertEqual(utility.parameter_count,5921320)
-        self.assertEqual(PersonalityNet(PersonalityConfig(utility.config.to_dict())).parameter_count,6023137)
+        self.assertEqual(utility.parameter_count,5928616)
+        self.assertEqual(PersonalityNet(PersonalityConfig(utility.config.to_dict())).parameter_count,6030433)
 
     def test_archived_hand_tensors_and_old_model_versions_rejected(self):
         p=self.position;e=Encoder().encode(p['view'],p['choices'])
@@ -65,7 +65,7 @@ class SixGroupRollbackTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError,'mixed-version'):collate([hand])
         for old in (1,2,3,4,5):
             raw=ModelConfig.preset().to_dict();raw.update(architecture=f'brass-four-seat-mlp-resnet/{old}.0.0',residual_blocks=4)
-            with self.assertRaisesRegex(ValueError,'old architectures'):ModelConfig.from_dict(raw)
+            with self.assertRaisesRegex(ValueError,'Architecture 11.2 required'):ModelConfig.from_dict(raw)
 
     def test_archived_hand_raw_can_be_reaudited_but_not_relabelled_as_neural(self):
         old=compatibility();old.update(learning_contract='four-seat-learning/3.0.0',

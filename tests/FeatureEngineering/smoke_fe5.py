@@ -131,7 +131,7 @@ def main():
     il=out/'imitation'
     bc=train_bc(SOURCE_ROOT,il,args.manifest,None,update,epochs=1,min_epochs=1,patience=1,workers=1)
     original,origin=completed_imitation(SOURCE_ROOT,il)
-    require(original.config.hidden==512 and original.config.residual_blocks==8 and original.parameter_count==5904644,
+    require(original.config.hidden==512 and original.config.residual_blocks==8 and original.parameter_count==5910916,
         'Smoke must use production width 512 and eight grouped residual blocks')
     # Same-version BC resume of the completed one-epoch run preserves progress.
     before_bc=read(il/'state.json');before_il=sha(SOURCE_ROOT/origin['path'])

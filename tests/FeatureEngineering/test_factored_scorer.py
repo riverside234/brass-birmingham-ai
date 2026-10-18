@@ -163,7 +163,7 @@ class FactoredScorerTests(unittest.TestCase):
             assert_compatible(dict(known, architecture_sha256='0'*64))
 
     def test_parameters_identity_and_mac_count(self):
-        for model, count, fixed in zip(self.models(), (5904644,5921320,6023137), (8235232,8251872,8353504)):
+        for model, count, fixed in zip(self.models(), (5910916,5928616,6030433), (8260064,8277728,8379360)):
             core = model.core if isinstance(model, PersonalityNet) else model
             params = [(name,id(t),tuple(t.shape)) for name,t in model.named_parameters()]
             core_id = model_id(core)

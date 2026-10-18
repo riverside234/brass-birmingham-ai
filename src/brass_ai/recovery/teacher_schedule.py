@@ -29,7 +29,8 @@ WORK_COUNTERS=frozenset(('allocated_simulations','attempted_simulations','work_e
                         'deadline_limited_turns','work_budget_exhausted_choices',
                         'time_budget_exhausted_turns','finalization_seconds'))
 SUPPORT_COUNTERS=frozenset(('allocated_seconds','completed_searches','legal_root_actions',
-                          'visited_root_actions','revisited_root_actions','supported_plans'))
+                          'visited_root_actions','revisited_root_actions','supported_plans',
+                          'deadline_admission_stops','deadline_unused_worker_seconds'))
 
 
 def phase_for(context):
@@ -53,7 +54,7 @@ def counters():
         cancelled=0,continuation_choices=0,budget_exhausted_choices=0,
         allocated_simulations=0,attempted_simulations=0,work_exhausted_turns=0,
         deadline_limited_turns=0,work_budget_exhausted_choices=0,
-        time_budget_exhausted_turns=0,finalization_seconds=0.,
+        time_budget_exhausted_turns=0,finalization_seconds=0.,deadline_admission_stops=0,deadline_unused_worker_seconds=0.,
         completed_rollouts=0,interrupted_rollouts=0,elapsed_seconds=0.,
         turn_elapsed_seconds=0.,deadline_overrun_seconds=0.,allocated_seconds=0.,
         completed_searches=0,legal_root_actions=0,visited_root_actions=0,revisited_root_actions=0,supported_plans=0)
@@ -231,6 +232,8 @@ class TurnSearch:
             bucket['revisited_root_actions']+=sum(n>=self.config.minimum_plan_visits for n in visits)
             bucket['supported_plans']+=sum(p['visits']>=self.config.minimum_plan_visits for p in stats.get('plans',{}).values())
             attempted=stats.get('batching',{}).get('attempted',0)
+            bucket['deadline_admission_stops']+=stats.get('batching',{}).get('deadline_stops',0)
+            bucket['deadline_unused_worker_seconds']+=stats.get('batching',{}).get('deadline_remaining_seconds',0.)
             bucket['attempted_simulations']+=attempted
             bucket['finalization_seconds']+=stats.get('finalization_seconds',0.)
             if timed:

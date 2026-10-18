@@ -52,14 +52,14 @@ class PersonalityNet(nn.Module):
             self.parameter_count-self.core.parameter_count<=self.config.extension_limit,'Personality parameter budget exceeded')
         return dict(base=self.core.parameter_count,extension=self.parameter_count-self.core.parameter_count,total=self.parameter_count)
 
-    def forward(self,states,actions,legal_mask,stable_to_relative,*,personality,remaining):
+    def forward(self,states,actions,legal_mask,stable_to_relative,*,personality,remaining,descriptors=None):
         require(personality.shape==(len(states),CONTEXT_DIM),'Personality tensor shape mismatch')
         require(remaining.shape==(len(states),4),'Remaining utility budgets required')
         h=self.core.state_encoder(states)+self.context_projection(personality)
         encoded=self.core.encode_state(states,context=h)
         logits=self.core.score_prepared(actions,self.core.prepare_candidates(encoded))
         logits=logits.masked_fill(~legal_mask,-torch.inf)
-        w,r,v,utility=self.core.heads_from_encoded(encoded,stable_to_relative,remaining)
+        w,r,v,utility=self.core.heads_from_encoded(encoded,stable_to_relative,remaining,descriptors)
         g=self.goal_trunk(torch.cat((h,personality),-1))
         return dict(policy_logits=logits,win_share_4=w,placement_4=r,vp_4=v,
             remaining_utility_4=utility,goals={k:head(g) for k,head in self.goal_heads.items()},

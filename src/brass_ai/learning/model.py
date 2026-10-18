@@ -15,7 +15,8 @@ from .state_layout import model_layout as state_layout,MODEL_PROJECTION_WIDTHS a
 from .local_entities import (ENTITY_HIDDEN, COUNTS, LocalEntityEncoder, LocalCandidates,
                             entity_layout)
 
-ARCHITECTURE='brass-four-seat-mlp-resnet/11.1.0'
+ARCHITECTURE='brass-four-seat-mlp-resnet/11.2.0'
+LEGACY_ARCHITECTURE='brass-four-seat-mlp-resnet/11.1.0'
 PARAMETER_LIMIT=6500000
 
 
@@ -49,10 +50,11 @@ class ModelConfig:
                    architecture=ARCHITECTURE, residual_blocks=8)
 
     @classmethod
-    def from_dict(cls, raw):
+    def from_dict(cls, raw, *, allow_legacy=False):
         allowed=set(cls.__dataclass_fields__)
-        require(raw.get('architecture')==ARCHITECTURE,
-                'Use fresh version-11.1 IL weights; old architectures including v11 cannot migrate')
+        require(raw.get('architecture')==ARCHITECTURE or
+                (allow_legacy and raw.get('architecture')==LEGACY_ARCHITECTURE),
+                'Architecture 11.2 required; explicitly upgrade completed v11.1 IL before fresh self-play')
         require(set(raw)==allowed, 'Invalid grouped model config fields')
         config = cls(**raw)
         config.validate()
@@ -61,11 +63,11 @@ class ModelConfig:
     def validate(self):
         encoder = Encoder()
         require(type(self.players) is int and self.players == 4, 'Four-seat model required')
-        require(self.architecture==ARCHITECTURE, 'Use fresh version-11.1 IL weights; old architectures including v11 cannot migrate')
+        require(self.architecture in (ARCHITECTURE,LEGACY_ARCHITECTURE), 'Unsupported model architecture')
         require((self.state_dim, self.action_dim) == (encoder.state_dim, encoder.action_dim), 'Feature dimensions differ')
         require(type(self.hidden) is int and 32 <= self.hidden <= 2048 and
                 type(self.action_hidden) is int and 16 <= self.action_hidden <= 1024, 'Invalid hidden size')
-        if self.architecture==ARCHITECTURE:
+        if self.architecture in (ARCHITECTURE,LEGACY_ARCHITECTURE):
             require(type(self.residual_blocks) is int and self.residual_blocks==8 and
                     type(self.head_hidden) is int and self.head_hidden==192 and
                     type(self.outcome_hidden) is int and self.outcome_hidden==128 and
@@ -122,7 +124,7 @@ class FourSeatNet(nn.Module):
         super().__init__()
         self.config = c = config or ModelConfig.preset()
         c.validate()
-        residual=c.architecture==ARCHITECTURE
+        residual=c.architecture in (ARCHITECTURE,LEGACY_ARCHITECTURE)
         self.state_encoder = GroupedStateEncoder(c)
         self.entity_encoder = LocalEntityEncoder()
         self.entity_projections = nn.ModuleDict({name: nn.Linear(c.entity_hidden, c.action_hidden, bias=False)
@@ -138,6 +140,16 @@ class FourSeatNet(nn.Module):
         self.policy_scorer = nn.Sequential(nn.Linear(c.hidden + c.action_hidden, ph),
             nn.GELU(), nn.Linear(ph, 1))
         self.outcomes = nn.Sequential(nn.Linear(c.hidden + c.entity_hidden, vh), nn.GELU(),nn.Linear(vh,3))
+        if c.architecture==ARCHITECTURE:
+            from .seat_descriptors import DIM,EMBEDDING
+            # Construct after every original layer: preserve original seeded tensors.
+            self.descriptor_encoder=nn.Sequential(nn.Linear(DIM,EMBEDDING),nn.GELU(),nn.Linear(EMBEDDING,EMBEDDING))
+            first=self.outcomes[0]
+            expanded=nn.Linear(first.in_features+EMBEDDING,vh)
+            with torch.no_grad():
+                expanded.weight.zero_();expanded.weight[:,:first.in_features].copy_(first.weight)
+                expanded.bias.copy_(first.bias)
+            self.outcomes[0]=expanded
         self.validate_parameter_count()
 
     def validate_parameter_count(self):
@@ -186,26 +198,39 @@ class FourSeatNet(nn.Module):
         candidates = self.action_encoder[2](self.action_encoder[1](pre))
         return self.score_candidates(candidates, prepared.context)
 
-    def official_heads(self, encoded, mapping):
+    def descriptor_embeddings(self,encoded,descriptors=None):
+        if self.config.architecture!=ARCHITECTURE:return None
+        if descriptors is None:
+            from .seat_descriptors import unknown_tensor
+            descriptors=unknown_tensor(encoded.context)
+        # The ONNX unknown initializer has one position. Explicit expansion
+        # prevents a fused utility GEMM from assuming its batch equals the
+        # optional input's batch before broadcasting.
+        descriptors=descriptors.expand(encoded.context.shape[0],-1,-1)
+        return self.descriptor_encoder(descriptors.to(encoded.context.dtype))
+
+    def official_heads(self, encoded, mapping, embeddings=None):
         first = self.outcomes[0]; width = self.config.hidden
         # Shared player head; retain the factored state contribution here too.
-        joint = F.linear(encoded.players, first.weight[:, width:]) + \
+        end=width+self.config.entity_hidden
+        joint = F.linear(encoded.players, first.weight[:, width:end]) + \
                 F.linear(encoded.context, first.weight[:, :width], first.bias).unsqueeze(1)
+        if embeddings is not None:joint=joint+F.linear(embeddings,first.weight[:,end:])
         raw = self.outcomes[2](self.outcomes[1](joint))  # [B, relative player, outcome]
         return (torch.softmax(raw[:, :, 0], dim=-1).gather(1, mapping),
                 (1 + 3 * torch.sigmoid(raw[:, :, 1])).gather(1, mapping),
                 (100 * raw[:, :, 2]).gather(1, mapping))
 
-    def heads_from_encoded(self, encoded, mapping, remaining=None):
-        return self.official_heads(encoded, mapping)
+    def heads_from_encoded(self, encoded, mapping, remaining=None, descriptors=None):
+        return self.official_heads(encoded, mapping,self.descriptor_embeddings(encoded,descriptors))
 
-    def forward(self, states, actions, legal_mask, stable_to_relative, remaining=None):
+    def forward(self, states, actions, legal_mask, stable_to_relative, remaining=None, descriptors=None):
         encoded = self.encode_state(states)
         logits = self.score_prepared(actions, self.prepare_candidates(encoded))
         logits = logits.masked_fill(~legal_mask, -torch.inf)
         # Each prediction uses ONE observer's features. Relative heads are
         # mapped independently to stable identities, never current turn order.
-        return (logits,) + self.heads_from_encoded(encoded, stable_to_relative, remaining)
+        return (logits,) + self.heads_from_encoded(encoded, stable_to_relative, remaining, descriptors)
 
     def project_policy_context(self, context):
         """Compute the first scorer layer's state contribution once per position.
@@ -248,8 +273,9 @@ def dense_multiply_adds(model):
             role=name.rsplit('.',1)[1]
             fixed+=mac*dict(zip(('target','merchant','industry'),reference_sizes))[role]
         elif name==prefix+'outcomes.0':
-            fixed+=core.config.hidden*module.out_features+4*core.config.entity_hidden*module.out_features
+            fixed+=core.config.hidden*module.out_features+4*(module.in_features-core.config.hidden)*module.out_features
         elif name==prefix+'outcomes.2':fixed+=4*mac
+        elif name.startswith(prefix+'descriptor_encoder.'):fixed+=4*mac
         else:fixed+=mac
     return dict(fixed_per_position=fixed,per_padded_candidate=candidate,
         formula='batch * (fixed_per_position + padded_candidates * per_padded_candidate)',

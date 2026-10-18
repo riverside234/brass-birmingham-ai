@@ -14,8 +14,14 @@ from .contracts import assert_compatible, compatibility, read_json, require
 from .model import ModelConfig
 from .onnx_tools import cpu_options, prepare_export, simplify_export, inspect_runtime_fusions, candidate_export_metadata
 
-INPUTS = ['states', 'actions', 'legal_mask', 'stable_to_relative']
+INPUTS = ['states', 'actions', 'legal_mask', 'stable_to_relative','descriptors']
 OUTPUTS = ['policy_logits', 'win_share', 'placement', 'vp']
+
+
+class WithDescriptors(torch.nn.Module):
+    def __init__(self,model):super().__init__();self.model=model
+    def forward(self,states,actions,legal_mask,stable_to_relative,descriptors):
+        return self.model(states,actions,legal_mask,stable_to_relative,descriptors=descriptors)
 
 
 def export_onnx(model, path, parity_batches):
@@ -25,12 +31,15 @@ def export_onnx(model, path, parity_batches):
     path = Path(path)
     require(len(parity_batches) >= 2, 'Export requires multiple shape checks')
     batches = [collate(batch) for batch in parity_batches]
+    from .seat_descriptors import unknown_tensor
+    batches=[(*batch,unknown_tensor(batch[0])) for batch in batches]
     require(len({(b[0].shape[0], b[1].shape[1]) for b in batches}) >= 2, 'Parity checks must exercise dynamic shapes')
-    reference_model = copy.deepcopy(model).cpu().eval()
-    frozen = prepare_export(model)
+    reference_model = WithDescriptors(copy.deepcopy(model).cpu().eval())
+    frozen = WithDescriptors(prepare_export(model))
     path.parent.mkdir(parents=True, exist_ok=True)
     temporary = path.with_name(path.name + '.tmp')
     axes = {name: {0: 'positions'} for name in INPUTS + OUTPUTS}
+    axes['descriptors']={0:'descriptor_positions'}
     for name in ('actions', 'legal_mask', 'policy_logits'):
         axes[name][1] = 'candidates'
     try:
@@ -43,6 +52,8 @@ def export_onnx(model, path, parity_batches):
         optimization['seat_encoding'] = 'one grouped MatMul; original own/other weights and affine parameters'
         optimization['candidate_encoding'] = candidate_export_metadata()
         optimization['execution'] = inspect_runtime_fusions(temporary)
+        from .onnx_tools import descriptor_default
+        descriptor_default(temporary)
         options = cpu_options()
         session = ort.InferenceSession(str(temporary), options, providers=['CPUExecutionProvider'])
         maximum_error = 0.0
@@ -86,7 +97,7 @@ def load_export(path):
     require(manifest['inputs'] == INPUTS and manifest['outputs'] == OUTPUTS, 'Export tensor contract mismatch')
     options = cpu_options()
     session = ort.InferenceSession(str(path), options, providers=['CPUExecutionProvider'])
-    require([x.name for x in session.get_inputs()] == INPUTS and
+    require({x.name for x in session.get_inputs()+session.get_overridable_initializers()} == set(INPUTS) and
             [x.name for x in session.get_outputs()] == OUTPUTS, 'ONNX graph names differ from manifest')
     inputs, outputs = session.get_inputs(), session.get_outputs()
     require(inputs[0].shape[-1] == config.state_dim and inputs[1].shape[-1] == config.action_dim and

@@ -16,6 +16,7 @@ from brass_ai.recovery.resources import TurnLease
 from brass_ai.recovery.teacher_schedule import reserved_rounds,counters,phase_for,finalization_reserve,TeacherTurns
 from brass_ai.recovery.telemetry import Timings
 from brass_ai.search.common import SearchIncomplete,turn_key
+from brass_ai.search.deadline import configure_clock
 from brass_ai.search.ismcts import MaskedISMCTS,MaskedSearchPolicy,information_key,node_key,visit_teacher,supported_continuation
 from brass_ai.step5.policy import NeuralPolicy,inference_deadline
 from .contracts import TEACHER,identity
@@ -52,6 +53,7 @@ class Worker(MaskedSearchPolicy):
         self.last_statistics=None
         bot=RootMasked(self.game,self.base,self.rollouts,self.config,view['seat'],self.context_features(view,rng),rng,
             deadline,recall,tree,cache,self.simulation_games,self.cancelled,self.partition_index,self.reward_context).bind(self.scope)
+        configure_clock(bot,self)
         with inference_deadline([self.base]+self.rollouts,deadline):stats=bot.run(view,choices)
         stats['context_id']=self.scope['id'];self.last_statistics=stats
         return stats
@@ -120,7 +122,8 @@ class SearchSession:
                 self.workers.append(Worker(root,config,base,opponents,mono,self.cancelled,i))
         except BaseException:self.close();raise
         self.game=self.workers[0].game if self.workers else None
-        self.telemetry=dict(decisions=0,searches=0,completed=0,interrupted=0,fallbacks=0,seconds=0.,prior_seconds=0.,overruns=0.)
+        self.telemetry=dict(decisions=0,searches=0,completed=0,interrupted=0,fallbacks=0,seconds=0.,prior_seconds=0.,overruns=0.,
+            attempted=0,deadline_stops=0,deadline_unused_worker_seconds=0.)
 
     def begin(self,setup_seed,sampling_seed,*,teacher_game=False):
         require(self.turn is None,'Close the previous game first')
@@ -226,6 +229,10 @@ class SearchSession:
             if error:raise error
             require(all(x['context_id']==scope['id'] for x in items),'Cannot merge incompatible private roots')
             stats=merge_statistics(items,choices);turn['injected']|=inject
+            self.telemetry['attempted']+=sum(x['batching']['attempted'] for x in items)
+            self.telemetry['deadline_stops']+=sum(x['batching'].get('deadline_stops',0) for x in items)
+            # Sum of unused worker clocks, not additional whole-turn time.
+            self.telemetry['deadline_unused_worker_seconds']+=sum(x['batching'].get('deadline_remaining_seconds',0.) for x in items)
             selected=max(range(len(choices)),key=lambda i:(stats['root'].get(choices[i]['id'],{}).get('visits',0),priors[i],-i))
             plan=supported_continuation(stats,choices[selected]['id'],seat,self.config.minimum_plan_visits)
             if plan is None:

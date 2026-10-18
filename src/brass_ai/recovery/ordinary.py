@@ -14,7 +14,7 @@ from .champion import enabled as champion_enabled,selfplay_policies
 from . import champion_mix
 
 
-def plan_collection(root,directory,state,config,signature,service,current,profiles,opponent_specs,fast_specs,window):
+def plan_collection(root,directory,state,config,signature,service,current,profiles,opponent_specs,fast_specs,window,*,fingerprints=None):
     incumbent=state.get('champion') if champion_enabled(config) else None
     if incumbent:
         path=project_path(root,incumbent['path'])
@@ -88,6 +88,12 @@ def plan_collection(root,directory,state,config,signature,service,current,profil
             learner_behavior=dict(model_id=current,policy_id=learner['policy_id'],
                                   exploration=config['exploration'],temperature=1.0,focus='mixed'))
         provenance['legacy_mode']='fast' if any(p.get('search_free') for p in policies) else ('searched' if kind=='legacy' else None)
+        if 'critic_data' in config:
+            from .critic_data import planned_table
+            require(fingerprints is not None,'Ordinary table requires incoming-policy fingerprints')
+            provenance['critic_table']=planned_table(policies,rotation,current,state['iteration'],
+                state['quality_pool']['members'],fingerprints['learner'],fingerprints['rule_bot'],
+                learner_policy_id=learner['policy_id'])
         if mix_receipt is not None:provenance['champion_rollout']=mix_receipt
         setup=digest(dict(rules='steam-brass-patch-1.1.0',setup_seed=seed))
         if quality_receipts:

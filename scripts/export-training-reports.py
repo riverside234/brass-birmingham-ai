@@ -212,6 +212,14 @@ def export(root, run, output=None, *, latest=2, extras=()):
         if directory in visited:
             return
         visited.add(directory)
+        upgrade_path = directory / 'upgrade.json'
+        if upgrade_path.is_file():
+            upgrade = add(upgrade_path, Path('lineage') / upgrade_path.relative_to(root),
+                          'Completed IL critic upgrade receipt', expected=True)
+            require(upgrade.get('contract') == 'completed-il-critic-upgrade/1.0.0',
+                    'Unrecognized IL upgrade lineage contract')
+            lineage(upgrade.get('parent'))
+            return
         parent_state = None
         for name in ('state.json', 'report.json'):
             path = directory / name

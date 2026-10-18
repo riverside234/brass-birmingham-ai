@@ -37,7 +37,7 @@ class Quality(unittest.TestCase):
         self.assertEqual(c,latest_model_config(c,c['imitation_checkpoint']))
         self.assertEqual(c['table_plan'],TABLE_PLAN);self.assertEqual(sum(c['population'].values()),24)
         old=copy.deepcopy(c)
-        for k in ('table_plan','opponent_pool','rating'):old.pop(k)
+        for k in ('table_plan','opponent_pool','rating','advantage','value_phase','critic_data','seat_descriptors'):old.pop(k)
         old.update(selfplay_recipe='latest-model-selfplay/2.0.0',curriculum=[dict(until=None,selfplay=60,historical=30,legacy=10)],
                    population=dict(recent=4,anchors=12))
         validate_config(old)
@@ -192,14 +192,19 @@ class Quality(unittest.TestCase):
             service=Mock();service.models={m['model_id']:None for m in p['members']}
             opponents={'v4':dict(kind='legacy',policy_id='v4')}
             args=(SOURCE_ROOT,root,state,c,dict(config=c),service,'current',['v4'],opponents,opponents,None)
-            before=copy.deepcopy(state);planned=plan_collection(*args)
-            restarted=plan_collection(*args[:2],json.loads(json.dumps(state)),*args[3:])
+            fp=dict(values=[1/8]*16+[1/6]*12)
+            for member in p['members']:member['fingerprint']=fp
+            fingerprints=dict(learner=fp,rule_bot=fp)
+            before=copy.deepcopy(state);planned=plan_collection(*args,fingerprints=fingerprints)
+            restarted=plan_collection(*args[:2],json.loads(json.dumps(state)),*args[3:],fingerprints=fingerprints)
             self.assertEqual(planned,restarted);self.assertEqual(state,before)
             self.assertEqual(planned['composition'],dict(selfplay=160,historical=144,legacy=16))
             self.assertEqual(planned['context_counter'],960)
             pairs={kind:Counter() for kind in ('historical','legacy')}
             for job in planned['jobs']:
                 physical=[job['policies'][(s-job['rotation'])%4] for s in range(4)]
+                table=job['provenance']['critic_table']
+                self.assertEqual([s['policy_id'] for s in table['seats']],[p['policy_id'] for p in physical])
                 pair=tuple(s for s,policy in enumerate(physical) if policy.get('model_id')=='current')
                 kind=job['provenance']['kind']
                 if kind=='selfplay':self.assertEqual(len(pair),4)

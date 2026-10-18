@@ -23,6 +23,8 @@ def main():
     config=sub.add_parser('configure')
     config.add_argument('--imitation-run',required=True);config.add_argument('--output',required=True)
     config.add_argument('--base',default='configs/step5/joint7-latest.json')
+    upgrade=sub.add_parser('upgrade-imitation',help='Copy completed v11.1 IL into a new v11.2 critic extension; no IL training')
+    upgrade.add_argument('--imitation-run',required=True);upgrade.add_argument('--output',required=True)
     portable=sub.add_parser('export',help='Export the current utility checkpoint with CPU parity')
     portable.add_argument('--checkpoint',required=True);portable.add_argument('--output',required=True)
     portable.add_argument('--include-personality',action='store_true',
@@ -31,6 +33,9 @@ def main():
     if a.command=='convert':
         from brass_ai.feature_conversion import convert
         result=convert(root,a.manifest,a.output,mono=a.mono,workers=a.workers)
+    elif a.command=='upgrade-imitation':
+        from brass_ai.recovery.critic_upgrade import upgrade
+        result=upgrade(root,a.imitation_run,a.output)
     elif a.command=='configure':
         from brass_ai.recovery.demonstrations import completed_imitation
         from brass_ai.recovery.config import latest_model_config,time_budget_config,champion_mix_config
@@ -99,7 +104,7 @@ def main():
             parameters=dict(state_encoder=sum(p.numel() for p in model.state_encoder.parameters()),
                 base=model.parameter_count,utility=utility.parameter_count,with_goals=goals.parameter_count),
             multiply_adds=dict(base=dense_multiply_adds(model),utility=dense_multiply_adds(utility),
-                              with_goals=dense_multiply_adds(goals)),requires_fresh_IL=True)
+                              with_goals=dense_multiply_adds(goals)),requires_fresh_IL=False,requires_explicit_v11_1_upgrade=True)
     import json
     print(json.dumps(result,indent=2))
 

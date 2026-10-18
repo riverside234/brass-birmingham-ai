@@ -3,6 +3,7 @@ from collections import defaultdict,deque
 import hashlib
 import heapq
 from pathlib import Path
+import shutil
 import time
 import numpy as np
 import torch
@@ -175,7 +176,9 @@ def build(root,directory,origin,model,config,update,workers):
     for i,(row,_,identity,encoded) in zip(indices,selected):
         context=row['view']['context']
         rows.append(dict(index=i,identity=list(identity),era=context['era'],phase=context['phase'],
-            group=group_for(context),kinds=[c['kind'] for c in row['choices']],choice_ids=list(encoded.choice_ids)))
+            group=group_for(context),kinds=[c['kind'] for c in row['choices']],
+            industries=[c.get('industry') for c in row['choices']],chosen=row['chosen'],
+            choice_ids=list(encoded.choice_ids)))
         offsets.append(offsets[-1]+len(encoded.actions))
     arrays=dict(states=np.stack([d[3].state for d in selected]),actions=np.concatenate([d[3].actions for d in selected]),
         seats=np.stack([d[3].stable_to_relative for d in selected]),offsets=np.asarray(offsets,dtype=np.int64),
@@ -218,3 +221,46 @@ def load(root,run,origin,model,config,update,workers,receipt=None):
     current=dict(path=path.relative_to(root).as_posix(),sha256=sha(path),probe_hash=metadata['probe_hash'])
     require(receipt is None or receipt==current,'Committed fixed IL probe manifest changed')
     return probe,current
+
+
+def import_probe(root,run,from_run,origin,model,config,update):
+    """Copy only a committed, compatible held-out probe into a fresh run.
+
+    The donor's large .prepared validation cache and all PPO state stay there.
+    A fresh run still checks KL(IL || IL)==0 before committing its own state.
+    """
+    from .retention import owned,safe,active
+    root,run=owned(root,run);_,donor=owned(root,from_run)
+    require(donor!=run and not (run/'state.json').exists(),'Probe import requires a different, new run')
+    require(not active(donor),'Stop the donor self-play run before reusing its IL probe')
+    state=read(safe(donor,donor/'state.json'))
+    receipt=state.get('il_kl_limit',{}).get('probe')
+    require(receipt is not None,'Donor has no committed fixed IL probe; full validation cache alone is insufficient')
+    entry=state['history'][-1];checkpoint=safe(donor,project_path(root,entry['path']))
+    require(sha(checkpoint)==entry['sha256'],'Donor checkpoint changed')
+    raw=torch.load(checkpoint,map_location='cpu',weights_only=True)
+    require(raw['training'].get('il_kl_limit',{}).get('probe')==receipt,
+            'Donor fixed probe differs from its committed checkpoint')
+    del raw
+    probe,_=load(root,donor,origin,model,config,update,1,receipt=receipt)
+    directory=safe(run,run/'il-kl');directory.mkdir(parents=True,exist_ok=True)
+    if (directory/'manifest.json').exists():
+        existing,current=load(root,run,origin,model,config,update,1)
+        require(current['probe_hash']==receipt['probe_hash'],'New run already has a different fixed IL probe')
+        return existing,current
+    metadata=dict(probe.metadata);source=project_path(root,metadata['cache']['path'])
+    target=safe(run,directory/'probe.npz');temporary=safe(run,directory/'probe.npz.tmp')
+    try:
+        shutil.copyfile(source,temporary)
+        require(sha(temporary)==metadata['cache']['sha256'],'IL probe changed during copy')
+        temporary.replace(target)
+    finally:temporary.unlink(missing_ok=True)
+    metadata['cache']=dict(path=target.relative_to(root).as_posix(),sha256=sha(target))
+    require(semantic_hash(metadata,probe.arrays)==receipt['probe_hash'],'Imported IL probe identity changed')
+    path=directory/'manifest.json';write_json(path,metadata)
+    current=dict(path=path.relative_to(root).as_posix(),sha256=sha(path),probe_hash=metadata['probe_hash'])
+    write_json(directory/'import-report.json',dict(format='fixed-il-probe-import/1.0.0',
+        source_run=donor.relative_to(root).as_posix(),source_receipt=receipt,destination_receipt=current,
+        copied_bytes=target.stat().st_size,training_state_imported=False))
+    print(f'Reused fixed IL validation probe: {len(probe.rows)} positions from {from_run}; no validation re-encoding',flush=True)
+    return Probe(metadata,probe.arrays,config),current

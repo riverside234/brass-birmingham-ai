@@ -76,7 +76,16 @@ def _prepare_inner(task):
     loaded=time.perf_counter()
     diagnostics=summarize(games,{policy_id},kinds)
     diagnosed=time.perf_counter()
-    data=prepared(games,lambda r:r['behavior']['policy_id']==policy_id,insolvency=insolvency,reward=reward)
+    data=[]
+    for game in games:
+        if hasattr(game,'critic_table'):
+            from .critic_data import check_table
+            table=check_table(game.critic_table,game,policy_id)
+            require(game.table_kind==kinds[game['setup_group']],'Critic table kind differs from plan')
+            eligible={s for s,seat in enumerate(table['seats']) if seat['role'] in ('learner','snapshot')}
+            data+=prepared([game],lambda r:r['seat'] in eligible,insolvency=insolvency,reward=reward)
+        else:
+            data+=prepared([game],lambda r:r['behavior']['policy_id']==policy_id,insolvency=insolvency,reward=reward)
     require(all(r['behavior']['kind']=='model' for r,_,_,_ in data),'External actions in PPO')
     prepared_at=time.perf_counter()
     # Only verified features and learning labels cross IPC. No repeated private
@@ -86,7 +95,8 @@ def _prepare_inner(task):
     compact=[(dict(seat=r['seat'],chosen=r['chosen'],behavior=r['behavior'],
                    view=dict(context={k:r['view']['context'][k] for k in ('era','phase','round')}),
                    choices=r['choices'],style=r['style'],intent=r['intent'],teacher=r['teacher'],
-                   **{k:r[k] for k in ('_insolvency_cost_to_go','_insolvency_trajectory','_reward_return','_reward_remaining','_reward_id','_reward_trajectory') if k in r}),
+                   **{k:r[k] for k in ('_insolvency_cost_to_go','_insolvency_trajectory','_reward_return','_reward_remaining','_reward_id','_reward_trajectory',
+                       '_critic_role','_table_kind','_seat_descriptors','_descriptor_generation') if k in r}),
               target,identity,encoded) for r,target,identity,encoded in data]
     headers=[{k:v for k,v in g.items() if k!='records'} for g in games]
     ended=time.perf_counter()

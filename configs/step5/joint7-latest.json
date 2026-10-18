@@ -150,7 +150,7 @@
   "audit_workers": 16,
   "overlap_pools": true,
   "search_wall_fraction": null,
-  "architecture": "brass-four-seat-mlp-resnet/11.1.0",
+  "architecture": "brass-four-seat-mlp-resnet/11.2.0",
   "parameter_limit": 6500000,
   "initialization": "random",
   "imitation": {
@@ -265,6 +265,13 @@
     "decrement": 0.01,
     "interval_iterations": 30
   },
+  "rehearsal_sampling": {
+    "contract": "rotating-train-window/1.0.0",
+    "rows_per_iteration": 16384,
+    "shard_draws": 32,
+    "max_cache_bytes": 4294967296,
+    "delete_after_update": true
+  },
   "table_plan": {
     "quotas": {
       "selfplay": 50,
@@ -312,5 +319,90 @@
     "panel_setups": 8,
     "v4_profile": "bank-3dc65253a610191d66a5/balanced-v3-masked-economy"
   },
-  "v4_search_enabled": false
+  "v4_search_enabled": false,
+  "advantage": {
+    "contract": "gae-advantage/2.0.0",
+    "lambda": 1.0,
+    "shadow_lambdas": [
+      0.98,
+      0.95,
+      0.9
+    ],
+    "chain": "nonforced",
+    "gate": {
+      "contract": "staged-gae-gate/1.0.0",
+      "mode": "auto",
+      "minimum_value_iterations": 10,
+      "heldout_ev_min": 0.5,
+      "ev_streak": 5,
+      "fallback_value_iterations": 30,
+      "healthy_iterations": 20,
+      "rating_slots": 3,
+      "rating_min_slope": 0.0
+    },
+    "table_gate": {
+      "contract": "table-gae-ev-gate/1.0.0",
+      "mode": "auto",
+      "ev_tolerance": 0.05,
+      "consecutive_iterations": 10
+    }
+  },
+  "value_phase": {
+    "contract": "ppg-value-phase/2.0.0",
+    "enabled": true,
+    "buffer_iterations": 2,
+    "max_epochs": 3,
+    "batch_size": 4096,
+    "clone_rows": 8192,
+    "clone_batch_size": 512,
+    "beta_clone": 1.0,
+    "beta_clone_max": 8.0,
+    "kl_cap": 0.002,
+    "learning_rate": 6e-06,
+    "holdout_fraction": 0.05
+  },
+  "seat_descriptors": {
+    "contract": "seat-descriptors/1.0.0",
+    "roles": [
+      "learner",
+      "snapshot",
+      "il",
+      "rule_bot",
+      "unknown"
+    ],
+    "lag_scale": 256,
+    "fingerprint": {
+      "phase": "action",
+      "families": [
+        "build",
+        "network",
+        "develop",
+        "sell",
+        "loan",
+        "scout",
+        "pass",
+        "other"
+      ],
+      "build_industries": true
+    },
+    "embedding": 32,
+    "dropout_games": 0.25
+  },
+  "critic_data": {
+    "contract": "critic-rows/1.0.0",
+    "learner_rows": true,
+    "snapshot_rows": true,
+    "snapshot_weight": 1.0,
+    "excluded_roles": [
+      "il",
+      "rule_bot"
+    ],
+    "holdout_fraction": 0.05,
+    "rollout": {
+      "mode": "auto",
+      "descriptor_ev_min_gain": 0.0,
+      "snapshot_ev_tolerance": 0.02,
+      "reduced_snapshot_weight": 0.5
+    }
+  }
 }

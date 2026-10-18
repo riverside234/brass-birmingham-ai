@@ -52,8 +52,8 @@ def _snapshot_input(value, memo=None):
     return copy.deepcopy(value, memo)
 
 
-def model_id(model):
-    value = hashlib.sha256(digest({'compatibility': compatibility(), 'model': model.config.to_dict()}).encode())
+def model_id(model,*,contracts=None):
+    value = hashlib.sha256(digest({'compatibility': compatibility() if contracts is None else contracts, 'model': model.config.to_dict()}).encode())
     for name, tensor in sorted(model.state_dict().items()):
         value.update(name.encode())
         value.update(tensor.detach().cpu().contiguous().numpy().tobytes())

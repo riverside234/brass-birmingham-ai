@@ -258,7 +258,8 @@ def slim_checkpoint(root,run,entry,existing=None):
     else:
         raw=torch.load(path,map_location='cpu',weights_only=True);raw['optimizer']=None
         # Opponents need model/compatibility/lineage, not copied per-game reports.
-        raw['training']={k:v for k,v in raw.get('training',{}).items() if k not in ('evidence','imitation')}
+        raw['training']={k:v for k,v in raw.get('training',{}).items()
+                         if k not in ('evidence','imitation','actor_value_phases')}
         if destination.exists():
             # An interrupted publication has no committed checksum yet. Verify
             # the complete derived payload, including calibration and lineage.
@@ -306,6 +307,9 @@ def plan(root,run,config=RETENTION):
     root,run=owned(root,run);require(run.exists(),'Run does not exist')
     require(not active(run,allow_owner=True),'Cannot prune an active run')
     pins=references(root,run);state_path=run/'state.json';state=read(state_path) if state_path.exists() else {}
+    from .value_buffer import enabled as buffered_value
+    require(not buffered_value(state.get('signature',{}).get('config',{})) or config['replay_rounds']>=2,
+            'Two-iteration PPG requires at least 2 replay rounds, including manual cleanup')
     keep=set(pins);reasons=dict(pins);candidates={}
     def candidate(path,reason):
         path=safe(run,path)
@@ -344,6 +348,10 @@ def plan(root,run,config=RETENTION):
         for path in (run/'population').glob('*.pt'): candidate(path,'retired population weights')
         rounds=sorted((p for p in run.glob('iteration-*') if p.is_dir() and p.name[10:].isdigit() and (p/'report.json').exists()),
                       key=lambda p:int(p.name[10:]))
+        if buffered_value(state.get('signature',{}).get('config',{})):
+            # Pending reports must not push a committed cache's rebuild source
+            # (or the prior full checkpoint's source) out of this window.
+            rounds=[p for p in rounds if int(p.name[10:])<state['iteration']]
         for directory in rounds[:-config['replay_rounds']]:
             for p in directory.glob('*.jsonl.gz*'): candidate(p,'expired ordinary or unpinned teacher replay')
             if int(directory.name.split('-')[-1])<state['iteration'] and str(read(directory/'report.json').get('format','')).startswith('step5-recovery-report/'):

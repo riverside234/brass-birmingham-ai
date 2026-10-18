@@ -50,9 +50,13 @@ def calibration_ready(model):
     return bool(receipt and receipt.get('reward_id')==digest(model.config.utility) and receipt.get('ready'))
 
 
-def calibrate(model,optimizer,dataset,config,*,auxiliary=None):
+def calibrate(model,optimizer,dataset,config,*,auxiliary=None,indices=None):
+    from .updates import value_output
     if calibration_ready(model):return dict(required=False,receipt=model.utility_calibration)
     require(dataset.utility is not None,'Calibration requires fresh complete-game utility targets')
+    indices=list(range(len(dataset.data))) if indices is None else list(indices)
+    if not indices:
+        return dict(required=True,reason='No critic-train rows; calibration deferred',receipt=model.utility_calibration)
     # Fixed three head-only passes. No extra games, retries or policy/value drift.
     # Keep the existing Adam state for every compatible parameter untouched.
     parameters=list(model.parameters());flags=[p.requires_grad for p in parameters]
@@ -69,17 +73,17 @@ def calibrate(model,optimizer,dataset,config,*,auxiliary=None):
         with torch.no_grad():
             for part in teacher.microbatches(range(len(teacher.data)),config['microbatch_size'],config['max_candidate_cells'],config['bucket']):
                 ix,inputs,_=teacher.value_batch(part,model)
-                predictions[ix]=model(*inputs,remaining=teacher.remaining[ix])[-1].float()
+                predictions[ix]=value_output(model,inputs,teacher,ix)[-1].float()
         diff=predictions-teacher.utility
         return dict(mse=float(diff.square().mean()),mae=float(diff.abs().mean())),predictions
     def error():
         squared=absolute=0.
         with torch.no_grad():
-            for part in dataset.microbatches(range(len(dataset.data)),config['microbatch_size'],config['max_candidate_cells'],config['bucket']):
+            for part in dataset.microbatches(indices,config['microbatch_size'],config['max_candidate_cells'],config['bucket']):
                 ix,inputs,_=dataset.value_batch(part,model)
-                diff=model(*inputs,remaining=dataset.remaining[ix])[-1].float()-dataset.utility[ix]
+                diff=value_output(model,inputs,dataset,ix)[-1].float()-dataset.utility[ix]
                 squared+=float(diff.square().sum());absolute+=float(diff.abs().sum())
-        n=4*len(dataset.data)
+        n=4*len(indices)
         return dict(mse=squared/n,mae=absolute/n)
     try:
         before=error()
@@ -90,13 +94,13 @@ def calibrate(model,optimizer,dataset,config,*,auxiliary=None):
             began=time.perf_counter();teacher_before,_=teacher_error();teacher_seconds+=time.perf_counter()-began
             before={k:(1-fraction)*before[k]+fraction*teacher_before[k] for k in before}
         for _ in range(3):
-            order=torch.randperm(len(dataset.data)).tolist()
+            order=[indices[j] for j in torch.randperm(len(indices)).tolist()]
             for start in range(0,len(order),config['effective_batch_size']):
                 batch=order[start:start+config['effective_batch_size']];optimizer.zero_grad(set_to_none=True)
                 for part in dataset.microbatches(batch,config['microbatch_size'],config['max_candidate_cells'],config['bucket']):
                     ix,inputs,_=dataset.value_batch(part,model)
-                    diff=model(*inputs,remaining=dataset.remaining[ix])[-1].float()-dataset.utility[ix]
-                    ((1-fraction)*diff.square().mean(-1).sum()/len(batch)).backward()
+                    diff=value_output(model,inputs,dataset,ix)[-1].float()-dataset.utility[ix]
+                    ((1-fraction)*(diff.square().mean(-1)*dataset.critic_weights[ix]).sum()/len(batch)).backward()
                 if teacher is not None:
                     began=time.perf_counter()
                     # A bounded whole teacher set alongside each already
@@ -104,7 +108,7 @@ def calibrate(model,optimizer,dataset,config,*,auxiliary=None):
                     # exactly the same mixture used by the auxiliary loss.
                     for part in teacher.microbatches(range(len(teacher.data)),config['microbatch_size'],config['max_candidate_cells'],config['bucket']):
                         ix,inputs,_=teacher.value_batch(part,model)
-                        diff=model(*inputs,remaining=teacher.remaining[ix])[-1].float()-teacher.utility[ix]
+                        diff=value_output(model,inputs,teacher,ix)[-1].float()-teacher.utility[ix]
                         (fraction*diff.square().mean(-1).sum()/len(teacher.data)).backward()
                     teacher_presentations+=len(teacher.data);teacher_steps+=1
                     auxiliary.calibration_seen.update(range(len(teacher.data)))
@@ -130,7 +134,7 @@ def calibrate(model,optimizer,dataset,config,*,auxiliary=None):
         # readiness gate. A failed ordinary fit still defers later searches.
         ready=ready and ordinary_after['mse']<=ordinary_before['mse']+1e-8
     model.utility_calibration=dict(version=MIGRATION,reward_id=digest(model.config.utility),ready=ready,
-        decisions=len(dataset.data),games=len({d[2][0] for d in dataset.data}),steps=steps,
+        decisions=len(indices),games=len({dataset.data[i][2][0] for i in indices}),steps=steps,
         before=before,after=after,scope='Fresh ordinary trajectories, in-sample calibration; not a strength guarantee')
     if teacher is not None:
         model.utility_calibration.update(version='teacher-mixed-utility-calibration/1.0.0',

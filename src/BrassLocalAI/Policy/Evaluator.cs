@@ -8,7 +8,7 @@ namespace BrassLegacyAI
 {
     public sealed class Ledger
     {
-        public double banked,industries,links,secured_links,forecast_links,industry_reserve,finance,development,rival,liquidity,sale_tempo,canal_opportunity,inventory_risk,tempo,score;
+        public double banked,industries,links,secured_links,forecast_links,industry_reserve,finance,development,rival,liquidity,sale_tempo,inventory_risk,tempo,score;
         public string era_strategy;
         public double? win_share;
         public int? rank;

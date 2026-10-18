@@ -13,6 +13,8 @@ from brass_ai.bank import FrozenOpponent,admission,load_bank,read,sha
 from brass_ai.learning.contracts import digest,require
 from brass_ai.learning.legacy_policy import LegacyPolicy
 from brass_ai.search.common import turn_key
+from brass_ai.search.legacy_runtime import reference as shared_reference, validate_reference, runtime_directory
+from brass_ai.legacy import LegacyWorker
 from brass_ai.step5.league import write_json
 from .config import time_budget
 
@@ -59,7 +61,7 @@ def prepare(root, *, publish=True):
         write_json(root/'training/opponents/lab/current.json',record)
     return record
 
-def legacy_spec(root,parent,budget=None,purpose='training',*,search_free=False,work_budget=None):
+def legacy_spec(root,parent,budget=None,purpose='training',*,search_free=False,work_budget=None,search_runtime=None):
     admission(root,parent,purpose)
     payload=load_bank(root,parent.split('/')[0])['payload']
     profile=payload['profiles'][parent.split('/')[1]]
@@ -87,6 +89,12 @@ def legacy_spec(root,parent,budget=None,purpose='training',*,search_free=False,w
         identity=dict(parent=parent,budget=budget,work_budget=work_budget,version=1)
         if fixed_simulations(work_budget) or time_budget(work_budget):identity.update(version=2,search_free=search_free)
         result['policy_id']=('masked-v4-work-fast/' if search_free else 'masked-v4-work/')+digest(identity)
+    if work_budget is not None and search_runtime is not False:
+        ref=shared_reference(root,parent) if search_runtime is None else validate_reference(search_runtime)
+        if ref is not None:
+            require(ref['recipe']['bank']==parent.split('/')[0],'Shared search belongs to another frozen strategy')
+            result['search_runtime']=ref
+            result['policy_id']='shared-legacy-search/'+digest(dict(parent=result['policy_id'],runtime=ref['id']))
     return result
 
 def teachers(root,budget=None,work_budget=None):
@@ -105,9 +113,10 @@ def native_node_ceiling(profile,simulations):
     return min(profile['work_limit'],4096+simulations*(profile.get('max_choices',512)+1))
 
 class LabLegacyPolicy(LegacyPolicy):
-    def __init__(self,root,parent,budget,*,mono=None,purpose='training',diagnostic=False,search_free=False,work_budget=None):
+    def __init__(self,root,parent,budget,*,mono=None,purpose='training',diagnostic=False,search_free=False,work_budget=None,search_runtime=None):
         self.root,self.parent,self.budget=Path(root),parent,budget
-        self.policy_id=legacy_spec(root,parent,budget,purpose,search_free=search_free,work_budget=work_budget)['policy_id']
+        spec=legacy_spec(root,parent,budget,purpose,search_free=search_free,work_budget=work_budget,search_runtime=search_runtime)
+        self.policy_id=spec['policy_id']
         self.work_budget=copy.deepcopy(work_budget)
         if search_free and time_budget(work_budget):
             # Search-free planning retains its prior node cap and exceptional
@@ -119,7 +128,14 @@ class LabLegacyPolicy(LegacyPolicy):
         self.native_forest='src/BrassMaskedSearch/RootForest.cs' in load_bank(root,parent.split('/')[0])['payload']['runtime_source_paths']
         self.workers=[];self.contexts=weakref.WeakKeyDictionary()
         try:
-            for _ in range(1 if self.native_forest or search_free else budget['search_workers']):self.workers.append(FrozenOpponent(root,parent,purpose=purpose,mono=mono))
+            for _ in range(1 if self.native_forest or search_free else budget['search_workers']):
+                if spec.get('search_runtime'):
+                    from types import SimpleNamespace
+                    ref=spec['search_runtime']
+                    profile=read(Path(root)/'configs/legacy-ai'/(parent.split('/')[1]+'.json'))
+                    worker=LegacyWorker(root,mono=mono,timeout=600,runtime_directory=runtime_directory(root,ref))
+                    self.workers.append(SimpleNamespace(worker=worker,profile=profile,close=worker.close))
+                else:self.workers.append(FrozenOpponent(root,parent,purpose=purpose,mono=mono))
         except BaseException:
             for w in self.workers:w.close()
             raise
@@ -127,6 +143,8 @@ class LabLegacyPolicy(LegacyPolicy):
         self.cpu_workers=1 if search_free else budget['search_workers']
         self.telemetry=dict(turns=0,branches=0,nodes=0,unique_plans=0,failures=0,over_budget_turns=0,max_turn_seconds=0.,seconds=budget['seconds'],search_workers=self.cpu_workers,search_free=search_free,completed=0,cpu_batching={})
         self.telemetry.update(search_elapsed_seconds=0.,time_budget_exhausted_turns=0,deadline_fallback_choices=0)
+        self.telemetry.update(search_runtime=spec.get('search_runtime',{}).get('id'),deadline_admission_stops=0,
+            deadline_unused_worker_seconds=0.,interrupted=0)
         if work_budget is not None:
             self.telemetry.update(work_budget=copy.deepcopy(work_budget),allocated_simulations=0,attempted_simulations=0,
                 work_exhausted_turns=0,deadline_limited_turns=0,incumbent_only_decisions=0,forced_choices=0)
@@ -158,6 +176,9 @@ class LabLegacyPolicy(LegacyPolicy):
             profile=dict(self.opponent.profile,milliseconds=max(0,1000*(state['deadline']-time.monotonic()-(.02 if timed else 0.))),
                 incumbent_only=self.search_free,work_limit=max(1,self.opponent.profile['work_limit']-state['work']))
             if timed:profile['simulations']=100000 # emergency guard, not a target/quota
+            # A fixed-count budget keeps its exceptional watchdog. Tail
+            # admission must not voluntarily withhold required attempts.
+            profile['deadline_admission']=not fixed_simulations(getattr(self,'work_budget',None))
             work_budget=getattr(self,'work_budget',None)
             allocated=0
             if work_budget is not None and not time_budget(work_budget):
@@ -186,6 +207,9 @@ class LabLegacyPolicy(LegacyPolicy):
             require(stats['opponent_nodes']==0,'Opponent nodes cannot be merged')
             self.telemetry['branches']+=self.cpu_workers;self.telemetry['nodes']+=d['nodes']
             self.telemetry['completed']+=stats['completed'];self.telemetry['unique_plans']+=len(d.get('alternatives',[]))+1
+            self.telemetry['interrupted']+=stats['interrupted']
+            self.telemetry['deadline_admission_stops']+=stats.get('deadline_stops',0)
+            self.telemetry['deadline_unused_worker_seconds']+=stats.get('deadline_remaining_ms',0.)/1000
             self.telemetry['cpu_batching']=stats.get('cpu_batching',{})
             if self.search_free:require(stats['completed']==0,'Fast opponent performed MCTS')
             if time_budget(work_budget):

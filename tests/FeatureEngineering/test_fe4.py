@@ -74,12 +74,12 @@ class FeatureSchemaTests(unittest.TestCase):
         self.assertEqual(schema['derived'],json.loads(json.dumps(specification())))
         self.assertEqual((len(STATE_FIELDS),len(ACTION_FIELDS)),(326,52))
         model=FourSeatNet();self.assertEqual(model.config.hidden,512)
-        self.assertEqual(model.parameter_count,5904644);self.assertLess(model.parameter_count,model.config.parameter_limit)
+        self.assertEqual(model.parameter_count,5910916);self.assertLess(model.parameter_count,model.config.parameter_limit)
         self.assertEqual(model.config.parameter_limit,6500000)
         bad=model.config.to_dict();bad['parameter_limit']=2000000
         with self.assertRaisesRegex(ValueError,'budget'):ModelConfig.from_dict(bad)
         bad=model.config.to_dict();bad['architecture']='brass-four-seat-mlp-resnet/1.0.0'
-        with self.assertRaisesRegex(ValueError,'old architectures'):ModelConfig.from_dict(bad)
+        with self.assertRaisesRegex(ValueError,'Architecture 11.2 required'):ModelConfig.from_dict(bad)
 
     def test_terminal_missing_source_information_private_fields_and_deadline_fail_explicitly(self):
         row=self.positions[0];fast=PreparedEncoder();view=copy.deepcopy(row['view'])
@@ -113,7 +113,13 @@ class FeatureSchemaTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError,'Incompatible'):load_checkpoint(path)
 
     def test_encoded_cache_version_receipts_and_neutral_supervision_preserve_labels(self):
-        episode=check_game(game())
+        raw=game();position=self.positions[0]
+        for row in raw['records']:
+            row['view']=rotate(position['view'],row['seat']-position['view']['seat'])
+            row['view']['context']['revision']+=row['step']
+            row['choices']=copy.deepcopy(position['choices'])
+            row['behavior']['probability']=1/len(row['choices'])
+        episode=check_game(raw)
         with tempfile.TemporaryDirectory(dir=SOURCE_ROOT/'artifacts') as directory:
             path=Path(directory)/'raw.jsonl.gz';write_shard(path,[episode],dict(purpose='training'))
             receipt=cache_receipt(path);self.assertEqual(receipt['validator'],cache_version())
@@ -197,7 +203,7 @@ class FeatureSchemaTests(unittest.TestCase):
             self.assertLess(report['parity_max_absolute_error'],.005);load_export(directory/'official.onnx')
             utility=UtilityNet(utility_config(ModelConfig.preset(),reward_spec(read_json(SOURCE_ROOT/'configs/step5/joint7-latest.json'))))
             model=PersonalityNet(PersonalityConfig(utility.config.to_dict()))
-            self.assertEqual(model.parameter_count,6023137)
+            self.assertEqual(model.parameter_count,6030433)
             self.assertEqual(model.config.parameter_limit,6600000)
             save(directory/'goals.pt',model);restored,_=load(directory/'goals.pt')
             with torch.no_grad():

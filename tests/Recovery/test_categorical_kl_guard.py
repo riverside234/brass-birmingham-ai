@@ -303,10 +303,14 @@ class ResumeTests(unittest.TestCase):
         self.assertEqual(len(current),1);self.assertEqual(current[0]['from_implementation'],PREVIOUS)
         self.assertEqual(current[0]['learning_compatibility'],digest(compatibility()))
         self.assertFalse(current[0].get('config_changes'))
-        if implementation_id()!=GUARD_IMPLEMENTATION:
-            self.assertFalse(any(e['to_implementation']==implementation_id() for e in entries))
+        implementation=implementation_id()
+        if implementation!=GUARD_IMPLEMENTATION:
+            self.assertFalse(any(e['to_implementation']==implementation for e in entries))
         handoff=read(SOURCE_ROOT/'configs/learning/imitation-handoff-sources.json')['compatible_sources']
-        self.assertEqual(digest(handoff[:47]),'506f7a6e45e3a2e139bdf37972f6c2ca29bc3e926a3cfa726a3e9c1eeddbc225')
+        # New completed-IL receipts may be prepended (bounded rehearsal does
+        # this). The historical entries and their order must still be exact.
+        start=next(i for i,e in enumerate(handoff) if e['implementation']=='86fd379b6fe6fb4da8e2b977d9c6ef98aca870d0cd35cb6a6c0f9b2080f2916a')
+        self.assertEqual(digest(handoff[start:start+47]),'506f7a6e45e3a2e139bdf37972f6c2ca29bc3e926a3cfa726a3e9c1eeddbc225')
         self.assertTrue(any(e['implementation']==PREVIOUS and e['learning_compatibility']==digest(compatibility()) for e in handoff))
 
 

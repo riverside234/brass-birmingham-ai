@@ -287,10 +287,15 @@ def latest_model_config(config,imitation_checkpoint):
     from .lr_controller import AUTO_CONTROLLER,AUTO_CONTRACT
     from .il_kl_limit import DEFAULT as AUTO_IL_KL
     from .rehearsal import DEFAULT_FLOOR
+    from .rehearsal_window import DEFAULT as REHEARSAL_SAMPLING
+    from .gae import DEFAULT as ADVANTAGE
+    from .value_phase import DEFAULT as VALUE_PHASE
+    from .critic_data import DEFAULT as CRITIC_DATA
+    from brass_ai.learning.seat_descriptors import DEFAULT as SEAT_DESCRIPTORS
     from .quality_config import TABLE_PLAN,OPPONENT_POOL,RATING
     # The width-512 learning-rate adjustment was introduced with v11. Moving
     # the local addition in v11.1 must not apply that adjustment a second time.
-    if result.get('architecture') not in (ARCHITECTURE,'brass-four-seat-mlp-resnet/11.0.0'):
+    if result.get('architecture') not in (ARCHITECTURE,'brass-four-seat-mlp-resnet/11.0.0','brass-four-seat-mlp-resnet/11.1.0'):
         result['learning_rate']*=.6
         result['imitation']['learning_rate']*=.6
         result['update']['grad_clip']=min(result['update']['grad_clip'],1.)
@@ -310,6 +315,11 @@ def latest_model_config(config,imitation_checkpoint):
     if result['ppo_lr_controller']['contract']==AUTO_CONTRACT:
         result.setdefault('il_kl_limit',copy.deepcopy(AUTO_IL_KL))
     result.setdefault('rehearsal_floor',copy.deepcopy(DEFAULT_FLOOR))
+    result.setdefault('rehearsal_sampling',copy.deepcopy(REHEARSAL_SAMPLING))
+    result['advantage']=copy.deepcopy(ADVANTAGE)
+    result['critic_data']=copy.deepcopy(CRITIC_DATA)
+    result['seat_descriptors']=copy.deepcopy(SEAT_DESCRIPTORS)
+    result.setdefault('value_phase',dict(copy.deepcopy(VALUE_PHASE),learning_rate=result['learning_rate']))
     result.setdefault('table_plan',copy.deepcopy(TABLE_PLAN))
     result.setdefault('opponent_pool',copy.deepcopy(OPPONENT_POOL))
     result.setdefault('rating',copy.deepcopy(RATING))
@@ -442,6 +452,35 @@ def validate_config(config):
         'search_ready_games','search_every_games','search_games','distill_steps','distill_weight',
         'rehearsal_manifest','rehearsal_weight','rehearsal_until','profile_steps'}
     version=config.get('format')
+    require(('critic_data' in config)==('seat_descriptors' in config),'Critic/descriptor blocks must be supplied together')
+    if 'critic_data' in config:
+        from .critic_data import validate_config as validate_critic
+        from brass_ai.learning.seat_descriptors import validate_config as validate_descriptors
+        from brass_ai.learning.model import ARCHITECTURE
+        fields.update(('critic_data','seat_descriptors'))
+        validate_critic(config['critic_data']);validate_descriptors(config['seat_descriptors'])
+        require(config.get('architecture')==ARCHITECTURE and quality_selfplay_recipe(config)
+            and config.get('value_phase',{}).get('enabled') and 'il_kl_limit' in config,
+            'Opponent critic rows require fresh v11.2 quality-pool training and fixed IL probe')
+        require(config['value_phase']['holdout_fraction']==config['critic_data']['holdout_fraction']
+            and config.get('advantage',{}).get('table_gate') is not None,'Critic holdout/GAE table contract differs')
+    if 'advantage' in config:
+        from .gae import validate as validate_advantage
+        fields.add('advantage');validate_advantage(config['advantage'],combined='reward' in config)
+        require(config['update'].get('actor_nonforced'),'GAE requires the nonforced actor recipe')
+    if 'value_phase' in config:
+        from .value_phase import validate as validate_value_phase
+        fields.add('value_phase');value=validate_value_phase(config['value_phase'])
+        require('advantage' in config and 'reward' in config and config['update'].get('actor_nonforced'),
+                'Value phase requires GAE plumbing and combined-return critic')
+        require(value['learning_rate']==config['learning_rate'],'Value phase must use the base PPO learning rate')
+        if value['enabled'] and value['buffer_iterations']==2:
+            require(type(config.get('retention',{}).get('replay_rounds')) is int and
+                    config['retention']['replay_rounds']>=2,'Two-iteration PPG requires at least 2 replay rounds')
+    require(('advantage' in config)==('value_phase' in config),'GAE/value configuration blocks must be supplied together')
+    if config.get('advantage',{}).get('gate',{}).get('mode')=='auto':
+        require(config['value_phase']['enabled'] and 'il_kl_limit' in config and config.get('rating',{}).get('enabled'),
+                'Automatic GAE requires the value phase, calibrated health and scheduled ratings')
     if 'v4_search_enabled' in config:
         fields.add('v4_search_enabled');v4_search_enabled(config)
     if 'learning_rate_warmup' in config:
@@ -454,6 +493,9 @@ def validate_config(config):
     if 'rehearsal_floor' in config:
         from .rehearsal import validate as validate_floor
         fields.add('rehearsal_floor');validate_floor(config['rehearsal_floor'])
+    if 'rehearsal_sampling' in config:
+        from .rehearsal_window import validate as validate_sampling
+        fields.add('rehearsal_sampling');validate_sampling(config['rehearsal_sampling'])
     from .lr_controller import AUTO_CONTRACT
     auto=config.get('ppo_lr_controller',{}).get('contract')==AUTO_CONTRACT
     require(auto==('il_kl_limit' in config),'Calibrated IL-KL requires LR controller 1.2 and its limit block together')

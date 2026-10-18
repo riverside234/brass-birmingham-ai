@@ -49,7 +49,7 @@ class Rules(unittest.TestCase):
             bad=copy.deepcopy(cfg);bad['il_kl_limit'].update(change)
             with self.assertRaises(ValueError):validate_config(bad)
         old=copy.deepcopy(cfg);old.pop('il_kl_limit');old['ppo_lr_controller']['contract']=lr.CONTRACT
-        for key in ('table_plan','opponent_pool','rating'):old.pop(key,None)
+        for key in ('table_plan','opponent_pool','rating','advantage','value_phase','critic_data','seat_descriptors'):old.pop(key,None)
         old.update(selfplay_recipe='latest-model-selfplay/2.0.0',
             curriculum=[dict(until=None,selfplay=60,historical=30,legacy=10)],population=dict(recent=4,anchors=12))
         validate_config(old)
@@ -227,7 +227,7 @@ class ProbeTests(unittest.TestCase):
         for i in range(8):
             context=dict(era='CanalEra' if i<4 else 'RailEra',phase='action' if i%2==0 else 'continuation')
             choices=[dict(id=k,kind=k) for k in ('sell','pass','loan')]
-            row=dict(view=dict(context=context),choices=choices)
+            row=dict(view=dict(context=context),choices=choices,chosen=0)
             rows.append((row,{},('game',i%4),Encoded(x[i].numpy(),a[i].numpy(),mapping[i].numpy(),tuple(c['id'] for c in choices))))
         return rows
 

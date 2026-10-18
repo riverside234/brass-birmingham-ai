@@ -34,6 +34,7 @@ class LegacyOpponentWorkTests(unittest.TestCase):
             def __init__(self,*args,**kwargs):self.profile=outer.profile;self.worker=Worker()
             def close(self):pass
         for mock in (patch.object(legacy,'admission'),patch.object(legacy,'load_bank',side_effect=lambda *args:{'payload':self.payload}),
+                     patch.object(legacy,'shared_reference',return_value=None),
                      patch.object(legacy,'FrozenOpponent',Frozen),patch.object(legacy.time,'monotonic',side_effect=lambda:self.clock.now)):
             mock.start();self.addCleanup(mock.stop)
         self.budget=dict(LEGACY_BUDGET,search_workers=4)
