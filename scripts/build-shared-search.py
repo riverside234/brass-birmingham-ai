@@ -1,4 +1,4 @@
-"""Build shared official v4 search for IL/self-play without replacing frozen banks."""
+"""Build shared v5 search (official v4 ancestry) without replacing frozen banks."""
 import argparse
 import json
 from pathlib import Path

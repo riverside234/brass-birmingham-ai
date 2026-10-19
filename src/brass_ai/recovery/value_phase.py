@@ -1,4 +1,4 @@
-"""Bounded PPG-style critic fitting with raw-policy cloning and transactional epochs."""
+"""Bounded PPG critic fitting with guarded steps and held-out epoch acceptance."""
 import copy
 import hashlib
 import math
@@ -151,13 +151,14 @@ def fit(model,optimizer,dataset,train_ids,heldout_ids,actor_ids,probe_ids,config
     current_count=len(dataset.data) if current_count is None else current_count
     validation_dataset=dataset if validation_dataset is None else validation_dataset
     report=dict(contract=config['contract'],enabled=config['enabled'],optimizer_steps=0,attempted_steps=0,
-        epochs=0,attempted_epochs=0,early_stop_reason=None,kl_guard_tripped=False,
+        epochs=0,completed_epochs=0,partial_epochs=0,attempted_epochs=0,early_stop_reason=None,kl_guard_tripped=False,
+        acceptance='kl-safe-prefix/1.0.0',kl_cap=config['kl_cap'],
         beta_clone=beta,learning_rate=config['learning_rate'],train_rows=len(value_train_ids),heldout_rows=len(heldout_ids),
         current_train_rows=len(train_ids),previous_train_rows=len(value_train_ids)-len(train_ids),
         distinct_value_rows_used=0,value_presentations=0,clone_presentations=0,
         attempted_value_presentations=0,attempted_clone_presentations=0,
         distinct_current_rows_used=0,distinct_previous_rows_used=0,current_presentations=0,previous_presentations=0,
-        scope='Critic: current plus configured previous iteration; validation/cloning/probes: current only; separate Adam/base LR, no PPO counters')
+        scope='Critic: current plus configured previous iteration; validation/cloning/probes: current only; separate Adam/base LR, no PPO counters; KL-safe prefixes require non-increasing held-out loss')
     if not config['enabled']:report['early_stop_reason']='disabled'
     elif not value_train_ids or not heldout_ids:report['early_stop_reason']='insufficient_critic_split'
     elif not actor_ids or not probe_ids:report['early_stop_reason']='no_policy_reference'
@@ -170,14 +171,20 @@ def fit(model,optimizer,dataset,train_ids,heldout_ids,actor_ids,probe_ids,config
     reference=RawPolicyReference(model,dataset,sorted(set(clones)|set(probe_ids)),update)
     train_before=metrics(model,value_dataset,value_train_ids,update);before=metrics(model,validation_dataset,heldout_ids,update)
     current=before;epochs=[];used=set();presentations=0;clone_presentations=0
-    max_kl=0.;last_attempt=None;previous_presentations=0;role_presentations=defaultdict(int)
+    max_kl=0.;accepted_kl=0.;last_attempt=None;previous_presentations=0;role_presentations=defaultdict(int)
     for epoch in range(config['max_epochs']):
         # Restore BOTH weights and this optimizer's moments on a rejected epoch.
         # PPO's optimizer/state and counters are never read or written here.
         saved_model=copy.deepcopy(model.state_dict());saved_adam=copy.deepcopy(optimizer.state_dict())
         order=[value_train_ids[j] for j in torch.randperm(len(value_train_ids)).tolist()]
-        attempted=0;epoch_used=set();epoch_presentations=0;epoch_clones=0
+        attempted=0;safe_steps=0;epoch_used=set();epoch_presentations=0;epoch_clones=0
+        attempted_presentations=0;attempted_clones=0;safe_kl=accepted_kl
         for start in range(0,len(order),config['batch_size']):
+            # Keep only one pre-step snapshot in addition to the epoch origin.
+            # A cap hit discards this step, not the preceding safe prefix. Adam
+            # moments/step counters are restored with weights; draw RNG remains
+            # consumed, just as with the existing rejected-epoch transaction.
+            step_model=copy.deepcopy(model.state_dict());step_adam=copy.deepcopy(optimizer.state_dict())
             batch=order[start:start+config['batch_size']];optimizer.zero_grad(set_to_none=True);model.train()
             for part,ix,inputs in value_dataset.value_batches(value_parts(value_dataset,batch,update,model),model):
                 drop=None if dropout is None else (dropout[0],epoch,dropout[1],'value')
@@ -191,25 +198,39 @@ def fit(model,optimizer,dataset,train_ids,heldout_ids,actor_ids,probe_ids,config
                 with autocast(update,dataset.device):loss=reference.loss(part,inputs,model)
                 (beta*loss.sum()/len(sample)).backward()
             torch.nn.utils.clip_grad_norm_(model.parameters(),update['grad_clip'],error_if_nonfinite=True)
-            optimizer.step();attempted+=1;epoch_used.update(batch);epoch_presentations+=len(batch);epoch_clones+=len(sample)
+            optimizer.step();attempted+=1;attempted_presentations+=len(batch);attempted_clones+=len(sample)
             measured=reference.measure(model,probe_ids);max_kl=max(max_kl,measured)
             if measured>config['kl_cap']:
-                report.update(early_stop_reason='policy_kl_cap',kl_guard_tripped=True);break
+                model.load_state_dict(step_model);optimizer.load_state_dict(step_adam)
+                report.update(early_stop_reason='policy_kl_cap',kl_guard_tripped=True)
+            else:
+                safe_steps+=1;safe_kl=measured;epoch_used.update(batch)
+                epoch_presentations+=len(batch);epoch_clones+=len(sample)
+            del step_model,step_adam
+            if report['kl_guard_tripped']:break
         report['attempted_steps']+=attempted;report['attempted_epochs']+=1
-        report['attempted_value_presentations']+=epoch_presentations
-        report['attempted_clone_presentations']+=epoch_clones
+        report['attempted_value_presentations']+=attempted_presentations
+        report['attempted_clone_presentations']+=attempted_clones
+        # Evaluate the restored safe prefix, never the policy-violating step.
         last_attempt=metrics(model,validation_dataset,heldout_ids,update)
-        if report['early_stop_reason'] is None and last_attempt['loss']>current['loss']:
+        loss_increased=last_attempt['loss']>current['loss']
+        if report['early_stop_reason'] is None and loss_increased:
             report['early_stop_reason']='heldout_loss_increased'
-        rejected=report['early_stop_reason'] is not None
+        rejected=not safe_steps or loss_increased
+        partial=safe_steps<attempted
         epochs.append(dict(epoch=epoch+1,steps=attempted,accepted=not rejected,
-            heldout_loss_before=current['loss'],heldout_loss_attempted=last_attempt['loss'],probe_kl=measured))
+            accepted_steps=0 if rejected else safe_steps,safe_steps=safe_steps,partial=partial,
+            rejection_reason='heldout_loss_increased' if loss_increased else 'no_safe_steps' if rejected else None,
+            heldout_loss_before=current['loss'],heldout_loss_attempted=last_attempt['loss'],
+            probe_kl=safe_kl,attempted_probe_kl=measured))
         if rejected:
             model.load_state_dict(saved_model);optimizer.load_state_dict(saved_adam);break
-        current=last_attempt;report['epochs']+=1;report['optimizer_steps']+=attempted
+        current=last_attempt;accepted_kl=safe_kl;report['epochs']+=1;report['optimizer_steps']+=safe_steps
+        report['partial_epochs' if partial else 'completed_epochs']+=1
         used.update(epoch_used);presentations+=epoch_presentations;clone_presentations+=epoch_clones
         previous_presentations+=sum(i>=current_count for i in epoch_used)
         for i in epoch_used:role_presentations[value_dataset.roles[i]]+=1
+        if report['kl_guard_tripped']:break
     optimizer.zero_grad(set_to_none=True);model.eval()
     # One fresh receipt for the final accepted weights. No head refit on the
     # holdout, and no stale pre-value-phase receipt after trunk movement.
@@ -227,7 +248,8 @@ def fit(model,optimizer,dataset,train_ids,heldout_ids,actor_ids,probe_ids,config
         # reissue its old pre-PPO receipt as evidence about these weights.
         model.utility_calibration=None
     report.update(train_before=train_before,train_after=train_after,heldout_before=before,heldout_after=current,
-        last_attempted_heldout=last_attempt,clone_rows=len(clones),clone_kl=reference.measure(model,clones),
+        last_attempted_heldout=last_attempt,heldout_attempt_scope='Safe epoch/prefix after any violating step is restored',
+        clone_rows=len(clones),clone_kl=reference.measure(model,clones),
         probe_rows=len(probe_ids),probe_kl=reference.measure(model,probe_ids),maximum_attempted_probe_kl=max_kl,
         distinct_value_rows_used=len(used),value_presentations=presentations,clone_presentations=clone_presentations,
         distinct_current_rows_used=sum(i<current_count for i in used),

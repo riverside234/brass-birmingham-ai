@@ -295,6 +295,81 @@ class ValuePhase(unittest.TestCase):
         self.assertTrue(_same_payload(before,model.state_dict()))
         phases.heldout_ids=[];r=phases.fit(model);self.assertEqual(r['early_stop_reason'],'insufficient_critic_split')
 
+    def test_kl_cap_retains_safe_prefix_and_its_exact_adam_only(self):
+        model,opt,cfg,(behavior,data)=fixture();phases=TrainingPhases(model,cfg)
+        ppo(model,opt,cfg,behavior,data,phases)
+        ppo_before=copy.deepcopy(opt.state_dict());safe=[]
+        real_step=phases.optimizer.step;real_measure=value_phase.RawPolicyReference.measure
+        def step(*args,**kwargs):
+            result=real_step(*args,**kwargs)
+            safe.append((copy.deepcopy(model.state_dict()),copy.deepcopy(phases.optimizer.state_dict())))
+            return result
+        def measurement(ref,*args,**kwargs):
+            # One valid step, then a violating step. Subsequent final probes
+            # use the real frozen post-PPO distribution on restored weights.
+            if len(safe)==2 and not rejected[0]:rejected[0]=True;return .0021471
+            return real_measure(ref,*args,**kwargs)
+        rejected=[False]
+        with patch.object(phases.optimizer,'step',side_effect=step),patch.object(
+                value_phase.RawPolicyReference,'measure',measurement):value=phases.fit(model)
+        self.assertEqual(value['attempted_steps'],2);self.assertEqual(value['optimizer_steps'],1)
+        self.assertTrue(value['kl_guard_tripped']);self.assertEqual(value['early_stop_reason'],'policy_kl_cap')
+        self.assertEqual(value['partial_epochs'],1);self.assertEqual(value['completed_epochs'],0)
+        self.assertTrue(value['epoch_reports'][0]['partial']);self.assertTrue(value['epoch_reports'][0]['accepted'])
+        self.assertEqual(value['epoch_reports'][0]['accepted_steps'],1)
+        self.assertEqual(value['distinct_value_rows_used'],cfg['value_phase']['batch_size'])
+        self.assertEqual(value['value_presentations'],cfg['value_phase']['batch_size'])
+        self.assertEqual(value['attempted_value_presentations'],len(phases.train_ids))
+        self.assertEqual(value['clone_presentations'],cfg['value_phase']['clone_batch_size'])
+        self.assertEqual(value['attempted_clone_presentations'],2*cfg['value_phase']['clone_batch_size'])
+        self.assertLessEqual(value['probe_kl'],.002)
+        self.assertLessEqual(value['heldout_after']['loss'],value['heldout_before']['loss'])
+        self.assertTrue(_same_payload(safe[0][0],model.state_dict()))
+        self.assertTrue(_same_payload(safe[0][1],phases.optimizer.state_dict()))
+        self.assertTrue(_same_payload(ppo_before,opt.state_dict()))
+
+    def test_safe_prefix_still_requires_heldout_improvement(self):
+        model,opt,cfg,(behavior,data)=fixture();phases=TrainingPhases(model,cfg)
+        ppo(model,opt,cfg,behavior,data,phases)
+        initial=copy.deepcopy(model.state_dict());adam=copy.deepcopy(phases.optimizer.state_dict())
+        real_measure=value_phase.RawPolicyReference.measure;real_metrics=value_phase.metrics
+        kl_calls=[];metric_calls=[]
+        def measurement(ref,*args,**kwargs):
+            kl_calls.append(1)
+            return .003 if len(kl_calls)==2 else real_measure(ref,*args,**kwargs)
+        def metrics(*args,**kwargs):
+            result=real_metrics(*args,**kwargs);metric_calls.append(1)
+            if len(metric_calls)==3:result['loss']+=10.
+            return result
+        with patch.object(value_phase.RawPolicyReference,'measure',measurement),patch.object(
+                value_phase,'metrics',side_effect=metrics):value=phases.fit(model)
+        self.assertEqual(value['optimizer_steps'],0);self.assertEqual(value['attempted_steps'],2)
+        self.assertEqual(value['epoch_reports'][0]['safe_steps'],1)
+        self.assertEqual(value['epoch_reports'][0]['rejection_reason'],'heldout_loss_increased')
+        self.assertEqual(value['value_presentations'],0);self.assertEqual(value['partial_epochs'],0)
+        self.assertTrue(_same_payload(initial,model.state_dict()))
+        self.assertTrue(_same_payload(adam,phases.optimizer.state_dict()))
+
+    def test_first_step_cap_in_later_epoch_keeps_prior_epoch(self):
+        model,opt,cfg,(behavior,data)=fixture();phases=TrainingPhases(model,cfg)
+        ppo(model,opt,cfg,behavior,data,phases);saved=[]
+        real_step=phases.optimizer.step;real_measure=value_phase.RawPolicyReference.measure;calls=[]
+        def step(*args,**kwargs):
+            result=real_step(*args,**kwargs)
+            saved.append((copy.deepcopy(model.state_dict()),copy.deepcopy(phases.optimizer.state_dict())))
+            return result
+        def measurement(ref,*args,**kwargs):
+            calls.append(1)
+            return .003 if len(calls)==3 else real_measure(ref,*args,**kwargs)
+        with patch.object(phases.optimizer,'step',side_effect=step),patch.object(
+                value_phase.RawPolicyReference,'measure',measurement):value=phases.fit(model)
+        self.assertEqual(value['attempted_steps'],3);self.assertEqual(value['optimizer_steps'],2)
+        self.assertEqual(value['completed_epochs'],1);self.assertEqual(value['partial_epochs'],0)
+        self.assertEqual(value['epoch_reports'][1]['accepted_steps'],0)
+        self.assertEqual(value['epoch_reports'][1]['rejection_reason'],'no_safe_steps')
+        self.assertTrue(_same_payload(saved[1][0],model.state_dict()))
+        self.assertTrue(_same_payload(saved[1][1],phases.optimizer.state_dict()))
+
     def test_checkpoint_restores_both_adams_gate_beta_rng_and_next_update(self):
         model,opt,cfg,(behavior,data)=fixture();phases=TrainingPhases(model,cfg)
         report=ppo(model,opt,cfg,behavior,data,phases);phases.fit(model);finish(phases,report,1)

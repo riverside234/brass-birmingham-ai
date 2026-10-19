@@ -40,6 +40,31 @@ def training_table(index,config,window):
     return table_kind(index,stages),boosted
 
 
+def tables_before(index,kind,config,window):
+    """Count a table kind in [0,index), without aliasing its quota schedule.
+
+    Each fixed-quota segment has period 20. Counting complete cycles also
+    handles resumed/partial collections and archived curriculum/boost changes
+    without a new mutable counter or a scan of the whole training history.
+    """
+    require(type(index) is int and index>=0 and kind in ('selfplay','historical','legacy'),
+            'Invalid ordinary table count')
+    boundaries={0,index}
+    boundaries.update(s['until'] for s in config['curriculum'] if s['until'] is not None and 0<s['until']<index)
+    if window is not None and not latest_model_recipe(config):
+        end=window['start_games']
+        if 0<end<index:boundaries.add(end)
+        for stage in config['legacy_boost']['stages']:
+            end+=stage['games']
+            if 0<end<index:boundaries.add(end)
+    total=0;boundaries=sorted(boundaries)
+    for start,stop in zip(boundaries,boundaries[1:]):
+        cycle=[training_table(i,config,window)[0] for i in range(start,min(start+20,stop))]
+        full,tail=divmod(stop-start,20)
+        total+=full*cycle.count(kind)+cycle[:tail].count(kind)
+    return total
+
+
 def curriculum_report(start,done,config):
     """Absolute ordinary-game intervals, including a boundary-crossing batch."""
     stages=[];begin=0

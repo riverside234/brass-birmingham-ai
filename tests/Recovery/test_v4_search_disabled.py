@@ -28,7 +28,8 @@ class V4SearchDisabled(unittest.TestCase):
         before=copy.deepcopy(old);new=latest_model_config(old,old['imitation_checkpoint'])
         self.assertEqual(old,before)
         allowed={'selfplay_recipe','curriculum','population','table_plan','opponent_pool','rating','v4_search_enabled',
-                 'evaluation_schedule','rehearsal_sampling','advantage','value_phase'}
+                 'evaluation_schedule','rehearsal_sampling','advantage','value_phase',
+                 'architecture','critic_data','seat_descriptors'}
         self.assertTrue({k for k in set(old)|set(new) if old.get(k)!=new.get(k)}<=allowed)
         self.assertFalse(new['v4_search_enabled']);self.assertFalse(new['teacher_enabled'])
         self.assertEqual(new['evaluation_schedule'],dict(old['evaluation_schedule'],enabled=False))
@@ -67,12 +68,14 @@ class V4SearchDisabled(unittest.TestCase):
             root=Path(tmp);path=root/'weights.pt';path.write_bytes(b'planning fixture')
             entry=dict(model_id='IL',generation=0,path=path.relative_to(SOURCE_ROOT).as_posix(),sha256=sha(path))
             pool=quality_pool.initial(entry,c['opponent_pool'],dict(path='probe',sha256='a'*64,probe_hash='probe'))
+            fp=dict(values=[1/8]*16+[1/6]*12);pool['members'][0]['fingerprint']=fp
             state=dict(iteration=0,games_done=0,next_seed=c['seed'],context_counter=0,
                 population=[entry],history=[entry],evaluation_anchor=entry,quality_pool=pool)
             service=Mock();service.models={'IL':None}
             slow={'v4':dict(kind='lab-legacy',policy_id='searched',search_free=False)}
             fast={'v4':dict(kind='lab-legacy',policy_id='fast',search_free=True)}
-            planned=plan_collection(SOURCE_ROOT,root,state,c,dict(config=c),service,'learner',['v4'],slow,fast,None)
+            planned=plan_collection(SOURCE_ROOT,root,state,c,dict(config=c),service,'learner',['v4'],slow,fast,None,
+                fingerprints=dict(learner=fp,rule_bot=fp))
             self.assertEqual(planned['composition'],dict(selfplay=160,historical=144,legacy=16))
             self.assertEqual(planned['context_counter'],960)
             for j in planned['jobs']:

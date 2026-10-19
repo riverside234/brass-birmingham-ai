@@ -73,30 +73,22 @@ namespace BrassLegacyAI
         }
         public static double Development(JObject v,string type)
         {
-            int seat=(int)v["seat"],actions=Conversion.Actions(v,seat);
+            int seat=(int)v["seat"];
             var tiles=Conversion.Player(v,seat)["mat"].Single(m=>(string)m["type"]==type)["tiles"].ToArray();
-            if(tiles.Length<2 || actions<2)return -6;
-            int costBefore;double before=Prospect(v,tiles[0],out costBefore),best=-5;
-            bool continuing=(string)v["pending"]["kind"]=="develop";
-            int cash=(int)Conversion.Player(v,seat)["cash"],maximum=continuing?3:4;
-            int freeIron=v["slots"].Where(Present).Where(s=>(string)s["tile"]["type"]=="IronWorks").Sum(s=>(int)s["tile"]["resource"]);
-            for(int removed=1;removed<=maximum && removed<tiles.Length;removed++)
+            if(tiles.Length<2 || Conversion.Actions(v,seat)<2)return -6;
+            var current=FundedDevelopment.Quote(v,tiles[0],0);
+            double before=current==null?0:current.prospect,best=-5;
+            for(int removed=1;removed<=FundedDevelopment.MaximumRemovals && removed<tiles.Length;removed++)
             {
-                if(!tiles.Take(removed).All(t=>(bool)t["developable"]))continue;
-                int costAfter;double after=Prospect(v,tiles[removed],out costAfter);
-                int ironCost=EraEconomy.IronPrice(v,Math.Max(0,removed-freeIron));
-                int developActions=continuing?1+(removed-1+1)/2:(removed+1)/2;
-                int available=cash-ironCost,needed=developActions+(Conversion.Sellable(tiles[removed])?2:1);
-                bool borrow=costAfter>available;
-                bool canFund=available>=0 && (costAfter<=available || ((int)Conversion.Player(v,seat)["income"]>=-7 && costAfter<=available+30));
-                if(after<=0 || !canFund || actions<needed+(borrow?1:0))continue;
+                if(!(bool)tiles[removed-1]["developable"])break;
                 bool expiring=EraEconomy.Rail(v) && (bool)tiles[0]["canal_only"];
                 if(!expiring && (int)tiles[removed]["level"]<=(int)tiles[0]["level"])continue;
-                // Compare the useful replacement, including Canal carry-over,
-                // rather than paying a bonus for every tile discarded. Cheap
-                // iron reduces the real upgrade cost; it never makes an
-                // unavailable buyer/card or a missed deadline worthwhile.
-                double value=Math.Min(9,(after-before)*.75+(expiring?2:0))-ironCost*.35-.25-1.5*(developActions-1);
+                var plan=FundedDevelopment.Quote(v,tiles[removed],removed);if(plan==null)continue;
+                // A loan can fund a later goal, but cannot pay today's iron.
+                if(FundedDevelopment.IronBudget(v,removed)>(int)Conversion.Player(v,seat)["cash"])continue;
+                double value=Math.Min(12,(plan.prospect-before)*.95+(expiring?2:0))-plan.iron_cost*.35-.25-
+                    1.0*(plan.develop_actions-1)-plan.connections*.5-plan.breweries*.6-plan.bridge*.25-(plan.borrow?.75:0);
+                if(value>0 && FundedDevelopment.CheapFunded(v,plan))value*=1.20;
                 best=Math.Max(best,value);
             }
             return best;
@@ -117,35 +109,27 @@ namespace BrassLegacyAI
         }
         public static double MatValue(JObject v,JToken tile)
         {
-            int cost;double prospect=Prospect(v,tile,out cost);
+            var current=FundedDevelopment.Quote(v,tile,0);
+            double value=current==null?0:Math.Min(12,current.prospect*.65)-current.connections*.5-current.breweries*.6-current.bridge*.25;
             var player=Conversion.Player(v,(int)v["seat"]);
-            int actions=Conversion.Actions(v,(int)v["seat"]),needed=Conversion.Sellable(tile)?2:1;
-            bool borrow=cost>(int)player["cash"];
-            if(prospect<=0 || actions<needed+(borrow?1:0) || (borrow && ((int)player["income"]<-7 || cost>(int)player["cash"]+30)))return 0;
-            // This is the option to make a reachable investment, not banked VP.
-            // The old 2-VP cap made nearly every useful tier look identical.
-            double value=Math.Min(9,prospect*.65);
             var tiles=player["mat"].Single(m=>(string)m["type"]==(string)tile["type"])["tiles"].ToArray();
-            // Three low Cotton tiles need two Develop actions. Recognize the
-            // bounded staged upgrade, including its action/iron costs, so the
-            // first removal is not dismissed just because the tier is unchanged.
+            // An unusable Canal-only head in Rail must not hide a reachable
+            // upgrade. Keep a small bounded option portfolio, never a tile-count
+            // reward; the last action still cannot earn development option value.
             if(tiles.Length>0 && JToken.DeepEquals(tile,tiles[0]))
             {
-                int free=v["slots"].Where(Present).Where(s=>(string)s["tile"]["type"]=="IronWorks").Sum(s=>(int)s["tile"]["resource"]);
                 var levels=new HashSet<int>();
-                for(int removed=1;removed<=4 && removed<tiles.Length;removed++)
+                for(int removed=1;removed<=FundedDevelopment.MaximumRemovals && removed<tiles.Length;removed++)
                 {
+                    if(!(bool)tiles[removed-1]["developable"])break;
                     var next=tiles[removed];int level=(int)next["level"];
-                    if(!tiles.Take(removed).All(t=>(bool)t["developable"]))break;
                     if(level<=(int)tile["level"] || !levels.Add(level))continue;
-                    int paid,dev=(removed+1)/2,iron=EraEconomy.IronPrice(v,Math.Max(0,removed-free));
-                    double future=Prospect(v,next,out paid);bool finance=paid+iron>(int)player["cash"];
-                    int required=dev+(Conversion.Sellable(next)?2:1)+(finance?1:0);
-                    if(future<=0 || actions<required || (finance && ((int)player["income"]<-7 || paid+iron>(int)player["cash"]+30)))continue;
-                    value=Math.Max(value,Math.Min(9,future*.65)-dev*1.5-iron*.35);
+                    var plan=FundedDevelopment.Quote(v,next,removed);if(plan==null)continue;
+                    value=Math.Max(value,Math.Min(12,plan.prospect*.65)-plan.develop_actions-plan.iron_cost*.35-
+                        plan.connections*.5-plan.breweries*.6-plan.bridge*.25-(plan.borrow?.75:0));
                 }
             }
-            return value;
+            return Math.Max(0,value);
         }
         public static double Portfolio(IEnumerable<double> options)
         {

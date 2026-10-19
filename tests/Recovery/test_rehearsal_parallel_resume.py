@@ -1,4 +1,4 @@
-"""The reported generation-one run can adopt the performance fix without reset."""
+"""The reported generation-one run can adopt reviewed fixes without reset."""
 import copy
 from pathlib import Path
 import tempfile
@@ -42,6 +42,14 @@ class Resume(unittest.TestCase):
         changed=copy.deepcopy(signature);changed['implementation']='0'*64
         with self.assertRaisesRegex(ValueError,'not been reviewed'):check_signature(state,changed,True)
         self.assertEqual(state,before)
+
+    def test_rehearsal_fix_run_can_adopt_ppg_and_profile_fix_without_config_change(self):
+        state=read(REPORT/'state.json')
+        state['signature']['implementation']='e2b6bf879c8b9da5b043c8f4c8aedf76b45bec9095867e4246b7decd1c316144'
+        signature=copy.deepcopy(state['signature']);signature['implementation']=implementation_id()
+        self.assertTrue(check_signature(state,signature,True))
+        changed=copy.deepcopy(signature);changed['config']['value_phase']['kl_cap']=.0025
+        with self.assertRaisesRegex(ValueError,'unchanged config'):check_signature(state,changed,True)
 
     def test_checkpoint_moments_rng_gates_and_progress_survive_reviewed_transition(self):
         model,optimizer,cfg,behavior,data,snap,_=mixed_fixture()

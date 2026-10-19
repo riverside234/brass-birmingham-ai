@@ -7,7 +7,7 @@ from brass_ai.learning.contracts import digest,project_path,require
 from brass_ai.step5.league import seeds_for
 from brass_ai.step5.policy import INDUSTRIES
 from .config import table_rotation,latest_model_recipe,learner_seats_per_table,quality_selfplay_recipe
-from .curriculum import training_table,searched_legacy
+from .curriculum import training_table,searched_legacy,tables_before
 from .execution import neural_spec
 from .population import sample_opponents
 from .champion import enabled as champion_enabled,selfplay_policies
@@ -26,6 +26,9 @@ def plan_collection(root,directory,state,config,signature,service,current,profil
         snapshots[entry['model_id']]=entry
     jobs=[];kind_by_group={};composition=Counter();cursor=state['next_seed'];context_counter=state['context_counter']
     historical_generations=Counter();mix_receipts=[];transition_added=0
+    legacy_ordinal=tables_before(state['games_done'],'legacy',config,window)
+    require(len(profiles)==len(set(profiles)) and all('pottery-flex' not in p for p in profiles),
+            'Ordinary training requires distinct admitted profiles; pottery-flex is evaluation-only')
     quality=quality_selfplay_recipe(config);quality_tables={};quality_planning=None
     if quality:
         from . import quality_pool
@@ -69,9 +72,13 @@ def plan_collection(root,directory,state,config,signature,service,current,profil
                 opponents.append(neural_spec(entry['model_id'],.05,'neutral'))
             policies=[learner]*learner_count+opponents
         else:
-            # Rotate all profiles across the collection instead of fixing three for an entire chunk.
+            # Advance by opponent slots on actual legacy tables. The absolute
+            # game index aliases the 5% quota (all such indices are 17 mod 20).
+            require(profiles,'No admitted ordinary legacy profiles')
             selected_specs=opponent_specs if searched_legacy(index,config,boosted) else fast_specs
-            policies=[learner]*learner_count+[selected_specs[profiles[(index*3+s)%len(profiles)]] for s in range(4-learner_count)]
+            chosen_profiles=[profiles[(legacy_ordinal*(4-learner_count)+s)%len(profiles)] for s in range(4-learner_count)]
+            policies=[learner]*learner_count+[selected_specs[p] for p in chosen_profiles]
+            legacy_ordinal+=1
         rotation=table_rotation(index);focuses={}
         if quality and learner_count==2:
             pair=quality_pool.learner_pair(index,kind,config['table_plan']['quotas'])
@@ -88,6 +95,12 @@ def plan_collection(root,directory,state,config,signature,service,current,profil
             learner_behavior=dict(model_id=current,policy_id=learner['policy_id'],
                                   exploration=config['exploration'],temperature=1.0,focus='mixed'))
         provenance['legacy_mode']='fast' if any(p.get('search_free') for p in policies) else ('searched' if kind=='legacy' else None)
+        if kind=='legacy':
+            by_policy={selected_specs[p]['policy_id']:p for p in chosen_profiles}
+            provenance['legacy_profiles']=dict(contract='ordinary-legacy-profile-cycle/1.0.0',
+                table_ordinal=legacy_ordinal-1,
+                seats={str(s):by_policy[p['policy_id']] for s in range(4)
+                       if (p:=policies[(s-rotation)%4])!=learner})
         if 'critic_data' in config:
             from .critic_data import planned_table
             require(fingerprints is not None,'Ordinary table requires incoming-policy fingerprints')
@@ -110,7 +123,7 @@ def plan_collection(root,directory,state,config,signature,service,current,profil
         quality_planning=quality_planning,quality_tables=quality_tables)
 
 
-def sampling_report(games,data,policy_id,kinds,config):
+def sampling_report(games,data,policy_id,kinds,config,*,legacy_profiles=None):
     """Check actual completed game seats separately from decision eligibility."""
     by_kind={k:dict(tables=0,learner_trajectories=0,learner_decisions=0,actor_eligible_decisions=0,forced_decisions=0)
              for k in ('selfplay','historical','legacy')}
@@ -133,9 +146,21 @@ def sampling_report(games,data,policy_id,kinds,config):
         for source,target in (('tables','table_fraction'),('learner_trajectories','trajectory_fraction'),
                               ('actor_eligible_decisions','actor_eligible_fraction')):
             counts[target]=counts[source]/totals[source] if totals[source] else 0.
-    return dict(**totals,by_composition=by_kind,
+    report=dict(**totals,by_composition=by_kind,
         behavior=dict(policy_id=policy_id,exploration=config['exploration'],temperature=1.0,focus='mixed'),
         scope='Actual completed tables and learner seats; forced decisions are critic-only. Table fractions do not define PPO sample fractions.')
+    if legacy_profiles is not None:
+        profiles={p:dict(seats=0,seat_counts=[0]*4) for p in sorted(set(legacy_profiles.values()))}
+        for game in games:
+            if kinds[game['setup_group']]!='legacy':continue
+            for seat,identity in enumerate(game['opponents']):
+                if identity==policy_id:continue
+                require(identity in legacy_profiles,'Unknown completed legacy opponent')
+                profile=profiles[legacy_profiles[identity]];profile['seats']+=1;profile['seat_counts'][seat]+=1
+        report['legacy_profiles']=dict(contract='ordinary-legacy-profile-cycle/1.0.0',profiles=profiles,
+            opponent_seats=sum(p['seats'] for p in profiles.values()),
+            scope='Actual completed ordinary legacy seats; pottery-flex remains evaluation-only')
+    return report
 
 
 def sample_usage(groups,eligible,actor_used,critic_used,actor_presentations,critic_presentations):

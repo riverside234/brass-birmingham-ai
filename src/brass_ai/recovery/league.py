@@ -311,7 +311,8 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                     learner_data=[d for d in learner_data if d[0]['_critic_role']=='learner']
                 if phases is not None:phases.collection(records,behavior.policy_id,kind_by_group,current)
                 collected=time.monotonic()
-                sampling=sampling_report(games,learner_data,behavior.policy_id,kind_by_group,config)
+                sampling=sampling_report(games,learner_data,behavior.policy_id,kind_by_group,config,
+                    legacy_profiles={spec['policy_id']:p for specs in (opponent_specs,fast_specs) for p,spec in specs.items()})
                 next_quality=quality_report=None
                 if quality:
                     next_quality,quality_report=quality_pool.update_scores(state['quality_pool'],games,

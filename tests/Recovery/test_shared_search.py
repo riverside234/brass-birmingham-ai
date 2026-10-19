@@ -25,7 +25,8 @@ class SharedSearchTests(unittest.TestCase):
         paths=source_paths(ROOT)
         for name in GAME_POLICY:
             self.assertEqual([p for p in paths if p.name==name],[ROOT/'src/BrassLocalAI/Policy'/name])
-        for name in ('MaskedSearchExecution.cs','HeuristicBatchQueue.cs','DeadlineAdmission.cs','RootForest.cs'):
+        for name in ('MaskedSearchExecution.cs','HeuristicBatchQueue.cs','DeadlineAdmission.cs','RootForest.cs',
+                     'FundedDevelopment.cs','SaleTiming.cs'):
             self.assertEqual(sum(p.name==name for p in paths),1)
 
     def test_official_v4_private_strategy_is_preserved(self):

@@ -1,0 +1,71 @@
+{
+  "format": "funded-industry-v5-validation/1.0.0",
+  "bank": "bank-357f50e6bcbdd119ea8c",
+  "passed": true,
+  "strength_qualified": false,
+  "native_checks": {
+    "IndustryV5Checks": 21,
+    "ParallelChecks": 23,
+    "RuntimeChecks": 99,
+    "IndustryChecks": 17
+  },
+  "python_tests": {
+    "shared_search_and_prebuilt": 21,
+    "isolated_bank_freeze": 2
+  },
+  "smoke": [
+    {
+      "era": "CanalEra",
+      "round": 2,
+      "workers": 1,
+      "turn_budget_ms": 2000,
+      "native_elapsed_ms": 1985.9256,
+      "completed": 11,
+      "interrupted": 0,
+      "failures": 0,
+      "whole_turn_legal": true
+    },
+    {
+      "era": "CanalEra",
+      "round": 8,
+      "workers": 1,
+      "turn_budget_ms": 2000,
+      "native_elapsed_ms": 1954.9334000000001,
+      "completed": 31,
+      "interrupted": 0,
+      "failures": 0,
+      "whole_turn_legal": true
+    },
+    {
+      "era": "RailEra",
+      "round": 4,
+      "workers": 1,
+      "turn_budget_ms": 2000,
+      "native_elapsed_ms": 1960.422,
+      "completed": 5,
+      "interrupted": 0,
+      "failures": 0,
+      "whole_turn_legal": true
+    },
+    {
+      "era": "RailEra",
+      "round": 8,
+      "workers": 1,
+      "turn_budget_ms": 2000,
+      "native_elapsed_ms": 1985.7632,
+      "completed": 12,
+      "interrupted": 0,
+      "failures": 0,
+      "whole_turn_legal": true
+    }
+  ],
+  "report": "artifacts/v5-development/checks-04/report.json",
+  "protected_hashes": {
+    "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Brass Birmingham\\training\\opponents\\current.json": "8d9dd6ce43c3e907943218db2a0b6e85ec93977bf8fef9f947913ae55e6f841f",
+    "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Brass Birmingham\\training\\opponents\\lab\\current.json": "8d9dd6ce43c3e907943218db2a0b6e85ec93977bf8fef9f947913ae55e6f841f",
+    "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Brass Birmingham\\training\\opponents\\pool.json": "fe42245cf50026a8950cafe6dc1ba4ef8891e8c9de467513ceb31769985054de",
+    "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Brass Birmingham\\BrassBirminghamUnity_Data\\Managed\\BrassLegacyAI.dll": "366adb638e64a951db87eaa7f52222690ca62d866e64d938ddd0f0f214a69b42"
+  },
+  "limitation": "Four fixed positions, not full games; higher targets and legal execution tested, no playing-strength or average-built-level conclusion.",
+  "superseded_unselected_draft": "bank-f762959bfd1da972a5dc"
+}

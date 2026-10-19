@@ -1,0 +1,22 @@
+{
+  "format": "funded-industry-v5/1.0.0",
+  "generation": "v5",
+  "bank": "bank-357f50e6bcbdd119ea8c",
+  "previous_bank": "bank-3dc65253a610191d66a5",
+  "profiles": [
+    "balanced-v5-masked-industry",
+    "rail-tempo-v5-masked-industry",
+    "cotton-v5-masked-industry",
+    "goods-beer-v5-masked-industry",
+    "supplier-v5-masked-industry",
+    "pottery-flex-v5-masked-industry"
+  ],
+  "manifest_sha256": "d27bb6d5636f9e581158414e4f7488fea16bd04e1bb8d9a0d61ba5bb47788633",
+  "runtime_directory": "artifacts/legacy-ai/bank/bank-357f50e6bcbdd119ea8c/runtime",
+  "strength_promoted": false,
+  "installed": false,
+  "selected": false,
+  "maximum_removals": 6,
+  "development_reserve": 4,
+  "note": "Official v4 strategy ancestry plus funded higher-tier targets; shared search optimizations retained. Candidate, not a strength qualification."
+}

@@ -46,9 +46,10 @@ def below(root,path):
     return resolve_project_path(root,path)
 
 
-def freeze(root,profile_names,*,fixed_work=False):
+def freeze(root,profile_names,*,fixed_work=False,runtime_directory=None):
     require(profile_names and len(set(profile_names))==len(profile_names) and all(re.fullmatch(r'[a-z0-9-]+',n) for n in profile_names),'Invalid/duplicate profile name')
-    root=Path(root).resolve();runtime=read(root/'artifacts/legacy-ai/runtime/runtime.json')
+    root=Path(root).resolve();runtime_path=below(root,runtime_directory or 'artifacts/legacy-ai/runtime')
+    runtime=read(runtime_path/'runtime.json')
     files={r['path']:r['sha256'] for r in runtime['sources']}
     for pattern in ('src/BrassLegacyAI/Unity/*.cs',*ADAPTER_FILES,'configs/contracts/v0.2.0/*.json',
                     'configs/rules/runtime-dependencies-1.1.0.json'):
@@ -57,7 +58,7 @@ def freeze(root,profile_names,*,fixed_work=False):
     require(profiles and all(p['player_count']==4 for p in profiles.values()),'Four-player profiles required')
     for name in profiles:files[f'configs/legacy-ai/{name}.json']=sha(root/f'configs/legacy-ai/{name}.json')
     for path,h in files.items():require(sha(below(root,path))==h,'Rebuild before freeze: '+path)
-    for f in runtime['files']:require(sha(root/'artifacts/legacy-ai/runtime'/f['name'])==f['sha256'],'Runtime changed before freeze')
+    for f in runtime['files']:require(sha(runtime_path/f['name'])==f['sha256'],'Runtime changed before freeze')
     payload=dict(format='legacy-bank/1.0.0',player_count=4,rules=runtime['rules'],wire=runtime['protocol'],
                  source_files=files,runtime_files=runtime['files'],runtime_source_paths=[f['path'] for f in runtime['sources']],
                  profiles=profiles,fixed_work=fixed_work,platform='windows-dotnet-unity-mono',sampling_seed=1,
@@ -71,7 +72,7 @@ def freeze(root,profile_names,*,fixed_work=False):
         destination=directory/'source'/path;destination.parent.mkdir(parents=True,exist_ok=True);shutil.copyfile(root/path,destination)
     (directory/'manifest.json').write_text(json.dumps(dict(id=identity,payload=payload),indent=2)+'\n',encoding='utf-8')
     private=root/'artifacts/legacy-ai/bank'/identity/'runtime';private.mkdir(parents=True,exist_ok=False)
-    for f in runtime['files']:shutil.copyfile(root/'artifacts/legacy-ai/runtime'/f['name'],private/f['name'])
+    for f in runtime['files']:shutil.copyfile(runtime_path/f['name'],private/f['name'])
     frozen=dict(runtime,sources=[dict(path=(directory/'source'/p).relative_to(root).as_posix(),sha256=files[p]) for p in payload['runtime_source_paths']])
     (private/'runtime.json').write_text(json.dumps(frozen,indent=2)+'\n',encoding='utf-8')
     return identity

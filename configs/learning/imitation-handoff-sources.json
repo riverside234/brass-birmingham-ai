@@ -288,6 +288,16 @@
       "implementation": "de2aac3edd606da9c23fad732c6bc4d8dc6118ad2d801af8b9ae6ffb9326f314",
       "learning_compatibility": "ef6a1b5126de42da8f3277dc9357b6ffb94a435f3faa7fee8dd312bb5a242a54",
       "reason": "Rehearsal loading and self-play reporting only; completed IL/checkpoint/encoder/labels/supervised math unchanged. Preserve hashes and lineage."
+    },
+    {
+      "implementation": "e2b6bf879c8b9da5b043c8f4c8aedf76b45bec9095867e4246b7decd1c316144",
+      "learning_compatibility": "ef6a1b5126de42da8f3277dc9357b6ffb94a435f3faa7fee8dd312bb5a242a54",
+      "reason": "PPG guarded-prefix and ordinary profile scheduling fixes preserve completed IL model/features/dataset/supervised math. Keep exact completion/hash/lineage checks."
+    },
+    {
+      "implementation": "2c626e155f595a28b1abf43a5743387060edba1b10b090beb6e9bf84a9f265db",
+      "learning_compatibility": "ef6a1b5126de42da8f3277dc9357b6ffb94a435f3faa7fee8dd312bb5a242a54",
+      "reason": "PPG guarded-prefix and ordinary profile scheduling fixes preserve completed IL model/features/dataset/supervised math. Keep exact completion/hash/lineage checks."
     }
   ]
 }
