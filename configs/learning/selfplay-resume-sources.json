@@ -23769,6 +23769,120 @@
       "config_migrations_ref": "13",
       "reviewed_evidence": "ai-research/SELFPLAY_HEALTH_EV_REVISION.md",
       "reason_ref": "104"
+    },
+    {
+      "from_implementation": "c13907c7564371269b2ae86fa690dcb6a0cd7d18c74d7322e9fcc83ac6a61d80",
+      "to_implementation": "fd85565852a00328236c96b4ed8b6fc9cd245627cc019bbf8c05d12721a89d52",
+      "learning_compatibility_ref": "5",
+      "config_changes_ref": "44",
+      "config_migrations_ref": "13",
+      "reviewed_evidence": "ai-research/SELFPLAY_G85_REVIEW.md",
+      "reason_ref": "105"
+    },
+    {
+      "from_implementation": "e2b6bf879c8b9da5b043c8f4c8aedf76b45bec9095867e4246b7decd1c316144",
+      "to_implementation": "fd85565852a00328236c96b4ed8b6fc9cd245627cc019bbf8c05d12721a89d52",
+      "learning_compatibility_ref": "5",
+      "config_changes_ref": "44",
+      "config_migrations_ref": "13",
+      "reviewed_evidence": "ai-research/SELFPLAY_G85_REVIEW.md",
+      "reason_ref": "105"
+    },
+    {
+      "from_implementation": "de2aac3edd606da9c23fad732c6bc4d8dc6118ad2d801af8b9ae6ffb9326f314",
+      "to_implementation": "fd85565852a00328236c96b4ed8b6fc9cd245627cc019bbf8c05d12721a89d52",
+      "learning_compatibility_ref": "5",
+      "config_changes_ref": "44",
+      "config_migrations_ref": "13",
+      "reviewed_evidence": "ai-research/SELFPLAY_G85_REVIEW.md",
+      "reason_ref": "105"
+    },
+    {
+      "from_implementation": "2c626e155f595a28b1abf43a5743387060edba1b10b090beb6e9bf84a9f265db",
+      "to_implementation": "fd85565852a00328236c96b4ed8b6fc9cd245627cc019bbf8c05d12721a89d52",
+      "learning_compatibility_ref": "5",
+      "config_changes_ref": "44",
+      "config_migrations_ref": "13",
+      "reviewed_evidence": "ai-research/SELFPLAY_G85_REVIEW.md",
+      "reason_ref": "105"
+    },
+    {
+      "from_implementation": "bee655014a2a238555afc936e2e5c341f8b7e630ddf63a60a77704ee344c41c2",
+      "to_implementation": "fd85565852a00328236c96b4ed8b6fc9cd245627cc019bbf8c05d12721a89d52",
+      "learning_compatibility_ref": "5",
+      "config_changes_ref": "44",
+      "config_migrations_ref": "13",
+      "reviewed_evidence": "ai-research/SELFPLAY_G85_REVIEW.md",
+      "reason_ref": "105"
+    },
+    {
+      "from_implementation": "997ce5bc26b8416d694f42ddac196feac8b365ee40bc412c6321ec85ae8885a5",
+      "learning_compatibility_ref": "5",
+      "config_changes_ref": "44",
+      "to_implementation": "fd85565852a00328236c96b4ed8b6fc9cd245627cc019bbf8c05d12721a89d52",
+      "reviewed_evidence": "ai-research/SELFPLAY_G85_REVIEW.md",
+      "reason_ref": "105"
+    },
+    {
+      "from_implementation": "c13907c7564371269b2ae86fa690dcb6a0cd7d18c74d7322e9fcc83ac6a61d80",
+      "to_implementation": "38a530ad117db9004a5ff31f617327ada7104bdfffbfbceeae07393fd863a649",
+      "learning_compatibility_ref": "5",
+      "config_changes_ref": "44",
+      "config_migrations_ref": "13",
+      "reviewed_evidence": "ai-research/SNAPSHOT_WEIGHT_RECOVERY.md",
+      "reason_ref": "106"
+    },
+    {
+      "from_implementation": "e2b6bf879c8b9da5b043c8f4c8aedf76b45bec9095867e4246b7decd1c316144",
+      "to_implementation": "38a530ad117db9004a5ff31f617327ada7104bdfffbfbceeae07393fd863a649",
+      "learning_compatibility_ref": "5",
+      "config_changes_ref": "44",
+      "config_migrations_ref": "13",
+      "reviewed_evidence": "ai-research/SNAPSHOT_WEIGHT_RECOVERY.md",
+      "reason_ref": "106"
+    },
+    {
+      "from_implementation": "de2aac3edd606da9c23fad732c6bc4d8dc6118ad2d801af8b9ae6ffb9326f314",
+      "to_implementation": "38a530ad117db9004a5ff31f617327ada7104bdfffbfbceeae07393fd863a649",
+      "learning_compatibility_ref": "5",
+      "config_changes_ref": "44",
+      "config_migrations_ref": "13",
+      "reviewed_evidence": "ai-research/SNAPSHOT_WEIGHT_RECOVERY.md",
+      "reason_ref": "106"
+    },
+    {
+      "from_implementation": "2c626e155f595a28b1abf43a5743387060edba1b10b090beb6e9bf84a9f265db",
+      "to_implementation": "38a530ad117db9004a5ff31f617327ada7104bdfffbfbceeae07393fd863a649",
+      "learning_compatibility_ref": "5",
+      "config_changes_ref": "44",
+      "config_migrations_ref": "13",
+      "reviewed_evidence": "ai-research/SNAPSHOT_WEIGHT_RECOVERY.md",
+      "reason_ref": "106"
+    },
+    {
+      "from_implementation": "bee655014a2a238555afc936e2e5c341f8b7e630ddf63a60a77704ee344c41c2",
+      "to_implementation": "38a530ad117db9004a5ff31f617327ada7104bdfffbfbceeae07393fd863a649",
+      "learning_compatibility_ref": "5",
+      "config_changes_ref": "44",
+      "config_migrations_ref": "13",
+      "reviewed_evidence": "ai-research/SNAPSHOT_WEIGHT_RECOVERY.md",
+      "reason_ref": "106"
+    },
+    {
+      "from_implementation": "997ce5bc26b8416d694f42ddac196feac8b365ee40bc412c6321ec85ae8885a5",
+      "learning_compatibility_ref": "5",
+      "config_changes_ref": "44",
+      "to_implementation": "38a530ad117db9004a5ff31f617327ada7104bdfffbfbceeae07393fd863a649",
+      "reviewed_evidence": "ai-research/SNAPSHOT_WEIGHT_RECOVERY.md",
+      "reason_ref": "106"
+    },
+    {
+      "from_implementation": "fd85565852a00328236c96b4ed8b6fc9cd245627cc019bbf8c05d12721a89d52",
+      "learning_compatibility_ref": "5",
+      "config_changes_ref": "44",
+      "to_implementation": "38a530ad117db9004a5ff31f617327ada7104bdfffbfbceeae07393fd863a649",
+      "reviewed_evidence": "ai-research/SNAPSHOT_WEIGHT_RECOVERY.md",
+      "reason_ref": "106"
     }
   ],
   "definitions": {
@@ -23877,7 +23991,9 @@
       "101": "Reviewed v11.2 rehearsal loading/reporting performance fix: reuse the configured audit reader pool (16 in the active recipe), keep seeded draws and row order/bytes, validate all raw records, prepare neutral metadata only for selected rows, enforce a shared scratch-byte cap and join writers before cleanup. Reuse metrics only when value rollback restored exact weights; expose attempted value work and separate timings. Model/encoding/targets/losses, PPO/value optimizers, RNG, gates, existing IL/probe, population and run config stay unchanged. Pending old collections remain rejected.",
       "102": "Retain KL-safe PPG step prefixes only after held-out-loss acceptance, restoring violating-step weights and value Adam; cap/config unchanged. Cycle admitted ordinary legacy profiles by legacy-table ordinal; keep pottery-flex evaluation-only and report actual counts. Preserve v11.2 model/Adam/RNG/progress/pool/probe and all source/collection freshness checks. Exact target also retains pre-existing shared funded-industry v5 source/profile additions; shared opponent identities remain source-bound, never relabel cached games.",
       "103": "Generation-55 review: require a new PPG KL trip before clone-beta escalation; keep calibrated IL distance/latch scoped to LR while retaining strict behavior/economy and PPO/value adoption guards; pin immutable rating binaries and expose gate blockers/whole-game support. Remove the experimental v5 bots/banks at user request and restore official v4 bank-3dc65253a610191d66a5 strategy/shared runtime. Preserve PPG safe-prefix and five-profile-cycle fixes, completed IL, unchanged signed config, checkpoint weights/Adam/RNG, counters, population, probe and lineage. Reject stale pending collections through existing source freshness checks.",
-      "104": "Remove IL sale-probability guard entirely; bounded paired mixed-table learner EV moments and distinct-game support. Exact table-gate upgrade starts evidence at committed progress; preserve model/Adam/RNG, global GAE, activated tables, critic state, IL probe, LR limits/latch, population and lineage. Preserve v4 and preceding reviewed fixes."
+      "104": "Remove IL sale-probability guard entirely; bounded paired mixed-table learner EV moments and distinct-game support. Exact table-gate upgrade starts evidence at committed progress; preserve model/Adam/RNG, global GAE, activated tables, critic state, IL probe, LR limits/latch, population and lineage. Preserve v4 and preceding reviewed fixes.",
+      "105": "Generation-85 review: require actual retained PPO or PPG snapshot training before an EV-based snapshot-weight reduction; report pooled mixed-table EV after admission and count review age from actual lambda-stage exposure. Preserve checkpoint schema and saved weight, weights, both Adams, RNG, GAE decisions, PPO/PPG losses and thresholds, IL probe/limits/latch, population, progress and v4. Retain exact previously reviewed table-gate upgrade when needed.",
+      "106": "Add staged snapshot critic weight recovery: five consecutive healthy iterations with retained PPO/PPG snapshot training and learner EV at least the fixed phase-1 baseline per 0.5->0.75->1.0 increase. Preserve the existing EV reduction, config, model, both Adams, RNG, GAE decisions/evidence, IL probe/limits, population, progress, lineage and opponents. Exact actor-value checkpoint v3/v4 migration adds only an empty recovery streak at committed progress; retain previously reviewed table-gate migration when needed. New v5 checkpoints preserve the recovery streak exactly."
     },
     "config_changes": {
       "0": {

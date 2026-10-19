@@ -9,6 +9,35 @@ from brass_ai.learning.contracts import require
 PPO_KL_GUARD = 'ppo-categorical-kl-guard/1.0.0'
 
 
+def mixed_ev_status(tables):
+    """Current bounded evidence, also after admission; no gate-state changes."""
+    result={}
+    for kind,table in tables.items():
+        evidence=table.get('evidence')
+        if not evidence:continue
+        mixed=evidence.get('mixed',{});reference=evidence.get('selfplay',{})
+        a=mixed.get('explained_variance');b=reference.get('explained_variance')
+        finite=all(type(x) in (int,float) and math.isfinite(x) for x in (a,b))
+        supported=evidence.get('supported') is True and finite
+        status=('ok' if evidence.get('ev_ok') is True else 'below_tolerance') if supported else 'insufficient_support'
+        result[kind]=dict(status=status,enabled=table.get('enabled',False),
+            lambda_used=table.get('lambda_used'),lambda_next=table.get('lambda_next'),
+            pooled_ev=a,selfplay_ev=b,ev_gap=a-b if finite else None,
+            games=mixed.get('games'),selfplay_games=reference.get('games'),
+            contributing_iterations=evidence.get('contributing_iterations'),
+            window_start=evidence.get('window_start'),window_end=evidence.get('window_end'),
+            fresh=evidence.get('fresh'),reasons=list(evidence.get('reasons',[])),
+            scope='Existing pooled EV admission tolerance; review signal only, no automatic rollback')
+    return result
+
+
+def mixed_ev_console(diagnostics):
+    def number(x):return f'{x:.3f}' if type(x) in (int,float) and math.isfinite(x) else 'na'
+    rows=diagnostics.get('mixed_ev_status',{})
+    return (' mixedEV='+','.join(f'{k}:{number(v["pooled_ev"])}vs{number(v["selfplay_ev"])}[{v["status"]}]'
+        for k,v in rows.items())) if rows else ''
+
+
 def gate_diagnostics(actor,value=None,limit=None,quality=None):
     """Expose coupled stalls from existing measurements; no new thresholds.
 
@@ -21,6 +50,8 @@ def gate_diagnostics(actor,value=None,limit=None,quality=None):
     planning=quality.get('planning',{});attempts=value.get('attempted_steps',0)
     before=value.get('heldout_before',{}).get('loss');after=value.get('heldout_after',{}).get('loss')
     groups=value.get('heldout_after',{}).get('groups',{})
+    tables=actor.get('gae',{}).get('gate',{}).get('table_gate',{})
+    mixed=mixed_ev_status(tables)
     warnings=[]
     if health.get('ok') is False and 'behavior_check_failed' in health.get('reasons',[]):
         warnings.append('il_behavior_check_failed')
@@ -28,7 +59,10 @@ def gate_diagnostics(actor,value=None,limit=None,quality=None):
     if planning.get('N')==0 and limit.get('baseline') is not None:
         warnings.append('history_pool_il_only')
     if attempts and not value.get('optimizer_steps'):warnings.append('value_fit_rejected')
-    return dict(contract='selfplay-gate-diagnostics/2.0.0',warnings=warnings,
+    for kind,row in mixed.items():
+        if row['enabled'] and row['lambda_next'] is not None and row['lambda_next']<1. and row['status']=='below_tolerance':
+            warnings.append('mixed_ev_below_tolerance:'+kind)
+    return dict(contract='selfplay-gate-diagnostics/2.1.0',warnings=warnings,
         health_ok=health.get('ok'),health_reasons=list(health.get('reasons',[])),
         pass_failures=passing.get('failures'),pass_positions=passing.get('positions'),
         lr_blockers=list(limit.get('lr_gate',{}).get('reasons',[])),
@@ -44,7 +78,7 @@ def gate_diagnostics(actor,value=None,limit=None,quality=None):
             ev=groups.get('table:'+k+'/role:learner',{}).get('explained_variance'))
             for k in ('selfplay','historical','legacy')},
         gae_reason=actor.get('gae',{}).get('gate',{}).get('reason'),
-        mixed_ev_evidence=actor.get('gae',{}).get('gate',{}).get('table_gate',{}),
+        mixed_ev_evidence=tables,mixed_ev_status=mixed,
         scope='Existing evidence only; missing groups are unavailable, not zero EV; no automatic threshold changes')
 
 

@@ -11,6 +11,10 @@ DEFAULT=dict(contract='critic-rows/1.0.0',learner_rows=True,snapshot_rows=True,s
     excluded_roles=['il','rule_bot'],holdout_fraction=.05,
     rollout=dict(mode='auto',descriptor_ev_min_gain=0.,snapshot_ev_tolerance=.02,reduced_snapshot_weight=.5))
 
+RECOVERY_CONTRACT='snapshot-weight-recovery/1.0.0'
+RECOVERY_ITERATIONS=5
+SNAPSHOT_WEIGHTS=(.5,.75,1.)
+
 
 def validate_config(c):
     require(type(c) is dict and set(c)==set(DEFAULT) and c['contract']==DEFAULT['contract']
@@ -106,15 +110,21 @@ def annotate(row,encoded,table,kind):
         _descriptor_generation=table['generation'])
 
 
+def recovery_initial(generation):
+    return dict(contract=RECOVERY_CONTRACT,origin=generation,healthy_streak=0,last_change_generation=None)
+
+
 def initial(c):
     return dict(generation=0,snapshots_active=c['snapshot_rows'] and c['rollout']['mode']=='snapshots',
         snapshot_weight=c['snapshot_weight'],learner_ev_baseline=None,activation_generation=None,
-        previous_fingerprint=None)
+        previous_fingerprint=None,weight_recovery=recovery_initial(0))
 
 
-def validate_state(s,c,generation):
-    require(type(s) is dict and set(s)==set(initial(c)) and s['generation']==generation
-        and type(s['snapshots_active']) is bool and s['snapshot_weight'] in (.5,1.),'Invalid critic rollout checkpoint')
+def _validate_base(s,c,generation,*,legacy=False):
+    fields=set(initial(c))-({'weight_recovery'} if legacy else set())
+    require(type(s) is dict and set(s)==fields and type(s['generation']) is int and s['generation']==generation
+        and type(s['snapshots_active']) is bool and type(s['snapshot_weight']) in (int,float)
+        and s['snapshot_weight'] in ((.5,1.) if legacy else SNAPSHOT_WEIGHTS),'Invalid critic rollout checkpoint')
     require(not s['snapshots_active'] or c['snapshot_rows'],'Unexpected snapshot activation')
     for k in ('learner_ev_baseline',):
         require(s[k] is None or (type(s[k]) in (int,float) and math.isfinite(s[k])),'Invalid critic rollout EV')
@@ -123,31 +133,99 @@ def validate_state(s,c,generation):
     return s
 
 
+def validate_state(s,c,generation):
+    _validate_base(s,c,generation)
+    r=s['weight_recovery']
+    require(type(r) is dict and set(r)==set(recovery_initial(0)) and r['contract']==RECOVERY_CONTRACT
+        and type(r['origin']) is int and 0<=r['origin']<=generation
+        and type(r['healthy_streak']) is int and 0<=r['healthy_streak']<RECOVERY_ITERATIONS,
+        'Invalid snapshot weight recovery checkpoint')
+    last=r['last_change_generation']
+    require(last is None or type(last) is int and r['origin']<=last<=generation,
+        'Invalid snapshot weight recovery age')
+    require(r['healthy_streak']<=generation-(last if last is not None else r['origin'])
+        and (not r['healthy_streak'] or s['snapshots_active'] and s['snapshot_weight']<1.),
+        'Invalid snapshot weight recovery streak')
+    return s
+
+
+def migrate_state(s,c,generation):
+    """Exact legacy checkpoint upgrade; no retrospective recovery evidence."""
+    s=copy.deepcopy(_validate_base(s,c,generation,legacy=True))
+    s['weight_recovery']=recovery_initial(generation)
+    return validate_state(s,c,generation)
+
+
 def learner_ev(metrics):return metrics.get('groups',{}).get('role:learner',{}).get('explained_variance')
 
 
-def advance(s,c,*,generation,report,healthy,fingerprint_now):
+def recovery_console(report):
+    r=report.get('weight_recovery')
+    return (f' snapshot_recovery={r["healthy_streak_next"]}/{r["required_iterations"]}:{report["decision"]}'
+        if r else '')
+
+
+def advance(s,c,*,generation,report,healthy,fingerprint_now,ppo_snapshot_rows=0):
     s=copy.deepcopy(validate_state(s,c,generation-1));before=s['snapshots_active'];weight=s['snapshot_weight']
     metrics=report.get('heldout_after',{});ev=learner_ev(metrics);gain=report.get('descriptor_gain',{}).get('learner_ev_gain')
+    value_snapshot_rows=(report.get('role_usage',{}).get('snapshot',{}).get('distinct_used',0)
+        if report.get('optimizer_steps',0)>0 else 0)
+    require(all(type(n) is int and n>=0 for n in (ppo_snapshot_rows,value_snapshot_rows)),
+        'Invalid retained snapshot training counts')
+    trained=bool(ppo_snapshot_rows or value_snapshot_rows)
     decision='hold';reason='health_or_descriptor_evidence_not_ready'
     valid=lambda x:type(x) in (int,float) and math.isfinite(x)
+    recovery=s['weight_recovery'];streak_before=recovery['healthy_streak'];evidence_streak=0
+    baseline=s['learner_ev_baseline'];ev_recovered=valid(baseline) and valid(ev) and ev>=baseline
+    health_ok=healthy is True and not report.get('kl_guard_tripped',False)
+    eligible=bool(before and trained and health_ok and ev_recovered)
+    # Consecutive evidence belongs to the currently used weight. A missing or
+    # unhealthy iteration, reduction, or successful stage change clears it.
+    recovery['healthy_streak']=0
     if not before and c['snapshot_rows'] and c['rollout']['mode']=='auto':
         if healthy and report.get('optimizer_steps',0)>0 and valid(ev) and valid(gain) and gain>=c['rollout']['descriptor_ev_min_gain']:
             s.update(snapshots_active=True,learner_ev_baseline=ev,activation_generation=generation)
             decision='enable_snapshots';reason='heldout_descriptor_gain_and_health'
     elif before:
-        baseline=s['learner_ev_baseline']
-        if valid(baseline) and valid(ev) and ev<baseline-c['rollout']['snapshot_ev_tolerance'] and weight>.5:
+        # Enabling the route does not create snapshot opponents. In an IL-only
+        # pool there may be no such rows for many iterations. Attribute an EV
+        # change to this rollout only after actual retained PPO or PPG fitting;
+        # available rows or rejected PPG attempts are not training exposure.
+        if not trained:reason='no_snapshot_training'
+        elif valid(baseline) and valid(ev) and ev<baseline-c['rollout']['snapshot_ev_tolerance'] and weight>.5:
             s['snapshot_weight']=.5;decision='reduce_snapshot_weight';reason='learner_heldout_ev_below_phase1_baseline'
+        elif weight<1.:
+            if not valid(baseline) or not valid(ev):reason='snapshot_recovery_ev_unavailable'
+            elif not health_ok:reason='snapshot_recovery_health_not_ready'
+            elif not ev_recovered:reason='snapshot_recovery_ev_below_phase1_baseline'
+            else:
+                evidence_streak=streak_before+1
+                if evidence_streak>=RECOVERY_ITERATIONS:
+                    s['snapshot_weight']=SNAPSHOT_WEIGHTS[SNAPSHOT_WEIGHTS.index(weight)+1]
+                    decision='increase_snapshot_weight';reason='sustained_healthy_learner_ev_recovery'
+                else:
+                    recovery['healthy_streak']=evidence_streak;reason='snapshot_recovery_streak'
         else:reason='snapshots_active'
     else:reason='configured_learner_only'
+    if s['snapshot_weight']!=weight:recovery['last_change_generation']=generation
     previous=s['previous_fingerprint'];drift=None
     if previous is not None and fingerprint_now is not None:
         drift=float(np.mean(np.abs(np.asarray(previous)-np.asarray(fingerprint_now['values']))))
     if fingerprint_now is not None:s['previous_fingerprint']=fingerprint_now['values']
     s['generation']=generation
-    return s,dict(snapshot_rows_used=before,snapshot_rows_next=s['snapshots_active'],weight_used=weight,
+    validate_state(s,c,generation)
+    return s,dict(snapshot_rows_used=trained,snapshot_rows_enabled=before,
+        ppo_snapshot_distinct_used=ppo_snapshot_rows,value_snapshot_distinct_used=value_snapshot_rows,
+        snapshot_rows_next=s['snapshots_active'],weight_used=weight,
         weight_next=s['snapshot_weight'],decision=decision,reason=reason,learner_heldout_ev=ev,
         phase1_learner_ev=s['learner_ev_baseline'],fingerprint_mean_absolute_drift=drift,
-        snapshot_effect_ev_delta=(ev-s['learner_ev_baseline'] if before and valid(ev) and valid(s['learner_ev_baseline']) else None),
-        scope='Sequential heldout diagnostic; iteration distributions differ, not a causal snapshot benefit estimate')
+        weight_recovery=dict(contract=RECOVERY_CONTRACT,origin=recovery['origin'],
+            required_iterations=RECOVERY_ITERATIONS,healthy_streak_before=streak_before,
+            evidence_streak=evidence_streak,healthy_streak_next=recovery['healthy_streak'],
+            eligible=eligible,health_ok=health_ok,ev_recovered=ev_recovered,
+            ev_threshold=baseline,reduce_below=baseline-c['rollout']['snapshot_ev_tolerance'] if valid(baseline) else None,
+            next_weight=SNAPSHOT_WEIGHTS[SNAPSHOT_WEIGHTS.index(s['snapshot_weight'])+1] if s['snapshot_weight']<1. else None,
+            last_change_generation=recovery['last_change_generation'],
+            scope='Five consecutive healthy, actually trained iterations at each weight; EV at least the fixed phase-1 baseline. Changes apply next iteration; no historical backfill'),
+        snapshot_effect_ev_delta=(ev-s['learner_ev_baseline'] if before and trained and valid(ev) and valid(s['learner_ev_baseline']) else None),
+        scope='Actual retained PPO/PPG snapshot exposure required; counts per phase may overlap. Sequential heldout diagnostic, not a causal snapshot benefit estimate')

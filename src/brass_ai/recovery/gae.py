@@ -217,11 +217,19 @@ def advance(state,config,*,generation,value_report,health_ok,rating):
                     and (not pooled or pooled[kind]['ready'])):
                 state['table_enabled'][kind]=True
                 state['table_origins'][kind]=generation
-            elapsed=generation-state['table_origins'][kind] if state['table_origins'][kind] is not None else 0
+            origin=state['table_origins'][kind]
+            # Qualification can precede the first non-MC collection. Review the
+            # actual lambda stage, not time spent qualified at lambda=1. Both
+            # origins already live in the checkpoint; no progress is rewritten.
+            effective_origin=(max(origin,state['stage_origin'])
+                if origin is not None and state['active_lambda']<1. else None)
+            elapsed=generation-effective_origin if effective_origin is not None else 0
             table_report[kind]=dict(learner_heldout_ev=table_ev,selfplay_learner_ev=ev,
                 streak=state['table_streaks'][kind],enabled=state['table_enabled'][kind],
-                origin=state['table_origins'][kind],iterations_since_extension=elapsed,
-                thirty_iteration_review_due=elapsed>=30,
+                origin=origin,iterations_since_qualification=generation-origin if origin is not None else 0,
+                effective_stage_origin=effective_origin,iterations_since_extension=elapsed,
+                extension_age_scope='Committed collections using this lambda stage; qualification at lambda=1 does not count',
+                thirty_iteration_review_due=effective_origin is not None and elapsed>=30,
                 review='Inspect common PL rating slope/uncertainty and by-table advantage std; no automatic rollback',
                 decision='enable_next_iteration' if not before and state['table_enabled'][kind] else 'hold',
                 lambda_used=used if before else 1.,lambda_next=state['active_lambda'] if state['table_enabled'][kind] else 1.)

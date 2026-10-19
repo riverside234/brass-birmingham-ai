@@ -1,4 +1,4 @@
-param([switch]$Installed,[ValidateSet('tracker','statistics','presentation','link','menu','history','performance')][string]$Suite='statistics',[string]$BuildDirectory='artifacts/information-ui-build')
+param([switch]$Installed,[ValidateSet('tracker','statistics','presentation','link','menu','history','performance')][string]$Suite='statistics',[string]$BuildDirectory='artifacts/information-ui-build',[switch]$Quick)
 $ErrorActionPreference='Stop'
 $trackerRoot=Split-Path -Parent (Split-Path -Parent (Split-Path -Parent $PSScriptRoot))
 $trackerBuild=Join-Path $trackerRoot $BuildDirectory
@@ -46,6 +46,10 @@ $trackerLog=Join-Path $trackerTestBuild ($Suite+'-card-tracker-native.log')
 @{passed=$false;status='running'}|ConvertTo-Json|Set-Content -LiteralPath $trackerResult
 $trackerArguments=@('-batchmode','-screen-width','1920','-screen-height','1080','-screen-fullscreen','0','-logFile',('"'+$trackerLog+'"'),'--brass-local-ai-test')
 if($Suite -eq 'menu'){$trackerArguments+='--brass-local-ai-smoke'}
+if($Quick){
+ if($Suite -ne 'menu'){throw 'Quick mode requires the AI menu suite.'}
+ $trackerArguments=@($trackerArguments|Where-Object {$_ -ne '--brass-local-ai-smoke'})+'--brass-masked-quick'
+}
 $trackerProcess=Start-Process -FilePath (Join-Path $trackerPlayer 'BrassBirminghamUnity.exe') -ArgumentList $trackerArguments -WorkingDirectory $trackerPlayer -WindowStyle Hidden -PassThru
 $trackerTimer=[Diagnostics.Stopwatch]::StartNew()
 $trackerCompletedAt=$null

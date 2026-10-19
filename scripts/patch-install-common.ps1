@@ -74,12 +74,12 @@ function Assert-BrassCandidate($Manifest,$Validation,[string]$Build){
     if(-not $Manifest -or $Manifest.stockSha256 -ne $BrassStockSha256){throw 'Candidate is not based on the supported stock game.'}
     if(-not $Validation -or -not $Validation.passed){throw 'Candidate validation must pass before installation.'}
     $expectedFiles='Assembly-CSharp.dll|BrassPatch.dll'
-    if($Manifest.version -in @('1.3.0','1.3.1','1.3.2','1.4.0','1.4.1','1.4.2','1.4.3','1.4.4','1.4.5','1.4.6','1.4.7','1.4.8','1.4.9','1.4.10','1.4.11','1.4.12','1.4.13','1.4.15','1.4.16','1.4.17','1.4.18','1.4.19','1.4.20','1.4.21','1.4.22','1.4.23','1.4.24','1.4.25','1.4.26','1.4.27','1.4.28','1.4.29','1.4.30','1.4.31')){
+    if($Manifest.version -in @('1.3.0','1.3.1','1.3.2','1.4.0','1.4.1','1.4.2','1.4.3','1.4.4','1.4.5','1.4.6','1.4.7','1.4.8','1.4.9','1.4.10','1.4.11','1.4.12','1.4.13','1.4.15','1.4.16','1.4.17','1.4.18','1.4.19','1.4.20','1.4.21','1.4.22','1.4.23','1.4.24','1.4.25','1.4.26','1.4.27','1.4.28','1.4.29','1.4.30','1.4.31','1.4.32')){
         $expectedFiles='Assembly-CSharp.dll|BrassLegacyAI.dll|BrassPatch.dll'
         if(-not $Validation.PSObject.Properties['localAi'] -or -not $Validation.localAi.passed){throw 'Combined AI and native UI qualification must pass before installation.'}
     }
     if((@($Manifest.files|ForEach-Object {$_.name}|Sort-Object)-join '|') -ne $expectedFiles){throw 'Unexpected candidate file list.'}
-    if($Manifest.version -in @('1.4.7','1.4.8','1.4.9','1.4.10','1.4.11','1.4.12','1.4.13','1.4.15','1.4.16','1.4.17','1.4.18','1.4.19','1.4.20','1.4.21','1.4.22','1.4.23','1.4.24','1.4.25','1.4.26','1.4.27','1.4.28','1.4.29','1.4.30','1.4.31')){
+    if($Manifest.version -in @('1.4.7','1.4.8','1.4.9','1.4.10','1.4.11','1.4.12','1.4.13','1.4.15','1.4.16','1.4.17','1.4.18','1.4.19','1.4.20','1.4.21','1.4.22','1.4.23','1.4.24','1.4.25','1.4.26','1.4.27','1.4.28','1.4.29','1.4.30','1.4.31','1.4.32')){
         if(-not $Manifest.PSObject.Properties['sourcePins'] -or -not $Validation.localAi.PSObject.Properties['sourcePins'] -or $Manifest.sourcePins.Count -ne $Validation.localAi.sourcePins.Count){throw 'Compiled runtime-source qualification is missing.'}
         foreach($pin in $Manifest.sourcePins){if(@($Validation.localAi.sourcePins|Where-Object {$_.path -eq $pin.path -and $_.sha256 -eq $pin.sha256}).Count -ne 1){throw 'Qualified runtime sources differ from compilation.'}}
         if(-not $Validation.localAi.resourceTests.passed -or $Validation.localAi.resourceTests.checks -lt 20 -or $Validation.localAi.executionStatistics.maximumRunning -ne 1 -or $Validation.localAi.executionStatistics.running){throw 'General AI execution/resource qualification must pass.'}
@@ -352,6 +352,27 @@ function Assert-BrassCandidate($Manifest,$Validation,[string]$Build){
         foreach($group in 'CT27-POSITION','CT27-STYLE','CT27-LAYER','CT25-THEME'){$cases=@($Validation.cardTracker.cases|Where-Object {$_.name.StartsWith($group)});if(-not $cases.Count -or @($cases|Where-Object {-not $_.passed}).Count){throw 'Preserved tracker evidence is incomplete.'}}
         foreach($kind in 'menu','cardTracker'){$pins=if($kind -eq 'menu'){$Validation.retainedUi.menuFiles}else{$Validation.retainedUi.trackerFiles};foreach($file in $pins){if(@($Validation.$kind.testedFiles|Where-Object {$_.name -eq $file.name -and $_.sha256 -eq $file.sha256}).Count -ne 1){throw 'Retained evidence fingerprint differs.'}}}
         if(-not $Validation.localAi.masked.passed -or $Validation.localAi.workers -ne 2 -or $Validation.localAi.retainedFrom -ne $Manifest.baseVersion){throw 'Preserved AI qualification required.'}
+    }
+    if($Manifest.version -eq '1.4.32'){
+        if($Manifest.baseVersion -ne '1.4.31' -or $Manifest.searchWorkers -ne 2 -or ($Manifest.turnOptionsMs -join '|') -ne '6000|10000|15000' -or $Manifest.executionVersion -ne 'local-ai-execution/1.1.0'){throw 'V4 timing requires accepted 1.4.31, 6/10/15-second allowances and two workers.'}
+        $scope=@('src/BrassLocalAI/Policy/DifficultyCatalog.cs','src/BrassLocalAI/Policy/ProfileCatalog.cs','src/BrassLocalAI/Unity/LocalTurnBridge.cs')
+        if(@($Manifest.sourceScope).Count -ne 3 -or @($Manifest.sourceScope|Where-Object {$_ -notin $scope}).Count){throw 'V4 timing contains unrelated runtime source changes.'}
+        foreach($name in 'Assembly-CSharp.dll','BrassPatch.dll'){if(($Manifest.files|Where-Object name -eq $name).sha256 -ne ($Manifest.baseFiles|Where-Object name -eq $name).sha256){throw 'V4 timing must preserve game and Statistics/UI helper binaries.'}}
+        if(-not $Validation.preservedRuntime.passed -or -not $Validation.retainedUi.passed -or $Validation.retainedUi.release -ne $Manifest.baseVersion -or -not $Validation.retainedUi.validationSha256){throw 'Protected runtime and retained UI evidence must pass.'}
+        if(-not $Validation.statistics.passed -or -not $Validation.history.passed -or -not $Validation.cardTracker.passed){throw 'Retained Statistics, History and Card Tracker evidence must pass.'}
+        foreach($file in $Validation.retainedUi.cardTrackerFiles){if(@($Validation.cardTracker.testedFiles|Where-Object {$_.name -eq $file.name -and $_.sha256 -eq $file.sha256}).Count -ne 1){throw 'Retained Card Tracker evidence changed.'}}
+        $menu=$Validation.menu
+        if(-not $menu.passed -or $menu.checks -lt 900 -or $menu.searchAllowanceChecks -lt 340 -or @($menu.nativeErrors|Where-Object {$_}).Count -or $menu.turns.Count -ne 8 -or -not $menu.selectionPanel.passed -or $menu.selectionPanel.gammaEnabled -or $menu.selectionPanel.draftChecks -lt 20 -or $menu.selectionPanel.layouts.Count -ne 18){throw 'Fresh native UI, execution, save compatibility and clock contracts required.'}
+        foreach($layout in $menu.selectionPanel.layouts){$choices=switch($layout.family){'Human'{0}'V4'{7}'Gamma'{17}default{throw 'Unknown selection page.'}};if($layout.choices -ne $choices){throw 'Player selection layout changed.'}}
+        foreach($turn in $menu.turns){
+            $budget=switch($turn.difficulty){'easy'{6000}'mid'{10000}'hard'{15000}default{throw 'Unknown timed difficulty.'}}
+            if($turn.thinkingMilliseconds -ne $budget -or $turn.workLimit -ne 1000000 -or -not $turn.inputGuardTested -or $turn.planningRequests -lt 1 -or $turn.lastRequestMilliseconds -gt $budget){throw 'V4 turn allowance, work guard or input guard changed.'}
+        }
+        foreach($tier in 'easy','mid','hard'){if(@($menu.turns|Where-Object difficulty -eq $tier).Count -lt 1){throw 'Difficulty missing from actual V4 turns.'}}
+        $replan=@($menu.turns|Where-Object {$_.count -eq 2 -and -not $_.intro -and $_.key -eq 'balanced' -and $_.difficulty -eq 'mid'})
+        if($replan.Count -ne 1 -or -not $replan[0].replanInjected -or $replan[0].planningRequests -ne 2){throw 'Shared-deadline replanning regression required.'}
+        if(-not $Validation.visualChecks.passed -or $Validation.visualChecks.cases.Count -lt 4){throw 'Fresh 1200p V4 panel and row review required.'}
+        foreach($report in $menu,$Validation.visualChecks){foreach($file in $Manifest.files){if(@($report.testedFiles|Where-Object {$_.name -eq $file.name -and $_.sha256 -eq $file.sha256}).Count -ne 1){throw 'V4 timing evidence belongs to another candidate.'}}}
     }
     if($Manifest.version -eq '1.4.28'){
         if($Manifest.baseVersion -ne '1.4.27' -or $Manifest.searchWorkers -ne 2 -or ($Manifest.turnOptionsMs -join '|') -ne '2000|5000|12000' -or -not $Validation.preservedRuntime.passed){throw 'Game finishing margin requires the accepted baseline and unchanged two-worker clocks.'}

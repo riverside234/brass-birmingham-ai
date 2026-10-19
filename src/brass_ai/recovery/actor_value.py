@@ -23,8 +23,9 @@ class TrainingPhases:
         buffered=value_buffer.enabled(config)
         descriptors='critic_data' in config
         previous_contract='actor-value-phases/3.0.0' if descriptors else 'actor-value-phases/2.0.0' if buffered else CONTRACT
-        self.contract='actor-value-phases/4.0.0' if gae.windowed(config['advantage']) else previous_contract
-        self.evidence_migration=None
+        evidence_contract='actor-value-phases/4.0.0' if gae.windowed(config['advantage']) else previous_contract
+        self.contract='actor-value-phases/5.0.0' if descriptors else evidence_contract
+        self.evidence_migration=None;self.critic_migration=None
         saved=(raw or {}).get('training',{}).get(KEY)
         if saved is None:
             require(generation==0,'Missing GAE/value optimizer checkpoint; use a fresh IL run')
@@ -35,15 +36,24 @@ class TrainingPhases:
             # The league verifies the signed source/config transition first.
             # This exact upgrade also handles a restart after that transition
             # was committed but before its first new generation checkpoint.
-            if saved.get('contract')==previous_contract and gae.windowed(config['advantage']):
+            if (saved.get('contract') in (previous_contract,self.contract) and gae.windowed(config['advantage'])
+                    and not gae.windowed(saved.get('options',{}).get('advantage',{}))):
                 require(gae.evidence_config(dict(saved['options'],reward=config.get('reward',{})))==
                         dict(self.options,reward=config.get('reward',{})),
                         'GAE/value checkpoint configuration differs during evidence upgrade')
                 saved=copy.deepcopy(saved)
                 saved['gae']=gae.migrate_state(saved['gae'],saved['options']['advantage'],config['advantage'],generation)
-                saved.update(contract=self.contract,options=copy.deepcopy(self.options))
+                saved.update(contract=(self.contract if saved['contract']==self.contract else evidence_contract),
+                    options=copy.deepcopy(self.options))
                 self.evidence_migration=dict(contract=gae.CONFIG_MIGRATION,origin=generation,
                     scope='Empty EV window and new health streaks; active lambdas/table origins, both Adams, beta and critic state preserved')
+            if descriptors and saved.get('contract')==evidence_contract:
+                require(saved.get('options')==self.options,'GAE/value checkpoint configuration differs during critic upgrade')
+                saved=copy.deepcopy(saved)
+                saved['critic_data']=critic_data.migrate_state(saved['critic_data'],config['critic_data'],generation)
+                saved['contract']=self.contract
+                self.critic_migration=dict(contract=critic_data.RECOVERY_CONTRACT,origin=generation,
+                    scope='Empty weight-recovery streak; saved weight, baseline, activation, fingerprint, both Adams and GAE state preserved')
             fields={'contract','options','gae','beta_clone','kl_trips','optimizer'}|({'buffer'} if buffered else set())|({'critic_data'} if descriptors else set())
             require(type(saved) is dict and set(saved)==fields
                     and saved['contract']==self.contract and saved['options']==self.options,
@@ -163,7 +173,9 @@ class TrainingPhases:
         if self.evidence_migration:report['evidence_migration']=copy.deepcopy(self.evidence_migration)
         if self.critic_state is not None:
             self.critic_state,value['critic_rollout']=critic_data.advance(self.critic_state,self.config['critic_data'],
-                generation=generation,report=value,healthy=healthy and not value.get('kl_guard_tripped',False),fingerprint_now=self.fingerprint)
+                generation=generation,report=value,healthy=healthy and not value.get('kl_guard_tripped',False),fingerprint_now=self.fingerprint,
+                ppo_snapshot_rows=update.get('critic_rows',{}).get('snapshot_distinct_used',0) if update['optimizer_steps']>0 else 0)
+            if self.critic_migration:value['critic_rollout']['recovery_migration']=copy.deepcopy(self.critic_migration)
         update['gae']['gate']=report
         return report
 

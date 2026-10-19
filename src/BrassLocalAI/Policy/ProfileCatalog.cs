@@ -74,6 +74,14 @@ namespace BrassLegacyAI
             p.interior_top_k=budget<=2000?2:budget<=5000?3:4;
             p.opponent_turn_limit=budget<=2000?1:2;
         }
+        public static void ConfigureClock(Profile p,double budget,string difficulty)
+        {
+            // Preserve each tier's existing breadth and reply horizon as its
+            // wall-clock allowance changes. Unnamed legacy saves keep the old path.
+            if(difficulty==DifficultyCatalog.Existing){ConfigureClock(p,budget);return;}
+            if(!DifficultyCatalog.Contains(difficulty))throw new InvalidDataException("Unknown AI difficulty.");
+            ConfigureClock(p,difficulty=="easy"?2000:difficulty=="mid"?5000:12000);
+        }
         public static Profile ForPlay(JObject savedProfile)
         {
             // Older saves keep their validated assignments and intent identities.

@@ -308,6 +308,16 @@
       "implementation": "c13907c7564371269b2ae86fa690dcb6a0cd7d18c74d7322e9fcc83ac6a61d80",
       "learning_compatibility": "ef6a1b5126de42da8f3277dc9357b6ffb94a435f3faa7fee8dd312bb5a242a54",
       "reason": "Removing the self-play IL sale-probability guard and adding bounded mixed-table EV evidence do not change IL architecture, encoder, dataset, supervised update math or checkpoint layout. Preserve completed IL and exact source/lineage checks."
+    },
+    {
+      "implementation": "997ce5bc26b8416d694f42ddac196feac8b365ee40bc412c6321ec85ae8885a5",
+      "learning_compatibility": "ef6a1b5126de42da8f3277dc9357b6ffb94a435f3faa7fee8dd312bb5a242a54",
+      "reason": "Generation-85 self-play snapshot-exposure and gate-reporting fixes do not change completed IL model, encoding, loss or checkpoint semantics. Preserve completion, data, probe and lineage checks."
+    },
+    {
+      "implementation": "fd85565852a00328236c96b4ed8b6fc9cd245627cc019bbf8c05d12721a89d52",
+      "learning_compatibility": "ef6a1b5126de42da8f3277dc9357b6ffb94a435f3faa7fee8dd312bb5a242a54",
+      "reason": "Snapshot critic weight recovery changes self-play gate state only; completed IL architecture, encoding, loss, data and checkpoint lineage remain compatible. Preserve all handoff freshness and completion checks."
     }
   ]
 }

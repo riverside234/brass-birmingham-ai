@@ -25,6 +25,7 @@ from .updates import ppo_update,rehearsal_dataset
 from .teacher_collection import collect_due
 from .curriculum import activate_boost,boost_window,boost_report,curriculum_report
 from .utility import migrate,reward_spec
+from . import critic_data
 
 
 class Behavior:
@@ -525,6 +526,7 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                         controller_line+=f' value_rows={value_report["distinct_current_rows_used"]}+{value_report["distinct_previous_rows_used"]}'
                     if phases.critic_state is not None:
                         controller_line+=f' snapshots={int(phases.critic_state["snapshots_active"])}@{phases.critic_state["snapshot_weight"]:.2f}'
+                        controller_line+=critic_data.recovery_console(value_report.get('critic_rollout',{}))
                         controller_line+=' GAE-mixed='+','.join(f'{k}:{v["lambda_next"]:.2f}[{v["streak"]}/10]'
                             +(f'({v["evidence"]["mixed"]["games"]}g/{v["evidence"]["minimum_games"]},'
                               f'{v["evidence"]["contributing_iterations"]}i)' if 'evidence' in v else '')
@@ -536,6 +538,8 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                     controller_line+=f' health={"ok" if checks["health_ok"] else ",".join(checks["health_reasons"])}'
                     controller_line+=f' pass_fail={checks["pass_failures"]}/{checks["pass_positions"]}'
                 if quality_report:controller_line+=f' history={quality_report["size"]}/24 {quality_report["admission"]["reason"]}'
+                from .review_metrics import mixed_ev_console
+                controller_line+=mixed_ev_console(report['gate_diagnostics'])
                 print(f'Recovery generation {iteration+1}: {done} games, {update["optimizer_steps"]} PPO steps; '
                       f'collect={load_began-began:.1f}s prepare={collected-load_began:.1f}s '
                       f'rehearsal={rehearsal_seconds:.1f}s PPO={report["timings"]["ppo_seconds"]:.1f}s '

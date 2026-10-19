@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
+using BrassHost;
 using BoardGameRules.Entities.Common;
 using BoardGameRules.Entities.Game;
 using BoardGameRules.Entities.Players;
@@ -69,7 +70,7 @@ public sealed class LocalAiUnityDriver : MonoBehaviour
     readonly List<object> turns = new List<object>();
     readonly List<object> selectionLayouts = new List<object>();
     bool selectionCasesPassed;
-    int selectionFixtureChoices, draftChecks;
+    int selectionFixtureChoices, draftChecks, searchAllowanceChecks;
     Router router; BrassGameHistory history; Settings settings;
     CreateOfflineGameUseCase menu; CreateOfflineGameView menuView;
     string saves;
@@ -101,6 +102,7 @@ public sealed class LocalAiUnityDriver : MonoBehaviour
     }
     IEnumerator Cases()
     {
+        SearchAllowanceContracts();
         yield return SceneManager.LoadSceneAsync("MenuScene"); yield return null;
         var resourceChecks = AiExecutionResourceTests.Run(Check);
         while (resourceChecks.MoveNext()) yield return resourceChecks.Current;
@@ -127,7 +129,7 @@ public sealed class LocalAiUnityDriver : MonoBehaviour
         CheckFirstDisplay("cached menu reopened without refresh");
         var rows = Rows();
         Check(Setup.PlayerMetadata.Skip(1).All(p => LocalMenu.Strategy(p) == "balanced"), "new bots default to Adaptive Advanced Book");
-        Check(Setup.PlayerMetadata.Skip(1).All(p => LocalMenu.Difficulty(p) == "hard"), "new bots default to Hard 12s");
+        Check(Setup.PlayerMetadata.Skip(1).All(p => LocalMenu.Difficulty(p) == "hard"), "new bots default to Hard " + DifficultyCatalog.Milliseconds("hard") / 1000 + "s");
         foreach (var row in rows.Skip(1))
         {
             var p = Get<PlayerMetadata>(row, "_playerMetadata");
@@ -145,6 +147,7 @@ public sealed class LocalAiUnityDriver : MonoBehaviour
             }
             foreach (var difficulty in DifficultyCatalog.Keys) {
                 controls.OpenPicker();
+                Check(StrategyPicker.Active.DifficultyButtons[Array.IndexOf(DifficultyCatalog.Keys, difficulty)].GetComponentInChildren<TextMeshProUGUI>().text == DifficultyCatalog.Summary(difficulty), "difficulty button displays its live allowance");
                 StrategyPicker.Active.DifficultyButtons[Array.IndexOf(DifficultyCatalog.Keys, difficulty)].onClick.Invoke();
                 StrategyPicker.Active.ApplyButton.onClick.Invoke();
                 Check(LocalMenu.Difficulty(p) == difficulty && LocalMenu.Strategy(p) == "random" && p.AiType == AIType.Hard, "difficulty independent of style and original engine enum");
@@ -452,8 +455,48 @@ public sealed class LocalAiUnityDriver : MonoBehaviour
     void Finish(Exception error)
     {
         done = true; LocalTurnBridge.CancelActive(); Application.logMessageReceived -= Log;
-        File.WriteAllText(Output, new JObject { ["passed"] = error == null, ["mode"] = Environment.GetCommandLineArgs().Contains("--brass-local-ai-smoke") ? "startup-menu-smoke" : "full", ["checks"] = checks, ["error"] = error == null ? null : error.ToString(), ["nativeErrors"] = JArray.FromObject(errors), ["environmentMessages"] = JArray.FromObject(environmentMessages), ["images"] = JArray.FromObject(images), ["turns"] = JArray.FromObject(turns), ["resourceTests"] = JObject.FromObject(new { passed = AiExecutionResourceTests.Passed, checks = AiExecutionResourceTests.Checks }), ["resourceMeasurements"] = AiExecutionResourceTests.Measurements == null ? null : JObject.FromObject(AiExecutionResourceTests.Measurements), ["executionStatistics"] = JObject.FromObject(BrassLegacyAI.Execution.AiExecutionScheduler.Statistics()), ["selectionPanel"] = JObject.FromObject(new { passed = selectionCasesPassed, gammaEnabled = AiSelectionCatalog.Entries(AiFamily.Gamma).Any(e => e.Available), fixtureChoices = selectionFixtureChoices, draftChecks, layouts = selectionLayouts }), ["unity"] = Application.unityVersion }.ToString());
+        File.WriteAllText(Output, new JObject { ["passed"] = error == null, ["mode"] = Environment.GetCommandLineArgs().Contains("--brass-local-ai-smoke") ? "startup-menu-smoke" : "full", ["checks"] = checks, ["searchAllowanceChecks"] = searchAllowanceChecks, ["error"] = error == null ? null : error.ToString(), ["nativeErrors"] = JArray.FromObject(errors), ["environmentMessages"] = JArray.FromObject(environmentMessages), ["images"] = JArray.FromObject(images), ["turns"] = JArray.FromObject(turns), ["resourceTests"] = JObject.FromObject(new { passed = AiExecutionResourceTests.Passed, checks = AiExecutionResourceTests.Checks }), ["resourceMeasurements"] = AiExecutionResourceTests.Measurements == null ? null : JObject.FromObject(AiExecutionResourceTests.Measurements), ["executionStatistics"] = JObject.FromObject(BrassLegacyAI.Execution.AiExecutionScheduler.Statistics()), ["selectionPanel"] = JObject.FromObject(new { passed = selectionCasesPassed, gammaEnabled = AiSelectionCatalog.Entries(AiFamily.Gamma).Any(e => e.Available), fixtureChoices = selectionFixtureChoices, draftChecks, layouts = selectionLayouts }), ["unity"] = Application.unityVersion }.ToString());
         Application.Quit(error == null ? 0 : 1);
+    }
+    void SearchAllowanceContracts()
+    {
+        int first=checks;
+        Check(TurnCoordinator.SearchWorkers==2, "V4 retains two search workers");
+        Check(LocalTurnBridge.SearchWorkLimit==1000000, "V4 work guard unchanged");
+        var expected=new[]{6000,10000,15000};var previous=new[]{2000,5000,12000};
+        Check(DifficultyCatalog.Keys.SequenceEqual(new[]{"easy","mid","hard"}), "same three difficulty IDs and order");
+        for(int tier=0;tier<3;tier++){
+            string key=DifficultyCatalog.Keys[tier];
+            Check(DifficultyCatalog.Milliseconds(key)==expected[tier], "new V4 turn allowance "+key);
+            Check(DifficultyCatalog.Summary(key).EndsWith(" · "+expected[tier]/1000+"s"), "summary uses new allowance");
+            var saved=DifficultyCatalog.Snapshot(key);var old=(JObject)saved.DeepClone();
+            old["version"]="local-ai-execution/1.0.0";old["search_ms"]=previous[tier];
+            Check(DifficultyCatalog.Read(saved)==key && DifficultyCatalog.Read(old)==key, "current and previous execution versions readable");
+            foreach(var valid in new[]{saved,old}){
+                var broken=(JObject)valid.DeepClone();broken["search_ms"]=17;
+                bool rejected=false;try{DifficultyCatalog.Read(broken);}catch(InvalidDataException){rejected=true;}
+                Check(rejected,"version-specific execution values remain validated");
+            }
+            foreach(int count in new[]{2,3,4})foreach(bool intro in new[]{false,true})foreach(string style in ProfileCatalog.Keys){
+                var frozen=ProfileCatalog.Snapshot(style,count,intro);var frozenHash=Wire.Hash(frozen);
+                var baseline=ProfileCatalog.ForPlay(frozen);ProfileCatalog.ConfigureClock(baseline,previous[tier]);
+                var updated=ProfileCatalog.ForPlay(frozen);ProfileCatalog.ConfigureClock(updated,expected[tier],key);
+                Check(JToken.DeepEquals(JObject.FromObject(baseline),JObject.FromObject(updated)), "tier search shape and all other settings unchanged");
+                Check(Wire.Hash(frozen)==frozenHash,"frozen strategy and intent identity unchanged");
+                var config=new GameStartConfiguration((NumberOfPlayers)count){IsIntroductoryGame=intro};
+                var meta=new GameMetadata(config,GameType.Local){GameId="clock-compatibility"};
+                foreach(var start in config.Players)meta.JoinGame(new PlayerMetadata{PlayerStartConfiguration=start,AiType=AIType.Hard});
+                var state=LocalGameState.Create(meta,p=>style,p=>key);state["ready"]=true;
+                foreach(JObject row in state["assignments"])row["execution"]=old.DeepClone();
+                state["assignment_sha256"]=Wire.Hash(new JObject{["format"]=state["format"],["runtime"]=state["runtime"],["rules"]=state["rules"],["schema"]=state["schema"],["configuration"]=state["configuration"],["assignments"]=state["assignments"]});
+                var before=Wire.Hash(state);SaveExtensions.Set(meta,state);var read=LocalGameState.Read(meta);
+                Check(Wire.Hash(read)==before && read["assignments"].All(a=>LocalGameState.Difficulty(read,(JObject)a)==key), "signed previous execution assignments read without mutation");
+            }
+        }
+        var legacy=ProfileCatalog.Create("balanced",4);ProfileCatalog.ConfigureClock(legacy,10000);
+        var compatibility=ProfileCatalog.Create("balanced",4);ProfileCatalog.ConfigureClock(compatibility,10000,DifficultyCatalog.Existing);
+        Check(DifficultyCatalog.Milliseconds(DifficultyCatalog.Existing)==10000 && JToken.DeepEquals(JObject.FromObject(legacy),JObject.FromObject(compatibility)), "unnamed legacy saves retain 10s and existing search shape");
+        searchAllowanceChecks=checks-first;
     }
     void Capture(string file)
     {

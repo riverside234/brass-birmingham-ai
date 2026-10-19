@@ -7,7 +7,8 @@ namespace BrassLegacyAI
     // Execution settings are independent of immutable research profiles and intent IDs.
     public static class DifficultyCatalog
     {
-        public const string Version = "local-ai-execution/1.0.0";
+        public const string Version = "local-ai-execution/1.1.0";
+        public const string PreviousVersion = "local-ai-execution/1.0.0";
         public const string Default = "hard";
         public const string Existing = "existing";
         public const int ExistingMilliseconds = 10000;
@@ -16,9 +17,9 @@ namespace BrassLegacyAI
         public static int Milliseconds(string key)
         {
             switch (key) {
-                case "easy": return 2000;
-                case "mid": return 5000;
-                case "hard": return 12000;
+                case "easy": return 6000;
+                case "mid": return 10000;
+                case "hard": return 15000;
                 case Existing: return ExistingMilliseconds;
                 default: throw new InvalidDataException("Unknown AI difficulty. The saved game has been preserved.");
             }
@@ -41,11 +42,17 @@ namespace BrassLegacyAI
         {
             var value = token as JObject;
             if (value == null || value.Count != 3 || value["version"]?.Type != JTokenType.String ||
-                (string)value["version"] != Version || value["difficulty"]?.Type != JTokenType.String ||
+                ((string)value["version"] != Version && (string)value["version"] != PreviousVersion) || value["difficulty"]?.Type != JTokenType.String ||
                 !Contains((string)value["difficulty"]) || value["search_ms"]?.Type != JTokenType.Integer ||
-                (long)value["search_ms"] != Milliseconds((string)value["difficulty"]))
+                (long)value["search_ms"] != ((string)value["version"] == PreviousVersion ? PreviousMilliseconds((string)value["difficulty"]) : Milliseconds((string)value["difficulty"])))
                 throw new InvalidDataException("Saved AI difficulty is incomplete or incompatible. The save has been preserved.");
             return (string)value["difficulty"];
+        }
+        static int PreviousMilliseconds(string key)
+        {
+            // Validate old records without rewriting their signed assignments.
+            // Named difficulties use the current allowance when play resumes.
+            switch (key) { case "easy": return 2000; case "mid": return 5000; case "hard": return 12000; default: throw new InvalidDataException("Unknown AI difficulty."); }
         }
     }
 }

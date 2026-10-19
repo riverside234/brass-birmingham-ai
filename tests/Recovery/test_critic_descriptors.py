@@ -207,7 +207,7 @@ class CriticTraining(unittest.TestCase):
         s,r=critic_data.advance(s,c,generation=2,report=report,healthy=True,fingerprint_now=dict(values=style()))
         self.assertTrue(s['snapshots_active']);self.assertEqual(r['decision'],'enable_snapshots');self.assertEqual(r['fingerprint_mean_absolute_drift'],0.)
         report['heldout_after']['groups']['role:learner']['explained_variance']=.579
-        s,r=critic_data.advance(s,c,generation=3,report=report,healthy=True,fingerprint_now=None)
+        s,r=critic_data.advance(s,c,generation=3,report=report,healthy=True,fingerprint_now=None,ppo_snapshot_rows=8)
         self.assertEqual(s['snapshot_weight'],.5);self.assertEqual(r['weight_used'],1.)
         model,opt,cfg,b,data,snap,_=mixed_fixture();cfg['critic_data']['rollout']['mode']='auto'
         phase=TrainingPhases(model,cfg);phase.snapshot_data=snap;phase.prepare(updates.Dataset(data,'cpu'))
