@@ -257,7 +257,7 @@ class FixedRecipe(unittest.TestCase):
         cfg=config();current=read_json(SOURCE_ROOT/'configs/step5/joint7-latest.json')
         self.assertEqual(latest_model_config(cfg,cfg['imitation_checkpoint']),current)
         self.assertFalse(cfg['teacher_enabled']);self.assertEqual(cfg['population'],dict(recent=4,anchors=12))
-        self.assertEqual(cfg['architecture'],'brass-four-seat-mlp-resnet/11.1.0')
+        self.assertEqual(cfg['architecture'],'brass-four-seat-mlp-resnet/11.2.0')
         for start in (0,19920,20000,99920,100000,500000):
             counts=Counter(training_table(i,cfg,None)[0] for i in range(start,start+320))
             self.assertEqual(counts,dict(selfplay=192,historical=96,legacy=32))
@@ -346,10 +346,10 @@ class FixedRecipe(unittest.TestCase):
         self.assertEqual(summary['actor']['lr_controller'],report)
         self.assertEqual(summary['actor']['optimizer_steps_planned'],10)
 
-    def test_completed_prechange_v11_1_il_is_admitted_without_file_changes(self):
+    def test_completed_reviewed_v11_2_il_is_admitted_without_file_changes(self):
         from latest_model_fixture import imitation_fixture
         from brass_ai.recovery.demonstrations import completed_imitation
-        before='647d019877a38a6023926803956bf794186d23a81fd6b6a35124684ca86046e4'
+        before='e2b6bf879c8b9da5b043c8f4c8aedf76b45bec9095867e4246b7decd1c316144'
         with tempfile.TemporaryDirectory(dir=SOURCE_ROOT/'artifacts') as folder:
             with patch('latest_model_fixture.implementation_id',return_value=before):
                 run,model,cfg=imitation_fixture(Path(folder))

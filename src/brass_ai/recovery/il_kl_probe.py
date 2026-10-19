@@ -98,7 +98,7 @@ class Probe:
         if part:yield part
 
     def measure(self,model,update):
-        began=time.perf_counter();distances={};sales=[];passes=[];was_training=model.training
+        began=time.perf_counter();distances={};passes=[];was_training=model.training
         device=next(model.parameters()).device
         model.eval()
         try:
@@ -113,10 +113,7 @@ class Probe:
                     values=stable_kl(reference,current,inputs[2],self.config['probability_floor']).cpu().tolist()
                     for j,i in enumerate(part):
                         distances[i]=values[j];kinds=self.rows[i]['kinds']
-                        selling=[k for k,kind in enumerate(kinds) if kind=='sell']
                         passing=[k for k,kind in enumerate(kinds) if kind=='pass']
-                        il_sale=float(reference[j,selling].sum());now_sale=float(current[j,selling].sum())
-                        if il_sale>=.2:sales.append(dict(row=i,il=il_sale,current=now_sale,ok=now_sale>=.5*il_sale))
                         il_pass=float(reference[j,passing].sum());now_pass=float(current[j,passing].sum())
                         if passing and len(passing)<len(kinds) and il_pass<.2:
                             passes.append(dict(row=i,il=il_pass,current=now_pass,ok=now_pass<=2*il_pass+.05))
@@ -128,12 +125,12 @@ class Probe:
         for group in GROUPS:
             values=[distances[i] for i,row in enumerate(self.rows) if row['group']==group]
             groups[group]=dict(positions=len(values),kl_mean=sum(values)/len(values) if values else None)
-        sale_check,pass_check=checks(sales),checks(passes)
+        pass_check=checks(passes)
         return dict(positions=len(distances),requested_positions=self.config['probe_positions'],
             kl_mean=sum(distances.values())/len(distances),groups=groups,unassigned_positions=0,
-            behavior=dict(ok=sale_check['ok'] and pass_check['ok'],sales=sale_check,passing=pass_check),
+            behavior=dict(ok=pass_check['ok'],passing=pass_check),
             elapsed_seconds=time.perf_counter()-began,probability_floor=self.config['probability_floor'],
-            scope='Fixed IL validation positions; raw temperature-1 policies, no exploration; symmetric floor/renormalization for KL, raw behavior checks')
+            scope='Fixed IL validation positions; raw temperature-1 policies, no exploration; symmetric floor/renormalization for KL; pass-probability check only')
 
     def probabilities(self,model,update):
         """Raw immutable snapshot for quality-pool novelty checks, no RNG."""

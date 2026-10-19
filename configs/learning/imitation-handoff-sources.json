@@ -298,6 +298,16 @@
       "implementation": "2c626e155f595a28b1abf43a5743387060edba1b10b090beb6e9bf84a9f265db",
       "learning_compatibility": "ef6a1b5126de42da8f3277dc9357b6ffb94a435f3faa7fee8dd312bb5a242a54",
       "reason": "PPG guarded-prefix and ordinary profile scheduling fixes preserve completed IL model/features/dataset/supervised math. Keep exact completion/hash/lineage checks."
+    },
+    {
+      "implementation": "bee655014a2a238555afc936e2e5c341f8b7e630ddf63a60a77704ee344c41c2",
+      "learning_compatibility": "ef6a1b5126de42da8f3277dc9357b6ffb94a435f3faa7fee8dd312bb5a242a54",
+      "reason": "Self-play gate/beta/frozen-rating fixes and removal of the experimental v5 bot preserve completed v11.2 IL architecture, weights, encoder, supervised data and update math. Keep exact completion/hash/lineage admission."
+    },
+    {
+      "implementation": "c13907c7564371269b2ae86fa690dcb6a0cd7d18c74d7322e9fcc83ac6a61d80",
+      "learning_compatibility": "ef6a1b5126de42da8f3277dc9357b6ffb94a435f3faa7fee8dd312bb5a242a54",
+      "reason": "Removing the self-play IL sale-probability guard and adding bounded mixed-table EV evidence do not change IL architecture, encoder, dataset, supervised update math or checkpoint layout. Preserve completed IL and exact source/lineage checks."
     }
   ]
 }

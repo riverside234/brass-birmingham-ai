@@ -1,7 +1,6 @@
-"""Shared v5 funded-industry strategy/search for new collections, with provenance.
+"""Shared official v4 strategy/search for new lab collections, with provenance.
 
 The strategy baseline is bank-3dc65253a610191d66a5, not Network/Scout.
-The bank names the profile ancestry; source pins identify the active v5 logic.
 Frozen receipts do not establish strength of a new timed search engine.
 """
 import hashlib

@@ -56,9 +56,10 @@ def require_start_generation(run,expected):
 
 def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=None,from_run=None,imitation_run=None,resume_reviewed_source=False,inference_devices=None,il_kl_probe_from_run=None):
     from .config import time_budget_config,champion_mix_config,latest_model_recipe,quality_selfplay_recipe
+    from .gae import evidence_config
     from .inference import validate_inference_devices
     inference_devices=validate_inference_devices(inference_devices,device)
-    config=champion_mix_config(time_budget_config(config))
+    config=evidence_config(champion_mix_config(time_budget_config(config)))
     root=Path(root).resolve();run=project_path(root,run_path);validate_config(config)
     quality=quality_selfplay_recipe(config)
     if quality and config['rating']['enabled']:
@@ -226,6 +227,9 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
     if 'advantage' in config:
         from .actor_value import TrainingPhases
         phases=TrainingPhases(model,config,raw=raw,generation=state['iteration'],root=root,run=run)
+    if quality:
+        from .ratings import validate_frozen_reference
+        validate_frozen_reference(root,state['ratings'])
     if migration:
         print('Combined reward migration: compatible weights/Adam/RNG preserved; utility head awaits fresh-rollout calibration',flush=True)
     if source_changed:
@@ -449,6 +453,8 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                 report['utilization']=iteration_utilization(inference_before,ordinary_inference,records,
                     load_began-began,len(games),config['execution'])
                 report['utilization']['replay_ingress']=ingress_metrics
+                from .review_metrics import gate_diagnostics
+                report['gate_diagnostics']=gate_diagnostics(update,value_report,limit_report,quality_report)
                 checkpoint_began=time.monotonic()
                 identity=save_checkpoint(output,model,optimizer,step=iteration+1,
                     training=dict(mode='step5-population-ppo',recipe='nonforced-actor-ppo/2.1.0' if revised else 'effective-minibatch-ppo/2.0.0',
@@ -519,10 +525,16 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                         controller_line+=f' value_rows={value_report["distinct_current_rows_used"]}+{value_report["distinct_previous_rows_used"]}'
                     if phases.critic_state is not None:
                         controller_line+=f' snapshots={int(phases.critic_state["snapshots_active"])}@{phases.critic_state["snapshot_weight"]:.2f}'
-                        controller_line+=' GAE-mixed='+','.join(f'{k}:{v["lambda_next"]:.2f}[{v["streak"]}/10]' for k,v in gate['table_gate'].items())
+                        controller_line+=' GAE-mixed='+','.join(f'{k}:{v["lambda_next"]:.2f}[{v["streak"]}/10]'
+                            +(f'({v["evidence"]["mixed"]["games"]}g/{v["evidence"]["minimum_games"]},'
+                              f'{v["evidence"]["contributing_iterations"]}i)' if 'evidence' in v else '')
+                            for k,v in gate['table_gate'].items())
                 if limit_report:
                     controller_line+=(f' ILKL={limit_report["measurement"]["kl_mean"]:.4f}/{limit_report["limit_after"]:.4f}'
                         f' group_limit={limit_report["group_limit_after"]:.4f} {limit_report["decision"]}')
+                    checks=report['gate_diagnostics']
+                    controller_line+=f' health={"ok" if checks["health_ok"] else ",".join(checks["health_reasons"])}'
+                    controller_line+=f' pass_fail={checks["pass_failures"]}/{checks["pass_positions"]}'
                 if quality_report:controller_line+=f' history={quality_report["size"]}/24 {quality_report["admission"]["reason"]}'
                 print(f'Recovery generation {iteration+1}: {done} games, {update["optimizer_steps"]} PPO steps; '
                       f'collect={load_began-began:.1f}s prepare={collected-load_began:.1f}s '

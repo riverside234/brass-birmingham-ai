@@ -25,9 +25,11 @@ class Resume(unittest.TestCase):
     @classmethod
     def setUpClass(cls):torch.set_num_threads(2)
 
-    def test_actual_report_requires_explicit_review_but_no_config_or_probe_change(self):
+    def test_actual_report_requires_reviewed_table_upgrade_and_preserves_probe(self):
         state=read(REPORT/'state.json');before=copy.deepcopy(state)
         signature=copy.deepcopy(state['signature']);signature['implementation']=implementation_id()
+        from brass_ai.recovery.gae import evidence_config
+        signature['config']=evidence_config(signature['config'])
         self.assertEqual(state['signature']['implementation'],PREVIOUS)
         self.assertEqual(signature['compatibility'],compatibility())
         self.assertEqual(signature['config']['audit_workers'],16)

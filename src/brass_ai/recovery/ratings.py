@@ -107,6 +107,16 @@ def validate_state(root,state,config):
     return state
 
 
+def validate_frozen_reference(root,rating):
+    """Fail at continuation startup, not after five more training iterations."""
+    if not rating['config']['enabled']:return
+    policy=rating['agents'][V4]['policy']
+    if policy.get('search_runtime'):
+        from .legacy_search import frozen_rating_runtime
+        require(policy.get('search_free') is True,'Rating reference must remain search-free')
+        frozen_rating_runtime(root,policy['search_runtime'],policy['parent'])
+
+
 def write_once(path,data):
     """Slot files are immutable; retries must reproduce their exact contents."""
     raw=(json.dumps(data,sort_keys=True,indent=2,allow_nan=False)+'\n').encode()
@@ -171,7 +181,11 @@ def jobs_for(spec,directory):
         policies=[]
         for agent in row['agents']:
             ref=spec['agents'][agent]
-            policies.append(neural_spec(ref['checkpoint']['model_id'],0.,'neutral') if ref['kind']=='model' else ref['policy'])
+            policy=(neural_spec(ref['checkpoint']['model_id'],0.,'neutral') if ref['kind']=='model' else
+                    copy.deepcopy(ref['policy']))
+            if ref['kind']=='v4' and policy.get('search_runtime'):
+                policy['frozen_rating']=True
+            policies.append(policy)
         provenance=dict(producer='plackett-luce-rating/1.0.0',purpose='evaluation',kind=row['kind'],
             seed=row['seed'],sampling_seed=row['seed']*7+row['seat'],rotation=row['seat'],spec=digest(spec))
         jobs.append(dict(index=i,seed=row['seed'],rotation=row['seat'],sampling_seed=provenance['sampling_seed'],

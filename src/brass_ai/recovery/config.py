@@ -308,8 +308,8 @@ def latest_model_config(config,imitation_checkpoint):
         imitation_checkpoint=copy.deepcopy(imitation_checkpoint),exploration=ORDINARY_LEARNER_EXPLORATION,
         teacher_enabled=False,v4_search_enabled=False,
         population=copy.deepcopy(POPULATION),legacy_opponents=dict(search_free_until_games=0))
-    # This helper explicitly creates a new recipe; signed old configs still
-    # validate unchanged and are never upgraded by the continuation loader.
+    # This helper explicitly creates a new recipe. Continuation admits only
+    # exact source/config reviews and their separately versioned migrations.
     result['ppo_lr_controller']=dict(AUTO_CONTROLLER,**result.get('ppo_lr_controller',{}))
     result['ppo_lr_controller']['contract']=AUTO_CONTRACT
     if result['ppo_lr_controller']['contract']==AUTO_CONTRACT:

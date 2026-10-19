@@ -76,6 +76,8 @@ def rates(rows):
 
 
 def health(baseline,current,behavior):
+    # Never reuse an archived aggregate flag: it included the removed check.
+    behavior=pass_behavior(behavior)
     reasons=[];checks={}
     if baseline is None:reasons.append('baseline_unavailable')
     if current is None:reasons.append('rolling_health_unavailable')
@@ -86,9 +88,14 @@ def health(baseline,current,behavior):
             okay=current[key]>=limits[key] if key in ('vp_per_seat','sells_per_seat') else current[key]<=limits[key]
             checks[key]=dict(value=current[key],threshold=limits[key],ok=okay)
             if not okay:reasons.append(key)
-    if not isinstance(behavior,dict) or behavior.get('ok') is not True:reasons.append('behavior_check_failed')
+    if behavior['ok'] is not True:reasons.append('behavior_check_failed')
     return dict(ok=not reasons,reasons=reasons,metrics=current,checks=checks,behavior=behavior,
-                scope='All-learner self-play tables only; seat-weighted five-iteration rates')
+                scope='All-learner self-play economy: seat-weighted five-iteration rates; fixed-IL pass-probability check')
+
+
+def pass_behavior(behavior):
+    passing=copy.deepcopy(behavior.get('passing')) if isinstance(behavior,dict) else None
+    return dict(ok=isinstance(passing,dict) and passing.get('ok') is True,passing=passing)
 
 
 def baseline_record(rows,config):
@@ -104,6 +111,8 @@ def baseline_record(rows,config):
 
 def advance(state,measurement,counts,*,generation,warmup_done):
     state=copy.deepcopy(validate_state(state,state['config']));c=state['config'];before=state['limit']
+    measurement=copy.deepcopy(measurement)
+    measurement['behavior']=pass_behavior(measurement.get('behavior'))
     require(generation==state['last_generation']+1,'Auto IL-KL must advance once per committed iteration')
     state['last_generation']=generation
     counts=counts if rates([counts]) is not None else None

@@ -27,7 +27,7 @@ Selection now uses `(legacy_table_ordinal * opponent_count + slot) % profile_cou
 
 `pottery-flex` remains evaluation-only and is explicitly rejected from ordinary training profile lists. Existing learner-pair rotation, 50/45/5 quotas, 4/2/2 learner counts, exploration and disabled v4 search remain unchanged. `provenance.legacy_profiles` binds each table's ordinal and physical seats. `sampling.legacy_profiles` counts actual completed seats, including zero-count profiles, and compact history retains it.
 
-The existing shared funded-industry/v5 work in this checkout was preserved, including its source-bound runtime identities. This fix does not promote a candidate bank or rewrite the admitted training/evaluation pool.
+On 19 October the user requested removal of the experimental funded-industry bot and its banks. Production game/lab strategy and the portable shared runtime now use official v4, `bank-3dc65253a610191d66a5`. The PPG and five-profile cycling fixes described here remain intact.
 
 ## Validation
 

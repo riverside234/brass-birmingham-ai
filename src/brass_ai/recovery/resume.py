@@ -87,6 +87,8 @@ def check_signature(state, signature, reviewed=False):
                       ARCHIVED_EARLY_RAIL_TIME_CONFIG_MIGRATION:archived_early_rail_time_budget_config,
                       ARCHIVED_PHASE_TIME_CONFIG_MIGRATION:archived_phase_time_budget_config,
                       ARCHIVED_TIME_CONFIG_MIGRATION:archived_time_budget_config}
+            from .gae import CONFIG_MIGRATION as EV_MIGRATION,evidence_config
+            handlers[EV_MIGRATION]=evidence_config
             for migration in migrations:
                 require(migration in handlers,'Unknown reviewed configuration migration')
                 expected=handlers[migration](expected)

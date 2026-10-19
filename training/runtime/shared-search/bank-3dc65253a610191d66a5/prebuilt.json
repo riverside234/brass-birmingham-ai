@@ -1,7 +1,7 @@
 {
   "format": "shared-search-prebuilt/1.0.0",
   "reference": {
-    "id": "search-a3605a51ae5ec22ffebcc3ae",
+    "id": "search-76a2f9ad7529c0e5e2117a36",
     "recipe": {
       "contract": "shared-heuristic-search/1.0.0",
       "bank": "bank-3dc65253a610191d66a5",
@@ -27,9 +27,8 @@
         "src/BrassMaskedSearch/CompetitiveEconomy.cs": "57d19eec2090541915104cbb89680da2784fa0a527ce30ca329a7e4065809ded",
         "src/BrassMaskedSearch/DeadlineAdmission.cs": "d1bb8ac0cba2c237efcca5e18d2fd78bb07d89b85a31d297ba8487edbe155ea6",
         "src/BrassMaskedSearch/EraEconomy.cs": "99cd1e859f3781a87ffe1e750d7bf45aae109b792cc7f26c1c04bed84fd22085",
-        "src/BrassMaskedSearch/FundedDevelopment.cs": "445c2cab546238e1a9f44c6da5599208252bf547cc707b18b663dbb0607c03ea",
         "src/BrassMaskedSearch/HeuristicBatchQueue.cs": "9cad7781f41c93a3916ea01286294c39a680ad5e32d1ecccbfe202911bc5bc36",
-        "src/BrassMaskedSearch/InvestmentOpportunity.cs": "4bd9307a4d3dd0d026f0591ed6c7d547ed17668c53be3e2980dddda3a7f52196",
+        "src/BrassMaskedSearch/InvestmentOpportunity.cs": "d46817cd3d933bfefa0f9aadc00380fc2e0bb0e183f41bee46cb9286fb173523",
         "src/BrassMaskedSearch/MaskedSearch.cs": "228c40af9b11306380eb8fa3ffd8c2c174d454cd9b8ebf43345211611828dafb",
         "src/BrassMaskedSearch/MaskedSearchExecution.cs": "385f5aaf8d423de896e05782d0418d02086daea20fb7a64df969de659f2ba936",
         "src/BrassMaskedSearch/NetworkOptions.cs": "805b5828b9054e98f3b0b0617e6fc8c41857b2ee3f17d216ad5017fb5001f0b1",
@@ -37,7 +36,7 @@
         "src/BrassMaskedSearch/SaleTiming.cs": "ca98967941fe574065675695a71e5492779fee10d0d77f2fade0146b1650876f",
         "src/BrassMaskedSearch/SearchSettings.cs": "5711a56e5dad1e46d8472e92a606b394a21924a1df6502b8a1d88e454c4e742e",
         "src/BrassMaskedSearch/StrategicOpenings.cs": "79d8328364ba4f78c74cd3e2cc8aeb12741c14ab51633dc43c2f957cf078d2b4",
-        "src/BrassMaskedSearch/TournamentOpenings.cs": "89a14bac12fb0f57e730c0dd03e7098ecc3663c12171f5a99e4e8aff5fea0372"
+        "src/BrassMaskedSearch/TournamentOpenings.cs": "f84b53753377934f67af03e7316514ee55848d2367be802bf28e05bcdf0e03fd"
       },
       "profiles": {
         "balanced-v3-masked-economy": "6afa9cd47d94e00fa667b3d91e4f98d2d7aead91ebd7fc1ad447a9d874b6cd79",
@@ -47,13 +46,13 @@
         "supplier-v3-masked-economy": "983ca1fee91eaca7930381ccfab5fe2502b8cda8ef50192607be20981363fa08",
         "pottery-flex-v3-masked-economy": "ee300bc0f92da7ade073b5c8746aadb230c736a3c4bf9ab1c68cf99cfb8eadf6"
       },
-      "adapter": "b7307318cd0f907366be91fcaf14699e53c99b07568a7486d74fb71a3d85bf9d"
+      "adapter": "d780c9b94c02dcb1b3783b2d40ae45f51a5e4de050f4f65e7181e2741bb8a0cd"
     }
   },
   "compiler_sha256": "48fc3f6dbd905197a6c46b46ce02e230bae2b2862eec59879b62553797999b85",
   "executable": {
     "name": "BrassLegacyAI.exe",
-    "sha256": "db550452bed0ab8ca331cc76689ac46c616dd648001d3e0710b48843834d5985"
+    "sha256": "133dddd583b5679e516a2486992d9aa242ca8530fd0a7016cf814d6dc41906dc"
   },
   "dependencies": [
     {

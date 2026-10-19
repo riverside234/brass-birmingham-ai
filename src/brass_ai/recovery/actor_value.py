@@ -22,13 +22,28 @@ class TrainingPhases:
         self.optimizer=torch.optim.Adam(model.parameters(),lr=config['value_phase']['learning_rate'])
         buffered=value_buffer.enabled(config)
         descriptors='critic_data' in config
-        self.contract='actor-value-phases/3.0.0' if descriptors else 'actor-value-phases/2.0.0' if buffered else CONTRACT
+        previous_contract='actor-value-phases/3.0.0' if descriptors else 'actor-value-phases/2.0.0' if buffered else CONTRACT
+        self.contract='actor-value-phases/4.0.0' if gae.windowed(config['advantage']) else previous_contract
+        self.evidence_migration=None
         saved=(raw or {}).get('training',{}).get(KEY)
         if saved is None:
             require(generation==0,'Missing GAE/value optimizer checkpoint; use a fresh IL run')
             self.state=gae.initial(config['advantage']);self.beta=config['value_phase']['beta_clone'];self.trips=[]
             if descriptors:self.critic_state=critic_data.initial(config['critic_data'])
         else:
+            require(type(saved) is dict,'Invalid GAE/value checkpoint')
+            # The league verifies the signed source/config transition first.
+            # This exact upgrade also handles a restart after that transition
+            # was committed but before its first new generation checkpoint.
+            if saved.get('contract')==previous_contract and gae.windowed(config['advantage']):
+                require(gae.evidence_config(dict(saved['options'],reward=config.get('reward',{})))==
+                        dict(self.options,reward=config.get('reward',{})),
+                        'GAE/value checkpoint configuration differs during evidence upgrade')
+                saved=copy.deepcopy(saved)
+                saved['gae']=gae.migrate_state(saved['gae'],saved['options']['advantage'],config['advantage'],generation)
+                saved.update(contract=self.contract,options=copy.deepcopy(self.options))
+                self.evidence_migration=dict(contract=gae.CONFIG_MIGRATION,origin=generation,
+                    scope='Empty EV window and new health streaks; active lambdas/table origins, both Adams, beta and critic state preserved')
             fields={'contract','options','gae','beta_clone','kl_trips','optimizer'}|({'buffer'} if buffered else set())|({'critic_data'} if descriptors else set())
             require(type(saved) is dict and set(saved)==fields
                     and saved['contract']==self.contract and saved['options']==self.options,
@@ -123,16 +138,29 @@ class TrainingPhases:
     def finish(self,*,generation,update,anchor_gate,rating):
         value=self.value_report;before=self.beta
         self.trips=(self.trips+[value['kl_guard_tripped']])[-5:]
-        if sum(self.trips)>=3:
+        # A clean iteration must not re-escalate on the same old cap hits.
+        # Keep the rolling evidence on resume, but require a new trip to act.
+        if value['kl_guard_tripped'] and sum(self.trips)>=3:
             self.beta=min(self.options['value_phase']['beta_clone_max'],2*self.beta)
-        value.update(beta_clone_next=self.beta,beta_decision='up' if self.beta>before else 'hold',kl_trip_window=list(self.trips))
+        value.update(beta_clone_next=self.beta,beta_decision='up' if self.beta>before else 'hold',
+            beta_reason=('new_trip_in_three_of_five' if self.beta>before else
+                         'at_cap' if value['kl_guard_tripped'] and sum(self.trips)>=3 else
+                         'no_new_kl_trip' if not value['kl_guard_tripped'] else 'fewer_than_three_trips'),
+            kl_trip_window=list(self.trips))
         kl=update['categorical_probe']['categorical_kl']
-        healthy=bool(anchor_gate and anchor_gate.get('ok') and update['controller_warmup_done'] and
+        # The calibrated IL distance budget/latch controls LR increases only.
+        # GAE and critic adoption still require the underlying economy AND
+        # behavior checks, plus their own PPO/value KL and evidence gates.
+        training_health=(anchor_gate.get('health',anchor_gate) if anchor_gate else None)
+        healthy=bool(training_health and training_health.get('ok') is True and update['controller_warmup_done'] and
             update['optimizer_steps']>0 and not update['kl_early_stop'] and gae.finite(kl) and
             kl<=1.5*self.config['update']['target_kl'])
         self.state,report=gae.advance(self.state,self.options['advantage'],generation=generation,
             value_report=value,health_ok=healthy,rating=rating)
         report['anchor_gate']=copy.deepcopy(anchor_gate)
+        report['training_health']=copy.deepcopy(training_health)
+        report['health_scope']='Economy/behavior health and PPO/value guards; calibrated IL distance/latch gates LR increases only'
+        if self.evidence_migration:report['evidence_migration']=copy.deepcopy(self.evidence_migration)
         if self.critic_state is not None:
             self.critic_state,value['critic_rollout']=critic_data.advance(self.critic_state,self.config['critic_data'],
                 generation=generation,report=value,healthy=healthy and not value.get('kl_guard_tripped',False),fingerprint_now=self.fingerprint)

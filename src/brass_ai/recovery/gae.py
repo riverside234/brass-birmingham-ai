@@ -7,12 +7,15 @@ import numpy as np
 import torch
 
 from brass_ai.learning.contracts import require
+from . import ev_evidence
 
 CONTRACT='gae-advantage/2.0.0'
 GATE=dict(contract='staged-gae-gate/1.0.0',mode='auto',minimum_value_iterations=10,
     heldout_ev_min=.5,ev_streak=5,fallback_value_iterations=30,healthy_iterations=20,
     rating_slots=3,rating_min_slope=0.)
-TABLE_GATE=dict(contract='table-gae-ev-gate/1.0.0',mode='auto',ev_tolerance=.05,consecutive_iterations=10)
+ARCHIVED_TABLE_GATE=dict(contract='table-gae-ev-gate/1.0.0',mode='auto',ev_tolerance=.05,consecutive_iterations=10)
+TABLE_GATE=ev_evidence.DEFAULT
+CONFIG_MIGRATION='table-gae-ev-window/1.0.0'
 DEFAULT=dict(contract=CONTRACT,**{'lambda':1.0},shadow_lambdas=[.98,.95,.9],chain='nonforced',gate=GATE,table_gate=TABLE_GATE)
 
 
@@ -26,9 +29,12 @@ def validate(config,*,combined=True):
             and config['chain']=='nonforced','Invalid GAE contract/fields/chain')
     if not legacy:
         t=config['table_gate']
-        require(type(t) is dict and set(t)==set(TABLE_GATE) and t['contract']==TABLE_GATE['contract']
-            and t['mode'] in ('auto','selfplay_only') and t['ev_tolerance']==.05
-            and type(t['consecutive_iterations']) is int and t['consecutive_iterations']==10,'Invalid table GAE gate')
+        require(type(t) is dict,'Invalid table GAE gate')
+        if t.get('contract')==ARCHIVED_TABLE_GATE['contract']:
+            require(type(t) is dict and set(t)==set(ARCHIVED_TABLE_GATE)
+                and t['mode'] in ('auto','selfplay_only') and t['ev_tolerance']==.05
+                and type(t['consecutive_iterations']) is int and t['consecutive_iterations']==10,'Invalid table GAE gate')
+        else:ev_evidence.validate_config(t)
     require(finite(config['lambda']) and 0<config['lambda']<=1,'Invalid GAE lambda')
     require(type(config['shadow_lambdas']) is list and config['shadow_lambdas']==[.98,.95,.9],
             'GAE shadows must be 0.98, 0.95 and 0.9')
@@ -44,6 +50,32 @@ def validate(config,*,combined=True):
     require(combined or (config['lambda']==1. and gate['mode']=='fixed'),
             'GAE lambda below 1 / automatic gate requires combined reward')
     return config
+
+
+def windowed(config):
+    return config.get('table_gate',{}).get('contract')==ev_evidence.CONTRACT
+
+
+def evidence_config(config):
+    """Only the recognized prior table gate upgrades, under signed source review."""
+    result=copy.deepcopy(config);advantage=result.get('advantage',{})
+    old=advantage.get('table_gate',{})
+    if old.get('contract')==ARCHIVED_TABLE_GATE['contract']:
+        validate(advantage,combined='reward' in config)
+        advantage['table_gate']=dict(copy.deepcopy(TABLE_GATE),mode=old['mode'])
+    return result
+
+
+def migrate_state(state,old_config,new_config,generation):
+    validate_state(state,old_config,generation)
+    require(evidence_config(dict(advantage=old_config,reward={}))['advantage']==new_config
+        and not windowed(old_config) and windowed(new_config),'Unreviewed table EV state migration')
+    state=copy.deepcopy(state)
+    state['table_evidence']=ev_evidence.initial(generation)
+    # Old per-iteration EV streaks have no pooled moments or game support.
+    # Keep already enabled tables and origins; do not backdate new evidence.
+    state['table_streaks']=dict(historical=0,legacy=0)
+    return validate_state(state,new_config,generation)
 
 
 def compute(data,actor_ids,mc_advantages,returns,lam,shadow_lambdas,lambda_by_table=None):
@@ -112,7 +144,8 @@ def initial(config,generation=0):
     return dict(generation=generation,active_lambda=config['lambda'],value_iterations=0,
         ev_streak=0,healthy_streak=0,stage_origin=generation,
         **(dict(table_streaks=dict(historical=0,legacy=0),table_enabled=dict(historical=False,legacy=False),
-                table_origins=dict(historical=None,legacy=None)) if 'table_gate' in config else {}))
+                table_origins=dict(historical=None,legacy=None)) if 'table_gate' in config else {}),
+        **(dict(table_evidence=ev_evidence.initial(generation)) if windowed(config) else {}))
 
 
 def validate_state(state,config,generation):
@@ -132,6 +165,7 @@ def validate_state(state,config,generation):
         for k,origin in state['table_origins'].items():
             require((origin is None and not state['table_enabled'][k]) or
                     (type(origin) is int and 1<=origin<=generation and state['table_enabled'][k]),'Invalid table GAE origin')
+    if windowed(config):ev_evidence.validate_state(state['table_evidence'],config['table_gate'],generation)
     return state
 
 
@@ -165,12 +199,22 @@ def advance(state,config,*,generation,value_report,health_ok,rating):
     table_report={}
     if 'table_gate' in config:
         tg=config['table_gate']
+        pooled={}
+        if windowed(config):
+            # A restored/no-improvement PPG phase still yields valid held-out
+            # predictions. Require recent accepted value work in the window,
+            # rather than forcing one accepted step on every sparse sample.
+            table_healthy=bool(health_ok and not value_report.get('kl_guard_tripped',False)
+                and value_report.get('enabled',True))
+            state['table_evidence'],pooled=ev_evidence.advance(state['table_evidence'],tg,
+                generation=generation,metrics=metrics,healthy=table_healthy,value_updated=ran)
         for kind in ('historical','legacy'):
             table_ev=metrics.get('groups',{}).get('table:'+kind+'/role:learner',{}).get('explained_variance')
-            okay=healthy and finite(ev) and finite(table_ev) and table_ev>=ev-tg['ev_tolerance']
+            okay=table_healthy if pooled else healthy and finite(ev) and finite(table_ev) and table_ev>=ev-tg['ev_tolerance']
             state['table_streaks'][kind]=state['table_streaks'][kind]+1 if okay else 0
             before=state['table_enabled'][kind]
-            if not before and tg['mode']=='auto' and state['table_streaks'][kind]>=tg['consecutive_iterations']:
+            if (not before and tg['mode']=='auto' and state['table_streaks'][kind]>=tg['consecutive_iterations']
+                    and (not pooled or pooled[kind]['ready'])):
                 state['table_enabled'][kind]=True
                 state['table_origins'][kind]=generation
             elapsed=generation-state['table_origins'][kind] if state['table_origins'][kind] is not None else 0
@@ -181,6 +225,12 @@ def advance(state,config,*,generation,value_report,health_ok,rating):
                 review='Inspect common PL rating slope/uncertainty and by-table advantage std; no automatic rollback',
                 decision='enable_next_iteration' if not before and state['table_enabled'][kind] else 'hold',
                 lambda_used=used if before else 1.,lambda_next=state['active_lambda'] if state['table_enabled'][kind] else 1.)
+            if pooled:
+                table_report[kind].update(evidence=pooled[kind],required_healthy_iterations=tg['consecutive_iterations'],
+                    reason=('already_enabled' if before else 'selfplay_only' if tg['mode']=='selfplay_only' else
+                            'healthy_streak_not_ready' if state['table_streaks'][kind]<tg['consecutive_iterations'] else
+                            ','.join(pooled[kind]['reasons']) if pooled[kind]['reasons'] else 'window_ev_and_health_ready'),
+                    streak_scope='Consecutive PPO/economy/pass health and no value KL trip; accepted value steps supported across the window')
     return state,dict(contract=gate['contract'],mode=gate['mode'],lambda_used=used,
         table_gate=table_report,
         lambda_next=state['active_lambda'],decision=decision,reason=reason,generation=generation,

@@ -112,10 +112,42 @@ def native_node_ceiling(profile,simulations):
     # This is a deterministic safety bound, not a replacement for simulations.
     return min(profile['work_limit'],4096+simulations*(profile.get('max_choices',512)+1))
 
+
+def frozen_rating_runtime(root,ref,parent):
+    """Verify an immutable rating opponent without relabelling current code.
+
+    New ordinary collections still use runtime_directory's source-freshness
+    check. Missing historical binaries/profiles fail closed; never rebuild an
+    old identity from newer source or substitute the current opponent.
+    """
+    from brass_ai.bank import below
+    from brass_ai.search.legacy_runtime import recorded,directory,source_hash,verify_file
+    validate_reference(ref)
+    require(ref['recipe']['bank']==parent.split('/')[0],'Frozen rating bank differs')
+    require((directory(root,ref['id'])/'search.json').is_file(),
+            'Frozen rating runtime missing: retain artifacts/legacy-ai/search/'+ref['id']+' from this run; do not replace its rated identity')
+    require(recorded(root,ref['id'])==ref,'Frozen rating runtime receipt changed')
+    runtime=directory(root,ref['id'])/'runtime';manifest=runtime/'runtime.json'
+    pins=read(manifest)['files']
+    require(len({p['name'] for p in pins})==len(pins) and
+            sum(p['name']=='BrassLegacyAI.exe' for p in pins)==1,'Invalid frozen rating runtime files')
+    for pin in pins:
+        path=below(runtime,pin['name'])
+        require(path.parent==runtime,'Frozen rating runtime file escaped its directory')
+        verify_file(path,pin['sha256'],'Frozen rating binary/dependency changed')
+    profile=Path(root)/'configs/legacy-ai'/(parent.split('/')[1]+'.json')
+    require(source_hash(profile)==ref['recipe']['profiles'].get(parent.split('/')[1]),
+            'Frozen rating profile changed; restore the exact pinned profile')
+    return runtime,sha(manifest)
+
+
 class LabLegacyPolicy(LegacyPolicy):
-    def __init__(self,root,parent,budget,*,mono=None,purpose='training',diagnostic=False,search_free=False,work_budget=None,search_runtime=None):
+    def __init__(self,root,parent,budget,*,mono=None,purpose='training',diagnostic=False,search_free=False,work_budget=None,search_runtime=None,
+                 frozen_rating=False):
         self.root,self.parent,self.budget=Path(root),parent,budget
         spec=legacy_spec(root,parent,budget,purpose,search_free=search_free,work_budget=work_budget,search_runtime=search_runtime)
+        require(type(frozen_rating) is bool and (not frozen_rating or search_free and spec.get('search_runtime')),
+                'Frozen rating runtime requires a pinned search-free reference')
         self.policy_id=spec['policy_id']
         self.work_budget=copy.deepcopy(work_budget)
         if search_free and time_budget(work_budget):
@@ -133,7 +165,9 @@ class LabLegacyPolicy(LegacyPolicy):
                     from types import SimpleNamespace
                     ref=spec['search_runtime']
                     profile=read(Path(root)/'configs/legacy-ai'/(parent.split('/')[1]+'.json'))
-                    worker=LegacyWorker(root,mono=mono,timeout=600,runtime_directory=runtime_directory(root,ref))
+                    runtime,pin=(frozen_rating_runtime(root,ref,parent) if frozen_rating else (runtime_directory(root,ref),None))
+                    worker=LegacyWorker(root,mono=mono,timeout=600,runtime_directory=runtime,
+                                        **(dict(frozen_manifest_sha256=pin) if pin is not None else {}))
                     self.workers.append(SimpleNamespace(worker=worker,profile=profile,close=worker.close))
                 else:self.workers.append(FrozenOpponent(root,parent,purpose=purpose,mono=mono))
         except BaseException:

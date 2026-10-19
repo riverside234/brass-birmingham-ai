@@ -9,6 +9,45 @@ from brass_ai.learning.contracts import require
 PPO_KL_GUARD = 'ppo-categorical-kl-guard/1.0.0'
 
 
+def gate_diagnostics(actor,value=None,limit=None,quality=None):
+    """Expose coupled stalls from existing measurements; no new thresholds.
+
+    This is reporting only. It must not turn healthy economy averages into an
+    override for failed per-position behavior checks or rewrite gate state.
+    """
+    value=value or {};limit=limit or {};quality=quality or {}
+    health=limit.get('health',{});behavior=limit.get('measurement',{}).get('behavior',{})
+    passing=behavior.get('passing') or {}
+    planning=quality.get('planning',{});attempts=value.get('attempted_steps',0)
+    before=value.get('heldout_before',{}).get('loss');after=value.get('heldout_after',{}).get('loss')
+    groups=value.get('heldout_after',{}).get('groups',{})
+    warnings=[]
+    if health.get('ok') is False and 'behavior_check_failed' in health.get('reasons',[]):
+        warnings.append('il_behavior_check_failed')
+    if limit.get('alarm'):warnings.append('il_distance_alarm')
+    if planning.get('N')==0 and limit.get('baseline') is not None:
+        warnings.append('history_pool_il_only')
+    if attempts and not value.get('optimizer_steps'):warnings.append('value_fit_rejected')
+    return dict(contract='selfplay-gate-diagnostics/2.0.0',warnings=warnings,
+        health_ok=health.get('ok'),health_reasons=list(health.get('reasons',[])),
+        pass_failures=passing.get('failures'),pass_positions=passing.get('positions'),
+        lr_blockers=list(limit.get('lr_gate',{}).get('reasons',[])),
+        scored_history_members_used=planning.get('N'),
+        history_il_only=planning.get('N')==0 if 'N' in planning else None,
+        history_admission_reason=quality.get('admission',{}).get('reason'),
+        value_accepted_steps=value.get('optimizer_steps'),value_attempted_steps=value.get('attempted_steps'),
+        value_accepted_fraction=value.get('optimizer_steps',0)/attempts if attempts else None,
+        value_stop=value.get('early_stop_reason'),beta_reason=value.get('beta_reason'),
+        heldout_loss_delta=after-before if before is not None and after is not None else None,
+        heldout_by_table={k:dict(rows=groups.get('table:'+k+'/role:learner',{}).get('rows',0),
+            games=groups.get('table:'+k+'/role:learner',{}).get('games'),
+            ev=groups.get('table:'+k+'/role:learner',{}).get('explained_variance'))
+            for k in ('selfplay','historical','legacy')},
+        gae_reason=actor.get('gae',{}).get('gate',{}).get('reason'),
+        mixed_ev_evidence=actor.get('gae',{}).get('gate',{}).get('table_gate',{}),
+        scope='Existing evidence only; missing groups are unavailable, not zero EV; no automatic threshold changes')
+
+
 def categorical_kl(old, current):
     """Sum over legal actions; masked probabilities are exactly zero."""
     return (old*(old.clamp_min(1e-30).log()-current.clamp_min(1e-30).log())).sum()

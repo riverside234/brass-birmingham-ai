@@ -26,10 +26,18 @@ class SharedSearchTests(unittest.TestCase):
         for name in GAME_POLICY:
             self.assertEqual([p for p in paths if p.name==name],[ROOT/'src/BrassLocalAI/Policy'/name])
         for name in ('MaskedSearchExecution.cs','HeuristicBatchQueue.cs','DeadlineAdmission.cs','RootForest.cs',
-                     'FundedDevelopment.cs','SaleTiming.cs'):
+                     'SaleTiming.cs'):
             self.assertEqual(sum(p.name==name for p in paths),1)
 
     def test_official_v4_private_strategy_is_preserved(self):
+        for name in ('InvestmentOpportunity.cs','TournamentOpenings.cs'):
+            relative='src/BrassMaskedSearch/'+name
+            self.assertEqual((ROOT/relative).read_text(),
+                             (ROOT/'training/opponents/bank'/BANK/'source'/relative).read_text())
+        self.assertFalse((ROOT/'src/BrassMaskedSearch/FundedDevelopment.cs').exists())
+        self.assertEqual(read(ROOT/'training/opponents/current.json')['bank'],BANK)
+        pool=read(ROOT/'training/opponents/pool.json')
+        self.assertTrue(all(p.startswith(BANK+'/') for k in ('training','evaluation') for p in pool[k]))
         original=(ROOT/'training/opponents/bank'/BANK/'source/src/BrassMaskedSearch/MaskedSearch.cs').read_text()
         current=(ROOT/'src/BrassMaskedSearch/MaskedSearch.cs').read_text()
         first='    public sealed partial class Planner'
@@ -106,6 +114,14 @@ class SharedSearchTests(unittest.TestCase):
         config=read(ROOT/'configs/step5/joint7-latest.json')
         self.assertFalse(v4_search_enabled(config))
         self.assertFalse(config['teacher_enabled'])
+
+    def test_portable_v4_bundle_matches_current_shared_strategy(self):
+        from brass_ai.bank import sha
+        bundle=ROOT/'training/runtime/shared-search'/BANK
+        manifest=read(bundle/'prebuilt.json')
+        self.assertEqual(manifest['reference'],reference(ROOT,BANK))
+        self.assertEqual(manifest['executable']['sha256'],sha(bundle/'BrassLegacyAI.exe'))
+        self.assertFalse(any('FundedDevelopment' in s for s in manifest['reference']['recipe']['sources']))
 
 
 if __name__=='__main__':unittest.main()

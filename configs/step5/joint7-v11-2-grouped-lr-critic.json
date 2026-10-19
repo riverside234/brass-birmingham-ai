@@ -341,10 +341,14 @@
       "rating_min_slope": 0.0
     },
     "table_gate": {
-      "contract": "table-gae-ev-gate/1.0.0",
+      "contract": "table-gae-ev-gate/2.0.0",
       "mode": "auto",
       "ev_tolerance": 0.05,
-      "consecutive_iterations": 10
+      "consecutive_iterations": 10,
+      "window_iterations": 20,
+      "minimum_games": 8,
+      "minimum_iterations": 3,
+      "minimum_value_iterations": 3
     }
   },
   "value_phase": {

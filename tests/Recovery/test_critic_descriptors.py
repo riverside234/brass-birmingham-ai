@@ -215,6 +215,9 @@ class CriticTraining(unittest.TestCase):
 
     def test_history_v4_ev_streaks_missing_reset_and_exact_resume(self):
         c=copy.deepcopy(gae.DEFAULT);c['gate']['mode']='fixed';c['lambda']=.95;s=gae.initial(c)
+        # Archived contract remains readable; new window behavior is covered
+        # in test_health_ev_window. Continuation upgrades this block explicitly.
+        c['table_gate']=copy.deepcopy(gae.ARCHIVED_TABLE_GATE);s=gae.initial(c)
         def advance(s,h=.56,v=.56):
             groups={'table:selfplay/role:learner':dict(explained_variance=.6),
                 'table:historical/role:learner':dict(explained_variance=h),'table:legacy/role:learner':dict(explained_variance=v)}

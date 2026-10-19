@@ -17,12 +17,20 @@ LAB_ROOT = Path('/data/not_backed_up/yxu209/ai-training/')
 
 
 class LegacyWorker:
-    def __init__(self, root=LAB_ROOT, *, mono=None, timeout=120, runtime_directory=None):
+    def __init__(self, root=LAB_ROOT, *, mono=None, timeout=120, runtime_directory=None,
+                 frozen_manifest_sha256=None):
         self.root = Path(root).resolve()
         directory = resolve_project_path(self.root, runtime_directory or 'artifacts/legacy-ai/runtime')
         if not directory.is_relative_to(self.root):
             raise ValueError('Runtime must remain below the project root')
-        self.manifest = json.loads((directory / 'runtime.json').read_text(encoding='utf-8-sig'))
+        manifest_path = directory / 'runtime.json'
+        if frozen_manifest_sha256 is not None:
+            # A frozen evaluation reference executes its already recorded
+            # binary. Its manifest and EVERY executable/dependency remain
+            # pinned below; current working sources are a different policy.
+            if hashlib.sha256(manifest_path.read_bytes()).hexdigest() != frozen_manifest_sha256:
+                raise ValueError('Frozen evaluation runtime manifest changed')
+        self.manifest = json.loads(manifest_path.read_text(encoding='utf-8-sig'))
         pins = json.loads((self.root / 'configs/rules/runtime-dependencies-1.1.0.json').read_text())
         expected = {p['name']: p['sha256'] for p in pins['files']}
         actual = {p['name']: p['sha256'] for p in self.manifest['files'] if p['name'] != 'BrassLegacyAI.exe'}
@@ -32,7 +40,7 @@ class LegacyWorker:
             file = directory / p['name']
             if file.parent != directory or hashlib.sha256(file.read_bytes()).hexdigest() != p['sha256']:
                 raise ValueError(f'Runtime fingerprint mismatch: {p["name"]}')
-        for p in self.manifest['sources']:
+        for p in self.manifest['sources'] if frozen_manifest_sha256 is None else ():
             file = resolve_project_path(self.root, p['path'])
             if not file.is_relative_to(self.root) or hashlib.sha256(file.read_bytes()).hexdigest() != p['sha256']:
                 raise ValueError(f'Rebuild legacy runtime after source change: {p["path"]}')

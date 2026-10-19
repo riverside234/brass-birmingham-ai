@@ -26,7 +26,7 @@ def counts(**kwargs):
 
 def measurement(distance=.1,**kwargs):
     return dict(dict(positions=2048,kl_mean=distance,groups={k:dict(positions=512,kl_mean=distance) for k in limits.GROUPS},
-        unassigned_positions=0,behavior=dict(ok=True)),**kwargs)
+        unassigned_positions=0,behavior=dict(ok=True,passing=dict(ok=True,positions=10,failures=0))),**kwargs)
 
 
 def tick(state,distance=.1,health=None,warmup=True,**kwargs):
@@ -101,9 +101,9 @@ class Rules(unittest.TestCase):
         for key,value in (('vp_sum',8499),('sells',139),('passes_with_alternative',71),
                           ('zero_vp_seats',6),('insolvent_seats',21)):
             current=limits.rates([counts(**{key:value})]*5)
-            self.assertFalse(limits.health(b,current,dict(ok=True))['ok'])
+            self.assertFalse(limits.health(b,current,dict(passing=dict(ok=True)))['ok'])
         current=limits.rates([counts(vp_sum=8500,sells=140,passes_with_alternative=70,zero_vp_seats=5,insolvent_seats=20)]*5)
-        self.assertTrue(limits.health(b,current,dict(ok=True))['ok'])
+        self.assertTrue(limits.health(b,current,dict(passing=dict(ok=True)))['ok'])
         state=baseline()
         for _ in range(4):state,_=tick(state,health=counts(sells=0))
         self.assertEqual(state['limit'],.1)
@@ -270,7 +270,7 @@ class ProbeTests(unittest.TestCase):
             with torch.no_grad():model.bias.copy_(torch.tensor([-4.,5.,1.]))
             changed=loaded.measure(model,update)
             self.assertGreater(changed['kl_mean'],0)
-            self.assertGreater(changed['behavior']['sales']['failures'],0)
+            self.assertNotIn('sales',changed['behavior'])
             self.assertGreater(changed['behavior']['passing']['failures'],0)
             # Even an uncommitted bootstrap cache must verify its semantic hash.
             path=root/'run/il-kl/manifest.json';original=path.read_bytes()

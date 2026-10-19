@@ -192,9 +192,9 @@ class Gates(unittest.TestCase):
         # or PPO health. Restoring the serialized streak keeps this decision.
         cfg=config();phase=object.__new__(TrainingPhases);phase.config=cfg
         phase.options={k:copy.deepcopy(cfg[k]) for k in ('advantage','value_phase')}
-        phase.state=gae.initial(cfg['advantage']);phase.state.update(generation=9,value_iterations=9,ev_streak=4)
+        phase.state=gae.initial(cfg['advantage'],9);phase.state.update(value_iterations=9,ev_streak=4)
         phase.critic_state=None
-        phase.beta=1.;phase.trips=[]
+        phase.beta=1.;phase.trips=[];phase.evidence_migration=None
         phase.value_report=dict(optimizer_steps=1,heldout_after=dict(explained_variance=.6,
             groups={'table:selfplay/role:learner':dict(explained_variance=.6)}),
             kl_guard_tripped=False,early_stop_reason=None)
@@ -385,7 +385,7 @@ class ValuePhase(unittest.TestCase):
             restored,raw=load_checkpoint(path);other=torch.optim.AdamW(restored.parameters());resume_optimizer(raw,other)
             second=TrainingPhases(restored,cfg,raw=raw,generation=1)
             self.assertTrue(_same_payload(phases.payload(),second.payload()));self.assertTrue(torch.equal(raw['rng'],torch.get_rng_state()))
-            behavior,data=examples(model);rng=torch.get_rng_state().clone();results=[]
+            behavior,data=examples(model,prefix='resume-next-');rng=torch.get_rng_state().clone();results=[]
             for net,adam,phase in ((model,opt,phases),(restored,other,second)):
                 torch.set_rng_state(rng);r=ppo(net,adam,cfg,behavior,data,phase);v=phase.fit(net);finish(phase,r,2)
                 results.append((r,v,torch.get_rng_state().clone()))

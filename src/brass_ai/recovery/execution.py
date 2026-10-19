@@ -59,6 +59,13 @@ def _collection_recipe(jobs,config):
     # Provenance describes the caller's intent, but older callers omit actual
     # model/opponent IDs or mixed-policy focuses. Bind all execution inputs;
     # output paths are transport locations and may change on relocation.
+    for job in jobs:
+        if any(p.get('frozen_rating') for p in job['policies']):
+            provenance=job.get('provenance',{})
+            require(provenance.get('producer')=='plackett-luce-rating/1.0.0' and
+                    provenance.get('purpose')=='evaluation' and
+                    provenance.get('kind') in ('rating','il-panel','v4-panel'),
+                    'Frozen rating runtime is restricted to held-out rating jobs')
     return dict(format='actor-collection/1.0.0',execution=config,
         jobs=[dict(rotation=0,rng_index=0,focuses={})|{k:v for k,v in job.items() if k!='path'}
               for job in jobs])
@@ -68,7 +75,8 @@ def make_policy(spec,root,endpoint,config,mono,*,_replica=False):
     if spec['kind']=='lab-legacy':
         from .legacy_search import LabLegacyPolicy
         policy=LabLegacyPolicy(root,spec['parent'],spec['budget'],mono=mono,purpose=spec.get('purpose','training'),
-            search_free=spec.get('search_free',False),work_budget=spec.get('work_budget'),search_runtime=spec.get('search_runtime',False))
+            search_free=spec.get('search_free',False),work_budget=spec.get('work_budget'),search_runtime=spec.get('search_runtime',False),
+            frozen_rating=spec.get('frozen_rating',False))
         require(policy.policy_id==spec['policy_id'],'Lab teacher identity changed')
         return policy
     if spec['kind']=='legacy':

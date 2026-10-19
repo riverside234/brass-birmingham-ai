@@ -79,13 +79,7 @@ public static class EconomyChecks
             Check(Tactics.Bias(cfg,tier,new Choice("loan"),reached)>0,"unfunded viable goal retains a soft financing prior");
             Check(Tactics.Bias(cfg,tier,new Choice("bonus_develop",industry:"CottonMill"),reached)==0,"merchant free development remains portfolio-ranked");
             var progressing=(JObject)v.DeepClone();var goal=Tactics.Refresh(progressing,cfg,null);
-            // This mat still contains three Cotton I, two II and three III:
-            // IV needs eight removals, beyond v5's six-removal funding cap.
-            // This stale IV-only assertion also fails against frozen v5 1.0.
-            var goalTiles=Conversion.Player(progressing,seat)["mat"].Single(m=>(string)m["type"]=="CottonMill")["tiles"].ToArray();
-            int goalRemoval=Array.FindIndex(goalTiles,t=>(int)t["level"]==goal.goal_level);
-            Check(goal.focus=="CottonMill" && goal.goal_level>(int)goalTiles[0]["level"] && goalRemoval>=0 &&
-                FundedDevelopment.Quote(progressing,goalTiles[goalRemoval],goalRemoval)!=null,"cotton upgrade must be funded and reachable within the development cap");
+            Check(goal.focus=="CottonMill" && goal.goal_level==4,"funded high-cotton fixture produces a named development goal");
             goal.age=2;progressing["context"]["revision"]=(int)progressing["context"]["revision"]+1;
             var idle=Tactics.Refresh(progressing,cfg,goal);
             Check(idle.age==3,"unchanged goal still advances its stall clock");

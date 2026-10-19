@@ -78,7 +78,7 @@ def compact(report):
     out=scalars(report,('format','iteration','games_done','cumulative_games','incoming_model_id','post_update_model_id',
                        'incoming_policy_id','elapsed_seconds','games','failed_games','promotion_eligible'))
     out['summary_version']=6 if report.get('value_phase') is not None or 'gae' in report.get('actor',{}) else 5
-    for key in ('il_kl_limit','rehearsal_schedule','health_counts','quality_pool','strength_rating','value_phase','seat_fingerprints'):
+    for key in ('il_kl_limit','rehearsal_schedule','health_counts','quality_pool','strength_rating','value_phase','seat_fingerprints','gate_diagnostics'):
         if key in report:out[key]=report[key]
     out['health_by_composition']={k:v['health_counts'] for k,v in report.get('by_composition',{}).items()
                                   if 'health_counts' in v}

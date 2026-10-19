@@ -58,7 +58,7 @@ def value_parts(dataset,ids,config,model):
     return dataset.microbatches(ids,config['microbatch_size'],config['max_candidate_cells'],config['bucket'])
 
 
-def metrics(model,dataset,ids,config,*,unknown=False):
+def metrics(model,dataset,ids,config,*,unknown=False,evidence=False):
     """All four heads' loss/calibration; EV is the observing learner seat's utility."""
     from .updates import value_losses,value_output
     from .teacher_schedule import phase_for
@@ -80,8 +80,9 @@ def metrics(model,dataset,ids,config,*,unknown=False):
         return dict(rows=len(a),loss=float(a[:,0].mean()),utility_mse=float(a[:,1].mean()),
             explained_variance=float(1-np.var(error)/variance) if variance>1e-12 else None,
             learner_utility_mse=float(np.square(error).mean()))
-    groups=defaultdict(list)
+    groups=defaultdict(list);game_ids=[]
     for position,i in enumerate(order):
+        game_ids.append(dataset.data[i][2][0])
         context=dataset.rows[i]['view']['context'];era=context['era']
         groups['era:'+era].append(position);groups['phase:'+era+'/'+context['phase']].append(position)
         table=dataset.tables[i];role=dataset.roles[i]
@@ -97,8 +98,16 @@ def metrics(model,dataset,ids,config,*,unknown=False):
         calibration.append(dict(lower=bucket/10,upper=(bucket+1)/10,count=n,
             predicted=float(probabilities[selected].mean()) if n else None,
             observed=float(targets[selected].mean()) if n else None))
-    return dict(summarize(all_values),games=len({dataset.data[i][2][0] for i in ids}),
-        groups={key:summarize(all_values[group]) for key,group in sorted(groups.items())},
+    summaries={key:dict(summarize(all_values[group]),
+        games=len({game_ids[p] for p in group})) for key,group in sorted(groups.items())}
+    if evidence:
+        from .ev_evidence import statistics,TABLES
+        for kind in TABLES:
+            key='table:'+kind+'/role:learner';group=groups.get(key)
+            if group:
+                a=all_values[group]
+                summaries[key]['ev_evidence']=statistics(a[:,3],a[:,2],[game_ids[p] for p in group])
+    return dict(summarize(all_values),games=len(set(game_ids)),groups=summaries,
         win_calibration=calibration,
         scope='MC loss over all four stable-seat heads; EV on observing row seat utility, grouped separately by role/table; correlated rows/heads')
 
@@ -164,12 +173,12 @@ def fit(model,optimizer,dataset,train_ids,heldout_ids,actor_ids,probe_ids,config
     elif not actor_ids or not probe_ids:report['early_stop_reason']='no_policy_reference'
     if report['early_stop_reason']:
         if config['enabled']:model.utility_calibration=None
-        report.update(heldout_after=metrics(model,validation_dataset,heldout_ids,update) if config['enabled'] else {},
+        report.update(heldout_after=metrics(model,validation_dataset,heldout_ids,update,evidence=True) if config['enabled'] else {},
             descriptor_gain=dict(learner_ev_gain=None),role_usage={role:dict(distinct_used=0,presentations=0) for role in ('learner','snapshot')})
         report['seconds']=time.perf_counter()-began;return report
     clones=clone_indices(dataset,actor_ids,config['clone_rows'])
     reference=RawPolicyReference(model,dataset,sorted(set(clones)|set(probe_ids)),update)
-    train_before=metrics(model,value_dataset,value_train_ids,update);before=metrics(model,validation_dataset,heldout_ids,update)
+    train_before=metrics(model,value_dataset,value_train_ids,update);before=metrics(model,validation_dataset,heldout_ids,update,evidence=True)
     current=before;epochs=[];used=set();presentations=0;clone_presentations=0
     max_kl=0.;accepted_kl=0.;last_attempt=None;previous_presentations=0;role_presentations=defaultdict(int)
     for epoch in range(config['max_epochs']):
@@ -212,7 +221,7 @@ def fit(model,optimizer,dataset,train_ids,heldout_ids,actor_ids,probe_ids,config
         report['attempted_value_presentations']+=attempted_presentations
         report['attempted_clone_presentations']+=attempted_clones
         # Evaluate the restored safe prefix, never the policy-violating step.
-        last_attempt=metrics(model,validation_dataset,heldout_ids,update)
+        last_attempt=metrics(model,validation_dataset,heldout_ids,update,evidence=True)
         loss_increased=last_attempt['loss']>current['loss']
         if report['early_stop_reason'] is None and loss_increased:
             report['early_stop_reason']='heldout_loss_increased'
