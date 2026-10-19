@@ -198,11 +198,11 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
     cuda_resume=resume_optimizer(raw,optimizer,allow_cuda_topology_change=True)
     from .resume import apply_optimizer_config
     optimizer_resume=apply_optimizer_config(optimizer,config)
+    pool_migration=resumed_pool=None
     if quality:
         from . import quality_pool
-        quality_pool.validate_state(state['quality_pool'],config['opponent_pool'],state['iteration'])
-        require(raw['training'].get('quality_pool_digest')==quality_pool.state_digest(state['quality_pool']),
-                'Quality pool state differs from the committed checkpoint')
+        from .resume import prepare_opponent_pool
+        resumed_pool,pool_migration=prepare_opponent_pool(root,run,state,raw,config,source_changed)
     anchor_model=None
     if 'il_kl_limit' in config:
         from .il_kl_limit import validate_state
@@ -235,7 +235,7 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
         print('Combined reward migration: compatible weights/Adam/RNG preserved; utility head awaits fresh-rollout calibration',flush=True)
     if source_changed:
         from .resume import commit_transition
-        state=commit_transition(run,state,signature)
+        state=commit_transition(run,state,signature,opponent_pool=resumed_pool,pool_migration=pool_migration)
     from .champion import initialize as initialize_champion,enabled as champion_enabled,selfplay_policies
     from . import champion_mix
     if champion_enabled(config):initialize_champion(root,run,state)
@@ -321,7 +321,9 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                 next_quality=quality_report=None
                 if quality:
                     next_quality,quality_report=quality_pool.update_scores(state['quality_pool'],games,
-                        plan['quality_tables'],plan['quality_planning'],generation=iteration+1)
+                        plan['quality_tables'],plan['quality_planning'],generation=iteration+1,
+                        games_done=state['games_done']+len(games))
+                    if pool_migration and not summaries:quality_report['migration']=pool_migration
                 rehearsal_status=rehearsal_schedule(config,state['games_done'],iteration)
                 weight=rehearsal_status['weight']
                 sampling_finished=time.monotonic();rehearsal_seconds=0.
@@ -418,10 +420,7 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                         model_id=model_id(model),generation=iteration+1)
                     next_quality,pool_admission=quality_pool.finish(root,run,next_quality,model,pending_entry,
                         fixed_probe,config['update'],limit_report)
-                    quality_report.update(admission=pool_admission,next_distribution=quality_pool.distribution(next_quality),
-                        size=len(next_quality['members']),max_members=config['opponent_pool']['max_members'],
-                        eta=config['opponent_pool']['eta'],uniform_floor=config['opponent_pool']['uniform_floor'],
-                        pinned_seat_share=config['opponent_pool']['pinned_seat_share'])
+                    quality_pool.finish_report(quality_report,next_quality,pool_admission)
                 diagnostics_finished=time.monotonic()
                 report=dict(format='step5-recovery-report/'+'2.2.0',iteration=iteration,composition=dict(composition),
                     quality_pool=quality_report,
@@ -448,7 +447,7 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                     legacy_modes=dict(Counter(j['provenance']['legacy_mode'] for j in jobs if j['provenance']['legacy_mode'])),
                     historical_opponents=dict(generation_seats=dict(sorted(historical_generations.items())),
                         pool_generations=[e['generation'] for e in state.get('population',[])],
-                        sampling=('Independent seats: 20% IL, 80% quality distribution (80% softmax + 20% uniform)'
+                        sampling=(quality_pool.sampling_description(state['quality_pool'])
                                   if quality else '25% initial/IL, 25% recent, 50% older reservoir; unavailable strata fall back')),
                     environment=environment(device),strength='requires fresh post-update evaluation')
                 report['utilization']=iteration_utilization(inference_before,ordinary_inference,records,
@@ -537,7 +536,9 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                     checks=report['gate_diagnostics']
                     controller_line+=f' health={"ok" if checks["health_ok"] else ",".join(checks["health_reasons"])}'
                     controller_line+=f' pass_fail={checks["pass_failures"]}/{checks["pass_positions"]}'
-                if quality_report:controller_line+=f' history={quality_report["size"]}/24 {quality_report["admission"]["reason"]}'
+                if quality_report:
+                    controller_line+=f' history={quality_report["size"]}/{quality_report["max_members"]} {quality_report["admission"]["reason"]}'
+                    controller_line+=quality_pool.pfsp_pool.console(quality_report)
                 from .review_metrics import mixed_ev_console
                 controller_line+=mixed_ev_console(report['gate_diagnostics'])
                 print(f'Recovery generation {iteration+1}: {done} games, {update["optimizer_steps"]} PPO steps; '

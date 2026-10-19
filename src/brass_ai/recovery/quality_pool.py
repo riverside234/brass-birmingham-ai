@@ -1,4 +1,4 @@
-"""Wins-only history sampling, with probabilities frozen before collection."""
+"""Versioned history sampling, probe admission and checkpoint references."""
 import copy
 import math
 from itertools import combinations
@@ -8,7 +8,8 @@ import numpy as np
 from brass_ai.bank import sha
 from brass_ai.learning.contracts import digest,project_path,require
 from brass_ai.learning.replay import terminal_targets
-from .quality_config import validate_pool
+from .quality_config import validate_pool,pfsp
+from . import pfsp_pool
 
 PAIRS=tuple(combinations(range(4),2))
 REF_FIELDS=('path','sha256','model_id','generation','weights_only')
@@ -27,6 +28,7 @@ def state_digest(pool):
 
 
 def initial(anchor,config,probe):
+    if pfsp(config):return pfsp_pool.initial(anchor,config,probe)
     validate_pool(config)
     entry=dict(reference(anchor),admitted_iteration=0,q=None,probe=copy.deepcopy(probe),
                admission_health=dict(ok=True,scope='Pinned completed IL reference'),recent_rates=[])
@@ -35,6 +37,7 @@ def initial(anchor,config,probe):
 
 
 def validate_state(pool,config,generation=None):
+    if pfsp(config):return pfsp_pool.validate_state(pool,config,generation)
     validate_pool(config)
     require(pool['contract']==config['contract'] and pool['config']==config,'Quality pool config differs')
     require(type(pool['generation']) is int and pool['generation']>=0 and
@@ -53,6 +56,7 @@ def validate_state(pool,config,generation=None):
 
 
 def distribution(pool):
+    if pfsp(pool):return pfsp_pool.distribution(pool)
     members=[m for m in pool['members'] if m['generation']!=0]
     if not members:return dict(N=0,members=[])
     top=max(m['q'] for m in members);weights=[math.exp(m['q']-top) for m in members]
@@ -63,6 +67,7 @@ def distribution(pool):
 
 def draw(pool,planned,rng):
     """Independent seat draw; p is conditional on drawing the scored pool."""
+    if pfsp(pool):return pfsp_pool.draw(pool,planned,rng)
     anchor=next(m for m in pool['members'] if m['generation']==0)
     share=pool['config']['pinned_seat_share']
     if not planned['N'] or rng.random()<share:
@@ -86,8 +91,9 @@ def learner_pair(index,kind,quotas):
     return PAIRS[ordinal%len(PAIRS)]
 
 
-def update_scores(pool,games,tables,planned,*,generation):
+def update_scores(pool,games,tables,planned,*,generation,games_done=None):
     """No mutation before a generation commits; each learner/opponent pair counts."""
+    if pfsp(pool):return pfsp_pool.update_scores(pool,games,tables,planned,generation=generation,games_done=games_done)
     pool=copy.deepcopy(validate_state(pool,pool['config']))
     require(generation==pool['generation']+1,'Quality scores must advance once per generation')
     require(planned==distribution(pool),'Quality planning probabilities differ from committed scores')
@@ -165,6 +171,7 @@ def cache_candidate(root,run,entry,values,probe):
 
 def admission(pool,entry,health,distances,pair_distance):
     """Pure membership decision; caller supplies cached probe comparisons."""
+    if pfsp(pool):return pfsp_pool.admission(pool,entry,health,distances,pair_distance)
     pool=copy.deepcopy(pool);c=pool['config'];generation=pool['generation']
     outcome=dict(generation=generation,candidate=entry['model_id'],admitted=False,evicted=None,reason='not_due')
     if generation%c['admit_every_iterations']:return pool,outcome
@@ -217,3 +224,16 @@ def finish(root,run,pool,model,entry,probe,update,limit_report):
             from .critic_data import fingerprint
             member['fingerprint']=fingerprint(probe,values)
     return result,event
+
+
+def finish_report(report,pool,event):
+    if pfsp(pool):return pfsp_pool.report_finish(report,pool,event)
+    c=pool['config']
+    report.update(admission=event,next_distribution=distribution(pool),size=len(pool['members']),
+        max_members=c['max_members'],eta=c['eta'],uniform_floor=c['uniform_floor'],pinned_seat_share=c['pinned_seat_share'])
+    return report
+
+
+def sampling_description(pool):
+    if pfsp(pool):return 'Independent snapshot seats: stored reciprocal IL share; remainder PFSP with uniform floor'
+    return 'Independent seats: 20% IL, 80% quality distribution (80% softmax + 20% uniform)'

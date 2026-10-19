@@ -89,6 +89,8 @@ def check_signature(state, signature, reviewed=False):
                       ARCHIVED_TIME_CONFIG_MIGRATION:archived_time_budget_config}
             from .gae import CONFIG_MIGRATION as EV_MIGRATION,evidence_config
             handlers[EV_MIGRATION]=evidence_config
+            from .quality_config import CONFIG_MIGRATION as PFSP_MIGRATION,sampling_config
+            handlers[PFSP_MIGRATION]=sampling_config
             for migration in migrations:
                 require(migration in handlers,'Unknown reviewed configuration migration')
                 expected=handlers[migration](expected)
@@ -210,7 +212,33 @@ def evaluation_directory(root, run, state, name):
     return safe(run,run/'evaluations'/f'{name}-source-{current[:16]}')
 
 
-def commit_transition(run, state, signature):
+def prepare_opponent_pool(root,run,state,raw,config,source_changed=False):
+    """Bind either the generation's pool or its exact atomic migration receipt."""
+    from . import quality_pool,pfsp_pool
+    pool=state['quality_pool'];quality_pool.validate_state(pool,pool['config'],state['iteration'])
+    actual=quality_pool.state_digest(pool);bound=raw['training'].get('quality_pool_digest')
+    if actual!=bound:
+        matches=[t for t in state.get('source_transitions',[]) if t['checkpoint']==state['history'][-1]
+            and t.get('opponent_pool_migration',{}).get('from_digest')==bound
+            and t['opponent_pool_migration']['to_digest']==actual]
+        require(matches,'Opponent pool state differs from the committed checkpoint')
+        for t in matches:
+            backup=read(safe(run,run/t['backup']))
+            require(digest(backup['signature'])==digest(t['from_signature']) and
+                quality_pool.state_digest(backup['quality_pool'])==bound and
+                (backup['iteration'],backup['games_done'])==(state['iteration'],state['games_done']),
+                'PFSP source transition backup differs')
+            migrated,receipt=pfsp_pool.migrate(backup['quality_pool'],pool['config'],state['iteration'],state['games_done'])
+            require(receipt==t['opponent_pool_migration'] and quality_pool.state_digest(migrated)==actual,
+                'PFSP source transition cannot be reproduced')
+    if pool['config']==config['opponent_pool']:
+        if pfsp_pool.pfsp(pool):require(pool['games_done']==state['games_done'],'PFSP ordinary progress differs')
+        return pool,None
+    require(source_changed,'Opponent sampling changes require a reviewed source/config transition')
+    return pfsp_pool.migrate(pool,config['opponent_pool'],state['iteration'],state['games_done'])
+
+
+def commit_transition(run, state, signature,*,opponent_pool=None,pool_migration=None):
     """Call only after restoring Adam and RNG successfully, under the run lock."""
     previous = copy.deepcopy(state)
     backup = safe(run, run / f"state-before-source-{digest(previous['signature'])[:16]}-{state['iteration']:04d}.json")
@@ -226,6 +254,12 @@ def commit_transition(run, state, signature):
         config_changes={k:dict(before=previous['signature']['config'].get(k),after=v)
                         for k,v in signature['config'].items() if previous['signature']['config'].get(k)!=v}))
     updated['signature'] = signature
+    if pool_migration is not None:
+        from .quality_pool import state_digest
+        require(opponent_pool is not None and state_digest(previous['quality_pool'])==pool_migration['from_digest']
+            and state_digest(opponent_pool)==pool_migration['to_digest'],'PFSP transition pool binding differs')
+        updated['quality_pool']=copy.deepcopy(opponent_pool)
+        updated['source_transitions'][-1]['opponent_pool_migration']=copy.deepcopy(pool_migration)
     from .config import TIME_CONFIG_MIGRATION,time_budget_config
     if signature['config']==time_budget_config(previous['signature']['config']):
         updated['source_transitions'][-1]['config_migration']=TIME_CONFIG_MIGRATION

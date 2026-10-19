@@ -12,6 +12,8 @@
 
 # Frozen original-source snapshots must retain their recorded bytes on every host.
 training/opponents/bank/**/source/** -text
+# User-supplied simulation reference is archived byte-for-byte, including CRLF.
+ai-research/simulations/pfsp_sim_original.py -text
 # Admission pins metadata bytes, including manifests and selection receipts.
 # Existing LF checkouts are accepted only via newline-equivalent verification.
 training/opponents/bank/**/manifest.json -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol

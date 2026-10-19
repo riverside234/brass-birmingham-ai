@@ -13,7 +13,7 @@ import numpy as np
 from brass_ai.bank import sha
 from brass_ai.learning.contracts import SOURCE_ROOT,read_json
 from brass_ai.recovery import quality_pool as q
-from brass_ai.recovery.quality_config import OPPONENT_POOL,TABLE_PLAN
+from brass_ai.recovery.quality_config import LEGACY_POOL as OPPONENT_POOL,TABLE_PLAN,maximum_members
 from brass_ai.recovery.config import validate_config,latest_model_config
 from brass_ai.recovery.ordinary import plan_collection
 
@@ -187,6 +187,7 @@ class Quality(unittest.TestCase):
             p=pool(3,generation=20)
             for m in p['members']:m.update(path=path.relative_to(SOURCE_ROOT).as_posix(),sha256=sha(path))
             c=read_json(SOURCE_ROOT/'configs/step5/joint7-latest.json')
+            c['opponent_pool']=copy.deepcopy(OPPONENT_POOL)
             state=dict(iteration=20,games_done=6400,next_seed=c['seed'],context_counter=0,
                 quality_pool=p,population=[q.reference(m) for m in p['members']],history=[q.reference(p['members'][0])],evaluation_anchor=q.reference(p['members'][0]))
             service=Mock();service.models={m['model_id']:None for m in p['members']}

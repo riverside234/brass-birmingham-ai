@@ -3,7 +3,7 @@ import math
 from brass_ai.learning.contracts import require
 
 DEFAULT_FLOOR=dict(contract='rehearsal-floor/1.0.0',initial=.03,hold_iterations=60,
-                   decrement=.01,interval_iterations=30)
+                   decrement=.01,interval_iterations=60)
 
 
 def validate(config):
@@ -30,4 +30,4 @@ def schedule(config,games,iteration):
     enabled=bool(config['rehearsal_manifest'] and config['rehearsal_weight'])
     return dict(weight=max(floor,decayed) if enabled else 0.,floor=floor,decayed_weight=decayed,
                 committed_games=games,committed_iterations=iteration,enabled=enabled,
-                scope='Weight for the next collection/update; floor drops after 60, 90 and 120 committed iterations')
+                scope='Weight for the next collection/update, using configured hold and interval at committed progress')

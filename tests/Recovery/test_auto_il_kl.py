@@ -60,13 +60,16 @@ class Rules(unittest.TestCase):
     def test_rehearsal_floor_boundaries_and_restart_use_committed_progress(self):
         cfg=dict(rehearsal_manifest='completed.json',rehearsal_weight=.1,rehearsal_until=10000,rehearsal_floor=DEFAULT_FLOOR)
         self.assertEqual(schedule(cfg,0,0)['weight'],.1)
-        for iteration,expected in ((0,.03),(59,.03),(60,.02),(89,.02),(90,.01),(119,.01),(120,0.)):
+        for iteration,expected in ((0,.03),(59,.03),(60,.02),(89,.02),(90,.02),(119,.02),(120,.01),(179,.01),(180,0.)):
             self.assertAlmostEqual(schedule(cfg,320*max(40,iteration),iteration)['weight'],expected)
             self.assertEqual(schedule(cfg,320*max(40,iteration),iteration),
                              schedule(json.loads(json.dumps(cfg)),320*max(40,iteration),iteration))
         self.assertEqual(schedule(dict(cfg,rehearsal_weight=0),20000,65)['weight'],0)
         old=copy.deepcopy(cfg);old.pop('rehearsal_floor')
         self.assertEqual(schedule(old,10000,32)['weight'],0)
+        legacy=dict(cfg,rehearsal_floor=dict(DEFAULT_FLOOR,interval_iterations=30))
+        self.assertEqual(schedule(legacy,32000,90)['weight'],.01)
+        self.assertEqual(schedule(legacy,38400,120)['weight'],0.)
 
     def test_warmup_baseline_and_first_raise_at_generation_23(self):
         state=limits.initial_state(limits.DEFAULT,{})

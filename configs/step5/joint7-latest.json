@@ -263,7 +263,7 @@
     "initial": 0.03,
     "hold_iterations": 60,
     "decrement": 0.01,
-    "interval_iterations": 30
+    "interval_iterations": 60
   },
   "rehearsal_sampling": {
     "contract": "rotating-train-window/1.0.0",
@@ -286,19 +286,49 @@
     "pair_rotation": "six-pairs"
   },
   "opponent_pool": {
-    "contract": "quality-score-pool/1.0.0",
-    "max_members": 24,
+    "contract": "pfsp-pool/1.0.0",
     "pinned": [
       "generation-0"
     ],
-    "pinned_seat_share": 0.2,
-    "eta": 0.01,
+    "pinned_seat_share": {
+      "rule": "reciprocal",
+      "offset": 1,
+      "max": null
+    },
+    "max_scored_members": [
+      {
+        "until_games": 100000,
+        "max": 16
+      },
+      {
+        "until_games": null,
+        "max": 23
+      }
+    ],
+    "outrank_rate": {
+      "half_life_iterations": 5,
+      "prior_rate": 0.5,
+      "prior_comparisons": 10
+    },
+    "weighting": {
+      "function": "hard",
+      "power": 2
+    },
     "uniform_floor": 0.2,
     "admit_every_iterations": 5,
     "admit_health_iterations": 5,
     "admit_min_kl": 0.02,
-    "evict_min_age_iterations": 20,
-    "protect_newest": 2
+    "evict": {
+      "min_age_iterations": 20,
+      "protect_newest": 2,
+      "min_decayed_comparisons": 15,
+      "redundancy_band": 0.05
+    },
+    "alarm": {
+      "rate_below": 0.4,
+      "min_decayed_comparisons": 20,
+      "iterations": 3
+    }
   },
   "rating": {
     "contract": "plackett-luce-rating/1.0.0",

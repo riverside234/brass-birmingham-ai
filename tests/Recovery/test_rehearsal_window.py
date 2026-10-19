@@ -155,10 +155,13 @@ class RehearsalWindowTests(unittest.TestCase):
 
     def test_dead_parallel_reader_does_not_leave_writers_or_partial_cache(self):
         from concurrent.futures.process import BrokenProcessPool
+        from brass_ai.recovery.ingress import reader_pool
         pinned={p:sha(p) for p in self.directory.iterdir() if p.is_file()}
-        with patch.object(windows,'_prepare_selection',killed_rehearsal_reader),contextlib.redirect_stdout(io.StringIO()):
-            with self.assertRaises(BrokenProcessPool):
-                with self.window(workers=2):pass
+        # A random window may contain only one distinct shard. Supply a real
+        # executor so the injected os._exit can never run in the test parent.
+        with self.assertRaises(BrokenProcessPool):
+            with reader_pool(2) as readers,patch.object(windows,'_prepare_selection',killed_rehearsal_reader),contextlib.redirect_stdout(io.StringIO()):
+                with self.window(workers=2,executor=readers):pass
         self.assertFalse((self.run/'.rehearsal-cache').exists())
         self.assertEqual(pinned,{p:sha(p) for p in pinned})
 

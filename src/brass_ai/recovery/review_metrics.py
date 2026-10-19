@@ -59,6 +59,7 @@ def gate_diagnostics(actor,value=None,limit=None,quality=None):
     if planning.get('N')==0 and limit.get('baseline') is not None:
         warnings.append('history_pool_il_only')
     if attempts and not value.get('optimizer_steps'):warnings.append('value_fit_rejected')
+    warnings.extend('pool_regression:'+row['model_id'] for row in quality.get('alarms',[]))
     for kind,row in mixed.items():
         if row['enabled'] and row['lambda_next'] is not None and row['lambda_next']<1. and row['status']=='below_tolerance':
             warnings.append('mixed_ev_below_tolerance:'+kind)
@@ -69,6 +70,7 @@ def gate_diagnostics(actor,value=None,limit=None,quality=None):
         scored_history_members_used=planning.get('N'),
         history_il_only=planning.get('N')==0 if 'N' in planning else None,
         history_admission_reason=quality.get('admission',{}).get('reason'),
+        pool_regression_alarms=quality.get('alarms',[]),
         value_accepted_steps=value.get('optimizer_steps'),value_attempted_steps=value.get('attempted_steps'),
         value_accepted_fraction=value.get('optimizer_steps',0)/attempts if attempts else None,
         value_stop=value.get('early_stop_reason'),beta_reason=value.get('beta_reason'),

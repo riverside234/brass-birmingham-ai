@@ -318,6 +318,11 @@
       "implementation": "fd85565852a00328236c96b4ed8b6fc9cd245627cc019bbf8c05d12721a89d52",
       "learning_compatibility": "ef6a1b5126de42da8f3277dc9357b6ffb94a435f3faa7fee8dd312bb5a242a54",
       "reason": "Snapshot critic weight recovery changes self-play gate state only; completed IL architecture, encoding, loss, data and checkpoint lineage remain compatible. Preserve all handoff freshness and completion checks."
+    },
+    {
+      "implementation": "38a530ad117db9004a5ff31f617327ada7104bdfffbfbceeae07393fd863a649",
+      "learning_compatibility": "ef6a1b5126de42da8f3277dc9357b6ffb94a435f3faa7fee8dd312bb5a242a54",
+      "reason": "PFSP/rehearsal revision changes self-play sampling and signed schedules only; completed IL architecture, encoding, loss, data and checkpoint lineage remain compatible. Preserve freshness/completion checks."
     }
   ]
 }

@@ -116,7 +116,7 @@ python scripts/step5.py --config configs/step5/joint7-v11-2-grouped-lr-critic.js
   --iterations 1
 ```
 
-The generated config includes the automatic critic/snapshot and per-table GAE gates, two-iteration disk-backed PPG, bounded rehearsal, 50/45/5 tables, the 24-member quality pool, PL ratings and auto IL-KL/LR controls. Teaching, all v4 search, Monitor and Broader Evaluation stay disabled. PPO starts with a fresh Adam and warmup; the utility extension follows the existing calibration path. The upgrade retains the parent IL checkpoint, dataset, source review and lineage in `upgrade.json`, and verifies the deterministic extension at handoff.
+The generated config includes the automatic critic/snapshot and per-table GAE gates, two-iteration disk-backed PPG, bounded rehearsal, 50/45/5 tables, the staged PFSP pool, PL ratings and auto IL-KL/LR controls. Teaching, all v4 search, Monitor and Broader Evaluation stay disabled. PPO starts with a fresh Adam and warmup; the utility extension follows the existing calibration path. The upgrade retains the parent IL checkpoint, dataset, source review and lineage in `upgrade.json`, and verifies the deterministic extension at handoff.
 
 The first v11.2 run rebuilds its fixed validation probe with recorded chosen moves and industry metadata. A v11.1 probe cannot be silently imported. The optional `--il-kl-probe-from-run` remains available for a stopped, committed **compatible v11.2** donor using the same upgraded IL/dataset and probe settings. Use it only on a new run's first command; it copies the probe, never PPO state or the donor's large prepared cache. Omit it on continuation.
 
@@ -148,7 +148,7 @@ At 320 games this is **160 / 144 / 16 tables**, or **640 / 288 / 32 learner seat
 
 Scheduled **Monitor** and **Broader Evaluation** are disabled (`evaluation_schedule.enabled=false`) at startup/resume and after iteration commits. The independent Plackett–Luce ratings and their diagnostic panels remain enabled every ten iterations. Newly generated configs inherit this setting; the older generated config is left unchanged.
 
-The historical pool has at most **24 members: pinned IL + 23 scored snapshots**. The `population` fields remain a compatibility capacity declaration (2 + 22); selection and eviction in recipe 3 are governed by `opponent_pool`, not the previous recent/reservoir sampler. Resume checkpoints and independently rated snapshots remain protected; 24 is the training-pool limit, not a cap on every checkpoint file.
+The PFSP historical pool holds **pinned IL + at most 16 scored snapshots before 100,000 committed ordinary games**, then **IL + at most 23 snapshots**. The `population` fields remain a compatibility declaration of the final capacity (2 + 22); `opponent_pool` governs selection and eviction. Resume checkpoints and independently rated snapshots remain protected; the pool cap does not limit every checkpoint file. The archived quality-score contract remains readable for explicit old configs.
 
 `teacher_enabled=false` disables teacher games, search, policy distillation and teacher auxiliary values. The stored teacher settings remain **9/12/12/12 seconds**, five games, eight workers per turn, eight distillation steps and `search_wall_fraction=null`, ready for a separately reviewed future change. Ordinary utility calibration is still required. PPO reward, entropy/value weights, evaluation and the disabled champion gate are unchanged. Rehearsal follows the floor schedule below.
 
@@ -204,17 +204,19 @@ The order is collection → critic-train-only head calibration → advantages �
 
 Each iteration and compact history retain `actor.gae` (lambda, TD-error spread, shadows at 1/0.98/0.95/0.9, sign/correlation and era/phase means), `actor.critic_split`, `actor.final_categorical_probe`, and `value_phase` (held-out/train EV, utility MSE, value loss, ten-bin win calibration, accepted/attempted steps, cloning/probe KL, stop reason and seconds). The `value_phase.buffer` report adds cache generations/bytes, rebuild and cleanup results; value totals distinguish current/previous available rows, distinct accepted rows and presentations. Console lines show used/next lambda, accepted value steps and current+previous rows actually used. The report exporter preserves these fields automatically. See [implementation and validation](../ai-research/GAE_VALUE_PHASE_REPORT.md).
 
-## Quality-score history opponents
+## PFSP history opponents
+
+The supplied **PFSP-vs-quality simulation is saved in the repository**. Rerun `python scripts/pfsp_sim.py --games 320 --history-share 0.45 --output results/pfsp-history45.json` when history share, games per iteration or pool capacity changes; choose a new result filename and adjust the share to the proposed setting. The command is an isolated synthetic experiment and does not change training. See [simulation files, options, limitations and reference cross-check](../ai-research/simulations/PFSP_SIMULATION.md).
 
 Ordinary v4 tables cycle through all five admitted training profiles: balanced, cotton, goods-beer, rail-tempo and supplier. Selection advances by the **v4-table ordinal**, derived from committed ordinary progress, rather than the overall game index that aliases the 5% quota. With 320 games at 50/45/5, the 32 v4 opponent seats give each profile 6–7 appearances. Each table uses two distinct variants; learner-pair rotation remains unchanged. `pottery-flex` stays in the evaluation pool. `sampling.legacy_profiles` records actual completed counts by profile and physical seat and is retained in compact history. No extra mutable rollout counter or config regeneration is required.
 
-Each history seat is sampled independently: 20% pinned IL, otherwise `p_i = 0.8 * softmax(q)_i + 0.2 / N` over the scored members. Until the first admission, every history seat uses IL. Both opponent seats may select the same model. The quality probability is conditional on selecting the scored pool; its per-seat probability is `0.8 * p_i`.
+Each history seat is sampled independently. With `k` total pool models **including IL**, its pinned share is `1/(k+1)`, or 100% while IL is alone. Thus k=2/4/17/24 gives 33.3%/20%/5.56%/4%. `pinned_seat_share.max=null` leaves this uncapped; an explicitly configured `max=0.2` caps the early share, except the IL-only fallback. The remaining seats draw from `p_i = 0.8 * (1-x_i)^2 / sum((1-x)^2) + 0.2/N`, where N=k-1. If all weights are zero, use uniform sampling. Both opponent seats may select the same model. The scored probability p is conditional; its absolute seat probability is `(1-il_share)*p`.
 
-After collection, every learner/opponent seat pair contributes its official-tiebreak outcome (win 1, tie 0.5, loss 0). A scored member receives `q_i -= 0.01 * outcome / (N * p_i)`, using the probabilities frozen when the collection was planned. Recenter by subtracting the largest q. IL outcomes are reported but never change a score. No rating result enters this sampler.
+After collection, every learner/snapshot seat pair in a completed history table contributes its official-tiebreak outcome (win 1, residual tie 0.5, loss 0). A repeated snapshot fills two seats and receives four comparisons. For every pool member, including IL, update Python float64 sums once per iteration: `S = d*S + outcomes`, `C = d*C + comparisons`, `x=S/C`, with `d=0.5**(1/5)`. Unsampled members decay without changing their estimated rate. New members start at S=5, C=10. IL's rate is diagnostic only. Self-play, v4 and rating results never enter this estimator; there is no importance weighting. The signed contract is `pfsp-pool/1.0.0`; q, eta and a fixed numeric IL share are rejected under it. Optional `weighting.function=variance,power=1` implements x*(1-x), but the default is hard/power=2.
 
-Every five committed iterations, admit the current model only after five recorded healthy iterations and when every `KL(member || candidate)` is at least 0.02 on the fixed IL validation probe. Health uses the existing baseline/behavior/evidence checks below; its window is not backfilled. Consequently the first admission can be later than generation 15. New q is the current maximum. When full, evict the lowest-q eligible member, breaking exact q ties by smallest KL to another member. IL, the two newest members, and members younger than 20 iterations are protected. If all are protected, skip admission.
+Every five committed iterations, admit the current model only after five recorded healthy iterations and when every `KL(member || candidate)` is at least 0.02 on the fixed IL validation probe. Health checks are unchanged, so first admission can occur later than generation 15. When full, protect IL, the two newest snapshots and snapshots younger than 20 iterations; require C>=15 for other eviction candidates. Shortlist members within 0.05 of the highest eligible outrank rate, then evict the one with the smallest KL to its nearest other pool member. With no eligible victim, skip admission. Pool size never exceeds its current cap.
 
-`state.json` stores members, scores, planning probabilities, cached-probe receipts, health window and membership events. Each generation checkpoint binds this state by digest; resume checks it. Reports and compact history retain q/p, seats, comparisons, raw and five-iteration outrank rates, and admission/eviction reasons. Active probability caches, pool checkpoints and all rated checkpoints survive retention cleanup.
+`state.json` stores S/C, admission ages, model/checkpoint identities, cached-probe receipts, alarm streaks, health window, membership events, committed games and the next planning distribution. IL share and p are frozen before collection and preserved in the plan/seat receipts. Reports and compact history retain per-member raw and decayed outranks, C, w, used p, seats/comparisons, effective members, largest/recent share, weighted mean rate, IL statistics and admission/eviction reasons. `planning` describes the completed collection; `next_distribution` and `summary` describe the next collection after admission/eviction. Console includes IL share, effective member count and alarm count. A member below x=0.4 with C>=20 for three consecutive iterations emits a review-only regression warning. It does not change shared health, sampling rules, rehearsal, ratings or gates. Active probe caches, pool checkpoints and rated checkpoints remain protected. See the [PFSP implementation and validation report](../ai-research/PFSP_REVISION_REPORT.md).
 
 ## Held-out Plackett–Luce ratings
 
@@ -248,11 +250,11 @@ The floor uses committed iteration progress, so restarting preserves its stage:
 | Training iterations (one-based) | Floor |
 | --- | ---: |
 | 1–60 | 0.03 |
-| 61–90 | 0.02 |
-| 91–120 | 0.01 |
-| 121 onward | 0 |
+| 61–120 | 0.02 |
+| 121–180 | 0.01 |
+| 181 onward | 0 |
 
-`rehearsal_floor` is a versioned block with `initial=0.03`, `hold_iterations=60`, `decrement=0.01`, and `interval_iterations=30`. Rehearsal remains loaded past 10,000 games while its floor is positive. Each report records the committed counters, floor, decayed coefficient and effective coefficient. An explicitly zero `rehearsal_weight` still disables rehearsal. Configs without the floor block retain their original schedule.
+`rehearsal_floor` is a versioned block with `initial=0.03`, `hold_iterations=60`, `decrement=0.01`, and **`interval_iterations=60`**. Drops occur after 60/120/180 committed iterations, without restarting the clock on continuation. Rehearsal remains loaded past 10,000 games while its floor is positive. Each report records the committed counters, floor, decayed coefficient and effective coefficient. An explicitly zero `rehearsal_weight` still disables rehearsal. Explicit old interval-30 configs retain their old schedule until the reviewed config change below; configs without the floor block retain their original schedule.
 
 ## PPO learning-rate controller and calibrated IL-KL limits
 
@@ -302,19 +304,25 @@ Probe preparation/validation happens at startup; normal iterations evaluate only
 
 ## Continue v11.2 self-play
 
-To continue the latest committed generation, including the reviewed generation-55 run:
+To adopt PFSP and the slower rehearsal floor in the existing run, switch at a **committed generation divisible by five** (85, 90, etc.). Generate a new config filename from the actual existing config; this helper changes only the recognized default opponent-pool block and rehearsal interval, and never reads or edits model/IL/run files:
 
 ```bash
 python scripts/build-shared-search.py --root .
 
-python scripts/step5.py --config configs/step5/joint7-v11-2-grouped-lr-critic.json train \
+python scripts/configure-pfsp.py \
+  --config configs/step5/joint7-v11-2-grouped-lr-critic.json \
+  --output configs/step5/joint7-v11-2-grouped-lr-critic-pfsp.json
+
+python scripts/step5.py --config configs/step5/joint7-v11-2-grouped-lr-critic-pfsp.json train \
   --run artifacts/step5/joint7-v11-2-grouped-lr-critic \
   --imitation-run artifacts/step5/features4-v11-2-batch7-il \
   --resume-reviewed-source \
   --iterations 20
 ```
 
-The `--resume-reviewed-source` flag admits the exact reviewed source transitions from the exported run and preceding fixes, including the health/EV revision, generation-85 corrections and staged snapshot-weight recovery. Keep the existing config, upgraded IL folder and self-play directory; do not rerun config generation, IL upgrade or `--fresh`. An old table-gate block upgrades to the versioned default window through this reviewed transition; all other config fields must match. The existing fixed IL validation probe remains compatible and is reused. Unknown source/config edits and pending old collections still fail closed. Omit the review flag when the source and effective config are unchanged.
+The `--resume-reviewed-source` flag admits exact reviewed transitions, including health/EV fixes, staged snapshot-weight recovery and this explicitly generated PFSP/rehearsal config. Keep the same IL folder and self-play directory; no IL upgrade, retraining or `--fresh` is needed. Existing sampler members retain their checkpoint/probe/fingerprint identities, admission ages and health window. Each gets C=10 and S=10 times its logged five-iteration outrank rate, or S=5 if no comparisons were logged. An atomic source-transition receipt binds the original checkpoint digest to the new pool, including a restart before the next PPO commit. No q value is reinterpreted as an outrank rate. The g85 export has k=4, so IL's share is initially still 20%; another admission makes it 1/6.
+
+If the run is between admission boundaries, first continue with its **old config** until the next multiple of five; this source retains the old signed sampling/schedule for that purpose. The PFSP switch rejects a non-boundary, an over-cap legacy pool, pending old collections or unknown config changes instead of resetting progress or dropping members. An old table-gate block can still undergo its previously reviewed upgrade. The fixed IL validation probe is reused. Once switched, repeat only the train command with the PFSP config; the config helper refuses overwrite. Omit `--resume-reviewed-source` when source and effective config are unchanged.
 
 Optionally add `--expected-generation 85` only while generation 85 is the intended entry; otherwise omit it or use the actual committed generation. Continuation preserves weights, both Adam optimizers, RNG, active lambdas and enabled table origins, snapshot gate/weight, descriptors/fingerprints, clone coefficient/history, warmup, LR controller, counters, population and lineage. The first snapshot-recovery upgrade adds only an empty recovery streak; later checkpoints resume it exactly. An existing v2 EV window and its streaks are preserved exactly. Only the first upgrade from the old v1 table gate starts an empty window at committed progress and clears its superseded mixed-table streaks; old scalar reports cannot backfill moments or game support. Calibrated IL limits/latch and economic baselines are preserved. See the [generation-85 review](../ai-research/SELFPLAY_G85_REVIEW.md), [health/EV revision](../ai-research/SELFPLAY_HEALTH_EV_REVISION.md) and [generation-55 review](../ai-research/SELFPLAY_G55_REVIEW.md).
 
@@ -331,7 +339,7 @@ python scripts/export-training-reports.py \
   --run artifacts/step5/joint7-v11-2-grouped-lr-critic
 ```
 
-The explicit `--run` selects the new GAE/value run; the script's older default run name is unchanged. The destination is a new `results/joint7-v11-2-grouped-lr-critic-gNNNN-<UTC timestamp>/` folder. It includes the latest two committed full iteration reports, available compact history and evaluation reports, the saved config, and the originating IL reports. Descriptor/role/EV gate diagnostics, GAE/value diagnostics, exact categorical KL, grouped anchor evidence, LR decisions, actual learner/sample usage, quality scores/membership and disabled-teacher status are preserved. Recent rating specs/reports, compact outcome JSONL, panels and SVG curves are included together with the active cumulative rating archive; dense probe/bootstrap tensors and full replay shards are excluded. Use your actual `--run` if it differs. The original completed IL stays at `artifacts/step5/features4-v11-1-batch7-il`; the new handoff is `artifacts/step5/features4-v11-2-batch7-il`. See [export options](EXPORT_TRAINING_REPORTS.md).
+The explicit `--run` selects the new GAE/value run; the script's older default run name is unchanged. The destination is a new `results/joint7-v11-2-grouped-lr-critic-gNNNN-<UTC timestamp>/` folder. It includes the latest two committed full iteration reports, available compact history and evaluation reports, the saved config, and the originating IL reports. Descriptor/role/EV gate diagnostics, GAE/value diagnostics, exact categorical KL, grouped anchor evidence, LR decisions, actual learner/sample usage, PFSP estimates/plans/alarms, membership and disabled-teacher status are preserved. Recent rating specs/reports, compact outcome JSONL, panels and SVG curves are included together with the active cumulative rating archive; dense probe/bootstrap tensors and full replay shards are excluded. Use your actual `--run` if it differs. The original completed IL stays at `artifacts/step5/features4-v11-1-batch7-il`; the new handoff is `artifacts/step5/features4-v11-2-batch7-il`. See [export options](EXPORT_TRAINING_REPORTS.md).
 
 ## Small local checks
 
@@ -340,7 +348,7 @@ With the repository Python dependencies available:
 ```bash
 PYTHONPATH=src:tests/FeatureEngineering:tests/R2:tests/Recovery:tests/Reports \
   python -B -m unittest test_critic_descriptors test_critic_export test_gae_value_phase \
-    test_value_buffer test_quality_pool test_auto_il_kl test_rehearsal_window \
+    test_value_buffer test_pfsp_pool test_quality_pool test_auto_il_kl test_rehearsal_window \
     test_export_training_reports -v
 
 PYTHONPATH=src:tests/FeatureEngineering:tests/R2:tests/Recovery \

@@ -28,7 +28,7 @@ class V4SearchDisabled(unittest.TestCase):
         before=copy.deepcopy(old);new=latest_model_config(old,old['imitation_checkpoint'])
         self.assertEqual(old,before)
         allowed={'selfplay_recipe','curriculum','population','table_plan','opponent_pool','rating','v4_search_enabled',
-                 'evaluation_schedule','rehearsal_sampling','advantage','value_phase',
+                 'evaluation_schedule','rehearsal_sampling','rehearsal_floor','advantage','value_phase',
                  'architecture','critic_data','seat_descriptors'}
         self.assertTrue({k for k in set(old)|set(new) if old.get(k)!=new.get(k)}<=allowed)
         self.assertFalse(new['v4_search_enabled']);self.assertFalse(new['teacher_enabled'])
@@ -37,7 +37,8 @@ class V4SearchDisabled(unittest.TestCase):
         self.assertEqual(new['imitation_checkpoint'],old['imitation_checkpoint'])
         self.assertEqual(new['rehearsal_manifest'],old['rehearsal_manifest'])
         self.assertEqual(new['curriculum'],[dict(until=None,selfplay=50,historical=45,legacy=5)])
-        self.assertEqual(new['opponent_pool']['max_members'],24)
+        from brass_ai.recovery.quality_config import maximum_members
+        self.assertEqual(maximum_members(new['opponent_pool']),24)
         self.assertEqual(new,latest_model_config(new,new['imitation_checkpoint']))
         self.assertEqual(config(),latest_model_config(config(),config()['imitation_checkpoint']))
 

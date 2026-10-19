@@ -44,9 +44,12 @@ The probe manifest carries selected-position identities and source/cache hashes;
 its dense `probe.npz` and `.prepared/` validation cache are excluded from this
 report-only bundle.
 
-The quality-pool revision retains per-member scores, frozen planning probabilities,
-seat/comparison counts, outrank diagnostics and admission/eviction decisions. The
-24-member training pool and the independently retained rated agents are visible in
+The PFSP revision retains per-member S/C and raw/decayed outranks, frozen IL share
+and planning probabilities, seat/comparison counts, concentration summaries,
+review-only regression alarms and admission/eviction decisions. The existing
+`quality_pool` report/state key is retained; its contract identifies PFSP versus
+archived quality scores. Compact history and exports preserve the entire block.
+The staged 17/24-member total pool and independently retained rated agents are visible in
 state. Compact held-out rating JSONL files are included because they are the complete
 input to future refits; they contain outcomes, not PPO trajectories. Committed outcome
 and panel hashes are verified before export. Dense opponent-probe caches and

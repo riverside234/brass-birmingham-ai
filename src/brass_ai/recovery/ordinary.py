@@ -33,6 +33,8 @@ def plan_collection(root,directory,state,config,signature,service,current,profil
     if quality:
         from . import quality_pool
         quality_pool.validate_state(state['quality_pool'],config['opponent_pool'],state['iteration'])
+        if quality_pool.pfsp(state['quality_pool']):
+            require(state['quality_pool']['games_done']==state['games_done'],'PFSP planning ordinary progress differs')
         quality_planning=quality_pool.distribution(state['quality_pool'])
     for i in range(config['games_per_iteration']):
         index=state['games_done']+i;kind,boosted=training_table(index,config,window)

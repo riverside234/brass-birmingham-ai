@@ -46,7 +46,8 @@ def main():
     if 'quality_pool' in state:
         from brass_ai.recovery.quality_pool import state_digest,validate_state
         validate_state(state['quality_pool'],cfg['opponent_pool'],1)
-        require(len(state['quality_pool']['members'])==1 and cfg['opponent_pool']['max_members']==24,
+        from brass_ai.recovery.quality_config import maximum_members
+        require(len(state['quality_pool']['members'])==1 and maximum_members(cfg['opponent_pool'])==24,
                 'Quality pool did not start with pinned IL only')
         require(state['ratings']['slots']==[] and len(state['ratings']['seeds'])==32,
                 'Unexpected rating campaign in the three-game smoke')

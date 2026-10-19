@@ -292,7 +292,7 @@ def latest_model_config(config,imitation_checkpoint):
     from .value_phase import DEFAULT as VALUE_PHASE
     from .critic_data import DEFAULT as CRITIC_DATA
     from brass_ai.learning.seat_descriptors import DEFAULT as SEAT_DESCRIPTORS
-    from .quality_config import TABLE_PLAN,OPPONENT_POOL,RATING
+    from .quality_config import TABLE_PLAN,OPPONENT_POOL,RATING,sampling_config
     # The width-512 learning-rate adjustment was introduced with v11. Moving
     # the local addition in v11.1 must not apply that adjustment a second time.
     if result.get('architecture') not in (ARCHITECTURE,'brass-four-seat-mlp-resnet/11.0.0','brass-four-seat-mlp-resnet/11.1.0'):
@@ -327,7 +327,7 @@ def latest_model_config(config,imitation_checkpoint):
     result.setdefault('teacher_value',copy.deepcopy(TEACHER_VALUE))
     result.pop('champion_opponents',None)
     result['execution']['teacher_search_workers_per_turn']=TEACHER_SEARCH_WORKERS
-    return validate_config(champion_mix_config(result))
+    return validate_config(champion_mix_config(sampling_config(result)))
 
 
 def champion_mix_config(config):
@@ -513,11 +513,11 @@ def validate_config(config):
             (quality or not any(k in config for k in ('table_plan','opponent_pool','rating'))),
             'Table plan, quality pool and ratings require the fresh 3.0 recipe together')
     if quality:
-        from .quality_config import TABLE_PLAN,validate_pool,validate_rating
+        from .quality_config import TABLE_PLAN,validate_pool,validate_rating,maximum_members
         fields|={'table_plan','opponent_pool','rating'}
         require(config['table_plan']==TABLE_PLAN,'Quality recipe requires fixed 50/45/5 and six seat pairs')
         validate_pool(config['opponent_pool']);validate_rating(config['rating'])
-        require(auto and sum(config['population'].values())==config['opponent_pool']['max_members'],
+        require(auto and sum(config['population'].values())==maximum_members(config['opponent_pool']),
                 'Quality pool requires calibrated health and matching population capacity')
     if 'teacher_enabled' in config:
         fields.add('teacher_enabled');require(type(config['teacher_enabled']) is bool,'Invalid teacher enabled flag')

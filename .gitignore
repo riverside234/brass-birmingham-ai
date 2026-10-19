@@ -460,6 +460,10 @@ FodyWeavers.xsd
 # Only authored reports and probe scripts from the inspection folders.
 # Decompiled game code, tools, downloaded references and generated results stay local.
 /ai-research/*
+!/ai-research/simulations/
+/ai-research/simulations/*
+!/ai-research/simulations/pfsp_sim_original.py
+!/ai-research/simulations/PFSP_SIMULATION.md
 !/ai-research/FEATURE_ENGINEERING_FE0_CONTRACT.json
 !/ai-research/*.md
 !/ai-research/*.ps1
