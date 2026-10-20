@@ -533,11 +533,12 @@
     "branching_after_iterations": 20
   },
   "v4_share_gate": {
-    "contract": "v4-table-share-gate/1.0.0",
+    "contract": "v4-table-share-gate/2.0.0",
     "enabled": true,
     "source": "rating-v4-panel",
     "win_share_above": 0.95,
     "reference_games": 320,
-    "reduced_v4_games": 6
+    "reduced_v4_games": 6,
+    "released_tables": "historical"
   }
 }

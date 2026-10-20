@@ -136,6 +136,11 @@ def _validate_base(s,c,generation,*,legacy=False):
 def validate_state(s,c,generation):
     _validate_base(s,c,generation)
     r=s['weight_recovery']
+    from . import snapshot_r2
+    if r.get('contract')==snapshot_r2.CONTRACT:
+        require(s['learner_ev_baseline'] is None,'Legacy EV must not be reused as the R2 reference')
+        snapshot_r2.validate(r,generation,s['snapshot_weight'])
+        return s
     require(type(r) is dict and set(r)==set(recovery_initial(0)) and r['contract']==RECOVERY_CONTRACT
         and type(r['origin']) is int and 0<=r['origin']<=generation
         and type(r['healthy_streak']) is int and 0<=r['healthy_streak']<RECOVERY_ITERATIONS,
@@ -161,11 +166,65 @@ def learner_ev(metrics):return metrics.get('groups',{}).get('role:learner',{}).g
 
 def recovery_console(report):
     r=report.get('weight_recovery')
-    return (f' snapshot_recovery={r["healthy_streak_next"]}/{r["required_iterations"]}:{report["decision"]}'
-        if r else '')
+    if not r:return ''
+    text=f' snapshot_recovery={r["healthy_streak_next"]}/{r["required_iterations"]}:{report["decision"]}'
+    if 'learner' in r:
+        a=r['learner'];value=f'{a["r2"]:.4f}' if a['r2'] is not None else 'n/a'
+        text+=f' snapshot_R2={value}[{a["qualifying_iterations"]}/{r["minimum_iterations"]}]'
+    return text
 
 
-def advance(s,c,*,generation,report,healthy,fingerprint_now,ppo_snapshot_rows=0):
+def advance(s,c,*,generation,report,healthy,fingerprint_now,ppo_snapshot_rows=0,regime=None):
+    from . import snapshot_r2
+    if s['weight_recovery'].get('contract')==snapshot_r2.CONTRACT:
+        return _advance_r2(s,c,generation=generation,report=report,healthy=healthy,
+            fingerprint_now=fingerprint_now,ppo_snapshot_rows=ppo_snapshot_rows,regime=regime)
+    return _advance_ev(s,c,generation=generation,report=report,healthy=healthy,
+        fingerprint_now=fingerprint_now,ppo_snapshot_rows=ppo_snapshot_rows)
+
+
+def _advance_r2(s,c,*,generation,report,healthy,fingerprint_now,ppo_snapshot_rows,regime):
+    from . import snapshot_r2
+    from .value_phase import critic_work
+    s=copy.deepcopy(validate_state(s,c,generation-1));before=s['snapshots_active'];weight=s['snapshot_weight']
+    work=critic_work(report)
+    value_rows=(report.get('role_usage',{}).get('snapshot',{}).get('distinct_used',0)
+                if report.get('optimizer_steps',0)>0 else 0)
+    require(all(type(n) is int and n>=0 for n in (ppo_snapshot_rows,value_rows)),
+        'Invalid retained snapshot training counts')
+    trained=bool(ppo_snapshot_rows or value_rows)
+    health_ok=healthy is True and not report.get('kl_guard_tripped',False)
+    observation=snapshot_r2.entry(generation,report,healthy=health_ok,trained=before and trained)
+    recovery,next_weight,decision,reason,evidence=snapshot_r2.advance(s['weight_recovery'],weight,
+        generation=generation,observation=observation,current_regime=regime or snapshot_r2.regime(report,{}),
+        active=before,tolerance=c['rollout']['snapshot_ev_tolerance'])
+    # Descriptor admission remains the existing EV/health gate. Only subsequent
+    # snapshot WEIGHT decisions change to R2.
+    ev=learner_ev(report.get('heldout_after',{}));gain=report.get('descriptor_gain',{}).get('learner_ev_gain')
+    if not before and c['snapshot_rows'] and c['rollout']['mode']=='auto':
+        if healthy and work['optimizer_steps']>0 and snapshot_r2.finite(ev) and snapshot_r2.finite(gain) and gain>=c['rollout']['descriptor_ev_min_gain']:
+            s.update(snapshots_active=True,activation_generation=generation)
+            recovery.update(stage_origin=generation,entries=[],healthy_streak=0)
+            decision='enable_snapshots';reason='heldout_descriptor_gain_and_health'
+    previous=s['previous_fingerprint'];drift=None
+    if previous is not None and fingerprint_now is not None:
+        drift=float(np.mean(np.abs(np.asarray(previous)-np.asarray(fingerprint_now['values']))))
+    if fingerprint_now is not None:s['previous_fingerprint']=fingerprint_now['values']
+    s.update(generation=generation,snapshot_weight=next_weight,weight_recovery=recovery)
+    validate_state(s,c,generation)
+    return s,dict(snapshot_rows_used=trained,snapshot_rows_enabled=before,critic_training=work,
+        ppo_snapshot_distinct_used=ppo_snapshot_rows,value_snapshot_distinct_used=value_rows,
+        snapshot_rows_next=s['snapshots_active'],weight_used=weight,weight_next=next_weight,
+        decision=decision,reason=reason,learner_heldout_ev=ev,
+        learner_rolling_r2=evidence['learner']['r2'],learner_mse=evidence['learner']['learner_mse'],
+        learner_prediction_bias=evidence['learner']['prediction_bias'],
+        learner_target_variance=evidence['learner']['target_variance'],
+        fingerprint_mean_absolute_drift=drift,weight_recovery=evidence,
+        scope='Snapshot weight uses frozen-reference rolling R2; descriptor admission and GAE EV gates unchanged')
+
+
+def _advance_ev(s,c,*,generation,report,healthy,fingerprint_now,ppo_snapshot_rows=0):
+    """Archived v1 transition for checkpoint regression/reproduction only."""
     from .value_phase import critic_work
     work=critic_work(report)
     s=copy.deepcopy(validate_state(s,c,generation-1));before=s['snapshots_active'];weight=s['snapshot_weight']

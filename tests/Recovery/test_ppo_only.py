@@ -117,6 +117,7 @@ class PPOOnly(unittest.TestCase):
             table_origins=dict(historical=130,legacy=150))
         phase.critic_state.update(generation=210,snapshots_active=True,snapshot_weight=.75,
             learner_ev_baseline=.2,activation_generation=15)
+        phase.critic_state['weight_recovery']=critic_data.recovery_initial(0)  # Pre-R2 checkpoint.
         phase.critic_state['weight_recovery']['healthy_streak']=3
         phase.trips=[True,False,False];saved=phase.payload()
         # The disabled route must not require or rebuild an old disk buffer.
@@ -135,7 +136,8 @@ class PPOOnly(unittest.TestCase):
         self.assertEqual(resumed.state['table_evidence']['entries'],[])
         self.assertEqual(resumed.state['value_iterations'],0)
         self.assertEqual(resumed.critic_state['snapshot_weight'],.75)
-        self.assertEqual(resumed.critic_state['learner_ev_baseline'],.2)
+        self.assertIsNone(resumed.critic_state['learner_ev_baseline'])
+        self.assertEqual(resumed.critic_state['weight_recovery']['legacy_ev_baseline'],.2)
         self.assertEqual(resumed.critic_state['activation_generation'],15)
         self.assertEqual(resumed.critic_state['weight_recovery']['healthy_streak'],0)
         self.assertTrue(_same_payload(saved['optimizer'],resumed.optimizer.state_dict()))
@@ -220,6 +222,8 @@ class PPOOnly(unittest.TestCase):
                 phase=TrainingPhases(model,cfg);phase.state=gae.initial(cfg['advantage'],9)
                 phase.state.update(value_iterations=9,ev_streak=4)
                 phase.critic_state['generation']=9;phase.value_report=measurement()
+                from brass_ai.recovery.snapshot_r2 import initial
+                phase.critic_state['weight_recovery']=initial(9,phase.critic_state['snapshot_weight'])
                 update=dict(optimizer_steps=1,controller_warmup_done=True,kl_early_stop=False,
                     categorical_probe=dict(categorical_kl=.001),gae={})
                 if failure=='warmup':update['controller_warmup_done']=False

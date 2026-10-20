@@ -140,7 +140,9 @@ class InterruptedIterationTests(unittest.TestCase):
         from brass_ai.learning.checkpoint import save_checkpoint, resume_optimizer
         from brass_ai.learning.contracts import digest
         from brass_ai.recovery.resume import load_resume, commit_transition
-        previous = '56f229de63ee148b7bd9e41245ae4d0b8953d59d85c16440d7b4e00c6d52f4ac'
+        # Use the actual g213 source, compatible with this fixture's current
+        # model tensors; the original pre-feature-engineering hash is not.
+        previous = '55c068379d3657948f55c3425169570c11fb7256ceaa4463c1b4cc91b01bf781'
         # Create an actual older-source checkpoint, then keep its full training
         # state while retiring only the collection after it.
         model, raw, _ = load_resume(SOURCE_ROOT, self.run, self.state, self.state['signature'])
@@ -193,7 +195,21 @@ class TeacherCrashResumeTests(unittest.TestCase):
             implementation='56f229de63ee148b7bd9e41245ae4d0b8953d59d85c16440d7b4e00c6d52f4ac')
         failed_source = dict(old, config=cfg, implementation='699bab353343458523eda073f07172ec4e70f679e4e1d1595c7d052a2d78e61c')
         target = dict(failed_source, implementation=implementation_id())
-        with tempfile.TemporaryDirectory(dir=SOURCE_ROOT/'artifacts') as tmp:
+        # Exercise the archived two-hop reward migration with today's authored
+        # tensors under fixture-only exact approvals. Do not admit historical
+        # architecture hashes into the production compatibility registry.
+        from brass_ai.recovery import resume
+        from brass_ai.learning.contracts import CONFIG_DIR
+        changes={k:dict(**{'from':oldcfg[k],'to':cfg[k]}) for k in cfg if cfg[k]!=oldcfg[k]}
+        approvals=dict(format='selfplay-resume-sources/1.0.0',transitions=[
+            dict(from_implementation=old['implementation'],to_implementation=failed_source['implementation'],
+                learning_compatibility=digest(compatibility()),config_changes=changes),
+            dict(from_implementation=failed_source['implementation'],to_implementation=target['implementation'],
+                learning_compatibility=digest(compatibility()),config_changes={})])
+        original_read=resume.read
+        fixture_read=lambda p:copy.deepcopy(approvals) if p==CONFIG_DIR/'selfplay-resume-sources.json' else original_read(p)
+        with patch.object(resume,'read',side_effect=fixture_read), \
+             tempfile.TemporaryDirectory(dir=SOURCE_ROOT/'artifacts') as tmp:
             run = Path(tmp)
             model = UtilityNet(utility_config(ModelConfig.preset('small'), reward_spec(oldcfg)))
             optimizer = torch.optim.AdamW(model.parameters(), lr=cfg['learning_rate'])

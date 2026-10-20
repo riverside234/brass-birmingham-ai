@@ -6,12 +6,12 @@ from pathlib import Path
 import random
 import tempfile
 import unittest
-from unittest.mock import Mock
+from unittest.mock import Mock,patch
 
 import torch
 
 from brass_ai.bank import read,sha
-from brass_ai.learning.contracts import SOURCE_ROOT
+from brass_ai.learning.contracts import SOURCE_ROOT,digest
 from brass_ai.recovery import v4_share as gate,critic_holdout as holdout,quality_pool as q
 from brass_ai.recovery.actor_value import TrainingPhases,KEY
 from brass_ai.recovery.config import validate_config,latest_model_config
@@ -20,7 +20,7 @@ from brass_ai.recovery.lr_controller import collection_signature
 from brass_ai.recovery.ordinary import plan_collection
 from brass_ai.recovery.plackett_luce import V4
 from brass_ai.recovery.retention import _same_payload
-from brass_ai.recovery.resume import check_signature
+from brass_ai.recovery.resume import check_signature,commit_transition
 from brass_ai.recovery.value_phase import disabled_options
 from brass_ai.step5.league import write_json,implementation_id
 from test_gae_value_phase import fixture
@@ -29,6 +29,7 @@ from test_ppg_refinement import rows
 from test_ppg_window import upgraded
 
 EXPORT=SOURCE_ROOT/'results/joint7-v11-2-grouped-lr-critic-g0210-20261020T145156876449Z'
+EXPORT213=SOURCE_ROOT/'results/joint7-v11-2-grouped-lr-critic-g0213-20261020T173708767483Z'
 
 
 def config():
@@ -80,7 +81,8 @@ class ShareGate(unittest.TestCase):
         self.assertEqual(fresh['v4_share_gate'],gate.DEFAULT)
         self.assertEqual(fresh['value_phase']['holdout'],holdout.DEFAULT)
         for key,value in (('win_share_above',float('nan')),('reference_games',True),
-                          ('reduced_v4_games',7),('enabled',1),('source','ordinary')):
+                          ('reduced_v4_games',7),('enabled',1),('source','ordinary'),
+                          ('released_tables','selfplay')):
             bad=copy.deepcopy(c);bad['v4_share_gate'][key]=value
             with self.subTest(key=key),self.assertRaises(ValueError):validate_config(bad)
         with tempfile.TemporaryDirectory(dir=SOURCE_ROOT/'artifacts') as temp:
@@ -104,12 +106,13 @@ class ShareGate(unittest.TestCase):
             before=gate.legacy_before(origin,c,None,None)
             for start in (origin,origin+320,origin+641):
                 counts=Counter(gate.table(i,c,None,s)[0] for i in range(start,start+320))
-                self.assertEqual(counts,dict(selfplay=170,historical=144,legacy=6))
+                self.assertEqual(counts,dict(selfplay=160,historical=154,legacy=6))
                 self.assertEqual(gate.legacy_before(start+320,c,None,s)-gate.legacy_before(start,c,None,s),6)
+                self.assertEqual(gate.history_before(start+320,c,None,s)-gate.history_before(start,c,None,s),154)
             self.assertEqual(gate.legacy_before(origin,c,None,s),before)
         self.assertEqual(random.getstate(),python_rng);self.assertTrue(torch.equal(rng,torch.get_rng_state()))
 
-    def test_real_planner_PFSP_draws_pairs_and_variants_resume_unchanged(self):
+    def test_real_planner_extra_PFSP_games_balanced_pairs_and_restart(self):
         c=config()
         with tempfile.TemporaryDirectory(dir=SOURCE_ROOT/'artifacts') as temp:
             root=Path(temp);path=root/'weights.pt';path.write_bytes(b'planning fixture')
@@ -131,12 +134,22 @@ class ShareGate(unittest.TestCase):
             frozen=copy.deepcopy(state);new=plan(state)
             self.assertEqual(new,plan(json.loads(json.dumps(state))));self.assertEqual(state,frozen)
             self.assertEqual(base['composition'],dict(selfplay=160,historical=144,legacy=16))
-            self.assertEqual(new['composition'],dict(selfplay=170,historical=144,legacy=6))
-            self.assertEqual(new['quality_tables'],base['quality_tables'])
+            self.assertEqual(new['composition'],dict(selfplay=160,historical=154,legacy=6))
+            self.assertEqual(len(new['quality_tables']),154)
             self.assertEqual(new['quality_planning'],base['quality_planning'])
-            self.assertEqual(new['historical_generations'],base['historical_generations'])
+            # Original history slots retain their independent opponent draws;
+            # actual history ordinals now include the ten extra tables.
+            for setup,old in base['quality_tables'].items():
+                current=new['quality_tables'][setup]
+                without_seat=lambda r:{k:v for k,v in r.items() if k!='seat'}
+                self.assertEqual([without_seat(r) for r in current['opponents']],
+                                 [without_seat(r) for r in old['opponents']])
+            self.assertEqual(sum(new['historical_generations'].values()),308)
             self.assertEqual(new['cursor'],base['cursor'])
-            self.assertEqual(new['context_counter']-state['context_counter'],980)
+            self.assertEqual(new['context_counter']-state['context_counter'],960)
+            history_pairs=Counter(tuple(t['learner_seats']) for t in new['quality_tables'].values())
+            self.assertEqual(set(history_pairs),set(q.PAIRS))
+            self.assertEqual(sorted(history_pairs.values()),[25,25,26,26,26,26])
             pairs=[];variants=Counter()
             for job in new['jobs']:
                 policies=[job['policies'][(s-job['rotation'])%4] for s in range(4)]
@@ -148,18 +161,38 @@ class ShareGate(unittest.TestCase):
             self.assertEqual(set(variants),set(profiles))
             self.assertLessEqual(max(variants.values())-min(variants.values()),1)
             r=gate.report(state['v4_share_gate'],new['composition'])
-            self.assertEqual(r['history_opponent_seats'],288)
-            self.assertEqual(r['history_pairwise_comparisons'],576)
+            self.assertEqual(r['history_opponent_seats'],308)
+            self.assertEqual(r['history_pairwise_comparisons'],616)
             self.assertEqual(compact(dict(v4_share_gate=r))['v4_share_gate'],r)
             # Existing LR controller resets its evidence when actual mix changes.
             def sample(plan):
                 return dict(by_composition={k:dict(tables=n,learner_trajectories=n*(4 if k=='selfplay' else 2))
                     for k,n in plan['composition'].items()})
             self.assertNotEqual(collection_signature(c,sample(base)),collection_signature(c,sample(new)))
+            # Feed the actual new plan through the estimator. All four pairs
+            # on every added table count, once, at the frozen probabilities.
+            games=[dict(setup_group=setup,opponents=t['policy_ids'],result={})
+                for setup,t in new['quality_tables'].items()]
+            with patch('brass_ai.learning.replay.terminal_targets',return_value=dict(placement=[1,2,3,4])):
+                updated,report=q.update_scores(p,games,new['quality_tables'],new['quality_planning'],
+                    generation=211,games_done=67520)
+                replayed,again=q.update_scores(json.loads(json.dumps(p)),games,new['quality_tables'],
+                    new['quality_planning'],generation=211,games_done=67520)
+            self.assertEqual((updated,report),(replayed,again));self.assertEqual(p,frozen['quality_pool'])
+            self.assertEqual(report['exposure']['history_tables'],154)
+            self.assertEqual(report['exposure']['opponent_seats'],308)
+            self.assertEqual(report['exposure']['pairwise_comparisons'],616)
+            self.assertEqual(report['exposure']['history_table_fraction'],154/320)
+            self.assertEqual(report['exposure']['half_life_iterations'],5)
+            decay=.5**.2
+            for old,member,r in zip(p['members'],updated['members'],report['members']):
+                self.assertAlmostEqual(member['C'],decay*old['C']+r['comparisons'])
+                self.assertAlmostEqual(member['S'],decay*old['S']+(r['outrank_rate'] or 0)*r['comparisons'])
+            self.assertEqual(sum(m['comparisons'] for m in report['members']),616)
 
     def test_holdout_exact_8_8_2_before_and_after_gate_branches_do_not_inflate(self):
         from brass_ai.recovery.branching import family
-        for counts in ((160,144,16),(170,144,6)):
+        for counts in ((160,144,16),(160,154,6)):
             data=rows(counts)
             train,held,r=holdout.partition(data,.05,holdout.DEFAULT)
             self.assertEqual([r['by_table'][k]['heldout_games'] for k in holdout.TABLES],[8,8,2])
@@ -178,6 +211,78 @@ class ShareGate(unittest.TestCase):
         self.assertEqual([old['by_table'][k]['heldout_games'] for k in holdout.TABLES],[8,7,2])
         holdout.validate_selection(old['selection'])
 
+    def test_legacy_gate_retains_its_allocation_and_migrates_without_backdating(self):
+        c=gate.configure_legacy(config());validate_config(c)
+        self.assertEqual(c['v4_share_gate'],gate.LEGACY_DEFAULT)
+        with tempfile.TemporaryDirectory(dir=SOURCE_ROOT/'artifacts') as temp:
+            state=dict(signature=dict(config=c),iteration=210,games_done=67200,
+                ratings=panel(Path(temp),c,1.))
+            state['v4_share_gate']=gate.prepare(SOURCE_ROOT,state,c)
+            state.update(iteration=213,games_done=68160)
+            saved=copy.deepcopy(state);old=state['v4_share_gate']
+            self.assertEqual(Counter(gate.table(i,c,None,old)[0] for i in range(67840,68160)),
+                dict(selfplay=170,historical=144,legacy=6))
+            target=gate.configure(c);new,receipt=gate.migrate_state(state,target)
+            self.assertEqual(state,saved)
+            self.assertEqual(new['activated'],old['activated']);self.assertEqual(new['last_panel'],old['last_panel'])
+            self.assertEqual(new['origin_games'],old['origin_games'])
+            self.assertEqual(new['allocation_origin'],dict(generation=213,games=68160))
+            self.assertEqual(receipt['from_digest'],digest(old))
+            self.assertEqual(Counter(gate.table(i,target,None,new)[0] for i in range(67840,68160)),
+                dict(selfplay=170,historical=144,legacy=6))
+            self.assertEqual(gate.history_before(68160,target,None,new),gate.history_before(68160,c,None,old))
+            self.assertEqual(gate.legacy_before(68160,target,None,new),gate.legacy_before(68160,c,None,old))
+            self.assertEqual(Counter(gate.table(i,target,None,new)[0] for i in range(68160,68480)),
+                dict(selfplay=160,historical=154,legacy=6))
+            for start,stop in ((68160,68177),(68177,68210),(68210,68480)):
+                counts=Counter(gate.table(i,target,None,new)[0] for i in range(start,stop))
+                self.assertEqual(gate.history_before(stop,target,None,new)-gate.history_before(start,target,None,new),
+                    counts['historical'])
+            again=dict(state,signature=dict(config=target),v4_share_gate=json.loads(json.dumps(new)))
+            self.assertEqual(gate.migrate_state(again,target),(new,None))
+            self.assertEqual(gate.prepare(SOURCE_ROOT,again,target),new)
+
+    def test_generation213_transition_preserves_training_and_latch_state(self):
+        state=read(EXPORT213/'state.json');original=copy.deepcopy(state)
+        target=gate.configure(state['signature']['config']);validate_config(target)
+        self.assertEqual({k for k in target if target[k]!=state['signature']['config'].get(k)},{'v4_share_gate'})
+        signature=dict(state['signature'],config=target,implementation=implementation_id())
+        self.assertTrue(check_signature(state,signature,reviewed=True))
+        with self.assertRaisesRegex(ValueError,'resume-reviewed-source'):check_signature(state,signature)
+        with tempfile.TemporaryDirectory(dir=SOURCE_ROOT/'artifacts') as temp:
+            run=Path(temp);write_json(run/'state.json',state)
+            updated=commit_transition(run,state,signature)
+            self.assertEqual(state,original);self.assertEqual(read(run/'state.json'),updated)
+            self.assertEqual({k for k in state if state[k]!=updated[k]},
+                {'signature','source_transitions','v4_share_gate'})
+            self.assertEqual(updated['quality_pool'],original['quality_pool'])
+            self.assertEqual(updated['v4_share_gate']['origin_games'],67200)
+            self.assertEqual(updated['v4_share_gate']['allocation_origin'],dict(generation=213,games=68160))
+            self.assertIsNone(updated['v4_share_gate']['activated'])
+            self.assertEqual(updated['v4_share_gate']['last_panel']['win_share'],.8125)
+            self.assertEqual(gate.migrate_state(updated,target),(updated['v4_share_gate'],None))
+            self.assertEqual(read(run/updated['source_transitions'][-1]['backup']),original)
+        for key in ('learning_rate','exploration'):
+            bad=copy.deepcopy(signature);bad['config'][key]*=1.1
+            with self.assertRaises(ValueError):check_signature(state,bad,reviewed=True)
+        bad=copy.deepcopy(state);bad['v4_share_gate']['config']='0'*64
+        with self.assertRaises(ValueError):gate.migrate_state(bad,target)
+
+    def test_gate_only_change_keeps_PPO_GAE_evidence_and_both_optimizers(self):
+        from test_gae_value_phase import ppo,finish
+        model,opt,cfg,(behavior,data)=fixture()
+        cfg=gate.configure(upgraded(cfg));cfg['v4_share_gate']=copy.deepcopy(gate.LEGACY_DEFAULT)
+        phase=TrainingPhases(model,cfg)
+        update=ppo(model,opt,cfg,behavior,data,phase);phase.fit(model);finish(phase,update,1)
+        saved=phase.payload();weights=copy.deepcopy(model.state_dict())
+        adam=copy.deepcopy(opt.state_dict());rng=torch.get_rng_state().clone()
+        resumed=TrainingPhases(model,gate.configure(cfg),raw=dict(training={KEY:saved}),generation=1)
+        self.assertTrue(_same_payload(resumed.payload(),saved))
+        self.assertTrue(_same_payload(model.state_dict(),weights))
+        self.assertTrue(_same_payload(opt.state_dict(),adam))
+        self.assertTrue(torch.equal(rng,torch.get_rng_state()))
+        self.assertIsNone(resumed.disable_migration);self.assertIsNone(resumed.holdout_migration)
+
     def test_holdout_transition_preserves_optimizers_lambda_weights_and_exact_restart(self):
         model,adam,cfg,_=fixture();cfg=disabled_options(upgraded(cfg))
         cfg['value_phase']['holdout']=copy.deepcopy(holdout.LEGACY_DEFAULT)
@@ -188,6 +293,8 @@ class ShareGate(unittest.TestCase):
             table_enabled=dict(historical=True,legacy=True),table_origins=dict(historical=100,legacy=110))
         phase.critic_state.update(generation=210,snapshots_active=True,snapshot_weight=.75,
             activation_generation=15,learner_ev_baseline=.2)
+        from brass_ai.recovery.critic_data import recovery_initial
+        phase.critic_state['weight_recovery']=recovery_initial(0)  # Pre-R2 checkpoint.
         phase.critic_state['weight_recovery']['healthy_streak']=3
         saved=phase.payload();target=holdout.quota_options(cfg)
         weights=copy.deepcopy(model.state_dict());opt=copy.deepcopy(adam.state_dict());rng=torch.get_rng_state().clone()

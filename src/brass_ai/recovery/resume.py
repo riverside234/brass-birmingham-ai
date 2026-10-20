@@ -101,8 +101,10 @@ def check_signature(state, signature, reviewed=False):
             handlers[HEALTH_MIGRATION]=health_options
             from .value_phase import DISABLE_MIGRATION,disabled_options
             handlers[DISABLE_MIGRATION]=disabled_options
-            from .v4_share import MIGRATION as V4_SHARE_MIGRATION,configure as configure_v4_share
+            from .v4_share import (MIGRATION as V4_SHARE_MIGRATION,configure as configure_v4_share,
+                LEGACY_MIGRATION as OLD_V4_SHARE_MIGRATION,configure_legacy as configure_old_v4_share)
             handlers[V4_SHARE_MIGRATION]=configure_v4_share
+            handlers[OLD_V4_SHARE_MIGRATION]=configure_old_v4_share
             from .exploration import MIGRATION as EXPLORATION_MIGRATION,continuation_config
             handlers[EXPLORATION_MIGRATION]=continuation_config
             for migration in migrations:
@@ -255,6 +257,8 @@ def prepare_opponent_pool(root,run,state,raw,config,source_changed=False):
 
 def commit_transition(run, state, signature,*,opponent_pool=None,pool_migration=None):
     """Call only after restoring Adam and RNG successfully, under the run lock."""
+    from .v4_share import migrate_state
+    share,share_migration=migrate_state(state,signature['config'])
     previous = copy.deepcopy(state)
     backup = safe(run, run / f"state-before-source-{digest(previous['signature'])[:16]}-{state['iteration']:04d}.json")
     if backup.exists():
@@ -269,6 +273,9 @@ def commit_transition(run, state, signature,*,opponent_pool=None,pool_migration=
         config_changes={k:dict(before=previous['signature']['config'].get(k),after=v)
                         for k,v in signature['config'].items() if previous['signature']['config'].get(k)!=v}))
     updated['signature'] = signature
+    if share_migration is not None:
+        updated['v4_share_gate']=share
+        updated['source_transitions'][-1]['v4_share_migration']=share_migration
     if pool_migration is not None:
         from .quality_pool import state_digest
         require(opponent_pool is not None and state_digest(previous['quality_pool'])==pool_migration['from_digest']

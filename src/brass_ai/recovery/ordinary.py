@@ -32,6 +32,7 @@ def plan_collection(root,directory,state,config,signature,service,current,profil
     if 'v4_share_gate' in config:
         v4_share.validate_state(share,config,state['iteration'],state['games_done'])
     legacy_ordinal=v4_share.legacy_before(state['games_done'],config,window,share)
+    history_ordinal=v4_share.history_before(state['games_done'],config,window,share)
     require(len(profiles)==len(set(profiles)) and all('pottery-flex' not in p for p in profiles),
             'Ordinary training requires distinct admitted profiles; pottery-flex is evaluation-only')
     quality=quality_selfplay_recipe(config);quality_tables={};quality_planning=None
@@ -79,6 +80,7 @@ def plan_collection(root,directory,state,config,signature,service,current,profil
                 if entry['model_id'] not in service.models: service.register_checkpoint(path)
                 opponents.append(neural_spec(entry['model_id'],config['exploration'] if exploration and exploration['version']==3 else .05,'neutral',**settings))
             policies=[learner]*learner_count+opponents
+            history_ordinal+=1
         else:
             # Advance by opponent slots on actual legacy tables. The absolute
             # game index aliases the 5% quota (all such indices are 17 mod 20).
@@ -89,10 +91,10 @@ def plan_collection(root,directory,state,config,signature,service,current,profil
             legacy_ordinal+=1
         rotation=table_rotation(index);focuses={}
         if quality and learner_count==2:
-            # Actual v4-table ordinal avoids quota aliasing after the share
-            # gate. History indices/draws/pair rotations stay exactly the same.
+            # Actual mixed-table ordinals include transferred v4->history
+            # games and continue balancing all six pairs across restarts.
             pair=(quality_pool.PAIRS[(legacy_ordinal-1)%len(quality_pool.PAIRS)] if kind=='legacy' else
-                  quality_pool.learner_pair(index,kind,config['table_plan']['quotas']))
+                  quality_pool.PAIRS[(history_ordinal-1)%len(quality_pool.PAIRS)])
             other=iter(policies[learner_count:]);physical=[learner if s in pair else next(other) for s in range(4)]
             policies=[physical[(s+rotation)%4] for s in range(4)]
             for seat,receipt in zip((s for s in range(4) if s not in pair),quality_receipts):receipt['seat']=seat

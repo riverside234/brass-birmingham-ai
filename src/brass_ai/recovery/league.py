@@ -242,6 +242,9 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
     if 'advantage' in config:
         from .actor_value import TrainingPhases
         phases=TrainingPhases(model,config,raw=raw,generation=state['iteration'],root=root,run=run)
+        if raw is not None and state['iteration']>0:
+            from .snapshot_r2_hotfix import restore as restore_snapshot_r2
+            restore_snapshot_r2(state,raw,phases)
     if quality:
         from .ratings import validate_frozen_reference
         validate_frozen_reference(root,state['ratings'])
@@ -444,7 +447,7 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                         scope='Final checkpoint weights after PPO, value phase and any teaching; reference is collection behavior')
                     phases.finish(generation=iteration+1,update=update,
                         anchor_gate=limit_report['lr_gate'] if limit_report else (update.get('lr_controller') or {}).get('health'),
-                        rating=rating_evidence(root,state,config['advantage']['gate']))
+                        rating=rating_evidence(root,state,config['advantage']['gate']),exploration=exploration_settings)
                     phases.release()
                 entropy_report=None
                 if exploration_state is not None:

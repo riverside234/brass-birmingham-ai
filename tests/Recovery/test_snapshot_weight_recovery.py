@@ -9,7 +9,7 @@ import torch
 
 from brass_ai.bank import read
 from brass_ai.learning.contracts import SOURCE_ROOT
-from brass_ai.recovery import critic_data,gae,updates
+from brass_ai.recovery import critic_data,gae,updates,snapshot_r2
 from brass_ai.recovery.actor_value import TrainingPhases,KEY
 from brass_ai.recovery.history import compact
 from brass_ai.recovery.retention import _same_payload
@@ -167,8 +167,9 @@ class CheckpointIntegration(unittest.TestCase):
         rng=torch.get_rng_state().clone()
         a=TrainingPhases(model,cfg,raw=raw,generation=1);b=TrainingPhases(model,cfg,raw=raw,generation=1)
         self.assertEqual(a.contract,'actor-value-phases/5.0.0')
-        self.assertEqual({k:v for k,v in a.critic_state.items() if k!='weight_recovery'},old)
-        self.assertEqual(a.critic_state['weight_recovery'],critic_data.recovery_initial(1))
+        self.assertEqual({k:v for k,v in a.critic_state.items() if k!='weight_recovery'},
+                         dict(old,learner_ev_baseline=None))
+        self.assertEqual(a.critic_state['weight_recovery'],snapshot_r2.initial(1,.5,.6))
         self.assertTrue(_same_payload(a.payload(),b.payload()));self.assertTrue(_same_payload(raw,original))
         self.assertTrue(_same_payload(model.state_dict(),weights));self.assertTrue(_same_payload(opt.state_dict(),adam))
         self.assertTrue(_same_payload(a.optimizer.state_dict(),phase.optimizer.state_dict()))
@@ -191,7 +192,7 @@ class CheckpointIntegration(unittest.TestCase):
         _,old.critic_state=active();payload=old.payload();payload['contract']='actor-value-phases/3.0.0'
         payload['critic_data'].pop('weight_recovery');before=copy.deepcopy(payload)
         upgraded=TrainingPhases(model,cfg,raw=dict(training={KEY:payload}),generation=85)
-        self.assertEqual(upgraded.critic_state['weight_recovery'],critic_data.recovery_initial(85))
+        self.assertEqual(upgraded.critic_state['weight_recovery'],snapshot_r2.initial(85,.5,.6))
         self.assertEqual(upgraded.critic_state['snapshot_weight'],.5)
         self.assertEqual(upgraded.state['table_evidence']['origin'],85)
         self.assertTrue(_same_payload(payload,before))
@@ -204,6 +205,7 @@ class CheckpointIntegration(unittest.TestCase):
         model,opt,cfg,b,data,snap,_=mixed_fixture();cfg['value_phase']['buffer_iterations']=2
         with tempfile.TemporaryDirectory(dir=SOURCE_ROOT/'artifacts') as tmp:
             p=TrainingPhases(model,cfg,root=SOURCE_ROOT,run=Path(tmp));p.critic_state['snapshot_weight']=.5
+            p.critic_state['weight_recovery']=snapshot_r2.initial(0,.5)
             p.snapshot_data=snap;p.collection_source=dict(source(b),snapshot_rows=True)
             update=ppo(model,opt,cfg,b,data,p)
             p.fit(model);finish(p,update,1);commit(Path(tmp),p,1)
@@ -212,6 +214,7 @@ class CheckpointIntegration(unittest.TestCase):
             b,rows=examples(model,games=9,decisions=4,prefix='recovery-second-')
             data,snap,_=partition(rows,'recovery-second-');p.snapshot_data=snap
             p.critic_state['snapshot_weight']=.75;p.collection_source=dict(source(b),snapshot_rows=True)
+            p.critic_state['weight_recovery']=snapshot_r2.initial(1,.75)
             update=ppo(model,opt,cfg,b,data,p)
             self.assertEqual(p.critic_dataset.critic_weights.tolist(),[.75 if r=='snapshot' else 1. for r in p.critic_dataset.roles])
             self.assertEqual(update['critic_rows']['snapshot_weight'],.75)

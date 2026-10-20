@@ -2,6 +2,13 @@
 
 Date: 2026-10-20.
 
+**Superseded allocation:** this report records the original gate v1 implementation.
+The user clarified that the ten released v4 tables belong to **history**.
+Use the [gate v2 correction and generation 213 continuation](V4_HISTORY_G213_REVISION.md):
+**160 self-play / 154 history / 6 v4**, with **308 PFSP opponent seats / 616 comparisons**.
+The old v1 recipe remains readable; new configs and the helper use v2.
+The historical behavior and validation below describe v1 only.
+
 Fresh recipes and the explicit continuation helper now enable a one-way
 ordinary-table share gate. PPG remains disabled.
 

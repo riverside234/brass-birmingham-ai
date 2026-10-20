@@ -206,6 +206,10 @@ class TrainingPhases:
                     self.optimizer.param_groups[0]['lr']==config['value_phase']['learning_rate'] and
                     self.optimizer.param_groups[0]['weight_decay']==0,'Value optimizer settings differ')
         self.buffer=None;self.collection_source=None
+        self.snapshot_r2_migration=None
+        if self.critic_state is not None:
+            from .snapshot_r2 import migrate
+            self.critic_state,self.snapshot_r2_migration=migrate(self.critic_state,config['critic_data'],generation)
         if buffered:
             require(root is not None and run is not None,'Two-iteration PPG requires an owned run disk cache')
             self.buffer=value_buffer.DiskBuffer(root,run,config,generation=generation,
@@ -288,7 +292,7 @@ class TrainingPhases:
         if self.holdout_migration:self.value_report['holdout_migration']=self.holdout_migration
         return self.value_report
 
-    def finish(self,*,generation,update,anchor_gate,rating):
+    def finish(self,*,generation,update,anchor_gate,rating,exploration=None):
         value=self.value_report;before=self.beta
         enabled=self.options['value_phase']['enabled']
         if enabled:self.trips=(self.trips+[value['kl_guard_tripped']])[-5:]
@@ -317,10 +321,13 @@ class TrainingPhases:
         if getattr(self,'window_migration',None):report['window_migration']=copy.deepcopy(self.window_migration)
         if self.evidence_migration:report['evidence_migration']=copy.deepcopy(self.evidence_migration)
         if self.critic_state is not None:
+            from .snapshot_r2 import regime
             self.critic_state,value['critic_rollout']=critic_data.advance(self.critic_state,self.config['critic_data'],
                 generation=generation,report=value,healthy=healthy and not value.get('kl_guard_tripped',False),fingerprint_now=self.fingerprint,
-                ppo_snapshot_rows=update.get('critic_rows',{}).get('snapshot_distinct_used',0) if update['optimizer_steps']>0 else 0)
+                ppo_snapshot_rows=update.get('critic_rows',{}).get('snapshot_distinct_used',0) if update['optimizer_steps']>0 else 0,
+                regime=regime(value,update,exploration))
             if self.critic_migration:value['critic_rollout']['recovery_migration']=copy.deepcopy(self.critic_migration)
+            if getattr(self,'snapshot_r2_migration',None):value['critic_rollout']['r2_migration']=copy.deepcopy(self.snapshot_r2_migration)
         update['gae']['gate']=report
         return report
 
@@ -342,6 +349,7 @@ class TrainingPhases:
         self.window_migration=None
         self.disable_migration=None
         self.holdout_migration=None
+        self.snapshot_r2_migration=None
 
     def release(self):
         self.dataset=None;self.critic_dataset=None;self.snapshot_data=[];self.ppo_probe=None;self.probe_ids=None

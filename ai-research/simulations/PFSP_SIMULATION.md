@@ -10,16 +10,22 @@ Use the maintained [scripts/pfsp_sim.py](../../scripts/pfsp_sim.py) for future e
 
 Current 320 ordinary games × 45% history = 144 history tables per iteration:
 
-The v4 win-share gate added on 2026-10-20 changes 160/144/16 tables to
-170/144/6 after qualification. History remains exactly 144 tables and 576
-pairwise comparisons, so the simulation's `--history-share 0.45` input and
-PFSP half-life/capacity settings remain applicable. The planner regression
-checks identical historical opponent draws and probabilities across this
-gate; no PFSP rate rescaling is needed.
+The corrected v4 gate v2 changes 160/144/16 tables to **160/154/6** after
+qualification. History then supplies **308 opponent seats and 616 pairwise
+comparisons**, a 6.94% increase in actual comparisons. Run the pre-gate case
+below and use `--tables 154` for the post-gate case (48.125% of all tables).
+All added history seats use the frozen PFSP distribution. S/C estimates take
+the extra actual outcomes with the existing five-iteration half-life; stored
+scores, reciprocal IL share, capacity and admission safeguards are not reset
+or artificially rescaled. History learner-pair rotation counts actual history
+tables, including the transferred slots.
 
 ```bash
 python scripts/pfsp_sim.py --games 320 --history-share 0.45 \
   --output results/pfsp-history45.json
+
+python scripts/pfsp_sim.py --games 320 --tables 154 \
+  --output results/pfsp-history154.json
 ```
 
 For example, to explore a future 30% history share:
@@ -73,3 +79,9 @@ The simulation's looser admission and simplified eviction are assumptions, not i
 - A bounded 30%-history rerun verified 96 tables and 384 comparisons per iteration. It used only two dynamic seeds and does not establish a recommendation to reduce history share. [JSON](../../artifacts/pfsp-simulation-20261019/history30.json).
 
 All timings are local simulation timings, not training throughput. These results do not demonstrate improved playing strength or guarantee stability in real games.
+
+The v2 correction was checked with fresh **144-table and 154-table runs**,
+16 dynamic seeds per cap, under `artifacts/v4-history-g213/pfsp-144.json` and
+`pfsp-154.json`. See [the correction report](../V4_HISTORY_G213_REVISION.md)
+for measured results and exact continuation commands. The archived original
+simulation is unchanged.

@@ -183,6 +183,8 @@ class ContinuationAndPassRemoval(unittest.TestCase):
         phase.state=gae.initial(old['advantage'],185)
         phase.state.update(active_lambda=.98,stage_origin=81,value_iterations=100,healthy_streak=2)
         phase.critic_state['generation']=185
+        from brass_ai.recovery.snapshot_r2 import initial
+        phase.critic_state['weight_recovery']=initial(185,phase.critic_state['snapshot_weight'])
         saved=phase.payload();raw=dict(training={KEY:saved})
         weights=copy.deepcopy(model.state_dict());adam=copy.deepcopy(opt.state_dict());rng=torch.get_rng_state().clone()
         new=upgraded(old);resumed=TrainingPhases(model,new,raw=raw,generation=185)

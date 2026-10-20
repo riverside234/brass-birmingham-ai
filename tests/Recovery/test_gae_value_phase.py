@@ -133,8 +133,9 @@ class Advantages(unittest.TestCase):
         cfg=config();validate_config(cfg)
         generated=latest_model_config(cfg,cfg['imitation_checkpoint'])
         from brass_ai.recovery.exploration import configure as exploration_config
-        self.assertEqual(value_phase.disabled_options(
-            exploration_config(gae.health_options(value_phase.interval_options(value_phase.refined_options(cfg))))),generated)
+        from brass_ai.recovery.critic_holdout import quota_options
+        self.assertEqual(quota_options(value_phase.disabled_options(
+            exploration_config(gae.health_options(value_phase.interval_options(value_phase.refined_options(cfg)))))),generated)
         for key,value in (('lambda',0),('lambda',True),('chain','all')):
             bad=copy.deepcopy(cfg);bad['advantage'][key]=value
             with self.assertRaises(ValueError):validate_config(bad)

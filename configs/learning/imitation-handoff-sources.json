@@ -363,6 +363,16 @@
       "implementation": "fd908ff8b5e073b2744b8a034dd7304a2803a5c6ad1d75dd9e0be6c67640fd08",
       "learning_compatibility": "ef6a1b5126de42da8f3277dc9357b6ffb94a435f3faa7fee8dd312bb5a242a54",
       "reason": "Self-play v4-share/critic-holdout revision only; completed IL, model and Features-4 unchanged."
+    },
+    {
+      "implementation": "55c068379d3657948f55c3425169570c11fb7256ceaa4463c1b4cc91b01bf781",
+      "learning_compatibility": "ef6a1b5126de42da8f3277dc9357b6ffb94a435f3faa7fee8dd312bb5a242a54",
+      "reason": "V4-to-history allocation and PFSP exposure reporting only; completed IL/model/Features-4 unchanged."
+    },
+    {
+      "implementation": "fe185d4d97bc256dbc35f32f6e2863b972f077b0877912ef31e373a72a455ecb",
+      "learning_compatibility": "ef6a1b5126de42da8f3277dc9357b6ffb94a435f3faa7fee8dd312bb5a242a54",
+      "reason": "Snapshot weight R2 controller only; completed IL architecture, encoding and tensors unchanged."
     }
   ]
 }

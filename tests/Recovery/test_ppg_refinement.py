@@ -109,6 +109,8 @@ class Continuation(unittest.TestCase):
         phase.state['table_evidence']=evidence
         phase.critic_state.update(generation=110,snapshots_active=True,snapshot_weight=.5,learner_ev_baseline=.447,
             activation_generation=60)
+        from brass_ai.recovery.critic_data import recovery_initial
+        phase.critic_state['weight_recovery']=recovery_initial(85)  # Authored pre-R2 checkpoint.
         phase.critic_state['weight_recovery'].update(origin=85,healthy_streak=2)
         raw=dict(training={KEY:phase.payload()});saved=copy.deepcopy(raw);new=value_phase.refined_options(old)
         weights=copy.deepcopy(model.state_dict());ppo_state=copy.deepcopy(opt.state_dict());rng=torch.get_rng_state().clone()
@@ -120,7 +122,9 @@ class Continuation(unittest.TestCase):
         for key in ('generation','active_lambda','value_iterations','stage_origin','table_enabled','table_origins'):
             self.assertEqual(resumed.state[key],phase.state[key])
         self.assertEqual(resumed.state['healthy_streak'],0);self.assertEqual(resumed.state['table_evidence'],ev_evidence.initial(110))
-        self.assertEqual(resumed.critic_state['snapshot_weight'],.5);self.assertEqual(resumed.critic_state['learner_ev_baseline'],.447)
+        self.assertEqual(resumed.critic_state['snapshot_weight'],.5)
+        self.assertIsNone(resumed.critic_state['learner_ev_baseline'])
+        self.assertEqual(resumed.critic_state['weight_recovery']['legacy_ev_baseline'],.447)
         self.assertEqual(resumed.critic_state['weight_recovery']['healthy_streak'],0)
         second=TrainingPhases(model,new,raw=dict(training={KEY:resumed.payload()}),generation=110)
         self.assertIsNone(second.refinement_migration)

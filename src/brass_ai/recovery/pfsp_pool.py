@@ -126,7 +126,14 @@ def update_scores(pool,games,tables,planned,*,generation,games_done):
     require(type(games_done) is int and games_done>pool['games_done'],'PFSP requires advancing ordinary-game progress')
     require(planned==distribution(pool),'PFSP planning differs from committed estimates')
     rows=comparisons(pool,games,tables,planned)
-    return update_counts(pool,rows,planned,generation=generation,games_done=games_done)
+    seats=sum(r['seats'] for r in rows.values());comparisons_done=sum(len(r['outcomes']) for r in rows.values())
+    require(seats==2*len(tables) and comparisons_done==4*len(tables),'PFSP history exposure differs')
+    updated,report=update_counts(pool,rows,planned,generation=generation,games_done=games_done)
+    report['exposure']=dict(ordinary_games=games_done-pool['games_done'],history_tables=len(tables),
+        history_table_fraction=len(tables)/(games_done-pool['games_done']),opponent_seats=seats,
+        pairwise_comparisons=comparisons_done,half_life_iterations=pool['config']['outrank_rate']['half_life_iterations'],
+        scope='Actual completed history tables, including released v4 tables; no synthetic count rescaling')
+    return updated,report
 
 
 def update_counts(pool,rows,planned,*,generation,games_done):
