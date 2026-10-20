@@ -14,7 +14,7 @@ from .champion import enabled as champion_enabled,selfplay_policies
 from . import champion_mix
 
 
-def plan_collection(root,directory,state,config,signature,service,current,profiles,opponent_specs,fast_specs,window,*,fingerprints=None):
+def plan_collection(root,directory,state,config,signature,service,current,profiles,opponent_specs,fast_specs,window,*,fingerprints=None,exploration=None):
     incumbent=state.get('champion') if champion_enabled(config) else None
     if incumbent:
         path=project_path(root,incumbent['path'])
@@ -40,7 +40,8 @@ def plan_collection(root,directory,state,config,signature,service,current,profil
         index=state['games_done']+i;kind,boosted=training_table(index,config,window)
         selected,cursor=seeds_for(cursor,1);seed=selected[0]
         rng=random.Random(digest(dict(seed=config['seed'],index=index)))
-        learner=neural_spec(current,config['exploration'],'mixed')
+        settings=dict(version=exploration['version'],opening=exploration['opening']) if exploration else {}
+        learner=neural_spec(current,config['exploration'],'mixed',**settings)
         learner_count=learner_seats_per_table(config,kind)
         mix_receipt=None;quality_receipts=[]
         if kind=='selfplay' and champion_mix.enabled(config):
@@ -71,7 +72,7 @@ def plan_collection(root,directory,state,config,signature,service,current,profil
                     require(sha(path)==entry['sha256'],'Historical checkpoint changed')
                     verified_snapshots.add(entry['model_id'])
                 if entry['model_id'] not in service.models: service.register_checkpoint(path)
-                opponents.append(neural_spec(entry['model_id'],.05,'neutral'))
+                opponents.append(neural_spec(entry['model_id'],config['exploration'] if exploration and exploration['version']==3 else .05,'neutral',**settings))
             policies=[learner]*learner_count+opponents
         else:
             # Advance by opponent slots on actual legacy tables. The absolute
@@ -97,6 +98,9 @@ def plan_collection(root,directory,state,config,signature,service,current,profil
             learner_behavior=dict(model_id=current,policy_id=learner['policy_id'],
                                   exploration=config['exploration'],temperature=1.0,focus='mixed'))
         provenance['legacy_mode']='fast' if any(p.get('search_free') for p in policies) else ('searched' if kind=='legacy' else None)
+        if exploration:
+            provenance['exploration']=exploration
+            provenance['learner_behavior'].update(exploration_version=exploration['version'],opening=exploration['opening'])
         if kind=='legacy':
             by_policy={selected_specs[p]['policy_id']:p for p in chosen_profiles}
             provenance['legacy_profiles']=dict(contract='ordinary-legacy-profile-cycle/1.0.0',
@@ -117,6 +121,10 @@ def plan_collection(root,directory,state,config,signature,service,current,profil
                 policy_ids=[policies[(s-rotation)%4]['policy_id'] for s in range(4)])
         jobs.append(dict(index=i,seed=seed,rotation=rotation,sampling_seed=config['seed']*7+index,
             policies=policies,focuses=focuses,path=str(directory/f'actor-{i:06d}.jsonl.gz'),provenance=provenance))
+        if exploration and exploration['version']==3:
+            jobs[-1]['stable_game_id']=digest(dict(seed=seed,index=index,collection=digest(signature)))
+            if kind=='selfplay' and exploration['branching']:
+                jobs[-1]['branching']=exploration['branching']
         kind_by_group[setup]=kind
         composition[kind]+=1
     return dict(jobs=jobs,kind_by_group=kind_by_group,composition=composition,cursor=cursor,
@@ -149,7 +157,9 @@ def sampling_report(games,data,policy_id,kinds,config,*,legacy_profiles=None):
                               ('actor_eligible_decisions','actor_eligible_fraction')):
             counts[target]=counts[source]/totals[source] if totals[source] else 0.
     report=dict(**totals,by_composition=by_kind,
-        behavior=dict(policy_id=policy_id,exploration=config['exploration'],temperature=1.0,focus='mixed'),
+        behavior=dict(policy_id=policy_id,exploration=config['exploration'],temperature=1.0,focus='mixed',
+            exploration_versions=dict(Counter(str(d[0]['behavior'].get('exploration_version',2)) for d in data)),
+            observed_temperatures=dict(Counter(str(d[0]['behavior'].get('temperature',1.)) for d in data))),
         scope='Actual completed tables and learner seats; forced decisions are critic-only. Table fractions do not define PPO sample fractions.')
     if legacy_profiles is not None:
         profiles={p:dict(seats=0,seat_counts=[0]*4) for p in sorted(set(legacy_profiles.values()))}

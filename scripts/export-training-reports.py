@@ -2,6 +2,9 @@
 
 Original JSON bytes and run files are preserved. Checkpoints, replay shards,
 feature caches and profiler traces are not part of this report-only export.
+With --continue, unchanged reports remain in earlier bundles and the new
+manifest records their verified locations. Rating slots include only the latest
+committed generation; the cumulative archive is still included when present.
 """
 import argparse
 from datetime import datetime, timezone
@@ -17,7 +20,8 @@ import time
 
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_RUN = 'artifacts/step5/joint7-v11-1-grouped-lr'
-FORMAT = 'selfplay-report-export/1.0.0'
+FORMAT = 'selfplay-report-export/1.1.0'
+PREVIOUS_FORMATS = {'selfplay-report-export/1.0.0', FORMAT}
 REPORT_NAMES = {'state.json', 'retention-history.json', 'report.json', 'spec.json',
                 'config.json', 'best.json', 'summary.json', 'comparison.json',
                 'validation-comparison.json', 'receipt.json', 'manifest.json'}
@@ -56,14 +60,15 @@ def checksum(raw):
     return hashlib.sha256(raw).hexdigest()
 
 
-def report_files(root, directory):
+def report_files(root, directory, *, skip_dirs=()):
     """Walk report directories without traversing links or bulk artifact trees."""
     directory = below(root, directory)
     if not directory.exists():
         return
     for parent, directories, files in os.walk(directory, followlinks=False):
         directories[:] = sorted(d for d in directories if not d.startswith('.')
-                                and d not in SKIP_DIRS and not d.startswith('profile'))
+                                and d not in SKIP_DIRS and d not in skip_dirs
+                                and not d.startswith('profile'))
         for name in directories:
             below(root, Path(parent) / name)
         for name in sorted(files):
@@ -85,7 +90,60 @@ def publish(stage, output):
                 raise
 
 
-def export(root, run, output=None, *, latest=2, extras=()):
+def previous_files(root, run, generation, warnings):
+    """Index physical files in older same-run exports, including legacy bundles.
+
+    Reused entries are deliberately not followed: indexing their original
+    physical bundle keeps references flat and avoids trusting reference chains.
+    Actual bytes and safe paths are checked only when a file could be reused.
+    """
+    index = {}
+    for path in sorted((root / 'results').rglob('export-manifest.json'), reverse=True):
+        if any(part.startswith('.') for part in path.relative_to(root / 'results').parts):
+            continue
+        try:
+            path = below(root, path)
+            manifest = json.loads(path.read_bytes().decode('utf-8-sig'))
+            if not isinstance(manifest, dict) or manifest.get('format') not in PREVIOUS_FORMATS:
+                continue
+            if manifest.get('run') != run.relative_to(root).as_posix():
+                continue
+            committed = manifest.get('committed_generation')
+            if type(committed) is not int or not 0 <= committed <= generation:
+                continue
+            for entry in manifest.get('files', []):
+                if not isinstance(entry, dict) or not all(isinstance(entry.get(k), str)
+                                                        for k in ('source', 'path', 'sha256')):
+                    continue
+                key = entry['source'], entry['path'], entry['sha256']
+                index.setdefault(key, []).append(path.parent)
+        except (ValueError, OSError, TypeError) as error:
+            warnings.append(f'Ignored previous export {path.relative_to(root)}: {error}')
+    return index
+
+
+def incremental_files(root, run, generation, files, warnings):
+    index = previous_files(root, run, generation, warnings)
+    copied, reused, dependencies = {}, [], []
+    for name, (entry, raw) in files.items():
+        for directory in index.get((entry['source'], name, entry['sha256']), []):
+            try:
+                prior = below(root, directory / name)
+                require(prior.is_relative_to(directory), 'Previous report escaped its export')
+                require(prior.read_bytes() == raw, 'Previous report is missing or changed')
+            except (ValueError, OSError):
+                warnings.append(f'Previous report unavailable or changed; copying {directory.relative_to(root) / name}')
+                continue
+            reused.append(dict(entry, previous_export=directory.relative_to(root).as_posix(),
+                               previous_path=name))
+            dependencies.append((prior, raw))
+            break
+        else:
+            copied[name] = entry, raw
+    return copied, reused, dependencies
+
+
+def export(root, run, output=None, *, latest=2, extras=(), continue_export=False):
     root = Path(root).resolve()
     run = below(root, run)
     require(run.is_relative_to(root / 'artifacts'), 'Choose the original run under artifacts/, not a previous export')
@@ -171,7 +229,14 @@ def export(root, run, output=None, *, latest=2, extras=()):
         add(path, path.relative_to(run), 'Evaluation report or specification')
     for path in report_files(root, run / 'il-kl'):
         add(path, path.relative_to(run), 'Fixed IL-KL probe manifest or initial measurement')
-    for path in report_files(root, run / 'ratings'):
+    # Old slot folders may still exist after retention or alongside a pending
+    # evaluation. Only the latest slot committed in state belongs in this export.
+    slots = state.get('ratings', {}).get('slots', [])
+    require(isinstance(slots, list) and all(isinstance(slot, dict) and
+            type(slot.get('generation')) is int and 0 <= slot['generation'] <= generation
+            for slot in slots), 'Invalid committed rating slots')
+    latest_slot = max(slots, key=lambda slot: slot['generation'], default=None)
+    for path in report_files(root, run / 'ratings', skip_dirs={'slots'}):
         add(path, path.relative_to(run), 'Plackett-Luce strength report or specification')
     archive = state.get('ratings', {}).get('archive')
     if archive is not None:
@@ -179,10 +244,17 @@ def export(root, run, output=None, *, latest=2, extras=()):
         require(path.is_relative_to(run / 'ratings'), 'Rating archive points outside this run')
         require(checksum(path.read_bytes()) == archive['sha256'], 'Archived rating evidence changed')
         add(path, path.relative_to(run), 'Compact cumulative rating outcomes and diagnostic-panel history')
-    for slot in state.get('ratings', {}).get('slots', []):
+    for slot in [latest_slot] if latest_slot is not None else []:
+        slot_directory = below(root, Path(slot['report']['path']).parent)
+        require(slot_directory.parent == run / 'ratings' / 'slots' and
+                re.fullmatch(r'generation-0*' + str(slot['generation']), slot_directory.name),
+                'Latest rating slot directory differs from its committed generation')
+        for path in report_files(root, slot_directory):
+            add(path, path.relative_to(run), 'Latest committed rating slot report or specification')
         for key in ('records', 'panels', 'report', 'spec'):
             reference = slot[key]
             path = below(root, reference['path'])
+            require(path.is_relative_to(slot_directory), 'Rating evidence points outside its slot')
             require(checksum(path.read_bytes()) == reference['sha256'], 'Committed rating evidence changed')
             if path.relative_to(run).as_posix() not in files:
                 add(path, path.relative_to(run), 'Append-only held-out rating outcomes or separate panel results',
@@ -190,6 +262,20 @@ def export(root, run, output=None, *, latest=2, extras=()):
         curve = below(root, Path(slot['report']['path']).parent / 'progress.svg')
         if curve.exists():
             add(curve, curve.relative_to(run), 'Strength progress curve', document='svg')
+    for comparison in state.get('temperature_ratings', []):
+        reference=comparison['report'];path=below(root,reference['path'])
+        require(path.is_relative_to(run/'ratings') and checksum(path.read_bytes())==reference['sha256'],
+                'Temperature rating report changed or outside this run')
+        if path.relative_to(run).as_posix() not in files:
+            add(path,path.relative_to(run),'Paired deployment temperature comparison')
+        evidence=json.loads(path.read_text(encoding='utf-8'))
+        for key in ('spec','records'):
+            item=evidence[key];source=below(root,item['path'])
+            require(source.is_relative_to(run/'ratings') and checksum(source.read_bytes())==item['sha256'],
+                    'Temperature comparison evidence changed')
+            if source.relative_to(run).as_posix() not in files:
+                add(source,source.relative_to(run),'Paired temperature rating evidence',
+                    document='jsonl' if key=='records' else 'json')
 
     # State receipts also reveal evaluations whose files retention has removed.
     gate = state.get('champion_gate') or {}
@@ -251,22 +337,27 @@ def export(root, run, output=None, *, latest=2, extras=()):
             require(item.suffix == '.json', '--extra accepts JSON reports or report directories')
             add(item, Path('related') / item.relative_to(root), 'Explicit related report')
 
+    copied, reused, dependencies = (incremental_files(root, run, generation, files, warnings)
+                                     if continue_export else (files, [], []))
     manifest = dict(format=FORMAT, created_utc=datetime.now(timezone.utc).isoformat(),
         run=run.relative_to(root).as_posix(), committed_generation=generation,
         games_done=state.get('games_done'), implementation=state.get('signature', {}).get('implementation'),
         latest_iterations=selected_iterations, uncompacted_iterations=uncompacted,
+        incremental=continue_export, reused_files=reused,
+        rating_slot_generation=latest_slot['generation'] if latest_slot is not None else None,
         run_lock_present=(run / '.active-run.json').exists(),
-        files=[entry for entry, _ in files.values()],
+        files=[entry for entry, _ in copied.values()],
         missing=[dict(source=path, reason=reason) for path, reason in sorted(missing.items())],
         warnings=sorted(set(warnings)),
         generated=['recorded-config.json', 'export-manifest.json'],
-        scope='Analysis reports only; not a resumable checkpoint backup. Missing/pruned evidence is not reconstructed.')
+        scope='Analysis reports only; not a resumable checkpoint backup. Missing/pruned evidence is not reconstructed. '
+              'Incremental exports require the previous bundles named in reused_files; references point to original physical files.')
     output.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix='.report-export-', dir=output.parent) as temporary:
         require(Path(temporary).resolve().is_relative_to((root / 'results').resolve()), 'Temporary export escaped results/')
         stage = Path(temporary) / 'bundle'
         stage.mkdir()
-        for entry, raw in files.values():
+        for entry, raw in copied.values():
             destination = stage / entry['path']
             destination.parent.mkdir(parents=True, exist_ok=True)
             destination.write_bytes(raw)
@@ -275,6 +366,9 @@ def export(root, run, output=None, *, latest=2, extras=()):
         for entry, raw in files.values():
             require(below(root, entry['source']).read_bytes() == raw,
                     f"Report changed during export; retry: {entry['source']}")
+        for path, raw in dependencies:
+            require(below(root, path).read_bytes() == raw,
+                    f'Previous report changed during export; retry: {path.relative_to(root)}')
         publish(stage, output)
     return output, manifest
 
@@ -285,13 +379,19 @@ def main():
     parser.add_argument('--run', default=DEFAULT_RUN, help=f'Self-play run under artifacts/ (default: {DEFAULT_RUN})')
     parser.add_argument('--output', help='New results/ folder; default includes run, generation and UTC timestamp')
     parser.add_argument('--latest', type=int, default=2, help='Number of latest committed iteration reports (default: 2)')
+    parser.add_argument('--continue', dest='continue_export', action='store_true',
+                        help='Skip unchanged files already in previous same-run exports; record their locations in the manifest')
     parser.add_argument('--extra', action='append', default=[], help='Additional JSON report or directory; repeat as needed')
     args = parser.parse_args()
     try:
-        output, manifest = export(args.root, args.run, args.output, latest=args.latest, extras=args.extra)
+        output, manifest = export(args.root, args.run, args.output, latest=args.latest, extras=args.extra,
+                                  continue_export=args.continue_export)
     except (ValueError, OSError) as error:
         parser.exit(1, f'Export failed: {error}\n')
     print(f'Copied {len(manifest["files"])} reports/metadata files to {output}')
+    print(f'Reused {len(manifest["reused_files"])} unchanged files; latest rating slot: {manifest["rating_slot_generation"]}')
+    if manifest['reused_files']:
+        print('Keep the previous bundles referenced in export-manifest.json (reused_files).')
     print(f'Committed generation {manifest["committed_generation"]}; iterations {manifest["latest_iterations"]}')
     print(f'Missing files: {len(manifest["missing"])}; warnings: {len(manifest["warnings"])}. See export-manifest.json.')
 

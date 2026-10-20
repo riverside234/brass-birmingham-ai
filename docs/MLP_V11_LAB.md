@@ -92,31 +92,37 @@ Repeat the **same extension command** after interruption; the saved total cap is
 
 `--from-imitation-run` remains a separate weights-only continuation into a **new** run and resets Adam/RNG/warmup. Do not use it for the exact extension above.
 
-## Fresh self-play from completed v11.1 IL
+## Fresh self-play from completed IL
 
-Install dependencies, upgrade the completed IL into a new directory, and generate a config bound to that upgraded candidate. No IL optimization runs in the upgrade. The original IL directory and Features-4 dataset are not renamed or overwritten. The helper refuses an existing output directory/config; choose another unused suffix consistently if these names already exist.
+Use the completed `artifacts/step5/features4-v11-2-batch7-il` directory. Its name and checkpoint remain unchanged. If you still have only v11.1 IL, first run the one-time `upgrade-imitation` command below; skip that command when v11.2 IL is already present. No IL optimization runs in this upgrade.
 
 ```bash
 conda activate ai-training
 cd /data/not_backed_up/yxu209/ai-training/
 python -m pip install -r requirements-step5.txt
 
-python scripts/feature-engineering.py upgrade-imitation \
-  --imitation-run artifacts/step5/features4-v11-1-batch7-il \
-  --output artifacts/step5/features4-v11-2-batch7-il
-
 python scripts/feature-engineering.py configure \
   --imitation-run artifacts/step5/features4-v11-2-batch7-il \
-  --output configs/step5/joint7-v11-2-grouped-lr-critic.json
+  --output configs/step5/joint7-v11-2-grouped-lr-critic-exploration-fresh.json
 
-python scripts/step5.py --config configs/step5/joint7-v11-2-grouped-lr-critic.json train \
+python scripts/step5.py --config configs/step5/joint7-v11-2-grouped-lr-critic-exploration-fresh.json train \
   --fresh \
-  --run artifacts/step5/joint7-v11-2-grouped-lr-critic \
+  --run artifacts/step5/joint7-v11-2-grouped-lr-critic-exploration \
   --imitation-run artifacts/step5/features4-v11-2-batch7-il \
   --iterations 1
 ```
 
-The generated config includes the automatic critic/snapshot and per-table GAE gates, two-iteration disk-backed PPG, bounded rehearsal, 50/45/5 tables, the staged PFSP pool, PL ratings and auto IL-KL/LR controls. Teaching, all v4 search, Monitor and Broader Evaluation stay disabled. PPO starts with a fresh Adam and warmup; the utility extension follows the existing calibration path. The upgrade retains the parent IL checkpoint, dataset, source review and lineage in `upgrade.json`, and verifies the deterministic extension at handoff.
+Only if the v11.2 IL directory does not yet exist:
+
+```bash
+python scripts/feature-engineering.py upgrade-imitation \
+  --imitation-run artifacts/step5/features4-v11-1-batch7-il \
+  --output artifacts/step5/features4-v11-2-batch7-il
+```
+
+The config/output helpers refuse conflicting existing files; choose unused names for a new run. To continue this **new** run, repeat its train command without `--fresh` and with the desired additional `--iterations`.
+
+The generated config includes q v3 at epsilon 0.03, two opening action decisions per neural seat at temperature 1.5, raw-policy entropy control, and branching after 20 completed iterations and a ready entropy baseline. It also includes the existing automatic critic/snapshot and per-table GAE gates, two-iteration disk-backed PPG with 16-step acceptance intervals, bounded rehearsal, 50/45/5 tables, the staged PFSP pool, PL ratings and auto IL-KL/LR controls. Teaching, all v4 search, Monitor and Broader Evaluation stay disabled. PPO starts with a fresh Adam and warmup; the utility extension follows the existing calibration path. The upgrade retains the parent IL checkpoint, dataset, source review and lineage in `upgrade.json`, and verifies the deterministic extension at handoff.
 
 The first v11.2 run rebuilds its fixed validation probe with recorded chosen moves and industry metadata. A v11.1 probe cannot be silently imported. The optional `--il-kl-probe-from-run` remains available for a stopped, committed **compatible v11.2** donor using the same upgraded IL/dataset and probe settings. Use it only on a new run's first command; it copies the probe, never PPO state or the donor's large prepared cache. Omit it on continuation.
 
@@ -144,13 +150,13 @@ The new `latest-model-selfplay/3.0.0` recipe uses the same quotas from game zero
 | History | 45% | 2 | 2 independently sampled history policies |
 | v4 | 5% | 2 | 2 search-free v4 bots |
 
-At 320 games this is **160 / 144 / 16 tables**, or **640 / 288 / 32 learner seat trajectories: 960 total** before forced-action filtering. Each mixed table type cycles deterministically through the six learner seat pairs, carrying its position across iterations/resumes. History uses each pair exactly 24 times per iteration; 16 v4 tables use each pair two or three times, balancing over successive iterations. Exact equality across six pairs is impossible for 16 tables. Normal table rotation and contextual family exploration remain intact. The learner uses exploration **0.08**, temperature **1.0**; frozen historical policies retain **0.05**. There is no v4 curriculum/boost window or later fast-to-searched transition. `v4_search_enabled=false` disables MCTS in all ordinary and scheduled self-play evaluation v4 seats, including held-out profiles. The bots use their existing incumbent-only policy. The one-second search budget is stored but inactive; cancellation and failure watchdogs remain active. This signed, strictly boolean setting defaults to false in newly generated configs; old configs without the field keep their historical behavior and cannot silently reuse search-free collection caches.
+At 320 games this is **160 / 144 / 16 ordinary tables**, or **640 / 288 / 32 learner seat trajectories: 960 total** before forced-action filtering. Branch continuations do not advance these counts. Each mixed table type cycles deterministically through the six learner seat pairs, carrying its position across iterations/resumes. History uses each pair exactly 24 times per iteration; 16 v4 tables use each pair two or three times, balancing over successive iterations. Exact equality across six pairs is impossible for 16 tables. Ordinary neural learners and frozen historical seats both use **epsilon 0.03, q v3**. Temperature is **1.5 for each seat's first two action decisions**, then **1.0**; intervening subdecisions stay at 1.0. Evaluation remains epsilon zero with no opening schedule. There is no v4 curriculum/boost window or later fast-to-searched transition. `v4_search_enabled=false` disables MCTS in all ordinary and scheduled self-play evaluation v4 seats, including held-out profiles. The bots use their existing incumbent-only policy. The one-second search budget is stored but inactive; cancellation and failure watchdogs remain active. Existing signed configs retain their previous behavior until explicitly migrated.
 
 Scheduled **Monitor** and **Broader Evaluation** are disabled (`evaluation_schedule.enabled=false`) at startup/resume and after iteration commits. The independent Plackett–Luce ratings and their diagnostic panels remain enabled every ten iterations. Newly generated configs inherit this setting; the older generated config is left unchanged.
 
 The PFSP historical pool holds **pinned IL + at most 16 scored snapshots before 100,000 committed ordinary games**, then **IL + at most 23 snapshots**. The `population` fields remain a compatibility declaration of the final capacity (2 + 22); `opponent_pool` governs selection and eviction. Resume checkpoints and independently rated snapshots remain protected; the pool cap does not limit every checkpoint file. The archived quality-score contract remains readable for explicit old configs.
 
-`teacher_enabled=false` disables teacher games, search, policy distillation and teacher auxiliary values. The stored teacher settings remain **9/12/12/12 seconds**, five games, eight workers per turn, eight distillation steps and `search_wall_fraction=null`, ready for a separately reviewed future change. Ordinary utility calibration is still required. PPO reward, entropy/value weights, evaluation and the disabled champion gate are unchanged. Rehearsal follows the floor schedule below.
+`teacher_enabled=false` disables teacher games, search, policy distillation and teacher auxiliary values. The stored teacher settings remain **9/12/12/12 seconds**, five games, eight workers per turn, eight distillation steps and `search_wall_fraction=null`, ready for a separately reviewed future change. Ordinary utility calibration is still required. PPO reward/value weights and the disabled champion gate are unchanged. The entropy base remains 0.005; the new controller can raise each group's coefficient to 0.05. Rehearsal follows the floor schedule below.
 
 ## Opponent critic rows and seat descriptors
 
@@ -175,8 +181,10 @@ Fresh configs include the signed `advantage` and `value_phase` blocks. GAE start
 The lighter automatic gate uses committed iterations only:
 
 - Move to **0.98** after at least ten iterations with accepted value-phase steps and self-play learner held-out utility explained variance of at least 0.5 for five consecutive iterations. The fallback is thirty iterations with accepted value steps. Both paths require current healthy evidence.
-- Move from **0.98 to 0.95** after **twenty consecutive healthy iterations**, with a nonnegative rating slope and no existing PL regression/v4-watch alert. The slope uses the last three rated checkpoints from the latest common PL fit. Missing or declining rating evidence delays this second transition. No extra rating games or fork runs are launched.
-- Self-play lambda-stage health requires final IL pass/economic checks, completed PPO warmup, a finite nonempty PPO update without early stopping, accepted value steps with finite held-out EV, and no value-phase KL trip. The calibrated IL distance budget and recovery latch gate LR increases only; they do not independently block GAE or snapshot-critic adoption. The IL sale-probability check has been removed entirely. An unhealthy iteration resets the twenty-iteration streak. A held-out-loss stop after earlier accepted epochs can still be healthy: the rejected epoch has been restored.
+- Move from **0.98 to 0.95** after **twenty consecutive healthy iterations**, with at least **16 accepted PPG optimizer steps across at least 3 iterations** in the rolling 20-iteration window at this lambda. A nonnegative rating slope and no existing PL regression/v4-watch alert are still required. The slope uses the last three rated checkpoints from the latest common PL fit. Missing or declining rating evidence delays this transition. No extra rating games or fork runs are launched.
+- Self-play lambda-stage health requires final economic checks, completed PPO warmup, a finite nonempty PPO update without early stopping, PPO categorical KL at most 1.5 times target, finite self-play learner held-out EV, and no value-phase KL trip. At lambda 0.98, **zero accepted PPG steps alone never reset the healthy counter**: accepted work is required across the window. Economic/PPO/PPG failures or missing EV still reset it. The calibrated IL distance budget and recovery latch gate LR increases only. Both IL sale- and pass-probability checks are removed from every shared-health consumer. The first lambda transition retains its accepted-value-iteration requirements.
+
+`staged-gae-gate/2.0.0` persists its own bounded `stage_evidence`, separate from mixed-table EV admission. The exact reviewed continuation preserves existing lambda, counters and streaks, but starts this new evidence window at committed progress without backfill. Even an existing long healthy streak cannot skip the 20 new observations. Old accepted steps expire after 20 iterations. Reports and compact history retain observed/healthy iterations, accepted steps, contributing iterations, thresholds and blockers. These initial support thresholds are an experiment, not evidence of better playing strength.
 
 Changes apply on the **next** iteration. Lambda never automatically drops below 0.95 or rolls back. These thresholds are experimental; a nonnegative point-estimate slope is a progression check, not statistically demonstrated strength. Setting `advantage.gate.mode` to `fixed` in a newly generated config permits an explicit fixed lambda instead. Lambda below 1 requires the combined-return recipe.
 
@@ -186,7 +194,7 @@ Activation also requires **ten consecutive healthy iterations** (final economy/p
 
 These are row-weighted **online EV measurements from successive retained post-value models**, not a re-evaluation of all old positions using the latest model or independent confidence bounds. The checkpoint stores only game IDs and moments, capped at 20 iterations; no extra tensor cache or model inference is needed. Existing whole-game holdout exclusions and the two-iteration PPG disk-cache lifecycle are unchanged. Qualification takes effect next iteration, persists across restart and follows subsequent self-play lambda stages. Qualification can precede the first lambda below 1. Reports distinguish the qualification `origin` from `effective_stage_origin`; the 30-iteration review age counts actual collections at the current lambda stage, beginning at the later of qualification and that stage's origin. A later lambda stage begins its own review age. Review common PL rating evidence and by-table advantage spread; no automatic rollback or additional evaluations are introduced.
 
-The value phase runs after PPO, using the current iteration plus the previous committed iteration's critic-train rows. The first iteration has only current rows. Set `value_phase.buffer_iterations=2` (default, `ppg-value-phase/3.0.0`); an explicit value of 1 keeps current-only fitting. Fresh configs use deterministic whole-game selection within each table type (nominal **5%**, minimum **two games per type** when feasible); all seats from those games are excluded from PPO critic batches, head-only utility calibration and value-phase fitting. Their nonforced rows remain eligible for actor and policy-cloning losses. This is a critic holdout, not a completely untouched policy evaluation set. Small collections can have no held-out games; the value phase skips with an explicit reason rather than changing the split.
+The value phase runs after PPO, using the current iteration plus the previous committed iteration's critic-train rows. The first iteration has only current rows. Set `value_phase.buffer_iterations=2` (default, `ppg-value-phase/4.0.0`); an explicit value of 1 keeps current-only fitting. Fresh configs use deterministic whole-game selection within each table type (nominal **5%**, minimum **two games per type** when feasible); all seats from those games are excluded from PPO critic batches, head-only utility calibration and value-phase fitting. Their nonforced rows remain eligible for actor and policy-cloning losses. This is a critic holdout, not a completely untouched policy evaluation set. Small collections can have no held-out games; the value phase skips with an explicit reason rather than changing the split.
 
 The previous rows live in `<run>/.ppg-value-cache/` as checksummed NumPy memory-mapped arrays. Cache only the critic inputs: state, one real legal candidate, seat mapping, MC/utility/remaining-cost targets, true descriptors, role/table labels, descriptor generation and game/phase identity. Forced rows are included; hash-held-out games are never cached. Previous behavior probabilities never enter PPO, GAE, head-only ordinary calibration, clone references or policy probes. Cloning and holdout validation continue to use current rows only. The batch mixes current and previous critic rows without duplicating either population within an epoch.
 
@@ -196,7 +204,7 @@ At the current 3,128-state / 327-action dimensions, each cached row is **14,503 
 
 Up to **three value epochs**, batches of **4,096**, fit the existing win/rank/VP losses plus utility MSE. A frozen raw post-PPO policy supplies up to **8,192 nonforced clone rows**, sampled in batches of **512**, with beta initially **1**. Value batches retain one legal candidate for the state-only value path; clone batches retain every legal action. The separate **Adam** runs at value LR **3e-6**, without PPO warmup or the LR multiplier; PPO base LR remains **6e-6**. It does not advance PPO counters or modify PPO moments.
 
-After every value optimizer step, exact raw-policy KL is checked on the **same position IDs as the PPO probe**, against the fixed post-PPO raw policy. The cap remains **0.002**, cumulative across the whole value phase. A violating step restores its preceding weights **and value Adam state**. Earlier safe steps in that epoch can be accepted only if their held-out value loss does not increase; then the phase stops. A first-step violation or increased held-out loss restores the entire attempted epoch, while earlier accepted epochs remain. This avoids discarding a useful safe prefix merely because the next step crossed the cap. Draw RNG is consumed deterministically as before; PPO Adam, warmup and LR-controller state are untouched.
+After every value optimizer step, exact raw-policy KL is checked on the **same position IDs as the PPO probe**, against the fixed post-PPO raw policy. The cap remains **0.002**, cumulative across the whole value phase; accepting an interval never resets the reference. New configs set **`acceptance_steps=16`**. At each boundary and shorter epoch tail, accept only non-increasing held-out loss. A loss-rejected interval restores its starting weights **and value Adam** while retaining earlier accepted intervals, then stops. A KL-violating step restores its pre-step weights/Adam; the safe interval prefix still needs the held-out-loss check before retention. Draw RNG is consumed deterministically as before; PPO Adam, warmup and LR-controller state are untouched. Explicit older configs retain epoch-length acceptance until the reviewed config upgrade.
 
 When the **current iteration trips** the cap and at least three of the last five iterations tripped, double beta up to **8**. Clean iterations cannot raise beta repeatedly using the same older trips. Resume preserves the saved beta and trip history, including an existing beta of 8. The trip remains recorded even when a safe prefix is retained. Existing health/GAE gates do not count that iteration as a clean pass. Reports distinguish attempted/accepted steps and presentations, full/partial accepted epochs, last attempted KL, retained KL, the cap and `beta_reason`. Each epoch's held-out attempt describes its safe prefix after restoring any violating step. A final accepted fit issues a new utility-calibration receipt; a skipped or fully rejected fit clears the stale receipt for the next ordinary calibration. The bounded rollback adds one model/value-Adam snapshot per attempted step; it does not add another optimizer or retain snapshots across iterations. See [the PPG and v4 sampling fix](../ai-research/PPG_V4_PROFILE_FIX.md).
 
@@ -277,7 +285,7 @@ The floor uses committed iteration progress, so restarting preserves its stage:
 
 ## PPO learning-rate controller and calibrated IL-KL limits
 
-Fresh configs now use **`ppo-categorical-kl-lr/1.2.0`** plus the strict **`auto-il-kl-limit/1.0.0`** block. Both are part of the run signature. Completed v11.1 IL remains usable through the explicit v11.2 upgrade; its original directory and selected weights stay intact. Generate a new bound config before starting. A previously generated config does not silently acquire these settings; the helper requires a new output filename. Existing committed runs require a separately reviewed source/config transition.
+Fresh configs now use **`ppo-categorical-kl-lr/1.2.0`** plus the strict **`auto-il-kl-limit/1.2.0`** block, with no sale-health threshold or IL action-probability guard. Both are part of the run signature. Completed v11.1 IL remains usable through the explicit v11.2 upgrade; its original directory and selected weights stay intact. Existing 1.0/1.1 health configs remain readable for reviewed continuation; retired `sells_ratio` is ignored. The fixed probe is reused unchanged. To enable the new PPG intervals and GAE window, use the [g185 continuation commands](../ai-research/PPG_WINDOW_REVISION.md#continuation); no new IL or g110 hotfix is needed.
 
 The per-update LR signal remains exact **KL(old behavior || post-PPO behavior)** on the ordinary proportional probe, capped at 2,048 nonforced rows. The active PPO trainer now also uses this exact categorical KL after **each optimizer step**, stopping further steps when it exceeds `update.target_kl=0.01`. The old probabilities and probe positions stay fixed throughout all PPO epochs; both distributions use the same legal masks, temperature and 0.08 exploration mixture. The sampled-action estimate on **all nonforced rows** remains a secondary guard at each epoch end. Nonfinite probe or full-dataset KL aborts the update before any further optimizer steps or checkpoint publication. No KL penalty is added to the loss, and stopping does not undo the last step.
 
@@ -291,7 +299,7 @@ Validation (2026-10-18): 59 focused regressions passed, covering exact/masked be
 
 The IL-distance gate now uses a separate **fixed validation probe**, built at generation 0 from the completed IL dataset. It selects up to 2,048 distinct nonforced positions with seed 710193, balanced across era × decision-phase strata using deterministic hash priority; exhausted strata redistribute their allocation. The manifest, selected identities, source hashes and cached IL probabilities live under `il-kl/`. No training RNG is used. The generation-zero report verifies KL(IL || IL) = 0. Validation positions never enter PPO or rehearsal updates; rehearsal still uses the training split.
 
-Both policies use raw temperature-1 probabilities with **no exploration mixture**. For a finite, nonnegative KL that remains zero for identical policies, both raw distributions receive the same **1e-6 floor and renormalization** for the KL calculation. The remaining raw pass-probability check requires, where a non-pass move exists and IL pass mass is below 0.2, learner pass mass no greater than `2 * IL + 0.05`. Every eligible pass position must pass. **IL sale-probability checks are completely removed** from measurement, shared health, LR/limit decisions, pool admission and GAE/critic gates. Ordinary sales counts remain economic diagnostics; their existing aggregate economy threshold is unchanged.
+Both policies use raw temperature-1 probabilities with **no exploration mixture**. For a finite, nonnegative KL that remains zero for identical policies, both raw distributions receive the same **1e-6 floor and renormalization** for the KL calculation. **IL pass-probability, IL sale-probability and aggregate sales-per-seat checks are removed** from shared health, LR/limit decisions, pool admission and GAE/critic gates. No per-position action-probability pass/fail is computed or reported. Archived behavior flags cannot affect new decisions. Ordinary sales counts are reporting only; ordinary aggregate passes-per-seat remains an economic check alongside VP, zero-VP and insolvency. Old signed probe manifests, bytes, hashes and selection remain unchanged and reusable; other config/source mismatches still fail validation.
 
 The four fixed-probe groups are **Canal action, Canal other, Rail action, Rail other**. This replaces the early/late-round anchor groups for controller 1.2; explicit 1.1 configs retain their previous behavior. Each group needs at least 64 positions, and LR increases require the full 2,048-position probe. Tiny diagnostic datasets can produce smaller probes with explicit counts; they cannot qualify an increase.
 
@@ -300,7 +308,6 @@ Health uses **all-learner self-play tables only**, with seat-weighted five-itera
 | Metric | Healthy when |
 | --- | --- |
 | VP per seat | At least 0.85 × baseline |
-| Selected sell decisions per seat/game, including continuations | At least 0.70 × baseline |
 | Passes with a legal non-pass alternative per seat/game | At most 2 × baseline + 0.5 |
 | Zero-VP seat fraction | At most max(0.05, 2 × baseline) |
 | Fraction of seats with an insolvency event | At most baseline + 0.10 |
@@ -321,7 +328,31 @@ Full/compact reports retain the fixed-probe measurements, four group means/count
 
 Probe preparation/validation happens at startup; normal iterations evaluate only the cached probe. Preparation scans the audited validation partition using disk-backed storage. Resume checks source hashes. These costs and the ongoing rehearsal floor are separate from the per-iteration forward-pass cost; the plan's approximate one-second timing is not a guarantee on every device. The limits and rehearsal schedule are experimental, with no demonstrated playing-strength improvement.
 
-## Continue v11.2 self-play
+## Continue the current run with staged exploration
+
+Run the helper against the **actual committed training directory**. It reads the saved recipe and writes a continuation config, preserving unrelated settings. It includes the previously requested 16-step PPG acceptance intervals and rolling GAE health window if not yet adopted. It does not edit checkpoints or reset training.
+
+```bash
+python scripts/joint7-exploration.py \
+  --run artifacts/step5/joint7-v11-2-grouped-lr-critic
+
+python scripts/step5.py \
+  --config configs/step5/joint7-v11-2-grouped-lr-critic-exploration.json train \
+  --run artifacts/step5/joint7-v11-2-grouped-lr-critic \
+  --imitation-run artifacts/step5/features4-v11-2-batch7-il \
+  --resume-reviewed-source \
+  --iterations 20
+```
+
+The first resumed iteration adopts q v3/epsilon 0.03 for all ordinary neural seats. The second enables the two opening temperatures; the third switches the actor entropy bonus to the raw temperature-1 policy. Ten prospective post-warmup probe measurements establish its four entropy baselines, then healthy iterations may adjust coefficients. Existing economic baselines and automatic IL-KL limits are retained. Branching starts only after 20 completed iterations since adoption and a ready entropy baseline. If starting at committed g185, these collection changes appear in g186, g187, g188 and no earlier than g206 respectively. A 20-iteration command ends at g205; the next continuation can activate branching.
+
+The checkpoint records the origin, baseline, coefficients and windows. Restarting keeps the same stage, weights, PPO/value Adam states, RNG, counters, population and lineage. The LR controller clears its short decision window at exploration regime changes, retaining its multiplier/cooldown; random branch-count fluctuations do not reset it. Pending collections from the old behavior fail closed; recover them with the original source before migration. Once adopted, repeat the train command for more iterations; do not use `--fresh` on this directory. `--expected-generation` is optional. The helper refuses a conflicting existing config rather than overwriting it; use `--output configs/step5/<new-name>.json` if your committed recipe has since changed.
+
+Full and compact reports retain rollout age/settings, ordinary exploration shares, forced-only picks, raw/normalized entropy and coefficients by group, opening diversity, separate branch economy, actual retained branch actor/critic usage, and ordinary/branch held-out EV. Every 50 absolute generations, the newest main rating slot also gets a separate, paired temperature-0.7 comparison; the main PL history and GAE slope stay unchanged, and deployment still needs panel review.
+
+See [exploration implementation and validation](../ai-research/EXPLORATION_REVISION.md) for the exact scope and limits of the smoke results.
+
+## Archived PFSP adoption from the older quality-score sampler
 
 To adopt PFSP and the slower rehearsal floor in the existing run, switch at a **committed generation divisible by five** (85, 90, etc.). Generate a new config filename from the actual existing config; this helper changes only the recognized default opponent-pool block and rehearsal interval, and never reads or edits model/IL/run files:
 

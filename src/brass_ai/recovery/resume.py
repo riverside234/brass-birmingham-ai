@@ -95,6 +95,12 @@ def check_signature(state, signature, reviewed=False):
             handlers[INSOLVENCY_EVENT_CONFIG_MIGRATION]=insolvency_event_config
             from .value_phase import CONFIG_MIGRATION as PPG_MIGRATION,refined_options
             handlers[PPG_MIGRATION]=refined_options
+            from .value_phase import INTERVAL_MIGRATION,interval_options
+            from .gae import HEALTH_MIGRATION,health_options
+            handlers[INTERVAL_MIGRATION]=interval_options
+            handlers[HEALTH_MIGRATION]=health_options
+            from .exploration import MIGRATION as EXPLORATION_MIGRATION,continuation_config
+            handlers[EXPLORATION_MIGRATION]=continuation_config
             for migration in migrations:
                 require(migration in handlers,'Unknown reviewed configuration migration')
                 expected=handlers[migration](expected)

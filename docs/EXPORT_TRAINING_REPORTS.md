@@ -20,6 +20,30 @@ folders are never overwritten:
 python scripts/export-training-reports.py --output results/joint7-v11-1-grouped-lr-review
 ```
 
+For the current v11.2 run, export with incremental reuse:
+
+```sh
+python scripts/export-training-reports.py \
+  --run artifacts/step5/joint7-v11-2-grouped-lr-critic \
+  --continue
+```
+
+`--continue` still creates a **new** generation/timestamp folder. It finds prior
+exports of the same `--run` anywhere under `results/`, including version-1.0
+manifests, and skips source reports whose original bytes are already present.
+It checks the actual old file, not just its manifest hash. New or changed reports
+are copied normally; a missing or altered old copy is copied again. Exports from
+another run or a later generation are not used. With no prior export, this flag
+performs a normal first export.
+
+The version-1.1 manifest lists newly copied reports in `files`, and skipped
+reports in `reused_files`, with `previous_export`, `previous_path`, and SHA-256.
+References point directly to a physical file in an older bundle. Keep and share
+the referenced older bundles along with the new folder; an incremental folder
+alone is not a complete analysis bundle. `recorded-config.json` and the new
+manifest are always generated. Omit `--continue` for an independent export of
+the selected reports. Existing folders are never modified or deleted.
+
 The script copies:
 
 - `state.json`, `retention-history.json`, and available run metadata such as `best.json`.
@@ -30,7 +54,13 @@ The script copies:
 - All available reports and specifications under the run's `evaluations/`, including champion, monitor, and broader panels.
 - The originating IL run's state/report and available ancestor IL states/reports.
 - The fixed IL-KL probe's `il-kl/manifest.json` and `il-kl/initial-report.json`, when present.
-- PL rating specifications/reports, separate panel reports, committed compact game outcomes (`games.jsonl`), and progress curves (`progress.svg`).
+- Only the **latest committed** PL rating slot folder: its specifications/reports,
+  separate panels, compact game outcomes (`games.jsonl`), and progress curve
+  (`progress.svg`). Older and pending slot folders are excluded, with or without
+  `--continue`. The selection is recorded as `rating_slot_generation`; unchanged
+  latest-slot files can be reused with `--continue` when no new rating has run.
+- The committed cumulative rating archive, when present, plus separate temperature
+  comparison reports and their compact evidence.
 
 For the current v11.1 recipe, full iteration reports and compact history retain
 the PPO LR controller, exact categorical KL, overall and per-group IL-anchor
@@ -53,8 +83,9 @@ review-only regression alarms and admission/eviction decisions. The existing
 `quality_pool` report/state key is retained; its contract identifies PFSP versus
 archived quality scores. Compact history and exports preserve the entire block.
 The staged 17/24-member total pool and independently retained rated agents are visible in
-state. Compact held-out rating JSONL files are included because they are the complete
-input to future refits; they contain outcomes, not PPO trajectories. Committed outcome
+state. The latest slot's compact held-out JSONL contains outcomes, not PPO
+trajectories. Reproducing a full historical refit can require earlier exports or
+the original run's other slot outcomes as well as its archive. Committed outcome
 and panel hashes are verified before export. Dense opponent-probe caches and
 `bootstrap.npz` are excluded. Rating reports retain uncertainty, paired differences,
 v4/regression warnings and the pending manual deployment-review status.
@@ -84,7 +115,8 @@ results/joint7-v11-1-grouped-lr-g0021-<timestamp>/
   ...
 ```
 
-Upload/copy the **whole output folder**, including its subfolders. It is an
+Upload/copy the **whole output folder**, including its subfolders, and any older
+bundles referenced by `reused_files` when using `--continue`. It is an
 analysis bundle, not a resume backup: checkpoints, replay shards, feature caches,
 and profiler traces are excluded. Original files are copied byte-for-byte and
 never edited. The script is outside source-bound training packages, so adding or
@@ -104,7 +136,8 @@ python scripts/export-training-reports.py \
 Use `--root /data/not_backed_up/yxu209/ai-training/` when invoking the script
 against an explicit project root. Export after an iteration finishes for its
 final timings. Read-only exports during training are allowed; changes to selected
-files during copying abort publication and request a retry. A run-lock marker and
+files, including reused files in older bundles, during copying abort publication
+and request a retry. A run-lock marker and
 missing final iteration timing are recorded in the manifest. No training lock is
 created or removed by this script. Publication retries transient Windows handle
 errors for at most 0.75 seconds, checking that the destination is still unused
@@ -134,10 +167,27 @@ Rating retention keeps full slot folders for the most recent 100 training
 iterations, normally ten slots. Older compact outcomes and diagnostic panels
 are consolidated into the checksummed `ratings/history-<digest>.json` named by
 `state.json` → `ratings.archive`. Export verifies and copies that archive along
-with the recent slot evidence. Historical games still support cumulative PL
+with **only the latest committed slot**, rather than all ten recent folders.
+The latest rating report/curve still includes the cumulative fit. Historical games
+in the original run and earlier exports still support cumulative PL
 fits and paired bootstrap refits; older per-slot bootstrap tensors and full
 reports/curves can be cleaned. Existing bundles already under `results/` are
 not automatically removed.
+
+Incremental export regressions cover legacy-bundle reuse, first export, changed
+or corrupted reports, same-run/generation isolation, flat references, concurrent
+changes to reused evidence, CLI invocation, and latest committed rating selection
+without copying older or pending slots. They run without models or training.
+
+October 20 validation: **39 report tests passed**. An isolated report-only fixture
+reconstructed the original g185 source bytes from the saved bundle (normalizing
+Git checkout line endings only inside the disposable fixture). A regular export
+selected 20 source files and only the g180 rating slot; an unchanged incremental
+export copied zero source files and reused all 20. After simulating generation
+186 in that fixture, the incremental export copied two changed/new files and
+reused 19 files (45,359,904 bytes), with no missing reports or warnings. Generated
+configuration/manifest files are additional. No real training state or model
+checkpoints were modified.
 
 Verification: `python -m unittest discover -s tests/Reports -v` covers report
 selection, original bytes, lineage, missing evidence, output protection, concurrent

@@ -42,9 +42,9 @@ def events(records):
     return result
 
 
-def returns(records,config):
+def returns(records,config,initial_spent=None):
     """Undiscounted future costs, capped once per seat/game in forward time."""
-    found=events(records);charges={};totals=[0.0]*4;counts=[0]*4;shortfalls=[0]*4
+    found=events(records);charges={};totals=list(initial_spent or [0.0]*4);counts=[0]*4;shortfalls=[0]*4
     phases=[Counter() for _ in range(4)]
     for event in found:
         seat=event['seat'];cost=min(config['event_cost'],max(0.,config['max_cost']-totals[seat]))
@@ -71,12 +71,16 @@ def advantage_costs(data,config):
             require(trajectory not in summaries,'Duplicate insolvency trajectory')
             summaries[trajectory]=row['_insolvency_trajectory']
     require(set(summaries)=={d[2] for d in data},'Missing insolvency trajectory summary')
+    branch_summaries=[v for k,v in summaries.items() if '/branch/' in k[0]]
+    summaries={k:v for k,v in summaries.items() if '/branch/' not in k[0]}
     phases=Counter()
     for summary in summaries.values():phases.update(summary['by_era'])
     total=sum(s['cost'] for s in summaries.values())
     return costs,dict(enabled=True,**config,events=sum(s['events'] for s in summaries.values()),
         shortfall=sum(s['shortfall'] for s in summaries.values()),by_era=dict(phases),
         learner_trajectories=len(summaries),affected_trajectories=sum(s['events']>0 for s in summaries.values()),
+        branch_trajectories=len(branch_summaries),branch_events=sum(s['events'] for s in branch_summaries),
+        scope='Ordinary trajectory statistics; branch continuation events separate, costs applied to every eligible row',
         total_cost=total,mean_cost_per_trajectory=total/max(1,len(summaries)),
         decisions_with_future_cost=sum(c>0 for c in costs),
         objective='terminal win share minus future capped insolvency costs; official critic targets unchanged')

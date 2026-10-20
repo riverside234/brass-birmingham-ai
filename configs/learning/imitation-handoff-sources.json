@@ -333,6 +333,21 @@
       "implementation": "3a0c2da9e512b810ad4fa4ea3583ea16dd5e09252cfb651a2dc42da5a0d6c702",
       "learning_compatibility": "ef6a1b5126de42da8f3277dc9357b6ffb94a435f3faa7fee8dd312bb5a242a54",
       "reason": "PPG LR/holdout refinement changes self-play only. IL feature/model layouts, tensors, dataset/probe contracts and completion lineage unchanged."
+    },
+    {
+      "implementation": "211ae80c9ab17cd302a19ed66d0fdfa339b887457708d14a7d6a30ff712805d5",
+      "learning_compatibility": "ef6a1b5126de42da8f3277dc9357b6ffb94a435f3faa7fee8dd312bb5a242a54",
+      "reason": "Sale-free shared health changes self-play controllers only; IL model, tensors, dataset, completed lineage and fixed probe encoding unchanged."
+    },
+    {
+      "implementation": "97176e32859527215f6318635b703781df120e69bcbf76e0a3ced94e035987f6",
+      "learning_compatibility": "ef6a1b5126de42da8f3277dc9357b6ffb94a435f3faa7fee8dd312bb5a242a54",
+      "reason": "Self-play health/PPG changes only; completed IL model, tensors, encoding and lineage unchanged."
+    },
+    {
+      "implementation": "741aa869d8da284c5adee0d7f6f94adb85b3257e21b5df2c09de76aacce91ba6",
+      "learning_compatibility": "ef6a1b5126de42da8f3277dc9357b6ffb94a435f3faa7fee8dd312bb5a242a54",
+      "reason": "Ordinary self-play exploration only. Completed IL weights, model/feature encoding, dataset and lineage unchanged."
     }
   ]
 }

@@ -26,12 +26,44 @@ def inference_deadline(policies, deadline):
         for p,old in zip(unique,previous): p.request_deadline=old
 
 
-def exploration_distribution(choices, intent=None):
+FAMILY_WEIGHTS = dict(build=4, develop=4, network=4, loan=2, sell=2, scout=1)
+
+
+def policy_identity(model, exploration, temperature, focus, version=2, opening=None):
+    fields = dict(model=model, exploration=exploration, temperature=temperature, focus=focus, version=version)
+    if version == 3:
+        fields['opening'] = opening
+    return 'step5-neural/' + digest(fields)
+
+
+def exploration_distribution(choices, intent=None, version=2, phase=None):
     """Equal action-family exploration; all legal build industries get a group.
 
     A pottery holdout NEVER changes this distribution or any legal mask. Context
     can give its focus group twice the exploration mass, without changing reward.
     """
+    require(type(version) is int and version in (2, 3), 'Unknown exploration distribution')
+    if version == 3:
+        require(isinstance(phase, str) and phase, 'v3 exploration requires the recorded phase')
+    if version == 3 and phase == 'action':
+        families = defaultdict(list)
+        for i, choice in enumerate(choices):
+            families[choice['kind']].append(i)
+        require(bool(families), 'No legal candidates')
+        if set(families) != {'pass'}:
+            families.pop('pass', None)
+        total = sum(FAMILY_WEIGHTS.get(k, 1) for k in families)
+        out = np.zeros(len(choices), dtype=np.float64)
+        for kind, indices in families.items():
+            share = FAMILY_WEIGHTS.get(kind, 1) / total
+            sub = defaultdict(list)
+            for i in indices:
+                sub[choices[i].get('industry') if kind in ('build', 'develop') else None].append(i)
+            weights = {ind: (2. if intent is not None and ind in INDUSTRIES and
+                            intent[INDUSTRIES.index(ind)] > .5 else 1.) for ind in sub}
+            for ind, members in sub.items():
+                out[members] = share * weights[ind] / sum(weights.values()) / len(members)
+        return out
     groups = defaultdict(list)
     for i, choice in enumerate(choices):
         key = (choice['kind'], choice.get('industry') if choice['kind'] in ('build', 'develop') else None)
@@ -62,19 +94,26 @@ class NeuralPolicy:
     kind = 'model'
 
     def __init__(self, model, device='cpu', *, exploration=.1, temperature=1.0,
-                 focus='mixed', batch_size=32, max_candidate_cells=8192, evaluator=None):
+                 focus='mixed', batch_size=32, max_candidate_cells=8192, evaluator=None,
+                 exploration_version=2, opening=None):
         require(0 <= exploration <= .5 and .1 <= temperature <= 3, 'Invalid behavior distribution')
         require(focus in ('mixed', 'neutral') + INDUSTRIES, 'Invalid context mode')
         self.evaluator = evaluator if evaluator is not None else Evaluator(model, device=device,
             batch_size=batch_size, max_candidate_cells=max_candidate_cells)
         self.owns_evaluator=evaluator is None
         self.exploration, self.temperature, self.focus = exploration, temperature, focus
+        require(exploration_version in (2, 3) and (opening is None or exploration_version == 3),
+                'Invalid exploration/opening contract')
+        self.exploration_version, self.opening = exploration_version, opening
+        self.action_counts = weakref.WeakKeyDictionary()
+        self.last_behavior = weakref.WeakKeyDictionary()
+        self.last_raw = weakref.WeakKeyDictionary()
         self.request_deadline = None
         self.contexts = weakref.WeakKeyDictionary()
         self.utility_remaining = weakref.WeakKeyDictionary()
         self.context_counter, self.context_offset = 0, None
-        self.policy_id = 'step5-neural/' + digest(dict(model=self.evaluator.model_id,
-            exploration=exploration, temperature=temperature, focus=focus, version=2))
+        self.policy_id = policy_identity(self.evaluator.model_id, exploration, temperature, focus,
+                                         exploration_version, opening)
 
     def close(self):
         if self.owns_evaluator:self.evaluator.close()
@@ -125,7 +164,8 @@ class NeuralPolicy:
             raw = np.asarray(response['probabilities'], dtype=np.float64)
             raw = np.power(raw.clip(1e-30), 1 / self.temperature)
             raw /= raw.sum()
-            q = exploration_distribution(request.choices, request.intent)
+            q = exploration_distribution(request.choices, request.intent, self.exploration_version,
+                                         request.view['context']['phase'])
             probabilities = (1 - self.exploration) * raw + self.exploration * q
             probabilities /= probabilities.sum()
             outputs.append((probabilities, response))
@@ -136,11 +176,41 @@ class NeuralPolicy:
         return self.prediction_outputs(requests,self.evaluator.predict(requests))
 
     def select_batch(self, inputs):
+        if self.exploration_version == 3:
+            requests = self.prediction_requests(inputs)
+            responses = self.evaluator.predict(requests)
+            output = []
+            for (view, choices, rng), request, response in zip(inputs, requests, responses):
+                accept_response(request, response, view['context']['revision'], self.evaluator.model_id)
+                raw = np.asarray(response['probabilities'], dtype=np.float64)
+                raw /= raw.sum()
+                output.append(self.sample_training(view, choices, rng, raw, request.intent))
+            return output
         output = []
         for (probabilities, _), (_, _, rng) in zip(self.predict(inputs), inputs):
             selected = rng.choices(range(len(probabilities)), weights=probabilities, k=1)[0]
             output.append((selected, float(probabilities[selected]), None))
         return output
+
+    def sample_training(self, view, choices, rng, raw, intent):
+        phase = view['context']['phase']
+        count = self.action_counts.get(rng, 0)
+        temperature = (self.opening['temperature'] if self.opening and phase == 'action' and
+                       count < self.opening['action_decisions_per_seat'] else self.temperature)
+        p = np.power(raw.clip(1e-30), 1 / temperature); p /= p.sum()
+        q = exploration_distribution(choices, intent, 3, phase)
+        mixed = (1-self.exploration)*p + self.exploration*q
+        # Sample the actual mixture component so exploration telemetry is observed,
+        # not an estimate inferred from the selected action.
+        explore = rng.random() < self.exploration
+        selected = rng.choices(range(len(choices)), weights=q if explore else p, k=1)[0]
+        self.last_behavior[rng] = dict(temperature=temperature, exploration=self.exploration,
+            exploration_version=3, component='exploration' if explore else 'policy',
+            action_decision=count if phase == 'action' else None)
+        self.last_raw[rng] = raw
+        if phase == 'action':
+            self.action_counts[rng] = count+1
+        return selected, float(mixed[selected]), None
 
 
 def predict_groups(groups):

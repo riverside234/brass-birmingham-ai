@@ -41,6 +41,18 @@ class ExportTests(unittest.TestCase):
     def export(self, **kwargs):
         return reports.export(self.root, self.run, **kwargs)
 
+    def test_committed_temperature_comparison_and_evidence_are_exported(self):
+        directory=self.run+'/ratings/temperature/generation-000050/'
+        spec=self.put(directory+'spec.json',dict(temperatures=[1.,.7]))
+        games=self.put(directory+'games.jsonl',b'{"setup":1}\n')
+        reference=lambda p:dict(path=p.relative_to(self.root).as_posix(),sha256=reports.checksum(p.read_bytes()))
+        report=self.put(directory+'report.json',dict(spec=reference(spec),records=reference(games)))
+        self.state['temperature_ratings']=[dict(generation=50,report=reference(report))]
+        self.put(self.run+'/state.json',self.state)
+        output,_=self.export()
+        for path in (spec,games,report):
+            self.assertEqual((output/path.relative_to(self.root/self.run)).read_bytes(),path.read_bytes())
+
     def test_collects_latest_two_all_evaluations_and_il_ancestry_preserving_bytes(self):
         self.put(self.run + '/best.json', {'generation': 0})
         self.put(self.run + '/generation-0060.pt', b'large checkpoint excluded')
@@ -331,6 +343,121 @@ class ExportTests(unittest.TestCase):
         self.assertEqual(json.loads((output/'state.json').read_text())['quality_pool'],self.state['quality_pool'])
         paths['records'].write_bytes(b'{"changed":true}\n')
         with self.assertRaisesRegex(ValueError,'evidence changed'):self.export()
+
+    def advance_run(self, generation):
+        self.state.update(iteration=generation, games_done=generation*320)
+        self.put(self.run+'/state.json', self.state)
+        self.put(f'{self.run}/iteration-{generation-1:04d}/report.json',
+                 dict(iteration=generation-1, timings=dict(iteration_seconds=1)))
+
+    def rating_slot(self, generation):
+        directory=f'{self.run}/ratings/slots/generation-{generation:06d}'
+        paths={key:self.put(directory+'/'+name, raw) for key,name,raw in (
+            ('records','games.jsonl',b'{"heldout":true}\n'),
+            ('panels','panels.json',dict(qualified=None)),
+            ('report','report.json',dict(generation=generation)),
+            ('spec','spec.json',dict(generation=generation)))}
+        self.put(directory+'/progress.svg',b'<svg xmlns="http://www.w3.org/2000/svg"/>\n')
+        return dict(generation=generation, **{
+            key:dict(path=path.relative_to(self.root).as_posix(),sha256=reports.checksum(path.read_bytes()))
+            for key,path in paths.items()})
+
+    def test_only_latest_committed_rating_slot_is_copied(self):
+        old=self.rating_slot(10);latest=self.rating_slot(50)
+        self.rating_slot(60)  # On disk but not yet committed in rating state.
+        self.state['ratings']=dict(slots=[latest,old])
+        self.put(self.run+'/state.json',self.state)
+        self.put(self.run+'/ratings/slots/generation-000010/report.json',b'old evidence not selected')
+        output,manifest=self.export()
+        self.assertEqual(manifest['rating_slot_generation'],50)
+        self.assertEqual([p.name for p in (output/'ratings/slots').iterdir()],['generation-000050'])
+        self.assertEqual(len(list((output/'ratings/slots/generation-000050').iterdir())),5)
+        path=self.root/latest['records']['path'];path.write_bytes(b'{"changed":true}\n')
+        with self.assertRaisesRegex(ValueError,'evidence changed'):
+            self.export()
+
+    def test_uncommitted_rating_directory_without_state_slot_is_excluded(self):
+        self.rating_slot(60)
+        output,manifest=self.export()
+        self.assertIsNone(manifest['rating_slot_generation'])
+        self.assertFalse((output/'ratings/slots').exists())
+
+    def test_continue_reuses_legacy_exports_but_copies_new_and_changed_reports(self):
+        original,_=self.export(output='results/original')
+        manifest_path=original/'export-manifest.json'
+        legacy=json.loads(manifest_path.read_text());legacy['format']='selfplay-report-export/1.0.0'
+        manifest_path.write_bytes(reports.encode(legacy))
+        self.advance_run(61)
+        output,manifest=self.export(output='results/next',continue_export=True)
+        self.assertTrue(manifest['incremental'])
+        self.assertFalse((output/'iteration-0059/report.json').exists())
+        self.assertTrue((output/'iteration-0060/report.json').exists())
+        self.assertTrue((output/'state.json').exists())
+        reused=next(e for e in manifest['reused_files'] if e['path']=='iteration-0059/report.json')
+        self.assertEqual(reused['previous_export'],'results/original')
+        for entry in manifest['reused_files']:
+            path=self.root/entry['previous_export']/entry['previous_path']
+            self.assertEqual(reports.checksum(path.read_bytes()),entry['sha256'])
+        changed=dict(iteration=59,timings=dict(iteration_seconds=2),finalized=True)
+        self.put(self.run+'/iteration-0059/report.json',changed)
+        output,manifest=self.export(output='results/finalized',continue_export=True)
+        self.assertEqual(json.loads((output/'iteration-0059/report.json').read_text()),changed)
+        self.assertNotIn('iteration-0059/report.json',{e['path'] for e in manifest['reused_files']})
+
+    def test_continue_first_export_and_foreign_or_future_bundles_do_not_skip_files(self):
+        first,baseline=self.export(output='results/first',continue_export=True)
+        self.assertEqual(baseline['reused_files'],[])
+        path=first/'export-manifest.json';foreign=dict(baseline,run='artifacts/step5/another-run')
+        path.write_bytes(reports.encode(foreign))
+        _,manifest=self.export(output='results/foreign-check',continue_export=True)
+        self.assertEqual(manifest['reused_files'],[])
+        self.assertEqual(len(manifest['files']),len(baseline['files']))
+        for previous in (first,self.root/'results/foreign-check'):
+            path=previous/'export-manifest.json';future=dict(baseline,committed_generation=61)
+            path.write_bytes(reports.encode(future))
+        _,manifest=self.export(output='results/future-check',continue_export=True)
+        self.assertEqual(manifest['reused_files'],[])
+
+    def test_continue_validates_actual_old_bytes_and_keeps_references_flat(self):
+        original,_=self.export(output='results/first')
+        (original/'iteration-0059/report.json').write_bytes(b'corrupted old export')
+        second,manifest=self.export(output='results/second',continue_export=True)
+        self.assertTrue((second/'iteration-0059/report.json').exists())
+        self.assertTrue(any('Previous report unavailable or changed' in w for w in manifest['warnings']))
+        self.advance_run(61)
+        _,manifest=self.export(output='results/third',continue_export=True)
+        report=next(e for e in manifest['reused_files'] if e['path']=='iteration-0059/report.json')
+        self.assertEqual(report['previous_export'],'results/second')
+        history=next(e for e in manifest['reused_files'] if e['path']=='retention-history.json')
+        self.assertEqual(history['previous_export'],'results/first')
+
+    def test_continue_aborts_if_reused_evidence_changes_during_publication(self):
+        original,_=self.export(output='results/original')
+        original_encode=reports.encode
+        def concurrent_write(value):
+            if value.get('format')==reports.FORMAT:
+                (original/'iteration-0059/report.json').write_bytes(b'changed during export')
+            return original_encode(value)
+        with patch.object(reports,'encode',side_effect=concurrent_write):
+            with self.assertRaisesRegex(ValueError,'Previous report changed during export'):
+                self.export(output='results/incomplete',continue_export=True)
+        self.assertFalse((self.root/'results/incomplete').exists())
+
+    def test_continue_cli_reuses_unchanged_latest_rating_evidence(self):
+        slot=self.rating_slot(60);self.state['ratings']=dict(slots=[slot])
+        self.put(self.run+'/state.json',self.state)
+        self.export(output='results/previous')
+        self.advance_run(61)
+        completed=subprocess.run([sys.executable,str(ROOT/'scripts/export-training-reports.py'),
+            '--root',str(self.root),'--run',self.run,'--output','results/continued','--continue'],
+            capture_output=True,text=True)
+        self.assertEqual(completed.returncode,0,completed.stderr)
+        output=self.root/'results/continued'
+        manifest=json.loads((output/'export-manifest.json').read_text())
+        self.assertFalse((output/'ratings/slots').exists())
+        self.assertEqual(len([e for e in manifest['reused_files'] if e['path'].startswith('ratings/slots/')]),5)
+        self.assertEqual(manifest['rating_slot_generation'],60)
+        self.assertIn('Reused',completed.stdout)
 
     def test_real_iteration60_exports_can_be_bundled_without_models_or_torch(self):
         # Reconstruct only report paths in a temporary fixture, never the real run.

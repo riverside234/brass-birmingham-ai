@@ -78,7 +78,8 @@ def compact(report):
     out=scalars(report,('format','iteration','games_done','cumulative_games','incoming_model_id','post_update_model_id',
                        'incoming_policy_id','elapsed_seconds','games','failed_games','promotion_eligible'))
     out['summary_version']=6 if report.get('value_phase') is not None or 'gae' in report.get('actor',{}) else 5
-    for key in ('il_kl_limit','rehearsal_schedule','health_counts','quality_pool','strength_rating','value_phase','seat_fingerprints','gate_diagnostics'):
+    for key in ('il_kl_limit','rehearsal_schedule','health_counts','quality_pool','strength_rating','value_phase','seat_fingerprints','gate_diagnostics',
+                'exploration_rollout','entropy_control','exploration_metrics','temperature_rating'):
         if key in report:out[key]=report[key]
     out['health_by_composition']={k:v['health_counts'] for k,v in report.get('by_composition',{}).items()
                                   if 'health_counts' in v}
@@ -94,6 +95,7 @@ def compact(report):
         'baseline_scope','kl_estimator','kl_probe_rows','kl_probe_sampling'))
     out['actor']['learning_rates']=actor.get('learning_rates',[])[:8]
     out['actor']['lr_controller']=actor.get('lr_controller')
+    if 'branch_sample_usage' in actor:out['actor']['branch_sample_usage']=actor['branch_sample_usage']
     out['actor']['optimizer_steps_planned']=actor.get('optimizer_steps_planned')
     out['actor']['optimizer_steps_fraction']=actor.get('optimizer_steps_fraction')
     schedule=actor.get('learning_rate_schedule')

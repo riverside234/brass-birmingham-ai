@@ -222,7 +222,8 @@ def collection_signature(config,sampling):
     return digest(dict(recipe=config.get('selfplay_recipe'),games=config['games_per_iteration'],
         tables={k:{f:v[f] for f in ('tables','learner_trajectories')} for k,v in sampling['by_composition'].items()},
         exploration=config['exploration'],update={k:config['update'][k] for k in
-            ('epochs','effective_batch_size','critic_batch_size','kl_probe_rows')}))
+            ('epochs','effective_batch_size','critic_batch_size','kl_probe_rows')},
+        **({'exploration_regime':sampling['exploration_regime']} if 'exploration_regime' in sampling else {})))
 
 
 def game_health(games,policy_id,kinds):

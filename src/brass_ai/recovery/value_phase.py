@@ -1,4 +1,4 @@
-"""Bounded PPG critic fitting with guarded steps and held-out epoch acceptance."""
+"""Bounded PPG critic fitting with guarded steps and held-out prefix acceptance."""
 import copy
 import hashlib
 import math
@@ -14,13 +14,23 @@ LEGACY_CONTRACT='ppg-value-phase/2.0.0'
 LEGACY_DEFAULT=dict(contract=LEGACY_CONTRACT,enabled=True,buffer_iterations=2,max_epochs=3,batch_size=4096,
     clone_rows=8192,clone_batch_size=512,beta_clone=1.,beta_clone_max=8.,kl_cap=.002,
     learning_rate=6e-6,holdout_fraction=.05)
-CONTRACT='ppg-value-phase/3.0.0'
+STRATIFIED_CONTRACT='ppg-value-phase/3.0.0'
+CONTRACT='ppg-value-phase/4.0.0'
 from .critic_holdout import DEFAULT as HOLDOUT_DEFAULT
-DEFAULT=dict(LEGACY_DEFAULT,contract=CONTRACT,learning_rate=3e-6,holdout=copy.deepcopy(HOLDOUT_DEFAULT))
+STRATIFIED_DEFAULT=dict(LEGACY_DEFAULT,contract=STRATIFIED_CONTRACT,learning_rate=3e-6,holdout=copy.deepcopy(HOLDOUT_DEFAULT))
+DEFAULT=dict(STRATIFIED_DEFAULT,contract=CONTRACT,acceptance_steps=16)
 CONFIG_MIGRATION='step5-ppg-refinement/1.0.0'
+INTERVAL_MIGRATION='step5-ppg-acceptance-intervals/1.0.0'
 
 
-def stratified(config):return config.get('contract')==CONTRACT
+def stratified(config):return config.get('contract') in (STRATIFIED_CONTRACT,CONTRACT)
+
+
+def interval_options(options):
+    result=copy.deepcopy(options);value=result.get('value_phase')
+    if value is not None and value.get('contract')==STRATIFIED_CONTRACT:
+        validate(value);value.update(contract=CONTRACT,acceptance_steps=16)
+    return result
 
 
 def refined_options(options):
@@ -28,16 +38,20 @@ def refined_options(options):
     result=copy.deepcopy(options);value=result.get('value_phase')
     if value is not None and value.get('contract')==LEGACY_CONTRACT:
         validate(value)
-        value.update(contract=CONTRACT,learning_rate=value['learning_rate']*.5,holdout=copy.deepcopy(HOLDOUT_DEFAULT))
+        value.update(contract=STRATIFIED_CONTRACT,learning_rate=value['learning_rate']*.5,holdout=copy.deepcopy(HOLDOUT_DEFAULT))
     return result
 
 
 def validate(config):
     current=type(config) is dict and stratified(config)
-    require(type(config) is dict and set(config)==set(DEFAULT if current else LEGACY_DEFAULT) and
-            (config['contract'] in (CONTRACT,LEGACY_CONTRACT) or
+    intervals=type(config) is dict and config.get('contract')==CONTRACT
+    require(type(config) is dict and set(config)==set(DEFAULT if intervals else STRATIFIED_DEFAULT if current else LEGACY_DEFAULT) and
+            (config['contract'] in (CONTRACT,STRATIFIED_CONTRACT,LEGACY_CONTRACT) or
              (config['contract']=='ppg-value-phase/1.0.0' and config['buffer_iterations']==1)),
             'Invalid value phase contract/fields')
+    if intervals:
+        require(type(config['acceptance_steps']) is int and 1<=config['acceptance_steps']<=16,
+            'PPG acceptance interval must be 1 to 16 optimizer steps')
     if current:
         from .critic_holdout import validate as validate_holdout
         validate_holdout(config['holdout'])
@@ -56,6 +70,8 @@ def validate(config):
 
 def heldout(game_id,fraction):
     require(type(game_id) is str and bool(game_id),'Critic holdout requires a game id')
+    from .branching import family
+    game_id=family(game_id)
     value=int.from_bytes(hashlib.sha256(('ppg-critic-holdout/1.0.0:'+game_id).encode()).digest()[:8],'big')
     return value < int(fraction*2**64)
 
@@ -106,11 +122,14 @@ def metrics(model,dataset,ids,config,*,unknown=False,evidence=False):
     groups=defaultdict(list);game_ids=[]
     for position,i in enumerate(order):
         game_ids.append(dataset.data[i][2][0])
+        branch='/branch/' in dataset.data[i][2][0]
+        groups['source:'+('branch' if branch else 'ordinary')].append(position)
         context=dataset.rows[i]['view']['context'];era=context['era']
         groups['era:'+era].append(position);groups['phase:'+era+'/'+context['phase']].append(position)
         table=dataset.tables[i];role=dataset.roles[i]
-        groups['table:'+table].append(position);groups['role:'+role].append(position)
-        groups['table:'+table+'/role:'+role].append(position)
+        if not branch:
+            groups['table:'+table].append(position);groups['role:'+role].append(position)
+            groups['table:'+table+'/role:'+role].append(position)
         name=phase_for(context) if type(context.get('round')) is int else None
         groups['period:'+(name or 'unassigned')].append(position)
     probabilities=all_values[:,4:8].reshape(-1);targets=all_values[:,8:12].reshape(-1)
@@ -130,9 +149,12 @@ def metrics(model,dataset,ids,config,*,unknown=False,evidence=False):
             if group:
                 a=all_values[group]
                 summaries[key]['ev_evidence']=statistics(a[:,3],a[:,2],[game_ids[p] for p in group])
-    return dict(summarize(all_values),games=len(set(game_ids)),groups=summaries,
+    summary=summarize(all_values)
+    if 'source:ordinary' in summaries:
+        summary['explained_variance']=summaries['source:ordinary']['explained_variance']
+    return dict(summary,games=len(set(game_ids)),groups=summaries,
         win_calibration=calibration,
-        scope='MC loss over all four stable-seat heads; EV on observing row seat utility, grouped separately by role/table; correlated rows/heads')
+        scope='MC loss over all heldout heads; gate EV and table/role evidence use ordinary games. Branch/ordinary EV reported separately; correlated rows/heads')
 
 
 class RawPolicyReference:
@@ -184,10 +206,13 @@ def fit(model,optimizer,dataset,train_ids,heldout_ids,actor_ids,probe_ids,config
     validation_dataset=dataset if validation_dataset is None else validation_dataset
     report=dict(contract=config['contract'],enabled=config['enabled'],optimizer_steps=0,attempted_steps=0,
         epochs=0,completed_epochs=0,partial_epochs=0,attempted_epochs=0,early_stop_reason=None,kl_guard_tripped=False,
-        acceptance='kl-safe-prefix/1.0.0',kl_cap=config['kl_cap'],
+        acceptance='kl-safe-interval/1.0.0' if 'acceptance_steps' in config else 'kl-safe-prefix/1.0.0',
+        acceptance_steps=config.get('acceptance_steps'),accepted_intervals=0,rejected_intervals=0,interval_reports=[],
+        kl_cap=config['kl_cap'],
         beta_clone=beta,learning_rate=config['learning_rate'],train_rows=len(value_train_ids),heldout_rows=len(heldout_ids),
         current_train_rows=len(train_ids),previous_train_rows=len(value_train_ids)-len(train_ids),
         distinct_value_rows_used=0,value_presentations=0,clone_presentations=0,
+        branch_distinct_rows_used=0,branch_presentations=0,
         attempted_value_presentations=0,attempted_clone_presentations=0,
         distinct_current_rows_used=0,distinct_previous_rows_used=0,current_presentations=0,previous_presentations=0,
         scope='Critic: current plus configured previous iteration; validation/cloning/probes: current only; separate Adam/configured value LR, no PPO counters; KL-safe prefixes require non-increasing held-out loss')
@@ -203,66 +228,77 @@ def fit(model,optimizer,dataset,train_ids,heldout_ids,actor_ids,probe_ids,config
     reference=RawPolicyReference(model,dataset,sorted(set(clones)|set(probe_ids)),update)
     train_before=metrics(model,value_dataset,value_train_ids,update);before=metrics(model,validation_dataset,heldout_ids,update,evidence=True)
     current=before;epochs=[];used=set();presentations=0;clone_presentations=0
-    max_kl=0.;accepted_kl=0.;last_attempt=None;previous_presentations=0;role_presentations=defaultdict(int)
+    max_kl=0.;accepted_kl=0.;last_attempt=None;previous_presentations=0;role_presentations=defaultdict(int);branch_presentations=0
     for epoch in range(config['max_epochs']):
-        # Restore BOTH weights and this optimizer's moments on a rejected epoch.
-        # PPO's optimizer/state and counters are never read or written here.
-        saved_model=copy.deepcopy(model.state_dict());saved_adam=copy.deepcopy(optimizer.state_dict())
         order=[value_train_ids[j] for j in torch.randperm(len(value_train_ids)).tolist()]
-        attempted=0;safe_steps=0;epoch_used=set();epoch_presentations=0;epoch_clones=0
-        attempted_presentations=0;attempted_clones=0;safe_kl=accepted_kl
-        for start in range(0,len(order),config['batch_size']):
-            # Keep only one pre-step snapshot in addition to the epoch origin.
-            # A cap hit discards this step, not the preceding safe prefix. Adam
-            # moments/step counters are restored with weights; draw RNG remains
-            # consumed, just as with the existing rejected-epoch transaction.
-            step_model=copy.deepcopy(model.state_dict());step_adam=copy.deepcopy(optimizer.state_dict())
-            batch=order[start:start+config['batch_size']];optimizer.zero_grad(set_to_none=True);model.train()
-            for part,ix,inputs in value_dataset.value_batches(value_parts(value_dataset,batch,update,model),model):
-                drop=None if dropout is None else (dropout[0],epoch,dropout[1],'value')
-                with autocast(update,value_dataset.device):out=value_output(model,inputs,value_dataset,ix,dropout=drop)
-                loss=value_losses(out,tuple(t[ix] for t in value_dataset.targets))[0]
-                loss=loss+(out[4].float()-value_dataset.utility[ix]).square().mean(-1)
-                ((loss*value_dataset.critic_weights[ix]).sum()/len(batch)).backward()
-            sample=[clones[j] for j in torch.randint(len(clones),(config['clone_batch_size'],)).tolist()]
-            for part in dataset.microbatches(sample,update['microbatch_size'],update['max_candidate_cells'],update['bucket']):
-                _,inputs,_=dataset.batch(part)
-                with autocast(update,dataset.device):loss=reference.loss(part,inputs,model)
-                (beta*loss.sum()/len(sample)).backward()
-            torch.nn.utils.clip_grad_norm_(model.parameters(),update['grad_clip'],error_if_nonfinite=True)
-            optimizer.step();attempted+=1;attempted_presentations+=len(batch);attempted_clones+=len(sample)
-            measured=reference.measure(model,probe_ids);max_kl=max(max_kl,measured)
-            if measured>config['kl_cap']:
-                model.load_state_dict(step_model);optimizer.load_state_dict(step_adam)
-                report.update(early_stop_reason='policy_kl_cap',kl_guard_tripped=True)
+        batches=[order[start:start+config['batch_size']] for start in range(0,len(order),config['batch_size'])]
+        interval=config.get('acceptance_steps',len(batches))
+        epoch_before=current['loss'];epoch_steps=0;epoch_safe=0;epoch_accepted=0;rejection_reason=None
+        report['attempted_epochs']+=1
+        for segment in range(0,len(batches),interval):
+            # A rejected segment restores BOTH weights and Adam to the last
+            # accepted boundary. PPO state is untouched; draw RNG is consumed.
+            saved_model=copy.deepcopy(model.state_dict());saved_adam=copy.deepcopy(optimizer.state_dict())
+            attempted=0;safe_steps=0;segment_used=[];segment_clones=0;safe_kl=accepted_kl
+            for batch in batches[segment:segment+interval]:
+                step_model=copy.deepcopy(model.state_dict());step_adam=copy.deepcopy(optimizer.state_dict())
+                optimizer.zero_grad(set_to_none=True);model.train()
+                for part,ix,inputs in value_dataset.value_batches(value_parts(value_dataset,batch,update,model),model):
+                    drop=None if dropout is None else (dropout[0],epoch,dropout[1],'value')
+                    with autocast(update,value_dataset.device):out=value_output(model,inputs,value_dataset,ix,dropout=drop)
+                    loss=value_losses(out,tuple(t[ix] for t in value_dataset.targets))[0]
+                    loss=loss+(out[4].float()-value_dataset.utility[ix]).square().mean(-1)
+                    ((loss*value_dataset.critic_weights[ix]).sum()/len(batch)).backward()
+                sample=[clones[j] for j in torch.randint(len(clones),(config['clone_batch_size'],)).tolist()]
+                for part in dataset.microbatches(sample,update['microbatch_size'],update['max_candidate_cells'],update['bucket']):
+                    _,inputs,_=dataset.batch(part)
+                    with autocast(update,dataset.device):loss=reference.loss(part,inputs,model)
+                    (beta*loss.sum()/len(sample)).backward()
+                torch.nn.utils.clip_grad_norm_(model.parameters(),update['grad_clip'],error_if_nonfinite=True)
+                optimizer.step();attempted+=1
+                report['attempted_value_presentations']+=len(batch);report['attempted_clone_presentations']+=len(sample)
+                measured=reference.measure(model,probe_ids);max_kl=max(max_kl,measured)
+                if measured>config['kl_cap']:
+                    model.load_state_dict(step_model);optimizer.load_state_dict(step_adam)
+                    report.update(early_stop_reason='policy_kl_cap',kl_guard_tripped=True)
+                else:
+                    safe_steps+=1;safe_kl=measured;segment_used.extend(batch);segment_clones+=len(sample)
+                del step_model,step_adam
+                if report['kl_guard_tripped']:break
+            report['attempted_steps']+=attempted;epoch_steps+=attempted;epoch_safe+=safe_steps
+            # Evaluate only the safe prefix. The KL reference remains fixed at
+            # post-PPO weights for the entire phase, across all accepted segments.
+            last_attempt=metrics(model,validation_dataset,heldout_ids,update,evidence=True)
+            loss_increased=last_attempt['loss']>current['loss']
+            rejected=not safe_steps or loss_increased
+            rejection_reason='heldout_loss_increased' if loss_increased else 'no_safe_steps' if rejected else None
+            if report['early_stop_reason'] is None and loss_increased:
+                report['early_stop_reason']='heldout_loss_increased'
+            report['interval_reports'].append(dict(epoch=epoch+1,start_step=segment+1,
+                steps=attempted,safe_steps=safe_steps,accepted=not rejected,
+                accepted_steps=0 if rejected else safe_steps,rejection_reason=rejection_reason,
+                heldout_loss_before=current['loss'],heldout_loss_attempted=last_attempt['loss'],
+                probe_kl=safe_kl,attempted_probe_kl=measured))
+            if rejected:
+                report['rejected_intervals']+=1
+                model.load_state_dict(saved_model);optimizer.load_state_dict(saved_adam)
             else:
-                safe_steps+=1;safe_kl=measured;epoch_used.update(batch)
-                epoch_presentations+=len(batch);epoch_clones+=len(sample)
-            del step_model,step_adam
-            if report['kl_guard_tripped']:break
-        report['attempted_steps']+=attempted;report['attempted_epochs']+=1
-        report['attempted_value_presentations']+=attempted_presentations
-        report['attempted_clone_presentations']+=attempted_clones
-        # Evaluate the restored safe prefix, never the policy-violating step.
-        last_attempt=metrics(model,validation_dataset,heldout_ids,update,evidence=True)
-        loss_increased=last_attempt['loss']>current['loss']
-        if report['early_stop_reason'] is None and loss_increased:
-            report['early_stop_reason']='heldout_loss_increased'
-        rejected=not safe_steps or loss_increased
-        partial=safe_steps<attempted
-        epochs.append(dict(epoch=epoch+1,steps=attempted,accepted=not rejected,
-            accepted_steps=0 if rejected else safe_steps,safe_steps=safe_steps,partial=partial,
-            rejection_reason='heldout_loss_increased' if loss_increased else 'no_safe_steps' if rejected else None,
-            heldout_loss_before=current['loss'],heldout_loss_attempted=last_attempt['loss'],
-            probe_kl=safe_kl,attempted_probe_kl=measured))
-        if rejected:
-            model.load_state_dict(saved_model);optimizer.load_state_dict(saved_adam);break
-        current=last_attempt;accepted_kl=safe_kl;report['epochs']+=1;report['optimizer_steps']+=safe_steps
-        report['partial_epochs' if partial else 'completed_epochs']+=1
-        used.update(epoch_used);presentations+=epoch_presentations;clone_presentations+=epoch_clones
-        previous_presentations+=sum(i>=current_count for i in epoch_used)
-        for i in epoch_used:role_presentations[value_dataset.roles[i]]+=1
-        if report['kl_guard_tripped']:break
+                report['accepted_intervals']+=1;epoch_accepted+=safe_steps
+                current=last_attempt;accepted_kl=safe_kl;report['optimizer_steps']+=safe_steps
+                used.update(segment_used);presentations+=len(segment_used);clone_presentations+=segment_clones
+                previous_presentations+=sum(i>=current_count for i in segment_used)
+                branch_presentations+=sum('/branch/' in value_dataset.data[i][2][0] for i in segment_used)
+                for i in segment_used:role_presentations[value_dataset.roles[i]]+=1
+            del saved_model,saved_adam
+            if rejected or report['kl_guard_tripped']:break
+        partial=epoch_accepted<len(batches)
+        epochs.append(dict(epoch=epoch+1,steps=epoch_steps,accepted=bool(epoch_accepted),
+            accepted_steps=epoch_accepted,safe_steps=epoch_safe,partial=partial,
+            rejection_reason=rejection_reason,heldout_loss_before=epoch_before,
+            heldout_loss_attempted=last_attempt['loss'],probe_kl=accepted_kl,attempted_probe_kl=measured))
+        if epoch_accepted:
+            report['epochs']+=1;report['partial_epochs' if partial else 'completed_epochs']+=1
+        if report['early_stop_reason'] is not None:break
     optimizer.zero_grad(set_to_none=True);model.eval()
     # One fresh receipt for the final accepted weights. No head refit on the
     # holdout, and no stale pre-value-phase receipt after trunk movement.
@@ -271,7 +307,7 @@ def fit(model,optimizer,dataset,train_ids,heldout_ids,actor_ids,probe_ids,config
     train_after=metrics(model,value_dataset,value_train_ids,update) if report['optimizer_steps'] else copy.deepcopy(train_before)
     if report['optimizer_steps']:
         ready=train_after['utility_mse']<=train_before['utility_mse']+1e-8
-        model.utility_calibration=dict(version=CONTRACT,reward_id=digest(model.config.utility),ready=ready,
+        model.utility_calibration=dict(version=config['contract'],reward_id=digest(model.config.utility),ready=ready,
             decisions=len(value_train_ids),games=train_after['games'],steps=report['optimizer_steps'],
             before=dict(mse=train_before['utility_mse']),after=dict(mse=train_after['utility_mse']),
             scope='Final accepted value-phase weights; ordinary critic-train games only; heldout games excluded')
@@ -280,10 +316,12 @@ def fit(model,optimizer,dataset,train_ids,heldout_ids,actor_ids,probe_ids,config
         # reissue its old pre-PPO receipt as evidence about these weights.
         model.utility_calibration=None
     report.update(train_before=train_before,train_after=train_after,heldout_before=before,heldout_after=current,
-        last_attempted_heldout=last_attempt,heldout_attempt_scope='Safe epoch/prefix after any violating step is restored',
+        last_attempted_heldout=last_attempt,heldout_attempt_scope='Safe interval/prefix after any violating step is restored',
         clone_rows=len(clones),clone_kl=reference.measure(model,clones),
         probe_rows=len(probe_ids),probe_kl=reference.measure(model,probe_ids),maximum_attempted_probe_kl=max_kl,
         distinct_value_rows_used=len(used),value_presentations=presentations,clone_presentations=clone_presentations,
+        branch_distinct_rows_used=sum('/branch/' in value_dataset.data[i][2][0] for i in used),
+        branch_presentations=branch_presentations,
         distinct_current_rows_used=sum(i<current_count for i in used),
         distinct_previous_rows_used=sum(i>=current_count for i in used),
         current_presentations=presentations-previous_presentations,previous_presentations=previous_presentations,

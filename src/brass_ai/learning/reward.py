@@ -41,14 +41,16 @@ def terminal_utility(result,spec):
     return np.asarray([sum(spec[k]*parts[k][s] for k in COEFFICIENTS) for s in range(4)],dtype=np.float64)
 
 
-def replay_returns(records,result,spec):
+def replay_returns(records,result,spec,initial_spent=None):
     """Four-seat future costs and budgets at each predecision observation."""
     from brass_ai.recovery.insolvency import events
-    charges={};spent=np.zeros(4);cap=spec['insolvency']['max_cost']
+    charges={};spent=np.asarray(initial_spent or [0.]*4,dtype=float).copy();cap=spec['insolvency']['max_cost']
+    require(spent.shape==(4,) and np.isfinite(spent).all() and (spent>=0).all() and (spent<=cap).all(),
+            'Invalid initial insolvency budget')
     for event in events(records):
         s=event['seat'];cost=min(spec['insolvency']['event_cost'],max(0.,cap-spent[s]))
         spent[s]+=cost;charges.setdefault(event['before'],np.zeros(4))[s]+=cost
-    total=spent.copy();past=np.zeros(4);terminal=terminal_utility(result,spec)
+    total=spent.copy();past=np.asarray(initial_spent or [0.]*4,dtype=float).copy();terminal=terminal_utility(result,spec)
     output=[]
     for i in range(len(records)):
         past+=charges.get(i,0.)

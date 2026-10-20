@@ -26,7 +26,9 @@ class TrainingPhases:
         evidence_contract='actor-value-phases/4.0.0' if gae.windowed(config['advantage']) else previous_contract
         base_contract='actor-value-phases/5.0.0' if descriptors else evidence_contract
         self.contract='actor-value-phases/6.0.0' if value_phase.stratified(config['value_phase']) else base_contract
-        self.evidence_migration=None;self.critic_migration=None;self.refinement_migration=None
+        if config['value_phase']['contract']==value_phase.CONTRACT or gae.stage_windowed(config['advantage']):
+            self.contract='actor-value-phases/7.0.0'
+        self.evidence_migration=None;self.critic_migration=None;self.refinement_migration=None;self.window_migration=None
         saved=(raw or {}).get('training',{}).get(KEY)
         previous_value=(saved or {}).get('options',{}).get('value_phase')
         if saved is None:
@@ -35,7 +37,16 @@ class TrainingPhases:
             if descriptors:self.critic_state=critic_data.initial(config['critic_data'])
         else:
             require(type(saved) is dict,'Invalid GAE/value checkpoint')
-            migration_options=copy.deepcopy(self.options)
+            refinement_options=copy.deepcopy(self.options)
+            if saved.get('contract')!='actor-value-phases/7.0.0':
+                if refinement_options['value_phase']['contract']==value_phase.CONTRACT:
+                    refinement_options['value_phase'].pop('acceptance_steps')
+                    refinement_options['value_phase']['contract']=value_phase.STRATIFIED_CONTRACT
+                if gae.stage_windowed(refinement_options['advantage']):
+                    gate=refinement_options['advantage']['gate']
+                    refinement_options['advantage']['gate']={k:copy.deepcopy(gate[k]) for k in gae.LEGACY_GATE}
+                    refinement_options['advantage']['gate']['contract']=gae.LEGACY_GATE['contract']
+            migration_options=copy.deepcopy(refinement_options)
             if self.contract!=base_contract and previous_value and previous_value.get('contract')==value_phase.LEGACY_CONTRACT:
                 # Older reviewed EV/weight-recovery upgrades compose before
                 # the value-only refinement, without bypassing their checks.
@@ -49,7 +60,7 @@ class TrainingPhases:
                         dict(migration_options,reward=config.get('reward',{})),
                         'GAE/value checkpoint configuration differs during evidence upgrade')
                 saved=copy.deepcopy(saved)
-                saved['gae']=gae.migrate_state(saved['gae'],saved['options']['advantage'],config['advantage'],generation)
+                saved['gae']=gae.migrate_state(saved['gae'],saved['options']['advantage'],migration_options['advantage'],generation)
                 saved.update(contract=(base_contract if saved['contract']==base_contract else evidence_contract),
                     options=copy.deepcopy(migration_options))
                 self.evidence_migration=dict(contract=gae.CONFIG_MIGRATION,origin=generation,
@@ -62,13 +73,13 @@ class TrainingPhases:
                 self.critic_migration=dict(contract=critic_data.RECOVERY_CONTRACT,origin=generation,
                     scope='Empty weight-recovery streak; saved weight, baseline, activation, fingerprint, both Adams and GAE state preserved')
             if self.contract!=base_contract and saved.get('contract')==base_contract:
-                require(value_phase.refined_options(saved.get('options',{}))==self.options,
+                require(value_phase.refined_options(saved.get('options',{}))==refinement_options,
                     'GAE/value checkpoint configuration differs during PPG refinement')
                 saved=copy.deepcopy(saved);groups=saved['optimizer']['param_groups']
                 old_rate=saved['options']['value_phase']['learning_rate']
                 require(len(groups)==1 and groups[0]['lr']==old_rate,'Previous value optimizer LR differs')
                 groups[0]['lr']=config['value_phase']['learning_rate']
-                saved.update(contract=self.contract,options=copy.deepcopy(self.options))
+                saved.update(contract='actor-value-phases/6.0.0',options=copy.deepcopy(refinement_options))
                 # Do not combine evidence gathered under different selection
                 # protocols into a new qualification/recovery streak.
                 state=saved['gae'];state.update(ev_streak=0,healthy_streak=0)
@@ -80,6 +91,16 @@ class TrainingPhases:
                 self.refinement_migration=dict(contract=value_phase.CONFIG_MIGRATION,origin=generation,
                     learning_rate_before=old_rate,learning_rate_after=config['value_phase']['learning_rate'],
                     scope='Value LR only changes in Adam; all moments/steps, weights and RNG preserved. New holdout evidence starts here; lambdas, activation/origins, snapshot weight, fixed EV baseline and training counters retained.')
+            if self.contract=='actor-value-phases/7.0.0' and saved.get('contract')=='actor-value-phases/6.0.0':
+                require(value_phase.interval_options(gae.health_options(saved['options']))==self.options,
+                    'GAE/value checkpoint configuration differs during interval/window upgrade')
+                saved=copy.deepcopy(saved)
+                if gae.stage_windowed(self.options['advantage']):
+                    saved['gae']=gae.migrate_health(saved['gae'],saved['options']['advantage'],
+                        self.options['advantage'],generation)
+                saved.update(contract=self.contract,options=copy.deepcopy(self.options))
+                self.window_migration=dict(origin=generation,acceptance_steps=config['value_phase'].get('acceptance_steps'),
+                    scope='New stage-evidence window starts at committed progress; no backfill. Both Adams, RNG, counters, active lambda, existing streaks, mixed-table EV evidence and previous critic cache preserved.')
             fields={'contract','options','gae','beta_clone','kl_trips','optimizer'}|({'buffer'} if buffered else set())|({'critic_data'} if descriptors else set())
             require(type(saved) is dict and set(saved)==fields
                     and saved['contract']==self.contract and saved['options']==self.options,
@@ -172,6 +193,7 @@ class TrainingPhases:
         else:self.value_report=fit()
         self.value_report['split']=self.split
         if self.refinement_migration:self.value_report['refinement_migration']=self.refinement_migration
+        if self.window_migration:self.value_report['window_migration']=self.window_migration
         return self.value_report
 
     def finish(self,*,generation,update,anchor_gate,rating):
@@ -188,8 +210,8 @@ class TrainingPhases:
             kl_trip_window=list(self.trips))
         kl=update['categorical_probe']['categorical_kl']
         # The calibrated IL distance budget/latch controls LR increases only.
-        # GAE and critic adoption still require the underlying economy AND
-        # behavior checks, plus their own PPO/value KL and evidence gates.
+        # GAE and critic adoption require economic health plus their own
+        # PPO/value KL and evidence gates. No IL action-probability checks.
         training_health=(anchor_gate.get('health',anchor_gate) if anchor_gate else None)
         healthy=bool(training_health and training_health.get('ok') is True and update['controller_warmup_done'] and
             update['optimizer_steps']>0 and not update['kl_early_stop'] and gae.finite(kl) and
@@ -198,7 +220,8 @@ class TrainingPhases:
             value_report=value,health_ok=healthy,rating=rating)
         report['anchor_gate']=copy.deepcopy(anchor_gate)
         report['training_health']=copy.deepcopy(training_health)
-        report['health_scope']='Economy/behavior health and PPO/value guards; calibrated IL distance/latch gates LR increases only'
+        report['health_scope']='Economic health and PPO/value guards; calibrated IL distance/latch gates LR increases only'
+        if getattr(self,'window_migration',None):report['window_migration']=copy.deepcopy(self.window_migration)
         if self.evidence_migration:report['evidence_migration']=copy.deepcopy(self.evidence_migration)
         if self.critic_state is not None:
             self.critic_state,value['critic_rollout']=critic_data.advance(self.critic_state,self.config['critic_data'],
@@ -220,6 +243,7 @@ class TrainingPhases:
             self.value_report['buffer']['committed_cleanup']=self.buffer.committed(generation)
         self.collection_source=None
         self.refinement_migration=None
+        self.window_migration=None
 
     def release(self):
         self.dataset=None;self.critic_dataset=None;self.snapshot_data=[];self.ppo_probe=None;self.probe_ids=None

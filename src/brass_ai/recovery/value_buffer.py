@@ -120,7 +120,7 @@ class ValueDataset(Dataset):
 class DiskBuffer:
     def __init__(self,root,run,config,*,generation,receipt=None,previous_reward=None,previous_value=None):
         from .utility import reward_spec,event_cost_upgrade
-        from .value_phase import stratified,refined_options
+        from .value_phase import stratified,refined_options,interval_options
         self.root,self.run=owned(root,run);self.config=config;self.generation=generation
         self.stratified=stratified(config['value_phase'])
         self.reward_id=digest(reward_spec(config))
@@ -140,8 +140,10 @@ class DiskBuffer:
         require((generation==0)==(receipt is None),'Missing committed PPG buffer receipt')
         if receipt is not None:
             reward_change=receipt.get('reward_id')!=self.reward_id and event_cost_upgrade(previous_reward,reward_spec(config))
+            prior_refined=refined_options(dict(value_phase=previous_value)) if previous_value else {}
             holdout_change=bool(previous_value and not stratified(previous_value) and self.stratified and
-                refined_options(dict(value_phase=previous_value))['value_phase']==config['value_phase'])
+                config['value_phase'] in (prior_refined['value_phase'],
+                    interval_options(prior_refined)['value_phase']))
             if reward_change or holdout_change:
                 # Exact reviewed transition: no relabeling of old targets or
                 # selection. Retain old files until the next successful commit.

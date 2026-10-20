@@ -191,6 +191,7 @@ def _references(root,run):
             selected['il_kl_probe']=d.get('il_kl_limit',{}).get('probe')
             selected['quality_members']=d.get('quality_pool',{}).get('members')
             selected['ratings']=d.get('ratings')
+            selected['temperature_ratings']=d.get('temperature_ratings')
             selected['accepted_gate']=d.get('champion_gate',{}).get('accepted_gate')
             cfg=d.get('signature',{}).get('config',{})
             selected['datasets']=[cfg.get('rehearsal_manifest'),cfg.get('imitation',{}).get('manifest')]

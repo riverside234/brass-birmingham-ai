@@ -39,22 +39,15 @@ def mixed_ev_console(diagnostics):
 
 
 def gate_diagnostics(actor,value=None,limit=None,quality=None):
-    """Expose coupled stalls from existing measurements; no new thresholds.
-
-    This is reporting only. It must not turn healthy economy averages into an
-    override for failed per-position behavior checks or rewrite gate state.
-    """
+    """Expose coupled stalls from existing measurements; never rewrite gates."""
     value=value or {};limit=limit or {};quality=quality or {}
-    health=limit.get('health',{});behavior=limit.get('measurement',{}).get('behavior',{})
-    passing=behavior.get('passing') or {}
+    health=limit.get('health',{})
     planning=quality.get('planning',{});attempts=value.get('attempted_steps',0)
     before=value.get('heldout_before',{}).get('loss');after=value.get('heldout_after',{}).get('loss')
     groups=value.get('heldout_after',{}).get('groups',{})
     tables=actor.get('gae',{}).get('gate',{}).get('table_gate',{})
     mixed=mixed_ev_status(tables)
     warnings=[]
-    if health.get('ok') is False and 'behavior_check_failed' in health.get('reasons',[]):
-        warnings.append('il_behavior_check_failed')
     if limit.get('alarm'):warnings.append('il_distance_alarm')
     if planning.get('N')==0 and limit.get('baseline') is not None:
         warnings.append('history_pool_il_only')
@@ -63,15 +56,16 @@ def gate_diagnostics(actor,value=None,limit=None,quality=None):
     for kind,row in mixed.items():
         if row['enabled'] and row['lambda_next'] is not None and row['lambda_next']<1. and row['status']=='below_tolerance':
             warnings.append('mixed_ev_below_tolerance:'+kind)
-    return dict(contract='selfplay-gate-diagnostics/2.1.0',warnings=warnings,
+    return dict(contract='selfplay-gate-diagnostics/2.2.0',warnings=warnings,
         health_ok=health.get('ok'),health_reasons=list(health.get('reasons',[])),
-        pass_failures=passing.get('failures'),pass_positions=passing.get('positions'),
         lr_blockers=list(limit.get('lr_gate',{}).get('reasons',[])),
         scored_history_members_used=planning.get('N'),
         history_il_only=planning.get('N')==0 if 'N' in planning else None,
         history_admission_reason=quality.get('admission',{}).get('reason'),
         pool_regression_alarms=quality.get('alarms',[]),
         value_accepted_steps=value.get('optimizer_steps'),value_attempted_steps=value.get('attempted_steps'),
+        value_acceptance_interval=value.get('acceptance_steps'),
+        value_accepted_intervals=value.get('accepted_intervals'),
         value_accepted_fraction=value.get('optimizer_steps',0)/attempts if attempts else None,
         value_stop=value.get('early_stop_reason'),beta_reason=value.get('beta_reason'),
         heldout_loss_delta=after-before if before is not None and after is not None else None,
@@ -80,6 +74,7 @@ def gate_diagnostics(actor,value=None,limit=None,quality=None):
             ev=groups.get('table:'+k+'/role:learner',{}).get('explained_variance'))
             for k in ('selfplay','historical','legacy')},
         gae_reason=actor.get('gae',{}).get('gate',{}).get('reason'),
+        gae_stage_evidence=actor.get('gae',{}).get('gate',{}).get('stage_evidence'),
         mixed_ev_evidence=tables,mixed_ev_status=mixed,
         scope='Existing evidence only; missing groups are unavailable, not zero EV; no automatic threshold changes')
 
@@ -122,7 +117,7 @@ class CategoricalProbe:
     Each stored CPU tensor is bounded by the ordinary candidate-cell limit.
     """
     def __init__(self, model, dataset, indices, behavior, config):
-        from .updates import probabilities
+        from .updates import row_probabilities
         self.parts = []
         self.dataset, self.behavior = dataset, behavior
         self.positions = len(indices)
@@ -130,7 +125,7 @@ class CategoricalProbe:
             for part in dataset.microbatches(indices, config['microbatch_size'],
                                             config['max_candidate_cells'], config['bucket']):
                 _, inputs, q = dataset.batch(part, behavior.exploration)
-                p = probabilities(model(*inputs)[0], q, behavior.exploration, behavior.temperature)
+                p = row_probabilities(dataset,part,model(*inputs)[0],q,behavior)
                 self.parts.append((part, p.detach().cpu()))
 
     def measure_step(self, model, *, executor=None):
@@ -140,13 +135,13 @@ class CategoricalProbe:
         Accumulate on-device, then synchronize once; do not reevaluate the IL
         anchor, resample positions or advance training RNG inside the guard.
         """
-        from .updates import probabilities
+        from .updates import row_probabilities
         totals = torch.zeros(2, device=self.dataset.device)
         parts = (part for part, _ in self.parts)
         batches = self.dataset.policy_batches(parts, self.behavior.exploration, executor)
         with torch.no_grad():
             for (_, before), (_, ix, inputs, q) in zip(self.parts, batches):
-                p = probabilities(model(*inputs)[0], q, self.behavior.exploration, self.behavior.temperature)
+                p = row_probabilities(self.dataset,ix,model(*inputs)[0],q,self.behavior)
                 old = before.to(p.device)
                 selected = p.gather(1, self.dataset.chosen[ix, None]).squeeze(1).clamp_min(1e-30)
                 ratio = selected/self.dataset.old[ix]
@@ -156,8 +151,8 @@ class CategoricalProbe:
         return dict(positions=self.positions, categorical_kl=exact, sampled_kl=sampled)
 
     def measure(self, model, anchor=None):
-        from .updates import probabilities
-        kl = entropy = relative_entropy = anchor_kl = 0.
+        from .updates import row_probabilities
+        kl = entropy = relative_entropy = anchor_kl = raw_entropy = raw_relative = 0.
         groups={};unassigned=0
         if anchor is not None:
             # Reuse the existing round boundaries, not the action/payment phase
@@ -167,15 +162,20 @@ class CategoricalProbe:
         with torch.no_grad():
             for part, before in self.parts:
                 _, inputs, q = self.dataset.batch(part, self.behavior.exploration)
-                p = probabilities(model(*inputs)[0], q, self.behavior.exploration, self.behavior.temperature)
+                logits=model(*inputs)[0]
+                p = row_probabilities(self.dataset,part,logits,q,self.behavior)
                 old = before.to(p.device)
                 kl += float(categorical_kl(old, p))
                 ent = -(p*p.clamp_min(1e-30).log()).sum(-1)
                 legal = inputs[2].sum(-1).float()
                 entropy += float(ent.sum())
                 relative_entropy += float((ent/legal.log().clamp_min(1e-8)).sum())
+                raw=torch.softmax(logits.float(),-1)
+                raw_ent=-(raw*raw.clamp_min(1e-30).log()).sum(-1)
+                raw_entropy+=float(raw_ent.sum())
+                raw_relative+=float((raw_ent/legal.log().clamp_min(1e-8)).sum())
                 if anchor is not None:
-                    reference=probabilities(anchor(*inputs)[0],q,self.behavior.exploration,self.behavior.temperature)
+                    reference=row_probabilities(self.dataset,part,anchor(*inputs)[0],q,self.behavior)
                     distances=(reference*(reference.clamp_min(1e-30).log()-p.clamp_min(1e-30).log())).sum(-1).cpu().tolist()
                     anchor_kl+=sum(distances)
                     for index,distance in zip(part,distances):
@@ -188,6 +188,8 @@ class CategoricalProbe:
             anchor_distance=row['total']/row['positions'] if row['positions'] and np.isfinite(row['total']) else None)
             for name,row in groups.items()}
         return dict(positions=self.positions, categorical_kl=kl/max(1,self.positions),
+                    raw_entropy=raw_entropy/max(1,self.positions),
+                    raw_entropy_over_log_legal=raw_relative/max(1,self.positions),
                     entropy=entropy/max(1,self.positions),
                     entropy_over_log_legal=relative_entropy/max(1,self.positions),
                     **(dict(anchor_distance=anchor_kl/self.positions if self.positions else None,

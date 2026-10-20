@@ -65,7 +65,9 @@ class CheckedGame(dict):
 
 def check_game(game, arrays=None,*,validated_inputs=False):
     require(not validated_inputs or arrays is not None,'Checked ingress requires attested arrays')
-    keys(game, ('game_id', 'setup_group', 'players', 'split', 'opponents', 'result', 'records'))
+    keys(game, ('game_id', 'setup_group', 'players', 'split', 'opponents', 'result', 'records'),
+         ('branch','branches','branch_statistics'))
+    require(not ('branch' in game and ('branches' in game or 'branch_statistics' in game)), 'Nested branch forbidden')
     require(type(game['players']) is int and game['players'] == 4, 'Replay must have four seats')
     require(all(isinstance(game[k], str) and game[k] for k in ('game_id','setup_group')), 'Missing game identity')
     require(game['split'] == split_for(game['setup_group']), 'Setup split mismatch')
@@ -97,7 +99,11 @@ def check_game(game, arrays=None,*,validated_inputs=False):
         require(type(row['chosen']) is int and 0 <= row['chosen'] < len(row['choices']), 'Illegal chosen index')
         revision = row['view']['context']['revision']
         require(revision > previous, 'Repeated or reversed revision'); previous = revision
-        b = row['behavior']; keys(b, ('kind','policy_id','probability','temperature'))
+        b = row['behavior']
+        if 'exploration_version' in b:
+            from .exploration import check_behavior
+            check_behavior(b,row['view']['context']['phase'],branch_move='branch' in game and step==0)
+        else:keys(b, ('kind','policy_id','probability','temperature'))
         require(b['kind'] in ('model','random','external') and b['policy_id'] == game['opponents'][row['seat']],
                 'Behavior attribution differs')
         finite_vector([b['probability']],1,0,1); require(b['probability'] > 0,'Zero behavior probability')
@@ -107,7 +113,13 @@ def check_game(game, arrays=None,*,validated_inputs=False):
             require(row['teacher']['legal_ids']==[c['id'] for c in row['choices']] and
                     row['teacher']['observer']==row['seat'], 'Teacher action order/observer mismatch')
         encoded.append(e)
-    require({r['seat'] for r in game['records']} == set(range(4)), 'Missing seat trajectories')
+    if 'branch' not in game:
+        require({r['seat'] for r in game['records']} == set(range(4)), 'Missing seat trajectories')
+    if 'branches' in game:
+        from .branching import validate_child
+        require(type(game['branches']) is list and len(game['branches'])<=1,'Too many branch games')
+        game=dict(game,branches=[check_game(child) for child in game['branches']])
+        for child in game['branches']:validate_child(game,child)
     return CheckedGame(game).bind(encoded)
 
 
@@ -225,6 +237,11 @@ def read_shards(paths,partition=None,receipts=None,*,heuristic_only=False):
             # Descriptors are table metadata, separate from the immutable board
             # observation/Features-4 contract. The enclosing replay hash seals it.
             proof=jobs[ordinal]['provenance'] if jobs is not None else header['provenance']
+            require('branch' not in game,'Standalone branch replay lacks parent evidence')
+            if game.get('branches'):
+                require(proof.get('purpose')=='training' and proof.get('kind')=='selfplay' and
+                    proof.get('exploration',{}).get('branching') is not None,
+                    'Branch replay outside ordinary self-play')
             if 'critic_table' in proof:
                 game.critic_table=proof['critic_table'];game.table_kind=proof['kind']
             if partition is None or game['split']==partition: output.append(game)

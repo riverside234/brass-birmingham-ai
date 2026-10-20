@@ -35,6 +35,9 @@ from test_mlp_v11 import inputs
 def config():
     # These regressions cover the explicit 1.1 ordinary-probe controller.
     value=read_json(SOURCE_ROOT/'configs/step5/joint7-latest.json')
+    from brass_ai.recovery.exploration import BLOCKS
+    for key in BLOCKS:value.pop(key,None)
+    value['exploration']=.08
     value['ppo_lr_controller']['contract']=controller.CONTRACT
     value.pop('il_kl_limit',None)
     for key in ('table_plan','opponent_pool','rating','v4_search_enabled','advantage','value_phase',

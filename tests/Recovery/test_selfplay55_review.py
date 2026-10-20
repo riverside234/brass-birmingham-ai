@@ -66,11 +66,12 @@ class AdoptionAndDiagnostics(unittest.TestCase):
         self.assertTrue(report['training_health']['ok'])
         self.assertEqual(gate,original);self.assertTrue(torch.equal(rng,torch.get_rng_state()))
 
-    def test_behavior_failure_still_blocks_both_adoptions_even_with_healthy_economy(self):
-        r=read(EXPORT/'iteration-0054/report.json');gate=r['il_kl_limit']['lr_gate']
-        self.assertTrue(all(c['ok'] for c in gate['health']['checks'].values()))
-        self.assertIn('behavior_check_failed',gate['health']['reasons'])
-        p,u=phase_fixture(9);report=p.finish(generation=10,update=u,anchor_gate=gate,rating=dict(ok=True))
+    def test_economic_failure_still_blocks_both_adoptions(self):
+        from brass_ai.recovery import il_kl_limit
+        from test_auto_il_kl import baseline,counts
+        health=il_kl_limit.health(baseline()['baseline'],il_kl_limit.rates([counts(vp_sum=0)]*5))
+        p,u=phase_fixture(9);report=p.finish(generation=10,update=u,
+            anchor_gate=dict(ok=False,health=health),rating=dict(ok=True))
         self.assertEqual(p.state['active_lambda'],1.)
         self.assertFalse(p.critic_state['snapshots_active']);self.assertFalse(report['healthy'])
 
@@ -105,7 +106,8 @@ class AdoptionAndDiagnostics(unittest.TestCase):
         result=gate_diagnostics(report['actor'],report['value_phase'],report['il_kl_limit'],report['quality_pool'])
         self.assertNotIn('sale_failures',result);self.assertNotIn('sale_positions',result)
         self.assertEqual(result['scored_history_members_used'],0);self.assertTrue(result['history_il_only'])
-        self.assertEqual(set(result['warnings']),{'history_pool_il_only','il_behavior_check_failed','il_distance_alarm'})
+        self.assertEqual(set(result['warnings']),{'history_pool_il_only','il_distance_alarm'})
+        self.assertNotIn('pass_failures',result);self.assertNotIn('pass_positions',result)
         self.assertEqual(result['value_accepted_steps'],41)
         self.assertEqual(result['value_accepted_fraction'],.5)
         self.assertIsNone(result['heldout_by_table']['legacy']['ev'])

@@ -50,9 +50,12 @@ class _ActorSerializedGame(SerializedGame):
         self.size=len(self.line.encode('utf-8'))
 
 
-def neural_spec(identity,exploration=.05,focus='neutral'):
-    policy_id='step5-neural/'+digest(dict(model=identity,exploration=exploration,temperature=1.0,focus=focus,version=2))
-    return dict(kind='neural',model_id=identity,exploration=exploration,focus=focus,policy_id=policy_id)
+def neural_spec(identity,exploration=.05,focus='neutral',*,version=2,opening=None,temperature=1.):
+    from brass_ai.step5.policy import policy_identity
+    policy_id=policy_identity(identity,exploration,temperature,focus,version,opening)
+    extra=dict(exploration_version=version,opening=opening) if version==3 else {}
+    if temperature!=1.:extra['temperature']=temperature
+    return dict(kind='neural',model_id=identity,exploration=exploration,focus=focus,policy_id=policy_id,**extra)
 
 
 def _collection_recipe(jobs,config):
@@ -90,7 +93,8 @@ def make_policy(spec,root,endpoint,config,mono,*,_replica=False):
     endpoints=endpoints[:1+workers if workers>1 else 1]
     evaluator=RemoteEvaluator(endpoints[0],spec['model_id'],config['batch_size'],config['max_candidate_cells'])
     if spec['kind']=='neural':
-        policy=NeuralPolicy(None,exploration=spec['exploration'],focus=spec['focus'],evaluator=evaluator)
+        policy=NeuralPolicy(None,exploration=spec['exploration'],focus=spec['focus'],evaluator=evaluator,
+            exploration_version=spec.get('exploration_version',2),opening=spec.get('opening'),temperature=spec.get('temperature',1.))
         require(policy.policy_id==spec['policy_id'],'Neural policy identity changed')
         return policy
     opponents=[NeuralPolicy(None,exploration=.05,focus='neutral',
@@ -147,7 +151,7 @@ def run_game(host,job,policies,timings,max_decisions,admission=None,encoder=None
     if hasattr(host,'enable_fastpath') and not host.fast_checked:host.enable_fastpath()
     assigned=[policies[(seat-job.get('rotation',0))%4] for seat in range(4)]
     group=digest(dict(rules=pins['rules'],setup_seed=job['seed']))
-    game=dict(game_id=uuid.uuid4().hex,setup_group=group,players=4,split=split_for(group),
+    game=dict(game_id=job.get('stable_game_id') or uuid.uuid4().hex,setup_group=group,players=4,split=split_for(group),
         opponents=[p.policy_id for p in assigned],result=None,records=[])
     rngs=[random.Random(digest(dict(sampling_seed=job['sampling_seed'],game=job.get('rng_index',0),seat=s))) for s in range(4)]
     for seat,p in enumerate(assigned):
@@ -167,6 +171,12 @@ def run_game(host,job,policies,timings,max_decisions,admission=None,encoder=None
     with ExitStack() as cleanup:
         cleanup.callback(lease.close)
         result=_run_turns(host,job,assigned,timings,max_decisions,context,game,rngs,encoded,encoder,lease)
+        packet=getattr(result,'branch_packet',None)
+        if packet is not None:
+            from .branching import continue_branch
+            child=continue_branch(host,job,result,packet,assigned,timings,max_decisions,encoder,lease)
+            result['branches']=[child]
+            result.bind(encoded)
         teachers=[p.teacher_report(rngs[seat]) for seat,p in enumerate(assigned) if hasattr(p,'teacher_report')]
         if teachers:result.teacher_phases=teachers
         work=[p.work_report(rngs[seat]) for seat,p in enumerate(assigned) if hasattr(p,'work_report')]
@@ -180,8 +190,8 @@ def _run_turns(host,job,assigned,timings,max_decisions,context,game,rngs,encoded
     ledger=CostLedger(rewards[0]) if rewards else None
     require(not rewards or all(r==rewards[0] for r in rewards),'Mixed search reward contracts in one table')
     from collections import deque
-    buffered=deque();decision=None
-    for step in range(max_decisions):
+    buffered=deque();decision=None;branch_packet=None;eligible_count=0
+    for step in range(len(game['records']),max_decisions):
         if context['terminal']: break
         seat=context['actor'];p=assigned[seat]
         from brass_ai.search.common import turn_key
@@ -212,16 +222,31 @@ def _run_turns(host,job,assigned,timings,max_decisions,context,game,rngs,encoded
         began=time.monotonic()
         with timings.phase('policy.'+p.kind):
             if type(p) is NeuralPolicy and len(choices)==1:
-                p.context_features(view,rngs[seat])
+                _,intent=p.context_features(view,rngs[seat])
                 # Match rng.choices' draw so future nonforced sampling is unchanged.
-                rngs[seat].choices([0],weights=[1.0],k=1)
-                chosen,probability,teacher=0,1.0,None
+                if p.exploration_version==3:
+                    import numpy as np
+                    chosen,probability,teacher=p.sample_training(view,choices,rngs[seat],np.ones(1),intent)
+                else:
+                    rngs[seat].choices([0],weights=[1.0],k=1)
+                    chosen,probability,teacher=0,1.0,None
             else: chosen,probability,teacher=p.select_batch([(view,choices,rngs[seat])])[0]
         require(type(chosen) is int and 0<=chosen<len(choices),'Actor returned an illegal choice')
         style,intent=p.context_features(view,rngs[seat]) if hasattr(p,'context_features') else ([0.0]*4,[0.0]*8)
         game['records'].append(dict(step=step,seat=seat,view=view,choices=choices,chosen=chosen,
             teacher=teacher,style=style,intent=intent,seconds=time.monotonic()-began,
-            behavior=dict(kind=p.kind,policy_id=p.policy_id,probability=probability,temperature=getattr(p,'temperature',1.0))))
+            behavior=dict(dict(kind=p.kind,policy_id=p.policy_id,probability=probability,temperature=getattr(p,'temperature',1.0)),
+                **(p.last_behavior[rngs[seat]] if type(p) is NeuralPolicy and p.exploration_version==3 else {}))))
+        if job.get('branching'):
+            from .branching import eligible,capture,seed_for
+            row=game['records'][-1]
+            if eligible(view,choices,row['behavior'].get('action_decision',0)):
+                eligible_count+=1
+                # Selection uses an independent stream; parent actions and
+                # training RNG do not change when branching is enabled.
+                draw=random.Random('select:'+seed_for(game['game_id'],step)).random()
+                if branch_packet is None and draw<job['branching']['rate_per_decision']:
+                    branch_packet=capture(host,game,row,assigned,rngs)
         e=policy_encoder(p,encoder)
         with timings.phase('inputs.encode'): encoded.append(e.encode(view,choices,style,intent,validated=True))
         if ledger is not None:ledger.chosen(view,choices[chosen])
@@ -244,7 +269,10 @@ def _run_turns(host,job,assigned,timings,max_decisions,context,game,rngs,encoded
     require(context['terminal'],'Decision cap reached; incomplete game excluded')
     with timings.phase('host.result'): game['result']=host.call('result')
     terminal_targets(game['result'])
+    if job.get('branching'):
+        game['branch_statistics']=dict(eligible_decisions=eligible_count)
     result=CheckedGame(game).bind(encoded)
+    result.branch_packet=branch_packet
     result.actor_validated=True  # every row crossed BOUNDARY.check above
     return result
 

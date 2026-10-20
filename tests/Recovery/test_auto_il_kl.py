@@ -49,6 +49,8 @@ class Rules(unittest.TestCase):
             bad=copy.deepcopy(cfg);bad['il_kl_limit'].update(change)
             with self.assertRaises(ValueError):validate_config(bad)
         old=copy.deepcopy(cfg);old.pop('il_kl_limit');old['ppo_lr_controller']['contract']=lr.CONTRACT
+        from brass_ai.recovery.exploration import BLOCKS
+        for key in BLOCKS:old.pop(key,None)
         for key in ('table_plan','opponent_pool','rating','advantage','value_phase','critic_data','seat_descriptors'):old.pop(key,None)
         old.update(selfplay_recipe='latest-model-selfplay/2.0.0',
             curriculum=[dict(until=None,selfplay=60,historical=30,legacy=10)],population=dict(recent=4,anchors=12))
@@ -91,24 +93,24 @@ class Rules(unittest.TestCase):
 
     def test_immediate_health_tightening_clears_clock_and_never_raises(self):
         state=baseline();state['kl_last_healthy']=.12
-        state,r=tick(state,behavior=dict(ok=False))
+        state,r=tick(state,health=counts(passes_with_alternative=1000))
         self.assertEqual((r['decision'],r['limit_after'],r['group_limit_after']),('tighten',.12,.24))
         self.assertEqual(state['last_update'],11);self.assertEqual(state['healthy_window'],[])
         state['kl_last_healthy']=.9
-        state,r=tick(state,behavior=dict(ok=False));self.assertEqual(state['limit'],.12)
+        state,r=tick(state,health=counts(passes_with_alternative=1000));self.assertEqual(state['limit'],.12)
         state['kl_last_healthy']=.001
-        state,r=tick(state,behavior=dict(ok=False));self.assertEqual(state['limit'],.05)
+        state,r=tick(state,health=counts(passes_with_alternative=1000));self.assertEqual(state['limit'],.05)
 
     def test_five_iteration_health_rates_and_all_thresholds(self):
         b=limits.baseline_record([counts()]*10,limits.DEFAULT)
-        for key,value in (('vp_sum',8499),('sells',139),('passes_with_alternative',71),
+        for key,value in (('vp_sum',8499),('passes_with_alternative',71),
                           ('zero_vp_seats',6),('insolvent_seats',21)):
             current=limits.rates([counts(**{key:value})]*5)
             self.assertFalse(limits.health(b,current,dict(passing=dict(ok=True)))['ok'])
         current=limits.rates([counts(vp_sum=8500,sells=140,passes_with_alternative=70,zero_vp_seats=5,insolvent_seats=20)]*5)
         self.assertTrue(limits.health(b,current,dict(passing=dict(ok=True)))['ok'])
         state=baseline()
-        for _ in range(4):state,_=tick(state,health=counts(sells=0))
+        for _ in range(4):state,_=tick(state,health=counts(vp_sum=0))
         self.assertEqual(state['limit'],.1)
 
     def test_raise_cap_ceiling_restart_and_group_limits(self):
@@ -265,16 +267,18 @@ class ProbeTests(unittest.TestCase):
                 other,rebuilt=probes.load(root,root/'rebuilt',origin,model,cfg,update,1)
             self.assertEqual(receipt['probe_hash'],rebuilt['probe_hash'])
             report=probe.measure(model,update)
-            self.assertEqual(report['kl_mean'],0.);self.assertTrue(report['behavior']['ok'])
+            self.assertEqual(report['kl_mean'],0.);self.assertNotIn('behavior',report)
             self.assertEqual(len(report['groups']),4)
+            for group in report['groups'].values():
+                self.assertGreater(group['raw_entropy'],0.)
+                self.assertTrue(0.<group['normalized_entropy']<=1.)
             loaded,again=probes.load(root,root/'run',origin,model,cfg,update,1,receipt)
             self.assertEqual(again,receipt);self.assertEqual(loaded.measure(model,update)['kl_mean'],0.)
             self.assertTrue(torch.equal(before,torch.get_rng_state()))
             with torch.no_grad():model.bias.copy_(torch.tensor([-4.,5.,1.]))
             changed=loaded.measure(model,update)
             self.assertGreater(changed['kl_mean'],0)
-            self.assertNotIn('sales',changed['behavior'])
-            self.assertGreater(changed['behavior']['passing']['failures'],0)
+            self.assertNotIn('behavior',changed)
             # Even an uncommitted bootstrap cache must verify its semantic hash.
             path=root/'run/il-kl/manifest.json';original=path.read_bytes()
             edited=json.loads(original);edited['rows'][0]['identity']=['different',0]

@@ -150,5 +150,7 @@ def merge_summaries(parts):
     grouped=defaultdict(list)
     for part in parts:
         for key,value in part['by_composition'].items():grouped[key].append(value)
-    return dict(**combine(parts),by_composition={k:combine(v) for k,v in grouped.items()},
+    from .exploration_metrics import merge
+    return dict(**combine(parts),exploration_metrics=merge([p.get('exploration_metrics') for p in parts]),
+                by_composition={k:combine(v) for k,v in grouped.items()},
                 measured_policy=parts[0]['measured_policy'])

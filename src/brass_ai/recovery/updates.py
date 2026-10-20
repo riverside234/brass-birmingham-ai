@@ -26,12 +26,17 @@ def prepared(games, predicate=None, neutral=False, insolvency=None, reward=None,
     for game in games:
         if hasattr(game,'assert_metadata'): game.assert_metadata()
         target = terminal_targets(game['result']) if outcome_targets is None else outcome_targets[game['game_id']]
-        costs,summaries=insolvency_returns(game['records'],insolvency) if insolvency is not None else (None,None)
+        prior=([min(insolvency['max_cost'],n*insolvency['event_cost']) for n in game['branch']['prior_events']]
+               if 'branch' in game and insolvency is not None else None)
+        costs,summaries=insolvency_returns(game['records'],insolvency,prior) if insolvency is not None else (None,None)
         if reward is not None:
             from brass_ai.learning.reward import replay_returns
-            labels,rewards=replay_returns(game['records'],game['result'],reward)
+            labels,rewards=replay_returns(game['records'],game['result'],reward,prior)
         annotated=set()
         for step,row in enumerate(game['records']):
+            if 'branch' in game and step==0:
+                if hasattr(game,'encoded'):game.encoded(row,encoder)
+                continue
             if predicate is None or predicate(row):
                 r = dict(row, style=[0.0]*4, intent=[0.0]*8) if neutral else row
                 if reward is not None:
@@ -48,6 +53,8 @@ def prepared(games, predicate=None, neutral=False, insolvency=None, reward=None,
                 if hasattr(game,'critic_table'):
                     from .critic_data import annotate
                     r=annotate(r,encoded,game.critic_table,game.table_kind)
+                if 'branch' in game:
+                    r=dict(r,_branch=True,_parent_game_id=game['branch']['parent_game_id'])
                 data.append((r, target, (game['game_id'],row['seat']), encoded))
             elif costs is not None and hasattr(game,'encoded'):
                 # Opponent observations also determine the learner's causal
@@ -99,7 +106,9 @@ class Dataset:
             self.utility=torch.tensor([r['_reward_return'] for r in self.rows],device=device,dtype=torch.float32)
             self.remaining=torch.tensor([r['_reward_remaining'] for r in self.rows],device=device,dtype=torch.float32)
         if log:log(2)
-        self.q=[exploration_distribution(r['choices'],r['intent']).astype(np.float32) for r in self.rows] if policy else None
+        self.q=[exploration_distribution(r['choices'],r['intent'],r['behavior'].get('exploration_version',2),
+                    r.get('view',{}).get('context',{}).get('phase')).astype(np.float32) for r in self.rows] if policy else None
+        self.temperatures=torch.tensor([r['behavior'].get('temperature',1.) for r in self.rows],device=device)[:,None]
         if log:log(3)
         self.forced_cpu=[len(r['choices'])==1 for r in self.rows]
         self.forced=torch.tensor(self.forced_cpu,device=device)
@@ -213,6 +222,42 @@ def probabilities(logits, q, exploration, temperature):
     return (1-exploration)*F.softmax(logits.float()/temperature,-1)+exploration*q
 
 
+def row_probabilities(dataset, indices, logits, q, behavior):
+    # Legacy callers retain their single temperature; v3 is an explicit
+    # per-row sampling contract, including the opening decision counter.
+    version=getattr(behavior,'exploration_version',2)
+    temperature=dataset.temperatures[indices] if version==3 else behavior.temperature
+    return probabilities(logits,q,behavior.exploration,temperature)
+
+
+def verify_behavior_metadata(dataset, behavior):
+    version=getattr(behavior,'exploration_version',2)
+    for row in dataset.rows:
+        b=row['behavior']
+        require(b.get('exploration_version',2)==version,'Wrong/stale exploration version')
+        if version==3:
+            from .exploration import check_behavior
+            check_behavior(b,row['view']['context']['phase'])
+            opening=behavior.opening
+            expected=(opening['temperature'] if opening and b['action_decision'] is not None and
+                      b['action_decision']<opening['action_decisions_per_seat'] else behavior.temperature)
+            require(b['exploration']==behavior.exploration and b['temperature']==expected,
+                    'Wrong/stale exploration or opening temperature')
+
+
+def entropy_term(logits, mixed, dataset, indices, behavior, config):
+    if not getattr(behavior,'raw_entropy',False):
+        entropy=-(mixed*mixed.clamp_min(1e-30).log()).sum(-1)
+        return entropy,config['entropy_weight']*entropy
+    from .exploration import group
+    raw=F.softmax(logits.float(),-1)
+    entropy=-(raw*raw.clamp_min(1e-30).log()).sum(-1)
+    ids=indices.detach().cpu().tolist() if isinstance(indices,torch.Tensor) else indices
+    weights=torch.tensor([behavior.entropy_alphas[group(dataset.rows[i]['view']['context'])] for i in ids],
+                         device=logits.device)
+    return entropy,weights*entropy
+
+
 def autocast(config, device):
     if config['precision']=='bf16':
         require(str(device).startswith('cuda') and torch.cuda.is_bf16_supported(), 'BF16 requires a supported CUDA device')
@@ -223,12 +268,13 @@ def autocast(config, device):
 def policy_measure(model, dataset, indices, behavior, config, timings, verify=False, advantages=None, executor=None):
     indices=list(indices)
     if not indices: return 0.0
+    if verify:verify_behavior_metadata(dataset,behavior)
     total=torch.zeros((),device=dataset.device);valid=torch.ones((),dtype=torch.bool,device=dataset.device)
     with torch.no_grad(), timings.phase('ppo.policy_measure'):
         parts=dataset.microbatches(indices,config['microbatch_size'],config['max_candidate_cells'],config['bucket'])
         for part,ix,inputs,q in dataset.policy_batches(parts,behavior.exploration,executor):
             out=value_output(model,inputs,dataset,ix)
-            p=probabilities(out[0],q,behavior.exploration,behavior.temperature)
+            p=row_probabilities(dataset,ix,out[0],q,behavior)
             selected=p.gather(1,dataset.chosen[ix,None]).squeeze(1).clamp_min(1e-30)
             old=dataset.old[ix]
             if verify:
@@ -280,14 +326,14 @@ def ppo_update(model,optimizer,games,behavior,config,*,profile=None,profile_step
                     for part in dataset.microbatches(batch,config['microbatch_size'],config['max_candidate_cells'],config['bucket']):
                         ix,inputs,q=dataset.batch(part,behavior.exploration,behavior.temperature)
                         with autocast(config,device): outputs=model(*inputs)
-                        p=probabilities(outputs[0],q,behavior.exploration,behavior.temperature)
+                        p=row_probabilities(dataset,ix,outputs[0],q,behavior)
                         new=p.gather(1,dataset.chosen[ix,None]).squeeze(1).clamp_min(1e-30)
                         ratio=new/dataset.old[ix]
                         a=advantages[ix]
                         actor=-torch.minimum(ratio*a,ratio.clamp(1-config['clip'],1+config['clip'])*a)
                         value,win,rank,vp=value_losses(outputs,tuple(t[ix] for t in dataset.targets))
-                        entropy=-(p*p.clamp_min(1e-30).log()).sum(-1)
-                        ((actor+config['value_weight']*value-config['entropy_weight']*entropy).sum()/len(batch)).backward()
+                        entropy,bonus=entropy_term(outputs[0],p,dataset,part,behavior,config)
+                        ((actor+config['value_weight']*value-bonus).sum()/len(batch)).backward()
                         clip=((ratio-1).abs()>config['clip']).float()
                         totals+=torch.stack([x.detach().sum() for x in (actor,value,entropy,clip,win,rank,vp)])
                         seen+=len(part)
@@ -364,7 +410,8 @@ def _ppo_nonforced(model,optimizer,games,behavior,config,*,profile,profile_steps
         require(data and all(d[0]['behavior']['kind']=='model' and d[0]['behavior']['policy_id']==behavior.policy_id
                             and d[0].get('_critic_role','learner')=='learner' for d in data),
                 'External or stale actions in PPO')
-        ds=Dataset(data,device);demo=rehearsal_dataset(rehearsal,device) if rehearsal_weight else None
+        ds=Dataset(data,device);verify_behavior_metadata(ds,behavior)
+        demo=rehearsal_dataset(rehearsal,device) if rehearsal_weight else None
     count=len(data);actor_ids=(~ds.forced).nonzero().flatten().cpu().tolist()
     critic_ids=phases.prepare(ds) if phases is not None else list(range(count))
     critic_ds=phases.critic_dataset if phases is not None else ds
@@ -431,12 +478,12 @@ def _ppo_nonforced(model,optimizer,games,behavior,config,*,profile,profile_steps
                     parts=ds.microbatches(batch,config['microbatch_size'],config['max_candidate_cells'],config['bucket'])
                     for part,ix,inputs,q in ds.policy_batches(parts,behavior.exploration,executor):
                         with autocast(config,device): out=model(*inputs)
-                        p=probabilities(out[0],q,behavior.exploration,behavior.temperature)
+                        p=row_probabilities(ds,ix,out[0],q,behavior)
                         new=p.gather(1,ds.chosen[ix,None]).squeeze(1).clamp_min(1e-30)
                         ratio=new/ds.old[ix];a=advantages[ix]
                         actor=-torch.minimum(ratio*a,ratio.clamp(1-config['clip'],1+config['clip'])*a)
-                        entropy=-(p*p.clamp_min(1e-30).log()).sum(-1)
-                        ((actor-config['entropy_weight']*entropy).sum()/len(batch)).backward()
+                        entropy,bonus=entropy_term(out[0],p,ds,part,behavior,config)
+                        ((actor-bonus).sum()/len(batch)).backward()
                         actor_totals+=torch.stack([x.detach().sum() for x in (actor,entropy,((ratio-1).abs()>config['clip']).float())])
                         actor_seen+=len(part)
                     parts=critic_ds.microbatches(crit,config['microbatch_size'],config['max_candidate_cells'],config['bucket'])
@@ -488,6 +535,9 @@ def _ppo_nonforced(model,optimizer,games,behavior,config,*,profile,profile_steps
     from .ordinary import sample_usage
     if phases is not None:phases.after_ppo(model,actor_ids,probe,categorical_probe)
     return dict(format='nonforced-actor-ppo/2.1.0',epochs=epochs,optimizer_steps=steps,
+        branch_sample_usage=dict(actor_distinct_used=sum(bool(ds.rows[i].get('_branch')) for i in actor_used),
+            critic_distinct_used=sum('/branch/' in critic_ds.data[i][2][0] for i in critic_used),
+            scope='Distinct branch continuation rows in retained PPO steps; branch move and prefix excluded'),
         **(dict(gae=gae_report,critic_split=phases.split) if phases is not None else {}),
         optimizer_steps_planned=planned_steps,optimizer_steps_fraction=steps/planned_steps if planned_steps else None,
         controller_warmup_done=warmup_done,

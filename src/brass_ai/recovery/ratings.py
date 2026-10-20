@@ -185,7 +185,7 @@ def jobs_for(spec,directory):
         policies=[]
         for agent in row['agents']:
             ref=spec['agents'][agent]
-            policy=(neural_spec(ref['checkpoint']['model_id'],0.,'neutral') if ref['kind']=='model' else
+            policy=(neural_spec(ref['checkpoint']['model_id'],0.,'neutral',temperature=ref.get('temperature',1.)) if ref['kind']=='model' else
                     copy.deepcopy(ref['policy']))
             if ref['kind']=='v4' and policy.get('search_runtime'):
                 policy['frozen_rating']=True
@@ -219,7 +219,8 @@ def collect_slot(root,directory,spec,config,device,mono,inference_devices):
         for ref in spec['agents'].values():
             if ref['kind']=='model':
                 e=ref['checkpoint'];path=project_path(root,e['path'])
-                require(sha(path)==e['sha256'],'Rated checkpoint changed');service.register_checkpoint(path)
+                require(sha(path)==e['sha256'],'Rated checkpoint changed')
+                if e['model_id'] not in service.models:service.register_checkpoint(path)
         with ActorPool(root,config['host'],service,config['execution'],mono=mono) as actors:
             records=actors.collect(jobs)
         require(len(records)==len(jobs) and {r['job'] for r in records}==set(range(len(jobs))),

@@ -29,10 +29,14 @@ from . import critic_data
 
 
 class Behavior:
-    def __init__(self,identity,exploration):
+    def __init__(self,identity,exploration,settings=None):
         self.evaluator=type('Identity',(),{'model_id':identity})()
         self.exploration,self.temperature=exploration,1.0
-        self.policy_id=neural_spec(identity,exploration,'mixed')['policy_id']
+        self.exploration_version=(settings or {}).get('version',2)
+        self.opening=(settings or {}).get('opening')
+        self.raw_entropy=(settings or {}).get('raw_entropy',False)
+        self.entropy_alphas=(settings or {}).get('alphas')
+        self.policy_id=neural_spec(identity,exploration,'mixed',version=self.exploration_version,opening=self.opening)['policy_id']
 
 
 def train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=None,from_run=None,imitation_run=None,resume_reviewed_source=False,inference_devices=None,expected_generation=None,fresh=False,il_kl_probe_from_run=None):
@@ -162,12 +166,14 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
             else:
                 fixed_probe,receipt=load_probe(root,run,bc_origin,model,config['il_kl_limit'],config['update'],config['audit_workers'])
             initial_measure=fixed_probe.measure(model,config['update'])
-            require(abs(initial_measure['kl_mean'])<=1e-10 and initial_measure['behavior']['ok'],
+            require(abs(initial_measure['kl_mean'])<=1e-10,
                     'Generation-zero IL probe must reproduce the original IL policy')
             state['il_kl_limit']=initial_state(config['il_kl_limit'],receipt)
             write_json(run/'il-kl/initial-report.json',dict(generation=0,measurement=initial_measure,
                 limit=config['il_kl_limit']['initial_limit'],
                 group_limit=config['il_kl_limit']['group_factor']*config['il_kl_limit']['initial_limit'],probe=receipt))
+        from . import exploration
+        if 'exploration_rollout' in config:state['exploration']=exploration.initial(config,0)
         init_path=run/'initial.pt'
         if quality:
             from . import quality_pool
@@ -180,6 +186,7 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                 state['quality_pool']['members'][0]['fingerprint']=fingerprint(fixed_probe,fixed_probe.arrays['reference'])
         save_checkpoint(init_path,model,optimizer,training=dict(mode='step5-fresh-residual-initial',parent=None,initialization=state['origin']['initialization'],fresh_run=run.relative_to(root).as_posix(),imitation=state['imitation'],
             **({'il_kl_limit':state['il_kl_limit']} if 'il_kl_limit' in config else {}),
+            **({'exploration':state['exploration']} if 'exploration' in state else {}),
             **({'quality_pool_digest':quality_pool.state_digest(state['quality_pool'])} if quality else {})))
         raw=load_checkpoint(init_path,device=device)[1]
         state['history']=[dict(path=init_path.relative_to(root).as_posix(),sha256=sha(init_path),
@@ -198,6 +205,8 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
     cuda_resume=resume_optimizer(raw,optimizer,allow_cuda_topology_change=True)
     from .resume import apply_optimizer_config
     optimizer_resume=apply_optimizer_config(optimizer,config)
+    from . import exploration
+    exploration_state=exploration.restore(config,state,raw['training'].get('exploration'))
     pool_migration=resumed_pool=None
     if quality:
         from . import quality_pool
@@ -266,6 +275,8 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
     if quality:
         from .ratings import schedule as schedule_ratings
         with torch.random.fork_rng(devices=[]):schedule_ratings(root,run,state,config,device=device,mono=mono,inference_devices=inference_devices)
+        from .temperature_rating import schedule as schedule_temperature
+        with torch.random.fork_rng(devices=[]):schedule_temperature(root,run,state,config,device=device,mono=mono,inference_devices=inference_devices)
     with InferenceService(config['execution'],device,profile=run/'profile-collection' if config['profile_steps'] else None,
                           profile_steps=config['profile_steps'],inference_devices=inference_devices) as service,reader_pool(config['audit_workers'],admission=service.cpu) as readers:
         with ActorPool(root,config['host'],service,config['execution'],mono=mono) as ordinary,ActorPool(root,config['host'],service,config['execution'],mono=mono,heavy=True) as heavy:
@@ -277,7 +288,8 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
             for _ in range(iterations):
                 iteration=state['iteration'];began=time.monotonic();directory=run/f'iteration-{iteration:04d}'
                 inference_before=service.report()
-                current=service.register(model);behavior=Behavior(current,config['exploration'])
+                exploration_settings=exploration.effective(config,exploration_state,iteration)
+                current=service.register(model);behavior=Behavior(current,config['exploration'],exploration_settings)
                 fingerprints=None
                 if 'critic_data' in config:
                     from .critic_data import fingerprint
@@ -286,7 +298,7 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                     phases.fingerprint=fingerprints['learner']
                 from .ordinary import plan_collection,sampling_report
                 plan=plan_collection(root,directory,state,config,signature,service,current,
-                                     profiles,opponent_specs,fast_specs,window,fingerprints=fingerprints)
+                                     profiles,opponent_specs,fast_specs,window,fingerprints=fingerprints,exploration=exploration_settings)
                 jobs=plan['jobs'];kind_by_group=plan['kind_by_group'];composition=plan['composition']
                 cursor=plan['cursor'];context_counter=plan['context_counter'];incumbent=plan['incumbent']
                 historical_generations=plan['historical_generations'];mix_receipts=plan['mix_receipts']
@@ -314,6 +326,10 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                         if legacy: records+=heavy.collect(legacy,on_records=prepared_collection.submit)
                     load_began=time.monotonic();ingress_metrics={}
                     games,learner_data,diagnostics=prepared_collection.finish(records,ingress_metrics)
+                all_games=games
+                sample_groups={g['game_id']:kind_by_group[g['setup_group']] for g in all_games}
+                games=[g for g in all_games if 'branch' not in g]
+                require(len(games)==config['games_per_iteration'],'Ordinary game count differs')
                 if 'critic_data' in config:
                     require(all('_seat_descriptors' in d[0] and d[0].get('_descriptor_generation')==iteration for d in learner_data),
                             'Ordinary collection missing current-generation seat descriptors')
@@ -321,8 +337,10 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                     learner_data=[d for d in learner_data if d[0]['_critic_role']=='learner']
                 if phases is not None:phases.collection(records,behavior.policy_id,kind_by_group,current)
                 collected=time.monotonic()
-                sampling=sampling_report(games,learner_data,behavior.policy_id,kind_by_group,config,
+                sampling=sampling_report(games,[d for d in learner_data if not d[0].get('_branch')],behavior.policy_id,kind_by_group,config,
                     legacy_profiles={spec['policy_id']:p for specs in (opponent_specs,fast_specs) for p,spec in specs.items()})
+                if exploration_settings['version']==3:
+                    sampling['exploration_regime']={k:exploration_settings[k] for k in ('version','opening','raw_entropy','branching')}
                 next_quality=quality_report=None
                 if quality:
                     next_quality,quality_report=quality_pool.update_scores(state['quality_pool'],games,
@@ -339,11 +357,11 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                             config['rehearsal_sampling'],seed=config['seed'],iteration=iteration,device=device,
                             workers=config['audit_workers'],executor=readers))
                     ppo_began=time.monotonic();rehearsal_seconds=ppo_began-sampling_finished
-                    update=ppo_update(model,optimizer,games,behavior,config['update'],
+                    update=ppo_update(model,optimizer,all_games,behavior,config['update'],
                         profile=directory/'profile-ppo' if config['profile_steps'] else None,
                         profile_steps=config['profile_steps'],
                         rehearsal=active_rehearsal,rehearsal_weight=weight,learner_data=learner_data,insolvency=config.get('insolvency'),reward=reward,
-                        sample_groups={g['game_id']:kind_by_group[g['setup_group']] for g in games},anchor_model=anchor_model,phases=phases)
+                        sample_groups=sample_groups,anchor_model=anchor_model,phases=phases)
                     if rehearsal_index is not None and weight:update['rehearsal_sampling']=active_rehearsal.report
                     ppo_ended=time.monotonic()
                 rehearsal_cleaned=time.monotonic()
@@ -353,7 +371,8 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                     from .il_kl_limit import advance
                     counts=diagnostics.get('by_composition',{}).get('selfplay',{}).get('health_counts')
                     if counts and counts['all_learner_tables']!=counts['tables']:counts=None
-                    next_limit,limit_report=advance(state['il_kl_limit'],fixed_probe.measure(model,config['update']),
+                    final_measurement=fixed_probe.measure(model,config['update'])
+                    next_limit,limit_report=advance(state['il_kl_limit'],final_measurement,
                         counts,generation=iteration+1,warmup_done=update['controller_warmup_done'])
                 from .lr_controller import finish_iteration
                 update['lr_controller']=finish_iteration(optimizer,update,config,sampling,games,behavior.policy_id,
@@ -405,7 +424,8 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                 # Final limits, quality admission and checkpoint probes include
                 # shared-trunk movement from the separate value/teacher phases.
                 if fixed_probe is not None and weights_changed:
-                    next_limit,limit_report=advance(state['il_kl_limit'],fixed_probe.measure(model,config['update']),
+                    final_measurement=fixed_probe.measure(model,config['update'])
+                    next_limit,limit_report=advance(state['il_kl_limit'],final_measurement,
                         counts,generation=iteration+1,warmup_done=update['controller_warmup_done'])
                 if phases is not None:
                     from .gae import rating_evidence
@@ -417,6 +437,14 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                         anchor_gate=limit_report['lr_gate'] if limit_report else (update.get('lr_controller') or {}).get('health'),
                         rating=rating_evidence(root,state,config['advantage']['gate']))
                     phases.release()
+                entropy_report=None
+                if exploration_state is not None:
+                    healthy=bool(limit_report and limit_report['health'].get('ok') is True and
+                        update['optimizer_steps']>0 and not update['kl_early_stop'] and
+                        not (value_report or {}).get('kl_guard_tripped',False) and
+                        update['categorical_probe']['categorical_kl']<=1.5*config['update']['target_kl'])
+                    exploration_state,entropy_report=exploration.advance(exploration_state,config,final_measurement,
+                        generation=iteration+1,warmup_done=update['controller_warmup_done'],healthy=healthy)
                 del learner_data
                 output=run/f'generation-{iteration+1:04d}.pt'
                 if quality:
@@ -428,6 +456,7 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                     quality_pool.finish_report(quality_report,next_quality,pool_admission)
                 diagnostics_finished=time.monotonic()
                 report=dict(format='step5-recovery-report/'+'2.2.0',iteration=iteration,composition=dict(composition),
+                    exploration_rollout=exploration_settings,entropy_control=entropy_report,
                     quality_pool=quality_report,
                     il_kl_limit=limit_report,rehearsal_schedule=rehearsal_status,
                     sampling=sampling,curriculum=curriculum_report(state['games_done'],done,config) if latest_model_recipe(config) else None,
@@ -467,6 +496,7 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                         evidence=dict(iteration=iteration,games_done=done,report=(directory/'report.json').relative_to(root).as_posix(),
                                       update_digest=digest(update)),
                         **({'il_kl_limit':next_limit} if next_limit is not None else {}),
+                        **({'exploration':exploration_state} if exploration_state is not None else {}),
                         **({'actor_value_phases':phases.payload()} if phases is not None else {}),
                         **({'quality_pool_digest':quality_pool.state_digest(next_quality)} if quality else {})))
                 report['post_update_model_id']=identity
@@ -477,12 +507,15 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                     history=state['history']+[entry],next_search_games=next_search,
                     search_seconds=search_seconds,ordinary_seconds=ordinary_seconds)
                 if next_limit is not None:state['il_kl_limit']=next_limit
+                if exploration_state is not None:state['exploration']=exploration_state
                 if quality:
                     for member in next_quality['members']:
                         if member['generation']==iteration+1:member.update(entry)
                     state['quality_pool']=next_quality
                 if champion_mix.enabled(config):state['champion_mix']['transition_tables']+=transition_added
                 state['recent_training']=(state.get('recent_training',[])+[dict(iteration=iteration,games_done=done,
+                    exploration_rollout=exploration_settings,entropy_control=entropy_report,
+                    exploration_metrics=diagnostics.get('exploration_metrics'),
                     quality_pool=quality_report,
                     il_kl_limit=limit_report,rehearsal_schedule=rehearsal_status,
                     value_phase=value_report,
@@ -507,6 +540,7 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                     if quality:
                         with torch.random.fork_rng(devices=[]):
                             report['strength_rating']=schedule_ratings(root,run,state,config,device=device,mono=mono,inference_devices=inference_devices)
+                            report['temperature_rating']=schedule_temperature(root,run,state,config,device=device,mono=mono,inference_devices=inference_devices)
                     report['timings']['evaluation_seconds']=time.monotonic()-evaluation_began
                     from .retention import prune
                     cleanup_began=time.monotonic()
@@ -522,11 +556,20 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                 summaries.append(report);summaries=summaries[-2:]
                 control=update.get('lr_controller')
                 controller_line=(f' LRmult={control["multiplier_after"]:.3f} {control["mode"]}:{control["decision"]}' if control else '')
+                if entropy_report:
+                    controller_line+=f' q=3 eps={config["exploration"]:.2f} explore_age={exploration_settings["age"]}'
+                    controller_line+=' entropy='+','.join(f'{g}:{v["alpha_after"]:.4f}' for g,v in entropy_report['groups'].items())
                 if phases is not None:
                     gate=update['gae']['gate']
                     controller_line+=f' GAE={gate["lambda_used"]:.2f}->{gate["lambda_next"]:.2f} value_steps={value_report["optimizer_steps"]}'
                     controller_line+=f'/{value_report["attempted_steps"]} value_stop={value_report["early_stop_reason"] or "none"}'
                     controller_line+=f' value_lr={value_report["learning_rate"]:.2g}'
+                    if value_report.get('acceptance_steps'):
+                        controller_line+=f' value_intervals={value_report["accepted_intervals"]}/{len(value_report["interval_reports"])}'
+                    stage=gate.get('stage_evidence')
+                    if stage:
+                        controller_line+=(f' GAE-health={gate["healthy_streak"]}/{stage["required_iterations"]}'
+                            f' PPG-window={stage["accepted_steps"]}steps/{stage["accepted_iterations"]}iters')
                     split=value_report.get('split') or {}
                     v4_holdout=split.get('by_table',{}).get('legacy')
                     if v4_holdout:controller_line+=f' v4_holdout={v4_holdout["heldout_games"]}/{v4_holdout["games"]}'
@@ -544,7 +587,6 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                         f' group_limit={limit_report["group_limit_after"]:.4f} {limit_report["decision"]}')
                     checks=report['gate_diagnostics']
                     controller_line+=f' health={"ok" if checks["health_ok"] else ",".join(checks["health_reasons"])}'
-                    controller_line+=f' pass_fail={checks["pass_failures"]}/{checks["pass_positions"]}'
                 if quality_report:
                     controller_line+=f' history={quality_report["size"]}/{quality_report["max_members"]} {quality_report["admission"]["reason"]}'
                     controller_line+=quality_pool.pfsp_pool.console(quality_report)

@@ -62,13 +62,12 @@ class SaleRemoval(unittest.TestCase):
             # IL sale mass ~.245; now ~.00012. The pass mass also falls.
             with torch.no_grad():model.bias.copy_(torch.tensor([-4.,-4.,5.]))
             current=probe.measure(model,update)
-            self.assertEqual(set(current['behavior']),{'ok','passing'})
-            self.assertTrue(current['behavior']['ok']);self.assertGreater(current['kl_mean'],0)
+            self.assertNotIn('behavior',current);self.assertGreater(current['kl_mean'],0)
             loaded,again=probes.load(root,root/'run',origin,model,cfg,update,1,receipt)
             self.assertEqual(again,receipt);self.assertEqual(sha(root/cache['path']),before)
-            self.assertTrue(loaded.measure(model,update)['behavior']['ok'])
+            self.assertNotIn('behavior',loaded.measure(model,update))
             with torch.no_grad():model.bias.copy_(torch.tensor([-4.,5.,1.]))
-            self.assertFalse(probe.measure(model,update)['behavior']['ok'])
+            self.assertNotIn('behavior',probe.measure(model,update))
 
     def test_archived_sale_flag_cannot_affect_any_shared_health_consumer(self):
         s=baseline();before=copy.deepcopy(s)
@@ -77,11 +76,10 @@ class SaleRemoval(unittest.TestCase):
         new,r=limits.advance(s,m,counts(),generation=11,warmup_done=True)
         self.assertTrue(r['health']['ok']);self.assertTrue(r['lr_gate']['ok'])
         self.assertEqual(r['decision'],'hold');self.assertEqual(new['limit'],s['limit'])
-        self.assertNotIn('sales',json.dumps(r));self.assertEqual(s,before);self.assertEqual(m['behavior'],old)
-        # Missing passing evidence still fails closed. The observed sells rate
-        # remains an economy metric; only the IL action-probability guard is gone.
-        self.assertFalse(limits.health(s['baseline'],limits.rates([counts()]*5),dict(ok=True))['ok'])
-        self.assertFalse(limits.health(s['baseline'],limits.rates([counts(sells=0)]*5),old)['ok'])
+        self.assertNotIn('behavior',r['measurement']);self.assertEqual(s,before);self.assertEqual(m['behavior'],old)
+        # No IL action-probability evidence is required by economic health.
+        self.assertTrue(limits.health(s['baseline'],limits.rates([counts()]*5),dict(ok=True))['ok'])
+        self.assertTrue(limits.health(s['baseline'],limits.rates([counts(sells=0)]*5),old)['ok'])
 
 
 class Statistics(unittest.TestCase):
@@ -212,7 +210,7 @@ class EvidenceWindow(unittest.TestCase):
 
     def test_strict_config_and_no_archived_backfill(self):
         c=config();old=copy.deepcopy(c);old['table_gate']=copy.deepcopy(gae.ARCHIVED_TABLE_GATE)
-        s=gae.initial(old);s.update(generation=55,value_iterations=20,ev_streak=0,table_streaks=dict(historical=9,legacy=6))
+        s=gae.initial(old,55);s.update(value_iterations=20,ev_streak=0,table_streaks=dict(historical=9,legacy=6))
         s['table_enabled']['historical']=True;s['table_origins']['historical']=50
         updated=gae.migrate_state(s,old,c,55)
         self.assertEqual(updated['table_evidence'],ev.initial(55));self.assertEqual(updated['active_lambda'],s['active_lambda'])

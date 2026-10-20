@@ -39,6 +39,8 @@ def build(root=ROOT,mono=None):
                 text=replace(text,'Adopt(Restore(before));','Adopt(Restore(before()));')
                 text=replace(text,'void Adopt(Host other)\n        {','void Adopt(Host other)\n        {\n            InvalidateFastCaches();')
                 text=replace(text,'public void Advance()\n        {','public void Advance()\n        {\n            InvalidateFastCaches();')
+                text=replace(text,'var c=h.Choices().SingleOrDefault',
+                    'if(cmd["training_deck"]!=null){h.ImportCards((JObject)cmd["training_deck"]);h.commands.Add((JObject)cmd.DeepClone());continue;} var c=h.Choices().SingleOrDefault')
             elif path.name=='Choices.cs':text=replace(text,'public List<Choice> Choices()','List<Choice> UncachedChoices()')
             elif path.name=='Observation.cs':text=replace(text,'string[] KnownWild(int seat)','string[] UncachedKnownWild(int seat)')
             elif path.name=='Program.cs':
@@ -53,6 +55,8 @@ def build(root=ROOT,mono=None):
                     extra+=f'if(host.ChancePending){{if((int){var}["revision"]!=host.Revision)throw new InvalidOperationException("stale_revision");host.ResolveChance((string){var}["card"]);}}\n'
                     extra+=f'else host.Apply((int){var}["revision"],(string){var}["choice"]);data=host.SearchSnapshot();break;\n'
                 else:
+                    extra+='case "fork_save":data=host.SaveTrainingFork();break;\n'
+                    extra+=f'case "fork_resume":data=host.ResumeTrainingFork((int?){var}["shuffle_seed"]);break;\n'
                     extra+='case "decision":data=host.Decision();break;\n'
                     extra+=f'case "step_decision":if((string){var}["game_id"]!=host.GameId)throw new InvalidOperationException("stale_game");data=host.StepDecision((int){var}["revision"],(string){var}["choice"],(int?){var}["forced_limit"]??0);break;\n'
                 text=replace(text,hook,extra+hook)

@@ -7,15 +7,18 @@ import numpy as np
 import torch
 
 from brass_ai.learning.contracts import require
-from . import ev_evidence
+from . import ev_evidence,gae_health
 
 CONTRACT='gae-advantage/2.0.0'
-GATE=dict(contract='staged-gae-gate/1.0.0',mode='auto',minimum_value_iterations=10,
+LEGACY_GATE=dict(contract='staged-gae-gate/1.0.0',mode='auto',minimum_value_iterations=10,
     heldout_ev_min=.5,ev_streak=5,fallback_value_iterations=30,healthy_iterations=20,
     rating_slots=3,rating_min_slope=0.)
+GATE=dict(LEGACY_GATE,contract='staged-gae-gate/2.0.0',window_iterations=20,
+    minimum_accepted_steps=16,minimum_value_iterations_in_window=3)
 ARCHIVED_TABLE_GATE=dict(contract='table-gae-ev-gate/1.0.0',mode='auto',ev_tolerance=.05,consecutive_iterations=10)
 TABLE_GATE=ev_evidence.DEFAULT
 CONFIG_MIGRATION='table-gae-ev-window/1.0.0'
+HEALTH_MIGRATION='staged-gae-health-window/1.0.0'
 DEFAULT=dict(contract=CONTRACT,**{'lambda':1.0},shadow_lambdas=[.98,.95,.9],chain='nonforced',gate=GATE,table_gate=TABLE_GATE)
 
 
@@ -39,13 +42,21 @@ def validate(config,*,combined=True):
     require(type(config['shadow_lambdas']) is list and config['shadow_lambdas']==[.98,.95,.9],
             'GAE shadows must be 0.98, 0.95 and 0.9')
     gate=config['gate']
-    require(type(gate) is dict and set(gate)==set(GATE) and gate['contract']==GATE['contract']
+    current=stage_windowed(config)
+    expected=GATE if current else LEGACY_GATE
+    require(type(gate) is dict and set(gate)==set(expected) and gate['contract']==expected['contract']
             and gate['mode'] in ('fixed','auto'),'Invalid GAE gate contract/fields/mode')
     for key in ('minimum_value_iterations','ev_streak','fallback_value_iterations','healthy_iterations','rating_slots'):
         require(type(gate[key]) is int and gate[key]>0,'Invalid GAE gate '+key)
     require(gate['minimum_value_iterations']<=gate['fallback_value_iterations'] and gate['rating_slots']>=3
             and finite(gate['heldout_ev_min']) and 0<=gate['heldout_ev_min']<=1
             and finite(gate['rating_min_slope']) and gate['rating_min_slope']>=0,'Invalid GAE gate bounds')
+    if current:
+        require(type(gate['window_iterations']) is int and gate['window_iterations']==gate['healthy_iterations']==20,
+            'Windowed GAE requires a 20-iteration observation period')
+        require(type(gate['minimum_accepted_steps']) is int and gate['minimum_accepted_steps']>0
+            and type(gate['minimum_value_iterations_in_window']) is int
+            and 1<=gate['minimum_value_iterations_in_window']<=20,'Invalid GAE accepted-work support')
     require(gate['mode']!='auto' or config['lambda']==1.,'Automatic GAE starts at lambda 1')
     require(combined or (config['lambda']==1. and gate['mode']=='fixed'),
             'GAE lambda below 1 / automatic gate requires combined reward')
@@ -54,6 +65,28 @@ def validate(config,*,combined=True):
 
 def windowed(config):
     return config.get('table_gate',{}).get('contract')==ev_evidence.CONTRACT
+
+
+def stage_windowed(config):
+    return config.get('gate',{}).get('contract')==GATE['contract']
+
+
+def health_options(options):
+    result=copy.deepcopy(options);advantage=result.get('advantage',{})
+    gate=advantage.get('gate',{})
+    if gate.get('contract')==LEGACY_GATE['contract']:
+        validate(advantage)
+        require(gate['healthy_iterations']==20,'GAE health upgrade requires the existing 20-iteration period')
+        gate.update({k:copy.deepcopy(v) for k,v in GATE.items() if k not in LEGACY_GATE or k=='contract'})
+    return result
+
+
+def migrate_health(state,old,new,generation):
+    validate_state(state,old,generation)
+    require(health_options(dict(advantage=old))['advantage']==new
+        and not stage_windowed(old) and stage_windowed(new),'Unreviewed GAE health migration')
+    state=copy.deepcopy(state);state['stage_evidence']=gae_health.initial(generation)
+    return validate_state(state,new,generation)
 
 
 def evidence_config(config):
@@ -145,7 +178,8 @@ def initial(config,generation=0):
         ev_streak=0,healthy_streak=0,stage_origin=generation,
         **(dict(table_streaks=dict(historical=0,legacy=0),table_enabled=dict(historical=False,legacy=False),
                 table_origins=dict(historical=None,legacy=None)) if 'table_gate' in config else {}),
-        **(dict(table_evidence=ev_evidence.initial(generation)) if windowed(config) else {}))
+        **(dict(table_evidence=ev_evidence.initial(generation)) if windowed(config) else {}),
+        **(dict(stage_evidence=gae_health.initial(generation)) if stage_windowed(config) else {}))
 
 
 def validate_state(state,config,generation):
@@ -166,6 +200,7 @@ def validate_state(state,config,generation):
             require((origin is None and not state['table_enabled'][k]) or
                     (type(origin) is int and 1<=origin<=generation and state['table_enabled'][k]),'Invalid table GAE origin')
     if windowed(config):ev_evidence.validate_state(state['table_evidence'],config['table_gate'],generation)
+    if stage_windowed(config):gae_health.validate(state['stage_evidence'],config['gate'],generation)
     return state
 
 
@@ -177,7 +212,13 @@ def advance(state,config,*,generation,value_report,health_ok,rating):
     metrics=value_report.get('heldout_after',{})
     ev=(metrics.get('groups',{}).get('table:selfplay/role:learner',{}).get('explained_variance')
         if 'table_gate' in config else metrics.get('explained_variance'))
-    healthy=bool(health_ok and ran and finite(ev) and not value_report.get('kl_guard_tripped',False))
+    healthy=bool(health_ok and (ran or (stage_windowed(config) and used!=1.))
+        and value_report.get('enabled',True) and finite(ev) and not value_report.get('kl_guard_tripped',False))
+    stage_evidence=None
+    if stage_windowed(config):
+        state['stage_evidence'],stage_evidence=gae_health.advance(state['stage_evidence'],gate,
+            generation=generation,stage_origin=state['stage_origin'],healthy=healthy,
+            accepted_steps=value_report.get('optimizer_steps',0))
     state['value_iterations']+=int(ran)
     state['ev_streak']=(state['ev_streak']+1 if ran and finite(ev) and ev>=gate['heldout_ev_min'] else 0)
     state['healthy_streak']=(state['healthy_streak']+1 if used==.98 and healthy else 0)
@@ -192,7 +233,8 @@ def advance(state,config,*,generation,value_report,health_ok,rating):
         elif used==.98:
             reason='collecting_healthy_iterations'
             if state['healthy_streak']>=gate['healthy_iterations']:
-                if rating.get('ok') is True:state['active_lambda']=.95;decision='advance';reason='healthy_streak_and_rating'
+                if stage_evidence is not None and not stage_evidence['ready']:reason='accepted_value_window_not_ready'
+                elif rating.get('ok') is True:state['active_lambda']=.95;decision='advance';reason='healthy_streak_and_rating'
                 else:reason='rating_evidence_not_ready'
         elif used==.95:reason='final_stage'
     if decision=='advance':state['stage_origin']=generation;state['healthy_streak']=0
@@ -238,12 +280,13 @@ def advance(state,config,*,generation,value_report,health_ok,rating):
                     reason=('already_enabled' if before else 'selfplay_only' if tg['mode']=='selfplay_only' else
                             'healthy_streak_not_ready' if state['table_streaks'][kind]<tg['consecutive_iterations'] else
                             ','.join(pooled[kind]['reasons']) if pooled[kind]['reasons'] else 'window_ev_and_health_ready'),
-                    streak_scope='Consecutive PPO/economy/pass health and no value KL trip; accepted value steps supported across the window')
+                    streak_scope='Consecutive PPO/economic health and no value KL trip; accepted value steps supported across the mixed-table EV window')
     return state,dict(contract=gate['contract'],mode=gate['mode'],lambda_used=used,
         table_gate=table_report,
         lambda_next=state['active_lambda'],decision=decision,reason=reason,generation=generation,
         value_iterations=state['value_iterations'],heldout_ev=ev,ev_streak=state['ev_streak'],
         healthy=healthy,healthy_streak=state['healthy_streak'],stage_origin=state['stage_origin'],rating=rating,
+        stage_evidence=stage_evidence,
         scope='Committed iterations only; no forks, extra ratings, or automatic rollback')
 
 

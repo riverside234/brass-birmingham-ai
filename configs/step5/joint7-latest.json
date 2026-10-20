@@ -7,7 +7,7 @@
   "threads": 4,
   "learning_rate": 6e-06,
   "weight_decay": 0.0001,
-  "exploration": 0.08,
+  "exploration": 0.03,
   "seed": 18510000,
   "execution": {
     "processes": 24,
@@ -235,7 +235,7 @@
     "zero_vp_max_fraction": 0.05
   },
   "il_kl_limit": {
-    "contract": "auto-il-kl-limit/1.0.0",
+    "contract": "auto-il-kl-limit/1.2.0",
     "probe_positions": 2048,
     "probe_seed": 710193,
     "probability_floor": 1e-06,
@@ -251,7 +251,6 @@
     "rolling_iterations": 5,
     "group_min_positions": 64,
     "vp_ratio": 0.85,
-    "sells_ratio": 0.7,
     "pass_factor": 2.0,
     "pass_allowance": 0.5,
     "zero_vp_floor": 0.05,
@@ -360,7 +359,7 @@
     ],
     "chain": "nonforced",
     "gate": {
-      "contract": "staged-gae-gate/1.0.0",
+      "contract": "staged-gae-gate/2.0.0",
       "mode": "auto",
       "minimum_value_iterations": 10,
       "heldout_ev_min": 0.5,
@@ -368,7 +367,10 @@
       "fallback_value_iterations": 30,
       "healthy_iterations": 20,
       "rating_slots": 3,
-      "rating_min_slope": 0.0
+      "rating_min_slope": 0.0,
+      "window_iterations": 20,
+      "minimum_accepted_steps": 16,
+      "minimum_value_iterations_in_window": 3
     },
     "table_gate": {
       "contract": "table-gae-ev-gate/2.0.0",
@@ -382,7 +384,7 @@
     }
   },
   "value_phase": {
-    "contract": "ppg-value-phase/3.0.0",
+    "contract": "ppg-value-phase/4.0.0",
     "enabled": true,
     "buffer_iterations": 2,
     "max_epochs": 3,
@@ -397,7 +399,8 @@
     "holdout": {
       "contract": "ppg-critic-holdout/2.0.0",
       "minimum_games_per_table": 2
-    }
+    },
+    "acceptance_steps": 16
   },
   "seat_descriptors": {
     "contract": "seat-descriptors/1.0.0",
@@ -442,5 +445,85 @@
       "snapshot_ev_tolerance": 0.02,
       "reduced_snapshot_weight": 0.5
     }
+  },
+  "exploration_distribution": {
+    "contract": "family-weighted-exploration/3.0.0",
+    "action_family_weights": {
+      "build": 4,
+      "develop": 4,
+      "network": 4,
+      "loan": 2,
+      "sell": 2,
+      "scout": 1
+    },
+    "unknown_action_kind_weight": 1,
+    "pass_only_when_alone": true,
+    "industry_subgroups": [
+      "build",
+      "develop"
+    ],
+    "focus_multiplier": 2.0,
+    "other_phases": "v2",
+    "snapshot_seats": "match_learner"
+  },
+  "entropy_control": {
+    "contract": "entropy-floor-controller/1.0.0",
+    "mode": "apply",
+    "measure": "raw-policy-fixed-il-probe",
+    "groups": [
+      "canal_action",
+      "canal_other",
+      "rail_action",
+      "rail_other"
+    ],
+    "alpha_base": 0.005,
+    "alpha_max": 0.05,
+    "floor_start_ratio": 0.9,
+    "floor_decay_per_iteration": 0.999,
+    "floor_min_ratio": 0.6,
+    "gain": 4.0,
+    "max_step": 1.5,
+    "relax_factor": 1.25,
+    "hysteresis": 1.03,
+    "median_window": 3,
+    "baseline_iterations": 10,
+    "deployment_temperature_check": {
+      "every_iterations": 50,
+      "temperatures": [
+        1.0,
+        0.7
+      ]
+    }
+  },
+  "opening": {
+    "contract": "opening-temperature/1.0.0",
+    "temperature": 1.5,
+    "action_decisions_per_seat": 2,
+    "seats": "neural"
+  },
+  "branching": {
+    "contract": "selfplay-branching/1.0.0",
+    "tables": [
+      "selfplay"
+    ],
+    "rate_per_decision": 0.005,
+    "max_per_game": 1,
+    "skip_opening_decisions": 2,
+    "skip_final_rounds": "rail_empty_deck_hand_le_4",
+    "move_distribution": {
+      "temperature_1": 0.7,
+      "temperature_2": 0.25,
+      "exploration_q": 0.05
+    },
+    "exclude_played_move": true,
+    "reshuffle_hidden_deck": true,
+    "branch_move_row": "excluded"
+  },
+  "exploration_rollout": {
+    "contract": "exploration-rollout/1.0.0",
+    "mode": "fresh",
+    "opening_after_iterations": 0,
+    "raw_entropy_after_iterations": 0,
+    "branching_after_iterations": 20
   }
 }

@@ -3,24 +3,33 @@ import copy
 import math
 from brass_ai.learning.contracts import require
 
-CONTRACT='auto-il-kl-limit/1.0.0'
+LEGACY_CONTRACT='auto-il-kl-limit/1.0.0'
+CONTRACT='auto-il-kl-limit/1.2.0'
 GROUPS=('canal_action','canal_other','rail_action','rail_other')
 DEFAULT=dict(contract=CONTRACT,probe_positions=2048,probe_seed=710193,probability_floor=1e-6,
     initial_limit=.15,minimum_limit=.05,maximum_limit=1.,group_factor=2.,
     growth_factor=1.25,recovery_factor=.8,alarm_factor=2.,update_interval=10,
     baseline_iterations=10,rolling_iterations=5,group_min_positions=64,
-    vp_ratio=.85,sells_ratio=.7,pass_factor=2.,pass_allowance=.5,
+    vp_ratio=.85,pass_factor=2.,pass_allowance=.5,
     zero_vp_floor=.05,zero_vp_factor=2.,insolvency_allowance=.10)
-COUNTS=('seat_games','vp_sum','sells','passes_with_alternative','zero_vp_seats','insolvent_seats','insolvency_events')
-METRICS=('vp_per_seat','sells_per_seat','passes_per_seat','zero_vp_fraction','insolvency_fraction')
+COUNTS=('seat_games','vp_sum','passes_with_alternative','zero_vp_seats','insolvent_seats','insolvency_events')
+METRICS=('vp_per_seat','passes_per_seat','zero_vp_fraction','insolvency_fraction')
 
 
 def finite(x):return type(x) in (int,float) and math.isfinite(x)
 
 
 def validate(config):
-    require(type(config) is dict and set(config)==set(DEFAULT) and config['contract']==CONTRACT,
+    require(type(config) is dict and config.get('contract') in (LEGACY_CONTRACT,'auto-il-kl-limit/1.1.0',CONTRACT),
             'Invalid auto IL-KL limit contract/fields')
+    legacy=config['contract']==LEGACY_CONTRACT
+    require(set(config)==set(DEFAULT)|({'sells_ratio'} if legacy else set()),
+            'Invalid auto IL-KL limit contract/fields')
+    # Read old signed configs/probe manifests without rewriting their identity.
+    # This field is compatibility metadata only; no decision reads it.
+    if legacy:
+        require(finite(config['sells_ratio']) and 0<config['sells_ratio']<=1,
+                'Invalid retired auto IL-KL sells_ratio metadata')
     for key,default in DEFAULT.items():
         if key=='contract':continue
         if type(default) is int:
@@ -34,21 +43,37 @@ def validate(config):
             1<config['growth_factor']<=1.25 and 0<config['recovery_factor']<1 and
             config['alarm_factor']>=1 and 4*config['group_min_positions']<=config['probe_positions'],
             'Invalid auto IL-KL bounds')
-    require(config['vp_ratio']<=1 and config['sells_ratio']<=1 and config['zero_vp_floor']<1 and
+    require(config['vp_ratio']<=1 and config['zero_vp_floor']<1 and
             config['insolvency_allowance']<1,'Invalid auto IL-KL health thresholds')
     return config
 
 
+def current_config(config):
+    """Fresh generation only; existing run/probe signatures stay byte-bound."""
+    result=copy.deepcopy(validate(config))
+    result.pop('sells_ratio',None);result['contract']=CONTRACT
+    return result
+
+
+def baseline_evidence(baseline):
+    """Ignore only the retired sales metric in an otherwise exact old baseline."""
+    if baseline is None:return None
+    result=copy.deepcopy(baseline)
+    for key in ('metrics','thresholds'):
+        if isinstance(result.get(key),dict):result[key].pop('sells_per_seat',None)
+    return result
+
+
 def initial_state(config,probe):
     validate(config)
-    return dict(contract=CONTRACT,config=copy.deepcopy(config),limit=config['initial_limit'],
+    return dict(contract=config['contract'],config=copy.deepcopy(config),limit=config['initial_limit'],
         kl_last_healthy=0.,last_healthy_generation=0,last_update=0,last_generation=0,
         baseline=None,baseline_rows=[],rolling=[],healthy_window=[],blocked=False,probe=copy.deepcopy(probe))
 
 
 def validate_state(state,config,generation=None):
     require(type(state) is dict and set(state)==set(initial_state(config,{})) and
-            state['contract']==CONTRACT and state['config']==config,'Auto IL-KL checkpoint config differs')
+            state['contract']==config['contract'] and state['config']==config,'Auto IL-KL checkpoint config differs')
     require(finite(state['limit']) and config['minimum_limit']<=state['limit']<=config['maximum_limit'],
             'Invalid persisted auto IL-KL limit')
     for key in ('last_update','last_healthy_generation','last_generation'):
@@ -62,7 +87,8 @@ def validate_state(state,config,generation=None):
     for key in ('baseline_rows','rolling'):
         require(all(row is None or rates([row]) is not None for row in state[key]),'Invalid auto IL-KL health counts')
     expected=baseline_record(state['baseline_rows'],config) if len(state['baseline_rows'])==10 else None
-    require(state['baseline']==expected,'Auto IL-KL health baseline differs from committed evidence')
+    require(baseline_evidence(state['baseline'])==expected,
+            'Auto IL-KL health baseline differs from committed evidence')
     return state
 
 
@@ -72,12 +98,13 @@ def rates(rows):
                        r['insolvent_seats']>r['seat_games'] for r in rows):return None
     totals={k:sum(r[k] for r in rows) for k in COUNTS};seats=totals['seat_games']
     return dict(zip(METRICS,(totals[k]/seats for k in
-        ('vp_sum','sells','passes_with_alternative','zero_vp_seats','insolvent_seats'))))
+        ('vp_sum','passes_with_alternative','zero_vp_seats','insolvent_seats'))))
 
 
-def health(baseline,current,behavior):
-    # Never reuse an archived aggregate flag: it included the removed check.
-    behavior=pass_behavior(behavior)
+def health(baseline,current,behavior=None):
+    # Recompute shared health from the active metrics, never an archived flag.
+    # The optional legacy behavior argument is ignored. Neither IL sales nor
+    # IL pass probabilities may affect any consumer of shared economic health.
     reasons=[];checks={}
     if baseline is None:reasons.append('baseline_unavailable')
     if current is None:reasons.append('rolling_health_unavailable')
@@ -85,17 +112,13 @@ def health(baseline,current,behavior):
         # Thresholds are supplied by the caller in the baseline record.
         limits=baseline['thresholds']
         for key in METRICS:
-            okay=current[key]>=limits[key] if key in ('vp_per_seat','sells_per_seat') else current[key]<=limits[key]
+            okay=current[key]>=limits[key] if key=='vp_per_seat' else current[key]<=limits[key]
             checks[key]=dict(value=current[key],threshold=limits[key],ok=okay)
             if not okay:reasons.append(key)
-    if behavior['ok'] is not True:reasons.append('behavior_check_failed')
-    return dict(ok=not reasons,reasons=reasons,metrics=current,checks=checks,behavior=behavior,
-                scope='All-learner self-play economy: seat-weighted five-iteration rates; fixed-IL pass-probability check')
-
-
-def pass_behavior(behavior):
-    passing=copy.deepcopy(behavior.get('passing')) if isinstance(behavior,dict) else None
-    return dict(ok=isinstance(passing,dict) and passing.get('ok') is True,passing=passing)
+    return dict(contract='selfplay-economic-health/3.0.0',ok=not reasons,reasons=reasons,
+                metrics={key:current[key] for key in METRICS} if current is not None else None,
+                checks=checks,
+                scope='All-learner self-play: seat-weighted five-iteration VP, ordinary passes, zero-VP and insolvency rates. No IL action-probability checks; sales are reporting only.')
 
 
 def baseline_record(rows,config):
@@ -103,7 +126,6 @@ def baseline_record(rows,config):
     if measured is None:return None
     b=measured;c=config
     return dict(metrics=b,thresholds=dict(vp_per_seat=c['vp_ratio']*b['vp_per_seat'],
-        sells_per_seat=c['sells_ratio']*b['sells_per_seat'],
         passes_per_seat=c['pass_factor']*b['passes_per_seat']+c['pass_allowance'],
         zero_vp_fraction=max(c['zero_vp_floor'],c['zero_vp_factor']*b['zero_vp_fraction']),
         insolvency_fraction=b['insolvency_fraction']+c['insolvency_allowance']))
@@ -111,11 +133,17 @@ def baseline_record(rows,config):
 
 def advance(state,measurement,counts,*,generation,warmup_done):
     state=copy.deepcopy(validate_state(state,state['config']));c=state['config'];before=state['limit']
+    # Preserve all active thresholds, counters, windows, limits and latch. Do
+    # not rebaseline or retroactively award healthy iterations on continuation.
+    state['baseline']=baseline_evidence(state['baseline'])
+    decision_counts=lambda row:{key:row[key] for key in COUNTS} if rates([row]) is not None else None
+    for key in ('baseline_rows','rolling'):
+        state[key]=[decision_counts(row) for row in state[key]]
     measurement=copy.deepcopy(measurement)
-    measurement['behavior']=pass_behavior(measurement.get('behavior'))
+    measurement.pop('behavior',None)
     require(generation==state['last_generation']+1,'Auto IL-KL must advance once per committed iteration')
     state['last_generation']=generation
-    counts=counts if rates([counts]) is not None else None
+    counts=decision_counts(counts)
     state['rolling']=(state['rolling']+[copy.deepcopy(counts)])[-c['rolling_iterations']:]
     just_ready=False
     if warmup_done and len(state['baseline_rows'])<c['baseline_iterations']:
@@ -124,7 +152,7 @@ def advance(state,measurement,counts,*,generation,warmup_done):
             state['baseline']=baseline_record(state['baseline_rows'],c)
             state['last_update']=generation;just_ready=True
     current=rates(state['rolling']) if len(state['rolling'])==c['rolling_iterations'] else None
-    evidence=health(state['baseline'],current,measurement.get('behavior'))
+    evidence=health(state['baseline'],current)
     distance=measurement.get('kl_mean');groups=measurement.get('groups',{})
     supported=measurement.get('positions')==c['probe_positions'] and finite(distance) and distance>=0 and all(
         type(groups.get(k)) is dict and type(groups[k].get('positions')) is int and

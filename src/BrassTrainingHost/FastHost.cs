@@ -14,6 +14,28 @@ namespace BrassHost
         List<Choice> cachedChoices;
         string[][] cachedWild;
         public long ChoiceCacheHits, ChoiceCacheMisses;
+        JObject trainingFork;
+        public object SaveTrainingFork()
+        {
+            if(Terminal || Phase!="action")throw new InvalidOperationException("fork_requires_action");
+            trainingFork=Checkpoint();
+            return new{revision=Revision,hash=Wire.Hash(Canonical())};
+        }
+        public object ResumeTrainingFork(int? shuffleSeed)
+        {
+            if(trainingFork==null)throw new InvalidOperationException("missing_training_fork");
+            var saved=trainingFork;trainingFork=null;Adopt(Restore(saved));
+            if(shuffleSeed.HasValue)
+            {
+                // Only the unseen deck changes. Hands, public history, wild
+                // decks, board state and the engine's own RNG are untouched.
+                var rng=new Random(shuffleSeed.Value);var deck=Game.Board.CardDeck;
+                for(int i=deck.Count-1;i>0;i--){int j=rng.Next(i+1);var card=deck[i];deck[i]=deck[j];deck[j]=card;}
+                commands.Add(new JObject{["training_deck"]=ExportCards()});
+            }
+            InvalidateFastCaches();
+            return Context();
+        }
         void InvalidateFastCaches() {choiceRevision=wildRevision=-1; cachedChoices=null; cachedWild=null;}
         public List<Choice> Choices()
         {

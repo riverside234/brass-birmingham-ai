@@ -231,7 +231,7 @@ CURRICULUM = [dict(until=None,selfplay=50,historical=45,legacy=5)]
 ARCHIVED_LATEST_MODEL_RECIPE='latest-model-selfplay/1.0.0'
 PREVIOUS_FIXED_RECIPE='latest-model-selfplay/2.0.0'
 LATEST_MODEL_RECIPE='latest-model-selfplay/3.0.0'
-ORDINARY_LEARNER_EXPLORATION=.08
+ORDINARY_LEARNER_EXPLORATION=.03
 
 EXECUTION_V21 = dict(EXECUTION, processes=24, hosts_per_process=2, flush_ms=1.0,
     shard_games=8, shard_bytes=268435456, feature_cache=True, policy_cache=32,search_workers_per_turn=4,
@@ -298,7 +298,7 @@ def latest_model_config(config,imitation_checkpoint):
     from brass_ai.learning.model import ARCHITECTURE,PARAMETER_LIMIT
     from .learning_rate import DEFAULT_WARMUP
     from .lr_controller import AUTO_CONTROLLER,AUTO_CONTRACT
-    from .il_kl_limit import DEFAULT as AUTO_IL_KL
+    from .il_kl_limit import DEFAULT as AUTO_IL_KL,current_config as current_il_kl_config
     from .rehearsal import DEFAULT_FLOOR
     from .rehearsal_window import DEFAULT as REHEARSAL_SAMPLING
     from .gae import DEFAULT as ADVANTAGE
@@ -327,6 +327,7 @@ def latest_model_config(config,imitation_checkpoint):
     result['ppo_lr_controller']['contract']=AUTO_CONTRACT
     if result['ppo_lr_controller']['contract']==AUTO_CONTRACT:
         result.setdefault('il_kl_limit',copy.deepcopy(AUTO_IL_KL))
+        result['il_kl_limit']=current_il_kl_config(result['il_kl_limit'])
     result.setdefault('rehearsal_floor',copy.deepcopy(DEFAULT_FLOOR))
     result.setdefault('rehearsal_sampling',copy.deepcopy(REHEARSAL_SAMPLING))
     result['advantage']=copy.deepcopy(ADVANTAGE)
@@ -340,8 +341,9 @@ def latest_model_config(config,imitation_checkpoint):
     result.setdefault('teacher_value',copy.deepcopy(TEACHER_VALUE))
     result.pop('champion_opponents',None)
     result['execution']['teacher_search_workers_per_turn']=TEACHER_SEARCH_WORKERS
-    from .value_phase import refined_options
-    return validate_config(refined_options(insolvency_event_config(champion_mix_config(sampling_config(result)))))
+    from .value_phase import refined_options,interval_options
+    from .exploration import configure
+    return validate_config(configure(interval_options(refined_options(insolvency_event_config(champion_mix_config(sampling_config(result)))))))
 
 
 def champion_mix_config(config):
@@ -469,6 +471,9 @@ def validate_config(config):
         'search_ready_games','search_every_games','search_games','distill_steps','distill_weight',
         'rehearsal_manifest','rehearsal_weight','rehearsal_until','profile_steps'}
     version=config.get('format')
+    from .exploration import validate as validate_exploration,BLOCKS
+    validate_exploration(config)
+    fields.update(k for k in BLOCKS if k in config)
     require(('critic_data' in config)==('seat_descriptors' in config),'Critic/descriptor blocks must be supplied together')
     if 'critic_data' in config:
         from .critic_data import validate_config as validate_critic

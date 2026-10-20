@@ -14,7 +14,7 @@ from brass_ai.learning.features import Encoded,check_encoded
 from brass_ai.learning.local_entities import check_action_selectors
 from brass_ai.learning.batching import collate
 from brass_ai.step5.league import write_json
-from .il_kl_limit import GROUPS
+from .il_kl_limit import GROUPS,current_config
 
 FORMAT='fixed-il-kl-probe/1.0.0'
 
@@ -98,7 +98,7 @@ class Probe:
         if part:yield part
 
     def measure(self,model,update):
-        began=time.perf_counter();distances={};passes=[];was_training=model.training
+        began=time.perf_counter();distances={};entropies={};normalized={};was_training=model.training
         device=next(model.parameters()).device
         model.eval()
         try:
@@ -111,26 +111,23 @@ class Probe:
                         a,b=map(int,self.arrays['offsets'][i:i+2])
                         reference[j,:b-a]=torch.tensor(self.arrays['reference'][a:b],device=device)
                     values=stable_kl(reference,current,inputs[2],self.config['probability_floor']).cpu().tolist()
+                    entropy=-(current*current.clamp_min(1e-30).log()).sum(-1)
+                    relative=entropy/inputs[2].sum(-1).float().log().clamp_min(1e-8)
+                    hh=entropy.cpu().tolist();nn=relative.cpu().tolist()
                     for j,i in enumerate(part):
-                        distances[i]=values[j];kinds=self.rows[i]['kinds']
-                        passing=[k for k,kind in enumerate(kinds) if kind=='pass']
-                        il_pass=float(reference[j,passing].sum());now_pass=float(current[j,passing].sum())
-                        if passing and len(passing)<len(kinds) and il_pass<.2:
-                            passes.append(dict(row=i,il=il_pass,current=now_pass,ok=now_pass<=2*il_pass+.05))
+                        distances[i]=values[j];entropies[i]=hh[j];normalized[i]=nn[j]
         finally:model.train(was_training)
-        def checks(rows):
-            failed=[r for r in rows if not r['ok']]
-            return dict(positions=len(rows),failures=len(failed),examples=failed[:8],ok=not failed)
         groups={}
         for group in GROUPS:
             values=[distances[i] for i,row in enumerate(self.rows) if row['group']==group]
-            groups[group]=dict(positions=len(values),kl_mean=sum(values)/len(values) if values else None)
-        pass_check=checks(passes)
+            ids=[i for i,row in enumerate(self.rows) if row['group']==group]
+            groups[group]=dict(positions=len(values),kl_mean=sum(values)/len(values) if values else None,
+                raw_entropy=sum(entropies[i] for i in ids)/len(ids) if ids else None,
+                normalized_entropy=sum(normalized[i] for i in ids)/len(ids) if ids else None)
         return dict(positions=len(distances),requested_positions=self.config['probe_positions'],
             kl_mean=sum(distances.values())/len(distances),groups=groups,unassigned_positions=0,
-            behavior=dict(ok=pass_check['ok'],passing=pass_check),
             elapsed_seconds=time.perf_counter()-began,probability_floor=self.config['probability_floor'],
-            scope='Fixed IL validation positions; raw temperature-1 policies, no exploration; symmetric floor/renormalization for KL; pass-probability check only')
+            scope='Fixed IL validation positions; raw temperature-1 policies, no exploration; symmetric floor/renormalization for KL')
 
     def probabilities(self,model,update):
         """Raw immutable snapshot for quality-pool novelty checks, no RNG."""
@@ -205,7 +202,11 @@ def load(root,run,origin,model,config,update,workers,receipt=None):
     source=source_binding(root,origin)
     if path.exists():
         metadata=read(path)
-        require(metadata['format']==FORMAT and metadata['config']==config and metadata['source']==source,
+        # Retiring a health-only sales field does not change fixed probe
+        # selection, tensors or reference probabilities. Keep its original
+        # manifest/hash/receipt; reject every other config/source difference.
+        require(metadata['format']==FORMAT and current_config(metadata['config'])==current_config(config)
+                and metadata['source']==source,
                 'Fixed IL probe source/config differs')
         cache=project_path(root,metadata['cache']['path'])
         require(cache.parent==directory and sha(cache)==metadata['cache']['sha256'],'Fixed IL probe cache changed')
