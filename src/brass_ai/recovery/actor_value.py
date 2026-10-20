@@ -24,36 +24,62 @@ class TrainingPhases:
         descriptors='critic_data' in config
         previous_contract='actor-value-phases/3.0.0' if descriptors else 'actor-value-phases/2.0.0' if buffered else CONTRACT
         evidence_contract='actor-value-phases/4.0.0' if gae.windowed(config['advantage']) else previous_contract
-        self.contract='actor-value-phases/5.0.0' if descriptors else evidence_contract
-        self.evidence_migration=None;self.critic_migration=None
+        base_contract='actor-value-phases/5.0.0' if descriptors else evidence_contract
+        self.contract='actor-value-phases/6.0.0' if value_phase.stratified(config['value_phase']) else base_contract
+        self.evidence_migration=None;self.critic_migration=None;self.refinement_migration=None
         saved=(raw or {}).get('training',{}).get(KEY)
+        previous_value=(saved or {}).get('options',{}).get('value_phase')
         if saved is None:
             require(generation==0,'Missing GAE/value optimizer checkpoint; use a fresh IL run')
             self.state=gae.initial(config['advantage']);self.beta=config['value_phase']['beta_clone'];self.trips=[]
             if descriptors:self.critic_state=critic_data.initial(config['critic_data'])
         else:
             require(type(saved) is dict,'Invalid GAE/value checkpoint')
+            migration_options=copy.deepcopy(self.options)
+            if self.contract!=base_contract and previous_value and previous_value.get('contract')==value_phase.LEGACY_CONTRACT:
+                # Older reviewed EV/weight-recovery upgrades compose before
+                # the value-only refinement, without bypassing their checks.
+                migration_options['value_phase']=copy.deepcopy(previous_value)
             # The league verifies the signed source/config transition first.
             # This exact upgrade also handles a restart after that transition
             # was committed but before its first new generation checkpoint.
-            if (saved.get('contract') in (previous_contract,self.contract) and gae.windowed(config['advantage'])
+            if (saved.get('contract') in (previous_contract,base_contract) and gae.windowed(config['advantage'])
                     and not gae.windowed(saved.get('options',{}).get('advantage',{}))):
                 require(gae.evidence_config(dict(saved['options'],reward=config.get('reward',{})))==
-                        dict(self.options,reward=config.get('reward',{})),
+                        dict(migration_options,reward=config.get('reward',{})),
                         'GAE/value checkpoint configuration differs during evidence upgrade')
                 saved=copy.deepcopy(saved)
                 saved['gae']=gae.migrate_state(saved['gae'],saved['options']['advantage'],config['advantage'],generation)
-                saved.update(contract=(self.contract if saved['contract']==self.contract else evidence_contract),
-                    options=copy.deepcopy(self.options))
+                saved.update(contract=(base_contract if saved['contract']==base_contract else evidence_contract),
+                    options=copy.deepcopy(migration_options))
                 self.evidence_migration=dict(contract=gae.CONFIG_MIGRATION,origin=generation,
                     scope='Empty EV window and new health streaks; active lambdas/table origins, both Adams, beta and critic state preserved')
             if descriptors and saved.get('contract')==evidence_contract:
-                require(saved.get('options')==self.options,'GAE/value checkpoint configuration differs during critic upgrade')
+                require(saved.get('options')==migration_options,'GAE/value checkpoint configuration differs during critic upgrade')
                 saved=copy.deepcopy(saved)
                 saved['critic_data']=critic_data.migrate_state(saved['critic_data'],config['critic_data'],generation)
-                saved['contract']=self.contract
+                saved['contract']=base_contract
                 self.critic_migration=dict(contract=critic_data.RECOVERY_CONTRACT,origin=generation,
                     scope='Empty weight-recovery streak; saved weight, baseline, activation, fingerprint, both Adams and GAE state preserved')
+            if self.contract!=base_contract and saved.get('contract')==base_contract:
+                require(value_phase.refined_options(saved.get('options',{}))==self.options,
+                    'GAE/value checkpoint configuration differs during PPG refinement')
+                saved=copy.deepcopy(saved);groups=saved['optimizer']['param_groups']
+                old_rate=saved['options']['value_phase']['learning_rate']
+                require(len(groups)==1 and groups[0]['lr']==old_rate,'Previous value optimizer LR differs')
+                groups[0]['lr']=config['value_phase']['learning_rate']
+                saved.update(contract=self.contract,options=copy.deepcopy(self.options))
+                # Do not combine evidence gathered under different selection
+                # protocols into a new qualification/recovery streak.
+                state=saved['gae'];state.update(ev_streak=0,healthy_streak=0)
+                if 'table_streaks' in state:state['table_streaks']={k:0 for k in state['table_streaks']}
+                if 'table_evidence' in state:
+                    from .ev_evidence import initial
+                    state['table_evidence']=initial(generation)
+                if descriptors:saved['critic_data']['weight_recovery']['healthy_streak']=0
+                self.refinement_migration=dict(contract=value_phase.CONFIG_MIGRATION,origin=generation,
+                    learning_rate_before=old_rate,learning_rate_after=config['value_phase']['learning_rate'],
+                    scope='Value LR only changes in Adam; all moments/steps, weights and RNG preserved. New holdout evidence starts here; lambdas, activation/origins, snapshot weight, fixed EV baseline and training counters retained.')
             fields={'contract','options','gae','beta_clone','kl_trips','optimizer'}|({'buffer'} if buffered else set())|({'critic_data'} if descriptors else set())
             require(type(saved) is dict and set(saved)==fields
                     and saved['contract']==self.contract and saved['options']==self.options,
@@ -74,7 +100,8 @@ class TrainingPhases:
         if buffered:
             require(root is not None and run is not None,'Two-iteration PPG requires an owned run disk cache')
             self.buffer=value_buffer.DiskBuffer(root,run,config,generation=generation,
-                receipt=saved['buffer'] if saved is not None else None)
+                receipt=saved['buffer'] if saved is not None else None,
+                previous_reward=(raw or {}).get('model_config',{}).get('utility'),previous_value=previous_value)
 
     def collection(self,records,policy_id,kinds,model_id):
         if self.buffer:
@@ -95,7 +122,8 @@ class TrainingPhases:
             for i,role in enumerate(critic.roles):
                 if role=='snapshot':critic.critic_weights[i]=self.critic_state['snapshot_weight']
         if self.options['value_phase']['enabled']:
-            self.train_ids,self.heldout_ids,self.split=value_phase.split(critic.data,self.options['value_phase']['holdout_fraction'])
+            self.train_ids,self.heldout_ids,self.split=value_phase.split(critic.data,self.options['value_phase']['holdout_fraction'],
+                self.options['value_phase'].get('holdout'))
             if self.critic_state and not self.critic_state['snapshots_active']:
                 self.train_ids=[i for i in self.train_ids if critic.roles[i]=='learner']
         else:
@@ -143,6 +171,7 @@ class TrainingPhases:
             self.value_report['buffer']=cache
         else:self.value_report=fit()
         self.value_report['split']=self.split
+        if self.refinement_migration:self.value_report['refinement_migration']=self.refinement_migration
         return self.value_report
 
     def finish(self,*,generation,update,anchor_gate,rating):
@@ -190,6 +219,7 @@ class TrainingPhases:
         if self.buffer:
             self.value_report['buffer']['committed_cleanup']=self.buffer.committed(generation)
         self.collection_source=None
+        self.refinement_migration=None
 
     def release(self):
         self.dataset=None;self.critic_dataset=None;self.snapshot_data=[];self.ppo_probe=None;self.probe_ids=None

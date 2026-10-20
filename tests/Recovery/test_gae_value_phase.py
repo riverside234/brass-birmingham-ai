@@ -25,7 +25,11 @@ from brass_ai.recovery.utility import migrate,reward_spec,calibrate
 
 
 def config():
-    return copy.deepcopy(read(SOURCE_ROOT/'configs/step5/joint7-latest.json'))
+    # Historical transaction/resume fixtures retain their original hash split
+    # and base LR. The refinement has its own explicit migration regressions.
+    result=copy.deepcopy(read(SOURCE_ROOT/'configs/step5/joint7-latest.json'))
+    result['value_phase']=copy.deepcopy(value_phase.LEGACY_DEFAULT)
+    return result
 
 
 def fixture(*,preset='small',games=4,decisions=3):
@@ -119,7 +123,8 @@ class Advantages(unittest.TestCase):
 
     def test_strict_config_old_recipe_and_new_generator(self):
         cfg=config();validate_config(cfg)
-        self.assertEqual(cfg,latest_model_config(cfg,cfg['imitation_checkpoint']))
+        generated=latest_model_config(cfg,cfg['imitation_checkpoint'])
+        self.assertEqual(value_phase.refined_options(cfg),generated)
         for key,value in (('lambda',0),('lambda',True),('chain','all')):
             bad=copy.deepcopy(cfg);bad['advantage'][key]=value
             with self.assertRaises(ValueError):validate_config(bad)

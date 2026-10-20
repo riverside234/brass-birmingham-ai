@@ -258,10 +258,10 @@ class CriticTraining(unittest.TestCase):
         with patch('brass_ai.recovery.updates.PreparedEncoder.encode',return_value=e):data=updates.prepared([game],insolvency=spec['insolvency'],reward=spec)
         terminal=terminal_utility(result(),spec)
         self.assertEqual(data[0][1],terminal_targets(result()));self.assertEqual(data[0][2],('snapshot-game',2))
-        self.assertAlmostEqual(data[0][0]['_insolvency_cost_to_go'],.005)
-        self.assertAlmostEqual(data[0][0]['_reward_return'][2],terminal[2]-.005)
+        self.assertAlmostEqual(data[0][0]['_insolvency_cost_to_go'],.0075)
+        self.assertAlmostEqual(data[0][0]['_reward_return'][2],terminal[2]-.0075)
         self.assertAlmostEqual(data[1][0]['_reward_return'][2],terminal[2])
-        self.assertAlmostEqual(data[1][0]['_reward_remaining'][2],.07)
+        self.assertAlmostEqual(data[1][0]['_reward_remaining'][2],.0675)
 
     def test_disk_descriptors_snapshot_roles_and_resume_exact_next_update(self):
         with tempfile.TemporaryDirectory(dir=SOURCE_ROOT/'artifacts') as tmp:

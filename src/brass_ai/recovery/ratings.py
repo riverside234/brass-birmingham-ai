@@ -47,7 +47,11 @@ def compact_history(root,run,state):
     from .retention import owned,safe,active
     root,run=owned(root,run)
     require(not active(run,allow_owner=True),'Cannot compact ratings in another active run')
-    require(read(run/'state.json')==state,'Run advanced during rating compaction')
+    # Live GAE rating evidence contains (generation, points) tuples. JSON
+    # persists these as lists; compare the same representation we committed.
+    # Retain the full-state stale-writer guard, not only an iteration check.
+    persisted=json.loads(json.dumps(state,allow_nan=False))
+    require(read(run/'state.json')==persisted,'Run advanced during rating compaction')
     archive=copy.deepcopy(archived_history(root,rating))
     for slot in expired:
         # Exact receipts remain mandatory before any source evidence is retired.

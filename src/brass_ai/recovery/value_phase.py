@@ -10,17 +10,37 @@ import torch
 
 from brass_ai.learning.contracts import digest,require
 
-CONTRACT='ppg-value-phase/2.0.0'
-DEFAULT=dict(contract=CONTRACT,enabled=True,buffer_iterations=2,max_epochs=3,batch_size=4096,
+LEGACY_CONTRACT='ppg-value-phase/2.0.0'
+LEGACY_DEFAULT=dict(contract=LEGACY_CONTRACT,enabled=True,buffer_iterations=2,max_epochs=3,batch_size=4096,
     clone_rows=8192,clone_batch_size=512,beta_clone=1.,beta_clone_max=8.,kl_cap=.002,
     learning_rate=6e-6,holdout_fraction=.05)
+CONTRACT='ppg-value-phase/3.0.0'
+from .critic_holdout import DEFAULT as HOLDOUT_DEFAULT
+DEFAULT=dict(LEGACY_DEFAULT,contract=CONTRACT,learning_rate=3e-6,holdout=copy.deepcopy(HOLDOUT_DEFAULT))
+CONFIG_MIGRATION='step5-ppg-refinement/1.0.0'
+
+
+def stratified(config):return config.get('contract')==CONTRACT
+
+
+def refined_options(options):
+    """Exact opt-in upgrade; preserve every unrelated value-phase option."""
+    result=copy.deepcopy(options);value=result.get('value_phase')
+    if value is not None and value.get('contract')==LEGACY_CONTRACT:
+        validate(value)
+        value.update(contract=CONTRACT,learning_rate=value['learning_rate']*.5,holdout=copy.deepcopy(HOLDOUT_DEFAULT))
+    return result
 
 
 def validate(config):
-    require(type(config) is dict and set(config)==set(DEFAULT) and
-            (config['contract']==CONTRACT or
+    current=type(config) is dict and stratified(config)
+    require(type(config) is dict and set(config)==set(DEFAULT if current else LEGACY_DEFAULT) and
+            (config['contract'] in (CONTRACT,LEGACY_CONTRACT) or
              (config['contract']=='ppg-value-phase/1.0.0' and config['buffer_iterations']==1)),
             'Invalid value phase contract/fields')
+    if current:
+        from .critic_holdout import validate as validate_holdout
+        validate_holdout(config['holdout'])
     require(type(config['enabled']) is bool,'Invalid value phase enabled flag')
     for key in ('buffer_iterations','max_epochs','batch_size','clone_rows','clone_batch_size'):
         require(type(config[key]) is int and config[key]>0,'Invalid value phase '+key)
@@ -40,7 +60,10 @@ def heldout(game_id,fraction):
     return value < int(fraction*2**64)
 
 
-def split(data,fraction):
+def split(data,fraction,holdout_options=None):
+    if holdout_options is not None:
+        from .critic_holdout import partition
+        return partition(data,fraction,holdout_options)
     held={row[2][0] for row in data if heldout(row[2][0],fraction)}
     train=[i for i,d in enumerate(data) if d[2][0] not in held]
     validation=[i for i,d in enumerate(data) if d[2][0] in held]
@@ -167,7 +190,7 @@ def fit(model,optimizer,dataset,train_ids,heldout_ids,actor_ids,probe_ids,config
         distinct_value_rows_used=0,value_presentations=0,clone_presentations=0,
         attempted_value_presentations=0,attempted_clone_presentations=0,
         distinct_current_rows_used=0,distinct_previous_rows_used=0,current_presentations=0,previous_presentations=0,
-        scope='Critic: current plus configured previous iteration; validation/cloning/probes: current only; separate Adam/base LR, no PPO counters; KL-safe prefixes require non-increasing held-out loss')
+        scope='Critic: current plus configured previous iteration; validation/cloning/probes: current only; separate Adam/configured value LR, no PPO counters; KL-safe prefixes require non-increasing held-out loss')
     if not config['enabled']:report['early_stop_reason']='disabled'
     elif not value_train_ids or not heldout_ids:report['early_stop_reason']='insufficient_critic_split'
     elif not actor_ids or not probe_ids:report['early_stop_reason']='no_policy_reference'

@@ -1,5 +1,6 @@
 """Rolling 100-iteration rating reports preserve cumulative evidence and resume."""
 import copy
+import json
 from pathlib import Path
 import tempfile
 import unittest
@@ -126,6 +127,23 @@ class RatingRetention(unittest.TestCase):
         write_json(self.run/'state.json',self.state)
         with self.assertRaisesRegex(ValueError,'escapes owned run'):r.compact_history(self.root,self.run,self.state)
         self.assertEqual(outside.read_text(),'{}')
+
+    def test_live_GAE_rating_tuples_compact_and_resume_without_recollecting(self):
+        self.through(100)
+        # gae.rating_evidence returns pairs as tuples in the live trainer.
+        self.state['recent_training']=[dict(actor=dict(gae=dict(rating=dict(
+            points=[(80,346.08),(90,372.29),(100,341.52)]))))]
+        self.assertNotEqual(self.state,json.loads(json.dumps(self.state)))
+        self.advance(110)
+        self.assertEqual([s['generation'] for s in self.state['ratings']['slots']],list(range(20,111,10)))
+        saved=read(self.run/'state.json')
+        with patch.object(r,'collect_slot',side_effect=AssertionError('Committed rating must be reused')):
+            self.assertIsNone(r.schedule(self.root,self.run,saved,self.cfg))
+        # Real changes, even within the same generation, must still fail.
+        self.cfg['retention']['enabled']=False;self.advance(120)
+        self.state['recent_training'][0]['actor']['gae']['rating']['points'][0]=(80,999.)
+        with self.assertRaisesRegex(ValueError,'Run advanced'):
+            r.compact_history(self.root,self.run,self.state)
 
 
 if __name__=='__main__':unittest.main()

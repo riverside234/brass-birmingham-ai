@@ -9,6 +9,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import re
 import stat
 import tempfile
 import time
@@ -137,7 +138,20 @@ def export(root, run, output=None, *, latest=2, extras=()):
 
     add(state_path, 'state.json', 'Committed configuration, lineage and progress', expected=True)
     require(files['state.json'][1] == state_bytes, 'Run advanced during export; retry')
-    add(run / 'retention-history.json', 'retention-history.json', 'Retained iteration trends', expected=True)
+    retained=add(run / 'retention-history.json', 'retention-history.json', 'Retained iteration trends', expected=True) or {}
+    # Cleanup can be interrupted after a new generation commits. An older
+    # report may then be outside --latest but not yet in compact history.
+    # Copy that real report rather than silently leaving a gap in the bundle.
+    uncompacted=[]
+    for directory in sorted(run.glob('iteration-*')):
+        match=re.fullmatch(r'iteration-([0-9]+)',directory.name)
+        if match is None:continue
+        iteration=int(match[1]);relative=directory.relative_to(run)/'report.json'
+        if iteration>=generation or iteration in selected_iterations or relative.as_posix() in retained:continue
+        report=add(directory/'report.json',relative,'Committed report not yet in compact history')
+        if report is not None:
+            require(report.get('iteration')==iteration,f'Iteration report identity differs: {directory}')
+            uncompacted.append(iteration)
     for path in sorted(run.glob('*.json')):
         if not path.name.startswith('.') and path.name not in (
                 'state.json', 'retention-history.json', 'recorded-config.json', 'export-manifest.json'):
@@ -240,7 +254,8 @@ def export(root, run, output=None, *, latest=2, extras=()):
     manifest = dict(format=FORMAT, created_utc=datetime.now(timezone.utc).isoformat(),
         run=run.relative_to(root).as_posix(), committed_generation=generation,
         games_done=state.get('games_done'), implementation=state.get('signature', {}).get('implementation'),
-        latest_iterations=selected_iterations, run_lock_present=(run / '.active-run.json').exists(),
+        latest_iterations=selected_iterations, uncompacted_iterations=uncompacted,
+        run_lock_present=(run / '.active-run.json').exists(),
         files=[entry for entry, _ in files.values()],
         missing=[dict(source=path, reason=reason) for path, reason in sorted(missing.items())],
         warnings=sorted(set(warnings)),

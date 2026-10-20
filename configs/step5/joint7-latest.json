@@ -109,7 +109,7 @@
       "placement": 0.1,
       "vp": 0.001,
       "insolvency": {
-        "event_cost": 0.005,
+        "event_cost": 0.0075,
         "max_cost": 0.075
       }
     },
@@ -165,7 +165,7 @@
   },
   "search_collections_per_iteration": 2,
   "insolvency": {
-    "event_cost": 0.005,
+    "event_cost": 0.0075,
     "max_cost": 0.075
   },
   "reward": {
@@ -382,7 +382,7 @@
     }
   },
   "value_phase": {
-    "contract": "ppg-value-phase/2.0.0",
+    "contract": "ppg-value-phase/3.0.0",
     "enabled": true,
     "buffer_iterations": 2,
     "max_epochs": 3,
@@ -392,8 +392,12 @@
     "beta_clone": 1.0,
     "beta_clone_max": 8.0,
     "kl_cap": 0.002,
-    "learning_rate": 6e-06,
-    "holdout_fraction": 0.05
+    "learning_rate": 3e-06,
+    "holdout_fraction": 0.05,
+    "holdout": {
+      "contract": "ppg-critic-holdout/2.0.0",
+      "minimum_games_per_table": 2
+    }
   },
   "seat_descriptors": {
     "contract": "seat-descriptors/1.0.0",

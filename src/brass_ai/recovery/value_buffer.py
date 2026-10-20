@@ -20,6 +20,9 @@ from .retention import owned,safe
 from .updates import Dataset,state_value_model
 
 CONTRACT='ppg-critic-disk-buffer/2.0.0'
+# Directory ownership and tensor layout stay unchanged; v3 receipts also bind
+# the complete collection's stratified selection, including excluded games.
+STRATIFIED_CONTRACT='ppg-critic-disk-buffer/3.0.0'
 OWNER=dict(contract=CONTRACT,purpose='disposable previous-iteration critic rows')
 TARGETS=('win_share','placement','vp')
 FILE=re.compile(r'generation-([0-9]{6,})\.(npy|json)(\.partial|\.tmp)?$')
@@ -58,8 +61,14 @@ class DiskRows:
         try:
             require(self.array.dtype==row_dtype() and self.array.shape==(receipt['rows'],),
                     'Invalid PPG cache tensor layout')
-            require(all(not heldout(g,receipt['holdout_fraction'])
-                        for g in receipt['game_ids']),'Held-out game in PPG cache')
+            if receipt['contract']==STRATIFIED_CONTRACT:
+                from .critic_holdout import validate_selection
+                selection=validate_selection(receipt['holdout_selection'])
+                require(set(receipt['game_ids'])<=set(selection['games'])-set(selection['heldout_games']),
+                    'Held-out or unknown game in PPG cache')
+            else:
+                require(receipt['contract']==CONTRACT and all(not heldout(g,receipt['holdout_fraction'])
+                            for g in receipt['game_ids']),'Held-out game in PPG cache')
         except BaseException:
             self.close();raise
 
@@ -109,9 +118,11 @@ class ValueDataset(Dataset):
 
 
 class DiskBuffer:
-    def __init__(self,root,run,config,*,generation,receipt=None):
-        from .utility import reward_spec
+    def __init__(self,root,run,config,*,generation,receipt=None,previous_reward=None,previous_value=None):
+        from .utility import reward_spec,event_cost_upgrade
+        from .value_phase import stratified,refined_options
         self.root,self.run=owned(root,run);self.config=config;self.generation=generation
+        self.stratified=stratified(config['value_phase'])
         self.reward_id=digest(reward_spec(config))
         self.directory=safe(self.run,self.run/'.ppg-value-cache')
         self.directory.mkdir(parents=True,exist_ok=True)
@@ -125,10 +136,29 @@ class DiskBuffer:
             require(read(temporary)==OWNER,'Unknown temporary PPG owner');temporary.unlink()
         require(read(owner)==OWNER,'Unknown PPG cache owner')
         self.receipt=copy.deepcopy(receipt);self.pending=None;self.rebuilt=False
+        self.reward_transition=None;self.holdout_transition=None
         require((generation==0)==(receipt is None),'Missing committed PPG buffer receipt')
         if receipt is not None:
-            self.validate_receipt(receipt,generation)
-            self.ensure()
+            reward_change=receipt.get('reward_id')!=self.reward_id and event_cost_upgrade(previous_reward,reward_spec(config))
+            holdout_change=bool(previous_value and not stratified(previous_value) and self.stratified and
+                refined_options(dict(value_phase=previous_value))['value_phase']==config['value_phase'])
+            if reward_change or holdout_change:
+                # Exact reviewed transition: no relabeling of old targets or
+                # selection. Retain old files until the next successful commit.
+                self.validate_receipt(receipt,generation,reward_id=digest(previous_reward) if reward_change else None,
+                    value_options=previous_value if holdout_change else None)
+                if reward_change:
+                    self.reward_transition=dict(contract='ppg-reward-transition/1.0.0',generation=generation,
+                        from_reward_id=receipt['reward_id'],to_reward_id=self.reward_id,excluded_previous_rows=receipt['rows'],
+                        scope='One collection uses current rows only; old-target cache retained until next commit')
+                if holdout_change:
+                    self.holdout_transition=dict(contract='ppg-holdout-transition/1.0.0',generation=generation,
+                        excluded_previous_rows=receipt['rows'],
+                        scope='Current rows only once at selection upgrade; old cache retained until next commit')
+                self.receipt=None
+            else:
+                self.validate_receipt(receipt,generation)
+                self.ensure()
         # Also retires uncommitted output after an interrupted iteration. The
         # committed generation's input is kept until the *next* state commit.
         self.startup_cleanup=self.cleanup(generation)
@@ -140,15 +170,24 @@ class DiskBuffer:
         self.path(generation,'json.tmp')  # reject linked temporary targets too
         write_json(self.path(generation,'json'),value)
 
-    def validate_receipt(self,r,generation):
-        require(type(r) is dict and r.get('contract')==CONTRACT and r.get('generation')==generation
+    def validate_receipt(self,r,generation,*,reward_id=None,value_options=None):
+        from .value_phase import stratified
+        options=self.config['value_phase'] if value_options is None else value_options
+        current=stratified(options)
+        require(type(r) is dict and r.get('contract')==(STRATIFIED_CONTRACT if current else CONTRACT) and r.get('generation')==generation
                 and r.get('compatibility')==digest(compatibility())
-                and r.get('reward_id')==self.reward_id
-                and r.get('holdout_fraction')==self.config['value_phase']['holdout_fraction']
+                and r.get('reward_id')==(self.reward_id if reward_id is None else reward_id)
+                and r.get('holdout_fraction')==options['holdout_fraction']
                 and type(r.get('rows')) is int and r['rows']>=0,'Incompatible PPG buffer receipt')
         require(type(r.get('game_ids')) is list and len(set(r['game_ids']))==len(r['game_ids'])
                 and type(r.get('contexts')) is list and type(r.get('source')) is dict,
                 'Invalid PPG cache identities')
+        if current:
+            from .critic_holdout import validate_selection
+            selection=validate_selection(r.get('holdout_selection'),options['holdout'],options['holdout_fraction'])
+            require(set(r['game_ids'])<=set(selection['games'])-set(selection['heldout_games']),
+                'Held-out or unknown game in PPG cache receipt')
+        else:require('holdout_selection' not in r,'Unexpected stratified PPG receipt')
 
     def source(self,records,policy_id,kinds,model_id):
         selected=[]
@@ -160,15 +199,24 @@ class DiskBuffer:
         require(selected and len({r['game_id'] for r in selected})==len(selected),'Invalid PPG source collection')
         return dict(records=selected,policy_id=policy_id,kind_by_group=copy.deepcopy(kinds),model_id=model_id)
 
-    def _write(self,rows,count,generation,source,expected=None):
+    def _write(self,rows,count,generation,source,expected=None,selection=None):
         from .value_phase import heldout
+        if self.stratified:
+            from .critic_holdout import validate_selection
+            if expected is not None:selection=expected['holdout_selection']
+            validate_selection(selection,self.config['value_phase']['holdout'],self.config['value_phase']['holdout_fraction'])
+            excluded=set(selection['heldout_games'])
         part=self.path(generation,'npy.partial');a=np.lib.format.open_memmap(part,mode='w+',dtype=row_dtype(),shape=(count,))
         games={};contexts={};context_values=[];forced=0;n=0
         try:
             for row,target,identity,encoded in rows:
                 require(n<count,'PPG cache row count increased')
-                require(not heldout(identity[0],self.config['value_phase']['holdout_fraction']),
+                require(identity[0] not in excluded if self.stratified else
+                        not heldout(identity[0],self.config['value_phase']['holdout_fraction']),
                         'Held-out row cannot enter PPG buffer')
+                if self.stratified:
+                    require(selection['games'].get(identity[0])==row.get('_table_kind','selfplay'),
+                        'PPG source game/table differs from holdout selection')
                 role=row.get('_critic_role','learner')
                 require(row['_reward_id']==self.reward_id and role in ('learner','snapshot') and
                         ((role=='learner' and row['behavior']['policy_id']==source['policy_id']) or
@@ -194,8 +242,9 @@ class DiskBuffer:
                 n+=1
             require(n==count,'PPG cache row count decreased');a.flush()
         finally:a._mmap.close()
-        result=dict(contract=CONTRACT,generation=generation,compatibility=digest(compatibility()),
+        result=dict(contract=STRATIFIED_CONTRACT if self.stratified else CONTRACT,generation=generation,compatibility=digest(compatibility()),
             reward_id=self.reward_id,holdout_fraction=self.config['value_phase']['holdout_fraction'],
+            **(dict(holdout_selection=copy.deepcopy(selection)) if self.stratified else {}),
             source=copy.deepcopy(source),rows=count,forced_rows=forced,game_ids=list(games),contexts=context_values,
             sha256=sha(part),bytes=part.stat().st_size)
         require(expected is None or result==expected,'Rebuilt PPG cache differs from committed receipt')
@@ -221,7 +270,12 @@ class DiskBuffer:
                     insolvency=self.config.get('insolvency'),reward=reward_spec(self.config))
                 for d in data:
                     if d[0].get('_critic_role','learner')!=role:continue
-                    if not heldout(d[2][0],self.receipt['holdout_fraction']):yield d
+                    if self.stratified:
+                        selection=self.receipt['holdout_selection']
+                        require(selection['games'].get(d[2][0])==d[0].get('_table_kind','selfplay'),
+                            'PPG replay differs from committed holdout selection')
+                        if d[2][0] not in selection['heldout_games']:yield d
+                    elif not heldout(d[2][0],self.receipt['holdout_fraction']):yield d
 
     def ensure(self):
         r=self.receipt;p=self.path(r['generation'],'npy');meta=self.path(r['generation'],'json')
@@ -238,18 +292,28 @@ class DiskBuffer:
         require(state_value_model(model),'Disk PPG buffer requires stock state-only value heads')
         require(self.pending is None,'PPG cache already staged')
         if self.receipt:
-            require(not (set(self.receipt['game_ids']) & {d[2][0] for d in dataset.data}),
+            previous_games=self.receipt.get('holdout_selection',{}).get('games',self.receipt['game_ids'])
+            require(not (set(previous_games) & {d[2][0] for d in dataset.data}),
                     'Previous and current PPG games overlap')
         began=time.perf_counter()
-        self.pending=self._write((dataset.data[i] for i in train_ids),len(train_ids),self.generation+1,source)
+        selection=None
+        if self.stratified:
+            from .critic_holdout import partition
+            _,_,report=partition(dataset.data,self.config['value_phase']['holdout_fraction'],self.config['value_phase']['holdout'])
+            selection=report['selection']
+        self.pending=self._write((dataset.data[i] for i in train_ids),len(train_ids),self.generation+1,source,selection=selection)
+        excluded=self.path(self.generation,'npy') if (self.reward_transition or self.holdout_transition) and not self.receipt else None
+        excluded_bytes=excluded.stat().st_size if excluded is not None and excluded.is_file() else 0
         return dict(storage='disk-backed one-candidate critic rows',buffer_iterations=2,
-            current_generation=self.generation+1,previous_generation=self.generation or None,
+            current_generation=self.generation+1,previous_generation=self.generation if self.receipt else None,
             current_rows=len(train_ids),previous_rows=self.receipt['rows'] if self.receipt else 0,
             current_forced_rows=self.pending['forced_rows'],previous_forced_rows=self.receipt['forced_rows'] if self.receipt else 0,
             current_cache_bytes=self.pending['bytes'],previous_cache_bytes=self.receipt['bytes'] if self.receipt else 0,
-            peak_cache_bytes=self.pending['bytes']+(self.receipt['bytes'] if self.receipt else 0),
+            excluded_cache_bytes=excluded_bytes,
+            peak_cache_bytes=self.pending['bytes']+(self.receipt['bytes'] if self.receipt else 0)+excluded_bytes,
             write_seconds=time.perf_counter()-began,rebuilt_from_replay=self.rebuilt,
-            startup_cleanup=self.startup_cleanup,committed_cleanup=None)
+            startup_cleanup=self.startup_cleanup,committed_cleanup=None,reward_transition=self.reward_transition,
+            holdout_transition=self.holdout_transition)
 
     @contextmanager
     def previous(self):
@@ -277,4 +341,5 @@ class DiskBuffer:
         require(read(self.run/'state.json')['iteration']==generation,'PPG cleanup requires committed training state')
         self.receipt=self.pending;self.pending=None;self.generation=generation
         result=self.cleanup(generation);self.rebuilt=False;self.startup_cleanup=None
+        self.reward_transition=None;self.holdout_transition=None
         return result

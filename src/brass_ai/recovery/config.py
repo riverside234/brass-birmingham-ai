@@ -249,7 +249,20 @@ EVALUATION_SCHEDULE = dict(enabled=False, monitor_every_games=6400, broader_ever
 LEGACY_BUDGET = dict(role='lab', seconds=1.0, search_workers=4, global_workers=60, work_multiplier=1)
 LEGACY_OPPONENTS = dict(search_free_until_games=10000)
 IMITATION = dict(manifest=None,epochs=10,patience=2,min_epochs=3,learning_rate=6e-5)
-INSOLVENCY = dict(event_cost=.005,max_cost=.075)
+INSOLVENCY = dict(event_cost=.0075,max_cost=.075)
+INSOLVENCY_EVENT_CONFIG_MIGRATION = 'step5-insolvency-event-cost/1.0.0'
+
+
+def insolvency_event_config(config):
+    """Explicit fresh/config-helper upgrade; never silently edit a resumed run."""
+    result=copy.deepcopy(config)
+    if result.get('insolvency')==dict(event_cost=.005,max_cost=.075):
+        search=result.get('search',{}).get('reward')
+        if search is not None:
+            require(search['insolvency']==result['insolvency'],'Search/learner insolvency differs')
+            search['insolvency']=copy.deepcopy(INSOLVENCY)
+        result['insolvency']=copy.deepcopy(INSOLVENCY)
+    return result
 CHAMPION_OPPONENTS = dict(contract='staged-champion-opponents/1.0.0',stage_iterations=5,max_champion_opponents=2)
 CHAMPION_MIX_CONFIG_MIGRATION = 'step5-staged-champion-opponents/1.0.0'
 LEGACY_BOOST = dict(stages=[dict(games=20000,selfplay=15,historical=25,legacy=60),
@@ -319,7 +332,7 @@ def latest_model_config(config,imitation_checkpoint):
     result['advantage']=copy.deepcopy(ADVANTAGE)
     result['critic_data']=copy.deepcopy(CRITIC_DATA)
     result['seat_descriptors']=copy.deepcopy(SEAT_DESCRIPTORS)
-    result.setdefault('value_phase',dict(copy.deepcopy(VALUE_PHASE),learning_rate=result['learning_rate']))
+    result.setdefault('value_phase',dict(copy.deepcopy(VALUE_PHASE),learning_rate=.5*result['learning_rate']))
     result.setdefault('table_plan',copy.deepcopy(TABLE_PLAN))
     result.setdefault('opponent_pool',copy.deepcopy(OPPONENT_POOL))
     result.setdefault('rating',copy.deepcopy(RATING))
@@ -327,7 +340,8 @@ def latest_model_config(config,imitation_checkpoint):
     result.setdefault('teacher_value',copy.deepcopy(TEACHER_VALUE))
     result.pop('champion_opponents',None)
     result['execution']['teacher_search_workers_per_turn']=TEACHER_SEARCH_WORKERS
-    return validate_config(champion_mix_config(sampling_config(result)))
+    from .value_phase import refined_options
+    return validate_config(refined_options(insolvency_event_config(champion_mix_config(sampling_config(result)))))
 
 
 def champion_mix_config(config):
@@ -336,11 +350,14 @@ def champion_mix_config(config):
     if not latest_model_recipe(result) and result.get('champion',{}).get('enabled'):
         result.setdefault('champion_opponents',copy.deepcopy(CHAMPION_OPPONENTS))
     if result.get('insolvency')==dict(event_cost=.005,max_cost=.025):
+        # Preserve the exact historical cap-only migration. A separate,
+        # explicitly reviewed transition changes the per-event coefficient.
+        upgraded=dict(event_cost=.005,max_cost=.075)
         old=result.get('search',{}).get('reward')
         if old is not None:
             require(old['insolvency']==result['insolvency'],'Search/learner insolvency differs')
-            old['insolvency']=copy.deepcopy(INSOLVENCY)
-        result['insolvency']=copy.deepcopy(INSOLVENCY)
+            old['insolvency']=copy.deepcopy(upgraded)
+        result['insolvency']=copy.deepcopy(upgraded)
     return result
 
 
@@ -473,7 +490,10 @@ def validate_config(config):
         fields.add('value_phase');value=validate_value_phase(config['value_phase'])
         require('advantage' in config and 'reward' in config and config['update'].get('actor_nonforced'),
                 'Value phase requires GAE plumbing and combined-return critic')
-        require(value['learning_rate']==config['learning_rate'],'Value phase must use the base PPO learning rate')
+        from .value_phase import stratified
+        if stratified(value):
+            require(value['learning_rate']<=config['learning_rate'],'Value phase LR must not exceed the base PPO learning rate')
+        else:require(value['learning_rate']==config['learning_rate'],'Value phase must use the base PPO learning rate')
         if value['enabled'] and value['buffer_iterations']==2:
             require(type(config.get('retention',{}).get('replay_rounds')) is int and
                     config['retention']['replay_rounds']>=2,'Two-iteration PPG requires at least 2 replay rounds')

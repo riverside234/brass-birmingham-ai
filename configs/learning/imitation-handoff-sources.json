@@ -323,6 +323,16 @@
       "implementation": "38a530ad117db9004a5ff31f617327ada7104bdfffbfbceeae07393fd863a649",
       "learning_compatibility": "ef6a1b5126de42da8f3277dc9357b6ffb94a435f3faa7fee8dd312bb5a242a54",
       "reason": "PFSP/rehearsal revision changes self-play sampling and signed schedules only; completed IL architecture, encoding, loss, data and checkpoint lineage remain compatible. Preserve freshness/completion checks."
+    },
+    {
+      "implementation": "b8cf21f31056d9e353d4216ea36ddddfc16066b1b1636460f825080d84ff59cd",
+      "learning_compatibility": "ef6a1b5126de42da8f3277dc9357b6ffb94a435f3faa7fee8dd312bb5a242a54",
+      "reason": "Generation-110 fixes change self-play retention and explicit continuation reward only; completed IL architecture, features, weights, loss, data/probe freshness and lineage remain compatible."
+    },
+    {
+      "implementation": "3a0c2da9e512b810ad4fa4ea3583ea16dd5e09252cfb651a2dc42da5a0d6c702",
+      "learning_compatibility": "ef6a1b5126de42da8f3277dc9357b6ffb94a435f3faa7fee8dd312bb5a242a54",
+      "reason": "PPG LR/holdout refinement changes self-play only. IL feature/model layouts, tensors, dataset/probe contracts and completion lineage unchanged."
     }
   ]
 }

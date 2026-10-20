@@ -153,13 +153,23 @@ class RolloutTests(unittest.TestCase):
         state['games_done']+=4000;before=copy.deepcopy(state['champion_mix'])
         one=copy.deepcopy(state['signature']);one['config']['champion_opponents']['max_champion_opponents']=1
         with self.assertRaisesRegex(ValueError,'resume-reviewed-source'):check_signature(state,one)
-        self.assertTrue(check_signature(state,one,reviewed=True))
+        # Exercise the archived champion recipe against explicit fixture
+        # approvals; current latest-model releases do not deploy this recipe.
+        approvals=dict(format='selfplay-resume-sources/1.0.0',transitions=[dict(
+            from_implementation=implementation_id(),to_implementation=implementation_id(),
+            learning_compatibility=digest(compatibility()),config_changes=dict(champion_opponents=dict(
+                **{'from':dict(CHAMPION_OPPONENTS,max_champion_opponents=a),
+                   'to':dict(CHAMPION_OPPONENTS,max_champion_opponents=b)}))) for a,b in ((2,1),(1,2))])
+        with patch('brass_ai.recovery.resume.read',return_value=approvals):
+            self.assertTrue(check_signature(state,one,reviewed=True))
         self.assertEqual(mix.status(state,one['config'])['stage'],'one_champion_override')
         self.assertEqual(state['champion_mix'],before)
         unsafe=copy.deepcopy(one);unsafe['config']['learning_rate']*=2
-        with self.assertRaises(ValueError):check_signature(state,unsafe,reviewed=True)
+        with patch('brass_ai.recovery.resume.read',return_value=approvals),self.assertRaises(ValueError):
+            check_signature(state,unsafe,reviewed=True)
         state['signature']=one;two=copy.deepcopy(one);two['config']['champion_opponents']['max_champion_opponents']=2
-        self.assertTrue(check_signature(state,two,reviewed=True))
+        with patch('brass_ai.recovery.resume.read',return_value=approvals):
+            self.assertTrue(check_signature(state,two,reviewed=True))
 
 
 class RewardResumeTests(unittest.TestCase):

@@ -24024,6 +24024,951 @@
       "reviewed_evidence": "ai-research/PFSP_REVISION_REPORT.md",
       "reason_ref": "108",
       "config_migrations_ref": "15"
+    },
+    {
+      "from_implementation": "c13907c7564371269b2ae86fa690dcb6a0cd7d18c74d7322e9fcc83ac6a61d80",
+      "to_implementation": "3a0c2da9e512b810ad4fa4ea3583ea16dd5e09252cfb651a2dc42da5a0d6c702",
+      "learning_compatibility_ref": "5",
+      "config_changes_ref": "44",
+      "config_migrations_ref": "13",
+      "reviewed_evidence": "ai-research/SELFPLAY_G110_REVIEW.md",
+      "reason_ref": "109"
+    },
+    {
+      "from_implementation": "c13907c7564371269b2ae86fa690dcb6a0cd7d18c74d7322e9fcc83ac6a61d80",
+      "to_implementation": "3a0c2da9e512b810ad4fa4ea3583ea16dd5e09252cfb651a2dc42da5a0d6c702",
+      "learning_compatibility_ref": "5",
+      "config_changes_ref": "44",
+      "reviewed_evidence": "ai-research/SELFPLAY_G110_REVIEW.md",
+      "reason_ref": "110",
+      "config_migrations_ref": "16"
+    },
+    {
+      "from_implementation": "c13907c7564371269b2ae86fa690dcb6a0cd7d18c74d7322e9fcc83ac6a61d80",
+      "to_implementation": "3a0c2da9e512b810ad4fa4ea3583ea16dd5e09252cfb651a2dc42da5a0d6c702",
+      "learning_compatibility_ref": "5",
+      "config_changes_ref": "44",
+      "reviewed_evidence": "ai-research/SELFPLAY_G110_REVIEW.md",
+      "reason_ref": "109",
+      "config_migrations_ref": "14"
+    },
+    {
+      "from_implementation": "c13907c7564371269b2ae86fa690dcb6a0cd7d18c74d7322e9fcc83ac6a61d80",
+      "to_implementation": "3a0c2da9e512b810ad4fa4ea3583ea16dd5e09252cfb651a2dc42da5a0d6c702",
+      "learning_compatibility_ref": "5",
+      "config_changes_ref": "44",
+      "reviewed_evidence": "ai-research/SELFPLAY_G110_REVIEW.md",
+      "reason_ref": "110",
+      "config_migrations_ref": "17"
+    },
+    {
+      "from_implementation": "e2b6bf879c8b9da5b043c8f4c8aedf76b45bec9095867e4246b7decd1c316144",
+      "to_implementation": "3a0c2da9e512b810ad4fa4ea3583ea16dd5e09252cfb651a2dc42da5a0d6c702",
+      "learning_compatibility_ref": "5",
+      "config_changes_ref": "44",
+      "config_migrations_ref": "13",
+      "reviewed_evidence": "ai-research/SELFPLAY_G110_REVIEW.md",
+      "reason_ref": "109"
+    },
+    {
+      "from_implementation": "e2b6bf879c8b9da5b043c8f4c8aedf76b45bec9095867e4246b7decd1c316144",
+      "to_implementation": "3a0c2da9e512b810ad4fa4ea3583ea16dd5e09252cfb651a2dc42da5a0d6c702",
+      "learning_compatibility_ref": "5",
+      "config_changes_ref": "44",
+      "reviewed_evidence": "ai-research/SELFPLAY_G110_REVIEW.md",
+      "reason_ref": "110",
+      "config_migrations_ref": "16"
+    },
+    {
+      "from_implementation": "e2b6bf879c8b9da5b043c8f4c8aedf76b45bec9095867e4246b7decd1c316144",
+      "to_implementation": "3a0c2da9e512b810ad4fa4ea3583ea16dd5e09252cfb651a2dc42da5a0d6c702",
+      "learning_compatibility_ref": "5",
+      "config_changes_ref": "44",
+      "reviewed_evidence": "ai-research/SELFPLAY_G110_REVIEW.md",
+      "reason_ref": "109",
+      "config_migrations_ref": "14"
+    },
+    {
+      "from_implementation": "e2b6bf879c8b9da5b043c8f4c8aedf76b45bec9095867e4246b7decd1c316144",
+      "to_implementation": "3a0c2da9e512b810ad4fa4ea3583ea16dd5e09252cfb651a2dc42da5a0d6c702",
+      "learning_compatibility_ref": "5",
+      "config_changes_ref": "44",
+      "reviewed_evidence": "ai-research/SELFPLAY_G110_REVIEW.md",
+      "reason_ref": "110",
+      "config_migrations_ref": "17"
+    },
+    {
+      "from_implementation": "de2aac3edd606da9c23fad732c6bc4d8dc6118ad2d801af8b9ae6ffb9326f314",
+      "to_implementation": "3a0c2da9e512b810ad4fa4ea3583ea16dd5e09252cfb651a2dc42da5a0d6c702",
+      "learning_compatibility_ref": "5",
+      "config_changes_ref": "44",
+      "config_migrations_ref": "13",
+      "reviewed_evidence": "ai-research/SELFPLAY_G110_REVIEW.md",
+      "reason_ref": "109"
+    },
+    {
+      "from_implementation": "de2aac3edd606da9c23fad732c6bc4d8dc6118ad2d801af8b9ae6ffb9326f314",
+      "to_implementation": "3a0c2da9e512b810ad4fa4ea3583ea16dd5e09252cfb651a2dc42da5a0d6c702",
+      "learning_compatibility_ref": "5",
+      "config_changes_ref": "44",
+      "reviewed_evidence": "ai-research/SELFPLAY_G110_REVIEW.md",
+      "reason_ref": "110",
+      "config_migrations_ref": "16"
+    },
+    {
+      "from_implementation": "de2aac3edd606da9c23fad732c6bc4d8dc6118ad2d801af8b9ae6ffb9326f314",
+      "to_implementation": "3a0c2da9e512b810ad4fa4ea3583ea16dd5e09252cfb651a2dc42da5a0d6c702",
+      "learning_compatibility_ref": "5",
+      "config_changes_ref": "44",
+      "reviewed_evidence": "ai-research/SELFPLAY_G110_REVIEW.md",
+      "reason_ref": "109",
+      "config_migrations_ref": "14"
+    },
+    {
+      "from_implementation": "de2aac3edd606da9c23fad732c6bc4d8dc6118ad2d801af8b9ae6ffb9326f314",
+      "to_implementation": "3a0c2da9e512b810ad4fa4ea3583ea16dd5e09252cfb651a2dc42da5a0d6c702",
+      "learning_compatibility_ref": "5",
+      "config_changes_ref": "44",
+      "reviewed_evidence": "ai-research/SELFPLAY_G110_REVIEW.md",
+      "reason_ref": "110",
+      "config_migrations_ref": "17"
+    },
+    {
+      "from_implementation": "2c626e155f595a28b1abf43a5743387060edba1b10b090beb6e9bf84a9f265db",
+      "to_implementation": "3a0c2da9e512b810ad4fa4ea3583ea16dd5e09252cfb651a2dc42da5a0d6c702",
+      "learning_compatibility_ref": "5",
+      "config_changes_ref": "44",
+      "config_migrations_ref": "13",
+      "reviewed_evidence": "ai-research/SELFPLAY_G110_REVIEW.md",
+      "reason_ref": "109"
+    },
+    {
+      "from_implementation": "2c626e155f595a28b1abf43a5743387060edba1b10b090beb6e9bf84a9f265db",
+      "to_implementation": "3a0c2da9e512b810ad4fa4ea3583ea16dd5e09252cfb651a2dc42da5a0d6c702",
+      "learning_compatibility_ref": "5",
+      "config_changes_ref": "44",
+      "reviewed_evidence": "ai-research/SELFPLAY_G110_REVIEW.md",
+      "reason_ref": "110",
+      "config_migrations_ref": "16"
+    },
+    {
+      "from_implementation": "2c626e155f595a28b1abf43a5743387060edba1b10b090beb6e9bf84a9f265db",
+      "to_implementation": "3a0c2da9e512b810ad4fa4ea3583ea16dd5e09252cfb651a2dc42da5a0d6c702",
+      "learning_compatibility_ref": "5",
+      "config_changes_ref": "44",
+      "reviewed_evidence": "ai-research/SELFPLAY_G110_REVIEW.md",
+      "reason_ref": "109",
+      "config_migrations_ref": "14"
+    },
+    {
+      "from_implementation": "2c626e155f595a28b1abf43a5743387060edba1b10b090beb6e9bf84a9f265db",
+      "to_implementation": "3a0c2da9e512b810ad4fa4ea3583ea16dd5e09252cfb651a2dc42da5a0d6c702",
+      "learning_compatibility_ref": "5",
+      "config_changes_ref": "44",
+      "reviewed_evidence": "ai-research/SELFPLAY_G110_REVIEW.md",
+      "reason_ref": "110",
+      "config_migrations_ref": "17"
+    },
+    {
+      "from_implementation": "bee655014a2a238555afc936e2e5c341f8b7e630ddf63a60a77704ee344c41c2",
+      "to_implementation": "3a0c2da9e512b810ad4fa4ea3583ea16dd5e09252cfb651a2dc42da5a0d6c702",
+      "learning_compatibility_ref": "5",
+      "config_changes_ref": "44",
+      "config_migrations_ref": "13",
+      "reviewed_evidence": "ai-research/SELFPLAY_G110_REVIEW.md",
+      "reason_ref": "109"
+    },
+    {
+      "from_implementation": "bee655014a2a238555afc936e2e5c341f8b7e630ddf63a60a77704ee344c41c2",
+      "to_implementation": "3a0c2da9e512b810ad4fa4ea3583ea16dd5e09252cfb651a2dc42da5a0d6c702",
+      "learning_compatibility_ref": "5",
+      "config_changes_ref": "44",
+      "reviewed_evidence": "ai-research/SELFPLAY_G110_REVIEW.md",
+      "reason_ref": "110",
+      "config_migrations_ref": "16"
+    },
+    {
+      "from_implementation": "bee655014a2a238555afc936e2e5c341f8b7e630ddf63a60a77704ee344c41c2",
+      "to_implementation": "3a0c2da9e512b810ad4fa4ea3583ea16dd5e09252cfb651a2dc42da5a0d6c702",
+      "learning_compatibility_ref": "5",
+      "config_changes_ref": "44",
+      "reviewed_evidence": "ai-research/SELFPLAY_G110_REVIEW.md",
+      "reason_ref": "109",
+      "config_migrations_ref": "14"
+    },
+    {
+      "from_implementation": "bee655014a2a238555afc936e2e5c341f8b7e630ddf63a60a77704ee344c41c2",
+      "to_implementation": "3a0c2da9e512b810ad4fa4ea3583ea16dd5e09252cfb651a2dc42da5a0d6c702",
+      "learning_compatibility_ref": "5",
+      "config_changes_ref": "44",
+      "reviewed_evidence": "ai-research/SELFPLAY_G110_REVIEW.md",
+      "reason_ref": "110",
+      "config_migrations_ref": "17"
+    },
+    {
+      "from_implementation": "997ce5bc26b8416d694f42ddac196feac8b365ee40bc412c6321ec85ae8885a5",
+      "learning_compatibility_ref": "5",
+      "config_changes_ref": "44",
+      "to_implementation": "3a0c2da9e512b810ad4fa4ea3583ea16dd5e09252cfb651a2dc42da5a0d6c702",
+      "reviewed_evidence": "ai-research/SELFPLAY_G110_REVIEW.md",
+      "reason_ref": "109"
+    },
+    {
+      "from_implementation": "997ce5bc26b8416d694f42ddac196feac8b365ee40bc412c6321ec85ae8885a5",
+      "learning_compatibility_ref": "5",
+      "config_changes_ref": "44",
+      "to_implementation": "3a0c2da9e512b810ad4fa4ea3583ea16dd5e09252cfb651a2dc42da5a0d6c702",
+      "reviewed_evidence": "ai-research/SELFPLAY_G110_REVIEW.md",
+      "reason_ref": "110",
+      "config_migrations_ref": "18"
+    },
+    {
+      "from_implementation": "997ce5bc26b8416d694f42ddac196feac8b365ee40bc412c6321ec85ae8885a5",
+      "learning_compatibility_ref": "5",
+      "config_changes_ref": "44",
+      "to_implementation": "3a0c2da9e512b810ad4fa4ea3583ea16dd5e09252cfb651a2dc42da5a0d6c702",
+      "reviewed_evidence": "ai-research/SELFPLAY_G110_REVIEW.md",
+      "reason_ref": "109",
+      "config_migrations_ref": "15"
+    },
+    {
+      "from_implementation": "997ce5bc26b8416d694f42ddac196feac8b365ee40bc412c6321ec85ae8885a5",
+      "learning_compatibility_ref": "5",
+      "config_changes_ref": "44",
+      "to_implementation": "3a0c2da9e512b810ad4fa4ea3583ea16dd5e09252cfb651a2dc42da5a0d6c702",
+      "reviewed_evidence": "ai-research/SELFPLAY_G110_REVIEW.md",
+      "reason_ref": "110",
+      "config_migrations_ref": "19"
+    },
+    {
+      "from_implementation": "fd85565852a00328236c96b4ed8b6fc9cd245627cc019bbf8c05d12721a89d52",
+      "learning_compatibility_ref": "5",
+      "config_changes_ref": "44",
+      "to_implementation": "3a0c2da9e512b810ad4fa4ea3583ea16dd5e09252cfb651a2dc42da5a0d6c702",
+      "reviewed_evidence": "ai-research/SELFPLAY_G110_REVIEW.md",
+      "reason_ref": "109"
+    },
+    {
+      "from_implementation": "fd85565852a00328236c96b4ed8b6fc9cd245627cc019bbf8c05d12721a89d52",
+      "learning_compatibility_ref": "5",
+      "config_changes_ref": "44",
+      "to_implementation": "3a0c2da9e512b810ad4fa4ea3583ea16dd5e09252cfb651a2dc42da5a0d6c702",
+      "reviewed_evidence": "ai-research/SELFPLAY_G110_REVIEW.md",
+      "reason_ref": "110",
+      "config_migrations_ref": "18"
+    },
+    {
+      "from_implementation": "fd85565852a00328236c96b4ed8b6fc9cd245627cc019bbf8c05d12721a89d52",
+      "learning_compatibility_ref": "5",
+      "config_changes_ref": "44",
+      "to_implementation": "3a0c2da9e512b810ad4fa4ea3583ea16dd5e09252cfb651a2dc42da5a0d6c702",
+      "reviewed_evidence": "ai-research/SELFPLAY_G110_REVIEW.md",
+      "reason_ref": "109",
+      "config_migrations_ref": "15"
+    },
+    {
+      "from_implementation": "fd85565852a00328236c96b4ed8b6fc9cd245627cc019bbf8c05d12721a89d52",
+      "learning_compatibility_ref": "5",
+      "config_changes_ref": "44",
+      "to_implementation": "3a0c2da9e512b810ad4fa4ea3583ea16dd5e09252cfb651a2dc42da5a0d6c702",
+      "reviewed_evidence": "ai-research/SELFPLAY_G110_REVIEW.md",
+      "reason_ref": "110",
+      "config_migrations_ref": "19"
+    },
+    {
+      "from_implementation": "38a530ad117db9004a5ff31f617327ada7104bdfffbfbceeae07393fd863a649",
+      "learning_compatibility_ref": "5",
+      "config_changes_ref": "44",
+      "to_implementation": "3a0c2da9e512b810ad4fa4ea3583ea16dd5e09252cfb651a2dc42da5a0d6c702",
+      "reviewed_evidence": "ai-research/SELFPLAY_G110_REVIEW.md",
+      "reason_ref": "109"
+    },
+    {
+      "from_implementation": "38a530ad117db9004a5ff31f617327ada7104bdfffbfbceeae07393fd863a649",
+      "learning_compatibility_ref": "5",
+      "config_changes_ref": "44",
+      "to_implementation": "3a0c2da9e512b810ad4fa4ea3583ea16dd5e09252cfb651a2dc42da5a0d6c702",
+      "reviewed_evidence": "ai-research/SELFPLAY_G110_REVIEW.md",
+      "reason_ref": "110",
+      "config_migrations_ref": "18"
+    },
+    {
+      "from_implementation": "38a530ad117db9004a5ff31f617327ada7104bdfffbfbceeae07393fd863a649",
+      "learning_compatibility_ref": "5",
+      "config_changes_ref": "44",
+      "to_implementation": "3a0c2da9e512b810ad4fa4ea3583ea16dd5e09252cfb651a2dc42da5a0d6c702",
+      "reviewed_evidence": "ai-research/SELFPLAY_G110_REVIEW.md",
+      "reason_ref": "109",
+      "config_migrations_ref": "15"
+    },
+    {
+      "from_implementation": "38a530ad117db9004a5ff31f617327ada7104bdfffbfbceeae07393fd863a649",
+      "learning_compatibility_ref": "5",
+      "config_changes_ref": "44",
+      "to_implementation": "3a0c2da9e512b810ad4fa4ea3583ea16dd5e09252cfb651a2dc42da5a0d6c702",
+      "reviewed_evidence": "ai-research/SELFPLAY_G110_REVIEW.md",
+      "reason_ref": "110",
+      "config_migrations_ref": "19"
+    },
+    {
+      "from_implementation": "b8cf21f31056d9e353d4216ea36ddddfc16066b1b1636460f825080d84ff59cd",
+      "learning_compatibility_ref": "5",
+      "config_changes_ref": "44",
+      "to_implementation": "3a0c2da9e512b810ad4fa4ea3583ea16dd5e09252cfb651a2dc42da5a0d6c702",
+      "reviewed_evidence": "ai-research/SELFPLAY_G110_REVIEW.md",
+      "reason_ref": "109"
+    },
+    {
+      "from_implementation": "b8cf21f31056d9e353d4216ea36ddddfc16066b1b1636460f825080d84ff59cd",
+      "learning_compatibility_ref": "5",
+      "config_changes_ref": "44",
+      "to_implementation": "3a0c2da9e512b810ad4fa4ea3583ea16dd5e09252cfb651a2dc42da5a0d6c702",
+      "reviewed_evidence": "ai-research/SELFPLAY_G110_REVIEW.md",
+      "reason_ref": "110",
+      "config_migrations_ref": "18"
+    },
+    {
+      "from_implementation": "c13907c7564371269b2ae86fa690dcb6a0cd7d18c74d7322e9fcc83ac6a61d80",
+      "to_implementation": "211ae80c9ab17cd302a19ed66d0fdfa339b887457708d14a7d6a30ff712805d5",
+      "learning_compatibility_ref": "5",
+      "config_changes_ref": "44",
+      "config_migrations_ref": "13",
+      "reviewed_evidence": "ai-research/PPG_REFINEMENT_REPORT.md",
+      "reason_ref": "111"
+    },
+    {
+      "from_implementation": "c13907c7564371269b2ae86fa690dcb6a0cd7d18c74d7322e9fcc83ac6a61d80",
+      "to_implementation": "211ae80c9ab17cd302a19ed66d0fdfa339b887457708d14a7d6a30ff712805d5",
+      "learning_compatibility_ref": "5",
+      "config_changes_ref": "44",
+      "reviewed_evidence": "ai-research/PPG_REFINEMENT_REPORT.md",
+      "reason_ref": "112",
+      "config_migrations_ref": "20"
+    },
+    {
+      "from_implementation": "c13907c7564371269b2ae86fa690dcb6a0cd7d18c74d7322e9fcc83ac6a61d80",
+      "to_implementation": "211ae80c9ab17cd302a19ed66d0fdfa339b887457708d14a7d6a30ff712805d5",
+      "learning_compatibility_ref": "5",
+      "config_changes_ref": "44",
+      "reviewed_evidence": "ai-research/PPG_REFINEMENT_REPORT.md",
+      "reason_ref": "111",
+      "config_migrations_ref": "16"
+    },
+    {
+      "from_implementation": "c13907c7564371269b2ae86fa690dcb6a0cd7d18c74d7322e9fcc83ac6a61d80",
+      "to_implementation": "211ae80c9ab17cd302a19ed66d0fdfa339b887457708d14a7d6a30ff712805d5",
+      "learning_compatibility_ref": "5",
+      "config_changes_ref": "44",
+      "reviewed_evidence": "ai-research/PPG_REFINEMENT_REPORT.md",
+      "reason_ref": "112",
+      "config_migrations_ref": "21"
+    },
+    {
+      "from_implementation": "c13907c7564371269b2ae86fa690dcb6a0cd7d18c74d7322e9fcc83ac6a61d80",
+      "to_implementation": "211ae80c9ab17cd302a19ed66d0fdfa339b887457708d14a7d6a30ff712805d5",
+      "learning_compatibility_ref": "5",
+      "config_changes_ref": "44",
+      "reviewed_evidence": "ai-research/PPG_REFINEMENT_REPORT.md",
+      "reason_ref": "111",
+      "config_migrations_ref": "14"
+    },
+    {
+      "from_implementation": "c13907c7564371269b2ae86fa690dcb6a0cd7d18c74d7322e9fcc83ac6a61d80",
+      "to_implementation": "211ae80c9ab17cd302a19ed66d0fdfa339b887457708d14a7d6a30ff712805d5",
+      "learning_compatibility_ref": "5",
+      "config_changes_ref": "44",
+      "reviewed_evidence": "ai-research/PPG_REFINEMENT_REPORT.md",
+      "reason_ref": "112",
+      "config_migrations_ref": "22"
+    },
+    {
+      "from_implementation": "c13907c7564371269b2ae86fa690dcb6a0cd7d18c74d7322e9fcc83ac6a61d80",
+      "to_implementation": "211ae80c9ab17cd302a19ed66d0fdfa339b887457708d14a7d6a30ff712805d5",
+      "learning_compatibility_ref": "5",
+      "config_changes_ref": "44",
+      "reviewed_evidence": "ai-research/PPG_REFINEMENT_REPORT.md",
+      "reason_ref": "111",
+      "config_migrations_ref": "17"
+    },
+    {
+      "from_implementation": "c13907c7564371269b2ae86fa690dcb6a0cd7d18c74d7322e9fcc83ac6a61d80",
+      "to_implementation": "211ae80c9ab17cd302a19ed66d0fdfa339b887457708d14a7d6a30ff712805d5",
+      "learning_compatibility_ref": "5",
+      "config_changes_ref": "44",
+      "reviewed_evidence": "ai-research/PPG_REFINEMENT_REPORT.md",
+      "reason_ref": "112",
+      "config_migrations_ref": "23"
+    },
+    {
+      "from_implementation": "e2b6bf879c8b9da5b043c8f4c8aedf76b45bec9095867e4246b7decd1c316144",
+      "to_implementation": "211ae80c9ab17cd302a19ed66d0fdfa339b887457708d14a7d6a30ff712805d5",
+      "learning_compatibility_ref": "5",
+      "config_changes_ref": "44",
+      "config_migrations_ref": "13",
+      "reviewed_evidence": "ai-research/PPG_REFINEMENT_REPORT.md",
+      "reason_ref": "111"
+    },
+    {
+      "from_implementation": "e2b6bf879c8b9da5b043c8f4c8aedf76b45bec9095867e4246b7decd1c316144",
+      "to_implementation": "211ae80c9ab17cd302a19ed66d0fdfa339b887457708d14a7d6a30ff712805d5",
+      "learning_compatibility_ref": "5",
+      "config_changes_ref": "44",
+      "reviewed_evidence": "ai-research/PPG_REFINEMENT_REPORT.md",
+      "reason_ref": "112",
+      "config_migrations_ref": "20"
+    },
+    {
+      "from_implementation": "e2b6bf879c8b9da5b043c8f4c8aedf76b45bec9095867e4246b7decd1c316144",
+      "to_implementation": "211ae80c9ab17cd302a19ed66d0fdfa339b887457708d14a7d6a30ff712805d5",
+      "learning_compatibility_ref": "5",
+      "config_changes_ref": "44",
+      "reviewed_evidence": "ai-research/PPG_REFINEMENT_REPORT.md",
+      "reason_ref": "111",
+      "config_migrations_ref": "16"
+    },
+    {
+      "from_implementation": "e2b6bf879c8b9da5b043c8f4c8aedf76b45bec9095867e4246b7decd1c316144",
+      "to_implementation": "211ae80c9ab17cd302a19ed66d0fdfa339b887457708d14a7d6a30ff712805d5",
+      "learning_compatibility_ref": "5",
+      "config_changes_ref": "44",
+      "reviewed_evidence": "ai-research/PPG_REFINEMENT_REPORT.md",
+      "reason_ref": "112",
+      "config_migrations_ref": "21"
+    },
+    {
+      "from_implementation": "e2b6bf879c8b9da5b043c8f4c8aedf76b45bec9095867e4246b7decd1c316144",
+      "to_implementation": "211ae80c9ab17cd302a19ed66d0fdfa339b887457708d14a7d6a30ff712805d5",
+      "learning_compatibility_ref": "5",
+      "config_changes_ref": "44",
+      "reviewed_evidence": "ai-research/PPG_REFINEMENT_REPORT.md",
+      "reason_ref": "111",
+      "config_migrations_ref": "14"
+    },
+    {
+      "from_implementation": "e2b6bf879c8b9da5b043c8f4c8aedf76b45bec9095867e4246b7decd1c316144",
+      "to_implementation": "211ae80c9ab17cd302a19ed66d0fdfa339b887457708d14a7d6a30ff712805d5",
+      "learning_compatibility_ref": "5",
+      "config_changes_ref": "44",
+      "reviewed_evidence": "ai-research/PPG_REFINEMENT_REPORT.md",
+      "reason_ref": "112",
+      "config_migrations_ref": "22"
+    },
+    {
+      "from_implementation": "e2b6bf879c8b9da5b043c8f4c8aedf76b45bec9095867e4246b7decd1c316144",
+      "to_implementation": "211ae80c9ab17cd302a19ed66d0fdfa339b887457708d14a7d6a30ff712805d5",
+      "learning_compatibility_ref": "5",
+      "config_changes_ref": "44",
+      "reviewed_evidence": "ai-research/PPG_REFINEMENT_REPORT.md",
+      "reason_ref": "111",
+      "config_migrations_ref": "17"
+    },
+    {
+      "from_implementation": "e2b6bf879c8b9da5b043c8f4c8aedf76b45bec9095867e4246b7decd1c316144",
+      "to_implementation": "211ae80c9ab17cd302a19ed66d0fdfa339b887457708d14a7d6a30ff712805d5",
+      "learning_compatibility_ref": "5",
+      "config_changes_ref": "44",
+      "reviewed_evidence": "ai-research/PPG_REFINEMENT_REPORT.md",
+      "reason_ref": "112",
+      "config_migrations_ref": "23"
+    },
+    {
+      "from_implementation": "de2aac3edd606da9c23fad732c6bc4d8dc6118ad2d801af8b9ae6ffb9326f314",
+      "to_implementation": "211ae80c9ab17cd302a19ed66d0fdfa339b887457708d14a7d6a30ff712805d5",
+      "learning_compatibility_ref": "5",
+      "config_changes_ref": "44",
+      "config_migrations_ref": "13",
+      "reviewed_evidence": "ai-research/PPG_REFINEMENT_REPORT.md",
+      "reason_ref": "111"
+    },
+    {
+      "from_implementation": "de2aac3edd606da9c23fad732c6bc4d8dc6118ad2d801af8b9ae6ffb9326f314",
+      "to_implementation": "211ae80c9ab17cd302a19ed66d0fdfa339b887457708d14a7d6a30ff712805d5",
+      "learning_compatibility_ref": "5",
+      "config_changes_ref": "44",
+      "reviewed_evidence": "ai-research/PPG_REFINEMENT_REPORT.md",
+      "reason_ref": "112",
+      "config_migrations_ref": "20"
+    },
+    {
+      "from_implementation": "de2aac3edd606da9c23fad732c6bc4d8dc6118ad2d801af8b9ae6ffb9326f314",
+      "to_implementation": "211ae80c9ab17cd302a19ed66d0fdfa339b887457708d14a7d6a30ff712805d5",
+      "learning_compatibility_ref": "5",
+      "config_changes_ref": "44",
+      "reviewed_evidence": "ai-research/PPG_REFINEMENT_REPORT.md",
+      "reason_ref": "111",
+      "config_migrations_ref": "16"
+    },
+    {
+      "from_implementation": "de2aac3edd606da9c23fad732c6bc4d8dc6118ad2d801af8b9ae6ffb9326f314",
+      "to_implementation": "211ae80c9ab17cd302a19ed66d0fdfa339b887457708d14a7d6a30ff712805d5",
+      "learning_compatibility_ref": "5",
+      "config_changes_ref": "44",
+      "reviewed_evidence": "ai-research/PPG_REFINEMENT_REPORT.md",
+      "reason_ref": "112",
+      "config_migrations_ref": "21"
+    },
+    {
+      "from_implementation": "de2aac3edd606da9c23fad732c6bc4d8dc6118ad2d801af8b9ae6ffb9326f314",
+      "to_implementation": "211ae80c9ab17cd302a19ed66d0fdfa339b887457708d14a7d6a30ff712805d5",
+      "learning_compatibility_ref": "5",
+      "config_changes_ref": "44",
+      "reviewed_evidence": "ai-research/PPG_REFINEMENT_REPORT.md",
+      "reason_ref": "111",
+      "config_migrations_ref": "14"
+    },
+    {
+      "from_implementation": "de2aac3edd606da9c23fad732c6bc4d8dc6118ad2d801af8b9ae6ffb9326f314",
+      "to_implementation": "211ae80c9ab17cd302a19ed66d0fdfa339b887457708d14a7d6a30ff712805d5",
+      "learning_compatibility_ref": "5",
+      "config_changes_ref": "44",
+      "reviewed_evidence": "ai-research/PPG_REFINEMENT_REPORT.md",
+      "reason_ref": "112",
+      "config_migrations_ref": "22"
+    },
+    {
+      "from_implementation": "de2aac3edd606da9c23fad732c6bc4d8dc6118ad2d801af8b9ae6ffb9326f314",
+      "to_implementation": "211ae80c9ab17cd302a19ed66d0fdfa339b887457708d14a7d6a30ff712805d5",
+      "learning_compatibility_ref": "5",
+      "config_changes_ref": "44",
+      "reviewed_evidence": "ai-research/PPG_REFINEMENT_REPORT.md",
+      "reason_ref": "111",
+      "config_migrations_ref": "17"
+    },
+    {
+      "from_implementation": "de2aac3edd606da9c23fad732c6bc4d8dc6118ad2d801af8b9ae6ffb9326f314",
+      "to_implementation": "211ae80c9ab17cd302a19ed66d0fdfa339b887457708d14a7d6a30ff712805d5",
+      "learning_compatibility_ref": "5",
+      "config_changes_ref": "44",
+      "reviewed_evidence": "ai-research/PPG_REFINEMENT_REPORT.md",
+      "reason_ref": "112",
+      "config_migrations_ref": "23"
+    },
+    {
+      "from_implementation": "2c626e155f595a28b1abf43a5743387060edba1b10b090beb6e9bf84a9f265db",
+      "to_implementation": "211ae80c9ab17cd302a19ed66d0fdfa339b887457708d14a7d6a30ff712805d5",
+      "learning_compatibility_ref": "5",
+      "config_changes_ref": "44",
+      "config_migrations_ref": "13",
+      "reviewed_evidence": "ai-research/PPG_REFINEMENT_REPORT.md",
+      "reason_ref": "111"
+    },
+    {
+      "from_implementation": "2c626e155f595a28b1abf43a5743387060edba1b10b090beb6e9bf84a9f265db",
+      "to_implementation": "211ae80c9ab17cd302a19ed66d0fdfa339b887457708d14a7d6a30ff712805d5",
+      "learning_compatibility_ref": "5",
+      "config_changes_ref": "44",
+      "reviewed_evidence": "ai-research/PPG_REFINEMENT_REPORT.md",
+      "reason_ref": "112",
+      "config_migrations_ref": "20"
+    },
+    {
+      "from_implementation": "2c626e155f595a28b1abf43a5743387060edba1b10b090beb6e9bf84a9f265db",
+      "to_implementation": "211ae80c9ab17cd302a19ed66d0fdfa339b887457708d14a7d6a30ff712805d5",
+      "learning_compatibility_ref": "5",
+      "config_changes_ref": "44",
+      "reviewed_evidence": "ai-research/PPG_REFINEMENT_REPORT.md",
+      "reason_ref": "111",
+      "config_migrations_ref": "16"
+    },
+    {
+      "from_implementation": "2c626e155f595a28b1abf43a5743387060edba1b10b090beb6e9bf84a9f265db",
+      "to_implementation": "211ae80c9ab17cd302a19ed66d0fdfa339b887457708d14a7d6a30ff712805d5",
+      "learning_compatibility_ref": "5",
+      "config_changes_ref": "44",
+      "reviewed_evidence": "ai-research/PPG_REFINEMENT_REPORT.md",
+      "reason_ref": "112",
+      "config_migrations_ref": "21"
+    },
+    {
+      "from_implementation": "2c626e155f595a28b1abf43a5743387060edba1b10b090beb6e9bf84a9f265db",
+      "to_implementation": "211ae80c9ab17cd302a19ed66d0fdfa339b887457708d14a7d6a30ff712805d5",
+      "learning_compatibility_ref": "5",
+      "config_changes_ref": "44",
+      "reviewed_evidence": "ai-research/PPG_REFINEMENT_REPORT.md",
+      "reason_ref": "111",
+      "config_migrations_ref": "14"
+    },
+    {
+      "from_implementation": "2c626e155f595a28b1abf43a5743387060edba1b10b090beb6e9bf84a9f265db",
+      "to_implementation": "211ae80c9ab17cd302a19ed66d0fdfa339b887457708d14a7d6a30ff712805d5",
+      "learning_compatibility_ref": "5",
+      "config_changes_ref": "44",
+      "reviewed_evidence": "ai-research/PPG_REFINEMENT_REPORT.md",
+      "reason_ref": "112",
+      "config_migrations_ref": "22"
+    },
+    {
+      "from_implementation": "2c626e155f595a28b1abf43a5743387060edba1b10b090beb6e9bf84a9f265db",
+      "to_implementation": "211ae80c9ab17cd302a19ed66d0fdfa339b887457708d14a7d6a30ff712805d5",
+      "learning_compatibility_ref": "5",
+      "config_changes_ref": "44",
+      "reviewed_evidence": "ai-research/PPG_REFINEMENT_REPORT.md",
+      "reason_ref": "111",
+      "config_migrations_ref": "17"
+    },
+    {
+      "from_implementation": "2c626e155f595a28b1abf43a5743387060edba1b10b090beb6e9bf84a9f265db",
+      "to_implementation": "211ae80c9ab17cd302a19ed66d0fdfa339b887457708d14a7d6a30ff712805d5",
+      "learning_compatibility_ref": "5",
+      "config_changes_ref": "44",
+      "reviewed_evidence": "ai-research/PPG_REFINEMENT_REPORT.md",
+      "reason_ref": "112",
+      "config_migrations_ref": "23"
+    },
+    {
+      "from_implementation": "bee655014a2a238555afc936e2e5c341f8b7e630ddf63a60a77704ee344c41c2",
+      "to_implementation": "211ae80c9ab17cd302a19ed66d0fdfa339b887457708d14a7d6a30ff712805d5",
+      "learning_compatibility_ref": "5",
+      "config_changes_ref": "44",
+      "config_migrations_ref": "13",
+      "reviewed_evidence": "ai-research/PPG_REFINEMENT_REPORT.md",
+      "reason_ref": "111"
+    },
+    {
+      "from_implementation": "bee655014a2a238555afc936e2e5c341f8b7e630ddf63a60a77704ee344c41c2",
+      "to_implementation": "211ae80c9ab17cd302a19ed66d0fdfa339b887457708d14a7d6a30ff712805d5",
+      "learning_compatibility_ref": "5",
+      "config_changes_ref": "44",
+      "reviewed_evidence": "ai-research/PPG_REFINEMENT_REPORT.md",
+      "reason_ref": "112",
+      "config_migrations_ref": "20"
+    },
+    {
+      "from_implementation": "bee655014a2a238555afc936e2e5c341f8b7e630ddf63a60a77704ee344c41c2",
+      "to_implementation": "211ae80c9ab17cd302a19ed66d0fdfa339b887457708d14a7d6a30ff712805d5",
+      "learning_compatibility_ref": "5",
+      "config_changes_ref": "44",
+      "reviewed_evidence": "ai-research/PPG_REFINEMENT_REPORT.md",
+      "reason_ref": "111",
+      "config_migrations_ref": "16"
+    },
+    {
+      "from_implementation": "bee655014a2a238555afc936e2e5c341f8b7e630ddf63a60a77704ee344c41c2",
+      "to_implementation": "211ae80c9ab17cd302a19ed66d0fdfa339b887457708d14a7d6a30ff712805d5",
+      "learning_compatibility_ref": "5",
+      "config_changes_ref": "44",
+      "reviewed_evidence": "ai-research/PPG_REFINEMENT_REPORT.md",
+      "reason_ref": "112",
+      "config_migrations_ref": "21"
+    },
+    {
+      "from_implementation": "bee655014a2a238555afc936e2e5c341f8b7e630ddf63a60a77704ee344c41c2",
+      "to_implementation": "211ae80c9ab17cd302a19ed66d0fdfa339b887457708d14a7d6a30ff712805d5",
+      "learning_compatibility_ref": "5",
+      "config_changes_ref": "44",
+      "reviewed_evidence": "ai-research/PPG_REFINEMENT_REPORT.md",
+      "reason_ref": "111",
+      "config_migrations_ref": "14"
+    },
+    {
+      "from_implementation": "bee655014a2a238555afc936e2e5c341f8b7e630ddf63a60a77704ee344c41c2",
+      "to_implementation": "211ae80c9ab17cd302a19ed66d0fdfa339b887457708d14a7d6a30ff712805d5",
+      "learning_compatibility_ref": "5",
+      "config_changes_ref": "44",
+      "reviewed_evidence": "ai-research/PPG_REFINEMENT_REPORT.md",
+      "reason_ref": "112",
+      "config_migrations_ref": "22"
+    },
+    {
+      "from_implementation": "bee655014a2a238555afc936e2e5c341f8b7e630ddf63a60a77704ee344c41c2",
+      "to_implementation": "211ae80c9ab17cd302a19ed66d0fdfa339b887457708d14a7d6a30ff712805d5",
+      "learning_compatibility_ref": "5",
+      "config_changes_ref": "44",
+      "reviewed_evidence": "ai-research/PPG_REFINEMENT_REPORT.md",
+      "reason_ref": "111",
+      "config_migrations_ref": "17"
+    },
+    {
+      "from_implementation": "bee655014a2a238555afc936e2e5c341f8b7e630ddf63a60a77704ee344c41c2",
+      "to_implementation": "211ae80c9ab17cd302a19ed66d0fdfa339b887457708d14a7d6a30ff712805d5",
+      "learning_compatibility_ref": "5",
+      "config_changes_ref": "44",
+      "reviewed_evidence": "ai-research/PPG_REFINEMENT_REPORT.md",
+      "reason_ref": "112",
+      "config_migrations_ref": "23"
+    },
+    {
+      "from_implementation": "997ce5bc26b8416d694f42ddac196feac8b365ee40bc412c6321ec85ae8885a5",
+      "learning_compatibility_ref": "5",
+      "config_changes_ref": "44",
+      "to_implementation": "211ae80c9ab17cd302a19ed66d0fdfa339b887457708d14a7d6a30ff712805d5",
+      "reviewed_evidence": "ai-research/PPG_REFINEMENT_REPORT.md",
+      "reason_ref": "111"
+    },
+    {
+      "from_implementation": "997ce5bc26b8416d694f42ddac196feac8b365ee40bc412c6321ec85ae8885a5",
+      "learning_compatibility_ref": "5",
+      "config_changes_ref": "44",
+      "to_implementation": "211ae80c9ab17cd302a19ed66d0fdfa339b887457708d14a7d6a30ff712805d5",
+      "reviewed_evidence": "ai-research/PPG_REFINEMENT_REPORT.md",
+      "reason_ref": "112",
+      "config_migrations_ref": "24"
+    },
+    {
+      "from_implementation": "997ce5bc26b8416d694f42ddac196feac8b365ee40bc412c6321ec85ae8885a5",
+      "learning_compatibility_ref": "5",
+      "config_changes_ref": "44",
+      "to_implementation": "211ae80c9ab17cd302a19ed66d0fdfa339b887457708d14a7d6a30ff712805d5",
+      "reviewed_evidence": "ai-research/PPG_REFINEMENT_REPORT.md",
+      "reason_ref": "111",
+      "config_migrations_ref": "18"
+    },
+    {
+      "from_implementation": "997ce5bc26b8416d694f42ddac196feac8b365ee40bc412c6321ec85ae8885a5",
+      "learning_compatibility_ref": "5",
+      "config_changes_ref": "44",
+      "to_implementation": "211ae80c9ab17cd302a19ed66d0fdfa339b887457708d14a7d6a30ff712805d5",
+      "reviewed_evidence": "ai-research/PPG_REFINEMENT_REPORT.md",
+      "reason_ref": "112",
+      "config_migrations_ref": "25"
+    },
+    {
+      "from_implementation": "997ce5bc26b8416d694f42ddac196feac8b365ee40bc412c6321ec85ae8885a5",
+      "learning_compatibility_ref": "5",
+      "config_changes_ref": "44",
+      "to_implementation": "211ae80c9ab17cd302a19ed66d0fdfa339b887457708d14a7d6a30ff712805d5",
+      "reviewed_evidence": "ai-research/PPG_REFINEMENT_REPORT.md",
+      "reason_ref": "111",
+      "config_migrations_ref": "15"
+    },
+    {
+      "from_implementation": "997ce5bc26b8416d694f42ddac196feac8b365ee40bc412c6321ec85ae8885a5",
+      "learning_compatibility_ref": "5",
+      "config_changes_ref": "44",
+      "to_implementation": "211ae80c9ab17cd302a19ed66d0fdfa339b887457708d14a7d6a30ff712805d5",
+      "reviewed_evidence": "ai-research/PPG_REFINEMENT_REPORT.md",
+      "reason_ref": "112",
+      "config_migrations_ref": "26"
+    },
+    {
+      "from_implementation": "997ce5bc26b8416d694f42ddac196feac8b365ee40bc412c6321ec85ae8885a5",
+      "learning_compatibility_ref": "5",
+      "config_changes_ref": "44",
+      "to_implementation": "211ae80c9ab17cd302a19ed66d0fdfa339b887457708d14a7d6a30ff712805d5",
+      "reviewed_evidence": "ai-research/PPG_REFINEMENT_REPORT.md",
+      "reason_ref": "111",
+      "config_migrations_ref": "19"
+    },
+    {
+      "from_implementation": "997ce5bc26b8416d694f42ddac196feac8b365ee40bc412c6321ec85ae8885a5",
+      "learning_compatibility_ref": "5",
+      "config_changes_ref": "44",
+      "to_implementation": "211ae80c9ab17cd302a19ed66d0fdfa339b887457708d14a7d6a30ff712805d5",
+      "reviewed_evidence": "ai-research/PPG_REFINEMENT_REPORT.md",
+      "reason_ref": "112",
+      "config_migrations_ref": "27"
+    },
+    {
+      "from_implementation": "fd85565852a00328236c96b4ed8b6fc9cd245627cc019bbf8c05d12721a89d52",
+      "learning_compatibility_ref": "5",
+      "config_changes_ref": "44",
+      "to_implementation": "211ae80c9ab17cd302a19ed66d0fdfa339b887457708d14a7d6a30ff712805d5",
+      "reviewed_evidence": "ai-research/PPG_REFINEMENT_REPORT.md",
+      "reason_ref": "111"
+    },
+    {
+      "from_implementation": "fd85565852a00328236c96b4ed8b6fc9cd245627cc019bbf8c05d12721a89d52",
+      "learning_compatibility_ref": "5",
+      "config_changes_ref": "44",
+      "to_implementation": "211ae80c9ab17cd302a19ed66d0fdfa339b887457708d14a7d6a30ff712805d5",
+      "reviewed_evidence": "ai-research/PPG_REFINEMENT_REPORT.md",
+      "reason_ref": "112",
+      "config_migrations_ref": "24"
+    },
+    {
+      "from_implementation": "fd85565852a00328236c96b4ed8b6fc9cd245627cc019bbf8c05d12721a89d52",
+      "learning_compatibility_ref": "5",
+      "config_changes_ref": "44",
+      "to_implementation": "211ae80c9ab17cd302a19ed66d0fdfa339b887457708d14a7d6a30ff712805d5",
+      "reviewed_evidence": "ai-research/PPG_REFINEMENT_REPORT.md",
+      "reason_ref": "111",
+      "config_migrations_ref": "18"
+    },
+    {
+      "from_implementation": "fd85565852a00328236c96b4ed8b6fc9cd245627cc019bbf8c05d12721a89d52",
+      "learning_compatibility_ref": "5",
+      "config_changes_ref": "44",
+      "to_implementation": "211ae80c9ab17cd302a19ed66d0fdfa339b887457708d14a7d6a30ff712805d5",
+      "reviewed_evidence": "ai-research/PPG_REFINEMENT_REPORT.md",
+      "reason_ref": "112",
+      "config_migrations_ref": "25"
+    },
+    {
+      "from_implementation": "fd85565852a00328236c96b4ed8b6fc9cd245627cc019bbf8c05d12721a89d52",
+      "learning_compatibility_ref": "5",
+      "config_changes_ref": "44",
+      "to_implementation": "211ae80c9ab17cd302a19ed66d0fdfa339b887457708d14a7d6a30ff712805d5",
+      "reviewed_evidence": "ai-research/PPG_REFINEMENT_REPORT.md",
+      "reason_ref": "111",
+      "config_migrations_ref": "15"
+    },
+    {
+      "from_implementation": "fd85565852a00328236c96b4ed8b6fc9cd245627cc019bbf8c05d12721a89d52",
+      "learning_compatibility_ref": "5",
+      "config_changes_ref": "44",
+      "to_implementation": "211ae80c9ab17cd302a19ed66d0fdfa339b887457708d14a7d6a30ff712805d5",
+      "reviewed_evidence": "ai-research/PPG_REFINEMENT_REPORT.md",
+      "reason_ref": "112",
+      "config_migrations_ref": "26"
+    },
+    {
+      "from_implementation": "fd85565852a00328236c96b4ed8b6fc9cd245627cc019bbf8c05d12721a89d52",
+      "learning_compatibility_ref": "5",
+      "config_changes_ref": "44",
+      "to_implementation": "211ae80c9ab17cd302a19ed66d0fdfa339b887457708d14a7d6a30ff712805d5",
+      "reviewed_evidence": "ai-research/PPG_REFINEMENT_REPORT.md",
+      "reason_ref": "111",
+      "config_migrations_ref": "19"
+    },
+    {
+      "from_implementation": "fd85565852a00328236c96b4ed8b6fc9cd245627cc019bbf8c05d12721a89d52",
+      "learning_compatibility_ref": "5",
+      "config_changes_ref": "44",
+      "to_implementation": "211ae80c9ab17cd302a19ed66d0fdfa339b887457708d14a7d6a30ff712805d5",
+      "reviewed_evidence": "ai-research/PPG_REFINEMENT_REPORT.md",
+      "reason_ref": "112",
+      "config_migrations_ref": "27"
+    },
+    {
+      "from_implementation": "38a530ad117db9004a5ff31f617327ada7104bdfffbfbceeae07393fd863a649",
+      "learning_compatibility_ref": "5",
+      "config_changes_ref": "44",
+      "to_implementation": "211ae80c9ab17cd302a19ed66d0fdfa339b887457708d14a7d6a30ff712805d5",
+      "reviewed_evidence": "ai-research/PPG_REFINEMENT_REPORT.md",
+      "reason_ref": "111"
+    },
+    {
+      "from_implementation": "38a530ad117db9004a5ff31f617327ada7104bdfffbfbceeae07393fd863a649",
+      "learning_compatibility_ref": "5",
+      "config_changes_ref": "44",
+      "to_implementation": "211ae80c9ab17cd302a19ed66d0fdfa339b887457708d14a7d6a30ff712805d5",
+      "reviewed_evidence": "ai-research/PPG_REFINEMENT_REPORT.md",
+      "reason_ref": "112",
+      "config_migrations_ref": "24"
+    },
+    {
+      "from_implementation": "38a530ad117db9004a5ff31f617327ada7104bdfffbfbceeae07393fd863a649",
+      "learning_compatibility_ref": "5",
+      "config_changes_ref": "44",
+      "to_implementation": "211ae80c9ab17cd302a19ed66d0fdfa339b887457708d14a7d6a30ff712805d5",
+      "reviewed_evidence": "ai-research/PPG_REFINEMENT_REPORT.md",
+      "reason_ref": "111",
+      "config_migrations_ref": "18"
+    },
+    {
+      "from_implementation": "38a530ad117db9004a5ff31f617327ada7104bdfffbfbceeae07393fd863a649",
+      "learning_compatibility_ref": "5",
+      "config_changes_ref": "44",
+      "to_implementation": "211ae80c9ab17cd302a19ed66d0fdfa339b887457708d14a7d6a30ff712805d5",
+      "reviewed_evidence": "ai-research/PPG_REFINEMENT_REPORT.md",
+      "reason_ref": "112",
+      "config_migrations_ref": "25"
+    },
+    {
+      "from_implementation": "38a530ad117db9004a5ff31f617327ada7104bdfffbfbceeae07393fd863a649",
+      "learning_compatibility_ref": "5",
+      "config_changes_ref": "44",
+      "to_implementation": "211ae80c9ab17cd302a19ed66d0fdfa339b887457708d14a7d6a30ff712805d5",
+      "reviewed_evidence": "ai-research/PPG_REFINEMENT_REPORT.md",
+      "reason_ref": "111",
+      "config_migrations_ref": "15"
+    },
+    {
+      "from_implementation": "38a530ad117db9004a5ff31f617327ada7104bdfffbfbceeae07393fd863a649",
+      "learning_compatibility_ref": "5",
+      "config_changes_ref": "44",
+      "to_implementation": "211ae80c9ab17cd302a19ed66d0fdfa339b887457708d14a7d6a30ff712805d5",
+      "reviewed_evidence": "ai-research/PPG_REFINEMENT_REPORT.md",
+      "reason_ref": "112",
+      "config_migrations_ref": "26"
+    },
+    {
+      "from_implementation": "38a530ad117db9004a5ff31f617327ada7104bdfffbfbceeae07393fd863a649",
+      "learning_compatibility_ref": "5",
+      "config_changes_ref": "44",
+      "to_implementation": "211ae80c9ab17cd302a19ed66d0fdfa339b887457708d14a7d6a30ff712805d5",
+      "reviewed_evidence": "ai-research/PPG_REFINEMENT_REPORT.md",
+      "reason_ref": "111",
+      "config_migrations_ref": "19"
+    },
+    {
+      "from_implementation": "38a530ad117db9004a5ff31f617327ada7104bdfffbfbceeae07393fd863a649",
+      "learning_compatibility_ref": "5",
+      "config_changes_ref": "44",
+      "to_implementation": "211ae80c9ab17cd302a19ed66d0fdfa339b887457708d14a7d6a30ff712805d5",
+      "reviewed_evidence": "ai-research/PPG_REFINEMENT_REPORT.md",
+      "reason_ref": "112",
+      "config_migrations_ref": "27"
+    },
+    {
+      "from_implementation": "b8cf21f31056d9e353d4216ea36ddddfc16066b1b1636460f825080d84ff59cd",
+      "learning_compatibility_ref": "5",
+      "config_changes_ref": "44",
+      "to_implementation": "211ae80c9ab17cd302a19ed66d0fdfa339b887457708d14a7d6a30ff712805d5",
+      "reviewed_evidence": "ai-research/PPG_REFINEMENT_REPORT.md",
+      "reason_ref": "111"
+    },
+    {
+      "from_implementation": "b8cf21f31056d9e353d4216ea36ddddfc16066b1b1636460f825080d84ff59cd",
+      "learning_compatibility_ref": "5",
+      "config_changes_ref": "44",
+      "to_implementation": "211ae80c9ab17cd302a19ed66d0fdfa339b887457708d14a7d6a30ff712805d5",
+      "reviewed_evidence": "ai-research/PPG_REFINEMENT_REPORT.md",
+      "reason_ref": "112",
+      "config_migrations_ref": "24"
+    },
+    {
+      "from_implementation": "b8cf21f31056d9e353d4216ea36ddddfc16066b1b1636460f825080d84ff59cd",
+      "learning_compatibility_ref": "5",
+      "config_changes_ref": "44",
+      "to_implementation": "211ae80c9ab17cd302a19ed66d0fdfa339b887457708d14a7d6a30ff712805d5",
+      "reviewed_evidence": "ai-research/PPG_REFINEMENT_REPORT.md",
+      "reason_ref": "111",
+      "config_migrations_ref": "18"
+    },
+    {
+      "from_implementation": "b8cf21f31056d9e353d4216ea36ddddfc16066b1b1636460f825080d84ff59cd",
+      "learning_compatibility_ref": "5",
+      "config_changes_ref": "44",
+      "to_implementation": "211ae80c9ab17cd302a19ed66d0fdfa339b887457708d14a7d6a30ff712805d5",
+      "reviewed_evidence": "ai-research/PPG_REFINEMENT_REPORT.md",
+      "reason_ref": "112",
+      "config_migrations_ref": "25"
+    },
+    {
+      "from_implementation": "3a0c2da9e512b810ad4fa4ea3583ea16dd5e09252cfb651a2dc42da5a0d6c702",
+      "learning_compatibility_ref": "5",
+      "config_changes_ref": "44",
+      "to_implementation": "211ae80c9ab17cd302a19ed66d0fdfa339b887457708d14a7d6a30ff712805d5",
+      "reviewed_evidence": "ai-research/PPG_REFINEMENT_REPORT.md",
+      "reason_ref": "111"
+    },
+    {
+      "from_implementation": "3a0c2da9e512b810ad4fa4ea3583ea16dd5e09252cfb651a2dc42da5a0d6c702",
+      "learning_compatibility_ref": "5",
+      "config_changes_ref": "44",
+      "to_implementation": "211ae80c9ab17cd302a19ed66d0fdfa339b887457708d14a7d6a30ff712805d5",
+      "reviewed_evidence": "ai-research/PPG_REFINEMENT_REPORT.md",
+      "reason_ref": "112",
+      "config_migrations_ref": "24"
+    },
+    {
+      "from_implementation": "211ae80c9ab17cd302a19ed66d0fdfa339b887457708d14a7d6a30ff712805d5",
+      "to_implementation": "211ae80c9ab17cd302a19ed66d0fdfa339b887457708d14a7d6a30ff712805d5",
+      "learning_compatibility_ref": "5",
+      "config_changes_ref": "44",
+      "config_migrations_ref": "24",
+      "reviewed_evidence": "ai-research/PPG_REFINEMENT_REPORT.md",
+      "reason_ref": "113"
+    },
+    {
+      "from_implementation": "211ae80c9ab17cd302a19ed66d0fdfa339b887457708d14a7d6a30ff712805d5",
+      "to_implementation": "211ae80c9ab17cd302a19ed66d0fdfa339b887457708d14a7d6a30ff712805d5",
+      "learning_compatibility_ref": "5",
+      "config_changes_ref": "44",
+      "config_migrations_ref": "25",
+      "reviewed_evidence": "ai-research/PPG_REFINEMENT_REPORT.md",
+      "reason_ref": "113"
     }
   ],
   "definitions": {
@@ -24136,7 +25081,12 @@
       "105": "Generation-85 review: require actual retained PPO or PPG snapshot training before an EV-based snapshot-weight reduction; report pooled mixed-table EV after admission and count review age from actual lambda-stage exposure. Preserve checkpoint schema and saved weight, weights, both Adams, RNG, GAE decisions, PPO/PPG losses and thresholds, IL probe/limits/latch, population, progress and v4. Retain exact previously reviewed table-gate upgrade when needed.",
       "106": "Add staged snapshot critic weight recovery: five consecutive healthy iterations with retained PPO/PPG snapshot training and learner EV at least the fixed phase-1 baseline per 0.5->0.75->1.0 increase. Preserve the existing EV reduction, config, model, both Adams, RNG, GAE decisions/evidence, IL probe/limits, population, progress, lineage and opponents. Exact actor-value checkpoint v3/v4 migration adds only an empty recovery streak at committed progress; retain previously reviewed table-gate migration when needed. New v5 checkpoints preserve the recovery streak exactly.",
       "107": "Preserve existing signed sampling/rehearsal settings under this source revision, including prior reviewed EV-window migration. New PFSP and slower rehearsal require the separate explicit config migration. Preserve model, both optimizers, RNG, gate/recovery state, IL probe, population, progress, lineage and ratings.",
-      "108": "Explicit opt-in default quality-score to PFSP and rehearsal interval 30->60 upgrade. Switch only at a committed five-iteration admission boundary; seed S/C from logged five-iteration rates (or prior), preserve checkpoints/probes/fingerprints, ages, health and all training state. Atomic migration receipt binds old generation pool digest to reproducible new pool state; pending old collections remain rejected. Preserve prior reviewed EV migration where specified."
+      "108": "Explicit opt-in default quality-score to PFSP and rehearsal interval 30->60 upgrade. Switch only at a committed five-iteration admission boundary; seed S/C from logged five-iteration rates (or prior), preserve checkpoints/probes/fingerprints, ages, health and all training state. Atomic migration receipt binds old generation pool digest to reproducible new pool state; pending old collections remain rejected. Preserve prior reviewed EV migration where specified.",
+      "109": "Generation-110 rating-compaction serialization repair; preserve existing signed recipe, weights, both Adam states, RNG, gates, probes, population, counters and lineage. Exact optional g110 IL-KL state override requires its separate once-only receipt. Preserve previous explicitly reviewed config migrations.",
+      "110": "Explicit insolvency event cost .005->.0075, cap unchanged at .075; synchronize teacher reward metadata. Same tensors, both Adam/RNG states and progress; invalidate utility calibration and exclude previous-reward PPG cache for one iteration, then resume normal reuse. No actor trajectory relabeling; existing freshness checks preserved.",
+      "111": "Preserve explicitly configured old PPG/hash behavior and all prior reviewed g110 recovery transitions. Feature schemas, tensors, IL handoff, weights, Adams, RNG, progress and lineage unchanged.",
+      "112": "Explicit PPG v2->v3 only: halve separate value LR; deterministic per-table whole-game holdout with minimum two when feasible. Preserve optimizer moments/steps, weights/RNG and active gates; restart selection-dependent EV evidence/streaks and use current-only buffer once. Existing reward and one-time IL-KL overrides remain separately verified.",
+      "113": "Exact opt-in PPG refinement after a source-only transition committed at the same generation; preserve original checkpoint binding, freshness and all unrelated settings. Optional reward upgrade remains exact and separately verified."
     },
     "config_changes": {
       "0": {
@@ -33195,6 +34145,58 @@
       ],
       "15": [
         "pfsp-and-rehearsal/1.0.0"
+      ],
+      "16": [
+        "table-gae-ev-window/1.0.0",
+        "step5-insolvency-event-cost/1.0.0"
+      ],
+      "17": [
+        "table-gae-ev-window/1.0.0",
+        "pfsp-and-rehearsal/1.0.0",
+        "step5-insolvency-event-cost/1.0.0"
+      ],
+      "18": [
+        "step5-insolvency-event-cost/1.0.0"
+      ],
+      "19": [
+        "pfsp-and-rehearsal/1.0.0",
+        "step5-insolvency-event-cost/1.0.0"
+      ],
+      "20": [
+        "table-gae-ev-window/1.0.0",
+        "step5-ppg-refinement/1.0.0"
+      ],
+      "21": [
+        "table-gae-ev-window/1.0.0",
+        "step5-insolvency-event-cost/1.0.0",
+        "step5-ppg-refinement/1.0.0"
+      ],
+      "22": [
+        "table-gae-ev-window/1.0.0",
+        "pfsp-and-rehearsal/1.0.0",
+        "step5-ppg-refinement/1.0.0"
+      ],
+      "23": [
+        "table-gae-ev-window/1.0.0",
+        "pfsp-and-rehearsal/1.0.0",
+        "step5-insolvency-event-cost/1.0.0",
+        "step5-ppg-refinement/1.0.0"
+      ],
+      "24": [
+        "step5-ppg-refinement/1.0.0"
+      ],
+      "25": [
+        "step5-insolvency-event-cost/1.0.0",
+        "step5-ppg-refinement/1.0.0"
+      ],
+      "26": [
+        "pfsp-and-rehearsal/1.0.0",
+        "step5-ppg-refinement/1.0.0"
+      ],
+      "27": [
+        "pfsp-and-rehearsal/1.0.0",
+        "step5-insolvency-event-cost/1.0.0",
+        "step5-ppg-refinement/1.0.0"
       ]
     },
     "config_migration": {

@@ -27,7 +27,7 @@ class ExportTests(unittest.TestCase):
             evaluations=[dict(report=self.run + '/evaluations/monitor-0003/report.json')],
             champion_gate=dict(recent=[]))
         self.put(self.run + '/state.json', reports.encode(self.state).replace(b'\n', b'\r\n'))
-        self.put(self.run + '/retention-history.json', {'older': 'summary'})
+        self.put(self.run + '/retention-history.json', {'iteration-0057/report.json': {'summary': {'iteration': 57}}})
         for iteration in (57, 58, 59, 60):
             self.put(f'{self.run}/iteration-{iteration:04d}/report.json',
                      dict(iteration=iteration, timings=dict(iteration_seconds=1)))
@@ -97,6 +97,15 @@ class ExportTests(unittest.TestCase):
         self.assertIn(self.run + '/evaluations/monitor-0003/report.json', missing)
         self.assertIn('artifacts/step5/il/report.json', missing)
         self.assertFalse((output / 'iteration-0058/report.json').exists())
+
+    def test_interrupted_cleanup_includes_older_uncompacted_report_without_pending_iteration(self):
+        self.put(self.run+'/retention-history.json',{})
+        original=(self.root/self.run/'iteration-0057/report.json').read_bytes()
+        output,manifest=self.export()
+        self.assertEqual(manifest['latest_iterations'],[58,59])
+        self.assertEqual(manifest['uncompacted_iterations'],[57])
+        self.assertEqual((output/'iteration-0057/report.json').read_bytes(),original)
+        self.assertFalse((output/'iteration-0060').exists())
 
     def test_never_overwrites_existing_output_or_accepts_escaped_paths(self):
         sentinel = self.put('results/existing/keep.json', b'unchanged')

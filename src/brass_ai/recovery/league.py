@@ -208,7 +208,12 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
         from .il_kl_limit import validate_state
         from .il_kl_probe import load as load_probe
         validate_state(state.get('il_kl_limit'),config['il_kl_limit'],state['iteration'])
-        require(raw['training'].get('il_kl_limit')==state['il_kl_limit'],'IL-KL state differs from committed checkpoint')
+        from .g110_hotfix import verify_checkpoint
+        restored_hotfix=verify_checkpoint(state,raw)
+        if restored_hotfix is not None:
+            optimizer_resume['il_kl_hotfix']=restored_hotfix
+            print(f'One-time IL-KL hotfix: limit={restored_hotfix["limit_after"]:.8f}, '
+                  f'group_limit={restored_hotfix["group_limit_after"]:.8f}; recovery latch preserved',flush=True)
         if fixed_probe is None:
             fixed_probe,_=load_probe(root,run,bc_origin,bc_model,config['il_kl_limit'],config['update'],
                 config['audit_workers'],receipt=state['il_kl_limit']['probe'])
@@ -521,6 +526,10 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                     gate=update['gae']['gate']
                     controller_line+=f' GAE={gate["lambda_used"]:.2f}->{gate["lambda_next"]:.2f} value_steps={value_report["optimizer_steps"]}'
                     controller_line+=f'/{value_report["attempted_steps"]} value_stop={value_report["early_stop_reason"] or "none"}'
+                    controller_line+=f' value_lr={value_report["learning_rate"]:.2g}'
+                    split=value_report.get('split') or {}
+                    v4_holdout=split.get('by_table',{}).get('legacy')
+                    if v4_holdout:controller_line+=f' v4_holdout={v4_holdout["heldout_games"]}/{v4_holdout["games"]}'
                     if phases.buffer:
                         controller_line+=f' value_rows={value_report["distinct_current_rows_used"]}+{value_report["distinct_previous_rows_used"]}'
                     if phases.critic_state is not None:

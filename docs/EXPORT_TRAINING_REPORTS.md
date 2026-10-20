@@ -24,6 +24,9 @@ The script copies:
 
 - `state.json`, `retention-history.json`, and available run metadata such as `best.json`.
 - The latest **two committed iteration** reports and associated JSON reports/receipts.
+- Any additional committed iteration report not yet present in compact history,
+  so interrupted cleanup does not leave gaps outside the latest-two selection.
+  These reports are listed in the export manifest's `uncompacted_iterations`.
 - All available reports and specifications under the run's `evaluations/`, including champion, monitor, and broader panels.
 - The originating IL run's state/report and available ancestor IL states/reports.
 - The fixed IL-KL probe's `il-kl/manifest.json` and `il-kl/initial-report.json`, when present.
