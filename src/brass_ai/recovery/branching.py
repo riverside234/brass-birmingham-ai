@@ -41,17 +41,18 @@ def alternative(raw,q,played,rng):
         component_probability=weight/total,marginal_probability=float(sum(w/total*v[action] for _,w,v in candidates)))
 
 
-def capture(host,game,row,assigned,rngs):
+def capture(host,game,row,assigned,rngs,*,portable=False):
     step=row['step'];seat=row['seat'];p=assigned[seat];seed=seed_for(game['game_id'],step)
     q=exploration_distribution(row['choices'],row['intent'],3,'action')
     move=alternative(p.last_raw[rngs[seat]],q,row['chosen'],random.Random(seed))
     if move is None:return None
     require(all(type(p) is NeuralPolicy and p.exploration_version==3 for p in assigned),
         'Branches require four current neural learners')
-    host.call('fork_save')
+    snapshot=host.call('fork_save',export=portable)
     from .insolvency import events
     prior=Counter(e['seat'] for e in events(game['records']))
-    return dict(row=copy.deepcopy(row),contexts=[copy.deepcopy(p.contexts[rngs[s]]) for s,p in enumerate(assigned)],
+    return dict(**(dict(checkpoint=snapshot['checkpoint']) if portable else {}),
+        row=copy.deepcopy(row),contexts=[copy.deepcopy(p.contexts[rngs[s]]) for s,p in enumerate(assigned)],
         counts=[p.action_counts.get(rngs[s],0) for s,p in enumerate(assigned)],
         metadata=dict(contract=BRANCH['contract'],parent_game_id=game['game_id'],decision=step,
             played=row['chosen'],seed=seed,prior_events=[prior[s] for s in range(4)],
@@ -62,8 +63,17 @@ def continue_branch(host,job,parent,packet,assigned,timings,max_decisions,encode
     from .execution import _run_turns
     from .replay import CheckedGame
     started=time.monotonic();meta=packet['metadata'];seed=meta['seed']
-    context=host.call('fork_resume',shuffle_seed=int(seed[:8],16)&0x7fffffff if job['branching']['reshuffle_hidden_deck'] else None)
-    row=packet['row'];row['step']=0;row['chosen']=meta['chosen']
+    shuffle=int(seed[:8],16)&0x7fffffff if job['branching']['reshuffle_hidden_deck'] else None
+    if 'checkpoint' in packet:
+        context=host.call('fork_restore',checkpoint=packet['checkpoint'],shuffle_seed=shuffle)
+        if hasattr(host,'enable_fastpath') and not host.fast_checked:host.enable_fastpath()
+    else:context=host.call('fork_resume',shuffle_seed=shuffle)
+    row=copy.deepcopy(packet['row'])
+    require({k:v for k,v in context.items() if k!='game_id'}==row['view']['context'],
+        'Restored branch context differs')
+    if 'checkpoint' in packet:
+        require(context['game_id']==packet['checkpoint']['game_id'],'Restored branch request identity differs')
+    row['step']=0;row['chosen']=meta['chosen']
     row['behavior']['probability']=meta['marginal_probability']
     row['behavior']['component']='branch_move'
     # Fork action remains in the authoritative replay for causal reward

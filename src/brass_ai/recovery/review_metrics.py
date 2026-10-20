@@ -68,6 +68,7 @@ def gate_diagnostics(actor,value=None,limit=None,quality=None):
         value_accepted_intervals=value.get('accepted_intervals'),
         value_accepted_fraction=value.get('optimizer_steps',0)/attempts if attempts else None,
         value_stop=value.get('early_stop_reason'),beta_reason=value.get('beta_reason'),
+        critic_training=value.get('critic_training'),
         heldout_loss_delta=after-before if before is not None and after is not None else None,
         heldout_by_table={k:dict(rows=groups.get('table:'+k+'/role:learner',{}).get('rows',0),
             games=groups.get('table:'+k+'/role:learner',{}).get('games'),

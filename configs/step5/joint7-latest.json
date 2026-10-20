@@ -385,7 +385,7 @@
   },
   "value_phase": {
     "contract": "ppg-value-phase/4.0.0",
-    "enabled": true,
+    "enabled": false,
     "buffer_iterations": 2,
     "max_epochs": 3,
     "batch_size": 4096,

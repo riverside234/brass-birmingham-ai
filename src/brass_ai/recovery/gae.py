@@ -208,17 +208,18 @@ def advance(state,config,*,generation,value_report,health_ok,rating):
     """Decisions apply to the NEXT collection; no backdating or automatic rollback."""
     state=copy.deepcopy(validate_state(state,config,generation-1));gate=config['gate'];used=state['active_lambda']
     state['generation']=generation
-    ran=value_report.get('optimizer_steps',0)>0
+    from .value_phase import critic_work
+    work=critic_work(value_report);ran=work['optimizer_steps']>0
     metrics=value_report.get('heldout_after',{})
     ev=(metrics.get('groups',{}).get('table:selfplay/role:learner',{}).get('explained_variance')
         if 'table_gate' in config else metrics.get('explained_variance'))
     healthy=bool(health_ok and (ran or (stage_windowed(config) and used!=1.))
-        and value_report.get('enabled',True) and finite(ev) and not value_report.get('kl_guard_tripped',False))
+        and finite(ev) and not value_report.get('kl_guard_tripped',False))
     stage_evidence=None
     if stage_windowed(config):
         state['stage_evidence'],stage_evidence=gae_health.advance(state['stage_evidence'],gate,
             generation=generation,stage_origin=state['stage_origin'],healthy=healthy,
-            accepted_steps=value_report.get('optimizer_steps',0))
+            accepted_steps=work['optimizer_steps'],source=work['source'])
     state['value_iterations']+=int(ran)
     state['ev_streak']=(state['ev_streak']+1 if ran and finite(ev) and ev>=gate['heldout_ev_min'] else 0)
     state['healthy_streak']=(state['healthy_streak']+1 if used==.98 and healthy else 0)
@@ -246,10 +247,9 @@ def advance(state,config,*,generation,value_report,health_ok,rating):
             # A restored/no-improvement PPG phase still yields valid held-out
             # predictions. Require recent accepted value work in the window,
             # rather than forcing one accepted step on every sparse sample.
-            table_healthy=bool(health_ok and not value_report.get('kl_guard_tripped',False)
-                and value_report.get('enabled',True))
+            table_healthy=bool(health_ok and not value_report.get('kl_guard_tripped',False))
             state['table_evidence'],pooled=ev_evidence.advance(state['table_evidence'],tg,
-                generation=generation,metrics=metrics,healthy=table_healthy,value_updated=ran)
+                generation=generation,metrics=metrics,healthy=table_healthy,value_updated=ran,source=work['source'])
         for kind in ('historical','legacy'):
             table_ev=metrics.get('groups',{}).get('table:'+kind+'/role:learner',{}).get('explained_variance')
             okay=table_healthy if pooled else healthy and finite(ev) and finite(table_ev) and table_ev>=ev-tg['ev_tolerance']
@@ -280,13 +280,13 @@ def advance(state,config,*,generation,value_report,health_ok,rating):
                     reason=('already_enabled' if before else 'selfplay_only' if tg['mode']=='selfplay_only' else
                             'healthy_streak_not_ready' if state['table_streaks'][kind]<tg['consecutive_iterations'] else
                             ','.join(pooled[kind]['reasons']) if pooled[kind]['reasons'] else 'window_ev_and_health_ready'),
-                    streak_scope='Consecutive PPO/economic health and no value KL trip; accepted value steps supported across the mixed-table EV window')
+                    streak_scope='Consecutive PPO/economic health and applicable value KL guard; critic work supported across the mixed-table EV window')
     return state,dict(contract=gate['contract'],mode=gate['mode'],lambda_used=used,
         table_gate=table_report,
         lambda_next=state['active_lambda'],decision=decision,reason=reason,generation=generation,
         value_iterations=state['value_iterations'],heldout_ev=ev,ev_streak=state['ev_streak'],
         healthy=healthy,healthy_streak=state['healthy_streak'],stage_origin=state['stage_origin'],rating=rating,
-        stage_evidence=stage_evidence,
+        stage_evidence=stage_evidence,critic_training=work,
         scope='Committed iterations only; no forks, extra ratings, or automatic rollback')
 
 

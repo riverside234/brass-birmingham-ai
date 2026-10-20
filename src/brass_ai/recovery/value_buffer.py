@@ -33,6 +33,24 @@ def enabled(config):
     return c.get('enabled',False) and c.get('buffer_iterations')==2
 
 
+def retire_disabled(root,run,generation):
+    """Retire derived PPG arrays only AFTER a PPO-only checkpoint commits."""
+    root,run=owned(root,run);state=read(run/'state.json')
+    require(state['iteration']==generation and state['signature']['config']['value_phase']['enabled'] is False,
+        'PPG cache retirement requires committed PPO-only training state')
+    directory=safe(run,run/'.ppg-value-cache')
+    if not directory.exists():return dict(deleted_files=[],deleted_bytes=0)
+    require(read(safe(directory,directory/'owner.json'))==OWNER,'Unknown PPG cache owner')
+    files=[]
+    for p in directory.iterdir():
+        if p.name=='owner.json':continue
+        require(FILE.fullmatch(p.name) is not None and safe(directory,p).is_file(),'Unknown PPG cache artifact')
+        files.append(p)
+    total=sum(p.stat().st_size for p in files)
+    for p in files:p.unlink()
+    return dict(deleted_files=[p.name for p in files],deleted_bytes=total)
+
+
 def row_dtype():
     schema=feature_schema()
     return np.dtype([('state','<f4',(schema['state_dim'],)),

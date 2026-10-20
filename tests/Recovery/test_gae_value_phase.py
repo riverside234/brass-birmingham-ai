@@ -116,8 +116,12 @@ class Advantages(unittest.TestCase):
         model,opt,cfg,(behavior,data)=fixture();other=copy.deepcopy(model)
         cfg['value_phase']['enabled']=False;cfg['advantage']['gate']['mode']='fixed'
         other_opt=torch.optim.AdamW(other.parameters());other_opt.load_state_dict(copy.deepcopy(opt.state_dict()))
-        phases=TrainingPhases(other,cfg);rng=torch.get_rng_state().clone()
-        a=ppo(model,opt,cfg,behavior,data);final_rng=torch.get_rng_state().clone()
+        phases=TrainingPhases(other,cfg);baseline=TrainingPhases(model,cfg)
+        # PPG-off retains the critic holdout. Compare MC vs lambda-one GAE
+        # using the same critic split, rather than training on held-out rows.
+        baseline.advantages=lambda mc,ids:(mc,{})
+        rng=torch.get_rng_state().clone()
+        a=ppo(model,opt,cfg,behavior,data,baseline);final_rng=torch.get_rng_state().clone()
         torch.set_rng_state(rng);b=ppo(other,other_opt,cfg,behavior,data,phases)
         self.assertTrue(_same_payload(model.state_dict(),other.state_dict()))
         self.assertTrue(_same_payload(opt.state_dict(),other_opt.state_dict()))
@@ -129,7 +133,8 @@ class Advantages(unittest.TestCase):
         cfg=config();validate_config(cfg)
         generated=latest_model_config(cfg,cfg['imitation_checkpoint'])
         from brass_ai.recovery.exploration import configure as exploration_config
-        self.assertEqual(exploration_config(gae.health_options(value_phase.interval_options(value_phase.refined_options(cfg)))),generated)
+        self.assertEqual(value_phase.disabled_options(
+            exploration_config(gae.health_options(value_phase.interval_options(value_phase.refined_options(cfg))))),generated)
         for key,value in (('lambda',0),('lambda',True),('chain','all')):
             bad=copy.deepcopy(cfg);bad['advantage'][key]=value
             with self.assertRaises(ValueError):validate_config(bad)

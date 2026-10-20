@@ -99,6 +99,8 @@ def check_signature(state, signature, reviewed=False):
             from .gae import HEALTH_MIGRATION,health_options
             handlers[INTERVAL_MIGRATION]=interval_options
             handlers[HEALTH_MIGRATION]=health_options
+            from .value_phase import DISABLE_MIGRATION,disabled_options
+            handlers[DISABLE_MIGRATION]=disabled_options
             from .exploration import MIGRATION as EXPLORATION_MIGRATION,continuation_config
             handlers[EXPLORATION_MIGRATION]=continuation_config
             for migration in migrations:

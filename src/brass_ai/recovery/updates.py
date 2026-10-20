@@ -457,7 +457,7 @@ def _ppo_nonforced(model,optimizer,games,behavior,config,*,profile,profile_steps
     probe=phase_probe(ds,actor_ids,config['kl_probe_rows'])
     categorical_probe=CategoricalProbe(model,ds,probe,behavior,config)
     gradient_norms=[]
-    epochs=[];steps=0;clips=0;stopped=False;rehearsal_steps=0
+    epochs=[];steps=0;critic_steps=0;clips=0;stopped=False;rehearsal_steps=0
     stop_reason=None;max_categorical_kl=0.
     actor_used=set();critic_used=set();actor_presentations=Counter();critic_presentations=Counter();critic_roles=Counter()
     groups=[(sample_groups or {}).get(d[2][0],'unknown') for d in data]
@@ -510,6 +510,7 @@ def _ppo_nonforced(model,optimizer,games,behavior,config,*,profile,profile_steps
                     norm=torch.nn.utils.clip_grad_norm_(model.parameters(),config['grad_clip'],error_if_nonfinite=True)
                     clips+=int(float(norm)>config['grad_clip']);scheduled_step(optimizer,ppo=True);steps+=1
                     gradient_norms.append(float(norm))
+                    critic_steps+=int(bool(crit) and config['value_weight']>0)
                     actor_used.update(batch);critic_used.update(crit)
                     actor_presentations.update(groups[i] for i in batch)
                     critic_presentations.update(groups[i] for i in crit if i<count and critic_ds.roles[i]=='learner')
@@ -533,7 +534,9 @@ def _ppo_nonforced(model,optimizer,games,behavior,config,*,profile,profile_steps
             if reward is not None:epochs[-1]['utility_prediction']=dict(mse=float(utility_squared)/max(1,4*critic_seen),mae=float(utility_absolute)/max(1,4*critic_seen))
             if stopped:break
     from .ordinary import sample_usage
-    if phases is not None:phases.after_ppo(model,actor_ids,probe,categorical_probe)
+    if phases is not None:
+        phases.after_ppo(model,actor_ids,probe,categorical_probe,
+            critic_steps=critic_steps,critic_rows=len(critic_used) if critic_steps else 0)
     return dict(format='nonforced-actor-ppo/2.1.0',epochs=epochs,optimizer_steps=steps,
         branch_sample_usage=dict(actor_distinct_used=sum(bool(ds.rows[i].get('_branch')) for i in actor_used),
             critic_distinct_used=sum('/branch/' in critic_ds.data[i][2][0] for i in critic_used),
@@ -544,6 +547,7 @@ def _ppo_nonforced(model,optimizer,games,behavior,config,*,profile,profile_steps
         sample_usage=sample_usage(groups,actor_ids,actor_used,{i for i in critic_used if i<count},actor_presentations,
             Counter({k:v for k,v in critic_presentations.items()})),
         critic_rows=dict(available=len(critic_ds.data),train=len(critic_ids),
+            optimizer_steps=critic_steps,
             available_by_role=dict(Counter(critic_ds.roles)),
             train_by_role=dict(Counter(critic_ds.roles[i] for i in critic_ids)),
             presentations_by_role=dict(critic_roles),

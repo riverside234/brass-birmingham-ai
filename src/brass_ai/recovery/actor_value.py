@@ -9,6 +9,39 @@ from . import gae,value_phase,value_buffer,critic_data
 
 KEY='actor_value_phases'
 CONTRACT='actor-value-phases/1.0.0'
+PPO_ONLY_CONTRACT='actor-value-phases/8.0.0'
+
+
+def ppo_evidence(generation):
+    return dict(contract=value_phase.DISABLE_MIGRATION,source='ppo',origin=generation,
+        previous_value_iterations=0,previous_buffer=None)
+
+
+def disable_ppg_checkpoint(saved,options,generation):
+    """No old PPG work is relabeled as PPO gate evidence."""
+    require(saved.get('contract')=='actor-value-phases/7.0.0'
+        and saved.get('options',{}).get('value_phase',{}).get('enabled') is True
+        and value_phase.disabled_options(saved['options'])==options,
+        'GAE/value checkpoint configuration differs during PPG disable')
+    fields={'contract','options','gae','beta_clone','kl_trips','optimizer'}
+    if 'critic_data' in options:fields.add('critic_data')
+    if value_buffer.enabled(saved['options']):fields.add('buffer')
+    require(set(saved)==fields,'Invalid checkpoint fields during PPG disable')
+    gae.validate_state(saved['gae'],options['advantage'],generation)
+    if 'critic_data' in options:
+        critic_data.validate_state(saved['critic_data'],options['critic_data'],generation)
+    result=copy.deepcopy(saved);evidence=ppo_evidence(generation)
+    evidence['previous_buffer']=result.pop('buffer',None)
+    state=result['gae'];evidence['previous_value_iterations']=state['value_iterations']
+    # Qualifying observations now come from PPO. Keep the attained lambdas,
+    # activation ages and critic weight, but start new source-specific windows.
+    state.update(value_iterations=0,ev_streak=0,healthy_streak=0)
+    if 'table_streaks' in state:state['table_streaks']={k:0 for k in state['table_streaks']}
+    if 'table_evidence' in state:state['table_evidence']=gae.ev_evidence.initial(generation)
+    if 'stage_evidence' in state:state['stage_evidence']=gae.gae_health.initial(generation)
+    if 'critic_data' in result:result['critic_data']['weight_recovery']['healthy_streak']=0
+    result.update(contract=PPO_ONLY_CONTRACT,options=copy.deepcopy(options),critic_evidence=evidence)
+    return result
 
 
 class TrainingPhases:
@@ -16,6 +49,8 @@ class TrainingPhases:
         self.options={k:copy.deepcopy(config[k]) for k in ('advantage','value_phase')}
         self.options.update({k:copy.deepcopy(config[k]) for k in ('critic_data','seat_descriptors') if k in config})
         self.snapshot_data=[];self.fingerprint=None;self.critic_state=None
+        self.root,self.run=root,run
+        self.critic_evidence=None;self.disable_migration=None;self.ppo_work=None
         self.config=config;self.dataset=None;self.probe_ids=None
         gae.validate(self.options['advantage'],combined='reward' in config)
         value_phase.validate(self.options['value_phase'])
@@ -28,6 +63,8 @@ class TrainingPhases:
         self.contract='actor-value-phases/6.0.0' if value_phase.stratified(config['value_phase']) else base_contract
         if config['value_phase']['contract']==value_phase.CONTRACT or gae.stage_windowed(config['advantage']):
             self.contract='actor-value-phases/7.0.0'
+        if not config['value_phase']['enabled']:
+            self.contract=PPO_ONLY_CONTRACT;self.critic_evidence=ppo_evidence(generation)
         self.evidence_migration=None;self.critic_migration=None;self.refinement_migration=None;self.window_migration=None
         saved=(raw or {}).get('training',{}).get(KEY)
         previous_value=(saved or {}).get('options',{}).get('value_phase')
@@ -37,8 +74,12 @@ class TrainingPhases:
             if descriptors:self.critic_state=critic_data.initial(config['critic_data'])
         else:
             require(type(saved) is dict,'Invalid GAE/value checkpoint')
+            if self.contract==PPO_ONLY_CONTRACT and saved.get('contract')!=PPO_ONLY_CONTRACT:
+                saved=disable_ppg_checkpoint(saved,self.options,generation)
+                self.disable_migration=dict(contract=value_phase.DISABLE_MIGRATION,origin=generation,
+                    scope='PPG disabled; PPO critic evidence starts at committed progress. Attained lambdas, table activation, critic weight/baseline, both Adams, RNG and training progress preserved; no old PPG evidence backfilled.')
             refinement_options=copy.deepcopy(self.options)
-            if saved.get('contract')!='actor-value-phases/7.0.0':
+            if saved.get('contract') not in ('actor-value-phases/7.0.0',PPO_ONLY_CONTRACT):
                 if refinement_options['value_phase']['contract']==value_phase.CONTRACT:
                     refinement_options['value_phase'].pop('acceptance_steps')
                     refinement_options['value_phase']['contract']=value_phase.STRATIFIED_CONTRACT
@@ -102,10 +143,26 @@ class TrainingPhases:
                 self.window_migration=dict(origin=generation,acceptance_steps=config['value_phase'].get('acceptance_steps'),
                     scope='New stage-evidence window starts at committed progress; no backfill. Both Adams, RNG, counters, active lambda, existing streaks, mixed-table EV evidence and previous critic cache preserved.')
             fields={'contract','options','gae','beta_clone','kl_trips','optimizer'}|({'buffer'} if buffered else set())|({'critic_data'} if descriptors else set())
+            if self.contract==PPO_ONLY_CONTRACT:fields.add('critic_evidence')
             require(type(saved) is dict and set(saved)==fields
                     and saved['contract']==self.contract and saved['options']==self.options,
                     'GAE/value checkpoint configuration differs')
+            if self.contract==PPO_ONLY_CONTRACT:
+                evidence=saved['critic_evidence']
+                require(type(evidence) is dict and set(evidence)==set(ppo_evidence(0))
+                    and evidence['contract']==value_phase.DISABLE_MIGRATION and evidence['source']=='ppo'
+                    and type(evidence['origin']) is int and 0<=evidence['origin']<=generation
+                    and type(evidence['previous_value_iterations']) is int
+                    and 0<=evidence['previous_value_iterations']<=evidence['origin'],
+                    'Invalid PPO critic evidence origin')
+                self.critic_evidence=copy.deepcopy(evidence)
             self.state=copy.deepcopy(gae.validate_state(saved['gae'],config['advantage'],generation))
+            if self.critic_evidence is not None:
+                origin=self.critic_evidence['origin'];age=generation-origin
+                require(self.state['value_iterations']<=age and self.state['healthy_streak']<=age
+                    and all(v<=age for v in self.state.get('table_streaks',{}).values())
+                    and all(self.state[k]['origin']>=origin for k in ('stage_evidence','table_evidence') if k in self.state),
+                    'PPO critic evidence predates the mode transition')
             if descriptors:self.critic_state=copy.deepcopy(critic_data.validate_state(saved['critic_data'],config['critic_data'],generation))
             self.beta=saved['beta_clone'];self.trips=copy.deepcopy(saved['kl_trips'])
             require(type(self.beta) in (int,float) and math.isfinite(self.beta) and
@@ -142,13 +199,10 @@ class TrainingPhases:
         if self.critic_state:
             for i,role in enumerate(critic.roles):
                 if role=='snapshot':critic.critic_weights[i]=self.critic_state['snapshot_weight']
-        if self.options['value_phase']['enabled']:
-            self.train_ids,self.heldout_ids,self.split=value_phase.split(critic.data,self.options['value_phase']['holdout_fraction'],
-                self.options['value_phase'].get('holdout'))
-            if self.critic_state and not self.critic_state['snapshots_active']:
-                self.train_ids=[i for i in self.train_ids if critic.roles[i]=='learner']
-        else:
-            self.train_ids=list(range(len(dataset.data)));self.heldout_ids=[];self.split=None
+        self.train_ids,self.heldout_ids,self.split=value_phase.split(critic.data,self.options['value_phase']['holdout_fraction'],
+            self.options['value_phase'].get('holdout'))
+        if self.critic_state and not self.critic_state['snapshots_active']:
+            self.train_ids=[i for i in self.train_ids if critic.roles[i]=='learner']
         self.learner_train_ids=[i for i in self.train_ids if i<len(dataset.data)]
         if self.split:self.split['eligible_train_rows']=len(self.train_ids)
         return self.train_ids
@@ -163,11 +217,13 @@ class TrainingPhases:
         actual,report=gae.compute(ds.data,actor_ids,mc,returns,self.state['active_lambda'],self.options['advantage']['shadow_lambdas'],by_table)
         return actual,report
 
-    def after_ppo(self,model,actor_ids,probe_ids,update):
+    def after_ppo(self,model,actor_ids,probe_ids,update,*,critic_steps=0,critic_rows=0):
         self.actor_ids=list(actor_ids);self.probe_ids=list(probe_ids)
         # The PPO report/probes stay bound to the post-PPO weights. A separate
         # final probe is retained for checkpoint metrics after value/teaching.
         self.ppo_probe=update
+        self.ppo_work=dict(source='ppo',optimizer_steps=critic_steps,distinct_rows=critic_rows,
+            scope='Retained PPO steps with nonempty critic batches and positive value_weight; calibration and PPG excluded')
 
     def fit(self,model):
         require(self.dataset is not None and self.probe_ids is not None,'Value phase must follow PPO')
@@ -191,6 +247,10 @@ class TrainingPhases:
             cache['rebuilt_from_replay']=self.buffer.rebuilt
             self.value_report['buffer']=cache
         else:self.value_report=fit()
+        if not self.options['value_phase']['enabled']:
+            self.value_report['critic_training']=copy.deepcopy(self.ppo_work)
+            self.value_report['critic_evidence_origin']=self.critic_evidence['origin']
+            if self.disable_migration:self.value_report['disable_migration']=self.disable_migration
         self.value_report['split']=self.split
         if self.refinement_migration:self.value_report['refinement_migration']=self.refinement_migration
         if self.window_migration:self.value_report['window_migration']=self.window_migration
@@ -198,13 +258,14 @@ class TrainingPhases:
 
     def finish(self,*,generation,update,anchor_gate,rating):
         value=self.value_report;before=self.beta
-        self.trips=(self.trips+[value['kl_guard_tripped']])[-5:]
+        enabled=self.options['value_phase']['enabled']
+        if enabled:self.trips=(self.trips+[value['kl_guard_tripped']])[-5:]
         # A clean iteration must not re-escalate on the same old cap hits.
         # Keep the rolling evidence on resume, but require a new trip to act.
-        if value['kl_guard_tripped'] and sum(self.trips)>=3:
+        if enabled and value['kl_guard_tripped'] and sum(self.trips)>=3:
             self.beta=min(self.options['value_phase']['beta_clone_max'],2*self.beta)
         value.update(beta_clone_next=self.beta,beta_decision='up' if self.beta>before else 'hold',
-            beta_reason=('new_trip_in_three_of_five' if self.beta>before else
+            beta_reason=('ppg_disabled' if not enabled else 'new_trip_in_three_of_five' if self.beta>before else
                          'at_cap' if value['kl_guard_tripped'] and sum(self.trips)>=3 else
                          'no_new_kl_trip' if not value['kl_guard_tripped'] else 'fewer_than_three_trips'),
             kl_trip_window=list(self.trips))
@@ -235,15 +296,19 @@ class TrainingPhases:
         if self.buffer:require(self.buffer.pending is not None,'PPG checkpoint needs the staged cache receipt')
         return dict(contract=self.contract,options=copy.deepcopy(self.options),gae=copy.deepcopy(self.state),
             **({'critic_data':copy.deepcopy(self.critic_state)} if self.critic_state is not None else {}),
+            **({'critic_evidence':copy.deepcopy(self.critic_evidence)} if self.critic_evidence is not None else {}),
             beta_clone=self.beta,kl_trips=copy.deepcopy(self.trips),optimizer=self.optimizer.state_dict(),
             **({'buffer':copy.deepcopy(self.buffer.pending)} if self.buffer else {}))
 
     def committed(self,generation):
         if self.buffer:
             self.value_report['buffer']['committed_cleanup']=self.buffer.committed(generation)
+        elif self.critic_evidence is not None and self.root is not None and self.run is not None:
+            self.value_report['disabled_cache_cleanup']=value_buffer.retire_disabled(self.root,self.run,generation)
         self.collection_source=None
         self.refinement_migration=None
         self.window_migration=None
+        self.disable_migration=None
 
     def release(self):
         self.dataset=None;self.critic_dataset=None;self.snapshot_data=[];self.ppo_probe=None;self.probe_ids=None

@@ -15,16 +15,22 @@ namespace BrassHost
         string[][] cachedWild;
         public long ChoiceCacheHits, ChoiceCacheMisses;
         JObject trainingFork;
-        public object SaveTrainingFork()
+        public object SaveTrainingFork(bool export=false)
         {
             if(Terminal || Phase!="action")throw new InvalidOperationException("fork_requires_action");
             trainingFork=Checkpoint();
+            if(export)return new{revision=Revision,hash=Wire.Hash(Canonical()),checkpoint=trainingFork};
             return new{revision=Revision,hash=Wire.Hash(Canonical())};
         }
         public object ResumeTrainingFork(int? shuffleSeed)
         {
             if(trainingFork==null)throw new InvalidOperationException("missing_training_fork");
             var saved=trainingFork;trainingFork=null;Adopt(Restore(saved));
+            return ShuffleTrainingDeck(shuffleSeed);
+        }
+        public object ShuffleTrainingDeck(int? shuffleSeed)
+        {
+            if(Terminal || Phase!="action")throw new InvalidOperationException("fork_requires_action");
             if(shuffleSeed.HasValue)
             {
                 // Only the unseen deck changes. Hands, public history, wild

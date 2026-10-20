@@ -55,7 +55,12 @@ def build(root=ROOT,mono=None):
                     extra+=f'if(host.ChancePending){{if((int){var}["revision"]!=host.Revision)throw new InvalidOperationException("stale_revision");host.ResolveChance((string){var}["card"]);}}\n'
                     extra+=f'else host.Apply((int){var}["revision"],(string){var}["choice"]);data=host.SearchSnapshot();break;\n'
                 else:
-                    extra+='case "fork_save":data=host.SaveTrainingFork();break;\n'
+                    # A trusted continuation can run on another ordinary lane.
+                    # Restore keeps the fork's request identity/revision so its
+                    # recorded decision remains exact. No checkpoint reaches a policy.
+                    text=replace(text,'else if(op=="restore")',
+                        'else if(op=="fork_restore"){host=Host.Restore((JObject)req["checkpoint"]);data=host.ShuffleTrainingDeck((int?)req["shuffle_seed"]);}\n                    else if(op=="restore")')
+                    extra+=f'case "fork_save":data=host.SaveTrainingFork((bool?){var}["export"]??false);break;\n'
                     extra+=f'case "fork_resume":data=host.ResumeTrainingFork((int?){var}["shuffle_seed"]);break;\n'
                     extra+='case "decision":data=host.Decision();break;\n'
                     extra+=f'case "step_decision":if((string){var}["game_id"]!=host.GameId)throw new InvalidOperationException("stale_game");data=host.StepDecision((int){var}["revision"],(string){var}["choice"],(int?){var}["forced_limit"]??0);break;\n'

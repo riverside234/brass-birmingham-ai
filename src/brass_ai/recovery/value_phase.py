@@ -18,9 +18,28 @@ STRATIFIED_CONTRACT='ppg-value-phase/3.0.0'
 CONTRACT='ppg-value-phase/4.0.0'
 from .critic_holdout import DEFAULT as HOLDOUT_DEFAULT
 STRATIFIED_DEFAULT=dict(LEGACY_DEFAULT,contract=STRATIFIED_CONTRACT,learning_rate=3e-6,holdout=copy.deepcopy(HOLDOUT_DEFAULT))
-DEFAULT=dict(STRATIFIED_DEFAULT,contract=CONTRACT,acceptance_steps=16)
+DEFAULT=dict(STRATIFIED_DEFAULT,contract=CONTRACT,acceptance_steps=16,enabled=False)
 CONFIG_MIGRATION='step5-ppg-refinement/1.0.0'
 INTERVAL_MIGRATION='step5-ppg-acceptance-intervals/1.0.0'
+DISABLE_MIGRATION='step5-ppo-only-critic/1.0.0'
+
+
+def disabled_options(options):
+    """Exact reviewed switch; retain the holdout and every unrelated setting."""
+    result=copy.deepcopy(options)
+    validate(result['value_phase'])
+    result['value_phase']['enabled']=False
+    return result
+
+
+def critic_work(report):
+    """Actual critic optimizer work; never label PPO steps as accepted PPG."""
+    if report.get('enabled',True):
+        return dict(source='ppg',optimizer_steps=report.get('optimizer_steps',0))
+    work=report.get('critic_training',dict(source='ppo',optimizer_steps=0))
+    require(work.get('source')=='ppo' and type(work.get('optimizer_steps')) is int
+        and work['optimizer_steps']>=0,'Invalid PPO critic evidence')
+    return work
 
 
 def stratified(config):return config.get('contract') in (STRATIFIED_CONTRACT,CONTRACT)
@@ -209,7 +228,8 @@ def fit(model,optimizer,dataset,train_ids,heldout_ids,actor_ids,probe_ids,config
         acceptance='kl-safe-interval/1.0.0' if 'acceptance_steps' in config else 'kl-safe-prefix/1.0.0',
         acceptance_steps=config.get('acceptance_steps'),accepted_intervals=0,rejected_intervals=0,interval_reports=[],
         kl_cap=config['kl_cap'],
-        beta_clone=beta,learning_rate=config['learning_rate'],train_rows=len(value_train_ids),heldout_rows=len(heldout_ids),
+        beta_clone=beta,learning_rate=config['learning_rate'] if config['enabled'] else 0.,
+        configured_learning_rate=config['learning_rate'],train_rows=len(value_train_ids),heldout_rows=len(heldout_ids),
         current_train_rows=len(train_ids),previous_train_rows=len(value_train_ids)-len(train_ids),
         distinct_value_rows_used=0,value_presentations=0,clone_presentations=0,
         branch_distinct_rows_used=0,branch_presentations=0,
@@ -220,9 +240,22 @@ def fit(model,optimizer,dataset,train_ids,heldout_ids,actor_ids,probe_ids,config
     elif not value_train_ids or not heldout_ids:report['early_stop_reason']='insufficient_critic_split'
     elif not actor_ids or not probe_ids:report['early_stop_reason']='no_policy_reference'
     if report['early_stop_reason']:
-        if config['enabled']:model.utility_calibration=None
-        report.update(heldout_after=metrics(model,validation_dataset,heldout_ids,update,evidence=True) if config['enabled'] else {},
+        # PPO has moved the shared trunk. Neither a skipped value fit nor
+        # read-only holdout diagnostics can certify its old calibration receipt.
+        model.utility_calibration=None
+        report.update(heldout_after=metrics(model,validation_dataset,heldout_ids,update,evidence=True),
             descriptor_gain=dict(learner_ev_gain=None),role_usage={role:dict(distinct_used=0,presentations=0) for role in ('learner','snapshot')})
+        if not config['enabled']:
+            # Keep the same whole-game holdout for PPO and adoption gates.
+            # Inference only: no clones, cached rows, optimizer or RNG draws.
+            unknown=metrics(model,validation_dataset,heldout_ids,update,unknown=True)
+            from .critic_data import learner_ev
+            true_ev=learner_ev(report['heldout_after']);unknown_ev=learner_ev(unknown)
+            report.update(heldout_unknown=unknown,
+                descriptor_gain=dict(learner_ev_gain=true_ev-unknown_ev
+                    if true_ev is not None and unknown_ev is not None else None),
+                calibration_receipt=None,
+                scope='PPG disabled; current post-PPO whole-game critic holdout diagnostics only; no value optimizer steps or previous rows')
         report['seconds']=time.perf_counter()-began;return report
     clones=clone_indices(dataset,actor_ids,config['clone_rows'])
     reference=RawPolicyReference(model,dataset,sorted(set(clones)|set(probe_ids)),update)

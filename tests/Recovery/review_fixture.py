@@ -1,7 +1,28 @@
 """Synthetic same-feature-version receipts for unit tests, never production approvals."""
+import copy
+from functools import lru_cache
 from unittest.mock import patch
 from brass_ai.learning.contracts import compatibility,digest
 from brass_ai.step5.league import implementation_id
+
+
+@lru_cache(maxsize=1)
+def _current_game():
+    """Four authored rows with native current topology, synthetic terminal labels."""
+    from fe_fixtures import Factory
+    from fixtures import game,rotate
+    factory=Factory()
+    try:view,choices=factory.position()
+    finally:factory.close()
+    episode=game()
+    for i,row in enumerate(episode['records']):
+        v=rotate(view,i);v['context']['revision']=i
+        row.update(seat=v['seat'],view=v,choices=copy.deepcopy(choices),chosen=0)
+        row['behavior']['probability']=1/len(choices)
+    return episode
+
+
+def current_game():return copy.deepcopy(_current_game())
 
 
 def install(test,transitions):

@@ -145,7 +145,7 @@ def policy_encoder(policy,fallback=None):
     return getattr(evaluator,'encoder',fallback)
 
 
-def run_game(host,job,policies,timings,max_decisions,admission=None,encoder=None):
+def run_game(host,job,policies,timings,max_decisions,admission=None,encoder=None,submit_branch=None):
     pins=read_json(CONFIG_DIR/'host-1.0.0.json')
     with timings.phase('host.reset'): context=host.reset(job['seed'])
     if hasattr(host,'enable_fastpath') and not host.fast_checked:host.enable_fastpath()
@@ -170,13 +170,15 @@ def run_game(host,job,policies,timings,max_decisions,admission=None,encoder=None
     lease=TurnLease(admission,timings)
     with ExitStack() as cleanup:
         cleanup.callback(lease.close)
-        result=_run_turns(host,job,assigned,timings,max_decisions,context,game,rngs,encoded,encoder,lease)
+        result=_run_turns(host,job,assigned,timings,max_decisions,context,game,rngs,encoded,encoder,lease,submit_branch)
         packet=getattr(result,'branch_packet',None)
-        if packet is not None:
+        if packet is not None and submit_branch is None:
             from .branching import continue_branch
             child=continue_branch(host,job,result,packet,assigned,timings,max_decisions,encoder,lease)
             result['branches']=[child]
             result.bind(encoded)
+        result.branch_deferred=packet is not None and submit_branch is not None
+        result.branch_packet=None  # private checkpoint is owned by the queue
         teachers=[p.teacher_report(rngs[seat]) for seat,p in enumerate(assigned) if hasattr(p,'teacher_report')]
         if teachers:result.teacher_phases=teachers
         work=[p.work_report(rngs[seat]) for seat,p in enumerate(assigned) if hasattr(p,'work_report')]
@@ -184,7 +186,7 @@ def run_game(host,job,policies,timings,max_decisions,admission=None,encoder=None
         return result
 
 
-def _run_turns(host,job,assigned,timings,max_decisions,context,game,rngs,encoded,encoder,lease):
+def _run_turns(host,job,assigned,timings,max_decisions,context,game,rngs,encoded,encoder,lease,submit_branch=None):
     rewards=[p.config.reward for p in assigned if isinstance(p,MaskedSearchPolicy) and p.config.reward is not None]
     from brass_ai.learning.reward import CostLedger
     ledger=CostLedger(rewards[0]) if rewards else None
@@ -246,7 +248,9 @@ def _run_turns(host,job,assigned,timings,max_decisions,context,game,rngs,encoded
                 # training RNG do not change when branching is enabled.
                 draw=random.Random('select:'+seed_for(game['game_id'],step)).random()
                 if branch_packet is None and draw<job['branching']['rate_per_decision']:
-                    branch_packet=capture(host,game,row,assigned,rngs)
+                    branch_packet=capture(host,game,row,assigned,rngs,portable=submit_branch is not None)
+                    if branch_packet is not None and submit_branch is not None:
+                        submit_branch(branch_packet,{k:v for k,v in game.items() if k not in ('records','result')})
         e=policy_encoder(p,encoder)
         with timings.phase('inputs.encode'): encoded.append(e.encode(view,choices,style,intent,validated=True))
         if ledger is not None:ledger.chosen(view,choices[chosen])
@@ -277,10 +281,53 @@ def _run_turns(host,job,assigned,timings,max_decisions,context,game,rngs,encoded
     return result
 
 
-def _actor(root,host_path,jobs,results,lease,config,mono,lanes,search_channels,admission):
+def _actor(root,host_path,jobs,results,lease,config,mono,lanes,search_channels,admission,actor_index,inboxes):
     root=Path(root);torch.set_num_threads(config['worker_threads'])
     stop=threading.Event();slots=threading.Semaphore(2*lanes)
     with ThreadPoolExecutor(max_workers=1) as writer:
+        def submit_publication(completed,packet,child=None):
+            slots.acquire()
+            def publish():
+                try:
+                    began=time.monotonic()
+                    if child is not None:
+                        from .branch_scheduler import attach_child
+                        require(len(completed)==1,'Branch family must have one parent')
+                        attach_child(completed[0][0],child)
+                    parts=[];part=[];size=0;serialized={}
+                    for item in completed:
+                        value=_ActorSerializedGame(item[0]);serialized[item[0]['game_id']]=value;weight=value.size
+                        if part and size+weight>config.get('shard_bytes',268435456):parts.append(part);part=[];size=0
+                        part.append(item);size+=weight
+                    if part:parts.append(part)
+                    records=[]
+                    for number,part in enumerate(parts,packet['part_start']):
+                        path=Path(packet['prefix']+f'-part-{number:04d}.jsonl.gz')
+                        provenance=dict(producer='recovery/2.1.0',purpose=part[0][1]['provenance']['purpose'],
+                            collection=packet['identity'],recipe=packet['recipe'],
+                            jobs=[dict(index=j['index'],seed=j['seed'],provenance=j['provenance'],
+                                **({'teacher_phases':g.teacher_phases} if hasattr(g,'teacher_phases') else {}),
+                                **({'search_work':g.search_work} if hasattr(g,'search_work') else {})) for g,j,_,_ in part])
+                        write_shard(path,[serialized[g['game_id']] for g,_,_,_ in part],provenance,cache=config.get('feature_cache',False))
+                        receipt=cache_receipt(path);replay_hash=receipt['replay_sha256'] if receipt else sha(path)
+                        for g,j,metrics,telemetry in part:
+                            records.append(dict(job=j['index'],game_id=g['game_id'],path=str(path),sha256=replay_hash,cached=False,
+                                features=receipt,metrics=metrics,search=telemetry,
+                                worker_seconds=g.actor_elapsed_seconds,
+                                actor_python_cpu_seconds=g.actor_python_cpu_seconds,
+                                **({'branch_execution':g.branch_execution} if hasattr(g,'branch_execution') else {}),
+                                **({'teacher_phases':g.teacher_phases} if hasattr(g,'teacher_phases') else {}),
+                                **({'search_work':g.search_work} if hasattr(g,'search_work') else {})))
+                    elapsed=time.monotonic()-began
+                    for record in records:record.update(replay_write_seconds=elapsed/len(completed),replay_write_scope='amortized packet')
+                    results.put(dict(records=records))
+                except BaseException:
+                    stop.set();results.put(dict(error=traceback.format_exc()))
+                finally:slots.release()
+            writer.submit(publish)
+
+        from .branch_scheduler import FamilyMailbox,pack_child
+        families=FamilyMailbox(inboxes[actor_index],results,stop,submit_publication)
         def lane():
             endpoint=[lease.acquire() for _ in range(search_channels)];timings=Timings()
             encoding_cache=share_encoder_cache(endpoint)
@@ -312,12 +359,28 @@ def _actor(root,host_path,jobs,results,lease,config,mono,lanes,search_channels,a
                                 cache.move_to_end(key);policies.append(cache[key])
                             cpu_started=time.process_time()
                             encoding_before=encoding_cache.report()
-                            game=run_game(host,job,policies,timings,config['max_decisions'],admission,
-                                          encoder=endpoint_encoder(endpoint[0]))
+                            started=time.monotonic()
+                            if 'continuation' in packet:
+                                from .branching import continue_branch
+                                from .resources import TurnLease
+                                assigned=[policies[(s-job.get('rotation',0))%4] for s in range(4)]
+                                turn_lease=TurnLease(admission,timings)
+                                try:
+                                    game=continue_branch(host,job,packet['parent'],packet['continuation'],assigned,
+                                        timings,config['max_decisions'],endpoint_encoder(endpoint[0]),turn_lease)
+                                finally:turn_lease.close()
+                            else:
+                                def fork(continuation,parent,packet=packet):
+                                    results.put(dict(fork=dict(packet,continuation=continuation,parent=parent,
+                                        origin_actor=actor_index,queued=time.monotonic())))
+                                game=run_game(host,job,policies,timings,config['max_decisions'],admission,
+                                    encoder=endpoint_encoder(endpoint[0]),submit_branch=fork if packet.get('schedule_token') else None)
+                            finished=time.monotonic()
                             # process_time counts actual Python-process CPU,
                             # including its threads. Multiple simultaneous host
                             # lanes would overlap this interval, so omit them.
                             game.actor_python_cpu_seconds=time.process_time()-cpu_started if lanes==1 else None
+                            game.actor_elapsed_seconds=finished-started
                             after=encoding_cache.report()
                             telemetry={'encoding_cache':dict(
                                 **{k:after[k]-encoding_before[k] for k in ('warm_hit','miss','evictions')},
@@ -332,50 +395,38 @@ def _actor(root,host_path,jobs,results,lease,config,mono,lanes,search_channels,a
                                     entry['host']=p.host.recovery_metrics.report()
                                 if entry: telemetry[str(i)]=entry
                             completed.append((game,job,timings.report(),telemetry))
+                            if packet.get('schedule_token'):
+                                results.put(dict(work_complete=dict(token=packet['schedule_token'],job=job['index'],
+                                    kind='branch' if 'continuation' in packet else 'parent',
+                                    table_kind=job['provenance']['kind'],started=started,finished=finished,
+                                    queued=packet.get('queued',started))))
                             timings=Timings();instrument_host(host,timings)
-                        slots.acquire()
-                        def publish(completed=completed,packet=packet):
-                            try:
-                                began=time.monotonic()
-                                parts=[];part=[];size=0;serialized={}
-                                for item in completed:
-                                    value=_ActorSerializedGame(item[0]);serialized[item[0]['game_id']]=value;weight=value.size
-                                    if part and size+weight>config.get('shard_bytes',268435456): parts.append(part);part=[];size=0
-                                    part.append(item);size+=weight
-                                if part: parts.append(part)
-                                records=[]
-                                for number,part in enumerate(parts,packet['part_start']):
-                                    path=Path(packet['prefix']+f'-part-{number:04d}.jsonl.gz')
-                                    provenance=dict(producer='recovery/2.1.0',purpose=part[0][1]['provenance']['purpose'],
-                                        collection=packet['identity'],recipe=packet['recipe'],
-                                        jobs=[dict(index=j['index'],seed=j['seed'],provenance=j['provenance'],
-                                            **({'teacher_phases':g.teacher_phases} if hasattr(g,'teacher_phases') else {}),
-                                            **({'search_work':g.search_work} if hasattr(g,'search_work') else {})) for g,j,_,_ in part])
-                                    write_shard(path,[serialized[g['game_id']] for g,_,_,_ in part],provenance,cache=config.get('feature_cache',False))
-                                    receipt=cache_receipt(path);replay_hash=receipt['replay_sha256'] if receipt else sha(path)
-                                    for g,j,metrics,telemetry in part:
-                                        records.append(dict(job=j['index'],game_id=g['game_id'],path=str(path),sha256=replay_hash,cached=False,
-                                            features=receipt,metrics=metrics,search=telemetry,
-                                            actor_python_cpu_seconds=g.actor_python_cpu_seconds,
-                                            **({'teacher_phases':g.teacher_phases} if hasattr(g,'teacher_phases') else {}),
-                                            **({'search_work':g.search_work} if hasattr(g,'search_work') else {})))
-                                elapsed=time.monotonic()-began
-                                for record in records:
-                                    record.update(replay_write_seconds=elapsed/len(completed),replay_write_scope='amortized packet')
-                                results.put(dict(records=records))
-                            except BaseException:
-                                stop.set();results.put(dict(error=traceback.format_exc()))
-                            finally: slots.release()
-                        writer.submit(publish)
+                        if 'continuation' in packet:
+                            slots.acquire()
+                            def return_child(completed=completed,packet=packet):
+                                try:
+                                    g,j,metrics,telemetry=completed[0]
+                                    inboxes[packet['origin_actor']].put(dict(key=FamilyMailbox.key(packet),payload=pack_child(g),
+                                        execution=dict(metrics=metrics,search=telemetry,worker_seconds=g.actor_elapsed_seconds,
+                                            actor_python_cpu_seconds=g.actor_python_cpu_seconds)))
+                                except BaseException:
+                                    stop.set();results.put(dict(error=traceback.format_exc()))
+                                finally:slots.release()
+                            writer.submit(return_child)
+                        elif any(getattr(g,'branch_deferred',False) for g,_,_,_ in completed):
+                            families.parent(completed,packet)
+                        else:submit_publication(completed,packet)
             except BaseException:
                 stop.set();results.put(dict(error=traceback.format_exc()))
             finally:
                 for p in cache.values():
                     if hasattr(p,'close'): p.close()
                 for e in endpoint:e.close()
-        with ThreadPoolExecutor(max_workers=lanes) as actors:
-            futures=[actors.submit(lane) for _ in range(lanes)]
-            for future in futures: future.result()
+        try:
+            with ThreadPoolExecutor(max_workers=lanes) as actors:
+                futures=[actors.submit(lane) for _ in range(lanes)]
+                for future in futures:future.result()
+        finally:families.close()
 
 
 class ActorPool:
@@ -386,6 +437,8 @@ class ActorPool:
         self.jobs=self.mp.Queue();self.results=self.mp.Queue()
         self.width=config['heavy_processes'] if heavy else config['processes']
         self.lanes=1 if heavy else config['hosts_per_process']
+        self.inboxes=[self.mp.Queue() for _ in range(self.width)]
+        self.last_collection_report=None;self.duration_estimates={}
 
     def start(self,target=None):
         target=min(self.width,target or self.width)
@@ -399,7 +452,7 @@ class ActorPool:
         lease=self.service.channels((target-len(self.processes))*self.lanes*search_channels)
         for _ in range(target-len(self.processes)):
             p=self.mp.Process(target=_actor,args=(str(self.root),str(self.host),self.jobs,self.results,
-                lease,self.config,self.mono,self.lanes,search_channels,self.service.cpu))
+                lease,self.config,self.mono,self.lanes,search_channels,self.service.cpu,len(self.processes),self.inboxes))
             p.start();self.processes.append(p)
 
     def collect(self,jobs,*,on_records=None):
@@ -420,6 +473,8 @@ class ActorPool:
 
     def _collect(self,jobs,*,on_records=None):
         require(jobs and len({j['index'] for j in jobs})==len(jobs),'Missing/duplicate actor jobs')
+        scheduled=self._branch_scheduling(jobs)
+        self.last_collection_report=None
         records=[];pending=[]
         buckets=defaultdict(list)
         for job in jobs:
@@ -427,6 +482,9 @@ class ActorPool:
             buckets[(str(Path(job['path']).parent),split_for(group))].append(job)
         for bucket in buckets.values():
             size=min(self.config.get('shard_games',1),max(1,len(bucket)//(self.width*self.lanes)))
+            # One schedulable parent per packet: no long sequential packet can
+            # strand ready continuations or hold a complete family unpublished.
+            if scheduled:size=1
             for start in range(0,len(bucket),size):
                 group=bucket[start:start+size]
                 recipe=_collection_recipe(group,self.config);identity=digest(recipe)
@@ -456,6 +514,8 @@ class ActorPool:
                 if missing: pending.append(dict(jobs=missing,prefix=prefix,identity=identity,recipe=recipe,part_start=len(existing)))
         if pending:
             self.start(len(pending))
+            if scheduled:
+                return self._collect_branches(jobs,pending,records,on_records)
             for packet in pending: self.jobs.put(packet)
             outstanding={j['index'] for packet in pending for j in packet['jobs']}
             while outstanding:
@@ -471,6 +531,85 @@ class ActorPool:
                     outstanding.remove(item['job']);records.append(item)
                 if on_records is not None:on_records(record['records'])
                 print(json.dumps(dict(phase='collection',complete=len(records),of=len(jobs),heavy=self.heavy)),flush=True)
+        elif scheduled:
+            from .branch_scheduler import report
+            now=time.monotonic()
+            self.last_collection_report=report([],now,now,0,len(records))
+        return sorted(records,key=lambda r:r['job'])
+
+    def _branch_scheduling(self,jobs):
+        return any(j.get('branching') for j in jobs)
+
+    def _collect_branches(self,jobs,pending,records,on_records):
+        if on_records is None:return self._dispatch_branches(jobs,pending,records,None)
+        # Reader submission can wait on StreamingCollection's bounded slots.
+        # Keep it off the dispatcher so a full reader queue cannot postpone a
+        # newly captured fork or leave ordinary lanes idle. Receipts are small
+        # and bounded by this collection's finite parent-job count.
+        with ThreadPoolExecutor(max_workers=1) as feeder:
+            futures=[]
+            def submit(items):
+                for future in futures:
+                    if future.done():future.result()
+                futures.append(feeder.submit(on_records,items))
+            try:
+                result=self._dispatch_branches(jobs,pending,records,submit)
+                began=time.monotonic()
+                for future in futures:future.result()
+                elapsed=time.monotonic()-began
+                self.last_collection_report['ingress_submission_join_seconds']=elapsed
+                self.last_collection_report['collection_wall_seconds']+=elapsed
+                self.last_collection_report['publication_tail_seconds']+=elapsed
+                return result
+            except BaseException:
+                # Release reader admission before executor shutdown waits for
+                # a submission already blocked on reader backpressure.
+                self.service.cpu.abort()
+                for future in futures:future.cancel()
+                raise
+
+    def _dispatch_branches(self,jobs,pending,records,on_records):
+        from .branch_scheduler import ReadyWork,report
+        started=time.monotonic();token=uuid.uuid4().hex
+        pending=[dict(p,schedule_token=token) for p in pending]
+        ready=ReadyWork(pending,getattr(self,'duration_estimates',{}))
+        outstanding={p['jobs'][0]['index'] for p in pending}
+        workers=len(self.processes)*self.lanes
+        require(workers>0,'Branch scheduling needs live ordinary workers')
+        running=set();forked=set();events=[];cached=len(records)
+        while outstanding or running:
+            while ready and len(running)<workers:
+                packet=ready.pop();key=('branch' if 'continuation' in packet else 'parent',packet['jobs'][0]['index'])
+                require(key not in running,'Duplicate scheduled job')
+                running.add(key);self.jobs.put(packet)
+            try:message=self.results.get(timeout=1)
+            except queue.Empty:
+                self.service.cpu.check()
+                require(all(p.is_alive() for p in self.processes),'Actor process exited before completing its games')
+                require(self.service.error is None,'Inference service failed')
+                continue
+            require('error' not in message,message.get('error','Actor failed'))
+            if 'fork' in message:
+                packet=message['fork'];index=packet['jobs'][0]['index']
+                require(packet['schedule_token']==token and ('parent',index) in running and index not in forked,
+                    'Duplicate, late or foreign branch request')
+                forked.add(index);ready.add_branch(packet)
+            elif 'work_complete' in message:
+                event=message['work_complete'];key=(event['kind'],event['job'])
+                require(event['token']==token and key in running,'Duplicate/foreign completion timing')
+                running.remove(key);events.append(event)
+            else:
+                for item in message['records']:
+                    require(item['job'] in outstanding,'Duplicate/misrouted actor result')
+                    outstanding.remove(item['job']);records.append(item)
+                if on_records is not None:on_records(message['records'])
+                print(json.dumps(dict(phase='collection',complete=len(records),of=len(jobs),heavy=self.heavy)),flush=True)
+        require(not ready and len(forked)==sum(e['kind']=='branch' for e in events),'Unfinished branch work')
+        self.last_collection_report=report(events,started,time.monotonic(),workers,cached)
+        durations=defaultdict(list)
+        for e in events:
+            if e['kind']=='parent':durations[e['table_kind']].append(e['finished']-e['started'])
+        self.duration_estimates={k:sum(v)/len(v) for k,v in durations.items()}
         return sorted(records,key=lambda r:r['job'])
 
     def close(self,failed=False):
@@ -486,6 +625,8 @@ class ActorPool:
         # No pending input messages should be flushed into a failed consumer.
         self.jobs.cancel_join_thread();self.results.cancel_join_thread()
         self.jobs.close();self.results.close()
+        for inbox in getattr(self,'inboxes',()):
+            inbox.cancel_join_thread();inbox.close()
 
     def __enter__(self): return self
     def __exit__(self,kind,*_): self.close(failed=kind is not None)

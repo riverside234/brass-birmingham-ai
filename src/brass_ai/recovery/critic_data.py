@@ -166,6 +166,8 @@ def recovery_console(report):
 
 
 def advance(s,c,*,generation,report,healthy,fingerprint_now,ppo_snapshot_rows=0):
+    from .value_phase import critic_work
+    work=critic_work(report)
     s=copy.deepcopy(validate_state(s,c,generation-1));before=s['snapshots_active'];weight=s['snapshot_weight']
     metrics=report.get('heldout_after',{});ev=learner_ev(metrics);gain=report.get('descriptor_gain',{}).get('learner_ev_gain')
     value_snapshot_rows=(report.get('role_usage',{}).get('snapshot',{}).get('distinct_used',0)
@@ -183,7 +185,7 @@ def advance(s,c,*,generation,report,healthy,fingerprint_now,ppo_snapshot_rows=0)
     # unhealthy iteration, reduction, or successful stage change clears it.
     recovery['healthy_streak']=0
     if not before and c['snapshot_rows'] and c['rollout']['mode']=='auto':
-        if healthy and report.get('optimizer_steps',0)>0 and valid(ev) and valid(gain) and gain>=c['rollout']['descriptor_ev_min_gain']:
+        if healthy and work['optimizer_steps']>0 and valid(ev) and valid(gain) and gain>=c['rollout']['descriptor_ev_min_gain']:
             s.update(snapshots_active=True,learner_ev_baseline=ev,activation_generation=generation)
             decision='enable_snapshots';reason='heldout_descriptor_gain_and_health'
     elif before:
@@ -214,7 +216,7 @@ def advance(s,c,*,generation,report,healthy,fingerprint_now,ppo_snapshot_rows=0)
     if fingerprint_now is not None:s['previous_fingerprint']=fingerprint_now['values']
     s['generation']=generation
     validate_state(s,c,generation)
-    return s,dict(snapshot_rows_used=trained,snapshot_rows_enabled=before,
+    return s,dict(snapshot_rows_used=trained,snapshot_rows_enabled=before,critic_training=work,
         ppo_snapshot_distinct_used=ppo_snapshot_rows,value_snapshot_distinct_used=value_snapshot_rows,
         snapshot_rows_next=s['snapshots_active'],weight_used=weight,
         weight_next=s['snapshot_weight'],decision=decision,reason=reason,learner_heldout_ev=ev,

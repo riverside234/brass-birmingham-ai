@@ -71,7 +71,8 @@ class Continuation(unittest.TestCase):
         self.assertEqual(new['value_phase']['kl_cap'],.002)
         self.assertEqual(new,value_phase.refined_options(new));validate_config(old);validate_config(new)
         fresh=latest_model_config(old,old['imitation_checkpoint'])
-        self.assertEqual(fresh,gae.health_options(value_phase.interval_options(new)))
+        from brass_ai.recovery.exploration import configure
+        self.assertEqual(fresh,value_phase.disabled_options(configure(gae.health_options(value_phase.interval_options(new)))))
         self.assertEqual(read(SOURCE_ROOT/'configs/step5/joint7-latest.json')['value_phase'],value_phase.DEFAULT)
         for update in (dict(learning_rate=7e-6),dict(holdout=dict(holdout.DEFAULT,extra=True))):
             bad=copy.deepcopy(new);bad['value_phase'].update(update)

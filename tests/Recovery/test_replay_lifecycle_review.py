@@ -91,13 +91,13 @@ class ReplayLifecycleReviewTests(unittest.TestCase):
         self.assertIs(ingress._admission,previous)
 
     def test_partial_collection_reuses_durable_shard_and_publishes_complete_membership(self):
-        from fixtures import game
+        from review_fixture import current_game as game
         pool=self.pool();pool.width=pool.lanes=1;pool.heavy=False
         pool.config=dict(shard_games=2,feature_cache=False)
         pool.results=queue.Queue();pool.start=Mock()
         with tempfile.TemporaryDirectory(dir=SOURCE_ROOT/'artifacts') as temp:
             directory=Path(temp);seeds=seeds_for(17100000,2)[0]
-            jobs=[dict(index=i,seed=seed,path=str(directory/f'actor-{i}.jsonl.gz'),
+            jobs=[dict(index=i,seed=seed,path=str(directory/f'actor-{i}.jsonl.gz'),policies=[dict(kind='random')]*4,
                 provenance=dict(purpose='training',seed=seed,policy='frozen-behavior')) for i,seed in enumerate(seeds)]
             recipe=_collection_recipe(jobs,pool.config)
             identity=digest(recipe);prefix=directory/('games-'+identity[:16])

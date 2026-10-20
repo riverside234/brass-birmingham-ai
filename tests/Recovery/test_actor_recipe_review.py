@@ -13,7 +13,7 @@ from brass_ai.learning.contracts import SOURCE_ROOT, digest
 from brass_ai.learning.replay import split_for
 from brass_ai.recovery.execution import ActorPool, neural_spec
 from brass_ai.recovery.replay import read_shards, write_shard
-from fixtures import game
+from review_fixture import current_game as game
 
 
 class ActorRecipeReviewTests(unittest.TestCase):

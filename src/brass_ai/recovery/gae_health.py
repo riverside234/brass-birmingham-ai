@@ -26,7 +26,7 @@ def validate(state,gate,generation):
     return state
 
 
-def advance(state,gate,*,generation,stage_origin,healthy,accepted_steps):
+def advance(state,gate,*,generation,stage_origin,healthy,accepted_steps,source='ppg'):
     state=copy.deepcopy(validate(state,gate,generation-1))
     require(type(healthy) is bool and type(accepted_steps) is int and accepted_steps>=0,
         'Invalid GAE stage measurements')
@@ -42,9 +42,10 @@ def advance(state,gate,*,generation,stage_origin,healthy,accepted_steps):
     if len(good)!=len(rows):reasons.append('unhealthy_iteration_in_window')
     if steps<gate['minimum_accepted_steps']:reasons.append('accepted_steps_insufficient')
     if contributors<gate['minimum_value_iterations_in_window']:reasons.append('accepted_iterations_insufficient')
-    return state,dict(contract=CONTRACT,origin=state['origin'],window_start=rows[0]['generation'] if rows else None,
+    require(source in ('ppo','ppg'),'Unknown GAE critic evidence source')
+    return state,dict(contract=CONTRACT,origin=state['origin'],source=source,window_start=rows[0]['generation'] if rows else None,
         window_end=generation,observed_iterations=len(rows),required_iterations=gate['window_iterations'],
         healthy_iterations=len(good),accepted_steps=steps,
         required_accepted_steps=gate['minimum_accepted_steps'],accepted_iterations=contributors,
         required_accepted_iterations=gate['minimum_value_iterations_in_window'],ready=not reasons,reasons=reasons,
-        scope='Current lambda stage, committed rolling window; accepted PPG work from healthy iterations only; zero accepted steps alone do not reset health')
+        scope='Current lambda stage, committed rolling window; retained '+source.upper()+' critic work from healthy iterations only; zero steps alone do not reset health')

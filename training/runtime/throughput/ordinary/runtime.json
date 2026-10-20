@@ -476,7 +476,7 @@
     },
     {
       "name": "BrassHost.exe",
-      "sha256": "396d90b8c00b3da3856d315cd735e871acb5f589d02497c5ba95da3d7eade2d3"
+      "sha256": "3fedd90a52afaaf227bac461bd57d7c47522a40235b66163d61f78f7fb3c9245"
     }
   ],
   "optimization": "training-host/1.0.0",
@@ -489,8 +489,8 @@
     "src/BrassHost/Observation.cs": "7162102e3b12613842d17e4ca1c24ba9837053eba955b4513ba134c3f49841c5",
     "src/BrassHost/Position.cs": "e587837815c74df3c275858e0df0e36e8b3db35182f3743bc5c53fc31e84f464",
     "src/BrassHost/Program.cs": "213b12b755efb61e5b774781b0885cc4b5b08b8c3caba01ed7b2477b64d6a0c6",
-    "src/BrassTrainingHost/FastHost.cs": "4c7821cd71534220e7b1f3eeefad567f2c913aa838cb579d672008a0fb464231",
+    "src/BrassTrainingHost/FastHost.cs": "c26c429d37f4ad0cf05fa85d0e690e39751780b8c8a46f11cd4855f8be830fca",
     "scripts/build-search-host.py": "98be13cd09bf7960b3c94c5103c1e2934111e1733ed9508da6855dbdbd76ab87"
   },
-  "builder_sha256": "e8daaf4fe703db6960580082ae4b318cf7982a40b97059ae6f4076d11149e17a"
+  "builder_sha256": "9bd97ab39d59dd594d90bc2feddb592d997f176a51798ef75d7fcec78f628dab"
 }

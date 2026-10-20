@@ -95,7 +95,7 @@ def validate_state(state,config,generation):
     return state
 
 
-def advance(state,config,*,generation,metrics,healthy,value_updated):
+def advance(state,config,*,generation,metrics,healthy,value_updated,source='ppg'):
     state=copy.deepcopy(validate_state(state,config,generation-1));groups=metrics.get('groups',{})
     tables={kind:copy.deepcopy(groups.get('table:'+kind+'/role:learner',{}).get('ev_evidence')) for kind in TABLES}
     state['entries']=(state['entries']+[dict(generation=generation,healthy=bool(healthy),
@@ -120,11 +120,12 @@ def advance(state,config,*,generation,metrics,healthy,value_updated):
         if supported and not ev_ok:reasons.append('ev_below_selfplay_tolerance')
         if not fresh:reasons.append('no_fresh_mixed_sample')
         if not healthy:reasons.append('health_not_ready')
-        reports[kind]=dict(contract=CONTRACT,origin=state['origin'],window_iterations=config['window_iterations'],
+        require(source in ('ppo','ppg'),'Unknown mixed-table critic evidence source')
+        reports[kind]=dict(contract=CONTRACT,origin=state['origin'],source=source,window_iterations=config['window_iterations'],
             window_start=state['entries'][0]['generation'],window_end=generation,
             contributing_iterations=len(paired),contributing_generations=[e['generation'] for e in paired],
             value_iterations=updates,minimum_games=config['minimum_games'],minimum_iterations=config['minimum_iterations'],
             minimum_value_iterations=config['minimum_value_iterations'],mixed=mixed,selfplay=reference,
             fresh=fresh,current_healthy=bool(healthy),supported=supported,ev_ok=ev_ok,ready=bool(healthy and fresh and ev_ok),reasons=reasons,
-            scope='Pooled row-weighted online EV at each iteration\'s accepted post-value weights; same contributing iterations for self-play; distinct whole-game support, learner seats only; not current-model re-evaluation or independent confidence bounds')
+            scope='Pooled row-weighted online EV at retained post-'+source.upper()+' weights; same contributing iterations for self-play; distinct whole-game support, learner seats only; not current-model re-evaluation or independent confidence bounds')
     return state,reports

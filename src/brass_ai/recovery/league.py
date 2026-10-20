@@ -326,6 +326,8 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                         if legacy: records+=heavy.collect(legacy,on_records=prepared_collection.submit)
                     load_began=time.monotonic();ingress_metrics={}
                     games,learner_data,diagnostics=prepared_collection.finish(records,ingress_metrics)
+                if normal and ordinary.last_collection_report is not None:
+                    diagnostics['exploration_metrics']['branching']['scheduling']=ordinary.last_collection_report
                 all_games=games
                 sample_groups={g['game_id']:kind_by_group[g['setup_group']] for g in all_games}
                 games=[g for g in all_games if 'branch' not in g]
@@ -563,13 +565,13 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                     gate=update['gae']['gate']
                     controller_line+=f' GAE={gate["lambda_used"]:.2f}->{gate["lambda_next"]:.2f} value_steps={value_report["optimizer_steps"]}'
                     controller_line+=f'/{value_report["attempted_steps"]} value_stop={value_report["early_stop_reason"] or "none"}'
-                    controller_line+=f' value_lr={value_report["learning_rate"]:.2g}'
+                    controller_line+=(f' value_lr={value_report["learning_rate"]:.2g}' if value_report['enabled'] else ' PPG=off')
                     if value_report.get('acceptance_steps'):
                         controller_line+=f' value_intervals={value_report["accepted_intervals"]}/{len(value_report["interval_reports"])}'
                     stage=gate.get('stage_evidence')
                     if stage:
                         controller_line+=(f' GAE-health={gate["healthy_streak"]}/{stage["required_iterations"]}'
-                            f' PPG-window={stage["accepted_steps"]}steps/{stage["accepted_iterations"]}iters')
+                            f' {stage.get("source","ppg").upper()}-critic-window={stage["accepted_steps"]}steps/{stage["accepted_iterations"]}iters')
                     split=value_report.get('split') or {}
                     v4_holdout=split.get('by_table',{}).get('legacy')
                     if v4_holdout:controller_line+=f' v4_holdout={v4_holdout["heldout_games"]}/{v4_holdout["games"]}'

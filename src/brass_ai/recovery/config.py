@@ -334,6 +334,7 @@ def latest_model_config(config,imitation_checkpoint):
     result['critic_data']=copy.deepcopy(CRITIC_DATA)
     result['seat_descriptors']=copy.deepcopy(SEAT_DESCRIPTORS)
     result.setdefault('value_phase',dict(copy.deepcopy(VALUE_PHASE),learning_rate=.5*result['learning_rate']))
+    result['value_phase']['enabled']=False
     result.setdefault('table_plan',copy.deepcopy(TABLE_PLAN))
     result.setdefault('opponent_pool',copy.deepcopy(OPPONENT_POOL))
     result.setdefault('rating',copy.deepcopy(RATING))
@@ -482,7 +483,7 @@ def validate_config(config):
         fields.update(('critic_data','seat_descriptors'))
         validate_critic(config['critic_data']);validate_descriptors(config['seat_descriptors'])
         require(config.get('architecture')==ARCHITECTURE and quality_selfplay_recipe(config)
-            and config.get('value_phase',{}).get('enabled') and 'il_kl_limit' in config,
+            and 'value_phase' in config and 'il_kl_limit' in config,
             'Opponent critic rows require fresh v11.2 quality-pool training and fixed IL probe')
         require(config['value_phase']['holdout_fraction']==config['critic_data']['holdout_fraction']
             and config.get('advantage',{}).get('table_gate') is not None,'Critic holdout/GAE table contract differs')
@@ -504,8 +505,8 @@ def validate_config(config):
                     config['retention']['replay_rounds']>=2,'Two-iteration PPG requires at least 2 replay rounds')
     require(('advantage' in config)==('value_phase' in config),'GAE/value configuration blocks must be supplied together')
     if config.get('advantage',{}).get('gate',{}).get('mode')=='auto':
-        require(config['value_phase']['enabled'] and 'il_kl_limit' in config and config.get('rating',{}).get('enabled'),
-                'Automatic GAE requires the value phase, calibrated health and scheduled ratings')
+        require('il_kl_limit' in config and config.get('rating',{}).get('enabled'),
+                'Automatic GAE requires critic holdout diagnostics, calibrated health and scheduled ratings')
     if 'v4_search_enabled' in config:
         fields.add('v4_search_enabled');v4_search_enabled(config)
     if 'learning_rate_warmup' in config:
