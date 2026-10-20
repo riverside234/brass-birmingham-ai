@@ -10,6 +10,13 @@ Use the maintained [scripts/pfsp_sim.py](../../scripts/pfsp_sim.py) for future e
 
 Current 320 ordinary games × 45% history = 144 history tables per iteration:
 
+The v4 win-share gate added on 2026-10-20 changes 160/144/16 tables to
+170/144/6 after qualification. History remains exactly 144 tables and 576
+pairwise comparisons, so the simulation's `--history-share 0.45` input and
+PFSP half-life/capacity settings remain applicable. The planner regression
+checks identical historical opponent draws and probabilities across this
+gate; no PFSP rate rescaling is needed.
+
 ```bash
 python scripts/pfsp_sim.py --games 320 --history-share 0.45 \
   --output results/pfsp-history45.json

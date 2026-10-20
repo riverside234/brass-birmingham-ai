@@ -74,7 +74,7 @@ def render(report, output, *, preview=None):
         fig.add_artist(FancyBboxPatch((.044,.078),.912,.686,boxstyle='round,pad=0,rounding_size=.012',
             transform=fig.transFigure,facecolor='white',edgecolor='#E0E7E6',linewidth=.85,zorder=0))
         ax=fig.add_axes([.099,.184,.785,.502],facecolor='white')
-        ax.set_axisbelow(True);ax.grid(axis='y',color=grid,linewidth=.8)
+        ax.set_axisbelow(True);ax.grid(axis='both',color=grid,linewidth=.8)
         for spine in ('left','right','top'):ax.spines[spine].set_visible(False)
         ax.spines['bottom'].set_color('#D1DCDC');ax.spines['bottom'].set_linewidth(.8)
         ax.tick_params(axis='both',length=0,pad=9,labelsize=9)

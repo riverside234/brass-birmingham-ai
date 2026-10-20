@@ -29,13 +29,18 @@ class V4SearchDisabled(unittest.TestCase):
         self.assertEqual(old,before)
         allowed={'selfplay_recipe','curriculum','population','table_plan','opponent_pool','rating','v4_search_enabled',
                  'evaluation_schedule','rehearsal_sampling','rehearsal_floor','advantage','value_phase',
-                 'architecture','critic_data','seat_descriptors'}
+                 'architecture','critic_data','seat_descriptors','v4_share_gate',
+                 'il_kl_limit','insolvency','search','exploration'}
+        from brass_ai.recovery.exploration import BLOCKS
+        allowed.update(BLOCKS)
         self.assertTrue({k for k in set(old)|set(new) if old.get(k)!=new.get(k)}<=allowed)
         self.assertFalse(new['v4_search_enabled']);self.assertFalse(new['teacher_enabled'])
         self.assertEqual(new['evaluation_schedule'],dict(old['evaluation_schedule'],enabled=False))
         self.assertTrue(new['rating']['enabled'])
         self.assertEqual(new['imitation_checkpoint'],old['imitation_checkpoint'])
         self.assertEqual(new['rehearsal_manifest'],old['rehearsal_manifest'])
+        self.assertEqual(new['learning_rate'],old['learning_rate'])
+        self.assertEqual(new['update'],old['update'])
         self.assertEqual(new['curriculum'],[dict(until=None,selfplay=50,historical=45,legacy=5)])
         from brass_ai.recovery.quality_config import maximum_members
         self.assertEqual(maximum_members(new['opponent_pool']),24)
@@ -44,6 +49,7 @@ class V4SearchDisabled(unittest.TestCase):
 
     def test_boolean_validation_and_old_configs_are_not_silently_changed(self):
         c=config();old=copy.deepcopy(c);old.pop('v4_search_enabled')
+        old.pop('v4_share_gate')
         self.assertTrue(v4_search_enabled(validate_config(old)))
         self.assertNotIn('v4_search_enabled',old)
         for value in (None,0,1,'false',{},[]):
@@ -81,7 +87,7 @@ class V4SearchDisabled(unittest.TestCase):
             self.assertEqual(planned['context_counter'],960)
             for j in planned['jobs']:
                 learners=[p for p in j['policies'] if p.get('model_id')=='learner']
-                self.assertTrue(all(p['exploration']==.08 for p in learners))
+                self.assertTrue(all(p['exploration']==c['exploration'] for p in learners))
                 self.assertEqual(len(learners),4 if j['provenance']['kind']=='selfplay' else 2)
                 if j['provenance']['kind']=='legacy':
                     self.assertEqual(j['provenance']['legacy_mode'],'fast')

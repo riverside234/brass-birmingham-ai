@@ -101,6 +101,8 @@ def check_signature(state, signature, reviewed=False):
             handlers[HEALTH_MIGRATION]=health_options
             from .value_phase import DISABLE_MIGRATION,disabled_options
             handlers[DISABLE_MIGRATION]=disabled_options
+            from .v4_share import MIGRATION as V4_SHARE_MIGRATION,configure as configure_v4_share
+            handlers[V4_SHARE_MIGRATION]=configure_v4_share
             from .exploration import MIGRATION as EXPLORATION_MIGRATION,continuation_config
             handlers[EXPLORATION_MIGRATION]=continuation_config
             for migration in migrations:

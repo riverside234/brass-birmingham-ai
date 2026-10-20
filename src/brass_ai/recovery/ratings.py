@@ -1,4 +1,4 @@
-"""Immutable held-out rating slots; never used by PPO or history sampling."""
+"""Immutable held-out rating slots; never PPO rows or PFSP sampling scores."""
 import copy
 import json
 from pathlib import Path
@@ -266,7 +266,7 @@ def alerts(report,state,panels,previous_panels):
     slipping=len(series)>=3 and series[-3]>series[-2]>series[-1]
     return dict(regression=bool(current['points_ci95'][1]<best_rating-50),candidate=latest,best=best,
         regression_threshold_points=50,v4_watch=slipping,v4_recent_win_shares=series[-3:],
-        v4_watch_action='Review three-slot decline; training mixture stays 50/45/5',
+        v4_watch_action='Review three-slot decline; no automatic increase or rollback of the ordinary v4 share',
         highest_lower_bound=max(checkpoints,key=lambda a:report['ratings'][a]['points_ci95'][0]),
         deployment_choice=None,deployment_status='Pending separate panel review; no automatic publication')
 

@@ -103,7 +103,10 @@ class SourceReviewTests(unittest.TestCase):
 class CompactResumeTests(audit_checks.AuditResumeTests):
     def signatures(self):
         old, new = super().signatures()
-        old['implementation'] = '40ef5e2adf1903f4ab6e473599c8c9a50a35c5cfaf5320d6e70fe2c353660a52'
+        # Use a reviewed source with the current model compatibility. The old
+        # fixture hash predates architecture revisions and is not an admission
+        # route for checkpoints authored with today's model tensors.
+        old['implementation'] = 'fd908ff8b5e073b2744b8a034dd7304a2803a5c6ad1d75dd9e0be6c67640fd08'
         return old, new
 
 

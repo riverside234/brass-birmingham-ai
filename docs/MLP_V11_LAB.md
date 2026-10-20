@@ -142,13 +142,30 @@ Validation on 18 October: **27 focused checks passed**, covering train-only inde
 
 Use your actual completed v11.1 path for the upgrade, and the new v11.2 handoff path for config generation and training. The shipped `joint7-latest.json` is a template; `configure` binds the selected IL checkpoint and its rehearsal manifest instead of importing the template's historical lineage.
 
-The new `latest-model-selfplay/3.0.0` recipe uses the same quotas from game zero onward:
+The `latest-model-selfplay/3.0.0` recipe starts with these base quotas. Fresh configs now include the v4 share gate described below:
 
 | Tables | Quota | Learners | Frozen opponents |
 | --- | ---: | ---: | --- |
 | Self-play | 50% | 4 | None |
 | History | 45% | 2 | 2 independently sampled history policies |
 | v4 | 5% | 2 | 2 search-free v4 bots |
+
+Once the latest completed **v4 rating panel** exceeds **95% learner win share**, the next collection uses **170 self-play / 144 history / 6 v4 games**, or **53.125% / 45% / 1.875%**. This is the existing one-learner/three-v4 evaluation panel (32 games, eight setups at the current cadence), with official ties. Exactly 95% does not pass. The reduction is persisted before collection and never automatically reversed. No extra evaluation games run, and deployment still requires review.
+
+To adopt this gate and the **8/8/2 critic holdout** in the current run while retaining PPO-only training:
+
+```bash
+python scripts/joint7-v4-share.py && \
+python scripts/step5.py \
+  --config configs/step5/joint7-v11-2-grouped-lr-critic-v4-share.json train \
+  --run artifacts/step5/joint7-v11-2-grouped-lr-critic \
+  --imitation-run artifacts/step5/features4-v11-2-batch7-il \
+  --resume-reviewed-source --iterations 20
+```
+
+The helper reads the committed run and preserves its unrelated settings. If its output filename already contains a different config, select an unused `--output` path and use that path to train. The old PPG-only disable helper below is retained for runs that do not want this gate/holdout revision. Fresh config generation includes both by default. See [gate behavior, continuation and validation](../ai-research/V4_SHARE_GATE_REVISION.md).
+
+After the share gate passes, learner trajectories increase from 960 to **980**, while PFSP remains at **144 history tables / 288 opponent seats / 576 pairwise comparisons**. History indices, seeds, learner pairs and opponent sampling probabilities are unchanged; no estimator rescaling is required. The six remaining v4 games cover all six learner pairs once and all five admitted bot variants across twelve opponent seats. LR-controller evidence resets through its existing actual-composition check; its multiplier and optimizer state remain intact. Reports and compact history retain `v4_share_gate` and effective table counts.
 
 At 320 games this is **160 / 144 / 16 ordinary tables**, or **640 / 288 / 32 learner seat trajectories: 960 total** before forced-action filtering. Branch continuations do not advance these counts. Each mixed table type cycles deterministically through the six learner seat pairs, carrying its position across iterations/resumes. History uses each pair exactly 24 times per iteration; 16 v4 tables use each pair two or three times, balancing over successive iterations. Exact equality across six pairs is impossible for 16 tables. Ordinary neural learners and frozen historical seats both use **epsilon 0.03, q v3**. Temperature is **1.5 for each seat's first two action decisions**, then **1.0**; intervening subdecisions stay at 1.0. Evaluation remains epsilon zero with no opening schedule. There is no v4 curriculum/boost window or later fast-to-searched transition. `v4_search_enabled=false` disables MCTS in all ordinary and scheduled self-play evaluation v4 seats, including held-out profiles. The bots use their existing incumbent-only policy. The one-second search budget is stored but inactive; cancellation and failure watchdogs remain active. Existing signed configs retain their previous behavior until explicitly migrated.
 
@@ -160,7 +177,7 @@ The PFSP historical pool holds **pinned IL + at most 16 scored snapshots before 
 
 ## Opponent critic rows and seat descriptors
 
-Only nonforced **current learner** decisions train the actor. The critic uses all learner decisions, including forced ones, plus scored snapshot decisions after its gate opens. IL/gen0 and v4 decision rows never train either. Learner rows from history/v4 tables remain eligible. A 5% game-id hash holdout excludes every seat in those games from all critic fitting; their learner decisions can still train the actor. A frozen snapshot with the same weights as the learner is distinguished by its behavior-policy identity.
+Only nonforced **current learner** decisions train the actor. The critic uses all learner decisions, including forced ones, plus scored snapshot decisions after its gate opens. IL/gen0 and v4 decision rows never train either. Learner rows from history/v4 tables remain eligible. Current whole-game holdouts select **8 self-play, 8 history and 2 v4 games per 320**, before and after the v4-share gate. They exclude every seat and branch in those game families from all critic fitting; learner decisions can still train the actor. A frozen snapshot with the same weights as the learner is distinguished by its behavior-policy identity.
 
 Each recorded table carries four descriptors, reordered into the observing seat's relative order: five role flags, clipped log-scaled generation lag, and 28 style values. The fingerprint contains eight action-family masses and six build-conditional industry masses for each era. Nonempty groups sum to one; absent eras/builds report zero groups. Learner fingerprints use one incoming raw-temperature-1 pass over the fixed IL validation action rows each iteration. Snapshot fingerprints are cached at admission, IL once, and v4 fingerprints use the probe's recorded choices without additional games. Unknown descriptors have only the unknown role set.
 
@@ -216,7 +233,7 @@ Activation also requires **ten consecutive healthy iterations** (final economy/p
 
 These are row-weighted **online EV measurements from successive retained post-PPO models** (post-value when PPG is explicitly enabled), not a re-evaluation of all old positions using the latest model or independent confidence bounds. The checkpoint stores only game IDs and moments, capped at 20 iterations; evidence pooling adds no tensor cache or model inference. Whole-game holdout exclusions remain unchanged. Qualification takes effect next iteration, persists across restart and follows subsequent self-play lambda stages. Qualification can precede the first lambda below 1. Reports distinguish the qualification `origin` from `effective_stage_origin`; the 30-iteration review age counts actual collections at the current lambda stage, beginning at the later of qualification and that stage's origin. A later lambda stage begins its own review age. Review common PL rating evidence and by-table advantage spread; no automatic rollback or additional evaluations are introduced.
 
-The following PPG training/cache details describe **explicitly enabled historical recipes**. Current defaults skip this phase and its cache. With PPG enabled, the value phase runs after PPO, using the current iteration plus the previous committed iteration's critic-train rows. The first iteration has only current rows. `value_phase.buffer_iterations=2` retains that optional configuration; it has no effect while disabled. In either mode, deterministic whole-game selection within each table type (nominal **5%**, minimum **two games per type** when feasible) excludes all seats from those games from PPO critic batches, head-only utility calibration and any value-phase fitting. Their nonforced rows remain eligible for actor losses. This is a critic holdout, not a completely untouched policy evaluation set. Small collections can have no held-out games; missing EV cannot satisfy an adoption gate.
+The following PPG training/cache details describe **explicitly enabled historical recipes**. Current defaults skip this phase and its cache. With PPG enabled, the value phase runs after PPO, using the current iteration plus the previous committed iteration's critic-train rows. The first iteration has only current rows. `value_phase.buffer_iterations=2` retains that optional configuration; it has no effect while disabled. Archived v2 holdouts used nominal **5%** and a minimum of two games per type. Current v3 holdouts use **8/8/2 per 320 parent games**, scaling for other collection sizes while leaving a training game in every represented stratum. In either mode, all seats in held-out families are excluded from PPO critic batches, head-only utility calibration and any value-phase fitting. Their nonforced rows remain eligible for actor losses. This is a critic holdout, not a completely untouched policy evaluation set. Small collections can have no held-out games; missing EV cannot satisfy an adoption gate.
 
 The previous rows live in `<run>/.ppg-value-cache/` as checksummed NumPy memory-mapped arrays. Cache only the critic inputs: state, one real legal candidate, seat mapping, MC/utility/remaining-cost targets, true descriptors, role/table labels, descriptor generation and game/phase identity. Forced rows are included; hash-held-out games are never cached. Previous behavior probabilities never enter PPO, GAE, head-only ordinary calibration, clone references or policy probes. Cloning and holdout validation continue to use current rows only. The batch mixes current and previous critic rows without duplicating either population within an epoch.
 
@@ -237,7 +254,7 @@ Each iteration and compact history retain `actor.gae` (lambda, TD-error spread, 
 ## PFSP history opponents
 
 The PPG refinement uses **3e-6 value LR** and stratifies whole-game critic
-holdouts: at 320 games and 50/45/5, **8 self-play / 7 history / 2 v4 games**.
+holdouts: the archived v2 contract selected **8 self-play / 7 history / 2 v4 games** at 320 games and 50/45/5. The current v3 quota contract selects **8 / 8 / 2** at both 160/144/16 and 170/144/6 ordinary tables; branches inherit their parent's holdout. Its reviewed continuation resets EV evidence windows while preserving attained GAE stages, snapshot weight and optimizer/training state.
 All their seats stay out of every critic fit/cache, while actor training keeps
 eligible actions. Old explicit configs retain their hash split and base value
 LR until the reviewed migration. That migration preserves both Adam states,
@@ -277,7 +294,7 @@ Keep the runtime under `artifacts/legacy-ai/search/<rated-runtime-id>/` for the 
 
 The MAP model fixes IL theta at zero, uses agent priors N(0, 2²), and four zero-sum seat effects with priors N(0, 0.5²). Official residual ties use a seeded shuffle. Every slot refits all main games with L-BFGS and runs 200 setup-cluster bootstrap refits, preserving pairing across slots and rotations. Reports give 173.7×theta points, 95% intervals, seat-neutral outrank probabilities versus IL/v4, and paired difference intervals. Only a difference interval excluding zero supports a directional strength claim within this model. The nominal intervals require adequate real-game evidence; neither ±40 points nor actual 95% coverage is guaranteed.
 
-Committed compact games, slot specifications, fit reports, panel results, bootstrap arrays and `progress.svg` live under `ratings/slots/generation-NNNNNN/`. Rating work finishes before further PPO on resume; an interrupted slot reuses verified games. Reports flag a new upper interval more than 50 points below the best point estimate and a strict decline in v4 win share over three slots. **The mixture stays 50/45/5. Deployment qualification requires manual panel review; no model is automatically deployed or published.** The highest lower-bound candidate is reported as a review aid.
+Committed compact games, slot specifications, fit reports, panel results, bootstrap arrays and `progress.svg` live under `ratings/slots/generation-NNNNNN/`. Rating work finishes before further PPO on resume; an interrupted slot reuses verified games. Reports flag a new upper interval more than 50 points below the best point estimate and a strict decline in v4 win share over three slots. The decline remains a manual-review warning, with no automatic increase or reversal of the v4 share gate. **Deployment qualification requires manual panel review; no model is automatically deployed or published.** The highest lower-bound candidate is reported as a review aid.
 
 With automatic retention enabled, full rating folders cover the **most recent 100 committed training iterations**: normally ten rating folders at the every-ten-iteration cadence. At generation 110, generation 10 is retired and generations 20–110 remain. Before cleanup, older compact outcomes and panel summaries are consolidated into one checksummed `ratings/history-<digest>.json`, referenced by `state.json` under `ratings.archive`. Cumulative PL fits, paired bootstrap refits, alerts and resume still use all outcomes. Older full reports, curves, bootstrap arrays and sampled replays are cleaned through the existing retention/quarantine mechanism; explicit pins are honored. Required rated model checkpoints remain protected. The latest fit is always kept, including with a custom rating interval over 100. This change applies to rating output folders; existing exported `results/` bundles are untouched.
 

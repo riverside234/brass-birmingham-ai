@@ -31,9 +31,9 @@ class Selection(unittest.TestCase):
     def test_320_games_exact_quotas_order_rng_and_all_seats(self):
         data=rows();rng=torch.get_rng_state().clone();python_rng=random.getstate()
         train,held,report=value_phase.split(data,.05,holdout.DEFAULT)
-        self.assertEqual({k:r['heldout_games'] for k,r in report['by_table'].items()},dict(selfplay=8,historical=7,legacy=2))
-        self.assertEqual(report['heldout_games'],17);self.assertEqual(report['train_games'],303)
-        self.assertEqual(len(held),68);self.assertEqual(len(train),1212)
+        self.assertEqual({k:r['heldout_games'] for k,r in report['by_table'].items()},dict(selfplay=8,historical=8,legacy=2))
+        self.assertEqual(report['heldout_games'],18);self.assertEqual(report['train_games'],302)
+        self.assertEqual(len(held),72);self.assertEqual(len(train),1208)
         reverse=value_phase.split(list(reversed(data)),.05,holdout.DEFAULT)[2]
         self.assertEqual(report,reverse)
         self.assertTrue(torch.equal(rng,torch.get_rng_state()));self.assertEqual(random.getstate(),python_rng)
@@ -72,7 +72,8 @@ class Continuation(unittest.TestCase):
         self.assertEqual(new,value_phase.refined_options(new));validate_config(old);validate_config(new)
         fresh=latest_model_config(old,old['imitation_checkpoint'])
         from brass_ai.recovery.exploration import configure
-        self.assertEqual(fresh,value_phase.disabled_options(configure(gae.health_options(value_phase.interval_options(new)))))
+        from brass_ai.recovery.v4_share import configure as configure_share
+        self.assertEqual(fresh,configure_share(configure(gae.health_options(value_phase.interval_options(new)))))
         self.assertEqual(read(SOURCE_ROOT/'configs/step5/joint7-latest.json')['value_phase'],value_phase.DEFAULT)
         for update in (dict(learning_rate=7e-6),dict(holdout=dict(holdout.DEFAULT,extra=True))):
             bad=copy.deepcopy(new);bad['value_phase'].update(update)

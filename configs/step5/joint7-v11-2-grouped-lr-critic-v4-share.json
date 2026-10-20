@@ -1,0 +1,544 @@
+{
+  "format": "step5-training/2.2.0",
+  "players": 4,
+  "model_size": "medium",
+  "host": "artifacts/r1-host/guarded",
+  "games_per_iteration": 320,
+  "threads": 4,
+  "learning_rate": 6e-06,
+  "weight_decay": 0.0001,
+  "exploration": 0.03,
+  "seed": 18510000,
+  "execution": {
+    "processes": 24,
+    "hosts_per_process": 2,
+    "heavy_processes": 24,
+    "batch_size": 64,
+    "max_candidate_cells": 131072,
+    "flush_ms": 1.0,
+    "worker_threads": 1,
+    "max_decisions": 2000,
+    "max_models": 72,
+    "shard_games": 8,
+    "shard_bytes": 268435456,
+    "feature_cache": true,
+    "policy_cache": 32,
+    "search_workers_per_turn": 4,
+    "teacher_search_workers_per_turn": 8,
+    "cpu_budget": 64,
+    "cpu_reserve": 4,
+    "shared_slot_bytes": 2097152,
+    "inference_routing": "demand",
+    "replica_backlog": 32
+  },
+  "update": {
+    "effective_batch_size": 2048,
+    "microbatch_size": 512,
+    "max_candidate_cells": 131072,
+    "epochs": 2,
+    "clip": 0.2,
+    "target_kl": 0.01,
+    "entropy_weight": 0.005,
+    "value_weight": 0.5,
+    "grad_clip": 1.0,
+    "normalize_advantages": true,
+    "precision": "fp32",
+    "bucket": true,
+    "actor_nonforced": true,
+    "critic_batch_size": 2048,
+    "kl_probe_rows": 2048
+  },
+  "curriculum": [
+    {
+      "until": null,
+      "selfplay": 50,
+      "historical": 45,
+      "legacy": 5
+    }
+  ],
+  "search_ready_games": 640,
+  "search_every_games": 160,
+  "search_games": 5,
+  "distill_steps": 8,
+  "teacher_value": {
+    "contract": "teacher-outcome-value/1.0.0",
+    "enabled": true,
+    "loss_weight": 0.1,
+    "teacher_fraction": 0.25,
+    "samples_per_game": 24,
+    "max_samples": 128,
+    "max_reuse": 2,
+    "diagnostics": false,
+    "probe_positions": 128
+  },
+  "distillation": {
+    "min_samples": 16,
+    "min_games": 2,
+    "min_samples_per_phase": 2,
+    "batch_size": 16,
+    "max_reuse": 2
+  },
+  "distill_weight": 0.25,
+  "search": {
+    "backend": "masked_ismcts",
+    "seconds": 12.0,
+    "simulations": 100000,
+    "max_choices": 512,
+    "exploration": 1.4,
+    "root_top_k": 16,
+    "interior_top_k": 8,
+    "pending_paths": 2,
+    "batch_size": 2,
+    "flush_ms": 0.5,
+    "prior_mix": 0.1,
+    "turn_interval": 4,
+    "max_searches_per_seat": 4,
+    "contract": "masked-ismcts/1.2.0",
+    "evaluator_kind": "neural",
+    "q_transform": "none",
+    "leaf_policy": "new_root_information_frontier",
+    "candidate_policy": "supported_progressive",
+    "fpu_reduction": 0.02,
+    "minimum_plan_visits": 2,
+    "reopen_support": 4,
+    "tail_admission": 0.05,
+    "virtual_loss": 0.02,
+    "reward": {
+      "version": "brass-combined-return/1.0.0",
+      "win": 1.0,
+      "placement": 0.1,
+      "vp": 0.001,
+      "insolvency": {
+        "event_cost": 0.0075,
+        "max_cost": 0.075
+      }
+    },
+    "utility_scale": 1.2
+  },
+  "rehearsal_manifest": "artifacts/il-replay/features4-compact-v8-batch7/manifest.json",
+  "rehearsal_weight": 0.1,
+  "rehearsal_until": 10000,
+  "profile_steps": 0,
+  "retention": {
+    "enabled": true,
+    "resume_checkpoints": 2,
+    "replay_rounds": 2,
+    "quarantine_hours": 0,
+    "evaluation_samples": 1,
+    "profile_traces": 2,
+    "history_reports": 128
+  },
+  "population": {
+    "recent": 2,
+    "anchors": 22
+  },
+  "evaluation_schedule": {
+    "enabled": false,
+    "monitor_every_games": 6400,
+    "broader_every_games": 25600,
+    "monitor_setups": 16,
+    "broader_setups": 16,
+    "seed": 910000
+  },
+  "legacy_budget": {
+    "role": "lab",
+    "seconds": 1.0,
+    "search_workers": 4,
+    "global_workers": 60,
+    "work_multiplier": 1
+  },
+  "audit_workers": 16,
+  "overlap_pools": true,
+  "search_wall_fraction": null,
+  "architecture": "brass-four-seat-mlp-resnet/11.2.0",
+  "parameter_limit": 6500000,
+  "initialization": "random",
+  "imitation": {
+    "manifest": null,
+    "epochs": 10,
+    "patience": 2,
+    "min_epochs": 3,
+    "learning_rate": 6e-05
+  },
+  "legacy_opponents": {
+    "search_free_until_games": 0
+  },
+  "search_collections_per_iteration": 2,
+  "insolvency": {
+    "event_cost": 0.0075,
+    "max_cost": 0.075
+  },
+  "reward": {
+    "win": 1.0,
+    "placement": 0.1,
+    "vp": 0.001
+  },
+  "champion": {
+    "enabled": false,
+    "every_games": 6400,
+    "setups": 8,
+    "min_win_share": 0.55,
+    "seed": 1910000,
+    "protocol": "two-stage-champion/1.0.0",
+    "confirmation_setups": 64,
+    "screen_min_win_share": 0.56,
+    "min_ci_lower": 0.49
+  },
+  "teacher_work_budget": {
+    "contract": "teacher-turn-time/1.1.0",
+    "mode": "time",
+    "seconds_per_phase": {
+      "canal_early": 9.0,
+      "canal_late": 12.0,
+      "rail_early": 12.0,
+      "rail_late": 12.0
+    }
+  },
+  "legacy_opponent_work_budget": {
+    "contract": "legacy-opponent-turn-time/1.0.0",
+    "mode": "time",
+    "seconds_per_turn": 1.0
+  },
+  "selfplay_recipe": "latest-model-selfplay/3.0.0",
+  "imitation_checkpoint": {
+    "bc_run": "artifacts/step5/features4-v11-2-batch7-il",
+    "path": "artifacts/step5/features4-v11-2-batch7-il/candidate.pt",
+    "sha256": "657fe1901ab35d144e5d86e16b42e795d281946829c87bcb8e0245927b70a263",
+    "model_id": "94bebe397ac8ab1f8fe3cfb46d7d293cdb8bc10116dcd5efaf2d2afdd813270b",
+    "manifest": "artifacts/il-replay/features4-compact-v8-batch7/manifest.json",
+    "manifest_sha256": "c382a8d184ad128de0298dc8bf0f738bf2b8266baa9d8002a1a84910266596d9",
+    "bc_signature": "1ec1a4cef052a6626e2f41d49eb1e7bcce400dc2322cdcf2bd62d9b5fd5ba285"
+  },
+  "learning_rate_warmup": {
+    "contract": "linear-update-warmup/1.0.0",
+    "imitation_steps": 500,
+    "selfplay_steps": 100,
+    "start_factor": 0.1
+  },
+  "teacher_enabled": false,
+  "ppo_lr_controller": {
+    "contract": "ppo-categorical-kl-lr/1.2.0",
+    "mode": "apply",
+    "target_kl": 0.01,
+    "raise_factor": 1.25,
+    "cut_divisor": 1.5,
+    "low_ratio": 0.45,
+    "high_ratio": 1.5,
+    "window_iterations": 3,
+    "cooldown_iterations": 3,
+    "min_multiplier": 0.5,
+    "max_multiplier": 3.0,
+    "anchor_kl_budget": 0.15,
+    "anchor_group_kl_budget": 0.3,
+    "anchor_group_min_positions": 64,
+    "vp_max_drop": 0.1,
+    "zero_vp_max_fraction": 0.05
+  },
+  "il_kl_limit": {
+    "contract": "auto-il-kl-limit/1.0.0",
+    "probe_positions": 2048,
+    "probe_seed": 710193,
+    "probability_floor": 1e-06,
+    "initial_limit": 0.15,
+    "minimum_limit": 0.05,
+    "maximum_limit": 1.0,
+    "group_factor": 2.0,
+    "growth_factor": 1.25,
+    "recovery_factor": 0.8,
+    "alarm_factor": 2.0,
+    "update_interval": 10,
+    "baseline_iterations": 10,
+    "rolling_iterations": 5,
+    "group_min_positions": 64,
+    "vp_ratio": 0.85,
+    "sells_ratio": 0.7,
+    "pass_factor": 2.0,
+    "pass_allowance": 0.5,
+    "zero_vp_floor": 0.05,
+    "zero_vp_factor": 2.0,
+    "insolvency_allowance": 0.1
+  },
+  "rehearsal_floor": {
+    "contract": "rehearsal-floor/1.0.0",
+    "initial": 0.03,
+    "hold_iterations": 60,
+    "decrement": 0.01,
+    "interval_iterations": 60
+  },
+  "rehearsal_sampling": {
+    "contract": "rotating-train-window/1.0.0",
+    "rows_per_iteration": 16384,
+    "shard_draws": 32,
+    "max_cache_bytes": 4294967296,
+    "delete_after_update": true
+  },
+  "table_plan": {
+    "quotas": {
+      "selfplay": 50,
+      "historical": 45,
+      "legacy": 5
+    },
+    "learner_seats": {
+      "selfplay": 4,
+      "historical": 2,
+      "legacy": 2
+    },
+    "pair_rotation": "six-pairs"
+  },
+  "opponent_pool": {
+    "contract": "pfsp-pool/1.0.0",
+    "pinned": [
+      "generation-0"
+    ],
+    "pinned_seat_share": {
+      "rule": "reciprocal",
+      "offset": 1,
+      "max": null
+    },
+    "max_scored_members": [
+      {
+        "until_games": 100000,
+        "max": 16
+      },
+      {
+        "until_games": null,
+        "max": 23
+      }
+    ],
+    "outrank_rate": {
+      "half_life_iterations": 5,
+      "prior_rate": 0.5,
+      "prior_comparisons": 10
+    },
+    "weighting": {
+      "function": "hard",
+      "power": 2
+    },
+    "uniform_floor": 0.2,
+    "admit_every_iterations": 5,
+    "admit_health_iterations": 5,
+    "admit_min_kl": 0.02,
+    "evict": {
+      "min_age_iterations": 20,
+      "protect_newest": 2,
+      "min_decayed_comparisons": 15,
+      "redundancy_band": 0.05
+    },
+    "alarm": {
+      "rate_below": 0.4,
+      "min_decayed_comparisons": 20,
+      "iterations": 3
+    }
+  },
+  "rating": {
+    "contract": "plackett-luce-rating/1.0.0",
+    "enabled": true,
+    "every_iterations": 10,
+    "setups": 32,
+    "seat_rotations": 4,
+    "references": [
+      "generation-0",
+      "v4"
+    ],
+    "nearest_opponents": 8,
+    "theta_prior_sd": 2.0,
+    "seat_prior_sd": 0.5,
+    "bootstrap": 200,
+    "elo_scale": 173.7,
+    "seed": 910517,
+    "panel_setups": 8,
+    "v4_profile": "bank-3dc65253a610191d66a5/balanced-v3-masked-economy"
+  },
+  "v4_search_enabled": false,
+  "advantage": {
+    "contract": "gae-advantage/2.0.0",
+    "lambda": 1.0,
+    "shadow_lambdas": [
+      0.98,
+      0.95,
+      0.9
+    ],
+    "chain": "nonforced",
+    "gate": {
+      "contract": "staged-gae-gate/2.0.0",
+      "mode": "auto",
+      "minimum_value_iterations": 10,
+      "heldout_ev_min": 0.5,
+      "ev_streak": 5,
+      "fallback_value_iterations": 30,
+      "healthy_iterations": 20,
+      "rating_slots": 3,
+      "rating_min_slope": 0.0,
+      "window_iterations": 20,
+      "minimum_accepted_steps": 16,
+      "minimum_value_iterations_in_window": 3
+    },
+    "table_gate": {
+      "contract": "table-gae-ev-gate/2.0.0",
+      "mode": "auto",
+      "ev_tolerance": 0.05,
+      "consecutive_iterations": 10,
+      "window_iterations": 20,
+      "minimum_games": 8,
+      "minimum_iterations": 3,
+      "minimum_value_iterations": 3
+    }
+  },
+  "value_phase": {
+    "contract": "ppg-value-phase/4.0.0",
+    "enabled": false,
+    "buffer_iterations": 2,
+    "max_epochs": 3,
+    "batch_size": 4096,
+    "clone_rows": 8192,
+    "clone_batch_size": 512,
+    "beta_clone": 1.0,
+    "beta_clone_max": 8.0,
+    "kl_cap": 0.002,
+    "learning_rate": 3e-06,
+    "holdout_fraction": 0.05,
+    "holdout": {
+      "contract": "ppg-critic-holdout/3.0.0",
+      "minimum_games_per_table": 2,
+      "reference_games": 320,
+      "games_per_table": {
+        "selfplay": 8,
+        "historical": 8,
+        "legacy": 2
+      }
+    },
+    "acceptance_steps": 16
+  },
+  "seat_descriptors": {
+    "contract": "seat-descriptors/1.0.0",
+    "roles": [
+      "learner",
+      "snapshot",
+      "il",
+      "rule_bot",
+      "unknown"
+    ],
+    "lag_scale": 256,
+    "fingerprint": {
+      "phase": "action",
+      "families": [
+        "build",
+        "network",
+        "develop",
+        "sell",
+        "loan",
+        "scout",
+        "pass",
+        "other"
+      ],
+      "build_industries": true
+    },
+    "embedding": 32,
+    "dropout_games": 0.25
+  },
+  "critic_data": {
+    "contract": "critic-rows/1.0.0",
+    "learner_rows": true,
+    "snapshot_rows": true,
+    "snapshot_weight": 1.0,
+    "excluded_roles": [
+      "il",
+      "rule_bot"
+    ],
+    "holdout_fraction": 0.05,
+    "rollout": {
+      "mode": "auto",
+      "descriptor_ev_min_gain": 0.0,
+      "snapshot_ev_tolerance": 0.02,
+      "reduced_snapshot_weight": 0.5
+    }
+  },
+  "exploration_distribution": {
+    "contract": "family-weighted-exploration/3.0.0",
+    "action_family_weights": {
+      "build": 4,
+      "develop": 4,
+      "network": 4,
+      "loan": 2,
+      "sell": 2,
+      "scout": 1
+    },
+    "unknown_action_kind_weight": 1,
+    "pass_only_when_alone": true,
+    "industry_subgroups": [
+      "build",
+      "develop"
+    ],
+    "focus_multiplier": 2.0,
+    "other_phases": "v2",
+    "snapshot_seats": "match_learner"
+  },
+  "entropy_control": {
+    "contract": "entropy-floor-controller/1.0.0",
+    "mode": "apply",
+    "measure": "raw-policy-fixed-il-probe",
+    "groups": [
+      "canal_action",
+      "canal_other",
+      "rail_action",
+      "rail_other"
+    ],
+    "alpha_base": 0.005,
+    "alpha_max": 0.05,
+    "floor_start_ratio": 0.9,
+    "floor_decay_per_iteration": 0.999,
+    "floor_min_ratio": 0.6,
+    "gain": 4.0,
+    "max_step": 1.5,
+    "relax_factor": 1.25,
+    "hysteresis": 1.03,
+    "median_window": 3,
+    "baseline_iterations": 10,
+    "deployment_temperature_check": {
+      "every_iterations": 50,
+      "temperatures": [
+        1.0,
+        0.7
+      ]
+    }
+  },
+  "opening": {
+    "contract": "opening-temperature/1.0.0",
+    "temperature": 1.5,
+    "action_decisions_per_seat": 2,
+    "seats": "neural"
+  },
+  "branching": {
+    "contract": "selfplay-branching/1.0.0",
+    "tables": [
+      "selfplay"
+    ],
+    "rate_per_decision": 0.005,
+    "max_per_game": 1,
+    "skip_opening_decisions": 2,
+    "skip_final_rounds": "rail_empty_deck_hand_le_4",
+    "move_distribution": {
+      "temperature_1": 0.7,
+      "temperature_2": 0.25,
+      "exploration_q": 0.05
+    },
+    "exclude_played_move": true,
+    "reshuffle_hidden_deck": true,
+    "branch_move_row": "excluded"
+  },
+  "exploration_rollout": {
+    "contract": "exploration-rollout/1.0.0",
+    "mode": "staged",
+    "opening_after_iterations": 1,
+    "raw_entropy_after_iterations": 2,
+    "branching_after_iterations": 20
+  },
+  "v4_share_gate": {
+    "contract": "v4-table-share-gate/1.0.0",
+    "enabled": true,
+    "source": "rating-v4-panel",
+    "win_share_above": 0.95,
+    "reference_games": 320,
+    "reduced_v4_games": 6
+  }
+}

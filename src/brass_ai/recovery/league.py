@@ -287,6 +287,13 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                 with torch.random.fork_rng(devices=[]):schedule_champion(root,run,state,service,ordinary)
             for _ in range(iterations):
                 iteration=state['iteration'];began=time.monotonic();directory=run/f'iteration-{iteration:04d}'
+                from . import v4_share
+                share=v4_share.prepare(root,state,config)
+                if share is not None and state.get('v4_share_gate')!=share:
+                    # Freeze the decision before any ordinary replay is made;
+                    # interrupted collections reproduce their exact table plan.
+                    state['v4_share_gate']=share
+                    write_json(state_path,state)
                 inference_before=service.report()
                 exploration_settings=exploration.effective(config,exploration_state,iteration)
                 current=service.register(model);behavior=Behavior(current,config['exploration'],exploration_settings)
@@ -458,6 +465,7 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                     quality_pool.finish_report(quality_report,next_quality,pool_admission)
                 diagnostics_finished=time.monotonic()
                 report=dict(format='step5-recovery-report/'+'2.2.0',iteration=iteration,composition=dict(composition),
+                    v4_share_gate=v4_share.report(share,composition),
                     exploration_rollout=exploration_settings,entropy_control=entropy_report,
                     quality_pool=quality_report,
                     il_kl_limit=limit_report,rehearsal_schedule=rehearsal_status,
@@ -486,6 +494,9 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                         sampling=(quality_pool.sampling_description(state['quality_pool'])
                                   if quality else '25% initial/IL, 25% recent, 50% older reservoir; unavailable strata fall back')),
                     environment=environment(device),strength='requires fresh post-update evaluation')
+                if share is not None:
+                    report['curriculum'].update(effective_tables=dict(composition),
+                        v4_share_reduced=share['activated'] is not None)
                 report['utilization']=iteration_utilization(inference_before,ordinary_inference,records,
                     load_began-began,len(games),config['execution'])
                 report['utilization']['replay_ingress']=ingress_metrics
@@ -499,6 +510,7 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                                       update_digest=digest(update)),
                         **({'il_kl_limit':next_limit} if next_limit is not None else {}),
                         **({'exploration':exploration_state} if exploration_state is not None else {}),
+                        **({'v4_share_gate':share} if share is not None else {}),
                         **({'actor_value_phases':phases.payload()} if phases is not None else {}),
                         **({'quality_pool_digest':quality_pool.state_digest(next_quality)} if quality else {})))
                 report['post_update_model_id']=identity
@@ -516,6 +528,7 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                     state['quality_pool']=next_quality
                 if champion_mix.enabled(config):state['champion_mix']['transition_tables']+=transition_added
                 state['recent_training']=(state.get('recent_training',[])+[dict(iteration=iteration,games_done=done,
+                    v4_share_gate=report['v4_share_gate'],
                     exploration_rollout=exploration_settings,entropy_control=entropy_report,
                     exploration_metrics=diagnostics.get('exploration_metrics'),
                     quality_pool=quality_report,
@@ -558,6 +571,8 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                 summaries.append(report);summaries=summaries[-2:]
                 control=update.get('lr_controller')
                 controller_line=(f' LRmult={control["multiplier_after"]:.3f} {control["mode"]}:{control["decision"]}' if control else '')
+                if share is not None:
+                    controller_line+=f' v4={composition["legacy"]}/{len(games)}[{"reduced" if share["activated"] else "base"}]'
                 if entropy_report:
                     controller_line+=f' q=3 eps={config["exploration"]:.2f} explore_age={exploration_settings["age"]}'
                     controller_line+=' entropy='+','.join(f'{g}:{v["alpha_after"]:.4f}' for g,v in entropy_report['groups'].items())

@@ -344,7 +344,8 @@ def latest_model_config(config,imitation_checkpoint):
     result['execution']['teacher_search_workers_per_turn']=TEACHER_SEARCH_WORKERS
     from .value_phase import refined_options,interval_options
     from .exploration import configure
-    return validate_config(configure(interval_options(refined_options(insolvency_event_config(champion_mix_config(sampling_config(result)))))))
+    from .v4_share import configure as configure_v4_share
+    return validate_config(configure_v4_share(configure(interval_options(refined_options(insolvency_event_config(champion_mix_config(sampling_config(result))))))))
 
 
 def champion_mix_config(config):
@@ -535,13 +536,18 @@ def validate_config(config):
         require(fixed_selfplay_recipe(config) and config.get('teacher_enabled') is False,
                 'Auto IL-KL is for fresh latest-model self-play with teaching disabled')
     quality=quality_selfplay_recipe(config)
+    if 'v4_share_gate' in config:
+        from .v4_share import validate as validate_share
+        fields.add('v4_share_gate');validate_share(config['v4_share_gate'])
+        require(quality and config.get('rating',{}).get('enabled') and config.get('v4_search_enabled') is False,
+            'V4 share gate requires fixed 50/45/5 and scheduled search-free v4 ratings')
     require(quality==all(k in config for k in ('table_plan','opponent_pool','rating')) and
             (quality or not any(k in config for k in ('table_plan','opponent_pool','rating'))),
             'Table plan, quality pool and ratings require the fresh 3.0 recipe together')
     if quality:
         from .quality_config import TABLE_PLAN,validate_pool,validate_rating,maximum_members
         fields|={'table_plan','opponent_pool','rating'}
-        require(config['table_plan']==TABLE_PLAN,'Quality recipe requires fixed 50/45/5 and six seat pairs')
+        require(config['table_plan']==TABLE_PLAN,'Quality recipe requires base 50/45/5 and six seat pairs')
         validate_pool(config['opponent_pool']);validate_rating(config['rating'])
         require(auto and sum(config['population'].values())==maximum_members(config['opponent_pool']),
                 'Quality pool requires calibrated health and matching population capacity')

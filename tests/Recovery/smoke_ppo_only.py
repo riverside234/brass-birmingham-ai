@@ -9,7 +9,7 @@ import torch
 from brass_ai.bank import sha
 from brass_ai.learning.checkpoint import save_checkpoint,load_checkpoint,resume_optimizer
 from brass_ai.learning.contracts import SOURCE_ROOT,require,project_path
-from brass_ai.recovery import value_phase
+from brass_ai.recovery import value_phase,critic_holdout
 from brass_ai.recovery.actor_value import TrainingPhases,KEY
 from brass_ai.recovery.retention import _same_payload
 from brass_ai.step5.league import write_json,implementation_id
@@ -23,7 +23,7 @@ def main():
     require(out.is_relative_to(SOURCE_ROOT/'artifacts') and not out.exists(),'Use a new isolated artifacts output')
     out.mkdir(parents=True);torch.set_num_threads(2);began=time.perf_counter()
     model,opt,cfg,(behavior,data)=fixture(preset='medium',games=8,decisions=4)
-    cfg=value_phase.disabled_options(upgraded(cfg))
+    cfg=critic_holdout.quota_options(value_phase.disabled_options(upgraded(cfg)))
     cfg['update'].update(effective_batch_size=128,critic_batch_size=64,microbatch_size=16)
     phases=TrainingPhases(model,cfg,root=SOURCE_ROOT,run=out)
     start=time.perf_counter();first=ppo(model,opt,cfg,behavior,data,phases);ppo_seconds=time.perf_counter()-start

@@ -44,13 +44,33 @@ def disable_ppg_checkpoint(saved,options,generation):
     return result
 
 
+def quota_holdout_checkpoint(saved,options,generation):
+    """Change only holdout selection; new EV support starts at this boundary."""
+    from .critic_holdout import LEGACY_CONTRACT,CONTRACT,quota_options
+    require(saved.get('contract')==PPO_ONLY_CONTRACT
+        and saved['options']['value_phase']['holdout']['contract']==LEGACY_CONTRACT
+        and options['value_phase']['holdout']['contract']==CONTRACT
+        and quota_options(saved['options'])==options,'Invalid critic quota holdout transition')
+    gae.validate_state(saved['gae'],options['advantage'],generation)
+    if 'critic_data' in options:
+        critic_data.validate_state(saved['critic_data'],options['critic_data'],generation)
+    result=copy.deepcopy(saved);state=result['gae']
+    state.update(ev_streak=0,healthy_streak=0)
+    if 'table_streaks' in state:state['table_streaks']={k:0 for k in state['table_streaks']}
+    if 'table_evidence' in state:state['table_evidence']=gae.ev_evidence.initial(generation)
+    if 'stage_evidence' in state:state['stage_evidence']=gae.gae_health.initial(generation)
+    if 'critic_data' in result:result['critic_data']['weight_recovery']['healthy_streak']=0
+    result['options']=copy.deepcopy(options)
+    return result
+
+
 class TrainingPhases:
     def __init__(self,model,config,*,raw=None,generation=0,root=None,run=None):
         self.options={k:copy.deepcopy(config[k]) for k in ('advantage','value_phase')}
         self.options.update({k:copy.deepcopy(config[k]) for k in ('critic_data','seat_descriptors') if k in config})
         self.snapshot_data=[];self.fingerprint=None;self.critic_state=None
         self.root,self.run=root,run
-        self.critic_evidence=None;self.disable_migration=None;self.ppo_work=None
+        self.critic_evidence=None;self.disable_migration=None;self.ppo_work=None;self.holdout_migration=None
         self.config=config;self.dataset=None;self.probe_ids=None
         gae.validate(self.options['advantage'],combined='reward' in config)
         value_phase.validate(self.options['value_phase'])
@@ -75,9 +95,20 @@ class TrainingPhases:
         else:
             require(type(saved) is dict,'Invalid GAE/value checkpoint')
             if self.contract==PPO_ONLY_CONTRACT and saved.get('contract')!=PPO_ONLY_CONTRACT:
-                saved=disable_ppg_checkpoint(saved,self.options,generation)
+                disable_target=copy.deepcopy(self.options)
+                from .critic_holdout import CONTRACT as QUOTA_CONTRACT,LEGACY_CONTRACT as OLD_HOLDOUT
+                old_holdout=saved.get('options',{}).get('value_phase',{}).get('holdout',{})
+                if (old_holdout.get('contract')==OLD_HOLDOUT
+                        and disable_target['value_phase']['holdout']['contract']==QUOTA_CONTRACT):
+                    disable_target['value_phase']['holdout']=copy.deepcopy(old_holdout)
+                saved=disable_ppg_checkpoint(saved,disable_target,generation)
                 self.disable_migration=dict(contract=value_phase.DISABLE_MIGRATION,origin=generation,
                     scope='PPG disabled; PPO critic evidence starts at committed progress. Attained lambdas, table activation, critic weight/baseline, both Adams, RNG and training progress preserved; no old PPG evidence backfilled.')
+            if saved.get('contract')==PPO_ONLY_CONTRACT and saved.get('options')!=self.options:
+                saved=quota_holdout_checkpoint(saved,self.options,generation)
+                self.holdout_migration=dict(origin=generation,
+                    holdout=copy.deepcopy(self.options['value_phase']['holdout']),
+                    scope='New whole-game EV selection and empty evidence windows. Active GAE lambdas, table activation, snapshot weight/baseline, both Adams, RNG and training progress preserved.')
             refinement_options=copy.deepcopy(self.options)
             if saved.get('contract') not in ('actor-value-phases/7.0.0',PPO_ONLY_CONTRACT):
                 if refinement_options['value_phase']['contract']==value_phase.CONTRACT:
@@ -254,6 +285,7 @@ class TrainingPhases:
         self.value_report['split']=self.split
         if self.refinement_migration:self.value_report['refinement_migration']=self.refinement_migration
         if self.window_migration:self.value_report['window_migration']=self.window_migration
+        if self.holdout_migration:self.value_report['holdout_migration']=self.holdout_migration
         return self.value_report
 
     def finish(self,*,generation,update,anchor_gate,rating):
@@ -309,6 +341,7 @@ class TrainingPhases:
         self.refinement_migration=None
         self.window_migration=None
         self.disable_migration=None
+        self.holdout_migration=None
 
     def release(self):
         self.dataset=None;self.critic_dataset=None;self.snapshot_data=[];self.ppo_probe=None;self.probe_ids=None

@@ -37,7 +37,10 @@ class Quality(unittest.TestCase):
         self.assertEqual(c,latest_model_config(c,c['imitation_checkpoint']))
         self.assertEqual(c['table_plan'],TABLE_PLAN);self.assertEqual(sum(c['population'].values()),24)
         old=copy.deepcopy(c)
-        for k in ('table_plan','opponent_pool','rating','advantage','value_phase','critic_data','seat_descriptors'):old.pop(k)
+        for k in ('table_plan','opponent_pool','rating','advantage','value_phase','critic_data','seat_descriptors','v4_share_gate'):old.pop(k)
+        from brass_ai.recovery.exploration import BLOCKS
+        for k in BLOCKS:old.pop(k,None)
+        old['exploration']=.08
         old.update(selfplay_recipe='latest-model-selfplay/2.0.0',curriculum=[dict(until=None,selfplay=60,historical=30,legacy=10)],
                    population=dict(recent=4,anchors=12))
         validate_config(old)

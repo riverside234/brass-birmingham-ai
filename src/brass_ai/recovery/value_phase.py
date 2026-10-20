@@ -16,9 +16,9 @@ LEGACY_DEFAULT=dict(contract=LEGACY_CONTRACT,enabled=True,buffer_iterations=2,ma
     learning_rate=6e-6,holdout_fraction=.05)
 STRATIFIED_CONTRACT='ppg-value-phase/3.0.0'
 CONTRACT='ppg-value-phase/4.0.0'
-from .critic_holdout import DEFAULT as HOLDOUT_DEFAULT
-STRATIFIED_DEFAULT=dict(LEGACY_DEFAULT,contract=STRATIFIED_CONTRACT,learning_rate=3e-6,holdout=copy.deepcopy(HOLDOUT_DEFAULT))
-DEFAULT=dict(STRATIFIED_DEFAULT,contract=CONTRACT,acceptance_steps=16,enabled=False)
+from .critic_holdout import DEFAULT as HOLDOUT_DEFAULT,LEGACY_DEFAULT as OLD_HOLDOUT
+STRATIFIED_DEFAULT=dict(LEGACY_DEFAULT,contract=STRATIFIED_CONTRACT,learning_rate=3e-6,holdout=copy.deepcopy(OLD_HOLDOUT))
+DEFAULT=dict(STRATIFIED_DEFAULT,contract=CONTRACT,acceptance_steps=16,enabled=False,holdout=copy.deepcopy(HOLDOUT_DEFAULT))
 CONFIG_MIGRATION='step5-ppg-refinement/1.0.0'
 INTERVAL_MIGRATION='step5-ppg-acceptance-intervals/1.0.0'
 DISABLE_MIGRATION='step5-ppo-only-critic/1.0.0'
@@ -57,7 +57,7 @@ def refined_options(options):
     result=copy.deepcopy(options);value=result.get('value_phase')
     if value is not None and value.get('contract')==LEGACY_CONTRACT:
         validate(value)
-        value.update(contract=STRATIFIED_CONTRACT,learning_rate=value['learning_rate']*.5,holdout=copy.deepcopy(HOLDOUT_DEFAULT))
+        value.update(contract=STRATIFIED_CONTRACT,learning_rate=value['learning_rate']*.5,holdout=copy.deepcopy(OLD_HOLDOUT))
     return result
 
 

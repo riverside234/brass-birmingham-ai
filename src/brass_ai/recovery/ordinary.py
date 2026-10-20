@@ -7,11 +7,12 @@ from brass_ai.learning.contracts import digest,project_path,require
 from brass_ai.step5.league import seeds_for
 from brass_ai.step5.policy import INDUSTRIES
 from .config import table_rotation,latest_model_recipe,learner_seats_per_table,quality_selfplay_recipe
-from .curriculum import training_table,searched_legacy,tables_before
+from .curriculum import searched_legacy
 from .execution import neural_spec
 from .population import sample_opponents
 from .champion import enabled as champion_enabled,selfplay_policies
 from . import champion_mix
+from . import v4_share
 
 
 def plan_collection(root,directory,state,config,signature,service,current,profiles,opponent_specs,fast_specs,window,*,fingerprints=None,exploration=None):
@@ -26,7 +27,11 @@ def plan_collection(root,directory,state,config,signature,service,current,profil
         snapshots[entry['model_id']]=entry
     jobs=[];kind_by_group={};composition=Counter();cursor=state['next_seed'];context_counter=state['context_counter']
     historical_generations=Counter();mix_receipts=[];transition_added=0
-    legacy_ordinal=tables_before(state['games_done'],'legacy',config,window)
+    share=(state.get('v4_share_gate',v4_share.initial(config,state['iteration'],state['games_done']))
+        if 'v4_share_gate' in config else None)
+    if 'v4_share_gate' in config:
+        v4_share.validate_state(share,config,state['iteration'],state['games_done'])
+    legacy_ordinal=v4_share.legacy_before(state['games_done'],config,window,share)
     require(len(profiles)==len(set(profiles)) and all('pottery-flex' not in p for p in profiles),
             'Ordinary training requires distinct admitted profiles; pottery-flex is evaluation-only')
     quality=quality_selfplay_recipe(config);quality_tables={};quality_planning=None
@@ -37,7 +42,7 @@ def plan_collection(root,directory,state,config,signature,service,current,profil
             require(state['quality_pool']['games_done']==state['games_done'],'PFSP planning ordinary progress differs')
         quality_planning=quality_pool.distribution(state['quality_pool'])
     for i in range(config['games_per_iteration']):
-        index=state['games_done']+i;kind,boosted=training_table(index,config,window)
+        index=state['games_done']+i;kind,boosted=v4_share.table(index,config,window,share)
         selected,cursor=seeds_for(cursor,1);seed=selected[0]
         rng=random.Random(digest(dict(seed=config['seed'],index=index)))
         settings=dict(version=exploration['version'],opening=exploration['opening']) if exploration else {}
@@ -84,7 +89,10 @@ def plan_collection(root,directory,state,config,signature,service,current,profil
             legacy_ordinal+=1
         rotation=table_rotation(index);focuses={}
         if quality and learner_count==2:
-            pair=quality_pool.learner_pair(index,kind,config['table_plan']['quotas'])
+            # Actual v4-table ordinal avoids quota aliasing after the share
+            # gate. History indices/draws/pair rotations stay exactly the same.
+            pair=(quality_pool.PAIRS[(legacy_ordinal-1)%len(quality_pool.PAIRS)] if kind=='legacy' else
+                  quality_pool.learner_pair(index,kind,config['table_plan']['quotas']))
             other=iter(policies[learner_count:]);physical=[learner if s in pair else next(other) for s in range(4)]
             policies=[physical[(s+rotation)%4] for s in range(4)]
             for seat,receipt in zip((s for s in range(4) if s not in pair),quality_receipts):receipt['seat']=seat

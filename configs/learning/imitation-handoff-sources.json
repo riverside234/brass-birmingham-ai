@@ -358,6 +358,11 @@
       "implementation": "4e3441392fde10f5e37324188a8e4a7d529e4f5bef874a95d23316b81e4a0248",
       "learning_compatibility": "ef6a1b5126de42da8f3277dc9357b6ffb94a435f3faa7fee8dd312bb5a242a54",
       "reason": "Self-play PPG disable only; completed IL/model/Features-4 unchanged."
+    },
+    {
+      "implementation": "fd908ff8b5e073b2744b8a034dd7304a2803a5c6ad1d75dd9e0be6c67640fd08",
+      "learning_compatibility": "ef6a1b5126de42da8f3277dc9357b6ffb94a435f3faa7fee8dd312bb5a242a54",
+      "reason": "Self-play v4-share/critic-holdout revision only; completed IL, model and Features-4 unchanged."
     }
   ]
 }

@@ -397,8 +397,14 @@
     "learning_rate": 3e-06,
     "holdout_fraction": 0.05,
     "holdout": {
-      "contract": "ppg-critic-holdout/2.0.0",
-      "minimum_games_per_table": 2
+      "contract": "ppg-critic-holdout/3.0.0",
+      "minimum_games_per_table": 2,
+      "reference_games": 320,
+      "games_per_table": {
+        "selfplay": 8,
+        "historical": 8,
+        "legacy": 2
+      }
     },
     "acceptance_steps": 16
   },
@@ -525,5 +531,13 @@
     "opening_after_iterations": 0,
     "raw_entropy_after_iterations": 0,
     "branching_after_iterations": 20
+  },
+  "v4_share_gate": {
+    "contract": "v4-table-share-gate/1.0.0",
+    "enabled": true,
+    "source": "rating-v4-panel",
+    "win_share_above": 0.95,
+    "reference_games": 320,
+    "reduced_v4_games": 6
   }
 }
