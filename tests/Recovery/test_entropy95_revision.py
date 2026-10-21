@@ -35,7 +35,7 @@ class Entropy95(unittest.TestCase):
         self.assertLess(E.floors(self.old,saved,320)['canal_action'],.8*saved['baseline']['canal_action'])
         self.assertEqual(restored,saved);self.assertEqual(self.state,before)
         self.assertEqual((restored['origin'],restored['armed_at']),(185,197))
-        self.assertEqual(E.effective(self.cfg,restored,320)['branching'],E.BRANCH)
+        self.assertEqual(E.effective(self.cfg,restored,320)['branching'],E.HIGH_BRANCH)
 
     def test_restart_controller_decision_is_identical_and_health_still_blocks(self):
         s=self.state['exploration'];measurement=measured(.1)

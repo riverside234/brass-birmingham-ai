@@ -251,7 +251,8 @@ def advance(r, weight, *, generation, observation, current_regime, active, toler
         reduce_below=threshold - tolerance if threshold is not None else None,
         learner=evidence, current=pool([p for p in observation['tables'].values() if p is not None]),
         current_qualifying=fresh, reference_before=ref_before, reference_next=copy.deepcopy(r['reference']),
-        next_weight=WEIGHTS[WEIGHTS.index(next_weight) + 1] if next_weight < 1. else None,
+        next_weight=next_weight,
+        recovery_target_weight=WEIGHTS[WEIGHTS.index(next_weight) + 1] if next_weight < 1. else None,
         last_change_generation=r['last_change_generation'],
         scope='Ordinary held-out learner rows only; row-pooled MSE includes bias. Twenty committed iterations, ten qualifying; five new consecutive healthy commits, not independent overlapping windows. New weight stages start empty; reference never lowered on deterioration.')
     return r, next_weight, decision, reason, report

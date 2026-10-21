@@ -393,6 +393,16 @@
       "implementation": "d36155785f06938df1719bfcd0db3e0d5f401081b176c434a9161ca18ac545f6",
       "learning_compatibility": "ef6a1b5126de42da8f3277dc9357b6ffb94a435f3faa7fee8dd312bb5a242a54",
       "reason": "Self-play entropy/opening/branch revision only; completed IL/model/Features-4 and handoff contracts unchanged."
+    },
+    {
+      "implementation": "e0dc28ad559ddcd2d6b0eff95d1dac61c4ede949f70bf341a16d08e2ca71dca3",
+      "learning_compatibility": "ef6a1b5126de42da8f3277dc9357b6ffb94a435f3faa7fee8dd312bb5a242a54",
+      "reason": "Performance-only batching/input reuse; completed IL, Features-4, v11.2 layout and reward/handoff contracts unchanged."
+    },
+    {
+      "implementation": "20b150626f22e27bca68e92b5a4ba9abaa0c6a07f7f6c5b70b2425c52f56eeb8",
+      "learning_compatibility": "ef6a1b5126de42da8f3277dc9357b6ffb94a435f3faa7fee8dd312bb5a242a54",
+      "reason": "Self-play group entropy floors/branch rate and reporting only; completed IL/model/Features-4 and handoff contracts unchanged."
     }
   ]
 }

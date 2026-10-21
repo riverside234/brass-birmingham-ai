@@ -61,6 +61,13 @@ class ExportTests(unittest.TestCase):
         output,_=self.export()
         self.assertEqual((output/'exploration/hotfix-report.json').read_bytes(),path.read_bytes())
 
+    def test_group_floor_hotfix_report_is_exported_unchanged(self):
+        data=dict(applied=True,generation=410,branch_rate_per_eligible_decision=.005,
+                  fixed_floor_ratio_by_group=dict(canal_action=.95,canal_other=.9,rail_action=.95,rail_other=.9))
+        path=self.put(self.run+'/exploration/group-floors-hotfix-report.json',data)
+        output,_=self.export()
+        self.assertEqual((output/'exploration/group-floors-hotfix-report.json').read_bytes(),path.read_bytes())
+
     def test_active_policy_anchor_cache_and_fit_are_exported_without_dense_arrays(self):
         reference=lambda p:dict(path=p.relative_to(self.root).as_posix(),sha256=reports.checksum(p.read_bytes()))
         dense=self.put(self.run+'/policy-anchor/probabilities/current.npz',b'large probabilities')

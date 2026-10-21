@@ -26,6 +26,8 @@ def run(root,run_path,output,*,apply=False,expected_generation=None,device='cpu'
         state=read(run/'state.json');generation=state['iteration'];old=state['signature']['config']
         require(expected_generation is None or generation==expected_generation,'Unexpected committed generation')
         require(all(b in old for b in E.BLOCKS),'Entropy hotfix requires an existing exploration rollout')
+        require(old['entropy_control']['contract']!=E.ENTROPY['contract'],
+                'Group floors already adopted; use joint7-entropy-groups.py instead of the superseded entropy95 hotfix')
         config=validate_config(E.frozen_config(old))
         require(not output.exists() or read(output)==config,'Existing config differs; choose another --output')
         signature=dict(copy.deepcopy(state['signature']),config=config,implementation=implementation_id())

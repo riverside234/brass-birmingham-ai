@@ -7,7 +7,7 @@ from unittest.mock import patch
 
 import torch
 
-from fixtures import game
+from review_fixture import current_game as game
 from brass_ai.learning.model import FourSeatNet, ModelConfig
 from brass_ai.learning.reward import specification
 from brass_ai.learning.utility_model import UtilityNet, utility_config
@@ -152,7 +152,7 @@ class ValueBatchPerformanceTests(unittest.TestCase):
                         spec = model.config.utility if combined else None
                         report = updates.ppo_update(model, adam, [episode], policy, config,
                             insolvency=spec['insolvency'] if spec else None, reward=spec)
-                    report = {k: v for k, v in report.items() if k not in ('timings', 'memory')}
+                    report = {k: v for k, v in report.items() if k not in ('timings', 'memory', 'input_cache')}
                     results.append((copy.deepcopy(model.state_dict()), copy.deepcopy(adam.state_dict()),
                                     torch.get_rng_state().clone(), report))
                 self.assert_tree_equal(results[0], results[1])

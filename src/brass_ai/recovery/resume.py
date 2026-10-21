@@ -113,6 +113,8 @@ def check_signature(state, signature, reviewed=False):
             handlers[EXPLORATION_MIGRATION]=continuation_config
             from .exploration import FROZEN_MIGRATION,frozen_config
             handlers[FROZEN_MIGRATION]=frozen_config
+            from .exploration import GROUP_FLOOR_MIGRATION,group_floor_config
+            handlers[GROUP_FLOOR_MIGRATION]=group_floor_config
             for migration in migrations:
                 require(migration in handlers,'Unknown reviewed configuration migration')
                 expected=handlers[migration](expected)

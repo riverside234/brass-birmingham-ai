@@ -8,7 +8,7 @@ from unittest.mock import patch
 
 import torch
 
-from fixtures import position
+from review_fixture import current_position as position
 from brass_ai.learning.batching import Request
 from brass_ai.learning.model import FourSeatNet, ModelConfig
 from brass_ai.recovery.config import EXECUTION

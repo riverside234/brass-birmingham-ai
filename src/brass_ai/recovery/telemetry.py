@@ -122,6 +122,11 @@ def iteration_utilization(before,after,records,seconds,games,config):
     return dict(games_per_second=games/max(seconds,1e-9),mean_inference_batch=positions/max(1,batches),
         inference_batches=batches,inference_positions=positions,padding_fraction=1-valid/cells if cells else None,
         actor_phase_seconds=dict(phases),inference_phase_deltas=inference,
+        inference_batching=dict(
+            batches=after.get('batching',{}).get('batches',0)-before.get('batching',{}).get('batches',0),
+            padding_splits=after.get('batching',{}).get('padding_splits',0)-before.get('batching',{}).get('padding_splits',0),
+            peak_pending_positions_since_service_start=after.get('batching',{}).get('peak_pending_positions'),
+            scope='Per-collection count deltas; pending-position peak is cumulative'),
         actor_python_cpu_seconds=sum(cpu) if complete else None,
         actor_python_average_cores=sum(cpu)/max(seconds,1e-9) if complete else None,
         actor_cpu_recorded_games=len(cpu),actor_cpu_expected_work_items=len(executions),

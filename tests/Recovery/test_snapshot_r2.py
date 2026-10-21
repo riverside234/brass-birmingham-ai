@@ -97,6 +97,13 @@ class Statistics(unittest.TestCase):
 
 
 class Stages(unittest.TestCase):
+    def test_report_distinguishes_committed_next_weight_from_recovery_target(self):
+        s=r2.initial(0,.5)
+        for g in range(1,16):
+            s,w,_,_,report=tick(s,g)
+            self.assertEqual(report['next_weight'],w)
+            self.assertEqual(report['recovery_target_weight'],.75 if w==.5 else 1.)
+
     def test_existing_point_zero_two_tolerance_includes_bias(self):
         baseline=r2.summarize([observe(g) for g in range(1,11)])
         for degradation,expected in ((.0199,.75),(.0201,.5)):

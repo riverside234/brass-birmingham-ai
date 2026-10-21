@@ -93,7 +93,8 @@ def main():
     write_json(out/'report.json',dict(passed=True,seconds=time.monotonic()-started,parameters=model.parameter_count,
         ordinary_games=2,branch_games=1,branch_openings_by_seat=openings,collection=collection,diagnostics=diagnostics['exploration_metrics'],
         exact_probability_reconstruction=True,exact_restored_update=True,results=results,
-        scope='Isolated randomly initialized current v11.2 model; test forces one early fork (rate=1) to exercise admission. Production rate is .015. Two native ordinary games; one PPO step repeated from the same checkpoint. No strength or production-overhead estimate.'))
+        production_branch_rate=cfg['branching']['rate_per_decision'],
+        scope='Isolated randomly initialized current v11.2 model; test forces one early fork (rate=1) to exercise admission. Two native ordinary games; one PPO step repeated from the same checkpoint. No strength or production-overhead estimate.'))
 
 
 if __name__=='__main__':main()

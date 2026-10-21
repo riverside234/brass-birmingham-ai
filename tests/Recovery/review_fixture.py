@@ -25,6 +25,11 @@ def _current_game():
 def current_game():return copy.deepcopy(_current_game())
 
 
+def current_position(observer=0):
+    row=next(row for row in current_game()['records'] if row['seat']==observer)
+    return row['view'],row['choices'][:3]
+
+
 def install(test,transitions):
     entries=[dict(entry,learning_compatibility=digest(compatibility()),reason='Authored unit-test receipt only')
              for entry in transitions]

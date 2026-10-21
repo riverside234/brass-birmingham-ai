@@ -115,19 +115,60 @@ class CategoricalProbe:
 
     Old probabilities are captured once before PPO and remain fixed across all
     steps/epochs. The same probe drives early stopping and post-update reporting.
-    Each stored CPU tensor is bounded by the ordinary candidate-cell limit.
+    Tensor snapshots use a bounded device/host budget and live for this probe
+    only. Probability checks still run after every optimizer step.
     """
     def __init__(self, model, dataset, indices, behavior, config):
         from .updates import row_probabilities
-        self.parts = []
+        from .batch_cache import PROBE_CACHE_BYTES, probe_device_limit, tensor_bytes
+        self.parts = []; self.batches = []; self.seals = []
         self.dataset, self.behavior = dataset, behavior
         self.positions = len(indices)
+        self.device_limit = probe_device_limit(dataset.device)
+        self.host_limit = PROBE_CACHE_BYTES if torch.device(dataset.device).type == 'cuda' else 0
+        self.device_bytes = self.host_bytes = self.cache_hits = self.cache_misses = 0
         with torch.no_grad():
             for part in dataset.microbatches(indices, config['microbatch_size'],
                                             config['max_candidate_cells'], config['bucket']):
-                _, inputs, q = dataset.batch(part, behavior.exploration)
+                ix, inputs, q = dataset.batch(part, behavior.exploration)
                 p = row_probabilities(dataset,part,model(*inputs)[0],q,behavior)
-                self.parts.append((part, p.detach().cpu()))
+                tensors = (ix,*inputs,q)
+                before = p.detach().clone()
+                size = tensor_bytes((*tensors,before))
+                if size <= self.device_limit-self.device_bytes:
+                    self.device_bytes += size
+                elif size <= self.host_limit-self.host_bytes:
+                    tensors = tuple(t.cpu().pin_memory() for t in tensors)
+                    before = before.cpu().pin_memory()
+                    self.host_bytes += size
+                else:
+                    tensors = None
+                    before = before.cpu()
+                self.parts.append((part,before))
+                self.batches.append(tensors)
+                self.seals.append(dataset.input_seal(part,behavior.exploration))
+
+    def _batch(self, index):
+        part, before = self.parts[index]
+        require(self.dataset.input_seal(part,self.behavior.exploration)==self.seals[index],
+                'Fixed PPO probe inputs changed after admission')
+        tensors = self.batches[index]
+        if tensors is None:
+            self.cache_misses += 1
+            ix,inputs,q = self.dataset.batch(part,self.behavior.exploration)
+        else:
+            self.cache_hits += 1
+            tensors = tuple(t.to(self.dataset.device,non_blocking=True) for t in tensors)
+            ix,inputs,q = tensors[0],tensors[1:-1],tensors[-1]
+        return part,before.to(self.dataset.device,non_blocking=True),ix,inputs,q
+
+    def cache_report(self):
+        device = torch.device(self.dataset.device).type
+        return dict(device=device,resident_bytes=self.device_bytes,limit_bytes=self.device_limit,
+                    host_fallback_bytes=self.host_bytes,host_fallback_limit_bytes=self.host_limit,
+                    cached_parts=sum(batch is not None for batch in self.batches),parts=len(self.parts),
+                    hits=self.cache_hits,uncached_calls=self.cache_misses,
+                    scope='Immutable packed inputs and old probabilities; one PPO iteration, bounded, content checked')
 
     def measure_step(self, model, *, executor=None):
         """Exact and sampled KL from ONE forward pass per cached microbatch.
@@ -138,12 +179,10 @@ class CategoricalProbe:
         """
         from .updates import row_probabilities
         totals = torch.zeros(2, device=self.dataset.device)
-        parts = (part for part, _ in self.parts)
-        batches = self.dataset.policy_batches(parts, self.behavior.exploration, executor)
         with torch.no_grad():
-            for (_, before), (_, ix, inputs, q) in zip(self.parts, batches):
+            for index in range(len(self.parts)):
+                _,old,ix,inputs,q = self._batch(index)
                 p = row_probabilities(self.dataset,ix,model(*inputs)[0],q,self.behavior)
-                old = before.to(p.device)
                 selected = p.gather(1, self.dataset.chosen[ix, None]).squeeze(1).clamp_min(1e-30)
                 ratio = selected/self.dataset.old[ix]
                 totals += torch.stack((categorical_kl(old, p), ((ratio-1)-ratio.log()).sum()))
@@ -161,11 +200,10 @@ class CategoricalProbe:
             from .teacher_schedule import PHASES,phase_for
             groups={name:dict(positions=0,total=0.) for name,_,_,_ in PHASES}
         with torch.no_grad():
-            for part, before in self.parts:
-                _, inputs, q = self.dataset.batch(part, self.behavior.exploration)
+            for index in range(len(self.parts)):
+                part,old,ix,inputs,q = self._batch(index)
                 logits=model(*inputs)[0]
                 p = row_probabilities(self.dataset,part,logits,q,self.behavior)
-                old = before.to(p.device)
                 kl += float(categorical_kl(old, p))
                 ent = -(p*p.clamp_min(1e-30).log()).sum(-1)
                 legal = inputs[2].sum(-1).float()

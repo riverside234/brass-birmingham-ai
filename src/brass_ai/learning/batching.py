@@ -60,10 +60,13 @@ def model_id(model,*,contracts=None):
     return value.hexdigest()
 
 
-def collate(encoded, device='cpu'):
+def collate(encoded, device='cpu', *, audit=None):
     require(bool(encoded), 'Cannot batch zero positions')
     for row in encoded:
-        check_encoded(row);check_action_selectors(row.actions)
+        if audit is None:
+            check_encoded(row);check_action_selectors(row.actions)
+        else:
+            audit.check(row)
     count, maximum = len(encoded), max(len(x.choice_ids) for x in encoded)
     require(maximum > 0, 'No legal choices')
     actions = np.zeros((count, maximum, encoded[0].actions.shape[-1]), dtype=np.float32)

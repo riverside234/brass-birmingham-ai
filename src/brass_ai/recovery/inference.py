@@ -240,6 +240,8 @@ class InferenceService:
         self.metrics=dict(batches=0,positions=0,model_cache_hits=0,valid_candidate_cells=0,padded_candidate_cells=0,
             max_batch_positions=0,max_padded_candidate_cells=0,expired_requests=0,cancelled_requests=0,
             packed_output_batches=0,shared_requests=0,shared_replies=0,inline_requests=0)
+        from .inference_batches import ModelBatches
+        self.scheduler=ModelBatches(config['batch_size'],config['max_candidate_cells'])
         self.on_complete=self.on_failure=None
         self.thread=threading.Thread(target=self._serve,name='brass-inference',daemon=True)
 
@@ -306,6 +308,7 @@ class InferenceService:
             learner_device=str(self.learner_device),inference_devices=[str(self.device)],replica_count=1,
             central_batching=True,memory=memory(self.device),
             cpu_admission=self.cpu.report(),
+            batching=self.scheduler.report(),
             timing_note='Host elapsed time; CUDA forward kernel duration is in optional profiler traces',
             error=str(self.error) if self.error else None)
 
@@ -407,64 +410,94 @@ class InferenceService:
         except BaseException as error:self._failed(error)
 
     def _serve(self):
+        pending={};serial=0
+
+        def admit(message):
+            nonlocal serial
+            key=serial;serial+=1
+            pending[key]=dict(message=message,responses=[None]*len(message['frames']),remaining=len(message['frames']))
+            require(message['frames'],'Empty inference envelope')
+            require(not any(record['message']['lane']==message['lane'] for other,record in pending.items() if other!=key),
+                    'Private inference lane has multiple in-flight envelopes')
+            if message.get('shared'):
+                require(message['lane'] in self.slots,'Missing shared input slot')
+                rows=self.slots[message['lane']].unpack_frames(message['frames'],message['token'])
+                self.metrics['shared_requests']+=1
+            else:
+                rows=message['frames'];self.metrics['inline_requests']+=1
+            for index,frame in enumerate(rows):self.scheduler.add((key,index),frame)
+
+        def finish(keys,error=None):
+            for key in keys:
+                record=pending[key];message=record['message']
+                if error is not None:
+                    response=dict(token=message['token'],error=str(error))
+                else:
+                    output=record['responses']
+                    slot=self.slots.get(message['lane'])
+                    packed=slot.pack_responses(output,message['token']) if slot else None
+                    if packed is not None:self.metrics['shared_replies']+=1
+                    else:
+                        for result in output:
+                            for name in ('probabilities','win_share','placement','vp','utility'):
+                                if isinstance(result.get(name),np.ndarray):result[name]=result[name].tolist()
+                    response=dict(token=message['token'],shared=packed is not None,
+                                  responses=packed if packed is not None else output)
+                # Exactly one reply releases an envelope's shared input slot.
+                # Other model queues may still refer to other private slots.
+                pending.pop(key)
+                self._reply(message,response)
+                if self.on_complete is not None:
+                    try:self.on_complete([message])
+                    except BaseException as failure:self._failed(failure)
+
         try:
             # Current CUDA device is thread-local. Explicit tensor placement and
             # this context leave the learner's device selection unchanged.
             selected=torch.cuda.device(self.device) if self.pack_outputs else nullcontext()
             with selected,profile_window(self.profile,self.device,self.profile_steps) as profiler:
                 while not self.stop.is_set():
-                    try: first=self.requests.get(timeout=.05)
-                    except queue.Empty: continue
-                    messages=[first];until=time.monotonic()+self.config['flush_ms']/1000
-                    until=min(until,min(f['deadline'] for f in first['frames']))
-                    while sum(len(m['frames']) for m in messages)<self.config['batch_size']:
-                        remaining=until-time.monotonic()
-                        if remaining<=0: break
-                        try:
-                            message=self.requests.get(timeout=remaining);messages.append(message)
-                            until=min(until,min(f['deadline'] for f in message['frames']))
-                        except queue.Empty: break
-                    frames=[];rows=None;outbound=[]
+                    frames=[]
                     try:
+                        if not self.scheduler:
+                            try:first=self.requests.get(timeout=.05)
+                            except queue.Empty:continue
+                            admit(first)
+                            until=min(time.monotonic()+self.config['flush_ms']/1000,
+                                      min(f['deadline'] for f in first['frames']))
+                            while len(self.scheduler)<self.config['batch_size']:
+                                remaining=until-time.monotonic()
+                                if remaining<=0:break
+                                try:
+                                    message=self.requests.get(timeout=remaining);admit(message)
+                                    until=min(until,min(f['deadline'] for f in message['frames']))
+                                except queue.Empty:break
+                        # Work arriving during the last model forward joins its
+                        # compatible queue now. This drain adds no waiting time.
+                        for _ in range(max(1,len(self.connections))):
+                            try:admit(self.requests.get_nowait())
+                            except queue.Empty:break
+                        frames=self.scheduler.take()
                         with self.timings.phase('inference.batch'):
-                            for i,m in enumerate(messages):
-                                if m.get('shared'):
-                                    require(m['lane'] in self.slots,'Missing shared input slot')
-                                    rows=self.slots[m['lane']].unpack_frames(m['frames'],m['token']);self.metrics['shared_requests']+=1
-                                else:rows=m['frames'];self.metrics['inline_requests']+=1
-                                frames.extend(((i,j),f) for j,f in enumerate(rows))
                             # Existing subclasses/instrumentation own their
                             # evaluator contract and still return normal lists.
                             evaluate=self._evaluate
                             replies=(evaluate(frames,array_responses=True)
                                 if getattr(evaluate,'__func__',None) is InferenceService._evaluate
                                 else evaluate(frames))
-                            # Release ndarray views before reusing/unmapping slots.
-                            frames.clear();rows=None
-                        for i,m in enumerate(messages):
-                            output=[replies[i,j] for j in range(len(m['frames']))]
-                            slot=self.slots.get(m['lane']);packed=slot.pack_responses(output,m['token']) if slot else None
-                            if packed is not None:self.metrics['shared_replies']+=1
-                            else:
-                                # Disabled or full slots retain the existing
-                                # list wire format, with exactly one conversion.
-                                for response in output:
-                                    for key in ('probabilities','win_share','placement','vp','utility'):
-                                        if isinstance(response.get(key),np.ndarray):response[key]=response[key].tolist()
-                            outbound.append(dict(token=m['token'],shared=packed is not None,
-                                responses=packed if packed is not None else output))
+                        for (key,index),_ in frames:
+                            pending[key]['responses'][index]=replies[key,index]
+                            pending[key]['remaining']-=1
+                        frames.clear()
+                        finish([key for key,record in pending.items() if record['remaining']==0])
                         if profiler: profiler.step()
                     except BaseException as error:
-                        outbound=[dict(token=m['token'],error=str(error)) for m in messages]
                         self._failed(error)
+                        # Drop all views before releasing their reply slots.
+                        frames.clear();self.scheduler.models.clear();self.scheduler.count=0
+                        finish(list(pending),error)
                     finally:
-                        frames.clear();rows=None
-                    # Attempt each reply exactly once. A dead actor must not
-                    # duplicate successful replies or starve the other lanes.
-                    for message,response in zip(messages,outbound):self._reply(message,response)
-                    try:
-                        if self.on_complete is not None:self.on_complete(messages)
-                    except BaseException as error:self._failed(error)
+                        frames.clear()
         except BaseException as error:
             self._failed(error)
 
@@ -643,6 +676,11 @@ class MultiInferenceService:
         for key in ('cuda_allocated_bytes','cuda_reserved_bytes'):
             if any(key in r['memory'] for r in reports):mem[key]=sum(r['memory'].get(key,0) for r in reports)
         return dict(**self.metrics,timings=timings,device=str(self.device),learner_device=str(self.learner_device),inference_devices=list(self.devices),
+            batching=dict(contract='streaming-model-batches/1.0.0',
+                batches=sum(r.get('batching',{}).get('batches',0) for r in reports),
+                padding_splits=sum(r.get('batching',{}).get('padding_splits',0) for r in reports),
+                peak_pending_positions=max(r.get('batching',{}).get('peak_pending_positions',0) for r in reports),
+                scope='Totals across replicas; peak is the largest per-replica peak since service start'),
             central_batching=True,multi_gpu=True,replica_count=len(self.services),memory=mem,
             routing=dict(mode=self.routing,requests_per_replica=list(self.dispatches),pending_positions=list(self.loads)),
             cpu_admission=self.cpu.report(),error=str(self.error) if self.error else None,

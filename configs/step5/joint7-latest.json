@@ -473,7 +473,7 @@
     "snapshot_seats": "match_learner"
   },
   "entropy_control": {
-    "contract": "entropy-floor-controller/2.0.0",
+    "contract": "entropy-floor-controller/3.0.0",
     "mode": "apply",
     "measure": "raw-policy-fixed-il-probe",
     "groups": [
@@ -500,6 +500,12 @@
         1.0,
         0.7
       ]
+    },
+    "floor_ratio_by_group": {
+      "canal_action": 0.95,
+      "canal_other": 0.9,
+      "rail_action": 0.95,
+      "rail_other": 0.9
     }
   },
   "opening": {
@@ -513,7 +519,7 @@
     "tables": [
       "selfplay"
     ],
-    "rate_per_decision": 0.015,
+    "rate_per_decision": 0.005,
     "max_per_game": 1,
     "skip_opening_decisions": 2,
     "skip_final_rounds": "rail_empty_deck_hand_le_4",

@@ -102,7 +102,7 @@ def compact(report):
     out['actor']['learning_rate_schedule']=scalars(schedule,('contract','kind','base_lr','steps','start_factor',
         'completed_steps','effective_lr','next_lr')) if schedule else None
     out['actor']['sample_usage']=actor.get('sample_usage')
-    for key in ('gae','critic_split','critic_rows','final_categorical_probe'):
+    for key in ('gae','critic_split','critic_rows','final_categorical_probe','input_cache'):
         if key in actor:out['actor'][key]=actor[key]
     sampling=actor.get('rehearsal_sampling')
     if isinstance(sampling,dict):out['actor']['rehearsal_sampling']=scalars(sampling,(
@@ -177,7 +177,7 @@ def compact(report):
     utilization=report.get('utilization',{})
     out['utilization']={key:utilization.get(key) for key in ('games_per_second','mean_inference_batch',
         'inference_batches','inference_positions','padding_fraction','actor_phase_seconds',
-        'inference_phase_deltas','replay_ingress','scope')}
+        'inference_phase_deltas','inference_batching','replay_ingress','scope')}
     out['selfplay_incumbent']=report.get('selfplay_incumbent')
     out['selfplay_opponents']=report.get('selfplay_opponents')
     out['historical_opponents']=report.get('historical_opponents')

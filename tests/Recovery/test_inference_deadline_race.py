@@ -8,7 +8,7 @@ from unittest.mock import patch
 
 import numpy as np
 
-from fixtures import position
+from review_fixture import current_position as position
 from brass_ai.learning.batching import Request, accept_response
 from brass_ai.learning.contracts import digest
 from brass_ai.personality.search.inference import PersonalityPolicy

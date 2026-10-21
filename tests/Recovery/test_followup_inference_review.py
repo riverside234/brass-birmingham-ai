@@ -7,7 +7,7 @@ from unittest.mock import patch
 import numpy as np
 import torch
 
-from fixtures import position
+from review_fixture import current_position as position
 from brass_ai.learning.batching import Evaluator, Request
 from brass_ai.learning.model import ModelConfig
 from brass_ai.learning.reward import specification

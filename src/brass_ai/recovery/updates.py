@@ -84,10 +84,11 @@ class Dataset:
         self.data, self.device = data, device
         self.rows=[d[0] for d in data]
         self.encoded=[d[3] for d in data]
-        from brass_ai.learning.features import check_encoded
-        from brass_ai.learning.local_entities import check_action_selectors
+        from .batch_cache import InputAudit, BatchCache
+        self.input_audit=InputAudit()
+        self.scan_cache=BatchCache()
         for row in self.encoded:
-            check_encoded(row);check_action_selectors(row.actions)
+            self.input_audit.check(row)
         log=Progress(progress,5,'tensor groups') if progress else None
         self.chosen=torch.tensor([r['chosen'] for r in self.rows],device=device)
         self.seats=torch.tensor([r['seat'] for r in self.rows],device=device)
@@ -126,31 +127,45 @@ class Dataset:
     def _batch_rows(self, indices, value_only=False):
         rows=[self.encoded[i] for i in indices]
         if value_only:
-            from brass_ai.learning.features import Encoded,check_encoded
+            from brass_ai.learning.features import Encoded
             # Check the original shapes before narrowing: slicing must not
             # hide a changed action/choice count after Dataset construction.
-            for row in rows:check_encoded(row)
+            for row in rows:self.input_audit.check(row)
             rows=[Encoded(row.state,row.actions[:1],row.stable_to_relative,
                           row.choice_ids[:1],row.feature_version) for row in rows]
         return rows
 
     def batch(self, indices, exploration=0, temperature=1, *, value_only=False):
         ix=torch.tensor(indices,device=self.device)
-        inputs=collate(self._batch_rows(indices,value_only),self.device)
+        inputs=collate(self._batch_rows(indices,value_only),self.device,audit=self.input_audit)
         width=inputs[1].shape[1]
         q=np.zeros((len(indices),width),dtype=np.float32)
         if exploration:
             for j,i in enumerate(indices): q[j,:len(self.q[i])]=self.q[i]
         return ix, inputs, torch.from_numpy(q).to(self.device)
 
-    def _pinned_batch(self, indices, exploration=0, *, value_only=False):
+    def input_seal(self, indices, exploration=0):
+        return self.input_audit.seal([self.encoded[i] for i in indices],
+                                    [self.q[i] for i in indices] if exploration else ())
+
+    def _pinned_batch(self, indices, exploration=0, *, value_only=False, cache=False):
         # A small background queue prepares/pins CPU tensors while CUDA trains.
         # These private buffers are never mutated after asynchronous transfer.
+        return self._host_batch(indices,exploration,value_only=value_only,cache=cache,pinned=True)
+
+    def _host_batch(self, indices, exploration=0, *, value_only=False, cache=False, pinned=False):
+        key=(tuple(indices),bool(exploration),value_only,pinned)
+        seal=self.input_seal(indices,exploration) if cache else None
+        if cache:
+            hit=self.scan_cache.get(key,seal)
+            if hit is not None:return hit
         ix,inputs,q=self.batch_cpu(indices,exploration,value_only=value_only)
-        return tuple(t.pin_memory() for t in (ix,*inputs,q))
+        tensors=(ix,*inputs,q)
+        if pinned:tensors=tuple(t.pin_memory() for t in tensors)
+        return self.scan_cache.put(key,seal,tensors) if cache else tensors
 
     def batch_cpu(self, indices, exploration=0, *, value_only=False):
-        inputs=collate(self._batch_rows(indices,value_only))
+        inputs=collate(self._batch_rows(indices,value_only),audit=self.input_audit)
         q=np.zeros((len(indices),inputs[1].shape[1]),dtype=np.float32)
         if exploration:
             for j,i in enumerate(indices):q[j,:len(self.q[i])]=self.q[i]
@@ -167,16 +182,21 @@ class Dataset:
         for part,ix,inputs,_ in self.policy_batches(parts,executor=executor,value_only=state_value_model(model)):
             yield part,ix,inputs
 
-    def policy_batches(self, parts, exploration=0, executor=None, *, value_only=False):
+    def policy_batches(self, parts, exploration=0, executor=None, *, value_only=False, cache=False):
         if executor is None:
             for part in parts:
-                ix,inputs,q=self.batch(part,exploration,value_only=value_only)
-                yield part,ix,inputs,q
+                if cache:
+                    host=self._host_batch(part,exploration,value_only=value_only,cache=True)
+                    tensors=tuple(t.to(self.device) for t in host)
+                    yield part,tensors[0],tensors[1:-1],tensors[-1]
+                else:
+                    ix,inputs,q=self.batch(part,exploration,value_only=value_only)
+                    yield part,ix,inputs,q
             return
         parts=iter(parts);pending=deque()
         def submit():
             part=next(parts,None)
-            if part is not None:pending.append((part,executor.submit(self._pinned_batch,part,exploration,value_only=value_only)))
+            if part is not None:pending.append((part,executor.submit(self._pinned_batch,part,exploration,value_only=value_only,cache=cache)))
         for _ in range(2):submit()
         while pending:
             part,future=pending.popleft()
@@ -272,7 +292,10 @@ def policy_measure(model, dataset, indices, behavior, config, timings, verify=Fa
     total=torch.zeros((),device=dataset.device);valid=torch.ones((),dtype=torch.bool,device=dataset.device)
     with torch.no_grad(), timings.phase('ppo.policy_measure'):
         parts=dataset.microbatches(indices,config['microbatch_size'],config['max_candidate_cells'],config['bucket'])
-        for part,ix,inputs,q in dataset.policy_batches(parts,behavior.exploration,executor):
+        # The initial all-row likelihood verification runs once and includes
+        # forced rows. Reserve the bounded cache for repeated actor-only scans;
+        # otherwise that one large sweep would displace every reusable batch.
+        for part,ix,inputs,q in dataset.policy_batches(parts,behavior.exploration,executor,cache=not verify):
             out=value_output(model,inputs,dataset,ix)
             p=row_probabilities(dataset,ix,out[0],q,behavior)
             selected=p.gather(1,dataset.chosen[ix,None]).squeeze(1).clamp_min(1e-30)
@@ -565,6 +588,8 @@ def _ppo_nonforced(model,optimizer,games,behavior,config,*,profile,profile_steps
         baseline_scope='Before PPO, after any head calibration; nonforced learner decisions, in-sample',
         legal_actions=distribution([len(ds.rows[i]['choices']) for i in actor_ids]),
         categorical_probe=categorical_probe.measure(model,anchor=anchor_model),gradient_norms=distribution(gradient_norms),
+        input_cache=dict(probe=categorical_probe.cache_report(),scans=ds.scan_cache.report(),
+                         admission=ds.input_audit.report()),
         kl_estimator='probe_categorical_kl: exact KL(old behavior || current behavior), per-step guard; post_update_kl/probe_kl: sampled chosen-action ((ratio-1)-log(ratio)); full means all nonforced rows, retained as secondary epoch guard',
         kl_guard=dict(contract=PPO_KL_GUARD,target_kl=config['target_kl'],probe_positions=len(probe),
             probe_checks=steps,full_dataset_checks=len(epochs),max_categorical_kl=max_categorical_kl,
