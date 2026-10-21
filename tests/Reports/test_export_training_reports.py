@@ -377,6 +377,55 @@ class ExportTests(unittest.TestCase):
             key:dict(path=path.relative_to(self.root).as_posix(),sha256=reports.checksum(path.read_bytes()))
             for key,path in paths.items()})
 
+    def active_anchor_at_latest_rating(self):
+        self.advance_run(320)
+        slot=self.rating_slot(320)
+        cache=self.put(self.run+'/policy-anchor/probabilities/current.json',dict(model_id='anchor'))
+        self.state['ratings']=dict(slots=[slot])
+        self.state['policy_anchor']=dict(active=dict(
+            cache=dict(path=cache.relative_to(self.root).as_posix(),sha256=reports.checksum(cache.read_bytes())),
+            fit={key:slot[key] for key in ('report','spec')}))
+        self.put(self.run+'/state.json',self.state)
+        return slot
+
+    def test_latest_rating_also_used_by_anchor_deduplicates_and_incrementally_reuses(self):
+        slot=self.active_anchor_at_latest_rating()
+        original={key:(self.root/slot[key]['path']).read_bytes() for key in ('report','spec')}
+        output,manifest=self.export(output='results/anchor-first')
+        for key,raw in original.items():
+            name=Path(slot[key]['path']).relative_to(self.run).as_posix()
+            self.assertEqual((output/name).read_bytes(),raw)
+            self.assertEqual(sum(e['path']==name for e in manifest['files']),1)
+        completed=subprocess.run([sys.executable,'-B',str(ROOT/'scripts/export-training-reports.py'),
+            '--root',str(self.root),'--run',self.run,'--output','results/anchor-continued','--continue'],
+            capture_output=True,text=True)
+        self.assertEqual(completed.returncode,0,completed.stderr)
+        continued=self.root/'results/anchor-continued'
+        manifest=json.loads((continued/'export-manifest.json').read_text())
+        self.assertEqual(manifest['rating_slot_generation'],320)
+        for key,raw in original.items():
+            name=Path(slot[key]['path']).relative_to(self.run).as_posix()
+            self.assertFalse((continued/name).exists())
+            reused=[e for e in manifest['reused_files'] if e['path']==name]
+            self.assertEqual(len(reused),1)
+            self.assertEqual(reused[0]['previous_export'],'results/anchor-first')
+            self.assertEqual((self.root/reused[0]['previous_export']/name).read_bytes(),raw)
+            self.assertEqual((self.root/slot[key]['path']).read_bytes(),raw)
+
+    def test_duplicate_anchor_rating_with_changed_bytes_still_aborts_publication(self):
+        slot=self.active_anchor_at_latest_rating();target=self.root/slot['report']['path']
+        original=target.read_bytes();changed=original.replace(b'320',b'321')
+        self.assertNotEqual(original,changed);self.assertEqual(len(original),len(changed))
+        original_files=reports.report_files
+        def change_between_selections(root,directory,**kwargs):
+            for path in original_files(root,directory,**kwargs):
+                if path==target:target.write_bytes(changed)
+                yield path
+        with patch.object(reports,'report_files',side_effect=change_between_selections):
+            with self.assertRaisesRegex(ValueError,'Conflicting export destination: ratings/slots/generation-000320/report.json'):
+                self.export(output='results/anchor-changed')
+        self.assertFalse((self.root/'results/anchor-changed').exists())
+
     def test_only_latest_committed_rating_slot_is_copied(self):
         old=self.rating_slot(10);latest=self.rating_slot(50)
         self.rating_slot(60)  # On disk but not yet committed in rating state.

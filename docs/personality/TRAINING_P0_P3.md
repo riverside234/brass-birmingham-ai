@@ -156,7 +156,7 @@ Local CPU verification does not establish CUDA throughput, playing strength, rea
 
 ## Post-Step-5 P2 search and P3 learned repertoire
 
-**Current scope:** The [goal-head skip decision](README.md#goal-head-skipped) supersedes this historical section's instruction to finish the goal pilot first. Goal-generated intent and goal-biased search are deferred. The existing commands still require goal-enabled model/readiness artifacts; they are not yet a validated goal-free continuation path.
+**Current scope (updated 20 October 2026):** The [goal-head skip decision](README.md#goal-head-skipped) supersedes this historical section's instruction to finish the goal pilot first. **P2's goal/intent search mechanism is no longer used because the selected workflow does not use a goal head.** This includes goal-generated intent, its persistence controls, goal-confidence calibration and goal-biased search priors. Generic search-teacher collection and policy-only distillation remain separate planned capabilities. The existing commands still require goal-enabled model/readiness artifacts; they need adaptation and validation before use in a goal-free continuation path.
 
 **13 October audit:** [P0–P6 findings and verification](AUDIT_HISTORY.md#audit-2026-10-13-p0-p6). Readiness calibration must match the saved model receipt and count only setups with observed labels. Teacher context, goal, profile and search settings must match the executed collection. Preparation failures now retire inference resources. Regenerate downstream evidence after the P0/P1 source migration; P3 schemas and selection settings are unchanged.
 

@@ -189,7 +189,11 @@ def export(root, run, output=None, *, latest=2, extras=(), continue_export=False
         entry = dict(source=path.relative_to(root).as_posix(), path=name,
                      bytes=len(raw), sha256=checksum(raw), reason=reason)
         if name in files:
-            require(files[name][0] == entry, f'Conflicting export destination: {name}')
+            previous, previous_raw = files[name]
+            # A report may serve both the active anchor and the latest rating
+            # slot. Selection reasons describe its uses, not file identity.
+            require(all(previous[key] == entry[key] for key in ('source', 'path', 'bytes', 'sha256'))
+                    and previous_raw == raw, f'Conflicting export destination: {name}')
         else:
             files[name] = (entry, raw)
         return value

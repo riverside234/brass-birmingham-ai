@@ -17,6 +17,8 @@ Consolidated on 15 October 2026. This directory is the single maintained locatio
 
 **18 October 2026:** The goal-head code is already implemented, but the real-model goal-head workflow has not been run. Keep that implementation for possible future use and **skip this stage in the upcoming post-Step-5 workflow**. Do not run goal-head warm-up, goal calibration (`validate-goals`), or the existing goal-loss joint pilot. Goal-generated short-term intent, goal-alignment search bias and goal-head UI hints are also outside the current workflow. Re-enable this branch only after an explicit future decision.
 
+**20 October 2026 — P2 goal/intent search: no longer used in the selected workflow.** Because this workflow does not use a goal head, omit goal-predicted short-term intent, its persistence controls, goal-confidence calibration and goal-alignment search priors. The old goal-dependent implementation and commands remain historical references. Generic MCTS teacher collection and policy distillation remain separate planned capabilities; their goal-free model/readiness integration still needs adaptation and validation. Existing Step 5 context inputs remain available for later frozen-network style discovery.
+
 The existing Step 5 style/industry-focus inputs remain separate from the skipped goal head. The later 16-style discovery objective also remains separate: those styles are measured behavioral archetypes, not goal-head classes. This decision changes the documented workflow only; it does not delete implemented code or alter models, checkpoints or current self-play training.
 
 The goal-enabled commands and results below are retained as historical reference. Existing P2-P6 tooling still depends on personality/goal model contracts and readiness artifacts. **Skipping P1 is not yet a supported command-level bypass into that tooling.** Adapt and validate those dependencies for a goal-free workflow before using the downstream commands; do not fabricate a completed P1 receipt or weaken qualification checks.
@@ -57,7 +59,7 @@ Ordinary PPO branches with the same win objective are not automatically PPGA and
 | --- | --- | --- |
 | P0 | [Handoff](TRAINING_P0_P3.md#p0-p1) | No search; validates and freezes the eligible source |
 | P1 | [Goal head and joint PPO - skipped](TRAINING_P0_P3.md#p0-p1) | Implemented code retained; do not run in the upcoming workflow |
-| P2 | [Readiness, search and teachers](TRAINING_P0_P3.md#p2-p3) | Direct readiness collection, then searched probes/teachers and policy distillation |
+| P2 | [Readiness, search and teachers](TRAINING_P0_P3.md#p2-p3) | Goal/intent search no longer used; generic readiness, search teachers and policy distillation require goal-free adaptation |
 | P3 | [Repertoire discovery](TRAINING_P0_P3.md#p2-p3-p3-inexpensive-discovery-first) | Direct discovery followed by searched-controller confirmation; descriptor fitting itself needs no search |
 | P4 | [Roster qualification](QUALIFICATION_P4_P6.md#p4) | Searched member/mixture evaluation of the frozen shared model |
 | P5 | [Difficulty calibration](QUALIFICATION_P4_P6.md#p5) | Evaluation under the declared tier search budgets |
