@@ -149,7 +149,7 @@ def read_games(root,state):
     return result
 
 
-def slot_spec(root,run,rating,entry,config):
+def slot_spec(root,run,rating,entry,config,*,anchor_agent=None):
     generation=entry['generation'];agent=f'generation-{generation:06d}';c=config['rating']
     agents=copy.deepcopy(rating['agents']);agents[agent]=dict(kind='model',checkpoint=copy.deepcopy(entry))
     previous=read(project_path(root,rating['latest_report']['path'])) if rating['latest_report'] else None
@@ -166,15 +166,24 @@ def slot_spec(root,run,rating,entry,config):
         opponents=rng.sample(available,2) if len(available)>=2 else available*2
         base=[agent,IL if i%2==0 else V4]+opponents
         for seat in range(4):lineups.append(dict(seed=seed,seat=seat,kind='rating',agents=base))
+    coverage=None
+    if 'rating_coverage' in config and rating.get('coverage',{}).get('activated'):
+        from .rating_coverage import lineups as competitive_lineups
+        lineups,coverage=competitive_lineups(rating,agents,agent,scores,generation,anchor_agent)
+        nearest=coverage['nearest'];estimate_theta=coverage['estimated_theta']
     for seed in rating['seeds'][:c['panel_setups']]:
         for seat in range(4):
-            lineups.append(dict(seed=seed,seat=seat,kind='v4-panel',agents=[agent,V4,V4,V4]))
-            lineups.append(dict(seed=seed,seat=seat,kind='il-panel',agents=[agent,agent,IL,IL]))
+            retired=rating.get('panel_gates',{}).get('retired',{}) if 'panel_gates' in config else {}
+            if not retired.get('v4-panel'):
+                lineups.append(dict(seed=seed,seat=seat,kind='v4-panel',agents=[agent,V4,V4,V4]))
+            if not retired.get('il-panel'):
+                lineups.append(dict(seed=seed,seat=seat,kind='il-panel',agents=[agent,agent,IL,IL]))
     used={a for row in lineups for a in row['agents']}
     return dict(format='plackett-luce-slot/1.0.0',generation=generation,candidate=agent,
         agents={a:agents[a] for a in sorted(used)},lineups=lineups,config=copy.deepcopy(c),
         estimated_theta=estimate_theta,estimate_scope='Latest rated checkpoint, or IL zero before the first slot',
-        nearest=nearest,startup_reference_fallback=not nearest,implementation=implementation_id(),
+        nearest=nearest,startup_reference_fallback=bool(coverage['startup_fallback_seats']) if coverage else not nearest,implementation=implementation_id(),
+        **({'coverage':coverage} if coverage is not None else {}),
         execution=copy.deepcopy(config['execution']),host=config['host'],partition='validation')
 
 
@@ -240,11 +249,17 @@ def collect_slot(root,directory,spec,config,device,mono,inference_devices):
     return rows
 
 
-def panel_report(rows,candidate,health,seed):
+def panel_report(rows,candidate,health,seed,*,gates=None):
     from brass_ai.qualification import grouped_interval
     result={}
     for name in ('v4-panel','il-panel'):
         games=[r for r in rows if r['kind']==name];samples=[]
+        if not games:
+            trigger=(gates or {}).get('retired',{}).get(name)
+            require(trigger is not None,'Missing active rating panel')
+            result[name]=dict(games=0,setups=0,learner_win_share=None,win_share_setup_bootstrap_95=None,
+                vp_per_learner_seat=None,qualified=None,status='retired',trigger=copy.deepcopy(trigger))
+            continue
         for game in games:
             seats=[s for s,a in enumerate(game['agents']) if a==candidate]
             samples.append(dict(seed=game['setup_seed'],win=sum(game['win_share'][s] for s in seats),
@@ -262,8 +277,9 @@ def alerts(report,state,panels,previous_panels):
     latest=max(checkpoints,key=lambda a:state['agents'][a]['checkpoint']['generation'])
     best=max(checkpoints,key=lambda a:report['ratings'][a]['points'])
     current=report['ratings'][latest];best_rating=report['ratings'][best]['points']
-    series=[p['panels']['v4-panel']['learner_win_share'] for p in previous_panels+[panels]]
-    slipping=len(series)>=3 and series[-3]>series[-2]>series[-1]
+    series=[p['panels']['v4-panel']['learner_win_share'] for p in previous_panels+[panels]
+        if p['panels']['v4-panel']['learner_win_share'] is not None]
+    slipping=panels['panels']['v4-panel']['learner_win_share'] is not None and len(series)>=3 and series[-3]>series[-2]>series[-1]
     return dict(regression=bool(current['points_ci95'][1]<best_rating-50),candidate=latest,best=best,
         regression_threshold_points=50,v4_watch=slipping,v4_recent_win_shares=series[-3:],
         v4_watch_action='Review three-slot decline; no automatic increase or rollback of the ordinary v4 share',
@@ -272,27 +288,24 @@ def alerts(report,state,panels,previous_panels):
 
 
 def plot_report(path,report,agents):
-    import matplotlib
-    matplotlib.use('Agg')
-    from matplotlib import pyplot as plt
-    points=sorted((entry['checkpoint']['generation'],name) for name,entry in agents.items() if entry['kind']=='model' and name!=IL)
-    fig,ax=plt.subplots(figsize=(8,4.5))
-    if points:
-        x=np.asarray([g for g,_ in points]);y=np.asarray([report['ratings'][a]['points'] for _,a in points])
-        ci=np.asarray([report['ratings'][a]['points_ci95'] for _,a in points])
-        # Percentile intervals can exclude the MAP estimate; draw endpoints
-        # directly rather than forcing nonnegative error-bar magnitudes.
-        ax.vlines(x,ci[:,0],ci[:,1],alpha=.6,color='#176b9b');ax.plot(x,y,'o-',color='#176b9b',label='Checkpoint (95% setup bootstrap)')
-    ax.axhline(0,color='gray',linestyle=':',label='IL = 0')
-    v4=report['ratings'][V4];ax.axhline(v4['points'],color='#b65f28',linestyle='--',label='v4, no search')
-    ax.axhspan(*v4['points_ci95'],alpha=.10,color='#b65f28')
-    ax.set(xlabel='Committed training generation',ylabel='PL points (173.7 × theta)',title='Held-out strength estimates')
-    ax.legend(fontsize=8);ax.grid(alpha=.2);fig.tight_layout();fig.savefig(path);plt.close(fig)
+    # Keep automatic slots, offline refits and manual redraws on one renderer.
+    from .rating_plot import render
+    render(report,path,agents=agents)
 
 
 def schedule(root,run,state,config,*,device='cpu',mono=None,inference_devices=None):
     rating=validate_state(root,state['ratings'],config['rating']);c=config['rating']
     if not c['enabled']:return None
+    from . import panel_gates
+    gates=panel_gates.prepare(root,state,config)
+    if gates is not None and rating.get('panel_gates')!=gates:
+        rating['panel_gates']=gates
+        write_json(run/'state.json',state)
+    from .rating_coverage import prepare as prepare_coverage
+    coverage=prepare_coverage(root,state,config)
+    if coverage is not None and rating.get('coverage')!=coverage:
+        rating['coverage']=coverage
+        write_json(run/'state.json',state)
     completed={s['generation'] for s in archived_history(root,rating)['slots']+rating['slots']}
     available={e['generation']:e for e in state['history']}
     last_report=None
@@ -304,7 +317,8 @@ def schedule(root,run,state,config,*,device='cpu',mono=None,inference_devices=No
         retained=state['population']+[a['checkpoint'] for a in rating['agents'].values() if a['kind']=='model']
         previous=next((m for m in retained if m['model_id']==entry['model_id'] and m.get('weights_only')),None)
         entry=slim_checkpoint(root,run,entry,previous)
-        spec=slot_spec(root,run,rating,entry,config);write_once(directory/'spec.json',spec)
+        anchor=(state.get('policy_anchor',{}).get('active') or {}).get('agent')
+        spec=slot_spec(root,run,rating,entry,config,anchor_agent=anchor);write_once(directory/'spec.json',spec)
         records_path=directory/'games.jsonl'
         manifest_path=directory/'games-manifest.json'
         if records_path.exists() and manifest_path.exists():
@@ -324,11 +338,12 @@ def schedule(root,run,state,config,*,device='cpu',mono=None,inference_devices=No
         fitted,samples=estimate([r for r in all_rows if r['kind']=='rating'],working['agents'],c)
         recent=state.get('recent_training',[])
         health=next((r['il_kl_limit']['health'] for r in reversed(recent) if r.get('il_kl_limit') and r['iteration']+1==generation),None)
-        panels=panel_report(rows,spec['candidate'],health,c['seed']);write_once(directory/'panels.json',panels)
+        panels=panel_report(rows,spec['candidate'],health,c['seed'],gates=rating.get('panel_gates'));write_once(directory/'panels.json',panels)
         previous_panels=panel_history(root,rating)
         fitted.update(generation=generation,candidate=spec['candidate'],alerts=alerts(fitted,working,panels,previous_panels),
-            protocol=dict(main_games=c['setups']*4,panel_games=c['panel_setups']*8,search=False,exploration=0.,focus='neutral'),
+            protocol=dict(main_games=c['setups']*4,panel_games=sum(p['games'] for p in panels['panels'].values()),search=False,exploration=0.,focus='neutral'),
             spec=receipt(root,directory/'spec.json'),records=receipt(root,records_path),panels=receipt(root,directory/'panels.json'))
+        if 'coverage' in spec:fitted['coverage']=copy.deepcopy(spec['coverage'])
         # Deterministic report bytes make an interrupted commit idempotent.
         write_once(directory/'report.json',fitted)
         samples_path=directory/'bootstrap.npz'
@@ -345,8 +360,12 @@ def schedule(root,run,state,config,*,device='cpu',mono=None,inference_devices=No
                   spec=receipt(root,directory/'spec.json'),panels=receipt(root,directory/'panels.json'),
                   bootstrap=receipt(root,samples_path))
         working['slots'].append(slot);working['latest_report']=slot['report'];rating=working;state['ratings']=rating
+        gates=panel_gates.prepare(root,state,config)
+        if gates is not None:rating['panel_gates']=gates
+        coverage=prepare_coverage(root,state,config)
+        if coverage is not None:rating['coverage']=coverage
         write_json(run/'state.json',state)
-        print(f'Rating generation {generation}: {c["setups"]*4} main + {c["panel_setups"]*8} panel games; '
+        print(f'Rating generation {generation}: {c["setups"]*4} main + {sum(p["games"] for p in panels["panels"].values())} panel games; '
               f'{fitted["ratings"][spec["candidate"]]["points"]:.1f} PL points; '
               f'{c["bootstrap"]} bootstrap refits; {time.perf_counter()-began:.1f}s',flush=True)
         last_report=fitted

@@ -41,7 +41,7 @@ def config():
     value['ppo_lr_controller']['contract']=controller.CONTRACT
     value.pop('il_kl_limit',None)
     for key in ('table_plan','opponent_pool','rating','v4_search_enabled','v4_share_gate','advantage','value_phase',
-                'critic_data','seat_descriptors'):value.pop(key,None)
+                'critic_data','seat_descriptors','panel_gates','policy_anchor','rating_coverage'):value.pop(key,None)
     value.update(selfplay_recipe='latest-model-selfplay/2.0.0',
         curriculum=[dict(until=None,selfplay=60,historical=30,legacy=10)],population=dict(recent=4,anchors=12))
     return value

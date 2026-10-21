@@ -195,7 +195,7 @@ def advance(r, weight, *, generation, observation, current_regime, active, toler
     threshold = ref_before['evidence']['r2'] if ref_before else None
     healthy = observation['healthy']
     fresh = observation['qualified']
-    recovered = threshold is not None and evidence['supported'] and evidence['r2'] >= threshold
+    recovered = threshold is not None and evidence['supported'] and evidence['r2'] >= threshold - .01
     eligible = bool(active and fresh and healthy and recovered)
     r['healthy_streak'] = 0
     decision, reason = 'hold', 'snapshot_r2_insufficient_support'
@@ -228,7 +228,9 @@ def advance(r, weight, *, generation, observation, current_regime, active, toler
             next_weight = WEIGHTS[WEIGHTS.index(weight) + 1]
             decision, reason = 'increase_snapshot_weight', 'sustained_healthy_rolling_r2_recovery'
             # Freeze PRE-INCREASE performance. No new-stage sample can change it.
-            r['reference'] = reference(evidence, generation, weight, current_regime)
+            # Tolerated small declines must not ratchet the frozen baseline down.
+            if evidence['r2'] >= threshold:
+                r['reference'] = reference(evidence, generation, weight, current_regime)
         else:
             r['healthy_streak'] = used_streak
             reason = 'snapshot_recovery_streak'
@@ -245,6 +247,7 @@ def advance(r, weight, *, generation, observation, current_regime, active, toler
         stage_origin_next=r['stage_origin'], regime_changed=regime_changed,
         healthy_streak_before=before, evidence_streak=used_streak, healthy_streak_next=r['healthy_streak'],
         eligible=eligible, health_ok=healthy, r2_recovered=bool(recovered), r2_threshold=threshold,
+        recovery_tolerance=.01, recover_at_or_above=threshold - .01 if threshold is not None else None,
         reduce_below=threshold - tolerance if threshold is not None else None,
         learner=evidence, current=pool([p for p in observation['tables'].values() if p is not None]),
         current_qualifying=fresh, reference_before=ref_before, reference_next=copy.deepcopy(r['reference']),

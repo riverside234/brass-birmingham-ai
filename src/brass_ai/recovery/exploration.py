@@ -10,11 +10,12 @@ GROUPS = ('canal_action', 'canal_other', 'rail_action', 'rail_other')
 Q = dict(contract='family-weighted-exploration/3.0.0', action_family_weights=FAMILY_WEIGHTS,
     unknown_action_kind_weight=1, pass_only_when_alone=True, industry_subgroups=['build','develop'],
     focus_multiplier=2., other_phases='v2', snapshot_seats='match_learner')
-ENTROPY = dict(contract='entropy-floor-controller/1.0.0', mode='apply',
+LEGACY_ENTROPY = dict(contract='entropy-floor-controller/1.0.0', mode='apply',
     measure='raw-policy-fixed-il-probe', groups=list(GROUPS), alpha_base=.005, alpha_max=.05,
     floor_start_ratio=.9, floor_decay_per_iteration=.999, floor_min_ratio=.6,
     gain=4., max_step=1.5, relax_factor=1.25, hysteresis=1.03, median_window=3, baseline_iterations=10,
     deployment_temperature_check=dict(every_iterations=50, temperatures=[1.,.7]))
+ENTROPY = dict(LEGACY_ENTROPY, deployment_temperature_check=dict(enabled=False,every_iterations=50,temperatures=[1.,.7]))
 OPENING = dict(contract='opening-temperature/1.0.0', temperature=1.5, action_decisions_per_seat=2, seats='neural')
 BRANCH = dict(contract='selfplay-branching/1.0.0', tables=['selfplay'], rate_per_decision=.005,
     max_per_game=1, skip_opening_decisions=2, skip_final_rounds='rail_empty_deck_hand_le_4',
@@ -29,7 +30,7 @@ STATE = 'exploration-state/1.0.0'
 
 def configure(config, staged=False):
     result=copy.deepcopy(config)
-    result.update(exploration=.03, exploration_distribution=copy.deepcopy(Q),
+    result.update(exploration=.02, exploration_distribution=copy.deepcopy(Q),
         entropy_control=copy.deepcopy(ENTROPY), opening=copy.deepcopy(OPENING),
         branching=copy.deepcopy(BRANCH), exploration_rollout=copy.deepcopy(ROLLOUT))
     if staged:
@@ -44,7 +45,12 @@ def continuation_config(config):
         return copy.deepcopy(config)
     require(config.get('selfplay_recipe')=='latest-model-selfplay/3.0.0' and config['exploration']==.08,
         'Staged exploration migration requires the existing .08 quality-pool recipe')
-    return configure(config,staged=True)
+    result=configure(config,staged=True)
+    # Reproduce the old signed migration exactly. Panel retirement is a
+    # separate reviewed transition; fresh generation uses the new default.
+    result['entropy_control']=copy.deepcopy(LEGACY_ENTROPY)
+    result['exploration']=.03  # Preserve the earlier signed staged-adoption recipe.
+    return result
 
 
 def validate(config):
@@ -53,11 +59,13 @@ def validate(config):
     require(all(present), 'Exploration revision requires all versioned blocks')
     # This initial recipe is deliberately narrow; experiments need explicit
     # reviewed signatures rather than unbounded free-form controller options.
-    require(config['exploration']==.03 and config['exploration_distribution']==Q and
+    require(config['exploration'] in (.02,.03) and config['exploration_distribution']==Q and
         config['opening']==OPENING and config['branching']==BRANCH, 'Invalid exploration revision recipe')
     e=config['entropy_control']
+    check=e.get('deployment_temperature_check',{})
+    require('enabled' not in check or check['enabled'] is False,'Temperature comparisons must be explicitly disabled')
     require(type(e) is dict and set(e)==set(ENTROPY) and e['mode'] in ('off','shadow','apply') and
-        dict(e,mode='apply')==ENTROPY, 'Invalid entropy floor controller')
+        dict(e,mode='apply') in (ENTROPY,LEGACY_ENTROPY), 'Invalid entropy floor controller')
     r=config['exploration_rollout']
     expected=dict(ROLLOUT,mode='staged',opening_after_iterations=1,raw_entropy_after_iterations=2) if r.get('mode')=='staged' else ROLLOUT
     require(r==expected, 'Invalid exploration adoption schedule')

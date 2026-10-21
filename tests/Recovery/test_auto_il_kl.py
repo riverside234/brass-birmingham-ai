@@ -51,7 +51,8 @@ class Rules(unittest.TestCase):
         old=copy.deepcopy(cfg);old.pop('il_kl_limit');old['ppo_lr_controller']['contract']=lr.CONTRACT
         from brass_ai.recovery.exploration import BLOCKS
         for key in BLOCKS:old.pop(key,None)
-        for key in ('table_plan','opponent_pool','rating','advantage','value_phase','critic_data','seat_descriptors'):old.pop(key,None)
+        for key in ('table_plan','opponent_pool','rating','advantage','value_phase','critic_data','seat_descriptors',
+                    'v4_share_gate','panel_gates','policy_anchor','rating_coverage'):old.pop(key,None)
         old.update(selfplay_recipe='latest-model-selfplay/2.0.0',
             curriculum=[dict(until=None,selfplay=60,historical=30,legacy=10)],population=dict(recent=4,anchors=12))
         validate_config(old)

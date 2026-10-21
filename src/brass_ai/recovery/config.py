@@ -345,7 +345,8 @@ def latest_model_config(config,imitation_checkpoint):
     from .value_phase import refined_options,interval_options
     from .exploration import configure
     from .v4_share import configure as configure_v4_share
-    return validate_config(configure_v4_share(configure(interval_options(refined_options(insolvency_event_config(champion_mix_config(sampling_config(result))))))))
+    from .policy_anchor import configure as configure_anchor
+    return validate_config(configure_anchor(configure_v4_share(configure(interval_options(refined_options(insolvency_event_config(champion_mix_config(sampling_config(result)))))))))
 
 
 def champion_mix_config(config):
@@ -536,6 +537,19 @@ def validate_config(config):
         require(fixed_selfplay_recipe(config) and config.get('teacher_enabled') is False,
                 'Auto IL-KL is for fresh latest-model self-play with teaching disabled')
     quality=quality_selfplay_recipe(config)
+    if 'policy_anchor' in config or 'rating_coverage' in config:
+        from .policy_anchor import validate as validate_anchor
+        fields|={'policy_anchor','rating_coverage'}
+        validate_anchor(config)
+    if 'panel_gates' in config:
+        from .panel_gates import validate as validate_panels
+        from .v4_share import CURRENT_CONTRACT
+        fields.add('panel_gates');validate_panels(config['panel_gates'])
+        require(quality and config.get('rating',{}).get('enabled') is True and
+            config.get('opponent_pool',{}).get('contract')=='pfsp-pool/1.0.0' and
+            config.get('v4_share_gate',{}).get('contract')==CURRENT_CONTRACT and
+            config.get('entropy_control',{}).get('deployment_temperature_check',{}).get('enabled') is False,
+            'Panel retirement requires PFSP, the 90% v4 share gate and disabled temperature comparisons')
     if 'v4_share_gate' in config:
         from .v4_share import validate as validate_share
         fields.add('v4_share_gate');validate_share(config['v4_share_gate'])

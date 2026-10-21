@@ -241,6 +241,8 @@ class PFSP(unittest.TestCase):
             profiles=[f'v4-{i}' for i in range(5)];bots={s:dict(kind='legacy',policy_id=s,search_free=True) for s in profiles}
             def plan(s):return plan_collection(SOURCE_ROOT,root,s,c,dict(config=c),service,'current',profiles,bots,bots,None,
                 fingerprints=dict(learner=fp,rule_bot=fp))
+            from brass_ai.recovery.panel_gates import initial as initial_panels
+            state['ratings']=dict(panel_gates=initial_panels(state['iteration']))
             before=copy.deepcopy(state);a=plan(state);b=plan(json.loads(json.dumps(state)))
             self.assertEqual(a,b);self.assertEqual(state,before)
             self.assertEqual(a['composition'],dict(selfplay=160,historical=144,legacy=16));self.assertEqual(a['context_counter']-81600,960)

@@ -7,7 +7,7 @@
   "threads": 4,
   "learning_rate": 6e-06,
   "weight_decay": 0.0001,
-  "exploration": 0.03,
+  "exploration": 0.02,
   "seed": 18510000,
   "execution": {
     "processes": 24,
@@ -498,7 +498,8 @@
       "temperatures": [
         1.0,
         0.7
-      ]
+      ],
+      "enabled": false
     }
   },
   "opening": {
@@ -533,12 +534,32 @@
     "branching_after_iterations": 20
   },
   "v4_share_gate": {
-    "contract": "v4-table-share-gate/2.0.0",
+    "contract": "v4-table-share-gate/3.0.0",
     "enabled": true,
     "source": "rating-v4-panel",
-    "win_share_above": 0.95,
+    "win_share_at_least": 0.9,
     "reference_games": 320,
     "reduced_v4_games": 6,
     "released_tables": "historical"
+  },
+  "panel_gates": {
+    "contract": "reference-panel-gates/1.0.0",
+    "win_share_at_least": 0.9,
+    "il_history_sampling": "pfsp"
+  },
+  "policy_anchor": {
+    "contract": "qualified-policy-anchor/1.0.0",
+    "qualification": "retired-or-active-il-panel-ge90",
+    "selection": "highest-rated-qualified-newer",
+    "promotion": "paired-setup-bootstrap-ci95-lower-gt0",
+    "initial_limit": 0.15,
+    "initial_group_limit": 0.3
+  },
+  "rating_coverage": {
+    "contract": "competitive-rating-coverage/1.0.0",
+    "win_share_above": 0.8,
+    "reference_setups_each": 4,
+    "competitive_setups": 24,
+    "selection": "nearest-balanced-distinct"
   }
 }

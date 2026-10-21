@@ -21,6 +21,7 @@ def specification(base):
 
 def schedule(root,run,state,config,*,device,mono=None,inference_devices=None):
     if 'entropy_control' not in config or not config['rating']['enabled']:return None
+    if config['entropy_control']['deployment_temperature_check'].get('enabled') is False:return None
     interval=config['entropy_control']['deployment_temperature_check']['every_iterations']
     origin=state.get('exploration',{}).get('origin',state['iteration'])
     completed={r['generation'] for r in state.get('temperature_ratings',[])}

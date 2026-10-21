@@ -73,7 +73,7 @@ class DistributionTests(unittest.TestCase):
 class ControllerTests(unittest.TestCase):
     def test_strict_configuration_and_fresh_defaults(self):
         c=config();validate_config(c)
-        new=latest_model_config(c,c['imitation_checkpoint']);self.assertEqual(new['exploration'],.03)
+        new=latest_model_config(c,c['imitation_checkpoint']);self.assertEqual(new['exploration'],.02)
         for key in E.BLOCKS:self.assertEqual(new[key],c[key])
         for key in E.BLOCKS:
             bad=copy.deepcopy(c);bad[key]['surprise']=1
@@ -241,7 +241,7 @@ class BehaviorTests(unittest.TestCase):
             for job in opened['jobs']:
                 for p in job['policies']:
                     if p['kind']=='neural':
-                        self.assertEqual(p['exploration'],.03);self.assertEqual(p['exploration_version'],3)
+                        self.assertEqual(p['exploration'],.02);self.assertEqual(p['exploration_version'],3)
                         self.assertEqual(p['opening'],E.OPENING)
                     else:self.assertEqual(p,bots[p['policy_id']])
                 self.assertNotIn('branching',job)
@@ -349,7 +349,8 @@ class BranchTests(unittest.TestCase):
         self.addCleanup(case.doCleanups)
         case.through(50)
         before=copy.deepcopy(case.state['ratings'])
-        case.cfg['entropy_control']=copy.deepcopy(E.ENTROPY)
+        # Archived signed recipes remain reproducible; fresh defaults disable it.
+        case.cfg['entropy_control']=copy.deepcopy(E.LEGACY_ENTROPY)
         case.state['exploration']=dict(origin=0)
         report=temperature_rating.schedule(case.root,case.run,case.state,case.cfg,device='cpu')
         self.assertEqual(case.state['ratings'],before)
@@ -399,6 +400,8 @@ class ContinuationTests(unittest.TestCase):
         p=next(model.parameters());p.grad=torch.ones_like(p)
         phase.optimizer.step();phase.optimizer.zero_grad(set_to_none=True)
         phase.state=gae.initial(old['advantage'],185);phase.critic_state['generation']=185
+        from brass_ai.recovery import snapshot_r2
+        phase.critic_state['weight_recovery']=snapshot_r2.initial(185,phase.critic_state['snapshot_weight'])
         new=E.continuation_config(old)
         state=dict(iteration=185,games_done=59200,next_seed=123,context_counter=177600,
             population=['kept'],history=['kept'],origin=dict(imitation='kept'))

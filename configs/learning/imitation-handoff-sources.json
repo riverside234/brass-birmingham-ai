@@ -373,6 +373,16 @@
       "implementation": "fe185d4d97bc256dbc35f32f6e2863b972f077b0877912ef31e373a72a455ecb",
       "learning_compatibility": "ef6a1b5126de42da8f3277dc9357b6ffb94a435f3faa7fee8dd312bb5a242a54",
       "reason": "Snapshot weight R2 controller only; completed IL architecture, encoding and tensors unchanged."
+    },
+    {
+      "implementation": "efc26563d6d0daa236d81a4d428a38b36624d7e72391c67bb84236a2515676b2",
+      "learning_compatibility": "ef6a1b5126de42da8f3277dc9357b6ffb94a435f3faa7fee8dd312bb5a242a54",
+      "reason": "g270 panel/PFSP/R2 revision only; completed IL architecture, encoding, checkpoint tensors and handoff invariants unchanged."
+    },
+    {
+      "implementation": "10d5817a743acc20eb0e70985f41cc2e07b0b1fa16779c54769d3828d3988e33",
+      "learning_compatibility": "ef6a1b5126de42da8f3277dc9357b6ffb94a435f3faa7fee8dd312bb5a242a54",
+      "reason": "Qualified self-play policy anchors and rating coverage only; completed IL/model/Features-4 contracts and handoff invariants unchanged."
     }
   ]
 }

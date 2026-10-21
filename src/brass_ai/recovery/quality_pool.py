@@ -55,8 +55,8 @@ def validate_state(pool,config,generation=None):
     return pool
 
 
-def distribution(pool):
-    if pfsp(pool):return pfsp_pool.distribution(pool)
+def distribution(pool,il_gate=None):
+    if pfsp(pool):return pfsp_pool.distribution(pool,il_gate=il_gate)
     members=[m for m in pool['members'] if m['generation']!=0]
     if not members:return dict(N=0,members=[])
     top=max(m['q'] for m in members);weights=[math.exp(m['q']-top) for m in members]
@@ -235,5 +235,7 @@ def finish_report(report,pool,event):
 
 
 def sampling_description(pool):
+    if pfsp(pool) and (pool.get('planning') or {}).get('il_gate'):
+        return 'Independent PFSP snapshot seats including IL, with the same uniform floor; IL checkpoint retained as evaluation/calibration anchor'
     if pfsp(pool):return 'Independent snapshot seats: stored reciprocal IL share; remainder PFSP with uniform floor'
     return 'Independent seats: 20% IL, 80% quality distribution (80% softmax + 20% uniform)'

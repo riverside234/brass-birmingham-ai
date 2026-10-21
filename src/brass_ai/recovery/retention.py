@@ -189,6 +189,8 @@ def _references(root,run):
         if d.get('format') in ('step5-recovery-league/2.1.0','step5-recovery-league/2.2.0'):
             selected={k:d.get(k) for k in ('resume','population','origin','evaluation_anchor','pins','champion','champion_mix')}
             selected['il_kl_probe']=d.get('il_kl_limit',{}).get('probe')
+            anchor=d.get('policy_anchor') or {}
+            selected['policy_anchor']=anchor.get('active')
             selected['quality_members']=d.get('quality_pool',{}).get('members')
             selected['ratings']=d.get('ratings')
             selected['temperature_ratings']=d.get('temperature_ratings')

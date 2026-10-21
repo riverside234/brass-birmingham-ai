@@ -78,7 +78,7 @@ class ShareGate(unittest.TestCase):
         self.assertFalse(c['value_phase']['enabled'])
         self.assertEqual(c,gate.configure(c))
         fresh=latest_model_config(c,c['imitation_checkpoint'])
-        self.assertEqual(fresh['v4_share_gate'],gate.DEFAULT)
+        self.assertEqual(fresh['v4_share_gate'],gate.CURRENT_DEFAULT)
         self.assertEqual(fresh['value_phase']['holdout'],holdout.DEFAULT)
         for key,value in (('win_share_above',float('nan')),('reference_games',True),
                           ('reduced_v4_games',7),('enabled',1),('source','ordinary'),

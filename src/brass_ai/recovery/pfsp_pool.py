@@ -24,18 +24,34 @@ def weight(member,config):
     return (1-x)**c['power'] if c['function']=='hard' else (x*(1-x))**c['power']
 
 
-def _distribution(pool):
-    members=[m for m in pool['members'] if m['generation']!=0];n=len(members);k=n+1;c=pool['config']
-    rule=c['pinned_seat_share'];share=1. if n==0 else min(1/(k+rule['offset']),rule['max'] or 1.)
+def _distribution(pool,il_gate=None):
+    previous=(pool.get('planning') or {}).get('il_gate')
+    if previous is not None:
+        require(il_gate is None or il_gate==previous,'IL PFSP gate cannot be replaced or reversed')
+        il_gate=previous
+    if il_gate is not None:
+        from .panel_gates import validate_trigger
+        validate_trigger(il_gate)
+        anchor=next(m for m in pool['members'] if m['generation']==0)
+        from brass_ai.learning.contracts import digest
+        require(il_gate['reference']==digest(dict(model_id=anchor['model_id'])) and
+            il_gate['generation']<=pool['generation'],'IL PFSP gate reference/progress differs')
+    members=[m for m in pool['members'] if m['generation']!=0 or il_gate is not None];n=len(members)
+    k=len(pool['members']);c=pool['config']
+    rule=c['pinned_seat_share'];share=(0. if il_gate is not None else
+        1. if n==0 else min(1/(k+rule['offset']),rule['max'] or 1.))
     weights=[weight(m,c) for m in members];total=math.fsum(weights);floor=c['uniform_floor']
     rows=[dict(model_id=m['model_id'],generation=m['generation'],x_hat=rate(m),C=m['C'],w=w,
         p=(1-floor)*w/total+floor/n if total else 1/n) for m,w in zip(members,weights)]
-    return dict(generation=pool['generation'],games_done=pool['games_done'],k=k,N=n,il_share=share,members=rows,
+    result=dict(generation=pool['generation'],games_done=pool['games_done'],k=k,N=n,il_share=share,members=rows,
         effective_members=1/math.fsum(r['p']**2 for r in rows) if n else 0.,
         largest_share=max((r['p'] for r in rows),default=0.),
         recent_share=math.fsum(r['p'] for m,r in zip(members,rows) if pool['generation']-m['admitted_iteration']<20),
         weighted_outrank_rate=math.fsum(r['p']*r['x_hat'] for r in rows) if n else None,
         all_zero_weights=bool(n and not total))
+    if il_gate is not None:
+        result.update(il_gate=copy.deepcopy(il_gate),il_probability=next(r['p'] for r in rows if r['generation']==0))
+    return result
 
 
 def seal(pool):
@@ -77,7 +93,8 @@ def validate_state(pool,config,generation=None):
     return pool
 
 
-def distribution(pool):return copy.deepcopy(pool['next_planning'])
+def distribution(pool,il_gate=None):
+    return copy.deepcopy(pool['next_planning']) if il_gate is None else _distribution(pool,il_gate)
 
 
 def draw(pool,planned,rng):
@@ -108,7 +125,7 @@ def comparisons(pool,games,tables,planned):
             'PFSP requires two learner and two separate snapshot seats')
         ranks=terminal_targets(game['result'])['placement']
         for o in opponents:
-            is_il=o['model_id']==anchor;p=expected.get(o['model_id'])
+            is_il=o['model_id']==anchor and 'il_gate' not in planned;p=expected.get(o['model_id'])
             require(o['model_id'] in rows and o['source']==('IL' if is_il else 'scored') and o['N']==planned['N']
                 and o['p']==p and o['il_share']==planned['il_share'] and
                 o['seat_probability']==(planned['il_share'] if is_il else (1-planned['il_share'])*p),
@@ -124,7 +141,7 @@ def update_scores(pool,games,tables,planned,*,generation,games_done):
     validate_state(pool,pool['config'])
     require(generation==pool['generation']+1,'PFSP must advance once per committed iteration')
     require(type(games_done) is int and games_done>pool['games_done'],'PFSP requires advancing ordinary-game progress')
-    require(planned==distribution(pool),'PFSP planning differs from committed estimates')
+    require(planned==_distribution(pool,planned.get('il_gate')),'PFSP planning differs from committed estimates')
     rows=comparisons(pool,games,tables,planned)
     seats=sum(r['seats'] for r in rows.values());comparisons_done=sum(len(r['outcomes']) for r in rows.values())
     require(seats==2*len(tables) and comparisons_done==4*len(tables),'PFSP history exposure differs')
@@ -151,7 +168,7 @@ def update_counts(pool,rows,planned,*,generation,games_done):
         if m['alarm_streak']==alarm['iterations']:
             alarms.append(dict(model_id=m['model_id'],generation=m['generation'],x_hat=rate(m),C=m['C'],
                 iterations=m['alarm_streak'],reason='pool_regression',action='review_only'))
-        used=old.get(m['model_id']);is_il=m['generation']==0
+        used=old.get(m['model_id']);is_il=m['generation']==0 and 'il_gate' not in planned
         report.append(dict(model_id=m['model_id'],generation=m['generation'],age=generation-m['admitted_iteration'],
             before=before,S=m['S'],C=m['C'],x_hat=rate(m),w=weight(m,c),
             p=used['p'] if used else None,w_used=used['w'] if used else None,
@@ -161,7 +178,8 @@ def update_counts(pool,rows,planned,*,generation,games_done):
     validate_state(pool,c,generation)
     il=next(r for r in report if r['generation']==0)
     return pool,dict(contract=c['contract'],planning=copy.deepcopy(planned),members=report,alarms=alarms,
-        il=dict(share=planned['il_share'],seats=il['seats_played'],comparisons=il['comparisons'],x_hat=il['x_hat'],C=il['C']),
+        il=dict(share=planned.get('il_probability',planned['il_share']),seats=il['seats_played'],comparisons=il['comparisons'],x_hat=il['x_hat'],C=il['C'],
+            sampling='pfsp' if 'il_gate' in planned else 'reserved'),
         decay=decay,scope='Unweighted learner/snapshot pairs in completed history tables only; p/IL share used are frozen before collection. Decayed rates are training diagnostics, not PL strength.')
 
 
@@ -242,4 +260,4 @@ def report_finish(report,pool,event):
 def console(report):
     if not report or not pfsp(report):return ''
     p=report['next_distribution']
-    return f' PFSP=IL:{p["il_share"]:.3f} effective:{p["effective_members"]:.1f} alarms:{len(report["alarms"])}'
+    return f' PFSP=IL:{p.get("il_probability",p["il_share"]):.3f} effective:{p["effective_members"]:.1f} alarms:{len(report["alarms"])}'

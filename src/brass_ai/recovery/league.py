@@ -113,6 +113,8 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
     require(il_kl_probe_from_run is None or (not state_path.exists() and bc_origin is not None and 'il_kl_limit' in config),
             '--il-kl-probe-from-run is only for a new self-play run from completed IL')
     fixed_probe=None
+    from . import policy_anchor
+    anchor_values=None
     source_changed=False
     require(not resume_reviewed_source or state_path.exists(),'--resume-reviewed-source needs an existing same-run state.json')
     if state_path.exists():
@@ -218,7 +220,10 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
         from .il_kl_probe import load as load_probe
         validate_state(state.get('il_kl_limit'),config['il_kl_limit'],state['iteration'])
         from .g110_hotfix import verify_checkpoint
-        restored_hotfix=verify_checkpoint(state,raw)
+        if 'policy_anchor' in state:
+            policy_anchor.verify_checkpoint(state,raw)
+            restored_hotfix=None
+        else:restored_hotfix=verify_checkpoint(state,raw)
         if restored_hotfix is not None:
             optimizer_resume['il_kl_hotfix']=restored_hotfix
             print(f'One-time IL-KL hotfix: limit={restored_hotfix["limit_after"]:.8f}, '
@@ -280,6 +285,9 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
         with torch.random.fork_rng(devices=[]):schedule_ratings(root,run,state,config,device=device,mono=mono,inference_devices=inference_devices)
         from .temperature_rating import schedule as schedule_temperature
         with torch.random.fork_rng(devices=[]):schedule_temperature(root,run,state,config,device=device,mono=mono,inference_devices=inference_devices)
+    if fixed_probe is not None and 'policy_anchor' in config:
+        anchor_values,anchor_transition=policy_anchor.prepare(root,run,state,config,fixed_probe,model)
+        policy_anchor.console(anchor_transition)
     with InferenceService(config['execution'],device,profile=run/'profile-collection' if config['profile_steps'] else None,
                           profile_steps=config['profile_steps'],inference_devices=inference_devices) as service,reader_pool(config['audit_workers'],admission=service.cpu) as readers:
         with ActorPool(root,config['host'],service,config['execution'],mono=mono) as ordinary,ActorPool(root,config['host'],service,config['execution'],mono=mono,heavy=True) as heavy:
@@ -383,12 +391,14 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                     from .il_kl_limit import advance
                     counts=diagnostics.get('by_composition',{}).get('selfplay',{}).get('health_counts')
                     if counts and counts['all_learner_tables']!=counts['tables']:counts=None
-                    final_measurement=fixed_probe.measure(model,config['update'])
+                    final_measurement=fixed_probe.measure(model,config['update'],reference=anchor_values)
                     next_limit,limit_report=advance(state['il_kl_limit'],final_measurement,
                         counts,generation=iteration+1,warmup_done=update['controller_warmup_done'])
+                    policy_anchor.annotate(limit_report,state)
                 from .lr_controller import finish_iteration
+                active_anchor=(state.get('policy_anchor',{}).get('active') or {}).get('checkpoint',state['evaluation_anchor'])
                 update['lr_controller']=finish_iteration(optimizer,update,config,sampling,games,behavior.policy_id,
-                    kind_by_group,state['evaluation_anchor'],calibrated_anchor=limit_report['lr_gate'] if limit_report else None)
+                    kind_by_group,active_anchor,calibrated_anchor=limit_report['lr_gate'] if limit_report else None)
                 ppo_finished=time.monotonic()
                 value_report=phases.fit(model) if phases is not None else None
                 updated=time.monotonic();done=state['games_done']+len(games)
@@ -436,9 +446,10 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                 # Final limits, quality admission and checkpoint probes include
                 # shared-trunk movement from the separate value/teacher phases.
                 if fixed_probe is not None and weights_changed:
-                    final_measurement=fixed_probe.measure(model,config['update'])
+                    final_measurement=fixed_probe.measure(model,config['update'],reference=anchor_values)
                     next_limit,limit_report=advance(state['il_kl_limit'],final_measurement,
                         counts,generation=iteration+1,warmup_done=update['controller_warmup_done'])
+                    policy_anchor.annotate(limit_report,state)
                 if phases is not None:
                     from .gae import rating_evidence
                     final_probe=(phases.ppo_probe.measure(model,anchor=anchor_model) if weights_changed
@@ -469,6 +480,9 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                 diagnostics_finished=time.monotonic()
                 report=dict(format='step5-recovery-report/'+'2.2.0',iteration=iteration,composition=dict(composition),
                     v4_share_gate=v4_share.report(share,composition),
+                    panel_gates=copy.deepcopy(state.get('ratings',{}).get('panel_gates')),
+                    policy_anchor=copy.deepcopy(state.get('policy_anchor')),
+                    rating_coverage=copy.deepcopy(state.get('ratings',{}).get('coverage')),
                     exploration_rollout=exploration_settings,entropy_control=entropy_report,
                     quality_pool=quality_report,
                     il_kl_limit=limit_report,rehearsal_schedule=rehearsal_status,
@@ -494,7 +508,7 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                     legacy_modes=dict(Counter(j['provenance']['legacy_mode'] for j in jobs if j['provenance']['legacy_mode'])),
                     historical_opponents=dict(generation_seats=dict(sorted(historical_generations.items())),
                         pool_generations=[e['generation'] for e in state.get('population',[])],
-                        sampling=(quality_pool.sampling_description(state['quality_pool'])
+                        sampling=(quality_pool.sampling_description(next_quality)
                                   if quality else '25% initial/IL, 25% recent, 50% older reservoir; unavailable strata fall back')),
                     environment=environment(device),strength='requires fresh post-update evaluation')
                 if share is not None:
@@ -506,12 +520,14 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                 from .review_metrics import gate_diagnostics
                 report['gate_diagnostics']=gate_diagnostics(update,value_report,limit_report,quality_report)
                 checkpoint_began=time.monotonic()
+                anchor_commit=policy_anchor.checkpoint_state(state)
                 identity=save_checkpoint(output,model,optimizer,step=iteration+1,
                     training=dict(mode='step5-population-ppo',recipe='nonforced-actor-ppo/2.1.0' if revised else 'effective-minibatch-ppo/2.0.0',
                         parent=current,signature=digest(signature),fresh_run=run.relative_to(root).as_posix(),initialization='random-lineage',
                         evidence=dict(iteration=iteration,games_done=done,report=(directory/'report.json').relative_to(root).as_posix(),
                                       update_digest=digest(update)),
                         **({'il_kl_limit':next_limit} if next_limit is not None else {}),
+                        **({'policy_anchor':anchor_commit} if anchor_commit is not None else {}),
                         **({'exploration':exploration_state} if exploration_state is not None else {}),
                         **({'v4_share_gate':share} if share is not None else {}),
                         **({'actor_value_phases':phases.payload()} if phases is not None else {}),
@@ -524,6 +540,7 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                     history=state['history']+[entry],next_search_games=next_search,
                     search_seconds=search_seconds,ordinary_seconds=ordinary_seconds)
                 if next_limit is not None:state['il_kl_limit']=next_limit
+                if anchor_commit is not None:state['policy_anchor']=anchor_commit
                 if exploration_state is not None:state['exploration']=exploration_state
                 if quality:
                     for member in next_quality['members']:
@@ -532,6 +549,8 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                 if champion_mix.enabled(config):state['champion_mix']['transition_tables']+=transition_added
                 state['recent_training']=(state.get('recent_training',[])+[dict(iteration=iteration,games_done=done,
                     v4_share_gate=report['v4_share_gate'],
+                    panel_gates=report['panel_gates'],
+                    policy_anchor=report['policy_anchor'],rating_coverage=report['rating_coverage'],
                     exploration_rollout=exploration_settings,entropy_control=entropy_report,
                     exploration_metrics=diagnostics.get('exploration_metrics'),
                     quality_pool=quality_report,
@@ -559,6 +578,10 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                         with torch.random.fork_rng(devices=[]):
                             report['strength_rating']=schedule_ratings(root,run,state,config,device=device,mono=mono,inference_devices=inference_devices)
                             report['temperature_rating']=schedule_temperature(root,run,state,config,device=device,mono=mono,inference_devices=inference_devices)
+                        if fixed_probe is not None and 'policy_anchor' in config:
+                            anchor_values,anchor_transition=policy_anchor.prepare(root,run,state,config,fixed_probe,model)
+                            policy_anchor.console(anchor_transition)
+                            report['anchor_transition']=anchor_transition
                     report['timings']['evaluation_seconds']=time.monotonic()-evaluation_began
                     from .retention import prune
                     cleanup_began=time.monotonic()
@@ -603,8 +626,14 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                               f'{v["evidence"]["contributing_iterations"]}i)' if 'evidence' in v else '')
                             for k,v in gate['table_gate'].items())
                 if limit_report:
-                    controller_line+=(f' ILKL={limit_report["measurement"]["kl_mean"]:.4f}/{limit_report["limit_after"]:.4f}'
-                        f' group_limit={limit_report["group_limit_after"]:.4f} {limit_report["decision"]}')
+                    controller_line+=(f' AnchorKL[g{limit_report["anchor_reference"]["generation"]}]='
+                        f'{limit_report["measurement"]["kl_mean"]:.4f}/{limit_report["limit_after"]:.4f}'
+                        f' OrigILKL={limit_report["original_il_measurement"]["kl_mean"]:.4f}'
+                        f' group_limit={limit_report["group_limit_after"]:.4f} {limit_report["decision"]}'
+                        f' LRraise={int(limit_report["lr_increases_permitted_by_anchor"])}')
+                    transition=report.get('anchor_transition') or {}
+                    if transition.get('decision')=='promote':
+                        controller_line+=f' next_anchor=g{transition["reference_generation"]}'
                     checks=report['gate_diagnostics']
                     controller_line+=f' health={"ok" if checks["health_ok"] else ",".join(checks["health_reasons"])}'
                 if quality_report:

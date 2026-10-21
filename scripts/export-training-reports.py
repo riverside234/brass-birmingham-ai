@@ -229,6 +229,15 @@ def export(root, run, output=None, *, latest=2, extras=(), continue_export=False
         add(path, path.relative_to(run), 'Evaluation report or specification')
     for path in report_files(root, run / 'il-kl'):
         add(path, path.relative_to(run), 'Fixed IL-KL probe manifest or initial measurement')
+    for path in report_files(root,run/'policy-anchor'):
+        add(path,path.relative_to(run),'Qualified KL reference transition report')
+    active_anchor=(state.get('policy_anchor') or {}).get('active')
+    if active_anchor:
+        for reference in [active_anchor['cache'],active_anchor['fit']['report'],active_anchor['fit']['spec']]:
+            path=below(root,reference['path'])
+            require(path.is_relative_to(run) and checksum(path.read_bytes())==reference['sha256'],
+                'Active policy-anchor report evidence changed or outside this run')
+            add(path,path.relative_to(run),'Active KL reference evidence or probability-cache manifest')
     # Old slot folders may still exist after retention or alongside a pending
     # evaluation. Only the latest slot committed in state belongs in this export.
     slots = state.get('ratings', {}).get('slots', [])
@@ -244,7 +253,14 @@ def export(root, run, output=None, *, latest=2, extras=(), continue_export=False
         require(path.is_relative_to(run / 'ratings'), 'Rating archive points outside this run')
         require(checksum(path.read_bytes()) == archive['sha256'], 'Archived rating evidence changed')
         add(path, path.relative_to(run), 'Compact cumulative rating outcomes and diagnostic-panel history')
-    for slot in [latest_slot] if latest_slot is not None else []:
+    # Retired-panel evidence remains useful until it moves into the compact
+    # archive. Export its committed slot even when it is no longer the latest.
+    triggers=state.get('ratings',{}).get('panel_gates',{}).get('retired',{}).values()
+    needed={t['generation'] for t in triggers if t is not None}
+    coverage=state.get('ratings',{}).get('coverage',{}).get('activated')
+    if coverage:needed.update(t['generation'] for t in coverage['panels'].values())
+    if latest_slot is not None:needed.add(latest_slot['generation'])
+    for slot in [s for s in slots if s['generation'] in needed]:
         slot_directory = below(root, Path(slot['report']['path']).parent)
         require(slot_directory.parent == run / 'ratings' / 'slots' and
                 re.fullmatch(r'generation-0*' + str(slot['generation']), slot_directory.name),

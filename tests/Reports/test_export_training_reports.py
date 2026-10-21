@@ -53,6 +53,21 @@ class ExportTests(unittest.TestCase):
         for path in (spec,games,report):
             self.assertEqual((output/path.relative_to(self.root/self.run)).read_bytes(),path.read_bytes())
 
+    def test_active_policy_anchor_cache_and_fit_are_exported_without_dense_arrays(self):
+        reference=lambda p:dict(path=p.relative_to(self.root).as_posix(),sha256=reports.checksum(p.read_bytes()))
+        dense=self.put(self.run+'/policy-anchor/probabilities/current.npz',b'large probabilities')
+        cache=self.put(self.run+'/policy-anchor/probabilities/current.json',dict(probabilities=reference(dense)))
+        folder=self.run+'/ratings/slots/generation-000030/'
+        fit={key:reference(self.put(folder+key+'.json',dict(generation=30))) for key in ('report','spec')}
+        fit['bootstrap']=reference(self.put(folder+'bootstrap.npz',b'large bootstrap'))
+        hotfix=self.put(self.run+'/policy-anchor/hotfix-report.json',dict(applied=True))
+        self.state['policy_anchor']=dict(active=dict(cache=reference(cache),fit=fit))
+        self.put(self.run+'/state.json',self.state)
+        output,_=self.export()
+        for p in (cache,hotfix,*[self.root/fit[k]['path'] for k in ('report','spec')]):
+            self.assertEqual((output/p.relative_to(self.root/self.run)).read_bytes(),p.read_bytes())
+        self.assertFalse(any(p.suffix=='.npz' for p in output.rglob('*')))
+
     def test_collects_latest_two_all_evaluations_and_il_ancestry_preserving_bytes(self):
         self.put(self.run + '/best.json', {'generation': 0})
         self.put(self.run + '/generation-0060.pt', b'large checkpoint excluded')
@@ -381,6 +396,19 @@ class ExportTests(unittest.TestCase):
         output,manifest=self.export()
         self.assertIsNone(manifest['rating_slot_generation'])
         self.assertFalse((output/'ratings/slots').exists())
+
+    def test_retired_panel_trigger_slot_exported_until_archived(self):
+        old=self.rating_slot(10);latest=self.rating_slot(50);self.rating_slot(60)
+        self.state['ratings']=dict(slots=[old,latest],panel_gates=dict(retired={
+            'v4-panel':dict(generation=10),'il-panel':dict(generation=10)}))
+        self.put(self.run+'/state.json',self.state)
+        output,manifest=self.export()
+        self.assertEqual(manifest['rating_slot_generation'],50)
+        self.assertEqual({p.name for p in (output/'ratings/slots').iterdir()},
+                         {'generation-000010','generation-000050'})
+        for key in ('panels','spec','records'):
+            path=self.root/old[key]['path']
+            self.assertEqual((output/path.relative_to(self.root/self.run)).read_bytes(),path.read_bytes())
 
     def test_continue_reuses_legacy_exports_but_copies_new_and_changed_reports(self):
         original,_=self.export(output='results/original')

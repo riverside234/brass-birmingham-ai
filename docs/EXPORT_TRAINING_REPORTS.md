@@ -54,13 +54,17 @@ The script copies:
 - All available reports and specifications under the run's `evaluations/`, including champion, monitor, and broader panels.
 - The originating IL run's state/report and available ancestor IL states/reports.
 - The fixed IL-KL probe's `il-kl/manifest.json` and `il-kl/initial-report.json`, when present.
-- Only the **latest committed** PL rating slot folder: its specifications/reports,
+- The **latest committed** PL rating slot folder: its specifications/reports,
   separate panels, compact game outcomes (`games.jsonl`), and progress curve
-  (`progress.svg`). Older and pending slot folders are excluded, with or without
+  (`progress.svg`). Older slots needed by panel-retirement or competitive-coverage
+  gate receipts are also included until archived. Other older and pending slot folders are excluded, with or without
   `--continue`. The selection is recorded as `rating_slot_generation`; unchanged
   latest-slot files can be reused with `--continue` when no new rating has run.
 - The committed cumulative rating archive, when present, plus separate temperature
   comparison reports and their compact evidence.
+- Qualified policy-reference transition reports, its active probability-cache
+  manifest, and the fit/spec supporting its paired promotion interval. These
+  remain available even when the active reference outlives ordinary slot retention.
 
 For the current v11.1 recipe, full iteration reports and compact history retain
 the PPO LR controller, exact categorical KL, overall and per-group IL-anchor
@@ -70,12 +74,19 @@ an absent champion gate need no substitute reports. The IL source is read from
 the saved run lineage; its existing directory/file names are preserved. No IL
 retraining or renaming is needed.
 
-The calibrated-limit revision also retains `il_kl_limit` (health baseline,
-behavior checks, overall/group limits, recovery latch and hold/raise/tighten
+The calibrated-limit revision also retains `il_kl_limit` (economic health baseline,
+overall/group limits, recovery latch and hold/raise/tighten
 decision), `rehearsal_schedule`, and zero-VP/insolvency counts by table type.
 The probe manifest carries selected-position identities and source/cache hashes;
 its dense `probe.npz` and `.prepared/` validation cache are excluded from this
 report-only bundle.
+
+For qualified references, full/compact reports retain `policy_anchor`,
+`anchor_transition` and `rating_coverage`, along with KL to the active reference,
+original IL KL, promotion confidence interval and whether anchor/economic checks
+permit LR increases. Original IL and fixed probe identities are unchanged. The
+active checkpoint, dense reference-probability array and bootstrap samples stay
+in the training run and are not copied; the helper verifies them on the lab host.
 
 The PFSP revision retains per-member S/C and raw/decayed outranks, frozen IL share
 and planning probabilities, seat/comparison counts, concentration summaries,

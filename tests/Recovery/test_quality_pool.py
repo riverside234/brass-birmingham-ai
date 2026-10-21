@@ -37,7 +37,8 @@ class Quality(unittest.TestCase):
         self.assertEqual(c,latest_model_config(c,c['imitation_checkpoint']))
         self.assertEqual(c['table_plan'],TABLE_PLAN);self.assertEqual(sum(c['population'].values()),24)
         old=copy.deepcopy(c)
-        for k in ('table_plan','opponent_pool','rating','advantage','value_phase','critic_data','seat_descriptors','v4_share_gate'):old.pop(k)
+        for k in ('table_plan','opponent_pool','rating','advantage','value_phase','critic_data','seat_descriptors',
+                  'v4_share_gate','panel_gates','policy_anchor','rating_coverage'):old.pop(k)
         from brass_ai.recovery.exploration import BLOCKS
         for k in BLOCKS:old.pop(k,None)
         old['exploration']=.08
@@ -191,6 +192,7 @@ class Quality(unittest.TestCase):
             for m in p['members']:m.update(path=path.relative_to(SOURCE_ROOT).as_posix(),sha256=sha(path))
             c=read_json(SOURCE_ROOT/'configs/step5/joint7-latest.json')
             c['opponent_pool']=copy.deepcopy(OPPONENT_POOL)
+            c.pop('panel_gates')  # Archived quality-score recipe predates IL-PFSP admission.
             state=dict(iteration=20,games_done=6400,next_seed=c['seed'],context_counter=0,
                 quality_pool=p,population=[q.reference(m) for m in p['members']],history=[q.reference(p['members'][0])],evaluation_anchor=q.reference(p['members'][0]))
             service=Mock();service.models={m['model_id']:None for m in p['members']}

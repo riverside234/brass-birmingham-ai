@@ -97,8 +97,14 @@ class Probe:
             part.append(i)
         if part:yield part
 
-    def measure(self,model,update):
+    def measure(self,model,update,*,reference=None):
         began=time.perf_counter();distances={};entropies={};normalized={};was_training=model.training
+        original_distances={};active_reference=reference
+        if active_reference is not None:
+            require(active_reference.shape==self.arrays['reference'].shape and
+                np.isfinite(active_reference).all() and (active_reference>=0).all(),'Invalid active anchor probabilities')
+            for a,b in zip(self.arrays['offsets'][:-1],self.arrays['offsets'][1:]):
+                require(abs(float(active_reference[a:b].sum())-1)<1e-5,'Active anchor probabilities are not normalized')
         device=next(model.parameters()).device
         model.eval()
         try:
@@ -110,6 +116,12 @@ class Probe:
                     for j,i in enumerate(part):
                         a,b=map(int,self.arrays['offsets'][i:i+2])
                         reference[j,:b-a]=torch.tensor(self.arrays['reference'][a:b],device=device)
+                    if active_reference is not None:
+                        original_values=stable_kl(reference,current,inputs[2],self.config['probability_floor']).cpu().tolist()
+                        for j,i in enumerate(part):
+                            original_distances[i]=original_values[j]
+                            a,b=map(int,self.arrays['offsets'][i:i+2])
+                            reference[j,:b-a]=torch.tensor(active_reference[a:b],device=device)
                     values=stable_kl(reference,current,inputs[2],self.config['probability_floor']).cpu().tolist()
                     entropy=-(current*current.clamp_min(1e-30).log()).sum(-1)
                     relative=entropy/inputs[2].sum(-1).float().log().clamp_min(1e-8)
@@ -124,10 +136,16 @@ class Probe:
             groups[group]=dict(positions=len(values),kl_mean=sum(values)/len(values) if values else None,
                 raw_entropy=sum(entropies[i] for i in ids)/len(ids) if ids else None,
                 normalized_entropy=sum(normalized[i] for i in ids)/len(ids) if ids else None)
-        return dict(positions=len(distances),requested_positions=self.config['probe_positions'],
+        result=dict(positions=len(distances),requested_positions=self.config['probe_positions'],
             kl_mean=sum(distances.values())/len(distances),groups=groups,unassigned_positions=0,
             elapsed_seconds=time.perf_counter()-began,probability_floor=self.config['probability_floor'],
             scope='Fixed IL validation positions; raw temperature-1 policies, no exploration; symmetric floor/renormalization for KL')
+        if active_reference is not None:
+            result['original_il']=dict(positions=len(original_distances),kl_mean=sum(original_distances.values())/len(original_distances),
+                groups={g:dict(positions=groups[g]['positions'],kl_mean=sum(original_distances[i] for i,row in
+                    enumerate(self.rows) if row['group']==g)/groups[g]['positions'] if groups[g]['positions'] else None) for g in GROUPS})
+            result['reference_kind']='qualified_checkpoint'
+        return result
 
     def probabilities(self,model,update):
         """Raw immutable snapshot for quality-pool novelty checks, no RNG."""

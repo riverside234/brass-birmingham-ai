@@ -131,6 +131,36 @@ def baseline_record(rows,config):
         insolvency_fraction=b['insolvency_fraction']+c['insolvency_allowance']))
 
 
+def measurement_supported(measurement,c):
+    distance=measurement.get('kl_mean');groups=measurement.get('groups',{})
+    return (measurement.get('positions')==c['probe_positions'] and finite(distance) and distance>=0 and all(
+        type(groups.get(k)) is dict and type(groups[k].get('positions')) is int and
+        groups[k]['positions']>=c['group_min_positions'] and finite(groups[k].get('kl_mean')) and
+        groups[k]['kl_mean']>=0 for k in GROUPS) and sum(groups[k]['positions'] for k in GROUPS)==c['probe_positions']
+        and measurement.get('unassigned_positions')==0)
+
+
+def reset_reference(state,measurement,*,generation):
+    """Reset reference-dependent calibration only, at committed progress."""
+    out=copy.deepcopy(validate_state(state,state['config'],generation));c=out['config']
+    require(c['initial_limit']==.15 and c['group_factor']==2.,'Qualified anchor starts at .15/.30 nats')
+    supported=measurement_supported(measurement,c)
+    current=rates(out['rolling']) if len(out['rolling'])==c['rolling_iterations'] else None
+    evidence=health(out['baseline'],current)
+    distance=measurement.get('kl_mean');groups=measurement.get('groups',{})
+    over=not supported or distance>.15 or any(groups[k]['kl_mean']>.30 for k in GROUPS)
+    out.update(limit=.15,last_update=generation,healthy_window=[],blocked=bool(over),
+        kl_last_healthy=distance if supported and evidence['ok'] else 0.,
+        last_healthy_generation=generation if supported and evidence['ok'] else 0)
+    for k in ('baseline','baseline_rows','rolling','probe','last_generation','config'):
+        require(out[k]==state[k],'Anchor promotion changed independent health/progress')
+    validate_state(out,c,generation)
+    return out,dict(generation=generation,measurement=copy.deepcopy(measurement),health=evidence,
+        limit_before=state['limit'],limit_after=.15,group_limit_before=2*state['limit'],group_limit_after=.30,
+        blocked=out['blocked'],lr_anchor_health_permits=bool(supported and evidence['ok'] and not over),
+        reason='new_reference_recalibration',scope='Reference KL only; economic baseline/rolling evidence and all optimizer state preserved')
+
+
 def advance(state,measurement,counts,*,generation,warmup_done):
     state=copy.deepcopy(validate_state(state,state['config']));c=state['config'];before=state['limit']
     # Preserve all active thresholds, counters, windows, limits and latch. Do
@@ -154,10 +184,7 @@ def advance(state,measurement,counts,*,generation,warmup_done):
     current=rates(state['rolling']) if len(state['rolling'])==c['rolling_iterations'] else None
     evidence=health(state['baseline'],current)
     distance=measurement.get('kl_mean');groups=measurement.get('groups',{})
-    supported=measurement.get('positions')==c['probe_positions'] and finite(distance) and distance>=0 and all(
-        type(groups.get(k)) is dict and type(groups[k].get('positions')) is int and
-        groups[k]['positions']>=c['group_min_positions'] and finite(groups[k].get('kl_mean')) and
-        groups[k]['kl_mean']>=0 for k in GROUPS) and sum(groups[k]['positions'] for k in GROUPS)==c['probe_positions'] and measurement.get('unassigned_positions')==0
+    supported=measurement_supported(measurement,c)
     if not supported:
         evidence['ok']=False;evidence['reasons'].append('probe_evidence_unavailable')
     action='hold';reason='warmup' if not warmup_done else 'collecting_baseline'

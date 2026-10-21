@@ -105,6 +105,10 @@ def check_signature(state, signature, reviewed=False):
                 LEGACY_MIGRATION as OLD_V4_SHARE_MIGRATION,configure_legacy as configure_old_v4_share)
             handlers[V4_SHARE_MIGRATION]=configure_v4_share
             handlers[OLD_V4_SHARE_MIGRATION]=configure_old_v4_share
+            from .panel_gates import MIGRATION as PANEL_MIGRATION,configure as configure_panels
+            handlers[PANEL_MIGRATION]=configure_panels
+            from .policy_anchor import MIGRATION as ANCHOR_MIGRATION,configure as configure_anchor
+            handlers[ANCHOR_MIGRATION]=configure_anchor
             from .exploration import MIGRATION as EXPLORATION_MIGRATION,continuation_config
             handlers[EXPLORATION_MIGRATION]=continuation_config
             for migration in migrations:
