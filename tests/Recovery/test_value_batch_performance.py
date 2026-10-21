@@ -9,9 +9,10 @@ import torch
 
 from review_fixture import current_game as game
 from brass_ai.learning.model import FourSeatNet, ModelConfig
+from brass_ai.learning.local_entities import entity_layout
 from brass_ai.learning.reward import specification
 from brass_ai.learning.utility_model import UtilityNet, utility_config
-from brass_ai.recovery import updates, utility
+from brass_ai.recovery import batch_cache, updates, utility
 from brass_ai.recovery.config import UPDATE_V21
 from brass_ai.step5.policy import NeuralPolicy
 
@@ -123,6 +124,36 @@ class ValueBatchPerformanceTests(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, 'encoded features'):
                     ds.value_batch([0], model)
 
+    def test_state_only_batches_do_not_hash_unused_action_lists(self):
+        data=self.data();model=self.model()
+        # Dataset admission checks layout; consumed policy/value inputs still
+        # validate selectors at collation. No eager digest over unused actions.
+        with patch.object(batch_cache,'array_digest',side_effect=AssertionError('unused action hash')):
+            ds=updates.Dataset(data,'cpu',policy=False)
+            for _ in range(3):
+                self.assertEqual(ds.value_batch([0,1,2,3],model)[1][1].shape[1],1)
+                self.assertEqual(ds.batch_cpu([0,1,2,3],value_only=True)[1][1].shape[1],1)
+            with patch.object(torch.Tensor,'pin_memory',lambda t:t),ThreadPoolExecutor(max_workers=2) as pool:
+                result=list(ds.value_batches([[0,1],[2,3]],model,pool))
+                self.assertEqual([part for part,_,_ in result],[[0,1],[2,3]])
+        self.assertEqual(ds.input_audit.report()['selector_checks'],0)
+        self.assertEqual(len(ds.input_audit.proofs),0)
+
+    def test_consumed_selectors_still_validated_and_policy_admits_every_action(self):
+        model=self.model();offset=entity_layout()['action_fields']['target']['start']
+        ds=updates.Dataset(self.data(),'cpu')
+        row=copy.copy(ds.encoded[0]);row.actions=row.actions.copy();ds.encoded[0]=row
+        row.actions[-1,offset]=.5
+        # The unused tail cannot affect state-only values, but it must never
+        # enter a policy, supervision or custom action-dependent value path.
+        ds.value_batch([0],model)
+        with self.assertRaisesRegex(ValueError,'selector'):ds.batch([0])
+        with self.assertRaisesRegex(ValueError,'selector'):
+            ds.value_batch([0],ActionDependentNet(model.config))
+        row.actions[0,offset]=.5
+        with self.assertRaisesRegex(ValueError,'selector'):ds.value_batch([0],model)
+        with self.assertRaisesRegex(ValueError,'selector'):ds.batch_cpu([0],value_only=True)
+
     def onpolicy(self, model):
         episode = game(); episode['split'] = 'train'
         policy = NeuralPolicy(model, focus='neutral', exploration=.05)
@@ -152,6 +183,10 @@ class ValueBatchPerformanceTests(unittest.TestCase):
                         spec = model.config.utility if combined else None
                         report = updates.ppo_update(model, adam, [episode], policy, config,
                             insolvency=spec['insolvency'] if spec else None, reward=spec)
+                    self.assertIn('ppo.critic_prepare',report['timings'])
+                    self.assertIn('ppo.probe_prepare',report['timings'])
+                    self.assertIn('ppo.probe_final',report['timings'])
+                    if combined:self.assertIn('ppo.utility_calibration',report['timings'])
                     report = {k: v for k, v in report.items() if k not in ('timings', 'memory', 'input_cache')}
                     results.append((copy.deepcopy(model.state_dict()), copy.deepcopy(adam.state_dict()),
                                     torch.get_rng_state().clone(), report))

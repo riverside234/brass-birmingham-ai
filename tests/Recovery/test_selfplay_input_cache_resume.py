@@ -9,6 +9,17 @@ from brass_ai.step5.league import implementation_id
 
 
 class InputCacheResume(unittest.TestCase):
+    def test_g412_continuation_preserves_the_adopted_config_and_state(self):
+        state=read(SOURCE_ROOT/'results/joint7-v11-2-grouped-lr-critic-g0412-20261021T173550049006Z/state.json')
+        original=copy.deepcopy(state)
+        config=read(SOURCE_ROOT/'configs/step5/joint7-v11-2-grouped-lr-critic-entropy-groups.json')
+        self.assertEqual(config,state['signature']['config'])
+        new=dict(state['signature'],implementation=implementation_id())
+        self.assertTrue(check_signature(state,new,reviewed=True))
+        self.assertEqual(state,original)
+        self.assertEqual((state['iteration'],state['games_done']),(412,131840))
+        with self.assertRaises(ValueError):check_signature(state,new)
+
     def test_same_settings_and_completed_il_layout_keep_their_identity(self):
         export=SOURCE_ROOT/'results/joint7-v11-2-grouped-lr-critic-g0320-20261021T052141479749Z'
         saved=read(export/'state.json')

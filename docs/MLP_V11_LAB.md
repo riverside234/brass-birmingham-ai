@@ -152,7 +152,22 @@ The `latest-model-selfplay/3.0.0` recipe starts with these base quotas. Fresh co
 
 Once the latest completed **v4 rating panel** reaches **90% learner win share**, the next collection uses **160 self-play / 154 history / 6 v4 games**, or **50% / 48.125% / 1.875%**. The ten released v4 tables go to **history**. This is the existing one-learner/three-v4 evaluation panel (32 games, eight setups at the current cadence), with official ties. The threshold is inclusive: exactly 90% passes. The reduction is persisted before collection and never automatically reversed. No extra evaluation games run, and deployment still requires review.
 
-To apply the **g410 group-floor/branch hotfix** after Ctrl+C and continue for 20 additional iterations, retaining PPO-only training and the **8/8/2 critic holdout**, run from the repository root:
+For the run stopped at **committed g412**, after updating the code, continue for 20 additional iterations from the repository root:
+
+```bash
+python scripts/recover-step5-iteration.py --root "$PWD" \
+  --run artifacts/step5/joint7-v11-2-grouped-lr-critic \
+  --expected-iteration 412 --apply && \
+python scripts/step5.py \
+  --config configs/step5/joint7-v11-2-grouped-lr-critic-entropy-groups.json train \
+  --run artifacts/step5/joint7-v11-2-grouped-lr-critic \
+  --imitation-run artifacts/step5/features4-v11-2-batch7-il \
+  --resume-reviewed-source --iterations 20
+```
+
+The group-floor/branch hotfix is already adopted at g412; do not rerun it or regenerate the config for this performance fix. Recovery archives an incomplete next collection, if present, without changing the committed checkpoint. Training resumes with g413. The PPO input repair removes repeated hashing of unused action lists from state-only value batches, retaining shape/layout and consumed-selector checks, all policy candidates, strict behavior verification and cached-input content checks. Reports now time `ppo.utility_calibration`, `ppo.critic_prepare`, `ppo.gae`, `ppo.probe_prepare` and `ppo.probe_final` separately. The displayed total PPO time includes utility-head calibration; disabling PPG does not disable that existing calibration. See [g412 diagnosis, benchmark and validation](../ai-research/SELFPLAY_G412_PPO_REVIEW.md).
+
+For an older run that has **not adopted the g410 group-floor/branch hotfix**, the archived command below applies that migration and continues for 20 additional iterations, retaining PPO-only training and the **8/8/2 critic holdout**:
 
 ```bash
 python scripts/recover-step5-iteration.py --root "$PWD" \

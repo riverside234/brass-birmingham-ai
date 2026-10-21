@@ -87,8 +87,11 @@ class Dataset:
         from .batch_cache import InputAudit, BatchCache
         self.input_audit=InputAudit()
         self.scan_cache=BatchCache()
-        for row in self.encoded:
-            self.input_audit.check(row)
+        # Selectors are admitted when their candidates are actually collated.
+        # Eager full-action hashing duplicated policy admission and made a
+        # state-only critic Dataset pay for every unused action as well.
+        from brass_ai.learning.features import check_encoded
+        for row in self.encoded:check_encoded(row)
         log=Progress(progress,5,'tensor groups') if progress else None
         self.chosen=torch.tensor([r['chosen'] for r in self.rows],device=device)
         self.seats=torch.tensor([r['seat'] for r in self.rows],device=device)
@@ -127,17 +130,20 @@ class Dataset:
     def _batch_rows(self, indices, value_only=False):
         rows=[self.encoded[i] for i in indices]
         if value_only:
-            from brass_ai.learning.features import Encoded
+            from brass_ai.learning.features import Encoded,check_encoded
             # Check the original shapes before narrowing: slicing must not
             # hide a changed action/choice count after Dataset construction.
-            for row in rows:self.input_audit.check(row)
+            # Unused actions do not enter a stock state-only value head. The
+            # consumed candidate still receives full selector admission below.
+            for row in rows:check_encoded(row)
             rows=[Encoded(row.state,row.actions[:1],row.stable_to_relative,
                           row.choice_ids[:1],row.feature_version) for row in rows]
         return rows
 
     def batch(self, indices, exploration=0, temperature=1, *, value_only=False):
         ix=torch.tensor(indices,device=self.device)
-        inputs=collate(self._batch_rows(indices,value_only),self.device,audit=self.input_audit)
+        inputs=collate(self._batch_rows(indices,value_only),self.device,
+                       audit=None if value_only else self.input_audit)
         width=inputs[1].shape[1]
         q=np.zeros((len(indices),width),dtype=np.float32)
         if exploration:
@@ -165,7 +171,7 @@ class Dataset:
         return self.scan_cache.put(key,seal,tensors) if cache else tensors
 
     def batch_cpu(self, indices, exploration=0, *, value_only=False):
-        inputs=collate(self._batch_rows(indices,value_only),audit=self.input_audit)
+        inputs=collate(self._batch_rows(indices,value_only),audit=None if value_only else self.input_audit)
         q=np.zeros((len(indices),inputs[1].shape[1]),dtype=np.float32)
         if exploration:
             for j,i in enumerate(indices):q[j,:len(self.q[i])]=self.q[i]
@@ -423,8 +429,9 @@ def ppo_nonforced(model,optimizer,games,behavior,config,*,profile=None,profile_s
 
 def _ppo_nonforced(model,optimizer,games,behavior,config,*,profile,profile_steps,rehearsal,rehearsal_weight,learner_data,executor,insolvency,reward,sample_groups=None,anchor_model=None,phases=None):
     require(all(g['split']=='train' for g in games),'Held-out PPO data')
-    require(model_id(model)==behavior.evaluator.model_id,'Collection model differs from learner')
     timings=Timings();device=next(model.parameters()).device
+    with timings.phase('ppo.behavior_identity'):
+        require(model_id(model)==behavior.evaluator.model_id,'Collection model differs from learner')
     from .learning_rate import KEY as WARMUP_KEY
     warmup=optimizer.param_groups[0].get(WARMUP_KEY)
     warmup_done=warmup is None or warmup['completed_steps']>=warmup['steps']
@@ -436,7 +443,8 @@ def _ppo_nonforced(model,optimizer,games,behavior,config,*,profile,profile_steps
         ds=Dataset(data,device);verify_behavior_metadata(ds,behavior)
         demo=rehearsal_dataset(rehearsal,device) if rehearsal_weight else None
     count=len(data);actor_ids=(~ds.forced).nonzero().flatten().cpu().tolist()
-    critic_ids=phases.prepare(ds) if phases is not None else list(range(count))
+    with timings.phase('ppo.critic_prepare'):
+        critic_ids=phases.prepare(ds) if phases is not None else list(range(count))
     critic_ds=phases.critic_dataset if phases is not None else ds
     critic_count=len(critic_ids)
     planned_steps=config['epochs']*math.ceil(len(actor_ids)/config['effective_batch_size'] if actor_ids else critic_count/config['critic_batch_size'])
@@ -447,7 +455,8 @@ def _ppo_nonforced(model,optimizer,games,behavior,config,*,profile,profile_steps
         require(insolvency==reward['insolvency'] and model.config.utility==reward and all(r['_reward_id']==digest(reward) for r in ds.rows),
                 'PPO model/return reward version differs')
         require(all(r['teacher'] is None for r in ds.rows),'Search distributions cannot enter fresh PPO rollouts')
-        calibration=calibrate(model,optimizer,critic_ds,config,indices=critic_ids)
+        with timings.phase('ppo.utility_calibration'):
+            calibration=calibrate(model,optimizer,critic_ds,config,indices=critic_ids)
         trajectories=[r['_reward_trajectory'] for r in ds.rows if '_reward_trajectory' in r]
         require(len(trajectories)==len({d[2] for d in data}),'Missing reward components')
         means={k:sum(t[k] for t in trajectories)/len(trajectories) for k in trajectories[0]}
@@ -466,7 +475,9 @@ def _ppo_nonforced(model,optimizer,games,behavior,config,*,profile,profile_steps
     if reward is None:advantages-=torch.tensor(costs,device=device,dtype=advantages.dtype)
     mc_useful=advantages[actor_ids]
     gae_report=None
-    if phases is not None:advantages,gae_report=phases.advantages(advantages,actor_ids)
+    if phases is not None:
+        with timings.phase('ppo.gae'):
+            advantages,gae_report=phases.advantages(advantages,actor_ids)
     useful=advantages[actor_ids];mean=useful.mean() if actor_ids else torch.zeros((),device=device)
     std=useful.std(unbiased=False) if actor_ids else torch.zeros((),device=device)
     from .review_metrics import distribution,CategoricalProbe,PPO_KL_GUARD
@@ -477,8 +488,9 @@ def _ppo_nonforced(model,optimizer,games,behavior,config,*,profile,profile_steps
     variance=float(actor_returns.var(unbiased=False)) if actor_ids else 0.
     explained_variance=1-float(mc_useful.var(unbiased=False))/variance if variance>1e-12 else None
     if config['normalize_advantages'] and actor_ids: advantages[actor_ids]=(useful-mean)/std.clamp_min(1e-8)
-    probe=phase_probe(ds,actor_ids,config['kl_probe_rows'])
-    categorical_probe=CategoricalProbe(model,ds,probe,behavior,config)
+    with timings.phase('ppo.probe_prepare'):
+        probe=phase_probe(ds,actor_ids,config['kl_probe_rows'])
+        categorical_probe=CategoricalProbe(model,ds,probe,behavior,config)
     gradient_norms=[]
     epochs=[];steps=0;critic_steps=0;clips=0;stopped=False;rehearsal_steps=0
     stop_reason=None;max_categorical_kl=0.
@@ -560,6 +572,8 @@ def _ppo_nonforced(model,optimizer,games,behavior,config,*,profile,profile_steps
     if phases is not None:
         phases.after_ppo(model,actor_ids,probe,categorical_probe,
             critic_steps=critic_steps,critic_rows=len(critic_used) if critic_steps else 0)
+    with timings.phase('ppo.probe_final'):
+        final_probe=categorical_probe.measure(model,anchor=anchor_model)
     return dict(format='nonforced-actor-ppo/2.1.0',epochs=epochs,optimizer_steps=steps,
         branch_sample_usage=dict(actor_distinct_used=sum(bool(ds.rows[i].get('_branch')) for i in actor_used),
             critic_distinct_used=sum('/branch/' in critic_ds.data[i][2][0] for i in critic_used),
@@ -587,7 +601,7 @@ def _ppo_nonforced(model,optimizer,games,behavior,config,*,profile,profile_steps
         baseline_explained_variance=explained_variance,
         baseline_scope='Before PPO, after any head calibration; nonforced learner decisions, in-sample',
         legal_actions=distribution([len(ds.rows[i]['choices']) for i in actor_ids]),
-        categorical_probe=categorical_probe.measure(model,anchor=anchor_model),gradient_norms=distribution(gradient_norms),
+        categorical_probe=final_probe,gradient_norms=distribution(gradient_norms),
         input_cache=dict(probe=categorical_probe.cache_report(),scans=ds.scan_cache.report(),
                          admission=ds.input_audit.report()),
         kl_estimator='probe_categorical_kl: exact KL(old behavior || current behavior), per-step guard; post_update_kl/probe_kl: sampled chosen-action ((ratio-1)-log(ratio)); full means all nonforced rows, retained as secondary epoch guard',

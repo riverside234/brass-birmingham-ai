@@ -403,6 +403,11 @@
       "implementation": "20b150626f22e27bca68e92b5a4ba9abaa0c6a07f7f6c5b70b2425c52f56eeb8",
       "learning_compatibility": "ef6a1b5126de42da8f3277dc9357b6ffb94a435f3faa7fee8dd312bb5a242a54",
       "reason": "Self-play group entropy floors/branch rate and reporting only; completed IL/model/Features-4 and handoff contracts unchanged."
+    },
+    {
+      "implementation": "fb4a7c40c8784dff3f1b991cb6eade5e95fbdb2b69172eb2ecb18ed590c411a0",
+      "learning_compatibility": "ef6a1b5126de42da8f3277dc9357b6ffb94a435f3faa7fee8dd312bb5a242a54",
+      "reason": "PPO value-input packing and timing only; completed IL/model/Features-4 and handoff contracts unchanged."
     }
   ]
 }
