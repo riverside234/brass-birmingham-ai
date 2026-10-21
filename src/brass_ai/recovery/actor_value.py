@@ -66,6 +66,11 @@ def quota_holdout_checkpoint(saved,options,generation):
 
 class TrainingPhases:
     def __init__(self,model,config,*,raw=None,generation=0,root=None,run=None):
+        from . import ppg_config
+        self.rolling=ppg_config.active(config['value_phase'])
+        if self.rolling:
+            self._init_rolling(model,config,raw=raw,generation=generation,root=root,run=run)
+            return
         self.options={k:copy.deepcopy(config[k]) for k in ('advantage','value_phase')}
         self.options.update({k:copy.deepcopy(config[k]) for k in ('critic_data','seat_descriptors') if k in config})
         self.snapshot_data=[];self.fingerprint=None;self.critic_state=None
@@ -216,6 +221,60 @@ class TrainingPhases:
                 receipt=saved['buffer'] if saved is not None else None,
                 previous_reward=(raw or {}).get('model_config',{}).get('utility'),previous_value=previous_value)
 
+    def _init_rolling(self,model,config,*,raw,generation,root,run):
+        from . import ppg_config,ppg_replay,ppg_epochs
+        require(root is not None and run is not None,'Eight-iteration PPG requires an owned disk cache')
+        self.config=config;self.root,self.run=root,run
+        self.options={k:copy.deepcopy(config[k]) for k in ('advantage','value_phase','critic_data','seat_descriptors') if k in config}
+        gae.validate(config['advantage'],combined='reward' in config);ppg_config.validate(config['value_phase'])
+        self.contract='actor-value-phases/9.0.0'
+        self.snapshot_data=[];self.fingerprint=None;self.dataset=None;self.probe_ids=None;self.collection_source=None;self.ppo_work=None
+        self.disable_migration=self.holdout_migration=self.refinement_migration=self.window_migration=None
+        self.evidence_migration=self.critic_migration=self.snapshot_r2_migration=None
+        self.rolling_migration=None;self.critic_evidence=None
+        self.optimizer=torch.optim.Adam(model.parameters(),lr=config['value_phase']['learning_rate'])
+        saved=(raw or {}).get('training',{}).get(KEY)
+        if saved is None:
+            require(generation==0,'Missing actor/value checkpoint; cannot fabricate continuation state')
+            self.state=gae.initial(config['advantage']);self.critic_state=critic_data.initial(config['critic_data']) if 'critic_data' in config else None
+            self.beta=config['value_phase']['beta_clone'];self.trips=[];self.schedule=ppg_config.initial(0);receipts=[]
+            self.epoch_control=ppg_epochs.initial(0,config['value_phase'])
+        else:
+            saved=copy.deepcopy(saved)
+            if saved.get('contract')==PPO_ONLY_CONTRACT:
+                require(ppg_config.configure(saved['options'])==self.options,'Unreviewed eight-iteration PPG options')
+                required={'contract','options','gae','beta_clone','kl_trips','optimizer','critic_evidence'}
+                if 'critic_data' in self.options:required.add('critic_data')
+                require(set(saved)==required,'Unexpected PPO-only checkpoint fields')
+                saved.update(contract=self.contract,options=copy.deepcopy(self.options),
+                    schedule=ppg_config.initial(generation),rolling_buffer=[],
+                    epoch_control=ppg_epochs.initial(generation,config['value_phase']))
+                self.rolling_migration=dict(contract=ppg_config.MIGRATION,origin=generation,
+                    scope='Enable scheduled PPG without backfill. Preserve weights, both Adams, RNG, GAE/PPO evidence, economic health, snapshot baseline and training progress.')
+            fields={'contract','options','gae','beta_clone','kl_trips','optimizer','critic_evidence','schedule','rolling_buffer','epoch_control'}
+            if 'critic_data' in self.options:fields.add('critic_data')
+            require(saved.get('contract')==self.contract and set(saved)==fields and saved['options']==self.options,
+                'Eight-iteration PPG checkpoint configuration differs')
+            self.state=copy.deepcopy(gae.validate_state(saved['gae'],config['advantage'],generation))
+            self.critic_state=copy.deepcopy(critic_data.validate_state(saved['critic_data'],config['critic_data'],generation)) if 'critic_data' in config else None
+            self.beta=saved['beta_clone'];self.trips=saved['kl_trips'];self.critic_evidence=saved['critic_evidence']
+            require(type(self.beta) in (int,float) and math.isfinite(self.beta)
+                and config['value_phase']['beta_clone']<=self.beta<=config['value_phase']['beta_clone_max']
+                and type(self.trips) is list and len(self.trips)<=5 and all(type(x) is bool for x in self.trips),
+                'Invalid auxiliary cloning state')
+            self.optimizer.load_state_dict(saved['optimizer'])
+            rate=self.optimizer.param_groups[0]['lr'];base=config['value_phase']['learning_rate']
+            require(len(self.optimizer.param_groups)==1 and math.isfinite(rate)
+                and base*config['value_phase']['rate_schedule']['warmup_start']<=rate<=base
+                and self.optimizer.param_groups[0]['weight_decay']==0,'Value optimizer settings differ')
+            self.schedule=copy.deepcopy(ppg_config.schedule(saved['schedule'],generation));receipts=saved['rolling_buffer']
+            self.epoch_control=copy.deepcopy(ppg_epochs.validate(saved['epoch_control'],config['value_phase'],
+                phases=self.schedule['phases'],last_phase=self.schedule['last_phase']))
+        if self.critic_state is not None:
+            from .snapshot_r2 import migrate
+            self.critic_state,self.snapshot_r2_migration=migrate(self.critic_state,config['critic_data'],generation)
+        self.buffer=ppg_replay.Buffer(root,run,config,generation=generation,receipts=receipts,origin=self.schedule['origin'])
+
     def collection(self,records,policy_id,kinds,model_id):
         if self.buffer:
             self.collection_source=self.buffer.source(records,policy_id,kinds,model_id)
@@ -262,6 +321,30 @@ class TrainingPhases:
 
     def fit(self,model):
         require(self.dataset is not None and self.probe_ids is not None,'Value phase must follow PPO')
+        if self.rolling:
+            from . import ppg_auxiliary,ppg_config,ppg_epochs
+            require(self.collection_source is not None,'PPG needs sealed ordinary collection provenance')
+            cache=self.buffer.stage(self.critic_dataset,self.train_ids,self.heldout_ids,self.actor_ids,
+                self.collection_source,model,self.split['selection'])
+            ran=ppg_config.due(self.schedule)
+            self.value_report=ppg_auxiliary.fit(model,self.optimizer,self.buffer,self.critic_dataset,
+                self.train_ids,self.heldout_ids,self.options['value_phase'],self.config['update'],beta=self.beta,
+                snapshot_weight=self.critic_state['snapshot_weight'] if self.critic_state else 1.,
+                dropout=self.dropout(0,'value'),run_phase=ran,ppo_work=self.ppo_work,
+                epoch_cap=self.epoch_control['cap'])
+            self.pending_schedule=ppg_config.advance(self.schedule,self.state['generation']+1,ran)
+            self.pending_epoch_control=copy.deepcopy(self.epoch_control)
+            if ran:
+                self.pending_epoch_control,epoch_report=ppg_epochs.advance(self.epoch_control,
+                    self.value_report,self.options['value_phase'],self.state['generation']+1)
+            else:
+                epoch_report=dict(contract=self.epoch_control['contract'],cap_used=self.epoch_control['cap'],
+                    cap_next=self.epoch_control['cap'],decision='hold',reason='not_due',
+                    after=copy.deepcopy(self.epoch_control))
+            self.value_report.update(buffer=cache,split=self.split,schedule=dict(self.pending_schedule,
+                next_phase=self.pending_schedule['last_phase']+self.config['value_phase']['phase_interval']),
+                epoch_controller=epoch_report,migration=self.rolling_migration)
+            return self.value_report
         def fit(dataset=None,indices=None):
             return value_phase.fit(model,self.optimizer,self.dataset,self.train_ids,self.heldout_ids,
                 self.actor_ids,self.probe_ids,self.options['value_phase'],self.config['update'],beta=self.beta,
@@ -295,15 +378,22 @@ class TrainingPhases:
     def finish(self,*,generation,update,anchor_gate,rating,exploration=None):
         value=self.value_report;before=self.beta
         enabled=self.options['value_phase']['enabled']
-        if enabled:self.trips=(self.trips+[value['kl_guard_tripped']])[-5:]
+        rolling=getattr(self,'rolling',False)
+        phase_ran=enabled and (not rolling or value['scheduled'])
+        if phase_ran:self.trips=(self.trips+[value['kl_guard_tripped']])[-5:]
         # A clean iteration must not re-escalate on the same old cap hits.
         # Keep the rolling evidence on resume, but require a new trip to act.
-        if enabled and value['kl_guard_tripped'] and sum(self.trips)>=3:
+        if rolling:
+            self.beta=value['beta_clone_final']
+        elif phase_ran and value['kl_guard_tripped'] and sum(self.trips)>=3:
             self.beta=min(self.options['value_phase']['beta_clone_max'],2*self.beta)
+        reason=('kl_retry_with_value_improvement' if self.beta>before else
+            'not_due' if not phase_ran else value['early_stop_reason'] or 'no_beta_retry') if rolling else (
+            'ppg_disabled' if not enabled else 'new_trip_in_three_of_five' if self.beta>before else
+            'at_cap' if value['kl_guard_tripped'] and sum(self.trips)>=3 else
+            'no_new_kl_trip' if not value['kl_guard_tripped'] else 'fewer_than_three_trips')
         value.update(beta_clone_next=self.beta,beta_decision='up' if self.beta>before else 'hold',
-            beta_reason=('ppg_disabled' if not enabled else 'new_trip_in_three_of_five' if self.beta>before else
-                         'at_cap' if value['kl_guard_tripped'] and sum(self.trips)>=3 else
-                         'no_new_kl_trip' if not value['kl_guard_tripped'] else 'fewer_than_three_trips'),
+            beta_reason=reason,
             kl_trip_window=list(self.trips))
         kl=update['categorical_probe']['categorical_kl']
         # The calibrated IL distance budget/latch controls LR increases only.
@@ -333,6 +423,13 @@ class TrainingPhases:
 
     def payload(self):
         if self.buffer:require(self.buffer.pending is not None,'PPG checkpoint needs the staged cache receipt')
+        if self.rolling:
+            return dict(contract=self.contract,options=copy.deepcopy(self.options),gae=copy.deepcopy(self.state),
+                **({'critic_data':copy.deepcopy(self.critic_state)} if self.critic_state is not None else {}),
+                critic_evidence=copy.deepcopy(self.critic_evidence),beta_clone=self.beta,kl_trips=copy.deepcopy(self.trips),
+                optimizer=self.optimizer.state_dict(),schedule=copy.deepcopy(self.pending_schedule),
+                epoch_control=copy.deepcopy(self.pending_epoch_control),
+                rolling_buffer=copy.deepcopy(self.buffer.pending))
         return dict(contract=self.contract,options=copy.deepcopy(self.options),gae=copy.deepcopy(self.state),
             **({'critic_data':copy.deepcopy(self.critic_state)} if self.critic_state is not None else {}),
             **({'critic_evidence':copy.deepcopy(self.critic_evidence)} if self.critic_evidence is not None else {}),
@@ -350,6 +447,8 @@ class TrainingPhases:
         self.disable_migration=None
         self.holdout_migration=None
         self.snapshot_r2_migration=None
+        if self.rolling:
+            self.schedule=self.pending_schedule;self.epoch_control=self.pending_epoch_control;self.rolling_migration=None
 
     def release(self):
         self.dataset=None;self.critic_dataset=None;self.snapshot_data=[];self.ppo_probe=None;self.probe_ids=None

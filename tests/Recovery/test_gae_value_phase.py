@@ -29,7 +29,7 @@ def config():
     # and base LR. The refinement has its own explicit migration regressions.
     result=copy.deepcopy(read(SOURCE_ROOT/'configs/step5/joint7-latest.json'))
     from brass_ai.recovery.exploration import BLOCKS
-    for key in BLOCKS:result.pop(key,None)
+    for key in (*BLOCKS,'panel_gates','policy_anchor','rating_coverage'):result.pop(key,None)
     result['exploration']=.08
     result['value_phase']=copy.deepcopy(value_phase.LEGACY_DEFAULT)
     result['advantage']['gate']=copy.deepcopy(gae.LEGACY_GATE)
@@ -134,8 +134,10 @@ class Advantages(unittest.TestCase):
         generated=latest_model_config(cfg,cfg['imitation_checkpoint'])
         from brass_ai.recovery.exploration import configure as exploration_config
         from brass_ai.recovery.critic_holdout import quota_options
-        self.assertEqual(quota_options(value_phase.disabled_options(
-            exploration_config(gae.health_options(value_phase.interval_options(value_phase.refined_options(cfg)))))),generated)
+        from brass_ai.recovery.ppg_config import configure as rolling_ppg
+        from brass_ai.recovery.policy_anchor import configure as configure_anchor
+        self.assertEqual(rolling_ppg(configure_anchor(quota_options(
+            exploration_config(gae.health_options(value_phase.interval_options(value_phase.refined_options(cfg))))))),generated)
         for key,value in (('lambda',0),('lambda',True),('chain','all')):
             bad=copy.deepcopy(cfg);bad['advantage'][key]=value
             with self.assertRaises(ValueError):validate_config(bad)

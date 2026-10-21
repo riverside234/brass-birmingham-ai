@@ -34,6 +34,11 @@ def disabled_options(options):
 
 def critic_work(report):
     """Actual critic optimizer work; never label PPO steps as accepted PPG."""
+    if report.get('contract')=='ppg-value-phase/5.0.0':
+        work=report.get('gate_critic_training',{})
+        require(work.get('source')=='ppo' and type(work.get('optimizer_steps')) is int
+            and work['optimizer_steps']>=0,'Invalid scheduled PPG/PPO critic evidence')
+        return work
     if report.get('enabled',True):
         return dict(source='ppg',optimizer_steps=report.get('optimizer_steps',0))
     work=report.get('critic_training',dict(source='ppo',optimizer_steps=0))
@@ -42,7 +47,7 @@ def critic_work(report):
     return work
 
 
-def stratified(config):return config.get('contract') in (STRATIFIED_CONTRACT,CONTRACT)
+def stratified(config):return config.get('contract') in (STRATIFIED_CONTRACT,CONTRACT,'ppg-value-phase/5.0.0')
 
 
 def interval_options(options):
@@ -62,6 +67,8 @@ def refined_options(options):
 
 
 def validate(config):
+    from . import ppg_config
+    if type(config) is dict and ppg_config.active(config):return ppg_config.validate(config)
     current=type(config) is dict and stratified(config)
     intervals=type(config) is dict and config.get('contract')==CONTRACT
     require(type(config) is dict and set(config)==set(DEFAULT if intervals else STRATIFIED_DEFAULT if current else LEGACY_DEFAULT) and

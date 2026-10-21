@@ -611,6 +611,13 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                     controller_line+=f' GAE={gate["lambda_used"]:.2f}->{gate["lambda_next"]:.2f} value_steps={value_report["optimizer_steps"]}'
                     controller_line+=f'/{value_report["attempted_steps"]} value_stop={value_report["early_stop_reason"] or "none"}'
                     controller_line+=(f' value_lr={value_report["learning_rate"]:.2g}' if value_report['enabled'] else ' PPG=off')
+                    if value_report.get('schedule'):
+                        controller_line+=(f' PPG={"phase" if value_report["scheduled"] else "waiting"}'
+                            f' next=g{value_report["schedule"]["next_phase"]}'
+                            f' ages={len(value_report["buffer"]["ages"])}'
+                            f' budget={value_report.get("planned_steps",0)}steps'
+                            f' epochs={value_report["epoch_controller"]["cap_used"]}->{value_report["epoch_controller"]["cap_next"]}'
+                            f' epoch_gate={value_report["epoch_controller"]["decision"]}')
                     if value_report.get('acceptance_steps'):
                         controller_line+=f' value_intervals={value_report["accepted_intervals"]}/{len(value_report["interval_reports"])}'
                     stage=gate.get('stage_evidence')

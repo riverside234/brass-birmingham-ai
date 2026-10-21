@@ -302,7 +302,7 @@ def latest_model_config(config,imitation_checkpoint):
     from .rehearsal import DEFAULT_FLOOR
     from .rehearsal_window import DEFAULT as REHEARSAL_SAMPLING
     from .gae import DEFAULT as ADVANTAGE
-    from .value_phase import DEFAULT as VALUE_PHASE
+    from .ppg_config import DEFAULT as VALUE_PHASE
     from .critic_data import DEFAULT as CRITIC_DATA
     from brass_ai.learning.seat_descriptors import DEFAULT as SEAT_DESCRIPTORS
     from .quality_config import TABLE_PLAN,OPPONENT_POOL,RATING,sampling_config
@@ -334,7 +334,6 @@ def latest_model_config(config,imitation_checkpoint):
     result['critic_data']=copy.deepcopy(CRITIC_DATA)
     result['seat_descriptors']=copy.deepcopy(SEAT_DESCRIPTORS)
     result.setdefault('value_phase',dict(copy.deepcopy(VALUE_PHASE),learning_rate=.5*result['learning_rate']))
-    result['value_phase']['enabled']=False
     result.setdefault('table_plan',copy.deepcopy(TABLE_PLAN))
     result.setdefault('opponent_pool',copy.deepcopy(OPPONENT_POOL))
     result.setdefault('rating',copy.deepcopy(RATING))
@@ -346,7 +345,8 @@ def latest_model_config(config,imitation_checkpoint):
     from .exploration import configure
     from .v4_share import configure as configure_v4_share
     from .policy_anchor import configure as configure_anchor
-    return validate_config(configure_anchor(configure_v4_share(configure(interval_options(refined_options(insolvency_event_config(champion_mix_config(sampling_config(result)))))))))
+    from .ppg_config import configure as configure_ppg
+    return validate_config(configure_ppg(configure_anchor(configure_v4_share(configure(interval_options(refined_options(insolvency_event_config(champion_mix_config(sampling_config(result))))))))))
 
 
 def champion_mix_config(config):
