@@ -235,6 +235,8 @@ def export(root, run, output=None, *, latest=2, extras=(), continue_export=False
         add(path, path.relative_to(run), 'Fixed IL-KL probe manifest or initial measurement')
     for path in report_files(root,run/'policy-anchor'):
         add(path,path.relative_to(run),'Qualified KL reference transition report')
+    for path in report_files(root,run/'exploration'):
+        add(path,path.relative_to(run),'Exploration configuration transition report')
     active_anchor=(state.get('policy_anchor') or {}).get('active')
     if active_anchor:
         for reference in [active_anchor['cache'],active_anchor['fit']['report'],active_anchor['fit']['spec']]:

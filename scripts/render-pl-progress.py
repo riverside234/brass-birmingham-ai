@@ -11,17 +11,19 @@ import sys
 ROOT=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT/'src'))
 
-from brass_ai.recovery.rating_plot import render
+from brass_ai.recovery.rating_plot import render, DEFAULT_MAX_POINTS
 
 def main():
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--report',type=Path,required=True)
     parser.add_argument('--output',type=Path,help='Defaults to progress.svg beside the report')
     parser.add_argument('--preview',type=Path,help='Optional PNG for visual inspection')
+    parser.add_argument('--max-points',type=int,default=DEFAULT_MAX_POINTS,
+        help=f'Maximum plotted points; adjacent history is averaged above this cap (default: {DEFAULT_MAX_POINTS})')
     args=parser.parse_args()
     output=args.output or args.report.with_name('progress.svg')
     if output.suffix.lower()!='.svg':raise ValueError('Output must be an SVG file')
-    render(json.loads(args.report.read_text(encoding='utf-8-sig')),output,preview=args.preview)
+    render(json.loads(args.report.read_text(encoding='utf-8-sig')),output,preview=args.preview,max_points=args.max_points)
     print(output)
 
 

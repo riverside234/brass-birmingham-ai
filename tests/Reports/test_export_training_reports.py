@@ -53,6 +53,14 @@ class ExportTests(unittest.TestCase):
         for path in (spec,games,report):
             self.assertEqual((output/path.relative_to(self.root/self.run)).read_bytes(),path.read_bytes())
 
+    def test_entropy_hotfix_report_is_exported_unchanged(self):
+        data=dict(applied=True,generation=60,fixed_floor_ratio=.95,
+                  floor_before={'canal_action':.8},floor_after={'canal_action':.95},
+                  branch_rate_per_eligible_decision=.015)
+        path=self.put(self.run+'/exploration/hotfix-report.json',data)
+        output,_=self.export()
+        self.assertEqual((output/'exploration/hotfix-report.json').read_bytes(),path.read_bytes())
+
     def test_active_policy_anchor_cache_and_fit_are_exported_without_dense_arrays(self):
         reference=lambda p:dict(path=p.relative_to(self.root).as_posix(),sha256=reports.checksum(p.read_bytes()))
         dense=self.put(self.run+'/policy-anchor/probabilities/current.npz',b'large probabilities')

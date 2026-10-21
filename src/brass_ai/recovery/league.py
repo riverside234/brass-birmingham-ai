@@ -602,6 +602,8 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                 if entropy_report:
                     controller_line+=f' q=3 eps={config["exploration"]:.2f} explore_age={exploration_settings["age"]}'
                     controller_line+=' entropy='+','.join(f'{g}:{v["alpha_after"]:.4f}' for g,v in entropy_report['groups'].items())
+                    if entropy_report['floor_decay_per_iteration']==1.:
+                        controller_line+=f' Hfloor={entropy_report["floor_start_ratio"]:.2f}*baseline(fixed)'
                 if phases is not None:
                     gate=update['gae']['gate']
                     controller_line+=f' GAE={gate["lambda_used"]:.2f}->{gate["lambda_next"]:.2f} value_steps={value_report["optimizer_steps"]}'

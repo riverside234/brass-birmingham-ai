@@ -28,7 +28,7 @@ class G210ReviewTests(unittest.TestCase):
         restored=E.restore(cfg,self.state,copy.deepcopy(self.state['exploration']))
         effective=E.effective(cfg,restored,210)
         self.assertEqual((restored['origin'],restored['armed_at'],effective['age']),(185,197,25))
-        self.assertEqual(effective['branching'],E.BRANCH)
+        self.assertEqual(effective['branching'],E.LEGACY_BRANCH)
         self.assertEqual(self.state,before)
         for k in ('exploration','learning_rate'):
             bad=copy.deepcopy(target);bad['config'][k]*=1.1

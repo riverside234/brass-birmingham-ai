@@ -15,16 +15,22 @@ LEGACY_ENTROPY = dict(contract='entropy-floor-controller/1.0.0', mode='apply',
     floor_start_ratio=.9, floor_decay_per_iteration=.999, floor_min_ratio=.6,
     gain=4., max_step=1.5, relax_factor=1.25, hysteresis=1.03, median_window=3, baseline_iterations=10,
     deployment_temperature_check=dict(every_iterations=50, temperatures=[1.,.7]))
-ENTROPY = dict(LEGACY_ENTROPY, deployment_temperature_check=dict(enabled=False,every_iterations=50,temperatures=[1.,.7]))
-OPENING = dict(contract='opening-temperature/1.0.0', temperature=1.5, action_decisions_per_seat=2, seats='neural')
-BRANCH = dict(contract='selfplay-branching/1.0.0', tables=['selfplay'], rate_per_decision=.005,
+DECAY_ENTROPY = dict(LEGACY_ENTROPY, deployment_temperature_check=dict(enabled=False,every_iterations=50,temperatures=[1.,.7]))
+ENTROPY = dict(DECAY_ENTROPY, contract='entropy-floor-controller/2.0.0',
+    floor_start_ratio=.95, floor_decay_per_iteration=1., floor_min_ratio=.95)
+LEGACY_OPENING = dict(contract='opening-temperature/1.0.0', temperature=1.5, action_decisions_per_seat=2, seats='neural')
+OPENING = dict(LEGACY_OPENING, contract='opening-temperature/2.0.0', temperature=2.)
+LEGACY_BRANCH = dict(contract='selfplay-branching/1.0.0', tables=['selfplay'], rate_per_decision=.005,
     max_per_game=1, skip_opening_decisions=2, skip_final_rounds='rail_empty_deck_hand_le_4',
     move_distribution=dict(temperature_1=.7, temperature_2=.25, exploration_q=.05),
     exclude_played_move=True, reshuffle_hidden_deck=True, branch_move_row='excluded')
+BRANCH = dict(LEGACY_BRANCH, contract='selfplay-branching/2.0.0', rate_per_decision=.015,
+    reset_opening_at_fork=True)
 ROLLOUT = dict(contract='exploration-rollout/1.0.0', mode='fresh',
     opening_after_iterations=0, raw_entropy_after_iterations=0, branching_after_iterations=20)
 BLOCKS = ('exploration_distribution','entropy_control','opening','branching','exploration_rollout')
 MIGRATION = 'staged-exploration/1.0.0'
+FROZEN_MIGRATION = 'frozen-entropy-branch-openings/1.0.0'
 STATE = 'exploration-state/1.0.0'
 
 
@@ -49,7 +55,22 @@ def continuation_config(config):
     # Reproduce the old signed migration exactly. Panel retirement is a
     # separate reviewed transition; fresh generation uses the new default.
     result['entropy_control']=copy.deepcopy(LEGACY_ENTROPY)
+    result['opening']=copy.deepcopy(LEGACY_OPENING)
+    result['branching']=copy.deepcopy(LEGACY_BRANCH)
     result['exploration']=.03  # Preserve the earlier signed staged-adoption recipe.
+    return result
+
+
+def frozen_config(config):
+    """Explicit continuation: retain the baseline, controller state and rollout age."""
+    validate(config)
+    # Older source-review routes may precede exploration adoption. This change
+    # does not adopt/restart their rollout or mask a later applicable route.
+    if not any(b in config for b in BLOCKS):return copy.deepcopy(config)
+    result=copy.deepcopy(config)
+    result.update(entropy_control=dict(copy.deepcopy(ENTROPY),mode=config['entropy_control']['mode']),
+                  opening=copy.deepcopy(OPENING),branching=copy.deepcopy(BRANCH))
+    validate(result)
     return result
 
 
@@ -59,13 +80,16 @@ def validate(config):
     require(all(present), 'Exploration revision requires all versioned blocks')
     # This initial recipe is deliberately narrow; experiments need explicit
     # reviewed signatures rather than unbounded free-form controller options.
+    current=config['opening']==OPENING and config['branching']==BRANCH
+    legacy=config['opening']==LEGACY_OPENING and config['branching']==LEGACY_BRANCH
     require(config['exploration'] in (.02,.03) and config['exploration_distribution']==Q and
-        config['opening']==OPENING and config['branching']==BRANCH, 'Invalid exploration revision recipe')
+        (current or legacy), 'Invalid exploration revision recipe')
     e=config['entropy_control']
     check=e.get('deployment_temperature_check',{})
     require('enabled' not in check or check['enabled'] is False,'Temperature comparisons must be explicitly disabled')
     require(type(e) is dict and set(e)==set(ENTROPY) and e['mode'] in ('off','shadow','apply') and
-        dict(e,mode='apply') in (ENTROPY,LEGACY_ENTROPY), 'Invalid entropy floor controller')
+        dict(e,mode='apply') in ((ENTROPY,) if current else (DECAY_ENTROPY,LEGACY_ENTROPY)),
+        'Invalid entropy floor controller')
     r=config['exploration_rollout']
     expected=dict(ROLLOUT,mode='staged',opening_after_iterations=1,raw_entropy_after_iterations=2) if r.get('mode')=='staged' else ROLLOUT
     require(r==expected, 'Invalid exploration adoption schedule')
@@ -83,7 +107,7 @@ def check_behavior(b, phase, *, branch_move=False):
         'component','action_decision'} and b['kind']=='model' and type(b['exploration_version']) is int and
         b['exploration_version']==3 and type(b['exploration']) in (float,int) and
         math.isfinite(b['exploration']) and 0<=b['exploration']<=.5 and
-        b['component'] in (('branch_move',) if branch_move else ('policy','exploration')) and b['temperature'] in (1.,1.5),
+        b['component'] in (('branch_move',) if branch_move else ('policy','exploration')) and b['temperature'] in (1.,1.5,2.),
         'Invalid v3 behavior record')
     count=b['action_decision']
     require((type(count) is int and count>=0) if phase=='action' else count is None,
@@ -139,6 +163,15 @@ def effective(config, state, generation):
         age=age,origin=state['origin'])
 
 
+def floors(config, state, generation):
+    if state['baseline'] is None:return dict.fromkeys(GROUPS)
+    require(generation>=state['armed_at'], 'Entropy floor precedes its baseline')
+    e=config['entropy_control']
+    ratio=max(e['floor_min_ratio'],e['floor_start_ratio']*
+              e['floor_decay_per_iteration']**(generation-state['armed_at']))
+    return {g:state['baseline'][g]*ratio for g in GROUPS}
+
+
 def advance(state, config, measurement, *, generation, warmup_done, healthy):
     """One final-probe observation per committed iteration; no RNG consumption."""
     s=copy.deepcopy(state); e=config['entropy_control']
@@ -151,7 +184,7 @@ def advance(state, config, measurement, *, generation, warmup_done, healthy):
         if len(s['baseline_rows'])==e['baseline_iterations']:
             s['baseline']={g:statistics.mean(r[g] for r in s['baseline_rows']) for g in GROUPS}
             s['armed_at']=generation
-    report={}
+    report={}; targets=floors(config,s,generation)
     for g in GROUPS:
         entry=s['groups'][g]; before=entry['alpha']; h=values[g]; floor=None
         if active and warmup_done and valid:
@@ -159,8 +192,7 @@ def advance(state, config, measurement, *, generation, warmup_done, healthy):
         median=statistics.median(entry['window']) if entry['window'] else None
         reason='baseline_pending'; decision='hold'
         if s['baseline'] is not None:
-            floor=s['baseline'][g]*max(e['floor_min_ratio'],e['floor_start_ratio']*
-                                      e['floor_decay_per_iteration']**(generation-s['armed_at']))
+            floor=targets[g]
             if not active or not warmup_done or not valid:reason='inactive_or_invalid'
             elif not healthy:reason='unhealthy'
             elif e['mode']=='off':reason='disabled'
@@ -180,5 +212,7 @@ def advance(state, config, measurement, *, generation, warmup_done, healthy):
             alpha_before=before,alpha_after=entry['alpha'],decision=decision,reason=reason,alarms=alarms)
     s['generation']=generation
     return s,dict(contract=e['contract'],mode=e['mode'],origin=s['origin'],armed_at=s['armed_at'],
+        floor_start_ratio=e['floor_start_ratio'],floor_decay_per_iteration=e['floor_decay_per_iteration'],
+        floor_min_ratio=e['floor_min_ratio'],
         baseline_iterations=len(s['baseline_rows']),healthy=bool(healthy),groups=report,
         scope='Final raw policy on fixed IL probe; prospective post-warmup baseline, no retired IL action checks')

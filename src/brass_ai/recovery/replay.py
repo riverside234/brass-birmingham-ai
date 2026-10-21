@@ -242,6 +242,8 @@ def read_shards(paths,partition=None,receipts=None,*,heuristic_only=False):
                 require(proof.get('purpose')=='training' and proof.get('kind')=='selfplay' and
                     proof.get('exploration',{}).get('branching') is not None,
                     'Branch replay outside ordinary self-play')
+                require(all(child['branch']['contract']==proof['exploration']['branching']['contract']
+                            for child in game['branches']), 'Branch contract differs from collection provenance')
             if 'critic_table' in proof:
                 game.critic_table=proof['critic_table'];game.table_kind=proof['kind']
             if partition is None or game['split']==partition: output.append(game)

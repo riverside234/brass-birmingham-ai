@@ -246,9 +246,9 @@ def _run_turns(host,job,assigned,timings,max_decisions,context,game,rngs,encoded
                 eligible_count+=1
                 # Selection uses an independent stream; parent actions and
                 # training RNG do not change when branching is enabled.
-                draw=random.Random('select:'+seed_for(game['game_id'],step)).random()
+                draw=random.Random('select:'+seed_for(game['game_id'],step,job['branching']['contract'])).random()
                 if branch_packet is None and draw<job['branching']['rate_per_decision']:
-                    branch_packet=capture(host,game,row,assigned,rngs,portable=submit_branch is not None)
+                    branch_packet=capture(host,game,row,assigned,rngs,portable=submit_branch is not None,branching=job['branching'])
                     if branch_packet is not None and submit_branch is not None:
                         submit_branch(branch_packet,{k:v for k,v in game.items() if k not in ('records','result')})
         e=policy_encoder(p,encoder)

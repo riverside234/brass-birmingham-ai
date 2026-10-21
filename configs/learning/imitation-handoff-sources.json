@@ -383,6 +383,16 @@
       "implementation": "10d5817a743acc20eb0e70985f41cc2e07b0b1fa16779c54769d3828d3988e33",
       "learning_compatibility": "ef6a1b5126de42da8f3277dc9357b6ffb94a435f3faa7fee8dd312bb5a242a54",
       "reason": "Qualified self-play policy anchors and rating coverage only; completed IL/model/Features-4 contracts and handoff invariants unchanged."
+    },
+    {
+      "implementation": "174712e17d5ab459d030aaab046acacfe3575c30223826da73fae33114661284",
+      "learning_compatibility": "ef6a1b5126de42da8f3277dc9357b6ffb94a435f3faa7fee8dd312bb5a242a54",
+      "reason": "PL progress display only: cap at 30 points, adjacent historical means with exact first/latest, original marker sizes and raw pointwise intervals. No training, config, model, rating-fit or checkpoint changes. Completed IL handoff remains unchanged."
+    },
+    {
+      "implementation": "d36155785f06938df1719bfcd0db3e0d5f401081b176c434a9161ca18ac545f6",
+      "learning_compatibility": "ef6a1b5126de42da8f3277dc9357b6ffb94a435f3faa7fee8dd312bb5a242a54",
+      "reason": "Self-play entropy/opening/branch revision only; completed IL/model/Features-4 and handoff contracts unchanged."
     }
   ]
 }

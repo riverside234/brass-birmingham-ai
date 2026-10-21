@@ -8,11 +8,12 @@ import numpy as np
 
 from brass_ai.learning.contracts import digest,require
 from brass_ai.step5.policy import exploration_distribution,NeuralPolicy
-from .exploration import BRANCH
+from .exploration import BRANCH,LEGACY_BRANCH,OPENING
 
 
-def seed_for(parent,decision):
-    return digest(dict(contract=BRANCH['contract'],parent=parent,decision=decision))
+def seed_for(parent,decision,contract=LEGACY_BRANCH['contract']):
+    require(contract in (LEGACY_BRANCH['contract'],BRANCH['contract']),'Unknown branch contract')
+    return digest(dict(contract=contract,parent=parent,decision=decision))
 
 
 def eligible(view,choices,action_count):
@@ -41,8 +42,8 @@ def alternative(raw,q,played,rng):
         component_probability=weight/total,marginal_probability=float(sum(w/total*v[action] for _,w,v in candidates)))
 
 
-def capture(host,game,row,assigned,rngs,*,portable=False):
-    step=row['step'];seat=row['seat'];p=assigned[seat];seed=seed_for(game['game_id'],step)
+def capture(host,game,row,assigned,rngs,*,portable=False,branching=LEGACY_BRANCH):
+    step=row['step'];seat=row['seat'];p=assigned[seat];seed=seed_for(game['game_id'],step,branching['contract'])
     q=exploration_distribution(row['choices'],row['intent'],3,'action')
     move=alternative(p.last_raw[rngs[seat]],q,row['chosen'],random.Random(seed))
     if move is None:return None
@@ -54,7 +55,7 @@ def capture(host,game,row,assigned,rngs,*,portable=False):
     return dict(**(dict(checkpoint=snapshot['checkpoint']) if portable else {}),
         row=copy.deepcopy(row),contexts=[copy.deepcopy(p.contexts[rngs[s]]) for s,p in enumerate(assigned)],
         counts=[p.action_counts.get(rngs[s],0) for s,p in enumerate(assigned)],
-        metadata=dict(contract=BRANCH['contract'],parent_game_id=game['game_id'],decision=step,
+        metadata=dict(contract=branching['contract'],parent_game_id=game['game_id'],decision=step,
             played=row['chosen'],seed=seed,prior_events=[prior[s] for s in range(4)],
             raw_probabilities=p.last_raw[rngs[seat]].tolist(),**move))
 
@@ -63,6 +64,11 @@ def continue_branch(host,job,parent,packet,assigned,timings,max_decisions,encode
     from .execution import _run_turns
     from .replay import CheckedGame
     started=time.monotonic();meta=packet['metadata'];seed=meta['seed']
+    require(meta['contract']==job['branching']['contract'],'Branch collection contract differs')
+    reset=meta['contract']==BRANCH['contract']
+    if reset:
+        require(job['branching']['reset_opening_at_fork'] is True and
+                all(p.opening==OPENING for p in assigned),'Branch opening policy differs')
     shuffle=int(seed[:8],16)&0x7fffffff if job['branching']['reshuffle_hidden_deck'] else None
     if 'checkpoint' in packet:
         context=host.call('fork_restore',checkpoint=packet['checkpoint'],shuffle_seed=shuffle)
@@ -83,7 +89,10 @@ def continue_branch(host,job,parent,packet,assigned,timings,max_decisions,encode
     encoded=[encoder.encode(row['view'],row['choices'],row['style'],row['intent'],validated=True)]
     rngs=[random.Random(digest(dict(branch=seed,seat=s))) for s in range(4)]
     for s,p in enumerate(assigned):
-        p.contexts[rngs[s]]=packet['contexts'][s];p.action_counts[rngs[s]]=packet['counts'][s]
+        p.contexts[rngs[s]]=packet['contexts'][s]
+        # The forced fork action is excluded. Start two fresh action decisions
+        # per seat after it; payment/bonus/continuation choices consume none.
+        p.action_counts[rngs[s]]=0 if reset else packet['counts'][s]
     context=host.apply(context,row['choices'][row['chosen']])
     result=_run_turns(host,{k:v for k,v in job.items() if k!='branching'},assigned,timings,
         max_decisions,context,game,rngs,encoded,encoder,lease)
@@ -93,8 +102,9 @@ def continue_branch(host,job,parent,packet,assigned,timings,max_decisions,encode
 
 
 def validate_child(parent,child):
-    meta=child['branch'];require(meta['contract']==BRANCH['contract'],'Unknown branch contract')
-    require(meta['parent_game_id']==parent['game_id'] and meta['seed']==seed_for(parent['game_id'],meta['decision']),
+    meta=child['branch']
+    require(meta['contract'] in (LEGACY_BRANCH['contract'],BRANCH['contract']),'Unknown branch contract')
+    require(meta['parent_game_id']==parent['game_id'] and meta['seed']==seed_for(parent['game_id'],meta['decision'],meta['contract']),
         'Foreign or changed branch seed')
     require(child['game_id']==parent['game_id']+'/branch/'+meta['seed'] and
         child['setup_group']==parent['setup_group'] and child['split']==parent['split'] and
@@ -120,6 +130,18 @@ def validate_child(parent,child):
     from .insolvency import events
     counts=Counter(e['seat'] for e in events(parent['records'][:meta['decision']+1]))
     require(meta['prior_events']==[counts[s] for s in range(4)],'Branch cost budget differs')
+    if meta['contract']==BRANCH['contract']:
+        validate_opening_rows(child['records'][1:])
+
+
+def validate_opening_rows(rows):
+    counts=[0]*4
+    for row in rows:
+        action=row['view']['context']['phase']=='action';seat=row['seat'];b=row['behavior']
+        expected=OPENING['temperature'] if action and counts[seat]<OPENING['action_decisions_per_seat'] else 1.
+        require(b['action_decision']==(counts[seat] if action else None) and b['temperature']==expected,
+                'Branch opening counters/temperature differ from fresh per-seat decisions')
+        if action:counts[seat]+=1
 
 
 def expand(games):

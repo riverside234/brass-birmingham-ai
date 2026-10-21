@@ -123,11 +123,11 @@ class ControllerTests(unittest.TestCase):
         self.assertIn('entropy_above_1.3_baseline',r['groups']['canal_action']['alarms'])
         held['generation']=999
         held,r=E.advance(held,c,measured(1.21),generation=1000,warmup_done=True,healthy=True)
-        self.assertEqual(r['groups']['canal_action']['floor'],1.2)
+        self.assertEqual(r['groups']['canal_action']['floor'],1.9)
 
     def test_hysteresis_and_shadow_do_not_apply_alpha(self):
         c,s=self.arm()
-        for i in range(11,14):s,r=E.advance(s,c,measured(1.81),generation=i,warmup_done=True,healthy=True)
+        for i in range(11,14):s,r=E.advance(s,c,measured(1.92),generation=i,warmup_done=True,healthy=True)
         self.assertEqual(r['groups']['canal_action']['reason'],'hysteresis')
         c['entropy_control']['mode']='shadow'
         for i in range(14,25):s,r=E.advance(s,c,measured(.1),generation=i,warmup_done=True,healthy=True)
@@ -175,7 +175,7 @@ class BehaviorTests(unittest.TestCase):
                 records.append((seat,phase,dict(p.last_behavior[rng])))
         for seat in range(4):
             rows=[b for s,phase,b in records if s==seat]
-            self.assertEqual([b['temperature'] for b in rows],[1.5,1.,1.5,1.,1.])
+            self.assertEqual([b['temperature'] for b in rows],[2.,1.,2.,1.,1.])
             self.assertEqual([b['action_decision'] for b in rows],[0,None,1,2,None])
         spec=neural_spec('model',.03,'neutral',version=3,opening=E.OPENING)
         self.assertEqual(p.policy_id,spec['policy_id'])
@@ -187,7 +187,7 @@ class BehaviorTests(unittest.TestCase):
         chosen,prob,_=p.sample_training(dict(context=dict(phase='action')),choices,rng,logits.softmax(-1)[0].numpy(),[0]*8)
         b=dict(p.last_behavior[rng],probability=prob,kind='model',policy_id=p.policy_id)
         row=dict(behavior=b,view=dict(context=dict(phase='action')))
-        ds=SimpleNamespace(rows=[row],temperatures=torch.tensor([[1.5]]))
+        ds=SimpleNamespace(rows=[row],temperatures=torch.tensor([[2.]]))
         behavior=SimpleNamespace(exploration=.03,temperature=1.,exploration_version=3,opening=E.OPENING)
         q=torch.tensor(np.array([exploration_distribution(choices,[0]*8,3,'action')]),dtype=torch.float32)
         actual=row_probabilities(ds,[0],logits,q,behavior)

@@ -111,6 +111,8 @@ def check_signature(state, signature, reviewed=False):
             handlers[ANCHOR_MIGRATION]=configure_anchor
             from .exploration import MIGRATION as EXPLORATION_MIGRATION,continuation_config
             handlers[EXPLORATION_MIGRATION]=continuation_config
+            from .exploration import FROZEN_MIGRATION,frozen_config
+            handlers[FROZEN_MIGRATION]=frozen_config
             for migration in migrations:
                 require(migration in handlers,'Unknown reviewed configuration migration')
                 expected=handlers[migration](expected)
