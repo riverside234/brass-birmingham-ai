@@ -39,6 +39,8 @@ def prepared(games, predicate=None, neutral=False, insolvency=None, reward=None,
                 continue
             if predicate is None or predicate(row):
                 r = dict(row, style=[0.0]*4, intent=[0.0]*8) if neutral else row
+                if hasattr(game,'ppo_opening_objective'):
+                    r=dict(r,_ppo_opening_objective=game.ppo_opening_objective)
                 if reward is not None:
                     r=dict(r,_reward_return=labels[step]['utility'],_reward_remaining=labels[step]['remaining'],_reward_id=rewards['reward_id'])
                     if row['seat'] not in annotated:
@@ -311,13 +313,17 @@ def policy_measure(model, dataset, indices, behavior, config, timings, verify=Fa
             old=dataset.old[ix]
             if verify:
                 valid &= torch.isclose(selected,old,rtol=3e-3,atol=3e-6).all()
+                if getattr(dataset,'opening_reference',None) is not None:
+                    dataset.opening_reference.capture(ix,out[0])
             ratio=selected/old
             total+=((ratio-1)-ratio.log()).sum()
             if advantages is not None:
                 target=dataset.utility if dataset.utility is not None else dataset.targets[0]
                 baseline=out[4] if dataset.utility is not None else out[1]
                 advantages[ix]=target[ix,dataset.seats[ix]]-baseline[torch.arange(len(ix),device=ix.device),dataset.seats[ix]]
-        if verify:require(bool(valid),'Wrong/stale behavior probabilities')
+        if verify:
+            require(bool(valid),'Wrong/stale behavior probabilities')
+            if getattr(dataset,'opening_reference',None) is not None:dataset.opening_reference.freeze()
         result=float(total)/len(indices)
     return result
 
@@ -458,6 +464,9 @@ def _ppo_nonforced(model,optimizer,games,behavior,config,*,profile,profile_steps
                             and d[0].get('_critic_role','learner')=='learner' for d in data),
                 'External or stale actions in PPO')
         ds=Dataset(data,device);verify_behavior_metadata(ds,behavior)
+        if 'opening_objective' in config:
+            from .opening_objective import Reference
+            ds.opening_reference=Reference(ds,behavior,config['opening_objective'])
         demo=rehearsal_dataset(rehearsal,device) if rehearsal_weight else None
     count=len(data);actor_ids=(~ds.forced).nonzero().flatten().cpu().tolist()
     with timings.phase('ppo.critic_prepare'):
@@ -510,7 +519,7 @@ def _ppo_nonforced(model,optimizer,games,behavior,config,*,profile,profile_steps
         categorical_probe=CategoricalProbe(model,ds,probe,behavior,config)
     gradient_norms=[]
     epochs=[];steps=0;critic_steps=0;clips=0;stopped=False;rehearsal_steps=0
-    stop_reason=None;max_categorical_kl=0.
+    stop_reason=None;max_categorical_kl=0.;max_behavior_kl=0.
     actor_used=set();critic_used=set();actor_presentations=Counter();critic_presentations=Counter();critic_roles=Counter()
     groups=[(sample_groups or {}).get(d[2][0],'unknown') for d in data]
     with profile_window(profile,device,profile_steps) as profiler:
@@ -532,8 +541,12 @@ def _ppo_nonforced(model,optimizer,games,behavior,config,*,profile,profile_steps
                         with autocast(config,device): out=model(*inputs)
                         p=row_probabilities(ds,ix,out[0],q,behavior)
                         new=p.gather(1,ds.chosen[ix,None]).squeeze(1).clamp_min(1e-30)
-                        ratio=new/ds.old[ix];a=advantages[ix]
-                        actor=-torch.minimum(ratio*a,ratio.clamp(1-config['clip'],1+config['clip'])*a)
+                        a=advantages[ix]
+                        if getattr(ds,'opening_reference',None) is not None:
+                            actor,ratio=ds.opening_reference.loss(ix,out[0],new,a,config['clip'])
+                        else:
+                            ratio=new/ds.old[ix]
+                            actor=-torch.minimum(ratio*a,ratio.clamp(1-config['clip'],1+config['clip'])*a)
                         entropy,bonus=entropy_term(out[0],p,ds,part,behavior,config)
                         ((actor-bonus).sum()/len(batch)).backward()
                         actor_totals+=torch.stack([x.detach().sum() for x in (actor,entropy,((ratio-1).abs()>config['clip']).float())])
@@ -573,8 +586,11 @@ def _ppo_nonforced(model,optimizer,games,behavior,config,*,profile,profile_steps
                     measured=categorical_probe.measure_step(model,executor=executor)
                 exact_kl=measured['categorical_kl'];kl=measured['sampled_kl']
                 max_categorical_kl=max(max_categorical_kl,exact_kl)
+                max_behavior_kl=max(max_behavior_kl,measured.get('behavior_categorical_kl',exact_kl))
                 if exact_kl>config['target_kl']:
-                    stopped=True;stop_reason='categorical_probe';break
+                    stopped=True;stop_reason=('temperature1_categorical_probe' if 'opening_objective' in config else 'categorical_probe');break
+                if measured.get('behavior_categorical_kl',0.)>config['target_kl']:
+                    stopped=True;stop_reason='behavior_categorical_probe';break
             full=policy_measure(model,ds,actor_ids,behavior,config,timings,executor=executor)
             require(math.isfinite(full),'Nonfinite full-dataset PPO sampled KL; refusing further updates')
             if not stopped and full>config['target_kl']:
@@ -583,6 +599,9 @@ def _ppo_nonforced(model,optimizer,games,behavior,config,*,profile,profile_steps
             epochs.append(dict(epoch=epoch,actor=aa[0],entropy=aa[1],clip_fraction=aa[2],value=vv[0],
                 win_loss=vv[1],rank_loss=vv[2],vp_loss=vv[3],post_update_kl=full,probe_kl=kl,probe_categorical_kl=exact_kl,
                 gradient_norm=float(norm),actor_positions=actor_seen,critic_positions=critic_seen,positions=actor_seen))
+            if 'opening_objective' in config:
+                epochs[-1].update(probe_behavior_categorical_kl=measured['behavior_categorical_kl'] if steps else 0.,
+                    probe_temperature1_categorical_kl=exact_kl)
             if reward is not None:epochs[-1]['utility_prediction']=dict(mse=float(utility_squared)/max(1,4*critic_seen),mae=float(utility_absolute)/max(1,4*critic_seen))
             if stopped:break
     from .ordinary import sample_usage
@@ -591,7 +610,8 @@ def _ppo_nonforced(model,optimizer,games,behavior,config,*,profile,profile_steps
             critic_steps=critic_steps,critic_rows=len(critic_used) if critic_steps else 0)
     with timings.phase('ppo.probe_final'):
         final_probe=categorical_probe.measure(model,anchor=anchor_model)
-    return dict(format='nonforced-actor-ppo/2.1.0',epochs=epochs,optimizer_steps=steps,
+    return dict(format='nonforced-actor-ppo/2.2.0' if 'opening_objective' in config else 'nonforced-actor-ppo/2.1.0',epochs=epochs,optimizer_steps=steps,
+        **(dict(opening_objective=ds.opening_reference.report()) if 'opening_objective' in config else {}),
         branch_sample_usage=dict(actor_distinct_used=sum(bool(ds.rows[i].get('_branch')) for i in actor_used),
             critic_distinct_used=sum('/branch/' in critic_ds.data[i][2][0] for i in critic_used),
             scope='Distinct branch continuation rows in retained PPO steps; branch move and prefix excluded'),
@@ -621,9 +641,14 @@ def _ppo_nonforced(model,optimizer,games,behavior,config,*,profile,profile_steps
         categorical_probe=final_probe,gradient_norms=distribution(gradient_norms),
         input_cache=dict(probe=categorical_probe.cache_report(),scans=ds.scan_cache.report(),
                          admission=ds.input_audit.report()),
-        kl_estimator='probe_categorical_kl: exact KL(old behavior || current behavior), per-step guard; post_update_kl/probe_kl: sampled chosen-action ((ratio-1)-log(ratio)); full means all nonforced rows, retained as secondary epoch guard',
-        kl_guard=dict(contract=PPO_KL_GUARD,target_kl=config['target_kl'],probe_positions=len(probe),
+        kl_estimator=('probe_categorical_kl/categorical_kl: exact KL(old raw T1 || current raw T1), per-step guard and LR signal; behavior_categorical_kl: independent exact behavior-policy guard at the same limit; '
+            if 'opening_objective' in config else 'probe_categorical_kl: exact KL(old behavior || current behavior), per-step guard; ')+
+            'post_update_kl/probe_kl: sampled behavior chosen-action ((ratio-1)-log(ratio)); full means all nonforced rows, retained as secondary epoch guard. Behavior reconstruction is verified separately before updates.',
+        kl_guard=dict(contract='ppo-categorical-kl-guard/2.0.0' if 'opening_objective' in config else PPO_KL_GUARD,
+            target_kl=config['target_kl'],probe_positions=len(probe),
             probe_checks=steps,full_dataset_checks=len(epochs),max_categorical_kl=max_categorical_kl,
+            **(dict(max_behavior_categorical_kl=max_behavior_kl,
+                operative_policy='raw-temperature-1',behavior_guard_preserved=True) if 'opening_objective' in config else {}),
             stop_reason=stop_reason,stop_step=steps if stopped else None),
         kl_probe_rows=len(probe),kl_probe_sampling='proportional-era-phase/1.0.0',
         learning_rates=[group['lr'] for group in optimizer.param_groups],learning_rate_schedule=learning_rate_report(optimizer),

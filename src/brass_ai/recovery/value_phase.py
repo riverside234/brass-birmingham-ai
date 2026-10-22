@@ -34,7 +34,8 @@ def disabled_options(options):
 
 def critic_work(report):
     """Actual critic optimizer work; never label PPO steps as accepted PPG."""
-    if report.get('contract')=='ppg-value-phase/5.0.0' and report.get('enabled',True):
+    from .ppg_config import active
+    if active(report) and report.get('enabled',True):
         work=report.get('gate_critic_training',{})
         require(work.get('source')=='ppo' and type(work.get('optimizer_steps')) is int
             and work['optimizer_steps']>=0,'Invalid scheduled PPG/PPO critic evidence')
@@ -47,7 +48,9 @@ def critic_work(report):
     return work
 
 
-def stratified(config):return config.get('contract') in (STRATIFIED_CONTRACT,CONTRACT,'ppg-value-phase/5.0.0')
+def stratified(config):
+    from .ppg_config import active
+    return config.get('contract') in (STRATIFIED_CONTRACT,CONTRACT) or active(config)
 
 
 def interval_options(options):

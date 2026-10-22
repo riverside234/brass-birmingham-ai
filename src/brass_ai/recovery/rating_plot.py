@@ -93,6 +93,38 @@ def _ticks(start, stop, count):
     return ticks
 
 
+def _endpoint_label(axes, generation, score, color):
+    """Reserve a physical gutter so endpoint text never covers the evidence.
+
+    Measure the formatted value rather than assuming three-digit ratings. The
+    label remains inside the canvas for negative and large scores, and its
+    leader still points to the exact, unshifted checkpoint.
+    """
+    from matplotlib.font_manager import FontProperties
+
+    figure = axes.figure
+    renderer = figure.canvas.get_renderer()
+    label = f'{score:,.1f}'
+    font = FontProperties(size=10, weight='bold')
+    width = renderer.get_text_width_height_descent(label, font, ismath=False)[0]
+    gutter = max(renderer.points_to_pixels(64), width + renderer.points_to_pixels(24))
+    position = axes.get_position()
+    right = min(position.x1, .978 - gutter / figure.bbox.width)
+    axes.set_position([position.x0, position.y0, right-position.x0, position.height])
+    low, high = axes.get_ylim()
+    y = min(.94, max(.06, (score-low)/(high-low)))
+    x = 1 + renderer.points_to_pixels(12) / axes.get_window_extent(renderer).width
+    annotation = axes.annotate(label, xy=(generation, score), xycoords='data',
+        xytext=(x, y), textcoords='axes fraction', ha='left', va='center',
+        fontproperties=font, color=color, annotation_clip=False, clip_on=False,
+        bbox=dict(boxstyle='round,pad=.35,rounding_size=.22', facecolor='white',
+                  edgecolor='#C9DEDF', linewidth=.8),
+        arrowprops=dict(arrowstyle='-', color=color, linewidth=.9,
+                        shrinkA=4, shrinkB=6, relpos=(0., .5)), zorder=8)
+    annotation.set_gid('pl-recent-latest-label')
+    annotation.arrow_patch.set_gid('pl-recent-latest-leader')
+
+
 def render(report, output, *, preview=None, agents=None, max_points=DEFAULT_MAX_POINTS):
     import matplotlib
     matplotlib.use('Agg')
@@ -136,11 +168,11 @@ def render(report, output, *, preview=None, agents=None, max_points=DEFAULT_MAX_
     rlo = [lower[i] for i in recent]; rhi = [upper[i] for i in recent]
     coverage = coverage_labels(report, len(points))
 
-    ink = '#203B43'; muted = '#687D84'; blue = '#167D8D'; dark = '#0A6473'
-    amber = '#A98049'; grid = '#E9EFF0'; paper = '#F6F8F7'
+    ink = '#203B43'; muted = '#5D737C'; blue = '#167D8D'; dark = '#0A6473'
+    amber = '#9C753F'; grid = '#E5ECEE'; paper = '#F6F8F7'
     with plt.rc_context({'font.family': 'DejaVu Sans', 'font.size': 10,
             'text.color': ink, 'axes.labelcolor': muted, 'xtick.color': muted, 'ytick.color': muted,
-            'svg.fonttype': 'none', 'svg.hashsalt': 'brass-pl-progress-v6',
+            'svg.fonttype': 'none', 'svg.hashsalt': 'brass-pl-progress-v7',
             'axes.unicode_minus': False, 'lines.solid_capstyle': 'round'}):
         fig = plt.figure(figsize=(14.4, 8.4), facecolor=paper)
         try:
@@ -182,6 +214,7 @@ def render(report, output, *, preview=None, agents=None, max_points=DEFAULT_MAX_
                 left, bottom, width, height = rect
                 ax = fig.add_axes(rect, facecolor='white')
                 ax.set_axisbelow(True); ax.grid(axis='y', color=grid, linewidth=.8)
+                ax.grid(axis='x', color=grid, linewidth=.6, alpha=.45)
                 for spine in ('left', 'right', 'top'):
                     ax.spines[spine].set_visible(False)
                 ax.spines['bottom'].set_color('#D2DEDF')
@@ -223,15 +256,15 @@ def render(report, output, *, preview=None, agents=None, max_points=DEFAULT_MAX_
             # values in limits even when percentile intervals exclude them.
             def curve(axes, xx, yy, lows, highs, prefix, size, *, band_x=None):
                 band = axes.fill_between(xx if band_x is None else band_x, lows, highs,
-                                         color=blue, alpha=.095, linewidth=0, zorder=2)
+                                         color=blue, alpha=.075, linewidth=0, zorder=2)
                 band.set_gid('pl-raw-pointwise-intervals' if prefix == 'history' else 'pl-recent-intervals')
-                line, = axes.plot(xx, yy, color=blue, linewidth=1.9, zorder=4)
+                line, = axes.plot(xx, yy, color=blue, linewidth=2., zorder=4)
                 line.set_gid('pl-' + prefix + '-line')
                 dots = axes.scatter(xx[:-1], yy[:-1], s=size, facecolor='white', edgecolor=blue,
                                     linewidth=1.05, zorder=5)
                 dots.set_gid('pl-' + prefix + '-markers')
                 if prefix == 'recent':
-                    axes.vlines(xx, lows, highs, color=blue, alpha=.23, linewidth=.9, zorder=3)
+                    axes.vlines(xx, lows, highs, color=blue, alpha=.20, linewidth=.9, zorder=3)
                 else:
                     axes.vlines([latest], [low], [high], color=dark, alpha=.5, linewidth=1.2, zorder=5)
                 last = axes.scatter([latest], [score], s=53, color=dark, edgecolor='white', linewidth=1.4, zorder=6)
@@ -243,8 +276,7 @@ def render(report, output, *, preview=None, agents=None, max_points=DEFAULT_MAX_
             rbottom = min(*rlo, *ry); rtop = max(*rhi, *ry); rspan = max(20., rtop - rbottom)
             detail.set_ylim(rbottom - rspan * .12, rtop + rspan * .16)
             curve(detail, rx, ry, rlo, rhi, 'recent', 23)
-            detail.annotate(f'{score:,.1f}', xy=(latest, score), xytext=(-9, 10),
-                            textcoords='offset points', ha='right', fontsize=10, color=dark, weight='bold')
+            _endpoint_label(detail, latest, score, dark)
             if len(recent) == 1:
                 detail.text(.04, .94, 'One checkpoint in this window', transform=detail.transAxes,
                             va='top', fontsize=8.2, color=muted)

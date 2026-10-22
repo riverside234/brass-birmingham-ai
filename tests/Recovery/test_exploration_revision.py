@@ -73,8 +73,8 @@ class DistributionTests(unittest.TestCase):
 class ControllerTests(unittest.TestCase):
     def test_strict_configuration_and_fresh_defaults(self):
         c=config();validate_config(c)
-        new=latest_model_config(c,c['imitation_checkpoint']);self.assertEqual(new['exploration'],.02)
-        for key in E.BLOCKS:self.assertEqual(new[key],c[key])
+        new=latest_model_config(c,c['imitation_checkpoint']);self.assertEqual(new['exploration'],0.)
+        for key in E.BLOCKS:self.assertEqual(new[key],E.HIGH_BRANCH if key=='branching' else c[key])
         for key in E.BLOCKS:
             bad=copy.deepcopy(c);bad[key]['surprise']=1
             with self.assertRaises(ValueError):validate_config(bad)

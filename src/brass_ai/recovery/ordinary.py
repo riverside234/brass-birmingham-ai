@@ -115,6 +115,8 @@ def plan_collection(root,directory,state,config,signature,service,current,profil
         if exploration:
             provenance['exploration']=exploration
             provenance['learner_behavior'].update(exploration_version=exploration['version'],opening=exploration['opening'])
+        if 'opening_objective' in config['update']:
+            provenance['ppo_opening_objective']=config['update']['opening_objective']
         if kind=='legacy':
             by_policy={selected_specs[p]['policy_id']:p for p in chosen_profiles}
             provenance['legacy_profiles']=dict(contract='ordinary-legacy-profile-cycle/1.0.0',

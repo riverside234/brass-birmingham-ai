@@ -423,6 +423,16 @@
       "implementation": "afcb66986a870567dbbd22ea45c5f43467ca0f7829948f04b561a9f8019e556b",
       "learning_compatibility": "ef6a1b5126de42da8f3277dc9357b6ffb94a435f3faa7fee8dd312bb5a242a54",
       "reason": "Self-play execution/controllers only; completed IL, model and feature contracts unchanged."
+    },
+    {
+      "implementation": "3b0546c92357041cde15cc0a4040bddbd0685e40cf3913bb22a52acc73bf6f65",
+      "learning_compatibility": "ef6a1b5126de42da8f3277dc9357b6ffb94a435f3faa7fee8dd312bb5a242a54",
+      "reason": "Self-play reward/branch/fixed snapshot control only; completed IL/model/feature contracts unchanged."
+    },
+    {
+      "implementation": "0175cf43e34fa0cb1a3425158e13399a868c3fe2bdcd27bef58ee10df2bda02f",
+      "learning_compatibility": "ef6a1b5126de42da8f3277dc9357b6ffb94a435f3faa7fee8dd312bb5a242a54",
+      "reason": "Optional self-play objectives and PPG acceptance only; completed IL/model/Features-4 remain unchanged."
     }
   ]
 }

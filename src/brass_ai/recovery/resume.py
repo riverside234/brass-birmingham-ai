@@ -93,6 +93,8 @@ def check_signature(state, signature, reviewed=False):
             handlers[PFSP_MIGRATION]=sampling_config
             from .config import INSOLVENCY_EVENT_CONFIG_MIGRATION,insolvency_event_config
             handlers[INSOLVENCY_EVENT_CONFIG_MIGRATION]=insolvency_event_config
+            from .config import INSOLVENCY_010_CONFIG_MIGRATION,insolvency_010_config
+            handlers[INSOLVENCY_010_CONFIG_MIGRATION]=insolvency_010_config
             from .value_phase import CONFIG_MIGRATION as PPG_MIGRATION,refined_options
             handlers[PPG_MIGRATION]=refined_options
             from .value_phase import INTERVAL_MIGRATION,interval_options
@@ -107,8 +109,16 @@ def check_signature(state, signature, reviewed=False):
             handlers[THROUGHPUT_CONFIG_MIGRATION]=throughput_config
             from .critic_data import FLOOR_MIGRATION,floor_config
             handlers[FLOOR_MIGRATION]=floor_config
+            from .critic_data import FIXED_MIGRATION,fixed_config
+            handlers[FIXED_MIGRATION]=fixed_config
             from .ppg_config import MIGRATION as PPG_REPLAY_MIGRATION,configure as configure_ppg_replay
             handlers[PPG_REPLAY_MIGRATION]=configure_ppg_replay
+            from .ppg_config import SHORT_MIGRATION,short_options
+            handlers[SHORT_MIGRATION]=short_options
+            from .opening_objective import (MIGRATION as OPENING_MIGRATION,configure as configure_opening,
+                ZERO_EXPLORATION_MIGRATION,zero_exploration)
+            handlers[OPENING_MIGRATION]=configure_opening
+            handlers[ZERO_EXPLORATION_MIGRATION]=zero_exploration
             from .v4_share import (MIGRATION as V4_SHARE_MIGRATION,configure as configure_v4_share,
                 LEGACY_MIGRATION as OLD_V4_SHARE_MIGRATION,configure_legacy as configure_old_v4_share)
             handlers[V4_SHARE_MIGRATION]=configure_v4_share
@@ -125,6 +135,8 @@ def check_signature(state, signature, reviewed=False):
             handlers[GROUP_FLOOR_MIGRATION]=group_floor_config
             from .exploration import ANCHOR_FLOOR_MIGRATION,anchor_floor_config
             handlers[ANCHOR_FLOOR_MIGRATION]=lambda c:anchor_floor_config(c,state)
+            from .exploration import HIGH_BRANCH_MIGRATION,high_branch_config
+            handlers[HIGH_BRANCH_MIGRATION]=high_branch_config
             for migration in migrations:
                 require(migration in handlers,'Unknown reviewed configuration migration')
                 expected=handlers[migration](expected)

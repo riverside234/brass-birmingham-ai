@@ -257,6 +257,10 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
         validate_frozen_reference(root,state['ratings'])
     if migration:
         print('Combined reward migration: compatible weights/Adam/RNG preserved; utility head awaits fresh-rollout calibration',flush=True)
+    if phases is not None and phases.snapshot_fixed_migration:
+        change=phases.snapshot_fixed_migration
+        print(f'Snapshot critic weight: {change["weight_before"]:.2f} -> 1.00 fixed; '
+              'recovery and decay disabled, prior controller archived',flush=True)
     if source_changed:
         from .resume import commit_transition
         state=commit_transition(run,state,signature,opponent_pool=resumed_pool,pool_migration=pool_migration)
@@ -533,7 +537,7 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                 checkpoint_began=time.monotonic()
                 anchor_commit=policy_anchor.checkpoint_state(state)
                 identity=save_checkpoint(output,model,optimizer,step=iteration+1,
-                    training=dict(mode='step5-population-ppo',recipe='nonforced-actor-ppo/2.1.0' if revised else 'effective-minibatch-ppo/2.0.0',
+                    training=dict(mode='step5-population-ppo',recipe=update['format'],
                         parent=current,signature=digest(signature),fresh_run=run.relative_to(root).as_posix(),initialization='random-lineage',
                         evidence=dict(iteration=iteration,games_done=done,report=(directory/'report.json').relative_to(root).as_posix(),
                                       update_digest=digest(update)),
@@ -679,7 +683,8 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                       f'total={report["timings"]["iteration_seconds"]:.1f}s; '
                       f'NN batch mean={report["utilization"]["mean_inference_batch"]:.2f}; '
                       f'LR={update["learning_rates"][0]:.1e}{controller_line} '
-                      f'KLcat={update.get("categorical_probe",{}).get("categorical_kl",0.):.5f} '
+                      f'{"KLT1" if "opening_objective" in update else "KLcat"}={update.get("categorical_probe",{}).get("categorical_kl",0.):.5f} '
+                      + (f'KLbehavior={update["categorical_probe"]["behavior_categorical_kl"]:.5f} ' if 'opening_objective' in update else '') +
                       f'KLsample={update["epochs"][-1]["post_update_kl"]:.5f} '
                       f'KLstop={update.get("kl_guard",{}).get("stop_reason") or "none"} '
                       f'value={update["epochs"][-1]["value"]:.4f}; '

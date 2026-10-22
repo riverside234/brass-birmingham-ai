@@ -32,6 +32,7 @@ def phase_fixture(generation=0):
         value_iterations=generation,ev_streak=min(generation,4))
     p.critic_state=critic_data.initial(cfg['critic_data']);p.critic_state['generation']=generation
     p.fingerprint=None;p.beta=1.;p.trips=[];p.evidence_migration=None;p.critic_migration=None
+    p.snapshot_floor_migration=None;p.snapshot_fixed_migration=None
     p.value_report=dict(optimizer_steps=1,kl_guard_tripped=False,
         descriptor_gain=dict(learner_ev_gain=.01),heldout_after=dict(groups={
             'role:learner':dict(explained_variance=.6),

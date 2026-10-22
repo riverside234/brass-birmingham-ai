@@ -13,6 +13,10 @@ LEGACY_DEFAULT=dict(contract='critic-rows/1.0.0',learner_rows=True,snapshot_rows
 DEFAULT=dict(copy.deepcopy(LEGACY_DEFAULT),contract='critic-rows/2.0.0',
     rollout=dict(LEGACY_DEFAULT['rollout'],reduced_snapshot_weight=0.))
 FLOOR_MIGRATION='snapshot-weight-zero-floor/1.0.0'
+FIXED_DEFAULT=dict(copy.deepcopy(DEFAULT),contract='critic-rows/3.0.0',
+    rollout=dict(DEFAULT['rollout'],mode='fixed'))
+FIXED_MIGRATION='snapshot-weight-fixed-one/1.0.0'
+FIXED_STATE='snapshot-weight-fixed/1.0.0'
 
 RECOVERY_CONTRACT='snapshot-weight-recovery/1.0.0'
 RECOVERY_ITERATIONS=5
@@ -23,15 +27,33 @@ def floor_config(config):
     result=copy.deepcopy(config)
     if 'critic_data' not in result:return result
     c=validate_config(result['critic_data'])
+    if fixed(c):return result
     c['contract']=DEFAULT['contract'];c['rollout']['reduced_snapshot_weight']=0.
     validate_config(c)
     return result
 
 
+def fixed_config(config):
+    result=copy.deepcopy(config)
+    if 'critic_data' in result:
+        validate_config(result['critic_data'])
+        result['critic_data']=copy.deepcopy(FIXED_DEFAULT)
+    return result
+
+
+def fixed(c):return c.get('contract')==FIXED_DEFAULT['contract']
+
+
 def validate_config(c):
-    require(type(c) is dict and set(c)==set(DEFAULT) and c['contract'] in (DEFAULT['contract'],LEGACY_DEFAULT['contract'])
+    require(type(c) is dict and set(c)==set(DEFAULT) and c['contract'] in (DEFAULT['contract'],LEGACY_DEFAULT['contract'],FIXED_DEFAULT['contract'])
         and c['learner_rows'] is True and type(c['snapshot_rows']) is bool
         and c['excluded_roles']==DEFAULT['excluded_roles'],'Invalid critic row contract')
+    if fixed(c):
+        require(c==FIXED_DEFAULT and type(c['snapshot_weight']) in (int,float)
+            and type(c['holdout_fraction']) in (int,float) and type(c['rollout']) is dict
+            and all(type(c['rollout'][k]) is not bool for k in c['rollout'] if k!='mode'),
+            'Fixed snapshot critic requires weight 1.00 and disabled weight control')
+        return c
     expected=DEFAULT if c['contract']==DEFAULT['contract'] else LEGACY_DEFAULT
     require(type(c['snapshot_weight']) in (int,float) and c['snapshot_weight'] in ((0.,.5,1.) if expected is DEFAULT else (.5,1.))
         and type(c['holdout_fraction']) in (int,float) and c['holdout_fraction']==.05,
@@ -128,9 +150,10 @@ def recovery_initial(generation):
 
 
 def initial(c):
-    return dict(generation=0,snapshots_active=c['snapshot_rows'] and c['rollout']['mode']=='snapshots',
-        snapshot_weight=c['snapshot_weight'],learner_ev_baseline=None,activation_generation=None,
-        previous_fingerprint=None,weight_recovery=recovery_initial(0))
+    return dict(generation=0,snapshots_active=c['snapshot_rows'] and c['rollout']['mode'] in ('snapshots','fixed'),
+        snapshot_weight=c['snapshot_weight'],learner_ev_baseline=None,activation_generation=0 if fixed(c) else None,
+        previous_fingerprint=None,weight_recovery=(dict(contract=FIXED_STATE,origin=0,previous=None)
+            if fixed(c) else recovery_initial(0)))
 
 
 def _validate_base(s,c,generation,*,legacy=False):
@@ -150,6 +173,17 @@ def _validate_base(s,c,generation,*,legacy=False):
 def validate_state(s,c,generation):
     _validate_base(s,c,generation)
     r=s['weight_recovery']
+    if fixed(c):
+        require(s['snapshots_active'] and s['snapshot_weight']==1. and type(r) is dict and
+            set(r)=={'contract','origin','previous'} and r['contract']==FIXED_STATE and
+            type(r['origin']) is int and 0<=r['origin']<=generation,'Invalid fixed snapshot weight checkpoint')
+        old=r['previous']
+        if old is not None:
+            require(type(old) is dict and set(old)=={'config','state'} and not fixed(old['config']),
+                'Invalid archived snapshot controller')
+            validate_config(old['config']);validate_state(old['state'],old['config'],r['origin'])
+        else:require(r['origin']==0,'Missing archived snapshot controller')
+        return s
     from . import snapshot_r2
     if r.get('contract')==snapshot_r2.CONTRACT:
         require(s['learner_ev_baseline'] is None,'Legacy EV must not be reused as the R2 reference')
@@ -168,6 +202,18 @@ def validate_state(s,c,generation):
     return s
 
 
+def fix_weight(s,old_config,new_config,generation):
+    """Explicit checkpoint transition, before any resumed critic sampling."""
+    validate_config(new_config);validate_state(s,old_config,generation)
+    require(fixed(new_config) and not fixed(old_config),'Invalid fixed snapshot transition')
+    result=copy.deepcopy(s)
+    result.update(snapshots_active=True,snapshot_weight=1.,
+        activation_generation=s['activation_generation'] if s['snapshots_active'] else generation,
+        weight_recovery=dict(contract=FIXED_STATE,origin=generation,
+            previous=dict(config=copy.deepcopy(old_config),state=copy.deepcopy(s))))
+    return validate_state(result,new_config,generation)
+
+
 def migrate_state(s,c,generation):
     """Exact legacy checkpoint upgrade; no retrospective recovery evidence."""
     s=copy.deepcopy(_validate_base(s,c,generation,legacy=True))
@@ -179,6 +225,7 @@ def learner_ev(metrics):return metrics.get('groups',{}).get('role:learner',{}).g
 
 
 def recovery_console(report):
+    if report.get('weight_control')=='fixed':return ' snapshot_weight=fixed'
     r=report.get('weight_recovery')
     if not r:return ''
     text=f' snapshot_recovery={r["healthy_streak_next"]}/{r["required_iterations"]}:{report["decision"]}'
@@ -190,6 +237,30 @@ def recovery_console(report):
 
 def advance(s,c,*,generation,report,healthy,fingerprint_now,ppo_snapshot_rows=0,regime=None):
     from . import snapshot_r2
+    if fixed(c):
+        from .value_phase import critic_work
+        s=copy.deepcopy(validate_state(s,c,generation-1))
+        value_rows=(report.get('role_usage',{}).get('snapshot',{}).get('distinct_used',0)
+            if report.get('optimizer_steps',0)>0 else 0)
+        require(all(type(n) is int and n>=0 for n in (ppo_snapshot_rows,value_rows)),
+            'Invalid retained snapshot training counts')
+        observation=snapshot_r2.entry(generation,report,healthy=healthy is True,trained=True)
+        evidence=snapshot_r2.pool([p for p in observation['tables'].values() if p is not None])
+        previous=s['previous_fingerprint'];drift=None
+        if previous is not None and fingerprint_now is not None:
+            drift=float(np.mean(np.abs(np.asarray(previous)-np.asarray(fingerprint_now['values']))))
+        if fingerprint_now is not None:s['previous_fingerprint']=fingerprint_now['values']
+        s['generation']=generation;validate_state(s,c,generation)
+        return s,dict(snapshot_rows_used=bool(ppo_snapshot_rows or value_rows),snapshot_rows_enabled=True,
+            ppo_snapshot_distinct_used=ppo_snapshot_rows,value_snapshot_distinct_used=value_rows,
+            critic_training=critic_work(report),snapshot_rows_next=True,weight_used=1.,weight_next=1.,
+            weight_control='fixed',weight_recovery=None,decision='fixed_snapshot_weight',
+            reason='configured_fixed_one_recovery_and_decay_disabled',
+            learner_heldout_ev=learner_ev(report.get('heldout_after',{})),learner_r2=evidence['r2'],
+            learner_mse=evidence['learner_mse'],learner_prediction_bias=evidence['prediction_bias'],
+            learner_target_variance=evidence['target_variance'],learner_evidence=evidence,
+            fingerprint_mean_absolute_drift=drift,
+            scope='Fixed 1.00 snapshot critic loss weight; current ordinary learner holdout R2 is diagnostic only. GAE, economic and PPO/PPG guards unchanged.')
     if s['weight_recovery'].get('contract')==snapshot_r2.CONTRACT:
         return _advance_r2(s,c,generation=generation,report=report,healthy=healthy,
             fingerprint_now=fingerprint_now,ppo_snapshot_rows=ppo_snapshot_rows,regime=regime)

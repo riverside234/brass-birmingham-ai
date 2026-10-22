@@ -102,7 +102,7 @@ def compact(report):
     out['actor']['learning_rate_schedule']=scalars(schedule,('contract','kind','base_lr','steps','start_factor',
         'completed_steps','effective_lr','next_lr')) if schedule else None
     out['actor']['sample_usage']=actor.get('sample_usage')
-    for key in ('gae','critic_split','critic_rows','final_categorical_probe','input_cache','cpu_preparation'):
+    for key in ('gae','critic_split','critic_rows','final_categorical_probe','input_cache','cpu_preparation','opening_objective'):
         if key in actor:out['actor'][key]=actor[key]
     sampling=actor.get('rehearsal_sampling')
     if isinstance(sampling,dict):out['actor']['rehearsal_sampling']=scalars(sampling,(
@@ -117,7 +117,8 @@ def compact(report):
     epochs=actor.get('epochs',[])
     if epochs:
         out['actor']['epochs']=[dict(scalars(epoch,('epoch','actor','value','win_loss','rank_loss','vp_loss',
-            'entropy','post_update_kl','probe_kl','probe_categorical_kl','clip_fraction','gradient_norm','actor_positions','critic_positions')),
+            'entropy','post_update_kl','probe_kl','probe_categorical_kl','probe_behavior_categorical_kl',
+            'probe_temperature1_categorical_kl','clip_fraction','gradient_norm','actor_positions','critic_positions')),
             utility_prediction=scalars(epoch.get('utility_prediction',{}),('mse','mae'))) for epoch in epochs[-8:]]
         out['actor']['last_epoch']=out['actor']['epochs'][-1]
         out['actor']['utility_prediction']=scalars(epochs[-1].get('utility_prediction',{}),('mse','mae'))

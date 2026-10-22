@@ -35,7 +35,7 @@ class Floors(unittest.TestCase):
         self.assertEqual(fresh['entropy_control'],E.ANCHOR_ENTROPY)
         self.assertEqual({k:v for k,v in fresh['entropy_control'].items() if k!='promotion_origin'},
                          {k:v for k,v in self.cfg['entropy_control'].items() if k!='promotion_origin'})
-        self.assertEqual(fresh['critic_data'],self.cfg['critic_data'])
+        self.assertEqual(fresh['critic_data'],C.FIXED_DEFAULT)  # g503; archived zero-floor migration stays exact.
         for key,value in (('floor_drop_per_anchor_promotion',.03),('floor_decay_per_iteration',.999)):
             bad=copy.deepcopy(self.cfg);bad['entropy_control'][key]=value
             with self.assertRaises(ValueError):validate_config(bad)

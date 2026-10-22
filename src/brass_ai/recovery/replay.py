@@ -237,6 +237,9 @@ def read_shards(paths,partition=None,receipts=None,*,heuristic_only=False):
             # Descriptors are table metadata, separate from the immutable board
             # observation/Features-4 contract. The enclosing replay hash seals it.
             proof=jobs[ordinal]['provenance'] if jobs is not None else header['provenance']
+            if 'ppo_opening_objective' in proof:
+                from .opening_objective import validate
+                game.ppo_opening_objective=validate(proof['ppo_opening_objective'])
             require('branch' not in game,'Standalone branch replay lacks parent evidence')
             if game.get('branches'):
                 require(proof.get('purpose')=='training' and proof.get('kind')=='selfplay' and

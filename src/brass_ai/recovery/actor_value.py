@@ -62,7 +62,8 @@ def disable_ppg_checkpoint(saved,options,generation):
     if 'table_streaks' in state:state['table_streaks']={k:0 for k in state['table_streaks']}
     if 'table_evidence' in state:state['table_evidence']=gae.ev_evidence.initial(generation)
     if 'stage_evidence' in state:state['stage_evidence']=gae.gae_health.initial(generation)
-    if 'critic_data' in result:result['critic_data']['weight_recovery']['healthy_streak']=0
+    if 'critic_data' in result and not critic_data.fixed(options['critic_data']):
+        result['critic_data']['weight_recovery']['healthy_streak']=0
     result.update(contract=PPO_ONLY_CONTRACT,options=copy.deepcopy(options),critic_evidence=evidence)
     return result
 
@@ -82,7 +83,8 @@ def quota_holdout_checkpoint(saved,options,generation):
     if 'table_streaks' in state:state['table_streaks']={k:0 for k in state['table_streaks']}
     if 'table_evidence' in state:state['table_evidence']=gae.ev_evidence.initial(generation)
     if 'stage_evidence' in state:state['stage_evidence']=gae.gae_health.initial(generation)
-    if 'critic_data' in result:result['critic_data']['weight_recovery']['healthy_streak']=0
+    if 'critic_data' in result and not critic_data.fixed(options['critic_data']):
+        result['critic_data']['weight_recovery']['healthy_streak']=0
     result['options']=copy.deepcopy(options)
     return result
 
@@ -91,8 +93,19 @@ class TrainingPhases:
     def __init__(self,model,config,*,raw=None,generation=0,root=None,run=None):
         from . import ppg_config
         self.snapshot_floor_migration=None
+        self.snapshot_fixed_migration=None
         saved=(raw or {}).get('training',{}).get(KEY)
         old_critic=(saved or {}).get('options',{}).get('critic_data')
+        if old_critic is not None and old_critic!=config.get('critic_data') and critic_data.fixed(config.get('critic_data',{})):
+            options=critic_data.fixed_config(saved['options'])
+            require(options['critic_data']==config['critic_data'],'Invalid fixed snapshot checkpoint transition')
+            updated=critic_data.fix_weight(saved['critic_data'],old_critic,options['critic_data'],generation)
+            saved=dict(saved,options=options,critic_data=updated)
+            raw=dict(raw,training=dict(raw['training'],**{KEY:saved}))
+            self.snapshot_fixed_migration=dict(contract=critic_data.FIXED_MIGRATION,origin=generation,
+                weight_before=updated['weight_recovery']['previous']['state']['snapshot_weight'],weight_after=1.,
+                recovery_enabled=False,decay_enabled=False,
+                scope='Fixed before the first resumed PPO batch. Prior controller archived; both Adams, GAE, RNG and all unrelated baselines preserved.')
         if (old_critic is not None and old_critic!=config.get('critic_data') and
                 config.get('critic_data',{}).get('contract')==critic_data.DEFAULT['contract']):
             options=critic_data.floor_config(saved['options'])
@@ -206,7 +219,8 @@ class TrainingPhases:
                 if 'table_evidence' in state:
                     from .ev_evidence import initial
                     state['table_evidence']=initial(generation)
-                if descriptors:saved['critic_data']['weight_recovery']['healthy_streak']=0
+                if descriptors and not critic_data.fixed(config['critic_data']):
+                    saved['critic_data']['weight_recovery']['healthy_streak']=0
                 self.refinement_migration=dict(contract=value_phase.CONFIG_MIGRATION,origin=generation,
                     learning_rate_before=old_rate,learning_rate_after=config['value_phase']['learning_rate'],
                     scope='Value LR only changes in Adam; all moments/steps, weights and RNG preserved. New holdout evidence starts here; lambdas, activation/origins, snapshot weight, fixed EV baseline and training counters retained.')
@@ -256,7 +270,7 @@ class TrainingPhases:
                     self.optimizer.param_groups[0]['weight_decay']==0,'Value optimizer settings differ')
         self.buffer=None;self.collection_source=None
         self.snapshot_r2_migration=None
-        if self.critic_state is not None:
+        if self.critic_state is not None and not critic_data.fixed(config['critic_data']):
             from .snapshot_r2 import migrate
             self.critic_state,self.snapshot_r2_migration=migrate(self.critic_state,config['critic_data'],generation)
         if buffered:
@@ -286,7 +300,9 @@ class TrainingPhases:
         else:
             saved=copy.deepcopy(saved)
             if saved.get('contract')==PPO_ONLY_CONTRACT:
-                require(ppg_config.configure(saved['options'])==self.options,'Unreviewed eight-iteration PPG options')
+                upgrade=(ppg_config.short_options if config['value_phase']['contract']==ppg_config.SHORT_CONTRACT
+                         else ppg_config.configure)
+                require(upgrade(saved['options'])==self.options,'Unreviewed eight-iteration PPG options')
                 required={'contract','options','gae','beta_clone','kl_trips','optimizer','critic_evidence'}
                 if 'critic_data' in self.options:required.add('critic_data')
                 require(set(saved)==required,'Unexpected PPO-only checkpoint fields')
@@ -295,6 +311,13 @@ class TrainingPhases:
                     epoch_control=ppg_epochs.initial(generation,config['value_phase']))
                 self.rolling_migration=dict(contract=ppg_config.MIGRATION,origin=generation,
                     scope='Enable scheduled PPG without backfill. Preserve weights, both Adams, RNG, GAE/PPO evidence, economic health, snapshot baseline and training progress.')
+            elif (saved.get('contract')==self.contract and saved['options']!=self.options and
+                    config['value_phase']['contract']==ppg_config.SHORT_CONTRACT):
+                require(ppg_config.short_options(saved['options'])==self.options,
+                    'Unreviewed sixteen-step PPG acceptance transition')
+                saved['options']=copy.deepcopy(self.options)
+                self.rolling_migration=dict(contract=ppg_config.SHORT_MIGRATION,origin=generation,
+                    scope='Acceptance every 16 steps, patience 1; retain schedule, committed critic caches, both Adams, RNG and GAE evidence.')
             fields={'contract','options','gae','beta_clone','kl_trips','optimizer','critic_evidence','schedule','rolling_buffer','epoch_control'}
             if 'critic_data' in self.options:fields.add('critic_data')
             require(saved.get('contract')==self.contract and set(saved)==fields and saved['options']==self.options,
@@ -478,6 +501,7 @@ class TrainingPhases:
             if self.critic_migration:value['critic_rollout']['recovery_migration']=copy.deepcopy(self.critic_migration)
             if getattr(self,'snapshot_r2_migration',None):value['critic_rollout']['r2_migration']=copy.deepcopy(self.snapshot_r2_migration)
             if self.snapshot_floor_migration:value['critic_rollout']['floor_migration']=copy.deepcopy(self.snapshot_floor_migration)
+            if self.snapshot_fixed_migration:value['critic_rollout']['fixed_migration']=copy.deepcopy(self.snapshot_fixed_migration)
         update['gae']['gate']=report
         return report
 
@@ -508,6 +532,7 @@ class TrainingPhases:
         self.holdout_migration=None
         self.snapshot_r2_migration=None
         self.snapshot_floor_migration=None
+        self.snapshot_fixed_migration=None
         self.disabled_startup_cleanup=None
         if self.rolling:
             self.schedule=self.pending_schedule;self.epoch_control=self.pending_epoch_control;self.rolling_migration=None

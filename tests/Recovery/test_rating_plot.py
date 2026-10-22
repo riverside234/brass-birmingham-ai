@@ -242,6 +242,51 @@ class RatingPlot(unittest.TestCase):
         self.assertEqual(len(plots), 2)
         self.assertTrue(all(height > .52 for height in plots))
 
+    def test_latest_label_has_its_own_gutter_and_stays_inside_canvas(self):
+        from matplotlib.figure import Figure
+
+        save = Figure.savefig
+        for case in ('normal', 'flat', 'negative', 'large', 'single'):
+            report, _ = long_fixture()
+            report.pop('differences')
+            score = report['ratings']['generation-000470']['points']
+            if case in ('negative', 'large'):
+                score = -500. if case == 'negative' else 12345678.9
+                report['ratings']['generation-000470'] = dict(points=score, points_ci95=[score-40, score+50])
+            elif case == 'flat':
+                for generation in range(370, 471, 10):
+                    report['ratings'][f'generation-{generation:06d}'] = dict(
+                        points=score, points_ci95=[score-40, score+50])
+            elif case == 'single':
+                report['ratings'] = {k: v for k, v in report['ratings'].items()
+                    if k in ('generation-0', 'v4', 'generation-000470')}
+            before = copy.deepcopy(report)
+            snapshots = []
+
+            def snapshot(figure, *args, **kwargs):
+                figure.canvas.draw()
+                renderer = figure.canvas.get_renderer()
+                axes = figure.axes[1]
+                label = next(t for t in axes.texts if t.get_gid() == 'pl-recent-latest-label')
+                snapshots.append((label.get_bbox_patch().get_window_extent(renderer).frozen(),
+                    axes.get_window_extent(renderer).frozen(), figure.bbox.frozen(), label.xy))
+                return save(figure, *args, **kwargs)
+
+            with self.subTest(case=case), tempfile.TemporaryDirectory(dir=ROOT/'artifacts') as tmp, \
+                    patch.object(Figure, 'savefig', snapshot):
+                path = Path(tmp)/'progress.svg'
+                rating_plot.render(report, path)
+                badge, plot, canvas, target = snapshots[0]
+                self.assertGreater(badge.x0, plot.x1 + 3)
+                self.assertGreaterEqual(badge.y0, plot.y0)
+                self.assertLessEqual(badge.y1, plot.y1)
+                self.assertLess(badge.x1, canvas.x1 - 3)
+                self.assertEqual(target, (470, score))
+                self.assertEqual(report, before)
+                root = ET.parse(path).getroot()
+                self.assertIsNotNone(root.find(".//*[@id='pl-recent-latest-label']"))
+                self.assertIsNotNone(root.find(".//*[@id='pl-recent-latest-leader']"))
+
     def test_percentile_endpoints_are_not_clamped_or_recentered(self):
         report, agents = fixture(); calls = []; original = Axes.vlines
         def vlines(ax, x, ymin, ymax, *args, **kwargs):

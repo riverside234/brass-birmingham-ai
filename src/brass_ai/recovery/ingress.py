@@ -100,7 +100,8 @@ def _prepare_inner(task):
                    view=dict(context={k:r['view']['context'][k] for k in ('era','phase','round')}),
                    choices=r['choices'],style=r['style'],intent=r['intent'],teacher=r['teacher'],
                    **{k:r[k] for k in ('_insolvency_cost_to_go','_insolvency_trajectory','_reward_return','_reward_remaining','_reward_id','_reward_trajectory',
-                       '_critic_role','_table_kind','_seat_descriptors','_descriptor_generation','_branch','_parent_game_id') if k in r}),
+                       '_critic_role','_table_kind','_seat_descriptors','_descriptor_generation','_branch','_parent_game_id',
+                       '_ppo_opening_objective') if k in r}),
               target,identity,encoded) for r,target,identity,encoded in data]
     headers=[{k:v for k,v in g.items() if k not in ('records','branches')} for g in games]
     ended=time.perf_counter()

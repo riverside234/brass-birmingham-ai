@@ -41,6 +41,7 @@ MIGRATION = 'staged-exploration/1.0.0'
 FROZEN_MIGRATION = 'frozen-entropy-branch-openings/1.0.0'
 GROUP_FLOOR_MIGRATION = 'group-entropy-floors-low-branching/1.0.0'
 ANCHOR_FLOOR_MIGRATION = 'anchor-promotion-entropy-floors/1.0.0'
+HIGH_BRANCH_MIGRATION = 'anchor-entropy-high-branching/1.0.0'
 STATE = 'exploration-state/1.0.0'
 ANCHOR_STATE = 'exploration-state/2.0.0'
 
@@ -115,6 +116,16 @@ def anchor_floor_config(config, state=None):
     return result
 
 
+def high_branch_config(config):
+    """Change only the fork probability; never reinitialize entropy or its origin."""
+    validate(config)
+    result=copy.deepcopy(config)
+    if config.get('entropy_control',{}).get('contract')==ANCHOR_ENTROPY['contract']:
+        result['branching']=copy.deepcopy(HIGH_BRANCH)
+    validate(result)
+    return result
+
+
 def validate(config):
     present=[b in config for b in BLOCKS]
     if not any(present): return
@@ -124,13 +135,13 @@ def validate(config):
     current=config['opening']==OPENING and config['branching']==BRANCH
     uniform=config['opening']==OPENING and config['branching']==HIGH_BRANCH
     legacy=config['opening']==LEGACY_OPENING and config['branching']==LEGACY_BRANCH
-    require(config['exploration'] in (.02,.03) and config['exploration_distribution']==Q and
+    require(type(config['exploration']) in (int,float) and config['exploration'] in (0.,.02,.03) and config['exploration_distribution']==Q and
         (current or uniform or legacy), 'Invalid exploration revision recipe')
     e=config['entropy_control']
     require(type(e) is dict,'Invalid entropy floor controller')
     check=e.get('deployment_temperature_check',{})
     require('enabled' not in check or check['enabled'] is False,'Temperature comparisons must be explicitly disabled')
-    recipes=(ENTROPY,ANCHOR_ENTROPY) if current else (UNIFORM_ENTROPY,) if uniform else (DECAY_ENTROPY,LEGACY_ENTROPY)
+    recipes=(ENTROPY,ANCHOR_ENTROPY) if current else (UNIFORM_ENTROPY,ANCHOR_ENTROPY) if uniform else (DECAY_ENTROPY,LEGACY_ENTROPY)
     comparable=dict(e,mode='apply')
     if e.get('contract')==ANCHOR_ENTROPY['contract']:
         origin=e.get('promotion_origin')

@@ -122,6 +122,8 @@ class CategoricalProbe:
         from .updates import row_probabilities
         from .batch_cache import PROBE_CACHE_BYTES, probe_device_limit, tensor_bytes
         self.parts = []; self.batches = []; self.seals = []
+        self.decoupled='opening_objective' in config
+        self.raw_parts=[];self.opening_masks=[];self.opening_positions=0
         self.dataset, self.behavior = dataset, behavior
         self.positions = len(indices)
         self.device_limit = probe_device_limit(dataset.device)
@@ -131,20 +133,28 @@ class CategoricalProbe:
             for part in dataset.microbatches(indices, config['microbatch_size'],
                                             config['max_candidate_cells'], config['bucket']):
                 ix, inputs, q = dataset.batch(part, behavior.exploration)
-                p = row_probabilities(dataset,part,model(*inputs)[0],q,behavior)
+                logits=model(*inputs)[0]
+                p = row_probabilities(dataset,part,logits,q,behavior)
                 tensors = (ix,*inputs,q)
                 before = p.detach().clone()
-                size = tensor_bytes((*tensors,before))
+                raw=logits.float().softmax(-1).detach() if self.decoupled else None
+                size = tensor_bytes((*tensors,before,*((raw,) if raw is not None else ())))
                 if size <= self.device_limit-self.device_bytes:
                     self.device_bytes += size
                 elif size <= self.host_limit-self.host_bytes:
                     tensors = tuple(t.cpu().pin_memory() for t in tensors)
                     before = before.cpu().pin_memory()
+                    if raw is not None:raw=raw.cpu().pin_memory()
                     self.host_bytes += size
                 else:
                     tensors = None
                     before = before.cpu()
+                    if raw is not None:raw=raw.cpu()
                 self.parts.append((part,before))
+                self.raw_parts.append(raw)
+                mask=dataset.temperatures[ix,0]==2. if self.decoupled else None
+                self.opening_masks.append(mask)
+                if mask is not None:self.opening_positions+=int(mask.sum())
                 self.batches.append(tensors)
                 self.seals.append(dataset.input_seal(part,behavior.exploration))
 
@@ -178,21 +188,37 @@ class CategoricalProbe:
         anchor, resample positions or advance training RNG inside the guard.
         """
         from .updates import row_probabilities
-        totals = torch.zeros(2, device=self.dataset.device)
+        totals = torch.zeros(4, device=self.dataset.device)
         with torch.no_grad():
             for index in range(len(self.parts)):
                 _,old,ix,inputs,q = self._batch(index)
-                p = row_probabilities(self.dataset,ix,model(*inputs)[0],q,self.behavior)
+                logits=model(*inputs)[0]
+                p = row_probabilities(self.dataset,ix,logits,q,self.behavior)
                 selected = p.gather(1, self.dataset.chosen[ix, None]).squeeze(1).clamp_min(1e-30)
                 ratio = selected/self.dataset.old[ix]
-                totals += torch.stack((categorical_kl(old, p), ((ratio-1)-ratio.log()).sum()))
-        exact, sampled = (value/max(1, self.positions) for value in totals.cpu().tolist())
-        require(math.isfinite(exact) and math.isfinite(sampled), 'Nonfinite PPO KL probe; refusing further updates')
-        return dict(positions=self.positions, categorical_kl=exact, sampled_kl=sampled)
+                raw_kl=opening_kl=torch.zeros((),device=self.dataset.device)
+                if self.decoupled:
+                    raw=logits.float().softmax(-1);before=self.raw_parts[index].to(raw.device,non_blocking=True)
+                    mask=self.opening_masks[index]
+                    raw_kl=categorical_kl(before,raw);opening_kl=categorical_kl(before[mask],raw[mask])
+                totals += torch.stack((categorical_kl(old, p), ((ratio-1)-ratio.log()).sum(),raw_kl,opening_kl))
+        exact,sampled,raw,opening=totals.cpu().tolist()
+        require(all(math.isfinite(x) for x in (exact,sampled,raw,opening)), 'Nonfinite PPO KL probe; refusing further updates')
+        result=dict(positions=self.positions,categorical_kl=(raw if self.decoupled else exact)/max(1,self.positions),
+                    sampled_kl=sampled/max(1,self.positions))
+        if self.decoupled:result.update(self._movement(exact,raw,opening))
+        return result
+
+    def _movement(self,behavior,raw,opening):
+        return dict(behavior_categorical_kl=behavior/max(1,self.positions),
+            temperature1_categorical_kl=raw/max(1,self.positions),
+            opening_temperature1_categorical_kl=opening/self.opening_positions if self.opening_positions else None,
+            opening_positions=self.opening_positions,
+            kl_scope='categorical_kl is raw T1 movement and the LR signal. Raw T1 and actual-behavior exact KL each retain the PPO per-step cap. Opening-only KL is a diagnostic; sampled KL remains behavior-policy movement.')
 
     def measure(self, model, anchor=None):
         from .updates import row_probabilities
-        kl = entropy = relative_entropy = anchor_kl = raw_entropy = raw_relative = 0.
+        kl = entropy = relative_entropy = anchor_kl = raw_entropy = raw_relative = raw_kl = opening_kl = 0.
         groups={};unassigned=0
         if anchor is not None:
             # Reuse the existing round boundaries, not the action/payment phase
@@ -210,6 +236,10 @@ class CategoricalProbe:
                 entropy += float(ent.sum())
                 relative_entropy += float((ent/legal.log().clamp_min(1e-8)).sum())
                 raw=torch.softmax(logits.float(),-1)
+                if self.decoupled:
+                    before=self.raw_parts[index].to(raw.device,non_blocking=True);mask=self.opening_masks[index]
+                    raw_kl+=float(categorical_kl(before,raw))
+                    opening_kl+=float(categorical_kl(before[mask],raw[mask]))
                 raw_ent=-(raw*raw.clamp_min(1e-30).log()).sum(-1)
                 raw_entropy+=float(raw_ent.sum())
                 raw_relative+=float((raw_ent/legal.log().clamp_min(1e-8)).sum())
@@ -217,8 +247,8 @@ class CategoricalProbe:
                     reference=row_probabilities(self.dataset,part,anchor(*inputs)[0],q,self.behavior)
                     distances=(reference*(reference.clamp_min(1e-30).log()-p.clamp_min(1e-30).log())).sum(-1).cpu().tolist()
                     anchor_kl+=sum(distances)
-                    for index,distance in zip(part,distances):
-                        context=self.dataset.rows[index].get('view',{}).get('context',{})
+                    for row_index,distance in zip(part,distances):
+                        context=self.dataset.rows[row_index].get('view',{}).get('context',{})
                         name=phase_for(context) if 'era' in context and type(context.get('round')) is int else None
                         if name is None:unassigned+=1
                         else:
@@ -226,7 +256,8 @@ class CategoricalProbe:
         group_means={name:dict(positions=row['positions'],
             anchor_distance=row['total']/row['positions'] if row['positions'] and np.isfinite(row['total']) else None)
             for name,row in groups.items()}
-        return dict(positions=self.positions, categorical_kl=kl/max(1,self.positions),
+        return dict(positions=self.positions, categorical_kl=(raw_kl if self.decoupled else kl)/max(1,self.positions),
+                    **(self._movement(kl,raw_kl,opening_kl) if self.decoupled else {}),
                     raw_entropy=raw_entropy/max(1,self.positions),
                     raw_entropy_over_log_legal=raw_relative/max(1,self.positions),
                     entropy=entropy/max(1,self.positions),
@@ -235,7 +266,9 @@ class CategoricalProbe:
                         anchor_groups=group_means,anchor_unassigned_positions=unassigned,
                         anchor_group_scope='Four existing era/round groups; per-position means on the unchanged nonforced probe',
                         anchor_scope='Exact KL(fixed IL behavior || post-PPO behavior), same probe and exploration mixture') if anchor is not None else {}),
-                    scope='Exact categorical KL(old behavior || new behavior) on the proportional era/phase nonforced probe; PPO per-step early stopping and optional LR feedback')
+                    scope=('Exact KL(old raw T1 || new raw T1) plus separate behavior-policy KL' if self.decoupled else
+                        'Exact categorical KL(old behavior || new behavior)')+
+                        ' on the proportional era/phase nonforced probe; PPO per-step early stopping and optional LR feedback')
 
 
 def teacher_drift_probe(model, data, behavior, config):

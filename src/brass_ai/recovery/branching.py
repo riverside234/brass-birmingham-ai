@@ -152,6 +152,8 @@ def expand(games):
             validate_child(game,child)
             if hasattr(game,'critic_table'):
                 child.critic_table=game.critic_table;child.table_kind=game.table_kind
+            if hasattr(game,'ppo_opening_objective'):
+                child.ppo_opening_objective=game.ppo_opening_objective
             result.append(child)
     return result
 

@@ -6,6 +6,8 @@ from brass_ai.learning.contracts import require
 from .critic_holdout import DEFAULT as HOLDOUT
 
 CONTRACT='ppg-value-phase/5.0.0'
+SHORT_CONTRACT='ppg-value-phase/6.0.0'
+SHORT_MIGRATION='ppg-sixteen-step-acceptance/1.0.0'
 MIGRATION='ppg-eight-iteration-replay/1.0.0'
 DEFAULT=dict(contract=CONTRACT,enabled=False,buffer_iterations=8,max_epochs=2,batch_size=4096,
     clone_rows_per_age=2048,probe_rows_per_age=512,current_probe_rows=2048,clone_batch_size=512,
@@ -18,11 +20,19 @@ DEFAULT=dict(contract=CONTRACT,enabled=False,buffer_iterations=8,max_epochs=2,ba
         warmup_start=.1,decay='linear',end_factor=.3))
 
 
-def active(config):return config.get('contract')==CONTRACT
+def active(config):return config.get('contract') in (CONTRACT,SHORT_CONTRACT)
+
+
+def short_options(options):
+    """Explicit enable/upgrade; preserve the archived 32-step migration exactly."""
+    result=configure(options)
+    result['value_phase'].update(contract=SHORT_CONTRACT,enabled=True,acceptance_steps=16,patience=1)
+    validate(result['value_phase'])
+    return result
 
 
 def configure(options):
-    """Explicit opt-in; fresh self-play defaults leave the auxiliary phase off."""
+    """Archived explicit opt-in; preserve its signed 32-step/patience-2 recipe."""
     result=copy.deepcopy(options)
     old=result['value_phase']
     if active(old):
@@ -37,7 +47,7 @@ def configure(options):
 
 
 def validate(c):
-    require(type(c) is dict and set(c)==set(DEFAULT) and c['contract']==CONTRACT,
+    require(type(c) is dict and set(c)==set(DEFAULT) and active(c),
         'Invalid eight-iteration PPG fields/contract')
     require(type(c['enabled']) is bool,'Invalid PPG enabled flag')
     for k in ('buffer_iterations','max_epochs','batch_size','clone_rows_per_age','probe_rows_per_age',
@@ -47,9 +57,9 @@ def validate(c):
     for k in ('beta_clone','beta_clone_max','kl_cap','learning_rate','holdout_fraction'):
         require(type(c[k]) in (int,float) and math.isfinite(c[k]) and c[k]>0,'Invalid PPG number: '+k)
     require(c['buffer_iterations']==8 and c['max_epochs']==2 and c['phase_interval']==8
-        and c['validation_iterations']==8 and c['patience']==2 and c['weighting']=='uniform'
+        and c['validation_iterations']==8 and c['patience']==(1 if c['contract']==SHORT_CONTRACT else 2) and c['weighting']=='uniform'
         and c['minimum_stratum_rows']==1 and c['kl_cap']==.002 and c['holdout']==HOLDOUT
-        and c['holdout_fraction']==.05 and 1<=c['acceptance_steps']<=32
+        and c['holdout_fraction']==.05 and 1<=c['acceptance_steps']<=(16 if c['contract']==SHORT_CONTRACT else 32)
         and c['batch_size']<=4096 and c['clone_batch_size']<=c['clone_rows_per_age']<=2048
         and c['probe_rows_per_age']<=512 and c['probe_rows_per_age']<=c['current_probe_rows']<=2048
         and 1<=c['beta_clone']<=c['beta_clone_max']==32.,'Invalid eight-iteration PPG bounds')

@@ -272,14 +272,27 @@ EVALUATION_SCHEDULE = dict(enabled=False, monitor_every_games=6400, broader_ever
 LEGACY_BUDGET = dict(role='lab', seconds=1.0, search_workers=4, global_workers=60, work_multiplier=1)
 LEGACY_OPPONENTS = dict(search_free_until_games=10000)
 IMITATION = dict(manifest=None,epochs=10,patience=2,min_epochs=3,learning_rate=6e-5)
-INSOLVENCY = dict(event_cost=.0075,max_cost=.075)
+INSOLVENCY = dict(event_cost=.010,max_cost=.075)
 INSOLVENCY_EVENT_CONFIG_MIGRATION = 'step5-insolvency-event-cost/1.0.0'
+INSOLVENCY_010_CONFIG_MIGRATION = 'step5-insolvency-event-cost/2.0.0'
 
 
 def insolvency_event_config(config):
     """Explicit fresh/config-helper upgrade; never silently edit a resumed run."""
     result=copy.deepcopy(config)
     if result.get('insolvency')==dict(event_cost=.005,max_cost=.075):
+        search=result.get('search',{}).get('reward')
+        if search is not None:
+            require(search['insolvency']==result['insolvency'],'Search/learner insolvency differs')
+            search['insolvency']=dict(event_cost=.0075,max_cost=.075)
+        result['insolvency']=dict(event_cost=.0075,max_cost=.075)
+    return result
+
+
+def insolvency_010_config(config):
+    """New explicit migration; keep the earlier signed .005 -> .0075 exact."""
+    result=copy.deepcopy(config)
+    if result.get('insolvency')==dict(event_cost=.0075,max_cost=.075):
         search=result.get('search',{}).get('reward')
         if search is not None:
             require(search['insolvency']==result['insolvency'],'Search/learner insolvency differs')
@@ -326,7 +339,7 @@ def latest_model_config(config,imitation_checkpoint):
     from .rehearsal_window import DEFAULT as REHEARSAL_SAMPLING
     from .gae import DEFAULT as ADVANTAGE
     from .ppg_config import DEFAULT as VALUE_PHASE
-    from .critic_data import DEFAULT as CRITIC_DATA
+    from .critic_data import FIXED_DEFAULT as CRITIC_DATA
     from brass_ai.learning.seat_descriptors import DEFAULT as SEAT_DESCRIPTORS
     from .quality_config import TABLE_PLAN,OPPONENT_POOL,RATING,sampling_config
     # The width-512 learning-rate adjustment was introduced with v11. Moving
@@ -370,7 +383,11 @@ def latest_model_config(config,imitation_checkpoint):
     from .policy_anchor import configure as configure_anchor
     from .value_phase import disabled_options
     from .ppg_config import configure as configure_ppg
-    return validate_config(throughput_config(disabled_options(configure_ppg(configure_anchor(configure_v4_share(configure(interval_options(refined_options(insolvency_event_config(champion_mix_config(sampling_config(result))))))))))))
+    result=throughput_config(disabled_options(configure_ppg(configure_anchor(configure_v4_share(configure(interval_options(refined_options(insolvency_event_config(champion_mix_config(sampling_config(result)))))))))))
+    from .exploration import high_branch_config
+    from .opening_objective import configure as configure_opening,zero_exploration
+    from .ppg_config import short_options
+    return validate_config(short_options(configure_opening(zero_exploration(high_branch_config(insolvency_010_config(result))))))
 
 
 def champion_mix_config(config):
@@ -462,7 +479,11 @@ def execution_config(config):
 
 
 def update_config(config):
-    require(set(config)-{'preparation_workers'} in (set(UPDATE),set(UPDATE_V21)), 'Unknown/missing update field')
+    require(set(config)-{'preparation_workers','opening_objective'} in (set(UPDATE),set(UPDATE_V21)), 'Unknown/missing update field')
+    if 'opening_objective' in config:
+        from .opening_objective import validate
+        validate(config['opening_objective'])
+        require(config.get('actor_nonforced') is True,'Decoupled opening PPO requires the nonforced actor')
     if 'preparation_workers' in config:
         require(type(config['preparation_workers']) is int and config['preparation_workers'] in (0,4,8),
             'PPO preparation_workers must be 0, 4 or 8')
@@ -505,6 +526,9 @@ def validate_config(config):
     version=config.get('format')
     from .exploration import validate as validate_exploration,BLOCKS
     validate_exploration(config)
+    if 'opening_objective' in config.get('update',{}):
+        from .exploration import OPENING
+        require(config.get('opening')==OPENING,'Decoupled PPO requires temperature-2 opening collection')
     fields.update(k for k in BLOCKS if k in config)
     require(('critic_data' in config)==('seat_descriptors' in config),'Critic/descriptor blocks must be supplied together')
     if 'critic_data' in config:
@@ -716,7 +740,7 @@ def validate_config(config):
         search_wall_fraction(config['search_wall_fraction'])
         require(config['execution']['max_models']>=sum(config['population'].values())+3,
                 'Model cache must cover frozen population plus learner/teacher versions')
-        require(set(config['update'])-{'preparation_workers'}==set(UPDATE_V21) and
+        require(set(config['update'])-{'preparation_workers','opening_objective'}==set(UPDATE_V21) and
                 set(config['execution'])-{'shared_slot_bytes','inference_routing','replica_backlog','teacher_search_workers_per_turn','padding_ratio','model_cohorts'}==set(EXECUTION_V21),
                 '2.1 requires revised update/execution')
         require(config['update'].get('preparation_workers',0)<=available,'PPO preparation exceeds CPU budget')

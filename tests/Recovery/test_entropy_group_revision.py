@@ -37,7 +37,7 @@ class GroupFloors(unittest.TestCase):
         self.assertEqual(self.old,original);self.assertEqual(E.group_floor_config(self.cfg),self.cfg)
         fresh=latest_model_config(self.old,self.old['imitation_checkpoint'])
         self.assertEqual(fresh['entropy_control'],E.ANCHOR_ENTROPY)
-        self.assertEqual(fresh['branching'],self.cfg['branching'])
+        self.assertEqual(fresh['branching'],E.HIGH_BRANCH)  # g503 fresh default; old migration remains .005.
         self.assertEqual(self.cfg['opening'],self.old['opening'])
         self.assertEqual(self.cfg['branching']['rate_per_decision'],.005)
         self.assertTrue(self.cfg['branching']['reset_opening_at_fork'])

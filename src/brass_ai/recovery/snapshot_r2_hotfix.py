@@ -95,6 +95,10 @@ def seeded(critic, config, generation, records, *, gae_state=None):
 def preview(directory):
     directory = Path(directory)
     state = read(directory / 'state.json')
+    from .critic_data import fixed
+    if fixed(state['signature']['config'].get('critic_data',{})):
+        return dict(generation=state['iteration'],configured_weight=1.,disabled=True,
+            status='fixed_weight_controller_disabled',preview_only=True,checkpoint_verified=False)
     records = reports(directory, state)
     latest = records[state['iteration']]['value_phase']['critic_rollout']
     if latest['weight_recovery']['contract'] == snapshot_r2.CONTRACT:
@@ -120,9 +124,12 @@ def restore(state, raw, phases):
             and receipt['generation'] <= state['iteration'] == raw['step'],
             'Invalid snapshot R2 hotfix binding')
     if raw['step'] > receipt['generation']:
-        require(raw['training']['actor_value_phases']['critic_data']['weight_recovery']['contract'] == snapshot_r2.CONTRACT,
+        from .critic_data import FIXED_STATE
+        require(raw['training']['actor_value_phases']['critic_data']['weight_recovery']['contract'] in (snapshot_r2.CONTRACT,FIXED_STATE),
                 'Committed checkpoint lost snapshot R2 controller')
         return receipt
+    from .critic_data import fixed
+    require(not fixed(phases.config['critic_data']), 'Apply the pending R2 hotfix before switching to fixed snapshot weight')
     saved = raw['training']['actor_value_phases']['critic_data']
     require(receipt['checkpoint'] == state['history'][-1]
             and receipt['checkpoint']['model_id'] == raw['model_id']
@@ -162,6 +169,11 @@ def run(root, run_path=RUN, *, apply=False, defer_until_ready=False):
             model, raw, _ = load_resume(root, directory, state, signature, reviewed=True)
             phases = TrainingPhases(model, signature['config'], raw=raw, generation=state['iteration'],
                                     root=root, run=directory)
+        from .critic_data import fixed
+        if fixed(signature['config']['critic_data']):
+            if KEY in state:restore(state,raw,phases)
+            return dict(applied=False,disabled=True,reason='Snapshot weight is fixed; R2 hotfix is inactive',
+                snapshot_weight=phases.critic_state['snapshot_weight'])
         if KEY in state:
             restore(state, raw, phases)
             return dict(already_applied=True, receipt=state[KEY],

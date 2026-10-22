@@ -223,6 +223,7 @@ def collection_signature(config,sampling):
         tables={k:{f:v[f] for f in ('tables','learner_trajectories')} for k,v in sampling['by_composition'].items()},
         exploration=config['exploration'],update={k:config['update'][k] for k in
             ('epochs','effective_batch_size','critic_batch_size','kl_probe_rows')},
+        **({'opening_objective':config['update']['opening_objective']} if 'opening_objective' in config['update'] else {}),
         **({'exploration_regime':sampling['exploration_regime']} if 'exploration_regime' in sampling else {})))
 
 

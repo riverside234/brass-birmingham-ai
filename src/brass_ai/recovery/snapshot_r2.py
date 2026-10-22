@@ -159,9 +159,10 @@ def validate(r, generation, weight):
 
 
 def migrate(state, config, generation):
-    from .critic_data import validate_state
+    from .critic_data import validate_state,fixed
     validate_state(state, config, generation)
     result = copy.deepcopy(state)
+    if fixed(config):return result,None
     if result['weight_recovery']['contract'] == CONTRACT:
         return result, None
     old = result['learner_ev_baseline']
