@@ -678830,6 +678830,86 @@
       "reason_ref": "140",
       "config_migrations_ref": "1606",
       "review_report": "ai-research/OWNERSHIP_AUXILIARY_HEADS_REPORT.md"
+    },
+    {
+      "from_implementation": "b95f45e2b0be6672a4efb7a3cabf9e2fab3e152a667e7f229b6c09ab5cb01c71",
+      "to_implementation": "ef1cb36d346edd6ce306324370fe60f759b297b58282edff093b3f08aadf80be",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "141",
+      "local_scoring_changes": true,
+      "review_report": "ai-research/OWNERSHIP_AUXILIARY_HEADS_REPORT.md"
+    },
+    {
+      "from_implementation": "b95f45e2b0be6672a4efb7a3cabf9e2fab3e152a667e7f229b6c09ab5cb01c71",
+      "to_implementation": "ef1cb36d346edd6ce306324370fe60f759b297b58282edff093b3f08aadf80be",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "141",
+      "config_migrations_ref": "1606",
+      "review_report": "ai-research/OWNERSHIP_AUXILIARY_HEADS_REPORT.md"
+    },
+    {
+      "from_implementation": "cb165c0d852ca79dfd3df2c40483dc7e06bf6dd988d94755ecd1cb597cc3a6af",
+      "to_implementation": "ef1cb36d346edd6ce306324370fe60f759b297b58282edff093b3f08aadf80be",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "141",
+      "local_scoring_changes": true,
+      "review_report": "ai-research/OWNERSHIP_AUXILIARY_HEADS_REPORT.md"
+    },
+    {
+      "from_implementation": "cb165c0d852ca79dfd3df2c40483dc7e06bf6dd988d94755ecd1cb597cc3a6af",
+      "to_implementation": "ef1cb36d346edd6ce306324370fe60f759b297b58282edff093b3f08aadf80be",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "141",
+      "config_migrations_ref": "1606",
+      "review_report": "ai-research/OWNERSHIP_AUXILIARY_HEADS_REPORT.md"
+    },
+    {
+      "from_implementation": "c33ff1ba936905fe06c4b6436d316a5073c9049be4a8d8d0e9c734f87e071314",
+      "to_implementation": "ef1cb36d346edd6ce306324370fe60f759b297b58282edff093b3f08aadf80be",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "141",
+      "local_scoring_changes": true,
+      "review_report": "ai-research/OWNERSHIP_AUXILIARY_HEADS_REPORT.md"
+    },
+    {
+      "from_implementation": "c33ff1ba936905fe06c4b6436d316a5073c9049be4a8d8d0e9c734f87e071314",
+      "to_implementation": "ef1cb36d346edd6ce306324370fe60f759b297b58282edff093b3f08aadf80be",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "141",
+      "config_migrations_ref": "1606",
+      "review_report": "ai-research/OWNERSHIP_AUXILIARY_HEADS_REPORT.md"
+    },
+    {
+      "from_implementation": "72ec2bf892f91bfb645acdf2b741c47276403fc5b38c159afe1ddeb7eeccc2c4",
+      "to_implementation": "ef1cb36d346edd6ce306324370fe60f759b297b58282edff093b3f08aadf80be",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "141",
+      "local_scoring_changes": true,
+      "review_report": "ai-research/OWNERSHIP_AUXILIARY_HEADS_REPORT.md"
+    },
+    {
+      "from_implementation": "72ec2bf892f91bfb645acdf2b741c47276403fc5b38c159afe1ddeb7eeccc2c4",
+      "to_implementation": "ef1cb36d346edd6ce306324370fe60f759b297b58282edff093b3f08aadf80be",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "141",
+      "config_migrations_ref": "1606",
+      "review_report": "ai-research/OWNERSHIP_AUXILIARY_HEADS_REPORT.md"
+    },
+    {
+      "from_implementation": "ef1cb36d346edd6ce306324370fe60f759b297b58282edff093b3f08aadf80be",
+      "to_implementation": "ef1cb36d346edd6ce306324370fe60f759b297b58282edff093b3f08aadf80be",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "141",
+      "local_scoring_changes": true,
+      "review_report": "ai-research/OWNERSHIP_AUXILIARY_HEADS_REPORT.md"
+    },
+    {
+      "from_implementation": "ef1cb36d346edd6ce306324370fe60f759b297b58282edff093b3f08aadf80be",
+      "to_implementation": "ef1cb36d346edd6ce306324370fe60f759b297b58282edff093b3f08aadf80be",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "141",
+      "config_migrations_ref": "1606",
+      "review_report": "ai-research/OWNERSHIP_AUXILIARY_HEADS_REPORT.md"
     }
   ],
   "definitions": {
@@ -678974,7 +679054,8 @@
       "137": "Reviewed VP-180 reward revision: versioned combined return v2 caps only the additive VP component and utility prior at 180; win, placement, official scores/targets and existing insolvency coefficients remain unchanged. Archived v1 objectives retain exact semantics. Explicit continuation preserves all parameter/optimizer tensors, RNG, progress, IL identity, population and baselines. Utility calibration is invalidated; old-target PPG caches are excluded and audited/deleted only after durable adoption, with eight fresh collections before the next phase. Preserve the attained epoch cap/beta and reset only target-dependent PPG schedule/evidence. Matching search/provenance and current fresh-config generation; no arbitrary configuration edits and no relabeling cached old targets.",
       "138": "Reviewed local-scoring companion and passive pinned recorder, exact g560-config adoption plus branching 0.010; core/IL/inference unchanged. Durable fresh PPG buffer/clock/vote reset preserves other state; later changes permit mode only. Resume tolerates roundoff at scheduled value-Adam LR endpoints without changing saved rates. Includes concurrent display-only rating plot width/recent-window revision. No transitive approval.",
       "139": "Reviewed auxiliary debug fixes: preserve decision revision across CPU ingress/PPG cache; remove collection planner hash-import shadowing. Core model/target contracts and recorder unchanged. User confirms g560 remains unrun: initial companion adoption also changes ONLY LR low_ratio .45 to .50 and branching .015 to .010; its explicit fresh-PPG origin remains g560 with first phase g568. Preserve later mode-only changes; separately permit ONLY low_ratio .45 to .50 from committed g560. Preserve multiplier/window/cooldown, Adam/RNG and all unrelated gates/progress.",
-      "140": "Reviewed diagnostic-lifetime fix: collect final ordinary held-out auxiliary metrics before releasing TrainingPhases datasets. Reporting only; core model, companion weights, both Adams, RNG, data contracts, training recipe and progress are unchanged. Preserve only the already reviewed local-scoring adoption/mode and 50-percent LR threshold transitions."
+      "140": "Reviewed diagnostic-lifetime fix: collect final ordinary held-out auxiliary metrics before releasing TrainingPhases datasets. Reporting only; core model, companion weights, both Adams, RNG, data contracts, training recipe and progress are unchanged. Preserve only the already reviewed local-scoring adoption/mode and 50-percent LR threshold transitions.",
+      "141": "Reviewed pre-first-checkpoint restart repair: a source transition may reuse an exactly identical durable local-scoring adoption receipt; changed receipts fail before any write. Preserve cleanup status, adoption origin, PPG clock, weights, Adam/RNG, progress and all training settings. Retain only previously reviewed local-scoring adoption/mode and LR-threshold config transitions."
     },
     "config_changes": {
       "0": {

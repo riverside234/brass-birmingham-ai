@@ -206,6 +206,18 @@ python scripts/step5.py \
 
 The failed iteration's shards are preserved under `.interrupted-iterations/`. The retry recollects with the new source identity; it does not adopt unsaved PPO updates. The g560 full checkpoint, Adam/RNG state, progress, population, adoption origin and PPG schedule remain unchanged. Any uncommitted g561 PPG cache is replaced when the retry stages its newly checked collection; committed caches remain receipt-bound.
 
+If that retry instead stops at **`ValueError: Local scoring adoption cannot repeat`**, sync the adoption-restart fix and source-review registry. The collection archive has already completed, and this error occurs before collection starts. The old code rejected the existing adoption receipt while publishing a source fix against the pre-adoption g560 checkpoint. It now accepts only an exactly identical receipt, preserving its cleanup status and original PPG schedule; altered receipts still fail before writing. Reuse the already generated config and run **only**:
+
+```bash
+python scripts/step5.py \
+  --config configs/step5/joint7-v11-2-grouped-lr-critic-local-scoring-lr50-g560.json train \
+  --run artifacts/step5/joint7-v11-2-grouped-lr-critic \
+  --imitation-run artifacts/step5/features4-v11-2-batch7-il \
+  --resume-reviewed-source --expected-generation 560 --iterations 20
+```
+
+Keep the existing source-transition backup, adoption receipt and checkpoint files. Do not rerun `--fresh-ppg-buffer` or manually remove the adoption receipt: the restart validates and reuses them, and the first scheduled PPG phase remains g568.
+
 Console `local=apply@scale rows=retained/available head_steps=PPO+PPG` exposes activation and usage. Full and compact reports include ownership/VP diagnostics, missing/masked labels, separate attempted/retained usage, joint rollback counts, cache bytes and timing. `python scripts/export-training-reports.py` includes the small runtime contract and adoption receipt, without copying PPG arrays.
 
 The following **g540 procedure is archived**; it has already been applied to the current run:

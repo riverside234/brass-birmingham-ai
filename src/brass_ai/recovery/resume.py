@@ -309,6 +309,13 @@ def prepare_opponent_pool(root,run,state,raw,config,source_changed=False):
 
 def commit_transition(run, state, signature,*,opponent_pool=None,pool_migration=None,local_scoring_adoption=None):
     """Call only after restoring Adam and RNG successfully, under the run lock."""
+    if local_scoring_adoption is not None and 'local_scoring_adoption' in state:
+        # Before the first companion checkpoint, prepare() reuses the durable
+        # adoption receipt to restore the old full checkpoint. A subsequent
+        # source fix may publish a new signature, but must not replace or reset
+        # that receipt (including cleanup progress and the original PPG clock).
+        require(state['local_scoring_adoption']==local_scoring_adoption,
+                'Local scoring adoption receipt differs; existing adoption cannot be replaced')
     from .v4_share import migrate_state
     share,share_migration=migrate_state(state,signature['config'])
     previous = copy.deepcopy(state)
@@ -325,8 +332,7 @@ def commit_transition(run, state, signature,*,opponent_pool=None,pool_migration=
         config_changes={k:dict(before=previous['signature']['config'].get(k),after=v)
                         for k,v in signature['config'].items() if previous['signature']['config'].get(k)!=v}))
     updated['signature'] = signature
-    if local_scoring_adoption is not None:
-        require('local_scoring_adoption' not in updated,'Local scoring adoption cannot repeat')
+    if local_scoring_adoption is not None and 'local_scoring_adoption' not in updated:
         updated['local_scoring_adoption']=copy.deepcopy(local_scoring_adoption)
     if share_migration is not None:
         updated['v4_share_gate']=share

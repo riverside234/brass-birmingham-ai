@@ -56,6 +56,132 @@ class Adoption(unittest.TestCase):
 
     def prepare(self):return adoption.prepare(SOURCE_ROOT,self.run,self.state,self.raw,self.cfg,reviewed=True)
 
+    def bind_source_checkpoint(self):
+        """Bind the reduced fixture like the real pre-adoption g560 checkpoint."""
+        from brass_ai.learning.contracts import compatibility
+        config=self.state['signature']['config']
+        self.state.update(format='step5-recovery-league/2.2.0',next_search_games=180000,
+            signature=dict(config=config,compatibility=compatibility(),
+                implementation='b95f45e2b0be6672a4efb7a3cabf9e2fab3e152a667e7f229b6c09ab5cb01c71'))
+        if config.get('legacy_boost') is not None:
+            self.state['legacy_boost']=dict(start_games=0,
+                until_games=sum(s['games'] for s in config['legacy_boost']['stages']),config=digest(config['legacy_boost']))
+        optimizer=torch.optim.AdamW(self.model.parameters());resume_optimizer(self.raw,optimizer)
+        save_checkpoint(self.checkpoint,self.model,optimizer,step=560,training=dict(self.raw['training'],
+            signature=digest(self.state['signature']),fresh_run=self.run.relative_to(SOURCE_ROOT).as_posix()))
+        self.old_sha=sha(self.checkpoint);self.state['history'][-1]['sha256']=self.old_sha
+        self.state['population']=copy.deepcopy(self.state['history'])
+        self.state['evaluation_anchor']=copy.deepcopy(self.state['history'][-1])
+        self.model,self.raw=load_checkpoint(self.checkpoint);self.cfg=adoption.configure(self.state)
+        write_json(self.run/'state.json',self.state)
+
+    def commit_initial_adoption(self):
+        from brass_ai.recovery.resume import load_resume,commit_transition
+        self.bind_source_checkpoint()
+        signature=dict(self.state['signature'],config=self.cfg,
+            implementation='c33ff1ba936905fe06c4b6436d316a5073c9049be4a8d8d0e9c734f87e071314')
+        model,raw,changed=load_resume(SOURCE_ROOT,self.run,self.state,signature,reviewed=True)
+        transformed,receipt,_=adoption.prepare(SOURCE_ROOT,self.run,self.state,raw,self.cfg,reviewed=changed)
+        receipt=adoption.archive_metadata(self.run,receipt,raw)
+        self.state=commit_transition(self.run,self.state,signature,local_scoring_adoption=receipt)
+        return transformed
+
+    def test_source_commit_after_completed_adoption_and_publication_crash_is_restart_safe(self):
+        from brass_ai.recovery import resume
+        from brass_ai.step5.league import implementation_id
+        transformed=self.commit_initial_adoption()
+        adoption.cleanup(SOURCE_ROOT,self.run,self.state)
+        durable=copy.deepcopy(self.state);receipt=copy.deepcopy(durable['local_scoring_adoption'])
+        self.assertTrue(receipt['cleanup_complete'])
+        # Preserve an uncommitted next-generation cache as well as the old
+        # adoption metadata. Only collection staging may replace this cache.
+        pending=self.run/'.ppg-eight-cache/generation-000561.critic.npy';pending.write_bytes(b'next generation')
+        metadata=self.run/receipt['old_cache_metadata']['path'];metadata_bytes=metadata.read_bytes()
+        target=dict(durable['signature'],implementation=implementation_id())
+        model,raw,changed=resume.load_resume(SOURCE_ROOT,self.run,durable,target,reviewed=True)
+        optimizer=torch.optim.AdamW(model.parameters());resume_optimizer(raw,optimizer)
+        adam=copy.deepcopy(optimizer.state_dict());rng=torch.get_rng_state().clone()
+        prepared,r,adopting=adoption.prepare(SOURCE_ROOT,self.run,durable,raw,self.cfg,reviewed=changed)
+        self.assertTrue(_same_payload(prepared,transformed));self.assertTrue(adopting)
+        companion=auxiliary.Companion(model,self.cfg[auxiliary.KEY],raw=raw,generation=560,adopting=adopting)
+        phase=TrainingPhases(model,self.cfg,raw=prepared,generation=560,root=SOURCE_ROOT,run=self.run)
+        r=adoption.archive_metadata(self.run,r,raw);self.assertEqual(r,receipt)
+        # Reproduce a failed source publication and its already-written backup,
+        # then retry against the same original g560 checkpoint.
+        def fail_state(path,value):
+            if path.name=='state.json':raise OSError('injected source publication failure')
+            return write_json(path,value)
+        with patch.object(resume,'write_json',side_effect=fail_state):
+            with self.assertRaisesRegex(OSError,'publication failure'):
+                resume.commit_transition(self.run,durable,target,local_scoring_adoption=r)
+        self.assertEqual(read(self.run/'state.json'),durable)
+        backup=self.run/f"state-before-source-{digest(durable['signature'])[:16]}-0560.json"
+        self.assertEqual(read(backup),durable);backup_bytes=backup.read_bytes()
+        committed=resume.commit_transition(self.run,durable,target,local_scoring_adoption=r)
+        self.assertEqual(committed['local_scoring_adoption'],receipt)
+        self.assertEqual(committed['source_transitions'][:-1],durable['source_transitions'])
+        self.assertEqual(committed['source_transitions'][-1]['config_changes'],{})
+        for k in durable:
+            if k not in ('signature','source_transitions'):self.assertEqual(committed[k],durable[k])
+        self.assertEqual(backup.read_bytes(),backup_bytes);self.assertEqual(metadata.read_bytes(),metadata_bytes)
+        self.assertIsNone(adoption.cleanup(SOURCE_ROOT,self.run,committed));self.assertIsNone(phase.startup(560))
+        self.assertEqual(pending.read_bytes(),b'next generation');self.assertEqual(sha(self.checkpoint),self.old_sha)
+        self.assertEqual(phase.schedule,ppg_config.initial(560));self.assertEqual(receipt['next_phase'],568)
+        self.assertTrue(torch.equal(torch.get_rng_state(),rng));self.assertTrue(_same_payload(adam,optimizer.state_dict()))
+        # A second restart traverses both persisted source transitions without
+        # needing the retired g553-g560 replay payload or another adoption.
+        again,raw2,changed=resume.load_resume(SOURCE_ROOT,self.run,committed,target)
+        self.assertFalse(changed)
+        prepared2,r2,adopting2=adoption.prepare(SOURCE_ROOT,self.run,committed,raw2,self.cfg)
+        heads2=auxiliary.Companion(again,self.cfg[auxiliary.KEY],raw=raw2,generation=560,adopting=adopting2)
+        self.assertTrue(_same_payload(prepared2,prepared));self.assertEqual(r2,receipt)
+        self.assertTrue(_same_payload(companion.payload(560),heads2.payload(560)))
+        # Complete one bounded, authored PPO iteration across the formerly
+        # failing boundary, then restore the first companion-bearing checkpoint.
+        from test_ppg_eight import collect
+        from test_gae_value_phase import ppo,finish
+        from test_local_scoring import annotate
+        from brass_ai.recovery.league import finish_training_diagnostics
+        phase.local_scoring=companion
+        behavior,data=collect(model,phase,561,branches=True)
+        annotate(data);annotate(phase.snapshot_data)
+        update=ppo(model,optimizer,self.cfg,behavior,data,phase);phase.fit(model);finish(phase,update,561)
+        report=finish_training_diagnostics(model,phase,companion)
+        self.assertGreater(update['optimizer_steps'],0);self.assertGreater(report['heldout']['rows'],0)
+        self.assertFalse(phase.value_report['scheduled'])
+        output=self.run/'generation-0561.pt'
+        identity=save_checkpoint(output,model,optimizer,step=561,training=dict(raw['training'],
+            signature=digest(target),**{KEY:phase.payload(),auxiliary.KEY:companion.payload(561)}))
+        entry=dict(generation=561,path=output.relative_to(SOURCE_ROOT).as_posix(),sha256=sha(output),model_id=identity)
+        committed.update(iteration=561,games_done=179520,history=committed['history']+[entry])
+        write_json(self.run/'state.json',committed);phase.committed(561);companion.committed(561)
+        next_model,next_raw,_=resume.load_resume(SOURCE_ROOT,self.run,committed,target)
+        next_prepared,next_receipt,next_adopting=adoption.prepare(SOURCE_ROOT,self.run,committed,next_raw,self.cfg)
+        self.assertIsNone(next_receipt);self.assertFalse(next_adopting)
+        next_phase=TrainingPhases(next_model,self.cfg,raw=next_prepared,generation=561,root=SOURCE_ROOT,run=self.run)
+        next_heads=auxiliary.Companion(next_model,self.cfg[auxiliary.KEY],raw=next_raw,generation=561)
+        self.assertEqual(next_phase.schedule,phase.schedule);self.assertEqual(next_heads.age,1)
+        self.assertTrue(_same_payload(next_heads.payload(561),companion.payload(561)))
+        self.assertEqual(sha(self.checkpoint),self.old_sha)
+
+    def test_source_commit_preserves_pending_cleanup_and_rejects_changed_adoption_receipts(self):
+        from brass_ai.recovery.resume import commit_transition
+        from brass_ai.step5.league import implementation_id
+        self.commit_initial_adoption();durable=copy.deepcopy(self.state)
+        receipt=durable['local_scoring_adoption'];self.assertFalse(receipt['cleanup_complete'])
+        target=dict(durable['signature'],implementation=implementation_id())
+        before={p:sha(p) for p in self.run.rglob('*') if p.is_file()}
+        for field,value in (('new_origin',561),('next_phase',569),('cleanup_complete',True)):
+            bad=copy.deepcopy(receipt);bad[field]=value
+            with self.subTest(field=field),self.assertRaisesRegex(ValueError,'adoption receipt differs'):
+                commit_transition(self.run,durable,target,local_scoring_adoption=bad)
+            self.assertEqual({p:sha(p) for p in self.run.rglob('*') if p.is_file()},before)
+        committed=commit_transition(self.run,durable,target,local_scoring_adoption=copy.deepcopy(receipt))
+        self.assertEqual(committed['local_scoring_adoption'],receipt)
+        cleaned=adoption.cleanup(SOURCE_ROOT,self.run,committed)
+        self.assertTrue(cleaned['cleanup_complete']);self.assertEqual(cleaned['new_origin'],560)
+        self.assertIsNone(adoption.cleanup(SOURCE_ROOT,self.run,committed))
+
     def test_resume_preserves_Adam_RNG_gates_and_requires_eight_fresh_commits(self):
         raw=copy.deepcopy(self.raw);rng=torch.get_rng_state().clone()
         phase_raw,receipt,adopting=self.prepare()
