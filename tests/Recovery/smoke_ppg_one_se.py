@@ -12,7 +12,7 @@ from brass_ai.learning.checkpoint import load_checkpoint,save_checkpoint,resume_
 from brass_ai.learning.contracts import SOURCE_ROOT,project_path,require
 from brass_ai.recovery import ppg_config as P,ppg_replay,ppg_epochs,critic_data,gae
 from brass_ai.recovery.actor_value import TrainingPhases,KEY,ppo_evidence
-from brass_ai.recovery.config import insolvency_010_config,insolvency_020_config
+from brass_ai.recovery.config import insolvency_010_config,insolvency_020_config,vp_cap_config
 from brass_ai.recovery.opening_objective import DEFAULT as OPENING_OBJECTIVE
 from brass_ai.recovery.retention import _same_payload
 from brass_ai.recovery.utility import migrate,reward_spec
@@ -22,7 +22,9 @@ from smoke_opening_ppo import advance
 
 
 def main():
-    parser=argparse.ArgumentParser(description=__doc__);parser.add_argument('--output',required=True);args=parser.parse_args()
+    parser=argparse.ArgumentParser(description=__doc__);parser.add_argument('--output',required=True)
+    parser.add_argument('--vp-cap',action='store_true',help='Also adopt the versioned VP-180 reward')
+    args=parser.parse_args()
     out=project_path(SOURCE_ROOT,args.output)
     require(out.is_relative_to(SOURCE_ROOT/'artifacts') and not out.exists(),'Use a new isolated artifacts directory')
     out.mkdir(parents=True);torch.set_num_threads(2);started=time.perf_counter();identity=implementation_id()
@@ -46,7 +48,9 @@ def main():
         p=next(model.parameters());p.grad=torch.ones_like(p);optimizer.step();optimizer.zero_grad(set_to_none=True)
     original=out/'original-g540.pt';save_checkpoint(original,model,opt,step=540,training={KEY:previous.payload()})
     write_json(run/'state.json',dict(iteration=540,signature=dict(config=old)));previous.buffer.committed(540)
-    original_hash=sha(original);cfg=P.coverage_options(insolvency_020_config(old))
+    original_hash=sha(original);production=P.coverage_options(insolvency_020_config(old))
+    if args.vp_cap:production=vp_cap_config(production)
+    cfg=copy.deepcopy(production)
     cfg['value_phase'].update(batch_size=32,clone_rows_per_age=48,clone_batch_size=24,
         probe_rows_per_age=12,current_probe_rows=48)
     model,raw=load_checkpoint(original);opt=torch.optim.AdamW(model.parameters());resume_optimizer(raw,opt)
@@ -54,7 +58,6 @@ def main():
     model._reviewed_cap_upgrade=True;migrate(model,opt,reward_spec(cfg))
     # Resume validation binds production-size options; scale only the authored
     # smoke's tensor budgets after the reviewed actor/value migration.
-    production=P.coverage_options(insolvency_020_config(old))
     phase=TrainingPhases(model,production,raw=raw,generation=540,root=SOURCE_ROOT,run=run)
     require(_same_payload(before,model.state_dict()) and _same_payload(adam,opt.state_dict()),'Resume reset weights/PPO Adam')
     require(torch.equal(rng,torch.get_rng_state()),'Resume changed RNG')
@@ -83,7 +86,7 @@ def main():
     require(value['probe_kl']<=.002 and value['age0_probe_kl']<=.002,'Retained KL guard violated')
     require(sha(original)==original_hash and implementation_id()==identity,'Incoming checkpoint/source changed')
     result=dict(passed=True,implementation=identity,seconds=time.perf_counter()-started,device='cpu',threads=2,
-        parameters=model.parameter_count,exact_restart=True,original_checkpoint_unchanged=True,
+        parameters=model.parameter_count,reward=reward_spec(cfg),exact_restart=True,original_checkpoint_unchanged=True,
         startup_cleanup=cleanup,results=results,
         scope='Authored small mixed-table/branch fixtures and real PPO/PPG/checkpoints. No production training/evaluation or strength claim.')
     write_json(out/'report.json',result)

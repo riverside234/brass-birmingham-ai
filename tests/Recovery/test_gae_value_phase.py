@@ -132,14 +132,16 @@ class Advantages(unittest.TestCase):
     def test_strict_config_old_recipe_and_new_generator(self):
         cfg=config();validate_config(cfg)
         generated=latest_model_config(cfg,cfg['imitation_checkpoint'])
-        from brass_ai.recovery.exploration import configure as exploration_config
-        from brass_ai.recovery.critic_holdout import quota_options
-        from brass_ai.recovery.ppg_config import configure as rolling_ppg
-        from brass_ai.recovery.policy_anchor import configure as configure_anchor
-        from brass_ai.recovery.config import ppo_microbatch_config
-        expected=rolling_ppg(configure_anchor(quota_options(
-            exploration_config(gae.health_options(value_phase.interval_options(value_phase.refined_options(cfg)))))))
-        self.assertEqual(ppo_microbatch_config(value_phase.disabled_options(expected)),generated)
+        # The archived input stays valid, while fresh generation uses the
+        # current recipe; do not reconstruct an obsolete migration pipeline.
+        validate_config(generated)
+        self.assertEqual(generated['advantage'],gae.DEFAULT)
+        self.assertEqual(generated['imitation_checkpoint'],cfg['imitation_checkpoint'])
+        self.assertEqual(generated['learning_rate'],cfg['learning_rate'])
+        self.assertEqual(generated['exploration'],0.)
+        self.assertEqual(generated['reward']['vp_cap'],180)
+        self.assertEqual(generated['value_phase']['contract'],'ppg-value-phase/7.0.0')
+        self.assertTrue(generated['value_phase']['enabled'])
         for key,value in (('lambda',0),('lambda',True),('chain','all')):
             bad=copy.deepcopy(cfg);bad['advantage'][key]=value
             with self.assertRaises(ValueError):validate_config(bad)

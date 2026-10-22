@@ -443,6 +443,11 @@
       "implementation": "056449b7e5177379e545cb499da91a870d22ebe033fa6827ba3b5beac214d534",
       "learning_compatibility": "ef6a1b5126de42da8f3277dc9357b6ffb94a435f3faa7fee8dd312bb5a242a54",
       "reason": "Evaluation evidence/resume fix only; completed IL, features and architecture unchanged."
+    },
+    {
+      "implementation": "5828457e258f104e9abf2d37350275c11b1cb1f0209b97e24204a0bb99764788",
+      "learning_compatibility": "ef6a1b5126de42da8f3277dc9357b6ffb94a435f3faa7fee8dd312bb5a242a54",
+      "reason": "Explicit VP-capped self-play reward only; IL forward/tensors, dataset and feature layout unchanged."
     }
   ]
 }

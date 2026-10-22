@@ -6,19 +6,26 @@ from .contracts import digest, require
 from .replay import terminal_targets
 
 VERSION = 'brass-combined-return/1.0.0'
+CAPPED_VERSION = 'brass-combined-return/2.0.0'
+VP_CAP = 180
 COEFFICIENTS = dict(win=1.0, placement=.10, vp=.001)
 
 
 def specification(coefficients=None, insolvency=None):
-    result=dict(version=VERSION, **(COEFFICIENTS if coefficients is None else coefficients),
+    coefficients=COEFFICIENTS if coefficients is None else coefficients
+    result=dict(version=CAPPED_VERSION if 'vp_cap' in coefficients else VERSION, **coefficients,
                 insolvency=dict(event_cost=.005,max_cost=.075) if insolvency is None else dict(insolvency))
     validate(result)
     return result
 
 
 def validate(spec):
-    require(type(spec) is dict and set(spec)=={'version','win','placement','vp','insolvency'} and spec['version']==VERSION,
+    capped=type(spec) is dict and spec.get('version')==CAPPED_VERSION
+    require(type(spec) is dict and set(spec)=={'version','win','placement','vp','insolvency'}|({'vp_cap'} if capped else set())
+            and spec['version'] in (VERSION,CAPPED_VERSION),
             'Unknown combined reward contract')
+    if capped:
+        require(type(spec['vp_cap']) in (int,float) and spec['vp_cap']==VP_CAP,'Invalid VP reward cap; expected 180')
     require(all(type(spec[k]) in (int,float) and math.isfinite(spec[k]) and spec[k]>=0
                 for k in COEFFICIENTS) and spec['win']>0,'Invalid reward coefficients')
     costs=spec['insolvency']
@@ -37,8 +44,15 @@ def terminal_components(result):
 
 
 def terminal_utility(result,spec):
-    parts=terminal_components(result)
+    parts=reward_components(result,spec)
     return np.asarray([sum(spec[k]*parts[k][s] for k in COEFFICIENTS) for s in range(4)],dtype=np.float64)
+
+
+def reward_components(result,spec):
+    """Cap only the additive training VP term; official ties/targets stay raw."""
+    parts=terminal_components(result)
+    if spec['version']==CAPPED_VERSION:parts['vp']=[min(v,spec['vp_cap']) for v in parts['vp']]
+    return parts
 
 
 def replay_returns(records,result,spec,initial_spent=None):
@@ -56,7 +70,7 @@ def replay_returns(records,result,spec,initial_spent=None):
         past+=charges.get(i,0.)
         output.append(dict(remaining=(cap-past).clip(0).tolist(),
                            utility=(terminal-(total-past)).tolist()))
-    return output,dict(components=terminal_components(result),cost=total.tolist(),
+    return output,dict(components=reward_components(result,spec),cost=total.tolist(),
                        utility=(terminal-total).tolist(),reward=spec,reward_id=digest(spec))
 
 

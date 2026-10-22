@@ -32,17 +32,33 @@ def event_cost_upgrade(previous,current):
     return expected==current
 
 
+def vp_cap_upgrade(previous,current):
+    """The exact 180-VP revision, optionally after one approved cost upgrade."""
+    from brass_ai.learning.reward import VERSION,CAPPED_VERSION,VP_CAP,validate
+    if not isinstance(previous,dict) or not isinstance(current,dict):return False
+    if previous.get('version')!=VERSION:return False
+    try:validate(previous);validate(current)
+    except (ValueError,KeyError,TypeError):return False
+    expected=dict(copy.deepcopy(previous),version=CAPPED_VERSION,vp_cap=VP_CAP)
+    return expected==current or event_cost_upgrade(expected,current)
+
+
+def reviewed_reward_upgrade(previous,current):
+    return cap_upgrade(previous,current) or event_cost_upgrade(previous,current) or vp_cap_upgrade(previous,current)
+
+
 def migrate(model,optimizer,spec):
     if spec is None:return None
     if getattr(model.config,'utility',None) is not None:
         if model.config.utility==spec:return None
         event_upgrade=event_cost_upgrade(model.config.utility,spec)
-        require(getattr(model,'_reviewed_cap_upgrade',False) and (cap_upgrade(model.config.utility,spec) or event_upgrade),
+        vp_upgrade=vp_cap_upgrade(model.config.utility,spec)
+        require(getattr(model,'_reviewed_cap_upgrade',False) and reviewed_reward_upgrade(model.config.utility,spec),
                 'Checkpoint reward differs; explicit reward migration required')
         before=model.config.to_dict()
         model.config=replace(model.config,utility=copy.deepcopy(spec))
         model.utility_calibration=None;model._reviewed_cap_upgrade=False
-        return dict(version='insolvency-event-cost/1.0.0' if event_upgrade else 'insolvency-cap-extension/1.0.0',from_config=before,to_config=model.config.to_dict(),
+        return dict(version='vp-capped-return/1.0.0' if vp_upgrade else 'insolvency-event-cost/1.0.0' if event_upgrade else 'insolvency-cap-extension/1.0.0',from_config=before,to_config=model.config.to_dict(),
                     preserved='All weights, Adam moments/steps and RNG; fresh ordinary utility calibration required')
     before=model.config.to_dict();device=next(model.parameters()).device
     # Do not perturb the restored rollout/PPO RNG or compatible tensors/moments.

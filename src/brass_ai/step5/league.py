@@ -25,6 +25,7 @@ def implementation_id():
     paths += [SOURCE_ROOT/'configs/learning'/name for name in (MODEL_LAYOUT_FILE,TOPOLOGY_FILE,BOARD_FILE)]
     paths += [SOURCE_ROOT/'configs/learning/architecture-source-equivalence.json']
     paths += [SOURCE_ROOT/'configs/learning/v11-selector-source-equivalence.json']
+    paths += [SOURCE_ROOT/'configs/learning/reward-source-equivalence.json']
     paths += [base / 'learning/runner.py', base / 'learning/batching.py']
     paths += [base/'searchlab/spiel.py',base/'beliefs.py',base/'runtime_contracts.py',base/'host.py',base/'bank.py',base/'legacy.py']
     paths += sorted((SOURCE_ROOT/'src/BrassTrainingHost').glob('*.cs'))

@@ -49,9 +49,10 @@ class UtilityNet(FourSeatNet):
         if embeddings is not None:pre=pre+torch.nn.functional.linear(embeddings.mean(1),first.weight[:,self.config.hidden+4:])
         residual=self.utility_head[2](self.utility_head[1](pre)).gather(1,mapping)
         win,rank,vp=heads
+        reward_vp=vp.clamp_max(c['vp_cap']) if 'vp_cap' in c else vp
         # Deterministic initialization; the learned correction handles ties and
         # future costs. Utility fitting does not relabel the official heads.
-        prior=(c['win']*win+c['placement']*(4-rank)/3+c['vp']*vp).detach()
+        prior=(c['win']*win+c['placement']*(4-rank)/3+c['vp']*reward_vp).detach()
         return prior+residual
 
     def heads_from_encoded(self,encoded,mapping,remaining=None,descriptors=None):

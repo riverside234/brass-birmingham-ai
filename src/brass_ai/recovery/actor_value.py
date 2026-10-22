@@ -358,13 +358,21 @@ class TrainingPhases:
                 phases=self.schedule['phases'],last_phase=self.schedule['last_phase']))
         require(type(self.cache_origin) is int and self.schedule['origin']<=self.cache_origin<=generation,
             'Invalid PPG reward-cache origin')
-        if coverage:
-            from .utility import reward_spec,event_cost_upgrade
+        if coverage or 'vp_cap' in config.get('reward',{}):
+            from .utility import reward_spec,reviewed_reward_upgrade,vp_cap_upgrade
             previous_reward=(raw or {}).get('model_config',{}).get('utility')
             current_reward=reward_spec(config)
             if previous_reward is not None and previous_reward!=current_reward:
-                require(event_cost_upgrade(previous_reward,current_reward),'Unreviewed PPG reward-cache transition')
+                require(reviewed_reward_upgrade(previous_reward,current_reward),'Unreviewed PPG reward-cache transition')
                 invalidated=[r['generation'] for r in receipts];receipts=[];self.cache_origin=generation
+                if vp_cap_upgrade(previous_reward,current_reward):
+                    # New targets require eight fresh collections, even when
+                    # the one-SE PPG recipe was already active before resume.
+                    cap=self.epoch_control['cap'];self.schedule=ppg_config.initial(generation)
+                    self.epoch_control=dict(ppg_epochs.initial(generation,config['value_phase']),cap=cap)
+                    self.trips=[]
+                    self.rolling_migration=dict(self.rolling_migration or {},fresh_cache_reset=True,
+                        origin=generation,contract='ppg-vp-cap-reset/1.0.0')
                 self.rolling_migration=dict(self.rolling_migration or {},reward_cache=dict(
                     contract='ppg-reward-cache/1.0.0',origin=generation,invalidated_generations=invalidated,
                     previous_reward=previous_reward,current_reward=current_reward,
@@ -380,7 +388,7 @@ class TrainingPhases:
             if not (getattr(self,'rolling_migration',None) or {}).get('fresh_cache_reset'):return None
             require(self.cache_origin==generation==self.schedule['origin'] and not self.buffer.receipts,
                 'Fresh PPG cleanup requires an empty replay window at its explicit reset origin')
-            result=value_buffer.retire_fresh(self.root,self.run,generation)
+            result=value_buffer.retire_fresh(self.root,self.run,generation,reward_id=self.buffer.reward_id)
             self.rolling_migration['startup_cleanup']=copy.deepcopy(result)
             if result['deleted_files']:
                 from brass_ai.step5.league import write_json

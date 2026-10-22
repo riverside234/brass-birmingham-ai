@@ -45,12 +45,17 @@ def retire_disabled(root,run,generation):
     return _retire_owned(root,run)
 
 
-def retire_fresh(root,run,generation):
+def retire_fresh(root,run,generation,*,reward_id):
     """Explicit fresh-PPG startup only, after durable reviewed config adoption."""
-    from .ppg_config import coverage
+    from .ppg_config import coverage,active
+    from brass_ai.learning.reward import CAPPED_VERSION
     root,run=owned(root,run);state=read(run/'state.json');value=state['signature']['config']['value_phase']
-    require(state['iteration']==generation and coverage(value) and value['enabled'] is True,
+    capped=state['signature']['config'].get('search',{}).get('reward',{}).get('version')==CAPPED_VERSION
+    require(state['iteration']==generation and (coverage(value) or (active(value) and capped)) and value['enabled'] is True,
         'Fresh PPG cleanup requires committed one-SE training state')
+    from .utility import reward_spec
+    require(digest(reward_spec(state['signature']['config']))==reward_id,
+        'Fresh PPG cleanup requires the committed reward configuration')
     return _retire_owned(root,run)
 
 
@@ -162,7 +167,7 @@ class ValueDataset(Dataset):
 
 class DiskBuffer:
     def __init__(self,root,run,config,*,generation,receipt=None,previous_reward=None,previous_value=None):
-        from .utility import reward_spec,event_cost_upgrade
+        from .utility import reward_spec,reviewed_reward_upgrade
         from .value_phase import stratified,refined_options,interval_options
         self.root,self.run=owned(root,run);self.config=config;self.generation=generation
         self.stratified=stratified(config['value_phase'])
@@ -182,7 +187,7 @@ class DiskBuffer:
         self.reward_transition=None;self.holdout_transition=None
         require((generation==0)==(receipt is None),'Missing committed PPG buffer receipt')
         if receipt is not None:
-            reward_change=receipt.get('reward_id')!=self.reward_id and event_cost_upgrade(previous_reward,reward_spec(config))
+            reward_change=receipt.get('reward_id')!=self.reward_id and reviewed_reward_upgrade(previous_reward,reward_spec(config))
             prior_refined=refined_options(dict(value_phase=previous_value)) if previous_value else {}
             holdout_change=bool(previous_value and not stratified(previous_value) and self.stratified and
                 config['value_phase'] in (prior_refined['value_phase'],

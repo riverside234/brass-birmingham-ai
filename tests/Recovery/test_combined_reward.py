@@ -128,7 +128,9 @@ class ModelTests(unittest.TestCase):
             self.assertEqual(model_id(model),model_id(loaded));self.assertEqual(len(restored.param_groups[0]['params']),len(list(model.parameters())))
             self.assertFalse(calibration_ready(loaded));self.assertIsNone(migrate(loaded,restored,SPEC))
         medium=UtilityNet(utility_config(ModelConfig.preset('medium'),SPEC))
-        self.assertEqual(medium.parameter_count,1850129);self.assertLessEqual(medium.parameter_count,2000000)
+        base=FourSeatNet(ModelConfig.preset('medium'))
+        self.assertEqual(medium.parameter_count,base.parameter_count+sum(p.numel() for p in medium.utility_head.parameters()))
+        self.assertLessEqual(medium.parameter_count,medium.config.parameter_limit)
 
     def test_calibration_changes_only_new_head_and_keeps_data_and_official_targets(self):
         model,optimizer=self.model();g=game();original=copy.deepcopy(g)

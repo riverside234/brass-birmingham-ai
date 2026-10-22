@@ -678080,6 +678080,636 @@
       "config_migrations_ref": "1590",
       "reason_ref": "136",
       "reviewed_evidence": "ai-research/SELFPLAY_G540_DEBUG.md"
+    },
+    {
+      "from_implementation": "174712e17d5ab459d030aaab046acacfe3575c30223826da73fae33114661284",
+      "to_implementation": "b95f45e2b0be6672a4efb7a3cabf9e2fab3e152a667e7f229b6c09ab5cb01c71",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "137",
+      "config_changes_ref": "44",
+      "reviewed_evidence": "ai-research/VP_REWARD_CAP_180.md",
+      "config_migrations_ref": "1587"
+    },
+    {
+      "from_implementation": "174712e17d5ab459d030aaab046acacfe3575c30223826da73fae33114661284",
+      "to_implementation": "b95f45e2b0be6672a4efb7a3cabf9e2fab3e152a667e7f229b6c09ab5cb01c71",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "137",
+      "config_changes_ref": "44",
+      "reviewed_evidence": "ai-research/VP_REWARD_CAP_180.md",
+      "config_migrations_ref": "1591"
+    },
+    {
+      "from_implementation": "174712e17d5ab459d030aaab046acacfe3575c30223826da73fae33114661284",
+      "to_implementation": "b95f45e2b0be6672a4efb7a3cabf9e2fab3e152a667e7f229b6c09ab5cb01c71",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "137",
+      "config_changes_ref": "44",
+      "reviewed_evidence": "ai-research/VP_REWARD_CAP_180.md",
+      "config_migrations_ref": "796"
+    },
+    {
+      "from_implementation": "174712e17d5ab459d030aaab046acacfe3575c30223826da73fae33114661284",
+      "to_implementation": "b95f45e2b0be6672a4efb7a3cabf9e2fab3e152a667e7f229b6c09ab5cb01c71",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "137",
+      "config_changes_ref": "44",
+      "reviewed_evidence": "ai-research/VP_REWARD_CAP_180.md",
+      "config_migrations_ref": "1592"
+    },
+    {
+      "from_implementation": "174712e17d5ab459d030aaab046acacfe3575c30223826da73fae33114661284",
+      "to_implementation": "b95f45e2b0be6672a4efb7a3cabf9e2fab3e152a667e7f229b6c09ab5cb01c71",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "137",
+      "config_changes_ref": "44",
+      "reviewed_evidence": "ai-research/VP_REWARD_CAP_180.md",
+      "config_migrations_ref": "404"
+    },
+    {
+      "from_implementation": "174712e17d5ab459d030aaab046acacfe3575c30223826da73fae33114661284",
+      "to_implementation": "b95f45e2b0be6672a4efb7a3cabf9e2fab3e152a667e7f229b6c09ab5cb01c71",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "137",
+      "config_changes_ref": "44",
+      "reviewed_evidence": "ai-research/VP_REWARD_CAP_180.md",
+      "config_migrations_ref": "1593"
+    },
+    {
+      "from_implementation": "174712e17d5ab459d030aaab046acacfe3575c30223826da73fae33114661284",
+      "to_implementation": "b95f45e2b0be6672a4efb7a3cabf9e2fab3e152a667e7f229b6c09ab5cb01c71",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "137",
+      "config_changes_ref": "44",
+      "reviewed_evidence": "ai-research/VP_REWARD_CAP_180.md",
+      "config_migrations_ref": "797"
+    },
+    {
+      "from_implementation": "174712e17d5ab459d030aaab046acacfe3575c30223826da73fae33114661284",
+      "to_implementation": "b95f45e2b0be6672a4efb7a3cabf9e2fab3e152a667e7f229b6c09ab5cb01c71",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "137",
+      "config_changes_ref": "44",
+      "reviewed_evidence": "ai-research/VP_REWARD_CAP_180.md",
+      "config_migrations_ref": "1594"
+    },
+    {
+      "from_implementation": "e0dc28ad559ddcd2d6b0eff95d1dac61c4ede949f70bf341a16d08e2ca71dca3",
+      "learning_compatibility_ref": "5",
+      "config_changes_ref": "44",
+      "to_implementation": "b95f45e2b0be6672a4efb7a3cabf9e2fab3e152a667e7f229b6c09ab5cb01c71",
+      "reviewed_evidence": "ai-research/VP_REWARD_CAP_180.md",
+      "reason_ref": "137",
+      "config_migrations_ref": "1587"
+    },
+    {
+      "from_implementation": "e0dc28ad559ddcd2d6b0eff95d1dac61c4ede949f70bf341a16d08e2ca71dca3",
+      "learning_compatibility_ref": "5",
+      "config_changes_ref": "44",
+      "to_implementation": "b95f45e2b0be6672a4efb7a3cabf9e2fab3e152a667e7f229b6c09ab5cb01c71",
+      "reviewed_evidence": "ai-research/VP_REWARD_CAP_180.md",
+      "reason_ref": "137",
+      "config_migrations_ref": "1591"
+    },
+    {
+      "from_implementation": "e0dc28ad559ddcd2d6b0eff95d1dac61c4ede949f70bf341a16d08e2ca71dca3",
+      "learning_compatibility_ref": "5",
+      "config_changes_ref": "44",
+      "to_implementation": "b95f45e2b0be6672a4efb7a3cabf9e2fab3e152a667e7f229b6c09ab5cb01c71",
+      "reviewed_evidence": "ai-research/VP_REWARD_CAP_180.md",
+      "reason_ref": "137",
+      "config_migrations_ref": "796"
+    },
+    {
+      "from_implementation": "e0dc28ad559ddcd2d6b0eff95d1dac61c4ede949f70bf341a16d08e2ca71dca3",
+      "learning_compatibility_ref": "5",
+      "config_changes_ref": "44",
+      "to_implementation": "b95f45e2b0be6672a4efb7a3cabf9e2fab3e152a667e7f229b6c09ab5cb01c71",
+      "reviewed_evidence": "ai-research/VP_REWARD_CAP_180.md",
+      "reason_ref": "137",
+      "config_migrations_ref": "1592"
+    },
+    {
+      "from_implementation": "fb4a7c40c8784dff3f1b991cb6eade5e95fbdb2b69172eb2ecb18ed590c411a0",
+      "to_implementation": "b95f45e2b0be6672a4efb7a3cabf9e2fab3e152a667e7f229b6c09ab5cb01c71",
+      "learning_compatibility_ref": "5",
+      "config_changes_ref": "44",
+      "reviewed_evidence": "ai-research/VP_REWARD_CAP_180.md",
+      "reason_ref": "137",
+      "config_migrations_ref": "796"
+    },
+    {
+      "from_implementation": "fb4a7c40c8784dff3f1b991cb6eade5e95fbdb2b69172eb2ecb18ed590c411a0",
+      "to_implementation": "b95f45e2b0be6672a4efb7a3cabf9e2fab3e152a667e7f229b6c09ab5cb01c71",
+      "learning_compatibility_ref": "5",
+      "config_changes_ref": "44",
+      "reviewed_evidence": "ai-research/VP_REWARD_CAP_180.md",
+      "reason_ref": "137",
+      "config_migrations_ref": "1592"
+    },
+    {
+      "from_implementation": "fb4a7c40c8784dff3f1b991cb6eade5e95fbdb2b69172eb2ecb18ed590c411a0",
+      "learning_compatibility_ref": "5",
+      "config_changes_ref": "44",
+      "to_implementation": "b95f45e2b0be6672a4efb7a3cabf9e2fab3e152a667e7f229b6c09ab5cb01c71",
+      "reviewed_evidence": "ai-research/VP_REWARD_CAP_180.md",
+      "reason_ref": "137",
+      "config_migrations_ref": "1587"
+    },
+    {
+      "from_implementation": "fb4a7c40c8784dff3f1b991cb6eade5e95fbdb2b69172eb2ecb18ed590c411a0",
+      "learning_compatibility_ref": "5",
+      "config_changes_ref": "44",
+      "to_implementation": "b95f45e2b0be6672a4efb7a3cabf9e2fab3e152a667e7f229b6c09ab5cb01c71",
+      "reviewed_evidence": "ai-research/VP_REWARD_CAP_180.md",
+      "reason_ref": "137",
+      "config_migrations_ref": "1591"
+    },
+    {
+      "from_implementation": "afcb66986a870567dbbd22ea45c5f43467ca0f7829948f04b561a9f8019e556b",
+      "learning_compatibility_ref": "5",
+      "config_changes_ref": "44",
+      "to_implementation": "b95f45e2b0be6672a4efb7a3cabf9e2fab3e152a667e7f229b6c09ab5cb01c71",
+      "reviewed_evidence": "ai-research/VP_REWARD_CAP_180.md",
+      "reason_ref": "137",
+      "config_migrations_ref": "1587"
+    },
+    {
+      "from_implementation": "afcb66986a870567dbbd22ea45c5f43467ca0f7829948f04b561a9f8019e556b",
+      "learning_compatibility_ref": "5",
+      "config_changes_ref": "44",
+      "to_implementation": "b95f45e2b0be6672a4efb7a3cabf9e2fab3e152a667e7f229b6c09ab5cb01c71",
+      "reviewed_evidence": "ai-research/VP_REWARD_CAP_180.md",
+      "reason_ref": "137",
+      "config_migrations_ref": "1591"
+    },
+    {
+      "from_implementation": "afcb66986a870567dbbd22ea45c5f43467ca0f7829948f04b561a9f8019e556b",
+      "learning_compatibility_ref": "5",
+      "config_changes_ref": "44",
+      "to_implementation": "b95f45e2b0be6672a4efb7a3cabf9e2fab3e152a667e7f229b6c09ab5cb01c71",
+      "reviewed_evidence": "ai-research/VP_REWARD_CAP_180.md",
+      "reason_ref": "137",
+      "config_migrations_ref": "1582"
+    },
+    {
+      "from_implementation": "afcb66986a870567dbbd22ea45c5f43467ca0f7829948f04b561a9f8019e556b",
+      "learning_compatibility_ref": "5",
+      "config_changes_ref": "44",
+      "to_implementation": "b95f45e2b0be6672a4efb7a3cabf9e2fab3e152a667e7f229b6c09ab5cb01c71",
+      "reviewed_evidence": "ai-research/VP_REWARD_CAP_180.md",
+      "reason_ref": "137",
+      "config_migrations_ref": "1595"
+    },
+    {
+      "from_implementation": "afcb66986a870567dbbd22ea45c5f43467ca0f7829948f04b561a9f8019e556b",
+      "learning_compatibility_ref": "5",
+      "config_changes_ref": "44",
+      "to_implementation": "b95f45e2b0be6672a4efb7a3cabf9e2fab3e152a667e7f229b6c09ab5cb01c71",
+      "reviewed_evidence": "ai-research/VP_REWARD_CAP_180.md",
+      "reason_ref": "137",
+      "config_migrations_ref": "1583"
+    },
+    {
+      "from_implementation": "afcb66986a870567dbbd22ea45c5f43467ca0f7829948f04b561a9f8019e556b",
+      "learning_compatibility_ref": "5",
+      "config_changes_ref": "44",
+      "to_implementation": "b95f45e2b0be6672a4efb7a3cabf9e2fab3e152a667e7f229b6c09ab5cb01c71",
+      "reviewed_evidence": "ai-research/VP_REWARD_CAP_180.md",
+      "reason_ref": "137",
+      "config_migrations_ref": "1596"
+    },
+    {
+      "from_implementation": "d0860bb58611f1645d27d6a3df2e5c308d567854808315d8d434b104895ad151",
+      "learning_compatibility_ref": "5",
+      "config_changes_ref": "44",
+      "to_implementation": "b95f45e2b0be6672a4efb7a3cabf9e2fab3e152a667e7f229b6c09ab5cb01c71",
+      "reviewed_evidence": "ai-research/VP_REWARD_CAP_180.md",
+      "reason_ref": "137",
+      "config_migrations_ref": "1587"
+    },
+    {
+      "from_implementation": "d0860bb58611f1645d27d6a3df2e5c308d567854808315d8d434b104895ad151",
+      "learning_compatibility_ref": "5",
+      "config_changes_ref": "44",
+      "to_implementation": "b95f45e2b0be6672a4efb7a3cabf9e2fab3e152a667e7f229b6c09ab5cb01c71",
+      "reviewed_evidence": "ai-research/VP_REWARD_CAP_180.md",
+      "reason_ref": "137",
+      "config_migrations_ref": "1591"
+    },
+    {
+      "from_implementation": "d0860bb58611f1645d27d6a3df2e5c308d567854808315d8d434b104895ad151",
+      "learning_compatibility_ref": "5",
+      "config_changes_ref": "44",
+      "to_implementation": "b95f45e2b0be6672a4efb7a3cabf9e2fab3e152a667e7f229b6c09ab5cb01c71",
+      "reviewed_evidence": "ai-research/VP_REWARD_CAP_180.md",
+      "reason_ref": "137",
+      "config_migrations_ref": "1580"
+    },
+    {
+      "from_implementation": "d0860bb58611f1645d27d6a3df2e5c308d567854808315d8d434b104895ad151",
+      "learning_compatibility_ref": "5",
+      "config_changes_ref": "44",
+      "to_implementation": "b95f45e2b0be6672a4efb7a3cabf9e2fab3e152a667e7f229b6c09ab5cb01c71",
+      "reviewed_evidence": "ai-research/VP_REWARD_CAP_180.md",
+      "reason_ref": "137",
+      "config_migrations_ref": "1597"
+    },
+    {
+      "from_implementation": "bd1a6bd5522fc0e54a18309afa9582cfcfd9f64c4b0622274e3081ae290fdfe8",
+      "learning_compatibility_ref": "5",
+      "config_changes_ref": "44",
+      "to_implementation": "b95f45e2b0be6672a4efb7a3cabf9e2fab3e152a667e7f229b6c09ab5cb01c71",
+      "reviewed_evidence": "ai-research/VP_REWARD_CAP_180.md",
+      "reason_ref": "137",
+      "config_migrations_ref": "1587"
+    },
+    {
+      "from_implementation": "bd1a6bd5522fc0e54a18309afa9582cfcfd9f64c4b0622274e3081ae290fdfe8",
+      "learning_compatibility_ref": "5",
+      "config_changes_ref": "44",
+      "to_implementation": "b95f45e2b0be6672a4efb7a3cabf9e2fab3e152a667e7f229b6c09ab5cb01c71",
+      "reviewed_evidence": "ai-research/VP_REWARD_CAP_180.md",
+      "reason_ref": "137",
+      "config_migrations_ref": "1591"
+    },
+    {
+      "from_implementation": "bd1a6bd5522fc0e54a18309afa9582cfcfd9f64c4b0622274e3081ae290fdfe8",
+      "learning_compatibility_ref": "5",
+      "config_changes_ref": "44",
+      "to_implementation": "b95f45e2b0be6672a4efb7a3cabf9e2fab3e152a667e7f229b6c09ab5cb01c71",
+      "reviewed_evidence": "ai-research/VP_REWARD_CAP_180.md",
+      "reason_ref": "137",
+      "config_migrations_ref": "84"
+    },
+    {
+      "from_implementation": "bd1a6bd5522fc0e54a18309afa9582cfcfd9f64c4b0622274e3081ae290fdfe8",
+      "learning_compatibility_ref": "5",
+      "config_changes_ref": "44",
+      "to_implementation": "b95f45e2b0be6672a4efb7a3cabf9e2fab3e152a667e7f229b6c09ab5cb01c71",
+      "reviewed_evidence": "ai-research/VP_REWARD_CAP_180.md",
+      "reason_ref": "137",
+      "config_migrations_ref": "1598"
+    },
+    {
+      "from_implementation": "bd1a6bd5522fc0e54a18309afa9582cfcfd9f64c4b0622274e3081ae290fdfe8",
+      "learning_compatibility_ref": "5",
+      "config_changes_ref": "44",
+      "to_implementation": "b95f45e2b0be6672a4efb7a3cabf9e2fab3e152a667e7f229b6c09ab5cb01c71",
+      "reviewed_evidence": "ai-research/VP_REWARD_CAP_180.md",
+      "reason_ref": "137",
+      "config_migrations_ref": "1581"
+    },
+    {
+      "from_implementation": "bd1a6bd5522fc0e54a18309afa9582cfcfd9f64c4b0622274e3081ae290fdfe8",
+      "learning_compatibility_ref": "5",
+      "config_changes_ref": "44",
+      "to_implementation": "b95f45e2b0be6672a4efb7a3cabf9e2fab3e152a667e7f229b6c09ab5cb01c71",
+      "reviewed_evidence": "ai-research/VP_REWARD_CAP_180.md",
+      "reason_ref": "137",
+      "config_migrations_ref": "1599"
+    },
+    {
+      "from_implementation": "3b0546c92357041cde15cc0a4040bddbd0685e40cf3913bb22a52acc73bf6f65",
+      "learning_compatibility_ref": "5",
+      "config_changes_ref": "44",
+      "to_implementation": "b95f45e2b0be6672a4efb7a3cabf9e2fab3e152a667e7f229b6c09ab5cb01c71",
+      "reviewed_evidence": "ai-research/VP_REWARD_CAP_180.md",
+      "reason_ref": "137",
+      "config_migrations_ref": "1587"
+    },
+    {
+      "from_implementation": "3b0546c92357041cde15cc0a4040bddbd0685e40cf3913bb22a52acc73bf6f65",
+      "learning_compatibility_ref": "5",
+      "config_changes_ref": "44",
+      "to_implementation": "b95f45e2b0be6672a4efb7a3cabf9e2fab3e152a667e7f229b6c09ab5cb01c71",
+      "reviewed_evidence": "ai-research/VP_REWARD_CAP_180.md",
+      "reason_ref": "137",
+      "config_migrations_ref": "1591"
+    },
+    {
+      "from_implementation": "3b0546c92357041cde15cc0a4040bddbd0685e40cf3913bb22a52acc73bf6f65",
+      "learning_compatibility_ref": "5",
+      "config_changes_ref": "44",
+      "to_implementation": "b95f45e2b0be6672a4efb7a3cabf9e2fab3e152a667e7f229b6c09ab5cb01c71",
+      "reviewed_evidence": "ai-research/VP_REWARD_CAP_180.md",
+      "reason_ref": "137",
+      "config_migrations_ref": "1584"
+    },
+    {
+      "from_implementation": "3b0546c92357041cde15cc0a4040bddbd0685e40cf3913bb22a52acc73bf6f65",
+      "learning_compatibility_ref": "5",
+      "config_changes_ref": "44",
+      "to_implementation": "b95f45e2b0be6672a4efb7a3cabf9e2fab3e152a667e7f229b6c09ab5cb01c71",
+      "reviewed_evidence": "ai-research/VP_REWARD_CAP_180.md",
+      "reason_ref": "137",
+      "config_migrations_ref": "1600"
+    },
+    {
+      "from_implementation": "3b0546c92357041cde15cc0a4040bddbd0685e40cf3913bb22a52acc73bf6f65",
+      "learning_compatibility_ref": "5",
+      "config_changes_ref": "44",
+      "to_implementation": "b95f45e2b0be6672a4efb7a3cabf9e2fab3e152a667e7f229b6c09ab5cb01c71",
+      "reviewed_evidence": "ai-research/VP_REWARD_CAP_180.md",
+      "reason_ref": "137",
+      "config_migrations_ref": "1585"
+    },
+    {
+      "from_implementation": "3b0546c92357041cde15cc0a4040bddbd0685e40cf3913bb22a52acc73bf6f65",
+      "learning_compatibility_ref": "5",
+      "config_changes_ref": "44",
+      "to_implementation": "b95f45e2b0be6672a4efb7a3cabf9e2fab3e152a667e7f229b6c09ab5cb01c71",
+      "reviewed_evidence": "ai-research/VP_REWARD_CAP_180.md",
+      "reason_ref": "137",
+      "config_migrations_ref": "1601"
+    },
+    {
+      "from_implementation": "3b0546c92357041cde15cc0a4040bddbd0685e40cf3913bb22a52acc73bf6f65",
+      "learning_compatibility_ref": "5",
+      "config_changes_ref": "44",
+      "to_implementation": "b95f45e2b0be6672a4efb7a3cabf9e2fab3e152a667e7f229b6c09ab5cb01c71",
+      "reviewed_evidence": "ai-research/VP_REWARD_CAP_180.md",
+      "reason_ref": "137",
+      "config_migrations_ref": "1586"
+    },
+    {
+      "from_implementation": "3b0546c92357041cde15cc0a4040bddbd0685e40cf3913bb22a52acc73bf6f65",
+      "learning_compatibility_ref": "5",
+      "config_changes_ref": "44",
+      "to_implementation": "b95f45e2b0be6672a4efb7a3cabf9e2fab3e152a667e7f229b6c09ab5cb01c71",
+      "reviewed_evidence": "ai-research/VP_REWARD_CAP_180.md",
+      "reason_ref": "137",
+      "config_migrations_ref": "1602"
+    },
+    {
+      "from_implementation": "0175cf43e34fa0cb1a3425158e13399a868c3fe2bdcd27bef58ee10df2bda02f",
+      "learning_compatibility_ref": "5",
+      "config_changes_ref": "44",
+      "to_implementation": "b95f45e2b0be6672a4efb7a3cabf9e2fab3e152a667e7f229b6c09ab5cb01c71",
+      "reviewed_evidence": "ai-research/VP_REWARD_CAP_180.md",
+      "reason_ref": "137",
+      "config_migrations_ref": "1587"
+    },
+    {
+      "from_implementation": "0175cf43e34fa0cb1a3425158e13399a868c3fe2bdcd27bef58ee10df2bda02f",
+      "learning_compatibility_ref": "5",
+      "config_changes_ref": "44",
+      "to_implementation": "b95f45e2b0be6672a4efb7a3cabf9e2fab3e152a667e7f229b6c09ab5cb01c71",
+      "reviewed_evidence": "ai-research/VP_REWARD_CAP_180.md",
+      "reason_ref": "137",
+      "config_migrations_ref": "1591"
+    },
+    {
+      "from_implementation": "0175cf43e34fa0cb1a3425158e13399a868c3fe2bdcd27bef58ee10df2bda02f",
+      "learning_compatibility_ref": "5",
+      "config_changes_ref": "44",
+      "to_implementation": "b95f45e2b0be6672a4efb7a3cabf9e2fab3e152a667e7f229b6c09ab5cb01c71",
+      "reviewed_evidence": "ai-research/VP_REWARD_CAP_180.md",
+      "reason_ref": "137",
+      "config_migrations_ref": "1585"
+    },
+    {
+      "from_implementation": "0175cf43e34fa0cb1a3425158e13399a868c3fe2bdcd27bef58ee10df2bda02f",
+      "learning_compatibility_ref": "5",
+      "config_changes_ref": "44",
+      "to_implementation": "b95f45e2b0be6672a4efb7a3cabf9e2fab3e152a667e7f229b6c09ab5cb01c71",
+      "reviewed_evidence": "ai-research/VP_REWARD_CAP_180.md",
+      "reason_ref": "137",
+      "config_migrations_ref": "1601"
+    },
+    {
+      "from_implementation": "0175cf43e34fa0cb1a3425158e13399a868c3fe2bdcd27bef58ee10df2bda02f",
+      "learning_compatibility_ref": "5",
+      "config_changes_ref": "44",
+      "to_implementation": "b95f45e2b0be6672a4efb7a3cabf9e2fab3e152a667e7f229b6c09ab5cb01c71",
+      "reviewed_evidence": "ai-research/VP_REWARD_CAP_180.md",
+      "reason_ref": "137",
+      "config_migrations_ref": "1586"
+    },
+    {
+      "from_implementation": "0175cf43e34fa0cb1a3425158e13399a868c3fe2bdcd27bef58ee10df2bda02f",
+      "learning_compatibility_ref": "5",
+      "config_changes_ref": "44",
+      "to_implementation": "b95f45e2b0be6672a4efb7a3cabf9e2fab3e152a667e7f229b6c09ab5cb01c71",
+      "reviewed_evidence": "ai-research/VP_REWARD_CAP_180.md",
+      "reason_ref": "137",
+      "config_migrations_ref": "1602"
+    },
+    {
+      "from_implementation": "38206ae9ecec5db1b291066978738d247d40ebe112fc27b4f3a4332796caffca",
+      "to_implementation": "b95f45e2b0be6672a4efb7a3cabf9e2fab3e152a667e7f229b6c09ab5cb01c71",
+      "learning_compatibility_ref": "5",
+      "config_changes_ref": "44",
+      "reviewed_evidence": "ai-research/VP_REWARD_CAP_180.md",
+      "reason_ref": "137",
+      "config_migrations_ref": "1587"
+    },
+    {
+      "from_implementation": "38206ae9ecec5db1b291066978738d247d40ebe112fc27b4f3a4332796caffca",
+      "to_implementation": "b95f45e2b0be6672a4efb7a3cabf9e2fab3e152a667e7f229b6c09ab5cb01c71",
+      "learning_compatibility_ref": "5",
+      "config_changes_ref": "44",
+      "reviewed_evidence": "ai-research/VP_REWARD_CAP_180.md",
+      "reason_ref": "137",
+      "config_migrations_ref": "1591"
+    },
+    {
+      "from_implementation": "38206ae9ecec5db1b291066978738d247d40ebe112fc27b4f3a4332796caffca",
+      "to_implementation": "b95f45e2b0be6672a4efb7a3cabf9e2fab3e152a667e7f229b6c09ab5cb01c71",
+      "learning_compatibility_ref": "5",
+      "config_changes_ref": "44",
+      "reviewed_evidence": "ai-research/VP_REWARD_CAP_180.md",
+      "reason_ref": "137",
+      "config_migrations_ref": "1588"
+    },
+    {
+      "from_implementation": "38206ae9ecec5db1b291066978738d247d40ebe112fc27b4f3a4332796caffca",
+      "to_implementation": "b95f45e2b0be6672a4efb7a3cabf9e2fab3e152a667e7f229b6c09ab5cb01c71",
+      "learning_compatibility_ref": "5",
+      "config_changes_ref": "44",
+      "reviewed_evidence": "ai-research/VP_REWARD_CAP_180.md",
+      "reason_ref": "137",
+      "config_migrations_ref": "1603"
+    },
+    {
+      "from_implementation": "38206ae9ecec5db1b291066978738d247d40ebe112fc27b4f3a4332796caffca",
+      "to_implementation": "b95f45e2b0be6672a4efb7a3cabf9e2fab3e152a667e7f229b6c09ab5cb01c71",
+      "learning_compatibility_ref": "5",
+      "config_changes_ref": "44",
+      "reviewed_evidence": "ai-research/VP_REWARD_CAP_180.md",
+      "reason_ref": "137",
+      "config_migrations_ref": "1589"
+    },
+    {
+      "from_implementation": "38206ae9ecec5db1b291066978738d247d40ebe112fc27b4f3a4332796caffca",
+      "to_implementation": "b95f45e2b0be6672a4efb7a3cabf9e2fab3e152a667e7f229b6c09ab5cb01c71",
+      "learning_compatibility_ref": "5",
+      "config_changes_ref": "44",
+      "reviewed_evidence": "ai-research/VP_REWARD_CAP_180.md",
+      "reason_ref": "137",
+      "config_migrations_ref": "1604"
+    },
+    {
+      "from_implementation": "38206ae9ecec5db1b291066978738d247d40ebe112fc27b4f3a4332796caffca",
+      "to_implementation": "b95f45e2b0be6672a4efb7a3cabf9e2fab3e152a667e7f229b6c09ab5cb01c71",
+      "learning_compatibility_ref": "5",
+      "config_changes_ref": "44",
+      "reviewed_evidence": "ai-research/VP_REWARD_CAP_180.md",
+      "reason_ref": "137",
+      "config_migrations_ref": "1590"
+    },
+    {
+      "from_implementation": "38206ae9ecec5db1b291066978738d247d40ebe112fc27b4f3a4332796caffca",
+      "to_implementation": "b95f45e2b0be6672a4efb7a3cabf9e2fab3e152a667e7f229b6c09ab5cb01c71",
+      "learning_compatibility_ref": "5",
+      "config_changes_ref": "44",
+      "reviewed_evidence": "ai-research/VP_REWARD_CAP_180.md",
+      "reason_ref": "137",
+      "config_migrations_ref": "1605"
+    },
+    {
+      "from_implementation": "056449b7e5177379e545cb499da91a870d22ebe033fa6827ba3b5beac214d534",
+      "to_implementation": "b95f45e2b0be6672a4efb7a3cabf9e2fab3e152a667e7f229b6c09ab5cb01c71",
+      "learning_compatibility_ref": "5",
+      "config_changes_ref": "44",
+      "reason_ref": "137",
+      "reviewed_evidence": "ai-research/VP_REWARD_CAP_180.md",
+      "config_migrations_ref": "1587"
+    },
+    {
+      "from_implementation": "056449b7e5177379e545cb499da91a870d22ebe033fa6827ba3b5beac214d534",
+      "to_implementation": "b95f45e2b0be6672a4efb7a3cabf9e2fab3e152a667e7f229b6c09ab5cb01c71",
+      "learning_compatibility_ref": "5",
+      "config_changes_ref": "44",
+      "reason_ref": "137",
+      "reviewed_evidence": "ai-research/VP_REWARD_CAP_180.md",
+      "config_migrations_ref": "1591"
+    },
+    {
+      "from_implementation": "056449b7e5177379e545cb499da91a870d22ebe033fa6827ba3b5beac214d534",
+      "to_implementation": "b95f45e2b0be6672a4efb7a3cabf9e2fab3e152a667e7f229b6c09ab5cb01c71",
+      "learning_compatibility_ref": "5",
+      "config_changes_ref": "44",
+      "reason_ref": "137",
+      "reviewed_evidence": "ai-research/VP_REWARD_CAP_180.md",
+      "config_migrations_ref": "1588"
+    },
+    {
+      "from_implementation": "056449b7e5177379e545cb499da91a870d22ebe033fa6827ba3b5beac214d534",
+      "to_implementation": "b95f45e2b0be6672a4efb7a3cabf9e2fab3e152a667e7f229b6c09ab5cb01c71",
+      "learning_compatibility_ref": "5",
+      "config_changes_ref": "44",
+      "reason_ref": "137",
+      "reviewed_evidence": "ai-research/VP_REWARD_CAP_180.md",
+      "config_migrations_ref": "1603"
+    },
+    {
+      "from_implementation": "056449b7e5177379e545cb499da91a870d22ebe033fa6827ba3b5beac214d534",
+      "to_implementation": "b95f45e2b0be6672a4efb7a3cabf9e2fab3e152a667e7f229b6c09ab5cb01c71",
+      "learning_compatibility_ref": "5",
+      "config_changes_ref": "44",
+      "reason_ref": "137",
+      "reviewed_evidence": "ai-research/VP_REWARD_CAP_180.md",
+      "config_migrations_ref": "1589"
+    },
+    {
+      "from_implementation": "056449b7e5177379e545cb499da91a870d22ebe033fa6827ba3b5beac214d534",
+      "to_implementation": "b95f45e2b0be6672a4efb7a3cabf9e2fab3e152a667e7f229b6c09ab5cb01c71",
+      "learning_compatibility_ref": "5",
+      "config_changes_ref": "44",
+      "reason_ref": "137",
+      "reviewed_evidence": "ai-research/VP_REWARD_CAP_180.md",
+      "config_migrations_ref": "1604"
+    },
+    {
+      "from_implementation": "056449b7e5177379e545cb499da91a870d22ebe033fa6827ba3b5beac214d534",
+      "to_implementation": "b95f45e2b0be6672a4efb7a3cabf9e2fab3e152a667e7f229b6c09ab5cb01c71",
+      "learning_compatibility_ref": "5",
+      "config_changes_ref": "44",
+      "reason_ref": "137",
+      "reviewed_evidence": "ai-research/VP_REWARD_CAP_180.md",
+      "config_migrations_ref": "1590"
+    },
+    {
+      "from_implementation": "056449b7e5177379e545cb499da91a870d22ebe033fa6827ba3b5beac214d534",
+      "to_implementation": "b95f45e2b0be6672a4efb7a3cabf9e2fab3e152a667e7f229b6c09ab5cb01c71",
+      "learning_compatibility_ref": "5",
+      "config_changes_ref": "44",
+      "reason_ref": "137",
+      "reviewed_evidence": "ai-research/VP_REWARD_CAP_180.md",
+      "config_migrations_ref": "1605"
+    },
+    {
+      "from_implementation": "5828457e258f104e9abf2d37350275c11b1cb1f0209b97e24204a0bb99764788",
+      "learning_compatibility_ref": "5",
+      "config_changes_ref": "44",
+      "to_implementation": "b95f45e2b0be6672a4efb7a3cabf9e2fab3e152a667e7f229b6c09ab5cb01c71",
+      "config_migrations_ref": "1587",
+      "reason_ref": "137",
+      "reviewed_evidence": "ai-research/VP_REWARD_CAP_180.md"
+    },
+    {
+      "from_implementation": "5828457e258f104e9abf2d37350275c11b1cb1f0209b97e24204a0bb99764788",
+      "learning_compatibility_ref": "5",
+      "config_changes_ref": "44",
+      "to_implementation": "b95f45e2b0be6672a4efb7a3cabf9e2fab3e152a667e7f229b6c09ab5cb01c71",
+      "config_migrations_ref": "1591",
+      "reason_ref": "137",
+      "reviewed_evidence": "ai-research/VP_REWARD_CAP_180.md"
+    },
+    {
+      "from_implementation": "5828457e258f104e9abf2d37350275c11b1cb1f0209b97e24204a0bb99764788",
+      "learning_compatibility_ref": "5",
+      "config_changes_ref": "44",
+      "to_implementation": "b95f45e2b0be6672a4efb7a3cabf9e2fab3e152a667e7f229b6c09ab5cb01c71",
+      "config_migrations_ref": "1588",
+      "reason_ref": "137",
+      "reviewed_evidence": "ai-research/VP_REWARD_CAP_180.md"
+    },
+    {
+      "from_implementation": "5828457e258f104e9abf2d37350275c11b1cb1f0209b97e24204a0bb99764788",
+      "learning_compatibility_ref": "5",
+      "config_changes_ref": "44",
+      "to_implementation": "b95f45e2b0be6672a4efb7a3cabf9e2fab3e152a667e7f229b6c09ab5cb01c71",
+      "config_migrations_ref": "1603",
+      "reason_ref": "137",
+      "reviewed_evidence": "ai-research/VP_REWARD_CAP_180.md"
+    },
+    {
+      "from_implementation": "5828457e258f104e9abf2d37350275c11b1cb1f0209b97e24204a0bb99764788",
+      "learning_compatibility_ref": "5",
+      "config_changes_ref": "44",
+      "to_implementation": "b95f45e2b0be6672a4efb7a3cabf9e2fab3e152a667e7f229b6c09ab5cb01c71",
+      "config_migrations_ref": "1589",
+      "reason_ref": "137",
+      "reviewed_evidence": "ai-research/VP_REWARD_CAP_180.md"
+    },
+    {
+      "from_implementation": "5828457e258f104e9abf2d37350275c11b1cb1f0209b97e24204a0bb99764788",
+      "learning_compatibility_ref": "5",
+      "config_changes_ref": "44",
+      "to_implementation": "b95f45e2b0be6672a4efb7a3cabf9e2fab3e152a667e7f229b6c09ab5cb01c71",
+      "config_migrations_ref": "1604",
+      "reason_ref": "137",
+      "reviewed_evidence": "ai-research/VP_REWARD_CAP_180.md"
+    },
+    {
+      "from_implementation": "5828457e258f104e9abf2d37350275c11b1cb1f0209b97e24204a0bb99764788",
+      "learning_compatibility_ref": "5",
+      "config_changes_ref": "44",
+      "to_implementation": "b95f45e2b0be6672a4efb7a3cabf9e2fab3e152a667e7f229b6c09ab5cb01c71",
+      "config_migrations_ref": "1590",
+      "reason_ref": "137",
+      "reviewed_evidence": "ai-research/VP_REWARD_CAP_180.md"
+    },
+    {
+      "from_implementation": "5828457e258f104e9abf2d37350275c11b1cb1f0209b97e24204a0bb99764788",
+      "learning_compatibility_ref": "5",
+      "config_changes_ref": "44",
+      "to_implementation": "b95f45e2b0be6672a4efb7a3cabf9e2fab3e152a667e7f229b6c09ab5cb01c71",
+      "config_migrations_ref": "1605",
+      "reason_ref": "137",
+      "reviewed_evidence": "ai-research/VP_REWARD_CAP_180.md"
     }
   ],
   "definitions": {
@@ -678220,7 +678850,8 @@
       "133": "Reviewed g503 continuation: explicit .0075 -> .010 insolvency-event cost, same .075 cap, with reward identities, fresh derived targets and utility recalibration; all weights and Adam state preserved. Explicit .015 selfplay-only branch rate retains one fork, excluded fork/prefix rows, temperature-2 openings and signed original entropy baselines/promotion origin. Versioned fixed-1.00 snapshot critic weight is applied before resumed PPO and disables only snapshot recovery/decay, retaining prior controller as an immutable archive. Strict old and new checkpoint option validation, archived R2-hotfix compatibility, restart-idempotent migration; GAE, ordinary whole-game holdouts, LR/warmup, both Adams, RNG, population, progress and lineage preserved. Teacher/PPG remain off. No source-bound pending collection is relabeled. Other working-tree rating-chart edits only affect presentation, not saved evaluation evidence.",
       "134": "Reviewed optional g503 follow-up: enable versioned eight-age PPG with sixteen-step acceptance and patience one; retain cadence/holdouts, raw post-PPO cloning, both .002 KL caps, beta/epoch controllers and phase-only Adam reset. Opening-only PPO uses frozen old raw T1 probabilities and detached capped old-T1/actual-behavior weights without normalization; actual T2/epsilon likelihood checks and legal/forced masks remain. Separate raw T1 and behavior exact KL guards, explicit provenance and incompatible-cache rejection; no old replay relabeled. Explicit epsilon .02->0 retains probabilistic openings and branch rules. Composes with reviewed .010/.075 reward, .015 branching and fixed snapshot weight 1. Both Adams, RNG, progress, GAE, original entropy/economic baselines, anchor/probe, population and lineage preserved. Old contracts retain their prior semantics. Model/IL/feature layout unchanged; unrelated chart edits retained.",
       "135": "Reviewed g540 continuation: versioned one-SE PPG coverage selection with a monotonically improving minimum-loss reference and matching retained weights/Adam. Neutral intervals do not count as failures; ordinary learner parent-game paired evidence spans all eight ages. Both .002 raw-policy KL safeguards remain per-step and independent. Explicit fresh PPG cache/schedule origin at committed progress; epoch cap hotfix two and adaptive minimum two, maximum six. Audit owned caches before startup cleanup after durable source/config adoption. Preserve weights, both Adams, beta, RNG, PPO/LR/GAE, baselines, ordinary counters, population and lineage. Explicit .010/.075->.020/.080 insolvency event/cap change, matching search reward, fresh utility calibration and no reuse/relabeling of old MC targets. Archived migrations retain their original semantics; model/IL/feature compatibility unchanged.",
-      "136": "Reviewed self-play debug fix: unfinished PL slots after a verified source transition use a deterministic fresh evidence directory. Preserve old source evidence and validate the full transition chain; same-source specification changes still fail closed. Compaction/retention follow verified actual slot directories, with old archives supported. No PPO/PPG/reward/exploration/evaluation recipe changes; preserve model weights, both Adams, RNG, counters, caches, baselines, population and lineage. Carry exact existing archived resume routes, including the omitted g320/g412 input-cache routes; no arbitrary config edits."
+      "136": "Reviewed self-play debug fix: unfinished PL slots after a verified source transition use a deterministic fresh evidence directory. Preserve old source evidence and validate the full transition chain; same-source specification changes still fail closed. Compaction/retention follow verified actual slot directories, with old archives supported. No PPO/PPG/reward/exploration/evaluation recipe changes; preserve model weights, both Adams, RNG, counters, caches, baselines, population and lineage. Carry exact existing archived resume routes, including the omitted g320/g412 input-cache routes; no arbitrary config edits.",
+      "137": "Reviewed VP-180 reward revision: versioned combined return v2 caps only the additive VP component and utility prior at 180; win, placement, official scores/targets and existing insolvency coefficients remain unchanged. Archived v1 objectives retain exact semantics. Explicit continuation preserves all parameter/optimizer tensors, RNG, progress, IL identity, population and baselines. Utility calibration is invalidated; old-target PPG caches are excluded and audited/deleted only after durable adoption, with eight fresh collections before the next phase. Preserve the attained epoch cap/beta and reset only target-dependent PPG schedule/evidence. Matching search/provenance and current fresh-config generation; no arbitrary configuration edits and no relabeling cached old targets."
     },
     "config_changes": {
       "0": {
@@ -699503,6 +700134,79 @@
       "1590": [
         "step5-insolvency-event-cost/3.0.0",
         "ppg-one-se-coverage/1.0.0"
+      ],
+      "1591": [
+        "step5-vp-reward-cap/1.0.0"
+      ],
+      "1592": [
+        "group-entropy-floors-low-branching/1.0.0",
+        "step5-vp-reward-cap/1.0.0"
+      ],
+      "1593": [
+        "frozen-entropy-branch-openings/1.0.0",
+        "step5-vp-reward-cap/1.0.0"
+      ],
+      "1594": [
+        "frozen-entropy-branch-openings/1.0.0",
+        "group-entropy-floors-low-branching/1.0.0",
+        "step5-vp-reward-cap/1.0.0"
+      ],
+      "1595": [
+        "step5-throughput-512-131072/1.0.0",
+        "step5-vp-reward-cap/1.0.0"
+      ],
+      "1596": [
+        "step5-throughput-512-131072/1.0.0",
+        "anchor-promotion-entropy-floors/1.0.0",
+        "snapshot-weight-zero-floor/1.0.0",
+        "step5-vp-reward-cap/1.0.0"
+      ],
+      "1597": [
+        "ppg-eight-iteration-replay/1.0.0",
+        "step5-vp-reward-cap/1.0.0"
+      ],
+      "1598": [
+        "step5-ppo-only-critic/1.0.0",
+        "step5-vp-reward-cap/1.0.0"
+      ],
+      "1599": [
+        "step5-ppo-only-critic/1.0.0",
+        "step5-ppo-batching-2048-524288/1.0.0",
+        "step5-vp-reward-cap/1.0.0"
+      ],
+      "1600": [
+        "step5-insolvency-event-cost/2.0.0",
+        "anchor-entropy-high-branching/1.0.0",
+        "snapshot-weight-fixed-one/1.0.0",
+        "step5-vp-reward-cap/1.0.0"
+      ],
+      "1601": [
+        "ppg-sixteen-step-acceptance/1.0.0",
+        "decoupled-opening-ppo/1.0.0",
+        "ordinary-zero-exploration/1.0.0",
+        "step5-vp-reward-cap/1.0.0"
+      ],
+      "1602": [
+        "step5-insolvency-event-cost/2.0.0",
+        "anchor-entropy-high-branching/1.0.0",
+        "snapshot-weight-fixed-one/1.0.0",
+        "ppg-sixteen-step-acceptance/1.0.0",
+        "decoupled-opening-ppo/1.0.0",
+        "ordinary-zero-exploration/1.0.0",
+        "step5-vp-reward-cap/1.0.0"
+      ],
+      "1603": [
+        "ppg-one-se-coverage/1.0.0",
+        "step5-vp-reward-cap/1.0.0"
+      ],
+      "1604": [
+        "step5-insolvency-event-cost/3.0.0",
+        "step5-vp-reward-cap/1.0.0"
+      ],
+      "1605": [
+        "step5-insolvency-event-cost/3.0.0",
+        "ppg-one-se-coverage/1.0.0",
+        "step5-vp-reward-cap/1.0.0"
       ]
     },
     "config_migration": {

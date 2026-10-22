@@ -96,7 +96,7 @@ def architecture_fingerprint():
     actual=digest({name:(Path(__file__).parent/name).read_text(encoding='utf-8').replace('\r\n','\n')
                    for name in ('model.py','utility_model.py','seat_descriptors.py','state_layout.py','local_entities.py','board_topology.py')})
     matches=[]
-    for name in ('architecture-source-equivalence.json','v11-selector-source-equivalence.json'):
+    for name in ('architecture-source-equivalence.json','v11-selector-source-equivalence.json','reward-source-equivalence.json'):
         receipt=read_json(CONFIG_DIR/name)
         keys(receipt,('format','original_sha256','equivalent_sha256','reason'))
         require(receipt['format']=='architecture-source-equivalence/1.0.0' and

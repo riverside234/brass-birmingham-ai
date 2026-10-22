@@ -1,0 +1,6 @@
+{
+  "format": "architecture-source-equivalence/1.0.0",
+  "original_sha256": "05368f9337d8a7a37459508f67d0bfd1c9092c4bc4a1e0d5c01748df1502f0d9",
+  "equivalent_sha256": "a5f30420696a8e79e1621bc381a515f8c61ddb9b87a72c5318436af8d5436234",
+  "reason": "Exact archived reward-v1 and IL forward behavior retained; the new VP clamp is conditional on an explicitly versioned reward-v2 spec. Parameter/buffer keys, shapes, heads and tensor interpretation are unchanged. New reward metadata changes model identity and requires reviewed continuation, target-cache invalidation and utility recalibration. Only this exact reviewed model source maps to the existing architecture identity."
+}

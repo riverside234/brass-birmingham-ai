@@ -276,6 +276,19 @@ INSOLVENCY = dict(event_cost=.020,max_cost=.080)
 INSOLVENCY_EVENT_CONFIG_MIGRATION = 'step5-insolvency-event-cost/1.0.0'
 INSOLVENCY_010_CONFIG_MIGRATION = 'step5-insolvency-event-cost/2.0.0'
 INSOLVENCY_020_CONFIG_MIGRATION = 'step5-insolvency-event-cost/3.0.0'
+VP_CAP_CONFIG_MIGRATION = 'step5-vp-reward-cap/1.0.0'
+
+
+def vp_cap_config(config):
+    """Explicit 180-VP reward migration; historical signed configs stay raw."""
+    from brass_ai.learning.reward import VP_CAP,specification
+    result=copy.deepcopy(config)
+    require('reward' in result,'VP cap requires combined-return training')
+    previous=specification(result['reward'],result['insolvency'])
+    require(result['search'].get('reward')==previous,'Search/learner rewards differ')
+    result['reward']['vp_cap']=VP_CAP
+    result['search']['reward']=specification(result['reward'],result['insolvency'])
+    return result
 
 
 def insolvency_event_config(config):
@@ -400,7 +413,7 @@ def latest_model_config(config,imitation_checkpoint):
     from .exploration import high_branch_config
     from .opening_objective import configure as configure_opening,zero_exploration
     from .ppg_config import coverage_options
-    return validate_config(coverage_options(configure_opening(zero_exploration(high_branch_config(insolvency_020_config(insolvency_010_config(result)))))))
+    return validate_config(vp_cap_config(coverage_options(configure_ppg(configure_opening(zero_exploration(high_branch_config(insolvency_020_config(insolvency_010_config(result)))))))))
 
 
 def champion_mix_config(config):

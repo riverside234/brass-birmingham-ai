@@ -97,6 +97,8 @@ def check_signature(state, signature, reviewed=False):
             handlers[INSOLVENCY_010_CONFIG_MIGRATION]=insolvency_010_config
             from .config import INSOLVENCY_020_CONFIG_MIGRATION,insolvency_020_config
             handlers[INSOLVENCY_020_CONFIG_MIGRATION]=insolvency_020_config
+            from .config import VP_CAP_CONFIG_MIGRATION,vp_cap_config
+            handlers[VP_CAP_CONFIG_MIGRATION]=vp_cap_config
             from .value_phase import CONFIG_MIGRATION as PPG_MIGRATION,refined_options
             handlers[PPG_MIGRATION]=refined_options
             from .value_phase import INTERVAL_MIGRATION,interval_options
@@ -162,13 +164,12 @@ def load_resume(root, run, state, signature, *, device='cpu', reviewed=False):
     path = safe(run, project_path(root, entry['path']))
     require(sha(path) == entry['sha256'], 'Snapshot changed')
     model, raw = load_checkpoint(path, device=device)
-    from .utility import reward_spec,cap_upgrade,event_cost_upgrade
+    from .utility import reward_spec,reviewed_reward_upgrade
     from brass_ai.learning.utility_model import utility_config
     expected=ModelConfig.preset(signature['config']['model_size'])
     target_reward=reward_spec(signature['config'])
     architecture_ok=model.config in (expected,utility_config(expected,target_reward))
-    upgrading=(cap_upgrade(getattr(model.config,'utility',None),target_reward) or
-               event_cost_upgrade(getattr(model.config,'utility',None),target_reward))
+    upgrading=reviewed_reward_upgrade(getattr(model.config,'utility',None),target_reward)
     if upgrading:
         require(model.config==utility_config(expected,model.config.utility),'Reward upgrade architecture differs')
         # The original reward must be bound either to the reviewed source we
