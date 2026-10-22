@@ -164,7 +164,7 @@ def diagnostics(model,current,heldout,config,update):
         descriptor_gain=dict(learner_ev_gain=ev-other if ev is not None and other is not None else None))
 
 
-def fit(model,optimizer,buffer,current,train_ids,heldout_ids,config,update,*,beta,snapshot_weight,dropout,run_phase,ppo_work,epoch_cap=None):
+def fit(model,optimizer,buffer,current,train_ids,heldout_ids,config,update,*,beta,snapshot_weight,dropout,run_phase,ppo_work,epoch_cap=None,companion=None):
     began=time.perf_counter()
     epoch_cap=config['max_epochs'] if epoch_cap is None else epoch_cap
     require(type(epoch_cap) is int and config['epoch_controller']['minimum']<=epoch_cap<=config['epoch_controller']['maximum'],
@@ -184,6 +184,13 @@ def fit(model,optimizer,buffer,current,train_ids,heldout_ids,config,update,*,bet
         budget_steps_attempted=0,beta_clone_final=beta,beta_retries=0,
         adam_reset=dict(reset=False),applied_lr_min=None,applied_lr_max=None,last_attempted_lr=None,
         scope='Auxiliary phase every eight committed iterations with uniform age weights. GAE retains PPO work evidence plus auxiliary KL safeguards; current-only holdout gates never recount older games.')
+    report.update(policy_guard_seconds=0.,heldout_evaluation_seconds=0.,core_optimizer_seconds=0.,core_gradient_norm_max=0.)
+    def measured_losses(ds,ids):
+        start=time.perf_counter();result=losses(model,ds,ids,update)
+        report['heldout_evaluation_seconds']+=time.perf_counter()-start;return result
+    def measured_probe():
+        start=time.perf_counter();result=reference.probes(model)
+        report['policy_guard_seconds']+=time.perf_counter()-start;return result
     if not run_phase:
         model.utility_calibration=None
         report.update(diagnostics(model,current,heldout_ids,config,update),seconds=time.perf_counter()-began)
@@ -194,6 +201,7 @@ def fit(model,optimizer,buffer,current,train_ids,heldout_ids,config,update,*,bet
             if v is not None:peak[k]=max(peak.get(k) or 0,v)
     with buffer.datasets(current.device) as (ds,policy,receipts):
         train,held,validation,ages,support=layout(ds,receipts,config,snapshot_weight)
+        if companion is not None and companion.active:companion.inventory(ds,[i for group in train.values() for i in group])
         report['age_support']=support
         if len(receipts)<config['phase_interval'] or not validation:
             report['early_stop_reason']='insufficient_fresh_holdouts'
@@ -206,7 +214,7 @@ def fit(model,optimizer,buffer,current,train_ids,heldout_ids,config,update,*,bet
         if report['early_stop_reason']:
             model.utility_calibration=None;report.update(diagnostics(model,current,heldout_ids,config,update))
             report.update(seconds=time.perf_counter()-began,memory=peak);return report
-        before_losses=losses(model,ds,held,update);best_games=by_game(ds,{i:before_losses[i] for i in validation})
+        before_losses=measured_losses(ds,held);best_games=by_game(ds,{i:before_losses[i] for i in validation})
         report['heldout_before']=value_phase.metrics(model,current,heldout_ids,update,evidence=True)
         report['heldout_loss_by_age_before']=age_metrics(ds,before_losses,ages)
         report['acceptance_games']=len(best_games);report['acceptance_generations']=[r['generation'] for r in receipts[:config['validation_iterations']]]
@@ -216,12 +224,14 @@ def fit(model,optimizer,buffer,current,train_ids,heldout_ids,config,update,*,bet
             previous_max_step=max(previous_steps,default=0),generation=receipts[0]['generation'],
             scope='Reset value Adam moments/step counters once at phase start; PPO Adam unchanged. Best-state rollback stays within this phase.')
         optimizer.state.clear();optimizer.zero_grad(set_to_none=True)
+        if companion is not None:companion.begin('ppg',reset=True)
         for group in optimizer.param_groups:group['lr']=config['learning_rate']
         best_model=copy.deepcopy(model.state_dict());best_adam=copy.deepcopy(optimizer.state_dict())
+        best_aux=companion.snapshot() if companion is not None else None
         selection=None
         if ppg_config.coverage(config):
             from .ppg_selection import Selection
-            selection=Selection(model,optimizer,best_games)
+            selection=Selection(model,optimizer,best_games,companion=companion)
         counts={str(a):len(ids) for a,ids in train.items()};rows=sum(counts.values())
         steps_per_epoch=math.ceil(rows/config['batch_size'])
         report.update(weighted_rows=rows,rows_per_epoch=rows,planned_presentations=rows*epoch_cap,
@@ -254,21 +264,30 @@ def fit(model,optimizer,buffer,current,train_ids,heldout_ids,config,update,*,bet
                     report['applied_lr_max']=max(report['applied_lr_max'] or rate,rate)
                     report['last_attempted_lr']=rate
                     optimizer.zero_grad(set_to_none=True);model.eval()
+                    if companion is not None:companion.begin('ppg',rate_factor=rate/config['learning_rate'])
                     for part,ix,inputs in ds.value_batches(value_phase.value_parts(ds,batch,update,model),model):
-                        with autocast(update,ds.device):out=value_output(model,inputs,ds,ix,dropout=active_dropout)
+                        with autocast(update,ds.device):
+                            if companion is not None:out,local_loss=companion.forward(model,inputs,ds,ix,dropout=active_dropout)
+                            else:out,local_loss=value_output(model,inputs,ds,ix,dropout=active_dropout),None
                         loss=value_losses(out,tuple(t[ix] for t in ds.targets))[0]+(out[4].float()-ds.utility[ix]).square().mean(-1)
+                        if local_loss is not None:
+                            loss=loss+local_loss
+                            companion.account_loss(local_loss,ds.critic_weights[ix],len(batch),'ppg')
                         ((loss*ds.critic_weights[ix]).sum()/len(batch)).backward()
                     # Eval mode freezes stochastic layers; gradients remain on.
                     for part in policy.microbatches(sample,update['microbatch_size'],update['max_candidate_cells'],update['bucket']):
                         _,inputs,_=policy.batch(part)
                         with autocast(update,policy.device):loss=reference.loss(part,inputs,model)
                         (beta*loss.sum()/len(sample)).backward()
-                    torch.nn.utils.clip_grad_norm_(model.parameters(),update['grad_clip'],error_if_nonfinite=True)
-                    optimizer.step();attempted+=1;report['attempted_steps']+=1
+                    norm=torch.nn.utils.clip_grad_norm_(model.parameters(),update['grad_clip'],error_if_nonfinite=True)
+                    report['core_gradient_norm_max']=max(report['core_gradient_norm_max'],float(norm))
+                    start_optimizer=time.perf_counter();optimizer.step();report['core_optimizer_seconds']+=time.perf_counter()-start_optimizer
+                    attempted+=1;report['attempted_steps']+=1
+                    if companion is not None:companion.step('ppg')
                     report['budget_steps_attempted']=max(report['budget_steps_attempted'],position)
                     report['attempted_value_presentations']+=len(batch)
                     report['attempted_clone_presentations']+=len(sample)
-                    probe=reference.probes(model);maximum=max(maximum,probe['overall']);maximum_age0=max(maximum_age0,probe['age0'])
+                    probe=measured_probe();maximum=max(maximum,probe['overall']);maximum_age0=max(maximum_age0,probe['age0'])
                     sample_memory()
                     if probe['overall']>config['kl_cap'] or probe['age0']>config['kl_cap']:
                         report['kl_guard_tripped']=True;trip=True;break
@@ -276,12 +295,13 @@ def fit(model,optimizer,buffer,current,train_ids,heldout_ids,config,update,*,bet
                 if not trip:break
                 # Unsafe weights are diagnostic only. More cloning pressure is
                 # justified only if their paired held-out value loss improved.
-                unsafe=paired(best_games,by_game(ds,losses(model,ds,validation,update)))
+                unsafe=paired(best_games,by_game(ds,measured_losses(ds,validation)))
                 retry=unsafe['improved'] and not unsafe['reject'] and beta<config['beta_clone_max']
                 before_beta=beta
                 if retry:
                     beta=min(config['beta_clone_max'],2*beta);report['beta_retries']+=1
                 model.load_state_dict(best_model);optimizer.load_state_dict(best_adam)
+                if companion is not None:companion.restore(best_aux)
                 working=list(best_used);working_clones=list(best_clones);working_steps=report['optimizer_steps']
                 report['interval_reports'].append(dict(epoch=epoch+1,attempted_steps=attempted,accepted=False,
                     reason='policy_kl_cap',probe=probe,unsafe_paired=unsafe,retry=retry,beta_before=before_beta,beta_after=beta,last_lr=rate))
@@ -291,7 +311,7 @@ def fit(model,optimizer,buffer,current,train_ids,heldout_ids,config,update,*,bet
                     break
             if trip:break
             if end_epoch:report['epochs_completed']=epoch+1
-            now=by_game(ds,losses(model,ds,validation,update));comparison=paired(best_games,now)
+            now=by_game(ds,measured_losses(ds,validation));comparison=paired(best_games,now)
             improved=comparison['improved'] and not comparison['reject']
             retained=False
             if selection is not None:
@@ -307,6 +327,7 @@ def fit(model,optimizer,buffer,current,train_ids,heldout_ids,config,update,*,bet
                     outcome='improved' if improved else 'failed' if comparison['reject'] else 'neutral')
             if improved:
                 best_model=copy.deepcopy(model.state_dict());best_adam=copy.deepcopy(optimizer.state_dict());best_games=now
+                best_aux=companion.snapshot() if companion is not None else None
                 best_used=list(working);best_clones=list(working_clones);report['optimizer_steps']=working_steps
                 report['best_budget_step']=epoch*steps_per_epoch+start+len(block)
                 checks_without_best=0;accepted_checks+=1
@@ -317,19 +338,21 @@ def fit(model,optimizer,buffer,current,train_ids,heldout_ids,config,update,*,bet
                 if selection is not None and not comparison['reject']:accepted_checks+=1
                 if comparison['reject']:
                     rejected_checks+=1;model.load_state_dict(best_model);optimizer.load_state_dict(best_adam)
+                    if companion is not None:companion.restore(best_aux)
                     working=list(best_used);working_clones=list(best_clones);working_steps=report['optimizer_steps']
                 if checks_without_best>=config['patience']:
                     report['early_stop_reason']='validation_patience';break
         if selection is None:
             model.load_state_dict(best_model);optimizer.load_state_dict(best_adam)
+            if companion is not None:companion.restore(best_aux)
         else:
             selection.restore(model,optimizer)
             best_used=selection.rows;best_clones=selection.clones
             report['optimizer_steps']=selection.steps;report['selection']=selection.report()
         optimizer.zero_grad(set_to_none=True);model.eval()
-        final_probe=reference.probes(model)
+        final_probe=measured_probe()
         require(final_probe['overall']<=config['kl_cap'] and final_probe['age0']<=config['kl_cap'],'Retained PPG checkpoint exceeds KL guard')
-        after_losses=losses(model,ds,held,update);used=set(best_used)
+        after_losses=measured_losses(ds,held);used=set(best_used)
         calibration_after=value_phase.metrics(model,current,train_ids,update) if used else calibration_before
         model.utility_calibration=(dict(version=config['contract'],reward_id=digest(model.config.utility),
             ready=calibration_after['utility_mse']<=calibration_before['utility_mse']+1e-8,

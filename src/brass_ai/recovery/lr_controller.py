@@ -16,11 +16,21 @@ CONTRACT='ppo-categorical-kl-lr/1.1.0'
 AUTO_CONTRACT='ppo-categorical-kl-lr/1.2.0'
 GROUP_FIELDS=frozenset(('anchor_group_kl_budget','anchor_group_min_positions'))
 DEFAULT_CONTROLLER=dict(contract=CONTRACT,mode='apply',target_kl=.01,
-    raise_factor=1.25,cut_divisor=1.5,low_ratio=.45,high_ratio=1.5,
+    raise_factor=1.25,cut_divisor=1.5,low_ratio=.50,high_ratio=1.5,
     window_iterations=3,cooldown_iterations=3,min_multiplier=.5,max_multiplier=3.,
     anchor_kl_budget=.15,anchor_group_kl_budget=.30,anchor_group_min_positions=64,
     vp_max_drop=.10,zero_vp_max_fraction=.05)
 AUTO_CONTROLLER=dict(DEFAULT_CONTROLLER,contract=AUTO_CONTRACT)
+THRESHOLD_MIGRATION='ppo-lr-raise-half-target/1.0.0'
+
+
+def threshold_config(config):
+    """Explicit reviewed config change; never reset checkpointed LR evidence."""
+    result=copy.deepcopy(config)
+    controller=validate_config(result['ppo_lr_controller'],result['update'])
+    require(controller['low_ratio'] in (.45,.50),'LR threshold hotfix requires the existing 45% or 50% threshold')
+    controller['low_ratio']=.50
+    return result
 
 
 def finite(value):
@@ -207,6 +217,7 @@ def decide(state,measurements):
                     state['window']=[];decision,reason='up','low_median_and_healthy'
                 else:reason='health_check_failed'
     report=dict(contract=cfg['contract'],mode=cfg['mode'],kl=kl if finite(kl) else None,
+        target_kl=cfg['target_kl'],raise_below_ratio=cfg['low_ratio'],raise_below_kl=cfg['low_ratio']*cfg['target_kl'],
         median_kl=window_median,window_size=window_size,early_stop=measurements['early_stop'],steps_done=done,steps_planned=planned,
         steps_fraction=done/planned if planned else None,warmup_done=measurements['warmup_done'],
         multiplier_before=before,multiplier_after=state['multiplier'],decision=decision,reason=reason,

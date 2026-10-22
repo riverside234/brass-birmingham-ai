@@ -387,6 +387,7 @@ def latest_model_config(config,imitation_checkpoint):
     # exact source/config reviews and their separately versioned migrations.
     result['ppo_lr_controller']=dict(AUTO_CONTROLLER,**result.get('ppo_lr_controller',{}))
     result['ppo_lr_controller']['contract']=AUTO_CONTRACT
+    result['ppo_lr_controller']['low_ratio']=AUTO_CONTROLLER['low_ratio']
     if result['ppo_lr_controller']['contract']==AUTO_CONTRACT:
         result.setdefault('il_kl_limit',copy.deepcopy(AUTO_IL_KL))
         result['il_kl_limit']=current_il_kl_config(result['il_kl_limit'])
@@ -413,7 +414,11 @@ def latest_model_config(config,imitation_checkpoint):
     from .exploration import high_branch_config
     from .opening_objective import configure as configure_opening,zero_exploration
     from .ppg_config import coverage_options
-    return validate_config(vp_cap_config(coverage_options(configure_ppg(configure_opening(zero_exploration(high_branch_config(insolvency_020_config(insolvency_010_config(result)))))))))
+    result=vp_cap_config(coverage_options(configure_ppg(configure_opening(zero_exploration(high_branch_config(insolvency_020_config(insolvency_010_config(result))))))))
+    from .local_scoring_auxiliary import DEFAULT as LOCAL_SCORING
+    result['local_scoring_auxiliary']=copy.deepcopy(LOCAL_SCORING)
+    result['branching']['rate_per_decision']=.010
+    return validate_config(result)
 
 
 def champion_mix_config(config):
@@ -550,6 +555,11 @@ def validate_config(config):
         'search_ready_games','search_every_games','search_games','distill_steps','distill_weight',
         'rehearsal_manifest','rehearsal_weight','rehearsal_until','profile_steps'}
     version=config.get('format')
+    if 'local_scoring_auxiliary' in config:
+        from .local_scoring_auxiliary import validate_config as validate_local
+        fields.add('local_scoring_auxiliary');validate_local(config['local_scoring_auxiliary'])
+        require(config.get('architecture')=='brass-four-seat-mlp-resnet/11.2.0' and 'critic_data' in config,
+                'Local scoring requires the v11.2 descriptor critic')
     from .exploration import validate as validate_exploration,BLOCKS
     validate_exploration(config)
     if 'opening_objective' in config.get('update',{}):

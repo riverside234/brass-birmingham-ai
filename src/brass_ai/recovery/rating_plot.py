@@ -9,7 +9,7 @@ from statistics import fmean
 
 
 DEFAULT_MAX_POINTS = 30
-RECENT_GENERATIONS = 100
+RECENT_GENERATIONS = 200
 
 
 def display_points(generations, scores, max_points=DEFAULT_MAX_POINTS):
@@ -172,9 +172,9 @@ def render(report, output, *, preview=None, agents=None, max_points=DEFAULT_MAX_
     amber = '#9C753F'; grid = '#E5ECEE'; paper = '#F6F8F7'
     with plt.rc_context({'font.family': 'DejaVu Sans', 'font.size': 10,
             'text.color': ink, 'axes.labelcolor': muted, 'xtick.color': muted, 'ytick.color': muted,
-            'svg.fonttype': 'none', 'svg.hashsalt': 'brass-pl-progress-v7',
+            'svg.fonttype': 'none', 'svg.hashsalt': 'brass-pl-progress-v8',
             'axes.unicode_minus': False, 'lines.solid_capstyle': 'round'}):
-        fig = plt.figure(figsize=(14.4, 8.4), facecolor=paper)
+        fig = plt.figure(figsize=(18., 8.4), facecolor=paper)
         try:
             text = fig.text
             text(.055, .975, 'BRASS BIRMINGHAM  /  SELF-PLAY', fontsize=7.4, weight='bold', color=muted)
@@ -229,8 +229,8 @@ def render(report, output, *, preview=None, agents=None, max_points=DEFAULT_MAX_
 
             history_subtitle = (f'{len(shown)} points / {len(points)} checkpoints · adjacent averages'
                                 if averaged else f'{len(points)} exact checkpoints · maximum {max_points} points')
-            ax = panel([.075, .190, .523, .527], 'Full training history', history_subtitle)
-            detail = panel([.709, .190, .239, .527], 'Recent progress',
+            ax = panel([.075, .190, .460, .527], 'Full training history', history_subtitle)
+            detail = panel([.635, .190, .313, .527], 'Recent progress',
                            f'g{recent_start}–g{latest} · exact points · separate y-axis')
             ax.set_xlim(-max(1, latest * .015), latest + max(5, latest * .025))
             ax.set_xticks(_ticks(0, latest, 7))

@@ -137,6 +137,11 @@ def plan_collection(root,directory,state,config,signature,service,current,profil
                 policy_ids=[policies[(s-rotation)%4]['policy_id'] for s in range(4)])
         jobs.append(dict(index=i,seed=seed,rotation=rotation,sampling_seed=config['seed']*7+index,
             policies=policies,focuses=focuses,path=str(directory/f'actor-{i:06d}.jsonl.gz'),provenance=provenance))
+        if config.get('local_scoring_auxiliary',{}).get('mode','off')!='off':
+            from .local_scoring_targets import identity
+            from .host_runtime import local_scoring_host
+            recorder=local_scoring_host(root)
+            provenance['local_scoring']=dict(identity(),producer=dict(runtime_sha256=sha(recorder/'runtime.json'),host_sha256=sha(recorder/'BrassHost.exe')))
         if exploration and exploration['version']==3:
             jobs[-1]['stable_game_id']=digest(dict(seed=seed,index=index,collection=digest(signature)))
             if kind=='selfplay' and exploration['branching']:

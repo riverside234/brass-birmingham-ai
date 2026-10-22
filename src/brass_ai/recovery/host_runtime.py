@@ -10,18 +10,28 @@ _lock=threading.Lock()
 _ready={}
 
 def training_host(root,kind='ordinary'):
+    return _install_host(root,kind,'throughput','training-host')
+
+
+def local_scoring_host(root):
+    """No fallback: apply-mode labels require this separately pinned capability."""
+    return _install_host(root,'ordinary','local-scoring','local-scoring-host')
+
+
+def _install_host(root,kind,package,builder):
     root=Path(root).resolve()
     require(kind in ('ordinary','search'),'Unknown training host kind')
-    source=project_path(root,'training/runtime/throughput/'+kind)
+    source=project_path(root,'training/runtime/'+package+'/'+kind)
     if not (source/'runtime.json').exists():
+        require(package=='throughput','Local scoring runtime missing; run scripts/build-local-scoring-host.py')
         # Older installations remain usable; the guide makes the selected
         # runtime and missing fast-path package visible in preflight.
         return project_path(root,'artifacts/r4-host' if kind=='search' else 'artifacts/r1-host/guarded')
     metadata=project_path(root,source/'runtime.json')
-    identity=sha(metadata);key=(str(root),kind,identity)
+    identity=sha(metadata);key=(str(root),package,kind,identity)
     with _lock:
         manifest=read_json(metadata)
-        out=project_path(root,'artifacts/training-host/'+kind)
+        out=project_path(root,'artifacts/'+builder+'/'+kind)
         project_path(root,out/'runtime.json')
         base=project_path(root,'artifacts/r1-host/guarded')
         for entry in manifest['files']:
@@ -31,9 +41,9 @@ def training_host(root,kind='ordinary'):
         # Cached setup may skip repeated DLL hashes, never path containment.
         if key in _ready:return _ready[key]
         original=read_json(project_path(root,base/'runtime.json'))
-        require(manifest['optimization']=='training-host/1.0.0' and manifest['kind']==kind,'Unknown training runtime')
+        require(manifest['optimization']==builder+'/1.0.0' and manifest['kind']==kind,'Unknown training runtime')
         import hashlib
-        require(hashlib.sha256((root/'scripts/build-training-host.py').read_text(encoding='utf-8-sig').replace('\r\n','\n').encode()).hexdigest()==manifest['builder_sha256'],
+        require(hashlib.sha256((root/('scripts/build-'+builder+'.py')).read_text(encoding='utf-8-sig').replace('\r\n','\n').encode()).hexdigest()==manifest['builder_sha256'],
                 'Training builder changed; rebuild additive runtime')
         for relative,expected in manifest['authored_sources'].items():
             path=project_path(root,relative)

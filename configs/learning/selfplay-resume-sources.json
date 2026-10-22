@@ -678710,6 +678710,62 @@
       "config_migrations_ref": "1605",
       "reason_ref": "137",
       "reviewed_evidence": "ai-research/VP_REWARD_CAP_180.md"
+    },
+    {
+      "from_implementation": "b95f45e2b0be6672a4efb7a3cabf9e2fab3e152a667e7f229b6c09ab5cb01c71",
+      "to_implementation": "cb165c0d852ca79dfd3df2c40483dc7e06bf6dd988d94755ecd1cb597cc3a6af",
+      "learning_compatibility_ref": "5",
+      "local_scoring_changes": true,
+      "reason_ref": "138"
+    },
+    {
+      "from_implementation": "cb165c0d852ca79dfd3df2c40483dc7e06bf6dd988d94755ecd1cb597cc3a6af",
+      "to_implementation": "cb165c0d852ca79dfd3df2c40483dc7e06bf6dd988d94755ecd1cb597cc3a6af",
+      "learning_compatibility_ref": "5",
+      "local_scoring_changes": true,
+      "reason_ref": "138"
+    },
+    {
+      "from_implementation": "b95f45e2b0be6672a4efb7a3cabf9e2fab3e152a667e7f229b6c09ab5cb01c71",
+      "to_implementation": "c33ff1ba936905fe06c4b6436d316a5073c9049be4a8d8d0e9c734f87e071314",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "139",
+      "local_scoring_changes": true
+    },
+    {
+      "from_implementation": "b95f45e2b0be6672a4efb7a3cabf9e2fab3e152a667e7f229b6c09ab5cb01c71",
+      "to_implementation": "c33ff1ba936905fe06c4b6436d316a5073c9049be4a8d8d0e9c734f87e071314",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "139",
+      "config_migrations_ref": "1606"
+    },
+    {
+      "from_implementation": "cb165c0d852ca79dfd3df2c40483dc7e06bf6dd988d94755ecd1cb597cc3a6af",
+      "to_implementation": "c33ff1ba936905fe06c4b6436d316a5073c9049be4a8d8d0e9c734f87e071314",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "139",
+      "local_scoring_changes": true
+    },
+    {
+      "from_implementation": "cb165c0d852ca79dfd3df2c40483dc7e06bf6dd988d94755ecd1cb597cc3a6af",
+      "to_implementation": "c33ff1ba936905fe06c4b6436d316a5073c9049be4a8d8d0e9c734f87e071314",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "139",
+      "config_migrations_ref": "1606"
+    },
+    {
+      "from_implementation": "c33ff1ba936905fe06c4b6436d316a5073c9049be4a8d8d0e9c734f87e071314",
+      "to_implementation": "c33ff1ba936905fe06c4b6436d316a5073c9049be4a8d8d0e9c734f87e071314",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "139",
+      "local_scoring_changes": true
+    },
+    {
+      "from_implementation": "c33ff1ba936905fe06c4b6436d316a5073c9049be4a8d8d0e9c734f87e071314",
+      "to_implementation": "c33ff1ba936905fe06c4b6436d316a5073c9049be4a8d8d0e9c734f87e071314",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "139",
+      "config_migrations_ref": "1606"
     }
   ],
   "definitions": {
@@ -678851,7 +678907,9 @@
       "134": "Reviewed optional g503 follow-up: enable versioned eight-age PPG with sixteen-step acceptance and patience one; retain cadence/holdouts, raw post-PPO cloning, both .002 KL caps, beta/epoch controllers and phase-only Adam reset. Opening-only PPO uses frozen old raw T1 probabilities and detached capped old-T1/actual-behavior weights without normalization; actual T2/epsilon likelihood checks and legal/forced masks remain. Separate raw T1 and behavior exact KL guards, explicit provenance and incompatible-cache rejection; no old replay relabeled. Explicit epsilon .02->0 retains probabilistic openings and branch rules. Composes with reviewed .010/.075 reward, .015 branching and fixed snapshot weight 1. Both Adams, RNG, progress, GAE, original entropy/economic baselines, anchor/probe, population and lineage preserved. Old contracts retain their prior semantics. Model/IL/feature layout unchanged; unrelated chart edits retained.",
       "135": "Reviewed g540 continuation: versioned one-SE PPG coverage selection with a monotonically improving minimum-loss reference and matching retained weights/Adam. Neutral intervals do not count as failures; ordinary learner parent-game paired evidence spans all eight ages. Both .002 raw-policy KL safeguards remain per-step and independent. Explicit fresh PPG cache/schedule origin at committed progress; epoch cap hotfix two and adaptive minimum two, maximum six. Audit owned caches before startup cleanup after durable source/config adoption. Preserve weights, both Adams, beta, RNG, PPO/LR/GAE, baselines, ordinary counters, population and lineage. Explicit .010/.075->.020/.080 insolvency event/cap change, matching search reward, fresh utility calibration and no reuse/relabeling of old MC targets. Archived migrations retain their original semantics; model/IL/feature compatibility unchanged.",
       "136": "Reviewed self-play debug fix: unfinished PL slots after a verified source transition use a deterministic fresh evidence directory. Preserve old source evidence and validate the full transition chain; same-source specification changes still fail closed. Compaction/retention follow verified actual slot directories, with old archives supported. No PPO/PPG/reward/exploration/evaluation recipe changes; preserve model weights, both Adams, RNG, counters, caches, baselines, population and lineage. Carry exact existing archived resume routes, including the omitted g320/g412 input-cache routes; no arbitrary config edits.",
-      "137": "Reviewed VP-180 reward revision: versioned combined return v2 caps only the additive VP component and utility prior at 180; win, placement, official scores/targets and existing insolvency coefficients remain unchanged. Archived v1 objectives retain exact semantics. Explicit continuation preserves all parameter/optimizer tensors, RNG, progress, IL identity, population and baselines. Utility calibration is invalidated; old-target PPG caches are excluded and audited/deleted only after durable adoption, with eight fresh collections before the next phase. Preserve the attained epoch cap/beta and reset only target-dependent PPG schedule/evidence. Matching search/provenance and current fresh-config generation; no arbitrary configuration edits and no relabeling cached old targets."
+      "137": "Reviewed VP-180 reward revision: versioned combined return v2 caps only the additive VP component and utility prior at 180; win, placement, official scores/targets and existing insolvency coefficients remain unchanged. Archived v1 objectives retain exact semantics. Explicit continuation preserves all parameter/optimizer tensors, RNG, progress, IL identity, population and baselines. Utility calibration is invalidated; old-target PPG caches are excluded and audited/deleted only after durable adoption, with eight fresh collections before the next phase. Preserve the attained epoch cap/beta and reset only target-dependent PPG schedule/evidence. Matching search/provenance and current fresh-config generation; no arbitrary configuration edits and no relabeling cached old targets.",
+      "138": "Reviewed local-scoring companion and passive pinned recorder, exact g560-config adoption plus branching 0.010; core/IL/inference unchanged. Durable fresh PPG buffer/clock/vote reset preserves other state; later changes permit mode only. Resume tolerates roundoff at scheduled value-Adam LR endpoints without changing saved rates. Includes concurrent display-only rating plot width/recent-window revision. No transitive approval.",
+      "139": "Reviewed auxiliary debug fixes: preserve decision revision across CPU ingress/PPG cache; remove collection planner hash-import shadowing. Core model/target contracts and recorder unchanged. User confirms g560 remains unrun: initial companion adoption also changes ONLY LR low_ratio .45 to .50 and branching .015 to .010; its explicit fresh-PPG origin remains g560 with first phase g568. Preserve later mode-only changes; separately permit ONLY low_ratio .45 to .50 from committed g560. Preserve multiplier/window/cooldown, Adam/RNG and all unrelated gates/progress."
     },
     "config_changes": {
       "0": {
@@ -700207,6 +700265,9 @@
         "step5-insolvency-event-cost/3.0.0",
         "ppg-one-se-coverage/1.0.0",
         "step5-vp-reward-cap/1.0.0"
+      ],
+      "1606": [
+        "ppo-lr-raise-half-target/1.0.0"
       ]
     },
     "config_migration": {

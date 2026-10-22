@@ -78,6 +78,10 @@ def compact(report):
     out=scalars(report,('format','iteration','games_done','cumulative_games','incoming_model_id','post_update_model_id',
                        'incoming_policy_id','elapsed_seconds','games','failed_games','promotion_eligible'))
     out['summary_version']=6 if report.get('value_phase') is not None or 'gae' in report.get('actor',{}) else 5
+    if 'local_scoring_auxiliary' in report:out['local_scoring_auxiliary']=report['local_scoring_auxiliary']
+    if 'local_scoring_adoption' in report:
+        r=report['local_scoring_adoption']
+        out['local_scoring_adoption']={k:r[k] for k in ('contract','origin','new_origin','next_phase','cleanup_complete','cleanup')}
     for key in ('il_kl_limit','policy_anchor','anchor_transition','rating_coverage','rehearsal_schedule','health_counts','quality_pool','strength_rating','value_phase','seat_fingerprints','gate_diagnostics',
                 'exploration_rollout','entropy_control','entropy_floor_transition','exploration_metrics','temperature_rating','v4_share_gate','panel_gates'):
         if key in report:out[key]=report[key]

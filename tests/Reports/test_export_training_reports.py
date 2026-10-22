@@ -41,6 +41,26 @@ class ExportTests(unittest.TestCase):
     def export(self, **kwargs):
         return reports.export(self.root, self.run, **kwargs)
 
+    def test_local_scoring_contract_receipt_metrics_without_payload_cache(self):
+        self.state['signature']['config']['local_scoring_auxiliary']={'mode':'apply'}
+        receipt={k:{} for k in ('origin','checkpoint','old_schedule','old_epoch_control','cleanup')}
+        receipt.update(contract='local-scoring-adoption/1.0.0',config_sha256='a'*64,
+            old_cache_receipts_sha256='b'*64,new_origin=60,next_phase=68,cleanup_complete=True,
+            old_cache_files=[dict(path='.ppg-eight-cache/generation-000060.critic.npy',bytes=10)],
+            old_cache_metadata=dict(path='local-scoring/adoption-g000060.json',sha256='c'*64,bytes=20))
+        self.state['local_scoring_adoption']=receipt;self.put(self.run+'/state.json',self.state)
+        runtime=self.put('training/runtime/local-scoring/ordinary/runtime.json',dict(contract='fixture'))
+        self.put(self.run+'/.ppg-eight-cache/generation-000060.local-scoring.json',dict(dense='excluded'))
+        metric=dict(mode='apply',shared_gradient_scale=.2,retained=dict(rows=20))
+        report=self.put(self.run+'/iteration-0059/report.json',dict(iteration=59,local_scoring_auxiliary=metric))
+        output,manifest=self.export()
+        compact=json.loads((output/'local-scoring-adoption.json').read_text())
+        self.assertNotIn('old_cache_files',compact);self.assertEqual(compact['old_cache_metadata'],receipt['old_cache_metadata'])
+        self.assertEqual((output/'contracts/local-scoring-runtime.json').read_bytes(),runtime.read_bytes())
+        self.assertEqual((output/'iteration-0059/report.json').read_bytes(),report.read_bytes())
+        self.assertFalse((output/'.ppg-eight-cache').exists())
+        self.assertIn('local-scoring-adoption.json',manifest['generated'])
+
     def test_committed_temperature_comparison_and_evidence_are_exported(self):
         directory=self.run+'/ratings/temperature/generation-000050/'
         spec=self.put(directory+'spec.json',dict(temperatures=[1.,.7]))

@@ -148,6 +148,12 @@ def policy_encoder(policy,fallback=None):
 def run_game(host,job,policies,timings,max_decisions,admission=None,encoder=None,submit_branch=None):
     pins=read_json(CONFIG_DIR/'host-1.0.0.json')
     with timings.phase('host.reset'): context=host.reset(job['seed'])
+    if 'local_scoring' in job['provenance']:
+        from .local_scoring_targets import CONTRACT
+        producer=dict(runtime_sha256=sha(host.runtime_directory/'runtime.json'),host_sha256=sha(host.runtime_directory/'BrassHost.exe'))
+        require(producer==job['provenance']['local_scoring']['producer'],'Local scoring runtime differs from collection provenance')
+        require(host.call('capabilities').get('local_scoring')==CONTRACT,'Local scoring recorder required')
+        host.call('local_scoring_enable')
     if hasattr(host,'enable_fastpath') and not host.fast_checked:host.enable_fastpath()
     assigned=[policies[(seat-job.get('rotation',0))%4] for seat in range(4)]
     group=digest(dict(rules=pins['rules'],setup_seed=job['seed']))
@@ -273,6 +279,10 @@ def _run_turns(host,job,assigned,timings,max_decisions,context,game,rngs,encoded
     require(context['terminal'],'Decision cap reached; incomplete game excluded')
     with timings.phase('host.result'): game['result']=host.call('result')
     terminal_targets(game['result'])
+    if 'local_scoring' in job['provenance']:
+        from .local_scoring_targets import bind,FIELD
+        with timings.phase('host.local_scoring'):
+            game[FIELD]=bind(host.call('local_scoring_targets'),game,job['provenance']['local_scoring']['producer'])
     if job.get('branching'):
         game['branch_statistics']=dict(eligible_decisions=eligible_count)
     result=CheckedGame(game).bind(encoded)

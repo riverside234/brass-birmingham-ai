@@ -57,6 +57,9 @@ def prepared(games, predicate=None, neutral=False, insolvency=None, reward=None,
                     r=annotate(r,encoded,game.critic_table,game.table_kind)
                 if 'branch' in game:
                     r=dict(r,_branch=True,_parent_game_id=game['branch']['parent_game_id'])
+                if 'local_scoring_targets' in game:
+                    from .local_scoring_targets import row_target
+                    r=dict(r,_local_scoring=row_target(game,r))
                 data.append((r, target, (game['game_id'],row['seat']), encoded))
             elif costs is not None and hasattr(game,'encoded'):
                 # Opponent observations also determine the learner's causal
@@ -535,6 +538,8 @@ def _ppo_nonforced(model,optimizer,games,behavior,config,*,profile,profile_steps
                 if critic_cursor>=critic_count: critic_order=[critic_ids[j] for j in torch.randperm(critic_count).tolist()];critic_cursor=0
                 crit=critic_order[critic_cursor:critic_cursor+config['critic_batch_size']];critic_cursor+=len(crit)
                 optimizer.zero_grad(set_to_none=True);model.train()
+                companion=getattr(phases,'local_scoring',None)
+                if companion is not None:companion.begin('ppo')
                 with timings.phase('ppo.forward_backward'):
                     parts=ds.microbatches(batch,config['microbatch_size'],config['max_candidate_cells'],config['bucket'])
                     for part,ix,inputs,q in ds.policy_batches(parts,behavior.exploration,executor):
@@ -554,14 +559,20 @@ def _ppo_nonforced(model,optimizer,games,behavior,config,*,profile,profile_steps
                     parts=critic_ds.microbatches(crit,config['microbatch_size'],config['max_candidate_cells'],config['bucket'])
                     for part,ix,inputs in critic_ds.value_batches(parts,model,executor):
                         with autocast(config,device):
-                            out=value_output(model,inputs,critic_ds,ix,dropout=phases.dropout(epoch,'ppo') if phases is not None else None)
+                            drop=phases.dropout(epoch,'ppo') if phases is not None else None
+                            if companion is not None:out,local_loss=companion.forward(model,inputs,critic_ds,ix,dropout=drop)
+                            else:out,local_loss=value_output(model,inputs,critic_ds,ix,dropout=drop),None
                         values=value_losses(out,tuple(t[ix] for t in critic_ds.targets))
                         loss=values[0]
                         if critic_ds.utility is not None:
                             diff=out[4].float()-critic_ds.utility[ix]
                             utility_squared+=diff.detach().square().sum();utility_absolute+=diff.detach().abs().sum()
                             loss=loss+diff.square().mean(-1)
-                        (config['value_weight']*(loss*critic_ds.critic_weights[ix]).sum()/len(crit)).backward()
+                        combined=config['value_weight']*loss
+                        if local_loss is not None:
+                            combined=combined+local_loss
+                            companion.account_loss(local_loss,critic_ds.critic_weights[ix],len(crit),'ppo')
+                        ((combined*critic_ds.critic_weights[ix]).sum()/len(crit)).backward()
                         value_totals+=torch.stack([v.detach().sum() for v in values]);critic_seen+=len(part)
                     if demo:
                         sample=torch.randint(len(demo.data),(min(config['effective_batch_size'],len(demo.data)),)).tolist()
@@ -574,6 +585,7 @@ def _ppo_nonforced(model,optimizer,games,behavior,config,*,profile,profile_steps
                 with timings.phase('ppo.optimizer'):
                     norm=torch.nn.utils.clip_grad_norm_(model.parameters(),config['grad_clip'],error_if_nonfinite=True)
                     clips+=int(float(norm)>config['grad_clip']);scheduled_step(optimizer,ppo=True);steps+=1
+                    if companion is not None:companion.step('ppo')
                     gradient_norms.append(float(norm))
                     critic_steps+=int(bool(crit) and config['value_weight']>0)
                     actor_used.update(batch);critic_used.update(crit)

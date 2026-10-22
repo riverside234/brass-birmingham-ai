@@ -74,6 +74,7 @@ def continue_branch(host,job,parent,packet,assigned,timings,max_decisions,encode
         context=host.call('fork_restore',checkpoint=packet['checkpoint'],shuffle_seed=shuffle)
         if hasattr(host,'enable_fastpath') and not host.fast_checked:host.enable_fastpath()
     else:context=host.call('fork_resume',shuffle_seed=shuffle)
+    if 'local_scoring' in job['provenance']:host.call('local_scoring_enable',fresh=True)
     row=copy.deepcopy(packet['row'])
     require({k:v for k,v in context.items() if k!='game_id'}==row['view']['context'],
         'Restored branch context differs')

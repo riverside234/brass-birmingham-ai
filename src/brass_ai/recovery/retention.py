@@ -262,7 +262,7 @@ def slim_checkpoint(root,run,entry,existing=None):
         raw=torch.load(path,map_location='cpu',weights_only=True);raw['optimizer']=None
         # Opponents need model/compatibility/lineage, not copied per-game reports.
         raw['training']={k:v for k,v in raw.get('training',{}).items()
-                         if k not in ('evidence','imitation','actor_value_phases')}
+                         if k not in ('evidence','imitation','actor_value_phases','local_scoring_auxiliary')}
         if destination.exists():
             # An interrupted publication has no committed checksum yet. Verify
             # the complete derived payload, including calibration and lineage.

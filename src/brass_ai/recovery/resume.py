@@ -63,6 +63,10 @@ def check_signature(state, signature, reviewed=False):
     for transition in transitions:
         # An exact unchanged configuration needs no historical upgrade path.
         if config_ok:break
+        if transition.get('local_scoring_changes'):
+            from .local_scoring_adoption import compatible
+            config_ok=compatible(state,signature['config'])
+            if config_ok:break
         if transition.get('teacher_value_changes'):
             # Only this separately versioned opt-in block may vary. Explicit
             # reviewed continuation still rejects pending old collections and
@@ -89,6 +93,10 @@ def check_signature(state, signature, reviewed=False):
                       ARCHIVED_TIME_CONFIG_MIGRATION:archived_time_budget_config}
             from .gae import CONFIG_MIGRATION as EV_MIGRATION,evidence_config
             handlers[EV_MIGRATION]=evidence_config
+            from .lr_controller import THRESHOLD_MIGRATION,threshold_config
+            if THRESHOLD_MIGRATION in migrations:
+                require(state['iteration']>=560,'LR threshold hotfix starts from committed generation 560 or later')
+            handlers[THRESHOLD_MIGRATION]=threshold_config
             from .quality_config import CONFIG_MIGRATION as PFSP_MIGRATION,sampling_config
             handlers[PFSP_MIGRATION]=sampling_config
             from .config import INSOLVENCY_EVENT_CONFIG_MIGRATION,insolvency_event_config
@@ -299,7 +307,7 @@ def prepare_opponent_pool(root,run,state,raw,config,source_changed=False):
     return pfsp_pool.migrate(pool,config['opponent_pool'],state['iteration'],state['games_done'])
 
 
-def commit_transition(run, state, signature,*,opponent_pool=None,pool_migration=None):
+def commit_transition(run, state, signature,*,opponent_pool=None,pool_migration=None,local_scoring_adoption=None):
     """Call only after restoring Adam and RNG successfully, under the run lock."""
     from .v4_share import migrate_state
     share,share_migration=migrate_state(state,signature['config'])
@@ -317,6 +325,9 @@ def commit_transition(run, state, signature,*,opponent_pool=None,pool_migration=
         config_changes={k:dict(before=previous['signature']['config'].get(k),after=v)
                         for k,v in signature['config'].items() if previous['signature']['config'].get(k)!=v}))
     updated['signature'] = signature
+    if local_scoring_adoption is not None:
+        require('local_scoring_adoption' not in updated,'Local scoring adoption cannot repeat')
+        updated['local_scoring_adoption']=copy.deepcopy(local_scoring_adoption)
     if share_migration is not None:
         updated['v4_share_gate']=share
         updated['source_transitions'][-1]['v4_share_migration']=share_migration

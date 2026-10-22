@@ -18,14 +18,34 @@ from . import ppg_sampling
 
 CONTRACT='ppg-eight-disk-buffer/1.0.0'
 OWNER=dict(contract=CONTRACT,purpose='sealed MC critic rows and selected complete policy inputs')
-FILE=re.compile(r'generation-([0-9]{6,})\.(critic\.npy|actions\.npy|json)(\.partial|\.tmp)?$')
+FILE=re.compile(r'generation-([0-9]{6,})\.(critic\.npy|actions\.npy|local-scoring\.json|json)(\.partial|\.tmp)?$')
 
 
 class Rows(DiskRows):
     def __init__(self,path,receipt):
         self.receipt=receipt;self.array=np.load(path,mmap_mode='r',allow_pickle=False)
-        try:require(self.array.dtype==row_dtype() and self.array.shape==(receipt['rows'],),'Invalid eight-age critic layout')
+        self.local={}
+        try:
+            if 'local-scoring.json' in receipt['files']:
+                from .local_scoring_targets import CONTRACT,seal,unpack
+                sidecar=path.with_name(path.name.replace('critic.npy','local-scoring.json'))
+                require(sha(sidecar)==receipt['files']['local-scoring.json']['sha256'],'Local scoring sidecar changed')
+                value=read(sidecar)
+                require(value['contract']==CONTRACT and value['generation']==receipt['generation'] and
+                    value['source']==digest(receipt['source']) and value['holdout']==digest(receipt['holdout_selection']) and
+                    set(value['games'])<=set(receipt['game_ids']),'Local scoring sidecar input/holdout binding differs')
+                self.local={g:unpack(e) for g,e in value['games'].items()}
+                require(all(g==e['game_id'] and e['sha256']==seal(e) for g,e in self.local.items()),'Invalid cached local scoring envelope')
+            require(self.array.dtype==row_dtype() and self.array.shape==(receipt['rows'],),'Invalid eight-age critic layout')
         except BaseException:self.close();raise
+
+    def field(self,i,field):
+        value=super().field(i,field)
+        if field==0:
+            game=self.receipt['game_ids'][int(self.array[i]['game'])]
+            if game in self.local:
+                value['_local_scoring']=dict(envelope=self.local[game],era=value['view']['context']['era'])
+        return value
 
 
 class Joined:
@@ -118,10 +138,13 @@ class Buffer:
         validate_selection(r['holdout_selection'],self.config['value_phase']['holdout'],self.config['value_phase']['holdout_fraction'])
         require(set(r['game_ids'])<=set(r['holdout_selection']['games']),'Unknown PPG cached game')
         for ext,f in r['files'].items():
+            require(ext in ('critic.npy','actions.npy','local-scoring.json'),'Unknown PPG cache file type')
             p=self.path(r['generation'],ext)
             require(p.is_file() and p.stat().st_size==f['bytes'] and sha(p)==f['sha256'],
                 'Missing/corrupt committed eight-age PPG cache; restore its matching cache backup: '+str(p))
         require(read(self.path(r['generation'],'json'))==r,'PPG cache metadata differs from checkpoint')
+        if self.config.get('local_scoring_auxiliary',{}).get('mode','off')!='off':
+            require('local-scoring.json' in r['files'],'Missing adopted PPG local scoring sidecar')
 
     def source(self,records,policy_id,kinds,model_id):
         # Reuse the existing checked ordinary-replay provenance builder.
@@ -197,6 +220,25 @@ class Buffer:
         disk_peak=max(disk_peak,sum(p.stat().st_size for p in self.directory.iterdir() if p.is_file()))
         part.replace(self.path(generation,'actions.npy'))
         files={ext:dict(bytes=self.path(generation,ext).stat().st_size,sha256=sha(self.path(generation,ext))) for ext in ('critic.npy','actions.npy')}
+        if 'local_scoring_auxiliary' in self.config:
+            from .local_scoring_targets import CONTRACT as TARGET_CONTRACT,seal,pack
+            local={};checked=set()
+            for i in ids:
+                row=dataset.rows[i];label=row.get('_local_scoring');game=dataset.data[i][2][0]
+                if label is None:
+                    require(self.config['local_scoring_auxiliary']['mode']=='off','New critic row lacks local scoring labels')
+                    continue
+                envelope=label['envelope']
+                require(envelope['game_id']==game,'PPG auxiliary game binding differs')
+                token=(game,id(envelope))
+                if token not in checked:
+                    require(envelope['sha256']==seal(envelope),'PPG auxiliary label binding differs');checked.add(token)
+                if game in local:require(local[game]['sha256']==envelope['sha256'],'Mixed era-map sources')
+                else:local[game]=envelope
+            sidecar=dict(contract=TARGET_CONTRACT,generation=generation,source=digest(source),holdout=digest(selection),games={g:pack(e) for g,e in local.items()})
+            self.path(generation,'local-scoring.json.tmp')
+            write_json(self.path(generation,'local-scoring.json'),sidecar)
+            files['local-scoring.json']=dict(bytes=self.path(generation,'local-scoring.json').stat().st_size,sha256=sha(self.path(generation,'local-scoring.json')))
         r=dict(contract=CONTRACT,generation=generation,compatibility=digest(compatibility()),reward_id=self.reward_id,
             rows=len(ids),game_ids=list(games),contexts=context_values,holdout_selection=copy.deepcopy(selection),
             source=copy.deepcopy(source),policy_entries=entries,policy_population=counts,files=files,
@@ -208,6 +250,7 @@ class Buffer:
             rows_by_age={str(generation-x['generation']):x['rows'] for x in self.pending},
             critic_bytes=sum(x['files']['critic.npy']['bytes'] for x in self.pending),
             policy_action_bytes=sum(x['files']['actions.npy']['bytes'] for x in self.pending),
+            auxiliary_label_bytes=sum(x['files'].get('local-scoring.json',{}).get('bytes',0) for x in self.pending),
             peak_disk_bytes=max(disk_peak,sum(p.stat().st_size for p in self.directory.iterdir() if p.is_file())),
             write_seconds=time.perf_counter()-began,committed_cleanup=None,
             scope='Eight trainable ages; pre-commit disk peak includes the not-yet-expired ninth cache. Mmap features; bounded minibatch transfers; no historical PPO admission.')

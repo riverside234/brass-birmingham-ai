@@ -155,7 +155,7 @@ class RatingPlot(unittest.TestCase):
             ratings.plot_report(auto, report, agents); command().render(report, manual)
             self.assertEqual(auto.read_bytes(), manual.read_bytes())
             root = ET.parse(auto).getroot(); text = labels(auto)
-            self.assertEqual(root.attrib['viewBox'], '0 0 1036.8 604.8')
+            self.assertEqual(root.attrib['viewBox'], '0 0 1296 604.8')
             for label in ('Full training history', 'Recent progress', 'GENERATION 20',
                           '180.0', '140.0 to 220.0', '+80.0', '+15.0 to +125.0',
                           'Improvement supported', 'Latest slot: 128 games / 32 setups',
@@ -187,7 +187,7 @@ class RatingPlot(unittest.TestCase):
                  patch.object(Axes, 'fill_between', band), patch.object(Axes, 'vlines', vlines):
                 ratings.plot_report(auto, report, agents)
             text = labels(auto)
-            for label in ('47 rated checkpoints', 'Change uncertain', 'g370–g470',
+            for label in ('47 rated checkpoints', 'Change uncertain', 'g270–g470',
                           '30 points / 47 checkpoints', 'first/latest exact',
                           'not intervals for averages', 'Recent window'):
                 self.assertIn(label, text)
@@ -199,13 +199,13 @@ class RatingPlot(unittest.TestCase):
         self.assertEqual(list(curve.get_ydata()), [row['score'] for row in expected])
         self.assertEqual(len(curve.get_xdata()), 30)
         recent = next(line for line in lines if line.get_gid() == 'pl-recent-line')
-        self.assertEqual(list(recent.get_xdata()), list(range(370, 471, 10)))
-        self.assertEqual(list(recent.get_ydata()), raw_y[-11:])
+        self.assertEqual(list(recent.get_xdata()), list(range(270, 471, 10)))
+        self.assertEqual(list(recent.get_ydata()), raw_y[-21:])
         markers = next(s for s in scatters if s.get_gid() == 'pl-history-markers')
         self.assertEqual(len(markers.get_offsets()), 29)
         latest = next(s for s in scatters if s.get_gid() == 'pl-latest-point')
         self.assertEqual(len(markers.get_offsets())+len(latest.get_offsets()), 30)
-        for band, generations in zip(bands, (list(range(10, 471, 10)), list(range(370, 471, 10)))):
+        for band, generations in zip(bands, (list(range(10, 471, 10)), list(range(270, 471, 10)))):
             self.assertEqual(band[0], generations)
             for offset in (0, 1):
                 self.assertEqual(band[1+offset],
@@ -222,7 +222,7 @@ class RatingPlot(unittest.TestCase):
                  patch('builtins.print'):
                 command().main()
             self.assertIn('12 displayed points from 47 checkpoints (cap 12)', labels(output))
-            self.assertIn('all 11 points exact', labels(output))
+            self.assertIn('all 21 points exact', labels(output))
             self.assertEqual(source.read_bytes(), before)
 
     def test_summary_cards_are_shorter_and_plot_area_is_taller(self):
@@ -254,7 +254,7 @@ class RatingPlot(unittest.TestCase):
                 score = -500. if case == 'negative' else 12345678.9
                 report['ratings']['generation-000470'] = dict(points=score, points_ci95=[score-40, score+50])
             elif case == 'flat':
-                for generation in range(370, 471, 10):
+                for generation in range(270, 471, 10):
                     report['ratings'][f'generation-{generation:06d}'] = dict(
                         points=score, points_ci95=[score-40, score+50])
             elif case == 'single':

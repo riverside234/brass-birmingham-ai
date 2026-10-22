@@ -265,7 +265,7 @@ class TrainingPhases:
                     'Invalid persisted value-phase KL history')
             self.optimizer.load_state_dict(saved['optimizer'])
             rate=self.optimizer.param_groups[0]['lr'];base=config['value_phase']['learning_rate']
-            valid_rate=(math.isfinite(rate) and base*config['value_phase']['rate_schedule']['warmup_start']<=rate<=base
+            valid_rate=(math.isfinite(rate) and base*config['value_phase']['rate_schedule']['warmup_start']*(1-1e-12)<=rate<=base*(1+1e-12)
                 if ppg_config.active(config['value_phase']) else rate==base)
             require(len(self.optimizer.param_groups)==1 and valid_rate and
                     self.optimizer.param_groups[0]['weight_decay']==0,'Value optimizer settings differ')
@@ -350,7 +350,7 @@ class TrainingPhases:
             self.optimizer.load_state_dict(saved['optimizer'])
             rate=self.optimizer.param_groups[0]['lr'];base=config['value_phase']['learning_rate']
             require(len(self.optimizer.param_groups)==1 and math.isfinite(rate)
-                and base*config['value_phase']['rate_schedule']['warmup_start']<=rate<=base
+                and base*config['value_phase']['rate_schedule']['warmup_start']*(1-1e-12)<=rate<=base*(1+1e-12)
                 and self.optimizer.param_groups[0]['weight_decay']==0,'Value optimizer settings differ')
             self.schedule=copy.deepcopy(ppg_config.schedule(saved['schedule'],generation));receipts=saved['rolling_buffer']
             self.cache_origin=saved.get('cache_origin',self.schedule['origin'])
@@ -429,6 +429,8 @@ class TrainingPhases:
             self.train_ids=[i for i in self.train_ids if critic.roles[i]=='learner']
         self.learner_train_ids=[i for i in self.train_ids if i<len(dataset.data)]
         if self.split:self.split['eligible_train_rows']=len(self.train_ids)
+        companion=getattr(self,'local_scoring',None)
+        if companion is not None and companion.active:companion.inventory(critic,self.train_ids)
         return self.train_ids
 
     def advantages(self,mc,actor_ids):
@@ -461,7 +463,7 @@ class TrainingPhases:
                 self.train_ids,self.heldout_ids,self.options['value_phase'],self.config['update'],beta=self.beta,
                 snapshot_weight=self.critic_state['snapshot_weight'] if self.critic_state else 1.,
                 dropout=self.dropout(0,'value'),run_phase=ran,ppo_work=self.ppo_work,
-                epoch_cap=self.epoch_control['cap'])
+                epoch_cap=self.epoch_control['cap'],companion=getattr(self,'local_scoring',None))
             self.pending_schedule=ppg_config.advance(self.schedule,self.state['generation']+1,ran)
             self.pending_epoch_control=copy.deepcopy(self.epoch_control)
             if ran:

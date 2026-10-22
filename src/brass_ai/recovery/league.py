@@ -246,9 +246,16 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
     reward=reward_spec(config)
     migration=migrate(model,optimizer,reward)
     phases=None
+    from .local_scoring_adoption import prepare as prepare_local,cleanup as cleanup_local
+    phase_raw,local_adoption,local_adopting=prepare_local(root,run,state,raw,config,reviewed=source_changed)
+    local_scoring=None
+    if 'local_scoring_auxiliary' in config:
+        from .local_scoring_auxiliary import Companion
+        local_scoring=Companion(model,config['local_scoring_auxiliary'],raw=raw,generation=state['iteration'],adopting=local_adopting)
     if 'advantage' in config:
         from .actor_value import TrainingPhases
-        phases=TrainingPhases(model,config,raw=raw,generation=state['iteration'],root=root,run=run)
+        phases=TrainingPhases(model,config,raw=phase_raw,generation=state['iteration'],root=root,run=run)
+        phases.local_scoring=local_scoring
         if raw is not None and state['iteration']>0:
             from .snapshot_r2_hotfix import restore as restore_snapshot_r2
             restore_snapshot_r2(state,raw,phases)
@@ -263,7 +270,13 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
               'recovery and decay disabled, prior controller archived',flush=True)
     if source_changed:
         from .resume import commit_transition
-        state=commit_transition(run,state,signature,opponent_pool=resumed_pool,pool_migration=pool_migration)
+        if local_adoption is not None:
+            from .local_scoring_adoption import archive_metadata
+            local_adoption=archive_metadata(run,local_adoption,raw)
+        state=commit_transition(run,state,signature,opponent_pool=resumed_pool,pool_migration=pool_migration,local_scoring_adoption=local_adoption)
+    local_cleanup=cleanup_local(root,run,state)
+    if local_cleanup:
+        print(f'Local scoring adopted at g{local_cleanup["new_origin"]}: retired {local_cleanup["cleanup"]["deleted_files"]} PPG cache files / {local_cleanup["cleanup"]["deleted_bytes"]:,} bytes; next phase g{local_cleanup["next_phase"]}',flush=True)
     if phases is not None:
         cache_cleanup=phases.startup(state['iteration'])
         if cache_cleanup is not None:
@@ -305,9 +318,13 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
         exploration_state,floor_transition=exploration.anchor_floor_transition(config,exploration_state,state.get('policy_anchor'))
         if floor_transition:print(f'Entropy floor promotion: {floor_transition["floor_ratio_after"]}; original baseline preserved',flush=True)
     from .ppo_preparation import PreparationPool
+    collection_host=config['host']
+    if local_scoring is not None and local_scoring.active:
+        from .host_runtime import local_scoring_host
+        collection_host=local_scoring_host(root)
     with InferenceService(config['execution'],device,profile=run/'profile-collection' if config['profile_steps'] else None,
                           profile_steps=config['profile_steps'],inference_devices=inference_devices) as service,reader_pool(config['audit_workers'],admission=service.cpu) as readers:
-        with ActorPool(root,config['host'],service,config['execution'],mono=mono) as ordinary,ActorPool(root,config['host'],service,config['execution'],mono=mono,heavy=True) as heavy,PreparationPool(config['update'].get('preparation_workers',0)) as preparation_pool:
+        with ActorPool(root,collection_host,service,config['execution'],mono=mono) as ordinary,ActorPool(root,collection_host,service,config['execution'],mono=mono,heavy=True) as heavy,PreparationPool(config['update'].get('preparation_workers',0)) as preparation_pool:
             from .champion import schedule as schedule_champion
             # Resume an interrupted gate for the committed candidate before
             # advancing the learner or writing a new gate specification.
@@ -537,6 +554,11 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                 report['utilization']['replay_ingress']=ingress_metrics
                 from .review_metrics import gate_diagnostics
                 report['gate_diagnostics']=gate_diagnostics(update,value_report,limit_report,quality_report)
+                if local_scoring is not None:
+                    report['local_scoring_auxiliary']=local_scoring.report()
+                    if local_scoring.active:
+                        report['local_scoring_auxiliary']['heldout']=local_scoring.diagnostics(model,phases.critic_dataset,phases.heldout_ids)
+                if state.get('local_scoring_adoption'):report['local_scoring_adoption']=state['local_scoring_adoption']
                 checkpoint_began=time.monotonic()
                 anchor_commit=policy_anchor.checkpoint_state(state)
                 identity=save_checkpoint(output,model,optimizer,step=iteration+1,
@@ -549,6 +571,7 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                         **({'exploration':exploration_state} if exploration_state is not None else {}),
                         **({'v4_share_gate':share} if share is not None else {}),
                         **({'actor_value_phases':phases.payload()} if phases is not None else {}),
+                        **({'local_scoring_auxiliary':local_scoring.payload(iteration+1)} if local_scoring is not None else {}),
                         **({'quality_pool_digest':quality_pool.state_digest(next_quality)} if quality else {})))
                 report['post_update_model_id']=identity
                 report['timings']['checkpoint_seconds']=time.monotonic()-checkpoint_began
@@ -574,6 +597,7 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                     quality_pool=quality_report,
                     il_kl_limit=limit_report,rehearsal_schedule=rehearsal_status,
                     value_phase=value_report,
+                    local_scoring_auxiliary=report.get('local_scoring_auxiliary'),
                     health_counts=diagnostics.get('health_counts'),
                     health_by_composition={k:v.get('health_counts') for k,v in diagnostics.get('by_composition',{}).items()},
                     sampling=sampling,curriculum=report['curriculum'],
@@ -584,6 +608,7 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                     from .retention import update_population
                     update_population(root,run,state,config['population'])
                 write_json(state_path,state)
+                if local_scoring is not None:local_scoring.committed(iteration+1)
                 if phases is not None:phases.committed(iteration+1)
                 if revised:
                     evaluation_began=time.monotonic()
@@ -676,6 +701,11 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                     controller_line+=quality_pool.pfsp_pool.console(quality_report)
                 from .review_metrics import mixed_ev_console
                 controller_line+=mixed_ev_console(report['gate_diagnostics'])
+                if report.get('local_scoring_auxiliary'):
+                    aux=report['local_scoring_auxiliary']
+                    controller_line+=(f' local={aux["mode"]}@{aux["shared_gradient_scale"]:.2f}'
+                        f' rows={aux["retained"]["rows"]}/{aux["available"]["rows"]}'
+                        f' head_steps={aux["companion_steps"]["ppo"]}+{aux["companion_steps"]["ppg"]}')
                 print(f'Recovery generation {iteration+1}: {done} games, {update["optimizer_steps"]} PPO steps; '
                       f'collect={load_began-began:.1f}s prepare={collected-load_began:.1f}s '
                       f'rehearsal={rehearsal_seconds:.1f}s PPO={report["timings"]["ppo_seconds"]:.1f}s '

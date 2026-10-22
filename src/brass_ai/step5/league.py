@@ -31,6 +31,9 @@ def implementation_id():
     paths += sorted((SOURCE_ROOT/'src/BrassTrainingHost').glob('*.cs'))
     paths += [SOURCE_ROOT/'scripts/build-training-host.py',SOURCE_ROOT/'scripts/build-search-host.py']
     paths += sorted((SOURCE_ROOT/'training/runtime/throughput').glob('*/runtime.json'))
+    paths += sorted((SOURCE_ROOT/'src/BrassLocalScoringHost').glob('*.cs'))
+    paths += [SOURCE_ROOT/'scripts/build-local-scoring-host.py']
+    paths += sorted((SOURCE_ROOT/'training/runtime/local-scoring').glob('*/runtime.json'))
     paths += sorted((SOURCE_ROOT/'configs/contracts/masked-ismcts').glob('*.json'))
     paths += [SOURCE_ROOT/'configs/references/masked-ismcts.lock.json']
     # Current heuristic opponents share game policy/search sources. A C# or

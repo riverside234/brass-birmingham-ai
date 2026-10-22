@@ -66,7 +66,7 @@ class CheckedGame(dict):
 def check_game(game, arrays=None,*,validated_inputs=False):
     require(not validated_inputs or arrays is not None,'Checked ingress requires attested arrays')
     keys(game, ('game_id', 'setup_group', 'players', 'split', 'opponents', 'result', 'records'),
-         ('branch','branches','branch_statistics'))
+         ('branch','branches','branch_statistics','local_scoring_targets'))
     require(not ('branch' in game and ('branches' in game or 'branch_statistics' in game)), 'Nested branch forbidden')
     require(type(game['players']) is int and game['players'] == 4, 'Replay must have four seats')
     require(all(isinstance(game[k], str) and game[k] for k in ('game_id','setup_group')), 'Missing game identity')
@@ -115,6 +115,9 @@ def check_game(game, arrays=None,*,validated_inputs=False):
         encoded.append(e)
     if 'branch' not in game:
         require({r['seat'] for r in game['records']} == set(range(4)), 'Missing seat trajectories')
+    if 'local_scoring_targets' in game:
+        from .local_scoring_targets import validate
+        validate(game['local_scoring_targets'],game)
     if 'branches' in game:
         from .branching import validate_child
         require(type(game['branches']) is list and len(game['branches'])<=1,'Too many branch games')
@@ -237,6 +240,12 @@ def read_shards(paths,partition=None,receipts=None,*,heuristic_only=False):
             # Descriptors are table metadata, separate from the immutable board
             # observation/Features-4 contract. The enclosing replay hash seals it.
             proof=jobs[ordinal]['provenance'] if jobs is not None else header['provenance']
+            if 'local_scoring' in proof:
+                from .local_scoring_targets import FIELD,identity
+                require(all(proof['local_scoring'].get(k)==v for k,v in identity().items()),'Local scoring provenance differs')
+                for member in [game]+game.get('branches',[]):
+                    require(FIELD in member and member[FIELD]['producer']==proof['local_scoring']['producer'],
+                            'Missing/foreign scoring labels in recorded collection')
             if 'ppo_opening_objective' in proof:
                 from .opening_objective import validate
                 game.ppo_opening_objective=validate(proof['ppo_opening_objective'])

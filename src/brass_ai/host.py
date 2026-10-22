@@ -24,6 +24,7 @@ class HostError(RuntimeError):
 class RulesHost:
     def __init__(self, directory=None, *, verify=True, mono=None):
         directory = Path(directory or ROOT / "artifacts/r1-host/guarded").resolve()
+        self.runtime_directory=directory
         if verify:
             manifest = json.loads((directory / "runtime.json").read_text(encoding="utf-8-sig"))
             if manifest["rules"] != "steam-brass-patch-1.1.0":

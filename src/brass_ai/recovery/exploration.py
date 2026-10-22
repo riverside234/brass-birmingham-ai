@@ -34,6 +34,7 @@ LEGACY_BRANCH = dict(contract='selfplay-branching/1.0.0', tables=['selfplay'], r
 HIGH_BRANCH = dict(LEGACY_BRANCH, contract='selfplay-branching/2.0.0', rate_per_decision=.015,
     reset_opening_at_fork=True)
 BRANCH = dict(HIGH_BRANCH, rate_per_decision=.005)
+LOCAL_SCORING_BRANCH = dict(HIGH_BRANCH,rate_per_decision=.010)
 ROLLOUT = dict(contract='exploration-rollout/1.0.0', mode='fresh',
     opening_after_iterations=0, raw_entropy_after_iterations=0, branching_after_iterations=20)
 BLOCKS = ('exploration_distribution','entropy_control','opening','branching','exploration_rollout')
@@ -132,7 +133,7 @@ def validate(config):
     require(all(present), 'Exploration revision requires all versioned blocks')
     # This initial recipe is deliberately narrow; experiments need explicit
     # reviewed signatures rather than unbounded free-form controller options.
-    current=config['opening']==OPENING and config['branching']==BRANCH
+    current=config['opening']==OPENING and config['branching'] in (BRANCH,LOCAL_SCORING_BRANCH)
     uniform=config['opening']==OPENING and config['branching']==HIGH_BRANCH
     legacy=config['opening']==LEGACY_OPENING and config['branching']==LEGACY_BRANCH
     require(type(config['exploration']) in (int,float) and config['exploration'] in (0.,.02,.03) and config['exploration_distribution']==Q and

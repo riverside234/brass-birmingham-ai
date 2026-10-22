@@ -9,7 +9,8 @@ DEFAULT=dict(contract='ppg-one-se-coverage/1.0.0',standard_errors=1.,
 
 
 class Selection:
-    def __init__(self,model,optimizer,games):
+    def __init__(self,model,optimizer,games,companion=None):
+        self.companion=companion
         self.minimum_games=copy.deepcopy(games);self.minimum_budget_step=0
         self.minimum_rows=0;self.initial_loss=sum(games.values())/len(games)
         self.neutral_intervals=0;self.failed_intervals=0;self.improvements=0
@@ -17,6 +18,7 @@ class Selection:
 
     def _save(self,model,optimizer,games,rows,clones,steps,budget_step):
         self.weights=copy.deepcopy(model.state_dict());self.adam=copy.deepcopy(optimizer.state_dict())
+        self.auxiliary=self.companion.snapshot() if self.companion is not None else None
         self.games=copy.deepcopy(games);self.rows=list(rows);self.clones=list(clones)
         self.steps=steps;self.budget_step=budget_step
 
@@ -43,6 +45,7 @@ class Selection:
         require(not paired(self.minimum_games,self.games)['reject'],
             'Selected PPG state exceeds its minimum-loss reference by more than one SE')
         model.load_state_dict(self.weights);optimizer.load_state_dict(self.adam)
+        if self.companion is not None:self.companion.restore(self.auxiliary)
 
     def report(self):
         from .ppg_auxiliary import paired

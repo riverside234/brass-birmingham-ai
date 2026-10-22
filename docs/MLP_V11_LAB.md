@@ -122,7 +122,9 @@ python scripts/feature-engineering.py upgrade-imitation \
 
 The config/output helpers refuse conflicting existing files; choose unused names for a new run. To continue this **new** run, repeat its train command without `--fresh` and with the desired additional `--iterations`.
 
-The generated config retains q v3 with **epsilon 0.00**, two opening action decisions per neural seat at temperature **2.0**, and **1.5% per eligible decision** branching after 20 completed iterations and a ready entropy baseline. Action sampling remains probabilistic. Each branch restarts two temperature-2 action decisions per seat after its excluded fork move; intervening subdecisions remain at temperature 1.0. There is still at most one fork per ordinary self-play game. Entropy floors start at **0.95 × original baseline for `canal_action`/`rail_action` and 0.90 × baseline for `canal_other`/`rail_other`**. Each future qualified promotion of the LR gate's KL reference subtracts **0.02 × that same baseline**, down to **0.85 for action groups / 0.80 for other groups**. There is no iteration decay or baseline reset; rejected candidates and repeated rating fits do not reduce floors.
+The generated config retains q v3 with **epsilon 0.00**, two opening action decisions per neural seat at temperature **2.0**, and **1% per eligible decision** branching after 20 completed iterations and a ready entropy baseline. Action sampling remains probabilistic. Each branch restarts two temperature-2 action decisions per seat after its excluded fork move; intervening subdecisions remain at temperature 1.0. There is still at most one fork per ordinary self-play game. Entropy floors start at **0.95 × original baseline for `canal_action`/`rail_action` and 0.90 × baseline for `canal_other`/`rail_other`**. Each future qualified promotion of the LR gate's KL reference subtracts **0.02 × that same baseline**, down to **0.85 for action groups / 0.80 for other groups**. There is no iteration decay or baseline reset; rejected candidates and repeated rating fits do not reduce floors.
+
+New self-play configs also enable `local_scoring_auxiliary.mode=apply`: training-only ownership/official-VP heads for 49 industry slots and 69 connections. The v11.2 core and completed IL remain unchanged. Auxiliary parameters are separate from the playing model and its PPO optimizer: **91,410** extra parameters, **6,020,026** total during training. The first two committed iterations train detached heads, followed by five shared-gradient ramp iterations. See the [implementation and validation report](../ai-research/OWNERSHIP_AUXILIARY_HEADS_REPORT.md).
 
 **New configs enable PPG (`ppg-value-phase/7.0.0`) with checks every 16 optimizer steps and patience 1 counting only loss degradation beyond one standard error.** Eight committed iterations, uniform weights, all eight iterations' ordinary holdouts, adaptive epoch cap 2 (bounds 2–6), separate value Adam and both 0.002 policy KL safeguards remain. The phase resets value Adam moments, warms its LR from 0.1× across the first 16 steps, then decays to 0.3×; PPO Adam is unaffected. PPO uses `update.microbatch_size=512`, `update.max_candidate_cells=131072` and `update.preparation_workers=4`. The effective actor and critic batches remain 2048. CPU-only process collation is bounded and consumed in original order; sampling/RNG stay in the main process. Collection defaults retain 1 ms flush, padding ratio 2, model cohorts off, the existing 48 game lanes and GPU-resident model cache. See the [g470 report](../ai-research/SELFPLAY_G470_THROUGHPUT.md) for those measurements.
 
@@ -158,7 +160,38 @@ The `latest-model-selfplay/3.0.0` recipe starts with these base quotas. Fresh co
 
 Once the latest completed **v4 rating panel** reaches **90% learner win share**, the next collection uses **160 self-play / 154 history / 6 v4 games**, or **50% / 48.125% / 1.875%**. The ten released v4 tables go to **history**. This is the existing one-learner/three-v4 evaluation panel (32 games, eight setups at the current cadence), with official ties. The threshold is inclusive: exactly 90% passes. The reduction is persisted before collection and never automatically reversed. No extra evaluation games run, and deployment still requires review.
 
-For the current run stopped at **committed g540**, sync this revision and run:
+### Continue from g560: auxiliary heads, 1% branches and 50% LR threshold
+
+The current run is still at **committed g560**; the previous adoption command has not been run. To adopt all three changes, pull the Python sources and the matching `training/runtime/local-scoring/ordinary/BrassHost.exe` and `runtime.json` together. The lab installs this additive recorder automatically from the prebuilt package and existing private pinned DLLs; no compiler or fresh IL is needed. Run:
+
+```bash
+cd /data/not_backed_up/yxu209/ai-training
+
+python scripts/recover-step5-iteration.py --root "$PWD" \
+  --run artifacts/step5/joint7-v11-2-grouped-lr-critic \
+  --expected-iteration 560 --apply && \
+python scripts/configure-local-scoring-aux.py \
+  --run artifacts/step5/joint7-v11-2-grouped-lr-critic \
+  --expected-generation 560 --mode apply --fresh-ppg-buffer \
+  --output configs/step5/joint7-v11-2-grouped-lr-critic-local-scoring-lr50-g560.json && \
+python scripts/step5.py \
+  --config configs/step5/joint7-v11-2-grouped-lr-critic-local-scoring-lr50-g560.json train \
+  --run artifacts/step5/joint7-v11-2-grouped-lr-critic \
+  --imitation-run artifacts/step5/features4-v11-2-batch7-il \
+  --resume-reviewed-source --expected-generation 560 --iterations 20
+```
+
+This continues **g561–580**. The helper copies the locked committed config, changes only the companion block, branching **0.015 → 0.010**, and LR raise threshold **0.45 → 0.50**, checks the full checkpoint hash and exact source review, and writes a config outside the run. It does not edit weights or delete caches. The recorded **0.020/0.080 insolvency**, VP cap 180, epsilon zero, fixed snapshot weight 1, temperature-2 openings, 16-step PPG checks/patience 1, PPO and all existing gates/baselines remain in place.
+
+With `target_kl=0.01`, an LR raise now requires a three-valid-iteration median **strictly below 0.005**, plus the existing health checks and cooldown. The new rule is used for the next post-PPO decision; it does not force a raise or reset the saved LR multiplier, measurement window, cooldown or warmup. Fresh config generation also selects 50%.
+
+Training startup archives old PPG **metadata**, durably records the adoption, then audits and retires the old owned PPG cache payloads. It preserves core PPO/value Adam, RNG, progress, population, the active KL reference, beta 8 and KL-trip history. Only the PPG buffer/clock and epoch-vote window start fresh at g560 (cap 2, bounds 2–6). The first new phase is **g568**, using g561–568; the next is **g576**. Old g553–560 payloads are not backfilled. Returning to that old buffer after retirement needs an external backup; the adopted continuation remains restart-safe.
+
+After a later interruption, recover any incomplete next iteration with its actual committed generation and repeat **only the train command**, updating `--expected-generation`. Do not repeat `--fresh-ppg-buffer`. To disable the heads after a new checkpoint has committed, run the same configuration helper with `--mode off`, the actual generation and a new output name, omitting `--fresh-ppg-buffer`; use its output with `--resume-reviewed-source`. This retains the companion state and current PPO/PPG clocks. `shadow` trains only detached heads. Existing IL/raw replays remain admissible; source-bound derived replay caches may be revalidated/rebuilt.
+
+Console `local=apply@scale rows=retained/available head_steps=PPO+PPG` exposes activation and usage. Full and compact reports include ownership/VP diagnostics, missing/masked labels, separate attempted/retained usage, joint rollback counts, cache bytes and timing. `python scripts/export-training-reports.py` includes the small runtime contract and adoption receipt, without copying PPG arrays.
+
+The following **g540 procedure is archived**; it has already been applied to the current run:
 
 ```bash
 python scripts/recover-step5-iteration.py --root "$PWD" \
@@ -459,7 +492,7 @@ The per-update LR signal remains exact **KL(old behavior || post-PPO behavior)**
 
 The exact and sampled probe values share one forward pass per microbatch. Reports and compact history retain `actor.kl_guard` (contract `ppo-categorical-kl-guard/1.0.0`, checks, maximum exact KL, stop reason and step), plus each epoch's `probe_categorical_kl`. Existing `probe_kl` and `post_update_kl` retain their sampled-action meaning. The console prints `KLstop=categorical_probe`, `sampled_full_dataset` or `none`; the LR report records the same stop reason and actual completed/planned steps.
 
-Raise by 1.25 after a full three-valid-iteration median below 0.0045 with no stops, no cooldown and passing health/anchor checks. Cut by 1.5 immediately on an early stop before half the planned steps, two stops in three valid iterations, or current exact KL above 0.015. Cuts start a three-valid-iteration cooldown; multiplier bounds remain 0.5–3. Warmup, empty/nonfinite update handling, shadow/off modes and PPO-only multiplier application remain unchanged. **Protective LR cuts never depend on anchor/health approval.**
+Raise by 1.25 after a full three-valid-iteration median **below 0.005 (50% of target_kl)** with no stops, no cooldown and passing health/anchor checks. Older recorded configs remain at 45% until the explicit g560 adoption/hotfix above is selected. Cut by 1.5 immediately on an early stop before half the planned steps, two stops in three valid iterations, or current exact KL above 0.015. Cuts start a three-valid-iteration cooldown; multiplier bounds remain 0.5–3. Warmup, empty/nonfinite update handling, shadow/off modes and PPO-only multiplier application remain unchanged. **Protective LR cuts never depend on anchor/health approval.** Full and compact LR reports include the effective raise ratio and absolute threshold.
 
 The categorical guard remains enabled and its preceding guard-only source approvals are preserved. Those approvals do **not** authorize the new quality-pool/rating recipe on an existing PPO run. For this revision, generate a new recipe-3 config and use the earlier `--fresh` command without a source-resume flag. Completed v11.1 IL remains usable; the PPO guard does not alter supervised IL updates. Signed older recipes are not silently upgraded, and pending-collection safeguards remain active.
 

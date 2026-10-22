@@ -200,6 +200,18 @@ def export(root, run, output=None, *, latest=2, extras=(), continue_export=False
 
     add(state_path, 'state.json', 'Committed configuration, lineage and progress', expected=True)
     require(files['state.json'][1] == state_bytes, 'Run advanced during export; retry')
+    local_scoring_receipt=None
+    if state.get('signature',{}).get('config',{}).get('local_scoring_auxiliary') is not None:
+        # Small training contracts/manifests only: never copy label arrays or
+        # the multi-GB PPG cache. Per-iteration metrics already live in reports.
+        path=below(root,'training/runtime/local-scoring/ordinary/runtime.json')
+        add(path,'contracts/local-scoring-runtime.json','Separately admitted scoring recorder',expected=True)
+        receipt=state.get('local_scoring_adoption')
+        if receipt is not None:
+            compact={k:receipt[k] for k in ('contract','origin','config_sha256','checkpoint','old_schedule',
+                'old_epoch_control','old_cache_receipts_sha256','new_origin','next_phase','cleanup_complete','cleanup')}
+            if 'old_cache_metadata' in receipt:compact['old_cache_metadata']=receipt['old_cache_metadata']
+            local_scoring_receipt=compact
     retained=add(run / 'retention-history.json', 'retention-history.json', 'Retained iteration trends', expected=True) or {}
     # Cleanup can be interrupted after a new generation commits. An older
     # report may then be outside --latest but not yet in compact history.
@@ -371,7 +383,7 @@ def export(root, run, output=None, *, latest=2, extras=(), continue_export=False
         files=[entry for entry, _ in copied.values()],
         missing=[dict(source=path, reason=reason) for path, reason in sorted(missing.items())],
         warnings=sorted(set(warnings)),
-        generated=['recorded-config.json', 'export-manifest.json'],
+        generated=['recorded-config.json', 'export-manifest.json']+(['local-scoring-adoption.json'] if local_scoring_receipt is not None else []),
         scope='Analysis reports only; not a resumable checkpoint backup. Missing/pruned evidence is not reconstructed. '
               'Incremental exports require the previous bundles named in reused_files; references point to original physical files.')
     output.parent.mkdir(parents=True, exist_ok=True)
@@ -384,6 +396,7 @@ def export(root, run, output=None, *, latest=2, extras=(), continue_export=False
             destination.parent.mkdir(parents=True, exist_ok=True)
             destination.write_bytes(raw)
         (stage / 'recorded-config.json').write_bytes(encode(state.get('signature', {}).get('config', {})))
+        if local_scoring_receipt is not None:(stage/'local-scoring-adoption.json').write_bytes(encode(local_scoring_receipt))
         (stage / 'export-manifest.json').write_bytes(encode(manifest))
         for entry, raw in files.values():
             require(below(root, entry['source']).read_bytes() == raw,
