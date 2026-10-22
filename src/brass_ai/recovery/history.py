@@ -79,7 +79,7 @@ def compact(report):
                        'incoming_policy_id','elapsed_seconds','games','failed_games','promotion_eligible'))
     out['summary_version']=6 if report.get('value_phase') is not None or 'gae' in report.get('actor',{}) else 5
     for key in ('il_kl_limit','policy_anchor','anchor_transition','rating_coverage','rehearsal_schedule','health_counts','quality_pool','strength_rating','value_phase','seat_fingerprints','gate_diagnostics',
-                'exploration_rollout','entropy_control','exploration_metrics','temperature_rating','v4_share_gate','panel_gates'):
+                'exploration_rollout','entropy_control','entropy_floor_transition','exploration_metrics','temperature_rating','v4_share_gate','panel_gates'):
         if key in report:out[key]=report[key]
     out['health_by_composition']={k:v['health_counts'] for k,v in report.get('by_composition',{}).items()
                                   if 'health_counts' in v}
@@ -102,7 +102,7 @@ def compact(report):
     out['actor']['learning_rate_schedule']=scalars(schedule,('contract','kind','base_lr','steps','start_factor',
         'completed_steps','effective_lr','next_lr')) if schedule else None
     out['actor']['sample_usage']=actor.get('sample_usage')
-    for key in ('gae','critic_split','critic_rows','final_categorical_probe','input_cache'):
+    for key in ('gae','critic_split','critic_rows','final_categorical_probe','input_cache','cpu_preparation'):
         if key in actor:out['actor'][key]=actor[key]
     sampling=actor.get('rehearsal_sampling')
     if isinstance(sampling,dict):out['actor']['rehearsal_sampling']=scalars(sampling,(
@@ -177,7 +177,8 @@ def compact(report):
     utilization=report.get('utilization',{})
     out['utilization']={key:utilization.get(key) for key in ('games_per_second','mean_inference_batch',
         'inference_batches','inference_positions','padding_fraction','actor_phase_seconds',
-        'inference_phase_deltas','inference_batching','replay_ingress','scope')}
+        'inference_phase_deltas','inference_batching','inference_batch_histogram','inference_per_model',
+        'model_loads','model_evictions','inference_model_scope','replay_ingress','scope')}
     out['selfplay_incumbent']=report.get('selfplay_incumbent')
     out['selfplay_opponents']=report.get('selfplay_opponents')
     out['historical_opponents']=report.get('historical_opponents')

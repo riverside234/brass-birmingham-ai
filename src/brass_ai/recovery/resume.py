@@ -103,6 +103,10 @@ def check_signature(state, signature, reviewed=False):
             handlers[DISABLE_MIGRATION]=disabled_options
             from .config import PPO_MICROBATCH_CONFIG_MIGRATION,ppo_microbatch_config
             handlers[PPO_MICROBATCH_CONFIG_MIGRATION]=ppo_microbatch_config
+            from .config import THROUGHPUT_CONFIG_MIGRATION,throughput_config
+            handlers[THROUGHPUT_CONFIG_MIGRATION]=throughput_config
+            from .critic_data import FLOOR_MIGRATION,floor_config
+            handlers[FLOOR_MIGRATION]=floor_config
             from .ppg_config import MIGRATION as PPG_REPLAY_MIGRATION,configure as configure_ppg_replay
             handlers[PPG_REPLAY_MIGRATION]=configure_ppg_replay
             from .v4_share import (MIGRATION as V4_SHARE_MIGRATION,configure as configure_v4_share,
@@ -119,6 +123,8 @@ def check_signature(state, signature, reviewed=False):
             handlers[FROZEN_MIGRATION]=frozen_config
             from .exploration import GROUP_FLOOR_MIGRATION,group_floor_config
             handlers[GROUP_FLOOR_MIGRATION]=group_floor_config
+            from .exploration import ANCHOR_FLOOR_MIGRATION,anchor_floor_config
+            handlers[ANCHOR_FLOOR_MIGRATION]=lambda c:anchor_floor_config(c,state)
             for migration in migrations:
                 require(migration in handlers,'Unknown reviewed configuration migration')
                 expected=handlers[migration](expected)

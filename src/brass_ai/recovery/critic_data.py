@@ -7,25 +7,38 @@ from brass_ai.learning.contracts import digest,require
 from brass_ai.learning.seat_descriptors import (CONTRACT,ROLES,FAMILIES,INDUSTRIES,
     descriptor,validate,relative)
 
-DEFAULT=dict(contract='critic-rows/1.0.0',learner_rows=True,snapshot_rows=True,snapshot_weight=1.,
+LEGACY_DEFAULT=dict(contract='critic-rows/1.0.0',learner_rows=True,snapshot_rows=True,snapshot_weight=1.,
     excluded_roles=['il','rule_bot'],holdout_fraction=.05,
     rollout=dict(mode='auto',descriptor_ev_min_gain=0.,snapshot_ev_tolerance=.02,reduced_snapshot_weight=.5))
+DEFAULT=dict(copy.deepcopy(LEGACY_DEFAULT),contract='critic-rows/2.0.0',
+    rollout=dict(LEGACY_DEFAULT['rollout'],reduced_snapshot_weight=0.))
+FLOOR_MIGRATION='snapshot-weight-zero-floor/1.0.0'
 
 RECOVERY_CONTRACT='snapshot-weight-recovery/1.0.0'
 RECOVERY_ITERATIONS=5
-SNAPSHOT_WEIGHTS=(.5,.75,1.)
+SNAPSHOT_WEIGHTS=(0.,.5,.75,1.)
+
+
+def floor_config(config):
+    result=copy.deepcopy(config)
+    if 'critic_data' not in result:return result
+    c=validate_config(result['critic_data'])
+    c['contract']=DEFAULT['contract'];c['rollout']['reduced_snapshot_weight']=0.
+    validate_config(c)
+    return result
 
 
 def validate_config(c):
-    require(type(c) is dict and set(c)==set(DEFAULT) and c['contract']==DEFAULT['contract']
+    require(type(c) is dict and set(c)==set(DEFAULT) and c['contract'] in (DEFAULT['contract'],LEGACY_DEFAULT['contract'])
         and c['learner_rows'] is True and type(c['snapshot_rows']) is bool
         and c['excluded_roles']==DEFAULT['excluded_roles'],'Invalid critic row contract')
-    require(type(c['snapshot_weight']) in (int,float) and c['snapshot_weight'] in (.5,1.)
+    expected=DEFAULT if c['contract']==DEFAULT['contract'] else LEGACY_DEFAULT
+    require(type(c['snapshot_weight']) in (int,float) and c['snapshot_weight'] in ((0.,.5,1.) if expected is DEFAULT else (.5,1.))
         and type(c['holdout_fraction']) in (int,float) and c['holdout_fraction']==.05,
         'Invalid critic snapshot weight/holdout')
     require(type(c['rollout']) is dict and set(c['rollout'])==set(DEFAULT['rollout'])
         and c['rollout']['mode'] in ('auto','learner_only','snapshots')
-        and all(c['rollout'][k]==v for k,v in DEFAULT['rollout'].items() if k!='mode'),
+        and all(type(c['rollout'][k]) is not bool and c['rollout'][k]==v for k,v in expected['rollout'].items() if k!='mode'),
         'Invalid critic rollout settings')
     return c
 
@@ -126,6 +139,7 @@ def _validate_base(s,c,generation,*,legacy=False):
         and type(s['snapshots_active']) is bool and type(s['snapshot_weight']) in (int,float)
         and s['snapshot_weight'] in ((.5,1.) if legacy else SNAPSHOT_WEIGHTS),'Invalid critic rollout checkpoint')
     require(not s['snapshots_active'] or c['snapshot_rows'],'Unexpected snapshot activation')
+    require(s['snapshot_weight']>=c['rollout']['reduced_snapshot_weight'],'Snapshot weight below configured floor')
     for k in ('learner_ev_baseline',):
         require(s[k] is None or (type(s[k]) in (int,float) and math.isfinite(s[k])),'Invalid critic rollout EV')
     require(s['activation_generation'] is None or
@@ -192,12 +206,15 @@ def _advance_r2(s,c,*,generation,report,healthy,fingerprint_now,ppo_snapshot_row
                 if report.get('optimizer_steps',0)>0 else 0)
     require(all(type(n) is int and n>=0 for n in (ppo_snapshot_rows,value_rows)),
         'Invalid retained snapshot training counts')
-    trained=bool(ppo_snapshot_rows or value_rows)
+    trained=weight>0 and bool(ppo_snapshot_rows or value_rows)
+    # At zero the snapshot loss is disabled. Recovery must be able to observe
+    # real learner critic work, without claiming that zero-weight rows trained.
+    zero_observation=weight==0 and work['optimizer_steps']>0
     health_ok=healthy is True and not report.get('kl_guard_tripped',False)
-    observation=snapshot_r2.entry(generation,report,healthy=health_ok,trained=before and trained)
+    observation=snapshot_r2.entry(generation,report,healthy=health_ok,trained=before and (trained or zero_observation))
     recovery,next_weight,decision,reason,evidence=snapshot_r2.advance(s['weight_recovery'],weight,
         generation=generation,observation=observation,current_regime=regime or snapshot_r2.regime(report,{}),
-        active=before,tolerance=c['rollout']['snapshot_ev_tolerance'])
+        active=before,tolerance=c['rollout']['snapshot_ev_tolerance'],floor=c['rollout']['reduced_snapshot_weight'])
     # Descriptor admission remains the existing EV/health gate. Only subsequent
     # snapshot WEIGHT decisions change to R2.
     ev=learner_ev(report.get('heldout_after',{}));gain=report.get('descriptor_gain',{}).get('learner_ev_gain')
@@ -214,6 +231,8 @@ def _advance_r2(s,c,*,generation,report,healthy,fingerprint_now,ppo_snapshot_row
     validate_state(s,c,generation)
     return s,dict(snapshot_rows_used=trained,snapshot_rows_enabled=before,critic_training=work,
         ppo_snapshot_distinct_used=ppo_snapshot_rows,value_snapshot_distinct_used=value_rows,
+        zero_weight_learner_observation=zero_observation,
+        snapshot_weight_floor=c['rollout']['reduced_snapshot_weight'],
         snapshot_rows_next=s['snapshots_active'],weight_used=weight,weight_next=next_weight,
         decision=decision,reason=reason,learner_heldout_ev=ev,
         learner_rolling_r2=evidence['learner']['r2'],learner_mse=evidence['learner']['learner_mse'],

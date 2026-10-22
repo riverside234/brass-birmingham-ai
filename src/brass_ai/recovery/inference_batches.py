@@ -9,10 +9,11 @@ import time
 
 
 class ModelBatches:
-    def __init__(self, batch_size, candidate_cells):
+    def __init__(self, batch_size, candidate_cells, padding_ratio=2.):
         self.batch_size, self.candidate_cells = batch_size, candidate_cells
+        self.padding_ratio = padding_ratio
         self.models = defaultdict(list)
-        self.count = self.peak = self.batches = self.padding_splits = 0
+        self.count = self.peak = self.batches = self.padding_splits = self.capacity_splits = 0
 
     def __len__(self):
         return self.count
@@ -63,10 +64,12 @@ class ModelBatches:
             if len(selected) >= self.batch_size:
                 break
             if (len(selected) + 1) * next_max > self.candidate_cells:
+                self.capacity_splits += 1
                 continue
             # Keep a pathological long candidate list from padding many short
-            # decisions. At least half the candidate cells must be useful.
-            if (len(selected) + 1) * next_max > 2 * (total + size):
+            # decisions. The default requires at least half the cells useful;
+            # experimental padding ratios remain separately configured.
+            if (len(selected) + 1) * next_max > self.padding_ratio * (total + size):
                 self.padding_splits += 1
                 continue
             selected.append(item); maximum = next_max; total += size
@@ -82,5 +85,6 @@ class ModelBatches:
 
     def report(self):
         return dict(contract='streaming-model-batches/1.0.0', peak_pending_positions=self.peak,
-                    batches=self.batches, padding_splits=self.padding_splits,
+                    batches=self.batches, padding_splits=self.padding_splits, capacity_splits=self.capacity_splits,
+                    max_padding_ratio=self.padding_ratio,
                     scope='One frozen model per batch; age/deadline fairness; no extra flush wait between model batches')

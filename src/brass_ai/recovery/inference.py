@@ -1,5 +1,5 @@
 """One frozen-model GPU service shared by spawned CPU game/search workers."""
-from collections import OrderedDict, defaultdict
+from collections import OrderedDict, defaultdict, Counter
 from contextlib import nullcontext
 import copy
 from dataclasses import dataclass
@@ -240,8 +240,11 @@ class InferenceService:
         self.metrics=dict(batches=0,positions=0,model_cache_hits=0,valid_candidate_cells=0,padded_candidate_cells=0,
             max_batch_positions=0,max_padded_candidate_cells=0,expired_requests=0,cancelled_requests=0,
             packed_output_batches=0,shared_requests=0,shared_replies=0,inline_requests=0)
+        self.metrics.update(model_loads=0,model_evictions=0)
+        self.batch_histogram=Counter();self.per_model={}
         from .inference_batches import ModelBatches
-        self.scheduler=ModelBatches(config['batch_size'],config['max_candidate_cells'])
+        self.scheduler=ModelBatches(config['batch_size'],config['max_candidate_cells'],
+                                    config.get('padding_ratio',2.))
         self.on_complete=self.on_failure=None
         self.thread=threading.Thread(target=self._serve,name='brass-inference',daemon=True)
 
@@ -309,16 +312,21 @@ class InferenceService:
             central_batching=True,memory=memory(self.device),
             cpu_admission=self.cpu.report(),
             batching=self.scheduler.report(),
+            batch_histogram=dict(self.batch_histogram),per_model=copy.deepcopy(self.per_model),
+            resident_models=len(self.cache),registered_models=len(self.models),
             timing_note='Host elapsed time; CUDA forward kernel duration is in optional profiler traces',
             error=str(self.error) if self.error else None)
 
     def _model(self,identity):
         require(identity in self.models,'Unregistered frozen model')
         if identity not in self.cache:
-            self.cache[identity]=copy.deepcopy(self.models[identity]).to(self.device).eval().requires_grad_(False)
+            with self.timings.phase('inference.model_load'):
+                self.cache[identity]=copy.deepcopy(self.models[identity]).to(self.device).eval().requires_grad_(False)
+            self.metrics['model_loads']+=1
         else: self.metrics['model_cache_hits']+=1
         self.cache.move_to_end(identity)
-        while len(self.cache)>self.config['max_models']: self.cache.popitem(last=False)
+        while len(self.cache)>self.config['max_models']:
+            self.cache.popitem(last=False);self.metrics['model_evictions']+=1
         return self.cache[identity]
 
     def _evaluate(self,items,*,array_responses=False):
@@ -339,6 +347,9 @@ class InferenceService:
                 responses[key]=self._response(frame,status)
             else: by_model[frame['model']].append((key,frame))
         for identity,group in sorted(by_model.items(),key=lambda pair:min(f['deadline'] for _,f in pair[1])):
+            meter=self.per_model.setdefault(identity,dict(positions=0,batches=0,batch_histogram={},
+                queue_wait_seconds=0.,queue_wait_max_seconds=0.,queue_wait_histogram={},
+                forward_seconds=0.,valid_candidate_cells=0,padded_candidate_cells=0))
             with self.lock: model=self._model(identity)
             # Earliest deadline first within size buckets, so a long choice list
             # cannot starve behind an endless stream of short requests.
@@ -362,6 +373,14 @@ class InferenceService:
                         responses[key]=self._response(frame,'expired')
                     else: live.append((key,frame))
                 if not live: continue
+                for _,frame in live:
+                    wait=max(0,time.monotonic()-frame['submitted'])
+                    meter['queue_wait_seconds']+=wait
+                    meter['queue_wait_max_seconds']=max(meter['queue_wait_max_seconds'],wait)
+                    # Full-stream fixed upper-bound bins, unlike the old first-1024 sample.
+                    bound=next((b for b in (1,2,4,8,16,32,64,128,256,512,1024) if wait*1000<=b),'overflow')
+                    meter['queue_wait_histogram'][str(bound)]=meter['queue_wait_histogram'].get(str(bound),0)+1
+                forward_started=time.perf_counter()
                 with torch.inference_mode():
                     with self.timings.phase('inference.forward'):
                         budget=utility_budget(model,[f.get('remaining') for _,f in live])
@@ -370,6 +389,7 @@ class InferenceService:
                         arrays=predict(model,[f['encoded'] for _,f in live],self.device,self.config['max_candidate_cells'],remaining)
                         if self.pack_outputs and max(len(f['encoded'].choice_ids) for _,f in live)<=self.config['max_candidate_cells']:
                             self.metrics['packed_output_batches']+=1
+                meter['forward_seconds']+=time.perf_counter()-forward_started
                 require(all(np.isfinite(a).all() for a in arrays),'Nonfinite inference output')
                 cells=min(self.config['max_candidate_cells'],len(live)*max(len(f['encoded'].choice_ids) for _,f in live))
                 self.metrics['batches']+=1;self.metrics['positions']+=len(live)
@@ -377,6 +397,11 @@ class InferenceService:
                 self.metrics['max_padded_candidate_cells']=max(self.metrics['max_padded_candidate_cells'],cells)
                 self.metrics['padded_candidate_cells']+=cells
                 self.metrics['valid_candidate_cells']+=sum(len(f['encoded'].choice_ids) for _,f in live)
+                self.batch_histogram[str(len(live))]+=1
+                meter['positions']+=len(live);meter['batches']+=1
+                meter['batch_histogram'][str(len(live))]=meter['batch_histogram'].get(str(len(live)),0)+1
+                meter['valid_candidate_cells']+=sum(len(f['encoded'].choice_ids) for _,f in live)
+                meter['padded_candidate_cells']+=cells
                 for j,(key,frame) in enumerate(live):
                     r=self._response(frame,'expired' if time.monotonic()>=frame['deadline'] else 'ok')
                     if r['status']=='expired': self.metrics['expired_requests']+=1
@@ -665,6 +690,16 @@ class MultiInferenceService:
 
     def report(self):
         reports=[s.report() for s in self.services]
+        histogram=Counter();per_model={}
+        for report in reports:
+            histogram.update(report.get('batch_histogram',{}))
+            for identity,values in report.get('per_model',{}).items():
+                target=per_model.setdefault(identity,{})
+                for key,value in values.items():
+                    if isinstance(value,dict):
+                        counter=Counter(target.get(key,{}));counter.update(value);target[key]=dict(counter)
+                    elif key.endswith('_max_seconds'):target[key]=max(target.get(key,0.),value)
+                    else:target[key]=target.get(key,0)+value
         timings={}
         for report in reports:
             for name,phase in report['timings'].items():
@@ -676,6 +711,7 @@ class MultiInferenceService:
         for key in ('cuda_allocated_bytes','cuda_reserved_bytes'):
             if any(key in r['memory'] for r in reports):mem[key]=sum(r['memory'].get(key,0) for r in reports)
         return dict(**self.metrics,timings=timings,device=str(self.device),learner_device=str(self.learner_device),inference_devices=list(self.devices),
+            batch_histogram=dict(histogram),per_model=per_model,
             batching=dict(contract='streaming-model-batches/1.0.0',
                 batches=sum(r.get('batching',{}).get('batches',0) for r in reports),
                 padding_splits=sum(r.get('batching',{}).get('padding_splits',0) for r in reports),

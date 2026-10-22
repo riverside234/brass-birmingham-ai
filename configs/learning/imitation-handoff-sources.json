@@ -418,6 +418,11 @@
       "implementation": "bd1a6bd5522fc0e54a18309afa9582cfcfd9f64c4b0622274e3081ae290fdfe8",
       "learning_compatibility": "ef6a1b5126de42da8f3277dc9357b6ffb94a435f3faa7fee8dd312bb5a242a54",
       "reason": "Optional PPG disable/cache retirement only; completed IL, model, feature and handoff contracts unchanged."
+    },
+    {
+      "implementation": "afcb66986a870567dbbd22ea45c5f43467ca0f7829948f04b561a9f8019e556b",
+      "learning_compatibility": "ef6a1b5126de42da8f3277dc9357b6ffb94a435f3faa7fee8dd312bb5a242a54",
+      "reason": "Self-play execution/controllers only; completed IL, model and feature contracts unchanged."
     }
   ]
 }

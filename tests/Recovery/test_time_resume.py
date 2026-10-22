@@ -77,9 +77,12 @@ class TimeResumeTests(unittest.TestCase):
         from brass_ai.learning.replay import validate_teacher
         from test_teacher_readiness_review import TeacherReadinessReviewTests
         from brass_ai.recovery.updates import distill_update
+        TeacherReadinessReviewTests.setUpClass()
         model,opt,episode,cfg,quality=TeacherReadinessReviewTests().fixture()
         for row in episode['records']:
-            label=row['teacher'];label['source_fingerprint']=OLD
+            label=row['teacher']
+            if label is None:continue # The current native fixture has sparse qualified labels.
+            label['source_fingerprint']=OLD
             label['fingerprint']=digest(dict(model=label['model_id'],config=label['search'],
                 contract='masked-ismcts/'+label['source'].rsplit('/',1)[1],source=OLD))
             validate_teacher(label,len(row['choices'])) # Archived replay format stays valid.

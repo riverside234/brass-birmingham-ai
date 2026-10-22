@@ -516,6 +516,9 @@ class ActorPool:
             self.start(len(pending))
             if scheduled:
                 return self._collect_branches(jobs,pending,records,on_records)
+            if not self.heavy and self.config.get('model_cohorts',False):
+                from .branch_scheduler import model_cohort
+                pending.sort(key=lambda p:(model_cohort(p),p['jobs'][0]['index']))
             for packet in pending: self.jobs.put(packet)
             outstanding={j['index'] for packet in pending for j in packet['jobs']}
             while outstanding:
@@ -572,7 +575,7 @@ class ActorPool:
         from .branch_scheduler import ReadyWork,report
         started=time.monotonic();token=uuid.uuid4().hex
         pending=[dict(p,schedule_token=token) for p in pending]
-        ready=ReadyWork(pending,getattr(self,'duration_estimates',{}))
+        ready=ReadyWork(pending,getattr(self,'duration_estimates',{}),getattr(self,'config',{}).get('model_cohorts',False))
         outstanding={p['jobs'][0]['index'] for p in pending}
         workers=len(self.processes)*self.lanes
         require(workers>0,'Branch scheduling needs live ordinary workers')

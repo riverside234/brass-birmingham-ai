@@ -9,6 +9,12 @@ import zlib
 from brass_ai.learning.contracts import require
 
 
+def model_cohort(packet):
+    """Execution order only: no opponent redraw, rotation or sampling RNG."""
+    jobs=packet['jobs']
+    return tuple(sorted({p['model_id'] for j in jobs for p in j.get('policies',[]) if 'model_id' in p}))
+
+
 class ReadyWork:
     """No prefetch backlog: branch-ready work goes to the next free lane.
 
@@ -17,12 +23,13 @@ class ReadyWork:
     collection's measured duration. Stable job indices break all ties.
     Scheduling never consumes a game RNG or changes its policies.
     """
-    def __init__(self,packets,estimates=None):
+    def __init__(self,packets,estimates=None,model_cohorts=False):
         self.parents=[];self.branches=[];self.estimates=estimates or {}
         for packet in packets:
             job=packet['jobs'][0]
             heapq.heappush(self.parents,(not bool(job.get('branching')),
-                -self.estimates.get(job['provenance']['kind'],1.),job['index'],packet))
+                -self.estimates.get(job['provenance']['kind'],1.),
+                model_cohort(packet) if model_cohorts else (),job['index'],packet))
 
     def add_branch(self,packet):
         c=packet['continuation']['row']['view']['context']

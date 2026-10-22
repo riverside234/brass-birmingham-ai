@@ -90,6 +90,21 @@ def quota_holdout_checkpoint(saved,options,generation):
 class TrainingPhases:
     def __init__(self,model,config,*,raw=None,generation=0,root=None,run=None):
         from . import ppg_config
+        self.snapshot_floor_migration=None
+        saved=(raw or {}).get('training',{}).get(KEY)
+        old_critic=(saved or {}).get('options',{}).get('critic_data')
+        if (old_critic is not None and old_critic!=config.get('critic_data') and
+                config.get('critic_data',{}).get('contract')==critic_data.DEFAULT['contract']):
+            options=critic_data.floor_config(saved['options'])
+            require(options['critic_data']==config['critic_data'],'Invalid snapshot floor checkpoint transition')
+            critic_data.validate_state(saved['critic_data'],old_critic,generation)
+            # Change only the option receipt. Model/Adam tensors, GAE, R2
+            # references, evidence, active weight and RNG remain untouched.
+            saved=dict(saved,options=options)
+            raw=dict(raw,training=dict(raw['training'],**{KEY:saved}))
+            self.snapshot_floor_migration=dict(contract=critic_data.FLOOR_MIGRATION,origin=generation,
+                floor_before=old_critic['rollout']['reduced_snapshot_weight'],floor_after=0.,
+                weight_preserved=saved['critic_data']['snapshot_weight'])
         self.rolling=ppg_config.active(config['value_phase']) and config['value_phase']['enabled']
         if self.rolling:
             self._init_rolling(model,config,raw=raw,generation=generation,root=root,run=run)
@@ -337,7 +352,7 @@ class TrainingPhases:
                 if role=='snapshot':critic.critic_weights[i]=self.critic_state['snapshot_weight']
         self.train_ids,self.heldout_ids,self.split=value_phase.split(critic.data,self.options['value_phase']['holdout_fraction'],
             self.options['value_phase'].get('holdout'))
-        if self.critic_state and not self.critic_state['snapshots_active']:
+        if self.critic_state and (not self.critic_state['snapshots_active'] or self.critic_state['snapshot_weight']==0):
             self.train_ids=[i for i in self.train_ids if critic.roles[i]=='learner']
         self.learner_train_ids=[i for i in self.train_ids if i<len(dataset.data)]
         if self.split:self.split['eligible_train_rows']=len(self.train_ids)
@@ -462,6 +477,7 @@ class TrainingPhases:
                 regime=regime(value,update,exploration))
             if self.critic_migration:value['critic_rollout']['recovery_migration']=copy.deepcopy(self.critic_migration)
             if getattr(self,'snapshot_r2_migration',None):value['critic_rollout']['r2_migration']=copy.deepcopy(self.snapshot_r2_migration)
+            if self.snapshot_floor_migration:value['critic_rollout']['floor_migration']=copy.deepcopy(self.snapshot_floor_migration)
         update['gae']['gate']=report
         return report
 
@@ -491,6 +507,7 @@ class TrainingPhases:
         self.disable_migration=None
         self.holdout_migration=None
         self.snapshot_r2_migration=None
+        self.snapshot_floor_migration=None
         self.disabled_startup_cleanup=None
         if self.rolling:
             self.schedule=self.pending_schedule;self.epoch_control=self.pending_epoch_control;self.rolling_migration=None

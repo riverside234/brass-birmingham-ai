@@ -36,7 +36,7 @@ class GroupFloors(unittest.TestCase):
         self.assertEqual({k for k in self.cfg if self.cfg[k]!=self.old[k]},{'entropy_control','branching'})
         self.assertEqual(self.old,original);self.assertEqual(E.group_floor_config(self.cfg),self.cfg)
         fresh=latest_model_config(self.old,self.old['imitation_checkpoint'])
-        self.assertEqual(fresh['entropy_control'],self.cfg['entropy_control'])
+        self.assertEqual(fresh['entropy_control'],E.ANCHOR_ENTROPY)
         self.assertEqual(fresh['branching'],self.cfg['branching'])
         self.assertEqual(self.cfg['opening'],self.old['opening'])
         self.assertEqual(self.cfg['branching']['rate_per_decision'],.005)

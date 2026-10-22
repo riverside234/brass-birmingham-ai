@@ -59,7 +59,7 @@ def calibration_ready(model):
     return bool(receipt and receipt.get('reward_id')==digest(model.config.utility) and receipt.get('ready'))
 
 
-def calibrate(model,optimizer,dataset,config,*,auxiliary=None,indices=None):
+def calibrate(model,optimizer,dataset,config,*,auxiliary=None,indices=None,executor=None):
     from .updates import value_output
     if calibration_ready(model):return dict(required=False,receipt=model.utility_calibration)
     require(dataset.utility is not None,'Calibration requires fresh complete-game utility targets')
@@ -88,8 +88,8 @@ def calibrate(model,optimizer,dataset,config,*,auxiliary=None,indices=None):
     def error():
         squared=absolute=0.
         with torch.no_grad():
-            for part in dataset.microbatches(indices,config['microbatch_size'],config['max_candidate_cells'],config['bucket']):
-                ix,inputs,_=dataset.value_batch(part,model)
+            parts=dataset.microbatches(indices,config['microbatch_size'],config['max_candidate_cells'],config['bucket'])
+            for part,ix,inputs in dataset.value_batches(parts,model,executor):
                 diff=value_output(model,inputs,dataset,ix)[-1].float()-dataset.utility[ix]
                 squared+=float(diff.square().sum());absolute+=float(diff.abs().sum())
         n=4*len(indices)
@@ -106,8 +106,8 @@ def calibrate(model,optimizer,dataset,config,*,auxiliary=None,indices=None):
             order=[indices[j] for j in torch.randperm(len(indices)).tolist()]
             for start in range(0,len(order),config['effective_batch_size']):
                 batch=order[start:start+config['effective_batch_size']];optimizer.zero_grad(set_to_none=True)
-                for part in dataset.microbatches(batch,config['microbatch_size'],config['max_candidate_cells'],config['bucket']):
-                    ix,inputs,_=dataset.value_batch(part,model)
+                parts=dataset.microbatches(batch,config['microbatch_size'],config['max_candidate_cells'],config['bucket'])
+                for part,ix,inputs in dataset.value_batches(parts,model,executor):
                     diff=value_output(model,inputs,dataset,ix)[-1].float()-dataset.utility[ix]
                     ((1-fraction)*(diff.square().mean(-1)*dataset.critic_weights[ix]).sum()/len(batch)).backward()
                 if teacher is not None:

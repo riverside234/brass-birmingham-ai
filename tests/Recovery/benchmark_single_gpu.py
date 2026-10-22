@@ -27,18 +27,18 @@ from brass_ai.step5.league import implementation_id, write_json
 @contextmanager
 def measured(report):
     stop=threading.Event();owner=psutil.Process();seen={};base={};peaks=[]
-    def sample():
+    def sample(initial=False):
         total=0
         for p in [owner]+owner.children(recursive=True):
             try:
                 key=(p.pid,p.create_time());cpu=p.cpu_times();seconds=cpu.user+cpu.system
-                if key not in base:base[key]=seconds if p.pid==owner.pid else 0.
+                if key not in base:base[key]=seconds if initial or p.pid==owner.pid else 0.
                 seen[key]=seconds;total+=p.memory_info().rss
             except (psutil.NoSuchProcess,psutil.AccessDenied):pass
         peaks.append(total)
     def watch():
         while not stop.wait(.25):sample()
-    sample();thread=threading.Thread(target=watch,daemon=True);start=time.perf_counter();thread.start()
+    sample(initial=True);thread=threading.Thread(target=watch,daemon=True);start=time.perf_counter();thread.start()
     try:yield
     finally:
         stop.set();thread.join();sample();elapsed=time.perf_counter()-start

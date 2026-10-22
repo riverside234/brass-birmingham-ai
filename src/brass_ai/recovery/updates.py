@@ -189,6 +189,9 @@ class Dataset:
             yield part,ix,inputs
 
     def policy_batches(self, parts, exploration=0, executor=None, *, value_only=False, cache=False):
+        if hasattr(executor,'batches'):
+            yield from executor.batches(self,parts,exploration,value_only=value_only,cache=cache)
+            return
         if executor is None:
             for part in parts:
                 if cache:
@@ -319,10 +322,10 @@ def policy_measure(model, dataset, indices, behavior, config, timings, verify=Fa
     return result
 
 
-def ppo_update(model,optimizer,games,behavior,config,*,profile=None,profile_steps=4,rehearsal=None,rehearsal_weight=0,learner_data=None,insolvency=None,reward=None,sample_groups=None,anchor_model=None,phases=None):
+def ppo_update(model,optimizer,games,behavior,config,*,profile=None,profile_steps=4,rehearsal=None,rehearsal_weight=0,learner_data=None,insolvency=None,reward=None,sample_groups=None,anchor_model=None,phases=None,preparation_pool=None):
     if config.get('actor_nonforced'):
         return ppo_nonforced(model,optimizer,games,behavior,config,profile=profile,profile_steps=profile_steps,
-                             rehearsal=rehearsal,rehearsal_weight=rehearsal_weight,learner_data=learner_data,insolvency=insolvency,reward=reward,sample_groups=sample_groups,anchor_model=anchor_model,phases=phases)
+                             rehearsal=rehearsal,rehearsal_weight=rehearsal_weight,learner_data=learner_data,insolvency=insolvency,reward=reward,sample_groups=sample_groups,anchor_model=anchor_model,phases=phases,preparation_pool=preparation_pool)
     require(phases is None,'GAE/value phase requires the nonforced actor recipe')
     require(insolvency is None and reward is None,'Combined reward requires the nonforced actor recipe')
     require(all(g['split']=='train' for g in games),'Held-out PPO data')
@@ -420,11 +423,25 @@ def phase_probe(dataset,indices,limit):
     return output
 
 
-def ppo_nonforced(model,optimizer,games,behavior,config,*,profile=None,profile_steps=4,rehearsal=None,rehearsal_weight=0,learner_data=None,insolvency=None,reward=None,sample_groups=None,anchor_model=None,phases=None):
+def ppo_nonforced(model,optimizer,games,behavior,config,*,profile=None,profile_steps=4,rehearsal=None,rehearsal_weight=0,learner_data=None,insolvency=None,reward=None,sample_groups=None,anchor_model=None,phases=None,preparation_pool=None):
     cuda=next(model.parameters()).device.type=='cuda'
-    with (ThreadPoolExecutor(max_workers=2) if cuda else nullcontext(None)) as executor:
-        return _ppo_nonforced(model,optimizer,games,behavior,config,profile=profile,profile_steps=profile_steps,
+    from contextlib import ExitStack
+    from .ppo_preparation import PreparationPool,Preparation
+    workers=config.get('preparation_workers',0)
+    # Avoid spawning/importing Torch workers for tiny diagnostics. Production
+    # collections are much larger; explicit Preparation tests cover small rows.
+    useful=workers and (learner_data is None or len(learner_data)>=2048)
+    with ExitStack() as stack:
+        if useful:
+            pool=preparation_pool or stack.enter_context(PreparationPool(workers))
+            require(pool.workers==workers,'PPO preparation pool/config differ')
+            executor=stack.enter_context(Preparation(pool))
+        else:executor=stack.enter_context(ThreadPoolExecutor(max_workers=2)) if cuda else None
+        result=_ppo_nonforced(model,optimizer,games,behavior,config,profile=profile,profile_steps=profile_steps,
                               rehearsal=rehearsal,rehearsal_weight=rehearsal_weight,learner_data=learner_data,executor=executor,insolvency=insolvency,reward=reward,sample_groups=sample_groups,anchor_model=anchor_model,phases=phases)
+        if workers:result['cpu_preparation']=(executor.report() if useful else
+            dict(workers=0,requested_workers=workers,reason='Fewer than 2048 rows; inline/thread preparation avoids process overhead'))
+        return result
 
 
 def _ppo_nonforced(model,optimizer,games,behavior,config,*,profile,profile_steps,rehearsal,rehearsal_weight,learner_data,executor,insolvency,reward,sample_groups=None,anchor_model=None,phases=None):
@@ -456,7 +473,7 @@ def _ppo_nonforced(model,optimizer,games,behavior,config,*,profile,profile_steps
                 'PPO model/return reward version differs')
         require(all(r['teacher'] is None for r in ds.rows),'Search distributions cannot enter fresh PPO rollouts')
         with timings.phase('ppo.utility_calibration'):
-            calibration=calibrate(model,optimizer,critic_ds,config,indices=critic_ids)
+            calibration=calibrate(model,optimizer,critic_ds,config,indices=critic_ids,executor=executor)
         trajectories=[r['_reward_trajectory'] for r in ds.rows if '_reward_trajectory' in r]
         require(len(trajectories)==len({d[2] for d in data}),'Missing reward components')
         means={k:sum(t[k] for t in trajectories)/len(trajectories) for k in trajectories[0]}

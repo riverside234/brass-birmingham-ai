@@ -19,7 +19,7 @@ def main():
     parser.add_argument('--output',type=Path,help='Defaults to progress.svg beside the report')
     parser.add_argument('--preview',type=Path,help='Optional PNG for visual inspection')
     parser.add_argument('--max-points',type=int,default=DEFAULT_MAX_POINTS,
-        help=f'Maximum plotted points; adjacent history is averaged above this cap (default: {DEFAULT_MAX_POINTS})')
+        help='Full-history display cap (3–30, default 30); average adjacent history above this cap, keep first/latest exact')
     args=parser.parse_args()
     output=args.output or args.report.with_name('progress.svg')
     if output.suffix.lower()!='.svg':raise ValueError('Output must be an SVG file')

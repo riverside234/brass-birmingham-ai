@@ -3,7 +3,7 @@ import copy
 import math
 import statistics
 
-from brass_ai.learning.contracts import require
+from brass_ai.learning.contracts import digest, require
 from brass_ai.step5.policy import FAMILY_WEIGHTS
 
 GROUPS = ('canal_action', 'canal_other', 'rail_action', 'rail_other')
@@ -20,6 +20,11 @@ UNIFORM_ENTROPY = dict(DECAY_ENTROPY, contract='entropy-floor-controller/2.0.0',
     floor_start_ratio=.95, floor_decay_per_iteration=1., floor_min_ratio=.95)
 ENTROPY = dict(UNIFORM_ENTROPY, contract='entropy-floor-controller/3.0.0',
     floor_ratio_by_group=dict(canal_action=.95,canal_other=.90,rail_action=.95,rail_other=.90))
+ANCHOR_ENTROPY = dict({k:copy.deepcopy(v) for k,v in ENTROPY.items()
+    if k not in ('floor_start_ratio','floor_decay_per_iteration','floor_min_ratio')},
+    contract='entropy-floor-controller/4.0.0',floor_drop_per_anchor_promotion=.02,
+    floor_min_ratio_by_group=dict(canal_action=.85,canal_other=.80,rail_action=.85,rail_other=.80),
+    promotion_origin=dict(generation=0,event_count=0,events_sha256=digest([])))
 LEGACY_OPENING = dict(contract='opening-temperature/1.0.0', temperature=1.5, action_decisions_per_seat=2, seats='neural')
 OPENING = dict(LEGACY_OPENING, contract='opening-temperature/2.0.0', temperature=2.)
 LEGACY_BRANCH = dict(contract='selfplay-branching/1.0.0', tables=['selfplay'], rate_per_decision=.005,
@@ -35,13 +40,15 @@ BLOCKS = ('exploration_distribution','entropy_control','opening','branching','ex
 MIGRATION = 'staged-exploration/1.0.0'
 FROZEN_MIGRATION = 'frozen-entropy-branch-openings/1.0.0'
 GROUP_FLOOR_MIGRATION = 'group-entropy-floors-low-branching/1.0.0'
+ANCHOR_FLOOR_MIGRATION = 'anchor-promotion-entropy-floors/1.0.0'
 STATE = 'exploration-state/1.0.0'
+ANCHOR_STATE = 'exploration-state/2.0.0'
 
 
 def configure(config, staged=False):
     result=copy.deepcopy(config)
     result.update(exploration=.02, exploration_distribution=copy.deepcopy(Q),
-        entropy_control=copy.deepcopy(ENTROPY), opening=copy.deepcopy(OPENING),
+        entropy_control=copy.deepcopy(ANCHOR_ENTROPY), opening=copy.deepcopy(OPENING),
         branching=copy.deepcopy(BRANCH), exploration_rollout=copy.deepcopy(ROLLOUT))
     if staged:
         result['exploration_rollout'].update(mode='staged',opening_after_iterations=1,raw_entropy_after_iterations=2)
@@ -92,6 +99,22 @@ def group_floor_config(config):
     return result
 
 
+def anchor_floor_config(config, state=None):
+    """Bind prospective promotion counting into the reviewed run signature."""
+    validate(config)
+    result=copy.deepcopy(config)
+    if not any(b in config for b in BLOCKS):return result
+    if config['opening']!=OPENING or config['branching']!=BRANCH:return result
+    if config['entropy_control']['contract']==ANCHOR_ENTROPY['contract']:return result
+    result['entropy_control']=dict(copy.deepcopy(ANCHOR_ENTROPY),mode=config['entropy_control']['mode'])
+    if state is not None:
+        events=(state.get('policy_anchor') or {}).get('events',[])
+        result['entropy_control']['promotion_origin']=dict(generation=state['iteration'],
+            event_count=len(events),events_sha256=digest(events))
+    validate(result)
+    return result
+
+
 def validate(config):
     present=[b in config for b in BLOCKS]
     if not any(present): return
@@ -107,8 +130,17 @@ def validate(config):
     require(type(e) is dict,'Invalid entropy floor controller')
     check=e.get('deployment_temperature_check',{})
     require('enabled' not in check or check['enabled'] is False,'Temperature comparisons must be explicitly disabled')
-    recipes=(ENTROPY,) if current else (UNIFORM_ENTROPY,) if uniform else (DECAY_ENTROPY,LEGACY_ENTROPY)
-    require(e.get('mode') in ('off','shadow','apply') and dict(e,mode='apply') in recipes,
+    recipes=(ENTROPY,ANCHOR_ENTROPY) if current else (UNIFORM_ENTROPY,) if uniform else (DECAY_ENTROPY,LEGACY_ENTROPY)
+    comparable=dict(e,mode='apply')
+    if e.get('contract')==ANCHOR_ENTROPY['contract']:
+        origin=e.get('promotion_origin')
+        require(type(origin) is dict and set(origin)=={'generation','event_count','events_sha256'} and
+            all(type(origin[k]) is int and origin[k]>=0 for k in ('generation','event_count')) and
+            type(origin['events_sha256']) is str and len(origin['events_sha256'])==64 and
+            all(c in '0123456789abcdef' for c in origin['events_sha256']) and
+            (origin['event_count']!=0 or origin['events_sha256']==digest([])), 'Invalid entropy promotion origin')
+        comparable['promotion_origin']=ANCHOR_ENTROPY['promotion_origin']
+    require(e.get('mode') in ('off','shadow','apply') and comparable in recipes,
         'Invalid entropy floor controller')
     r=config['exploration_rollout']
     expected=dict(ROLLOUT,mode='staged',opening_after_iterations=1,raw_entropy_after_iterations=2) if r.get('mode')=='staged' else ROLLOUT
@@ -135,7 +167,9 @@ def check_behavior(b, phase, *, branch_move=False):
 
 
 def initial(config, generation):
-    return dict(contract=STATE, origin=generation, generation=generation,
+    anchored=config['entropy_control']['contract']==ANCHOR_ENTROPY['contract']
+    return dict(contract=ANCHOR_STATE if anchored else STATE, origin=generation, generation=generation,
+        **(dict(floor_anchor_promotions=0) if anchored else {}),
         baseline_rows=[], baseline=None, armed_at=None,
         groups={g:dict(alpha=config['entropy_control']['alpha_base'],window=[],cap_streak=0) for g in GROUPS})
 
@@ -146,10 +180,16 @@ def restore(config, state, checkpoint=None):
     if saved is None:
         require(checkpoint is None, 'Checkpoint exploration state missing from committed run')
         return initial(config,state['iteration'])
-    require(type(saved) is dict and set(saved)=={'contract','origin','generation','baseline_rows','baseline','armed_at','groups'} and
-        saved==checkpoint and saved['contract']==STATE and type(saved['generation']) is int and
+    anchored=config['entropy_control']['contract']==ANCHOR_ENTROPY['contract']
+    upgraded=saved.get('contract')==ANCHOR_STATE
+    fields={'contract','origin','generation','baseline_rows','baseline','armed_at','groups'}
+    require(type(saved) is dict and set(saved)==fields|({'floor_anchor_promotions'} if upgraded else set()) and
+        saved==checkpoint and saved['contract'] in (STATE,ANCHOR_STATE) and type(saved['generation']) is int and
         type(saved['origin']) is int and saved['generation']==state['iteration'] and
         0<=saved['origin']<=saved['generation'], 'Exploration checkpoint state differs')
+    if upgraded:
+        require(anchored and type(saved['floor_anchor_promotions']) is int and saved['floor_anchor_promotions']>=0,
+            'Invalid entropy promotion count or unsupported return to frozen floors')
     finite=lambda x:type(x) in (int,float) and math.isfinite(x) and x>=0
     rows=saved['baseline_rows']
     require(type(rows) is list and len(rows)<=10 and
@@ -166,7 +206,54 @@ def restore(config, state, checkpoint=None):
             len(entry['window'])<=3 and all(finite(v) for v in entry['window']) and
             type(entry['cap_streak']) is int and entry['cap_streak']>=0,
             'Invalid saved entropy controller')
-    return copy.deepcopy(saved)
+    result=copy.deepcopy(saved)
+    if anchored and not upgraded:result.update(contract=ANCHOR_STATE,floor_anchor_promotions=0)
+    return sync_anchor_floor(config,result,state.get('policy_anchor'))
+
+
+def sync_anchor_floor(config, state, controller):
+    """Replay committed anchor receipts, including a pending pre-PPO promotion.
+
+    The signed origin makes this restart-safe even if a promotion is committed
+    to state.json before the first new entropy checkpoint is written.
+    """
+    if config['entropy_control']['contract']!=ANCHOR_ENTROPY['contract']:return state
+    result=copy.deepcopy(state);origin=config['entropy_control']['promotion_origin']
+    require(origin['generation']<=state['generation'],'Entropy promotion origin is in the future')
+    events=(controller or {}).get('events',[]);start=origin['event_count']
+    require(type(events) is list and len(events)>=start and digest(events[:start])==origin['events_sha256'],
+        'Entropy anchor promotion history differs from its signed origin')
+    selected=events[start:]
+    require(all(type(e) is dict and e.get('decision')=='promote' and type(e.get('reference_generation')) is int and
+        type(e.get('generation')) is int and
+        0<e['reference_generation']<=e['generation'] and origin['generation']<=e['generation'] and
+        e.get('evidence',{}).get('points_delta_ci95',[0])[0]>0 for e in selected),
+        'Unqualified anchor event cannot lower entropy floors')
+    generations=[e['reference_generation'] for e in events]
+    require(generations==sorted(set(generations)), 'Anchor references must advance to distinct newer generations')
+    require(type(result.get('floor_anchor_promotions')) is int and
+        0<=result['floor_anchor_promotions']<=len(selected),'Entropy promotion count went backwards')
+    result['floor_anchor_promotions']=len(selected)
+    return result
+
+
+def floor_ratios(config, state):
+    e=config['entropy_control'];ratios=e.get('floor_ratio_by_group')
+    if e['contract']!=ANCHOR_ENTROPY['contract']:return copy.deepcopy(ratios)
+    require(state.get('contract')==ANCHOR_STATE,'Entropy promotion state must be restored before use')
+    count=state['floor_anchor_promotions']
+    return {g:max(e['floor_min_ratio_by_group'][g],round(ratios[g]-count*e['floor_drop_per_anchor_promotion'],12))
+        for g in GROUPS}
+
+
+def anchor_floor_transition(config, state, controller):
+    if state is None:return state,None
+    after=sync_anchor_floor(config,state,controller)
+    if after.get('floor_anchor_promotions')==state.get('floor_anchor_promotions'):return after,None
+    return after,dict(decision='lower_on_anchor_promotion',
+        promotions_before=state['floor_anchor_promotions'],promotions_after=after['floor_anchor_promotions'],
+        floor_ratio_before=floor_ratios(config,state),floor_ratio_after=floor_ratios(config,after),
+        baseline_preserved=True,scope='Next entropy target; original baseline and current alpha unchanged')
 
 
 def effective(config, state, generation):
@@ -188,15 +275,15 @@ def floors(config, state, generation):
     require(generation>=state['armed_at'], 'Entropy floor precedes its baseline')
     e=config['entropy_control']
     if 'floor_ratio_by_group' in e:
-        return {g:state['baseline'][g]*e['floor_ratio_by_group'][g] for g in GROUPS}
+        return {g:state['baseline'][g]*ratio for g,ratio in floor_ratios(config,state).items()}
     ratio=max(e['floor_min_ratio'],e['floor_start_ratio']*
               e['floor_decay_per_iteration']**(generation-state['armed_at']))
     return {g:state['baseline'][g]*ratio for g in GROUPS}
 
 
-def advance(state, config, measurement, *, generation, warmup_done, healthy):
+def advance(state, config, measurement, *, generation, warmup_done, healthy, policy_anchor=None):
     """One final-probe observation per committed iteration; no RNG consumption."""
-    s=copy.deepcopy(state); e=config['entropy_control']
+    s=sync_anchor_floor(config,copy.deepcopy(state),policy_anchor); e=config['entropy_control']
     require(generation==s['generation']+1, 'Entropy controller skipped/repeated a generation')
     active=effective(config,s,generation-1)['raw_entropy']
     values={g:measurement.get('groups',{}).get(g,{}).get('raw_entropy') for g in GROUPS}
@@ -234,8 +321,10 @@ def advance(state, config, measurement, *, generation, warmup_done, healthy):
             alpha_before=before,alpha_after=entry['alpha'],decision=decision,reason=reason,alarms=alarms)
     s['generation']=generation
     return s,dict(contract=e['contract'],mode=e['mode'],origin=s['origin'],armed_at=s['armed_at'],
-        **(dict(floor_ratio_by_group=copy.deepcopy(e['floor_ratio_by_group'])) if 'floor_ratio_by_group' in e else {}),
-        floor_start_ratio=e['floor_start_ratio'],floor_decay_per_iteration=e['floor_decay_per_iteration'],
-        floor_min_ratio=e['floor_min_ratio'],
+        **(dict(floor_ratio_by_group=floor_ratios(config,s)) if 'floor_ratio_by_group' in e else {}),
+        **{k:copy.deepcopy(e[k]) for k in ('floor_start_ratio','floor_decay_per_iteration','floor_min_ratio',
+            'floor_min_ratio_by_group','floor_drop_per_anchor_promotion','promotion_origin') if k in e},
+        **(dict(floor_anchor_promotions=s['floor_anchor_promotions'],
+            floor_initial_ratio_by_group=copy.deepcopy(e['floor_ratio_by_group'])) if 'floor_anchor_promotions' in s else {}),
         baseline_iterations=len(s['baseline_rows']),healthy=bool(healthy),groups=report,
         scope='Final raw policy on fixed IL probe; prospective post-warmup baseline, no retired IL action checks')

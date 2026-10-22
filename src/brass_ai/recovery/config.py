@@ -42,6 +42,17 @@ ARCHIVED_PHASE_TIME_CONFIG_MIGRATION = 'step5-phase-teacher-time/1.0.0'
 ARCHIVED_EARLY_RAIL_TIME_CONFIG_MIGRATION = 'step5-phase-teacher-time/1.1.0'
 TIME_CONFIG_MIGRATION = 'step5-phase-teacher-time/1.2.0'
 PPO_MICROBATCH_CONFIG_MIGRATION = 'step5-ppo-batching-2048-524288/1.0.0'
+THROUGHPUT_CONFIG_MIGRATION = 'step5-throughput-512-131072/1.0.0'
+
+
+def throughput_config(config):
+    """Reviewed execution settings; no optimizer/evidence reset or recipe edit."""
+    result=copy.deepcopy(config)
+    result['update'].update(microbatch_size=512,max_candidate_cells=131072,preparation_workers=4)
+    # Looser padding and model cohorts lost the bounded CPU comparison. Keep
+    # established scheduling; expose the knobs for an isolated GPU benchmark.
+    result['execution'].update(padding_ratio=2.,model_cohorts=False)
+    return result
 
 
 def ppo_microbatch_config(config):
@@ -359,7 +370,7 @@ def latest_model_config(config,imitation_checkpoint):
     from .policy_anchor import configure as configure_anchor
     from .value_phase import disabled_options
     from .ppg_config import configure as configure_ppg
-    return validate_config(ppo_microbatch_config(disabled_options(configure_ppg(configure_anchor(configure_v4_share(configure(interval_options(refined_options(insolvency_event_config(champion_mix_config(sampling_config(result))))))))))))
+    return validate_config(throughput_config(disabled_options(configure_ppg(configure_anchor(configure_v4_share(configure(interval_options(refined_options(insolvency_event_config(champion_mix_config(sampling_config(result))))))))))))
 
 
 def champion_mix_config(config):
@@ -429,14 +440,16 @@ def search_workers_per_turn(config,*,teacher=False):
 
 
 def execution_config(config):
-    optional={'shared_slot_bytes','inference_routing','replica_backlog','teacher_search_workers_per_turn'}
+    optional={'shared_slot_bytes','inference_routing','replica_backlog','teacher_search_workers_per_turn','padding_ratio','model_cohorts'}
     require(set(config)-optional in (set(EXECUTION),set(EXECUTION_V21)), 'Unknown/missing execution field')
-    for key in set(config)-{'feature_cache','shared_slot_bytes','inference_routing'}:
+    for key in set(config)-{'feature_cache','shared_slot_bytes','inference_routing','padding_ratio','model_cohorts'}:
         positive(config[key], key, integer=key != 'flush_ms')
     if 'shared_slot_bytes' in config:
         require(type(config['shared_slot_bytes']) is int and (config['shared_slot_bytes']==0 or 65536<=config['shared_slot_bytes']<=16777216),'Invalid shared slot capacity')
     if 'inference_routing' in config:require(config['inference_routing'] in ('demand','round_robin'),'Invalid inference routing')
     if 'feature_cache' in config: require(type(config['feature_cache']) is bool,'Invalid feature cache flag')
+    if 'model_cohorts' in config:require(type(config['model_cohorts']) is bool,'Invalid model cohort flag')
+    if 'padding_ratio' in config:require(type(config['padding_ratio']) in (int,float) and 1<=config['padding_ratio']<=4,'Invalid inference padding ratio')
     require(config['flush_ms'] <= 50, 'Excessive inference queue delay')
     if 'cpu_budget' in config:
         require(config['cpu_reserve']<config['cpu_budget'],'CPU reserve exceeds allocation')
@@ -449,7 +462,10 @@ def execution_config(config):
 
 
 def update_config(config):
-    require(set(config) in (set(UPDATE),set(UPDATE_V21)), 'Unknown/missing update field')
+    require(set(config)-{'preparation_workers'} in (set(UPDATE),set(UPDATE_V21)), 'Unknown/missing update field')
+    if 'preparation_workers' in config:
+        require(type(config['preparation_workers']) is int and config['preparation_workers'] in (0,4,8),
+            'PPO preparation_workers must be 0, 4 or 8')
     if 'actor_nonforced' in config:
         require(type(config['actor_nonforced']) is bool,'Invalid actor sampling flag')
         for key in ('critic_batch_size','kl_probe_rows'): positive(config[key],key,integer=True)
@@ -700,9 +716,10 @@ def validate_config(config):
         search_wall_fraction(config['search_wall_fraction'])
         require(config['execution']['max_models']>=sum(config['population'].values())+3,
                 'Model cache must cover frozen population plus learner/teacher versions')
-        require(set(config['update'])==set(UPDATE_V21) and
-                set(config['execution'])-{'shared_slot_bytes','inference_routing','replica_backlog','teacher_search_workers_per_turn'}==set(EXECUTION_V21),
+        require(set(config['update'])-{'preparation_workers'}==set(UPDATE_V21) and
+                set(config['execution'])-{'shared_slot_bytes','inference_routing','replica_backlog','teacher_search_workers_per_turn','padding_ratio','model_cohorts'}==set(EXECUTION_V21),
                 '2.1 requires revised update/execution')
+        require(config['update'].get('preparation_workers',0)<=available,'PPO preparation exceeds CPU budget')
     require(set(config)==fields and version=='step5-training/2.2.0' and config['players']==4,
         'Use the fresh four-player Masked ISMCTS 2.2 recipe; historical runs cannot migrate in place')
     require(config['model_size'] in ('small','medium'), 'Unknown residual model preset')

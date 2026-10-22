@@ -295,9 +295,12 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
     if fixed_probe is not None and 'policy_anchor' in config:
         anchor_values,anchor_transition=policy_anchor.prepare(root,run,state,config,fixed_probe,model)
         policy_anchor.console(anchor_transition)
+        exploration_state,floor_transition=exploration.anchor_floor_transition(config,exploration_state,state.get('policy_anchor'))
+        if floor_transition:print(f'Entropy floor promotion: {floor_transition["floor_ratio_after"]}; original baseline preserved',flush=True)
+    from .ppo_preparation import PreparationPool
     with InferenceService(config['execution'],device,profile=run/'profile-collection' if config['profile_steps'] else None,
                           profile_steps=config['profile_steps'],inference_devices=inference_devices) as service,reader_pool(config['audit_workers'],admission=service.cpu) as readers:
-        with ActorPool(root,config['host'],service,config['execution'],mono=mono) as ordinary,ActorPool(root,config['host'],service,config['execution'],mono=mono,heavy=True) as heavy:
+        with ActorPool(root,config['host'],service,config['execution'],mono=mono) as ordinary,ActorPool(root,config['host'],service,config['execution'],mono=mono,heavy=True) as heavy,PreparationPool(config['update'].get('preparation_workers',0)) as preparation_pool:
             from .champion import schedule as schedule_champion
             # Resume an interrupted gate for the committed candidate before
             # advancing the learner or writing a new gate specification.
@@ -388,7 +391,7 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                         profile=directory/'profile-ppo' if config['profile_steps'] else None,
                         profile_steps=config['profile_steps'],
                         rehearsal=active_rehearsal,rehearsal_weight=weight,learner_data=learner_data,insolvency=config.get('insolvency'),reward=reward,
-                        sample_groups=sample_groups,anchor_model=anchor_model,phases=phases)
+                        sample_groups=sample_groups,anchor_model=anchor_model,phases=phases,preparation_pool=preparation_pool)
                     if rehearsal_index is not None and weight:update['rehearsal_sampling']=active_rehearsal.report
                     ppo_ended=time.monotonic()
                 rehearsal_cleaned=time.monotonic()
@@ -474,7 +477,8 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                         not (value_report or {}).get('kl_guard_tripped',False) and
                         update['categorical_probe']['categorical_kl']<=1.5*config['update']['target_kl'])
                     exploration_state,entropy_report=exploration.advance(exploration_state,config,final_measurement,
-                        generation=iteration+1,warmup_done=update['controller_warmup_done'],healthy=healthy)
+                        generation=iteration+1,warmup_done=update['controller_warmup_done'],healthy=healthy,
+                        policy_anchor=state.get('policy_anchor'))
                 del learner_data
                 output=run/f'generation-{iteration+1:04d}.pt'
                 if quality:
@@ -589,6 +593,8 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                             anchor_values,anchor_transition=policy_anchor.prepare(root,run,state,config,fixed_probe,model)
                             policy_anchor.console(anchor_transition)
                             report['anchor_transition']=anchor_transition
+                            exploration_state,floor_transition=exploration.anchor_floor_transition(config,exploration_state,state.get('policy_anchor'))
+                            if floor_transition:report['entropy_floor_transition']=floor_transition
                     report['timings']['evaluation_seconds']=time.monotonic()-evaluation_began
                     from .retention import prune
                     cleanup_began=time.monotonic()
@@ -610,7 +616,11 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                     controller_line+=f' q=3 eps={config["exploration"]:.2f} explore_age={exploration_settings["age"]}'
                     controller_line+=' entropy='+','.join(f'{g}:{v["alpha_after"]:.4f}' for g,v in entropy_report['groups'].items())
                     if 'floor_ratio_by_group' in entropy_report:
-                        controller_line+=' Hfloor='+','.join(f'{g}:{v:.2f}' for g,v in entropy_report['floor_ratio_by_group'].items())+'*baseline(fixed)'
+                        controller_line+=' Hfloor='+','.join(f'{g}:{v:.2f}' for g,v in entropy_report['floor_ratio_by_group'].items())+'*baseline'
+                        controller_line+=('(anchor-promotions='+str(entropy_report['floor_anchor_promotions'])+')'
+                            if 'floor_anchor_promotions' in entropy_report else '(fixed)')
+                        if report.get('entropy_floor_transition'):
+                            controller_line+=' next_Hfloor='+','.join(f'{g}:{v:.2f}' for g,v in report['entropy_floor_transition']['floor_ratio_after'].items())
                     elif entropy_report['floor_decay_per_iteration']==1.:
                         controller_line+=f' Hfloor={entropy_report["floor_start_ratio"]:.2f}*baseline(fixed)'
                 if phases is not None:

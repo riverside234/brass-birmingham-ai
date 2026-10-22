@@ -10,7 +10,7 @@ MIN_ITERATIONS = 10
 MIN_GAMES = 8
 MIN_TABLE_GAMES = 2
 HEALTHY_ITERATIONS = 5
-WEIGHTS = (.5, .75, 1.)
+WEIGHTS = (0., .5, .75, 1.)
 
 
 def pool(parts):
@@ -178,8 +178,9 @@ def reference(evidence, generation, weight, current_regime):
                 evidence=copy.deepcopy(evidence))
 
 
-def advance(r, weight, *, generation, observation, current_regime, active, tolerance):
+def advance(r, weight, *, generation, observation, current_regime, active, tolerance, floor=.5):
     r = copy.deepcopy(validate(r, generation - 1, weight))
+    require(type(floor) in (int,float) and floor in (0.,.5) and weight>=floor,'Invalid snapshot weight floor')
     require(observation['generation'] == generation, 'Snapshot R2 observation generation differs')
     regime_changed = r['regime'] is not None and r['regime'] != current_regime
     if regime_changed:
@@ -213,8 +214,8 @@ def advance(r, weight, *, generation, observation, current_regime, active, toler
             reason = 'snapshot_r2_initial_reference_frozen'
         else:
             reason = 'snapshot_r2_calibration_health_not_ready'
-    elif fresh and evidence['r2'] < threshold - tolerance and weight > .5:
-        next_weight = .5
+    elif fresh and evidence['r2'] < threshold - tolerance and weight > floor:
+        next_weight = floor
         decision, reason = 'reduce_snapshot_weight', 'learner_rolling_r2_below_frozen_reference'
     elif not fresh:
         reason = 'no_new_qualifying_snapshot_iteration'
@@ -251,7 +252,7 @@ def advance(r, weight, *, generation, observation, current_regime, active, toler
         reduce_below=threshold - tolerance if threshold is not None else None,
         learner=evidence, current=pool([p for p in observation['tables'].values() if p is not None]),
         current_qualifying=fresh, reference_before=ref_before, reference_next=copy.deepcopy(r['reference']),
-        next_weight=next_weight,
+        next_weight=next_weight, minimum_weight=floor,
         recovery_target_weight=WEIGHTS[WEIGHTS.index(next_weight) + 1] if next_weight < 1. else None,
         last_change_generation=r['last_change_generation'],
         scope='Ordinary held-out learner rows only; row-pooled MSE includes bias. Twenty committed iterations, ten qualifying; five new consecutive healthy commits, not independent overlapping windows. New weight stages start empty; reference never lowered on deterioration.')

@@ -119,12 +119,27 @@ def iteration_utilization(before,after,records,seconds,games,config):
     valid=after.get('valid_candidate_cells',0)-before.get('valid_candidate_cells',0)
     cpu=[r['actor_python_cpu_seconds'] for r in executions if r.get('actor_python_cpu_seconds') is not None]
     complete=bool(executions) and len(cpu)==len(executions)
+    def histogram_delta(new,old):
+        return {k:v-old.get(k,0) for k,v in new.items() if v-old.get(k,0)}
+    per_model={}
+    for identity,new in after.get('per_model',{}).items():
+        old=before.get('per_model',{}).get(identity,{})
+        if new['positions']==old.get('positions',0):continue
+        per_model[identity]={k:(histogram_delta(v,old.get(k,{})) if isinstance(v,dict) else
+            v if k.endswith('_max_seconds') else v-old.get(k,0)) for k,v in new.items()}
     return dict(games_per_second=games/max(seconds,1e-9),mean_inference_batch=positions/max(1,batches),
         inference_batches=batches,inference_positions=positions,padding_fraction=1-valid/cells if cells else None,
+        inference_batch_histogram=histogram_delta(after.get('batch_histogram',{}),before.get('batch_histogram',{})),
+        inference_per_model=per_model,
+        model_loads=after.get('model_loads',0)-before.get('model_loads',0),
+        model_evictions=after.get('model_evictions',0)-before.get('model_evictions',0),
+        inference_model_scope='Counts, sums and histograms are per-collection deltas; queue_wait_max_seconds is since service start',
         actor_phase_seconds=dict(phases),inference_phase_deltas=inference,
         inference_batching=dict(
             batches=after.get('batching',{}).get('batches',0)-before.get('batching',{}).get('batches',0),
             padding_splits=after.get('batching',{}).get('padding_splits',0)-before.get('batching',{}).get('padding_splits',0),
+            capacity_splits=after.get('batching',{}).get('capacity_splits',0)-before.get('batching',{}).get('capacity_splits',0),
+            max_padding_ratio=after.get('batching',{}).get('max_padding_ratio'),
             peak_pending_positions_since_service_start=after.get('batching',{}).get('peak_pending_positions'),
             scope='Per-collection count deltas; pending-position peak is cumulative'),
         actor_python_cpu_seconds=sum(cpu) if complete else None,
