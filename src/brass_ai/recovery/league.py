@@ -131,6 +131,8 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
         # never import partially trained or previous-run neural weights.
         allowed={'.active-run.json','imitation-progress.json'} if config['imitation']['manifest'] else {'.active-run.json'}
         if 'il_kl_limit' in config:allowed.add('il-kl')
+        if config.get('value_phase',{}).get('enabled') is False:
+            allowed.update(('.ppg-value-cache','.ppg-eight-cache'))
         require(not run.exists() or all(p.name in allowed for p in run.iterdir()),'New recovery directory must be empty')
         if revised: torch.manual_seed(config['seed'])
         from brass_ai.learning.model import FourSeatNet
@@ -258,6 +260,11 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
     if source_changed:
         from .resume import commit_transition
         state=commit_transition(run,state,signature,opponent_pool=resumed_pool,pool_migration=pool_migration)
+    if phases is not None:
+        cache_cleanup=phases.startup(state['iteration'])
+        if cache_cleanup is not None:
+            print(f'PPG disabled: startup removed {len(cache_cleanup["deleted_files"])} cache files '
+                  f'({cache_cleanup["deleted_bytes"]:,} bytes); no auxiliary replay will be collected',flush=True)
     from .champion import initialize as initialize_champion,enabled as champion_enabled,selfplay_policies
     from . import champion_mix
     if champion_enabled(config):initialize_champion(root,run,state)

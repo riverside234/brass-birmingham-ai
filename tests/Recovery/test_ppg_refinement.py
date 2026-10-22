@@ -75,7 +75,9 @@ class Continuation(unittest.TestCase):
         from brass_ai.recovery.v4_share import configure as configure_share
         from brass_ai.recovery.ppg_config import configure as configure_ppg
         from brass_ai.recovery.policy_anchor import configure as configure_anchor
-        self.assertEqual(fresh,configure_ppg(configure_anchor(configure_share(configure(gae.health_options(value_phase.interval_options(new)))))))
+        from brass_ai.recovery.config import ppo_microbatch_config
+        expected=configure_ppg(configure_anchor(configure_share(configure(gae.health_options(value_phase.interval_options(new))))))
+        self.assertEqual(fresh,ppo_microbatch_config(value_phase.disabled_options(expected)))
         self.assertEqual(read(SOURCE_ROOT/'configs/step5/joint7-latest.json')['value_phase'],value_phase.DEFAULT)
         for update in (dict(learning_rate=7e-6),dict(holdout=dict(holdout.DEFAULT,extra=True))):
             bad=copy.deepcopy(new);bad['value_phase'].update(update)

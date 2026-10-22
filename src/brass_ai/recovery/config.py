@@ -41,6 +41,18 @@ ARCHIVED_TIME_CONFIG_MIGRATION = 'step5-whole-turn-time/1.0.0'
 ARCHIVED_PHASE_TIME_CONFIG_MIGRATION = 'step5-phase-teacher-time/1.0.0'
 ARCHIVED_EARLY_RAIL_TIME_CONFIG_MIGRATION = 'step5-phase-teacher-time/1.1.0'
 TIME_CONFIG_MIGRATION = 'step5-phase-teacher-time/1.2.0'
+PPO_MICROBATCH_CONFIG_MIGRATION = 'step5-ppo-batching-2048-524288/1.0.0'
+
+
+def ppo_microbatch_config(config):
+    """Explicit memory-partition limits; effective optimizer batch stays fixed."""
+    result=copy.deepcopy(config)
+    require(type(result.get('update')) is dict and
+        type(result['update'].get('microbatch_size')) is int and result['update']['microbatch_size']>0,
+        'Missing PPO microbatch configuration')
+    result['update']['microbatch_size']=2048
+    result['update']['max_candidate_cells']=524288
+    return result
 
 
 def time_budget(value):
@@ -345,8 +357,9 @@ def latest_model_config(config,imitation_checkpoint):
     from .exploration import configure
     from .v4_share import configure as configure_v4_share
     from .policy_anchor import configure as configure_anchor
+    from .value_phase import disabled_options
     from .ppg_config import configure as configure_ppg
-    return validate_config(configure_ppg(configure_anchor(configure_v4_share(configure(interval_options(refined_options(insolvency_event_config(champion_mix_config(sampling_config(result))))))))))
+    return validate_config(ppo_microbatch_config(disabled_options(configure_ppg(configure_anchor(configure_v4_share(configure(interval_options(refined_options(insolvency_event_config(champion_mix_config(sampling_config(result))))))))))))
 
 
 def champion_mix_config(config):

@@ -19,6 +19,29 @@ def ppo_evidence(generation):
 
 def disable_ppg_checkpoint(saved,options,generation):
     """No old PPG work is relabeled as PPO gate evidence."""
+    from . import ppg_config,ppg_epochs
+    if saved.get('contract')=='actor-value-phases/9.0.0':
+        require(saved.get('options',{}).get('value_phase',{}).get('enabled') is True
+            and value_phase.disabled_options(saved['options'])==options,
+            'GAE/value checkpoint configuration differs during PPG disable')
+        fields={'contract','options','gae','beta_clone','kl_trips','optimizer','critic_evidence',
+            'schedule','rolling_buffer','epoch_control'}
+        if 'critic_data' in options:fields.add('critic_data')
+        require(set(saved)==fields and type(saved['rolling_buffer']) is list,
+            'Invalid eight-iteration checkpoint fields during PPG disable')
+        clock=ppg_config.schedule(saved['schedule'],generation)
+        ppg_epochs.validate(saved['epoch_control'],saved['options']['value_phase'],
+            phases=clock['phases'],last_phase=clock['last_phase'])
+        gae.validate_state(saved['gae'],options['advantage'],generation)
+        if 'critic_data' in options:
+            critic_data.validate_state(saved['critic_data'],options['critic_data'],generation)
+        # Scheduled PPG already counted PPO work for GAE. Preserve those windows,
+        # unlike the older per-iteration PPG -> PPO evidence-source migration.
+        result={k:copy.deepcopy(v) for k,v in saved.items()
+            if k not in ('schedule','rolling_buffer','epoch_control')}
+        result.update(contract=PPO_ONLY_CONTRACT,options=copy.deepcopy(options),
+            critic_evidence=copy.deepcopy(saved['critic_evidence']) or ppo_evidence(0))
+        return result
     require(saved.get('contract')=='actor-value-phases/7.0.0'
         and saved.get('options',{}).get('value_phase',{}).get('enabled') is True
         and value_phase.disabled_options(saved['options'])==options,
@@ -67,7 +90,7 @@ def quota_holdout_checkpoint(saved,options,generation):
 class TrainingPhases:
     def __init__(self,model,config,*,raw=None,generation=0,root=None,run=None):
         from . import ppg_config
-        self.rolling=ppg_config.active(config['value_phase'])
+        self.rolling=ppg_config.active(config['value_phase']) and config['value_phase']['enabled']
         if self.rolling:
             self._init_rolling(model,config,raw=raw,generation=generation,root=root,run=run)
             return
@@ -76,6 +99,7 @@ class TrainingPhases:
         self.snapshot_data=[];self.fingerprint=None;self.critic_state=None
         self.root,self.run=root,run
         self.critic_evidence=None;self.disable_migration=None;self.ppo_work=None;self.holdout_migration=None
+        self.disabled_startup_cleanup=None
         self.config=config;self.dataset=None;self.probe_ids=None
         gae.validate(self.options['advantage'],combined='reward' in config)
         value_phase.validate(self.options['value_phase'])
@@ -106,9 +130,12 @@ class TrainingPhases:
                 if (old_holdout.get('contract')==OLD_HOLDOUT
                         and disable_target['value_phase']['holdout']['contract']==QUOTA_CONTRACT):
                     disable_target['value_phase']['holdout']=copy.deepcopy(old_holdout)
+                was_rolling=saved.get('contract')=='actor-value-phases/9.0.0'
                 saved=disable_ppg_checkpoint(saved,disable_target,generation)
                 self.disable_migration=dict(contract=value_phase.DISABLE_MIGRATION,origin=generation,
-                    scope='PPG disabled; PPO critic evidence starts at committed progress. Attained lambdas, table activation, critic weight/baseline, both Adams, RNG and training progress preserved; no old PPG evidence backfilled.')
+                    scope=('Scheduled PPG disabled; existing PPO GAE evidence preserved; no old cache needed. '
+                        if was_rolling else 'PPG disabled; PPO critic evidence starts at committed progress. ')+
+                        'Attained lambdas, table activation, critic weight/baseline, both Adams, RNG and training progress preserved; no old PPG evidence backfilled.')
             if saved.get('contract')==PPO_ONLY_CONTRACT and saved.get('options')!=self.options:
                 saved=quota_holdout_checkpoint(saved,self.options,generation)
                 self.holdout_migration=dict(origin=generation,
@@ -207,8 +234,10 @@ class TrainingPhases:
             require(type(self.trips) is list and len(self.trips)<=5 and all(type(t) is bool for t in self.trips),
                     'Invalid persisted value-phase KL history')
             self.optimizer.load_state_dict(saved['optimizer'])
-            require(len(self.optimizer.param_groups)==1 and
-                    self.optimizer.param_groups[0]['lr']==config['value_phase']['learning_rate'] and
+            rate=self.optimizer.param_groups[0]['lr'];base=config['value_phase']['learning_rate']
+            valid_rate=(math.isfinite(rate) and base*config['value_phase']['rate_schedule']['warmup_start']<=rate<=base
+                if ppg_config.active(config['value_phase']) else rate==base)
+            require(len(self.optimizer.param_groups)==1 and valid_rate and
                     self.optimizer.param_groups[0]['weight_decay']==0,'Value optimizer settings differ')
         self.buffer=None;self.collection_source=None
         self.snapshot_r2_migration=None
@@ -274,6 +303,19 @@ class TrainingPhases:
             from .snapshot_r2 import migrate
             self.critic_state,self.snapshot_r2_migration=migrate(self.critic_state,config['critic_data'],generation)
         self.buffer=ppg_replay.Buffer(root,run,config,generation=generation,receipts=receipts,origin=self.schedule['origin'])
+
+    def startup(self,generation):
+        """Called under the run lock, after source/config adoption is committed."""
+        if self.options['value_phase']['enabled']:return None
+        require(self.buffer is None,'Disabled PPG must not open its old cache')
+        result=value_buffer.retire_disabled(self.root,self.run,generation)
+        self.disabled_startup_cleanup=result
+        # Preserve the last nonempty cleanup receipt across an immediate restart.
+        if result['deleted_files']:
+            from brass_ai.step5.league import write_json
+            write_json(self.run/'ppg-disabled-cache-cleanup.json',dict(result,generation=generation,
+                phase='startup',scope='Owned auxiliary caches only; PPO checkpoints, replays and fixed probes preserved'))
+        return result
 
     def collection(self,records,policy_id,kinds,model_id):
         if self.buffer:
@@ -368,6 +410,8 @@ class TrainingPhases:
         if not self.options['value_phase']['enabled']:
             self.value_report['critic_training']=copy.deepcopy(self.ppo_work)
             self.value_report['critic_evidence_origin']=self.critic_evidence['origin']
+            if self.disabled_startup_cleanup is not None:
+                self.value_report['disabled_startup_cleanup']=copy.deepcopy(self.disabled_startup_cleanup)
             if self.disable_migration:self.value_report['disable_migration']=self.disable_migration
         self.value_report['split']=self.split
         if self.refinement_migration:self.value_report['refinement_migration']=self.refinement_migration
@@ -447,6 +491,7 @@ class TrainingPhases:
         self.disable_migration=None
         self.holdout_migration=None
         self.snapshot_r2_migration=None
+        self.disabled_startup_cleanup=None
         if self.rolling:
             self.schedule=self.pending_schedule;self.epoch_control=self.pending_epoch_control;self.rolling_migration=None
 

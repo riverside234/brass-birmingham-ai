@@ -46,7 +46,7 @@ class PPOOnly(unittest.TestCase):
         self.assertEqual(cfg['value_phase'],expected)
         self.assertFalse(value_phase.DEFAULT['enabled'])
         fresh=latest_model_config(before,before['imitation_checkpoint'])
-        self.assertTrue(fresh['value_phase']['enabled'])
+        self.assertFalse(fresh['value_phase']['enabled'])
         self.assertEqual(fresh['value_phase']['buffer_iterations'],8)
         self.assertFalse(fresh['teacher_enabled'])
         self.assertEqual(fresh['advantage']['gate']['healthy_iterations'],20)

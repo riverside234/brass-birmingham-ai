@@ -101,6 +101,8 @@ def check_signature(state, signature, reviewed=False):
             handlers[HEALTH_MIGRATION]=health_options
             from .value_phase import DISABLE_MIGRATION,disabled_options
             handlers[DISABLE_MIGRATION]=disabled_options
+            from .config import PPO_MICROBATCH_CONFIG_MIGRATION,ppo_microbatch_config
+            handlers[PPO_MICROBATCH_CONFIG_MIGRATION]=ppo_microbatch_config
             from .ppg_config import MIGRATION as PPG_REPLAY_MIGRATION,configure as configure_ppg_replay
             handlers[PPG_REPLAY_MIGRATION]=configure_ppg_replay
             from .v4_share import (MIGRATION as V4_SHARE_MIGRATION,configure as configure_v4_share,

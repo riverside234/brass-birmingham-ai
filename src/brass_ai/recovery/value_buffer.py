@@ -34,21 +34,33 @@ def enabled(config):
 
 
 def retire_disabled(root,run,generation):
-    """Retire derived PPG arrays only AFTER a PPO-only checkpoint commits."""
+    """Retire both owned caches after durable PPO-only config adoption.
+
+    The caller holds the run lock and has restored the checkpoint successfully.
+    A reviewed source transition is sufficient; no new PPO iteration is needed.
+    """
     root,run=owned(root,run);state=read(run/'state.json')
     require(state['iteration']==generation and state['signature']['config']['value_phase']['enabled'] is False,
         'PPG cache retirement requires committed PPO-only training state')
-    directory=safe(run,run/'.ppg-value-cache')
-    if not directory.exists():return dict(deleted_files=[],deleted_bytes=0)
-    require(read(safe(directory,directory/'owner.json'))==OWNER,'Unknown PPG cache owner')
+    from .ppg_replay import OWNER as EIGHT_OWNER,FILE as EIGHT_FILE
     files=[]
-    for p in directory.iterdir():
-        if p.name=='owner.json':continue
-        require(FILE.fullmatch(p.name) is not None and safe(directory,p).is_file(),'Unknown PPG cache artifact')
-        files.append(p)
+    directories=[]
+    # Audit every file in BOTH caches before deleting anything. No recursion or
+    # links: unknown artifacts require inspection and are never treated as cache.
+    for name,owner,pattern in (('.ppg-value-cache',OWNER,FILE),('.ppg-eight-cache',EIGHT_OWNER,EIGHT_FILE)):
+        directory=safe(run,run/name)
+        if not directory.exists():continue
+        require(directory.is_dir() and read(safe(directory,directory/'owner.json'))==owner,
+            'Unknown PPG cache owner')
+        directories.append(name)
+        for p in directory.iterdir():
+            if p.name=='owner.json':continue
+            require(pattern.fullmatch(p.name) is not None and safe(directory,p).is_file(),'Unknown PPG cache artifact')
+            files.append(p)
     total=sum(p.stat().st_size for p in files)
     for p in files:p.unlink()
-    return dict(deleted_files=[p.name for p in files],deleted_bytes=total)
+    return dict(deleted_files=[p.name if p.parent.name=='.ppg-value-cache' else
+        p.relative_to(run).as_posix() for p in files],deleted_bytes=total,directories=directories)
 
 
 def row_dtype():

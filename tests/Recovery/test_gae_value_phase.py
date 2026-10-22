@@ -136,8 +136,10 @@ class Advantages(unittest.TestCase):
         from brass_ai.recovery.critic_holdout import quota_options
         from brass_ai.recovery.ppg_config import configure as rolling_ppg
         from brass_ai.recovery.policy_anchor import configure as configure_anchor
-        self.assertEqual(rolling_ppg(configure_anchor(quota_options(
-            exploration_config(gae.health_options(value_phase.interval_options(value_phase.refined_options(cfg))))))),generated)
+        from brass_ai.recovery.config import ppo_microbatch_config
+        expected=rolling_ppg(configure_anchor(quota_options(
+            exploration_config(gae.health_options(value_phase.interval_options(value_phase.refined_options(cfg)))))))
+        self.assertEqual(ppo_microbatch_config(value_phase.disabled_options(expected)),generated)
         for key,value in (('lambda',0),('lambda',True),('chain','all')):
             bad=copy.deepcopy(cfg);bad['advantage'][key]=value
             with self.assertRaises(ValueError):validate_config(bad)

@@ -7,7 +7,7 @@ from .critic_holdout import DEFAULT as HOLDOUT
 
 CONTRACT='ppg-value-phase/5.0.0'
 MIGRATION='ppg-eight-iteration-replay/1.0.0'
-DEFAULT=dict(contract=CONTRACT,enabled=True,buffer_iterations=8,max_epochs=2,batch_size=4096,
+DEFAULT=dict(contract=CONTRACT,enabled=False,buffer_iterations=8,max_epochs=2,batch_size=4096,
     clone_rows_per_age=2048,probe_rows_per_age=512,current_probe_rows=2048,clone_batch_size=512,
     beta_clone=1.,beta_clone_max=32.,kl_cap=.002,learning_rate=3e-6,holdout_fraction=.05,
     holdout=copy.deepcopy(HOLDOUT),acceptance_steps=32,weighting='uniform',phase_interval=8,
@@ -22,13 +22,16 @@ def active(config):return config.get('contract')==CONTRACT
 
 
 def configure(options):
+    """Explicit opt-in; fresh self-play defaults leave the auxiliary phase off."""
     result=copy.deepcopy(options)
     old=result['value_phase']
-    if active(old):validate(old);return result
+    if active(old):
+        validate(old);old['enabled']=True
+        return result
     from .value_phase import validate as validate_old
     validate_old(old)
     require(old.get('holdout')==HOLDOUT,'Eight-iteration PPG requires the existing 8/8/2 holdout')
-    result['value_phase']=dict(copy.deepcopy(DEFAULT),learning_rate=old['learning_rate'],
+    result['value_phase']=dict(copy.deepcopy(DEFAULT),enabled=True,learning_rate=old['learning_rate'],
         beta_clone=old['beta_clone'])
     return result
 
@@ -36,7 +39,7 @@ def configure(options):
 def validate(c):
     require(type(c) is dict and set(c)==set(DEFAULT) and c['contract']==CONTRACT,
         'Invalid eight-iteration PPG fields/contract')
-    require(c['enabled'] is True,'Use the reviewed PPO-only recipe to disable eight-iteration PPG')
+    require(type(c['enabled']) is bool,'Invalid PPG enabled flag')
     for k in ('buffer_iterations','max_epochs','batch_size','clone_rows_per_age','probe_rows_per_age',
               'current_probe_rows','clone_batch_size','acceptance_steps','phase_interval',
               'validation_iterations','patience','minimum_stratum_rows'):

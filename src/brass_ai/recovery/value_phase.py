@@ -34,7 +34,7 @@ def disabled_options(options):
 
 def critic_work(report):
     """Actual critic optimizer work; never label PPO steps as accepted PPG."""
-    if report.get('contract')=='ppg-value-phase/5.0.0':
+    if report.get('contract')=='ppg-value-phase/5.0.0' and report.get('enabled',True):
         work=report.get('gate_critic_training',{})
         require(work.get('source')=='ppo' and type(work.get('optimizer_steps')) is int
             and work['optimizer_steps']>=0,'Invalid scheduled PPG/PPO critic evidence')
