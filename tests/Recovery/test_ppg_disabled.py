@@ -85,7 +85,7 @@ class DisabledEight(unittest.TestCase):
         self.assertFalse(ppg_config.DEFAULT['enabled'])
         fresh=latest_model_config(old,old['imitation_checkpoint'])
         self.assertTrue(fresh['value_phase']['enabled']);self.assertEqual(fresh['value_phase']['holdout'],old['value_phase']['holdout'])
-        self.assertEqual(fresh['value_phase']['contract'],ppg_config.SHORT_CONTRACT)
+        self.assertEqual(fresh['value_phase']['contract'],ppg_config.COVERAGE_CONTRACT)
         self.assertEqual((fresh['value_phase']['acceptance_steps'],fresh['value_phase']['patience']),(16,1))
         self.assertEqual(fresh['update']['microbatch_size'],512)
         self.assertEqual(fresh['update']['max_candidate_cells'],131072)

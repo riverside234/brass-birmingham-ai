@@ -24,10 +24,11 @@ def cap_upgrade(previous,current):
 def event_cost_upgrade(previous,current):
     if not isinstance(previous,dict) or not isinstance(current,dict):return False
     expected=copy.deepcopy(previous)
-    steps={.005:.0075,.0075:.010}
+    steps={(.005,.075):(.0075,.075),(.0075,.075):(.010,.075),(.010,.075):(.020,.080)}
     old=expected.get('insolvency',{})
-    if old.get('max_cost')!=.075 or old.get('event_cost') not in steps:return False
-    expected['insolvency']=dict(event_cost=steps[old['event_cost']],max_cost=.075)
+    key=(old.get('event_cost'),old.get('max_cost'))
+    if key not in steps:return False
+    event,cap=steps[key];expected['insolvency']=dict(event_cost=event,max_cost=cap)
     return expected==current
 
 

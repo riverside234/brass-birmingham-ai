@@ -95,6 +95,8 @@ def check_signature(state, signature, reviewed=False):
             handlers[INSOLVENCY_EVENT_CONFIG_MIGRATION]=insolvency_event_config
             from .config import INSOLVENCY_010_CONFIG_MIGRATION,insolvency_010_config
             handlers[INSOLVENCY_010_CONFIG_MIGRATION]=insolvency_010_config
+            from .config import INSOLVENCY_020_CONFIG_MIGRATION,insolvency_020_config
+            handlers[INSOLVENCY_020_CONFIG_MIGRATION]=insolvency_020_config
             from .value_phase import CONFIG_MIGRATION as PPG_MIGRATION,refined_options
             handlers[PPG_MIGRATION]=refined_options
             from .value_phase import INTERVAL_MIGRATION,interval_options
@@ -115,6 +117,8 @@ def check_signature(state, signature, reviewed=False):
             handlers[PPG_REPLAY_MIGRATION]=configure_ppg_replay
             from .ppg_config import SHORT_MIGRATION,short_options
             handlers[SHORT_MIGRATION]=short_options
+            from .ppg_config import COVERAGE_MIGRATION,coverage_options
+            handlers[COVERAGE_MIGRATION]=coverage_options
             from .opening_objective import (MIGRATION as OPENING_MIGRATION,configure as configure_opening,
                 ZERO_EXPLORATION_MIGRATION,zero_exploration)
             handlers[OPENING_MIGRATION]=configure_opening

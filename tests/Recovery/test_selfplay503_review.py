@@ -49,7 +49,7 @@ class Review503(unittest.TestCase):
 
     def test_fresh_generation_has_new_defaults_but_old_migrations_stay_exact(self):
         fresh=latest_model_config(self.old,self.old['imitation_checkpoint'])
-        self.assertEqual(fresh['insolvency'],self.config['insolvency'])
+        self.assertEqual(fresh['insolvency'],dict(event_cost=.020,max_cost=.080))
         self.assertEqual(fresh['branching'],E.HIGH_BRANCH)
         self.assertEqual(fresh['critic_data'],C.FIXED_DEFAULT)
         self.assertEqual(fresh['entropy_control']['promotion_origin']['generation'],0)

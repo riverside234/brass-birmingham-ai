@@ -218,6 +218,10 @@ def fit(model,optimizer,buffer,current,train_ids,heldout_ids,config,update,*,bet
         optimizer.state.clear();optimizer.zero_grad(set_to_none=True)
         for group in optimizer.param_groups:group['lr']=config['learning_rate']
         best_model=copy.deepcopy(model.state_dict());best_adam=copy.deepcopy(optimizer.state_dict())
+        selection=None
+        if ppg_config.coverage(config):
+            from .ppg_selection import Selection
+            selection=Selection(model,optimizer,best_games)
         counts={str(a):len(ids) for a,ids in train.items()};rows=sum(counts.values())
         steps_per_epoch=math.ceil(rows/config['batch_size'])
         report.update(weighted_rows=rows,rows_per_epoch=rows,planned_presentations=rows*epoch_cap,
@@ -289,24 +293,40 @@ def fit(model,optimizer,buffer,current,train_ids,heldout_ids,config,update,*,bet
             if end_epoch:report['epochs_completed']=epoch+1
             now=by_game(ds,losses(model,ds,validation,update));comparison=paired(best_games,now)
             improved=comparison['improved'] and not comparison['reject']
+            retained=False
+            if selection is not None:
+                retained=selection.consider(model,optimizer,now,working,working_clones,working_steps,
+                    epoch*steps_per_epoch+start+len(block))
             report['interval_reports'].append(dict(epoch=epoch+1,budget_step=epoch*steps_per_epoch+start+len(block),
                 attempted_steps=attempted,accepted=not comparison['reject'],beta_clone=beta,last_lr=rate,
                 retained_as_best=improved,paired=comparison,probe=probe))
+            if selection is not None:
+                report['interval_reports'][-1].update(retained_for_coverage=retained,
+                    minimum_reference_step=selection.minimum_budget_step,
+                    selected_budget_step=selection.budget_step,
+                    outcome='improved' if improved else 'failed' if comparison['reject'] else 'neutral')
             if improved:
                 best_model=copy.deepcopy(model.state_dict());best_adam=copy.deepcopy(optimizer.state_dict());best_games=now
                 best_used=list(working);best_clones=list(working_clones);report['optimizer_steps']=working_steps
                 report['best_budget_step']=epoch*steps_per_epoch+start+len(block)
                 checks_without_best=0;accepted_checks+=1
             else:
-                checks_without_best+=1
+                # v7: a tolerance-safe plateau is neutral, not a failed check.
+                # Archived v5/v6 retain their strict keep-best/patience semantics.
+                if selection is None or comparison['reject']:checks_without_best+=1
+                if selection is not None and not comparison['reject']:accepted_checks+=1
                 if comparison['reject']:
                     rejected_checks+=1;model.load_state_dict(best_model);optimizer.load_state_dict(best_adam)
                     working=list(best_used);working_clones=list(best_clones);working_steps=report['optimizer_steps']
                 if checks_without_best>=config['patience']:
                     report['early_stop_reason']='validation_patience';break
-        # Always retain the BEST loss checkpoint, not a tolerance-safe but worse
-        # final interval. Adam moments/steps follow the exact retained weights.
-        model.load_state_dict(best_model);optimizer.load_state_dict(best_adam);optimizer.zero_grad(set_to_none=True);model.eval()
+        if selection is None:
+            model.load_state_dict(best_model);optimizer.load_state_dict(best_adam)
+        else:
+            selection.restore(model,optimizer)
+            best_used=selection.rows;best_clones=selection.clones
+            report['optimizer_steps']=selection.steps;report['selection']=selection.report()
+        optimizer.zero_grad(set_to_none=True);model.eval()
         final_probe=reference.probes(model)
         require(final_probe['overall']<=config['kl_cap'] and final_probe['age0']<=config['kl_cap'],'Retained PPG checkpoint exceeds KL guard')
         after_losses=losses(model,ds,held,update);used=set(best_used)

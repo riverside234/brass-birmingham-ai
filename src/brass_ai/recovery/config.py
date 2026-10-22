@@ -272,9 +272,10 @@ EVALUATION_SCHEDULE = dict(enabled=False, monitor_every_games=6400, broader_ever
 LEGACY_BUDGET = dict(role='lab', seconds=1.0, search_workers=4, global_workers=60, work_multiplier=1)
 LEGACY_OPPONENTS = dict(search_free_until_games=10000)
 IMITATION = dict(manifest=None,epochs=10,patience=2,min_epochs=3,learning_rate=6e-5)
-INSOLVENCY = dict(event_cost=.010,max_cost=.075)
+INSOLVENCY = dict(event_cost=.020,max_cost=.080)
 INSOLVENCY_EVENT_CONFIG_MIGRATION = 'step5-insolvency-event-cost/1.0.0'
 INSOLVENCY_010_CONFIG_MIGRATION = 'step5-insolvency-event-cost/2.0.0'
+INSOLVENCY_020_CONFIG_MIGRATION = 'step5-insolvency-event-cost/3.0.0'
 
 
 def insolvency_event_config(config):
@@ -293,6 +294,18 @@ def insolvency_010_config(config):
     """New explicit migration; keep the earlier signed .005 -> .0075 exact."""
     result=copy.deepcopy(config)
     if result.get('insolvency')==dict(event_cost=.0075,max_cost=.075):
+        search=result.get('search',{}).get('reward')
+        if search is not None:
+            require(search['insolvency']==result['insolvency'],'Search/learner insolvency differs')
+            search['insolvency']=dict(event_cost=.010,max_cost=.075)
+        result['insolvency']=dict(event_cost=.010,max_cost=.075)
+    return result
+
+
+def insolvency_020_config(config):
+    """Explicit .010/.075 -> .020/.080; preserve earlier signed migrations."""
+    result=copy.deepcopy(config)
+    if result.get('insolvency')==dict(event_cost=.010,max_cost=.075):
         search=result.get('search',{}).get('reward')
         if search is not None:
             require(search['insolvency']==result['insolvency'],'Search/learner insolvency differs')
@@ -386,8 +399,8 @@ def latest_model_config(config,imitation_checkpoint):
     result=throughput_config(disabled_options(configure_ppg(configure_anchor(configure_v4_share(configure(interval_options(refined_options(insolvency_event_config(champion_mix_config(sampling_config(result)))))))))))
     from .exploration import high_branch_config
     from .opening_objective import configure as configure_opening,zero_exploration
-    from .ppg_config import short_options
-    return validate_config(short_options(configure_opening(zero_exploration(high_branch_config(insolvency_010_config(result))))))
+    from .ppg_config import coverage_options
+    return validate_config(coverage_options(configure_opening(zero_exploration(high_branch_config(insolvency_020_config(insolvency_010_config(result)))))))
 
 
 def champion_mix_config(config):

@@ -42,6 +42,19 @@ def retire_disabled(root,run,generation):
     root,run=owned(root,run);state=read(run/'state.json')
     require(state['iteration']==generation and state['signature']['config']['value_phase']['enabled'] is False,
         'PPG cache retirement requires committed PPO-only training state')
+    return _retire_owned(root,run)
+
+
+def retire_fresh(root,run,generation):
+    """Explicit fresh-PPG startup only, after durable reviewed config adoption."""
+    from .ppg_config import coverage
+    root,run=owned(root,run);state=read(run/'state.json');value=state['signature']['config']['value_phase']
+    require(state['iteration']==generation and coverage(value) and value['enabled'] is True,
+        'Fresh PPG cleanup requires committed one-SE training state')
+    return _retire_owned(root,run)
+
+
+def _retire_owned(root,run):
     from .ppg_replay import OWNER as EIGHT_OWNER,FILE as EIGHT_FILE
     files=[]
     directories=[]

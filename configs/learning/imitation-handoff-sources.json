@@ -433,6 +433,11 @@
       "implementation": "0175cf43e34fa0cb1a3425158e13399a868c3fe2bdcd27bef58ee10df2bda02f",
       "learning_compatibility": "ef6a1b5126de42da8f3277dc9357b6ffb94a435f3faa7fee8dd312bb5a242a54",
       "reason": "Optional self-play objectives and PPG acceptance only; completed IL/model/Features-4 remain unchanged."
+    },
+    {
+      "implementation": "38206ae9ecec5db1b291066978738d247d40ebe112fc27b4f3a4332796caffca",
+      "learning_compatibility": "ef6a1b5126de42da8f3277dc9357b6ffb94a435f3faa7fee8dd312bb5a242a54",
+      "reason": "PPG retention/default reward continuation only; completed IL and feature/model layout unchanged."
     }
   ]
 }

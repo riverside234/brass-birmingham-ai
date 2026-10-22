@@ -267,8 +267,11 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
     if phases is not None:
         cache_cleanup=phases.startup(state['iteration'])
         if cache_cleanup is not None:
-            print(f'PPG disabled: startup removed {len(cache_cleanup["deleted_files"])} cache files '
-                  f'({cache_cleanup["deleted_bytes"]:,} bytes); no auxiliary replay will be collected',flush=True)
+            status='PPG fresh reset' if cache_cleanup.get('fresh_ppg') else 'PPG disabled'
+            following=(f'next phase g{cache_cleanup["next_phase"]}' if cache_cleanup.get('fresh_ppg') else
+                       'no auxiliary replay will be collected')
+            print(f'{status}: startup removed {len(cache_cleanup["deleted_files"])} cache files '
+                  f'({cache_cleanup["deleted_bytes"]:,} bytes); {following}',flush=True)
     from .champion import initialize as initialize_champion,enabled as champion_enabled,selfplay_policies
     from . import champion_mix
     if champion_enabled(config):initialize_champion(root,run,state)
