@@ -162,7 +162,7 @@ Once the latest completed **v4 rating panel** reaches **90% learner win share**,
 
 ### Continue from g560: auxiliary heads, 1% branches and 50% LR threshold
 
-The current run is still at **committed g560**; the previous adoption command has not been run. To adopt all three changes, pull the Python sources and the matching `training/runtime/local-scoring/ordinary/BrassHost.exe` and `runtime.json` together. The lab installs this additive recorder automatically from the prebuilt package and existing private pinned DLLs; no compiler or fresh IL is needed. Run:
+The adoption entry point is **committed g560**. If adoption has not yet been attempted, use the full sequence below. If startup or the first iteration failed after adoption, use the recovery instructions below instead. Pull the Python sources and the matching `training/runtime/local-scoring/ordinary/BrassHost.exe` and `runtime.json` together. The lab installs this additive recorder automatically from the prebuilt package and existing private pinned DLLs; no compiler or fresh IL is needed.
 
 ```bash
 cd /data/not_backed_up/yxu209/ai-training
@@ -190,6 +190,21 @@ Training startup archives old PPG **metadata**, durably records the adoption, th
 After a later interruption, recover any incomplete next iteration with its actual committed generation and repeat **only the train command**, updating `--expected-generation`. Do not repeat `--fresh-ppg-buffer`. To disable the heads after a new checkpoint has committed, run the same configuration helper with `--mode off`, the actual generation and a new output name, omitting `--fresh-ppg-buffer`; use its output with `--resume-reviewed-source`. This retains the companion state and current PPO/PPG clocks. `shadow` trains only detached heads. Existing IL/raw replays remain admissible; source-bound derived replay caches may be revalidated/rebuilt.
 
 If startup fails with a missing `training/runtime/local-scoring/ordinary/BrassHost.exe`, sync the executable along with `runtime.json`. The initial package accidentally inherited the repository's `*.exe` ignore rule; the exact local-scoring executable is now explicitly allowed, while private game DLLs remain excluded. Its SHA-256 must be `c36293458ba9bba82f2acbb5525e335d6cb1187df442b8a202b7c34ff17eb20e`. The existing `-text` Git attribute preserves its exact bytes. This is a packaging-only fix: it does not change the reviewed training source or require recompiling on the lab. Retry **only the final train command above**, using the already generated config. Startup may already have committed the adoption and retired the old PPG cache before discovering the missing executable; its saved receipt safely resumes that transition without another fresh-buffer request.
+
+If the first collected iteration fails in `local_scoring.diagnostics` with **`'NoneType' object has no attribute 'rows'`**, sync the diagnostic-lifetime fix and its source-review registry. The old loop released the critic dataset before the auxiliary report read it. Reports now materialize before release, and the datasets are still freed before checkpoint serialization. The traceback occurs before saving g561: archive the incomplete collection, then retry from g560 with the already generated config. The recovery helper checks the actual committed generation and checkpoint; it refuses a different generation or a partial checkpoint instead of rewinding it. Do not regenerate the config or repeat `--fresh-ppg-buffer`.
+
+```bash
+python scripts/recover-step5-iteration.py --root "$PWD" \
+  --run artifacts/step5/joint7-v11-2-grouped-lr-critic \
+  --expected-iteration 560 --apply && \
+python scripts/step5.py \
+  --config configs/step5/joint7-v11-2-grouped-lr-critic-local-scoring-lr50-g560.json train \
+  --run artifacts/step5/joint7-v11-2-grouped-lr-critic \
+  --imitation-run artifacts/step5/features4-v11-2-batch7-il \
+  --resume-reviewed-source --expected-generation 560 --iterations 20
+```
+
+The failed iteration's shards are preserved under `.interrupted-iterations/`. The retry recollects with the new source identity; it does not adopt unsaved PPO updates. The g560 full checkpoint, Adam/RNG state, progress, population, adoption origin and PPG schedule remain unchanged. Any uncommitted g561 PPG cache is replaced when the retry stages its newly checked collection; committed caches remain receipt-bound.
 
 Console `local=apply@scale rows=retained/available head_steps=PPO+PPG` exposes activation and usage. Full and compact reports include ownership/VP diagnostics, missing/masked labels, separate attempted/retained usage, joint rollback counts, cache bytes and timing. `python scripts/export-training-reports.py` includes the small runtime contract and adoption receipt, without copying PPG arrays.
 

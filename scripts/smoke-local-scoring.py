@@ -55,6 +55,7 @@ def training(output):
     from brass_ai.recovery import ppg_config,updates
     from brass_ai.recovery.actor_value import TrainingPhases,KEY
     from brass_ai.recovery.local_scoring_auxiliary import Companion,DEFAULT,KEY as AUX
+    from brass_ai.recovery.league import finish_training_diagnostics
     from brass_ai.recovery.retention import _same_payload
     from brass_ai.recovery.telemetry import memory
     from brass_ai.step5.league import write_json
@@ -72,7 +73,8 @@ def training(output):
         annotate(data);annotate(phase.snapshot_data)
         report=ppo(model,opt,cfg,behavior,data,phase);value=phase.fit(model)
         finish(phase,report,generation)
-        auxiliary=phase.local_scoring.report()
+        auxiliary=finish_training_diagnostics(model,phase,phase.local_scoring)
+        assert auxiliary['heldout']['rows']>0 and phase.critic_dataset is None
         checkpoint=run/f'generation-{generation:04d}.pt'
         save_checkpoint(checkpoint,model,opt,step=generation,training={KEY:phase.payload(),AUX:phase.local_scoring.payload(generation)})
         files.append(dict(path=str(checkpoint),sha256=sha(checkpoint)))

@@ -154,5 +154,22 @@ class Adoption(unittest.TestCase):
             self.assertEqual(sha(self.run/'state.json'),checksum)
         with self.assertRaisesRegex(ValueError,'Stale'):helper.generate(SOURCE_ROOT,self.run,output,559,fresh_ppg_buffer=True)
 
+    def test_diagnostics_fix_resumes_already_adopted_source_without_config_reset(self):
+        from brass_ai.recovery.resume import check_signature
+        from brass_ai.step5.league import implementation_id
+        export=SOURCE_ROOT/'results/joint7-v11-2-grouped-lr-critic-g0560-20261022T202410715648Z'
+        state=read(export/'state.json');config=adoption.configure(state)
+        state['signature']=dict(state['signature'],config=config,
+            implementation='c33ff1ba936905fe06c4b6436d316a5073c9049be4a8d8d0e9c734f87e071314')
+        before=copy.deepcopy(state)
+        target=dict(state['signature'],implementation=implementation_id())
+        self.assertTrue(check_signature(state,target,reviewed=True))
+        self.assertEqual(state,before)
+        with self.assertRaisesRegex(ValueError,'resume-reviewed-source'):
+            check_signature(state,target)
+        for key in ('learning_rate','exploration'):
+            bad=copy.deepcopy(target);bad['config'][key]+=.001
+            with self.assertRaises(ValueError):check_signature(state,bad,reviewed=True)
+
 
 if __name__=='__main__':unittest.main()

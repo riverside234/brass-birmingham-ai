@@ -39,6 +39,19 @@ class Behavior:
         self.policy_id=neural_spec(identity,exploration,'mixed',version=self.exploration_version,opening=self.opening)['policy_id']
 
 
+def finish_training_diagnostics(model,phases,local_scoring):
+    """Materialize the small report before releasing its iteration datasets."""
+    report=None
+    if local_scoring is not None:
+        report=local_scoring.report()
+        if local_scoring.active:
+            require(phases is not None and phases.critic_dataset is not None,
+                    'Local scoring diagnostics require the live critic dataset before release')
+            report['heldout']=local_scoring.diagnostics(model,phases.critic_dataset,phases.heldout_ids)
+    if phases is not None:phases.release()
+    return report
+
+
 def train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=None,from_run=None,imitation_run=None,resume_reviewed_source=False,inference_devices=None,expected_generation=None,fresh=False,il_kl_probe_from_run=None):
     from .retention import owned,run_lock
     _,run=owned(root,run_path)
@@ -493,7 +506,7 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                     phases.finish(generation=iteration+1,update=update,
                         anchor_gate=limit_report['lr_gate'] if limit_report else (update.get('lr_controller') or {}).get('health'),
                         rating=rating_evidence(root,state,config['advantage']['gate']),exploration=exploration_settings)
-                    phases.release()
+                local_scoring_report=finish_training_diagnostics(model,phases,local_scoring)
                 entropy_report=None
                 if exploration_state is not None:
                     healthy=bool(limit_report and limit_report['health'].get('ok') is True and
@@ -554,10 +567,8 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                 report['utilization']['replay_ingress']=ingress_metrics
                 from .review_metrics import gate_diagnostics
                 report['gate_diagnostics']=gate_diagnostics(update,value_report,limit_report,quality_report)
-                if local_scoring is not None:
-                    report['local_scoring_auxiliary']=local_scoring.report()
-                    if local_scoring.active:
-                        report['local_scoring_auxiliary']['heldout']=local_scoring.diagnostics(model,phases.critic_dataset,phases.heldout_ids)
+                if local_scoring_report is not None:
+                    report['local_scoring_auxiliary']=local_scoring_report
                 if state.get('local_scoring_adoption'):report['local_scoring_adoption']=state['local_scoring_adoption']
                 checkpoint_began=time.monotonic()
                 anchor_commit=policy_anchor.checkpoint_state(state)
