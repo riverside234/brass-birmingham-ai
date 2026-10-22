@@ -242,8 +242,17 @@ def evaluation_directory(root, run, state, name):
     """
     require(isinstance(name,str) and name not in ('','.','..') and Path(name).name==name,
             'Expected a single evaluation directory name')
-    directory=safe(run,run/'evaluations'/name)
-    spec=directory/'spec.json'
+    return evidence_directory(root,run,state,run/'evaluations'/name)
+
+
+def evidence_directory(root,run,state,directory):
+    """Isolate pending evaluation evidence after a verified source transition.
+
+    Rating slots use the same guard as monitor/champion screens. Matching
+    sources still pass through their normal immutable specification checks.
+    """
+    directory=safe(run,directory)
+    spec=safe(run,directory/'spec.json')
     if not spec.is_file():return directory
     previous=read(spec);current=implementation_id()
     if previous.get('implementation')==current:return directory
@@ -260,7 +269,7 @@ def evaluation_directory(root, run, state, name):
         known[digest(origin)]=origin
     require(previous.get('implementation') in {s['implementation'] for s in known.values()},
             'Existing evaluation source is not in this run\'s reviewed transition history')
-    return safe(run,run/'evaluations'/f'{name}-source-{current[:16]}')
+    return safe(run,directory.with_name(f'{directory.name}-source-{current[:16]}'))
 
 
 def prepare_opponent_pool(root,run,state,raw,config,source_changed=False):

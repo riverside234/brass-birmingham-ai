@@ -3,6 +3,7 @@ import copy
 import json
 from pathlib import Path
 import random
+import re
 import time
 import numpy as np
 import torch
@@ -16,6 +17,21 @@ from .quality_config import validate_rating
 
 HISTORY_ITERATIONS=100
 ARCHIVE_FORMAT='plackett-luce-history/1.0.0'
+
+
+def archived_slot_directory(run,slot):
+    """Old archives use canonical names; new source slots retain their path."""
+    from .retention import safe
+    name=f'generation-{slot["generation"]:06d}'
+    parent=safe(run,run/'ratings'/'slots')
+    require('directory' not in slot or (type(slot['directory']) is str and
+        slot['directory'].startswith('ratings/slots/') and '..' not in slot['directory'].split('/')),
+        'Invalid archived rating slot directory')
+    directory=safe(run,run/slot['directory']) if 'directory' in slot else safe(run,parent/name)
+    require(directory.parent==parent and re.fullmatch(re.escape(name)+r'(-source-[0-9a-f]{16})?',directory.name)
+        and ('directory' not in slot or slot['directory']=='ratings/slots/'+directory.name),
+        'Invalid archived rating slot directory')
+    return directory
 
 
 def archived_history(root,state):
@@ -61,7 +77,10 @@ def compact_history(root,run,state):
         rows=[json.loads(line) for line in project_path(root,slot['records']['path']).read_text(encoding='utf-8').splitlines()]
         require(rows and all(r['slot']==slot['generation'] for r in rows),'Retired rating games/slot differ')
         archive['games'].extend(rows)
-        archive['slots'].append(dict(generation=slot['generation'],
+        directory=safe(run,project_path(root,slot['spec']['path']).parent)
+        archived_slot=dict(generation=slot['generation'],directory=directory.relative_to(run).as_posix())
+        archived_slot_directory(run,archived_slot)
+        archive['slots'].append(dict(**archived_slot,
             panels=read(project_path(root,slot['panels']['path'])),
             original_sha256={k:slot[k]['sha256'] for k in ('records','report','spec','panels','bootstrap')}))
     require(len({g['game_id'] for g in archive['games']})==len(archive['games']),'Rating archive repeats a game')
@@ -312,7 +331,9 @@ def schedule(root,run,state,config,*,device='cpu',mono=None,inference_devices=No
     for generation in range(c['every_iterations'],state['iteration']+1,c['every_iterations']):
         if generation in completed:continue
         require(generation in available,'Missing checkpoint for uncommitted rating slot '+str(generation))
-        began=time.perf_counter();entry=available[generation];directory=run/'ratings'/'slots'/f'generation-{generation:06d}'
+        began=time.perf_counter();entry=available[generation]
+        from .resume import evidence_directory
+        directory=evidence_directory(root,run,state,run/'ratings'/'slots'/f'generation-{generation:06d}')
         from .retention import slim_checkpoint
         retained=state['population']+[a['checkpoint'] for a in rating['agents'].values() if a['kind']=='model']
         previous=next((m for m in retained if m['model_id']==entry['model_id'] and m.get('weights_only')),None)

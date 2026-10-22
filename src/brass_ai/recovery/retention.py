@@ -320,10 +320,10 @@ def plan(root,run,config=RETENTION):
     if state.get('format') in ('step5-recovery-league/2.1.0','step5-recovery-league/2.2.0'):
         # Old full rating slots are retired only after their compact cumulative
         # outcomes/panels have been archived and committed in state.json.
-        from .ratings import archived_history,ARCHIVE_FORMAT
+        from .ratings import archived_history,archived_slot_directory,ARCHIVE_FORMAT
         archived=archived_history(root,state.get('ratings',{}))
         for slot in archived['slots']:
-            directory=safe(run,run/'ratings'/'slots'/f'generation-{slot["generation"]:06d}')
+            directory=archived_slot_directory(run,slot)
             for name in ('spec.json','report.json','panels.json','progress.svg','bootstrap.npz','games.jsonl','games-manifest.json'):
                 candidate(directory/name,'retired strength-rating slot')
             for p in directory.glob('*.jsonl.gz*'):candidate(p,'retired strength-rating replay or features')

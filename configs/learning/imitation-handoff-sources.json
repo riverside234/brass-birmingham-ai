@@ -438,6 +438,11 @@
       "implementation": "38206ae9ecec5db1b291066978738d247d40ebe112fc27b4f3a4332796caffca",
       "learning_compatibility": "ef6a1b5126de42da8f3277dc9357b6ffb94a435f3faa7fee8dd312bb5a242a54",
       "reason": "PPG retention/default reward continuation only; completed IL and feature/model layout unchanged."
+    },
+    {
+      "implementation": "056449b7e5177379e545cb499da91a870d22ebe033fa6827ba3b5beac214d534",
+      "learning_compatibility": "ef6a1b5126de42da8f3277dc9357b6ffb94a435f3faa7fee8dd312bb5a242a54",
+      "reason": "Evaluation evidence/resume fix only; completed IL, features and architecture unchanged."
     }
   ]
 }
