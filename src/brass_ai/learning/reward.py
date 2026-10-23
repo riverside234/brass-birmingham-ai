@@ -8,6 +8,7 @@ from .replay import terminal_targets
 VERSION = 'brass-combined-return/1.0.0'
 CAPPED_VERSION = 'brass-combined-return/2.0.0'
 VP_CAP = 180
+MAX_INSOLVENCY_COST = .16
 COEFFICIENTS = dict(win=1.0, placement=.10, vp=.001)
 
 
@@ -30,7 +31,7 @@ def validate(spec):
                 for k in COEFFICIENTS) and spec['win']>0,'Invalid reward coefficients')
     costs=spec['insolvency']
     require(set(costs)=={'event_cost','max_cost'} and all(type(v) in (int,float) and math.isfinite(v) for v in costs.values())
-            and 0<costs['event_cost']<=costs['max_cost']<=.1,'Invalid reward insolvency budget')
+            and 0<costs['event_cost']<=costs['max_cost']<=MAX_INSOLVENCY_COST,'Invalid reward insolvency budget')
     return spec
 
 

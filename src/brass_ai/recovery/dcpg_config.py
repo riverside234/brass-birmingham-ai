@@ -113,10 +113,10 @@ def initial(generation,config=None):
         cadence=dict(origin=generation,previous_phases=0,previous_last_phase=generation,first_phase=generation+(16 if wide else 8)))
 
 
-def migrate_sixteen_clock(previous,generation):
+def migrate_sixteen_clock(previous,generation,*,fresh_replay=False):
     from . import ppg_config
     ppg_config.schedule(previous,generation)
-    if previous['contract']==SIXTEEN_CLOCK:return copy.deepcopy(previous)
+    if previous['contract']==SIXTEEN_CLOCK and not fresh_replay:return copy.deepcopy(previous)
     result=dict(copy.deepcopy(previous),contract=SIXTEEN_CLOCK,cadence=dict(origin=generation,
         previous_phases=previous['phases'],previous_last_phase=previous['last_phase'],first_phase=generation+16))
     return schedule(result,generation)

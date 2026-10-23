@@ -276,7 +276,7 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
         from .ratings import validate_frozen_reference
         validate_frozen_reference(root,state['ratings'])
     if migration:
-        print('Combined reward migration: compatible weights/Adam/RNG preserved; utility head awaits fresh-rollout calibration',flush=True)
+        print('Combined reward migration: compatible weights/Adam/RNG preserved; value targets and fitting follow the adopted reward/training recipe',flush=True)
     if phases is not None and phases.snapshot_fixed_migration:
         change=phases.snapshot_fixed_migration
         print(f'Snapshot critic weight: {change["weight_before"]:.2f} -> 1.00 fixed; '

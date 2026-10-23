@@ -451,7 +451,13 @@ class TrainingPhases:
             if previous_reward is not None and previous_reward!=current_reward:
                 require(reviewed_reward_upgrade(previous_reward,current_reward),'Unreviewed PPG reward-cache transition')
                 invalidated=[r['generation'] for r in receipts];receipts=[];self.cache_origin=generation
-                if vp_cap_upgrade(previous_reward,current_reward):
+                if dcpg_config.sixteen(config['value_phase']):
+                    # Reward targets cannot be relabeled or mixed. Wait for a
+                    # full new window, retaining prior phase counts and Adam.
+                    self.schedule=dcpg_config.migrate_sixteen_clock(self.schedule,generation,fresh_replay=True)
+                    self.rolling_migration=dict(self.rolling_migration or {},fresh_cache_reset=True,
+                        cache_origin=generation,retained_generations=[],next_phase=ppg_config.next_phase(self.schedule))
+                elif vp_cap_upgrade(previous_reward,current_reward):
                     # New targets require eight fresh collections, even when
                     # the one-SE PPG recipe was already active before resume.
                     cap=self.epoch_control['cap'];self.schedule=ppg_config.initial(generation,config['value_phase'])
@@ -470,17 +476,20 @@ class TrainingPhases:
 
     def startup(self,generation):
         """Called under the run lock, after source/config adoption is committed."""
+        from . import ppg_config
         if self.options['value_phase']['enabled']:
             if not (getattr(self,'rolling_migration',None) or {}).get('fresh_cache_reset'):return None
-            require(self.cache_origin==generation==self.schedule['origin'] and not self.buffer.receipts,
+            next_phase=ppg_config.next_phase(self.schedule)
+            require(self.cache_origin==generation and not self.buffer.receipts
+                and next_phase==generation+self.options['value_phase']['buffer_iterations'],
                 'Fresh PPG cleanup requires an empty replay window at its explicit reset origin')
             result=value_buffer.retire_fresh(self.root,self.run,generation,reward_id=self.buffer.reward_id)
             self.rolling_migration['startup_cleanup']=copy.deepcopy(result)
             if result['deleted_files']:
                 from brass_ai.step5.league import write_json
                 write_json(self.run/'ppg-fresh-cache-reset.json',dict(result,generation=generation,
-                    phase='startup',next_phase=generation+8))
-            return dict(result,fresh_ppg=True,next_phase=generation+8)
+                    phase='startup',next_phase=next_phase))
+            return dict(result,fresh_ppg=True,next_phase=next_phase)
         require(self.buffer is None,'Disabled PPG must not open its old cache')
         result=value_buffer.retire_disabled(self.root,self.run,generation)
         self.disabled_startup_cleanup=result

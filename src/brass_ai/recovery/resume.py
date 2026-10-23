@@ -105,6 +105,10 @@ def check_signature(state, signature, reviewed=False):
             handlers[INSOLVENCY_010_CONFIG_MIGRATION]=insolvency_010_config
             from .config import INSOLVENCY_020_CONFIG_MIGRATION,insolvency_020_config
             handlers[INSOLVENCY_020_CONFIG_MIGRATION]=insolvency_020_config
+            from .config import INSOLVENCY_040_CONFIG_MIGRATION,insolvency_040_config
+            handlers[INSOLVENCY_040_CONFIG_MIGRATION]=insolvency_040_config
+            from .config import INSOLVENCY_040_CAP100_CONFIG_MIGRATION,insolvency_040_cap100_config
+            handlers[INSOLVENCY_040_CAP100_CONFIG_MIGRATION]=insolvency_040_cap100_config
             from .config import VP_CAP_CONFIG_MIGRATION,vp_cap_config
             handlers[VP_CAP_CONFIG_MIGRATION]=vp_cap_config
             from .value_phase import CONFIG_MIGRATION as PPG_MIGRATION,refined_options

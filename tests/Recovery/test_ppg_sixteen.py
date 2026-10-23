@@ -88,11 +88,11 @@ class Packing(unittest.TestCase):
 
 class Schedule(unittest.TestCase):
     def test_g620_source_config_helper_and_unrelated_change_rejection(self):
-        from brass_ai.recovery.config import validate_config,latest_model_config
+        from brass_ai.recovery.config import validate_config,latest_model_config,insolvency_040_cap100_config
         from brass_ai.recovery.resume import check_signature
         from brass_ai.step5.league import implementation_id
         exported=SOURCE_ROOT/'results/joint7-v11-2-grouped-lr-critic-g0620-20261023T133150568578Z'
-        state=read(exported/'state.json');old=state['signature']['config'];new=D.sixteen_options(old)
+        state=read(exported/'state.json');old=state['signature']['config'];new=insolvency_040_cap100_config(D.sixteen_options(old))
         validate_config(new)
         self.assertEqual(latest_model_config(old,old['imitation_checkpoint'])['value_phase'],new['value_phase'])
         target=dict(state['signature'],config=new,implementation=implementation_id())
@@ -110,6 +110,8 @@ class Schedule(unittest.TestCase):
             out='configs/step5/test-sixteen.json'
             r=helper.generate(root,'artifacts/run',out,620)
             self.assertEqual(r['first_phase'],636);self.assertEqual(read(root/out),new)
+            self.assertEqual(r['insolvency'],dict(event_cost=.04,max_cost=.10))
+            self.assertTrue(r['retire_old_reward_cache_on_startup'])
             self.assertEqual(helper.generate(root,'artifacts/run',out,620),r)
             self.assertEqual(before,{p.name:sha(p) for p in run.iterdir()})
             with self.assertRaises(ValueError):helper.generate(root,'artifacts/run',out,619)

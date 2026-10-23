@@ -135,7 +135,8 @@ class Request:
         object.__setattr__(self, 'style', tuple(self.style))
         object.__setattr__(self, 'intent', tuple(self.intent))
         if self.remaining is not None:
-            finite_vector(self.remaining,4,0,.1)
+            from .reward import MAX_INSOLVENCY_COST
+            finite_vector(self.remaining,4,0,MAX_INSOLVENCY_COST)
             object.__setattr__(self,'remaining',tuple(self.remaining))
         object.__setattr__(self, 'input_digest', self.digest())
 

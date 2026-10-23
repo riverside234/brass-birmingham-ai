@@ -272,10 +272,12 @@ EVALUATION_SCHEDULE = dict(enabled=False, monitor_every_games=6400, broader_ever
 LEGACY_BUDGET = dict(role='lab', seconds=1.0, search_workers=4, global_workers=60, work_multiplier=1)
 LEGACY_OPPONENTS = dict(search_free_until_games=10000)
 IMITATION = dict(manifest=None,epochs=10,patience=2,min_epochs=3,learning_rate=6e-5)
-INSOLVENCY = dict(event_cost=.020,max_cost=.080)
+INSOLVENCY = dict(event_cost=.040,max_cost=.100)
 INSOLVENCY_EVENT_CONFIG_MIGRATION = 'step5-insolvency-event-cost/1.0.0'
 INSOLVENCY_010_CONFIG_MIGRATION = 'step5-insolvency-event-cost/2.0.0'
 INSOLVENCY_020_CONFIG_MIGRATION = 'step5-insolvency-event-cost/3.0.0'
+INSOLVENCY_040_CONFIG_MIGRATION = 'step5-insolvency-event-cost/4.0.0'
+INSOLVENCY_040_CAP100_CONFIG_MIGRATION = 'step5-insolvency-event-cost/5.0.0'
 VP_CAP_CONFIG_MIGRATION = 'step5-vp-reward-cap/1.0.0'
 
 
@@ -322,8 +324,32 @@ def insolvency_020_config(config):
         search=result.get('search',{}).get('reward')
         if search is not None:
             require(search['insolvency']==result['insolvency'],'Search/learner insolvency differs')
-            search['insolvency']=copy.deepcopy(INSOLVENCY)
-        result['insolvency']=copy.deepcopy(INSOLVENCY)
+            search['insolvency']=dict(event_cost=.020,max_cost=.080)
+        result['insolvency']=dict(event_cost=.020,max_cost=.080)
+    return result
+
+
+def insolvency_040_config(config):
+    """Explicit .020/.080 -> .040/.160; never rewrite historical recipes."""
+    result=copy.deepcopy(config)
+    if result.get('insolvency')==dict(event_cost=.020,max_cost=.080):
+        search=result.get('search',{}).get('reward')
+        if search is not None:
+            require(search['insolvency']==result['insolvency'],'Search/learner insolvency differs')
+            search['insolvency']=dict(event_cost=.040,max_cost=.160)
+        result['insolvency']=dict(event_cost=.040,max_cost=.160)
+    return result
+
+
+def insolvency_040_cap100_config(config):
+    """Pending g620 revision: .040 per event, .100 cap; retain prior receipts."""
+    result=copy.deepcopy(config)
+    if result.get('insolvency') in (dict(event_cost=.020,max_cost=.080),dict(event_cost=.040,max_cost=.160)):
+        search=result.get('search',{}).get('reward')
+        if search is not None:
+            require(search['insolvency']==result['insolvency'],'Search/learner insolvency differs')
+            search['insolvency']=dict(event_cost=.040,max_cost=.100)
+        result['insolvency']=dict(event_cost=.040,max_cost=.100)
     return result
 CHAMPION_OPPONENTS = dict(contract='staged-champion-opponents/1.0.0',stage_iterations=5,max_champion_opponents=2)
 CHAMPION_MIX_CONFIG_MIGRATION = 'step5-staged-champion-opponents/1.0.0'
@@ -415,6 +441,7 @@ def latest_model_config(config,imitation_checkpoint):
     from .opening_objective import configure as configure_opening,zero_exploration
     from .ppg_config import coverage_options
     result=vp_cap_config(coverage_options(configure_ppg(configure_opening(zero_exploration(high_branch_config(insolvency_020_config(insolvency_010_config(result))))))))
+    result=insolvency_040_cap100_config(result)
     from .dcpg_config import configure as phasic_config,beta_options,sixteen_options
     result=sixteen_options(beta_options(phasic_config(result)))
     from .local_scoring_auxiliary import DEFAULT as LOCAL_SCORING
@@ -738,8 +765,9 @@ def validate_config(config):
     if 'insolvency' in config:
         fields.add('insolvency')
         bounded_fields(config['insolvency'],INSOLVENCY,'insolvency')
-        require(config['insolvency']['event_cost']<=config['insolvency']['max_cost']<=.1,
-                'Insolvency costs must stay small relative to winning')
+        from brass_ai.learning.reward import MAX_INSOLVENCY_COST
+        require(config['insolvency']['event_cost']<=config['insolvency']['max_cost']<=MAX_INSOLVENCY_COST,
+                'Insolvency costs exceed the supported budget')
     if 'legacy_boost' in config:
         fields.add('legacy_boost')
         boost=config['legacy_boost']

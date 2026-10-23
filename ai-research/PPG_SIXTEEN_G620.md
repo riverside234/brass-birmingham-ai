@@ -22,8 +22,18 @@ decreases**. The g620 report records `beta_clone_next=1.0`; this continuation ke
 that value. A new run starts at configured beta 1. The former 0.002 is not an
 acceptance limit or a beta-adjustment threshold in this recipe. PPO's separate
 KL guards, GAE economic/PPO checks and LR-controller rules are unchanged.
-PPO continues DCPG output preservation. No model, IL, reward, exploration,
+PPO continues DCPG output preservation. No model, IL, exploration,
 opponent, LR-controller, GAE or snapshot settings are changed.
+
+The pending g620 continuation now also changes insolvency from **0.020/event,
+0.080 maximum** to **0.040/event, 0.100 maximum per seat/game**. The first two
+events cost 0.040 each, the third costs only the remaining 0.020, and further
+events add no penalty. The VP-180 reward and all other
+reward coefficients stay unchanged. The explicit config migration updates both
+ordinary and search reward specifications, preserving historical signed recipes.
+The active cap is 0.100. Validation also retains support for the previously
+reviewed 0.160 recipe without adopting it; each frozen
+opponent still validates remaining budgets against its own checkpoint's cap.
 
 Policy coverage stays at 2,048 clone rows per age and 512 probes per older age,
 with 2,048 age-0 probes: up to **32,768 cloning rows and 9,728 probes**. Exact KL
@@ -95,19 +105,51 @@ compatibility; retention uses the signed buffer length, not the directory name.
   arrays are removed only after the new checkpoint/state commit. Unknown files,
   links, missing arrays and changed hashes fail closed.
 
-The g620 helper generates a configuration without editing the run. At adoption,
-existing g613–620 cache receipts stay intact and readable; the available-cache
-origin becomes g612 so no already-expired ages are fabricated. New caches are
-packed as they are collected. The first new phase is **g636**, using g621–636,
-then g652. Fresh runs first run PPG at g16. Restarting during this fill does not
+The g620 helper generates a configuration without editing the run. With the
+reward follow-up, old g613–620 MC/remaining-cost targets are excluded immediately
+on adoption. At the next training startup, **after the reviewed new configuration
+is durably committed and before g621 collection**, delete only the owned old
+PPG caches. Unknown files or ownership mismatches refuse cleanup before any
+deletion. No old targets are relabeled or reconstructed with the new reward.
+The replay origin becomes g620; new caches are packed as they are collected.
+The first new phase is **g636**, using g621–636, then g652. Fresh runs first run
+PPG at g16. Restarting during this fill does not
 restart the schedule or reset beta, either Adam, RNG, GAE, snapshot evidence,
 population, lineage or ordinary progress. The previous phase count is retained.
+An interruption between configuration adoption and the first new checkpoint
+repeats the same empty-window migration safely. Once g621 is committed, restarting
+retains its new-reward cache. DCPG still fits fresh value targets only in PPG;
+this reward change does not introduce a head-only fitting pass inside PPO.
 
 Do not rerun old beta-reset or fresh-buffer-reset helpers. Backups must include
 the sealed cache arrays referenced by the matching checkpoint. Original replay
 retention remains unchanged and cannot reconstruct expired 16-age cache data.
 
 ## Validation and measurements
+
+The final **0.040/event, 0.100 cap** revision passed **13 focused tests in 59.6 s**.
+They cover direct g620 adoption, the earlier 0.160 proposal's exact migration,
+third-event partial charging, config generation, cache cleanup/restart, and
+preservation of weights, both Adams, RNG and progress. Evidence:
+`artifacts/insolvency040-cap100-g620-tests.log`. The continuation command below
+is unchanged; generate its configuration with the updated helper before training.
+The earlier full PPO/PPG smoke below used the previous 0.160 cap, not 0.100.
+
+Before the cap was reduced to 0.100, the 0.040/0.160 follow-up passed **13 focused tests in 20.3 s**, including g620
+combined configuration admission, preservation of archived reward migrations,
+per-event saturation, inference budget limits, old eight-age and sixteen-age
+cache retirement, fail-before-delete ownership checks, interruption after
+adoption, and retention of newly committed reward-compatible caches. Weights,
+both Adams, RNG, beta, phase counts and gate state are checked for preservation.
+Log: `artifacts/insolvency040-g620-tests.log`.
+
+An isolated **66.9 s CPU smoke with that earlier 0.040/0.160 reward** completed 16 authored PPO
+iterations and a 70-step retained PPG phase over 96 held-out fixture games.
+The g15 restart reproduced weights, both optimizers, RNG and evidence exactly;
+the incoming checkpoint stayed unchanged. Final overall/age-0 KL were
+0.0000039773 / 0.0000022737. This validates execution and continuation, not
+playing strength or the effect of stronger insolvency penalties on real games.
+Report: `artifacts/ppg-sixteen-insolvency040-g620-smoke/report.json`.
 
 Before the minimum-loss follow-up, the buffer/penalty suite passed **45 tests in 238.0 s**, including ten new
 packing/schedule/penalty-only regressions, existing DCPG/beta contracts, source
@@ -167,9 +209,9 @@ After syncing source and the review registry, run from the Linux repository:
 python scripts/configure-ppg-sixteen.py \
   --run artifacts/step5/joint7-v11-2-grouped-lr-critic \
   --expected-generation 620 \
-  --output configs/step5/joint7-v11-2-grouped-lr-critic-ppg16-g620.json && \
+  --output configs/step5/joint7-v11-2-grouped-lr-critic-ppg16-cost040-g620.json && \
 python scripts/step5.py \
-  --config configs/step5/joint7-v11-2-grouped-lr-critic-ppg16-g620.json train \
+  --config configs/step5/joint7-v11-2-grouped-lr-critic-ppg16-cost040-g620.json train \
   --run artifacts/step5/joint7-v11-2-grouped-lr-critic \
   --imitation-run artifacts/step5/features4-v11-2-batch7-il \
   --resume-reviewed-source --expected-generation 620 --iterations 20

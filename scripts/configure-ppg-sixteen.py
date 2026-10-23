@@ -13,7 +13,7 @@ def generate(root,run_path,output,expected_generation):
     from brass_ai.learning.contracts import project_path,require
     from brass_ai.recovery.retention import owned,safe,run_lock
     from brass_ai.recovery import dcpg_config
-    from brass_ai.recovery.config import validate_config
+    from brass_ai.recovery.config import validate_config,insolvency_040_cap100_config
     from brass_ai.recovery.resume import check_signature
     from brass_ai.step5.league import implementation_id,write_json
     root,run=owned(root,project_path(root,run_path));output=project_path(root,output)
@@ -25,17 +25,21 @@ def generate(root,run_path,output,expected_generation):
         old=state['signature']['config'];require(old['value_phase']['enabled'],'Expected active DCPG/PPG')
         entry=state['history'][-1]
         require(sha(safe(run,project_path(root,entry['path'])))==entry['sha256'],'Committed checkpoint missing/changed')
-        config=validate_config(dcpg_config.sixteen_options(old))
+        config=validate_config(insolvency_040_cap100_config(dcpg_config.sixteen_options(old)))
+        require(config['insolvency']==dict(event_cost=.04,max_cost=.10),
+            'Expected the g620 .020/.080 reward or the .040 event-cost recipe')
+        reward_changed=config['insolvency']!=old['insolvency']
         check_signature(state,dict(state['signature'],config=config,implementation=implementation_id()),reviewed=True)
         require(not output.exists() or read(output)==config,'Existing output differs; choose a new --output')
         write_json(output,config)
         return dict(config=output.relative_to(root).as_posix(),generation=state['iteration'],run_modified=False,
-            first_phase=expected_generation+16 if not dcpg_config.sixteen(old['value_phase']) else 'restore checkpoint schedule',
+            first_phase=expected_generation+16 if reward_changed or not dcpg_config.sixteen(old['value_phase']) else 'restore checkpoint schedule',
             buffer_iterations=16,heldout_iterations=16,phase_interval=16,weighting='uniform',
             cache_format=dcpg_config.PACKED_CACHE,
             kl_control='penalty-only',kl_cap=None,beta_mode='fixed-checkpoint',
             selection=config['value_phase']['selection'],
-            scope='Retain existing sealed caches; pack only new generations. Preserve model, both Adams, beta, RNG, progress, population and gate evidence. No fresh-buffer reset.')
+            insolvency=config['insolvency'],retire_old_reward_cache_on_startup=reward_changed,
+            scope='After reviewed reward adoption, retire old-target PPG caches at startup and collect 16 fresh iterations. Preserve model, both Adams, beta, RNG, progress, population and gate evidence.')
 
 
 def main():

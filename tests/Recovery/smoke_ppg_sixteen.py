@@ -1,6 +1,7 @@
 """Isolated CPU PPO/PPG cycle, exact resume, and paired cache-read benchmark."""
 import argparse
 import copy
+from dataclasses import replace
 import math
 from pathlib import Path
 import shutil
@@ -75,10 +76,16 @@ def benchmark(out,phase):
 
 
 def main():
-    p=argparse.ArgumentParser(description=__doc__);p.add_argument('--output',required=True);a=p.parse_args()
+    p=argparse.ArgumentParser(description=__doc__);p.add_argument('--output',required=True)
+    p.add_argument('--insolvency-040',action='store_true');a=p.parse_args()
     out=project_path(SOURCE_ROOT,a.output);require(out.is_relative_to(SOURCE_ROOT/'artifacts') and not out.exists(),'Use a fresh artifacts output')
     out.mkdir(parents=True);torch.set_num_threads(2);began=time.perf_counter();source=implementation_id()
     model,opt,cfg=config();cfg['value_phase']['batch_size']=128
+    if a.insolvency_040:
+        from brass_ai.recovery.config import insolvency_010_config,insolvency_020_config,insolvency_040_cap100_config,vp_cap_config
+        from brass_ai.recovery.utility import reward_spec
+        cfg=vp_cap_config(insolvency_040_cap100_config(insolvency_020_config(insolvency_010_config(cfg))))
+        model.config=replace(model.config,utility=reward_spec(cfg))
     cfg['update'].update(effective_batch_size=512,critic_batch_size=512,microbatch_size=32)
     run=out/'continuous';phase=TrainingPhases(model,cfg,root=SOURCE_ROOT,run=run);reports=[]
     for g in range(1,16):
@@ -110,6 +117,7 @@ def main():
     bench=benchmark(out/'benchmark',phase)
     require(source==implementation_id(),'Source changed during smoke')
     report=dict(passed=True,seconds=time.perf_counter()-began,implementation=source,parameters=model.parameter_count,
+        insolvency=cfg['insolvency'],
         exact_restart=True,incoming_checkpoint_unchanged=True,results=reports,benchmark=bench,
         scope='CPU authored fixtures, 18 games and reduced row budgets per iteration. Sixteen committed iterations, one real scheduled PPG phase, repeated after g15 restart. No production run or evaluation.')
     write_json(out/'report.json',report)
