@@ -1,5 +1,17 @@
 # Fresh training in conda: selected v4 teachers and Masked ISMCTS NN
 
+## Current g650 PPG continuation
+
+Use the [dense eight-iteration PPG instructions](../ai-research/PPG_DENSE_EIGHT_G650.md)
+for the current v11.2 run: eight cached/held-out ages, a phase every eight
+iterations, last-accepted-loss selection, ordered multiprocess preparation and
+**0.5% branching per eligible decision**. PPO feedback cuts use **LR / 1.25**;
+PPO stopping uses only the **2,048-row exact categorical KL probe**, with sampled
+KL retained as a diagnostic.
+The reviewed g650 continuation starts its first new phase at g658 and preserves
+the completed IL folder. The guide includes the interrupted-collection recovery
+and exact config/continuation commands.
+
 ## Features 2: fresh IL and a new self-play run
 
 The current encoder/model uses `permitted-features/2.0.0`, width 304 and an explicit

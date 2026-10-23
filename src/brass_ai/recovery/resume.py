@@ -97,6 +97,10 @@ def check_signature(state, signature, reviewed=False):
             if THRESHOLD_MIGRATION in migrations:
                 require(state['iteration']>=560,'LR threshold hotfix starts from committed generation 560 or later')
             handlers[THRESHOLD_MIGRATION]=threshold_config
+            from .lr_controller import CUT_MIGRATION,cut_config
+            handlers[CUT_MIGRATION]=cut_config
+            from .ppo_kl_control import MIGRATION as EXACT_KL_MIGRATION,configure as exact_kl_config
+            handlers[EXACT_KL_MIGRATION]=exact_kl_config
             from .quality_config import CONFIG_MIGRATION as PFSP_MIGRATION,sampling_config
             handlers[PFSP_MIGRATION]=sampling_config
             from .config import INSOLVENCY_EVENT_CONFIG_MIGRATION,insolvency_event_config
@@ -143,6 +147,8 @@ def check_signature(state, signature, reviewed=False):
             handlers[BETA_MIGRATION]=beta_options
             from .dcpg_config import SIXTEEN_MIGRATION,sixteen_options
             handlers[SIXTEEN_MIGRATION]=sixteen_options
+            from .dcpg_config import FAST_MIGRATION,fast_options
+            handlers[FAST_MIGRATION]=fast_options
             from .opening_objective import (MIGRATION as OPENING_MIGRATION,configure as configure_opening,
                 ZERO_EXPLORATION_MIGRATION,zero_exploration)
             handlers[OPENING_MIGRATION]=configure_opening
@@ -165,6 +171,8 @@ def check_signature(state, signature, reviewed=False):
             handlers[ANCHOR_FLOOR_MIGRATION]=lambda c:anchor_floor_config(c,state)
             from .exploration import HIGH_BRANCH_MIGRATION,high_branch_config
             handlers[HIGH_BRANCH_MIGRATION]=high_branch_config
+            from .exploration import LOW_BRANCH_MIGRATION,low_branch_config
+            handlers[LOW_BRANCH_MIGRATION]=low_branch_config
             for migration in migrations:
                 require(migration in handlers,'Unknown reviewed configuration migration')
                 expected=handlers[migration](expected)

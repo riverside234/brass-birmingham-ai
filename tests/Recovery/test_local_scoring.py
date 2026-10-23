@@ -74,7 +74,7 @@ class Contracts(unittest.TestCase):
             row,target,ident,e=data[0];mapping=np.array([(s-observer)%4 for s in range(4)],dtype=np.int64)
             row=dict(row,seat=observer);encoded=Encoded(e.state,e.actions,mapping,e.choice_ids)
             ds=updates.Dataset([(row,target,(ident[0],observer),encoded)],'cpu');ix,x,_=ds.batch([0]);a.begin('ppo');a.forward(m,x,ds,ix)
-            key=(row['_local_scoring']['envelope']['sha256'],row['_local_scoring']['era'],observer,'slots')
+            key=((row['_local_scoring']['envelope']['sha256'],row['_local_scoring']['era'],observer,tuple(mapping)),'slots')
             classes,values,mask=a.target_cache[key];labels=targets.map_for(row)['slots']
             self.assertTrue(mask.all())
             for j,label in enumerate(labels):

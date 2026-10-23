@@ -43,6 +43,7 @@ FROZEN_MIGRATION = 'frozen-entropy-branch-openings/1.0.0'
 GROUP_FLOOR_MIGRATION = 'group-entropy-floors-low-branching/1.0.0'
 ANCHOR_FLOOR_MIGRATION = 'anchor-promotion-entropy-floors/1.0.0'
 HIGH_BRANCH_MIGRATION = 'anchor-entropy-high-branching/1.0.0'
+LOW_BRANCH_MIGRATION = 'anchor-entropy-half-percent-branching/1.0.0'
 STATE = 'exploration-state/1.0.0'
 ANCHOR_STATE = 'exploration-state/2.0.0'
 
@@ -123,6 +124,18 @@ def high_branch_config(config):
     result=copy.deepcopy(config)
     if config.get('entropy_control',{}).get('contract')==ANCHOR_ENTROPY['contract']:
         result['branching']=copy.deepcopy(HIGH_BRANCH)
+    validate(result)
+    return result
+
+
+def low_branch_config(config):
+    """Reduce only fork probability; retain entropy evidence and fork openings."""
+    validate(config)
+    require(config.get('entropy_control',{}).get('contract')==ANCHOR_ENTROPY['contract'] and
+        config.get('branching',{}).get('contract')==BRANCH['contract'],
+        'Half-percent branching requires the current anchor-entropy recipe')
+    result=copy.deepcopy(config)
+    result['branching']['rate_per_decision']=.005
     validate(result)
     return result
 

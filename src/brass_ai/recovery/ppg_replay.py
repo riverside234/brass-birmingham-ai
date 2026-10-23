@@ -84,14 +84,20 @@ class Column:
     def __getitem__(self,indices):
         tail=None
         if isinstance(indices,tuple):indices,tail=indices
-        if isinstance(indices,torch.Tensor):indices=indices.detach().cpu().tolist()
+        prepared=getattr(self.data,'prepared',None)
+        same=prepared is not None and indices is prepared[0]
+        if not same and isinstance(indices,torch.Tensor):indices=indices.detach().cpu().tolist()
         if isinstance(indices,int):indices=[indices]
-        values=self.data.column(indices,self.name)
-        if self.head is not None:values=values[:,self.head]
-        t=torch.as_tensor(values,device=self.device)
+        if prepared is not None and (same or (isinstance(indices,list) and indices==prepared[1])):
+            t=prepared[2][self.name]
+            if self.head is not None:t=t[:,self.head]
+        else:
+            values=self.data.column(indices,self.name)
+            if self.head is not None:values=values[:,self.head]
+            t=torch.as_tensor(values,device=self.device)
         if tail is not None:
             if isinstance(tail,torch.Tensor):tail=tail.to(self.device)
-            t=t[torch.arange(len(indices),device=self.device),tail]
+            t=t[torch.arange(len(t),device=self.device),tail]
         return t
 
 
@@ -104,6 +110,29 @@ class CriticDataset(Dataset):
         self.targets=tuple(Column(self.data,'targets',device,j) for j in range(3))
         self.roles=[('learner','snapshot')[int(x)] for p in rows for x in p.array['role']]
         self.tables=[('selfplay','historical','legacy')[int(x)] for p in rows for x in p.array['table']]
+
+    def preparation_source(self):
+        # Packed historical recipes retain their existing reader. New v13
+        # replay is admitted/hashed once by Buffer.verify, then read-only.
+        if any('packing' in p.receipt for p in self.data.parts):return None
+        return tuple((str(p.array.filename),len(p)) for p in self.data.parts)
+
+    def scoring_metadata(self,indices):
+        """Small metadata only: never reconstruct an Encoded row or descriptor."""
+        from .local_scoring_targets import map_for
+        indices=np.asarray(indices,dtype=np.int64)
+        owners=np.searchsorted(self.data.ends,indices,side='right')
+        games=self.data.column(indices,'game');contexts=self.data.column(indices,'context')
+        seats=self.data.column(indices,'seat');mapping=self.data.column(indices,'mapping')
+        result=[]
+        for i,p,g,c,seat,m in zip(indices,owners,games,contexts,seats,mapping):
+            part=self.data.parts[p];game=part.receipt['game_ids'][g];context=part.receipt['contexts'][c]
+            envelope=part.local.get(game);era=context['era']
+            target=map_for({'_local_scoring':dict(envelope=envelope,era=era)}) if envelope else None
+            key=(envelope['sha256'],era,int(seat),tuple(m)) if envelope else None
+            revision=context['revision'] if target is not None else context.get('revision',int(i))
+            result.append((target,key,(game,era,int(revision),int(seat)),m))
+        return result
 
     def microbatches(self,indices,size,cells,bucket=True):
         # This sealed critic format contains exactly one real candidate/row.

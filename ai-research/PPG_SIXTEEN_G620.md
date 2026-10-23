@@ -1,5 +1,10 @@
 # Sixteen-iteration PPG and lossless packed replay
 
+This is the archived g620 recipe. The current g650 continuation uses
+[dense eight-iteration replay and previous-accepted-loss selection](PPG_DENSE_EIGHT_G650.md).
+Its new settings do not reinterpret historical reports or overwrite this signed
+sixteen-age configuration.
+
 The explicit g620 continuation and newly generated configurations use
 `ppg-value-phase/12.0.0`: 16 cached committed iterations, uniform weights,
 fresh main-process shuffling each epoch, and a value phase every 16 iterations.

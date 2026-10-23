@@ -94,7 +94,7 @@ class Schedule(unittest.TestCase):
         exported=SOURCE_ROOT/'results/joint7-v11-2-grouped-lr-critic-g0620-20261023T133150568578Z'
         state=read(exported/'state.json');old=state['signature']['config'];new=insolvency_040_cap100_config(D.sixteen_options(old))
         validate_config(new)
-        self.assertEqual(latest_model_config(old,old['imitation_checkpoint'])['value_phase'],new['value_phase'])
+        self.assertEqual(latest_model_config(old,old['imitation_checkpoint'])['value_phase'],D.fast_options(new)['value_phase'])
         target=dict(state['signature'],config=new,implementation=implementation_id())
         self.assertTrue(check_signature(state,target,reviewed=True))
         with self.assertRaises(ValueError):check_signature(state,target)

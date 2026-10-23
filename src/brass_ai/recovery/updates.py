@@ -419,7 +419,7 @@ def phase_probe(dataset,indices,limit):
 
     Equal quotas per phase over-represented rare bonus/payment choices, hiding
     drift in the dominant action phase. Largest-remainder quotas preserve the
-    population mixture; the full final KL remains required.
+    population mixture; full-dataset sampled KL is still recorded separately.
     """
     from collections import defaultdict
     groups=defaultdict(list)
@@ -462,6 +462,8 @@ def ppo_nonforced(model,optimizer,games,behavior,config,*,profile=None,profile_s
 def _ppo_nonforced(model,optimizer,games,behavior,config,*,profile,profile_steps,rehearsal,rehearsal_weight,learner_data,executor,insolvency,reward,sample_groups=None,anchor_model=None,phases=None):
     from .ppg_phasic import detached
     from . import dcpg_config
+    from . import ppo_kl_control
+    exact_only=ppo_kl_control.active(config)
     detach_critic=detached(config)
     preserve=dcpg_config.enabled(config)
     if preserve:require(phases is not None and dcpg_config.active(phases.options['value_phase']),
@@ -638,7 +640,7 @@ def _ppo_nonforced(model,optimizer,games,behavior,config,*,profile,profile_steps
                     stopped=True;stop_reason='behavior_categorical_probe';break
             full=policy_measure(model,ds,actor_ids,behavior,config,timings,executor=executor)
             require(math.isfinite(full),'Nonfinite full-dataset PPO sampled KL; refusing further updates')
-            if not stopped and full>config['target_kl']:
+            if not exact_only and not stopped and full>config['target_kl']:
                 stopped=True;stop_reason='sampled_full_dataset'
             aa=(actor_totals/max(1,actor_seen)).cpu().tolist();vv=(value_totals/max(1,critic_seen)).cpu().tolist()
             epochs.append(dict(epoch=epoch,actor=aa[0],entropy=aa[1],clip_fraction=aa[2],value=vv[0],
@@ -700,9 +702,12 @@ def _ppo_nonforced(model,optimizer,games,behavior,config,*,profile,profile_steps
                          admission=ds.input_audit.report()),
         kl_estimator=('probe_categorical_kl/categorical_kl: exact KL(old raw T1 || current raw T1), per-step guard and LR signal; behavior_categorical_kl: independent exact behavior-policy guard at the same limit; '
             if 'opening_objective' in config else 'probe_categorical_kl: exact KL(old behavior || current behavior), per-step guard; ')+
-            'post_update_kl/probe_kl: sampled behavior chosen-action ((ratio-1)-log(ratio)); full means all nonforced rows, retained as secondary epoch guard. Behavior reconstruction is verified separately before updates.',
-        kl_guard=dict(contract='ppo-categorical-kl-guard/2.0.0' if 'opening_objective' in config else PPO_KL_GUARD,
+            'post_update_kl/probe_kl: sampled behavior chosen-action ((ratio-1)-log(ratio)); '+
+            ('diagnostics only, never a stop or LR signal. ' if exact_only else 'full means all nonforced rows, retained as secondary epoch guard. ')+
+            'Behavior reconstruction is verified separately before updates.',
+        kl_guard=dict(contract=ppo_kl_control.CONTRACT if exact_only else 'ppo-categorical-kl-guard/2.0.0' if 'opening_objective' in config else PPO_KL_GUARD,
             target_kl=config['target_kl'],probe_positions=len(probe),
+            requested_probe_positions=config['kl_probe_rows'],sampled_kl_stop_enabled=not exact_only,
             probe_checks=steps,full_dataset_checks=len(epochs),max_categorical_kl=max_categorical_kl,
             **(dict(max_behavior_categorical_kl=max_behavior_kl,
                 operative_policy='raw-temperature-1',behavior_guard_preserved=True) if 'opening_objective' in config else {}),

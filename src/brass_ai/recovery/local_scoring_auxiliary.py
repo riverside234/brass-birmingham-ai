@@ -115,11 +115,50 @@ class Companion:
         require(math.isfinite(rate_factor) and 0<rate_factor<=1+1e-12,'Invalid companion phase LR factor')
         for group in optimizer.param_groups:group['lr']=self.config['optimizer']['learning_rate']*min(1.,rate_factor)
 
+    def metadata(self,ds,ids):
+        if hasattr(ds,'scoring_metadata'):return ds.scoring_metadata(ids)
+        result=[]
+        for i in ids:
+            row=ds.rows[i];target=targets.map_for(row);context=row['view']['context']
+            mapping=np.asarray(ds.encoded[i].stable_to_relative)
+            key=(row['_local_scoring']['envelope']['sha256'],target['era'],int(row['seat']),tuple(mapping)) if target else None
+            revision=context['revision'] if target is not None else context.get('revision',i)
+            result.append((target,key,(ds.data[i][2][0],context['era'],int(revision),int(row['seat'])),mapping))
+        return result
+
+    def target_arrays(self,metadata,kind,count):
+        # One conversion per sealed game/era/seat mapping, then vectorized
+        # expansion of the unique records in this batch. Cache only small CPU
+        # labels, never encoded states, model outputs or autograd graphs.
+        unique={};values=[];inverse=[]
+        for target,key,_,mapping in metadata:
+            token=(key,kind)
+            if token not in unique:
+                unique[token]=len(values)
+                if target is None:
+                    value=(np.zeros(count,np.int64),np.zeros((count,4),np.float32),np.zeros(count,np.bool_))
+                else:
+                    value=self.target_cache.get(token)
+                    if value is None:
+                        stable=np.array([r['owner']-1 for r in target[kind]])
+                        relative=mapping[stable.clip(0)];present=stable>=0
+                        cls=np.where(present,relative+1,0);vp=np.zeros((count,4),np.float32)
+                        vp[np.arange(count)[present],relative[present]]=np.array([r['vp'] for r in target[kind]])[present]/self.config['vp_scale']
+                        value=(cls,vp,np.array([r['valid'] for r in target[kind]],np.bool_))
+                        self.target_cache[token]=value;self.stats['target_cache_misses']+=1
+                        if len(self.target_cache)>65536:self.target_cache.popitem(last=False)
+                    else:self.stats['target_cache_hits']+=1
+                    self.target_cache.move_to_end(token)
+                values.append(value)
+            inverse.append(unique[token])
+        return tuple(np.stack([v[j] for v in values])[inverse] for j in range(3))
+
     def forward(self,model,inputs,ds,ix,*,dropout=None,detach=False):
         from .updates import value_output
         ids=ix.detach().cpu().tolist() if isinstance(ix,torch.Tensor) else list(ix)
-        selected=[targets.map_for(ds.rows[i]) for i in ids]
-        if not self.active or not any(x is not None for x in selected):return value_output(model,inputs,ds,ix,dropout=dropout,detach=detach),None
+        if not self.active:return value_output(model,inputs,ds,ix,dropout=dropout,detach=detach),None
+        metadata=self.metadata(ds,ids)
+        if not any(x[0] is not None for x in metadata):return value_output(model,inputs,ds,ix,dropout=dropout,detach=detach),None
         from brass_ai.learning.seat_descriptors import critic_inputs
         start=time.perf_counter()
         with torch.set_grad_enabled(torch.is_grad_enabled() and not detach):encoded=model.encode_state(inputs[0])
@@ -134,23 +173,7 @@ class Companion:
         predictions=self.heads(encoded,embeddings,self.scale)
         loss=torch.zeros(len(ids),device=inputs[0].device,dtype=torch.float32)
         for kind,(owner,vp) in predictions.items():
-            count=owner.shape[1];classes=np.zeros((len(ids),count),np.int64)
-            values=np.zeros((len(ids),count,4),np.float32);mask=np.zeros((len(ids),count),np.bool_)
-            for b,(i,target) in enumerate(zip(ids,selected)):
-                if target is None:continue
-                token=(ds.rows[i]['_local_scoring']['envelope']['sha256'],target['era'],int(ds.rows[i]['seat']),kind)
-                if token not in self.target_cache:
-                    mapping=np.asarray(ds.encoded[i].stable_to_relative)
-                    stable=np.array([r['owner']-1 for r in target[kind]])
-                    relative=mapping[stable.clip(0)];present=stable>=0
-                    owner_class=np.where(present,relative+1,0)
-                    val=np.zeros((count,4),np.float32)
-                    val[np.arange(count)[present],relative[present]]=np.array([r['vp'] for r in target[kind]])[present]/self.config['vp_scale']
-                    valid=np.array([r['valid'] for r in target[kind]],np.bool_)
-                    self.target_cache[token]=(owner_class,val,valid)
-                    if len(self.target_cache)>4096:self.target_cache.popitem(last=False)
-                self.target_cache.move_to_end(token)
-                classes[b],values[b],mask[b]=self.target_cache[token]
+            classes,values,mask=self.target_arrays(metadata,kind,owner.shape[1])
             m=torch.as_tensor(mask,device=owner.device);den=m.sum(-1).clamp_min(1)
             cls=torch.as_tensor(classes,device=owner.device);truth=torch.as_tensor(values,device=vp.device)
             ce=F.cross_entropy(owner.float().transpose(1,2),cls,reduction='none')
@@ -161,10 +184,9 @@ class Companion:
             self.accumulate(kind+'_ce_sum',(ce.detach()*m).sum())
             self.accumulate(kind+'_none',((cls==0)&m).sum())
             self.accumulate(kind+'_vp_abs_sum',((vp.detach().float()-truth).abs().sum(-1)*m).sum()*self.config['vp_scale'])
-        for i,target in zip(ids,selected):
+        for target,_,token,_ in metadata:
             if target is not None:
-                row=ds.rows[i];game=ds.data[i][2][0]
-                token=(game,target['era'],int(row['view']['context']['revision']),int(row['seat']))
+                game=token[0]
                 self.batch_used.add(token);self.attempted.add(token)
                 if (game,target['era']) not in self.map_support:
                     self.map_support[(game,target['era'])]=sum(int(r['valid']) for k in ('slots','links') for r in target[k])
@@ -246,15 +268,15 @@ class Companion:
             target=targets.identity(),audit_discrepancies=0,scope='Critic-train rows only; official held-out loss and exact policy KL remain the acceptance criteria. Invalid scoring audits fail admission.')
 
     def inventory(self,dataset,ids):
-        for i in ids:
-            row=dataset.rows[i];target=targets.map_for(row)
-            game=dataset.data[i][2][0];era=row['view']['context']['era']
-            if target is None:
-                self.unavailable.add((game,era,row['view']['context'].get('revision',i),int(row['seat'])));continue
-            self.available.add((game,era,int(row['view']['context']['revision']),int(row['seat'])))
-            if (game,era) not in self.map_support:
-                self.map_support[(game,era)]=sum(int(r['valid']) for k in ('slots','links') for r in target[k])
-                self.map_masked[(game,era)]=sum(int(not r['valid']) for k in ('slots','links') for r in target[k])
+        ids=list(ids)
+        for start in range(0,len(ids),4096):
+            for target,_,token,_ in self.metadata(dataset,ids[start:start+4096]):
+                game,era=token[:2]
+                if target is None:self.unavailable.add(token);continue
+                self.available.add(token)
+                if (game,era) not in self.map_support:
+                    self.map_support[(game,era)]=sum(int(r['valid']) for k in ('slots','links') for r in target[k])
+                    self.map_masked[(game,era)]=sum(int(not r['valid']) for k in ('slots','links') for r in target[k])
 
     def diagnostics(self,model,dataset,heldout,*,maximum=2048):
         """Bounded ordinary held-out families; no fitting or gate decisions."""

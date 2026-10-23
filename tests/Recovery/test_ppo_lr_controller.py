@@ -98,7 +98,7 @@ class Decisions(unittest.TestCase):
                     [measurements(early_stop=True),measurements(),measurements(early_stop=True)]):
             state=ready()
             for m in seq:state,report=controller.decide(state,m)
-            self.assertEqual(report['decision'],'down');self.assertAlmostEqual(state['multiplier'],1/1.5)
+            self.assertEqual(report['decision'],'down');self.assertAlmostEqual(state['multiplier'],.8)
             self.assertEqual(state['window'],[]);self.assertEqual(state['cooldown'],3)
         # Exactly half and exactly the upper boundary do not trigger these cuts.
         _,report=controller.decide(ready(),measurements(early_stop=True,steps_done=5,kl=.015))

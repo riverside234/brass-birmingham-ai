@@ -56,10 +56,10 @@ def paired(before,after,*,standard_errors=1.):
         improved=mean<0.,scope='Equally weighted ordinary held-out learner games; paired loss difference from best retained weights')
 
 
-def losses(model,dataset,ids,update):
+def losses(model,dataset,ids,update,*,preparation=None):
     result={};model.eval()
     with torch.no_grad():
-        for part,ix,inputs in dataset.value_batches(value_phase.value_parts(dataset,ids,update,model),model):
+        for part,ix,inputs in dataset.value_batches(value_phase.value_parts(dataset,ids,update,model),model,executor=preparation):
             out=value_output(model,inputs,dataset,ix)
             loss=value_losses(out,tuple(t[ix] for t in dataset.targets))[0]+(out[4].float()-dataset.utility[ix]).square().mean(-1)
             values=loss.double().cpu().tolist()
@@ -173,7 +173,7 @@ def diagnostics(model,current,heldout,config,update):
         descriptor_gain=dict(learner_ev_gain=ev-other if ev is not None and other is not None else None))
 
 
-def fit(model,optimizer,buffer,current,train_ids,heldout_ids,config,update,*,beta,snapshot_weight,dropout,run_phase,ppo_work,epoch_cap=None,companion=None,ppo_peak=None):
+def fit(model,optimizer,buffer,current,train_ids,heldout_ids,config,update,*,beta,snapshot_weight,dropout,run_phase,ppo_work,epoch_cap=None,companion=None,ppo_peak=None,preparation_pool=None):
     began=time.perf_counter()
     from . import ppg_phasic,dcpg_config
     delayed=dcpg_config.active(config)
@@ -221,9 +221,12 @@ def fit(model,optimizer,buffer,current,train_ids,heldout_ids,config,update,*,bet
     report['heldout_standard_errors']=config.get('selection',{}).get('standard_errors',1.)
     def compare(before,after):
         if report['heldout_standard_errors']==1.:return paired(before,after)
-        return paired(before,after,standard_errors=report['heldout_standard_errors'])
+        result=paired(before,after,standard_errors=report['heldout_standard_errors'])
+        if dcpg_config.fast(config):result['scope']='Paired mean ordinary learner game-loss difference from the previous accepted interval'
+        return result
     def measured_losses(ds,ids):
-        start=time.perf_counter();result=losses(model,ds,ids,update)
+        start=time.perf_counter()
+        result=losses(model,ds,ids,update,**({'preparation':preparation} if preparation is not None else {}))
         report['heldout_evaluation_seconds']+=time.perf_counter()-start;return result
     def measured_probe():
         start=time.perf_counter();result=reference.probes(model)
@@ -241,7 +244,10 @@ def fit(model,optimizer,buffer,current,train_ids,heldout_ids,config,update,*,bet
     def sample_memory():
         for k,v in memory(current.device).items():
             if v is not None:peak[k]=max(peak.get(k) or 0,v)
-    with buffer.datasets(current.device) as (ds,policy,receipts):
+    from .ppo_preparation import phase_preparation
+    with buffer.datasets(current.device) as (ds,policy,receipts),phase_preparation(
+            preparation_pool,update.get('preparation_workers',0),directory=buffer.root/'artifacts',
+            enabled=dcpg_config.fast(config)) as preparation:
         train,held,validation,ages,support=layout(ds,receipts,config,snapshot_weight)
         if companion is not None and companion.active:companion.inventory(ds,[i for group in train.values() for i in group])
         report['age_support']=support
@@ -276,7 +282,7 @@ def fit(model,optimizer,buffer,current,train_ids,heldout_ids,config,update,*,bet
         best_aux=companion.snapshot() if companion is not None else None
         selection=None
         if ppg_config.coverage(config):
-            from .ppg_selection import Selection,minimum
+            from .ppg_selection import Selection,minimum,latest
             selection=Selection(model,optimizer,best_games,companion=companion,config=config['selection'])
         # Loss-selected states at steps 16,48,... are provisional. The separate
         # certified selection contains only states with their OWN exact KL check.
@@ -327,7 +333,7 @@ def fit(model,optimizer,buffer,current,train_ids,heldout_ids,config,update,*,bet
                     optimizer.zero_grad(set_to_none=True);model.eval()
                     if companion is not None:companion.begin('ppg',rate_factor=rate/peak_rate)
                     train_start=time.perf_counter()
-                    for part,ix,inputs in ds.value_batches(value_phase.value_parts(ds,batch,update,model),model):
+                    for part,ix,inputs in ds.value_batches(value_phase.value_parts(ds,batch,update,model),model,executor=preparation):
                         with autocast(update,ds.device):
                             if companion is not None:out,local_loss=companion.forward(model,inputs,ds,ix,dropout=active_dropout)
                             else:out,local_loss=value_output(model,inputs,ds,ix,dropout=active_dropout),None
@@ -397,6 +403,7 @@ def fit(model,optimizer,buffer,current,train_ids,heldout_ids,config,update,*,bet
             if trip:break
             if end_epoch:report['epochs_completed']=epoch+1
             now=by_game(ds,measured_losses(ds,validation));comparison=compare(best_games,now)
+            reference_step=report['best_budget_step']
             report['heldout_checks']+=1
             improved=comparison['improved'] and not comparison['reject']
             retained=False
@@ -412,11 +419,12 @@ def fit(model,optimizer,buffer,current,train_ids,heldout_ids,config,update,*,bet
                 policy_checked=not delayed or checked_position==position))
             if selection is not None:
                 report['interval_reports'][-1].update(
-                    **{('retained_as_minimum_loss' if minimum(config['selection']) else 'retained_for_coverage'):retained},
+                    **{('retained_as_latest' if latest(config['selection']) else 'retained_as_minimum_loss' if minimum(config['selection']) else 'retained_for_coverage'):retained},
+                    loss_reference_step=reference_step,
                     minimum_reference_step=selection.minimum_budget_step,
                     selected_budget_step=selection.budget_step,
                     outcome='improved' if improved else 'failed' if comparison['reject'] else 'neutral')
-            if improved:
+            if improved or (selection is not None and latest(config['selection']) and retained):
                 best_model=copy.deepcopy(model.state_dict());best_adam=copy.deepcopy(optimizer.state_dict());best_games=now
                 best_aux=companion.snapshot() if companion is not None else None
                 best_used=list(working);best_clones=list(working_clones);report['optimizer_steps']=working_steps
@@ -473,5 +481,6 @@ def fit(model,optimizer,buffer,current,train_ids,heldout_ids,config,update,*,bet
             calibration_receipt=copy.deepcopy(model.utility_calibration))
         report.update(diagnostics(model,current,heldout_ids,config,update))
         report['policy_input_cache']=reference.cache.report();sample_memory()
+        if preparation is not None:report['cpu_preparation']=preparation.report()
     report.update(memory=peak,memory_scope='Peak sampled phase RSS, OS process-lifetime RSS high-water, and CUDA allocator high-water; disk peak reported separately',seconds=time.perf_counter()-began)
     return report

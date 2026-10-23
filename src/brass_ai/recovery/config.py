@@ -414,6 +414,7 @@ def latest_model_config(config,imitation_checkpoint):
     result['ppo_lr_controller']=dict(AUTO_CONTROLLER,**result.get('ppo_lr_controller',{}))
     result['ppo_lr_controller']['contract']=AUTO_CONTRACT
     result['ppo_lr_controller']['low_ratio']=AUTO_CONTROLLER['low_ratio']
+    result['ppo_lr_controller']['cut_divisor']=AUTO_CONTROLLER['cut_divisor']
     if result['ppo_lr_controller']['contract']==AUTO_CONTRACT:
         result.setdefault('il_kl_limit',copy.deepcopy(AUTO_IL_KL))
         result['il_kl_limit']=current_il_kl_config(result['il_kl_limit'])
@@ -442,11 +443,14 @@ def latest_model_config(config,imitation_checkpoint):
     from .ppg_config import coverage_options
     result=vp_cap_config(coverage_options(configure_ppg(configure_opening(zero_exploration(high_branch_config(insolvency_020_config(insolvency_010_config(result))))))))
     result=insolvency_040_cap100_config(result)
-    from .dcpg_config import configure as phasic_config,beta_options,sixteen_options
-    result=sixteen_options(beta_options(phasic_config(result)))
+    from .dcpg_config import configure as phasic_config,beta_options,sixteen_options,fast_options
+    result=fast_options(sixteen_options(beta_options(phasic_config(result))))
     from .local_scoring_auxiliary import DEFAULT as LOCAL_SCORING
     result['local_scoring_auxiliary']=copy.deepcopy(LOCAL_SCORING)
-    result['branching']['rate_per_decision']=.010
+    from .exploration import low_branch_config
+    result=low_branch_config(result)
+    from .ppo_kl_control import configure as exact_kl_config
+    result=exact_kl_config(result)
     return validate_config(result)
 
 
@@ -539,7 +543,10 @@ def execution_config(config):
 
 
 def update_config(config):
-    require(set(config)-{'preparation_workers','opening_objective','value_gradient'} in (set(UPDATE),set(UPDATE_V21)), 'Unknown/missing update field')
+    require(set(config)-{'preparation_workers','opening_objective','value_gradient','kl_control'} in (set(UPDATE),set(UPDATE_V21)), 'Unknown/missing update field')
+    if 'kl_control' in config:
+        from .ppo_kl_control import validate
+        validate(config)
     if 'value_gradient' in config:
         from .ppg_phasic import validate_gradient
         validate_gradient(config['value_gradient'])
@@ -822,7 +829,7 @@ def validate_config(config):
         search_wall_fraction(config['search_wall_fraction'])
         require(config['execution']['max_models']>=sum(config['population'].values())+3,
                 'Model cache must cover frozen population plus learner/teacher versions')
-        require(set(config['update'])-{'preparation_workers','opening_objective','value_gradient'}==set(UPDATE_V21) and
+        require(set(config['update'])-{'preparation_workers','opening_objective','value_gradient','kl_control'}==set(UPDATE_V21) and
                 set(config['execution'])-{'shared_slot_bytes','inference_routing','replica_backlog','teacher_search_workers_per_turn','padding_ratio','model_cohorts'}==set(EXECUTION_V21),
                 '2.1 requires revised update/execution')
         require(config['update'].get('preparation_workers',0)<=available,'PPO preparation exceeds CPU budget')

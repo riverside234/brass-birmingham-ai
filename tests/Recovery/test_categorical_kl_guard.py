@@ -141,8 +141,11 @@ class GuardTests(unittest.TestCase):
         cfg=dict(lr_fixtures.config()['update'],effective_batch_size=2,microbatch_size=2,critic_batch_size=2)
         return model,optimizer,behavior,data,cfg
 
-    def run_update(self,exact=None,sampled=None,full=None):
+    def run_update(self,exact=None,sampled=None,full=None,exact_only=False):
         model,optimizer,behavior,data,cfg=self.fixture()
+        if exact_only:
+            from brass_ai.recovery.ppo_kl_control import DEFAULT
+            cfg=dict(cfg,kl_control=copy.deepcopy(DEFAULT))
         real=CategoricalProbe.measure_step;real_full=updates.policy_measure
         probes=[]
         def measure(probe,*args,**kwargs):
@@ -225,7 +228,7 @@ class GuardTests(unittest.TestCase):
         self.assertEqual(result['decision'],'down')
         self.assertEqual(result['early_stop_reason'],'categorical_probe')
         self.assertEqual((result['steps_done'],result['steps_planned']),(1,8))
-        self.assertAlmostEqual(result['multiplier_after'],1/1.5)
+        self.assertAlmostEqual(result['multiplier_after'],.8)
 
 
 class ResumeTests(unittest.TestCase):

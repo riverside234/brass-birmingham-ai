@@ -447,7 +447,7 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                 update['lr_controller']=finish_iteration(optimizer,update,config,sampling,games,behavior.policy_id,
                     kind_by_group,active_anchor,calibrated_anchor=limit_report['lr_gate'] if limit_report else None)
                 ppo_finished=time.monotonic()
-                value_report=phases.fit(model) if phases is not None else None
+                value_report=phases.fit(model,preparation_pool=preparation_pool) if phases is not None else None
                 updated=time.monotonic();done=state['games_done']+len(games)
                 ordinary_inference=service.report()
                 if rehearsal_schedule(config,done,iteration+1)['weight']==0:rehearsal=None

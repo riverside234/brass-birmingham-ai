@@ -148,7 +148,7 @@ class Rules(unittest.TestCase):
         control=lr.initial_state(lr.AUTO_CONTROLLER)
         updated,decision=lr.decide(control,measurements(kl=.02,calibrated_anchor=r['lr_gate']))
         self.assertEqual(decision['decision'],'down')
-        self.assertEqual(updated['multiplier'],1/1.5)
+        self.assertEqual(updated['multiplier'],.8)
         compacted=compact(dict(actor=dict(lr_controller=decision),il_kl_limit=r,
             rehearsal_schedule=dict(weight=.03),by_composition=dict(selfplay=dict(health_counts=counts()))))
         self.assertEqual(compacted['il_kl_limit'],r)

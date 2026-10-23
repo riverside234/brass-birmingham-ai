@@ -16,12 +16,13 @@ CONTRACT='ppo-categorical-kl-lr/1.1.0'
 AUTO_CONTRACT='ppo-categorical-kl-lr/1.2.0'
 GROUP_FIELDS=frozenset(('anchor_group_kl_budget','anchor_group_min_positions'))
 DEFAULT_CONTROLLER=dict(contract=CONTRACT,mode='apply',target_kl=.01,
-    raise_factor=1.25,cut_divisor=1.5,low_ratio=.50,high_ratio=1.5,
+    raise_factor=1.25,cut_divisor=1.25,low_ratio=.50,high_ratio=1.5,
     window_iterations=3,cooldown_iterations=3,min_multiplier=.5,max_multiplier=3.,
     anchor_kl_budget=.15,anchor_group_kl_budget=.30,anchor_group_min_positions=64,
     vp_max_drop=.10,zero_vp_max_fraction=.05)
 AUTO_CONTROLLER=dict(DEFAULT_CONTROLLER,contract=AUTO_CONTRACT)
 THRESHOLD_MIGRATION='ppo-lr-raise-half-target/1.0.0'
+CUT_MIGRATION='ppo-lr-cut-divisor-125/1.0.0'
 
 
 def threshold_config(config):
@@ -30,6 +31,16 @@ def threshold_config(config):
     controller=validate_config(result['ppo_lr_controller'],result['update'])
     require(controller['low_ratio'] in (.45,.50),'LR threshold hotfix requires the existing 45% or 50% threshold')
     controller['low_ratio']=.50
+    return result
+
+
+def cut_config(config):
+    """Change the protective cut size only, preserving the persisted controller."""
+    result=copy.deepcopy(config)
+    controller=validate_config(result['ppo_lr_controller'],result['update'])
+    require(controller['cut_divisor'] in (1.5,1.25),
+        'PPO cut hotfix requires the existing 1.5 or 1.25 divisor')
+    controller['cut_divisor']=1.25
     return result
 
 
@@ -218,6 +229,7 @@ def decide(state,measurements):
                 else:reason='health_check_failed'
     report=dict(contract=cfg['contract'],mode=cfg['mode'],kl=kl if finite(kl) else None,
         target_kl=cfg['target_kl'],raise_below_ratio=cfg['low_ratio'],raise_below_kl=cfg['low_ratio']*cfg['target_kl'],
+        cut_divisor=cfg['cut_divisor'],
         median_kl=window_median,window_size=window_size,early_stop=measurements['early_stop'],steps_done=done,steps_planned=planned,
         steps_fraction=done/planned if planned else None,warmup_done=measurements['warmup_done'],
         multiplier_before=before,multiplier_after=state['multiplier'],decision=decision,reason=reason,
@@ -254,6 +266,12 @@ def finish_iteration(optimizer,update,config,sampling,games,policy_id,kinds,anch
     group=optimizer.param_groups[0]
     if KEY not in group:return None
     probe=update['categorical_probe']
+    from . import ppo_kl_control
+    exact_only=ppo_kl_control.active(config['update'])
+    if exact_only:
+        guard=update['kl_guard']
+        require(guard['contract']==ppo_kl_control.CONTRACT and not guard['sampled_kl_stop_enabled'] and
+            guard['stop_reason']!='sampled_full_dataset','PPO LR feedback received an incompatible sampled-KL stop')
     measurements=dict(kl=probe['categorical_kl'] if probe['positions'] else None,
         steps_done=update['optimizer_steps'],steps_planned=update['optimizer_steps_planned'],
         early_stop=update['kl_early_stop'],warmup_done=update['controller_warmup_done'],
@@ -261,6 +279,8 @@ def finish_iteration(optimizer,update,config,sampling,games,policy_id,kinds,anch
         anchor_groups=probe.get('anchor_groups'),anchor_unassigned_positions=probe.get('anchor_unassigned_positions'),
         anchor_identity=anchor,calibrated_anchor=calibrated_anchor,**game_health(games,policy_id,kinds))
     group[KEY],report=decide(group[KEY],measurements)
+    report.update(kl_signal='exact-categorical-probe',kl_probe_positions=probe['positions'],
+        requested_probe_positions=config['update']['kl_probe_rows'],sampled_kl_stop_enabled=not exact_only)
     report['early_stop_reason']=update.get('kl_guard',{}).get('stop_reason')
     from .learning_rate import KEY as WARMUP_KEY,rate
     warmup=group[WARMUP_KEY]

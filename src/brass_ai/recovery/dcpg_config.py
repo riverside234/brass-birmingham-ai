@@ -9,6 +9,10 @@ BETA_CONTRACT='ppg-value-phase/11.0.0'
 SIXTEEN_CONTRACT='ppg-value-phase/12.0.0'
 SIXTEEN_MIGRATION='ppg-sixteen-packed-replay/1.0.0'
 SIXTEEN_CLOCK='ppg-committed-cadence/4.0.0'
+FAST_CONTRACT='ppg-value-phase/13.0.0'
+FAST_MIGRATION='ppg-eight-dense-latest/1.0.0'
+FAST_CLOCK='ppg-committed-cadence/5.0.0'
+DENSE_CACHE='ppg-eight-disk-buffer/1.0.0'
 PACKED_CACHE='ppg-columnar-disk-buffer/2.0.0'
 BETA_MIGRATION='ppg-clone-beta-feedback/1.0.0'
 BETA_CONTROL=dict(contract=BETA_MIGRATION,decrease_factor=.5,low_kl_fraction=.5,
@@ -26,13 +30,32 @@ SCHEDULE=dict(contract='ppg-phase-rate/2.0.0',reset_adam=True,
     warmup_start=1.,decay='none',end_factor=1.)
 
 
-def active(config):return config.get('contract') in (CONTRACT,BETA_CONTRACT,SIXTEEN_CONTRACT)
+def active(config):return config.get('contract') in (CONTRACT,BETA_CONTRACT,SIXTEEN_CONTRACT,FAST_CONTRACT)
 
 
-def beta_feedback(config):return config.get('contract') in (BETA_CONTRACT,SIXTEEN_CONTRACT)
+def beta_feedback(config):return config.get('contract') in (BETA_CONTRACT,SIXTEEN_CONTRACT,FAST_CONTRACT)
 
 
 def sixteen(config):return config.get('contract')==SIXTEEN_CONTRACT
+
+
+def fast(config):return config.get('contract')==FAST_CONTRACT
+
+
+def penalty_only(config):return sixteen(config) or fast(config)
+
+
+def fast_options(config):
+    """Eight dense ages, latest accepted loss, same fixed-beta penalty-only recipe."""
+    from . import ppg_config
+    from .ppg_selection import LATEST_DEFAULT
+    require(penalty_only(config['value_phase']),'Dense eight-age transition requires penalty-only PPG')
+    ppg_config.validate(config['value_phase'])
+    result=copy.deepcopy(config)
+    result['value_phase'].update(contract=FAST_CONTRACT,buffer_iterations=8,
+        validation_iterations=8,phase_interval=8,cache_format=DENSE_CACHE,
+        selection=copy.deepcopy(LATEST_DEFAULT))
+    ppg_config.validate(result['value_phase']);return result
 
 
 def sixteen_options(config):
@@ -54,7 +77,7 @@ def beta_options(config):
     from . import ppg_config
     require(active(config['value_phase']),'Beta feedback requires the delayed-critic recipe')
     ppg_config.validate(config['value_phase'])
-    if sixteen(config['value_phase']):return copy.deepcopy(config)
+    if penalty_only(config['value_phase']):return copy.deepcopy(config)
     result=copy.deepcopy(config)
     result['value_phase'].update(contract=BETA_CONTRACT,beta_clone=1.,beta_clone_max=32.,
         beta_control=copy.deepcopy(BETA_CONTROL))
@@ -66,7 +89,7 @@ def beta_after_phase(report,config):
     before=report['beta_clone_final'];after=before;reason='not_due'
     require(type(before) in (int,float) and math.isfinite(before) and
         config['beta_clone']<=before<=config['beta_clone_max'],'Invalid phase cloning beta')
-    if sixteen(config):
+    if penalty_only(config):
         return before,dict(contract=FIXED_BETA_CONTROL['contract'],before=before,after=before,
             decision='hold',reason='fixed_current_beta',hard_cap=None,
             scope='Keep checkpoint beta unchanged; fresh runs use configured beta. No KL-triggered adjustment, rejection, rollback, retry or stopping.')
@@ -109,7 +132,7 @@ def configure(config):
 
 def initial(generation,config=None):
     wide=sixteen(config or {})
-    return dict(contract=SIXTEEN_CLOCK if wide else CLOCK,origin=generation,generation=generation,last_phase=generation,phases=0,
+    return dict(contract=FAST_CLOCK if fast(config or {}) else SIXTEEN_CLOCK if wide else CLOCK,origin=generation,generation=generation,last_phase=generation,phases=0,
         cadence=dict(origin=generation,previous_phases=0,previous_last_phase=generation,first_phase=generation+(16 if wide else 8)))
 
 
@@ -119,6 +142,15 @@ def migrate_sixteen_clock(previous,generation,*,fresh_replay=False):
     if previous['contract']==SIXTEEN_CLOCK and not fresh_replay:return copy.deepcopy(previous)
     result=dict(copy.deepcopy(previous),contract=SIXTEEN_CLOCK,cadence=dict(origin=generation,
         previous_phases=previous['phases'],previous_last_phase=previous['last_phase'],first_phase=generation+16))
+    return schedule(result,generation)
+
+
+def migrate_fast_clock(previous,generation):
+    from . import ppg_config
+    ppg_config.schedule(previous,generation)
+    if previous['contract']==FAST_CLOCK:return copy.deepcopy(previous)
+    result=dict(copy.deepcopy(previous),contract=FAST_CLOCK,cadence=dict(origin=generation,
+        previous_phases=previous['phases'],previous_last_phase=previous['last_phase'],first_phase=generation+8))
     return schedule(result,generation)
 
 
@@ -138,7 +170,7 @@ def next_phase(state):
 
 
 def schedule(state,generation):
-    require(type(state) is dict and set(state)==set(initial(0)) and state['contract'] in (CLOCK,SIXTEEN_CLOCK),
+    require(type(state) is dict and set(state)==set(initial(0)) and state['contract'] in (CLOCK,SIXTEEN_CLOCK,FAST_CLOCK),
         'Invalid delayed-critic schedule fields')
     c=state['cadence']
     require(type(c) is dict and set(c)==set(initial(0)['cadence'])
@@ -147,7 +179,7 @@ def schedule(state,generation):
         'Invalid delayed-critic schedule counters')
     done=state['phases']-c['previous_phases']
     interval=16 if state['contract']==SIXTEEN_CLOCK else 8
-    first=c['origin']+16 if interval==16 else max(c['origin']+1,c['previous_last_phase']+8,state['origin']+8)
+    first=c['origin']+interval if state['contract'] in (SIXTEEN_CLOCK,FAST_CLOCK) else max(c['origin']+1,c['previous_last_phase']+8,state['origin']+8)
     require(0<=state['origin']<=c['previous_last_phase']<=c['origin']<=generation==state['generation']
         and 0<=c['previous_phases']<=state['phases']
         and c['first_phase']==first
