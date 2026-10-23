@@ -1,6 +1,9 @@
 """Copy a self-play analysis bundle to results/ without importing the trainer.
 
-Original JSON bytes and run files are preserved. Checkpoints, replay shards,
+Run files are preserved. Exported retention history removes JSON formatting
+whitespace without changing any tokens; other reports preserve original bytes.
+The manifest records both source and exported hashes for transformed history.
+Checkpoints, replay shards,
 feature caches and profiler traces are not part of this report-only export.
 With --continue, unchanged reports remain in earlier bundles and the new
 manifest records their verified locations. Rating slots include only the latest
@@ -20,8 +23,9 @@ import time
 
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_RUN = 'artifacts/step5/joint7-v11-1-grouped-lr'
-FORMAT = 'selfplay-report-export/1.1.0'
-PREVIOUS_FORMATS = {'selfplay-report-export/1.0.0', FORMAT}
+FORMAT = 'selfplay-report-export/1.2.0'
+PREVIOUS_FORMATS = {'selfplay-report-export/1.0.0', 'selfplay-report-export/1.1.0', FORMAT}
+COMPACT_JSON = 'json-whitespace-only/1.0.0'
 REPORT_NAMES = {'state.json', 'retention-history.json', 'report.json', 'spec.json',
                 'config.json', 'best.json', 'summary.json', 'comparison.json',
                 'validation-comparison.json', 'receipt.json', 'manifest.json'}
@@ -58,6 +62,27 @@ def encode(value):
 
 def checksum(raw):
     return hashlib.sha256(raw).hexdigest()
+
+
+def compact_json(raw):
+    """Minify already validated UTF-8 JSON, preserving exact strings/numbers.
+
+    Do not round-trip through dumps: that can round long decimal tokens or
+    collapse duplicate keys. Whitespace inside strings and every escape remain.
+    """
+    if raw.startswith(b'\xef\xbb\xbf'):raw=raw[3:]
+    result=bytearray();quoted=escaped=False
+    for byte in raw:
+        if quoted:
+            result.append(byte)
+            if escaped:escaped=False
+            elif byte==92:escaped=True
+            elif byte==34:quoted=False
+        elif byte==34:
+            quoted=True;result.append(byte)
+        elif byte not in (9,10,13,32):result.append(byte)
+    result.append(10)
+    return bytes(result)
 
 
 def report_files(root, directory, *, skip_dirs=()):
@@ -115,6 +140,8 @@ def previous_files(root, run, generation, warnings):
                 if not isinstance(entry, dict) or not all(isinstance(entry.get(k), str)
                                                         for k in ('source', 'path', 'sha256')):
                     continue
+                # Match exported bytes, not source_sha256: compact history
+                # may be identical even if the source's formatting changed.
                 key = entry['source'], entry['path'], entry['sha256']
                 index.setdefault(key, []).append(path.parent)
         except (ValueError, OSError, TypeError) as error:
@@ -186,13 +213,21 @@ def export(root, run, output=None, *, latest=2, extras=(), continue_export=False
             ET.fromstring(raw); value = None
         else:
             raise ValueError('Unknown report document format')
+        source_raw=raw
+        compact_history=(document=='json' and name=='retention-history.json'
+                         and path==run/'retention-history.json')
+        if compact_history:raw=compact_json(source_raw)
         entry = dict(source=path.relative_to(root).as_posix(), path=name,
                      bytes=len(raw), sha256=checksum(raw), reason=reason)
+        if compact_history:
+            entry.update(transform=COMPACT_JSON,source_bytes=len(source_raw),
+                         source_sha256=checksum(source_raw))
         if name in files:
             previous, previous_raw = files[name]
             # A report may serve both the active anchor and the latest rating
             # slot. Selection reasons describe its uses, not file identity.
             require(all(previous[key] == entry[key] for key in ('source', 'path', 'bytes', 'sha256'))
+                    and previous.get('source_sha256')==entry.get('source_sha256')
                     and previous_raw == raw, f'Conflicting export destination: {name}')
         else:
             files[name] = (entry, raw)
@@ -385,6 +420,8 @@ def export(root, run, output=None, *, latest=2, extras=(), continue_export=False
         warnings=sorted(set(warnings)),
         generated=['recorded-config.json', 'export-manifest.json']+(['local-scoring-adoption.json'] if local_scoring_receipt is not None else []),
         scope='Analysis reports only; not a resumable checkpoint backup. Missing/pruned evidence is not reconstructed. '
+              'Retention history is whitespace-minified JSON; its source_bytes/source_sha256 describe the original '
+              'and bytes/sha256 describe the exported file. Other reports preserve original bytes. '
               'Incremental exports require the previous bundles named in reused_files; references point to original physical files.')
     output.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix='.report-export-', dir=output.parent) as temporary:
@@ -399,7 +436,10 @@ def export(root, run, output=None, *, latest=2, extras=(), continue_export=False
         if local_scoring_receipt is not None:(stage/'local-scoring-adoption.json').write_bytes(encode(local_scoring_receipt))
         (stage / 'export-manifest.json').write_bytes(encode(manifest))
         for entry, raw in files.values():
-            require(below(root, entry['source']).read_bytes() == raw,
+            current=below(root, entry['source']).read_bytes()
+            matches=(len(current)==entry['source_bytes'] and checksum(current)==entry['source_sha256']
+                     if entry.get('transform')==COMPACT_JSON else current==raw)
+            require(matches,
                     f"Report changed during export; retry: {entry['source']}")
         for path, raw in dependencies:
             require(below(root, path).read_bytes() == raw,

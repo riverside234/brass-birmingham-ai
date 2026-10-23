@@ -29,20 +29,44 @@ python scripts/export-training-reports.py \
 ```
 
 `--continue` still creates a **new** generation/timestamp folder. It finds prior
-exports of the same `--run` anywhere under `results/`, including version-1.0
-manifests, and skips source reports whose original bytes are already present.
+exports of the same `--run` anywhere under `results/`, including version-1.0/1.1
+manifests, and skips reports whose exported bytes are already present.
 It checks the actual old file, not just its manifest hash. New or changed reports
 are copied normally; a missing or altered old copy is copied again. Exports from
 another run or a later generation are not used. With no prior export, this flag
 performs a normal first export.
 
-The version-1.1 manifest lists newly copied reports in `files`, and skipped
+The version-1.2 manifest lists newly copied reports in `files`, and skipped
 reports in `reused_files`, with `previous_export`, `previous_path`, and SHA-256.
 References point directly to a physical file in an older bundle. Keep and share
 the referenced older bundles along with the new folder; an incremental folder
 alone is not a complete analysis bundle. `recorded-config.json` and the new
 manifest are always generated. Omit `--continue` for an independent export of
 the selected reports. Existing folders are never modified or deleted.
+
+The exported root `retention-history.json` is now compact JSON. Only whitespace
+outside strings and an optional UTF-8 BOM are removed; a final newline is retained.
+All report fields, iterations, strings, escapes and exact numeric tokens stay intact.
+The original file in the training run is never edited. Other report files still
+preserve their original bytes, including evidence referenced by state receipts.
+
+For compact history, the manifest records `transform="json-whitespace-only/1.0.0"`:
+
+- `bytes` and `sha256` describe the **exported compact file**.
+- `source_bytes` and `source_sha256` describe the **original run file**.
+
+Publication rechecks the original source hash, so even a formatting-only source
+change during export aborts the operation. Incremental reuse checks the compact
+file's actual bytes and rechecks dependencies before publication. Source formatting
+changes can reuse the same compact bytes while recording the new source hash.
+Old pretty-printed history is copied once into compact form; other unchanged files
+remain reusable from older exports. Existing export folders are never rewritten.
+
+Validation on the g620 report in an isolated fixture reduced history from
+54,854,166 to 34,576,705 bytes (52.31 to 32.97 MiB, 37% smaller), preserving all
+128 entries and source bytes. A second incremental export reused the compact
+history with matching hashes. All 37 exporter regressions pass, including exact
+numeric/string tokens, legacy exports, source races and dependency tampering.
 
 The script copies:
 
@@ -129,8 +153,9 @@ results/joint7-v11-1-grouped-lr-g0021-<timestamp>/
 Upload/copy the **whole output folder**, including its subfolders, and any older
 bundles referenced by `reused_files` when using `--continue`. It is an
 analysis bundle, not a resume backup: checkpoints, replay shards, feature caches,
-and profiler traces are excluded. Original files are copied byte-for-byte and
-never edited. The script is outside source-bound training packages, so adding or
+and profiler traces are excluded. Run files are never edited; exported retention
+history alone is whitespace-minified as described above. The script is outside
+source-bound training packages, so adding or
 running it does not change a run's learning implementation identity.
 
 Use `--run` for another self-play run, `--latest` for more full iteration reports,
