@@ -8,7 +8,7 @@ ROOT=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT/'src'))
 
 
-def generate(root,run_path,output,expected_generation):
+def generate(root,run_path,output,expected_generation,*,beta_feedback=False):
     from brass_ai.bank import read,sha
     from brass_ai.learning.contracts import require,project_path
     from brass_ai.recovery.retention import owned,safe,run_lock
@@ -27,7 +27,9 @@ def generate(root,run_path,output,expected_generation):
             'Expected an active PPO-linked eight-age PPG run')
         entry=state['history'][-1]
         require(sha(safe(run,project_path(root,entry['path'])))==entry['sha256'],'Committed checkpoint missing/changed')
-        config=validate_config(dcpg_config.configure(old))
+        config=dcpg_config.configure(old)
+        if beta_feedback:config=dcpg_config.beta_options(config)
+        config=validate_config(config)
         check_signature(state,dict(state['signature'],config=config,implementation=implementation_id()),reviewed=True)
         require(not output.exists() or read(output)==config,'Existing output differs; choose a new --output')
         write_json(output,config)
@@ -36,6 +38,8 @@ def generate(root,run_path,output,expected_generation):
             learning_rate='0.35 times this iteration actual final PPO LR, fixed throughout phase; no warmup/decay',
             ppo_critic=config['update']['value_gradient'],epoch_cap=5,acceptance_steps=16,
             kl_check_steps=32,patience=1,heldout_standard_errors=1.5,
+            beta_clone=config['value_phase']['beta_clone'],beta_clone_max=config['value_phase']['beta_clone_max'],
+            beta_mode='adaptive-up-down' if dcpg_config.beta_feedback(config['value_phase']) else 'adaptive-up',
             changes={k:dict(before=old.get(k),after=v) for k,v in config.items() if old.get(k)!=v},
             scope='Preserve weights, all Adam/RNG state, replay, progress, population and gate state. No fresh-buffer reset; no fresh-target fitting during PPO/calibration.')
 
@@ -46,7 +50,8 @@ def main():
     p.add_argument('--run',default='artifacts/step5/joint7-v11-2-grouped-lr-critic')
     p.add_argument('--expected-generation',required=True,type=int)
     p.add_argument('--output',required=True)
-    a=p.parse_args();print(json.dumps(generate(a.root.resolve(),a.run,a.output,a.expected_generation),indent=2))
+    p.add_argument('--adaptive-beta',action='store_true',help='Adopt beta feedback: reset to 1 once, keep KL-triggered increases, halve after clean low-KL phases')
+    a=p.parse_args();print(json.dumps(generate(a.root.resolve(),a.run,a.output,a.expected_generation,beta_feedback=a.adaptive_beta),indent=2))
 
 
 if __name__=='__main__':main()

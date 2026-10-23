@@ -310,6 +310,17 @@ class TrainingPhases:
             self.cache_origin=0
         else:
             saved=copy.deepcopy(saved)
+            if dcpg_config.beta_feedback(config['value_phase']) and not dcpg_config.beta_feedback(saved['options']['value_phase']):
+                require(saved.get('contract')==self.contract and
+                    dcpg_config.beta_options(saved['options'])==self.options,
+                    'Unreviewed PPG beta feedback transition')
+                old_beta=saved['beta_clone'];old_value=saved['options']['value_phase']
+                require(type(old_beta) in (int,float) and math.isfinite(old_beta) and
+                    old_value['beta_clone']<=old_beta<=old_value['beta_clone_max'],'Invalid prior PPG beta')
+                saved['options']=copy.deepcopy(self.options);saved['beta_clone']=1.
+                self.rolling_migration=dict(contract=dcpg_config.BETA_MIGRATION,origin=generation,
+                    beta_before=old_beta,beta_after=1.,beta_max=32.,
+                    scope='One-time beta reset; preserve adaptive increases and add clean-phase decreases. Preserve weights, all Adam/RNG state, eight-age replay, schedule, KL safeguards and gate evidence.')
             if dcpg_config.active(config['value_phase']) and not dcpg_config.active(saved['options']['value_phase']):
                 require(saved.get('contract')==self.contract and ppg_config.linked(saved['options']['value_phase'])
                     and dcpg_config.options(saved['options'])==self.options,'Unreviewed delayed-critic transition')
@@ -603,6 +614,9 @@ class TrainingPhases:
         # Keep the rolling evidence on resume, but require a new trip to act.
         if rolling:
             self.beta=value['beta_clone_final']
+            from . import dcpg_config
+            if dcpg_config.beta_feedback(self.options['value_phase']):
+                self.beta,value['beta_feedback']=dcpg_config.beta_after_phase(value,self.options['value_phase'])
         elif phase_ran and value['kl_guard_tripped'] and sum(self.trips)>=3:
             self.beta=min(self.options['value_phase']['beta_clone_max'],2*self.beta)
         reason=('kl_retry_with_value_improvement' if self.beta>before else
@@ -610,7 +624,8 @@ class TrainingPhases:
             'ppg_disabled' if not enabled else 'new_trip_in_three_of_five' if self.beta>before else
             'at_cap' if value['kl_guard_tripped'] and sum(self.trips)>=3 else
             'no_new_kl_trip' if not value['kl_guard_tripped'] else 'fewer_than_three_trips')
-        value.update(beta_clone_next=self.beta,beta_decision='up' if self.beta>before else 'hold',
+        if self.beta<before:reason=value['beta_feedback']['reason']
+        value.update(beta_clone_next=self.beta,beta_decision='up' if self.beta>before else 'down' if self.beta<before else 'hold',
             beta_reason=reason,
             kl_trip_window=list(self.trips))
         kl=update['categorical_probe']['categorical_kl']

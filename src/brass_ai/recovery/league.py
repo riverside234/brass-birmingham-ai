@@ -673,6 +673,8 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                     controller_line+=(f' value_lr={value_report["learning_rate"]:.2g}' if value_report['enabled'] else ' PPG=off')
                     if (value_report.get('learning_rate_source') or {}).get('source')=='ppo-last-applied':
                         controller_line+=f' value_peak={value_report["peak_learning_rate"]:.2g}[PPO]'
+                    if value_report.get('beta_mode')=='adaptive-up-down':
+                        controller_line+=f' PPGbeta={value_report["beta_clone_final"]:g}->{value_report["beta_clone_next"]:g}'
                     if update.get('value_gradient',{}).get('mode')=='detach-encoder':controller_line+=' critic=PPO-heads/PPG-shared'
                     if update.get('value_preservation'):
                         preservation=update['value_preservation']

@@ -679284,6 +679284,161 @@
       "learning_compatibility_ref": "5",
       "config_migrations_ref": "1609",
       "reason_ref": "144"
+    },
+    {
+      "from_implementation": "b95f45e2b0be6672a4efb7a3cabf9e2fab3e152a667e7f229b6c09ab5cb01c71",
+      "to_implementation": "0f0eca5b6efeb8ba9c47cde4bbf191e289f6c35b97df75817ba834ecc71a2146",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "145",
+      "local_scoring_changes": true,
+      "review_report": "ai-research/PPG_THROUGHPUT_G580.md"
+    },
+    {
+      "from_implementation": "b95f45e2b0be6672a4efb7a3cabf9e2fab3e152a667e7f229b6c09ab5cb01c71",
+      "to_implementation": "0f0eca5b6efeb8ba9c47cde4bbf191e289f6c35b97df75817ba834ecc71a2146",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "145",
+      "config_migrations_ref": "1606",
+      "review_report": "ai-research/PPG_THROUGHPUT_G580.md"
+    },
+    {
+      "from_implementation": "cb165c0d852ca79dfd3df2c40483dc7e06bf6dd988d94755ecd1cb597cc3a6af",
+      "to_implementation": "0f0eca5b6efeb8ba9c47cde4bbf191e289f6c35b97df75817ba834ecc71a2146",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "145",
+      "local_scoring_changes": true,
+      "review_report": "ai-research/PPG_THROUGHPUT_G580.md"
+    },
+    {
+      "from_implementation": "cb165c0d852ca79dfd3df2c40483dc7e06bf6dd988d94755ecd1cb597cc3a6af",
+      "to_implementation": "0f0eca5b6efeb8ba9c47cde4bbf191e289f6c35b97df75817ba834ecc71a2146",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "145",
+      "config_migrations_ref": "1606",
+      "review_report": "ai-research/PPG_THROUGHPUT_G580.md"
+    },
+    {
+      "from_implementation": "c33ff1ba936905fe06c4b6436d316a5073c9049be4a8d8d0e9c734f87e071314",
+      "to_implementation": "0f0eca5b6efeb8ba9c47cde4bbf191e289f6c35b97df75817ba834ecc71a2146",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "145",
+      "local_scoring_changes": true,
+      "review_report": "ai-research/PPG_THROUGHPUT_G580.md"
+    },
+    {
+      "from_implementation": "c33ff1ba936905fe06c4b6436d316a5073c9049be4a8d8d0e9c734f87e071314",
+      "to_implementation": "0f0eca5b6efeb8ba9c47cde4bbf191e289f6c35b97df75817ba834ecc71a2146",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "145",
+      "config_migrations_ref": "1606",
+      "review_report": "ai-research/PPG_THROUGHPUT_G580.md"
+    },
+    {
+      "from_implementation": "72ec2bf892f91bfb645acdf2b741c47276403fc5b38c159afe1ddeb7eeccc2c4",
+      "to_implementation": "0f0eca5b6efeb8ba9c47cde4bbf191e289f6c35b97df75817ba834ecc71a2146",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "145",
+      "local_scoring_changes": true,
+      "review_report": "ai-research/PPG_THROUGHPUT_G580.md"
+    },
+    {
+      "from_implementation": "72ec2bf892f91bfb645acdf2b741c47276403fc5b38c159afe1ddeb7eeccc2c4",
+      "to_implementation": "0f0eca5b6efeb8ba9c47cde4bbf191e289f6c35b97df75817ba834ecc71a2146",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "145",
+      "config_migrations_ref": "1606",
+      "review_report": "ai-research/PPG_THROUGHPUT_G580.md"
+    },
+    {
+      "from_implementation": "ef1cb36d346edd6ce306324370fe60f759b297b58282edff093b3f08aadf80be",
+      "to_implementation": "0f0eca5b6efeb8ba9c47cde4bbf191e289f6c35b97df75817ba834ecc71a2146",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "145",
+      "local_scoring_changes": true,
+      "review_report": "ai-research/PPG_THROUGHPUT_G580.md"
+    },
+    {
+      "from_implementation": "ef1cb36d346edd6ce306324370fe60f759b297b58282edff093b3f08aadf80be",
+      "to_implementation": "0f0eca5b6efeb8ba9c47cde4bbf191e289f6c35b97df75817ba834ecc71a2146",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "145",
+      "config_migrations_ref": "1606",
+      "review_report": "ai-research/PPG_THROUGHPUT_G580.md"
+    },
+    {
+      "from_implementation": "38206ae9ecec5db1b291066978738d247d40ebe112fc27b4f3a4332796caffca",
+      "to_implementation": "0f0eca5b6efeb8ba9c47cde4bbf191e289f6c35b97df75817ba834ecc71a2146",
+      "learning_compatibility_ref": "5",
+      "config_changes_ref": "44",
+      "reviewed_evidence": "ai-research/VP_REWARD_CAP_180.md",
+      "reason_ref": "145",
+      "config_migrations_ref": "1590",
+      "review_report": "ai-research/PPG_THROUGHPUT_G580.md"
+    },
+    {
+      "from_implementation": "ef1cb36d346edd6ce306324370fe60f759b297b58282edff093b3f08aadf80be",
+      "to_implementation": "0f0eca5b6efeb8ba9c47cde4bbf191e289f6c35b97df75817ba834ecc71a2146",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "145",
+      "config_migrations_ref": "1607",
+      "review_report": "ai-research/PPG_THROUGHPUT_G580.md"
+    },
+    {
+      "from_implementation": "4d7dbd64a757357973679d64b36eaf199724b659588c0023ea1d98322aa09283",
+      "to_implementation": "0f0eca5b6efeb8ba9c47cde4bbf191e289f6c35b97df75817ba834ecc71a2146",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "145",
+      "config_migrations_ref": "1607",
+      "review_report": "ai-research/PPG_THROUGHPUT_G580.md"
+    },
+    {
+      "from_implementation": "ef1cb36d346edd6ce306324370fe60f759b297b58282edff093b3f08aadf80be",
+      "to_implementation": "0f0eca5b6efeb8ba9c47cde4bbf191e289f6c35b97df75817ba834ecc71a2146",
+      "learning_compatibility_ref": "5",
+      "config_migrations_ref": "1608",
+      "reason_ref": "145"
+    },
+    {
+      "from_implementation": "4d7dbd64a757357973679d64b36eaf199724b659588c0023ea1d98322aa09283",
+      "to_implementation": "0f0eca5b6efeb8ba9c47cde4bbf191e289f6c35b97df75817ba834ecc71a2146",
+      "learning_compatibility_ref": "5",
+      "config_migrations_ref": "1608",
+      "reason_ref": "145"
+    },
+    {
+      "from_implementation": "8dd7b4737bcbcd85d1f935c63e66687a125734094dbd065fd8421b18bc083b3c",
+      "to_implementation": "0f0eca5b6efeb8ba9c47cde4bbf191e289f6c35b97df75817ba834ecc71a2146",
+      "learning_compatibility_ref": "5",
+      "config_migrations_ref": "1608",
+      "reason_ref": "145"
+    },
+    {
+      "from_implementation": "8dd7b4737bcbcd85d1f935c63e66687a125734094dbd065fd8421b18bc083b3c",
+      "to_implementation": "0f0eca5b6efeb8ba9c47cde4bbf191e289f6c35b97df75817ba834ecc71a2146",
+      "learning_compatibility_ref": "5",
+      "config_migrations_ref": "1609",
+      "reason_ref": "145"
+    },
+    {
+      "from_implementation": "1de2fff49c5b0cfc2f47920ed92f02021b34e73c421f250d08e0db6fb915dc5a",
+      "to_implementation": "0f0eca5b6efeb8ba9c47cde4bbf191e289f6c35b97df75817ba834ecc71a2146",
+      "learning_compatibility_ref": "5",
+      "config_migrations_ref": "1609",
+      "reason_ref": "145"
+    },
+    {
+      "from_implementation": "1de2fff49c5b0cfc2f47920ed92f02021b34e73c421f250d08e0db6fb915dc5a",
+      "to_implementation": "0f0eca5b6efeb8ba9c47cde4bbf191e289f6c35b97df75817ba834ecc71a2146",
+      "learning_compatibility_ref": "5",
+      "config_migrations_ref": "1610",
+      "reason_ref": "145"
+    },
+    {
+      "from_implementation": "0f0eca5b6efeb8ba9c47cde4bbf191e289f6c35b97df75817ba834ecc71a2146",
+      "to_implementation": "0f0eca5b6efeb8ba9c47cde4bbf191e289f6c35b97df75817ba834ecc71a2146",
+      "learning_compatibility_ref": "5",
+      "config_migrations_ref": "1610",
+      "reason_ref": "145"
     }
   ],
   "definitions": {
@@ -679432,7 +679587,8 @@
       "141": "Reviewed pre-first-checkpoint restart repair: a source transition may reuse an exactly identical durable local-scoring adoption receipt; changed receipts fail before any write. Preserve cleanup status, adoption origin, PPG clock, weights, Adam/RNG, progress and all training settings. Retain only previously reviewed local-scoring adoption/mode and LR-threshold config transitions.",
       "142": "Reviewed training-only throughput revision: phase-local frozen calibration/PPG input caches, batched critic gathers and detached auxiliary statistics. Explicit PPG v8 uses fixed five epochs, 32-step KL/heldout checks and 1.5 paired-SE loss tolerance; both .002 KL caps remain. Preserve model/feature identity, weights, both Adams/RNG, committed replay, schedule, controller evidence and unrelated settings.",
       "143": "Reviewed PPG four-iteration cadence with eight uniform ages, PPO-last-applied peak and unchanged warmup/decay, and PPO critic representation detachment. Keep throughput caches, guarded five-epoch auxiliary fitting, both Adams, RNG, replay, progress, population and economic/GAE evidence. Explicit signature/config transition; old unfinished collection remains rejected.",
-      "144": "Reviewed delayed critic: frozen true-descriptor pre-PPO outputs, no fresh PPO/calibration targets, shared preservation gradients; eight-age PPG every eight committed iterations, constant 0.35x actual PPO LR, 16-step heldout and 32-step KL with verified retention. Preserve weights, Adam/RNG, replay/holdouts, source admission, economics and committed gates. Explicit configuration only; archived recipes unchanged."
+      "144": "Reviewed delayed critic: frozen true-descriptor pre-PPO outputs, no fresh PPO/calibration targets, shared preservation gradients; eight-age PPG every eight committed iterations, constant 0.35x actual PPO LR, 16-step heldout and 32-step KL with verified retention. Preserve weights, Adam/RNG, replay/holdouts, source admission, economics and committed gates. Explicit configuration only; archived recipes unchanged.",
+      "145": "Reviewed explicit PPG beta feedback adoption: reset saved beta to 1 once; preserve KL-triggered increases up to 32; halve only after an accepted clean phase with both retained KLs below half the cap, minimum 1. Preserve weights, all Adam/RNG state, replay, schedule and progress; archived configurations unchanged."
     },
     "config_changes": {
       "0": {
@@ -700800,6 +700956,9 @@
       ],
       "1609": [
         "dcpg-preservation-eight-iteration/1.0.0"
+      ],
+      "1610": [
+        "ppg-clone-beta-feedback/1.0.0"
       ]
     },
     "config_migration": {

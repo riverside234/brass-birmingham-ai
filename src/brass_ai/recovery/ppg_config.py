@@ -26,16 +26,16 @@ DEFAULT=dict(contract=CONTRACT,enabled=False,buffer_iterations=8,max_epochs=2,ba
         warmup_start=.1,decay='linear',end_factor=.3))
 
 
-def active(config):return config.get('contract') in (CONTRACT,SHORT_CONTRACT,COVERAGE_CONTRACT,FIXED_CONTRACT,LINKED_CONTRACT,dcpg_config.CONTRACT)
+def active(config):return config.get('contract') in (CONTRACT,SHORT_CONTRACT,COVERAGE_CONTRACT,FIXED_CONTRACT,LINKED_CONTRACT) or dcpg_config.active(config)
 
 
-def coverage(config):return config.get('contract') in (COVERAGE_CONTRACT,FIXED_CONTRACT,LINKED_CONTRACT,dcpg_config.CONTRACT)
+def coverage(config):return config.get('contract') in (COVERAGE_CONTRACT,FIXED_CONTRACT,LINKED_CONTRACT) or dcpg_config.active(config)
 
 
-def fixed(config):return config.get('contract') in (FIXED_CONTRACT,LINKED_CONTRACT,dcpg_config.CONTRACT)
+def fixed(config):return config.get('contract') in (FIXED_CONTRACT,LINKED_CONTRACT) or dcpg_config.active(config)
 
 
-def linked(config):return config.get('contract') in (LINKED_CONTRACT,dcpg_config.CONTRACT)
+def linked(config):return config.get('contract')==LINKED_CONTRACT or dcpg_config.active(config)
 
 
 def fixed_options(options):
@@ -85,7 +85,7 @@ def configure(options):
 
 
 def validate(c):
-    require(type(c) is dict and set(c)==set(DEFAULT)|({'selection'} if coverage(c) else set())|({'kl_check_steps'} if fixed(c) else set())|({'learning_rate_source'} if linked(c) else set())|({'learning_rate_factor'} if dcpg_config.active(c) else set()) and active(c),
+    require(type(c) is dict and set(c)==set(DEFAULT)|({'selection'} if coverage(c) else set())|({'kl_check_steps'} if fixed(c) else set())|({'learning_rate_source'} if linked(c) else set())|({'learning_rate_factor'} if dcpg_config.active(c) else set())|({'beta_control'} if dcpg_config.beta_feedback(c) else set()) and active(c),
         'Invalid eight-iteration PPG fields/contract')
     require(type(c['enabled']) is bool,'Invalid PPG enabled flag')
     for k in ('buffer_iterations','max_epochs','batch_size','clone_rows_per_age','probe_rows_per_age',
@@ -96,6 +96,8 @@ def validate(c):
         require(type(c[k]) in (int,float) and math.isfinite(c[k]) and c[k]>0,'Invalid PPG number: '+k)
     short=c['contract']!=CONTRACT
     delayed=dcpg_config.active(c)
+    if dcpg_config.beta_feedback(c):
+        require(c['beta_control']==dcpg_config.BETA_CONTROL,'Invalid PPG beta feedback contract')
     if delayed:
         require(type(c['learning_rate_factor']) in (int,float) and c['learning_rate_factor']==.35,
             'Delayed critic requires 0.35 times actual PPO LR')
@@ -114,6 +116,7 @@ def validate(c):
         and c['batch_size']<=4096 and c['clone_batch_size']<=c['clone_rows_per_age']<=2048
         and c['probe_rows_per_age']<=512 and c['probe_rows_per_age']<=c['current_probe_rows']<=2048
         and 1<=c['beta_clone']<=c['beta_clone_max']==32.,'Invalid eight-iteration PPG bounds')
+    if dcpg_config.beta_feedback(c):require(c['beta_clone']==1.,'PPG beta feedback minimum must be 1')
     gate=c['epoch_controller']
     if fixed(c):
         require(gate is None and type(c['kl_check_steps']) is int and c['kl_check_steps']==32

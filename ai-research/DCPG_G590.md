@@ -1,5 +1,9 @@
 # Delayed critic preservation and eight-iteration PPG, g590
 
+The later [g600 beta hotfix](PPG_BETA_G600.md) resets the saved cloning beta to 1
+and adds clean low-KL decreases while retaining adaptive increases. Use its
+continuation command for the current run; the g590 validation below is historical.
+
 The exported run is committed at **g590**, with its last PPG phase at **g588**.
 This explicit revision keeps all eight replay ages and moves the next phases to
 **g596, g604, g612, ...**. It preserves the original schedule origin, completed

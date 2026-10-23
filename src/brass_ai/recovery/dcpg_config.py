@@ -5,6 +5,10 @@ import math
 from brass_ai.learning.contracts import require
 
 CONTRACT='ppg-value-phase/10.0.0'
+BETA_CONTRACT='ppg-value-phase/11.0.0'
+BETA_MIGRATION='ppg-clone-beta-feedback/1.0.0'
+BETA_CONTROL=dict(contract=BETA_MIGRATION,decrease_factor=.5,low_kl_fraction=.5,
+    signal='max-final-overall-and-age0',scope='accepted-clean-phase')
 MIGRATION='dcpg-preservation-eight-iteration/1.0.0'
 CLOCK='ppg-committed-cadence/3.0.0'
 RATE='ppg-ppo-constant-rate/2.0.0'
@@ -16,7 +20,45 @@ SCHEDULE=dict(contract='ppg-phase-rate/2.0.0',reset_adam=True,
     warmup_start=1.,decay='none',end_factor=1.)
 
 
-def active(config):return config.get('contract')==CONTRACT
+def active(config):return config.get('contract') in (CONTRACT,BETA_CONTRACT)
+
+
+def beta_feedback(config):return config.get('contract')==BETA_CONTRACT
+
+
+def beta_options(config):
+    """Explicit beta-only transition; preserve the delayed-critic recipe."""
+    from . import ppg_config
+    require(active(config['value_phase']),'Beta feedback requires the delayed-critic recipe')
+    ppg_config.validate(config['value_phase'])
+    result=copy.deepcopy(config)
+    result['value_phase'].update(contract=BETA_CONTRACT,beta_clone=1.,beta_clone_max=32.,
+        beta_control=copy.deepcopy(BETA_CONTROL))
+    ppg_config.validate(result['value_phase']);return result
+
+
+def beta_after_phase(report,config):
+    """One decrease per accepted clean phase; never undo a safeguard retry."""
+    before=report['beta_clone_final'];after=before;reason='not_due'
+    require(type(before) in (int,float) and math.isfinite(before) and
+        config['beta_clone']<=before<=config['beta_clone_max'],'Invalid phase cloning beta')
+    threshold=config['beta_control']['low_kl_fraction']*config['kl_cap']
+    maximum=None
+    if report['scheduled']:
+        if report['kl_guard_tripped'] or report['beta_retries']:
+            reason='kl_guard_or_retry'
+        elif not report['optimizer_steps']:reason='no_accepted_steps'
+        else:
+            values=[report.get('probe_kl'),report.get('age0_probe_kl')]
+            require(all(type(v) in (int,float) and math.isfinite(v) and 0<=v<=config['kl_cap'] for v in values),
+                'Invalid retained PPG KL for beta feedback')
+            maximum=max(values);reason='kl_not_below_half_cap'
+            if maximum<threshold:
+                after=max(config['beta_clone'],before*config['beta_control']['decrease_factor'])
+                reason='both_KLs_below_half_cap' if after<before else 'at_minimum'
+    return after,dict(contract=BETA_MIGRATION,before=before,after=after,threshold=threshold,
+        maximum_retained_kl=maximum,decision='down' if after<before else 'hold',reason=reason,
+        scope='Applies to the next phase only; existing within-phase KL-triggered increases remain active')
 
 
 def enabled(update):return update.get('value_gradient',{}).get('mode')=='preserve-outputs'
