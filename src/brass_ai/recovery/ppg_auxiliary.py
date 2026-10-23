@@ -85,17 +85,24 @@ def age_metrics(dataset,values,ages):
 
 def layout(dataset,receipts,config,snapshot_weight):
     train={};held=[];validation=[];ages=[];offset=0;support={}
-    for age,r in enumerate(receipts):
-        held_games=set(r['holdout_selection']['heldout_games']);ids=[];games=set()
-        for i in range(offset,offset+r['rows']):
-            row=dataset.rows[i];game=dataset.data[i][2][0]
-            if game in held_games:
-                # Independent ordinary learner evidence, never branch families
-                # or snapshot/bot outcomes, controls retention and diagnostics.
-                if '/branch/' not in game and dataset.roles[i]=='learner':
-                    held.append(i);games.add(game)
-                    if age<config['validation_iterations']:validation.append(i)
-            else:ids.append(i)
+    require(len(dataset.data.parts)==len(receipts),'PPG cache layout/receipts differ')
+    for age,(r,part) in enumerate(zip(receipts,dataset.data.parts)):
+        require(len(part)==r['rows'],'PPG cache row count differs')
+        # Read only the two small metadata columns. Reconstructing state or
+        # game descriptors for every row is unnecessary for a partition.
+        held_games=set(r['holdout_selection']['heldout_games'])
+        game_ids=np.asarray(part.array['game'][:]);roles=np.asarray(part.array['role'][:])
+        membership=np.asarray([g in held_games for g in r['game_ids']],dtype=bool)
+        ordinary=np.asarray(['/branch/' not in g for g in r['game_ids']],dtype=bool)
+        require(((game_ids>=0)&(game_ids<len(membership))).all(),'Invalid PPG cached game index')
+        mask=membership[game_ids]
+        ids=(np.flatnonzero(~mask)+offset).tolist()
+        # Independent ordinary learner evidence only; held-out snapshot and
+        # parent/branch family rows remain excluded from ALL fitting.
+        selected=np.flatnonzero(mask & ordinary[game_ids] & (roles==0))
+        selected_global=(selected+offset).tolist();held.extend(selected_global)
+        games={r['game_ids'][g] for g in np.unique(game_ids[selected])}
+        if age<config['validation_iterations']:validation.extend(selected_global)
         train[age]=ids;ages.extend([age]*r['rows']);offset+=r['rows']
         support[str(age)]=dict(generation=r['generation'],train_rows=len(ids),ordinary_heldout_games=len(games),weight=ppg_config.weight(age,config))
     dataset.critic_weights=torch.tensor([snapshot_weight if r=='snapshot' else 1. for r in dataset.roles],device=dataset.device)
@@ -153,7 +160,7 @@ class Reference(value_phase.RawPolicyReference):
                                 'age:'+str(self.ages[i])+'/group:'+self.groups[i]):
                         g=groups[key];g[0]+=weights[i]*v;g[1]+=weights[i];g[2]+=1
         report={k:dict(kl=max(0.,a/b) if b else None,rows=n,weight_mass=b) for k,(a,b,n) in sorted(groups.items())}
-        require('overall' in report and 'age:0' in report,'PPG KL safeguards need age-0 and overall probe support')
+        require('overall' in report and 'age:0' in report,'PPG KL measurements need age-0 and overall probe support')
         return dict(overall=report['overall']['kl'],age0=report['age:0']['kl'],groups=report)
 
 
@@ -170,6 +177,7 @@ def fit(model,optimizer,buffer,current,train_ids,heldout_ids,config,update,*,bet
     began=time.perf_counter()
     from . import ppg_phasic,dcpg_config
     delayed=dcpg_config.active(config)
+    hard_cap=config['kl_cap'] is not None
     peak_rate=config['learning_rate']
     if ppg_config.linked(config) and ppo_peak is not None:
         ppg_phasic.validate_rate(ppo_peak,buffer.generation+1)
@@ -184,12 +192,14 @@ def fit(model,optimizer,buffer,current,train_ids,heldout_ids,config,update,*,bet
     require(math.isfinite(beta) and config['beta_clone']<=beta<=config['beta_clone_max'],
         'Invalid effective PPG clone beta')
     report=dict(contract=config['contract'],enabled=True,scheduled=run_phase,optimizer_steps=0,attempted_steps=0,
-        kl_guard_tripped=False,kl_cap=config['kl_cap'],acceptance_steps=config['acceptance_steps'],
+        kl_guard_tripped=False,kl_cap=config['kl_cap'],policy_guard_enabled=hard_cap,
+        kl_control='hard-cap-and-penalty' if hard_cap else 'penalty-only',acceptance_steps=config['acceptance_steps'],
         kl_check_steps=config.get('kl_check_steps',1),policy_guard_checks=0,
         configured_learning_rate=config['learning_rate'],learning_rate=peak_rate if run_phase else 0.,
         learning_rate_source=copy.deepcopy(ppo_peak) if ppg_config.linked(config) else dict(source='fixed-config',peak_lr=peak_rate),
         peak_learning_rate=peak_rate,phase_interval=config['phase_interval'],buffer_iterations=config['buffer_iterations'],
-        beta_clone=beta,beta_mode='adaptive-up-down' if dcpg_config.beta_feedback(config) else 'adaptive-up',
+        beta_clone=beta,beta_mode='fixed-checkpoint' if not hard_cap else 'adaptive-up-down' if dcpg_config.beta_feedback(config) else 'adaptive-up',
+        beta_retry_loss_rule=('within-heldout-SE-allowance' if dcpg_config.beta_feedback(config) else 'strict-improvement') if hard_cap else 'disabled-penalty-only',
         early_stop_reason=None if run_phase else 'not_due',gate_critic_training=copy.deepcopy(ppo_work),
         interval_reports=[],accepted_intervals=0,rejected_intervals=0,
         distinct_current_rows_used=0,distinct_previous_rows_used=0,
@@ -204,7 +214,9 @@ def fit(model,optimizer,buffer,current,train_ids,heldout_ids,config,update,*,bet
         policy_reference_seconds=0.,critic_training_seconds=0.,cloning_training_seconds=0.)
     report.update(heldout_checks=0,scheduled_policy_checks=0,retention_policy_checks=0,
         rejected_unverified_selections=0,retention_checks=[])
-    if delayed:report['scope']='Eight committed iterations between phases; eight uniform replay ages. Fresh-target GAE work comes only from accepted PPG; current-only holdouts exclude branches/snapshots.'
+    if delayed:
+        report['scope']=f'{config["phase_interval"]} committed iterations between phases; {config["buffer_iterations"]} uniform replay ages. Fresh-target GAE work comes only from accepted PPG; current-only gate evidence excludes branches/snapshots. '
+        report['scope']+=('Exact KL limits apply to retained weights.' if hard_cap else 'Policy movement is controlled only by the cloning KL penalty; measured KL never rejects, rolls back or retries an interval.')
     report['timing_scope']='Host wall time per operation, including input packing; CUDA execution can overlap until a guard/report synchronizes. Not isolated GPU kernel times.'
     report['heldout_standard_errors']=config.get('selection',{}).get('standard_errors',1.)
     def compare(before,after):
@@ -264,18 +276,18 @@ def fit(model,optimizer,buffer,current,train_ids,heldout_ids,config,update,*,bet
         best_aux=companion.snapshot() if companion is not None else None
         selection=None
         if ppg_config.coverage(config):
-            from .ppg_selection import Selection
+            from .ppg_selection import Selection,minimum
             selection=Selection(model,optimizer,best_games,companion=companion,config=config['selection'])
         # Loss-selected states at steps 16,48,... are provisional. The separate
         # certified selection contains only states with their OWN exact KL check.
         # A later endpoint's KL never certifies an earlier weight snapshot.
-        certified=Selection(model,optimizer,best_games,companion=companion,config=config['selection']) if delayed else None
+        certified=Selection(model,optimizer,best_games,companion=companion,config=config['selection']) if delayed and hard_cap else None
         counts={str(a):len(ids) for a,ids in train.items()};rows=sum(counts.values())
         steps_per_epoch=math.ceil(rows/config['batch_size'])
         report.update(weighted_rows=rows,rows_per_epoch=rows,planned_presentations=rows*epoch_cap,
             sampled_rows_by_age={a:n*epoch_cap for a,n in counts.items()},
             planned_steps=steps_per_epoch*epoch_cap,steps_per_epoch=steps_per_epoch,weighting='uniform',
-            weighting_scope='Each eligible critic row once per epoch; all eight age weights are 1. Policy strata are population-corrected once; existing snapshot critic loss weight is retained.',
+            weighting_scope=f'Each eligible critic row once per epoch; all {config["buffer_iterations"]} age weights are 1. Policy strata are population-corrected once; existing snapshot critic loss weight is retained.',
             clone_rows=len(reference.clone_ids),probe_rows=len(reference.probe_ids))
         if report['planned_steps']:
             report['rate_schedule']=dict(config['rate_schedule'],warmup_steps=min(config['acceptance_steps'],report['planned_steps']),
@@ -289,7 +301,7 @@ def fit(model,optimizer,buffer,current,train_ids,heldout_ids,config,update,*,bet
         working=[];best_used=[];best_clones=[];working_clones=[];checks_without_best=0;working_steps=0
         maximum=0.;maximum_age0=0.;accepted_checks=0;rejected_checks=0
         probe=None;checked_position=0
-        def safe_probe(result):return result['overall']<=config['kl_cap'] and result['age0']<=config['kl_cap']
+        def safe_probe(result):return not hard_cap or (result['overall']<=config['kl_cap'] and result['age0']<=config['kl_cap'])
         def verify_restored():
             nonlocal maximum,maximum_age0
             result=measured_probe();report['retention_policy_checks']+=1
@@ -349,14 +361,16 @@ def fit(model,optimizer,buffer,current,train_ids,heldout_ids,config,update,*,bet
                         probe=measured_probe();maximum=max(maximum,probe['overall']);maximum_age0=max(maximum_age0,probe['age0'])
                         checked_position=position;report['scheduled_policy_checks']+=1
                         sample_memory()
-                        if probe['overall']>config['kl_cap'] or probe['age0']>config['kl_cap']:
+                        if not safe_probe(probe):
                             report['kl_guard_tripped']=True;trip=True;break
                     working.extend(batch);working_clones.extend(sample);working_steps+=1
                 if not trip:break
-                # Unsafe weights are diagnostic only. More cloning pressure is
-                # justified only if their paired held-out value loss improved.
+                # Unsafe weights are diagnostic only. Adaptive-beta recipes
+                # permit retries within the paired held-out SE allowance;
+                # archived recipes retain their strict-improvement rule.
                 unsafe=compare(best_games,by_game(ds,measured_losses(ds,validation)))
-                retry=unsafe['improved'] and not unsafe['reject'] and beta<config['beta_clone_max']
+                retry=(not unsafe['reject'] and beta<config['beta_clone_max'] and
+                    (dcpg_config.beta_feedback(config) or unsafe['improved']))
                 before_beta=beta
                 if retry:
                     beta=min(config['beta_clone_max'],2*beta);report['beta_retries']+=1
@@ -377,7 +391,8 @@ def fit(model,optimizer,buffer,current,train_ids,heldout_ids,config,update,*,bet
                     reason='policy_kl_cap',probe=probe,unsafe_paired=unsafe,retry=retry,beta_before=before_beta,beta_after=beta,last_lr=rate))
                 rejected_checks+=1;report['beta_clone_final']=beta
                 if not retry:
-                    report['early_stop_reason']='policy_kl_cap_beta_max' if beta>=config['beta_clone_max'] else 'policy_kl_cap_no_value_improvement'
+                    loss_reason='policy_kl_cap_heldout_loss_rejected' if dcpg_config.beta_feedback(config) else 'policy_kl_cap_no_value_improvement'
+                    report['early_stop_reason']='policy_kl_cap_beta_max' if beta>=config['beta_clone_max'] else loss_reason
                     break
             if trip:break
             if end_epoch:report['epochs_completed']=epoch+1
@@ -388,14 +403,16 @@ def fit(model,optimizer,buffer,current,train_ids,heldout_ids,config,update,*,bet
             if selection is not None:
                 retained=selection.consider(model,optimizer,now,working,working_clones,working_steps,
                     epoch*steps_per_epoch+start+len(block))
-            if delayed and checked_position==position:
+                if minimum(config['selection']):improved=retained
+            if certified is not None and checked_position==position:
                 certified.consider(model,optimizer,now,working,working_clones,working_steps,position)
             report['interval_reports'].append(dict(epoch=epoch+1,budget_step=epoch*steps_per_epoch+start+len(block),
                 attempted_steps=attempted,accepted=not comparison['reject'],beta_clone=beta,last_lr=rate,
                 retained_as_best=improved,paired=comparison,probe=probe if not delayed or checked_position==position else None,
                 policy_checked=not delayed or checked_position==position))
             if selection is not None:
-                report['interval_reports'][-1].update(retained_for_coverage=retained,
+                report['interval_reports'][-1].update(
+                    **{('retained_as_minimum_loss' if minimum(config['selection']) else 'retained_for_coverage'):retained},
                     minimum_reference_step=selection.minimum_budget_step,
                     selected_budget_step=selection.budget_step,
                     outcome='improved' if improved else 'failed' if comparison['reject'] else 'neutral')
@@ -421,7 +438,7 @@ def fit(model,optimizer,buffer,current,train_ids,heldout_ids,config,update,*,bet
             if companion is not None:companion.restore(best_aux)
         else:
             selection.restore(model,optimizer)
-            if delayed and not verify_restored():
+            if delayed and hard_cap and not verify_restored():
                 report['rejected_unverified_selections']+=1
                 report['kl_guard_tripped']=True
                 report['early_stop_reason']='selected_state_policy_kl_cap'
@@ -431,7 +448,7 @@ def fit(model,optimizer,buffer,current,train_ids,heldout_ids,config,update,*,bet
         optimizer.zero_grad(set_to_none=True);model.eval()
         final_probe=measured_probe()
         report['retention_policy_checks']+=1
-        require(final_probe['overall']<=config['kl_cap'] and final_probe['age0']<=config['kl_cap'],'Retained PPG checkpoint exceeds KL guard')
+        require(safe_probe(final_probe),'Retained PPG checkpoint exceeds KL guard')
         after_losses=measured_losses(ds,held);used=set(best_used)
         calibration_after=value_phase.metrics(model,current,train_ids,update) if used else calibration_before
         model.utility_calibration=(dict(version=config['contract'],reward_id=digest(model.config.utility),

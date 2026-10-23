@@ -85,19 +85,20 @@ def configure(options):
 
 
 def validate(c):
-    require(type(c) is dict and set(c)==set(DEFAULT)|({'selection'} if coverage(c) else set())|({'kl_check_steps'} if fixed(c) else set())|({'learning_rate_source'} if linked(c) else set())|({'learning_rate_factor'} if dcpg_config.active(c) else set())|({'beta_control'} if dcpg_config.beta_feedback(c) else set()) and active(c),
+    require(type(c) is dict and set(c)==set(DEFAULT)|({'selection'} if coverage(c) else set())|({'kl_check_steps'} if fixed(c) else set())|({'learning_rate_source'} if linked(c) else set())|({'learning_rate_factor'} if dcpg_config.active(c) else set())|({'beta_control'} if dcpg_config.beta_feedback(c) else set())|({'cache_format','kl_control'} if dcpg_config.sixteen(c) else set()) and active(c),
         'Invalid eight-iteration PPG fields/contract')
     require(type(c['enabled']) is bool,'Invalid PPG enabled flag')
     for k in ('buffer_iterations','max_epochs','batch_size','clone_rows_per_age','probe_rows_per_age',
               'current_probe_rows','clone_batch_size','acceptance_steps','phase_interval',
               'validation_iterations','patience','minimum_stratum_rows'):
         require(type(c[k]) is int and c[k]>0,'Invalid PPG integer: '+k)
-    for k in ('beta_clone','beta_clone_max','kl_cap','holdout_fraction')+(() if linked(c) else ('learning_rate',)):
+    for k in ('beta_clone','beta_clone_max','holdout_fraction')+(() if dcpg_config.sixteen(c) else ('kl_cap',))+(() if linked(c) else ('learning_rate',)):
         require(type(c[k]) in (int,float) and math.isfinite(c[k]) and c[k]>0,'Invalid PPG number: '+k)
     short=c['contract']!=CONTRACT
     delayed=dcpg_config.active(c)
     if dcpg_config.beta_feedback(c):
-        require(c['beta_control']==dcpg_config.BETA_CONTROL,'Invalid PPG beta feedback contract')
+        require(c['beta_control']==(dcpg_config.FIXED_BETA_CONTROL if dcpg_config.sixteen(c) else dcpg_config.BETA_CONTROL),
+            'Invalid PPG beta feedback contract')
     if delayed:
         require(type(c['learning_rate_factor']) in (int,float) and c['learning_rate_factor']==.35,
             'Delayed critic requires 0.35 times actual PPO LR')
@@ -105,13 +106,17 @@ def validate(c):
         require(c['learning_rate'] is None and c['learning_rate_source']=='ppo-last-applied',
             'Linked PPG requires the actual PPO peak, not a configured fixed LR')
     if coverage(c):
-        from .ppg_selection import DEFAULT as OLD_SELECTION,RELAXED_DEFAULT
-        SELECTION=RELAXED_DEFAULT if fixed(c) else OLD_SELECTION
+        from .ppg_selection import DEFAULT as OLD_SELECTION,RELAXED_DEFAULT,MINIMUM_DEFAULT
+        SELECTION=MINIMUM_DEFAULT if dcpg_config.sixteen(c) else RELAXED_DEFAULT if fixed(c) else OLD_SELECTION
         require(c['selection']==SELECTION and type(c['selection']['standard_errors']) in (int,float),
             'Invalid one-SE PPG selection contract')
-    require(c['buffer_iterations']==8 and c['max_epochs']==(5 if fixed(c) else 2) and c['phase_interval']==(4 if linked(c) and not delayed else 8)
-        and c['validation_iterations']==8 and c['patience']==(1 if short else 2) and c['weighting']=='uniform'
-        and c['minimum_stratum_rows']==1 and c['kl_cap']==.002 and c['holdout']==HOLDOUT
+    window=16 if dcpg_config.sixteen(c) else 8
+    if window==16:
+        require(c['cache_format']==dcpg_config.PACKED_CACHE,'Invalid packed PPG cache contract')
+        require(c['kl_cap'] is None and c['kl_control']=='penalty-only','Sixteen-age PPG uses no hard KL cap')
+    require(c['buffer_iterations']==window and c['max_epochs']==(5 if fixed(c) else 2) and c['phase_interval']==(4 if linked(c) and not delayed else window)
+        and c['validation_iterations']==window and c['patience']==(1 if short else 2) and c['weighting']=='uniform'
+        and c['minimum_stratum_rows']==1 and (c['kl_cap'] is None if window==16 else c['kl_cap']==.002) and c['holdout']==HOLDOUT
         and c['holdout_fraction']==.05 and 1<=c['acceptance_steps']<=(16 if short and not fixed(c) else 32)
         and c['batch_size']<=4096 and c['clone_batch_size']<=c['clone_rows_per_age']<=2048
         and c['probe_rows_per_age']<=512 and c['probe_rows_per_age']<=c['current_probe_rows']<=2048
@@ -157,7 +162,7 @@ def weight(age,config):
 
 
 def initial(generation,config=None):
-    if dcpg_config.active(config or {}):return dcpg_config.initial(generation)
+    if dcpg_config.active(config or {}):return dcpg_config.initial(generation,config)
     if linked(config or {}):
         from .ppg_phasic import initial as linked_initial
         return linked_initial(generation)
@@ -167,7 +172,7 @@ def initial(generation,config=None):
 def schedule(state,generation):
     from . import ppg_phasic
     require(type(state) is dict,'Invalid PPG schedule')
-    if state.get('contract')==dcpg_config.CLOCK:return dcpg_config.schedule(state,generation)
+    if state.get('contract') in (dcpg_config.CLOCK,dcpg_config.SIXTEEN_CLOCK):return dcpg_config.schedule(state,generation)
     if state.get('contract')==ppg_phasic.CLOCK:return ppg_phasic.schedule(state,generation)
     require(type(state) is dict and set(state)==set(initial(0)) and state['contract']==MIGRATION
         and all(type(state[k]) is int for k in ('origin','generation','last_phase','phases'))
@@ -179,7 +184,7 @@ def schedule(state,generation):
 
 def next_phase(state):
     from . import ppg_phasic
-    if state['contract']==dcpg_config.CLOCK:return dcpg_config.next_phase(state)
+    if state['contract'] in (dcpg_config.CLOCK,dcpg_config.SIXTEEN_CLOCK):return dcpg_config.next_phase(state)
     if state['contract']==ppg_phasic.CLOCK:return ppg_phasic.next_phase(state)
     return state['last_phase']+DEFAULT['phase_interval']
 

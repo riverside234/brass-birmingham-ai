@@ -46,7 +46,7 @@ class Feedback(unittest.TestCase):
         self.assertEqual({k for k in new if new[k]!=old[k]},{'value_phase'})
         self.assertEqual({k for k in new['value_phase'] if new['value_phase'][k]!=old['value_phase'].get(k)},
             {'contract','beta_control'})
-        self.assertEqual(latest_model_config(old,old['imitation_checkpoint'])['value_phase'],new['value_phase'])
+        self.assertEqual(latest_model_config(old,old['imitation_checkpoint'])['value_phase'],D.sixteen_options(new)['value_phase'])
         target=dict(s['signature'],config=new,implementation=implementation_id())
         self.assertTrue(check_signature(s,target,reviewed=True))
         with self.assertRaises(ValueError):check_signature(s,target)

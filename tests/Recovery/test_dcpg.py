@@ -34,7 +34,7 @@ class Delayed(unittest.TestCase):
         self.assertEqual({k for k in old if old[k]!=new[k]},{'update','value_phase'})
         self.assertEqual({k:v for k,v in new['update'].items() if k!='value_gradient'},
             {k:v for k,v in old['update'].items() if k!='value_gradient'})
-        self.assertEqual(latest_model_config(old,old['imitation_checkpoint'])['value_phase'],D.beta_options(new)['value_phase'])
+        self.assertEqual(latest_model_config(old,old['imitation_checkpoint'])['value_phase'],D.sixteen_options(D.beta_options(new))['value_phase'])
         c=new['value_phase'];self.assertEqual((c['phase_interval'],c['buffer_iterations'],c['validation_iterations']),(8,8,8))
         for rate in (3e-6,6.25e-6,1.8e-5):
             receipt=D.rate_receipt(rate,591,48)

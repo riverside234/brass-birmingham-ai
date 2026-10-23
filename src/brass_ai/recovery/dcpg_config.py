@@ -1,4 +1,4 @@
-"""Explicit delayed-critic objective and eight-iteration auxiliary transition."""
+"""Explicit delayed-critic objectives and versioned auxiliary transitions."""
 import copy
 import math
 
@@ -6,9 +6,15 @@ from brass_ai.learning.contracts import require
 
 CONTRACT='ppg-value-phase/10.0.0'
 BETA_CONTRACT='ppg-value-phase/11.0.0'
+SIXTEEN_CONTRACT='ppg-value-phase/12.0.0'
+SIXTEEN_MIGRATION='ppg-sixteen-packed-replay/1.0.0'
+SIXTEEN_CLOCK='ppg-committed-cadence/4.0.0'
+PACKED_CACHE='ppg-columnar-disk-buffer/2.0.0'
 BETA_MIGRATION='ppg-clone-beta-feedback/1.0.0'
 BETA_CONTROL=dict(contract=BETA_MIGRATION,decrease_factor=.5,low_kl_fraction=.5,
     signal='max-final-overall-and-age0',scope='accepted-clean-phase')
+FIXED_BETA_CONTROL=dict(contract='ppg-fixed-current-beta/1.0.0',mode='fixed',
+    initialization='preserve-checkpoint-or-config',scope='penalty-only-no-KL-rejection')
 MIGRATION='dcpg-preservation-eight-iteration/1.0.0'
 CLOCK='ppg-committed-cadence/3.0.0'
 RATE='ppg-ppo-constant-rate/2.0.0'
@@ -20,10 +26,27 @@ SCHEDULE=dict(contract='ppg-phase-rate/2.0.0',reset_adam=True,
     warmup_start=1.,decay='none',end_factor=1.)
 
 
-def active(config):return config.get('contract') in (CONTRACT,BETA_CONTRACT)
+def active(config):return config.get('contract') in (CONTRACT,BETA_CONTRACT,SIXTEEN_CONTRACT)
 
 
-def beta_feedback(config):return config.get('contract')==BETA_CONTRACT
+def beta_feedback(config):return config.get('contract') in (BETA_CONTRACT,SIXTEEN_CONTRACT)
+
+
+def sixteen(config):return config.get('contract')==SIXTEEN_CONTRACT
+
+
+def sixteen_options(config):
+    """Sixteen packed ages and penalty-only PPG; never reset effective beta."""
+    from . import ppg_config
+    from .ppg_selection import MINIMUM_DEFAULT
+    require(beta_feedback(config['value_phase']),'Sixteen-age replay requires the adaptive-beta DCPG recipe')
+    ppg_config.validate(config['value_phase'])
+    result=copy.deepcopy(config)
+    result['value_phase'].update(contract=SIXTEEN_CONTRACT,buffer_iterations=16,
+        validation_iterations=16,phase_interval=16,cache_format=PACKED_CACHE,
+        kl_cap=None,kl_control='penalty-only',beta_control=copy.deepcopy(FIXED_BETA_CONTROL),
+        selection=copy.deepcopy(MINIMUM_DEFAULT))
+    ppg_config.validate(result['value_phase']);return result
 
 
 def beta_options(config):
@@ -31,6 +54,7 @@ def beta_options(config):
     from . import ppg_config
     require(active(config['value_phase']),'Beta feedback requires the delayed-critic recipe')
     ppg_config.validate(config['value_phase'])
+    if sixteen(config['value_phase']):return copy.deepcopy(config)
     result=copy.deepcopy(config)
     result['value_phase'].update(contract=BETA_CONTRACT,beta_clone=1.,beta_clone_max=32.,
         beta_control=copy.deepcopy(BETA_CONTROL))
@@ -42,6 +66,10 @@ def beta_after_phase(report,config):
     before=report['beta_clone_final'];after=before;reason='not_due'
     require(type(before) in (int,float) and math.isfinite(before) and
         config['beta_clone']<=before<=config['beta_clone_max'],'Invalid phase cloning beta')
+    if sixteen(config):
+        return before,dict(contract=FIXED_BETA_CONTROL['contract'],before=before,after=before,
+            decision='hold',reason='fixed_current_beta',hard_cap=None,
+            scope='Keep checkpoint beta unchanged; fresh runs use configured beta. No KL-triggered adjustment, rejection, rollback, retry or stopping.')
     threshold=config['beta_control']['low_kl_fraction']*config['kl_cap']
     maximum=None
     if report['scheduled']:
@@ -79,9 +107,19 @@ def configure(config):
     return result
 
 
-def initial(generation):
-    return dict(contract=CLOCK,origin=generation,generation=generation,last_phase=generation,phases=0,
-        cadence=dict(origin=generation,previous_phases=0,previous_last_phase=generation,first_phase=generation+8))
+def initial(generation,config=None):
+    wide=sixteen(config or {})
+    return dict(contract=SIXTEEN_CLOCK if wide else CLOCK,origin=generation,generation=generation,last_phase=generation,phases=0,
+        cadence=dict(origin=generation,previous_phases=0,previous_last_phase=generation,first_phase=generation+(16 if wide else 8)))
+
+
+def migrate_sixteen_clock(previous,generation):
+    from . import ppg_config
+    ppg_config.schedule(previous,generation)
+    if previous['contract']==SIXTEEN_CLOCK:return copy.deepcopy(previous)
+    result=dict(copy.deepcopy(previous),contract=SIXTEEN_CLOCK,cadence=dict(origin=generation,
+        previous_phases=previous['phases'],previous_last_phase=previous['last_phase'],first_phase=generation+16))
+    return schedule(result,generation)
 
 
 def migrate_clock(previous,generation):
@@ -95,11 +133,12 @@ def migrate_clock(previous,generation):
 
 
 def next_phase(state):
-    return state['cadence']['first_phase']+8*(state['phases']-state['cadence']['previous_phases'])
+    interval=16 if state['contract']==SIXTEEN_CLOCK else 8
+    return state['cadence']['first_phase']+interval*(state['phases']-state['cadence']['previous_phases'])
 
 
 def schedule(state,generation):
-    require(type(state) is dict and set(state)==set(initial(0)) and state['contract']==CLOCK,
+    require(type(state) is dict and set(state)==set(initial(0)) and state['contract'] in (CLOCK,SIXTEEN_CLOCK),
         'Invalid delayed-critic schedule fields')
     c=state['cadence']
     require(type(c) is dict and set(c)==set(initial(0)['cadence'])
@@ -107,10 +146,12 @@ def schedule(state,generation):
         and all(type(state[k]) is int for k in ('origin','generation','last_phase','phases')),
         'Invalid delayed-critic schedule counters')
     done=state['phases']-c['previous_phases']
+    interval=16 if state['contract']==SIXTEEN_CLOCK else 8
+    first=c['origin']+16 if interval==16 else max(c['origin']+1,c['previous_last_phase']+8,state['origin']+8)
     require(0<=state['origin']<=c['previous_last_phase']<=c['origin']<=generation==state['generation']
         and 0<=c['previous_phases']<=state['phases']
-        and c['first_phase']==max(c['origin']+1,c['previous_last_phase']+8,state['origin']+8)
-        and state['last_phase']==(c['first_phase']+8*(done-1) if done else c['previous_last_phase'])
+        and c['first_phase']==first
+        and state['last_phase']==(c['first_phase']+interval*(done-1) if done else c['previous_last_phase'])
         and state['last_phase']<=generation<next_phase(state),'Invalid delayed-critic committed schedule')
     return state
 

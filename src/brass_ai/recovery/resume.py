@@ -137,6 +137,8 @@ def check_signature(state, signature, reviewed=False):
             handlers[DCPG_MIGRATION]=dcpg_config
             from .dcpg_config import BETA_MIGRATION,beta_options
             handlers[BETA_MIGRATION]=beta_options
+            from .dcpg_config import SIXTEEN_MIGRATION,sixteen_options
+            handlers[SIXTEEN_MIGRATION]=sixteen_options
             from .opening_objective import (MIGRATION as OPENING_MIGRATION,configure as configure_opening,
                 ZERO_EXPLORATION_MIGRATION,zero_exploration)
             handlers[OPENING_MIGRATION]=configure_opening

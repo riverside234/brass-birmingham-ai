@@ -310,6 +310,21 @@ class TrainingPhases:
             self.cache_origin=0
         else:
             saved=copy.deepcopy(saved)
+            if dcpg_config.sixteen(config['value_phase']) and not dcpg_config.sixteen(saved['options']['value_phase']):
+                require(saved.get('contract')==self.contract and
+                    dcpg_config.sixteen_options(saved['options'])==self.options,'Unreviewed sixteen-age PPG transition')
+                previous_clock=copy.deepcopy(saved['schedule'])
+                old_origin=saved['cache_origin'];receipts=saved['rolling_buffer']
+                # Retain every available sealed age; do not demand already-expired
+                # old arrays, backfill targets, or rewrite checkpoint-owned files.
+                saved['cache_origin']=receipts[0]['generation']-1 if receipts else generation
+                saved['schedule']=dcpg_config.migrate_sixteen_clock(previous_clock,generation)
+                saved['options']=copy.deepcopy(self.options)
+                self.rolling_migration=dict(contract=dcpg_config.SIXTEEN_MIGRATION,origin=generation,
+                    previous_schedule=previous_clock,next_phase=ppg_config.next_phase(saved['schedule']),
+                    previous_cache_origin=old_origin,cache_origin=saved['cache_origin'],
+                    retained_generations=[r['generation'] for r in receipts],
+                    scope='Retain old arrays read-only until expiry; new collections use lossless columnar packing. Preserve beta, all Adam/RNG state, gates and ordinary progress. First phase after 16 newly committed iterations. PPG uses a fixed current-beta KL penalty only, with no hard cap or beta adaptation.')
             if dcpg_config.beta_feedback(config['value_phase']) and not dcpg_config.beta_feedback(saved['options']['value_phase']):
                 require(saved.get('contract')==self.contract and
                     dcpg_config.beta_options(saved['options'])==self.options,
@@ -422,6 +437,8 @@ class TrainingPhases:
                 and base*minimum_factor*(1-1e-12)<=rate<=base*(1+1e-12)
                 and self.optimizer.param_groups[0]['weight_decay']==0,'Value optimizer settings differ')
             self.schedule=copy.deepcopy(ppg_config.schedule(saved['schedule'],generation));receipts=saved['rolling_buffer']
+            require((self.schedule['contract']==dcpg_config.SIXTEEN_CLOCK)==dcpg_config.sixteen(config['value_phase']),
+                'PPG schedule and configured window differ')
             self.cache_origin=saved.get('cache_origin',self.schedule['origin'])
             self.epoch_control=copy.deepcopy(ppg_epochs.validate(saved['epoch_control'],config['value_phase'],
                 phases=self.schedule['phases'],last_phase=self.schedule['last_phase']))
@@ -625,6 +642,7 @@ class TrainingPhases:
             'at_cap' if value['kl_guard_tripped'] and sum(self.trips)>=3 else
             'no_new_kl_trip' if not value['kl_guard_tripped'] else 'fewer_than_three_trips')
         if self.beta<before:reason=value['beta_feedback']['reason']
+        if rolling and dcpg_config.sixteen(self.options['value_phase']):reason=value['beta_feedback']['reason']
         value.update(beta_clone_next=self.beta,beta_decision='up' if self.beta>before else 'down' if self.beta<before else 'hold',
             beta_reason=reason,
             kl_trip_window=list(self.trips))
@@ -641,6 +659,8 @@ class TrainingPhases:
         report['anchor_gate']=copy.deepcopy(anchor_gate)
         report['training_health']=copy.deepcopy(training_health)
         report['health_scope']='Economic health and PPO/value guards; calibrated IL distance/latch gates LR increases only'
+        if rolling and dcpg_config.sixteen(self.options['value_phase']):
+            report['health_scope']='Economic health and PPO guards; PPG policy control is penalty-only with no hard KL veto. Calibrated anchor distance/latch gates LR increases only.'
         if getattr(self,'window_migration',None):report['window_migration']=copy.deepcopy(self.window_migration)
         if self.evidence_migration:report['evidence_migration']=copy.deepcopy(self.evidence_migration)
         if self.critic_state is not None:

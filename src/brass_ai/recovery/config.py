@@ -415,8 +415,8 @@ def latest_model_config(config,imitation_checkpoint):
     from .opening_objective import configure as configure_opening,zero_exploration
     from .ppg_config import coverage_options
     result=vp_cap_config(coverage_options(configure_ppg(configure_opening(zero_exploration(high_branch_config(insolvency_020_config(insolvency_010_config(result))))))))
-    from .dcpg_config import configure as phasic_config,beta_options
-    result=beta_options(phasic_config(result))
+    from .dcpg_config import configure as phasic_config,beta_options,sixteen_options
+    result=sixteen_options(beta_options(phasic_config(result)))
     from .local_scoring_auxiliary import DEFAULT as LOCAL_SCORING
     result['local_scoring_auxiliary']=copy.deepcopy(LOCAL_SCORING)
     result['branching']['rate_per_decision']=.010

@@ -149,7 +149,9 @@ class Continuation(unittest.TestCase):
         self.assertEqual(insolvency_010_config(older)['insolvency']['event_cost'],.010)
         self.assertEqual(insolvency_010_config(old),old)
         fresh=latest_model_config(old,old['imitation_checkpoint'])
-        self.assertEqual(fresh['value_phase'],P.fixed_options(new)['value_phase']);self.assertEqual(fresh['insolvency'],new['insolvency'])
+        from brass_ai.recovery import dcpg_config as D
+        self.assertEqual(fresh['value_phase'],D.sixteen_options(D.beta_options(D.configure(new)))['value_phase'])
+        self.assertEqual(fresh['insolvency'],new['insolvency'])
         bad=copy.deepcopy(new);bad['value_phase']['selection']['standard_errors']=2.
         with self.assertRaises(ValueError):validate_config(bad)
         bad=copy.deepcopy(new);bad['value_phase']['epoch_controller']['minimum']=1

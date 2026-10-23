@@ -12,6 +12,15 @@ the **next** phase if both final retained overall and age-0 KL are strictly belo
 steps, or on a waiting iteration. Equality at 0.001 does not qualify. Minimum
 beta is 1. The 0.002 safeguards and verified keep-best rollback remain active.
 
+Adaptive-beta retries now use the same paired held-out allowance as acceptance:
+after either KL cap trips, double beta (up to 32) and retry if the mean game-loss
+increase is at most **1.5 standard errors**, including unchanged loss and small
+increases. Strict loss improvement is no longer required for v11/v12 retries.
+Larger increases stop the phase; unsafe weights and Adam state are rolled back
+before retrying. The final retained policy must still satisfy both 0.002 KL caps.
+Reports identify this rule as `beta_retry_loss_rule=within-heldout-SE-allowance`.
+Archived recipes retain their original strict-improvement condition.
+
 The config adopts this feedback contract; the checkpoint's actor/value options
 record its adoption. Restarts from the old g600 checkpoint consistently adopt 1;
 after the first new checkpoint, later adapted beta values resume unchanged.

@@ -1,4 +1,4 @@
-"""Checkpoint-owned eight-age mmap replay. Never a source of PPO trajectories."""
+"""Checkpoint-owned mmap replay. Never a source of PPO trajectories."""
 import copy
 from contextlib import contextmanager
 import re
@@ -18,12 +18,16 @@ from . import ppg_sampling
 
 CONTRACT='ppg-eight-disk-buffer/1.0.0'
 OWNER=dict(contract=CONTRACT,purpose='sealed MC critic rows and selected complete policy inputs')
-FILE=re.compile(r'generation-([0-9]{6,})\.(critic\.npy|actions\.npy|local-scoring\.json|json)(\.partial|\.tmp)?$')
+FILE=re.compile(r'generation-([0-9]{6,})\.(critic\.npy|actions\.npy|meta\.npy|games\.npy|state-floats\.npy|state-bits\.npy|critic-actions\.npy|policy-actions\.npy|local-scoring\.json|json)(\.partial|\.tmp)?$')
 
 
 class Rows(DiskRows):
     def __init__(self,path,receipt):
-        self.receipt=receipt;self.array=np.load(path,mmap_mode='r',allow_pickle=False)
+        self.receipt=receipt
+        if 'packing' in receipt:
+            from .ppg_packing import CriticArray
+            self.array=CriticArray(lambda ext:path.with_name(path.name.replace('critic.npy',ext)),receipt)
+        else:self.array=np.load(path,mmap_mode='r',allow_pickle=False)
         self.local={}
         try:
             if 'local-scoring.json' in receipt['files']:
@@ -150,21 +154,30 @@ class Buffer:
             write_json(owner,OWNER)
         require(read(owner)==OWNER,'Unknown eight-age PPG owner')
         self.receipts=copy.deepcopy(receipts or [])
-        require([r['generation'] for r in self.receipts]==list(range(max(origin+1,generation-7),generation+1)),
-            'Missing committed eight-age PPG cache receipts')
+        self.window=config['value_phase']['buffer_iterations']
+        require(self.window in (8,16),'Invalid PPG replay window')
+        require([r['generation'] for r in self.receipts]==list(range(max(origin+1,generation-self.window+1),generation+1)),
+            'Missing committed PPG cache receipts')
         for r in self.receipts:self.verify(r)
 
     def path(self,generation,ext):return safe(self.directory,self.directory/f'generation-{generation:06d}.{ext}')
 
     def verify(self,r):
         from .critic_holdout import validate_selection
-        require(r.get('contract')==CONTRACT and r.get('reward_id')==self.reward_id
+        from .ppg_packing import CONTRACT as PACKED,EXTENSIONS,validate
+        packed=r.get('contract')==PACKED
+        require((r.get('contract')==CONTRACT or (packed and self.window==16)) and r.get('reward_id')==self.reward_id
             and r.get('compatibility')==digest(compatibility()) and type(r.get('rows')) is int and r['rows']>0,
             'Incompatible eight-age PPG receipt')
         validate_selection(r['holdout_selection'],self.config['value_phase']['holdout'],self.config['value_phase']['holdout_fraction'])
         require(set(r['game_ids'])<=set(r['holdout_selection']['games']),'Unknown PPG cached game')
+        expected=set(EXTENSIONS) if packed else {'critic.npy','actions.npy'}
+        require(set(r['files']) in (expected,expected|{'local-scoring.json'}),'Missing/unknown PPG cache file type')
+        require(('packing' in r)==packed,'PPG packing receipt contract differs')
+        if packed:
+            validate(r['packing'])
+            require(r['packing']['games']==len(r['game_ids']),'Packed PPG game table differs')
         for ext,f in r['files'].items():
-            require(ext in ('critic.npy','actions.npy','local-scoring.json'),'Unknown PPG cache file type')
             p=self.path(r['generation'],ext)
             require(p.is_file() and p.stat().st_size==f['bytes'] and sha(p)==f['sha256'],
                 'Missing/corrupt committed eight-age PPG cache; restore its matching cache backup: '+str(p))
@@ -197,6 +210,7 @@ class Buffer:
         import shutil
         action_count=sum(len(dataset.data[e['index']][3].choice_ids) for e in selected)
         estimated=len(ids)*row_dtype().itemsize+action_count*feature_schema()['action_dim']*4+16*1024**2
+        if self.window==16:estimated*=2  # raw staging and packed output coexist until publication
         require(shutil.disk_usage(self.directory).free>=estimated,
             'Insufficient free disk for staged PPG cache; committed caches are never deleted to make room')
         disk_peak=sum(p.stat().st_size for p in self.directory.iterdir() if p.is_file())
@@ -245,7 +259,23 @@ class Buffer:
         finally:actions._mmap.close()
         disk_peak=max(disk_peak,sum(p.stat().st_size for p in self.directory.iterdir() if p.is_file()))
         part.replace(self.path(generation,'actions.npy'))
-        files={ext:dict(bytes=self.path(generation,ext).stat().st_size,sha256=sha(self.path(generation,ext))) for ext in ('critic.npy','actions.npy')}
+        packing=None;extensions=('critic.npy','actions.npy')
+        if self.window==16:
+            from .ppg_packing import pack,EXTENSIONS
+            raw=np.load(self.path(generation,'critic.npy'),mmap_mode='r',allow_pickle=False)
+            raw_actions=None
+            try:
+                raw_actions=np.load(self.path(generation,'actions.npy'),mmap_mode='r',allow_pickle=False)
+                packing=pack(lambda ext:self.path(generation,ext),raw,raw_actions,len(games))
+            finally:
+                raw._mmap.close()
+                if raw_actions is not None:raw_actions._mmap.close()
+            disk_peak=max(disk_peak,sum(p.stat().st_size for p in self.directory.iterdir() if p.is_file()))
+            # Only this uncommitted generation's scratch files are removed here.
+            # Every older checkpoint-owned cache remains until committed().
+            for ext in extensions:self.path(generation,ext).unlink()
+            extensions=EXTENSIONS
+        files={ext:dict(bytes=self.path(generation,ext).stat().st_size,sha256=sha(self.path(generation,ext))) for ext in extensions}
         if 'local_scoring_auxiliary' in self.config:
             from .local_scoring_targets import CONTRACT as TARGET_CONTRACT,seal,pack
             local={};checked=set()
@@ -269,17 +299,25 @@ class Buffer:
             rows=len(ids),game_ids=list(games),contexts=context_values,holdout_selection=copy.deepcopy(selection),
             source=copy.deepcopy(source),policy_entries=entries,policy_population=counts,files=files,
             train_rows=len(train_ids),heldout_rows=len(heldout_ids))
+        if packing:r.update(contract=packing['contract'],packing=packing)
         self.path(generation,'json.tmp')
         write_json(self.path(generation,'json'),r)
-        self.pending=(self.receipts+[r])[-8:]
-        return dict(buffer_iterations=8,ages=list(range(len(self.pending))),generations=[r['generation'] for r in self.pending],
+        self.pending=(self.receipts+[r])[-self.window:]
+        return dict(buffer_iterations=self.window,ages=list(range(len(self.pending))),generations=[r['generation'] for r in self.pending],
             rows_by_age={str(generation-x['generation']):x['rows'] for x in self.pending},
-            critic_bytes=sum(x['files']['critic.npy']['bytes'] for x in self.pending),
-            policy_action_bytes=sum(x['files']['actions.npy']['bytes'] for x in self.pending),
+            critic_bytes=sum(f['bytes'] for x in self.pending for ext,f in x['files'].items()
+                if ext not in ('actions.npy','policy-actions.npy','local-scoring.json')),
+            policy_action_bytes=sum(f['bytes'] for x in self.pending for ext,f in x['files'].items()
+                if ext in ('actions.npy','policy-actions.npy')),
             auxiliary_label_bytes=sum(x['files'].get('local-scoring.json',{}).get('bytes',0) for x in self.pending),
             peak_disk_bytes=max(disk_peak,sum(p.stat().st_size for p in self.directory.iterdir() if p.is_file())),
             write_seconds=time.perf_counter()-began,committed_cleanup=None,
-            scope='Eight trainable ages; pre-commit disk peak includes the not-yet-expired ninth cache. Mmap features; bounded minibatch transfers; no historical PPO admission.')
+            packing=(dict(contract=packing['contract'],dense_array_bytes=packing['dense_array_bytes'],
+                packed_array_bytes=packing['packed_array_bytes'],games=packing['games'],
+                state_columns={k:len(packing['state'][k]) for k in ('constant','binary','floating')},
+                scope=packing['scope']) if packing else None),
+            packed_generations=sum('packing' in x for x in self.pending),
+            scope=f'{self.window} trainable ages; pre-commit disk peak includes unexpired old age and new-generation packing scratch. Mmap features; bounded minibatch transfers; no historical PPO admission.')
 
     @contextmanager
     def datasets(self,device):
@@ -288,7 +326,10 @@ class Buffer:
         try:
             for r in reversed(self.pending):
                 rows.append(Rows(self.path(r['generation'],'critic.npy'),r))
-                actions.append(np.load(self.path(r['generation'],'actions.npy'),mmap_mode='r',allow_pickle=False))
+                if 'packing' in r:
+                    from .ppg_packing import ActionArray
+                    actions.append(ActionArray(self.path(r['generation'],'policy-actions.npy'),r['packing']))
+                else:actions.append(np.load(self.path(r['generation'],'actions.npy'),mmap_mode='r',allow_pickle=False))
                 require(actions[-1].dtype==np.dtype('<f4') and actions[-1].shape[1]==feature_schema()['action_dim'],'Invalid policy action cache')
                 policies.append(PolicyData(rows[-1],actions[-1],r['policy_entries']))
             yield CriticDataset(rows,device),PolicyDataset(policies,device),list(reversed(self.pending))
