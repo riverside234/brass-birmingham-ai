@@ -1,5 +1,9 @@
 # Four-iteration PPG and detached PPO critic, g580
 
+The subsequent [g590 delayed-critic revision](DCPG_G590.md) supersedes this
+recipe for new configs and explicit continuation. This report describes the
+preserved g580 detach baseline; use the newer g590 command for that run.
+
 The g580 export is committed at generation 580. Its last PPG phase was g576,
 its next phase was g584, and its last actual PPO learning rate was 6.25e-6.
 The supplied export contains reports, not the lab's full checkpoint or replay

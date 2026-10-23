@@ -28,13 +28,15 @@ def configure(config):
 
 
 def validate_gradient(config):
-    require(type(config) is dict and config==GRADIENT,'Invalid PPO critic gradient contract')
+    from .dcpg_config import GRADIENT as PRESERVATION
+    require(type(config) is dict and config in (GRADIENT,PRESERVATION)
+        and ('beta' not in config or type(config['beta']) in (int,float)),'Invalid PPO critic gradient contract')
     return config
 
 
 def detached(config):
     if 'value_gradient' not in config:return False
-    validate_gradient(config['value_gradient']);return True
+    validate_gradient(config['value_gradient']);return config['value_gradient']['mode']=='detach-encoder'
 
 
 def stop_value_gradient(encoded):
@@ -90,6 +92,9 @@ def rate_receipt(peak,generation,source,steps=0):
 
 
 def validate_rate(receipt,generation):
+    from . import dcpg_config
+    if type(receipt) is dict and receipt.get('contract')==dcpg_config.RATE:
+        return dcpg_config.validate_rate(receipt,generation)
     require(type(receipt) is dict and set(receipt)=={'contract','peak_lr','generation','source','ppo_steps'}
         and receipt['contract']==RATE_CONTRACT and type(receipt['peak_lr']) in (int,float)
         and math.isfinite(receipt['peak_lr']) and receipt['peak_lr']>0

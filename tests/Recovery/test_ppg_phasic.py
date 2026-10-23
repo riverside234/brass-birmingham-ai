@@ -37,7 +37,9 @@ class Phasic(unittest.TestCase):
         self.assertEqual(c['acceptance_steps'],32);self.assertEqual(c['max_epochs'],5)
         self.assertEqual(c['selection']['standard_errors'],1.5);self.assertIsNone(c['learning_rate'])
         fresh=latest_model_config(old,old['imitation_checkpoint'])
-        self.assertEqual(fresh['value_phase'],new['value_phase']);self.assertEqual(fresh['update']['value_gradient'],F.GRADIENT)
+        from brass_ai.recovery import dcpg_config
+        self.assertEqual(fresh['value_phase'],dcpg_config.configure(new)['value_phase'])
+        self.assertEqual(fresh['update']['value_gradient'],dcpg_config.GRADIENT)
         for key,value in [('phase_interval',8),('phase_interval',True),('buffer_iterations',4),('validation_iterations',4),
                           ('learning_rate',3e-6),('learning_rate_source','configured-base')]:
             bad=copy.deepcopy(c);bad[key]=value

@@ -182,6 +182,15 @@ class Companion:
             self.retained.update(self.batch_used)
         self.optimizers[phase].zero_grad(set_to_none=True);self.pending=False
 
+    def preservation_used(self,dataset,indices):
+        """Track output-distillation work without reading/fitting scoring targets."""
+        require(self.active,'Inactive companion cannot preserve outputs')
+        for i in indices:
+            row=dataset.rows[i]
+            token=(dataset.data[i][2][0],row['view']['context']['era'],int(row['view']['context']['revision']),int(row['seat']))
+            self.batch_used.add(token);self.attempted.add(token)
+        self.pending=True
+
     def snapshot(self):
         return copy.deepcopy(dict(heads=self.heads.state_dict(),adam=self.optimizers['ppg'].state_dict(),
             retained=self.retained,retained_steps=self.retained_steps,steps=self.steps))

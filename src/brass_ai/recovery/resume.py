@@ -133,6 +133,8 @@ def check_signature(state, signature, reviewed=False):
             handlers[FIXED_MIGRATION]=fixed_options
             from .ppg_phasic import MIGRATION as PHASIC_MIGRATION,configure as phasic_config
             handlers[PHASIC_MIGRATION]=phasic_config
+            from .dcpg_config import MIGRATION as DCPG_MIGRATION,configure as dcpg_config
+            handlers[DCPG_MIGRATION]=dcpg_config
             from .opening_objective import (MIGRATION as OPENING_MIGRATION,configure as configure_opening,
                 ZERO_EXPLORATION_MIGRATION,zero_exploration)
             handlers[OPENING_MIGRATION]=configure_opening

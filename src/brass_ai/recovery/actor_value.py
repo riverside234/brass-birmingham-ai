@@ -287,7 +287,7 @@ class TrainingPhases:
                 previous_reward=(raw or {}).get('model_config',{}).get('utility'),previous_value=previous_value)
 
     def _init_rolling(self,model,config,*,raw,generation,root,run):
-        from . import ppg_config,ppg_replay,ppg_epochs,ppg_phasic
+        from . import ppg_config,ppg_replay,ppg_epochs,ppg_phasic,dcpg_config
         require(root is not None and run is not None,'Eight-iteration PPG requires an owned disk cache')
         self.config=config;self.root,self.run=root,run
         self.options={k:copy.deepcopy(config[k]) for k in ('advantage','value_phase','critic_data','seat_descriptors') if k in config}
@@ -310,6 +310,15 @@ class TrainingPhases:
             self.cache_origin=0
         else:
             saved=copy.deepcopy(saved)
+            if dcpg_config.active(config['value_phase']) and not dcpg_config.active(saved['options']['value_phase']):
+                require(saved.get('contract')==self.contract and ppg_config.linked(saved['options']['value_phase'])
+                    and dcpg_config.options(saved['options'])==self.options,'Unreviewed delayed-critic transition')
+                previous_clock=copy.deepcopy(saved['schedule'])
+                saved['schedule']=dcpg_config.migrate_clock(previous_clock,generation)
+                saved['options']=copy.deepcopy(self.options)
+                self.rolling_migration=dict(contract=dcpg_config.MIGRATION,origin=generation,
+                    previous_schedule=previous_clock,next_phase=ppg_config.next_phase(saved['schedule']),
+                    scope='Preserve model, both Adams, RNG, eight-age replay and gates. Change only cadence, future phase LR and PPO value objective. No new phase or fresh-target work is backfilled.')
             if (ppg_config.fixed(config['value_phase']) and saved.get('contract')=='actor-value-phases/10.0.0'
                     and not ppg_config.fixed(saved['options']['value_phase'])):
                 fixed_options=ppg_config.fixed_options(saved['options'])
@@ -393,8 +402,13 @@ class TrainingPhases:
             rate=self.optimizer.param_groups[0]['lr'];base=config['value_phase']['learning_rate']
             if ppg_config.linked(config['value_phase']):
                 base=ppg_phasic.validate_rate(self.optimizer.param_groups[0].get(ppg_phasic.RATE_KEY),generation)['peak_lr']
+            minimum_factor=config['value_phase']['rate_schedule']['warmup_start']
+            if dcpg_config.active(config['value_phase']) and self.optimizer.param_groups[0].get(ppg_phasic.RATE_KEY,{}).get('contract')==ppg_phasic.RATE_CONTRACT:
+                # An old phase's Adam/rate remains byte-identical until the next
+                # scheduled phase. Its receipt still names its original curve.
+                minimum_factor=.1
             require(len(self.optimizer.param_groups)==1 and math.isfinite(rate)
-                and base*config['value_phase']['rate_schedule']['warmup_start']*(1-1e-12)<=rate<=base*(1+1e-12)
+                and base*minimum_factor*(1-1e-12)<=rate<=base*(1+1e-12)
                 and self.optimizer.param_groups[0]['weight_decay']==0,'Value optimizer settings differ')
             self.schedule=copy.deepcopy(ppg_config.schedule(saved['schedule'],generation));receipts=saved['rolling_buffer']
             self.cache_origin=saved.get('cache_origin',self.schedule['origin'])
@@ -495,9 +509,14 @@ class TrainingPhases:
         self.ppo_work=dict(source='ppo',optimizer_steps=critic_steps,distinct_rows=critic_rows,
             scope='Retained PPO steps with nonempty critic batches and positive value_weight; calibration and PPG excluded')
         from . import ppg_config,ppg_phasic
+        from . import dcpg_config
+        if dcpg_config.active(self.options['value_phase']):
+            self.ppo_work.update(source='ppo-preservation',fresh_target_steps=0,
+                scope='Frozen-output preservation steps, not fresh-target critic fitting; GAE work evidence uses retained PPG steps only')
         if ppg_config.linked(self.options['value_phase']):
-            self.ppo_peak=(ppg_phasic.rate_receipt(ppo_rate,self.state['generation']+1,'ppo-last-applied',ppo_steps)
-                if ppo_steps else None)
+            self.ppo_peak=((dcpg_config.rate_receipt(ppo_rate,self.state['generation']+1,ppo_steps)
+                if dcpg_config.active(self.options['value_phase']) else
+                ppg_phasic.rate_receipt(ppo_rate,self.state['generation']+1,'ppo-last-applied',ppo_steps)) if ppo_steps else None)
 
     def fit(self,model):
         require(self.dataset is not None and self.probe_ids is not None,'Value phase must follow PPO')
@@ -526,6 +545,21 @@ class TrainingPhases:
             self.value_report.update(buffer=cache,split=self.split,schedule=dict(self.pending_schedule,
                 next_phase=ppg_config.next_phase(self.pending_schedule)),
                 epoch_controller=epoch_report,migration=self.rolling_migration)
+            from . import dcpg_config
+            if dcpg_config.active(self.options['value_phase']):
+                self.value_report['gate_critic_training']=dict(source='ppg',optimizer_steps=self.value_report['optimizer_steps'],
+                    scope='Accepted fresh-target PPG only; PPO preservation is not value-fitting evidence')
+                from .ev_evidence import pool
+                def ordinary_ev(metrics):
+                    parts=[v['ev_evidence'] for k,v in metrics.get('groups',{}).items()
+                        if k.startswith('table:') and k.endswith('/role:learner') and 'ev_evidence' in v]
+                    return pool(parts)
+                self.value_report['value_sag']=dict(generation=self.state['generation']+1,
+                    iterations_since_last_phase=self.state['generation']+1-self.schedule['last_phase'],
+                    phase_scheduled=ran,phase_retained_steps=self.value_report['optimizer_steps'],
+                    after_ppo=ordinary_ev(self.value_report.get('heldout_before',self.value_report.get('heldout_after',{}))),
+                    after_value_phase=ordinary_ev(self.value_report.get('heldout_after',{})),
+                    scope='Current ordinary held-out learner games only, no branches/snapshots. Group by elapsed committed iterations; a rejected phase is explicitly reported.')
             return self.value_report
         def fit(dataset=None,indices=None):
             return value_phase.fit(model,self.optimizer,self.dataset,self.train_ids,self.heldout_ids,

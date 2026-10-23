@@ -674,6 +674,9 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                     if (value_report.get('learning_rate_source') or {}).get('source')=='ppo-last-applied':
                         controller_line+=f' value_peak={value_report["peak_learning_rate"]:.2g}[PPO]'
                     if update.get('value_gradient',{}).get('mode')=='detach-encoder':controller_line+=' critic=PPO-heads/PPG-shared'
+                    if update.get('value_preservation'):
+                        preservation=update['value_preservation']
+                        controller_line+=f' critic=preserve Vkeep={preservation["end_weighted_objective"]:.5f} Vdrift={preservation["utility_probe_rms"]:.5f}'
                     if value_report.get('schedule'):
                         controller_line+=(f' PPG={"phase" if value_report["scheduled"] else "waiting"}'
                             f' next=g{value_report["schedule"]["next_phase"]}'

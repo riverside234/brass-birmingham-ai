@@ -35,6 +35,12 @@ def disabled_options(options):
 def critic_work(report):
     """Actual critic optimizer work; never label PPO steps as accepted PPG."""
     from .ppg_config import active
+    from . import dcpg_config
+    if dcpg_config.active(report):
+        steps=report.get('optimizer_steps',0)
+        require(type(steps) is int and steps>=0,'Invalid delayed-critic retained PPG steps')
+        return dict(source='ppg',optimizer_steps=steps,
+            scope='Fresh-target value training only; PPO preservation excluded')
     if active(report) and report.get('enabled',True):
         work=report.get('gate_critic_training',{})
         require(work.get('source')=='ppo' and type(work.get('optimizer_steps')) is int

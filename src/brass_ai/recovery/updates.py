@@ -461,7 +461,11 @@ def ppo_nonforced(model,optimizer,games,behavior,config,*,profile=None,profile_s
 
 def _ppo_nonforced(model,optimizer,games,behavior,config,*,profile,profile_steps,rehearsal,rehearsal_weight,learner_data,executor,insolvency,reward,sample_groups=None,anchor_model=None,phases=None):
     from .ppg_phasic import detached
+    from . import dcpg_config
     detach_critic=detached(config)
+    preserve=dcpg_config.enabled(config)
+    if preserve:require(phases is not None and dcpg_config.active(phases.options['value_phase']),
+        'Value preservation requires the delayed fresh-target phase')
     require(all(g['split']=='train' for g in games),'Held-out PPO data')
     timings=Timings();device=next(model.parameters()).device
     with timings.phase('ppo.behavior_identity'):
@@ -493,7 +497,8 @@ def _ppo_nonforced(model,optimizer,games,behavior,config,*,profile,profile_steps
                 'PPO model/return reward version differs')
         require(all(r['teacher'] is None for r in ds.rows),'Search distributions cannot enter fresh PPO rollouts')
         with timings.phase('ppo.utility_calibration'):
-            calibration=calibrate(model,optimizer,critic_ds,config,indices=critic_ids,executor=executor)
+            calibration=(dict(required=False,steps=0,reason='DCPG fresh targets are fitted only in the value phase')
+                if preserve else calibrate(model,optimizer,critic_ds,config,indices=critic_ids,executor=executor))
         trajectories=[r['_reward_trajectory'] for r in ds.rows if '_reward_trajectory' in r]
         require(len(trajectories)==len({d[2] for d in data}),'Missing reward components')
         means={k:sum(t[k] for t in trajectories)/len(trajectories) for k in trajectories[0]}
@@ -502,8 +507,16 @@ def _ppo_nonforced(model,optimizer,games,behavior,config,*,profile,profile_steps
         from .review_metrics import reward_distribution
         reward_report['distribution']=reward_distribution(trajectories,reward)
     advantages=torch.zeros(count,device=device);model.eval()
+    frozen=None
+    if preserve:
+        from .value_preservation import FrozenValues,TrunkGradients
+        with timings.phase('ppo.freeze_values'):
+            frozen=FrozenValues(model,critic_ds,config,getattr(phases,'local_scoring',None),executor)
     # Verify likelihoods for ALL rows, including deterministic continuation rows.
-    policy_measure(model,ds,range(count),behavior,config,timings,True,advantages,executor)
+    policy_measure(model,ds,range(count),behavior,config,timings,True,None if frozen else advantages,executor)
+    if frozen is not None:
+        baseline=frozen.values['utility'][:count].to(device)
+        advantages=(ds.utility-baseline)[torch.arange(count,device=device),ds.seats]
     costs,insolvency_report=advantage_costs(data,insolvency)
     if reward is not None:
         insolvency_report['objective']='Combined terminal utility minus future capped insolvency costs'
@@ -548,6 +561,7 @@ def _ppo_nonforced(model,optimizer,games,behavior,config,*,profile,profile_steps
                 optimizer.zero_grad(set_to_none=True);model.train()
                 companion=getattr(phases,'local_scoring',None)
                 if companion is not None:companion.begin('ppo')
+                gradient_terms=TrunkGradients(model) if frozen else None
                 with timings.phase('ppo.forward_backward'):
                     parts=ds.microbatches(batch,config['microbatch_size'],config['max_candidate_cells'],config['bucket'])
                     for part,ix,inputs,q in ds.policy_batches(parts,behavior.exploration,executor):
@@ -561,27 +575,38 @@ def _ppo_nonforced(model,optimizer,games,behavior,config,*,profile,profile_steps
                             ratio=new/ds.old[ix]
                             actor=-torch.minimum(ratio*a,ratio.clamp(1-config['clip'],1+config['clip'])*a)
                         entropy,bonus=entropy_term(out[0],p,ds,part,behavior,config)
+                        if gradient_terms is not None:gradient_terms.add_actor(actor.sum()/len(batch))
                         ((actor-bonus).sum()/len(batch)).backward()
                         actor_totals+=torch.stack([x.detach().sum() for x in (actor,entropy,((ratio-1).abs()>config['clip']).float())])
                         actor_seen+=len(part)
+                    if gradient_terms is not None:gradient_terms.before_value()
                     parts=critic_ds.microbatches(crit,config['microbatch_size'],config['max_candidate_cells'],config['bucket'])
                     for part,ix,inputs in critic_ds.value_batches(parts,model,executor):
-                        with autocast(config,device):
-                            drop=phases.dropout(epoch,'ppo') if phases is not None else None
-                            if companion is not None:out,local_loss=companion.forward(model,inputs,critic_ds,ix,dropout=drop,detach=detach_critic)
-                            else:out,local_loss=value_output(model,inputs,critic_ds,ix,dropout=drop,detach=detach_critic),None
-                        values=value_losses(out,tuple(t[ix] for t in critic_ds.targets))
-                        loss=values[0]
-                        if critic_ds.utility is not None:
-                            diff=out[4].float()-critic_ds.utility[ix]
-                            utility_squared+=diff.detach().square().sum();utility_absolute+=diff.detach().abs().sum()
-                            loss=loss+diff.square().mean(-1)
+                        if frozen is not None:
+                            model.eval()
+                            with autocast(config,device):preserved=frozen.losses(model,inputs,ix)
+                            values=tuple(preserved[k] for k in ('core','win','rank','vp'))
+                            loss=values[0];local_loss=preserved['local'] if companion is not None and companion.active else None
+                            if local_loss is not None:companion.preservation_used(critic_ds,part)
+                        else:
+                            with autocast(config,device):
+                                drop=phases.dropout(epoch,'ppo') if phases is not None else None
+                                if companion is not None:out,local_loss=companion.forward(model,inputs,critic_ds,ix,dropout=drop,detach=detach_critic)
+                                else:out,local_loss=value_output(model,inputs,critic_ds,ix,dropout=drop,detach=detach_critic),None
+                            values=value_losses(out,tuple(t[ix] for t in critic_ds.targets))
+                            loss=values[0]
+                            if critic_ds.utility is not None:
+                                diff=out[4].float()-critic_ds.utility[ix]
+                                utility_squared+=diff.detach().square().sum();utility_absolute+=diff.detach().abs().sum()
+                                loss=loss+diff.square().mean(-1)
                         combined=config['value_weight']*loss
                         if local_loss is not None:
                             combined=combined+local_loss
                             companion.account_loss(local_loss,critic_ds.critic_weights[ix],len(crit),'ppo')
                         ((combined*critic_ds.critic_weights[ix]).sum()/len(crit)).backward()
                         value_totals+=torch.stack([v.detach().sum() for v in values]);critic_seen+=len(part)
+                    if gradient_terms is not None:
+                        frozen.gradients.append(gradient_terms.finish(steps+1));del gradient_terms
                     if demo:
                         sample=torch.randint(len(demo.data),(min(config['effective_batch_size'],len(demo.data)),)).tolist()
                         meaningful=[i for i in sample if not demo.forced_cpu[i]]
@@ -622,7 +647,8 @@ def _ppo_nonforced(model,optimizer,games,behavior,config,*,profile,profile_steps
             if 'opening_objective' in config:
                 epochs[-1].update(probe_behavior_categorical_kl=measured['behavior_categorical_kl'] if steps else 0.,
                     probe_temperature1_categorical_kl=exact_kl)
-            if reward is not None:epochs[-1]['utility_prediction']=dict(mse=float(utility_squared)/max(1,4*critic_seen),mae=float(utility_absolute)/max(1,4*critic_seen))
+            if reward is not None and not preserve:epochs[-1]['utility_prediction']=dict(mse=float(utility_squared)/max(1,4*critic_seen),mae=float(utility_absolute)/max(1,4*critic_seen))
+            if preserve:epochs[-1]['value_scope']='Frozen-output preservation, not fresh-target fitting'
             if stopped:break
     from .ordinary import sample_usage
     if phases is not None:
@@ -631,9 +657,17 @@ def _ppo_nonforced(model,optimizer,games,behavior,config,*,profile,profile_steps
             ppo_rate=optimizer.param_groups[0]['lr'] if steps else None,ppo_steps=steps)
     with timings.phase('ppo.probe_final'):
         final_probe=categorical_probe.measure(model,anchor=anchor_model)
+    preservation_report=None
+    if frozen is not None:
+        with timings.phase('ppo.preservation_final'):
+            preservation_report=frozen.report(model,critic_ids,probe,executor)
+        preservation_report['actor_kl']=final_probe['categorical_kl']
+        preservation_report['actor_kl_scope']='Unchanged raw-T1 PPO probe and separate behavior-policy guard; compare prior detach runs on the same recipe'
     return dict(format='nonforced-actor-ppo/2.2.0' if 'opening_objective' in config else 'nonforced-actor-ppo/2.1.0',epochs=epochs,optimizer_steps=steps,
-        value_gradient=dict(mode='detach-encoder' if detach_critic else 'shared',
-            scope='PPO outcome, utility and local scoring losses; heads and critic-only descriptors train; actor/rehearsal unchanged; PPG encoder gradients enabled'),
+        value_gradient=dict(mode='preserve-outputs' if preserve else 'detach-encoder' if detach_critic else 'shared',
+            scope=('Frozen outputs only, with shared encoder/descriptor/head gradients; all fresh targets in PPG' if preserve else
+                'PPO outcome, utility and local scoring losses; heads and critic-only descriptors train; actor/rehearsal unchanged; PPG encoder gradients enabled')),
+        **(dict(value_preservation=preservation_report) if preserve else {}),
         **(dict(opening_objective=ds.opening_reference.report()) if 'opening_objective' in config else {}),
         branch_sample_usage=dict(actor_distinct_used=sum(bool(ds.rows[i].get('_branch')) for i in actor_used),
             critic_distinct_used=sum('/branch/' in critic_ds.data[i][2][0] for i in critic_used),

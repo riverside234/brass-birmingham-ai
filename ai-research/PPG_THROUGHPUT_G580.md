@@ -2,7 +2,8 @@
 
 The subsequent [PPG phase revision](PPG_PHASIC_G580.md) changes cadence to four
 iterations, links the peak rate to PPO and detaches PPO critic representations.
-Use its g580 continuation command. This report preserves the preceding throughput
+The newer [g590 delayed-critic revision](DCPG_G590.md) supplies the current
+continuation command. This report preserves the preceding throughput
 implementation and its measurements; its caches and fixed guard settings remain active.
 
 The requested revision keeps the model, MC targets, PPO objective, learner sampling,

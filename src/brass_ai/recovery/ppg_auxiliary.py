@@ -168,13 +168,15 @@ def diagnostics(model,current,heldout,config,update):
 
 def fit(model,optimizer,buffer,current,train_ids,heldout_ids,config,update,*,beta,snapshot_weight,dropout,run_phase,ppo_work,epoch_cap=None,companion=None,ppo_peak=None):
     began=time.perf_counter()
-    from . import ppg_phasic
+    from . import ppg_phasic,dcpg_config
+    delayed=dcpg_config.active(config)
     peak_rate=config['learning_rate']
     if ppg_config.linked(config) and ppo_peak is not None:
         ppg_phasic.validate_rate(ppo_peak,buffer.generation+1)
         require(ppo_peak['generation']==buffer.generation+1 and ppo_peak['source']=='ppo-last-applied',
             'PPG peak must come from this iteration PPO, before its next-LR controller decision')
         peak_rate=ppo_peak['peak_lr']
+        if delayed:dcpg_config.validate_rate(ppo_peak,buffer.generation+1)
     epoch_cap=config['max_epochs'] if epoch_cap is None else epoch_cap
     require(type(epoch_cap) is int and (epoch_cap==5 if ppg_config.fixed(config) else
         config['epoch_controller']['minimum']<=epoch_cap<=config['epoch_controller']['maximum']),
@@ -199,6 +201,9 @@ def fit(model,optimizer,buffer,current,train_ids,heldout_ids,config,update,*,bet
         scope=f'Auxiliary phase every {config["phase_interval"]} committed iterations with eight uniform ages. GAE retains PPO work evidence plus auxiliary KL safeguards; current-only holdout gates never recount older games.')
     report.update(policy_guard_seconds=0.,heldout_evaluation_seconds=0.,core_optimizer_seconds=0.,core_gradient_norm_max=0.,
         policy_reference_seconds=0.,critic_training_seconds=0.,cloning_training_seconds=0.)
+    report.update(heldout_checks=0,scheduled_policy_checks=0,retention_policy_checks=0,
+        rejected_unverified_selections=0,retention_checks=[])
+    if delayed:report['scope']='Eight committed iterations between phases; eight uniform replay ages. Fresh-target GAE work comes only from accepted PPG; current-only holdouts exclude branches/snapshots.'
     report['timing_scope']='Host wall time per operation, including input packing; CUDA execution can overlap until a guard/report synchronizes. Not isolated GPU kernel times.'
     report['heldout_standard_errors']=config.get('selection',{}).get('standard_errors',1.)
     def compare(before,after):
@@ -260,6 +265,10 @@ def fit(model,optimizer,buffer,current,train_ids,heldout_ids,config,update,*,bet
         if ppg_config.coverage(config):
             from .ppg_selection import Selection
             selection=Selection(model,optimizer,best_games,companion=companion,config=config['selection'])
+        # Loss-selected states at steps 16,48,... are provisional. The separate
+        # certified selection contains only states with their OWN exact KL check.
+        # A later endpoint's KL never certifies an earlier weight snapshot.
+        certified=Selection(model,optimizer,best_games,companion=companion,config=config['selection']) if delayed else None
         counts={str(a):len(ids) for a,ids in train.items()};rows=sum(counts.values())
         steps_per_epoch=math.ceil(rows/config['batch_size'])
         report.update(weighted_rows=rows,rows_per_epoch=rows,planned_presentations=rows*epoch_cap,
@@ -273,9 +282,19 @@ def fit(model,optimizer,buffer,current,train_ids,heldout_ids,config,update,*,bet
                 first_lr=ppg_config.phase_rate(config,1,report['planned_steps'],peak=peak_rate),
                 final_lr=ppg_config.phase_rate(config,report['planned_steps'],report['planned_steps'],peak=peak_rate),
                 scope='Linear warmup over the first acceptance interval, then linear decay to 0.3x at the planned epoch cap; retries reuse their original planned-step rate.')
+            if delayed:report['rate_schedule'].update(warmup_steps=0,
+                scope='Constant 0.35 times this iteration actual last PPO LR, including retries; no warmup or decay.')
         clone_weights=torch.tensor(reference.clone_weights,dtype=torch.float64)
         working=[];best_used=[];best_clones=[];working_clones=[];checks_without_best=0;working_steps=0
         maximum=0.;maximum_age0=0.;accepted_checks=0;rejected_checks=0
+        probe=None;checked_position=0
+        def safe_probe(result):return result['overall']<=config['kl_cap'] and result['age0']<=config['kl_cap']
+        def verify_restored():
+            nonlocal maximum,maximum_age0
+            result=measured_probe();report['retention_policy_checks']+=1
+            maximum=max(maximum,result['overall']);maximum_age0=max(maximum_age0,result['age0'])
+            report['retention_checks'].append(dict(overall=result['overall'],age0=result['age0'],safe=safe_probe(result)))
+            return safe_probe(result)
         for epoch,start,block,end_epoch in intervals(train,config,epoch_cap):
             report['epochs_started']=epoch+1
             active_dropout=(dropout[0],epoch,*dropout[2:]) if dropout is not None else None
@@ -320,11 +339,14 @@ def fit(model,optimizer,buffer,current,train_ids,heldout_ids,config,update,*,bet
                     report['budget_steps_attempted']=max(report['budget_steps_attempted'],position)
                     report['attempted_value_presentations']+=len(batch)
                     report['attempted_clone_presentations']+=len(sample)
-                    # Always validate at an acceptance boundary, including the
-                    # last short interval/epoch. No unchecked state may enter
-                    # the keep-best selection or a committed checkpoint.
-                    if (index+1)%report['kl_check_steps']==0 or index+1==len(block):
+                    # v10 separates provisional loss selection at 16 from KL
+                    # at 32 and epoch tails. Older recipes check every interval.
+                    # Final retention independently verifies selected weights.
+                    check=(position%report['kl_check_steps']==0 or (end_epoch and index+1==len(block))
+                        if delayed else (index+1)%report['kl_check_steps']==0 or index+1==len(block))
+                    if check:
                         probe=measured_probe();maximum=max(maximum,probe['overall']);maximum_age0=max(maximum_age0,probe['age0'])
+                        checked_position=position;report['scheduled_policy_checks']+=1
                         sample_memory()
                         if probe['overall']>config['kl_cap'] or probe['age0']>config['kl_cap']:
                             report['kl_guard_tripped']=True;trip=True;break
@@ -339,6 +361,16 @@ def fit(model,optimizer,buffer,current,train_ids,heldout_ids,config,update,*,bet
                     beta=min(config['beta_clone_max'],2*beta);report['beta_retries']+=1
                 model.load_state_dict(best_model);optimizer.load_state_dict(best_adam)
                 if companion is not None:companion.restore(best_aux)
+                if delayed and not verify_restored():
+                    # The minimum-loss state could be an unchecked 16-step
+                    # state. Reject it, including its Adam and companion state.
+                    report['rejected_unverified_selections']+=1
+                    certified.restore(model,optimizer)
+                    selection=copy.copy(certified)
+                    best_model=copy.deepcopy(model.state_dict());best_adam=copy.deepcopy(optimizer.state_dict())
+                    best_aux=companion.snapshot() if companion is not None else None
+                    best_games=copy.deepcopy(certified.games);best_used=list(certified.rows);best_clones=list(certified.clones)
+                    report['optimizer_steps']=certified.steps;report['best_budget_step']=certified.budget_step
                 working=list(best_used);working_clones=list(best_clones);working_steps=report['optimizer_steps']
                 report['interval_reports'].append(dict(epoch=epoch+1,attempted_steps=attempted,accepted=False,
                     reason='policy_kl_cap',probe=probe,unsafe_paired=unsafe,retry=retry,beta_before=before_beta,beta_after=beta,last_lr=rate))
@@ -349,14 +381,18 @@ def fit(model,optimizer,buffer,current,train_ids,heldout_ids,config,update,*,bet
             if trip:break
             if end_epoch:report['epochs_completed']=epoch+1
             now=by_game(ds,measured_losses(ds,validation));comparison=compare(best_games,now)
+            report['heldout_checks']+=1
             improved=comparison['improved'] and not comparison['reject']
             retained=False
             if selection is not None:
                 retained=selection.consider(model,optimizer,now,working,working_clones,working_steps,
                     epoch*steps_per_epoch+start+len(block))
+            if delayed and checked_position==position:
+                certified.consider(model,optimizer,now,working,working_clones,working_steps,position)
             report['interval_reports'].append(dict(epoch=epoch+1,budget_step=epoch*steps_per_epoch+start+len(block),
                 attempted_steps=attempted,accepted=not comparison['reject'],beta_clone=beta,last_lr=rate,
-                retained_as_best=improved,paired=comparison,probe=probe))
+                retained_as_best=improved,paired=comparison,probe=probe if not delayed or checked_position==position else None,
+                policy_checked=not delayed or checked_position==position))
             if selection is not None:
                 report['interval_reports'][-1].update(retained_for_coverage=retained,
                     minimum_reference_step=selection.minimum_budget_step,
@@ -384,10 +420,16 @@ def fit(model,optimizer,buffer,current,train_ids,heldout_ids,config,update,*,bet
             if companion is not None:companion.restore(best_aux)
         else:
             selection.restore(model,optimizer)
+            if delayed and not verify_restored():
+                report['rejected_unverified_selections']+=1
+                report['kl_guard_tripped']=True
+                report['early_stop_reason']='selected_state_policy_kl_cap'
+                certified.restore(model,optimizer);selection=certified
             best_used=selection.rows;best_clones=selection.clones
             report['optimizer_steps']=selection.steps;report['selection']=selection.report()
         optimizer.zero_grad(set_to_none=True);model.eval()
         final_probe=measured_probe()
+        report['retention_policy_checks']+=1
         require(final_probe['overall']<=config['kl_cap'] and final_probe['age0']<=config['kl_cap'],'Retained PPG checkpoint exceeds KL guard')
         after_losses=measured_losses(ds,held);used=set(best_used)
         calibration_after=value_phase.metrics(model,current,train_ids,update) if used else calibration_before

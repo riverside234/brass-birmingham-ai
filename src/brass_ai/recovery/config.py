@@ -415,7 +415,7 @@ def latest_model_config(config,imitation_checkpoint):
     from .opening_objective import configure as configure_opening,zero_exploration
     from .ppg_config import coverage_options
     result=vp_cap_config(coverage_options(configure_ppg(configure_opening(zero_exploration(high_branch_config(insolvency_020_config(insolvency_010_config(result))))))))
-    from .ppg_phasic import configure as phasic_config
+    from .dcpg_config import configure as phasic_config
     result=phasic_config(result)
     from .local_scoring_auxiliary import DEFAULT as LOCAL_SCORING
     result['local_scoring_auxiliary']=copy.deepcopy(LOCAL_SCORING)
@@ -595,7 +595,11 @@ def validate_config(config):
                 'Value phase requires GAE plumbing and combined-return critic')
         from .value_phase import stratified
         from .ppg_config import linked
-        if linked(value):
+        from . import dcpg_config
+        if dcpg_config.active(value):
+            require(value['enabled'] and config['update'].get('value_gradient')==dcpg_config.GRADIENT,
+                'Delayed critic requires enabled auxiliary fitting and preservation objective')
+        elif linked(value):
             from .ppg_phasic import detached
             require(detached(config['update']),'Linked PPG requires the reviewed PPO critic detachment')
         elif stratified(value):
@@ -605,6 +609,10 @@ def validate_config(config):
             require(type(config.get('retention',{}).get('replay_rounds')) is int and
                     config['retention']['replay_rounds']>=2,'Two-iteration PPG requires at least 2 replay rounds')
     require(('advantage' in config)==('value_phase' in config),'GAE/value configuration blocks must be supplied together')
+    from . import dcpg_config
+    if dcpg_config.enabled(config['update']):
+        require(dcpg_config.active(config.get('value_phase',{})) and config['value_phase']['enabled'],
+            'Value preservation requires the delayed-critic value phase')
     if config.get('advantage',{}).get('gate',{}).get('mode')=='auto':
         require('il_kl_limit' in config and config.get('rating',{}).get('enabled'),
                 'Automatic GAE requires critic holdout diagnostics, calibrated health and scheduled ratings')
