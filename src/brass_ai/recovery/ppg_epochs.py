@@ -2,14 +2,25 @@
 import copy
 
 from brass_ai.learning.contracts import require
+from .ppg_config import fixed
+
+FIXED_CONTRACT='ppg-fixed-epoch-cap/1.0.0'
 
 
 def initial(generation,config):
+    if fixed(config):return dict(contract=FIXED_CONTRACT,cap=5,phases=0,last_phase=generation)
     return dict(contract=config['epoch_controller']['contract'],cap=config['max_epochs'],
         window=[],window_origin=0,phases=0,last_phase=generation)
 
 
 def validate(state,config,*,phases=None,last_phase=None):
+    if fixed(config):
+        require(type(state) is dict and set(state)==set(initial(0,config)) and state['contract']==FIXED_CONTRACT
+            and all(type(state[k]) is int for k in ('cap','phases','last_phase')) and state['cap']==5
+            and state['phases']>=0 and state['last_phase']>=0
+            and (phases is None or state['phases']==phases) and (last_phase is None or state['last_phase']==last_phase),
+            'Invalid fixed PPG epoch cap')
+        return state
     gate=config['epoch_controller']
     require(type(state) is dict and set(state)==set(initial(0,config))
         and state['contract']==gate['contract']
@@ -35,7 +46,15 @@ def validate(state,config,*,phases=None,last_phase=None):
     return state
 
 
-def advance(state,report,config,generation):
+def advance(state,report,config,generation,*,expected_generation=None):
+    expected_generation=state['last_phase']+config['phase_interval'] if expected_generation is None else expected_generation
+    if fixed(config):
+        before=copy.deepcopy(validate(state,config))
+        require(report.get('scheduled') is True and report.get('epoch_cap_used')==5
+            and generation==expected_generation and generation>state['last_phase'],'Invalid fixed PPG phase progress')
+        after=dict(before,phases=before['phases']+1,last_phase=generation)
+        return after,dict(contract=FIXED_CONTRACT,cap_used=5,cap_next=5,decision='fixed',
+            reason='adaptive_controller_disabled',before=before,after=copy.deepcopy(after))
     before=copy.deepcopy(validate(state,config));state=copy.deepcopy(before);gate=config['epoch_controller']
     require(report.get('scheduled') is True and report.get('epoch_cap_used')==state['cap']
         and generation==state['last_phase']+config['phase_interval'],

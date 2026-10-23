@@ -102,6 +102,7 @@ class Companion:
 
     def reset_report(self):
         self.attempted=set();self.retained=set();self.stats=defaultdict(float)
+        self.device_stats={}
         self.available=set();self.unavailable=set();self.map_support={};self.map_masked={}
         self.rollbacks=0;self.restorations=0;self.steps=dict(ppo=0,ppg=0);self.gradient_norms=[]
 
@@ -114,14 +115,18 @@ class Companion:
         require(math.isfinite(rate_factor) and 0<rate_factor<=1+1e-12,'Invalid companion phase LR factor')
         for group in optimizer.param_groups:group['lr']=self.config['optimizer']['learning_rate']*min(1.,rate_factor)
 
-    def forward(self,model,inputs,ds,ix,*,dropout=None):
+    def forward(self,model,inputs,ds,ix,*,dropout=None,detach=False):
         from .updates import value_output
         ids=ix.detach().cpu().tolist() if isinstance(ix,torch.Tensor) else list(ix)
         selected=[targets.map_for(ds.rows[i]) for i in ids]
-        if not self.active or not any(x is not None for x in selected):return value_output(model,inputs,ds,ix,dropout=dropout),None
+        if not self.active or not any(x is not None for x in selected):return value_output(model,inputs,ds,ix,dropout=dropout,detach=detach),None
         from brass_ai.learning.seat_descriptors import critic_inputs
         start=time.perf_counter()
-        encoded=model.encode_state(inputs[0]);embeddings=model.descriptor_embeddings(encoded,critic_inputs(ds,ids,dropout=dropout))
+        with torch.set_grad_enabled(torch.is_grad_enabled() and not detach):encoded=model.encode_state(inputs[0])
+        if detach:
+            from .ppg_phasic import stop_value_gradient
+            encoded=stop_value_gradient(encoded)
+        embeddings=model.descriptor_embeddings(encoded,critic_inputs(ds,ids,dropout=dropout))
         heads=model.official_heads(encoded,inputs[3],embeddings)
         out=(inputs[1].new_zeros(inputs[1].shape[:2]),*heads)
         if hasattr(model,'predict_utility'):
@@ -152,10 +157,10 @@ class Companion:
             huber=F.smooth_l1_loss(vp.float(),truth,reduction='none').mean(-1)
             loss+=self.config['loss_weights'][kind+'_owner']*(ce*m).sum(-1)/den
             loss+=self.config['loss_weights'][kind+'_vp']*(huber*m).sum(-1)/den
-            self.stats[kind+'_presentations']+=int(m.sum())
-            self.stats[kind+'_ce_sum']+=float((ce.detach()*m).sum())
-            self.stats[kind+'_none']+=int(((cls==0)&m).sum())
-            self.stats[kind+'_vp_abs_sum']+=float(((vp.detach().float()-truth).abs().sum(-1)*m).sum())*self.config['vp_scale']
+            self.accumulate(kind+'_presentations',m.sum())
+            self.accumulate(kind+'_ce_sum',(ce.detach()*m).sum())
+            self.accumulate(kind+'_none',((cls==0)&m).sum())
+            self.accumulate(kind+'_vp_abs_sum',((vp.detach().float()-truth).abs().sum(-1)*m).sum()*self.config['vp_scale'])
         for i,target in zip(ids,selected):
             if target is not None:
                 row=ds.rows[i];game=ds.data[i][2][0]
@@ -171,7 +176,9 @@ class Companion:
         if self.active and self.pending:
             norm=torch.nn.utils.clip_grad_norm_(self.heads.parameters(),1.,error_if_nonfinite=True)
             start=time.perf_counter();self.optimizers[phase].step();self.stats['optimizer_seconds']+=time.perf_counter()-start
-            self.gradient_norms.append(float(norm));self.steps[phase]+=1;self.retained_steps[phase]+=1
+            detached=norm.detach().double()
+            self.device_stats['gradient_norm_max']=torch.maximum(self.device_stats.get('gradient_norm_max',torch.zeros_like(detached)),detached)
+            self.steps[phase]+=1;self.retained_steps[phase]+=1
             self.retained.update(self.batch_used)
         self.optimizers[phase].zero_grad(set_to_none=True);self.pending=False
 
@@ -187,7 +194,14 @@ class Companion:
         self.optimizers['ppg'].zero_grad(set_to_none=True);self.pending=False;self.restorations+=1;self.rollbacks+=int(changed)
 
     def account_loss(self,loss,weights,denominator,phase):
-        self.stats[phase+'_weighted_auxiliary_loss_sum']+=float((loss.detach()*weights).sum()/denominator)
+        self.accumulate(phase+'_weighted_auxiliary_loss_sum',(loss.detach()*weights).sum()/denominator)
+
+    def accumulate(self,name,value):
+        # Detached scalar totals only: no graphs and no per-microbatch device
+        # synchronization. Safety checks/gradient clipping still run normally.
+        value=value.detach().double()
+        if name not in self.device_stats:self.device_stats[name]=torch.zeros_like(value)
+        self.device_stats[name].add_(value)
 
     def payload(self,generation):
         require(generation in (self.generation,self.generation+1),'Noncommitted companion progress jump')
@@ -206,6 +220,9 @@ class Companion:
         return dict(rows=len(self.retained),games=len({r[0] for r in self.retained}),era_maps=len({r[:2] for r in self.retained}))
 
     def report(self):
+        names=list(self.device_stats)
+        totals=dict(zip(names,torch.stack([self.device_stats[k] for k in names]).cpu().tolist())) if names else {}
+        gradient_norm=totals.pop('gradient_norm_max',0.)
         def support(rows):
             maps={r[:2] for r in rows}
             return dict(rows=len(rows),games=len({r[0] for r in rows}),era_maps=len(maps),
@@ -215,8 +232,8 @@ class Companion:
             shared_gradient_scale=self.scale,parameter_count=sum(p.numel() for p in self.heads.parameters()),
             available=support(self.available),unavailable=support(self.unavailable),attempted=support(self.attempted),retained=support(self.retained),companion_steps=self.steps,
             companion_lr={p:o.param_groups[0]['lr'] for p,o in self.optimizers.items()},
-            gradient_norm_max=max(self.gradient_norms,default=0.),rollbacks=self.rollbacks,state_restorations=self.restorations,
-            training=dict(self.stats),training_scope='Attempted presentations/loss totals, including rejected intervals. Retained counts follow joint checkpoint selection.',
+            gradient_norm_max=gradient_norm,rollbacks=self.rollbacks,state_restorations=self.restorations,
+            training=dict(self.stats,**totals),training_scope='Detached device totals transferred together at reporting; attempted presentations/loss totals include rejected intervals. Retained counts follow joint checkpoint selection.',
             target=targets.identity(),audit_discrepancies=0,scope='Critic-train rows only; official held-out loss and exact policy KL remain the acceptance criteria. Invalid scoring audits fail admission.')
 
     def inventory(self,dataset,ids):

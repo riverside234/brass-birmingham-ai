@@ -60,6 +60,19 @@ class Joined:
     def __getitem__(self,i):
         part,j=self.locate(i);return part[j]
 
+    def column(self,indices,name):
+        """Vectorized gathers per mmap, retaining duplicates and request order."""
+        indices=np.asarray(indices,dtype=np.int64)
+        require(indices.ndim==1 and ((indices>=0)&(indices<len(self))).all(),'Invalid PPG row indices')
+        parts=np.searchsorted(self.ends,indices,side='right')
+        first=self.parts[0].array[name]
+        result=np.empty((len(indices),*first.shape[1:]),dtype=first.dtype)
+        for p in np.unique(parts):
+            selected=np.flatnonzero(parts==p)
+            local=indices[selected]-(self.ends[p-1] if p else 0)
+            result[selected]=self.parts[p].array[name][local]
+        return result
+
 
 class Column:
     """Gather only a minibatch of small metadata onto the training device."""
@@ -69,11 +82,9 @@ class Column:
         if isinstance(indices,tuple):indices,tail=indices
         if isinstance(indices,torch.Tensor):indices=indices.detach().cpu().tolist()
         if isinstance(indices,int):indices=[indices]
-        values=[]
-        for i in indices:
-            part,j=self.data.locate(i);v=part.array[j][self.name]
-            values.append(v if self.head is None else v[self.head])
-        t=torch.as_tensor(np.array(values),device=self.device)
+        values=self.data.column(indices,self.name)
+        if self.head is not None:values=values[:,self.head]
+        t=torch.as_tensor(values,device=self.device)
         if tail is not None:
             if isinstance(tail,torch.Tensor):tail=tail.to(self.device)
             t=t[torch.arange(len(indices),device=self.device),tail]
@@ -89,6 +100,21 @@ class CriticDataset(Dataset):
         self.targets=tuple(Column(self.data,'targets',device,j) for j in range(3))
         self.roles=[('learner','snapshot')[int(x)] for p in rows for x in p.array['role']]
         self.tables=[('selfplay','historical','legacy')[int(x)] for p in rows for x in p.array['table']]
+
+    def microbatches(self,indices,size,cells,bucket=True):
+        # This sealed critic format contains exactly one real candidate/row.
+        indices=list(indices);size=min(size,cells)
+        for start in range(0,len(indices),size):yield indices[start:start+size]
+
+    def batch(self,indices,exploration=0,temperature=1,*,value_only=False):
+        require(not exploration,'Critic replay cannot collect exploration probabilities')
+        from brass_ai.learning.local_entities import check_action_selectors
+        states=self.data.column(indices,'state');actions=self.data.column(indices,'action')
+        mapping=self.data.column(indices,'mapping')
+        check_action_selectors(actions)
+        inputs=tuple(torch.as_tensor(v,device=self.device) for v in
+            (states,actions[:,None,:],np.ones((len(indices),1),dtype=np.bool_),mapping))
+        return torch.tensor(indices,device=self.device),inputs,torch.zeros((len(indices),1),device=self.device)
 
 
 class PolicyData:

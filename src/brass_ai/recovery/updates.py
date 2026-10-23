@@ -232,7 +232,7 @@ def state_value_model(model):
     return type(model) in (FourSeatNet,UtilityNet)
 
 
-def value_output(model,inputs,dataset,indices,*,dropout=None,unknown=False):
+def value_output(model,inputs,dataset,indices,*,dropout=None,unknown=False,detach=False):
     from brass_ai.learning.model import ARCHITECTURE
     from brass_ai.learning.seat_descriptors import critic_inputs
     extra={}
@@ -240,6 +240,12 @@ def value_output(model,inputs,dataset,indices,*,dropout=None,unknown=False):
         ids=indices.detach().cpu().tolist() if isinstance(indices,torch.Tensor) else list(indices)
         extra['descriptors']=critic_inputs(dataset,ids,dropout=dropout,unknown=unknown)
     if dataset.remaining is not None:extra['remaining']=dataset.remaining[indices]
+    if detach:
+        from .ppg_phasic import stop_value_gradient
+        require(state_value_model(model),'Detached PPO critic requires the supported state-only model')
+        with torch.no_grad():encoded=stop_value_gradient(model.encode_state(inputs[0]))
+        heads=model.heads_from_encoded(encoded,inputs[3],extra.get('remaining'),extra.get('descriptors'))
+        return (inputs[1].new_zeros(inputs[1].shape[:2]),)+heads
     return model(*inputs,**extra)
 
 
@@ -454,6 +460,8 @@ def ppo_nonforced(model,optimizer,games,behavior,config,*,profile=None,profile_s
 
 
 def _ppo_nonforced(model,optimizer,games,behavior,config,*,profile,profile_steps,rehearsal,rehearsal_weight,learner_data,executor,insolvency,reward,sample_groups=None,anchor_model=None,phases=None):
+    from .ppg_phasic import detached
+    detach_critic=detached(config)
     require(all(g['split']=='train' for g in games),'Held-out PPO data')
     timings=Timings();device=next(model.parameters()).device
     with timings.phase('ppo.behavior_identity'):
@@ -560,8 +568,8 @@ def _ppo_nonforced(model,optimizer,games,behavior,config,*,profile,profile_steps
                     for part,ix,inputs in critic_ds.value_batches(parts,model,executor):
                         with autocast(config,device):
                             drop=phases.dropout(epoch,'ppo') if phases is not None else None
-                            if companion is not None:out,local_loss=companion.forward(model,inputs,critic_ds,ix,dropout=drop)
-                            else:out,local_loss=value_output(model,inputs,critic_ds,ix,dropout=drop),None
+                            if companion is not None:out,local_loss=companion.forward(model,inputs,critic_ds,ix,dropout=drop,detach=detach_critic)
+                            else:out,local_loss=value_output(model,inputs,critic_ds,ix,dropout=drop,detach=detach_critic),None
                         values=value_losses(out,tuple(t[ix] for t in critic_ds.targets))
                         loss=values[0]
                         if critic_ds.utility is not None:
@@ -619,10 +627,13 @@ def _ppo_nonforced(model,optimizer,games,behavior,config,*,profile,profile_steps
     from .ordinary import sample_usage
     if phases is not None:
         phases.after_ppo(model,actor_ids,probe,categorical_probe,
-            critic_steps=critic_steps,critic_rows=len(critic_used) if critic_steps else 0)
+            critic_steps=critic_steps,critic_rows=len(critic_used) if critic_steps else 0,
+            ppo_rate=optimizer.param_groups[0]['lr'] if steps else None,ppo_steps=steps)
     with timings.phase('ppo.probe_final'):
         final_probe=categorical_probe.measure(model,anchor=anchor_model)
     return dict(format='nonforced-actor-ppo/2.2.0' if 'opening_objective' in config else 'nonforced-actor-ppo/2.1.0',epochs=epochs,optimizer_steps=steps,
+        value_gradient=dict(mode='detach-encoder' if detach_critic else 'shared',
+            scope='PPO outcome, utility and local scoring losses; heads and critic-only descriptors train; actor/rehearsal unchanged; PPG encoder gradients enabled'),
         **(dict(opening_objective=ds.opening_reference.report()) if 'opening_objective' in config else {}),
         branch_sample_usage=dict(actor_distinct_used=sum(bool(ds.rows[i].get('_branch')) for i in actor_used),
             critic_distinct_used=sum('/branch/' in critic_ds.data[i][2][0] for i in critic_used),

@@ -19,6 +19,8 @@ def calibration(value):
     for key in ('before','after','ordinary_before','ordinary_after','teacher_before','teacher_after'):
         if isinstance(value.get(key),dict):out[key]=scalars(value[key],('mse','mae'))
     if isinstance(value.get('receipt'),dict):out['receipt']=calibration(value['receipt'])
+    if isinstance(value.get('frozen_input_cache'),dict):
+        out['frozen_input_cache']=scalars(value['frozen_input_cache'],('rows','bytes','device','build_seconds','scope'))
     return out
 
 
@@ -106,7 +108,7 @@ def compact(report):
     out['actor']['learning_rate_schedule']=scalars(schedule,('contract','kind','base_lr','steps','start_factor',
         'completed_steps','effective_lr','next_lr')) if schedule else None
     out['actor']['sample_usage']=actor.get('sample_usage')
-    for key in ('gae','critic_split','critic_rows','final_categorical_probe','input_cache','cpu_preparation','opening_objective'):
+    for key in ('gae','critic_split','critic_rows','final_categorical_probe','input_cache','cpu_preparation','opening_objective','value_gradient'):
         if key in actor:out['actor'][key]=actor[key]
     sampling=actor.get('rehearsal_sampling')
     if isinstance(sampling,dict):out['actor']['rehearsal_sampling']=scalars(sampling,(

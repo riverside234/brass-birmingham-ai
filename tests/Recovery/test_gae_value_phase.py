@@ -140,7 +140,7 @@ class Advantages(unittest.TestCase):
         self.assertEqual(generated['learning_rate'],cfg['learning_rate'])
         self.assertEqual(generated['exploration'],0.)
         self.assertEqual(generated['reward']['vp_cap'],180)
-        self.assertEqual(generated['value_phase']['contract'],'ppg-value-phase/7.0.0')
+        self.assertEqual(generated['value_phase']['contract'],'ppg-value-phase/8.0.0')
         self.assertTrue(generated['value_phase']['enabled'])
         for key,value in (('lambda',0),('lambda',True),('chain','all')):
             bad=copy.deepcopy(cfg);bad['advantage'][key]=value

@@ -96,6 +96,15 @@ def calibrate(model,optimizer,dataset,config,*,auxiliary=None,indices=None,execu
     teacher=auxiliary.teacher if auxiliary is not None and auxiliary.seen else None
     fraction=auxiliary.options['teacher_fraction'] if teacher is not None else 0.
     teacher_seconds=0.;teacher_presentations=0;teacher_steps=0
+    cache=None
+    def predictions(parts):
+        if cache is not None:
+            for part in parts:
+                ix=torch.tensor(part,device=dataset.device)
+                yield ix,cache.predict(part)
+        else:
+            for part,ix,inputs in dataset.value_batches(parts,model,executor):
+                yield ix,value_output(model,inputs,dataset,ix)[-1].float()
     def teacher_error():
         predictions=torch.empty_like(teacher.utility)
         with torch.no_grad():
@@ -108,12 +117,14 @@ def calibrate(model,optimizer,dataset,config,*,auxiliary=None,indices=None,execu
         squared=absolute=0.
         with torch.no_grad():
             parts=dataset.microbatches(indices,config['microbatch_size'],config['max_candidate_cells'],config['bucket'])
-            for part,ix,inputs in dataset.value_batches(parts,model,executor):
-                diff=value_output(model,inputs,dataset,ix)[-1].float()-dataset.utility[ix]
+            for ix,prediction in predictions(parts):
+                diff=prediction.float()-dataset.utility[ix]
                 squared+=float(diff.square().sum());absolute+=float(diff.abs().sum())
         n=4*len(indices)
         return dict(mse=squared/n,mae=absolute/n)
     try:
+        from .calibration_cache import build
+        cache=build(model,dataset,indices,config,executor)
         before=error()
         ordinary_before=before
         teacher_before=teacher_after=None
@@ -126,8 +137,8 @@ def calibrate(model,optimizer,dataset,config,*,auxiliary=None,indices=None,execu
             for start in range(0,len(order),config['effective_batch_size']):
                 batch=order[start:start+config['effective_batch_size']];optimizer.zero_grad(set_to_none=True)
                 parts=dataset.microbatches(batch,config['microbatch_size'],config['max_candidate_cells'],config['bucket'])
-                for part,ix,inputs in dataset.value_batches(parts,model,executor):
-                    diff=value_output(model,inputs,dataset,ix)[-1].float()-dataset.utility[ix]
+                for ix,prediction in predictions(parts):
+                    diff=prediction.float()-dataset.utility[ix]
                     ((1-fraction)*(diff.square().mean(-1)*dataset.critic_weights[ix]).sum()/len(batch)).backward()
                 if teacher is not None:
                     began=time.perf_counter()
@@ -172,4 +183,5 @@ def calibrate(model,optimizer,dataset,config,*,auxiliary=None,indices=None,execu
             teacher_games=auxiliary.games,teacher_target_source=auxiliary.binding,
             ordinary_before=ordinary_before,ordinary_after=ordinary_after,teacher_before=teacher_before,teacher_after=teacher_after,
             teacher_seconds=teacher_seconds,teacher_sample_presentations=teacher_presentations,teacher_optimizer_steps=teacher_steps)
-    return dict(required=True,receipt=model.utility_calibration)
+    return dict(required=True,receipt=model.utility_calibration,
+        frozen_input_cache=cache.report() if cache is not None else None)

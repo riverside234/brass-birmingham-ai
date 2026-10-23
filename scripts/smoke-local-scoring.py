@@ -47,7 +47,7 @@ def native(output):
     return runs
 
 
-def training(output):
+def training(output,*,throughput=False,phasic=False):
     import torch
     from brass_ai.bank import sha
     from brass_ai.learning.checkpoint import load_checkpoint,save_checkpoint,resume_optimizer
@@ -63,15 +63,26 @@ def training(output):
     from test_gae_value_phase import ppo,finish
     from test_local_scoring import annotate
     torch.set_num_threads(2);model,opt,cfg=setup();cfg=ppg_config.coverage_options(cfg)
-    cfg['value_phase'].update(batch_size=128,acceptance_steps=16)
+    if throughput:cfg=ppg_config.fixed_options(cfg)
+    if phasic:
+        from brass_ai.recovery.ppg_phasic import configure
+        cfg=configure(cfg)
+    cfg['value_phase'].update(batch_size=128,acceptance_steps=32 if throughput or phasic else 16)
     cfg[AUX]=copy.deepcopy(DEFAULT)
     write_json(output/'fixture-config.json',cfg)
     run=output/'eight-iteration';run.mkdir();phase=TrainingPhases(model,cfg,root=ROOT,run=run)
     phase.local_scoring=Companion(model,cfg[AUX]);reports=[];files=[]
-    for generation in range(1,9):
+    for generation in range(1,13 if phasic else 9):
         before=time.perf_counter();behavior,data=collect(model,phase,generation,branches=True)
         annotate(data);annotate(phase.snapshot_data)
         report=ppo(model,opt,cfg,behavior,data,phase);value=phase.fit(model)
+        if phasic:
+            assert report['value_gradient']['mode']=='detach-encoder'
+            assert value['peak_learning_rate']==report['learning_rates'][0]
+            if value['scheduled']:
+                assert len(value['age_support'])==8 and len(value['acceptance_generations'])==8
+                assert value['rate_schedule']['peak_lr']==report['learning_rates'][0]
+                assert value['applied_lr_max']<=value['peak_learning_rate']*(1+1e-12)
         finish(phase,report,generation)
         auxiliary=finish_training_diagnostics(model,phase,phase.local_scoring)
         assert auxiliary['heldout']['rows']>0 and phase.critic_dataset is None
@@ -82,8 +93,10 @@ def training(output):
         reports.append(dict(generation=generation,seconds=time.perf_counter()-before,ppo_steps=report['optimizer_steps'],
             ppo_kl=report['categorical_probe'],ppg=value,auxiliary=auxiliary,memory=memory('cpu')))
         print(json.dumps(dict(generation=generation,ppo=report['optimizer_steps'],ppg=value['optimizer_steps'],seconds=reports[-1]['seconds'])),flush=True)
-        if generation in (4,8):
+        if generation in ((4,8,10,12) if phasic else (4,8)):
             expected_model=copy.deepcopy(model.state_dict());expected_adam=copy.deepcopy(opt.state_dict());expected_aux=phase.local_scoring.payload(generation)
+            expected_value=copy.deepcopy(phase.optimizer.state_dict());expected_clock=copy.deepcopy(phase.schedule)
+            expected_epochs=copy.deepcopy(phase.epoch_control)
             rng=torch.get_rng_state().clone();model,raw=load_checkpoint(checkpoint)
             opt=torch.optim.AdamW(model.parameters());resume_optimizer(raw,opt)
             phase=TrainingPhases(model,cfg,raw=raw,generation=generation,root=ROOT,run=run)
@@ -91,7 +104,9 @@ def training(output):
             assert torch.equal(rng,torch.get_rng_state())
             assert _same_payload(expected_model,model.state_dict()) and _same_payload(expected_adam,opt.state_dict())
             assert _same_payload(expected_aux,phase.local_scoring.payload(generation))
-    assert [r['generation'] for r in reports if r['ppg']['scheduled']]==[8]
+            assert _same_payload(expected_value,phase.optimizer.state_dict()) and phase.schedule==expected_clock
+            assert phase.epoch_control==expected_epochs
+    assert [r['generation'] for r in reports if r['ppg']['scheduled']]==([8,12] if phasic else [8])
     assert all(sha(Path(f['path']))==f['sha256'] for f in files)
     return reports
 

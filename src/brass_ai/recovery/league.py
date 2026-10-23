@@ -671,6 +671,9 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                     controller_line+=f' GAE={gate["lambda_used"]:.2f}->{gate["lambda_next"]:.2f} value_steps={value_report["optimizer_steps"]}'
                     controller_line+=f'/{value_report["attempted_steps"]} value_stop={value_report["early_stop_reason"] or "none"}'
                     controller_line+=(f' value_lr={value_report["learning_rate"]:.2g}' if value_report['enabled'] else ' PPG=off')
+                    if (value_report.get('learning_rate_source') or {}).get('source')=='ppo-last-applied':
+                        controller_line+=f' value_peak={value_report["peak_learning_rate"]:.2g}[PPO]'
+                    if update.get('value_gradient',{}).get('mode')=='detach-encoder':controller_line+=' critic=PPO-heads/PPG-shared'
                     if value_report.get('schedule'):
                         controller_line+=(f' PPG={"phase" if value_report["scheduled"] else "waiting"}'
                             f' next=g{value_report["schedule"]["next_phase"]}'

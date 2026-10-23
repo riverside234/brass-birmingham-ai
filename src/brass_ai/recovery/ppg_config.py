@@ -10,6 +10,9 @@ SHORT_CONTRACT='ppg-value-phase/6.0.0'
 SHORT_MIGRATION='ppg-sixteen-step-acceptance/1.0.0'
 COVERAGE_CONTRACT='ppg-value-phase/7.0.0'
 COVERAGE_MIGRATION='ppg-one-se-coverage/1.0.0'
+FIXED_CONTRACT='ppg-value-phase/8.0.0'
+FIXED_MIGRATION='ppg-fixed-five-32-step-guards/1.0.0'
+LINKED_CONTRACT='ppg-value-phase/9.0.0'
 MIGRATION='ppg-eight-iteration-replay/1.0.0'
 DEFAULT=dict(contract=CONTRACT,enabled=False,buffer_iterations=8,max_epochs=2,batch_size=4096,
     clone_rows_per_age=2048,probe_rows_per_age=512,current_probe_rows=2048,clone_batch_size=512,
@@ -22,10 +25,27 @@ DEFAULT=dict(contract=CONTRACT,enabled=False,buffer_iterations=8,max_epochs=2,ba
         warmup_start=.1,decay='linear',end_factor=.3))
 
 
-def active(config):return config.get('contract') in (CONTRACT,SHORT_CONTRACT,COVERAGE_CONTRACT)
+def active(config):return config.get('contract') in (CONTRACT,SHORT_CONTRACT,COVERAGE_CONTRACT,FIXED_CONTRACT,LINKED_CONTRACT)
 
 
-def coverage(config):return config.get('contract')==COVERAGE_CONTRACT
+def coverage(config):return config.get('contract') in (COVERAGE_CONTRACT,FIXED_CONTRACT,LINKED_CONTRACT)
+
+
+def fixed(config):return config.get('contract') in (FIXED_CONTRACT,LINKED_CONTRACT)
+
+
+def linked(config):return config.get('contract')==LINKED_CONTRACT
+
+
+def fixed_options(options):
+    """Reviewed scheduling-only change; existing replay/targets stay compatible."""
+    if linked(options['value_phase']):
+        validate(options['value_phase']);return copy.deepcopy(options)
+    result=coverage_options(options)
+    from .ppg_selection import RELAXED_DEFAULT
+    result['value_phase'].update(contract=FIXED_CONTRACT,max_epochs=5,epoch_controller=None,
+        acceptance_steps=32,kl_check_steps=32,patience=1,selection=copy.deepcopy(RELAXED_DEFAULT))
+    validate(result['value_phase']);return result
 
 
 def coverage_options(options):
@@ -64,33 +84,41 @@ def configure(options):
 
 
 def validate(c):
-    require(type(c) is dict and set(c)==set(DEFAULT)|({'selection'} if coverage(c) else set()) and active(c),
+    require(type(c) is dict and set(c)==set(DEFAULT)|({'selection'} if coverage(c) else set())|({'kl_check_steps'} if fixed(c) else set())|({'learning_rate_source'} if linked(c) else set()) and active(c),
         'Invalid eight-iteration PPG fields/contract')
     require(type(c['enabled']) is bool,'Invalid PPG enabled flag')
     for k in ('buffer_iterations','max_epochs','batch_size','clone_rows_per_age','probe_rows_per_age',
               'current_probe_rows','clone_batch_size','acceptance_steps','phase_interval',
               'validation_iterations','patience','minimum_stratum_rows'):
         require(type(c[k]) is int and c[k]>0,'Invalid PPG integer: '+k)
-    for k in ('beta_clone','beta_clone_max','kl_cap','learning_rate','holdout_fraction'):
+    for k in ('beta_clone','beta_clone_max','kl_cap','holdout_fraction')+(() if linked(c) else ('learning_rate',)):
         require(type(c[k]) in (int,float) and math.isfinite(c[k]) and c[k]>0,'Invalid PPG number: '+k)
-    short=c['contract'] in (SHORT_CONTRACT,COVERAGE_CONTRACT)
+    short=c['contract'] in (SHORT_CONTRACT,COVERAGE_CONTRACT,FIXED_CONTRACT,LINKED_CONTRACT)
+    if linked(c):
+        require(c['learning_rate'] is None and c['learning_rate_source']=='ppo-last-applied',
+            'Linked PPG requires the actual PPO peak, not a configured fixed LR')
     if coverage(c):
-        from .ppg_selection import DEFAULT as SELECTION
+        from .ppg_selection import DEFAULT as OLD_SELECTION,RELAXED_DEFAULT
+        SELECTION=RELAXED_DEFAULT if fixed(c) else OLD_SELECTION
         require(c['selection']==SELECTION and type(c['selection']['standard_errors']) in (int,float),
             'Invalid one-SE PPG selection contract')
-    require(c['buffer_iterations']==8 and c['max_epochs']==2 and c['phase_interval']==8
+    require(c['buffer_iterations']==8 and c['max_epochs']==(5 if fixed(c) else 2) and c['phase_interval']==(4 if linked(c) else 8)
         and c['validation_iterations']==8 and c['patience']==(1 if short else 2) and c['weighting']=='uniform'
         and c['minimum_stratum_rows']==1 and c['kl_cap']==.002 and c['holdout']==HOLDOUT
-        and c['holdout_fraction']==.05 and 1<=c['acceptance_steps']<=(16 if short else 32)
+        and c['holdout_fraction']==.05 and 1<=c['acceptance_steps']<=(16 if short and not fixed(c) else 32)
         and c['batch_size']<=4096 and c['clone_batch_size']<=c['clone_rows_per_age']<=2048
         and c['probe_rows_per_age']<=512 and c['probe_rows_per_age']<=c['current_probe_rows']<=2048
         and 1<=c['beta_clone']<=c['beta_clone_max']==32.,'Invalid eight-iteration PPG bounds')
     gate=c['epoch_controller']
-    expected_gate=dict(DEFAULT['epoch_controller'],contract='ppg-epoch-cap/2.0.0',minimum=2) if coverage(c) else DEFAULT['epoch_controller']
-    require(type(gate) is dict and gate==expected_gate
-        and all(type(gate[k]) is int for k in ('minimum','maximum','window_phases','qualifying_phases'))
-        and type(gate['late_fraction']) in (int,float),
-        'Invalid PPG epoch controller')
+    if fixed(c):
+        require(gate is None and type(c['kl_check_steps']) is int and
+            c['kl_check_steps']==c['acceptance_steps']==32,'Fixed PPG requires five epochs and matched 32-step guards')
+    else:
+        expected_gate=dict(DEFAULT['epoch_controller'],contract='ppg-epoch-cap/2.0.0',minimum=2) if coverage(c) else DEFAULT['epoch_controller']
+        require(type(gate) is dict and gate==expected_gate
+            and all(type(gate[k]) is int for k in ('minimum','maximum','window_phases','qualifying_phases'))
+            and type(gate['late_fraction']) in (int,float),
+            'Invalid PPG epoch controller')
     rate=c['rate_schedule']
     require(type(rate) is dict and rate==DEFAULT['rate_schedule'] and rate['reset_adam'] is True
         and all(type(rate[k]) in (int,float) for k in ('warmup_start','end_factor')),
@@ -98,7 +126,7 @@ def validate(c):
     return c
 
 
-def phase_rate(config,step,planned_steps):
+def phase_rate(config,step,planned_steps,*,peak=None):
     """One-based planned step; retries replay the same rate without extending it."""
     require(type(step) is int and type(planned_steps) is int and 1<=step<=planned_steps,
         'Invalid PPG phase-rate progress')
@@ -106,7 +134,10 @@ def phase_rate(config,step,planned_steps):
     if step<=warmup:
         factor=rate['warmup_start']+(1-rate['warmup_start'])*(step-1)/max(1,warmup-1)
     else:factor=1-(1-rate['end_factor'])*(step-warmup)/(planned_steps-warmup)
-    return config['learning_rate']*factor
+    if linked(config):
+        require(type(peak) in (int,float) and math.isfinite(peak) and peak>0,'Missing actual PPO peak rate')
+    else:peak=config['learning_rate']
+    return peak*factor
 
 
 def weight(age,config):
@@ -114,11 +145,16 @@ def weight(age,config):
     return 1.
 
 
-def initial(generation):
+def initial(generation,config=None):
+    if linked(config or {}):
+        from .ppg_phasic import initial as linked_initial
+        return linked_initial(generation)
     return dict(contract=MIGRATION,origin=generation,generation=generation,last_phase=generation,phases=0)
 
 
 def schedule(state,generation):
+    from . import ppg_phasic
+    if state.get('contract')==ppg_phasic.CLOCK:return ppg_phasic.schedule(state,generation)
     require(type(state) is dict and set(state)==set(initial(0)) and state['contract']==MIGRATION
         and all(type(state[k]) is int for k in ('origin','generation','last_phase','phases'))
         and 0<=state['origin']<=state['last_phase']<=generation==state['generation']
@@ -127,9 +163,15 @@ def schedule(state,generation):
     return state
 
 
+def next_phase(state):
+    from . import ppg_phasic
+    if state['contract']==ppg_phasic.CLOCK:return ppg_phasic.next_phase(state)
+    return state['last_phase']+DEFAULT['phase_interval']
+
+
 def due(state):
     schedule(state,state['generation'])
-    return state['generation']+1-state['last_phase']==DEFAULT['phase_interval']
+    return state['generation']+1==next_phase(state)
 
 
 def advance(state,generation,ran):

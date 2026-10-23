@@ -187,20 +187,29 @@ def metrics(model,dataset,ids,config,*,unknown=False,evidence=False):
 
 
 class RawPolicyReference:
-    """Frozen post-PPO legal distributions, on CPU; no exploration mixture."""
+    """Frozen post-PPO legal distributions and phase-local immutable inputs."""
     def __init__(self,model,dataset,ids,config):
         self.dataset,self.config=dataset,config;self.ids=list(ids);self.rows={}
+        from .ppg_policy_cache import PolicyInputs
+        self.cache=PolicyInputs(dataset,self.ids) if self.ids else None
         model.eval()
         with torch.no_grad():
-            for part in dataset.microbatches(ids,config['microbatch_size'],config['max_candidate_cells'],config['bucket']):
-                _,inputs,_=dataset.batch(part)
-                p=torch.softmax(model(*inputs)[0].float(),-1).cpu()
+            for part in self.microbatches(ids):
+                inputs=self.inputs(part)
+                p=torch.softmax(model(*inputs)[0].float(),-1)
+                self.cache.store_old(part,p)
+                p=p.cpu()
                 for j,i in enumerate(part):self.rows[i]=p[j,:len(dataset.rows[i]['choices'])].clone()
+
+    def microbatches(self,ids):
+        if self.cache is None:return iter(())
+        return self.cache.microbatches(ids,self.config['microbatch_size'],self.config['max_candidate_cells'],self.config['bucket'])
+
+    def inputs(self,part):return self.cache.inputs(part)
 
     def loss(self,part,inputs,model):
         logits=model(*inputs)[0].float()
-        old=torch.zeros_like(logits)
-        for j,i in enumerate(part):old[j,:len(self.rows[i])]=self.rows[i].to(logits.device)
+        old=self.cache.probabilities(part,logits.shape[1])
         logp=torch.log_softmax(logits,-1).masked_fill(~inputs[2],0.)
         return (old*(old.clamp_min(1e-30).log()-logp)).sum(-1)
 
@@ -208,8 +217,8 @@ class RawPolicyReference:
         ids=self.ids if ids is None else list(ids);total=torch.zeros((),device=self.dataset.device)
         model.eval()
         with torch.no_grad():
-            for part in self.dataset.microbatches(ids,self.config['microbatch_size'],self.config['max_candidate_cells'],self.config['bucket']):
-                _,inputs,_=self.dataset.batch(part);total+=self.loss(part,inputs,model).sum()
+            for part in self.microbatches(ids):
+                inputs=self.inputs(part);total+=self.loss(part,inputs,model).sum()
         result=float(total)/max(1,len(ids))
         require(math.isfinite(result),'Nonfinite PPG raw policy KL')
         return max(0.,result)

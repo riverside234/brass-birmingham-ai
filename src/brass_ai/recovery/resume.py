@@ -129,6 +129,10 @@ def check_signature(state, signature, reviewed=False):
             handlers[SHORT_MIGRATION]=short_options
             from .ppg_config import COVERAGE_MIGRATION,coverage_options
             handlers[COVERAGE_MIGRATION]=coverage_options
+            from .ppg_config import FIXED_MIGRATION,fixed_options
+            handlers[FIXED_MIGRATION]=fixed_options
+            from .ppg_phasic import MIGRATION as PHASIC_MIGRATION,configure as phasic_config
+            handlers[PHASIC_MIGRATION]=phasic_config
             from .opening_objective import (MIGRATION as OPENING_MIGRATION,configure as configure_opening,
                 ZERO_EXPLORATION_MIGRATION,zero_exploration)
             handlers[OPENING_MIGRATION]=configure_opening

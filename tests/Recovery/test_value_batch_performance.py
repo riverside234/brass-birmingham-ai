@@ -188,6 +188,7 @@ class ValueBatchPerformanceTests(unittest.TestCase):
                     self.assertIn('ppo.probe_final',report['timings'])
                     if combined:self.assertIn('ppo.utility_calibration',report['timings'])
                     report = {k: v for k, v in report.items() if k not in ('timings', 'memory', 'input_cache')}
+                    if report.get('utility_calibration'):report['utility_calibration'].pop('frozen_input_cache',None)
                     results.append((copy.deepcopy(model.state_dict()), copy.deepcopy(adam.state_dict()),
                                     torch.get_rng_state().clone(), report))
                 self.assert_tree_equal(results[0], results[1])
@@ -208,6 +209,7 @@ class ValueBatchPerformanceTests(unittest.TestCase):
             gate = updates.state_value_model if narrow else lambda _: False
             with patch.object(updates, 'state_value_model', gate):
                 report = utility.calibrate(model, adam, ds, config)
+                report.pop('frozen_input_cache',None)
             results.append((copy.deepcopy(model.state_dict()), copy.deepcopy(adam.state_dict()),
                             torch.get_rng_state().clone(), report,
                             [p.requires_grad for p in model.parameters()]))

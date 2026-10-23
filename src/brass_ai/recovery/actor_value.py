@@ -132,7 +132,7 @@ class TrainingPhases:
         self.config=config;self.dataset=None;self.probe_ids=None
         gae.validate(self.options['advantage'],combined='reward' in config)
         value_phase.validate(self.options['value_phase'])
-        self.optimizer=torch.optim.Adam(model.parameters(),lr=config['value_phase']['learning_rate'])
+        self.optimizer=torch.optim.Adam(model.parameters(),lr=config['value_phase']['learning_rate'] or config['learning_rate'])
         buffered=value_buffer.enabled(config)
         descriptors='critic_data' in config
         previous_contract='actor-value-phases/3.0.0' if descriptors else 'actor-value-phases/2.0.0' if buffered else CONTRACT
@@ -149,6 +149,9 @@ class TrainingPhases:
         if saved is None:
             require(generation==0,'Missing GAE/value optimizer checkpoint; use a fresh IL run')
             self.state=gae.initial(config['advantage']);self.beta=config['value_phase']['beta_clone'];self.trips=[]
+            if ppg_config.linked(config['value_phase']):
+                from .ppg_phasic import RATE_KEY,rate_receipt
+                self.optimizer.param_groups[0][RATE_KEY]=rate_receipt(config['learning_rate'],0,'initial-ppo-base')
             if descriptors:self.critic_state=critic_data.initial(config['critic_data'])
         else:
             require(type(saved) is dict,'Invalid GAE/value checkpoint')
@@ -265,6 +268,9 @@ class TrainingPhases:
                     'Invalid persisted value-phase KL history')
             self.optimizer.load_state_dict(saved['optimizer'])
             rate=self.optimizer.param_groups[0]['lr'];base=config['value_phase']['learning_rate']
+            if ppg_config.linked(config['value_phase']):
+                from .ppg_phasic import RATE_KEY,validate_rate
+                base=validate_rate(self.optimizer.param_groups[0].get(RATE_KEY),generation)['peak_lr']
             valid_rate=(math.isfinite(rate) and base*config['value_phase']['rate_schedule']['warmup_start']*(1-1e-12)<=rate<=base*(1+1e-12)
                 if ppg_config.active(config['value_phase']) else rate==base)
             require(len(self.optimizer.param_groups)==1 and valid_rate and
@@ -281,7 +287,7 @@ class TrainingPhases:
                 previous_reward=(raw or {}).get('model_config',{}).get('utility'),previous_value=previous_value)
 
     def _init_rolling(self,model,config,*,raw,generation,root,run):
-        from . import ppg_config,ppg_replay,ppg_epochs
+        from . import ppg_config,ppg_replay,ppg_epochs,ppg_phasic
         require(root is not None and run is not None,'Eight-iteration PPG requires an owned disk cache')
         self.config=config;self.root,self.run=root,run
         self.options={k:copy.deepcopy(config[k]) for k in ('advantage','value_phase','critic_data','seat_descriptors') if k in config}
@@ -292,18 +298,47 @@ class TrainingPhases:
         self.disable_migration=self.holdout_migration=self.refinement_migration=self.window_migration=None
         self.evidence_migration=self.critic_migration=self.snapshot_r2_migration=None
         self.rolling_migration=None;self.critic_evidence=None
-        self.optimizer=torch.optim.Adam(model.parameters(),lr=config['value_phase']['learning_rate'])
+        self.optimizer=torch.optim.Adam(model.parameters(),lr=config['value_phase']['learning_rate'] or config['learning_rate'])
         saved=(raw or {}).get('training',{}).get(KEY)
         if saved is None:
             require(generation==0,'Missing actor/value checkpoint; cannot fabricate continuation state')
             self.state=gae.initial(config['advantage']);self.critic_state=critic_data.initial(config['critic_data']) if 'critic_data' in config else None
-            self.beta=config['value_phase']['beta_clone'];self.trips=[];self.schedule=ppg_config.initial(0);receipts=[]
+            self.beta=config['value_phase']['beta_clone'];self.trips=[];self.schedule=ppg_config.initial(0,config['value_phase']);receipts=[]
+            if ppg_config.linked(config['value_phase']):
+                self.optimizer.param_groups[0][ppg_phasic.RATE_KEY]=ppg_phasic.rate_receipt(config['learning_rate'],0,'initial-ppo-base')
             self.epoch_control=ppg_epochs.initial(0,config['value_phase'])
             self.cache_origin=0
         else:
             saved=copy.deepcopy(saved)
+            if (ppg_config.fixed(config['value_phase']) and saved.get('contract')=='actor-value-phases/10.0.0'
+                    and not ppg_config.fixed(saved['options']['value_phase'])):
+                fixed_options=ppg_config.fixed_options(saved['options'])
+                require((ppg_phasic.options(fixed_options) if ppg_config.linked(config['value_phase']) else fixed_options)==self.options,'Unreviewed fixed PPG transition')
+                clock=ppg_config.schedule(saved['schedule'],generation)
+                previous=copy.deepcopy(ppg_epochs.validate(saved['epoch_control'],saved['options']['value_phase'],
+                    phases=clock['phases'],last_phase=clock['last_phase']))
+                saved['options']=fixed_options
+                saved['epoch_control']=dict(ppg_epochs.initial(clock['last_phase'],config['value_phase']),phases=clock['phases'])
+                self.rolling_migration=dict(contract=ppg_config.FIXED_MIGRATION,origin=generation,
+                    previous_epoch_controller=previous,epoch_cap_after=5,acceptance_steps=32,kl_check_steps=32,heldout_standard_errors=1.5,
+                    scope='Fixed cap; no adaptive votes. Preserve committed replay, phase schedule, both Adams, beta, RNG, PPO/GAE, snapshots and training progress.')
+            if (ppg_config.linked(config['value_phase']) and saved.get('contract')==self.contract
+                    and not ppg_config.linked(saved['options']['value_phase'])):
+                require(ppg_phasic.options(saved['options'])==self.options,'Unreviewed linked PPG transition')
+                previous_clock=copy.deepcopy(saved['schedule'])
+                old_value=saved['options']['value_phase'];group=saved['optimizer']['param_groups'][0]
+                require(len(saved['optimizer']['param_groups'])==1 and math.isfinite(group['lr'])
+                    and old_value['learning_rate']*.1*(1-1e-12)<=group['lr']<=old_value['learning_rate']*(1+1e-12)
+                    and ppg_phasic.RATE_KEY not in group,'Invalid pre-link value Adam rate')
+                group[ppg_phasic.RATE_KEY]=ppg_phasic.rate_receipt(old_value['learning_rate'],generation,'legacy-value-rate')
+                saved['schedule']=ppg_phasic.migrate_clock(previous_clock,generation)
+                saved['options']=copy.deepcopy(self.options)
+                self.rolling_migration=dict(self.rolling_migration or {},linked_phase=dict(
+                    contract=ppg_phasic.MIGRATION,origin=generation,previous_schedule=previous_clock,
+                    next_phase=ppg_config.next_phase(saved['schedule']),phase_interval=4,
+                    scope='PPO-last-applied peak with retained warmup/decay. Eight ages and original phase counts preserved; no cache/Adam/RNG/GAE reset.'))
             if saved.get('contract')==PPO_ONLY_CONTRACT:
-                upgrade=(ppg_config.coverage_options if coverage else
+                upgrade=(ppg_phasic.options if ppg_config.linked(config['value_phase']) else ppg_config.fixed_options if ppg_config.fixed(config['value_phase']) else ppg_config.coverage_options if coverage else
                          ppg_config.short_options if config['value_phase']['contract']==ppg_config.SHORT_CONTRACT
                          else ppg_config.configure)
                 require(upgrade(saved['options'])==self.options,'Unreviewed eight-iteration PPG options')
@@ -311,22 +346,29 @@ class TrainingPhases:
                 if 'critic_data' in self.options:required.add('critic_data')
                 require(set(saved)==required,'Unexpected PPO-only checkpoint fields')
                 saved.update(contract=self.contract,options=copy.deepcopy(self.options),
-                    schedule=ppg_config.initial(generation),rolling_buffer=[],
+                    schedule=ppg_config.initial(generation,config['value_phase']),rolling_buffer=[],
                     epoch_control=ppg_epochs.initial(generation,config['value_phase']))
                 if coverage:saved['cache_origin']=generation
+                if ppg_config.linked(config['value_phase']) and ppg_phasic.RATE_KEY not in saved['optimizer']['param_groups'][0]:
+                    saved['optimizer']['param_groups'][0][ppg_phasic.RATE_KEY]=ppg_phasic.rate_receipt(
+                        config['learning_rate'],generation,'initial-ppo-base')
                 self.rolling_migration=dict(contract=ppg_config.MIGRATION,origin=generation,
                     scope='Enable scheduled PPG without backfill. Preserve weights, both Adams, RNG, GAE/PPO evidence, economic health, snapshot baseline and training progress.')
             elif coverage and saved.get('contract')=='actor-value-phases/9.0.0':
-                require(ppg_config.coverage_options(saved['options'])==self.options,
+                upgrade=ppg_phasic.options if ppg_config.linked(config['value_phase']) else ppg_config.fixed_options if ppg_config.fixed(config['value_phase']) else ppg_config.coverage_options
+                require(upgrade(saved['options'])==self.options,
                     'Unreviewed one-SE PPG retention transition')
                 previous_clock=copy.deepcopy(ppg_config.schedule(saved['schedule'],generation))
+                if ppg_config.linked(config['value_phase']):
+                    saved['optimizer']['param_groups'][0][ppg_phasic.RATE_KEY]=ppg_phasic.rate_receipt(
+                        saved['options']['value_phase']['learning_rate'],generation,'legacy-value-rate')
                 previous_cap=saved['epoch_control']['cap'];invalidated=[r['generation'] for r in saved['rolling_buffer']]
                 saved.update(contract=self.contract,options=copy.deepcopy(self.options),
-                    cache_origin=generation,schedule=ppg_config.initial(generation),rolling_buffer=[],
+                    cache_origin=generation,schedule=ppg_config.initial(generation,config['value_phase']),rolling_buffer=[],
                     epoch_control=ppg_epochs.initial(generation,config['value_phase']),kl_trips=[])
                 self.rolling_migration=dict(contract=ppg_config.COVERAGE_MIGRATION,origin=generation,
                     fresh_cache_reset=True,previous_schedule=previous_clock,previous_epoch_cap=previous_cap,
-                    epoch_cap_after=2,invalidated_generations=invalidated,
+                    epoch_cap_after=config['value_phase']['max_epochs'],invalidated_generations=invalidated,
                     scope='Explicit fresh PPG replay/schedule origin and epoch cap/floor two. Preserve model, both Adams, beta, RNG, PPO/GAE and ordinary progress. Clear old PPG votes/trips and delete only owned caches after reviewed config adoption.')
             elif (saved.get('contract')==self.contract and saved['options']!=self.options and
                     config['value_phase']['contract']==ppg_config.SHORT_CONTRACT):
@@ -349,6 +391,8 @@ class TrainingPhases:
                 'Invalid auxiliary cloning state')
             self.optimizer.load_state_dict(saved['optimizer'])
             rate=self.optimizer.param_groups[0]['lr'];base=config['value_phase']['learning_rate']
+            if ppg_config.linked(config['value_phase']):
+                base=ppg_phasic.validate_rate(self.optimizer.param_groups[0].get(ppg_phasic.RATE_KEY),generation)['peak_lr']
             require(len(self.optimizer.param_groups)==1 and math.isfinite(rate)
                 and base*config['value_phase']['rate_schedule']['warmup_start']*(1-1e-12)<=rate<=base*(1+1e-12)
                 and self.optimizer.param_groups[0]['weight_decay']==0,'Value optimizer settings differ')
@@ -368,7 +412,7 @@ class TrainingPhases:
                 if vp_cap_upgrade(previous_reward,current_reward):
                     # New targets require eight fresh collections, even when
                     # the one-SE PPG recipe was already active before resume.
-                    cap=self.epoch_control['cap'];self.schedule=ppg_config.initial(generation)
+                    cap=self.epoch_control['cap'];self.schedule=ppg_config.initial(generation,config['value_phase'])
                     self.epoch_control=dict(ppg_epochs.initial(generation,config['value_phase']),cap=cap)
                     self.trips=[]
                     self.rolling_migration=dict(self.rolling_migration or {},fresh_cache_reset=True,
@@ -443,13 +487,17 @@ class TrainingPhases:
         actual,report=gae.compute(ds.data,actor_ids,mc,returns,self.state['active_lambda'],self.options['advantage']['shadow_lambdas'],by_table)
         return actual,report
 
-    def after_ppo(self,model,actor_ids,probe_ids,update,*,critic_steps=0,critic_rows=0):
+    def after_ppo(self,model,actor_ids,probe_ids,update,*,critic_steps=0,critic_rows=0,ppo_rate=None,ppo_steps=0):
         self.actor_ids=list(actor_ids);self.probe_ids=list(probe_ids)
         # The PPO report/probes stay bound to the post-PPO weights. A separate
         # final probe is retained for checkpoint metrics after value/teaching.
         self.ppo_probe=update
         self.ppo_work=dict(source='ppo',optimizer_steps=critic_steps,distinct_rows=critic_rows,
             scope='Retained PPO steps with nonempty critic batches and positive value_weight; calibration and PPG excluded')
+        from . import ppg_config,ppg_phasic
+        if ppg_config.linked(self.options['value_phase']):
+            self.ppo_peak=(ppg_phasic.rate_receipt(ppo_rate,self.state['generation']+1,'ppo-last-applied',ppo_steps)
+                if ppo_steps else None)
 
     def fit(self,model):
         require(self.dataset is not None and self.probe_ids is not None,'Value phase must follow PPO')
@@ -463,18 +511,20 @@ class TrainingPhases:
                 self.train_ids,self.heldout_ids,self.options['value_phase'],self.config['update'],beta=self.beta,
                 snapshot_weight=self.critic_state['snapshot_weight'] if self.critic_state else 1.,
                 dropout=self.dropout(0,'value'),run_phase=ran,ppo_work=self.ppo_work,
-                epoch_cap=self.epoch_control['cap'],companion=getattr(self,'local_scoring',None))
+                epoch_cap=self.epoch_control['cap'],companion=getattr(self,'local_scoring',None),
+                ppo_peak=getattr(self,'ppo_peak',None))
             self.pending_schedule=ppg_config.advance(self.schedule,self.state['generation']+1,ran)
             self.pending_epoch_control=copy.deepcopy(self.epoch_control)
             if ran:
                 self.pending_epoch_control,epoch_report=ppg_epochs.advance(self.epoch_control,
-                    self.value_report,self.options['value_phase'],self.state['generation']+1)
+                    self.value_report,self.options['value_phase'],self.state['generation']+1,
+                    expected_generation=ppg_config.next_phase(self.schedule))
             else:
                 epoch_report=dict(contract=self.epoch_control['contract'],cap_used=self.epoch_control['cap'],
                     cap_next=self.epoch_control['cap'],decision='hold',reason='not_due',
                     after=copy.deepcopy(self.epoch_control))
             self.value_report.update(buffer=cache,split=self.split,schedule=dict(self.pending_schedule,
-                next_phase=self.pending_schedule['last_phase']+self.config['value_phase']['phase_interval']),
+                next_phase=ppg_config.next_phase(self.pending_schedule)),
                 epoch_controller=epoch_report,migration=self.rolling_migration)
             return self.value_report
         def fit(dataset=None,indices=None):

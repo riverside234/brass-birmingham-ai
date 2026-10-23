@@ -415,6 +415,8 @@ def latest_model_config(config,imitation_checkpoint):
     from .opening_objective import configure as configure_opening,zero_exploration
     from .ppg_config import coverage_options
     result=vp_cap_config(coverage_options(configure_ppg(configure_opening(zero_exploration(high_branch_config(insolvency_020_config(insolvency_010_config(result))))))))
+    from .ppg_phasic import configure as phasic_config
+    result=phasic_config(result)
     from .local_scoring_auxiliary import DEFAULT as LOCAL_SCORING
     result['local_scoring_auxiliary']=copy.deepcopy(LOCAL_SCORING)
     result['branching']['rate_per_decision']=.010
@@ -510,7 +512,11 @@ def execution_config(config):
 
 
 def update_config(config):
-    require(set(config)-{'preparation_workers','opening_objective'} in (set(UPDATE),set(UPDATE_V21)), 'Unknown/missing update field')
+    require(set(config)-{'preparation_workers','opening_objective','value_gradient'} in (set(UPDATE),set(UPDATE_V21)), 'Unknown/missing update field')
+    if 'value_gradient' in config:
+        from .ppg_phasic import validate_gradient
+        validate_gradient(config['value_gradient'])
+        require(config.get('actor_nonforced'),'Detached critic requires the nonforced actor path')
     if 'opening_objective' in config:
         from .opening_objective import validate
         validate(config['opening_objective'])
@@ -588,7 +594,11 @@ def validate_config(config):
         require('advantage' in config and 'reward' in config and config['update'].get('actor_nonforced'),
                 'Value phase requires GAE plumbing and combined-return critic')
         from .value_phase import stratified
-        if stratified(value):
+        from .ppg_config import linked
+        if linked(value):
+            from .ppg_phasic import detached
+            require(detached(config['update']),'Linked PPG requires the reviewed PPO critic detachment')
+        elif stratified(value):
             require(value['learning_rate']<=config['learning_rate'],'Value phase LR must not exceed the base PPO learning rate')
         else:require(value['learning_rate']==config['learning_rate'],'Value phase must use the base PPO learning rate')
         if value['enabled'] and value['buffer_iterations']==2:
@@ -776,7 +786,7 @@ def validate_config(config):
         search_wall_fraction(config['search_wall_fraction'])
         require(config['execution']['max_models']>=sum(config['population'].values())+3,
                 'Model cache must cover frozen population plus learner/teacher versions')
-        require(set(config['update'])-{'preparation_workers','opening_objective'}==set(UPDATE_V21) and
+        require(set(config['update'])-{'preparation_workers','opening_objective','value_gradient'}==set(UPDATE_V21) and
                 set(config['execution'])-{'shared_slot_bytes','inference_routing','replica_backlog','teacher_search_workers_per_turn','padding_ratio','model_cohorts'}==set(EXECUTION_V21),
                 '2.1 requires revised update/execution')
         require(config['update'].get('preparation_workers',0)<=available,'PPO preparation exceeds CPU budget')
