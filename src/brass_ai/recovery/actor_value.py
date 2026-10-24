@@ -119,6 +119,10 @@ class TrainingPhases:
             self.snapshot_floor_migration=dict(contract=critic_data.FLOOR_MIGRATION,origin=generation,
                 floor_before=old_critic['rollout']['reduced_snapshot_weight'],floor_after=0.,
                 weight_preserved=saved['critic_data']['snapshot_weight'])
+        from . import ppg_g210
+        if ppg_g210.active(config['value_phase']):
+            ppg_g210.initialize(self,model,config,raw=raw,generation=generation,root=root,run=run)
+            return
         self.rolling=ppg_config.active(config['value_phase']) and config['value_phase']['enabled']
         if self.rolling:
             self._init_rolling(model,config,raw=raw,generation=generation,root=root,run=run)
@@ -490,6 +494,8 @@ class TrainingPhases:
     def startup(self,generation):
         """Called under the run lock, after source/config adoption is committed."""
         from . import ppg_config
+        from . import ppg_g210
+        if ppg_g210.active(self.options['value_phase']):return ppg_g210.startup(self,generation)
         if self.options['value_phase']['enabled']:
             if not (getattr(self,'rolling_migration',None) or {}).get('fresh_cache_reset'):return None
             next_phase=ppg_config.next_phase(self.schedule)
@@ -560,9 +566,12 @@ class TrainingPhases:
             scope='Retained PPO steps with nonempty critic batches and positive value_weight; calibration and PPG excluded')
         from . import ppg_config,ppg_phasic
         from . import dcpg_config
-        if dcpg_config.active(self.options['value_phase']):
+        if dcpg_config.enabled(self.config['update']):
             self.ppo_work.update(source='ppo-preservation',fresh_target_steps=0,
                 scope='Frozen-output preservation steps, not fresh-target critic fitting; GAE work evidence uses retained PPG steps only')
+        from . import ppg_g210
+        if ppg_g210.active(self.options['value_phase']):
+            self.ppo_peak=ppg_g210.rate_receipt(ppo_rate,self.state['generation']+1,ppo_steps) if ppo_steps else None
         if ppg_config.linked(self.options['value_phase']):
             self.ppo_peak=((dcpg_config.rate_receipt(ppo_rate,self.state['generation']+1,ppo_steps)
                 if dcpg_config.active(self.options['value_phase']) else
@@ -570,6 +579,8 @@ class TrainingPhases:
 
     def fit(self,model,*,preparation_pool=None):
         require(self.dataset is not None and self.probe_ids is not None,'Value phase must follow PPO')
+        from . import ppg_g210
+        if ppg_g210.active(self.options['value_phase']):return ppg_g210.fit(self,model,preparation_pool)
         if self.rolling:
             from . import ppg_auxiliary,ppg_config,ppg_epochs
             require(self.collection_source is not None,'PPG needs sealed ordinary collection provenance')
@@ -647,11 +658,15 @@ class TrainingPhases:
         value=self.value_report;before=self.beta
         enabled=self.options['value_phase']['enabled']
         rolling=getattr(self,'rolling',False)
+        from . import ppg_g210
+        restored=ppg_g210.active(self.options['value_phase'])
         phase_ran=enabled and (not rolling or value['scheduled'])
-        if phase_ran:self.trips=(self.trips+[value['kl_guard_tripped']])[-5:]
+        if phase_ran and not restored:self.trips=(self.trips+[value['kl_guard_tripped']])[-5:]
         # A clean iteration must not re-escalate on the same old cap hits.
         # Keep the rolling evidence on resume, but require a new trip to act.
-        if rolling:
+        if restored:
+            self.beta,self.trips,value['beta_feedback']=ppg_g210.beta_after_phase(self.beta,self.trips,value,self.options['value_phase'])
+        elif rolling:
             self.beta=value['beta_clone_final']
             from . import dcpg_config
             if dcpg_config.beta_feedback(self.options['value_phase']):
@@ -664,6 +679,7 @@ class TrainingPhases:
             'at_cap' if value['kl_guard_tripped'] and sum(self.trips)>=3 else
             'no_new_kl_trip' if not value['kl_guard_tripped'] else 'fewer_than_three_trips')
         if self.beta<before:reason=value['beta_feedback']['reason']
+        if restored:reason=value['beta_feedback']['reason']
         if rolling and dcpg_config.penalty_only(self.options['value_phase']):reason=value['beta_feedback']['reason']
         value.update(beta_clone_next=self.beta,beta_decision='up' if self.beta>before else 'down' if self.beta<before else 'hold',
             beta_reason=reason,
@@ -700,6 +716,8 @@ class TrainingPhases:
 
     def payload(self):
         from . import ppg_config
+        from . import ppg_g210
+        if ppg_g210.active(self.options['value_phase']):return ppg_g210.payload(self)
         if self.buffer:require(self.buffer.pending is not None,'PPG checkpoint needs the staged cache receipt')
         if self.rolling:
             return dict(contract=self.contract,options=copy.deepcopy(self.options),gae=copy.deepcopy(self.state),
@@ -729,6 +747,7 @@ class TrainingPhases:
         self.snapshot_floor_migration=None
         self.snapshot_fixed_migration=None
         self.disabled_startup_cleanup=None
+        if hasattr(self,'g210_migration'):self.g210_migration=None
         if self.rolling:
             self.schedule=self.pending_schedule;self.epoch_control=self.pending_epoch_control;self.rolling_migration=None
 

@@ -56,7 +56,8 @@ def critic_work(report):
 
 def stratified(config):
     from .ppg_config import active
-    return config.get('contract') in (STRATIFIED_CONTRACT,CONTRACT) or active(config)
+    from .ppg_g210 import active as restored
+    return config.get('contract') in (STRATIFIED_CONTRACT,CONTRACT) or active(config) or restored(config)
 
 
 def interval_options(options):
@@ -76,6 +77,8 @@ def refined_options(options):
 
 
 def validate(config):
+    from . import ppg_g210
+    if type(config) is dict and ppg_g210.active(config):return ppg_g210.validate(config)
     from . import ppg_config
     if type(config) is dict and ppg_config.active(config):return ppg_config.validate(config)
     current=type(config) is dict and stratified(config)
@@ -132,14 +135,14 @@ def value_parts(dataset,ids,config,model):
     return dataset.microbatches(ids,config['microbatch_size'],config['max_candidate_cells'],config['bucket'])
 
 
-def metrics(model,dataset,ids,config,*,unknown=False,evidence=False):
+def metrics(model,dataset,ids,config,*,unknown=False,evidence=False,preparation=None):
     """All four heads' loss/calibration; EV is the observing learner seat's utility."""
     from .updates import value_losses,value_output
     from .teacher_schedule import phase_for
     if not ids:return dict(rows=0,games=0,loss=None,explained_variance=None,utility_mse=None)
     arrays=[];order=[];model.eval()
     with torch.no_grad():
-        for part,ix,inputs in dataset.value_batches(value_parts(dataset,ids,config,model),model):
+        for part,ix,inputs in dataset.value_batches(value_parts(dataset,ids,config,model),model,executor=preparation):
             out=value_output(model,inputs,dataset,ix,unknown=unknown)
             value=value_losses(out,tuple(t[ix] for t in dataset.targets))[0]
             error=out[4].float()-dataset.utility[ix]
@@ -240,8 +243,54 @@ def clone_indices(dataset,actor_ids,limit):
     return [i for _,i in sorted(ranked)[:limit]]
 
 
+class DeferredKL:
+    """Loss acceptance between KL checks is provisional until retention checks.
+
+    Keep pending loss boundaries since the last jointly accepted loss/KL state.
+    If a later guard trips, verify pending boundaries newest first, then restore
+    the newest safe one with matching Adam and companion state. A safe later
+    probe does not certify the KL of an earlier, different checkpoint.
+    """
+    def __init__(self,model,optimizer,companion,reference,probe_ids,cap,report):
+        self.model,self.optimizer,self.companion=model,optimizer,companion
+        self.reference,self.probe_ids,self.cap,self.report=reference,probe_ids,cap,report
+        self.maximum=0.;self.checks=[];self.points=[]
+        self.accept(0,0,0.)
+
+    def measure(self,step,scope):
+        kl=self.reference.measure(self.model,self.probe_ids);self.maximum=max(self.maximum,kl)
+        self.checks.append(dict(step=step,scope=scope,kl=kl,passed=kl<=self.cap))
+        if kl>self.cap:
+            self.report.update(kl_guard_tripped=True,early_stop_reason='policy_kl_cap')
+        return kl
+
+    def accept(self,step,intervals,kl):
+        point=dict(step=step,intervals=intervals,kl=kl,
+            model=copy.deepcopy(self.model.state_dict()),adam=copy.deepcopy(self.optimizer.state_dict()),
+            auxiliary=self.companion.snapshot() if self.companion is not None else None)
+        if kl is not None:self.points.clear()
+        self.points.append(point)
+
+    def restore(self,point):
+        self.model.load_state_dict(point['model']);self.optimizer.load_state_dict(point['adam'])
+        if self.companion is not None:self.companion.restore(point['auxiliary'])
+
+    def finish(self):
+        for point in reversed(self.points):
+            self.restore(point)
+            kl=point['kl']
+            if kl is None:kl=self.measure(point['step'],'retention')
+            if kl<=self.cap:
+                self.report.update(kl_checks=self.checks,
+                    kl_guard_scope='Exact checks every configured number of attempted optimizer steps, epoch tails, and unchecked retained loss boundaries; intermediate steps are not individually certified')
+                self.points.clear()
+                return point['intervals'],kl
+        raise AssertionError('Missing frozen post-PPO KL-safe checkpoint')
+
+
 def fit(model,optimizer,dataset,train_ids,heldout_ids,actor_ids,probe_ids,config,update,*,beta,
-        value_dataset=None,value_train_ids=None,validation_dataset=None,current_count=None,dropout=None):
+        value_dataset=None,value_train_ids=None,validation_dataset=None,current_count=None,dropout=None,
+        companion=None,preparation=None):
     from .updates import autocast,value_losses,value_output
     began=time.perf_counter();model.eval()
     value_dataset=dataset if value_dataset is None else value_dataset
@@ -252,7 +301,7 @@ def fit(model,optimizer,dataset,train_ids,heldout_ids,actor_ids,probe_ids,config
         epochs=0,completed_epochs=0,partial_epochs=0,attempted_epochs=0,early_stop_reason=None,kl_guard_tripped=False,
         acceptance='kl-safe-interval/1.0.0' if 'acceptance_steps' in config else 'kl-safe-prefix/1.0.0',
         acceptance_steps=config.get('acceptance_steps'),accepted_intervals=0,rejected_intervals=0,interval_reports=[],
-        kl_cap=config['kl_cap'],
+        kl_cap=config['kl_cap'],kl_check_steps=config.get('kl_check_steps',1),
         beta_clone=beta,learning_rate=config['learning_rate'] if config['enabled'] else 0.,
         configured_learning_rate=config['learning_rate'],train_rows=len(value_train_ids),heldout_rows=len(heldout_ids),
         current_train_rows=len(train_ids),previous_train_rows=len(value_train_ids)-len(train_ids),
@@ -284,9 +333,13 @@ def fit(model,optimizer,dataset,train_ids,heldout_ids,actor_ids,probe_ids,config
         report['seconds']=time.perf_counter()-began;return report
     clones=clone_indices(dataset,actor_ids,config['clone_rows'])
     reference=RawPolicyReference(model,dataset,sorted(set(clones)|set(probe_ids)),update)
-    train_before=metrics(model,value_dataset,value_train_ids,update);before=metrics(model,validation_dataset,heldout_ids,update,evidence=True)
+    train_before=metrics(model,value_dataset,value_train_ids,update,preparation=preparation);before=metrics(model,validation_dataset,heldout_ids,update,evidence=True)
     current=before;epochs=[];used=set();presentations=0;clone_presentations=0
     max_kl=0.;accepted_kl=0.;last_attempt=None;previous_presentations=0;role_presentations=defaultdict(int);branch_presentations=0
+    deferred=config.get('kl_check_steps',1)>1
+    guard=DeferredKL(model,optimizer,companion,reference,probe_ids,config['kl_cap'],report) if deferred else None
+    if deferred:report['acceptance']='kl-checked-retained-interval/1.0.0'
+    retained=[]
     for epoch in range(config['max_epochs']):
         order=[value_train_ids[j] for j in torch.randperm(len(value_train_ids)).tolist()]
         batches=[order[start:start+config['batch_size']] for start in range(0,len(order),config['batch_size'])]
@@ -297,35 +350,56 @@ def fit(model,optimizer,dataset,train_ids,heldout_ids,actor_ids,probe_ids,config
             # A rejected segment restores BOTH weights and Adam to the last
             # accepted boundary. PPO state is untouched; draw RNG is consumed.
             saved_model=copy.deepcopy(model.state_dict());saved_adam=copy.deepcopy(optimizer.state_dict())
-            attempted=0;safe_steps=0;segment_used=[];segment_clones=0;safe_kl=accepted_kl
-            for batch in batches[segment:segment+interval]:
-                step_model=copy.deepcopy(model.state_dict());step_adam=copy.deepcopy(optimizer.state_dict())
+            saved_aux=companion.snapshot() if companion is not None else None
+            attempted=0;safe_steps=0;segment_used=[];segment_clones=0;safe_kl=accepted_kl;measured=None
+            checked_step=None
+            for offset,batch in enumerate(batches[segment:segment+interval]):
+                if not deferred:
+                    step_model=copy.deepcopy(model.state_dict());step_adam=copy.deepcopy(optimizer.state_dict())
+                    step_aux=companion.snapshot() if companion is not None else None
                 optimizer.zero_grad(set_to_none=True);model.train()
-                for part,ix,inputs in value_dataset.value_batches(value_parts(value_dataset,batch,update,model),model):
+                if companion is not None:companion.begin('ppg')
+                for part,ix,inputs in value_dataset.value_batches(value_parts(value_dataset,batch,update,model),model,executor=preparation):
                     drop=None if dropout is None else (dropout[0],epoch,dropout[1],'value')
-                    with autocast(update,value_dataset.device):out=value_output(model,inputs,value_dataset,ix,dropout=drop)
+                    with autocast(update,value_dataset.device):
+                        if companion is not None:out,local_loss=companion.forward(model,inputs,value_dataset,ix,dropout=drop)
+                        else:out,local_loss=value_output(model,inputs,value_dataset,ix,dropout=drop),None
                     loss=value_losses(out,tuple(t[ix] for t in value_dataset.targets))[0]
                     loss=loss+(out[4].float()-value_dataset.utility[ix]).square().mean(-1)
+                    if local_loss is not None:
+                        loss=loss+local_loss
+                        companion.account_loss(local_loss,value_dataset.critic_weights[ix],len(batch),'ppg')
                     ((loss*value_dataset.critic_weights[ix]).sum()/len(batch)).backward()
                 sample=[clones[j] for j in torch.randint(len(clones),(config['clone_batch_size'],)).tolist()]
-                for part in dataset.microbatches(sample,update['microbatch_size'],update['max_candidate_cells'],update['bucket']):
-                    _,inputs,_=dataset.batch(part)
+                for part in reference.microbatches(sample):
+                    inputs=reference.inputs(part)
                     with autocast(update,dataset.device):loss=reference.loss(part,inputs,model)
                     (beta*loss.sum()/len(sample)).backward()
                 torch.nn.utils.clip_grad_norm_(model.parameters(),update['grad_clip'],error_if_nonfinite=True)
                 optimizer.step();attempted+=1
+                if companion is not None:companion.step('ppg')
                 report['attempted_value_presentations']+=len(batch);report['attempted_clone_presentations']+=len(sample)
-                measured=reference.measure(model,probe_ids);max_kl=max(max_kl,measured)
-                if measured>config['kl_cap']:
-                    model.load_state_dict(step_model);optimizer.load_state_dict(step_adam)
+                step=report['attempted_steps']+attempted
+                tail=segment+offset+1==len(batches)
+                check=not deferred or step%config['kl_check_steps']==0 or tail
+                if check:
+                    measured=(guard.measure(step,'periodic' if step%config['kl_check_steps']==0 else 'epoch_tail')
+                        if deferred else reference.measure(model,probe_ids))
+                    max_kl=max(max_kl,measured);checked_step=step
+                if check and measured>config['kl_cap']:
+                    model.load_state_dict(saved_model if deferred else step_model)
+                    optimizer.load_state_dict(saved_adam if deferred else step_adam)
+                    if companion is not None:companion.restore(saved_aux if deferred else step_aux)
+                    if deferred:safe_steps=0;segment_used=[];segment_clones=0
                     report.update(early_stop_reason='policy_kl_cap',kl_guard_tripped=True)
                 else:
-                    safe_steps+=1;safe_kl=measured;segment_used.extend(batch);segment_clones+=len(sample)
-                del step_model,step_adam
+                    safe_steps+=1;safe_kl=measured if checked_step==step else None
+                    segment_used.extend(batch);segment_clones+=len(sample)
+                if not deferred:del step_model,step_adam
                 if report['kl_guard_tripped']:break
             report['attempted_steps']+=attempted;epoch_steps+=attempted;epoch_safe+=safe_steps
-            # Evaluate only the safe prefix. The KL reference remains fixed at
-            # post-PPO weights for the entire phase, across all accepted segments.
+            # The KL reference stays frozen across the phase. With spaced KL
+            # checks a passing loss boundary is provisional until retention.
             last_attempt=metrics(model,validation_dataset,heldout_ids,update,evidence=True)
             loss_increased=last_attempt['loss']>current['loss']
             rejected=not safe_steps or loss_increased
@@ -340,6 +414,7 @@ def fit(model,optimizer,dataset,train_ids,heldout_ids,actor_ids,probe_ids,config
             if rejected:
                 report['rejected_intervals']+=1
                 model.load_state_dict(saved_model);optimizer.load_state_dict(saved_adam)
+                if companion is not None:companion.restore(saved_aux)
             else:
                 report['accepted_intervals']+=1;epoch_accepted+=safe_steps
                 current=last_attempt;accepted_kl=safe_kl;report['optimizer_steps']+=safe_steps
@@ -347,6 +422,13 @@ def fit(model,optimizer,dataset,train_ids,heldout_ids,actor_ids,probe_ids,config
                 previous_presentations+=sum(i>=current_count for i in segment_used)
                 branch_presentations+=sum('/branch/' in value_dataset.data[i][2][0] for i in segment_used)
                 for i in segment_used:role_presentations[value_dataset.roles[i]]+=1
+                if deferred:
+                    retained.append(dict(report_index=len(report['interval_reports'])-1,heldout=current,
+                        rows=segment_used,clones=segment_clones,steps=safe_steps))
+                    guard.accept(report['optimizer_steps'],len(retained),safe_kl)
+            if deferred:
+                report['interval_reports'][-1].update(kl_checked_at_interval_end=checked_step==report['attempted_steps'],
+                    provisional_loss_acceptance=not rejected and safe_kl is None)
             del saved_model,saved_adam
             if rejected or report['kl_guard_tripped']:break
         partial=epoch_accepted<len(batches)
@@ -357,12 +439,39 @@ def fit(model,optimizer,dataset,train_ids,heldout_ids,actor_ids,probe_ids,config
         if epoch_accepted:
             report['epochs']+=1;report['partial_epochs' if partial else 'completed_epochs']+=1
         if report['early_stop_reason'] is not None:break
+    if deferred:
+        keep,accepted_kl=guard.finish();max_kl=max(max_kl,guard.maximum)
+        # A loss boundary accepted before the next probe can still be unsafe.
+        # Rebuild retained-work accounting from exactly the restored prefix.
+        for entry in retained[keep:]:
+            item=report['interval_reports'][entry['report_index']]
+            item.update(accepted=False,accepted_steps=0,safe_steps=0,
+                rejection_reason='policy_kl_cap_after_provisional_loss_acceptance')
+        retained=retained[:keep];current=retained[-1]['heldout'] if retained else before
+        if retained:
+            report['interval_reports'][retained[-1]['report_index']].update(
+                retained_probe_kl=accepted_kl,retention_kl_verified=True)
+        used=set();presentations=0;clone_presentations=0;previous_presentations=0;branch_presentations=0
+        role_presentations=defaultdict(int)
+        for entry in retained:
+            used.update(entry['rows']);presentations+=len(entry['rows']);clone_presentations+=entry['clones']
+            previous_presentations+=sum(i>=current_count for i in entry['rows'])
+            branch_presentations+=sum('/branch/' in value_dataset.data[i][2][0] for i in entry['rows'])
+            for i in entry['rows']:role_presentations[value_dataset.roles[i]]+=1
+        report.update(optimizer_steps=sum(e['steps'] for e in retained),accepted_intervals=len(retained),
+            rejected_intervals=len(report['interval_reports'])-len(retained),epochs=0,completed_epochs=0,partial_epochs=0)
+        for entry in epochs:
+            accepted=[i for i in report['interval_reports'] if i['epoch']==entry['epoch'] and i['accepted']]
+            kept=sum(i['accepted_steps'] for i in accepted)
+            entry.update(accepted_steps=kept,safe_steps=kept,accepted=bool(kept),partial=kept<len(batches),
+                probe_kl=accepted[-1].get('retained_probe_kl',accepted[-1]['probe_kl']) if accepted else None)
+            if kept:report['epochs']+=1;report['partial_epochs' if entry['partial'] else 'completed_epochs']+=1
     optimizer.zero_grad(set_to_none=True);model.eval()
     # One fresh receipt for the final accepted weights. No head refit on the
     # holdout, and no stale pre-value-phase receipt after trunk movement.
     # A fully rejected phase restored the exact post-PPO weights. Reuse its
     # already measured train metrics instead of scanning the whole buffer again.
-    train_after=metrics(model,value_dataset,value_train_ids,update) if report['optimizer_steps'] else copy.deepcopy(train_before)
+    train_after=metrics(model,value_dataset,value_train_ids,update,preparation=preparation) if report['optimizer_steps'] else copy.deepcopy(train_before)
     if report['optimizer_steps']:
         ready=train_after['utility_mse']<=train_before['utility_mse']+1e-8
         model.utility_calibration=dict(version=config['contract'],reward_id=digest(model.config.utility),ready=ready,
@@ -374,9 +483,10 @@ def fit(model,optimizer,dataset,train_ids,heldout_ids,actor_ids,probe_ids,config
         # reissue its old pre-PPO receipt as evidence about these weights.
         model.utility_calibration=None
     report.update(train_before=train_before,train_after=train_after,heldout_before=before,heldout_after=current,
-        last_attempted_heldout=last_attempt,heldout_attempt_scope='Safe interval/prefix after any violating step is restored',
+        last_attempted_heldout=last_attempt,heldout_attempt_scope=('Loss-accepted boundaries remain provisional until a safe exact KL receipt; attempted diagnostics may precede final rollback'
+            if deferred else 'Safe interval/prefix after any violating step is restored'),
         clone_rows=len(clones),clone_kl=reference.measure(model,clones),
-        probe_rows=len(probe_ids),probe_kl=reference.measure(model,probe_ids),maximum_attempted_probe_kl=max_kl,
+        probe_rows=len(probe_ids),probe_kl=accepted_kl if deferred else reference.measure(model,probe_ids),maximum_attempted_probe_kl=max_kl,
         distinct_value_rows_used=len(used),value_presentations=presentations,clone_presentations=clone_presentations,
         branch_distinct_rows_used=sum('/branch/' in value_dataset.data[i][2][0] for i in used),
         branch_presentations=branch_presentations,

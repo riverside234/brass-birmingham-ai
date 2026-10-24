@@ -466,7 +466,8 @@ def _ppo_nonforced(model,optimizer,games,behavior,config,*,profile,profile_steps
     exact_only=ppo_kl_control.active(config)
     detach_critic=detached(config)
     preserve=dcpg_config.enabled(config)
-    if preserve:require(phases is not None and dcpg_config.active(phases.options['value_phase']),
+    from .ppg_g210 import active as restored_ppg
+    if preserve:require(phases is not None and (dcpg_config.active(phases.options['value_phase']) or restored_ppg(phases.options['value_phase'])),
         'Value preservation requires the delayed fresh-target phase')
     require(all(g['split']=='train' for g in games),'Held-out PPO data')
     timings=Timings();device=next(model.parameters()).device

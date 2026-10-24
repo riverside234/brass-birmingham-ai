@@ -630,7 +630,10 @@ def validate_config(config):
         from .value_phase import stratified
         from .ppg_config import linked
         from . import dcpg_config
-        if dcpg_config.active(value):
+        from . import ppg_g210
+        if ppg_g210.active(value):
+            require(value['enabled'],'g210 PPG must remain enabled')
+        elif dcpg_config.active(value):
             require(value['enabled'] and config['update'].get('value_gradient')==dcpg_config.GRADIENT,
                 'Delayed critic requires enabled auxiliary fitting and preservation objective')
         elif linked(value):
@@ -645,7 +648,8 @@ def validate_config(config):
     require(('advantage' in config)==('value_phase' in config),'GAE/value configuration blocks must be supplied together')
     from . import dcpg_config
     if dcpg_config.enabled(config['update']):
-        require(dcpg_config.active(config.get('value_phase',{})) and config['value_phase']['enabled'],
+        from .ppg_g210 import active as restored
+        require((dcpg_config.active(config.get('value_phase',{})) or restored(config.get('value_phase',{}))) and config['value_phase']['enabled'],
             'Value preservation requires the delayed-critic value phase')
     if config.get('advantage',{}).get('gate',{}).get('mode')=='auto':
         require('il_kl_limit' in config and config.get('rating',{}).get('enabled'),

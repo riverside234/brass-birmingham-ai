@@ -149,6 +149,8 @@ def check_signature(state, signature, reviewed=False):
             handlers[SIXTEEN_MIGRATION]=sixteen_options
             from .dcpg_config import FAST_MIGRATION,fast_options
             handlers[FAST_MIGRATION]=fast_options
+            from .ppg_g210 import MIGRATION as G210_MIGRATION,options as g210_options
+            handlers[G210_MIGRATION]=g210_options
             from .opening_objective import (MIGRATION as OPENING_MIGRATION,configure as configure_opening,
                 ZERO_EXPLORATION_MIGRATION,zero_exploration)
             handlers[OPENING_MIGRATION]=configure_opening

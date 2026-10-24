@@ -1,6 +1,18 @@
 # Fresh training in conda: selected v4 teachers and Masked ISMCTS NN
 
-## Current g650 PPG continuation
+## Current g660 PPG continuation
+
+Use the [g210-style PPG restoration](../ai-research/PPG_G210_G660.md) for the
+current run. PPG now runs after every PPO iteration, trains current plus previous
+critic data, validates current-iteration holdouts, and allows at most **3 epochs**.
+Beta starts at **4 once on adoption**, then adapts in **[1, 32]**. PPG uses
+**0.65 times the actual PPO LR**, a **0.002 hard KL guard every 32 steps**
+(plus epoch tails and retained-checkpoint verification), and strict
+non-increasing loss checks every **16 steps**. Existing PPO/DCPG, rewards,
+opponents, branch probability and completed IL identity are preserved.
+The linked guide includes the exact g660 recovery/config/continuation command.
+
+## Archived g650 PPG continuation
 
 Use the [dense eight-iteration PPG instructions](../ai-research/PPG_DENSE_EIGHT_G650.md)
 for the current v11.2 run: eight cached/held-out ages, a phase every eight

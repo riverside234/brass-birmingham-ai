@@ -1,0 +1,188 @@
+"""Explicit g210 auxiliary recipe, with reviewed beta/LR/epoch adjustments.
+
+PPO's objective is deliberately outside this configuration migration. The
+32-step hard guard and monotone 16-step acceptance live in value_phase.fit.
+"""
+import copy
+import math
+
+import numpy as np
+import torch
+
+from brass_ai.learning.contracts import require
+
+CONTRACT='ppg-value-phase/14.0.0'
+MIGRATION='ppg-g210-two-age-ppo-rate/1.0.0'
+CHECKPOINT='actor-value-phases/11.0.0'
+RATE='ppg-actual-ppo-rate/2.0.0'
+DEFAULT=dict(contract=CONTRACT,enabled=True,buffer_iterations=2,max_epochs=3,
+    batch_size=4096,clone_rows=8192,clone_batch_size=512,beta_clone=4.,
+    beta_clone_min=1.,beta_clone_max=32.,kl_cap=.002,learning_rate=None,
+    learning_rate_source='ppo-last-applied',learning_rate_factor=.65,
+    holdout_fraction=.05,holdout=dict(contract='ppg-critic-holdout/2.0.0',minimum_games_per_table=2),
+    acceptance_steps=16,kl_check_steps=32,phase_interval=1,validation_iterations=1)
+
+
+def active(c):return c.get('contract')==CONTRACT
+
+
+def validate(c):
+    require(type(c) is dict and set(c)==set(DEFAULT) and active(c),'Invalid g210 PPG fields/contract')
+    # Smaller batches are useful for bounded regression/smoke fixtures only.
+    for k,v in DEFAULT.items():
+        if k in ('batch_size','clone_rows','clone_batch_size'):continue
+        require(c[k]==v and type(c[k]) is type(v),'Invalid g210 PPG option: '+k)
+    require(all(type(c[k]) is int and 1<=c[k]<=DEFAULT[k] for k in ('batch_size','clone_rows','clone_batch_size'))
+        and c['clone_batch_size']<=c['clone_rows'],'Invalid g210 PPG batch bounds')
+    return c
+
+
+def options(config):
+    from .value_phase import validate as validate_value
+    validate_value(config['value_phase'])
+    result=copy.deepcopy(config)
+    if not active(result['value_phase']):result['value_phase']=copy.deepcopy(DEFAULT)
+    validate(result['value_phase']);return result
+
+
+def rate_receipt(rate,generation,steps):
+    require(type(rate) in (int,float) and math.isfinite(rate) and rate>0
+        and type(steps) is int and steps>0,'PPG needs an actual applied PPO LR')
+    return dict(contract=RATE,source='ppo-last-applied',generation=generation,
+        ppo_steps=steps,ppo_lr=rate,factor=.65,peak_lr=rate*.65)
+
+
+def beta_after_phase(beta,trips,report,config):
+    """g210's new-trip/3-of-5 escalation; clean accepted low-KL phases halve."""
+    require(math.isfinite(beta) and 1<=beta<=32 and type(trips) is list
+        and len(trips)<=5 and all(type(x) is bool for x in trips),'Invalid g210 beta state')
+    trips=(trips+[bool(report['kl_guard_tripped'])])[-5:]
+    after=beta;reason='fewer_than_three_trips' if trips[-1] else 'no_new_kl_trip'
+    if trips[-1] and sum(trips)>=3:
+        after=min(config['beta_clone_max'],beta*2)
+        reason='new_trip_in_three_of_five' if after>beta else 'at_maximum'
+    elif not trips[-1] and report['optimizer_steps']>0:
+        kl=report.get('probe_kl')
+        require(type(kl) in (int,float) and math.isfinite(kl) and 0<=kl<=config['kl_cap']+1e-7,
+            'Invalid retained PPG KL')
+        if kl<.5*config['kl_cap']:
+            after=max(config['beta_clone_min'],beta/2)
+            reason='retained_KL_below_half_cap' if after<beta else 'at_minimum'
+    elif not trips[-1]:reason='no_accepted_steps'
+    return after,trips,dict(before=beta,after=after,reason=reason,
+        decision='up' if after>beta else 'down' if after<beta else 'hold',
+        threshold=.5*config['kl_cap'],scope='Next phase only; a new hard-cap trip with 3/5 hits doubles beta. Clean accepted phases below half cap halve beta. No within-phase retries.')
+
+
+def initialize(phases,model,config,*,raw,generation,root,run):
+    from . import actor_value,gae,critic_data,ppg_config,ppg_epochs,ppg_replay
+    validate(config['value_phase'])
+    require(root is not None and run is not None,'g210 PPG requires an owned disk cache')
+    phases.config=config;phases.root=root;phases.run=run;phases.rolling=False
+    phases.options={k:copy.deepcopy(config[k]) for k in ('advantage','value_phase','critic_data','seat_descriptors') if k in config}
+    phases.contract=CHECKPOINT;phases.snapshot_data=[];phases.fingerprint=None
+    phases.dataset=None;phases.probe_ids=None;phases.collection_source=None;phases.ppo_work=None
+    for name in ('critic_evidence','disable_migration','holdout_migration','refinement_migration','window_migration',
+                 'evidence_migration','critic_migration','snapshot_r2_migration','disabled_startup_cleanup','g210_migration'):
+        setattr(phases,name,None)
+    phases.optimizer=torch.optim.Adam(model.parameters(),lr=config['learning_rate']*.65)
+    saved=(raw or {}).get('training',{}).get(actor_value.KEY)
+    if saved is None:
+        require(generation==0,'Missing g210 continuation checkpoint')
+        phases.state=gae.initial(config['advantage'])
+        phases.critic_state=critic_data.initial(config['critic_data']) if 'critic_data' in config else None
+        phases.beta=4.;phases.trips=[];phases.cache_origin=0;phases.adoption=None;receipts=[]
+    else:
+        saved=copy.deepcopy(saved)
+        migrating=not active(saved.get('options',{}).get('value_phase',{}))
+        if migrating:
+            require(saved.get('contract')=='actor-value-phases/10.0.0' and
+                options(saved['options'])==phases.options,'Unreviewed g210 PPG continuation')
+            clock=ppg_config.schedule(saved['schedule'],generation)
+            ppg_epochs.validate(saved['epoch_control'],saved['options']['value_phase'],
+                phases=clock['phases'],last_phase=clock['last_phase'])
+            phases.adoption=dict(contract=MIGRATION,origin=generation,beta_before=saved['beta_clone'],beta_after=4.,
+                previous_schedule=copy.deepcopy(clock),invalidated_generations=[r['generation'] for r in saved['rolling_buffer']],
+                scope='Only PPG changes. Keep model, PPO/value Adam moments, RNG, GAE, snapshot state and ordinary progress. New holdout protocol starts fresh auxiliary caches; first phase uses current data, then current plus previous.')
+            phases.g210_migration=copy.deepcopy(phases.adoption)
+            phases.beta=4.;phases.trips=[];phases.cache_origin=generation;receipts=[]
+        else:
+            fields={'contract','options','gae','beta_clone','kl_trips','optimizer','rolling_buffer','cache_origin','adoption'}
+            if 'critic_data' in config:fields.add('critic_data')
+            require(saved.get('contract')==CHECKPOINT and set(saved)==fields and saved['options']==phases.options,
+                'g210 checkpoint configuration differs')
+            phases.beta=saved['beta_clone'];phases.trips=saved['kl_trips']
+            phases.cache_origin=saved['cache_origin'];receipts=saved['rolling_buffer'];phases.adoption=saved['adoption']
+        phases.state=copy.deepcopy(gae.validate_state(saved['gae'],config['advantage'],generation))
+        phases.critic_state=copy.deepcopy(critic_data.validate_state(saved['critic_data'],config['critic_data'],generation)) if 'critic_data' in config else None
+        phases.optimizer.load_state_dict(saved['optimizer'])
+    require(type(phases.beta) in (int,float) and math.isfinite(phases.beta) and 1<=phases.beta<=32
+        and type(phases.trips) is list and len(phases.trips)<=5 and all(type(x) is bool for x in phases.trips),
+        'Invalid persisted g210 beta')
+    group=phases.optimizer.param_groups[0]
+    require(len(phases.optimizer.param_groups)==1 and math.isfinite(group['lr']) and group['lr']>0
+        and group['weight_decay']==0,'Invalid g210 value Adam')
+    require(type(phases.cache_origin) is int and 0<=phases.cache_origin<=generation,'Invalid g210 replay origin')
+    phases.buffer=ppg_replay.Buffer(root,run,config,generation=generation,receipts=receipts,origin=phases.cache_origin)
+
+
+def startup(phases,generation):
+    if phases.g210_migration is None:return None
+    from .value_buffer import retire_fresh
+    from brass_ai.step5.league import write_json
+    require(phases.cache_origin==generation and not phases.buffer.receipts,'Invalid g210 startup boundary')
+    result=retire_fresh(phases.root,phases.run,generation,reward_id=phases.buffer.reward_id)
+    write_json(phases.run/'ppg-fresh-cache-reset.json',dict(result,generation=generation,phase='startup',next_phase=generation+1))
+    return dict(result,fresh_ppg=True,next_phase=generation+1)
+
+
+def fit(phases,model,preparation_pool):
+    from . import value_phase
+    from .ppg_phasic import RATE_KEY
+    from .ppo_preparation import phase_preparation
+    require(phases.collection_source is not None,'g210 PPG requires sealed collection provenance')
+    c=phases.options['value_phase'];rate=getattr(phases,'ppo_peak',None)
+    cache=phases.buffer.stage(phases.critic_dataset,phases.train_ids,phases.heldout_ids,phases.actor_ids,
+        phases.collection_source,model,phases.split['selection'])
+    # An empty PPO update supplies no actual LR; do not invent one or change beta.
+    effective=copy.deepcopy(c);effective['learning_rate']=rate['peak_lr'] if rate is not None else 0.
+    if rate is not None:
+        require(rate['generation']==phases.state['generation']+1 and rate['contract']==RATE,'Stale g210 PPO rate')
+        phases.optimizer.param_groups[0].update(lr=rate['peak_lr'],**{RATE_KEY:copy.deepcopy(rate)})
+    prepare=phase_preparation(preparation_pool,phases.config['update'].get('preparation_workers',0),
+        directory=phases.root/'artifacts',enabled=True)
+    with phases.buffer.datasets(phases.dataset.device,policy=False) as (ds,_,receipts), prepare as preparation:
+        indices=[];offset=0
+        for r,part in zip(receipts,ds.data.parts):
+            held=set(r['holdout_selection']['heldout_games'])
+            membership=np.array([g not in held for g in r['game_ids']],dtype=bool)
+            indices.extend((np.flatnonzero(membership[part.array['game']])+offset).tolist())
+            offset+=r['rows']
+        snapshot_weight=phases.critic_state['snapshot_weight'] if phases.critic_state else 1.
+        ds.critic_weights=torch.tensor([snapshot_weight if r=='snapshot' else 1. for r in ds.roles],device=ds.device)
+        companion=getattr(phases,'local_scoring',None)
+        if companion is not None and companion.active:companion.inventory(ds,indices)
+        report=value_phase.fit(model,phases.optimizer,phases.dataset,phases.train_ids,phases.heldout_ids,
+            phases.actor_ids if rate is not None else [],phases.probe_ids,effective,phases.config['update'],beta=phases.beta,
+            value_dataset=ds,value_train_ids=indices,validation_dataset=phases.critic_dataset,
+            current_count=receipts[0]['rows'],dropout=(phases.state['generation'],phases.config['seat_descriptors']['dropout_games']) if phases.critic_state else None,
+            companion=companion,preparation=preparation)
+        report['cpu_preparation']=preparation.report() if preparation is not None else dict(workers=0)
+    if rate is None:report['early_stop_reason']='no_applied_ppo_rate'
+    report.update(buffer=cache,split=phases.split,migration=copy.deepcopy(phases.g210_migration),
+        phase_interval=1,buffer_iterations=2,validation_iterations=1,scheduled=True,
+        epoch_cap_used=c['max_epochs'],kl_check_steps=c['kl_check_steps'],policy_guard_enabled=True,kl_control='hard-cap-and-penalty',
+        learning_rate_source=copy.deepcopy(rate),peak_learning_rate=effective['learning_rate'],beta_clone_final=phases.beta,
+        beta_mode='adaptive-up-down',
+        acceptance_generations=[phases.state['generation']+1],beta_retries=0,
+        gate_critic_training=dict(source='ppg',optimizer_steps=report['optimizer_steps']),
+        rate_schedule=dict(reset_adam=False,warmup=False,decay=False,factor=.65))
+    phases.value_report=report;return report
+
+
+def payload(phases):
+    require(phases.buffer.pending is not None,'g210 checkpoint needs a staged cache')
+    return dict(contract=CHECKPOINT,options=copy.deepcopy(phases.options),gae=copy.deepcopy(phases.state),
+        **({'critic_data':copy.deepcopy(phases.critic_state)} if phases.critic_state is not None else {}),
+        beta_clone=phases.beta,kl_trips=copy.deepcopy(phases.trips),optimizer=phases.optimizer.state_dict(),
+        rolling_buffer=copy.deepcopy(phases.buffer.pending),cache_origin=phases.cache_origin,adoption=copy.deepcopy(phases.adoption))

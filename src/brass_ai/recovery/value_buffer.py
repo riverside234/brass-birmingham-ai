@@ -48,10 +48,11 @@ def retire_disabled(root,run,generation):
 def retire_fresh(root,run,generation,*,reward_id):
     """Explicit fresh-PPG startup only, after durable reviewed config adoption."""
     from .ppg_config import coverage,active
+    from .ppg_g210 import active as restored
     from brass_ai.learning.reward import CAPPED_VERSION
     root,run=owned(root,run);state=read(run/'state.json');value=state['signature']['config']['value_phase']
     capped=state['signature']['config'].get('search',{}).get('reward',{}).get('version')==CAPPED_VERSION
-    require(state['iteration']==generation and (coverage(value) or (active(value) and capped)) and value['enabled'] is True,
+    require(state['iteration']==generation and (coverage(value) or restored(value) or (active(value) and capped)) and value['enabled'] is True,
         'Fresh PPG cleanup requires committed one-SE training state')
     from .utility import reward_spec
     require(digest(reward_spec(state['signature']['config']))==reward_id,

@@ -184,7 +184,8 @@ class Buffer:
         require(read(owner)==OWNER,'Unknown eight-age PPG owner')
         self.receipts=copy.deepcopy(receipts or [])
         self.window=config['value_phase']['buffer_iterations']
-        require(self.window in (8,16),'Invalid PPG replay window')
+        from .ppg_g210 import active as restored
+        require(self.window in (8,16) or (self.window==2 and restored(config['value_phase'])),'Invalid PPG replay window')
         require([r['generation'] for r in self.receipts]==list(range(max(origin+1,generation-self.window+1),generation+1)),
             'Missing committed PPG cache receipts')
         for r in self.receipts:self.verify(r)
@@ -233,7 +234,10 @@ class Buffer:
         # even the cloning loss must not train on their observations. Ordinary
         # PPO retains its existing actor/critic holdout semantics.
         training=set(train_ids)
-        selected,counts=ppg_sampling.select(dataset.data,[i for i in actor_ids if i in training],self.config['value_phase'])
+        from .ppg_g210 import active as restored
+        # g210 uses current live learner policy inputs only, not historical
+        # cloning/probe caches. Its dense critic sidecars still keep local heads.
+        selected,counts=([],{}) if restored(self.config['value_phase']) else ppg_sampling.select(dataset.data,[i for i in actor_ids if i in training],self.config['value_phase'])
         require(all(e['index'] in index for e in selected),'Policy row missing critic reference')
         generation=self.generation+1;began=time.perf_counter()
         import shutil
@@ -349,19 +353,20 @@ class Buffer:
             scope=f'{self.window} trainable ages; pre-commit disk peak includes unexpired old age and new-generation packing scratch. Mmap features; bounded minibatch transfers; no historical PPO admission.')
 
     @contextmanager
-    def datasets(self,device):
+    def datasets(self,device,*,policy=True):
         require(self.pending is not None,'No staged PPG cache')
         rows=[];actions=[];policies=[]
         try:
             for r in reversed(self.pending):
                 rows.append(Rows(self.path(r['generation'],'critic.npy'),r))
+                if not policy:continue
                 if 'packing' in r:
                     from .ppg_packing import ActionArray
                     actions.append(ActionArray(self.path(r['generation'],'policy-actions.npy'),r['packing']))
                 else:actions.append(np.load(self.path(r['generation'],'actions.npy'),mmap_mode='r',allow_pickle=False))
                 require(actions[-1].dtype==np.dtype('<f4') and actions[-1].shape[1]==feature_schema()['action_dim'],'Invalid policy action cache')
                 policies.append(PolicyData(rows[-1],actions[-1],r['policy_entries']))
-            yield CriticDataset(rows,device),PolicyDataset(policies,device),list(reversed(self.pending))
+            yield CriticDataset(rows,device),PolicyDataset(policies,device) if policy else None,list(reversed(self.pending))
         finally:
             for a in actions:a._mmap.close()
             for r in rows:r.close()
