@@ -43,7 +43,8 @@ def gate_diagnostics(actor,value=None,limit=None,quality=None):
     value=value or {};limit=limit or {};quality=quality or {}
     health=limit.get('health',{})
     planning=quality.get('planning',{});attempts=value.get('attempted_steps',0)
-    before=value.get('heldout_before',{}).get('loss');after=value.get('heldout_after',{}).get('loss')
+    before=value.get('acceptance_heldout_before',value.get('heldout_before',{})).get('loss')
+    after=value.get('acceptance_heldout_after',value.get('heldout_after',{})).get('loss')
     groups=value.get('heldout_after',{}).get('groups',{})
     tables=actor.get('gae',{}).get('gate',{}).get('table_gate',{})
     mixed=mixed_ev_status(tables)

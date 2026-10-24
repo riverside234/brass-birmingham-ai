@@ -8,11 +8,11 @@ import numpy as np
 
 from brass_ai.learning.contracts import digest,require
 from brass_ai.step5.policy import exploration_distribution,NeuralPolicy
-from .exploration import BRANCH,LEGACY_BRANCH,OPENING
+from .exploration import BRANCH,LEGACY_BRANCH,OPENING,REVISED_BRANCH,REVISED_OPENING
 
 
 def seed_for(parent,decision,contract=LEGACY_BRANCH['contract']):
-    require(contract in (LEGACY_BRANCH['contract'],BRANCH['contract']),'Unknown branch contract')
+    require(contract in (LEGACY_BRANCH['contract'],BRANCH['contract'],REVISED_BRANCH['contract']),'Unknown branch contract')
     return digest(dict(contract=contract,parent=parent,decision=decision))
 
 
@@ -65,10 +65,11 @@ def continue_branch(host,job,parent,packet,assigned,timings,max_decisions,encode
     from .replay import CheckedGame
     started=time.monotonic();meta=packet['metadata'];seed=meta['seed']
     require(meta['contract']==job['branching']['contract'],'Branch collection contract differs')
-    reset=meta['contract']==BRANCH['contract']
+    reset=meta['contract'] in (BRANCH['contract'],REVISED_BRANCH['contract'])
     if reset:
+        opening=REVISED_OPENING if meta['contract']==REVISED_BRANCH['contract'] else OPENING
         require(job['branching']['reset_opening_at_fork'] is True and
-                all(p.opening==OPENING for p in assigned),'Branch opening policy differs')
+                all(p.opening==opening for p in assigned),'Branch opening policy differs')
     shuffle=int(seed[:8],16)&0x7fffffff if job['branching']['reshuffle_hidden_deck'] else None
     if 'checkpoint' in packet:
         context=host.call('fork_restore',checkpoint=packet['checkpoint'],shuffle_seed=shuffle)
@@ -104,7 +105,7 @@ def continue_branch(host,job,parent,packet,assigned,timings,max_decisions,encode
 
 def validate_child(parent,child):
     meta=child['branch']
-    require(meta['contract'] in (LEGACY_BRANCH['contract'],BRANCH['contract']),'Unknown branch contract')
+    require(meta['contract'] in (LEGACY_BRANCH['contract'],BRANCH['contract'],REVISED_BRANCH['contract']),'Unknown branch contract')
     require(meta['parent_game_id']==parent['game_id'] and meta['seed']==seed_for(parent['game_id'],meta['decision'],meta['contract']),
         'Foreign or changed branch seed')
     require(child['game_id']==parent['game_id']+'/branch/'+meta['seed'] and
@@ -131,15 +132,15 @@ def validate_child(parent,child):
     from .insolvency import events
     counts=Counter(e['seat'] for e in events(parent['records'][:meta['decision']+1]))
     require(meta['prior_events']==[counts[s] for s in range(4)],'Branch cost budget differs')
-    if meta['contract']==BRANCH['contract']:
-        validate_opening_rows(child['records'][1:])
+    if meta['contract'] in (BRANCH['contract'],REVISED_BRANCH['contract']):
+        validate_opening_rows(child['records'][1:],REVISED_OPENING if meta['contract']==REVISED_BRANCH['contract'] else OPENING)
 
 
-def validate_opening_rows(rows):
+def validate_opening_rows(rows,opening=OPENING):
     counts=[0]*4
     for row in rows:
         action=row['view']['context']['phase']=='action';seat=row['seat'];b=row['behavior']
-        expected=OPENING['temperature'] if action and counts[seat]<OPENING['action_decisions_per_seat'] else 1.
+        expected=opening['temperature'] if action and counts[seat]<opening['action_decisions_per_seat'] else 1.
         require(b['action_decision']==(counts[seat] if action else None) and b['temperature']==expected,
                 'Branch opening counters/temperature differ from fresh per-seat decisions')
         if action:counts[seat]+=1

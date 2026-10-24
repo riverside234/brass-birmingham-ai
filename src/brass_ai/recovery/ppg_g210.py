@@ -21,17 +21,46 @@ DEFAULT=dict(contract=CONTRACT,enabled=True,buffer_iterations=2,max_epochs=3,
     learning_rate_source='ppo-last-applied',learning_rate_factor=.65,
     holdout_fraction=.05,holdout=dict(contract='ppg-critic-holdout/2.0.0',minimum_games_per_table=2),
     acceptance_steps=16,kl_check_steps=32,phase_interval=1,validation_iterations=1)
+COSINE_CONTRACT='ppg-value-phase/15.0.0'
+COSINE=dict(contract='ppg-cosine-warmup-decay/1.0.0',warmup_steps=16,start_factor=.1,end_factor=.3)
+COSINE_DEFAULT=dict(DEFAULT,contract=COSINE_CONTRACT,max_epochs=2,beta_clone_min=.5,
+    kl_check_steps=16,validation_iterations=2,rate_schedule=COSINE)
 
 
-def active(c):return c.get('contract')==CONTRACT
+def active(c):return c.get('contract') in (CONTRACT,COSINE_CONTRACT)
+
+
+def cosine(c):return c.get('contract')==COSINE_CONTRACT
+
+
+def cosine_options(config):
+    validate(config['value_phase'])
+    result=copy.deepcopy(config)
+    result['value_phase'].update(contract=COSINE_CONTRACT,max_epochs=2,beta_clone_min=.5,
+        kl_check_steps=16,validation_iterations=2,rate_schedule=copy.deepcopy(COSINE))
+    return result
+
+
+def rate_factor(step,total,config):
+    """One-based attempted step; full-cap schedule, never compressed by rejection."""
+    require(type(step) is int and type(total) is int and 1<=step<=total,'Invalid PPG rate step')
+    schedule=config['rate_schedule'];warmup=schedule['warmup_steps']
+    if step<=warmup:
+        return schedule['start_factor']+(1-schedule['start_factor'])*.5*(1-math.cos(math.pi*(step-1)/(warmup-1)))
+    fraction=(step-warmup)/(total-warmup)
+    return schedule['end_factor']+(1-schedule['end_factor'])*.5*(1+math.cos(math.pi*fraction))
 
 
 def validate(c):
-    require(type(c) is dict and set(c)==set(DEFAULT) and active(c),'Invalid g210 PPG fields/contract')
+    default=COSINE_DEFAULT if cosine(c) else DEFAULT
+    require(type(c) is dict and set(c)==set(default) and active(c),'Invalid g210 PPG fields/contract')
     # Smaller batches are useful for bounded regression/smoke fixtures only.
-    for k,v in DEFAULT.items():
+    for k,v in default.items():
         if k in ('batch_size','clone_rows','clone_batch_size'):continue
         require(c[k]==v and type(c[k]) is type(v),'Invalid g210 PPG option: '+k)
+    if cosine(c):
+        require(all(type(c['rate_schedule'][k]) is type(v) for k,v in COSINE.items()),
+            'Invalid PPG cosine schedule field type')
     require(all(type(c[k]) is int and 1<=c[k]<=DEFAULT[k] for k in ('batch_size','clone_rows','clone_batch_size'))
         and c['clone_batch_size']<=c['clone_rows'],'Invalid g210 PPG batch bounds')
     return c
@@ -54,7 +83,7 @@ def rate_receipt(rate,generation,steps):
 
 def beta_after_phase(beta,trips,report,config):
     """g210's new-trip/3-of-5 escalation; clean accepted low-KL phases halve."""
-    require(math.isfinite(beta) and 1<=beta<=32 and type(trips) is list
+    require(math.isfinite(beta) and config['beta_clone_min']<=beta<=32 and type(trips) is list
         and len(trips)<=5 and all(type(x) is bool for x in trips),'Invalid g210 beta state')
     trips=(trips+[bool(report['kl_guard_tripped'])])[-5:]
     after=beta;reason='fewer_than_three_trips' if trips[-1] else 'no_new_kl_trip'
@@ -109,20 +138,34 @@ def initialize(phases,model,config,*,raw,generation,root,run):
         else:
             fields={'contract','options','gae','beta_clone','kl_trips','optimizer','rolling_buffer','cache_origin','adoption'}
             if 'critic_data' in config:fields.add('critic_data')
-            require(saved.get('contract')==CHECKPOINT and set(saved)==fields and saved['options']==phases.options,
+            options_match=saved['options']==phases.options
+            if cosine(config['value_phase']) and saved['options']['value_phase']['contract']==CONTRACT:
+                options_match=cosine_options(saved['options'])==phases.options
+            require(saved.get('contract')==CHECKPOINT and set(saved)==fields and options_match,
                 'g210 checkpoint configuration differs')
             phases.beta=saved['beta_clone'];phases.trips=saved['kl_trips']
             phases.cache_origin=saved['cache_origin'];receipts=saved['rolling_buffer'];phases.adoption=saved['adoption']
         phases.state=copy.deepcopy(gae.validate_state(saved['gae'],config['advantage'],generation))
         phases.critic_state=copy.deepcopy(critic_data.validate_state(saved['critic_data'],config['critic_data'],generation)) if 'critic_data' in config else None
         phases.optimizer.load_state_dict(saved['optimizer'])
-    require(type(phases.beta) in (int,float) and math.isfinite(phases.beta) and 1<=phases.beta<=32
+    require(type(phases.beta) in (int,float) and math.isfinite(phases.beta) and config['value_phase']['beta_clone_min']<=phases.beta<=32
         and type(phases.trips) is list and len(phases.trips)<=5 and all(type(x) is bool for x in phases.trips),
         'Invalid persisted g210 beta')
     group=phases.optimizer.param_groups[0]
     require(len(phases.optimizer.param_groups)==1 and math.isfinite(group['lr']) and group['lr']>0
         and group['weight_decay']==0,'Invalid g210 value Adam')
     require(type(phases.cache_origin) is int and 0<=phases.cache_origin<=generation,'Invalid g210 replay origin')
+    from .utility import reward_spec,reviewed_reward_upgrade
+    previous_reward=(raw or {}).get('model_config',{}).get('utility')
+    current_reward=reward_spec(config)
+    if previous_reward is not None and previous_reward!=current_reward:
+        require(reviewed_reward_upgrade(previous_reward,current_reward),'Unreviewed g210 reward-cache transition')
+        phases.g210_migration=dict(contract='ppg-g210-reward-cache/1.0.0',origin=generation,
+            invalidated_generations=[r['generation'] for r in receipts],previous_reward=previous_reward,
+            current_reward=current_reward,beta_before=phases.beta,beta_after=phases.beta,
+            scope='Discard incompatible reward targets after reviewed adoption; preserve beta/trips, Adam/RNG and all gate evidence.')
+        phases.adoption=copy.deepcopy(phases.g210_migration)
+        receipts=[];phases.cache_origin=generation
     phases.buffer=ppg_replay.Buffer(root,run,config,generation=generation,receipts=receipts,origin=phases.cache_origin)
 
 
@@ -152,31 +195,39 @@ def fit(phases,model,preparation_pool):
     prepare=phase_preparation(preparation_pool,phases.config['update'].get('preparation_workers',0),
         directory=phases.root/'artifacts',enabled=True)
     with phases.buffer.datasets(phases.dataset.device,policy=False) as (ds,_,receipts), prepare as preparation:
-        indices=[];offset=0
+        indices=[];validation=[];validation_support=[];offset=0
         for r,part in zip(receipts,ds.data.parts):
             held=set(r['holdout_selection']['heldout_games'])
             membership=np.array([g not in held for g in r['game_ids']],dtype=bool)
             indices.extend((np.flatnonzero(membership[part.array['game']])+offset).tolist())
+            selected=np.flatnonzero(~membership[part.array['game']])
+            validation.extend((selected+offset).tolist())
+            validation_support.append(dict(generation=r['generation'],rows=len(selected),
+                games=len(set(part.array['game'][selected].tolist()))))
             offset+=r['rows']
         snapshot_weight=phases.critic_state['snapshot_weight'] if phases.critic_state else 1.
         ds.critic_weights=torch.tensor([snapshot_weight if r=='snapshot' else 1. for r in ds.roles],device=ds.device)
         companion=getattr(phases,'local_scoring',None)
         if companion is not None and companion.active:companion.inventory(ds,indices)
-        report=value_phase.fit(model,phases.optimizer,phases.dataset,phases.train_ids,phases.heldout_ids,
+        pooled=cosine(c)
+        report=value_phase.fit(model,phases.optimizer,phases.dataset,phases.train_ids,validation if pooled else phases.heldout_ids,
             phases.actor_ids if rate is not None else [],phases.probe_ids,effective,phases.config['update'],beta=phases.beta,
-            value_dataset=ds,value_train_ids=indices,validation_dataset=phases.critic_dataset,
+            value_dataset=ds,value_train_ids=indices,validation_dataset=ds if pooled else phases.critic_dataset,
+            **(dict(gate_dataset=phases.critic_dataset,gate_ids=phases.heldout_ids) if pooled else {}),
             current_count=receipts[0]['rows'],dropout=(phases.state['generation'],phases.config['seat_descriptors']['dropout_games']) if phases.critic_state else None,
             companion=companion,preparation=preparation)
         report['cpu_preparation']=preparation.report() if preparation is not None else dict(workers=0)
+        if pooled:report['acceptance_support']=validation_support
     if rate is None:report['early_stop_reason']='no_applied_ppo_rate'
     report.update(buffer=cache,split=phases.split,migration=copy.deepcopy(phases.g210_migration),
-        phase_interval=1,buffer_iterations=2,validation_iterations=1,scheduled=True,
+        phase_interval=1,buffer_iterations=2,validation_iterations=c['validation_iterations'],scheduled=True,
         epoch_cap_used=c['max_epochs'],kl_check_steps=c['kl_check_steps'],policy_guard_enabled=True,kl_control='hard-cap-and-penalty',
         learning_rate_source=copy.deepcopy(rate),peak_learning_rate=effective['learning_rate'],beta_clone_final=phases.beta,
         beta_mode='adaptive-up-down',
-        acceptance_generations=[phases.state['generation']+1],beta_retries=0,
+        acceptance_generations=sorted(r['generation'] for r in receipts) if cosine(c) else [phases.state['generation']+1],beta_retries=0,
         gate_critic_training=dict(source='ppg',optimizer_steps=report['optimizer_steps']),
-        rate_schedule=dict(reset_adam=False,warmup=False,decay=False,factor=.65))
+        rate_schedule=(dict(copy.deepcopy(c['rate_schedule']),reset_adam=False,warmup=True,decay=True,factor=.65)
+            if cosine(c) else dict(reset_adam=False,warmup=False,decay=False,factor=.65)))
     phases.value_report=report;return report
 
 

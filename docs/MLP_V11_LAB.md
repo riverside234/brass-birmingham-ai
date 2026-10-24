@@ -1,6 +1,15 @@
 # Grouped MLP v11.2: completed IL upgrade and fresh self-play
 
-**Current PPO/PPG update:** PPG runs every sixteen committed iterations, using all
+**Current g850 recipe:** use [the g850 instructions](../ai-research/TRAINING_G850_REVISION.md)
+for continuation and the effective settings. Fresh self-play config generation
+also selects this recipe: T1.5 openings, epsilon .05, fixed entropy .005,
+1% branching, .02/.075 insolvency, every-iteration two-age PPG with a two-epoch
+cap, both iterations' held-out games for loss acceptance, cosine LR, beta minimum
+.5 and KL/loss checks every 16 steps. Gate evidence remains current-only. PL bootstrap
+execution uses four single-threaded processes and full-fit warm starts.
+Completed IL is unchanged; no model architecture migration is part of this update.
+
+**Archived g620 PPO/PPG update:** PPG ran every sixteen committed iterations, using all
 sixteen cached ages and all sixteen ages' ordinary holdouts with uniform weights and
 a new shuffle each epoch. Its constant rate is **0.35 times the last actual PPO
 LR** from that iteration, with no PPG warmup or decay. PPO preserves frozen
@@ -13,8 +22,8 @@ saves weights and matching value-Adam/auxiliary state; each phase returns that
 minimum, including step zero if no update improves it. PPG has **no hard KL cap**; policy movement is controlled
 only by the cloning KL penalty. PPO's own KL guards remain unchanged. See the
 [implementation and official-code comparison](../ai-research/DCPG_G590.md), and the
-[current g620 packed-buffer continuation command](../ai-research/PPG_SIXTEEN_G620.md).
-New configs use `ppg-value-phase/12.0.0`: cloning beta starts and stays at 1.
+[archived g620 packed-buffer continuation command](../ai-research/PPG_SIXTEEN_G620.md).
+That recipe uses `ppg-value-phase/12.0.0`: cloning beta starts and stays at 1.
 Continuation fixes beta at its saved value (the g620 report records **1.0**),
 without automatic increases, decreases, KL rejection or KL-triggered retries.
 The g620 adoption preserves the current beta and completed

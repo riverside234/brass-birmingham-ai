@@ -290,13 +290,16 @@ class DeferredKL:
 
 def fit(model,optimizer,dataset,train_ids,heldout_ids,actor_ids,probe_ids,config,update,*,beta,
         value_dataset=None,value_train_ids=None,validation_dataset=None,current_count=None,dropout=None,
-        companion=None,preparation=None):
+        companion=None,preparation=None,gate_dataset=None,gate_ids=None):
     from .updates import autocast,value_losses,value_output
     began=time.perf_counter();model.eval()
     value_dataset=dataset if value_dataset is None else value_dataset
     value_train_ids=list(train_ids) if value_train_ids is None else list(value_train_ids)
     current_count=len(dataset.data) if current_count is None else current_count
     validation_dataset=dataset if validation_dataset is None else validation_dataset
+    separate_gate=gate_dataset is not None
+    gate_dataset=validation_dataset if gate_dataset is None else gate_dataset
+    gate_ids=heldout_ids if gate_ids is None else gate_ids
     report=dict(contract=config['contract'],enabled=config['enabled'],optimizer_steps=0,attempted_steps=0,
         epochs=0,completed_epochs=0,partial_epochs=0,attempted_epochs=0,early_stop_reason=None,kl_guard_tripped=False,
         acceptance='kl-safe-interval/1.0.0' if 'acceptance_steps' in config else 'kl-safe-prefix/1.0.0',
@@ -317,8 +320,13 @@ def fit(model,optimizer,dataset,train_ids,heldout_ids,actor_ids,probe_ids,config
         # PPO has moved the shared trunk. Neither a skipped value fit nor
         # read-only holdout diagnostics can certify its old calibration receipt.
         model.utility_calibration=None
-        report.update(heldout_after=metrics(model,validation_dataset,heldout_ids,update,evidence=True),
+        report.update(heldout_after=metrics(model,gate_dataset,gate_ids,update,evidence=True),
             descriptor_gain=dict(learner_ev_gain=None),role_usage={role:dict(distinct_used=0,presentations=0) for role in ('learner','snapshot')})
+        if separate_gate:
+            pooled=metrics(model,validation_dataset,heldout_ids,update,evidence=True)
+            report.update(acceptance_heldout_before=pooled,acceptance_heldout_after=copy.deepcopy(pooled),
+                acceptance_heldout_rows=len(heldout_ids),heldout_rows=len(gate_ids),
+                gate_evidence_scope='Current iteration only; previous held-out evidence is not counted again')
         if not config['enabled']:
             # Keep the same whole-game holdout for PPO and adoption gates.
             # Inference only: no clones, cached rows, optimizer or RNG draws.
@@ -334,12 +342,17 @@ def fit(model,optimizer,dataset,train_ids,heldout_ids,actor_ids,probe_ids,config
     clones=clone_indices(dataset,actor_ids,config['clone_rows'])
     reference=RawPolicyReference(model,dataset,sorted(set(clones)|set(probe_ids)),update)
     train_before=metrics(model,value_dataset,value_train_ids,update,preparation=preparation);before=metrics(model,validation_dataset,heldout_ids,update,evidence=True)
+    gate_before=metrics(model,gate_dataset,gate_ids,update,evidence=True) if separate_gate else before
     current=before;epochs=[];used=set();presentations=0;clone_presentations=0
     max_kl=0.;accepted_kl=0.;last_attempt=None;previous_presentations=0;role_presentations=defaultdict(int);branch_presentations=0
     deferred=config.get('kl_check_steps',1)>1
     guard=DeferredKL(model,optimizer,companion,reference,probe_ids,config['kl_cap'],report) if deferred else None
     if deferred:report['acceptance']='kl-checked-retained-interval/1.0.0'
     retained=[]
+    from .ppg_g210 import cosine,rate_factor
+    scheduled=cosine(config)
+    total_steps=math.ceil(len(value_train_ids)/config['batch_size'])*config['max_epochs']
+    if scheduled:report.update(planned_steps=total_steps,attempted_learning_rates=[])
     for epoch in range(config['max_epochs']):
         order=[value_train_ids[j] for j in torch.randperm(len(value_train_ids)).tolist()]
         batches=[order[start:start+config['batch_size']] for start in range(0,len(order),config['batch_size'])]
@@ -376,6 +389,10 @@ def fit(model,optimizer,dataset,train_ids,heldout_ids,actor_ids,probe_ids,config
                     with autocast(update,dataset.device):loss=reference.loss(part,inputs,model)
                     (beta*loss.sum()/len(sample)).backward()
                 torch.nn.utils.clip_grad_norm_(model.parameters(),update['grad_clip'],error_if_nonfinite=True)
+                if scheduled:
+                    rate=config['learning_rate']*rate_factor(report['attempted_steps']+attempted+1,total_steps,config)
+                    for group in optimizer.param_groups:group['lr']=rate
+                    report['attempted_learning_rates'].append(rate)
                 optimizer.step();attempted+=1
                 if companion is not None:companion.step('ppg')
                 report['attempted_value_presentations']+=len(batch);report['attempted_clone_presentations']+=len(sample)
@@ -482,7 +499,8 @@ def fit(model,optimizer,dataset,train_ids,heldout_ids,actor_ids,probe_ids,config
         # PPO already moved the trunk. A skipped/rejected value fit cannot
         # reissue its old pre-PPO receipt as evidence about these weights.
         model.utility_calibration=None
-    report.update(train_before=train_before,train_after=train_after,heldout_before=before,heldout_after=current,
+    gate_after=metrics(model,gate_dataset,gate_ids,update,evidence=True) if separate_gate else current
+    report.update(train_before=train_before,train_after=train_after,heldout_before=gate_before,heldout_after=gate_after,
         last_attempted_heldout=last_attempt,heldout_attempt_scope=('Loss-accepted boundaries remain provisional until a safe exact KL receipt; attempted diagnostics may precede final rollback'
             if deferred else 'Safe interval/prefix after any violating step is restored'),
         clone_rows=len(clones),clone_kl=reference.measure(model,clones),
@@ -496,9 +514,15 @@ def fit(model,optimizer,dataset,train_ids,heldout_ids,actor_ids,probe_ids,config
         epoch_reports=epochs,calibration_receipt=copy.deepcopy(model.utility_calibration),
         train_metrics_reused=not bool(report['optimizer_steps']),
         seconds=time.perf_counter()-began)
-    unknown_metrics=metrics(model,validation_dataset,heldout_ids,update,unknown=True)
+    if separate_gate:
+        report.update(acceptance_heldout_before=before,acceptance_heldout_after=current,
+            acceptance_heldout_rows=len(heldout_ids),heldout_rows=len(gate_ids),
+            acceptance_scope='Pooled row-mean loss across all available held-out games/branch families in both critic ages',
+            gate_evidence_scope='Current iteration only; previous held-out evidence is not counted again',
+            scope='Critic training and loss acceptance: two cached iterations. Cloning/probe and GAE/snapshot evidence: current iteration only.')
+    unknown_metrics=metrics(model,gate_dataset,gate_ids,update,unknown=True)
     from .critic_data import learner_ev
-    true_ev=learner_ev(current);unknown_ev=learner_ev(unknown_metrics)
+    true_ev=learner_ev(gate_after);unknown_ev=learner_ev(unknown_metrics)
     report.update(heldout_unknown=unknown_metrics,
         descriptor_gain=dict(learner_ev_gain=true_ev-unknown_ev if true_ev is not None and unknown_ev is not None else None),
         role_usage={role:dict(distinct_used=sum(value_dataset.roles[i]==role for i in used),presentations=role_presentations[role]) for role in ('learner','snapshot')})

@@ -1,9 +1,23 @@
 # Fresh training in conda: selected v4 teachers and Masked ISMCTS NN
 
-## Current g660 PPG continuation
+## Current g850 continuation
+
+Use [the g850 revision and continuation command](../ai-research/TRAINING_G850_REVISION.md).
+Openings use temperature **1.5**, epsilon mixing **0.05**, fixed entropy **0.005**,
+and branching **1% per eligible decision**. PPG still runs every iteration on
+two critic ages and both ages' held-out games, now with a **two-epoch cap**, beta floor **0.5**, loss/KL checks
+every **16** steps, and cosine warmup/decay around a peak of **0.65 × actual PPO LR**.
+Insolvency is **0.02 per event / 0.075 cap**. PL refits use four single-threaded
+processes by default (configurable 4–8) and full-fit warm starts. The completed
+IL directory and training progress are preserved. Use the new config helper;
+do not manually edit the saved run signature or reuse incompatible reward caches.
+GAE and snapshot evidence remain current-only; pooled acceptance does not count
+the previous iteration again as new gate evidence.
+
+## Archived g660 PPG continuation
 
 Use the [g210-style PPG restoration](../ai-research/PPG_G210_G660.md) for the
-current run. PPG now runs after every PPO iteration, trains current plus previous
+g660 recipe. PPG runs after every PPO iteration, trains current plus previous
 critic data, validates current-iteration holdouts, and allows at most **3 epochs**.
 Beta starts at **4 once on adoption**, then adapts in **[1, 32]**. PPG uses
 **0.65 times the actual PPO LR**, a **0.002 hard KL guard every 32 steps**

@@ -27,6 +27,7 @@ ANCHOR_ENTROPY = dict({k:copy.deepcopy(v) for k,v in ENTROPY.items()
     promotion_origin=dict(generation=0,event_count=0,events_sha256=digest([])))
 LEGACY_OPENING = dict(contract='opening-temperature/1.0.0', temperature=1.5, action_decisions_per_seat=2, seats='neural')
 OPENING = dict(LEGACY_OPENING, contract='opening-temperature/2.0.0', temperature=2.)
+REVISED_OPENING = dict(LEGACY_OPENING, contract='opening-temperature/3.0.0')
 LEGACY_BRANCH = dict(contract='selfplay-branching/1.0.0', tables=['selfplay'], rate_per_decision=.005,
     max_per_game=1, skip_opening_decisions=2, skip_final_rounds='rail_empty_deck_hand_le_4',
     move_distribution=dict(temperature_1=.7, temperature_2=.25, exploration_q=.05),
@@ -35,6 +36,7 @@ HIGH_BRANCH = dict(LEGACY_BRANCH, contract='selfplay-branching/2.0.0', rate_per_
     reset_opening_at_fork=True)
 BRANCH = dict(HIGH_BRANCH, rate_per_decision=.005)
 LOCAL_SCORING_BRANCH = dict(HIGH_BRANCH,rate_per_decision=.010)
+REVISED_BRANCH = dict(LOCAL_SCORING_BRANCH,contract='selfplay-branching/3.0.0')
 ROLLOUT = dict(contract='exploration-rollout/1.0.0', mode='fresh',
     opening_after_iterations=0, raw_entropy_after_iterations=0, branching_after_iterations=20)
 BLOCKS = ('exploration_distribution','entropy_control','opening','branching','exploration_rollout')
@@ -146,10 +148,11 @@ def validate(config):
     require(all(present), 'Exploration revision requires all versioned blocks')
     # This initial recipe is deliberately narrow; experiments need explicit
     # reviewed signatures rather than unbounded free-form controller options.
-    current=config['opening']==OPENING and config['branching'] in (BRANCH,LOCAL_SCORING_BRANCH)
+    revised=config['opening']==REVISED_OPENING and config['branching']==REVISED_BRANCH
+    current=(config['opening']==OPENING and config['branching'] in (BRANCH,LOCAL_SCORING_BRANCH)) or revised
     uniform=config['opening']==OPENING and config['branching']==HIGH_BRANCH
     legacy=config['opening']==LEGACY_OPENING and config['branching']==LEGACY_BRANCH
-    require(type(config['exploration']) in (int,float) and config['exploration'] in (0.,.02,.03) and config['exploration_distribution']==Q and
+    require(type(config['exploration']) in (int,float) and config['exploration'] in ((.05,) if revised else (0.,.02,.03)) and config['exploration_distribution']==Q and
         (current or uniform or legacy), 'Invalid exploration revision recipe')
     e=config['entropy_control']
     require(type(e) is dict,'Invalid entropy floor controller')
@@ -167,6 +170,8 @@ def validate(config):
         comparable['promotion_origin']=ANCHOR_ENTROPY['promotion_origin']
     require(e.get('mode') in ('off','shadow','apply') and comparable in recipes,
         'Invalid entropy floor controller')
+    require(not revised or (e['mode']=='off' and e['contract']==ANCHOR_ENTROPY['contract']),
+        'Revised openings use fixed entropy .005')
     r=config['exploration_rollout']
     expected=dict(ROLLOUT,mode='staged',opening_after_iterations=1,raw_entropy_after_iterations=2) if r.get('mode')=='staged' else ROLLOUT
     require(r==expected, 'Invalid exploration adoption schedule')
@@ -243,6 +248,7 @@ def sync_anchor_floor(config, state, controller):
     to state.json before the first new entropy checkpoint is written.
     """
     if config['entropy_control']['contract']!=ANCHOR_ENTROPY['contract']:return state
+    if config['entropy_control']['mode']=='off':return state
     result=copy.deepcopy(state);origin=config['entropy_control']['promotion_origin']
     require(origin['generation']<=state['generation'],'Entropy promotion origin is in the future')
     events=(controller or {}).get('events',[]);start=origin['event_count']
@@ -343,7 +349,8 @@ def advance(state, config, measurement, *, generation, warmup_done, healthy, pol
         if valid and s['baseline'] and h>1.3*s['baseline'][g]:alarms.append('entropy_above_1.3_baseline')
         report[g]=dict(raw_entropy=h,normalized_entropy=measurement.get('groups',{}).get(g,{}).get('normalized_entropy'),
             baseline=s['baseline'][g] if s['baseline'] else None,floor=floor,median=median,
-            alpha_before=before,alpha_after=entry['alpha'],decision=decision,reason=reason,alarms=alarms)
+            alpha_before=before,alpha_after=entry['alpha'],decision=decision,reason=reason,alarms=alarms,
+            effective_alpha=entry['alpha'] if e['mode']=='apply' else e['alpha_base'])
     s['generation']=generation
     return s,dict(contract=e['contract'],mode=e['mode'],origin=s['origin'],armed_at=s['armed_at'],
         **(dict(floor_ratio_by_group=floor_ratios(config,s)) if 'floor_ratio_by_group' in e else {}),

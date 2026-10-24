@@ -423,7 +423,9 @@ def latest_model_config(config,imitation_checkpoint):
     result['advantage']=copy.deepcopy(ADVANTAGE)
     result['critic_data']=copy.deepcopy(CRITIC_DATA)
     result['seat_descriptors']=copy.deepcopy(SEAT_DESCRIPTORS)
-    result.setdefault('value_phase',dict(copy.deepcopy(VALUE_PHASE),learning_rate=.5*result['learning_rate']))
+    # Fresh generation starts from today's recipe, including when its input
+    # config came from a run with a newer, strictly enabled PPG contract.
+    result['value_phase']=dict(copy.deepcopy(VALUE_PHASE),learning_rate=.5*result['learning_rate'])
     result.setdefault('table_plan',copy.deepcopy(TABLE_PLAN))
     result.setdefault('opponent_pool',copy.deepcopy(OPPONENT_POOL))
     result.setdefault('rating',copy.deepcopy(RATING))
@@ -451,6 +453,9 @@ def latest_model_config(config,imitation_checkpoint):
     result=low_branch_config(result)
     from .ppo_kl_control import configure as exact_kl_config
     result=exact_kl_config(result)
+    from .ppg_g210 import options as g210_options
+    from .training_revision_g850 import configure as g850_config
+    result=g850_config(g210_options(result))
     return validate_config(result)
 
 
@@ -603,8 +608,15 @@ def validate_config(config):
     from .exploration import validate as validate_exploration,BLOCKS
     validate_exploration(config)
     if 'opening_objective' in config.get('update',{}):
-        from .exploration import OPENING
-        require(config.get('opening')==OPENING,'Decoupled PPO requires temperature-2 opening collection')
+        from .exploration import OPENING,REVISED_OPENING
+        from .opening_objective import T15
+        expected=REVISED_OPENING if config['update']['opening_objective']==T15 else OPENING
+        require(config.get('opening')==expected,'Decoupled PPO opening collection differs')
+    if 'rating_compute' in config:
+        from .plackett_luce import validate_compute
+        fields.add('rating_compute');validate_compute(config['rating_compute'])
+        require(config['rating_compute']['workers']<=config['audit_workers'],
+            'Rating processes exceed the existing CPU reader budget')
     fields.update(k for k in BLOCKS if k in config)
     require(('critic_data' in config)==('seat_descriptors' in config),'Critic/descriptor blocks must be supplied together')
     if 'critic_data' in config:

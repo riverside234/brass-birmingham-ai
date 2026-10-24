@@ -356,7 +356,9 @@ def schedule(root,run,state,config,*,device='cpu',mono=None,inference_devices=No
         working=copy.deepcopy(rating);working['agents'][spec['candidate']]=spec['agents'][spec['candidate']]
         # Only the 128 main games enter PL; diagnostic panels stay separate.
         all_rows=read_games(root,rating)+rows
-        fitted,samples=estimate([r for r in all_rows if r['kind']=='rating'],working['agents'],c)
+        compute=config.get('rating_compute')
+        fitted,samples=estimate([r for r in all_rows if r['kind']=='rating'],working['agents'],c,
+            **(dict(compute=compute) if compute is not None else {}))
         recent=state.get('recent_training',[])
         health=next((r['il_kl_limit']['health'] for r in reversed(recent) if r.get('il_kl_limit') and r['iteration']+1==generation),None)
         panels=panel_report(rows,spec['candidate'],health,c['seed'],gates=rating.get('panel_gates'));write_once(directory/'panels.json',panels)
