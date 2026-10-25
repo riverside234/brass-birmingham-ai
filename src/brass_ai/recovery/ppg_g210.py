@@ -1,7 +1,7 @@
 """Explicit g210 auxiliary recipe, with reviewed beta/LR/epoch adjustments.
 
 PPO's objective is deliberately outside this configuration migration. The
-32-step hard guard and monotone 16-step acceptance live in value_phase.fit.
+versioned KL guard and monotone loss acceptance live in value_phase.fit.
 """
 import copy
 import math
@@ -29,18 +29,33 @@ LINEAR_CONTRACT='ppg-value-phase/16.0.0'
 LINEAR_MIGRATION='ppg-linear-warmup-near-zero-decay/1.0.0'
 LINEAR=dict(contract='ppg-linear-warmup-cosine-decay/1.0.0',warmup_steps=16,start_factor=.1,end_factor=.001)
 LINEAR_DEFAULT=dict(COSINE_DEFAULT,contract=LINEAR_CONTRACT,beta_clone_min=1.,rate_schedule=LINEAR)
+SHORT_CONTRACT='ppg-value-phase/17.0.0'
+SHORT_MIGRATION='ppg-eight-step-loss-half-beta/1.0.0'
+SHORT_DEFAULT=dict(LINEAR_DEFAULT,contract=SHORT_CONTRACT,beta_clone_min=.5,acceptance_steps=8)
 
 
-def active(c):return c.get('contract') in (CONTRACT,COSINE_CONTRACT,LINEAR_CONTRACT)
+def active(c):return c.get('contract') in (CONTRACT,COSINE_CONTRACT,LINEAR_CONTRACT,SHORT_CONTRACT)
 
 
 def cosine(c):return c.get('contract')==COSINE_CONTRACT
 
 
-def linear(c):return c.get('contract')==LINEAR_CONTRACT
+def linear(c):return c.get('contract') in (LINEAR_CONTRACT,SHORT_CONTRACT)
+
+
+def short(c):return c.get('contract')==SHORT_CONTRACT
 
 
 def scheduled(c):return cosine(c) or linear(c)
+
+
+def short_options(config):
+    """Exact g1050 PPG-only transition; preserve timing, targets and cache ages."""
+    validate(config['value_phase'])
+    require(linear(config['value_phase']),'Eight-step loss checks require the g950 PPG recipe')
+    result=copy.deepcopy(config)
+    result['value_phase'].update(contract=SHORT_CONTRACT,beta_clone_min=.5,acceptance_steps=8)
+    return result
 
 
 def linear_options(config):
@@ -73,7 +88,7 @@ def rate_factor(step,total,config):
 
 
 def validate(c):
-    default=LINEAR_DEFAULT if linear(c) else COSINE_DEFAULT if cosine(c) else DEFAULT
+    default=SHORT_DEFAULT if short(c) else LINEAR_DEFAULT if linear(c) else COSINE_DEFAULT if cosine(c) else DEFAULT
     require(type(c) is dict and set(c)==set(default) and active(c),'Invalid g210 PPG fields/contract')
     # Smaller batches are useful for bounded regression/smoke fixtures only.
     for k,v in default.items():
@@ -163,20 +178,23 @@ def initialize(phases,model,config,*,raw,generation,root,run):
             options_match=saved['options']==phases.options
             if cosine(config['value_phase']) and saved['options']['value_phase']['contract']==CONTRACT:
                 options_match=cosine_options(saved['options'])==phases.options
-            adopting_linear=linear(config['value_phase']) and cosine(saved['options']['value_phase'])
+            adopting_linear=config['value_phase']['contract']==LINEAR_CONTRACT and cosine(saved['options']['value_phase'])
             if adopting_linear:options_match=linear_options(saved['options'])==phases.options
+            adopting_short=short(config['value_phase']) and saved['options']['value_phase']['contract']==LINEAR_CONTRACT
+            if adopting_short:options_match=short_options(saved['options'])==phases.options
             require(saved.get('contract')==CHECKPOINT and set(saved)==fields and options_match,
                 'g210 checkpoint configuration differs')
             phases.beta=saved['beta_clone'];phases.trips=saved['kl_trips']
             phases.cache_origin=saved['cache_origin'];receipts=saved['rolling_buffer'];phases.adoption=saved['adoption']
-            if adopting_linear:
+            if adopting_linear or adopting_short:
                 require(type(phases.beta) in (int,float) and math.isfinite(phases.beta) and
                     saved['options']['value_phase']['beta_clone_min']<=phases.beta<=32,
                     'Invalid beta before PPG schedule adoption')
-                phases.ppg_schedule_migration=dict(contract=LINEAR_MIGRATION,origin=generation,
-                    beta_before=phases.beta,beta_after=1.,previous_adoption=copy.deepcopy(phases.adoption),
+                beta_after=.5 if adopting_short else 1.
+                phases.ppg_schedule_migration=dict(contract=SHORT_MIGRATION if adopting_short else LINEAR_MIGRATION,origin=generation,
+                    beta_before=phases.beta,beta_after=beta_after,previous_adoption=copy.deepcopy(phases.adoption),
                     scope='One-time beta hotfix; preserve trip history, model/Adam/RNG, cached targets, progress and gate evidence.')
-                phases.adoption=copy.deepcopy(phases.ppg_schedule_migration);phases.beta=1.
+                phases.adoption=copy.deepcopy(phases.ppg_schedule_migration);phases.beta=beta_after
         phases.state=copy.deepcopy(gae.validate_state(saved['gae'],config['advantage'],generation))
         phases.critic_state=copy.deepcopy(critic_data.validate_state(saved['critic_data'],config['critic_data'],generation)) if 'critic_data' in config else None
         phases.optimizer.load_state_dict(saved['optimizer'])

@@ -289,7 +289,8 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
         state=commit_transition(run,state,signature,opponent_pool=resumed_pool,pool_migration=pool_migration,local_scoring_adoption=local_adoption)
     if phases is not None and getattr(phases,'ppg_schedule_migration',None):
         change=phases.ppg_schedule_migration
-        print(f'PPG schedule adopted at g{change["origin"]}: beta {change["beta_before"]:g} -> 1; '
+        print(f'PPG schedule adopted at g{change["origin"]}: beta {change["beta_before"]:g} -> {change["beta_after"]:g}; '
+              f'loss checks every {config["value_phase"]["acceptance_steps"]} steps, KL every {config["value_phase"]["kl_check_steps"]}; '
               'linear warmup to step 16, cosine decay to 0.001x peak over two epochs; replay and Adam preserved',flush=True)
     local_cleanup=cleanup_local(root,run,state)
     if local_cleanup:

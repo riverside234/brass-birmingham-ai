@@ -40,7 +40,7 @@ class Revision(unittest.TestCase):
             {'contract','rate_schedule','beta_clone_min'})
         self.assertEqual(G.linear_options(new),new)
         fresh=latest_model_config(old,old['imitation_checkpoint'])
-        self.assertEqual(fresh['value_phase'],new['value_phase'])
+        self.assertEqual(fresh['value_phase'],G.short_options(new)['value_phase'])
         for k,v in [('beta_clone_min',.5),('max_epochs',3),('phase_interval',2),('validation_iterations',1)]:
             with self.assertRaises(ValueError):G.validate(dict(new['value_phase'],**{k:v}))
         for k,v in [('end_factor',0.),('end_factor',.3),('warmup_steps',16.),('start_factor',0.)]:

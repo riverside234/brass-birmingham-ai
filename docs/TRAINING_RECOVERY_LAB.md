@@ -1,6 +1,17 @@
 # Fresh training in conda: selected v4 teachers and Masked ISMCTS NN
 
-## Current g950 continuation
+## Current g1050 continuation
+
+Use [the g1050 continuation command](../ai-research/TRAINING_G1050_REVISION.md).
+PPG beta is set to **0.5 once on adoption**, then adapts within **0.5–32**.
+Held-out loss checks run every **8 steps**, using the full two-iteration held-out
+set. Periodic KL checks remain every **16 steps**, with exact verification of
+any otherwise unchecked retained loss checkpoint. The hard KL cap stays 0.002.
+Linear warmup to step 16, cosine decay to 0.001 × peak, the two-epoch cap and
+0.65 × actual PPO peak LR are unchanged. Replay caches and training state are
+preserved; no fresh-buffer reset or IL change is needed.
+
+## Archived g950 continuation
 
 Use [the g950 review and continuation command](../ai-research/TRAINING_G950_REVIEW.md).
 PPG uses linear warmup from **0.1 × peak at step 1** to **peak at step 16**,
