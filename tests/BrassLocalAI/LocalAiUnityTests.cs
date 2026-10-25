@@ -155,7 +155,7 @@ public sealed class LocalAiUnityDriver : MonoBehaviour
             controls.OpenPicker(); menu.BackClicked(); Check(!StrategyPicker.IsOpen && menuView.gameObject.activeInHierarchy, "Escape/back closes chooser without exiting menu");
             Check(row.GetComponentsInChildren<Button>().All(b => !Enumerable.Range(0, b.onClick.GetPersistentEventCount()).Any(i => b.onClick.GetPersistentMethodName(i).Contains("DifficultyClick"))), "old arrows absent from active UI");
         }
-        for (int i = 1; i < 4; i++) { LocalMenu.Select(Setup.PlayerMetadata[i], ProfileCatalog.Keys[i + 2]); LocalMenu.SelectDifficulty(Setup.PlayerMetadata[i], DifficultyCatalog.Keys[i - 1]); }
+        for (int i = 1; i < 4; i++) { LocalMenu.Select(Setup.PlayerMetadata[i], ProfileCatalog.Keys[i + 2]); LocalMenu.SelectDifficulty(Setup.PlayerMetadata[i], (i == 3 ? "max" : DifficultyCatalog.Keys[i - 1])); }
         Call(menu, "PresentGameConfiguration");
         var selected = Setup.PlayerMetadata[1]; var priorColor = selected.PlayerStartConfiguration.Color;
         menu.NextColorFor(priorColor, priorColor);
@@ -260,7 +260,7 @@ public sealed class LocalAiUnityDriver : MonoBehaviour
             AssertInsideTarget(row.GetComponent<AiSetupRow>().StyleButton.GetComponent<RectTransform>(), "single split menu control");
         Rows()[3].GetComponent<AiSetupRow>().OpenPicker(); AssertInsideTarget(StrategyPicker.Active.Window, "split picker"); Capture("local-ai-resume-picker-1920x1200.png"); StrategyPicker.CloseActive();
         router.Resize(1600, 900); yield return null;
-        Check(Setup.PlayerMetadata.Skip(1).Select(LocalMenu.Difficulty).SequenceEqual(DifficultyCatalog.Keys), "next-game preferences preserve each difficulty independently of Continue");
+        Check(Setup.PlayerMetadata.Skip(1).Select(LocalMenu.Difficulty).SequenceEqual(new[]{"easy","mid","max"}), "next-game preferences preserve each difficulty independently of Continue");
         menu.DecreaseNumberOfPlayers(); var second = menu.StartGame(92702);
         Check(second != null && repository.GetGamesMetadata().Count() == 2, "new game keeps previous save");
         Check(LocalMenu.FindResume(history).GameId == second.Metadata.GameId, "newest ready save selected");
@@ -300,7 +300,7 @@ public sealed class LocalAiUnityDriver : MonoBehaviour
             if(Environment.GetCommandLineArgs().Contains("--brass-masked-quick"))
             {
                 bool quickCase=(count==2 && !intro && key=="balanced" && (difficulty=="easy" || difficulty=="mid")) ||
-                    (count==4 && !intro && key=="balanced" && difficulty=="hard") ||
+                    (count==4 && !intro && key=="balanced" && (difficulty=="hard" || difficulty=="max")) ||
                     (count==3 && intro && (key=="rail-tempo" || key=="pottery-flex") && difficulty=="easy") ||
                     (count==4 && !intro && (key=="cotton" || key=="goods-beer" || key=="supplier") && difficulty=="easy");
                 if(!quickCase)continue;
@@ -412,7 +412,7 @@ public sealed class LocalAiUnityDriver : MonoBehaviour
             Check(remainingBudget <= DifficultyCatalog.Milliseconds(difficulty), "no request receives a larger allowance than its actor");
             if (count == 2 && !intro && key == "balanced" && difficulty == "mid") Check(replanInjected && requests == 2 && remainingBudget <= Math.Max(0, DifficultyCatalog.Milliseconds(difficulty) - injectedElapsed) + 1, "stale second action replans only within the original turn deadline");
             turns.Add(new { count, intro, key, difficulty, inputGuardTested = probed, humanTransitionTested = humanTransition, replanInjected, initialQueueDelayTested, planningRequests = requests, lastRequestMilliseconds = remainingBudget, thinkingMilliseconds = DifficultyCatalog.Milliseconds(difficulty), workLimit = LocalTurnBridge.SearchWorkLimit, seconds = Time.realtimeSinceStartup - startTime });
-            File.WriteAllText(Output + ".progress.json", JObject.FromObject(new { completed = turns.Count, total = 108, count, intro, key, difficulty }).ToString());
+            File.WriteAllText(Output + ".progress.json", JObject.FromObject(new { completed = turns.Count, total = Environment.GetCommandLineArgs().Contains("--brass-masked-quick") ? 9 : 144, count, intro, key, difficulty }).ToString());
             if (humanTransition)
             {
                 var human = app.Metadata.GetPlayerMetadataByColor(app.Game.GameProgressInformation.CurrentPlayer.Color);
@@ -463,35 +463,44 @@ public sealed class LocalAiUnityDriver : MonoBehaviour
         int first=checks;
         Check(TurnCoordinator.SearchWorkers==2, "V4 retains two search workers");
         Check(LocalTurnBridge.SearchWorkLimit==1000000, "V4 work guard unchanged");
-        var expected=new[]{6000,10000,15000};var previous=new[]{2000,5000,12000};
-        Check(DifficultyCatalog.Keys.SequenceEqual(new[]{"easy","mid","hard"}), "same three difficulty IDs and order");
-        for(int tier=0;tier<3;tier++){
+        var expected=new[]{4000,8000,10000,12000};var shape=new[]{2000,5000,12000,12000};
+        Check(DifficultyCatalog.Keys.SequenceEqual(new[]{"easy","mid","hard","max"}), "four difficulty IDs in time order");
+        Check(DifficultyCatalog.Default=="hard" && DifficultyCatalog.Milliseconds(DifficultyCatalog.Default)==10000, "default remains Hard at 10s");
+        for(int tier=0;tier<4;tier++){
             string key=DifficultyCatalog.Keys[tier];
-            Check(DifficultyCatalog.Milliseconds(key)==expected[tier], "new V4 turn allowance "+key);
-            Check(DifficultyCatalog.Summary(key).EndsWith(" · "+expected[tier]/1000+"s"), "summary uses new allowance");
-            var saved=DifficultyCatalog.Snapshot(key);var old=(JObject)saved.DeepClone();
-            old["version"]="local-ai-execution/1.0.0";old["search_ms"]=previous[tier];
-            Check(DifficultyCatalog.Read(saved)==key && DifficultyCatalog.Read(old)==key, "current and previous execution versions readable");
-            foreach(var valid in new[]{saved,old}){
-                var broken=(JObject)valid.DeepClone();broken["search_ms"]=17;
+            Check(DifficultyCatalog.Milliseconds(key)==expected[tier], "V4 turn allowance "+key);
+            Check(DifficultyCatalog.Summary(key).EndsWith(" · "+expected[tier]/1000+"s"), "summary uses current allowance");
+            var saved=DifficultyCatalog.Snapshot(key);
+            Check((string)saved["version"]=="local-ai-execution/1.2.0" && DifficultyCatalog.Read(saved)==key, "new execution format includes all four tiers");
+            foreach(string version in new[]{"local-ai-execution/1.0.0","local-ai-execution/1.1.0","local-ai-execution/1.2.0","future/9"}){
+                var broken=(JObject)saved.DeepClone();broken["version"]=version;broken["search_ms"]=17;
                 bool rejected=false;try{DifficultyCatalog.Read(broken);}catch(InvalidDataException){rejected=true;}
-                Check(rejected,"version-specific execution values remain validated");
+                Check(rejected,"invalid execution time rejected for "+version);
             }
             foreach(int count in new[]{2,3,4})foreach(bool intro in new[]{false,true})foreach(string style in ProfileCatalog.Keys){
                 var frozen=ProfileCatalog.Snapshot(style,count,intro);var frozenHash=Wire.Hash(frozen);
-                var baseline=ProfileCatalog.ForPlay(frozen);ProfileCatalog.ConfigureClock(baseline,previous[tier]);
+                var baseline=ProfileCatalog.ForPlay(frozen);ProfileCatalog.ConfigureClock(baseline,shape[tier]);
                 var updated=ProfileCatalog.ForPlay(frozen);ProfileCatalog.ConfigureClock(updated,expected[tier],key);
-                Check(JToken.DeepEquals(JObject.FromObject(baseline),JObject.FromObject(updated)), "tier search shape and all other settings unchanged");
+                Check(JToken.DeepEquals(JObject.FromObject(baseline),JObject.FromObject(updated)), "existing search shape preserved; Max shares Hard shape");
                 Check(Wire.Hash(frozen)==frozenHash,"frozen strategy and intent identity unchanged");
                 var config=new GameStartConfiguration((NumberOfPlayers)count){IsIntroductoryGame=intro};
                 var meta=new GameMetadata(config,GameType.Local){GameId="clock-compatibility"};
                 foreach(var start in config.Players)meta.JoinGame(new PlayerMetadata{PlayerStartConfiguration=start,AiType=AIType.Hard});
                 var state=LocalGameState.Create(meta,p=>style,p=>key);state["ready"]=true;
-                foreach(JObject row in state["assignments"])row["execution"]=old.DeepClone();
-                state["assignment_sha256"]=Wire.Hash(new JObject{["format"]=state["format"],["runtime"]=state["runtime"],["rules"]=state["rules"],["schema"]=state["schema"],["configuration"]=state["configuration"],["assignments"]=state["assignments"]});
-                var before=Wire.Hash(state);SaveExtensions.Set(meta,state);var read=LocalGameState.Read(meta);
-                Check(Wire.Hash(read)==before && read["assignments"].All(a=>LocalGameState.Difficulty(read,(JObject)a)==key), "signed previous execution assignments read without mutation");
+                var encoded=System.Text.Encoding.UTF8.GetBytes(new JObject{[SaveExtensions.Key]=state}.ToString());SaveExtensions.Read(meta,encoded);var current=LocalGameState.Read(meta);
+                Check(Wire.Hash(current)==Wire.Hash(state) && current["assignments"].All(a=>LocalGameState.Difficulty(current,(JObject)a)==key && (int)a["execution"]["search_ms"]==expected[tier]), "all four execution choices survive serialization and read");
+                if(tier<3)foreach(string version in new[]{"local-ai-execution/1.0.0","local-ai-execution/1.1.0"}){
+                    var old=(JObject)state.DeepClone();int previous=version.EndsWith("1.0.0")?new[]{2000,5000,12000}[tier]:new[]{6000,10000,15000}[tier];
+                    foreach(JObject row in old["assignments"])row["execution"]=new JObject{["version"]=version,["difficulty"]=key,["search_ms"]=previous};
+                    old["assignment_sha256"]=Wire.Hash(new JObject{["format"]=old["format"],["runtime"]=old["runtime"],["rules"]=old["rules"],["schema"]=old["schema"],["configuration"]=old["configuration"],["assignments"]=old["assignments"]});
+                    var before=Wire.Hash(old);SaveExtensions.Read(meta,System.Text.Encoding.UTF8.GetBytes(new JObject{[SaveExtensions.Key]=old}.ToString()));var read=LocalGameState.Read(meta);
+                    Check(Wire.Hash(read)==before && read["assignments"].All(a=>LocalGameState.Difficulty(read,(JObject)a)==key), "both prior signed execution versions read without mutation");
+                }
             }
+        }
+        foreach(string version in new[]{"local-ai-execution/1.0.0","local-ai-execution/1.1.0"}){
+            bool rejected=false;try{DifficultyCatalog.Read(new JObject{["version"]=version,["difficulty"]="max",["search_ms"]=12000});}catch(InvalidDataException){rejected=true;}
+            Check(rejected,"prior versions cannot claim the new Max tier");
         }
         var legacy=ProfileCatalog.Create("balanced",4);ProfileCatalog.ConfigureClock(legacy,10000);
         var compatibility=ProfileCatalog.Create("balanced",4);ProfileCatalog.ConfigureClock(compatibility,10000,DifficultyCatalog.Existing);
@@ -542,6 +551,14 @@ public sealed class LocalAiUnityDriver : MonoBehaviour
         Check(bot.Player.AiType == AIType.Human && bot.SelectedChoice.Equals(original) && bot.SelectedDifficulty == difficulty, "Human Apply preserves committed AI settings, discards unapplied AI edits");
         bot.OpenPicker(); panel = AiSelectionPanel.Active; panel.SelectPage(PlayerSelectionPage.V4); panel.ApplyButton.onClick.Invoke();
         Check(bot.Player.AiType == AIType.Hard && bot.SelectedChoice.Equals(original), "switch back restores committed AI");
+        bot.OpenPicker(); panel=AiSelectionPanel.Active;panel.DifficultyButtons[3].onClick.Invoke();
+        panel.SelectPage(PlayerSelectionPage.Human);panel.SelectPage(PlayerSelectionPage.V4);
+        Check(panel.DraftDifficulty=="max" && panel.DifficultyButtons[3].GetComponent<AiControlSurface>().Selected,"Max draft survives page rebuilds");
+        Capture("player-selection-max-1200.png");panel.ApplyButton.onClick.Invoke();
+        Check(bot.SelectedDifficulty=="max" && Get<TextMeshProUGUI>(bot,"choiceDetail").text=="Max · up to 12s", "Max Apply immediately updates row");
+        Capture("player-selection-max-row-1200.png");
+        LocalMenu.SelectDifficulty(bot.Player,difficulty);Call(menu,"PresentGameConfiguration");
+
         bot.OpenPicker(); panel = AiSelectionPanel.Active; panel.DifficultyButtons[1].onClick.Invoke();
         Check(bot.SelectedDifficulty == difficulty, "difficulty-only draft does not commit early");
         panel.ApplyButton.onClick.Invoke(); Check(bot.SelectedDifficulty == "mid" && bot.SelectedChoice.Equals(original), "difficulty-only Apply commits without reselecting style");
@@ -614,8 +631,15 @@ public sealed class LocalAiUnityDriver : MonoBehaviour
                     Check(panel.Tiles.Count() == (family == PlayerSelectionPage.Human ? 0 : family == PlayerSelectionPage.V4 ? 7 : 17), "page count stable at resolution/text preset");
                     Check(panel.Tiles.All(b => b.interactable == (family == PlayerSelectionPage.V4)), "availability stable after rebuild");
                     if (family != PlayerSelectionPage.Human) {
-                    foreach (var name in new[] { "Find AI", "Clear filter", "random", "Difficulty easy", "Difficulty mid", "Difficulty hard" })
+                    foreach (var name in new[] { "Find AI", "Clear filter", "random", "Difficulty easy", "Difficulty mid", "Difficulty hard", "Difficulty max" })
                         AssertInsideTarget(panel.Window.Find(name).GetComponent<RectTransform>(), "fixed AI control " + name);
+                    Check(panel.DifficultyButtons.Length==4, "four search-time buttons on each AI page");
+                    for(int tier=0;tier<4;tier++){
+                        var button=panel.DifficultyButtons[tier];var text=button.GetComponentInChildren<TextMeshProUGUI>();
+                        Check(text.text==DifficultyCatalog.Summary(DifficultyCatalog.Keys[tier]), "all four time labels survive resize/text changes");
+                        Check(text.GetPreferredValues(text.text).x<=text.rectTransform.rect.width+1, "search-time label fits its button");
+                        if(tier>0){var previousBounds=RectTransformUtility.CalculateRelativeRectTransformBounds(panel.Window,panel.DifficultyButtons[tier-1].transform);var nextBounds=RectTransformUtility.CalculateRelativeRectTransformBounds(panel.Window,button.transform);Check(previousBounds.max.x<nextBounds.min.x,"time buttons do not overlap");}
+                    }
                     if (size.y == 1200 && preset == 1 && family == PlayerSelectionPage.Gamma)
                         foreach (var tile in panel.Tiles.Skip(1)) Check(InsideViewport(tile.GetComponent<RectTransform>(), panel.GridScroll.viewport), "all Gamma cards visible at 1200 default: " + tile.name);
                     var closePosition = panel.Window.Find("Close panel").position;
@@ -625,7 +649,7 @@ public sealed class LocalAiUnityDriver : MonoBehaviour
                     panel.GridScroll.verticalNormalizedPosition = 1;
                     }
                     Capture("player-selection-" + size.x + "x" + size.y + "-" + family + "-" + preset + ".png");
-                    selectionLayouts.Add(new { width = size.x, height = size.y, preset, family = family.ToString(), choices = panel.Tiles.Count(), available = panel.Tiles.Count(b => b.interactable) });
+                    selectionLayouts.Add(new { width = size.x, height = size.y, preset, family = family.ToString(), choices = panel.Tiles.Count(), available = panel.Tiles.Count(b => b.interactable), difficultyButtons = panel.DifficultyButtons.Length, difficultyLabels = panel.DifficultyButtons.Select(b=>b.GetComponentInChildren<TextMeshProUGUI>().text).ToArray() });
                 }
                 panel.Close(); yield return null;
             }

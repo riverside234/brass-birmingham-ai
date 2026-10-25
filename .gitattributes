@@ -24,3 +24,6 @@ training/models/**/*.pt -text
 training/models/**/*.onnx -text
 training/runtime/**/*.exe -text
 training/runtime/**/*.json -text
+# Migration bundle receipts and checkpoint parts must survive Git byte-for-byte.
+test_nn/**/*.json -text
+test_nn/**/*.pt.part* -text

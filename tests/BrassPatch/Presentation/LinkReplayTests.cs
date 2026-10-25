@@ -83,6 +83,14 @@ public sealed class LinkReplayDriver : MonoBehaviour
     {
         var prefabs = Resources.FindObjectsOfTypeAll<UnityViewFactory>().SelectMany(f => f.ViewList.Views).OfType<BaseView>().ToArray();
         UnityCityLocatorRegression.Prefab = prefabs.OfType<BoardView>().First(v => v.GetType() == typeof(BoardView));
+        bool staleBaseline = Environment.GetCommandLineArgs().Contains("--brass-network-stale-baseline");
+        if (staleBaseline) {
+            foreach (int count in new[] { 2, 3, 4 }) {
+                var reproduction = Flow(prefabs, count, "canal-opening", false, true);
+                while (reproduction.MoveNext()) yield return reproduction.Current;
+            }
+            yield break;
+        }
         bool baseline = Environment.GetCommandLineArgs().Contains("--brass-link-replay-baseline");
         foreach (int count in baseline ? new[] { 2 } : new[] { 2, 3, 4 })
         foreach (string era in new[] { "Canal", "Rail" })
@@ -156,10 +164,38 @@ public sealed class LinkReplayDriver : MonoBehaviour
             var flow = Flow(prefabs, count, kind, interrupt);
             while (flow.MoveNext()) yield return flow.Current;
         }
+        foreach (int count in new[] { 2, 3, 4 }) {
+            var cancelled = CancelledPrompt(prefabs, count);
+            while (cancelled.MoveNext()) yield return cancelled.Current;
+            SearchContinuation(count);
+        }
     }
     static string State(BrassApplicationGame app)
     { var g = app.Game; return JsonConvert.SerializeObject(new { g.Revision, events = g.GetUncommittedEvents().Count,
         actions = g.TurnFlow.GetRemainingActionsCount(), players = g.PlayersTrack.Players.Select(p => new { p.Color, p.Money, p.IncomeMarkerPosition, p.LinkTileCount, p.VP, hand = p.Hand.Count }).ToArray() }); }
+    void SearchContinuation(int count)
+    {
+        var config = new BoardGameRules.Entities.Game.GameStartConfiguration((BoardGameRules.Entities.Common.NumberOfPlayers)count);
+        var configuration = BrassHost.Host.Configuration(config);
+        var host = new BrassHost.Host(270926, new Newtonsoft.Json.Linq.JObject { ["configuration"] = configuration });
+        var g = host.Game; var player = host.Player;
+        g.ApplyEvent(new RailEraStarted()); g.ApplyEvent(new MoneyLoaned(player.Color, 100));
+        g.ApplyEvent(new LinkPlaced(player.Color, "RailBirminghamOxford"));
+        while (player.Mat.GetFirstBuildingOfType(BuildingType.Brewery).Level < 2) g.ApplyEvent(new IndustryDeveloped(player.Color, BuildingType.Brewery));
+        var slot = g.Board.GetRegionByName(RegionName.Stafford).BuildingSlots.First(s => s.BuildingTypes.Contains(BuildingType.Brewery));
+        g.ApplyEvent(new IndustryBuilt(player.Color, BuildingType.Brewery, slot.UniqueId));
+        host.SearchApply(host.Choices().First(c => c.kind == "network" && c.target == "RailBirminghamDudley").id);
+        host.SearchApply(host.Choices().First(c => c.kind == "coal").id);
+        var restored = new BrassHost.Host(270926, host.TrustedSetup());
+        Check(ReflectionAccess.Get<BoardGameRules.Entities.Cards.BaseCard>(restored.Game.TurnFlow.NetworkAction, "_chosenCard") == null &&
+            restored.Game.TurnFlow.CurrentAction != null, "N34-SEARCH: fixture restores the real AI partial-action format", new { count });
+        restored.SearchApply(restored.Choices().First(c => c.kind == "network").id);
+        restored.SearchApply(restored.Choices().First(c => c.kind == "coal").id);
+        restored.SearchApply(restored.Choices().First(c => c.kind == "beer").id);
+        restored.SearchApply(new BrassHost.Choice("finish").id);
+        Check(restored.ActionComplete && restored.Game.TurnFlow.CurrentAction == null && !g.Board.GetLinkById("RailBirminghamWalsall").HasOwner,
+            "N34-SEARCH: AI restored double-Rail search pays coal and beer and finishes without touching the live world", new { count });
+    }
     static void GuardTick(ReplayView view, float delta)
     {
         var guard = view.GetComponents<Component>().First(c => c.GetType().Name == "LinkReplayGuard");
@@ -251,7 +287,7 @@ public sealed class LinkReplayDriver : MonoBehaviour
         Check(replaced.Count == 0, "replacing the game router invalidates old replay recovery");
         Utils.Global.Instance.Router = router; presenter.CancelCurrentReplay(); DOTween.KillAll();
     }
-    IEnumerator Flow(BaseView[] prefabs, int count, string kind, bool interrupt)
+    IEnumerator Flow(BaseView[] prefabs, int count, string kind, bool interrupt, bool staleBaseline = false)
     {
         using (var f = new UnityCityLocatorRegression.Fixture(count)) {
             f.App.Metadata.GameId = "link-replay-" + count + "-" + kind;
@@ -264,7 +300,8 @@ public sealed class LinkReplayDriver : MonoBehaviour
                 var slot = g.Board.GetRegionByName(RegionName.Stafford).BuildingSlots.First(s => s.BuildingTypes.Contains(BuildingType.Brewery));
                 g.ApplyEvent(new IndustryBuilt(player.Color, BuildingType.Brewery, slot.UniqueId));
             } else if (kind == "canal-later") g.ApplyEvent(new RoundStarted(2, 10, GameEra.CanalEra));
-            g.ApplyEvent(new TurnStarted(player.Color)); f.Update();
+            if (kind != "canal-opening") g.ApplyEvent(new TurnStarted(player.Color));
+            f.Update();
             var repository = new BaseRepository(new InMemoryGameStorage(), new InMemorySnapshotStorage(), new BrassBirminghamFactory());
             repository.Save(f.App);
             var history = new BrassGameHistory { Repository = repository }; history.SetGame(f.App);
@@ -279,10 +316,48 @@ public sealed class LinkReplayDriver : MonoBehaviour
             var action = new NetworkActionUseCase(output, history);
             int money = player.Money, cards = player.Hand.Count, tiles = player.LinkTileCount, actions = g.TurnFlow.GetRemainingActionsCount();
             int expectedMoney = money - (rail ? 5 : 3);
-            action.StartNetworkAction(); action.SelectCard(player.Hand[0]);
+            action.StartNetworkAction();
+            if (!staleBaseline) {
+                string selecting = State(f.App); action.LinkSelected(g.Board.GetLinkById((rail ? "Rail" : "Canal") + "BirminghamDudley"));
+                Check(State(f.App) == selecting && ReflectionAccess.Get<int>(g.TurnFlow.NetworkAction, "_linkCounter") == 0,
+                    "N34-PROMPT: no link callback can run before card selection");
+            }
+            action.SelectCard(player.Hand[0]);
             var pump = Pump(output.Replay, dispatcher, false); while (pump.MoveNext()) yield return pump.Current;
             Check(output.Links != null && output.Links.Any(l => l.LinkId == (rail ? "Rail" : "Canal") + "BirminghamDudley"), "card discard reaches native link selection", new { count, kind, interrupt });
-            action.LinkSelected(g.Board.GetLinkById((rail ? "Rail" : "Canal") + "BirminghamDudley"));
+            // Exercise the actual button listener, including a duplicate Unity click
+            // already queued before the board refresh removes the old listener.
+            var selected = g.Board.GetLinkById((rail ? "Rail" : "Canal") + "BirminghamDudley");
+            var linkView = f.View.GetComponentsInChildren<LinkView>(true).First(v => v.name == "BirminghamDudley");
+            var button = ReflectionAccess.Get<Button>(linkView, "_tokenButton");
+            if (!staleBaseline) {
+                string ready = State(f.App);
+                ReflectionAccess.Set(history, "_movedBackInHistory", true); action.LinkSelected(selected);
+                ReflectionAccess.Set(history, "_movedBackInHistory", false);
+                Check(State(f.App) == ready && !selected.HasOwner, "N34-PROMPT: history browsing cannot consume a live placement");
+                action.LinkSelected(null);
+                Check(State(f.App) == ready, "N34-PROMPT: null selection is harmless");
+            }
+            string beforeMat = State(f.App);
+            var mat = UnityEngine.Object.Instantiate(prefabs.First(v => v.GetType().Name == "IndustriesDetailsView"), f.Root.transform);
+            mat.InputRegistration = router;
+            mat.CreateShowViewImmediatelyAnimation(); UnityCityLocatorRegression.Tick(.05f); mat.DisableView();
+            Check(State(f.App) == beforeMat, "N34-MAT: opening and closing industry mat preserves the live Network prompt");
+            button.onClick.Invoke();
+            Check(selected.HasOwner, "N34-CLICK: original button still places the first link", new { count, kind, interrupt });
+            string afterFirst = State(f.App); Exception duplicate = null;
+            try { button.onClick.Invoke(); } catch (Exception e) { duplicate = e; }
+            int counter = ReflectionAccess.Get<int>(g.TurnFlow.NetworkAction, "_linkCounter");
+            if (staleBaseline) {
+                Check(duplicate is NullReferenceException && counter == 1 && State(f.App) == afterFirst,
+                    "N34-BASELINE: completed Canal button poisons the counter before null-player failure", new { count, exception = duplicate == null ? null : duplicate.ToString(), counter });
+            } else {
+                Check(duplicate == null && State(f.App) == afterFirst && counter == (rail ? 1 : 0),
+                    "N34-CLICK: duplicate listener cannot mutate action, payment, money, cards or link count", new { count, kind, interrupt, counter });
+                action.LinkSelected(g.Board.GetLinkById((rail ? "Rail" : "Canal") + "BirminghamWalsall"));
+                Check(State(f.App) == afterFirst && ReflectionAccess.Get<int>(g.TurnFlow.NetworkAction, "_linkCounter") == counter,
+                    "N34-PENDING: queued other-link callback cannot bypass completion or pending coal");
+            }
             pump = Pump(output.Replay, dispatcher, interrupt); while (pump.MoveNext()) yield return pump.Current;
             int links = 1;
             if (rail) {
@@ -307,6 +382,59 @@ public sealed class LinkReplayDriver : MonoBehaviour
             Check(g.TurnFlow.GetRemainingActionsCount() == actions - 1 && player.Hand.Count == cards - 1 && player.LinkTileCount == tiles - links,
                 "recovery never duplicates action, card or link consumption");
             Check(player.Money == expectedMoney, "link and resource costs are paid exactly once");
+            if (kind == "canal-opening") {
+                string finished = State(f.App);
+                if (!staleBaseline) {
+                    action.LinkSelected(selected);
+                    Exception unprepared = null;
+                    try { g.TurnFlow.NetworkAction.PlaceLink(g.Board.GetLinkById("CanalBirminghamWalsall")); } catch (Exception e) { unprepared = e; }
+                    Check(unprepared is InvalidOperationException && State(f.App) == finished && ReflectionAccess.Get<int>(g.TurnFlow.NetworkAction, "_linkCounter") == 0,
+                        "N34-DOMAIN: unprepared direct placement is rejected before any mutation");
+                }
+                g.GameFlow.EndTurn();
+                Check(g.GameProgressInformation.CurrentPlayer != player, "N34-HANDOFF: End Turn advances to the next actor");
+                if (!staleBaseline) {
+                    string nextTurn = State(f.App); action.LinkSelected(g.Board.GetLinkById("CanalBirminghamWalsall"));
+                    Check(State(f.App) == nextTurn && ReflectionAccess.Get<int>(g.TurnFlow.NetworkAction, "_linkCounter") == 0,
+                        "N34-HANDOFF: old human callback is harmless during the next player's turn");
+                }
+                var live = BrassHost.Host.Capture(f.App);
+                var choice = live.Choices().First(c => c.kind == "network");
+                var path = new[] { choice.id, new BrassHost.Choice("finish").id };
+                var composition = BrassHost.Host.Composition(BrassHost.Host.Configuration(g.GameStartConfiguration));
+                live.ValidateLiveAction(path, composition);
+                Exception commit = null;
+                try { live.LiveCommit(path, composition); } catch (Exception e) { commit = e; }
+                Check(staleBaseline ? commit is InvalidOperationException && commit.Message.Contains("one link per action") : commit == null && g.TurnFlow.CurrentAction == null,
+                    staleBaseline ? "N34-BASELINE: next AI live commit reproduces the user's exact Canal error" : "N34-HANDOFF: next AI validated Network action commits successfully",
+                    new { count, error = commit == null ? null : commit.ToString() });
+            }
+            presenter.CancelCurrentReplay(); DOTween.KillAll();
+        }
+    }
+    IEnumerator CancelledPrompt(BaseView[] prefabs, int count)
+    {
+        using (var f = new UnityCityLocatorRegression.Fixture(count)) {
+            f.App.Metadata.GameId = "network-cancel-" + count;
+            var repository = new BaseRepository(new InMemoryGameStorage(), new InMemorySnapshotStorage(), new BrassBirminghamFactory());
+            repository.Save(f.App);
+            var history = new BrassGameHistory { Repository = repository }; history.SetGame(f.App);
+            var router = new TestRouter { Board = f.View };
+            router.Replay = UnityEngine.Object.Instantiate(prefabs.OfType<ReplayView>().First(), f.Root.transform);
+            router.Replay.InputRegistration = router; ReflectionAccess.Set(router.Replay, "_router", router); Utils.Global.Instance.Router = router;
+            var dispatcher = new Dispatcher(); var presenter = new ReplayPresenter(router, dispatcher, history, f.Localization);
+            var output = new NetworkOutput(f, router, presenter);
+            output.Replay = new ReplayUseCase(new ReplayOutput(f, presenter), history);
+            var action = new NetworkActionUseCase(output, history); var g = f.App.Game;
+            var player = g.GameProgressInformation.CurrentPlayer;
+            f.App.Metadata.GetPlayerMetadataByColor(player.Color).LastSeenEventRevision = g.Revision;
+            action.StartNetworkAction(); action.SelectCard(player.Hand[0]);
+            var pump = Pump(output.Replay, dispatcher, false); while (pump.MoveNext()) yield return pump.Current;
+            var link = output.Links.First(); action.CancelAction();
+            string current = State(history.CurrentGame); string abandoned = State(f.App);
+            action.LinkSelected(link);
+            Check(State(history.CurrentGame) == current && State(f.App) == abandoned && !link.HasOwner && ReflectionAccess.Get<int>(g.TurnFlow.NetworkAction, "_linkCounter") == 0,
+                "N34-CANCEL: cancelled or replaced game cannot receive an obsolete placement", new { count });
             presenter.CancelCurrentReplay(); DOTween.KillAll();
         }
     }

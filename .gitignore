@@ -585,3 +585,10 @@ Desktop.ini
 # Track results copied from the lab computer.
 !/results/
 !/results/**
+
+# Explicit checkpoint transfer bundles for local migration tests.
+!/test_nn/
+!/test_nn/**
+/test_nn/**/checkpoint.pt
+/test_nn/.staging-*/
+/test_nn/**/*.tmp

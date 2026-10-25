@@ -39,7 +39,7 @@ namespace BrassLegacyAI
         readonly Stopwatch clock = new Stopwatch();
         public const double ThinkingMilliseconds = DifficultyCatalog.ExistingMilliseconds;
         // A safety guard, not the old beam width/work target. The turn clock
-        // controls normal execution at the 6/10/15-second settings.
+        // controls normal execution at the 4/8/10/12-second settings.
         public const int SearchWorkLimit = 1000000;
         double budget;
         int planningRequests;

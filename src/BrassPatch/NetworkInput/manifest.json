@@ -1,0 +1,18 @@
+[
+  {
+    "targetType": "BrassApplication.UseCases.Game.Actions.NetworkAction.NetworkActionUseCase",
+    "targetMethod": "LinkSelected",
+    "parameterTypes": ["BoardGameRules.Entities.Board.Links.Link"],
+    "helperType": "BrassPatch.NetworkInput.NetworkInputFixes",
+    "helperMethod": "LinkSelected",
+    "mode": "replace"
+  },
+  {
+    "targetType": "BoardGameRules.Entities.Actions.NetworkAction",
+    "targetMethod": "PlaceLink",
+    "parameterTypes": ["BoardGameRules.Entities.Board.Links.Link"],
+    "helperType": "BrassPatch.NetworkInput.NetworkInputFixes",
+    "helperMethod": "BeforePlaceLink",
+    "mode": "prefix"
+  }
+]

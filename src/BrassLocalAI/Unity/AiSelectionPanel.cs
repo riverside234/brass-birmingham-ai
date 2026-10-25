@@ -171,9 +171,9 @@ namespace BrassLegacyAI
                 Text(human, "Hotseat", "Choose Human for more than one seat to play together on this device.", 104, 148, bodyWidth - 140, 68, 22, true).color = LightUi.Muted;
             } else {
             Text(window, "Difficulty caption", "Difficulty", bodyX, 146, 137, 46, 21);
-            DifficultyButtons = new Button[3];
+            DifficultyButtons = new Button[DifficultyCatalog.Keys.Length];
             bool enabled = CurrentPage == PlayerSelectionPage.V4 || fixture && catalogs[Family].Any(e => e.Available);
-            for (int i = 0; i < 3; i++) {
+            for (int i = 0; i < DifficultyButtons.Length; i++) {
                 string key = DifficultyCatalog.Keys[i];
                 var button = DifficultyButtons[i] = Button(window, "Difficulty " + key, DifficultyCatalog.Label(key) + " · " + DifficultyCatalog.Milliseconds(key) / 1000 + "s", bodyX + 142 + i * 167, 146, 155, 46, 21, () => {
                     if (CurrentPage == PlayerSelectionPage.Gamma && !fixture) return;
@@ -183,7 +183,8 @@ namespace BrassLegacyAI
                 var mark = AiWidgets.Rect(button.transform, "Selected mark", P(136, 17), S(11, 11)); mark.gameObject.AddComponent<AiSelectionMark>().raycastTarget = false;
                 button.GetComponentInChildren<TextMeshProUGUI>().rectTransform.offsetMax = new Vector2(-20 * unit, -2 * unit);
             }
-            Text(window, "Difficulty help", CurrentPage == PlayerSelectionPage.Gamma ? "Gamma is not available yet." : "Maximum thinking time", bodyX + 656, 146, bodyWidth - 656, 46, 18, true).color = LightUi.Muted;
+            float helpX = 155 + 167 * DifficultyButtons.Length;
+            Text(window, "Difficulty help", CurrentPage == PlayerSelectionPage.Gamma ? "Gamma is not available yet." : "Maximum thinking time", bodyX + helpX, 146, bodyWidth - helpX, 46, 18, true).color = LightUi.Muted;
             var box = AiWidgets.Rect(window, "Find AI", P(bodyX, 204), S(bodyWidth - 88, 44)); box.gameObject.AddComponent<AiControlSurface>();
             filter = box.gameObject.AddComponent<TMP_InputField>();
             var area = AiWidgets.Rect(box, "Text area", P(10, 3), S(bodyWidth - 110, 38)); area.gameObject.AddComponent<RectMask2D>();

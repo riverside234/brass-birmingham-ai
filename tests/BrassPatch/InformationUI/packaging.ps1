@@ -13,7 +13,7 @@ $trackerFixtureScripts=Join-Path $trackerFixture 'scripts'
 $trackerFixtureBaseline=Join-Path $trackerFixture 'artifacts/patch-baseline'
 $trackerFixtureSaves=Join-Path $trackerFixture 'artificial-saves'
 New-Item -ItemType Directory -Path $trackerFixtureManaged,(Join-Path $trackerFixtureBuild 'Managed'),$trackerFixtureScripts,$trackerFixtureBaseline,$trackerFixtureSaves -Force|Out-Null
-foreach($name in 'install-combined-patch.ps1','patch-install-common.ps1'){Copy-Item -LiteralPath (Join-Path $trackerRoot ('scripts/'+$name)) -Destination $trackerFixtureScripts}
+foreach($name in 'install-combined-patch.ps1','install-patch.ps1','patch-install-common.ps1'){Copy-Item -LiteralPath (Join-Path $trackerRoot ('scripts/'+$name)) -Destination $trackerFixtureScripts}
 Copy-Item -LiteralPath (Join-Path $trackerRoot 'artifacts/patch-baseline/Assembly-CSharp.dll') -Destination $trackerFixtureBaseline
 foreach($name in 'build-manifest.json','validation.json'){Copy-Item -LiteralPath (Join-Path $trackerBuild $name) -Destination $trackerFixtureBuild}
 foreach($file in $trackerManifest.files){Copy-Item -LiteralPath (Join-Path $trackerBuild ('Managed/'+$file.name)) -Destination (Join-Path $trackerFixtureBuild 'Managed')}
@@ -50,10 +50,19 @@ if($trackerManifest.version -in '1.4.23','1.4.24','1.4.25','1.4.26','1.4.27','1.
 if($trackerManifest.version -in '1.4.24','1.4.25','1.4.26','1.4.27','1.4.29','1.4.30','1.4.31'){$trackerScenarios+=@('failed-draft','gamma-enabled','wrong-player-layout')}
 if($trackerManifest.version -in '1.4.25','1.4.26'){$trackerScenarios+='failed-tracker-position'}
 if($trackerManifest.version -in '1.4.25','1.4.26','1.4.27','1.4.29','1.4.30','1.4.31'){$trackerScenarios+='failed-tracker-theme'}
-if($trackerManifest.version -eq '1.4.32'){$trackerScenarios+=@('failed-clock-contracts','wrong-clock','missing-replan','gamma-enabled','wrong-player-layout')}
+if($trackerManifest.version -in '1.4.32','1.4.33'){$trackerScenarios+=@('failed-clock-contracts','wrong-clock','missing-replan','gamma-enabled','wrong-player-layout')}
+if($trackerManifest.version -eq '1.4.33'){$trackerScenarios+=@('missing-fourth-time-button','wrong-time-label')}
+if($trackerManifest.version -eq '1.4.34'){$trackerScenarios+=@('failed-network','failed-network-group','wrong-network-fingerprint','failed-reproduction','failed-presentation')}
 foreach($scenario in $trackerScenarios){
  $trackerValidation=Get-Content -LiteralPath (Join-Path $trackerBuild 'validation.json') -Raw|ConvertFrom-Json
- if($scenario -eq 'failed-clock-contracts'){$trackerValidation.menu.searchAllowanceChecks=0}elseif($scenario -eq 'wrong-clock'){$trackerValidation.menu.turns[0].thinkingMilliseconds=17}elseif($scenario -eq 'missing-replan'){foreach($turn in $trackerValidation.menu.turns){$turn.replanInjected=$false}}elseif($scenario -eq 'failed-tracker-position'){foreach($case in $trackerValidation.cardTracker.cases|Where-Object name -Like 'CT25-POSITION*'){$case.passed=$false}}elseif($scenario -eq 'failed-tracker-theme'){foreach($case in $trackerValidation.cardTracker.cases|Where-Object name -Like 'CT25-THEME*'){$case.passed=$false}}elseif($scenario -eq 'failed-draft'){$trackerValidation.menu.selectionPanel.draftChecks=0}elseif($scenario -eq 'gamma-enabled'){$trackerValidation.menu.selectionPanel.gammaEnabled=$true}elseif($scenario -eq 'wrong-player-layout'){$trackerValidation.menu.selectionPanel.layouts[0].choices=99}elseif($scenario -eq 'failed-tracker'){$trackerValidation.cardTracker.passed=$false}elseif($scenario -eq 'failed-statistics'){$trackerValidation.statistics.passed=$false}elseif($scenario -eq 'failed-preservation'){$trackerValidation.preservedRuntime.passed=$false}elseif($scenario -eq 'failed-visual'){$trackerValidation.visualChecks.passed=$false}elseif($scenario -eq 'failed-history'){$trackerValidation.history.passed=$false}elseif($scenario -eq 'wrong-history-limit'){$trackerValidation.history.historyLimit=11}elseif($scenario -eq 'wrong-history-schema'){$trackerValidation.history.reportSchema=99}elseif($scenario -eq 'wrong-history-fingerprint'){$trackerValidation.history.testedFiles[0].sha256='unexpected'}else{$trackerValidation.cardTracker.testedFiles[0].sha256='unexpected'}
+ if($scenario -eq 'failed-network'){$trackerValidation.networkInput.passed=$false}
+ elseif($scenario -eq 'failed-network-group'){foreach($case in $trackerValidation.networkInput.cases|Where-Object name -Like 'N34-HANDOFF*'){$case.passed=$false}}
+ elseif($scenario -eq 'wrong-network-fingerprint'){$trackerValidation.networkInput.testedFiles[0].sha256='unexpected'}
+ elseif($scenario -eq 'failed-reproduction'){$trackerValidation.baselineReproduction.passed=$false}
+ elseif($scenario -eq 'failed-presentation'){$trackerValidation.presentation.passed=$false}
+ else {
+ if($scenario -eq 'missing-fourth-time-button'){foreach($layout in $trackerValidation.menu.selectionPanel.layouts|Where-Object family -eq 'V4'){$layout.difficultyButtons=3}}elseif($scenario -eq 'wrong-time-label'){foreach($layout in $trackerValidation.menu.selectionPanel.layouts|Where-Object family -eq 'V4'){$layout.difficultyLabels[3]='Max · 15s'}}elseif($scenario -eq 'failed-clock-contracts'){$trackerValidation.menu.searchAllowanceChecks=0}elseif($scenario -eq 'wrong-clock'){$trackerValidation.menu.turns[0].thinkingMilliseconds=17}elseif($scenario -eq 'missing-replan'){foreach($turn in $trackerValidation.menu.turns){$turn.replanInjected=$false}}elseif($scenario -eq 'failed-tracker-position'){foreach($case in $trackerValidation.cardTracker.cases|Where-Object name -Like 'CT25-POSITION*'){$case.passed=$false}}elseif($scenario -eq 'failed-tracker-theme'){foreach($case in $trackerValidation.cardTracker.cases|Where-Object name -Like 'CT25-THEME*'){$case.passed=$false}}elseif($scenario -eq 'failed-draft'){$trackerValidation.menu.selectionPanel.draftChecks=0}elseif($scenario -eq 'gamma-enabled'){$trackerValidation.menu.selectionPanel.gammaEnabled=$true}elseif($scenario -eq 'wrong-player-layout'){$trackerValidation.menu.selectionPanel.layouts[0].choices=99}elseif($scenario -eq 'failed-tracker'){$trackerValidation.cardTracker.passed=$false}elseif($scenario -eq 'failed-statistics'){$trackerValidation.statistics.passed=$false}elseif($scenario -eq 'failed-preservation'){$trackerValidation.preservedRuntime.passed=$false}elseif($scenario -eq 'failed-visual'){$trackerValidation.visualChecks.passed=$false}elseif($scenario -eq 'failed-history'){$trackerValidation.history.passed=$false}elseif($scenario -eq 'wrong-history-limit'){$trackerValidation.history.historyLimit=11}elseif($scenario -eq 'wrong-history-schema'){$trackerValidation.history.reportSchema=99}elseif($scenario -eq 'wrong-history-fingerprint'){$trackerValidation.history.testedFiles[0].sha256='unexpected'}else{$trackerValidation.cardTracker.testedFiles[0].sha256='unexpected'}
+ }
  $trackerValidation|ConvertTo-Json -Depth 30|Set-Content -LiteralPath $trackerValidationPath -Encoding utf8
  Run-TrackerPackage $false;Assert-TrackerPackage $trackerManifest.files
 }
@@ -100,6 +109,19 @@ try{Run-TrackerPackage $false;Assert-TrackerPackage $trackerManifest.baseFiles}f
 Check-TrackerPackage ((Get-Content -LiteralPath $trackerRecordPath -Raw|ConvertFrom-Json).version -eq $trackerManifest.baseVersion) 'blocked replacement keeps baseline installation record'
 Run-TrackerPackage $true;Assert-TrackerPackage $trackerManifest.files
 Check-TrackerPackage (-not(Test-Path -LiteralPath $trackerPendingPath)) 'retry finishes retained transaction after lock release'
+if($trackerManifest.version -eq '1.4.34'){
+ Reset-TrackerPackage
+ $trackerEntryBuild=Join-Path $trackerFixture 'artifacts/patch-build'
+ New-Item -ItemType Directory -Path (Join-Path $trackerEntryBuild 'Managed') -Force|Out-Null
+ foreach($name in 'build-manifest.json','validation.json'){Copy-Item -LiteralPath (Join-Path $trackerBuild $name) -Destination $trackerEntryBuild -Force}
+ foreach($file in $trackerManifest.files){Copy-Item -LiteralPath (Join-Path $trackerBuild ('Managed/'+$file.name)) -Destination (Join-Path $trackerEntryBuild 'Managed') -Force}
+ $trackerEntryOutput=& pwsh -NoProfile -File (Join-Path $trackerFixtureScripts 'install-patch.ps1') -GameRoot $trackerFixtureGame 2>&1
+ Check-TrackerPackage ($LASTEXITCODE -eq 0) ('standard installer routes combined releases: '+($trackerEntryOutput -join ' '))
+ Assert-TrackerPackage $trackerManifest.files
+ $trackerEntryRecord=Get-Content -LiteralPath $trackerRecordPath -Raw|ConvertFrom-Json
+ Check-TrackerPackage ($trackerEntryRecord.version -eq $trackerManifest.version -and $trackerEntryRecord.previousReleaseBackup -and -not $trackerEntryRecord.onlineEnabled) 'standard installer retains combined backup and offline receipt'
+ foreach($file in $trackerManifest.baseFiles){Check-TrackerPackage ((Get-FileHash -LiteralPath (Join-Path $trackerEntryRecord.previousReleaseBackup $file.name)).Hash -eq $file.sha256) ('standard installer recoverable baseline '+$file.name)}
+}
 foreach($file in $trackerManifest.files){Check-TrackerPackage ((Get-FileHash -LiteralPath (Join-Path $trackerBuild ('Managed/'+$file.name))).Hash -eq $file.sha256) ('qualification candidate unchanged '+$file.name)}
 [ordered]@{passed=$true;checks=$trackerChecks;cases=$trackerCases;fixture=$trackerFixture;testedFiles=$trackerManifest.files}|ConvertTo-Json -Depth 18|Set-Content -LiteralPath (Join-Path $trackerBuild 'packaging-results.json') -Encoding utf8
 Write-Output ('Information UI packaging: '+$trackerChecks+' checks passed using artificial files only.')

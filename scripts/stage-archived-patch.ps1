@@ -1,4 +1,4 @@
-param([Parameter(Mandatory=$true)][ValidateSet('1.4.8','1.4.9','1.4.10','1.4.11','1.4.12','1.4.13','1.4.15','1.4.16','1.4.17','1.4.18','1.4.19','1.4.20','1.4.21','1.4.22','1.4.23','1.4.24','1.4.25','1.4.26','1.4.27','1.4.28','1.4.29','1.4.30','1.4.31','1.4.32')][string]$Version,[switch]$VerifyOnly)
+param([Parameter(Mandatory=$true)][ValidateSet('1.4.8','1.4.9','1.4.10','1.4.11','1.4.12','1.4.13','1.4.15','1.4.16','1.4.17','1.4.18','1.4.19','1.4.20','1.4.21','1.4.22','1.4.23','1.4.24','1.4.25','1.4.26','1.4.27','1.4.28','1.4.29','1.4.30','1.4.31','1.4.32','1.4.33','1.4.34')][string]$Version,[switch]$VerifyOnly)
 $ErrorActionPreference='Stop'
 $root=Split-Path -Parent $PSScriptRoot
 . (Join-Path $PSScriptRoot 'patch-install-common.ps1')
@@ -28,6 +28,8 @@ if(Get-Process -Name BrassBirminghamUnity -ErrorAction SilentlyContinue){throw '
 $build=Join-Path $root 'artifacts/patch-build'
 New-Item -ItemType Directory -Path (Join-Path $build 'Managed') -Force|Out-Null
 foreach($file in $manifest.files){Copy-BrassAtomic $sources[$file.name] (Join-Path $build ('Managed/'+$file.name))}
+$hookInventory=Join-Path $archive 'Managed/Assembly-CSharp.dll.manifest.json'
+if(Test-Path -LiteralPath $hookInventory){Copy-BrassAtomic $hookInventory (Join-Path $build 'Managed/Assembly-CSharp.dll.manifest.json')}
 foreach($name in 'build-manifest.json','validation.json','local-ai-qualification.json'){
  Copy-BrassAtomic (Join-Path $archive $name) (Join-Path $build $name)
 }

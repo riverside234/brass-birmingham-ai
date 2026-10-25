@@ -67,7 +67,7 @@ namespace BrassLegacyAI
         }
         public static void SelectDifficulty(PlayerMetadata player, string key)
         {
-            if (!DifficultyCatalog.Contains(key)) throw new ArgumentException("Select Easy, Mid or Hard.", "key");
+            if (!DifficultyCatalog.Contains(key)) throw new ArgumentException("Select Easy, Mid, Hard or Max.", "key");
             Selections.GetValue(player, p => new Selection()).Difficulty = key;
         }
         public static bool IsEditable(PlayerMetadata player)

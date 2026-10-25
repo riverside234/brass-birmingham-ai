@@ -17,11 +17,13 @@ Consolidated on 15 October 2026. This directory is the single maintained locatio
 
 **18 October 2026:** The goal-head code is already implemented, but the real-model goal-head workflow has not been run. Keep that implementation for possible future use and **skip this stage in the upcoming post-Step-5 workflow**. Do not run goal-head warm-up, goal calibration (`validate-goals`), or the existing goal-loss joint pilot. Goal-generated short-term intent, goal-alignment search bias and goal-head UI hints are also outside the current workflow. Re-enable this branch only after an explicit future decision.
 
-**20 October 2026 — P2 goal/intent search: no longer used in the selected workflow.** Because this workflow does not use a goal head, omit goal-predicted short-term intent, its persistence controls, goal-confidence calibration and goal-alignment search priors. The old goal-dependent implementation and commands remain historical references. Generic MCTS teacher collection and policy distillation remain separate planned capabilities; their goal-free model/readiness integration still needs adaptation and validation. Existing Step 5 context inputs remain available for later frozen-network style discovery.
+<a id="p2-skipped"></a>
 
-The existing Step 5 style/industry-focus inputs remain separate from the skipped goal head. The later 16-style discovery objective also remains separate: those styles are measured behavioral archetypes, not goal-head classes. This decision changes the documented workflow only; it does not delete implemented code or alter models, checkpoints or current self-play training.
+**24 October 2026 — temporarily skip P2 search preparation.** Defer the entire P2 search-preparation stage, including search readiness/calibration, search probes, teacher collection and policy distillation. Goal-generated intent and goal-alignment search bias remain outside the selected workflow. After P0 and the necessary goal-free checkpoint/context integration, proceed to direct-policy P3 discovery and P4 style assessment using the frozen Step 5 model. Direct-policy model, input, provenance and evaluation checks still apply. Retain the P2 implementation for a possible later decision; its historical commands are not upcoming lab steps.
 
-The goal-enabled commands and results below are retained as historical reference. Existing P2-P6 tooling still depends on personality/goal model contracts and readiness artifacts. **Skipping P1 is not yet a supported command-level bypass into that tooling.** Adapt and validate those dependencies for a goal-free workflow before using the downstream commands; do not fabricate a completed P1 receipt or weaken qualification checks.
+The existing Step 5 style/industry-focus inputs remain separate from the skipped goal head. Styles must be demonstrated by measured behavior. The former 16-style/eight-variant target is canceled; the current smaller-roster objective is described below. These decisions change the documented workflow only; they do not delete implemented code or alter models, checkpoints or current self-play training.
+
+The goal-enabled commands and results below are retained as historical reference. Existing downstream tooling still depends on personality/goal model contracts and P2 readiness artifacts. **Skipping P1 and P2 is not yet a supported command-level bypass into that tooling.** Adapt and validate the direct-policy entry and qualification contracts before using the downstream commands; do not fabricate completed P1/P2 receipts or weaken quality and provenance checks.
 
 <a id="frozen-network-discovery"></a>
 
@@ -29,19 +31,23 @@ The goal-enabled commands and results below are retained as historical reference
 
 **18 October 2026:** The first experiment is to measure how many useful, reproducible styles the frozen Step 5 model's existing contexts actually produce. Start with those supported inputs and reuse the existing discovery and qualification framework before considering additional policy training. Continue to skip the goal-head stage. Keep the main self-play run and its Five-style history sampling/retention unchanged. This is a documentation decision; the goal-free integration described here is still pending.
 
+<a id="small-roster"></a>
+
+**24 October 2026 — P4 prioritizes a smaller set with good playing quality and clear behavioral differences.** The initial target is seven styles corresponding to the seven supported inputs: neutral plus six industry focuses. Evaluate all seven candidates, but report fewer qualified styles when inputs produce indistinguishable, unreliable or weak behavior. Quality, repeatability and separation take priority over reaching seven. **Cancel the former target of 16 archetypes with eight variants each (128 controllers); there is no per-style variant quota.** The smaller qualified set is the intended initial deliverable, not an incomplete attempt to fill the old roster. Legacy fixed-size tooling and downstream assumptions still require explicit adaptation.
+
 | Capability | Verified implementation status |
 | --- | --- |
 | Shared frozen weights, candidate proposals and elite-profile mutations | Implemented in [discovery.py](../../src/brass_ai/personality/repertoire/discovery.py) for the existing goal-enabled personality model. |
 | Matched setups, four-seat rotations, public behavior descriptors and independent quality screening | Implemented in the existing P3 workflow. Fixture checks do not qualify a real trained model. |
 | Behavior archive and representative selection | Implemented in [archive.py](../../src/brass_ai/personality/repertoire/archive.py) as an unstructured quality/novelty archive, rather than the original grid-based MAP-Elites algorithm. |
-| Direct use of the current Step 5 checkpoint without P1 | Not yet supported. [readiness.py](../../src/brass_ai/personality/search/readiness.py) still requires P1 warm-up, a personality checkpoint and goal-calibration artifacts. |
-| Sixteen stable, competitive styles from the goal-free path | Not demonstrated; different parameter values alone are not evidence of different behaviors. |
+| Direct use of the current Step 5 checkpoint without P1/P2 | Not yet supported by the old downstream path. [readiness.py](../../src/brass_ai/personality/search/readiness.py) still requires P1 warm-up, a personality checkpoint and goal-calibration artifacts; a validated direct-policy entry is needed. |
+| A smaller qualified roster, initially targeting seven styles | Not demonstrated; the seven supported inputs are candidates, not proof of seven distinct behaviors. Legacy 16-by-8 qualification/export contracts have not been adapted. |
 
 The first proposed goal-free candidates are the existing Step 5 `neutral` context and its six industry focuses: `CottonMill`, `Manufacturer`, `Pottery`, `Brewery`, `IronWorks` and `CoalMine`. [Ordinary collection](../../src/brass_ai/recovery/ordinary.py) uses these contexts, and [policy.py](../../src/brass_ai/step5/policy.py) defines their encoding and exploration weighting. Verify their coverage in the selected source run. They are distinct from the old personality profiles (`neutral`, `industrialist`, `networker`, `supplier`, `investor`), which use a separate context contract and projection; do not substitute one vocabulary for the other or introduce untrained continuous context inputs.
 
 The old proposal generator varies `style`, `alpha`, `patience` and `hysteresis`. The latter three control goal bias or goal persistence. Once those mechanisms are skipped, changes to inactive fields must not create supposedly distinct style candidates. Setting `alpha=0` alone does not remove the model/readiness dependencies or all saved-intent behavior. A future goal-free adapter must identify effective controls, deduplicate equivalent recipes, and preserve source/model identities, legal-action handling and qualification safeguards.
 
-After that adaptation, evaluate all seven existing contexts in a bounded direct-policy comparison against the same frozen reference pool, using matched setups and seat rotations. Seven input choices do not imply seven distinct qualified styles. Report the tested contexts, repeat-game behavior dispersion, distinguishable behavior groups, held-out playing quality relative to the neutral control, and the number of useful styles supported by the evidence. Retain only reproducible behavioral differences with acceptable held-out playing quality; separately confirm any searched deployment recipe. A smaller preliminary set is useful if fewer styles qualify. Keep the 16-archetype/eight-variant product target, but do not duplicate candidates, relabel noise or relax release gates to fill it. Removing candidate policy training does not remove evaluation costs or establish a measured speedup.
+After that adaptation, evaluate all seven existing contexts in a bounded direct-policy comparison against the same frozen reference pool, using matched setups and seat rotations. Report the tested contexts, repeat-game behavior dispersion, distinguishable behavior groups, held-out playing quality relative to the neutral control, and the number of useful styles supported by the evidence. Prioritize the strongest reproducible, behaviorally distinct subset, even if fewer than seven qualify. Do not duplicate candidates, relabel noise or relax quality checks to fill a numerical target. P2 search work is deferred; direct-policy evidence does not qualify a searched controller if one is later chosen for deployment. Removing candidate policy training does not remove evaluation costs or establish a measured speedup.
 
 <a id="optional-ppga-experiment"></a>
 
@@ -59,19 +65,19 @@ Ordinary PPO branches with the same win objective are not automatically PPGA and
 | --- | --- | --- |
 | P0 | [Handoff](TRAINING_P0_P3.md#p0-p1) | No search; validates and freezes the eligible source |
 | P1 | [Goal head and joint PPO - skipped](TRAINING_P0_P3.md#p0-p1) | Implemented code retained; do not run in the upcoming workflow |
-| P2 | [Readiness, search and teachers](TRAINING_P0_P3.md#p2-p3) | Goal/intent search no longer used; generic readiness, search teachers and policy distillation require goal-free adaptation |
-| P3 | [Repertoire discovery](TRAINING_P0_P3.md#p2-p3-p3-inexpensive-discovery-first) | Direct discovery followed by searched-controller confirmation; descriptor fitting itself needs no search |
-| P4 | [Roster qualification](QUALIFICATION_P4_P6.md#p4) | Searched member/mixture evaluation of the frozen shared model |
+| P2 | [Search preparation - temporarily skipped](#p2-skipped) | Defer readiness/calibration, search probes, teachers and distillation |
+| P3 | [Repertoire discovery](TRAINING_P0_P3.md#p2-p3-p3-inexpensive-discovery-first) | Direct-policy comparison of the seven supported contexts after entry-path adaptation; descriptor fitting needs no search |
+| P4 | [Smaller-roster qualification](QUALIFICATION_P4_P6.md#p4) | Prioritize quality and behavioral separation; initially target seven styles, accept fewer on evidence, with no eight-variant quota |
 | P5 | [Difficulty calibration](QUALIFICATION_P4_P6.md#p5) | Evaluation under the declared tier search budgets |
 | P6 | [Deployment](QUALIFICATION_P4_P6.md#p6) | Export itself needs no search; runtime decisions and search benchmarks do |
 
 ## Status and use of historical material
 
-The consolidation preserves existing commands, design requirements, audit records and their original dates. Historical model sizes, Step 5 settings, source hashes and fixture timings describe their recorded versions; they are not refreshed measurements of the current model or lab run. Check the current implementation, resolved run manifests and applicable versioned receipts before executing a continuation.
+The consolidation preserves historical commands, prior design requirements and audit records with their original dates. The current workflow decisions above supersede conflicting historical targets and execution sequences, including the canceled 16-by-8 roster. Historical model sizes, Step 5 settings, source hashes and fixture timings describe their recorded versions; they are not refreshed measurements of the current model or lab run. Check the current implementation, resolved run manifests and applicable versioned receipts before executing a continuation.
 
 Step 5 encoder reuse and personality `SearchSession` cross-lane sharing are implemented. Deployment workers now use fused native snapshots, with public observation data constructed once per snapshot. The [deployment performance record](DEPLOYMENT_PERFORMANCE.md) documents the completed local headless comparison and remaining work. Broad P0-P5 collection measurements, trained-model qualification and interactive Unity acceptance remain pending. This documentation update records existing evidence; it does not rerun benchmarks or alter code, configurations or checkpoints.
 
-The recorded P2 accounting discrepancy also remains open: its teacher implementation uses a 90% cumulative wall allowance while the design specifies 50%. Current Step 5 settings do not automatically select or migrate P2's policy. Preserve that distinction until an explicit implementation decision resolves it; this reorganization does not change either value.
+The recorded P2 accounting discrepancy remains deferred with P2: its teacher implementation uses a 90% cumulative wall allowance while the historical design specifies 50%. Resolve and version that policy before any future P2 campaign. Current Step 5 settings do not automatically select or migrate it; this note does not change either value.
 
 <a id="encoder-reuse-follow-up"></a>
 
@@ -124,9 +130,9 @@ Use these mechanisms and focused checks as the starting point for the remaining 
 | --- | --- | --- |
 | P0 handoff | No search | Carry the correct feature/layout/source identities into downstream artifacts; this work must not mutate the completed source run. |
 | P1 goal warm-up and joint PPO - skipped | Historical direct policy collection | No current goal-head collection or training. These checks apply only if the branch is explicitly re-enabled. |
-| P2 intent search and teachers | Search probes, reserved teacher collection and distillation inputs; readiness collection is direct | Shared-session construction is implemented. Measure actual teacher/root/continuation reuse and label yield, plus direct readiness collection. Preserve independent mutable worker state and current acceptance rules. |
-| P3 repertoire discovery | Direct discovery, then searched-controller confirmation | Cover both collection modes, especially repeated inference during searched confirmation. Descriptor fitting itself needs no search; preserve its split and provenance rules. |
-| P4 roster validation | Frozen shared model with searched member/mixture panels | Verify reuse across repeated requests without mixing seats, controller inputs or panel jobs. Preserve tested member identities and qualification evidence. |
+| P2 search preparation - temporarily skipped | Historical readiness, search probes, teachers and distillation | Shared-session construction is implemented. Defer its collection measurements and accounting decision until P2 is explicitly resumed. |
+| P3 repertoire discovery | Direct discovery for the seven supported inputs | Verify direct collection and preserve descriptor splits/provenance. Search confirmation is separate future work if a searched controller is selected. |
+| P4 smaller-roster validation | Frozen shared model with matched direct-policy style comparisons | Verify reuse without mixing seats, context inputs or panel jobs. Adapt fixed-size assumptions while preserving quality, separation, repeatability and provenance checks. |
 | P5 difficulty calibration | Search under each tier's declared budget | Measure actual collection throughput and completed work for each tier. Keep its calibrated clocks, worker settings and held-out evaluation rules intact. |
 | P6 deployment | Export itself needs no search; runtime decisions and search benchmarks do | Shared caches, fused hosts, public-view reuse and a self-contained packaged native host are tested. Extend the two-position headless comparison to trained models, all tiers and interactive packaged Unity use; include startup, saves, cancellation and new games. |
 

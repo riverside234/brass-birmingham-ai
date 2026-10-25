@@ -78,6 +78,7 @@ namespace BrassLegacyAI
         {
             // Preserve each tier's existing breadth and reply horizon as its
             // wall-clock allowance changes. Unnamed legacy saves keep the old path.
+            // Hard and Max share the existing Hard search shape.
             if(difficulty==DifficultyCatalog.Existing){ConfigureClock(p,budget);return;}
             if(!DifficultyCatalog.Contains(difficulty))throw new InvalidDataException("Unknown AI difficulty.");
             ConfigureClock(p,difficulty=="easy"?2000:difficulty=="mid"?5000:12000);
