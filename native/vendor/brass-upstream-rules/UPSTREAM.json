@@ -1,0 +1,224 @@
+{
+  "format": "brass-upstream-extract/1.0.0",
+  "repository": "https://github.com/riverside234/brass-birmingham-daiyu-ai.git",
+  "commit": "f8f0246718d6d3fb3f301742d4154811c90d5813",
+  "source_archive_sha256": "72a07103dc5b3a08f9585af4ce787901cc9fe8cc4843d4653629ae84f42e27d5",
+  "source_files": [
+    {
+      "path": "src/actions/build.rs",
+      "bytes": 20832,
+      "sha256": "4ef92052501328554a4715980017cb26a083188774e69f02172bcfc1085a9ee8"
+    },
+    {
+      "path": "src/actions/develop.rs",
+      "bytes": 1481,
+      "sha256": "67c7d7d4bd395c34139a50fa1c6a7feb08adb80031aae8be0324462a9802bbff"
+    },
+    {
+      "path": "src/actions/mod.rs",
+      "bytes": 187,
+      "sha256": "8c105ed34d89c97ac626842e48689921b15ada1efa5da7a8ca1d22e4b1af159e"
+    },
+    {
+      "path": "src/actions/network.rs",
+      "bytes": 6932,
+      "sha256": "9e8ee355810e691ccdc245438332594145d9e5760458a33940ad5b178bc1a800"
+    },
+    {
+      "path": "src/actions/sell.rs",
+      "bytes": 6830,
+      "sha256": "f0183403d65c3a07de4249b597e873453b2d7c060402a493a294aa7db0c2e482"
+    },
+    {
+      "path": "src/actions/special.rs",
+      "bytes": 6736,
+      "sha256": "e949953f26acb5e97fd440b551cc34bd71c6e61e0928ed22505e26dc1e20596f"
+    },
+    {
+      "path": "src/board/board.rs",
+      "bytes": 13193,
+      "sha256": "33e38c8847623bef548eac943389d891bdf029865a398d3c117ad21c79c8c76f"
+    },
+    {
+      "path": "src/board/connectivity.rs",
+      "bytes": 8730,
+      "sha256": "51624177dce8c56a1758440ad9af98d93237a610976691c6abdc9c47cbe22c75"
+    },
+    {
+      "path": "src/board/mod.rs",
+      "bytes": 215,
+      "sha256": "618179539bcaaca4c5d76e5c685bbdd7db52aadfb3c17c95e074e1123ceda7e3"
+    },
+    {
+      "path": "src/board/network_utils.rs",
+      "bytes": 1774,
+      "sha256": "02b51c6e15664bdb31013f43f0c63a03748bd570a0889b6e6892f4f2bf3d60b3"
+    },
+    {
+      "path": "src/board/resources.rs",
+      "bytes": 15866,
+      "sha256": "adad0cfd2aa87b0d693630d4c77c36b5f46c4273d415264617559110e2ddec43"
+    },
+    {
+      "path": "src/board/state.rs",
+      "bytes": 17894,
+      "sha256": "1f494f40e67b51f9db5cf46a5bbd8ba258c6130bf378bff8bd2c2a1d41984d19"
+    },
+    {
+      "path": "src/cards/deck.rs",
+      "bytes": 1910,
+      "sha256": "3d40da42b4fec6efe257b83f1904122e860e95fb9739206e9726dfad75b9112d"
+    },
+    {
+      "path": "src/cards/hand.rs",
+      "bytes": 1089,
+      "sha256": "3ceabbbece2f9b68cd29ed66cd58fc6b4de1bb9c9e9c29387e960f42c1e74633"
+    },
+    {
+      "path": "src/cards/mod.rs",
+      "bytes": 68,
+      "sha256": "4345d242cc64d05b5a275a08bf60e9c2a9c4551ddd6f38f699068d00136ebbd7"
+    },
+    {
+      "path": "src/consts.rs",
+      "bytes": 13265,
+      "sha256": "3c98c35762c0aafbb28ad2bd06376d4f5eb62d4aaf767662ce65c0e85fb71304"
+    },
+    {
+      "path": "src/core/building.rs",
+      "bytes": 1797,
+      "sha256": "2bfca4b5f64edd4ec4ba47404d63b4ffdc937d5e0e263557a9342ddaa43c7d97"
+    },
+    {
+      "path": "src/core/industry_mat.rs",
+      "bytes": 4532,
+      "sha256": "aee0a9f05475f99ecc23bb060a3bdc9d41ade79029a55971ee05f6b218325efd"
+    },
+    {
+      "path": "src/core/links.rs",
+      "bytes": 1129,
+      "sha256": "f825baabf2085025ff9dd4713e15ba4e1ca2a2f9fbd528dfba953c58fa16c799"
+    },
+    {
+      "path": "src/core/locations.rs",
+      "bytes": 14020,
+      "sha256": "59db221afac1e0fa022a1e640b70a81cc472b4a7184ef2f3dbec82d8b4048aa7"
+    },
+    {
+      "path": "src/core/mod.rs",
+      "bytes": 362,
+      "sha256": "323738c70a7bcc991493d67160271e44c0a2ba7be1f1dd668c220174fcf290a9"
+    },
+    {
+      "path": "src/core/player.rs",
+      "bytes": 6631,
+      "sha256": "851b5b09d34fb03ad78e4bbd85bd2af27e8fc08a20785356d9e49b9b0032a023"
+    },
+    {
+      "path": "src/core/static_data.rs",
+      "bytes": 33182,
+      "sha256": "0fcd8da3cf1990544fe977183a11921184aff12d9c44a2abf067f19a5c6a640e"
+    },
+    {
+      "path": "src/core/types.rs",
+      "bytes": 22713,
+      "sha256": "f53be410a7e0d16e239738f28cb4983e0afb044ff143959bd9180d4cae9a4ab8"
+    },
+    {
+      "path": "src/game/benchmark_deadline.rs",
+      "bytes": 1090,
+      "sha256": "8d288bac11cbd04af060512a0dfcbd5f47ccb2a3c3d6ac099f753c6763da5699"
+    },
+    {
+      "path": "src/game/framework.rs",
+      "bytes": 101767,
+      "sha256": "fb026f5ef6ca152260e1abf618fd04757959e39b3bc3d249fc803f568f7ea5b6"
+    },
+    {
+      "path": "src/game/hidden_information.rs",
+      "bytes": 7982,
+      "sha256": "67fb21304bd489f82980c090e4c034695b05a31d431dcddbe3d24b8f7bbe7ecf"
+    },
+    {
+      "path": "src/game/legal_actions.rs",
+      "bytes": 17436,
+      "sha256": "9bc3e874c77b344b212897744467e430df33cd0a70f41f9df42bd0e84d23f6f2"
+    },
+    {
+      "path": "src/game/runner.rs",
+      "bytes": 23200,
+      "sha256": "cbe61afab22d786359cc20a86d406429d3ea837c99ac7bade74ae808f713a968"
+    },
+    {
+      "path": "src/market/merchants.rs",
+      "bytes": 3682,
+      "sha256": "47a17d1199d4e9fe9ae208c8bea4ed286b40c04c60b7edba3f292cf316d9147c"
+    },
+    {
+      "path": "src/market/mod.rs",
+      "bytes": 84,
+      "sha256": "449520b137b828d170093d7e419c44db78983fb8f5d42b00db560968345076c8"
+    },
+    {
+      "path": "src/market/pricing.rs",
+      "bytes": 1323,
+      "sha256": "3a62edc091a23f09eb18191f4ec6ea6ba12a7fc4f110d6928c84acff2102e2dc"
+    },
+    {
+      "path": "src/utils/dsu.rs",
+      "bytes": 9098,
+      "sha256": "853557f7774e244147e757614461be80630329a72c497b5968efe06a5621dd3e"
+    },
+    {
+      "path": "src/utils/helpers.rs",
+      "bytes": 5686,
+      "sha256": "b89af86888dc039bbb758445c1455c30d49a712679b1a7b14c458de44ca0fc20"
+    },
+    {
+      "path": "src/utils/mod.rs",
+      "bytes": 72,
+      "sha256": "d8f0d000472865fd7ecf336e23e65211c1b067a2f115ba24efd42facd08daa4d"
+    },
+    {
+      "path": "src/validation/build_validation.rs",
+      "bytes": 41813,
+      "sha256": "6b412b609c591d520aa9b073ee73f671c9a40d34a00d1e89ce9c1afb69919dc1"
+    },
+    {
+      "path": "src/validation/develop_validation.rs",
+      "bytes": 6266,
+      "sha256": "7718381204c83d6ad1b2e9b12e7bc4440ded8284f8533be6bda8999136d040f9"
+    },
+    {
+      "path": "src/validation/mod.rs",
+      "bytes": 236,
+      "sha256": "726233ae5162db33bf3887d6a9208b18dc4d07828348091794250a4040cf97cd"
+    },
+    {
+      "path": "src/validation/network_validation.rs",
+      "bytes": 18625,
+      "sha256": "890081cb0512e6222bbb1f0bdba394b53700da25775c0574013b50d8a2d99b0f"
+    },
+    {
+      "path": "src/validation/sell_validation.rs",
+      "bytes": 5938,
+      "sha256": "f2c1ff3b0520ad2c37ee3cc79177845a643384f518899601a61ae3ae0337dc62"
+    }
+  ],
+  "byte_identical": true,
+  "license_sha256": "8486a10c4393cee1c25392769ddd3b2d6c242d6ec7928e1414efff7dfb2f07ef",
+  "local_patch_sha256": "6f654443f655fea388290f291744c6ce928675a56bd7229f21e1d875e0e4a5b4",
+  "excluded": [
+    "web",
+    "python",
+    "main",
+    "search",
+    "rule_ai",
+    "trained_ai",
+    "training",
+    "self_play",
+    "models",
+    "UI assets"
+  ],
+  "note": "Original selected source bytes retained; Cargo.toml/lib.rs/game/mod.rs are local isolation wrappers. Existing benchmark-deadline feature retained and disabled by default."
+}

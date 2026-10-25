@@ -27,3 +27,9 @@ training/runtime/**/*.json -text
 # Migration bundle receipts and checkpoint parts must survive Git byte-for-byte.
 test_nn/**/*.json -text
 test_nn/**/*.pt.part* -text
+test_nn/**/*.jsonl.gz -text
+# Imported upstream Rust modules retain their frozen archive bytes.
+native/vendor/brass-upstream-rules/src/** -text
+native/vendor/brass-upstream-rules/LICENSE -text
+native/vendor/brass-upstream-rules/upstream-local.patch -text
+native/vendor/brass-upstream-rules/UPSTREAM.json -text

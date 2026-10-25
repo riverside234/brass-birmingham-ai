@@ -1,0 +1,16 @@
+{
+  "format": "rust-fixture-recipe/1.0.0",
+  "players": 4,
+  "games": 20,
+  "first_seed": 731001,
+  "holdout_seed_offsets": [16, 17, 18, 19],
+  "minimum_roots": 100,
+  "minimum_roots_per_game": 6,
+  "maximum_steps_per_game": 2500,
+  "matched_seconds": 4,
+  "paired_repetitions": 5,
+  "sessions": 2,
+  "threads_per_session": 1,
+  "selection": "Uniform action-family, then uniform semantic choice; explicit chance by recorded probability. Authored edge positions supplement natural play.",
+  "coverage": "Era/phase/action/chance/terminal coverage is measured, never inferred from fixture names. Native lifecycle/model trace gates remain in L03-L15."
+}

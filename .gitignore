@@ -450,6 +450,7 @@ FodyWeavers.xsd
 !/ai-research/
 !/rules-audit/
 !/src/
+!/native/
 !/tests/
 !/training/
 !/configs/
@@ -570,6 +571,7 @@ tensorboard/
 !/training/runtime/shared-search/*/BrassLegacyAI.exe
 
 # Local operating-system metadata.
+/native/**/target/
 /configs/legacy-ai/live.json
 .DS_Store
 Thumbs.db

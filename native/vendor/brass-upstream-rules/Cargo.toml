@@ -1,0 +1,16 @@
+[package]
+name = "brass-upstream-rules"
+version = "0.1.0"
+edition = "2021"
+publish = false
+license-file = "LICENSE"
+description = "Pinned, isolated Daiyu game rules; not yet qualified against the C# rules"
+
+[features]
+default = []
+benchmark-deadlines = []
+
+[dependencies]
+fixedbitset = "=0.5.7"
+once_cell = "=1.21.3"
+rand = "=0.8.5"

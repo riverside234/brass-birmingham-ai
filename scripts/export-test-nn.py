@@ -1,4 +1,4 @@
-"""Export committed NN checkpoints to test_nn/; no trainer imports or run writes.
+"""Export NN test checkpoints, with read-only utility validation by default.
 
 Checkpoint bytes travel as bounded Git-friendly parts. After pulling, --restore
 verifies the bundle and rebuilds checkpoint.pt, which stays ignored by Git.
@@ -166,10 +166,30 @@ def verify_bundle(bundle):
         require(receipt(path) == {k: item[k] for k in ('bytes', 'sha256')},
                 f'Metadata hash differs: {path}')
     require(digest((bundle / 'state.json').read_bytes()) == manifest['state_sha256'], 'State snapshot differs')
+    if 'calibration' in manifest:
+        proof = manifest['calibration']
+        report = read(below(bundle, 'calibration.json'))
+        require(proof.get('ready') is True and report.get('ready') is True and
+                report['calibration_receipt'].get('ready') is True,
+                'Calibrated bundle does not have a passed utility receipt')
+        require(proof['request_id'] == report['request_id'] and
+                proof['source_checkpoint_sha256'] == report['source_checkpoint_sha256'] ==
+                manifest['recorded_checkpoint']['sha256'].lower(), 'Calibration parent/request differs')
+        require(manifest['derived_checkpoint']['sha256'] == manifest['checkpoint']['sha256'] and
+                manifest['derived_checkpoint']['model_id'] == report['exported_model_id'],
+                'Calibrated checkpoint identity differs')
+        if proof.get('mode') == 'read-only-validation':
+            require(report['completed'] is True and proof['weights_unchanged'] is True and
+                    report['calibration_receipt']['steps'] == 0 and
+                    report['calibration_receipt']['mode'] == 'read-only-validation' and
+                    report['checks']['weights_unchanged'] is True and
+                    report['source_model_id'] == report['exported_model_id'] ==
+                    manifest['recorded_checkpoint']['model_id'], 'Read-only validation identity differs')
     return manifest
 
 
-def make_bundle(root, output, run, raw_state, state, entry, source, part_bytes):
+def make_bundle(root, output, run, raw_state, state, entry, source, part_bytes, *,
+                extra_files=None, provenance=None):
     run_name = re.sub('[^A-Za-z0-9_.-]', '-', run.name)[:64]
     run_ref = run.relative_to(root).as_posix()
     state_hash = digest(raw_state)
@@ -180,6 +200,9 @@ def make_bundle(root, output, run, raw_state, state, entry, source, part_bytes):
         manifest = verify_bundle(bundle)
         require(manifest['source_run'] == run_ref and manifest['state_sha256'] == state_hash and
                 manifest['checkpoint']['sha256'] == entry['sha256'].lower(), 'Existing bundle identity differs')
+        if provenance:
+            require(all(manifest.get(k) == value for k, value in provenance.items()),
+                    'Existing calibrated bundle provenance differs')
         return bundle
     stage = Path(tempfile.mkdtemp(prefix='.staging-', dir=output))
     try:
@@ -210,14 +233,22 @@ def make_bundle(root, output, run, raw_state, state, entry, source, part_bytes):
         require(isinstance(config, dict), 'No effective run config in captured state')
         (stage / 'config.json').write_bytes(encode(config))
         (stage / 'source.json').write_bytes(encode(git_info(root)))
+        metadata_names = ['state.json', 'config.json', 'source.json']
+        for relative, origin in (extra_files or {}).items():
+            require(relative not in metadata_names and relative != 'manifest.json', 'Duplicate bundle metadata')
+            target = below(stage, relative)
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(below(root, origin), target)
+            metadata_names.append(relative)
         manifest = dict(format=FORMAT, created_utc=datetime.now(timezone.utc).isoformat(),
                         source_run=run_ref, committed_generation=state.get('iteration'),
                         state_sha256=state_hash, recorded_checkpoint=entry,
                         checkpoint=dict(path='checkpoint.pt', bytes=total, sha256=checksum.hexdigest()),
-                        parts=parts, metadata=[dict(path=p, **receipt(stage / p))
-                            for p in ('state.json', 'config.json', 'source.json')],
+                        parts=parts, metadata=[dict(path=p, **receipt(stage / p)) for p in metadata_names],
                         config_scope='Source run at snapshot time; checkpoint.model_config and reward '
                                      'are authoritative for an older best/anchor. Not a resume bundle.')
+        if provenance:
+            manifest.update(provenance)
         (stage / 'manifest.json').write_bytes(encode(manifest))
         verify_bundle(stage)
         require(not bundle.exists(), f'Bundle appeared concurrently; retry: {bundle}')
@@ -251,7 +282,17 @@ def write_pointer(output, label, bundle, entry, reason):
         Path(temporary).unlink(missing_ok=True)
 
 
-def export(root, run=None, choice='latest', *, part_bytes=48 * CHUNK):
+def calibrate_bundle(root, bundle, options, label, part_bytes):
+    # Restoration and byte-copy exports keep working without PyTorch.
+    import importlib.util
+    spec = importlib.util.spec_from_file_location('_test_nn_calibration',
+                                                Path(__file__).with_name('test_nn_calibration.py'))
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module.prepare(root, bundle, options, label, part_bytes=part_bytes)
+
+
+def export(root, run=None, choice='latest', *, part_bytes=48 * CHUNK, calibration=None):
     root = Path(root).resolve()
     require(0 < part_bytes <= 48 * CHUNK, 'Part size must be 1 byte to 48 MiB')
     run = find_run(root, run)
@@ -263,6 +304,14 @@ def export(root, run=None, choice='latest', *, part_bytes=48 * CHUNK):
     output.mkdir(exist_ok=True)
     bundles = {label: make_bundle(root, output, run, raw_state, state, value['entry'],
                                  sources[label], part_bytes) for label, value in selected.items()}
+    if calibration is not None:
+        completed = {}
+        for label, bundle in list(bundles.items()):
+            if bundle not in completed:
+                completed[bundle] = calibrate_bundle(root, bundle, calibration, label, part_bytes)
+            bundles[label], derived = completed[bundle]
+            selected[label] = dict(entry=derived,
+                                   reason=selected[label]['reason'] + '; read-only utility validation; weights unchanged')
     # Publish selections only after every requested checkpoint has passed verification.
     for label, value in selected.items():
         write_pointer(output, label, bundles[label], value['entry'], value['reason'])
@@ -306,6 +355,16 @@ def main():
     mode.add_argument('--restore', action='store_true', help='After Git pull: verify and reconstruct checkpoint.pt')
     mode.add_argument('--verify', action='store_true', help='Verify exported bytes without creating checkpoints')
     parser.add_argument('--part-mib', type=int, default=48, choices=range(1, 49), metavar='1..48')
+    parser.add_argument('--no-utility-validation', '--no-calibrate', action='store_true',
+                        help='Byte-copy only; does not issue a new utility readiness receipt')
+    parser.add_argument('--validation-games', '--calibration-games', type=int, default=4,
+                        help='Independent complete games for read-only metrics; no fitting (default: 4)')
+    parser.add_argument('--validation-rows-per-game', '--calibration-rows-per-game', type=int, default=128)
+    parser.add_argument('--validation-seed', '--calibration-seed', type=int, default=1700000000)
+    parser.add_argument('--validation-device', '--calibration-device', choices=('cpu', 'cuda', 'cuda:0'), default='cpu')
+    parser.add_argument('--validation-threads', '--calibration-threads', type=int, default=1)
+    parser.add_argument('--validation-host', '--calibration-host',
+                        help='Existing prepared rules host; no runtime installation is performed')
     args = parser.parse_args()
     try:
         if args.restore or args.verify:
@@ -314,11 +373,15 @@ def main():
                 path = materialize(args.root, label, restore=args.restore)
                 print(f'{label}: {path}' if args.restore else f'{label}: verified')
         else:
-            for label, bundle in export(args.root, args.run, args.select, part_bytes=args.part_mib * CHUNK).items():
+            calibration = None if args.no_utility_validation else dict(
+                games=args.validation_games, rows_per_game=args.validation_rows_per_game, seed=args.validation_seed,
+                device=args.validation_device, threads=args.validation_threads, host=args.validation_host)
+            for label, bundle in export(args.root, args.run, args.select,
+                                       part_bytes=args.part_mib * CHUNK, calibration=calibration).items():
                 print(f'{label}: {bundle}')
             print('Prepared test_nn/. Commit and push it on the lab, then pull locally and run:')
             print(f'python scripts/export-test-nn.py --restore --select {args.select}')
-    except (ValueError, OSError, KeyError, TypeError, json.JSONDecodeError) as error:
+    except (ValueError, OSError, KeyError, TypeError, RuntimeError, ImportError, json.JSONDecodeError) as error:
         parser.exit(1, f'export-test-nn: {error}\n')
 
 

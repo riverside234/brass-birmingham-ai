@@ -1,0 +1,4216 @@
+{
+  "source_initial_sha256": "c40cbd0e8ba7bb282b13459b1a64866db5dc56c688b4682be5c2ab5bdb8c5973",
+  "tiles": [
+    {
+      "seat": 0,
+      "type": "Brewery",
+      "level": 1,
+      "flipped": false,
+      "resource": 0,
+      "vp": 4,
+      "link_vp": 2,
+      "income": 4,
+      "cost": 5,
+      "coal": 0,
+      "iron": 1,
+      "beer": 0,
+      "developable": true,
+      "canal_only": true,
+      "rail_only": false,
+      "id": "0:Brewery:0"
+    },
+    {
+      "seat": 0,
+      "type": "Brewery",
+      "level": 1,
+      "flipped": false,
+      "resource": 0,
+      "vp": 4,
+      "link_vp": 2,
+      "income": 4,
+      "cost": 5,
+      "coal": 0,
+      "iron": 1,
+      "beer": 0,
+      "developable": true,
+      "canal_only": true,
+      "rail_only": false,
+      "id": "0:Brewery:1"
+    },
+    {
+      "seat": 0,
+      "type": "Brewery",
+      "level": 2,
+      "flipped": false,
+      "resource": 0,
+      "vp": 5,
+      "link_vp": 2,
+      "income": 5,
+      "cost": 7,
+      "coal": 0,
+      "iron": 1,
+      "beer": 0,
+      "developable": true,
+      "canal_only": false,
+      "rail_only": false,
+      "id": "0:Brewery:2"
+    },
+    {
+      "seat": 0,
+      "type": "Brewery",
+      "level": 2,
+      "flipped": false,
+      "resource": 0,
+      "vp": 5,
+      "link_vp": 2,
+      "income": 5,
+      "cost": 7,
+      "coal": 0,
+      "iron": 1,
+      "beer": 0,
+      "developable": true,
+      "canal_only": false,
+      "rail_only": false,
+      "id": "0:Brewery:3"
+    },
+    {
+      "seat": 0,
+      "type": "Brewery",
+      "level": 3,
+      "flipped": false,
+      "resource": 0,
+      "vp": 7,
+      "link_vp": 2,
+      "income": 5,
+      "cost": 9,
+      "coal": 0,
+      "iron": 1,
+      "beer": 0,
+      "developable": true,
+      "canal_only": false,
+      "rail_only": false,
+      "id": "0:Brewery:4"
+    },
+    {
+      "seat": 0,
+      "type": "Brewery",
+      "level": 3,
+      "flipped": false,
+      "resource": 0,
+      "vp": 7,
+      "link_vp": 2,
+      "income": 5,
+      "cost": 9,
+      "coal": 0,
+      "iron": 1,
+      "beer": 0,
+      "developable": true,
+      "canal_only": false,
+      "rail_only": false,
+      "id": "0:Brewery:5"
+    },
+    {
+      "seat": 0,
+      "type": "Brewery",
+      "level": 4,
+      "flipped": false,
+      "resource": 0,
+      "vp": 10,
+      "link_vp": 2,
+      "income": 5,
+      "cost": 9,
+      "coal": 0,
+      "iron": 1,
+      "beer": 0,
+      "developable": true,
+      "canal_only": false,
+      "rail_only": true,
+      "id": "0:Brewery:6"
+    },
+    {
+      "seat": 0,
+      "type": "CoalMine",
+      "level": 1,
+      "flipped": false,
+      "resource": 2,
+      "vp": 1,
+      "link_vp": 2,
+      "income": 4,
+      "cost": 5,
+      "coal": 0,
+      "iron": 0,
+      "beer": 0,
+      "developable": true,
+      "canal_only": true,
+      "rail_only": false,
+      "id": "0:CoalMine:0"
+    },
+    {
+      "seat": 0,
+      "type": "CoalMine",
+      "level": 2,
+      "flipped": false,
+      "resource": 3,
+      "vp": 2,
+      "link_vp": 1,
+      "income": 7,
+      "cost": 7,
+      "coal": 0,
+      "iron": 0,
+      "beer": 0,
+      "developable": true,
+      "canal_only": false,
+      "rail_only": false,
+      "id": "0:CoalMine:1"
+    },
+    {
+      "seat": 0,
+      "type": "CoalMine",
+      "level": 2,
+      "flipped": false,
+      "resource": 3,
+      "vp": 2,
+      "link_vp": 1,
+      "income": 7,
+      "cost": 7,
+      "coal": 0,
+      "iron": 0,
+      "beer": 0,
+      "developable": true,
+      "canal_only": false,
+      "rail_only": false,
+      "id": "0:CoalMine:2"
+    },
+    {
+      "seat": 0,
+      "type": "CoalMine",
+      "level": 3,
+      "flipped": false,
+      "resource": 4,
+      "vp": 3,
+      "link_vp": 1,
+      "income": 6,
+      "cost": 8,
+      "coal": 0,
+      "iron": 1,
+      "beer": 0,
+      "developable": true,
+      "canal_only": false,
+      "rail_only": false,
+      "id": "0:CoalMine:3"
+    },
+    {
+      "seat": 0,
+      "type": "CoalMine",
+      "level": 3,
+      "flipped": false,
+      "resource": 4,
+      "vp": 3,
+      "link_vp": 1,
+      "income": 6,
+      "cost": 8,
+      "coal": 0,
+      "iron": 1,
+      "beer": 0,
+      "developable": true,
+      "canal_only": false,
+      "rail_only": false,
+      "id": "0:CoalMine:4"
+    },
+    {
+      "seat": 0,
+      "type": "CoalMine",
+      "level": 4,
+      "flipped": false,
+      "resource": 5,
+      "vp": 4,
+      "link_vp": 1,
+      "income": 5,
+      "cost": 10,
+      "coal": 0,
+      "iron": 1,
+      "beer": 0,
+      "developable": true,
+      "canal_only": false,
+      "rail_only": false,
+      "id": "0:CoalMine:5"
+    },
+    {
+      "seat": 0,
+      "type": "CoalMine",
+      "level": 4,
+      "flipped": false,
+      "resource": 5,
+      "vp": 4,
+      "link_vp": 1,
+      "income": 5,
+      "cost": 10,
+      "coal": 0,
+      "iron": 1,
+      "beer": 0,
+      "developable": true,
+      "canal_only": false,
+      "rail_only": false,
+      "id": "0:CoalMine:6"
+    },
+    {
+      "seat": 0,
+      "type": "CottonMill",
+      "level": 1,
+      "flipped": false,
+      "resource": 0,
+      "vp": 5,
+      "link_vp": 1,
+      "income": 5,
+      "cost": 12,
+      "coal": 0,
+      "iron": 0,
+      "beer": 1,
+      "developable": true,
+      "canal_only": true,
+      "rail_only": false,
+      "id": "0:CottonMill:0"
+    },
+    {
+      "seat": 0,
+      "type": "CottonMill",
+      "level": 1,
+      "flipped": false,
+      "resource": 0,
+      "vp": 5,
+      "link_vp": 1,
+      "income": 5,
+      "cost": 12,
+      "coal": 0,
+      "iron": 0,
+      "beer": 1,
+      "developable": true,
+      "canal_only": true,
+      "rail_only": false,
+      "id": "0:CottonMill:1"
+    },
+    {
+      "seat": 0,
+      "type": "CottonMill",
+      "level": 1,
+      "flipped": false,
+      "resource": 0,
+      "vp": 5,
+      "link_vp": 1,
+      "income": 5,
+      "cost": 12,
+      "coal": 0,
+      "iron": 0,
+      "beer": 1,
+      "developable": true,
+      "canal_only": true,
+      "rail_only": false,
+      "id": "0:CottonMill:2"
+    },
+    {
+      "seat": 0,
+      "type": "CottonMill",
+      "level": 2,
+      "flipped": false,
+      "resource": 0,
+      "vp": 5,
+      "link_vp": 2,
+      "income": 4,
+      "cost": 14,
+      "coal": 1,
+      "iron": 0,
+      "beer": 1,
+      "developable": true,
+      "canal_only": false,
+      "rail_only": false,
+      "id": "0:CottonMill:3"
+    },
+    {
+      "seat": 0,
+      "type": "CottonMill",
+      "level": 2,
+      "flipped": false,
+      "resource": 0,
+      "vp": 5,
+      "link_vp": 2,
+      "income": 4,
+      "cost": 14,
+      "coal": 1,
+      "iron": 0,
+      "beer": 1,
+      "developable": true,
+      "canal_only": false,
+      "rail_only": false,
+      "id": "0:CottonMill:4"
+    },
+    {
+      "seat": 0,
+      "type": "CottonMill",
+      "level": 3,
+      "flipped": false,
+      "resource": 0,
+      "vp": 9,
+      "link_vp": 1,
+      "income": 3,
+      "cost": 16,
+      "coal": 1,
+      "iron": 1,
+      "beer": 1,
+      "developable": true,
+      "canal_only": false,
+      "rail_only": false,
+      "id": "0:CottonMill:5"
+    },
+    {
+      "seat": 0,
+      "type": "CottonMill",
+      "level": 3,
+      "flipped": false,
+      "resource": 0,
+      "vp": 9,
+      "link_vp": 1,
+      "income": 3,
+      "cost": 16,
+      "coal": 1,
+      "iron": 1,
+      "beer": 1,
+      "developable": true,
+      "canal_only": false,
+      "rail_only": false,
+      "id": "0:CottonMill:6"
+    },
+    {
+      "seat": 0,
+      "type": "CottonMill",
+      "level": 3,
+      "flipped": false,
+      "resource": 0,
+      "vp": 9,
+      "link_vp": 1,
+      "income": 3,
+      "cost": 16,
+      "coal": 1,
+      "iron": 1,
+      "beer": 1,
+      "developable": true,
+      "canal_only": false,
+      "rail_only": false,
+      "id": "0:CottonMill:7"
+    },
+    {
+      "seat": 0,
+      "type": "CottonMill",
+      "level": 4,
+      "flipped": false,
+      "resource": 0,
+      "vp": 12,
+      "link_vp": 1,
+      "income": 2,
+      "cost": 18,
+      "coal": 1,
+      "iron": 1,
+      "beer": 1,
+      "developable": true,
+      "canal_only": false,
+      "rail_only": false,
+      "id": "0:CottonMill:8"
+    },
+    {
+      "seat": 0,
+      "type": "CottonMill",
+      "level": 4,
+      "flipped": false,
+      "resource": 0,
+      "vp": 12,
+      "link_vp": 1,
+      "income": 2,
+      "cost": 18,
+      "coal": 1,
+      "iron": 1,
+      "beer": 1,
+      "developable": true,
+      "canal_only": false,
+      "rail_only": false,
+      "id": "0:CottonMill:9"
+    },
+    {
+      "seat": 0,
+      "type": "CottonMill",
+      "level": 4,
+      "flipped": false,
+      "resource": 0,
+      "vp": 12,
+      "link_vp": 1,
+      "income": 2,
+      "cost": 18,
+      "coal": 1,
+      "iron": 1,
+      "beer": 1,
+      "developable": true,
+      "canal_only": false,
+      "rail_only": false,
+      "id": "0:CottonMill:10"
+    },
+    {
+      "seat": 0,
+      "type": "IronWorks",
+      "level": 1,
+      "flipped": false,
+      "resource": 4,
+      "vp": 3,
+      "link_vp": 1,
+      "income": 3,
+      "cost": 5,
+      "coal": 1,
+      "iron": 0,
+      "beer": 0,
+      "developable": true,
+      "canal_only": true,
+      "rail_only": false,
+      "id": "0:IronWorks:0"
+    },
+    {
+      "seat": 0,
+      "type": "IronWorks",
+      "level": 2,
+      "flipped": false,
+      "resource": 4,
+      "vp": 5,
+      "link_vp": 1,
+      "income": 3,
+      "cost": 7,
+      "coal": 1,
+      "iron": 0,
+      "beer": 0,
+      "developable": true,
+      "canal_only": false,
+      "rail_only": false,
+      "id": "0:IronWorks:1"
+    },
+    {
+      "seat": 0,
+      "type": "IronWorks",
+      "level": 3,
+      "flipped": false,
+      "resource": 5,
+      "vp": 7,
+      "link_vp": 1,
+      "income": 2,
+      "cost": 9,
+      "coal": 1,
+      "iron": 0,
+      "beer": 0,
+      "developable": true,
+      "canal_only": false,
+      "rail_only": false,
+      "id": "0:IronWorks:2"
+    },
+    {
+      "seat": 0,
+      "type": "IronWorks",
+      "level": 4,
+      "flipped": false,
+      "resource": 6,
+      "vp": 9,
+      "link_vp": 1,
+      "income": 1,
+      "cost": 12,
+      "coal": 1,
+      "iron": 0,
+      "beer": 0,
+      "developable": true,
+      "canal_only": false,
+      "rail_only": false,
+      "id": "0:IronWorks:3"
+    },
+    {
+      "seat": 0,
+      "type": "Manufacturer",
+      "level": 1,
+      "flipped": false,
+      "resource": 0,
+      "vp": 3,
+      "link_vp": 2,
+      "income": 5,
+      "cost": 8,
+      "coal": 1,
+      "iron": 0,
+      "beer": 1,
+      "developable": true,
+      "canal_only": true,
+      "rail_only": false,
+      "id": "0:Manufacturer:0"
+    },
+    {
+      "seat": 0,
+      "type": "Manufacturer",
+      "level": 2,
+      "flipped": false,
+      "resource": 0,
+      "vp": 5,
+      "link_vp": 1,
+      "income": 1,
+      "cost": 10,
+      "coal": 0,
+      "iron": 1,
+      "beer": 1,
+      "developable": true,
+      "canal_only": false,
+      "rail_only": false,
+      "id": "0:Manufacturer:1"
+    },
+    {
+      "seat": 0,
+      "type": "Manufacturer",
+      "level": 2,
+      "flipped": false,
+      "resource": 0,
+      "vp": 5,
+      "link_vp": 1,
+      "income": 1,
+      "cost": 10,
+      "coal": 0,
+      "iron": 1,
+      "beer": 1,
+      "developable": true,
+      "canal_only": false,
+      "rail_only": false,
+      "id": "0:Manufacturer:2"
+    },
+    {
+      "seat": 0,
+      "type": "Manufacturer",
+      "level": 3,
+      "flipped": false,
+      "resource": 0,
+      "vp": 4,
+      "link_vp": 0,
+      "income": 4,
+      "cost": 12,
+      "coal": 2,
+      "iron": 0,
+      "beer": 0,
+      "developable": true,
+      "canal_only": false,
+      "rail_only": false,
+      "id": "0:Manufacturer:3"
+    },
+    {
+      "seat": 0,
+      "type": "Manufacturer",
+      "level": 4,
+      "flipped": false,
+      "resource": 0,
+      "vp": 3,
+      "link_vp": 1,
+      "income": 6,
+      "cost": 8,
+      "coal": 0,
+      "iron": 1,
+      "beer": 1,
+      "developable": true,
+      "canal_only": false,
+      "rail_only": false,
+      "id": "0:Manufacturer:4"
+    },
+    {
+      "seat": 0,
+      "type": "Manufacturer",
+      "level": 5,
+      "flipped": false,
+      "resource": 0,
+      "vp": 8,
+      "link_vp": 2,
+      "income": 2,
+      "cost": 16,
+      "coal": 1,
+      "iron": 0,
+      "beer": 2,
+      "developable": true,
+      "canal_only": false,
+      "rail_only": false,
+      "id": "0:Manufacturer:5"
+    },
+    {
+      "seat": 0,
+      "type": "Manufacturer",
+      "level": 5,
+      "flipped": false,
+      "resource": 0,
+      "vp": 8,
+      "link_vp": 2,
+      "income": 2,
+      "cost": 16,
+      "coal": 1,
+      "iron": 0,
+      "beer": 2,
+      "developable": true,
+      "canal_only": false,
+      "rail_only": false,
+      "id": "0:Manufacturer:6"
+    },
+    {
+      "seat": 0,
+      "type": "Manufacturer",
+      "level": 6,
+      "flipped": false,
+      "resource": 0,
+      "vp": 7,
+      "link_vp": 1,
+      "income": 6,
+      "cost": 20,
+      "coal": 0,
+      "iron": 0,
+      "beer": 1,
+      "developable": true,
+      "canal_only": false,
+      "rail_only": false,
+      "id": "0:Manufacturer:7"
+    },
+    {
+      "seat": 0,
+      "type": "Manufacturer",
+      "level": 7,
+      "flipped": false,
+      "resource": 0,
+      "vp": 9,
+      "link_vp": 0,
+      "income": 4,
+      "cost": 16,
+      "coal": 1,
+      "iron": 1,
+      "beer": 0,
+      "developable": true,
+      "canal_only": false,
+      "rail_only": false,
+      "id": "0:Manufacturer:8"
+    },
+    {
+      "seat": 0,
+      "type": "Manufacturer",
+      "level": 8,
+      "flipped": false,
+      "resource": 0,
+      "vp": 11,
+      "link_vp": 1,
+      "income": 1,
+      "cost": 20,
+      "coal": 0,
+      "iron": 2,
+      "beer": 1,
+      "developable": true,
+      "canal_only": false,
+      "rail_only": false,
+      "id": "0:Manufacturer:9"
+    },
+    {
+      "seat": 0,
+      "type": "Manufacturer",
+      "level": 8,
+      "flipped": false,
+      "resource": 0,
+      "vp": 11,
+      "link_vp": 1,
+      "income": 1,
+      "cost": 20,
+      "coal": 0,
+      "iron": 2,
+      "beer": 1,
+      "developable": true,
+      "canal_only": false,
+      "rail_only": false,
+      "id": "0:Manufacturer:10"
+    },
+    {
+      "seat": 0,
+      "type": "Pottery",
+      "level": 1,
+      "flipped": false,
+      "resource": 0,
+      "vp": 10,
+      "link_vp": 1,
+      "income": 5,
+      "cost": 17,
+      "coal": 0,
+      "iron": 1,
+      "beer": 1,
+      "developable": false,
+      "canal_only": false,
+      "rail_only": false,
+      "id": "0:Pottery:0"
+    },
+    {
+      "seat": 0,
+      "type": "Pottery",
+      "level": 2,
+      "flipped": false,
+      "resource": 0,
+      "vp": 1,
+      "link_vp": 1,
+      "income": 1,
+      "cost": 0,
+      "coal": 1,
+      "iron": 0,
+      "beer": 1,
+      "developable": true,
+      "canal_only": false,
+      "rail_only": false,
+      "id": "0:Pottery:1"
+    },
+    {
+      "seat": 0,
+      "type": "Pottery",
+      "level": 3,
+      "flipped": false,
+      "resource": 0,
+      "vp": 11,
+      "link_vp": 1,
+      "income": 5,
+      "cost": 22,
+      "coal": 2,
+      "iron": 0,
+      "beer": 2,
+      "developable": false,
+      "canal_only": false,
+      "rail_only": false,
+      "id": "0:Pottery:2"
+    },
+    {
+      "seat": 0,
+      "type": "Pottery",
+      "level": 4,
+      "flipped": false,
+      "resource": 0,
+      "vp": 1,
+      "link_vp": 1,
+      "income": 1,
+      "cost": 0,
+      "coal": 1,
+      "iron": 0,
+      "beer": 1,
+      "developable": true,
+      "canal_only": false,
+      "rail_only": false,
+      "id": "0:Pottery:3"
+    },
+    {
+      "seat": 0,
+      "type": "Pottery",
+      "level": 5,
+      "flipped": false,
+      "resource": 0,
+      "vp": 20,
+      "link_vp": 1,
+      "income": 5,
+      "cost": 24,
+      "coal": 2,
+      "iron": 0,
+      "beer": 2,
+      "developable": true,
+      "canal_only": false,
+      "rail_only": true,
+      "id": "0:Pottery:4"
+    },
+    {
+      "seat": 1,
+      "type": "Brewery",
+      "level": 1,
+      "flipped": false,
+      "resource": 0,
+      "vp": 4,
+      "link_vp": 2,
+      "income": 4,
+      "cost": 5,
+      "coal": 0,
+      "iron": 1,
+      "beer": 0,
+      "developable": true,
+      "canal_only": true,
+      "rail_only": false,
+      "id": "1:Brewery:0"
+    },
+    {
+      "seat": 1,
+      "type": "Brewery",
+      "level": 1,
+      "flipped": false,
+      "resource": 0,
+      "vp": 4,
+      "link_vp": 2,
+      "income": 4,
+      "cost": 5,
+      "coal": 0,
+      "iron": 1,
+      "beer": 0,
+      "developable": true,
+      "canal_only": true,
+      "rail_only": false,
+      "id": "1:Brewery:1"
+    },
+    {
+      "seat": 1,
+      "type": "Brewery",
+      "level": 2,
+      "flipped": false,
+      "resource": 0,
+      "vp": 5,
+      "link_vp": 2,
+      "income": 5,
+      "cost": 7,
+      "coal": 0,
+      "iron": 1,
+      "beer": 0,
+      "developable": true,
+      "canal_only": false,
+      "rail_only": false,
+      "id": "1:Brewery:2"
+    },
+    {
+      "seat": 1,
+      "type": "Brewery",
+      "level": 2,
+      "flipped": false,
+      "resource": 0,
+      "vp": 5,
+      "link_vp": 2,
+      "income": 5,
+      "cost": 7,
+      "coal": 0,
+      "iron": 1,
+      "beer": 0,
+      "developable": true,
+      "canal_only": false,
+      "rail_only": false,
+      "id": "1:Brewery:3"
+    },
+    {
+      "seat": 1,
+      "type": "Brewery",
+      "level": 3,
+      "flipped": false,
+      "resource": 0,
+      "vp": 7,
+      "link_vp": 2,
+      "income": 5,
+      "cost": 9,
+      "coal": 0,
+      "iron": 1,
+      "beer": 0,
+      "developable": true,
+      "canal_only": false,
+      "rail_only": false,
+      "id": "1:Brewery:4"
+    },
+    {
+      "seat": 1,
+      "type": "Brewery",
+      "level": 3,
+      "flipped": false,
+      "resource": 0,
+      "vp": 7,
+      "link_vp": 2,
+      "income": 5,
+      "cost": 9,
+      "coal": 0,
+      "iron": 1,
+      "beer": 0,
+      "developable": true,
+      "canal_only": false,
+      "rail_only": false,
+      "id": "1:Brewery:5"
+    },
+    {
+      "seat": 1,
+      "type": "Brewery",
+      "level": 4,
+      "flipped": false,
+      "resource": 0,
+      "vp": 10,
+      "link_vp": 2,
+      "income": 5,
+      "cost": 9,
+      "coal": 0,
+      "iron": 1,
+      "beer": 0,
+      "developable": true,
+      "canal_only": false,
+      "rail_only": true,
+      "id": "1:Brewery:6"
+    },
+    {
+      "seat": 1,
+      "type": "CoalMine",
+      "level": 1,
+      "flipped": false,
+      "resource": 2,
+      "vp": 1,
+      "link_vp": 2,
+      "income": 4,
+      "cost": 5,
+      "coal": 0,
+      "iron": 0,
+      "beer": 0,
+      "developable": true,
+      "canal_only": true,
+      "rail_only": false,
+      "id": "1:CoalMine:0"
+    },
+    {
+      "seat": 1,
+      "type": "CoalMine",
+      "level": 2,
+      "flipped": false,
+      "resource": 3,
+      "vp": 2,
+      "link_vp": 1,
+      "income": 7,
+      "cost": 7,
+      "coal": 0,
+      "iron": 0,
+      "beer": 0,
+      "developable": true,
+      "canal_only": false,
+      "rail_only": false,
+      "id": "1:CoalMine:1"
+    },
+    {
+      "seat": 1,
+      "type": "CoalMine",
+      "level": 2,
+      "flipped": false,
+      "resource": 3,
+      "vp": 2,
+      "link_vp": 1,
+      "income": 7,
+      "cost": 7,
+      "coal": 0,
+      "iron": 0,
+      "beer": 0,
+      "developable": true,
+      "canal_only": false,
+      "rail_only": false,
+      "id": "1:CoalMine:2"
+    },
+    {
+      "seat": 1,
+      "type": "CoalMine",
+      "level": 3,
+      "flipped": false,
+      "resource": 4,
+      "vp": 3,
+      "link_vp": 1,
+      "income": 6,
+      "cost": 8,
+      "coal": 0,
+      "iron": 1,
+      "beer": 0,
+      "developable": true,
+      "canal_only": false,
+      "rail_only": false,
+      "id": "1:CoalMine:3"
+    },
+    {
+      "seat": 1,
+      "type": "CoalMine",
+      "level": 3,
+      "flipped": false,
+      "resource": 4,
+      "vp": 3,
+      "link_vp": 1,
+      "income": 6,
+      "cost": 8,
+      "coal": 0,
+      "iron": 1,
+      "beer": 0,
+      "developable": true,
+      "canal_only": false,
+      "rail_only": false,
+      "id": "1:CoalMine:4"
+    },
+    {
+      "seat": 1,
+      "type": "CoalMine",
+      "level": 4,
+      "flipped": false,
+      "resource": 5,
+      "vp": 4,
+      "link_vp": 1,
+      "income": 5,
+      "cost": 10,
+      "coal": 0,
+      "iron": 1,
+      "beer": 0,
+      "developable": true,
+      "canal_only": false,
+      "rail_only": false,
+      "id": "1:CoalMine:5"
+    },
+    {
+      "seat": 1,
+      "type": "CoalMine",
+      "level": 4,
+      "flipped": false,
+      "resource": 5,
+      "vp": 4,
+      "link_vp": 1,
+      "income": 5,
+      "cost": 10,
+      "coal": 0,
+      "iron": 1,
+      "beer": 0,
+      "developable": true,
+      "canal_only": false,
+      "rail_only": false,
+      "id": "1:CoalMine:6"
+    },
+    {
+      "seat": 1,
+      "type": "CottonMill",
+      "level": 1,
+      "flipped": false,
+      "resource": 0,
+      "vp": 5,
+      "link_vp": 1,
+      "income": 5,
+      "cost": 12,
+      "coal": 0,
+      "iron": 0,
+      "beer": 1,
+      "developable": true,
+      "canal_only": true,
+      "rail_only": false,
+      "id": "1:CottonMill:0"
+    },
+    {
+      "seat": 1,
+      "type": "CottonMill",
+      "level": 1,
+      "flipped": false,
+      "resource": 0,
+      "vp": 5,
+      "link_vp": 1,
+      "income": 5,
+      "cost": 12,
+      "coal": 0,
+      "iron": 0,
+      "beer": 1,
+      "developable": true,
+      "canal_only": true,
+      "rail_only": false,
+      "id": "1:CottonMill:1"
+    },
+    {
+      "seat": 1,
+      "type": "CottonMill",
+      "level": 1,
+      "flipped": false,
+      "resource": 0,
+      "vp": 5,
+      "link_vp": 1,
+      "income": 5,
+      "cost": 12,
+      "coal": 0,
+      "iron": 0,
+      "beer": 1,
+      "developable": true,
+      "canal_only": true,
+      "rail_only": false,
+      "id": "1:CottonMill:2"
+    },
+    {
+      "seat": 1,
+      "type": "CottonMill",
+      "level": 2,
+      "flipped": false,
+      "resource": 0,
+      "vp": 5,
+      "link_vp": 2,
+      "income": 4,
+      "cost": 14,
+      "coal": 1,
+      "iron": 0,
+      "beer": 1,
+      "developable": true,
+      "canal_only": false,
+      "rail_only": false,
+      "id": "1:CottonMill:3"
+    },
+    {
+      "seat": 1,
+      "type": "CottonMill",
+      "level": 2,
+      "flipped": false,
+      "resource": 0,
+      "vp": 5,
+      "link_vp": 2,
+      "income": 4,
+      "cost": 14,
+      "coal": 1,
+      "iron": 0,
+      "beer": 1,
+      "developable": true,
+      "canal_only": false,
+      "rail_only": false,
+      "id": "1:CottonMill:4"
+    },
+    {
+      "seat": 1,
+      "type": "CottonMill",
+      "level": 3,
+      "flipped": false,
+      "resource": 0,
+      "vp": 9,
+      "link_vp": 1,
+      "income": 3,
+      "cost": 16,
+      "coal": 1,
+      "iron": 1,
+      "beer": 1,
+      "developable": true,
+      "canal_only": false,
+      "rail_only": false,
+      "id": "1:CottonMill:5"
+    },
+    {
+      "seat": 1,
+      "type": "CottonMill",
+      "level": 3,
+      "flipped": false,
+      "resource": 0,
+      "vp": 9,
+      "link_vp": 1,
+      "income": 3,
+      "cost": 16,
+      "coal": 1,
+      "iron": 1,
+      "beer": 1,
+      "developable": true,
+      "canal_only": false,
+      "rail_only": false,
+      "id": "1:CottonMill:6"
+    },
+    {
+      "seat": 1,
+      "type": "CottonMill",
+      "level": 3,
+      "flipped": false,
+      "resource": 0,
+      "vp": 9,
+      "link_vp": 1,
+      "income": 3,
+      "cost": 16,
+      "coal": 1,
+      "iron": 1,
+      "beer": 1,
+      "developable": true,
+      "canal_only": false,
+      "rail_only": false,
+      "id": "1:CottonMill:7"
+    },
+    {
+      "seat": 1,
+      "type": "CottonMill",
+      "level": 4,
+      "flipped": false,
+      "resource": 0,
+      "vp": 12,
+      "link_vp": 1,
+      "income": 2,
+      "cost": 18,
+      "coal": 1,
+      "iron": 1,
+      "beer": 1,
+      "developable": true,
+      "canal_only": false,
+      "rail_only": false,
+      "id": "1:CottonMill:8"
+    },
+    {
+      "seat": 1,
+      "type": "CottonMill",
+      "level": 4,
+      "flipped": false,
+      "resource": 0,
+      "vp": 12,
+      "link_vp": 1,
+      "income": 2,
+      "cost": 18,
+      "coal": 1,
+      "iron": 1,
+      "beer": 1,
+      "developable": true,
+      "canal_only": false,
+      "rail_only": false,
+      "id": "1:CottonMill:9"
+    },
+    {
+      "seat": 1,
+      "type": "CottonMill",
+      "level": 4,
+      "flipped": false,
+      "resource": 0,
+      "vp": 12,
+      "link_vp": 1,
+      "income": 2,
+      "cost": 18,
+      "coal": 1,
+      "iron": 1,
+      "beer": 1,
+      "developable": true,
+      "canal_only": false,
+      "rail_only": false,
+      "id": "1:CottonMill:10"
+    },
+    {
+      "seat": 1,
+      "type": "IronWorks",
+      "level": 1,
+      "flipped": false,
+      "resource": 4,
+      "vp": 3,
+      "link_vp": 1,
+      "income": 3,
+      "cost": 5,
+      "coal": 1,
+      "iron": 0,
+      "beer": 0,
+      "developable": true,
+      "canal_only": true,
+      "rail_only": false,
+      "id": "1:IronWorks:0"
+    },
+    {
+      "seat": 1,
+      "type": "IronWorks",
+      "level": 2,
+      "flipped": false,
+      "resource": 4,
+      "vp": 5,
+      "link_vp": 1,
+      "income": 3,
+      "cost": 7,
+      "coal": 1,
+      "iron": 0,
+      "beer": 0,
+      "developable": true,
+      "canal_only": false,
+      "rail_only": false,
+      "id": "1:IronWorks:1"
+    },
+    {
+      "seat": 1,
+      "type": "IronWorks",
+      "level": 3,
+      "flipped": false,
+      "resource": 5,
+      "vp": 7,
+      "link_vp": 1,
+      "income": 2,
+      "cost": 9,
+      "coal": 1,
+      "iron": 0,
+      "beer": 0,
+      "developable": true,
+      "canal_only": false,
+      "rail_only": false,
+      "id": "1:IronWorks:2"
+    },
+    {
+      "seat": 1,
+      "type": "IronWorks",
+      "level": 4,
+      "flipped": false,
+      "resource": 6,
+      "vp": 9,
+      "link_vp": 1,
+      "income": 1,
+      "cost": 12,
+      "coal": 1,
+      "iron": 0,
+      "beer": 0,
+      "developable": true,
+      "canal_only": false,
+      "rail_only": false,
+      "id": "1:IronWorks:3"
+    },
+    {
+      "seat": 1,
+      "type": "Manufacturer",
+      "level": 1,
+      "flipped": false,
+      "resource": 0,
+      "vp": 3,
+      "link_vp": 2,
+      "income": 5,
+      "cost": 8,
+      "coal": 1,
+      "iron": 0,
+      "beer": 1,
+      "developable": true,
+      "canal_only": true,
+      "rail_only": false,
+      "id": "1:Manufacturer:0"
+    },
+    {
+      "seat": 1,
+      "type": "Manufacturer",
+      "level": 2,
+      "flipped": false,
+      "resource": 0,
+      "vp": 5,
+      "link_vp": 1,
+      "income": 1,
+      "cost": 10,
+      "coal": 0,
+      "iron": 1,
+      "beer": 1,
+      "developable": true,
+      "canal_only": false,
+      "rail_only": false,
+      "id": "1:Manufacturer:1"
+    },
+    {
+      "seat": 1,
+      "type": "Manufacturer",
+      "level": 2,
+      "flipped": false,
+      "resource": 0,
+      "vp": 5,
+      "link_vp": 1,
+      "income": 1,
+      "cost": 10,
+      "coal": 0,
+      "iron": 1,
+      "beer": 1,
+      "developable": true,
+      "canal_only": false,
+      "rail_only": false,
+      "id": "1:Manufacturer:2"
+    },
+    {
+      "seat": 1,
+      "type": "Manufacturer",
+      "level": 3,
+      "flipped": false,
+      "resource": 0,
+      "vp": 4,
+      "link_vp": 0,
+      "income": 4,
+      "cost": 12,
+      "coal": 2,
+      "iron": 0,
+      "beer": 0,
+      "developable": true,
+      "canal_only": false,
+      "rail_only": false,
+      "id": "1:Manufacturer:3"
+    },
+    {
+      "seat": 1,
+      "type": "Manufacturer",
+      "level": 4,
+      "flipped": false,
+      "resource": 0,
+      "vp": 3,
+      "link_vp": 1,
+      "income": 6,
+      "cost": 8,
+      "coal": 0,
+      "iron": 1,
+      "beer": 1,
+      "developable": true,
+      "canal_only": false,
+      "rail_only": false,
+      "id": "1:Manufacturer:4"
+    },
+    {
+      "seat": 1,
+      "type": "Manufacturer",
+      "level": 5,
+      "flipped": false,
+      "resource": 0,
+      "vp": 8,
+      "link_vp": 2,
+      "income": 2,
+      "cost": 16,
+      "coal": 1,
+      "iron": 0,
+      "beer": 2,
+      "developable": true,
+      "canal_only": false,
+      "rail_only": false,
+      "id": "1:Manufacturer:5"
+    },
+    {
+      "seat": 1,
+      "type": "Manufacturer",
+      "level": 5,
+      "flipped": false,
+      "resource": 0,
+      "vp": 8,
+      "link_vp": 2,
+      "income": 2,
+      "cost": 16,
+      "coal": 1,
+      "iron": 0,
+      "beer": 2,
+      "developable": true,
+      "canal_only": false,
+      "rail_only": false,
+      "id": "1:Manufacturer:6"
+    },
+    {
+      "seat": 1,
+      "type": "Manufacturer",
+      "level": 6,
+      "flipped": false,
+      "resource": 0,
+      "vp": 7,
+      "link_vp": 1,
+      "income": 6,
+      "cost": 20,
+      "coal": 0,
+      "iron": 0,
+      "beer": 1,
+      "developable": true,
+      "canal_only": false,
+      "rail_only": false,
+      "id": "1:Manufacturer:7"
+    },
+    {
+      "seat": 1,
+      "type": "Manufacturer",
+      "level": 7,
+      "flipped": false,
+      "resource": 0,
+      "vp": 9,
+      "link_vp": 0,
+      "income": 4,
+      "cost": 16,
+      "coal": 1,
+      "iron": 1,
+      "beer": 0,
+      "developable": true,
+      "canal_only": false,
+      "rail_only": false,
+      "id": "1:Manufacturer:8"
+    },
+    {
+      "seat": 1,
+      "type": "Manufacturer",
+      "level": 8,
+      "flipped": false,
+      "resource": 0,
+      "vp": 11,
+      "link_vp": 1,
+      "income": 1,
+      "cost": 20,
+      "coal": 0,
+      "iron": 2,
+      "beer": 1,
+      "developable": true,
+      "canal_only": false,
+      "rail_only": false,
+      "id": "1:Manufacturer:9"
+    },
+    {
+      "seat": 1,
+      "type": "Manufacturer",
+      "level": 8,
+      "flipped": false,
+      "resource": 0,
+      "vp": 11,
+      "link_vp": 1,
+      "income": 1,
+      "cost": 20,
+      "coal": 0,
+      "iron": 2,
+      "beer": 1,
+      "developable": true,
+      "canal_only": false,
+      "rail_only": false,
+      "id": "1:Manufacturer:10"
+    },
+    {
+      "seat": 1,
+      "type": "Pottery",
+      "level": 1,
+      "flipped": false,
+      "resource": 0,
+      "vp": 10,
+      "link_vp": 1,
+      "income": 5,
+      "cost": 17,
+      "coal": 0,
+      "iron": 1,
+      "beer": 1,
+      "developable": false,
+      "canal_only": false,
+      "rail_only": false,
+      "id": "1:Pottery:0"
+    },
+    {
+      "seat": 1,
+      "type": "Pottery",
+      "level": 2,
+      "flipped": false,
+      "resource": 0,
+      "vp": 1,
+      "link_vp": 1,
+      "income": 1,
+      "cost": 0,
+      "coal": 1,
+      "iron": 0,
+      "beer": 1,
+      "developable": true,
+      "canal_only": false,
+      "rail_only": false,
+      "id": "1:Pottery:1"
+    },
+    {
+      "seat": 1,
+      "type": "Pottery",
+      "level": 3,
+      "flipped": false,
+      "resource": 0,
+      "vp": 11,
+      "link_vp": 1,
+      "income": 5,
+      "cost": 22,
+      "coal": 2,
+      "iron": 0,
+      "beer": 2,
+      "developable": false,
+      "canal_only": false,
+      "rail_only": false,
+      "id": "1:Pottery:2"
+    },
+    {
+      "seat": 1,
+      "type": "Pottery",
+      "level": 4,
+      "flipped": false,
+      "resource": 0,
+      "vp": 1,
+      "link_vp": 1,
+      "income": 1,
+      "cost": 0,
+      "coal": 1,
+      "iron": 0,
+      "beer": 1,
+      "developable": true,
+      "canal_only": false,
+      "rail_only": false,
+      "id": "1:Pottery:3"
+    },
+    {
+      "seat": 1,
+      "type": "Pottery",
+      "level": 5,
+      "flipped": false,
+      "resource": 0,
+      "vp": 20,
+      "link_vp": 1,
+      "income": 5,
+      "cost": 24,
+      "coal": 2,
+      "iron": 0,
+      "beer": 2,
+      "developable": true,
+      "canal_only": false,
+      "rail_only": true,
+      "id": "1:Pottery:4"
+    },
+    {
+      "seat": 2,
+      "type": "Brewery",
+      "level": 1,
+      "flipped": false,
+      "resource": 0,
+      "vp": 4,
+      "link_vp": 2,
+      "income": 4,
+      "cost": 5,
+      "coal": 0,
+      "iron": 1,
+      "beer": 0,
+      "developable": true,
+      "canal_only": true,
+      "rail_only": false,
+      "id": "2:Brewery:0"
+    },
+    {
+      "seat": 2,
+      "type": "Brewery",
+      "level": 1,
+      "flipped": false,
+      "resource": 0,
+      "vp": 4,
+      "link_vp": 2,
+      "income": 4,
+      "cost": 5,
+      "coal": 0,
+      "iron": 1,
+      "beer": 0,
+      "developable": true,
+      "canal_only": true,
+      "rail_only": false,
+      "id": "2:Brewery:1"
+    },
+    {
+      "seat": 2,
+      "type": "Brewery",
+      "level": 2,
+      "flipped": false,
+      "resource": 0,
+      "vp": 5,
+      "link_vp": 2,
+      "income": 5,
+      "cost": 7,
+      "coal": 0,
+      "iron": 1,
+      "beer": 0,
+      "developable": true,
+      "canal_only": false,
+      "rail_only": false,
+      "id": "2:Brewery:2"
+    },
+    {
+      "seat": 2,
+      "type": "Brewery",
+      "level": 2,
+      "flipped": false,
+      "resource": 0,
+      "vp": 5,
+      "link_vp": 2,
+      "income": 5,
+      "cost": 7,
+      "coal": 0,
+      "iron": 1,
+      "beer": 0,
+      "developable": true,
+      "canal_only": false,
+      "rail_only": false,
+      "id": "2:Brewery:3"
+    },
+    {
+      "seat": 2,
+      "type": "Brewery",
+      "level": 3,
+      "flipped": false,
+      "resource": 0,
+      "vp": 7,
+      "link_vp": 2,
+      "income": 5,
+      "cost": 9,
+      "coal": 0,
+      "iron": 1,
+      "beer": 0,
+      "developable": true,
+      "canal_only": false,
+      "rail_only": false,
+      "id": "2:Brewery:4"
+    },
+    {
+      "seat": 2,
+      "type": "Brewery",
+      "level": 3,
+      "flipped": false,
+      "resource": 0,
+      "vp": 7,
+      "link_vp": 2,
+      "income": 5,
+      "cost": 9,
+      "coal": 0,
+      "iron": 1,
+      "beer": 0,
+      "developable": true,
+      "canal_only": false,
+      "rail_only": false,
+      "id": "2:Brewery:5"
+    },
+    {
+      "seat": 2,
+      "type": "Brewery",
+      "level": 4,
+      "flipped": false,
+      "resource": 0,
+      "vp": 10,
+      "link_vp": 2,
+      "income": 5,
+      "cost": 9,
+      "coal": 0,
+      "iron": 1,
+      "beer": 0,
+      "developable": true,
+      "canal_only": false,
+      "rail_only": true,
+      "id": "2:Brewery:6"
+    },
+    {
+      "seat": 2,
+      "type": "CoalMine",
+      "level": 1,
+      "flipped": false,
+      "resource": 2,
+      "vp": 1,
+      "link_vp": 2,
+      "income": 4,
+      "cost": 5,
+      "coal": 0,
+      "iron": 0,
+      "beer": 0,
+      "developable": true,
+      "canal_only": true,
+      "rail_only": false,
+      "id": "2:CoalMine:0"
+    },
+    {
+      "seat": 2,
+      "type": "CoalMine",
+      "level": 2,
+      "flipped": false,
+      "resource": 3,
+      "vp": 2,
+      "link_vp": 1,
+      "income": 7,
+      "cost": 7,
+      "coal": 0,
+      "iron": 0,
+      "beer": 0,
+      "developable": true,
+      "canal_only": false,
+      "rail_only": false,
+      "id": "2:CoalMine:1"
+    },
+    {
+      "seat": 2,
+      "type": "CoalMine",
+      "level": 2,
+      "flipped": false,
+      "resource": 3,
+      "vp": 2,
+      "link_vp": 1,
+      "income": 7,
+      "cost": 7,
+      "coal": 0,
+      "iron": 0,
+      "beer": 0,
+      "developable": true,
+      "canal_only": false,
+      "rail_only": false,
+      "id": "2:CoalMine:2"
+    },
+    {
+      "seat": 2,
+      "type": "CoalMine",
+      "level": 3,
+      "flipped": false,
+      "resource": 4,
+      "vp": 3,
+      "link_vp": 1,
+      "income": 6,
+      "cost": 8,
+      "coal": 0,
+      "iron": 1,
+      "beer": 0,
+      "developable": true,
+      "canal_only": false,
+      "rail_only": false,
+      "id": "2:CoalMine:3"
+    },
+    {
+      "seat": 2,
+      "type": "CoalMine",
+      "level": 3,
+      "flipped": false,
+      "resource": 4,
+      "vp": 3,
+      "link_vp": 1,
+      "income": 6,
+      "cost": 8,
+      "coal": 0,
+      "iron": 1,
+      "beer": 0,
+      "developable": true,
+      "canal_only": false,
+      "rail_only": false,
+      "id": "2:CoalMine:4"
+    },
+    {
+      "seat": 2,
+      "type": "CoalMine",
+      "level": 4,
+      "flipped": false,
+      "resource": 5,
+      "vp": 4,
+      "link_vp": 1,
+      "income": 5,
+      "cost": 10,
+      "coal": 0,
+      "iron": 1,
+      "beer": 0,
+      "developable": true,
+      "canal_only": false,
+      "rail_only": false,
+      "id": "2:CoalMine:5"
+    },
+    {
+      "seat": 2,
+      "type": "CoalMine",
+      "level": 4,
+      "flipped": false,
+      "resource": 5,
+      "vp": 4,
+      "link_vp": 1,
+      "income": 5,
+      "cost": 10,
+      "coal": 0,
+      "iron": 1,
+      "beer": 0,
+      "developable": true,
+      "canal_only": false,
+      "rail_only": false,
+      "id": "2:CoalMine:6"
+    },
+    {
+      "seat": 2,
+      "type": "CottonMill",
+      "level": 1,
+      "flipped": false,
+      "resource": 0,
+      "vp": 5,
+      "link_vp": 1,
+      "income": 5,
+      "cost": 12,
+      "coal": 0,
+      "iron": 0,
+      "beer": 1,
+      "developable": true,
+      "canal_only": true,
+      "rail_only": false,
+      "id": "2:CottonMill:0"
+    },
+    {
+      "seat": 2,
+      "type": "CottonMill",
+      "level": 1,
+      "flipped": false,
+      "resource": 0,
+      "vp": 5,
+      "link_vp": 1,
+      "income": 5,
+      "cost": 12,
+      "coal": 0,
+      "iron": 0,
+      "beer": 1,
+      "developable": true,
+      "canal_only": true,
+      "rail_only": false,
+      "id": "2:CottonMill:1"
+    },
+    {
+      "seat": 2,
+      "type": "CottonMill",
+      "level": 1,
+      "flipped": false,
+      "resource": 0,
+      "vp": 5,
+      "link_vp": 1,
+      "income": 5,
+      "cost": 12,
+      "coal": 0,
+      "iron": 0,
+      "beer": 1,
+      "developable": true,
+      "canal_only": true,
+      "rail_only": false,
+      "id": "2:CottonMill:2"
+    },
+    {
+      "seat": 2,
+      "type": "CottonMill",
+      "level": 2,
+      "flipped": false,
+      "resource": 0,
+      "vp": 5,
+      "link_vp": 2,
+      "income": 4,
+      "cost": 14,
+      "coal": 1,
+      "iron": 0,
+      "beer": 1,
+      "developable": true,
+      "canal_only": false,
+      "rail_only": false,
+      "id": "2:CottonMill:3"
+    },
+    {
+      "seat": 2,
+      "type": "CottonMill",
+      "level": 2,
+      "flipped": false,
+      "resource": 0,
+      "vp": 5,
+      "link_vp": 2,
+      "income": 4,
+      "cost": 14,
+      "coal": 1,
+      "iron": 0,
+      "beer": 1,
+      "developable": true,
+      "canal_only": false,
+      "rail_only": false,
+      "id": "2:CottonMill:4"
+    },
+    {
+      "seat": 2,
+      "type": "CottonMill",
+      "level": 3,
+      "flipped": false,
+      "resource": 0,
+      "vp": 9,
+      "link_vp": 1,
+      "income": 3,
+      "cost": 16,
+      "coal": 1,
+      "iron": 1,
+      "beer": 1,
+      "developable": true,
+      "canal_only": false,
+      "rail_only": false,
+      "id": "2:CottonMill:5"
+    },
+    {
+      "seat": 2,
+      "type": "CottonMill",
+      "level": 3,
+      "flipped": false,
+      "resource": 0,
+      "vp": 9,
+      "link_vp": 1,
+      "income": 3,
+      "cost": 16,
+      "coal": 1,
+      "iron": 1,
+      "beer": 1,
+      "developable": true,
+      "canal_only": false,
+      "rail_only": false,
+      "id": "2:CottonMill:6"
+    },
+    {
+      "seat": 2,
+      "type": "CottonMill",
+      "level": 3,
+      "flipped": false,
+      "resource": 0,
+      "vp": 9,
+      "link_vp": 1,
+      "income": 3,
+      "cost": 16,
+      "coal": 1,
+      "iron": 1,
+      "beer": 1,
+      "developable": true,
+      "canal_only": false,
+      "rail_only": false,
+      "id": "2:CottonMill:7"
+    },
+    {
+      "seat": 2,
+      "type": "CottonMill",
+      "level": 4,
+      "flipped": false,
+      "resource": 0,
+      "vp": 12,
+      "link_vp": 1,
+      "income": 2,
+      "cost": 18,
+      "coal": 1,
+      "iron": 1,
+      "beer": 1,
+      "developable": true,
+      "canal_only": false,
+      "rail_only": false,
+      "id": "2:CottonMill:8"
+    },
+    {
+      "seat": 2,
+      "type": "CottonMill",
+      "level": 4,
+      "flipped": false,
+      "resource": 0,
+      "vp": 12,
+      "link_vp": 1,
+      "income": 2,
+      "cost": 18,
+      "coal": 1,
+      "iron": 1,
+      "beer": 1,
+      "developable": true,
+      "canal_only": false,
+      "rail_only": false,
+      "id": "2:CottonMill:9"
+    },
+    {
+      "seat": 2,
+      "type": "CottonMill",
+      "level": 4,
+      "flipped": false,
+      "resource": 0,
+      "vp": 12,
+      "link_vp": 1,
+      "income": 2,
+      "cost": 18,
+      "coal": 1,
+      "iron": 1,
+      "beer": 1,
+      "developable": true,
+      "canal_only": false,
+      "rail_only": false,
+      "id": "2:CottonMill:10"
+    },
+    {
+      "seat": 2,
+      "type": "IronWorks",
+      "level": 1,
+      "flipped": false,
+      "resource": 4,
+      "vp": 3,
+      "link_vp": 1,
+      "income": 3,
+      "cost": 5,
+      "coal": 1,
+      "iron": 0,
+      "beer": 0,
+      "developable": true,
+      "canal_only": true,
+      "rail_only": false,
+      "id": "2:IronWorks:0"
+    },
+    {
+      "seat": 2,
+      "type": "IronWorks",
+      "level": 2,
+      "flipped": false,
+      "resource": 4,
+      "vp": 5,
+      "link_vp": 1,
+      "income": 3,
+      "cost": 7,
+      "coal": 1,
+      "iron": 0,
+      "beer": 0,
+      "developable": true,
+      "canal_only": false,
+      "rail_only": false,
+      "id": "2:IronWorks:1"
+    },
+    {
+      "seat": 2,
+      "type": "IronWorks",
+      "level": 3,
+      "flipped": false,
+      "resource": 5,
+      "vp": 7,
+      "link_vp": 1,
+      "income": 2,
+      "cost": 9,
+      "coal": 1,
+      "iron": 0,
+      "beer": 0,
+      "developable": true,
+      "canal_only": false,
+      "rail_only": false,
+      "id": "2:IronWorks:2"
+    },
+    {
+      "seat": 2,
+      "type": "IronWorks",
+      "level": 4,
+      "flipped": false,
+      "resource": 6,
+      "vp": 9,
+      "link_vp": 1,
+      "income": 1,
+      "cost": 12,
+      "coal": 1,
+      "iron": 0,
+      "beer": 0,
+      "developable": true,
+      "canal_only": false,
+      "rail_only": false,
+      "id": "2:IronWorks:3"
+    },
+    {
+      "seat": 2,
+      "type": "Manufacturer",
+      "level": 1,
+      "flipped": false,
+      "resource": 0,
+      "vp": 3,
+      "link_vp": 2,
+      "income": 5,
+      "cost": 8,
+      "coal": 1,
+      "iron": 0,
+      "beer": 1,
+      "developable": true,
+      "canal_only": true,
+      "rail_only": false,
+      "id": "2:Manufacturer:0"
+    },
+    {
+      "seat": 2,
+      "type": "Manufacturer",
+      "level": 2,
+      "flipped": false,
+      "resource": 0,
+      "vp": 5,
+      "link_vp": 1,
+      "income": 1,
+      "cost": 10,
+      "coal": 0,
+      "iron": 1,
+      "beer": 1,
+      "developable": true,
+      "canal_only": false,
+      "rail_only": false,
+      "id": "2:Manufacturer:1"
+    },
+    {
+      "seat": 2,
+      "type": "Manufacturer",
+      "level": 2,
+      "flipped": false,
+      "resource": 0,
+      "vp": 5,
+      "link_vp": 1,
+      "income": 1,
+      "cost": 10,
+      "coal": 0,
+      "iron": 1,
+      "beer": 1,
+      "developable": true,
+      "canal_only": false,
+      "rail_only": false,
+      "id": "2:Manufacturer:2"
+    },
+    {
+      "seat": 2,
+      "type": "Manufacturer",
+      "level": 3,
+      "flipped": false,
+      "resource": 0,
+      "vp": 4,
+      "link_vp": 0,
+      "income": 4,
+      "cost": 12,
+      "coal": 2,
+      "iron": 0,
+      "beer": 0,
+      "developable": true,
+      "canal_only": false,
+      "rail_only": false,
+      "id": "2:Manufacturer:3"
+    },
+    {
+      "seat": 2,
+      "type": "Manufacturer",
+      "level": 4,
+      "flipped": false,
+      "resource": 0,
+      "vp": 3,
+      "link_vp": 1,
+      "income": 6,
+      "cost": 8,
+      "coal": 0,
+      "iron": 1,
+      "beer": 1,
+      "developable": true,
+      "canal_only": false,
+      "rail_only": false,
+      "id": "2:Manufacturer:4"
+    },
+    {
+      "seat": 2,
+      "type": "Manufacturer",
+      "level": 5,
+      "flipped": false,
+      "resource": 0,
+      "vp": 8,
+      "link_vp": 2,
+      "income": 2,
+      "cost": 16,
+      "coal": 1,
+      "iron": 0,
+      "beer": 2,
+      "developable": true,
+      "canal_only": false,
+      "rail_only": false,
+      "id": "2:Manufacturer:5"
+    },
+    {
+      "seat": 2,
+      "type": "Manufacturer",
+      "level": 5,
+      "flipped": false,
+      "resource": 0,
+      "vp": 8,
+      "link_vp": 2,
+      "income": 2,
+      "cost": 16,
+      "coal": 1,
+      "iron": 0,
+      "beer": 2,
+      "developable": true,
+      "canal_only": false,
+      "rail_only": false,
+      "id": "2:Manufacturer:6"
+    },
+    {
+      "seat": 2,
+      "type": "Manufacturer",
+      "level": 6,
+      "flipped": false,
+      "resource": 0,
+      "vp": 7,
+      "link_vp": 1,
+      "income": 6,
+      "cost": 20,
+      "coal": 0,
+      "iron": 0,
+      "beer": 1,
+      "developable": true,
+      "canal_only": false,
+      "rail_only": false,
+      "id": "2:Manufacturer:7"
+    },
+    {
+      "seat": 2,
+      "type": "Manufacturer",
+      "level": 7,
+      "flipped": false,
+      "resource": 0,
+      "vp": 9,
+      "link_vp": 0,
+      "income": 4,
+      "cost": 16,
+      "coal": 1,
+      "iron": 1,
+      "beer": 0,
+      "developable": true,
+      "canal_only": false,
+      "rail_only": false,
+      "id": "2:Manufacturer:8"
+    },
+    {
+      "seat": 2,
+      "type": "Manufacturer",
+      "level": 8,
+      "flipped": false,
+      "resource": 0,
+      "vp": 11,
+      "link_vp": 1,
+      "income": 1,
+      "cost": 20,
+      "coal": 0,
+      "iron": 2,
+      "beer": 1,
+      "developable": true,
+      "canal_only": false,
+      "rail_only": false,
+      "id": "2:Manufacturer:9"
+    },
+    {
+      "seat": 2,
+      "type": "Manufacturer",
+      "level": 8,
+      "flipped": false,
+      "resource": 0,
+      "vp": 11,
+      "link_vp": 1,
+      "income": 1,
+      "cost": 20,
+      "coal": 0,
+      "iron": 2,
+      "beer": 1,
+      "developable": true,
+      "canal_only": false,
+      "rail_only": false,
+      "id": "2:Manufacturer:10"
+    },
+    {
+      "seat": 2,
+      "type": "Pottery",
+      "level": 1,
+      "flipped": false,
+      "resource": 0,
+      "vp": 10,
+      "link_vp": 1,
+      "income": 5,
+      "cost": 17,
+      "coal": 0,
+      "iron": 1,
+      "beer": 1,
+      "developable": false,
+      "canal_only": false,
+      "rail_only": false,
+      "id": "2:Pottery:0"
+    },
+    {
+      "seat": 2,
+      "type": "Pottery",
+      "level": 2,
+      "flipped": false,
+      "resource": 0,
+      "vp": 1,
+      "link_vp": 1,
+      "income": 1,
+      "cost": 0,
+      "coal": 1,
+      "iron": 0,
+      "beer": 1,
+      "developable": true,
+      "canal_only": false,
+      "rail_only": false,
+      "id": "2:Pottery:1"
+    },
+    {
+      "seat": 2,
+      "type": "Pottery",
+      "level": 3,
+      "flipped": false,
+      "resource": 0,
+      "vp": 11,
+      "link_vp": 1,
+      "income": 5,
+      "cost": 22,
+      "coal": 2,
+      "iron": 0,
+      "beer": 2,
+      "developable": false,
+      "canal_only": false,
+      "rail_only": false,
+      "id": "2:Pottery:2"
+    },
+    {
+      "seat": 2,
+      "type": "Pottery",
+      "level": 4,
+      "flipped": false,
+      "resource": 0,
+      "vp": 1,
+      "link_vp": 1,
+      "income": 1,
+      "cost": 0,
+      "coal": 1,
+      "iron": 0,
+      "beer": 1,
+      "developable": true,
+      "canal_only": false,
+      "rail_only": false,
+      "id": "2:Pottery:3"
+    },
+    {
+      "seat": 2,
+      "type": "Pottery",
+      "level": 5,
+      "flipped": false,
+      "resource": 0,
+      "vp": 20,
+      "link_vp": 1,
+      "income": 5,
+      "cost": 24,
+      "coal": 2,
+      "iron": 0,
+      "beer": 2,
+      "developable": true,
+      "canal_only": false,
+      "rail_only": true,
+      "id": "2:Pottery:4"
+    },
+    {
+      "seat": 3,
+      "type": "Brewery",
+      "level": 1,
+      "flipped": false,
+      "resource": 0,
+      "vp": 4,
+      "link_vp": 2,
+      "income": 4,
+      "cost": 5,
+      "coal": 0,
+      "iron": 1,
+      "beer": 0,
+      "developable": true,
+      "canal_only": true,
+      "rail_only": false,
+      "id": "3:Brewery:0"
+    },
+    {
+      "seat": 3,
+      "type": "Brewery",
+      "level": 1,
+      "flipped": false,
+      "resource": 0,
+      "vp": 4,
+      "link_vp": 2,
+      "income": 4,
+      "cost": 5,
+      "coal": 0,
+      "iron": 1,
+      "beer": 0,
+      "developable": true,
+      "canal_only": true,
+      "rail_only": false,
+      "id": "3:Brewery:1"
+    },
+    {
+      "seat": 3,
+      "type": "Brewery",
+      "level": 2,
+      "flipped": false,
+      "resource": 0,
+      "vp": 5,
+      "link_vp": 2,
+      "income": 5,
+      "cost": 7,
+      "coal": 0,
+      "iron": 1,
+      "beer": 0,
+      "developable": true,
+      "canal_only": false,
+      "rail_only": false,
+      "id": "3:Brewery:2"
+    },
+    {
+      "seat": 3,
+      "type": "Brewery",
+      "level": 2,
+      "flipped": false,
+      "resource": 0,
+      "vp": 5,
+      "link_vp": 2,
+      "income": 5,
+      "cost": 7,
+      "coal": 0,
+      "iron": 1,
+      "beer": 0,
+      "developable": true,
+      "canal_only": false,
+      "rail_only": false,
+      "id": "3:Brewery:3"
+    },
+    {
+      "seat": 3,
+      "type": "Brewery",
+      "level": 3,
+      "flipped": false,
+      "resource": 0,
+      "vp": 7,
+      "link_vp": 2,
+      "income": 5,
+      "cost": 9,
+      "coal": 0,
+      "iron": 1,
+      "beer": 0,
+      "developable": true,
+      "canal_only": false,
+      "rail_only": false,
+      "id": "3:Brewery:4"
+    },
+    {
+      "seat": 3,
+      "type": "Brewery",
+      "level": 3,
+      "flipped": false,
+      "resource": 0,
+      "vp": 7,
+      "link_vp": 2,
+      "income": 5,
+      "cost": 9,
+      "coal": 0,
+      "iron": 1,
+      "beer": 0,
+      "developable": true,
+      "canal_only": false,
+      "rail_only": false,
+      "id": "3:Brewery:5"
+    },
+    {
+      "seat": 3,
+      "type": "Brewery",
+      "level": 4,
+      "flipped": false,
+      "resource": 0,
+      "vp": 10,
+      "link_vp": 2,
+      "income": 5,
+      "cost": 9,
+      "coal": 0,
+      "iron": 1,
+      "beer": 0,
+      "developable": true,
+      "canal_only": false,
+      "rail_only": true,
+      "id": "3:Brewery:6"
+    },
+    {
+      "seat": 3,
+      "type": "CoalMine",
+      "level": 1,
+      "flipped": false,
+      "resource": 2,
+      "vp": 1,
+      "link_vp": 2,
+      "income": 4,
+      "cost": 5,
+      "coal": 0,
+      "iron": 0,
+      "beer": 0,
+      "developable": true,
+      "canal_only": true,
+      "rail_only": false,
+      "id": "3:CoalMine:0"
+    },
+    {
+      "seat": 3,
+      "type": "CoalMine",
+      "level": 2,
+      "flipped": false,
+      "resource": 3,
+      "vp": 2,
+      "link_vp": 1,
+      "income": 7,
+      "cost": 7,
+      "coal": 0,
+      "iron": 0,
+      "beer": 0,
+      "developable": true,
+      "canal_only": false,
+      "rail_only": false,
+      "id": "3:CoalMine:1"
+    },
+    {
+      "seat": 3,
+      "type": "CoalMine",
+      "level": 2,
+      "flipped": false,
+      "resource": 3,
+      "vp": 2,
+      "link_vp": 1,
+      "income": 7,
+      "cost": 7,
+      "coal": 0,
+      "iron": 0,
+      "beer": 0,
+      "developable": true,
+      "canal_only": false,
+      "rail_only": false,
+      "id": "3:CoalMine:2"
+    },
+    {
+      "seat": 3,
+      "type": "CoalMine",
+      "level": 3,
+      "flipped": false,
+      "resource": 4,
+      "vp": 3,
+      "link_vp": 1,
+      "income": 6,
+      "cost": 8,
+      "coal": 0,
+      "iron": 1,
+      "beer": 0,
+      "developable": true,
+      "canal_only": false,
+      "rail_only": false,
+      "id": "3:CoalMine:3"
+    },
+    {
+      "seat": 3,
+      "type": "CoalMine",
+      "level": 3,
+      "flipped": false,
+      "resource": 4,
+      "vp": 3,
+      "link_vp": 1,
+      "income": 6,
+      "cost": 8,
+      "coal": 0,
+      "iron": 1,
+      "beer": 0,
+      "developable": true,
+      "canal_only": false,
+      "rail_only": false,
+      "id": "3:CoalMine:4"
+    },
+    {
+      "seat": 3,
+      "type": "CoalMine",
+      "level": 4,
+      "flipped": false,
+      "resource": 5,
+      "vp": 4,
+      "link_vp": 1,
+      "income": 5,
+      "cost": 10,
+      "coal": 0,
+      "iron": 1,
+      "beer": 0,
+      "developable": true,
+      "canal_only": false,
+      "rail_only": false,
+      "id": "3:CoalMine:5"
+    },
+    {
+      "seat": 3,
+      "type": "CoalMine",
+      "level": 4,
+      "flipped": false,
+      "resource": 5,
+      "vp": 4,
+      "link_vp": 1,
+      "income": 5,
+      "cost": 10,
+      "coal": 0,
+      "iron": 1,
+      "beer": 0,
+      "developable": true,
+      "canal_only": false,
+      "rail_only": false,
+      "id": "3:CoalMine:6"
+    },
+    {
+      "seat": 3,
+      "type": "CottonMill",
+      "level": 1,
+      "flipped": false,
+      "resource": 0,
+      "vp": 5,
+      "link_vp": 1,
+      "income": 5,
+      "cost": 12,
+      "coal": 0,
+      "iron": 0,
+      "beer": 1,
+      "developable": true,
+      "canal_only": true,
+      "rail_only": false,
+      "id": "3:CottonMill:0"
+    },
+    {
+      "seat": 3,
+      "type": "CottonMill",
+      "level": 1,
+      "flipped": false,
+      "resource": 0,
+      "vp": 5,
+      "link_vp": 1,
+      "income": 5,
+      "cost": 12,
+      "coal": 0,
+      "iron": 0,
+      "beer": 1,
+      "developable": true,
+      "canal_only": true,
+      "rail_only": false,
+      "id": "3:CottonMill:1"
+    },
+    {
+      "seat": 3,
+      "type": "CottonMill",
+      "level": 1,
+      "flipped": false,
+      "resource": 0,
+      "vp": 5,
+      "link_vp": 1,
+      "income": 5,
+      "cost": 12,
+      "coal": 0,
+      "iron": 0,
+      "beer": 1,
+      "developable": true,
+      "canal_only": true,
+      "rail_only": false,
+      "id": "3:CottonMill:2"
+    },
+    {
+      "seat": 3,
+      "type": "CottonMill",
+      "level": 2,
+      "flipped": false,
+      "resource": 0,
+      "vp": 5,
+      "link_vp": 2,
+      "income": 4,
+      "cost": 14,
+      "coal": 1,
+      "iron": 0,
+      "beer": 1,
+      "developable": true,
+      "canal_only": false,
+      "rail_only": false,
+      "id": "3:CottonMill:3"
+    },
+    {
+      "seat": 3,
+      "type": "CottonMill",
+      "level": 2,
+      "flipped": false,
+      "resource": 0,
+      "vp": 5,
+      "link_vp": 2,
+      "income": 4,
+      "cost": 14,
+      "coal": 1,
+      "iron": 0,
+      "beer": 1,
+      "developable": true,
+      "canal_only": false,
+      "rail_only": false,
+      "id": "3:CottonMill:4"
+    },
+    {
+      "seat": 3,
+      "type": "CottonMill",
+      "level": 3,
+      "flipped": false,
+      "resource": 0,
+      "vp": 9,
+      "link_vp": 1,
+      "income": 3,
+      "cost": 16,
+      "coal": 1,
+      "iron": 1,
+      "beer": 1,
+      "developable": true,
+      "canal_only": false,
+      "rail_only": false,
+      "id": "3:CottonMill:5"
+    },
+    {
+      "seat": 3,
+      "type": "CottonMill",
+      "level": 3,
+      "flipped": false,
+      "resource": 0,
+      "vp": 9,
+      "link_vp": 1,
+      "income": 3,
+      "cost": 16,
+      "coal": 1,
+      "iron": 1,
+      "beer": 1,
+      "developable": true,
+      "canal_only": false,
+      "rail_only": false,
+      "id": "3:CottonMill:6"
+    },
+    {
+      "seat": 3,
+      "type": "CottonMill",
+      "level": 3,
+      "flipped": false,
+      "resource": 0,
+      "vp": 9,
+      "link_vp": 1,
+      "income": 3,
+      "cost": 16,
+      "coal": 1,
+      "iron": 1,
+      "beer": 1,
+      "developable": true,
+      "canal_only": false,
+      "rail_only": false,
+      "id": "3:CottonMill:7"
+    },
+    {
+      "seat": 3,
+      "type": "CottonMill",
+      "level": 4,
+      "flipped": false,
+      "resource": 0,
+      "vp": 12,
+      "link_vp": 1,
+      "income": 2,
+      "cost": 18,
+      "coal": 1,
+      "iron": 1,
+      "beer": 1,
+      "developable": true,
+      "canal_only": false,
+      "rail_only": false,
+      "id": "3:CottonMill:8"
+    },
+    {
+      "seat": 3,
+      "type": "CottonMill",
+      "level": 4,
+      "flipped": false,
+      "resource": 0,
+      "vp": 12,
+      "link_vp": 1,
+      "income": 2,
+      "cost": 18,
+      "coal": 1,
+      "iron": 1,
+      "beer": 1,
+      "developable": true,
+      "canal_only": false,
+      "rail_only": false,
+      "id": "3:CottonMill:9"
+    },
+    {
+      "seat": 3,
+      "type": "CottonMill",
+      "level": 4,
+      "flipped": false,
+      "resource": 0,
+      "vp": 12,
+      "link_vp": 1,
+      "income": 2,
+      "cost": 18,
+      "coal": 1,
+      "iron": 1,
+      "beer": 1,
+      "developable": true,
+      "canal_only": false,
+      "rail_only": false,
+      "id": "3:CottonMill:10"
+    },
+    {
+      "seat": 3,
+      "type": "IronWorks",
+      "level": 1,
+      "flipped": false,
+      "resource": 4,
+      "vp": 3,
+      "link_vp": 1,
+      "income": 3,
+      "cost": 5,
+      "coal": 1,
+      "iron": 0,
+      "beer": 0,
+      "developable": true,
+      "canal_only": true,
+      "rail_only": false,
+      "id": "3:IronWorks:0"
+    },
+    {
+      "seat": 3,
+      "type": "IronWorks",
+      "level": 2,
+      "flipped": false,
+      "resource": 4,
+      "vp": 5,
+      "link_vp": 1,
+      "income": 3,
+      "cost": 7,
+      "coal": 1,
+      "iron": 0,
+      "beer": 0,
+      "developable": true,
+      "canal_only": false,
+      "rail_only": false,
+      "id": "3:IronWorks:1"
+    },
+    {
+      "seat": 3,
+      "type": "IronWorks",
+      "level": 3,
+      "flipped": false,
+      "resource": 5,
+      "vp": 7,
+      "link_vp": 1,
+      "income": 2,
+      "cost": 9,
+      "coal": 1,
+      "iron": 0,
+      "beer": 0,
+      "developable": true,
+      "canal_only": false,
+      "rail_only": false,
+      "id": "3:IronWorks:2"
+    },
+    {
+      "seat": 3,
+      "type": "IronWorks",
+      "level": 4,
+      "flipped": false,
+      "resource": 6,
+      "vp": 9,
+      "link_vp": 1,
+      "income": 1,
+      "cost": 12,
+      "coal": 1,
+      "iron": 0,
+      "beer": 0,
+      "developable": true,
+      "canal_only": false,
+      "rail_only": false,
+      "id": "3:IronWorks:3"
+    },
+    {
+      "seat": 3,
+      "type": "Manufacturer",
+      "level": 1,
+      "flipped": false,
+      "resource": 0,
+      "vp": 3,
+      "link_vp": 2,
+      "income": 5,
+      "cost": 8,
+      "coal": 1,
+      "iron": 0,
+      "beer": 1,
+      "developable": true,
+      "canal_only": true,
+      "rail_only": false,
+      "id": "3:Manufacturer:0"
+    },
+    {
+      "seat": 3,
+      "type": "Manufacturer",
+      "level": 2,
+      "flipped": false,
+      "resource": 0,
+      "vp": 5,
+      "link_vp": 1,
+      "income": 1,
+      "cost": 10,
+      "coal": 0,
+      "iron": 1,
+      "beer": 1,
+      "developable": true,
+      "canal_only": false,
+      "rail_only": false,
+      "id": "3:Manufacturer:1"
+    },
+    {
+      "seat": 3,
+      "type": "Manufacturer",
+      "level": 2,
+      "flipped": false,
+      "resource": 0,
+      "vp": 5,
+      "link_vp": 1,
+      "income": 1,
+      "cost": 10,
+      "coal": 0,
+      "iron": 1,
+      "beer": 1,
+      "developable": true,
+      "canal_only": false,
+      "rail_only": false,
+      "id": "3:Manufacturer:2"
+    },
+    {
+      "seat": 3,
+      "type": "Manufacturer",
+      "level": 3,
+      "flipped": false,
+      "resource": 0,
+      "vp": 4,
+      "link_vp": 0,
+      "income": 4,
+      "cost": 12,
+      "coal": 2,
+      "iron": 0,
+      "beer": 0,
+      "developable": true,
+      "canal_only": false,
+      "rail_only": false,
+      "id": "3:Manufacturer:3"
+    },
+    {
+      "seat": 3,
+      "type": "Manufacturer",
+      "level": 4,
+      "flipped": false,
+      "resource": 0,
+      "vp": 3,
+      "link_vp": 1,
+      "income": 6,
+      "cost": 8,
+      "coal": 0,
+      "iron": 1,
+      "beer": 1,
+      "developable": true,
+      "canal_only": false,
+      "rail_only": false,
+      "id": "3:Manufacturer:4"
+    },
+    {
+      "seat": 3,
+      "type": "Manufacturer",
+      "level": 5,
+      "flipped": false,
+      "resource": 0,
+      "vp": 8,
+      "link_vp": 2,
+      "income": 2,
+      "cost": 16,
+      "coal": 1,
+      "iron": 0,
+      "beer": 2,
+      "developable": true,
+      "canal_only": false,
+      "rail_only": false,
+      "id": "3:Manufacturer:5"
+    },
+    {
+      "seat": 3,
+      "type": "Manufacturer",
+      "level": 5,
+      "flipped": false,
+      "resource": 0,
+      "vp": 8,
+      "link_vp": 2,
+      "income": 2,
+      "cost": 16,
+      "coal": 1,
+      "iron": 0,
+      "beer": 2,
+      "developable": true,
+      "canal_only": false,
+      "rail_only": false,
+      "id": "3:Manufacturer:6"
+    },
+    {
+      "seat": 3,
+      "type": "Manufacturer",
+      "level": 6,
+      "flipped": false,
+      "resource": 0,
+      "vp": 7,
+      "link_vp": 1,
+      "income": 6,
+      "cost": 20,
+      "coal": 0,
+      "iron": 0,
+      "beer": 1,
+      "developable": true,
+      "canal_only": false,
+      "rail_only": false,
+      "id": "3:Manufacturer:7"
+    },
+    {
+      "seat": 3,
+      "type": "Manufacturer",
+      "level": 7,
+      "flipped": false,
+      "resource": 0,
+      "vp": 9,
+      "link_vp": 0,
+      "income": 4,
+      "cost": 16,
+      "coal": 1,
+      "iron": 1,
+      "beer": 0,
+      "developable": true,
+      "canal_only": false,
+      "rail_only": false,
+      "id": "3:Manufacturer:8"
+    },
+    {
+      "seat": 3,
+      "type": "Manufacturer",
+      "level": 8,
+      "flipped": false,
+      "resource": 0,
+      "vp": 11,
+      "link_vp": 1,
+      "income": 1,
+      "cost": 20,
+      "coal": 0,
+      "iron": 2,
+      "beer": 1,
+      "developable": true,
+      "canal_only": false,
+      "rail_only": false,
+      "id": "3:Manufacturer:9"
+    },
+    {
+      "seat": 3,
+      "type": "Manufacturer",
+      "level": 8,
+      "flipped": false,
+      "resource": 0,
+      "vp": 11,
+      "link_vp": 1,
+      "income": 1,
+      "cost": 20,
+      "coal": 0,
+      "iron": 2,
+      "beer": 1,
+      "developable": true,
+      "canal_only": false,
+      "rail_only": false,
+      "id": "3:Manufacturer:10"
+    },
+    {
+      "seat": 3,
+      "type": "Pottery",
+      "level": 1,
+      "flipped": false,
+      "resource": 0,
+      "vp": 10,
+      "link_vp": 1,
+      "income": 5,
+      "cost": 17,
+      "coal": 0,
+      "iron": 1,
+      "beer": 1,
+      "developable": false,
+      "canal_only": false,
+      "rail_only": false,
+      "id": "3:Pottery:0"
+    },
+    {
+      "seat": 3,
+      "type": "Pottery",
+      "level": 2,
+      "flipped": false,
+      "resource": 0,
+      "vp": 1,
+      "link_vp": 1,
+      "income": 1,
+      "cost": 0,
+      "coal": 1,
+      "iron": 0,
+      "beer": 1,
+      "developable": true,
+      "canal_only": false,
+      "rail_only": false,
+      "id": "3:Pottery:1"
+    },
+    {
+      "seat": 3,
+      "type": "Pottery",
+      "level": 3,
+      "flipped": false,
+      "resource": 0,
+      "vp": 11,
+      "link_vp": 1,
+      "income": 5,
+      "cost": 22,
+      "coal": 2,
+      "iron": 0,
+      "beer": 2,
+      "developable": false,
+      "canal_only": false,
+      "rail_only": false,
+      "id": "3:Pottery:2"
+    },
+    {
+      "seat": 3,
+      "type": "Pottery",
+      "level": 4,
+      "flipped": false,
+      "resource": 0,
+      "vp": 1,
+      "link_vp": 1,
+      "income": 1,
+      "cost": 0,
+      "coal": 1,
+      "iron": 0,
+      "beer": 1,
+      "developable": true,
+      "canal_only": false,
+      "rail_only": false,
+      "id": "3:Pottery:3"
+    },
+    {
+      "seat": 3,
+      "type": "Pottery",
+      "level": 5,
+      "flipped": false,
+      "resource": 0,
+      "vp": 20,
+      "link_vp": 1,
+      "income": 5,
+      "cost": 24,
+      "coal": 2,
+      "iron": 0,
+      "beer": 2,
+      "developable": true,
+      "canal_only": false,
+      "rail_only": true,
+      "id": "3:Pottery:4"
+    }
+  ],
+  "slots": [
+    {
+      "id": "Belper:0",
+      "types": [
+        "CottonMill",
+        "Manufacturer"
+      ]
+    },
+    {
+      "id": "Belper:1",
+      "types": [
+        "CoalMine"
+      ]
+    },
+    {
+      "id": "Belper:2",
+      "types": [
+        "Pottery"
+      ]
+    },
+    {
+      "id": "Birmingham:0",
+      "types": [
+        "CottonMill",
+        "Manufacturer"
+      ]
+    },
+    {
+      "id": "Birmingham:1",
+      "types": [
+        "Manufacturer"
+      ]
+    },
+    {
+      "id": "Birmingham:2",
+      "types": [
+        "IronWorks"
+      ]
+    },
+    {
+      "id": "Birmingham:3",
+      "types": [
+        "Manufacturer"
+      ]
+    },
+    {
+      "id": "BurtonOnTrent:0",
+      "types": [
+        "Manufacturer",
+        "CoalMine"
+      ]
+    },
+    {
+      "id": "BurtonOnTrent:1",
+      "types": [
+        "Brewery"
+      ]
+    },
+    {
+      "id": "Cannock:0",
+      "types": [
+        "Manufacturer",
+        "CoalMine"
+      ]
+    },
+    {
+      "id": "Cannock:1",
+      "types": [
+        "CoalMine"
+      ]
+    },
+    {
+      "id": "Central:0",
+      "types": [
+        "Brewery"
+      ]
+    },
+    {
+      "id": "Coalbrookdale:0",
+      "types": [
+        "IronWorks",
+        "Brewery"
+      ]
+    },
+    {
+      "id": "Coalbrookdale:1",
+      "types": [
+        "IronWorks"
+      ]
+    },
+    {
+      "id": "Coalbrookdale:2",
+      "types": [
+        "CoalMine"
+      ]
+    },
+    {
+      "id": "Coventry:0",
+      "types": [
+        "Pottery"
+      ]
+    },
+    {
+      "id": "Coventry:1",
+      "types": [
+        "Manufacturer",
+        "CoalMine"
+      ]
+    },
+    {
+      "id": "Coventry:2",
+      "types": [
+        "IronWorks",
+        "Manufacturer"
+      ]
+    },
+    {
+      "id": "Derby:0",
+      "types": [
+        "CottonMill",
+        "Brewery"
+      ]
+    },
+    {
+      "id": "Derby:1",
+      "types": [
+        "CottonMill",
+        "Manufacturer"
+      ]
+    },
+    {
+      "id": "Derby:2",
+      "types": [
+        "IronWorks"
+      ]
+    },
+    {
+      "id": "Dudley:0",
+      "types": [
+        "CoalMine"
+      ]
+    },
+    {
+      "id": "Dudley:1",
+      "types": [
+        "IronWorks"
+      ]
+    },
+    {
+      "id": "Kidderminster:0",
+      "types": [
+        "CottonMill",
+        "CoalMine"
+      ]
+    },
+    {
+      "id": "Kidderminster:1",
+      "types": [
+        "CottonMill"
+      ]
+    },
+    {
+      "id": "Leek:0",
+      "types": [
+        "CottonMill",
+        "Manufacturer"
+      ]
+    },
+    {
+      "id": "Leek:1",
+      "types": [
+        "CottonMill",
+        "CoalMine"
+      ]
+    },
+    {
+      "id": "Nuneaton:0",
+      "types": [
+        "Manufacturer",
+        "Brewery"
+      ]
+    },
+    {
+      "id": "Nuneaton:1",
+      "types": [
+        "CottonMill",
+        "CoalMine"
+      ]
+    },
+    {
+      "id": "Redditch:0",
+      "types": [
+        "Manufacturer",
+        "CoalMine"
+      ]
+    },
+    {
+      "id": "Redditch:1",
+      "types": [
+        "IronWorks"
+      ]
+    },
+    {
+      "id": "SouthWest:0",
+      "types": [
+        "Brewery"
+      ]
+    },
+    {
+      "id": "Stafford:0",
+      "types": [
+        "Manufacturer",
+        "Brewery"
+      ]
+    },
+    {
+      "id": "Stafford:1",
+      "types": [
+        "Pottery"
+      ]
+    },
+    {
+      "id": "StokeOnTrent:0",
+      "types": [
+        "Pottery",
+        "IronWorks"
+      ]
+    },
+    {
+      "id": "StokeOnTrent:1",
+      "types": [
+        "Manufacturer"
+      ]
+    },
+    {
+      "id": "StokeOnTrent:2",
+      "types": [
+        "CottonMill",
+        "Manufacturer"
+      ]
+    },
+    {
+      "id": "Stone:0",
+      "types": [
+        "CottonMill",
+        "Brewery"
+      ]
+    },
+    {
+      "id": "Stone:1",
+      "types": [
+        "Manufacturer",
+        "CoalMine"
+      ]
+    },
+    {
+      "id": "Tamworth:0",
+      "types": [
+        "CottonMill",
+        "CoalMine"
+      ]
+    },
+    {
+      "id": "Tamworth:1",
+      "types": [
+        "CottonMill",
+        "CoalMine"
+      ]
+    },
+    {
+      "id": "Uttoxeter:0",
+      "types": [
+        "Manufacturer",
+        "Brewery"
+      ]
+    },
+    {
+      "id": "Uttoxeter:1",
+      "types": [
+        "CottonMill",
+        "Brewery"
+      ]
+    },
+    {
+      "id": "Walsall:0",
+      "types": [
+        "IronWorks",
+        "Manufacturer"
+      ]
+    },
+    {
+      "id": "Walsall:1",
+      "types": [
+        "Manufacturer",
+        "Brewery"
+      ]
+    },
+    {
+      "id": "Wolverhampton:0",
+      "types": [
+        "Manufacturer"
+      ]
+    },
+    {
+      "id": "Wolverhampton:1",
+      "types": [
+        "Manufacturer",
+        "CoalMine"
+      ]
+    },
+    {
+      "id": "Worcester:0",
+      "types": [
+        "CottonMill"
+      ]
+    },
+    {
+      "id": "Worcester:1",
+      "types": [
+        "CottonMill"
+      ]
+    }
+  ],
+  "links": [
+    {
+      "id": "CanalBelperDerby",
+      "regions": [
+        "Belper",
+        "Derby"
+      ],
+      "era": "Canal"
+    },
+    {
+      "id": "CanalBirminghamCoventry",
+      "regions": [
+        "Birmingham",
+        "Coventry"
+      ],
+      "era": "Canal"
+    },
+    {
+      "id": "CanalBirminghamDudley",
+      "regions": [
+        "Birmingham",
+        "Dudley"
+      ],
+      "era": "Canal"
+    },
+    {
+      "id": "CanalBirminghamOxford",
+      "regions": [
+        "Birmingham",
+        "Oxford"
+      ],
+      "era": "Canal"
+    },
+    {
+      "id": "CanalBirminghamTamworth",
+      "regions": [
+        "Birmingham",
+        "Tamworth"
+      ],
+      "era": "Canal"
+    },
+    {
+      "id": "CanalBirminghamWalsall",
+      "regions": [
+        "Birmingham",
+        "Walsall"
+      ],
+      "era": "Canal"
+    },
+    {
+      "id": "CanalBirminghamWorcester",
+      "regions": [
+        "Birmingham",
+        "Worcester"
+      ],
+      "era": "Canal"
+    },
+    {
+      "id": "CanalCannockCentral",
+      "regions": [
+        "Cannock",
+        "Central"
+      ],
+      "era": "Canal"
+    },
+    {
+      "id": "CanalCannockStafford",
+      "regions": [
+        "Cannock",
+        "Stafford"
+      ],
+      "era": "Canal"
+    },
+    {
+      "id": "CanalCoalbrookdaleShrewsbury",
+      "regions": [
+        "Coalbrookdale",
+        "Shrewsbury"
+      ],
+      "era": "Canal"
+    },
+    {
+      "id": "CanalCoalbrookdaleWolverhampton",
+      "regions": [
+        "Coalbrookdale",
+        "Wolverhampton"
+      ],
+      "era": "Canal"
+    },
+    {
+      "id": "CanalDerbyBurtonOnTrent",
+      "regions": [
+        "Derby",
+        "BurtonOnTrent"
+      ],
+      "era": "Canal"
+    },
+    {
+      "id": "CanalDerbyNottingham",
+      "regions": [
+        "Derby",
+        "Nottingham"
+      ],
+      "era": "Canal"
+    },
+    {
+      "id": "CanalDudleyWolverhampton",
+      "regions": [
+        "Dudley",
+        "Wolverhampton"
+      ],
+      "era": "Canal"
+    },
+    {
+      "id": "CanalKidderminsterCoalbrookdale",
+      "regions": [
+        "Kidderminster",
+        "Coalbrookdale"
+      ],
+      "era": "Canal"
+    },
+    {
+      "id": "CanalKidderminsterDudley",
+      "regions": [
+        "Kidderminster",
+        "Dudley"
+      ],
+      "era": "Canal"
+    },
+    {
+      "id": "CanalNuneatonTamworth",
+      "regions": [
+        "Nuneaton",
+        "Tamworth"
+      ],
+      "era": "Canal"
+    },
+    {
+      "id": "CanalRedditchGloucester",
+      "regions": [
+        "Redditch",
+        "Gloucester"
+      ],
+      "era": "Canal"
+    },
+    {
+      "id": "CanalRedditchOxford",
+      "regions": [
+        "Redditch",
+        "Oxford"
+      ],
+      "era": "Canal"
+    },
+    {
+      "id": "CanalStokeOnTrentLeek",
+      "regions": [
+        "StokeOnTrent",
+        "Leek"
+      ],
+      "era": "Canal"
+    },
+    {
+      "id": "CanalStokeOnTrentWarrington",
+      "regions": [
+        "StokeOnTrent",
+        "Warrington"
+      ],
+      "era": "Canal"
+    },
+    {
+      "id": "CanalStoneBurtonOnTrent",
+      "regions": [
+        "Stone",
+        "BurtonOnTrent"
+      ],
+      "era": "Canal"
+    },
+    {
+      "id": "CanalStoneStafford",
+      "regions": [
+        "Stone",
+        "Stafford"
+      ],
+      "era": "Canal"
+    },
+    {
+      "id": "CanalStoneStokeOnTrent",
+      "regions": [
+        "Stone",
+        "StokeOnTrent"
+      ],
+      "era": "Canal"
+    },
+    {
+      "id": "CanalTamworthBurtonOnTrent",
+      "regions": [
+        "Tamworth",
+        "BurtonOnTrent"
+      ],
+      "era": "Canal"
+    },
+    {
+      "id": "CanalWalsallBurtonOnTrent",
+      "regions": [
+        "Walsall",
+        "BurtonOnTrent"
+      ],
+      "era": "Canal"
+    },
+    {
+      "id": "CanalWalsallCannock",
+      "regions": [
+        "Walsall",
+        "Cannock"
+      ],
+      "era": "Canal"
+    },
+    {
+      "id": "CanalWolverhamptonCannock",
+      "regions": [
+        "Wolverhampton",
+        "Cannock"
+      ],
+      "era": "Canal"
+    },
+    {
+      "id": "CanalWolverhamptonWalsall",
+      "regions": [
+        "Wolverhampton",
+        "Walsall"
+      ],
+      "era": "Canal"
+    },
+    {
+      "id": "CanalWorcesterGloucester",
+      "regions": [
+        "Worcester",
+        "Gloucester"
+      ],
+      "era": "Canal"
+    },
+    {
+      "id": "CanalWorcesterSouthWest",
+      "regions": [
+        "Worcester",
+        "SouthWest",
+        "Kidderminster"
+      ],
+      "era": "Canal"
+    },
+    {
+      "id": "RailBelperDerby",
+      "regions": [
+        "Belper",
+        "Derby"
+      ],
+      "era": "Rail"
+    },
+    {
+      "id": "RailBirminghamCoventry",
+      "regions": [
+        "Birmingham",
+        "Coventry"
+      ],
+      "era": "Rail"
+    },
+    {
+      "id": "RailBirminghamDudley",
+      "regions": [
+        "Birmingham",
+        "Dudley"
+      ],
+      "era": "Rail"
+    },
+    {
+      "id": "RailBirminghamNuneaton",
+      "regions": [
+        "Birmingham",
+        "Nuneaton"
+      ],
+      "era": "Rail"
+    },
+    {
+      "id": "RailBirminghamOxford",
+      "regions": [
+        "Birmingham",
+        "Oxford"
+      ],
+      "era": "Rail"
+    },
+    {
+      "id": "RailBirminghamRedditch",
+      "regions": [
+        "Birmingham",
+        "Redditch"
+      ],
+      "era": "Rail"
+    },
+    {
+      "id": "RailBirminghamTamworth",
+      "regions": [
+        "Birmingham",
+        "Tamworth"
+      ],
+      "era": "Rail"
+    },
+    {
+      "id": "RailBirminghamWalsall",
+      "regions": [
+        "Birmingham",
+        "Walsall"
+      ],
+      "era": "Rail"
+    },
+    {
+      "id": "RailBirminghamWorcester",
+      "regions": [
+        "Birmingham",
+        "Worcester"
+      ],
+      "era": "Rail"
+    },
+    {
+      "id": "RailCannockBurtonOnTrent",
+      "regions": [
+        "Cannock",
+        "BurtonOnTrent"
+      ],
+      "era": "Rail"
+    },
+    {
+      "id": "RailCannockCentral",
+      "regions": [
+        "Cannock",
+        "Central"
+      ],
+      "era": "Rail"
+    },
+    {
+      "id": "RailCannockStafford",
+      "regions": [
+        "Cannock",
+        "Stafford"
+      ],
+      "era": "Rail"
+    },
+    {
+      "id": "RailCoalbrookdaleShrewsbury",
+      "regions": [
+        "Coalbrookdale",
+        "Shrewsbury"
+      ],
+      "era": "Rail"
+    },
+    {
+      "id": "RailCoalbrookdaleWolverhampton",
+      "regions": [
+        "Coalbrookdale",
+        "Wolverhampton"
+      ],
+      "era": "Rail"
+    },
+    {
+      "id": "RailCoventryNuneaton",
+      "regions": [
+        "Coventry",
+        "Nuneaton"
+      ],
+      "era": "Rail"
+    },
+    {
+      "id": "RailDerbyBurtonOnTrent",
+      "regions": [
+        "Derby",
+        "BurtonOnTrent"
+      ],
+      "era": "Rail"
+    },
+    {
+      "id": "RailDerbyNottingham",
+      "regions": [
+        "Derby",
+        "Nottingham"
+      ],
+      "era": "Rail"
+    },
+    {
+      "id": "RailDerbyUttoxeter",
+      "regions": [
+        "Derby",
+        "Uttoxeter"
+      ],
+      "era": "Rail"
+    },
+    {
+      "id": "RailDudleyWolverhampton",
+      "regions": [
+        "Dudley",
+        "Wolverhampton"
+      ],
+      "era": "Rail"
+    },
+    {
+      "id": "RailKidderminsterCoalbrookdale",
+      "regions": [
+        "Kidderminster",
+        "Coalbrookdale"
+      ],
+      "era": "Rail"
+    },
+    {
+      "id": "RailKidderminsterDudley",
+      "regions": [
+        "Kidderminster",
+        "Dudley"
+      ],
+      "era": "Rail"
+    },
+    {
+      "id": "RailLeekBelper",
+      "regions": [
+        "Leek",
+        "Belper"
+      ],
+      "era": "Rail"
+    },
+    {
+      "id": "RailNuneatonTamworth",
+      "regions": [
+        "Nuneaton",
+        "Tamworth"
+      ],
+      "era": "Rail"
+    },
+    {
+      "id": "RailRedditchGloucester",
+      "regions": [
+        "Redditch",
+        "Gloucester"
+      ],
+      "era": "Rail"
+    },
+    {
+      "id": "RailRedditchOxford",
+      "regions": [
+        "Redditch",
+        "Oxford"
+      ],
+      "era": "Rail"
+    },
+    {
+      "id": "RailStokeOnTrentLeek",
+      "regions": [
+        "StokeOnTrent",
+        "Leek"
+      ],
+      "era": "Rail"
+    },
+    {
+      "id": "RailStokeOnTrentWarrington",
+      "regions": [
+        "StokeOnTrent",
+        "Warrington"
+      ],
+      "era": "Rail"
+    },
+    {
+      "id": "RailStoneBurtonOnTrent",
+      "regions": [
+        "Stone",
+        "BurtonOnTrent"
+      ],
+      "era": "Rail"
+    },
+    {
+      "id": "RailStoneStafford",
+      "regions": [
+        "Stone",
+        "Stafford"
+      ],
+      "era": "Rail"
+    },
+    {
+      "id": "RailStoneStokeOnTrent",
+      "regions": [
+        "Stone",
+        "StokeOnTrent"
+      ],
+      "era": "Rail"
+    },
+    {
+      "id": "RailStoneUttoxeter",
+      "regions": [
+        "Stone",
+        "Uttoxeter"
+      ],
+      "era": "Rail"
+    },
+    {
+      "id": "RailTamworthBurtonOnTrent",
+      "regions": [
+        "Tamworth",
+        "BurtonOnTrent"
+      ],
+      "era": "Rail"
+    },
+    {
+      "id": "RailWalsallCannock",
+      "regions": [
+        "Walsall",
+        "Cannock"
+      ],
+      "era": "Rail"
+    },
+    {
+      "id": "RailWalsallTamworth",
+      "regions": [
+        "Walsall",
+        "Tamworth"
+      ],
+      "era": "Rail"
+    },
+    {
+      "id": "RailWolverhamptonCannock",
+      "regions": [
+        "Wolverhampton",
+        "Cannock"
+      ],
+      "era": "Rail"
+    },
+    {
+      "id": "RailWolverhamptonWalsall",
+      "regions": [
+        "Wolverhampton",
+        "Walsall"
+      ],
+      "era": "Rail"
+    },
+    {
+      "id": "RailWorcesterGloucester",
+      "regions": [
+        "Worcester",
+        "Gloucester"
+      ],
+      "era": "Rail"
+    },
+    {
+      "id": "RailWorcesterSouthWest",
+      "regions": [
+        "Worcester",
+        "SouthWest",
+        "Kidderminster"
+      ],
+      "era": "Rail"
+    }
+  ],
+  "merchants": [
+    {
+      "id": "Gloucester:0",
+      "bonus": "Develop"
+    },
+    {
+      "id": "Gloucester:1",
+      "bonus": "Develop"
+    },
+    {
+      "id": "Nottingham:0",
+      "bonus": "VP"
+    },
+    {
+      "id": "Nottingham:1",
+      "bonus": "VP"
+    },
+    {
+      "id": "Oxford:0",
+      "bonus": "Income"
+    },
+    {
+      "id": "Oxford:1",
+      "bonus": "Income"
+    },
+    {
+      "id": "Shrewsbury:0",
+      "bonus": "VP"
+    },
+    {
+      "id": "Warrington:0",
+      "bonus": "Money"
+    },
+    {
+      "id": "Warrington:1",
+      "bonus": "Money"
+    }
+  ],
+  "merchant_types": [
+    [
+      "Manufacturer"
+    ],
+    [],
+    [
+      "Pottery"
+    ],
+    [],
+    [],
+    [
+      "CottonMill"
+    ],
+    [
+      "CottonMill",
+      "Pottery",
+      "Manufacturer"
+    ],
+    [
+      "CottonMill"
+    ],
+    [
+      "Manufacturer"
+    ]
+  ],
+  "cards": {
+    "industry:Brewery": 5,
+    "industry:CoalMine": 3,
+    "industry:CottonMill+Manufacturer": 8,
+    "industry:IronWorks": 4,
+    "industry:Pottery": 3,
+    "location:Belper": 2,
+    "location:Birmingham": 3,
+    "location:BurtonOnTrent": 2,
+    "location:Cannock": 2,
+    "location:Coalbrookdale": 3,
+    "location:Coventry": 3,
+    "location:Derby": 3,
+    "location:Dudley": 2,
+    "location:Kidderminster": 2,
+    "location:Leek": 2,
+    "location:Nuneaton": 1,
+    "location:Redditch": 1,
+    "location:Stafford": 2,
+    "location:StokeOnTrent": 3,
+    "location:Stone": 2,
+    "location:Tamworth": 1,
+    "location:Uttoxeter": 2,
+    "location:Walsall": 1,
+    "location:Wolverhampton": 2,
+    "location:Worcester": 2,
+    "wild:industry": 4,
+    "wild:location": 4
+  }
+}

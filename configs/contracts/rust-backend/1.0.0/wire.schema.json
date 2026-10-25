@@ -1,0 +1,428 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:brass-ai:rust-backend:1.0.0",
+  "title": "Local permitted requests and trusted-only diagnostic fixtures",
+  "$defs": {
+    "recall": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "revision": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "hand": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "revision",
+          "hand"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "ledger": {
+      "anyOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "spent": {
+              "type": "array",
+              "minItems": 4,
+              "maxItems": 4,
+              "items": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 0.16
+              }
+            },
+            "settled": {
+              "type": "array",
+              "items": {
+                "type": "array",
+                "minItems": 2,
+                "maxItems": 2,
+                "prefixItems": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "integer",
+                    "minimum": 0
+                  }
+                ],
+                "items": false
+              }
+            }
+          },
+          "required": [
+            "spent",
+            "settled"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "request": {
+      "type": "object",
+      "properties": {
+        "format": {
+          "const": "rust-permitted-request/1.0.0"
+        },
+        "request_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "model_id": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "view": {
+          "$ref": "urn:brass-ai:runtime:0.2.0#/$defs/observation"
+        },
+        "choices": {
+          "$ref": "urn:brass-ai:runtime:0.2.0#/$defs/choices"
+        },
+        "recall": {
+          "$ref": "#/$defs/recall"
+        },
+        "budget": {
+          "type": "object",
+          "properties": {
+            "total_ms": {
+              "enum": [
+                4000,
+                8000,
+                10000,
+                12000
+              ]
+            },
+            "remaining_ms": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 12000
+            },
+            "sessions": {
+              "const": 2
+            },
+            "threads_per_session": {
+              "const": 1
+            }
+          },
+          "required": [
+            "total_ms",
+            "remaining_ms",
+            "sessions",
+            "threads_per_session"
+          ],
+          "additionalProperties": false,
+          "allOf": [
+            {
+              "if": {
+                "properties": {
+                  "total_ms": {
+                    "const": 4000
+                  }
+                }
+              },
+              "then": {
+                "properties": {
+                  "remaining_ms": {
+                    "maximum": 4000
+                  }
+                }
+              }
+            },
+            {
+              "if": {
+                "properties": {
+                  "total_ms": {
+                    "const": 8000
+                  }
+                }
+              },
+              "then": {
+                "properties": {
+                  "remaining_ms": {
+                    "maximum": 8000
+                  }
+                }
+              }
+            },
+            {
+              "if": {
+                "properties": {
+                  "total_ms": {
+                    "const": 10000
+                  }
+                }
+              },
+              "then": {
+                "properties": {
+                  "remaining_ms": {
+                    "maximum": 10000
+                  }
+                }
+              }
+            },
+            {
+              "if": {
+                "properties": {
+                  "total_ms": {
+                    "const": 12000
+                  }
+                }
+              },
+              "then": {
+                "properties": {
+                  "remaining_ms": {
+                    "maximum": 12000
+                  }
+                }
+              }
+            }
+          ]
+        },
+        "reward_context": {
+          "$ref": "#/$defs/ledger"
+        }
+      },
+      "required": [
+        "format",
+        "request_id",
+        "model_id",
+        "view",
+        "choices",
+        "recall",
+        "budget",
+        "reward_context"
+      ],
+      "additionalProperties": false
+    },
+    "projection": {
+      "type": "object",
+      "properties": {
+        "format": {
+          "const": "rust-state-projection/1.0.0"
+        },
+        "context": {
+          "type": "object"
+        },
+        "views": {
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "array",
+              "minItems": 4,
+              "maxItems": 4,
+              "items": {
+                "$ref": "urn:brass-ai:runtime:0.2.0#/$defs/observation"
+              }
+            }
+          ]
+        },
+        "choices": {
+          "$ref": "urn:brass-ai:runtime:0.2.0#/$defs/choices"
+        },
+        "chance": {
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "object",
+              "properties": {
+                "kind": {
+                  "enum": [
+                    "draw",
+                    "rail-shuffle"
+                  ]
+                },
+                "remaining": {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                "outcomes": {
+                  "type": "array",
+                  "minItems": 1,
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "card": {
+                        "type": "string"
+                      },
+                      "probability": {
+                        "type": "number",
+                        "exclusiveMinimum": 0,
+                        "maximum": 1
+                      }
+                    },
+                    "required": [
+                      "card",
+                      "probability"
+                    ],
+                    "additionalProperties": false
+                  }
+                }
+              },
+              "required": [
+                "kind",
+                "remaining",
+                "outcomes"
+              ],
+              "additionalProperties": false
+            }
+          ]
+        },
+        "cards": {
+          "$ref": "urn:brass-ai:runtime:0.2.0#/$defs/cards"
+        },
+        "result": {
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "$ref": "urn:brass-ai:runtime:0.2.0#/$defs/result"
+            }
+          ]
+        },
+        "chance_progress": {
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "object",
+              "properties": {
+                "picked": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "needed": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              },
+              "required": [
+                "picked",
+                "needed"
+              ],
+              "additionalProperties": false
+            }
+          ]
+        }
+      },
+      "required": [
+        "format",
+        "context",
+        "views",
+        "choices",
+        "chance",
+        "cards",
+        "result",
+        "chance_progress"
+      ],
+      "additionalProperties": false
+    },
+    "debug": {
+      "type": "object",
+      "properties": {
+        "format": {
+          "const": "rust-trusted-debug/1.0.0"
+        },
+        "id": {
+          "type": "string"
+        },
+        "source": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "checkpoint": {
+          "type": "object",
+          "properties": {
+            "explicit_chance": {
+              "type": "boolean"
+            },
+            "format": {
+              "const": "brass-trusted-checkpoint"
+            },
+            "protocol": {
+              "const": "0.2.0"
+            },
+            "rules": {
+              "const": "steam-brass-patch-1.1.0"
+            },
+            "game_id": {
+              "type": "string"
+            },
+            "seed": {
+              "type": "integer"
+            },
+            "setup": {
+              "type": "object"
+            },
+            "commands": {
+              "type": "array",
+              "items": {
+                "type": "object"
+              }
+            },
+            "hash": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            }
+          },
+          "required": [
+            "explicit_chance",
+            "format",
+            "protocol",
+            "rules",
+            "game_id",
+            "seed",
+            "setup",
+            "commands",
+            "hash"
+          ],
+          "additionalProperties": false
+        },
+        "projection": {
+          "$ref": "#/$defs/projection"
+        },
+        "recall": {
+          "type": "array",
+          "minItems": 4,
+          "maxItems": 4,
+          "items": {
+            "$ref": "#/$defs/recall"
+          }
+        },
+        "ledger": {
+          "$ref": "#/$defs/ledger"
+        }
+      },
+      "required": [
+        "format",
+        "id",
+        "source",
+        "checkpoint",
+        "projection",
+        "recall",
+        "ledger"
+      ],
+      "additionalProperties": false
+    }
+  }
+}

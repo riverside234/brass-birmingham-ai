@@ -1,6 +1,6 @@
 # Rust Simulation and Search Backend Migration Plan
 
-Updated: **2026-10-24**. Status: **implementation plan**; all implementation and qualification gates below start pending.
+Updated: **2026-10-25**. Status: **L01 complete for mechanical testing; L02, L03 and L04 complete**. L05–L15 and lab qualification remain pending. Local evidence is recorded under `artifacts/rust-backend/20261024-g890-l01-l02/`, `artifacts/rust-backend/20261024-l03-verified/` and `artifacts/rust-backend/20261025-l04-qualified/`; see the [L01/L02 results report](RUST_BACKEND_L01_L02_REPORT.md), [L03 results report](RUST_BACKEND_L03_REPORT.md) and [L04 results report](RUST_BACKEND_L04_REPORT.md). The test model's missing utility calibration remains an explicit live/strength admission gate.
 
 The migration has two portions, in this order:
 
@@ -11,7 +11,9 @@ The migration has two portions, in this order:
 
 **Execution order: local backend → local debugging and live testing → recorded local acceptance → lab backend → isolated lab validation → controlled training rollout.** A Python test adapter used locally is diagnostic infrastructure; it does not require migrating or running lab training first. Local defects get a reproducible regression fixture and a local fix before promotion. Linux/GPU-only defects receive server tests as well, and changes to the shared core rerun the affected local gates.
 
-The requested local timing target is **four settings: 4s / 8s / 10s / 12s**, all with **two independent search sessions (one thread each)**. Keep the matched complex-state comparison at **one 12-second whole-turn allowance**. Four-setting game/catalog work is being updated separately in this workspace; the migration must integrate and qualify its admitted version. This document records planned backend work, not a completed Rust release or lab deployment.
+The requested local timing target is **four settings: 4s / 8s / 10s / 12s**, all with **two independent search sessions (one thread each)**. The matched complex-state comparison now uses **one 4-second whole-turn allowance**, as requested on 24 October. Installed patch **1.4.34** includes the four-setting catalog. This document records backend work and its evidence, not a completed Rust release or lab deployment.
+
+The selected migration test model is `test_nn/joint7-v11-2-grouped-lr-critic-1b96e228-g890-ecad3b932a8d-6bd7b0105b58/checkpoint.pt`: generation **890**, model ID `1145fecba3289511df1c518bb71fbfb5b2f6df351777151a5eb999b89cba0761`, checkpoint SHA-256 `ecad3b932a8dd9d3b5d0cc49b5e9bb94a9e98b4536ffdc86a44179d003995cb8`. This is the user's **temporary test/benchmark NN**, not the final model, which remains in training. The transferred source-state snapshot is generation 920; it does not change this checkpoint's generation. Strict loading, source compatibility and all bundle hashes pass. The checkpoint has **5,928,616 parameters** and the g850 capped reward, but `utility_calibration` is null and the existing readiness check returns false. Mechanical tests and timing are authorized; live search, strength and teacher admission remain pending. Never alter weights or fabricate calibration to pass a gate. A later final model requires its own pin and relevant parity/readiness checks.
 
 This revision incorporates the inspected self-play implementation through repository HEAD `5b49722d7bc328bbad7866c08671967fa505d4ad`, including the 24 October g850 recipe. It also preserves the earlier native-design, same-process inference, profiling, batching and performance requirements. Pin actual source/configuration/checkpoint hashes again at implementation time; current uncommitted work and a lab run's adopted recipe can differ from HEAD or a template config.
 
@@ -32,7 +34,7 @@ A faithful native port is the baseline. Upstream's determinized PUCT has differe
 | Upstream atomic-action enumeration and native saved states | Add direct staged choice generation and external import; avoid constructing every complete action at each stage |
 | v11.2 Features-4 model and critic descriptors | Preserve the selected model's exact interface; unknown descriptors for deployment/search by default |
 | `LocalTurnBridge` and `IAiExecutionBackend` | Integrate with the existing scheduler, freshness guards, isolated validation and single main-thread commit |
-| Installed patch 1.4.32, V4 6/10/15-second settings | Historical compatibility baseline; implement the requested four 4/8/10/12-second settings with versioned save handling |
+| Installed patch 1.4.34, V4 4/8/10/12-second settings | L01 freezes the actual installed binaries, release receipt and original saves; preserve versioned save handling |
 | Ordinary collection, branch scheduler, replay, PPO/PPG and ratings | Part 2 deliverables; these are not prerequisites for local integration |
 
 #### Source and historical evidence
@@ -41,7 +43,7 @@ A faithful native port is the baseline. Upstream's determinized PUCT has differe
 - Our inspected source HEAD is recorded above. Existing uncommitted personality documentation and four-setting game/installer changes are separate work. Pin selected bytes, runtime receipts and configuration; preserve historical upstream locks and notices.
 - The earlier experiment under `C:/Users/BobXu/Desktop/brass/output/cpu-capacity-2workers-20261016-deadline/` used upstream PUCT, initialized networks and a folded feature adapter. It established neither exact model compatibility nor our engine/search speedup. Its clock was per root, not per whole turn.
 - The [historical four-worker batching report](../artifacts/feature-engineering/rust-v9-v11-w448x6-4workers-20261016/REPORT.md) favored cap 2 over cap 4 in 13/13 preliminary uncapped pairs (median completion ratio 1.0602). It used four worker processes, a shared CPU service and folded inputs. Retest with two independent one-thread sessions, exact features and same-process inference.
-- `artifacts/patch-installation.json` records installed patch 1.4.32; `docs/V4_SEARCH_TIME_1.4.32.md` describes its timing/save behavior. The older `src/BrassLocalAI/README.md` is useful for lifecycle history but is not the current timing authority.
+- L01 inspected source HEAD `df41b07625ed190e3332326f3c3118c404e026f7` and installed patch **1.4.34**. `artifacts/patch-installation.json` and the frozen release archive are the current deployment baseline; `docs/V4_FOUR_SEARCH_TIMES_1.4.33.md` records the four-setting/save contract retained in 1.4.34. The 1.4.32 timing report and older local README remain historical references.
 - Latest self-play behavior comes from executable configuration/collector/trainer code and the admitted run signature. `configs/step5/joint7-latest.json` contains older explicit values; `latest_model_config()` applies subsequent migrations including g850. Do not infer the current recipe from the filename “latest.”
 - Frozen research and installed Unity observations have separate contracts. Resolve any rules difference explicitly; do not label a deployment observation as admitted training data automatically.
 
@@ -106,6 +108,25 @@ Build views on demand for the current policy consumer and any required root rewa
 
 #### A2.3 Rust engineering and build standards
 
+**Reuse established crates by default.** Import the pinned upstream rules as a small local crate, then build the migration adapters around it. Use existing libraries for serialization, errors, collections, channels, random primitives, inference and measurement. Custom code should implement Brass rules/phase translation, permitted-information boundaries, exact feature semantics and our Masked ISMCTS contract. A custom replacement for general infrastructure needs a concrete compatibility or measured performance reason. Adding dependencies with no current consumer is not required.
+
+| Responsibility | Reuse decision | Admission / milestone |
+| --- | --- | --- |
+| Existing game rules | Extract `brass-upstream-rules` from the L01 source archive; retain board, cards, resources, validation and runner code with provenance and license | L03 compiles and smoke-tests the upstream core; C# staged parity remains L04–L07 |
+| Wire types and JSON | `serde` / `serde_json`, strict unknown-field handling; reuse the L02 schemas with an offline `jsonschema` validator when importing those DTOs | L03 control messages; L04/L06 state and permitted-root imports |
+| Typed errors and build identities | `thiserror` and RustCrypto `sha2`; standard Cargo metadata and lockfile checksums | L03; no custom error framework or hash algorithm |
+| Two owner threads and bounded control queues | `crossbeam-channel` with `std::thread`; each session owns its mutable state | L03 skeleton; no Rayon pool or multi-thread Tokio runtime inside search/inference |
+| Bitsets and small scratch buffers | Retain upstream `fixedbitset`; consider `smallvec` for measured short-list hot paths | L04–L08, preserving full legal sets |
+| Stable tree handles and maps | Prefer `slotmap` generational handles plus standard maps; evaluate `hashbrown` only if profiling justifies it | L10; impose node/edge budgets around the crate and test stale handles |
+| Randomness | Retain the upstream pinned `rand` version for its diagnostics; use explicit recorded draws and an identified `rand_chacha` stream for future reproducible native sampling | L06/L10; equal seeds never substitute for cross-language outcome parity |
+| CPU neural inference | `ort` and its compatible ONNX Runtime; `ndarray` only where it removes tensor-shape/binding glue | L09; pin the compatible crate/runtime pair and enforce one intra-op/inter-op thread per owning session |
+| Measurements and tests | `criterion`, `proptest`, and `stats_alloc` for benchmark-only allocation instrumentation | L03 onward; instrumented allocation runs are separate from timing |
+| Python bindings | Prefer `pyo3` if an in-process diagnostic adapter becomes useful; use the framed worker adapter initially | L07 / Part 2; release the GIL during native computation |
+
+Pin direct versions and commit `Cargo.lock`; retain registry checksums, dependency/features inventory, upstream patches and attribution in the build receipt. Turn off unnecessary default features and keep web servers, databases, embedded UI assets and training dependencies out of the worker. Crate upgrades get focused compatibility tests and new build identities. These choices use the documented [Serde](https://serde.rs/), [Crossbeam channels](https://docs.rs/crossbeam-channel/latest/crossbeam_channel/), [SlotMap](https://docs.rs/slotmap/latest/slotmap/), [ORT](https://docs.rs/ort/latest/ort/), [Criterion](https://criterion-rs.github.io/book/) and [allocation instrumentation](https://docs.rs/stats_alloc/latest/stats_alloc/) interfaces.
+
+Generic MCTS crates are not a drop-in substitute for our four-seat, masked-information, staged-action search. Reuse their relevant infrastructure only if it preserves the pinned leaf/backup/complete-plan semantics; continue to port the existing algorithm as required by L10. Likewise, a crate's fast RNG or serializer does not establish game/rules or NN parity.
+
 Prefer safe Rust, explicit ownership and small modules organized around rules, state, observation, belief, features, search and transport. Use typed errors for invalid requests and unsupported states. Avoid unchecked indexing, `unwrap()` on external data, global mutable state and broad `Arc<Mutex<...>>` ownership. Any measured need for `unsafe` requires a narrow implementation, documented invariants and focused verification; it is not a default optimization technique.
 
 Contain failures at the process/binding boundary. A worker panic retires that request through the existing failure lifecycle; an in-process FFI adapter must translate failures without unwinding into foreign code. Document ownership and release rules for every borrowed tensor or external buffer.
@@ -130,16 +151,18 @@ The existing external evaluator remains the parity oracle; its GPU-training adap
 
 #### A2.5 Proposed implementation locations
 
-These are proposed locations, not files supplied by this plan. Create local core/worker/inference/Unity and diagnostic-harness code in Part 1; add collection and lab orchestration adapters only in Part 2:
+L03 created the native workspace, isolated upstream crate, core/worker skeleton and explicit Python diagnostic selector. The remaining responsibilities below are planned milestones. Create inference and Unity integration in Part 1; add collection and lab orchestration adapters only in Part 2:
 
 | Proposed path | Responsibility |
 | --- | --- |
+| `native/vendor/brass-upstream-rules/` | Pinned existing rules crate, original source hashes, local patch and attribution; isolated in L03 |
 | `native/brass-ai-core/` | Adapted engine, state/action contracts, belief sampling, Masked ISMCTS, ordinary collection loops and exact feature encoder |
 | `native/brass-ai-worker/` | Worker/game-lane lifecycle, cancellation, framed protocol, inference transport and bounded decision buffers |
 | `native/brass-ai-inference/` | Same-process ONNX adapter, model sessions, native postprocessing and CPU batch scheduling |
 | `src/brass_ai/native/` | Research and ordinary-collection adapters and backend selection, preserving the current public training interfaces |
 | `src/BrassLocalAI/Native/` | Unity request/result adapter using the existing execution lifecycle |
 | `tests/RustBackend/` | Golden fixtures, differential tests and cross-language search traces |
+| `tests/RustBackendNative/` | L03 process, ownership, failure and explicit-selection checks, separate from the frozen reference suite |
 | `native/brass-ai-core/benches/` | Fixed-work rules, restoration, encoding and scripted-search microbenchmarks |
 | `configs/references/rust-engine.lock.json` | Upstream revision, imported source hashes, local patches and attribution references |
 | `artifacts/rust-backend/<run-id>/` | Versioned parity, benchmark and deployment evidence |
@@ -158,6 +181,8 @@ Define a versioned semantic state DTO and a canonical comparison projection inde
 - For trusted differential fixtures only: complete hidden hands, deck order, setup discards, pending chance and any state needed for deterministic replay. Keep this format separate from production policy requests.
 
 Rebuild Rust connectivity masks, resource indexes and other derived caches after import. Validate card/resource conservation and state invariants. Fail explicitly on an unsupported phase or configuration and use the qualified backend; never manufacture a turn-start approximation for a mid-action state.
+
+L04 implements the trusted [`brass-native-state/1.0.0` contract](../configs/contracts/rust-backend/semantic-state-v1.md). It preserves the independent engine flow cursor, public debt and residual settlement debts, ordered partial chance draws, Rail discard aliases, and separate removed/retired tile identities. Its typed native state reuses upstream connectivity and income helpers plus `fixedbitset`. This diagnostic import is separate from permitted-root construction in L06.
 
 **Production search starts from a detached permitted view and allowed recall.** Rust builds sampled hidden worlds from this information. It must not receive the actual opponent hands, deck order or live RNG through a convenient full-state export. Trusted full-state imports are for parity/debugging, not belief construction.
 
@@ -197,7 +222,7 @@ Keep weights and architecture unchanged when these checks pass. If rules or feat
 
 The inspected current architecture is `brass-four-seat-mlp-resnet/11.2.0`: 5,910,916 base parameters and 5,928,616 with the utility head. It retains the v11.1 actor and adds `seat-descriptors/1.0.0`, a `[B,4,34]` critic-only input with a 34 → 32 → 32 encoder. Verify relative-seat mapping, the all-unknown default, explicit known/unknown inputs, dynamic legal counts and policy independence from descriptor values. Search and deployment use **unknown descriptors by default**, matching the current contract. Do not import privileged training table roles into live search or choose an own-copy descriptor experiment silently.
 
-Select an existing, admitted trained checkpoint whose utility/reward readiness supports local search. Its model, reward and export hashes govern the local profile; g850's new reward settings do not automatically make an older utility head calibrated. If only uncalibrated IL weights are available, use them for tensor/mechanical diagnostics and keep the live neural-search gate pending until a suitable checkpoint is admitted. **Part 1 does not require a new self-play run or a repeated IL run.**
+For this migration use the supplied g890 test checkpoint pinned above. Its model, reward and eventual export hashes govern mechanical tests and benchmarks. Its missing utility calibration keeps the live neural-search and strength gates pending; being trained or using g850 rewards does not establish calibration. Retain that distinction when the final checkpoint arrives. **Part 1 does not require a new self-play run or a repeated IL run.**
 
 Keep the completed v11.1 IL source and its explicit v11.2 upgrade receipt intact. The supported zero-prior-self-play handoff, fresh optimizer and utility calibration are tested in Part 2. Resuming an established v11.2 self-play checkpoint preserves its architecture, weights, optimizers and progress; changing the simulator language is not another architecture migration.
 
@@ -223,7 +248,7 @@ The matched migration already replaces continuation beyond its defined frontier 
 
 After baseline parity, implement a separately identified **first-new-compatible-information-set** leaf experiment. Bootstrap at the first newly expanded nonterminal information set whose observation/phase and reward context are supported by the value model, instead of continuing to the baseline's later frontier. Start with root-player observations covered by the existing value training. Evaluating at arbitrary opponent turns needs explicit evaluator, actor-view, seat-remapping and reward-context qualification; do not substitute a frozen opponent's value output for the root model's value.
 
-Keep exact terminal returns, four-seat backup, hidden-information restrictions and the same turn budget. An earlier leaf can end before a complete live action; partial traces must not acquire complete-plan support or become deployable actions/teacher plans. Preserve a legal completion path and measure its cost. Compare this variant with the faithful native baseline using identical trained checkpoints, two single-threaded sessions, 12-second whole turns, complex roots and seat-balanced strength tests. Retune batching for it only as a separately reported optimization.
+Keep exact terminal returns, four-seat backup, hidden-information restrictions and the same turn budget. An earlier leaf can end before a complete live action; partial traces must not acquire complete-plan support or become deployable actions/teacher plans. Preserve a legal completion path and measure its cost. Compare this variant with the faithful native baseline using identical qualified checkpoints, two single-threaded sessions, 4-second whole turns, complex roots and seat-balanced strength tests. The current test checkpoint supports mechanical measurements only. Retune batching for it only as a separately reported optimization.
 
 Adopt the new leaf contract only if its measured decision quality and latency pass the predeclared criteria. Version its search/teacher provenance separately. Higher visit counts caused by shorter trajectories cannot be reported as a Rust engine speedup or as evidence of stronger play.
 
@@ -231,7 +256,7 @@ Preserve the newer launch-admission rule in `search/deadline.py`: timed entry po
 
 ### A5. Whole-turn timing, inference and cancellation
 
-- Give a searched ordinary turn one 12-second allowance and both sessions the same remaining budget. Preserve the selected reference's preparation/admission boundary, measure excluded preparation separately and report total observed turn latency too.
+- Give a searched ordinary turn one 4-second matched-benchmark allowance and both sessions the same remaining budget. Preserve the selected reference's preparation/admission boundary, measure excluded preparation separately and report total observed turn latency too. Local production still exposes all four settings.
 - Pin the finalization reserve to the reference for the matched comparison. Stop admitting work at its work deadline; plan selection, completion and delivery use the remaining allowance. Tune that reserve only in a separately identified optimization run. Action two, payment, continuation, bonus and replanning do not replenish the ordinary-turn budget.
 - Poll cancellation/deadlines inside expensive legal-choice generation, recursive resource/sale exploration, traversal, feature building and transport waits. Upstream's optional benchmark deadline patch is evidence of a problem, not the final production cancellation API.
 - Measure polling overhead and the longest interval of unchecked native work. Use bounded chunks with cheap cancellation checks and appropriately spaced clock reads; an expensive recursive operation cannot hide behind one outer-loop check. Preserve the same cutoff contract while tuning check frequency.
@@ -239,13 +264,13 @@ Preserve the newer launch-admission rule in `search/deadline.py`: timed entry po
 - Use session-owned pending queues and persistent single-threaded ONNX handles. Count encoding, queueing and inference inside search work. The two independent sessions each run search and inference on their one thread; there is no extra inference pool. Record actual computation/transport threads and CPU use separately.
 - Maintain separate latency policies for interactive search and ordinary collection. Search batches flush on a small bounded delay or the approaching deadline; collection batches can favor throughput across independent games. Group only compatible model/export/schema requests, preserve candidate offsets and never wait indefinitely to fill a batch. Measure batch size, queue age, padding and worker idle time before tuning pending-path limits or NN thread counts.
 - Put a deadline on each batch and ignore results for expired requests/generations. Bound pending work and buffer ownership. Cancellation does not mean an in-flight native/device operation has already stopped; the execution backend remains busy until all its CPU/device work has actually completed.
-- On timeout, worker failure or an unsupported state, use the bounded legal fallback only while the same live request is still valid. Cancellation caused by game replacement, history navigation, menu exit or a superseding request retires the job without applying any action. Never start a fresh 12-second fallback search after the allowance has elapsed.
+- On timeout, worker failure or an unsupported state, use the bounded legal fallback only while the same live request is still valid. Cancellation caused by game replacement, history navigation, menu exit or a superseding request retires the job without applying any action. Never start a fresh 4-second fallback search after the allowance has elapsed.
 
-A hard search cutoff and zero wall-clock delivery overhead are different claims. Qualification must state the permitted delivery tolerance and observed worst case; do not describe a 12-second search followed by unbounded draining as a 12-second turn.
+A hard search cutoff and zero wall-clock delivery overhead are different claims. Qualification must state the permitted delivery tolerance and observed worst case; do not describe a 4-second search followed by unbounded draining as a 4-second turn.
 
-**Reference timing details to preserve:** personality `SearchSession` keys sessions by `(turn_key, seat, is_debt)` and disables search at debt roots. The training teacher wrapper also routes debt roots through its policy/completion path. Forced single-choice decisions remain recorded without launching search. Direct-policy calls have their own inference timeout in the research code; they do not establish a 12-second Unity latency guarantee. Give deployment policy/fallback work an explicit bounded lifecycle and qualify it separately.
+**Reference timing details to preserve:** personality `SearchSession` keys sessions by `(turn_key, seat, is_debt)` and disables search at debt roots. The training teacher wrapper also routes debt roots through its policy/completion path. Forced single-choice decisions remain recorded without launching search. Direct-policy calls have their own inference timeout in the research code; they do not establish a 4-second Unity latency guarantee. Give deployment policy/fallback work an explicit bounded lifecycle and qualify it separately.
 
-The target local menu has exactly four search allowances: **4s / 8s / 10s / 12s**, each using two independent search sessions (one thread each) and one shared ordinary-turn budget. Keep the four-setting catalog's existing default (Hard, 10s) and use 12s for the matched benchmark; verify deadlines and lifecycle at all four settings. The installed 1.4.32 6/10/15-second catalog is an input compatibility baseline, not the target. Section A9 defines its explicit save migration. Production teacher recipes may instead use phase-specific time allowances or simulation quotas with a watchdog. Preserve the selected recipe's budget mode, counters and admission behavior; do not convert it to time-based search as part of the port.
+The target local menu has exactly four search allowances: **4s / 8s / 10s / 12s**, each using two independent search sessions (one thread each) and one shared ordinary-turn budget. Keep the four-setting catalog's existing default (Hard, 10s) and use **4s for the matched benchmark**; verify deadlines and lifecycle at all four settings. Installed 1.4.34 already has this catalog. The earlier 1.4.32 6/10/15-second catalog remains a legacy-save compatibility input; section A9 defines its explicit mapping. Production teacher recipes may instead use phase-specific time allowances or simulation quotas with a watchdog. Preserve the selected recipe's budget mode, counters and admission behavior; do not convert it to time-based search as part of the port.
 
 #### A5.1 Retest batching within two single-threaded sessions
 
@@ -261,7 +286,7 @@ The single deterministic session used for trace parity is a correctness fixture,
 
 ### A6. Local implementation sequence and exit gates
 
-All new paths and test/benchmark drivers below are proposed deliverables. Keep step status, source/model/runtime hashes, commands actually run, result paths and unresolved differences in `artifacts/rust-backend/<run-id>/local/progress.json`. Start as pending; a gate passes only when its evidence exists. These are technical gates, not repeated permission requests.
+L01/L02 paths and their test/benchmark driver are implemented; later-step paths below remain proposed deliverables. Keep step status, source/model/runtime hashes, commands actually run, result paths and unresolved differences in `artifacts/rust-backend/<run-id>/local/progress.json`. Start new gates as pending; a gate passes only when its evidence exists. These are technical gates, not repeated permission requests.
 
 | Steps | Dependency | Result |
 | --- | --- | --- |
@@ -272,24 +297,28 @@ All new paths and test/benchmark drivers below are proposed deliverables. Keep s
 | L14 | L13 | Matched local performance, batching and quality evidence |
 | L15 | L14 | Opt-in local live games, reproducible bug fixes and rollback; **Local acceptance gate** |
 
-Recommended order: **L01 → … → L15 → local acceptance receipt → Part 2**. No self-play collection, PPO update or positive teacher-admission test is a predecessor of L13/L15. Use an already admitted, value-ready checkpoint for local play; an IL-only mechanical test cannot certify search quality.
+Recommended order: **L01 → … → L15 → local acceptance receipt → Part 2**. No self-play collection, PPO update or positive teacher-admission test is a predecessor of L13/L15. Use the supplied temporary g890 checkpoint for the initial mechanical work and timing. Local play/strength admission still needs a value-ready checkpoint; the temporary model's missing readiness is recorded explicitly.
 
 Performance work starts with the harness and continues at rules, features, inference and search milestones. A Python simulator adapter is useful for local differential testing and benchmark variant B; final trajectories remain native. Preserve a simple implementation for optimization ablations and keep unrelated workspace changes and active training runs intact.
 
 
 #### L01 — Freeze the local rules, model and installed-game baseline
 
-**Targets:** `configs/references/rust-engine.lock.json` and `artifacts/rust-backend/<run-id>/baseline.json`; existing model/checkpoint manifests, installed 1.4.32 receipt and relevant completed IL lineage.
+**Status: complete for the authorized mechanical tests and timing.** Run `20261024-g890-l01-l02` freezes 462 reference files, the patched upstream revision, g890 model/bundle, installed 1.4.34 fallback and 98 original save/history files. Variant A ran eight roots × five repetitions at **4 seconds, two sessions × one thread**, completing 85 of 163 attempted trajectories. Response-ready latency was 4.321 s median, 4.735 s observed p95 and 5.141 s maximum, including the harness's C# staged validation/application. The reference misses the latency targets; those targets remain unchanged. Its test checkpoint is not admitted for live play or strength. Detailed timing, memory and provenance limits are in the [results report](RUST_BACKEND_L01_L02_REPORT.md).
+
+**Targets:** `configs/references/rust-engine.lock.json` and `artifacts/rust-backend/<run-id>/baseline.json`; supplied `test_nn/` manifests/checkpoint, installed 1.4.34 receipt and transferred completed IL lineage receipts.
 
 1. Identify the exact current C#/Python sources, configuration bytes, upstream Rust revision and local patches. Select the four-player rules baseline and record unsupported configurations.
-2. Pin an admitted existing trained checkpoint/export and its lineage, architecture, descriptor/feature/action/context/reward contracts, value readiness, inference runtime and frozen opponent policies. Preserve IL upgrade receipts where applicable. Freeze the four target allowances (4/8/10/12 seconds), two single-threaded sessions and the legacy-save mapping in A9.
+2. Pin the supplied temporary g890 checkpoint and its lineage, architecture, descriptor/feature/action/context/reward contracts, actual value-readiness result, inference runtime and frozen opponent policies. Use the same supplied frozen checkpoint for the mechanical reference's neutral opponent policy; do not substitute absent lab population files. ONNX export/parity is L08/L09. Preserve IL lineage receipts where applicable. Freeze the four target allowances (4/8/10/12 seconds), **4-second matched benchmark**, two single-threaded sessions and the legacy-save mapping in A9.
 3. Record the reference environment, search counters, timing boundaries, CPU/device/thread settings and local deployment policy. Measure baseline A and freeze the section A8 performance targets and regression limits before inspecting B/C results. Include a held-out complex-state set for final evaluation.
 
-**Exit:** the manifest resolves every source/model/configuration identity and the selected checkpoint passes its existing hash/architecture/source/readiness checks. The installed fallback and original saves have a recoverable release baseline. No weights or training artifacts have been rewritten.
+**Exit for L01 mechanical testing:** the manifest resolves the selected source/model/configuration identities, existing hash/architecture/source checks pass, and the actual readiness result is recorded. The installed fallback and original saves have a recoverable baseline. Variant A and predeclared comparison targets are recorded. No weights or training artifacts are rewritten. **Live admission remains open while this test model lacks a passing utility-calibration receipt**; a mechanical L01 completion does not waive L08–L15.
 
 #### L02 — Build the independent fixture and comparison harness
 
-**Targets:** proposed `tests/RustBackend/fixtures/`, `test_contracts.py`, `test_state_parity.py` and `scripts/qualify-rust-backend.py`; existing authored C# host and runtime contracts.
+**Status: complete.** The versioned boundary/comparison harness passed 24 focused tests, restored all 546 roots, replayed 20 complete games / 8,344 transitions plus five authored edge transitions, and checked 14 independent expectations. It also froze and verified 28 NN replies and 56 sampled worlds. Four held-out games supply 104 roots reserved from timing/tuning. Full native search selection/backup traces remain L10. Evidence: `local/fixtures/qualification.json`, `local/fixtures/trace-qualification.json` and `local/negative-tests.json` in the run directory.
+
+**Targets:** implemented `tests/RustBackend/fixtures/`, `test_contracts.py`, `test_state_parity.py` and `scripts/qualify-rust-backend.py`; existing authored C# host and runtime contracts.
 
 1. Define versioned permitted-request and trusted-debug state schemas, semantic choices and a canonical state comparison projection. Keep hidden-state fixture imports separate from production policy requests.
 2. Capture reference roots, staged transitions, all four masked views, explicit chance outcomes, terminal scores and the selected utility/reward returns. Include independent expected outcomes for known rule edge cases.
@@ -299,18 +328,24 @@ Performance work starts with the harness and continues at rules, features, infer
 
 #### L03 — Isolate and build the Rust core and worker skeleton
 
-**Targets:** proposed `native/Cargo.toml`, `native/brass-ai-core/`, `native/brass-ai-worker/` and `src/brass_ai/native/`.
+**Status: complete, 2026-10-24.** The [L03 report](RUST_BACKEND_L03_REPORT.md) and `artifacts/rust-backend/20261024-l03-verified/qualification.json` record native Windows x64 debug/release/profiling builds, strict workspace lint/format checks, 10 new Rust tests in debug and release, 31 preserved upstream tests in debug and release, and 11 cross-process Python checks against each build. The optional upstream deadline feature also compiles and passes its 31 tests. L03's diagnostic capabilities explicitly reject C# state import and neural search; deployment readiness remains false.
 
-1. Create the Rust workspace, pin dependencies/toolchain/build identity and isolate imported rule code from upstream web, training and application concerns. Preserve attribution and the local patch inventory.
-2. Introduce typed state/choice/error interfaces and a worker handshake reporting supported contracts and build identity. Implement the ownership/layout requirements in section A2, starting with compact state copies and a simple framed local protocol.
+**Targets:** `native/Cargo.toml`, `native/vendor/brass-upstream-rules/`, `native/brass-ai-core/`, `native/brass-ai-worker/` and `src/brass_ai/native/`.
+
+1. Create the Rust workspace, pin dependencies/toolchain/build identity and isolate imported rule code from upstream web, training and application concerns. Preserve attribution and the local patch inventory. Reuse upstream `fixedbitset`, `rand`, `once_cell` and `num_enum`; use `serde`/`serde_json`, `thiserror`, `crossbeam-channel` and `sha2` for the new boundary and worker infrastructure.
+2. Introduce typed state/choice/error interfaces and a worker handshake reporting supported contracts and build identity. Implement the ownership/layout requirements in section A2, starting with independent native state clones and a bounded, length-framed local protocol. Strictly reject unavailable rules/search operations and incompatible contracts.
 3. Add explicit backend selection defaulting to the existing implementation. Establish separate instances for mutable game state; do not switch an active run or Unity deployment during scaffolding.
-4. Add optimized microbenchmarks and allocation/copy counters for rules, state restoration, feature preparation and scripted search as each becomes available. Establish debug, profiling and portable release builds plus formatting/lint checks.
+4. Use Criterion for optimized microbenchmarks and `stats_alloc` for separate allocation runs; record clone/copy operations explicitly. Add rules, state restoration, feature preparation and scripted-search workloads as each becomes available. Use property tests for protocol/state ownership invariants. Establish debug, profiling and portable release builds plus formatting/lint checks.
 
 **Exit:** core and worker compile natively for Windows x64 on this machine; native tests, lint and handshake/error checks pass. The benchmark skeleton records build identity and raw measurements. Unsupported contracts are rejected explicitly, and the reference path still works.
 
+**Recorded result:** 40 upstream modules remain byte-identical to the frozen archive. The two owner threads keep independent mutable states, and backend selection defaults to the existing C#/Python implementation. Criterion's initial-state clone/drop estimate is 4.56 µs; a separate allocation probe records 87 allocations and 9,993 allocated bytes per warm clone, all released in that probe. These scaffold measurements are not matched search results. The 4-second complex-state NN/search comparison remains a later gate. The installed game, 98 original save files, frozen reference source and g890 test-model bytes were preserved. See `native/README.md` and `scripts/qualify-rust-scaffold.py` for reproduction.
+
 #### L04 — Implement complete state import, export and restoration
 
-**Targets:** proposed core `state.rs` and state DTO modules; `tests/RustBackend/test_state_parity.py`.
+**Status: complete.** The strict semantic DTO imports into owned Rust state and exports exactly, including every staged phase, pending settlement debt, partial chance and Rail discard aliases. Derived indexes reuse the upstream DSU and `fixedbitset`; clone/save/restore is private to each of two one-thread sessions. Qualification passed 16 native tests in debug/release and 17 process tests on debug/release/profiling builds. It covered **540 unchanged frozen roots, six corrected C# authored variants and three additional partial-chance states** with zero unexplained differences. The six inconsistent original authored roots remain immutable and are explicitly rejected for link/merchant conservation or turn-owner errors. A discovered owner-exit race has a deterministic regression and fix. See the [L04 report](RUST_BACKEND_L04_REPORT.md) for correction provenance, profiles and preservation receipts. Staged transitions and legal choices remain L05; this is not yet the usable simulator milestone.
+
+**Targets:** `native/brass-ai-core/src/state/`, native worker state capabilities, `src/brass_ai/native/protocol.py`, and `tests/RustBackendNative/test_state_parity.py`. The original L02 oracle tests remain separate.
 
 1. Import the selected semantic state DTO, including actions remaining, phase, pending payments/continuations/bonuses/debt, public history and stable tile/card/seat identities.
 2. Rebuild derived connectivity/resource indexes, check conservation/invariants and implement export plus clone/restore without shared mutable state.
@@ -397,7 +432,7 @@ Performance work starts with the harness and continues at rules, features, infer
 **Targets:** native search scheduler and worker cancellation paths; proposed `tests/RustBackend/test_deadlines.py`.
 
 1. Run two independent one-thread sessions with private trees, shared immutable definitions and separate session-owned inference paths. Aggregate only completed root/plan evidence using the existing replica semantics.
-2. Implement pending reservations, exactly-once release and cooperative checks inside expensive operations. Use the pinned reference finalization reserve for the initial matched 12-second whole-turn comparison. Define the completion point at which an entire backup becomes visible; interrupted backups must never publish partial counters.
+2. Implement pending reservations, exactly-once release and cooperative checks inside expensive operations. Use the pinned reference finalization reserve for the initial matched 4-second whole-turn comparison. Define the completion point at which an entire backup becomes visible; interrupted backups must never publish partial counters.
 3. Inject cancellation, exceptions, queue delays and late NN replies during generation, traversal, encoding and backup. Verify that resource ownership continues until outstanding native/device work actually ends.
 4. Profile both active workers with scripted and real inference. Measure allocations per completed trajectory, key construction, tree traversal, synchronization, idle time and peak memory. Remove avoidable per-move allocations, serialization and shared locks before integrated qualification; test the optimized path against the simple native baseline.
 5. Exercise the complete same-process engine → Features-4 → ONNX → backup path with two independent sessions, one thread each, then run the staged batch sweep in section A5.1. Keep the frozen baseline and tuned scheduler results separately identified for L14.
@@ -418,11 +453,11 @@ Performance work starts with the harness and continues at rules, features, infer
 
 **Targets:** proposed `scripts/benchmark-rust-backend.py`; versioned evidence under `artifacts/rust-backend/<run-id>/local/`; section A8.
 
-1. Run A/B/C_ref/C fixed-work controls and actual NN search on this Windows machine, with two single-threaded sessions and one 12-second ordinary-turn allowance. Use the primary admitted v11.2 export; retain the requested width/depth comparisons only for exact compatible exports.
+1. Run A/B/C_ref/C fixed-work controls and actual NN search on this Windows machine, with two single-threaded sessions and one 4-second ordinary-turn allowance. Use the primary admitted v11.2 export; retain the requested width/depth comparisons only for exact compatible exports.
 2. Retune per-session batch caps, pending paths and flush delays with ORT threads fixed at one using A5.1. Separate the frozen baseline from scheduler optimizations; isolate inference runtime/placement with C_ref_ORT when needed.
 3. Collect component profiles, state/node sizes, allocation/copy statistics, latency distributions, supported-plan/fallback rates and held-out complex-state results. Improve measured bottlenecks one at a time and confirm without diagnostic instrumentation.
 4. Run seat/setup-balanced decision-quality matches with trained weights. The optional earlier-leaf experiment has a separate identity and measured retain/reject result; baseline admission cannot silently adopt it.
-5. Verify all four local time settings for timing, complete actions and cancellation. The 12-second matched study remains the performance comparison; another worker-count sweep is not required.
+5. Verify all four local time settings for timing, complete actions and cancellation. The 4-second matched study remains the performance comparison; another worker-count sweep is not required.
 
 **Exit:** the predeclared local parity/performance/latency/memory/quality gates pass with raw evidence and no unresolved supported-state failure. An unmet target remains open with its cause and next measurement; do not lower it after inspecting candidate results. Missing trained checkpoints or representative Windows evidence keep this gate pending.
 
@@ -463,7 +498,7 @@ Training-only critic eligibility, branch families and optimizer checks are added
 
 ### A8. Matched local benchmarks
 
-#### Search comparison: two one-thread CPU sessions, 12 seconds per searched ordinary turn
+#### Search comparison: two one-thread CPU sessions, 4 seconds per searched ordinary turn
 
 | Variant | Engine | Search | Inference | Purpose |
 | --- | --- | --- | --- | --- |
@@ -484,9 +519,9 @@ The following are initial engineering targets, not measured results or promised 
 | Gate | Initial target | Measurement and interpretation |
 | --- | --- | --- |
 | Native rules and search work | At least **2×** A→C throughput on the fixed-work rules/scripted-search suite | Same sampled worlds, staged transitions and scripted NN results; both engines execute equivalent work. Report rules and tree-management components separately. |
-| Real NN search | At least **1.25×** A→C completed trajectories per searched ordinary turn for the primary admitted model | Geometric mean of paired fixture ratios, with a confidence interval supporting a benefit; two single-threaded sessions and the same 12-second session contract. Report plan coverage and strength separately. |
+| Real NN search | At least **1.25×** A→C completed trajectories per searched ordinary turn for the primary admitted model | Geometric mean of paired fixture ratios, with a confidence interval supporting a benefit; two single-threaded sessions and the same 4-second session contract. Report plan coverage and strength separately. |
 | Complex-state regressions | No reproducible median slowdown greater than **5%** in a declared critical era/phase group | Keep dense Rail, resource ties, multi-sale and near-terminal results visible. Expand inconclusive samples; an aggregate gain cannot hide a severe case. |
-| Turn latency | No counted search work after the reference work deadline; warm response-ready p95 at most **12.05 s**, maximum observed at most **12.15 s** from the ordinary-turn clock start | Targets for controlled target-hardware qualification, including finalization and transport. Gather enough turns for tail claims; report preparation, inference retirement, Unity dispatch and animation separately. |
+| Turn latency | No counted search work after the reference work deadline; warm response-ready p95 at most **4.05 s**, maximum observed at most **4.15 s** from the ordinary-turn clock start | Targets for controlled target-hardware qualification, including finalization and transport. Gather enough turns for tail claims; report preparation, inference retirement, Unity dispatch and animation separately. |
 | Memory and lifecycle | Stay within the declared tree, pending-path, tensor and replay budgets; no unexplained growth across repeated turns/games | Report peak/high-water and post-retirement memory, allocations per useful unit, canceled-job draining and retained shared model caches. |
 
 The fixed-work gate is the clearest test of native engine/search efficiency. Real NN speedup can still be limited by model computation or by different explored paths under a time budget. Use C_ref/C and the batch sweep to quantify inference placement and scheduling. After co-location, use profiles to decide whether remaining packing, padding, thread contention or model computation dominates. An unmet target remains an unmet objective; do not replace it with a favorable microbenchmark or lower it after seeing the candidate.
@@ -498,7 +533,7 @@ Freeze concrete memory budgets from the selected model, node/edge limits, maximu
 1. Use one fixed fixture set spanning early/middle/late Canal and Rail, plus payment, continuation, bonus and near-terminal cases. Include dense late-Rail roots and high-branching cases where the earlier benchmark needed native deadline interruption. Debt and forced-choice fixtures check the reference's non-search behavior and are reported separately from search throughput.
 2. First run fixed-work microbenchmarks: same legal generation, apply, clone/restore, sampling, encoding and deterministic search trace with scripted NN responses. Measure equivalent units of work, with no NN path variation.
 3. Run actual NN-guided search with identical architecture/weights, feature/context/reward contracts, frozen bank, search/leaf parameters, finalization reserve and worker count across A/B/C_ref/C. Hold evaluator/runtime settings fixed for each attribution pair and identify deliberate differences. First use matched batching/pending/flush settings; report the tuned C configuration separately. Validate outputs before interpreting throughput.
-4. Use two independent sessions, one thread each, and **one 12-second whole-turn allowance**, shared by first-action choice, staged completion, second action and replanning. A resumed mid-turn fixture carries its original remaining budget; it does not receive another 12 seconds. If a separate microbenchmark gives a staged root a fresh budget, label it as a per-root diagnostic and exclude it from whole-turn results. Reset session/cache state consistently between paired trials.
+4. Use two independent sessions, one thread each, and **one 4-second whole-turn allowance**, shared by first-action choice, staged completion, second action and replanning. A resumed mid-turn fixture carries its original remaining budget; it does not receive another 4 seconds. If a separate microbenchmark gives a staged root a fresh budget, label it as a per-root diagnostic and exclude it from whole-turn results. Reset session/cache state consistently between paired trials.
 5. Reuse recorded worlds/chance/policy responses for deterministic comparisons. Actual NN runs use paired fixture/setup schedules and at least five measured paired repetitions initially. Record setup fingerprints and RNG versions; equal numeric seeds across languages are insufficient. Counterbalance implementation order and run trials sequentially on the same machine.
 6. Record warm-up, cold startup/model load, excluded preparation and timed search separately. Keep power mode/AC state, process load, temperatures where available, fixed one-thread-per-session settings, actual ORT/compute-thread counts and runtime/build versions in the evidence. The earlier battery-powered WSL result is not a Windows deployment qualification.
 7. Use the admitted v11.2 checkpoint as the current model baseline (5,928,616 parameters for the medium utility model), recording its exact export and descriptors. Retain the requested W352×6, W448×6 and W512×8 size comparisons only after their exact exports are admitted to the same semantic contract. Pair each size across A/B/C. Initialized weights may measure mechanical cost; trained matching checkpoints are needed for representative search behavior and strength claims.
@@ -523,7 +558,7 @@ Attribute the requested savings explicitly: engine in-process/restore costs thro
 
 Use the same **2 sessions × 1 thread** constraint for the native CPU arms. Record reference evaluator placement, thread settings and any unavoidable external service overhead; an unfair extra inference pool must not enter the claimed matched result. Measure the existing C# V4 gameplay backend separately as a deployment/quality control because its heuristic policy is not our Python neural-search baseline.
 
-Local production timing checks cover all four 4/8/10/12-second choices, while A/B/C performance ratios remain at 12 seconds. Use the same 50 ms p95 / 150 ms maximum response-ready engineering tolerances relative to each setting, subject to the declared sample counts and target hardware; animation/preparation are reported separately. Do not omit zero-completion roots from aggregate results: report their absolute completed work, fallback and valid-plan rates, and define treatment of undefined ratios in the frozen protocol.
+Local production timing checks cover all four 4/8/10/12-second choices, while A/B/C performance ratios remain at 4 seconds. Use the same 50 ms p95 / 150 ms maximum response-ready engineering tolerances relative to each setting, subject to the declared sample counts and target hardware; animation/preparation are reported separately. Do not omit zero-completion roots from aggregate results: report their absolute completed work, fallback and valid-plan rates, and define treatment of undefined ratios in the frozen protocol.
 
 ### A9. Unity deployment, four timing settings and rollback
 
@@ -537,7 +572,7 @@ The current shipped game has no installed neural runtime. For L13, package the R
 
 Backend selection must be explicit and traceable. Preserve strategy/profile/source identity; the new neural implementation gets its own backend identity. Integrate the admitted four-setting catalog/schema for exactly four options labeled **4s / 8s / 10s / 12s**, as Easy/Mid/Hard/Max respectively, retaining the current Hard (10s) default and two independent one-thread sessions at every setting. Every menu/description/player summary reads the same catalog.
 
-For compatibility, preserve original signed save payloads and use a versioned execution adapter: legacy named Easy/Mid/Hard map to **4s/8s/10s**; an unnamed legacy 10-second record stays **10s**. The new Max option selects 12s. The in-progress catalog uses `local-ai-execution/1.2.0`; verify the admitted source/receipt at implementation time. Validate old 1.0.0/1.1.0 difficulty records, source/profile identities and new saves; never rewrite historical signatures in place or keep a hidden 15s execution path behind a 12s label. Test old-save load, save again and reload at all mapped settings. Existing optimizers, checkpoints and replay remain owned by their current training code.
+For compatibility, preserve original signed save payloads and use a versioned execution adapter: legacy named Easy/Mid/Hard map to **4s/8s/10s**; an unnamed legacy 10-second record stays **10s**. The new Max option selects 12s. The installed catalog uses `local-ai-execution/1.2.0`; verify the admitted source/receipt at implementation time. Validate old 1.0.0/1.1.0 difficulty records, source/profile identities and new saves; never rewrite historical signatures in place or keep a hidden 15s execution path behind a 12s label. Test old-save load, save again and reload at all mapped settings. Existing optimizers, checkpoints and replay remain owned by their current training code.
 
 On an unsupported snapshot, worker failure, incompatible model/contract or invalid plan, discard the result before mutation. Invoke the qualified bounded fallback only if the original game/request is still current. A canceled or superseded job applies nothing. Keep a runtime switch to disable Rust for subsequent requests. Backend changes invalidate incompatible trees/caches and are recorded in teacher provenance; they must not silently blend incompatible labels into an admitted dataset.
 
@@ -574,7 +609,7 @@ Rules/state/feature parity is the largest correctness risk. State representation
 - [ ] Native layout, arenas, buffer ownership, cache equality/invalidation and allocation/copy profiles meet A2; formatting/lint and debug/optimized checks pass.
 - [ ] Adversarial cancellation and deadline tests show only completed timely work; scheduler ownership lasts until both sessions retire, and stale/canceled requests apply no action.
 - [ ] Exact **4s / 8s / 10s / 12s** choices, the current Hard/10s default, shared ordinary-turn clocks and versioned legacy-save mappings pass menu/runtime/save tests.
-- [ ] A/B/C_ref/C use matched 12-second whole turns, two one-thread sessions, complex and held-out roots, and trained checkpoints; inference-placement and batching changes have separate evidence.
+- [ ] A/B/C_ref/C use matched 4-second whole turns, two one-thread sessions, complex and held-out roots, and trained checkpoints; inference-placement and batching changes have separate evidence.
 - [ ] Predeclared local throughput, latency, memory and quality criteria pass; a shorter leaf policy is adopted only under its separately tested search contract.
 - [ ] Native Windows package passes shadow testing and complete live games across both eras, both actions, debt/final settlement and the declared support matrix.
 - [ ] Validated fallback, backend disable/rollback, old-save load and resource/FPS restoration are reproducible.
@@ -832,7 +867,7 @@ All paths below are relative to this repository. They are behavior references, n
 | `src/brass_ai/learning/export.py`, `src/brass_ai/learning/onnx_tools.py`, `src/brass_ai/personality/laptop/inference.py` | Export and inference parity |
 | `src/BrassTrainingHost/FastHost.cs`, `docs/R1_HOST.md`, `src/brass_ai/recovery/host_runtime.py` | Authored rules host and runtime provenance |
 | `src/BrassLocalAI/Unity/LocalTurnBridge.cs`, `src/BrassLocalAI/Execution/AiExecutionScheduler.cs`, `src/BrassLocalAI/Policy/DifficultyCatalog.cs` | Live validation, resource lifetime and timing/save schemas |
-| `docs/AI_EXECUTION_RESOURCES_1.4.7.md`, `docs/V4_SEARCH_TIME_1.4.32.md`, `artifacts/patch-installation.json` | Local lifecycle and installed historical timing baseline; inspect current four-setting work before building |
+| `docs/AI_EXECUTION_RESOURCES_1.4.7.md`, `docs/V4_FOUR_SEARCH_TIMES_1.4.33.md`, `artifacts/patch-installation.json` | Local lifecycle, four-setting/save contract and installed 1.4.34 baseline; the 1.4.32 timing report remains historical |
 | `src/brass_ai/recovery/config.py`, `src/brass_ai/recovery/training_revision_g850.py`, `scripts/configure-training-g850.py`, `ai-research/TRAINING_G850_REVISION.md` | Effective generator/reviewed continuation and g850 changes |
 | `src/brass_ai/recovery/ordinary.py`, `src/brass_ai/recovery/execution.py`, `src/brass_ai/recovery/exploration.py`, `src/brass_ai/recovery/opening_objective.py` | Frozen jobs, current behavior and objective attribution |
 | `src/brass_ai/recovery/branching.py`, `src/brass_ai/recovery/branch_scheduler.py`, `ai-research/SELFPLAY_G210_REVIEW.md` | Trusted forks, fresh counters, asynchronous continuations and family validation |
