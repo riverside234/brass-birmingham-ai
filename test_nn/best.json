@@ -1,0 +1,10 @@
+{
+  "format": "migration-test-nn-selection/1.0.0",
+  "selection": "best",
+  "selection_reason": "qualified policy anchor (not a global best claim)",
+  "bundle": "joint7-v11-2-grouped-lr-critic-1b96e228-g890-ecad3b932a8d-6bd7b0105b58",
+  "generation": 890,
+  "model_id": "1145fecba3289511df1c518bb71fbfb5b2f6df351777151a5eb999b89cba0761",
+  "checkpoint_sha256": "ecad3b932a8dd9d3b5d0cc49b5e9bb94a9e98b4536ffdc86a44179d003995cb8",
+  "manifest_sha256": "0fbfb482540b4651445b377ea563b56c413f30548c6b85f20130e6f4a35efc46"
+}
