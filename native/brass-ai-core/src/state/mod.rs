@@ -1,8 +1,12 @@
 //! Owned semantic simulator state. Import validates before exposing a replacement.
+pub mod belief;
 mod catalog;
 mod chance;
 mod choices;
+pub mod initial;
+pub mod observation;
 mod phases;
+pub mod simulation;
 pub use chance::ChanceOutcomes;
 pub mod dto;
 mod indexes;
@@ -46,6 +50,7 @@ struct PlayerState {
 #[derive(Debug, Clone)]
 struct MerchantState {
     types: Vec<Industry>,
+    defined: bool,
     beer: u8,
 }
 #[derive(Debug, Clone, Copy)]
@@ -495,14 +500,15 @@ impl NativeState {
                 "merchant identity/bonus/beer",
             )?;
             require(
-                !m.types.is_empty() || m.beer == 0,
+                m.types.as_ref().is_some_and(|types| !types.is_empty()) || m.beer == 0,
                 "empty merchant has beer",
             )?;
             merchants.push(MerchantState {
-                types: m.types.clone(),
+                types: m.types.clone().unwrap_or_default(),
+                defined: m.types.is_some(),
                 beer: m.beer,
             });
-            merchant_types.push(m.types.clone());
+            merchant_types.push(m.types.clone().unwrap_or_default());
         }
         merchant_types.sort();
         let mut expected = CATALOG.merchant_types.clone();
@@ -856,7 +862,7 @@ impl NativeState {
                 .map(|(d, m)| Merchant {
                     id: d.id.clone(),
                     bonus: d.bonus,
-                    types: m.types.clone(),
+                    types: m.defined.then(|| m.types.clone()),
                     beer: m.beer,
                 })
                 .collect(),
@@ -937,6 +943,7 @@ impl NativeState {
         for m in &mut fork.merchants {
             m.beer = 0;
             m.types.clear();
+            m.defined = !m.defined;
         }
         for h in &mut fork.cards.hands {
             h.clear();

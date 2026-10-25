@@ -155,9 +155,21 @@ pub struct Link {
 #[serde(deny_unknown_fields)]
 pub struct Merchant {
     pub id: String,
-    pub types: Vec<Industry>,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "merchant_types"
+    )]
+    pub types: Option<Vec<Industry>>,
     pub beer: u8,
     pub bonus: Bonus,
+}
+
+fn merchant_types<'de, D: serde::Deserializer<'de>>(
+    deserializer: D,
+) -> Result<Option<Vec<Industry>>, D::Error> {
+    // The reference wire allows an omitted field or an array, not explicit null.
+    Vec::<Industry>::deserialize(deserializer).map(Some)
 }
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]

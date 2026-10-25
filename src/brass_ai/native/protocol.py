@@ -17,9 +17,10 @@ PROTOCOL = "brass-native-control/0.1.0"
 DIAGNOSTIC_RULES = "daiyu-upstream-diagnostic/0.1.0"
 MAX_FRAME_BYTES = 1024 * 1024
 STATE_FORMAT = "brass-native-state/1.0.0"
-CAPABILITIES = {"diagnostic_new", "diagnostic_snapshot", "diagnostic_clone_check",
+CAPABILITIES = {"simulation", "diagnostic_new", "diagnostic_snapshot", "diagnostic_clone_check",
                 "state_import", "state_export", "state_save", "state_restore", "state_clone_check",
-                "rules_snapshot", "rules_apply", "rules_chance"}
+                "rules_snapshot", "rules_apply", "rules_chance",
+                "observation_snapshot", "belief_prepare", "belief_sample"}
 
 
 class WorkerFailure(RuntimeError):
@@ -80,7 +81,7 @@ class NativeWorker:
             if (self.hello.get("status") != "hello" or self.hello.get("sessions") != 2
                 or self.hello.get("threads_per_session") != 1
                 or self.hello.get("diagnostic_rules") != DIAGNOSTIC_RULES
-                or self.hello.get("target_rules_qualified") is not False
+                or self.hello.get("target_rules_qualified") is not True
                 or self.hello.get("state_format") != STATE_FORMAT
                 or self.hello.get("max_frame_bytes") != MAX_FRAME_BYTES
                 or set(self.hello.get("capabilities", [])) != CAPABILITIES
@@ -138,7 +139,9 @@ class NativeWorker:
                     if not isinstance(response.get("code"), str) or not isinstance(response.get("message"), str):
                         raise WorkerFailure("malformed error reply")
                     raise NativeError(response)
-                expected = {"hello": "hello", "shutdown": "shutdown"}.get(op, "rules" if op.startswith("rules_") else "state" if op.startswith("state_") else "diagnostic")
+                expected = {"simulation": "simulation", "hello": "hello", "shutdown": "shutdown", "observation_snapshot": "observation",
+                            "belief_prepare": "prepared", "belief_sample": "sampled"}.get(op,
+                            "rules" if op.startswith("rules_") else "state" if op.startswith("state_") else "diagnostic")
                 if response.get("status") != expected:
                     raise WorkerFailure("reply status does not match request")
                 return response
@@ -152,6 +155,9 @@ class NativeWorker:
 
     def new_game(self, session, seed):
         return self.call("diagnostic_new", session=session, players=4, seed=seed)
+
+    def simulation(self, session, kind, **fields):
+        return self.call("simulation", session=session, command=dict(kind=kind, **fields))["data"]
 
     def snapshot(self, session):
         return self.call("diagnostic_snapshot", session=session)
@@ -184,6 +190,18 @@ class NativeWorker:
 
     def resolve_chance(self, session, revision, card):
         return self.call("rules_chance", session=session, revision=revision, card=card)
+
+    def observation(self, session, seat):
+        """One seat's permitted information; no complete cards or chance picks."""
+        return self.call("observation_snapshot", session=session, seat=seat)
+
+    def prepare_belief(self, session, view, recall):
+        """Detached permitted view only. Recall affects identity, not conditioning."""
+        return self.call("belief_prepare", session=session, view=view, recall=recall)
+
+    def sample_belief(self, session, random):
+        """Trusted diagnostic result contains a sampled world's hidden state."""
+        return self.call("belief_sample", session=session, random=random)
 
     def _retire(self):
         if self._closed:

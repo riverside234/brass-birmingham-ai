@@ -3,7 +3,13 @@ use brass_ai_core::{
     diagnostic::DiagnosticGame,
     framing::{read_frame, write_frame},
     protocol::{Operation, Reply, Request, Response, CAPABILITIES},
-    state::{dto::StateDto, NativeState, StateSnapshot},
+    state::{
+        belief::{PreparedRoot, SamplingDraws, SAMPLER},
+        dto::StateDto,
+        observation::{Observation, ObservationMemory, Recall},
+        NativeState, StateSnapshot,
+    },
+    types::Seat,
     CoreError,
 };
 use crossbeam_channel::{bounded, Receiver, Sender};
@@ -14,6 +20,7 @@ use std::{
 };
 
 enum Command {
+    Simulation(brass_ai_core::state::simulation::SimulationCommand),
     New {
         players: u8,
         seed: u64,
@@ -28,6 +35,9 @@ enum Command {
     RulesSnapshot,
     Apply(u32, String),
     Chance(u32, String),
+    Observe(Seat),
+    Prepare(Box<Observation>, Recall),
+    Sample(SamplingDraws),
     #[cfg(test)]
     Panic,
 }
@@ -35,9 +45,13 @@ type Job = (Command, Sender<Result<Response, CoreError>>);
 
 #[derive(Default)]
 struct Session {
+    simulator: brass_ai_core::state::simulation::Simulator,
     diagnostic: Option<DiagnosticGame>,
     state: Option<NativeState>,
     saved: Option<StateSnapshot>,
+    observation: ObservationMemory,
+    saved_observation: Option<ObservationMemory>,
+    prepared: Option<PreparedRoot>,
 }
 
 struct Owner {
@@ -125,6 +139,12 @@ fn execute(
             | Command::StateCloneCheck
     );
     match command {
+        Command::Simulation(command) => {
+            return Ok(Response::Simulation {
+                session,
+                data: Box::new(game.simulator.execute(command, session)?),
+            })
+        }
         Command::New { players, seed } => {
             let replacement = DiagnosticGame::new(players, seed)?;
             game.diagnostic = Some(replacement);
@@ -133,7 +153,49 @@ fn execute(
         Command::Import(dto) => {
             // Build and validate the entire replacement before touching live or saved state.
             let replacement = NativeState::import(&dto)?;
+            game.observation = ObservationMemory::new(&replacement);
             game.state = Some(replacement);
+        }
+        Command::Observe(seat) => {
+            game.state.as_ref().ok_or(CoreError::NoGame)?;
+            let information = game.observation.information(seat);
+            let reference_digest = information.reference_digest();
+            return Ok(Response::Observation {
+                session,
+                owner: owner.into(),
+                information: Box::new(information),
+                reference_digest,
+            });
+        }
+        Command::Prepare(view, recall) => {
+            let replacement = PreparedRoot::new(&view, recall)?;
+            let response = Response::Prepared {
+                session,
+                owner: owner.into(),
+                sampler: SAMPLER,
+                unseen_cards: replacement.unseen_cards(),
+                draw_count: replacement.draw_count(),
+            };
+            game.prepared = Some(replacement);
+            return Ok(response);
+        }
+        Command::Sample(random) => {
+            let (next, memory, draws) = game
+                .prepared
+                .as_ref()
+                .ok_or(CoreError::NoGame)?
+                .sample(random)?;
+            let response = Response::Sampled {
+                session,
+                owner: owner.into(),
+                sampler: SAMPLER,
+                draws,
+                state: Box::new(next.export()),
+                choices: next.legal_choices()?,
+            };
+            game.state = Some(next);
+            game.observation = memory;
+            return Ok(response);
         }
         Command::Export | Command::StateCloneCheck => {}
         Command::RulesSnapshot => {}
@@ -144,6 +206,7 @@ fn execute(
                 .ok_or(CoreError::NoGame)?
                 .after_choice(revision, &choice)?;
             let response = rules_response(&next, session, owner)?;
+            game.observation.refresh(&next);
             game.state = Some(next);
             return Ok(response);
         }
@@ -154,11 +217,13 @@ fn execute(
                 .ok_or(CoreError::NoGame)?
                 .after_chance(revision, &card)?;
             let response = rules_response(&next, session, owner)?;
+            game.observation.refresh(&next);
             game.state = Some(next);
             return Ok(response);
         }
         Command::Save => {
-            game.saved = Some(game.state.as_ref().ok_or(CoreError::NoGame)?.snapshot())
+            game.saved = Some(game.state.as_ref().ok_or(CoreError::NoGame)?.snapshot());
+            game.saved_observation = Some(game.observation.clone());
         }
         Command::Restore => {
             let saved = game
@@ -166,6 +231,11 @@ fn execute(
                 .as_ref()
                 .ok_or_else(|| CoreError::Invalid("session has no saved state".into()))?;
             game.state.as_mut().ok_or(CoreError::NoGame)?.restore(saved);
+            game.observation = game
+                .saved_observation
+                .as_ref()
+                .expect("paired save")
+                .clone();
         }
         #[cfg(test)]
         Command::Panic => panic!("test owner failure"),
@@ -250,6 +320,7 @@ impl Server {
             return Reply::error(id, CoreError::Invalid("hello must complete first".into()));
         };
         let (session, command) = match request.request {
+            Operation::Simulation { session, command } => (session, Command::Simulation(command)),
             Operation::DiagnosticNew {
                 session,
                 players,
@@ -263,6 +334,13 @@ impl Server {
             Operation::StateRestore { session } => (session, Command::Restore),
             Operation::StateCloneCheck { session } => (session, Command::StateCloneCheck),
             Operation::RulesSnapshot { session } => (session, Command::RulesSnapshot),
+            Operation::ObservationSnapshot { session, seat } => (session, Command::Observe(seat)),
+            Operation::BeliefPrepare {
+                session,
+                view,
+                recall,
+            } => (session, Command::Prepare(view, recall)),
+            Operation::BeliefSample { session, random } => (session, Command::Sample(random)),
             Operation::RulesApply {
                 session,
                 revision,
@@ -481,9 +559,12 @@ mod tests {
         let state = NativeState::import(&dto).unwrap();
         let id = state.legal_choices().unwrap()[0].id.clone();
         let saved = state.snapshot();
+        let observation = ObservationMemory::new(&state);
         let mut session = Session {
             state: Some(state),
             saved: Some(saved),
+            saved_observation: Some(observation.clone()),
+            observation,
             ..Session::default()
         };
         assert!(execute(

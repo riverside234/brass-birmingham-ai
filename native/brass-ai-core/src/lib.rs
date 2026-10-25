@@ -1,4 +1,4 @@
-//! Native diagnostics and L04 semantic state. Staged transitions are not qualified yet.
+//! Native rules, permitted observations and detached belief worlds.
 pub mod diagnostic;
 pub mod framing;
 pub mod protocol;

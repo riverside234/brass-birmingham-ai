@@ -12,6 +12,9 @@ serde_json.workspace = true
 thiserror.workspace = true
 num_enum.workspace = true
 fixedbitset.workspace = true
+sha2.workspace = true
+rand.workspace = true
+rand_chacha.workspace = true
 
 [build-dependencies]
 sha2.workspace = true
@@ -32,6 +35,10 @@ harness = false
 
 [[bench]]
 name = "rules"
+harness = false
+
+[[bench]]
+name = "simulation"
 harness = false
 
 [lints]

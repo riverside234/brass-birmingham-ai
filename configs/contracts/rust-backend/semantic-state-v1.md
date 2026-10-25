@@ -7,6 +7,12 @@ schema is `native/brass-ai-core/src/state/dto.rs`: Serde denies unknown fields,
 requires the typed fields and four-element seat arrays, and rejects unknown enums.
 `NativeState::import` validates relationships before publishing a replacement.
 
+L06 additionally preserves the reference's optional merchant `types` field:
+an absent field and an explicit empty array both denote an unusable merchant,
+but retain distinct observation/serialized identities. Explicit null is invalid.
+Existing L04/L05 inputs containing arrays retain identical exports. The new
+representation is covered by frozen C# sampled-root and two-era regressions.
+
 ## Authoritative fields
 
 | Field | Meaning |

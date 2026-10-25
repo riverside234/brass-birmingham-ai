@@ -1,5 +1,7 @@
 use crate::state::{
+    belief::SamplingDraws,
     dto::{Choice, StateDto, STATE_FORMAT},
+    observation::{InformationState, Observation, Recall},
     ChanceOutcomes, IndexSnapshot,
 };
 use crate::{
@@ -23,6 +25,10 @@ pub enum Operation {
         sessions: u8,
         threads_per_session: u8,
         required_capabilities: Vec<String>,
+    },
+    Simulation {
+        session: u8,
+        command: crate::state::simulation::SimulationCommand,
     },
     DiagnosticNew {
         session: u8,
@@ -63,6 +69,19 @@ pub enum Operation {
         session: u8,
         revision: u32,
         card: String,
+    },
+    ObservationSnapshot {
+        session: u8,
+        seat: crate::types::Seat,
+    },
+    BeliefPrepare {
+        session: u8,
+        view: Box<Observation>,
+        recall: Recall,
+    },
+    BeliefSample {
+        session: u8,
+        random: SamplingDraws,
     },
     ImportReference {
         contract: String,
@@ -131,6 +150,10 @@ pub struct Reply {
 #[derive(Debug, Serialize)]
 #[serde(tag = "status", rename_all = "snake_case")]
 pub enum Response {
+    Simulation {
+        session: u8,
+        data: Box<crate::state::simulation::SimulationReply>,
+    },
     Hello {
         build: BuildIdentity,
         capabilities: Vec<&'static str>,
@@ -167,9 +190,31 @@ pub enum Response {
         choices: Vec<Choice>,
         chance: Option<ChanceOutcomes>,
     },
+    Observation {
+        session: u8,
+        owner: String,
+        information: Box<InformationState>,
+        reference_digest: String,
+    },
+    Prepared {
+        session: u8,
+        owner: String,
+        sampler: &'static str,
+        unseen_cards: usize,
+        draw_count: usize,
+    },
+    Sampled {
+        session: u8,
+        owner: String,
+        sampler: &'static str,
+        draws: Vec<u32>,
+        state: Box<StateDto>,
+        choices: Vec<Choice>,
+    },
     Shutdown,
 }
 pub const CAPABILITIES: &[&str] = &[
+    "simulation",
     "diagnostic_new",
     "diagnostic_snapshot",
     "diagnostic_clone_check",
@@ -181,6 +226,9 @@ pub const CAPABILITIES: &[&str] = &[
     "rules_snapshot",
     "rules_apply",
     "rules_chance",
+    "observation_snapshot",
+    "belief_prepare",
+    "belief_sample",
 ];
 impl Reply {
     pub fn new(id: Option<String>, response: Response) -> Self {
@@ -209,7 +257,7 @@ impl Reply {
                 threads_per_session: 1,
                 diagnostic_rules: DIAGNOSTIC_RULES,
                 target_rules: TARGET_RULES,
-                target_rules_qualified: false,
+                target_rules_qualified: true,
                 state_format: STATE_FORMAT,
                 max_frame_bytes: crate::framing::MAX_FRAME_BYTES,
             },

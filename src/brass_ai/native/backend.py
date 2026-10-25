@@ -14,4 +14,7 @@ def select_backend(*, backend="reference", root=None, **kwargs):
             kwargs.setdefault("executable", Path(root) / "artifacts/rust-native-target" /
                               "x86_64-pc-windows-gnu/release/brass-ai-worker.exe")
         return NativeWorker(**kwargs)
-    raise ValueError(f"Backend {backend!r} is unavailable; use reference or explicit rust-diagnostic")
+    if backend == "rust-simulator":
+        from .simulation import NativeSpielGame
+        return NativeSpielGame(root=root, **kwargs)
+    raise ValueError(f"Backend {backend!r} is unavailable; use reference, rust-simulator or rust-diagnostic")

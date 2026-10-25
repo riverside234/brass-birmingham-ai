@@ -1,12 +1,14 @@
-# Native Brass backend: L03–L05
+# Native Brass backend: L03–L07
 
 This workspace isolates the existing upstream rules and provides an opt-in
 diagnostic worker. It is the foundation for the local-first migration in
 [`RUST_AI_BACKEND_MIGRATION_PLAN.md`](../ai-research/RUST_AI_BACKEND_MIGRATION_PLAN.md).
 The existing C#/Python backend remains the default. L04 adds complete trusted
 state import/export and private save/restore. L05 adds staged legal choices,
-transitions and explicit chance. Permitted views, features, inference and our
-Masked ISMCTS follow in L06 onward.
+transitions and explicit chance. L06 adds permitted views, own-hand recall and
+detached world sampling. L07 adds an explicit OpenSpiel-compatible simulator
+adapter with native setup, bounded handles and clone/restore. Features,
+inference and our native Masked ISMCTS follow in L08 onward.
 Nothing here installs a Unity patch or starts lab training.
 
 ## Reused code and crates
@@ -25,12 +27,14 @@ excluded. The isolation manifest and module wrappers are new local files.
 | Typed seats and errors | `num_enum` 0.7.3, `thiserror` 2.0.21 |
 | Bounded queues | `crossbeam-channel` 0.5.17 |
 | Build provenance | `sha2` 0.10.9, `walkdir` 2.5.0 (build only) |
+| Permitted identity and reproducible sampling | `sha2` 0.10.9, `rand` 0.8.5, `rand_chacha` 0.3.1 |
 | Tests and measurements | `proptest` 1.6.0, `criterion` 0.8.2, `stats_alloc` 0.1.10 (development only) |
 
 Both Cargo lockfiles are tracked. The small fixed-length framing and owner
 threads use Rust's standard library. Additional crates are introduced when
 their milestone has a real consumer; the plan identifies `slotmap`, `ort`,
-`rand_chacha`, `smallvec` and optional `pyo3` for subsequent work.
+`smallvec` and optional `pyo3` for subsequent work. L06 promotes the already
+locked `rand`/`rand_chacha` packages to direct consumers without upgrading them.
 
 ## Build and qualification
 
@@ -109,6 +113,45 @@ Concurrent training edits in the shared checkout are recorded as drift and left
 intact; they cannot silently change the reference used by these tests. New C#
 captures still require the capture script's original source-preservation gate.
 
+L06 reuses the sealed L05 exporter and original L02 views, executes the frozen
+Python sampler with recorded shuffle indices, and compares all four sampled
+observations plus continuations. Its capture and qualifier both use the isolated
+reference archive so unrelated training changes cannot affect the oracle:
+
+```powershell
+python scripts/capture-rust-privacy.py --out artifacts/rust-backend/my-l06/capture
+python scripts/capture-rust-privacy-edges.py --out artifacts/rust-backend/my-l06/edges
+python scripts/qualify-rust-privacy.py --capture artifacts/rust-backend/my-l06/capture --edges artifacts/rust-backend/my-l06/edges --out artifacts/rust-backend/my-l06/qualification
+```
+
+The existing sealed L06 captures can also be reused by omitting `--capture` and `--edges` from
+the qualification command. That qualifier runs the L03–L06 native/process
+regressions in debug/release/profiling and records their exact source identities;
+L06 adds no search or NN benchmark. Its contract is
+[`permitted-observation-v1.md`](../configs/contracts/rust-backend/permitted-observation-v1.md).
+`prepare_belief(session, view, recall)` accepts a single permitted view,
+`sample_belief(session, random)` creates a trusted diagnostic sampled world, and
+`observation(session, seat)` returns only that seat's information. Save/restore
+includes recall and the prior reveal during chance. Sampling's prepared public
+projection is immutable and private mutable worlds remain owner-local.
+The supplementary edge capture preserves empty merchants with omitted `types`
+fields, including a complete two-era game. Empty arrays remain distinct valid
+wire identities, and explicit null is rejected.
+
+L07 qualifies the usable diagnostic simulator, including full games through
+the actual adapter and fixed-work comparisons through unchanged Python search:
+
+```powershell
+python scripts/qualify-rust-simulation.py --out artifacts/rust-backend/my-l07/qualification
+```
+
+It uses the isolated frozen Python reference and existing sealed captures.
+Native tests run in debug/release; adapter tests run in debug/release/profiling;
+the full L03–L06 process regression suite also runs in release. Criterion and
+`stats_alloc` measure simple/dense native operations, while a separate adapter
+profile includes transport and Python overhead. See the
+[simulator contract](../configs/contracts/rust-backend/simulation-v1.md).
+
 The script configures the local toolchain and Python reference dependencies,
 checks preservation, runs formatting/Clippy/native/upstream tests, builds debug,
 release and profiling executables, runs real-process Python checks, and records
@@ -148,7 +191,9 @@ The required first message is:
 
 The response identifies the source and Cargo lock hashes, compiler, target,
 profile options, linker, upstream commit and exact capabilities. It explicitly
-reports `target_rules_qualified: false`.
+reports `target_rules_qualified: true` for the qualified four-player standard
+simulator contract. This does not admit native NN search, unsupported game
+variants, Unity deployment or training collection.
 
 Two dedicated Rust owner threads each hold their private diagnostic/semantic
 state, one bounded semantic save slot, and a request queue of capacity one.
@@ -169,6 +214,8 @@ Available operations:
 - `rules_snapshot`, `rules_apply`, `rules_chance`: ordered legal choices,
   transactional staged transitions and explicit card outcomes; see the
   [staged rules contract](../configs/contracts/rust-backend/staged-rules-v1.md).
+- `simulation`: explicit setup, detached sampling, bounded state handles,
+  transactional steps, clone/restore and trusted portable checkpoints.
 - `shutdown`: join owners, acknowledge, exit.
 
 `import_reference` (the old replay-journal placeholder) and `search` return
@@ -192,6 +239,15 @@ with select_backend(backend="rust-diagnostic", root=repository_root) as worker:
     second = worker.new_game(1, 891)
     assert first["owner"] != second["owner"]
     assert worker.clone_check(0)["clone_isolated"]
+
+with select_backend(backend="rust-simulator", root=repository_root) as game:
+    with game.new_initial_state() as state:
+        assert state.is_chance_node()
+        # Feed the normal explicit-chance setup choices, then use the same
+        # state API consumed by the existing Python MaskedISMCTS.
+        with state.clone() as fork:
+            fork.apply_action(fork.legal_actions()[0])
+            fork.restore(state)
 ```
 
 ## Measurements and remaining gates

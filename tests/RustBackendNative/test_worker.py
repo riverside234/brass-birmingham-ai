@@ -36,7 +36,7 @@ class WorkerTests(unittest.TestCase):
         worker = self.worker()
         hello = worker.hello
         self.assertEqual((hello["sessions"], hello["threads_per_session"]), (2, 1))
-        self.assertFalse(hello["target_rules_qualified"])
+        self.assertTrue(hello["target_rules_qualified"])
         self.assertEqual(hello["build"]["target"], "x86_64-pc-windows-gnu")
         for key in ("source_sha256", "cargo_lock_sha256"):
             self.assertRegex(hello["build"][key], r"^[a-f0-9]{64}$")
@@ -132,7 +132,7 @@ class WorkerTests(unittest.TestCase):
     def fake_worker(self, request_id="1"):
         reply = frame(dict(protocol=PROTOCOL, request_id=request_id, response=dict(
             status="hello", sessions=2, threads_per_session=1, diagnostic_rules=DIAGNOSTIC_RULES,
-            target_rules_qualified=False, max_frame_bytes=MAX_FRAME_BYTES,
+            target_rules_qualified=True, max_frame_bytes=MAX_FRAME_BYTES,
             state_format=STATE_FORMAT,
             capabilities=sorted(CAPABILITIES), build={})))
         script = ("import sys, struct, time; "
