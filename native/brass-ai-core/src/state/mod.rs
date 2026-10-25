@@ -1,6 +1,9 @@
 //! Owned semantic simulator state. Import validates before exposing a replacement.
-//! L04 deliberately provides no legal-choice generation or transition execution.
 mod catalog;
+mod chance;
+mod choices;
+mod phases;
+pub use chance::ChanceOutcomes;
 pub mod dto;
 mod indexes;
 
@@ -394,7 +397,7 @@ impl NativeState {
                 p.cash >= 0 && p.spent >= 0 && p.bonus_vp >= 0 && p.link_tiles <= 14 && p.debt >= 0,
                 "player counters out of bounds",
             )?;
-            // VP can be negative after unpaid-debt penalties; preserve the signed value.
+            // Preserve the reference's signed VP field, including authored positions.
             let mut mat = std::array::from_fn(|_| vec![]);
             for (j, m) in p.mat.iter().enumerate() {
                 require(m.industry == Industry::ALL[j], "mat industry order")?;

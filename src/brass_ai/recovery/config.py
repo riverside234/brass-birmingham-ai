@@ -453,9 +453,9 @@ def latest_model_config(config,imitation_checkpoint):
     result=low_branch_config(result)
     from .ppo_kl_control import configure as exact_kl_config
     result=exact_kl_config(result)
-    from .ppg_g210 import options as g210_options
+    from .ppg_g210 import options as g210_options,linear_options
     from .training_revision_g850 import configure as g850_config
-    result=g850_config(g210_options(result))
+    result=linear_options(g850_config(g210_options(result)))
     return validate_config(result)
 
 

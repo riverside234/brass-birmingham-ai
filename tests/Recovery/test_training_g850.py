@@ -80,7 +80,7 @@ class Recipe(unittest.TestCase):
         from brass_ai.recovery.config import latest_model_config
         fresh=latest_model_config(old,old['imitation_checkpoint'])
         for k in ('value_phase','opening','branching','insolvency','exploration','rating_compute'):
-            self.assertEqual(fresh[k],new[k],k)
+            self.assertEqual(fresh[k],G.linear_options(new)[k] if k=='value_phase' else new[k],k)
         from brass_ai.learning.reward import CostLedger
         ledger=CostLedger(reward_spec(new))
         for expected in (.02,.04,.06,.075,.075):

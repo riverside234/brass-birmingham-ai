@@ -1,11 +1,14 @@
 # Grouped MLP v11.2: completed IL upgrade and fresh self-play
 
-**Current g850 recipe:** use [the g850 instructions](../ai-research/TRAINING_G850_REVISION.md)
+**Current g950 recipe:** use [the g950 instructions](../ai-research/TRAINING_G950_REVIEW.md)
 for continuation and the effective settings. Fresh self-play config generation
 also selects this recipe: T1.5 openings, epsilon .05, fixed entropy .005,
 1% branching, .02/.075 insolvency, every-iteration two-age PPG with a two-epoch
-cap, both iterations' held-out games for loss acceptance, cosine LR, beta minimum
-.5 and KL/loss checks every 16 steps. Gate evidence remains current-only. PL bootstrap
+cap, both iterations' held-out games for loss acceptance, linear LR warmup to
+step 16 followed by cosine decay to .001 times peak, beta minimum
+1 and KL/loss checks every 16 steps. Peak remains .65 times actual PPO LR.
+Existing g950 training adopts beta=1 once; subsequent restarts preserve adaptive beta.
+Gate evidence remains current-only. PL bootstrap
 execution uses four single-threaded processes and full-fit warm starts.
 Completed IL is unchanged; no model architecture migration is part of this update.
 

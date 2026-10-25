@@ -19,7 +19,7 @@ requires the typed fields and four-element seat arrays, and rejects unknown enum
 | `slots`, `links`, `merchants` | Stable topology, industry identities and quantities, link owners, merchant types/beer/bonus |
 | `cards` | Ordered hands, deck, wild piles, discards and per-seat Rail discard offsets |
 | `removed` | Exact C# board removed-industry identity list |
-| `retired` | Remaining off-board identities: development, era mat pruning and liquidation can remove objects without adding them to the board removed list |
+| `retired` | Remaining off-board identities: development and liquidation remove objects without adding them to the board removed list |
 | `round_pending`, `debt_pending` | Pending round/settlement flow flags |
 | `settlement_debts` | Four residual amounts used at settlement, including unpaid penalties during the pre-Rail shuffle pause |
 | `pending` | Action kind, target, merchant, completed parts and outstanding coal/iron/beer; no turn-start approximation |
@@ -63,7 +63,7 @@ pending chance and derived indexes, belongs to its state/session.
 `brass-upstream-rules::utils::dsu::DisjointSetUnion` rebuilds physical connectivity,
 including three-region links. `fixedbitset` indexes owned slots/links, network
 regions and nonempty coal/iron/beer sources. These are physical indexes; distance,
-payment eligibility and staged legal choices are L05 work. Income conversion
+payment eligibility and staged legal choices are implemented in L05. Income conversion
 reuses the upstream pure income function and is verified against the fixtures.
 
 The worker advertises `state_format` and these diagnostic capabilities:
@@ -82,5 +82,7 @@ without transferring the snapshot to another session. EOF/shutdown clears both
 owners; there is no persistent or cross-session snapshot handle.
 
 The configuration remains two independent owners with one computation thread
-each. `target_rules_qualified` remains false: this milestone cannot execute a
-game, construct permitted beliefs, infer with a neural net or search.
+each. L05 adds the [staged rules operations](staged-rules-v1.md) on this state.
+`target_rules_qualified` remains false until privacy and expanded simulator
+qualification pass; permitted beliefs, neural inference and search remain later
+milestones. Unbuilt Canal-only tiles remain on their mats when Rail begins.

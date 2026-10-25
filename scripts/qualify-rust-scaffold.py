@@ -84,12 +84,40 @@ def tool_environment():
     return env, base / "cargo/bin/cargo.exe"
 
 
-def verify_frozen():
+def verify_frozen(*, reference_source_root=None):
     for entry in ["src", "artifacts/r2-pythondeps", "artifacts/r4-pythondeps", "artifacts/r0-pythonlibs", "artifacts/r0-validation-deps"]:
         sys.path.insert(0, str(ROOT / entry))
-    from brass_ai.rust_backend.baseline import verify_reference
     baseline = read(FROZEN / "baseline.json")
-    drift = verify_reference(baseline, ROOT)
+    if reference_source_root is None:
+        from brass_ai.rust_backend.baseline import verify_reference
+        drift = verify_reference(baseline, ROOT)
+    else:
+        # Later milestones can execute an isolated, byte-identical reference
+        # while unrelated training work continues in the shared checkout.
+        # This never waives source verification: every executed reference file
+        # must match both the original manifest and its immutable archive.
+        reference_source_root = Path(reference_source_root).resolve()
+        archived = baseline["reference_source"]["archive"]
+        if sha(ROOT / archived["path"]) != archived["sha256"]:
+            raise RuntimeError("Frozen source archive changed")
+        drift = []
+        with zipfile.ZipFile(ROOT / archived["path"]) as archive:
+            for item in baseline["reference_source"]["files"]:
+                path = (reference_source_root / item["path"]).resolve()
+                if not path.is_relative_to(reference_source_root):
+                    raise RuntimeError("Reference source escapes isolated root")
+                if (sha(path) != item["sha256"] or
+                    hashlib.sha256(archive.read(item["path"])).hexdigest() != item["sha256"]):
+                    raise RuntimeError("Isolated reference source changed: " + item["path"])
+                live = ROOT / item["path"]
+                actual = sha(live) if live.is_file() else None
+                if actual != item["sha256"]:
+                    drift.append(dict(path=item["path"], frozen_sha256=item["sha256"], current_sha256=actual,
+                        disposition="Isolated archived reference executed; concurrent checkout edits preserved"))
+        for item in [dict(path=baseline["model"]["path"], sha256=baseline["model"]["sha256"]),
+                     *baseline["model"]["bundle_files"]]:
+            if sha(ROOT / item["path"]) != item["sha256"]:
+                raise RuntimeError("Test model/bundle changed: " + item["path"])
     checks = []
     for item in baseline["installed"]["receipt"]["files"]:
         path = ROOT / "BrassBirminghamUnity_Data/Managed" / item["name"]

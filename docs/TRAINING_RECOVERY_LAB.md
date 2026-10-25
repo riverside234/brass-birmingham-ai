@@ -1,6 +1,18 @@
 # Fresh training in conda: selected v4 teachers and Masked ISMCTS NN
 
-## Current g850 continuation
+## Current g950 continuation
+
+Use [the g950 review and continuation command](../ai-research/TRAINING_G950_REVIEW.md).
+PPG uses linear warmup from **0.1 × peak at step 1** to **peak at step 16**,
+then cosine decay to **0.001 × peak** at the end of its fixed **two-epoch** budget.
+Peak remains **0.65 × the last actual PPO LR**. On adoption, beta is set to **1 once**;
+subsequent adaptive updates and restarts respect the new **1–32** bounds.
+PPG still runs every iteration, fits both critic ages and uses all held-out games
+from both ages for loss checks. Loss and KL checks stay at 16 steps; the hard KL
+cap remains 0.002. Current-only gate evidence, cached targets, Adam/RNG, progress,
+reward and completed IL are preserved. No fresh-buffer reset is needed.
+
+## Archived g850 continuation
 
 Use [the g850 revision and continuation command](../ai-research/TRAINING_G850_REVISION.md).
 Openings use temperature **1.5**, epsilon mixing **0.05**, fixed entropy **0.005**,

@@ -23,6 +23,13 @@ pub struct IndexSnapshot {
     pub beer_slots: Vec<String>,
 }
 impl Indexes {
+    pub fn connected(&self, a: usize, b: usize) -> bool {
+        self.connectivity.find_set_immutable(a) == self.connectivity.find_set_immutable(b)
+    }
+    pub fn in_network(&self, player: super::Seat, region: usize) -> bool {
+        let network = &self.network_regions[seat(player)];
+        network.is_clear() || network.contains(region)
+    }
     pub fn empty() -> Self {
         Self {
             connectivity: DisjointSetUnion::new(CATALOG.regions.len()),

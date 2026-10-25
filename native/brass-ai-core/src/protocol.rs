@@ -1,6 +1,6 @@
 use crate::state::{
-    dto::{StateDto, STATE_FORMAT},
-    IndexSnapshot,
+    dto::{Choice, StateDto, STATE_FORMAT},
+    ChanceOutcomes, IndexSnapshot,
 };
 use crate::{
     diagnostic::DiagnosticSnapshot, CoreError, CONTROL_PROTOCOL, DIAGNOSTIC_RULES, TARGET_RULES,
@@ -50,6 +50,19 @@ pub enum Operation {
     },
     StateCloneCheck {
         session: u8,
+    },
+    RulesSnapshot {
+        session: u8,
+    },
+    RulesApply {
+        session: u8,
+        revision: u32,
+        choice: String,
+    },
+    RulesChance {
+        session: u8,
+        revision: u32,
+        card: String,
     },
     ImportReference {
         contract: String,
@@ -147,6 +160,13 @@ pub enum Response {
         code: &'static str,
         message: String,
     },
+    Rules {
+        session: u8,
+        owner: String,
+        state: Box<StateDto>,
+        choices: Vec<Choice>,
+        chance: Option<ChanceOutcomes>,
+    },
     Shutdown,
 }
 pub const CAPABILITIES: &[&str] = &[
@@ -158,6 +178,9 @@ pub const CAPABILITIES: &[&str] = &[
     "state_save",
     "state_restore",
     "state_clone_check",
+    "rules_snapshot",
+    "rules_apply",
+    "rules_chance",
 ];
 impl Reply {
     pub fn new(id: Option<String>, response: Response) -> Self {

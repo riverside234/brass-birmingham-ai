@@ -151,6 +151,8 @@ def check_signature(state, signature, reviewed=False):
             handlers[FAST_MIGRATION]=fast_options
             from .ppg_g210 import MIGRATION as G210_MIGRATION,options as g210_options
             handlers[G210_MIGRATION]=g210_options
+            from .ppg_g210 import LINEAR_MIGRATION,linear_options
+            handlers[LINEAR_MIGRATION]=linear_options
             from .training_revision_g850 import MIGRATION as G850_MIGRATION,configure as g850_config
             handlers[G850_MIGRATION]=lambda c:g850_config(c,rating_workers=signature['config'].get('rating_compute',{}).get('workers'))
             from .opening_objective import (MIGRATION as OPENING_MIGRATION,configure as configure_opening,

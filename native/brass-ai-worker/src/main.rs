@@ -25,6 +25,9 @@ enum Command {
     Save,
     Restore,
     StateCloneCheck,
+    RulesSnapshot,
+    Apply(u32, String),
+    Chance(u32, String),
     #[cfg(test)]
     Panic,
 }
@@ -109,6 +112,10 @@ fn execute(
 ) -> Result<Response, CoreError> {
     let check_clone = matches!(command, Command::CloneCheck);
     let state_clone = matches!(command, Command::StateCloneCheck);
+    let rules = matches!(
+        command,
+        Command::RulesSnapshot | Command::Apply(..) | Command::Chance(..)
+    );
     let semantic = matches!(
         command,
         Command::Import(_)
@@ -129,6 +136,27 @@ fn execute(
             game.state = Some(replacement);
         }
         Command::Export | Command::StateCloneCheck => {}
+        Command::RulesSnapshot => {}
+        Command::Apply(revision, choice) => {
+            let next = game
+                .state
+                .as_ref()
+                .ok_or(CoreError::NoGame)?
+                .after_choice(revision, &choice)?;
+            let response = rules_response(&next, session, owner)?;
+            game.state = Some(next);
+            return Ok(response);
+        }
+        Command::Chance(revision, card) => {
+            let next = game
+                .state
+                .as_ref()
+                .ok_or(CoreError::NoGame)?
+                .after_chance(revision, &card)?;
+            let response = rules_response(&next, session, owner)?;
+            game.state = Some(next);
+            return Ok(response);
+        }
         Command::Save => {
             game.saved = Some(game.state.as_ref().ok_or(CoreError::NoGame)?.snapshot())
         }
@@ -141,6 +169,10 @@ fn execute(
         }
         #[cfg(test)]
         Command::Panic => panic!("test owner failure"),
+    }
+    if rules {
+        let state = game.state.as_ref().ok_or(CoreError::NoGame)?;
+        return rules_response(state, session, owner);
     }
     if semantic {
         let state = game.state.as_ref().ok_or(CoreError::NoGame)?;
@@ -159,6 +191,18 @@ fn execute(
         owner: owner.to_owned(),
         state: game.snapshot(),
         clone_isolated: check_clone.then(|| game.clone_isolated()),
+    })
+}
+
+fn rules_response(state: &NativeState, session: u8, owner: &str) -> Result<Response, CoreError> {
+    // Even response generation may reject an unreachable trusted import. Build
+    // the complete response before publishing a successor to its owner.
+    Ok(Response::Rules {
+        session,
+        owner: owner.to_owned(),
+        state: Box::new(state.export()),
+        choices: state.legal_choices()?,
+        chance: state.chance_outcomes(),
     })
 }
 
@@ -218,6 +262,17 @@ impl Server {
             Operation::StateSave { session } => (session, Command::Save),
             Operation::StateRestore { session } => (session, Command::Restore),
             Operation::StateCloneCheck { session } => (session, Command::StateCloneCheck),
+            Operation::RulesSnapshot { session } => (session, Command::RulesSnapshot),
+            Operation::RulesApply {
+                session,
+                revision,
+                choice,
+            } => (session, Command::Apply(revision, choice)),
+            Operation::RulesChance {
+                session,
+                revision,
+                card,
+            } => (session, Command::Chance(revision, card)),
             Operation::ImportReference { .. } => {
                 return Reply::error(
                     id,
@@ -406,5 +461,40 @@ mod tests {
             assert_eq!(value["response"]["status"], expected);
         }
         assert!(read_frame(&mut output).unwrap().is_none());
+    }
+    #[test]
+    fn response_failure_preserves_live_and_saved_states() {
+        use brass_ai_core::types::Phase;
+        let mut dto: StateDto = serde_json::from_str(include_str!(
+            "../../brass-ai-core/tests/data/initial-state.json"
+        ))
+        .unwrap();
+        // Structurally valid, deliberately unreachable: after this Finish there
+        // would still be an action left, but no card with which to take it.
+        dto.context.round = 2;
+        dto.context.actions_remaining = 2;
+        dto.context.phase = Phase::Continuation;
+        dto.pending.kind = "pass".into();
+        dto.pending.parts = 1;
+        let actor = dto.context.actor as usize;
+        dto.cards.deck.append(&mut dto.cards.hands[actor]);
+        let state = NativeState::import(&dto).unwrap();
+        let id = state.legal_choices().unwrap()[0].id.clone();
+        let saved = state.snapshot();
+        let mut session = Session {
+            state: Some(state),
+            saved: Some(saved),
+            ..Session::default()
+        };
+        assert!(execute(
+            &mut session,
+            Command::Apply(dto.context.revision, id),
+            0,
+            "test"
+        )
+        .is_err());
+        assert_eq!(session.state.as_ref().unwrap().export(), dto);
+        execute(&mut session, Command::Restore, 0, "test").unwrap();
+        assert_eq!(session.state.as_ref().unwrap().export(), dto);
     }
 }

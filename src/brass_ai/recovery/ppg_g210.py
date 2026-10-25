@@ -25,12 +25,31 @@ COSINE_CONTRACT='ppg-value-phase/15.0.0'
 COSINE=dict(contract='ppg-cosine-warmup-decay/1.0.0',warmup_steps=16,start_factor=.1,end_factor=.3)
 COSINE_DEFAULT=dict(DEFAULT,contract=COSINE_CONTRACT,max_epochs=2,beta_clone_min=.5,
     kl_check_steps=16,validation_iterations=2,rate_schedule=COSINE)
+LINEAR_CONTRACT='ppg-value-phase/16.0.0'
+LINEAR_MIGRATION='ppg-linear-warmup-near-zero-decay/1.0.0'
+LINEAR=dict(contract='ppg-linear-warmup-cosine-decay/1.0.0',warmup_steps=16,start_factor=.1,end_factor=.001)
+LINEAR_DEFAULT=dict(COSINE_DEFAULT,contract=LINEAR_CONTRACT,beta_clone_min=1.,rate_schedule=LINEAR)
 
 
-def active(c):return c.get('contract') in (CONTRACT,COSINE_CONTRACT)
+def active(c):return c.get('contract') in (CONTRACT,COSINE_CONTRACT,LINEAR_CONTRACT)
 
 
 def cosine(c):return c.get('contract')==COSINE_CONTRACT
+
+
+def linear(c):return c.get('contract')==LINEAR_CONTRACT
+
+
+def scheduled(c):return cosine(c) or linear(c)
+
+
+def linear_options(config):
+    """Exact g950 PPG-only transition; compatible critic caches stay valid."""
+    validate(config['value_phase'])
+    require(scheduled(config['value_phase']),'Linear warmup requires the two-age g850 PPG recipe')
+    result=copy.deepcopy(config)
+    result['value_phase'].update(contract=LINEAR_CONTRACT,beta_clone_min=1.,rate_schedule=copy.deepcopy(LINEAR))
+    return result
 
 
 def cosine_options(config):
@@ -46,21 +65,23 @@ def rate_factor(step,total,config):
     require(type(step) is int and type(total) is int and 1<=step<=total,'Invalid PPG rate step')
     schedule=config['rate_schedule'];warmup=schedule['warmup_steps']
     if step<=warmup:
-        return schedule['start_factor']+(1-schedule['start_factor'])*.5*(1-math.cos(math.pi*(step-1)/(warmup-1)))
+        fraction=(step-1)/(warmup-1)
+        if not linear(config):fraction=.5*(1-math.cos(math.pi*fraction))
+        return schedule['start_factor']+(1-schedule['start_factor'])*fraction
     fraction=(step-warmup)/(total-warmup)
     return schedule['end_factor']+(1-schedule['end_factor'])*.5*(1+math.cos(math.pi*fraction))
 
 
 def validate(c):
-    default=COSINE_DEFAULT if cosine(c) else DEFAULT
+    default=LINEAR_DEFAULT if linear(c) else COSINE_DEFAULT if cosine(c) else DEFAULT
     require(type(c) is dict and set(c)==set(default) and active(c),'Invalid g210 PPG fields/contract')
     # Smaller batches are useful for bounded regression/smoke fixtures only.
     for k,v in default.items():
         if k in ('batch_size','clone_rows','clone_batch_size'):continue
         require(c[k]==v and type(c[k]) is type(v),'Invalid g210 PPG option: '+k)
-    if cosine(c):
-        require(all(type(c['rate_schedule'][k]) is type(v) for k,v in COSINE.items()),
-            'Invalid PPG cosine schedule field type')
+    if scheduled(c):
+        require(all(type(c['rate_schedule'][k]) is type(v) for k,v in default['rate_schedule'].items()),
+            'Invalid PPG rate schedule field type')
     require(all(type(c[k]) is int and 1<=c[k]<=DEFAULT[k] for k in ('batch_size','clone_rows','clone_batch_size'))
         and c['clone_batch_size']<=c['clone_rows'],'Invalid g210 PPG batch bounds')
     return c
@@ -112,7 +133,8 @@ def initialize(phases,model,config,*,raw,generation,root,run):
     phases.contract=CHECKPOINT;phases.snapshot_data=[];phases.fingerprint=None
     phases.dataset=None;phases.probe_ids=None;phases.collection_source=None;phases.ppo_work=None
     for name in ('critic_evidence','disable_migration','holdout_migration','refinement_migration','window_migration',
-                 'evidence_migration','critic_migration','snapshot_r2_migration','disabled_startup_cleanup','g210_migration'):
+                 'evidence_migration','critic_migration','snapshot_r2_migration','disabled_startup_cleanup','g210_migration',
+                 'ppg_schedule_migration'):
         setattr(phases,name,None)
     phases.optimizer=torch.optim.Adam(model.parameters(),lr=config['learning_rate']*.65)
     saved=(raw or {}).get('training',{}).get(actor_value.KEY)
@@ -141,10 +163,20 @@ def initialize(phases,model,config,*,raw,generation,root,run):
             options_match=saved['options']==phases.options
             if cosine(config['value_phase']) and saved['options']['value_phase']['contract']==CONTRACT:
                 options_match=cosine_options(saved['options'])==phases.options
+            adopting_linear=linear(config['value_phase']) and cosine(saved['options']['value_phase'])
+            if adopting_linear:options_match=linear_options(saved['options'])==phases.options
             require(saved.get('contract')==CHECKPOINT and set(saved)==fields and options_match,
                 'g210 checkpoint configuration differs')
             phases.beta=saved['beta_clone'];phases.trips=saved['kl_trips']
             phases.cache_origin=saved['cache_origin'];receipts=saved['rolling_buffer'];phases.adoption=saved['adoption']
+            if adopting_linear:
+                require(type(phases.beta) in (int,float) and math.isfinite(phases.beta) and
+                    saved['options']['value_phase']['beta_clone_min']<=phases.beta<=32,
+                    'Invalid beta before PPG schedule adoption')
+                phases.ppg_schedule_migration=dict(contract=LINEAR_MIGRATION,origin=generation,
+                    beta_before=phases.beta,beta_after=1.,previous_adoption=copy.deepcopy(phases.adoption),
+                    scope='One-time beta hotfix; preserve trip history, model/Adam/RNG, cached targets, progress and gate evidence.')
+                phases.adoption=copy.deepcopy(phases.ppg_schedule_migration);phases.beta=1.
         phases.state=copy.deepcopy(gae.validate_state(saved['gae'],config['advantage'],generation))
         phases.critic_state=copy.deepcopy(critic_data.validate_state(saved['critic_data'],config['critic_data'],generation)) if 'critic_data' in config else None
         phases.optimizer.load_state_dict(saved['optimizer'])
@@ -209,7 +241,7 @@ def fit(phases,model,preparation_pool):
         ds.critic_weights=torch.tensor([snapshot_weight if r=='snapshot' else 1. for r in ds.roles],device=ds.device)
         companion=getattr(phases,'local_scoring',None)
         if companion is not None and companion.active:companion.inventory(ds,indices)
-        pooled=cosine(c)
+        pooled=scheduled(c)
         report=value_phase.fit(model,phases.optimizer,phases.dataset,phases.train_ids,validation if pooled else phases.heldout_ids,
             phases.actor_ids if rate is not None else [],phases.probe_ids,effective,phases.config['update'],beta=phases.beta,
             value_dataset=ds,value_train_ids=indices,validation_dataset=ds if pooled else phases.critic_dataset,
@@ -224,10 +256,11 @@ def fit(phases,model,preparation_pool):
         epoch_cap_used=c['max_epochs'],kl_check_steps=c['kl_check_steps'],policy_guard_enabled=True,kl_control='hard-cap-and-penalty',
         learning_rate_source=copy.deepcopy(rate),peak_learning_rate=effective['learning_rate'],beta_clone_final=phases.beta,
         beta_mode='adaptive-up-down',
-        acceptance_generations=sorted(r['generation'] for r in receipts) if cosine(c) else [phases.state['generation']+1],beta_retries=0,
+        acceptance_generations=sorted(r['generation'] for r in receipts) if scheduled(c) else [phases.state['generation']+1],beta_retries=0,
         gate_critic_training=dict(source='ppg',optimizer_steps=report['optimizer_steps']),
         rate_schedule=(dict(copy.deepcopy(c['rate_schedule']),reset_adam=False,warmup=True,decay=True,factor=.65)
-            if cosine(c) else dict(reset_adam=False,warmup=False,decay=False,factor=.65)))
+            if scheduled(c) else dict(reset_adam=False,warmup=False,decay=False,factor=.65)))
+    if linear(c):report['schedule_migration']=copy.deepcopy(phases.ppg_schedule_migration)
     phases.value_report=report;return report
 
 

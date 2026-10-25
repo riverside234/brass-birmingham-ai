@@ -287,6 +287,10 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
             from .local_scoring_adoption import archive_metadata
             local_adoption=archive_metadata(run,local_adoption,raw)
         state=commit_transition(run,state,signature,opponent_pool=resumed_pool,pool_migration=pool_migration,local_scoring_adoption=local_adoption)
+    if phases is not None and getattr(phases,'ppg_schedule_migration',None):
+        change=phases.ppg_schedule_migration
+        print(f'PPG schedule adopted at g{change["origin"]}: beta {change["beta_before"]:g} -> 1; '
+              'linear warmup to step 16, cosine decay to 0.001x peak over two epochs; replay and Adam preserved',flush=True)
     local_cleanup=cleanup_local(root,run,state)
     if local_cleanup:
         print(f'Local scoring adopted at g{local_cleanup["new_origin"]}: retired {local_cleanup["cleanup"]["deleted_files"]} PPG cache files / {local_cleanup["cleanup"]["deleted_bytes"]:,} bytes; next phase g{local_cleanup["next_phase"]}',flush=True)

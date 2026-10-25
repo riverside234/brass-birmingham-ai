@@ -18,7 +18,8 @@ DIAGNOSTIC_RULES = "daiyu-upstream-diagnostic/0.1.0"
 MAX_FRAME_BYTES = 1024 * 1024
 STATE_FORMAT = "brass-native-state/1.0.0"
 CAPABILITIES = {"diagnostic_new", "diagnostic_snapshot", "diagnostic_clone_check",
-                "state_import", "state_export", "state_save", "state_restore", "state_clone_check"}
+                "state_import", "state_export", "state_save", "state_restore", "state_clone_check",
+                "rules_snapshot", "rules_apply", "rules_chance"}
 
 
 class WorkerFailure(RuntimeError):
@@ -137,7 +138,7 @@ class NativeWorker:
                     if not isinstance(response.get("code"), str) or not isinstance(response.get("message"), str):
                         raise WorkerFailure("malformed error reply")
                     raise NativeError(response)
-                expected = {"hello": "hello", "shutdown": "shutdown"}.get(op, "state" if op.startswith("state_") else "diagnostic")
+                expected = {"hello": "hello", "shutdown": "shutdown"}.get(op, "rules" if op.startswith("rules_") else "state" if op.startswith("state_") else "diagnostic")
                 if response.get("status") != expected:
                     raise WorkerFailure("reply status does not match request")
                 return response
@@ -174,6 +175,15 @@ class NativeWorker:
 
     def state_clone_check(self, session):
         return self.call("state_clone_check", session=session)
+
+    def rules_snapshot(self, session):
+        return self.call("rules_snapshot", session=session)
+
+    def apply_choice(self, session, revision, choice):
+        return self.call("rules_apply", session=session, revision=revision, choice=choice)
+
+    def resolve_chance(self, session, revision, card):
+        return self.call("rules_chance", session=session, revision=revision, card=card)
 
     def _retire(self):
         if self._closed:

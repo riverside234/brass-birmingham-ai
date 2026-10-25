@@ -349,8 +349,8 @@ def fit(model,optimizer,dataset,train_ids,heldout_ids,actor_ids,probe_ids,config
     guard=DeferredKL(model,optimizer,companion,reference,probe_ids,config['kl_cap'],report) if deferred else None
     if deferred:report['acceptance']='kl-checked-retained-interval/1.0.0'
     retained=[]
-    from .ppg_g210 import cosine,rate_factor
-    scheduled=cosine(config)
+    from .ppg_g210 import scheduled as scheduled_rate,rate_factor
+    scheduled=scheduled_rate(config)
     total_steps=math.ceil(len(value_train_ids)/config['batch_size'])*config['max_epochs']
     if scheduled:report.update(planned_steps=total_steps,attempted_learning_rates=[])
     for epoch in range(config['max_epochs']):
