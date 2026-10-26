@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 
 pub const STATE_FORMAT: &str = "brass-native-state/1.0.0";
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
 pub enum Industry {
     Brewery,
     CoalMine,
@@ -26,19 +26,19 @@ impl Industry {
         self as usize
     }
 }
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum LinkEra {
     Canal,
     Rail,
 }
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum Bonus {
     Develop,
     VP,
     Income,
     Money,
 }
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Kind {
     Build,
@@ -76,7 +76,7 @@ impl Kind {
         }
     }
 }
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Context {
     pub protocol: String,
@@ -92,7 +92,7 @@ pub struct Context {
     pub terminal: bool,
     pub chance: bool,
 }
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Tile {
     pub id: String,
@@ -113,14 +113,14 @@ pub struct Tile {
     pub canal_only: bool,
     pub rail_only: bool,
 }
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Mat {
     #[serde(rename = "type")]
     pub industry: Industry,
     pub tiles: Vec<Tile>,
 }
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Player {
     pub seat: Seat,
@@ -134,7 +134,7 @@ pub struct Player {
     pub mat: [Mat; 6],
     pub debt: i32,
 }
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Slot {
     pub id: String,
@@ -142,7 +142,7 @@ pub struct Slot {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub tile: Option<Tile>,
 }
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Link {
     pub id: String,
@@ -151,7 +151,7 @@ pub struct Link {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub owner: Option<Seat>,
 }
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Merchant {
     pub id: String,
@@ -171,7 +171,7 @@ fn merchant_types<'de, D: serde::Deserializer<'de>>(
     // The reference wire allows an omitted field or an array, not explicit null.
     Vec::<Industry>::deserialize(deserializer).map(Some)
 }
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Cards<C> {
     pub hands: [Vec<C>; 4],
@@ -181,7 +181,7 @@ pub struct Cards<C> {
     pub wild_industry: Vec<C>,
     pub wild_location: Vec<C>,
 }
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Pending {
     pub kind: String,
@@ -192,13 +192,13 @@ pub struct Pending {
     pub iron: u8,
     pub beer: u8,
 }
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum ChanceKind {
     Draw,
     RailShuffle,
 }
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Chance<C> {
     pub kind: ChanceKind,
@@ -206,7 +206,7 @@ pub struct Chance<C> {
     pub pool: Vec<C>,
     pub picked: Vec<C>,
 }
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Choice {
     pub id: String,
@@ -237,7 +237,7 @@ impl Choice {
         .join("|")
     }
 }
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct History {
     pub seat: Seat,

@@ -17,7 +17,7 @@ pub struct MerchantId(pub(super) usize);
 
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
-pub(super) struct MerchantDef {
+pub(crate) struct MerchantDef {
     pub id: String,
     pub bonus: Bonus,
 }
@@ -32,7 +32,7 @@ struct Definitions {
     merchant_types: Vec<Vec<Industry>>,
     cards: BTreeMap<String, u8>,
 }
-pub(super) struct Catalog {
+pub(crate) struct Catalog {
     pub tiles: Vec<Tile>,
     pub slots: Vec<Slot>,
     pub links: Vec<Link>,
@@ -47,7 +47,7 @@ pub(super) struct Catalog {
     pub link_regions: Vec<Vec<usize>>,
     pub incomes: [i8; 101],
 }
-pub(super) static CATALOG: LazyLock<Catalog> = LazyLock::new(|| {
+pub(crate) static CATALOG: LazyLock<Catalog> = LazyLock::new(|| {
     // Embedded, generated definitions are immutable and shared; no session state is shared.
     let d: Definitions = serde_json::from_str(include_str!("../../data/state-catalog.json"))
         .expect("embedded state catalog");
@@ -111,6 +111,9 @@ pub(super) static CATALOG: LazyLock<Catalog> = LazyLock::new(|| {
     }
 });
 impl Catalog {
+    pub(crate) fn tile_definition(&self, name: &str) -> Option<&Tile> {
+        self.tile_ids.get(name).map(|id| &self.tiles[id.0])
+    }
     pub fn tile(&self, s: &str) -> Result<TileId, CoreError> {
         self.tile_ids
             .get(s)

@@ -1,6 +1,6 @@
 //! Owned semantic simulator state. Import validates before exposing a replacement.
 pub mod belief;
-mod catalog;
+pub(crate) mod catalog;
 mod chance;
 mod choices;
 pub mod initial;
@@ -322,6 +322,9 @@ pub struct NativeState {
 pub struct StateSnapshot(NativeState);
 
 impl NativeState {
+    pub fn context(&self) -> &Context {
+        &self.context
+    }
     pub fn import(d: &StateDto) -> Result<Self, CoreError> {
         if d.format != STATE_FORMAT
             || d.rules != TARGET_RULES
@@ -780,7 +783,7 @@ impl NativeState {
         t.resource = self.tiles[id.0].resource;
         t
     }
-    fn result(&self) -> Option<ResultDto> {
+    pub fn result(&self) -> Option<ResultDto> {
         if !self.context.terminal {
             return None;
         }

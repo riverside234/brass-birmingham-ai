@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::sync::Arc;
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct ViewContext {
     pub protocol: String,
@@ -38,7 +38,7 @@ impl ViewContext {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct ViewPlayer {
     pub seat: Seat,
@@ -73,7 +73,7 @@ impl ViewPlayer {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Observation {
     pub protocol: String,
@@ -95,7 +95,7 @@ pub struct Observation {
     pub history: Vec<History>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct RecallEntry {
     pub revision: u32,
@@ -121,7 +121,7 @@ pub fn validate_recall(view: &Observation, recall: &Recall) -> Result<(), CoreEr
     )
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct ObservationEnvelope {
     pub view: Option<Observation>,
@@ -131,7 +131,7 @@ pub struct ObservationEnvelope {
 
 /// Typed equality, not a board hash, defines the permitted information set.
 /// The diagnostic digest is generated only at the transport boundary.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct InformationState {
     pub observation: ObservationEnvelope,
@@ -276,12 +276,16 @@ impl ObservationMemory {
         result
     }
     pub fn refresh(&mut self, state: &NativeState) {
+        self.refresh_checked(state).expect("uncontrolled reveal");
+    }
+    pub fn refresh_checked(&mut self, state: &NativeState) -> Result<(), CoreError> {
+        crate::work::checkpoint(crate::work::Stage::Observation)?;
         self.chance = state.chance.as_ref().map(|c| c.kind);
         if self.chance.is_some() {
-            return;
+            return Ok(());
         }
         // Build public fields once; only seat and own_hand vary by observer.
-        let mut public = state.observation(Seat::Zero).expect("not chance");
+        let mut public = state.observation(Seat::Zero)?;
         public.own_hand.clear();
         for s in 0..4 {
             self.hands[s] = state.sorted_hand(s);
@@ -296,6 +300,7 @@ impl ObservationMemory {
             }
         }
         self.public = Some(Arc::new(public));
+        Ok(())
     }
     pub fn attach_recall(&mut self, view: &Observation, recall: Recall) -> Result<(), CoreError> {
         validate_recall(view, &recall)?;
@@ -344,6 +349,7 @@ impl NativeState {
         )?;
         let mut known: [Vec<String>; 4] = std::array::from_fn(|_| vec![]);
         for h in &self.history {
+            crate::work::checkpoint(crate::work::Stage::Observation)?;
             if h.era != self.context.era {
                 continue;
             }

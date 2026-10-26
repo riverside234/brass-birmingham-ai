@@ -1,9 +1,13 @@
 //! Native rules, permitted observations and detached belief worlds.
 pub mod diagnostic;
+pub mod evaluation;
+pub mod features;
 pub mod framing;
 pub mod protocol;
+pub mod search;
 pub mod state;
 pub mod types;
+pub mod work;
 
 pub const CONTROL_PROTOCOL: &str = "brass-native-control/0.1.0";
 pub const DIAGNOSTIC_RULES: &str = "daiyu-upstream-diagnostic/0.1.0";

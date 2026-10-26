@@ -261,9 +261,10 @@ impl NativeState {
             cards: None,
         }
     }
-    fn sales(&self, card: Option<CardId>) -> Vec<HistoryState> {
+    fn sales(&self, card: Option<CardId>) -> Result<Vec<HistoryState>, CoreError> {
         let mut choices = vec![];
         for (s, tile) in self.slots.iter().enumerate() {
+            crate::work::checkpoint(crate::work::Stage::Generation)?;
             let Some(id) = tile else {
                 continue;
             };
@@ -284,6 +285,7 @@ impl NativeState {
                 .map(|s| u16::from(self.tiles[self.slots[*s].unwrap().0].resource))
                 .sum();
             for (m, merchant) in self.merchants.iter().enumerate() {
+                crate::work::checkpoint(crate::work::Stage::Generation)?;
                 if merchant.types.contains(&tile.industry)
                     && self.connected(r, Self::merchant_region(m))
                     && beer + u16::from(merchant.beer) >= u16::from(tile.beer)
@@ -296,11 +298,11 @@ impl NativeState {
                 }
             }
         }
-        choices
+        Ok(choices)
     }
-    fn staged_choices(&self) -> Vec<HistoryState> {
+    fn staged_choices(&self) -> Result<Vec<HistoryState>, CoreError> {
         if self.context.terminal || self.chance.is_some() {
-            return vec![];
+            return Ok(vec![]);
         }
         let mut choices = vec![];
         match self.context.phase {
@@ -377,7 +379,7 @@ impl NativeState {
                             choices.push(c);
                         }
                     }
-                    Some(Kind::Sell) => choices.extend(self.sales(None)),
+                    Some(Kind::Sell) => choices.extend(self.sales(None)?),
                     _ => {}
                 }
             }
@@ -392,6 +394,7 @@ impl NativeState {
                 };
                 let links = self.network_links();
                 for card in cards {
+                    crate::work::checkpoint(crate::work::Stage::Generation)?;
                     let mut pass = self.choice(Kind::Pass);
                     pass.card = Some(card);
                     choices.push(pass);
@@ -404,6 +407,7 @@ impl NativeState {
                         choices.push(c);
                     }
                     for (s, slot) in CATALOG.slots.iter().enumerate() {
+                        crate::work::checkpoint(crate::work::Stage::Generation)?;
                         for t in &slot.types {
                             if self.can_build(s, *t, card) {
                                 let mut c = self.choice(Kind::Build);
@@ -426,7 +430,7 @@ impl NativeState {
                         c.target = Some(Target::Link(LinkId(*l)));
                         choices.push(c);
                     }
-                    choices.extend(self.sales(Some(card)));
+                    choices.extend(self.sales(Some(card))?);
                 }
                 let mut hand = self.cards.hands[seat(self.current_player)].clone();
                 hand.sort();
@@ -440,6 +444,7 @@ impl NativeState {
                     let mut seen = std::collections::BTreeSet::new();
                     for a in 0..hand.len() {
                         for b in a + 1..hand.len() {
+                            crate::work::checkpoint(crate::work::Stage::Generation)?;
                             for c in b + 1..hand.len() {
                                 if seen.insert([hand[a], hand[b], hand[c]]) {
                                     let mut choice = self.choice(Kind::Scout);
@@ -454,11 +459,12 @@ impl NativeState {
             }
             Phase::Chance | Phase::Terminal => {}
         }
-        choices
+        Ok(choices)
     }
     pub(super) fn legal_native(&self) -> Result<Vec<(String, HistoryState)>, CoreError> {
+        crate::work::checkpoint(crate::work::Stage::Generation)?;
         let mut choices: Vec<_> = self
-            .staged_choices()
+            .staged_choices()?
             .into_iter()
             .map(|c| (c.export().choice.id, c))
             .collect();

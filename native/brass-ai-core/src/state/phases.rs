@@ -16,16 +16,40 @@ impl NativeState {
             .find(|(key, _)| key == id)
             .map(|(_, c)| c)
             .ok_or_else(|| CoreError::Invalid("illegal choice".into()))?;
+        self.after_admitted(revision, choice)
+    }
+    /// Private hot path: Brass selected this exact choice from this revision's legal set.
+    pub(crate) fn after_legal_choice(
+        &self,
+        revision: u32,
+        choice: &Choice,
+    ) -> Result<Self, CoreError> {
+        require(revision == self.context.revision, "stale revision")?;
+        self.after_admitted(
+            revision,
+            HistoryState::import(&History {
+                seat: Seat::try_from(self.context.actor as u8)
+                    .map_err(|_| CoreError::Invalid("actor".into()))?,
+                era: self.context.era,
+                choice: choice.clone(),
+            })?,
+        )
+    }
+    fn after_admitted(&self, revision: u32, choice: HistoryState) -> Result<Self, CoreError> {
+        crate::work::checkpoint(crate::work::Stage::Application)?;
         require(
             self.history.len() < 8192 && revision < u32::MAX,
             "state history/revision limit",
         )?;
         // One owned transactional fork; errors and arithmetic limits leave the original intact.
+        let copy_started = std::time::Instant::now();
         let mut next = self.clone();
+        crate::work::state_copied(copy_started);
         next.execute(&choice)?;
         next.history.push(choice);
         next.context.revision += 1;
         next.rebuild_indexes();
+        crate::work::checkpoint(crate::work::Stage::Application)?;
         Ok(next)
     }
     fn add(value: &mut i32, amount: i32) -> Result<(), CoreError> {
@@ -344,6 +368,7 @@ impl NativeState {
         }
     }
     pub(super) fn advance(&mut self) -> Result<(), CoreError> {
+        crate::work::checkpoint(crate::work::Stage::Application)?;
         if self.chance.is_some() {
             return Ok(());
         }

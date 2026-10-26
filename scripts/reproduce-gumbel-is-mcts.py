@@ -52,7 +52,8 @@ class Draws:
         return next(outcome for outcome, p in reversed(outcomes) if p > 0)
 
     def finish(self):
-        if self.tape is not None and next(self.tape, None) is not None:
+        sentinel = object()
+        if self.tape is not None and next(self.tape, sentinel) is not sentinel:
             raise ValueError("unused replay draws")
 
 

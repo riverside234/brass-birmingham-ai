@@ -1,0 +1,123 @@
+{
+  "schema": "gumbel-is-mcts-reference-lock/1.0.0",
+  "reviewed_at": "2026-10-25",
+  "algorithm_reference": "gumbel-is-mcts-reference/1",
+  "scope": "Executable fixed-count algorithm mechanics; no Brass, model, Rust deployment, or training-result qualification.",
+  "paper": {
+    "title": "A Meta-Game Evaluation Framework for Deep Multiagent Reinforcement Learning",
+    "authors": [
+      "Zun Li",
+      "Michael P. Wellman"
+    ],
+    "arxiv": "2405.00243v1",
+    "url": "https://arxiv.org/abs/2405.00243v1",
+    "local_file": {
+      "path": "C:/Users/BobXu/Desktop/2405.00243v1.pdf",
+      "sha256": "29bd21b7197c68c1569e3eea4e8df354c3531f8ef9210efbd5cea69db23d720e",
+      "bytes": 1295713
+    },
+    "sections": [
+      "Section 6 / Algorithm 1 (page 4)",
+      "Section 6 root scores (page 5)",
+      "Appendix B.1/B.2, Eq. 3 (page 11)",
+      "Appendix C.2 / Algorithm 3 (page 13)",
+      "Appendix D / Table 7 (page 15)"
+    ]
+  },
+  "upstream_code": {
+    "repository": "https://github.com/olivkoch/gumbel-mcts",
+    "commit": "f7cc656af7a037f1283b08b454982edba4d86e21",
+    "license": "MIT, copyright (c) 2026 Olivier K",
+    "use": "Read-only design reference. No upstream code imported or executed by the reproduction.",
+    "snapshot_note": "Optional ignored UTF-8 source snapshots; local SHA-256 is distinct from upstream Git blob SHA.",
+    "files": [
+      {
+        "path": "LICENSE",
+        "blob_sha": "a25416734e35c4df6e4e97b655492af98526bd45",
+        "url": "https://github.com/olivkoch/gumbel-mcts/blob/f7cc656af7a037f1283b08b454982edba4d86e21/LICENSE",
+        "local_snapshot": {
+          "path": "artifacts/gumbel-is-mcts/20261025-reference/upstream/LICENSE",
+          "sha256": "c458ae30b78084aa68c25b84aeaeab068492bb8f22bc0ef9286eb9b8147c17c4",
+          "bytes": 1066
+        }
+      },
+      {
+        "path": "src/kernels/gumbel_sparse_kernels.py",
+        "blob_sha": "45362b034ac91cf55587090ceb905ba64dabf4e8",
+        "url": "https://github.com/olivkoch/gumbel-mcts/blob/f7cc656af7a037f1283b08b454982edba4d86e21/src/kernels/gumbel_sparse_kernels.py",
+        "local_snapshot": {
+          "path": "artifacts/gumbel-is-mcts/20261025-reference/upstream/src/kernels/gumbel_sparse_kernels.py",
+          "sha256": "92b66aed91739411e1dd35ef9f020fd32a25d8ce259a07b0eb85b31979787c43",
+          "bytes": 18557
+        }
+      },
+      {
+        "path": "src/kernels/gumbel_dense_kernels.py",
+        "blob_sha": "115a11a735f03fc713c53221448235b23c82cdf0",
+        "url": "https://github.com/olivkoch/gumbel-mcts/blob/f7cc656af7a037f1283b08b454982edba4d86e21/src/kernels/gumbel_dense_kernels.py",
+        "local_snapshot": {
+          "path": "artifacts/gumbel-is-mcts/20261025-reference/upstream/src/kernels/gumbel_dense_kernels.py",
+          "sha256": "73330b2a24baa43c847bcb86171728d0ceb9b6cd3417803b1c78dca4b92ad44f",
+          "bytes": 13065
+        }
+      },
+      {
+        "path": "src/gumbel_mcts/gumbel_sparse.py",
+        "blob_sha": "fb87963179fb15def25ffd67af480258a4917e59",
+        "url": "https://github.com/olivkoch/gumbel-mcts/blob/f7cc656af7a037f1283b08b454982edba4d86e21/src/gumbel_mcts/gumbel_sparse.py",
+        "local_snapshot": {
+          "path": "artifacts/gumbel-is-mcts/20261025-reference/upstream/src/gumbel_mcts/gumbel_sparse.py",
+          "sha256": "fe2abcc7a75ef3964c75fdc168b26e2cba5269842df40a6694e40c0c26ef6240",
+          "bytes": 28643
+        }
+      },
+      {
+        "path": "src/gumbel_mcts/gumbel_dense.py",
+        "blob_sha": "d973e3ef62d353a6570783c94e1d4eabe5a61921",
+        "url": "https://github.com/olivkoch/gumbel-mcts/blob/f7cc656af7a037f1283b08b454982edba4d86e21/src/gumbel_mcts/gumbel_dense.py",
+        "local_snapshot": {
+          "path": "artifacts/gumbel-is-mcts/20261025-reference/upstream/src/gumbel_mcts/gumbel_dense.py",
+          "sha256": "1ac9f76eb3bec2de1ceae3729c199968fc113d91e019989825a3b091aaad0ca8",
+          "bytes": 16944
+        }
+      }
+    ]
+  },
+  "executable": {
+    "path": "scripts/reproduce-gumbel-is-mcts.py",
+    "sha256": "60faaa406c9ebf89d9724069fbbe692610e1c85176fb2bf17e99aad39d292e50",
+    "bytes": 13457
+  },
+  "golden_trace": {
+    "path": "tests/GumbelISMCTS/fixtures/reference-v1.json",
+    "sha256": "2e9238e009b6b6ae2d070ca08be2e06143f137f68c79e22c5e83941044cab21d",
+    "bytes": 39804
+  },
+  "commands": [
+    "python -m unittest discover -s tests/GumbelISMCTS -v",
+    "python scripts/reproduce-gumbel-is-mcts.py --out artifacts/gumbel-is-mcts/20261025-reference/paper-parameters.json",
+    "python scripts/reproduce-gumbel-is-mcts.py --replay artifacts/gumbel-is-mcts/20261025-reference/paper-parameters.json",
+    "python scripts/reproduce-gumbel-is-mcts.py --replay tests/GumbelISMCTS/fixtures/reference-v1.json"
+  ],
+  "verification": {
+    "tests": 14,
+    "passed": 14,
+    "paper_parameters": {
+      "simulations": 200,
+      "k": 16,
+      "c1": 50,
+      "c2": 0.1,
+      "seed": 7,
+      "players": 4
+    },
+    "round_simulations": [
+      48,
+      48,
+      48,
+      50
+    ],
+    "floor_remainder": 6,
+    "selected_toy_action": 6,
+    "full_and_golden_replay": "passed"
+  }
+}

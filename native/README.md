@@ -1,4 +1,4 @@
-# Native Brass backend: L03–L07
+# Native Brass backend: L03–L11
 
 This workspace isolates the existing upstream rules and provides an opt-in
 diagnostic worker. It is the foundation for the local-first migration in
@@ -7,8 +7,11 @@ The existing C#/Python backend remains the default. L04 adds complete trusted
 state import/export and private save/restore. L05 adds staged legal choices,
 transitions and explicit chance. L06 adds permitted views, own-hand recall and
 detached world sampling. L07 adds an explicit OpenSpiel-compatible simulator
-adapter with native setup, bounded handles and clone/restore. Features,
-inference and our native Masked ISMCTS follow in L08 onward.
+adapter with native setup, bounded handles and clone/restore. L08/L09 add exact
+Features-4 and same-process CPU inference. L10 implements the scalar Gumbel
+IS-MCTS oracle; L11 adds whole-turn sessions, balanced-round snapshots and
+validated complete-action proofs. Two-session scheduling and Unity integration
+remain L12/L13 work.
 Nothing here installs a Unity patch or starts lab training.
 
 ## Reused code and crates
@@ -28,12 +31,13 @@ excluded. The isolation manifest and module wrappers are new local files.
 | Bounded queues | `crossbeam-channel` 0.5.17 |
 | Build provenance | `sha2` 0.10.9, `walkdir` 2.5.0 (build only) |
 | Permitted identity and reproducible sampling | `sha2` 0.10.9, `rand` 0.8.5, `rand_chacha` 0.3.1 |
+| Owner-local search arena and CPU inference | `slotmap` 1.1.1, `ort` 2.0.0-rc.10, qualified ONNX Runtime 1.22.1 |
 | Tests and measurements | `proptest` 1.6.0, `criterion` 0.8.2, `stats_alloc` 0.1.10 (development only) |
 
 Both Cargo lockfiles are tracked. The small fixed-length framing and owner
 threads use Rust's standard library. Additional crates are introduced when
-their milestone has a real consumer; the plan identifies `slotmap`, `ort`,
-`smallvec` and optional `pyo3` for subsequent work. L06 promotes the already
+their milestone has a real consumer; `smallvec` and optional `pyo3` remain
+future choices. L06 promotes the already
 locked `rand`/`rand_chacha` packages to direct consumers without upgrading them.
 
 ## Build and qualification

@@ -1,0 +1,43 @@
+{
+  "format": "brass-native-model/1.0.0",
+  "model_id": "1145fecba3289511df1c518bb71fbfb5b2f6df351777151a5eb999b89cba0761",
+  "checkpoint_sha256": "ecad3b932a8dd9d3b5d0cc49b5e9bb94a9e98b4536ffdc86a44179d003995cb8",
+  "export_sha256": "64e4a8340f4beb7bbc4ee70219b5e461b1185bcde9e25c4bfc78e30936c91ae9",
+  "export_file": "model.onnx",
+  "metadata_sha256": "8501aaad92eb5bd05b50a9be9001c9cc09a66887745d14199d59b6466f7d4e5c",
+  "runtime_file": "onnxruntime.dll",
+  "runtime_sha256": "c7151fd9844ad7c7d18525f1177e9ef62d91e4a6ac3583d0be700554a2b2b1d6",
+  "runtime_version": "1.22.1",
+  "binding_version": "2.0.0-rc.10",
+  "architecture": "brass-four-seat-mlp-resnet/11.2.0",
+  "feature_schema": "59facdd72a386b6046abbb875daf3e1051b92e580ff55d0ab37250dd0c1dfb6a",
+  "group_layout": "9dcb18c8bfc04ca9b020b43ddcfa20a27785d3baf08d19679c8751747a18d53d",
+  "entity_layout": "a4e1ca6a7588f8839275ff527918a3080f324db6d300215e7328410fb430a4e9",
+  "reward_id": "a84a3fccf2421d40aefc71c80d3b8839cf3ff22900eb6c5b917b821b5bb8d72e",
+  "max_cost": 0.075,
+  "precision": "float32",
+  "opset": 17,
+  "inputs": [
+    "states",
+    "actions",
+    "legal_mask",
+    "stable_to_relative",
+    "remaining",
+    "descriptors"
+  ],
+  "outputs": [
+    "policy_logits",
+    "win_share_4",
+    "placement_4",
+    "vp_4",
+    "remaining_utility_4"
+  ],
+  "mechanical_only": true,
+  "utility_calibration": null,
+  "intra_threads": 1,
+  "inter_threads": 1,
+  "sequential": true,
+  "provider": "CPUExecutionProvider",
+  "optimization": "all-exact-gelu",
+  "source_archive_sha256": "4405d28dbd551e6ae86ce88a8572212d101c09a78cc2ae0ac759bd7265799a93"
+}

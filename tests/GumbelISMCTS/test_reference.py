@@ -132,6 +132,18 @@ class SearchTests(unittest.TestCase):
         self.assertEqual(leaf["info"]["player"], 1)
         self.assertEqual(sum(leaf["count"]), 0)
 
+    def test_bootstrap_uses_new_actors_full_value_vector(self):
+        class VectorLeaves(ref.HiddenOffer):
+            def evaluate(self, info):
+                logits, _ = super().evaluate(info)
+                return logits, (.1, .2, .3, .4) if info.player else (0.,) * 4
+
+        result = ref.search(VectorLeaves(), simulations=1)
+        trajectory = result["trajectories"][0]
+        self.assertEqual(trajectory["value"], (.1, .2, .3, .4))
+        root = result["nodes"][0]
+        self.assertEqual(root["returns"][trajectory["path"][0][1]], [.1, .2, .3, .4])
+
     def test_terminal_chance_vector_backup_and_information_set_merging(self):
         game = ref.HiddenOffer()
         result = ref.search(game)
@@ -179,7 +191,7 @@ class SearchTests(unittest.TestCase):
         for k, budget in ((0, 200), (16, -1)):
             with self.assertRaises(ValueError):
                 ref.search(OneStep(), k=k, simulations=budget)
-        for tape in ([], [0.], [1.], [float("nan")], [.5, .5]):
+        for tape in ([], [0.], [1.], [float("nan")], [.5, .5], [.5, None]):
             with self.assertRaises(ValueError):
                 ref.search(OneStep(), simulations=1, tape=tape)
         for logits, value in (([float("nan")], [0.]), ([0.], [float("inf")]), ([], [0.])):

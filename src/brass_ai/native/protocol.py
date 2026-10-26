@@ -17,7 +17,7 @@ PROTOCOL = "brass-native-control/0.1.0"
 DIAGNOSTIC_RULES = "daiyu-upstream-diagnostic/0.1.0"
 MAX_FRAME_BYTES = 1024 * 1024
 STATE_FORMAT = "brass-native-state/1.0.0"
-CAPABILITIES = {"simulation", "diagnostic_new", "diagnostic_snapshot", "diagnostic_clone_check",
+CAPABILITIES = {"inference", "features", "simulation", "diagnostic_new", "diagnostic_snapshot", "diagnostic_clone_check",
                 "state_import", "state_export", "state_save", "state_restore", "state_clone_check",
                 "rules_snapshot", "rules_apply", "rules_chance",
                 "observation_snapshot", "belief_prepare", "belief_sample"}
@@ -139,7 +139,7 @@ class NativeWorker:
                     if not isinstance(response.get("code"), str) or not isinstance(response.get("message"), str):
                         raise WorkerFailure("malformed error reply")
                     raise NativeError(response)
-                expected = {"simulation": "simulation", "hello": "hello", "shutdown": "shutdown", "observation_snapshot": "observation",
+                expected = {"inference": "inference", "features": "features", "simulation": "simulation", "hello": "hello", "shutdown": "shutdown", "observation_snapshot": "observation",
                             "belief_prepare": "prepared", "belief_sample": "sampled"}.get(op,
                             "rules" if op.startswith("rules_") else "state" if op.startswith("state_") else "diagnostic")
                 if response.get("status") != expected:

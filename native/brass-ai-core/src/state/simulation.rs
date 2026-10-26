@@ -305,6 +305,23 @@ pub struct Simulator {
     prepared: Option<PreparedRoot>,
 }
 impl Simulator {
+    /// New actor view and complete current legal set, entirely inside Rust.
+    pub fn feature_input(
+        &self,
+        handle: u64,
+        revision: u32,
+    ) -> Result<(Observation, Vec<Choice>), CoreError> {
+        let World::Playing { state, .. } = self.get(handle)?.as_ref() else {
+            return Err(CoreError::Invalid("setup has no neural features".into()));
+        };
+        require(
+            state.context.revision == revision && !state.context.terminal && state.chance.is_none(),
+            "stale or non-policy feature state",
+        )?;
+        let actor = Seat::try_from(state.context.actor as u8)
+            .map_err(|_| CoreError::Invalid("feature actor".into()))?;
+        Ok((state.observation(actor)?, state.legal_choices()?))
+    }
     fn get(&self, handle: u64) -> Result<&Arc<World>, CoreError> {
         self.worlds
             .get(&handle)

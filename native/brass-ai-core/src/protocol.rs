@@ -21,6 +21,14 @@ pub struct Request {
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(tag = "op", rename_all = "snake_case", deny_unknown_fields)]
 pub enum Operation {
+    Inference {
+        session: u8,
+        command: crate::evaluation::InferenceCommand,
+    },
+    Features {
+        session: u8,
+        command: crate::features::session::FeatureCommand,
+    },
     Hello {
         sessions: u8,
         threads_per_session: u8,
@@ -150,6 +158,14 @@ pub struct Reply {
 #[derive(Debug, Serialize)]
 #[serde(tag = "status", rename_all = "snake_case")]
 pub enum Response {
+    Inference {
+        session: u8,
+        data: Box<crate::evaluation::InferenceResponse>,
+    },
+    Features {
+        session: u8,
+        data: Box<crate::features::session::FeatureResponse>,
+    },
     Simulation {
         session: u8,
         data: Box<crate::state::simulation::SimulationReply>,
@@ -214,6 +230,8 @@ pub enum Response {
     Shutdown,
 }
 pub const CAPABILITIES: &[&str] = &[
+    "inference",
+    "features",
     "simulation",
     "diagnostic_new",
     "diagnostic_snapshot",

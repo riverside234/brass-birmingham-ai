@@ -209,6 +209,7 @@ impl PreparedRoot {
         &self,
         random: SamplingDraws,
     ) -> Result<(NativeState, ObservationMemory, Vec<u32>), CoreError> {
+        crate::work::checkpoint(crate::work::Stage::Sampling)?;
         let indices = match random {
             SamplingDraws::Recorded { indices } => indices,
             SamplingDraws::Chacha12 { seed, stream } => {
@@ -222,7 +223,9 @@ impl PreparedRoot {
         };
         let mut pool = self.pool.clone();
         shuffle(&mut pool, &indices)?;
+        let copy_started = std::time::Instant::now();
         let mut state = self.template.clone();
+        crate::work::state_copied(copy_started);
         deal(
             &mut state.cards,
             &pool,
@@ -243,6 +246,7 @@ fn shuffle(pool: &mut [CardId], indices: &[u32]) -> Result<(), CoreError> {
         "shuffle draw count mismatch",
     )?;
     for (i, j) in (1..pool.len()).rev().zip(indices) {
+        crate::work::checkpoint(crate::work::Stage::Sampling)?;
         require((*j as usize) <= i, "shuffle draw outside support")?;
         pool.swap(i, *j as usize);
     }

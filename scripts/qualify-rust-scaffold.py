@@ -50,8 +50,10 @@ def receipt(path):
 
 def native_fingerprint():
     value = hashlib.sha256()
-    # Rust PathBuf ordering is case-sensitive; WindowsPath ordering is not.
-    for path in sorted(NATIVE.rglob("*"), key=str):
+    # Rust PathBuf compares case-sensitive components. Whole-string ordering
+    # differs when a module.rs has a sibling module/ directory; WindowsPath's
+    # default comparison also folds case. Match the build script exactly.
+    for path in sorted(NATIVE.rglob("*"), key=lambda p: p.parts):
         if not path.is_file() or path.suffix not in (".rs", ".toml", ".lock", ".json"):
             continue
         if any(part in ("target", ".git", "__pycache__") for part in path.relative_to(NATIVE).parts):

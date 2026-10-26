@@ -1,4 +1,5 @@
 //! Bounded control transport; exactly two independent native state owners.
+mod inference;
 use brass_ai_core::{
     diagnostic::DiagnosticGame,
     framing::{read_frame, write_frame},
@@ -20,6 +21,9 @@ use std::{
 };
 
 enum Command {
+    LoadModel(String, String),
+    Evaluate(Box<inference::Run>),
+    Features(brass_ai_core::features::session::FeatureCommand),
     Simulation(brass_ai_core::state::simulation::SimulationCommand),
     New {
         players: u8,
@@ -45,6 +49,8 @@ type Job = (Command, Sender<Result<Response, CoreError>>);
 
 #[derive(Default)]
 struct Session {
+    inference: inference::Engine,
+    features: brass_ai_core::features::session::FeatureSession,
     simulator: brass_ai_core::state::simulation::Simulator,
     diagnostic: Option<DiagnosticGame>,
     state: Option<NativeState>,
@@ -139,6 +145,24 @@ fn execute(
             | Command::StateCloneCheck
     );
     match command {
+        Command::LoadModel(path, digest) => {
+            return Ok(Response::Inference {
+                session,
+                data: Box::new(game.inference.load(path, digest, owner)?),
+            })
+        }
+        Command::Evaluate(run) => {
+            return Ok(Response::Inference {
+                session,
+                data: Box::new(game.inference.run(*run, &game.simulator, owner)?),
+            })
+        }
+        Command::Features(command) => {
+            return Ok(Response::Features {
+                session,
+                data: Box::new(game.features.execute(command, &game.simulator, session)?),
+            })
+        }
         Command::Simulation(command) => {
             return Ok(Response::Simulation {
                 session,
@@ -279,6 +303,16 @@ fn rules_response(state: &NativeState, session: u8, owner: &str) -> Result<Respo
 #[derive(Default)]
 struct Server {
     owners: Option<[Owner; 2]>,
+    active: [Option<inference::Active>; 2],
+    generations: [u64; 2],
+    sequence: u64,
+}
+impl Drop for Server {
+    fn drop(&mut self) {
+        for active in self.active.iter().flatten() {
+            active.cancel();
+        }
+    }
 }
 impl Server {
     fn handle(&mut self, request: Request) -> Reply {
@@ -320,6 +354,13 @@ impl Server {
             return Reply::error(id, CoreError::Invalid("hello must complete first".into()));
         };
         let (session, command) = match request.request {
+            Operation::Inference { session, command } => {
+                return match self.inference(session, command) {
+                    Ok(response) => Reply::new(id, response),
+                    Err(error) => Reply::error(id, error),
+                }
+            }
+            Operation::Features { session, command } => (session, Command::Features(command)),
             Operation::Simulation { session, command } => (session, Command::Simulation(command)),
             Operation::DiagnosticNew {
                 session,
@@ -363,6 +404,9 @@ impl Server {
                 return Reply::error(id, CoreError::Unavailable("neural search (L08-L10)"))
             }
             Operation::Shutdown => {
+                for active in self.active.iter().flatten() {
+                    active.cancel();
+                }
                 self.owners.take();
                 return Reply::new(id, Response::Shutdown);
             }
@@ -371,6 +415,12 @@ impl Server {
         let Some(owner) = owners.get(usize::from(session)) else {
             return Reply::error(id, CoreError::Invalid("session must be 0 or 1".into()));
         };
+        if self.active[usize::from(session)].is_some() {
+            return Reply::error(
+                id,
+                CoreError::Invalid("session busy until inference ticket is drained".into()),
+            );
+        }
         match owner.call(command) {
             Ok(response) => Reply::new(id, response),
             Err(error) => Reply::error(id, error),
@@ -399,7 +449,12 @@ fn serve(reader: &mut impl Read, writer: &mut impl Write) -> io::Result<()> {
             }
         };
         let shutdown = matches!(reply.response, Response::Shutdown);
-        let payload = serde_json::to_vec(&reply).map_err(io::Error::other)?;
+        let mut payload = serde_json::to_vec(&reply).map_err(io::Error::other)?;
+        if payload.len() > brass_ai_core::framing::MAX_FRAME_BYTES {
+            payload=serde_json::to_vec(&Reply::error(reply.request_id,CoreError::Invalid(
+                "diagnostic response exceeds frame bound; use a smaller batch (no candidates were truncated)".into()
+            ))).map_err(io::Error::other)?;
+        }
         write_frame(writer, &payload)?;
         if shutdown {
             break;
