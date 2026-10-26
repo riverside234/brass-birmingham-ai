@@ -79,8 +79,10 @@ class Recipe(unittest.TestCase):
         self.assertEqual(validate_config(configure(old,rating_workers=8))['rating_compute']['workers'],8)
         from brass_ai.recovery.config import latest_model_config
         fresh=latest_model_config(old,old['imitation_checkpoint'])
+        from brass_ai.recovery.training_revision_g1120 import configure_kl32 as newest
+        expected=newest(G.short_options(G.linear_options(new)))
         for k in ('value_phase','opening','branching','insolvency','exploration','rating_compute'):
-            self.assertEqual(fresh[k],G.short_options(G.linear_options(new))[k] if k=='value_phase' else new[k],k)
+            self.assertEqual(fresh[k],expected[k],k)
         from brass_ai.learning.reward import CostLedger
         ledger=CostLedger(reward_spec(new))
         for expected in (.02,.04,.06,.075,.075):

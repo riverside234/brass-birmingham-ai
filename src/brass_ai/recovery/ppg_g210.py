@@ -32,21 +32,47 @@ LINEAR_DEFAULT=dict(COSINE_DEFAULT,contract=LINEAR_CONTRACT,beta_clone_min=1.,ra
 SHORT_CONTRACT='ppg-value-phase/17.0.0'
 SHORT_MIGRATION='ppg-eight-step-loss-half-beta/1.0.0'
 SHORT_DEFAULT=dict(LINEAR_DEFAULT,contract=SHORT_CONTRACT,beta_clone_min=.5,acceptance_steps=8)
+LOSS16_CONTRACT='ppg-value-phase/18.0.0'
+LOSS16_MIGRATION='ppg-sixteen-step-loss-half-beta/1.0.0'
+LOSS16_DEFAULT=dict(SHORT_DEFAULT,contract=LOSS16_CONTRACT,acceptance_steps=16)
+KL32_CONTRACT='ppg-value-phase/19.0.0'
+KL32_MIGRATION='ppg-loss16-kl32-half-beta/1.0.0'
+KL32_DEFAULT=dict(LOSS16_DEFAULT,contract=KL32_CONTRACT,kl_check_steps=32)
 
 
-def active(c):return c.get('contract') in (CONTRACT,COSINE_CONTRACT,LINEAR_CONTRACT,SHORT_CONTRACT)
+def active(c):return c.get('contract') in (CONTRACT,COSINE_CONTRACT,LINEAR_CONTRACT,SHORT_CONTRACT,LOSS16_CONTRACT,KL32_CONTRACT)
 
 
 def cosine(c):return c.get('contract')==COSINE_CONTRACT
 
 
-def linear(c):return c.get('contract') in (LINEAR_CONTRACT,SHORT_CONTRACT)
+def linear(c):return c.get('contract') in (LINEAR_CONTRACT,SHORT_CONTRACT,LOSS16_CONTRACT,KL32_CONTRACT)
 
 
 def short(c):return c.get('contract')==SHORT_CONTRACT
 
 
 def scheduled(c):return cosine(c) or linear(c)
+
+
+def kl32_options(config):
+    """Loss16/KL32, preserving saved beta and compatible two-age replay."""
+    validate(config['value_phase'])
+    require(config['value_phase']['contract'] in (SHORT_CONTRACT,LOSS16_CONTRACT,KL32_CONTRACT),
+        'KL32 continuation requires the g1050 or g1120 PPG recipe')
+    result=copy.deepcopy(config)
+    result['value_phase'].update(contract=KL32_CONTRACT,acceptance_steps=16,kl_check_steps=32)
+    return result
+
+
+def loss16_options(config):
+    """Restore loss16 checks without repeating the earlier beta hotfix."""
+    validate(config['value_phase'])
+    require(config['value_phase']['contract'] in (SHORT_CONTRACT,LOSS16_CONTRACT),
+        'Sixteen-step half-beta loss checks require the g1050 PPG recipe')
+    result=copy.deepcopy(config)
+    result['value_phase'].update(contract=LOSS16_CONTRACT,acceptance_steps=16)
+    return result
 
 
 def short_options(config):
@@ -88,7 +114,7 @@ def rate_factor(step,total,config):
 
 
 def validate(c):
-    default=SHORT_DEFAULT if short(c) else LINEAR_DEFAULT if linear(c) else COSINE_DEFAULT if cosine(c) else DEFAULT
+    default=KL32_DEFAULT if c.get('contract')==KL32_CONTRACT else LOSS16_DEFAULT if c.get('contract')==LOSS16_CONTRACT else SHORT_DEFAULT if short(c) else LINEAR_DEFAULT if linear(c) else COSINE_DEFAULT if cosine(c) else DEFAULT
     require(type(c) is dict and set(c)==set(default) and active(c),'Invalid g210 PPG fields/contract')
     # Smaller batches are useful for bounded regression/smoke fixtures only.
     for k,v in default.items():
@@ -182,6 +208,10 @@ def initialize(phases,model,config,*,raw,generation,root,run):
             if adopting_linear:options_match=linear_options(saved['options'])==phases.options
             adopting_short=short(config['value_phase']) and saved['options']['value_phase']['contract']==LINEAR_CONTRACT
             if adopting_short:options_match=short_options(saved['options'])==phases.options
+            adopting_loss16=config['value_phase']['contract']==LOSS16_CONTRACT and short(saved['options']['value_phase'])
+            if adopting_loss16:options_match=loss16_options(saved['options'])==phases.options
+            adopting_kl32=config['value_phase']['contract']==KL32_CONTRACT and saved['options']['value_phase']['contract'] in (SHORT_CONTRACT,LOSS16_CONTRACT)
+            if adopting_kl32:options_match=kl32_options(saved['options'])==phases.options
             require(saved.get('contract')==CHECKPOINT and set(saved)==fields and options_match,
                 'g210 checkpoint configuration differs')
             phases.beta=saved['beta_clone'];phases.trips=saved['kl_trips']
@@ -195,6 +225,11 @@ def initialize(phases,model,config,*,raw,generation,root,run):
                     beta_before=phases.beta,beta_after=beta_after,previous_adoption=copy.deepcopy(phases.adoption),
                     scope='One-time beta hotfix; preserve trip history, model/Adam/RNG, cached targets, progress and gate evidence.')
                 phases.adoption=copy.deepcopy(phases.ppg_schedule_migration);phases.beta=beta_after
+            if adopting_loss16 or adopting_kl32:
+                phases.ppg_schedule_migration=dict(contract=KL32_MIGRATION if adopting_kl32 else LOSS16_MIGRATION,origin=generation,
+                    beta_before=phases.beta,beta_after=phases.beta,previous_adoption=copy.deepcopy(phases.adoption),
+                    scope=f'Loss checks every 16 steps, KL every {config["value_phase"]["kl_check_steps"]}; preserve beta/trips, model/Adam/RNG, cached targets, progress and gate evidence.')
+                phases.adoption=copy.deepcopy(phases.ppg_schedule_migration)
         phases.state=copy.deepcopy(gae.validate_state(saved['gae'],config['advantage'],generation))
         phases.critic_state=copy.deepcopy(critic_data.validate_state(saved['critic_data'],config['critic_data'],generation)) if 'critic_data' in config else None
         phases.optimizer.load_state_dict(saved['optimizer'])

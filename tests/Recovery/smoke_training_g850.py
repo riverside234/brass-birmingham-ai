@@ -35,7 +35,7 @@ def advance(model,opt,c,p,run,g,pool):
         'Wrong PPG cadence/validation ages')
     require(len(p.buffer.pending)==min(2,g) and report['buffer']['packed_generations']==0,'Wrong replay window/format')
     require(report['probe_kl']<=.002+1e-7,'Retained phase exceeded hard KL cap')
-    require(report['kl_check_steps']==16 and report['acceptance_steps']==c['value_phase']['acceptance_steps'],'Wrong separated KL/loss cadence')
+    require(all(report[k]==c['value_phase'][k] for k in ('kl_check_steps','acceptance_steps')),'Wrong separated KL/loss cadence')
     require(report['acceptance_heldout_after']['loss']<=report['acceptance_heldout_before']['loss'],'Retained pooled critic loss increased')
     require(sum(x['rows'] for x in report['acceptance_support'])==report['acceptance_heldout_rows'],
         'Pooled holdout support differs')

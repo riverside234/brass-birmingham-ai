@@ -1,6 +1,21 @@
 # Fresh training in conda: selected v4 teachers and Masked ISMCTS NN
 
-## Current g1050 continuation
+## Current g1120 continuation
+
+Use [the g1120 continuation command](../ai-research/TRAINING_G1120_REVISION.md).
+Each neural seat uses **temperature 1.3 for its first three action decisions**,
+including a fresh three-decision window after a fork. Payment/bonus/continuation
+choices do not consume this window. The existing decoupled raw-T1 PPO objective
+selects the same eligible nonforced rows. Branches skip the first three action
+decisions and remain at 1% per eligible decision.
+
+PPG held-out loss checks return to **16 steps**, on all held-out games from both
+cached iterations. Periodic KL checks run every **32 steps**, plus epoch tails
+and verification of any otherwise unchecked retained state, with the 0.002 cap.
+Saved beta (0.5 at g1120), adaptive bounds 0.5–32, LR curve, replay caches and
+training state are preserved. Fresh config generation also uses this recipe.
+
+## Archived g1050 continuation
 
 Use [the g1050 continuation command](../ai-research/TRAINING_G1050_REVISION.md).
 PPG beta is set to **0.5 once on adoption**, then adapts within **0.5–32**.

@@ -155,6 +155,10 @@ def check_signature(state, signature, reviewed=False):
             handlers[LINEAR_MIGRATION]=linear_options
             from .ppg_g210 import SHORT_MIGRATION as LOSS8_MIGRATION,short_options as loss8_options
             handlers[LOSS8_MIGRATION]=loss8_options
+            from .training_revision_g1120 import MIGRATION as G1120_MIGRATION,configure as g1120_config
+            handlers[G1120_MIGRATION]=g1120_config
+            from .training_revision_g1120 import KL32_MIGRATION as G1120_KL32_MIGRATION,configure_kl32 as g1120_kl32_config
+            handlers[G1120_KL32_MIGRATION]=g1120_kl32_config
             from .training_revision_g850 import MIGRATION as G850_MIGRATION,configure as g850_config
             handlers[G850_MIGRATION]=lambda c:g850_config(c,rating_workers=signature['config'].get('rating_compute',{}).get('workers'))
             from .opening_objective import (MIGRATION as OPENING_MIGRATION,configure as configure_opening,

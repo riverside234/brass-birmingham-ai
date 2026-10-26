@@ -27,7 +27,7 @@ spec=importlib.util.spec_from_file_location('g503_openings',SOURCE_ROOT/'scripts
 helper=importlib.util.module_from_spec(spec);spec.loader.exec_module(helper)
 
 
-def opening_rows(model,data,epsilon=0.,opening=E.OPENING):
+def opening_rows(model,data,epsilon=0.,opening=E.OPENING,objective=O.DEFAULT):
     """Authored complete-policy fixtures, with actual T2/T1 behavior retained."""
     behavior=Behavior(model_id(model),epsilon,dict(version=3,opening=opening,
         raw_entropy=True,alphas=dict.fromkeys(E.GROUPS,.005)))
@@ -35,9 +35,9 @@ def opening_rows(model,data,epsilon=0.,opening=E.OPENING):
     for row,t,identity,e in data:
         row=copy.deepcopy(row);count=counters.get(identity,0)
         action=row['view']['context']['phase']=='action'
-        b=dict(kind='model',policy_id=behavior.policy_id,probability=1.,temperature=2. if opening and action and count<2 else 1.,
+        b=dict(kind='model',policy_id=behavior.policy_id,probability=1.,temperature=opening['temperature'] if opening and action and count<opening['action_decisions_per_seat'] else 1.,
             exploration=epsilon,exploration_version=3,component='policy',action_decision=count if action else None)
-        row.update(behavior=b,**{O.ROW_KEY:copy.deepcopy(O.DEFAULT)})
+        row.update(behavior=b,**{O.ROW_KEY:copy.deepcopy(objective)})
         if action:counters[identity]=count+1
         result.append((row,t,identity,e))
     ds=updates.Dataset(result,'cpu');model.eval()

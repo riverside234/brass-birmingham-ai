@@ -13,13 +13,20 @@ DEFAULT=dict(contract=CONTRACT,scope='temperature-2-action-openings',target_temp
     kl_guard='behavior-and-raw-temperature-1')
 ROW_KEY='_ppo_opening_objective'
 T15=dict(DEFAULT,contract='opening-ppo-objective/2.0.0',scope='temperature-1.5-action-openings')
+T13=dict(DEFAULT,contract='opening-ppo-objective/3.0.0',scope='temperature-1.3-three-action-openings')
 
 
-def opening_temperature(config):return 1.5 if config==T15 else 2.
+def opening_spec(config):
+    from .exploration import OPENING,REVISED_OPENING,THREE_OPENING
+    validate(config)
+    return THREE_OPENING if config==T13 else REVISED_OPENING if config==T15 else OPENING
+
+
+def opening_temperature(config):return opening_spec(config)['temperature']
 
 
 def validate(c):
-    require(type(c) is dict and c in (DEFAULT,T15) and
+    require(type(c) is dict and c in (DEFAULT,T15,T13) and
         all(type(c[k]) in (int,float) for k in ('target_temperature','importance_cap')),
         'Invalid decoupled opening PPO objective')
     return c
@@ -54,10 +61,10 @@ class Reference:
     """Selected raw T1 probabilities captured during strict behavior verification."""
     def __init__(self,dataset,behavior,config):
         self.dataset=dataset;self.config=validate(config);self.frozen=False
-        temperature=opening_temperature(config)
+        spec=opening_spec(config);temperature=spec['temperature'];decisions=spec['action_decisions_per_seat']
         require(getattr(behavior,'exploration_version',2)==3 and behavior.temperature==1. and
             (behavior.opening is None or (behavior.opening['temperature']==temperature and
-             behavior.opening['action_decisions_per_seat']==2)),'Decoupled PPO behavior contract differs')
+             behavior.opening['action_decisions_per_seat']==decisions)),'Decoupled PPO behavior contract differs')
         selected=[]
         for row in dataset.rows:
             require(row.get(ROW_KEY)==config,'Missing/stale opening objective collection provenance')
@@ -66,7 +73,7 @@ class Reference:
             b=row['behavior'];opening=b['temperature']==temperature
             require(b['temperature'] in (1.,temperature),'Stale opening temperature in PPO rows')
             require(not opening or (row['view']['context']['phase']=='action' and
-                type(b['action_decision']) is int and 0<=b['action_decision']<2),
+                type(b['action_decision']) is int and 0<=b['action_decision']<decisions),
                 'Tempered row is not an opening action')
             selected.append(opening and len(row['choices'])>1)
         self.mask=torch.tensor(selected,device=dataset.device,dtype=torch.bool)

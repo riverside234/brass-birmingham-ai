@@ -38,7 +38,7 @@ class Revision(unittest.TestCase):
         self.assertEqual({k for k in new['value_phase'] if old['value_phase'][k]!=new['value_phase'][k]},
             {'contract','acceptance_steps','beta_clone_min'})
         self.assertEqual(G.short_options(new),new)
-        self.assertEqual(latest_model_config(old,old['imitation_checkpoint'])['value_phase'],new['value_phase'])
+        self.assertEqual(latest_model_config(old,old['imitation_checkpoint'])['value_phase'],G.kl32_options(new)['value_phase'])
         for k,v in [('beta_clone_min',1.),('acceptance_steps',16),('kl_check_steps',8),('validation_iterations',1)]:
             with self.assertRaises(ValueError):G.validate(dict(new['value_phase'],**{k:v}))
         self.assertEqual([G.rate_factor(i,142,new['value_phase']) for i in range(1,143)],

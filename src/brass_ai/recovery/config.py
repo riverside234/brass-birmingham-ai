@@ -456,6 +456,8 @@ def latest_model_config(config,imitation_checkpoint):
     from .ppg_g210 import options as g210_options,linear_options,short_options
     from .training_revision_g850 import configure as g850_config
     result=short_options(linear_options(g850_config(g210_options(result))))
+    from .training_revision_g1120 import configure_kl32 as g1120_config
+    result=g1120_config(result)
     return validate_config(result)
 
 
@@ -608,9 +610,8 @@ def validate_config(config):
     from .exploration import validate as validate_exploration,BLOCKS
     validate_exploration(config)
     if 'opening_objective' in config.get('update',{}):
-        from .exploration import OPENING,REVISED_OPENING
-        from .opening_objective import T15
-        expected=REVISED_OPENING if config['update']['opening_objective']==T15 else OPENING
+        from .opening_objective import opening_spec
+        expected=opening_spec(config['update']['opening_objective'])
         require(config.get('opening')==expected,'Decoupled PPO opening collection differs')
     if 'rating_compute' in config:
         from .plackett_luce import validate_compute

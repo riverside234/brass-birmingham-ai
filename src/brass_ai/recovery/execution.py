@@ -248,7 +248,7 @@ def _run_turns(host,job,assigned,timings,max_decisions,context,game,rngs,encoded
         if job.get('branching'):
             from .branching import eligible,capture,seed_for
             row=game['records'][-1]
-            if eligible(view,choices,row['behavior'].get('action_decision',0)):
+            if eligible(view,choices,row['behavior'].get('action_decision',0),job['branching']['skip_opening_decisions']):
                 eligible_count+=1
                 # Selection uses an independent stream; parent actions and
                 # training RNG do not change when branching is enabled.

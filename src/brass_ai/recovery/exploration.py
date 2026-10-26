@@ -28,6 +28,7 @@ ANCHOR_ENTROPY = dict({k:copy.deepcopy(v) for k,v in ENTROPY.items()
 LEGACY_OPENING = dict(contract='opening-temperature/1.0.0', temperature=1.5, action_decisions_per_seat=2, seats='neural')
 OPENING = dict(LEGACY_OPENING, contract='opening-temperature/2.0.0', temperature=2.)
 REVISED_OPENING = dict(LEGACY_OPENING, contract='opening-temperature/3.0.0')
+THREE_OPENING = dict(REVISED_OPENING, contract='opening-temperature/4.0.0', temperature=1.3, action_decisions_per_seat=3)
 LEGACY_BRANCH = dict(contract='selfplay-branching/1.0.0', tables=['selfplay'], rate_per_decision=.005,
     max_per_game=1, skip_opening_decisions=2, skip_final_rounds='rail_empty_deck_hand_le_4',
     move_distribution=dict(temperature_1=.7, temperature_2=.25, exploration_q=.05),
@@ -37,6 +38,7 @@ HIGH_BRANCH = dict(LEGACY_BRANCH, contract='selfplay-branching/2.0.0', rate_per_
 BRANCH = dict(HIGH_BRANCH, rate_per_decision=.005)
 LOCAL_SCORING_BRANCH = dict(HIGH_BRANCH,rate_per_decision=.010)
 REVISED_BRANCH = dict(LOCAL_SCORING_BRANCH,contract='selfplay-branching/3.0.0')
+THREE_BRANCH = dict(REVISED_BRANCH,contract='selfplay-branching/4.0.0',skip_opening_decisions=3)
 ROLLOUT = dict(contract='exploration-rollout/1.0.0', mode='fresh',
     opening_after_iterations=0, raw_entropy_after_iterations=0, branching_after_iterations=20)
 BLOCKS = ('exploration_distribution','entropy_control','opening','branching','exploration_rollout')
@@ -148,7 +150,8 @@ def validate(config):
     require(all(present), 'Exploration revision requires all versioned blocks')
     # This initial recipe is deliberately narrow; experiments need explicit
     # reviewed signatures rather than unbounded free-form controller options.
-    revised=config['opening']==REVISED_OPENING and config['branching']==REVISED_BRANCH
+    revised=(config['opening']==REVISED_OPENING and config['branching']==REVISED_BRANCH) or (
+        config['opening']==THREE_OPENING and config['branching']==THREE_BRANCH)
     current=(config['opening']==OPENING and config['branching'] in (BRANCH,LOCAL_SCORING_BRANCH)) or revised
     uniform=config['opening']==OPENING and config['branching']==HIGH_BRANCH
     legacy=config['opening']==LEGACY_OPENING and config['branching']==LEGACY_BRANCH
@@ -189,7 +192,7 @@ def check_behavior(b, phase, *, branch_move=False):
         'component','action_decision'} and b['kind']=='model' and type(b['exploration_version']) is int and
         b['exploration_version']==3 and type(b['exploration']) in (float,int) and
         math.isfinite(b['exploration']) and 0<=b['exploration']<=.5 and
-        b['component'] in (('branch_move',) if branch_move else ('policy','exploration')) and b['temperature'] in (1.,1.5,2.),
+        b['component'] in (('branch_move',) if branch_move else ('policy','exploration')) and b['temperature'] in (1.,1.3,1.5,2.),
         'Invalid v3 behavior record')
     count=b['action_decision']
     require((type(count) is int and count>=0) if phase=='action' else count is None,
