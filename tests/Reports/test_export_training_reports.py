@@ -1,4 +1,5 @@
-"""Report selection, lossless history minification and consistent publication."""
+"""Report selection, lossless history compression and consistent publication."""
+import gzip
 import importlib.util
 import json
 from pathlib import Path
@@ -44,10 +45,15 @@ class ExportTests(unittest.TestCase):
     def assert_exported(self, entry, raw, source):
         self.assertEqual(len(raw),entry['bytes'])
         self.assertEqual(reports.checksum(raw),entry['sha256'])
-        if entry.get('transform')==reports.COMPACT_JSON:
-            self.assertEqual(json.loads(raw),json.loads(source))
+        if entry.get('transform') in (reports.COMPACT_JSON,reports.GZIP_JSON):
+            decoded=gzip.decompress(raw) if entry['transform']==reports.GZIP_JSON else raw
+            original=gzip.decompress(source) if source[:2]==b'\x1f\x8b' else source
+            self.assertEqual(json.loads(decoded),json.loads(original))
             self.assertEqual(entry['source_bytes'],len(source))
             self.assertEqual(entry['source_sha256'],reports.checksum(source))
+            if entry['transform']==reports.GZIP_JSON:
+                self.assertEqual(entry['uncompressed_bytes'],len(decoded))
+                self.assertEqual(entry['uncompressed_sha256'],reports.checksum(decoded))
         else:self.assertEqual(raw,source)
 
     def test_history_minifies_without_changing_tokens_or_run_bytes(self):
@@ -60,48 +66,84 @@ class ExportTests(unittest.TestCase):
         raw=b'\xef\xbb\xbf \r\n'+compact.replace(b',',b',\r\n\t ')+b'\r\n '
         path=self.put(self.run+'/retention-history.json',raw)
         output,manifest=self.export()
-        saved=(output/'retention-history.json').read_bytes()
-        self.assertEqual(saved,compact+b'\n')
-        entry=next(e for e in manifest['files'] if e['path']=='retention-history.json')
+        saved=(output/'retention-history.json.gz').read_bytes()
+        self.assertEqual(gzip.decompress(saved),compact+b'\n')
+        self.assertFalse((output/'retention-history.json').exists())
+        self.assertEqual(reports.load_json(output/'retention-history.json'),json.loads(compact))
+        self.assertEqual(reports.load_json(output/'retention-history.json.gz'),json.loads(compact))
+        entry=next(e for e in manifest['files'] if e['path']=='retention-history.json.gz')
         self.assert_exported(entry,saved,raw);self.assertLess(entry['bytes'],entry['source_bytes'])
         self.assertEqual(path.read_bytes(),raw)
         self.assertEqual((output/'state.json').read_bytes(),(self.root/self.run/'state.json').read_bytes())
 
     def test_continue_reuses_compact_history_after_source_formatting_change(self):
         original,first=self.export(output='results/history-first')
-        before=(original/'retention-history.json').read_bytes()
+        before=(original/'retention-history.json.gz').read_bytes()
         path=self.root/self.run/'retention-history.json'
         raw=path.read_bytes()+b' \r\n\t ';path.write_bytes(raw)
         output,manifest=self.export(output='results/history-next',continue_export=True)
-        self.assertFalse((output/'retention-history.json').exists())
-        entry=next(e for e in manifest['reused_files'] if e['path']=='retention-history.json')
+        self.assertFalse((output/'retention-history.json.gz').exists())
+        entry=next(e for e in manifest['reused_files'] if e['path']=='retention-history.json.gz')
         self.assertEqual(entry['previous_export'],'results/history-first')
         self.assert_exported(entry,before,raw)
-        old=next(e for e in first['files'] if e['path']=='retention-history.json')
+        old=next(e for e in first['files'] if e['path']=='retention-history.json.gz')
         self.assertNotEqual(old['source_sha256'],entry['source_sha256'])
         self.assertEqual(old['sha256'],entry['sha256'])
         self.put(self.run+'/retention-history.json',{'changed':True})
         output,manifest=self.export(output='results/history-changed',continue_export=True)
-        self.assertEqual(json.loads((output/'retention-history.json').read_bytes()),{'changed':True})
-        self.assertNotIn('retention-history.json',{e['path'] for e in manifest['reused_files']})
+        self.assertEqual(reports.load_json(output/'retention-history.json'),{'changed':True})
+        self.assertNotIn('retention-history.json.gz',{e['path'] for e in manifest['reused_files']})
+
+    def test_loads_plain_and_gzip_history_and_exports_deterministically(self):
+        path=self.root/self.run/'retention-history.json'
+        source=path.read_bytes();value=reports.load_json(path)
+        first,_=self.export(output='results/plain-source')
+        compressed=path.with_suffix('.json.gz')
+        compressed.write_bytes(reports.compress_history(source));path.unlink()
+        before=compressed.read_bytes()
+        self.assertEqual(reports.load_json(path),value)
+        self.assertEqual(reports.load_json(compressed),value)
+        output,manifest=self.export(output='results/gzip-source')
+        saved=(output/'retention-history.json.gz').read_bytes()
+        self.assertEqual(saved,(first/'retention-history.json.gz').read_bytes())
+        self.assertEqual(saved[4:8],b'\0'*4)
+        self.assertEqual(saved[9],255)
+        self.assertEqual(compressed.read_bytes(),before)
+        entry=next(e for e in manifest['files'] if e['path']=='retention-history.json.gz')
+        self.assertEqual(entry['source'],self.run+'/retention-history.json.gz')
+        self.assert_exported(entry,saved,before)
+        self.assertNotIn(self.run+'/retention-history.json',{m['source'] for m in manifest['missing']})
+        self.assertNotIn(57,manifest['uncompacted_iterations'])
+
+    def test_corrupt_compressed_history_is_rejected_before_publication(self):
+        path=self.root/self.run/'retention-history.json';path.unlink()
+        compressed=self.put(self.run+'/retention-history.json.gz',b'not gzip')
+        with self.assertRaises(OSError):
+            self.export(output='results/corrupt-history')
+        self.assertFalse((self.root/'results/corrupt-history').exists())
+        compressed.write_bytes(reports.compress_history(b'not JSON'))
+        with self.assertRaises(ValueError):
+            self.export(output='results/invalid-history')
+        self.assertFalse((self.root/'results/invalid-history').exists())
 
     def test_pretty_legacy_history_is_replaced_without_touching_old_exports(self):
-        for version in ('selfplay-report-export/1.0.0','selfplay-report-export/1.1.0'):
+        for version in ('selfplay-report-export/1.0.0','selfplay-report-export/1.1.0','selfplay-report-export/1.2.0'):
             with self.subTest(version=version):
                 original,old=self.export(output='results/legacy-'+version.split('/')[-1])
                 raw=(self.root/self.run/'retention-history.json').read_bytes()
+                (original/'retention-history.json.gz').unlink()
                 path=original/'retention-history.json';path.write_bytes(raw)
                 old['format']=version
-                entry=next(e for e in old['files'] if e['path']=='retention-history.json')
-                for key in ('source_bytes','source_sha256','transform'):entry.pop(key)
-                entry.update(bytes=len(raw),sha256=reports.checksum(raw))
+                entry=next(e for e in old['files'] if e['path']=='retention-history.json.gz')
+                for key in ('source_bytes','source_sha256','transform','uncompressed_bytes','uncompressed_sha256'):entry.pop(key)
+                entry.update(path='retention-history.json',bytes=len(raw),sha256=reports.checksum(raw))
                 (original/'export-manifest.json').write_bytes(reports.encode(old))
         output,manifest=self.export(output='results/legacy-upgraded',continue_export=True)
-        self.assertTrue((output/'retention-history.json').is_file())
-        self.assertEqual(manifest['format'],'selfplay-report-export/1.2.0')
+        self.assertTrue((output/'retention-history.json.gz').is_file())
+        self.assertEqual(manifest['format'],'selfplay-report-export/1.3.0')
         self.assertTrue(any(e['path']=='state.json' for e in manifest['reused_files']))
-        self.assertNotIn('retention-history.json',{e['path'] for e in manifest['reused_files']})
-        for folder in ('1.0.0','1.1.0'):
+        self.assertNotIn('retention-history.json.gz',{e['path'] for e in manifest['reused_files']})
+        for folder in ('1.0.0','1.1.0','1.2.0'):
             self.assertEqual((self.root/('results/legacy-'+folder)/'retention-history.json').read_bytes(),raw)
 
     def test_compact_history_source_reformat_during_publication_aborts(self):
@@ -116,11 +158,11 @@ class ExportTests(unittest.TestCase):
 
     def test_continue_checks_compact_history_bytes_and_reused_dependency(self):
         original,_=self.export(output='results/compact-first')
-        prior=original/'retention-history.json';prior.write_bytes(b'{"tampered":true}\n')
+        prior=original/'retention-history.json.gz';prior.write_bytes(b'{"tampered":true}\n')
         output,manifest=self.export(output='results/compact-second',continue_export=True)
-        self.assertTrue((output/'retention-history.json').is_file())
+        self.assertTrue((output/'retention-history.json.gz').is_file())
         self.assertTrue(any('Previous report unavailable or changed' in w for w in manifest['warnings']))
-        original_encode=reports.encode;prior=output/'retention-history.json'
+        original_encode=reports.encode;prior=output/'retention-history.json.gz'
         def concurrent_write(value):
             if value.get('format')==reports.FORMAT:prior.write_bytes(b'{}\n')
             return original_encode(value)
@@ -216,7 +258,9 @@ class ExportTests(unittest.TestCase):
         self.assertTrue((output / 'lineage/artifacts/step5/parent/report.json').is_file())
         self.assertFalse((output / 'iteration-0057').exists())
         self.assertFalse((output / 'iteration-0060').exists())
-        self.assertFalse(any(p.suffix in ('.pt', '.gz', '.npz') for p in output.rglob('*')))
+        self.assertFalse(any(p.suffix in ('.pt', '.npz') for p in output.rglob('*')))
+        self.assertEqual([p.relative_to(output).as_posix() for p in output.rglob('*.gz')],
+                         ['retention-history.json.gz'])
         self.assertFalse(any('features' in p.name or 'profile-collection' in p.parts for p in output.rglob('*')))
         for entry in manifest['files']:
             raw = (output / entry['path']).read_bytes()
@@ -379,7 +423,7 @@ class ExportTests(unittest.TestCase):
         self.assertEqual(manifest['latest_iterations'], [1, 2])
         self.assertEqual(manifest['missing'], [])
         self.assertFalse((output / 'iteration-0003').exists())
-        self.assertEqual(json.loads((output / 'retention-history.json').read_text()), history)
+        self.assertEqual(reports.load_json(output / 'retention-history.json'), history)
         for entry in manifest['files']:
             self.assert_exported(entry,(output / entry['path']).read_bytes(),(self.root / entry['source']).read_bytes())
         config = json.loads((output / 'recorded-config.json').read_text())
@@ -476,7 +520,9 @@ class ExportTests(unittest.TestCase):
         output,manifest=self.export()
         for path in [*paths.values(),curve]:
             self.assertEqual((output/path.relative_to(self.root/self.run)).read_bytes(),path.read_bytes())
-        self.assertFalse(any(p.suffix in ('.npz','.gz','.pt') for p in output.rglob('*')))
+        self.assertFalse(any(p.suffix in ('.npz','.pt') for p in output.rglob('*')))
+        self.assertEqual([p.relative_to(output).as_posix() for p in output.rglob('*.gz')],
+                         ['retention-history.json.gz'])
         self.assertEqual(json.loads((output/'state.json').read_text())['quality_pool'],self.state['quality_pool'])
         paths['records'].write_bytes(b'{"changed":true}\n')
         with self.assertRaisesRegex(ValueError,'evidence changed'):self.export()
@@ -627,7 +673,7 @@ class ExportTests(unittest.TestCase):
         _,manifest=self.export(output='results/third',continue_export=True)
         report=next(e for e in manifest['reused_files'] if e['path']=='iteration-0059/report.json')
         self.assertEqual(report['previous_export'],'results/second')
-        history=next(e for e in manifest['reused_files'] if e['path']=='retention-history.json')
+        history=next(e for e in manifest['reused_files'] if e['path']=='retention-history.json.gz')
         self.assertEqual(history['previous_export'],'results/first')
 
     def test_continue_aborts_if_reused_evidence_changes_during_publication(self):

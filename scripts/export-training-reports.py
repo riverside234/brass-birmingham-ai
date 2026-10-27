@@ -1,7 +1,7 @@
 """Copy a self-play analysis bundle to results/ without importing the trainer.
 
-Run files are preserved. Exported retention history removes JSON formatting
-whitespace without changing any tokens; other reports preserve original bytes.
+Run files are preserved. Exported retention history is whitespace-minified and
+gzip-compressed without changing any JSON tokens; other reports preserve original bytes.
 The manifest records both source and exported hashes for transformed history.
 Checkpoints, replay shards,
 feature caches and profiler traces are not part of this report-only export.
@@ -11,7 +11,9 @@ committed generation; the cumulative archive is still included when present.
 """
 import argparse
 from datetime import datetime, timezone
+import gzip
 import hashlib
+import io
 import json
 import os
 from pathlib import Path
@@ -23,9 +25,11 @@ import time
 
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_RUN = 'artifacts/step5/joint7-v11-1-grouped-lr'
-FORMAT = 'selfplay-report-export/1.2.0'
-PREVIOUS_FORMATS = {'selfplay-report-export/1.0.0', 'selfplay-report-export/1.1.0', FORMAT}
+FORMAT = 'selfplay-report-export/1.3.0'
+PREVIOUS_FORMATS = {'selfplay-report-export/1.0.0', 'selfplay-report-export/1.1.0',
+                    'selfplay-report-export/1.2.0', FORMAT}
 COMPACT_JSON = 'json-whitespace-only/1.0.0'
+GZIP_JSON = 'gzip-json-whitespace-only/1.0.0'
 REPORT_NAMES = {'state.json', 'retention-history.json', 'report.json', 'spec.json',
                 'config.json', 'best.json', 'summary.json', 'comparison.json',
                 'validation-comparison.json', 'receipt.json', 'manifest.json'}
@@ -62,6 +66,29 @@ def encode(value):
 
 def checksum(raw):
     return hashlib.sha256(raw).hexdigest()
+
+
+def json_bytes(path):
+    """Decode a JSON file, accepting .json.gz when the plain path is absent."""
+    path = Path(path)
+    if not path.is_file() and path.suffix == '.json':
+        path = path.with_suffix('.json.gz')
+    raw = path.read_bytes()
+    return gzip.decompress(raw) if path.suffix == '.gz' else raw
+
+
+def load_json(path):
+    """Read old plain reports or new gzip reports using either file name."""
+    return json.loads(json_bytes(path).decode('utf-8-sig'))
+
+
+def compress_history(raw):
+    # An empty filename and fixed mtime make identical JSON reusable across
+    # exports. GzipFile also avoids platform-dependent header bytes.
+    output = io.BytesIO()
+    with gzip.GzipFile(filename='', mode='wb', fileobj=output, compresslevel=9, mtime=0) as stream:
+        stream.write(raw)
+    return output.getvalue()
 
 
 def compact_json(raw):
@@ -128,7 +155,7 @@ def previous_files(root, run, generation, warnings):
             continue
         try:
             path = below(root, path)
-            manifest = json.loads(path.read_bytes().decode('utf-8-sig'))
+            manifest = load_json(path)
             if not isinstance(manifest, dict) or manifest.get('format') not in PREVIOUS_FORMATS:
                 continue
             if manifest.get('run') != run.relative_to(root).as_posix():
@@ -197,11 +224,16 @@ def export(root, run, output=None, *, latest=2, extras=(), continue_export=False
         path = below(root, path)
         name = Path(destination).as_posix()
         require(not Path(name).is_absolute() and '..' not in Path(name).parts, 'Unsafe bundle path')
+        if name == 'retention-history.json' and path == run/'retention-history.json' and not path.is_file():
+            compressed = below(root, path.with_suffix('.json.gz'))
+            if compressed.is_file():
+                path = compressed
         if not path.is_file():
             if expected:
                 missing[path.relative_to(root).as_posix()] = reason
             return None
-        raw = path.read_bytes()
+        source_raw = path.read_bytes()
+        raw = gzip.decompress(source_raw) if document == 'json' and path.suffix == '.gz' else source_raw
         # Validate complete documents before publication. Only explicitly
         # selected compact rating outcomes/curves may use these other formats.
         if document == 'json':
@@ -213,15 +245,18 @@ def export(root, run, output=None, *, latest=2, extras=(), continue_export=False
             ET.fromstring(raw); value = None
         else:
             raise ValueError('Unknown report document format')
-        source_raw=raw
         compact_history=(document=='json' and name=='retention-history.json'
-                         and path==run/'retention-history.json')
-        if compact_history:raw=compact_json(source_raw)
+                         and path in (run/'retention-history.json',run/'retention-history.json.gz'))
+        if compact_history:
+            uncompressed=compact_json(raw)
+            raw=compress_history(uncompressed)
+            name+='.gz'
         entry = dict(source=path.relative_to(root).as_posix(), path=name,
                      bytes=len(raw), sha256=checksum(raw), reason=reason)
         if compact_history:
-            entry.update(transform=COMPACT_JSON,source_bytes=len(source_raw),
-                         source_sha256=checksum(source_raw))
+            entry.update(transform=GZIP_JSON,source_bytes=len(source_raw),
+                         source_sha256=checksum(source_raw),
+                         uncompressed_bytes=len(uncompressed),uncompressed_sha256=checksum(uncompressed))
         if name in files:
             previous, previous_raw = files[name]
             # A report may serve both the active anchor and the latest rating
@@ -420,7 +455,8 @@ def export(root, run, output=None, *, latest=2, extras=(), continue_export=False
         warnings=sorted(set(warnings)),
         generated=['recorded-config.json', 'export-manifest.json']+(['local-scoring-adoption.json'] if local_scoring_receipt is not None else []),
         scope='Analysis reports only; not a resumable checkpoint backup. Missing/pruned evidence is not reconstructed. '
-              'Retention history is whitespace-minified JSON; its source_bytes/source_sha256 describe the original '
+              'Retention history is gzip-compressed whitespace-minified JSON (.json.gz); load_json accepts both formats. '
+              'Its source_bytes/source_sha256 describe the original '
               'and bytes/sha256 describe the exported file. Other reports preserve original bytes. '
               'Incremental exports require the previous bundles named in reused_files; references point to original physical files.')
     output.parent.mkdir(parents=True, exist_ok=True)
@@ -438,7 +474,7 @@ def export(root, run, output=None, *, latest=2, extras=(), continue_export=False
         for entry, raw in files.values():
             current=below(root, entry['source']).read_bytes()
             matches=(len(current)==entry['source_bytes'] and checksum(current)==entry['source_sha256']
-                     if entry.get('transform')==COMPACT_JSON else current==raw)
+                     if entry.get('transform') in (COMPACT_JSON,GZIP_JSON) else current==raw)
             require(matches,
                     f"Report changed during export; retry: {entry['source']}")
         for path, raw in dependencies:
@@ -461,7 +497,7 @@ def main():
     try:
         output, manifest = export(args.root, args.run, args.output, latest=args.latest, extras=args.extra,
                                   continue_export=args.continue_export)
-    except (ValueError, OSError) as error:
+    except (ValueError, OSError, EOFError) as error:
         parser.exit(1, f'Export failed: {error}\n')
     print(f'Copied {len(manifest["files"])} reports/metadata files to {output}')
     print(f'Reused {len(manifest["reused_files"])} unchanged files; latest rating slot: {manifest["rating_slot_generation"]}')

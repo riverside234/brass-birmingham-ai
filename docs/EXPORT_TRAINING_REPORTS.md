@@ -36,7 +36,7 @@ are copied normally; a missing or altered old copy is copied again. Exports from
 another run or a later generation are not used. With no prior export, this flag
 performs a normal first export.
 
-The version-1.2 manifest lists newly copied reports in `files`, and skipped
+The version-1.3 manifest lists newly copied reports in `files`, and skipped
 reports in `reused_files`, with `previous_export`, `previous_path`, and SHA-256.
 References point directly to a physical file in an older bundle. Keep and share
 the referenced older bundles along with the new folder; an incremental folder
@@ -44,33 +44,54 @@ alone is not a complete analysis bundle. `recorded-config.json` and the new
 manifest are always generated. Omit `--continue` for an independent export of
 the selected reports. Existing folders are never modified or deleted.
 
-The exported root `retention-history.json` is now compact JSON. Only whitespace
-outside strings and an optional UTF-8 BOM are removed; a final newline is retained.
+The exported root history is now **`retention-history.json.gz`**, using deterministic
+gzip compression (level 9) after minification. Only whitespace outside strings
+and an optional UTF-8 BOM are removed; a final newline is retained.
 All report fields, iterations, strings, escapes and exact numeric tokens stay intact.
 The original file in the training run is never edited. Other report files still
 preserve their original bytes, including evidence referenced by state receipts.
 
-For compact history, the manifest records `transform="json-whitespace-only/1.0.0"`:
+For compressed history, the manifest records `transform="gzip-json-whitespace-only/1.0.0"`:
 
-- `bytes` and `sha256` describe the **exported compact file**.
+- `bytes` and `sha256` describe the **exported gzip file**.
 - `source_bytes` and `source_sha256` describe the **original run file**.
+- `uncompressed_bytes` and `uncompressed_sha256` describe the minified JSON inside it.
 
 Publication rechecks the original source hash, so even a formatting-only source
-change during export aborts the operation. Incremental reuse checks the compact
+change during export aborts the operation. Incremental reuse checks the compressed
 file's actual bytes and rechecks dependencies before publication. Source formatting
 changes can reuse the same compact bytes while recording the new source hash.
-Old pretty-printed history is copied once into compact form; other unchanged files
+Old plain history is copied once into compressed form; other unchanged files
 remain reusable from older exports. Existing export folders are never rewritten.
 
-Validation on the g620 report in an isolated fixture reduced history from
-54,854,166 to 34,576,705 bytes (52.31 to 32.97 MiB, 37% smaller), preserving all
-128 entries and source bytes. A second incremental export reused the compact
-history with matching hashes. All 37 exporter regressions pass, including exact
-numeric/string tokens, legacy exports, source races and dependency tampering.
+The exporter's `load_json(path)` function reads both `.json` and `.json.gz`.
+Passing a missing `retention-history.json` automatically checks the adjacent
+`.json.gz` file. Export also accepts an already-compressed source history, though
+normal training continues using its original plain JSON file. Other report files
+retain their original bytes. For standalone analysis, use Python's standard library:
+
+```python
+import gzip
+import json
+
+with gzip.open("results/YOUR-BUNDLE/retention-history.json.gz", "rt", encoding="utf-8") as stream:
+    history = json.load(stream)
+```
+
+With `--continue`, use the physical `previous_export` / `previous_path` location
+from the manifest if history is listed under `reused_files`. A new export does
+not replace an earlier bundle's large plain file; avoid adding that obsolete
+plain copy to the same Git commit if the goal is to eliminate its size warning.
+
+Validation: 39 exporter tests pass, covering gzip/plain loading, deterministic
+compression, exact JSON tokens, legacy manifests, incremental reuse, corruption,
+source races and dependency tampering. On the existing g620 history, minification
+plus gzip reduced 54,854,166 bytes to 10,723,545 bytes (80.45% smaller), with
+decompression matching the minified bytes exactly. The source was unchanged.
 
 The script copies:
 
-- `state.json`, `retention-history.json`, and available run metadata such as `best.json`.
+- `state.json`, `retention-history.json.gz`, and available run metadata such as `best.json`.
 - The latest **two committed iteration** reports and associated JSON reports/receipts.
 - Any additional committed iteration report not yet present in compact history,
   so interrupted cleanup does not leave gaps outside the latest-two selection.
@@ -133,7 +154,7 @@ than reconstructed. Iteration/evaluation folder names are preserved, for example
 ```text
 results/joint7-v11-1-grouped-lr-g0021-<timestamp>/
   state.json
-  retention-history.json
+  retention-history.json.gz
   recorded-config.json
   export-manifest.json
   iteration-0019/report.json
