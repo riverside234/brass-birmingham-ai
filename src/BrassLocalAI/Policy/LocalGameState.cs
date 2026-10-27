@@ -45,6 +45,7 @@ namespace BrassLegacyAI
         {
             var state = SaveExtensions.Get(metadata);
             if (state == null) return null;
+            if (Native.NativeGameState.IsNative(state)) return Native.NativeGameState.Read(metadata, allowPending);
             string runtime=(string)state["runtime"];
             if (((string)state["format"] != Format && (string)state["format"] != PreviousFormat) || (runtime != ProfileCatalog.Runtime && runtime != ProfileCatalog.IndustryRuntime && runtime != ProfileCatalog.EraRuntime && runtime != ProfileCatalog.StrengthRuntime && runtime != ProfileCatalog.MaskedRuntime && runtime != ProfileCatalog.OriginalRuntime && runtime != ProfileCatalog.PreviousRuntime && runtime != ProfileCatalog.CashRuntime) || (string)state["rules"] != Wire.Rules ||
                 (string)state["schema"] != Wire.Version || (string)state["game_id"] != metadata.GameId ||
@@ -75,6 +76,7 @@ namespace BrassLegacyAI
         public static JObject Assignment(JObject state, int color) { return (JObject)state["assignments"].Single(p => (int)p["color"] == color); }
         public static string Difficulty(JObject state, JObject assignment)
         {
+            if (Native.NativeGameState.IsNative(state)) return DifficultyCatalog.Read(assignment["execution"]);
             if ((string)state["format"] == PreviousFormat) {
                 if (assignment["execution"] != null) throw new InvalidDataException("Old AI save has unexpected execution settings.");
                 return DifficultyCatalog.Existing;

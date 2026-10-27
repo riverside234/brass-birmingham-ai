@@ -170,9 +170,13 @@ namespace BrassPatch.Liquidation
             UiState state = State(useCase);
             if (state.SaveInProgress || state.PromptOpen) return;
             BrassApplicationGame app = Get<IGameHistory>(useCase, "_gameHistory").CurrentGame;
+            // Capture the player who clicked End before EndTurn/EndRound changes
+            // the actor. This is the one automatic checkpoint: the completed
+            // human turn and resulting next-player/round boundary, before AI play.
+            bool humanFinished = app.Metadata.GetPlayerMetadataByColor(app.Game.GameProgressInformation.CurrentPlayer.Color).AiType == AIType.Human;
             if (!app.Game.GameFlow.IsLastTurnOver()) app.Game.GameFlow.EndTurn();
             if (app.Game.GameFlow.IsLastTurnOver() && !IsPending(app.Game.SellIndustryFlow)) app.Game.GameFlow.EndRound();
-            Save(useCase);
+            if (humanFinished) Save(useCase); else useCase.PlayGame();
         }
 
         private static void Save(PlayGameUseCase useCase)
@@ -212,16 +216,33 @@ namespace BrassPatch.Liquidation
             if (!IsPending(flow)) { Original(useCase, "PlayGame"); return; }
             IPlayGameOutput presenter = Get<IPlayGameOutput>(useCase, "_presenter");
             FocusNextDebtor(app.Game);
+            var aiState = BrassPatch.Persistence.SaveExtensions.Get(app.Metadata);
+            if ((string)aiState?["family"] == "nn") {
+                // The qualified public-state contract resolves debt in color
+                // order. Focus is presentation state; each sale remains a normal
+                // persisted event. Apply the same order to human and NN debtors.
+                var next = app.Game.PlayersTrack.Players.OrderBy(p => (int)p.Color)
+                    .FirstOrDefault(p => !flow.CanIndustrySellingBeCompleted(p.Color));
+                if (next != null) app.Game.GameProgressInformation.CurrentPlayer = next;
+            }
             Player current = app.Game.GameProgressInformation.CurrentPlayer;
             PlayerMetadata metadata = app.Metadata.GetPlayerMetadataByColor(current.Color);
-            if (flow.CanIndustrySellingBeCompleted()) { app.Game.GameFlow.EndRound(); Save(useCase); return; }
+            if (flow.CanIndustrySellingBeCompleted()) { app.Game.GameFlow.EndRound(); useCase.PlayGame(); return; }
             if (metadata.AiType == AIType.Human) { presenter.StartSellingIndustries(); return; }
+            if ((string)aiState?["family"] == "nn") {
+                // Late binding avoids a helper dependency cycle. An unavailable
+                // native route stops play; it must never fall through to V4.
+                var type = Type.GetType("BrassLegacyAI.LocalTurnBridge, BrassLegacyAI", true);
+                if (!(bool)type.GetMethod("PlayNativeDebt").Invoke(null, new object[] { useCase }))
+                    throw new InvalidOperationException("NN table has no native debt handler.");
+                return;
+            }
             // Preserve the shipped AI's valuation, but never let it liquidate a human player's tile.
             BuildingSlot choice = Eligible(app, current.Color).OrderBy(s =>
                 ((app.Game.GameProgressInformation.CurrentGameEra == GameEra.CanalEra && s.BuildedIndustry.Level == 2) ? 2 : 1) *
                 (s.BuildedIndustry.VPForBuilding + s.BuildedIndustry.VPPerLink)).ThenBy(s => s.UniqueId, StringComparer.Ordinal).First();
             flow.SellIndustry(current.Color, choice);
-            Save(useCase);
+            useCase.PlayGame();
         }
 
         public static void StartSellIndustriesFlow(SellIndustryFlowUseCase useCase)
@@ -261,7 +282,7 @@ namespace BrassPatch.Liquidation
                 if (!Object.ReferenceEquals(Get<IGameHistory>(play, "_gameHistory").CurrentGame, app)) return;
                 state.PromptOpen = false;
                 flow.SellIndustry(player.Color, slot);
-                Save(play);
+                play.PlayGame();
             }, () => ShowChoice(play, router, app, index + 1));
         }
 

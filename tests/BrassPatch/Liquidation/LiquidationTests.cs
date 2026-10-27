@@ -41,6 +41,7 @@ namespace BrassPatch.Tests.Liquidation
         {
             checks = 0;
             DomainAndReload();
+            HumanEndCheckpoint();
             DelayedHumanChoices();
             NoAssetsAndMixedAi();
             SaveFailure();
@@ -83,6 +84,8 @@ namespace BrassPatch.Tests.Liquidation
         }
         private static void DomainAndReload()
         {
+            // Explicit repository writes exercise compatibility with older
+            // mid-liquidation saves; gameplay no longer creates these writes.
             Case c = NewCase(); Player p = c.App.Game.PlayersTrack.Players[0], other = c.App.Game.PlayersTrack.Players[1];
             BuildingSlot first = Build(c, p, BuildingType.Pottery), second = Build(c, p, BuildingType.CottonMill), opponent = Build(c, other, BuildingType.CoalMine);
             Debt(c, p); var flow = c.App.Game.SellIndustryFlow;
@@ -144,14 +147,15 @@ namespace BrassPatch.Tests.Liquidation
             h.Router.CompleteHide(); Check(h.Router.Popup.Text != initialText, "Next industry offers another owned tile");
             Action doubleClick = h.Router.Popup.Confirm; doubleClick(); doubleClick();
             Check(h.Output.SaveCalls == 1, "Choice waits for presentation completion");
-            h.Router.CompleteHide(); Check(h.Output.SaveCalls == 2, "Confirmed choice saves exactly once");
-            h.Output.CompleteSave(); Check(c.App.Game.GameProgressInformation.CurrentRoundNumber == round, "Remaining debt waits for another choice");
-            h.Router.Popup.Confirm(); h.Router.CompleteHide(); h.Output.CompleteSave();
-            Check(h.Output.HasPendingSave, "Covering debt ends round and schedules final save");
+            h.Router.CompleteHide(); Check(h.Output.SaveCalls == 1 && !h.Output.HasPendingSave, "Liquidation choice continues without another save");
+            Check(c.App.Game.GameProgressInformation.CurrentRoundNumber == round, "Remaining debt waits for another choice");
+            h.Router.Popup.Confirm(); h.Router.CompleteHide();
+            Check(!h.Output.HasPendingSave && h.Output.SaveCalls == 1, "Covering debt does not overwrite the human End checkpoint");
             Check(c.App.Game.GameProgressInformation.CurrentRoundNumber == round + 1, "Round resumes once after last choice");
-            h.Output.CompleteSave(); Check(h.Output.HumanTurns == 1, "Next human turn starts once");
-            int ended = c.Repo.Advanced.GameStorage.LoadEvents(c.App.Metadata.GameId, 0, int.MaxValue).Count(e => e is RoundEnded);
+            Check(h.Output.HumanTurns == 1, "Next human turn starts once");
+            int ended = c.App.Game.GetUncommittedEvents().Count(e => e is RoundEnded);
             Check(ended == 1, "Exactly one RoundEnded event is emitted");
+            Check(LiquidationFixes.IsPending(c.Repo.Load(c.App.Metadata.GameId).Game.SellIndustryFlow), "Reload returns to the saved human End boundary before liquidation");
             // Resume a saved pending phase in fresh application use cases.
             Case paused = NewCase(); Player debtor = paused.App.Game.PlayersTrack.Players[0]; Build(paused, debtor, BuildingType.Pottery); Debt(paused, debtor); ReachFinalTurn(paused);
             UiHarness before = Harness(paused); before.Play.EndTurn(); before.Output.CompleteSave();
@@ -182,8 +186,27 @@ namespace BrassPatch.Tests.Liquidation
             Check(noAssets.VP == 0, "No-assets debt loses available VP without a negative total");
             Check(c.App.Game.SellIndustryFlow.GetLostVpsInLastRound()[noAssets.Color] == 7, "Shortfall summary records VP loss");
             BrassApplicationGame loaded = c.Repo.Load(c.App.Metadata.GameId);
-            Check(loaded.Game.SellIndustryFlow.GetLostVpsInLastRound()[noAssets.Color] == 7, "No-assets loss summary survives reload");
-            Check(!LiquidationFixes.IsPending(loaded.Game.SellIndustryFlow), "Mixed phase completes and reloads");
+            Check(h.Output.SaveCalls == 1, "Mixed human/AI liquidation does not trigger another save");
+            Check(LiquidationFixes.IsPending(loaded.Game.SellIndustryFlow), "Mixed phase reload restores the last human End checkpoint");
+        }
+
+        private static void HumanEndCheckpoint()
+        {
+            Case c = NewCase(4); UiHarness h = Harness(c); int original = c.App.Game.Revision;
+            var human = c.App.Game.GameProgressInformation.CurrentPlayer;
+            PassActions(c.App);
+            Check(h.Output.SaveCalls == 0 && c.Repo.Load(c.App.Metadata.GameId).Game.Revision == original, "Completed human actions wait for End before saving");
+            h.Play.EndTurn(); int boundary = c.App.Game.Revision;
+            Check(h.Output.SaveCalls == 1 && c.App.Game.GameProgressInformation.CurrentPlayer.Color != human.Color, "Human End advances to the next player before checkpointing");
+            h.Output.CompleteSave();
+            Check(c.Repo.Load(c.App.Metadata.GameId).Game.Revision == boundary, "Human End checkpoint includes the next-player boundary");
+            for (int i = 0; i < 3; i++) {
+                var ai = c.App.Game.GameProgressInformation.CurrentPlayer;
+                c.App.Metadata.GetPlayerMetadataByColor(ai.Color).AiType = AIType.Hard;
+                PassActions(c.App); h.Play.EndTurn();
+                Check(h.Output.SaveCalls == 1 && !h.Output.HasPendingSave, "AI End and round transition do not save");
+            }
+            Check(c.Repo.Load(c.App.Metadata.GameId).Game.Revision == boundary, "All AI turns preserve the one human checkpoint");
         }
 
         private static void SaveFailure()

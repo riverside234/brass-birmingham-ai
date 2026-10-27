@@ -508,6 +508,8 @@ fn run_lane<E: Evaluator>(
     let s = session.as_mut().ok_or(CoreError::SessionFailed)?;
     let mut effective = s.budget();
     effective.narrow(0, run.remaining_deadline);
+    let _remaining_scope =
+        work::Scope::narrow_remaining(effective.deadline_ns.saturating_sub(clock.now_ns()));
     let mut neural = Batched {
         evaluator,
         buffers,
@@ -525,14 +527,19 @@ fn run_lane<E: Evaluator>(
     let shared = match run.root {
         Root::Produce(sender) => {
             let result = (|| {
-                let _root_scope =
-                    work::Scope::narrow_remaining(effective.remaining_work(clock.now_ns()));
+                // Root identity/legal preparation is also needed by bounded
+                // completion when only the delivery reserve remains. Keep it
+                // inside the narrowed delivery deadline; NN work still gets
+                // its stricter work deadline below. A zero work budget must
+                // not cancel the legal fallback before it can be constructed.
                 let (_, info) = s.preview(run.input.clone())?;
                 let stats = if info.actions.len() > 1
                     && session::plans::phase(&info)? != brass_ai_core::types::Phase::Debt
                     && !s.continuation_matches(&info)
                     && effective.work_open(clock)
                 {
+                    let _root_scope =
+                        work::Scope::narrow_remaining(effective.remaining_work(clock.now_ns()));
                     match neural.evaluate(&info) {
                         Ok(s) => Some(s),
                         Err(e) => {

@@ -1,62 +1,83 @@
 # Brass: Birmingham AI
 
-**Offline game AI, imperfect-information search, and neural self-play for the Steam edition of Brass: Birmingham.**
+**Four-player, imperfect-information AI: neural self-play, native Rust search, and integration with the Steam game.**
 
-This project connects a Unity/C# rules engine to a Python/PyTorch training pipeline. It combines hidden-information search, heuristic imitation, population self-play, and evaluation across opponents and player seats. The goal is a stronger local opponent with varied playing styles and difficulty suited to laptop play.
+An independent AI project for *Brass: Birmingham*, an economic strategy game with hidden cards, shared resources, and changing turn order. It connects Python/PyTorch reinforcement learning to a playable CPU opponent through a Rust simulator, Gumbel IS-MCTS search, and Unity/C# integration.
 
-**Current status:** Six heuristic search styles and the local game integration are implemented and verified. Neural self-play training is in progress; learned personalities, calibrated neural difficulty, and laptop neural deployment remain to be qualified.
+**Stack:** Rust · Python · PyTorch · C# · Unity/Mono · ONNX Runtime
 
-**Stack:** Python · PyTorch · C# · Unity/Mono · ONNX · PowerShell
+[Architecture](#architecture) · [Training](#training) · [Getting started](#getting-started) · [Validation and benchmarks](docs/VALIDATION_RESULTS.md) · [Repository guide](#repository-guide)
+
+## Current status
+
+- **Local Rust backend released:** version 1.4.36 integrates native simulation, feature encoding, Gumbel IS-MCTS, and ONNX Runtime CPU inference with the Windows game.
+- **Neural training continues:** the in-game **Alpha Test** option uses a pinned intermediate checkpoint; the final neural model is still in training.
+- **Two opponent families:** six V4 heuristic styles or the neural opponent, with independent **4 / 8 / 10 / 12-second** settings for each AI seat. A table uses one AI family throughout.
+
+Neural play supports standard four-player local tables with a human; V4 also supports two and three players. Training still uses the existing collection backend; extending Rust to collection is a subsequent stage.
 
 ## Technical highlights
 
-- **Search with hidden information.** A shared C# implementation of Masked Information Set Monte Carlo Tree Search (Masked ISMCTS) samples plausible hidden worlds from the acting player's permitted view. Opponent policies receive their own masked views, and completed simulations retain all four players' returns.
-- **Compact four-player model.** An MLP-ResNet scores variable legal-action sets and predicts four-seat win share, placement, and victory points. The model has **1,840,109 parameters** for imitation and **1,850,129** with the utility head used by PPO and neural search.
-- **Resumable training.** Audited heuristic imitation feeds population self-play with Proximal Policy Optimization (PPO) and search-visit distillation. CPU feature preparation, shared CPU/GPU inference, bounded worker admission, checkpoint lineage, and retention support long-running experiments.
-- **Evaluation controls.** Frozen opponents, held-out setups, seat rotations, and model selection using confidence intervals separate training progress from measured playing strength. Cancelled, late, or incomplete search work cannot supply teacher labels.
-- **Game integration.** Six V4 heuristic styles have independent **2/5/12-second** difficulty allowances. The local patch also adds public-information card tracking, end-game statistics, game history, rules repairs, and save/recovery fixes.
+- **Information-set search in Rust.** Gumbel IS-MCTS samples plausible hidden worlds, explores roots through sequential halving, and backs up all four players' outcomes. Both actions of a turn share one deadline.
+- **Native simulation and inference.** Typed staged rules, reusable feature buffers, arena-owned trees, and persistent ONNX sessions keep the simulation loop inside Rust. Two independent search sessions each use one compute thread, including inference.
+- **A model for multiplayer decisions.** The v11.2 network combines grouped state projections, a 512-wide residual trunk with eight blocks, local entity features, and a shared scorer for variable legal-action sets. It predicts win share, placement, victory points, and remaining utility for every seat.
+- **Policy and critic separation.** Opponent descriptors condition only the critic; deployment uses unknown descriptors. Policies see permitted information, with masks preserving the full legal-action set.
+- **Resumable reinforcement learning.** Heuristic imitation feeds population self-play with Proximal Policy Optimization (PPO) and a Phasic Policy Gradient (PPG) value phase. Replay admission, branch continuations, behavior-probability checks, and optimizer rollback support reproducible recovery.
+- **Safe game integration.** Detached snapshots undergo full validation through the existing background scheduler. Main-thread commits recheck identity, revision, actor, cancellation, and legality. Save/load, worker failure, and installation rollback have explicit recovery paths.
 
-## How it works
-
-Four-player Brass combines hidden cards, shared resources, a changing turn order, and long-term economic planning. The system must evaluate each player's outcome without treating the next player's value as its negative, and it must plan both actions of a turn within one search budget.
+## Architecture
 
 ```mermaid
-flowchart LR
-    H["C# rules host"] --> D["Audited heuristic demonstrations"]
-    D --> I["Fresh neural imitation"]
-    I --> P["Population self-play + PPO"]
-    P --> E["Held-out, seat-rotated evaluation"]
-    P --> S["Masked ISMCTS + NN"]
-    S -->|Completed-visit distillation| P
+flowchart TB
+    subgraph Training["Training · Python / PyTorch"]
+        C["C# reference engine + rollout collection"] --> D["Audited demonstrations + population self-play"]
+        D --> P["Imitation → PPO + PPG"]
+        P --> M["Versioned checkpoint + ONNX export"]
+    end
+
+    subgraph Game["Local play · Unity / C# + Rust"]
+        U["Unity board, UI, and saves"] -->|Permitted observation| R["Rust simulation + Gumbel IS-MCTS"]
+        R <--> N["Native feature encoding + ONNX Runtime CPU"]
+        M --> N
+        R -->|Complete semantic action| V["Background validation + guarded main-thread commit"]
+        V --> U
+    end
 ```
 
-The rules host supplies permitted observations and complete legal choices. Dynamic legality, batch padding, and progressive search expansion have separate masks, so a large action set is processed in chunks rather than silently truncated. The shared search implementation serves both the heuristic game opponents and the research pipeline; trained neural models are not yet installed in the game.
+The C# engine provides the reference for cross-language checks. Rust reuses an attributed upstream rules crate, adapted to the target game's staged actions, chance, debt, and scoring. The existing C# Masked ISMCTS remains available for V4 and reference comparisons.
 
-The active recipe begins with random weights and audited heuristic data. Compatible completed imitation runs can hand off to self-play, and reviewed runs can resume with their lineage and optimizer state preserved. Older bundled bootstrap checkpoints are archival artifacts, not initializers for the current recipe. See the [current training guide](docs/TRAINING_RECOVERY_LAB.md) for the exact workflow.
+Policies receive public information, their own hand, and permitted recall. Each simulated actor receives its own view. Versioned state, model, feature, and request identities prevent stale work from becoming a live action.
 
-## Validation and current status
+## Training
 
-The linked reports record checks executed against their stated source and runtime versions:
+The current recipe mixes self-play, frozen historical opponents, and V4 opponents. Actor updates use eligible learner decisions; critic fitting has separate role and whole-game holdout rules. Optional ownership/scoring heads share the critic representation, with future outcomes confined to training targets.
 
-| Area | Recorded evidence |
-| --- | --- |
-| Rules host and information boundary | Five complete four-player games, 46 restored checkpoints, and 328 counterfactual observation checks; standalone .NET and Unity Mono replay agreement. [Host validation](docs/R1_EXIT_CHECKS.md) |
-| Shared search and game opponents | All six V4 styles, legal turn completion, clocks, cancellation, resource lifecycle, and older saved profiles; **1,218 native assertions** in the selected V4 release. [V4 runtime checks](docs/MASKED_V4_1.4.20.md) |
-| Neural training pipeline | End-to-end imitation, self-play, resume, evaluation, CPU batching, and completed-visit distillation checks. [Search/training implementation checks](docs/MASKED_ISMCTS_EXIT_CHECKS.md) and [current training revisions](docs/TRAINING_RECOVERY_LAB.md) |
-| Statistics and game history | **5,805 Statistics checks** and **3,999 Game History checks**, plus native visual inspection, for patch 1.4.30. [Game UI validation](docs/STATISTICS_GEOGRAPHY_1.4.30.md) |
+Recent revisions add three-decision opening exploration, fresh opening windows after forks, a decoupled PPO opening objective, and PPG fitting over two iterations of critic data. Exact KL and held-out loss checks govern retained updates. Checkpoints preserve weights, optimizer moments, RNG, replay provenance, population, and progress.
 
-These results establish tested behavior and compatibility within their documented scope. They do not establish stronger neural play or calibrated difficulty. The V4 bank was selected without a new qualifying strength tournament. The neural parent is still training, and the game's **Gamma** model slots remain unavailable. Local CPU checks also do not establish lab CUDA throughput or cross-platform qualification.
+Ordinary training currently uses policy-only collection. Optional search teachers and distillation have separate admission rules.
+
+See the [current recipe and continuation notes](ai-research/TRAINING_G1120_REVISION.md), [critic architecture and data admission](ai-research/OPPONENT_CRITIC_DESCRIPTORS_REPORT.md), and [checkpoint transfer and recovery guide](docs/STEP5_MACHINE_TRANSFER.md).
+
+## Validation summary
+
+Validation covers cross-language rules and neural-output parity, complete games, deadlines, cancellation, save/load, and rollback. Recorded local comparisons show **48.8% lower median worst-frame time** from background validation and **48.4% fewer counted managed validation bytes** in a separate controlled probe. These measurements have different scopes and do not establish neural playing strength or performance on other hardware. See [validation results, benchmarks, and limitations](docs/VALIDATION_RESULTS.md).
 
 ## Getting started
 
-### Explore without game files or a GPU
+### Explore the algorithm without game files or a GPU
+
+The small Gumbel IS-MCTS reference and its tests use only Python's standard library:
 
 ```sh
-git clone https://github.com/riverside234/ai-training.git
-cd ai-training
+git clone https://github.com/riverside234/brass-birmingham-ai.git
+cd brass-birmingham-ai
+python scripts/reproduce-gumbel-is-mcts.py --simulations 128 --seed 7
+python -m unittest discover -s tests/GumbelISMCTS -p "test_*.py" -v
 ```
 
-In an isolated **Python 3.10+** environment, run the reference and contract checks:
+The [algorithm reference](ai-research/GUMBEL_IS_MCTS_REFERENCE.md) explains this small hidden-information game, recorded-draw replay, and the connection to the full Brass implementation.
+
+For observation/action contracts and multiplayer value checks, use an isolated **Python 3.10+** environment:
 
 ```sh
 python -m pip install -r requirements-r0.txt
@@ -64,41 +85,39 @@ python scripts/verify-r0.py
 python -m unittest discover -s tests/R0 -p "test_*.py" -v
 ```
 
-These checks need no game installation, GPU, or network access after dependency installation. They validate reference metadata, observation/action contracts, and four-player value semantics. See the [contract guide](docs/R0_CONTRACTS.md) for their scope.
+See the [contract guide](docs/R0_CONTRACTS.md) for coverage. These checks run offline after dependency installation.
 
-### Train or evaluate against the game engine
+### Work with the full system
 
-Engine-backed collection requires your own compatible Steam game installation and a privately transferred, fingerprint-verified rules/runtime bundle. A clone alone does not supply those dependencies.
+Full collection and Unity integration require a compatible Steam installation and verified runtime dependencies, supplied separately from the source clone. Keep the checkout separate from the game installation; generated builds and experiments belong under ignored `artifacts/`.
 
-Start with the [current conda training guide](docs/TRAINING_RECOVERY_LAB.md) for runtime import, CPU/CUDA preflight, demonstration auditing, fresh imitation, self-play, and evaluation. The [rules-host guide](docs/R1_HOST.md) covers the Windows host build and APIs. Keep the game installation outside a new clone; generated runtime files and experiments belong under ignored `artifacts/`.
-
-### Use the local game patch
-
-Read the [patch build and restoration guide](docs/LOCAL_PATCH.md), [selected V4 opponent notes](docs/MASKED_V4_1.4.20.md), and [latest documented UI release](docs/STATISTICS_GEOGRAPHY_1.4.30.md). The patch is for offline play: online play is disabled while it is installed, and games created with its versioned identifiers require a compatible patch to continue.
+- **Native backend:** start with the [Rust workspace](native/Cargo.toml), [pinned toolchain](native/rust-toolchain.toml), and [migration design](ai-research/RUST_AI_BACKEND_MIGRATION_PLAN.md).
+- **Training and evaluation:** use the [current training recipe](ai-research/TRAINING_G1120_REVISION.md), versioned presets under [configs/step5/](configs/step5/), and the [reference-host guide](docs/R1_HOST.md).
+- **Local game integration:** the [local release report](ai-research/RUST_BACKEND_LOCAL_RELEASE.md) describes the supported package, installation prerequisites, and exact rollback. The patch is for offline play; online play is disabled while installed, and modified saves need a compatible runtime.
 
 ## Repository guide
 
-| Location | Contents |
+| Location | Purpose |
 | --- | --- |
-| [src/brass_ai/](src/brass_ai/) | Python host client, models, training, search coordination, evaluation, and personality research |
-| [src/BrassHost/](src/BrassHost/) and [src/BrassSearchHost/](src/BrassSearchHost/) | C# rules-host and search-runtime adapters |
-| [src/BrassMaskedSearch/](src/BrassMaskedSearch/) | Shared Masked ISMCTS implementation |
-| [src/BrassLocalAI/](src/BrassLocalAI/) and [src/BrassPatch/](src/BrassPatch/) | Local AI integration, rules/save repairs, and game UI |
-| [configs/](configs/) and [training/](training/) | Versioned contracts, experiment presets, frozen opponent banks, and selected reproducibility artifacts |
-| [tests/](tests/) and [scripts/](scripts/) | Python/C# regression checks, runtime verification, builders, and experiment entry points |
-| [docs/](docs/) | Setup guides, implementation checks, and versioned release notes |
-| [ai-research/](ai-research/) and [rules-audit/](rules-audit/) | Design decisions, research reviews, rules audits, and historical probes |
+| [native/brass-ai-core/](native/brass-ai-core/) | Rules adapter, permitted observations, world sampling, features, and Gumbel IS-MCTS |
+| [native/brass-ai-inference/](native/brass-ai-inference/) | Same-process ONNX evaluation and session-owned buffers |
+| [native/brass-ai-worker/](native/brass-ai-worker/) | Two-session coordination, deadlines, cancellation, and local process protocol |
+| [src/brass_ai/](src/brass_ai/) | PyTorch models, imitation, PPO/PPG, replay admission, evaluation, and recovery |
+| [src/BrassLocalAI/](src/BrassLocalAI/) | AI selection, execution scheduling, native bridge, and action validation |
+| [src/BrassHost/](src/BrassHost/) · [src/BrassSearchHost/](src/BrassSearchHost/) · [src/BrassMaskedSearch/](src/BrassMaskedSearch/) | Reference engine adapters and C# Masked ISMCTS |
+| [src/BrassPatch/](src/BrassPatch/) | Rules/save repairs, card tracking, statistics, and game history |
+| [configs/](configs/) · [training/](training/) | Versioned contracts, experiment recipes, opponent banks, and selected model artifacts |
+| [tests/](tests/) · [scripts/](scripts/) | Regression suites, parity tools, benchmark harnesses, builders, and training entry points |
+| [docs/](docs/) · [ai-research/](ai-research/) | Guides, architecture decisions, experiment reviews, and release reports |
 
-Earlier R2/R3 and R4/R5 recipes remain available as implementation history. Use the current training guide for active commands and compatibility rules.
+## Next steps
 
-## Next milestones
+- Evaluate the final neural model against frozen opponents on unseen setups and across all four seats.
+- Extend the qualified Rust simulation backend to training collection, with separate Linux/GPU and replay-equivalence checks.
+- Validate learned playing styles and model-specific difficulty calibration.
 
-- Measure the trained model against frozen opponents on unseen setups and across all four seats.
-- Complete learned-style discovery and validate distinct personalities and difficulty levels. The [personality plan](ai-research/PERSONALITIES_AND_DIFFICULTY_PLAN.md) and [implemented research workflows](docs/PERSONALITY_P0_P1_LAB.md) describe this stage.
-- Qualify laptop inference and integrate trained neural opponents into the game.
+## Attribution and distribution
 
-## Attribution and repository boundaries
+Credits and component-specific licenses for Daiyu AI, OpenSpiel, and the Gumbel IS-MCTS references are preserved in the [native rules notice](native/vendor/brass-upstream-rules/NOTICE.md), [learning notice and license](src/brass_ai/learning/NOTICE.md), [search notice](src/BrassMaskedSearch/NOTICE.md), and [algorithm reference](ai-research/GUMBEL_IS_MCTS_REFERENCE.md).
 
-The project draws on pinned Daiyu AI and OpenSpiel references. See the [reference provenance](docs/R0_REFERENCE_NOTICES.md), [learning-component attribution](src/brass_ai/learning/NOTICE.md), and [learning-component license](src/brass_ai/learning/LICENSE) for scope and licensing.
-
-Game executables, Unity assets, proprietary managed assemblies, decompiled game source, private runtime bundles, bulk replay, and generated experiment checkpoints are excluded from Git. Selected weights and project-authored workers under `training/` have explicit exceptions; their private game dependencies are still required. Some historical audit links point to local files or generated evidence that is not included in a clone.
+Game binaries/assets, proprietary assemblies, decompiled game source, private runtime bundles, bulk replay, and generated checkpoints are excluded from Git, with explicit exceptions for selected model artifacts. The [results page](docs/VALIDATION_RESULTS.md) explains evidence availability. This project is independent of the game's publisher and developers.

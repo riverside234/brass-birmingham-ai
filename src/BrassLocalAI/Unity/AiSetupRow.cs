@@ -53,7 +53,7 @@ namespace BrassLegacyAI
             }
             choiceLabel.text = human ? "Human" : LocalMenu.RowLabel(player);
             choiceDetail.text = human ? "Local player" : DifficultyCatalog.Label(SelectedDifficulty) + " · up to " + DifficultyCatalog.Milliseconds(SelectedDifficulty) / 1000 + "s";
-            var icon = StyleButton.GetComponentInChildren<AiChoiceIcon>(); icon.Kind = human ? AiIconKind.Human : AiIconKind.V4; icon.SetVerticesDirty();
+            var icon = StyleButton.GetComponentInChildren<AiChoiceIcon>(); icon.Kind = human ? AiIconKind.Human : SelectedChoice.Family==AiFamily.AlphaTest?AiIconKind.Gamma:AiIconKind.V4; icon.SetVerticesDirty();
             StyleButton.GetComponent<StrategyTooltip>().Description = human ? "You control this player locally. Multiple Human players can share this device." : LocalMenu.ChoiceDescription(SelectedStyle);
         }
         void Initialize(PlayerCreateGameView view)

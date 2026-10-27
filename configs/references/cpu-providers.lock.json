@@ -1,0 +1,40 @@
+{
+  "format": "brass-provider-packages/1.0.0",
+  "packages": [
+    {
+      "name": "onnxruntime",
+      "filename": "onnxruntime-1.31.0-cp312-cp312-win_amd64.whl",
+      "url": "https://files.pythonhosted.org/packages/be/ed/b12cea136ccd7b03d924f46b8393faf7ceac21115c0c50e729faa248cf23/onnxruntime-1.31.0-cp312-cp312-win_amd64.whl",
+      "sha256": "09d56445c1753e66e0912de69d3f0184016ad9a191dcd6925bf5dd570d2bfbe5",
+      "bytes": 14888841
+    },
+    {
+      "name": "onnxruntime-ep-openvino",
+      "filename": "onnxruntime_ep_openvino-1.8.1-py3-none-win_amd64.whl",
+      "url": "https://files.pythonhosted.org/packages/75/98/224ead07344390258ae0515ed285ba2951e9c1405f4507443a03bb7dd5c7/onnxruntime_ep_openvino-1.8.1-py3-none-win_amd64.whl",
+      "sha256": "1acd878be173b02bb8b953460f2f59b121e5f6e47ebc6aad490c0590cf6718fb",
+      "bytes": 75824318
+    },
+    {
+      "name": "onnxruntime-openvino",
+      "filename": "onnxruntime_openvino-1.24.1-cp312-cp312-win_amd64.whl",
+      "url": "https://files.pythonhosted.org/packages/59/37/d301f2c68b19a9485ed5db3047e0fb52478f3e73eb08c7d2a7c61be7cc1c/onnxruntime_openvino-1.24.1-cp312-cp312-win_amd64.whl",
+      "sha256": "f186335a9c9b255633275290da7521d3d4d14c7773fee3127bfa040234d3fa5a",
+      "bytes": 13658075
+    },
+    {
+      "name": "openvino",
+      "filename": "openvino-2025.4.1-20426-cp312-cp312-win_amd64.whl",
+      "url": "https://files.pythonhosted.org/packages/64/c2/582bd6d01fc6588bfe35c0f363d294a54daa4587cafe30e932fa51420d04/openvino-2025.4.1-20426-cp312-cp312-win_amd64.whl",
+      "sha256": "c50293d1463698012eaa526dcc83f841b85a3f4952eea4c9445c83e0346f8e80",
+      "bytes": 41791284
+    }
+  ],
+  "documentation": [
+    "https://onnxruntime.ai/docs/execution-providers/OpenVINO-ExecutionProvider.html",
+    "https://github.com/onnxruntime/onnxruntime-ep-openvino/blob/main/docs/QuickStart.md"
+  ],
+  "tested_cpu": "Intel Core Ultra 5 135U",
+  "default": "CPUExecutionProvider",
+  "openvino_admitted": false
+}

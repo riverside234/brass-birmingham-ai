@@ -1,79 +1,79 @@
-# Step 5：迁移到另一台 lab machine
+# Step 5: Transfer to Another Lab Machine
 
-不能只复制最后一个 `iteration-*` 文件夹或 `best.pt`。续训还需要最新 learner 的完整 checkpoint（含 Adam/RNG）、`state.json`、当前历史对手池、incumbent、evaluation anchor，以及 IL 来源记录。`best.pt` 可能比最新 learner 旧。
+Copying only the last `iteration-*` directory or `best.pt` is insufficient. Resuming training also requires the latest learner's full checkpoint (including Adam and RNG state), `state.json`, the current historical opponent pool, the incumbent, the evaluation anchor, and imitation learning (IL) provenance. `best.pt` may be older than the latest learner.
 
-独立脚本 `scripts/step5-transfer.py` 默认使用 **compact + repo + 多线程 tar.zst + 1900 MB 分卷**，通过 **GitHub Release 附件**中转。新机器从 GitHub 检出 Release 对应的代码版本，再从附件恢复游戏规则运行时/DLL 和训练状态。上传成功后，恢复该快照不再需要访问旧机器。**现在支持 `restore --relocate --root 新目录`**，不需要管理员权限、bind mount 或创建原来的绝对目录。恢复不改写历史训练文件；旧训练代码须在原字节校验后按下文升级。
+The standalone `scripts/step5-transfer.py` defaults to **compact + repo + multithreaded tar.zst + 1900 MB parts**, transferred through **GitHub Release assets**. The destination machine checks out the code version associated with the Release, then restores the game rules runtime/DLLs and training state from its assets. Once the upload succeeds, restoring that snapshot no longer requires access to the source machine. **`restore --relocate --root <new-directory>` is now supported**, without administrator privileges, bind mounts, or recreating the original absolute directory. Restoration preserves historical training files; upgrade older training code as described below after verifying the original bytes.
 
-公有和私有仓库均可运行工作流：公有仓库的附件公开下载，私有仓库需要读取权限。这里的“只靠 GitHub”指项目代码、运行时和续训数据都从 GitHub 获取；系统、Python/conda、PyTorch、CUDA 驱动和 Mono/OpenSpiel 仍需按指南安装，这不是离线系统镜像。
+The workflow supports both public and private repositories. Assets in a public repository are publicly downloadable; private repositories require read access. Here, "GitHub alone" means that project code, runtimes, and training continuation data all come from GitHub. The operating system, Python/conda, PyTorch, CUDA drivers, and Mono/OpenSpiel still need to be installed according to the guide; the archive is not an offline system image.
 
-## 12 October：zstd 和 GitHub Release
+## 12 October: zstd and GitHub Releases
 
-本次将默认依赖模式由 `external` 改为 `repo`，把 `training/runtime/distribution.json` 列出的全部规则运行时以及保存 config 选定 host 的文件装入附件，逐文件校验 SHA-256。代码和已跟踪 worker 继续从匹配的 Git commit 获取；其他恢复依赖进入包。重复 DLL 按内容去重，不会为每个运行时目录重复压缩。缺失或修改过的 DLL 会使导出失败，工作流也会在上传前确认全部运行时已打包。
+This revision changes the default dependency mode from `external` to `repo`. It includes every rules runtime listed in `training/runtime/distribution.json`, plus the files of the host selected by the saved config, in the Release assets, with SHA-256 verification for each file. Code and tracked workers still come from the matching Git commit; other restoration dependencies are packaged. Identical DLLs are deduplicated by content rather than compressed again for every runtime directory. Missing or modified DLLs cause export to fail, and the workflow confirms that all runtimes are packaged before uploading.
 
-默认 `--format zstd --zstd-level 3 --threads 0 --part-mb 1900`。`--threads 0` 自动使用可用 CPU 数，考虑进程 affinity 和 `SLURM_CPUS_PER_TASK`；共享机器上可明确指定 `--threads 8` 等上限，`--threads 1` 为单线程。小文件可能不足以让所有线程同时工作。压缩速度和体积取决于真实 checkpoint/数据，不保证固定提速倍数。
+The defaults are `--format zstd --zstd-level 3 --threads 0 --part-mb 1900`. `--threads 0` automatically uses the available CPU count, accounting for process affinity and `SLURM_CPUS_PER_TASK`. On shared machines, set an explicit limit such as `--threads 8`; `--threads 1` uses a single thread. Small files may not provide enough work to keep every thread busy. Compression speed and size depend on the actual checkpoints/data; no fixed speedup is guaranteed.
 
-打包直接把 TAR 内容流送入 zstd，不先生成完整 TAR；恢复直接读取分卷，也不落地完整 TAR。内容去重、SHA-256 校验、外部依赖检查和原字节恢复保持不变。ZIP 单文件、ZIP 分卷以及旧版本清单仍会按内容自动识别，无需额外恢复参数。
+Packaging streams TAR contents directly into zstd without first creating a complete TAR file. Restoration reads the parts directly without writing a complete TAR to disk. Content deduplication, SHA-256 verification, external dependency checks, and byte-preserving restoration remain in place. Single-file ZIP archives, split ZIP archives, and older manifests are still detected automatically by content, with no extra restore flags.
 
-脚本需要 **Python 3.11+**。Python 3.14+ 通常自带 `compression.zstd`；较早版本在两台机器的环境中安装独立迁移依赖：
+The script requires **Python 3.11+**. Python 3.14+ normally includes `compression.zstd`; on earlier versions, install the separate transfer dependency in the environments on both machines:
 
 ```sh
 ROOT=/data/not_backed_up/yxu209/ai-training
 python -m pip install -r "$ROOT/requirements-transfer.txt"
 ```
 
-若某个 Python 3.14+ 发行版没有编译原生 zstd，可安装 `python -m pip install backports.zstd==1.8.0`。缺少 zstd 时会提示安装方法，不会静默退回 ZIP；`--dry-run` 和显式 `--format zip` 不需要此依赖。该依赖不加入训练 requirements，也不改变训练签名。
+If a Python 3.14+ distribution was built without native zstd, install `python -m pip install backports.zstd==1.8.0`. Missing zstd produces installation instructions rather than silently falling back to ZIP. `--dry-run` and explicit `--format zip` do not require this dependency. It is separate from the training requirements and does not change the training signature.
 
-## 当前 self-training 兼容性
+## Current Self-Training Compatibility
 
-目录迁移审计修订为 `step5-project-relocation/1.1.0`，源码指纹为 `f6f8028538c13fdaa5cbcd40ffde5e81fe5d9cb58b649875d8a5cd1ea8487191`，共享路径层属于这个指纹。新包记录 `source_recipe: 3` 和 `relocation_version: step5-project-relocation/1.1.0`；recipe 3 在原有 Python、host/build 输入之外纳入 `bank.py` 和 `legacy.py`，`learning/paths.py` 也属于源码指纹。旧包仍按原 recipe 1/2/3 校验，不需要重新导出，不能用新版代码冒充旧版通过校验。
+The audited relocation revision is `step5-project-relocation/1.1.0`, with source fingerprint `f6f8028538c13fdaa5cbcd40ffde5e81fe5d9cb58b649875d8a5cd1ea8487191`. The shared path layer is included in this fingerprint. New archives record `source_recipe: 3` and `relocation_version: step5-project-relocation/1.1.0`. Recipe 3 adds `bank.py` and `legacy.py` to the existing Python and host/build inputs; `learning/paths.py` is also source-bound. Older archives are still verified using their original recipe 1/2/3 and do not need to be exported again. New code cannot substitute for old code to pass verification.
 
-`configs/learning/selfplay-resume-sources.json` 明确登记最初的目录迁移版（`c9c9bb914477feea94b61b1698db93fd5e767d0f2f88b0c715f0cfea12074140`）、**12 October comprehensive bug audit**（`8d19aff88a93edd9b734561a73c83a440f5d3517429be007d9913aceab8cffd1`）到本修订的审核升级，以及此前已支持、仍受原配置限制的升级路径。learning compatibility 保持 `c349e816f2e301ea2a3b438902059cffe868f48e131f7c120691d37cd1c409d2`。完成的 IL 来源另由 `imitation-handoff-sources.json` 审核，仍检查原 manifest、checkpoint 和祖先签名。未知源码、改变学习契约或未经登记的 config 变化依然拒绝。未完成的旧源码 IL 训练不因此获得跨版本续训许可。
+`configs/learning/selfplay-resume-sources.json` explicitly registers reviewed transitions from the original relocation version (`c9c9bb914477feea94b61b1698db93fd5e767d0f2f88b0c715f0cfea12074140`) and the **12 October comprehensive bug audit** (`8d19aff88a93edd9b734561a73c83a440f5d3517429be007d9913aceab8cffd1`) to this revision, along with previously supported transitions subject to their original config restrictions. Learning compatibility remains `c349e816f2e301ea2a3b438902059cffe868f48e131f7c120691d37cd1c409d2`. Completed IL sources are reviewed separately in `imitation-handoff-sources.json`; their original manifest, checkpoint, and ancestry signatures are still checked. Unknown source versions, changed learning contracts, and unregistered config changes remain rejected. This does not authorize resuming unfinished IL training from older source versions across a source upgrade.
 
-**恢复和代码升级分两步。** 已保存的旧包先恢复到匹配的旧源码目录并 `verify`，随后在新机器升级到本修订，用 `--resume-reviewed-source` 继续原 run；不需要旧机器参与。已采用本修订的包在匹配源码下直接续训。升级保留模型、Adam/RNG、计数器、课程表和 provenance，照常记录 source transition；现有升级机制要求用新普通对局重新校准 utility，并拒绝旧源码 teacher 目标。目录映射不会绕过这些检查。
+**Restoration and code upgrades are separate steps.** First restore an existing older archive into a checkout of its matching old source and run `verify`. Then upgrade to this revision on the destination machine and continue the same run with `--resume-reviewed-source`; the source machine is not needed. Archives already using this revision can resume directly under matching source. The upgrade preserves the model, Adam/RNG state, counters, schedules, and provenance, and records the source transition as usual. The existing upgrade mechanism requires fresh ordinary games to recalibrate utility and rejects teacher targets from older source versions. Directory mapping does not bypass these checks.
 
-不同目录恢复旧 recipe 3 包时，也要检查 `requires_code_update`：缺少本次 `relocation_version` 的旧迁移版会要求升级，不能仅凭 recipe 3 判断训练代码已经包含审计修复。sidecar 格式仍为 `step5-project-relocation/1.0.0`，现有映射无需改写。新代码须先由项目维护者发布到 GitHub；本地未提交的修订不会自动出现在新机器。
+When restoring an older recipe 3 archive into a different directory, also check `requires_code_update`. Earlier relocation versions without this `relocation_version` require an upgrade; recipe 3 alone does not mean that the training code includes the audit fixes. The sidecar format remains `step5-project-relocation/1.0.0`, so existing mappings do not need to be rewritten. Project maintainers must publish the new code to GitHub first; local uncommitted changes do not automatically become available on the destination machine.
 
-## 目录映射与再次迁移
+## Directory Mapping and Subsequent Transfers
 
-例如源目录 `/data/not_backed_up/yxu209/ai-training`，目标目录 `/scratch/bob/ai-training`。源目录从归档 `source_root` 读取，目标由 `--root` 指定；不同目录必须明确加 `--relocate`。原目录恢复继续支持原命令。已恢复项目的后续 `verify` 会识别与该归档匹配的映射。
+For example, the source may be `/data/not_backed_up/yxu209/ai-training` and the destination `/scratch/bob/ai-training`. The source directory is read from the archive's `source_root`; `--root` specifies the destination. A different destination requires explicit `--relocate`. Restoration at the original path continues to support the original command. Subsequent `verify` calls on a restored project recognize the mapping associated with that archive.
 
-根目录的 **`.step5-relocation.json`** 是单独的本机元数据，记录目标根目录、历史源目录、归档 ID 和自身摘要；不进入 Git。读取 checkpoint、state/config 引用、IL 祖先、数据集/calibration、评估、保留清理和运行时依赖时，共享解析器才将历史目录组件映射到目标。`/old/project-other` 不会匹配 `/old/project`。相对路径保持相对含义；IL 文件名仍相对所属 IL run。新生成的模型/评估/IL 引用优先使用项目相对路径，已签名的历史文本保留原样。
+**`.step5-relocation.json`** at the project root is separate machine-local metadata. It records the destination root, historical source roots, archive ID, and its own digest, and is excluded from Git. The shared resolver maps historical directory components to the destination when accessing checkpoints, state/config references, IL ancestry, datasets/calibration, evaluations, retention cleanup, and runtime dependencies. `/old/project-other` does not match `/old/project`. Relative paths retain their meaning; IL filenames remain relative to their owning IL run. Newly generated model/evaluation/IL references prefer project-relative paths, while signed historical text is preserved.
 
-映射文件必须随项目保留，子进程和以后启动的会话自动读取，不依赖临时环境变量。恢复逐文件校验 SHA-256，checkpoint/report/config/state 保持原字节；不同内容的目标文件、冲突/损坏的映射、重叠根目录、`..`、链接/junction 越界和项目外依赖均拒绝。项目外数据须在**导出前**纳入项目并通过其原有数据/签名流程；工具不会自动把外部任意目录映射进来。若旧包没有包含某项外部依赖，目录迁移也无法凭空补齐。
+Keep the mapping file with the project. Subprocesses and later sessions read it automatically without temporary environment variables. Restoration checks each file's SHA-256 and preserves checkpoint/report/config/state bytes. Conflicting destination files, conflicting or corrupted mappings, overlapping roots, `..`, symlink/junction escapes, and dependencies outside the project are rejected. External data must be brought into the project **before export** through its existing data/signature workflow; the tool does not automatically map arbitrary external directories. Relocation cannot supply an external dependency omitted from an older archive.
 
-映射包含当前目录在内最多 64 个根目录，序列化文件必须小于 64 KiB。超出限制时会在恢复写文件之前报错，不能生成一个训练程序读不进的 sidecar 后宣称成功。
+Mappings support at most 64 roots, including the current directory, and the serialized file must be smaller than 64 KiB. Exceeding either limit produces an error before restoration writes files, rather than reporting success after creating a sidecar that the training program cannot read.
 
-再次搬迁时，先完成本机受支持的源码续训、停止 run，再从**当前根目录**运行 `export`。新清单携带所有历史根目录，下一次 `restore --relocate` 将它们直接映射到第三个目录，不需要前两台机器。不要手改 sidecar 或直接移动整个目录后沿用旧 sidecar；它会校验目标根目录。目标与各历史根目录应彼此独立，不能互为子目录。
+To move again, first complete the supported source continuation on the current machine, stop the run, and run `export` from the **current root**. The new manifest carries all historical roots, and the next `restore --relocate` maps them directly to a third directory without needing either previous machine. Do not edit the sidecar manually or move the entire directory and reuse its old sidecar: it validates the destination root. The destination and historical roots must be disjoint, with none nested inside another.
 
-`export` 会在包内生成对应新 state 的精确 resume config，不把它写回源项目。`verify` 校验的是**已恢复的目录**，所以应在第三目录 `restore` 后运行。若要在导出机器原地验证新包，先对原地执行一次 `restore`（不需 `--relocate`，匹配文件不会改写），补齐这个新 config 后再 `verify`；不能忽略“Missing restored file”。
+`export` generates an exact resume config for the new state inside the archive, without writing it back to the source project. `verify` checks a **restored directory**, so run it after `restore` into the third directory. To verify the new archive in place on the exporting machine, first run `restore` there (without `--relocate`; matching files are preserved) to materialize the new config, then run `verify`. Do not ignore "Missing restored file" errors.
 
-## 默认复制哪些文件
+## Files Included by Default
 
-| 内容 | 默认处理 |
+| Content | Default treatment |
 | --- | --- |
-| `state.json`、精确续训 config、best 元数据、显式 pins | 保留 |
-| 最新完整 checkpoint、state 指定的恢复 checkpoint | 保留原字节，包括 optimizer/RNG |
-| 当前历史对手池、incumbent、evaluation anchor | 保留；不为缩小体积而缩减训练对手池 |
-| 仍在磁盘、尚未由当前池代表的历史候选模型 | 保留，因为下一次更新对手池仍可能使用 |
-| 最新 iteration 的 report、评估 report/spec、已选 champion 的证据 | 保留 |
-| 未完成评估的缓存、引用模型及单独选用的 host | compact/full 都保留，包括 run 外、项目内的模型和 runtime 依赖 |
-| IL 来源和祖先的 state/report、选中 checkpoint、dataset manifest | 保留；不复制无用的 epoch checkpoints |
-| IL 训练数据分片 | 仅当 rehearsal 仍启用且未到 `rehearsal_until` 时复制训练分片；结束后省略 |
-| 已消费的 PPO/teacher/已完成评估的 replay、feature caches | 省略，显式 pin 的文件除外 |
-| 无引用旧模型、retention 历史和隔离区 | 省略 |
-| 代码、仓库配置、冻结规则 AI 资料 | 从 Git 获取，分卷里只记录依赖哈希 |
-| 新版 ordinary/search 加速 worker 的 EXE 和清单 | 从 Git 的 `training/runtime/throughput/` 获取，不加入训练分卷 |
-| 自动生成的 `artifacts/training-host/` | 标准配置下由目标机 preflight 从 Git worker 和附件中的规则 DLL 部署；若 config 直接选用其中的 host，则保留该 host 全部文件 |
-| 游戏规则运行时/DLL、各运行时清单 | **包含在默认 Release 附件**；按 distribution 和训练/未完成评估 host 清单校验、去重；保留运行时加载会校验的 source pins |
-| conda 环境、CUDA 驱动、其他 runs、旧机器 preflight 和进程锁 | 不复制 |
+| `state.json`, exact resume config, best metadata, explicit pins | Included |
+| Latest full checkpoint and resume checkpoints specified by state | Original bytes preserved, including optimizer/RNG state |
+| Current historical opponent pool, incumbent, evaluation anchor | Included; the training opponent pool is not reduced to save space |
+| Historical candidate models still on disk and not represented by the current pool | Included because the next population update may still use them |
+| Latest iteration report, evaluation report/spec, selected champion evidence | Included |
+| Unfinished evaluation caches, referenced models, separately selected hosts | Included in compact/full mode, including models and runtime dependencies outside the run but inside the project |
+| State/report, selected checkpoints, and dataset manifests for the IL source and its ancestors | Included; unused epoch checkpoints are omitted |
+| IL training data shards | Training shards included only while rehearsal is enabled and before `rehearsal_until`; omitted afterward |
+| Consumed PPO/teacher/completed-evaluation replays and feature caches | Omitted unless explicitly pinned |
+| Unreferenced old models, retention history, quarantine | Omitted |
+| Code, repository configs, frozen rules AI material | Obtained from Git; only dependency hashes are recorded in the parts |
+| Accelerated ordinary/search worker EXEs and manifests | Obtained from Git at `training/runtime/throughput/`, not added to training archive parts |
+| Generated `artifacts/training-host/` | Under standard configs, destination preflight deploys Git workers using rules DLLs from the assets; if the config directly selects one of these hosts, all of that host's files are included |
+| Game rules runtimes/DLLs and runtime manifests | **Included in default Release assets**; verified and deduplicated using the distribution and training/unfinished-evaluation host manifests, including source pins checked at runtime startup |
+| Conda environment, CUDA drivers, other runs, source-machine preflight results and process locks | Omitted |
 
-相同内容只压缩存储一次，例如完全相同的模型文件有多个路径时不会重复占用分卷空间。恢复时仍建立原来的文件布局。所有源文件原样保留，工具不会清理旧机器。实际体积取决于当前池和 rehearsal；`--dry-run` 显示逻辑大小、去重后的大小、类别大小及最大的十个文件。
+Identical content is compressed and stored only once. For example, identical model files at multiple paths do not consume duplicate space in the parts. Restoration recreates the original file layout. All source files are preserved, and the tool does not clean up the source machine. Actual size depends on the current pool and rehearsal requirements. `--dry-run` reports logical size, deduplicated size, category sizes, and the ten largest files.
 
-## 1. 旧机器停止训练并导出
+## 1. Stop Training and Export on the Source Machine
 
-等待当前训练命令正常完成后执行。脚本拒绝活动 run、未提交 iteration/checkpoint、损坏或缺失的依赖；中断留下的半个 iteration 应先在旧机器用原命令恢复完成。
+Wait for the current training command to finish normally before proceeding. The script rejects active runs, uncommitted iterations/checkpoints, and damaged or missing dependencies. If an interruption left a partial iteration, first resume and finish it on the source machine using the original command.
 
-把 `RUN` 改成你实际的 self-play 目录，`BUNDLE` 放在该 run 和 IL run 之外：
+Set `RUN` to your actual self-play directory and place `BUNDLE` outside that run and the IL run:
 
 ```sh
 conda activate ai-training
@@ -82,63 +82,63 @@ RUN=$ROOT/artifacts/step5/selfplay-best-v1
 BUNDLE=$ROOT/artifacts/step5-transfer/selfplay-migration.tar.zst
 python -m pip install -r "$ROOT/requirements-transfer.txt"
 
-# 先查看体积；不生成压缩包。
+# Inspect the size first without creating an archive.
 python "$ROOT/scripts/step5-transfer.py" export \
   --root "$ROOT" --run "$RUN" --bundle "$BUNDLE" --dry-run
 
-# 以下均为默认设置，显式写出便于检查。
+# These are the defaults, shown explicitly for review.
 python "$ROOT/scripts/step5-transfer.py" export \
   --root "$ROOT" --run "$RUN" --bundle "$BUNDLE" \
   --mode compact --dependencies repo \
   --format zstd --zstd-level 3 --threads 0 --part-mb 1900
 ```
 
-生成 `selfplay-migration.tar.zst.part0001`、`.part0002` 等分卷，以及 `selfplay-migration.tar.zst.parts.json`。默认每卷最多 **1,900,000,000 字节（约 1.77 GiB）**；相同归档的分卷数量约降为原来 100 MB 方案的 1/19，小于 1900 MB 的包只需一卷。不会额外保留完整归档。索引最后写入，包含分卷和完整归档的大小及 SHA-256。输出还记录 iteration、游戏数、Git commit、`compressed_bytes`、分卷数、格式、压缩等级和配置的线程数。进度写到 stderr，stdout 是可解析的 JSON。每次导出使用新文件名，现存分卷不会被覆盖。
+This creates parts such as `selfplay-migration.tar.zst.part0001` and `.part0002`, plus `selfplay-migration.tar.zst.parts.json`. Each part contains at most **1,900,000,000 bytes (about 1.77 GiB)** by default. For the same archive, this reduces the part count to approximately 1/19 of the previous 100 MB scheme; archives smaller than 1900 MB need only one part. No additional complete archive is retained. The index is written last and records sizes and SHA-256 hashes for the parts and the complete archive. Output also records the iteration, game count, Git commit, `compressed_bytes`, part count, format, compression level, and configured thread count. Progress goes to stderr; stdout is parseable JSON. Use a new filename for each export; existing parts are never overwritten.
 
-## 2. 用 GitHub Release 附件传输
+## 2. Transfer Through GitHub Release Assets
 
-**Release 附件是版本发布页面上单独上传的文件，不进入 Git 提交历史，也不会随 `git clone/pull` 自动下载。** 两台 lab 机器都能连接 GitHub 即可中转，不要求它们相互 SSH 连通；本次附件已包含规则运行时，无需另传运行时 zip。
+**Release assets are separate files uploaded to a release page. They do not enter Git commit history and are not downloaded automatically by `git clone/pull`.** Both lab machines only need access to GitHub; they do not need SSH connectivity to each other. The assets now include the rules runtimes, so a separate runtime ZIP transfer is unnecessary.
 
-**self-hosted runner 只负责从旧机器读取、打包并上传。全部附件上传成功后，数据保存在 GitHub，旧机器或 runner 后来不可用不会让附件消失。** 新机器可独立下载和恢复；恢复的是最后一次成功上传的快照，后续未上传的训练进度不会自动进入 Release。保留该仓库、Release/tag 和全部分卷，附件不使用 Actions artifact 的按天过期机制。
+**The self-hosted runner only reads, packages, and uploads data from the source machine. Once every asset has uploaded successfully, the data is stored on GitHub; losing the source machine or runner afterward does not remove those assets.** The destination can download and restore independently. It restores the last successfully uploaded snapshot; later training progress that was not uploaded does not automatically enter the Release. Keep the repository, Release/tag, and every part. Release assets do not use the time-based expiration mechanism of Actions artifacts.
 
-| 仓库可见性 | Release 附件的访问方式 | 文件大小限制 |
+| Repository visibility | Release asset access | File size limit |
 | --- | --- | --- |
-| 私有仓库 | 需要登录，并拥有该仓库读取权限 | 每个附件小于 2 GiB |
-| 公共仓库 | 公开下载；不能把其中某一个已发布附件单独设为私有 | 每个附件小于 2 GiB |
+| Private | Authentication and repository read access required | Each asset must be smaller than 2 GiB |
+| Public | Public downloads; individual published assets cannot be made private | Each asset must be smaller than 2 GiB |
 
-“私有”控制访问权限，不会提高大小上限。一份 Release 最多 1000 个附件（包括索引）；默认每卷 1900 MB，留在 2 GiB 以下。这里不受普通 Git 单文件 100 MiB / 单次 push 2 GiB 的限制。[GitHub Release 说明及限制](https://docs.github.com/en/repositories/releasing-projects-on-github/about-releases)
+Repository privacy controls access, not the size limit. A Release supports at most 1000 assets, including the index. The default 1900 MB parts stay below 2 GiB. The usual Git limits of 100 MiB per file and 2 GiB per push do not apply to these assets. [GitHub Release documentation and limits](https://docs.github.com/en/repositories/releasing-projects-on-github/about-releases)
 
-### 推荐：GitHub Actions 自动打包并上传
+### Recommended: Package and Upload with GitHub Actions
 
-工作流位于 [`.github/workflows/step5-transfer-release.yml`](../.github/workflows/step5-transfer-release.yml)，名称 **Step 5 transfer release**，仅通过 **Run workflow** 手动触发。触发后自动打包、校验、上传并发布 Release；不会自动停止训练或启动续训。
+The workflow is [`.github/workflows/step5-transfer-release.yml`](../.github/workflows/step5-transfer-release.yml), named **Step 5 transfer release**. It is triggered manually through **Run workflow**. Once triggered, it packages, verifies, uploads, and publishes the Release automatically. It does not stop training or start a resumed training run.
 
-一次性准备：
+One-time setup:
 
-1. 将工作流、迁移脚本、`requirements-transfer.txt` 及匹配的训练代码提交到 GitHub；工作流需先存在于默认分支，GitHub 才会显示手动运行入口。
-2. 在**保存原 run 的旧 lab 机器**上，按仓库 **Settings → Actions → Runners → New self-hosted runner** 的说明注册 Linux runner。为这台机器设置唯一自定义标签，例如 `step5-transfer-lab1`，填写到运行参数 `runner_label`。服务账号需能读写项目目录；不要把 runner 的工作目录设成正在训练的项目目录。[GitHub self-hosted runner 标签](https://docs.github.com/en/actions/how-tos/manage-runners/self-hosted-runners/use-in-a-workflow)
-3. runner 的 PATH 中需有 `git`、`gh` 和支持 `venv` 的 Python 3.11+；可通过 `python_executable` 指定 Python 完整路径。打包不需要 PyTorch/CUDA，工作流会在 runner 临时目录创建独立环境并安装迁移依赖。
+1. Commit and publish the workflow, transfer script, `requirements-transfer.txt`, and matching training code to GitHub. The workflow must exist on the default branch before GitHub displays its manual trigger.
+2. Register a Linux runner on the **source lab machine that holds the original run**, following **Settings → Actions → Runners → New self-hosted runner** in the repository. Give the machine a unique custom label, such as `step5-transfer-lab1`, and enter it as the `runner_label` input. The service account needs read/write access to the project directory. Do not use the active training project as the runner's working directory. [GitHub self-hosted runner labels](https://docs.github.com/en/actions/how-tos/manage-runners/self-hosted-runners/use-in-a-workflow)
+3. The runner's PATH must include `git`, `gh`, and Python 3.11+ with `venv` support. Use `python_executable` to specify a full Python path if needed. Packaging does not require PyTorch/CUDA; the workflow creates a separate environment in the runner's temporary directory and installs the transfer dependency there.
 
-每次迁移：等当前迭代完成并正常停止训练，确认旧机器保存 run 对应的代码已提交且推到 GitHub，然后进入 **Actions → Step 5 transfer release → Run workflow**。选择与旧机器 `HEAD` 相同的 branch/tag，并填写：
+For each transfer, wait for the current iteration to finish and stop training normally. Confirm that the code associated with the saved run on the source machine has been committed and pushed to GitHub. Then open **Actions → Step 5 transfer release → Run workflow**, select the branch/tag matching the source machine's `HEAD`, and enter:
 
-| 参数 | 默认值 / 用途 |
+| Input | Default / purpose |
 | --- | --- |
-| `runner_label` | `step5-transfer`；改为源机器的唯一标签 |
+| `runner_label` | `step5-transfer`; replace with the source machine's unique label |
 | `source_root` | `/data/not_backed_up/yxu209/ai-training` |
-| `run_path` | `artifacts/step5/selfplay-best-v1`，相对项目根目录 |
-| `python_executable` | `python3`，需要 3.11+ 和 venv |
-| `threads` | `0` 自动；共享机器可指定 `8` 等线程数 |
-| `zstd_level` | `3`，范围 1–22 |
-| `part_mb` | `1900`，范围 1–2000 MB |
+| `run_path` | `artifacts/step5/selfplay-best-v1`, relative to the project root |
+| `python_executable` | `python3`; requires 3.11+ and venv |
+| `threads` | `0` for automatic selection; set a count such as `8` on a shared machine |
+| `zstd_level` | `3`, range 1–22 |
+| `part_mb` | `1900`, range 1–2000 MB |
 
-GitHub 托管的 `ubuntu-latest` 访问不到旧 lab 的 `/data/...`，因此这里需要 self-hosted runner；尚未注册或标签不匹配时任务会排队。工作流不执行 checkout、pull 或 reset，源码版本不匹配、代码/config 有未提交改动、run 活动或迭代未提交时会失败，并留下明确错误。
+GitHub-hosted `ubuntu-latest` cannot access the source lab's `/data/...`, so this workflow requires a self-hosted runner. Jobs remain queued if the runner is not registered or its label does not match. The workflow does not perform checkout, pull, or reset. It fails with a clear error if the source version differs, code/config changes are uncommitted, the run is active, or an iteration is uncommitted.
 
-工作流使用自带的 `GITHUB_TOKEN` 和 `contents: write` 权限上传到**当前仓库**，不需要另配个人 token。Release 标签为 `step5-transfer-<run_id>-<run_attempt>`；文件保存在源机器 `artifacts/step5-transfer/<标签>/`。先创建草稿，上传所有分卷，最后上传 `.parts.json`，全部成功后发布为 prerelease，且不标记为 Latest。失败时保留草稿和本地包，原训练数据不变；重新运行会使用新 attempt/tag。完成后 Actions 摘要提供 Release 链接和新机器下载命令。
+The workflow uploads to the **current repository** using its built-in `GITHUB_TOKEN` with `contents: write`; no separate personal token is required. Release tags use `step5-transfer-<run_id>-<run_attempt>`, and local files are stored under `artifacts/step5-transfer/<tag>/` on the source machine. It creates a draft, uploads every part, uploads `.parts.json` last, then publishes a prerelease without marking it as Latest. On failure, the draft and local archive remain, and the original training data is preserved. A rerun uses a new attempt/tag. When complete, the Actions summary provides the Release link and destination download commands.
 
-工作流支持公有和私有仓库，不设置私有仓库门槛。当前代码仓库公开时，规则 DLL 和训练数据附件也公开；私有仓库则只允许有读取权限的用户访问。文件名中的 `private`、草稿转 prerelease 都不会改变仓库自身的访问权限。
+The workflow supports public and private repositories without requiring a private repository. If the code repository is public, the rules DLL and training data assets are public too; a private repository restricts access to users with read permission. The word `private` in a filename, or changing a draft into a prerelease, does not change repository access permissions.
 
-### 已在旧机器打好包：手动上传
+### Manual Upload of an Archive Already Created on the Source Machine
 
-安装 GitHub CLI 后，在旧机器执行 `gh auth login`，使用具有仓库写入权限的账号。下面以当前代码仓库为例，`TAG` 每次使用新值；代码 commit 必须已经 push：
+After installing GitHub CLI, run `gh auth login` on the source machine with an account that has repository write access. The following example uses the current code repository. Choose a new `TAG` each time; the code commit must already have been pushed:
 
 ```sh
 set -euo pipefail
@@ -155,24 +155,24 @@ gh release upload "$TAG" "$BUNDLE.parts.json" --repo "$REPO"
 gh release edit "$TAG" --repo "$REPO" --draft=false --prerelease --latest=false
 ```
 
-不对这些附件执行 `git add/commit/push`，也不放开 `artifacts/` 的 ignore。默认 `--dependencies repo` 已包含规则 DLL，不需要再上传旧的运行时 zip。[GitHub CLI 上传命令](https://cli.github.com/manual/gh_release_create)
+Do not run `git add/commit/push` on these assets or remove `artifacts/` from the ignore rules. The default `--dependencies repo` already includes the rules DLLs, so the old runtime ZIP does not need to be uploaded separately. [GitHub CLI upload command](https://cli.github.com/manual/gh_release_create)
 
-## 3. 新机器同步代码、下载附件，然后恢复
+## 3. Check Out Code, Download Assets, and Restore on the Destination
 
-可以选择任意有写权限的新目录，保留 run 的相对布局。以下 Bash 示例把旧 `/data/not_backed_up/yxu209/ai-training` 恢复到 `/scratch/bob/ai-training`；请按实际磁盘修改 `ROOT`。`TOOLS` 是**独立的新版工具 checkout**，用于兼容 Release 中尚无 `--relocate` 的旧代码。两者均从 GitHub 获取，无需旧机器在线。
+Choose any new directory where you have write access, preserving the run's relative layout. This Bash example restores the old `/data/not_backed_up/yxu209/ai-training` into `/scratch/bob/ai-training`; adjust `ROOT` for your storage. `TOOLS` is a **separate checkout of the updated tools**, allowing restoration of Releases whose older code does not yet support `--relocate`. Both checkouts come from GitHub, and the source machine can be offline.
 
 ```bash
 set -euo pipefail
 ROOT=/scratch/bob/ai-training
 TOOLS=/scratch/bob/step5-transfer-tools
 REPO=riverside234/ai-training
-TAG=step5-transfer-20261012-01  # 改为实际 Release 标签，Actions 摘要中也有。
-CODE_REF=main                 # 应指向已发布、包含本目录迁移修订的 commit/分支；推荐填写固定 SHA。
-# 首次使用 GitHub CLI 时执行 gh auth login；私有仓库还需要账号具有读取权限。
-# 私有仓库通过 HTTPS clone 时，可执行 gh auth setup-git 配置 Git 凭据。
+TAG=step5-transfer-20261012-01  # Replace with the actual Release tag from the Actions summary.
+CODE_REF=main                 # Use a published commit/branch containing this relocation revision; prefer a fixed SHA.
+# Run gh auth login when first using GitHub CLI; private repositories also require read access.
+# For private HTTPS clones, gh auth setup-git can configure Git credentials.
 mkdir -p "$(dirname "$ROOT")"
 git clone --branch "$TAG" --single-branch "https://github.com/$REPO.git" "$ROOT"
-git -C "$ROOT" rev-parse HEAD  # 应等于 Release 说明中的 Source commit。
+git -C "$ROOT" rev-parse HEAD  # Must match the Source commit in the Release notes.
 git clone "https://github.com/$REPO.git" "$TOOLS"
 git -C "$TOOLS" switch --detach "$CODE_REF"
 CODE_COMMIT=$(git -C "$TOOLS" rev-parse HEAD)
@@ -189,7 +189,7 @@ python "$TOOLS/scripts/step5-transfer.py" restore \
 python "$TOOLS/scripts/step5-transfer.py" verify \
   --root "$ROOT" --bundle "$BUNDLE" --relocate
 
-# 缺少本次 relocation_version 的旧迁移代码也需升级；原文件校验必须先完成。
+# Older relocation code without this relocation_version also needs an upgrade; verify original files first.
 NEEDS_UPDATE=$(python -c 'import json,sys; print(int(json.load(open(sys.argv[1]))["requires_code_update"]))' "$RESTORE_JSON")
 if [ "$NEEDS_UPDATE" = 1 ]; then
   git -C "$ROOT" fetch origin "$CODE_COMMIT"
@@ -197,28 +197,28 @@ if [ "$NEEDS_UPDATE" = 1 ]; then
 fi
 ```
 
-通配符 `part*` 同时下载数字分卷和 `.parts.json` 索引。Release 标签定位到导出时的 commit，因此新机器不会误用后来的训练代码。已有目标仓库时，先确认没有需要保留的改动，再 `git fetch origin tag "$TAG"`、`git switch --detach "$TAG"`；恢复后需要改代码时可从此处创建分支。不要使用 Release 页面自动生成的 **Source code (zip/tar.gz)** 来代替训练附件。[附件下载命令](https://cli.github.com/manual/gh_release_download)
+The `part*` pattern downloads both numbered parts and the `.parts.json` index. The Release tag points to the commit used at export time, preventing the destination from accidentally using later training code. For an existing destination repository, first check for changes you need to preserve, then run `git fetch origin tag "$TAG"` and `git switch --detach "$TAG"`. You can create a branch from there if you need to change code after restoration. Do not substitute the Release page's automatically generated **Source code (zip/tar.gz)** downloads for the training assets. [Asset download command](https://cli.github.com/manual/gh_release_download)
 
-恢复直接读取分卷，不必手动合并，也不需要另存大 TAR/ZIP。它先检查所有分卷、归档内容和 Git 代码依赖哈希，再恢复规则运行时和训练文件。无需执行 `import-runtime`。相同目标文件可复用；缺失外部依赖或不同内容会停止恢复，已有文件不会被覆盖。
+Restoration reads the parts directly, without manual concatenation or an additional large TAR/ZIP file. It checks every part, the archive contents, and Git code dependency hashes before restoring the rules runtimes and training files. Running `import-runtime` is unnecessary. Matching destination files can be reused; missing external dependencies or different contents stop restoration, and existing files are not overwritten.
 
-首次检出旧 tag 是为了满足归档的**原始源码/外部文件哈希**。直接在新版 checkout 恢复旧包会报冲突，应使用上述两步流程，不能删哈希检查或改 state。工具依赖同一 checkout 的 `src/brass_ai/learning/paths.py`，不要只单独复制一个新版脚本。若 Git 提示有本地修改/冲突，先保留并核对这些文件，不要强制覆盖。新版训练源码必须包含对应的显式审核记录；单纯换一个更新的 commit 并不自动获得兼容性。
+The initial checkout of the old tag satisfies the archive's **original source/external file hashes**. Restoring an old archive directly into a newer checkout produces conflicts; use the two-step process above rather than removing hash checks or editing state. The tool depends on `src/brass_ai/learning/paths.py` from the same checkout, so do not copy only the updated script. If Git reports local changes or conflicts, preserve and inspect those files instead of forcing an overwrite. Updated training source must contain the corresponding explicit review receipts; choosing a newer commit alone does not establish compatibility.
 
-旧版导出器可能没有收集未完成评估单独选用的 host，或代码目录之外的运行时 source pins。这类旧包只能在另有**完全匹配**的依赖时继续；迁移工具无法恢复从未上传的文件。新的导出器会提前拒绝缺失依赖。`verify` 证明归档及清单内文件的完整性，不能替代实际 preflight、数据/IL 检查和 resume 的签名验证。
+Older exporters may have omitted a host selected separately by an unfinished evaluation, or runtime source pins outside the code directories. Such archives can continue only when **exactly matching** dependencies are supplied separately; the transfer tool cannot recover files that were never uploaded. The updated exporter rejects missing dependencies early. `verify` establishes the integrity of the archive and its listed files; it does not replace actual preflight, data/IL checks, or resume signature verification.
 
-`verify` 用于恢复后、升级代码和开始续训**之前**。升级后的源码与旧包不同，或训练后的 state/checkpoint 更新，均会使旧包完整校验失败，这是预期行为。原归档可永久保留并在另一个干净目录重新恢复校验。
+Run `verify` after restoration and **before** upgrading code or resuming training. Upgraded source differs from the old archive, and subsequent training updates state/checkpoints, so either change causes full verification against the old archive to fail as expected. Keep the original archive indefinitely if desired; it can be restored and verified again in another clean directory.
 
-## 4. 新机器 preflight，再继续原 run
+## 4. Run Destination Preflight, Then Resume the Original Run
 
-安装并激活 `ai-training` conda 环境，按[训练指南](TRAINING_RECOVERY_LAB.md#transfer-and-preflight)安装 PyTorch/CUDA、Python 依赖、Mono/OpenSpiel。迁移脚本需要 Python 3.11+；zstd 依赖按本文开头安装，旧 ZIP 模式仍只依赖标准库。
+Install and activate the `ai-training` conda environment, then install PyTorch/CUDA, Python dependencies, and Mono/OpenSpiel according to the [training guide](TRAINING_RECOVERY_LAB.md#transfer-and-preflight). The transfer script requires Python 3.11+. Install the zstd dependency as described at the start of this document; legacy ZIP mode still needs only the standard library.
 
-`restore` 和 `verify` 输出两条完整命令：
+`restore` and `verify` output two complete commands:
 
-1. `preflight`：在新机器验证设备和规则运行时，不能沿用旧机器的通过记录。
-2. `resume`：使用保存的 config、原 `--run` 和需要的 `--imitation-run`，继续 20 iterations。可修改追加轮数，不要重新传 `--initial`。
+1. `preflight`: validate the device and rules runtimes on the destination; the source machine's successful preflight record cannot be reused.
+2. `resume`: continue for 20 iterations using the saved config, original `--run`, and required `--imitation-run`. You can change the number of additional iterations; do not pass `--initial` again.
 
-先执行 `preflight`，成功后执行 `resume`。已有 self-play state 会恢复 PPO checkpoint；`--imitation-run` 仅验证 IL 来源，不会重做 IL。课程表、历史池、teacher 预算和计数器保持原状态。
+Run `preflight` first, then `resume` after it succeeds. Existing self-play state restores the PPO checkpoint. `--imitation-run` only validates the IL source; it does not repeat IL. Schedules, the historical pool, teacher budgets, and counters are preserved.
 
-接着执行以下 Bash 命令，沿用上节变量；路径从恢复输出读取，适用于不同 run 名称及有/无 IL 来源的包：
+Continue with the following Bash commands, reusing the variables from the previous section. Paths are read from the restore output, supporting different run names and archives with or without IL provenance:
 
 ```bash
 set -euo pipefail
@@ -234,48 +234,48 @@ python "$ROOT/scripts/step5.py" --root "$ROOT" --config "$CONFIG" --device cuda 
   train --run "$RUN" --iterations 20 "${RESUME_ARGS[@]}"
 ```
 
-CPU 验证把两处 `cuda` 改成 `cpu`。旧包的恢复 JSON 中 `requires_code_update: true` 表示必须先安装支持映射的训练源码，并在第一次源码续接时使用 `--resume-reviewed-source`；输出的普通 `resume` 字符串本身不会替你批准升级。不同 SHA 若不在审核列表中将明确报错。升级完成以后，新会话直接用相同 config/run 续训，映射仍然有效。
+For CPU validation, replace both occurrences of `cuda` with `cpu`. In an older archive's restore JSON, `requires_code_update: true` means that you must install mapping-aware training source first and use `--resume-reviewed-source` for the first source continuation. The ordinary `resume` string in the output does not itself approve the upgrade. A source SHA absent from the review list produces an explicit error. After the upgrade, later sessions can resume with the same config/run, and the mapping remains effective.
 
-新版 preflight 还会安装并检查两个加速 worker；输出中的 `throughput_workers` 应显示 ordinary/search 均为 `optimized: true`。需要的规则 DLL 已由 Release 附件恢复。当前 self-training 默认使用一张 GPU；GPU 分配是目标机器的运行选项，不从旧机器自动复制。只有确实使用多卡推理时才按新机器分配设置 `CUDA_VISIBLE_DEVICES`，并在输出的续训命令中、`train` 子命令之前加入 `--inference-devices auto`。不要把这个参数加到 `preflight` 命令。
+Updated preflight also installs and checks both accelerated workers. Its `throughput_workers` output should show `optimized: true` for both ordinary and search. The required rules DLLs have already been restored from the Release assets. Current self-training defaults to one GPU; GPU allocation is a destination runtime option and is not copied automatically from the source machine. If you actually use multiple GPUs for inference, set `CUDA_VISIBLE_DEVICES` for the destination allocation and add `--inference-devices auto` before the `train` subcommand in the generated resume command. Do not add this option to `preflight`.
 
-旧机器仍可用时，建议在回收前完成一次目标机恢复验证；之后该快照的恢复无需旧机器。不同 GPU、库版本及搜索线程调度不保证后续结果逐步一致；本工具保证保存文件的字节完整性和恢复依赖，不保证跨机器游戏结果完全复现。
+If the source machine is still available, validate a destination restoration before retiring it. Later restoration of that snapshot does not require the source machine. Different GPUs, library versions, and search thread scheduling can produce different subsequent results. The tool preserves saved-file bytes and restoration dependencies; it does not guarantee identical game results across machines.
 
-## 其他模式
+## Other Modes
 
-- `--mode full`：额外保留选中 self-play/IL 目录中的历史文件，用于需要旧 replay/traces 的完整备份；当前迁移不需要它。
-- `--dependencies repo`：**默认**。干净且已跟踪的代码从 Git 获取；全部规则运行时/DLL、选定 host 和其他未跟踪依赖进入 Release 附件。
-- `--dependencies bundled`：代码和规则运行时都包含在包里，体积更大；恢复脚本及 Python/zstd 仍需先可用。自动工作流固定使用 `repo`。
-- `--dependencies external`：保留旧行为，代码和运行时均需另行准备。它不满足“只靠 GitHub 代码和当前附件恢复”的目标，自动工作流不使用此模式；旧 external 包也不会因此自动补齐 DLL。
-- `--format zip`：使用旧 ZIP/DEFLATE 导出；相应 bundle 文件名使用 `.zip`。恢复会自动识别 ZIP/zstd，不按后缀猜测格式。
-- `--part-mb 0`：关闭分卷，生成一个 `.tar.zst`（或显式 ZIP）。手动上传 Release 时须确认整个文件小于 2 GiB；工作流使用分卷以始终保留索引校验。
-- `--part-mb 100`：保留普通 Git 传输兼容性。100 MB 小于 GitHub 单文件 100 MiB 限制；单次 push 仍受 2 GiB 总量限制，需要分批 commit/push。默认 1900 MB 分卷仅用于 Release，不能直接 `git add` 后 push。[普通 Git 限制](https://docs.github.com/en/repositories/working-with-files/managing-large-files/about-large-files-on-github)、[push 限制](https://docs.github.com/en/get-started/using-git/troubleshooting-the-2-gb-push-limit)
+- `--mode full`: also retains historical files in the selected self-play/IL directories for complete backups that need old replays/traces. It is not required for the current transfer workflow.
+- `--dependencies repo`: **default**. Clean tracked code comes from Git; all rules runtimes/DLLs, selected hosts, and other untracked dependencies are included in Release assets.
+- `--dependencies bundled`: includes both code and rules runtimes, producing a larger archive. The restore script and Python/zstd must still be available first. The automated workflow always uses `repo`.
+- `--dependencies external`: retains the old behavior, requiring code and runtimes to be supplied separately. It does not meet the goal of restoring solely from GitHub code and the current assets, so the automated workflow does not use it. Older external archives do not automatically gain missing DLLs.
+- `--format zip`: uses legacy ZIP/DEFLATE export; use `.zip` for the corresponding bundle filename. Restoration detects ZIP/zstd automatically by content rather than guessing from the extension.
+- `--part-mb 0`: disables splitting and creates one `.tar.zst` (or explicit ZIP). For manual Release uploads, ensure the whole file is smaller than 2 GiB. The workflow uses parts so index verification is always available.
+- `--part-mb 100`: preserves compatibility with ordinary Git transfers. 100 MB is below GitHub's 100 MiB per-file limit, but each push is still limited to 2 GiB total and requires batched commits/pushes. Default 1900 MB parts are intended for Releases and cannot be added directly with `git add` and pushed. [Large-file limits](https://docs.github.com/en/repositories/working-with-files/managing-large-files/about-large-files-on-github), [push limits](https://docs.github.com/en/get-started/using-git/troubleshooting-the-2-gb-push-limit)
 
-## 本地验证
+## Local Validation
 
-### 目录迁移审计（1.1.0）
+### Directory Relocation Audit (1.1.0)
 
-本次先复现、再修复以下问题，未修改真实训练数据或上传/推送任何内容：
+The following issues were reproduced and then fixed, without changing real training data or uploading/pushing anything:
 
-| 问题 | 原因与修复 |
+| Issue | Cause and fix |
 | --- | --- |
-| 未完成评估的独立 host、部分运行时 source pins 未进入归档 | 原收集器只遍历训练 host 和固定代码树；现在 compact/full 都收集评估模型、host 清单及加载时校验的源文件。缺失依赖在发布归档前报错。 |
-| 相同 host 改用新绝对路径或相对路径后，已有评估不能复用 | 原 spec 对 host 文本做精确比较；现在只对该字段验证组件映射后的同一文件，其余配置仍精确比较，并保留原 spec/provenance 字节与摘要。 |
-| 某些畸形归档错误地返回 `verified: true` | 文件与目录/临时 run lease 冲突时，恢复阶段把临时创建的路径视为已恢复；过大的映射也可能写出无法读取的 sidecar。现在先拒绝这些清单、活动标记、非目录父节点及超限映射，再写入。另拒绝大小写变体的私有配置路径及不可移植文件名。旧 full 包中不活动的 OS guard 文件仍按原字节校验恢复；新导出省略它们。 |
-| runtime 安装可能越过链接写文件，或缓存返回绕过检查 | ordinary/search 安装器现在在复制和缓存返回之前检查源、目标及目标文件；preflight 不能先写到链接目录后才报错。Windows junction 回归检查实际执行。 |
+| Separate hosts for unfinished evaluations and some runtime source pins were omitted from archives | The original collector only traversed the training host and fixed code trees. Compact/full modes now collect evaluation models, host manifests, and source files checked at startup. Missing dependencies fail before archive publication. |
+| Existing evaluations could not be reused after spelling the same host with a new absolute or relative path | The original spec compared host text exactly. That field now checks path identity after component mapping, while all other config fields still require exact equality. Original spec/provenance bytes and digests are preserved. |
+| Some malformed archives incorrectly returned `verified: true` | File/directory or temporary run-lease conflicts caused restoration to treat temporarily created paths as restored files; oversized mappings could also create unreadable sidecars. These manifests, active markers, non-directory parents, and oversized mappings are now rejected before writing. Case variants of private configuration paths and non-portable filenames are also rejected. Inert OS guard files in older full archives are still verified and restored byte-for-byte; new exports omit them. |
+| Runtime installation could write through links, or a cached return could bypass checks | Ordinary/search installers now validate source, destination, and destination files before copying or returning cached results. Preflight cannot write through a linked directory before reporting an error. Windows junction regression checks were actually executed. |
 
-路径追踪覆盖如下调用边界；底层 checkpoint/replay/inference API 接收上层已解析的实际文件路径，历史 JSON 中的旧字符串不会被统一替换：
+Path tracing covered the following call boundaries. Low-level checkpoint/replay/inference APIs receive actual file paths resolved by their callers; old strings in historical JSON are not replaced globally:
 
-| 阶段 | 路径和完整性边界 |
+| Stage | Path and integrity boundary |
 | --- | --- |
-| export | `inventory → below/resolve_project_path`：state/live models、IL ancestry、dataset/calibration、pins、pending evaluations、runtime/source pins；原字节哈希。 |
-| restore / verify | 清单、分卷和 payload 校验 → 路径布局/目标冲突检查 → 原子不覆盖写入 → 原 recipe 源码校验 → 独立 sidecar。 |
-| preflight | distribution/assets、冻结 bank、LegacyWorker、规则/加速 worker；新目录内安装，DLL/source pins 与真实规则 parity 仍检查。 |
-| resume | `load_resume` 校验 checkpoint/state/model/generation/signature；恢复 Adam/RNG，显式 source receipt 才可升级；历史引用经 `project_path` 解析。 |
-| IL / rehearsal | completed imitation 的原 manifest/parent/checkpoint 绑定；`load_dataset` 在父进程解析分片/calibration，再交给 spawned readers。 |
-| workers / evaluation | actor 子进程从目标根目录读取 sidecar；parent 创建目标目录下的 jobs，inference 加载已解析 checkpoint；已有 evaluation 保留原 spec 摘要。 |
-| retention / re-export | live/pinned/cleanup 引用继续通过映射；再次导出用当前源码/state，携带历史根目录，下一目标不需访问前两处目录。 |
+| export | `inventory → below/resolve_project_path`: state/live models, IL ancestry, dataset/calibration, pins, pending evaluations, runtime/source pins; hashes of original bytes. |
+| restore / verify | Manifest, parts, and payload verification → layout/destination conflict checks → atomic writes without overwrite → source verification using the original recipe → separate sidecar. |
+| preflight | Distribution/assets, frozen bank, LegacyWorker, rules/accelerated workers; installation inside the new directory, with DLL/source pins and actual rules parity still checked. |
+| resume | `load_resume` checks checkpoint/state/model/generation/signature and restores Adam/RNG; upgrades require an explicit source receipt. Historical references resolve through `project_path`. |
+| IL / rehearsal | Original manifest/parent/checkpoint bindings for completed imitation; `load_dataset` resolves shards/calibration in the parent before passing them to spawned readers. |
+| workers / evaluation | Actor subprocesses read the sidecar from the destination root; the parent creates jobs under the destination, and inference loads resolved checkpoints. Existing evaluations retain the original spec digest. |
+| retention / re-export | Live/pinned/cleanup references continue through the mapping; re-export uses current source/state and carries historical roots, so the next destination needs neither previous directory. |
 
-最终单元组合命令如下（先安装迁移/训练依赖，并将 `src`、`tests/Transfer`、`tests/Recovery`、`tests/R2` 加入 `PYTHONPATH`）：
+The final unit-test commands are below. First install the transfer/training dependencies and add `src`, `tests/Transfer`, `tests/Recovery`, and `tests/R2` to `PYTHONPATH`:
 
 ```sh
 python -m unittest test_relocation_audit test_relocation test_step5_transfer -v
@@ -284,24 +284,24 @@ python -m unittest test_audit_resume test_time_resume test_resume_evaluations te
 python -m unittest test_native_runtime_review.NativeRuntimeReviewTests.test_search_transformation_is_pinned_and_changed_helper_is_rejected -v
 ```
 
-在 Windows / Python 3.12 / PyTorch 2.8 CPU 上，最终迁移/归档组 **57 项全部通过**；相关恢复组 **38 项中 36 通过、2 跳过**（真实 CUDA 硬件、POSIX 删除当前工作目录）；runtime source pin 检查 **1 项通过**，合计 **96 项独立测试，94 通过、2 跳过**。首次在沙箱运行的 junction 跳过项，最终已在普通用户上下文实际运行并通过，不需要管理员权限。相关现有测试没有失败。源码兼容测试同时拒绝未知 source、未经审核 config 变化及错误 checkpoint/state 绑定；实际 CPU checkpoint 逐项比较权重、Adam、RNG/下一次随机输出和完整 state。
+On Windows / Python 3.12 / PyTorch 2.8 CPU, **all 57 transfer/archive tests passed**. The related recovery group had **36 passes and 2 skips out of 38 tests** (actual CUDA hardware and POSIX removal of the current working directory). The runtime source-pin check had **1 pass**, for **96 distinct tests: 94 passed and 2 skipped**. Junction checks initially skipped inside the sandbox were later executed successfully in a normal user context without administrator privileges. Relevant existing tests had no failures. Source compatibility tests also reject unknown source versions, unreviewed config changes, and incorrect checkpoint/state bindings. Actual CPU checkpoints were compared field by field for weights, Adam, RNG/next random output, and complete state.
 
-原始失败日志、最终单元结果及本次原生演练日志均位于 `artifacts/step5-relocation-audit/`。首次原生演练已通过新目录 preflight 和 PPO 续训，但嵌套测试目录使 Windows retention rename 路径达到 267 字符，触发系统路径限制。演练改用短临时目录；Windows 上仍须让项目及生成文件路径处于系统支持的长度内，本修订没有修改系统长路径设置。演练使用单独的新 evaluation config 保留 replay，以检验第三目录能复用真实缓存，不改写归档的训练 config 或既有 spec。
+Original failure logs, final unit results, and native integration logs are under `artifacts/step5-relocation-audit/`. The first native exercise passed destination preflight and PPO continuation, but nested test directories produced a 267-character Windows retention rename path and hit the system path limit. The exercise was rerun using shorter temporary directories. On Windows, project and generated-file paths must still fit the system's supported lengths; this revision does not change system long-path settings. The exercise uses a separate new evaluation config that retains replays to test actual cache reuse in the third directory, without rewriting the archived training config or an existing spec.
 
-**最终真实运行时演练通过**：`tests/Transfer/smoke_migration_audit.py` 使用 Git commit `05def96720df7635626b7a3ea0de1a4ab2888da3` 的真实旧 exporter，在归档前构造包含绝对 host/checkpoint 引用的有界 fixture。删除源目录后恢复到第二目录，校验 **2,799 个文件**，更新到上面的已审核源码，完成真实 DLL preflight、一轮两局 PPO 和四局评估。再次导出为 45 个 1 MB 测试分卷、删除第二目录，恢复到第三目录并校验 **2,819 个文件**；第三目录再次 preflight，**四局评估全部命中原 replay 缓存，原 spec 字节和结果不变**，再续训一轮。训练计数 **iteration 2 → 3 → 4、games 4 → 6 → 8**；第二次搬迁没有增加 source transition。1 MB 仅用于分卷压力测试，实际默认仍为 1900 MB。
+**The final exercise with real runtimes passed.** `tests/Transfer/smoke_migration_audit.py` uses the actual historical exporter from Git commit `05def96720df7635626b7a3ea0de1a4ab2888da3` and constructs a bounded fixture with absolute host/checkpoint references before archiving. After deleting the source directory, it restores into a second directory, verifies **2,799 files**, upgrades to the reviewed source above, and completes real DLL preflight, one two-game PPO iteration, and four evaluation games. It then exports 45 test parts of 1 MB, deletes the second directory, restores into a third directory, and verifies **2,819 files**. The third directory passes preflight again, **reuses the original replay cache for all four evaluation games with unchanged spec bytes and results**, and completes another training iteration. Training counters advance through **iteration 2 → 3 → 4 and games 4 → 6 → 8**. The second move adds no source transition. The 1 MB size is only for split-archive stress testing; the actual default remains 1900 MB.
 
-演练在独立 Python 启动及 spawned workers 中禁止对前两处目录的 Python 文件访问，结束时两处目录仍不存在；输入测试 run 的全部文件哈希保持不变。执行上下文的管理员标志为 false。耗时约 **864 秒**，结果见 `native-result.json`、`second-*`/`third-*` 日志和 `user-context.json`。`scope-check.json` 确认与任务无关的未提交文件和以前的审核记录未变。`final-transfer-tests.log`、`final-tests.log`、`native-source-pin.log` 保存单元结果。
+The exercise blocks Python filesystem access to the first two directories in independent Python launches and spawned workers. Both directories remain absent at completion, and every file hash in the input test run is unchanged. The execution context's administrator flag is false. Elapsed time was approximately **864 seconds**; see `native-result.json`, the `second-*`/`third-*` logs, and `user-context.json`. `scope-check.json` confirms that unrelated uncommitted files and prior review receipts were preserved. Unit results are in `final-transfer-tests.log`, `final-tests.log`, and `native-source-pin.log`.
 
-离线的公有/私有 Release 工作流模拟、actionlint 及本文六个 shell 代码块的 Bash 语法检查也通过，未执行任何真实 GitHub 上传/下载。未验证真实 Linux/CUDA 机器、跨设备逐步一致性、大于 2 GB 的实际归档或完整强度评估；模型/Adam/RNG 的 CPU 恢复与此处有限演练不能证明不同设备和时钟预算下后续训练逐步相同。旧包遗漏的依赖仍须另行提供，系统/Python/Mono/CUDA/OpenSpiel 环境仍按指南准备。
+Offline simulations of the public/private Release workflow, actionlint, and Bash syntax checks for this document's six shell blocks also passed. No actual GitHub uploads/downloads were performed. Actual Linux/CUDA machines, step-by-step consistency across devices, archives larger than 2 GB, and full playing-strength evaluation were not tested. CPU restoration of the model/Adam/RNG and these bounded exercises do not establish identical subsequent training across different devices and clock budgets. Dependencies omitted from older archives still need to be supplied separately, and system/Python/Mono/CUDA/OpenSpiel environments must still be prepared according to the guide.
 
-### 上一版验证记录（1.0.0）
+### Previous Validation Record (1.0.0)
 
-目录迁移修订在 **Windows / Python 3.12 / PyTorch 2.8 CPU** 验证。最终组合运行 **46 项**（30 项原迁移测试、11 项新增迁移测试、5 项 audit/time-budget 续训测试），45 项通过，1 项 junction 测试因沙箱无法创建链接跳过；随后在普通用户上下文单独实测 junction 越界拒绝、原子发布不覆盖、非法映射及原目录旧包恢复，**4 项全部通过**。另运行 **38 项**相关恢复/IL/评估/保留清理/运行时/启动目录测试，36 项通过，CUDA 和 POSIX 各跳过 1 项；其中 5 项与组合运行重叠，不重复计数。
+The relocation revision was validated on **Windows / Python 3.12 / PyTorch 2.8 CPU**. The final combined run had **46 tests** (30 existing transfer tests, 11 new relocation tests, and 5 audit/time-budget continuation tests): 45 passed, and one junction test was skipped because the sandbox could not create links. Junction escape rejection, atomic publication without overwrite, invalid mappings, and old-archive restoration at the original path were then tested separately in a normal user context; **all 4 passed**. Another **38 related recovery/IL/evaluation/retention/runtime/launch-directory tests** ran: 36 passed, with one CUDA and one POSIX skip. Five overlapped with the combined run and are not counted twice.
 
-新增用例导出临时项目后**删除源根目录**，恢复到另一个目录，再次导出并搬到第三个目录。覆盖绝对/相对路径、ZIP/zstd/分卷和旧 recipe 1/2 清单、所有归档文件原字节、后续独立进程读取映射、IL 祖先及真实 checkpoint、并行 rehearsal 读取与 calibration 校验、评估模型依赖和原 spec 绑定、损坏归档、目标冲突、非法映射/越界引用，以及保留清理的引用保护。真实 utility-head checkpoint 通过原有 `load_resume`/`resume_optimizer` 恢复并比较全部权重、Adam 状态、RNG（包括下一次随机输出）及完整 state；篡改 checkpoint/state 绑定仍被拒绝。评估用例验证真实模型加载和已有 summary/spec 复用，没有进行完整强度评估 campaign。
+The new cases export a temporary project, **delete its source root**, restore into another directory, then re-export and move into a third directory. Coverage includes absolute/relative paths; ZIP/zstd/parts and legacy recipe 1/2 manifests; original bytes for every archived file; mapping access from later independent processes; IL ancestry and real checkpoints; parallel rehearsal readers and calibration checks; evaluation model dependencies and original spec bindings; corrupted archives; destination conflicts; invalid mappings/out-of-project references; and retention dependency protection. A real utility-head checkpoint is restored through the existing `load_resume`/`resume_optimizer`, comparing all weights, Adam state, RNG (including the next random output), and complete state. Tampered checkpoint/state bindings remain rejected. Evaluation cases test real model loading and reuse of existing summaries/specs, without a full playing-strength evaluation campaign.
 
-**旧归档的真实运行时演练通过**：`tests/Transfer/smoke_relocation.py` 从 commit `05def96720df7635626b7a3ea0de1a4ab2888da3` 提取历史代码，用该版本的真实 exporter 打包已提交的两局/轮 fixture；删除临时源项目，在不同根目录恢复并逐一校验 **2,799 个文件**。原始 state/checkpoint 在恢复过程中不变；随后更新目标源码、运行真实两局规则 parity 和两个加速 worker 的 preflight，再以 `--resume-reviewed-source` 实际续训一轮。结果 **iteration 2 → 3、games 4 → 6**，原 checkpoint 字节、原 state 备份、源码升级记录全部检查通过。原始测试 fixture 未修改，总耗时约 777 秒。
+**The historical-archive exercise with real runtimes passed.** `tests/Transfer/smoke_relocation.py` extracts historical code from commit `05def96720df7635626b7a3ea0de1a4ab2888da3` and uses that version's actual exporter to package a committed two-game-per-iteration fixture. It deletes the temporary source project, restores at a different root, and verifies **2,799 files** individually. Original state/checkpoint bytes remain intact during restoration. It then updates destination source, runs actual two-game rules parity and preflight for both accelerated workers, and resumes one iteration with `--resume-reviewed-source`. The result is **iteration 2 → 3 and games 4 → 6**. Original checkpoint bytes, the original state backup, and the source transition record all pass verification. The input fixture was unchanged; total elapsed time was approximately 777 seconds.
 
-本修订证据在 `artifacts/step5-relocation-validation/`：`final-tests.log`、`final-security.log`、`recovery-tests.log`、`native-smoke-result.json`、`native-preflight.log`、`native-resume.log`。演练共享已安装的第三方 Python 环境，系统依赖未打包；未实际联网下载/上传，未在两台 Linux lab 或真实 CUDA 硬件间迁移，目标机器仍须运行 preflight。
+Evidence for this revision is under `artifacts/step5-relocation-validation/`: `final-tests.log`, `final-security.log`, `recovery-tests.log`, `native-smoke-result.json`, `native-preflight.log`, and `native-resume.log`. The exercise shares an installed third-party Python environment; system dependencies are not packaged. No actual network downloads/uploads or transfers between two Linux lab machines or actual CUDA devices were performed. The destination must still run preflight.
 
-工作流重新通过 actionlint 1.7.12、Bash/嵌入 Python 语法和 `tests/Transfer/check_release_workflow.py` 的公有/私有仓库模拟上传检查。Release 下载行为不变，分卷或索引上传失败仍不会发布；未实际运行 GitHub self-hosted runner。
+The workflow also passed actionlint 1.7.12, Bash/embedded Python syntax checks, and simulated public/private repository uploads in `tests/Transfer/check_release_workflow.py`. Release download behavior is unchanged, and a failed part or index upload still prevents publication. An actual GitHub self-hosted runner was not exercised.

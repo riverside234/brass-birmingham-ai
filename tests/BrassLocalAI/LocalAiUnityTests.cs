@@ -60,7 +60,7 @@ public static class LocalAiUnityTests
     }
 }
 
-public sealed class LocalAiUnityDriver : MonoBehaviour
+public sealed partial class LocalAiUnityDriver : MonoBehaviour
 {
     public string Output;
     int checks; float started; bool done, expectedError;
@@ -124,6 +124,15 @@ public sealed class LocalAiUnityDriver : MonoBehaviour
         router.ShowView<ICreateOfflineGameView>();
         yield return null;
         CheckFirstDisplay("first open"); Capture("local-ai-cold-menu.png");
+        if(Environment.GetCommandLineArgs().Any(a=>a.StartsWith("--brass-release-case="))) {
+            var release=(IEnumerator)GetType().GetMethod("NativeReleaseCases",ReflectionAccess.Flags).Invoke(this,null);while(release.MoveNext())yield return release.Current;yield break;
+        }
+        if(Environment.GetCommandLineArgs().Contains("--brass-native-matched-test")) {
+            var matched=(IEnumerator)GetType().GetMethod("NativeMatchedCases",ReflectionAccess.Flags).Invoke(this,null);while(matched.MoveNext())yield return matched.Current;yield break;
+        }
+        if(Environment.GetCommandLineArgs().Contains("--brass-native-local-test")) {
+            var native=(IEnumerator)GetType().GetMethod("NativeCases",ReflectionAccess.Flags).Invoke(this,null);while(native.MoveNext())yield return native.Current;yield break;
+        }
         router.HideView<ICreateOfflineGameView>(); yield return null;
         router.ShowView<ICreateOfflineGameView>(); yield return null;
         CheckFirstDisplay("cached menu reopened without refresh");
@@ -454,6 +463,8 @@ public sealed class LocalAiUnityDriver : MonoBehaviour
     void Update() { if (!done && Time.realtimeSinceStartup - started > 1800) Finish(new Exception("native integration watchdog")); }
     void Finish(Exception error)
     {
+        var profile=Environment.GetEnvironmentVariable("BRASS_L14_TRACE");
+        if(!String.IsNullOrEmpty(profile))typeof(LocalTurnBridge).Assembly.GetType("BrassLegacyAI.Native.NativeStageTrace").GetMethod("Save").Invoke(null,new object[]{profile});
         done = true; LocalTurnBridge.CancelActive(); Application.logMessageReceived -= Log;
         File.WriteAllText(Output, new JObject { ["passed"] = error == null, ["mode"] = Environment.GetCommandLineArgs().Contains("--brass-local-ai-smoke") ? "startup-menu-smoke" : "full", ["checks"] = checks, ["searchAllowanceChecks"] = searchAllowanceChecks, ["error"] = error == null ? null : error.ToString(), ["nativeErrors"] = JArray.FromObject(errors), ["environmentMessages"] = JArray.FromObject(environmentMessages), ["images"] = JArray.FromObject(images), ["turns"] = JArray.FromObject(turns), ["resourceTests"] = JObject.FromObject(new { passed = AiExecutionResourceTests.Passed, checks = AiExecutionResourceTests.Checks }), ["resourceMeasurements"] = AiExecutionResourceTests.Measurements == null ? null : JObject.FromObject(AiExecutionResourceTests.Measurements), ["executionStatistics"] = JObject.FromObject(BrassLegacyAI.Execution.AiExecutionScheduler.Statistics()), ["selectionPanel"] = JObject.FromObject(new { passed = selectionCasesPassed, gammaEnabled = AiSelectionCatalog.Entries(AiFamily.Gamma).Any(e => e.Available), fixtureChoices = selectionFixtureChoices, draftChecks, layouts = selectionLayouts }), ["unity"] = Application.unityVersion }.ToString());
         Application.Quit(error == null ? 0 : 1);

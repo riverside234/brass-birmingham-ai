@@ -572,6 +572,8 @@ tensorboard/
 
 # Local operating-system metadata.
 /native/**/target/
+!/native/brass-ai-worker/src/bin/brass-ai-local.rs
+/BrassNative/
 /configs/legacy-ai/live.json
 .DS_Store
 Thumbs.db

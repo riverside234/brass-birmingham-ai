@@ -183,6 +183,30 @@ fn narrowed_allowance_includes_root_preparation_and_cannot_be_replenished() {
     assert!(second.result.budget.deadline_ns <= first.result.budget.deadline_ns);
 }
 #[test]
+fn delivery_reserve_can_prepare_bounded_completion_without_search_or_nn_work() {
+    let (mut pair, input, id) = fixture();
+    pair.admit(id, &input, config(), 12_000_000_000).unwrap();
+    let ticket = pair
+        .start(
+            input,
+            Mode::Timed { startup: None },
+            BatchPolicy::default(),
+            450_000_000,
+            [None, None],
+        )
+        .unwrap();
+    let decision = drain(&mut pair, ticket).unwrap();
+    assert!(!decision.result.actions.is_empty());
+    assert_eq!(decision.result.budget.work_deadline_ns, 0);
+    assert!(decision.result.budget.deadline_ns < 500_000_000);
+    assert!(decision.response_ready_ns < decision.result.budget.deadline_ns);
+    assert!(decision
+        .lanes
+        .iter()
+        .all(|l| l.outcome.completed == 0 && l.neural.positions == 0));
+    assert!(!pair.busy());
+}
+#[test]
 fn owner_panic_and_subsequent_partial_dispatch_retire_before_idle() {
     let (mut pair, input, mut id) = fixture();
     pair.admit(id.clone(), &input, config(), 4_000_000_000)

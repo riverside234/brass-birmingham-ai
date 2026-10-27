@@ -21,7 +21,10 @@ namespace BrassLegacyAI
         readonly Dictionary<AiFamily, AiChoice> drafts = new Dictionary<AiFamily, AiChoice>();
         int ownerVersion;
         bool fixture;
-        AiFamily Family { get { return CurrentPage == PlayerSelectionPage.Gamma ? AiFamily.Gamma : AiFamily.V4; } }
+        AiFamily tableFamily;
+        Button v4Table, alphaTable;
+        AiFamily Family { get { return CurrentPage == PlayerSelectionPage.Gamma ? AiFamily.Gamma : tableFamily; } }
+        static string PageLabel(PlayerSelectionPage page) {return page==PlayerSelectionPage.AlphaTest?"Alpha Test":page.ToString();}
         AiChoice selected { get { return drafts[Family]; } }
         string nickname, detail;
         RectTransform window, viewport, content;
@@ -65,7 +68,8 @@ namespace BrassLegacyAI
             if (!row.CanEdit) return null;
             var panel = OpenCore(row, font, row.Player.NickName, row.SelectedChoice, null, null);
             panel.apply = onApply;
-            panel.CurrentPage = row.Player.AiType == BrassApplication.AI.AIType.Human ? PlayerSelectionPage.Human : PlayerSelectionPage.V4;
+            panel.tableFamily=LocalMenu.NativeSupported(row.Player)?LocalMenu.TableFamily(row.Player):AiFamily.V4;
+            panel.CurrentPage = row.Player.AiType == BrassApplication.AI.AIType.Human ? PlayerSelectionPage.Human : panel.tableFamily==AiFamily.AlphaTest?PlayerSelectionPage.AlphaTest:PlayerSelectionPage.V4;
             panel.Build(); panel.FocusSelection(); return panel;
         }
         static AiSelectionPanel OpenCore(AiSetupRow row, TextMeshProUGUI font, string playerName, AiChoice selectedChoice, AiFamily? fixtureFamily, AiCatalogEntry[] fixtureEntries)
@@ -78,10 +82,10 @@ namespace BrassLegacyAI
             var panel = active = root.gameObject.AddComponent<AiSelectionPanel>();
             panel.owner = row; panel.ownerVersion = row.BindingVersion; panel.template = font; panel.nickname = playerName;
             panel.DraftDifficulty = row.SelectedDifficulty;
-            foreach (var family in new[] { AiFamily.V4, AiFamily.Gamma }) {
+            foreach (var family in new[] { AiFamily.V4, AiFamily.Gamma, AiFamily.AlphaTest }) {
                 panel.catalogs[family] = fixtureFamily == family && fixtureEntries != null ? Array.AsReadOnly(fixtureEntries) : AiSelectionCatalog.Entries(family);
                 panel.queries[family] = ""; panel.positions[family] = 1;
-                panel.drafts[family] = selectedChoice.Family == family ? selectedChoice : new AiChoice(family, "random");
+                panel.drafts[family] = selectedChoice.Family == family ? selectedChoice : new AiChoice(family, family==AiFamily.AlphaTest?"alpha-test":"random");
             }
             root.gameObject.AddComponent<LightUiTheme>();
             var menu = row.GetComponentsInParent<Frameworks.View.Menu.CreateGame.CreateOfflineGameView>(true).FirstOrDefault();
@@ -141,7 +145,7 @@ namespace BrassLegacyAI
             window.gameObject.AddComponent<LightUiSurface>().Role = LightSurfaceRole.Window;
             var title = Text(window, "Title", "CHOOSE PLAYER · " + nickname, 22, 10, width - 365, 46, 30);
             title.fontStyle = FontStyles.Bold; title.overflowMode = TextOverflowModes.Ellipsis;
-            Text(window, "Context", "Player " + owner.Player.PlayerStartConfiguration.Color + " · Choose who plays this seat. Apply to confirm your selection.", 22, 55, width - 60, 32, 19).color = LightUi.Muted;
+            Text(window, "Context", "Player " + owner.Player.PlayerStartConfiguration.Color + " · Apply confirms this seat and the AI family for the whole table.", 22, 55, width - 60, 32, 19).color = LightUi.Muted;
             smaller = Button(window, "Smaller text", "A−", width - 298, 16, 50, 42, 20, () => ChangeTextSize(-1));
             Text(window, "Text size", new[] { "Large", "Larger", "Largest" }[Mathf.RoundToInt((TextScale - 1) / .15f)], width - 244, 16, 100, 42, 18).alignment = TextAlignmentOptions.Center;
             larger = Button(window, "Larger text", "A+", width - 140, 16, 50, 42, 20, () => ChangeTextSize(1));
@@ -151,14 +155,28 @@ namespace BrassLegacyAI
             close = Button(window, "Close chooser", "×", width - 70, 16, 48, 42, 25, Close);
             float sidebar = 208, bodyX = sidebar + 40, bodyWidth = width - bodyX - 24;
             foreach (var page in new[] { PlayerSelectionPage.Human, PlayerSelectionPage.V4, PlayerSelectionPage.Gamma }) {
-                var button = Button(window, "Page " + page, "", 22, 106 + (int)page * 90, sidebar, 78, 24, () => SelectPage(page));
+                var actualPage=page;
+                if(!fixture && page==PlayerSelectionPage.V4 && tableFamily==AiFamily.AlphaTest)actualPage=PlayerSelectionPage.AlphaTest;
+                if(!fixture && page==PlayerSelectionPage.Gamma && tableFamily==AiFamily.AlphaTest)continue;
+                var capturedPage=actualPage;
+                var button = Button(window, "Page " + actualPage, "", 22, 106 + (int)page * 90, sidebar, 78, 24, () => SelectPage(capturedPage));
                 button.GetComponentInChildren<TextMeshProUGUI>().gameObject.SetActive(false);
-                AddIcon(button.transform, page == PlayerSelectionPage.Human ? AiIconKind.Human : page == PlayerSelectionPage.V4 ? AiIconKind.V4 : AiIconKind.Gamma, 12, 17, 30);
-                Text(button.transform, "Family", page.ToString(), 52, 8, sidebar - 64, 34, 24).fontStyle = FontStyles.Bold;
-                Text(button.transform, "Count", page == PlayerSelectionPage.Human ? "Local player" : page == PlayerSelectionPage.V4 ? "6 + Random" : "16 + Random", 52, 44, sidebar - 60, 24, 17).color = LightUi.Muted;
-                button.GetComponent<AiControlSurface>().Selected = CurrentPage == page; pageButtons[page] = button;
+                AddIcon(button.transform, actualPage == PlayerSelectionPage.Human ? AiIconKind.Human : actualPage == PlayerSelectionPage.V4 ? AiIconKind.V4 : AiIconKind.Gamma, 12, 17, 30);
+                Text(button.transform, "Family", PageLabel(actualPage), 52, 8, sidebar - 64, 34, 24).fontStyle = FontStyles.Bold;
+                Text(button.transform, "Count", actualPage==PlayerSelectionPage.AlphaTest?"Test NN":page == PlayerSelectionPage.Human ? "Local player" : page == PlayerSelectionPage.V4 ? "6 + Random" : "16 + Random", 52, 44, sidebar - 60, 24, 17).color = LightUi.Muted;
+                button.GetComponent<AiControlSurface>().Selected = CurrentPage == actualPage; pageButtons[actualPage] = button;
             }
-            Text(window, "Page title", CurrentPage.ToString(), bodyX, 100, 155, 38, 27).fontStyle = FontStyles.Bold;
+            if(!fixture) {
+                Text(window,"Table family label","AI for whole table",22,392,sidebar,50,20,true).color=LightUi.Muted;
+                v4Table=Button(window,"V4 table","V4",22,450,sidebar,46,21,()=>SwitchFamily(AiFamily.V4));
+                v4Table.GetComponent<AiControlSurface>().Selected=tableFamily==AiFamily.V4;
+                alphaTable=null;
+                if(LocalMenu.NativeSupported(owner.Player)) {
+                    alphaTable=Button(window,"Alpha Test table","Alpha Test",22,508,sidebar,46,21,()=>SwitchFamily(AiFamily.AlphaTest));
+                    alphaTable.GetComponent<AiControlSurface>().Selected=tableFamily==AiFamily.AlphaTest;
+                }
+            }
+            Text(window, "Page title", PageLabel(CurrentPage), bodyX, 100, 155, 38, 27).fontStyle = FontStyles.Bold;
             countLabel = Text(window, "Page count", "", bodyX + 165, 104, bodyWidth - 165, 34, 19); countLabel.color = LightUi.Muted;
             float footerHeight = 108 + Math.Max(0, TextScale - 1.15f) * 90;
             if (CurrentPage == PlayerSelectionPage.Human) {
@@ -172,7 +190,7 @@ namespace BrassLegacyAI
             } else {
             Text(window, "Difficulty caption", "Difficulty", bodyX, 146, 137, 46, 21);
             DifficultyButtons = new Button[DifficultyCatalog.Keys.Length];
-            bool enabled = CurrentPage == PlayerSelectionPage.V4 || fixture && catalogs[Family].Any(e => e.Available);
+            bool enabled = CurrentPage == PlayerSelectionPage.V4 || CurrentPage==PlayerSelectionPage.AlphaTest || fixture && catalogs[Family].Any(e => e.Available);
             for (int i = 0; i < DifficultyButtons.Length; i++) {
                 string key = DifficultyCatalog.Keys[i];
                 var button = DifficultyButtons[i] = Button(window, "Difficulty " + key, DifficultyCatalog.Label(key) + " · " + DifficultyCatalog.Milliseconds(key) / 1000 + "s", bodyX + 142 + i * 167, 146, 155, 46, 21, () => {
@@ -195,6 +213,7 @@ namespace BrassLegacyAI
             filter.onValueChanged.AddListener(value => { if (!IsCurrent) return; queries[Family] = value; positions[Family] = 1; RefreshGrid(); });
             clear = Button(window, "Clear filter", "Clear", bodyX + bodyWidth - 80, 204, 80, 44, 18, () => { filter.text = ""; filter.ActivateInputField(); });
             var randomEntry = RandomEntry(); random = Tile(randomEntry, window, bodyX, 260, bodyWidth, 68, true);
+            if(Family==AiFamily.AlphaTest)random.gameObject.SetActive(false);
             columns = Family == AiFamily.Gamma ? 4 : 3;
             cardHeight = (Family == AiFamily.Gamma ? 146 : 216) * TextScale / 1.15f;
             float gridHeight = Mathf.Max(80, height - 340 - footerHeight - 16);
@@ -237,6 +256,7 @@ namespace BrassLegacyAI
         }
         AiCatalogEntry RandomEntry()
         {
+            if(Family==AiFamily.AlphaTest)return catalogs[Family][0];
             int available = catalogs[Family].Count(e => e.Available);
             var canonical = AiSelectionCatalog.Random(Family);
             return new AiCatalogEntry(Family, "random", "Random", canonical.Description, available > 0, available == 0 ? "Models not installed" : "");
@@ -287,13 +307,13 @@ namespace BrassLegacyAI
             if (CurrentPage == PlayerSelectionPage.Human) return !fixture;
             return DifficultyCatalog.Contains(DraftDifficulty) && (fixture ?
                 (selected.EntryId == "random" ? RandomEntry().Available : catalogs[Family].Any(e => e.Choice.Equals(selected) && e.Available)) :
-                CurrentPage == PlayerSelectionPage.V4 && AiSelectionCatalog.CanChoose(selected));
+                (CurrentPage == PlayerSelectionPage.V4 || CurrentPage==PlayerSelectionPage.AlphaTest) && AiSelectionCatalog.CanChoose(selected));
         }
         void UpdateSelection()
         {
             selectionText.text = CurrentPage == PlayerSelectionPage.Human ? "Selection: Human · Local player" : CurrentPage == PlayerSelectionPage.Gamma && !fixture ?
                 "Gamma is not available yet. Choose Human or V4 to play." :
-                "Selection: " + Family + " · " + (selected.EntryId == "random" ? "Random" : catalogs[Family].First(e => e.Choice.Equals(selected)).Name) +
+                "Selection: " + (Family==AiFamily.AlphaTest?"NN":Family.ToString()) + " · " + (selected.EntryId == "random" ? "Random" : catalogs[Family].First(e => e.Choice.Equals(selected)).Name) +
                 " · " + DifficultyCatalog.Label(DraftDifficulty) + " · up to " + DifficultyCatalog.Milliseconds(DraftDifficulty) / 1000 + "s";
             ApplyButton.interactable = CanApply(); var surface = ApplyButton.GetComponent<AiControlSurface>();
             surface.Available = ApplyButton.interactable; surface.Selected = ApplyButton.interactable; surface.SetVerticesDirty();
@@ -315,7 +335,7 @@ namespace BrassLegacyAI
             string query = queries[Family].Trim(); var entries = catalogs[Family];
             var shown = entries.Where(e => query.Length == 0 || e.Name.IndexOf(query, StringComparison.OrdinalIgnoreCase) >= 0 ||
                 e.Description.IndexOf(query, StringComparison.OrdinalIgnoreCase) >= 0).ToArray();
-            countLabel.text = Family == AiFamily.Gamma ? shown.Length + " of " + entries.Count + " models · " + entries.Count(e => e.Available) + " available" +
+            countLabel.text = Family==AiFamily.AlphaTest ? "Test model · Experimental" : Family == AiFamily.Gamma ? shown.Length + " of " + entries.Count + " models · " + entries.Count(e => e.Available) + " available" +
                 (entries.Any(e => e.Available) ? "" : " · Models not installed") : shown.Length + " of " + entries.Count + " styles · Plans adapt during play";
             float w = (gridWidth - (columns - 1) * 12) / columns;
             for (int i = 0; i < shown.Length; i++) tiles.Add(Tile(shown[i], content, (i % columns) * (w + 12), (i / columns) * (cardHeight + 12), w, cardHeight, false));
@@ -327,10 +347,16 @@ namespace BrassLegacyAI
             scroll.verticalNormalizedPosition = positions[Family]; UpdateNavigation();
         }
         public void SelectPage(AiFamily family)
-        { SelectPage(family == AiFamily.V4 ? PlayerSelectionPage.V4 : PlayerSelectionPage.Gamma); }
+        { SelectPage(family == AiFamily.V4 ? PlayerSelectionPage.V4 : family==AiFamily.AlphaTest?PlayerSelectionPage.AlphaTest:PlayerSelectionPage.Gamma); }
+        public void SwitchFamily(AiFamily family)
+        {
+            if(!IsCurrent || fixture || (family!=AiFamily.V4 && family!=AiFamily.AlphaTest) || (family==AiFamily.AlphaTest && !LocalMenu.NativeSupported(owner.Player)))return;
+            Remember();tableFamily=family;CurrentPage=family==AiFamily.V4?PlayerSelectionPage.V4:PlayerSelectionPage.AlphaTest;Build();FocusSelection();
+        }
         public void SelectPage(PlayerSelectionPage page)
         {
             if (!IsCurrent || page == CurrentPage || !Enum.IsDefined(typeof(PlayerSelectionPage), page)) return;
+            if(!pageButtons.ContainsKey(page))return;
             Remember(); CurrentPage = page; Build(); pageButtons[page].Select();
         }
         public void ChangeTextSize(int direction)
@@ -341,7 +367,8 @@ namespace BrassLegacyAI
         }
         List<Selectable> FocusOrder()
         {
-            var controls = new List<Selectable> { pageButtons[PlayerSelectionPage.Human], pageButtons[PlayerSelectionPage.V4], pageButtons[PlayerSelectionPage.Gamma] };
+            var controls = new List<Selectable>(pageButtons.OrderBy(p=>(int)p.Key).Select(p=>(Selectable)p.Value));
+            controls.Add(v4Table);controls.Add(alphaTable);
             controls.AddRange(DifficultyButtons); controls.AddRange(new Selectable[] { filter, clear, random });
             controls.AddRange(tiles); controls.AddRange(new[] { smaller, larger, close, footerClose, ApplyButton });
             return controls.Where(c => c != null && c.IsActive() && c.IsInteractable()).ToList();

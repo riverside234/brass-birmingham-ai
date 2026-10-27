@@ -319,6 +319,16 @@ impl ObservationMemory {
             v
         })
     }
+    /// Borrow already-published public fields for causal debt accounting.
+    /// Own hand is intentionally empty; callers must not use this as a policy
+    /// observation. Chance states have no newly revealed accounting boundary.
+    pub(crate) fn accounting_view(&self) -> Option<&Observation> {
+        if self.chance.is_some() {
+            None
+        } else {
+            self.public.as_deref()
+        }
+    }
     pub fn information(&self, observer: Seat) -> InformationState {
         InformationState {
             observation: ObservationEnvelope {

@@ -1,7 +1,7 @@
 namespace BrassLegacyAI
 {
     // Navigation includes Human without treating it as an executable AI family.
-    public enum PlayerSelectionPage { Human, V4, Gamma }
+    public enum PlayerSelectionPage { Human, V4, Gamma, AlphaTest }
     public sealed class PlayerSelectionDraft
     {
         public readonly PlayerSelectionPage Page;

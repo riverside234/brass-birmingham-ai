@@ -1,0 +1,15 @@
+# L14.5 provider evaluation — CPU retained
+
+**2026-10-26 user decision: stop here and keep the existing ONNX Runtime setup.**
+
+The local default remains **CPUExecutionProvider, ONNX Runtime 1.22.1, ort 2.0.0-rc.10**. No OpenVINO runtime or experimental binding was installed in the game. Production inference and Unity provider handling were restored to the frozen L14 v5 sources. The existing L14 optimizations remain intact.
+
+The unchanged temporary g890 model was used throughout. OpenVINO plugin 1.8.1 with ONNX Runtime 1.31.0 failed to load its descriptor input, with both full and disabled graph optimization. The documented ONNX Runtime 1.24.1 / OpenVINO 2025.4.1 provider loaded the model but failed the original numerical tolerance on all four value heads; policy logits passed. Its CPU provider passed the same golden corpus. Maximum absolute differences for policy, win share, placement, VP and utility were respectively **0.0000381, 0.285897, 1.665447, 25.773651 and 0.360682**. Profiling confirmed actual OpenVINO execution for that failed comparison.
+
+These correctness failures prevent a valid OpenVINO speed or release qualification. CPU-only inference measurements are controls, not evidence of an OpenVINO gain. No tolerances, model weights or accepted export bytes were changed. The experimental rc.13 binding also failed safe compatibility with the old 1.22.1 runtime, so that binding upgrade was not retained in production.
+
+Before the stop request, short native golden/contract checks, CPU controls, retained-package lifecycle and 4/8/10/12-second checks completed. The already-running isolated fallback tests and Unity smoke test had also finished successfully when their status was collected. No further tests are scheduled or running for this step. Full OpenVINO search, thread-budget and release qualification remain unperformed because admission failed; L14/L15's other open gates are unchanged.
+
+Reproduction infrastructure is retained in [`benchmark-rust-providers.py`](../scripts/benchmark-rust-providers.py), [`provider_diagnostics.py`](../tests/RustBackendInference/provider_diagnostics.py), the [package lock](../configs/references/cpu-providers.lock.json), the prepared-input [native probe](../native/brass-ai-inference/examples/provider_probe.rs), and the isolated [experimental patch](../tests/RustBackendInference/openvino-candidate.patch). The patch is research evidence, not an admitted production change. Raw results, failed attempts, source snapshots and package hashes are under `artifacts/rust-backend/20261026-l14-5/providers/`; the retained CPU Unity smoke copy is under `artifacts/rust-backend/20261026-l14-5/retained-cpu/`.
+
+Package selection followed the official [OpenVINO EP documentation](https://onnxruntime.ai/docs/execution-providers/OpenVINO-ExecutionProvider.html) and [plugin compatibility guide](https://github.com/onnxruntime/onnxruntime-ep-openvino/blob/main/docs/QuickStart.md). A future provider attempt requires a new, explicitly scoped qualification; there is no pending automatic switch.

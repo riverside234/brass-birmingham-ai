@@ -82,6 +82,8 @@ struct Request {
     scripted: bool,
     #[serde(default)]
     delay_ms: u64,
+    #[serde(default)]
+    external: Option<crate::research_external::Settings>,
     cases: Vec<Case>,
 }
 #[derive(Deserialize)]
@@ -106,12 +108,14 @@ struct Fault {
 }
 enum Engine {
     Native(Box<CpuEvaluator>),
+    External(Box<crate::research_external::External>),
     Scripted { manifest: Box<Manifest>, delay: u64 },
 }
 impl Evaluator for Engine {
     fn manifest(&self) -> &Manifest {
         match self {
             Self::Native(e) => e.manifest(),
+            Self::External(e) => e.manifest(),
             Self::Scripted { manifest, .. } => manifest,
         }
     }
@@ -122,6 +126,7 @@ impl Evaluator for Engine {
     ) -> Result<BatchOutput> {
         match self {
             Self::Native(e) => e.evaluate(inputs, control),
+            Self::External(e) => e.evaluate(inputs, control),
             Self::Scripted { manifest, delay } => {
                 service::validate_batch(manifest, inputs)?;
                 control.check()?;
@@ -178,8 +183,17 @@ pub fn run(instrumented: bool) -> std::result::Result<(), Box<dyn std::error::Er
     let digest = request.manifest_sha256;
     let scripted = request.scripted;
     let delay = request.delay_ms;
+    let external = request.external;
+    search::check(
+        !(scripted && external.is_some()),
+        "external/scripted modes conflict",
+    )?;
     let mut pair = Pair::new(move |_| {
-        if scripted {
+        if let Some(settings) = &external {
+            Ok(Engine::External(Box::new(
+                crate::research_external::External::load(settings, model.clone())?,
+            )))
+        } else if scripted {
             Ok(Engine::Scripted {
                 manifest: Box::new(model.clone()),
                 delay,

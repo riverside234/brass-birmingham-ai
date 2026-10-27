@@ -1,0 +1,685 @@
+--- a/native/Cargo.toml
++++ b/native/Cargo.toml
+@@ -12,7 +12,7 @@
+ [workspace.dependencies]
+ brass-ai-core = { path = "brass-ai-core" }
+ brass-ai-inference = { path = "brass-ai-inference" }
+-ort = { version = "=2.0.0-rc.10", default-features = false, features = ["std", "load-dynamic"] }
++ort = { version = "=2.0.0-rc.13", default-features = false, features = ["std", "load-dynamic", "api-22"] }
+ brass-upstream-rules = { path = "vendor/brass-upstream-rules" }
+ serde = { version = "=1.0.228", features = ["derive", "rc"] }
+ serde_json = "=1.0.149"
+--- a/native/Cargo.lock
++++ b/native/Cargo.lock
+@@ -364,9 +364,9 @@
+ 
+ [[package]]
+ name = "libloading"
+-version = "0.8.9"
+-source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "d7c4b02199fee7c5d21a5ae7d8cfa79a6ef5bb2fc834d6e9058e89c825efdc55"
++version = "0.9.0"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "754ca22de805bb5744484a5b151a9e1a8e837d5dc232c2d7d8c2e3492edc8b60"
+ dependencies = [
+  "cfg-if",
+  "windows-link",
+@@ -390,9 +390,9 @@
+ 
+ [[package]]
+ name = "ndarray"
+-version = "0.16.1"
+-source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "882ed72dce9365842bf196bdeedf5055305f11fc8c03dee7bb0194a6cad34841"
++version = "0.17.2"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "520080814a7a6b4a6e9070823bb24b4531daac8c4627e08ba5de8c5ef2f2752d"
+ dependencies = [
+  "matrixmultiply",
+  "num-complex",
+@@ -465,9 +465,9 @@
+ 
+ [[package]]
+ name = "ort"
+-version = "2.0.0-rc.10"
+-source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "1fa7e49bd669d32d7bc2a15ec540a527e7764aec722a45467814005725bcd721"
++version = "2.0.0-rc.13"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "4336a1e2b38848325241c72889086886004e589b7c74f335e60a8e8db5138a0b"
+ dependencies = [
+  "libloading",
+  "ndarray",
+@@ -478,12 +478,9 @@
+ 
+ [[package]]
+ name = "ort-sys"
+-version = "2.0.0-rc.10"
+-source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "e2aba9f5c7c479925205799216e7e5d07cc1d4fa76ea8058c60a9a30f6a4e890"
+-dependencies = [
+- "pkg-config",
+-]
++version = "2.0.0-rc.13"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "cf211e3776eea6aec988552fa118dd746d70e1b1e5e244058d1c98015f3e5872"
+ 
+ [[package]]
+ name = "page_size"
+@@ -500,12 +497,6 @@
+ version = "0.2.17"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+ checksum = "a89322df9ebe1c1578d689c92318e070967d1042b512afbe49518723f4e6d5cd"
+-
+-[[package]]
+-name = "pkg-config"
+-version = "0.3.34"
+-source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "f6b464fbc74e149a392436b17d523f769e057cb6877f6a5c4618bc6f11800548"
+ 
+ [[package]]
+ name = "portable-atomic"
+@@ -728,9 +719,9 @@
+ 
+ [[package]]
+ name = "smallvec"
+-version = "2.0.0-alpha.10"
+-source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "51d44cfb396c3caf6fbfd0ab422af02631b69ddd96d2eff0b0f0724f9024051b"
++version = "1.16.4"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "d0d5d4b1981b8bbbb7aed204cae5726d683d5d6ac7e74ec54122ea28f315e7c8"
+ 
+ [[package]]
+ name = "stats_alloc"
+--- a/native/brass-ai-inference/src/lib.rs
++++ b/native/brass-ai-inference/src/lib.rs
+@@ -2,6 +2,7 @@
+ pub mod batch;
+ pub mod manifest;
+ pub mod math;
++pub mod provider;
+ pub mod runtime;
+ pub mod search;
+ pub mod service;
+--- a/native/brass-ai-inference/src/manifest.rs
++++ b/native/brass-ai-inference/src/manifest.rs
+@@ -66,9 +66,28 @@
+     pub inter_threads: u8,
+     pub sequential: bool,
+     pub provider: String,
++    #[serde(default, skip_serializing_if = "Option::is_none")]
++    pub provider_runtime: Option<ProviderRuntime>,
+     pub optimization: String,
+     pub source_archive_sha256: String,
+ }
++#[derive(Debug, Clone, Deserialize, Serialize)]
++#[serde(deny_unknown_fields)]
++pub struct RuntimeFile {
++    pub path: String,
++    pub sha256: String,
++}
++#[derive(Debug, Clone, Deserialize, Serialize)]
++#[serde(deny_unknown_fields)]
++pub struct ProviderRuntime {
++    pub plugin_version: String,
++    pub openvino_version: String,
++    pub library: String,
++    pub files: Vec<RuntimeFile>,
++    pub options: std::collections::BTreeMap<String, String>,
++    pub allow_cpu_fallback: bool,
++}
++pub const OPENVINO_CONFIG: &str = r#"{"CPU":{"INFERENCE_PRECISION_HINT":"f32","EXECUTION_MODE_HINT":"ACCURACY","INFERENCE_NUM_THREADS":1,"NUM_STREAMS":1,"ENABLE_CPU_PINNING":false}}"#;
+ fn child(root: &Path, file: &str) -> Result<PathBuf> {
+     require(
+         !file.is_empty()
+@@ -89,6 +108,8 @@
+     pub manifest_sha256: String,
+     pub model_bytes: Vec<u8>,
+     pub runtime_path: PathBuf,
++    pub plugin_path: Option<PathBuf>,
++    pub provider_unavailable: Option<String>,
+ }
+ fn read_bounded(path: &Path, maximum: u64) -> Result<Vec<u8>> {
+     let file = fs::File::open(path).map_err(|e| invalid(e.to_string()))?;
+@@ -151,11 +172,34 @@
+             hash(&read_bounded(&runtime_path, 128 * 1024 * 1024)?) == manifest.runtime_sha256,
+             "runtime hash mismatch",
+         )?;
++        let mut provider_unavailable = None;
++        let mut plugin_path = None;
++        if let Some(provider) = &manifest.provider_runtime {
++            for pin in &provider.files {
++                // Missing optional provider dependencies permit a visible CPU
++                // startup fallback. Changed bytes/path escapes fail closed.
++                if !root.join(&pin.path).exists() {
++                    provider_unavailable =
++                        Some(format!("missing provider dependency: {}", pin.path));
++                    continue;
++                }
++                let path = child(root, &pin.path)?;
++                require(
++                    hash(&read_bounded(&path, 128 * 1024 * 1024)?) == pin.sha256,
++                    "provider dependency hash mismatch",
++                )?;
++                if pin.path == provider.library {
++                    plugin_path = Some(path);
++                }
++            }
++        }
+         Ok(Self {
+             manifest,
+             manifest_sha256: expected.into(),
+             model_bytes,
+             runtime_path,
++            plugin_path,
++            provider_unavailable,
+         })
+     }
+ }
+@@ -191,15 +235,50 @@
+             "invalid pinned identity",
+         )?;
+         require(
+-            self.runtime_version == "1.22.1"
+-                && self.binding_version == "2.0.0-rc.10"
+-                && self.provider == "CPUExecutionProvider"
++            ((self.runtime_version == "1.22.1" && self.binding_version == "2.0.0-rc.10")
++                || (self.runtime_version == "1.31.0" && self.binding_version == "2.0.0-rc.13"))
++                && ["CPUExecutionProvider", "OpenVINOExecutionProvider"]
++                    .contains(&self.provider.as_str())
+                 && self.optimization == "all-exact-gelu"
+                 && self.intra_threads == 1
+                 && self.inter_threads == 1
+                 && self.sequential,
+             "unsupported CPU runtime configuration",
+         )?;
++        if self.provider == "OpenVINOExecutionProvider" {
++            let p = self
++                .provider_runtime
++                .as_ref()
++                .ok_or_else(|| invalid("provider runtime missing"))?;
++            require(
++                self.runtime_version == "1.31.0"
++                    && p.plugin_version == "1.8.1"
++                    && p.openvino_version == "2026.4.1-22982-e213a147257"
++                    && !p.files.is_empty()
++                    && p.files.len() <= 32
++                    && p.options.len() == 1
++                    && p.options.get("load_config").map(String::as_str) == Some(OPENVINO_CONFIG),
++                "unsupported OpenVINO configuration",
++            )?;
++            let mut names = HashSet::new();
++            for f in &p.files {
++                require(
++                    !f.path.is_empty()
++                        && Path::new(&f.path)
++                            .components()
++                            .all(|c| matches!(c, Component::Normal(_)))
++                        && digest(&f.sha256)
++                        && names.insert(&f.path),
++                    "invalid provider file pin",
++                )?;
++            }
++            require(names.contains(&p.library), "unlisted provider library")?;
++        } else {
++            require(
++                self.provider_runtime.is_none(),
++                "CPU manifest has provider dependencies",
++            )?;
++        }
+         require(
+             self.max_cost.is_finite() && (0. ..=1.).contains(&self.max_cost),
+             "invalid model cost cap",
+--- a/native/brass-ai-inference/src/runtime.rs
++++ b/native/brass-ai-inference/src/runtime.rs
+@@ -1,6 +1,6 @@
++use crate::provider::error as ort_error;
+ use crate::{
+     batch::Packed,
+-    invalid,
+     manifest::{Bundle, Manifest, INPUTS, OUTPUTS},
+     nanos, require,
+     service::{finish, validate_batch, RawRow},
+@@ -11,16 +11,10 @@
+     features::{ACTION_DIM, STATE_DIM},
+ };
+ use ort::{
+-    session::{builder::GraphOptimizationLevel, Session},
+-    tensor::TensorElementType,
+-    value::{TensorRef, ValueType},
++    session::Session,
++    value::{TensorElementType, TensorRef, ValueType},
+ };
+-use std::{marker::PhantomData, rc::Rc, sync::OnceLock, time::Instant};
+-
+-static RUNTIME: OnceLock<std::result::Result<String, String>> = OnceLock::new();
+-fn ort_error(error: ort::Error) -> brass_ai_core::CoreError {
+-    invalid(format!("ONNX runtime: {error}"))
+-}
++use std::{marker::PhantomData, rc::Rc, time::Instant};
+ struct Arrays<'a> {
+     b: usize,
+     n: usize,
+@@ -42,6 +36,7 @@
+     manifest: Manifest,
+     manifest_sha256: String,
+     session: Session,
++    provider: crate::provider::Receipt,
+     packed: Packed,
+     failed: bool,
+     pub load_ns: u64,
+@@ -51,47 +46,12 @@
+ impl CpuEvaluator {
+     pub fn load(bundle: Bundle) -> Result<Self> {
+         let start = Instant::now();
+-        let runtime_key = bundle.manifest.runtime_sha256.clone();
+-        let initialized = RUNTIME.get_or_init(|| {
+-            ort::init_from(bundle.runtime_path.to_string_lossy())
+-                .with_name("brass-cpu")
+-                .with_telemetry(false)
+-                .commit()
+-                .map(|_| runtime_key.clone())
+-                .map_err(|e| e.to_string())
+-        });
+-        require(
+-            initialized
+-                .as_ref()
+-                .map(|k| k == &runtime_key)
+-                .unwrap_or(false),
+-            "runtime initialization failed or runtime identity changed",
+-        )?;
+-        let session = Session::builder()
+-            .map_err(ort_error)?
+-            .with_intra_threads(1)
+-            .map_err(ort_error)?
+-            .with_inter_threads(1)
+-            .map_err(ort_error)?
+-            .with_parallel_execution(false)
+-            .map_err(ort_error)?
+-            .with_intra_op_spinning(false)
+-            .map_err(ort_error)?
+-            .with_inter_op_spinning(false)
+-            .map_err(ort_error)?
+-            .with_optimization_level(GraphOptimizationLevel::Level3)
+-            .map_err(ort_error)?
+-            .with_config_entry("optimization.enable_gelu_approximation", "0")
+-            .map_err(ort_error)?
+-            .with_log_level(ort::logging::LogLevel::Error)
+-            .map_err(ort_error)?
+-            .commit_from_memory(&bundle.model_bytes)
+-            .map_err(ort_error)?;
++        let (session, provider) = crate::provider::create(&bundle)?;
+         let initializers = session.overridable_initializers();
+         let specs: Vec<_> = session
+-            .inputs
++            .inputs()
+             .iter()
+-            .map(|x| (x.name.as_str(), &x.input_type))
++            .map(|x| (x.name(), x.dtype()))
+             .chain(initializers.iter().map(|x| (x.name(), x.dtype())))
+             .collect();
+         let shapes: [&[i64]; 6] = [
+@@ -103,7 +63,7 @@
+             &[-1, 4, 34],
+         ];
+         require(
+-            specs.len() == 6 && session.outputs.len() == 5,
++            specs.len() == 6 && session.outputs().len() == 5,
+             "unexpected ONNX tensor count",
+         )?;
+         for (i, name) in INPUTS.iter().enumerate() {
+@@ -128,11 +88,11 @@
+                 "ONNX input dtype/shape mismatch",
+             )?;
+         }
+-        for (i, out) in session.outputs.iter().enumerate() {
++        for (i, out) in session.outputs().iter().enumerate() {
+             let shape = if i == 0 { &[-1, -1] } else { &[-1, 4] };
+             require(
+-                out.name == OUTPUTS[i]
+-                    && matches!(&out.output_type,ValueType::Tensor{ty,shape:s,..} if *ty==TensorElementType::Float32 && &**s==shape),
++                out.name() == OUTPUTS[i]
++                    && matches!(out.dtype(),ValueType::Tensor{ty,shape:s,..} if *ty==TensorElementType::Float32 && &**s==shape),
+                 "ONNX output dtype/shape mismatch",
+             )?;
+         }
+@@ -141,6 +101,7 @@
+             manifest: bundle.manifest,
+             manifest_sha256: bundle.manifest_sha256,
+             session,
++            provider,
+             packed: Packed::default(),
+             failed: false,
+             load_ns,
+@@ -178,8 +139,8 @@
+     pub fn receipt(&self) -> serde_json::Value {
+         serde_json::json!({"manifest_sha256":self.manifest_sha256,"model_id":self.manifest.model_id,
+             "export_sha256":self.manifest.export_sha256,"runtime_sha256":self.manifest.runtime_sha256,
+-            "runtime_version":self.manifest.runtime_version,"binding":"ort/2.0.0-rc.10","runtime_build":ort::info(),
+-            "provider":"CPUExecutionProvider","intra_threads":1,"inter_threads":1,"sequential":true,
++            "runtime_version":self.manifest.runtime_version,"binding":"ort/2.0.0-rc.13","runtime_build":ort::info(),
++            "provider":self.provider.effective,"provider_selection":self.provider,"intra_threads":1,"inter_threads":1,"sequential":true,
+             "cached_models":1,"load_ns":self.load_ns,"warmup_ns":self.warmup_ns,"mechanical_only":true,"live_ready":false})
+     }
+ }
+--- /dev/null
++++ b/native/brass-ai-inference/src/provider.rs
+@@ -0,0 +1,190 @@
++//! Pinned CPU providers. Plugin registration is process-wide; sessions remain
++//! owner-local. A fallback is only a startup decision, never a mid-search retry.
++use crate::{invalid, manifest::Bundle, require, Result};
++use ort::{
++    environment::Environment,
++    ep::ExecutionProviderLibrary,
++    memory::DeviceType,
++    session::{
++        builder::{GraphOptimizationLevel, SessionBuilder},
++        Session,
++    },
++};
++use serde::Serialize;
++use std::sync::OnceLock;
++
++static RUNTIME: OnceLock<std::result::Result<String, String>> = OnceLock::new();
++static PLUGIN: OnceLock<std::result::Result<(String, ExecutionProviderLibrary), String>> =
++    OnceLock::new();
++
++pub(crate) fn error(e: impl std::fmt::Display) -> brass_ai_core::CoreError {
++    invalid(format!("ONNX runtime: {e}"))
++}
++#[derive(Clone, Serialize)]
++pub struct Receipt {
++    pub requested: String,
++    pub effective: String,
++    pub override_reason: Option<String>,
++    pub fallback_reason: Option<String>,
++    pub options: std::collections::BTreeMap<String, String>,
++    pub plugin_version: Option<String>,
++    pub openvino_version: Option<String>,
++    pub device: String,
++    pub cpu_partition_fallback_disabled: bool,
++}
++
++fn builder() -> Result<SessionBuilder> {
++    Session::builder()
++        .map_err(error)?
++        .with_no_environment_execution_providers()
++        .map_err(error)?
++        .with_intra_threads(1)
++        .map_err(error)?
++        .with_inter_threads(1)
++        .map_err(error)?
++        .with_parallel_execution(false)
++        .map_err(error)?
++        .with_intra_op_spinning(false)
++        .map_err(error)?
++        .with_inter_op_spinning(false)
++        .map_err(error)?
++        // rc.10 called ORT_ENABLE_ALL "Level3"; rc.13 gives it the explicit
++        // "All" name. Keep numeric ORT_ENABLE_ALL=99 for the 1.22.1 baseline.
++        .with_optimization_level(GraphOptimizationLevel::All)
++        .map_err(error)?
++        .with_config_entry("optimization.enable_gelu_approximation", "0")
++        .map_err(error)?
++        .with_log_level(ort::logging::LogLevel::Error)
++        .map_err(error)
++}
++
++pub fn create(bundle: &Bundle) -> Result<(Session, Receipt)> {
++    require(bundle.manifest.runtime_version == "1.31.0", "experimental plugin binding requires ORT 1.31.0; use the frozen rc.10 executable for the 1.22.1 control")?;
++    let runtime_key = &bundle.manifest.runtime_sha256;
++    let initialized = RUNTIME.get_or_init(|| {
++        let env = ort::init_from(&bundle.runtime_path).map_err(|e| e.to_string())?;
++        if !env.with_name("brass-cpu").with_telemetry(false).commit() {
++            return Err("runtime was initialized before pinned admission".into());
++        }
++        Environment::current().map_err(|e| e.to_string())?;
++        Ok(runtime_key.clone())
++    });
++    require(
++        initialized
++            .as_ref()
++            .map(|k| k == runtime_key)
++            .unwrap_or(false),
++        "runtime initialization failed or runtime identity changed",
++    )?;
++    let override_value = std::env::var("BRASS_NN_PROVIDER").unwrap_or_default();
++    require(
++        override_value.is_empty() || override_value == "cpu",
++        "invalid BRASS_NN_PROVIDER override",
++    )?;
++    let mut receipt = Receipt {
++        requested: bundle.manifest.provider.clone(),
++        effective: "CPUExecutionProvider".into(),
++        override_reason: (!override_value.is_empty()).then(|| "BRASS_NN_PROVIDER=cpu".into()),
++        fallback_reason: None,
++        options: Default::default(),
++        plugin_version: None,
++        openvino_version: None,
++        device: "CPU".into(),
++        cpu_partition_fallback_disabled: false,
++    };
++    if receipt.requested == "OpenVINOExecutionProvider" && override_value.is_empty() {
++        let p = bundle
++            .manifest
++            .provider_runtime
++            .as_ref()
++            .expect("validated provider");
++        receipt.options = p.options.clone();
++        receipt.plugin_version = Some(p.plugin_version.clone());
++        receipt.openvino_version = Some(p.openvino_version.clone());
++        let attempt = (|| {
++            if let Some(reason) = &bundle.provider_unavailable {
++                return Err(invalid(reason));
++            }
++            let path = bundle
++                .plugin_path
++                .as_ref()
++                .ok_or_else(|| invalid("provider library unavailable"))?;
++            let identity = crate::manifest::hash(&serde_json::to_vec(&p.files).map_err(error)?);
++            let loaded = PLUGIN.get_or_init(|| {
++                let env = Environment::current().map_err(|e| e.to_string())?;
++                env.register_ep_library("brass_openvino", path)
++                    .map(|handle| (identity.clone(), handle))
++                    .map_err(|e| e.to_string())
++            });
++            match loaded {
++                Ok((key, _)) => require(*key == identity, "provider identity changed")?,
++                Err(reason) => {
++                    return Err(invalid(format!("OpenVINO registration failed: {reason}")))
++                }
++            }
++            let env = Environment::current().map_err(error)?;
++            let devices: Vec<_> = env
++                .devices()
++                .filter(|d| {
++                    d.ep().ok() == Some("OpenVINOExecutionProvider")
++                        && d.hardware_device().ty() == DeviceType::CPU
++                })
++                .collect();
++            require(
++                devices.len() == 1,
++                "OpenVINO CPU device unavailable or ambiguous",
++            )?;
++            let options: Vec<_> = p
++                .options
++                .iter()
++                .map(|(k, v)| (format!("OpenVINOExecutionProvider.{k}"), v.clone()))
++                .collect();
++            builder()?
++                .with_devices(devices, Some(&options))
++                .map_err(error)?
++                .with_config_entry("session.disable_cpu_ep_fallback", "1")
++                .map_err(error)?
++                .commit_from_memory(&bundle.model_bytes)
++                .map_err(error)
++        })();
++        match attempt {
++            Ok(session) => {
++                receipt.effective = receipt.requested.clone();
++                receipt.cpu_partition_fallback_disabled = true;
++                return Ok((session, receipt));
++            }
++            Err(e) if p.allow_cpu_fallback => receipt.fallback_reason = Some(e.to_string()),
++            Err(e) => return Err(e),
++        }
++    }
++    // ort rc.13 defaults to automatic selection; its legacy CPU wrapper only
++    // toggles the arena and does NOT disable that policy. On the plugin stack,
++    // explicitly append the built-in CPU device through the V2 API instead.
++    let mut cpu = builder()?;
++    if bundle.manifest.runtime_version == "1.31.0" {
++        let env = Environment::current().map_err(error)?;
++        let devices: Vec<_> = env
++            .devices()
++            .filter(|d| d.ep().ok() == Some("CPUExecutionProvider"))
++            .collect();
++        require(
++            devices.len() == 1,
++            "built-in CPU provider unavailable or ambiguous",
++        )?;
++        cpu = cpu
++            .with_devices(
++                devices,
++                Some(&[("CPUExecutionProvider.use_arena".into(), "1".into())]),
++            )
++            .map_err(error)?;
++    } else {
++        cpu = cpu
++            .with_execution_providers([ort::ep::CPU::default()
++                .with_arena_allocator(true)
++                .build()
++                .error_on_failure()])
++            .map_err(error)?;
++    }
++    let session = cpu.commit_from_memory(&bundle.model_bytes).map_err(error)?;
++    Ok((session, receipt))
++}
+--- a/native/brass-ai-inference/tests/contracts.rs
++++ b/native/brass-ai-inference/tests/contracts.rs
+@@ -82,6 +82,46 @@
+         assert!(bad.validate().is_err());
+     }
+ }
++
++#[test]
++fn provider_pins_reject_precision_threads_unknown_versions_and_path_escapes() {
++    use brass_ai_inference::manifest::{ProviderRuntime, RuntimeFile, OPENVINO_CONFIG};
++    let mut m = manifest();
++    m.runtime_version = "1.31.0".into();
++    m.binding_version = "2.0.0-rc.13".into();
++    m.provider = "OpenVINOExecutionProvider".into();
++    m.provider_runtime = Some(ProviderRuntime {
++        plugin_version: "1.8.1".into(),
++        openvino_version: "2026.4.1-22982-e213a147257".into(),
++        library: "openvino/plugin.dll".into(),
++        files: vec![RuntimeFile {
++            path: "openvino/plugin.dll".into(),
++            sha256: "0".repeat(64),
++        }],
++        options: [("load_config".into(), OPENVINO_CONFIG.into())].into(),
++        allow_cpu_fallback: true,
++    });
++    m.validate().unwrap();
++    for mutation in 0..7 {
++        let mut bad = m.clone();
++        let p = bad.provider_runtime.as_mut().unwrap();
++        match mutation {
++            0 => {
++                p.options
++                    .insert("load_config".into(), OPENVINO_CONFIG.replace("f32", "bf16"));
++            }
++            1 => {
++                p.options.insert("num_of_threads".into(), "2".into());
++            }
++            2 => p.files[0].path = "../plugin.dll".into(),
++            3 => p.files[0].sha256 = "unknown".into(),
++            4 => p.plugin_version = "unqualified".into(),
++            5 => p.library = "unlisted.dll".into(),
++            _ => bad.runtime_version = "1.22.1".into(),
++        }
++        assert!(bad.validate().is_err(), "mutation {mutation}");
++    }
++}
+ #[test]
+ fn reference_rejects_stale_reordered_nonfinite_and_partial_outputs() {
+     let (_, c, id, state) = fixture();
+--- a/native/brass-ai-worker/src/local.rs
++++ b/native/brass-ai-worker/src/local.rs
+@@ -229,7 +229,24 @@
+     let package_path = PathBuf::from(&args[0]);
+     let (package, model_path) = Package::load(&package_path, &args[1].to_string_lossy())?;
+     let digest = package.model_manifest_sha256.clone();
+-    let mut pair = Pair::new(move |_| CpuEvaluator::load(Bundle::load(&model_path, &digest)?))?;
++    let providers = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
++    let receipts = providers.clone();
++    let mut pair = Pair::new(move |_| {
++        let evaluator = CpuEvaluator::load(Bundle::load(&model_path, &digest)?)?;
++        receipts
++            .lock()
++            .map_err(|_| search::invalid("provider receipt lock"))?
++            .push(evaluator.receipt());
++        Ok(evaluator)
++    })?;
++    let providers = providers
++        .lock()
++        .map_err(|_| search::invalid("provider receipt lock"))?
++        .clone();
++    search::check(
++        providers.len() == 2 && providers[0]["provider"] == providers[1]["provider"],
++        "both owners must use the same effective provider",
++    )?;
+     // Exercise real features, both owners and the pinned export before exposing
+     // readiness. This public fixture has no trusted full-state material.
+     let warm_path = package_path.parent().unwrap().join("warmup.json");
+@@ -275,7 +292,7 @@
+         "ready",
+         json!({"backend":BACKEND,"build":BuildIdentity::current(),"model_id":MODEL,
+         "export_sha256":EXPORT,"sessions":2,"threads_per_session":1,
+-        "provider":"CPUExecutionProvider","utility_acceptance":package.acceptance,
++        "provider":providers[0]["provider"],"provider_receipts":providers,"utility_acceptance":package.acceptance,
+         "measured_readiness":{"warmup_passed":true,"native_nn_positions":warmup.lanes.iter().map(|l| l.neural.positions).sum::<usize>()},
+         "max_frame_bytes":brass_ai_core::framing::MAX_FRAME_BYTES}),
+     )?;
+--- a/native/brass-ai-worker/src/pair_harness.rs
++++ b/native/brass-ai-worker/src/pair_harness.rs
+@@ -188,6 +188,8 @@
+         !(scripted && external.is_some()),
+         "external/scripted modes conflict",
+     )?;
++    let providers = Arc::new(std::sync::Mutex::new(Vec::new()));
++    let receipts = providers.clone();
+     let mut pair = Pair::new(move |_| {
+         if let Some(settings) = &external {
+             Ok(Engine::External(Box::new(
+@@ -199,9 +201,12 @@
+                 delay,
+             })
+         } else {
+-            Ok(Engine::Native(Box::new(CpuEvaluator::load(Bundle::load(
+-                &manifest, &digest,
+-            )?)?)))
++            let evaluator = CpuEvaluator::load(Bundle::load(&manifest, &digest)?)?;
++            receipts
++                .lock()
++                .map_err(|_| search::invalid("provider receipt lock"))?
++                .push(evaluator.receipt());
++            Ok(Engine::Native(Box::new(evaluator)))
+         }
+     })?;
+     let destination = PathBuf::from(&args[1]);
+@@ -215,6 +220,13 @@
+     let mut writer = BufWriter::with_capacity(65536, file);
+     writer.write_all(b"{\"identity\":\"brass-gumbel-is-mcts/coordinator-v1\",\"scripted\":")?;
+     serde_json::to_writer(&mut writer, &scripted)?;
++    writer.write_all(b",\"providers\":")?;
++    serde_json::to_writer(
++        &mut writer,
++        &*providers
++            .lock()
++            .map_err(|_| search::invalid("provider receipt lock"))?,
++    )?;
+     writer.write_all(b",\"results\":[")?;
+     for (index, case) in request.cases.into_iter().enumerate() {
+         search::check(

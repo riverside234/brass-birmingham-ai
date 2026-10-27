@@ -68,7 +68,6 @@ pub struct Brass {
     root_ledger: Ledger,
     context: FeatureContext,
     reward: Reward,
-    root_seat: Seat,
     shuffle_tape: Option<Vec<Vec<u32>>>,
     sample_seed: u64,
     samples: usize,
@@ -79,7 +78,9 @@ pub struct World {
     state: NativeState,
     memory: ObservationMemory,
     ledger: Ledger,
-    decision: Option<(Observation, Vec<Choice>)>,
+    // The immutable key already owns the permitted view and legal choices.
+    // Keep that exact decision alive through step instead of cloning both.
+    decision: Option<std::sync::Arc<Key>>,
 }
 impl Brass {
     /// Deterministic permitted completion. Never consumes a search world's stream.
@@ -135,7 +136,6 @@ impl Brass {
             root_ledger: ledger,
             context: input.context,
             reward: input.reward,
-            root_seat: input.view.seat,
             shuffle_tape: input.shuffle_tape,
             sample_seed: input.sample_seed,
             samples: 0,
@@ -235,21 +235,16 @@ impl Game for Brass {
             return Ok(Position::Chance(outcomes));
         }
         // Public debt accounting is observer independent and runs at reveal boundaries.
-        w.ledger.observe(&w.state.observation(self.root_seat)?)?;
+        w.ledger.observe(
+            w.memory
+                .accounting_view()
+                .ok_or_else(|| invalid("missing published accounting view"))?,
+        )?;
         if let Some(result) = w.state.result() {
             return Ok(Position::Terminal(self.reward.terminal(&result)?));
         }
         let info = Self::information(&w.state, &w.memory, &w.ledger, &self.context)?;
-        w.decision = Some((
-            info.key
-                .information
-                .observation
-                .view
-                .as_ref()
-                .ok_or_else(|| invalid("missing actor view"))?
-                .clone(),
-            info.key.choices.clone(),
-        ));
+        w.decision = Some(info.key.clone());
         Ok(Position::Decision(info))
     }
     fn step(&self, w: &mut World, action: &String) -> Result<()> {
@@ -257,16 +252,23 @@ impl Game for Brass {
         let next = if let Some(card) = action.strip_prefix("chance:card:") {
             w.state.after_chance(revision, card)?
         } else {
-            let (view, choices) = w
+            let decision = w
                 .decision
                 .take()
                 .ok_or_else(|| invalid("step without decision"))?;
-            let choice = choices
+            let view = decision
+                .information
+                .observation
+                .view
+                .as_ref()
+                .ok_or_else(|| invalid("missing actor view"))?;
+            let choice = decision
+                .choices
                 .iter()
                 .find(|c| &c.id == action)
                 .ok_or_else(|| invalid("selected action outside legal set"))?;
             let next = w.state.after_legal_choice(revision, choice)?;
-            w.ledger.chosen(&view, choice);
+            w.ledger.chosen(view, choice);
             next
         };
         w.memory.refresh_checked(&next)?;
