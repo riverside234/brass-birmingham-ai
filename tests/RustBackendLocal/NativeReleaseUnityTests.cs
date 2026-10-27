@@ -91,7 +91,7 @@ public sealed partial class LocalAiUnityDriver
                 if(isHuman)humanTurns++;else aiTurns++;
             }
             actions+=remaining;
-            Check(history.Repository.Load(app.Metadata.GameId).Game.Revision==lastSaved,"no action writes a save before human End");
+            Check(history.Repository.Load(app.Metadata.GameId).Game.Revision==lastSaved,"no action writes a save before the completed turn");
             int savesBefore=output.Saves;
             try {play.EndTurn();}
             catch(InvalidOperationException error) {
@@ -102,14 +102,14 @@ public sealed partial class LocalAiUnityDriver
                 // lookup, without changing any seat or save to make it pass.
                 noHumanReview=true;
             }
-            Check(output.Saves==savesBefore+(isHuman?1:0),"only human End writes one checkpoint");
-            if(isHuman)lastSaved=app.Game.Revision;
+            Check(output.Saves==savesBefore+1,"each completed human or AI turn writes one checkpoint");
+            lastSaved=history.Repository.Load(app.Metadata.GameId).Game.Revision;
             if(LiquidationFixes.IsPending(app.Game.SellIndustryFlow)) {
                 debtPhases++;float debtUntil=Time.realtimeSinceStartup+10;
                 while((LocalTurnBridge.IsThinking || !AiExecutionScheduler.IsIdle) && Time.realtimeSinceStartup<debtUntil)yield return null;
                 Check(!LocalTurnBridge.IsThinking && AiExecutionScheduler.IsIdle,"round-end debt owners retire");
             }
-            Check(history.Repository.Load(app.Metadata.GameId).Game.Revision==lastSaved,"AI End never overwrites the checkpoint");
+            Check(history.Repository.Load(app.Metadata.GameId).Game.Revision==lastSaved && output.Saves==savesBefore+1,"debt continuation does not add another checkpoint");
             Check(!LiquidationFixes.IsPending(app.Game.SellIndustryFlow),"round-end debt completed");
             rows.Add(new JObject{["turn"]=turns,["era"]=era,["actor"]=(int)player.Color,["human"]=isHuman,
                 ["before"]=before,["after"]=app.Game.Revision,["allowance_ms"]=isHuman?0:DifficultyCatalog.Milliseconds(difficulty(app.Metadata.GetPlayerMetadataByColor(player.Color)))});
@@ -117,7 +117,7 @@ public sealed partial class LocalAiUnityDriver
         }
         Check(eras.Count==2 && actions>60,"complete game traverses Canal and Rail");
         Check(!LiquidationFixes.IsPending(app.Game.SellIndustryFlow),"final settlement complete");
-        Check(output.Saves==humanTurns,"one save per completed human turn across entire game");
+        Check(output.Saves==humanTurns+aiTurns,"one save per completed human or AI turn across entire game");
         var saved=history.Repository.Load(app.Metadata.GameId);
         Check(NativeGameState.IsNative(LocalGameState.Read(saved.Metadata))==nn,"last checkpoint retains table family");
         Check(JToken.DeepEquals(LocalGameState.Read(saved.Metadata)["assignments"],LocalGameState.Read(app.Metadata)["assignments"]),"mixed difficulties survive checkpoint load");

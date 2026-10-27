@@ -21,6 +21,7 @@ use crossbeam_channel::{bounded, RecvTimeoutError};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::{
+    collections::BTreeMap,
     io,
     path::{Path, PathBuf},
     time::{Duration, Instant},
@@ -81,6 +82,7 @@ pub struct Package {
     pub model_manifest_sha256: String,
     pub acceptance: Acceptance,
     pub config: Config,
+    pub k_by_allowance_ms: BTreeMap<u64, usize>,
     pub startup_ns: u64,
     pub startup_source: String,
     pub warmup_sha256: String,
@@ -112,6 +114,16 @@ impl Package {
             "unsupported local search settings",
         )?;
         p.config.validate()?;
+        search::check(
+            p.k_by_allowance_ms
+                .keys()
+                .copied()
+                .eq([4000, 8000, 10000, 12000]),
+            "missing or unsupported search allowance",
+        )?;
+        for &allowance in p.k_by_allowance_ms.keys() {
+            p.search_config(allowance)?.validate()?;
+        }
         let model = path
             .parent()
             .ok_or_else(|| search::invalid("package directory"))?
@@ -119,6 +131,16 @@ impl Package {
         p.acceptance
             .validate(&Bundle::load(&model, &p.model_manifest_sha256)?.manifest)?;
         Ok((p, model))
+    }
+
+    fn search_config(&self, allowance_ms: u64) -> Result<Config> {
+        let mut config = self.config.clone();
+        // Use the seat's whole-turn setting, never its diminishing remainder.
+        config.k = *self
+            .k_by_allowance_ms
+            .get(&allowance_ms)
+            .ok_or_else(|| search::invalid("unsupported search allowance"))?;
+        Ok(config)
     }
 }
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
@@ -212,12 +234,13 @@ struct Active {
     pair_id: u64,
     ticket: Ticket,
     deadline: Instant,
+    requested_k: usize,
 }
-fn compact(d: Decision, ticket: Ticket) -> Value {
+fn compact(d: Decision, ticket: Ticket, requested_k: usize) -> Value {
     json!({"ticket":ticket,"backend":BACKEND,"model_id":MODEL,"export_sha256":EXPORT,
         "actions":d.result.action_ids,"provenance":d.result.provenance,
         "completed":d.lanes.iter().map(|l| l.outcome.completed).sum::<u64>(),
-        "sessions":2,"threads_per_session":1,"retired":true,
+        "sessions":2,"threads_per_session":1,"retired":true,"requested_k":requested_k,
         "replay":{
             "version":"brass-local-replay/1.0.0",
             "root_epoch":d.result.root_epoch,
@@ -227,6 +250,7 @@ fn compact(d: Decision, ticket: Ticket) -> Value {
                 "owner":owner,"root_epoch":lane.outcome.root_epoch,
                 "completed":lane.outcome.completed,"attempted":lane.outcome.attempted,
                 "partial_completed":lane.outcome.partial_completed,"quota":lane.outcome.quota,
+                "effective_k":lane.outcome.effective_k,
                 "snapshot":lane.outcome.snapshot,"work_stopped_ns":lane.outcome.work_stopped_ns,
                 "last_completion_ns":lane.outcome.last_completion_ns,
                 "retired_pending":lane.outcome.retired_pending,
@@ -291,6 +315,7 @@ pub fn run() -> std::result::Result<(), Box<dyn std::error::Error>> {
         json!({"backend":BACKEND,"build":BuildIdentity::current(),"model_id":MODEL,
         "export_sha256":EXPORT,"sessions":2,"threads_per_session":1,
         "provider":"CPUExecutionProvider","utility_acceptance":package.acceptance,
+        "k_by_allowance_ms":package.k_by_allowance_ms,
         "measured_readiness":{"warmup_passed":true,"native_nn_positions":warmup.lanes.iter().map(|l| l.neural.positions).sum::<usize>()},
         "max_frame_bytes":brass_ai_core::framing::MAX_FRAME_BYTES}),
     )?;
@@ -307,7 +332,7 @@ pub fn run() -> std::result::Result<(), Box<dyn std::error::Error>> {
             }
         })?;
     let mut active: Option<Active> = None;
-    let mut binding: Option<(Identity, TurnKey)> = None;
+    let mut binding: Option<(Identity, TurnKey, u64)> = None;
     let mut last_id = 0;
     let mut shutdown = None;
     loop {
@@ -327,7 +352,7 @@ pub fn run() -> std::result::Result<(), Box<dyn std::error::Error>> {
                     );
                     match result {
                         Ok(Some(d)) if Instant::now() < a.deadline => {
-                            emit(a.id, "ok", compact(d, a.ticket))?
+                            emit(a.id, "ok", compact(d, a.ticket, a.requested_k))?
                         }
                         Ok(_) => emit(a.id, "error", json!({"error":"expired","retired":true}))?,
                         Err(e) => emit(
@@ -425,14 +450,19 @@ pub fn run() -> std::result::Result<(), Box<dyn std::error::Error>> {
                     export_sha256: EXPORT.into(),
                 };
                 let turn = TurnKey::from_context(&input.view.context, ticket.actor as usize);
-                if binding.as_ref() != Some(&(identity.clone(), turn.clone())) {
-                    pair.admit(
-                        identity.clone(),
-                        &input,
-                        package.config.clone(),
-                        allowance_ms * 1_000_000,
+                let config = package.search_config(allowance_ms)?;
+                let requested_k = config.k;
+                if let Some((bound_identity, bound_turn, bound_allowance)) = &binding {
+                    search::check(
+                        bound_identity != &identity
+                            || bound_turn != &turn
+                            || *bound_allowance == allowance_ms,
+                        "turn allowance changed",
                     )?;
-                    binding = Some((identity, turn));
+                }
+                if binding.as_ref() != Some(&(identity.clone(), turn.clone(), allowance_ms)) {
+                    pair.admit(identity.clone(), &input, config, allowance_ms * 1_000_000)?;
+                    binding = Some((identity, turn, allowance_ms));
                 }
                 let deadline = received + Duration::from_millis(remaining_ms);
                 let remaining = deadline
@@ -468,6 +498,7 @@ pub fn run() -> std::result::Result<(), Box<dyn std::error::Error>> {
                     pair_id,
                     ticket,
                     deadline,
+                    requested_k,
                 });
                 Ok(())
             }

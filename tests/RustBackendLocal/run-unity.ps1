@@ -1,6 +1,6 @@
 param([string]$BuildDirectory='artifacts/rust-backend/l13-dev',[switch]$Quick,[switch]$Matched,[ValidateRange(30,480)][int]$MaxSeconds=480,
  [ValidateSet('nn-human','nn-ai','v4-human','v4-two','v4-three','failures','nn-live','v4-live')][string]$ReleaseCase,
- [string]$EvidenceDirectory)
+ [string]$EvidenceDirectory,[switch]$TurnHistory)
 $ErrorActionPreference='Stop'
 $localRoot=Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 $localBuild=Join-Path $localRoot $BuildDirectory
@@ -25,6 +25,7 @@ Copy-Item -LiteralPath (Join-Path $localBuild 'BrassNative') -Destination $local
 $localDll=Join-Path $localTests 'Managed/LocalAiUnityTests.dll'
 $localRsp=Join-Path $localOut 'native-tests.rsp'
 $localSources=@('tests/BrassLocalAI/LocalAiUnityTests.cs','tests/BrassLocalAI/AiExecutionResourceTests.cs','tests/RustBackendLocal/NativeLocalUnityTests.cs','tests/RustBackendLocal/NativeMatchedUnityTests.cs','tests/RustBackendLocal/NativeValidationLifecycleTests.cs','tests/RustBackendLocal/NativeReleaseUnityTests.cs','tests/RustBackendLocal/ReleaseSegmentUnityTests.cs')
+if($TurnHistory){$localSources+=@('tests/BrassPatch/TurnHistory/TurnHistoryRegression.cs','tests/BrassPatch/TurnHistory/TurnHistoryUnityTests.cs')}
 $localCompiled=@();$localSourcePins=@()
 foreach($source in $localSources){
  $target=Join-Path $localOut ('test-source/'+$source)
@@ -41,7 +42,7 @@ Copy-Item -LiteralPath $localDll -Destination (Join-Path $localOut 'LocalAiUnity
 @{sources=$localSourcePins;testDllSha256=(Get-FileHash -LiteralPath $localDll).Hash.ToLowerInvariant();candidateManifestSha256=(Get-FileHash -LiteralPath (Join-Path $localBuild 'build-manifest.json')).Hash.ToLowerInvariant()}|ConvertTo-Json -Depth 5|Set-Content -LiteralPath (Join-Path $localOut 'test-build.json')
 $localResult=Join-Path $localTests 'local-ai-native.json'
 # Sidecars belong to this invocation; stale prior evidence must never pass it.
-foreach($suffix in '.release.json','.permitted.jsonl','.native-turns.json','.failure.json'){
+foreach($suffix in '.release.json','.permitted.jsonl','.native-turns.json','.failure.json','.turn-history.json'){
  if(Test-Path -LiteralPath ($localResult+$suffix)){Move-Item -LiteralPath ($localResult+$suffix) -Destination ($localResult+$suffix+'.retained-'+[Guid]::NewGuid().ToString('N'))}
 }
 @{passed=$false;status='running'}|ConvertTo-Json|Set-Content -LiteralPath $localResult
@@ -49,13 +50,14 @@ $localLog=Join-Path $localOut 'unity.log'
 $localArguments=@('-batchmode','-screen-width','1920','-screen-height','1080','-screen-fullscreen','0','-logFile',('"'+$localLog+'"'),'--brass-local-ai-test','--brass-native-local-test')
 if($Quick){$localArguments+='--brass-native-short-test'}
 if($Matched){$localArguments+='--brass-native-matched-test'}
+if($TurnHistory){$localArguments+='--brass-turn-history-test'}
 if($ReleaseCase){$localArguments+=('--brass-release-case='+$ReleaseCase)}
 $localProcess=Start-Process -FilePath (Join-Path $localPlayer 'BrassBirminghamUnity.exe') -ArgumentList $localArguments -WorkingDirectory $localPlayer -WindowStyle Hidden -PassThru
 $localTimer=[Diagnostics.Stopwatch]::StartNew()
 while(-not $localProcess.WaitForExit(1000)){if($localTimer.Elapsed.TotalSeconds -gt $MaxSeconds){$localProcess.Kill();throw 'Native test watchdog.'}}
 Copy-Item -LiteralPath $localResult -Destination (Join-Path $localOut 'unity.json') -Force
 $localEvidence=Get-Content -LiteralPath $localResult -Raw|ConvertFrom-Json
-foreach($suffix in '.native-turns.json','.release.json','.permitted.jsonl','.failure.json'){
+foreach($suffix in '.native-turns.json','.release.json','.permitted.jsonl','.failure.json','.turn-history.json'){
  if(Test-Path -LiteralPath ($localResult+$suffix)){Copy-Item -LiteralPath ($localResult+$suffix) -Destination (Join-Path $localOut ('unity'+$suffix))}
 }
 if(Test-Path -LiteralPath ($localResult+'.native-turns.json')){Copy-Item -LiteralPath ($localResult+'.native-turns.json') -Destination (Join-Path $localOut 'unity-turns.json') -Force}

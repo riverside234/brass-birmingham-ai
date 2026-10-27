@@ -111,7 +111,10 @@ public sealed partial class LocalAiUnityDriver
             app.Game.TurnFlow.StartPassAction().Pass(ai.Hand[0],ai);app.Game.TurnFlow.ConfirmCurrentAction();
         }
         play.EndTurn();
-        Check(output.Saves==1 && history.Repository.Load(app.Metadata.GameId).Game.Revision==checkpoint,"AI End advances without saving over the human checkpoint");
+        int aiCheckpoint=app.Game.Revision;
+        Check(output.Saves==2 && output.Starts==1 && history.Repository.Load(app.Metadata.GameId).Game.Revision==aiCheckpoint,"AI End writes one checkpoint before dispatching the next player");
+        play.EndTurn();Check(output.Saves==2 && app.Game.Revision==aiCheckpoint,"duplicate AI End cannot save or advance during the checkpoint write");
+        output.Complete();Check(output.Starts==2,"next player starts only after the AI checkpoint completes");
         history.SetGame(loaded);return loaded;
     }
     sealed class HumanCheckpointOutput : IPlayGameOutput

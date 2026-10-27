@@ -81,14 +81,14 @@ public sealed partial class LocalAiUnityDriver
             clock.Stop();actions+=remaining;
             Check(history.Repository.Load(metadata.GameId).Game.Revision==lastSaved,"AI/human actions do not save");
             int beforeSaves=output.Saves;play.EndTurn();
-            Check(output.Saves==beforeSaves+(human?1:0),"exactly one checkpoint after human End");
-            if(human)lastSaved=game.Revision;
+            Check(output.Saves==beforeSaves+1,"exactly one checkpoint after human or AI End");
+            lastSaved=history.Repository.Load(metadata.GameId).Game.Revision;
             if(LiquidationFixes.IsPending(game.SellIndustryFlow)) {
                 debt++;float until=Time.realtimeSinceStartup+12;
                 while((LocalTurnBridge.IsThinking || !AiExecutionScheduler.IsIdle) && Time.realtimeSinceStartup<until)yield return null;
                 Check(!LiquidationFixes.IsPending(game.SellIndustryFlow) && AiExecutionScheduler.IsIdle,"debt settles and retires");
             }
-            Check(history.Repository.Load(metadata.GameId).Game.Revision==lastSaved,"AI End/debt never saves");
+            Check(history.Repository.Load(metadata.GameId).Game.Revision==lastSaved && output.Saves==beforeSaves+1,"debt continuation adds no extra save");
             rows.Add(new JObject{["turn"]=++completed,["era"]=era,["actor"]=(int)player.Color,["human"]=human,["before"]=revision,["after"]=game.Revision,
                 ["allowance_ms"]=human?0:4000,["delivery_ms"]=clock.Elapsed.TotalMilliseconds,["actions"]=remaining,["replies"]=replies});
             Check(Time.realtimeSinceStartup-start<70,"short segment bound");yield return null;

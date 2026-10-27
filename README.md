@@ -10,9 +10,11 @@ An independent AI project for *Brass: Birmingham*, an economic strategy game wit
 
 ## Current status
 
-- **Local Rust backend released:** version 1.4.36 integrates native simulation, feature encoding, Gumbel IS-MCTS, and ONNX Runtime CPU inference with the Windows game.
+- **Local Rust backend released:** version 1.4.37 integrates native simulation, feature encoding, Gumbel IS-MCTS, and ONNX Runtime CPU inference with the Windows game. The [latest hotfix](ai-research/TURN_HISTORY_HOTFIX_1_4_37.md) repairs city cancellation and checkpoints each completed human or AI turn.
 - **Neural training continues:** the in-game **Alpha Test** option uses a pinned intermediate checkpoint; the final neural model is still in training.
 - **Two opponent families:** six V4 heuristic styles or the neural opponent, with independent **4 / 8 / 10 / 12-second** settings for each AI seat. A table uses one AI family throughout.
+
+Alpha Test uses Gumbel root candidate **K=8 at 4s** and **K=16 at 8s, 10s and 12s**, configured in [`local-gumbel-k.json`](configs/search/local-gumbel-k.json). Each turn keeps its seat's K across both actions; the existing legal-action and simulation-budget limits can reduce the effective candidate count.
 
 Neural play supports standard four-player local tables with a human; V4 also supports two and three players. Training still uses the existing collection backend; extending Rust to collection is a subsequent stage.
 

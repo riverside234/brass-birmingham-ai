@@ -170,13 +170,12 @@ namespace BrassPatch.Liquidation
             UiState state = State(useCase);
             if (state.SaveInProgress || state.PromptOpen) return;
             BrassApplicationGame app = Get<IGameHistory>(useCase, "_gameHistory").CurrentGame;
-            // Capture the player who clicked End before EndTurn/EndRound changes
-            // the actor. This is the one automatic checkpoint: the completed
-            // human turn and resulting next-player/round boundary, before AI play.
-            bool humanFinished = app.Metadata.GetPlayerMetadataByColor(app.Game.GameProgressInformation.CurrentPlayer.Color).AiType == AIType.Human;
+            // One checkpoint after either a human or AI finishes the entire
+            // turn, including the next-player/round boundary. No action or
+            // search saves; the callback gates dispatch of the next player.
             if (!app.Game.GameFlow.IsLastTurnOver()) app.Game.GameFlow.EndTurn();
             if (app.Game.GameFlow.IsLastTurnOver() && !IsPending(app.Game.SellIndustryFlow)) app.Game.GameFlow.EndRound();
-            if (humanFinished) Save(useCase); else useCase.PlayGame();
+            Save(useCase);
         }
 
         private static void Save(PlayGameUseCase useCase)

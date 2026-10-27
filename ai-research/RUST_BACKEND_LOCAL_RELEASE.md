@@ -1,5 +1,7 @@
 # Local Rust backend release — 1.4.36
 
+**Current installed update: 1.4.37.** The [city cancellation and checkpoint hotfix](TURN_HISTORY_HOTFIX_1_4_37.md) fixes Cancel/Undo turn boundaries and saves once after each completed human or AI turn. The original 1.4.36 measurements and receipts below retain their historical scope.
+
 Date: **2026-10-26** (America/Chicago). **Installed and verified; Part 1 local migration complete (Full local release). All 106 existing save files are unchanged.** Release qualification and installation verification are recorded in `artifacts/rust-backend/20261026-local-release/`. The final status is the [installed verification](../artifacts/rust-backend/20261026-local-release/installed-verification.json) and [release acceptance](../artifacts/rust-backend/20261026-local-release/release-acceptance.json).
 
 ## Release scope

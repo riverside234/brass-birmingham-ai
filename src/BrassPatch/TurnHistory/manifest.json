@@ -1,0 +1,18 @@
+[
+  {
+    "targetType": "BrassApplication.GameHistory.BrassGameHistory",
+    "targetMethod": "GetBeginningOfActionRevision",
+    "parameterTypes": [],
+    "helperType": "BrassPatch.TurnHistory.ActionHistoryFixes",
+    "helperMethod": "BeginningOfAction",
+    "mode": "replace"
+  },
+  {
+    "targetType": "BrassApplication.GameHistory.BrassGameHistory",
+    "targetMethod": "IsCancelActionAvailable",
+    "parameterTypes": [],
+    "helperType": "BrassPatch.TurnHistory.ActionHistoryFixes",
+    "helperMethod": "CanCancel",
+    "mode": "replace"
+  }
+]

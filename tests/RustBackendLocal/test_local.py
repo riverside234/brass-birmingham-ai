@@ -87,6 +87,7 @@ class LocalTests(unittest.TestCase):
             self.w.send(self.w.search(0,allowance,remaining=300))
             response=self.w.recv();self.assertEqual(response['status'],'ok',response)
             data=response['data'];self.assertTrue(data['actions']);self.assertTrue(data['retired'])
+            self.assertEqual(data['requested_k'],8 if allowance==4000 else 16)
             self.assertEqual(data['completed'],0)
             self.assertLess(data['response_ready_ns'],data['deadline_ns'])
     def test_cancel_drains_before_reuse_and_stale_cancel_does_not_kill_current(self):
@@ -109,6 +110,29 @@ class LocalTests(unittest.TestCase):
     def test_no_replenishment_or_duplicate_root(self):
         r=self.w.search(0,remaining=500,instance='same');self.w.send(r);self.w.recv()
         r['remaining_ms']=4000;self.w.send(r);self.assertEqual(self.w.recv()['status'],'error')
+    def test_k_tracks_seat_allowance_with_short_remainders_and_mixed_seats(self):
+        # One persistent process switches difficulties, including returning to 4s.
+        # This is a bounded smoke, not four full-duration searches.
+        for ms in (8000,4000,12000,10000,4000):
+            self.w.send(self.w.search(0,ms,remaining=1600))
+            response=self.w.recv();self.assertEqual(response['status'],'ok',response)
+            d=response['data'];expected=8 if ms==4000 else 16
+            self.assertEqual(d['requested_k'],expected)
+            self.assertTrue(d['actions']);self.assertTrue(d['retired'])
+            self.assertEqual((d['sessions'],d['threads_per_session']),(2,1))
+            for owner in d['replay']['owners']:
+                self.assertGreater(owner['effective_k'],0)
+                self.assertLessEqual(owner['effective_k'],expected)
+                # Later roots use measured trajectory costs. A short remainder
+                # may legitimately reduce K to fit a complete halving schedule.
+                if owner['quota']['simulations']>=expected*(expected.bit_length()-1):
+                    self.assertEqual(owner['effective_k'],expected)
+    def test_allowance_cannot_change_within_the_same_turn(self):
+        r=self.w.search(0,8000,remaining=500,instance='fixed-allowance')
+        self.w.send(r);self.assertEqual(self.w.recv()['status'],'ok')
+        r['allowance_ms']=4000;r['remaining_ms']=300
+        self.w.send(r);reply=self.w.recv();self.assertEqual(reply['status'],'error')
+        self.assertIn('turn allowance changed',reply['data']['error'])
     def test_shutdown_active_retires_before_stopped(self):
         search=self.w.send(self.w.search());stop=self.w.send(dict(op='shutdown'))
         replies=[self.w.recv(),self.w.recv()]

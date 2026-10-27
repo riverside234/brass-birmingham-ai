@@ -100,7 +100,8 @@ def build(out,binary,background_validation=True):
     acceptance=dict(version='brass-local-utility-acceptance/1.0.0',scope='part1-local-alpha-test',decision='user-2026-10-25',
         model_id=model['model_id'],export_sha256=model['export_sha256'],checkpoint_sha256=model['checkpoint_sha256'],utility_calibration=None,final_model=False)
     policy=dict(protocol='brass-local-native/1.0.0',backend='brass-gumbel-is-mcts/alpha-g890-v1',model_manifest_sha256=sha(MODEL/'manifest.json'),
-        acceptance=acceptance,config=config,startup_ns=7262519,startup_source='L12 singleton calibration maximum; 5ec4f608931e09c0a3aa4c64bcb6f5355fff8415fa76ee815f6a344c0c59ad7e',warmup_sha256=sha(package/'warmup.json'))
+        acceptance=acceptance,config=config,k_by_allowance_ms=read(ROOT/'configs/search/local-gumbel-k.json'),
+        startup_ns=7262519,startup_source='L12 singleton calibration maximum; 5ec4f608931e09c0a3aa4c64bcb6f5355fff8415fa76ee815f6a344c0c59ad7e',warmup_sha256=sha(package/'warmup.json'))
     write(package/'policy.json',policy)
     identity=runpy.run_path(str(ROOT/'scripts/qualify-rust-scaffold.py'))['native_fingerprint']()
     names=['brass-ai-local.exe','policy.json','warmup.json','model/manifest.json','model/model.json','model/model.onnx','model/onnxruntime.dll']
@@ -112,7 +113,7 @@ def build(out,binary,background_validation=True):
         sourcePins=pins,files=[dict(name=n,sha256=sha(managed/n)) for n in ('Assembly-CSharp.dll','BrassPatch.dll','BrassLegacyAI.dll')],
         native_build_sha256=sha(package/'build.json'),native_source_sha256=identity,turnOptionsMs=[4000,8000,10000,12000],sessions=2,threads_per_session=1,
         model_acceptance=acceptance,measured_readiness=None,local_release_qualified=False,
-        background_validation_candidate=background_validation,save_policy='human-end-checkpoint/1.0.0'))
+        background_validation_candidate=background_validation,save_policy='completed-turn-checkpoint/1.0.0'))
     print('Built isolated local candidate',out,'background_validation='+str(background_validation),flush=True)
 
 if __name__=='__main__':

@@ -124,6 +124,10 @@ public sealed partial class LocalAiUnityDriver : MonoBehaviour
         router.ShowView<ICreateOfflineGameView>();
         yield return null;
         CheckFirstDisplay("first open"); Capture("local-ai-cold-menu.png");
+        if(Environment.GetCommandLineArgs().Contains("--brass-turn-history-test")) {
+            var historyCases=(IEnumerator)GetType().GetMethod("TurnHistoryCases",ReflectionAccess.Flags).Invoke(this,null);
+            while(historyCases.MoveNext())yield return historyCases.Current;yield break;
+        }
         if(Environment.GetCommandLineArgs().Any(a=>a.StartsWith("--brass-release-case="))) {
             var release=(IEnumerator)GetType().GetMethod("NativeReleaseCases",ReflectionAccess.Flags).Invoke(this,null);while(release.MoveNext())yield return release.Current;yield break;
         }

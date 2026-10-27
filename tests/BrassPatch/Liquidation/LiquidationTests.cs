@@ -45,6 +45,7 @@ namespace BrassPatch.Tests.Liquidation
             DelayedHumanChoices();
             NoAssetsAndMixedAi();
             SaveFailure();
+            SaveFailure(true);
             NetworkRouting();
             NavigationCallbacks();
             return checks;
@@ -203,15 +204,21 @@ namespace BrassPatch.Tests.Liquidation
             for (int i = 0; i < 3; i++) {
                 var ai = c.App.Game.GameProgressInformation.CurrentPlayer;
                 c.App.Metadata.GetPlayerMetadataByColor(ai.Color).AiType = AIType.Hard;
-                PassActions(c.App); h.Play.EndTurn();
-                Check(h.Output.SaveCalls == 1 && !h.Output.HasPendingSave, "AI End and round transition do not save");
+                PassActions(c.App);
+                Check(c.Repo.Load(c.App.Metadata.GameId).Game.Revision == boundary, "AI actions do not save before End");
+                h.Play.EndTurn(); boundary = c.App.Game.Revision;
+                Check(h.Output.SaveCalls == i + 2 && h.Output.HasPendingSave, "AI End writes one checkpoint, including round transition");
+                h.Play.EndTurn(); Check(h.Output.SaveCalls == i + 2 && c.App.Game.Revision == boundary, "Repeated AI End waits for its checkpoint");
+                h.Output.CompleteSave();
+                Check(c.Repo.Load(c.App.Metadata.GameId).Game.Revision == boundary, "Completed AI turn and next actor are saved");
             }
-            Check(c.Repo.Load(c.App.Metadata.GameId).Game.Revision == boundary, "All AI turns preserve the one human checkpoint");
+            Check(h.Output.SaveCalls == 4 && c.Repo.Load(c.App.Metadata.GameId).Game.Revision == boundary, "Human and three AI turns each save once");
         }
 
-        private static void SaveFailure()
+        private static void SaveFailure(bool ai = false)
         {
             Case c = NewCase(); Player debtor = c.App.Game.PlayersTrack.Players[0]; Build(c, debtor, BuildingType.Pottery); Debt(c, debtor); ReachFinalTurn(c);
+            if (ai) c.App.Metadata.GetPlayerMetadataByColor(c.App.Game.GameProgressInformation.CurrentPlayer.Color).AiType = AIType.Hard;
             UiHarness h = Harness(c); h.Play.EndTurn(); int revision = c.App.Game.Revision;
             h.Output.CompleteSave(false);
             Check(h.Router.Popup.Text.Contains("could not be saved"), "Failed save offers retry");
