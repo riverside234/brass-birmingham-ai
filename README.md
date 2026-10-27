@@ -10,7 +10,7 @@ An independent AI project for *Brass: Birmingham*, an economic strategy game wit
 
 ## Current status
 
-- **Local Rust backend released:** version 1.4.37 integrates native simulation, feature encoding, Gumbel IS-MCTS, and ONNX Runtime CPU inference with the Windows game. The [latest hotfix](ai-research/TURN_HISTORY_HOTFIX_1_4_37.md) repairs city cancellation and checkpoints each completed human or AI turn.
+- **Local Rust backend released:** version 1.4.38 integrates native simulation, feature encoding, Gumbel IS-MCTS, and ONNX Runtime CPU inference with the Windows game. The [latest menu patch](ai-research/SETUP_PREFERENCES_PATCH_1_4_38.md) remembers applied AI settings and groups Alpha Test/Gamma under NN. The [1.4.37 hotfix](ai-research/TURN_HISTORY_HOTFIX_1_4_37.md) repairs city cancellation and checkpoints each completed human or AI turn.
 - **Neural training continues:** the in-game **Alpha Test** option uses a pinned intermediate checkpoint; the final neural model is still in training.
 - **Two opponent families:** six V4 heuristic styles or the neural opponent, with independent **4 / 8 / 10 / 12-second** settings for each AI seat. A table uses one AI family throughout.
 

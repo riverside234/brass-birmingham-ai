@@ -1,6 +1,6 @@
 param([string]$BuildDirectory='artifacts/rust-backend/l13-dev',[switch]$Quick,[switch]$Matched,[ValidateRange(30,480)][int]$MaxSeconds=480,
  [ValidateSet('nn-human','nn-ai','v4-human','v4-two','v4-three','failures','nn-live','v4-live')][string]$ReleaseCase,
- [string]$EvidenceDirectory,[switch]$TurnHistory)
+ [string]$EvidenceDirectory,[switch]$TurnHistory,[ValidateSet('write','read')][string]$SetupPreferences)
 $ErrorActionPreference='Stop'
 $localRoot=Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 $localBuild=Join-Path $localRoot $BuildDirectory
@@ -26,6 +26,7 @@ $localDll=Join-Path $localTests 'Managed/LocalAiUnityTests.dll'
 $localRsp=Join-Path $localOut 'native-tests.rsp'
 $localSources=@('tests/BrassLocalAI/LocalAiUnityTests.cs','tests/BrassLocalAI/AiExecutionResourceTests.cs','tests/RustBackendLocal/NativeLocalUnityTests.cs','tests/RustBackendLocal/NativeMatchedUnityTests.cs','tests/RustBackendLocal/NativeValidationLifecycleTests.cs','tests/RustBackendLocal/NativeReleaseUnityTests.cs','tests/RustBackendLocal/ReleaseSegmentUnityTests.cs')
 if($TurnHistory){$localSources+=@('tests/BrassPatch/TurnHistory/TurnHistoryRegression.cs','tests/BrassPatch/TurnHistory/TurnHistoryUnityTests.cs')}
+if($SetupPreferences){$localSources+=@('tests/BrassLocalAI/SetupPreferencesUnityTests.cs')}
 $localCompiled=@();$localSourcePins=@()
 foreach($source in $localSources){
  $target=Join-Path $localOut ('test-source/'+$source)
@@ -51,6 +52,7 @@ $localArguments=@('-batchmode','-screen-width','1920','-screen-height','1080','-
 if($Quick){$localArguments+='--brass-native-short-test'}
 if($Matched){$localArguments+='--brass-native-matched-test'}
 if($TurnHistory){$localArguments+='--brass-turn-history-test'}
+if($SetupPreferences){$localArguments+=('--brass-setup-preferences='+$SetupPreferences)}
 if($ReleaseCase){$localArguments+=('--brass-release-case='+$ReleaseCase)}
 $localProcess=Start-Process -FilePath (Join-Path $localPlayer 'BrassBirminghamUnity.exe') -ArgumentList $localArguments -WorkingDirectory $localPlayer -WindowStyle Hidden -PassThru
 $localTimer=[Diagnostics.Stopwatch]::StartNew()

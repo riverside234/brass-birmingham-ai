@@ -103,6 +103,8 @@ public sealed partial class LocalAiUnityDriver : MonoBehaviour
     IEnumerator Cases()
     {
         SearchAllowanceContracts();
+        if(Environment.GetCommandLineArgs().Any(a=>a.StartsWith("--brass-setup-preferences=")))
+            GetType().GetMethod("PrepareSetupPreferences",ReflectionAccess.Flags).Invoke(this,null);
         yield return SceneManager.LoadSceneAsync("MenuScene"); yield return null;
         var resourceChecks = AiExecutionResourceTests.Run(Check);
         while (resourceChecks.MoveNext()) yield return resourceChecks.Current;
@@ -124,6 +126,10 @@ public sealed partial class LocalAiUnityDriver : MonoBehaviour
         router.ShowView<ICreateOfflineGameView>();
         yield return null;
         CheckFirstDisplay("first open"); Capture("local-ai-cold-menu.png");
+        if(Environment.GetCommandLineArgs().Any(a=>a.StartsWith("--brass-setup-preferences="))) {
+            var preferences=(IEnumerator)GetType().GetMethod("SetupPreferencesCases",ReflectionAccess.Flags).Invoke(this,null);
+            while(preferences.MoveNext())yield return preferences.Current;yield break;
+        }
         if(Environment.GetCommandLineArgs().Contains("--brass-turn-history-test")) {
             var historyCases=(IEnumerator)GetType().GetMethod("TurnHistoryCases",ReflectionAccess.Flags).Invoke(this,null);
             while(historyCases.MoveNext())yield return historyCases.Current;yield break;
@@ -641,7 +647,7 @@ public sealed partial class LocalAiUnityDriver : MonoBehaviour
                 foreach (var family in new[] { PlayerSelectionPage.Human, PlayerSelectionPage.V4, PlayerSelectionPage.Gamma }) {
                     panel.SelectPage(family); Canvas.ForceUpdateCanvases();
                     AssertInsideTarget(panel.Window, "selection window " + size + "/" + preset);
-                    foreach (var name in new[] { "Close chooser", "Close panel", "Apply selection", "Page Human", "Page V4", "Page Gamma" })
+                    foreach (var name in new[] { "Close chooser", "Close panel", "Apply selection", "Page Human", "Page V4", "V4 table", "NN table" })
                         AssertInsideTarget(panel.Window.Find(name).GetComponent<RectTransform>(), "fixed control " + name);
                     Check(panel.Tiles.Count() == (family == PlayerSelectionPage.Human ? 0 : family == PlayerSelectionPage.V4 ? 7 : 17), "page count stable at resolution/text preset");
                     Check(panel.Tiles.All(b => b.interactable == (family == PlayerSelectionPage.V4)), "availability stable after rebuild");
