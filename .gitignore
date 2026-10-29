@@ -644,3 +644,12 @@ Desktop.ini
 !/distribution/rust-lab-b04/b04-search-v1-teacher.zip
 !/distribution/rust-lab-b04/transfer-manifest.json
 !/distribution/rust-lab-b04/bundle.json
+
+# Combined g1326 lab qualification bundle with automatic Git-visible reports.
+!/distribution/rust-lab-g1326/
+/distribution/rust-lab-g1326/*
+!/distribution/rust-lab-g1326/README.md
+!/distribution/rust-lab-g1326/training-reference.json
+!/distribution/rust-lab-g1326/transfer-manifest.json
+!/distribution/rust-lab-g1326/bundle.json
+!/distribution/rust-lab-g1326/rust-lab-b01-b04-g1326.zip

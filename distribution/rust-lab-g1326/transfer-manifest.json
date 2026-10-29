@@ -1,0 +1,45 @@
+{
+  "contract": "brass-lab-results-transfer/1.0.0",
+  "training_reference": {
+    "run": "artifacts/step5/joint7-v11-2-grouped-lr-critic",
+    "generation": 1326,
+    "games_done": 424320,
+    "checkpoint": {
+      "path": "artifacts/step5/joint7-v11-2-grouped-lr-critic/generation-1326.pt",
+      "sha256": "ada8d72195837cb399c13effb975cce19840e847080a7a0d4e03091235d85cbe",
+      "model_id": "f95cc855dd5e05023584b21734f8f3ef35b912ac8a21890daaa137136ce3631c",
+      "generation": 1326
+    },
+    "implementation": "603d1d236ca3da4511467956a9b656b41a4f03017d814b1abd8f060467a4c05c",
+    "report_directory": "results/joint7-v11-2-grouped-lr-critic-g1326-20261029T212054859818Z",
+    "state_export_sha256": "31ee3c3a2da4af23489aaf8646462a06e4454c3e9b542aeb680321f7cc5ffd2c",
+    "report_manifest_sha256": "a22a43dd2fdf6558817fcf2b55489b466ae346b420faf66d9c1e21249d7697ae",
+    "qualification": "Pending"
+  },
+  "files": {
+    "scripts/rust_lab_results.py": "d4b875a331ea423ba0f59157808317fac9bb178fe95a21a71fda1aaed5721756",
+    "scripts/run-rust-lab-qualification.py": "14027d48b7bbce28b357a082fd618df5e8eb9f72276b2434e309a6d33cd08098",
+    "scripts/prepare-rust-lab-results.py": "2453423e199bcac2a555c560198b4c38404fdfe94041b09194a59c63439d30c7",
+    "tests/RustBackendLab/test_result_export.py": "e553e96bc1c62bf5f3186076fb1589b0a8b65c5af4947b4f2a959a4b1da63a95",
+    "distribution/rust-lab-g1326/README.md": "c1e86e5e481241a5c6930d2baf90dfbf5f55ef1c320f69d388b30c9e661db8bd",
+    "distribution/rust-lab-g1326/training-reference.json": "34236409f65ca42136db7a1dec00a039f02816354a53fbf1385f38ee41a5a470",
+    "results/rust-lab-qualification/README.md": "30d25271e2dd8b6ad2979c0cb07902abf0118869c73a8c6f80d1e5c324c32d0b"
+  },
+  "archives": {
+    "distribution/rust-lab-b01/b01-search-v1-inputs.zip": "935443a477d3a52425923e3d7458a15ae8250f4296a6900c5b9088fbef864a76",
+    "distribution/rust-lab-b01/b01-search-v1-update.zip": "ae634e746dd1864bee281b36f2415112510aeb66a8c5de7faf8d7e4c75dac685",
+    "distribution/rust-lab-b02/b02-search-v1-update.zip": "62a9d022bb3daa41f8ad874dfbbf40cb24e3b526c478d559db9db115e4725664",
+    "distribution/rust-lab-b025/b025-search-v1-teacher-phase.zip": "038380aab0fcb54c43bff660a098f96cbe7099e17a8abe6d8c02cf3ea0e7332e",
+    "distribution/rust-lab-b03/b03-search-v1-admission.zip": "fb6975872aac10a4efb97530b624150dedf78810f91a7800b4950f1d5c4ad0f3",
+    "distribution/rust-lab-b04/b04-search-v1-teacher.zip": "fa2ad9b13192786d0417b8be9e4de22a1b28c7797cfe84580891f372f2dd1eca"
+  },
+  "lab_qualification": "Pending",
+  "results_directory": "results/rust-lab-qualification",
+  "extraction_order": [
+    "B01",
+    "B02",
+    "B02.5",
+    "B03",
+    "B04"
+  ]
+}

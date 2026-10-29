@@ -1,0 +1,16 @@
+{
+  "run": "artifacts/step5/joint7-v11-2-grouped-lr-critic",
+  "generation": 1326,
+  "games_done": 424320,
+  "checkpoint": {
+    "path": "artifacts/step5/joint7-v11-2-grouped-lr-critic/generation-1326.pt",
+    "sha256": "ada8d72195837cb399c13effb975cce19840e847080a7a0d4e03091235d85cbe",
+    "model_id": "f95cc855dd5e05023584b21734f8f3ef35b912ac8a21890daaa137136ce3631c",
+    "generation": 1326
+  },
+  "implementation": "603d1d236ca3da4511467956a9b656b41a4f03017d814b1abd8f060467a4c05c",
+  "report_directory": "results/joint7-v11-2-grouped-lr-critic-g1326-20261029T212054859818Z",
+  "state_export_sha256": "31ee3c3a2da4af23489aaf8646462a06e4454c3e9b542aeb680321f7cc5ffd2c",
+  "report_manifest_sha256": "a22a43dd2fdf6558817fcf2b55489b466ae346b420faf66d9c1e21249d7697ae",
+  "qualification": "Pending"
+}
