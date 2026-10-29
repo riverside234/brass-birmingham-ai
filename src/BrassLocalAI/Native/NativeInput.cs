@@ -19,6 +19,16 @@ namespace BrassLegacyAI.Native
             var view=host.ObservePersonality(actor);
             return FromView(view,debts,recall);
         }
+        // The clock journal consumes only these confirmed boundary fields. A
+        // search_v1 continuation has no projected-successor observation to test;
+        // rebuilding the full NN/history input here would serve no other reader.
+        public static JObject ClockView(BrassApplicationGame app,int actor)
+        {
+            var progress=app.Game.GameProgressInformation;
+            return new JObject{["seat"]=actor,["context"]=new JObject{
+                ["revision"]=app.Game.Revision,["era"]=progress.CurrentGameEra.ToString(),
+                ["round"]=progress.CurrentRoundNumber,["turn"]=progress.CurrentTurnNumber}};
+        }
         public static JObject FromView(JObject view,int[] debts,JArray recall)
         {
             var spent=debts.Select(n=>Math.Min(.075,n*.02)).ToArray();

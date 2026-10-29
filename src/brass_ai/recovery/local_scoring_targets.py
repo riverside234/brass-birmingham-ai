@@ -35,18 +35,24 @@ def validate(envelope,game):
     require(envelope['game_id']==game['game_id'] and envelope['setup_group']==game['setup_group'] and
             envelope['branch_parent']==game.get('branch',{}).get('parent_game_id'),'Local scoring game/branch binding differs')
     # Producer hashes are immutable provenance, not general host compatibility.
-    keys(envelope['producer'],('runtime_sha256','host_sha256'))
-    require(all(isinstance(v,str) and len(v)==64 and all(c in '0123456789abcdef' for c in v)
-                for v in envelope['producer'].values()),'Invalid local scoring producer')
-    validate_receipt(envelope['receipt'],game,producer='local-scoring-host/1.0.0')
+    if envelope['producer'].get('contract') == 'brass-native-scoring-producer/1.0.0':
+        from brass_ai.rust_backend.lab_admission import validate_scorer
+        validate_scorer(envelope['producer'])
+        recorder='rust-local-scoring/1.0.0'
+    else:
+        keys(envelope['producer'],('runtime_sha256','host_sha256'))
+        require(all(isinstance(v,str) and len(v)==64 and all(c in '0123456789abcdef' for c in v)
+                    for v in envelope['producer'].values()),'Invalid local scoring producer')
+        recorder='local-scoring-host/1.0.0'
+    validate_receipt(envelope['receipt'],game,producer=recorder)
     return envelope
 
 
 def validate_receipt(r,game,*,producer):
     """Shared semantic audit; callers separately admit their producer envelope.
 
-    The legacy replay route above still accepts ONLY the authored C# producer.
-    B02 uses this audit in its isolated family container, not replay admission.
+    Legacy replay still requires the authored C# envelope. B03's separate native
+    replay route binds its typed producer and independent admission receipt.
     """
     require(producer in ('local-scoring-host/1.0.0','rust-local-scoring/1.0.0'),'Unknown scoring recorder')
     keys(r,('contract','rules','producer','start_revision','initial_vp','eras','final_vp'))

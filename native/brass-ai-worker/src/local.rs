@@ -34,6 +34,10 @@ pub const EXPORT: &str = "64e4a8340f4beb7bbc4ee70219b5e461b1185bcde9e25c4bfc78e3
 pub const CHECKPOINT: &str = "ecad3b932a8dd9d3b5d0cc49b5e9bb94a9e98b4536ffdc86a44179d003995cb8";
 pub const PROFILE: &str = "alpha-test-g890-neutral/1.0.0";
 pub const REWARD: &str = "a84a3fccf2421d40aefc71c80d3b8839cf3ff22900eb6c5b917b821b5bb8d72e";
+// The selected allowance is entirely search work. A single additional second
+// covers retirement, legal completion and host delivery on the original clock.
+const DELIVERY_GRACE_MS: u64 = 1_000;
+const DELIVERY_GRACE_NS: u64 = DELIVERY_GRACE_MS * 1_000_000;
 type Result<T> = std::result::Result<T, CoreError>;
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
@@ -217,7 +221,7 @@ fn validate_input(ticket: &Ticket, input: &Input, allowance: u64, remaining: u64
             && ticket.source_sha256 == BuildIdentity::current().source_sha256
             && [4000, 8000, 10000, 12000].contains(&allowance)
             && remaining > 0
-            && remaining <= allowance,
+            && remaining <= allowance.saturating_add(DELIVERY_GRACE_MS),
         "request identity/allowance mismatch",
     )?;
     search::check(
@@ -339,6 +343,10 @@ pub fn run() -> std::result::Result<(), Box<dyn std::error::Error>> {
         "export_sha256":EXPORT,"sessions":2,"threads_per_session":1,
         "provider":"CPUExecutionProvider","utility_acceptance":package.acceptance,
         "k_by_allowance_ms":package.k_by_allowance_ms,
+        "k32_host_delivery_reserve_ns":DELIVERY_GRACE_NS,
+        "host_delivery_reserve_policy":"search-plus-delivery/1.0.0",
+        "delivery_grace_ms":DELIVERY_GRACE_MS,
+        "host_delivery_reserve_ns_by_k":{"8":DELIVERY_GRACE_NS,"16":DELIVERY_GRACE_NS,"32":DELIVERY_GRACE_NS},
         "policy_temperature":temperature,"temperature_scope":"all_nn_policy_evaluations",
         "measured_readiness":{"warmup_passed":true,"native_nn_positions":warmup.lanes.iter().map(|l| l.neural.positions).sum::<usize>()},
         "max_frame_bytes":brass_ai_core::framing::MAX_FRAME_BYTES}),
@@ -485,7 +493,16 @@ pub fn run() -> std::result::Result<(), Box<dyn std::error::Error>> {
                     )?;
                 }
                 if binding.as_ref() != Some(&(identity.clone(), turn.clone(), allowance_ms)) {
-                    pair.admit(identity.clone(), &input, config, allowance_ms * 1_000_000)?;
+                    pair.admit(
+                        identity.clone(),
+                        &input,
+                        config,
+                        (allowance_ms + DELIVERY_GRACE_MS) * 1_000_000,
+                    )?;
+                    // Work deadline = original search allowance. Retirement and
+                    // legal completion may use the additional second, not NN
+                    // search. Retrying cannot repeat this fresh admission.
+                    pair.configure_host_delivery(DELIVERY_GRACE_NS)?;
                     pair.method(package.method)?;
                     binding = Some((identity, turn, allowance_ms));
                 }

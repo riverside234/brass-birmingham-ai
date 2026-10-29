@@ -28,6 +28,10 @@ def implementation_id():
     paths += [SOURCE_ROOT/'configs/learning/reward-source-equivalence.json']
     paths += [base / 'learning/runner.py', base / 'learning/batching.py']
     paths += [base/'searchlab/spiel.py',base/'beliefs.py',base/'runtime_contracts.py',base/'host.py',base/'bank.py',base/'legacy.py']
+    # Native replay/admission and diagnostic resume are learning dependencies.
+    paths += sorted((base/'rust_backend').glob('lab_*.py'))
+    paths += [p for p in (SOURCE_ROOT/'lab-native').rglob('*') if p.is_file() and
+              p.suffix in ('.rs','.toml','.lock') and 'target' not in p.parts]
     paths += sorted((SOURCE_ROOT/'src/BrassTrainingHost').glob('*.cs'))
     paths += [SOURCE_ROOT/'scripts/build-training-host.py',SOURCE_ROOT/'scripts/build-search-host.py']
     paths += sorted((SOURCE_ROOT/'training/runtime/throughput').glob('*/runtime.json'))

@@ -1,0 +1,109 @@
+{
+  "contract": "brass-lab-b03-transfer/1.0.0",
+  "implementation": "0c60f22dbaebcfdfea44721dd6bbd1032845a8d24fd4c75e6d2a7af41f5180e3",
+  "files": {
+    "ai-research/RUST_AI_BACKEND_MIGRATION_PLAN.md": "04256e14179ae89143628eab89634fad4cedd7de1b6185e29dcf68deed1268c9",
+    "ai-research/RUST_BACKEND_B03_REPORT.md": "97ec12d8bfa7442aac08a9dc6b40c5b51318f687859eef483ed81c3accad333b",
+    "configs/learning/selfplay-resume-sources.json": "72005598050a7267f520edae0a3358b9d4d802dbadab59931170bcaa6a2c9144",
+    "distribution/rust-lab-b03/README.md": "f1788be863cd8429293047c09a0ab1664620c07d803031a0baae616ef61d040d",
+    "results/joint7-v11-2-grouped-lr-critic-g1320-20261027T075134827445Z/recorded-config.json": "3bc6cbd00ebc3a6ae4227873b3876d2bf2a18bb630dce114a43274393baa8a78",
+    "scripts/prepare-rust-lab-b03.py": "93beee443befc510218728796a32359771d399dd27e2cd125cabf7113fe82d9f",
+    "scripts/qualify-rust-lab-b02.py": "1b1121686b8fd6878462387540674beb3f5c9d554535fe7e432ee1f2518ba9f3",
+    "scripts/qualify-rust-lab-b025.py": "68655b42ce33f55fc9478c88b7e3c0aae74be534de824ab26dbdfa50132f2681",
+    "scripts/qualify-rust-lab-b03.py": "e9d3854ddef692bf2f6a175910f6545a9e54f5790267eb3900e8773d1550f206",
+    "scripts/restore-rust-lab-b03.py": "1a5443c6dfe219375389a0e6bf7145e7f8d51e2b8e94284156d7f503d1df788f",
+    "scripts/run-rust-lab-b03.sh": "c64964bc9581a6bcdcf07b42d287e36999c27d9c26089cda650fd58888bc5b45",
+    "src/brass_ai/recovery/ingress.py": "3c269170e028844966f14899788e1dd8eec0a5bc787e26328f54525701df8a97",
+    "src/brass_ai/recovery/league.py": "0413de83e938ce04ceaa0d4d97a90ab62834144781353f7c091d222b577735b4",
+    "src/brass_ai/recovery/local_scoring_targets.py": "560b9327c74b19873aa64d751c38ff5fddeb70b39305e12eda634101600493d3",
+    "src/brass_ai/recovery/replay.py": "a1219d77d5b88c30ba8dc3d1043bc7bdeb1b602b373f2a19b64a01cc87a09704",
+    "src/brass_ai/recovery/resume.py": "33bd56d26162b6a9ef6362466b363a446c85c33cbbb25f59398cac064bdba3d7",
+    "src/brass_ai/recovery/teacher_phase.py": "af0b8ba43e0165102a831e0a792015d848aa5275506d110c657fc5d8a77ce1ab",
+    "src/brass_ai/recovery/value_buffer.py": "d58b3fcb1cf97c52296187b24e53e049023590bb95ddf2398c5d4568657e6d9b",
+    "src/brass_ai/rust_backend/lab_admission.py": "3507673b14c51bf1c626f970abc87ef051052a4726208e1f6e189844b49b1a1d",
+    "src/brass_ai/rust_backend/lab_b02_smoke.py": "5353587ad3431ee9da9e35cb29b2a79d8c202cab3a1bd0962717063c4dff2df8",
+    "src/brass_ai/rust_backend/lab_b03_smoke.py": "3827fe7313c2bbe95266d23fd3da4fda21414f8075cf5c64fda17b0cc6ce82b5",
+    "src/brass_ai/rust_backend/lab_continuation.py": "51d028409aea93cefeaefb8a7b0ae532ffa9e27db72de5c8a20aa8ac51a1b903",
+    "src/brass_ai/rust_backend/lab_families.py": "004714c9fe1102e0812f2710b045d14d307acd586c9ed1f4d33ecb52c8ccf024",
+    "src/brass_ai/rust_backend/lab_snapshot.py": "8a4c5d14855fe3cd3fee1b8a39719cae5215736676f16e75ccd59d463ac18bd4",
+    "src/brass_ai/step5/league.py": "bff846ebabec675a91d0b10e8929ce7b20408b974efb8ba99dfc7caa2b39aa22",
+    "tests/FeatureEngineering/test_mlp_v11.py": "8512b759644cfe1c050c961cc064ee6ead8c50339e74720994e18b24475f862a",
+    "tests/R2/fixtures.py": "d4937eb49072ba108ea8f3072ffb4d2e0fdd1027e9f800da4391a74a1731e949",
+    "tests/Recovery/test_critic_descriptors.py": "2bc100832b6a7cca975242e185526c4e4488ae736fd858e99669bab5cd5a2e7c",
+    "tests/Recovery/test_gae_value_phase.py": "acb84233bbdc0d42588effa569aa0e7adf2b8ce02c85b92a6943a60f9027131d",
+    "tests/Recovery/test_insolvency_recovery.py": "a8a745060bef11cd9a0aead9413bc10f029dc5f4187184d4ff2beb1ce6c9cdd1",
+    "tests/Recovery/test_ppg_eight.py": "ef6edf09094c0b5dcf19bb369e50d2981bdd4b1159b1c8d2556d96499fc6cc1d",
+    "tests/Recovery/test_reviewed_resume.py": "e19805733da3cd8e234a87a8c55bf79164742ceb5c4c859d32e0e8706da960b7",
+    "tests/Recovery/test_revision.py": "9202e9dee37990ea7aeee2a26d0b41d657b273c18284ac14b75c5fc4b747d207",
+    "tests/Recovery/test_value_buffer.py": "345e7e2fa5e89c979ff6b7400c649f0c4bc0805f689f03de679ba01564556aaa",
+    "tests/RustBackendLab/test_b025.py": "c672512b1fb9b819cefc0266242ee9f013706a1ac157d2ec4600b15856eae88c",
+    "tests/RustBackendLab/test_b03.py": "daf1037619d3577d27b3c77a07d8b48e22090964791a1dfe563d206403e36191"
+  },
+  "shared_core_source": "fa0b3f7b74e9ed638c8b6f96d3f23b0910b4e5df9387ff8df58d5472a8014dd2",
+  "method": "search_v1",
+  "v205_enabled": false,
+  "b01_qualification": "Pending",
+  "b02_qualification": "Pending",
+  "b025_lab_qualification": "Pending",
+  "b03_lab_qualification": "Pending",
+  "local_checks": {
+    "passed": true,
+    "implementation": "0c60f22dbaebcfdfea44721dd6bbd1032845a8d24fd4c75e6d2a7af41f5180e3",
+    "tests": 123,
+    "seconds": 139.31200000000536,
+    "modules": [
+      "test_b03",
+      "test_b025",
+      "test_b01",
+      "test_b02",
+      "test_training_g1324",
+      "test_categorical_kl_guard.ProbeTests",
+      "test_categorical_kl_guard.GuardTests",
+      "test_local_scoring",
+      "test_reviewed_resume",
+      "test_source_reviews.SourceReviewTests"
+    ],
+    "excluded_from_selected_modules": [
+      "test_reviewed_resume.ReviewedResumeTests.test_real_v2_signature_has_exact_reviewed_active_lab_continuation"
+    ],
+    "failure_ids": [],
+    "log_sha256": "dd345bed7c536b3386fb1ea1927d233496c94723d63e1fa83bd5153625da796f",
+    "historical_baseline": {
+      "tests": 9,
+      "failures": [
+        "test_categorical_kl_guard.ResumeTests.test_prior_source_reviews_are_unchanged_and_il_source_is_admitted",
+        "test_categorical_kl_guard.ResumeTests.test_review_and_pending_collection_checks_remain_strict",
+        "test_reviewed_resume.ReviewedResumeTests.test_real_v2_signature_has_exact_reviewed_active_lab_continuation",
+        "test_categorical_kl_guard.ResumeTests.test_reviewed_resume_preserves_state_and_next_update",
+        "test_selfplay_input_cache_resume.InputCacheResume.test_existing_g320_hotfix_route_remains_available",
+        "test_selfplay_input_cache_resume.InputCacheResume.test_g412_continuation_preserves_the_adopted_config_and_state",
+        "test_selfplay_input_cache_resume.InputCacheResume.test_same_settings_and_completed_il_layout_keep_their_identity",
+        "test_source_reviews.CompactResumeTests.test_committed_weights_optimizer_rng_population_and_progress_survive",
+        "test_source_reviews.CompactResumeTests.test_review_does_not_admit_changed_config_contracts_or_unknown_source"
+      ],
+      "note": "Nine obsolete-contract/source fixtures also fail using sealed B02.5 resume.py and its original review registry; not newly admitted or weakened for B03",
+      "audit_sha256": "d191e4963ea0fa8759fa8b769f58a32f60e9dfff458939b4d38284755625241b"
+    },
+    "scope": "Bounded CPU fixtures; no native games or actual lab checkpoint qualification",
+    "lab_qualification": "Pending",
+    "package_checks": {
+      "python_compile": true,
+      "cli_help": true,
+      "bash_syntax": true,
+      "b025_layered_manifest": {
+        "valid_overlay": true,
+        "old_seal_mismatch_rejected": true,
+        "replacement_tampering_rejected": true,
+        "prior_manifest_tampering_rejected": true,
+        "prior_archive_tampering_rejected": true
+      }
+    }
+  },
+  "prior_bundles": {
+    "distribution/rust-lab-b01/b01-search-v1-update.zip": "ae634e746dd1864bee281b36f2415112510aeb66a8c5de7faf8d7e4c75dac685",
+    "distribution/rust-lab-b02/b02-search-v1-update.zip": "62a9d022bb3daa41f8ad874dfbbf40cb24e3b526c478d559db9db115e4725664",
+    "distribution/rust-lab-b025/b025-search-v1-teacher-phase.zip": "038380aab0fcb54c43bff660a098f96cbe7099e17a8abe6d8c02cf3ea0e7332e"
+  },
+  "required_checkout": "Updated project checkout/private training runtime; extract B01, B02, B02.5, B03 in order before qualification",
+  "scope": "Native replay admission and reviewed joint7 full-state restoration. No new games, optimizer steps, teacher enablement or production adoption."
+}

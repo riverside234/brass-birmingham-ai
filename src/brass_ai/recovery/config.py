@@ -79,10 +79,10 @@ PPO_LEARNING_RATE=1e-5
 # then 48 second presentations. Missing evidence reduces or skips updates;
 # a surviving decision is never repeated to fill an otherwise empty batch.
 DISTILLATION=dict(min_samples=16,min_games=2,min_samples_per_phase=2,batch_size=16,max_reuse=2)
-# Enabled in fresh self-play recipes; no additional games or optimizer steps.
+# Policy-only teacher phases never fit these auxiliary outcome targets.
 # Diagnostics are independently opt-in
 # until their full-iteration overhead has been measured on representative runs.
-TEACHER_VALUE=dict(contract='teacher-outcome-value/1.0.0',enabled=True,loss_weight=.1,
+TEACHER_VALUE=dict(contract='teacher-outcome-value/1.0.0',enabled=False,loss_weight=.1,
     teacher_fraction=.25,samples_per_game=24,max_samples=128,max_reuse=2,
     diagnostics=False,probe_positions=128)
 
@@ -472,6 +472,8 @@ def latest_model_config(config,imitation_checkpoint):
     result=g1322_config(result)
     from .training_revision_g1324 import configure as g1324_config
     result=g1324_config(result)
+    from .teacher_phase_config import adopt as adopt_teacher_phase
+    result=adopt_teacher_phase(result)
     return validate_config(result)
 
 
@@ -619,6 +621,9 @@ def validate_config(config):
         'search_ready_games','search_every_games','search_games','distill_steps','distill_weight',
         'rehearsal_manifest','rehearsal_weight','rehearsal_until','profile_steps'}
     version=config.get('format')
+    if 'teacher_phase' in config:
+        from .teacher_phase_config import validate as validate_teacher_phase
+        fields.add('teacher_phase');validate_teacher_phase(config)
     if 'local_scoring_auxiliary' in config:
         from .local_scoring_auxiliary import validate_config as validate_local
         fields.add('local_scoring_auxiliary');validate_local(config['local_scoring_auxiliary'])
@@ -710,7 +715,7 @@ def validate_config(config):
                 controller['anchor_group_min_positions']==limit['group_min_positions'],
                 'Initial overall/group IL-KL settings must match the calibrated limits')
         require(fixed_selfplay_recipe(config) and config.get('teacher_enabled') is False,
-                'Auto IL-KL is for fresh latest-model self-play with teaching disabled')
+                'Auto IL-KL requires latest-model self-play with the legacy teacher disabled; teacher_phase stays inside PPO')
     quality=quality_selfplay_recipe(config)
     if 'policy_anchor' in config or 'rating_coverage' in config:
         from .policy_anchor import validate as validate_anchor

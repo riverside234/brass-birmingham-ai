@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Security.Cryptography;
@@ -19,6 +20,8 @@ namespace BrassLegacyAI.Native
         public readonly string Directory, Source, PolicyHash, PolicyPath;
         public readonly int SearchK;
         public readonly double Temperature;
+        public static readonly IReadOnlyList<int> SearchKChoices = Array.AsReadOnly(new[]{8,16,32});
+        public static bool ValidSearchK(int searchK) { return SearchKChoices.Contains(searchK); }
         public static bool ValidTemperature(double temperature) { return temperature==1.0 || temperature==1.5; }
         public readonly JObject Policy, ModelManifest;
         public static string GameRoot { get { return Path.GetFullPath(Path.Combine(Path.GetDirectoryName(typeof(NativePackage).Assembly.Location), "../..")); } }
@@ -30,7 +33,7 @@ namespace BrassLegacyAI.Native
             : this(directory,searchK,1.0) { }
         public NativePackage(string directory,int searchK,double temperature)
         {
-            if(searchK!=8 && searchK!=16)throw new InvalidDataException("Unsupported NN search K");
+            if(!ValidSearchK(searchK))throw new InvalidDataException("Unsupported NN search K");
             SearchK=searchK;
             if(!ValidTemperature(temperature))throw new InvalidDataException("Unsupported NN temperature");
             Temperature=temperature;
@@ -39,14 +42,16 @@ namespace BrassLegacyAI.Native
             if((string)build["format"]!="brass-local-package/1.0.0" || (string)build["backend"]!=Backend ||
                 (string)build["target"]!="x86_64-pc-windows-gnu" || (string)build["scope"]!="local-alpha-test") throw new InvalidDataException("Unsupported native package");
             var files=(JArray)build["files"];
-            string[] required={"brass-ai-local.exe","policy.json","policy-k8.json","policy-t15.json","policy-k8-t15.json","warmup.json","model/manifest.json","model/model.json","model/model.onnx","model/onnxruntime.dll"};
+            string[] required={"brass-ai-local.exe","policy.json","policy-k8.json","policy-k32.json","policy-t15.json","policy-k8-t15.json","policy-k32-t15.json","warmup.json","model/manifest.json","model/model.json","model/model.onnx","model/onnxruntime.dll"};
             if(files.Count!=required.Length || required.Any(n=>files.Count(f=>(string)f["path"]==n)!=1)) throw new InvalidDataException("Incomplete native package");
             foreach(var file in files) {
                 string name=(string)file["path"];
                 if(!required.Contains(name) || Hash(Path.Combine(Directory,name))!=(string)file["sha256"]) throw new InvalidDataException("Native package file changed");
             }
             Source=(string)build["source_sha256"];
-            PolicyPath=Path.Combine(Directory,temperature==1.5?(searchK==8?"policy-k8-t15.json":"policy-t15.json"):(searchK==8?"policy-k8.json":"policy.json")); PolicyHash=Hash(PolicyPath);
+            string policyName=searchK==16?"policy":"policy-k"+searchK;
+            if(temperature==1.5)policyName+="-t15";
+            PolicyPath=Path.Combine(Directory,policyName+".json"); PolicyHash=Hash(PolicyPath);
             Policy=JObject.Parse(File.ReadAllText(PolicyPath));
             ModelManifest=JObject.Parse(File.ReadAllText(Path.Combine(Directory,"model/manifest.json")));
             ValidateAcceptance((JObject)Policy["acceptance"],ModelManifest);

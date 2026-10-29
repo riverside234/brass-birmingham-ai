@@ -69,7 +69,7 @@ namespace BrassLegacyAI.Native
             CheckPath(currentPath);
             if(binding!=currentBinding || !path.SequenceEqual(currentPath) || !JToken.DeepEquals(composition,currentComposition) ||
                 live.Phase!="action" || live.Game.TurnFlow.CurrentAction!=null ||
-                !JToken.DeepEquals(view,Wire.Token(live.Observe(live.Actor))))
+                !JToken.DeepEquals(view,live.ObserveToken(live.Actor)))
                 throw new InvalidOperationException("Stale native validation");
             if(Interlocked.Exchange(ref consumed,1)!=0)throw new InvalidOperationException("Native validation was already consumed");
             // All mutation and event confirmation remain on the main thread.

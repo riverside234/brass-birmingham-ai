@@ -227,18 +227,18 @@ namespace BrassLegacyAI
             float searchOffset = CurrentPage == PlayerSelectionPage.AlphaTest ? 116 : 0;
             if (searchOffset > 0) {
                 Text(window, "NN search caption", "NN search", bodyX, 204, 137, 46, 21);
-                SearchKButtons = new Button[2];
+                SearchKButtons = new Button[Native.NativePackage.SearchKChoices.Count];
                 for (int i = 0; i < SearchKButtons.Length; i++) {
-                    int k = i == 0 ? 8 : 16;
+                    int k = Native.NativePackage.SearchKChoices[i];
                     var button = SearchKButtons[i] = Button(window, "NN search K" + k, "K = " + k,
-                        bodyX + 142 + i * 167, 204, 155, 46, 21, () => {
+                        bodyX + 142 + i * 111, 204, 103, 46, 21, () => {
                             DraftSearchK = k; UpdateSearchK(); UpdateSelection();
                         });
-                    var mark = AiWidgets.Rect(button.transform, "Selected mark", P(136, 17), S(11, 11));
+                    var mark = AiWidgets.Rect(button.transform, "Selected mark", P(84, 17), S(11, 11));
                     mark.gameObject.AddComponent<AiSelectionMark>().raycastTarget = false;
                     button.GetComponentInChildren<TextMeshProUGUI>().rectTransform.offsetMax = new Vector2(-20 * unit, -2 * unit);
                 }
-                Text(window, "NN search help", "Whole NN table · all time budgets", bodyX + 486, 204, bodyWidth - 486, 46, 18, true).color = LightUi.Muted;
+                Text(window, "NN search help", "Search + up to 1s delivery", bodyX + 486, 204, bodyWidth - 486, 46, 18, true).color = LightUi.Muted;
                 UpdateSearchK();
                 Text(window, "NN temperature caption", "Temperature", bodyX, 262, 137, 46, 20);
                 TemperatureButtons = new Button[2];
@@ -356,7 +356,7 @@ namespace BrassLegacyAI
         void UpdateSearchK()
         {
             for (int i = 0; i < SearchKButtons.Length; i++) {
-                bool chosen = DraftSearchK == (i == 0 ? 8 : 16);
+                bool chosen = DraftSearchK == Native.NativePackage.SearchKChoices[i];
                 var surface = SearchKButtons[i].GetComponent<AiControlSurface>(); surface.Selected = chosen; surface.SetVerticesDirty();
                 SearchKButtons[i].transform.Find("Selected mark").gameObject.SetActive(chosen);
             }

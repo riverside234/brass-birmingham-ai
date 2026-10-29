@@ -41,6 +41,8 @@ namespace BrassLegacyAI
         readonly string validationLifetime=Guid.NewGuid().ToString("N");
         int nativeAction;
         bool native;
+        bool nativeDeliveryActive;
+        NativeTurnClock nativeTurn;
         PlayGameUseCase debtOwner;
         string instance;
         int nativeAllowance;
@@ -59,6 +61,9 @@ namespace BrassLegacyAI
         int planningRequests;
         double lastRequestMilliseconds;
         int revision, actor, replans;
+        BoardGameRules.Entities.Game.BoardGameRulesGame eventsGame;
+        int eventsRevision=-1;
+        List<BoardGameRules.Entities.EventSourcing.Events.IEvent> capturedEvents;
         long startedGeneration;
         bool endTurn, stopped;
         string strategy;
@@ -120,13 +125,14 @@ namespace BrassLegacyAI
                 bridge.history = history; bridge.presenter = presenter; bridge.router = router; bridge.app = app;
                 bridge.revision = app.Game.Revision; bridge.actor = actor; bridge.endTurn = endTurn; bridge.startedGeneration = generation;
                 bridge.native = native; bridge.instance = Guid.NewGuid().ToString("N");
-                if(native){var lease=NativeTurnClock.For(app,actor,false);bridge.instance=lease.Instance;bridge.clock=lease.Clock;}
+                if(native){var lease=NativeTurnClock.For(app,actor,false);bridge.nativeTurn=lease;bridge.instance=lease.Instance;bridge.clock=lease.Clock;}
                 bridge.strategy = (string)assignment["strategy"]; if (!native) bridge.profile = ProfileCatalog.ForPlay((JObject)assignment["profile"]);
                 // Apply the requested live allowance on the detached execution copy.
                 // Keep the bank's 240-node planning setting, including its bounded completion work.
                 string difficulty = LocalGameState.Difficulty(state, assignment);
                 bridge.budget = DifficultyCatalog.Milliseconds(difficulty);
                 bridge.nativeAllowance = (int)bridge.budget;
+                if(native)bridge.budget=bridge.nativeTurn.BindDeadline(NativeJob.TotalAllowanceMilliseconds(bridge.nativeAllowance));
                 if (!native) bridge.profile.work_limit = SearchWorkLimit;
                 bridge.composition = Host.Composition((JObject)state["configuration"]);
                 bridge.controls = AiTurnControls.Attach(router, (native ? "Alpha Test" : ProfileCatalog.Label(bridge.strategy)) + " · " + DifficultyCatalog.Label(difficulty));
@@ -140,10 +146,18 @@ namespace BrassLegacyAI
         }
         List<BoardGameRules.Entities.EventSourcing.Events.IEvent> Events()
         {
-            return LocalGameState.History(app, history.Repository.Advanced.GameStorage.LoadEvents(app.Metadata.GameId, 0, app.Game.Revision));
+            // A bridge belongs to one application/lifetime. Confirmed events are
+            // immutable within a revision; load/history replacement retires it.
+            // Also bind the rules object in case it is replaced at that revision.
+            if(capturedEvents==null || !ReferenceEquals(eventsGame,app.Game) || eventsRevision!=app.Game.Revision) {
+                capturedEvents=LocalGameState.History(app,history.Repository.Advanced.GameStorage.LoadEvents(app.Metadata.GameId,0,app.Game.Revision));
+                eventsGame=app.Game;eventsRevision=app.Game.Revision;
+            }
+            return capturedEvents;
         }
         void StartRequest(JObject state)
         {
+            nativeDeliveryActive=false;
             coordinator?.Dispose(); coordinator = null;
             if (resources == null) resources = AiExecutionResources.BeginComputation();
             else resources.WaitingForExecution();
@@ -184,9 +198,10 @@ namespace BrassLegacyAI
             if(nativeRecall.Count==0 || !JToken.DeepEquals(nativeRecall.Last["hand"],hand))
                 nativeRecall.Add(new JObject{["revision"]=input["view"]["context"]["revision"],["hand"]=hand.DeepClone()});
             input["recall"]=nativeRecall.DeepClone();
+            budget=nativeTurn.BindDeadline((int)budget);
             planningRequests++;
             nativeAction=0;
-            nativeBackend=new NativeJob(NativeInput.Request(input,instance,app.Metadata.GameId,startedGeneration+1,nativeAllowance),clock,(int)budget,NativeGameState.SearchK(state),NativeGameState.Temperature(state));
+            nativeBackend=NativeJob.WithDeadline(NativeInput.Request(input,instance,app.Metadata.GameId,startedGeneration+1,nativeAllowance),clock,(int)budget,NativeGameState.SearchK(state),NativeGameState.Temperature(state));
             nativeExecution=AiExecutionScheduler.Submit(nativeBackend);resources.Observe(nativeExecution);
         }
         // Called by the existing liquidation route before its V4 policy. No
@@ -204,8 +219,9 @@ namespace BrassLegacyAI
                 var bridge=active=new GameObject("Brass native debt").AddComponent<LocalTurnBridge>();
                 bridge.native=true;bridge.history=history;bridge.app=app;bridge.actor=actor;bridge.revision=app.Game.Revision;bridge.router=router;
                 bridge.debtOwner=owner;bridge.instance=Guid.NewGuid().ToString("N");bridge.startedGeneration=generation;
-                var lease=NativeTurnClock.For(app,actor,true);bridge.instance=lease.Instance;bridge.clock=lease.Clock;
+                var lease=NativeTurnClock.For(app,actor,true);bridge.nativeTurn=lease;bridge.instance=lease.Instance;bridge.clock=lease.Clock;
                 bridge.budget=bridge.nativeAllowance=DifficultyCatalog.Milliseconds(LocalGameState.Difficulty(state,LocalGameState.Assignment(state,actor)));
+                bridge.budget=lease.BindDeadline(NativeJob.TotalAllowanceMilliseconds(bridge.nativeAllowance));
                 bridge.composition=Host.Composition((JObject)state["configuration"]);bridge.controls=AiTurnControls.Attach(router,"Alpha Test · liquidation");bridge.StartRequest(state);
             } catch(Exception error){CancelActive();LocalMenu.ShowError(router,"Alpha Test stopped. The NN table and save are preserved.\n"+error.Message,error);}
             return true;
@@ -218,6 +234,7 @@ namespace BrassLegacyAI
             { Stop(); return; }
             try
             {
+                if(native)CheckNativeDeadline(false);
                 if (pendingState != null)
                 {
                     if (controls != null) controls.SetApplying(false);
@@ -231,6 +248,7 @@ namespace BrassLegacyAI
                         if(validatingPath!=null)goto NativeReady;
                         if(!nativeExecution.Completion.IsCompleted)return;
                         if(nativeExecution.Failure!=null || nativeExecution.CancellationRequested)throw new InvalidOperationException(nativeExecution.Failure??"Native request cancelled");
+                        nativeDeliveryActive=true;CheckNativeDeadline(false);
                         foreach(var action in NativeInput.Actions(nativeBackend.Result))continuation.Enqueue(action);
                     } else {
                     var plan = coordinator.Take(ticket, app.Game.Revision, actor, generation);
@@ -254,8 +272,8 @@ namespace BrassLegacyAI
                         var captured=Host.Capture(app,Events());
                         if(captured.Phase!="action" || app.Game.TurnFlow.CurrentAction!=null)throw new InvalidOperationException("Native validation boundary changed");
                         validatingPath=continuation.Dequeue();
-                        nativeValidation=new NativeValidation((JObject)Wire.Token(captured.Observe(actor)),composition,validatingPath,ValidationBinding(captured));
-                        validationExecution=AiExecutionScheduler.Submit(nativeValidation);resources.Observe(validationExecution);
+                        nativeValidation=new NativeValidation(captured.ObserveToken(actor),composition,validatingPath,ValidationBinding(captured));
+                        validationExecution=AiExecutionScheduler.Submit(nativeValidation);resources.ObserveDelivery(validationExecution);
                         return;
                     }
                     if(!validationExecution.Completion.IsCompleted)return;
@@ -288,6 +306,7 @@ namespace BrassLegacyAI
                     if(!NativeGameState.IsNative(currentState) || (string)LocalGameState.Assignment(currentState,actor)["kind"]!="native" ||
                         DifficultyCatalog.Milliseconds(LocalGameState.Difficulty(currentState,LocalGameState.Assignment(currentState,actor)))!=nativeAllowance)
                         throw new InvalidOperationException("Native assignment changed before commit");
+                    CheckNativeDeadline(true);
                 }
                 new LegacyBehavior(app, () => {
                     if(native && debtOwner==null && NativeValidation.Enabled)nativeValidation.Commit(live,composition,path,ValidationBinding(live),stopped || !CurrentGeneration(startedGeneration) || validationExecution.CancellationRequested);
@@ -306,16 +325,19 @@ namespace BrassLegacyAI
                     owner.PlayGame();return;
                 }
                 if(native && app.Game.TurnFlow.GetRemainingActionsCount()>0) {
-                    var nowEvents=Events();var current=NativeInput.Capture(app,nowEvents,actor,new JArray());
+                    var nowEvents=Events();JObject clockView;
                     // An internally projected root is a hypothesis. A legal
                     // but different live successor must replan on the original
                     // turn clock rather than execute that hypothetical action.
-                    if(continuation.Count>0 && !NativeInput.ContinuationMatches(nativeBackend.Result,current,nativeRecall))
-                        continuation.Clear();
-                    NativeGameState.Record(app.Metadata,(JObject)current["view"],LocalGameState.HistoryHash(nowEvents,revision),
+                    if(continuation.Count>0 && nativeBackend.Result["search_revision"] is JObject) {
+                        var current=NativeInput.Capture(app,nowEvents,actor,new JArray());
+                        if(!NativeInput.ContinuationMatches(nativeBackend.Result,current,nativeRecall))continuation.Clear();
+                        clockView=(JObject)current["view"];
+                    } else clockView=NativeInput.ClockView(app,actor);
+                    NativeGameState.Record(app.Metadata,clockView,LocalGameState.HistoryHash(nowEvents,revision),
                         Math.Max(0,(int)(budget-clock.Elapsed.TotalMilliseconds)),nativeRecall);
                 }
-                LocalGameState.CommitIntent(app.Metadata, intent, revision, Events());
+                if(intent!=null)LocalGameState.CommitIntent(app.Metadata,intent,revision,Events());
                 if (app.Game.TurnFlow.GetRemainingActionsCount() == 0)
                 {
                     bool advance = endTurn; var output = presenter;
@@ -334,6 +356,14 @@ namespace BrassLegacyAI
         {
             return NativeValidation.Binding(validationLifetime,instance,app.Metadata.GameId,generation,planningRequests,nativeAction,
                 app.Game.Revision,live.Actor,live.Phase,nativeBackend.Result);
+        }
+        void CheckNativeDeadline(bool committing)
+        {
+            if(!clock.IsRunning)return;
+            double deadline=budget;
+            if(nativeDeliveryActive && nativeBackend!=null)deadline=Math.Min(deadline,nativeBackend.DeliveryDeadlineMilliseconds);
+            if(clock.Elapsed.TotalMilliseconds>=deadline-(committing?NativeJob.CommitHeadroomMilliseconds:0))
+                throw new TimeoutException("Alpha Test delivery exceeded its original deadline or has insufficient commit headroom");
         }
         void Stop()
         {

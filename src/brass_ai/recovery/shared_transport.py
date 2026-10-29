@@ -81,7 +81,7 @@ class SharedSlot:
         return out
 
     def pack_responses(self,responses,token):
-        keys=('probabilities','win_share','placement','vp','utility')
+        keys=('probabilities','win_share','placement','vp','utility','logits')
         size=HEADER+sum(8*len(r[k])+7 for r in responses for k in keys if k in r)
         if size>self.size:return None
         self.header(token,'output',True);offset=HEADER;result=[]
@@ -96,7 +96,7 @@ class SharedSlot:
         self.header(token,'output');out=[]
         for response in responses:
             response=dict(response)
-            for key in ('probabilities','win_share','placement','vp','utility'):
+            for key in ('probabilities','win_share','placement','vp','utility','logits'):
                 if key in response:response[key]=self.get(response[key]).tolist()
             out.append(response)
         return out

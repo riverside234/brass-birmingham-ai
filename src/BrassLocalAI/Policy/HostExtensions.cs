@@ -12,7 +12,7 @@ namespace BrassHost
         // ordinary future draws must never influence either action of a current turn.
         public void SearchApply(string id)
         {
-            var c=Choices().Single(x=>x.id==id);
+            var c=ResolveChoice(id);
             if(c.kind=="finish")
             {
                 Game.TurnFlow.ConfirmCurrentAction(); action="";target="";merchant="";

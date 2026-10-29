@@ -1,6 +1,8 @@
 //! B02 ordinary lane. Policy RNG stays in the versioned Python adapter;
 //! authoritative progression, exact features and complete row buffers stay here.
 pub mod scoring;
+#[cfg(feature = "teacher")]
+pub mod teacher;
 use brass_ai_core::{
     features::{FeatureContext, FeatureEncoder, FeatureReply},
     state::{
@@ -308,7 +310,7 @@ fn peak_rss() -> Option<u64> {
 /// Keep the reference hidden deck order. Search's explicit chance sampler sorts
 /// the unseen remainder, so the ordinary adapter restores that remainder before
 /// exposing the next decision. Chance draws do not consume ordinary revisions.
-fn ordinary_after(
+pub fn ordinary_after(
     state: &NativeState,
     choice: &str,
     keys: &[u32],

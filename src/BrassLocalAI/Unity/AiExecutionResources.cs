@@ -28,18 +28,23 @@ namespace BrassLegacyAI
     public sealed class AiExecutionScope : IDisposable
     {
         internal bool Computing = true, Released;
+        internal bool Delivering;
         internal AiExecutionJob Job;
         public void Observe(AiExecutionJob job)
+        { Observe(job,false); }
+        public void ObserveDelivery(AiExecutionJob job)
+        { Observe(job,true); }
+        void Observe(AiExecutionJob job,bool delivery)
         {
             AiExecutionResources.AssertMainThread();
             if (Released) throw new ObjectDisposedException(nameof(AiExecutionScope));
-            Job = job ?? throw new ArgumentNullException(nameof(job)); Computing = true; AiExecutionResources.Refresh();
+            Job = job ?? throw new ArgumentNullException(nameof(job)); Computing = true; Delivering=delivery; AiExecutionResources.Refresh();
         }
         public void WaitingForExecution()
         {
             AiExecutionResources.AssertMainThread();
             if (Released) throw new ObjectDisposedException(nameof(AiExecutionScope));
-            Job?.Cancel(); Job = null; Computing = true; AiExecutionResources.Refresh();
+            Job?.Cancel(); Job = null; Computing = true; Delivering=false; AiExecutionResources.Refresh();
         }
         public void Presenting()
         {
@@ -47,7 +52,7 @@ namespace BrassLegacyAI
             if (Released) return;
             // Retain ownership of a retiring job until this scope is disposed;
             // presentation can resume while its cancellation tail drains.
-            Computing = false; AiExecutionResources.Refresh();
+            Computing = false; Delivering=false; AiExecutionResources.Refresh();
         }
         public void Dispose() { AiExecutionResources.Release(this); }
     }
@@ -136,7 +141,12 @@ namespace BrassLegacyAI
                 // Preserve an existing lower software cap. VSync otherwise takes
                 // precedence over targetFrameRate in the shipped Windows player.
                 QualitySettings.vSyncCount = 0;
-                Application.targetFrameRate = previousFrameRate > 0 ? Math.Min(previousFrameRate, policy.FramesPerSecond) : policy.FramesPerSecond;
+                // Search retains its CPU-saving cap. Only short validation jobs
+                // use 60 Hz handoffs; concurrent search always keeps priority.
+                bool deliveryOnly=true;
+                foreach(var scope in scopes)if(scope.Computing && !scope.Delivering){deliveryOnly=false;break;}
+                int cap=deliveryOnly?Math.Max(60,policy.FramesPerSecond):policy.FramesPerSecond;
+                Application.targetFrameRate = previousFrameRate > 0 ? Math.Min(previousFrameRate,cap) : cap;
             }
             else if (renderingConstrained)
             {

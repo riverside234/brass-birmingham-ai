@@ -43,7 +43,7 @@ namespace BrassLegacyAI
                 var seats = value["seats"] as JArray;
                 int count = (int)value["players"];
                 var k = value["nn_search_k"];
-                if (k != null && (k.Type != JTokenType.Integer || ((int)k != 8 && (int)k != 16))) return null;
+                if (k != null && (k.Type != JTokenType.Integer || !Native.NativePackage.ValidSearchK((int)k))) return null;
                 var temperature = value["nn_temperature"];
                 if (temperature != null && ((temperature.Type != JTokenType.Integer && temperature.Type != JTokenType.Float) ||
                     !Native.NativePackage.ValidTemperature((double)temperature))) return null;

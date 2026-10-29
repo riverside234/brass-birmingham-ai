@@ -246,7 +246,8 @@ class DiskBuffer:
             p=safe(self.run,project_path(self.root,r['path']))
             require(p.parent==self.run/f'iteration-{self.generation:04d}','PPG cache needs current ordinary replays')
             selected.append(dict({k:r[k] for k in ('job','game_id','sha256','features')},
-                                 path=p.relative_to(self.run).as_posix()))
+                                 path=p.relative_to(self.run).as_posix(),
+                                 **({'native_admission':copy.deepcopy(r['native_admission'])} if 'native_admission' in r else {})))
         require(selected and len({r['game_id'] for r in selected})==len(selected),'Invalid PPG source collection')
         return dict(records=selected,policy_id=policy_id,kind_by_group=copy.deepcopy(kinds),model_id=model_id)
 

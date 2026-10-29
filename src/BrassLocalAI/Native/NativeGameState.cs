@@ -15,11 +15,17 @@ namespace BrassLegacyAI.Native
         string turn;
         public readonly string Instance=Guid.NewGuid().ToString("N");
         public System.Diagnostics.Stopwatch Clock=new System.Diagnostics.Stopwatch();
+        int? deadlineMilliseconds;
+        public int BindDeadline(int milliseconds) {
+            if(milliseconds<0)throw new ArgumentOutOfRangeException("milliseconds");
+            deadlineMilliseconds=deadlineMilliseconds.HasValue?Math.Min(deadlineMilliseconds.Value,milliseconds):milliseconds;
+            return deadlineMilliseconds.Value;
+        }
         public static NativeTurnClock For(BrassApplicationGame app,int actor,bool debt)
         {
             var value=clocks.GetValue(app,g=>new NativeTurnClock());var c=app.Game.GameProgressInformation;
             string key=c.CurrentGameEra+":"+c.CurrentRoundNumber+":"+c.CurrentTurnNumber+":"+actor+":"+debt;
-            if(value.turn!=key){value.turn=key;value.Clock=new System.Diagnostics.Stopwatch();}
+            if(value.turn!=key){value.turn=key;value.Clock=new System.Diagnostics.Stopwatch();value.deadlineMilliseconds=null;}
             return value;
         }
     }
@@ -39,7 +45,7 @@ namespace BrassLegacyAI.Native
         {
             var k=state["nn_search_k"];
             if(k==null)return 16; // Pre-selector saves retain the installed K16 default.
-            if(k.Type!=JTokenType.Integer || ((int)k!=8 && (int)k!=16))throw new InvalidDataException("Unsupported saved NN search K");
+            if(k.Type!=JTokenType.Integer || !NativePackage.ValidSearchK((int)k))throw new InvalidDataException("Unsupported saved NN search K");
             return (int)k;
         }
         public static JObject Create(GameMetadata metadata,Func<PlayerMetadata,string> difficulty)
@@ -57,7 +63,7 @@ namespace BrassLegacyAI.Native
         public static JObject Create(GameMetadata metadata,Func<PlayerMetadata,string> difficulty,int searchK,double temperature)
         {
             if(!Supported(metadata))throw new InvalidDataException("Alpha Test requires standard four-player rules");
-            if(searchK!=8 && searchK!=16)throw new InvalidDataException("Unsupported NN search K");
+            if(!NativePackage.ValidSearchK(searchK))throw new InvalidDataException("Unsupported NN search K");
             if(!NativePackage.ValidTemperature(temperature))throw new InvalidDataException("Unsupported NN temperature");
             var rows=new JArray(metadata.PlayerMetadata.Select(p=>{
                 var r=new JObject{["color"]=(int)p.PlayerStartConfiguration.Color,["sitting_order"]=p.PlayerStartConfiguration.SittingOrder,

@@ -9,6 +9,14 @@ publish = false
 # ../native. No installed-game or shared-core source is changed by B02.
 [workspace]
 
+[features]
+teacher = []
+
+[[bin]]
+name = "brass-lab-teacher"
+path = "src/bin/teacher.rs"
+required-features = ["teacher"]
+
 [dependencies]
 brass-ai-core = { path = "../native/brass-ai-core" }
 serde = { version = "=1.0.228", features = ["derive"] }

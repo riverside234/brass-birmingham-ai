@@ -618,3 +618,29 @@ Desktop.ini
 !/distribution/rust-lab-b01/b01-search-v1-update.zip
 !/distribution/rust-lab-b02/b02-search-v1-update.zip
 !/distribution/RUST_LAB_SEARCH_V1.md
+
+# B02.5 policy-only teacher phase; sealed source transfer and lab instructions.
+!/distribution/rust-lab-b025/
+/distribution/rust-lab-b025/*
+!/distribution/rust-lab-b025/README.md
+!/distribution/rust-lab-b025/b025-search-v1-teacher-phase.zip
+!/distribution/rust-lab-b025/transfer-manifest.json
+!/distribution/rust-lab-b025/bundle.json
+
+# B03 replay admission and full-state diagnostic continuation.
+!/distribution/rust-lab-b03/
+/distribution/rust-lab-b03/*
+!/distribution/rust-lab-b03/README.md
+!/distribution/rust-lab-b03/b03-search-v1-admission.zip
+!/distribution/rust-lab-b03/transfer-manifest.json
+!/distribution/rust-lab-b03/bundle.json
+
+# B04 native search_v1 teacher exports and bounded lab shadow qualification.
+!/lab-native/src/bin/
+!/lab-native/src/bin/teacher.rs
+!/distribution/rust-lab-b04/
+/distribution/rust-lab-b04/*
+!/distribution/rust-lab-b04/README.md
+!/distribution/rust-lab-b04/b04-search-v1-teacher.zip
+!/distribution/rust-lab-b04/transfer-manifest.json
+!/distribution/rust-lab-b04/bundle.json

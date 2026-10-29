@@ -37,14 +37,14 @@ public sealed partial class LocalAiUnityDriver
         Check(panel.ApplyButton.interactable,"applied choice is available");panel.ApplyButton.onClick.Invoke();
         Check(!AiSelectionPanel.IsOpen,"Apply closes chooser");
     }
-    void CheckRestoredNeural()
+    void CheckRestoredNeural(int expectedK=8)
     {
         Check(Get<int>(menu,"_numberOfPlayers")==4 && !Setup.GameStartConfiguration.IsIntroductoryGame,"restored valid NN table shape");
         Check(Setup.PlayerMetadata.Select(p=>p.AiType==AIType.Human).SequenceEqual(new[]{true,false,true,false}),"restored controllers including second Human");
         Check(Setup.PlayerMetadata.Skip(1).Select(LocalMenu.Difficulty).SequenceEqual(new[]{"easy","mid","max"}),"restored independent allowances including Human's remembered AI setting");
         Check(Setup.PlayerMetadata.All(p=>LocalMenu.Choice(p).Family==AiFamily.AlphaTest),"restored one coherent NN family");
         Check(LocalMenu.TableFamily(Setup.PlayerMetadata[0])==AiFamily.AlphaTest && LocalMenu.CanStart(menu),"NN family retained for Human seat and Start allowed");
-        Check(Setup.PlayerMetadata.All(p=>LocalMenu.TableSearchK(p)==8),"K8 restored for the whole table independently of seat allowances");
+        Check(Setup.PlayerMetadata.All(p=>LocalMenu.TableSearchK(p)==expectedK),"saved K restored for the whole table independently of seat allowances");
     }
     IEnumerator SetupPreferencesCases()
     {
@@ -63,7 +63,7 @@ public sealed partial class LocalAiUnityDriver
             Check(Setup.PlayerMetadata.Skip(1).Select(LocalMenu.Difficulty).SequenceEqual(new[]{"easy","mid","max"}),"V4 seat difficulties restored");
             PickSetup(1,"cotton",0,true);PickSetup(2,"rail-tempo",1,true);PickSetup(3,"random",3,true);PickSetup(2,"rail-tempo",1,true,true);yield return null;
             Rows()[1].GetComponent<AiSetupRow>().OpenPicker();var kPanel=AiSelectionPanel.Active;
-            Check(kPanel.DraftSearchK==16 && kPanel.SearchKButtons.Length==2,"existing setup defaults to K16 and offers two choices");
+            Check(kPanel.DraftSearchK==16 && kPanel.SearchKButtons.Length==3,"existing setup defaults to K16 and offers three choices");
             kPanel.SearchKButtons[0].onClick.Invoke();
             Check(kPanel.DraftSearchK==8 && LocalMenu.TableSearchK(Setup.PlayerMetadata[1])==16,"K8 stays a draft until Apply");
             kPanel.Close();yield return null;
@@ -77,6 +77,8 @@ public sealed partial class LocalAiUnityDriver
                 Check(kPanel.DraftSearchK==8,"K8 is independent of time budget "+difficulty);
                 kPanel.SearchKButtons[1].onClick.Invoke();
                 Check(kPanel.DraftSearchK==16,"K16 is available at time budget "+difficulty);
+                kPanel.SearchKButtons[2].onClick.Invoke();
+                Check(kPanel.DraftSearchK==32,"K32 is available at time budget "+difficulty);
                 kPanel.Close();yield return null;
             }
             Rows()[1].GetComponent<AiSetupRow>().OpenPicker();kPanel=AiSelectionPanel.Active;
@@ -92,12 +94,12 @@ public sealed partial class LocalAiUnityDriver
             Check(tPanel.DraftTemperature==1.5 && LocalMenu.TableTemperature(Setup.PlayerMetadata[1])==1.0,"temperature remains a draft before Apply");
             tPanel.Close();yield return null;
             Check(PreferenceValues()[SetupKey]==saved,"temperature Cancel leaves preferences intact");
-            foreach(int kIndex in new[]{0,1})foreach(int difficulty in Enumerable.Range(0,4)) {
+            foreach(int kIndex in new[]{0,1,2})foreach(int difficulty in Enumerable.Range(0,4)) {
                 Rows()[1].GetComponent<AiSetupRow>().OpenPicker();tPanel=AiSelectionPanel.Active;
                 Check(tPanel.DraftTemperature==1.0,"Cancel restored T1.0");
                 tPanel.SearchKButtons[kIndex].onClick.Invoke();tPanel.DifficultyButtons[difficulty].onClick.Invoke();
                 tPanel.TemperatureButtons[1].onClick.Invoke();
-                Check(tPanel.DraftTemperature==1.5 && tPanel.DraftSearchK==(kIndex==0?8:16) && tPanel.DraftDifficulty==DifficultyCatalog.Keys[difficulty],"T1.5 works independently of K and allowance");
+                Check(tPanel.DraftTemperature==1.5 && tPanel.DraftSearchK==NativePackage.SearchKChoices[kIndex] && tPanel.DraftDifficulty==DifficultyCatalog.Keys[difficulty],"T1.5 works independently of K and allowance");
                 tPanel.TemperatureButtons[0].onClick.Invoke();Check(tPanel.DraftTemperature==1.0,"T1.0 works at every K/allowance");
                 tPanel.Close();yield return null;
             }
@@ -107,9 +109,9 @@ public sealed partial class LocalAiUnityDriver
             saved=PreferenceValues()[SetupKey];
             foreach(double invalidT in new[]{0.0,2.0,Double.NaN,Double.PositiveInfinity})
                 Check(!LocalMenu.ApplyPlayerSelection(Setup.PlayerMetadata[1],menu,new PlayerSelectionDraft(PlayerSelectionPage.AlphaTest,new AiChoice(AiFamily.AlphaTest,"alpha-test"),"easy",8,invalidT)),"unsupported temperature cannot bypass UI");
-            foreach(double temperature in new[]{1.0,1.5})foreach(int k in new[]{8,16}) {
+            foreach(double temperature in new[]{1.0,1.5})foreach(int k in new[]{8,16,32}) {
                 var package=new NativePackage(NativePackage.Location,k,temperature);
-                Check(package.Temperature==temperature && package.SearchK==k,"four native K/temperature policies admitted");
+                Check(package.Temperature==temperature && package.SearchK==k,"six native K/temperature policies admitted");
                 var metadata=(BrassApplication.Game.GameMetadata)Setup.Clone();
                 var state=NativeGameState.Create(metadata,LocalMenu.Difficulty,k,temperature);SaveExtensions.Set(metadata,state);
                 Check(NativeGameState.Temperature(NativeGameState.Read(metadata,true))==temperature,"saved game pins temperature");
@@ -125,9 +127,9 @@ public sealed partial class LocalAiUnityDriver
                 SaveExtensions.Set(metadata,legacy);
                 Check(NativeGameState.Temperature(NativeGameState.Read(metadata,true))==1.0 && JToken.DeepEquals(SaveExtensions.Get(metadata),legacy),"legacy save keeps T1.0 without rewrite");
             }
-            foreach(int invalidK in new[]{0,9,32})
+            foreach(int invalidK in new[]{0,9,64})
                 Check(!LocalMenu.ApplyPlayerSelection(Setup.PlayerMetadata[1],menu,new PlayerSelectionDraft(PlayerSelectionPage.AlphaTest,new AiChoice(AiFamily.AlphaTest,"alpha-test"),"easy",invalidK)),"unsupported K cannot bypass UI");
-            foreach(int k in new[]{8,16}) {
+            foreach(int k in new[]{8,16,32}) {
                 var package=new NativePackage(NativePackage.Location,k);
                 Check(package.Policy["k_by_allowance_ms"].Children<JProperty>().All(p=>(int)p.Value==k),"integrity-checked native policy maps all four allowances to K"+k);
                 var metadata=(BrassApplication.Game.GameMetadata)Setup.Clone();
@@ -176,7 +178,10 @@ public sealed partial class LocalAiUnityDriver
                 Check(LocalMenu.TableTemperature(Setup.PlayerMetadata[1])==1.0 && LocalMenu.TableFamily(Setup.PlayerMetadata[1])==AiFamily.V4,"invalid temperature preference falls back safely");
             }
             PreferenceValues()[SetupKey]=saved;Call(menu,"CreateNewGameConfiguration");yield return null;CheckRestoredNeural();
-        } else CheckRestoredNeural();
+            Rows()[1].GetComponent<AiSetupRow>().OpenPicker();var finalPanel=AiSelectionPanel.Active;
+            finalPanel.SearchKButtons[2].onClick.Invoke();finalPanel.ApplyButton.onClick.Invoke();yield return null;
+            CheckRestoredNeural(32);
+        } else CheckRestoredNeural(32);
         Check(Setup.PlayerMetadata.All(p=>LocalMenu.TableTemperature(p)==1.5),"temperature 1.5 survives menu recreation and process restart");
 
         foreach(var size in new[]{new Vector2Int(1920,1080),new Vector2Int(1920,1200)}) {
@@ -184,7 +189,7 @@ public sealed partial class LocalAiUnityDriver
             Rows()[1].GetComponent<AiSetupRow>().OpenPicker();var panel=AiSelectionPanel.Active;
             Check(panel.CurrentPage==PlayerSelectionPage.AlphaTest,"opening restored NN seat selects Alpha Test");
             Check(panel.DraftTemperature==1.5 && panel.TemperatureButtons[1].GetComponent<AiControlSurface>().Selected && !panel.TemperatureButtons[0].GetComponent<AiControlSurface>().Selected,"temperature has exactly one selected state");
-            Check(panel.DraftSearchK==8 && panel.SearchKButtons[0].GetComponent<AiControlSurface>().Selected && !panel.SearchKButtons[1].GetComponent<AiControlSurface>().Selected,"K8 has one clear selected state");
+            Check(panel.DraftSearchK==32 && panel.SearchKButtons.Length==3 && panel.SearchKButtons[2].GetComponent<AiControlSurface>().Selected && panel.SearchKButtons.Count(b=>b.GetComponent<AiControlSurface>().Selected)==1,"K32 has one clear selected state");
             foreach(var button in panel.SearchKButtons) {
                 AssertInsideTarget(button.GetComponent<RectTransform>(),"visible search K choice");
                 Check(button.navigation.selectOnDown!=null,"search K supports keyboard navigation");
@@ -205,7 +210,7 @@ public sealed partial class LocalAiUnityDriver
             Check(panel.Window.Find("NN options")==null && panel.Tiles.Count()==7,"V4 contains only V4 styles");
             Check(panel.SearchKButtons.Length==0,"NN search controls are scoped to the NN page");
             Check(panel.TemperatureButtons.Length==0,"temperature controls are scoped to NN");
-            panel.Close();yield return null;CheckRestoredNeural();
+            panel.Close();yield return null;CheckRestoredNeural(32);
         }
         // Publish exact preference bytes for a separate fresh Unity process.
         if(!read)File.WriteAllText(PreferenceFixture,JsonConvert.SerializeObject(PreferenceValues()));

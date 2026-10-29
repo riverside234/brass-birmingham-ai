@@ -200,6 +200,9 @@ def write_shard(path,games,provenance,*,cache=True):
     path=Path(path);require(not path.exists() and games,'Existing or empty shard')
     serialized=[g if isinstance(g,SerializedGame) else SerializedGame(g) for g in games]
     games=[g.game for g in serialized]
+    require(all(m.get('local_scoring_targets',{}).get('producer',{}).get('contract') is None
+                for g in games for m in [g]+g.get('branches',[])),
+            'Native scoring requires the separate native replay/admission format')
     require(len({g['game_id'] for g in games})==len(games),'Duplicate game IDs')
     for game in games:game.assert_metadata()
     checked=games
@@ -214,12 +217,21 @@ def write_shard(path,games,provenance,*,cache=True):
     return checked
 
 
-def read_shards(paths,partition=None,receipts=None,*,heuristic_only=False):
+def read_shards(paths,partition=None,receipts=None,*,heuristic_only=False,native_admissions=None):
     require(partition in (None,'train','validation','test'),'Unknown partition')
     output=[];identities=set()
     for path in dict.fromkeys(str(p) for p in paths):
         with gzip.open(path,'rt',encoding='utf-8') as stream:
-            header=decode_json(next(stream));keys(header,('format','compatibility','provenance'))
+            header=decode_json(next(stream))
+            if header.get('format')=='four-seat-native-replay/1.0.0':
+                require(not heuristic_only,'Native ordinary replay is not completed-IL heuristic data')
+                from brass_ai.rust_backend.lab_admission import read as read_native
+                game=read_native(path,(native_admissions or {}).get(str(path)))
+                require(game['game_id'] not in identities,'Duplicate game across shards')
+                identities.add(game['game_id'])
+                if partition is None or game['split']==partition:output.append(game)
+                continue
+            keys(header,('format','compatibility','provenance'))
             require(header['format']=='four-seat-replay/1.0.0','Unsupported replay format')
             if heuristic_only:
                 from brass_ai.learning.contracts import assert_heuristic_data_compatible
@@ -231,6 +243,9 @@ def read_shards(paths,partition=None,receipts=None,*,heuristic_only=False):
         if heuristic_only:
             require(all(r['behavior']['kind']=='external' and r['teacher'] is None for g in raw for r in g['records']),
                     'Audited heuristic ingress prohibits neural behavior and search targets')
+        require(all(m.get('local_scoring_targets',{}).get('producer',{}).get('contract') is None
+                    for g in raw for m in [g]+g.get('branches',[])),
+                'Native scoring cannot be relabeled as legacy replay')
         arrays=load_cache(path,raw,(receipts or {}).get(str(path)));start=0
         jobs=header['provenance'].get('jobs')
         if jobs is not None:require(len(jobs)==len(raw),'Replay provenance job count differs')

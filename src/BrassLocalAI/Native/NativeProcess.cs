@@ -62,6 +62,8 @@ namespace BrassLegacyAI.Native
                     throw new IOException("Native startup search K mismatch");
                 if((double?)Readiness["policy_temperature"]!=package.Temperature || (string)Readiness["temperature_scope"]!="all_nn_policy_evaluations")
                     throw new IOException("Native startup temperature mismatch");
+                if((int?)Readiness["delivery_grace_ms"]!=NativeJob.DeliveryGraceMilliseconds || (string)Readiness["host_delivery_reserve_policy"]!="search-plus-delivery/1.0.0")
+                    throw new IOException("Native startup search/delivery budget mismatch");
             } catch {Dispose();throw;}
         }
         JObject Read()
@@ -124,6 +126,8 @@ namespace BrassLegacyAI.Native
 
     public sealed class NativeJob : IAiExecutionBackend
     {
+        public const int DeliveryGraceMilliseconds=1000;
+        public const int CommitHeadroomMilliseconds=100;
         readonly JObject request;
         readonly Stopwatch clock;
         readonly int allowance;
@@ -132,13 +136,22 @@ namespace BrassLegacyAI.Native
         NativeProcess worker;
         public string FailureBundle {get;private set;}
         public JObject Result {get;private set;}
+        public double ResponseReceivedMilliseconds {get;private set;}=-1;
+        public int DeadlineMilliseconds {get{return allowance;}}
+        public double DeliveryDeadlineMilliseconds {get{return ResponseReceivedMilliseconds<0?allowance:Math.Min(allowance,ResponseReceivedMilliseconds+DeliveryGraceMilliseconds);}}
+        public static int TotalAllowanceMilliseconds(int searchMilliseconds) {return checked(searchMilliseconds+DeliveryGraceMilliseconds);}
         public string Name {get{return NativePackage.Backend;}}
         public NativeJob(JObject request,Stopwatch clock,int allowance) : this(request,clock,allowance,16) { }
         public NativeJob(JObject request,Stopwatch clock,int allowance,int searchK)
             : this(request,clock,allowance,searchK,1.0) { }
         public NativeJob(JObject request,Stopwatch clock,int allowance,int searchK,double temperature)
+            : this(request,clock,TotalAllowanceMilliseconds(allowance),searchK,temperature,true) { }
+        public static NativeJob WithDeadline(JObject request,Stopwatch clock,int deadlineMilliseconds,int searchK,double temperature)
+        {return new NativeJob(request,clock,deadlineMilliseconds,searchK,temperature,true);}
+        NativeJob(JObject request,Stopwatch clock,int allowance,int searchK,double temperature,bool absoluteDeadline)
         {
-            if(searchK!=8 && searchK!=16)throw new ArgumentOutOfRangeException("searchK");
+            if(!absoluteDeadline || allowance<0 || allowance>TotalAllowanceMilliseconds((int)request["allowance_ms"]))throw new ArgumentOutOfRangeException("allowance");
+            if(!NativePackage.ValidSearchK(searchK))throw new ArgumentOutOfRangeException("searchK");
             if(!NativePackage.ValidTemperature(temperature))throw new ArgumentOutOfRangeException("temperature");
             this.request=(JObject)request.DeepClone();this.clock=clock;this.allowance=allowance;this.searchK=searchK;
             this.temperature=temperature;
@@ -163,7 +176,8 @@ namespace BrassLegacyAI.Native
             request["remaining_ms"]=Math.Max(0,allowance-(long)Math.Ceiling(clock.Elapsed.TotalMilliseconds));
             request["ticket"]["source_sha256"]=worker.Package.Source;
             Result=worker.Search(request,cancellation);
-            if(clock.Elapsed.TotalMilliseconds>=allowance)throw new TimeoutException("Native response exceeded the original turn allowance");
+            ResponseReceivedMilliseconds=clock.Elapsed.TotalMilliseconds;
+            if(clock.Elapsed.TotalMilliseconds>=allowance)throw new TimeoutException("Native response exceeded the original search-plus-delivery deadline");
             if(!JToken.DeepEquals(Result["ticket"],request["ticket"]) || (string)Result["model_id"]!=NativePackage.Model ||
                 (string)Result["export_sha256"]!=NativePackage.Export || (string)Result["backend"]!=Name)
                 throw new IOException("Native response belongs to a different game/request/model");

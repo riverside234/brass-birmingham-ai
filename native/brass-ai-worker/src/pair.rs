@@ -34,6 +34,146 @@ use std::{
 };
 type Result<T> = std::result::Result<T, CoreError>;
 
+fn host_delivery_budget(mut budget: Budget, minimum_ns: u64) -> Result<Budget> {
+    search::check(
+        minimum_ns < budget.deadline_ns.saturating_sub(budget.started_ns),
+        "host reserve exceeds turn allowance",
+    )?;
+    budget.reserve_ns = budget.reserve_ns.max(minimum_ns);
+    budget.work_deadline_ns = budget
+        .work_deadline_ns
+        .min(budget.deadline_ns.saturating_sub(budget.reserve_ns));
+    Ok(budget)
+}
+
+// Initial local policy configuration may replace the research percentage.
+// Once any owner has started, only Budget::narrow can change remaining time.
+fn fixed_host_delivery_budget(
+    mut budget: Budget,
+    reserve_ns: u64,
+    admission: bool,
+) -> Result<Budget> {
+    search::check(admission, "fixed host reserve must be frozen at admission")?;
+    search::check(
+        reserve_ns > 0 && reserve_ns < budget.deadline_ns.saturating_sub(budget.started_ns),
+        "fixed host reserve bounds",
+    )?;
+    budget.reserve_ns = reserve_ns;
+    budget.work_deadline_ns = budget.deadline_ns - reserve_ns;
+    Ok(budget)
+}
+
+#[cfg(test)]
+mod host_reserve_tests {
+    use super::*;
+
+    #[test]
+    fn k32_headroom_preserves_original_delivery_deadline() {
+        let base = Budget::new(0, 4_000_000_000).unwrap();
+        let reserved = host_delivery_budget(base, 1_200_000_000).unwrap();
+        assert_eq!(reserved.started_ns, base.started_ns);
+        assert_eq!(reserved.deadline_ns, base.deadline_ns);
+        assert_eq!(reserved.work_deadline_ns, 2_800_000_000);
+        assert_eq!(reserved.reserve_ns, 1_200_000_000);
+    }
+
+    #[test]
+    fn reduced_k32_floor_preserves_all_deadlines_and_larger_defaults() {
+        for (allowance_ms, reserve_ms) in [(4000, 800), (8000, 800), (10000, 1000), (12000, 1200)] {
+            let base = Budget::new(0, allowance_ms * 1_000_000).unwrap();
+            let reserved = host_delivery_budget(base, 800_000_000).unwrap();
+            assert_eq!(reserved.started_ns, base.started_ns);
+            assert_eq!(reserved.deadline_ns, base.deadline_ns);
+            assert_eq!(reserved.reserve_ns, reserve_ms * 1_000_000);
+            assert_eq!(
+                reserved.work_deadline_ns,
+                (allowance_ms - reserve_ms) * 1_000_000
+            );
+        }
+    }
+
+    #[test]
+    fn existing_reserve_and_narrowed_budget_never_grow() {
+        let mut budget = Budget::new(0, 4_000_000_000).unwrap();
+        budget.narrow(1_000_000_000, 1_000_000_000);
+        let reserved = host_delivery_budget(budget, 1_200_000_000).unwrap();
+        assert_eq!(reserved.deadline_ns, 2_000_000_000);
+        assert_eq!(reserved.work_deadline_ns, 800_000_000);
+        let smaller = host_delivery_budget(reserved, 400_000_000).unwrap();
+        assert_eq!(smaller.reserve_ns, reserved.reserve_ns);
+        assert_eq!(smaller.work_deadline_ns, reserved.work_deadline_ns);
+    }
+
+    #[test]
+    fn long_budget_retains_existing_maximum_reserve() {
+        let base = Budget::new(0, 12_000_000_000).unwrap();
+        let reserved = host_delivery_budget(base, 1_200_000_000).unwrap();
+        assert_eq!(reserved.work_deadline_ns, base.work_deadline_ns);
+        assert_eq!(reserved.deadline_ns, base.deadline_ns);
+    }
+
+    #[test]
+    fn reserve_cannot_consume_or_exceed_the_turn() {
+        let base = Budget::new(0, 4_000_000_000).unwrap();
+        assert!(host_delivery_budget(base, 4_000_000_000).is_err());
+        assert!(host_delivery_budget(base, u64::MAX).is_err());
+    }
+
+    #[test]
+    fn fixed_local_reserves_preserve_every_original_deadline() {
+        for allowance_ms in [4000, 8000, 10000, 12000] {
+            for reserve_ms in [400, 600, 800] {
+                let base = Budget::new(0, allowance_ms * 1_000_000).unwrap();
+                let result =
+                    fixed_host_delivery_budget(base, reserve_ms * 1_000_000, true).unwrap();
+                assert_eq!(result.started_ns, base.started_ns);
+                assert_eq!(result.deadline_ns, base.deadline_ns);
+                assert_eq!(result.reserve_ns, reserve_ms * 1_000_000);
+                assert_eq!(
+                    result.work_deadline_ns,
+                    (allowance_ms - reserve_ms) * 1_000_000
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn fixed_reserve_cannot_reconfigure_a_started_turn_or_retry() {
+        let original = Budget::new(0, 12_000_000_000).unwrap();
+        let fixed = fixed_host_delivery_budget(original, 400_000_000, true).unwrap();
+        assert!(fixed_host_delivery_budget(fixed, 200_000_000, false).is_err());
+        let mut narrowed = fixed;
+        narrowed.narrow(11_000_000_000, 500_000_000);
+        assert_eq!(narrowed.deadline_ns, 11_500_000_000);
+        assert_eq!(narrowed.reserve_ns, 400_000_000);
+        assert_eq!(narrowed.work_deadline_ns, 11_100_000_000);
+        assert!(fixed_host_delivery_budget(narrowed, 100_000_000, false).is_err());
+    }
+
+    #[test]
+    fn fixed_reserve_rejects_invalid_allowance_consumption() {
+        let base = Budget::new(0, 4_000_000_000).unwrap();
+        for reserve in [0, 4_000_000_000, u64::MAX] {
+            assert!(fixed_host_delivery_budget(base, reserve, true).is_err());
+        }
+    }
+
+    #[test]
+    fn extra_delivery_grace_preserves_the_entire_search_allowance() {
+        for search_ms in [4000, 8000, 10000, 12000] {
+            let initial = Budget::new(0, (search_ms + 1000) * 1_000_000).unwrap();
+            let budget = fixed_host_delivery_budget(initial, 1_000_000_000, true).unwrap();
+            assert_eq!(budget.work_deadline_ns, search_ms * 1_000_000);
+            assert_eq!(budget.deadline_ns, (search_ms + 1000) * 1_000_000);
+            let mut retry = budget;
+            retry.narrow(search_ms * 1_000_000, 800_000_000);
+            assert!(retry.work_deadline_ns <= budget.work_deadline_ns);
+            assert!(retry.deadline_ns <= budget.deadline_ns);
+            assert!(fixed_host_delivery_budget(retry, 1_000_000_000, false).is_err());
+        }
+    }
+}
+
 #[derive(Clone)]
 struct Binding {
     identity: Identity,
@@ -317,6 +457,24 @@ impl Pair {
             method: session::focus::Method::SearchV1,
             switched: false,
         });
+        Ok(())
+    }
+    /// Reserve host validation/commit time before either owner starts. This
+    /// narrows NN work only; it never extends or restarts the delivery clock.
+    pub fn reserve_host_delivery(&mut self, minimum_ns: u64) -> Result<()> {
+        search::check(!self.busy(), "host reserve change while busy")?;
+        let binding = self.binding.as_mut().ok_or(CoreError::NoGame)?;
+        search::check(binding.reset, "host reserve must be frozen at admission")?;
+        binding.budget = host_delivery_budget(binding.budget, minimum_ns)?;
+        Ok(())
+    }
+    /// Local-only fixed reserve, before either owner has started. The initial
+    /// research percentage may shrink, but the original delivery deadline does
+    /// not change. A retry/continuation has reset=false and cannot call this.
+    pub fn configure_host_delivery(&mut self, reserve_ns: u64) -> Result<()> {
+        search::check(!self.busy(), "fixed host reserve change while busy")?;
+        let binding = self.binding.as_mut().ok_or(CoreError::NoGame)?;
+        binding.budget = fixed_host_delivery_budget(binding.budget, reserve_ns, binding.reset)?;
         Ok(())
     }
     /// Research admission only. Local packages continue to admit search_v1.

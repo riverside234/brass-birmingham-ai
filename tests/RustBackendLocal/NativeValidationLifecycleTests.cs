@@ -75,7 +75,7 @@ public sealed partial class LocalAiUnityDriver
                 router.ShowView<IPlayAiTurnView>();turn.PlayAITurn(false);
                 var fresh=typeof(LocalTurnBridge).GetField("active",ReflectionAccess.Flags).GetValue(null);
                 Check(fresh!=null && !System.Object.ReferenceEquals(fresh,bridge),"load creates a fresh bridge lifetime");
-                Check(Get<double>(fresh,"budget")==4000,"discarded AI work restarts from the saved pre-AI boundary");
+                Check(Get<double>(fresh,"budget")==NativeJob.TotalAllowanceMilliseconds(4000),"discarded AI work restarts from the saved pre-AI boundary with one delivery grace");
                 Check(field.GetValue(fresh)==null,"saved validation is never authority after load");
                 LocalTurnBridge.CancelActive();until=Time.realtimeSinceStartup+10;
                 while(!AiExecutionScheduler.IsIdle && Time.realtimeSinceStartup<until)yield return null;
@@ -115,6 +115,10 @@ public sealed partial class LocalAiUnityDriver
         Check(output.Saves==2 && output.Starts==1 && history.Repository.Load(app.Metadata.GameId).Game.Revision==aiCheckpoint,"AI End writes one checkpoint before dispatching the next player");
         play.EndTurn();Check(output.Saves==2 && app.Game.Revision==aiCheckpoint,"duplicate AI End cannot save or advance during the checkpoint write");
         output.Complete();Check(output.Starts==2,"next player starts only after the AI checkpoint completes");
+        // Completed AI turns now save too. Lifecycle work must start from that
+        // newest checkpoint, rather than the earlier human checkpoint object.
+        loaded=history.Repository.Load(app.Metadata.GameId);
+        Check(loaded.Game.Revision==aiCheckpoint,"lifecycle fixture uses the latest completed-turn checkpoint");
         history.SetGame(loaded);return loaded;
     }
     sealed class HumanCheckpointOutput : IPlayGameOutput

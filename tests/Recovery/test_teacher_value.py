@@ -88,9 +88,10 @@ class TeacherValueTests(unittest.TestCase):
         model,opt,games,ordinary,opts,cfg,quality,bindings=fixture
         return TeacherValue(model,games,ordinary,opts,cfg,bindings,ordinary_policy_id='fixture')
 
-    def test_enabled_fresh_default_strict_bounds_and_unrelated_recipe_unchanged(self):
-        cfg=read(SOURCE_ROOT/'configs/step5/joint7-latest.json');self.assertEqual(cfg['teacher_value'],TEACHER_VALUE)
-        validate_config(cfg);self.assertTrue(TEACHER_VALUE['enabled']);self.assertFalse(TEACHER_VALUE['diagnostics'])
+    def test_disabled_fresh_default_strict_bounds_and_historical_recipe_unchanged(self):
+        cfg=read(SOURCE_ROOT/'configs/step5/joint7-latest.json')
+        self.assertEqual(cfg['teacher_value'],dict(TEACHER_VALUE,enabled=True))
+        validate_config(cfg);self.assertFalse(TEACHER_VALUE['enabled']);self.assertFalse(TEACHER_VALUE['diagnostics'])
         self.assertEqual((cfg['search_games'],cfg['distill_steps'],cfg['search_every_games']),(5,8,160))
         self.assertEqual(list(cfg['teacher_work_budget']['seconds_per_phase'].values()),[9.,12.,12.,12.])
         self.assertIsNone(cfg['search_wall_fraction'])
@@ -98,12 +99,13 @@ class TeacherValueTests(unittest.TestCase):
                     ('teacher_fraction',1.),('loss_weight',float('nan')),('enabled',1)):
             with self.subTest(k=k),self.assertRaises(ValueError):teacher_value_config(dict(TEACHER_VALUE,**{k:v}))
 
-    def test_fresh_generation_enables_value_but_preserves_explicit_opt_out_and_legacy_omission(self):
+    def test_fresh_generation_is_policy_only_and_preserves_legacy_omission(self):
         base=read(SOURCE_ROOT/'configs/step5/joint7-latest.json');base.pop('teacher_value')
         before=copy.deepcopy(base)
         generated=latest_model_config(base,base['imitation_checkpoint'])
         self.assertEqual(generated['teacher_value'],TEACHER_VALUE)
-        self.assertTrue(generated['teacher_value']['enabled'])
+        self.assertFalse(generated['teacher_value']['enabled'])
+        self.assertEqual(generated['teacher_phase']['mode'],'off')
         self.assertEqual(base,before)
         # A stored legacy signature is not silently reinterpreted on resume.
         self.assertFalse(teacher_value_config(base.get('teacher_value'))['enabled'])

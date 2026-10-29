@@ -25,7 +25,9 @@ def tree_digest(value):
             item = item.detach().cpu().contiguous()
             add(b't', str((item.dtype, tuple(item.shape))).encode())
             add(b'b', item.reshape(-1).view(torch.uint8).numpy().tobytes())
-        elif type(item) is dict:
+        elif isinstance(item, dict):
+            # Module state_dicts (including the local-scoring companion) are
+            # OrderedDicts. Hash their mapping contents like ordinary dicts.
             add(b'd', str(len(item)).encode())
             for key in sorted(item, key=lambda k: (type(k).__name__, repr(k))):
                 walk(key); walk(item[key])

@@ -16,7 +16,7 @@ namespace BrassHost
         object Tile(BoardGameRules.Entities.Industries.BaseIndustry tile)
         {
             if(tile==null)return null;
-            var data=(JObject)Wire.Token(Wire.Tile(tile));data["id"]=tileIds[tile.UniqueId];return data;
+            var data=(JObject)Wire.ObservationToken(Wire.Tile(tile));data["id"]=tileIds[tile.UniqueId];return data;
         }
         string[] KnownWild(int seat)
         {
@@ -24,7 +24,7 @@ namespace BrassHost
             string era=Game.GameProgressInformation.CurrentGameEra.ToString();
             foreach(var entry in publicHistory)
             {
-                var item=Wire.Token(entry);
+                var item=Wire.ObservationToken(entry);
                 if((int)item["seat"]!=seat || (string)item["era"]!=era)continue;
                 string card=(string)item["choice"]["card"];
                 if(card!=null && card.StartsWith("wild:"))known.Remove(card);
@@ -33,6 +33,7 @@ namespace BrassHost
             return known.OrderBy(x=>x,StringComparer.Ordinal).ToArray();
         }
         // Explicit allowlist. Do not serialize Game, Player, BaseCard, events or Reflection.
+        public JObject ObserveToken(int seat) {return (JObject)Wire.ObservationToken(Observe(seat));}
         public object Observe(int seat)
         {
             if(seat<0 || seat>3) throw new InvalidOperationException("invalid_seat");

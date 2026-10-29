@@ -337,8 +337,9 @@ class InferenceService:
         # Each entry has only tensors derived from one permitted observer.
         by_model=defaultdict(list)
         for key,frame in items:
-            require(set(frame) in ({'request_id','model','revision','seat','digest','deadline','submitted','cancelled','encoded'},
+            require(set(frame)-{'want_logits'} in ({'request_id','model','revision','seat','digest','deadline','submitted','cancelled','encoded'},
                                   {'request_id','model','revision','seat','digest','deadline','submitted','cancelled','encoded','remaining'}),'Invalid inference frame')
+            require('want_logits' not in frame or frame['want_logits'] is True,'Invalid raw-logit request')
             require(type(frame['seat']) is int and 0<=frame['seat']<4 and np.isfinite(frame['deadline']),'Invalid inference attribution')
             self.timings.observe('inference.queue_wait',max(0,time.monotonic()-frame['submitted']))
             status='cancelled' if frame['cancelled'] else ('expired' if time.monotonic()>=frame['deadline'] else None)
@@ -386,6 +387,9 @@ class InferenceService:
                         budget=utility_budget(model,[f.get('remaining') for _,f in live])
                         remaining=torch.from_numpy(budget).to(self.device) if budget is not None else None
                         predict=predict_packed if self.pack_outputs else predict_encoded
+                        raw_logits=any(f.get('want_logits',False) for _,f in live)
+                        if raw_logits:
+                            from brass_ai.rust_backend.lab_teacher_inference import predict
                         arrays=predict(model,[f['encoded'] for _,f in live],self.device,self.config['max_candidate_cells'],remaining)
                         if self.pack_outputs and max(len(f['encoded'].choice_ids) for _,f in live)<=self.config['max_candidate_cells']:
                             self.metrics['packed_output_batches']+=1
@@ -412,6 +416,8 @@ class InferenceService:
                         if len(arrays)>4:
                             from brass_ai.learning.contracts import digest
                             r.update(utility=values(arrays[4][j]),reward_id=digest(model.config.utility))
+                        if frame.get('want_logits'):
+                            r['logits']=values(arrays[-1][j,:len(frame['encoded'].choice_ids)])
                     responses[key]=r
         return responses
 
@@ -464,7 +470,7 @@ class InferenceService:
                     if packed is not None:self.metrics['shared_replies']+=1
                     else:
                         for result in output:
-                            for name in ('probabilities','win_share','placement','vp','utility'):
+                            for name in ('probabilities','win_share','placement','vp','utility','logits'):
                                 if isinstance(result.get(name),np.ndarray):result[name]=result[name].tolist()
                     response=dict(token=message['token'],shared=packed is not None,
                                   responses=packed if packed is not None else output)

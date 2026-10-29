@@ -34,12 +34,29 @@ namespace BrassHost
         int turnOwner;
         readonly Dictionary<string,BaseIndustry> tileCatalog=new Dictionary<string,BaseIndustry>();
         readonly Dictionary<string,string> tileIds=new Dictionary<string,string>();
+        BoardGameRulesGame indexedGame;
+        GameEra indexedEra;
+        KeyValuePair<string,BuildingSlot>[] indexedSlots;
+        KeyValuePair<string,MerchantSlot>[] indexedMerchants;
+        Link[] indexedLinks;
         public Player Player {get{return Game.GameProgressInformation.CurrentPlayer;}}
         public bool Terminal {get{return Game.GameProgressInformation.IsGameOver;}}
         public IEnumerable<Player> Seats {get{return Game.PlayersTrack.Players.OrderBy(p=>(int)p.Color);}}
-        public IEnumerable<KeyValuePair<string,BuildingSlot>> Slots { get {return Game.Board.Regions.OrderBy(r=>r.Name.ToString(),StringComparer.Ordinal).SelectMany(r=>r.BuildingSlots.Select((s,i)=>new KeyValuePair<string,BuildingSlot>(r.Name+":"+i,s)));}}
-        public IEnumerable<KeyValuePair<string,MerchantSlot>> Merchants {get{return Game.Board.Regions.OfType<BorderRegion>().OrderBy(r=>r.Name.ToString(),StringComparer.Ordinal).SelectMany(r=>r.MerchantSlots.Select((s,i)=>new KeyValuePair<string,MerchantSlot>(r.Name+":"+i,s)));}}
-        public IEnumerable<Link> Links {get{return Game.Board.Regions.SelectMany(r=>r.Links).Distinct().OrderBy(l=>l.LinkId,StringComparer.Ordinal);}}
+        // Topology is stable within an era. Cache object indexes, never mutable
+        // legality/results; rebuild when capture/load/adopt replaces the game
+        // or Canal -> Rail replaces the link graph. Tile/owner fields stay live.
+        void IndexBoard()
+        {
+            var era=Game.GameProgressInformation.CurrentGameEra;
+            if(ReferenceEquals(indexedGame,Game) && indexedEra==era)return;
+            indexedSlots=Game.Board.Regions.OrderBy(r=>r.Name.ToString(),StringComparer.Ordinal).SelectMany(r=>r.BuildingSlots.Select((s,i)=>new KeyValuePair<string,BuildingSlot>(r.Name+":"+i,s))).ToArray();
+            indexedMerchants=Game.Board.Regions.OfType<BorderRegion>().OrderBy(r=>r.Name.ToString(),StringComparer.Ordinal).SelectMany(r=>r.MerchantSlots.Select((s,i)=>new KeyValuePair<string,MerchantSlot>(r.Name+":"+i,s))).ToArray();
+            indexedLinks=Game.Board.Regions.SelectMany(r=>r.Links).Distinct().OrderBy(l=>l.LinkId,StringComparer.Ordinal).ToArray();
+            indexedGame=Game;indexedEra=era;
+        }
+        public IEnumerable<KeyValuePair<string,BuildingSlot>> Slots { get {IndexBoard();return indexedSlots;}}
+        public IEnumerable<KeyValuePair<string,MerchantSlot>> Merchants {get{IndexBoard();return indexedMerchants;}}
+        public IEnumerable<Link> Links {get{IndexBoard();return indexedLinks;}}
         BuildingSlot Slot(string key) {return Slots.Single(s=>s.Key==key).Value;}
         MerchantSlot Merchant(string key) {return Merchants.Single(s=>s.Key==key).Value;}
         Link Link(string key) {return Links.Single(l=>l.LinkId==key);}

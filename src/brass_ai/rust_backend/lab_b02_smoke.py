@@ -177,6 +177,7 @@ def run(args):
     branches=sum(f['child'] is not None for f in families)
     require_coverage(seen, branches)
     return dict(passed=True,scope='bounded diagnostic subset of frozen ordinary jobs; native neural tables, whole-table reference legacy route; no training admission',
+        frozen_jobs=pin(out/'frozen-jobs.json'),families=[pin(store.path(job)) for job in jobs],
         roots=coverage,metrics=metrics,scheduler=scheduler,cached=cached,service=report,branch_families=branches,
         missing_table_kinds=sorted({'selfplay','historical','legacy'}-seen),training_started=False,lab_deployed=False,
         full_native_coverage=False,method=METHOD,search_enabled=False,v205_enabled=False,diagnostic_branch_trigger='first eligible decision; alternative draws and fork semantics unchanged',

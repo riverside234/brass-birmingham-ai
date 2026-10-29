@@ -28,8 +28,8 @@ from .lab_contract import SOURCE
 FORMAT='brass-lab-family/1.0.0'
 
 
-def validate_part(part, job, *, child=False):
-    game=check_game(part['game'])
+def validate_part(part, job, *, child=False, arrays=None):
+    game=check_game(part['game']) if arrays is None else check_game(part['game'],arrays,validated_inputs=True)
     group=digest(dict(rules='steam-brass-patch-1.1.0',setup_seed=job['seed']))
     parent_id=job.get('stable_game_id') or digest(dict(job=frozen_id(job),seed=job['seed']))
     expected_id=parent_id+'/branch/'+game['branch']['seed'] if child else parent_id
@@ -102,16 +102,25 @@ def validate_part(part, job, *, child=False):
     return game
 
 
-def validate_family(value, job, producer):
+def validate_family(value, job, producer, *, arrays=None, return_games=False):
     require(value['format']==FORMAT and value['job_id']==frozen_id(job) and value['producer']==producer,
             'Stale/foreign family identity')
     require(value['sha256']==digest({k:v for k,v in value.items() if k!='sha256'}),'Family seal differs')
     require(value['training_admitted'] is False,'B02 family cannot self-admit to training')
     require(value['frozen_job']=={k:v for k,v in job.items() if k!='path'},'Frozen job metadata differs')
-    parent=validate_part(value['parent'],job)
+    count=0
+    if arrays is not None:
+        count=len(value['parent']['game']['records'])
+        total=count+(len(value['child']['game']['records']) if value['child'] is not None else 0)
+        require(len(arrays)==total,'Native family cached row count differs')
+    parent=validate_part(value['parent'],job,arrays=None if arrays is None else arrays[:count])
     child=value['child']
     require(value['parent']['branch_expected']==(child is not None),'Incomplete/unexpected family member')
-    if child is not None: validate_child(parent,validate_part(child,job,child=True))
+    checked_child=None
+    if child is not None:
+        checked_child=validate_part(child,job,child=True,arrays=None if arrays is None else arrays[count:])
+        validate_child(parent,checked_child)
+    if return_games:return parent,checked_child
     return value
 
 

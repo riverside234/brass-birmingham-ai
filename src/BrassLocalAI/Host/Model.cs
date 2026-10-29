@@ -33,6 +33,11 @@ namespace BrassHost
         public static readonly JsonSerializerSettings Settings=new JsonSerializerSettings { NullValueHandling=NullValueHandling.Ignore, TypeNameHandling=TypeNameHandling.None };
         public static string Json(object value) { return JsonConvert.SerializeObject(value, Formatting.None, Settings); }
         public static JToken Token(object value) { return JToken.Parse(Json(value)); }
+        // Only allowlisted observation DTOs use this path. Keep Token's general
+        // JSON parsing semantics (including date-like arbitrary strings) intact.
+        internal static JToken ObservationToken(object value) {
+            return value==null?JValue.CreateNull():JToken.FromObject(value,JsonSerializer.CreateDefault(Settings));
+        }
         public static string Hash(object value) { using(var h=SHA256.Create()) return BitConverter.ToString(h.ComputeHash(Encoding.UTF8.GetBytes(Json(value)))).Replace("-","").ToLowerInvariant(); }
         public static string Card(BaseCard c)
         {

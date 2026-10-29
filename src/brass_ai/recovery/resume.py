@@ -63,6 +63,10 @@ def check_signature(state, signature, reviewed=False):
     for transition in transitions:
         # An exact unchanged configuration needs no historical upgrade path.
         if config_ok:break
+        if transition.get('teacher_phase_changes'):
+            from .teacher_phase_config import toggle_compatible
+            config_ok=toggle_compatible(previous['config'],signature['config'])
+            if config_ok:break
         if transition.get('local_scoring_changes'):
             from .local_scoring_adoption import compatible
             config_ok=compatible(state,signature['config'])
@@ -165,6 +169,8 @@ def check_signature(state, signature, reviewed=False):
             handlers[G1322_MIGRATION]=g1322_config
             from .training_revision_g1324 import MIGRATION as G1324_MIGRATION,configure as g1324_config
             handlers[G1324_MIGRATION]=g1324_config
+            from .teacher_phase_config import MIGRATION as TEACHER_PHASE_MIGRATION,adopt as adopt_teacher_phase
+            handlers[TEACHER_PHASE_MIGRATION]=adopt_teacher_phase
             from .training_revision_g850 import MIGRATION as G850_MIGRATION,configure as g850_config
             handlers[G850_MIGRATION]=lambda c:g850_config(c,rating_workers=signature['config'].get('rating_compute',{}).get('workers'))
             from .opening_objective import (MIGRATION as OPENING_MIGRATION,configure as configure_opening,
@@ -197,19 +203,29 @@ def check_signature(state, signature, reviewed=False):
             if transition.get('teacher_value_changes'):
                 expected.pop('teacher_value',None)
                 if 'teacher_value' in signature['config']:expected['teacher_value']=signature['config']['teacher_value']
+            if transition.get('teacher_phase_changes'):
+                from .teacher_phase_config import toggle_compatible
+                config_ok |= toggle_compatible(expected,signature['config'])
             config_ok |= expected == signature['config']
     require(config_ok, 'Reviewed resume requires unchanged config except explicitly pinned review changes')
     require(state['iteration'] > 0, 'Reviewed continuation requires a committed PPO generation')
     return True
 
 
-def load_resume(root, run, state, signature, *, device='cpu', reviewed=False):
+def load_resume(root, run, state, signature, *, device='cpu', reviewed=False, diagnostic_fork=None):
     """Read/verify everything before altering state or starting collection."""
     changed = check_signature(state, signature, reviewed)
+    run_origin=run
+    resolve=lambda p:safe(run,p)
+    if diagnostic_fork is not None:
+        from brass_ai.rust_backend.lab_continuation import DiagnosticFork
+        require(type(diagnostic_fork) is DiagnosticFork,'Invalid diagnostic continuation capability')
+        run_origin=diagnostic_fork.authorize(root,run,state,signature)
+        resolve=diagnostic_fork.resolve
     for entry in state['history']:
-        safe(run, project_path(root, entry['path']))
+        safe(run_origin, project_path(root, entry['path']))
     entry = state['history'][-1]
-    path = safe(run, project_path(root, entry['path']))
+    path = resolve(project_path(root, entry['path']))
     require(sha(path) == entry['sha256'], 'Snapshot changed')
     model, raw = load_checkpoint(path, device=device)
     from .utility import reward_spec,reviewed_reward_upgrade
@@ -232,7 +248,7 @@ def load_resume(root, run, state, signature, *, device='cpu', reviewed=False):
         architecture_ok=any(reward_spec(s['config'])==model.config.utility for s in known.values())
         require(architecture_ok,'Checkpoint reward upgrade has no reviewed origin')
         model._reviewed_cap_upgrade=True
-    require(architecture_ok and raw['training'].get('fresh_run') and project_path(root, raw['training']['fresh_run']) == run,
+    require(architecture_ok and raw['training'].get('fresh_run') and project_path(root, raw['training']['fresh_run']) == run_origin,
             "Resume must use this run's residual checkpoint")
     require(raw['model_id'] == entry['model_id'] and raw['step'] == entry['generation'] == state['iteration'],
             'Resume checkpoint generation/model identity differs')
@@ -241,8 +257,12 @@ def load_resume(root, run, state, signature, *, device='cpu', reviewed=False):
     # commit, still has the original checkpoint. Accept only that exact binding.
     if not bound:
         bindings={raw['training'].get('signature')}
+        targets={digest(s):s for s in [state['signature']]+[t['from_signature'] for t in state.get('source_transitions',[])]}
         for transition in state.get('source_transitions', []):
             if transition['checkpoint']==entry and digest(transition['from_signature']) in bindings:
+                target=targets.get(transition['to_signature'])
+                require(target is not None,'Missing source-transition target')
+                check_signature(dict(state,signature=transition['from_signature']),target,reviewed=True)
                 bindings.add(transition['to_signature'])
         bound=digest(state['signature']) in bindings
     initial = (state['iteration'] == 0 and raw['training'].get('mode') == 'step5-fresh-residual-initial')
@@ -254,7 +274,7 @@ def load_resume(root, run, state, signature, *, device='cpu', reviewed=False):
         require(not pending.exists() or (pending.is_dir() and not any(pending.iterdir())),
                 f'Uncommitted iteration at {pending}; finish/recover it with the previous source before upgrading')
         output = safe(run, run / f"generation-{state['iteration'] + 1:04d}.pt")
-        require(not output.exists(), f'Uncommitted checkpoint at {output}; recover it before upgrading')
+        require(not list(run.glob(output.name+'*')), f'Uncommitted checkpoint at {output}; recover it before upgrading')
         # Old full history may already be retired; only the live population and
         # evaluation anchor must still be present. Latest snapshot checked above.
         verified = {entry['path']}
@@ -264,10 +284,11 @@ def load_resume(root, run, state, signature, *, device='cpu', reviewed=False):
         for frozen in frozen_entries:
             if frozen['path'] in verified:
                 continue
-            path = safe(run, project_path(root, frozen['path']))
+            path = resolve(project_path(root, frozen['path']))
             require(sha(path) == frozen['sha256'], 'Live opponent/evaluation checkpoint changed')
             verified.add(frozen['path'])
-    if getattr(model.config,'utility',None) is not None and raw['training'].get('signature')!=digest(signature):
+    if (getattr(model.config,'utility',None) is not None and raw['training'].get('signature')!=digest(signature)
+            and not teacher_receipt_preserved(state,signature,raw,entry)):
         # The old receipt can predate a post-calibration policy/distillation
         # update. A reviewed source transition preserves its weights and Adam,
         # but does not certify its leaf evaluator under the repaired pipeline.
@@ -278,6 +299,29 @@ def load_resume(root, run, state, signature, *, device='cpu', reviewed=False):
             reason='Reviewed source continuation requires fresh ordinary utility calibration',
             checkpoint_signature=raw['training'].get('signature'),current_signature=digest(signature))
     return model, raw, changed
+
+
+def teacher_receipt_preserved(state,signature,raw,entry):
+    """Only exact mode/share toggles, including a crash before the next checkpoint.
+
+    A source/reward change anywhere between the checkpoint and requested recipe
+    still resets readiness. Never infer permission from equal model weights.
+    """
+    from .teacher_phase_config import mode_only_signature
+    origin=raw['training'].get('signature')
+    known={digest(state['signature']):state['signature']}
+    for transition in reversed(state.get('source_transitions',[])):
+        if transition['checkpoint']==entry and transition['to_signature'] in known:
+            known[digest(transition['from_signature'])]=transition['from_signature']
+    before=known.get(origin)
+    if before is None or not mode_only_signature(before,signature):return False
+    safe_bindings={origin}
+    for transition in state.get('source_transitions',[]):
+        if transition['checkpoint']!=entry:continue
+        old=transition['from_signature'];target=known.get(transition['to_signature'])
+        if digest(old) in safe_bindings and target is not None and mode_only_signature(old,target):
+            safe_bindings.add(transition['to_signature'])
+    return digest(state['signature']) in safe_bindings
 
 
 def evaluation_directory(root, run, state, name):

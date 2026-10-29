@@ -66,10 +66,17 @@ def _prepare_inner(task):
     began=time.perf_counter();cpu_began=time.process_time()
     records,policy_id,kinds,insolvency,reward=task
     first=records[0];path=first['path']
-    require(all(r['sha256']==first['sha256'] and r.get('features')==first.get('features') for r in records),
+    require(all(r['sha256']==first['sha256'] and r.get('features')==first.get('features')
+                and r.get('native_admission')==first.get('native_admission') for r in records),
             'Conflicting self-play shard receipts')
     require(sha(path)==first['sha256'],'Self-play replay changed')
-    games=read_shards([path],partition='train',receipts={path:first.get('features')})
+    native=first.get('native_admission')
+    if native is not None:
+        from brass_ai.learning.contracts import digest
+        require(native['admission']['reward_id']==digest(reward)
+                and native['admission']['job']['provenance']['learner_behavior']['policy_id']==policy_id,
+                'Native collection reward/learner differs from preparation')
+    games=read_shards([path],partition='train',receipts={path:first.get('features')},native_admissions={path:native})
     require(all(g['split']=='train' for g in games),'Held-out PPO data')
     expected={r['game_id'] for r in records}
     require(len(expected)==len(records) and {g['game_id'] for g in games}==expected,'Self-play shard membership differs')

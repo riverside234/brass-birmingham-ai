@@ -55,6 +55,8 @@ def finish_training_diagnostics(model,phases,local_scoring):
 def train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=None,from_run=None,imitation_run=None,resume_reviewed_source=False,inference_devices=None,expected_generation=None,fresh=False,il_kl_probe_from_run=None):
     from .retention import owned,run_lock
     _,run=owned(root,run_path)
+    require(not (run/'diagnostic-fork.json').exists() and not (run.parent/'diagnostic-fork.json').exists(),
+            'B03 diagnostic forks require the explicit restoration interface; ordinary training cannot adopt their path map')
     with run_lock(run):
         require(not fresh or not (run/'state.json').exists(),'--fresh requires a new run; existing progress will not be overwritten')
         require_start_generation(run,expected_generation)
@@ -79,6 +81,10 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
     inference_devices=validate_inference_devices(inference_devices,device)
     config=evidence_config(champion_mix_config(time_budget_config(config)))
     root=Path(root).resolve();run=project_path(root,run_path);validate_config(config)
+    # B04 has an explicit native collector/barrier. B05/B07 must qualify the
+    # next committed update/canary before exposing it to the production trainer.
+    require(config.get('teacher_phase',{}).get('mode','off')=='off',
+            'B05/B07 teacher update/adoption qualification is Pending; use the B04 shadow qualifier')
     quality=quality_selfplay_recipe(config)
     if quality and config['rating']['enabled']:
         from .ratings import check_dependencies
@@ -281,6 +287,10 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
         change=phases.snapshot_fixed_migration
         print(f'Snapshot critic weight: {change["weight_before"]:.2f} -> 1.00 fixed; '
               'recovery and decay disabled, prior controller archived',flush=True)
+    teacher_phase=None
+    if 'teacher_phase' in config:
+        from .teacher_phase import TeacherPhase
+        teacher_phase=TeacherPhase(root,run,config,state,model,raw)
     if source_changed:
         from .resume import commit_transition
         if local_adoption is not None:
@@ -360,6 +370,7 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                 inference_before=service.report()
                 exploration_settings=exploration.effective(config,exploration_state,iteration)
                 current=service.register(model);behavior=Behavior(current,config['exploration'],exploration_settings)
+                if teacher_phase is not None:teacher_phase.begin(state,model)
                 fingerprints=None
                 if 'critic_data' in config:
                     from .critic_data import fingerprint
@@ -420,6 +431,7 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                         games_done=state['games_done']+len(games))
                     if pool_migration and not summaries:quality_report['migration']=pool_migration
                 rehearsal_status=rehearsal_schedule(config,state['games_done'],iteration)
+                teacher_term=teacher_phase.prepare(model) if teacher_phase is not None else None
                 weight=rehearsal_status['weight']
                 sampling_finished=time.monotonic();rehearsal_seconds=0.
                 with ExitStack() as rehearsal_scope:
@@ -433,7 +445,8 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                         profile=directory/'profile-ppo' if config['profile_steps'] else None,
                         profile_steps=config['profile_steps'],
                         rehearsal=active_rehearsal,rehearsal_weight=weight,learner_data=learner_data,insolvency=config.get('insolvency'),reward=reward,
-                        sample_groups=sample_groups,anchor_model=anchor_model,phases=phases,preparation_pool=preparation_pool)
+                        sample_groups=sample_groups,anchor_model=anchor_model,phases=phases,preparation_pool=preparation_pool,
+                        teacher_term=teacher_term)
                     if rehearsal_index is not None and weight:update['rehearsal_sampling']=active_rehearsal.report
                     ppo_ended=time.monotonic()
                 rehearsal_cleaned=time.monotonic()
@@ -531,6 +544,7 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                         fixed_probe,config['update'],limit_report)
                     quality_pool.finish_report(quality_report,next_quality,pool_admission)
                 diagnostics_finished=time.monotonic()
+                teacher_report=teacher_phase.finish(model,update) if teacher_phase is not None else None
                 report=dict(format='step5-recovery-report/'+'2.2.0',iteration=iteration,composition=dict(composition),
                     v4_share_gate=v4_share.report(share,composition),
                     panel_gates=copy.deepcopy(state.get('ratings',{}).get('panel_gates')),
@@ -574,6 +588,9 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                 report['gate_diagnostics']=gate_diagnostics(update,value_report,limit_report,quality_report)
                 if local_scoring_report is not None:
                     report['local_scoring_auxiliary']=local_scoring_report
+                if teacher_report is not None:
+                    teacher_report['side_effects'].update(il_kl_health=limit_report,entropy=entropy_report)
+                    report['teacher_phase']=teacher_report
                 if state.get('local_scoring_adoption'):report['local_scoring_adoption']=state['local_scoring_adoption']
                 checkpoint_began=time.monotonic()
                 anchor_commit=policy_anchor.checkpoint_state(state)
@@ -585,6 +602,7 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                         **({'il_kl_limit':next_limit} if next_limit is not None else {}),
                         **({'policy_anchor':anchor_commit} if anchor_commit is not None else {}),
                         **({'exploration':exploration_state} if exploration_state is not None else {}),
+                        **({'teacher_phase':teacher_phase.payload(iteration+1)} if teacher_phase is not None else {}),
                         **({'v4_share_gate':share} if share is not None else {}),
                         **({'actor_value_phases':phases.payload()} if phases is not None else {}),
                         **({'local_scoring_auxiliary':local_scoring.payload(iteration+1)} if local_scoring is not None else {}),
@@ -597,6 +615,9 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                     history=state['history']+[entry],next_search_games=next_search,
                     search_seconds=search_seconds,ordinary_seconds=ordinary_seconds)
                 if next_limit is not None:state['il_kl_limit']=next_limit
+                if teacher_phase is not None:
+                    state['teacher_phase']=teacher_phase.payload(iteration+1)
+                    state['teacher_seed_cursor']=teacher_phase.cursor
                 if anchor_commit is not None:state['policy_anchor']=anchor_commit
                 if exploration_state is not None:state['exploration']=exploration_state
                 if quality:
@@ -620,10 +641,12 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                     learning_rate=config['learning_rate'],learning_rate_schedule=update.get('learning_rate_schedule'),
                     actor={k:v for k,v in update.items() if k not in ('timings','memory')},
                     search={k:v for k,v in search.items() if k not in ('collection','updates')})])[-2:]
+                if teacher_report is not None:state['recent_training'][-1]['teacher_phase']=teacher_report
                 if revised:
                     from .retention import update_population
                     update_population(root,run,state,config['population'])
                 write_json(state_path,state)
+                if teacher_phase is not None:teacher_phase.committed(iteration+1)
                 if local_scoring is not None:local_scoring.committed(iteration+1)
                 if phases is not None:phases.committed(iteration+1)
                 if revised:
@@ -731,6 +754,12 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                     controller_line+=(f' local={aux["mode"]}@{aux["shared_gradient_scale"]:.2f}'
                         f' rows={aux["retained"]["rows"]}/{aux["available"]["rows"]}'
                         f' head_steps={aux["companion_steps"]["ppo"]}+{aux["companion_steps"]["ppg"]}')
+                teacher_line=(f'teacher rows={search.get("teacher_rows",0)} steps={search.get("optimizer_steps",0)}')
+                if teacher_report is not None:
+                    tt=teacher_report['term']
+                    teacher_line=(f'teacher={teacher_report["mode"]} labels={teacher_report["collection"].get("labels",0)} '
+                        f'beta={tt.get("beta")} share={tt.get("share",{}).get("median")} '
+                        f'heldout_dKL={teacher_report["heldout"]["delta"]["all"]}')
                 print(f'Recovery generation {iteration+1}: {done} games, {update["optimizer_steps"]} PPO steps; '
                       f'collect={load_began-began:.1f}s prepare={collected-load_began:.1f}s '
                       f'rehearsal={rehearsal_seconds:.1f}s PPO={report["timings"]["ppo_seconds"]:.1f}s '
@@ -748,7 +777,7 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                       f'value={update["epochs"][-1]["value"]:.4f}; '
                       f'insolvency events={update["insolvency"].get("events",0)} '
                       f'mean cost={update["insolvency"].get("mean_cost_per_trajectory",0):.4f}; '
-                      f'teacher rows={search.get("teacher_rows",0)} steps={search.get("optimizer_steps",0)}',flush=True)
+                      +teacher_line,flush=True)
     return dict(run=str(run),completed_iteration=state['iteration'],checkpoint=state['history'][-1],
                 best=state.get('champion'),summaries=summaries,
                 summary_scope='latest two iterations; bounded compact older metrics in retention-history.json')

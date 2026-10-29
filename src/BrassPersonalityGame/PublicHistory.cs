@@ -18,7 +18,7 @@ namespace BrassHost
         // accepts only the standard four-player/eight-round contract; the
         // unchanged Python boundary validates every remaining field.
         public JObject ObservePersonality(int seat) {
-            var view=(JObject)Wire.Token(Observe(seat));var c=(JObject)view["context"];
+            var view=ObserveToken(seat);var c=(JObject)view["context"];
             if((string)view["protocol"]!="local-game/0.3.0" || (string)view["rules"]!="steam-brass-patch-1.3.0" ||
                 (int)c["player_count"]!=4 || (bool)c["introductory"] || (int)c["round_limit"]!=8)
                 throw new InvalidOperationException("Unsupported local-game neural observation contract");

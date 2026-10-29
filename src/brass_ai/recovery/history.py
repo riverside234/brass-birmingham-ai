@@ -85,7 +85,7 @@ def compact(report):
         r=report['local_scoring_adoption']
         out['local_scoring_adoption']={k:r[k] for k in ('contract','origin','new_origin','next_phase','cleanup_complete','cleanup')}
     for key in ('il_kl_limit','policy_anchor','anchor_transition','rating_coverage','rehearsal_schedule','health_counts','quality_pool','strength_rating','value_phase','seat_fingerprints','gate_diagnostics',
-                'exploration_rollout','entropy_control','entropy_floor_transition','exploration_metrics','temperature_rating','v4_share_gate','panel_gates'):
+                'exploration_rollout','entropy_control','entropy_floor_transition','exploration_metrics','temperature_rating','v4_share_gate','panel_gates','teacher_phase'):
         if key in report:out[key]=report[key]
     out['health_by_composition']={k:v['health_counts'] for k,v in report.get('by_composition',{}).items()
                                   if 'health_counts' in v}

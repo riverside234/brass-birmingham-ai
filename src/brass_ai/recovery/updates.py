@@ -343,12 +343,14 @@ def policy_measure(model, dataset, indices, behavior, config, timings, verify=Fa
     return result
 
 
-def ppo_update(model,optimizer,games,behavior,config,*,profile=None,profile_steps=4,rehearsal=None,rehearsal_weight=0,learner_data=None,insolvency=None,reward=None,sample_groups=None,anchor_model=None,phases=None,preparation_pool=None):
+def ppo_update(model,optimizer,games,behavior,config,*,profile=None,profile_steps=4,rehearsal=None,rehearsal_weight=0,learner_data=None,insolvency=None,reward=None,sample_groups=None,anchor_model=None,phases=None,preparation_pool=None,teacher_term=None):
     if config.get('actor_nonforced'):
         return ppo_nonforced(model,optimizer,games,behavior,config,profile=profile,profile_steps=profile_steps,
-                             rehearsal=rehearsal,rehearsal_weight=rehearsal_weight,learner_data=learner_data,insolvency=insolvency,reward=reward,sample_groups=sample_groups,anchor_model=anchor_model,phases=phases,preparation_pool=preparation_pool)
+                             rehearsal=rehearsal,rehearsal_weight=rehearsal_weight,learner_data=learner_data,insolvency=insolvency,reward=reward,sample_groups=sample_groups,anchor_model=anchor_model,phases=phases,preparation_pool=preparation_pool,teacher_term=teacher_term)
+    require(teacher_term is None,'Teacher term requires guarded nonforced PPO')
     require(phases is None,'GAE/value phase requires the nonforced actor recipe')
     require(insolvency is None and reward is None,'Combined reward requires the nonforced actor recipe')
+    require(all(g.get('kind')!='teacher_phase' and not g.get('teacher_phase') for g in games),'Teacher tables cannot enter ordinary PPO')
     require(all(g['split']=='train' for g in games),'Held-out PPO data')
     require(model_id(model)==behavior.evaluator.model_id,'Collection model differs from learner')
     timings=Timings()
@@ -444,7 +446,7 @@ def phase_probe(dataset,indices,limit):
     return output
 
 
-def ppo_nonforced(model,optimizer,games,behavior,config,*,profile=None,profile_steps=4,rehearsal=None,rehearsal_weight=0,learner_data=None,insolvency=None,reward=None,sample_groups=None,anchor_model=None,phases=None,preparation_pool=None):
+def ppo_nonforced(model,optimizer,games,behavior,config,*,profile=None,profile_steps=4,rehearsal=None,rehearsal_weight=0,learner_data=None,insolvency=None,reward=None,sample_groups=None,anchor_model=None,phases=None,preparation_pool=None,teacher_term=None):
     cuda=next(model.parameters()).device.type=='cuda'
     from contextlib import ExitStack
     from .ppo_preparation import PreparationPool,Preparation
@@ -459,13 +461,13 @@ def ppo_nonforced(model,optimizer,games,behavior,config,*,profile=None,profile_s
             executor=stack.enter_context(Preparation(pool))
         else:executor=stack.enter_context(ThreadPoolExecutor(max_workers=2)) if cuda else None
         result=_ppo_nonforced(model,optimizer,games,behavior,config,profile=profile,profile_steps=profile_steps,
-                              rehearsal=rehearsal,rehearsal_weight=rehearsal_weight,learner_data=learner_data,executor=executor,insolvency=insolvency,reward=reward,sample_groups=sample_groups,anchor_model=anchor_model,phases=phases)
+                              rehearsal=rehearsal,rehearsal_weight=rehearsal_weight,learner_data=learner_data,executor=executor,insolvency=insolvency,reward=reward,sample_groups=sample_groups,anchor_model=anchor_model,phases=phases,teacher_term=teacher_term)
         if workers:result['cpu_preparation']=(executor.report() if useful else
             dict(workers=0,requested_workers=workers,reason='Fewer than 2048 rows; inline/thread preparation avoids process overhead'))
         return result
 
 
-def _ppo_nonforced(model,optimizer,games,behavior,config,*,profile,profile_steps,rehearsal,rehearsal_weight,learner_data,executor,insolvency,reward,sample_groups=None,anchor_model=None,phases=None):
+def _ppo_nonforced(model,optimizer,games,behavior,config,*,profile,profile_steps,rehearsal,rehearsal_weight,learner_data,executor,insolvency,reward,sample_groups=None,anchor_model=None,phases=None,teacher_term=None):
     from .ppg_phasic import detached
     from . import dcpg_config
     from . import ppo_kl_control
@@ -475,6 +477,7 @@ def _ppo_nonforced(model,optimizer,games,behavior,config,*,profile,profile_steps
     from .ppg_g210 import active as restored_ppg
     if preserve:require(phases is not None and (dcpg_config.active(phases.options['value_phase']) or restored_ppg(phases.options['value_phase'])),
         'Value preservation requires the delayed fresh-target phase')
+    require(all(g.get('kind')!='teacher_phase' and not g.get('teacher_phase') for g in games),'Teacher tables cannot enter ordinary PPO')
     require(all(g['split']=='train' for g in games),'Held-out PPO data')
     timings=Timings();device=next(model.parameters()).device
     with timings.phase('ppo.behavior_identity'):
@@ -487,12 +490,15 @@ def _ppo_nonforced(model,optimizer,games,behavior,config,*,profile,profile_steps
         require(data and all(d[0]['behavior']['kind']=='model' and d[0]['behavior']['policy_id']==behavior.policy_id
                             and d[0].get('_critic_role','learner')=='learner' for d in data),
                 'External or stale actions in PPO')
+        require(all(d[0].get('teacher') is None for d in data),'Teacher labels cannot enter ordinary actor/critic data')
         ds=Dataset(data,device);verify_behavior_metadata(ds,behavior)
         if 'opening_objective' in config:
             from .opening_objective import Reference
             ds.opening_reference=Reference(ds,behavior,config['opening_objective'])
         demo=rehearsal_dataset(rehearsal,device) if rehearsal_weight else None
     count=len(data);actor_ids=(~ds.forced).nonzero().flatten().cpu().tolist()
+    require(teacher_term is None or not teacher_term.active or bool(actor_ids),
+            'Teacher term requires a nonforced ordinary PPO KL probe')
     with timings.phase('ppo.critic_prepare'):
         critic_ids=phases.prepare(ds) if phases is not None else list(range(count))
     critic_ds=phases.critic_dataset if phases is not None else ds
@@ -517,6 +523,7 @@ def _ppo_nonforced(model,optimizer,games,behavior,config,*,profile,profile_steps
         reward_report['distribution']=reward_distribution(trajectories,reward)
     advantages=torch.zeros(count,device=device);model.eval()
     frozen=None
+    from .value_preservation import TrunkGradients
     if preserve:
         from .value_preservation import FrozenValues,TrunkGradients
         with timings.phase('ppo.freeze_values'):
@@ -570,7 +577,7 @@ def _ppo_nonforced(model,optimizer,games,behavior,config,*,profile,profile_steps
                 optimizer.zero_grad(set_to_none=True);model.train()
                 companion=getattr(phases,'local_scoring',None)
                 if companion is not None:companion.begin('ppo')
-                gradient_terms=TrunkGradients(model) if frozen else None
+                gradient_terms=TrunkGradients(model) if frozen or teacher_term is not None else None
                 with timings.phase('ppo.forward_backward'):
                     parts=ds.microbatches(batch,config['microbatch_size'],config['max_candidate_cells'],config['bucket'])
                     for part,ix,inputs,q in ds.policy_batches(parts,behavior.exploration,executor):
@@ -588,7 +595,7 @@ def _ppo_nonforced(model,optimizer,games,behavior,config,*,profile,profile_steps
                         ((actor-bonus).sum()/len(batch)).backward()
                         actor_totals+=torch.stack([x.detach().sum() for x in (actor,entropy,((ratio-1).abs()>config['clip']).float())])
                         actor_seen+=len(part)
-                    if gradient_terms is not None:gradient_terms.before_value()
+                    if frozen is not None:gradient_terms.before_value()
                     parts=critic_ds.microbatches(crit,config['microbatch_size'],config['max_candidate_cells'],config['bucket'])
                     for part,ix,inputs in critic_ds.value_batches(parts,model,executor):
                         if frozen is not None:
@@ -614,8 +621,8 @@ def _ppo_nonforced(model,optimizer,games,behavior,config,*,profile,profile_steps
                             companion.account_loss(local_loss,critic_ds.critic_weights[ix],len(crit),'ppo')
                         ((combined*critic_ds.critic_weights[ix]).sum()/len(crit)).backward()
                         value_totals+=torch.stack([v.detach().sum() for v in values]);critic_seen+=len(part)
-                    if gradient_terms is not None:
-                        frozen.gradients.append(gradient_terms.finish(steps+1));del gradient_terms
+                    if frozen is not None:
+                        frozen.gradients.append(gradient_terms.finish(steps+1))
                     if demo:
                         sample=torch.randint(len(demo.data),(min(config['effective_batch_size'],len(demo.data)),)).tolist()
                         meaningful=[i for i in sample if not demo.forced_cpu[i]]
@@ -624,6 +631,8 @@ def _ppo_nonforced(model,optimizer,games,behavior,config,*,profile,profile_steps
                             with autocast(config,device): out=model(*inputs)
                             (rehearsal_weight*bc_loss(out[0],demo.chosen[ix]).sum()/len(meaningful)).backward()
                         rehearsal_steps+=int(bool(meaningful))
+                    if teacher_term is not None:teacher_term.apply(model,gradient_terms,steps+1)
+                    del gradient_terms
                 with timings.phase('ppo.optimizer'):
                     norm=torch.nn.utils.clip_grad_norm_(model.parameters(),config['grad_clip'],error_if_nonfinite=True)
                     clips+=int(float(norm)>config['grad_clip']);scheduled_step(optimizer,ppo=True);steps+=1

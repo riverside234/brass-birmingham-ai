@@ -95,6 +95,29 @@ public static class AiExecutionResourceTests
         check(job.Completion.IsCompleted && job.ResourcesReleased && !AiExecutionResources.IsComputing && Application.targetFrameRate == 60, "actual device completion automatically restores resources on main thread");
         scope.Dispose(); scope.Dispose();
 
+        // Keep this source usable against the frozen baseline as well.
+        var delivery=typeof(AiExecutionScope).GetMethod("ObserveDelivery");
+        if(delivery!=null) {
+            var releaseDelivery=new TaskCompletionSource<int>();
+            var deliveryJob=AiExecutionScheduler.Submit(new DelegateAiExecutionBackend("short detached delivery",token=>releaseDelivery.Task));
+            var deliveryScope=AiExecutionResources.BeginComputation();delivery.Invoke(deliveryScope,new object[]{deliveryJob});
+            check(Application.targetFrameRate==60 && QualitySettings.vSyncCount==0 && AiExecutionResources.IsComputing,"delivery uses 60 Hz handoffs with optional work still constrained");
+            var searchScope=AiExecutionResources.BeginComputation();
+            check(Application.targetFrameRate==30,"overlapping search preserves the search frame cap");
+            searchScope.Dispose();check(Application.targetFrameRate==60,"retiring overlapping search restores the delivery cap");
+            deliveryJob.Cancel();check(!deliveryJob.Completion.IsCompleted && AiExecutionResources.IsComputing,"delivery cancellation still owns retiring work");
+            releaseDelivery.SetResult(0);deadline=Time.realtimeSinceStartup+3;
+            while(!deliveryJob.Completion.IsCompleted && Time.realtimeSinceStartup<deadline)yield return null;
+            yield return null;deliveryScope.Dispose();
+            check(Application.targetFrameRate==60 && AiExecutionResources.ScopeCount==0,"delivery retirement restores the previous cap");
+            Application.targetFrameRate=18;
+            var lowerJob=AiExecutionScheduler.Submit(new DelegateAiExecutionBackend("lower cap delivery",token=>Task.FromResult(0)));
+            var lowerScope=AiExecutionResources.BeginComputation();delivery.Invoke(lowerScope,new object[]{lowerJob});
+            check(Application.targetFrameRate==18,"delivery respects an existing lower software cap");
+            while(!lowerJob.Completion.IsCompleted)yield return null;
+            lowerScope.Dispose();Application.targetFrameRate=60;
+        }
+
         var replacementDevice = new TaskCompletionSource<int>(); var replacementStarted = new TaskCompletionSource<int>();
         var replacementJob = AiExecutionScheduler.Submit(new DelegateAiExecutionBackend("independent future model", token => { replacementStarted.SetResult(0); return replacementDevice.Task; }));
         var replacementScope = AiExecutionResources.BeginComputation(); replacementScope.Observe(replacementJob);

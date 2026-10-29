@@ -106,13 +106,15 @@ def qualify(args,out):
             for operation in ('build','test'):
                 commands.append(base.command(['cargo','+1.99.1',operation,'--release',*common],cwd=checkout,env=env,
                     log=out/(operation+'.log'),timeout=900))
-            commands.append(base.command([sys.executable,'-m','unittest','discover','-s','tests/RustBackendLab','-v'],
+            commands.append(base.command([sys.executable,'-m','unittest','discover','-s','tests/RustBackendLab','-p','test_b02.py','-v'],
                 cwd=ROOT,env=env,log=out/'adapter-tests.log',timeout=90))
             bootstrap=build_bootstrap(out,env,base.command,args.mono)
             executable=out/'target'/target/'release/brass-lab-collector'
             identity=dict(contract='brass-lab-b02-build/1.0.0',shared_core=SOURCE,collector=pin(executable),
                 bootstrap=bootstrap,source=source,rustc=version,cargo_lock=pin(checkout/'lab-native/Cargo.lock'),
                 b01=pin(args.b01),search_method=METHOD,search_enabled=False,v205_enabled=False)
+            from brass_ai.step5.league import implementation_id
+            identity['trainer_implementation']=implementation_id()
             base.write(out/'build.json',identity)
             commands.append(base.command([sys.executable,'-m','brass_ai.rust_backend.lab_b02_smoke',
                 '--run',Path(args.run).resolve(),'--state',read_json(args.b01)['lab_state']['path'],
