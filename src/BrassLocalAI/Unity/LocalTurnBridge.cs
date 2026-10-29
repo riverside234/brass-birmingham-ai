@@ -186,7 +186,7 @@ namespace BrassLegacyAI
             input["recall"]=nativeRecall.DeepClone();
             planningRequests++;
             nativeAction=0;
-            nativeBackend=new NativeJob(NativeInput.Request(input,instance,app.Metadata.GameId,startedGeneration+1,nativeAllowance),clock,(int)budget);
+            nativeBackend=new NativeJob(NativeInput.Request(input,instance,app.Metadata.GameId,startedGeneration+1,nativeAllowance),clock,(int)budget,NativeGameState.SearchK(state));
             nativeExecution=AiExecutionScheduler.Submit(nativeBackend);resources.Observe(nativeExecution);
         }
         // Called by the existing liquidation route before its V4 policy. No
@@ -307,6 +307,11 @@ namespace BrassLegacyAI
                 }
                 if(native && app.Game.TurnFlow.GetRemainingActionsCount()>0) {
                     var nowEvents=Events();var current=NativeInput.Capture(app,nowEvents,actor,new JArray());
+                    // An internally projected root is a hypothesis. A legal
+                    // but different live successor must replan on the original
+                    // turn clock rather than execute that hypothetical action.
+                    if(continuation.Count>0 && !NativeInput.ContinuationMatches(nativeBackend.Result,current,nativeRecall))
+                        continuation.Clear();
                     NativeGameState.Record(app.Metadata,(JObject)current["view"],LocalGameState.HistoryHash(nowEvents,revision),
                         Math.Max(0,(int)(budget-clock.Elapsed.TotalMilliseconds)),nativeRecall);
                 }

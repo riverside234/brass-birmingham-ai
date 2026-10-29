@@ -16,6 +16,7 @@ pub struct Pending<G: Game> {
 }
 #[derive(Clone, Copy, Default)]
 pub struct Work {
+    pub reused_selections: u64,
     pub sampling_ns: u64,
     pub information_ns: u64,
     pub lookup_ns: u64,
@@ -80,7 +81,15 @@ impl<G: Game> Pending<G> {
                 )?;
                 None
             } else {
-                Some(tree.insert(info, stats)?)
+                Some(
+                    tree.insert_child(
+                        info,
+                        stats,
+                        self.path
+                            .last()
+                            .ok_or_else(|| invalid("missing expansion parent"))?,
+                    )?,
+                )
             }
         } else {
             None
@@ -103,7 +112,13 @@ impl<G: Game> Pending<G> {
         let (leaf, value) = match (self.info, evaluation, self.terminal) {
             (Some(info), Some(stats), None) => {
                 let value = stats.value;
-                let h = tree.insert(info, stats)?;
+                let h = tree.insert_child(
+                    info,
+                    stats,
+                    self.path
+                        .last()
+                        .ok_or_else(|| invalid("missing expansion parent"))?,
+                )?;
                 (Leaf::Node(tree.get(h)?.ordinal), value)
             }
             (None, None, Some(value)) => (Leaf::Terminal("terminal".into()), value),
@@ -206,6 +221,9 @@ pub fn traverse<G: Game>(
                 let edge = if h == root {
                     root_edge
                 } else {
+                    if node.ordinal < tree.retained_len() {
+                        work.reused_selections += 1;
+                    }
                     node.stats.select(info.actor, config.parameters())?
                 };
                 work.selection_ns += nanos(clock);

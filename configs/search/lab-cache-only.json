@@ -1,0 +1,9 @@
+{
+  "contract": "brass-lab-cache-only/1.0.0",
+  "method": "search_v2_focus_only",
+  "focus_policy": "adaptive-focus/2.0.0",
+  "composite_contract": "brass-composite-plan/2.0.0",
+  "v205_enabled": false,
+  "native_source_sha256": "fadb7af2524eb84c960c24cf2c846ceef1de3a8ba07871f59abb1a707625f994",
+  "source_archive_sha256": "dba778c92e4716d4bc3f5e9eae8ed05a6e40b88963dc6612846cef66b39da777"
+}

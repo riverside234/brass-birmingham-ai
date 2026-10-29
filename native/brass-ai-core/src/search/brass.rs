@@ -83,6 +83,9 @@ pub struct World {
     decision: Option<std::sync::Arc<Key>>,
 }
 impl Brass {
+    pub(crate) fn reusable_sampler(&self) -> bool {
+        self.shuffle_tape.is_none()
+    }
     /// Deterministic permitted completion. Never consumes a search world's stream.
     pub fn completion_world(&self) -> Result<World> {
         let (state, memory, _) = self.prepared.sample(SamplingDraws::Recorded {
@@ -94,6 +97,102 @@ impl Brass {
             ledger: self.root_ledger.clone(),
             decision: None,
         })
+    }
+    /// Certified ordinary own-action transition. Every supported rule below
+    /// reads only the public board and actor's hand; Finish with two actions
+    /// remaining cannot draw, settle income or change actor. We also check the
+    /// complete semantic path, ledger and hidden-zone allocation law. No sampled
+    /// opponent cards/deck are copied into the successor Input.
+    pub fn project(
+        &self,
+        action: &session::plans::Action,
+        budget: session::clock::Budget,
+        clock: &impl session::clock::Clock,
+    ) -> Result<(Input, Info<Key, String>)> {
+        use crate::{state::dto::Kind, types::Phase};
+        let start = &self.root_info;
+        let view = start.key.information.observation.view.as_ref().unwrap();
+        check(
+            view.context.phase == Phase::Action && view.context.actions_remaining == 2,
+            "projection requires two ordinary actions",
+        )?;
+        check(
+            !action.steps.is_empty() && action.steps.len() <= 96,
+            "projection step bound",
+        )?;
+        let turn = session::TurnKey::of(start)?;
+        let mut world = self.completion_world()?;
+        for (i, step) in action.steps.iter().enumerate() {
+            check(budget.work_open(clock), "projection cutoff")?;
+            let Position::Decision(info) = self.inspect(&mut world)? else {
+                return Err(invalid("projection chance/terminal"));
+            };
+            check(
+                info == step.precondition && session::TurnKey::of(&info)? == turn,
+                "projection precondition/actor changed",
+            )?;
+            let choice = info
+                .key
+                .choices
+                .iter()
+                .find(|c| c.id == step.choice)
+                .ok_or_else(|| invalid("projection illegal step"))?;
+            check(
+                matches!(
+                    choice.kind,
+                    Kind::Build
+                        | Kind::Network
+                        | Kind::Sell
+                        | Kind::Develop
+                        | Kind::Loan
+                        | Kind::Pass
+                        | Kind::Finish
+                        | Kind::Coal
+                        | Kind::Iron
+                        | Kind::Beer
+                        | Kind::BonusDevelop
+                        | Kind::BonusSkip
+                ),
+                "uncertified projection action",
+            )?;
+            check(
+                (choice.kind == Kind::Finish) == (i + 1 == action.steps.len()),
+                "projection incomplete action",
+            )?;
+            self.step(&mut world, &step.choice)?;
+        }
+        let Position::Decision(boundary) = self.inspect(&mut world)? else {
+            return Err(invalid("projection information transition"));
+        };
+        let next = boundary.key.information.observation.view.as_ref().unwrap();
+        check(
+            session::TurnKey::of(&boundary)? == turn
+                && next.context.phase == Phase::Action
+                && next.context.actions_remaining == 1
+                && next.context.revision > view.context.revision
+                && next.deck_count == view.deck_count,
+            "projection boundary changed",
+        )?;
+        let input = Input {
+            view: next.clone(),
+            recall: boundary.key.information.recall.clone(),
+            context: boundary.key.context.clone(),
+            reward: self.reward.clone(),
+            ledger: world.ledger.state(),
+            shuffle_tape: None,
+            sample_seed: self.sample_seed ^ 0xa0761d6478bd642f,
+        };
+        let projected = Brass::new(input.clone(), false)?;
+        check(
+            projected.root_info == boundary,
+            "projected observation/legal/ledger mismatch",
+        )?;
+        check(
+            self.prepared.same_hidden_allocation(&projected.prepared),
+            "conditional sampler mismatch",
+        )?;
+        check(budget.work_open(clock), "projection cutoff")?;
+        Ok((input, boundary))
     }
     pub fn new(input: Input, record: bool) -> Result<Self> {
         input.context.validate()?;

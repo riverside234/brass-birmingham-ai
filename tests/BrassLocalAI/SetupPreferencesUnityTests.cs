@@ -6,6 +6,8 @@ using System.Linq;
 using BrassLegacyAI;
 using BrassPatch;
 using BrassApplication.AI;
+using BrassLegacyAI.Native;
+using BrassPatch.Persistence;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using UnityEngine;
@@ -42,6 +44,7 @@ public sealed partial class LocalAiUnityDriver
         Check(Setup.PlayerMetadata.Skip(1).Select(LocalMenu.Difficulty).SequenceEqual(new[]{"easy","mid","max"}),"restored independent allowances including Human's remembered AI setting");
         Check(Setup.PlayerMetadata.All(p=>LocalMenu.Choice(p).Family==AiFamily.AlphaTest),"restored one coherent NN family");
         Check(LocalMenu.TableFamily(Setup.PlayerMetadata[0])==AiFamily.AlphaTest && LocalMenu.CanStart(menu),"NN family retained for Human seat and Start allowed");
+        Check(Setup.PlayerMetadata.All(p=>LocalMenu.TableSearchK(p)==8),"K8 restored for the whole table independently of seat allowances");
     }
     IEnumerator SetupPreferencesCases()
     {
@@ -59,8 +62,46 @@ public sealed partial class LocalAiUnityDriver
             Check(Setup.PlayerMetadata.Skip(1).Select(LocalMenu.Strategy).SequenceEqual(new[]{"cotton","rail-tempo","random"}),"V4 styles and unresolved Random restore before Start");
             Check(Setup.PlayerMetadata.Skip(1).Select(LocalMenu.Difficulty).SequenceEqual(new[]{"easy","mid","max"}),"V4 seat difficulties restored");
             PickSetup(1,"cotton",0,true);PickSetup(2,"rail-tempo",1,true);PickSetup(3,"random",3,true);PickSetup(2,"rail-tempo",1,true,true);yield return null;
+            Rows()[1].GetComponent<AiSetupRow>().OpenPicker();var kPanel=AiSelectionPanel.Active;
+            Check(kPanel.DraftSearchK==16 && kPanel.SearchKButtons.Length==2,"existing setup defaults to K16 and offers two choices");
+            kPanel.SearchKButtons[0].onClick.Invoke();
+            Check(kPanel.DraftSearchK==8 && LocalMenu.TableSearchK(Setup.PlayerMetadata[1])==16,"K8 stays a draft until Apply");
+            kPanel.Close();yield return null;
+            Rows()[1].GetComponent<AiSetupRow>().OpenPicker();kPanel=AiSelectionPanel.Active;
+            Check(kPanel.DraftSearchK==16,"Cancel discards the search K draft");
+            kPanel.SearchKButtons[0].onClick.Invoke();kPanel.ApplyButton.onClick.Invoke();yield return null;
+            CheckRestoredNeural();
+            foreach(var difficulty in Enumerable.Range(0,4)) {
+                Rows()[1].GetComponent<AiSetupRow>().OpenPicker();kPanel=AiSelectionPanel.Active;
+                kPanel.DifficultyButtons[difficulty].onClick.Invoke();
+                Check(kPanel.DraftSearchK==8,"K8 is independent of time budget "+difficulty);
+                kPanel.SearchKButtons[1].onClick.Invoke();
+                Check(kPanel.DraftSearchK==16,"K16 is available at time budget "+difficulty);
+                kPanel.Close();yield return null;
+            }
+            Rows()[1].GetComponent<AiSetupRow>().OpenPicker();kPanel=AiSelectionPanel.Active;
+            kPanel.SearchKButtons[1].onClick.Invoke();kPanel.ApplyButton.onClick.Invoke();yield return null;
+            Check(Setup.PlayerMetadata.All(p=>LocalMenu.TableSearchK(p)==16),"K16 Apply changes every seat together");
+            Rows()[3].GetComponent<AiSetupRow>().OpenPicker();kPanel=AiSelectionPanel.Active;
+            kPanel.SearchKButtons[0].onClick.Invoke();kPanel.ApplyButton.onClick.Invoke();yield return null;
             CheckRestoredNeural();
             saved=PreferenceValues()[SetupKey];
+            foreach(int invalidK in new[]{0,9,32})
+                Check(!LocalMenu.ApplyPlayerSelection(Setup.PlayerMetadata[1],menu,new PlayerSelectionDraft(PlayerSelectionPage.AlphaTest,new AiChoice(AiFamily.AlphaTest,"alpha-test"),"easy",invalidK)),"unsupported K cannot bypass UI");
+            foreach(int k in new[]{8,16}) {
+                var package=new NativePackage(NativePackage.Location,k);
+                Check(package.Policy["k_by_allowance_ms"].Children<JProperty>().All(p=>(int)p.Value==k),"integrity-checked native policy maps all four allowances to K"+k);
+                var metadata=(BrassApplication.Game.GameMetadata)Setup.Clone();
+                var state=NativeGameState.Create(metadata,LocalMenu.Difficulty,k);SaveExtensions.Set(metadata,state);
+                Check(NativeGameState.SearchK(NativeGameState.Read(metadata,true))==k,"new game pins K"+k+" in its saved assignment");
+                var bad=(JObject)state.DeepClone();bad["nn_search_k"]=k==8?16:8;SaveExtensions.Set(metadata,bad);
+                bool rejected=false;try{NativeGameState.Read(metadata,true);}catch(InvalidDataException){rejected=true;}
+                Check(rejected,"saved K is protected by assignment integrity");
+                var legacy=(JObject)state.DeepClone();legacy.Remove("nn_search_k");
+                legacy["assignment_sha256"]=(string)typeof(NativeGameState).GetMethod("AssignmentHash",ReflectionAccess.Flags).Invoke(null,new object[]{legacy});
+                SaveExtensions.Set(metadata,legacy);
+                Check(NativeGameState.SearchK(NativeGameState.Read(metadata,true))==16 && JToken.DeepEquals(SaveExtensions.Get(metadata),legacy),"pre-selector save reads as K16 without rewriting it");
+            }
             Check(!LocalMenu.ApplyPlayerSelection(Setup.PlayerMetadata[1],new object(),new PlayerSelectionDraft(PlayerSelectionPage.V4,new AiChoice(AiFamily.V4,"cotton"),"hard")),"stale setup cannot apply");
             Check(!LocalMenu.ApplyPlayerSelection(Setup.PlayerMetadata[1],menu,new PlayerSelectionDraft(PlayerSelectionPage.Human,new AiChoice(AiFamily.Gamma,"gamma-01"),"hard")),"unavailable family cannot bypass via Human");
             Check(PreferenceValues()[SetupKey]==saved,"rejected drafts leave defaults intact");
@@ -78,21 +119,37 @@ public sealed partial class LocalAiUnityDriver
             Call(menu,"CreateNewGameConfiguration");yield return null;
             Check(LocalMenu.Strategy(Setup.PlayerMetadata[1])=="supplier" && LocalMenu.Difficulty(Setup.PlayerMetadata[1])=="mid","older style/difficulty preferences migrate");
             PreferenceValues()[SetupKey]=saved;Call(menu,"CreateNewGameConfiguration");yield return null;CheckRestoredNeural();
+            var oldPreferences=JObject.Parse(saved);oldPreferences.Remove("nn_search_k");
+            PreferenceValues()[SetupKey]=oldPreferences.ToString();Call(menu,"CreateNewGameConfiguration");yield return null;
+            Check(LocalMenu.TableSearchK(Setup.PlayerMetadata[1])==16,"pre-selector menu defaults migrate to K16");
+            foreach(var invalid in new JToken[]{new JValue(7),new JValue("8"),JValue.CreateNull()}) {
+                var broken=JObject.Parse(saved);broken["nn_search_k"]=invalid;
+                PreferenceValues()[SetupKey]=broken.ToString();Call(menu,"CreateNewGameConfiguration");yield return null;
+                Check(LocalMenu.TableFamily(Setup.PlayerMetadata[0])==AiFamily.V4 && LocalMenu.TableSearchK(Setup.PlayerMetadata[1])==16,"invalid K preference falls back safely");
+            }
+            PreferenceValues()[SetupKey]=saved;Call(menu,"CreateNewGameConfiguration");yield return null;CheckRestoredNeural();
         } else CheckRestoredNeural();
 
         foreach(var size in new[]{new Vector2Int(1920,1080),new Vector2Int(1920,1200)}) {
             router.Resize(size.x,size.y);yield return null;
             Rows()[1].GetComponent<AiSetupRow>().OpenPicker();var panel=AiSelectionPanel.Active;
             Check(panel.CurrentPage==PlayerSelectionPage.AlphaTest,"opening restored NN seat selects Alpha Test");
+            Check(panel.DraftSearchK==8 && panel.SearchKButtons[0].GetComponent<AiControlSurface>().Selected && !panel.SearchKButtons[1].GetComponent<AiControlSurface>().Selected,"K8 has one clear selected state");
+            foreach(var button in panel.SearchKButtons) {
+                AssertInsideTarget(button.GetComponent<RectTransform>(),"visible search K choice");
+                Check(button.navigation.selectOnDown!=null,"search K supports keyboard navigation");
+            }
             Check(panel.Window.Find("Alpha Test table")==null && panel.Window.Find("Page Gamma")==null,"neural options are not whole-table peers");
             Check(PanelButton("Alpha Test table").transform.parent.name=="NN options" && PanelButton("Page Gamma").transform.parent.name=="NN options","Alpha Test and Gamma nested under NN");
             foreach(var name in new[]{"NN table","V4 table","Alpha Test table","Page Gamma"})AssertInsideTarget(PanelButton(name).GetComponent<RectTransform>(),"visible "+name);
             panel.ChangeTextSize(1);yield return null;Capture("setup-nn-"+size.y+"-largest.png");
+            foreach(var button in panel.SearchKButtons)AssertInsideTarget(button.GetComponent<RectTransform>(),"large-text search K choice inside panel");
             PanelButton("Page Gamma").onClick.Invoke();yield return null;
             Check(panel.CurrentPage==PlayerSelectionPage.Gamma && !panel.ApplyButton.interactable,"Gamma preview disables Apply");
             Capture("setup-gamma-"+size.y+"-largest.png");
             PanelButton("V4 table").onClick.Invoke();
             Check(panel.Window.Find("NN options")==null && panel.Tiles.Count()==7,"V4 contains only V4 styles");
+            Check(panel.SearchKButtons.Length==0,"NN search controls are scoped to the NN page");
             panel.Close();yield return null;CheckRestoredNeural();
         }
         // Publish exact preference bytes for a separate fresh Unity process.

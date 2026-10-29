@@ -31,9 +31,10 @@ def advance(model,opt,c,p,run,g,pool):
     before=copy.deepcopy(opt.state_dict());report=p.fit(model,preparation_pool=pool)
     require(_same_payload(before,opt.state_dict()),'PPG changed PPO Adam')
     require(report['learning_rate']==report['learning_rate_source']['ppo_lr']*.65,'PPG LR does not track actual PPO')
-    require(report['scheduled'] and report['acceptance_generations']==list(range(max(1,g-1),g+1)),
+    origin=p.cache_origin
+    require(report['scheduled'] and report['acceptance_generations']==list(range(max(origin+1,g-1),g+1)),
         'Wrong PPG cadence/validation ages')
-    require(len(p.buffer.pending)==min(2,g) and report['buffer']['packed_generations']==0,'Wrong replay window/format')
+    require(len(p.buffer.pending)==min(2,g-origin) and report['buffer']['packed_generations']==0,'Wrong replay window/format')
     require(report['probe_kl']<=.002+1e-7,'Retained phase exceeded hard KL cap')
     require(all(report[k]==c['value_phase'][k] for k in ('kl_check_steps','acceptance_steps')),'Wrong separated KL/loss cadence')
     require(report['acceptance_heldout_after']['loss']<=report['acceptance_heldout_before']['loss'],'Retained pooled critic loss increased')

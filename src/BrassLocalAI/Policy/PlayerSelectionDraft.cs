@@ -7,7 +7,9 @@ namespace BrassLegacyAI
         public readonly PlayerSelectionPage Page;
         public readonly AiChoice Choice;
         public readonly string Difficulty;
-        public PlayerSelectionDraft(PlayerSelectionPage page, AiChoice choice, string difficulty)
-        { Page = page; Choice = choice; Difficulty = difficulty; }
+        public readonly int SearchK;
+        public PlayerSelectionDraft(PlayerSelectionPage page, AiChoice choice, string difficulty) : this(page, choice, difficulty, 16) { }
+        public PlayerSelectionDraft(PlayerSelectionPage page, AiChoice choice, string difficulty, int searchK)
+        { Page = page; Choice = choice; Difficulty = difficulty; SearchK = searchK; }
     }
 }

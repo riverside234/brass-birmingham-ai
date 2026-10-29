@@ -74,6 +74,129 @@ fn config() -> Config {
         ..Default::default()
     }
 }
+
+#[test]
+fn composite_fallback_keeps_incumbent_and_never_invents_joint_support() {
+    use brass_ai_core::search::{
+        brass::Brass,
+        session::{
+            clock::{Budget, MonotonicClock},
+            focus,
+        },
+    };
+    use std::sync::atomic::AtomicBool;
+    let (mut pair, mut input, id) = fixture();
+    input.view.context.round = 2;
+    input.view.context.actions_remaining = 2;
+    let mut cfg = config();
+    cfg.simulations = 128;
+    pair.admit(id, &input, cfg, 4_000_000_000).unwrap();
+    let ticket = pair
+        .start(
+            input.clone(),
+            Mode::Count,
+            BatchPolicy::default(),
+            4_000_000_000,
+            [None, None],
+        )
+        .unwrap();
+    let decision = drain(&mut pair, ticket).unwrap();
+    let clock = MonotonicClock::new(Arc::new(AtomicBool::new(false)));
+    // Session admission records the initial own hand before any search proof.
+    input.recall = decision.result.actions[0].action.steps[0]
+        .precondition
+        .key
+        .information
+        .recall
+        .clone();
+    let game = Brass::new(input, false).unwrap();
+    let prepared = focus::prepare(
+        &game,
+        &decision.result.actions,
+        Budget::new(0, 4_000_000_000).unwrap(),
+        &clock,
+    )
+    .unwrap();
+    let incumbent = prepared.incumbent.clone();
+    let (mut coordinator, _) =
+        crate::focus::Coordinator::new(focus::Method::SearchV2FocusOnly, true);
+    coordinator.prepared = Some(Box::new(prepared));
+    coordinator.first_selection = Some(decision.selection.clone());
+    let lanes = [&decision.lanes[0], &decision.lanes[1]];
+    let mut second = decision.selection.clone();
+    second.actions = None;
+    let fallback = coordinator.compose(&second, lanes).unwrap();
+    assert_eq!(
+        serde_json::to_value(fallback.actions.as_ref().unwrap()).unwrap(),
+        serde_json::to_value(&incumbent).unwrap()
+    );
+    assert!(coordinator.metrics.fallback_used);
+    assert!(coordinator
+        .metrics
+        .composite
+        .as_ref()
+        .unwrap()
+        .joint_support
+        .is_none());
+    assert!(coordinator
+        .metrics
+        .composite
+        .as_ref()
+        .unwrap()
+        .actions
+        .iter()
+        .all(|a| a.root_epoch == 1));
+    let mut fresh = incumbent[1].clone();
+    fresh.support = 3;
+    second.actions = Some(vec![fresh.clone()]);
+    let composite = coordinator.compose(&second, lanes).unwrap();
+    assert!(!coordinator.metrics.fallback_used);
+    assert!(composite
+        .actions
+        .unwrap()
+        .iter()
+        .all(|a| a.support == 0 && a.returns == [0.; 4]));
+    let evidence = coordinator.metrics.composite.as_ref().unwrap();
+    assert!(evidence.joint_support.is_none());
+    assert_eq!(evidence.actions[1].root_epoch, 2);
+    assert_eq!(evidence.actions[1].conditional_support, 3);
+    fresh.action.steps[0].precondition.actor = (fresh.action.steps[0].precondition.actor + 1) % 4;
+    second.actions = Some(vec![fresh]);
+    assert_eq!(
+        serde_json::to_value(
+            coordinator
+                .compose(&second, lanes)
+                .unwrap()
+                .actions
+                .unwrap()
+        )
+        .unwrap(),
+        serde_json::to_value(incumbent).unwrap()
+    );
+    assert!(coordinator.metrics.fallback_used);
+}
+
+#[test]
+fn focus_method_is_bound_at_admission_and_cancellation_retires_both_owners() {
+    use brass_ai_core::search::session::focus::Method;
+    let (mut pair, input, id) = fixture();
+    assert!(pair.method(Method::SearchV2FocusOnly).is_err());
+    pair.admit(id, &input, config(), 4_000_000_000).unwrap();
+    pair.method(Method::SearchV2FocusOnly).unwrap();
+    let ticket = pair
+        .start(
+            input,
+            Mode::Count,
+            BatchPolicy::default(),
+            4_000_000_000,
+            [None, None],
+        )
+        .unwrap();
+    assert!(pair.method(Method::SearchV1).is_err());
+    pair.cancel(ticket).unwrap();
+    assert!(drain(&mut pair, ticket).is_err());
+    assert!(!pair.busy());
+}
 fn drain(pair: &mut Pair, ticket: u64) -> Result<Decision> {
     let limit = Instant::now() + Duration::from_secs(10);
     loop {

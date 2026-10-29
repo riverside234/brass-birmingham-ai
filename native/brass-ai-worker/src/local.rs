@@ -86,6 +86,8 @@ pub struct Package {
     pub startup_ns: u64,
     pub startup_source: String,
     pub warmup_sha256: String,
+    #[serde(default)]
+    pub method: search::session::focus::Method,
 }
 impl Package {
     pub fn load(path: &Path, digest: &str) -> Result<(Self, PathBuf)> {
@@ -237,7 +239,7 @@ struct Active {
     requested_k: usize,
 }
 fn compact(d: Decision, ticket: Ticket, requested_k: usize) -> Value {
-    json!({"ticket":ticket,"backend":BACKEND,"model_id":MODEL,"export_sha256":EXPORT,
+    let mut value = json!({"ticket":ticket,"backend":BACKEND,"model_id":MODEL,"export_sha256":EXPORT,
         "actions":d.result.action_ids,"provenance":d.result.provenance,
         "completed":d.lanes.iter().map(|l| l.outcome.completed).sum::<u64>(),
         "sessions":2,"threads_per_session":1,"retired":true,"requested_k":requested_k,
@@ -257,7 +259,15 @@ fn compact(d: Decision, ticket: Ticket, requested_k: usize) -> Value {
                 "seed_xor":if owner==0 {0} else {0xd1b54a32d192ed03_u64},
                 "sample_seed_xor":if owner==0 {0} else {0x9e3779b97f4a7c15_u64}
             })).collect::<Vec<_>>()},
-        "response_ready_ns":d.response_ready_ns,"deadline_ns":d.result.budget.deadline_ns})
+        "response_ready_ns":d.response_ready_ns,"deadline_ns":d.result.budget.deadline_ns});
+    if let Some(focus) = d.focus {
+        value["search_revision"] = json!({"version":"brass-local-focus/2.0.0", "focus":focus,
+            "focused_owners":d.focused_lanes.map(|lanes| lanes.map(|l| json!({
+                "epoch":2,"completed":l.outcome.completed,"effective_k":l.outcome.effective_k,
+                "cache_hits":l.outcome.cache_hits,"watermark":l.outcome.snapshot.as_ref().map(|s|s.support_watermark),
+                "last_completion_ns":l.outcome.last_completion_ns,"work_stopped_ns":l.outcome.work_stopped_ns}))) });
+    }
+    value
 }
 
 pub fn run() -> std::result::Result<(), Box<dyn std::error::Error>> {
@@ -462,6 +472,7 @@ pub fn run() -> std::result::Result<(), Box<dyn std::error::Error>> {
                 }
                 if binding.as_ref() != Some(&(identity.clone(), turn.clone(), allowance_ms)) {
                     pair.admit(identity.clone(), &input, config, allowance_ms * 1_000_000)?;
+                    pair.method(package.method)?;
                     binding = Some((identity, turn, allowance_ms));
                 }
                 let deadline = received + Duration::from_millis(remaining_ms);

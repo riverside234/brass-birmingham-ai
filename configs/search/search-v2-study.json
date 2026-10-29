@@ -1,0 +1,499 @@
+{
+  "version": "search-v2-study/2.0.0",
+  "folder": "study",
+  "stage": "cache-only-candidate",
+  "roots": [
+    {
+      "id": "brass-003",
+      "fixture": {
+        "path": "artifacts/search-v2/20261028/study/fixtures/brass-003.json",
+        "bytes": 157059,
+        "sha256": "41367c9a15482d9bd3bf2855e94c40ddc601f60ee1b2a797bcecdd455963c70f"
+      },
+      "category": "Early Canal; build/develop/loan combinations",
+      "partition": "development",
+      "source": {
+        "path": "artifacts/rust-backend/20261025-l10-capture/brass-003-request.json",
+        "bytes": 2763089,
+        "sha256": "a9c1e25825ae904a181eea9565a175c323ce36313db7d73c857015d87d27fa8d"
+      },
+      "authored": null,
+      "search_seed": 7,
+      "world_seed": 890,
+      "expectation": "Both actions must be complete and independently legal; resource payments and actor/turn/ledger must match replay. No invented optimal-action claim."
+    },
+    {
+      "id": "brass-026",
+      "fixture": {
+        "path": "artifacts/search-v2/20261028/study/fixtures/brass-026.json",
+        "bytes": 180798,
+        "sha256": "99b3f8c673b0b8bdf675a045b20f74ad2a5fcbf8ddf6198afc27dcf48e0cf54c"
+      },
+      "category": "Rail construction/resource alternatives",
+      "partition": "development",
+      "source": {
+        "path": "artifacts/rust-backend/20261025-l10-capture/brass-026-request.json",
+        "bytes": 2521969,
+        "sha256": "7893a1009a260f2118178785c36db56db3fcf3d6de0e9e05967a199dbb845a60"
+      },
+      "authored": null,
+      "search_seed": 7,
+      "world_seed": 890,
+      "expectation": "Both actions must be complete and independently legal; resource payments and actor/turn/ledger must match replay. No invented optimal-action claim."
+    },
+    {
+      "id": "loan-build",
+      "fixture": {
+        "path": "artifacts/search-v2/20261028/study/fixtures/loan-build.json",
+        "bytes": 167591,
+        "sha256": "86cb6d309b7346047957b005fb31f4cc798865671ec94c907cdabfec68613057"
+      },
+      "category": "Canal cash=9; loan and follow-up construction",
+      "partition": "development",
+      "source": {
+        "path": "artifacts/rust-backend/20261026-local-release/nn-03-a-evidence/unity.permitted.jsonl",
+        "bytes": 546545,
+        "sha256": "da781e46f87d4b40642bd46336ee4b630e57f9de176a6eefdc9059b0d417c51f"
+      },
+      "authored": null,
+      "search_seed": 7,
+      "world_seed": 890,
+      "expectation": "Both actions must be complete and independently legal; resource payments and actor/turn/ledger must match replay. No invented optimal-action claim."
+    },
+    {
+      "id": "dense-canal",
+      "fixture": {
+        "path": "artifacts/search-v2/20261028/study/fixtures/dense-canal.json",
+        "bytes": 174614,
+        "sha256": "b509f3f675c371dfe39da47a499c28e19d2300aa41d217e8b18b594be15658f8"
+      },
+      "category": "Canal round 7; 15 tiles; development and payment choices",
+      "partition": "development",
+      "source": {
+        "path": "artifacts/rust-backend/20261026-local-release/nn-04-a-evidence/unity.permitted.jsonl",
+        "bytes": 518194,
+        "sha256": "c54a2d5c22069460a69089a65c908dde54150e60541e6537505ec2c6bd604f4f"
+      },
+      "authored": null,
+      "search_seed": 7,
+      "world_seed": 890,
+      "expectation": "Both actions must be complete and independently legal; resource payments and actor/turn/ledger must match replay. No invented optimal-action claim."
+    },
+    {
+      "id": "dense-rail",
+      "fixture": {
+        "path": "artifacts/search-v2/20261028/study/fixtures/dense-rail.json",
+        "bytes": 226304,
+        "sha256": "b5e97c488bc3b455d4d403e884e89388ebbf772ac481b53d69b61a9e3395cf2d"
+      },
+      "category": "Rail round 7; 31 tiles/30 links; expensive legality",
+      "partition": "heldout",
+      "source": {
+        "path": "artifacts/rust-backend/20261026-local-release/nn-08-a-evidence/unity.permitted.jsonl",
+        "bytes": 656903,
+        "sha256": "a200ef45beb179d2d7cc91dddafdf3887f5dbfe3902d3789519d918058df10a6"
+      },
+      "authored": null,
+      "search_seed": 7,
+      "world_seed": 890,
+      "expectation": "Both actions must be complete and independently legal; resource payments and actor/turn/ledger must match replay. No invented optimal-action claim."
+    },
+    {
+      "id": "near-end",
+      "fixture": {
+        "path": "artifacts/search-v2/20261028/study/fixtures/near-end.json",
+        "bytes": 230629,
+        "sha256": "91d90b6887b4f495c5527295642eb9484ae478f45cc41ba1aaa2813309f21360"
+      },
+      "category": "Rail round 8; first-choice commitment risk",
+      "partition": "heldout",
+      "source": {
+        "path": "artifacts/rust-backend/20261026-local-release/nn-08-a-evidence/unity.permitted.jsonl",
+        "bytes": 656903,
+        "sha256": "a200ef45beb179d2d7cc91dddafdf3887f5dbfe3902d3789519d918058df10a6"
+      },
+      "authored": null,
+      "search_seed": 7,
+      "world_seed": 890,
+      "expectation": "Both actions must be complete and independently legal; resource payments and actor/turn/ledger must match replay. No invented optimal-action claim."
+    },
+    {
+      "id": "rail-double",
+      "fixture": {
+        "path": "artifacts/search-v2/20261028/study/fixtures/rail-double.json",
+        "bytes": 147139,
+        "sha256": "e2a113241a1772e9e4395664c6f801545610f48ca52884179eefbd88284788ed"
+      },
+      "category": "Rail double-link; own beer and remote coal",
+      "partition": "heldout",
+      "source": {
+        "path": "artifacts/rust-backend/20261024-g890-l01-l02/local/fixtures/roots/edge-rail-action.json.gz",
+        "bytes": 15351,
+        "sha256": "58abe3540bcda476497e0db105274ce05b9bb2b575a86321365a7347bb2bcb19"
+      },
+      "authored": null,
+      "search_seed": 7,
+      "world_seed": 890,
+      "expectation": "Both actions must be complete and independently legal; resource payments and actor/turn/ledger must match replay. No invented optimal-action claim."
+    },
+    {
+      "id": "multi-sale",
+      "fixture": {
+        "path": "artifacts/search-v2/20261028/study/fixtures/multi-sale.json",
+        "bytes": 150623,
+        "sha256": "3b80f943ddd2fca646039b638c19c63a68428e6cfe3b7a085c9a4c0591806851"
+      },
+      "category": "Two cotton mills; shared merchant beer; multi-sale ordering",
+      "partition": "heldout",
+      "source": {
+        "path": "artifacts/rust-backend/20261024-g890-l01-l02/local/fixtures/roots/edge-shared-merchant-beer.json.gz",
+        "bytes": 15548,
+        "sha256": "ff53edcb18e732c6125455a4858935a0333a9721bcda339db0f4c469e893fc6e"
+      },
+      "authored": "Change only round 1->2 and actions_remaining 1->2 on the existing authored shared-beer fixture; preserve board/cards/resources.",
+      "search_seed": 7,
+      "world_seed": 890,
+      "expectation": "Both actions must be complete and independently legal; resource payments and actor/turn/ledger must match replay. No invented optimal-action claim."
+    }
+  ],
+  "batches": [
+    {
+      "batch": "brass-003-4s_k8",
+      "root": "brass-003",
+      "setting": "4s_k8",
+      "allowance_ms": 4000,
+      "k": 8,
+      "order": [
+        "search_v1",
+        "search_v2_focus_only"
+      ]
+    },
+    {
+      "batch": "brass-003-8s_k8",
+      "root": "brass-003",
+      "setting": "8s_k8",
+      "allowance_ms": 8000,
+      "k": 8,
+      "order": [
+        "search_v2_focus_only",
+        "search_v1"
+      ]
+    },
+    {
+      "batch": "brass-003-8s_k16",
+      "root": "brass-003",
+      "setting": "8s_k16",
+      "allowance_ms": 8000,
+      "k": 16,
+      "order": [
+        "search_v1",
+        "search_v2_focus_only"
+      ]
+    },
+    {
+      "batch": "brass-026-4s_k8",
+      "root": "brass-026",
+      "setting": "4s_k8",
+      "allowance_ms": 4000,
+      "k": 8,
+      "order": [
+        "search_v2_focus_only",
+        "search_v1"
+      ]
+    },
+    {
+      "batch": "brass-026-8s_k8",
+      "root": "brass-026",
+      "setting": "8s_k8",
+      "allowance_ms": 8000,
+      "k": 8,
+      "order": [
+        "search_v1",
+        "search_v2_focus_only"
+      ]
+    },
+    {
+      "batch": "brass-026-8s_k16",
+      "root": "brass-026",
+      "setting": "8s_k16",
+      "allowance_ms": 8000,
+      "k": 16,
+      "order": [
+        "search_v2_focus_only",
+        "search_v1"
+      ]
+    },
+    {
+      "batch": "loan-build-4s_k8",
+      "root": "loan-build",
+      "setting": "4s_k8",
+      "allowance_ms": 4000,
+      "k": 8,
+      "order": [
+        "search_v1",
+        "search_v2_focus_only"
+      ]
+    },
+    {
+      "batch": "loan-build-8s_k8",
+      "root": "loan-build",
+      "setting": "8s_k8",
+      "allowance_ms": 8000,
+      "k": 8,
+      "order": [
+        "search_v2_focus_only",
+        "search_v1"
+      ]
+    },
+    {
+      "batch": "loan-build-8s_k16",
+      "root": "loan-build",
+      "setting": "8s_k16",
+      "allowance_ms": 8000,
+      "k": 16,
+      "order": [
+        "search_v1",
+        "search_v2_focus_only"
+      ]
+    },
+    {
+      "batch": "dense-canal-4s_k8",
+      "root": "dense-canal",
+      "setting": "4s_k8",
+      "allowance_ms": 4000,
+      "k": 8,
+      "order": [
+        "search_v2_focus_only",
+        "search_v1"
+      ]
+    },
+    {
+      "batch": "dense-canal-8s_k8",
+      "root": "dense-canal",
+      "setting": "8s_k8",
+      "allowance_ms": 8000,
+      "k": 8,
+      "order": [
+        "search_v1",
+        "search_v2_focus_only"
+      ]
+    },
+    {
+      "batch": "dense-canal-8s_k16",
+      "root": "dense-canal",
+      "setting": "8s_k16",
+      "allowance_ms": 8000,
+      "k": 16,
+      "order": [
+        "search_v2_focus_only",
+        "search_v1"
+      ]
+    },
+    {
+      "batch": "dense-rail-4s_k8",
+      "root": "dense-rail",
+      "setting": "4s_k8",
+      "allowance_ms": 4000,
+      "k": 8,
+      "order": [
+        "search_v1",
+        "search_v2_focus_only"
+      ]
+    },
+    {
+      "batch": "dense-rail-8s_k8",
+      "root": "dense-rail",
+      "setting": "8s_k8",
+      "allowance_ms": 8000,
+      "k": 8,
+      "order": [
+        "search_v2_focus_only",
+        "search_v1"
+      ]
+    },
+    {
+      "batch": "dense-rail-8s_k16",
+      "root": "dense-rail",
+      "setting": "8s_k16",
+      "allowance_ms": 8000,
+      "k": 16,
+      "order": [
+        "search_v1",
+        "search_v2_focus_only"
+      ]
+    },
+    {
+      "batch": "near-end-4s_k8",
+      "root": "near-end",
+      "setting": "4s_k8",
+      "allowance_ms": 4000,
+      "k": 8,
+      "order": [
+        "search_v2_focus_only",
+        "search_v1"
+      ]
+    },
+    {
+      "batch": "near-end-8s_k8",
+      "root": "near-end",
+      "setting": "8s_k8",
+      "allowance_ms": 8000,
+      "k": 8,
+      "order": [
+        "search_v1",
+        "search_v2_focus_only"
+      ]
+    },
+    {
+      "batch": "near-end-8s_k16",
+      "root": "near-end",
+      "setting": "8s_k16",
+      "allowance_ms": 8000,
+      "k": 16,
+      "order": [
+        "search_v2_focus_only",
+        "search_v1"
+      ]
+    },
+    {
+      "batch": "rail-double-4s_k8",
+      "root": "rail-double",
+      "setting": "4s_k8",
+      "allowance_ms": 4000,
+      "k": 8,
+      "order": [
+        "search_v1",
+        "search_v2_focus_only"
+      ]
+    },
+    {
+      "batch": "rail-double-8s_k8",
+      "root": "rail-double",
+      "setting": "8s_k8",
+      "allowance_ms": 8000,
+      "k": 8,
+      "order": [
+        "search_v2_focus_only",
+        "search_v1"
+      ]
+    },
+    {
+      "batch": "rail-double-8s_k16",
+      "root": "rail-double",
+      "setting": "8s_k16",
+      "allowance_ms": 8000,
+      "k": 16,
+      "order": [
+        "search_v1",
+        "search_v2_focus_only"
+      ]
+    },
+    {
+      "batch": "multi-sale-4s_k8",
+      "root": "multi-sale",
+      "setting": "4s_k8",
+      "allowance_ms": 4000,
+      "k": 8,
+      "order": [
+        "search_v2_focus_only",
+        "search_v1"
+      ]
+    },
+    {
+      "batch": "multi-sale-8s_k8",
+      "root": "multi-sale",
+      "setting": "8s_k8",
+      "allowance_ms": 8000,
+      "k": 8,
+      "order": [
+        "search_v1",
+        "search_v2_focus_only"
+      ]
+    },
+    {
+      "batch": "multi-sale-8s_k16",
+      "root": "multi-sale",
+      "setting": "8s_k16",
+      "allowance_ms": 8000,
+      "k": 16,
+      "order": [
+        "search_v2_focus_only",
+        "search_v1"
+      ]
+    },
+    {
+      "batch": "brass-003-no-switch",
+      "root": "brass-003",
+      "setting": "4s_k8",
+      "allowance_ms": 4000,
+      "k": 8,
+      "order": [
+        "search_v2_no_switch"
+      ]
+    },
+    {
+      "batch": "brass-026-no-switch",
+      "root": "brass-026",
+      "setting": "4s_k8",
+      "allowance_ms": 4000,
+      "k": 8,
+      "order": [
+        "search_v2_no_switch"
+      ]
+    }
+  ],
+  "settings": [
+    [
+      "4s_k8",
+      4000,
+      8
+    ],
+    [
+      "8s_k8",
+      8000,
+      8
+    ],
+    [
+      "8s_k16",
+      8000,
+      16
+    ]
+  ],
+  "sessions": 2,
+  "threads_per_session": 1,
+  "preparation_ns": 20000000,
+  "minimum_support": 2,
+  "batch_watchdog_seconds": 60,
+  "maximum_trials": 50,
+  "search_allowance_seconds": 328,
+  "startup": 7262519,
+  "model": {
+    "path": "artifacts/search-v2/20261028/control/BrassNative/alpha-g890/model/manifest.json",
+    "bytes": 1656,
+    "sha256": "3fee37f18cd7963f6dfde7b56fc211b9d424263bf6f27bcc4e7cb6e7a7e132b7"
+  },
+  "binary": {
+    "path": "artifacts/search-v2/20261028/study/gumbel-pair.exe",
+    "bytes": 3770925,
+    "sha256": "d65ac7c988da7756b4d98ee24b3f361fdc2e402c322456558039680a444fa8f4"
+  },
+  "control_binary": {
+    "path": "artifacts/search-v2/20261028/control/rebuilt-gumbel-pair.exe",
+    "bytes": 3654497,
+    "sha256": "9c62a31367b7db4410212ca65bd56b662e39c277777e632f1244b8267f55e82e"
+  },
+  "native_source_sha256": "e69997a33840b1c4169d2ae173e3553ba4dc12aa07b3926e03a0342beec35e45",
+  "warmup": "One identical 8-trajectory count warmup per arm; reset turn/tree/cache after warmup",
+  "method_scope": "Cache-only refinement; zero inherited visits; full statistical subtree reuse not claimed",
+  "projection_policy": "Ordinary same-actor paths excluding Scout/liquidation; exact projected proof and equal hidden-card allocation law",
+  "retirement": "Quiesce at drained trajectory wave; eligibility stays at the last complete round. Discard later partial work only after acceptance; no-switch resumes it unchanged.",
+  "scope": "Single final native request; report incomplete whole-turn plans explicitly. Actual live exceptional replans are a separate Unity/lifecycle check.",
+  "early_stop": "Run first two development roots before remaining matrix; correctness failure blocks further batches.",
+  "preliminary_evidence": {
+    "path": "artifacts/search-v2/20261028/feasibility/protocol.json",
+    "bytes": 5219,
+    "sha256": "3e02c4268950e8782c28c253ca551108ddba5f7a2abcdeb3c553258862454aa4"
+  },
+  "production_switch": false,
+  "subtree_reuse": false
+}

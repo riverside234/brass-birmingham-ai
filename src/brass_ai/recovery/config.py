@@ -458,6 +458,8 @@ def latest_model_config(config,imitation_checkpoint):
     result=short_options(linear_options(g850_config(g210_options(result))))
     from .training_revision_g1120 import configure_kl32 as g1120_config
     result=g1120_config(result)
+    from .training_revision_g1320 import configure as g1320_config
+    result=g1320_config(result)
     return validate_config(result)
 
 

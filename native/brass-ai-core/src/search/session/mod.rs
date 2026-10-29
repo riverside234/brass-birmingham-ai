@@ -1,8 +1,10 @@
 //! L11 scalar whole-turn adapter. Two-session coordination/batching belongs to L12.
 pub mod clock;
 pub mod cooperative;
+pub mod focus;
 pub mod merge;
 pub mod plans;
+pub mod reuse;
 pub mod tournament;
 use super::{
     brass::{Brass, Input, Key},
@@ -97,6 +99,8 @@ impl Default for Settings {
 }
 #[derive(Debug, Clone, Serialize)]
 pub struct Outcome {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reuse: Option<reuse::Metrics>,
     pub version: &'static str,
     pub identity: Identity,
     pub request_id: u64,
@@ -259,6 +263,10 @@ struct CostBucket {
     costs: Costs,
 }
 pub struct Session {
+    retain_descendants: bool,
+    retained: Option<reuse::Retired>,
+    promoted: Option<reuse::Ready>,
+    reuse_metrics: Option<reuse::Metrics>,
     identity: Identity,
     turn: TurnKey,
     context: FeatureContext,
@@ -312,6 +320,10 @@ impl Session {
             });
         }
         Ok(Self {
+            retain_descendants: false,
+            retained: None,
+            promoted: None,
+            reuse_metrics: None,
             identity,
             turn: TurnKey::from_context(&input.view.context, u8::from(input.view.seat) as usize),
             context: input.context.clone(),
@@ -335,10 +347,80 @@ impl Session {
     pub fn next_root_seed(&self) -> u64 {
         self.settings.search.seed.wrapping_add(self.epoch)
     }
+    /// Frozen at admission; ordinary baseline/cache-only owners allocate no journal.
+    pub fn enable_descendant_reuse(&mut self) -> Result<()> {
+        check(self.request == 0, "reuse must be admitted before searching")?;
+        self.retain_descendants = true;
+        Ok(())
+    }
+    /// A hypothetical root has its own recall/revision bookkeeping. It never
+    /// passes through live accept(), advances this session, or gains a clock.
+    /// Exact NN entries are moved, not copied; no tree statistics are inherited.
+    pub fn projected_owner(&mut self, input: &Input) -> Result<Self> {
+        let mut settings = self.settings.clone();
+        settings.search.seed = settings.search.seed.wrapping_add(self.epoch);
+        let mut projected = Self::new(self.identity.clone(), input, settings, self.budget)?;
+        projected.cache = std::mem::take(&mut self.cache);
+        Ok(projected)
+    }
+    pub fn projected_owner_reusing(
+        &mut self,
+        input: &Input,
+        first: &plans::Action,
+        clock: &impl Clock,
+    ) -> Result<Self> {
+        let mut projected = self.projected_owner(input)?;
+        let mut metrics =
+            reuse::Metrics::miss("no retired owner arena", self.settings.search.max_depth);
+        let began = std::time::Instant::now();
+        if let Some(retired) = self.retained.take() {
+            match retired.promote(input, first, self.budget, clock) {
+                Ok((ready, counts)) => {
+                    metrics.hit = true;
+                    metrics.reason = "certified descendant".into();
+                    metrics.counts = counts;
+                    projected.promoted = Some(ready);
+                }
+                Err(error) => metrics.reason = error.to_string(),
+            }
+        }
+        metrics.matching_ns = super::nanos(began);
+        projected.reuse_metrics = Some(metrics);
+        Ok(projected)
+    }
+    pub fn recover_projected_cache(&mut self, projected: &mut Self) {
+        self.cache = std::mem::take(&mut projected.cache);
+    }
+    pub fn reuse_metrics(&self) -> Option<&reuse::Metrics> {
+        self.reuse_metrics.as_ref()
+    }
+    pub fn evaluate_projected_root<E: LeafEvaluator<Key, String>>(
+        &mut self,
+        info: &Info<Key, String>,
+        evaluator: &mut E,
+        clock: &impl Clock,
+    ) -> Result<Statistics> {
+        if let Some(ready) = &self.promoted {
+            let n = ready.tree.get(ready.root)?;
+            check(n.info == *info, "retained root differs from projected root")?;
+            check(self.budget.work_open(clock), "retained root work cutoff")?;
+            return Ok(n.stats.clone());
+        }
+        Cached {
+            cache: &mut self.cache,
+            limit: self.settings.cache_entries,
+            evaluator,
+            clock,
+            budget: self.budget,
+        }
+        .evaluate(info)
+    }
     pub fn recall(&self) -> &Recall {
         &self.recall
     }
     pub fn retire(&mut self) {
+        self.retained = None;
+        self.promoted = None;
         self.retired = true;
         self.continuation = None;
         self.expected_after = None;
@@ -484,6 +566,7 @@ impl Session {
     }
     fn empty(&self, phase: Phase, clock: &impl Clock) -> Outcome {
         Outcome {
+            reuse: self.reuse_metrics.clone(),
             version: IDENTITY,
             identity: self.identity.clone(),
             request_id: self.request,
@@ -602,6 +685,7 @@ impl Session {
             evaluator,
             tape,
             None,
+            None,
         )
     }
     #[allow(clippy::too_many_arguments)]
@@ -631,6 +715,37 @@ impl Session {
             evaluator,
             tape,
             Some((shared, policy)),
+            None,
+        )
+    }
+    /// Experimental checkpoints keep the owner stack (arena, draws, tournament,
+    /// ledger and costs) alive. Pausing never calls accept or narrows the budget.
+    #[allow(clippy::too_many_arguments)]
+    pub fn decide_observed<E: LeafEvaluator<Key, String>>(
+        &mut self,
+        identity: &Identity,
+        request: u64,
+        input: Input,
+        request_deadline_ns: u64,
+        mode: Mode,
+        clock: &impl Clock,
+        evaluator: &mut E,
+        shared: &cooperative::SharedRoot,
+        policy: crate::evaluation::BatchPolicy,
+        observer: &mut dyn focus::Observer,
+    ) -> Result<Outcome> {
+        cooperative::validate_policy(policy)?;
+        self.decide_impl(
+            identity,
+            request,
+            input,
+            request_deadline_ns,
+            mode,
+            clock,
+            evaluator,
+            None,
+            Some((shared, policy)),
+            Some(observer),
         )
     }
     #[allow(clippy::too_many_arguments)]
@@ -645,8 +760,65 @@ impl Session {
         evaluator: &mut E,
         tape: Option<Vec<f64>>,
         cooperative: Option<(&cooperative::SharedRoot, crate::evaluation::BatchPolicy)>,
+        observer: Option<&mut dyn focus::Observer>,
     ) -> Result<Outcome> {
-        let (mut game, info) = self.accept(identity, request, input, request_deadline_ns, clock)?;
+        let (game, info) = self.accept(identity, request, input, request_deadline_ns, clock)?;
+        self.search_root(
+            game,
+            info,
+            mode,
+            clock,
+            evaluator,
+            tape,
+            cooperative,
+            observer,
+        )
+    }
+    /// Internal hypothetical search only. Caller owns a separate projected
+    /// session and supplies the already narrowed original budget unchanged.
+    #[allow(clippy::too_many_arguments)]
+    pub fn decide_projected<E: LeafEvaluator<Key, String>>(
+        &mut self,
+        request: u64,
+        input: Input,
+        mode: Mode,
+        clock: &impl Clock,
+        evaluator: &mut E,
+        shared: &cooperative::SharedRoot,
+        policy: crate::evaluation::BatchPolicy,
+    ) -> Result<Outcome> {
+        check(
+            self.request == 0 && self.previous.is_none(),
+            "projected owner already searched",
+        )?;
+        cooperative::validate_policy(policy)?;
+        let (game, info) = self.preview(input)?;
+        self.request = request;
+        self.search_root(
+            game,
+            info,
+            mode,
+            clock,
+            evaluator,
+            None,
+            Some((shared, policy)),
+            None,
+        )
+    }
+    #[allow(clippy::too_many_arguments)]
+    fn search_root<E: LeafEvaluator<Key, String>>(
+        &mut self,
+        mut game: Brass,
+        info: Info<Key, String>,
+        mode: Mode,
+        clock: &impl Clock,
+        evaluator: &mut E,
+        tape: Option<Vec<f64>>,
+        cooperative: Option<(&cooperative::SharedRoot, crate::evaluation::BatchPolicy)>,
+        mut observer: Option<&mut dyn focus::Observer>,
+    ) -> Result<Outcome> {
+        self.retained = None;
+        let mut retired_tree = None;
         self.epoch += 1;
         self.previous = Some(info.clone());
         if let Some((shared, _)) = cooperative {
@@ -763,11 +935,27 @@ impl Session {
                 self.settings.search.k,
                 quota.simulations,
             )?;
-            let mut tree = Tree::new(
-                self.settings.search.max_nodes,
-                self.settings.search.max_edges,
-            )?;
-            let root = tree.insert(info.clone(), stats.clone())?;
+            let (mut tree, root) = if let Some(ready) = self.promoted.take() {
+                let retained = ready.tree.get(ready.root)?;
+                check(
+                    retained.info == info
+                        && retained.stats.count.iter().all(|n| *n == 0)
+                        && retained.stats.logits == stats.logits
+                        && retained.stats.value == stats.value,
+                    "promoted root/evaluator mismatch",
+                )?;
+                (ready.tree, ready.root)
+            } else {
+                let mut tree = Tree::new(
+                    self.settings.search.max_nodes,
+                    self.settings.search.max_edges,
+                )?;
+                let root = tree.insert(info.clone(), stats.clone())?;
+                if self.retain_descendants {
+                    tree.enable_retention();
+                }
+                (tree, root)
+            };
             let mut ledger = plans::Ledger::default();
             out.quota = Some(quota.clone());
             if let Some((_, policy)) = cooperative {
@@ -788,6 +976,8 @@ impl Session {
                     clock,
                     policy,
                     &mut out,
+                    &mut observer,
+                    self.settings.minimum_plan_support,
                 )?;
             } else {
                 while rounds.tournament.completed < quota.simulations {
@@ -878,6 +1068,16 @@ impl Session {
                 "search_supported"
             }
             .into();
+            if self.retain_descendants && out.status == "policy_round_stop" {
+                retired_tree = Some((
+                    tree,
+                    root,
+                    out.snapshot
+                        .as_ref()
+                        .expect("eligible stop")
+                        .support_watermark,
+                ));
+            }
         } else {
             out.provenance = "bounded_legal_fallback".into();
         }
@@ -897,6 +1097,15 @@ impl Session {
                 }
             }
         }
-        self.deliver(&game, out, clock)
+        let result = self.deliver(&game, out, clock)?;
+        if self.budget.work_open(clock) {
+            self.retained = retired_tree.map(|(tree, root, watermark)| reuse::Retired {
+                tree,
+                root,
+                watermark,
+                game,
+            });
+        }
+        Ok(result)
     }
 }

@@ -1,0 +1,121 @@
+{
+  "version": "search-v2-study/2.0.0",
+  "folder": "fixture-correction-v2",
+  "stage": "cache-only-candidate",
+  "roots": [
+    {
+      "id": "multi-sale",
+      "fixture": {
+        "path": "artifacts/search-v2/20261028/fixture-correction-v2/multi-sale-corrected.json",
+        "bytes": 150638,
+        "sha256": "0c57a4d95aae5d62768bc7e87aa75d9da3cae98b3eb21bd9549d4e9b3f51d940"
+      },
+      "category": "Two cotton mills; shared merchant beer; multi-sale ordering",
+      "partition": "heldout",
+      "source": {
+        "path": "artifacts/rust-backend/20261024-l04/regressions-v2/regressions.json",
+        "bytes": 5723956,
+        "sha256": "6dd8449c62eba8d3527bf16ec4ee2e63bb3710db473ef5e6cef380ad89e18924"
+      },
+      "authored": "Use the independently C#-captured L04 corrected shared-merchant fixture. It repairs both link inventory and merchant tile conservation, preserving the two Gloucester cotton destinations. Only the same round=2/actions_remaining=2 study alteration is then applied. Search policy/seeds unchanged; prior two rejected variants preserved.",
+      "search_seed": 7,
+      "world_seed": 890,
+      "expectation": "Both actions must be complete and independently legal; resource payments and actor/turn/ledger must match replay. No invented optimal-action claim."
+    }
+  ],
+  "batches": [
+    {
+      "batch": "multi-sale-corrected-4s_k8",
+      "root": "multi-sale",
+      "setting": "4s_k8",
+      "allowance_ms": 4000,
+      "k": 8,
+      "order": [
+        "search_v2_focus_only",
+        "search_v1"
+      ]
+    },
+    {
+      "batch": "multi-sale-corrected-8s_k8",
+      "root": "multi-sale",
+      "setting": "8s_k8",
+      "allowance_ms": 8000,
+      "k": 8,
+      "order": [
+        "search_v1",
+        "search_v2_focus_only"
+      ]
+    },
+    {
+      "batch": "multi-sale-corrected-8s_k16",
+      "root": "multi-sale",
+      "setting": "8s_k16",
+      "allowance_ms": 8000,
+      "k": 16,
+      "order": [
+        "search_v2_focus_only",
+        "search_v1"
+      ]
+    }
+  ],
+  "settings": [
+    [
+      "4s_k8",
+      4000,
+      8
+    ],
+    [
+      "8s_k8",
+      8000,
+      8
+    ],
+    [
+      "8s_k16",
+      8000,
+      16
+    ]
+  ],
+  "sessions": 2,
+  "threads_per_session": 1,
+  "preparation_ns": 20000000,
+  "minimum_support": 2,
+  "batch_watchdog_seconds": 60,
+  "maximum_trials": 6,
+  "search_allowance_seconds": 40,
+  "startup": 7262519,
+  "model": {
+    "path": "artifacts/search-v2/20261028/control/BrassNative/alpha-g890/model/manifest.json",
+    "bytes": 1656,
+    "sha256": "3fee37f18cd7963f6dfde7b56fc211b9d424263bf6f27bcc4e7cb6e7a7e132b7"
+  },
+  "binary": {
+    "path": "artifacts/search-v2/20261028/study/gumbel-pair.exe",
+    "bytes": 3770925,
+    "sha256": "d65ac7c988da7756b4d98ee24b3f361fdc2e402c322456558039680a444fa8f4"
+  },
+  "control_binary": {
+    "path": "artifacts/search-v2/20261028/control/rebuilt-gumbel-pair.exe",
+    "bytes": 3654497,
+    "sha256": "9c62a31367b7db4410212ca65bd56b662e39c277777e632f1244b8267f55e82e"
+  },
+  "native_source_sha256": "e69997a33840b1c4169d2ae173e3553ba4dc12aa07b3926e03a0342beec35e45",
+  "warmup": "One identical 8-trajectory count warmup per arm; reset turn/tree/cache after warmup",
+  "method_scope": "Cache-only refinement; zero inherited visits; full statistical subtree reuse not claimed",
+  "projection_policy": "Ordinary same-actor paths excluding Scout/liquidation; exact projected proof and equal hidden-card allocation law",
+  "retirement": "Quiesce at drained trajectory wave; eligibility stays at the last complete round. Discard later partial work only after acceptance; no-switch resumes it unchanged.",
+  "scope": "Single final native request; report incomplete whole-turn plans explicitly. Actual live exceptional replans are a separate Unity/lifecycle check.",
+  "early_stop": "Run first two development roots before remaining matrix; correctness failure blocks further batches.",
+  "preliminary_evidence": {
+    "path": "artifacts/search-v2/20261028/feasibility/protocol.json",
+    "bytes": 5219,
+    "sha256": "3e02c4268950e8782c28c253ca551108ddba5f7a2abcdeb3c553258862454aa4"
+  },
+  "production_switch": false,
+  "subtree_reuse": false,
+  "amends": {
+    "path": "artifacts/search-v2/20261028/study/protocol.json",
+    "bytes": 15344,
+    "sha256": "28521fc24bdd1decf3051de1b9209c8675f79848f7657f9739d378f8edee43e0"
+  },
+  "correction": "Use the independently C#-captured L04 corrected shared-merchant fixture. It repairs both link inventory and merchant tile conservation, preserving the two Gloucester cotton destinations. Only the same round=2/actions_remaining=2 study alteration is then applied. Search policy/seeds unchanged; prior two rejected variants preserved."
+}

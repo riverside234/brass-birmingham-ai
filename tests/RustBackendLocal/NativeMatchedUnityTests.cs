@@ -48,6 +48,10 @@ public sealed partial class LocalAiUnityDriver
     }
     IEnumerator NativeMatchedCases()
     {
+        if(Environment.GetCommandLineArgs().Contains("--brass-search-v2-test")) {
+            var focused=(IEnumerator)GetType().GetMethod("SearchV2Cases",ReflectionAccess.Flags).Invoke(this,null);
+            while(focused.MoveNext())yield return focused.Current;yield break;
+        }
         var inputs=JArray.Parse(File.ReadAllText(Environment.GetEnvironmentVariable("BRASS_L14_LIVE_FIXTURES")));
         string destination=Environment.GetEnvironmentVariable("BRASS_L14_LIVE_RESULT");
         yield return SceneManager.LoadSceneAsync("GameScene");yield return null;router.ReloadPrefabs();

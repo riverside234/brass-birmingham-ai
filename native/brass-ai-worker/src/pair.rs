@@ -42,6 +42,8 @@ struct Binding {
     budget: Budget,
     clock: MonotonicClock,
     reset: bool,
+    method: session::focus::Method,
+    switched: bool,
 }
 struct Run {
     binding: Binding,
@@ -52,6 +54,9 @@ struct Run {
     remaining_deadline: u64,
     root: Root,
     probe: Option<Probe>,
+    progress: Option<crate::focus::Transport>,
+    projected: bool,
+    first_action: Option<session::plans::Action>,
 }
 enum Root {
     Produce(Sender<Result<Arc<SharedRoot>>>),
@@ -59,11 +64,13 @@ enum Root {
 }
 enum Command {
     Run(Box<Run>),
+    Focus(Box<Run>),
     Finish {
         input: Box<Input>,
         outcome: Box<Outcome>,
         selection: Box<merge::Selection>,
         clock: MonotonicClock,
+        fallback: Option<Vec<SupportedAction>>,
     },
     Stop,
 }
@@ -97,6 +104,11 @@ struct Active {
     error: Option<CoreError>,
     received: [bool; 2],
     finishing: bool,
+    focus: Option<crate::focus::Coordinator>,
+    first_lanes: Option<[Lane; 2]>,
+    mode: Mode,
+    policy: BatchPolicy,
+    remaining_deadline: u64,
 }
 #[derive(Serialize)]
 pub struct Decision {
@@ -109,6 +121,10 @@ pub struct Decision {
     pub result: Outcome,
     pub response_ready_ns: u64,
     pub retired_ns: u64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub focus: Option<crate::focus::Metrics>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub focused_lanes: Option<[Lane; 2]>,
 }
 pub struct Pair {
     owners: [Owner; 2],
@@ -161,11 +177,25 @@ impl Pair {
                                         )
                                         .map(Box::new),
                                     ),
+                                    Command::Focus(run) => Reply::Lane((|| {
+                                        let original = session.as_mut().ok_or(CoreError::SessionFailed)?;
+                                        let mut projected = Some(if run.binding.method == session::focus::Method::SearchV2 {
+                                            let first = run.first_action.as_ref().ok_or_else(|| search::invalid("missing retained prefix"))?;
+                                            let _scope = work::Scope::enter(work::Control {
+                                                deadline: run.binding.clock.instant(original.budget().work_deadline_ns),
+                                                cancelled: run.binding.clock.cancelled.clone(), probe: None });
+                                            original.projected_owner_reusing(&run.input, first, &run.binding.clock)?
+                                        } else { original.projected_owner(&run.input)? });
+                                        let result = run_lane(*run, lane, &mut projected, &mut evaluator, &mut buffers);
+                                        original.recover_projected_cache(projected.as_mut().unwrap());
+                                        result.map(Box::new)
+                                    })()),
                                     Command::Finish {
                                         input,
                                         outcome,
                                         mut selection,
                                         clock,
+                                        fallback,
                                     } => {
                                         let control = work::Control {
                                             deadline: clock.instant(outcome.budget.deadline_ns),
@@ -194,8 +224,18 @@ impl Pair {
                                                 };
                                             let mut outcome = *outcome;
                                             outcome.provenance = selection.provenance.clone();
-                                            let mut result =
-                                                s.adopt(*input, outcome, actions, &clock)?;
+                                            let adopted = s.adopt((*input).clone(), outcome.clone(), actions, &clock);
+                                            let mut result = match adopted {
+                                                Ok(result) => result,
+                                                Err(error) => {
+                                                    if let Some(fallback) = fallback {
+                                                        let mut result = s.adopt(*input, outcome, fallback, &clock)?;
+                                                        result.provenance = format!("incumbent_after_rejected_composition: {error}");
+                                                        return Ok(result);
+                                                    }
+                                                    return Err(error);
+                                                }
+                                            };
                                             result.provenance = selection.provenance;
                                             Ok(result)
                                         })();
@@ -237,6 +277,12 @@ impl Pair {
     pub fn busy(&self) -> bool {
         self.active.is_some()
     }
+    /// Diagnostic lifecycle observation; grants no authority to change clocks.
+    pub fn focusing(&self) -> bool {
+        self.active
+            .as_ref()
+            .is_some_and(|a| a.first_lanes.is_some() && !a.finishing)
+    }
     /// Explicit admission only. A retry or changed sub-choice cannot call this
     /// while work remains owned; the live caller adds its generation guards L13.
     pub fn admit(
@@ -268,7 +314,17 @@ impl Pair {
             budget,
             clock,
             reset: true,
+            method: session::focus::Method::SearchV1,
+            switched: false,
         });
+        Ok(())
+    }
+    /// Research admission only. Local packages continue to admit search_v1.
+    pub fn method(&mut self, method: session::focus::Method) -> Result<()> {
+        search::check(!self.busy(), "method change while busy")?;
+        let b = self.binding.as_mut().ok_or(CoreError::NoGame)?;
+        search::check(b.reset, "method must be frozen at turn admission")?;
+        b.method = method;
         Ok(())
     }
     pub fn start(
@@ -298,6 +354,15 @@ impl Pair {
             .min(binding.clock.now_ns().saturating_add(remaining_ns));
         let (root_tx, root_rx) = bounded(1);
         let roots = [Root::Produce(root_tx), Root::Consume(root_rx)];
+        let (focus, mut progress) = if binding.method != session::focus::Method::SearchV1 {
+            let ordinary = input.view.context.phase == brass_ai_core::types::Phase::Action
+                && input.view.context.actions_remaining == 2
+                && !binding.switched;
+            let (coordinator, senders) = crate::focus::Coordinator::new(binding.method, ordinary);
+            (Some(coordinator), senders.map(Some))
+        } else {
+            (None, [None, None])
+        };
         self.active = Some(Active {
             request: self.sequence,
             input: input.clone(),
@@ -307,6 +372,11 @@ impl Pair {
             error: None,
             received: [false, false],
             finishing: false,
+            focus,
+            first_lanes: None,
+            mode: mode.clone(),
+            policy,
+            remaining_deadline,
         });
         for (lane, (root, probe)) in roots.into_iter().zip(probes).enumerate() {
             let mut input = input.clone();
@@ -324,6 +394,9 @@ impl Pair {
                 remaining_deadline,
                 root,
                 probe,
+                progress: progress[lane].take(),
+                projected: false,
+                first_action: None,
             };
             if self.owners[lane]
                 .tx
@@ -360,6 +433,14 @@ impl Pair {
         )?;
         let b = self.binding.as_ref().expect("active binding");
         let a = self.active.as_mut().expect("matched ticket");
+        if let Some(focus) = &mut a.focus {
+            let mut effective = b.budget;
+            effective.narrow(0, a.remaining_deadline);
+            if let Err(e) = focus.poll(&b.config, effective, &b.clock) {
+                a.error = Some(e);
+                b.clock.cancelled.store(true, Ordering::Release);
+            }
+        }
         for lane in 0..2 {
             if a.received[lane] {
                 continue;
@@ -368,7 +449,12 @@ impl Pair {
                 Ok(reply) => {
                     a.received[lane] = true;
                     let result = match reply {
-                        Reply::Lane(r) if !a.finishing => r.map(|r| a.lanes[lane] = Some(*r)),
+                        Reply::Lane(r) if !a.finishing => r.map(|r| {
+                            a.lanes[lane] = Some(*r);
+                            if let Some(focus) = &mut a.focus {
+                                focus.owner_finished();
+                            }
+                        }),
                         Reply::Finished(r) if a.finishing => r.map(|r| a.finished[lane] = Some(*r)),
                         _ => Err(CoreError::SessionFailed),
                     };
@@ -397,6 +483,48 @@ impl Pair {
             return Err(search::invalid("cancelled/expired pair retired"));
         }
         if !a.finishing {
+            if a.first_lanes.is_none() && a.focus.as_ref().is_some_and(|f| f.metrics.switched) {
+                // Both original owners retired. Original live sessions stay
+                // untouched while temporary hypothetical owners borrow caches.
+                let focused = a.focus.as_ref().unwrap().prepared.as_ref().unwrap();
+                let input = focused.input.clone();
+                let (tx, rx) = bounded(1);
+                let roots = [Root::Produce(tx), Root::Consume(rx)];
+                a.first_lanes = Some([a.lanes[0].take().unwrap(), a.lanes[1].take().unwrap()]);
+                a.received = [false, false];
+                for (lane, root) in roots.into_iter().enumerate() {
+                    let mut input = input.clone();
+                    if lane == 1 {
+                        input.sample_seed ^= 0x9e3779b97f4a7c15;
+                    }
+                    let mut binding = b.clone();
+                    binding.reset = false;
+                    let run = Run {
+                        binding,
+                        request: a.request,
+                        input,
+                        mode: a.mode.clone(),
+                        policy: a.policy,
+                        remaining_deadline: a.remaining_deadline,
+                        root,
+                        probe: None,
+                        progress: None,
+                        projected: true,
+                        first_action: Some(focused.incumbent[0].action.clone()),
+                    };
+                    if self.owners[lane]
+                        .tx
+                        .send(Command::Focus(Box::new(run)))
+                        .is_err()
+                    {
+                        a.error = Some(CoreError::SessionFailed);
+                        a.received[lane..].fill(true);
+                        b.clock.cancelled.store(true, Ordering::Release);
+                        break;
+                    }
+                }
+                return Ok(None);
+            }
             let lanes = [a.lanes[0].as_ref().unwrap(), a.lanes[1].as_ref().unwrap()];
             let selected = merge::select(
                 &lanes[0].shared,
@@ -404,16 +532,32 @@ impl Pair {
                 b.config.parameters(),
                 2,
             );
-            let selection = match selected {
+            let mut selection = match selected {
                 Ok(s) => s,
                 Err(e) => {
                     self.active = None;
                     return Err(e);
                 }
             };
+            if a.first_lanes.is_some() {
+                selection = match a.focus.as_mut().unwrap().compose(&selection, lanes) {
+                    Ok(selection) => selection,
+                    Err(error) => {
+                        // Both owners have retired: a rejected envelope must
+                        // not leave the coordinator permanently busy.
+                        self.active = None;
+                        return Err(error);
+                    }
+                };
+            }
             a.finishing = true;
             a.received = [false, false];
-            for (lane, result) in lanes.iter().enumerate() {
+            let original = a
+                .first_lanes
+                .as_ref()
+                .map(|l| [&l[0], &l[1]])
+                .unwrap_or(lanes);
+            for (lane, result) in original.iter().enumerate() {
                 if self.owners[lane]
                     .tx
                     .send(Command::Finish {
@@ -421,6 +565,11 @@ impl Pair {
                         outcome: Box::new(result.outcome.clone()),
                         selection: Box::new(selection.clone()),
                         clock: b.clock.clone(),
+                        fallback: a
+                            .focus
+                            .as_ref()
+                            .and_then(|f| f.prepared.as_ref())
+                            .map(|p| p.incumbent.clone()),
                     })
                     .is_err()
                 {
@@ -440,13 +589,53 @@ impl Pair {
             !result.actions.is_empty() && result.action_ids == second.action_ids,
             "coordinator completion disagreement",
         )?;
+        if result
+            .provenance
+            .starts_with("incumbent_after_rejected_composition:")
+        {
+            let focus = a
+                .focus
+                .as_mut()
+                .ok_or_else(|| search::invalid("fallback missing focus evidence"))?;
+            let mut empty = focus
+                .first_selection
+                .clone()
+                .ok_or_else(|| search::invalid("fallback missing first evidence"))?;
+            empty.actions = None;
+            // compose(None) uses only the retained original evidence. In
+            // particular, rejected focused support must not survive delivery.
+            let selection = focus.compose(
+                &empty,
+                [a.lanes[0].as_ref().unwrap(), a.lanes[1].as_ref().unwrap()],
+            )?;
+            search::check(
+                selection
+                    .actions
+                    .as_ref()
+                    .unwrap()
+                    .iter()
+                    .map(|a| a.action.ids())
+                    .collect::<Vec<_>>()
+                    == result.action_ids,
+                "fallback delivery/evidence disagreement",
+            )?;
+            a.selection = Some(selection);
+        }
         let retired_ns = b.clock.now_ns();
         let response_ready_ns = b.clock.now_ns();
         search::check(
             response_ready_ns < result.budget.deadline_ns,
             "late coordinator result",
         )?;
-        let lanes = a.lanes.map(|l| l.unwrap());
+        let latest = a.lanes.map(|l| l.unwrap());
+        let (lanes, focused_lanes) = if let Some(first) = a.first_lanes {
+            (first, Some(latest))
+        } else {
+            (latest, None)
+        };
+        if a.focus.as_ref().is_some_and(|f| f.metrics.switched) {
+            self.binding.as_mut().unwrap().switched = true;
+        }
         Ok(Some(Decision {
             identity: merge::IDENTITY,
             request_id: ticket,
@@ -457,6 +646,8 @@ impl Pair {
             result,
             response_ready_ns,
             retired_ns,
+            focus: a.focus.map(|f| f.metrics),
+            focused_lanes,
         }))
     }
 }
@@ -504,6 +695,9 @@ fn run_lane<E: Evaluator>(
             },
             b.budget,
         )?);
+        if b.method == session::focus::Method::SearchV2 {
+            session.as_mut().unwrap().enable_descendant_reuse()?;
+        }
     }
     let s = session.as_mut().ok_or(CoreError::SessionFailed)?;
     let mut effective = s.budget();
@@ -540,7 +734,12 @@ fn run_lane<E: Evaluator>(
                 {
                     let _root_scope =
                         work::Scope::narrow_remaining(effective.remaining_work(clock.now_ns()));
-                    match neural.evaluate(&info) {
+                    let evaluated = if run.projected {
+                        s.evaluate_projected_root(&info, &mut neural, clock)
+                    } else {
+                        neural.evaluate(&info)
+                    };
+                    match evaluated {
                         Ok(s) => Some(s),
                         Err(e) => {
                             if effective.work_open(clock) {
@@ -588,18 +787,50 @@ fn run_lane<E: Evaluator>(
     } else {
         0
     };
-    let outcome = s.decide_cooperative(
-        &b.identity,
-        run.request,
-        run.input,
-        run.remaining_deadline,
-        run.mode,
-        clock,
-        &mut neural,
-        None,
-        &shared,
-        run.policy,
-    )?;
+    let outcome = if run.projected {
+        s.decide_projected(
+            run.request,
+            run.input,
+            run.mode,
+            clock,
+            &mut neural,
+            &shared,
+            run.policy,
+        )?
+    } else if let Some(transport) = run.progress {
+        let mut monitor = crate::focus::Monitor {
+            shared: shared.clone(),
+            transport,
+            clock: clock.clone(),
+            budget: effective,
+            pause_pending: false,
+        };
+        s.decide_observed(
+            &b.identity,
+            run.request,
+            run.input,
+            run.remaining_deadline,
+            run.mode,
+            clock,
+            &mut neural,
+            &shared,
+            run.policy,
+            &mut monitor,
+        )?
+    } else {
+        s.decide_cooperative(
+            &b.identity,
+            run.request,
+            run.input,
+            run.remaining_deadline,
+            run.mode,
+            clock,
+            &mut neural,
+            None,
+            &shared,
+            run.policy,
+        )?
+    };
     let neural_stats = neural.stats;
     Ok(Lane {
         outcome,

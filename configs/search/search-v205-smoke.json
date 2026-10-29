@@ -1,0 +1,287 @@
+{
+  "version": "search-v205-smoke/1.0.0",
+  "folder": "v205",
+  "roots": [
+    {
+      "id": "brass-003",
+      "fixture": {
+        "path": "artifacts/search-v2/20261028/study/fixtures/brass-003.json",
+        "bytes": 157059,
+        "sha256": "41367c9a15482d9bd3bf2855e94c40ddc601f60ee1b2a797bcecdd455963c70f"
+      },
+      "category": "Early Canal; build/develop/loan combinations",
+      "partition": "previously inspected coverage root",
+      "source": {
+        "path": "artifacts/rust-backend/20261025-l10-capture/brass-003-request.json",
+        "bytes": 2763089,
+        "sha256": "a9c1e25825ae904a181eea9565a175c323ce36313db7d73c857015d87d27fa8d"
+      },
+      "authored": null,
+      "search_seed": 7,
+      "world_seed": 890,
+      "expectation": "Both actions must be complete and independently legal; resource payments and actor/turn/ledger must match replay. No invented optimal-action claim."
+    },
+    {
+      "id": "loan-build",
+      "fixture": {
+        "path": "artifacts/search-v2/20261028/study/fixtures/loan-build.json",
+        "bytes": 167591,
+        "sha256": "86cb6d309b7346047957b005fb31f4cc798865671ec94c907cdabfec68613057"
+      },
+      "category": "Canal cash=9; loan and follow-up construction",
+      "partition": "previously inspected coverage root",
+      "source": {
+        "path": "artifacts/rust-backend/20261026-local-release/nn-03-a-evidence/unity.permitted.jsonl",
+        "bytes": 546545,
+        "sha256": "da781e46f87d4b40642bd46336ee4b630e57f9de176a6eefdc9059b0d417c51f"
+      },
+      "authored": null,
+      "search_seed": 7,
+      "world_seed": 890,
+      "expectation": "Both actions must be complete and independently legal; resource payments and actor/turn/ledger must match replay. No invented optimal-action claim."
+    },
+    {
+      "id": "dense-canal",
+      "fixture": {
+        "path": "artifacts/search-v2/20261028/study/fixtures/dense-canal.json",
+        "bytes": 174614,
+        "sha256": "b509f3f675c371dfe39da47a499c28e19d2300aa41d217e8b18b594be15658f8"
+      },
+      "category": "Canal round 7; 15 tiles; development and payment choices",
+      "partition": "previously inspected coverage root",
+      "source": {
+        "path": "artifacts/rust-backend/20261026-local-release/nn-04-a-evidence/unity.permitted.jsonl",
+        "bytes": 518194,
+        "sha256": "c54a2d5c22069460a69089a65c908dde54150e60541e6537505ec2c6bd604f4f"
+      },
+      "authored": null,
+      "search_seed": 7,
+      "world_seed": 890,
+      "expectation": "Both actions must be complete and independently legal; resource payments and actor/turn/ledger must match replay. No invented optimal-action claim."
+    },
+    {
+      "id": "rail-double",
+      "fixture": {
+        "path": "artifacts/search-v2/20261028/study/fixtures/rail-double.json",
+        "bytes": 147139,
+        "sha256": "e2a113241a1772e9e4395664c6f801545610f48ca52884179eefbd88284788ed"
+      },
+      "category": "Rail double-link; own beer and remote coal",
+      "partition": "previously inspected coverage root",
+      "source": {
+        "path": "artifacts/rust-backend/20261024-g890-l01-l02/local/fixtures/roots/edge-rail-action.json.gz",
+        "bytes": 15351,
+        "sha256": "58abe3540bcda476497e0db105274ce05b9bb2b575a86321365a7347bb2bcb19"
+      },
+      "authored": null,
+      "search_seed": 7,
+      "world_seed": 890,
+      "expectation": "Both actions must be complete and independently legal; resource payments and actor/turn/ledger must match replay. No invented optimal-action claim."
+    },
+    {
+      "id": "dense-rail",
+      "fixture": {
+        "path": "artifacts/search-v2/20261028/study/fixtures/dense-rail.json",
+        "bytes": 226304,
+        "sha256": "b5e97c488bc3b455d4d403e884e89388ebbf772ac481b53d69b61a9e3395cf2d"
+      },
+      "category": "Rail round 7; 31 tiles/30 links; expensive legality",
+      "partition": "previously inspected coverage root",
+      "source": {
+        "path": "artifacts/rust-backend/20261026-local-release/nn-08-a-evidence/unity.permitted.jsonl",
+        "bytes": 656903,
+        "sha256": "a200ef45beb179d2d7cc91dddafdf3887f5dbfe3902d3789519d918058df10a6"
+      },
+      "authored": null,
+      "search_seed": 7,
+      "world_seed": 890,
+      "expectation": "Both actions must be complete and independently legal; resource payments and actor/turn/ledger must match replay. No invented optimal-action claim."
+    },
+    {
+      "id": "multi-sale",
+      "fixture": {
+        "path": "artifacts/search-v2/20261028/fixture-correction-v2/multi-sale-corrected.json",
+        "bytes": 150638,
+        "sha256": "0c57a4d95aae5d62768bc7e87aa75d9da3cae98b3eb21bd9549d4e9b3f51d940"
+      },
+      "category": "Two cotton mills; shared merchant beer; multi-sale ordering",
+      "partition": "previously inspected coverage root",
+      "source": {
+        "path": "artifacts/rust-backend/20261024-l04/regressions-v2/regressions.json",
+        "bytes": 5723956,
+        "sha256": "6dd8449c62eba8d3527bf16ec4ee2e63bb3710db473ef5e6cef380ad89e18924"
+      },
+      "authored": "Use the independently C#-captured L04 corrected shared-merchant fixture. It repairs both link inventory and merchant tile conservation, preserving the two Gloucester cotton destinations. Only the same round=2/actions_remaining=2 study alteration is then applied. Search policy/seeds unchanged; prior two rejected variants preserved.",
+      "search_seed": 7,
+      "world_seed": 890,
+      "expectation": "Both actions must be complete and independently legal; resource payments and actor/turn/ledger must match replay. No invented optimal-action claim."
+    },
+    {
+      "id": "brass-003-repeat",
+      "fixture": {
+        "path": "artifacts/search-v2/20261028/study/fixtures/brass-003.json",
+        "bytes": 157059,
+        "sha256": "41367c9a15482d9bd3bf2855e94c40ddc601f60ee1b2a797bcecdd455963c70f"
+      },
+      "category": "Early Canal; build/develop/loan combinations",
+      "partition": "predeclared diagnostic second seed",
+      "source": {
+        "path": "artifacts/rust-backend/20261025-l10-capture/brass-003-request.json",
+        "bytes": 2763089,
+        "sha256": "a9c1e25825ae904a181eea9565a175c323ce36313db7d73c857015d87d27fa8d"
+      },
+      "authored": null,
+      "search_seed": 19,
+      "world_seed": 891,
+      "expectation": "Both actions must be complete and independently legal; resource payments and actor/turn/ledger must match replay. No invented optimal-action claim."
+    },
+    {
+      "id": "dense-rail-repeat",
+      "fixture": {
+        "path": "artifacts/search-v2/20261028/study/fixtures/dense-rail.json",
+        "bytes": 226304,
+        "sha256": "b5e97c488bc3b455d4d403e884e89388ebbf772ac481b53d69b61a9e3395cf2d"
+      },
+      "category": "Rail round 7; 31 tiles/30 links; expensive legality",
+      "partition": "predeclared diagnostic second seed",
+      "source": {
+        "path": "artifacts/rust-backend/20261026-local-release/nn-08-a-evidence/unity.permitted.jsonl",
+        "bytes": 656903,
+        "sha256": "a200ef45beb179d2d7cc91dddafdf3887f5dbfe3902d3789519d918058df10a6"
+      },
+      "authored": null,
+      "search_seed": 19,
+      "world_seed": 891,
+      "expectation": "Both actions must be complete and independently legal; resource payments and actor/turn/ledger must match replay. No invented optimal-action claim."
+    }
+  ],
+  "batches": [
+    {
+      "batch": "brass-003-4s_k8",
+      "root": "brass-003",
+      "setting": "4s_k8",
+      "allowance_ms": 4000,
+      "k": 8,
+      "order": [
+        "search_v2_focus_only",
+        "search_v2"
+      ]
+    },
+    {
+      "batch": "loan-build-4s_k8",
+      "root": "loan-build",
+      "setting": "4s_k8",
+      "allowance_ms": 4000,
+      "k": 8,
+      "order": [
+        "search_v2",
+        "search_v2_focus_only"
+      ]
+    },
+    {
+      "batch": "dense-canal-4s_k8",
+      "root": "dense-canal",
+      "setting": "4s_k8",
+      "allowance_ms": 4000,
+      "k": 8,
+      "order": [
+        "search_v2_focus_only",
+        "search_v2"
+      ]
+    },
+    {
+      "batch": "rail-double-4s_k8",
+      "root": "rail-double",
+      "setting": "4s_k8",
+      "allowance_ms": 4000,
+      "k": 8,
+      "order": [
+        "search_v2",
+        "search_v2_focus_only"
+      ]
+    },
+    {
+      "batch": "dense-rail-4s_k8",
+      "root": "dense-rail",
+      "setting": "4s_k8",
+      "allowance_ms": 4000,
+      "k": 8,
+      "order": [
+        "search_v2_focus_only",
+        "search_v2"
+      ]
+    },
+    {
+      "batch": "multi-sale-4s_k8",
+      "root": "multi-sale",
+      "setting": "4s_k8",
+      "allowance_ms": 4000,
+      "k": 8,
+      "order": [
+        "search_v2",
+        "search_v2_focus_only"
+      ]
+    },
+    {
+      "batch": "brass-003-repeat-4s_k8",
+      "root": "brass-003-repeat",
+      "setting": "4s_k8",
+      "allowance_ms": 4000,
+      "k": 8,
+      "order": [
+        "search_v2",
+        "search_v2_focus_only"
+      ]
+    },
+    {
+      "batch": "dense-rail-repeat-4s_k8",
+      "root": "dense-rail-repeat",
+      "setting": "4s_k8",
+      "allowance_ms": 4000,
+      "k": 8,
+      "order": [
+        "search_v2",
+        "search_v2_focus_only"
+      ]
+    }
+  ],
+  "settings": [
+    [
+      "4s_k8",
+      4000,
+      8
+    ]
+  ],
+  "sessions": 2,
+  "threads_per_session": 1,
+  "preparation_ns": 20000000,
+  "minimum_support": 2,
+  "subtree_reuse": true,
+  "production_switch": false,
+  "startup": 7262519,
+  "model": {
+    "path": "artifacts/search-v2/20261028/control/BrassNative/alpha-g890/model/manifest.json",
+    "bytes": 1656,
+    "sha256": "3fee37f18cd7963f6dfde7b56fc211b9d424263bf6f27bcc4e7cb6e7a7e132b7"
+  },
+  "binary": {
+    "path": "artifacts/search-v2/20261028/v205/gumbel-pair.exe",
+    "bytes": 3810749,
+    "sha256": "1549db5ee7c56c4026bdf8a718885e960adddc5e1179defc994dc137fd67cf10"
+  },
+  "batch_watchdog_seconds": 60,
+  "maximum_trials": 16,
+  "search_allowance_seconds": 64,
+  "warmup": "One identical 8-trajectory count warmup per arm; reset turn/tree/cache after warmup",
+  "native_source_sha256": "fadb7af2524eb84c960c24cf2c846ceef1de3a8ba07871f59abb1a707625f994",
+  "frozen_control_candidate": {
+    "path": "artifacts/search-v2/20261028/final-candidate/build-manifest.json",
+    "bytes": 31209,
+    "sha256": "22c7e63b506d5cb28d779611ea1a147fa1b6149deeb4b895cc429a6d7411c0fb"
+  },
+  "reuse_policy": "descendant-reuse/1.0.0; first-expansion descendant forest; completed-watermark rollback; fresh root counts/support/draws; independent certified sampler/ledger per owner",
+  "interpretation": "Old edge visits are not newly completed trajectories. Different first paths or focus checkpoints are not pure reuse speed comparisons.",
+  "decision": "Keep only if correctness and bounded delivery pass and retention gives useful work/latency or tactical benefit against cache-only, including the predeclared second seeds. If overhead or deeper-path cost dominates without independent quality evidence, retain cache-only and leave reuse disabled.",
+  "expectations": "Complete independently legal actions; same causal resources/ledger. No invented optimal-action oracle. Previously observed multi-sale development/sale choice is audited, not forced.",
+  "repeat_scope": "Run the two predeclared diagnostic second-seed pairs once after the six primary pairs. No added timing trials."
+}

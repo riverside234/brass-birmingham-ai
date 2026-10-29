@@ -87,7 +87,7 @@ class LocalTests(unittest.TestCase):
             self.w.send(self.w.search(0,allowance,remaining=300))
             response=self.w.recv();self.assertEqual(response['status'],'ok',response)
             data=response['data'];self.assertTrue(data['actions']);self.assertTrue(data['retired'])
-            self.assertEqual(data['requested_k'],8 if allowance==4000 else 16)
+            self.assertEqual(data['requested_k'],read(PACKAGE/'policy.json')['k_by_allowance_ms'][str(allowance)])
             self.assertEqual(data['completed'],0)
             self.assertLess(data['response_ready_ns'],data['deadline_ns'])
     def test_cancel_drains_before_reuse_and_stale_cancel_does_not_kill_current(self):

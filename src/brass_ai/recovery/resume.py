@@ -159,6 +159,8 @@ def check_signature(state, signature, reviewed=False):
             handlers[G1120_MIGRATION]=g1120_config
             from .training_revision_g1120 import KL32_MIGRATION as G1120_KL32_MIGRATION,configure_kl32 as g1120_kl32_config
             handlers[G1120_KL32_MIGRATION]=g1120_kl32_config
+            from .training_revision_g1320 import MIGRATION as G1320_MIGRATION,configure as g1320_config
+            handlers[G1320_MIGRATION]=g1320_config
             from .training_revision_g850 import MIGRATION as G850_MIGRATION,configure as g850_config
             handlers[G850_MIGRATION]=lambda c:g850_config(c,rating_workers=signature['config'].get('rating_compute',{}).get('workers'))
             from .opening_objective import (MIGRATION as OPENING_MIGRATION,configure as configure_opening,

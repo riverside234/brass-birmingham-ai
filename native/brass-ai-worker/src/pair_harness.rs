@@ -96,7 +96,11 @@ struct Case {
     mode: Mode,
     allowance_ms: u64,
     #[serde(default)]
+    method: search::session::focus::Method,
+    #[serde(default)]
     cancel_after_ms: Option<u64>,
+    #[serde(default)]
+    cancel_on_focus: bool,
     #[serde(default)]
     faults: [Option<Fault>; 2],
 }
@@ -247,6 +251,7 @@ pub fn run(instrumented: bool) -> std::result::Result<(), Box<dyn std::error::Er
             case.config,
             case.allowance_ms * 1_000_000,
         )?;
+        pair.method(case.method)?;
         let ticket = pair.start(
             case.input.clone(),
             case.mode.clone(),
@@ -259,9 +264,10 @@ pub fn run(instrumented: bool) -> std::result::Result<(), Box<dyn std::error::Er
         let mut blocked_admission = false;
         let outcome = loop {
             if !cancelled
-                && case
-                    .cancel_after_ms
-                    .is_some_and(|n| began.elapsed() >= Duration::from_millis(n))
+                && ((case.cancel_on_focus && pair.focusing())
+                    || case
+                        .cancel_after_ms
+                        .is_some_and(|n| began.elapsed() >= Duration::from_millis(n)))
             {
                 pair.cancel(ticket)?;
                 cancelled = true;

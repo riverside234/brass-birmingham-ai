@@ -682698,6 +682698,407 @@
       "learning_compatibility_ref": "5",
       "config_migrations_ref": "1622",
       "reason_ref": "163"
+    },
+    {
+      "from_implementation": "b95f45e2b0be6672a4efb7a3cabf9e2fab3e152a667e7f229b6c09ab5cb01c71",
+      "to_implementation": "83ebfadaaccf862ebd06fb78cecb4b34362ad977781adf67f118851df244f015",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "164",
+      "local_scoring_changes": true,
+      "review_report": "ai-research/PPG_SIXTEEN_G620.md"
+    },
+    {
+      "from_implementation": "b95f45e2b0be6672a4efb7a3cabf9e2fab3e152a667e7f229b6c09ab5cb01c71",
+      "to_implementation": "83ebfadaaccf862ebd06fb78cecb4b34362ad977781adf67f118851df244f015",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "164",
+      "config_migrations_ref": "1606",
+      "review_report": "ai-research/PPG_SIXTEEN_G620.md"
+    },
+    {
+      "from_implementation": "cb165c0d852ca79dfd3df2c40483dc7e06bf6dd988d94755ecd1cb597cc3a6af",
+      "to_implementation": "83ebfadaaccf862ebd06fb78cecb4b34362ad977781adf67f118851df244f015",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "164",
+      "local_scoring_changes": true,
+      "review_report": "ai-research/PPG_SIXTEEN_G620.md"
+    },
+    {
+      "from_implementation": "cb165c0d852ca79dfd3df2c40483dc7e06bf6dd988d94755ecd1cb597cc3a6af",
+      "to_implementation": "83ebfadaaccf862ebd06fb78cecb4b34362ad977781adf67f118851df244f015",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "164",
+      "config_migrations_ref": "1606",
+      "review_report": "ai-research/PPG_SIXTEEN_G620.md"
+    },
+    {
+      "from_implementation": "c33ff1ba936905fe06c4b6436d316a5073c9049be4a8d8d0e9c734f87e071314",
+      "to_implementation": "83ebfadaaccf862ebd06fb78cecb4b34362ad977781adf67f118851df244f015",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "164",
+      "local_scoring_changes": true,
+      "review_report": "ai-research/PPG_SIXTEEN_G620.md"
+    },
+    {
+      "from_implementation": "c33ff1ba936905fe06c4b6436d316a5073c9049be4a8d8d0e9c734f87e071314",
+      "to_implementation": "83ebfadaaccf862ebd06fb78cecb4b34362ad977781adf67f118851df244f015",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "164",
+      "config_migrations_ref": "1606",
+      "review_report": "ai-research/PPG_SIXTEEN_G620.md"
+    },
+    {
+      "from_implementation": "72ec2bf892f91bfb645acdf2b741c47276403fc5b38c159afe1ddeb7eeccc2c4",
+      "to_implementation": "83ebfadaaccf862ebd06fb78cecb4b34362ad977781adf67f118851df244f015",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "164",
+      "local_scoring_changes": true,
+      "review_report": "ai-research/PPG_SIXTEEN_G620.md"
+    },
+    {
+      "from_implementation": "72ec2bf892f91bfb645acdf2b741c47276403fc5b38c159afe1ddeb7eeccc2c4",
+      "to_implementation": "83ebfadaaccf862ebd06fb78cecb4b34362ad977781adf67f118851df244f015",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "164",
+      "config_migrations_ref": "1606",
+      "review_report": "ai-research/PPG_SIXTEEN_G620.md"
+    },
+    {
+      "from_implementation": "ef1cb36d346edd6ce306324370fe60f759b297b58282edff093b3f08aadf80be",
+      "to_implementation": "83ebfadaaccf862ebd06fb78cecb4b34362ad977781adf67f118851df244f015",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "164",
+      "local_scoring_changes": true,
+      "review_report": "ai-research/PPG_SIXTEEN_G620.md"
+    },
+    {
+      "from_implementation": "ef1cb36d346edd6ce306324370fe60f759b297b58282edff093b3f08aadf80be",
+      "to_implementation": "83ebfadaaccf862ebd06fb78cecb4b34362ad977781adf67f118851df244f015",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "164",
+      "config_migrations_ref": "1606",
+      "review_report": "ai-research/PPG_SIXTEEN_G620.md"
+    },
+    {
+      "from_implementation": "38206ae9ecec5db1b291066978738d247d40ebe112fc27b4f3a4332796caffca",
+      "to_implementation": "83ebfadaaccf862ebd06fb78cecb4b34362ad977781adf67f118851df244f015",
+      "learning_compatibility_ref": "5",
+      "config_changes_ref": "44",
+      "reviewed_evidence": "ai-research/VP_REWARD_CAP_180.md",
+      "reason_ref": "164",
+      "config_migrations_ref": "1590",
+      "review_report": "ai-research/PPG_SIXTEEN_G620.md"
+    },
+    {
+      "from_implementation": "ef1cb36d346edd6ce306324370fe60f759b297b58282edff093b3f08aadf80be",
+      "to_implementation": "83ebfadaaccf862ebd06fb78cecb4b34362ad977781adf67f118851df244f015",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "164",
+      "config_migrations_ref": "1607",
+      "review_report": "ai-research/PPG_SIXTEEN_G620.md"
+    },
+    {
+      "from_implementation": "4d7dbd64a757357973679d64b36eaf199724b659588c0023ea1d98322aa09283",
+      "to_implementation": "83ebfadaaccf862ebd06fb78cecb4b34362ad977781adf67f118851df244f015",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "164",
+      "config_migrations_ref": "1607",
+      "review_report": "ai-research/PPG_SIXTEEN_G620.md"
+    },
+    {
+      "from_implementation": "ef1cb36d346edd6ce306324370fe60f759b297b58282edff093b3f08aadf80be",
+      "to_implementation": "83ebfadaaccf862ebd06fb78cecb4b34362ad977781adf67f118851df244f015",
+      "learning_compatibility_ref": "5",
+      "config_migrations_ref": "1608",
+      "reason_ref": "164",
+      "review_report": "ai-research/PPG_SIXTEEN_G620.md"
+    },
+    {
+      "from_implementation": "4d7dbd64a757357973679d64b36eaf199724b659588c0023ea1d98322aa09283",
+      "to_implementation": "83ebfadaaccf862ebd06fb78cecb4b34362ad977781adf67f118851df244f015",
+      "learning_compatibility_ref": "5",
+      "config_migrations_ref": "1608",
+      "reason_ref": "164",
+      "review_report": "ai-research/PPG_SIXTEEN_G620.md"
+    },
+    {
+      "from_implementation": "8dd7b4737bcbcd85d1f935c63e66687a125734094dbd065fd8421b18bc083b3c",
+      "to_implementation": "83ebfadaaccf862ebd06fb78cecb4b34362ad977781adf67f118851df244f015",
+      "learning_compatibility_ref": "5",
+      "config_migrations_ref": "1608",
+      "reason_ref": "164",
+      "review_report": "ai-research/PPG_SIXTEEN_G620.md"
+    },
+    {
+      "from_implementation": "8dd7b4737bcbcd85d1f935c63e66687a125734094dbd065fd8421b18bc083b3c",
+      "to_implementation": "83ebfadaaccf862ebd06fb78cecb4b34362ad977781adf67f118851df244f015",
+      "learning_compatibility_ref": "5",
+      "config_migrations_ref": "1609",
+      "reason_ref": "164",
+      "review_report": "ai-research/PPG_SIXTEEN_G620.md"
+    },
+    {
+      "from_implementation": "1de2fff49c5b0cfc2f47920ed92f02021b34e73c421f250d08e0db6fb915dc5a",
+      "to_implementation": "83ebfadaaccf862ebd06fb78cecb4b34362ad977781adf67f118851df244f015",
+      "learning_compatibility_ref": "5",
+      "config_migrations_ref": "1609",
+      "reason_ref": "164",
+      "review_report": "ai-research/PPG_SIXTEEN_G620.md"
+    },
+    {
+      "from_implementation": "1de2fff49c5b0cfc2f47920ed92f02021b34e73c421f250d08e0db6fb915dc5a",
+      "to_implementation": "83ebfadaaccf862ebd06fb78cecb4b34362ad977781adf67f118851df244f015",
+      "learning_compatibility_ref": "5",
+      "config_migrations_ref": "1610",
+      "reason_ref": "164",
+      "review_report": "ai-research/PPG_SIXTEEN_G620.md"
+    },
+    {
+      "from_implementation": "0f0eca5b6efeb8ba9c47cde4bbf191e289f6c35b97df75817ba834ecc71a2146",
+      "to_implementation": "83ebfadaaccf862ebd06fb78cecb4b34362ad977781adf67f118851df244f015",
+      "learning_compatibility_ref": "5",
+      "config_migrations_ref": "1610",
+      "reason_ref": "164",
+      "review_report": "ai-research/PPG_SIXTEEN_G620.md"
+    },
+    {
+      "from_implementation": "0f0eca5b6efeb8ba9c47cde4bbf191e289f6c35b97df75817ba834ecc71a2146",
+      "to_implementation": "83ebfadaaccf862ebd06fb78cecb4b34362ad977781adf67f118851df244f015",
+      "learning_compatibility_ref": "5",
+      "config_migrations_ref": "1587",
+      "reason_ref": "164",
+      "review_report": "ai-research/PPG_SIXTEEN_G620.md"
+    },
+    {
+      "from_implementation": "0f0eca5b6efeb8ba9c47cde4bbf191e289f6c35b97df75817ba834ecc71a2146",
+      "to_implementation": "83ebfadaaccf862ebd06fb78cecb4b34362ad977781adf67f118851df244f015",
+      "learning_compatibility_ref": "5",
+      "config_migrations_ref": "1611",
+      "reason_ref": "164",
+      "review_report": "ai-research/PPG_SIXTEEN_G620.md"
+    },
+    {
+      "from_implementation": "0f0eca5b6efeb8ba9c47cde4bbf191e289f6c35b97df75817ba834ecc71a2146",
+      "to_implementation": "83ebfadaaccf862ebd06fb78cecb4b34362ad977781adf67f118851df244f015",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "164",
+      "review_report": "ai-research/PPG_SIXTEEN_G620.md"
+    },
+    {
+      "from_implementation": "0f0eca5b6efeb8ba9c47cde4bbf191e289f6c35b97df75817ba834ecc71a2146",
+      "to_implementation": "83ebfadaaccf862ebd06fb78cecb4b34362ad977781adf67f118851df244f015",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "164",
+      "review_report": "ai-research/PPG_SIXTEEN_G620.md",
+      "config_migrations_ref": "1612"
+    },
+    {
+      "from_implementation": "0f0eca5b6efeb8ba9c47cde4bbf191e289f6c35b97df75817ba834ecc71a2146",
+      "to_implementation": "83ebfadaaccf862ebd06fb78cecb4b34362ad977781adf67f118851df244f015",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "164",
+      "review_report": "ai-research/PPG_SIXTEEN_G620.md",
+      "config_migrations_ref": "1613"
+    },
+    {
+      "from_implementation": "61ce54442f33eb40cf59be4ddc864fef0c978db4e5ea0ff68020666b8369f7a8",
+      "to_implementation": "83ebfadaaccf862ebd06fb78cecb4b34362ad977781adf67f118851df244f015",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "164",
+      "review_report": "ai-research/PPG_SIXTEEN_G620.md"
+    },
+    {
+      "from_implementation": "61ce54442f33eb40cf59be4ddc864fef0c978db4e5ea0ff68020666b8369f7a8",
+      "to_implementation": "83ebfadaaccf862ebd06fb78cecb4b34362ad977781adf67f118851df244f015",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "164",
+      "review_report": "ai-research/PPG_SIXTEEN_G620.md",
+      "config_migrations_ref": "1611"
+    },
+    {
+      "from_implementation": "61ce54442f33eb40cf59be4ddc864fef0c978db4e5ea0ff68020666b8369f7a8",
+      "to_implementation": "83ebfadaaccf862ebd06fb78cecb4b34362ad977781adf67f118851df244f015",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "164",
+      "review_report": "ai-research/PPG_SIXTEEN_G620.md",
+      "config_migrations_ref": "1612"
+    },
+    {
+      "from_implementation": "61ce54442f33eb40cf59be4ddc864fef0c978db4e5ea0ff68020666b8369f7a8",
+      "to_implementation": "83ebfadaaccf862ebd06fb78cecb4b34362ad977781adf67f118851df244f015",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "164",
+      "review_report": "ai-research/PPG_SIXTEEN_G620.md",
+      "config_migrations_ref": "1613"
+    },
+    {
+      "from_implementation": "0f0eca5b6efeb8ba9c47cde4bbf191e289f6c35b97df75817ba834ecc71a2146",
+      "to_implementation": "83ebfadaaccf862ebd06fb78cecb4b34362ad977781adf67f118851df244f015",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "164",
+      "review_report": "ai-research/PPG_SIXTEEN_G620.md",
+      "config_migrations_ref": "1614"
+    },
+    {
+      "from_implementation": "0f0eca5b6efeb8ba9c47cde4bbf191e289f6c35b97df75817ba834ecc71a2146",
+      "to_implementation": "83ebfadaaccf862ebd06fb78cecb4b34362ad977781adf67f118851df244f015",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "164",
+      "review_report": "ai-research/PPG_SIXTEEN_G620.md",
+      "config_migrations_ref": "1615"
+    },
+    {
+      "from_implementation": "993a9cc07e6f0e53fd0b63f20349289cf5d410fbc104259c7740aefdaca446d9",
+      "to_implementation": "83ebfadaaccf862ebd06fb78cecb4b34362ad977781adf67f118851df244f015",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "164",
+      "review_report": "ai-research/PPG_SIXTEEN_G620.md"
+    },
+    {
+      "from_implementation": "993a9cc07e6f0e53fd0b63f20349289cf5d410fbc104259c7740aefdaca446d9",
+      "to_implementation": "83ebfadaaccf862ebd06fb78cecb4b34362ad977781adf67f118851df244f015",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "164",
+      "review_report": "ai-research/PPG_SIXTEEN_G620.md",
+      "config_migrations_ref": "1614"
+    },
+    {
+      "from_implementation": "993a9cc07e6f0e53fd0b63f20349289cf5d410fbc104259c7740aefdaca446d9",
+      "to_implementation": "83ebfadaaccf862ebd06fb78cecb4b34362ad977781adf67f118851df244f015",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "164",
+      "review_report": "ai-research/PPG_SIXTEEN_G620.md",
+      "config_migrations_ref": "1615"
+    },
+    {
+      "from_implementation": "61ce54442f33eb40cf59be4ddc864fef0c978db4e5ea0ff68020666b8369f7a8",
+      "to_implementation": "83ebfadaaccf862ebd06fb78cecb4b34362ad977781adf67f118851df244f015",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "164",
+      "review_report": "ai-research/PPG_SIXTEEN_G620.md",
+      "config_migrations_ref": "1614"
+    },
+    {
+      "from_implementation": "61ce54442f33eb40cf59be4ddc864fef0c978db4e5ea0ff68020666b8369f7a8",
+      "to_implementation": "83ebfadaaccf862ebd06fb78cecb4b34362ad977781adf67f118851df244f015",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "164",
+      "review_report": "ai-research/PPG_SIXTEEN_G620.md",
+      "config_migrations_ref": "1615"
+    },
+    {
+      "from_implementation": "98a39c30ddea66084853a97862e9b8b13f14a4ad4cf6c8d0311c4d34d8fc7b2b",
+      "to_implementation": "83ebfadaaccf862ebd06fb78cecb4b34362ad977781adf67f118851df244f015",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "164",
+      "config_migrations_ref": "1616"
+    },
+    {
+      "from_implementation": "afcb66986a870567dbbd22ea45c5f43467ca0f7829948f04b561a9f8019e556b",
+      "learning_compatibility_ref": "5",
+      "config_changes_ref": "44",
+      "to_implementation": "83ebfadaaccf862ebd06fb78cecb4b34362ad977781adf67f118851df244f015",
+      "reviewed_evidence": "ai-research/PPG_DENSE_EIGHT_G650.md",
+      "reason_ref": "164",
+      "config_migrations_ref": "1583"
+    },
+    {
+      "from_implementation": "c7ab2ff8c75b3ab9abd307cc78d0fdb8da50683e707b68475220b05d21a1aee5",
+      "to_implementation": "83ebfadaaccf862ebd06fb78cecb4b34362ad977781adf67f118851df244f015",
+      "learning_compatibility_ref": "5",
+      "config_migrations_ref": "1617",
+      "reason_ref": "164"
+    },
+    {
+      "from_implementation": "9cd3826db5d0dca61f07bf1e584a5d5e81371b307b2ba96d6666571fb31836b2",
+      "to_implementation": "83ebfadaaccf862ebd06fb78cecb4b34362ad977781adf67f118851df244f015",
+      "learning_compatibility_ref": "5",
+      "config_migrations_ref": "1618",
+      "reason_ref": "164"
+    },
+    {
+      "from_implementation": "084f4e0494c2758b3b2eb7a615da865744cffd4ce2bf6516972c4b83a755ace1",
+      "to_implementation": "83ebfadaaccf862ebd06fb78cecb4b34362ad977781adf67f118851df244f015",
+      "learning_compatibility_ref": "5",
+      "config_migrations_ref": "1618",
+      "reason_ref": "164"
+    },
+    {
+      "from_implementation": "084f4e0494c2758b3b2eb7a615da865744cffd4ce2bf6516972c4b83a755ace1",
+      "to_implementation": "83ebfadaaccf862ebd06fb78cecb4b34362ad977781adf67f118851df244f015",
+      "learning_compatibility_ref": "5",
+      "config_migrations_ref": "1619",
+      "reason_ref": "164"
+    },
+    {
+      "from_implementation": "a9d19c2ee9325454bce2ab51fa184688d99406f5d5135a228775dce81db54439",
+      "to_implementation": "83ebfadaaccf862ebd06fb78cecb4b34362ad977781adf67f118851df244f015",
+      "learning_compatibility_ref": "5",
+      "config_migrations_ref": "1619",
+      "reason_ref": "164"
+    },
+    {
+      "from_implementation": "a9d19c2ee9325454bce2ab51fa184688d99406f5d5135a228775dce81db54439",
+      "to_implementation": "83ebfadaaccf862ebd06fb78cecb4b34362ad977781adf67f118851df244f015",
+      "learning_compatibility_ref": "5",
+      "config_migrations_ref": "1620",
+      "reason_ref": "164"
+    },
+    {
+      "from_implementation": "9d488d8dd3c9f7610263214338af18d2b844062939f1c40a2d5c46a9ea6b6cb3",
+      "to_implementation": "83ebfadaaccf862ebd06fb78cecb4b34362ad977781adf67f118851df244f015",
+      "learning_compatibility_ref": "5",
+      "config_migrations_ref": "1620",
+      "reason_ref": "164"
+    },
+    {
+      "from_implementation": "9d488d8dd3c9f7610263214338af18d2b844062939f1c40a2d5c46a9ea6b6cb3",
+      "to_implementation": "83ebfadaaccf862ebd06fb78cecb4b34362ad977781adf67f118851df244f015",
+      "learning_compatibility_ref": "5",
+      "config_migrations_ref": "1621",
+      "reason_ref": "164"
+    },
+    {
+      "from_implementation": "4199ffb44025664806548ace38b27470c477719b1fcc9f3e11ef0f9b402ceb4e",
+      "to_implementation": "83ebfadaaccf862ebd06fb78cecb4b34362ad977781adf67f118851df244f015",
+      "learning_compatibility_ref": "5",
+      "config_migrations_ref": "1621",
+      "reason_ref": "164"
+    },
+    {
+      "from_implementation": "9d488d8dd3c9f7610263214338af18d2b844062939f1c40a2d5c46a9ea6b6cb3",
+      "to_implementation": "83ebfadaaccf862ebd06fb78cecb4b34362ad977781adf67f118851df244f015",
+      "learning_compatibility_ref": "5",
+      "config_migrations_ref": "1622",
+      "reason_ref": "164"
+    },
+    {
+      "from_implementation": "4199ffb44025664806548ace38b27470c477719b1fcc9f3e11ef0f9b402ceb4e",
+      "to_implementation": "83ebfadaaccf862ebd06fb78cecb4b34362ad977781adf67f118851df244f015",
+      "learning_compatibility_ref": "5",
+      "config_migrations_ref": "1622",
+      "reason_ref": "164"
+    },
+    {
+      "from_implementation": "217a89c935b0cb7ae596518d9bfd4c84bf8bdd8985467f6a5d49ba2415762952",
+      "to_implementation": "83ebfadaaccf862ebd06fb78cecb4b34362ad977781adf67f118851df244f015",
+      "learning_compatibility_ref": "5",
+      "config_migrations_ref": "1622",
+      "reason_ref": "164"
+    },
+    {
+      "from_implementation": "217a89c935b0cb7ae596518d9bfd4c84bf8bdd8985467f6a5d49ba2415762952",
+      "to_implementation": "83ebfadaaccf862ebd06fb78cecb4b34362ad977781adf67f118851df244f015",
+      "learning_compatibility_ref": "5",
+      "config_migrations_ref": "1623",
+      "reason_ref": "164"
+    },
+    {
+      "from_implementation": "83ebfadaaccf862ebd06fb78cecb4b34362ad977781adf67f118851df244f015",
+      "to_implementation": "83ebfadaaccf862ebd06fb78cecb4b34362ad977781adf67f118851df244f015",
+      "learning_compatibility_ref": "5",
+      "config_migrations_ref": "1623",
+      "reason_ref": "164"
     }
   ],
   "definitions": {
@@ -682865,7 +683266,8 @@
       "160": "Reviewed g950 PPG-only continuation: linear warmup 0.1x to peak at step 16, cosine decay to 0.001x peak at fixed two-epoch cap; beta floor 1 with one-time beta=1 on v15-to-v16 adoption. Preserve model, both Adams, RNG, two-age replay, beta trip history, progress and independent health evidence. Legacy explicit PPG recipes unchanged.",
       "161": "Reviewed g1050 PPG-only continuation: eight-step held-out loss acceptance, beta floor .5 and one-time beta=.5 on v16-to-v17 adoption. Keep KL16/.002, linear warmup/cosine decay, two-age replay and independent gates. Preserve model/Adam/RNG, progress, beta trip history and all unrelated settings. Legacy explicit recipes unchanged.",
       "162": "Reviewed g1120 continuation: three per-seat action openings at T1.3, matching raw-T1 decoupled PPO and branch skip3 with fresh post-fork counters. PPG loss16/KL16 with preserved adaptive beta and .5 floor. Fix opening-only KL reporting for all objective versions. Preserve weights, Adam/RNG, caches, progress, independent evidence and unrelated settings; old explicit recipes unchanged.",
-      "163": "Reviewed g1120 KL32 continuation: preserve three-decision T1.3 openings and matched decoupled PPO; loss16, periodic KL32 plus epoch-tail and retained-checkpoint certification. Preserve .002 cap, beta/trips, model/Adam/RNG, two-age caches, progress and independent gate evidence. Supports direct v17 and v18 adoption; explicit old recipes unchanged."
+      "163": "Reviewed g1120 KL32 continuation: preserve three-decision T1.3 openings and matched decoupled PPO; loss16, periodic KL32 plus epoch-tail and retained-checkpoint certification. Preserve .002 cap, beta/trips, model/Adam/RNG, two-age caches, progress and independent gate evidence. Supports direct v17 and v18 adoption; explicit old recipes unchanged.",
+      "164": "Reviewed g1320 reward-only continuation: reduce insolvency event cost from .02 to .01, keep .075 cap. Existing reviewed reward migration retires incompatible PPG caches after durable config adoption, retries safely and refills current then current+previous. Preserve model weights, PPO/value/auxiliary Adam, beta/trips, RNG, GAE/snapshot/anchor evidence, population, progress and lineage; PPG loss16/KL32 and every-iteration recipe unchanged."
     },
     "config_changes": {
       "0": {
@@ -704277,6 +704679,9 @@
       ],
       "1622": [
         "training-recipe-g1120/2.0.0"
+      ],
+      "1623": [
+        "training-recipe-g1320/1.0.0"
       ]
     },
     "config_migration": {

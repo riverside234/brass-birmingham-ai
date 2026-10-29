@@ -20,10 +20,14 @@ namespace BrassLegacyAI.Native
         long sequence;
         public readonly NativePackage Package;
         public readonly JObject Readiness;
-        public static NativeProcess Shared()
+        public static NativeProcess Shared() { return Shared(16); }
+        public static NativeProcess Shared(int searchK)
         {
             if(!NativePackage.Enabled) throw new InvalidOperationException("Alpha Test is disabled. This NN table must stop or be replaced as a whole.");
-            if(shared==null) shared=new NativeProcess(new NativePackage(NativePackage.Location));
+            // Only the scheduler's exclusive compute lease selects a worker.
+            // Retire the old table's process before admitting another K.
+            if(shared!=null && shared.Package.SearchK!=searchK){shared.Dispose();shared=null;}
+            if(shared==null) shared=new NativeProcess(new NativePackage(NativePackage.Location,searchK));
             if(shared.process.HasExited) {shared.Dispose();shared=null;throw new IOException("Native worker exited; reload the saved game to recover");}
             return shared;
         }
@@ -32,7 +36,7 @@ namespace BrassLegacyAI.Native
             Package=package;
             process=new Process {StartInfo=new ProcessStartInfo {
                 FileName=Path.Combine(package.Directory,"brass-ai-local.exe"),
-                Arguments="\""+Path.Combine(package.Directory,"policy.json")+"\" "+package.PolicyHash,
+                Arguments="\""+package.PolicyPath+"\" "+package.PolicyHash,
                 WorkingDirectory=package.Directory,UseShellExecute=false,CreateNoWindow=true,
                 RedirectStandardInput=true,RedirectStandardOutput=true,RedirectStandardError=true }};
             process.StartInfo.EnvironmentVariables["PYTHONPATH"]="";
@@ -52,6 +56,8 @@ namespace BrassLegacyAI.Native
                     (int)Readiness["sessions"]!=2 || (int)Readiness["threads_per_session"]!=1 ||
                     (string)Readiness["provider"]!="CPUExecutionProvider" || (bool?)Readiness["measured_readiness"]["warmup_passed"]!=true)
                     throw new IOException("Native startup identity mismatch");
+                if(!JToken.DeepEquals(Readiness["k_by_allowance_ms"],package.Policy["k_by_allowance_ms"]))
+                    throw new IOException("Native startup search K mismatch");
             } catch {Dispose();throw;}
         }
         JObject Read()
@@ -117,12 +123,17 @@ namespace BrassLegacyAI.Native
         readonly JObject request;
         readonly Stopwatch clock;
         readonly int allowance;
+        readonly int searchK;
         NativeProcess worker;
         public string FailureBundle {get;private set;}
         public JObject Result {get;private set;}
         public string Name {get{return NativePackage.Backend;}}
-        public NativeJob(JObject request,Stopwatch clock,int allowance)
-        {this.request=(JObject)request.DeepClone();this.clock=clock;this.allowance=allowance;}
+        public NativeJob(JObject request,Stopwatch clock,int allowance) : this(request,clock,allowance,16) { }
+        public NativeJob(JObject request,Stopwatch clock,int allowance,int searchK)
+        {
+            if(searchK!=8 && searchK!=16)throw new ArgumentOutOfRangeException("searchK");
+            this.request=(JObject)request.DeepClone();this.clock=clock;this.allowance=allowance;this.searchK=searchK;
+        }
         public Task ExecuteAsync(CancellationToken cancellation)
         {
             try { return Execute(cancellation); }
@@ -138,7 +149,7 @@ namespace BrassLegacyAI.Native
         Task Execute(CancellationToken cancellation)
         {
             // ExecuteAsync is invoked on the scheduler's pool task.
-            worker=NativeProcess.Shared();cancellation.ThrowIfCancellationRequested();
+            cancellation.ThrowIfCancellationRequested();worker=NativeProcess.Shared(searchK);cancellation.ThrowIfCancellationRequested();
             if(!clock.IsRunning)clock.Start();
             request["remaining_ms"]=Math.Max(0,allowance-(long)Math.Ceiling(clock.Elapsed.TotalMilliseconds));
             request["ticket"]["source_sha256"]=worker.Package.Source;
@@ -147,6 +158,7 @@ namespace BrassLegacyAI.Native
             if(!JToken.DeepEquals(Result["ticket"],request["ticket"]) || (string)Result["model_id"]!=NativePackage.Model ||
                 (string)Result["export_sha256"]!=NativePackage.Export || (string)Result["backend"]!=Name)
                 throw new IOException("Native response belongs to a different game/request/model");
+            if((int?)Result["requested_k"]!=searchK)throw new IOException("Native response used a different search K");
             return Task.FromResult(0);
         }
     }

@@ -16,31 +16,39 @@ namespace BrassLegacyAI.Native
         public const string Export = "64e4a8340f4beb7bbc4ee70219b5e461b1185bcde9e25c4bfc78e30936c91ae9";
         public const string Checkpoint = "ecad3b932a8dd9d3b5d0cc49b5e9bb94a9e98b4536ffdc86a44179d003995cb8";
         public const string Profile = "alpha-test-g890-neutral/1.0.0";
-        public readonly string Directory, Source, PolicyHash;
+        public readonly string Directory, Source, PolicyHash, PolicyPath;
+        public readonly int SearchK;
         public readonly JObject Policy, ModelManifest;
         public static string GameRoot { get { return Path.GetFullPath(Path.Combine(Path.GetDirectoryName(typeof(NativePackage).Assembly.Location), "../..")); } }
         public static string Location { get { return Path.Combine(GameRoot, "BrassNative", "alpha-g890"); } }
         public static bool Enabled { get { return !File.Exists(Path.Combine(GameRoot, "BrassNative", "disabled")) && File.Exists(Path.Combine(Location, "build.json")); } }
         public static string Hash(string path) { using(var sha=SHA256.Create()) using(var stream=File.OpenRead(path)) return BitConverter.ToString(sha.ComputeHash(stream)).Replace("-", "").ToLowerInvariant(); }
-        public NativePackage(string directory)
+        public NativePackage(string directory) : this(directory,16) { }
+        public NativePackage(string directory,int searchK)
         {
+            if(searchK!=8 && searchK!=16)throw new InvalidDataException("Unsupported NN search K");
+            SearchK=searchK;
             Directory=Path.GetFullPath(directory);
             var build=JObject.Parse(File.ReadAllText(Path.Combine(Directory,"build.json")));
             if((string)build["format"]!="brass-local-package/1.0.0" || (string)build["backend"]!=Backend ||
                 (string)build["target"]!="x86_64-pc-windows-gnu" || (string)build["scope"]!="local-alpha-test") throw new InvalidDataException("Unsupported native package");
             var files=(JArray)build["files"];
-            string[] required={"brass-ai-local.exe","policy.json","warmup.json","model/manifest.json","model/model.json","model/model.onnx","model/onnxruntime.dll"};
+            string[] required={"brass-ai-local.exe","policy.json","policy-k8.json","warmup.json","model/manifest.json","model/model.json","model/model.onnx","model/onnxruntime.dll"};
             if(files.Count!=required.Length || required.Any(n=>files.Count(f=>(string)f["path"]==n)!=1)) throw new InvalidDataException("Incomplete native package");
             foreach(var file in files) {
                 string name=(string)file["path"];
                 if(!required.Contains(name) || Hash(Path.Combine(Directory,name))!=(string)file["sha256"]) throw new InvalidDataException("Native package file changed");
             }
-            Source=(string)build["source_sha256"]; PolicyHash=Hash(Path.Combine(Directory,"policy.json"));
-            Policy=JObject.Parse(File.ReadAllText(Path.Combine(Directory,"policy.json")));
+            Source=(string)build["source_sha256"]; PolicyPath=Path.Combine(Directory,searchK==8?"policy-k8.json":"policy.json"); PolicyHash=Hash(PolicyPath);
+            Policy=JObject.Parse(File.ReadAllText(PolicyPath));
             ModelManifest=JObject.Parse(File.ReadAllText(Path.Combine(Directory,"model/manifest.json")));
             ValidateAcceptance((JObject)Policy["acceptance"],ModelManifest);
             if((string)Policy["protocol"]!=Protocol || (string)Policy["backend"]!=Backend ||
                 (string)Policy["model_manifest_sha256"]!=Hash(Path.Combine(Directory,"model/manifest.json"))) throw new InvalidDataException("Native package contract changed");
+            var mapping=Policy["k_by_allowance_ms"] as JObject;
+            if(mapping==null || mapping.Count!=4 || new[]{"4000","8000","10000","12000"}.Any(a=>
+                mapping[a]?.Type!=JTokenType.Integer || (int)mapping[a]!=searchK))throw new InvalidDataException("NN search K mapping differs");
+            if((string)Policy["method"]!="search_v2_focus_only")throw new InvalidDataException("Unsupported local search method");
         }
         public static void ValidateAcceptance(JObject acceptance,JObject model)
         {

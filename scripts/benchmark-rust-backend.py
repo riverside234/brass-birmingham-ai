@@ -123,9 +123,16 @@ def validation(out, build, label, unity=False, candidate=False):
     print(label, data.get('summary',dict(checks=data.get('checks'),rows=len(data['rows']))), flush=True)
 
 
-def profile_build(out, build, label):
+def profile_build(out, build, label, validate_study=True):
     """Instrument copies only. The installed/L13/candidate sources stay intact."""
-    checked(out);dest=out/(label+'-profile-build');assert not dest.exists()
+    if validate_study: checked(out)
+    # Other isolated studies may supply their own frozen protocol, but every
+    # source/binary still has to match the candidate's sealed manifest.
+    for pin in read(build/'build-manifest.json')['sourcePins']:
+        assert sha(build/'runtime'/pin['path'])==pin['sha256'].lower()
+    for pin in read(build/'build-manifest.json')['files']:
+        assert sha(build/'Managed'/pin['name'])==pin['sha256'].lower()
+    dest=out/(label+'-profile-build');assert not dest.exists()
     shutil.copytree(build/'runtime',dest/'runtime')
     shutil.copytree(build/'Managed',dest/'Managed')
     shutil.copytree(build/'BrassNative',dest/'BrassNative')
@@ -181,6 +188,8 @@ def profile_build(out, build, label):
     if p.exists():
         wrap(base+'Native/NativeValidation.cs','public Task ExecuteAsync(','validation.detached','binding')
         wrap(base+'Native/NativeValidation.cs','public void Commit(','commit.native_guard_and_apply','binding')
+    if 'public static bool ContinuationMatches(' in (dest/'runtime'/base/'Native/NativeInput.cs').read_text(encoding='utf-8-sig'):
+        wrap(base+'Native/NativeInput.cs','public static bool ContinuationMatches(','validation.projected_successor')
     p=dest/'runtime'/base/'Native/NativeProcess.cs';text=p.read_text(encoding='utf-8')
     text=text.replace('JObject.Parse(new UTF8Encoding(false,true).GetString(Exact(stream,length)))','NativeStageTrace.Parse(new UTF8Encoding(false,true).GetString(Exact(stream,length)))')
     text=text.replace('Encoding.UTF8.GetBytes(request.ToString(Formatting.None))','NativeStageTrace.Encode(request)')
@@ -188,7 +197,9 @@ def profile_build(out, build, label):
         'NativeStageTrace.Point("ipc.write_begin",id,bytes.Length);stream.Write(header,0,header.Length);stream.Write(bytes,0,bytes.Length);stream.Flush();NativeStageTrace.Point("ipc.write_end",id,bytes.Length);return id;')
     p.write_text(text,encoding='utf-8')
     shutil.copyfile(ROOT/'tests/RustBackendLocal/NativeStageTrace.cs',dest/'runtime'/base/'Native/NativeStageTrace.cs')
-    original=(build/'BrassLegacyAI.dll.rsp').read_text(encoding='utf-8-sig')
+    response_file=build/'BrassLegacyAI.dll.rsp'
+    if not response_file.exists():response_file=build/'legacy.rsp'
+    original=response_file.read_text(encoding='utf-8-sig')
     original=original.replace(str(build),str(dest))+'\n"'+str(dest/'runtime'/base/'Native/NativeStageTrace.cs')+'"\n'
     rsp=dest/'BrassLegacyAI.dll.rsp';rsp.write_text(original,encoding='utf-8-sig')
     compiler=ROOT/'artifacts/patch-tools/microsoft.net.compilers.toolset.4.12.0/tasks/net472/csc.exe'

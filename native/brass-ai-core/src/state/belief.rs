@@ -202,6 +202,15 @@ impl PreparedRoot {
     pub fn unseen_cards(&self) -> usize {
         self.pool.len()
     }
+    /// Same uniform allocation law for all still-hidden card zones. Moving a
+    /// known own card into public discards leaves this law unchanged. This does
+    /// not assert equality of another observer's information or reuse its tree.
+    pub(crate) fn same_hidden_allocation(&self, other: &Self) -> bool {
+        self.root == other.root
+            && self.pool == other.pool
+            && self.missing_hands == other.missing_hands
+            && self.hidden_discards == other.hidden_discards
+    }
     pub fn draw_count(&self) -> usize {
         self.pool.len().saturating_sub(1)
     }

@@ -82,6 +82,439 @@ fn identity() -> Identity {
         export_sha256: "a".repeat(64),
     }
 }
+
+fn ordinary_input() -> Input {
+    let mut dto: StateDto = serde_json::from_str(include_str!("data/initial-state.json")).unwrap();
+    dto.context.round = 2;
+    dto.context.actions_remaining = 2;
+    let mut input = input();
+    input.view = NativeState::import(&dto)
+        .unwrap()
+        .observation(input.view.seat)
+        .unwrap();
+    input
+}
+
+#[test]
+fn focus_stability_requires_both_owners_and_the_entire_proof() {
+    use session::focus::Stability;
+    let mut game = Brass::new(ordinary_input(), false).unwrap();
+    let info = game.root().unwrap();
+    let first = info
+        .actions
+        .iter()
+        .find(|a| a.starts_with("pass|"))
+        .unwrap();
+    let clock = Fake::default();
+    let budget = Budget::new(0, 4_000_000_000).unwrap();
+    let path = plans::complete(&game, first, budget, &clock).unwrap();
+    let mut gate = Stability::default();
+    assert!(!gate.observe(Some(&path), [8, 8]));
+    assert!(!gate.observe(Some(&path), [8, 8]));
+    assert!(!gate.observe(Some(&path), [16, 8]));
+    assert!(gate.observe(Some(&path), [16, 16]));
+    let mut changed = path.clone();
+    changed.steps.last_mut().unwrap().choice.push_str("changed");
+    assert!(!gate.observe(Some(&changed), [24, 24]));
+    assert!(!gate.observe(None, [32, 32]));
+    assert!(!gate.observe(Some(&changed), [40, 40]));
+}
+
+#[test]
+fn focus_affordability_is_conservative_without_changing_quota_costs() {
+    let mut costs = Costs::default();
+    for value in [1, 1, 1, 1, 100] {
+        costs.observe(value);
+    }
+    assert_eq!(costs.estimate(), Some(1));
+    assert_eq!(costs.conservative(7), 100);
+    assert_eq!(costs.conservative(200), 200);
+    assert!(
+        !session::focus::affordable(100, 0, 8, 400, 20)
+            .unwrap()
+            .useful
+    );
+    assert!(
+        !session::focus::affordable(21, 1, 8, 400, 20)
+            .unwrap()
+            .useful
+    );
+    assert!(
+        session::focus::affordable(22, 1, 8, 400, 20)
+            .unwrap()
+            .useful
+    );
+    assert_eq!(
+        session::focus::affordable(44, 1, 8, 400, 20)
+            .unwrap()
+            .effective_k,
+        8
+    );
+    assert!(
+        !session::focus::affordable(1000, 1, 8, 1, 20)
+            .unwrap()
+            .useful
+    );
+}
+
+#[test]
+fn permitted_projection_is_identical_in_all_24_hidden_burn_allocations() {
+    use brass_ai_core::search::{Draws, Position};
+    let mut dto: StateDto = serde_json::from_str(include_str!("data/initial-state.json")).unwrap();
+    dto.context.round = 2;
+    dto.context.actions_remaining = 2;
+    let actor = dto.context.actor as usize;
+    // Tractable full sampler support: the only unseen cards are the four
+    // distinct Canal setup burns. All 4! allocations are enumerated, not seeded
+    // spot checks. Public discards and the actor's known hand conserve 64 cards.
+    for s in 0..4 {
+        if s != actor {
+            let cards = std::mem::take(&mut dto.cards.hands[s]);
+            dto.cards.discards[s].extend(cards);
+        }
+    }
+    let deck = std::mem::take(&mut dto.cards.deck);
+    dto.cards.discards[0].extend(deck);
+    let mut input = ordinary_input();
+    input.view = NativeState::import(&dto)
+        .unwrap()
+        .observation(input.view.seat)
+        .unwrap();
+    let tapes = (0..4)
+        .flat_map(|a| (0..3).flat_map(move |b| (0..2).map(move |c| vec![a, b, c])))
+        .collect::<Vec<_>>();
+    let clock = Fake::default();
+    let budget = Budget::new(0, 4_000_000_000).unwrap();
+    for family in ["pass|", "loan|", "develop|", "build|"] {
+        input.shuffle_tape = Some(tapes.clone());
+        let mut game = Brass::new(input.clone(), false).unwrap();
+        let info = game.root().unwrap();
+        let Some(first) = info.actions.iter().find(|a| a.starts_with(family)) else {
+            continue;
+        };
+        let path = plans::complete(&game, first, budget, &clock).unwrap();
+        let (_, projected) = game.project(&path, budget, &clock).unwrap();
+        let mut draws = Draws::new(42, None, false);
+        for _ in &tapes {
+            let mut world = game.sample(&mut draws).unwrap();
+            for step in &path.steps {
+                let Position::Decision(actual) = game.inspect(&mut world).unwrap() else {
+                    panic!("unexpected chance")
+                };
+                assert_eq!(actual, step.precondition);
+                game.step(&mut world, &step.choice).unwrap();
+            }
+            let Position::Decision(actual) = game.inspect(&mut world).unwrap() else {
+                panic!("unexpected chance")
+            };
+            assert_eq!(actual, projected);
+        }
+        game.finish().unwrap();
+    }
+}
+
+#[test]
+fn projection_preserves_live_identity_and_completes_a_legal_incumbent() {
+    let input = ordinary_input();
+    let clock = Fake::default();
+    let budget = Budget::new(0, 4_000_000_000).unwrap();
+    let mut live = Session::new(identity(), &input, settings(32), budget).unwrap();
+    let (game, info) = live.preview(input.clone()).unwrap();
+    for family in ["pass|", "loan|", "develop|", "build|"] {
+        let Some(first) = info.actions.iter().find(|a| a.starts_with(family)) else {
+            continue;
+        };
+        let action = plans::complete(&game, first, budget, &clock).unwrap();
+        let prepared = session::focus::prepare(
+            &game,
+            &[plans::SupportedAction {
+                action: action.clone(),
+                support: 2,
+                returns: [0.; 4],
+            }],
+            budget,
+            &clock,
+        )
+        .unwrap();
+        assert_eq!(prepared.incumbent.len(), 2);
+        assert_eq!(prepared.incumbent[1].support, 0);
+        assert_eq!(prepared.input.view.context.actions_remaining, 1);
+        assert_eq!(prepared.input.view.seat, input.view.seat);
+        assert!(prepared.input.shuffle_tape.is_none());
+        let hypothetical = live.projected_owner(&prepared.input).unwrap();
+        assert_eq!(hypothetical.budget().deadline_ns, budget.deadline_ns);
+        assert_eq!(live.preview(input.clone()).unwrap().1, info);
+        assert!(live
+            .recall()
+            .iter()
+            .all(|r| r.revision <= input.view.context.revision));
+        let mut corrupt = action;
+        corrupt.steps[0].precondition.actions = vec!["invalid".into()].into();
+        assert!(game.project(&corrupt, budget, &clock).is_err());
+    }
+    clock.now.set(budget.work_deadline_ns);
+    let action = plans::complete(&game, &info.actions[0], budget, &clock).unwrap();
+    assert!(game.project(&action, budget, &clock).is_err());
+}
+
+#[test]
+fn no_switch_checkpoint_resumes_the_exact_owner_tournament() {
+    use session::{
+        cooperative::SharedRoot,
+        focus::{Observer, Progress},
+    };
+    struct Watch(Vec<Progress>);
+    impl Observer for Watch {
+        fn checkpoint(&mut self, _: &Brass, p: Progress) -> Result<bool, CoreError> {
+            self.0.push(p);
+            Ok(false)
+        }
+    }
+    let input = ordinary_input();
+    let clock = Fake::default();
+    let config = Settings {
+        search: Config {
+            simulations: 64,
+            k: 8,
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+    let budget = Budget::new(0, 4_000_000_000).unwrap();
+    let mut a = Session::new(identity(), &input, config.clone(), budget).unwrap();
+    let mut b = Session::new(identity(), &input, config, budget).unwrap();
+    b.enable_descendant_reuse().unwrap(); // Tracking alone must not alter any draw/count.
+    let info = a.preview(input.clone()).unwrap().1;
+    let mut e = Eval {
+        clock: &clock,
+        calls: 0,
+        late_at: 0,
+        cancel: false,
+    };
+    let stats = e.evaluate(&info).unwrap();
+    let mut draws = brass_ai_core::search::Draws::new(a.next_root_seed(), None, false);
+    let shared = SharedRoot {
+        uniforms: (0..info.actions.len())
+            .map(|_| draws.uniform().unwrap())
+            .collect(),
+        info,
+        stats: Some(stats),
+    };
+    let policy = brass_ai_core::evaluation::BatchPolicy {
+        cap: 1,
+        pending_limit: 1,
+        max_candidate_cells: 8192,
+        flush_us: 0,
+    };
+    let baseline = a
+        .decide_cooperative(
+            &identity(),
+            1,
+            input.clone(),
+            budget.deadline_ns,
+            Mode::Count,
+            &clock,
+            &mut e,
+            None,
+            &shared,
+            policy,
+        )
+        .unwrap();
+    let mut watch = Watch(vec![]);
+    let observed = b
+        .decide_observed(
+            &identity(),
+            1,
+            input,
+            budget.deadline_ns,
+            Mode::Count,
+            &clock,
+            &mut e,
+            &shared,
+            policy,
+            &mut watch,
+        )
+        .unwrap();
+    assert_eq!(watch.0.len(), 3);
+    for field in [
+        "snapshot",
+        "gumbels",
+        "actions",
+        "action_ids",
+        "completed",
+        "attempted",
+        "partial_completed",
+        "plan_events",
+        "eligible_plans",
+    ] {
+        assert_eq!(
+            serde_json::to_value(&baseline).unwrap()[field],
+            serde_json::to_value(&observed).unwrap()[field],
+            "{field}"
+        );
+    }
+}
+fn retired_for_reuse(enabled: bool, clock: &Fake) -> (Session, session::focus::Prepared) {
+    use session::{
+        cooperative::SharedRoot,
+        focus::{Observer, Progress},
+    };
+    struct Stop;
+    impl Observer for Stop {
+        fn checkpoint(&mut self, _: &Brass, p: Progress) -> Result<bool, CoreError> {
+            Ok(p.outcome.snapshot.as_ref().unwrap().completed_rounds >= 2)
+        }
+    }
+    let input = ordinary_input();
+    let budget = Budget::new(0, 4_000_000_000).unwrap();
+    let mut config = settings(96);
+    config.search.k = 8;
+    let mut session = Session::new(identity(), &input, config, budget).unwrap();
+    if enabled {
+        session.enable_descendant_reuse().unwrap();
+    }
+    let (game, info) = session.preview(input.clone()).unwrap();
+    let mut evaluator = Eval {
+        clock,
+        calls: 0,
+        late_at: 0,
+        cancel: false,
+    };
+    let shared = SharedRoot {
+        stats: Some(evaluator.evaluate(&info).unwrap()),
+        uniforms: vec![0.5; info.actions.len()],
+        info,
+    };
+    let outcome = session
+        .decide_observed(
+            &identity(),
+            1,
+            input,
+            budget.deadline_ns,
+            Mode::Count,
+            clock,
+            &mut evaluator,
+            &shared,
+            brass_ai_core::evaluation::BatchPolicy {
+                cap: 1,
+                pending_limit: 1,
+                max_candidate_cells: 8192,
+                flush_us: 0,
+            },
+            &mut Stop,
+        )
+        .unwrap();
+    assert_eq!(outcome.status, "policy_round_stop");
+    let prepared = session::focus::prepare(&game, &outcome.actions, budget, clock).unwrap();
+    (session, prepared)
+}
+#[test]
+fn both_one_and_neither_owner_hit_without_sharing_counts_or_root_credit() {
+    use session::cooperative::SharedRoot;
+    for enabled in [[true, true], [true, false], [false, false]] {
+        let clock = Fake::default();
+        let (mut a, pa) = retired_for_reuse(enabled[0], &clock);
+        let (mut b, pb) = retired_for_reuse(enabled[1], &clock);
+        assert_eq!(pa.boundary, pb.boundary);
+        assert_eq!(pa.incumbent[0].action, pb.incumbent[0].action);
+        let mut projected = [
+            a.projected_owner_reusing(&pa.input, &pa.incumbent[0].action, &clock)
+                .unwrap(),
+            b.projected_owner_reusing(&pa.input, &pa.incumbent[0].action, &clock)
+                .unwrap(),
+        ];
+        for lane in 0..2 {
+            let p = &mut projected[lane];
+            let metrics = p.reuse_metrics().unwrap();
+            assert_eq!(metrics.hit, enabled[lane], "{}", metrics.reason);
+            if enabled[lane] {
+                assert!(metrics.counts.retained_nodes > 1);
+                assert!(metrics.counts.inherited_edge_visits > 0);
+            }
+            let mut evaluator = Eval {
+                clock: &clock,
+                calls: 0,
+                late_at: 0,
+                cancel: false,
+            };
+            let stats = p
+                .evaluate_projected_root(&pa.boundary, &mut evaluator, &clock)
+                .unwrap();
+            assert!(stats.count.iter().all(|n| *n == 0));
+            let shared = SharedRoot {
+                info: pa.boundary.clone(),
+                stats: Some(stats),
+                uniforms: vec![0.5; pa.boundary.actions.len()],
+            };
+            let outcome = p
+                .decide_projected(
+                    1,
+                    pa.input.clone(),
+                    Mode::Count,
+                    &clock,
+                    &mut evaluator,
+                    &shared,
+                    brass_ai_core::evaluation::BatchPolicy {
+                        cap: 1,
+                        pending_limit: 1,
+                        max_candidate_cells: 8192,
+                        flush_us: 0,
+                    },
+                )
+                .unwrap();
+            assert_eq!(outcome.completed, 96);
+            assert_eq!(
+                outcome
+                    .snapshot
+                    .as_ref()
+                    .unwrap()
+                    .stats
+                    .count
+                    .iter()
+                    .sum::<u64>(),
+                96
+            );
+            assert_eq!(outcome.snapshot.as_ref().unwrap().support_watermark, 96);
+            assert!(outcome.actions[0].support <= 96);
+            assert_eq!(outcome.budget.deadline_ns, 4_000_000_000);
+            if enabled[lane] {
+                assert!(outcome.schedule.reused_selections > 0);
+            }
+        }
+        assert_eq!(projected[0].next_root_seed(), projected[1].next_root_seed());
+    }
+}
+#[test]
+fn reused_owner_rejects_changed_value_sampler_information_and_cancellation() {
+    for variant in 0..7 {
+        let clock = Fake::default();
+        let (mut session, mut p) = retired_for_reuse(true, &clock);
+        match variant {
+            0 => p.input.context.style[0] += 0.1,
+            1 => p.input.ledger.spent[0] += 0.001,
+            2 => p.input.shuffle_tape = Some(vec![]),
+            3 => p.input.view.context.revision += 1,
+            4 => p.incumbent[0]
+                .action
+                .steps
+                .last_mut()
+                .unwrap()
+                .choice
+                .push_str("wrong"),
+            5 => clock.cancelled.set(true),
+            _ => clock.now.set(3_600_000_000),
+        }
+        let projected = session
+            .projected_owner_reusing(&p.input, &p.incumbent[0].action, &clock)
+            .unwrap();
+        assert!(!projected.reuse_metrics().unwrap().hit);
+        assert_eq!(projected.budget().deadline_ns, 4_000_000_000);
+        assert_eq!(
+            projected.reuse_metrics().unwrap().diagnostic_max_depth,
+            Config::default().max_depth
+        );
+    }
+}
 fn settings(n: u64) -> Settings {
     Settings {
         search: Config {

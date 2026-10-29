@@ -1,6 +1,16 @@
 # Fresh training in conda: selected v4 teachers and Masked ISMCTS NN
 
-## Current g1120 continuation
+## Current g1320 continuation
+
+Use [the g1320 reward/cache continuation command](../ai-research/TRAINING_G1320_REVISION.md).
+Insolvency event cost is **0.01**, with the existing **0.075 cap**. The helper
+changes only the learner/search reward. After durable reviewed adoption, startup
+retires old-reward PPG caches: g1321 uses current data, g1322 uses g1321+g1322.
+Weights, PPO/value/auxiliary Adam, beta/trips, RNG, gate evidence, population and
+training progress are preserved. Loss16/KL32 and all other PPG settings remain.
+Fresh self-play configuration generation also uses 0.01/0.075.
+
+## Archived g1120 continuation
 
 Use [the g1120 continuation command](../ai-research/TRAINING_G1120_REVISION.md).
 Each neural seat uses **temperature 1.3 for its first three action decisions**,

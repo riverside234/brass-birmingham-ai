@@ -1,0 +1,51 @@
+{
+  "version": "descendant-reuse-reference/1",
+  "watermark": 3,
+  "promoted": {
+    "count": [
+      0,
+      0
+    ],
+    "returns": [
+      [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ]
+    ]
+  },
+  "descendant": {
+    "count": [
+      0,
+      3
+    ],
+    "returns": [
+      [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      [
+        2.94,
+        2.94,
+        2.94,
+        2.94
+      ]
+    ]
+  },
+  "retained_nodes": [
+    2,
+    3,
+    4
+  ],
+  "old_root_visits_reset": 3,
+  "inherited_edge_visits": 3
+}

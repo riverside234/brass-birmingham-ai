@@ -28,11 +28,25 @@ namespace BrassLegacyAI.Native
         public const string Format="brass-local-native-save/1.0.0";
         public static bool IsNative(JObject state) {return (string)state?["format"]==Format || (string)state?["runtime"]==NativePackage.Backend;}
         public static bool Supported(GameMetadata metadata) {return metadata!=null && (int)metadata.GameStartConfiguration.NumberOfPlayers==4 && !metadata.GameStartConfiguration.IsIntroductoryGame;}
-        static string AssignmentHash(JObject s) {return Wire.Hash(new JObject{["format"]=s["format"],["runtime"]=s["runtime"],["family"]=s["family"],
-            ["rules"]=s["rules"],["schema"]=s["schema"],["configuration"]=s["configuration"],["assignments"]=s["assignments"]});}
+        static string AssignmentHash(JObject s) {
+            var bound=new JObject{["format"]=s["format"],["runtime"]=s["runtime"],["family"]=s["family"],
+                ["rules"]=s["rules"],["schema"]=s["schema"],["configuration"]=s["configuration"],["assignments"]=s["assignments"]};
+            if(s["nn_search_k"]!=null)bound["nn_search_k"]=s["nn_search_k"].DeepClone();
+            return Wire.Hash(bound);
+        }
+        public static int SearchK(JObject state)
+        {
+            var k=state["nn_search_k"];
+            if(k==null)return 16; // Pre-selector saves retain the installed K16 default.
+            if(k.Type!=JTokenType.Integer || ((int)k!=8 && (int)k!=16))throw new InvalidDataException("Unsupported saved NN search K");
+            return (int)k;
+        }
         public static JObject Create(GameMetadata metadata,Func<PlayerMetadata,string> difficulty)
+        { return Create(metadata,difficulty,16); }
+        public static JObject Create(GameMetadata metadata,Func<PlayerMetadata,string> difficulty,int searchK)
         {
             if(!Supported(metadata))throw new InvalidDataException("Alpha Test requires standard four-player rules");
+            if(searchK!=8 && searchK!=16)throw new InvalidDataException("Unsupported NN search K");
             var rows=new JArray(metadata.PlayerMetadata.Select(p=>{
                 var r=new JObject{["color"]=(int)p.PlayerStartConfiguration.Color,["sitting_order"]=p.PlayerStartConfiguration.SittingOrder,
                     ["kind"]=p.AiType==AIType.Human?"human":"native"};
@@ -43,6 +57,7 @@ namespace BrassLegacyAI.Native
             var state=new JObject{["format"]=Format,["runtime"]=NativePackage.Backend,["family"]="nn",["rules"]=Wire.Rules,["schema"]=Wire.Version,
                 ["game_id"]=metadata.GameId,["created_utc"]=DateTime.UtcNow.ToString("o"),["ready"]=false,
                 ["configuration"]=Host.Configuration(metadata.GameStartConfiguration),["assignments"]=rows,["records"]=new JArray()};
+            state["nn_search_k"]=searchK;
             state["assignment_sha256"]=AssignmentHash(state);state["records_sha256"]=Wire.Hash(state["records"]);return state;
         }
         public static JObject Read(GameMetadata metadata,bool pending)
@@ -53,6 +68,7 @@ namespace BrassLegacyAI.Native
                 (!pending && (bool?)s["ready"]!=true) || !JToken.DeepEquals(s["configuration"],Host.Configuration(metadata.GameStartConfiguration)) ||
                 (string)s["assignment_sha256"]!=AssignmentHash(s) || !(s["records"] is JArray) ||
                 (string)s["records_sha256"]!=Wire.Hash(s["records"]))throw new InvalidDataException("Incompatible NN table; save preserved");
+            SearchK(s);
             var rows=s["assignments"].ToArray();
             if(rows.Length!=4 || rows.Select(r=>(int)r["color"]).Distinct().Count()!=4)throw new InvalidDataException("Invalid NN seat mapping");
             foreach(var p in metadata.PlayerMetadata) {

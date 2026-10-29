@@ -66,6 +66,48 @@ class Draws:
 class Expired(Exception):pass
 
 
+class FakeClock:
+    """Deterministic scheduler reference; advancing a phase never resets time."""
+    def __init__(self, allowance_ns):
+        self.now = 0
+        self.deadline = allowance_ns
+        self.work_deadline = allowance_ns - min(allowance_ns // 10, 1_200_000_000)
+        self.cancelled = False
+
+    def advance(self, ns):
+        assert ns >= 0
+        self.now += ns
+
+    def remaining(self):
+        return 0 if self.cancelled else max(0, self.work_deadline - self.now)
+
+
+class FocusGate:
+    """Independent scalar specification of revision-2 checkpoint eligibility.
+
+    Full proof equality matters, including subchoices/preconditions. The two
+    counts identify eligible completed rounds, not raw/partial MCTS work.
+    """
+    def __init__(self):
+        self.previous = None
+        self.watermarks = (0, 0)
+
+    def observe(self, path, watermarks):
+        if any(new <= old for new, old in zip(watermarks, self.watermarks)):
+            return False
+        stable = path is not None and self.previous == path
+        self.previous = copy.deepcopy(path)
+        self.watermarks = tuple(watermarks)
+        return stable
+
+    @staticmethod
+    def affordable(clock, startup_ns, recent, requested, legal, preparation_ns=20_000_000):
+        cost = max([startup_ns, *recent[-8:]])
+        quota = max(0, clock.remaining() - preparation_ns) // cost if cost else 0
+        k = ref.effective_k(requested, legal, quota)
+        return dict(quota=quota, effective_k=k, useful=k >= 2, cost_ns=cost)
+
+
 def turn(info):
     c=info['key']['information']['observation']['view']['context']
     return tuple(c[k] for k in ('era','round','turn','turn_owner'))+(info['actor'],c['phase']=='debt')
@@ -75,11 +117,12 @@ class Session:
     def __init__(self,worker,lane,evaluator):
         self.worker,self.lane,self.evaluator=worker,lane,evaluator
         self.cache={};self.costs={};self.epoch=0;self.continuation=[]
+        self.now_ns=time.perf_counter_ns;self.on_checkpoint=None
 
     def call(self,kind,**kw):return self.worker.simulation(self.lane,kind,**kw)
 
     def check(self,delivery=False):
-        if self.cancel.is_set() or time.perf_counter_ns()>=(self.deadline if delivery else self.work_deadline):raise Expired()
+        if self.cancel.is_set() or self.now_ns()>=(self.deadline if delivery else self.work_deadline):raise Expired()
 
     def evaluate(self,info):
         self.check();k=key(info)
@@ -160,16 +203,16 @@ class Session:
         bucket=(info['key']['information']['observation']['view']['context']['phase'],str(info['key']['context']))
         costs=self.costs.setdefault(bucket,[]);estimate=(mode.get('startup') or {}).get('estimate',{}).get('nanoseconds')
         if len(costs)>=4:estimate=sorted(costs)[(len(costs)-1)//4]
-        available=max(0,self.work_deadline-time.perf_counter_ns())
+        available=max(0,self.work_deadline-self.now_ns())
         budget=cfg['simulations'] if mode['kind']=='count' else (available//estimate if estimate else 0)
         k=ref.effective_k(cfg['k'],len(logits),budget)
         ranking=lambda choices,s:sorted(choices,key=lambda i:(-s[i]-g[i],i))
         survivors=sorted(ranking(range(len(logits)),logits)[:k]);completed=attempted=round_done=rounds=remainder=0
         snapshot=None;entries={}
         while completed<budget:
-            if time.perf_counter_ns()>=self.work_deadline or self.cancel.is_set():break
-            if mode['kind']=='timed' and estimate and self.work_deadline-time.perf_counter_ns()<estimate:break
-            edge=survivors[round_done%len(survivors)];began=time.perf_counter_ns();attempted+=1
+            if self.now_ns()>=self.work_deadline or self.cancel.is_set():break
+            if mode['kind']=='timed' and estimate and self.work_deadline-self.now_ns()<estimate:break
+            edge=survivors[round_done%len(survivors)];began=self.now_ns();attempted+=1
             h,s=self.sample();ledger=CostLedger(self.input['reward'],**self.ledger.snapshot())
             path=[];spent=[];prefix=[];steps=[];fresh=None
             try:
@@ -227,7 +270,11 @@ class Session:
                     snapshot=dict(stats=dict(logits=list(root.logits),value=list(root.value),count=root.count.copy(),returns=copy.deepcopy(root.returns)),
                         survivors=survivors.copy(),completed_rounds=rounds,support_watermark=completed,remainder_simulations=remainder,
                         reason='quota_complete' if completed==budget else 'single_candidate' if k==1 else 'balanced_round')
-                costs.append(time.perf_counter_ns()-began);costs[:]=costs[-8:]
+                costs.append(self.now_ns()-began);costs[:]=costs[-8:]
+                if balanced and self.on_checkpoint is not None:
+                    # Locals retain the same arena, draws and fixed tournament.
+                    # A callback may advance fake time; it never replenishes it.
+                    if self.on_checkpoint(copy.deepcopy(snapshot),entries):break
             except Expired:break
             finally:self.call('release',handle=h)
         if snapshot:

@@ -14,6 +14,7 @@ pub struct SharedRoot {
 }
 #[derive(Debug, Clone, Default, Serialize)]
 pub struct Metrics {
+    pub reused_selections: u64,
     pub waves: u64,
     pub evaluator_batches: u64,
     pub unique_leaves: u64,
@@ -58,10 +59,13 @@ pub(super) fn run<E: LeafEvaluator<Key, String>>(
     clock: &impl Clock,
     policy: BatchPolicy,
     out: &mut Outcome,
+    observer: &mut Option<&mut dyn focus::Observer>,
+    minimum_support: u64,
 ) -> Result<()> {
     validate_policy(policy)?;
     let actor = tree.get(root)?.info.actor;
     let n = out.quota.as_ref().expect("frozen quota").simulations;
+    let mut published_round = 0;
     while rounds.tournament.completed < n {
         let mut pending = Vec::with_capacity(policy.pending_limit);
         let wave_started = clock.now_ns();
@@ -78,6 +82,7 @@ pub(super) fn run<E: LeafEvaluator<Key, String>>(
                 let began = clock.now_ns();
                 let path = trajectory::traverse(game, tree, root, edge, config, draws)?;
                 let work = path.work();
+                out.schedule.reused_selections += work.reused_selections;
                 out.schedule.sampling_ns += work.sampling_ns;
                 out.schedule.information_ns += work.information_ns;
                 out.schedule.lookup_ns += work.lookup_ns;
@@ -166,6 +171,13 @@ pub(super) fn run<E: LeafEvaluator<Key, String>>(
                 })?;
                 ledger.record(&actions, rounds.tournament.completed + 1, value)?;
                 rounds.complete(edge, &tree.get(root)?.stats, actor, config.parameters())?;
+                if rounds
+                    .eligible
+                    .as_ref()
+                    .is_some_and(|s| s.support_watermark == rounds.tournament.completed)
+                {
+                    tree.checkpoint_round(rounds.tournament.completed);
+                }
                 out.schedule.publication_ns += super::super::nanos(publication);
                 out.last_completion_ns = Some(completed_at);
                 costs.observe(completed_at.saturating_sub(began));
@@ -196,6 +208,57 @@ pub(super) fn run<E: LeafEvaluator<Key, String>>(
                 Ok(())
             }
         })?;
+        if let Some(observer) = observer.as_deref_mut() {
+            let retire = observer.retirement_requested();
+            if let Some(snapshot) = &rounds.eligible {
+                // Only full halving rounds, with every reservation retired. A
+                // repeated single-candidate/remainder update is not a new round.
+                if (snapshot.completed_rounds > published_round || retire)
+                    && rounds.tournament.pending() == 0
+                {
+                    published_round = snapshot.completed_rounds;
+                    let began = clock.now_ns();
+                    let mut progress = out.clone();
+                    progress.snapshot = Some(snapshot.clone());
+                    progress.completed = rounds.tournament.completed;
+                    progress.effective_k = rounds.tournament.effective_k;
+                    progress.gumbels = rounds.tournament.gumbels.clone();
+                    progress.eligible_plans.clear();
+                    let info = &tree.get(root)?.info;
+                    for candidate in
+                        rounds.ranking(&tree.get(root)?.stats, actor, config.parameters())?
+                    {
+                        let plan = ledger.select(
+                            &info.actions[candidate],
+                            snapshot.support_watermark,
+                            minimum_support,
+                            actor,
+                        );
+                        if !plan.is_empty() {
+                            progress.eligible_plans.push(plan);
+                        }
+                    }
+                    let startup = progress
+                        .quota
+                        .as_ref()
+                        .and_then(|q| q.estimate.as_ref())
+                        .map_or(0, |e| e.nanoseconds);
+                    let stop = observer.checkpoint(
+                        game,
+                        focus::Progress {
+                            outcome: progress,
+                            cost_ns: costs.conservative(startup),
+                            at_ns: clock.now_ns(),
+                            extraction_ns: clock.now_ns().saturating_sub(began),
+                        },
+                    )?;
+                    if stop {
+                        out.status = "policy_round_stop".into();
+                        break;
+                    }
+                }
+            }
+        }
     }
     check(
         rounds.tournament.pending() == 0,

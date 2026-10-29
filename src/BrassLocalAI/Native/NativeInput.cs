@@ -50,5 +50,31 @@ namespace BrassLegacyAI.Native
                 return path.Values<string>().ToArray();
             }).ToArray();
         }
+        // Rust counts staged semantic choices; Unity counts underlying game
+        // events. Compare the full permitted successor after translating only
+        // those new revision stamps. The live event revision remains bound by
+        // LocalTurnBridge and NativeValidation immediately before each commit.
+        public static bool ContinuationMatches(JObject response,JObject actual,JArray priorRecall)
+        {
+            var revision=response?["search_revision"] as JObject;
+            if(revision==null)return true; // Frozen search_v1 contract.
+            if((string)revision["version"]!="brass-local-focus/2.0.0")throw new InvalidOperationException("Unknown native focus contract");
+            var focus=revision["focus"] as JObject;
+            if((bool?)focus?["switched"]!=true)return true;
+            var expected=focus["permitted_successor"] as JObject;
+            if(expected==null || expected["view"]==null || expected["recall"]==null)
+                throw new InvalidOperationException("Missing projected continuation precondition");
+            var view=(JObject)actual["view"].DeepClone();
+            long liveRevision=(long)view["context"]["revision"];
+            long originalRevision=(long)response["ticket"]["revision"];
+            if(liveRevision<=originalRevision)return false;
+            view["context"]["revision"]=expected["view"]["context"]["revision"].DeepClone();
+            if(!JToken.DeepEquals(view,expected["view"]) || !JToken.DeepEquals(actual["context"],expected["context"]) ||
+                !JToken.DeepEquals(actual["ledger"],expected["ledger"]))return false;
+            var recall=(JArray)priorRecall.DeepClone();var hand=actual["view"]["own_hand"];
+            if(recall.Count==0 || !JToken.DeepEquals(recall.Last["hand"],hand))
+                recall.Add(new JObject{["revision"]=expected["recall"].Last["revision"].DeepClone(),["hand"]=hand.DeepClone()});
+            return JToken.DeepEquals(recall,expected["recall"]);
+        }
     }
 }

@@ -45,8 +45,10 @@ namespace BrassLegacyAI
         public float TextScale { get; private set; } = 1.15f;
         public PlayerSelectionPage CurrentPage { get; private set; }
         public string DraftDifficulty { get; private set; }
+        public int DraftSearchK { get; private set; }
         public Button ApplyButton { get; private set; }
         public Button[] DifficultyButtons { get; private set; } = new Button[0];
+        public Button[] SearchKButtons { get; private set; } = new Button[0];
         public static bool IsOpen { get { return !ReferenceEquals(active, null); } }
         public static AiSelectionPanel Active { get { return active; } }
         public static bool BlocksMenuActivation { get { return IsOpen || closedFrame == Time.frameCount; } }
@@ -84,6 +86,7 @@ namespace BrassLegacyAI
             var panel = active = root.gameObject.AddComponent<AiSelectionPanel>();
             panel.owner = row; panel.ownerVersion = row.BindingVersion; panel.template = font; panel.nickname = playerName;
             panel.DraftDifficulty = row.SelectedDifficulty;
+            panel.DraftSearchK = LocalMenu.TableSearchK(row.Player);
             foreach (var family in new[] { AiFamily.V4, AiFamily.Gamma, AiFamily.AlphaTest }) {
                 panel.catalogs[family] = fixtureFamily == family && fixtureEntries != null ? Array.AsReadOnly(fixtureEntries) : AiSelectionCatalog.Entries(family);
                 panel.queries[family] = ""; panel.positions[family] = 1;
@@ -130,6 +133,7 @@ namespace BrassLegacyAI
             foreach (Transform child in transform) { child.gameObject.SetActive(false); Destroy(child.gameObject); }
             tiles.Clear(); pageButtons.Clear(); filter = null; random = null; scroll = null; clear = null;
             DifficultyButtons = new Button[0];
+            SearchKButtons = new Button[0];
             Canvas.ForceUpdateCanvases(); var root = (RectTransform)transform; var pixels = PixelBounds();
             pixelWidth = (int)pixels.width; pixelHeight = (int)pixels.height;
             unit = root.rect.width / Math.Max(1, pixels.width); if (unit <= 0) unit = 1;
@@ -216,7 +220,24 @@ namespace BrassLegacyAI
             }
             float helpX = 155 + 167 * DifficultyButtons.Length;
             Text(window, "Difficulty help", CurrentPage == PlayerSelectionPage.Gamma ? "Gamma is not available yet." : "Maximum thinking time", bodyX + helpX, 146, bodyWidth - helpX, 46, 18, true).color = LightUi.Muted;
-            var box = AiWidgets.Rect(window, "Find AI", P(bodyX, 204), S(bodyWidth - 88, 44)); box.gameObject.AddComponent<AiControlSurface>();
+            float searchOffset = CurrentPage == PlayerSelectionPage.AlphaTest ? 58 : 0;
+            if (searchOffset > 0) {
+                Text(window, "NN search caption", "NN search", bodyX, 204, 137, 46, 21);
+                SearchKButtons = new Button[2];
+                for (int i = 0; i < SearchKButtons.Length; i++) {
+                    int k = i == 0 ? 8 : 16;
+                    var button = SearchKButtons[i] = Button(window, "NN search K" + k, "K = " + k,
+                        bodyX + 142 + i * 167, 204, 155, 46, 21, () => {
+                            DraftSearchK = k; UpdateSearchK(); UpdateSelection();
+                        });
+                    var mark = AiWidgets.Rect(button.transform, "Selected mark", P(136, 17), S(11, 11));
+                    mark.gameObject.AddComponent<AiSelectionMark>().raycastTarget = false;
+                    button.GetComponentInChildren<TextMeshProUGUI>().rectTransform.offsetMax = new Vector2(-20 * unit, -2 * unit);
+                }
+                Text(window, "NN search help", "Whole NN table · all time budgets", bodyX + 486, 204, bodyWidth - 486, 46, 18, true).color = LightUi.Muted;
+                UpdateSearchK();
+            }
+            var box = AiWidgets.Rect(window, "Find AI", P(bodyX, 204 + searchOffset), S(bodyWidth - 88, 44)); box.gameObject.AddComponent<AiControlSurface>();
             filter = box.gameObject.AddComponent<TMP_InputField>();
             var area = AiWidgets.Rect(box, "Text area", P(10, 3), S(bodyWidth - 110, 38)); area.gameObject.AddComponent<RectMask2D>();
             var inputText = Text(area, "Input", "", 0, 0, bodyWidth - 110, 38, 20);
@@ -224,20 +245,20 @@ namespace BrassLegacyAI
             filter.textViewport = area; filter.textComponent = inputText; filter.placeholder = placeholder; filter.characterLimit = 64;
             filter.SetTextWithoutNotify(queries[Family]);
             filter.onValueChanged.AddListener(value => { if (!IsCurrent) return; queries[Family] = value; positions[Family] = 1; RefreshGrid(); });
-            clear = Button(window, "Clear filter", "Clear", bodyX + bodyWidth - 80, 204, 80, 44, 18, () => { filter.text = ""; filter.ActivateInputField(); });
-            var randomEntry = RandomEntry(); random = Tile(randomEntry, window, bodyX, 260, bodyWidth, 68, true);
+            clear = Button(window, "Clear filter", "Clear", bodyX + bodyWidth - 80, 204 + searchOffset, 80, 44, 18, () => { filter.text = ""; filter.ActivateInputField(); });
+            var randomEntry = RandomEntry(); random = Tile(randomEntry, window, bodyX, 260 + searchOffset, bodyWidth, 68, true);
             if(Family==AiFamily.AlphaTest)random.gameObject.SetActive(false);
             columns = Family == AiFamily.Gamma ? 4 : 3;
             cardHeight = (Family == AiFamily.Gamma ? 146 : 216) * TextScale / 1.15f;
-            float gridHeight = Mathf.Max(80, height - 340 - footerHeight - 16);
-            viewport = AiWidgets.Rect(window, "Styles viewport", P(bodyX, 340), S(bodyWidth, gridHeight)); viewport.gameObject.AddComponent<RectMask2D>();
+            float gridHeight = Mathf.Max(80, height - 340 - searchOffset - footerHeight - 16);
+            viewport = AiWidgets.Rect(window, "Styles viewport", P(bodyX, 340 + searchOffset), S(bodyWidth, gridHeight)); viewport.gameObject.AddComponent<RectMask2D>();
             viewport.gameObject.AddComponent<Image>().color = new Color(0, 0, 0, .001f);
             scroll = viewport.gameObject.AddComponent<ScrollRect>(); scroll.viewport = viewport; scroll.horizontal = false; scroll.vertical = true;
             scroll.scrollSensitivity = 38 * unit; scroll.movementType = ScrollRect.MovementType.Clamped;
             gridWidth = bodyWidth - 22;
             content = AiWidgets.Rect(viewport, "Styles", Vector2.zero, S(gridWidth, gridHeight)); scroll.content = content;
             empty = Text(viewport, "No results", "No matching AIs. Clear the search to see this page's roster.", 12, 12, bodyWidth - 32, 80, 21, true);
-            var scrollbar = Scrollbar(window, "AI grid scrollbar", bodyX + bodyWidth - 14, 340, 14, gridHeight);
+            var scrollbar = Scrollbar(window, "AI grid scrollbar", bodyX + bodyWidth - 14, 340 + searchOffset, 14, gridHeight);
             scroll.verticalScrollbar = scrollbar; scroll.verticalScrollbarVisibility = ScrollRect.ScrollbarVisibility.AutoHide;
             }
             float footerY = height - footerHeight;
@@ -314,6 +335,14 @@ namespace BrassLegacyAI
                 DifficultyButtons[i].transform.Find("Selected mark").gameObject.SetActive(chosen);
             }
         }
+        void UpdateSearchK()
+        {
+            for (int i = 0; i < SearchKButtons.Length; i++) {
+                bool chosen = DraftSearchK == (i == 0 ? 8 : 16);
+                var surface = SearchKButtons[i].GetComponent<AiControlSurface>(); surface.Selected = chosen; surface.SetVerticesDirty();
+                SearchKButtons[i].transform.Find("Selected mark").gameObject.SetActive(chosen);
+            }
+        }
         bool CanApply()
         {
             if (!IsCurrent) return false;
@@ -327,14 +356,15 @@ namespace BrassLegacyAI
             selectionText.text = CurrentPage == PlayerSelectionPage.Human ? "Selection: Human · Local player" : CurrentPage == PlayerSelectionPage.Gamma && !fixture ?
                 "Gamma is not available yet. Choose an available table AI to play." :
                 "Selection: " + (Family==AiFamily.AlphaTest?"NN":Family.ToString()) + " · " + (selected.EntryId == "random" ? "Random" : catalogs[Family].First(e => e.Choice.Equals(selected)).Name) +
-                " · " + DifficultyCatalog.Label(DraftDifficulty) + " · up to " + DifficultyCatalog.Milliseconds(DraftDifficulty) / 1000 + "s";
+                " · " + DifficultyCatalog.Label(DraftDifficulty) + " · up to " + DifficultyCatalog.Milliseconds(DraftDifficulty) / 1000 + "s" +
+                (Family == AiFamily.AlphaTest ? " · K = " + DraftSearchK : "");
             ApplyButton.interactable = CanApply(); var surface = ApplyButton.GetComponent<AiControlSurface>();
             surface.Available = ApplyButton.interactable; surface.Selected = ApplyButton.interactable; surface.SetVerticesDirty();
         }
         void Apply()
         {
             if (!CanApply()) return;
-            var draft = new PlayerSelectionDraft(CurrentPage, selected, DraftDifficulty);
+            var draft = new PlayerSelectionDraft(CurrentPage, selected, DraftDifficulty, DraftSearchK);
             var onApply = apply; var onChoose = choose;
             // Closing restores row input before its identity/generation checked
             // callback commits the complete draft with one presenter refresh.
@@ -386,7 +416,7 @@ namespace BrassLegacyAI
             var controls = new List<Selectable>(pageButtons.Where(p=>fixture || p.Key!=PlayerSelectionPage.Gamma).OrderBy(p=>(int)p.Key).Select(p=>(Selectable)p.Value));
             controls.Add(v4Table);controls.Add(nnTable);controls.Add(alphaTable);
             if(!fixture && pageButtons.ContainsKey(PlayerSelectionPage.Gamma))controls.Add(pageButtons[PlayerSelectionPage.Gamma]);
-            controls.AddRange(DifficultyButtons); controls.AddRange(new Selectable[] { filter, clear, random });
+            controls.AddRange(DifficultyButtons); controls.AddRange(SearchKButtons); controls.AddRange(new Selectable[] { filter, clear, random });
             controls.AddRange(tiles); controls.AddRange(new[] { smaller, larger, close, footerClose, ApplyButton });
             return controls.Where(c => c != null && c.IsActive() && c.IsInteractable()).ToList();
         }

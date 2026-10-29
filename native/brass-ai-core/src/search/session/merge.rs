@@ -103,6 +103,8 @@ pub fn select(
         lanes[0].identity == lanes[1].identity
             && lanes[0].request_id == lanes[1].request_id
             && lanes[0].revision == lanes[1].revision
+            && lanes[0].root_epoch == lanes[1].root_epoch
+            && lanes[0].supporting_root_epoch == lanes[1].supporting_root_epoch
             && lanes[0].turn == lanes[1].turn
             && lanes[0].context == lanes[1].context,
         "mixed request snapshots",

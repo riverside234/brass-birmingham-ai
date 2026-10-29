@@ -103,6 +103,15 @@ impl Costs {
         values.sort_unstable();
         Some(values[(values.len() - 1) / 4])
     }
+    /// Switch affordability only; the frozen baseline quota estimator is unchanged.
+    pub fn conservative(&self, startup_ns: u64) -> u64 {
+        self.completed
+            .iter()
+            .copied()
+            .max()
+            .unwrap_or(0)
+            .max(startup_ns)
+    }
     pub fn admit(&self, remaining: u64) -> bool {
         remaining > 0 && remaining >= self.estimate().unwrap_or(0)
     }

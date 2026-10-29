@@ -16,6 +16,7 @@ namespace BrassLegacyAI
         public AiFamily Family;
         public int PlayerCount;
         public bool Introductory;
+        public int SearchK = 16;
         public Seat[] Seats;
 
         public string Encode()
@@ -23,6 +24,7 @@ namespace BrassLegacyAI
             return new JObject {
                 ["version"] = 2, ["family"] = Family == AiFamily.AlphaTest ? "nn" : "v4",
                 ["players"] = PlayerCount, ["introductory"] = Introductory,
+                ["nn_search_k"] = SearchK,
                 ["seats"] = new JArray(Seats.Select(s => new JObject {
                     ["human"] = s.Human, ["style"] = s.Style, ["difficulty"] = s.Difficulty }))
             }.ToString(Newtonsoft.Json.Formatting.None);
@@ -38,11 +40,14 @@ namespace BrassLegacyAI
                 string family = (string)value["family"];
                 var seats = value["seats"] as JArray;
                 int count = (int)value["players"];
+                var k = value["nn_search_k"];
+                if (k != null && (k.Type != JTokenType.Integer || ((int)k != 8 && (int)k != 16))) return null;
                 if ((family != "v4" && family != "nn") || count < 2 || count > 4 || seats == null ||
                     seats.Count < count || seats.Count > 4) return null;
                 var result = new LocalSetupPreferences {
                     Family = family == "nn" ? AiFamily.AlphaTest : AiFamily.V4,
                     PlayerCount = count, Introductory = (bool)value["introductory"],
+                    SearchK = k == null ? 16 : (int)k,
                     Seats = new Seat[seats.Count]
                 };
                 for (int i = 0; i < seats.Count; i++) {
