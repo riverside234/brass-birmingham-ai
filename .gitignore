@@ -596,3 +596,11 @@ Desktop.ini
 /test_nn/**/checkpoint.pt
 /test_nn/.staging-*/
 /test_nn/**/*.tmp
+
+# Deliberately distributed B01 lab qualification bundle only.
+!/distribution/
+/distribution/*
+!/distribution/rust-lab-b01/
+/distribution/rust-lab-b01/*
+!/distribution/rust-lab-b01/README.md
+!/distribution/rust-lab-b01/b01-lab-update.zip
