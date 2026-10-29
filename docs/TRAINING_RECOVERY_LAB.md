@@ -1,6 +1,22 @@
 # Fresh training in conda: selected v4 teachers and Masked ISMCTS NN
 
-## Current g1320 continuation
+## Current g1322 continuation
+
+Use [the g1322 continuation command](../ai-research/TRAINING_G1322_REVISION.md).
+Insolvency is **0.005 per event / 0.05 cap**. Fixed raw-policy entropy coefficients
+are **0.015** for `canal_action` and `rail_action`, **0.005** for both `other` groups.
+Adaptive entropy remains off and the saved baseline is retained. Ordinary neural
+policies use **epsilon 0.08**, **T2.0 for the first three action decisions per seat**,
+including the three decisions after a fork; decoupled PPO selects the same window.
+Branch rate stays 1%, with the first three action decisions excluded as fork points.
+Fresh self-play configuration generation uses the same recipe.
+
+The explicit reward transition starts **fresh PPG replay** after durable config
+adoption: g1323 uses only new data, g1324 uses g1323+g1324. The existing two-age PPG
+recipe, loss16/KL32, optimizers, beta, weights, RNG and training progress are retained.
+Do not rerun the g1320 helper or manually edit/delete checkpoint files.
+
+## Archived g1320 continuation
 
 Use [the g1320 reward/cache continuation command](../ai-research/TRAINING_G1320_REVISION.md).
 Insolvency event cost is **0.01**, with the existing **0.075 cap**. The helper
@@ -8,7 +24,7 @@ changes only the learner/search reward. After durable reviewed adoption, startup
 retires old-reward PPG caches: g1321 uses current data, g1322 uses g1321+g1322.
 Weights, PPO/value/auxiliary Adam, beta/trips, RNG, gate evidence, population and
 training progress are preserved. Loss16/KL32 and all other PPG settings remain.
-Fresh self-play configuration generation also uses 0.01/0.075.
+That revision's fresh default was 0.01/0.075; g1322 above supersedes it.
 
 ## Archived g1120 continuation
 

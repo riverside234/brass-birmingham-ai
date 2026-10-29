@@ -88,6 +88,11 @@ pub struct Package {
     pub warmup_sha256: String,
     #[serde(default)]
     pub method: search::session::focus::Method,
+    #[serde(default = "default_temperature")]
+    pub policy_temperature: f32,
+}
+fn default_temperature() -> f32 {
+    1.0
 }
 impl Package {
     pub fn load(path: &Path, digest: &str) -> Result<(Self, PathBuf)> {
@@ -104,6 +109,7 @@ impl Package {
             "package identity",
         )?;
         let p: Self = serde_json::from_slice(&bytes).map_err(|e| search::invalid(e.to_string()))?;
+        crate::local_temperature::validate(p.policy_temperature)?;
         search::check(
             p.protocol == PROTOCOL
                 && p.backend == BACKEND
@@ -238,11 +244,12 @@ struct Active {
     deadline: Instant,
     requested_k: usize,
 }
-fn compact(d: Decision, ticket: Ticket, requested_k: usize) -> Value {
+fn compact(d: Decision, ticket: Ticket, requested_k: usize, temperature: f32) -> Value {
     let mut value = json!({"ticket":ticket,"backend":BACKEND,"model_id":MODEL,"export_sha256":EXPORT,
         "actions":d.result.action_ids,"provenance":d.result.provenance,
         "completed":d.lanes.iter().map(|l| l.outcome.completed).sum::<u64>(),
         "sessions":2,"threads_per_session":1,"retired":true,"requested_k":requested_k,
+        "policy_temperature":temperature,"temperature_scope":"all_nn_policy_evaluations",
         "replay":{
             "version":"brass-local-replay/1.0.0",
             "root_epoch":d.result.root_epoch,
@@ -278,7 +285,13 @@ pub fn run() -> std::result::Result<(), Box<dyn std::error::Error>> {
     let package_path = PathBuf::from(&args[0]);
     let (package, model_path) = Package::load(&package_path, &args[1].to_string_lossy())?;
     let digest = package.model_manifest_sha256.clone();
-    let mut pair = Pair::new(move |_| CpuEvaluator::load(Bundle::load(&model_path, &digest)?))?;
+    let temperature = package.policy_temperature;
+    let mut pair = Pair::new(move |_| {
+        crate::local_temperature::Tempered::new(
+            CpuEvaluator::load(Bundle::load(&model_path, &digest)?)?,
+            temperature,
+        )
+    })?;
     // Exercise real features, both owners and the pinned export before exposing
     // readiness. This public fixture has no trusted full-state material.
     let warm_path = package_path.parent().unwrap().join("warmup.json");
@@ -326,6 +339,7 @@ pub fn run() -> std::result::Result<(), Box<dyn std::error::Error>> {
         "export_sha256":EXPORT,"sessions":2,"threads_per_session":1,
         "provider":"CPUExecutionProvider","utility_acceptance":package.acceptance,
         "k_by_allowance_ms":package.k_by_allowance_ms,
+        "policy_temperature":temperature,"temperature_scope":"all_nn_policy_evaluations",
         "measured_readiness":{"warmup_passed":true,"native_nn_positions":warmup.lanes.iter().map(|l| l.neural.positions).sum::<usize>()},
         "max_frame_bytes":brass_ai_core::framing::MAX_FRAME_BYTES}),
     )?;
@@ -362,7 +376,7 @@ pub fn run() -> std::result::Result<(), Box<dyn std::error::Error>> {
                     );
                     match result {
                         Ok(Some(d)) if Instant::now() < a.deadline => {
-                            emit(a.id, "ok", compact(d, a.ticket, a.requested_k))?
+                            emit(a.id, "ok", compact(d, a.ticket, a.requested_k, temperature))?
                         }
                         Ok(_) => emit(a.id, "error", json!({"error":"expired","retired":true}))?,
                         Err(e) => emit(

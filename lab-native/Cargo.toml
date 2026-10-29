@@ -1,0 +1,25 @@
+[package]
+name = "brass-lab-collector"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.99"
+publish = false
+
+# Standalone additive collector; lab builds place the unchanged B01 archive at
+# ../native. No installed-game or shared-core source is changed by B02.
+[workspace]
+
+[dependencies]
+brass-ai-core = { path = "../native/brass-ai-core" }
+serde = { version = "=1.0.228", features = ["derive"] }
+serde_json = "=1.0.149"
+sha2 = "=0.10.9"
+
+[profile.release]
+opt-level = 3
+lto = "thin"
+codegen-units = 1
+overflow-checks = true
+
+[lints.rust]
+unsafe_code = "forbid"

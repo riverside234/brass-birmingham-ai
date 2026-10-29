@@ -13,7 +13,7 @@ import zipfile
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'src'))
 from brass_ai.learning.contracts import read_json, require
-from brass_ai.rust_backend.lab_contract import sha, verify_inputs
+from brass_ai.rust_backend.lab_contract import ARCHIVE, METHOD, POLICIES, admit, sha, verify_inputs
 
 
 def write(path, value):
@@ -27,17 +27,21 @@ def rows(path):
 
 
 def prepare(output):
-    base = ROOT / 'artifacts/search-v2/20261028'
+    base = ROOT / 'artifacts/search-v1-default'
+    package = base / 'candidate/BrassNative/alpha-g890'
     references = {
-        'source.zip': base / 'v205/source.zip',
-        'candidate.json': base / 'v205-cache-candidate/build-manifest.json',
-        'deployment.json': base / 'installed-smoke/deployment.json',
-        'installed-smoke.json': base / 'installed-smoke/verification.json',
+        'source.zip': package / 'native-source.zip',
+        'candidate.json': base / 'candidate/build-manifest.json',
+        'deployment.json': base / 'deployment.json',
+        'installed-smoke.json': base / 'installed-k16/verification.json',
+        'local-qualification.json': base / 'candidate/qualification.json',
+        'local-native-build.json': package / 'build.json',
         'local-acceptance.json': ROOT / 'artifacts/rust-backend/20261026-local-release/release-acceptance.json',
-        'v205-decision.json': base / 'v205/decision.json',
     }
-    require(sha(references['source.zip']) == read_json(references['v205-decision.json'])['source']['sha256'],
-            'Selected source archive differs from V205 decision receipt')
+    references.update({name: package / name for name in POLICIES})
+    require(sha(references['source.zip']) == ARCHIVE, 'Selected installed search_v1 source archive differs')
+    profile = read_json(ROOT / 'configs/search/lab-search-v1.json')
+    profile_id = admit(profile)
     captures = ROOT / 'artifacts/rust-backend'
     rules_file = captures / '20261025-l05-capture-v2/roots.jsonl.gz'
     views_file = captures / '20261025-l06-capture/roots.jsonl.gz'
@@ -66,6 +70,7 @@ def prepare(output):
         transitions.setdefault((c['era'], c['phase']), row)
     require(0 < len(transitions) <= 24, 'B01 transition coverage exceeds its bounded smoke cap')
     output = Path(output).resolve()
+    require(output.is_relative_to(ROOT / 'distribution'), 'Qualification bundles belong under distribution/')
     require(not output.exists(), 'B01 input bundle already exists; choose a new file')
     output.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(dir=output.parent, prefix='b01-package-') as temp:
@@ -80,9 +85,9 @@ def prepare(output):
         vendor = ROOT / 'native/vendor/brass-upstream-rules'
         for name in ('LICENSE', 'UPSTREAM.json', 'upstream-local.patch'):
             (temp / ('vendor-' + name)).write_bytes((vendor / name).read_bytes())
-        write(temp / 'inputs.json', dict(contract='brass-lab-b01-inputs/1.0.0',
+        write(temp / 'inputs.json', dict(contract='brass-lab-b01-inputs/2.0.0', method=METHOD, profile_id=profile_id,
               files={p.name: sha(p) for p in sorted(temp.iterdir()) if p.is_file()}))
-        verify_inputs(temp, read_json(ROOT / 'configs/search/lab-cache-only.json'))
+        verify_inputs(temp, profile)
         with zipfile.ZipFile(output, 'x', zipfile.ZIP_DEFLATED) as archive:
             for p in sorted(temp.iterdir()):
                 archive.write(p, p.name)

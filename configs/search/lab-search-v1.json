@@ -1,0 +1,9 @@
+{
+  "contract": "brass-lab-search-v1/1.0.0",
+  "method": "search_v1",
+  "algorithm": "brass-gumbel-is-mcts/count-v1",
+  "session_contract": "brass-gumbel-is-mcts/session-v1",
+  "v205_enabled": false,
+  "native_source_sha256": "fa0b3f7b74e9ed638c8b6f96d3f23b0910b4e5df9387ff8df58d5472a8014dd2",
+  "source_archive_sha256": "6dc6e230b96a4c57bd14d85fb994c8d0bd624b9b504d83647ff8d157842179c7"
+}

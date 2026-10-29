@@ -662,8 +662,9 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                     controller_line+=f' v4={composition["legacy"]}/{len(games)}[{"reduced" if share["activated"] else "base"}]'
                 if entropy_report:
                     controller_line+=f' q=3 eps={config["exploration"]:.2f} explore_age={exploration_settings["age"]}'
-                    controller_line+=' entropy='+','.join(f'{g}:{v["alpha_after"]:.4f}' for g,v in entropy_report['groups'].items())
-                    if 'floor_ratio_by_group' in entropy_report:
+                    controller_line+=' entropy='+','.join(f'{g}:{v["effective_alpha"]:.4f}' for g,v in entropy_report['groups'].items())
+                    if entropy_report['mode']=='off':controller_line+='(fixed)'
+                    elif 'floor_ratio_by_group' in entropy_report:
                         controller_line+=' Hfloor='+','.join(f'{g}:{v:.2f}' for g,v in entropy_report['floor_ratio_by_group'].items())+'*baseline'
                         controller_line+=('(anchor-promotions='+str(entropy_report['floor_anchor_promotions'])+')'
                             if 'floor_anchor_promotions' in entropy_report else '(fixed)')

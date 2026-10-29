@@ -7,6 +7,8 @@ from brass_ai.learning.contracts import digest, require
 from brass_ai.step5.policy import FAMILY_WEIGHTS
 
 GROUPS = ('canal_action', 'canal_other', 'rail_action', 'rail_other')
+FIXED_ENTROPY = dict(contract='fixed-group-entropy/1.0.0',
+    weights=dict(canal_action=.015,canal_other=.005,rail_action=.015,rail_other=.005))
 Q = dict(contract='family-weighted-exploration/3.0.0', action_family_weights=FAMILY_WEIGHTS,
     unknown_action_kind_weight=1, pass_only_when_alone=True, industry_subgroups=['build','develop'],
     focus_multiplier=2., other_phases='v2', snapshot_seats='match_learner')
@@ -29,6 +31,7 @@ LEGACY_OPENING = dict(contract='opening-temperature/1.0.0', temperature=1.5, act
 OPENING = dict(LEGACY_OPENING, contract='opening-temperature/2.0.0', temperature=2.)
 REVISED_OPENING = dict(LEGACY_OPENING, contract='opening-temperature/3.0.0')
 THREE_OPENING = dict(REVISED_OPENING, contract='opening-temperature/4.0.0', temperature=1.3, action_decisions_per_seat=3)
+THREE_T2_OPENING = dict(THREE_OPENING, contract='opening-temperature/5.0.0', temperature=2.)
 LEGACY_BRANCH = dict(contract='selfplay-branching/1.0.0', tables=['selfplay'], rate_per_decision=.005,
     max_per_game=1, skip_opening_decisions=2, skip_final_rounds='rail_empty_deck_hand_le_4',
     move_distribution=dict(temperature_1=.7, temperature_2=.25, exploration_q=.05),
@@ -39,6 +42,7 @@ BRANCH = dict(HIGH_BRANCH, rate_per_decision=.005)
 LOCAL_SCORING_BRANCH = dict(HIGH_BRANCH,rate_per_decision=.010)
 REVISED_BRANCH = dict(LOCAL_SCORING_BRANCH,contract='selfplay-branching/3.0.0')
 THREE_BRANCH = dict(REVISED_BRANCH,contract='selfplay-branching/4.0.0',skip_opening_decisions=3)
+THREE_T2_BRANCH = dict(THREE_BRANCH,contract='selfplay-branching/5.0.0')
 ROLLOUT = dict(contract='exploration-rollout/1.0.0', mode='fresh',
     opening_after_iterations=0, raw_entropy_after_iterations=0, branching_after_iterations=20)
 BLOCKS = ('exploration_distribution','entropy_control','opening','branching','exploration_rollout')
@@ -146,16 +150,19 @@ def low_branch_config(config):
 
 def validate(config):
     present=[b in config for b in BLOCKS]
-    if not any(present): return
+    if not any(present):
+        require('fixed_entropy' not in config.get('update',{}),'Fixed group entropy requires versioned exploration')
+        return
     require(all(present), 'Exploration revision requires all versioned blocks')
     # This initial recipe is deliberately narrow; experiments need explicit
     # reviewed signatures rather than unbounded free-form controller options.
     revised=(config['opening']==REVISED_OPENING and config['branching']==REVISED_BRANCH) or (
         config['opening']==THREE_OPENING and config['branching']==THREE_BRANCH)
-    current=(config['opening']==OPENING and config['branching'] in (BRANCH,LOCAL_SCORING_BRANCH)) or revised
+    three_t2=config['opening']==THREE_T2_OPENING and config['branching']==THREE_T2_BRANCH
+    current=(config['opening']==OPENING and config['branching'] in (BRANCH,LOCAL_SCORING_BRANCH)) or revised or three_t2
     uniform=config['opening']==OPENING and config['branching']==HIGH_BRANCH
     legacy=config['opening']==LEGACY_OPENING and config['branching']==LEGACY_BRANCH
-    require(type(config['exploration']) in (int,float) and config['exploration'] in ((.05,) if revised else (0.,.02,.03)) and config['exploration_distribution']==Q and
+    require(type(config['exploration']) in (int,float) and config['exploration'] in ((.08,) if three_t2 else (.05,) if revised else (0.,.02,.03)) and config['exploration_distribution']==Q and
         (current or uniform or legacy), 'Invalid exploration revision recipe')
     e=config['entropy_control']
     require(type(e) is dict,'Invalid entropy floor controller')
@@ -173,8 +180,10 @@ def validate(config):
         comparable['promotion_origin']=ANCHOR_ENTROPY['promotion_origin']
     require(e.get('mode') in ('off','shadow','apply') and comparable in recipes,
         'Invalid entropy floor controller')
-    require(not revised or (e['mode']=='off' and e['contract']==ANCHOR_ENTROPY['contract']),
-        'Revised openings use fixed entropy .005')
+    require(not (revised or three_t2) or (e['mode']=='off' and e['contract']==ANCHOR_ENTROPY['contract']),
+        'Revised openings require fixed entropy with adaptive control disabled')
+    require(('fixed_entropy' in config['update'])==three_t2,'Fixed group entropy requires the three-decision T2 recipe')
+    if three_t2:validate_fixed_entropy(config['update']['fixed_entropy'])
     r=config['exploration_rollout']
     expected=dict(ROLLOUT,mode='staged',opening_after_iterations=1,raw_entropy_after_iterations=2) if r.get('mode')=='staged' else ROLLOUT
     require(r==expected, 'Invalid exploration adoption schedule')
@@ -185,6 +194,19 @@ def validate(config):
 def group(context):
     require(context['era'] in ('CanalEra','RailEra'), 'Unknown entropy era')
     return context['era'].removesuffix('Era').lower()+('_action' if context['phase']=='action' else '_other')
+
+
+def validate_fixed_entropy(config):
+    require(type(config) is dict and config==FIXED_ENTROPY and
+        all(type(v) in (float,int) for v in config['weights'].values()),'Invalid fixed group entropy recipe')
+    return config
+
+
+def effective_alphas(config,state):
+    fixed=config['update'].get('fixed_entropy')
+    if fixed is not None:return copy.deepcopy(validate_fixed_entropy(fixed)['weights'])
+    e=config['entropy_control']
+    return {g:(state['groups'][g]['alpha'] if e['mode']=='apply' else e['alpha_base']) for g in GROUPS}
 
 
 def check_behavior(b, phase, *, branch_move=False):
@@ -300,7 +322,7 @@ def effective(config, state, generation):
     return dict(version=3,opening=config['opening'] if age>=r['opening_after_iterations'] else None,
         raw_entropy=raw,branching=config['branching'] if branch_ready else None,
         branching_status='active' if branch_ready else 'waiting_for_20_iterations' if age<r['branching_after_iterations'] else 'waiting_for_entropy_baseline',
-        alphas={g:(state['groups'][g]['alpha'] if e['mode']=='apply' else e['alpha_base']) for g in GROUPS},
+        alphas=effective_alphas(config,state),
         age=age,origin=state['origin'])
 
 
@@ -353,9 +375,10 @@ def advance(state, config, measurement, *, generation, warmup_done, healthy, pol
         report[g]=dict(raw_entropy=h,normalized_entropy=measurement.get('groups',{}).get(g,{}).get('normalized_entropy'),
             baseline=s['baseline'][g] if s['baseline'] else None,floor=floor,median=median,
             alpha_before=before,alpha_after=entry['alpha'],decision=decision,reason=reason,alarms=alarms,
-            effective_alpha=entry['alpha'] if e['mode']=='apply' else e['alpha_base'])
+            effective_alpha=effective_alphas(config,s)[g])
     s['generation']=generation
     return s,dict(contract=e['contract'],mode=e['mode'],origin=s['origin'],armed_at=s['armed_at'],
+        **(dict(fixed_entropy=copy.deepcopy(config['update']['fixed_entropy'])) if 'fixed_entropy' in config['update'] else {}),
         **(dict(floor_ratio_by_group=floor_ratios(config,s)) if 'floor_ratio_by_group' in e else {}),
         **{k:copy.deepcopy(e[k]) for k in ('floor_start_ratio','floor_decay_per_iteration','floor_min_ratio',
             'floor_min_ratio_by_group','floor_drop_per_anchor_promotion','promotion_origin') if k in e},

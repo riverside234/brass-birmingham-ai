@@ -86,6 +86,45 @@ public sealed partial class LocalAiUnityDriver
             kPanel.SearchKButtons[0].onClick.Invoke();kPanel.ApplyButton.onClick.Invoke();yield return null;
             CheckRestoredNeural();
             saved=PreferenceValues()[SetupKey];
+            Rows()[1].GetComponent<AiSetupRow>().OpenPicker();var tPanel=AiSelectionPanel.Active;
+            Check(tPanel.DraftTemperature==1.0 && tPanel.TemperatureButtons.Length==2,"temperature defaults to 1.0 with two choices");
+            tPanel.TemperatureButtons[1].onClick.Invoke();
+            Check(tPanel.DraftTemperature==1.5 && LocalMenu.TableTemperature(Setup.PlayerMetadata[1])==1.0,"temperature remains a draft before Apply");
+            tPanel.Close();yield return null;
+            Check(PreferenceValues()[SetupKey]==saved,"temperature Cancel leaves preferences intact");
+            foreach(int kIndex in new[]{0,1})foreach(int difficulty in Enumerable.Range(0,4)) {
+                Rows()[1].GetComponent<AiSetupRow>().OpenPicker();tPanel=AiSelectionPanel.Active;
+                Check(tPanel.DraftTemperature==1.0,"Cancel restored T1.0");
+                tPanel.SearchKButtons[kIndex].onClick.Invoke();tPanel.DifficultyButtons[difficulty].onClick.Invoke();
+                tPanel.TemperatureButtons[1].onClick.Invoke();
+                Check(tPanel.DraftTemperature==1.5 && tPanel.DraftSearchK==(kIndex==0?8:16) && tPanel.DraftDifficulty==DifficultyCatalog.Keys[difficulty],"T1.5 works independently of K and allowance");
+                tPanel.TemperatureButtons[0].onClick.Invoke();Check(tPanel.DraftTemperature==1.0,"T1.0 works at every K/allowance");
+                tPanel.Close();yield return null;
+            }
+            Rows()[3].GetComponent<AiSetupRow>().OpenPicker();tPanel=AiSelectionPanel.Active;
+            tPanel.TemperatureButtons[1].onClick.Invoke();tPanel.ApplyButton.onClick.Invoke();yield return null;
+            Check(Setup.PlayerMetadata.All(p=>LocalMenu.TableTemperature(p)==1.5),"temperature Apply sets the whole NN table");
+            saved=PreferenceValues()[SetupKey];
+            foreach(double invalidT in new[]{0.0,2.0,Double.NaN,Double.PositiveInfinity})
+                Check(!LocalMenu.ApplyPlayerSelection(Setup.PlayerMetadata[1],menu,new PlayerSelectionDraft(PlayerSelectionPage.AlphaTest,new AiChoice(AiFamily.AlphaTest,"alpha-test"),"easy",8,invalidT)),"unsupported temperature cannot bypass UI");
+            foreach(double temperature in new[]{1.0,1.5})foreach(int k in new[]{8,16}) {
+                var package=new NativePackage(NativePackage.Location,k,temperature);
+                Check(package.Temperature==temperature && package.SearchK==k,"four native K/temperature policies admitted");
+                var metadata=(BrassApplication.Game.GameMetadata)Setup.Clone();
+                var state=NativeGameState.Create(metadata,LocalMenu.Difficulty,k,temperature);SaveExtensions.Set(metadata,state);
+                Check(NativeGameState.Temperature(NativeGameState.Read(metadata,true))==temperature,"saved game pins temperature");
+                var bad=(JObject)state.DeepClone();bad["nn_temperature"]=temperature==1.0?1.5:1.0;SaveExtensions.Set(metadata,bad);
+                bool rejected=false;try{NativeGameState.Read(metadata,true);}catch(InvalidDataException){rejected=true;}
+                Check(rejected,"assignment integrity rejects changed temperature");
+                var legacy=(JObject)state.DeepClone();legacy.Remove("nn_temperature");
+                // Frozen 1.4.40 assignment schema, before the temperature field.
+                legacy["assignment_sha256"]=BrassHost.Wire.Hash(new JObject {
+                    ["format"]=legacy["format"],["runtime"]=legacy["runtime"],["family"]=legacy["family"],
+                    ["rules"]=legacy["rules"],["schema"]=legacy["schema"],["configuration"]=legacy["configuration"],
+                    ["assignments"]=legacy["assignments"],["nn_search_k"]=legacy["nn_search_k"] });
+                SaveExtensions.Set(metadata,legacy);
+                Check(NativeGameState.Temperature(NativeGameState.Read(metadata,true))==1.0 && JToken.DeepEquals(SaveExtensions.Get(metadata),legacy),"legacy save keeps T1.0 without rewrite");
+            }
             foreach(int invalidK in new[]{0,9,32})
                 Check(!LocalMenu.ApplyPlayerSelection(Setup.PlayerMetadata[1],menu,new PlayerSelectionDraft(PlayerSelectionPage.AlphaTest,new AiChoice(AiFamily.AlphaTest,"alpha-test"),"easy",invalidK)),"unsupported K cannot bypass UI");
             foreach(int k in new[]{8,16}) {
@@ -128,12 +167,23 @@ public sealed partial class LocalAiUnityDriver
                 Check(LocalMenu.TableFamily(Setup.PlayerMetadata[0])==AiFamily.V4 && LocalMenu.TableSearchK(Setup.PlayerMetadata[1])==16,"invalid K preference falls back safely");
             }
             PreferenceValues()[SetupKey]=saved;Call(menu,"CreateNewGameConfiguration");yield return null;CheckRestoredNeural();
+            var oldTemperature=JObject.Parse(saved);oldTemperature.Remove("nn_temperature");
+            PreferenceValues()[SetupKey]=oldTemperature.ToString();Call(menu,"CreateNewGameConfiguration");yield return null;
+            Check(LocalMenu.TableTemperature(Setup.PlayerMetadata[1])==1.0 && LocalMenu.TableSearchK(Setup.PlayerMetadata[1])==8,"old preferences default temperature while preserving K");
+            foreach(var invalid in new JToken[]{new JValue(2.0),new JValue("1.5"),JValue.CreateNull()}) {
+                var broken=JObject.Parse(saved);broken["nn_temperature"]=invalid;PreferenceValues()[SetupKey]=broken.ToString();
+                Call(menu,"CreateNewGameConfiguration");yield return null;
+                Check(LocalMenu.TableTemperature(Setup.PlayerMetadata[1])==1.0 && LocalMenu.TableFamily(Setup.PlayerMetadata[1])==AiFamily.V4,"invalid temperature preference falls back safely");
+            }
+            PreferenceValues()[SetupKey]=saved;Call(menu,"CreateNewGameConfiguration");yield return null;CheckRestoredNeural();
         } else CheckRestoredNeural();
+        Check(Setup.PlayerMetadata.All(p=>LocalMenu.TableTemperature(p)==1.5),"temperature 1.5 survives menu recreation and process restart");
 
         foreach(var size in new[]{new Vector2Int(1920,1080),new Vector2Int(1920,1200)}) {
             router.Resize(size.x,size.y);yield return null;
             Rows()[1].GetComponent<AiSetupRow>().OpenPicker();var panel=AiSelectionPanel.Active;
             Check(panel.CurrentPage==PlayerSelectionPage.AlphaTest,"opening restored NN seat selects Alpha Test");
+            Check(panel.DraftTemperature==1.5 && panel.TemperatureButtons[1].GetComponent<AiControlSurface>().Selected && !panel.TemperatureButtons[0].GetComponent<AiControlSurface>().Selected,"temperature has exactly one selected state");
             Check(panel.DraftSearchK==8 && panel.SearchKButtons[0].GetComponent<AiControlSurface>().Selected && !panel.SearchKButtons[1].GetComponent<AiControlSurface>().Selected,"K8 has one clear selected state");
             foreach(var button in panel.SearchKButtons) {
                 AssertInsideTarget(button.GetComponent<RectTransform>(),"visible search K choice");
@@ -144,12 +194,17 @@ public sealed partial class LocalAiUnityDriver
             foreach(var name in new[]{"NN table","V4 table","Alpha Test table","Page Gamma"})AssertInsideTarget(PanelButton(name).GetComponent<RectTransform>(),"visible "+name);
             panel.ChangeTextSize(1);yield return null;Capture("setup-nn-"+size.y+"-largest.png");
             foreach(var button in panel.SearchKButtons)AssertInsideTarget(button.GetComponent<RectTransform>(),"large-text search K choice inside panel");
+            foreach(var button in panel.TemperatureButtons){
+                AssertInsideTarget(button.GetComponent<RectTransform>(),"large-text temperature choice inside panel");
+                Check(button.navigation.selectOnDown!=null,"temperature keyboard navigation");
+            }
             PanelButton("Page Gamma").onClick.Invoke();yield return null;
             Check(panel.CurrentPage==PlayerSelectionPage.Gamma && !panel.ApplyButton.interactable,"Gamma preview disables Apply");
             Capture("setup-gamma-"+size.y+"-largest.png");
             PanelButton("V4 table").onClick.Invoke();
             Check(panel.Window.Find("NN options")==null && panel.Tiles.Count()==7,"V4 contains only V4 styles");
             Check(panel.SearchKButtons.Length==0,"NN search controls are scoped to the NN page");
+            Check(panel.TemperatureButtons.Length==0,"temperature controls are scoped to NN");
             panel.Close();yield return null;CheckRestoredNeural();
         }
         // Publish exact preference bytes for a separate fresh Unity process.

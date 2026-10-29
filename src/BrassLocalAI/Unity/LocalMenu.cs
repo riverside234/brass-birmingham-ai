@@ -30,7 +30,7 @@ namespace BrassLegacyAI
             public string DisplayFamily = "V4";
             public string Difficulty = DifficultyCatalog.Default; public CreateOfflineGameUseCase Owner;
         }
-        sealed class SetupState { public bool ResumeError; public GameMetadata Metadata; public AiFamily Family; public int SearchK = 16; }
+        sealed class SetupState { public bool ResumeError; public GameMetadata Metadata; public AiFamily Family; public int SearchK = 16; public double Temperature = 1.0; }
         static readonly ConditionalWeakTable<PlayerMetadata, Selection> Selections = new ConditionalWeakTable<PlayerMetadata, Selection>();
         static readonly ConditionalWeakTable<CreateOfflineGameUseCase, SetupState> Setups = new ConditionalWeakTable<CreateOfflineGameUseCase, SetupState>();
         static readonly System.Collections.Generic.Dictionary<string, string> TestPreferences = new System.Collections.Generic.Dictionary<string, string>();
@@ -129,6 +129,7 @@ namespace BrassLegacyAI
                 if (saved != null && saved.Seats.Length > metadata.PlayerMetadata.Count) saved = null;
                 setup.Family = saved == null ? AiFamily.V4 : saved.Family;
                 setup.SearchK = saved == null ? 16 : saved.SearchK;
+                setup.Temperature = saved == null ? 1.0 : saved.Temperature;
                 if (saved != null) {
                     ReflectionAccess.Set(owner, "_numberOfPlayers", saved.PlayerCount);
                     metadata.GameStartConfiguration.IsIntroductoryGame = saved.Introductory;
@@ -162,6 +163,7 @@ namespace BrassLegacyAI
             var snapshot = new LocalSetupPreferences {
                 Family = Setups.GetValue(owner, x => new SetupState()).Family,
                 SearchK = Setups.GetValue(owner, x => new SetupState()).SearchK,
+                Temperature = Setups.GetValue(owner, x => new SetupState()).Temperature,
                 PlayerCount = Field<int>(owner, "_numberOfPlayers"),
                 Introductory = metadata.GameStartConfiguration.IsIntroductoryGame,
                 Seats = metadata.PlayerMetadata.Select(p => {
@@ -225,7 +227,7 @@ namespace BrassLegacyAI
                     SelectDifficulty(player, Difficulty(Metadata(owner).PlayerMetadata[i]));
                 }
                 var state = metadata.PlayerMetadata.Any(p=>p.AiType!=AIType.Human && Choice(p).Family==AiFamily.AlphaTest) ?
-                    Native.NativeGameState.Create(metadata,Difficulty,Setups.GetValue(owner,x=>new SetupState()).SearchK) : LocalGameState.Create(metadata, Strategy, Difficulty);
+                    Native.NativeGameState.Create(metadata,Difficulty,Setups.GetValue(owner,x=>new SetupState()).SearchK,Setups.GetValue(owner,x=>new SetupState()).Temperature) : LocalGameState.Create(metadata, Strategy, Difficulty);
                 SaveExtensions.Set(metadata, state);
                 var app = history.Repository.Create(metadata);
                 foreach (var p in app.Metadata.PlayerMetadata) p.AIBehaviour = AiBehaviorFactory.CreateAiBehavior(p);
@@ -368,6 +370,11 @@ namespace BrassLegacyAI
             var owner=SetupIdentity(player) as CreateOfflineGameUseCase;
             return owner == null ? 16 : Setups.GetValue(owner,x=>new SetupState()).SearchK;
         }
+        public static double TableTemperature(PlayerMetadata player)
+        {
+            var owner=SetupIdentity(player) as CreateOfflineGameUseCase;
+            return owner == null ? 1.0 : Setups.GetValue(owner,x=>new SetupState()).Temperature;
+        }
         public static bool NativeSupported(PlayerMetadata player)
         {
             var owner=SetupIdentity(player) as CreateOfflineGameUseCase;
@@ -378,6 +385,7 @@ namespace BrassLegacyAI
             if (AiSelectionPanel.IsOpen || draft == null || !CanConfigure(player) || !ReferenceEquals(SetupIdentity(player), setupIdentity)) return false;
             if (draft.Choice.Family != AiFamily.V4 && draft.Choice.Family != AiFamily.AlphaTest) return false;
             if (draft.SearchK != 8 && draft.SearchK != 16) return false;
+            if (!Native.NativePackage.ValidTemperature(draft.Temperature)) return false;
             bool neural=draft.Choice.Family==AiFamily.AlphaTest;
             if(neural && !NativeSupported(player))return false;
             if (draft.Page != PlayerSelectionPage.Human && ((draft.Page != (neural?PlayerSelectionPage.AlphaTest:PlayerSelectionPage.V4)) ||
@@ -385,6 +393,7 @@ namespace BrassLegacyAI
             var owner=SetupIdentity(player) as CreateOfflineGameUseCase;
             Setups.GetValue(owner, x => new SetupState()).Family = draft.Choice.Family;
             Setups.GetValue(owner, x => new SetupState()).SearchK = draft.SearchK;
+            Setups.GetValue(owner, x => new SetupState()).Temperature = draft.Temperature;
             foreach(var seat in Metadata(owner).PlayerMetadata) {
                 var other=Selections.GetValue(seat,p=>new Selection());
                 if(neural)other.Choice=new AiChoice(AiFamily.AlphaTest,"alpha-test");

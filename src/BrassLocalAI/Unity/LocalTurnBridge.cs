@@ -186,7 +186,7 @@ namespace BrassLegacyAI
             input["recall"]=nativeRecall.DeepClone();
             planningRequests++;
             nativeAction=0;
-            nativeBackend=new NativeJob(NativeInput.Request(input,instance,app.Metadata.GameId,startedGeneration+1,nativeAllowance),clock,(int)budget,NativeGameState.SearchK(state));
+            nativeBackend=new NativeJob(NativeInput.Request(input,instance,app.Metadata.GameId,startedGeneration+1,nativeAllowance),clock,(int)budget,NativeGameState.SearchK(state),NativeGameState.Temperature(state));
             nativeExecution=AiExecutionScheduler.Submit(nativeBackend);resources.Observe(nativeExecution);
         }
         // Called by the existing liquidation route before its V4 policy. No

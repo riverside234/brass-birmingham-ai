@@ -604,3 +604,17 @@ Desktop.ini
 /distribution/rust-lab-b01/*
 !/distribution/rust-lab-b01/README.md
 !/distribution/rust-lab-b01/b01-lab-update.zip
+
+# Additive lab collector sources; build products stay private.
+!/lab-native/
+/lab-native/target/
+!/distribution/rust-lab-b02/
+/distribution/rust-lab-b02/*
+!/distribution/rust-lab-b02/README.md
+!/distribution/rust-lab-b02/b02-lab-update.zip
+
+# Current search_v1 qualification transfers and their nested immutable inputs.
+!/distribution/rust-lab-b01/b01-search-v1-inputs.zip
+!/distribution/rust-lab-b01/b01-search-v1-update.zip
+!/distribution/rust-lab-b02/b02-search-v1-update.zip
+!/distribution/RUST_LAB_SEARCH_V1.md

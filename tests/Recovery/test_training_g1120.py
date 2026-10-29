@@ -59,7 +59,10 @@ class Revision(unittest.TestCase):
         self.assertEqual(new['value_phase'],dict(old['value_phase'],contract=G.LOSS16_CONTRACT,acceptance_steps=16))
         self.assertEqual(new['opening'],E.THREE_OPENING);self.assertEqual(new['branching'],E.THREE_BRANCH)
         fresh=latest_model_config(old,old['imitation_checkpoint'])
-        for k in ('opening','branching','value_phase'):self.assertEqual(fresh[k],G.kl32_options(new)[k])
+        from brass_ai.recovery.training_revision_g1320 import configure as reward_config
+        from brass_ai.recovery.training_revision_g1322 import configure as current_config
+        expected=current_config(reward_config(G.kl32_options(new)))
+        for k in ('opening','branching','value_phase'):self.assertEqual(fresh[k],expected[k])
         for block,key,value in [('opening','action_decisions_per_seat',2),('branching','skip_opening_decisions',2),
                                 ('value_phase','acceptance_steps',8),('value_phase','beta_clone_min',1.)]:
             bad=copy.deepcopy(new);bad[block][key]=value

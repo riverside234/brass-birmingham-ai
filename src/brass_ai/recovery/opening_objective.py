@@ -14,19 +14,20 @@ DEFAULT=dict(contract=CONTRACT,scope='temperature-2-action-openings',target_temp
 ROW_KEY='_ppo_opening_objective'
 T15=dict(DEFAULT,contract='opening-ppo-objective/2.0.0',scope='temperature-1.5-action-openings')
 T13=dict(DEFAULT,contract='opening-ppo-objective/3.0.0',scope='temperature-1.3-three-action-openings')
+T2_THREE=dict(DEFAULT,contract='opening-ppo-objective/4.0.0',scope='temperature-2-three-action-openings')
 
 
 def opening_spec(config):
-    from .exploration import OPENING,REVISED_OPENING,THREE_OPENING
+    from .exploration import OPENING,REVISED_OPENING,THREE_OPENING,THREE_T2_OPENING
     validate(config)
-    return THREE_OPENING if config==T13 else REVISED_OPENING if config==T15 else OPENING
+    return THREE_T2_OPENING if config==T2_THREE else THREE_OPENING if config==T13 else REVISED_OPENING if config==T15 else OPENING
 
 
 def opening_temperature(config):return opening_spec(config)['temperature']
 
 
 def validate(c):
-    require(type(c) is dict and c in (DEFAULT,T15,T13) and
+    require(type(c) is dict and c in (DEFAULT,T15,T13,T2_THREE) and
         all(type(c[k]) in (int,float) for k in ('target_temperature','importance_cap')),
         'Invalid decoupled opening PPO objective')
     return c

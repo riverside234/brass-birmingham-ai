@@ -286,6 +286,12 @@ def verify_behavior_metadata(dataset, behavior):
 
 
 def entropy_term(logits, mixed, dataset, indices, behavior, config):
+    fixed=config.get('fixed_entropy')
+    if fixed is not None:
+        from .exploration import validate_fixed_entropy
+        weights=validate_fixed_entropy(fixed)['weights']
+        require(getattr(behavior,'raw_entropy',False) and behavior.entropy_alphas==weights,
+            'Fixed group entropy requires the matching raw-policy coefficients')
     if not getattr(behavior,'raw_entropy',False):
         entropy=-(mixed*mixed.clamp_min(1e-30).log()).sum(-1)
         return entropy,config['entropy_weight']*entropy

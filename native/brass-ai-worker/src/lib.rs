@@ -2,6 +2,7 @@
 pub mod focus;
 pub mod local;
 pub mod local_profile;
+mod local_temperature;
 pub mod pair;
 pub mod pair_harness;
 pub mod research_external;

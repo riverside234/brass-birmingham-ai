@@ -1,16 +1,18 @@
 # Grouped MLP v11.2: completed IL upgrade and fresh self-play
 
-**Current g1320 recipe:** use [the g1320 instructions](../ai-research/TRAINING_G1320_REVISION.md)
+**Current g1322 recipe:** use [the g1322 instructions](../ai-research/TRAINING_G1322_REVISION.md)
 for continuation and the effective settings. Fresh self-play config generation
-also selects this recipe: T1.3 for the first three action decisions per neural
-seat (also after a fork), matching decoupled PPO, epsilon .05, fixed entropy .005,
-1% branching, .01/.075 insolvency, every-iteration two-age PPG with a two-epoch
+also selects this recipe: T2.0 for the first three action decisions per neural
+seat (also after a fork), matching decoupled PPO, epsilon .08, fixed entropy
+.015 for `canal_action`/`rail_action` and .005 for `canal_other`/`rail_other`,
+1% branching, .005/.05 insolvency, every-iteration two-age PPG with a two-epoch
 cap, both iterations' held-out games for loss acceptance, linear LR warmup to
 step 16 followed by cosine decay to .001 times peak, beta minimum
 .5, loss checks every 16 steps and periodic KL checks every 32 steps.
 Unchecked retained loss checkpoints also require exact KL verification.
 Peak remains .65 times actual PPO LR.
-The g1320 transition preserves saved adaptive beta and refreshes incompatible
+Adaptive entropy stays off; the original saved entropy baseline is preserved.
+The g1322 transition preserves saved adaptive beta and refreshes incompatible
 old-reward PPG caches after durable adoption. Its first iteration uses fresh data
 only; the second restores the two-age window. Branch points still skip the first
 three action decisions. Earlier behavior is never relabeled.

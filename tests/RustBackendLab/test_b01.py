@@ -15,19 +15,63 @@ import numpy as np
 from brass_ai.learning.contracts import SOURCE_ROOT, digest, read_json
 from brass_ai.learning.features import FEATURE_VERSION
 from brass_ai.learning.seat_descriptors import unknown_numpy
-from brass_ai.rust_backend.lab_contract import admit, admit_search_request, extract_new, native_fingerprint, sha
+from brass_ai.rust_backend.lab_contract import (ARCHIVE, SOURCE, admit, admit_search_request,
+    extract_new, native_fingerprint, sha, verify_inputs)
 from brass_ai.rust_backend.lab_inference import NativeInputClient, Scope
 from brass_ai.rust_backend.lab_snapshot import capture, pending_paths, tree_digest, verify_unchanged
 
 
-PROFILE = read_json(SOURCE_ROOT / 'configs/search/lab-cache-only.json')
+PROFILE = read_json(SOURCE_ROOT / 'configs/search/lab-search-v1.json')
 
 
 class ContractTests(unittest.TestCase):
-    def test_only_exact_explicit_cache_only_profile(self):
+    def unpack_inputs(self, temp):
+        inputs = Path(temp) / 'inputs'
+        extract_new(SOURCE_ROOT / 'distribution/rust-lab-b01/b01-search-v1-inputs.zip', inputs)
+        return inputs
+
+    def test_search_v1_inputs_bind_current_installed_evidence_and_source(self):
+        with tempfile.TemporaryDirectory(dir=SOURCE_ROOT / 'artifacts') as temp:
+            inputs = self.unpack_inputs(temp)
+            self.assertEqual(verify_inputs(inputs, PROFILE)['native_source_sha256'], SOURCE)
+            self.assertEqual(sha(inputs / 'source.zip'), ARCHIVE)
+            extract_new(inputs / 'source.zip', Path(temp) / 'checkout')
+            self.assertEqual(native_fingerprint(Path(temp) / 'checkout/native'), SOURCE)
+
+    def test_rehashed_input_manifest_cannot_relabel_old_methods_or_broken_receipts(self):
+        mutations = [('deployment.json', 'method', 'search_v2_focus_only'),
+                     ('local-qualification.json', 'build_manifest_sha256', 'changed'),
+                     ('policy-k8-t15.json', 'method', 'search_v2'),
+                     ('candidate.json', 'native_source_sha256', 'old-core')]
+        for name, key, value in mutations:
+            with self.subTest(name=name), tempfile.TemporaryDirectory(dir=SOURCE_ROOT / 'artifacts') as temp:
+                inputs = self.unpack_inputs(temp)
+                record = read_json(inputs / name); record[key] = value
+                (inputs / name).write_text(json.dumps(record), encoding='utf-8')
+                manifest = read_json(inputs / 'inputs.json'); manifest['files'][name] = sha(inputs / name)
+                (inputs / 'inputs.json').write_text(json.dumps(manifest), encoding='utf-8')
+                with self.assertRaises(ValueError):
+                    verify_inputs(inputs, PROFILE)
+
+    def test_omitted_pin_or_old_input_contract_cannot_bypass_verification(self):
+        for old_contract in (False, True):
+            with tempfile.TemporaryDirectory(dir=SOURCE_ROOT / 'artifacts') as temp:
+                inputs = self.unpack_inputs(temp)
+                manifest = read_json(inputs / 'inputs.json')
+                if old_contract:
+                    manifest['contract'] = 'brass-lab-b01-inputs/1.0.0'
+                else:
+                    manifest['files'].pop('installed-smoke.json')
+                (inputs / 'inputs.json').write_text(json.dumps(manifest), encoding='utf-8')
+                with self.assertRaises(ValueError):
+                    verify_inputs(inputs, PROFILE)
+
+    def test_only_exact_explicit_search_v1_profile(self):
         admit(PROFILE)
-        for key, value in [('method', 'search_v2'), ('method', 'search_v1'), ('method', None),
-                           ('v205_enabled', True), ('v205_enabled', 0), ('focus_policy', 'adaptive-focus/1')]:
+        for key, value in [('method', 'search_v2'), ('method', 'search_v2_focus_only'),
+                           ('method', 'search_v2_no_switch'), ('method', None),
+                           ('v205_enabled', True), ('v205_enabled', 0), ('focus_policy', 'adaptive-focus/2.0.0'),
+                           ('session_contract', 'unknown'), ('native_source_sha256', 'old')]:
             with self.subTest(key=key, value=value), self.assertRaises(ValueError):
                 admit(dict(PROFILE, **{key: value}))
         for key in PROFILE:
@@ -36,10 +80,15 @@ class ContractTests(unittest.TestCase):
                 admit(incomplete)
         with self.assertRaises(ValueError):
             admit(dict(PROFILE, enabled=True))
+        with self.assertRaises(ValueError):
+            admit(read_json(SOURCE_ROOT / 'configs/search/lab-cache-only.json'))
 
     def test_method_overrides_cannot_reach_future_dispatch(self):
-        admit_search_request(PROFILE, {'method': 'search_v2_focus_only'})
-        for value in ({}, {'method': 'search_v2'}, {'method': 'search_v2_focus_only', 'reuse': False}):
+        admit_search_request(PROFILE, {'method': 'search_v1'})
+        for value in ({}, {'method': 'search_v2'}, {'method': 'search_v2_focus_only'},
+                      {'method': 'search_v2_no_switch'}, {'method': 'search_v1', 'reuse': False},
+                      {'method': 'search_v1', 'focus_policy': None},
+                      {'method': 'search_v1', 'composite_contract': None}):
             with self.assertRaises(ValueError):
                 admit_search_request(PROFILE, value)
 

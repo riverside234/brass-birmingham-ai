@@ -15,6 +15,7 @@ for device in "$@"; do device_args+=(--device "$device"); done
 
 exec python scripts/qualify-rust-lab.py \
   --run "$run_dir" "${device_args[@]}" \
-  --bundle artifacts/rust-backend/20261028-b01/lab/b01-inputs.zip \
-  --bundle-sha256 fc93c4d369ac87a53c07f430a1563070ce74980271086a52993067f5d9edcb72 \
-  --out "artifacts/rust-backend/$(date -u +%Y%m%d-%H%M%S)-b01/lab"
+  --profile configs/search/lab-search-v1.json \
+  --bundle distribution/rust-lab-b01/b01-search-v1-inputs.zip \
+  --bundle-sha256 935443a477d3a52425923e3d7458a15ae8250f4296a6900c5b9088fbef864a76 \
+  --out "artifacts/rust-backend/$(date -u +%Y%m%d-%H%M%S)-b01-search-v1/lab"

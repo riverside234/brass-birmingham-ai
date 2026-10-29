@@ -17,6 +17,7 @@ namespace BrassLegacyAI
         public int PlayerCount;
         public bool Introductory;
         public int SearchK = 16;
+        public double Temperature = 1.0;
         public Seat[] Seats;
 
         public string Encode()
@@ -25,6 +26,7 @@ namespace BrassLegacyAI
                 ["version"] = 2, ["family"] = Family == AiFamily.AlphaTest ? "nn" : "v4",
                 ["players"] = PlayerCount, ["introductory"] = Introductory,
                 ["nn_search_k"] = SearchK,
+                ["nn_temperature"] = Temperature,
                 ["seats"] = new JArray(Seats.Select(s => new JObject {
                     ["human"] = s.Human, ["style"] = s.Style, ["difficulty"] = s.Difficulty }))
             }.ToString(Newtonsoft.Json.Formatting.None);
@@ -42,12 +44,16 @@ namespace BrassLegacyAI
                 int count = (int)value["players"];
                 var k = value["nn_search_k"];
                 if (k != null && (k.Type != JTokenType.Integer || ((int)k != 8 && (int)k != 16))) return null;
+                var temperature = value["nn_temperature"];
+                if (temperature != null && ((temperature.Type != JTokenType.Integer && temperature.Type != JTokenType.Float) ||
+                    !Native.NativePackage.ValidTemperature((double)temperature))) return null;
                 if ((family != "v4" && family != "nn") || count < 2 || count > 4 || seats == null ||
                     seats.Count < count || seats.Count > 4) return null;
                 var result = new LocalSetupPreferences {
                     Family = family == "nn" ? AiFamily.AlphaTest : AiFamily.V4,
                     PlayerCount = count, Introductory = (bool)value["introductory"],
                     SearchK = k == null ? 16 : (int)k,
+                    Temperature = temperature == null ? 1.0 : (double)temperature,
                     Seats = new Seat[seats.Count]
                 };
                 for (int i = 0; i < seats.Count; i++) {

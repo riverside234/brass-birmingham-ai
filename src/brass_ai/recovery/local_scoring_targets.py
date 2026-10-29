@@ -38,8 +38,19 @@ def validate(envelope,game):
     keys(envelope['producer'],('runtime_sha256','host_sha256'))
     require(all(isinstance(v,str) and len(v)==64 and all(c in '0123456789abcdef' for c in v)
                 for v in envelope['producer'].values()),'Invalid local scoring producer')
-    r=envelope['receipt'];keys(r,('contract','rules','producer','start_revision','initial_vp','eras','final_vp'))
-    require(r['contract']==CONTRACT and r['rules']==identity()['rules'] and r['producer']=='local-scoring-host/1.0.0','Scoring recorder differs')
+    validate_receipt(envelope['receipt'],game,producer='local-scoring-host/1.0.0')
+    return envelope
+
+
+def validate_receipt(r,game,*,producer):
+    """Shared semantic audit; callers separately admit their producer envelope.
+
+    The legacy replay route above still accepts ONLY the authored C# producer.
+    B02 uses this audit in its isolated family container, not replay admission.
+    """
+    require(producer in ('local-scoring-host/1.0.0','rust-local-scoring/1.0.0'),'Unknown scoring recorder')
+    keys(r,('contract','rules','producer','start_revision','initial_vp','eras','final_vp'))
+    require(r['contract']==CONTRACT and r['rules']==identity()['rules'] and r['producer']==producer,'Scoring recorder differs')
     require(type(r['start_revision']) is int and r['start_revision']>=0,'Invalid scoring start')
     first_revision=game['records'][0]['view']['context'].get('revision')
     require(first_revision is None or r['start_revision']==first_revision,'Scoring capture starts outside this continuation')
@@ -76,7 +87,7 @@ def validate(envelope,game):
         previous=audit['after']
     final=[next(s['vp'] for s in game['result']['seats'] if s['seat']==i) for i in range(4)]
     require(previous==r['final_vp']==final,'Whole-game local scoring discrepancy')
-    return envelope
+    return r
 
 
 def row_target(game,row):

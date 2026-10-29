@@ -411,6 +411,14 @@ def latest_model_config(config,imitation_checkpoint):
         population=copy.deepcopy(POPULATION),legacy_opponents=dict(search_free_until_games=0))
     # This helper explicitly creates a new recipe. Continuation admits only
     # exact source/config reviews and their separately versioned migrations.
+    result['update'].pop('fixed_entropy',None)
+    # Re-enter the historical recipe builder when regenerating from the new
+    # reduced-cap config. This is fresh config generation, never resume.
+    from .training_revision_g1322 import CURRENT as G1322_REWARD,PREVIOUS as G1320_REWARD
+    if result.get('insolvency')==G1322_REWARD:
+        require(result['search']['reward']['insolvency']==G1322_REWARD,'Search/learner insolvency differs')
+        result['insolvency']=copy.deepcopy(G1320_REWARD)
+        result['search']['reward']['insolvency']=copy.deepcopy(G1320_REWARD)
     result['ppo_lr_controller']=dict(AUTO_CONTROLLER,**result.get('ppo_lr_controller',{}))
     result['ppo_lr_controller']['contract']=AUTO_CONTRACT
     result['ppo_lr_controller']['low_ratio']=AUTO_CONTROLLER['low_ratio']
@@ -460,6 +468,8 @@ def latest_model_config(config,imitation_checkpoint):
     result=g1120_config(result)
     from .training_revision_g1320 import configure as g1320_config
     result=g1320_config(result)
+    from .training_revision_g1322 import configure as g1322_config
+    result=g1322_config(result)
     return validate_config(result)
 
 
@@ -552,7 +562,10 @@ def execution_config(config):
 
 
 def update_config(config):
-    require(set(config)-{'preparation_workers','opening_objective','value_gradient','kl_control'} in (set(UPDATE),set(UPDATE_V21)), 'Unknown/missing update field')
+    require(set(config)-{'preparation_workers','opening_objective','value_gradient','kl_control','fixed_entropy'} in (set(UPDATE),set(UPDATE_V21)), 'Unknown/missing update field')
+    if 'fixed_entropy' in config:
+        from .exploration import validate_fixed_entropy
+        validate_fixed_entropy(config['fixed_entropy'])
     if 'kl_control' in config:
         from .ppo_kl_control import validate
         validate(config)
@@ -848,7 +861,7 @@ def validate_config(config):
         search_wall_fraction(config['search_wall_fraction'])
         require(config['execution']['max_models']>=sum(config['population'].values())+3,
                 'Model cache must cover frozen population plus learner/teacher versions')
-        require(set(config['update'])-{'preparation_workers','opening_objective','value_gradient','kl_control'}==set(UPDATE_V21) and
+        require(set(config['update'])-{'preparation_workers','opening_objective','value_gradient','kl_control','fixed_entropy'}==set(UPDATE_V21) and
                 set(config['execution'])-{'shared_slot_bytes','inference_routing','replica_backlog','teacher_search_workers_per_turn','padding_ratio','model_cohorts'}==set(EXECUTION_V21),
                 '2.1 requires revised update/execution')
         require(config['update'].get('preparation_workers',0)<=available,'PPO preparation exceeds CPU budget')

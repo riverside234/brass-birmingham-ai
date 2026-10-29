@@ -58,7 +58,8 @@ class Revision(unittest.TestCase):
         self.assertEqual(new['search'],dict(old['search'],reward=reward_spec(new)))
         self.assertEqual(validate_config(old),old)
         fresh=latest_model_config(old,old['imitation_checkpoint'])
-        self.assertEqual(fresh['insolvency'],CURRENT);self.assertEqual(fresh['search']['reward'],reward_spec(fresh))
+        from brass_ai.recovery.training_revision_g1322 import CURRENT as FRESH
+        self.assertEqual(fresh['insolvency'],FRESH);self.assertEqual(fresh['search']['reward'],reward_spec(fresh))
         self.assertEqual(new['value_phase'],old['value_phase'])
         for field,value in [('max_cost',.08),('event_cost',.005)]:
             bad=copy.deepcopy(old);bad['insolvency'][field]=value

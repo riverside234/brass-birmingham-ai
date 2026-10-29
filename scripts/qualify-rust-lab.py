@@ -16,7 +16,7 @@ import time
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'src'))
 from brass_ai.learning.contracts import read_json, require
-from brass_ai.rust_backend.lab_contract import (SOURCE, admit, extract_new, native_fingerprint,
+from brass_ai.rust_backend.lab_contract import (B01_CONTRACT, SOURCE, admit, extract_new, native_fingerprint,
                                                pin, sha, verify_inputs)
 
 
@@ -126,7 +126,7 @@ def qualify(args, out):
             tests = cargo + ['test', '--release', '-p', 'brass-ai-worker', '--lib', *common, '--offline', '--', '--test-threads=2']
             commands.append(command(tests, cwd=checkout, env=env, log=out / 'worker-tests.log', timeout=args.build_timeout))
             commands.append(command([sys.executable, '-m', 'unittest', 'discover', '-s',
-                                      ROOT / 'tests/RustBackendLab', '-v'], cwd=ROOT, env=env,
+                                      ROOT / 'tests/RustBackendLab', '-p', 'test_b01.py', '-v'], cwd=ROOT, env=env,
                                     log=out / 'adapter-tests.log', timeout=60))
             commands.append(command([sys.executable, '-m', 'unittest', '-v',
                 'test_inference_deadline_race', 'test_inference_failure_review',
@@ -164,7 +164,7 @@ def qualify(args, out):
             for original in snapshot['extra_runtime_manifests']:
                 require(pin(original['path']) == original, 'Runtime manifest changed during B01')
             verify_unchanged(snapshot)
-            return dict(contract='brass-lab-b01/1.0.0', passed=True, milestone='B01',
+            return dict(contract=B01_CONTRACT, passed=True, milestone='B01',
                         method=profile['method'], v205_enabled=False, completed_utc=datetime.now(timezone.utc).isoformat(),
                         profile=pin(out / 'profile.json'), local_entry=pin(out / 'local-entry.json'),
                         lab_state=pin(out / 'lab-state.json'), python_sources=pin(out / 'python-runtime-sources.json'),
@@ -184,7 +184,7 @@ def main():
     parser.add_argument('--bundle-sha256', required=True)
     parser.add_argument('--out', type=Path, required=True, help='New directory under artifacts/rust-backend, outside the training run')
     parser.add_argument('--device', action='append', required=True, help='Explicit CUDA device, e.g. cuda:0; repeat for each device')
-    parser.add_argument('--profile', type=Path, default=ROOT / 'configs/search/lab-cache-only.json')
+    parser.add_argument('--profile', type=Path, default=ROOT / 'configs/search/lab-search-v1.json')
     parser.add_argument('--runtime-manifest', type=Path, action='append', default=[])
     parser.add_argument('--offline', action='store_true', help='Require a populated pinned Cargo cache')
     parser.add_argument('--build-timeout', type=int, default=900, help='Compiler/test-command watchdog; no gameplay sessions')
@@ -197,7 +197,7 @@ def main():
     try:
         result = qualify(args, out)
     except Exception as error:
-        write(out / 'qualification.json', dict(contract='brass-lab-b01/1.0.0', passed=False,
+        write(out / 'qualification.json', dict(contract=B01_CONTRACT, passed=False,
               milestone='B01', error=f'{type(error).__name__}: {error}', lab_deployed=False))
         raise
     write(out / 'qualification.json', result)

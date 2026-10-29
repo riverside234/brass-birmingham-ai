@@ -22,12 +22,14 @@ namespace BrassLegacyAI.Native
         public readonly JObject Readiness;
         public static NativeProcess Shared() { return Shared(16); }
         public static NativeProcess Shared(int searchK)
+        { return Shared(searchK,1.0); }
+        public static NativeProcess Shared(int searchK,double temperature)
         {
             if(!NativePackage.Enabled) throw new InvalidOperationException("Alpha Test is disabled. This NN table must stop or be replaced as a whole.");
             // Only the scheduler's exclusive compute lease selects a worker.
             // Retire the old table's process before admitting another K.
-            if(shared!=null && shared.Package.SearchK!=searchK){shared.Dispose();shared=null;}
-            if(shared==null) shared=new NativeProcess(new NativePackage(NativePackage.Location,searchK));
+            if(shared!=null && (shared.Package.SearchK!=searchK || shared.Package.Temperature!=temperature)){shared.Dispose();shared=null;}
+            if(shared==null) shared=new NativeProcess(new NativePackage(NativePackage.Location,searchK,temperature));
             if(shared.process.HasExited) {shared.Dispose();shared=null;throw new IOException("Native worker exited; reload the saved game to recover");}
             return shared;
         }
@@ -58,6 +60,8 @@ namespace BrassLegacyAI.Native
                     throw new IOException("Native startup identity mismatch");
                 if(!JToken.DeepEquals(Readiness["k_by_allowance_ms"],package.Policy["k_by_allowance_ms"]))
                     throw new IOException("Native startup search K mismatch");
+                if((double?)Readiness["policy_temperature"]!=package.Temperature || (string)Readiness["temperature_scope"]!="all_nn_policy_evaluations")
+                    throw new IOException("Native startup temperature mismatch");
             } catch {Dispose();throw;}
         }
         JObject Read()
@@ -124,15 +128,20 @@ namespace BrassLegacyAI.Native
         readonly Stopwatch clock;
         readonly int allowance;
         readonly int searchK;
+        readonly double temperature;
         NativeProcess worker;
         public string FailureBundle {get;private set;}
         public JObject Result {get;private set;}
         public string Name {get{return NativePackage.Backend;}}
         public NativeJob(JObject request,Stopwatch clock,int allowance) : this(request,clock,allowance,16) { }
         public NativeJob(JObject request,Stopwatch clock,int allowance,int searchK)
+            : this(request,clock,allowance,searchK,1.0) { }
+        public NativeJob(JObject request,Stopwatch clock,int allowance,int searchK,double temperature)
         {
             if(searchK!=8 && searchK!=16)throw new ArgumentOutOfRangeException("searchK");
+            if(!NativePackage.ValidTemperature(temperature))throw new ArgumentOutOfRangeException("temperature");
             this.request=(JObject)request.DeepClone();this.clock=clock;this.allowance=allowance;this.searchK=searchK;
+            this.temperature=temperature;
         }
         public Task ExecuteAsync(CancellationToken cancellation)
         {
@@ -149,7 +158,7 @@ namespace BrassLegacyAI.Native
         Task Execute(CancellationToken cancellation)
         {
             // ExecuteAsync is invoked on the scheduler's pool task.
-            cancellation.ThrowIfCancellationRequested();worker=NativeProcess.Shared(searchK);cancellation.ThrowIfCancellationRequested();
+            cancellation.ThrowIfCancellationRequested();worker=NativeProcess.Shared(searchK,temperature);cancellation.ThrowIfCancellationRequested();
             if(!clock.IsRunning)clock.Start();
             request["remaining_ms"]=Math.Max(0,allowance-(long)Math.Ceiling(clock.Elapsed.TotalMilliseconds));
             request["ticket"]["source_sha256"]=worker.Package.Source;
@@ -159,6 +168,8 @@ namespace BrassLegacyAI.Native
                 (string)Result["export_sha256"]!=NativePackage.Export || (string)Result["backend"]!=Name)
                 throw new IOException("Native response belongs to a different game/request/model");
             if((int?)Result["requested_k"]!=searchK)throw new IOException("Native response used a different search K");
+            if((double?)Result["policy_temperature"]!=temperature || (string)Result["temperature_scope"]!="all_nn_policy_evaluations")
+                throw new IOException("Native response used a different NN temperature");
             return Task.FromResult(0);
         }
     }

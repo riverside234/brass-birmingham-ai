@@ -8,10 +8,11 @@ import numpy as np
 
 from brass_ai.learning.contracts import digest,require
 from brass_ai.step5.policy import exploration_distribution,NeuralPolicy
-from .exploration import BRANCH,LEGACY_BRANCH,OPENING,REVISED_BRANCH,REVISED_OPENING,THREE_BRANCH,THREE_OPENING
+from .exploration import (BRANCH,LEGACY_BRANCH,OPENING,REVISED_BRANCH,REVISED_OPENING,
+    THREE_BRANCH,THREE_OPENING,THREE_T2_BRANCH,THREE_T2_OPENING)
 
 RESET_OPENINGS={BRANCH['contract']:OPENING,REVISED_BRANCH['contract']:REVISED_OPENING,
-    THREE_BRANCH['contract']:THREE_OPENING}
+    THREE_BRANCH['contract']:THREE_OPENING,THREE_T2_BRANCH['contract']:THREE_T2_OPENING}
 CONTRACTS=(LEGACY_BRANCH['contract'],*RESET_OPENINGS)
 
 

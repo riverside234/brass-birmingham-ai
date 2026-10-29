@@ -32,6 +32,7 @@ namespace BrassLegacyAI.Native
             var bound=new JObject{["format"]=s["format"],["runtime"]=s["runtime"],["family"]=s["family"],
                 ["rules"]=s["rules"],["schema"]=s["schema"],["configuration"]=s["configuration"],["assignments"]=s["assignments"]};
             if(s["nn_search_k"]!=null)bound["nn_search_k"]=s["nn_search_k"].DeepClone();
+            if(s["nn_temperature"]!=null)bound["nn_temperature"]=s["nn_temperature"].DeepClone();
             return Wire.Hash(bound);
         }
         public static int SearchK(JObject state)
@@ -44,9 +45,20 @@ namespace BrassLegacyAI.Native
         public static JObject Create(GameMetadata metadata,Func<PlayerMetadata,string> difficulty)
         { return Create(metadata,difficulty,16); }
         public static JObject Create(GameMetadata metadata,Func<PlayerMetadata,string> difficulty,int searchK)
+        { return Create(metadata,difficulty,searchK,1.0); }
+        public static double Temperature(JObject state)
+        {
+            var temperature=state["nn_temperature"];
+            if(temperature==null)return 1.0;
+            if((temperature.Type!=JTokenType.Integer && temperature.Type!=JTokenType.Float) || !NativePackage.ValidTemperature((double)temperature))
+                throw new InvalidDataException("Unsupported saved NN temperature");
+            return (double)temperature;
+        }
+        public static JObject Create(GameMetadata metadata,Func<PlayerMetadata,string> difficulty,int searchK,double temperature)
         {
             if(!Supported(metadata))throw new InvalidDataException("Alpha Test requires standard four-player rules");
             if(searchK!=8 && searchK!=16)throw new InvalidDataException("Unsupported NN search K");
+            if(!NativePackage.ValidTemperature(temperature))throw new InvalidDataException("Unsupported NN temperature");
             var rows=new JArray(metadata.PlayerMetadata.Select(p=>{
                 var r=new JObject{["color"]=(int)p.PlayerStartConfiguration.Color,["sitting_order"]=p.PlayerStartConfiguration.SittingOrder,
                     ["kind"]=p.AiType==AIType.Human?"human":"native"};
@@ -58,6 +70,7 @@ namespace BrassLegacyAI.Native
                 ["game_id"]=metadata.GameId,["created_utc"]=DateTime.UtcNow.ToString("o"),["ready"]=false,
                 ["configuration"]=Host.Configuration(metadata.GameStartConfiguration),["assignments"]=rows,["records"]=new JArray()};
             state["nn_search_k"]=searchK;
+            state["nn_temperature"]=temperature;
             state["assignment_sha256"]=AssignmentHash(state);state["records_sha256"]=Wire.Hash(state["records"]);return state;
         }
         public static JObject Read(GameMetadata metadata,bool pending)
@@ -69,6 +82,7 @@ namespace BrassLegacyAI.Native
                 (string)s["assignment_sha256"]!=AssignmentHash(s) || !(s["records"] is JArray) ||
                 (string)s["records_sha256"]!=Wire.Hash(s["records"]))throw new InvalidDataException("Incompatible NN table; save preserved");
             SearchK(s);
+            Temperature(s);
             var rows=s["assignments"].ToArray();
             if(rows.Length!=4 || rows.Select(r=>(int)r["color"]).Distinct().Count()!=4)throw new InvalidDataException("Invalid NN seat mapping");
             foreach(var p in metadata.PlayerMetadata) {
