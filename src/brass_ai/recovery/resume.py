@@ -163,6 +163,8 @@ def check_signature(state, signature, reviewed=False):
             handlers[G1320_MIGRATION]=g1320_config
             from .training_revision_g1322 import MIGRATION as G1322_MIGRATION,configure as g1322_config
             handlers[G1322_MIGRATION]=g1322_config
+            from .training_revision_g1324 import MIGRATION as G1324_MIGRATION,configure as g1324_config
+            handlers[G1324_MIGRATION]=g1324_config
             from .training_revision_g850 import MIGRATION as G850_MIGRATION,configure as g850_config
             handlers[G850_MIGRATION]=lambda c:g850_config(c,rating_workers=signature['config'].get('rating_compute',{}).get('workers'))
             from .opening_objective import (MIGRATION as OPENING_MIGRATION,configure as configure_opening,

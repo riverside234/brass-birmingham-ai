@@ -83,6 +83,8 @@ class Recipe(unittest.TestCase):
         from brass_ai.recovery.training_revision_g1320 import configure as reward_config
         from brass_ai.recovery.training_revision_g1322 import configure as current
         expected=current(reward_config(newest(G.short_options(G.linear_options(new)))))
+        from brass_ai.recovery.training_revision_g1324 import configure as latest_recipe
+        expected=latest_recipe(expected)
         for k in ('value_phase','opening','branching','insolvency','exploration','rating_compute'):
             self.assertEqual(fresh[k],expected[k],k)
         from brass_ai.learning.reward import CostLedger

@@ -1,6 +1,17 @@
 # Fresh training in conda: selected v4 teachers and Masked ISMCTS NN
 
-## Current g1322 continuation
+## Current g1324 continuation
+
+Use [the g1324 continuation command](../ai-research/TRAINING_G1324_REVISION.md).
+Fork actions now use **50% T2 + 50% q**, excluding the parent action before
+normalizing each component. If q has no alternative support, use T2 alone.
+The versioned sampler verifies old branch replay using its original mixture.
+Branch rate remains 1%, with three opening decisions skipped and three fresh
+T2 decisions per seat after a fork. All g1322 reward, entropy and epsilon settings
+below remain. Valid PPG replay, weights, Adam/RNG, beta and progress are preserved.
+Fresh self-play config generation selects the same branch mixture.
+
+## Archived g1322 continuation
 
 Use [the g1322 continuation command](../ai-research/TRAINING_G1322_REVISION.md).
 Insolvency is **0.005 per event / 0.05 cap**. Fixed raw-policy entropy coefficients

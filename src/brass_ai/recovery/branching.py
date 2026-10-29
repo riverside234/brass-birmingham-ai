@@ -9,11 +9,14 @@ import numpy as np
 from brass_ai.learning.contracts import digest,require
 from brass_ai.step5.policy import exploration_distribution,NeuralPolicy
 from .exploration import (BRANCH,LEGACY_BRANCH,OPENING,REVISED_BRANCH,REVISED_OPENING,
-    THREE_BRANCH,THREE_OPENING,THREE_T2_BRANCH,THREE_T2_OPENING)
+    THREE_BRANCH,THREE_OPENING,THREE_T2_BRANCH,THREE_T2_OPENING,BALANCED_BRANCH)
 
 RESET_OPENINGS={BRANCH['contract']:OPENING,REVISED_BRANCH['contract']:REVISED_OPENING,
-    THREE_BRANCH['contract']:THREE_OPENING,THREE_T2_BRANCH['contract']:THREE_T2_OPENING}
+    THREE_BRANCH['contract']:THREE_OPENING,THREE_T2_BRANCH['contract']:THREE_T2_OPENING,
+    BALANCED_BRANCH['contract']:THREE_T2_OPENING}
 CONTRACTS=(LEGACY_BRANCH['contract'],*RESET_OPENINGS)
+MOVE_DISTRIBUTIONS={c:(BALANCED_BRANCH if c==BALANCED_BRANCH['contract'] else LEGACY_BRANCH)['move_distribution']
+    for c in CONTRACTS}
 
 
 def seed_for(parent,decision,contract=LEGACY_BRANCH['contract']):
@@ -27,14 +30,16 @@ def eligible(view,choices,action_count,skip_opening_decisions=2):
             not (c['era']=='RailEra' and view['deck_count']==0 and len(view['own_hand'])<=4))
 
 
-def alternative(raw,q,played,rng):
+def alternative(raw,q,played,rng,*,contract=LEGACY_BRANCH['contract']):
     """Exclude first, normalize each component; skip a zero-support component.
 
     A q-only alternative can be empty when the other move is pass. Reweight
     the available components, recording both conditional and marginal mass.
     """
-    candidates=[]
-    for name,weight,values in (('temperature_1',.7,raw),('temperature_2',.25,np.sqrt(raw)),('exploration_q',.05,q)):
+    require(contract in MOVE_DISTRIBUTIONS,'Unknown branch move contract')
+    candidates=[];values_by_name=dict(temperature_1=raw,temperature_2=np.sqrt(raw),exploration_q=q)
+    for name,weight in MOVE_DISTRIBUTIONS[contract].items():
+        values=values_by_name[name]
         p=np.array(values,dtype=np.float64,copy=True);p[played]=0
         if p.sum()>0:
             p/=p.sum();candidates.append((name,weight,p))
@@ -49,8 +54,10 @@ def alternative(raw,q,played,rng):
 
 def capture(host,game,row,assigned,rngs,*,portable=False,branching=LEGACY_BRANCH):
     step=row['step'];seat=row['seat'];p=assigned[seat];seed=seed_for(game['game_id'],step,branching['contract'])
+    require(branching['move_distribution']==MOVE_DISTRIBUTIONS[branching['contract']],
+        'Branch move distribution differs from its versioned contract')
     q=exploration_distribution(row['choices'],row['intent'],3,'action')
-    move=alternative(p.last_raw[rngs[seat]],q,row['chosen'],random.Random(seed))
+    move=alternative(p.last_raw[rngs[seat]],q,row['chosen'],random.Random(seed),contract=branching['contract'])
     if move is None:return None
     require(all(type(p) is NeuralPolicy and p.exploration_version==3 for p in assigned),
         'Branches require four current neural learners')
@@ -121,7 +128,7 @@ def validate_child(parent,child):
         meta['played']==source['chosen'] and row['chosen']==meta['chosen']!=meta['played'] and
         row['style']==source['style'] and row['intent']==source['intent'], 'Branch point differs from parent')
     require(0<meta['probability']<=1 and 0<meta['marginal_probability']<=1 and
-        meta['component'] in BRANCH['move_distribution'],'Invalid branch sampling evidence')
+        meta['component'] in MOVE_DISTRIBUTIONS[meta['contract']],'Invalid branch sampling evidence')
     require(row['behavior']['component']=='branch_move' and
         row['behavior']['probability']==meta['marginal_probability'], 'Branch behavior probability differs')
     skip=RESET_OPENINGS.get(meta['contract'],OPENING)['action_decisions_per_seat']
@@ -130,7 +137,7 @@ def validate_child(parent,child):
     require(raw.shape==(len(source['choices']),) and np.isfinite(raw).all() and (raw>=0).all() and
         abs(raw.sum()-1)<1e-6,'Invalid branch policy distribution')
     q=exploration_distribution(source['choices'],source['intent'],3,'action')
-    replay=alternative(raw,q,meta['played'],random.Random(meta['seed']))
+    replay=alternative(raw,q,meta['played'],random.Random(meta['seed']),contract=meta['contract'])
     require(replay is not None and all(meta[k]==v for k,v in replay.items()),'Branch move/probability differs')
     epsilon=source['behavior']['exploration']
     require(abs(((1-epsilon)*raw+epsilon*q)[meta['played']]-source['behavior']['probability'])<3e-6,

@@ -75,8 +75,10 @@ class Revision(unittest.TestCase):
         self.assertEqual(validate_config(old),old)
         for origin in (old,new):
             fresh=latest_model_config(origin,origin['imitation_checkpoint'])
+            from brass_ai.recovery.training_revision_g1324 import configure as latest_recipe
+            expected=latest_recipe(new)
             for k in ('insolvency','opening','branching','exploration','value_phase'):
-                self.assertEqual(fresh[k],new[k],k)
+                self.assertEqual(fresh[k],expected[k],k)
             self.assertEqual(fresh['update']['fixed_entropy'],E.FIXED_ENTROPY)
         for block,key,value in [('opening','action_decisions_per_seat',2),('branching','skip_opening_decisions',2),
             ('entropy_control','mode','apply'),('update','opening_objective',O.DEFAULT),('update','entropy_weight',.015)]:

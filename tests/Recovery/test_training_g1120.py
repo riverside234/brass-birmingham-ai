@@ -62,6 +62,8 @@ class Revision(unittest.TestCase):
         from brass_ai.recovery.training_revision_g1320 import configure as reward_config
         from brass_ai.recovery.training_revision_g1322 import configure as current_config
         expected=current_config(reward_config(G.kl32_options(new)))
+        from brass_ai.recovery.training_revision_g1324 import configure as latest_recipe
+        expected=latest_recipe(expected)
         for k in ('opening','branching','value_phase'):self.assertEqual(fresh[k],expected[k])
         for block,key,value in [('opening','action_decisions_per_seat',2),('branching','skip_opening_decisions',2),
                                 ('value_phase','acceptance_steps',8),('value_phase','beta_clone_min',1.)]:

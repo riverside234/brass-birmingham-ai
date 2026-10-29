@@ -1,21 +1,23 @@
 # Grouped MLP v11.2: completed IL upgrade and fresh self-play
 
-**Current g1322 recipe:** use [the g1322 instructions](../ai-research/TRAINING_G1322_REVISION.md)
+**Current g1324 recipe:** use [the g1324 instructions](../ai-research/TRAINING_G1324_REVISION.md)
 for continuation and the effective settings. Fresh self-play config generation
 also selects this recipe: T2.0 for the first three action decisions per neural
 seat (also after a fork), matching decoupled PPO, epsilon .08, fixed entropy
 .015 for `canal_action`/`rail_action` and .005 for `canal_other`/`rail_other`,
-1% branching, .005/.05 insolvency, every-iteration two-age PPG with a two-epoch
+1% branching with **50% T2 + 50% q** fork actions, .005/.05 insolvency,
+every-iteration two-age PPG with a two-epoch
 cap, both iterations' held-out games for loss acceptance, linear LR warmup to
 step 16 followed by cosine decay to .001 times peak, beta minimum
 .5, loss checks every 16 steps and periodic KL checks every 32 steps.
 Unchecked retained loss checkpoints also require exact KL verification.
 Peak remains .65 times actual PPO LR.
 Adaptive entropy stays off; the original saved entropy baseline is preserved.
-The g1322 transition preserves saved adaptive beta and refreshes incompatible
-old-reward PPG caches after durable adoption. Its first iteration uses fresh data
-only; the second restores the two-age window. Branch points still skip the first
-three action decisions. Earlier behavior is never relabeled.
+The g1324 transition changes only the fork-action mixture and its contract.
+Valid PPG replay and saved adaptive beta are retained. The earlier g1322 reward
+adoption already refreshed old-reward caches. Branch points still skip the first
+three action decisions. Earlier behavior is never relabeled; its branch contract
+selects the original sampler during replay verification.
 Gate evidence remains current-only. PL bootstrap
 execution uses four single-threaded processes and full-fit warm starts.
 Completed IL is unchanged; no model architecture migration is part of this update.

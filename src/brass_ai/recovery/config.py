@@ -470,6 +470,8 @@ def latest_model_config(config,imitation_checkpoint):
     result=g1320_config(result)
     from .training_revision_g1322 import configure as g1322_config
     result=g1322_config(result)
+    from .training_revision_g1324 import configure as g1324_config
+    result=g1324_config(result)
     return validate_config(result)
 
 

@@ -43,6 +43,8 @@ LOCAL_SCORING_BRANCH = dict(HIGH_BRANCH,rate_per_decision=.010)
 REVISED_BRANCH = dict(LOCAL_SCORING_BRANCH,contract='selfplay-branching/3.0.0')
 THREE_BRANCH = dict(REVISED_BRANCH,contract='selfplay-branching/4.0.0',skip_opening_decisions=3)
 THREE_T2_BRANCH = dict(THREE_BRANCH,contract='selfplay-branching/5.0.0')
+BALANCED_BRANCH = dict(THREE_T2_BRANCH,contract='selfplay-branching/6.0.0',
+    move_distribution=dict(temperature_2=.5,exploration_q=.5))
 ROLLOUT = dict(contract='exploration-rollout/1.0.0', mode='fresh',
     opening_after_iterations=0, raw_entropy_after_iterations=0, branching_after_iterations=20)
 BLOCKS = ('exploration_distribution','entropy_control','opening','branching','exploration_rollout')
@@ -158,7 +160,7 @@ def validate(config):
     # reviewed signatures rather than unbounded free-form controller options.
     revised=(config['opening']==REVISED_OPENING and config['branching']==REVISED_BRANCH) or (
         config['opening']==THREE_OPENING and config['branching']==THREE_BRANCH)
-    three_t2=config['opening']==THREE_T2_OPENING and config['branching']==THREE_T2_BRANCH
+    three_t2=config['opening']==THREE_T2_OPENING and config['branching'] in (THREE_T2_BRANCH,BALANCED_BRANCH)
     current=(config['opening']==OPENING and config['branching'] in (BRANCH,LOCAL_SCORING_BRANCH)) or revised or three_t2
     uniform=config['opening']==OPENING and config['branching']==HIGH_BRANCH
     legacy=config['opening']==LEGACY_OPENING and config['branching']==LEGACY_BRANCH
