@@ -267,6 +267,16 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
     phases=None
     from .local_scoring_adoption import prepare as prepare_local,cleanup as cleanup_local
     phase_raw,local_adoption,local_adopting=prepare_local(root,run,state,raw,config,reviewed=source_changed)
+    from .domino_config import enabled as domino_enabled
+    from .domino_adoption import prepare as prepare_domino
+    phase_raw,domino_adoption=prepare_domino(root,run,state,raw,config,phase_raw)
+    diversity=None
+    if domino_enabled(config):
+        from .domino_auxiliary import Diversity
+        from .domino_state import regime
+        from .domino_fingerprints import inventory
+        inventory(root,state)
+        diversity=Diversity(model,config['diversity'],raw=raw,generation=state['iteration'],regime=regime(config,state.get('v4_share_gate')))
     local_scoring=None
     if 'local_scoring_auxiliary' in config:
         from .local_scoring_auxiliary import Companion
@@ -275,6 +285,7 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
         from .actor_value import TrainingPhases
         phases=TrainingPhases(model,config,raw=phase_raw,generation=state['iteration'],root=root,run=run)
         phases.local_scoring=local_scoring
+        phases.diversity=diversity
         if raw is not None and state['iteration']>0:
             from .snapshot_r2_hotfix import restore as restore_snapshot_r2
             restore_snapshot_r2(state,raw,phases)
@@ -296,7 +307,10 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
         if local_adoption is not None:
             from .local_scoring_adoption import archive_metadata
             local_adoption=archive_metadata(run,local_adoption,raw)
-        state=commit_transition(run,state,signature,opponent_pool=resumed_pool,pool_migration=pool_migration,local_scoring_adoption=local_adoption)
+        if domino_adoption is not None:
+            from .domino_adoption import archive
+            archive(run,domino_adoption)
+        state=commit_transition(run,state,signature,opponent_pool=resumed_pool,pool_migration=pool_migration,local_scoring_adoption=local_adoption,domino_adoption=domino_adoption)
     if phases is not None and getattr(phases,'ppg_schedule_migration',None):
         change=phases.ppg_schedule_migration
         print(f'PPG schedule adopted at g{change["origin"]}: beta {change["beta_before"]:g} -> {change["beta_after"]:g}; '
@@ -368,6 +382,9 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                     state['v4_share_gate']=share
                     write_json(state_path,state)
                 inference_before=service.report()
+                if diversity is not None:
+                    from .domino_state import regime
+                    diversity.change_regime(regime(config,share))
                 exploration_settings=exploration.effective(config,exploration_state,iteration)
                 current=service.register(model);behavior=Behavior(current,config['exploration'],exploration_settings)
                 if teacher_phase is not None:teacher_phase.begin(state,model)
@@ -377,6 +394,10 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                     fingerprints=dict(learner=fingerprint(fixed_probe,fixed_probe.probabilities(model,config['update'])),
                         rule_bot=fingerprint(fixed_probe,rule_bot=True))
                     phases.fingerprint=fingerprints['learner']
+                    if diversity is not None:
+                        from .domino_fingerprints import Fingerprints
+                        fingerprints['contexts']=Fingerprints(root,run,fixed_probe,model,config['update'],
+                            {m['model_id']:m for m in state['quality_pool']['members']},neutral=fingerprints['learner'])
                 from .ordinary import plan_collection,sampling_report
                 plan=plan_collection(root,directory,state,config,signature,service,current,
                                      profiles,opponent_specs,fast_specs,window,fingerprints=fingerprints,exploration=exploration_settings)
@@ -424,6 +445,8 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                     legacy_profiles={spec['policy_id']:p for specs in (opponent_specs,fast_specs) for p,spec in specs.items()})
                 if exploration_settings['version']==3:
                     sampling['exploration_regime']={k:exploration_settings[k] for k in ('version','opening','raw_entropy','branching')}
+                if diversity is not None:
+                    sampling.setdefault('exploration_regime',dict(version=exploration_settings['version']))['diversity']=dict(contract=config['diversity']['contract'],context_contract=config['diversity']['context_contract'])
                 next_quality=quality_report=None
                 if quality:
                     next_quality,quality_report=quality_pool.update_scores(state['quality_pool'],games,
@@ -558,7 +581,7 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                     optimizer_resume=optimizer_resume if not summaries else None,
                     legacy_boost=boost_report(state['games_done'],done,config,window),
                     actor=update,value_phase=value_report,search=search,**diagnostics,incoming_model_id=current,incoming_policy_id=behavior.policy_id,
-                    seat_fingerprints=fingerprints,
+                    seat_fingerprints={k:v for k,v in (fingerprints or {}).items() if k!='contexts'} if fingerprints else None,
                     selfplay_incumbent=incumbent,
                     selfplay_opponents=champion_mix.summarize(state,config,mix_receipts) if champion_mix.enabled(config) else None,
                     games_done=done,cumulative_games=state['previous_games']+done,
@@ -593,6 +616,17 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                     report['teacher_phase']=teacher_report
                 if state.get('local_scoring_adoption'):report['local_scoring_adoption']=state['local_scoring_adoption']
                 checkpoint_began=time.monotonic()
+                if diversity is not None:
+                    assigned=[(j['provenance']['kind'],a) for j in jobs for a in j['provenance']['diversity_assignment']['seats'] if a is not None]
+                    completed=[(kind_by_group[g['setup_group']],a) for g in games
+                        for a in g['_diversity_assignment']['seats'] if a is not None]
+                    diversity.report.update(assigned=dict(Counter(str(a['strategy_id']) for _,a in assigned)),
+                        assigned_by_table_role_seat=dict(Counter(f'{kind}/{a["training_role"]}/{a["physical_seat"]}/{a["strategy_id"]}' for kind,a in assigned)),
+                        completed=dict(Counter(str(a['strategy_id']) for _,a in completed)),
+                        completed_by_table_role_seat=dict(Counter(f'{kind}/{a["training_role"]}/{a["physical_seat"]}/{a["strategy_id"]}' for kind,a in completed)),
+                        history_contexts=quality_report.get('context_outcomes',{}) if quality_report else {},
+                        fingerprints=fingerprints['contexts'].report,pfsp_context_regime=config['diversity']['context_contract'])
+                    report['diversity']=copy.deepcopy(diversity.report)
                 anchor_commit=policy_anchor.checkpoint_state(state)
                 identity=save_checkpoint(output,model,optimizer,step=iteration+1,
                     training=dict(mode='step5-population-ppo',recipe=update['format'],
@@ -606,6 +640,7 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                         **({'v4_share_gate':share} if share is not None else {}),
                         **({'actor_value_phases':phases.payload()} if phases is not None else {}),
                         **({'local_scoring_auxiliary':local_scoring.payload(iteration+1)} if local_scoring is not None else {}),
+                        **({'domino':diversity.payload()} if diversity is not None else {}),
                         **({'quality_pool_digest':quality_pool.state_digest(next_quality)} if quality else {})))
                 report['post_update_model_id']=identity
                 report['timings']['checkpoint_seconds']=time.monotonic()-checkpoint_began
@@ -615,6 +650,7 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                     history=state['history']+[entry],next_search_games=next_search,
                     search_seconds=search_seconds,ordinary_seconds=ordinary_seconds)
                 if next_limit is not None:state['il_kl_limit']=next_limit
+                if diversity is not None:state['domino_state_digest']=digest(diversity.pending)
                 if teacher_phase is not None:
                     state['teacher_phase']=teacher_phase.payload(iteration+1)
                     state['teacher_seed_cursor']=teacher_phase.cursor
@@ -635,6 +671,7 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                     il_kl_limit=limit_report,rehearsal_schedule=rehearsal_status,
                     value_phase=value_report,
                     local_scoring_auxiliary=report.get('local_scoring_auxiliary'),
+                    diversity=report.get('diversity'),
                     health_counts=diagnostics.get('health_counts'),
                     health_by_composition={k:v.get('health_counts') for k,v in diagnostics.get('by_composition',{}).items()},
                     sampling=sampling,curriculum=report['curriculum'],
@@ -649,6 +686,7 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                 if teacher_phase is not None:teacher_phase.committed(iteration+1)
                 if local_scoring is not None:local_scoring.committed(iteration+1)
                 if phases is not None:phases.committed(iteration+1)
+                if diversity is not None:diversity.committed(iteration+1)
                 if revised:
                     evaluation_began=time.monotonic()
                     from .champion import schedule as schedule_champion
@@ -724,6 +762,8 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                     split=value_report.get('split') or {}
                     v4_holdout=split.get('by_table',{}).get('legacy')
                     if v4_holdout:controller_line+=f' v4_holdout={v4_holdout["heldout_games"]}/{v4_holdout["games"]}'
+                    if diversity is not None:
+                        controller_line+=f' DOMiNO={diversity.config["mode"]}:{diversity.report.get("readiness","pending")}'
                     if phases.buffer:
                         controller_line+=f' value_rows={value_report["distinct_current_rows_used"]}+{value_report["distinct_previous_rows_used"]}'
                     if phases.critic_state is not None:

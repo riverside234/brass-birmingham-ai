@@ -30,6 +30,11 @@ def plan(root, run, snapshot, model, raw, service, output):
         probe,_=load_probe(root,run,origin,None,config['il_kl_limit'],config['update'],config['audit_workers'],
                           receipt=state['il_kl_limit']['probe'])
         fingerprints=dict(learner=fingerprint(probe,probe.probabilities(model,config['update'])),rule_bot=fingerprint(probe,rule_bot=True))
+        from brass_ai.recovery.domino_config import enabled
+        if enabled(config):
+            from brass_ai.recovery.domino_fingerprints import Fingerprints
+            fingerprints['contexts']=Fingerprints(root,output,probe,model,config['update'],
+                {m['model_id']:m for m in state['quality_pool']['members']})
     current=service.register(model)
     require(current==snapshot['model_id'],'Incoming learner identity changed')
     result=plan_collection(root,output,state,config,signature,service,current,profiles,specs,fast,

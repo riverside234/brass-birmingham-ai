@@ -270,6 +270,10 @@ def export(root, run, output=None, *, latest=2, extras=(), continue_export=False
 
     add(state_path, 'state.json', 'Committed configuration, lineage and progress', expected=True)
     require(files['state.json'][1] == state_bytes, 'Run advanced during export; retry')
+    domino=state.get('domino_adoption')
+    if domino is not None:
+        add(run / f'domino-adoption-g{domino["generation"]:06d}.json', 'domino-adoption.json',
+            'DOMiNO transition and archived PPG receipts; no cache arrays', expected=True)
     local_scoring_receipt=None
     if state.get('signature',{}).get('config',{}).get('local_scoring_auxiliary') is not None:
         # Small training contracts/manifests only: never copy label arrays or

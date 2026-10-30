@@ -89,6 +89,8 @@ def collect_lane(root, executable, bootstrap, job, endpoint, execution, *, origi
             rngs = [random.Random(digest(dict(sampling_seed=job['sampling_seed'],game=job.get('rng_index',0),seat=s))) for s in range(4)]
             for s,p in enumerate(assigned):
                 if p.focus == 'mixed': p.contexts[rngs[s]] = context_for(job.get('focuses',{}).get(str(s),'neutral'))
+            from brass_ai.recovery.domino_sampling import install
+            install(job,assigned,rngs)
         else:
             packet = continuation; meta = packet['metadata']; seed = meta['seed']; forked = True
             require(packet.get('sha256')==digest({k:v for k,v in packet.items() if k!='sha256'}),'Branch packet changed in transit')

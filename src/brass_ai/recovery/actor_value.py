@@ -545,6 +545,8 @@ class TrainingPhases:
         if self.split:self.split['eligible_train_rows']=len(self.train_ids)
         companion=getattr(self,'local_scoring',None)
         if companion is not None and companion.active:companion.inventory(critic,self.train_ids)
+        diversity=getattr(self,'diversity',None)
+        if diversity is not None:diversity.prepare(critic,self.train_ids,self.heldout_ids)
         return self.train_ids
 
     def advantages(self,mc,actor_ids):

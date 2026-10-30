@@ -20,8 +20,9 @@ namespace BrassLegacyAI.Native
         public readonly string Directory, Source, PolicyHash, PolicyPath;
         public readonly int SearchK;
         public readonly double Temperature;
-        public static readonly IReadOnlyList<int> SearchKChoices = Array.AsReadOnly(new[]{8,16,32});
-        public static bool ValidSearchK(int searchK) { return SearchKChoices.Contains(searchK); }
+        public static readonly IReadOnlyList<int> SearchKChoices = Array.AsReadOnly(new[]{8,16});
+        // Older saves may pin K32, although new tables no longer offer it.
+        public static bool ValidSearchK(int searchK) { return SearchKChoices.Contains(searchK) || searchK==32; }
         public static bool ValidTemperature(double temperature) { return temperature==1.0 || temperature==1.5; }
         public readonly JObject Policy, ModelManifest;
         public static string GameRoot { get { return Path.GetFullPath(Path.Combine(Path.GetDirectoryName(typeof(NativePackage).Assembly.Location), "../..")); } }

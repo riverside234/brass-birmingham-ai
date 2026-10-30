@@ -153,12 +153,12 @@ class Companion:
             inverse.append(unique[token])
         return tuple(np.stack([v[j] for v in values])[inverse] for j in range(3))
 
-    def forward(self,model,inputs,ds,ix,*,dropout=None,detach=False):
+    def forward(self,model,inputs,ds,ix,*,dropout=None,detach=False,capture_encoded=None):
         from .updates import value_output
         ids=ix.detach().cpu().tolist() if isinstance(ix,torch.Tensor) else list(ix)
-        if not self.active:return value_output(model,inputs,ds,ix,dropout=dropout,detach=detach),None
+        if not self.active:return value_output(model,inputs,ds,ix,dropout=dropout,detach=detach,capture_encoded=capture_encoded),None
         metadata=self.metadata(ds,ids)
-        if not any(x[0] is not None for x in metadata):return value_output(model,inputs,ds,ix,dropout=dropout,detach=detach),None
+        if not any(x[0] is not None for x in metadata):return value_output(model,inputs,ds,ix,dropout=dropout,detach=detach,capture_encoded=capture_encoded),None
         from brass_ai.learning.seat_descriptors import critic_inputs
         start=time.perf_counter()
         with torch.set_grad_enabled(torch.is_grad_enabled() and not detach):encoded=model.encode_state(inputs[0])
@@ -166,6 +166,7 @@ class Companion:
             from .ppg_phasic import stop_value_gradient
             encoded=stop_value_gradient(encoded)
         embeddings=model.descriptor_embeddings(encoded,critic_inputs(ds,ids,dropout=dropout))
+        if capture_encoded is not None:capture_encoded(encoded)
         heads=model.official_heads(encoded,inputs[3],embeddings)
         out=(inputs[1].new_zeros(inputs[1].shape[:2]),*heads)
         if hasattr(model,'predict_utility'):

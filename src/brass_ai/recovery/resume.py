@@ -169,6 +169,10 @@ def check_signature(state, signature, reviewed=False):
             handlers[G1322_MIGRATION]=g1322_config
             from .training_revision_g1324 import MIGRATION as G1324_MIGRATION,configure as g1324_config
             handlers[G1324_MIGRATION]=g1324_config
+            from .domino_config import MIGRATION as DOMINO_MIGRATION,configure as configure_domino
+            handlers[DOMINO_MIGRATION]=lambda c:configure_domino(c,state,signature['config']['diversity']['mode'])
+            from .exploration import FIXED_010_MIGRATION,fixed_010_config
+            handlers[FIXED_010_MIGRATION]=fixed_010_config
             from .teacher_phase_config import MIGRATION as TEACHER_PHASE_MIGRATION,adopt as adopt_teacher_phase
             handlers[TEACHER_PHASE_MIGRATION]=adopt_teacher_phase
             from .training_revision_g850 import MIGRATION as G850_MIGRATION,configure as g850_config
@@ -381,17 +385,25 @@ def prepare_opponent_pool(root,run,state,raw,config,source_changed=False):
                 quality_pool.state_digest(backup['quality_pool'])==bound and
                 (backup['iteration'],backup['games_done'])==(state['iteration'],state['games_done']),
                 'PFSP source transition backup differs')
-            migrated,receipt=pfsp_pool.migrate(backup['quality_pool'],pool['config'],state['iteration'],state['games_done'])
+            if t['opponent_pool_migration'].get('contract')=='domino-adoption/1.0.0':
+                from .domino_adoption import pool_transition
+                migrated,receipt=pool_transition(backup['quality_pool'])
+            else:migrated,receipt=pfsp_pool.migrate(backup['quality_pool'],pool['config'],state['iteration'],state['games_done'])
             require(receipt==t['opponent_pool_migration'] and quality_pool.state_digest(migrated)==actual,
                 'PFSP source transition cannot be reproduced')
     if pool['config']==config['opponent_pool']:
         if pfsp_pool.pfsp(pool):require(pool['games_done']==state['games_done'],'PFSP ordinary progress differs')
+        from .domino_config import enabled
+        if enabled(config) and not enabled(state['signature']['config']):
+            require(source_changed,'DOMiNO context sampling requires reviewed adoption')
+            from .domino_adoption import pool_transition
+            return pool_transition(pool)
         return pool,None
     require(source_changed,'Opponent sampling changes require a reviewed source/config transition')
     return pfsp_pool.migrate(pool,config['opponent_pool'],state['iteration'],state['games_done'])
 
 
-def commit_transition(run, state, signature,*,opponent_pool=None,pool_migration=None,local_scoring_adoption=None):
+def commit_transition(run, state, signature,*,opponent_pool=None,pool_migration=None,local_scoring_adoption=None,domino_adoption=None):
     """Call only after restoring Adam and RNG successfully, under the run lock."""
     if local_scoring_adoption is not None and 'local_scoring_adoption' in state:
         # Before the first companion checkpoint, prepare() reuses the durable
@@ -416,6 +428,9 @@ def commit_transition(run, state, signature,*,opponent_pool=None,pool_migration=
         config_changes={k:dict(before=previous['signature']['config'].get(k),after=v)
                         for k,v in signature['config'].items() if previous['signature']['config'].get(k)!=v}))
     updated['signature'] = signature
+    if domino_adoption is not None:
+        require('domino_adoption' not in updated or updated['domino_adoption']==domino_adoption,'DOMiNO adoption differs')
+        updated['domino_adoption']=copy.deepcopy(domino_adoption)
     if local_scoring_adoption is not None and 'local_scoring_adoption' not in updated:
         updated['local_scoring_adoption']=copy.deepcopy(local_scoring_adoption)
     if share_migration is not None:

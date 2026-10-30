@@ -79,7 +79,7 @@ class Revision(unittest.TestCase):
             expected=latest_recipe(new)
             for k in ('insolvency','opening','branching','exploration','value_phase'):
                 self.assertEqual(fresh[k],expected[k],k)
-            self.assertEqual(fresh['update']['fixed_entropy'],E.FIXED_ENTROPY)
+            self.assertEqual(fresh['update']['fixed_entropy'],E.FIXED_ENTROPY_010)
         for block,key,value in [('opening','action_decisions_per_seat',2),('branching','skip_opening_decisions',2),
             ('entropy_control','mode','apply'),('update','opening_objective',O.DEFAULT),('update','entropy_weight',.015)]:
             bad=copy.deepcopy(new);bad[block][key]=value

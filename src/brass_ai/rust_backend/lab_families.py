@@ -28,6 +28,22 @@ from .lab_contract import SOURCE
 FORMAT='brass-lab-family/1.0.0'
 
 
+def same_fork_evidence(native,original):
+    """Keep exact identities; allow only f64 JSON roundoff in probabilities.
+
+    The shared serde parser can round a decimal probability by one ULP.
+    Original Python sampling metadata remains authoritative and is separately
+    replayed by validate_child; this never changes a behavior denominator.
+    """
+    if set(native)!=set(original):return False
+    floats={'raw_probabilities','probability','marginal_probability','component_probability'}
+    if {k:v for k,v in native.items() if k not in floats}!={k:v for k,v in original.items() if k not in floats}:return False
+    a=np.asarray([*native['raw_probabilities'],*[native[k] for k in sorted(floats-{'raw_probabilities'}) if k in native]],dtype=np.float64)
+    b=np.asarray([*original['raw_probabilities'],*[original[k] for k in sorted(floats-{'raw_probabilities'}) if k in original]],dtype=np.float64)
+    return bool(a.shape==b.shape and np.isfinite(a).all() and np.isfinite(b).all() and
+        ((b>=0)&(b<=1)).all() and (np.abs(a-b)<=2*np.spacing(b)).all())
+
+
 def validate_part(part, job, *, child=False, arrays=None):
     game=check_game(part['game']) if arrays is None else check_game(part['game'],arrays,validated_inputs=True)
     group=digest(dict(rules='steam-brass-patch-1.1.0',setup_seed=job['seed']))
@@ -63,13 +79,19 @@ def validate_part(part, job, *, child=False, arrays=None):
                      'chosen','component','probability','component_probability','marginal_probability'}
             require(set(evidence)=={'kind','metadata'} and evidence['kind']=='excluded-fork'
                     and set(evidence['metadata'])==allowed
-                    and evidence['metadata']=={k:game['branch'][k] for k in allowed},
+                    and same_fork_evidence(evidence['metadata'],{k:game['branch'][k] for k in allowed}),
                     'Missing/unsafe excluded-fork evidence');continue
         require(set(evidence)<= {'kind','model_id','policy_id','forced','raw_probabilities','feature_version','semantic_id'},
                 'Unexpected/private ordinary evidence')
         if spec['kind']!='neural':continue
         b=row['behavior'];phase=row['view']['context']['phase'];seat=row['seat'];opening=spec.get('opening')
         focus=job.get('focuses',{}).get(str(seat),'neutral') if spec['focus']=='mixed' else spec['focus']
+        assignment=job['provenance'].get('diversity_assignment')
+        if assignment is not None:
+            from brass_ai.recovery.domino_sampling import validate_assignment
+            a=validate_assignment(assignment['seats'][seat])
+            require(a['model_id']==spec['model_id'] and a['legacy_policy_id']==spec['policy_id'], 'Native strategy model routing differs')
+            focus=a['context']
         require((row['style'],row['intent'])==context_for(focus),'Frozen personality context differs')
         temperature=opening['temperature'] if opening and phase=='action' and counts[seat]<opening['action_decisions_per_seat'] else spec.get('temperature',1.)
         require(b['temperature']==temperature,'Wrong opening temperature')

@@ -63,7 +63,8 @@ public sealed partial class LocalAiUnityDriver
             Check(Setup.PlayerMetadata.Skip(1).Select(LocalMenu.Difficulty).SequenceEqual(new[]{"easy","mid","max"}),"V4 seat difficulties restored");
             PickSetup(1,"cotton",0,true);PickSetup(2,"rail-tempo",1,true);PickSetup(3,"random",3,true);PickSetup(2,"rail-tempo",1,true,true);yield return null;
             Rows()[1].GetComponent<AiSetupRow>().OpenPicker();var kPanel=AiSelectionPanel.Active;
-            Check(kPanel.DraftSearchK==16 && kPanel.SearchKButtons.Length==3,"existing setup defaults to K16 and offers three choices");
+            Check(kPanel.DraftSearchK==16 && kPanel.SearchKButtons.Length==2,"existing setup defaults to K16 and offers two choices");
+            Check(kPanel.SearchKButtons.Select(b=>b.name).SequenceEqual(new[]{"NN search K8","NN search K16"}),"only K8 and K16 are offered");
             kPanel.SearchKButtons[0].onClick.Invoke();
             Check(kPanel.DraftSearchK==8 && LocalMenu.TableSearchK(Setup.PlayerMetadata[1])==16,"K8 stays a draft until Apply");
             kPanel.Close();yield return null;
@@ -77,8 +78,7 @@ public sealed partial class LocalAiUnityDriver
                 Check(kPanel.DraftSearchK==8,"K8 is independent of time budget "+difficulty);
                 kPanel.SearchKButtons[1].onClick.Invoke();
                 Check(kPanel.DraftSearchK==16,"K16 is available at time budget "+difficulty);
-                kPanel.SearchKButtons[2].onClick.Invoke();
-                Check(kPanel.DraftSearchK==32,"K32 is available at time budget "+difficulty);
+                Check(!kPanel.GetComponentsInChildren<Button>().Any(b=>b.name=="NN search K32"),"K32 is absent at time budget "+difficulty);
                 kPanel.Close();yield return null;
             }
             Rows()[1].GetComponent<AiSetupRow>().OpenPicker();kPanel=AiSelectionPanel.Active;
@@ -94,7 +94,7 @@ public sealed partial class LocalAiUnityDriver
             Check(tPanel.DraftTemperature==1.5 && LocalMenu.TableTemperature(Setup.PlayerMetadata[1])==1.0,"temperature remains a draft before Apply");
             tPanel.Close();yield return null;
             Check(PreferenceValues()[SetupKey]==saved,"temperature Cancel leaves preferences intact");
-            foreach(int kIndex in new[]{0,1,2})foreach(int difficulty in Enumerable.Range(0,4)) {
+            foreach(int kIndex in Enumerable.Range(0,NativePackage.SearchKChoices.Count))foreach(int difficulty in Enumerable.Range(0,4)) {
                 Rows()[1].GetComponent<AiSetupRow>().OpenPicker();tPanel=AiSelectionPanel.Active;
                 Check(tPanel.DraftTemperature==1.0,"Cancel restored T1.0");
                 tPanel.SearchKButtons[kIndex].onClick.Invoke();tPanel.DifficultyButtons[difficulty].onClick.Invoke();
@@ -127,14 +127,14 @@ public sealed partial class LocalAiUnityDriver
                 SaveExtensions.Set(metadata,legacy);
                 Check(NativeGameState.Temperature(NativeGameState.Read(metadata,true))==1.0 && JToken.DeepEquals(SaveExtensions.Get(metadata),legacy),"legacy save keeps T1.0 without rewrite");
             }
-            foreach(int invalidK in new[]{0,9,64})
+            foreach(int invalidK in new[]{0,9,32,64})
                 Check(!LocalMenu.ApplyPlayerSelection(Setup.PlayerMetadata[1],menu,new PlayerSelectionDraft(PlayerSelectionPage.AlphaTest,new AiChoice(AiFamily.AlphaTest,"alpha-test"),"easy",invalidK)),"unsupported K cannot bypass UI");
             foreach(int k in new[]{8,16,32}) {
                 var package=new NativePackage(NativePackage.Location,k);
                 Check(package.Policy["k_by_allowance_ms"].Children<JProperty>().All(p=>(int)p.Value==k),"integrity-checked native policy maps all four allowances to K"+k);
                 var metadata=(BrassApplication.Game.GameMetadata)Setup.Clone();
                 var state=NativeGameState.Create(metadata,LocalMenu.Difficulty,k);SaveExtensions.Set(metadata,state);
-                Check(NativeGameState.SearchK(NativeGameState.Read(metadata,true))==k,"new game pins K"+k+" in its saved assignment");
+                Check(NativeGameState.SearchK(NativeGameState.Read(metadata,true))==k,"saved-game compatibility preserves K"+k+" in its assignment");
                 var bad=(JObject)state.DeepClone();bad["nn_search_k"]=k==8?16:8;SaveExtensions.Set(metadata,bad);
                 bool rejected=false;try{NativeGameState.Read(metadata,true);}catch(InvalidDataException){rejected=true;}
                 Check(rejected,"saved K is protected by assignment integrity");
@@ -163,6 +163,14 @@ public sealed partial class LocalAiUnityDriver
             var oldPreferences=JObject.Parse(saved);oldPreferences.Remove("nn_search_k");
             PreferenceValues()[SetupKey]=oldPreferences.ToString();Call(menu,"CreateNewGameConfiguration");yield return null;
             Check(LocalMenu.TableSearchK(Setup.PlayerMetadata[1])==16,"pre-selector menu defaults migrate to K16");
+            var k32Preferences=JObject.Parse(saved);k32Preferences["nn_search_k"]=32;
+            PreferenceValues()[SetupKey]=k32Preferences.ToString();Call(menu,"CreateNewGameConfiguration");yield return null;
+            CheckRestoredNeural(16);
+            Check(Setup.PlayerMetadata.All(p=>LocalMenu.TableTemperature(p)==1.5),"K32 menu migration preserves the remembered temperature");
+            Rows()[1].GetComponent<AiSetupRow>().OpenPicker();var migratedPanel=AiSelectionPanel.Active;
+            Check(migratedPanel.DraftSearchK==16 && migratedPanel.SearchKButtons.Length==2 && migratedPanel.SearchKButtons[1].GetComponent<AiControlSurface>().Selected,"K32 menu preference opens with K16 selected");
+            migratedPanel.ApplyButton.onClick.Invoke();yield return null;
+            Check((int)JObject.Parse(PreferenceValues()[SetupKey])["nn_search_k"]==16,"Apply saves the migrated menu K16");
             foreach(var invalid in new JToken[]{new JValue(7),new JValue("8"),JValue.CreateNull()}) {
                 var broken=JObject.Parse(saved);broken["nn_search_k"]=invalid;
                 PreferenceValues()[SetupKey]=broken.ToString();Call(menu,"CreateNewGameConfiguration");yield return null;
@@ -179,9 +187,9 @@ public sealed partial class LocalAiUnityDriver
             }
             PreferenceValues()[SetupKey]=saved;Call(menu,"CreateNewGameConfiguration");yield return null;CheckRestoredNeural();
             Rows()[1].GetComponent<AiSetupRow>().OpenPicker();var finalPanel=AiSelectionPanel.Active;
-            finalPanel.SearchKButtons[2].onClick.Invoke();finalPanel.ApplyButton.onClick.Invoke();yield return null;
-            CheckRestoredNeural(32);
-        } else CheckRestoredNeural(32);
+            finalPanel.SearchKButtons[1].onClick.Invoke();finalPanel.ApplyButton.onClick.Invoke();yield return null;
+            CheckRestoredNeural(16);
+        } else CheckRestoredNeural(16);
         Check(Setup.PlayerMetadata.All(p=>LocalMenu.TableTemperature(p)==1.5),"temperature 1.5 survives menu recreation and process restart");
 
         foreach(var size in new[]{new Vector2Int(1920,1080),new Vector2Int(1920,1200)}) {
@@ -189,7 +197,8 @@ public sealed partial class LocalAiUnityDriver
             Rows()[1].GetComponent<AiSetupRow>().OpenPicker();var panel=AiSelectionPanel.Active;
             Check(panel.CurrentPage==PlayerSelectionPage.AlphaTest,"opening restored NN seat selects Alpha Test");
             Check(panel.DraftTemperature==1.5 && panel.TemperatureButtons[1].GetComponent<AiControlSurface>().Selected && !panel.TemperatureButtons[0].GetComponent<AiControlSurface>().Selected,"temperature has exactly one selected state");
-            Check(panel.DraftSearchK==32 && panel.SearchKButtons.Length==3 && panel.SearchKButtons[2].GetComponent<AiControlSurface>().Selected && panel.SearchKButtons.Count(b=>b.GetComponent<AiControlSurface>().Selected)==1,"K32 has one clear selected state");
+            Check(panel.DraftSearchK==16 && panel.SearchKButtons.Length==2 && panel.SearchKButtons[1].GetComponent<AiControlSurface>().Selected && panel.SearchKButtons.Count(b=>b.GetComponent<AiControlSurface>().Selected)==1,"K16 has one clear selected state");
+            Check(!panel.GetComponentsInChildren<Button>().Any(b=>b.name=="NN search K32"),"K32 is absent from the restored panel");
             foreach(var button in panel.SearchKButtons) {
                 AssertInsideTarget(button.GetComponent<RectTransform>(),"visible search K choice");
                 Check(button.navigation.selectOnDown!=null,"search K supports keyboard navigation");
@@ -210,7 +219,7 @@ public sealed partial class LocalAiUnityDriver
             Check(panel.Window.Find("NN options")==null && panel.Tiles.Count()==7,"V4 contains only V4 styles");
             Check(panel.SearchKButtons.Length==0,"NN search controls are scoped to the NN page");
             Check(panel.TemperatureButtons.Length==0,"temperature controls are scoped to NN");
-            panel.Close();yield return null;CheckRestoredNeural(32);
+            panel.Close();yield return null;CheckRestoredNeural(16);
         }
         // Publish exact preference bytes for a separate fresh Unity process.
         if(!read)File.WriteAllText(PreferenceFixture,JsonConvert.SerializeObject(PreferenceValues()));

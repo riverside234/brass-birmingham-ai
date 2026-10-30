@@ -27,7 +27,9 @@ public static class BrassLabBootstrap
             ["round_pending"]=full["round_pending"].DeepClone(),["debt_pending"]=debt,
             ["settlement_debts"]=new JArray(Enumerable.Range(0,4).Select(s=>debt?host.Game.SellIndustryFlow._moneyToPayBySelling[(PlayerColor)s]:0)),
             ["removed"]=full["removed"].DeepClone(),["retired"]=new JArray(tileIds.Except(used).OrderBy(x=>x,StringComparer.Ordinal)),
-            ["chance"]=JValue.CreateNull(),["result"]=full["result"].DeepClone()};
+            // Wire omits null fields before terminal; native setup requires
+            // an explicit null result, not a dereference of an absent token.
+            ["chance"]=JValue.CreateNull(),["result"]=full["result"]?.DeepClone() ?? JValue.CreateNull()};
         foreach(string key in new[]{"order","slots","links","merchants","coal_market","iron_market","pending","history"})result[key]=view[key].DeepClone();
         return result;
     }

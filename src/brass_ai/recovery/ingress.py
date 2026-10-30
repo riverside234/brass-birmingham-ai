@@ -109,9 +109,10 @@ def _prepare_inner(task):
                    choices=r['choices'],style=r['style'],intent=r['intent'],teacher=r['teacher'],
                    **{k:r[k] for k in ('_insolvency_cost_to_go','_insolvency_trajectory','_reward_return','_reward_remaining','_reward_id','_reward_trajectory',
                        '_critic_role','_table_kind','_seat_descriptors','_descriptor_generation','_branch','_parent_game_id',
-                       '_ppo_opening_objective','_local_scoring') if k in r}),
+                       '_ppo_opening_objective','_local_scoring','_domino','_domino_event') if k in r}),
               target,identity,encoded) for r,target,identity,encoded in data]
-    headers=[{k:v for k,v in g.items() if k not in ('records','branches')} for g in games]
+    headers=[dict({k:v for k,v in g.items() if k not in ('records','branches')},
+        **({'_diversity_assignment':g.diversity_assignment} if hasattr(g,'diversity_assignment') else {})) for g in games]
     ended=time.perf_counter()
     metrics=dict(worker_cpu_seconds=time.process_time()-cpu_began,worker_elapsed_seconds=ended-began,
         read_validate_seconds=loaded-began,diagnostics_seconds=diagnosed-loaded,

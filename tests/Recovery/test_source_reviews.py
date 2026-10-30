@@ -106,7 +106,7 @@ class CompactResumeTests(audit_checks.AuditResumeTests):
         # Use a reviewed source with the current model compatibility. The old
         # fixture hash predates architecture revisions and is not an admission
         # route for checkpoints authored with today's model tensors.
-        old['implementation'] = 'fd908ff8b5e073b2744b8a034dd7304a2803a5c6ad1d75dd9e0be6c67640fd08'
+        old['implementation'] = '603d1d236ca3da4511467956a9b656b41a4f03017d814b1abd8f060467a4c05c'
         return old, new
 
 

@@ -42,6 +42,21 @@ class ExportTests(unittest.TestCase):
     def export(self, **kwargs):
         return reports.export(self.root, self.run, **kwargs)
 
+    def test_domino_adoption_and_compact_evidence_are_retained(self):
+        receipt=dict(contract='domino-adoption/1.0.0',generation=60,
+                     checkpoint_sha256='a'*64,model_id='b'*64)
+        evidence=dict(readiness='ready',assigned={'0':4,'1':3},
+                      coefficients_next=[1.,.5,.5,.5,.5,.5,.5])
+        self.state['domino_adoption']=receipt
+        self.put(self.run+'/state.json',self.state)
+        self.put(self.run+'/domino-adoption-g000060.json',receipt)
+        self.put(self.run+'/iteration-0059/report.json',dict(iteration=59,diversity=evidence))
+        self.put(self.run+'/retention-history.json',{'iteration-0058/report.json':{'diversity':evidence}})
+        output,manifest=self.export()
+        self.assertEqual(reports.load_json(output/'domino-adoption.json'),receipt)
+        self.assertEqual(reports.load_json(output/'iteration-0059/report.json')['diversity'],evidence)
+        self.assertEqual(reports.load_json(output/'retention-history.json')['iteration-0058/report.json']['diversity'],evidence)
+
     def assert_exported(self, entry, raw, source):
         self.assertEqual(len(raw),entry['bytes'])
         self.assertEqual(reports.checksum(raw),entry['sha256'])

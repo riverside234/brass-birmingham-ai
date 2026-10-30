@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using BoardGameRules.Entities.Actions.Events;
+using BoardGameRules.Entities.Board.Events;
 using BoardGameRules.Entities.EventSourcing.Events;
 using BoardGameRules.Entities.Game;
 using BoardGameRules.Entities.GamePhases.Events;
@@ -44,6 +45,10 @@ namespace BrassHost
                 if(e is LinkPlaced)kind="network";
                 if(name=="LoanTaken" || name=="MoneyLoaned")kind="loan";
                 if(name=="ActionPassed")kind="pass";
+                // Stock resolves merchant bonuses before flipping the sold
+                // industry. Identify Sell now so its free development cannot
+                // be mistaken for a separate Develop action.
+                if(e is MerchantBonusReceived && kind==null)kind="sell";
                 if(e is IndustryDeveloped && kind==null)kind="develop";
                 var flipped=e as IndustryFlipped;
                 if(flipped!=null && kind==null && projection.Slots.Any(s=>s.Value.BuildedIndustry is BaseSellableIndustry &&

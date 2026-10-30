@@ -20,6 +20,7 @@ def implementation_id():
     paths = [p for group in ('step5','recovery','search','learning','feature_engineering') for p in (base/group).glob('*.py')]
     paths += [SOURCE_ROOT/'configs/learning'/FEATURE_SCHEMA]
     paths += [SOURCE_ROOT/'configs/learning'/LAYOUT_FILE]
+    paths += [SOURCE_ROOT/'configs/learning/domino-descriptor-1.0.0.json',SOURCE_ROOT/'src/BrassLabBootstrap/Bootstrap.cs']
     from brass_ai.learning.state_layout import MODEL_LAYOUT_FILE
     from brass_ai.learning.board_topology import TOPOLOGY_FILE,BOARD_FILE
     paths += [SOURCE_ROOT/'configs/learning'/name for name in (MODEL_LAYOUT_FILE,TOPOLOGY_FILE,BOARD_FILE)]

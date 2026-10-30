@@ -156,6 +156,9 @@ def convert(family, admission, *, allow_diagnostic=False, arrays=None):
             from brass_ai.recovery.opening_objective import validate
             game.ppo_opening_objective = copy.deepcopy(validate(proof['ppo_opening_objective']))
         game.native_admission = copy.deepcopy(admission)
+        if 'diversity_assignment' in proof:
+            from brass_ai.recovery.domino_sampling import bind
+            bind(game,proof)
         games.append(game)
     parent = games[0]
     if len(games) == 2:

@@ -238,7 +238,8 @@ namespace BrassLegacyAI
                     mark.gameObject.AddComponent<AiSelectionMark>().raycastTarget = false;
                     button.GetComponentInChildren<TextMeshProUGUI>().rectTransform.offsetMax = new Vector2(-20 * unit, -2 * unit);
                 }
-                Text(window, "NN search help", "Search + up to 1s delivery", bodyX + 486, 204, bodyWidth - 486, 46, 18, true).color = LightUi.Muted;
+                float searchHelpX = 153 + 111 * SearchKButtons.Length;
+                Text(window, "NN search help", "Search + up to 1s delivery", bodyX + searchHelpX, 204, bodyWidth - searchHelpX, 46, 18, true).color = LightUi.Muted;
                 UpdateSearchK();
                 Text(window, "NN temperature caption", "Temperature", bodyX, 262, 137, 46, 20);
                 TemperatureButtons = new Button[2];

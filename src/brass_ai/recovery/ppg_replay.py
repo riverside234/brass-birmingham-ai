@@ -18,7 +18,7 @@ from . import ppg_sampling
 
 CONTRACT='ppg-eight-disk-buffer/1.0.0'
 OWNER=dict(contract=CONTRACT,purpose='sealed MC critic rows and selected complete policy inputs')
-FILE=re.compile(r'generation-([0-9]{6,})\.(critic\.npy|actions\.npy|meta\.npy|games\.npy|state-floats\.npy|state-bits\.npy|critic-actions\.npy|policy-actions\.npy|local-scoring\.json|json)(\.partial|\.tmp)?$')
+FILE=re.compile(r'generation-([0-9]{6,})\.(critic\.npy|actions\.npy|meta\.npy|games\.npy|state-floats\.npy|state-bits\.npy|critic-actions\.npy|policy-actions\.npy|local-scoring\.json|domino\.json|json)(\.partial|\.tmp)?$')
 
 
 class Rows(DiskRows):
@@ -28,8 +28,22 @@ class Rows(DiskRows):
             from .ppg_packing import CriticArray
             self.array=CriticArray(lambda ext:path.with_name(path.name.replace('critic.npy',ext)),receipt)
         else:self.array=np.load(path,mmap_mode='r',allow_pickle=False)
-        self.local={}
+        self.local={};self.domino={}
         try:
+            if 'domino.json' in receipt['files']:
+                from .domino_config import CONTRACT as DOMINO_CONTRACT
+                from .domino_sampling import validate_assignment
+                sidecar=path.with_name(path.name.replace('critic.npy','domino.json'))
+                require(sha(sidecar)==receipt['files']['domino.json']['sha256'],'DOMiNO cache changed')
+                value=read(sidecar)
+                require(value['contract']==DOMINO_CONTRACT and value['source']==digest(receipt['source']) and value['generation']==receipt['generation'] and
+                    value['rows']==receipt['rows'],'DOMiNO cached provenance differs')
+                self.domino=value['seats']
+                require(set(self.domino)==set(receipt['game_ids']),'DOMiNO cache game identities differ')
+                for seats in self.domino.values():
+                    for seat,a in seats.items():
+                        validate_assignment(a)
+                        require(str(a['physical_seat'])==seat,'DOMiNO cached seat identity differs')
             if 'local-scoring.json' in receipt['files']:
                 from .local_scoring_targets import CONTRACT,seal,unpack
                 sidecar=path.with_name(path.name.replace('critic.npy','local-scoring.json'))
@@ -49,6 +63,8 @@ class Rows(DiskRows):
             game=self.receipt['game_ids'][int(self.array[i]['game'])]
             if game in self.local:
                 value['_local_scoring']=dict(envelope=self.local[game],era=value['view']['context']['era'])
+            a=self.domino.get(game,{}).get(str(value['seat']))
+            if a is not None:value['_domino']=a
         return value
 
 
@@ -134,6 +150,20 @@ class CriticDataset(Dataset):
             result.append((target,key,(game,era,int(revision),int(seat)),m))
         return result
 
+    def diversity_metadata(self,indices):
+        """Only sealed identity columns; packed state/action arrays stay untouched."""
+        indices=np.asarray(indices,dtype=np.int64)
+        owners=np.searchsorted(self.data.ends,indices,side='right')
+        games=self.data.column(indices,'game');contexts=self.data.column(indices,'context')
+        seats=self.data.column(indices,'seat');roles=self.data.column(indices,'role')
+        result=[]
+        for p,g,c,seat,role in zip(owners,games,contexts,seats,roles):
+            part=self.data.parts[p];game=part.receipt['game_ids'][g];context=part.receipt['contexts'][c]
+            a=part.domino.get(game,{}).get(str(seat))
+            require(not part.domino or a is not None,'DOMiNO cache lacks a neural seat assignment')
+            result.append(((game,int(seat),int(context['revision'])),a,('learner','snapshot')[int(role)],'/branch/' in game))
+        return result
+
     def microbatches(self,indices,size,cells,bucket=True):
         # This sealed critic format contains exactly one real candidate/row.
         indices=list(indices);size=min(size,cells)
@@ -202,7 +232,7 @@ class Buffer:
         validate_selection(r['holdout_selection'],self.config['value_phase']['holdout'],self.config['value_phase']['holdout_fraction'])
         require(set(r['game_ids'])<=set(r['holdout_selection']['games']),'Unknown PPG cached game')
         expected=set(EXTENSIONS) if packed else {'critic.npy','actions.npy'}
-        require(set(r['files']) in (expected,expected|{'local-scoring.json'}),'Missing/unknown PPG cache file type')
+        require(set(r['files'])-{'local-scoring.json','domino.json'}==expected,'Missing/unknown PPG cache file type')
         require(('packing' in r)==packed,'PPG packing receipt contract differs')
         if packed:
             validate(r['packing'])
@@ -214,6 +244,8 @@ class Buffer:
         require(read(self.path(r['generation'],'json'))==r,'PPG cache metadata differs from checkpoint')
         if self.config.get('local_scoring_auxiliary',{}).get('mode','off')!='off':
             require('local-scoring.json' in r['files'],'Missing adopted PPG local scoring sidecar')
+        from .domino_config import enabled
+        if enabled(self.config):require('domino.json' in r['files'],'Missing adopted PPG strategy provenance')
 
     def source(self,records,policy_id,kinds,model_id):
         # Reuse the existing checked ordinary-replay provenance builder.
@@ -309,6 +341,23 @@ class Buffer:
             for ext in extensions:self.path(generation,ext).unlink()
             extensions=EXTENSIONS
         files={ext:dict(bytes=self.path(generation,ext).stat().st_size,sha256=sha(self.path(generation,ext))) for ext in extensions}
+        from .domino_config import enabled,CONTRACT as DOMINO_CONTRACT
+        if enabled(self.config):
+            from .domino_sampling import validate_assignment,learner_row
+            seats={};intrinsic=[]
+            for j,i in enumerate(ids):
+                row=dataset.rows[i];game=dataset.data[i][2][0];a=validate_assignment(row['_domino'])
+                require((row.get('_critic_role','learner')=='learner')==learner_row(row,source['policy_id']),
+                    'Cached strategy role differs')
+                recorded=seats.setdefault(game,{})
+                require(str(row['seat']) not in recorded or recorded[str(row['seat'])]==a,
+                        'Strategy changed within cached seat-game')
+                recorded[str(row['seat'])]=a
+                if '_domino_target' in row:intrinsic.append([j,row['_domino_target']])
+            write_json(self.path(generation,'domino.json'),dict(contract=DOMINO_CONTRACT,generation=generation,
+                source=digest(source),rows=len(ids),seats=seats,intrinsic=intrinsic,
+                scope='Recorded frozen-statistic MC intrinsic targets for audit; fitting only current ordinary learner train rows'))
+            p=self.path(generation,'domino.json');files['domino.json']=dict(bytes=p.stat().st_size,sha256=sha(p))
         if 'local_scoring_auxiliary' in self.config:
             from .local_scoring_targets import CONTRACT as TARGET_CONTRACT,seal,pack
             local={};checked=set()
@@ -343,6 +392,7 @@ class Buffer:
             policy_action_bytes=sum(f['bytes'] for x in self.pending for ext,f in x['files'].items()
                 if ext in ('actions.npy','policy-actions.npy')),
             auxiliary_label_bytes=sum(x['files'].get('local-scoring.json',{}).get('bytes',0) for x in self.pending),
+            diversity_bytes=sum(x['files'].get('domino.json',{}).get('bytes',0) for x in self.pending),
             peak_disk_bytes=max(disk_peak,sum(p.stat().st_size for p in self.directory.iterdir() if p.is_file())),
             write_seconds=time.perf_counter()-began,committed_cleanup=None,
             packing=(dict(contract=packing['contract'],dense_array_bytes=packing['dense_array_bytes'],

@@ -223,7 +223,7 @@ class CategoricalProbe:
     def measure(self, model, anchor=None):
         from .updates import row_probabilities
         kl = entropy = relative_entropy = anchor_kl = raw_entropy = raw_relative = raw_kl = opening_kl = 0.
-        groups={};unassigned=0
+        groups={};unassigned=0;strategies={}
         if anchor is not None:
             # Reuse the existing round boundaries, not the action/payment phase
             # labels used to stratify the probe. Do not resample or reweight it.
@@ -247,6 +247,16 @@ class CategoricalProbe:
                 raw_ent=-(raw*raw.clamp_min(1e-30).log()).sum(-1)
                 raw_entropy+=float(raw_ent.sum())
                 raw_relative+=float((raw_ent/legal.log().clamp_min(1e-8)).sum())
+                if any('_domino' in self.dataset.rows[i] for i in part):
+                    bkl=(old*(old.clamp_min(1e-30).log()-p.clamp_min(1e-30).log())).sum(-1).cpu().tolist()
+                    rkl=((before*(before.clamp_min(1e-30).log()-raw.clamp_min(1e-30).log())).sum(-1).cpu().tolist()
+                        if self.decoupled else [None]*len(part))
+                    for i,bv,rv in zip(part,bkl,rkl):
+                        a=self.dataset.rows[i].get('_domino')
+                        if a is None:continue
+                        s=strategies.setdefault(str(a['strategy_id']),dict(rows=0,behavior_kl=0.,temperature1_kl=0. if self.decoupled else None))
+                        s['rows']+=1;s['behavior_kl']+=bv
+                        if self.decoupled:s['temperature1_kl']+=rv
                 if anchor is not None:
                     reference=row_probabilities(self.dataset,part,anchor(*inputs)[0],q,self.behavior)
                     distances=(reference*(reference.clamp_min(1e-30).log()-p.clamp_min(1e-30).log())).sum(-1).cpu().tolist()
@@ -261,6 +271,8 @@ class CategoricalProbe:
             anchor_distance=row['total']/row['positions'] if row['positions'] and np.isfinite(row['total']) else None)
             for name,row in groups.items()}
         return dict(positions=self.positions, categorical_kl=(raw_kl if self.decoupled else kl)/max(1,self.positions),
+                    **(dict(strategy_kl={z:{k:(v/s['rows'] if k!='rows' and v is not None else v) for k,v in s.items()}
+                        for z,s in strategies.items()}) if strategies else {}),
                     **(self._movement(kl,raw_kl,opening_kl) if self.decoupled else {}),
                     raw_entropy=raw_entropy/max(1,self.positions),
                     raw_entropy_over_log_legal=raw_relative/max(1,self.positions),

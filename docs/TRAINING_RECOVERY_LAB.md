@@ -1,6 +1,31 @@
 # Fresh training in conda: selected v4 teachers and Masked ISMCTS NN
 
-## Current g1324 continuation
+## Current g1326 DOMiNO continuation
+
+The latest [g1326 adoption command](../ai-research/DOMINO_DIVERSITY_IMPLEMENTATION.md#continuation-and-preserved-recipe)
+includes `--entropy-010`: `canal_action`, `canal_other`, `rail_action` and
+`rail_other` all use fixed **0.10**. Adaptive entropy remains off and its original
+baseline is preserved. Use the new `domino-entropy010-g1326.json` config filename.
+
+For an already adopted run, use the [DOMiNO debug-review continuation](../ai-research/DOMINO_DIVERSITY_DEBUG_REVIEW.md#continue-an-already-adopted-run).
+It preserves the current committed generation, configuration and PPG cache.
+Do not repeat g1326 recovery/adoption after the run has advanced.
+
+Use [the DOMiNO implementation report and g1326 command](../ai-research/DOMINO_DIVERSITY_IMPLEMENTATION.md).
+This is an explicit adoption into the committed g1326 run. All ordinary neural
+seats, including frozen history/IL seats, receive an independent uniform choice
+from the seven existing contexts. Neutral remains task-only. The adaptive
+diversity objective starts after each ID has sufficient genuine ordinary-game
+support; branches keep their existing task-only objective and inherited context.
+
+The helper reads the actual committed config and verifies the full checkpoint.
+It preserves the current g1324 recipe except for the explicitly requested entropy
+change, and starts a fresh two-iteration PPG window
+with the same value Adam, beta and cadence. Old caches are removed only after the
+first new checkpoint commits. PFSP keeps its members and starts a separately
+archived uniform-context score regime. Do not rerun the older g1324 helper.
+
+## Archived g1324 continuation
 
 Use [the g1324 continuation command](../ai-research/TRAINING_G1324_REVISION.md).
 Fork actions now use **50% T2 + 50% q**, excluding the parent action before

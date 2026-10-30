@@ -169,6 +169,8 @@ def run_game(host,job,policies,timings,max_decisions,admission=None,encoder=None
         if isinstance(p,NeuralPolicy) and p.focus=='mixed':
             p.contexts[rngs[seat]]=context_for(job.get('focuses',{}).get(str(seat),'neutral'))
     encoded=[]
+    from .domino_sampling import install as install_strategies
+    install_strategies(job,assigned,rngs)
     if encoder is None:
         encoder=next((e for p in assigned if (e:=policy_encoder(p)) is not None),None)
         if encoder is None:encoder=PreparedEncoder()

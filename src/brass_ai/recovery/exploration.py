@@ -9,6 +9,8 @@ from brass_ai.step5.policy import FAMILY_WEIGHTS
 GROUPS = ('canal_action', 'canal_other', 'rail_action', 'rail_other')
 FIXED_ENTROPY = dict(contract='fixed-group-entropy/1.0.0',
     weights=dict(canal_action=.015,canal_other=.005,rail_action=.015,rail_other=.005))
+FIXED_ENTROPY_010 = dict(contract='fixed-group-entropy/1.1.0',weights=dict.fromkeys(GROUPS,.10))
+FIXED_010_MIGRATION = 'fixed-group-entropy-010/1.0.0'
 Q = dict(contract='family-weighted-exploration/3.0.0', action_family_weights=FAMILY_WEIGHTS,
     unknown_action_kind_weight=1, pass_only_when_alone=True, industry_subgroups=['build','develop'],
     focus_multiplier=2., other_phases='v2', snapshot_seats='match_learner')
@@ -199,9 +201,20 @@ def group(context):
 
 
 def validate_fixed_entropy(config):
-    require(type(config) is dict and config==FIXED_ENTROPY and
+    require(type(config) is dict and config in (FIXED_ENTROPY,FIXED_ENTROPY_010) and
         all(type(v) in (float,int) for v in config['weights'].values()),'Invalid fixed group entropy recipe')
     return config
+
+
+def fixed_010_config(config):
+    """Only the four fixed PPO entropy weights; preserve saved adaptive state."""
+    validate(config)
+    require(config.get('update',{}).get('fixed_entropy') in (FIXED_ENTROPY,FIXED_ENTROPY_010) and
+        config['entropy_control']['mode']=='off','Fixed 0.10 entropy requires the existing fixed-group recipe')
+    result=copy.deepcopy(config)
+    result['update']['fixed_entropy']=copy.deepcopy(FIXED_ENTROPY_010)
+    validate(result)
+    return result
 
 
 def effective_alphas(config,state):

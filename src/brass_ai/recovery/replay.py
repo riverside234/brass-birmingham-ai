@@ -273,6 +273,10 @@ def read_shards(paths,partition=None,receipts=None,*,heuristic_only=False,native
                             for child in game['branches']), 'Branch contract differs from collection provenance')
             if 'critic_table' in proof:
                 game.critic_table=proof['critic_table'];game.table_kind=proof['kind']
+            if 'diversity_assignment' in proof:
+                from .domino_sampling import bind
+                bind(game,proof)
+                for child in game.get('branches',[]):bind(child,proof)
             if partition is None or game['split']==partition: output.append(game)
     require(output,'No complete games in requested partition')
     return output

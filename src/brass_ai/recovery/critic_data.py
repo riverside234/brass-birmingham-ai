@@ -95,7 +95,7 @@ def fingerprint(probe,probabilities=None,*,rule_bot=False):
         normalization='Family groups sum to 1 per observed era; industry groups conditional on build; empty groups are zero')
 
 
-def planned_table(policies,rotation,current,generation,members,learner_fp,rule_fp,*,learner_policy_id):
+def planned_table(policies,rotation,current,generation,members,learner_fp,rule_fp,*,learner_policy_id,strategies=None,context_fingerprints=None):
     lookup={m['model_id']:m for m in members};seats=[];values=[]
     for seat in range(4):
         p=policies[(seat-rotation)%4];mid=p.get('model_id')
@@ -107,9 +107,17 @@ def planned_table(policies,rotation,current,generation,members,learner_fp,rule_f
         elif p.get('kind') in ('external','legacy') or p.get('search_free'):
             role='rule_bot';born=generation;fp=rule_fp
         else:raise ValueError('Unrecognized ordinary opponent for critic descriptors')
+        a=strategies['seats'][seat] if strategies else None
+        if a is not None:
+            from .domino_sampling import validate_assignment
+            validate_assignment(a)
+            require((a['training_role']=='learner')==(role=='learner') and mid==a['model_id'],
+                'Strategy role/model differs from critic descriptor')
+            require(context_fingerprints is not None,'Missing context-aware fingerprint provider')
+            fp=context_fingerprints.get(mid,a['strategy_id'])
         require(0<=born<=generation,'Opponent from a future generation')
         seats.append(dict(role=role,generation=born,model_id=mid,policy_id=p.get('policy_id'),
-                          fingerprint_id=digest(fp)))
+                          fingerprint_id=digest(fp),**(dict(strategy=a) if a is not None else {})))
         values.append(descriptor(role,0 if role in ('learner','rule_bot') else generation-born,fp['values']))
     validate(values)
     return dict(contract=CONTRACT,generation=generation,seats=seats,stable=values,
@@ -125,6 +133,14 @@ def check_table(table,game,policy_id):
         role=record['role'];require(role in ROLES[:-1] and record['policy_id']==game['opponents'][seat],
                                    'Recorded descriptor opponent identity differs')
         require((role=='learner')==(record['policy_id']==policy_id),'Critic learner role differs from collection')
+        if 'strategy' in record:
+            from .domino_sampling import validate_assignment
+            a=validate_assignment(record['strategy'])
+            require(a['model_id']==record['model_id'] and a['physical_seat']==seat and
+                (a['training_role']=='learner')==(role=='learner'),'Critic strategy role differs')
+        if hasattr(game,'diversity_assignment'):
+            require(record.get('strategy')==game.diversity_assignment['seats'][seat],
+                    'Critic strategy differs from collection assignment')
         require(type(record['generation']) is int and 0<=record['generation']<=table['generation'] and
                 values[seat,ROLES.index(role)]==1 and
                 (role!='snapshot' or 0<record['generation']<=table['generation']) and
@@ -141,6 +157,7 @@ def check_table(table,game,policy_id):
 def annotate(row,encoded,table,kind):
     role=table['seats'][row['seat']]['role']
     return dict(row,_critic_role=role,_table_kind=kind,
+        **(dict(_domino=table['seats'][row['seat']]['strategy']) if 'strategy' in table['seats'][row['seat']] else {}),
         _seat_descriptors=relative(table['stable'],encoded.stable_to_relative),
         _descriptor_generation=table['generation'])
 

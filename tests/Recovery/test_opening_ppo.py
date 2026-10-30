@@ -239,6 +239,15 @@ class Continuation(unittest.TestCase):
     def setUpClass(cls):
         torch.set_num_threads(2);cls.state=read(EXPORT/'state.json');cls.old=cls.state['signature']['config']
 
+    def setUp(self):
+        if self._testMethodName in ('test_actual_signature_and_config_helper',
+                                   'test_interrupted_adoption_preserves_checkpoint_and_repeats_exactly'):
+            # These exercise the archived g503 helper and its original review,
+            # not permission to skip every intervening revision into today's run.
+            target='38206ae9ecec5db1b291066978738d247d40ebe112fc27b4f3a4332796caffca'
+            self.enterContext(patch('brass_ai.step5.league.implementation_id',return_value=target))
+            self.enterContext(patch.object(helper,'implementation_id',return_value=target))
+
     def test_exact_config_and_original_entropy_baseline(self):
         c=helper.configure(self.old);validate_config(c);self.assertEqual(c,helper.configure(c))
         self.assertEqual({k for k in c if c[k]!=self.old[k]},
@@ -249,8 +258,10 @@ class Continuation(unittest.TestCase):
         self.assertEqual(E.restore(c,self.state,self.state['exploration']),self.state['exploration'])
         self.assertEqual(c['entropy_control'],self.old['entropy_control'])
         fresh=latest_model_config(self.old,self.old['imitation_checkpoint'])
-        self.assertEqual(fresh['exploration'],0.);self.assertTrue(fresh['value_phase']['enabled'])
-        self.assertEqual(fresh['value_phase']['acceptance_steps'],16);self.assertEqual(fresh['value_phase']['patience'],1)
+        # The archived g503 helper above remains exact; fresh defaults have
+        # subsequently adopted g1324's epsilon and the two-age g210 PPG path.
+        self.assertEqual(fresh['exploration'],.08);self.assertTrue(fresh['value_phase']['enabled'])
+        self.assertEqual(fresh['value_phase']['acceptance_steps'],16);self.assertEqual(fresh['value_phase']['buffer_iterations'],2)
         for key,val in [('importance_cap',3),('target_temperature',2),('normalization','batch')]:
             bad=copy.deepcopy(c);bad['update']['opening_objective'][key]=val
             with self.assertRaises(ValueError):validate_config(bad)

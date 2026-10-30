@@ -241,9 +241,9 @@ class ResumeTests(unittest.TestCase):
         cfg=lr_fixtures.config();cfg['model_size']='small'
         cfg['learning_rate_warmup']['selfplay_steps']=0
         previous=dict(config=cfg,compatibility=compatibility(),
-            implementation='e0dc28ad559ddcd2d6b0eff95d1dac61c4ede949f70bf341a16d08e2ca71dca3',legacy_pool={},teachers={})
-        # The archived guard source predates v11.2. Exercise the current-layout
-        # performance-only route without approving an old architecture.
+            implementation='603d1d236ca3da4511467956a9b656b41a4f03017d814b1abd8f060467a4c05c',legacy_pool={},teachers={})
+        # Exercise the current-layout g1326 source route. The early guard's
+        # archived source is no longer a current direct continuation origin.
         target=dict(previous,implementation=implementation_id())
         torch.manual_seed(761);model=FourSeatNet(ModelConfig.preset('small'))
         helper=lr_fixtures.OptimizerIntegration();optimizer=helper.optimizer(model)
@@ -309,7 +309,7 @@ class ResumeTests(unittest.TestCase):
         self.assertEqual(current[0]['learning_compatibility'],'b3b944dbc492bc1483c41bdb5a9d566f13e2b2a8b7988dbeec8fcb9ebb372674')
         self.assertFalse(current[0].get('config_changes'))
         implementation=implementation_id()
-        compatible_source='e0dc28ad559ddcd2d6b0eff95d1dac61c4ede949f70bf341a16d08e2ca71dca3'
+        compatible_source='603d1d236ca3da4511467956a9b656b41a4f03017d814b1abd8f060467a4c05c'
         self.assertTrue(any(e['to_implementation']==implementation and e['from_implementation']==compatible_source
                             and e['learning_compatibility']==digest(compatibility()) for e in entries))
         handoff=read(SOURCE_ROOT/'configs/learning/imitation-handoff-sources.json')['compatible_sources']
@@ -317,7 +317,8 @@ class ResumeTests(unittest.TestCase):
         # this). The historical entries and their order must still be exact.
         start=next(i for i,e in enumerate(handoff) if e['implementation']=='86fd379b6fe6fb4da8e2b977d9c6ef98aca870d0cd35cb6a6c0f9b2080f2916a')
         self.assertEqual(digest(handoff[start:start+47]),'506f7a6e45e3a2e139bdf37972f6c2ca29bc3e926a3cfa726a3e9c1eeddbc225')
-        self.assertTrue(any(e['implementation']==compatible_source and e['learning_compatibility']==digest(compatibility()) for e in handoff))
+        self.assertTrue(any(e['implementation']=='e0dc28ad559ddcd2d6b0eff95d1dac61c4ede949f70bf341a16d08e2ca71dca3'
+            and e['learning_compatibility']==digest(compatibility()) for e in handoff))
 
 
 if __name__=='__main__':unittest.main()

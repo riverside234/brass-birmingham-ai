@@ -3,7 +3,7 @@ import copy
 import hashlib
 import math
 import time
-from collections import defaultdict
+from collections import defaultdict,Counter
 
 import numpy as np
 import torch
@@ -340,6 +340,11 @@ def fit(model,optimizer,dataset,train_ids,heldout_ids,actor_ids,probe_ids,config
                 scope='PPG disabled; current post-PPO whole-game critic holdout diagnostics only; no value optimizer steps or previous rows')
         report['seconds']=time.perf_counter()-began;return report
     clones=clone_indices(dataset,actor_ids,config['clone_rows'])
+    if companion is not None and hasattr(companion,'diversity') and companion.diversity.config['mode']=='apply':
+        training=set(train_ids)
+        clones=clone_indices(dataset,[i for i in actor_ids if i in training],config['clone_rows'])
+        if not clones:
+            raise ValueError('DOMiNO PPG requires nonforced training-game cloning rows')
     reference=RawPolicyReference(model,dataset,sorted(set(clones)|set(probe_ids)),update)
     train_before=metrics(model,value_dataset,value_train_ids,update,preparation=preparation);before=metrics(model,validation_dataset,heldout_ids,update,evidence=True)
     gate_before=metrics(model,gate_dataset,gate_ids,update,evidence=True) if separate_gate else before
@@ -372,6 +377,7 @@ def fit(model,optimizer,dataset,train_ids,heldout_ids,actor_ids,probe_ids,config
                     step_aux=companion.snapshot() if companion is not None else None
                 optimizer.zero_grad(set_to_none=True);model.train()
                 if companion is not None:companion.begin('ppg')
+                if companion is not None and hasattr(companion,'batch'):companion.batch(value_dataset,batch)
                 for part,ix,inputs in value_dataset.value_batches(value_parts(value_dataset,batch,update,model),model,executor=preparation):
                     drop=None if dropout is None else (dropout[0],epoch,dropout[1],'value')
                     with autocast(update,value_dataset.device):
@@ -527,5 +533,12 @@ def fit(model,optimizer,dataset,train_ids,heldout_ids,actor_ids,probe_ids,config
         descriptor_gain=dict(learner_ev_gain=true_ev-unknown_ev if true_ev is not None and unknown_ev is not None else None),
         role_usage={role:dict(distinct_used=sum(value_dataset.roles[i]==role for i in used),presentations=role_presentations[role]) for role in ('learner','snapshot')})
     report['seconds']=time.perf_counter()-began
+    if companion is not None and hasattr(companion,'diversity'):
+        groups=defaultdict(list)
+        for i in probe_ids:
+            a=dataset.rows[i].get('_domino')
+            if a is not None:groups[a['strategy_id']].append(i)
+        report['strategy_kl']={str(z):dict(rows=len(ids),kl=reference.measure(model,ids)) for z,ids in groups.items()}
+        report['strategy_clone_rows']=dict(Counter(str(dataset.rows[i]['_domino']['strategy_id']) for i in clones))
     require(report['probe_kl']<=config['kl_cap']+1e-7,'Accepted value phase exceeds policy KL cap')
     return report

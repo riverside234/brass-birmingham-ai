@@ -52,7 +52,7 @@ namespace BrassLegacyAI
                 var result = new LocalSetupPreferences {
                     Family = family == "nn" ? AiFamily.AlphaTest : AiFamily.V4,
                     PlayerCount = count, Introductory = (bool)value["introductory"],
-                    SearchK = k == null ? 16 : (int)k,
+                    SearchK = k == null || (int)k == 32 ? 16 : (int)k,
                     Temperature = temperature == null ? 1.0 : (double)temperature,
                     Seats = new Seat[seats.Count]
                 };

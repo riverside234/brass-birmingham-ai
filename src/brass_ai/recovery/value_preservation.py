@@ -10,7 +10,7 @@ from brass_ai.learning.contracts import require
 CONTRACT='dcpg-value-preservation/1.0.0'
 
 
-def outputs(model,inputs,ds,ix,companion=None):
+def outputs(model,inputs,ds,ix,companion=None,diversity=None):
     from brass_ai.learning.seat_descriptors import critic_inputs
     ids=ix.detach().cpu().tolist()
     encoded=model.encode_state(inputs[0])
@@ -18,6 +18,8 @@ def outputs(model,inputs,ds,ix,companion=None):
     heads=model.official_heads(encoded,inputs[3],embeddings)
     utility=model.predict_utility(encoded.context,inputs[3],heads,ds.remaining[ix],embeddings)
     result=dict(win=heads[0].float(),rank=heads[1].float(),vp=heads[2].float(),utility=utility.float())
+    if diversity is not None and diversity.active:
+        result['intrinsic']=diversity.prediction(model,inputs,ds,ix,encoded=encoded,embeddings=embeddings)
     if companion is not None and companion.active:
         for kind,(owner,vp) in companion.heads(encoded,embeddings,companion.scale).items():
             result[kind+'_owner']=owner.float().softmax(-1)
@@ -45,16 +47,17 @@ def divergences(current,old,companion=None):
 
 
 class FrozenValues:
-    def __init__(self,model,ds,update,companion=None,executor=None):
+    def __init__(self,model,ds,update,companion=None,executor=None,diversity=None):
         from .updates import autocast
         from .value_phase import value_parts
         self.ds=ds;self.update=update;self.companion=companion;self.values={};self.gradients=[]
+        self.diversity=diversity
         started=time.perf_counter();was_training=model.training;model.eval()
         self.rows=len(ds.data)
         try:
             with torch.no_grad():
                 for part,ix,inputs in ds.value_batches(value_parts(ds,range(self.rows),update,model),model,executor):
-                    with autocast(update,ds.device):out=outputs(model,inputs,ds,ix,companion)
+                    with autocast(update,ds.device):out=outputs(model,inputs,ds,ix,companion,diversity)
                     for k,v in out.items():
                         require(bool(torch.isfinite(v).all()),'Nonfinite frozen critic output')
                         if k not in self.values:self.values[k]=torch.empty((self.rows,*v.shape[1:]),dtype=torch.float32,device='cpu')
@@ -67,17 +70,26 @@ class FrozenValues:
         return {k:v[ids].to(device) for k,v in self.values.items()}
 
     def losses(self,model,inputs,ix):
-        out=outputs(model,inputs,self.ds,ix,self.companion)
-        return divergences(out,self.selected(ix,inputs[0].device),self.companion)
+        out=outputs(model,inputs,self.ds,ix,self.companion,self.diversity)
+        old=self.selected(ix,inputs[0].device)
+        result=divergences(out,old,self.companion)
+        if 'intrinsic' in out:
+            mask=out['intrinsic'].new_tensor(self.diversity.eligible(self.ds,ix.detach().cpu().tolist()))
+            result['intrinsic']=(out['intrinsic']-old['intrinsic']).square()*mask*self.diversity.config['intrinsic_preservation_weight']
+        return result
 
     def report(self,model,train_ids,probe_ids,executor=None):
         from .updates import autocast
         from .value_phase import value_parts
         totals=torch.zeros(7,device=self.ds.device);weighted=torch.zeros_like(totals)
         keys=('core','win','rank','vp','utility','local');model.eval()
+        intrinsic_sum=0.;intrinsic_rows=0
         with torch.no_grad():
             for part,ix,inputs in self.ds.value_batches(value_parts(self.ds,train_ids,self.update,model),model,executor):
                 with autocast(self.update,self.ds.device):v=self.losses(model,inputs,ix)
+                if 'intrinsic' in v:
+                    intrinsic_sum+=float(v['intrinsic'].sum())
+                    intrinsic_rows+=sum(self.diversity.eligible(self.ds,part))
                 combined=self.update['value_weight']*v['core']+v['local']
                 tensors=[v[k] for k in keys]+[combined]
                 totals+=torch.stack([x.sum() for x in tensors])
@@ -87,6 +99,9 @@ class FrozenValues:
                 with autocast(self.update,self.ds.device):out=outputs(model,inputs,self.ds,ix)
                 drift+=(out['utility']-self.values['utility'][part].to(inputs[0].device)).square().sum()
         means=dict(zip((*keys,'weighted_objective'),(totals/max(1,len(train_ids))).cpu().tolist()))
+        if self.diversity is not None:
+            self.diversity.report['preservation']=dict(rows=intrinsic_rows,mean_loss=intrinsic_sum/max(1,intrinsic_rows),
+                rms=(intrinsic_sum/max(1,intrinsic_rows))**.5,scope='End of PPO, true descriptors, ordinary learner training rows only')
         return dict(contract=CONTRACT,beta=1.,value_weight=self.update['value_weight'],fresh_target_steps=0,
             frozen_rows=self.rows,train_rows=len(train_ids),frozen_by_role=dict(Counter(self.ds.roles)),
             frozen_bytes=sum(v.numel()*v.element_size() for v in self.values.values()),

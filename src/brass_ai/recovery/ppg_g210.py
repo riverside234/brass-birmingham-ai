@@ -293,6 +293,9 @@ def fit(phases,model,preparation_pool):
         snapshot_weight=phases.critic_state['snapshot_weight'] if phases.critic_state else 1.
         ds.critic_weights=torch.tensor([snapshot_weight if r=='snapshot' else 1. for r in ds.roles],device=ds.device)
         companion=getattr(phases,'local_scoring',None)
+        if getattr(phases,'diversity',None) is not None:
+            from .domino_auxiliary import PPGCompanions
+            companion=PPGCompanions(companion,phases.diversity,phases.optimizer,phases.config['update']['value_weight'])
         if companion is not None and companion.active:companion.inventory(ds,indices)
         pooled=scheduled(c)
         report=value_phase.fit(model,phases.optimizer,phases.dataset,phases.train_ids,validation if pooled else phases.heldout_ids,
@@ -314,6 +317,9 @@ def fit(phases,model,preparation_pool):
         rate_schedule=(dict(copy.deepcopy(c['rate_schedule']),reset_adam=False,warmup=True,decay=True,factor=.65)
             if scheduled(c) else dict(reset_adam=False,warmup=False,decay=False,factor=.65)))
     if linear(c):report['schedule_migration']=copy.deepcopy(phases.ppg_schedule_migration)
+    if getattr(phases,'diversity',None) is not None:
+        phases.diversity.diagnostics(model,phases.critic_dataset,phases.heldout_ids,phases.config['update'])
+        report['diversity']=copy.deepcopy(phases.diversity.report)
     phases.value_report=report;return report
 
 

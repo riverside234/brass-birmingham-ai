@@ -384,7 +384,7 @@ namespace BrassLegacyAI
         {
             if (AiSelectionPanel.IsOpen || draft == null || !CanConfigure(player) || !ReferenceEquals(SetupIdentity(player), setupIdentity)) return false;
             if (draft.Choice.Family != AiFamily.V4 && draft.Choice.Family != AiFamily.AlphaTest) return false;
-            if (!Native.NativePackage.ValidSearchK(draft.SearchK)) return false;
+            if (!Native.NativePackage.SearchKChoices.Contains(draft.SearchK)) return false;
             if (!Native.NativePackage.ValidTemperature(draft.Temperature)) return false;
             bool neural=draft.Choice.Family==AiFamily.AlphaTest;
             if(neural && !NativeSupported(player))return false;

@@ -55,6 +55,9 @@ def prepared(games, predicate=None, neutral=False, insolvency=None, reward=None,
                 if hasattr(game,'critic_table'):
                     from .critic_data import annotate
                     r=annotate(r,encoded,game.critic_table,game.table_kind)
+                if '_domino' in r and r['_domino']['training_role']=='learner' and 'branch' not in game:
+                    from .domino_features import event
+                    r=dict(r,_domino_event=event(r))
                 if 'branch' in game:
                     r=dict(r,_branch=True,_parent_game_id=game['branch']['parent_game_id'])
                 if 'local_scoring_targets' in game:
@@ -232,7 +235,7 @@ def state_value_model(model):
     return type(model) in (FourSeatNet,UtilityNet)
 
 
-def value_output(model,inputs,dataset,indices,*,dropout=None,unknown=False,detach=False):
+def value_output(model,inputs,dataset,indices,*,dropout=None,unknown=False,detach=False,capture_encoded=None):
     from brass_ai.learning.model import ARCHITECTURE
     from brass_ai.learning.seat_descriptors import critic_inputs
     extra={}
@@ -240,10 +243,13 @@ def value_output(model,inputs,dataset,indices,*,dropout=None,unknown=False,detac
         ids=indices.detach().cpu().tolist() if isinstance(indices,torch.Tensor) else list(indices)
         extra['descriptors']=critic_inputs(dataset,ids,dropout=dropout,unknown=unknown)
     if dataset.remaining is not None:extra['remaining']=dataset.remaining[indices]
-    if detach:
+    if detach or capture_encoded is not None:
         from .ppg_phasic import stop_value_gradient
         require(state_value_model(model),'Detached PPO critic requires the supported state-only model')
-        with torch.no_grad():encoded=stop_value_gradient(model.encode_state(inputs[0]))
+        if detach:
+            with torch.no_grad():encoded=stop_value_gradient(model.encode_state(inputs[0]))
+        else:encoded=model.encode_state(inputs[0])
+        if capture_encoded is not None:capture_encoded(encoded)
         heads=model.heads_from_encoded(encoded,inputs[3],extra.get('remaining'),extra.get('descriptors'))
         return (inputs[1].new_zeros(inputs[1].shape[:2]),)+heads
     return model(*inputs,**extra)
@@ -486,8 +492,9 @@ def _ppo_nonforced(model,optimizer,games,behavior,config,*,profile,profile_steps
     warmup=optimizer.param_groups[0].get(WARMUP_KEY)
     warmup_done=warmup is None or warmup['completed_steps']>=warmup['steps']
     with timings.phase('ppo.prepare'):
+        from .domino_sampling import learner_row
         data=learner_data if learner_data is not None else prepared(games,lambda r:r['behavior']['policy_id']==behavior.policy_id,insolvency=insolvency,reward=reward)
-        require(data and all(d[0]['behavior']['kind']=='model' and d[0]['behavior']['policy_id']==behavior.policy_id
+        require(data and all(d[0]['behavior']['kind']=='model' and learner_row(d[0],behavior.policy_id)
                             and d[0].get('_critic_role','learner')=='learner' for d in data),
                 'External or stale actions in PPO')
         require(all(d[0].get('teacher') is None for d in data),'Teacher labels cannot enter ordinary actor/critic data')
@@ -523,11 +530,12 @@ def _ppo_nonforced(model,optimizer,games,behavior,config,*,profile,profile_steps
         reward_report['distribution']=reward_distribution(trajectories,reward)
     advantages=torch.zeros(count,device=device);model.eval()
     frozen=None
+    diversity=getattr(phases,'diversity',None)
     from .value_preservation import TrunkGradients
     if preserve:
         from .value_preservation import FrozenValues,TrunkGradients
         with timings.phase('ppo.freeze_values'):
-            frozen=FrozenValues(model,critic_ds,config,getattr(phases,'local_scoring',None),executor)
+            frozen=FrozenValues(model,critic_ds,config,getattr(phases,'local_scoring',None),executor,diversity=diversity)
     # Verify likelihoods for ALL rows, including deterministic continuation rows.
     policy_measure(model,ds,range(count),behavior,config,timings,True,None if frozen else advantages,executor)
     if frozen is not None:
@@ -544,6 +552,8 @@ def _ppo_nonforced(model,optimizer,games,behavior,config,*,profile,profile_steps
     if phases is not None:
         with timings.phase('ppo.gae'):
             advantages,gae_report=phases.advantages(advantages,actor_ids)
+    if diversity is not None:
+        advantages=diversity.combine(advantages,ds,actor_ids,frozen.values.get('intrinsic') if frozen else None)
     useful=advantages[actor_ids];mean=useful.mean() if actor_ids else torch.zeros((),device=device)
     std=useful.std(unbiased=False) if actor_ids else torch.zeros((),device=device)
     from .review_metrics import distribution,CategoricalProbe,PPO_KL_GUARD
@@ -577,6 +587,8 @@ def _ppo_nonforced(model,optimizer,games,behavior,config,*,profile,profile_steps
                 optimizer.zero_grad(set_to_none=True);model.train()
                 companion=getattr(phases,'local_scoring',None)
                 if companion is not None:companion.begin('ppo')
+                if diversity is not None:diversity.begin('ppo')
+                intrinsic_count=sum(diversity.eligible(critic_ds,crit)) if diversity is not None and diversity.active else 0
                 gradient_terms=TrunkGradients(model) if frozen or teacher_term is not None else None
                 with timings.phase('ppo.forward_backward'):
                     parts=ds.microbatches(batch,config['microbatch_size'],config['max_candidate_cells'],config['bucket'])
@@ -616,6 +628,8 @@ def _ppo_nonforced(model,optimizer,games,behavior,config,*,profile,profile_steps
                                 utility_squared+=diff.detach().square().sum();utility_absolute+=diff.detach().abs().sum()
                                 loss=loss+diff.square().mean(-1)
                         combined=config['value_weight']*loss
+                        if intrinsic_count and frozen is not None:
+                            combined=combined+config['value_weight']*preserved['intrinsic']*(len(crit)/intrinsic_count)
                         if local_loss is not None:
                             combined=combined+local_loss
                             companion.account_loss(local_loss,critic_ds.critic_weights[ix],len(crit),'ppo')
@@ -637,6 +651,7 @@ def _ppo_nonforced(model,optimizer,games,behavior,config,*,profile,profile_steps
                     norm=torch.nn.utils.clip_grad_norm_(model.parameters(),config['grad_clip'],error_if_nonfinite=True)
                     clips+=int(float(norm)>config['grad_clip']);scheduled_step(optimizer,ppo=True);steps+=1
                     if companion is not None:companion.step('ppo')
+                    if diversity is not None:diversity.step('ppo',optimizer.param_groups[0]['lr'])
                     gradient_norms.append(float(norm))
                     critic_steps+=int(bool(crit) and config['value_weight']>0)
                     actor_used.update(batch);critic_used.update(crit)

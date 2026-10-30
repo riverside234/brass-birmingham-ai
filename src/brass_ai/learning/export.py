@@ -81,6 +81,9 @@ def export_onnx(model, path, parity_batches):
         'inputs': INPUTS, 'outputs': OUTPUTS, 'parameter_count': model.parameter_count,
         'parity_batches': len(batches), 'parity_max_absolute_error': maximum_error,
         'opset': 17, 'provider_tested': 'CPUExecutionProvider', 'optimization': optimization}
+    from brass_ai.recovery.domino_config import ENCODING,mapping
+    manifest['supported_contexts']=dict(contract=ENCODING,contexts=mapping(),
+        scope='Existing input semantics only; deployment selection and strength qualification remain separate. Training-only DOMiNO heads are not exported.')
     path.with_suffix('.json').write_text(json.dumps(manifest, indent=2) + '\n', encoding='utf-8')
     return manifest
 

@@ -472,6 +472,8 @@ def latest_model_config(config,imitation_checkpoint):
     result=g1322_config(result)
     from .training_revision_g1324 import configure as g1324_config
     result=g1324_config(result)
+    from .exploration import fixed_010_config
+    result=fixed_010_config(result)
     from .teacher_phase_config import adopt as adopt_teacher_phase
     result=adopt_teacher_phase(result)
     return validate_config(result)
@@ -616,6 +618,9 @@ def curriculum_config(stages):
 
 
 def validate_config(config):
+    if 'diversity' in config:
+        from .domino_config import validate as validate_diversity
+        validate_diversity(config['diversity'],config)
     fields={'format','players','model_size','host','games_per_iteration','threads','learning_rate',
         'weight_decay','exploration','seed','execution','update','curriculum','search',
         'search_ready_games','search_every_games','search_games','distill_steps','distill_weight',
@@ -629,6 +634,7 @@ def validate_config(config):
         fields.add('local_scoring_auxiliary');validate_local(config['local_scoring_auxiliary'])
         require(config.get('architecture')=='brass-four-seat-mlp-resnet/11.2.0' and 'critic_data' in config,
                 'Local scoring requires the v11.2 descriptor critic')
+    if 'diversity' in config:fields.add('diversity')
     from .exploration import validate as validate_exploration,BLOCKS
     validate_exploration(config)
     if 'opening_objective' in config.get('update',{}):

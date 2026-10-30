@@ -158,6 +158,7 @@ class CriticTraining(unittest.TestCase):
                 for seat,p in enumerate(policies):
                     records.append(dict(row(seat),step=seat,style=[0.]*4,intent=[0.]*8,teacher=None,
                         behavior=dict(kind='external' if p is bot else 'model',policy_id=p['policy_id'],probability=1.)))
+                    records[-1]['view']['context']['revision']=seat
                 game=Game(game_id=kind,setup_group=kind,split='train',records=records,result=result(),
                     opponents=[p['policy_id'] for p in policies])
                 game.table_kind=kind

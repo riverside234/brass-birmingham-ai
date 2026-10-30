@@ -81,6 +81,7 @@ def compact(report):
                        'incoming_policy_id','elapsed_seconds','games','failed_games','promotion_eligible'))
     out['summary_version']=6 if report.get('value_phase') is not None or 'gae' in report.get('actor',{}) else 5
     if 'local_scoring_auxiliary' in report:out['local_scoring_auxiliary']=report['local_scoring_auxiliary']
+    if 'diversity' in report:out['diversity']=report['diversity']
     if 'local_scoring_adoption' in report:
         r=report['local_scoring_adoption']
         out['local_scoring_adoption']={k:r[k] for k in ('contract','origin','new_origin','next_phase','cleanup_complete','cleanup')}

@@ -16,6 +16,8 @@ from . import v4_share
 
 
 def plan_collection(root,directory,state,config,signature,service,current,profiles,opponent_specs,fast_specs,window,*,fingerprints=None,exploration=None):
+    from .domino_config import enabled as domino_enabled
+    diverse=domino_enabled(config)
     incumbent=state.get('champion') if champion_enabled(config) else None
     if incumbent:
         path=project_path(root,incumbent['path'])
@@ -104,8 +106,9 @@ def plan_collection(root,directory,state,config,signature,service,current,profil
             for seat,receipt in zip((s for s in range(4) if s not in pair),quality_receipts):receipt['seat']=seat
         for seat in range(4):
             if policies[(seat-rotation)%4]==learner:
-                point=context_counter%12;context_counter+=1
-                focuses[str(seat)]='neutral' if point%2==0 else INDUSTRIES[point//2]
+                if not diverse:
+                    point=context_counter%12;context_counter+=1
+                    focuses[str(seat)]='neutral' if point%2==0 else INDUSTRIES[point//2]
         provenance=dict(producer='recovery/2.0.0',purpose='training',kind=kind,
             ordinary_game_index=index,seed=seed,sampling_seed=config['seed']*7+index,spec=digest(signature),
             policies=[p.get('policy_id',p.get('kind')) for p in policies],rotation=rotation,
@@ -117,6 +120,18 @@ def plan_collection(root,directory,state,config,signature,service,current,profil
             provenance['learner_behavior'].update(exploration_version=exploration['version'],opening=exploration['opening'])
         if 'opening_objective' in config['update']:
             provenance['ppo_opening_objective']=config['update']['opening_objective']
+        if diverse:
+            from .domino_sampling import assignments
+            checkpoints={m['model_id']:m['sha256'] for m in state['quality_pool']['members']}
+            checkpoints.setdefault(current,state['history'][-1]['sha256'])
+            assignment=assignments(policies,rotation,seed=config['seed'],index=index,
+                learner_id=learner['policy_id'],current=current,checkpoints=checkpoints,learner_checkpoint=state['history'][-1]['sha256'])
+            provenance['diversity_assignment']=assignment
+            focuses={str(s):a['context'] for s,a in enumerate(assignment['seats']) if a is not None}
+            for receipt in quality_receipts:
+                a=assignment['seats'][receipt['seat']]
+                receipt.update(strategy_id=a['strategy_id'],context_probability=a['probability'],
+                    seat_policy_id=a['seat_policy_id'],context_regime=config['diversity']['context_contract'])
         if kind=='legacy':
             by_policy={selected_specs[p]['policy_id']:p for p in chosen_profiles}
             provenance['legacy_profiles']=dict(contract='ordinary-legacy-profile-cycle/1.0.0',
@@ -128,7 +143,8 @@ def plan_collection(root,directory,state,config,signature,service,current,profil
             require(fingerprints is not None,'Ordinary table requires incoming-policy fingerprints')
             provenance['critic_table']=planned_table(policies,rotation,current,state['iteration'],
                 state['quality_pool']['members'],fingerprints['learner'],fingerprints['rule_bot'],
-                learner_policy_id=learner['policy_id'])
+                learner_policy_id=learner['policy_id'],
+                strategies=provenance.get('diversity_assignment'),context_fingerprints=fingerprints.get('contexts'))
         if mix_receipt is not None:provenance['champion_rollout']=mix_receipt
         setup=digest(dict(rules='steam-brass-patch-1.1.0',setup_seed=seed))
         if quality_receipts:
@@ -168,7 +184,8 @@ def sampling_report(games,data,policy_id,kinds,config,*,legacy_profiles=None):
         by_kind[kind]['tables']+=1;by_kind[kind]['learner_trajectories']+=len(seats)
     require({d[2] for d in data}==trajectories,'Missing or external ordinary player trajectories')
     for row,_,identity,_ in data:
-        require(row['behavior']['policy_id']==policy_id and row['behavior']['kind']=='model',
+        from .domino_sampling import learner_row
+        require(learner_row(row,policy_id) and row['behavior']['kind']=='model',
                 'Frozen opponent action in learner sampling report')
         counts=by_kind[groups[identity[0]]];counts['learner_decisions']+=1
         counts['actor_eligible_decisions' if len(row['choices'])>1 else 'forced_decisions']+=1

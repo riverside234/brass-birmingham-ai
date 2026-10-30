@@ -150,6 +150,18 @@ def update_scores(pool,games,tables,planned,*,generation,games_done):
         history_table_fraction=len(tables)/(games_done-pool['games_done']),opponent_seats=seats,
         pairwise_comparisons=comparisons_done,half_life_iterations=pool['config']['outrank_rate']['half_life_iterations'],
         scope='Actual completed history tables, including released v4 tables; no synthetic count rescaling')
+    if any('strategy_id' in o for t in tables.values() for o in t['opponents']):
+        context={};lookup={g['setup_group']:g for g in games}
+        from brass_ai.learning.replay import terminal_targets
+        for setup,t in tables.items():
+            ranks=terminal_targets(lookup[setup]['result'])['placement']
+            for o in t['opponents']:
+                require(o['context_probability']==1/7,'History contexts must stay uniform')
+                key=o['model_id']+'/'+str(o['strategy_id'])
+                r=context.setdefault(key,dict(seats=0,comparisons=0,outranks=0.));r['seats']+=1
+                for seat in t['learner_seats']:
+                    r['comparisons']+=1;r['outranks']+=1. if ranks[seat]<ranks[o['seat']] else .5 if ranks[seat]==ranks[o['seat']] else 0.
+        report['context_outcomes']=context
     return updated,report
 
 
