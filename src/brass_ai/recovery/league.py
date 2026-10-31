@@ -696,9 +696,16 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                             report['champion_gate']=schedule_champion(root,run,state,service,ordinary)
                     schedule_evaluations(root,run,state,device,mono,inference_devices=inference_devices)
                     if quality:
+                        context_seconds_before=state.get('context_evaluation',{}).get('timing',{}).get('added_seconds',0.)
                         with torch.random.fork_rng(devices=[]):
                             report['strength_rating']=schedule_ratings(root,run,state,config,device=device,mono=mono,inference_devices=inference_devices)
                             report['temperature_rating']=schedule_temperature(root,run,state,config,device=device,mono=mono,inference_devices=inference_devices)
+                        if 'context_evaluation' in state:
+                            ctx=state['context_evaluation']
+                            report['context_evaluation']=dict(activation_generation=ctx['activation_generation'],
+                                next_due_generation=ctx['next_due_generation'],pending=ctx['pending'],
+                                latest=ctx['panels'][-1] if ctx['panels'] else None,latest_visualization=ctx['latest_visualization'])
+                            report['timings']['context_evaluation_seconds']=ctx['timing']['added_seconds']-context_seconds_before
                         if fixed_probe is not None and 'policy_anchor' in config:
                             anchor_values,anchor_transition=policy_anchor.prepare(root,run,state,config,fixed_probe,model)
                             policy_anchor.console(anchor_transition)
@@ -717,6 +724,8 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                                  ([state['champion_mix'][k]['model_id'] for k in ('anchor','previous')] if champion_mix.enabled(config) else []))
                 report['timings']['iteration_seconds']=time.monotonic()-began
                 write_json(directory/'report.json',report)
+                from .context_evaluation import record_iteration_time
+                record_iteration_time(root,run,state,report)
                 summaries.append(report);summaries=summaries[-2:]
                 control=update.get('lr_controller')
                 controller_line=(f' LRmult={control["multiplier_after"]:.3f} {control["mode"]}:{control["decision"]}' if control else '')

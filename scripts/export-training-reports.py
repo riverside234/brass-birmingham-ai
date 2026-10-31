@@ -128,6 +128,53 @@ def report_files(root, directory, *, skip_dirs=()):
                 yield below(root, Path(parent) / name)
 
 
+def context_files(root,run,state):
+    """Committed context evidence/visuals only; no raw replays or model tensors."""
+    saved=state.get('context_evaluation')
+    if saved is None:return
+    base=below(root,run/'ratings/contexts')
+    index=below(root,base/'index.json')
+    if index.is_file():yield index,'json'
+    def verified(ref):
+        path=below(root,ref['path'])
+        require(path.is_relative_to(base) and checksum(path.read_bytes())==ref['sha256'],
+                'Context report receipt changed or outside its owned directory')
+        return path
+    for entry in saved['panels']:
+        generation=entry['generation'];directory=base/f'generation-{generation:06d}'
+        for key in ('spec','report','games','summaries','status_receipt','final_cost','visualization','visualization_failure'):
+            if key not in entry:continue
+            path=verified(entry[key]);require(path.parent==directory,'Context receipt generation differs')
+            yield path,'jsonl' if path.suffix=='.jsonl' else 'json'
+        if entry['status']!='complete':continue
+        report=load_json(verified(entry['report']));require(report['generation']==generation,'Context displayed generation differs')
+        for ref in report.get('representatives',[]):yield verified(ref),'json'
+        markdown=below(root,directory/'report.md')
+        if markdown.is_file():yield markdown,'text'
+        v=entry.get('visualization')
+        if v is not None:
+            visual=load_json(verified(v))
+            require(visual['generation']==generation and visual['report']==entry['report'],'Context visualization report mismatch')
+            if visual['status']=='complete':
+                if visual.get('cost'):
+                    require(visual['cost']==entry.get('final_cost'),'Context visual timing receipt differs')
+                svg=verified(visual['svg'])
+                require(svg.parent==directory and f'DOMiNO context evaluation g{generation}' in svg.read_text(encoding='utf-8'),
+                    'Context SVG displayed generation differs')
+                yield svg,'svg'
+    pending=saved.get('pending')
+    if pending:
+        yield verified(pending['spec']),'json'
+        status=below(root,base/f'generation-{pending["generation"]:06d}'/'status.json')
+        if status.exists():yield status,'json'
+    latest=saved.get('latest_visualization')
+    if latest:
+        alias=verified(latest['svg']);source=verified(latest['source'])
+        require(alias.read_bytes()==source.read_bytes() and f'DOMiNO context evaluation g{latest["generation"]}' in alias.read_text(encoding='utf-8'),
+            'Latest context SVG does not match its committed generation')
+        yield alias,'svg'
+
+
 def publish(stage, output):
     """Allow short Windows file-handle contention without overwriting a bundle."""
     for attempt, delay in enumerate((0, .05, .1, .2, .4)):
@@ -243,6 +290,8 @@ def export(root, run, output=None, *, latest=2, extras=(), continue_export=False
         elif document == 'svg':
             import xml.etree.ElementTree as ET
             ET.fromstring(raw); value = None
+        elif document == 'text':
+            raw.decode('utf-8')
         else:
             raise ValueError('Unknown report document format')
         compact_history=(document=='json' and name=='retention-history.json'
@@ -337,8 +386,10 @@ def export(root, run, output=None, *, latest=2, extras=(), continue_export=False
             type(slot.get('generation')) is int and 0 <= slot['generation'] <= generation
             for slot in slots), 'Invalid committed rating slots')
     latest_slot = max(slots, key=lambda slot: slot['generation'], default=None)
-    for path in report_files(root, run / 'ratings', skip_dirs={'slots'}):
+    for path in report_files(root, run / 'ratings', skip_dirs={'slots','contexts'}):
         add(path, path.relative_to(run), 'Plackett-Luce strength report or specification')
+    for path,document in context_files(root,run,state):
+        add(path,path.relative_to(run),'Report-only DOMiNO context evidence or visualization',document=document)
     archive = state.get('ratings', {}).get('archive')
     if archive is not None:
         path = below(root, archive['path'])

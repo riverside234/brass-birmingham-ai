@@ -63,6 +63,10 @@ def check_signature(state, signature, reviewed=False):
     for transition in transitions:
         # An exact unchanged configuration needs no historical upgrade path.
         if config_ok:break
+        if transition.get('context_evaluation_changes'):
+            from .context_evaluation_config import compatible
+            config_ok=compatible(previous['config'],signature['config'])
+            if config_ok:break
         if transition.get('teacher_phase_changes'):
             from .teacher_phase_config import toggle_compatible
             config_ok=toggle_compatible(previous['config'],signature['config'])
@@ -169,6 +173,8 @@ def check_signature(state, signature, reviewed=False):
             handlers[G1322_MIGRATION]=g1322_config
             from .training_revision_g1324 import MIGRATION as G1324_MIGRATION,configure as g1324_config
             handlers[G1324_MIGRATION]=g1324_config
+            from .training_revision_g1340 import MIGRATION as G1340_MIGRATION,configure as g1340_config
+            handlers[G1340_MIGRATION]=g1340_config
             from .domino_config import MIGRATION as DOMINO_MIGRATION,configure as configure_domino
             handlers[DOMINO_MIGRATION]=lambda c:configure_domino(c,state,signature['config']['diversity']['mode'])
             from .exploration import FIXED_010_MIGRATION,fixed_010_config
@@ -203,9 +209,16 @@ def check_signature(state, signature, reviewed=False):
             handlers[HIGH_BRANCH_MIGRATION]=high_branch_config
             from .exploration import LOW_BRANCH_MIGRATION,low_branch_config
             handlers[LOW_BRANCH_MIGRATION]=low_branch_config
+            applicable=True
             for migration in migrations:
                 require(migration in handlers,'Unknown reviewed configuration migration')
-                expected=handlers[migration](expected)
+                try:expected=handlers[migration](expected)
+                except (ValueError,KeyError):
+                    # Reviews are alternative exact paths, often with different
+                    # source-recipe prerequisites. An inapplicable path cannot
+                    # mask a later applicable review or weaken final equality.
+                    applicable=False;break
+            if not applicable:continue
             if transition.get('teacher_value_changes'):
                 expected.pop('teacher_value',None)
                 if 'teacher_value' in signature['config']:expected['teacher_value']=signature['config']['teacher_value']
@@ -294,7 +307,8 @@ def load_resume(root, run, state, signature, *, device='cpu', reviewed=False, di
             require(sha(path) == frozen['sha256'], 'Live opponent/evaluation checkpoint changed')
             verified.add(frozen['path'])
     if (getattr(model.config,'utility',None) is not None and raw['training'].get('signature')!=digest(signature)
-            and not teacher_receipt_preserved(state,signature,raw,entry)):
+            and not teacher_receipt_preserved(state,signature,raw,entry)
+            and not evaluation_receipt_preserved(state,signature,raw,entry)):
         # The old receipt can predate a post-calibration policy/distillation
         # update. A reviewed source transition preserves its weights and Adam,
         # but does not certify its leaf evaluator under the repaired pipeline.
@@ -305,6 +319,31 @@ def load_resume(root, run, state, signature, *, device='cpu', reviewed=False, di
             reason='Reviewed source continuation requires fresh ordinary utility calibration',
             checkpoint_signature=raw['training'].get('signature'),current_signature=digest(signature))
     return model, raw, changed
+
+
+def evaluation_receipt_preserved(state,signature,raw,entry):
+    """Explicitly reviewed evaluation-only paths preserve utility calibration too."""
+    from .context_evaluation_config import compatible
+    known={digest(state['signature']):state['signature'],digest(signature):signature}
+    for transition in reversed(state.get('source_transitions',[])):
+        if transition['checkpoint']==entry and transition['to_signature'] in known:
+            known[digest(transition['from_signature'])]=transition['from_signature']
+    before=known.get(raw['training'].get('signature'))
+    if before is None:return False
+    approvals=expand_source_reviews(read(CONFIG_DIR/'selfplay-resume-sources.json'))['transitions']
+    def allowed(a,b):
+        if a==b:return True
+        return ({k:v for k,v in a.items() if k not in ('config','implementation')}==
+                {k:v for k,v in b.items() if k not in ('config','implementation')} and compatible(a['config'],b['config']) and
+                any(e.get('context_evaluation_changes') and e.get('preserve_evaluation_calibration') and
+                    e['from_implementation']==a['implementation'] and
+                    e['to_implementation']==b['implementation'] and e['learning_compatibility']==digest(b['compatibility']) for e in approvals))
+    if allowed(before,signature):return True
+    reached={digest(before)}
+    for transition in state.get('source_transitions',[]):
+        a=transition['from_signature'];b=known.get(transition['to_signature'])
+        if transition['checkpoint']==entry and digest(a) in reached and b is not None and allowed(a,b):reached.add(digest(b))
+    return digest(state['signature']) in reached and allowed(state['signature'],signature)
 
 
 def teacher_receipt_preserved(state,signature,raw,entry):

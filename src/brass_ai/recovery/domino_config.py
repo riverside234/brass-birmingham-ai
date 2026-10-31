@@ -66,10 +66,16 @@ def configure(config, state=None, mode='apply'):
     if enabled(result):
         validate(result['diversity'],result)
         require(result['diversity']['mode']==mode, 'DOMiNO mode change needs a separate reviewed transition')
+        if state is None and mode!='off':
+            from .context_evaluation_config import defaults as evaluation_defaults
+            result.setdefault('context_evaluation',evaluation_defaults())
         return result
     result['diversity']=defaults(mode)
     if state is not None:
         e=state['history'][-1]
         result['diversity']['adoption']=dict(generation=state['iteration'],checkpoint_sha256=e['sha256'],model_id=e['model_id'])
     validate(result['diversity'],result)
+    if state is None and mode!='off':
+        from .context_evaluation_config import defaults as evaluation_defaults
+        result.setdefault('context_evaluation',evaluation_defaults())
     return result

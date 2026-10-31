@@ -65,9 +65,12 @@ def _collection_recipe(jobs,config):
     for job in jobs:
         if any(p.get('frozen_rating') for p in job['policies']):
             provenance=job.get('provenance',{})
-            require(provenance.get('producer')=='plackett-luce-rating/1.0.0' and
-                    provenance.get('purpose')=='evaluation' and
-                    provenance.get('kind') in ('rating','il-panel','v4-panel'),
+            rating=(provenance.get('producer')=='plackett-luce-rating/1.0.0' and
+                    provenance.get('kind') in ('rating','il-panel','v4-panel'))
+            context=(provenance.get('producer')=='domino-context-evaluation/1.0.0' and
+                     provenance.get('kind')=='context-panel' and provenance.get('parent_spec') and
+                     type(provenance.get('context_id')) is int and 1<=provenance['context_id']<=6)
+            require((rating or context) and provenance.get('purpose')=='evaluation',
                     'Frozen rating runtime is restricted to held-out rating jobs')
     return dict(format='actor-collection/1.0.0',execution=config,
         jobs=[dict(rotation=0,rng_index=0,focuses={})|{k:v for k,v in job.items() if k!='path'}

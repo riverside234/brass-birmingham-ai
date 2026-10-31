@@ -76,7 +76,8 @@ class Revision(unittest.TestCase):
         for origin in (old,new):
             fresh=latest_model_config(origin,origin['imitation_checkpoint'])
             from brass_ai.recovery.training_revision_g1324 import configure as latest_recipe
-            expected=latest_recipe(new)
+            from brass_ai.recovery.training_revision_g1340 import recipe as current_recipe
+            expected=current_recipe(latest_recipe(new))
             for k in ('insolvency','opening','branching','exploration','value_phase'):
                 self.assertEqual(fresh[k],expected[k],k)
             self.assertEqual(fresh['update']['fixed_entropy'],E.FIXED_ENTROPY_010)
@@ -84,7 +85,7 @@ class Revision(unittest.TestCase):
             ('entropy_control','mode','apply'),('update','opening_objective',O.DEFAULT),('update','entropy_weight',.015)]:
             bad=copy.deepcopy(new);bad[block][key]=value
             with self.assertRaises(ValueError):validate_config(bad)
-        for mutate in (lambda c:c.update(exploration=.05),lambda c:c['update'].pop('fixed_entropy'),
+        for mutate in (lambda c:c.update(exploration=.07),lambda c:c['update'].pop('fixed_entropy'),
             lambda c:c['update']['fixed_entropy']['weights'].update(canal_other=.015)):
             bad=copy.deepcopy(new);mutate(bad)
             with self.assertRaises(ValueError):validate_config(bad)
@@ -93,7 +94,9 @@ class Revision(unittest.TestCase):
 
     def test_reward_migration_and_ten_event_cap(self):
         old=old_recipe();new=configure(old);previous,current=reward_spec(old),reward_spec(new)
-        self.assertTrue(reviewed_reward_upgrade(previous,current));self.assertFalse(reviewed_reward_upgrade(current,previous))
+        self.assertTrue(reviewed_reward_upgrade(previous,current))
+        # g1340 explicitly reviews the reverse cost/cap change; signature admission is still mandatory.
+        self.assertTrue(reviewed_reward_upgrade(current,previous))
         for costs in (dict(event_cost=.005,max_cost=.075),dict(event_cost=.01,max_cost=.05)):
             self.assertFalse(reviewed_reward_upgrade(previous,dict(current,insolvency=costs)))
         ledger=CostLedger(current)

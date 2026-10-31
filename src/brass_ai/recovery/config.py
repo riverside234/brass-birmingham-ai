@@ -475,7 +475,14 @@ def latest_model_config(config,imitation_checkpoint):
     from .exploration import fixed_010_config
     result=fixed_010_config(result)
     from .teacher_phase_config import adopt as adopt_teacher_phase
+    if 'teacher_phase' in result:
+        # Fresh generation traverses historical reward builders. Rebind only
+        # their reward-dependent teacher field before validating today's recipe.
+        from .utility import reward_spec
+        result['teacher_phase']['search']['reward']=reward_spec(result)
     result=adopt_teacher_phase(result)
+    from .training_revision_g1340 import recipe as g1340_recipe
+    result=g1340_recipe(result)
     return validate_config(result)
 
 
@@ -635,6 +642,9 @@ def validate_config(config):
         require(config.get('architecture')=='brass-four-seat-mlp-resnet/11.2.0' and 'critic_data' in config,
                 'Local scoring requires the v11.2 descriptor critic')
     if 'diversity' in config:fields.add('diversity')
+    if 'context_evaluation' in config:
+        from .context_evaluation_config import validate as validate_context_evaluation
+        fields.add('context_evaluation');validate_context_evaluation(config['context_evaluation'],config)
     from .exploration import validate as validate_exploration,BLOCKS
     validate_exploration(config)
     if 'opening_objective' in config.get('update',{}):

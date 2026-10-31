@@ -7,6 +7,8 @@ D5, empirical strategy and playing-strength qualification, remains a separate ex
 
 Follow-up: [debug review and performance fixes](DOMINO_DIVERSITY_DEBUG_REVIEW.md).
 Latest: [g1327–g1330 log review and g1330 continuation](SELFPLAY_G1330_REVIEW.md).
+Optional report-only evaluation: [matched context panels and activation command](DOMINO_CONTEXT_EVALUATION_IMPLEMENTATION.md).
+This adds diagnostics; formal D5 qualification remains separate.
 Already adopted runs use their existing config and a reviewed source continuation;
 they do not repeat the g1326 adoption or reset compatible PPG replay.
 

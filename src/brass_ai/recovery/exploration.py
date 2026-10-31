@@ -166,7 +166,7 @@ def validate(config):
     current=(config['opening']==OPENING and config['branching'] in (BRANCH,LOCAL_SCORING_BRANCH)) or revised or three_t2
     uniform=config['opening']==OPENING and config['branching']==HIGH_BRANCH
     legacy=config['opening']==LEGACY_OPENING and config['branching']==LEGACY_BRANCH
-    require(type(config['exploration']) in (int,float) and config['exploration'] in ((.08,) if three_t2 else (.05,) if revised else (0.,.02,.03)) and config['exploration_distribution']==Q and
+    require(type(config['exploration']) in (int,float) and config['exploration'] in ((.08,.05) if three_t2 else (.05,) if revised else (0.,.02,.03)) and config['exploration_distribution']==Q and
         (current or uniform or legacy), 'Invalid exploration revision recipe')
     e=config['entropy_control']
     require(type(e) is dict,'Invalid entropy floor controller')

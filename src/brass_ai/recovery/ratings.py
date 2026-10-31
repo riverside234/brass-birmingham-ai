@@ -238,7 +238,7 @@ def game_record(game,row,spec):
         official_placement=targets['placement'],vp=targets['vp'],win_share=targets['win_share'],spec_digest=digest(spec))
 
 
-def collect_slot(root,directory,spec,config,device,mono,inference_devices):
+def collect_slot(root,directory,spec,config,device,mono,inference_devices,*,context_sink=None):
     from .inference import InferenceService
     from .execution import ActorPool
     from .replay import read_shards
@@ -265,6 +265,7 @@ def collect_slot(root,directory,spec,config,device,mono,inference_devices):
             require(game['opponents']==expected and game['setup_group']==digest(dict(rules='steam-brass-patch-1.1.0',setup_seed=job['seed'])),
                     'Rating game seat/setup identity differs')
             rows.append(game_record(game,spec['lineups'][record['job']],spec))
+            if context_sink is not None:context_sink(game,job,record)
     return rows
 
 
@@ -315,6 +316,8 @@ def plot_report(path,report,agents):
 def schedule(root,run,state,config,*,device='cpu',mono=None,inference_devices=None):
     rating=validate_state(root,state['ratings'],config['rating']);c=config['rating']
     if not c['enabled']:return None
+    from . import context_evaluation as contexts
+    contexts.prepare(root,run,state,config)
     from . import panel_gates
     gates=panel_gates.prepare(root,state,config)
     if gates is not None and rating.get('panel_gates')!=gates:
@@ -340,6 +343,7 @@ def schedule(root,run,state,config,*,device='cpu',mono=None,inference_devices=No
         entry=slim_checkpoint(root,run,entry,previous)
         anchor=(state.get('policy_anchor',{}).get('active') or {}).get('agent')
         spec=slot_spec(root,run,rating,entry,config,anchor_agent=anchor);write_once(directory/'spec.json',spec)
+        contexts.seal(root,run,state,config,spec,directory/'spec.json')
         records_path=directory/'games.jsonl'
         manifest_path=directory/'games-manifest.json'
         if records_path.exists() and manifest_path.exists():
@@ -351,7 +355,13 @@ def schedule(root,run,state,config,*,device='cpu',mono=None,inference_devices=No
             require(len(rows)==len(expected) and {(r['kind'],r['setup_seed'],r['candidate_seat']) for r in rows}==expected
                     and all(r['slot']==generation and r['spec_digest']==digest(spec) for r in rows),'Incomplete cached rating games')
         else:
-            rows=collect_slot(root,directory,spec,config,device,mono,inference_devices);append_games(records_path,rows)
+            sink=contexts.neutral_sink(root,run,state,spec)
+            try:
+                rows=collect_slot(root,directory,spec,config,device,mono,inference_devices,
+                    **(dict(context_sink=sink) if sink is not None else {}))
+            finally:
+                if sink is not None:sink.finish()
+            append_games(records_path,rows)
             write_once(manifest_path,dict(spec_digest=digest(spec),records=receipt(root,records_path)))
         working=copy.deepcopy(rating);working['agents'][spec['candidate']]=spec['agents'][spec['candidate']]
         # Only the 128 main games enter PL; diagnostic panels stay separate.
@@ -392,5 +402,6 @@ def schedule(root,run,state,config,*,device='cpu',mono=None,inference_devices=No
               f'{fitted["ratings"][spec["candidate"]]["points"]:.1f} PL points; '
               f'{c["bootstrap"]} bootstrap refits; {time.perf_counter()-began:.1f}s',flush=True)
         last_report=fitted
+    contexts.run_pending(root,run,state,config,device=device,mono=mono,inference_devices=inference_devices)
     if config.get('retention',{}).get('enabled',True):compact_history(root,run,state)
     return last_report

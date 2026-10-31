@@ -194,6 +194,7 @@ def _references(root,run):
             selected['quality_members']=d.get('quality_pool',{}).get('members')
             selected['ratings']=d.get('ratings')
             selected['temperature_ratings']=d.get('temperature_ratings')
+            selected['context_evaluation']=d.get('context_evaluation',{}).get('pending')
             selected['accepted_gate']=d.get('champion_gate',{}).get('accepted_gate')
             selected['teacher_phase']=d.get('teacher_phase')
             cfg=d.get('signature',{}).get('config',{})
@@ -204,6 +205,11 @@ def _references(root,run):
     for p in inventory['spec.json']:
         if '.retention-trash' in p.parts: continue
         report=p.parent/'report.json';d=read(p)
+        if (d.get('contract')=='domino-context-evaluation/1.0.0' and
+                p.parent.parent.name=='contexts' and p.parent.parent.parent.name=='ratings'):
+            # Pending state above owns these dependencies. Failed diagnostic
+            # specs intentionally have no report and must not pin weights forever.
+            continue
         unfinished=not report.exists()
         cfg=d.get('config',{})
         formal=(cfg.get('panel')=='full' and cfg.get('setups',0)>=30) or (

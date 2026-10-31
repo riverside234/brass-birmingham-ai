@@ -260,7 +260,7 @@ class Continuation(unittest.TestCase):
         fresh=latest_model_config(self.old,self.old['imitation_checkpoint'])
         # The archived g503 helper above remains exact; fresh defaults have
         # subsequently adopted g1324's epsilon and the two-age g210 PPG path.
-        self.assertEqual(fresh['exploration'],.08);self.assertTrue(fresh['value_phase']['enabled'])
+        self.assertEqual(fresh['exploration'],.05);self.assertTrue(fresh['value_phase']['enabled'])
         self.assertEqual(fresh['value_phase']['acceptance_steps'],16);self.assertEqual(fresh['value_phase']['buffer_iterations'],2)
         for key,val in [('importance_cap',3),('target_temperature',2),('normalization','batch')]:
             bad=copy.deepcopy(c);bad['update']['opening_objective'][key]=val

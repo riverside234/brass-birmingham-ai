@@ -1,6 +1,19 @@
 # Fresh training in conda: selected v4 teachers and Masked ISMCTS NN
 
-## Current g1330 DOMiNO continuation
+## Current g1340 continuation and DOMiNO context evaluation
+
+See [the implementation and continuation command](../ai-research/DOMINO_CONTEXT_EVALUATION_IMPLEMENTATION.md#enable-for-the-continuing-run).
+Use `scripts/configure-training-g1340.py` after the documented Ctrl-C recovery
+step to adopt **event_cost=0.01, max_cost=0.075, epsilon=0.05**, refresh old-reward
+PPG data and enable matched seven-context panels. Fixed entropy remains 0.10 in
+all groups; the completed IL folder and training progress are preserved.
+First activation at g1340 schedules **g1390**: 384 added games plus 64 exact
+neutral reuses, with no extra PL fit or training gate. The continuation runs
+g1341–g1360. The exporter includes compact context evidence and SVG dashboards.
+For a later evaluation-only change, use `configure-domino-context-evaluation.py`;
+that helper does not change the reward, exploration or PPG cache.
+
+## Archived g1330 DOMiNO continuation
 
 The four post-adoption iterations are reviewed in
 [the g1330 report](../ai-research/SELFPLAY_G1330_REVIEW.md).
