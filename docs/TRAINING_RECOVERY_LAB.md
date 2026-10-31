@@ -1,13 +1,23 @@
 # Fresh training in conda: selected v4 teachers and Masked ISMCTS NN
 
-## Current g1326 DOMiNO continuation
+## Current g1330 DOMiNO continuation
+
+The four post-adoption iterations are reviewed in
+[the g1330 report](../ai-research/SELFPLAY_G1330_REVIEW.md).
+Use its [g1331–g1350 command](../ai-research/SELFPLAY_G1330_REVIEW.md#continue-from-g1330)
+with the existing `domino-entropy010-g1326.json` config and
+`--resume-reviewed-source --expected-generation 1330`. This source-only fix keeps
+the configuration, DOMiNO state and compatible PPG cache. Do not repeat adoption
+or rewind to g1326.
+
+## Archived g1326 DOMiNO adoption
 
 The latest [g1326 adoption command](../ai-research/DOMINO_DIVERSITY_IMPLEMENTATION.md#continuation-and-preserved-recipe)
 includes `--entropy-010`: `canal_action`, `canal_other`, `rail_action` and
 `rail_other` all use fixed **0.10**. Adaptive entropy remains off and its original
 baseline is preserved. Use the new `domino-entropy010-g1326.json` config filename.
 
-For an already adopted run, use the [DOMiNO debug-review continuation](../ai-research/DOMINO_DIVERSITY_DEBUG_REVIEW.md#continue-an-already-adopted-run).
+For an already adopted run, use the [g1330 continuation](../ai-research/SELFPLAY_G1330_REVIEW.md#continue-from-g1330).
 It preserves the current committed generation, configuration and PPG cache.
 Do not repeat g1326 recovery/adoption after the run has advanced.
 

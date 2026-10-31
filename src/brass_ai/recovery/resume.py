@@ -175,6 +175,8 @@ def check_signature(state, signature, reviewed=False):
             handlers[FIXED_010_MIGRATION]=fixed_010_config
             from .teacher_phase_config import MIGRATION as TEACHER_PHASE_MIGRATION,adopt as adopt_teacher_phase
             handlers[TEACHER_PHASE_MIGRATION]=adopt_teacher_phase
+            from .teacher_diversity import MIGRATION as TEACHER_DIVERSITY_MIGRATION,adopt as adopt_teacher_diversity
+            handlers[TEACHER_DIVERSITY_MIGRATION]=adopt_teacher_diversity
             from .training_revision_g850 import MIGRATION as G850_MIGRATION,configure as g850_config
             handlers[G850_MIGRATION]=lambda c:g850_config(c,rating_workers=signature['config'].get('rating_compute',{}).get('workers'))
             from .opening_objective import (MIGRATION as OPENING_MIGRATION,configure as configure_opening,

@@ -302,6 +302,7 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
     if 'teacher_phase' in config:
         from .teacher_phase import TeacherPhase
         teacher_phase=TeacherPhase(root,run,config,state,model,raw)
+        teacher_phase.diversity=diversity
     if source_changed:
         from .resume import commit_transition
         if local_adoption is not None:

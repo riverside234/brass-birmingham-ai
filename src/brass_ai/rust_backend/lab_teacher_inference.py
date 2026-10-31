@@ -44,8 +44,20 @@ def decode(meta, payload):
     encoded = Encoded(values[:state_n], values[state_n:].reshape(n,327), mapping, tuple(binding['legal_ids']))
     check_encoded(encoded)
     require(np.array_equal(mapping, [(s-binding['seat'])%4 for s in range(4)]), 'Teacher seat mapping differs')
-    require(binding['context']['stable_descriptors'] is None and binding['context']['style'] == [0.]*4
-            and binding['context']['intent'] == [0.]*8, 'Teacher context is not neutral/unknown')
+    require(binding['context']['stable_descriptors'] is None, 'Task search descriptors must remain unknown')
+    if 'bundle_id' in binding['job']:
+        from brass_ai.recovery.teacher_diversity import check_context
+        require(type(binding['root_owner']) is int and 0<=binding['root_owner']<4
+                and binding['context']['profile_id']==binding['job']['bundle_id'], 'Wrong teacher root/objective identity')
+        planned=check_context(binding['job']['seat_contexts'][binding['root_owner']])
+        require(planned['strategy_id']==binding['strategy_id'] and binding['context']['style']==planned['style']
+                and binding['context']['intent']==planned['intent'], 'Teacher root-latent context differs')
+        from brass_ai.learning.state_layout import state_layout
+        indices=next(g.indices for g in state_layout().groups if g.name=='policy_context')
+        require(np.array_equal(encoded.state[list(indices)],np.asarray(planned['style']+planned['intent'],dtype=np.float32)),
+                'Encoded teacher context differs')
+    else:
+        require(binding['context']['style']==[0.]*4 and binding['context']['intent']==[0.]*8,'Teacher context is not neutral/unknown')
     return encoded
 
 
@@ -71,6 +83,10 @@ class Client:
         frame = dict(request_id=str(self.sequence), model=self.expected['model_id'], revision=b['revision'],
             seat=b['seat'], digest=digest(b), deadline=deadline, submitted=time.monotonic(),
             cancelled=self.cancel.is_set(), encoded=encoded, remaining=b['context']['remaining'], want_logits=True)
+        if b.get('want_intrinsic',False):
+            require('bundle_id' in self.expected and b['seat']==b['root_owner'] and b['strategy_id']>0,
+                    'Intrinsic scalar requested for wrong observer/neutral root')
+            frame['intrinsic']=dict(bundle_id=self.expected['bundle_id'],strategy_id=b['strategy_id'])
         token = uuid.uuid4().hex; began = time.monotonic()
         with e.lock:
             require(e.pending is None, 'Teacher GPU owner is still pending')
@@ -100,6 +116,10 @@ class Client:
                         require(a.shape == (n,) and np.isfinite(a).all(), 'Invalid teacher GPU '+key)
                         result[key] = a.tolist()
                     result['reward_id'] = r['reward_id']
+                    if 'intrinsic' in frame:
+                        require(r['evaluator_id']==self.expected['bundle_id'] and np.isfinite(r['intrinsic']),
+                                'Wrong/nonfinite intrinsic evaluator reply')
+                        result['intrinsic']=r['intrinsic'];result['evaluator_id']=r['evaluator_id']
                 e.pending = None
                 return result
             except BaseException:

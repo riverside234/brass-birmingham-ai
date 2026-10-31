@@ -46,6 +46,12 @@ class Diversity:
             self.validate_tensors()
         self.pending=None;self.targets={};self.train_keys=set();self.heldout_keys=set();self.report={};self.steps=Counter()
         self.target_receipts={};self._indices=weakref.WeakKeyDictionary()
+        self.search_normalization_proven=False
+        self.search_fit=copy.deepcopy(saved.get('search_fit')) if saved else None
+        self.fit_diagnostics=copy.deepcopy(saved.get('fit_diagnostics')) if saved else None
+        if self.search_fit is not None:
+            from .domino_search_fit import validate
+            validate(self.search_fit)
         self.change_regime(regime)
 
     def change_regime(self,regime):
@@ -63,6 +69,7 @@ class Diversity:
     def prepare(self,ds,train_ids,heldout_ids):
         start=time.perf_counter()
         observations,report=S.prepare(ds,train_ids,self.state,self.config)
+        self.search_normalization_proven=bool(observations) and all(o['phases']==[7,8,12,4] for o in observations)
         self.pending=S.advance(self.state,self.config,observations,self.state['generation']+1)
         self.targets={row_key(ds,i):r['_domino_target'] for i,r in enumerate(ds.rows) if '_domino_target' in r}
         require(len(self.targets)==sum('_domino_target' in r for r in ds.rows),'Duplicate intrinsic decision identity')
@@ -153,17 +160,20 @@ class Diversity:
         o.zero_grad(set_to_none=True)
 
     def snapshot(self):
-        return copy.deepcopy(dict(head=self.head.state_dict(),optimizers={p:o.state_dict() for p,o in self.optimizers.items()},steps=self.steps))
+        return copy.deepcopy(dict(head=self.head.state_dict(),optimizers={p:o.state_dict() for p,o in self.optimizers.items()},
+            steps=self.steps,search_fit=self.search_fit,fit_diagnostics=self.fit_diagnostics))
 
     def restore(self,s):
         self.head.load_state_dict(s['head'])
         for p,o in self.optimizers.items():o.load_state_dict(s['optimizers'][p])
         self.steps=copy.deepcopy(s['steps'])
+        self.search_fit=copy.deepcopy(s.get('search_fit'));self.fit_diagnostics=copy.deepcopy(s.get('fit_diagnostics'))
 
     def payload(self):
         require(self.pending is not None,'DOMiNO checkpoint requires pending committed evidence')
         self.validate_tensors()
         s=dict(config=self.config,state=self.pending,head=self.head.state_dict(),optimizers={p:o.state_dict() for p,o in self.optimizers.items()})
+        if self.search_fit is not None:s.update(search_fit=self.search_fit,fit_diagnostics=self.fit_diagnostics)
         return dict(s,identity=bundle_id(s))
 
     def committed(self,generation):
@@ -173,18 +183,27 @@ class Diversity:
     def diagnostics(self,model,ds,ids,update):
         from .value_phase import value_parts
         chosen=[i for i in ids if row_key(ds,i) in self.targets];error=0.;by_strategy={}
+        prediction_squared=target_squared=error_sum=0.
         model.eval()
         with torch.no_grad():
             for part,ix,inputs in ds.value_batches(value_parts(ds,chosen,update,model),model):
                 out=self.prediction(model,inputs,ds,ix)
                 target=torch.tensor([self.targets[row_key(ds,i)] for i in part],device=out.device)
+                prediction_squared+=float(out.double().square().sum())
+                target_squared+=float(target.double().square().sum())
+                error_sum+=float((out.double()-target.double()).sum())
                 errors=(out-target).square().cpu().tolist();error+=sum(errors)
                 for i,err in zip(part,errors):
                     z=str(ds.rows[i]['_domino']['strategy_id']);s=by_strategy.setdefault(z,dict(rows=0,sum=0.))
                     s['rows']+=1;s['sum']+=err
         self.report['intrinsic_heldout']=dict(rows=len(chosen),mse=error/len(chosen) if chosen else None,
+            zero_predictor_mse=target_squared/len(chosen) if chosen else None,bias=error_sum/len(chosen) if chosen else None,
+            prediction_rms=(prediction_squared/len(chosen))**.5 if chosen else None,
+            target_rms=(target_squared/len(chosen))**.5 if chosen else None,
             by_strategy={z:dict(rows=s['rows'],mse=s['sum']/s['rows']) for z,s in by_strategy.items()})
         self.report['retained_optimizer_steps']=dict(self.steps)
+        if self.search_fit is not None and self.search_fit['collection_generation']==self.state['generation']:
+            self.fit_diagnostics=copy.deepcopy(self.report['intrinsic_heldout'])
 
 
 class PPGCompanions:
@@ -192,19 +211,26 @@ class PPGCompanions:
     def __init__(self,local,diversity,optimizer,value_weight):
         self.local,self.diversity,self.optimizer,self.value_weight=local,diversity,optimizer,value_weight
         self.active=True;self.valid=0;self.batch_size=0
+        self.attempted_rows=set();self.retained_rows=set()
+        self.attempted_steps=self.retained_steps=self.attempted_presentations=self.retained_presentations=0
+        self.fit_batch=[];self._local_loss=None
     def inventory(self,*args):
         if self.local is not None:self.local.inventory(*args)
     def begin(self,phase):
         if self.local is not None:self.local.begin(phase)
         self.diversity.begin(phase)
     def batch(self,ds,ids):
-        self.valid=sum(self.diversity.eligible(ds,ids));self.batch_size=len(ids)
+        valid=self.diversity.eligible(ds,ids)
+        self.fit_batch=[i for i,keep in zip(ids,valid) if keep] if self.diversity.active else []
+        self.valid=sum(valid);self.batch_size=len(ids)
     def forward(self,model,inputs,ds,ix,**kwargs):
         from .updates import value_output
         captured=[]
         capture=captured.append if self.diversity.active and self.valid else None
         out,loss=(self.local.forward(model,inputs,ds,ix,capture_encoded=capture,**kwargs) if self.local is not None else
                   (value_output(model,inputs,ds,ix,capture_encoded=capture,**kwargs),None))
+        # Report each companion's own loss; the caller backpropagates their sum.
+        self._local_loss=loss.detach() if loss is not None else None
         if self.diversity.active and self.valid:
             ids=ix.detach().cpu().tolist();_,valid,targets,_=self.diversity.metadata(ds,ids)
             if any(valid):
@@ -213,12 +239,29 @@ class PPGCompanions:
                 auxiliary=(pred-truth).square()*pred.new_tensor(valid)*(self.batch_size/self.valid)*self.value_weight*self.diversity.config['intrinsic_value_weight']
                 loss=auxiliary if loss is None else loss+auxiliary
         return out,loss
-    def account_loss(self,*args):
-        if self.local is not None:self.local.account_loss(*args)
+    def account_loss(self,loss,weights,denominator,phase):
+        if self.local is not None and self._local_loss is not None:
+            self.local.account_loss(self._local_loss,weights,denominator,phase)
     def step(self,phase):
         if self.local is not None:self.local.step(phase)
+        before=self.diversity.steps[phase]
         self.diversity.step(phase,self.optimizer.param_groups[0]['lr'])
-    def snapshot(self):return dict(local=self.local.snapshot() if self.local is not None else None,diversity=self.diversity.snapshot())
+        if self.diversity.steps[phase]>before and self.fit_batch:
+            self.attempted_steps+=1;self.retained_steps+=1
+            self.attempted_presentations+=len(self.fit_batch);self.retained_presentations+=len(self.fit_batch)
+            self.attempted_rows.update(self.fit_batch);self.retained_rows.update(self.fit_batch)
+    def snapshot(self):
+        return dict(local=self.local.snapshot() if self.local is not None else None,diversity=self.diversity.snapshot(),
+            retained_rows=self.retained_rows.copy(),retained_steps=self.retained_steps,retained_presentations=self.retained_presentations)
     def restore(self,s):
         if self.local is not None:self.local.restore(s['local'])
         self.diversity.restore(s['diversity'])
+        self.retained_rows=s['retained_rows'].copy();self.retained_steps=s['retained_steps'];self.retained_presentations=s['retained_presentations']
+    def report(self):
+        return dict(eligible_rows=len(self.diversity.train_keys) if self.diversity.active else 0,
+            attempted_steps=self.attempted_steps,retained_steps=self.retained_steps,
+            attempted_presentations=self.attempted_presentations,retained_presentations=self.retained_presentations,
+            attempted_distinct_rows=len(self.attempted_rows),retained_distinct_rows=len(self.retained_rows),
+            status=self.diversity.config['mode'] if self.diversity.config['mode']!='apply' else
+                'task_only_bootstrap' if not self.diversity.active else 'retained_fit' if self.retained_steps else 'no_retained_fit',
+            scope='Current ordinary learner critic-train targets only. Excludes prior ages, branches, snapshots and heldouts; PPO preservation steps do not fit targets. Retained counts follow joint rollback.')

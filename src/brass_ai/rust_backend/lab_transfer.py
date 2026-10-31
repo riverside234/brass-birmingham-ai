@@ -14,6 +14,9 @@ def text_sha(path):return hashlib.sha256(Path(path).read_bytes().replace(b'\r\n'
 
 
 def verify(milestone, supplement=None):
+    if supplement is not None and (SOURCE_ROOT/supplement).resolve()==SOURCE_ROOT/'distribution/rust-lab-g1330/transfer-manifest.json':
+        from .lab_diversity_transfer import verify as verify_diversity
+        return verify_diversity(milestone,supplement)
     from brass_ai.step5.league import implementation_id
     root = SOURCE_ROOT; destination = root/'distribution/rust-lab-b04/transfer-manifest.json'
     if supplement is not None:

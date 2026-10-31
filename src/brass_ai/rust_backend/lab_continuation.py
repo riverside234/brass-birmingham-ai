@@ -133,6 +133,18 @@ def inventory(root, run, state, raw):
     if source:
         for key, hash_key in (('path', 'sha256'), ('manifest', 'manifest_sha256')):
             if key in source: add(source[key], source[hash_key])
+    if 'diversity' in state['signature']['config']:
+        from brass_ai.recovery.domino_fingerprints import Fingerprints
+        # Preserve all sealed cached contexts: cheap derived JSON, including
+        # historical weights still referenced by the PPG descriptor datasets.
+        for path in sorted((run/'domino-fingerprints').glob('*.json')):
+            value=read(path)
+            require(value['seal']==digest(value['fingerprint']) and path.stem==digest(value['identity']),
+                    'Changed DOMiNO fingerprint manifest')
+            add(path)
+    refs(raw['training'].get('teacher_evaluators',{}))
+    for receipt in state.get('teacher_phase',{}).get('buffer',{}).get('receipts',[]):
+        refs(receipt.get('evaluators',{}))
     return dict(files=files, external=external)
 
 
@@ -250,6 +262,7 @@ class Restored:
     state: dict
     raw: dict
     report: dict
+    diversity: object = None
 
 
 def restore(fork, *, device='cpu', allow_cuda_topology_change=False):
@@ -290,6 +303,23 @@ def restore(fork, *, device='cpu', allow_cuda_topology_change=False):
     if 'exploration' in raw['training']:
         require(restore_exploration(config, state, raw['training']['exploration']) == raw['training']['exploration'],
                 'Exploration state changed')
+    diversity = None
+    if config.get('diversity',{}).get('mode','off') != 'off':
+        from brass_ai.recovery.domino_auxiliary import Diversity
+        from brass_ai.recovery.domino_state import regime
+        from brass_ai.recovery.local_scoring_auxiliary import bundle_id
+        saved_diversity=raw['training'].get('domino')
+        require(saved_diversity is not None, 'Backend continuation cannot replay DOMiNO adoption')
+        diversity=Diversity(model,config['diversity'],raw=raw,generation=state['iteration'],
+            regime=regime(config,state.get('v4_share_gate')))
+        restored=dict(config=diversity.config,state=diversity.state,head=diversity.head.state_dict(),
+                      optimizers={p:o.state_dict() for p,o in diversity.optimizers.items()})
+        if 'search_fit' in saved_diversity:
+            restored.update(search_fit=diversity.search_fit,fit_diagnostics=diversity.fit_diagnostics)
+        require(_same_payload(restored,{k:v for k,v in saved_diversity.items() if k!='identity'})
+                and bundle_id(restored)==saved_diversity['identity'], 'Live DOMiNO restore changed head/Adams/controller/evidence')
+        require(state.get('domino_state_digest',digest(diversity.state))==digest(diversity.state), 'DOMiNO state digest differs')
+        phases.diversity=diversity
     if 'quality_pool' in state:
         pool, migration = prepare_opponent_pool(fork.root, fork.run, state, raw, config, changed)
         require(migration is None and pool == state['quality_pool'], 'Backend migration changed opponent pool')
@@ -307,11 +337,18 @@ def restore(fork, *, device='cpu', allow_cuda_topology_change=False):
             verify_checkpoint(state, raw)
         probe = restore_probe(fork, config, state['il_kl_limit']['probe'])
     teacher = TeacherPhase(fork.root, fork.run, config, state, model, raw) if 'teacher_phase' in config else None
+    if teacher is not None:teacher.diversity=diversity
     if teacher is not None and 'teacher_phase' in state:
         saved_teacher = state['teacher_phase']
-        require(teacher.cursor == saved_teacher['teacher_seed_cursor']
-                and teacher.weight == saved_teacher['weight'] and teacher.buffer.payload() == saved_teacher['buffer'],
-                'Teacher cursor/weight/retained ages changed')
+        require(teacher.cursor == saved_teacher['teacher_seed_cursor'] and teacher.buffer.receipts==saved_teacher['buffer']['receipts'],
+                'Teacher cursor/committed receipts changed')
+        if teacher.buffer.identity==saved_teacher['buffer']['identity']:
+            require(teacher.weight == saved_teacher['weight'] and teacher.buffer.payload() == saved_teacher['buffer'],
+                    'Teacher weight/retained ages changed')
+        else:
+            require(teacher.options['mode']=='off' and saved_teacher['weight'] in teacher.weight['archive']
+                and all(r in teacher.buffer.retired for r in saved_teacher['buffer']['receipts']),
+                'Changed teacher profile must archive calibration and retain rollback shards')
     topology = resume_optimizer(raw, optimizer, allow_cuda_topology_change=allow_cuda_topology_change)
     require(torch.equal(torch.get_rng_state(), raw['rng']), 'CPU RNG restoration differs')
     cuda_checked = False
@@ -326,11 +363,15 @@ def restore(fork, *, device='cpu', allow_cuda_topology_change=False):
         full_state_restored=True, optimizers=['ppo', 'value'] + (['local-scoring-ppo', 'local-scoring-ppg'] if companion else []),
         preserved_ppg_ages=[r['generation'] for r in saved.get('rolling_buffer', [])],
         teacher_state_restored=teacher is not None, cuda_rng_checked=cuda_checked, topology=topology,
+        domino_restored=diversity is not None,
+        domino_components={k:tree_digest(v) for k,v in restored.items()} if diversity is not None else None,
+        diversity_teacher_readiness='missing_retained_intrinsic_fit' if diversity is not None and diversity.search_fit is None else 'requires_frozen_evaluator',
         snapshot_r2_overlay=copy.deepcopy(snapshot_overlay),
         utility_readiness_before=raw['training'].get('utility_calibration'), utility_readiness_after=model.utility_calibration,
         state_digest=tree_digest(state), checkpoint_parts={k: tree_digest(v) for k, v in raw.items()},
         optimizer_steps=0, source_run_modified=False, qualification_scope='Full restoration; next update/commit remains B05')
-    return Restored(model, optimizer, phases, companion, teacher, probe, state, raw, report)
+    if diversity is not None:report['optimizers']+=['intrinsic-ppo','intrinsic-ppg','domino-dual-adam']
+    return Restored(model, optimizer, phases, companion, teacher, probe, state, raw, report, diversity)
 
 
 def restore_probe(fork, config, receipt):

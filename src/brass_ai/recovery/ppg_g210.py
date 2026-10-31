@@ -304,6 +304,10 @@ def fit(phases,model,preparation_pool):
             **(dict(gate_dataset=phases.critic_dataset,gate_ids=phases.heldout_ids) if pooled else {}),
             current_count=receipts[0]['rows'],dropout=(phases.state['generation'],phases.config['seat_descriptors']['dropout_games']) if phases.critic_state else None,
             companion=companion,preparation=preparation)
+        if getattr(phases,'diversity',None) is not None:
+            phases.diversity.report['intrinsic_fit']=companion.report()
+            from .domino_search_fit import retain
+            retain(phases.diversity,model,ds,companion.retained_rows,companion.retained_steps)
         report['cpu_preparation']=preparation.report() if preparation is not None else dict(workers=0)
         if pooled:report['acceptance_support']=validation_support
     if rate is None:report['early_stop_reason']='no_applied_ppo_rate'

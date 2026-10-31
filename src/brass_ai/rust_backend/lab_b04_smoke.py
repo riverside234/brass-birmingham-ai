@@ -32,6 +32,11 @@ def entry(b02,b03,run,device):
     preflight=read_json(lab['preflight']['path'])
     require(preflight['snapshot']['state_file']==snapshot['state_file'] and
             preflight['snapshot']['checkpoint']==snapshot['checkpoint'],'B03 belongs to another committed state')
+    if snapshot['state']['signature']['config'].get('diversity',{}).get('mode')=='apply':
+        restored=read_json(lab['restoration']['path']);replay=read_json(lab['replay']['path'])
+        require(restored.get('domino_restored') is True and replay['families']
+                and all(r.get('domino_normalization',{}).get('passed') is True for r in replay['families']),
+                'Diversity teacher requires live DOMiNO restoration and complete-game normalization proof')
     return snapshot
 
 
@@ -77,16 +82,41 @@ def run(args):
     torch.set_num_threads(2);torch.set_num_interop_threads(1)
     torch.backends.cuda.matmul.allow_tf32=False;torch.backends.cudnn.allow_tf32=False
     model,raw=load_checkpoint(snapshot['checkpoint']['path'],device='cpu');model.eval()
-    config=adopt(snapshot['state']['signature']['config']);config['teacher_phase']['mode']='shadow'
+    profile=getattr(args,'teacher_profile','legacy')
+    if profile=='domino':
+        from brass_ai.recovery.teacher_diversity import adopt as adopt_diversity
+        config=adopt_diversity(snapshot['state']['signature']['config'])
+    else:config=adopt(snapshot['state']['signature']['config'])
+    config['teacher_phase']['mode']='shadow'
     reward=digest(config['teacher_phase']['search']['reward'])
     receipt,ready,evidence=latest_readiness(root,snapshot['state'],raw,reward)
-    write_json(out/'readiness.json',dict(receipt=receipt,ready=ready,evidence=evidence,model_calibration_unchanged=True))
+    diversity=None;fingerprints=None;diversity_readiness=None
+    if profile=='domino':
+        from brass_ai.recovery.domino_auxiliary import Diversity
+        from brass_ai.recovery.domino_state import regime
+        from brass_ai.recovery.teacher_diversity import freeze
+        diversity=Diversity(model,config['diversity'],raw=raw,generation=snapshot['generation'],
+            regime=regime(config,snapshot['state'].get('v4_share_gate')))
+        if diversity.search_fit is not None:
+            from brass_ai.rust_backend.lab_continuation import DiagnosticFork,restore_probe
+            from brass_ai.recovery.domino_fingerprints import Fingerprints
+            fork_path=Path(read_json(args.b03)['lab']['diagnostic_fork']['path']).parent
+            fork=DiagnosticFork(root,fork_path,generation=snapshot['generation'],checkpoint_sha256=snapshot['checkpoint']['sha256'])
+            probe=restore_probe(fork,config,snapshot['state']['il_kl_limit']['probe'])
+            model.to(args.device);diversity.head.to(args.device)
+            fingerprints=Fingerprints(root,out/'diagnostic-phase',probe,model,config['update'],{})
+        _,diversity_readiness=freeze(model,diversity,fingerprints,export_hash=snapshot['checkpoint']['sha256'],
+            generation=snapshot['generation'],checkpoint=snapshot['state']['history'][-1])
+        ready=ready and diversity_readiness['ready']
+    write_json(out/'readiness.json',dict(receipt=receipt,ready=ready,evidence=evidence,diversity=diversity_readiness,
+        profile=profile,model_calibration_unchanged=True))
     if not ready:
-        return dict(passed=False,deferred=True,reason='Latest current-reward lab readiness is not ready/unavailable; no teacher tables dispatched',
+        return dict(passed=False,deferred=True,reason=(diversity_readiness or {}).get('reason','Latest current-reward task utility is not ready/unavailable'),
             readiness=pin(out/'readiness.json'),new_games=0,optimizer_steps=0,production_modified=False)
     state=dict(iteration=snapshot['generation'],history=copy.deepcopy(snapshot['state']['history']))
     if 'teacher_seed_cursor' in snapshot['state']:state['teacher_seed_cursor']=snapshot['state']['teacher_seed_cursor']
     phase=TeacherPhase(root,out/'diagnostic-phase',config,state,model)
+    phase.diversity=diversity;phase.fingerprints=fingerprints
     phase.receipt=receipt;phase.ready=ready
     full=phase.begin(state,model,export_hash=snapshot['checkpoint']['sha256'],epoch=0,native_source=source_fingerprint())
     jobs=[next(j for j in full if j['split']==split) for split in ('train','heldout')]
@@ -105,10 +135,21 @@ def run(args):
     try:
         with InferenceService(snapshot['execution'],args.device) as service:
             require(service.register(model)==snapshot['model_id'],'Frozen teacher model differs')
+            if diversity is not None:
+                from .lab_intrinsic import register
+                register(service,model,diversity.head,phase.evaluator)
             # Initial CUDA model loading is outside the measured trajectory work.
             with service.lock:service._model(snapshot['model_id'])
-            calibration=calibrate(build['binary']['path'],build['core_source'],origins,jobs[0],service)
+            calibration_job=jobs[0]
+            if diversity is not None:
+                actors=[o['state']['context']['actor'] for o in origins]
+                calibration_job=next(j for j in full if all(j['expected']['seat_contexts'][s]['strategy_id']>0 for s in actors))
+            calibration=calibrate(build['binary']['path'],build['core_source'],origins,calibration_job,service)
             calibration['roots']=[r['id'] for r in roots];write_json(out/'gpu-calibration.json',calibration)
+            if diversity is not None:
+                from .lab_teacher import matched_controls
+                comparison=matched_controls(build['binary']['path'],build['core_source'],origins,calibration_job,service,calibration)
+                write_json(out/'matched-4s-controls.json',comparison)
             bootstrap=[args.mono,build['bootstrap']['binary']['path']]
             backend=TeacherCollector(build['binary']['path'],build['core_source'],bootstrap,service,calibration,lanes=2)
             results=backend.collect(jobs);write_json(out/'native-tables.json',results)
@@ -121,6 +162,7 @@ def run(args):
         write_json(out/'teacher-report.json',report);write_json(out/'inference-report.json',service_report)
         verify_unchanged(snapshot)
         return dict(passed=True,readiness=pin(out/'readiness.json'),calibration=pin(out/'gpu-calibration.json'),
+            matched_controls=pin(out/'matched-4s-controls.json') if diversity is not None else None,
             tables=pin(out/'native-tables.json'),jobs=pin(out/'frozen-teacher-jobs.json'),report=pin(out/'teacher-report.json'),
             inference=pin(out/'inference-report.json'),new_games=2,optimizer_steps=0,production_modified=False,
             elapsed_seconds=time.monotonic()-began,scope='Two separate full teacher tables, one train and one heldout; 4s/K16, one session/thread per table, two concurrent lanes. Missing label kinds supplemented by authored tests, no extra games.')
@@ -132,5 +174,6 @@ if __name__=='__main__':
     p=argparse.ArgumentParser();p.add_argument('--run',type=Path,required=True);p.add_argument('--b02',type=Path,required=True)
     p.add_argument('--b03',type=Path,required=True);p.add_argument('--build',type=Path,required=True);p.add_argument('--out',type=Path,required=True)
     p.add_argument('--expected-generation',type=int,required=True);p.add_argument('--checkpoint-sha256',required=True)
-    p.add_argument('--device',default='cuda:0');p.add_argument('--mono',default='mono');a=p.parse_args()
+    p.add_argument('--device',default='cuda:0');p.add_argument('--mono',default='mono')
+    p.add_argument('--teacher-profile',choices=('legacy','domino'),default='legacy');a=p.parse_args()
     write_json(a.out/'lab-checks.json',run(a))

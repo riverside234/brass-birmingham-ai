@@ -690356,6 +690356,2649 @@
       "learning_compatibility_ref": "5",
       "config_migrations_ref": "1650",
       "reason_ref": "172"
+    },
+    {
+      "from_implementation": "b95f45e2b0be6672a4efb7a3cabf9e2fab3e152a667e7f229b6c09ab5cb01c71",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "173",
+      "local_scoring_changes": true,
+      "review_report": "ai-research/PPG_SIXTEEN_G620.md"
+    },
+    {
+      "from_implementation": "b95f45e2b0be6672a4efb7a3cabf9e2fab3e152a667e7f229b6c09ab5cb01c71",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "173",
+      "local_scoring_changes": true,
+      "review_report": "ai-research/PPG_SIXTEEN_G620.md",
+      "config_migrations_ref": "1650"
+    },
+    {
+      "from_implementation": "b95f45e2b0be6672a4efb7a3cabf9e2fab3e152a667e7f229b6c09ab5cb01c71",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "173",
+      "config_migrations_ref": "1606",
+      "review_report": "ai-research/PPG_SIXTEEN_G620.md"
+    },
+    {
+      "from_implementation": "b95f45e2b0be6672a4efb7a3cabf9e2fab3e152a667e7f229b6c09ab5cb01c71",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "173",
+      "review_report": "ai-research/PPG_SIXTEEN_G620.md",
+      "config_migrations_ref": "1651"
+    },
+    {
+      "from_implementation": "cb165c0d852ca79dfd3df2c40483dc7e06bf6dd988d94755ecd1cb597cc3a6af",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "173",
+      "local_scoring_changes": true,
+      "review_report": "ai-research/PPG_SIXTEEN_G620.md"
+    },
+    {
+      "from_implementation": "cb165c0d852ca79dfd3df2c40483dc7e06bf6dd988d94755ecd1cb597cc3a6af",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "173",
+      "local_scoring_changes": true,
+      "review_report": "ai-research/PPG_SIXTEEN_G620.md",
+      "config_migrations_ref": "1650"
+    },
+    {
+      "from_implementation": "cb165c0d852ca79dfd3df2c40483dc7e06bf6dd988d94755ecd1cb597cc3a6af",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "173",
+      "config_migrations_ref": "1606",
+      "review_report": "ai-research/PPG_SIXTEEN_G620.md"
+    },
+    {
+      "from_implementation": "cb165c0d852ca79dfd3df2c40483dc7e06bf6dd988d94755ecd1cb597cc3a6af",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "173",
+      "review_report": "ai-research/PPG_SIXTEEN_G620.md",
+      "config_migrations_ref": "1651"
+    },
+    {
+      "from_implementation": "c33ff1ba936905fe06c4b6436d316a5073c9049be4a8d8d0e9c734f87e071314",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "173",
+      "local_scoring_changes": true,
+      "review_report": "ai-research/PPG_SIXTEEN_G620.md"
+    },
+    {
+      "from_implementation": "c33ff1ba936905fe06c4b6436d316a5073c9049be4a8d8d0e9c734f87e071314",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "173",
+      "local_scoring_changes": true,
+      "review_report": "ai-research/PPG_SIXTEEN_G620.md",
+      "config_migrations_ref": "1650"
+    },
+    {
+      "from_implementation": "c33ff1ba936905fe06c4b6436d316a5073c9049be4a8d8d0e9c734f87e071314",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "173",
+      "config_migrations_ref": "1606",
+      "review_report": "ai-research/PPG_SIXTEEN_G620.md"
+    },
+    {
+      "from_implementation": "c33ff1ba936905fe06c4b6436d316a5073c9049be4a8d8d0e9c734f87e071314",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "173",
+      "review_report": "ai-research/PPG_SIXTEEN_G620.md",
+      "config_migrations_ref": "1651"
+    },
+    {
+      "from_implementation": "72ec2bf892f91bfb645acdf2b741c47276403fc5b38c159afe1ddeb7eeccc2c4",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "173",
+      "local_scoring_changes": true,
+      "review_report": "ai-research/PPG_SIXTEEN_G620.md"
+    },
+    {
+      "from_implementation": "72ec2bf892f91bfb645acdf2b741c47276403fc5b38c159afe1ddeb7eeccc2c4",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "173",
+      "local_scoring_changes": true,
+      "review_report": "ai-research/PPG_SIXTEEN_G620.md",
+      "config_migrations_ref": "1650"
+    },
+    {
+      "from_implementation": "72ec2bf892f91bfb645acdf2b741c47276403fc5b38c159afe1ddeb7eeccc2c4",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "173",
+      "config_migrations_ref": "1606",
+      "review_report": "ai-research/PPG_SIXTEEN_G620.md"
+    },
+    {
+      "from_implementation": "72ec2bf892f91bfb645acdf2b741c47276403fc5b38c159afe1ddeb7eeccc2c4",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "173",
+      "review_report": "ai-research/PPG_SIXTEEN_G620.md",
+      "config_migrations_ref": "1651"
+    },
+    {
+      "from_implementation": "ef1cb36d346edd6ce306324370fe60f759b297b58282edff093b3f08aadf80be",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "173",
+      "local_scoring_changes": true,
+      "review_report": "ai-research/PPG_SIXTEEN_G620.md"
+    },
+    {
+      "from_implementation": "ef1cb36d346edd6ce306324370fe60f759b297b58282edff093b3f08aadf80be",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "173",
+      "local_scoring_changes": true,
+      "review_report": "ai-research/PPG_SIXTEEN_G620.md",
+      "config_migrations_ref": "1650"
+    },
+    {
+      "from_implementation": "ef1cb36d346edd6ce306324370fe60f759b297b58282edff093b3f08aadf80be",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "173",
+      "config_migrations_ref": "1606",
+      "review_report": "ai-research/PPG_SIXTEEN_G620.md"
+    },
+    {
+      "from_implementation": "ef1cb36d346edd6ce306324370fe60f759b297b58282edff093b3f08aadf80be",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "173",
+      "review_report": "ai-research/PPG_SIXTEEN_G620.md",
+      "config_migrations_ref": "1651"
+    },
+    {
+      "from_implementation": "38206ae9ecec5db1b291066978738d247d40ebe112fc27b4f3a4332796caffca",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "config_changes_ref": "44",
+      "reviewed_evidence": "ai-research/VP_REWARD_CAP_180.md",
+      "reason_ref": "173",
+      "config_migrations_ref": "1590",
+      "review_report": "ai-research/PPG_SIXTEEN_G620.md"
+    },
+    {
+      "from_implementation": "38206ae9ecec5db1b291066978738d247d40ebe112fc27b4f3a4332796caffca",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "config_changes_ref": "44",
+      "reviewed_evidence": "ai-research/VP_REWARD_CAP_180.md",
+      "reason_ref": "173",
+      "review_report": "ai-research/PPG_SIXTEEN_G620.md",
+      "config_migrations_ref": "1652"
+    },
+    {
+      "from_implementation": "ef1cb36d346edd6ce306324370fe60f759b297b58282edff093b3f08aadf80be",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "173",
+      "config_migrations_ref": "1607",
+      "review_report": "ai-research/PPG_SIXTEEN_G620.md"
+    },
+    {
+      "from_implementation": "ef1cb36d346edd6ce306324370fe60f759b297b58282edff093b3f08aadf80be",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "173",
+      "review_report": "ai-research/PPG_SIXTEEN_G620.md",
+      "config_migrations_ref": "1653"
+    },
+    {
+      "from_implementation": "4d7dbd64a757357973679d64b36eaf199724b659588c0023ea1d98322aa09283",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "173",
+      "config_migrations_ref": "1607",
+      "review_report": "ai-research/PPG_SIXTEEN_G620.md"
+    },
+    {
+      "from_implementation": "4d7dbd64a757357973679d64b36eaf199724b659588c0023ea1d98322aa09283",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "173",
+      "review_report": "ai-research/PPG_SIXTEEN_G620.md",
+      "config_migrations_ref": "1653"
+    },
+    {
+      "from_implementation": "ef1cb36d346edd6ce306324370fe60f759b297b58282edff093b3f08aadf80be",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "config_migrations_ref": "1608",
+      "reason_ref": "173",
+      "review_report": "ai-research/PPG_SIXTEEN_G620.md"
+    },
+    {
+      "from_implementation": "ef1cb36d346edd6ce306324370fe60f759b297b58282edff093b3f08aadf80be",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "173",
+      "review_report": "ai-research/PPG_SIXTEEN_G620.md",
+      "config_migrations_ref": "1654"
+    },
+    {
+      "from_implementation": "4d7dbd64a757357973679d64b36eaf199724b659588c0023ea1d98322aa09283",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "config_migrations_ref": "1608",
+      "reason_ref": "173",
+      "review_report": "ai-research/PPG_SIXTEEN_G620.md"
+    },
+    {
+      "from_implementation": "4d7dbd64a757357973679d64b36eaf199724b659588c0023ea1d98322aa09283",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "173",
+      "review_report": "ai-research/PPG_SIXTEEN_G620.md",
+      "config_migrations_ref": "1654"
+    },
+    {
+      "from_implementation": "8dd7b4737bcbcd85d1f935c63e66687a125734094dbd065fd8421b18bc083b3c",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "config_migrations_ref": "1608",
+      "reason_ref": "173",
+      "review_report": "ai-research/PPG_SIXTEEN_G620.md"
+    },
+    {
+      "from_implementation": "8dd7b4737bcbcd85d1f935c63e66687a125734094dbd065fd8421b18bc083b3c",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "173",
+      "review_report": "ai-research/PPG_SIXTEEN_G620.md",
+      "config_migrations_ref": "1654"
+    },
+    {
+      "from_implementation": "8dd7b4737bcbcd85d1f935c63e66687a125734094dbd065fd8421b18bc083b3c",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "config_migrations_ref": "1609",
+      "reason_ref": "173",
+      "review_report": "ai-research/PPG_SIXTEEN_G620.md"
+    },
+    {
+      "from_implementation": "8dd7b4737bcbcd85d1f935c63e66687a125734094dbd065fd8421b18bc083b3c",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "173",
+      "review_report": "ai-research/PPG_SIXTEEN_G620.md",
+      "config_migrations_ref": "1655"
+    },
+    {
+      "from_implementation": "1de2fff49c5b0cfc2f47920ed92f02021b34e73c421f250d08e0db6fb915dc5a",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "config_migrations_ref": "1609",
+      "reason_ref": "173",
+      "review_report": "ai-research/PPG_SIXTEEN_G620.md"
+    },
+    {
+      "from_implementation": "1de2fff49c5b0cfc2f47920ed92f02021b34e73c421f250d08e0db6fb915dc5a",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "173",
+      "review_report": "ai-research/PPG_SIXTEEN_G620.md",
+      "config_migrations_ref": "1655"
+    },
+    {
+      "from_implementation": "1de2fff49c5b0cfc2f47920ed92f02021b34e73c421f250d08e0db6fb915dc5a",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "config_migrations_ref": "1610",
+      "reason_ref": "173",
+      "review_report": "ai-research/PPG_SIXTEEN_G620.md"
+    },
+    {
+      "from_implementation": "1de2fff49c5b0cfc2f47920ed92f02021b34e73c421f250d08e0db6fb915dc5a",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "173",
+      "review_report": "ai-research/PPG_SIXTEEN_G620.md",
+      "config_migrations_ref": "1656"
+    },
+    {
+      "from_implementation": "0f0eca5b6efeb8ba9c47cde4bbf191e289f6c35b97df75817ba834ecc71a2146",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "config_migrations_ref": "1610",
+      "reason_ref": "173",
+      "review_report": "ai-research/PPG_SIXTEEN_G620.md"
+    },
+    {
+      "from_implementation": "0f0eca5b6efeb8ba9c47cde4bbf191e289f6c35b97df75817ba834ecc71a2146",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "173",
+      "review_report": "ai-research/PPG_SIXTEEN_G620.md",
+      "config_migrations_ref": "1656"
+    },
+    {
+      "from_implementation": "0f0eca5b6efeb8ba9c47cde4bbf191e289f6c35b97df75817ba834ecc71a2146",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "config_migrations_ref": "1587",
+      "reason_ref": "173",
+      "review_report": "ai-research/PPG_SIXTEEN_G620.md"
+    },
+    {
+      "from_implementation": "0f0eca5b6efeb8ba9c47cde4bbf191e289f6c35b97df75817ba834ecc71a2146",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "173",
+      "review_report": "ai-research/PPG_SIXTEEN_G620.md",
+      "config_migrations_ref": "1650"
+    },
+    {
+      "from_implementation": "0f0eca5b6efeb8ba9c47cde4bbf191e289f6c35b97df75817ba834ecc71a2146",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "config_migrations_ref": "1611",
+      "reason_ref": "173",
+      "review_report": "ai-research/PPG_SIXTEEN_G620.md"
+    },
+    {
+      "from_implementation": "0f0eca5b6efeb8ba9c47cde4bbf191e289f6c35b97df75817ba834ecc71a2146",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "173",
+      "review_report": "ai-research/PPG_SIXTEEN_G620.md",
+      "config_migrations_ref": "1657"
+    },
+    {
+      "from_implementation": "0f0eca5b6efeb8ba9c47cde4bbf191e289f6c35b97df75817ba834ecc71a2146",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "173",
+      "review_report": "ai-research/PPG_SIXTEEN_G620.md"
+    },
+    {
+      "from_implementation": "0f0eca5b6efeb8ba9c47cde4bbf191e289f6c35b97df75817ba834ecc71a2146",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "173",
+      "review_report": "ai-research/PPG_SIXTEEN_G620.md",
+      "config_migrations_ref": "1612"
+    },
+    {
+      "from_implementation": "0f0eca5b6efeb8ba9c47cde4bbf191e289f6c35b97df75817ba834ecc71a2146",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "173",
+      "review_report": "ai-research/PPG_SIXTEEN_G620.md",
+      "config_migrations_ref": "1658"
+    },
+    {
+      "from_implementation": "0f0eca5b6efeb8ba9c47cde4bbf191e289f6c35b97df75817ba834ecc71a2146",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "173",
+      "review_report": "ai-research/PPG_SIXTEEN_G620.md",
+      "config_migrations_ref": "1613"
+    },
+    {
+      "from_implementation": "0f0eca5b6efeb8ba9c47cde4bbf191e289f6c35b97df75817ba834ecc71a2146",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "173",
+      "review_report": "ai-research/PPG_SIXTEEN_G620.md",
+      "config_migrations_ref": "1659"
+    },
+    {
+      "from_implementation": "61ce54442f33eb40cf59be4ddc864fef0c978db4e5ea0ff68020666b8369f7a8",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "173",
+      "review_report": "ai-research/PPG_SIXTEEN_G620.md"
+    },
+    {
+      "from_implementation": "61ce54442f33eb40cf59be4ddc864fef0c978db4e5ea0ff68020666b8369f7a8",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "173",
+      "review_report": "ai-research/PPG_SIXTEEN_G620.md",
+      "config_migrations_ref": "1650"
+    },
+    {
+      "from_implementation": "61ce54442f33eb40cf59be4ddc864fef0c978db4e5ea0ff68020666b8369f7a8",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "173",
+      "review_report": "ai-research/PPG_SIXTEEN_G620.md",
+      "config_migrations_ref": "1611"
+    },
+    {
+      "from_implementation": "61ce54442f33eb40cf59be4ddc864fef0c978db4e5ea0ff68020666b8369f7a8",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "173",
+      "review_report": "ai-research/PPG_SIXTEEN_G620.md",
+      "config_migrations_ref": "1657"
+    },
+    {
+      "from_implementation": "61ce54442f33eb40cf59be4ddc864fef0c978db4e5ea0ff68020666b8369f7a8",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "173",
+      "review_report": "ai-research/PPG_SIXTEEN_G620.md",
+      "config_migrations_ref": "1612"
+    },
+    {
+      "from_implementation": "61ce54442f33eb40cf59be4ddc864fef0c978db4e5ea0ff68020666b8369f7a8",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "173",
+      "review_report": "ai-research/PPG_SIXTEEN_G620.md",
+      "config_migrations_ref": "1658"
+    },
+    {
+      "from_implementation": "61ce54442f33eb40cf59be4ddc864fef0c978db4e5ea0ff68020666b8369f7a8",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "173",
+      "review_report": "ai-research/PPG_SIXTEEN_G620.md",
+      "config_migrations_ref": "1613"
+    },
+    {
+      "from_implementation": "61ce54442f33eb40cf59be4ddc864fef0c978db4e5ea0ff68020666b8369f7a8",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "173",
+      "review_report": "ai-research/PPG_SIXTEEN_G620.md",
+      "config_migrations_ref": "1659"
+    },
+    {
+      "from_implementation": "0f0eca5b6efeb8ba9c47cde4bbf191e289f6c35b97df75817ba834ecc71a2146",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "173",
+      "review_report": "ai-research/PPG_SIXTEEN_G620.md",
+      "config_migrations_ref": "1614"
+    },
+    {
+      "from_implementation": "0f0eca5b6efeb8ba9c47cde4bbf191e289f6c35b97df75817ba834ecc71a2146",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "173",
+      "review_report": "ai-research/PPG_SIXTEEN_G620.md",
+      "config_migrations_ref": "1660"
+    },
+    {
+      "from_implementation": "0f0eca5b6efeb8ba9c47cde4bbf191e289f6c35b97df75817ba834ecc71a2146",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "173",
+      "review_report": "ai-research/PPG_SIXTEEN_G620.md",
+      "config_migrations_ref": "1615"
+    },
+    {
+      "from_implementation": "0f0eca5b6efeb8ba9c47cde4bbf191e289f6c35b97df75817ba834ecc71a2146",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "173",
+      "review_report": "ai-research/PPG_SIXTEEN_G620.md",
+      "config_migrations_ref": "1661"
+    },
+    {
+      "from_implementation": "993a9cc07e6f0e53fd0b63f20349289cf5d410fbc104259c7740aefdaca446d9",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "173",
+      "review_report": "ai-research/PPG_SIXTEEN_G620.md"
+    },
+    {
+      "from_implementation": "993a9cc07e6f0e53fd0b63f20349289cf5d410fbc104259c7740aefdaca446d9",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "173",
+      "review_report": "ai-research/PPG_SIXTEEN_G620.md",
+      "config_migrations_ref": "1650"
+    },
+    {
+      "from_implementation": "993a9cc07e6f0e53fd0b63f20349289cf5d410fbc104259c7740aefdaca446d9",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "173",
+      "review_report": "ai-research/PPG_SIXTEEN_G620.md",
+      "config_migrations_ref": "1614"
+    },
+    {
+      "from_implementation": "993a9cc07e6f0e53fd0b63f20349289cf5d410fbc104259c7740aefdaca446d9",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "173",
+      "review_report": "ai-research/PPG_SIXTEEN_G620.md",
+      "config_migrations_ref": "1660"
+    },
+    {
+      "from_implementation": "993a9cc07e6f0e53fd0b63f20349289cf5d410fbc104259c7740aefdaca446d9",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "173",
+      "review_report": "ai-research/PPG_SIXTEEN_G620.md",
+      "config_migrations_ref": "1615"
+    },
+    {
+      "from_implementation": "993a9cc07e6f0e53fd0b63f20349289cf5d410fbc104259c7740aefdaca446d9",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "173",
+      "review_report": "ai-research/PPG_SIXTEEN_G620.md",
+      "config_migrations_ref": "1661"
+    },
+    {
+      "from_implementation": "61ce54442f33eb40cf59be4ddc864fef0c978db4e5ea0ff68020666b8369f7a8",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "173",
+      "review_report": "ai-research/PPG_SIXTEEN_G620.md",
+      "config_migrations_ref": "1614"
+    },
+    {
+      "from_implementation": "61ce54442f33eb40cf59be4ddc864fef0c978db4e5ea0ff68020666b8369f7a8",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "173",
+      "review_report": "ai-research/PPG_SIXTEEN_G620.md",
+      "config_migrations_ref": "1660"
+    },
+    {
+      "from_implementation": "61ce54442f33eb40cf59be4ddc864fef0c978db4e5ea0ff68020666b8369f7a8",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "173",
+      "review_report": "ai-research/PPG_SIXTEEN_G620.md",
+      "config_migrations_ref": "1615"
+    },
+    {
+      "from_implementation": "61ce54442f33eb40cf59be4ddc864fef0c978db4e5ea0ff68020666b8369f7a8",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "173",
+      "review_report": "ai-research/PPG_SIXTEEN_G620.md",
+      "config_migrations_ref": "1661"
+    },
+    {
+      "from_implementation": "98a39c30ddea66084853a97862e9b8b13f14a4ad4cf6c8d0311c4d34d8fc7b2b",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "173",
+      "config_migrations_ref": "1616"
+    },
+    {
+      "from_implementation": "98a39c30ddea66084853a97862e9b8b13f14a4ad4cf6c8d0311c4d34d8fc7b2b",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "173",
+      "config_migrations_ref": "1662"
+    },
+    {
+      "from_implementation": "afcb66986a870567dbbd22ea45c5f43467ca0f7829948f04b561a9f8019e556b",
+      "learning_compatibility_ref": "5",
+      "config_changes_ref": "44",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "reviewed_evidence": "ai-research/PPG_DENSE_EIGHT_G650.md",
+      "reason_ref": "173",
+      "config_migrations_ref": "1583"
+    },
+    {
+      "from_implementation": "afcb66986a870567dbbd22ea45c5f43467ca0f7829948f04b561a9f8019e556b",
+      "learning_compatibility_ref": "5",
+      "config_changes_ref": "44",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "reviewed_evidence": "ai-research/PPG_DENSE_EIGHT_G650.md",
+      "reason_ref": "173",
+      "config_migrations_ref": "1663"
+    },
+    {
+      "from_implementation": "c7ab2ff8c75b3ab9abd307cc78d0fdb8da50683e707b68475220b05d21a1aee5",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "config_migrations_ref": "1617",
+      "reason_ref": "173"
+    },
+    {
+      "from_implementation": "c7ab2ff8c75b3ab9abd307cc78d0fdb8da50683e707b68475220b05d21a1aee5",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "173",
+      "config_migrations_ref": "1664"
+    },
+    {
+      "from_implementation": "9cd3826db5d0dca61f07bf1e584a5d5e81371b307b2ba96d6666571fb31836b2",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "config_migrations_ref": "1618",
+      "reason_ref": "173"
+    },
+    {
+      "from_implementation": "9cd3826db5d0dca61f07bf1e584a5d5e81371b307b2ba96d6666571fb31836b2",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "173",
+      "config_migrations_ref": "1665"
+    },
+    {
+      "from_implementation": "084f4e0494c2758b3b2eb7a615da865744cffd4ce2bf6516972c4b83a755ace1",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "config_migrations_ref": "1618",
+      "reason_ref": "173"
+    },
+    {
+      "from_implementation": "084f4e0494c2758b3b2eb7a615da865744cffd4ce2bf6516972c4b83a755ace1",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "173",
+      "config_migrations_ref": "1665"
+    },
+    {
+      "from_implementation": "084f4e0494c2758b3b2eb7a615da865744cffd4ce2bf6516972c4b83a755ace1",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "config_migrations_ref": "1619",
+      "reason_ref": "173"
+    },
+    {
+      "from_implementation": "084f4e0494c2758b3b2eb7a615da865744cffd4ce2bf6516972c4b83a755ace1",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "173",
+      "config_migrations_ref": "1666"
+    },
+    {
+      "from_implementation": "a9d19c2ee9325454bce2ab51fa184688d99406f5d5135a228775dce81db54439",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "config_migrations_ref": "1619",
+      "reason_ref": "173"
+    },
+    {
+      "from_implementation": "a9d19c2ee9325454bce2ab51fa184688d99406f5d5135a228775dce81db54439",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "173",
+      "config_migrations_ref": "1666"
+    },
+    {
+      "from_implementation": "a9d19c2ee9325454bce2ab51fa184688d99406f5d5135a228775dce81db54439",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "config_migrations_ref": "1620",
+      "reason_ref": "173"
+    },
+    {
+      "from_implementation": "a9d19c2ee9325454bce2ab51fa184688d99406f5d5135a228775dce81db54439",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "173",
+      "config_migrations_ref": "1667"
+    },
+    {
+      "from_implementation": "9d488d8dd3c9f7610263214338af18d2b844062939f1c40a2d5c46a9ea6b6cb3",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "config_migrations_ref": "1620",
+      "reason_ref": "173"
+    },
+    {
+      "from_implementation": "9d488d8dd3c9f7610263214338af18d2b844062939f1c40a2d5c46a9ea6b6cb3",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "173",
+      "config_migrations_ref": "1667"
+    },
+    {
+      "from_implementation": "9d488d8dd3c9f7610263214338af18d2b844062939f1c40a2d5c46a9ea6b6cb3",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "config_migrations_ref": "1621",
+      "reason_ref": "173"
+    },
+    {
+      "from_implementation": "9d488d8dd3c9f7610263214338af18d2b844062939f1c40a2d5c46a9ea6b6cb3",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "173",
+      "config_migrations_ref": "1668"
+    },
+    {
+      "from_implementation": "4199ffb44025664806548ace38b27470c477719b1fcc9f3e11ef0f9b402ceb4e",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "config_migrations_ref": "1621",
+      "reason_ref": "173"
+    },
+    {
+      "from_implementation": "4199ffb44025664806548ace38b27470c477719b1fcc9f3e11ef0f9b402ceb4e",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "173",
+      "config_migrations_ref": "1668"
+    },
+    {
+      "from_implementation": "9d488d8dd3c9f7610263214338af18d2b844062939f1c40a2d5c46a9ea6b6cb3",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "config_migrations_ref": "1622",
+      "reason_ref": "173"
+    },
+    {
+      "from_implementation": "9d488d8dd3c9f7610263214338af18d2b844062939f1c40a2d5c46a9ea6b6cb3",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "173",
+      "config_migrations_ref": "1669"
+    },
+    {
+      "from_implementation": "4199ffb44025664806548ace38b27470c477719b1fcc9f3e11ef0f9b402ceb4e",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "config_migrations_ref": "1622",
+      "reason_ref": "173"
+    },
+    {
+      "from_implementation": "4199ffb44025664806548ace38b27470c477719b1fcc9f3e11ef0f9b402ceb4e",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "173",
+      "config_migrations_ref": "1669"
+    },
+    {
+      "from_implementation": "217a89c935b0cb7ae596518d9bfd4c84bf8bdd8985467f6a5d49ba2415762952",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "config_migrations_ref": "1622",
+      "reason_ref": "173"
+    },
+    {
+      "from_implementation": "217a89c935b0cb7ae596518d9bfd4c84bf8bdd8985467f6a5d49ba2415762952",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "173",
+      "config_migrations_ref": "1669"
+    },
+    {
+      "from_implementation": "217a89c935b0cb7ae596518d9bfd4c84bf8bdd8985467f6a5d49ba2415762952",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "config_migrations_ref": "1623",
+      "reason_ref": "173"
+    },
+    {
+      "from_implementation": "217a89c935b0cb7ae596518d9bfd4c84bf8bdd8985467f6a5d49ba2415762952",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "173",
+      "config_migrations_ref": "1670"
+    },
+    {
+      "from_implementation": "83ebfadaaccf862ebd06fb78cecb4b34362ad977781adf67f118851df244f015",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "config_migrations_ref": "1623",
+      "reason_ref": "173"
+    },
+    {
+      "from_implementation": "83ebfadaaccf862ebd06fb78cecb4b34362ad977781adf67f118851df244f015",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "173",
+      "config_migrations_ref": "1670"
+    },
+    {
+      "from_implementation": "83ebfadaaccf862ebd06fb78cecb4b34362ad977781adf67f118851df244f015",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "config_migrations_ref": "1624",
+      "reason_ref": "173"
+    },
+    {
+      "from_implementation": "83ebfadaaccf862ebd06fb78cecb4b34362ad977781adf67f118851df244f015",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "173",
+      "config_migrations_ref": "1671"
+    },
+    {
+      "from_implementation": "8746640733360fd984d0a35a38aa8de6748bf058a9cc53952e86fc54dc1c58b1",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "config_migrations_ref": "1624",
+      "reason_ref": "173"
+    },
+    {
+      "from_implementation": "8746640733360fd984d0a35a38aa8de6748bf058a9cc53952e86fc54dc1c58b1",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "173",
+      "config_migrations_ref": "1671"
+    },
+    {
+      "from_implementation": "8746640733360fd984d0a35a38aa8de6748bf058a9cc53952e86fc54dc1c58b1",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "config_migrations_ref": "1625",
+      "reason_ref": "173"
+    },
+    {
+      "from_implementation": "8746640733360fd984d0a35a38aa8de6748bf058a9cc53952e86fc54dc1c58b1",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "173",
+      "config_migrations_ref": "1672"
+    },
+    {
+      "from_implementation": "603d1d236ca3da4511467956a9b656b41a4f03017d814b1abd8f060467a4c05c",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "config_migrations_ref": "1625",
+      "reason_ref": "173"
+    },
+    {
+      "from_implementation": "603d1d236ca3da4511467956a9b656b41a4f03017d814b1abd8f060467a4c05c",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "173",
+      "config_migrations_ref": "1672"
+    },
+    {
+      "from_implementation": "0c60f22dbaebcfdfea44721dd6bbd1032845a8d24fd4c75e6d2a7af41f5180e3",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "173"
+    },
+    {
+      "from_implementation": "0c60f22dbaebcfdfea44721dd6bbd1032845a8d24fd4c75e6d2a7af41f5180e3",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "173",
+      "config_migrations_ref": "1650"
+    },
+    {
+      "from_implementation": "6abba7672db47057df6090907c9397eb70ecad52b691653ed552bf250725e96d",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "173"
+    },
+    {
+      "from_implementation": "6abba7672db47057df6090907c9397eb70ecad52b691653ed552bf250725e96d",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "173",
+      "config_migrations_ref": "1650"
+    },
+    {
+      "from_implementation": "603d1d236ca3da4511467956a9b656b41a4f03017d814b1abd8f060467a4c05c",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "173",
+      "teacher_phase_changes": true
+    },
+    {
+      "from_implementation": "603d1d236ca3da4511467956a9b656b41a4f03017d814b1abd8f060467a4c05c",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "173",
+      "teacher_phase_changes": true,
+      "config_migrations_ref": "1650"
+    },
+    {
+      "from_implementation": "603d1d236ca3da4511467956a9b656b41a4f03017d814b1abd8f060467a4c05c",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "173",
+      "config_migrations_ref": "1626"
+    },
+    {
+      "from_implementation": "603d1d236ca3da4511467956a9b656b41a4f03017d814b1abd8f060467a4c05c",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "173",
+      "config_migrations_ref": "1673"
+    },
+    {
+      "from_implementation": "1b682936cf03a6b52a1a129413f0bf1f90c115f43fbe10e72bfd95ad7ace0ce9",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "173",
+      "teacher_phase_changes": true
+    },
+    {
+      "from_implementation": "1b682936cf03a6b52a1a129413f0bf1f90c115f43fbe10e72bfd95ad7ace0ce9",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "173",
+      "teacher_phase_changes": true,
+      "config_migrations_ref": "1650"
+    },
+    {
+      "from_implementation": "1b682936cf03a6b52a1a129413f0bf1f90c115f43fbe10e72bfd95ad7ace0ce9",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "173",
+      "config_migrations_ref": "1626"
+    },
+    {
+      "from_implementation": "1b682936cf03a6b52a1a129413f0bf1f90c115f43fbe10e72bfd95ad7ace0ce9",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "173",
+      "config_migrations_ref": "1673"
+    },
+    {
+      "from_implementation": "b95f45e2b0be6672a4efb7a3cabf9e2fab3e152a667e7f229b6c09ab5cb01c71",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "173",
+      "local_scoring_changes": true,
+      "review_report": "ai-research/PPG_SIXTEEN_G620.md",
+      "config_migrations_ref": "1626"
+    },
+    {
+      "from_implementation": "b95f45e2b0be6672a4efb7a3cabf9e2fab3e152a667e7f229b6c09ab5cb01c71",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "173",
+      "local_scoring_changes": true,
+      "review_report": "ai-research/PPG_SIXTEEN_G620.md",
+      "config_migrations_ref": "1673"
+    },
+    {
+      "from_implementation": "b95f45e2b0be6672a4efb7a3cabf9e2fab3e152a667e7f229b6c09ab5cb01c71",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "173",
+      "config_migrations_ref": "1627",
+      "review_report": "ai-research/PPG_SIXTEEN_G620.md"
+    },
+    {
+      "from_implementation": "b95f45e2b0be6672a4efb7a3cabf9e2fab3e152a667e7f229b6c09ab5cb01c71",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "173",
+      "review_report": "ai-research/PPG_SIXTEEN_G620.md",
+      "config_migrations_ref": "1674"
+    },
+    {
+      "from_implementation": "cb165c0d852ca79dfd3df2c40483dc7e06bf6dd988d94755ecd1cb597cc3a6af",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "173",
+      "local_scoring_changes": true,
+      "review_report": "ai-research/PPG_SIXTEEN_G620.md",
+      "config_migrations_ref": "1626"
+    },
+    {
+      "from_implementation": "cb165c0d852ca79dfd3df2c40483dc7e06bf6dd988d94755ecd1cb597cc3a6af",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "173",
+      "local_scoring_changes": true,
+      "review_report": "ai-research/PPG_SIXTEEN_G620.md",
+      "config_migrations_ref": "1673"
+    },
+    {
+      "from_implementation": "cb165c0d852ca79dfd3df2c40483dc7e06bf6dd988d94755ecd1cb597cc3a6af",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "173",
+      "config_migrations_ref": "1627",
+      "review_report": "ai-research/PPG_SIXTEEN_G620.md"
+    },
+    {
+      "from_implementation": "cb165c0d852ca79dfd3df2c40483dc7e06bf6dd988d94755ecd1cb597cc3a6af",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "173",
+      "review_report": "ai-research/PPG_SIXTEEN_G620.md",
+      "config_migrations_ref": "1674"
+    },
+    {
+      "from_implementation": "c33ff1ba936905fe06c4b6436d316a5073c9049be4a8d8d0e9c734f87e071314",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "173",
+      "local_scoring_changes": true,
+      "review_report": "ai-research/PPG_SIXTEEN_G620.md",
+      "config_migrations_ref": "1626"
+    },
+    {
+      "from_implementation": "c33ff1ba936905fe06c4b6436d316a5073c9049be4a8d8d0e9c734f87e071314",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "173",
+      "local_scoring_changes": true,
+      "review_report": "ai-research/PPG_SIXTEEN_G620.md",
+      "config_migrations_ref": "1673"
+    },
+    {
+      "from_implementation": "c33ff1ba936905fe06c4b6436d316a5073c9049be4a8d8d0e9c734f87e071314",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "173",
+      "config_migrations_ref": "1627",
+      "review_report": "ai-research/PPG_SIXTEEN_G620.md"
+    },
+    {
+      "from_implementation": "c33ff1ba936905fe06c4b6436d316a5073c9049be4a8d8d0e9c734f87e071314",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "173",
+      "review_report": "ai-research/PPG_SIXTEEN_G620.md",
+      "config_migrations_ref": "1674"
+    },
+    {
+      "from_implementation": "72ec2bf892f91bfb645acdf2b741c47276403fc5b38c159afe1ddeb7eeccc2c4",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "173",
+      "local_scoring_changes": true,
+      "review_report": "ai-research/PPG_SIXTEEN_G620.md",
+      "config_migrations_ref": "1626"
+    },
+    {
+      "from_implementation": "72ec2bf892f91bfb645acdf2b741c47276403fc5b38c159afe1ddeb7eeccc2c4",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "173",
+      "local_scoring_changes": true,
+      "review_report": "ai-research/PPG_SIXTEEN_G620.md",
+      "config_migrations_ref": "1673"
+    },
+    {
+      "from_implementation": "72ec2bf892f91bfb645acdf2b741c47276403fc5b38c159afe1ddeb7eeccc2c4",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "173",
+      "config_migrations_ref": "1627",
+      "review_report": "ai-research/PPG_SIXTEEN_G620.md"
+    },
+    {
+      "from_implementation": "72ec2bf892f91bfb645acdf2b741c47276403fc5b38c159afe1ddeb7eeccc2c4",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "173",
+      "review_report": "ai-research/PPG_SIXTEEN_G620.md",
+      "config_migrations_ref": "1674"
+    },
+    {
+      "from_implementation": "ef1cb36d346edd6ce306324370fe60f759b297b58282edff093b3f08aadf80be",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "173",
+      "local_scoring_changes": true,
+      "review_report": "ai-research/PPG_SIXTEEN_G620.md",
+      "config_migrations_ref": "1626"
+    },
+    {
+      "from_implementation": "ef1cb36d346edd6ce306324370fe60f759b297b58282edff093b3f08aadf80be",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "173",
+      "local_scoring_changes": true,
+      "review_report": "ai-research/PPG_SIXTEEN_G620.md",
+      "config_migrations_ref": "1673"
+    },
+    {
+      "from_implementation": "ef1cb36d346edd6ce306324370fe60f759b297b58282edff093b3f08aadf80be",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "173",
+      "config_migrations_ref": "1627",
+      "review_report": "ai-research/PPG_SIXTEEN_G620.md"
+    },
+    {
+      "from_implementation": "ef1cb36d346edd6ce306324370fe60f759b297b58282edff093b3f08aadf80be",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "173",
+      "review_report": "ai-research/PPG_SIXTEEN_G620.md",
+      "config_migrations_ref": "1674"
+    },
+    {
+      "from_implementation": "38206ae9ecec5db1b291066978738d247d40ebe112fc27b4f3a4332796caffca",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "config_changes_ref": "44",
+      "reviewed_evidence": "ai-research/VP_REWARD_CAP_180.md",
+      "reason_ref": "173",
+      "config_migrations_ref": "1628",
+      "review_report": "ai-research/PPG_SIXTEEN_G620.md"
+    },
+    {
+      "from_implementation": "38206ae9ecec5db1b291066978738d247d40ebe112fc27b4f3a4332796caffca",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "config_changes_ref": "44",
+      "reviewed_evidence": "ai-research/VP_REWARD_CAP_180.md",
+      "reason_ref": "173",
+      "review_report": "ai-research/PPG_SIXTEEN_G620.md",
+      "config_migrations_ref": "1675"
+    },
+    {
+      "from_implementation": "ef1cb36d346edd6ce306324370fe60f759b297b58282edff093b3f08aadf80be",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "173",
+      "config_migrations_ref": "1629",
+      "review_report": "ai-research/PPG_SIXTEEN_G620.md"
+    },
+    {
+      "from_implementation": "ef1cb36d346edd6ce306324370fe60f759b297b58282edff093b3f08aadf80be",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "173",
+      "review_report": "ai-research/PPG_SIXTEEN_G620.md",
+      "config_migrations_ref": "1676"
+    },
+    {
+      "from_implementation": "4d7dbd64a757357973679d64b36eaf199724b659588c0023ea1d98322aa09283",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "173",
+      "config_migrations_ref": "1629",
+      "review_report": "ai-research/PPG_SIXTEEN_G620.md"
+    },
+    {
+      "from_implementation": "4d7dbd64a757357973679d64b36eaf199724b659588c0023ea1d98322aa09283",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "173",
+      "review_report": "ai-research/PPG_SIXTEEN_G620.md",
+      "config_migrations_ref": "1676"
+    },
+    {
+      "from_implementation": "ef1cb36d346edd6ce306324370fe60f759b297b58282edff093b3f08aadf80be",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "config_migrations_ref": "1630",
+      "reason_ref": "173",
+      "review_report": "ai-research/PPG_SIXTEEN_G620.md"
+    },
+    {
+      "from_implementation": "ef1cb36d346edd6ce306324370fe60f759b297b58282edff093b3f08aadf80be",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "173",
+      "review_report": "ai-research/PPG_SIXTEEN_G620.md",
+      "config_migrations_ref": "1677"
+    },
+    {
+      "from_implementation": "4d7dbd64a757357973679d64b36eaf199724b659588c0023ea1d98322aa09283",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "config_migrations_ref": "1630",
+      "reason_ref": "173",
+      "review_report": "ai-research/PPG_SIXTEEN_G620.md"
+    },
+    {
+      "from_implementation": "4d7dbd64a757357973679d64b36eaf199724b659588c0023ea1d98322aa09283",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "173",
+      "review_report": "ai-research/PPG_SIXTEEN_G620.md",
+      "config_migrations_ref": "1677"
+    },
+    {
+      "from_implementation": "8dd7b4737bcbcd85d1f935c63e66687a125734094dbd065fd8421b18bc083b3c",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "config_migrations_ref": "1630",
+      "reason_ref": "173",
+      "review_report": "ai-research/PPG_SIXTEEN_G620.md"
+    },
+    {
+      "from_implementation": "8dd7b4737bcbcd85d1f935c63e66687a125734094dbd065fd8421b18bc083b3c",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "173",
+      "review_report": "ai-research/PPG_SIXTEEN_G620.md",
+      "config_migrations_ref": "1677"
+    },
+    {
+      "from_implementation": "8dd7b4737bcbcd85d1f935c63e66687a125734094dbd065fd8421b18bc083b3c",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "config_migrations_ref": "1631",
+      "reason_ref": "173",
+      "review_report": "ai-research/PPG_SIXTEEN_G620.md"
+    },
+    {
+      "from_implementation": "8dd7b4737bcbcd85d1f935c63e66687a125734094dbd065fd8421b18bc083b3c",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "173",
+      "review_report": "ai-research/PPG_SIXTEEN_G620.md",
+      "config_migrations_ref": "1678"
+    },
+    {
+      "from_implementation": "1de2fff49c5b0cfc2f47920ed92f02021b34e73c421f250d08e0db6fb915dc5a",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "config_migrations_ref": "1631",
+      "reason_ref": "173",
+      "review_report": "ai-research/PPG_SIXTEEN_G620.md"
+    },
+    {
+      "from_implementation": "1de2fff49c5b0cfc2f47920ed92f02021b34e73c421f250d08e0db6fb915dc5a",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "173",
+      "review_report": "ai-research/PPG_SIXTEEN_G620.md",
+      "config_migrations_ref": "1678"
+    },
+    {
+      "from_implementation": "1de2fff49c5b0cfc2f47920ed92f02021b34e73c421f250d08e0db6fb915dc5a",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "config_migrations_ref": "1632",
+      "reason_ref": "173",
+      "review_report": "ai-research/PPG_SIXTEEN_G620.md"
+    },
+    {
+      "from_implementation": "1de2fff49c5b0cfc2f47920ed92f02021b34e73c421f250d08e0db6fb915dc5a",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "173",
+      "review_report": "ai-research/PPG_SIXTEEN_G620.md",
+      "config_migrations_ref": "1679"
+    },
+    {
+      "from_implementation": "0f0eca5b6efeb8ba9c47cde4bbf191e289f6c35b97df75817ba834ecc71a2146",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "config_migrations_ref": "1632",
+      "reason_ref": "173",
+      "review_report": "ai-research/PPG_SIXTEEN_G620.md"
+    },
+    {
+      "from_implementation": "0f0eca5b6efeb8ba9c47cde4bbf191e289f6c35b97df75817ba834ecc71a2146",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "173",
+      "review_report": "ai-research/PPG_SIXTEEN_G620.md",
+      "config_migrations_ref": "1679"
+    },
+    {
+      "from_implementation": "0f0eca5b6efeb8ba9c47cde4bbf191e289f6c35b97df75817ba834ecc71a2146",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "config_migrations_ref": "1626",
+      "reason_ref": "173",
+      "review_report": "ai-research/PPG_SIXTEEN_G620.md"
+    },
+    {
+      "from_implementation": "0f0eca5b6efeb8ba9c47cde4bbf191e289f6c35b97df75817ba834ecc71a2146",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "173",
+      "review_report": "ai-research/PPG_SIXTEEN_G620.md",
+      "config_migrations_ref": "1673"
+    },
+    {
+      "from_implementation": "0f0eca5b6efeb8ba9c47cde4bbf191e289f6c35b97df75817ba834ecc71a2146",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "config_migrations_ref": "1633",
+      "reason_ref": "173",
+      "review_report": "ai-research/PPG_SIXTEEN_G620.md"
+    },
+    {
+      "from_implementation": "0f0eca5b6efeb8ba9c47cde4bbf191e289f6c35b97df75817ba834ecc71a2146",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "173",
+      "review_report": "ai-research/PPG_SIXTEEN_G620.md",
+      "config_migrations_ref": "1680"
+    },
+    {
+      "from_implementation": "0f0eca5b6efeb8ba9c47cde4bbf191e289f6c35b97df75817ba834ecc71a2146",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "173",
+      "review_report": "ai-research/PPG_SIXTEEN_G620.md",
+      "config_migrations_ref": "1634"
+    },
+    {
+      "from_implementation": "0f0eca5b6efeb8ba9c47cde4bbf191e289f6c35b97df75817ba834ecc71a2146",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "173",
+      "review_report": "ai-research/PPG_SIXTEEN_G620.md",
+      "config_migrations_ref": "1681"
+    },
+    {
+      "from_implementation": "0f0eca5b6efeb8ba9c47cde4bbf191e289f6c35b97df75817ba834ecc71a2146",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "173",
+      "review_report": "ai-research/PPG_SIXTEEN_G620.md",
+      "config_migrations_ref": "1635"
+    },
+    {
+      "from_implementation": "0f0eca5b6efeb8ba9c47cde4bbf191e289f6c35b97df75817ba834ecc71a2146",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "173",
+      "review_report": "ai-research/PPG_SIXTEEN_G620.md",
+      "config_migrations_ref": "1682"
+    },
+    {
+      "from_implementation": "61ce54442f33eb40cf59be4ddc864fef0c978db4e5ea0ff68020666b8369f7a8",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "173",
+      "review_report": "ai-research/PPG_SIXTEEN_G620.md",
+      "config_migrations_ref": "1626"
+    },
+    {
+      "from_implementation": "61ce54442f33eb40cf59be4ddc864fef0c978db4e5ea0ff68020666b8369f7a8",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "173",
+      "review_report": "ai-research/PPG_SIXTEEN_G620.md",
+      "config_migrations_ref": "1673"
+    },
+    {
+      "from_implementation": "61ce54442f33eb40cf59be4ddc864fef0c978db4e5ea0ff68020666b8369f7a8",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "173",
+      "review_report": "ai-research/PPG_SIXTEEN_G620.md",
+      "config_migrations_ref": "1633"
+    },
+    {
+      "from_implementation": "61ce54442f33eb40cf59be4ddc864fef0c978db4e5ea0ff68020666b8369f7a8",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "173",
+      "review_report": "ai-research/PPG_SIXTEEN_G620.md",
+      "config_migrations_ref": "1680"
+    },
+    {
+      "from_implementation": "61ce54442f33eb40cf59be4ddc864fef0c978db4e5ea0ff68020666b8369f7a8",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "173",
+      "review_report": "ai-research/PPG_SIXTEEN_G620.md",
+      "config_migrations_ref": "1634"
+    },
+    {
+      "from_implementation": "61ce54442f33eb40cf59be4ddc864fef0c978db4e5ea0ff68020666b8369f7a8",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "173",
+      "review_report": "ai-research/PPG_SIXTEEN_G620.md",
+      "config_migrations_ref": "1681"
+    },
+    {
+      "from_implementation": "61ce54442f33eb40cf59be4ddc864fef0c978db4e5ea0ff68020666b8369f7a8",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "173",
+      "review_report": "ai-research/PPG_SIXTEEN_G620.md",
+      "config_migrations_ref": "1635"
+    },
+    {
+      "from_implementation": "61ce54442f33eb40cf59be4ddc864fef0c978db4e5ea0ff68020666b8369f7a8",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "173",
+      "review_report": "ai-research/PPG_SIXTEEN_G620.md",
+      "config_migrations_ref": "1682"
+    },
+    {
+      "from_implementation": "0f0eca5b6efeb8ba9c47cde4bbf191e289f6c35b97df75817ba834ecc71a2146",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "173",
+      "review_report": "ai-research/PPG_SIXTEEN_G620.md",
+      "config_migrations_ref": "1636"
+    },
+    {
+      "from_implementation": "0f0eca5b6efeb8ba9c47cde4bbf191e289f6c35b97df75817ba834ecc71a2146",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "173",
+      "review_report": "ai-research/PPG_SIXTEEN_G620.md",
+      "config_migrations_ref": "1683"
+    },
+    {
+      "from_implementation": "0f0eca5b6efeb8ba9c47cde4bbf191e289f6c35b97df75817ba834ecc71a2146",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "173",
+      "review_report": "ai-research/PPG_SIXTEEN_G620.md",
+      "config_migrations_ref": "1637"
+    },
+    {
+      "from_implementation": "0f0eca5b6efeb8ba9c47cde4bbf191e289f6c35b97df75817ba834ecc71a2146",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "173",
+      "review_report": "ai-research/PPG_SIXTEEN_G620.md",
+      "config_migrations_ref": "1684"
+    },
+    {
+      "from_implementation": "993a9cc07e6f0e53fd0b63f20349289cf5d410fbc104259c7740aefdaca446d9",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "173",
+      "review_report": "ai-research/PPG_SIXTEEN_G620.md",
+      "config_migrations_ref": "1626"
+    },
+    {
+      "from_implementation": "993a9cc07e6f0e53fd0b63f20349289cf5d410fbc104259c7740aefdaca446d9",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "173",
+      "review_report": "ai-research/PPG_SIXTEEN_G620.md",
+      "config_migrations_ref": "1673"
+    },
+    {
+      "from_implementation": "993a9cc07e6f0e53fd0b63f20349289cf5d410fbc104259c7740aefdaca446d9",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "173",
+      "review_report": "ai-research/PPG_SIXTEEN_G620.md",
+      "config_migrations_ref": "1636"
+    },
+    {
+      "from_implementation": "993a9cc07e6f0e53fd0b63f20349289cf5d410fbc104259c7740aefdaca446d9",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "173",
+      "review_report": "ai-research/PPG_SIXTEEN_G620.md",
+      "config_migrations_ref": "1683"
+    },
+    {
+      "from_implementation": "993a9cc07e6f0e53fd0b63f20349289cf5d410fbc104259c7740aefdaca446d9",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "173",
+      "review_report": "ai-research/PPG_SIXTEEN_G620.md",
+      "config_migrations_ref": "1637"
+    },
+    {
+      "from_implementation": "993a9cc07e6f0e53fd0b63f20349289cf5d410fbc104259c7740aefdaca446d9",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "173",
+      "review_report": "ai-research/PPG_SIXTEEN_G620.md",
+      "config_migrations_ref": "1684"
+    },
+    {
+      "from_implementation": "61ce54442f33eb40cf59be4ddc864fef0c978db4e5ea0ff68020666b8369f7a8",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "173",
+      "review_report": "ai-research/PPG_SIXTEEN_G620.md",
+      "config_migrations_ref": "1636"
+    },
+    {
+      "from_implementation": "61ce54442f33eb40cf59be4ddc864fef0c978db4e5ea0ff68020666b8369f7a8",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "173",
+      "review_report": "ai-research/PPG_SIXTEEN_G620.md",
+      "config_migrations_ref": "1683"
+    },
+    {
+      "from_implementation": "61ce54442f33eb40cf59be4ddc864fef0c978db4e5ea0ff68020666b8369f7a8",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "173",
+      "review_report": "ai-research/PPG_SIXTEEN_G620.md",
+      "config_migrations_ref": "1637"
+    },
+    {
+      "from_implementation": "61ce54442f33eb40cf59be4ddc864fef0c978db4e5ea0ff68020666b8369f7a8",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "173",
+      "review_report": "ai-research/PPG_SIXTEEN_G620.md",
+      "config_migrations_ref": "1684"
+    },
+    {
+      "from_implementation": "98a39c30ddea66084853a97862e9b8b13f14a4ad4cf6c8d0311c4d34d8fc7b2b",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "173",
+      "config_migrations_ref": "1638"
+    },
+    {
+      "from_implementation": "98a39c30ddea66084853a97862e9b8b13f14a4ad4cf6c8d0311c4d34d8fc7b2b",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "173",
+      "config_migrations_ref": "1685"
+    },
+    {
+      "from_implementation": "afcb66986a870567dbbd22ea45c5f43467ca0f7829948f04b561a9f8019e556b",
+      "learning_compatibility_ref": "5",
+      "config_changes_ref": "44",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "reviewed_evidence": "ai-research/PPG_DENSE_EIGHT_G650.md",
+      "reason_ref": "173",
+      "config_migrations_ref": "1639"
+    },
+    {
+      "from_implementation": "afcb66986a870567dbbd22ea45c5f43467ca0f7829948f04b561a9f8019e556b",
+      "learning_compatibility_ref": "5",
+      "config_changes_ref": "44",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "reviewed_evidence": "ai-research/PPG_DENSE_EIGHT_G650.md",
+      "reason_ref": "173",
+      "config_migrations_ref": "1686"
+    },
+    {
+      "from_implementation": "c7ab2ff8c75b3ab9abd307cc78d0fdb8da50683e707b68475220b05d21a1aee5",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "config_migrations_ref": "1640",
+      "reason_ref": "173"
+    },
+    {
+      "from_implementation": "c7ab2ff8c75b3ab9abd307cc78d0fdb8da50683e707b68475220b05d21a1aee5",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "173",
+      "config_migrations_ref": "1687"
+    },
+    {
+      "from_implementation": "9cd3826db5d0dca61f07bf1e584a5d5e81371b307b2ba96d6666571fb31836b2",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "config_migrations_ref": "1641",
+      "reason_ref": "173"
+    },
+    {
+      "from_implementation": "9cd3826db5d0dca61f07bf1e584a5d5e81371b307b2ba96d6666571fb31836b2",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "173",
+      "config_migrations_ref": "1688"
+    },
+    {
+      "from_implementation": "084f4e0494c2758b3b2eb7a615da865744cffd4ce2bf6516972c4b83a755ace1",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "config_migrations_ref": "1641",
+      "reason_ref": "173"
+    },
+    {
+      "from_implementation": "084f4e0494c2758b3b2eb7a615da865744cffd4ce2bf6516972c4b83a755ace1",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "173",
+      "config_migrations_ref": "1688"
+    },
+    {
+      "from_implementation": "084f4e0494c2758b3b2eb7a615da865744cffd4ce2bf6516972c4b83a755ace1",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "config_migrations_ref": "1642",
+      "reason_ref": "173"
+    },
+    {
+      "from_implementation": "084f4e0494c2758b3b2eb7a615da865744cffd4ce2bf6516972c4b83a755ace1",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "173",
+      "config_migrations_ref": "1689"
+    },
+    {
+      "from_implementation": "a9d19c2ee9325454bce2ab51fa184688d99406f5d5135a228775dce81db54439",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "config_migrations_ref": "1642",
+      "reason_ref": "173"
+    },
+    {
+      "from_implementation": "a9d19c2ee9325454bce2ab51fa184688d99406f5d5135a228775dce81db54439",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "173",
+      "config_migrations_ref": "1689"
+    },
+    {
+      "from_implementation": "a9d19c2ee9325454bce2ab51fa184688d99406f5d5135a228775dce81db54439",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "config_migrations_ref": "1643",
+      "reason_ref": "173"
+    },
+    {
+      "from_implementation": "a9d19c2ee9325454bce2ab51fa184688d99406f5d5135a228775dce81db54439",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "173",
+      "config_migrations_ref": "1690"
+    },
+    {
+      "from_implementation": "9d488d8dd3c9f7610263214338af18d2b844062939f1c40a2d5c46a9ea6b6cb3",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "config_migrations_ref": "1643",
+      "reason_ref": "173"
+    },
+    {
+      "from_implementation": "9d488d8dd3c9f7610263214338af18d2b844062939f1c40a2d5c46a9ea6b6cb3",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "173",
+      "config_migrations_ref": "1690"
+    },
+    {
+      "from_implementation": "9d488d8dd3c9f7610263214338af18d2b844062939f1c40a2d5c46a9ea6b6cb3",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "config_migrations_ref": "1644",
+      "reason_ref": "173"
+    },
+    {
+      "from_implementation": "9d488d8dd3c9f7610263214338af18d2b844062939f1c40a2d5c46a9ea6b6cb3",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "173",
+      "config_migrations_ref": "1691"
+    },
+    {
+      "from_implementation": "4199ffb44025664806548ace38b27470c477719b1fcc9f3e11ef0f9b402ceb4e",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "config_migrations_ref": "1644",
+      "reason_ref": "173"
+    },
+    {
+      "from_implementation": "4199ffb44025664806548ace38b27470c477719b1fcc9f3e11ef0f9b402ceb4e",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "173",
+      "config_migrations_ref": "1691"
+    },
+    {
+      "from_implementation": "9d488d8dd3c9f7610263214338af18d2b844062939f1c40a2d5c46a9ea6b6cb3",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "config_migrations_ref": "1645",
+      "reason_ref": "173"
+    },
+    {
+      "from_implementation": "9d488d8dd3c9f7610263214338af18d2b844062939f1c40a2d5c46a9ea6b6cb3",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "173",
+      "config_migrations_ref": "1692"
+    },
+    {
+      "from_implementation": "4199ffb44025664806548ace38b27470c477719b1fcc9f3e11ef0f9b402ceb4e",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "config_migrations_ref": "1645",
+      "reason_ref": "173"
+    },
+    {
+      "from_implementation": "4199ffb44025664806548ace38b27470c477719b1fcc9f3e11ef0f9b402ceb4e",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "173",
+      "config_migrations_ref": "1692"
+    },
+    {
+      "from_implementation": "217a89c935b0cb7ae596518d9bfd4c84bf8bdd8985467f6a5d49ba2415762952",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "config_migrations_ref": "1645",
+      "reason_ref": "173"
+    },
+    {
+      "from_implementation": "217a89c935b0cb7ae596518d9bfd4c84bf8bdd8985467f6a5d49ba2415762952",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "173",
+      "config_migrations_ref": "1692"
+    },
+    {
+      "from_implementation": "217a89c935b0cb7ae596518d9bfd4c84bf8bdd8985467f6a5d49ba2415762952",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "config_migrations_ref": "1646",
+      "reason_ref": "173"
+    },
+    {
+      "from_implementation": "217a89c935b0cb7ae596518d9bfd4c84bf8bdd8985467f6a5d49ba2415762952",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "173",
+      "config_migrations_ref": "1693"
+    },
+    {
+      "from_implementation": "83ebfadaaccf862ebd06fb78cecb4b34362ad977781adf67f118851df244f015",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "config_migrations_ref": "1646",
+      "reason_ref": "173"
+    },
+    {
+      "from_implementation": "83ebfadaaccf862ebd06fb78cecb4b34362ad977781adf67f118851df244f015",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "173",
+      "config_migrations_ref": "1693"
+    },
+    {
+      "from_implementation": "83ebfadaaccf862ebd06fb78cecb4b34362ad977781adf67f118851df244f015",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "config_migrations_ref": "1647",
+      "reason_ref": "173"
+    },
+    {
+      "from_implementation": "83ebfadaaccf862ebd06fb78cecb4b34362ad977781adf67f118851df244f015",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "173",
+      "config_migrations_ref": "1694"
+    },
+    {
+      "from_implementation": "8746640733360fd984d0a35a38aa8de6748bf058a9cc53952e86fc54dc1c58b1",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "config_migrations_ref": "1647",
+      "reason_ref": "173"
+    },
+    {
+      "from_implementation": "8746640733360fd984d0a35a38aa8de6748bf058a9cc53952e86fc54dc1c58b1",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "173",
+      "config_migrations_ref": "1694"
+    },
+    {
+      "from_implementation": "8746640733360fd984d0a35a38aa8de6748bf058a9cc53952e86fc54dc1c58b1",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "config_migrations_ref": "1648",
+      "reason_ref": "173"
+    },
+    {
+      "from_implementation": "8746640733360fd984d0a35a38aa8de6748bf058a9cc53952e86fc54dc1c58b1",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "173",
+      "config_migrations_ref": "1695"
+    },
+    {
+      "from_implementation": "603d1d236ca3da4511467956a9b656b41a4f03017d814b1abd8f060467a4c05c",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "config_migrations_ref": "1648",
+      "reason_ref": "173"
+    },
+    {
+      "from_implementation": "603d1d236ca3da4511467956a9b656b41a4f03017d814b1abd8f060467a4c05c",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "173",
+      "config_migrations_ref": "1695"
+    },
+    {
+      "from_implementation": "603d1d236ca3da4511467956a9b656b41a4f03017d814b1abd8f060467a4c05c",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "config_migrations_ref": "1649",
+      "reason_ref": "173"
+    },
+    {
+      "from_implementation": "603d1d236ca3da4511467956a9b656b41a4f03017d814b1abd8f060467a4c05c",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "173",
+      "config_migrations_ref": "1696"
+    },
+    {
+      "from_implementation": "1b682936cf03a6b52a1a129413f0bf1f90c115f43fbe10e72bfd95ad7ace0ce9",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "config_migrations_ref": "1649",
+      "reason_ref": "173"
+    },
+    {
+      "from_implementation": "1b682936cf03a6b52a1a129413f0bf1f90c115f43fbe10e72bfd95ad7ace0ce9",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "173",
+      "config_migrations_ref": "1696"
+    },
+    {
+      "from_implementation": "cd3943e2ea84d436fb009fa3bce936c84115aa5bcb5b360b0fb3be7b97e31cc1",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "config_migrations_ref": "1649",
+      "reason_ref": "173"
+    },
+    {
+      "from_implementation": "cd3943e2ea84d436fb009fa3bce936c84115aa5bcb5b360b0fb3be7b97e31cc1",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "173",
+      "config_migrations_ref": "1696"
+    },
+    {
+      "from_implementation": "cd3943e2ea84d436fb009fa3bce936c84115aa5bcb5b360b0fb3be7b97e31cc1",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "173"
+    },
+    {
+      "from_implementation": "cd3943e2ea84d436fb009fa3bce936c84115aa5bcb5b360b0fb3be7b97e31cc1",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "173",
+      "config_migrations_ref": "1650"
+    },
+    {
+      "from_implementation": "d980354d39b02f27aeee147e91ba32c24f55a879647a3d1f27615410ca9e012a",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "config_migrations_ref": "1650",
+      "reason_ref": "173"
+    },
+    {
+      "from_implementation": "299f58b01ffcc5551207c16cf74f0f7c8e8aa7f87c4e957ee37ab8d2880e5f42",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "config_migrations_ref": "1650",
+      "reason_ref": "173"
+    },
+    {
+      "from_implementation": "299f58b01ffcc5551207c16cf74f0f7c8e8aa7f87c4e957ee37ab8d2880e5f42",
+      "to_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "173"
+    },
+    {
+      "from_implementation": "084f4e0494c2758b3b2eb7a615da865744cffd4ce2bf6516972c4b83a755ace1",
+      "to_implementation": "738316294df0d6fcecdc9024859f983a5675bc9c2acc8fca19a7b279c1a8a30f",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "174",
+      "review_report": "ai-research/RUST_BACKEND_AZ_DB_REPORT.md"
+    },
+    {
+      "from_implementation": "084f4e0494c2758b3b2eb7a615da865744cffd4ce2bf6516972c4b83a755ace1",
+      "to_implementation": "738316294df0d6fcecdc9024859f983a5675bc9c2acc8fca19a7b279c1a8a30f",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "174",
+      "review_report": "ai-research/RUST_BACKEND_AZ_DB_REPORT.md",
+      "teacher_phase_changes": true
+    },
+    {
+      "from_implementation": "084f4e0494c2758b3b2eb7a615da865744cffd4ce2bf6516972c4b83a755ace1",
+      "to_implementation": "738316294df0d6fcecdc9024859f983a5675bc9c2acc8fca19a7b279c1a8a30f",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "174",
+      "review_report": "ai-research/RUST_BACKEND_AZ_DB_REPORT.md",
+      "config_migrations_ref": "1626"
+    },
+    {
+      "from_implementation": "0c60f22dbaebcfdfea44721dd6bbd1032845a8d24fd4c75e6d2a7af41f5180e3",
+      "to_implementation": "738316294df0d6fcecdc9024859f983a5675bc9c2acc8fca19a7b279c1a8a30f",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "174",
+      "review_report": "ai-research/RUST_BACKEND_AZ_DB_REPORT.md"
+    },
+    {
+      "from_implementation": "0c60f22dbaebcfdfea44721dd6bbd1032845a8d24fd4c75e6d2a7af41f5180e3",
+      "to_implementation": "738316294df0d6fcecdc9024859f983a5675bc9c2acc8fca19a7b279c1a8a30f",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "174",
+      "review_report": "ai-research/RUST_BACKEND_AZ_DB_REPORT.md",
+      "teacher_phase_changes": true
+    },
+    {
+      "from_implementation": "0c60f22dbaebcfdfea44721dd6bbd1032845a8d24fd4c75e6d2a7af41f5180e3",
+      "to_implementation": "738316294df0d6fcecdc9024859f983a5675bc9c2acc8fca19a7b279c1a8a30f",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "174",
+      "review_report": "ai-research/RUST_BACKEND_AZ_DB_REPORT.md",
+      "config_migrations_ref": "1626"
+    },
+    {
+      "from_implementation": "0f0eca5b6efeb8ba9c47cde4bbf191e289f6c35b97df75817ba834ecc71a2146",
+      "to_implementation": "738316294df0d6fcecdc9024859f983a5675bc9c2acc8fca19a7b279c1a8a30f",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "174",
+      "review_report": "ai-research/RUST_BACKEND_AZ_DB_REPORT.md"
+    },
+    {
+      "from_implementation": "0f0eca5b6efeb8ba9c47cde4bbf191e289f6c35b97df75817ba834ecc71a2146",
+      "to_implementation": "738316294df0d6fcecdc9024859f983a5675bc9c2acc8fca19a7b279c1a8a30f",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "174",
+      "review_report": "ai-research/RUST_BACKEND_AZ_DB_REPORT.md",
+      "teacher_phase_changes": true
+    },
+    {
+      "from_implementation": "0f0eca5b6efeb8ba9c47cde4bbf191e289f6c35b97df75817ba834ecc71a2146",
+      "to_implementation": "738316294df0d6fcecdc9024859f983a5675bc9c2acc8fca19a7b279c1a8a30f",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "174",
+      "review_report": "ai-research/RUST_BACKEND_AZ_DB_REPORT.md",
+      "config_migrations_ref": "1626"
+    },
+    {
+      "from_implementation": "1b682936cf03a6b52a1a129413f0bf1f90c115f43fbe10e72bfd95ad7ace0ce9",
+      "to_implementation": "738316294df0d6fcecdc9024859f983a5675bc9c2acc8fca19a7b279c1a8a30f",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "174",
+      "review_report": "ai-research/RUST_BACKEND_AZ_DB_REPORT.md"
+    },
+    {
+      "from_implementation": "1b682936cf03a6b52a1a129413f0bf1f90c115f43fbe10e72bfd95ad7ace0ce9",
+      "to_implementation": "738316294df0d6fcecdc9024859f983a5675bc9c2acc8fca19a7b279c1a8a30f",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "174",
+      "review_report": "ai-research/RUST_BACKEND_AZ_DB_REPORT.md",
+      "teacher_phase_changes": true
+    },
+    {
+      "from_implementation": "1b682936cf03a6b52a1a129413f0bf1f90c115f43fbe10e72bfd95ad7ace0ce9",
+      "to_implementation": "738316294df0d6fcecdc9024859f983a5675bc9c2acc8fca19a7b279c1a8a30f",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "174",
+      "review_report": "ai-research/RUST_BACKEND_AZ_DB_REPORT.md",
+      "config_migrations_ref": "1626"
+    },
+    {
+      "from_implementation": "1b682936cf03a6b52a1a129413f0bf1f90c115f43fbe10e72bfd95ad7ace0ce9",
+      "to_implementation": "738316294df0d6fcecdc9024859f983a5675bc9c2acc8fca19a7b279c1a8a30f",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "174",
+      "review_report": "ai-research/RUST_BACKEND_AZ_DB_REPORT.md",
+      "config_migrations_ref": "1697"
+    },
+    {
+      "from_implementation": "1de2fff49c5b0cfc2f47920ed92f02021b34e73c421f250d08e0db6fb915dc5a",
+      "to_implementation": "738316294df0d6fcecdc9024859f983a5675bc9c2acc8fca19a7b279c1a8a30f",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "174",
+      "review_report": "ai-research/RUST_BACKEND_AZ_DB_REPORT.md"
+    },
+    {
+      "from_implementation": "1de2fff49c5b0cfc2f47920ed92f02021b34e73c421f250d08e0db6fb915dc5a",
+      "to_implementation": "738316294df0d6fcecdc9024859f983a5675bc9c2acc8fca19a7b279c1a8a30f",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "174",
+      "review_report": "ai-research/RUST_BACKEND_AZ_DB_REPORT.md",
+      "teacher_phase_changes": true
+    },
+    {
+      "from_implementation": "1de2fff49c5b0cfc2f47920ed92f02021b34e73c421f250d08e0db6fb915dc5a",
+      "to_implementation": "738316294df0d6fcecdc9024859f983a5675bc9c2acc8fca19a7b279c1a8a30f",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "174",
+      "review_report": "ai-research/RUST_BACKEND_AZ_DB_REPORT.md",
+      "config_migrations_ref": "1626"
+    },
+    {
+      "from_implementation": "217a89c935b0cb7ae596518d9bfd4c84bf8bdd8985467f6a5d49ba2415762952",
+      "to_implementation": "738316294df0d6fcecdc9024859f983a5675bc9c2acc8fca19a7b279c1a8a30f",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "174",
+      "review_report": "ai-research/RUST_BACKEND_AZ_DB_REPORT.md"
+    },
+    {
+      "from_implementation": "217a89c935b0cb7ae596518d9bfd4c84bf8bdd8985467f6a5d49ba2415762952",
+      "to_implementation": "738316294df0d6fcecdc9024859f983a5675bc9c2acc8fca19a7b279c1a8a30f",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "174",
+      "review_report": "ai-research/RUST_BACKEND_AZ_DB_REPORT.md",
+      "teacher_phase_changes": true
+    },
+    {
+      "from_implementation": "217a89c935b0cb7ae596518d9bfd4c84bf8bdd8985467f6a5d49ba2415762952",
+      "to_implementation": "738316294df0d6fcecdc9024859f983a5675bc9c2acc8fca19a7b279c1a8a30f",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "174",
+      "review_report": "ai-research/RUST_BACKEND_AZ_DB_REPORT.md",
+      "config_migrations_ref": "1626"
+    },
+    {
+      "from_implementation": "299f58b01ffcc5551207c16cf74f0f7c8e8aa7f87c4e957ee37ab8d2880e5f42",
+      "to_implementation": "738316294df0d6fcecdc9024859f983a5675bc9c2acc8fca19a7b279c1a8a30f",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "174",
+      "review_report": "ai-research/RUST_BACKEND_AZ_DB_REPORT.md"
+    },
+    {
+      "from_implementation": "299f58b01ffcc5551207c16cf74f0f7c8e8aa7f87c4e957ee37ab8d2880e5f42",
+      "to_implementation": "738316294df0d6fcecdc9024859f983a5675bc9c2acc8fca19a7b279c1a8a30f",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "174",
+      "review_report": "ai-research/RUST_BACKEND_AZ_DB_REPORT.md",
+      "teacher_phase_changes": true
+    },
+    {
+      "from_implementation": "299f58b01ffcc5551207c16cf74f0f7c8e8aa7f87c4e957ee37ab8d2880e5f42",
+      "to_implementation": "738316294df0d6fcecdc9024859f983a5675bc9c2acc8fca19a7b279c1a8a30f",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "174",
+      "review_report": "ai-research/RUST_BACKEND_AZ_DB_REPORT.md",
+      "config_migrations_ref": "1626"
+    },
+    {
+      "from_implementation": "299f58b01ffcc5551207c16cf74f0f7c8e8aa7f87c4e957ee37ab8d2880e5f42",
+      "to_implementation": "738316294df0d6fcecdc9024859f983a5675bc9c2acc8fca19a7b279c1a8a30f",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "174",
+      "review_report": "ai-research/RUST_BACKEND_AZ_DB_REPORT.md",
+      "config_migrations_ref": "1697"
+    },
+    {
+      "from_implementation": "38206ae9ecec5db1b291066978738d247d40ebe112fc27b4f3a4332796caffca",
+      "to_implementation": "738316294df0d6fcecdc9024859f983a5675bc9c2acc8fca19a7b279c1a8a30f",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "174",
+      "review_report": "ai-research/RUST_BACKEND_AZ_DB_REPORT.md"
+    },
+    {
+      "from_implementation": "38206ae9ecec5db1b291066978738d247d40ebe112fc27b4f3a4332796caffca",
+      "to_implementation": "738316294df0d6fcecdc9024859f983a5675bc9c2acc8fca19a7b279c1a8a30f",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "174",
+      "review_report": "ai-research/RUST_BACKEND_AZ_DB_REPORT.md",
+      "teacher_phase_changes": true
+    },
+    {
+      "from_implementation": "38206ae9ecec5db1b291066978738d247d40ebe112fc27b4f3a4332796caffca",
+      "to_implementation": "738316294df0d6fcecdc9024859f983a5675bc9c2acc8fca19a7b279c1a8a30f",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "174",
+      "review_report": "ai-research/RUST_BACKEND_AZ_DB_REPORT.md",
+      "config_migrations_ref": "1626"
+    },
+    {
+      "from_implementation": "4199ffb44025664806548ace38b27470c477719b1fcc9f3e11ef0f9b402ceb4e",
+      "to_implementation": "738316294df0d6fcecdc9024859f983a5675bc9c2acc8fca19a7b279c1a8a30f",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "174",
+      "review_report": "ai-research/RUST_BACKEND_AZ_DB_REPORT.md"
+    },
+    {
+      "from_implementation": "4199ffb44025664806548ace38b27470c477719b1fcc9f3e11ef0f9b402ceb4e",
+      "to_implementation": "738316294df0d6fcecdc9024859f983a5675bc9c2acc8fca19a7b279c1a8a30f",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "174",
+      "review_report": "ai-research/RUST_BACKEND_AZ_DB_REPORT.md",
+      "teacher_phase_changes": true
+    },
+    {
+      "from_implementation": "4199ffb44025664806548ace38b27470c477719b1fcc9f3e11ef0f9b402ceb4e",
+      "to_implementation": "738316294df0d6fcecdc9024859f983a5675bc9c2acc8fca19a7b279c1a8a30f",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "174",
+      "review_report": "ai-research/RUST_BACKEND_AZ_DB_REPORT.md",
+      "config_migrations_ref": "1626"
+    },
+    {
+      "from_implementation": "4d7dbd64a757357973679d64b36eaf199724b659588c0023ea1d98322aa09283",
+      "to_implementation": "738316294df0d6fcecdc9024859f983a5675bc9c2acc8fca19a7b279c1a8a30f",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "174",
+      "review_report": "ai-research/RUST_BACKEND_AZ_DB_REPORT.md"
+    },
+    {
+      "from_implementation": "4d7dbd64a757357973679d64b36eaf199724b659588c0023ea1d98322aa09283",
+      "to_implementation": "738316294df0d6fcecdc9024859f983a5675bc9c2acc8fca19a7b279c1a8a30f",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "174",
+      "review_report": "ai-research/RUST_BACKEND_AZ_DB_REPORT.md",
+      "teacher_phase_changes": true
+    },
+    {
+      "from_implementation": "4d7dbd64a757357973679d64b36eaf199724b659588c0023ea1d98322aa09283",
+      "to_implementation": "738316294df0d6fcecdc9024859f983a5675bc9c2acc8fca19a7b279c1a8a30f",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "174",
+      "review_report": "ai-research/RUST_BACKEND_AZ_DB_REPORT.md",
+      "config_migrations_ref": "1626"
+    },
+    {
+      "from_implementation": "603d1d236ca3da4511467956a9b656b41a4f03017d814b1abd8f060467a4c05c",
+      "to_implementation": "738316294df0d6fcecdc9024859f983a5675bc9c2acc8fca19a7b279c1a8a30f",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "174",
+      "review_report": "ai-research/RUST_BACKEND_AZ_DB_REPORT.md"
+    },
+    {
+      "from_implementation": "603d1d236ca3da4511467956a9b656b41a4f03017d814b1abd8f060467a4c05c",
+      "to_implementation": "738316294df0d6fcecdc9024859f983a5675bc9c2acc8fca19a7b279c1a8a30f",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "174",
+      "review_report": "ai-research/RUST_BACKEND_AZ_DB_REPORT.md",
+      "teacher_phase_changes": true
+    },
+    {
+      "from_implementation": "603d1d236ca3da4511467956a9b656b41a4f03017d814b1abd8f060467a4c05c",
+      "to_implementation": "738316294df0d6fcecdc9024859f983a5675bc9c2acc8fca19a7b279c1a8a30f",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "174",
+      "review_report": "ai-research/RUST_BACKEND_AZ_DB_REPORT.md",
+      "config_migrations_ref": "1626"
+    },
+    {
+      "from_implementation": "61ce54442f33eb40cf59be4ddc864fef0c978db4e5ea0ff68020666b8369f7a8",
+      "to_implementation": "738316294df0d6fcecdc9024859f983a5675bc9c2acc8fca19a7b279c1a8a30f",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "174",
+      "review_report": "ai-research/RUST_BACKEND_AZ_DB_REPORT.md"
+    },
+    {
+      "from_implementation": "61ce54442f33eb40cf59be4ddc864fef0c978db4e5ea0ff68020666b8369f7a8",
+      "to_implementation": "738316294df0d6fcecdc9024859f983a5675bc9c2acc8fca19a7b279c1a8a30f",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "174",
+      "review_report": "ai-research/RUST_BACKEND_AZ_DB_REPORT.md",
+      "teacher_phase_changes": true
+    },
+    {
+      "from_implementation": "61ce54442f33eb40cf59be4ddc864fef0c978db4e5ea0ff68020666b8369f7a8",
+      "to_implementation": "738316294df0d6fcecdc9024859f983a5675bc9c2acc8fca19a7b279c1a8a30f",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "174",
+      "review_report": "ai-research/RUST_BACKEND_AZ_DB_REPORT.md",
+      "config_migrations_ref": "1626"
+    },
+    {
+      "from_implementation": "6abba7672db47057df6090907c9397eb70ecad52b691653ed552bf250725e96d",
+      "to_implementation": "738316294df0d6fcecdc9024859f983a5675bc9c2acc8fca19a7b279c1a8a30f",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "174",
+      "review_report": "ai-research/RUST_BACKEND_AZ_DB_REPORT.md"
+    },
+    {
+      "from_implementation": "6abba7672db47057df6090907c9397eb70ecad52b691653ed552bf250725e96d",
+      "to_implementation": "738316294df0d6fcecdc9024859f983a5675bc9c2acc8fca19a7b279c1a8a30f",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "174",
+      "review_report": "ai-research/RUST_BACKEND_AZ_DB_REPORT.md",
+      "teacher_phase_changes": true
+    },
+    {
+      "from_implementation": "6abba7672db47057df6090907c9397eb70ecad52b691653ed552bf250725e96d",
+      "to_implementation": "738316294df0d6fcecdc9024859f983a5675bc9c2acc8fca19a7b279c1a8a30f",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "174",
+      "review_report": "ai-research/RUST_BACKEND_AZ_DB_REPORT.md",
+      "config_migrations_ref": "1626"
+    },
+    {
+      "from_implementation": "72ec2bf892f91bfb645acdf2b741c47276403fc5b38c159afe1ddeb7eeccc2c4",
+      "to_implementation": "738316294df0d6fcecdc9024859f983a5675bc9c2acc8fca19a7b279c1a8a30f",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "174",
+      "review_report": "ai-research/RUST_BACKEND_AZ_DB_REPORT.md"
+    },
+    {
+      "from_implementation": "72ec2bf892f91bfb645acdf2b741c47276403fc5b38c159afe1ddeb7eeccc2c4",
+      "to_implementation": "738316294df0d6fcecdc9024859f983a5675bc9c2acc8fca19a7b279c1a8a30f",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "174",
+      "review_report": "ai-research/RUST_BACKEND_AZ_DB_REPORT.md",
+      "teacher_phase_changes": true
+    },
+    {
+      "from_implementation": "72ec2bf892f91bfb645acdf2b741c47276403fc5b38c159afe1ddeb7eeccc2c4",
+      "to_implementation": "738316294df0d6fcecdc9024859f983a5675bc9c2acc8fca19a7b279c1a8a30f",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "174",
+      "review_report": "ai-research/RUST_BACKEND_AZ_DB_REPORT.md",
+      "config_migrations_ref": "1626"
+    },
+    {
+      "from_implementation": "738316294df0d6fcecdc9024859f983a5675bc9c2acc8fca19a7b279c1a8a30f",
+      "to_implementation": "738316294df0d6fcecdc9024859f983a5675bc9c2acc8fca19a7b279c1a8a30f",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "174",
+      "review_report": "ai-research/RUST_BACKEND_AZ_DB_REPORT.md"
+    },
+    {
+      "from_implementation": "738316294df0d6fcecdc9024859f983a5675bc9c2acc8fca19a7b279c1a8a30f",
+      "to_implementation": "738316294df0d6fcecdc9024859f983a5675bc9c2acc8fca19a7b279c1a8a30f",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "174",
+      "review_report": "ai-research/RUST_BACKEND_AZ_DB_REPORT.md",
+      "teacher_phase_changes": true
+    },
+    {
+      "from_implementation": "738316294df0d6fcecdc9024859f983a5675bc9c2acc8fca19a7b279c1a8a30f",
+      "to_implementation": "738316294df0d6fcecdc9024859f983a5675bc9c2acc8fca19a7b279c1a8a30f",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "174",
+      "review_report": "ai-research/RUST_BACKEND_AZ_DB_REPORT.md",
+      "config_migrations_ref": "1626"
+    },
+    {
+      "from_implementation": "738316294df0d6fcecdc9024859f983a5675bc9c2acc8fca19a7b279c1a8a30f",
+      "to_implementation": "738316294df0d6fcecdc9024859f983a5675bc9c2acc8fca19a7b279c1a8a30f",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "174",
+      "review_report": "ai-research/RUST_BACKEND_AZ_DB_REPORT.md",
+      "config_migrations_ref": "1697"
+    },
+    {
+      "from_implementation": "83ebfadaaccf862ebd06fb78cecb4b34362ad977781adf67f118851df244f015",
+      "to_implementation": "738316294df0d6fcecdc9024859f983a5675bc9c2acc8fca19a7b279c1a8a30f",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "174",
+      "review_report": "ai-research/RUST_BACKEND_AZ_DB_REPORT.md"
+    },
+    {
+      "from_implementation": "83ebfadaaccf862ebd06fb78cecb4b34362ad977781adf67f118851df244f015",
+      "to_implementation": "738316294df0d6fcecdc9024859f983a5675bc9c2acc8fca19a7b279c1a8a30f",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "174",
+      "review_report": "ai-research/RUST_BACKEND_AZ_DB_REPORT.md",
+      "teacher_phase_changes": true
+    },
+    {
+      "from_implementation": "83ebfadaaccf862ebd06fb78cecb4b34362ad977781adf67f118851df244f015",
+      "to_implementation": "738316294df0d6fcecdc9024859f983a5675bc9c2acc8fca19a7b279c1a8a30f",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "174",
+      "review_report": "ai-research/RUST_BACKEND_AZ_DB_REPORT.md",
+      "config_migrations_ref": "1626"
+    },
+    {
+      "from_implementation": "8746640733360fd984d0a35a38aa8de6748bf058a9cc53952e86fc54dc1c58b1",
+      "to_implementation": "738316294df0d6fcecdc9024859f983a5675bc9c2acc8fca19a7b279c1a8a30f",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "174",
+      "review_report": "ai-research/RUST_BACKEND_AZ_DB_REPORT.md"
+    },
+    {
+      "from_implementation": "8746640733360fd984d0a35a38aa8de6748bf058a9cc53952e86fc54dc1c58b1",
+      "to_implementation": "738316294df0d6fcecdc9024859f983a5675bc9c2acc8fca19a7b279c1a8a30f",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "174",
+      "review_report": "ai-research/RUST_BACKEND_AZ_DB_REPORT.md",
+      "teacher_phase_changes": true
+    },
+    {
+      "from_implementation": "8746640733360fd984d0a35a38aa8de6748bf058a9cc53952e86fc54dc1c58b1",
+      "to_implementation": "738316294df0d6fcecdc9024859f983a5675bc9c2acc8fca19a7b279c1a8a30f",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "174",
+      "review_report": "ai-research/RUST_BACKEND_AZ_DB_REPORT.md",
+      "config_migrations_ref": "1626"
+    },
+    {
+      "from_implementation": "8dd7b4737bcbcd85d1f935c63e66687a125734094dbd065fd8421b18bc083b3c",
+      "to_implementation": "738316294df0d6fcecdc9024859f983a5675bc9c2acc8fca19a7b279c1a8a30f",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "174",
+      "review_report": "ai-research/RUST_BACKEND_AZ_DB_REPORT.md"
+    },
+    {
+      "from_implementation": "8dd7b4737bcbcd85d1f935c63e66687a125734094dbd065fd8421b18bc083b3c",
+      "to_implementation": "738316294df0d6fcecdc9024859f983a5675bc9c2acc8fca19a7b279c1a8a30f",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "174",
+      "review_report": "ai-research/RUST_BACKEND_AZ_DB_REPORT.md",
+      "teacher_phase_changes": true
+    },
+    {
+      "from_implementation": "8dd7b4737bcbcd85d1f935c63e66687a125734094dbd065fd8421b18bc083b3c",
+      "to_implementation": "738316294df0d6fcecdc9024859f983a5675bc9c2acc8fca19a7b279c1a8a30f",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "174",
+      "review_report": "ai-research/RUST_BACKEND_AZ_DB_REPORT.md",
+      "config_migrations_ref": "1626"
+    },
+    {
+      "from_implementation": "98a39c30ddea66084853a97862e9b8b13f14a4ad4cf6c8d0311c4d34d8fc7b2b",
+      "to_implementation": "738316294df0d6fcecdc9024859f983a5675bc9c2acc8fca19a7b279c1a8a30f",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "174",
+      "review_report": "ai-research/RUST_BACKEND_AZ_DB_REPORT.md"
+    },
+    {
+      "from_implementation": "98a39c30ddea66084853a97862e9b8b13f14a4ad4cf6c8d0311c4d34d8fc7b2b",
+      "to_implementation": "738316294df0d6fcecdc9024859f983a5675bc9c2acc8fca19a7b279c1a8a30f",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "174",
+      "review_report": "ai-research/RUST_BACKEND_AZ_DB_REPORT.md",
+      "teacher_phase_changes": true
+    },
+    {
+      "from_implementation": "98a39c30ddea66084853a97862e9b8b13f14a4ad4cf6c8d0311c4d34d8fc7b2b",
+      "to_implementation": "738316294df0d6fcecdc9024859f983a5675bc9c2acc8fca19a7b279c1a8a30f",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "174",
+      "review_report": "ai-research/RUST_BACKEND_AZ_DB_REPORT.md",
+      "config_migrations_ref": "1626"
+    },
+    {
+      "from_implementation": "993a9cc07e6f0e53fd0b63f20349289cf5d410fbc104259c7740aefdaca446d9",
+      "to_implementation": "738316294df0d6fcecdc9024859f983a5675bc9c2acc8fca19a7b279c1a8a30f",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "174",
+      "review_report": "ai-research/RUST_BACKEND_AZ_DB_REPORT.md"
+    },
+    {
+      "from_implementation": "993a9cc07e6f0e53fd0b63f20349289cf5d410fbc104259c7740aefdaca446d9",
+      "to_implementation": "738316294df0d6fcecdc9024859f983a5675bc9c2acc8fca19a7b279c1a8a30f",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "174",
+      "review_report": "ai-research/RUST_BACKEND_AZ_DB_REPORT.md",
+      "teacher_phase_changes": true
+    },
+    {
+      "from_implementation": "993a9cc07e6f0e53fd0b63f20349289cf5d410fbc104259c7740aefdaca446d9",
+      "to_implementation": "738316294df0d6fcecdc9024859f983a5675bc9c2acc8fca19a7b279c1a8a30f",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "174",
+      "review_report": "ai-research/RUST_BACKEND_AZ_DB_REPORT.md",
+      "config_migrations_ref": "1626"
+    },
+    {
+      "from_implementation": "9cd3826db5d0dca61f07bf1e584a5d5e81371b307b2ba96d6666571fb31836b2",
+      "to_implementation": "738316294df0d6fcecdc9024859f983a5675bc9c2acc8fca19a7b279c1a8a30f",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "174",
+      "review_report": "ai-research/RUST_BACKEND_AZ_DB_REPORT.md"
+    },
+    {
+      "from_implementation": "9cd3826db5d0dca61f07bf1e584a5d5e81371b307b2ba96d6666571fb31836b2",
+      "to_implementation": "738316294df0d6fcecdc9024859f983a5675bc9c2acc8fca19a7b279c1a8a30f",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "174",
+      "review_report": "ai-research/RUST_BACKEND_AZ_DB_REPORT.md",
+      "teacher_phase_changes": true
+    },
+    {
+      "from_implementation": "9cd3826db5d0dca61f07bf1e584a5d5e81371b307b2ba96d6666571fb31836b2",
+      "to_implementation": "738316294df0d6fcecdc9024859f983a5675bc9c2acc8fca19a7b279c1a8a30f",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "174",
+      "review_report": "ai-research/RUST_BACKEND_AZ_DB_REPORT.md",
+      "config_migrations_ref": "1626"
+    },
+    {
+      "from_implementation": "9d488d8dd3c9f7610263214338af18d2b844062939f1c40a2d5c46a9ea6b6cb3",
+      "to_implementation": "738316294df0d6fcecdc9024859f983a5675bc9c2acc8fca19a7b279c1a8a30f",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "174",
+      "review_report": "ai-research/RUST_BACKEND_AZ_DB_REPORT.md"
+    },
+    {
+      "from_implementation": "9d488d8dd3c9f7610263214338af18d2b844062939f1c40a2d5c46a9ea6b6cb3",
+      "to_implementation": "738316294df0d6fcecdc9024859f983a5675bc9c2acc8fca19a7b279c1a8a30f",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "174",
+      "review_report": "ai-research/RUST_BACKEND_AZ_DB_REPORT.md",
+      "teacher_phase_changes": true
+    },
+    {
+      "from_implementation": "9d488d8dd3c9f7610263214338af18d2b844062939f1c40a2d5c46a9ea6b6cb3",
+      "to_implementation": "738316294df0d6fcecdc9024859f983a5675bc9c2acc8fca19a7b279c1a8a30f",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "174",
+      "review_report": "ai-research/RUST_BACKEND_AZ_DB_REPORT.md",
+      "config_migrations_ref": "1626"
+    },
+    {
+      "from_implementation": "a9d19c2ee9325454bce2ab51fa184688d99406f5d5135a228775dce81db54439",
+      "to_implementation": "738316294df0d6fcecdc9024859f983a5675bc9c2acc8fca19a7b279c1a8a30f",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "174",
+      "review_report": "ai-research/RUST_BACKEND_AZ_DB_REPORT.md"
+    },
+    {
+      "from_implementation": "a9d19c2ee9325454bce2ab51fa184688d99406f5d5135a228775dce81db54439",
+      "to_implementation": "738316294df0d6fcecdc9024859f983a5675bc9c2acc8fca19a7b279c1a8a30f",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "174",
+      "review_report": "ai-research/RUST_BACKEND_AZ_DB_REPORT.md",
+      "teacher_phase_changes": true
+    },
+    {
+      "from_implementation": "a9d19c2ee9325454bce2ab51fa184688d99406f5d5135a228775dce81db54439",
+      "to_implementation": "738316294df0d6fcecdc9024859f983a5675bc9c2acc8fca19a7b279c1a8a30f",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "174",
+      "review_report": "ai-research/RUST_BACKEND_AZ_DB_REPORT.md",
+      "config_migrations_ref": "1626"
+    },
+    {
+      "from_implementation": "afcb66986a870567dbbd22ea45c5f43467ca0f7829948f04b561a9f8019e556b",
+      "to_implementation": "738316294df0d6fcecdc9024859f983a5675bc9c2acc8fca19a7b279c1a8a30f",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "174",
+      "review_report": "ai-research/RUST_BACKEND_AZ_DB_REPORT.md"
+    },
+    {
+      "from_implementation": "afcb66986a870567dbbd22ea45c5f43467ca0f7829948f04b561a9f8019e556b",
+      "to_implementation": "738316294df0d6fcecdc9024859f983a5675bc9c2acc8fca19a7b279c1a8a30f",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "174",
+      "review_report": "ai-research/RUST_BACKEND_AZ_DB_REPORT.md",
+      "teacher_phase_changes": true
+    },
+    {
+      "from_implementation": "afcb66986a870567dbbd22ea45c5f43467ca0f7829948f04b561a9f8019e556b",
+      "to_implementation": "738316294df0d6fcecdc9024859f983a5675bc9c2acc8fca19a7b279c1a8a30f",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "174",
+      "review_report": "ai-research/RUST_BACKEND_AZ_DB_REPORT.md",
+      "config_migrations_ref": "1626"
+    },
+    {
+      "from_implementation": "b95f45e2b0be6672a4efb7a3cabf9e2fab3e152a667e7f229b6c09ab5cb01c71",
+      "to_implementation": "738316294df0d6fcecdc9024859f983a5675bc9c2acc8fca19a7b279c1a8a30f",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "174",
+      "review_report": "ai-research/RUST_BACKEND_AZ_DB_REPORT.md"
+    },
+    {
+      "from_implementation": "b95f45e2b0be6672a4efb7a3cabf9e2fab3e152a667e7f229b6c09ab5cb01c71",
+      "to_implementation": "738316294df0d6fcecdc9024859f983a5675bc9c2acc8fca19a7b279c1a8a30f",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "174",
+      "review_report": "ai-research/RUST_BACKEND_AZ_DB_REPORT.md",
+      "teacher_phase_changes": true
+    },
+    {
+      "from_implementation": "b95f45e2b0be6672a4efb7a3cabf9e2fab3e152a667e7f229b6c09ab5cb01c71",
+      "to_implementation": "738316294df0d6fcecdc9024859f983a5675bc9c2acc8fca19a7b279c1a8a30f",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "174",
+      "review_report": "ai-research/RUST_BACKEND_AZ_DB_REPORT.md",
+      "config_migrations_ref": "1626"
+    },
+    {
+      "from_implementation": "c33ff1ba936905fe06c4b6436d316a5073c9049be4a8d8d0e9c734f87e071314",
+      "to_implementation": "738316294df0d6fcecdc9024859f983a5675bc9c2acc8fca19a7b279c1a8a30f",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "174",
+      "review_report": "ai-research/RUST_BACKEND_AZ_DB_REPORT.md"
+    },
+    {
+      "from_implementation": "c33ff1ba936905fe06c4b6436d316a5073c9049be4a8d8d0e9c734f87e071314",
+      "to_implementation": "738316294df0d6fcecdc9024859f983a5675bc9c2acc8fca19a7b279c1a8a30f",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "174",
+      "review_report": "ai-research/RUST_BACKEND_AZ_DB_REPORT.md",
+      "teacher_phase_changes": true
+    },
+    {
+      "from_implementation": "c33ff1ba936905fe06c4b6436d316a5073c9049be4a8d8d0e9c734f87e071314",
+      "to_implementation": "738316294df0d6fcecdc9024859f983a5675bc9c2acc8fca19a7b279c1a8a30f",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "174",
+      "review_report": "ai-research/RUST_BACKEND_AZ_DB_REPORT.md",
+      "config_migrations_ref": "1626"
+    },
+    {
+      "from_implementation": "c7ab2ff8c75b3ab9abd307cc78d0fdb8da50683e707b68475220b05d21a1aee5",
+      "to_implementation": "738316294df0d6fcecdc9024859f983a5675bc9c2acc8fca19a7b279c1a8a30f",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "174",
+      "review_report": "ai-research/RUST_BACKEND_AZ_DB_REPORT.md"
+    },
+    {
+      "from_implementation": "c7ab2ff8c75b3ab9abd307cc78d0fdb8da50683e707b68475220b05d21a1aee5",
+      "to_implementation": "738316294df0d6fcecdc9024859f983a5675bc9c2acc8fca19a7b279c1a8a30f",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "174",
+      "review_report": "ai-research/RUST_BACKEND_AZ_DB_REPORT.md",
+      "teacher_phase_changes": true
+    },
+    {
+      "from_implementation": "c7ab2ff8c75b3ab9abd307cc78d0fdb8da50683e707b68475220b05d21a1aee5",
+      "to_implementation": "738316294df0d6fcecdc9024859f983a5675bc9c2acc8fca19a7b279c1a8a30f",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "174",
+      "review_report": "ai-research/RUST_BACKEND_AZ_DB_REPORT.md",
+      "config_migrations_ref": "1626"
+    },
+    {
+      "from_implementation": "cb165c0d852ca79dfd3df2c40483dc7e06bf6dd988d94755ecd1cb597cc3a6af",
+      "to_implementation": "738316294df0d6fcecdc9024859f983a5675bc9c2acc8fca19a7b279c1a8a30f",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "174",
+      "review_report": "ai-research/RUST_BACKEND_AZ_DB_REPORT.md"
+    },
+    {
+      "from_implementation": "cb165c0d852ca79dfd3df2c40483dc7e06bf6dd988d94755ecd1cb597cc3a6af",
+      "to_implementation": "738316294df0d6fcecdc9024859f983a5675bc9c2acc8fca19a7b279c1a8a30f",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "174",
+      "review_report": "ai-research/RUST_BACKEND_AZ_DB_REPORT.md",
+      "teacher_phase_changes": true
+    },
+    {
+      "from_implementation": "cb165c0d852ca79dfd3df2c40483dc7e06bf6dd988d94755ecd1cb597cc3a6af",
+      "to_implementation": "738316294df0d6fcecdc9024859f983a5675bc9c2acc8fca19a7b279c1a8a30f",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "174",
+      "review_report": "ai-research/RUST_BACKEND_AZ_DB_REPORT.md",
+      "config_migrations_ref": "1626"
+    },
+    {
+      "from_implementation": "cd3943e2ea84d436fb009fa3bce936c84115aa5bcb5b360b0fb3be7b97e31cc1",
+      "to_implementation": "738316294df0d6fcecdc9024859f983a5675bc9c2acc8fca19a7b279c1a8a30f",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "174",
+      "review_report": "ai-research/RUST_BACKEND_AZ_DB_REPORT.md"
+    },
+    {
+      "from_implementation": "cd3943e2ea84d436fb009fa3bce936c84115aa5bcb5b360b0fb3be7b97e31cc1",
+      "to_implementation": "738316294df0d6fcecdc9024859f983a5675bc9c2acc8fca19a7b279c1a8a30f",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "174",
+      "review_report": "ai-research/RUST_BACKEND_AZ_DB_REPORT.md",
+      "teacher_phase_changes": true
+    },
+    {
+      "from_implementation": "cd3943e2ea84d436fb009fa3bce936c84115aa5bcb5b360b0fb3be7b97e31cc1",
+      "to_implementation": "738316294df0d6fcecdc9024859f983a5675bc9c2acc8fca19a7b279c1a8a30f",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "174",
+      "review_report": "ai-research/RUST_BACKEND_AZ_DB_REPORT.md",
+      "config_migrations_ref": "1626"
+    },
+    {
+      "from_implementation": "d980354d39b02f27aeee147e91ba32c24f55a879647a3d1f27615410ca9e012a",
+      "to_implementation": "738316294df0d6fcecdc9024859f983a5675bc9c2acc8fca19a7b279c1a8a30f",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "174",
+      "review_report": "ai-research/RUST_BACKEND_AZ_DB_REPORT.md"
+    },
+    {
+      "from_implementation": "d980354d39b02f27aeee147e91ba32c24f55a879647a3d1f27615410ca9e012a",
+      "to_implementation": "738316294df0d6fcecdc9024859f983a5675bc9c2acc8fca19a7b279c1a8a30f",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "174",
+      "review_report": "ai-research/RUST_BACKEND_AZ_DB_REPORT.md",
+      "teacher_phase_changes": true
+    },
+    {
+      "from_implementation": "d980354d39b02f27aeee147e91ba32c24f55a879647a3d1f27615410ca9e012a",
+      "to_implementation": "738316294df0d6fcecdc9024859f983a5675bc9c2acc8fca19a7b279c1a8a30f",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "174",
+      "review_report": "ai-research/RUST_BACKEND_AZ_DB_REPORT.md",
+      "config_migrations_ref": "1626"
+    },
+    {
+      "from_implementation": "ef1cb36d346edd6ce306324370fe60f759b297b58282edff093b3f08aadf80be",
+      "to_implementation": "738316294df0d6fcecdc9024859f983a5675bc9c2acc8fca19a7b279c1a8a30f",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "174",
+      "review_report": "ai-research/RUST_BACKEND_AZ_DB_REPORT.md"
+    },
+    {
+      "from_implementation": "ef1cb36d346edd6ce306324370fe60f759b297b58282edff093b3f08aadf80be",
+      "to_implementation": "738316294df0d6fcecdc9024859f983a5675bc9c2acc8fca19a7b279c1a8a30f",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "174",
+      "review_report": "ai-research/RUST_BACKEND_AZ_DB_REPORT.md",
+      "teacher_phase_changes": true
+    },
+    {
+      "from_implementation": "ef1cb36d346edd6ce306324370fe60f759b297b58282edff093b3f08aadf80be",
+      "to_implementation": "738316294df0d6fcecdc9024859f983a5675bc9c2acc8fca19a7b279c1a8a30f",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "174",
+      "review_report": "ai-research/RUST_BACKEND_AZ_DB_REPORT.md",
+      "config_migrations_ref": "1626"
+    },
+    {
+      "from_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "to_implementation": "738316294df0d6fcecdc9024859f983a5675bc9c2acc8fca19a7b279c1a8a30f",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "174",
+      "review_report": "ai-research/RUST_BACKEND_AZ_DB_REPORT.md"
+    },
+    {
+      "from_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "to_implementation": "738316294df0d6fcecdc9024859f983a5675bc9c2acc8fca19a7b279c1a8a30f",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "174",
+      "review_report": "ai-research/RUST_BACKEND_AZ_DB_REPORT.md",
+      "teacher_phase_changes": true
+    },
+    {
+      "from_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "to_implementation": "738316294df0d6fcecdc9024859f983a5675bc9c2acc8fca19a7b279c1a8a30f",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "174",
+      "review_report": "ai-research/RUST_BACKEND_AZ_DB_REPORT.md",
+      "config_migrations_ref": "1626"
+    },
+    {
+      "from_implementation": "fa4514f0c562e7eb247e3d4a75b4b38e2304ee11cfaadeaee3702ae76310447d",
+      "to_implementation": "738316294df0d6fcecdc9024859f983a5675bc9c2acc8fca19a7b279c1a8a30f",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "174",
+      "review_report": "ai-research/RUST_BACKEND_AZ_DB_REPORT.md",
+      "config_migrations_ref": "1697"
     }
   ],
   "definitions": {
@@ -690532,7 +693175,9 @@
       "169": "B04 opt-in native search_v1 teacher exports/collector and raw GPU logits. Saved joint7 recipe, learner/optimizer/RNG/PPG state and lineage retained; native teacher source participates in buffer admission. Narrow mode/share readiness preservation retained. B01-B04 lab qualification and B05/B07 production updates/adoption remain separately required.",
       "170": "Reviewed DOMiNO-based episodic PPO adoption: independent uniform seven-context assignments to all neural ordinary seats; explicit frozen/learner roles and context fingerprints; phase-normalized observable occupancy, prior committed quality/centroid EMAs and six-logit dual Adam; task-only neutral/bootstrap/branches; isolated intrinsic companion, DCPG preservation and current-only PPG fitting with full keep-best rollback. Generation-bound full-checkpoint adoption archives/resets only PFSP context scores and starts an empty PPG window; old caches expire only after new commit. Preserve base weights and all existing Adam/RNG/progress, reward, opening/exploration, KL/economic/GAE/snapshot controls, ratings, membership and IL identity. Native setup handles omitted nonterminal result; branch probability transport admits at most two f64 ULPs, with exact identities and independent original branch replay unchanged. Explicit off retains legacy execution; shadow changes contexts/telemetry only.",
       "171": "Reviewed DOMiNO debug/performance follow-up: require complete physical-seat context assignments and exact collection/critic/replay receipts; reject changed frozen weights or cross-context fingerprint bodies; vectorize the unchanged PPO advantage mixture and cache small current-iteration intrinsic eligibility metadata without decoding replay inputs. Reuse encoder outputs for PPG intrinsic fitting when local scoring heads are absent/inactive. Preserve all config, model/auxiliary weights, PPO/value/auxiliary Adam, RNG, committed progress, opponent sampling, bootstrap/dual evidence, objective, KL safeguards, two-age cache and existing DOMiNO adoption. Retain the original generation-bound adoption routes without requiring adoption or PFSP reset again. Focused receipt, numerical/gradient parity, rejected-PPG rollback and exact restart checks accompany this review.",
-      "172": "Reviewed explicit fixed PPO entropy revision: canal_action, canal_other, rail_action and rail_other each 0.10 in fixed-group-entropy/1.1.0. Original 1.0.0 configurations remain valid and are not silently rewritten. The generation-bound DOMiNO helper can combine the existing adoption with this separately versioned entropy migration. Preserve all other sampling, reward, opening/branch, PPO/PPG, model, optimizer/RNG, progress, controller baselines and population settings."
+      "172": "Reviewed explicit fixed PPO entropy revision: canal_action, canal_other, rail_action and rail_other each 0.10 in fixed-group-entropy/1.1.0. Original 1.0.0 configurations remain valid and are not silently rewritten. The generation-bound DOMiNO helper can combine the existing adoption with this separately versioned entropy migration. Preserve all other sampling, reward, opening/branch, PPO/PPG, model, optimizer/RNG, progress, controller baselines and population settings.",
+      "173": "Reviewed g1327-g1330 DOMiNO logs: replace rowwise GPU snapshot-weight writes with exact bulk weights; separate local-head versus intrinsic loss reporting; expose attempted/retained intrinsic fitting and prediction/target RMS; report unmeasured attempted PPG KL as null. Preserve objectives, random draws, safeguards, model/Adam/RNG, DOMiNO state, compatible replay, progress and configuration. No repeated adoption or reset.",
+      "174": "Reviewed B02.5/B03/B04 AZ_DB supplement: preserve g1330 DOMiNO review and ordinary PPO/PPG objectives, data, Adam/RNG and progress. Add optional retained-fit receipts after accepted normal PPG, explicit full DOMiNO restore, conditional policy-only teacher and detached root-only Rust objective. Teacher remains off; lab qualification and B05/B07 activation remain Pending."
     },
     "config_changes": {
       "0": {
@@ -712280,6 +714925,9 @@
       "1696": [
         "domino-adoption/1.0.0",
         "fixed-group-entropy-010/1.0.0"
+      ],
+      "1697": [
+        "teacher-domino-adoption/1.0.0"
       ]
     },
     "config_migration": {

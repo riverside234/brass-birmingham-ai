@@ -50,10 +50,15 @@ def improved_policy(logits, counts, means, value, c1=50, c2=.1):
 
 def validate_improved_policy(label, choices):
     """Validate mathematical/ordered-legal contract; return None for no evidence."""
-    require(isinstance(label, dict) and label.get('source') == LABEL_SOURCE
-            and label.get('method') == 'search_v1' and label.get('algorithm') == ALGORITHM
-            and label.get('session') == SESSION and label.get('v205_enabled') is False,
+    from . import teacher_diversity as D
+    diversity = label.get('source') == D.LABEL
+    require(isinstance(label, dict) and label.get('source') in (LABEL_SOURCE,D.LABEL)
+            and label.get('method') == 'search_v1' and label.get('algorithm') == (D.ALGORITHM if diversity else ALGORITHM)
+            and label.get('session') == (D.SESSION if diversity else SESSION) and label.get('v205_enabled') is False,
             'Unknown teacher label/search source')
+    if diversity:
+        require(label['base_algorithm'] == ALGORITHM and label['base_session'] == SESSION, 'Changed base Gumbel algorithm')
+        D.validate_channels(label)
     ids = [c['id'] for c in choices]
     require(ids and len(set(ids)) == len(ids) and label['legal_ids'] == ids, 'Teacher legal order differs')
     require(label['kind'] in KINDS and label['phase'] in PHASES, 'Unknown teacher decision kind/phase')
@@ -122,8 +127,19 @@ def validate_row(row, expected, history, admitted_sources):
     phase = ('canal_' + ('early' if context['round'] <= 4 else 'late') if context['era'] == 'CanalEra'
              else 'rail_' + ('early' if context['round'] <= 6 else 'late'))
     require(label['phase'] == phase, 'Teacher phase differs from observation')
-    require(row.get('style', [0.] * 4) == [0.] * 4 and row.get('intent', [0.] * 8) == [0.] * 8,
-            'Teacher policy requires neutral context')
+    from . import teacher_diversity as D
+    if label.get('source') == D.LABEL:
+        planned = expected['seat_contexts'][label['seat']]
+        D.check_context(planned)
+        require(label['seat_context'] == planned and label['strategy_id'] == planned['strategy_id']
+                and row['style'] == planned['style'] and row['intent'] == planned['intent']
+                and label['bundle_id'] == expected['bundle_id'] and label['profile_id'] == expected['profile_id']
+                and label['fit_id'] == expected['fit_id'] and label['direction_id'] == expected['direction_id']
+                and label['coefficient'] == expected['coefficients'][planned['strategy_id']],
+                'Teacher context/evaluator differs from frozen job')
+    else:
+        require('bundle_id' not in expected and row.get('style', [0.] * 4) == [0.] * 4
+                and row.get('intent', [0.] * 8) == [0.] * 8, 'Teacher policy requires neutral context')
     return validate_improved_policy(label, row['choices'])
 
 
@@ -141,7 +157,7 @@ def admit_rows(rows, *, model, expected, history, admitted_sources):
             reason = 'cancelled' if row['teacher']['cancelled'] else 'forced' if len(row['choices']) == 1 else 'no_evidence'
             rejected[reason] += 1
             continue
-        value = LabelRow(row, encoder.encode(row['view'], row['choices'], [0.] * 4, [0.] * 8))
+        value = LabelRow(row, encoder.encode(row['view'], row['choices'], row.get('style',[0.]*4), row.get('intent',[0.]*8)))
         require(value.identity not in seen, 'Duplicate teacher decision')
         seen.add(value.identity); accepted.append(value)
     actual = policy_logits(model, accepted)

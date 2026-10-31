@@ -71,7 +71,7 @@ def compare_preparation(game, family, config, learner):
             recorder = dict(part['scoring'], producer='local-scoring-host/1.0.0')
             old[FIELD] = bind(recorder, old, dict(runtime_sha256='0'*64, host_sha256='0'*64))
     legacy = check_game(legacy)
-    for attribute in ('critic_table', 'table_kind', 'ppo_opening_objective'):
+    for attribute in ('critic_table', 'table_kind', 'ppo_opening_objective', 'diversity_assignment'):
         if hasattr(game, attribute): setattr(legacy, attribute, copy.deepcopy(getattr(game, attribute)))
     left = prepared_rows([game], config, learner); right = prepared_rows([legacy], config, learner)
     require(len(left) == len(right), 'Native/reference preparation row count differs')
@@ -100,11 +100,13 @@ def run(snapshot, jobs, files, producer, output):
         require(game['game_id'] not in identities, 'Repeated family admission'); identities.add(game['game_id'])
         learner = job['provenance']['learner_behavior']['policy_id']
         rows = compare_preparation(game, family, config, learner)
+        from .lab_domino_normalization import prove
+        normalization=prove(game) if config.get('diversity',{}).get('mode')=='apply' else None
         reports.append(dict(job=job['index'], family_sha256=family['sha256'], receipt=record, prepared_rows=len(rows),
             forced_critic_rows=sum(len(e.choice_ids) == 1 for _, _, _, e in rows),
             actor_rows=sum(r['behavior']['policy_id'] == learner and len(e.choice_ids) > 1 for r, _, _, e in rows),
             snapshot_rows=sum(r.get('_critic_role') == 'snapshot' for r, _, _, _ in rows),
-            branch=family['child'] is not None, kind=job['provenance']['kind']))
+            branch=family['child'] is not None, kind=job['provenance']['kind'],domino_normalization=normalization))
         games.append(game)
     kinds = {g['game_id']: getattr(g, 'table_kind', job['provenance']['kind'])
              for game, job in zip(games, jobs, strict=True) for g in expand([game])}

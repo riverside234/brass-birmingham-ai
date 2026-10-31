@@ -653,3 +653,13 @@ Desktop.ini
 !/distribution/rust-lab-g1326/transfer-manifest.json
 !/distribution/rust-lab-g1326/bundle.json
 !/distribution/rust-lab-g1326/rust-lab-b01-b04-g1326.zip
+
+# AZ_db teacher revision; historical qualification transfers stay immutable.
+!/distribution/rust-lab-g1330/
+/distribution/rust-lab-g1330/*
+!/distribution/rust-lab-g1330/README.md
+!/distribution/rust-lab-g1330/training-reference.json
+!/distribution/rust-lab-g1330/transfer-manifest.json
+!/distribution/rust-lab-g1330/bundle.json
+!/distribution/rust-lab-g1330/local-development.json
+!/distribution/rust-lab-g1330/rust-lab-az-db-g1330.zip

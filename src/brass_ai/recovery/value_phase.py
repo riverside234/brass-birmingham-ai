@@ -349,7 +349,7 @@ def fit(model,optimizer,dataset,train_ids,heldout_ids,actor_ids,probe_ids,config
     train_before=metrics(model,value_dataset,value_train_ids,update,preparation=preparation);before=metrics(model,validation_dataset,heldout_ids,update,evidence=True)
     gate_before=metrics(model,gate_dataset,gate_ids,update,evidence=True) if separate_gate else before
     current=before;epochs=[];used=set();presentations=0;clone_presentations=0
-    max_kl=0.;accepted_kl=0.;last_attempt=None;previous_presentations=0;role_presentations=defaultdict(int);branch_presentations=0
+    max_kl=0.;attempted_kl_checks=0;accepted_kl=0.;last_attempt=None;previous_presentations=0;role_presentations=defaultdict(int);branch_presentations=0
     deferred=config.get('kl_check_steps',1)>1
     guard=DeferredKL(model,optimizer,companion,reference,probe_ids,config['kl_cap'],report) if deferred else None
     if deferred:report['acceptance']='kl-checked-retained-interval/1.0.0'
@@ -406,6 +406,7 @@ def fit(model,optimizer,dataset,train_ids,heldout_ids,actor_ids,probe_ids,config
                 tail=segment+offset+1==len(batches)
                 check=not deferred or step%config['kl_check_steps']==0 or tail
                 if check:
+                    attempted_kl_checks+=1
                     measured=(guard.measure(step,'periodic' if step%config['kl_check_steps']==0 else 'epoch_tail')
                         if deferred else reference.measure(model,probe_ids))
                     max_kl=max(max_kl,measured);checked_step=step
@@ -464,6 +465,7 @@ def fit(model,optimizer,dataset,train_ids,heldout_ids,actor_ids,probe_ids,config
         if report['early_stop_reason'] is not None:break
     if deferred:
         keep,accepted_kl=guard.finish();max_kl=max(max_kl,guard.maximum)
+        attempted_kl_checks=len(guard.checks)
         # A loss boundary accepted before the next probe can still be unsafe.
         # Rebuild retained-work accounting from exactly the restored prefix.
         for entry in retained[keep:]:
@@ -510,7 +512,9 @@ def fit(model,optimizer,dataset,train_ids,heldout_ids,actor_ids,probe_ids,config
         last_attempted_heldout=last_attempt,heldout_attempt_scope=('Loss-accepted boundaries remain provisional until a safe exact KL receipt; attempted diagnostics may precede final rollback'
             if deferred else 'Safe interval/prefix after any violating step is restored'),
         clone_rows=len(clones),clone_kl=reference.measure(model,clones),
-        probe_rows=len(probe_ids),probe_kl=accepted_kl if deferred else reference.measure(model,probe_ids),maximum_attempted_probe_kl=max_kl,
+        probe_rows=len(probe_ids),probe_kl=accepted_kl if deferred else reference.measure(model,probe_ids),
+        maximum_attempted_probe_kl=max_kl if attempted_kl_checks else None,attempted_probe_kl_checks=attempted_kl_checks,
+        attempted_probe_kl_scope='Only measured attempted states, including retention checks. Null means no attempted state was checked; restored post-PPO KL can still be exactly zero.',
         distinct_value_rows_used=len(used),value_presentations=presentations,clone_presentations=clone_presentations,
         branch_distinct_rows_used=sum('/branch/' in value_dataset.data[i][2][0] for i in used),
         branch_presentations=branch_presentations,

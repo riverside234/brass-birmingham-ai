@@ -1,6 +1,7 @@
 """Iteration lifecycle and checkpoint binding for GAE and the separate value Adam."""
 import copy
 import math
+import time
 
 import torch
 
@@ -530,23 +531,34 @@ class TrainingPhases:
 
     def prepare(self,dataset):
         from .updates import Dataset
+        started=time.perf_counter();timings={}
         self.dataset=dataset
         self.critic_dataset=Dataset(dataset.data+self.snapshot_data,dataset.device,policy=False) if self.snapshot_data else dataset
         critic=self.critic_dataset
+        timings['dataset']=time.perf_counter()-started;started=time.perf_counter()
         require(all(role in ('learner','snapshot') for role in critic.roles),'Excluded opponent in critic data')
-        if self.critic_state:
-            for i,role in enumerate(critic.roles):
-                if role=='snapshot':critic.critic_weights[i]=self.critic_state['snapshot_weight']
+        if self.critic_state and self.critic_state['snapshot_weight']!=1.:
+            # One transfer, rather than one CUDA indexed write per snapshot row.
+            # Dataset already initialized all weights to one for the fixed-1 run.
+            critic.critic_weights=torch.tensor([
+                self.critic_state['snapshot_weight'] if role=='snapshot' else 1. for role in critic.roles
+            ],device=dataset.device,dtype=critic.critic_weights.dtype)
+        timings['weights']=time.perf_counter()-started;started=time.perf_counter()
         self.train_ids,self.heldout_ids,self.split=value_phase.split(critic.data,self.options['value_phase']['holdout_fraction'],
             self.options['value_phase'].get('holdout'))
         if self.critic_state and (not self.critic_state['snapshots_active'] or self.critic_state['snapshot_weight']==0):
             self.train_ids=[i for i in self.train_ids if critic.roles[i]=='learner']
         self.learner_train_ids=[i for i in self.train_ids if i<len(dataset.data)]
         if self.split:self.split['eligible_train_rows']=len(self.train_ids)
+        timings['split']=time.perf_counter()-started;started=time.perf_counter()
         companion=getattr(self,'local_scoring',None)
         if companion is not None and companion.active:companion.inventory(critic,self.train_ids)
+        timings['local_inventory']=time.perf_counter()-started;started=time.perf_counter()
         diversity=getattr(self,'diversity',None)
         if diversity is not None:diversity.prepare(critic,self.train_ids,self.heldout_ids)
+        timings['diversity']=time.perf_counter()-started
+        self.split['preparation_seconds']=timings
+        self.split['preparation_timing_scope']='Host wall time; asynchronous device work may complete in the next section'
         return self.train_ids
 
     def advantages(self,mc,actor_ids):

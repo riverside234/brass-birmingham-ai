@@ -2,7 +2,7 @@
 
 Date: 2026-10-30 (America/Chicago).
 
-Status: **Design only.** This document revises the completed B02.5, B03 and B04 implementations for a later teacher activation. It does not enable teaching, alter the ongoing backend migration, or authorize a training campaign. DOMiNO ordinary training is already implemented; reuse it.
+Status: **B02.5/B03/B04 implementation delivered; Linux/CUDA qualification Pending.** See the [implementation report](RUST_BACKEND_AZ_DB_REPORT.md) and [g1330 transfer and commands](../distribution/rust-lab-g1330/README.md). The current run has adopted DOMiNO `apply` and reached g1330; missing retained intrinsic-fit metadata defers v2 collection while ordinary training remains resumable. Production teaching stays off. B05/B07 continuation and activation remain later gates; no training campaign is authorized or claimed here.
 
 ## 1. Scope and relationship to existing work
 
@@ -40,7 +40,7 @@ All Brass-specific choices below are engineering adaptations, not paper results.
 
 ## 3. Current implementation findings
 
-These are observations from the checkout inspected on 2026-10-30, not instructions to undo concurrent updates.
+These are **pre-revision** observations from the checkout inspected on 2026-10-30. The linked supplement implements the required deltas below; retain this table as rationale, not a description of the current code.
 
 | Component | Existing behavior | Required delta |
 | --- | --- | --- |
@@ -313,7 +313,7 @@ Archive any previous teacher beta calibration when adopting this materially diff
 
 ## 11. Versioning and proposed configuration
 
-Use a new, strictly validated configuration contract. The names below are proposed identifiers, not currently implemented commands or accepted schemas:
+Use the new, strictly validated configuration contract. These v2 identifiers are implemented; the reviewed config helper generates the full block:
 
 ```json
 {

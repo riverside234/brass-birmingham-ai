@@ -6,10 +6,11 @@ This implements D0–D4 of [the plan](DOMINO_DIVERSITY_TRAINING_PLAN.md).
 D5, empirical strategy and playing-strength qualification, remains a separate experiment.
 
 Follow-up: [debug review and performance fixes](DOMINO_DIVERSITY_DEBUG_REVIEW.md).
+Latest: [g1327–g1330 log review and g1330 continuation](SELFPLAY_G1330_REVIEW.md).
 Already adopted runs use their existing config and a reviewed source continuation;
 they do not repeat the g1326 adoption or reset compatible PPG replay.
 
-**Current g1326 command update:** the user has not yet run the adoption command.
+**Archived g1326 command update:** at the time of this update, adoption had not run.
 The command below now explicitly sets all four fixed PPO entropy coefficients to
 **0.10**, through `--entropy-010` and `fixed-group-entropy/1.1.0`. Adaptive entropy
 stays off; its saved baseline is retained. Fresh config generation uses the same

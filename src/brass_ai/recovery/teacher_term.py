@@ -61,8 +61,9 @@ def summary(values):
 
 def heldout_measure(model, rows):
     logits = policy_logits(model, rows); out = {}
-    for phase in ('all', *PHASES):
-        pairs = [(r, l) for r, l in zip(rows, logits) if phase == 'all' or r.label['phase'] == phase]
+    for phase in ('all', *PHASES, *(f'strategy_{z}' for z in range(7))):
+        pairs = [(r, l) for r, l in zip(rows, logits) if phase == 'all' or r.label['phase'] == phase
+                 or phase == 'strategy_'+str(r.label.get('strategy_id',0))]
         out[phase] = dict(rows=len(pairs), kl=float(np.mean([kl(r.label['target'], softmax(l)) for r, l in pairs])) if pairs else None,
             top1=float(np.mean([np.argmax(r.label['target']) == np.argmax(l) for r, l in pairs])) if pairs else None)
     return out
@@ -95,6 +96,10 @@ class TeacherTerm:
                 skip = drift > config['buffer']['max_staleness_ratio'] * improve
                 self.staleness[str(age)] = dict(rows=len(selected), improvement=improve, drift=drift,
                     ratio=drift / improve if improve > 0 else None, skipped=bool(skip))
+                self.staleness[str(age)]['by_strategy']={str(z):dict(rows=len(group),
+                    correction_kl=float(np.mean([kl(r.label['target'],softmax(r.label['logits'])) for r,l in group])),
+                    policy_drift=float(np.mean([kl(softmax(r.label['logits']),softmax(l)) for r,l in group])))
+                    for z in range(7) if (group:=[(r,l) for r,l in selected if r.label.get('strategy_id',0)==z])}
                 if not skip:
                     self.rows.extend(r for r, _ in selected); self.ages.extend([age] * len(selected))
             for phase in PHASES:
@@ -152,8 +157,10 @@ class TeacherTerm:
         if self.mode == 'on' and share is not None:
             target = self.config['term']['share_target']
             self.outside = self.outside + 1 if share < target / 2 or share > target * 2 else 0
+        archive=copy.deepcopy(self.state.get('archive'))
         self.state = dict(mode=self.mode, beta=self.beta, calibrated=self.calibrated,
             share_target=self.config['term']['share_target'], shadow_shares=self.shadow, outside_streak=self.outside)
+        if archive is not None:self.state['archive']=archive
         return copy.deepcopy(self.state)
 
     def report(self):
@@ -166,6 +173,7 @@ class TeacherTerm:
             improvement_by_phase=self.improvement_by_phase, presentations=sum(self.presentations.values()),
             distinct_rows=len(self.used), presentations_by_age=counts(lambda i: self.ages[i]),
             presentations_by_phase=counts(lambda i: self.rows[i].label['phase']),
+            presentations_by_strategy=counts(lambda i: self.rows[i].label.get('strategy_id',0)),
             distinct_by_age=dict(Counter(str(self.ages[i]) for i in self.used)),
             distinct_by_phase=dict(Counter(self.rows[i].label['phase'] for i in self.used)),
             first_loss=self.steps[0]['loss'] if self.steps else None, last_loss=self.steps[-1]['loss'] if self.steps else None,

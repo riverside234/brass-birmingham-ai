@@ -337,7 +337,7 @@ class InferenceService:
         # Each entry has only tensors derived from one permitted observer.
         by_model=defaultdict(list)
         for key,frame in items:
-            require(set(frame)-{'want_logits'} in ({'request_id','model','revision','seat','digest','deadline','submitted','cancelled','encoded'},
+            require(set(frame)-{'want_logits','intrinsic'} in ({'request_id','model','revision','seat','digest','deadline','submitted','cancelled','encoded'},
                                   {'request_id','model','revision','seat','digest','deadline','submitted','cancelled','encoded','remaining'}),'Invalid inference frame')
             require('want_logits' not in frame or frame['want_logits'] is True,'Invalid raw-logit request')
             require(type(frame['seat']) is int and 0<=frame['seat']<4 and np.isfinite(frame['deadline']),'Invalid inference attribution')
@@ -388,9 +388,20 @@ class InferenceService:
                         remaining=torch.from_numpy(budget).to(self.device) if budget is not None else None
                         predict=predict_packed if self.pack_outputs else predict_encoded
                         raw_logits=any(f.get('want_logits',False) for _,f in live)
+                        intrinsic=any(f.get('intrinsic') is not None for _,f in live)
                         if raw_logits:
                             from brass_ai.rust_backend.lab_teacher_inference import predict
-                        arrays=predict(model,[f['encoded'] for _,f in live],self.device,self.config['max_candidate_cells'],remaining)
+                        if intrinsic:
+                            from brass_ai.rust_backend.lab_intrinsic import predict as predict_intrinsic
+                            registry=getattr(self,'teacher_evaluators',{})
+                            require(all(f.get('intrinsic') is None or (f['intrinsic']['bundle_id'] in registry
+                                and registry[f['intrinsic']['bundle_id']][0]['model_id']==identity) for _,f in live),
+                                'Intrinsic bundle belongs to another base model')
+                            arrays=predict_intrinsic(model,[f['encoded'] for _,f in live],self.device,
+                                self.config['max_candidate_cells'],remaining,[f.get('intrinsic') for _,f in live],
+                                registry)
+                        else:
+                            arrays=predict(model,[f['encoded'] for _,f in live],self.device,self.config['max_candidate_cells'],remaining)
                         if self.pack_outputs and max(len(f['encoded'].choice_ids) for _,f in live)<=self.config['max_candidate_cells']:
                             self.metrics['packed_output_batches']+=1
                 meter['forward_seconds']+=time.perf_counter()-forward_started
@@ -417,7 +428,9 @@ class InferenceService:
                             from brass_ai.learning.contracts import digest
                             r.update(utility=values(arrays[4][j]),reward_id=digest(model.config.utility))
                         if frame.get('want_logits'):
-                            r['logits']=values(arrays[-1][j,:len(frame['encoded'].choice_ids)])
+                            r['logits']=values(arrays[5][j,:len(frame['encoded'].choice_ids)])
+                        if frame.get('intrinsic') is not None:
+                            r.update(intrinsic=float(arrays[6][j,0]),evaluator_id=frame['intrinsic']['bundle_id'])
                     responses[key]=r
         return responses
 

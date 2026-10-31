@@ -410,6 +410,11 @@ def export(root, run, output=None, *, latest=2, extras=(), continue_export=False
             add(spec, spec.relative_to(run), 'Evaluation specification', expected=True)
 
     # Carry IL reports (and ancestor reports), not the large models or dataset.
+    for receipt in state.get('teacher_phase',{}).get('buffer',{}).get('receipts',[]):
+        shard=below(root,receipt['path'],) if receipt['path'].startswith('artifacts/') else run/receipt['path']
+        sidecar=Path(str(shard)+'.receipt.json')
+        add(sidecar,sidecar.relative_to(run),'Sealed teacher contexts/evaluator/fit provenance; excludes label replay',expected=True)
+
     visited = set()
 
     def lineage(origin):

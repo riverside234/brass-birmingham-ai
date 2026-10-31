@@ -14,7 +14,7 @@ import uuid
 from rust_lab_results import ROOT, export, sha, write
 
 STAGES = ('b01', 'b02', 'b025', 'b03', 'b04')
-PACKAGE = ROOT/'distribution/rust-lab-g1326'
+PACKAGE = ROOT/'distribution/rust-lab-g1330'
 
 
 def verify_package():
@@ -53,8 +53,10 @@ def command(stage, args, out, receipts):
         cmd += ['--profile', str(ROOT/'configs/search/lab-search-v1.json'),
                 '--bundle', str(ROOT/'distribution/rust-lab-b01/b01-search-v1-inputs.zip'),
                 '--bundle-sha256', '935443a477d3a52425923e3d7458a15ae8250f4296a6900c5b9088fbef864a76']
-    if stage in ('b025', 'b03'):
-        cmd += ['--transfer-manifest', str(ROOT/'distribution/rust-lab-b04/transfer-manifest.json')]
+    if stage in ('b025', 'b03','b04'):
+        cmd += ['--transfer-manifest', str(PACKAGE/'transfer-manifest.json')]
+    if stage in ('b025','b04'):
+        cmd += ['--teacher-profile','domino']
     if not args.fixtures_only:
         for needed in {'b02': ('b01',), 'b03': ('b02',), 'b04': ('b02', 'b03')}.get(stage, ()):
             if not receipts.get(needed): raise ValueError(stage+' needs --'+needed+' or --stage all')
@@ -85,8 +87,8 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--stage', choices=(*STAGES, 'all'), default='all')
     parser.add_argument('--run', type=Path, default=Path('artifacts/step5/joint7-v11-2-grouped-lr-critic'))
-    parser.add_argument('--expected-generation', type=int, default=1326)
-    parser.add_argument('--checkpoint-sha256', default='ada8d72195837cb399c13effb975cce19840e847080a7a0d4e03091235d85cbe')
+    parser.add_argument('--expected-generation', type=int, default=1330)
+    parser.add_argument('--checkpoint-sha256', default='d7e4e9473472251289b20991f423908c30a55a548a66e7be6afbc0c1f0c236b8')
     parser.add_argument('--device', default='cuda:0')
     for stage in ('b01', 'b02', 'b03'): parser.add_argument('--'+stage, type=Path)
     parser.add_argument('--fixtures-only', action='store_true', help='CPU development only; stage b025, b03 or b04')

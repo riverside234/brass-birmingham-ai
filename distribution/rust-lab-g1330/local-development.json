@@ -1,0 +1,81 @@
+{
+  "contract": "brass-lab-az-db-local-development/1.0.0",
+  "passed": true,
+  "implementation": "738316294df0d6fcecdc9024859f983a5675bc9c2acc8fca19a7b279c1a8a30f",
+  "producer": "cf45d128b4b8b9c940a9ed87c2028fbceb721786a5d9f56199f55b03f317d2d5",
+  "core_source": "b605ae11be57f962beab9676103cf3b19789fcf823ae5a77a0764dc2ede270a2",
+  "scope": "Authored CPU fixtures and finite count probes only. No full teacher game, training iteration, actual g1330 checkpoint restore, CUDA qualification or installed-game change.",
+  "lab_qualification": "Pending",
+  "production_teacher_enabled": false,
+  "python": {
+    "distinct_passed": 87,
+    "skipped": {
+      "test_symlink_is_not_followed (test_result_export.Results.test_symlink_is_not_followed)": "skipped 'Platform does not permit unprivileged symlink creation'"
+    },
+    "initial_failures": [
+      {
+        "test": "test_exact_adoption_and_reviewed_self_toggle (test_b025.Resume.test_exact_adoption_and_reviewed_self_toggle)",
+        "log": "python.log",
+        "result": "ERROR"
+      },
+      {
+        "test": "test_full_resume_receipt_mode_toggle_keeps_weights_adam_rng (test_b025.Resume.test_full_resume_receipt_mode_toggle_keeps_weights_adam_rng)",
+        "log": "python.log",
+        "result": "ERROR"
+      },
+      {
+        "test": "test_helper_is_readonly_idempotent_generation_hash_and_adoption_bound (test_b025.Resume.test_helper_is_readonly_idempotent_generation_hash_and_adoption_bound)",
+        "log": "python.log",
+        "result": "ERROR"
+      },
+      {
+        "test": "test_b03_restores_live_domino_and_both_adams_without_fit (test_teacher_diversity.DiversityTeacher.test_b03_restores_live_domino_and_both_adams_without_fit)",
+        "log": "python.log",
+        "result": "ERROR"
+      },
+      {
+        "test": "test_b03_restores_live_domino_and_both_adams_without_fit (test_teacher_diversity.DiversityTeacher.test_b03_restores_live_domino_and_both_adams_without_fit)",
+        "log": "focused-final.log",
+        "result": "ERROR"
+      },
+      {
+        "test": "test_native_intrinsic_probe_and_real_service (test_teacher_diversity.DiversityTeacher.test_native_intrinsic_probe_and_real_service)",
+        "log": "focused-final.log",
+        "result": "ERROR"
+      }
+    ],
+    "unresolved_failures": {},
+    "final_fit_metadata_regression": "Real staged PPG mmap cache, retained selected rollback, exact dense/cache receipt and unchanged weights/Adam/RNG; no state/action hydration or device metadata gather.",
+    "source_review_regressions": "Seven focused tests rerun on final source: exact v1 adoption/toggle/restore/crash and g1330 unchanged/v2-off adoption."
+  },
+  "native": {
+    "ordinary": 5,
+    "session_teacher": 30,
+    "core_objective": 2,
+    "failed": 0,
+    "source_verified_against_tested_checkout": true,
+    "descriptor_cases": "28 phase/action-family combinations and four populated public seat perspectives",
+    "continuation": "Finite real service scalar probes, root-owned observations, complete work only"
+  },
+  "final_source_delta": "Only fit metadata batching and cached column extraction changed after prior Python/native passing runs; focused final regressions cover these changes.",
+  "preserved_source_reviews": 75852,
+  "logs": {
+    "artifacts/rust-backend/teacher-diversity-dev-05/python.log": "aaaae1ea9138650e50c10a4c98c613218b684ea827a3e6019b2dd85c305b0a1d",
+    "artifacts/rust-backend/teacher-diversity-dev-05/focused-final.log": "db67450d66ed362a15e54182cc0b55a7810e573429610a76731e88b68cc4b144",
+    "artifacts/rust-backend/teacher-diversity-dev-05/integration-final.log": "a1852f4d7d0c2607e13963a9185160c1d220e2566e66a6192167083e2ee1e3f5",
+    "artifacts/rust-backend/teacher-diversity-dev-05/python-final.log": "c113360cffa4262b89004511c667a26065f0bc0c074b71483767150386337eea",
+    "artifacts/rust-backend/teacher-diversity-dev-05/descriptor-populated.log": "2b44b8fc1a5e68c863de8b36b954412ab5e7ede8a645a14705c2137f10a35743",
+    "artifacts/rust-backend/teacher-diversity-dev-05/cached-fit-regression.log": "56294a38930edbd09abe0ffe4cde7ee2486e530c92f6502b9924db37e249e58f",
+    "artifacts/rust-backend/teacher-diversity-dev-05/source-final.log": "90dbb48093f27aa83031c7d20a058bca7ed1b2ad642188d196fedc5271bacc5d",
+    "artifacts/rust-backend/teacher-diversity-dev-05/native-final.log": "36b34e0abe40cb5c0581c49e7abdecc451e61414126c29c1b36bcaf4ff9405e6",
+    "artifacts/rust-backend/teacher-diversity-dev-04/core-tests.log": "692c78b0c56d5e12b8c7b1d81f4c2553b188c166ba3c96b29f3fc4917a52da6b",
+    "artifacts/rust-backend/teacher-diversity-dev-05/final-audit.json": "da373b144c2240c240f03b5d5188a0fe87fbc2093f587f2e7573e76b1f7e71d1",
+    "artifacts/rust-backend/teacher-diversity-dev-05/diff-check.log": "21be19fd8f3b51417ecfd3e1fb1f7cd1ba8d19e9e57d3a0d585892d531f8e5c6"
+  },
+  "unavailable": [
+    "Linux/CUDA cost and parity",
+    "Full real checkpoint and complete-family normalization",
+    "Two shadow tables",
+    "B05/B07 production activation"
+  ]
+}

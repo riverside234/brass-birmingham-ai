@@ -1,8 +1,9 @@
-"""B04 additive export hooks, applied only to a fresh copy of the sealed core.
+"""B04 exports and opt-in DOMiNO objective on a detached sealed-core copy.
 
 The installed game and the B01/B02 archives are never rewritten. The resulting
 core has its own real build fingerprint; the lab teacher producer pins both it
-and this overlay. No selection, backup, quota or recommendation equation changes.
+and this overlay. Legacy sessions retain their original equations. Versioned
+DOMiNO sessions additionally track root-only intrinsic rewards and continuation.
 """
 from pathlib import Path
 import hashlib
@@ -10,11 +11,11 @@ import hashlib
 from brass_ai.learning.contracts import SOURCE_ROOT, digest, require
 from .lab_contract import SOURCE, native_fingerprint
 
-CONTRACT = 'brass-lab-teacher/1.0.0'
+CONTRACT = 'brass-lab-teacher/2.0.0'
 
 
 def source_fingerprint():
-    paths = [Path(__file__), *sorted((SOURCE_ROOT / 'lab-native').rglob('*.rs')),
+    paths = [Path(__file__), Path(__file__).with_name('lab_domino_overlay.py'), *sorted((SOURCE_ROOT / 'lab-native').rglob('*.rs')),
              SOURCE_ROOT / 'lab-native/Cargo.toml', SOURCE_ROOT / 'lab-native/Cargo.lock']
     return digest(dict(contract=CONTRACT, base=SOURCE, files={p.relative_to(SOURCE_ROOT).as_posix():
         hashlib.sha256(p.read_bytes().replace(b'\r\n', b'\n')).hexdigest()
@@ -54,5 +55,7 @@ def apply(directory):
         source = source.replace(before, after)
     path.write_bytes(source.encode())
     (path.parent / 'teacher.rs').write_bytes((SOURCE_ROOT / 'lab-native/core-overlay/teacher.rs').read_bytes().replace(b'\r\n', b'\n'))
+    from .lab_domino_overlay import apply as apply_diversity
+    apply_diversity(directory)
     return dict(contract=CONTRACT, base_source=SOURCE, producer=source_fingerprint(),
                 core_source=native_fingerprint(directory), hooks=len(changes))

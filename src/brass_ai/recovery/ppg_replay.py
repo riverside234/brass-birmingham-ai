@@ -164,6 +164,16 @@ class CriticDataset(Dataset):
             result.append(((game,int(seat),int(context['revision'])),a,('learner','snapshot')[int(role)],'/branch/' in game))
         return result
 
+    def intrinsic_fit_metadata(self,indices):
+        """Retained-fit provenance from CPU columns, without state/action hydration."""
+        indices=np.asarray(indices,dtype=np.int64)
+        owners=np.searchsorted(self.data.ends,indices,side='right')
+        contexts=self.data.column(indices,'context')
+        descriptors=self.data.column(indices,'descriptors')[:,0]
+        identities=self.diversity_metadata(indices)
+        return [(key,a,self.data.parts[p].receipt['contexts'][c],descriptor.tolist())
+                for (key,a,_,_),p,c,descriptor in zip(identities,owners,contexts,descriptors)]
+
     def microbatches(self,indices,size,cells,bucket=True):
         # This sealed critic format contains exactly one real candidate/row.
         indices=list(indices);size=min(size,cells)

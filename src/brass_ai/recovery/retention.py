@@ -195,6 +195,7 @@ def _references(root,run):
             selected['ratings']=d.get('ratings')
             selected['temperature_ratings']=d.get('temperature_ratings')
             selected['accepted_gate']=d.get('champion_gate',{}).get('accepted_gate')
+            selected['teacher_phase']=d.get('teacher_phase')
             cfg=d.get('signature',{}).get('config',{})
             selected['datasets']=[cfg.get('rehearsal_manifest'),cfg.get('imitation',{}).get('manifest')]
         elif 'best' in d and 'last' in d: selected={k:d.get(k) for k in ('best','last','signature')}

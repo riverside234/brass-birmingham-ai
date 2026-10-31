@@ -22,6 +22,9 @@ def source_sha(path):
 
 
 def verify_transfer(supplement=None):
+    if supplement is not None and (ROOT/supplement).resolve() == ROOT/'distribution/rust-lab-g1330/transfer-manifest.json':
+        from brass_ai.rust_backend.lab_diversity_transfer import verify
+        return verify('b025',supplement)
     if supplement is not None and (ROOT/supplement).resolve() == ROOT/'distribution/rust-lab-b04/transfer-manifest.json':
         from brass_ai.rust_backend.lab_transfer import verify
         return verify('b025',supplement)
@@ -53,7 +56,7 @@ def verify_transfer(supplement=None):
                 supplement_sha256=source_sha(supplement) if supplement else None)
 
 
-def inspect_run(run, generation):
+def inspect_run(run, generation, profile='legacy'):
     """Load full model/Adam on CPU, but never commit, advance or alter a run."""
     import torch
     from brass_ai.bank import read, sha
@@ -63,6 +66,8 @@ def inspect_run(run, generation):
     from brass_ai.recovery.retention import owned, safe, run_lock, _same_payload
     from brass_ai.recovery.resume import load_resume
     from brass_ai.recovery.teacher_phase_config import adopt
+    if profile=='domino':
+        from brass_ai.recovery.teacher_diversity import adopt
     from brass_ai.recovery.teacher_phase import TeacherPhase
     from brass_ai.step5.league import implementation_id
     _, run = owned(ROOT, run)
@@ -84,7 +89,7 @@ def inspect_run(run, generation):
             scope='Read-only full model/Adam adoption check; PPG/auxiliary optimizer continuation remains B05')
 
 
-def device_smoke(device):
+def device_smoke(device,profile='legacy'):
     import torch
     from brass_ai.learning.contracts import require
     from brass_ai.recovery.value_preservation import TrunkGradients
@@ -96,6 +101,19 @@ def device_smoke(device):
     model = fixture.model_fixture().to(device)
     rows = [(0, fixture.example(model, seat=s)[0]) for s in range(4)]
     c = fixture.config()['teacher_phase']; c['mode'] = 'on'
+    if profile=='domino':
+        import test_teacher_diversity as revised
+        row,job,bundle,diversity=revised.conditional(model);rows=[(0,row)]
+        c=revised.config()['teacher_phase'];c['mode']='on'
+        from brass_ai.rust_backend.lab_intrinsic import predict as intrinsic_predict
+        from brass_ai.rust_backend.lab_teacher_inference import predict
+        import numpy as np
+        with torch.inference_mode():
+            specs=[dict(bundle_id=bundle['identity'],strategy_id=row.label['strategy_id'])]*2
+            actual=intrinsic_predict(model,[row.encoded]*2,device,1,None,specs,{bundle['identity']:(bundle,diversity.head)})
+            reference=predict(model,[row.encoded]*2,device,128,None)
+        require(all(np.allclose(a,b,atol=2e-5,rtol=1e-5) for a,b in zip(actual[:6],reference)),
+                'CUDA intrinsic wrapper changed task/policy outputs')
     term = TeacherTerm(model, c, rows, seed=1, generation=10)
     optimizer = torch.optim.AdamW(model.parameters(), lr=1e-5)
     term.apply(model, TrunkGradients(model), 1)
@@ -103,7 +121,8 @@ def device_smoke(device):
                 for p in module.parameters()), 'Teacher touched non-policy heads')
     torch.nn.utils.clip_grad_norm_(model.parameters(), 1., error_if_nonfinite=True); optimizer.step()
     torch.cuda.synchronize()
-    return dict(device=device, rows=4, optimizer_steps=1, loss=term.steps[0]['loss'], passed=True,
+    return dict(device=device, rows=len(rows), optimizer_steps=1, loss=term.steps[0]['loss'], passed=True,
+                intrinsic_wrapper_parity=profile=='domino',
                 scope='One authored teacher-policy CUDA step; no native games or real training data')
 
 
@@ -114,10 +133,11 @@ def main():
     p.add_argument('--expected-generation', type=int)
     p.add_argument('--device', default='cpu', help='CPU exact fixtures always run; cuda:0 adds one authored device step')
     p.add_argument('--device-child', action='store_true', help=argparse.SUPPRESS)
+    p.add_argument('--teacher-profile',choices=('legacy','domino'),default='legacy')
     p.add_argument('--transfer-manifest', type=Path, help='Explicit sealed B03 or B04 supplement; verifies original prerequisite archives')
     a = p.parse_args()
     if a.device_child:
-        print(json.dumps(device_smoke(a.device), indent=2)); return
+        print(json.dumps(device_smoke(a.device,a.teacher_profile), indent=2)); return
     from brass_ai.learning.contracts import project_path, require
     from brass_ai.step5.league import write_json
     require((a.run is None) == (a.expected_generation is None), 'Supply both --run and --expected-generation')
@@ -136,7 +156,7 @@ def main():
         report['transfer'] = verify_transfer(a.transfer_manifest)
         env = dict(os.environ, PYTHONPATH=os.pathsep.join(str(ROOT / path) for path in TEST_PATHS),
                    CUBLAS_WORKSPACE_CONFIG=':4096:8')
-        command = [sys.executable, '-m', 'unittest', 'test_b025', '-v']
+        command = [sys.executable, '-m', 'unittest', 'test_b025', *(['test_teacher_diversity'] if a.teacher_profile=='domino' else []), '-v']
         print('B02.5: short CPU fixture suite', flush=True)
         with (out / 'fixtures.log').open('wb') as log:
             result = subprocess.run(command, cwd=ROOT, env=dict(env, CUDA_VISIBLE_DEVICES=''),
@@ -145,14 +165,15 @@ def main():
         report['fixtures'] = dict(passed=True, log='fixtures.log', sha256=source_sha(out / 'fixtures.log'), timeout_seconds=180)
         if a.device != 'cpu':
             print('B02.5: one CUDA fixture step', flush=True)
-            result = subprocess.run([sys.executable, str(Path(__file__)), '--device-child', '--device', a.device],
+            result = subprocess.run([sys.executable, str(Path(__file__)), '--device-child', '--device', a.device,'--teacher-profile',a.teacher_profile],
                 cwd=ROOT, env=env, text=True, capture_output=True, timeout=60)
             (out / 'device.log').write_text(result.stdout + result.stderr, encoding='utf-8')
             require(result.returncode == 0, 'CUDA fixture failed; see device.log')
             report['device'] = json.loads(result.stdout)
         if a.run:
             print('B02.5: read-only committed model/Adam adoption check', flush=True)
-            report['run'] = inspect_run(run, a.expected_generation)
+            report['run'] = inspect_run(run, a.expected_generation,a.teacher_profile)
+        report['teacher_profile']=a.teacher_profile
         report['passed'] = True
     except Exception as error:
         report['error'] = str(error)

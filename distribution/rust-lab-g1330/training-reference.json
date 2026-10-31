@@ -1,0 +1,18 @@
+{
+  "run": "artifacts/step5/joint7-v11-2-grouped-lr-critic",
+  "generation": 1330,
+  "games_done": 425600,
+  "checkpoint": {
+    "path": "artifacts/step5/joint7-v11-2-grouped-lr-critic/generation-1330.pt",
+    "sha256": "d7e4e9473472251289b20991f423908c30a55a548a66e7be6afbc0c1f0c236b8",
+    "model_id": "e85ba41819c4550d5c27ca60ba5f52d8fd4ea127574b63478e953487dd559521",
+    "generation": 1330
+  },
+  "implementation": "299f58b01ffcc5551207c16cf74f0f7c8e8aa7f87c4e957ee37ab8d2880e5f42",
+  "report_directory": "results/joint7-v11-2-grouped-lr-critic-g1330-20261031T024940047516Z",
+  "state_export_sha256": "e21329641ddb0a47fe20e68217664a155082a376192dbae09208e14a87aaec4d",
+  "report_manifest_sha256": "5d3c3a0239bd59b41dcac8b3786fc671b09e303846f4a942d9f118daadf4fb39",
+  "diversity_mode": "apply",
+  "teacher_readiness": "missing_retained_intrinsic_fit",
+  "qualification": "Pending"
+}

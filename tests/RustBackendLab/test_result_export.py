@@ -65,9 +65,9 @@ class Results(unittest.TestCase):
     def fixture_run(self, statuses, *, stage='all', preflight_fail=False):
         run = self.root/'artifacts/step5/joint7-v11-2-grouped-lr-critic'
         run.mkdir(parents=True)
-        reports.write(run/'state.json', dict(iteration=1326, history=[dict(generation=1326,
-            sha256='ada8d72195837cb399c13effb975cce19840e847080a7a0d4e03091235d85cbe')], signature=dict(implementation='original')))
-        package = self.root/'distribution/rust-lab-g1326'; package.mkdir(parents=True)
+        reports.write(run/'state.json', dict(iteration=1330, history=[dict(generation=1330,
+            sha256='d7e4e9473472251289b20991f423908c30a55a548a66e7be6afbc0c1f0c236b8')], signature=dict(implementation='original')))
+        package = self.root/'distribution/rust-lab-g1330'; package.mkdir(parents=True)
         reports.write(package/'transfer-manifest.json', {})
         calls = []
         def execute(cmd, log):
@@ -80,7 +80,7 @@ class Results(unittest.TestCase):
             return code
         with patch.object(runner, 'ROOT', self.root), patch.object(runner, 'PACKAGE', package), \
              patch.object(runner, 'verify_package', side_effect=ValueError('bad transfer') if preflight_fail else None,
-                          return_value={'training_reference': {'generation': 1326}}), \
+                          return_value={'training_reference': {'generation': 1330}}), \
              patch.object(runner, 'execute', side_effect=execute), \
              patch.object(runner, 'export', side_effect=lambda path: reports.export(path, root=self.root)):
             code = runner.main(['--stage', stage, '--run', str(run)])
@@ -96,6 +96,8 @@ class Results(unittest.TestCase):
             path = Path(calls[4][calls[4].index(flag)+1])
             self.assertTrue(path.is_relative_to(self.root/'artifacts/rust-backend'))
         self.assertIn('--transfer-manifest', calls[2]); self.assertIn('--transfer-manifest', calls[3])
+        self.assertIn('--transfer-manifest', calls[4])
+        for index in (2,4):self.assertEqual(calls[index][calls[index].index('--teacher-profile')+1],'domino')
 
     def test_failure_exports_and_stops_before_next_stage(self):
         code, result, calls = self.fixture_run([(7, False)])

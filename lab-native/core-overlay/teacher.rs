@@ -11,6 +11,7 @@ use super::{
 
 #[derive(Clone)]
 pub struct Evidence {
+    pub work: Option<super::super::domino::Work>,
     pub info: Info<Key, String>,
     pub stats: Statistics,
     pub frozen_n: u64,
@@ -52,6 +53,7 @@ impl Exports {
         self.clear();
         let node = tree.get(root)?;
         let evidence = Evidence {
+            work: out.teacher_work.clone(),
             info: node.info.clone(),
             stats: node.stats.clone(),
             frozen_n: out.quota.as_ref().map_or(0, |q| q.simulations),
