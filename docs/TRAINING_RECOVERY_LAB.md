@@ -10,6 +10,16 @@ all groups; the completed IL folder and training progress are preserved.
 First activation at g1340 schedules **g1390**: 384 added games plus 64 exact
 neutral reuses, with no extra PL fit or training gate. The continuation runs
 g1341–g1360. The exporter includes compact context evidence and SVG dashboards.
+The same command also adopts the [diagnostics/cleanup performance follow-up](../ai-research/DOMINO_CONTEXT_EVALUATION_IMPLEMENTATION.md#diagnostics-and-cleanup-follow-up):
+auxiliary-head diagnostics every five committed generations, at most 512 rows,
+and general retention every five generations. Seat fingerprints use neutral
+zero inputs (roles/age and 34-column critic dimensions preserved). AnchorKL
+measurement, calibration and LR gating are disabled; PPO KL and economic health
+checks remain. Fixed-probe comparisons run only for due historical-pool
+admission/eviction, preserving PFSP. Expired PPG data still retire after each
+commit. The helper signs these changes; no additional helper or
+config edit is needed. Starting from g1340, auxiliary diagnostics and general
+cleanup first run at g1345, then g1350, g1355 and g1360.
 For a later evaluation-only change, use `configure-domino-context-evaluation.py`;
 that helper does not change the reward, exploration or PPG cache.
 

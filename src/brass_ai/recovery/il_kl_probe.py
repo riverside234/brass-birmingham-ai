@@ -1,5 +1,5 @@
 """Immutable, seeded held-out IL probe; never supplies optimizer samples."""
-from collections import defaultdict,deque
+from collections import defaultdict,deque,OrderedDict
 import hashlib
 import heapq
 from pathlib import Path
@@ -72,6 +72,9 @@ class Probe:
     def __init__(self,metadata,arrays,config):
         self.metadata,self.arrays,self.config=metadata,arrays,config
         self.rows=metadata['rows'];self.encoded=[]
+        # Immutable INPUTS only. Never reuse predictions across weight updates.
+        # Bound the CPU cache even for unusual high-candidate probes.
+        self._inputs=OrderedDict();self._input_bytes=0;self._input_limit=256*1024**2
         offsets=arrays['offsets']
         require(len(offsets)==len(self.rows)+1 and offsets[0]==0 and
                 offsets[-1]==len(arrays['actions']) and len(arrays['reference'])==offsets[-1],
@@ -97,54 +100,57 @@ class Probe:
             part.append(i)
         if part:yield part
 
-    def measure(self,model,update,*,reference=None):
-        began=time.perf_counter();distances={};entropies={};normalized={};was_training=model.training
-        original_distances={};active_reference=reference
-        if active_reference is not None:
-            require(active_reference.shape==self.arrays['reference'].shape and
-                np.isfinite(active_reference).all() and (active_reference>=0).all(),'Invalid active anchor probabilities')
-            for a,b in zip(self.arrays['offsets'][:-1],self.arrays['offsets'][1:]):
-                require(abs(float(active_reference[a:b].sum())-1)<1e-5,'Active anchor probabilities are not normalized')
-        device=next(model.parameters()).device
-        model.eval()
-        try:
-            with torch.no_grad():
-                for part in self.parts(update):
-                    inputs=collate([self.encoded[i] for i in part],device)
-                    current=raw_probabilities(model(*inputs)[0],inputs[2])
-                    reference=torch.zeros_like(current)
-                    for j,i in enumerate(part):
-                        a,b=map(int,self.arrays['offsets'][i:i+2])
-                        reference[j,:b-a]=torch.tensor(self.arrays['reference'][a:b],device=device)
-                    if active_reference is not None:
-                        original_values=stable_kl(reference,current,inputs[2],self.config['probability_floor']).cpu().tolist()
-                        for j,i in enumerate(part):
-                            original_distances[i]=original_values[j]
-                            a,b=map(int,self.arrays['offsets'][i:i+2])
-                            reference[j,:b-a]=torch.tensor(active_reference[a:b],device=device)
-                    values=stable_kl(reference,current,inputs[2],self.config['probability_floor']).cpu().tolist()
-                    entropy=-(current*current.clamp_min(1e-30).log()).sum(-1)
-                    relative=entropy/inputs[2].sum(-1).float().log().clamp_min(1e-8)
-                    hh=entropy.cpu().tolist();nn=relative.cpu().tolist()
-                    for j,i in enumerate(part):
-                        distances[i]=values[j];entropies[i]=hh[j];normalized[i]=nn[j]
-        finally:model.train(was_training)
+    def inputs(self,part,device):
+        key=tuple(part)
+        if key in self._inputs:
+            result=self._inputs.pop(key);self._inputs[key]=result
+        else:
+            # collate performs the complete feature/selector admission once.
+            result=collate([self.encoded[i] for i in part],'cpu')
+            size=sum(t.numel()*t.element_size() for t in result)
+            if size<=self._input_limit:
+                while self._inputs and self._input_bytes+size>self._input_limit:
+                    _,old=self._inputs.popitem(last=False)
+                    self._input_bytes-=sum(t.numel()*t.element_size() for t in old)
+                self._inputs[key]=result;self._input_bytes+=size
+        return tuple(t.to(device) for t in result)
+
+    def measure(self,model,update,*,reference=None,probabilities=None):
+        """Operative anchor only; original-IL report-only comparisons are retired.
+
+        KL uses all legal actions and the same double-precision floor and
+        normalization as stable_kl. Bulk CPU reduction avoids thousands of
+        small GPU transfers. Optional probabilities must be from these exact
+        weights; the caller owns their short lifetime within one diagnostic pass.
+        """
+        began=time.perf_counter();offsets=self.arrays['offsets'];starts=offsets[:-1]
+        lengths=np.diff(offsets)
+        current=self.probabilities(model,update) if probabilities is None else probabilities
+        active=self.arrays['reference'] if reference is None else reference
+        for name,values in (('active anchor',active),('current probe',current)):
+            require(values.shape==self.arrays['reference'].shape and
+                    np.isfinite(values).all() and (values>=0).all(),'Invalid '+name+' probabilities')
+            require(np.all(np.abs(np.add.reduceat(values,starts)-1)<1e-5),name+' probabilities are not normalized')
+        p=np.maximum(active.astype(np.float64),self.config['probability_floor'])
+        q=np.maximum(current.astype(np.float64),self.config['probability_floor'])
+        p/=np.repeat(np.add.reduceat(p,starts),lengths)
+        q/=np.repeat(np.add.reduceat(q,starts),lengths)
+        distances=np.maximum(0.,np.add.reduceat(p*(np.log(p)-np.log(q)),starts))
+        entropies=-np.add.reduceat(current*np.log(np.maximum(current,1e-30)),starts)
+        normalized=entropies/np.log(lengths)
         groups={}
         for group in GROUPS:
-            values=[distances[i] for i,row in enumerate(self.rows) if row['group']==group]
             ids=[i for i,row in enumerate(self.rows) if row['group']==group]
-            groups[group]=dict(positions=len(values),kl_mean=sum(values)/len(values) if values else None,
-                raw_entropy=sum(entropies[i] for i in ids)/len(ids) if ids else None,
-                normalized_entropy=sum(normalized[i] for i in ids)/len(ids) if ids else None)
+            values=[distances[i] for i in ids]
+            groups[group]=dict(positions=len(values),kl_mean=float(sum(values)/len(values)) if values else None,
+                raw_entropy=float(np.mean(entropies[ids])) if ids else None,
+                normalized_entropy=float(np.mean(normalized[ids])) if ids else None)
         result=dict(positions=len(distances),requested_positions=self.config['probe_positions'],
-            kl_mean=sum(distances.values())/len(distances),groups=groups,unassigned_positions=0,
+            kl_mean=float(distances.mean()),groups=groups,unassigned_positions=0,
             elapsed_seconds=time.perf_counter()-began,probability_floor=self.config['probability_floor'],
-            scope='Fixed IL validation positions; raw temperature-1 policies, no exploration; symmetric floor/renormalization for KL')
-        if active_reference is not None:
-            result['original_il']=dict(positions=len(original_distances),kl_mean=sum(original_distances.values())/len(original_distances),
-                groups={g:dict(positions=groups[g]['positions'],kl_mean=sum(original_distances[i] for i,row in
-                    enumerate(self.rows) if row['group']==g)/groups[g]['positions'] if groups[g]['positions'] else None) for g in GROUPS})
-            result['reference_kind']='qualified_checkpoint'
+            input_cache_bytes=self._input_bytes,original_il_diagnostics=False,
+            reference_kind='qualified_checkpoint' if reference is not None else 'initial_anchor',
+            scope='Active-anchor safeguard on the existing fixed cached positions; raw T1, no exploration; no IL-data reload or separate original-IL comparison')
         return result
 
     def probabilities(self,model,update):
@@ -154,12 +160,19 @@ class Probe:
         try:
             with torch.no_grad():
                 for part in self.parts(update):
-                    inputs=collate([self.encoded[i] for i in part],device)
+                    inputs=self.inputs(part,device)
                     values=raw_probabilities(model(*inputs)[0],inputs[2]).cpu().numpy()
                     for j,i in enumerate(part):
                         a,b=map(int,self.arrays['offsets'][i:i+2]);result[a:b]=values[j,:b-a]
         finally:model.train(was_training)
         return result
+
+    def evaluate(self,model,update,*,reference=None):
+        """One timed final-weight pass for the anchor and pool admission."""
+        began=time.perf_counter();values=self.probabilities(model,update)
+        result=self.measure(model,update,reference=reference,probabilities=values)
+        result['elapsed_seconds']=time.perf_counter()-began
+        return result,values
 
 
 def source_binding(root,origin):

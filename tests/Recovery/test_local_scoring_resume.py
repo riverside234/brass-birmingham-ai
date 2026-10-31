@@ -147,7 +147,8 @@ class Adoption(unittest.TestCase):
         annotate(data);annotate(phase.snapshot_data)
         update=ppo(model,optimizer,self.cfg,behavior,data,phase);phase.fit(model);finish(phase,update,561)
         report=finish_training_diagnostics(model,phase,companion)
-        self.assertGreater(update['optimizer_steps'],0);self.assertGreater(report['heldout']['rows'],0)
+        self.assertGreater(update['optimizer_steps'],0);self.assertFalse(report['heldout']['measured'])
+        self.assertEqual(report['heldout']['next_generation'],565)
         self.assertFalse(phase.value_report['scheduled'])
         output=self.run/'generation-0561.pt'
         identity=save_checkpoint(output,model,optimizer,step=561,training=dict(raw['training'],

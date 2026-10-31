@@ -25,7 +25,7 @@ from .updates import ppo_update,rehearsal_dataset
 from .teacher_collection import collect_due
 from .curriculum import activate_boost,boost_window,boost_report,curriculum_report
 from .utility import migrate,reward_spec
-from . import critic_data
+from . import critic_data,policy_observations
 
 
 class Behavior:
@@ -39,15 +39,19 @@ class Behavior:
         self.policy_id=neural_spec(identity,exploration,'mixed',version=self.exploration_version,opening=self.opening)['policy_id']
 
 
-def finish_training_diagnostics(model,phases,local_scoring):
+def finish_training_diagnostics(model,phases,local_scoring,*,generation=None):
     """Materialize the small report before releasing its iteration datasets."""
     report=None
     if local_scoring is not None:
         report=local_scoring.report()
         if local_scoring.active:
-            require(phases is not None and phases.critic_dataset is not None,
-                    'Local scoring diagnostics require the live critic dataset before release')
-            report['heldout']=local_scoring.diagnostics(model,phases.critic_dataset,phases.heldout_ids)
+            from .local_scoring_auxiliary import diagnostics_schedule
+            schedule=diagnostics_schedule(local_scoring.generation+1 if generation is None else generation)
+            if schedule['measured']:
+                require(phases is not None and phases.critic_dataset is not None,
+                        'Local scoring diagnostics require the live critic dataset before release')
+                report['heldout']=dict(local_scoring.diagnostics(model,phases.critic_dataset,phases.heldout_ids),**schedule)
+            else:report['heldout']=dict(schedule,reason='not_due',seconds=0.)
     if phases is not None:phases.release()
     return report
 
@@ -81,6 +85,7 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
     inference_devices=validate_inference_devices(inference_devices,device)
     config=evidence_config(champion_mix_config(time_budget_config(config)))
     root=Path(root).resolve();run=project_path(root,run_path);validate_config(config)
+    observations_off=policy_observations.enabled(config)
     # B04 has an explicit native collector/barrier. B05/B07 must qualify the
     # next committed update/canary before exposing it to the production trainer.
     require(config.get('teacher_phase',{}).get('mode','off')=='off',
@@ -188,13 +193,15 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                 fixed_probe,receipt=import_probe(root,run,il_kl_probe_from_run,bc_origin,model,config['il_kl_limit'],config['update'])
             else:
                 fixed_probe,receipt=load_probe(root,run,bc_origin,model,config['il_kl_limit'],config['update'],config['audit_workers'])
-            initial_measure=fixed_probe.measure(model,config['update'])
-            require(abs(initial_measure['kl_mean'])<=1e-10,
-                    'Generation-zero IL probe must reproduce the original IL policy')
+            initial_measure=None if observations_off else fixed_probe.measure(model,config['update'])
+            if initial_measure is not None:
+                require(abs(initial_measure['kl_mean'])<=1e-10,
+                        'Generation-zero IL probe must reproduce the original IL policy')
             state['il_kl_limit']=initial_state(config['il_kl_limit'],receipt)
             write_json(run/'il-kl/initial-report.json',dict(generation=0,measurement=initial_measure,
-                limit=config['il_kl_limit']['initial_limit'],
-                group_limit=config['il_kl_limit']['group_factor']*config['il_kl_limit']['initial_limit'],probe=receipt))
+                anchor_kl_enabled=not observations_off,
+                limit=None if observations_off else config['il_kl_limit']['initial_limit'],
+                group_limit=None if observations_off else config['il_kl_limit']['group_factor']*config['il_kl_limit']['initial_limit'],probe=receipt))
         from . import exploration
         if 'exploration_rollout' in config:state['exploration']=exploration.initial(config,0)
         init_path=run/'initial.pt'
@@ -204,7 +211,7 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
             anchor=dict(path=init_path.relative_to(root).as_posix(),sha256='pending',model_id=model_id(model),generation=0)
             probe_ref=dict(fixed_probe.metadata['cache'],probe_hash=fixed_probe.metadata['probe_hash'])
             state['quality_pool']=quality_pool.initial(anchor,config['opponent_pool'],probe_ref)
-            if 'critic_data' in config:
+            if 'critic_data' in config and not observations_off:
                 from .critic_data import fingerprint
                 state['quality_pool']['members'][0]['fingerprint']=fingerprint(fixed_probe,fixed_probe.arrays['reference'])
         save_checkpoint(init_path,model,optimizer,training=dict(mode='step5-fresh-residual-initial',parent=None,initialization=state['origin']['initialization'],fresh_run=run.relative_to(root).as_posix(),imitation=state['imitation'],
@@ -264,6 +271,7 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
               f'restored {cuda_resume["restored_devices"]} matching logical-device RNG streams (learner stays on cuda:0)',flush=True)
     reward=reward_spec(config)
     migration=migrate(model,optimizer,reward)
+    policy_observations.install(model,config)
     phases=None
     from .local_scoring_adoption import prepare as prepare_local,cleanup as cleanup_local
     phase_raw,local_adoption,local_adopting=prepare_local(root,run,state,raw,config,reviewed=source_changed)
@@ -355,7 +363,7 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
         with torch.random.fork_rng(devices=[]):schedule_ratings(root,run,state,config,device=device,mono=mono,inference_devices=inference_devices)
         from .temperature_rating import schedule as schedule_temperature
         with torch.random.fork_rng(devices=[]):schedule_temperature(root,run,state,config,device=device,mono=mono,inference_devices=inference_devices)
-    if fixed_probe is not None and 'policy_anchor' in config:
+    if fixed_probe is not None and 'policy_anchor' in config and not observations_off:
         anchor_values,anchor_transition=policy_anchor.prepare(root,run,state,config,fixed_probe,model)
         policy_anchor.console(anchor_transition)
         exploration_state,floor_transition=exploration.anchor_floor_transition(config,exploration_state,state.get('policy_anchor'))
@@ -390,7 +398,7 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                 current=service.register(model);behavior=Behavior(current,config['exploration'],exploration_settings)
                 if teacher_phase is not None:teacher_phase.begin(state,model)
                 fingerprints=None
-                if 'critic_data' in config:
+                if 'critic_data' in config and not observations_off:
                     from .critic_data import fingerprint
                     fingerprints=dict(learner=fingerprint(fixed_probe,fixed_probe.probabilities(model,config['update'])),
                         rule_bot=fingerprint(fixed_probe,rule_bot=True))
@@ -475,19 +483,27 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                     ppo_ended=time.monotonic()
                 rehearsal_cleaned=time.monotonic()
                 active_rehearsal=None
-                next_limit=limit_report=None
-                if fixed_probe is not None:
+                next_limit=limit_report=None;anchor_probe_seconds=0.
+                final_measurement={};final_probabilities=None
+                if observations_off:
+                    counts=diagnostics.get('by_composition',{}).get('selfplay',{}).get('health_counts')
+                    if counts and counts['all_learner_tables']!=counts['tables']:counts=None
+                    next_limit,limit_report=policy_observations.advance_health(state['il_kl_limit'],counts,
+                        generation=iteration+1,warmup_done=update['controller_warmup_done'])
+                elif fixed_probe is not None:
                     from .il_kl_limit import advance
                     counts=diagnostics.get('by_composition',{}).get('selfplay',{}).get('health_counts')
                     if counts and counts['all_learner_tables']!=counts['tables']:counts=None
-                    final_measurement=fixed_probe.measure(model,config['update'],reference=anchor_values)
+                    final_measurement,final_probabilities=fixed_probe.evaluate(model,config['update'],reference=anchor_values)
+                    anchor_probe_seconds+=final_measurement['elapsed_seconds']
                     next_limit,limit_report=advance(state['il_kl_limit'],final_measurement,
                         counts,generation=iteration+1,warmup_done=update['controller_warmup_done'])
                     policy_anchor.annotate(limit_report,state)
                 from .lr_controller import finish_iteration
-                active_anchor=(state.get('policy_anchor',{}).get('active') or {}).get('checkpoint',state['evaluation_anchor'])
+                active_anchor=None if observations_off else (state.get('policy_anchor',{}).get('active') or {}).get('checkpoint',state['evaluation_anchor'])
                 update['lr_controller']=finish_iteration(optimizer,update,config,sampling,games,behavior.policy_id,
-                    kind_by_group,active_anchor,calibrated_anchor=limit_report['lr_gate'] if limit_report else None)
+                    kind_by_group,active_anchor,calibrated_anchor=limit_report['lr_gate'] if limit_report and not observations_off else None,
+                    economic_health=limit_report['health'] if observations_off else None)
                 ppo_finished=time.monotonic()
                 value_report=phases.fit(model,preparation_pool=preparation_pool) if phases is not None else None
                 updated=time.monotonic();done=state['games_done']+len(games)
@@ -534,8 +550,9 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                 # The LR decision above retains its exact post-PPO signal.
                 # Final limits, quality admission and checkpoint probes include
                 # shared-trunk movement from the separate value/teacher phases.
-                if fixed_probe is not None and weights_changed:
-                    final_measurement=fixed_probe.measure(model,config['update'],reference=anchor_values)
+                if fixed_probe is not None and weights_changed and not observations_off:
+                    final_measurement,final_probabilities=fixed_probe.evaluate(model,config['update'],reference=anchor_values)
+                    anchor_probe_seconds+=final_measurement['elapsed_seconds']
                     next_limit,limit_report=advance(state['il_kl_limit'],final_measurement,
                         counts,generation=iteration+1,warmup_done=update['controller_warmup_done'])
                     policy_anchor.annotate(limit_report,state)
@@ -548,7 +565,7 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                     phases.finish(generation=iteration+1,update=update,
                         anchor_gate=limit_report['lr_gate'] if limit_report else (update.get('lr_controller') or {}).get('health'),
                         rating=rating_evidence(root,state,config['advantage']['gate']),exploration=exploration_settings)
-                local_scoring_report=finish_training_diagnostics(model,phases,local_scoring)
+                local_scoring_report=finish_training_diagnostics(model,phases,local_scoring,generation=iteration+1)
                 entropy_report=None
                 if exploration_state is not None:
                     healthy=bool(limit_report and limit_report['health'].get('ok') is True and
@@ -560,12 +577,14 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                         policy_anchor=state.get('policy_anchor'))
                 del learner_data
                 output=run/f'generation-{iteration+1:04d}.pt'
+                pool_admission_began=time.monotonic()
                 if quality:
                     from brass_ai.learning.batching import model_id
                     pending_entry=dict(path=output.relative_to(root).as_posix(),sha256='pending',
                         model_id=model_id(model),generation=iteration+1)
                     next_quality,pool_admission=quality_pool.finish(root,run,next_quality,model,pending_entry,
-                        fixed_probe,config['update'],limit_report)
+                        fixed_probe,config['update'],limit_report,probabilities=final_probabilities,
+                        compute_fingerprints=not observations_off)
                     quality_pool.finish_report(quality_report,next_quality,pool_admission)
                 diagnostics_finished=time.monotonic()
                 teacher_report=teacher_phase.finish(model,update) if teacher_phase is not None else None
@@ -582,7 +601,8 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                     optimizer_resume=optimizer_resume if not summaries else None,
                     legacy_boost=boost_report(state['games_done'],done,config,window),
                     actor=update,value_phase=value_report,search=search,**diagnostics,incoming_model_id=current,incoming_policy_id=behavior.policy_id,
-                    seat_fingerprints={k:v for k,v in (fingerprints or {}).items() if k!='contexts'} if fingerprints else None,
+                    seat_fingerprints=(dict(enabled=False,descriptor_columns=28,neutral_value=0.) if observations_off else
+                        {k:v for k,v in (fingerprints or {}).items() if k!='contexts'} if fingerprints else None),
                     selfplay_incumbent=incumbent,
                     selfplay_opponents=champion_mix.summarize(state,config,mix_receipts) if champion_mix.enabled(config) else None,
                     games_done=done,cumulative_games=state['previous_games']+done,
@@ -602,6 +622,9 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                         sampling=(quality_pool.sampling_description(next_quality)
                                   if quality else '25% initial/IL, 25% recent, 50% older reservoir; unavailable strata fall back')),
                     environment=environment(device),strength='requires fresh post-update evaluation')
+                report['timings'].update(anchor_probe_seconds=anchor_probe_seconds,
+                    auxiliary_diagnostics_seconds=(local_scoring_report or {}).get('heldout',{}).get('seconds',0.),
+                    pool_admission_seconds=diagnostics_finished-pool_admission_began)
                 if share is not None:
                     report['curriculum'].update(effective_tables=dict(composition),
                         v4_share_reduced=share['activated'] is not None)
@@ -626,7 +649,8 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                         completed=dict(Counter(str(a['strategy_id']) for _,a in completed)),
                         completed_by_table_role_seat=dict(Counter(f'{kind}/{a["training_role"]}/{a["physical_seat"]}/{a["strategy_id"]}' for kind,a in completed)),
                         history_contexts=quality_report.get('context_outcomes',{}) if quality_report else {},
-                        fingerprints=fingerprints['contexts'].report,pfsp_context_regime=config['diversity']['context_contract'])
+                        fingerprints=(dict(enabled=False,reason='neutral_critic_inputs') if observations_off else fingerprints['contexts'].report),
+                        pfsp_context_regime=config['diversity']['context_contract'])
                     report['diversity']=copy.deepcopy(diversity.report)
                 anchor_commit=policy_anchor.checkpoint_state(state)
                 identity=save_checkpoint(output,model,optimizer,step=iteration+1,
@@ -706,18 +730,16 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                                 next_due_generation=ctx['next_due_generation'],pending=ctx['pending'],
                                 latest=ctx['panels'][-1] if ctx['panels'] else None,latest_visualization=ctx['latest_visualization'])
                             report['timings']['context_evaluation_seconds']=ctx['timing']['added_seconds']-context_seconds_before
-                        if fixed_probe is not None and 'policy_anchor' in config:
+                        if fixed_probe is not None and 'policy_anchor' in config and not observations_off:
                             anchor_values,anchor_transition=policy_anchor.prepare(root,run,state,config,fixed_probe,model)
                             policy_anchor.console(anchor_transition)
                             report['anchor_transition']=anchor_transition
                             exploration_state,floor_transition=exploration.anchor_floor_transition(config,exploration_state,state.get('policy_anchor'))
                             if floor_transition:report['entropy_floor_transition']=floor_transition
                     report['timings']['evaluation_seconds']=time.monotonic()-evaluation_began
-                    from .retention import prune
+                    from .retention import scheduled_prune
                     cleanup_began=time.monotonic()
-                    if config['retention']['enabled']:
-                        cleanup=prune(root,run,config['retention'],apply=True)
-                        report['cleanup']={k:cleanup[k] for k in ('reclaimable_bytes','permanently_deleted_files','permanently_deleted_bytes')}
+                    report['cleanup']=scheduled_prune(root,run,config['retention'])
                     report['timings']['cleanup_seconds']=time.monotonic()-cleanup_began
                     service.trim([e['model_id'] for e in state['population']]+[identity]+
                                  ([state['champion']['model_id']] if incumbent else [])+
@@ -784,9 +806,9 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                               f'{v["evidence"]["contributing_iterations"]}i)' if 'evidence' in v else '')
                             for k,v in gate['table_gate'].items())
                 if limit_report:
-                    controller_line+=(f' AnchorKL[g{limit_report["anchor_reference"]["generation"]}]='
+                    if observations_off:controller_line+=' AnchorKL=off'
+                    else:controller_line+=(f' AnchorKL[g{limit_report["anchor_reference"]["generation"]}]='
                         f'{limit_report["measurement"]["kl_mean"]:.4f}/{limit_report["limit_after"]:.4f}'
-                        f' OrigILKL={limit_report["original_il_measurement"]["kl_mean"]:.4f}'
                         f' group_limit={limit_report["group_limit_after"]:.4f} {limit_report["decision"]}'
                         f' LRraise={int(limit_report["lr_increases_permitted_by_anchor"])}')
                     transition=report.get('anchor_transition') or {}

@@ -15,10 +15,20 @@ from . import local_scoring_targets as targets
 
 KEY='local_scoring_auxiliary'
 CONTRACT='local-scoring-training/1.0.0'
+DIAGNOSTICS_EVERY_ITERATIONS=5
+DIAGNOSTICS_MAX_ROWS=512
 DEFAULT=dict(contract=CONTRACT,head_contract=HEAD,target=targets.identity(),mode='apply',
     head_width=64,vp_scale=20.,loss_weights=dict(slots_owner=.05,links_owner=.05,slots_vp=.01,links_vp=.01),
     optimizer=dict(kind='Adam',learning_rate=1e-4,weight_decay=0.,grad_clip=1.),
     head_only_iterations=2,ramp_iterations=5,adoption=None)
+
+
+def diagnostics_schedule(generation):
+    require(type(generation) is int and generation>0,'Invalid auxiliary diagnostics generation')
+    return dict(contract='local-scoring-diagnostics/2.0.0',generation=generation,
+        measured=generation%DIAGNOSTICS_EVERY_ITERATIONS==0,every_iterations=DIAGNOSTICS_EVERY_ITERATIONS,
+        maximum_rows=DIAGNOSTICS_MAX_ROWS,
+        next_generation=(generation//DIAGNOSTICS_EVERY_ITERATIONS+1)*DIAGNOSTICS_EVERY_ITERATIONS)
 
 
 def validate_config(config):
@@ -279,9 +289,8 @@ class Companion:
                     self.map_support[(game,era)]=sum(int(r['valid']) for k in ('slots','links') for r in target[k])
                     self.map_masked[(game,era)]=sum(int(not r['valid']) for k in ('slots','links') for r in target[k])
 
-    def diagnostics(self,model,dataset,heldout,*,maximum=2048):
+    def diagnostics(self,model,dataset,heldout,*,maximum=DIAGNOSTICS_MAX_ROWS):
         """Bounded ordinary held-out families; no fitting or gate decisions."""
-        from .updates import autocast
         from brass_ai.learning.seat_descriptors import critic_inputs
         began=time.perf_counter();strata=defaultdict(list)
         for i in heldout:
@@ -294,46 +303,43 @@ class Companion:
             for part in strata.values():
                 if n<len(part) and len(ids)<maximum:ids.append(part[n]);present=True
             if not present or len(ids)>=maximum:break
-        groups={};model.eval();self.heads.eval()
-        from brass_ai.learning.state_layout import state_layout
-        segments={s.name:s for s in state_layout().segments}
-        with torch.no_grad():
+        groups={};was_training=model.training;heads_training=self.heads.training
+        model.eval();self.heads.eval();label_cache={}
+        try:
+          with torch.no_grad():
             for start in range(0,len(ids),64):
                 chosen=ids[start:start+64];ix,inputs,_=dataset.value_batch(chosen,model)
                 encoded=model.encode_state(inputs[0]);embeddings=model.descriptor_embeddings(encoded,critic_inputs(dataset,chosen))
                 predictions=self.heads(encoded,embeddings,0.)
+                # One transfer per output/batch, instead of per row and role.
+                # All entity reductions below are vectorized on CPU.
+                predictions={kind:(logits.float().softmax(-1).cpu().numpy(),
+                    values.float().cpu().numpy()*self.config['vp_scale'])
+                    for kind,(logits,values) in predictions.items()}
                 for b,i in enumerate(chosen):
                     row=dataset.rows[i];target=targets.map_for(row);mapping=dataset.encoded[i].stable_to_relative
-                    for kind,(logits,values) in predictions.items():
+                    for kind,(probabilities_batch,values_batch) in predictions.items():
                         key=dataset.tables[i]+'/'+target['era']+'/'+kind
-                        if key not in groups:groups[key]=dict(rows=0,entities=0,positive=0,none=0,ce_sum=0.,brier_sum=0.,
-                            vp_abs_sum=0.,vp_squared_sum=0.,vp_total_abs_sum=0.,positive_errors=0,confusion=[[0]*5 for _ in range(5)],
-                            current_empty=0,current_occupied=0)
+                        if key not in groups:groups[key]=dict(rows=0,entities=0,positive=0,none=0,ce_sum=0.,
+                            vp_abs_sum=0.,positive_errors=0)
                         g=groups[key];g['rows']+=1
-                        probabilities=logits[b].float().softmax(-1).cpu().numpy();pred=values[b].float().cpu().numpy()*self.config['vp_scale']
-                        truth=np.zeros_like(pred);valid=np.array([r['valid'] for r in target[kind]])
-                        # Existing inputs alone describe current occupancy.
-                        for j,label in enumerate(target[kind]):
-                            if not valid[j]:continue
-                            owner=int(mapping[label['owner']-1])+1 if label['owner'] else 0
-                            if owner:truth[j,owner-1]=label['vp']
-                            predicted=int(probabilities[j].argmax());g['entities']+=1;g['positive']+=int(owner>0);g['none']+=int(owner==0)
-                            g['positive_errors']+=int(owner>0 and predicted!=owner);g['confusion'][owner][predicted]+=1
-                            g['ce_sum']-=math.log(max(1e-30,float(probabilities[j,owner])))
-                            target_one=np.eye(5)[owner];g['brier_sum']+=float(((probabilities[j]-target_one)**2).sum())
-                            # Feature manifests name the owner block; unknown
-                            # layouts are reported as unavailable, never guessed.
-                            prefix=('slot.' if kind=='slots' else 'link.')+label['id']
-                            segment=segments.get(prefix+'.owner',segments.get(prefix))
-                            if segment is not None:
-                                state=dataset.encoded[i].state
-                                occupied=bool(state[segment.start:segment.start+4].sum())
-                                g['current_occupied']+=int(occupied);g['current_empty']+=int(not occupied)
-                        diff=(pred-truth)[valid];g['vp_abs_sum']+=float(np.abs(diff).sum());g['vp_squared_sum']+=float((diff**2).sum())
-                        g['vp_total_abs_sum']+=float(np.abs(diff.sum(0)).sum())
+                        probabilities=probabilities_batch[b];pred=values_batch[b]
+                        token=(row['_local_scoring']['envelope']['sha256'],target['era'],kind,tuple(mapping))
+                        if token not in label_cache:
+                            labels=target[kind];valid=np.array([r['valid'] for r in labels],dtype=bool)
+                            owners=np.array([int(mapping[r['owner']-1])+1 if r['owner'] else 0 for r in labels])
+                            truth=np.zeros_like(pred);positive=np.flatnonzero(owners)
+                            truth[positive,owners[positive]-1]=[labels[j]['vp'] for j in positive]
+                            label_cache[token]=(valid,owners,truth)
+                        valid,owners,truth=label_cache[token];owner=owners[valid]
+                        probs=probabilities[valid];predicted=probs.argmax(-1)
+                        g['entities']+=len(owner);g['positive']+=int((owner>0).sum());g['none']+=int((owner==0).sum())
+                        g['positive_errors']+=int(((owner>0)&(predicted!=owner)).sum())
+                        g['ce_sum']+=float(-np.log(np.maximum(probs[np.arange(len(owner)),owner].astype(np.float64),1e-30)).sum())
+                        g['vp_abs_sum']+=float(np.abs((pred-truth)[valid]).sum())
+        finally:
+            model.train(was_training);self.heads.train(heads_training)
         for g in groups.values():
-            count=max(1,g['entities']);g.update(owner_ce=g['ce_sum']/count,owner_brier=g['brier_sum']/count,
-                vp_mae=g['vp_abs_sum']/(4*count),vp_rmse=math.sqrt(g['vp_squared_sum']/(4*count)),
-                vp_sum_mae_per_seat=g['vp_total_abs_sum']/(4*max(1,g['rows'])))
+            count=max(1,g['entities']);g.update(owner_ce=g['ce_sum']/count,vp_mae=g['vp_abs_sum']/(4*count))
         return dict(rows=len(ids),games=len({dataset.data[i][2][0] for i in ids}),groups=groups,seconds=time.perf_counter()-began,
-            scope='At most 2048 ordinary learner critic-held-out rows balanced by era/table; branches and snapshot seats excluded. These families retain their existing PPO actor use.')
+            scope=f'At most {maximum} ordinary learner critic-held-out rows balanced by era/table; branches and snapshot seats excluded. Ownership CE/errors and VP MAE only; report-only, no gate or fitting changes.')

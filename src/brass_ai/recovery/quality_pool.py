@@ -206,21 +206,24 @@ def admission(pool,entry,health,distances,pair_distance):
     return pool,outcome
 
 
-def finish(root,run,pool,model,entry,probe,update,limit_report):
+def finish(root,run,pool,model,entry,probe,update,limit_report,*,probabilities=None,compute_fingerprints=True):
     pool=copy.deepcopy(pool);c=pool['config'];health=limit_report['health']
     pool['health_window']=(pool['health_window']+[health['ok'] is True])[-c['admit_health_iterations']:]
     distances=None;values=None;cache={}
     ready=(pool['generation']%c['admit_every_iterations']==0 and len(pool['health_window'])==c['admit_health_iterations']
            and all(pool['health_window']) and entry['model_id'] not in {m['model_id'] for m in pool['members']})
     if ready:
-        values=probe.probabilities(model,update)
+        # With AnchorKL retired this is the only fixed-probe policy pass, and
+        # only on due, healthy admission attempts. Legacy runs can pass exact
+        # same-weight outputs; never reuse post-PPO values after PPG.
+        values=probe.probabilities(model,update) if probabilities is None else probabilities
         cache={m['model_id']:cached(root,m,probe) for m in pool['members']}
         distances={identity:mean_kl(old,values,probe.arrays['offsets'],probe.config['probability_floor']) for identity,old in cache.items()}
     pair=lambda a,b:mean_kl(cache[a['model_id']],cache[b['model_id']],probe.arrays['offsets'],probe.config['probability_floor'])
     result,event=admission(pool,entry,health,distances,pair)
     if event['admitted']:
         member=result['members'][-1];member['probe']=cache_candidate(root,run,entry,values,probe)
-        if 'fingerprint' in pool['members'][0]:
+        if compute_fingerprints and 'fingerprint' in pool['members'][0]:
             from .critic_data import fingerprint
             member['fingerprint']=fingerprint(probe,values)
     return result,event

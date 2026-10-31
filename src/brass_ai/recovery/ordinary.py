@@ -140,11 +140,15 @@ def plan_collection(root,directory,state,config,signature,service,current,profil
                        if (p:=policies[(s-rotation)%4])!=learner})
         if 'critic_data' in config:
             from .critic_data import planned_table
-            require(fingerprints is not None,'Ordinary table requires incoming-policy fingerprints')
+            from .policy_observations import enabled as neutral_observations
+            neutral=neutral_observations(config)
+            require(neutral or fingerprints is not None,'Ordinary table requires incoming-policy fingerprints')
+            fp=fingerprints or {}
             provenance['critic_table']=planned_table(policies,rotation,current,state['iteration'],
-                state['quality_pool']['members'],fingerprints['learner'],fingerprints['rule_bot'],
+                state['quality_pool']['members'],fp.get('learner'),fp.get('rule_bot'),
                 learner_policy_id=learner['policy_id'],
-                strategies=provenance.get('diversity_assignment'),context_fingerprints=fingerprints.get('contexts'))
+                strategies=provenance.get('diversity_assignment'),context_fingerprints=fp.get('contexts'),neutral_fingerprints=neutral)
+            if neutral:provenance['policy_observations']=config['policy_observations']
         if mix_receipt is not None:provenance['champion_rollout']=mix_receipt
         setup=digest(dict(rules='steam-brass-patch-1.1.0',setup_seed=seed))
         if quality_receipts:

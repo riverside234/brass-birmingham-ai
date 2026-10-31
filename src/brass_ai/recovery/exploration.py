@@ -333,7 +333,8 @@ def effective(config, state, generation):
     age=generation-state['origin']; r=config['exploration_rollout']
     require(age>=0, 'Exploration rollout precedes its committed origin')
     e=config['entropy_control']; raw=age>=r['raw_entropy_after_iterations']
-    branch_ready=age>=r['branching_after_iterations'] and state['baseline'] is not None
+    from .policy_observations import enabled as observations_off
+    branch_ready=age>=r['branching_after_iterations'] and (state['baseline'] is not None or observations_off(config))
     return dict(version=3,opening=config['opening'] if age>=r['opening_after_iterations'] else None,
         raw_entropy=raw,branching=config['branching'] if branch_ready else None,
         branching_status='active' if branch_ready else 'waiting_for_20_iterations' if age<r['branching_after_iterations'] else 'waiting_for_entropy_baseline',
@@ -400,4 +401,6 @@ def advance(state, config, measurement, *, generation, warmup_done, healthy, pol
         **(dict(floor_anchor_promotions=s['floor_anchor_promotions'],
             floor_initial_ratio_by_group=copy.deepcopy(e['floor_ratio_by_group'])) if 'floor_anchor_promotions' in s else {}),
         baseline_iterations=len(s['baseline_rows']),healthy=bool(healthy),groups=report,
-        scope='Final raw policy on fixed IL probe; prospective post-warmup baseline, no retired IL action checks')
+        scope=('Fixed entropy weights; fixed-probe diagnostics disabled, saved entropy baseline unchanged'
+            if config.get('policy_observations',{}).get('anchor_kl')=='off' else
+            'Final raw policy on fixed IL probe; prospective post-warmup baseline, no retired IL action checks'))

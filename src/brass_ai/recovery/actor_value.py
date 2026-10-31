@@ -93,6 +93,8 @@ def quota_holdout_checkpoint(saved,options,generation):
 
 class TrainingPhases:
     def __init__(self,model,config,*,raw=None,generation=0,root=None,run=None):
+        from .policy_observations import install
+        install(model,config)
         from . import ppg_config
         self.snapshot_floor_migration=None
         self.snapshot_fixed_migration=None
@@ -713,6 +715,8 @@ class TrainingPhases:
         report['health_scope']='Economic health and PPO/value guards; calibrated IL distance/latch gates LR increases only'
         if rolling and dcpg_config.penalty_only(self.options['value_phase']):
             report['health_scope']='Economic health and PPO guards; PPG policy control is penalty-only with no hard KL veto. Calibrated anchor distance/latch gates LR increases only.'
+        if self.config.get('policy_observations',{}).get('anchor_kl')=='off':
+            report['health_scope']='Economic health and existing PPO/PPG evidence rules; AnchorKL measurement, calibration and gating disabled'
         if getattr(self,'window_migration',None):report['window_migration']=copy.deepcopy(self.window_migration)
         if self.evidence_migration:report['evidence_migration']=copy.deepcopy(self.evidence_migration)
         if self.critic_state is not None:

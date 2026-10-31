@@ -231,7 +231,7 @@ def annotate(report,state):
     active=(state.get('policy_anchor') or {}).get('active')
     report['anchor_reference']=copy.deepcopy(active['checkpoint'] if active else state['evaluation_anchor'])
     report['anchor_promotion']=copy.deepcopy(active['evidence']) if active else None
-    report['original_il_measurement']=copy.deepcopy(report['measurement'].get('original_il',report['measurement']))
+    report['original_il_diagnostics']=dict(enabled=False,reason='Report-only IL comparisons retired')
     report['lr_increases_permitted_by_anchor']=report['lr_gate']['ok']
     report['lr_gate']['scope']='Active frozen policy reference on fixed IL probe; independently anchored economic health'
     return report
@@ -242,5 +242,5 @@ def console(decision):
     r=decision['calibration'];e=decision['evidence']
     print(f'KL reference -> g{decision["reference_generation"]}: paired delta={e["points_delta"]:.2f} '
         f'CI95={e["points_delta_ci95"]}; AnchorKL={r["measurement"]["kl_mean"]:.5f}/0.15000 '
-        f'ILKL={r["measurement"]["original_il"]["kl_mean"]:.5f} group_limit=0.30000 '
+        f'group_limit=0.30000 '
         f'anchor/econ permits LR increases={r["lr_anchor_health_permits"]}',flush=True)

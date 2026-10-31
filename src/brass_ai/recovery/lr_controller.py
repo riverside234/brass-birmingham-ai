@@ -14,6 +14,7 @@ KEY='brass_ppo_lr_controller'
 LEGACY_CONTRACT='ppo-categorical-kl-lr/1.0.0'
 CONTRACT='ppo-categorical-kl-lr/1.1.0'
 AUTO_CONTRACT='ppo-categorical-kl-lr/1.2.0'
+ECONOMIC_CONTRACT='ppo-categorical-kl-lr/1.3.0'
 GROUP_FIELDS=frozenset(('anchor_group_kl_budget','anchor_group_min_positions'))
 DEFAULT_CONTROLLER=dict(contract=CONTRACT,mode='apply',target_kl=.01,
     raise_factor=1.25,cut_divisor=1.25,low_ratio=.50,high_ratio=1.5,
@@ -49,7 +50,7 @@ def finite(value):
 
 
 def validate_config(config,update=None):
-    require(type(config) is dict and config.get('contract') in (LEGACY_CONTRACT,CONTRACT,AUTO_CONTRACT),
+    require(type(config) is dict and config.get('contract') in (LEGACY_CONTRACT,CONTRACT,AUTO_CONTRACT,ECONOMIC_CONTRACT),
             'Unsupported PPO LR controller contract')
     expected=set(DEFAULT_CONTROLLER)-(GROUP_FIELDS if config['contract']==LEGACY_CONTRACT else set())
     require(set(config)==expected,
@@ -71,6 +72,10 @@ def validate_config(config,update=None):
                 'Invalid per-phase anchor KL budget')
         require(type(config['anchor_group_min_positions']) is int and 1<=config['anchor_group_min_positions']<=512,
                 'Invalid anchor group minimum; four groups must fit the 2048-row probe')
+    if config['contract']==ECONOMIC_CONTRACT:
+        require(config['anchor_kl_budget'] is None and config['anchor_group_kl_budget'] is None and
+                type(config['anchor_group_min_positions']) is int and config['anchor_group_min_positions']==64,
+                'Economic-only LR requires disabled overall/group anchor budgets')
     if update is not None:
         require(config['target_kl']==update['target_kl'],'Controller and PPO target_kl must match')
         require(config['mode']=='off' or (update.get('actor_nonforced') and update.get('kl_probe_rows')==2048),
@@ -156,6 +161,11 @@ def anchor_group_health(measurements,config):
 
 
 def health(state,measurements,config):
+    if config['contract']==ECONOMIC_CONTRACT:
+        evidence=measurements.get('economic_health')
+        require(type(evidence) is dict and type(evidence.get('ok')) is bool and
+                evidence.get('contract')=='selfplay-economic-health/3.0.0','Missing fresh economic health evidence')
+        return dict(copy.deepcopy(evidence),anchor_distance=None,anchor_kl_enabled=False)
     if config['contract']==AUTO_CONTRACT:
         evidence=measurements.get('calibrated_anchor')
         require(type(evidence) is dict and type(evidence.get('ok')) is bool and
@@ -262,7 +272,7 @@ def game_health(games,policy_id,kinds):
                 zero_vp_fraction=sum(v==0 for v in learner)/len(learner) if learner else None)
 
 
-def finish_iteration(optimizer,update,config,sampling,games,policy_id,kinds,anchor,calibrated_anchor=None):
+def finish_iteration(optimizer,update,config,sampling,games,policy_id,kinds,anchor,calibrated_anchor=None,economic_health=None):
     group=optimizer.param_groups[0]
     if KEY not in group:return None
     probe=update['categorical_probe']
@@ -277,7 +287,7 @@ def finish_iteration(optimizer,update,config,sampling,games,policy_id,kinds,anch
         early_stop=update['kl_early_stop'],warmup_done=update['controller_warmup_done'],
         data_signature=collection_signature(config,sampling),anchor_distance=probe.get('anchor_distance'),
         anchor_groups=probe.get('anchor_groups'),anchor_unassigned_positions=probe.get('anchor_unassigned_positions'),
-        anchor_identity=anchor,calibrated_anchor=calibrated_anchor,**game_health(games,policy_id,kinds))
+        anchor_identity=anchor,calibrated_anchor=calibrated_anchor,economic_health=economic_health,**game_health(games,policy_id,kinds))
     group[KEY],report=decide(group[KEY],measurements)
     report.update(kl_signal='exact-categorical-probe',kl_probe_positions=probe['positions'],
         requested_probe_positions=config['update']['kl_probe_rows'],sampled_kl_stop_enabled=not exact_only)

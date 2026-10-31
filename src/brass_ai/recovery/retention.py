@@ -19,6 +19,11 @@ from brass_ai.learning.contracts import project_path,require
 from brass_ai.step5.league import write_json
 from .config import RETENTION,POPULATION
 
+# Journal a bounded group of file intents before touching any of its bytes.
+# Crash recovery checks each path/hash independently, as with one-file receipts.
+JOURNAL_BATCH=64
+AUTO_EVERY_ITERATIONS=5
+
 
 def link(path):
     path=Path(path)
@@ -419,35 +424,70 @@ def plan(root,run,config=RETENTION):
 
 
 def prune(root,run,config=RETENTION,*,apply=False):
-    root,run=owned(root,run);decision=plan(root,run,config)
+    began=time.perf_counter();root,run=owned(root,run);decision=plan(root,run,config)
+    planned=time.perf_counter()
     if not apply: return dict(decision,dry_run=True)
     from .history import compact_history
     archived=[e for e in decision['entries'] if e['path'].endswith('/report.json') and e['reason'].startswith('archived')]
     compact_history(run,[(e['path'],e['sha256'],read(safe(run,run/e['path']))) for e in archived],
                     config.get('history_reports',128))
     if not decision['entries']:
-        return dict(decision,dry_run=False,**purge(root,run,config,automatic=True))
+        result=purge(root,run,config,automatic=True)
+        return dict(decision,dry_run=False,**result,timings=dict(plan_seconds=planned-began,
+            archive_move_seconds=0.,purge_seconds=time.perf_counter()-planned))
     # A single small history file retains learning/evaluation metrics, replacing
     # one large report directory per retired round. Archive before moving bytes.
     token=str(int(time.time()))+'-'+uuid.uuid4().hex[:8]
     manifest=run/'.retention'/('cleanup-'+token+'.json');trash=run/'.retention-trash'/token
     decision.update(dry_run=False,quarantine_hours=config['quarantine_hours'],status='moving')
     write_json(manifest,decision)
-    for entry in decision['entries']:
-        source=safe(run,run/entry['path']);destination=safe(run,trash/entry['path'])
-        require(sha(source)==entry['sha256'],'Artifact changed during cleanup')
-        entry['quarantine']=destination.relative_to(run).as_posix();entry['moving']=True
+    for start in range(0,len(decision['entries']),JOURNAL_BATCH):
+        batch=decision['entries'][start:start+JOURNAL_BATCH];paths=[]
+        for entry in batch:
+            source=safe(run,run/entry['path']);destination=safe(run,trash/entry['path'])
+            require(sha(source)==entry['sha256'],'Artifact changed during cleanup')
+            require(not destination.exists(),'Quarantine would overwrite a file')
+            entry['quarantine']=destination.relative_to(run).as_posix();entry['moving']=True
+            paths.append((source,destination))
+        # All intents reach disk before the first rename. An interrupted batch
+        # may contain moved and unmoved entries; purge/restore handle both.
         write_json(manifest,decision)
-        destination.parent.mkdir(parents=True,exist_ok=True);source.replace(destination)
-        entry['moved']=True;entry['moving']=False
+        for entry,(source,destination) in zip(batch,paths):
+            destination.parent.mkdir(parents=True,exist_ok=True);source.replace(destination)
+            entry['moved']=True;entry['moving']=False
         write_json(manifest,decision)
     decision['status']='quarantined';write_json(manifest,decision)
     report_path=run/'report.json'
     if report_path.exists() and any('development' in e['reason'] for e in decision['entries']):
         report=read(report_path);report.update(raw_records_pruned=True,promotion_eligible=False)
         report['retention_manifest']=manifest.relative_to(root).as_posix();write_json(report_path,report)
-    result=purge(root,run,config,automatic=True)
-    return dict(decision,manifest=str(manifest),**result)
+    moved=time.perf_counter();result=purge(root,run,config,automatic=True)
+    return dict(decision,manifest=str(manifest),**result,timings=dict(plan_seconds=planned-began,
+        archive_move_seconds=moved-planned,purge_seconds=time.perf_counter()-moved))
+
+
+def scheduled_prune(root,run,config=RETENTION):
+    """General retention only; PPG cache expiry remains per-commit elsewhere.
+
+    The small receipt survives process restarts. Publish only after successful
+    cleanup so an interrupted due pass is retried, never silently skipped.
+    """
+    root,run=owned(root,run);state=read(run/'state.json');generation=state['iteration']
+    interval=config.get('every_iterations',AUTO_EVERY_ITERATIONS)
+    require(type(interval) is int and 1<=interval<=20,'Invalid retention.every_iterations')
+    receipt=safe(run,run/'.retention/automatic.json')
+    last=read(receipt)['generation'] if receipt.exists() else None
+    require(last is None or type(last) is int and 0<=last<=generation,'Retention schedule ahead of committed progress')
+    due=(generation%interval==0 if last is None else generation-last>=interval)
+    result=dict(performed=False,every_iterations=interval,last_cleanup_generation=last,
+        next_cleanup_generation=((generation//interval+1)*interval if last is None else last+interval),
+        reason='not_due' if config['enabled'] else 'disabled')
+    if not config['enabled'] or not due:return result
+    cleanup=prune(root,run,config,apply=True)
+    write_json(receipt,dict(format='automatic-retention/1.0.0',generation=generation,every_iterations=interval))
+    result.update(performed=True,last_cleanup_generation=generation,next_cleanup_generation=generation+interval,reason='due')
+    result.update({k:cleanup[k] for k in ('reclaimable_bytes','permanently_deleted_files','permanently_deleted_bytes','timings')})
+    return result
 
 
 def settled(data):
@@ -475,32 +515,48 @@ def purge(root,run,config=RETENTION,*,automatic=False):
         if automatic and data['quarantine_hours'] and generation<=data['generation']: continue
         if settled(data):continue
         if pins is None:pins=references(root,run)
-        for entry in data['entries']:
-            if entry.get('moving') and not entry.get('moved'):
-                origin=safe(run,run/entry['path']);destination=safe(run,run/entry['quarantine'])
-                require(not (origin.exists() and destination.exists()),'Ambiguous interrupted cleanup')
-                if not origin.exists() and destination.exists():
-                    require(sha(destination)==entry['sha256'],'Interrupted quarantine changed')
-                    entry.update(moved=True,moving=False);write_json(manifest,data)
-            if not entry.get('moved') or entry.get('restored') or entry.get('deleted'): continue
-            path=safe(run,run/entry['quarantine']);origin=safe(run,run/entry['path'])
-            if entry.get('restoring') and not path.exists() and origin.exists():
-                require(sha(origin)==entry['sha256'],'Restored dependency changed')
-                entry.update(restored=True,restoring=False);write_json(manifest,data)
-                remove_empty_parents(run,path);continue
-            if entry.get('deleting') and not path.exists():
-                entry.update(deleted=True,deleting=False);write_json(manifest,data)
-                remove_empty_parents(run,path);remove_empty_parents(run,origin);continue
-            require(path.exists() and sha(path)==entry['sha256'],'Quarantine changed')
-            if origin in pins:
-                require(not origin.exists(),'Restoring dependency would overwrite a file')
-                entry['restoring']=True;write_json(manifest,data)
-                origin.parent.mkdir(parents=True,exist_ok=True);path.replace(origin)
-                entry.update(restored=True,restoring=False,deleting=False);rescued+=1;write_json(manifest,data)
-                remove_empty_parents(run,path);continue
-            entry['deleting']=True;write_json(manifest,data)
-            path.unlink();entry.update(deleted=True,deleting=False);count+=1;deleted_bytes+=entry['bytes'];write_json(manifest,data)
-            remove_empty_parents(run,path);remove_empty_parents(run,origin)
+        for start in range(0,len(data['entries']),JOURNAL_BATCH):
+            actions=[];empty_paths=[];changed=False
+            for entry in data['entries'][start:start+JOURNAL_BATCH]:
+                if entry.get('restored') or entry.get('deleted'):continue
+                origin=safe(run,run/entry['path'])
+                if not entry.get('moved'):
+                    if entry.get('moving'):
+                        destination=safe(run,run/entry['quarantine'])
+                        require(origin.exists()!=destination.exists(),'Ambiguous interrupted cleanup')
+                        if destination.exists():
+                            require(sha(destination)==entry['sha256'],'Interrupted quarantine changed')
+                            entry.update(moved=True,moving=False);changed=True
+                    if not entry.get('moved'):
+                        # This file never left its original path. Release the
+                        # aborted intent; a future fresh plan may retire it.
+                        entry.update(restored=True,moving=False,unmoved=True);changed=True
+                        continue
+                path=safe(run,run/entry['quarantine'])
+                if entry.get('restoring') and not path.exists() and origin.exists():
+                    require(sha(origin)==entry['sha256'],'Restored dependency changed')
+                    entry.update(restored=True,restoring=False);changed=True;empty_paths.append(path);continue
+                if entry.get('deleting') and not path.exists():
+                    entry.update(deleted=True,deleting=False);changed=True;empty_paths.extend((path,origin));continue
+                require(path.exists() and sha(path)==entry['sha256'],'Quarantine changed')
+                if origin in pins:
+                    require(not origin.exists(),'Restoring dependency would overwrite a file')
+                    entry.update(restoring=True,deleting=False);action='restore'
+                else:entry['deleting']=True;action='delete'
+                actions.append((entry,path,origin,action));changed=True
+            if changed:write_json(manifest,data)  # durable intent BEFORE any delete/restore
+            for entry,path,origin,action in actions:
+                if action=='restore':
+                    origin.parent.mkdir(parents=True,exist_ok=True);path.replace(origin)
+                    entry.update(restored=True,restoring=False,deleting=False);rescued+=1
+                    empty_paths.append(path)
+                else:
+                    path.unlink();entry.update(deleted=True,deleting=False);count+=1;deleted_bytes+=entry['bytes']
+                    empty_paths.extend((path,origin))
+            if actions:write_json(manifest,data)
+            for path in empty_paths:remove_empty_parents(run,path)
+        if data.get('status')!='quarantined':
+            data['status']='quarantined';write_json(manifest,data)
     # Bound the cleanup journal too; unsettled receipts remain recoverable.
     # With only two completed receipts, no fresh dependency scan is necessary.
     if pins is None:

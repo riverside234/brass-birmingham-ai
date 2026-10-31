@@ -86,7 +86,7 @@ def compact(report):
         r=report['local_scoring_adoption']
         out['local_scoring_adoption']={k:r[k] for k in ('contract','origin','new_origin','next_phase','cleanup_complete','cleanup')}
     for key in ('il_kl_limit','policy_anchor','anchor_transition','rating_coverage','rehearsal_schedule','health_counts','quality_pool','strength_rating','value_phase','seat_fingerprints','gate_diagnostics',
-                'exploration_rollout','entropy_control','entropy_floor_transition','exploration_metrics','temperature_rating','context_evaluation','v4_share_gate','panel_gates','teacher_phase'):
+                'exploration_rollout','entropy_control','entropy_floor_transition','exploration_metrics','temperature_rating','context_evaluation','v4_share_gate','panel_gates','teacher_phase','cleanup'):
         if key in report:out[key]=report[key]
     out['health_by_composition']={k:v['health_counts'] for k,v in report.get('by_composition',{}).items()
                                   if 'health_counts' in v}
@@ -94,6 +94,7 @@ def compact(report):
         out['evaluation_evidence']=evaluation_evidence(report)
     out['timings']=scalars(report.get('timings',{}),('collection_seconds','replay_load_seconds','ppo_seconds',
         'sampling_seconds','rehearsal_prepare_seconds','rehearsal_cleanup_seconds',
+        'anchor_probe_seconds','auxiliary_diagnostics_seconds','pool_admission_seconds',
         'post_ppo_diagnostics_seconds','final_diagnostics_seconds',
         'value_phase_seconds','search_and_distill_seconds','checkpoint_seconds','evaluation_seconds','context_evaluation_seconds','cleanup_seconds','iteration_seconds'))
     actor=report.get('actor',{})

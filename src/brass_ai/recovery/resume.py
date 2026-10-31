@@ -197,6 +197,8 @@ def check_signature(state, signature, reviewed=False):
             handlers[PANEL_MIGRATION]=configure_panels
             from .policy_anchor import MIGRATION as ANCHOR_MIGRATION,configure as configure_anchor
             handlers[ANCHOR_MIGRATION]=configure_anchor
+            from .policy_observations import MIGRATION as OBSERVATIONS_MIGRATION,configure as observations_config
+            handlers[OBSERVATIONS_MIGRATION]=observations_config
             from .exploration import MIGRATION as EXPLORATION_MIGRATION,continuation_config
             handlers[EXPLORATION_MIGRATION]=continuation_config
             from .exploration import FROZEN_MIGRATION,frozen_config

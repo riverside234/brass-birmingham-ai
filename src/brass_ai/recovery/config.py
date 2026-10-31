@@ -483,6 +483,8 @@ def latest_model_config(config,imitation_checkpoint):
     result=adopt_teacher_phase(result)
     from .training_revision_g1340 import recipe as g1340_recipe
     result=g1340_recipe(result)
+    from .policy_observations import configure as policy_observations_config
+    result=policy_observations_config(result)
     return validate_config(result)
 
 
@@ -511,8 +513,14 @@ def positive(value, name, integer=False):
 def bounded_fields(config, default, name):
     allowed=[set(default)]
     if name=='retention':allowed.append(set(default)-{'history_reports'})
+    if name=='retention':
+        # Operational cadence is optional in old signed recipes; no identity
+        # rewrite on load. Five committed iterations is the runtime default.
+        allowed += [fields|{'every_iterations'} for fields in list(allowed)]
     require(type(config) is dict and set(config) in allowed,'Invalid '+name+' fields')
     for key,value in config.items():
+        if name=='retention' and key=='every_iterations':
+            require(type(value) is int and 1<=value<=20,'Invalid retention.every_iterations');continue
         expected=default[key]
         if type(expected) is bool: require(type(value) is bool,'Invalid '+name+'.'+key)
         elif name=='retention' and key=='quarantine_hours':
@@ -720,15 +728,19 @@ def validate_config(config):
     if 'rehearsal_sampling' in config:
         from .rehearsal_window import validate as validate_sampling
         fields.add('rehearsal_sampling');validate_sampling(config['rehearsal_sampling'])
-    from .lr_controller import AUTO_CONTRACT
-    auto=config.get('ppo_lr_controller',{}).get('contract')==AUTO_CONTRACT
-    require(auto==('il_kl_limit' in config),'Calibrated IL-KL requires LR controller 1.2 and its limit block together')
+    from .lr_controller import AUTO_CONTRACT,ECONOMIC_CONTRACT
+    economic=config.get('ppo_lr_controller',{}).get('contract')==ECONOMIC_CONTRACT
+    auto=config.get('ppo_lr_controller',{}).get('contract') in (AUTO_CONTRACT,ECONOMIC_CONTRACT)
+    if economic or 'policy_observations' in config:
+        from .policy_observations import validate as validate_observations
+        fields.add('policy_observations');validate_observations(config)
+    require(auto==('il_kl_limit' in config),'Calibrated/economic LR requires the persisted health/probe block')
     if auto:
         from .il_kl_limit import validate as validate_limit
         fields.add('il_kl_limit');limit=validate_limit(config['il_kl_limit']);controller=config['ppo_lr_controller']
-        require(controller['anchor_kl_budget']==limit['initial_limit'] and
+        require(economic or (controller['anchor_kl_budget']==limit['initial_limit'] and
                 controller['anchor_group_kl_budget']==limit['group_factor']*limit['initial_limit'] and
-                controller['anchor_group_min_positions']==limit['group_min_positions'],
+                controller['anchor_group_min_positions']==limit['group_min_positions']),
                 'Initial overall/group IL-KL settings must match the calibrated limits')
         require(fixed_selfplay_recipe(config) and config.get('teacher_enabled') is False,
                 'Auto IL-KL requires latest-model self-play with the legacy teacher disabled; teacher_phase stays inside PPO')

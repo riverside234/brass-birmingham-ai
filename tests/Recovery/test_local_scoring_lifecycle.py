@@ -49,7 +49,7 @@ class Lifecycle(unittest.TestCase):
                     self.assertEqual(ids,phase.heldout_ids)
                     return diagnostics(net,dataset,ids)
                 with patch.object(companion,'diagnostics',side_effect=checked) as measured:
-                    report=finish_training_diagnostics(model,phase,companion)
+                    report=finish_training_diagnostics(model,phase,companion,generation=5)
                 measured.assert_called_once()
                 self.assertEqual(report['heldout']['rows'],len(eligible))
                 self.assertEqual(report['heldout']['games'],len({ds.data[i][2][0] for i in eligible}))
@@ -84,7 +84,7 @@ class Lifecycle(unittest.TestCase):
     def test_missing_dataset_fails_explicitly_instead_of_suppressing_diagnostics(self):
         model,_,_=setup();companion=Companion(model,copy.deepcopy(DEFAULT))
         with self.assertRaisesRegex(ValueError,'live critic dataset before release'):
-            finish_training_diagnostics(model,None,companion)
+            finish_training_diagnostics(model,None,companion,generation=5)
 
 
 if __name__=='__main__':unittest.main()

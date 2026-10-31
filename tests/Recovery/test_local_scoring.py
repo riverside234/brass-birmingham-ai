@@ -139,7 +139,8 @@ class Contracts(unittest.TestCase):
         result=a.diagnostics(m,ds,list(range(len(data))),maximum=4)
         self.assertEqual(result['rows'],4);self.assertTrue(result['groups'])
         for group in result['groups'].values():
-            self.assertEqual(group['current_empty']+group['current_occupied'],group['entities'])
+            self.assertEqual(group['positive']+group['none'],group['entities'])
+            self.assertNotIn('confusion',group);self.assertNotIn('current_occupied',group)
             self.assertTrue(np.isfinite(group['vp_mae']));self.assertTrue(np.isfinite(group['owner_ce']))
         self.assertEqual(before,model_id(m));self.assertFalse(a.retained)
         saved=a.payload(0);config=dict(copy.deepcopy(auxiliary.DEFAULT),mode='off')

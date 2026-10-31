@@ -95,7 +95,10 @@ def fingerprint(probe,probabilities=None,*,rule_bot=False):
         normalization='Family groups sum to 1 per observed era; industry groups conditional on build; empty groups are zero')
 
 
-def planned_table(policies,rotation,current,generation,members,learner_fp,rule_fp,*,learner_policy_id,strategies=None,context_fingerprints=None):
+def planned_table(policies,rotation,current,generation,members,learner_fp,rule_fp,*,learner_policy_id,strategies=None,context_fingerprints=None,neutral_fingerprints=False):
+    if neutral_fingerprints:
+        from .policy_observations import neutral_fingerprint
+        learner_fp=rule_fp=neutral_fingerprint()
     lookup={m['model_id']:m for m in members};seats=[];values=[]
     for seat in range(4):
         p=policies[(seat-rotation)%4];mid=p.get('model_id')
@@ -103,7 +106,8 @@ def planned_table(policies,rotation,current,generation,members,learner_fp,rule_f
             require(mid==current,'Learner descriptor model differs')
             role='learner';born=generation;fp=learner_fp
         elif mid in lookup:
-            member=lookup[mid];born=member['generation'];role='il' if born==0 else 'snapshot';fp=member['fingerprint']
+            member=lookup[mid];born=member['generation'];role='il' if born==0 else 'snapshot'
+            fp=learner_fp if neutral_fingerprints else member['fingerprint']
         elif p.get('kind') in ('external','legacy') or p.get('search_free'):
             role='rule_bot';born=generation;fp=rule_fp
         else:raise ValueError('Unrecognized ordinary opponent for critic descriptors')
@@ -113,22 +117,31 @@ def planned_table(policies,rotation,current,generation,members,learner_fp,rule_f
             validate_assignment(a)
             require((a['training_role']=='learner')==(role=='learner') and mid==a['model_id'],
                 'Strategy role/model differs from critic descriptor')
-            require(context_fingerprints is not None,'Missing context-aware fingerprint provider')
-            fp=context_fingerprints.get(mid,a['strategy_id'])
+            if not neutral_fingerprints:
+                require(context_fingerprints is not None,'Missing context-aware fingerprint provider')
+                fp=context_fingerprints.get(mid,a['strategy_id'])
         require(0<=born<=generation,'Opponent from a future generation')
         seats.append(dict(role=role,generation=born,model_id=mid,policy_id=p.get('policy_id'),
                           fingerprint_id=digest(fp),**(dict(strategy=a) if a is not None else {})))
         values.append(descriptor(role,0 if role in ('learner','rule_bot') else generation-born,fp['values']))
     validate(values)
     return dict(contract=CONTRACT,generation=generation,seats=seats,stable=values,
+                **(dict(fingerprint_mode='neutral') if neutral_fingerprints else {}),
                 learner_fingerprint_id=digest(learner_fp))
 
 
 def check_table(table,game,policy_id):
-    require(type(table) is dict and set(table)=={'contract','generation','seats','stable','learner_fingerprint_id'}
+    fields={'contract','generation','seats','stable','learner_fingerprint_id'}
+    require(type(table) is dict and set(table) in (fields,fields|{'fingerprint_mode'})
         and table['contract']==CONTRACT and type(table['generation']) is int and table['generation']>=0
         and len(table['seats'])==4,'Missing/invalid recorded critic table')
     values=validate(table['stable'])
+    if 'fingerprint_mode' in table:
+        from .policy_observations import neutral_fingerprint
+        token=digest(neutral_fingerprint())
+        require(table['fingerprint_mode']=='neutral' and np.all(values[:,6:]==0) and
+                table['learner_fingerprint_id']==token and all(r['fingerprint_id']==token for r in table['seats']),
+                'Neutral fingerprint provenance/values differ')
     for seat,record in enumerate(table['seats']):
         role=record['role'];require(role in ROLES[:-1] and record['policy_id']==game['opponents'][seat],
                                    'Recorded descriptor opponent identity differs')

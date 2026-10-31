@@ -107,6 +107,128 @@ configs remain valid and unchanged; adoption requires the reviewed transition.
 The context-only helper remains available for evaluation-only changes and does
 not refresh PPG replay.
 
+## Diagnostics and cleanup follow-up
+
+The g1340 export is now available locally. Its last two reports measured
+**11.32/11.62 s post-PPO diagnostics**, **12.43/25.69 s final diagnostics**, and
+**32.38/35.66 s cleanup**. Each active-anchor probe took about 11.3–11.7 s;
+the 2,048-row auxiliary-head diagnostic took about 12 s. The second final
+diagnostic pass includes another anchor probe when retained PPG changes weights.
+
+The performance revision preserves data eligibility, checkpoint dimensions,
+optimizer/RNG/controller state, scoring targets and PPO/PPG acceptance rules.
+The subsequent explicit policy-observation revision changes the critic inputs
+and removes the anchor-distance gate as requested:
+
+- **Auxiliary-head diagnostics:** every **five committed generations**, using
+  at most **512 ordinary held-out learner rows** balanced by table/era. Retain
+  ownership CE/positive-owner error counts, VP MAE and sample support. Drop
+  confusion matrices, Brier scores, occupancy breakdowns and extra VP summaries.
+  Skipped generations explicitly report `measured=false`, with no stale metrics
+  or inference. The schedule follows the committed generation across restarts.
+  Auxiliary heads still train on their existing schedule; this changes reporting.
+- **AnchorKL and original-IL diagnostics:** disable their measurements,
+  reference promotions and overall/group allowance calibration. Console reports
+  `AnchorKL=off`; reports use a null measurement, never stale saved KL values.
+  LR controller contract `ppo-categorical-kl-lr/1.3.0` uses fresh economic health
+  plus the unchanged PPO categorical KL rules. Cuts, warmup, cooldown, multiplier,
+  early stopping and empty/nonfinite-update rules remain. Archived anchor and
+  calibration receipts are retained for lineage, but cannot gate LR increases.
+  The existing economic baseline and rolling evidence are preserved and advanced
+  from ordinary games. IL remains the fixed PL rating origin/reference opponent.
+- **Seat fingerprints:** stop current, historical, bot and DOMiNO-context style
+  fingerprint inference. The 28 fingerprint columns become zero; the five role
+  columns and checkpoint-age column stay unchanged (34 dimensions total).
+  An input hook at the critic descriptor encoder also neutralizes old PPG cache
+  rows without rewriting their recorded descriptors or Monte Carlo targets.
+  Model tensors and checkpoint shapes do not change. Hook installation is
+  idempotent and repeated after each load of the new self-play configuration.
+  DOMiNO strategy contexts, actor inputs and PFSP sampling remain unchanged.
+- **Probe performance:** cache admitted input batches on CPU, bounded to 256 MiB;
+  batch transfers and exact full-legal-distribution KL reductions replace per-row
+  tensor copies. With AnchorKL disabled, run the fixed probe only on due, healthy
+  historical-pool admission attempts and the associated eviction comparisons.
+  Keep immutable probe positions and model-bound pool probability caches; never
+  reuse learner probabilities after weights change. No per-iteration IL-data
+  diagnostic reload or entropy-probe pass remains. Fixed entropy stays 0.10;
+  preserve the saved entropy baseline and opening/branch staging.
+- **Auxiliary performance:** transfer whole output batches and vectorize entity
+  reductions. Restore model/head mode even after exceptions. Sampling, target
+  masks and relative-seat mappings stay intact.
+- **General cleanup:** every **five committed generations** by default. A small
+  durable receipt prevents restart from resetting the cadence. Batch up to 64
+  move/delete intents per journal write; retain fresh dependency scans, path
+  checks, content hashes, quarantine rules and interruption recovery. Archive
+  compact reports before retiring their raw evidence. A failed pass does not
+  advance the schedule. Manual cleanup still runs immediately.
+- **PPG cache expiry remains per commit**, including the requested old-reward
+  refresh. Population selection/limits, active model pins, pending evaluations
+  and per-iteration checkpoint commits remain unchanged.
+
+Less frequent general cleanup amortizes repeated scans and journal work; it
+does not remove the underlying file I/O. Up to four extra iterations of retired
+replays/checkpoints can remain between passes. The exported run retired about
+1.48–1.98 GB per pass, so allow roughly **6–8 GB extra temporary disk space**
+(a rough estimate, not a hard bound; replay sizes and evaluation artifacts vary).
+PPG's own memory/disk window does not grow. An optional strictly validated
+`retention.every_iterations` integer (1–20) overrides the default; changing an
+existing signed configuration still requires its normal reviewed transition.
+No config change is needed for this five-iteration cleanup default. Retiring
+fingerprints/AnchorKL is an explicit signed configuration change:
+`policy_observations = {contract: selfplay-policy-observations/1.0.0,
+seat_fingerprints: neutral, anchor_kl: off, fixed_probe: pool_admission_only}`.
+Fresh config generation and the existing `configure-training-g1340.py` helper
+include it. The documented g1340 recovery/config/train command is unchanged;
+unreviewed configuration edits and incompatible pending collections still fail.
+
+Isolated CPU measurements against Git `c8fa5a5`, two Torch threads, unchanged
+small-model weights and authored inputs:
+
+| Work | Before | After |
+| --- | ---: | ---: |
+| Fixed 2,048-row probe (2–3 legal actions/row; median of 3) | 0.380 s | 0.325 s |
+| Auxiliary report, same 2,048 rows (median of 2; retained metrics match) | 2.010 s | 0.640 s |
+| New default auxiliary report, 512 rows | 2.010 s every iteration previously | 0.163 s every 5 iterations |
+
+The fixed-probe benchmark above is relevant to pool-admission work; it no longer
+runs as an AnchorKL diagnostic. A separate bounded CPU training smoke accepted
+one PPO step and two PPG steps; every observed descriptor forward received zeros
+in the fingerprint columns, including rows carrying old nonzero descriptors.
+The focused regressions cover strict config migration, economic evidence,
+stale-anchor exclusion, LR rules, model/Adam/RNG preservation, neutral seat
+rotation/context provenance, PFSP planner parity, due-only pool probes and fresh
+branch staging without an entropy probe. These tests do not establish a playing
+strength benefit or predict production CUDA timing.
+
+Final follow-up validation: **32 continuation/controller/source-review tests**
+and **29 diagnostics/retention/context-lifecycle tests** passed. Receipts are
+`artifacts/policy-observations-continuation-tests.log` and
+`artifacts/policy-observations-performance-tests.log`. The neutral-descriptor
+smoke used 42 authored tables, one PPO step and two accepted PPG steps; all 146
+observed descriptor forwards had zero fingerprint columns. It ran in an isolated
+temporary directory and did not edit any existing training checkpoint. Current
+source identity is `f2303e80d843bdce339df8e9ca59f37642d2a5addbc13f468df700b6e0b09d11`;
+model/feature compatibility is unchanged. All 76,391 pre-follow-up source reviews
+are retained in order, with 481 explicit reviews added.
+| Cleanup of 100 temporary files | 1.702 s / 402 journal writes | 0.775 s / 10 writes |
+| Separate 1,000-file cleanup fixture | 50.86 s / 4,002 writes | 24.93 s / 66 writes |
+
+The reduced auxiliary check amortizes to **0.033 s per iteration** in this fixture.
+The same selected 512 rows also match the old metric calculations within float
+tolerance. The 1,000-file measurement preceded the reporting-frequency follow-up;
+the retention code was unchanged between measurements. These are local Windows
+CPU/filesystem measurements, not estimates of lab CUDA speedups or playing strength.
+The 2–3-action probe is deliberately small and does not represent the production
+candidate-count distribution. No long training/evaluation was launched.
+
+Reproducible benchmark: `tests/Recovery/benchmark_diagnostics_cleanup.py` with
+`--baseline-ref c8fa5a5`. Receipts are
+`artifacts/diagnostics-cleanup-benchmark.json` and
+`artifacts/diagnostics-cleanup-benchmark-final.json`.
+New iteration reports expose `anchor_probe_seconds`,
+`auxiliary_diagnostics_seconds`, `pool_admission_seconds`, and cleanup
+plan/move/purge timings. The compact history retains these fields and cadence.
+
 ## Enable for the continuing run
 
 Use the actual committed generation in `--expected-generation`. For the last
@@ -136,6 +258,10 @@ repeat g1326 DOMiNO adoption or rerun IL. The requested PPG refresh is automatic
 for this reward change; do not manually delete checkpoint or cache files.
 The helper only writes the requested new config; continuation commits the
 reviewed transition under the normal run lock.
+The command also includes the diagnostics/cleanup follow-up above. The user has
+not yet run the earlier g1340 command: retain this same recovery generation and
+config filename. Auxiliary diagnostics and general cleanup first run at **g1345**,
+then g1350, g1355 and g1360. No separate cleanup/reset command is needed.
 
 To keep context evaluation off, retain the old config. To explicitly change
 the interval later, use `configure-domino-context-evaluation.py` with

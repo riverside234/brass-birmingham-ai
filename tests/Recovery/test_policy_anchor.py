@@ -109,7 +109,7 @@ class Selection(unittest.TestCase):
 
 
 class Calibration(unittest.TestCase):
-    def test_dual_probe_uses_one_forward_and_preserves_original_il_arrays(self):
+    def test_active_probe_uses_one_forward_without_optional_original_il_comparison(self):
         from test_auto_il_kl import ProbeTests,ToyPolicy
         from brass_ai.recovery import il_kl_probe as probes
         rows=ProbeTests().data();il=ToyPolicy();reference=copy.deepcopy(il);current=copy.deepcopy(il)
@@ -127,7 +127,7 @@ class Calibration(unittest.TestCase):
             with patch.object(current,'forward',wraps=current.forward) as forward:
                 dual=probe.measure(current,update,reference=probabilities)
                 self.assertEqual(forward.call_count,len(list(probe.parts(update))))
-            self.assertEqual(dual['original_il']['kl_mean'],original['kl_mean'])
+            self.assertNotIn('original_il',dual);self.assertFalse(dual['original_il_diagnostics'])
             self.assertNotEqual(dual['kl_mean'],original['kl_mean'])
             self.assertEqual(probe.measure(reference,update,reference=probabilities)['kl_mean'],0.)
             for key,value in arrays.items():np.testing.assert_array_equal(value,probe.arrays[key])
