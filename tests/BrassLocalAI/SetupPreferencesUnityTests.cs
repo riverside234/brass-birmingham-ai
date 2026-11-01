@@ -45,6 +45,8 @@ public sealed partial class LocalAiUnityDriver
         Check(Setup.PlayerMetadata.All(p=>LocalMenu.Choice(p).Family==AiFamily.AlphaTest),"restored one coherent NN family");
         Check(LocalMenu.TableFamily(Setup.PlayerMetadata[0])==AiFamily.AlphaTest && LocalMenu.CanStart(menu),"NN family retained for Human seat and Start allowed");
         Check(Setup.PlayerMetadata.All(p=>LocalMenu.TableSearchK(p)==expectedK),"saved K restored for the whole table independently of seat allowances");
+        Check(AiSelectionCatalog.Entries(AiFamily.AlphaTest).Count==2 && Setup.PlayerMetadata.All(p=>LocalMenu.Choice(p).EntryId=="alpha-test"),"NN catalog offers Alpha Test/Beta and retains the default Alpha choice");
+        Check(NativeFocus.Keys.Skip(1).All(f=>!AiSelectionCatalog.CanChoose(new AiChoice(AiFamily.AlphaTest,NativeFocus.ChoiceId(f)))),"industry tag choices cannot bypass the single NN menu");
     }
     IEnumerator SetupPreferencesCases()
     {
@@ -72,6 +74,13 @@ public sealed partial class LocalAiUnityDriver
             Check(kPanel.DraftSearchK==16,"Cancel discards the search K draft");
             kPanel.SearchKButtons[0].onClick.Invoke();kPanel.ApplyButton.onClick.Invoke();yield return null;
             CheckRestoredNeural();
+            string neutralMigrationPreferences=PreferenceValues()[SetupKey];
+            foreach(string oldFocus in NativeFocus.Keys.Skip(1)) {
+                var former=JObject.Parse(neutralMigrationPreferences);foreach(JObject seat in former["seats"])seat["nn_focus"]=oldFocus;
+                PreferenceValues()[SetupKey]=former.ToString();Call(menu,"CreateNewGameConfiguration");yield return null;
+                CheckRestoredNeural();
+            }
+            PreferenceValues()[SetupKey]=neutralMigrationPreferences;
             foreach(var difficulty in Enumerable.Range(0,4)) {
                 Rows()[1].GetComponent<AiSetupRow>().OpenPicker();kPanel=AiSelectionPanel.Active;
                 kPanel.DifficultyButtons[difficulty].onClick.Invoke();

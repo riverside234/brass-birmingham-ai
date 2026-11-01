@@ -32,7 +32,8 @@ namespace BrassLegacyAI.Native
     public static class NativeGameState
     {
         public const string Format="brass-local-native-save/1.0.0";
-        public static bool IsNative(JObject state) {return (string)state?["format"]==Format || (string)state?["runtime"]==NativePackage.Backend;}
+        public static bool IsNative(JObject state) {return (string)state?["format"]==Format || (string)state?["runtime"]==NativePackage.Backend || (string)state?["runtime"]==NativeModel.Beta.Backend;}
+        public static NativeModel Model(JObject state) { return NativeModel.FromBackend((string)state?["runtime"]); }
         public static bool Supported(GameMetadata metadata) {return metadata!=null && (int)metadata.GameStartConfiguration.NumberOfPlayers==4 && !metadata.GameStartConfiguration.IsIntroductoryGame;}
         static string AssignmentHash(JObject s) {
             var bound=new JObject{["format"]=s["format"],["runtime"]=s["runtime"],["family"]=s["family"],
@@ -71,6 +72,10 @@ namespace BrassLegacyAI.Native
             return (string)token;
         }
         public static JObject Create(GameMetadata metadata,Func<PlayerMetadata,string> difficulty,int searchK,double temperature,Func<PlayerMetadata,string> focus)
+        { return Create(metadata,difficulty,searchK,temperature,focus,NativeModel.Alpha); }
+        public static JObject Create(GameMetadata metadata,Func<PlayerMetadata,string> difficulty,int searchK,double temperature,NativeModel model)
+        { return Create(metadata,difficulty,searchK,temperature,p=>"neutral",model); }
+        public static JObject Create(GameMetadata metadata,Func<PlayerMetadata,string> difficulty,int searchK,double temperature,Func<PlayerMetadata,string> focus,NativeModel model)
         {
             if(!Supported(metadata))throw new InvalidDataException("Alpha Test requires standard four-player rules");
             if(!NativePackage.ValidSearchK(searchK))throw new InvalidDataException("Unsupported NN search K");
@@ -79,11 +84,11 @@ namespace BrassLegacyAI.Native
                 var r=new JObject{["color"]=(int)p.PlayerStartConfiguration.Color,["sitting_order"]=p.PlayerStartConfiguration.SittingOrder,
                     ["kind"]=p.AiType==AIType.Human?"human":"native"};
                 if(p.AiType!=AIType.Human){string tag=focus(p);if(!NativeFocus.Valid(tag))throw new InvalidDataException("Unsupported NN industry focus");
-                    r["nn_focus"]=tag;r["strategy"]="alpha-test";r["backend"]=NativePackage.Backend;r["profile"]=NativeFocus.Profile(tag);
-                    r["model_id"]=NativePackage.Model;r["export_sha256"]=NativePackage.Export;r["execution"]=DifficultyCatalog.Snapshot(difficulty(p));}
+                    r["nn_focus"]=tag;r["strategy"]=model.Key;r["backend"]=model.Backend;r["profile"]=model.Profile(tag);
+                    r["model_id"]=model.Model;r["export_sha256"]=model.Export;r["execution"]=DifficultyCatalog.Snapshot(difficulty(p));}
                 return r;
             }));
-            var state=new JObject{["format"]=Format,["runtime"]=NativePackage.Backend,["family"]="nn",["rules"]=Wire.Rules,["schema"]=Wire.Version,
+            var state=new JObject{["format"]=Format,["runtime"]=model.Backend,["family"]="nn",["rules"]=Wire.Rules,["schema"]=Wire.Version,
                 ["game_id"]=metadata.GameId,["created_utc"]=DateTime.UtcNow.ToString("o"),["ready"]=false,
                 ["configuration"]=Host.Configuration(metadata.GameStartConfiguration),["assignments"]=rows,["records"]=new JArray()};
             state["nn_search_k"]=searchK;
@@ -93,7 +98,8 @@ namespace BrassLegacyAI.Native
         public static JObject Read(GameMetadata metadata,bool pending)
         {
             var s=SaveExtensions.Get(metadata);
-            if(!Supported(metadata) || (string)s["format"]!=Format || (string)s["runtime"]!=NativePackage.Backend || (string)s["family"]!="nn" ||
+            var model=Model(s);
+            if(!Supported(metadata) || (string)s["format"]!=Format || (string)s["runtime"]!=model.Backend || (string)s["family"]!="nn" ||
                 (string)s["rules"]!=Wire.Rules || (string)s["schema"]!=Wire.Version || (string)s["game_id"]!=metadata.GameId ||
                 (!pending && (bool?)s["ready"]!=true) || !JToken.DeepEquals(s["configuration"],Host.Configuration(metadata.GameStartConfiguration)) ||
                 (string)s["assignment_sha256"]!=AssignmentHash(s) || !(s["records"] is JArray) ||
@@ -107,8 +113,8 @@ namespace BrassLegacyAI.Native
                 if((int)r["sitting_order"]!=p.PlayerStartConfiguration.SittingOrder || (string)r["kind"]!=(human?"human":"native"))throw new InvalidDataException("Mixed or changed NN table");
                 if(human){if(r["execution"]!=null || r["nn_focus"]!=null)throw new InvalidDataException("Unexpected human execution");continue;}
                 string focus=Focus(s,(int)p.PlayerStartConfiguration.Color);
-                if((string)r["strategy"]!="alpha-test" || (string)r["backend"]!=NativePackage.Backend || (string)r["profile"]!=NativeFocus.Profile(focus) ||
-                    (string)r["model_id"]!=NativePackage.Model || (string)r["export_sha256"]!=NativePackage.Export)throw new InvalidDataException("Saved NN model differs");
+                if((string)r["strategy"]!=model.Key || (string)r["backend"]!=model.Backend || (string)r["profile"]!=model.Profile(focus) ||
+                    (string)r["model_id"]!=model.Model || (string)r["export_sha256"]!=model.Export)throw new InvalidDataException("Saved NN model differs");
                 DifficultyCatalog.Read(r["execution"]);
             }
             return s;

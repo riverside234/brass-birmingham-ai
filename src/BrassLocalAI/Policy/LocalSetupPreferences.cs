@@ -19,6 +19,7 @@ namespace BrassLegacyAI
         public bool Introductory;
         public int SearchK = 16;
         public double Temperature = 1.0;
+        public string NeuralChoice = "alpha-test";
         public Seat[] Seats;
 
         public string Encode()
@@ -28,6 +29,7 @@ namespace BrassLegacyAI
                 ["players"] = PlayerCount, ["introductory"] = Introductory,
                 ["nn_search_k"] = SearchK,
                 ["nn_temperature"] = Temperature,
+                ["nn_model"] = NeuralChoice,
                 ["seats"] = new JArray(Seats.Select(s => new JObject {
                     ["human"] = s.Human, ["style"] = s.Style, ["difficulty"] = s.Difficulty, ["nn_focus"] = s.NeuralFocus }))
             }.ToString(Newtonsoft.Json.Formatting.None);
@@ -46,6 +48,8 @@ namespace BrassLegacyAI
                 var k = value["nn_search_k"];
                 if (k != null && (k.Type != JTokenType.Integer || !Native.NativePackage.ValidSearchK((int)k))) return null;
                 var temperature = value["nn_temperature"];
+                var model = value["nn_model"];
+                if(model!=null && (model.Type!=JTokenType.String || !Native.NativeModel.ValidChoice((string)model)))return null;
                 if (temperature != null && ((temperature.Type != JTokenType.Integer && temperature.Type != JTokenType.Float) ||
                     !Native.NativePackage.ValidTemperature((double)temperature))) return null;
                 if ((family != "v4" && family != "nn") || count < 2 || count > 4 || seats == null ||
@@ -55,6 +59,7 @@ namespace BrassLegacyAI
                     PlayerCount = count, Introductory = (bool)value["introductory"],
                     SearchK = k == null || (int)k == 32 ? 16 : (int)k,
                     Temperature = temperature == null ? 1.0 : (double)temperature,
+                    NeuralChoice = model == null ? "alpha-test" : (string)model,
                     Seats = new Seat[seats.Count]
                 };
                 for (int i = 0; i < seats.Count; i++) {
@@ -66,7 +71,9 @@ namespace BrassLegacyAI
                     var focus = seat["nn_focus"];
                     if (focus != null && (focus.Type != JTokenType.String || !Native.NativeFocus.Valid((string)focus))) return null;
                     result.Seats[i] = new Seat { Human = (bool)seat["human"], Style = (string)seat["style"], Difficulty = (string)seat["difficulty"],
-                        NeuralFocus = focus == null ? "neutral" : (string)focus };
+                        // Menu defaults now offer only the neutral NN. Retain
+                        // the remaining settings when reading a former tag choice.
+                        NeuralFocus = "neutral" };
                 }
                 if (result.Family == AiFamily.AlphaTest && (count != 4 || result.Introductory)) return null;
                 return result;

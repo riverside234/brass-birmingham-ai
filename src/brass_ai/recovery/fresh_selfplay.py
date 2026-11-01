@@ -88,7 +88,8 @@ def copy_verified(root,source,destination,receipt):
     return dict(receipt,path=destination.relative_to(root).as_posix())
 
 
-def prepare(root,source_path,run_path,output,*,expected_generation=1360,seed_generation=1290,history_through=1330):
+def prepare(root,source_path,run_path,output,*,expected_generation=1360,seed_generation=1290,history_through=1330,no_rehearsal=False,
+            trained_restart=False):
     """Copy a self-contained seed bundle; never edit or recover the source run."""
     from . import quality_pool
     from .config import validate_config as validate_recipe
@@ -115,6 +116,19 @@ def prepare(root,source_path,run_path,output,*,expected_generation=1360,seed_gen
     entry,members=selected(state,seed_generation,history_through)
     seed=available_seed(root,source,state,entry)
     config=configure(state['signature']['config']);config.pop(KEY,None)
+    # Companion heads are absent from slim population checkpoints. Fresh heads
+    # and accepted-work warmup do not depend on the optional scheduling gates.
+    from . import local_scoring_auxiliary as auxiliary
+    config[auxiliary.KEY]=auxiliary.fresh_config(config[auxiliary.KEY])
+    require(type(no_rehearsal) is bool,'Invalid rehearsal override')
+    # Bind this opt-in to the new manifest before publishing it. A zero base
+    # weight disables the schedule, including its floor, and skips shard loading.
+    if no_rehearsal:config['rehearsal_weight']=0.
+    from . import trained_startup as startup
+    require(type(trained_restart) is bool,'Invalid trained restart override')
+    if trained_restart:
+        require(seed_generation==1290,'Trained restart requires generation 1290')
+        config=startup.configure(config)
     # Start a new seed stream beyond the source's committed ordinary games.
     config['seed']=state['next_seed']
     # Preserve all eligible members, without pretending old games were played
@@ -160,6 +174,7 @@ def prepare(root,source_path,run_path,output,*,expected_generation=1360,seed_gen
             copied.append(dict(checkpoint,probe=cached))
         require(sha(source_state)==state_hash and not active(source),'Source advanced during seed preparation')
         manifest=dict(binding,seed_checkpoint=seed_copy,members=copied,probe=probe_receipt,
+            **(dict(startup=copy.deepcopy(config[startup.KEY])) if trained_restart else {}),
             imitation_source=copy.deepcopy(origin),excluded_generations=[m['generation'] for m in state['quality_pool']['members']
                 if m['generation']>history_through],
             reset=['optimizers','rng','iterations','ordinary_games','PPG_cache','PFSP_scores','gates','DOMiNO'],
@@ -174,6 +189,10 @@ def prepare(root,source_path,run_path,output,*,expected_generation=1360,seed_gen
     return dict(config=output.relative_to(root).as_posix(),run=run.relative_to(root).as_posix(),
         generation=0,seed_generation=seed_generation,seed_model_id=seed['model_id'],history_through=history_through,
         imported_generations=[m['generation'] for m in copied],excluded_generations=manifest['excluded_generations'],
+        rehearsal_enabled=bool(config['rehearsal_weight']),rehearsal_weight=config['rehearsal_weight'],
+        auxiliary_heads='fresh',auxiliary_warmup=dict(qualifying_iterations=config[auxiliary.KEY]['head_only_iterations'],
+            retained_fitting_steps=config[auxiliary.KEY]['minimum_fitting_steps'],ramp_iterations=config[auxiliary.KEY]['ramp_iterations']),
+        **(dict(startup=config[startup.KEY],qualification='manual_override_not_measured') if trained_restart else {}),
         source_modified=False,training_started=False)
 
 
@@ -193,6 +212,10 @@ def load_manifest(root,run,config):
         'Imported history exceeds cutoff or repeats a model')
     for ref in [m['seed_checkpoint'],*members]:
         require(sha(safe(run,project_path(root,ref['path'])))==ref['sha256'],'Prepared checkpoint changed')
+    from . import trained_startup as startup
+    if startup.enabled(config):
+        require(m.get('startup')==config[startup.KEY],'Prepared startup settings differ')
+    else:require('startup' not in m and 'auxiliary_heads' not in m,'Unexpected trained startup receipt')
     return m
 
 

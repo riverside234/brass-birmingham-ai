@@ -384,6 +384,7 @@ def latest_model_config(config,imitation_checkpoint):
     """Generate a fresh IL recipe from current settings, never a run snapshot."""
     result=copy.deepcopy(config)
     result.pop('fresh_selfplay_seed',None)
+    result.pop('trained_startup',None)
     from brass_ai.learning.model import ARCHITECTURE,PARAMETER_LIMIT
     from .learning_rate import DEFAULT_WARMUP
     from .lr_controller import AUTO_CONTROLLER,AUTO_CONTRACT
@@ -644,6 +645,9 @@ def validate_config(config):
         'search_ready_games','search_every_games','search_games','distill_steps','distill_weight',
         'rehearsal_manifest','rehearsal_weight','rehearsal_until','profile_steps'}
     version=config.get('format')
+    if 'trained_startup' in config:
+        from .trained_startup import validate as validate_startup
+        fields.add('trained_startup');validate_startup(config)
     if 'seat_contexts' in config:
         from .neutral_training import validate as validate_neutral
         fields.add('seat_contexts');validate_neutral(config)
@@ -654,10 +658,14 @@ def validate_config(config):
         from .teacher_phase_config import validate as validate_teacher_phase
         fields.add('teacher_phase');validate_teacher_phase(config)
     if 'local_scoring_auxiliary' in config:
-        from .local_scoring_auxiliary import validate_config as validate_local
+        from .local_scoring_auxiliary import validate_config as validate_local,accepted_warmup
         fields.add('local_scoring_auxiliary');validate_local(config['local_scoring_auxiliary'])
         require(config.get('architecture')=='brass-four-seat-mlp-resnet/11.2.0' and 'critic_data' in config,
                 'Local scoring requires the v11.2 descriptor critic')
+        if accepted_warmup(config['local_scoring_auxiliary']):
+            from .dcpg_config import enabled as preserves_values
+            require(preserves_values(config['update']) and config['value_phase']['enabled'],
+                'Fresh auxiliary warmup requires PPO output preservation and PPG target fitting')
     if 'diversity' in config:fields.add('diversity')
     if 'context_evaluation' in config:
         from .context_evaluation_config import validate as validate_context_evaluation

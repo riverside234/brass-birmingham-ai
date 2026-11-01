@@ -79,7 +79,8 @@ def initial(config,generation,games):
 
 
 def validate_state(saved,config,generation,games):
-    require(type(saved) is dict and set(saved)==set(initial(config,0,0))
+    manual=isinstance(saved,dict) and 'manual_override' in saved
+    require(type(saved) is dict and set(saved)==set(initial(config,0,0))|({'manual_override'} if manual else set())
         and saved['contract']==config['v4_share_gate']['contract'] and saved['config']==digest(config['v4_share_gate']),
         'V4 share gate state/config differs')
     for key,limit in (('origin_generation',generation),('origin_games',games)):
@@ -105,6 +106,14 @@ def validate_state(saved,config,generation,games):
             require(type(ref) is dict and set(ref)=={'path','sha256'} and type(ref['path']) is str
                 and type(ref['sha256']) is str and len(ref['sha256'])==64,'Invalid v4 gate panel receipt')
     activation=saved['activated']
+    if manual:
+        from .trained_startup import validate_authorization,enabled
+        validate_authorization(saved['manual_override'])
+        require(enabled(config) and saved['manual_override']['manifest_sha256']==config['fresh_selfplay_seed']['sha256']
+            and saved['origin_generation']==saved['origin_games']==0 and evidence is None
+            and activation==dict(generation=0,games=0) and config['v4_share_gate']==CURRENT_DEFAULT,
+            'Manual v4 allocation requires authorized generation-zero startup; no panel measurements')
+        return saved
     if activation is not None:
         require(type(activation) is dict and set(activation)=={'generation','games'}
             and type(activation['generation']) is int and type(activation['games']) is int
@@ -238,4 +247,7 @@ def report(saved,composition):
         released_tables='historical' if saved['contract'] in HISTORY_CONTRACTS else 'selfplay',
         threshold=.9 if saved['contract']==CURRENT_CONTRACT else .95,
         comparison='>=' if saved['contract']==CURRENT_CONTRACT else '>',
-        scope='One-way held-out one-learner/three-v4 gate. Every actual history seat uses the frozen PFSP plan; main rating lineups unchanged.')
+        qualification_source='manual_override' if 'manual_override' in saved else 'measured_panel',
+        scope=('User-authorized startup allocation, not measured playing strength. ' if 'manual_override' in saved else
+            'One-way held-out one-learner/three-v4 gate. ')+
+            'Every actual history seat uses the frozen PFSP plan; main rating budget unchanged.')

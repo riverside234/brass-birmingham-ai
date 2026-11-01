@@ -5,6 +5,9 @@ edition.workspace = true
 rust-version.workspace = true
 publish.workspace = true
 
+[features]
+local-beta = []
+
 [dependencies]
 serde.workspace = true
 brass-ai-core.workspace = true

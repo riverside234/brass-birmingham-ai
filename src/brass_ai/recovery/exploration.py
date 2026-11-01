@@ -52,6 +52,7 @@ NEUTRAL_BRANCH = dict(THREE_BRANCH,contract='selfplay-branching/7.0.0',
     move_distribution=dict(temperature_1=.6,temperature_2=.3,exploration_q=.1))
 ROLLOUT = dict(contract='exploration-rollout/1.0.0', mode='fresh',
     opening_after_iterations=0, raw_entropy_after_iterations=0, branching_after_iterations=20)
+TRAINED_ROLLOUT = dict(ROLLOUT,contract='exploration-rollout/2.0.0',branching_after_iterations=0)
 BLOCKS = ('exploration_distribution','entropy_control','opening','branching','exploration_rollout')
 MIGRATION = 'staged-exploration/1.0.0'
 FROZEN_MIGRATION = 'frozen-entropy-branch-openings/1.0.0'
@@ -195,6 +196,7 @@ def validate(config):
     if neutral:require(config['update']['fixed_entropy']==FIXED_ENTROPY_005,'Neutral restart requires fixed 0.005 entropy')
     r=config['exploration_rollout']
     expected=dict(ROLLOUT,mode='staged',opening_after_iterations=1,raw_entropy_after_iterations=2) if r.get('mode')=='staged' else ROLLOUT
+    if 'trained_startup' in config:expected=TRAINED_ROLLOUT
     require(r==expected, 'Invalid exploration adoption schedule')
     require(config['update']['entropy_weight']==e['alpha_base'] and 'il_kl_limit' in config and
         config.get('selfplay_recipe')=='latest-model-selfplay/3.0.0', 'Exploration requires fixed IL probe and latest-model recipe')

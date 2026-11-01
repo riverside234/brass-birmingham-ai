@@ -38,11 +38,11 @@ namespace BrassLegacyAI
         {
             if (family == AiFamily.V4) return v4;
             if (family == AiFamily.Gamma) return gamma;
-            if (family == AiFamily.AlphaTest) return Array.AsReadOnly(Native.NativeFocus.Keys.Select(focus =>
-                new AiCatalogEntry(family, Native.NativeFocus.ChoiceId(focus), Native.NativeFocus.Label(focus),
-                    focus == "neutral" ? "Test NN · Neutral context. No industry preference." :
-                        "Test NN · " + Native.NativeFocus.Label(focus) + " industry focus. Plans can adapt.",
-                    Native.NativePackage.Enabled, "Test runtime is not installed")).ToArray());
+            if (family == AiFamily.AlphaTest) return Array.AsReadOnly(new[]{new AiCatalogEntry(family,"alpha-test","Alpha Test",
+                "Current test neural network (g890). Neutral context; this is not the final trained model.",
+                Native.NativeModel.Alpha.Enabled,"Test runtime is not installed"),
+                new AiCatalogEntry(family,"beta","Beta","Test neural network g1290 · Neutral context.",
+                    Native.NativeModel.Beta.Enabled,"Beta runtime is not installed")});
             throw new ArgumentOutOfRangeException("family");
         }
         public static AiCatalogEntry Random(AiFamily family)
@@ -56,7 +56,7 @@ namespace BrassLegacyAI
         public static AiCatalogEntry Find(AiChoice choice)
         {
             if (choice.Family != AiFamily.V4 && choice.Family != AiFamily.Gamma && choice.Family != AiFamily.AlphaTest) return null;
-            if (choice.Family == AiFamily.AlphaTest && Native.NativeFocus.FromChoice(choice.EntryId) == null) return null;
+            if (choice.Family == AiFamily.AlphaTest && choice.EntryId!="beta" && Native.NativeFocus.FromChoice(choice.EntryId) == null) return null;
             return choice.EntryId == "random" ? Random(choice.Family) : Entries(choice.Family).FirstOrDefault(e => e.Choice.Equals(choice));
         }
         public static bool CanChoose(AiChoice choice)

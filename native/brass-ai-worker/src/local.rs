@@ -28,11 +28,7 @@ use std::{
 };
 
 pub const PROTOCOL: &str = "brass-local-native/1.0.0";
-pub const BACKEND: &str = "brass-gumbel-is-mcts/alpha-g890-v1";
-pub const MODEL: &str = "1145fecba3289511df1c518bb71fbfb5b2f6df351777151a5eb999b89cba0761";
-pub const EXPORT: &str = "64e4a8340f4beb7bbc4ee70219b5e461b1185bcde9e25c4bfc78e30936c91ae9";
-pub const CHECKPOINT: &str = "ecad3b932a8dd9d3b5d0cc49b5e9bb94a9e98b4536ffdc86a44179d003995cb8";
-pub const PROFILE: &str = "alpha-test-g890-neutral/1.0.0";
+pub use crate::local_model::{BACKEND, MODEL, EXPORT, CHECKPOINT, PROFILE, PROFILE_PREFIX, INDUSTRY_FOCUSES};
 pub const REWARD: &str = "a84a3fccf2421d40aefc71c80d3b8839cf3ff22900eb6c5b917b821b5bb8d72e";
 // The selected allowance is entirely search work. A single additional second
 // covers retirement, legal completion and host delivery on the original clock.
@@ -62,8 +58,8 @@ impl Acceptance {
     pub fn validate(&self, model: &Manifest) -> Result<()> {
         search::check(
             self.version == "brass-local-utility-acceptance/1.0.0"
-                && self.scope == "part1-local-alpha-test"
-                && self.decision == "user-2026-10-25"
+                && self.scope == crate::local_model::SCOPE
+                && self.decision == crate::local_model::DECISION
                 && self.model_id == MODEL
                 && self.export_sha256 == EXPORT
                 && self.checkpoint_sha256 == CHECKPOINT
@@ -71,9 +67,16 @@ impl Acceptance {
                 && model.export_sha256 == self.export_sha256
                 && model.checkpoint_sha256 == self.checkpoint_sha256
                 && !self.final_model
-                && self.utility_calibration.is_none()
-                && model.utility_calibration.is_none()
-                && model.mechanical_only,
+                && self.utility_calibration == model.utility_calibration
+                && if crate::local_model::BETA {
+                    !model.mechanical_only && self.utility_calibration.as_ref().is_some_and(|r|
+                        r["request_id"] == crate::local_model::CALIBRATION_REQUEST
+                        && r["source_checkpoint_sha256"] == crate::local_model::SOURCE_CHECKPOINT
+                        && r["source_model_id"] == MODEL && r["reward_id"] == REWARD
+                        && r["mode"] == "read-only-validation" && r["ready"] == true
+                        && r["completed"] == true && r["weights_unchanged"] == true
+                        && r["steps"].as_u64() == Some(0))
+                } else { model.mechanical_only && self.utility_calibration.is_none() },
             "model lacks exact local utility acceptance",
         )
     }
@@ -208,18 +211,9 @@ fn emit(id: u64, status: &str, data: Value) -> io::Result<()> {
     );
     result
 }
-pub const INDUSTRY_FOCUSES: [&str; 7] = [
-    "neutral",
-    "cotton",
-    "manufacturer",
-    "pottery",
-    "brewery",
-    "iron",
-    "coal",
-];
 fn focus_context(profile: &str) -> Option<([f64; 4], [f64; 8])> {
     let name = profile
-        .strip_prefix("alpha-test-g890-")?
+        .strip_prefix(PROFILE_PREFIX)?
         .strip_suffix("/1.0.0")?;
     let index = INDUSTRY_FOCUSES.iter().position(|f| *f == name)?;
     let mut style = [0.; 4];
@@ -275,7 +269,7 @@ fn compact(d: Decision, ticket: Ticket, requested_k: usize, temperature: f32) ->
         "completed":d.lanes.iter().map(|l| l.outcome.completed).sum::<u64>(),
         "sessions":2,"threads_per_session":1,"retired":true,"requested_k":requested_k,
         "policy_temperature":temperature,"temperature_scope":"all_nn_policy_evaluations",
-        "industry_focus":ticket.profile.strip_prefix("alpha-test-g890-").and_then(|s| s.strip_suffix("/1.0.0")),
+        "industry_focus":ticket.profile.strip_prefix(PROFILE_PREFIX).and_then(|s| s.strip_suffix("/1.0.0")),
         "replay":{
             "version":"brass-local-replay/1.0.0",
             "root_epoch":d.result.root_epoch,
@@ -587,7 +581,7 @@ mod industry_focus_tests {
     #[test]
     fn seven_exact_context_encodings() {
         for (i, name) in INDUSTRY_FOCUSES.iter().enumerate() {
-            let (style, intent) = focus_context(&format!("alpha-test-g890-{name}/1.0.0")).unwrap();
+            let (style, intent) = focus_context(&format!("{PROFILE_PREFIX}{name}/1.0.0")).unwrap();
             assert_eq!(
                 style,
                 [

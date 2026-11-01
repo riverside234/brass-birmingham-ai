@@ -18,8 +18,9 @@ namespace BrassLegacyAI.Native
             int[] debts;var host=Host.CapturePersonality(app,events,out debts);
             var view=host.ObservePersonality(actor);
             var saved=BrassPatch.Persistence.SaveExtensions.Get(app.Metadata);
-            string focus=NativeGameState.IsNative(saved)?NativeGameState.Focus(NativeGameState.Read(app.Metadata,false),actor):"neutral";
-            return FromView(view,debts,recall,focus);
+            var state=NativeGameState.IsNative(saved)?NativeGameState.Read(app.Metadata,false):null;
+            string focus=state==null?"neutral":NativeGameState.Focus(state,actor);
+            return FromView(view,debts,recall,focus,state==null?NativeModel.Alpha:NativeGameState.Model(state));
         }
         // The clock journal consumes only these confirmed boundary fields. A
         // search_v1 continuation has no projected-successor observation to test;
@@ -34,13 +35,15 @@ namespace BrassLegacyAI.Native
         public static JObject FromView(JObject view,int[] debts,JArray recall)
         { return FromView(view,debts,recall,"neutral"); }
         public static JObject FromView(JObject view,int[] debts,JArray recall,string focus)
+        { return FromView(view,debts,recall,focus,NativeModel.Alpha); }
+        public static JObject FromView(JObject view,int[] debts,JArray recall,string focus,NativeModel model)
         {
             var spent=debts.Select(n=>Math.Min(.075,n*.02)).ToArray();
             var settled=new JArray();var c=view["context"];
             if((string)c["phase"]=="debt")settled.Add(new JArray(c["era"],c["round"]));
             return new JObject{["view"]=view.DeepClone(),["recall"]=(recall??new JArray()).DeepClone(),
-                ["context"]=new JObject{["model_id"]=NativePackage.Model,["reward_id"]="a84a3fccf2421d40aefc71c80d3b8839cf3ff22900eb6c5b917b821b5bb8d72e",
-                    ["profile_id"]=NativeFocus.Profile(focus),["style"]=NativeFocus.Style(focus),["intent"]=NativeFocus.Intent(focus),
+                ["context"]=new JObject{["model_id"]=model.Model,["reward_id"]="a84a3fccf2421d40aefc71c80d3b8839cf3ff22900eb6c5b917b821b5bb8d72e",
+                    ["profile_id"]=model.Profile(focus),["style"]=NativeFocus.Style(focus),["intent"]=NativeFocus.Intent(focus),
                     ["remaining"]=new JArray(spent.Select(s=>.075-s)),["max_cost"]=.075,["stable_descriptors"]=JValue.CreateNull()},
                 ["reward"]=new JObject{["version"]="brass-combined-return/2.0.0",["win"]=1.0,["placement"]=.1,["vp"]=.001,["vp_cap"]=180,
                     ["insolvency"]=new JObject{["event_cost"]=.02,["max_cost"]=.075}},

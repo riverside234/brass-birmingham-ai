@@ -1,5 +1,9 @@
 # NN industry focus tags — local release 1.4.46
 
+The industry selection UI is superseded by release 1.4.47: new NN games offer
+one Alpha Test choice with neutral context. The backend retains compatibility
+with existing signed saves. The qualification below records the earlier release.
+
 Installed on 2026-10-31. **NN → Alpha Test** now offers **Neutral, Cotton,
 Manufacturer, Pottery, Brewery, Iron and Coal**. Each NN seat can choose its own
 tag and difficulty. Apply saves the selection; Cancel discards the draft. Tags

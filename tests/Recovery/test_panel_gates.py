@@ -211,7 +211,14 @@ class PanelGates(unittest.TestCase):
 
     def test_generation270_reviewed_transition_preserves_counters_and_pool(self):
         s=exported();before=copy.deepcopy(s);c=validate_config(g.configure(s['signature']['config']))
-        signature=dict(copy.deepcopy(s['signature']),implementation=implementation_id(),config=c)
+        # Exercise the original reviewed transition. Later architecture/source
+        # contracts intentionally do not authorize a direct jump from g270.
+        from brass_ai.recovery.source_reviews import expand_source_reviews
+        reviews=expand_source_reviews(read(SOURCE_ROOT/'configs/learning/selfplay-resume-sources.json'))['transitions']
+        receipt=next(e for e in reviews if e['from_implementation']==s['signature']['implementation']
+            and e['learning_compatibility']==digest(s['signature']['compatibility']) and not e.get('config_changes')
+            and e.get('config_migrations',[e.get('config_migration')])==[g.MIGRATION])
+        signature=dict(copy.deepcopy(s['signature']),implementation=receipt['to_implementation'],config=c)
         self.assertTrue(check_signature(s,signature,reviewed=True))
         bad=copy.deepcopy(signature);bad['config']['learning_rate']*=2
         with self.assertRaises(ValueError):check_signature(s,bad,reviewed=True)

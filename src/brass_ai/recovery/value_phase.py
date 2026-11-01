@@ -376,7 +376,13 @@ def fit(model,optimizer,dataset,train_ids,heldout_ids,actor_ids,probe_ids,config
                     step_model=copy.deepcopy(model.state_dict());step_adam=copy.deepcopy(optimizer.state_dict())
                     step_aux=companion.snapshot() if companion is not None else None
                 optimizer.zero_grad(set_to_none=True);model.train()
-                if companion is not None:companion.begin('ppg')
+                if companion is not None:
+                    # New work-based companions retain the current phase's Adam
+                    # lifecycle, but use its warmup/decay factor on their own
+                    # 1e-4 base rate. Main-model value LR is unchanged.
+                    if scheduled and getattr(companion,'work_warmup',False):
+                        companion.begin('ppg',rate_factor=rate_factor(report['attempted_steps']+attempted+1,total_steps,config))
+                    else:companion.begin('ppg')
                 if companion is not None and hasattr(companion,'batch'):companion.batch(value_dataset,batch)
                 for part,ix,inputs in value_dataset.value_batches(value_parts(value_dataset,batch,update,model),model,executor=preparation):
                     drop=None if dropout is None else (dropout[0],epoch,dropout[1],'value')

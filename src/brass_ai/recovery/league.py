@@ -164,6 +164,8 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
             seed_manifest=fresh_selfplay.load_manifest(root,run,config)
             require(bc_origin==seed_manifest['imitation_source'],'Fresh seed completed IL identity differs')
             allowed.update(('seed','population','opponent-pool','initial.pt'))
+        from . import trained_startup as startup
+        require(not startup.enabled(config) or seed_manifest is not None,'Trained startup requires a prepared seed manifest')
         require(not run.exists() or all(p.name in allowed for p in run.iterdir()),'New recovery directory must be empty')
         if revised: torch.manual_seed(config['seed'])
         from brass_ai.learning.model import FourSeatNet
@@ -181,7 +183,7 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
         if seed_manifest is not None:
             state['origin'].update(seed_origin)
             state['imitation']=dict(enabled=True,source=bc_origin,optimizer_reset_before_ppo=True,
-                note='Original completed IL retained for rehearsal, pool and ratings; learner initialized from separate PPO weights')
+                note='Original completed IL retained as pool/rating reference; rehearsal follows configured weight; learner initialized from separate PPO weights')
             print(f'Fresh self-play from g{seed_origin["seed_generation"]} weights; generation/games zero, new Adam/RNG/PPG/PFSP state; all neural contexts neutral',flush=True)
         elif bc_origin:
             model.load_state_dict(bc_model.state_dict())
@@ -234,9 +236,27 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
             if 'critic_data' in config and not observations_off:
                 from .critic_data import fingerprint
                 state['quality_pool']['members'][0]['fingerprint']=fingerprint(fixed_probe,fixed_probe.arrays['reference'])
+        startup_payload={}
+        from . import local_scoring_auxiliary as auxiliary
+        if auxiliary.accepted_warmup(config.get(auxiliary.KEY,{})):
+            companion=auxiliary.Companion(model,config[auxiliary.KEY],raw=dict(model_id=model_id(model)))
+            payload=companion.payload(0)
+            state['auxiliary_initialization']=auxiliary.initialization_receipt(companion,payload)
+            startup_payload.update({auxiliary.KEY:payload,'auxiliary_initialization':copy.deepcopy(state['auxiliary_initialization'])})
+            del companion
+        if startup.enabled(config):
+            from .ratings import initialize as initialize_ratings
+            state['population']=[quality_pool.reference(m) for m in state['quality_pool']['members']]
+            state['ratings']=initialize_ratings(root,run,state,config)
+            startup.initialize_gates(state,config)
+            startup_payload.update(startup_initialization=copy.deepcopy(state['startup_initialization']),
+                v4_share_gate=copy.deepcopy(state['v4_share_gate']))
+            print('Manual startup overrides: IL/v4 panels retired without qualification games; IL in PFSP; '
+                '160 self-play / 154 history / 6 v4; competitive PL uses startup fallback. Not measured qualification.',flush=True)
         save_checkpoint(init_path,model,optimizer,training=dict(mode='step5-fresh-residual-initial',
             parent=seed_origin['parent_model_id'] if seed_origin else None,signature=digest(signature),
             initialization=state['origin']['initialization'],fresh_run=run.relative_to(root).as_posix(),imitation=state['imitation'],
+            **startup_payload,
             **({'fresh_selfplay_seed':config['fresh_selfplay_seed']} if seed_manifest is not None else {}),
             **({'il_kl_limit':state['il_kl_limit']} if 'il_kl_limit' in config else {}),
             **({'exploration':state['exploration']} if 'exploration' in state else {}),
@@ -251,10 +271,18 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
         if revised:
             from .retention import update_population
             update_population(root,run,state,config['population'])
-        if quality:
+        if quality and 'ratings' not in state:
             from .ratings import initialize as initialize_ratings
             state['ratings']=initialize_ratings(root,run,state,config)
         write_json(state_path,state)
+    from . import trained_startup as startup
+    if startup.enabled(config):
+        startup.verify_gates(state,config)
+        require(raw['training'].get('startup_initialization')==state['startup_initialization'],
+            'Missing trained-model startup checkpoint receipt')
+    from . import local_scoring_auxiliary as auxiliary
+    if auxiliary.accepted_warmup(config.get(auxiliary.KEY,{})):
+        auxiliary.verify_initialization(state,raw,config[auxiliary.KEY])
     optimizer=torch.optim.AdamW(model.parameters(),lr=config['learning_rate'],weight_decay=config['weight_decay'])
     cuda_resume=resume_optimizer(raw,optimizer,allow_cuda_topology_change=True)
     from .resume import apply_optimizer_config
@@ -682,6 +710,8 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                 identity=save_checkpoint(output,model,optimizer,step=iteration+1,
                     training=dict(mode='step5-population-ppo',recipe=update['format'],
                         parent=current,signature=digest(signature),fresh_run=run.relative_to(root).as_posix(),initialization='random-lineage',
+                        **({'startup_initialization':state['startup_initialization']} if startup.enabled(config) else {}),
+                        **({'auxiliary_initialization':state['auxiliary_initialization']} if 'auxiliary_initialization' in state else {}),
                         evidence=dict(iteration=iteration,games_done=done,report=(directory/'report.json').relative_to(root).as_posix(),
                                       update_digest=digest(update)),
                         **({'il_kl_limit':next_limit} if next_limit is not None else {}),
@@ -852,6 +882,11 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                     controller_line+=(f' local={aux["mode"]}@{aux["shared_gradient_scale"]:.2f}'
                         f' rows={aux["retained"]["rows"]}/{aux["available"]["rows"]}'
                         f' head_steps={aux["companion_steps"]["ppo"]}+{aux["companion_steps"]["ppg"]}')
+                    if 'warmup' in aux:
+                        warmup=aux['warmup'];next_stage=warmup['after_commit']
+                        controller_line+=(f' aux_stage={warmup["before"]["stage"]}'
+                            f' fit={warmup["retained_fitting_steps"]}steps/{warmup["distinct_fitting_games"]}games'
+                            f' aux_next={next_stage["encoder_gradient_multiplier"]:.2f}')
                 teacher_line=(f'teacher rows={search.get("teacher_rows",0)} steps={search.get("optimizer_steps",0)}')
                 if teacher_report is not None:
                     tt=teacher_report['term']

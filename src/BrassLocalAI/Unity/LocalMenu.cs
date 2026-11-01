@@ -31,7 +31,7 @@ namespace BrassLegacyAI
             public string DisplayFamily = "V4";
             public string Difficulty = DifficultyCatalog.Default; public CreateOfflineGameUseCase Owner;
         }
-        sealed class SetupState { public bool ResumeError; public GameMetadata Metadata; public AiFamily Family; public int SearchK = 16; public double Temperature = 1.0; }
+        sealed class SetupState { public bool ResumeError; public GameMetadata Metadata; public AiFamily Family; public int SearchK = 16; public double Temperature = 1.0; public string NeuralChoice = "alpha-test"; }
         static readonly ConditionalWeakTable<PlayerMetadata, Selection> Selections = new ConditionalWeakTable<PlayerMetadata, Selection>();
         static readonly ConditionalWeakTable<CreateOfflineGameUseCase, SetupState> Setups = new ConditionalWeakTable<CreateOfflineGameUseCase, SetupState>();
         static readonly System.Collections.Generic.Dictionary<string, string> TestPreferences = new System.Collections.Generic.Dictionary<string, string>();
@@ -61,7 +61,7 @@ namespace BrassLegacyAI
         public static string NeuralTag(PlayerMetadata player)
         { Selection selection; return Selections.TryGetValue(player, out selection) ? selection.NeuralFocus : "neutral"; }
         public static string RowLabel(PlayerMetadata player)
-        { if(Choice(player).Family==AiFamily.AlphaTest)return "NN · " + Native.NativeFocus.Label(Native.NativeFocus.FromChoice(Choice(player).EntryId)); Selection selection; string family = Selections.TryGetValue(player, out selection) ? selection.DisplayFamily : "V4"; return family + " · " + ChoiceLabel(Strategy(player)); }
+        { if(Choice(player).Family==AiFamily.AlphaTest)return Native.NativeModel.FromChoice(Choice(player).EntryId).Label; Selection selection; string family = Selections.TryGetValue(player, out selection) ? selection.DisplayFamily : "V4"; return family + " · " + ChoiceLabel(Strategy(player)); }
         public static bool EditChoice(PlayerMetadata player, AiChoice choice)
         {
             // The menu catalog is a second validation boundary, independent of
@@ -92,8 +92,8 @@ namespace BrassLegacyAI
             SelectDifficulty(player, key); Refresh(Selections.GetValue(player, p => new Selection()).Owner); return true;
         }
         public static readonly string[] Choices = ProfileCatalog.Keys.Concat(new[] { "random" }).ToArray();
-        public static string ChoiceLabel(string key) { var focus=Native.NativeFocus.FromChoice(key); return focus!=null?"NN · "+Native.NativeFocus.Label(focus):key == "random" ? "Random" : ProfileCatalog.Labels[ProfileCatalog.Index(key)]; }
-        public static string ChoiceDescription(string key) { var focus=Native.NativeFocus.FromChoice(key); return focus!=null?"Experimental g890 test neural network · "+Native.NativeFocus.Label(focus)+" context.":key == "random" ? "Chooses one of " + ProfileCatalog.Keys.Length + " starting styles. Plans adapt, with balanced fallback when needed." : ProfileCatalog.Description(key); }
+        public static string ChoiceLabel(string key) { if(key=="beta")return "Beta"; var focus=Native.NativeFocus.FromChoice(key); return focus!=null?"NN · "+Native.NativeFocus.Label(focus):key == "random" ? "Random" : ProfileCatalog.Labels[ProfileCatalog.Index(key)]; }
+        public static string ChoiceDescription(string key) { if(key=="beta")return "Test neural network g1290 · Neutral context."; var focus=Native.NativeFocus.FromChoice(key); return focus!=null?"Experimental g890 test neural network · "+Native.NativeFocus.Label(focus)+" context.":key == "random" ? "Chooses one of " + ProfileCatalog.Keys.Length + " starting styles. Plans adapt, with balanced fallback when needed." : ProfileCatalog.Description(key); }
         static string ResolveStrategy(string key)
         {
             if (key != "random") return key;
@@ -133,6 +133,7 @@ namespace BrassLegacyAI
                 setup.Family = saved == null ? AiFamily.V4 : saved.Family;
                 setup.SearchK = saved == null ? 16 : saved.SearchK;
                 setup.Temperature = saved == null ? 1.0 : saved.Temperature;
+                setup.NeuralChoice = saved == null ? "alpha-test" : saved.NeuralChoice;
                 if (saved != null) {
                     ReflectionAccess.Set(owner, "_numberOfPlayers", saved.PlayerCount);
                     metadata.GameStartConfiguration.IsIntroductoryGame = saved.Introductory;
@@ -156,7 +157,7 @@ namespace BrassLegacyAI
                     Selections.GetValue(player, p => new Selection()).NeuralFocus = seat.NeuralFocus;
                     player.AiType = seat.Human ? AIType.Human : AIType.Hard;
                     if (saved.Family == AiFamily.AlphaTest)
-                        Selections.GetValue(player, p => new Selection()).Choice = new AiChoice(AiFamily.AlphaTest, Native.NativeFocus.ChoiceId(seat.NeuralFocus));
+                        Selections.GetValue(player, p => new Selection()).Choice = new AiChoice(AiFamily.AlphaTest, setup.NeuralChoice);
                 }
                 if (player.AiType != AIType.Human) player.AiType = AIType.Hard;
             }
@@ -168,6 +169,7 @@ namespace BrassLegacyAI
                 Family = Setups.GetValue(owner, x => new SetupState()).Family,
                 SearchK = Setups.GetValue(owner, x => new SetupState()).SearchK,
                 Temperature = Setups.GetValue(owner, x => new SetupState()).Temperature,
+                NeuralChoice = Setups.GetValue(owner, x => new SetupState()).NeuralChoice,
                 PlayerCount = Field<int>(owner, "_numberOfPlayers"),
                 Introductory = metadata.GameStartConfiguration.IsIntroductoryGame,
                 Seats = metadata.PlayerMetadata.Select(p => {
@@ -200,7 +202,8 @@ namespace BrassLegacyAI
             var families=players.Where(p=>p.AiType!=AIType.Human).Select(p=>Choice(p).Family).Distinct().ToArray();
             return families.Length<=1 && players.All(p=>p.PlayerStartConfiguration!=null && (p.AiType==AIType.Human ||
                 (AiSelectionCatalog.CanChoose(Choice(p)) && DifficultyCatalog.Contains(Difficulty(p))))) &&
-                (!families.Contains(AiFamily.AlphaTest) || NativeSupported(players[0]));
+                (!families.Contains(AiFamily.AlphaTest) || (NativeSupported(players[0]) && players.Where(p=>p.AiType!=AIType.Human && Choice(p).Family==AiFamily.AlphaTest)
+                    .Select(p=>Native.NativeModel.FromChoice(Choice(p).EntryId).Key).Distinct().Count()==1));
         }
         public static BrassApplicationGame StartGame(CreateOfflineGameUseCase owner, int seed)
         {
@@ -233,7 +236,8 @@ namespace BrassLegacyAI
                 }
                 var state = metadata.PlayerMetadata.Any(p=>p.AiType!=AIType.Human && Choice(p).Family==AiFamily.AlphaTest) ?
                     Native.NativeGameState.Create(metadata,Difficulty,Setups.GetValue(owner,x=>new SetupState()).SearchK,Setups.GetValue(owner,x=>new SetupState()).Temperature,
-                        p => Native.NativeFocus.FromChoice(Choice(p).EntryId) ?? "neutral") : LocalGameState.Create(metadata, Strategy, Difficulty);
+                        p => Native.NativeFocus.FromChoice(Choice(p).EntryId) ?? "neutral",
+                        Native.NativeModel.FromChoice(Choice(metadata.PlayerMetadata.First(p=>p.AiType!=AIType.Human)).EntryId)) : LocalGameState.Create(metadata, Strategy, Difficulty);
                 SaveExtensions.Set(metadata, state);
                 var app = history.Repository.Create(metadata);
                 foreach (var p in app.Metadata.PlayerMetadata) p.AIBehaviour = AiBehaviorFactory.CreateAiBehavior(p);
@@ -303,7 +307,8 @@ namespace BrassLegacyAI
             if (state == null) return;
             foreach (var p in app.Metadata.PlayerMetadata.Where(p => p.AiType != AIType.Human)) {
                 var row = LocalGameState.Assignment(state, (int)p.PlayerStartConfiguration.Color);
-                if(Native.NativeGameState.IsNative(state))Selections.GetValue(p,x=>new Selection()).Choice=new AiChoice(AiFamily.AlphaTest,Native.NativeFocus.ChoiceId(Native.NativeGameState.Focus(state,(int)p.PlayerStartConfiguration.Color)));
+                if(Native.NativeGameState.IsNative(state))Selections.GetValue(p,x=>new Selection()).Choice=new AiChoice(AiFamily.AlphaTest,
+                    Native.NativeGameState.Model(state)==Native.NativeModel.Beta?"beta":Native.NativeFocus.ChoiceId(Native.NativeGameState.Focus(state,(int)p.PlayerStartConfiguration.Color)));
                 else Select(p, (string)row["strategy"]);
                 var selection = Selections.GetValue(p, x => new Selection()); selection.Difficulty = LocalGameState.Difficulty(state, row); selection.Owner = null;
                 selection.DisplayFamily = (string)state["runtime"] == ProfileCatalog.Runtime ? "V4" :
@@ -381,6 +386,11 @@ namespace BrassLegacyAI
             var owner=SetupIdentity(player) as CreateOfflineGameUseCase;
             return owner == null ? 1.0 : Setups.GetValue(owner,x=>new SetupState()).Temperature;
         }
+        public static string TableNeuralChoice(PlayerMetadata player)
+        {
+            var owner=SetupIdentity(player) as CreateOfflineGameUseCase;
+            return owner==null?"alpha-test":Setups.GetValue(owner,x=>new SetupState()).NeuralChoice;
+        }
         public static bool NativeSupported(PlayerMetadata player)
         {
             var owner=SetupIdentity(player) as CreateOfflineGameUseCase;
@@ -393,23 +403,24 @@ namespace BrassLegacyAI
             if (!Native.NativePackage.SearchKChoices.Contains(draft.SearchK)) return false;
             if (!Native.NativePackage.ValidTemperature(draft.Temperature)) return false;
             bool neural=draft.Choice.Family==AiFamily.AlphaTest;
-            if(neural && !NativeSupported(player))return false;
+            if(neural && (!NativeSupported(player) || !Native.NativeModel.ValidChoice(draft.Choice.EntryId) || !AiSelectionCatalog.CanChoose(draft.Choice)))return false;
             if (draft.Page != PlayerSelectionPage.Human && ((draft.Page != (neural?PlayerSelectionPage.AlphaTest:PlayerSelectionPage.V4)) ||
                 !AiSelectionCatalog.CanChoose(draft.Choice) || !DifficultyCatalog.Contains(draft.Difficulty))) return false;
             var owner=SetupIdentity(player) as CreateOfflineGameUseCase;
             Setups.GetValue(owner, x => new SetupState()).Family = draft.Choice.Family;
             Setups.GetValue(owner, x => new SetupState()).SearchK = draft.SearchK;
             Setups.GetValue(owner, x => new SetupState()).Temperature = draft.Temperature;
+            if(neural)Setups.GetValue(owner,x=>new SetupState()).NeuralChoice=draft.Choice.EntryId;
             foreach(var seat in Metadata(owner).PlayerMetadata) {
                 var other=Selections.GetValue(seat,p=>new Selection());
-                if(neural && other.Choice.Family!=AiFamily.AlphaTest)other.Choice=new AiChoice(AiFamily.AlphaTest,Native.NativeFocus.ChoiceId(other.NeuralFocus));
+                if(neural){other.Choice=draft.Choice;other.NeuralFocus="neutral";}
                 else if(!neural && other.Choice.Family==AiFamily.AlphaTest)other.Choice=new AiChoice(AiFamily.V4,other.V4Style);
             }
             var selection = Selections.GetValue(player, p => new Selection());
             // Unlike the stock cycling control, changing controller does not
             // overwrite the user's nickname. AI behavior is created at Start.
             if (draft.Page == PlayerSelectionPage.Human) player.AiType = AIType.Human;
-            else { selection.Choice = draft.Choice; if (!neural) selection.V4Style = draft.Choice.EntryId; else selection.NeuralFocus = Native.NativeFocus.FromChoice(draft.Choice.EntryId); selection.Difficulty = draft.Difficulty; player.AiType = AIType.Hard; }
+            else { selection.Choice = draft.Choice; if (!neural) selection.V4Style = draft.Choice.EntryId; else selection.NeuralFocus = "neutral"; selection.Difficulty = draft.Difficulty; player.AiType = AIType.Hard; }
             SaveSetup(owner); Refresh(selection.Owner); return true;
         }
     }

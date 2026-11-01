@@ -10,6 +10,7 @@ from brass_ai.learning.contracts import require
 from . import ev_evidence,gae_health
 
 CONTRACT='gae-advantage/2.0.0'
+TRAINED_CONTRACT='gae-advantage/3.0.0'
 LEGACY_GATE=dict(contract='staged-gae-gate/1.0.0',mode='auto',minimum_value_iterations=10,
     heldout_ev_min=.5,ev_streak=5,fallback_value_iterations=30,healthy_iterations=20,
     rating_slots=3,rating_min_slope=0.)
@@ -28,7 +29,7 @@ def finite(x):return type(x) in (int,float) and math.isfinite(x)
 def validate(config,*,combined=True):
     legacy=config.get('contract')=='gae-advantage/1.0.0'
     require(type(config) is dict and set(config)==(set(DEFAULT)-{'table_gate'} if legacy else set(DEFAULT)) and
-            config['contract'] in (CONTRACT,'gae-advantage/1.0.0')
+            config['contract'] in (CONTRACT,TRAINED_CONTRACT,'gae-advantage/1.0.0')
             and config['chain']=='nonforced','Invalid GAE contract/fields/chain')
     if not legacy:
         t=config['table_gate']
@@ -57,7 +58,10 @@ def validate(config,*,combined=True):
         require(type(gate['minimum_accepted_steps']) is int and gate['minimum_accepted_steps']>0
             and type(gate['minimum_value_iterations_in_window']) is int
             and 1<=gate['minimum_value_iterations_in_window']<=20,'Invalid GAE accepted-work support')
-    require(gate['mode']!='auto' or config['lambda']==1.,'Automatic GAE starts at lambda 1')
+    trained=config['contract']==TRAINED_CONTRACT
+    require(not trained or (config['lambda']==.98 and gate==GATE and config['table_gate']==TABLE_GATE),
+        'Trained GAE starts at 0.98 with unchanged automatic evidence gates')
+    require(gate['mode']!='auto' or config['lambda']==(.98 if trained else 1.),'Automatic GAE initial lambda differs')
     require(combined or (config['lambda']==1. and gate['mode']=='fixed'),
             'GAE lambda below 1 / automatic gate requires combined reward')
     return config
@@ -187,7 +191,7 @@ def validate_state(state,config,generation):
     require(state['generation']==generation,'GAE checkpoint progress differs')
     for key in ('generation','value_iterations','ev_streak','healthy_streak','stage_origin'):
         require(type(state[key]) is int and 0<=state[key]<=generation,'Invalid GAE checkpoint '+key)
-    allowed=(1.,.98,.95) if config['gate']['mode']=='auto' else (config['lambda'],)
+    allowed=((.98,.95) if config['contract']==TRAINED_CONTRACT else (1.,.98,.95)) if config['gate']['mode']=='auto' else (config['lambda'],)
     require(finite(state['active_lambda']) and state['active_lambda'] in allowed,'Invalid persisted GAE lambda')
     require(state['ev_streak']<=state['value_iterations'] and
             state['healthy_streak']<=generation-state['stage_origin'],'Invalid GAE checkpoint streak')

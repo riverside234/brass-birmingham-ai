@@ -25,6 +25,11 @@ def prepare(root, state, config):
     require(set(saved)=={'contract','activated'} and saved['contract']==CONTRACT,'Invalid rating-coverage state')
     active=saved['activated']
     if active is not None:
+        if 'manual_override' in active:
+            from .trained_startup import verify_gates
+            require(active==dict(generation=0,manual_override=verify_gates(state,config)),
+                'Competitive PL override differs from authorized startup')
+            return saved
         require(set(active)=={'generation','panels'} and type(active['generation']) is int and
             0<=active['generation']<=state['iteration'] and set(active['panels'])==set(panel_gates.NAMES),
             'Invalid competitive rating activation')

@@ -217,6 +217,29 @@ class FreshNeutral(unittest.TestCase):
             print('Fresh-seed initialization smoke:',dict(seed_generation=1290,initial_generation=0,imported=[0,855,1330],
                 fresh_adam=True,IL_preserved=True,restart_verified=True,source_unchanged=True),flush=True)
 
+    def test_no_rehearsal_is_scoped_and_signed_before_preparation(self):
+        from brass_ai.recovery.rehearsal import schedule
+        with tempfile.TemporaryDirectory(dir=SOURCE_ROOT/'artifacts') as tmp:
+            root=Path(tmp);source,state,il,origin,seed=source_fixture(root)
+            before={p.relative_to(source).as_posix():sha(p) for p in source.rglob('*') if p.is_file()}
+            run=root/'artifacts/neutral-no-rehearsal';output='configs/step5/neutral-no-rehearsal.json'
+            result=F.prepare(root,source,run,output,no_rehearsal=True)
+            c=read(root/output);m=F.load_manifest(root,run,c)
+            self.assertFalse(result['rehearsal_enabled']);self.assertEqual(result['rehearsal_weight'],0.)
+            self.assertEqual(c['rehearsal_manifest'],origin['manifest'])
+            expected=N.configure(state['signature']['config']);expected['seed']=state['next_seed'];expected['rehearsal_weight']=0.
+            from brass_ai.recovery import local_scoring_auxiliary as auxiliary
+            expected[auxiliary.KEY]=auxiliary.fresh_config(expected[auxiliary.KEY])
+            self.assertEqual({k:v for k,v in c.items() if k!=F.KEY},expected)
+            self.assertNotIn('trained_startup',c)  # Fresh heads do not grant scheduling overrides.
+            for iteration in (0,1,59,60,120,180,1290):
+                status=schedule(c,iteration*320,iteration)
+                self.assertFalse(status['enabled']);self.assertEqual(status['weight'],0.)
+            self.assertTrue(schedule(N.configure(state['signature']['config']),0,0)['enabled'])
+            self.assertEqual(F.prepare(root,source,run,output,no_rehearsal=True),result)
+            with self.assertRaisesRegex(ValueError,'another source/config'):F.prepare(root,source,run,output)
+            self.assertEqual(before,{p.relative_to(source).as_posix():sha(p) for p in source.rglob('*') if p.is_file()})
+
     def check_planner(self,root,run,c,pool,current,anchor):
         from brass_ai.recovery.ordinary import plan_collection
         from brass_ai.recovery.execution import neural_spec

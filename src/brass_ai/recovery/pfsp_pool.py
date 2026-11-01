@@ -32,6 +32,8 @@ def _distribution(pool,il_gate=None):
     if il_gate is not None:
         from .panel_gates import validate_trigger
         validate_trigger(il_gate)
+        from .trained_startup import manual
+        require(not manual(il_gate) or il_gate['panel']=='il-panel','PFSP requires the IL override')
         anchor=next(m for m in pool['members'] if m['generation']==0)
         from brass_ai.learning.contracts import digest
         require(il_gate['reference']==digest(dict(model_id=anchor['model_id'])) and

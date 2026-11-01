@@ -204,11 +204,24 @@ impl Manifest {
             self.max_cost.is_finite() && (0. ..=1.).contains(&self.max_cost),
             "invalid model cost cap",
         )?;
-        // L09 has no authority to promote a calibration receipt into live admission.
+        // Inference checks receipt structure only. The local transport separately
+        // pins the model/export/checkpoint and its accepted receipt identity.
         require(
-            self.mechanical_only && self.utility_calibration.is_none(),
-            "only mechanical model admission is qualified",
+            (self.mechanical_only && self.utility_calibration.is_none())
+                || (!self.mechanical_only && self.readonly_utility_receipt()),
+            "model must have mechanical admission or a completed read-only utility receipt",
         )
+    }
+    fn readonly_utility_receipt(&self) -> bool {
+        let Some(r) = &self.utility_calibration else { return false; };
+        r["version"] == "migration-utility-readonly-validation/1.0.0"
+            && r["mode"] == "read-only-validation"
+            && r["ready"] == true && r["completed"] == true
+            && r["weights_unchanged"] == true && r["steps"].as_u64() == Some(0)
+            && r["descriptors"] == "all-unknown"
+            && r["reward_id"] == self.reward_id && r["source_model_id"] == self.model_id
+            && r["request_id"].as_str().is_some_and(digest)
+            && r["source_checkpoint_sha256"].as_str().is_some_and(digest)
     }
     pub fn validate_input(&self, input: &Input<'_>) -> Result<()> {
         let (id, c, t, n) = (input.id, input.context, input.tensors, input.choices.len());

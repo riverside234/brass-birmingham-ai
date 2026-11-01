@@ -68,12 +68,13 @@ Human seats remain supported. Difficulty is independent per seat: different
 preserves the other seats' difficulty choices. Unsupported configurations omit
 Alpha Test and cannot start an existing unsupported NN draft.
 
-The NN / Alpha Test page offers Neutral and six industry tags independently for
-each seat. Apply persists the choice and Cancel discards the draft. Switching
-the whole table between NN and V4 retains the remembered NN tags. Menu preferences
-store `nn_focus` per seat; older preferences default to neutral. Native seat
-assignments bind `nn_focus` and its exact profile in the existing assignment hash.
-Older signed neutral saves without that field remain readable without rewriting.
+As of local release 1.4.47, the NN / Alpha Test page offers one NN choice with
+neutral context. Former industry-tag menu preferences normalize to neutral while
+retaining the other setup settings. Apply persists the choice and Cancel discards
+the draft. Signed assignments from existing games retain their bound profile;
+the backend's seven-profile admission remains available for save compatibility.
+Industry tags cannot be selected for new games. Older signed neutral saves
+without `nn_focus` remain readable without rewriting.
 
 Native saves use `brass-local-native-save/1.0.0`, family `nn`, exact model/export
 identities and signed assignments/records. Existing V4 save mappings remain

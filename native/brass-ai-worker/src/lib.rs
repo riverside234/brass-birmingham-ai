@@ -1,6 +1,7 @@
 //! Research owner-thread search service. Live protocol admission remains L13.
 pub mod focus;
 pub mod local;
+mod local_model;
 pub mod local_profile;
 mod local_temperature;
 pub mod pair;

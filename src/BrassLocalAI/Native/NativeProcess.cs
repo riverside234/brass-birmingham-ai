@@ -24,12 +24,14 @@ namespace BrassLegacyAI.Native
         public static NativeProcess Shared(int searchK)
         { return Shared(searchK,1.0); }
         public static NativeProcess Shared(int searchK,double temperature)
+        { return Shared(searchK,temperature,NativeModel.Alpha); }
+        public static NativeProcess Shared(int searchK,double temperature,NativeModel model)
         {
-            if(!NativePackage.Enabled) throw new InvalidOperationException("Alpha Test is disabled. This NN table must stop or be replaced as a whole.");
+            if(!model.Enabled) throw new InvalidOperationException(model.Label+" is disabled. This NN table must stop or be replaced as a whole.");
             // Only the scheduler's exclusive compute lease selects a worker.
             // Retire the old table's process before admitting another K.
-            if(shared!=null && (shared.Package.SearchK!=searchK || shared.Package.Temperature!=temperature)){shared.Dispose();shared=null;}
-            if(shared==null) shared=new NativeProcess(new NativePackage(NativePackage.Location,searchK,temperature));
+            if(shared!=null && (shared.Package.ModelSpec!=model || shared.Package.SearchK!=searchK || shared.Package.Temperature!=temperature)){shared.Dispose();shared=null;}
+            if(shared==null) shared=new NativeProcess(new NativePackage(model.Location,searchK,temperature));
             if(shared.process.HasExited) {shared.Dispose();shared=null;throw new IOException("Native worker exited; reload the saved game to recover");}
             return shared;
         }
@@ -53,8 +55,8 @@ namespace BrassLegacyAI.Native
                 if((long)hello["id"]!=0 || (string)hello["status"]!="ready")throw new IOException("Native readiness failed");
                 Readiness=(JObject)hello["data"];
                 NativePackage.ValidateAcceptance((JObject)Readiness["utility_acceptance"],Package.ModelManifest);
-                if((string)Readiness["backend"]!=NativePackage.Backend || (string)Readiness["build"]["source_sha256"]!=package.Source ||
-                    (string)Readiness["model_id"]!=NativePackage.Model || (string)Readiness["export_sha256"]!=NativePackage.Export ||
+                if((string)Readiness["backend"]!=package.ModelSpec.Backend || (string)Readiness["build"]["source_sha256"]!=package.Source ||
+                    (string)Readiness["model_id"]!=package.ModelSpec.Model || (string)Readiness["export_sha256"]!=package.ModelSpec.Export ||
                     (int)Readiness["sessions"]!=2 || (int)Readiness["threads_per_session"]!=1 ||
                     (string)Readiness["provider"]!="CPUExecutionProvider" || (bool?)Readiness["measured_readiness"]["warmup_passed"]!=true)
                     throw new IOException("Native startup identity mismatch");
@@ -64,7 +66,7 @@ namespace BrassLegacyAI.Native
                     throw new IOException("Native startup temperature mismatch");
                 if((int?)Readiness["delivery_grace_ms"]!=NativeJob.DeliveryGraceMilliseconds || (string)Readiness["host_delivery_reserve_policy"]!="search-plus-delivery/1.0.0")
                     throw new IOException("Native startup search/delivery budget mismatch");
-                if(!JToken.DeepEquals(Readiness["industry_focuses"],new JArray(NativeFocus.Keys)))
+                if(!JToken.DeepEquals(Readiness["industry_focuses"],new JArray(package.ModelSpec.Focuses)))
                     throw new IOException("Native industry focus support differs");
             } catch {Dispose();throw;}
         }
@@ -135,6 +137,7 @@ namespace BrassLegacyAI.Native
         readonly int allowance;
         readonly int searchK;
         readonly double temperature;
+        readonly NativeModel model;
         NativeProcess worker;
         public string FailureBundle {get;private set;}
         public JObject Result {get;private set;}
@@ -142,7 +145,7 @@ namespace BrassLegacyAI.Native
         public int DeadlineMilliseconds {get{return allowance;}}
         public double DeliveryDeadlineMilliseconds {get{return ResponseReceivedMilliseconds<0?allowance:Math.Min(allowance,ResponseReceivedMilliseconds+DeliveryGraceMilliseconds);}}
         public static int TotalAllowanceMilliseconds(int searchMilliseconds) {return checked(searchMilliseconds+DeliveryGraceMilliseconds);}
-        public string Name {get{return NativePackage.Backend;}}
+        public string Name {get{return model.Backend;}}
         public NativeJob(JObject request,Stopwatch clock,int allowance) : this(request,clock,allowance,16) { }
         public NativeJob(JObject request,Stopwatch clock,int allowance,int searchK)
             : this(request,clock,allowance,searchK,1.0) { }
@@ -157,6 +160,7 @@ namespace BrassLegacyAI.Native
             if(!NativePackage.ValidTemperature(temperature))throw new ArgumentOutOfRangeException("temperature");
             this.request=(JObject)request.DeepClone();this.clock=clock;this.allowance=allowance;this.searchK=searchK;
             this.temperature=temperature;
+            model=NativeModel.FromProfile((string)this.request["ticket"]["profile"]);
         }
         public Task ExecuteAsync(CancellationToken cancellation)
         {
@@ -173,15 +177,15 @@ namespace BrassLegacyAI.Native
         Task Execute(CancellationToken cancellation)
         {
             // ExecuteAsync is invoked on the scheduler's pool task.
-            cancellation.ThrowIfCancellationRequested();worker=NativeProcess.Shared(searchK,temperature);cancellation.ThrowIfCancellationRequested();
+            cancellation.ThrowIfCancellationRequested();worker=NativeProcess.Shared(searchK,temperature,model);cancellation.ThrowIfCancellationRequested();
             if(!clock.IsRunning)clock.Start();
             request["remaining_ms"]=Math.Max(0,allowance-(long)Math.Ceiling(clock.Elapsed.TotalMilliseconds));
             request["ticket"]["source_sha256"]=worker.Package.Source;
             Result=worker.Search(request,cancellation);
             ResponseReceivedMilliseconds=clock.Elapsed.TotalMilliseconds;
             if(clock.Elapsed.TotalMilliseconds>=allowance)throw new TimeoutException("Native response exceeded the original search-plus-delivery deadline");
-            if(!JToken.DeepEquals(Result["ticket"],request["ticket"]) || (string)Result["model_id"]!=NativePackage.Model ||
-                (string)Result["export_sha256"]!=NativePackage.Export || (string)Result["backend"]!=Name)
+            if(!JToken.DeepEquals(Result["ticket"],request["ticket"]) || (string)Result["model_id"]!=model.Model ||
+                (string)Result["export_sha256"]!=model.Export || (string)Result["backend"]!=Name)
                 throw new IOException("Native response belongs to a different game/request/model");
             if((int?)Result["requested_k"]!=searchK)throw new IOException("Native response used a different search K");
             if((double?)Result["policy_temperature"]!=temperature || (string)Result["temperature_scope"]!="all_nn_policy_evaluations")

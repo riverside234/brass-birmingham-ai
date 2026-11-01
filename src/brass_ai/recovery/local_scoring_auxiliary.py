@@ -15,12 +15,26 @@ from . import local_scoring_targets as targets
 
 KEY='local_scoring_auxiliary'
 CONTRACT='local-scoring-training/1.0.0'
+ACCEPTED_CONTRACT='local-scoring-training/2.0.0'
 DIAGNOSTICS_EVERY_ITERATIONS=5
 DIAGNOSTICS_MAX_ROWS=512
 DEFAULT=dict(contract=CONTRACT,head_contract=HEAD,target=targets.identity(),mode='apply',
     head_width=64,vp_scale=20.,loss_weights=dict(slots_owner=.05,links_owner=.05,slots_vp=.01,links_vp=.01),
     optimizer=dict(kind='Adam',learning_rate=1e-4,weight_decay=0.,grad_clip=1.),
     head_only_iterations=2,ramp_iterations=5,adoption=None)
+
+
+def accepted_warmup(config):return config.get('contract')==ACCEPTED_CONTRACT
+
+
+def fresh_config(config):
+    """Opt-in fresh heads; no dependency on panel, branching or GAE startup."""
+    validate_config(config)
+    result=copy.deepcopy(config)
+    result.update(contract=ACCEPTED_CONTRACT,head_only_iterations=2,minimum_fitting_steps=32,
+        ramp_iterations=5,adoption=None)
+    result['optimizer']['learning_rate']=1e-4
+    return validate_config(result)
 
 
 def diagnostics_schedule(generation):
@@ -32,14 +46,21 @@ def diagnostics_schedule(generation):
 
 
 def validate_config(config):
-    keys(config,tuple(DEFAULT))
+    work=accepted_warmup(config)
+    keys(config,tuple(DEFAULT)+(('minimum_fitting_steps',) if work else ()))
     require(config['mode'] in ('off','shadow','apply'),'Unknown local scoring mode')
     for name in ('contract','head_contract','target','head_width','vp_scale','head_only_iterations','ramp_iterations'):
+        if work and name in ('contract','head_only_iterations','ramp_iterations'):continue
         require(config[name]==DEFAULT[name], 'Local scoring contract differs: '+name)
+    if work:
+        require(all(type(config[k]) is int and config[k]>0 for k in
+            ('head_only_iterations','minimum_fitting_steps','ramp_iterations'))
+            and config['adoption'] is None,'Accepted-work auxiliary warmup requires a fresh initialization')
     require(set(config['loss_weights'])==set(DEFAULT['loss_weights']) and all(type(v) in (int,float) and math.isfinite(v) and v>=0 for v in config['loss_weights'].values()),'Invalid local scoring loss weights')
     o=config['optimizer'];keys(o,tuple(DEFAULT['optimizer']))
     require(o['kind']=='Adam' and o['weight_decay']==0 and o['grad_clip']==1. and
         type(o['learning_rate']) in (int,float) and math.isfinite(o['learning_rate']) and 0<o['learning_rate']<=.001,'Invalid companion optimizer')
+    if work:require(o['learning_rate']==1e-4,'Fresh companion Adam base LR must be 1e-4')
     a=config['adoption']
     if a is not None:
         keys(a,('generation','checkpoint_sha256','model_id','fresh_ppg_buffer'))
@@ -66,6 +87,38 @@ def head_identity():
     return hashlib.sha256(Path(local_scoring_heads.__file__).read_bytes().replace(b'\r\n',b'\n')).hexdigest()
 
 
+def initialization_receipt(companion,payload):
+    require(companion.work_warmup and companion.generation==0,'Fresh auxiliary receipt requires generation zero')
+    return dict(contract='fresh-local-scoring-heads/1.0.0',kind='fresh',generation=0,
+        head_contract=companion.config['head_contract'],seed=companion.seed,model_id=companion.origin['model_id'],
+        config_sha256=digest(companion.config),initial_bundle_identity=payload['identity'],
+        head_only_iterations=companion.config['head_only_iterations'],minimum_fitting_steps=companion.config['minimum_fitting_steps'],
+        ramp_iterations=companion.config['ramp_iterations'],initialization='normal_hidden_zero_final_outputs',
+        optimizer='fresh',rng='forked_preserved',progress='retained_PPG_fitting_at_commit')
+
+
+def verify_initialization(state,raw,config):
+    receipt=state.get('auxiliary_initialization');saved=raw.get('training',{}).get(KEY)
+    require(isinstance(receipt,dict) and isinstance(saved,dict)
+        and raw['training'].get('auxiliary_initialization')==receipt,
+        'Missing fresh auxiliary initialization/checkpoint receipt')
+    keys(receipt,('contract','kind','generation','head_contract','seed','model_id','config_sha256',
+        'initial_bundle_identity','head_only_iterations','minimum_fitting_steps','ramp_iterations',
+        'initialization','optimizer','rng','progress'))
+    require(receipt['contract']=='fresh-local-scoring-heads/1.0.0' and receipt['kind']=='fresh'
+        and receipt['generation']==0 and receipt['config_sha256']==digest(config)
+        and receipt['head_contract']==config['head_contract']
+        and all(receipt[k]==config[k] for k in ('head_only_iterations','minimum_fitting_steps','ramp_iterations'))
+        and receipt['initialization']=='normal_hidden_zero_final_outputs' and receipt['optimizer']=='fresh'
+        and receipt['rng']=='forked_preserved' and receipt['progress']=='retained_PPG_fitting_at_commit'
+        and saved['origin']==dict(generation=0,model_id=receipt['model_id'])
+        and saved['seed']==receipt['seed'] and saved['generation']==state['iteration']
+        and saved['config']==config,'Fresh auxiliary checkpoint provenance differs')
+    if state['iteration']==0:
+        require(saved['identity']==receipt['initial_bundle_identity'] and raw['model_id']==receipt['model_id'],
+            'Initial auxiliary weights/identity differ')
+
+
 class Companion:
     def __init__(self,model,config,*,raw=None,generation=0,adopting=False):
         self.config=copy.deepcopy(validate_config(config));self.generation=generation
@@ -81,21 +134,29 @@ class Companion:
         self.heads.to(next(model.parameters()).device)
         self.optimizers={p:torch.optim.Adam(self.heads.parameters(),lr=config['optimizer']['learning_rate'],weight_decay=0.) for p in ('ppo','ppg')}
         self.retained_steps=dict(ppo=0,ppg=0);self.retained_samples=dict(rows=0,games=0,era_maps=0)
+        self.work_warmup=accepted_warmup(config)
+        from . import local_scoring_warmup as warmup
+        self.warmup=warmup.initial() if self.work_warmup else None
         self.retained=set();self.reset_report()
         if saved is None:
             require(generation==0 or adopting,'Missing adopted local scoring companion checkpoint')
         else:
-            keys(saved,('contract','config','config_sha256','head_sha256','origin','seed','generation','age','heads','optimizers','retained_steps','retained_samples','identity'))
+            keys(saved,('contract','config','config_sha256','head_sha256','origin','seed','generation','age','heads','optimizers','retained_steps','retained_samples','identity')+
+                (('warmup',) if self.work_warmup else ()))
             require(saved['identity']==bundle_id({k:v for k,v in saved.items() if k!='identity'}),'Corrupt companion bundle identity')
             require(saved['config_sha256']==digest(saved['config']) and saved['head_sha256']==head_identity(),'Companion architecture/config hash differs')
             expected=copy.deepcopy(saved['config']);expected['mode']=config['mode']
-            require(expected==config and saved['contract']==CONTRACT and saved['origin']==origin and saved['seed']==self.seed and
+            require(expected==config and saved['contract']==config['contract'] and saved['origin']==origin and saved['seed']==self.seed and
                     saved['generation']==generation and saved['age']==self.age,'Companion checkpoint/config/progress differs')
             self.heads.load_state_dict(saved['heads'],strict=True)
             require(set(saved['optimizers'])=={'ppo','ppg'},'Missing companion Adam')
             for p,o in self.optimizers.items():o.load_state_dict(saved['optimizers'][p])
             self.retained_steps=copy.deepcopy(saved['retained_steps'])
             self.retained_samples=copy.deepcopy(saved['retained_samples'])
+            if self.work_warmup:
+                self.warmup=copy.deepcopy(warmup.validate(saved['warmup'],config,generation))
+                require(self.warmup['fitting_steps']==self.retained_steps['ppg'],
+                    'Auxiliary fitting counters differ from retained PPG steps')
             for values,names in ((self.retained_steps,('ppo','ppg')),(self.retained_samples,('rows','games','era_maps'))):
                 require(set(values)==set(names) and all(type(x) is int and x>=0 for x in values.values()),'Invalid companion retained counters')
             for phase,o in self.optimizers.items():
@@ -108,6 +169,9 @@ class Companion:
     @property
     def scale(self):
         if self.config['mode']!='apply':return 0.
+        if self.work_warmup:
+            from .local_scoring_warmup import scale
+            return scale(self.warmup,self.config)
         return max(0.,min(1.,(self.age-self.config['head_only_iterations']+1)/self.config['ramp_iterations']))
 
     def reset_report(self):
@@ -115,9 +179,11 @@ class Companion:
         self.device_stats={}
         self.available=set();self.unavailable=set();self.map_support={};self.map_masked={}
         self.rollbacks=0;self.restorations=0;self.steps=dict(ppo=0,ppg=0);self.gradient_norms=[]
+        self.fitting_steps=0;self.fitting_used=set()
 
     def begin(self,phase,*,reset=False,rate_factor=1.):
         optimizer=self.optimizers[phase]
+        self.phase=phase;self.batch_fitting=set()
         if not self.active:
             optimizer.zero_grad(set_to_none=True);self.pending=False;self.batch_used=set();return
         if reset:optimizer.state.clear()
@@ -169,6 +235,8 @@ class Companion:
         if not self.active:return value_output(model,inputs,ds,ix,dropout=dropout,detach=detach,capture_encoded=capture_encoded),None
         metadata=self.metadata(ds,ids)
         if not any(x[0] is not None for x in metadata):return value_output(model,inputs,ds,ix,dropout=dropout,detach=detach,capture_encoded=capture_encoded),None
+        if self.work_warmup:
+            require(self.phase=='ppg','Fresh auxiliary target fitting is restricted to PPG')
         from brass_ai.learning.seat_descriptors import critic_inputs
         start=time.perf_counter()
         with torch.set_grad_enabled(torch.is_grad_enabled() and not detach):encoded=model.encode_state(inputs[0])
@@ -195,14 +263,21 @@ class Companion:
             self.accumulate(kind+'_ce_sum',(ce.detach()*m).sum())
             self.accumulate(kind+'_none',((cls==0)&m).sum())
             self.accumulate(kind+'_vp_abs_sum',((vp.detach().float()-truth).abs().sum(-1)*m).sum()*self.config['vp_scale'])
-        for target,_,token,_ in metadata:
+        critic_weights=ds.critic_weights[ix].detach().cpu().tolist() if self.work_warmup else [1.]*len(ids)
+        for (target,_,token,_),weight in zip(metadata,critic_weights):
             if target is not None:
                 game=token[0]
-                self.batch_used.add(token);self.attempted.add(token)
+                valid=any(any(r['valid'] for r in target[k]) and
+                    (self.config['loss_weights'][k+'_owner']>0 or self.config['loss_weights'][k+'_vp']>0)
+                    for k in ('slots','links')) and weight>0
+                if valid:
+                    self.batch_fitting.add(token)
+                if valid or not self.work_warmup:
+                    self.batch_used.add(token);self.attempted.add(token)
                 if (game,target['era']) not in self.map_support:
                     self.map_support[(game,target['era'])]=sum(int(r['valid']) for k in ('slots','links') for r in target[k])
                     self.map_masked[(game,target['era'])]=sum(int(not r['valid']) for k in ('slots','links') for r in target[k])
-        self.pending=True;self.stats['forward_seconds']+=time.perf_counter()-start
+        self.pending=bool(self.batch_used);self.stats['forward_seconds']+=time.perf_counter()-start
         return out,loss
 
     def step(self,phase):
@@ -213,6 +288,8 @@ class Companion:
             self.device_stats['gradient_norm_max']=torch.maximum(self.device_stats.get('gradient_norm_max',torch.zeros_like(detached)),detached)
             self.steps[phase]+=1;self.retained_steps[phase]+=1
             self.retained.update(self.batch_used)
+            if phase=='ppg' and self.batch_fitting:
+                self.fitting_steps+=1;self.fitting_used.update(self.batch_fitting)
         self.optimizers[phase].zero_grad(set_to_none=True);self.pending=False
 
     def preservation_used(self,dataset,indices):
@@ -226,13 +303,15 @@ class Companion:
 
     def snapshot(self):
         return copy.deepcopy(dict(heads=self.heads.state_dict(),adam=self.optimizers['ppg'].state_dict(),
-            retained=self.retained,retained_steps=self.retained_steps,steps=self.steps))
+            retained=self.retained,retained_steps=self.retained_steps,steps=self.steps,
+            fitting_steps=self.fitting_steps,fitting_used=self.fitting_used))
 
     def restore(self,saved):
         # A final selected-state reload is not necessarily a discarded update.
         changed=self.retained_steps!=saved['retained_steps'] or self.retained!=saved['retained']
         self.heads.load_state_dict(saved['heads']);self.optimizers['ppg'].load_state_dict(saved['adam'])
         self.retained=copy.deepcopy(saved['retained']);self.retained_steps=copy.deepcopy(saved['retained_steps']);self.steps=copy.deepcopy(saved['steps'])
+        self.fitting_steps=saved['fitting_steps'];self.fitting_used=copy.deepcopy(saved['fitting_used'])
         self.optimizers['ppg'].zero_grad(set_to_none=True);self.pending=False;self.restorations+=1;self.rollbacks+=int(changed)
 
     def account_loss(self,loss,weights,denominator,phase):
@@ -247,19 +326,29 @@ class Companion:
 
     def payload(self,generation):
         require(generation in (self.generation,self.generation+1),'Noncommitted companion progress jump')
-        result=dict(contract=CONTRACT,config=self.config,config_sha256=digest(self.config),head_sha256=head_identity(),origin=self.origin,seed=self.seed,generation=generation,
+        result=dict(contract=self.config['contract'],config=self.config,config_sha256=digest(self.config),head_sha256=head_identity(),origin=self.origin,seed=self.seed,generation=generation,
             age=generation-self.origin['generation'],heads=self.heads.state_dict(),
             optimizers={p:o.state_dict() for p,o in self.optimizers.items()},retained_steps=self.retained_steps,
             retained_samples={k:v+(self.usage()[k] if generation==self.generation+1 else 0) for k,v in self.retained_samples.items()})
+        if self.work_warmup:
+            result['warmup']=self.next_warmup() if generation==self.generation+1 else copy.deepcopy(self.warmup)
+            require(result['warmup']['fitting_steps']==self.retained_steps['ppg'],
+                'Auxiliary warmup must account for exactly the retained fitting steps')
         return dict(result,identity=bundle_id(result))
 
     def committed(self,generation):
         require(generation==self.generation+1,'Auxiliary commit discontinuity')
+        if self.work_warmup:self.warmup=self.next_warmup()
         self.retained_samples={k:v+self.usage()[k] for k,v in self.retained_samples.items()}
         self.generation=generation;self.age=generation-self.origin['generation'];self.reset_report()
 
     def usage(self):
         return dict(rows=len(self.retained),games=len({r[0] for r in self.retained}),era_maps=len({r[:2] for r in self.retained}))
+
+    def next_warmup(self):
+        from .local_scoring_warmup import advance
+        return advance(self.warmup,self.config,self.generation+1,self.fitting_steps,
+            len({r[0] for r in self.fitting_used}))
 
     def report(self):
         names=list(self.device_stats)
@@ -270,7 +359,15 @@ class Companion:
             return dict(rows=len(rows),games=len({r[0] for r in rows}),era_maps=len(maps),
                 distinct_entity_targets=sum(self.map_support.get(k,0) for k in maps),
                 masked_entity_targets=sum(self.map_masked.get(k,0) for k in maps))
-        return dict(contract=CONTRACT,mode=self.config['mode'],origin=self.origin,activation_age=self.age,
+        progress={}
+        if self.work_warmup:
+            from .local_scoring_warmup import report
+            progress=dict(warmup=dict(before=report(self.warmup,self.config),after_commit=report(self.next_warmup(),self.config),
+                retained_fitting_steps=self.fitting_steps,distinct_fitting_games=len({r[0] for r in self.fitting_used}),
+                distinct_fitting_rows=len(self.fitting_used),
+                scope='This iteration: retained PPG target fitting only. PPO preservation, rejected intervals and invalid/zero-weight targets excluded. Ramp changes after checkpoint commit.'))
+        return dict(contract=self.config['contract'],mode=self.config['mode'],origin=self.origin,activation_age=self.age,
+            **progress,
             shared_gradient_scale=self.scale,parameter_count=sum(p.numel() for p in self.heads.parameters()),
             available=support(self.available),unavailable=support(self.unavailable),attempted=support(self.attempted),retained=support(self.retained),companion_steps=self.steps,
             companion_lr={p:o.param_groups[0]['lr'] for p,o in self.optimizers.items()},
@@ -303,7 +400,7 @@ class Companion:
             for part in strata.values():
                 if n<len(part) and len(ids)<maximum:ids.append(part[n]);present=True
             if not present or len(ids)>=maximum:break
-        groups={};was_training=model.training;heads_training=self.heads.training
+        groups={};group_games=defaultdict(set);was_training=model.training;heads_training=self.heads.training
         model.eval();self.heads.eval();label_cache={}
         try:
           with torch.no_grad():
@@ -320,8 +417,9 @@ class Companion:
                     row=dataset.rows[i];target=targets.map_for(row);mapping=dataset.encoded[i].stable_to_relative
                     for kind,(probabilities_batch,values_batch) in predictions.items():
                         key=dataset.tables[i]+'/'+target['era']+'/'+kind
+                        group_games[key].add(dataset.data[i][2][0])
                         if key not in groups:groups[key]=dict(rows=0,entities=0,positive=0,none=0,ce_sum=0.,
-                            vp_abs_sum=0.,positive_errors=0)
+                            vp_abs_sum=0.,positive_errors=0,occupied_ce_sum=0.,occupied_vp_abs_sum=0.)
                         g=groups[key];g['rows']+=1
                         probabilities=probabilities_batch[b];pred=values_batch[b]
                         token=(row['_local_scoring']['envelope']['sha256'],target['era'],kind,tuple(mapping))
@@ -335,11 +433,19 @@ class Companion:
                         probs=probabilities[valid];predicted=probs.argmax(-1)
                         g['entities']+=len(owner);g['positive']+=int((owner>0).sum());g['none']+=int((owner==0).sum())
                         g['positive_errors']+=int(((owner>0)&(predicted!=owner)).sum())
-                        g['ce_sum']+=float(-np.log(np.maximum(probs[np.arange(len(owner)),owner].astype(np.float64),1e-30)).sum())
-                        g['vp_abs_sum']+=float(np.abs((pred-truth)[valid]).sum())
+                        ce=-np.log(np.maximum(probs[np.arange(len(owner)),owner].astype(np.float64),1e-30))
+                        error=np.abs((pred-truth)[valid])
+                        g['ce_sum']+=float(ce.sum());g['vp_abs_sum']+=float(error.sum())
+                        g['occupied_ce_sum']+=float(ce[owner>0].sum())
+                        g['occupied_vp_abs_sum']+=float(error[owner>0].sum())
         finally:
             model.train(was_training);self.heads.train(heads_training)
-        for g in groups.values():
+        for key,g in groups.items():
+            g['games']=len(group_games[key])
             count=max(1,g['entities']);g.update(owner_ce=g['ce_sum']/count,vp_mae=g['vp_abs_sum']/(4*count))
+            occupied=g['positive']
+            g['occupied']=dict(entities=occupied,owner_ce=g['occupied_ce_sum']/occupied if occupied else None,
+                owner_error_rate=g['positive_errors']/occupied if occupied else None,
+                vp_mae=g['occupied_vp_abs_sum']/(4*occupied) if occupied else None)
         return dict(rows=len(ids),games=len({dataset.data[i][2][0] for i in ids}),groups=groups,seconds=time.perf_counter()-began,
-            scope=f'At most {maximum} ordinary learner critic-held-out rows balanced by era/table; branches and snapshot seats excluded. Ownership CE/errors and VP MAE only; report-only, no gate or fitting changes.')
+            scope=f'At most {maximum} ordinary learner critic-held-out rows balanced by era/table; branches and snapshot seats excluded. Slots/links reported separately; occupied means ground-truth era-end owner is nonzero. VP MAE is in VP units across four seats. Report-only; no gate or fitting changes.')

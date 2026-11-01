@@ -23,9 +23,9 @@ namespace BrassLegacyAI
         bool fixture;
         AiFamily tableFamily;
         bool neuralTab;
-        Button v4Table, nnTable, alphaTable;
+        Button v4Table, nnTable, alphaTable, betaTable;
         AiFamily Family { get { return CurrentPage == PlayerSelectionPage.Gamma ? AiFamily.Gamma : tableFamily; } }
-        static string PageLabel(PlayerSelectionPage page) {return page==PlayerSelectionPage.AlphaTest?"Alpha Test":page.ToString();}
+        string PageLabel(PlayerSelectionPage page) {return page==PlayerSelectionPage.AlphaTest?(drafts[AiFamily.AlphaTest].EntryId=="beta"?"Beta":"Alpha Test"):page.ToString();}
         AiChoice selected { get { return drafts[Family]; } }
         string nickname, detail;
         RectTransform window, viewport, content;
@@ -93,7 +93,7 @@ namespace BrassLegacyAI
             foreach (var family in new[] { AiFamily.V4, AiFamily.Gamma, AiFamily.AlphaTest }) {
                 panel.catalogs[family] = fixtureFamily == family && fixtureEntries != null ? Array.AsReadOnly(fixtureEntries) : AiSelectionCatalog.Entries(family);
                 panel.queries[family] = ""; panel.positions[family] = 1;
-                panel.drafts[family] = selectedChoice.Family == family ? selectedChoice : new AiChoice(family, family==AiFamily.AlphaTest?Native.NativeFocus.ChoiceId(LocalMenu.NeuralTag(row.Player)):"random");
+                panel.drafts[family] = selectedChoice.Family == family ? selectedChoice : new AiChoice(family, family==AiFamily.AlphaTest?LocalMenu.TableNeuralChoice(row.Player):"random");
             }
             root.gameObject.AddComponent<LightUiTheme>();
             var menu = row.GetComponentsInParent<Frameworks.View.Menu.CreateGame.CreateOfflineGameView>(true).FirstOrDefault();
@@ -173,7 +173,7 @@ namespace BrassLegacyAI
                 button.GetComponentInChildren<TextMeshProUGUI>().gameObject.SetActive(false);
                 AddIcon(button.transform, actualPage == PlayerSelectionPage.Human ? AiIconKind.Human : actualPage == PlayerSelectionPage.V4 ? AiIconKind.V4 : AiIconKind.Gamma, 12, 17, 30);
                 Text(button.transform, "Family", !fixture && page!=PlayerSelectionPage.Human?"AI":PageLabel(actualPage), 52, 8, sidebar - 64, 34, 24).fontStyle = FontStyles.Bold;
-                Text(button.transform, "Count", actualPage==PlayerSelectionPage.AlphaTest?"Alpha Test":page == PlayerSelectionPage.Human ? "Local player" : page == PlayerSelectionPage.V4 ? "V4 · 6 + Random" : "16 + Random", 52, 44, sidebar - 60, 24, 17).color = LightUi.Muted;
+                Text(button.transform, "Count", actualPage==PlayerSelectionPage.AlphaTest?PageLabel(actualPage):page == PlayerSelectionPage.Human ? "Local player" : page == PlayerSelectionPage.V4 ? "V4 · 6 + Random" : "16 + Random", 52, 44, sidebar - 60, 24, 17).color = LightUi.Muted;
                 button.GetComponent<AiControlSurface>().Selected = CurrentPage == actualPage; pageButtons[actualPage] = button;
             }
             if(!fixture) {
@@ -185,14 +185,18 @@ namespace BrassLegacyAI
                     else SelectPage(PlayerSelectionPage.Gamma);
                 });
                 nnTable.GetComponent<AiControlSurface>().Selected=neuralTab;
-                alphaTable=null;
+                alphaTable=null;betaTable=null;
                 if(neuralTab) {
-                    var options=AiWidgets.Rect(window,"NN options",P(42,566),S(sidebar-20,104));
+                    var options=AiWidgets.Rect(window,"NN options",P(42,566),S(sidebar-20,162));
                     if(LocalMenu.NativeSupported(owner.Player)) {
-                        alphaTable=Button(options,"Alpha Test table","Alpha Test",0,0,sidebar-20,46,21,()=>SwitchFamily(AiFamily.AlphaTest));
-                        alphaTable.GetComponent<AiControlSurface>().Selected=tableFamily==AiFamily.AlphaTest && CurrentPage!=PlayerSelectionPage.Gamma;
+                        alphaTable=Button(options,"Alpha Test table","Alpha Test",0,0,sidebar-20,46,21,()=>SwitchNeuralModel("alpha-test"));
+                        alphaTable.interactable=Native.NativeModel.Alpha.Enabled;
+                        alphaTable.GetComponent<AiControlSurface>().Selected=tableFamily==AiFamily.AlphaTest && drafts[AiFamily.AlphaTest].EntryId=="alpha-test" && CurrentPage!=PlayerSelectionPage.Gamma;
+                        betaTable=Button(options,"Beta table","Beta",0,58,sidebar-20,46,21,()=>SwitchNeuralModel("beta"));
+                        betaTable.interactable=Native.NativeModel.Beta.Enabled;
+                        betaTable.GetComponent<AiControlSurface>().Selected=tableFamily==AiFamily.AlphaTest && drafts[AiFamily.AlphaTest].EntryId=="beta" && CurrentPage!=PlayerSelectionPage.Gamma;
                     }
-                    var gammaTable=Button(options,"Page Gamma","Gamma",0,alphaTable==null?0:58,sidebar-20,46,21,()=>SelectPage(PlayerSelectionPage.Gamma));
+                    var gammaTable=Button(options,"Page Gamma","Gamma",0,alphaTable==null?0:116,sidebar-20,46,21,()=>SelectPage(PlayerSelectionPage.Gamma));
                     gammaTable.GetComponent<AiControlSurface>().Selected=CurrentPage==PlayerSelectionPage.Gamma;
                     pageButtons[PlayerSelectionPage.Gamma]=gammaTable;
                 }
@@ -268,8 +272,8 @@ namespace BrassLegacyAI
             var randomEntry = RandomEntry(); random = Tile(randomEntry, window, bodyX, 260 + searchOffset, bodyWidth, 68, true);
             if(Family==AiFamily.AlphaTest)random.gameObject.SetActive(false);
             columns = Family == AiFamily.Gamma ? 4 : 3;
-            cardHeight = (Family == AiFamily.V4 ? 216 : 146) * TextScale / 1.15f;
-            float gridTop = (Family == AiFamily.AlphaTest ? 260 : 340) + searchOffset;
+            cardHeight = (Family == AiFamily.Gamma ? 146 : 216) * TextScale / 1.15f;
+            float gridTop = 340 + searchOffset;
             float gridHeight = Mathf.Max(80, height - gridTop - footerHeight - 16);
             viewport = AiWidgets.Rect(window, "Styles viewport", P(bodyX, gridTop), S(bodyWidth, gridHeight)); viewport.gameObject.AddComponent<RectMask2D>();
             viewport.gameObject.AddComponent<Image>().color = new Color(0, 0, 0, .001f);
@@ -404,9 +408,9 @@ namespace BrassLegacyAI
             if (rebuilding) return;
             foreach (var tile in tiles) { tile.gameObject.SetActive(false); Destroy(tile.gameObject); } tiles.Clear();
             string query = queries[Family].Trim(); var entries = catalogs[Family];
-            var shown = entries.Where(e => query.Length == 0 || e.Name.IndexOf(query, StringComparison.OrdinalIgnoreCase) >= 0 ||
+            var shown = entries.Where(e => Family!=AiFamily.AlphaTest || e.Choice.Equals(selected)).Where(e => query.Length == 0 || e.Name.IndexOf(query, StringComparison.OrdinalIgnoreCase) >= 0 ||
                 e.Description.IndexOf(query, StringComparison.OrdinalIgnoreCase) >= 0).ToArray();
-            countLabel.text = Family==AiFamily.AlphaTest ? "Test NN · Neutral + 6 industry tags" : Family == AiFamily.Gamma ? shown.Length + " of " + entries.Count + " models · " + entries.Count(e => e.Available) + " available" +
+            countLabel.text = Family==AiFamily.AlphaTest ? (selected.EntryId=="beta"?"g1290 test model · Neutral":"g890 test model · Neutral") : Family == AiFamily.Gamma ? shown.Length + " of " + entries.Count + " models · " + entries.Count(e => e.Available) + " available" +
                 (entries.Any(e => e.Available) ? "" : " · Models not installed") : shown.Length + " of " + entries.Count + " styles · Plans adapt during play";
             float w = (gridWidth - (columns - 1) * 12) / columns;
             for (int i = 0; i < shown.Length; i++) tiles.Add(Tile(shown[i], content, (i % columns) * (w + 12), (i / columns) * (cardHeight + 12), w, cardHeight, false));
@@ -419,6 +423,12 @@ namespace BrassLegacyAI
         }
         public void SelectPage(AiFamily family)
         { SelectPage(family == AiFamily.V4 ? PlayerSelectionPage.V4 : family==AiFamily.AlphaTest?PlayerSelectionPage.AlphaTest:PlayerSelectionPage.Gamma); }
+        public void SwitchNeuralModel(string choice)
+        {
+            var pick=new AiChoice(AiFamily.AlphaTest,choice);
+            if(!IsCurrent || fixture || !LocalMenu.NativeSupported(owner.Player) || !AiSelectionCatalog.CanChoose(pick))return;
+            drafts[AiFamily.AlphaTest]=pick;SwitchFamily(AiFamily.AlphaTest);
+        }
         public void SwitchFamily(AiFamily family)
         {
             if(!IsCurrent || fixture || (family!=AiFamily.V4 && family!=AiFamily.AlphaTest) || (family==AiFamily.AlphaTest && !LocalMenu.NativeSupported(owner.Player)))return;
@@ -442,7 +452,7 @@ namespace BrassLegacyAI
         List<Selectable> FocusOrder()
         {
             var controls = new List<Selectable>(pageButtons.Where(p=>fixture || p.Key!=PlayerSelectionPage.Gamma).OrderBy(p=>(int)p.Key).Select(p=>(Selectable)p.Value));
-            controls.Add(v4Table);controls.Add(nnTable);controls.Add(alphaTable);
+            controls.Add(v4Table);controls.Add(nnTable);controls.Add(alphaTable);controls.Add(betaTable);
             if(!fixture && pageButtons.ContainsKey(PlayerSelectionPage.Gamma))controls.Add(pageButtons[PlayerSelectionPage.Gamma]);
             controls.AddRange(DifficultyButtons); controls.AddRange(SearchKButtons); controls.AddRange(TemperatureButtons); controls.AddRange(new Selectable[] { filter, clear, random });
             controls.AddRange(tiles); controls.AddRange(new[] { smaller, larger, close, footerClose, ApplyButton });

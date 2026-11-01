@@ -15,11 +15,14 @@ def main():
     p.add_argument('--expected-source-generation',type=int,default=1360)
     p.add_argument('--seed-generation',type=int,default=1290)
     p.add_argument('--history-through',type=int,default=1330)
+    p.add_argument('--no-rehearsal',action='store_true',help='Disable rehearsal only in this prepared run; leave global defaults unchanged')
+    p.add_argument('--trained-restart',action='store_true',help='Immediate branching, manual panel overrides, GAE 0.98 and no rehearsal; independent of fresh companion initialization')
     p.add_argument('--run',default='artifacts/step5/joint7-v11-2-neutral-from-g1290')
     p.add_argument('--output',default='configs/step5/joint7-v11-2-neutral-from-g1290.json')
     a=p.parse_args()
     print(json.dumps(prepare(a.root.resolve(),a.source_run,a.run,a.output,
-        expected_generation=a.expected_source_generation,seed_generation=a.seed_generation,history_through=a.history_through),indent=2))
+        expected_generation=a.expected_source_generation,seed_generation=a.seed_generation,history_through=a.history_through,
+        no_rehearsal=a.no_rehearsal,trained_restart=a.trained_restart),indent=2))
 
 
 if __name__=='__main__':main()

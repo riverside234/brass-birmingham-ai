@@ -32,6 +32,8 @@ def initial(generation):
 
 
 def validate_trigger(trigger):
+    from . import trained_startup as startup
+    if startup.manual(trigger):return startup.validate_trigger(trigger)
     require(type(trigger) is dict and set(trigger) == {'generation', 'candidate', 'games', 'setups',
         'win_share', 'panels', 'spec', 'reference', 'threshold'} and
         type(trigger['generation']) is int and trigger['generation'] > 0 and
@@ -57,10 +59,12 @@ def validate_state(saved, generation):
         and set(saved['retired']) == set(NAMES), 'Invalid panel-gate state')
     last = saved['last_generation']
     require(last is None or type(last) is int and 0 < last <= generation, 'Invalid panel-gate progress')
-    for trigger in saved['retired'].values():
+    from . import trained_startup as startup
+    for name,trigger in saved['retired'].items():
         if trigger is not None:
             validate_trigger(trigger)
-            require(last is not None and trigger['generation'] <= last, 'Panel trigger exceeds committed progress')
+            if startup.manual(trigger):require(trigger['panel']==name,'Manual override panel differs')
+            else:require(last is not None and trigger['generation'] <= last, 'Panel trigger exceeds committed progress')
     return saved
 
 
@@ -114,6 +118,9 @@ def verify_retired(root, rating, saved):
 
 def verify_evidence(root, rating, name, trigger):
     """Verify a frozen panel observation, including after full-slot retention."""
+    from . import trained_startup as startup
+    if startup.manual(trigger):
+        startup.verify_manual(rating,name,trigger);return
     from .ratings import archived_history
     require(name in NAMES and trigger['reference'] == reference(rating, name), 'Retired panel reference changed')
     slot = next((s for s in rating['slots'] if s['generation'] == trigger['generation']), None)
@@ -135,7 +142,8 @@ def verify_evidence(root, rating, name, trigger):
 def latest_evidence(root, state, config):
     """Latest complete active panels, or the verified one-way retirement receipt."""
     rating=state['ratings']; saved=prepare(root,state,config)
-    result=copy.deepcopy(saved['retired'])
+    from .trained_startup import manual
+    result={n:None if manual(v) else copy.deepcopy(v) for n,v in saved['retired'].items()}
     if not rating['slots']: return result
     slot=max(rating['slots'],key=lambda s:s['generation'])
     panels=verified_panel(root,rating,slot)
@@ -153,6 +161,9 @@ def prepare(root, state, config):
     if 'panel_gates' not in config: return None
     validate(config['panel_gates'])
     rating = state['ratings']; generation = state['iteration']
+    from . import trained_startup as startup
+    if startup.enabled(config):startup.verify_gates(state,config)
+    else:require('startup_override' not in rating,'Manual startup requires its signed configuration')
     saved = copy.deepcopy(rating.get('panel_gates', initial(generation)))
     validate_state(saved, generation)
     verify_retired(root, rating, saved)

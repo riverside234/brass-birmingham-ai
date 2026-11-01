@@ -199,6 +199,8 @@ def prepare(root,run,state,config,probe,model):
     if controller['pending'] is not None:
         return values(root,controller['active'],probe),dict(decision='hold',reason='pending_reference_restored',generation=state['iteration'])
     qualification=panel_gates.prepare(root,state,config)['retired']['il-panel']
+    from .trained_startup import manual
+    if manual(qualification):qualification=None  # Scheduling permission is not measured anchor qualification.
     selected=fit=None;reason='il_panel_not_qualified'
     if qualification is not None:selected,fit,reason=select(root,state,controller)
     if reason=='same_completed_fit':

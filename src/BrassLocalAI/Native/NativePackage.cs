@@ -18,6 +18,7 @@ namespace BrassLegacyAI.Native
         public const string Checkpoint = "ecad3b932a8dd9d3b5d0cc49b5e9bb94a9e98b4536ffdc86a44179d003995cb8";
         public const string Profile = "alpha-test-g890-neutral/1.0.0";
         public readonly string Directory, Source, PolicyHash, PolicyPath;
+        public readonly NativeModel ModelSpec;
         public readonly int SearchK;
         public readonly double Temperature;
         public static readonly IReadOnlyList<int> SearchKChoices = Array.AsReadOnly(new[]{8,16});
@@ -27,7 +28,7 @@ namespace BrassLegacyAI.Native
         public readonly JObject Policy, ModelManifest;
         public static string GameRoot { get { return Path.GetFullPath(Path.Combine(Path.GetDirectoryName(typeof(NativePackage).Assembly.Location), "../..")); } }
         public static string Location { get { return Path.Combine(GameRoot, "BrassNative", "alpha-g890"); } }
-        public static bool Enabled { get { return !File.Exists(Path.Combine(GameRoot, "BrassNative", "disabled")) && File.Exists(Path.Combine(Location, "build.json")); } }
+        public static bool Enabled { get { return NativeModel.Alpha.Enabled || NativeModel.Beta.Enabled; } }
         public static string Hash(string path) { using(var sha=SHA256.Create()) using(var stream=File.OpenRead(path)) return BitConverter.ToString(sha.ComputeHash(stream)).Replace("-", "").ToLowerInvariant(); }
         public NativePackage(string directory) : this(directory,16) { }
         public NativePackage(string directory,int searchK)
@@ -39,9 +40,10 @@ namespace BrassLegacyAI.Native
             if(!ValidTemperature(temperature))throw new InvalidDataException("Unsupported NN temperature");
             Temperature=temperature;
             Directory=Path.GetFullPath(directory);
+            ModelSpec=NativeModel.FromDirectory(Directory);
             var build=JObject.Parse(File.ReadAllText(Path.Combine(Directory,"build.json")));
-            if((string)build["format"]!="brass-local-package/1.0.0" || (string)build["backend"]!=Backend ||
-                (string)build["target"]!="x86_64-pc-windows-gnu" || (string)build["scope"]!="local-alpha-test") throw new InvalidDataException("Unsupported native package");
+            if((string)build["format"]!="brass-local-package/1.0.0" || (string)build["backend"]!=ModelSpec.Backend ||
+                (string)build["target"]!="x86_64-pc-windows-gnu" || (string)build["scope"]!=(ModelSpec==NativeModel.Alpha?"local-alpha-test":"local-beta-test")) throw new InvalidDataException("Unsupported native package");
             var files=(JArray)build["files"];
             string[] required={"brass-ai-local.exe","policy.json","policy-k8.json","policy-k32.json","policy-t15.json","policy-k8-t15.json","policy-k32-t15.json","warmup.json","model/manifest.json","model/model.json","model/model.onnx","model/onnxruntime.dll"};
             if(files.Count!=required.Length || required.Any(n=>files.Count(f=>(string)f["path"]==n)!=1)) throw new InvalidDataException("Incomplete native package");
@@ -56,7 +58,7 @@ namespace BrassLegacyAI.Native
             Policy=JObject.Parse(File.ReadAllText(PolicyPath));
             ModelManifest=JObject.Parse(File.ReadAllText(Path.Combine(Directory,"model/manifest.json")));
             ValidateAcceptance((JObject)Policy["acceptance"],ModelManifest);
-            if((string)Policy["protocol"]!=Protocol || (string)Policy["backend"]!=Backend ||
+            if((string)ModelManifest["model_id"]!=ModelSpec.Model || (string)Policy["protocol"]!=Protocol || (string)Policy["backend"]!=ModelSpec.Backend ||
                 (string)Policy["model_manifest_sha256"]!=Hash(Path.Combine(Directory,"model/manifest.json"))) throw new InvalidDataException("Native package contract changed");
             var mapping=Policy["k_by_allowance_ms"] as JObject;
             if(mapping==null || mapping.Count!=4 || new[]{"4000","8000","10000","12000"}.Any(a=>
@@ -66,6 +68,19 @@ namespace BrassLegacyAI.Native
         }
         public static void ValidateAcceptance(JObject acceptance,JObject model)
         {
+            if(model==null)throw new InvalidDataException("Missing NN manifest");
+            var spec=NativeModel.FromModel((string)model["model_id"]);
+            if(spec==NativeModel.Beta) {
+                if(acceptance==null || (string)acceptance["version"]!="brass-local-utility-acceptance/1.0.0" ||
+                    (string)acceptance["scope"]!=spec.Scope || (string)acceptance["decision"]!=spec.Decision ||
+                    (string)acceptance["model_id"]!=spec.Model || (string)model["model_id"]!=spec.Model ||
+                    (string)acceptance["export_sha256"]!=spec.Export || (string)model["export_sha256"]!=spec.Export ||
+                    (string)acceptance["checkpoint_sha256"]!=spec.Checkpoint || (string)model["checkpoint_sha256"]!=spec.Checkpoint ||
+                    (bool?)acceptance["final_model"]!=false || (bool?)model["mechanical_only"]!=false ||
+                    !NativeModel.BetaReceipt(model["utility_calibration"]) || !JToken.DeepEquals(acceptance["utility_calibration"],model["utility_calibration"]))
+                    throw new InvalidDataException("Beta lacks its exact read-only utility validation");
+                return;
+            }
             if(acceptance==null || model==null || (string)acceptance["version"]!="brass-local-utility-acceptance/1.0.0" ||
                 (string)acceptance["scope"]!="part1-local-alpha-test" || (string)acceptance["decision"]!="user-2026-10-25" ||
                 (string)acceptance["model_id"]!=Model || (string)acceptance["export_sha256"]!=Export || (string)acceptance["checkpoint_sha256"]!=Checkpoint ||

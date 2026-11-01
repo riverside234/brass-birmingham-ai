@@ -3,7 +3,7 @@
 ## Current: fresh neutral self-play from g1290
 
 Use [the fresh g1290 start command and import rules](../ai-research/NEUTRAL_SELFPLAY_G1290_RESTART.md).
-The source is the stopped g1360 run; a separate `joint7-v11-2-neutral-from-g1290`
+The source is the stopped g1360 run; a separate `joint7-v11-2-g1290-trained-restart`
 run begins at generation zero with g1290 weights, new optimizers and fresh PPG
 data. Import only the retained history through g1330, inclusive, while keeping
 the original IL reference. Do not run the archived g1340 continuation below.
@@ -14,6 +14,23 @@ All four entropy groups are fixed at **0.005**, epsilon **0.05**, insolvency
 tags are neutral. Fingerprints and AnchorKL stay disabled. The helper preserves
 the existing PPO/PPG recipe and PFSP mechanics; fresh configuration generation
 also uses these neutral defaults. The completed IL filename is unchanged.
+The current launch command adds `--no-rehearsal` only for this run: weight zero
+disables both the rehearsal loss and shard loading, including the scheduled
+floor. Global rehearsal defaults and other runs are unchanged. Add
+`--trained-restart` for immediate 1% branching, main GAE 0.98 and explicit manual
+IL/v4 panel retirement/competitive-PL permission: **160/154/6** tables, IL in PFSP.
+These receipts are scheduling overrides, not measured qualification or health
+evidence. Original IL zero point and main PL evaluation remain.
+
+The retained slim g1290 main weights suffice. Fresh Ownership/VP companion heads
+use normal hidden projections and zero final outputs, with new Adam state and
+deterministic initialization. Independently of the startup overrides, encoder
+gradients remain blocked until **two committed fitting iterations and 32 retained
+PPG fitting steps**. Then the encoder-only multiplier ramps **0.2→1.0 across five
+qualifying iterations**; rejected work and PPO preservation never advance it.
+Heads retain their own full loss gradients. This schedule is checkpointed,
+separate from PPO's **100 optimizer-step** warmup. See the linked launch document
+for configuration keys, diagnostics and the exact command.
 
 ## Archived g1340 continuation and DOMiNO context evaluation
 
