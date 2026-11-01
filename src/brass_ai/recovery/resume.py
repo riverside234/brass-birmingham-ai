@@ -37,8 +37,9 @@ def apply_optimizer_config(optimizer, config):
 def check_signature(state, signature, reviewed=False):
     require(state['format'] == 'step5-recovery-league/2.2.0', 'Unsupported self-play resume format')
     previous = state['signature']
-    # The latest-model recipe starts from completed IL, never a PPO generation
-    # or an old run's population. It also cannot later resume as a gate recipe.
+    # A new weights-seeded run has its own signed generation-zero manifest.
+    # Same-run resume never imports another run's optimizer/progress/population
+    # or switches to a champion-gate recipe.
     require(previous['config'].get('selfplay_recipe')==signature['config'].get('selfplay_recipe'),
             'Changing self-play recipe requires a fresh IL run')
     from .config import latest_model_recipe

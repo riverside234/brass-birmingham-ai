@@ -31,7 +31,7 @@ class Entropy(unittest.TestCase):
         self.assertEqual(validate_config(old),old)
         for source in (old,new):
             fresh=latest_model_config(source,source['imitation_checkpoint'])
-            self.assertEqual(fresh['update']['fixed_entropy'],E.FIXED_ENTROPY_010)
+            self.assertEqual(fresh['update']['fixed_entropy'],E.FIXED_ENTROPY_005)
         for key,value in [('canal_action',.099),('canal_other',float('nan')),('rail_action',True),('rail_other',.005)]:
             bad=copy.deepcopy(new);bad['update']['fixed_entropy']['weights'][key]=value
             with self.assertRaises(ValueError):validate_config(bad)

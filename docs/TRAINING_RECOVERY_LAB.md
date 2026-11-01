@@ -1,6 +1,21 @@
 # Fresh training in conda: selected v4 teachers and Masked ISMCTS NN
 
-## Current g1340 continuation and DOMiNO context evaluation
+## Current: fresh neutral self-play from g1290
+
+Use [the fresh g1290 start command and import rules](../ai-research/NEUTRAL_SELFPLAY_G1290_RESTART.md).
+The source is the stopped g1360 run; a separate `joint7-v11-2-neutral-from-g1290`
+run begins at generation zero with g1290 weights, new optimizers and fresh PPG
+data. Import only the retained history through g1330, inclusive, while keeping
+the original IL reference. Do not run the archived g1340 continuation below.
+
+All four entropy groups are fixed at **0.005**, epsilon **0.05**, insolvency
+**0.02 / 0.075**, three opening action decisions at **T1.3**, and fork actions
+**60% T1 + 30% T2 + 10% q**. DOMiNO and context panels are off; all neural seat
+tags are neutral. Fingerprints and AnchorKL stay disabled. The helper preserves
+the existing PPO/PPG recipe and PFSP mechanics; fresh configuration generation
+also uses these neutral defaults. The completed IL filename is unchanged.
+
+## Archived g1340 continuation and DOMiNO context evaluation
 
 See [the implementation and continuation command](../ai-research/DOMINO_CONTEXT_EVALUATION_IMPLEMENTATION.md#enable-for-the-continuing-run).
 Use `scripts/configure-training-g1340.py` after the documented Ctrl-C recovery

@@ -30,8 +30,18 @@ Operations are `health`, `search`, `cancel` and `shutdown`; readiness uses ID 0.
 Search contains a full ticket, `allowance_ms`, `remaining_ms` and `input_json`.
 The ticket binds game instance, saved game ID, generation, revision, actor,
 profile, exact UTF-8 input digest and native source fingerprint. Only the
-permitted view, actor's recall, neutral feature context and bounded reward
+permitted view, actor's recall, an accepted industry feature context and bounded reward
 ledger are admitted. Full/private state and scripted/shuffle inputs are absent.
+
+Local release 1.4.46 admits exactly seven g890 profiles:
+`alpha-test-g890-{neutral,cotton,manufacturer,pottery,brewery,iron,coal}/1.0.0`.
+Readiness advertises the ordered `industry_focuses` list. The ticket profile must
+equal the input profile, and style/intent must exactly match the selected tag's
+`step5.policy.context_for` encoding (not merely contain finite values). Neutral
+uses twelve zeros; Cotton/Manufacturer/Pottery use style `[1,0,0,0]`, and
+Brewery/Iron/Coal use `[0,0,1,0]`. Intent is the corresponding one-hot channel in
+that six-industry order, followed by two zeros. This conditions the existing
+search request's NN evaluations; reward and search_v1 are unchanged.
 
 One existing Unity scheduler job owns one Pair. Each search has two independent
 single-threaded sessions. The reader/control thread only handles bounded I/O;
@@ -57,6 +67,13 @@ Human seats remain supported. Difficulty is independent per seat: different
 4/8/10/12-second choices can coexist within either family. A family change
 preserves the other seats' difficulty choices. Unsupported configurations omit
 Alpha Test and cannot start an existing unsupported NN draft.
+
+The NN / Alpha Test page offers Neutral and six industry tags independently for
+each seat. Apply persists the choice and Cancel discards the draft. Switching
+the whole table between NN and V4 retains the remembered NN tags. Menu preferences
+store `nn_focus` per seat; older preferences default to neutral. Native seat
+assignments bind `nn_focus` and its exact profile in the existing assignment hash.
+Older signed neutral saves without that field remain readable without rewriting.
 
 Native saves use `brass-local-native-save/1.0.0`, family `nn`, exact model/export
 identities and signed assignments/records. Existing V4 save mappings remain

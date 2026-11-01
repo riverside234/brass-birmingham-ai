@@ -319,6 +319,12 @@ def export(root, run, output=None, *, latest=2, extras=(), continue_export=False
 
     add(state_path, 'state.json', 'Committed configuration, lineage and progress', expected=True)
     require(files['state.json'][1] == state_bytes, 'Run advanced during export; retry')
+    seed=state.get('signature',{}).get('config',{}).get('fresh_selfplay_seed')
+    if seed is not None:
+        path=below(root,seed['manifest'])
+        require(path==run/'seed/manifest.json' and checksum(path.read_bytes())==seed['sha256'],
+                'Fresh-start seed manifest changed or belongs to another run')
+        add(path,'fresh-start.json','Weights-only source and imported history cutoff; no model tensors',expected=True)
     domino=state.get('domino_adoption')
     if domino is not None:
         add(run / f'domino-adoption-g{domino["generation"]:06d}.json', 'domino-adoption.json',

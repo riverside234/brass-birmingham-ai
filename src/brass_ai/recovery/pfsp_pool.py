@@ -42,6 +42,7 @@ def _distribution(pool,il_gate=None):
         1. if n==0 else min(1/(k+rule['offset']),rule['max'] or 1.))
     weights=[weight(m,c) for m in members];total=math.fsum(weights);floor=c['uniform_floor']
     rows=[dict(model_id=m['model_id'],generation=m['generation'],x_hat=rate(m),C=m['C'],w=w,
+        **(dict(imported_from=copy.deepcopy(m['imported_from'])) if 'imported_from' in m else {}),
         p=(1-floor)*w/total+floor/n if total else 1/n) for m,w in zip(members,weights)]
     result=dict(generation=pool['generation'],games_done=pool['games_done'],k=k,N=n,il_share=share,members=rows,
         effective_members=1/math.fsum(r['p']**2 for r in rows) if n else 0.,
@@ -79,7 +80,10 @@ def validate_state(pool,config,generation=None):
     require(len({m['model_id'] for m in members})==len(members) and sum(m['generation']==0 for m in members)==1,
         'PFSP membership duplicate or missing pinned IL')
     for m in members:
-        require(type(m['generation']) is int and 0<=m['generation']<=g and
+        if 'imported_from' in m:
+            from .fresh_selfplay import validate_import
+            validate_import(m)
+        require(type(m['generation']) is int and (m['generation']>=0 or 'imported_from' in m) and m['generation']<=g and
             type(m['admitted_iteration']) is int and m['generation']<=m['admitted_iteration']<=g,
             'Invalid PFSP admission iteration')
         require(not {'q','eta','recent_rates'}&set(m),'Quality-score fields are forbidden in PFSP state')
@@ -182,6 +186,7 @@ def update_counts(pool,rows,planned,*,generation,games_done):
                 iterations=m['alarm_streak'],reason='pool_regression',action='review_only'))
         used=old.get(m['model_id']);is_il=m['generation']==0 and 'il_gate' not in planned
         report.append(dict(model_id=m['model_id'],generation=m['generation'],age=generation-m['admitted_iteration'],
+            **(dict(imported_from=copy.deepcopy(m['imported_from'])) if 'imported_from' in m else {}),
             before=before,S=m['S'],C=m['C'],x_hat=rate(m),w=weight(m,c),
             p=used['p'] if used else None,w_used=used['w'] if used else None,
             seat_probability=planned['il_share'] if is_il else (1-planned['il_share'])*used['p'],
@@ -211,7 +216,8 @@ def admission(pool,entry,health,distances,pair_distance):
         if event['minimum_kl']<c['admit_min_kl']:event['reason']='insufficient_distinctness'
         else:
             scored=[m for m in pool['members'] if m['generation']!=0];e=c['evict']
-            newest={m['model_id'] for m in sorted(scored,key=lambda m:(m['admitted_iteration'],m['model_id']))[-e['protect_newest']:]}
+            newest={m['model_id'] for m in sorted(scored,key=lambda m:(m['admitted_iteration'],
+                m['generation'] if 'imported_from' in m else 0,m['model_id']))[-e['protect_newest']:]}
             eligible=[m for m in scored if m['model_id'] not in newest and g-m['admitted_iteration']>=e['min_age_iterations']
                 and m['C']>=e['min_decayed_comparisons']]
             event['eligible_members']=[m['model_id'] for m in eligible]

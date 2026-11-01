@@ -36,6 +36,7 @@ public sealed partial class LocalAiUnityDriver
         int holdUntil=Int32.Parse(Environment.GetEnvironmentVariable("BRASS_SEARCH_HOLD_UNTIL_MS")??"0");
         Check(holdUntil>=0 && holdUntil<=(scenario=="expired"?totalAllowance+100:totalAllowance),"late probe is within its declared scope");
         double temperature=Double.Parse(Environment.GetEnvironmentVariable("BRASS_NN_TEMPERATURE")??"1.0",System.Globalization.CultureInfo.InvariantCulture);
+        string industryFocus=Environment.GetEnvironmentVariable("BRASS_NN_FOCUS")??"neutral";
         int priorK=searchK==32?16:searchK;
         double priorTemperature=searchK==32?temperature:temperature==1.0?1.5:1.0;
         string method=(string)new NativePackage(NativePackage.Location,searchK,temperature).Policy["method"];
@@ -52,7 +53,9 @@ public sealed partial class LocalAiUnityDriver
         foreach(var start in game.GameStartConfiguration.Players)metadata.JoinGame(new PlayerMetadata{PlayerStartConfiguration=start,
             AiType=AIType.Hard,NickName="Alpha Test",PlayerNetworkId="local-"+start.Color});
         string difficulty=DifficultyCatalog.Keys.Single(k=>DifficultyCatalog.Milliseconds(k)==allowance);
-        var app=new BrassApplicationGame(game,metadata);var state=NativeGameState.Create(metadata,p=>difficulty,searchK,temperature);
+        int focusedActor=(int)game.GameProgressInformation.CurrentPlayer.Color;
+        var app=new BrassApplicationGame(game,metadata);var state=NativeGameState.Create(metadata,p=>difficulty,searchK,temperature,
+            p=>(int)p.PlayerStartConfiguration.Color==focusedActor?industryFocus:"neutral");
         state["game_id"]=metadata.GameId;state["ready"]=true;SaveExtensions.Set(metadata,state);
         history.Repository.Save(app);history.SetGame(app);
         int actor=(int)game.GameProgressInformation.CurrentPlayer.Color,initial=game.Revision;
@@ -123,6 +126,10 @@ public sealed partial class LocalAiUnityDriver
         Check(replies.All(r=>(double)r["policy_temperature"]==temperature && (string)r["temperature_scope"]=="all_nn_policy_evaluations"),"production bridge uses saved temperature for all evaluations");
         bool focused=replies.Any(r=>(bool?)r["search_revision"]?["focus"]?["switched"]==true);
         Check(replies.Count>0,"completed production search reply");
+        Check((string)input["context"]["profile_id"]==NativeFocus.Profile(industryFocus) &&
+            JToken.DeepEquals(input["context"]["style"],NativeFocus.Style(industryFocus)) &&
+            JToken.DeepEquals(input["context"]["intent"],NativeFocus.Intent(industryFocus)),"live NN input carries the selected industry context");
+        Check(replies.All(r=>(string)r["industry_focus"]==industryFocus && (string)r["ticket"]["profile"]==NativeFocus.Profile(industryFocus)),"native search confirms the selected industry tag");
         if(method=="search_v1")Check(replies.All(r=>r["search_revision"]==null),"search_v1 has no focus/composite revision");
         else Check(replies.All(r=>(string)r["search_revision"]?["focus"]?["method"]==method),"effective search method matches package");
         if(scenario=="expired") {
@@ -138,13 +145,14 @@ public sealed partial class LocalAiUnityDriver
             loaded=history.Repository.Load(metadata.GameId);Check(loaded.Game.Revision==game.Revision,"checkpoint includes next-turn boundary");
             Check(NativeGameState.SearchK(NativeGameState.Read(loaded.Metadata,false))==searchK,"completed-turn save/load retains chosen K");
             Check(NativeGameState.Temperature(NativeGameState.Read(loaded.Metadata,false))==temperature,"completed-turn save/load retains chosen temperature");
+            Check(NativeGameState.Focus(NativeGameState.Read(loaded.Metadata,false),actor)==industryFocus,"completed-turn save/load retains industry focus");
         }else {
             Check(intervened && game.TurnFlow.GetRemainingActionsCount()==1,"interruption prevented action two");
             if(loaded!=null)Check(loaded.Game.Revision==initial,"load discarded unsaved action and old receipt");
         }
         Check(errors.Count==0,"no Unity errors");
         File.WriteAllText(destination,new JObject{["passed"]=true,["scenario"]=scenario,["allowance_ms"]=allowance,["search_k"]=searchK,["focused"]=focused,
-            ["temperature"]=temperature,["search_method"]=method,
+            ["temperature"]=temperature,["search_method"]=method,["industry_focus"]=industryFocus,
             ["requests"]=requests,["initial_snapshot_ms"]=capture.Elapsed.TotalMilliseconds,["cold_warmup_ms"]=cold.Elapsed.TotalMilliseconds,
             ["delivery_grace_ms"]=grace,["total_allowance_ms"]=totalAllowance,["original_response_received_clock_ms"]=originalReceived,
             ["late_delivery_hold_until_ms"]=holdUntil,["late_delivery_resumed_ms"]=resumed,["native_reply_observed_clock_ms"]=replyObserved,

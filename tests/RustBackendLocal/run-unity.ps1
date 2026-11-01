@@ -1,6 +1,6 @@
 param([string]$BuildDirectory='artifacts/rust-backend/l13-dev',[switch]$Quick,[switch]$Matched,[ValidateRange(30,480)][int]$MaxSeconds=480,
  [ValidateSet('nn-human','nn-ai','v4-human','v4-two','v4-three','failures','nn-live','v4-live')][string]$ReleaseCase,
- [string]$EvidenceDirectory,[switch]$TurnHistory,[ValidateSet('write','read')][string]$SetupPreferences,[switch]$SearchV2)
+ [string]$EvidenceDirectory,[switch]$TurnHistory,[ValidateSet('write','read')][string]$SetupPreferences,[switch]$SearchV2,[switch]$IndustryFocus)
 $ErrorActionPreference='Stop'
 $localRoot=Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 $localBuild=Join-Path $localRoot $BuildDirectory
@@ -28,6 +28,7 @@ $localSources=@('tests/BrassLocalAI/LocalAiUnityTests.cs','tests/BrassLocalAI/Ai
 if($TurnHistory){$localSources+=@('tests/BrassPatch/TurnHistory/TurnHistoryRegression.cs','tests/BrassPatch/TurnHistory/TurnHistoryUnityTests.cs')}
 if($SetupPreferences){$localSources+=@('tests/BrassLocalAI/SetupPreferencesUnityTests.cs')}
 if($SearchV2){$localSources+=@('tests/RustBackendLocal/SearchV2UnityTests.cs')}
+if($IndustryFocus){$localSources+=@('tests/BrassLocalAI/IndustryFocusUnityTests.cs')}
 $localCompiled=@();$localSourcePins=@()
 foreach($source in $localSources){
  $target=Join-Path $localOut ('test-source/'+$source)

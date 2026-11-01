@@ -253,7 +253,10 @@ class PFSP(unittest.TestCase):
     def test_exact_review_allows_only_sampler_and_rehearsal_changes(self):
         from brass_ai.recovery.gae import evidence_config
         state=read(SOURCE_ROOT/'results/joint7-v11-2-grouped-lr-critic-g0085-20261019T172419550588Z/state.json')
-        signature=copy.deepcopy(state['signature']);signature['implementation']=implementation_id()
+        # This archived g85 migration has an explicitly reviewed historical
+        # destination; future binaries do not automatically authorize it.
+        signature=copy.deepcopy(state['signature'])
+        signature['implementation']='38206ae9ecec5db1b291066978738d247d40ebe112fc27b4f3a4332796caffca'
         signature['config']=sampling_config(evidence_config(signature['config']))
         self.assertTrue(check_signature(state,signature,reviewed=True))
         with self.assertRaises(ValueError):check_signature(state,signature)

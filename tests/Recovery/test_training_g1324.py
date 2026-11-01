@@ -54,7 +54,7 @@ class Revision(unittest.TestCase):
             move_distribution=dict(temperature_2=.5,exploration_q=.5)))
         for c in (old,new):
             self.assertEqual(validate_config(c),c)
-            self.assertEqual(latest_model_config(c,c['imitation_checkpoint'])['branching'],E.BALANCED_BRANCH)
+            self.assertEqual(latest_model_config(c,c['imitation_checkpoint'])['branching'],E.NEUTRAL_BRANCH)
         for changes in (dict(move_distribution=E.LEGACY_BRANCH['move_distribution']),dict(rate_per_decision=.015),
             dict(skip_opening_decisions=2)):
             bad=copy.deepcopy(new);bad['branching'].update(changes)

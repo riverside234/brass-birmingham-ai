@@ -17,7 +17,9 @@ from . import v4_share
 
 def plan_collection(root,directory,state,config,signature,service,current,profiles,opponent_specs,fast_specs,window,*,fingerprints=None,exploration=None):
     from .domino_config import enabled as domino_enabled
+    from .neutral_training import enabled as neutral_contexts
     diverse=domino_enabled(config)
+    neutral_seats=neutral_contexts(config)
     incumbent=state.get('champion') if champion_enabled(config) else None
     if incumbent:
         path=project_path(root,incumbent['path'])
@@ -106,15 +108,18 @@ def plan_collection(root,directory,state,config,signature,service,current,profil
             for seat,receipt in zip((s for s in range(4) if s not in pair),quality_receipts):receipt['seat']=seat
         for seat in range(4):
             if policies[(seat-rotation)%4]==learner:
-                if not diverse:
+                if not diverse and not neutral_seats:
                     point=context_counter%12;context_counter+=1
                     focuses[str(seat)]='neutral' if point%2==0 else INDUSTRIES[point//2]
+        if neutral_seats:
+            focuses={str(s):'neutral' for s in range(4) if policies[(s-rotation)%4].get('kind')=='neural'}
         provenance=dict(producer='recovery/2.0.0',purpose='training',kind=kind,
             ordinary_game_index=index,seed=seed,sampling_seed=config['seed']*7+index,spec=digest(signature),
             policies=[p.get('policy_id',p.get('kind')) for p in policies],rotation=rotation,
             learner_behavior=dict(model_id=current,policy_id=learner['policy_id'],
                                   exploration=config['exploration'],temperature=1.0,focus='mixed'))
         provenance['legacy_mode']='fast' if any(p.get('search_free') for p in policies) else ('searched' if kind=='legacy' else None)
+        if neutral_seats:provenance['seat_contexts']=config['seat_contexts']
         if exploration:
             provenance['exploration']=exploration
             provenance['learner_behavior'].update(exploration_version=exploration['version'],opening=exploration['opening'])

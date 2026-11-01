@@ -383,6 +383,7 @@ def v4_search_enabled(config):
 def latest_model_config(config,imitation_checkpoint):
     """Generate a fresh IL recipe from current settings, never a run snapshot."""
     result=copy.deepcopy(config)
+    result.pop('fresh_selfplay_seed',None)
     from brass_ai.learning.model import ARCHITECTURE,PARAMETER_LIMIT
     from .learning_rate import DEFAULT_WARMUP
     from .lr_controller import AUTO_CONTROLLER,AUTO_CONTRACT
@@ -485,6 +486,8 @@ def latest_model_config(config,imitation_checkpoint):
     result=g1340_recipe(result)
     from .policy_observations import configure as policy_observations_config
     result=policy_observations_config(result)
+    from .neutral_training import configure as neutral_config
+    result=neutral_config(result)
     return validate_config(result)
 
 
@@ -641,6 +644,12 @@ def validate_config(config):
         'search_ready_games','search_every_games','search_games','distill_steps','distill_weight',
         'rehearsal_manifest','rehearsal_weight','rehearsal_until','profile_steps'}
     version=config.get('format')
+    if 'seat_contexts' in config:
+        from .neutral_training import validate as validate_neutral
+        fields.add('seat_contexts');validate_neutral(config)
+    if 'fresh_selfplay_seed' in config:
+        from .fresh_selfplay import validate_config as validate_seed
+        fields.add('fresh_selfplay_seed');validate_seed(config)
     if 'teacher_phase' in config:
         from .teacher_phase_config import validate as validate_teacher_phase
         fields.add('teacher_phase');validate_teacher_phase(config)

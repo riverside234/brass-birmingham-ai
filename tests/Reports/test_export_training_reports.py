@@ -57,6 +57,19 @@ class ExportTests(unittest.TestCase):
         self.assertEqual(reports.load_json(output/'iteration-0059/report.json')['diversity'],evidence)
         self.assertEqual(reports.load_json(output/'retention-history.json')['iteration-0058/report.json']['diversity'],evidence)
 
+    def test_fresh_start_receipt_is_exported_without_checkpoint_tensors(self):
+        receipt=dict(seed_generation=1290,history_through=1330,reset=['optimizers','PPG_cache'])
+        path=self.put(self.run+'/seed/manifest.json',receipt)
+        self.state['signature']['config']['fresh_selfplay_seed']=dict(manifest=self.run+'/seed/manifest.json',
+            sha256=reports.checksum(path.read_bytes()))
+        self.put(self.run+'/state.json',self.state)
+        self.put(self.run+'/seed/weights-test.pt',b'not a report')
+        output,manifest=self.export()
+        self.assertEqual(reports.load_json(output/'fresh-start.json'),receipt)
+        self.assertFalse(list(output.rglob('*.pt')))
+        path.write_bytes(b'{}')
+        with self.assertRaisesRegex(ValueError,'seed manifest changed'):self.export()
+
     def assert_exported(self, entry, raw, source):
         self.assertEqual(len(raw),entry['bytes'])
         self.assertEqual(reports.checksum(raw),entry['sha256'])

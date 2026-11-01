@@ -77,10 +77,11 @@ class Revision(unittest.TestCase):
             fresh=latest_model_config(origin,origin['imitation_checkpoint'])
             from brass_ai.recovery.training_revision_g1324 import configure as latest_recipe
             from brass_ai.recovery.training_revision_g1340 import recipe as current_recipe
-            expected=current_recipe(latest_recipe(new))
+            from brass_ai.recovery.neutral_training import configure as neutral_recipe
+            expected=neutral_recipe(current_recipe(latest_recipe(new)))
             for k in ('insolvency','opening','branching','exploration','value_phase'):
                 self.assertEqual(fresh[k],expected[k],k)
-            self.assertEqual(fresh['update']['fixed_entropy'],E.FIXED_ENTROPY_010)
+            self.assertEqual(fresh['update']['fixed_entropy'],E.FIXED_ENTROPY_005)
         for block,key,value in [('opening','action_decisions_per_seat',2),('branching','skip_opening_decisions',2),
             ('entropy_control','mode','apply'),('update','opening_objective',O.DEFAULT),('update','entropy_weight',.015)]:
             bad=copy.deepcopy(new);bad[block][key]=value

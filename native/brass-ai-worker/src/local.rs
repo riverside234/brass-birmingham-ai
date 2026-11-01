@@ -208,6 +208,28 @@ fn emit(id: u64, status: &str, data: Value) -> io::Result<()> {
     );
     result
 }
+pub const INDUSTRY_FOCUSES: [&str; 7] = [
+    "neutral",
+    "cotton",
+    "manufacturer",
+    "pottery",
+    "brewery",
+    "iron",
+    "coal",
+];
+fn focus_context(profile: &str) -> Option<([f64; 4], [f64; 8])> {
+    let name = profile
+        .strip_prefix("alpha-test-g890-")?
+        .strip_suffix("/1.0.0")?;
+    let index = INDUSTRY_FOCUSES.iter().position(|f| *f == name)?;
+    let mut style = [0.; 4];
+    let mut intent = [0.; 8];
+    if index > 0 {
+        style[if index <= 3 { 0 } else { 2 }] = 1.;
+        intent[index - 1] = 1.;
+    }
+    Some((style, intent))
+}
 fn validate_input(ticket: &Ticket, input: &Input, allowance: u64, remaining: u64) -> Result<()> {
     search::check(
         manifest::label(&ticket.game_instance)
@@ -216,7 +238,7 @@ fn validate_input(ticket: &Ticket, input: &Input, allowance: u64, remaining: u64
             && ticket.revision == input.view.context.revision
             && ticket.actor == u8::from(input.view.seat)
             && ticket.actor < 4
-            && ticket.profile == PROFILE
+            && ticket.profile == input.context.profile_id
             && manifest::digest(&ticket.root_sha256)
             && ticket.source_sha256 == BuildIdentity::current().source_sha256
             && [4000, 8000, 10000, 12000].contains(&allowance)
@@ -228,9 +250,8 @@ fn validate_input(ticket: &Ticket, input: &Input, allowance: u64, remaining: u64
         input.context.model_id == MODEL
             && input.context.reward_id == REWARD
             && input.context.max_cost == 0.075
-            && input.context.profile_id == PROFILE
-            && input.context.style == [0.; 4]
-            && input.context.intent == [0.; 8]
+            && focus_context(&input.context.profile_id)
+                == Some((input.context.style, input.context.intent))
             && input.context.stable_descriptors.is_none()
             && input.shuffle_tape.is_none(),
         "unaccepted local model/profile or research input",
@@ -254,6 +275,7 @@ fn compact(d: Decision, ticket: Ticket, requested_k: usize, temperature: f32) ->
         "completed":d.lanes.iter().map(|l| l.outcome.completed).sum::<u64>(),
         "sessions":2,"threads_per_session":1,"retired":true,"requested_k":requested_k,
         "policy_temperature":temperature,"temperature_scope":"all_nn_policy_evaluations",
+        "industry_focus":ticket.profile.strip_prefix("alpha-test-g890-").and_then(|s| s.strip_suffix("/1.0.0")),
         "replay":{
             "version":"brass-local-replay/1.0.0",
             "root_epoch":d.result.root_epoch,
@@ -348,6 +370,7 @@ pub fn run() -> std::result::Result<(), Box<dyn std::error::Error>> {
         "delivery_grace_ms":DELIVERY_GRACE_MS,
         "host_delivery_reserve_ns_by_k":{"8":DELIVERY_GRACE_NS,"16":DELIVERY_GRACE_NS,"32":DELIVERY_GRACE_NS},
         "policy_temperature":temperature,"temperature_scope":"all_nn_policy_evaluations",
+        "industry_focuses":INDUSTRY_FOCUSES,
         "measured_readiness":{"warmup_passed":true,"native_nn_positions":warmup.lanes.iter().map(|l| l.neural.positions).sum::<usize>()},
         "max_frame_bytes":brass_ai_core::framing::MAX_FRAME_BYTES}),
     )?;
@@ -556,4 +579,40 @@ pub fn run() -> std::result::Result<(), Box<dyn std::error::Error>> {
     // EOF/broken transport retires both threads synchronously before process exit.
     drop(pair);
     Ok(())
+}
+
+#[cfg(test)]
+mod industry_focus_tests {
+    use super::*;
+    #[test]
+    fn seven_exact_context_encodings() {
+        for (i, name) in INDUSTRY_FOCUSES.iter().enumerate() {
+            let (style, intent) = focus_context(&format!("alpha-test-g890-{name}/1.0.0")).unwrap();
+            assert_eq!(
+                style,
+                [
+                    if (1..=3).contains(&i) { 1. } else { 0. },
+                    0.,
+                    if i >= 4 { 1. } else { 0. },
+                    0.
+                ]
+            );
+            for (j, value) in intent.iter().enumerate() {
+                assert_eq!(*value, if i > 0 && j == i - 1 { 1. } else { 0. });
+            }
+        }
+        assert_eq!(focus_context(PROFILE), Some(([0.; 4], [0.; 8])));
+    }
+    #[test]
+    fn unknown_profiles_and_versions_are_rejected() {
+        for profile in [
+            "alpha-test-g890-unknown/1.0.0",
+            "alpha-test-g890-cotton/2.0.0",
+            "alpha-test-g1340-cotton/1.0.0",
+            "neutral",
+            "",
+        ] {
+            assert!(focus_context(profile).is_none());
+        }
+    }
 }

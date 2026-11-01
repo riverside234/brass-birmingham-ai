@@ -255,6 +255,9 @@ def read_shards(paths,partition=None,receipts=None,*,heuristic_only=False,native
             # Descriptors are table metadata, separate from the immutable board
             # observation/Features-4 contract. The enclosing replay hash seals it.
             proof=jobs[ordinal]['provenance'] if jobs is not None else header['provenance']
+            if 'seat_contexts' in proof:
+                from .neutral_training import check_rows
+                for member in [game]+game.get('branches',[]):check_rows(member,proof)
             if 'local_scoring' in proof:
                 from .local_scoring_targets import FIELD,identity
                 require(all(proof['local_scoring'].get(k)==v for k,v in identity().items()),'Local scoring provenance differs')

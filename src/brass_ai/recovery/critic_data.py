@@ -101,12 +101,16 @@ def planned_table(policies,rotation,current,generation,members,learner_fp,rule_f
         learner_fp=rule_fp=neutral_fingerprint()
     lookup={m['model_id']:m for m in members};seats=[];values=[]
     for seat in range(4):
+        imported=None
         p=policies[(seat-rotation)%4];mid=p.get('model_id')
         if p.get('policy_id')==learner_policy_id:
             require(mid==current,'Learner descriptor model differs')
             role='learner';born=generation;fp=learner_fp
         elif mid in lookup:
             member=lookup[mid];born=member['generation'];role='il' if born==0 else 'snapshot'
+            if 'imported_from' in member:
+                from .fresh_selfplay import validate_import
+                imported=copy.deepcopy(validate_import(member))
             fp=learner_fp if neutral_fingerprints else member['fingerprint']
         elif p.get('kind') in ('external','legacy') or p.get('search_free'):
             role='rule_bot';born=generation;fp=rule_fp
@@ -120,9 +124,10 @@ def planned_table(policies,rotation,current,generation,members,learner_fp,rule_f
             if not neutral_fingerprints:
                 require(context_fingerprints is not None,'Missing context-aware fingerprint provider')
                 fp=context_fingerprints.get(mid,a['strategy_id'])
-        require(0<=born<=generation,'Opponent from a future generation')
+        require((born>=0 or imported is not None) and born<=generation,'Opponent from a future generation')
         seats.append(dict(role=role,generation=born,model_id=mid,policy_id=p.get('policy_id'),
-                          fingerprint_id=digest(fp),**(dict(strategy=a) if a is not None else {})))
+                          fingerprint_id=digest(fp),**(dict(strategy=a) if a is not None else {}),
+                          **(dict(imported_from=imported) if imported is not None else {})))
         values.append(descriptor(role,0 if role in ('learner','rule_bot') else generation-born,fp['values']))
     validate(values)
     return dict(contract=CONTRACT,generation=generation,seats=seats,stable=values,
@@ -154,9 +159,14 @@ def check_table(table,game,policy_id):
         if hasattr(game,'diversity_assignment'):
             require(record.get('strategy')==game.diversity_assignment['seats'][seat],
                     'Critic strategy differs from collection assignment')
-        require(type(record['generation']) is int and 0<=record['generation']<=table['generation'] and
+        imported='imported_from' in record
+        if imported:
+            from .fresh_selfplay import validate_import
+            validate_import(record)
+            require(role=='snapshot','Imported generation can only describe a frozen snapshot')
+        require(type(record['generation']) is int and (record['generation']>=0 or imported) and record['generation']<=table['generation'] and
                 values[seat,ROLES.index(role)]==1 and
-                (role!='snapshot' or 0<record['generation']<=table['generation']) and
+                (role!='snapshot' or record['generation']!=0) and
                 (role!='il' or record['generation']==0),'Invalid critic role/generation')
         expected_lag=0. if role in ('learner','rule_bot') else min(1.,math.log1p(table['generation']-record['generation'])/math.log1p(256))
         require(abs(float(values[seat,5])-expected_lag)<1e-7 and

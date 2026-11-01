@@ -12,6 +12,7 @@ namespace BrassLegacyAI
         {
             public bool Human;
             public string Style, Difficulty;
+            public string NeuralFocus = "neutral";
         }
         public AiFamily Family;
         public int PlayerCount;
@@ -28,7 +29,7 @@ namespace BrassLegacyAI
                 ["nn_search_k"] = SearchK,
                 ["nn_temperature"] = Temperature,
                 ["seats"] = new JArray(Seats.Select(s => new JObject {
-                    ["human"] = s.Human, ["style"] = s.Style, ["difficulty"] = s.Difficulty }))
+                    ["human"] = s.Human, ["style"] = s.Style, ["difficulty"] = s.Difficulty, ["nn_focus"] = s.NeuralFocus }))
             }.ToString(Newtonsoft.Json.Formatting.None);
         }
 
@@ -62,7 +63,10 @@ namespace BrassLegacyAI
                         seat["style"]?.Type != JTokenType.String || seat["difficulty"]?.Type != JTokenType.String ||
                         !LocalMenu.Choices.Contains((string)seat["style"]) ||
                         !DifficultyCatalog.Contains((string)seat["difficulty"])) return null;
-                    result.Seats[i] = new Seat { Human = (bool)seat["human"], Style = (string)seat["style"], Difficulty = (string)seat["difficulty"] };
+                    var focus = seat["nn_focus"];
+                    if (focus != null && (focus.Type != JTokenType.String || !Native.NativeFocus.Valid((string)focus))) return null;
+                    result.Seats[i] = new Seat { Human = (bool)seat["human"], Style = (string)seat["style"], Difficulty = (string)seat["difficulty"],
+                        NeuralFocus = focus == null ? "neutral" : (string)focus };
                 }
                 if (result.Family == AiFamily.AlphaTest && (count != 4 || result.Introductory)) return null;
                 return result;

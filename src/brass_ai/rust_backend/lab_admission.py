@@ -61,6 +61,7 @@ def binding(job, producer, *, generation, model_id, config, scope='ordinary'):
             'Search/teacher/unsupported policy in ordinary admission')
     require(bool('critic_table' in proof) == bool('critic_data' in config), 'Missing or unexpected critic table')
     require(proof.get('ppo_opening_objective') == config['update'].get('opening_objective'), 'Opening objective differs')
+    require(proof.get('seat_contexts') == config.get('seat_contexts'), 'Seat-context contract differs')
     local = config.get('local_scoring_auxiliary', {}).get('mode', 'off') != 'off'
     require(not local or 'local_scoring' in proof, 'Enabled auxiliary collection lacks recorder binding')
     value = dict(contract=CONTRACT, compatibility=digest(compatibility()), core_source=SOURCE,
@@ -143,6 +144,9 @@ def convert(family, admission, *, allow_diagnostic=False, arrays=None):
                     and part['producer']['runtime']['sha256'] == local['producer']['runtime_sha256'],
                     'Reference scoring provenance differs')
         game = check_game(game,[original.encoded(r,None) for r in original['records']],validated_inputs=True)
+        if 'seat_contexts' in proof:
+            from brass_ai.recovery.neutral_training import check_rows
+            check_rows(game,proof)
         if 'critic_table' in proof:
             from brass_ai.recovery.critic_data import check_table
             table = copy.deepcopy(proof['critic_table'])

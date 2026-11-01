@@ -61,6 +61,16 @@ namespace BrassLegacyAI.Native
             return (double)temperature;
         }
         public static JObject Create(GameMetadata metadata,Func<PlayerMetadata,string> difficulty,int searchK,double temperature)
+        { return Create(metadata,difficulty,searchK,temperature,p=>"neutral"); }
+        public static string Focus(JObject state,int color)
+        {
+            var row=state["assignments"].Single(r=>(int)r["color"]==color);
+            var token=row["nn_focus"];
+            if(token==null)return "neutral"; // Pre-tag saves retain neutral context.
+            if(token.Type!=JTokenType.String || !NativeFocus.Valid((string)token))throw new InvalidDataException("Unsupported saved NN industry focus");
+            return (string)token;
+        }
+        public static JObject Create(GameMetadata metadata,Func<PlayerMetadata,string> difficulty,int searchK,double temperature,Func<PlayerMetadata,string> focus)
         {
             if(!Supported(metadata))throw new InvalidDataException("Alpha Test requires standard four-player rules");
             if(!NativePackage.ValidSearchK(searchK))throw new InvalidDataException("Unsupported NN search K");
@@ -68,7 +78,8 @@ namespace BrassLegacyAI.Native
             var rows=new JArray(metadata.PlayerMetadata.Select(p=>{
                 var r=new JObject{["color"]=(int)p.PlayerStartConfiguration.Color,["sitting_order"]=p.PlayerStartConfiguration.SittingOrder,
                     ["kind"]=p.AiType==AIType.Human?"human":"native"};
-                if(p.AiType!=AIType.Human){r["strategy"]="alpha-test";r["backend"]=NativePackage.Backend;r["profile"]=NativePackage.Profile;
+                if(p.AiType!=AIType.Human){string tag=focus(p);if(!NativeFocus.Valid(tag))throw new InvalidDataException("Unsupported NN industry focus");
+                    r["nn_focus"]=tag;r["strategy"]="alpha-test";r["backend"]=NativePackage.Backend;r["profile"]=NativeFocus.Profile(tag);
                     r["model_id"]=NativePackage.Model;r["export_sha256"]=NativePackage.Export;r["execution"]=DifficultyCatalog.Snapshot(difficulty(p));}
                 return r;
             }));
@@ -94,8 +105,9 @@ namespace BrassLegacyAI.Native
             foreach(var p in metadata.PlayerMetadata) {
                 var r=rows.Single(x=>(int)x["color"]==(int)p.PlayerStartConfiguration.Color);bool human=p.AiType==AIType.Human;
                 if((int)r["sitting_order"]!=p.PlayerStartConfiguration.SittingOrder || (string)r["kind"]!=(human?"human":"native"))throw new InvalidDataException("Mixed or changed NN table");
-                if(human){if(r["execution"]!=null)throw new InvalidDataException("Unexpected human execution");continue;}
-                if((string)r["strategy"]!="alpha-test" || (string)r["backend"]!=NativePackage.Backend || (string)r["profile"]!=NativePackage.Profile ||
+                if(human){if(r["execution"]!=null || r["nn_focus"]!=null)throw new InvalidDataException("Unexpected human execution");continue;}
+                string focus=Focus(s,(int)p.PlayerStartConfiguration.Color);
+                if((string)r["strategy"]!="alpha-test" || (string)r["backend"]!=NativePackage.Backend || (string)r["profile"]!=NativeFocus.Profile(focus) ||
                     (string)r["model_id"]!=NativePackage.Model || (string)r["export_sha256"]!=NativePackage.Export)throw new InvalidDataException("Saved NN model differs");
                 DifficultyCatalog.Read(r["execution"]);
             }

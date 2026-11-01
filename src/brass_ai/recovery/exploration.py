@@ -10,6 +10,7 @@ GROUPS = ('canal_action', 'canal_other', 'rail_action', 'rail_other')
 FIXED_ENTROPY = dict(contract='fixed-group-entropy/1.0.0',
     weights=dict(canal_action=.015,canal_other=.005,rail_action=.015,rail_other=.005))
 FIXED_ENTROPY_010 = dict(contract='fixed-group-entropy/1.1.0',weights=dict.fromkeys(GROUPS,.10))
+FIXED_ENTROPY_005 = dict(contract='fixed-group-entropy/1.2.0',weights=dict.fromkeys(GROUPS,.005))
 FIXED_010_MIGRATION = 'fixed-group-entropy-010/1.0.0'
 Q = dict(contract='family-weighted-exploration/3.0.0', action_family_weights=FAMILY_WEIGHTS,
     unknown_action_kind_weight=1, pass_only_when_alone=True, industry_subgroups=['build','develop'],
@@ -47,6 +48,8 @@ THREE_BRANCH = dict(REVISED_BRANCH,contract='selfplay-branching/4.0.0',skip_open
 THREE_T2_BRANCH = dict(THREE_BRANCH,contract='selfplay-branching/5.0.0')
 BALANCED_BRANCH = dict(THREE_T2_BRANCH,contract='selfplay-branching/6.0.0',
     move_distribution=dict(temperature_2=.5,exploration_q=.5))
+NEUTRAL_BRANCH = dict(THREE_BRANCH,contract='selfplay-branching/7.0.0',
+    move_distribution=dict(temperature_1=.6,temperature_2=.3,exploration_q=.1))
 ROLLOUT = dict(contract='exploration-rollout/1.0.0', mode='fresh',
     opening_after_iterations=0, raw_entropy_after_iterations=0, branching_after_iterations=20)
 BLOCKS = ('exploration_distribution','entropy_control','opening','branching','exploration_rollout')
@@ -163,10 +166,11 @@ def validate(config):
     revised=(config['opening']==REVISED_OPENING and config['branching']==REVISED_BRANCH) or (
         config['opening']==THREE_OPENING and config['branching']==THREE_BRANCH)
     three_t2=config['opening']==THREE_T2_OPENING and config['branching'] in (THREE_T2_BRANCH,BALANCED_BRANCH)
-    current=(config['opening']==OPENING and config['branching'] in (BRANCH,LOCAL_SCORING_BRANCH)) or revised or three_t2
+    neutral=config['opening']==THREE_OPENING and config['branching']==NEUTRAL_BRANCH
+    current=(config['opening']==OPENING and config['branching'] in (BRANCH,LOCAL_SCORING_BRANCH)) or revised or three_t2 or neutral
     uniform=config['opening']==OPENING and config['branching']==HIGH_BRANCH
     legacy=config['opening']==LEGACY_OPENING and config['branching']==LEGACY_BRANCH
-    require(type(config['exploration']) in (int,float) and config['exploration'] in ((.08,.05) if three_t2 else (.05,) if revised else (0.,.02,.03)) and config['exploration_distribution']==Q and
+    require(type(config['exploration']) in (int,float) and config['exploration'] in ((.08,.05) if three_t2 else (.05,) if revised or neutral else (0.,.02,.03)) and config['exploration_distribution']==Q and
         (current or uniform or legacy), 'Invalid exploration revision recipe')
     e=config['entropy_control']
     require(type(e) is dict,'Invalid entropy floor controller')
@@ -184,10 +188,11 @@ def validate(config):
         comparable['promotion_origin']=ANCHOR_ENTROPY['promotion_origin']
     require(e.get('mode') in ('off','shadow','apply') and comparable in recipes,
         'Invalid entropy floor controller')
-    require(not (revised or three_t2) or (e['mode']=='off' and e['contract']==ANCHOR_ENTROPY['contract']),
+    require(not (revised or three_t2 or neutral) or (e['mode']=='off' and e['contract']==ANCHOR_ENTROPY['contract']),
         'Revised openings require fixed entropy with adaptive control disabled')
-    require(('fixed_entropy' in config['update'])==three_t2,'Fixed group entropy requires the three-decision T2 recipe')
-    if three_t2:validate_fixed_entropy(config['update']['fixed_entropy'])
+    require(('fixed_entropy' in config['update'])==(three_t2 or neutral),'Fixed group entropy requires a supported three-decision recipe')
+    if three_t2 or neutral:validate_fixed_entropy(config['update']['fixed_entropy'])
+    if neutral:require(config['update']['fixed_entropy']==FIXED_ENTROPY_005,'Neutral restart requires fixed 0.005 entropy')
     r=config['exploration_rollout']
     expected=dict(ROLLOUT,mode='staged',opening_after_iterations=1,raw_entropy_after_iterations=2) if r.get('mode')=='staged' else ROLLOUT
     require(r==expected, 'Invalid exploration adoption schedule')
@@ -201,7 +206,7 @@ def group(context):
 
 
 def validate_fixed_entropy(config):
-    require(type(config) is dict and config in (FIXED_ENTROPY,FIXED_ENTROPY_010) and
+    require(type(config) is dict and config in (FIXED_ENTROPY,FIXED_ENTROPY_010,FIXED_ENTROPY_005) and
         all(type(v) in (float,int) for v in config['weights'].values()),'Invalid fixed group entropy recipe')
     return config
 

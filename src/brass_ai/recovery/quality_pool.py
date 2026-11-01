@@ -12,7 +12,7 @@ from .quality_config import validate_pool,pfsp
 from . import pfsp_pool
 
 PAIRS=tuple(combinations(range(4),2))
-REF_FIELDS=('path','sha256','model_id','generation','weights_only')
+REF_FIELDS=('path','sha256','model_id','generation','weights_only','imported_from')
 
 
 def reference(member):return {k:member[k] for k in REF_FIELDS if k in member}

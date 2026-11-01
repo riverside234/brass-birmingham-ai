@@ -82,7 +82,7 @@ namespace BrassLegacyAI.Native
         {
             return new JObject{["lifetime"]=lifetime,["instance"]=instance,["game_id"]=gameId,["generation"]=generation,
                 ["request"]=request,["action"]=action,["revision"]=revision,["actor"]=actor,["phase"]=phase,
-                ["model"]=NativePackage.Model,["export"]=NativePackage.Export,["profile"]=NativePackage.Profile,
+                ["model"]=NativePackage.Model,["export"]=NativePackage.Export,["profile"]=reply?["ticket"]?["profile"]??NativePackage.Profile,
                 ["ticket"]=reply?["ticket"]?.DeepClone(),["backend"]=reply?["backend"],
                 ["reply_model"]=reply?["model_id"],["reply_export"]=reply?["export_sha256"]}.ToString(Formatting.None);
         }

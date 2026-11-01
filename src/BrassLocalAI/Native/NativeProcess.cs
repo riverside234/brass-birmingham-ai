@@ -64,6 +64,8 @@ namespace BrassLegacyAI.Native
                     throw new IOException("Native startup temperature mismatch");
                 if((int?)Readiness["delivery_grace_ms"]!=NativeJob.DeliveryGraceMilliseconds || (string)Readiness["host_delivery_reserve_policy"]!="search-plus-delivery/1.0.0")
                     throw new IOException("Native startup search/delivery budget mismatch");
+                if(!JToken.DeepEquals(Readiness["industry_focuses"],new JArray(NativeFocus.Keys)))
+                    throw new IOException("Native industry focus support differs");
             } catch {Dispose();throw;}
         }
         JObject Read()

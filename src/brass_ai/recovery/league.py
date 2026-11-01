@@ -157,18 +157,33 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
         if 'il_kl_limit' in config:allowed.add('il-kl')
         if config.get('value_phase',{}).get('enabled') is False:
             allowed.update(('.ppg-value-cache','.ppg-eight-cache'))
+        seed_manifest=None
+        if 'fresh_selfplay_seed' in config:
+            from . import fresh_selfplay
+            require(il_kl_probe_from_run is None,'Prepared fresh seed already contains its verified pool probe')
+            seed_manifest=fresh_selfplay.load_manifest(root,run,config)
+            require(bc_origin==seed_manifest['imitation_source'],'Fresh seed completed IL identity differs')
+            allowed.update(('seed','population','opponent-pool','initial.pt'))
         require(not run.exists() or all(p.name in allowed for p in run.iterdir()),'New recovery directory must be empty')
         if revised: torch.manual_seed(config['seed'])
         from brass_ai.learning.model import FourSeatNet
         require(initial is None and from_run is None,'Fresh training rejects --initial and --from-run; resume this same new run instead')
         origin=None;history=[];previous_games=0;cursor=config['seed']
-        model=FourSeatNet(ModelConfig.preset(config['model_size'])).to(device)
+        seed_origin=None
+        if seed_manifest is not None:
+            model,seed_origin=fresh_selfplay.seed_model(root,run,config,seed_manifest,device)
+        else:model=FourSeatNet(ModelConfig.preset(config['model_size'])).to(device)
         model.validate_parameter_count()
         state=dict(format='step5-recovery-league/2.2.0',signature=signature,iteration=0,games_done=0,
             previous_games=0,next_seed=cursor,history=[],origin=dict(initialization='random',seed=config['seed'],parameters=model.parameter_count),
             next_search_games=config['search_ready_games'],context_counter=0,evaluations=[],search_seconds=0.,ordinary_seconds=0.)
         from .demonstrations import fresh_imitation
-        if bc_origin:
+        if seed_manifest is not None:
+            state['origin'].update(seed_origin)
+            state['imitation']=dict(enabled=True,source=bc_origin,optimizer_reset_before_ppo=True,
+                note='Original completed IL retained for rehearsal, pool and ratings; learner initialized from separate PPO weights')
+            print(f'Fresh self-play from g{seed_origin["seed_generation"]} weights; generation/games zero, new Adam/RNG/PPG/PFSP state; all neural contexts neutral',flush=True)
+        elif bc_origin:
             model.load_state_dict(bc_model.state_dict())
             state['origin'].update(initialization='fresh-heuristic-imitation',**bc_origin)
             state['imitation']=dict(enabled=True,source=bc_origin,optimizer_reset_before_ppo=True,
@@ -192,7 +207,9 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                 from .il_kl_probe import import_probe
                 fixed_probe,receipt=import_probe(root,run,il_kl_probe_from_run,bc_origin,model,config['il_kl_limit'],config['update'])
             else:
-                fixed_probe,receipt=load_probe(root,run,bc_origin,model,config['il_kl_limit'],config['update'],config['audit_workers'])
+                fixed_probe,receipt=load_probe(root,run,bc_origin,bc_model if seed_manifest is not None else model,
+                    config['il_kl_limit'],config['update'],config['audit_workers'],
+                    receipt=seed_manifest['probe'] if seed_manifest is not None else None)
             initial_measure=None if observations_off else fixed_probe.measure(model,config['update'])
             if initial_measure is not None:
                 require(abs(initial_measure['kl_mean'])<=1e-10,
@@ -208,21 +225,28 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
         if quality:
             from . import quality_pool
             from brass_ai.learning.batching import model_id
-            anchor=dict(path=init_path.relative_to(root).as_posix(),sha256='pending',model_id=model_id(model),generation=0)
-            probe_ref=dict(fixed_probe.metadata['cache'],probe_hash=fixed_probe.metadata['probe_hash'])
-            state['quality_pool']=quality_pool.initial(anchor,config['opponent_pool'],probe_ref)
+            if seed_manifest is not None:
+                state['quality_pool'],state['evaluation_anchor']=fresh_selfplay.initialize_pool(root,run,config,seed_manifest,fixed_probe)
+            else:
+                anchor=dict(path=init_path.relative_to(root).as_posix(),sha256='pending',model_id=model_id(model),generation=0)
+                probe_ref=dict(fixed_probe.metadata['cache'],probe_hash=fixed_probe.metadata['probe_hash'])
+                state['quality_pool']=quality_pool.initial(anchor,config['opponent_pool'],probe_ref)
             if 'critic_data' in config and not observations_off:
                 from .critic_data import fingerprint
                 state['quality_pool']['members'][0]['fingerprint']=fingerprint(fixed_probe,fixed_probe.arrays['reference'])
-        save_checkpoint(init_path,model,optimizer,training=dict(mode='step5-fresh-residual-initial',parent=None,initialization=state['origin']['initialization'],fresh_run=run.relative_to(root).as_posix(),imitation=state['imitation'],
+        save_checkpoint(init_path,model,optimizer,training=dict(mode='step5-fresh-residual-initial',
+            parent=seed_origin['parent_model_id'] if seed_origin else None,signature=digest(signature),
+            initialization=state['origin']['initialization'],fresh_run=run.relative_to(root).as_posix(),imitation=state['imitation'],
+            **({'fresh_selfplay_seed':config['fresh_selfplay_seed']} if seed_manifest is not None else {}),
             **({'il_kl_limit':state['il_kl_limit']} if 'il_kl_limit' in config else {}),
             **({'exploration':state['exploration']} if 'exploration' in state else {}),
             **({'quality_pool_digest':quality_pool.state_digest(state['quality_pool'])} if quality else {})))
         raw=load_checkpoint(init_path,device=device)[1]
         state['history']=[dict(path=init_path.relative_to(root).as_posix(),sha256=sha(init_path),
             model_id=raw['model_id'],generation=0)]
-        state['evaluation_anchor']=state['history'][0]
-        if quality:state['quality_pool']['members'][0].update(state['evaluation_anchor'])
+        if seed_manifest is None:
+            state['evaluation_anchor']=state['history'][0]
+            if quality:state['quality_pool']['members'][0].update(state['evaluation_anchor'])
         activate_boost(state,config)
         if revised:
             from .retention import update_population
@@ -631,6 +655,8 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                 report['utilization']=iteration_utilization(inference_before,ordinary_inference,records,
                     load_began-began,len(games),config['execution'])
                 report['utilization']['replay_ingress']=ingress_metrics
+                if 'seat_contexts' in config:
+                    report['seat_contexts']=dict(config['seat_contexts'],diversity_enabled=False)
                 from .review_metrics import gate_diagnostics
                 report['gate_diagnostics']=gate_diagnostics(update,value_report,limit_report,quality_report)
                 if local_scoring_report is not None:

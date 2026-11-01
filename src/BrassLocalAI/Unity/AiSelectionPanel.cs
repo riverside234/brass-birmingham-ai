@@ -93,7 +93,7 @@ namespace BrassLegacyAI
             foreach (var family in new[] { AiFamily.V4, AiFamily.Gamma, AiFamily.AlphaTest }) {
                 panel.catalogs[family] = fixtureFamily == family && fixtureEntries != null ? Array.AsReadOnly(fixtureEntries) : AiSelectionCatalog.Entries(family);
                 panel.queries[family] = ""; panel.positions[family] = 1;
-                panel.drafts[family] = selectedChoice.Family == family ? selectedChoice : new AiChoice(family, family==AiFamily.AlphaTest?"alpha-test":"random");
+                panel.drafts[family] = selectedChoice.Family == family ? selectedChoice : new AiChoice(family, family==AiFamily.AlphaTest?Native.NativeFocus.ChoiceId(LocalMenu.NeuralTag(row.Player)):"random");
             }
             root.gameObject.AddComponent<LightUiTheme>();
             var menu = row.GetComponentsInParent<Frameworks.View.Menu.CreateGame.CreateOfflineGameView>(true).FirstOrDefault();
@@ -268,16 +268,17 @@ namespace BrassLegacyAI
             var randomEntry = RandomEntry(); random = Tile(randomEntry, window, bodyX, 260 + searchOffset, bodyWidth, 68, true);
             if(Family==AiFamily.AlphaTest)random.gameObject.SetActive(false);
             columns = Family == AiFamily.Gamma ? 4 : 3;
-            cardHeight = (Family == AiFamily.Gamma ? 146 : 216) * TextScale / 1.15f;
-            float gridHeight = Mathf.Max(80, height - 340 - searchOffset - footerHeight - 16);
-            viewport = AiWidgets.Rect(window, "Styles viewport", P(bodyX, 340 + searchOffset), S(bodyWidth, gridHeight)); viewport.gameObject.AddComponent<RectMask2D>();
+            cardHeight = (Family == AiFamily.V4 ? 216 : 146) * TextScale / 1.15f;
+            float gridTop = (Family == AiFamily.AlphaTest ? 260 : 340) + searchOffset;
+            float gridHeight = Mathf.Max(80, height - gridTop - footerHeight - 16);
+            viewport = AiWidgets.Rect(window, "Styles viewport", P(bodyX, gridTop), S(bodyWidth, gridHeight)); viewport.gameObject.AddComponent<RectMask2D>();
             viewport.gameObject.AddComponent<Image>().color = new Color(0, 0, 0, .001f);
             scroll = viewport.gameObject.AddComponent<ScrollRect>(); scroll.viewport = viewport; scroll.horizontal = false; scroll.vertical = true;
             scroll.scrollSensitivity = 38 * unit; scroll.movementType = ScrollRect.MovementType.Clamped;
             gridWidth = bodyWidth - 22;
             content = AiWidgets.Rect(viewport, "Styles", Vector2.zero, S(gridWidth, gridHeight)); scroll.content = content;
             empty = Text(viewport, "No results", "No matching AIs. Clear the search to see this page's roster.", 12, 12, bodyWidth - 32, 80, 21, true);
-            var scrollbar = Scrollbar(window, "AI grid scrollbar", bodyX + bodyWidth - 14, 340 + searchOffset, 14, gridHeight);
+            var scrollbar = Scrollbar(window, "AI grid scrollbar", bodyX + bodyWidth - 14, gridTop, 14, gridHeight);
             scroll.verticalScrollbar = scrollbar; scroll.verticalScrollbarVisibility = ScrollRect.ScrollbarVisibility.AutoHide;
             }
             float footerY = height - footerHeight;
@@ -405,7 +406,7 @@ namespace BrassLegacyAI
             string query = queries[Family].Trim(); var entries = catalogs[Family];
             var shown = entries.Where(e => query.Length == 0 || e.Name.IndexOf(query, StringComparison.OrdinalIgnoreCase) >= 0 ||
                 e.Description.IndexOf(query, StringComparison.OrdinalIgnoreCase) >= 0).ToArray();
-            countLabel.text = Family==AiFamily.AlphaTest ? "Test model · Experimental" : Family == AiFamily.Gamma ? shown.Length + " of " + entries.Count + " models · " + entries.Count(e => e.Available) + " available" +
+            countLabel.text = Family==AiFamily.AlphaTest ? "Test NN · Neutral + 6 industry tags" : Family == AiFamily.Gamma ? shown.Length + " of " + entries.Count + " models · " + entries.Count(e => e.Available) + " available" +
                 (entries.Any(e => e.Available) ? "" : " · Models not installed") : shown.Length + " of " + entries.Count + " styles · Plans adapt during play";
             float w = (gridWidth - (columns - 1) * 12) / columns;
             for (int i = 0; i < shown.Length; i++) tiles.Add(Tile(shown[i], content, (i % columns) * (w + 12), (i / columns) * (cardHeight + 12), w, cardHeight, false));

@@ -45,7 +45,7 @@ class Revision(unittest.TestCase):
         self.assertEqual(validate_config(old),old)
         for origin in (old,new):
             fresh=latest_model_config(origin,origin['imitation_checkpoint'])
-            self.assertEqual(fresh['insolvency'],CURRENT);self.assertEqual(fresh['exploration'],.05)
+            self.assertEqual(fresh['insolvency'],dict(event_cost=.02,max_cost=.075));self.assertEqual(fresh['exploration'],.05)
             self.assertEqual(latest_model_config(fresh,fresh['imitation_checkpoint']),fresh)
         for change in (dict(exploration=.06),dict(insolvency=dict(event_cost=.01,max_cost=.05))):
             with self.assertRaises(ValueError):configure(dict(old,**change))
