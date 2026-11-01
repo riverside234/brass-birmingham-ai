@@ -1,0 +1,90 @@
+{
+  "format": "migration-test-nn/1.0.0",
+  "created_utc": "2026-11-01T05:28:24.605351+00:00",
+  "source_run": "artifacts/step5/joint7-v11-2-grouped-lr-critic",
+  "committed_generation": 1360,
+  "state_sha256": "d50f4bc95d518d585b1c3065d84a882e30140448f57b286064182a7be3bcf2d9",
+  "recorded_checkpoint": {
+    "path": "artifacts/step5/joint7-v11-2-grouped-lr-critic/population/weights-73fd0aa12a7a6496414b03e106ae52367d865767922aed7b40ea88a7940891ff.pt",
+    "sha256": "e14d5b7a4596944ac7dec1b30c676b52ab79beb7bbf2e55a8b8540cc8a312937",
+    "model_id": "73fd0aa12a7a6496414b03e106ae52367d865767922aed7b40ea88a7940891ff",
+    "generation": 1290,
+    "weights_only": true
+  },
+  "checkpoint": {
+    "path": "checkpoint.pt",
+    "bytes": 23948555,
+    "sha256": "ed8edb039a1257d591cc0d2e2b87eb7a2d7aa411ce0f7710a2d7f8ad487dc3b0"
+  },
+  "parts": [
+    {
+      "path": "checkpoint.pt.part0001",
+      "bytes": 23948555,
+      "sha256": "ed8edb039a1257d591cc0d2e2b87eb7a2d7aa411ce0f7710a2d7f8ad487dc3b0"
+    }
+  ],
+  "metadata": [
+    {
+      "path": "state.json",
+      "bytes": 5058588,
+      "sha256": "d50f4bc95d518d585b1c3065d84a882e30140448f57b286064182a7be3bcf2d9"
+    },
+    {
+      "path": "config.json",
+      "bytes": 20936,
+      "sha256": "25fb72b69a0a33005924a480f64f7b8f8c5550aee1883fdf6f6468d700aec120"
+    },
+    {
+      "path": "source.json",
+      "bytes": 171,
+      "sha256": "3fd17ea9d2a6fbaba4a68c1cec1adae4811804651180047a61375d990eb554f6"
+    },
+    {
+      "path": "calibration.json",
+      "bytes": 59283,
+      "sha256": "114ecd7911df8cccda6a0e8f6876dd4dda1a1094b496f91f6745d167ba7487ac"
+    },
+    {
+      "path": "model-config.json",
+      "bytes": 749,
+      "sha256": "cdd4a26b1adffccd2568cf1953a691c19415e025ea396c669711ea371eea43ee"
+    },
+    {
+      "path": "validation-games/000.jsonl.gz",
+      "bytes": 3151267,
+      "sha256": "84d6b91217722e6903e95a608ddb61306ac0c61b53bdd6e632feaf16a06256f5"
+    },
+    {
+      "path": "validation-games/001.jsonl.gz",
+      "bytes": 3231875,
+      "sha256": "779c91263afb31dd90db6bf7b5fb693ceed18e4e063c006e70a5d97c506f405c"
+    },
+    {
+      "path": "validation-games/002.jsonl.gz",
+      "bytes": 3021602,
+      "sha256": "58fbc3a39e2d5c2f95eae543f6671dc8b4c16e5130992b639bd6777006807303"
+    },
+    {
+      "path": "validation-games/003.jsonl.gz",
+      "bytes": 3127517,
+      "sha256": "54129d694d2155e25ae09c671fc51aec1a1bb14bf752084fe393014a6b27845f"
+    }
+  ],
+  "config_scope": "Source run at snapshot time; checkpoint.model_config and reward are authoritative for an older best/anchor. Not a resume bundle.",
+  "derived_checkpoint": {
+    "path": "checkpoint.pt",
+    "generation": 1290,
+    "model_id": "73fd0aa12a7a6496414b03e106ae52367d865767922aed7b40ea88a7940891ff",
+    "sha256": "ed8edb039a1257d591cc0d2e2b87eb7a2d7aa411ce0f7710a2d7f8ad487dc3b0",
+    "derived": true
+  },
+  "calibration": {
+    "request_id": "f56bd03a91e661c5be0f941765ec9420c4729ef6caca0f8d294d61b3d3550670",
+    "ready": true,
+    "mode": "read-only-validation",
+    "weights_unchanged": true,
+    "source_checkpoint_sha256": "e14d5b7a4596944ac7dec1b30c676b52ab79beb7bbf2e55a8b8540cc8a312937",
+    "source_bundle": "joint7-v11-2-grouped-lr-critic-1b96e228-g1290-e14d5b7a4596-d50f4bc95d51",
+    "contract": "migration-utility-readonly-validation/1.0.0"
+  }
+}

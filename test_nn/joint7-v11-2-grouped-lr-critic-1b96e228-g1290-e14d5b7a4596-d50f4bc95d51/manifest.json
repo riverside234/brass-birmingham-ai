@@ -1,0 +1,44 @@
+{
+  "format": "migration-test-nn/1.0.0",
+  "created_utc": "2026-11-01T05:27:14.114402+00:00",
+  "source_run": "artifacts/step5/joint7-v11-2-grouped-lr-critic",
+  "committed_generation": 1360,
+  "state_sha256": "d50f4bc95d518d585b1c3065d84a882e30140448f57b286064182a7be3bcf2d9",
+  "recorded_checkpoint": {
+    "path": "artifacts/step5/joint7-v11-2-grouped-lr-critic/population/weights-73fd0aa12a7a6496414b03e106ae52367d865767922aed7b40ea88a7940891ff.pt",
+    "sha256": "e14d5b7a4596944ac7dec1b30c676b52ab79beb7bbf2e55a8b8540cc8a312937",
+    "model_id": "73fd0aa12a7a6496414b03e106ae52367d865767922aed7b40ea88a7940891ff",
+    "generation": 1290,
+    "weights_only": true
+  },
+  "checkpoint": {
+    "path": "checkpoint.pt",
+    "bytes": 23962643,
+    "sha256": "e14d5b7a4596944ac7dec1b30c676b52ab79beb7bbf2e55a8b8540cc8a312937"
+  },
+  "parts": [
+    {
+      "path": "checkpoint.pt.part0001",
+      "bytes": 23962643,
+      "sha256": "e14d5b7a4596944ac7dec1b30c676b52ab79beb7bbf2e55a8b8540cc8a312937"
+    }
+  ],
+  "metadata": [
+    {
+      "path": "state.json",
+      "bytes": 5058588,
+      "sha256": "d50f4bc95d518d585b1c3065d84a882e30140448f57b286064182a7be3bcf2d9"
+    },
+    {
+      "path": "config.json",
+      "bytes": 20936,
+      "sha256": "25fb72b69a0a33005924a480f64f7b8f8c5550aee1883fdf6f6468d700aec120"
+    },
+    {
+      "path": "source.json",
+      "bytes": 171,
+      "sha256": "3fd17ea9d2a6fbaba4a68c1cec1adae4811804651180047a61375d990eb554f6"
+    }
+  ],
+  "config_scope": "Source run at snapshot time; checkpoint.model_config and reward are authoritative for an older best/anchor. Not a resume bundle."
+}

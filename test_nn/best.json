@@ -1,10 +1,10 @@
 {
   "format": "migration-test-nn-selection/1.0.0",
   "selection": "best",
-  "selection_reason": "qualified policy anchor (not a global best claim)",
-  "bundle": "joint7-v11-2-grouped-lr-critic-1b96e228-g890-ecad3b932a8d-6bd7b0105b58",
-  "generation": 890,
-  "model_id": "1145fecba3289511df1c518bb71fbfb5b2f6df351777151a5eb999b89cba0761",
-  "checkpoint_sha256": "ecad3b932a8dd9d3b5d0cc49b5e9bb94a9e98b4536ffdc86a44179d003995cb8",
-  "manifest_sha256": "0fbfb482540b4651445b377ea563b56c413f30548c6b85f20130e6f4a35efc46"
+  "selection_reason": "qualified policy anchor (not a global best claim); read-only utility validation; weights unchanged",
+  "bundle": "joint7-v11-2-grouped-lr-critic-1b96e228-g1290-ed8edb039a12-d50f4bc95d51",
+  "generation": 1290,
+  "model_id": "73fd0aa12a7a6496414b03e106ae52367d865767922aed7b40ea88a7940891ff",
+  "checkpoint_sha256": "ed8edb039a1257d591cc0d2e2b87eb7a2d7aa411ce0f7710a2d7f8ad487dc3b0",
+  "manifest_sha256": "8f4ff167f834ffa350db13fa9fc27cd0c59dc9a698bc77c1e4475d9cfff8ceb8"
 }
