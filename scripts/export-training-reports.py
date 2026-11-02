@@ -24,7 +24,7 @@ import time
 
 
 ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_RUN = 'artifacts/step5/joint7-v11-1-grouped-lr'
+DEFAULT_RUN = 'artifacts/step5/joint7-v11-2-g1290-trained-restart'
 FORMAT = 'selfplay-report-export/1.3.0'
 PREVIOUS_FORMATS = {'selfplay-report-export/1.0.0', 'selfplay-report-export/1.1.0',
                     'selfplay-report-export/1.2.0', FORMAT}
@@ -407,7 +407,9 @@ def export(root, run, output=None, *, latest=2, extras=(), continue_export=False
     triggers=state.get('ratings',{}).get('panel_gates',{}).get('retired',{}).values()
     needed={t['generation'] for t in triggers if t is not None}
     coverage=state.get('ratings',{}).get('coverage',{}).get('activated')
-    if coverage:needed.update(t['generation'] for t in coverage['panels'].values())
+    # A manually authorized trained restart has no measured panel evidence.
+    # Its override remains in state.json; do not expect or invent a rating slot.
+    if coverage:needed.update(t['generation'] for t in coverage.get('panels',{}).values())
     if latest_slot is not None:needed.add(latest_slot['generation'])
     for slot in [s for s in slots if s['generation'] in needed]:
         slot_directory = below(root, Path(slot['report']['path']).parent)

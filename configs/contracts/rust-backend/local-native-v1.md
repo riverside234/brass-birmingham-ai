@@ -5,6 +5,14 @@ Windows x64. `brass-local-native/1.0.0` is distinct from the research protocol.
 The backend identity is `brass-gumbel-is-mcts/alpha-g890-v1`; its neutral profile
 is `alpha-test-g890-neutral/1.0.0`. This is a temporary local test model.
 
+Local release 1.4.48 additionally provides **Beta** with backend
+`brass-gumbel-is-mcts/beta-g1290-v1`, profile `beta-g1290-neutral/1.0.0`, and the
+exact g1290 model/export/checkpoint in `NN_BETA_G1290_GAME_UPDATE.md`. Beta supports
+neutral context only. Its completed read-only utility receipt is retained in the
+model manifest and checked against the pinned source model/checkpoint/request.
+Model, K and temperature changes retire the previous process before another
+two-owner worker starts. The original Alpha package remains valid for old saves.
+
 ## Admission and readiness
 
 Unity verifies the package file hashes before starting the child process. The
@@ -75,6 +83,13 @@ the draft. Signed assignments from existing games retain their bound profile;
 the backend's seven-profile admission remains available for save compatibility.
 Industry tags cannot be selected for new games. Older signed neutral saves
 without `nn_focus` remain readable without rewriting.
+
+Release 1.4.48 adds a Beta subtab under NN. Alpha Test and Beta each show one
+neutral model card. Apply chooses the model for the whole NN table and stores
+`nn_model` in setup preferences; an absent field retains Alpha Test. Native saves
+bind the model through their existing runtime/assignment hash, including each
+seat's backend, model, export and profile. Different NN models cannot mix in one
+table. Unknown/mismatched model identities stop without a fallback or save rewrite.
 
 Native saves use `brass-local-native-save/1.0.0`, family `nn`, exact model/export
 identities and signed assignments/records. Existing V4 save mappings remain

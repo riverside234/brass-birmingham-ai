@@ -9,22 +9,22 @@ cd /data/not_backed_up/yxu209/ai-training/
 python scripts/export-training-reports.py
 ```
 
-The default source is **`artifacts/step5/joint7-v11-1-grouped-lr`**, matching the
-[current fresh-start and continuation commands](MLP_V11_LAB.md#fresh-self-play-from-completed-v111-il).
+The default source is **`artifacts/step5/joint7-v11-2-g1290-trained-restart`**, matching the
+[current g1290 restart command](../ai-research/NEUTRAL_SELFPLAY_G1290_RESTART.md#start-on-the-lab-machine).
 The destination is automatically named with the run, committed generation, and
-UTC timestamp, for example `results/joint7-v11-1-grouped-lr-g0021-<timestamp>/`.
+UTC timestamp, for example `results/joint7-v11-2-g1290-trained-restart-g0021-<timestamp>/`.
 Choose another new folder under `results/` with `--output`; existing output
 folders are never overwritten:
 
 ```sh
-python scripts/export-training-reports.py --output results/joint7-v11-1-grouped-lr-review
+python scripts/export-training-reports.py --output results/joint7-v11-2-g1290-trained-restart-review
 ```
 
-For the current v11.2 run, export with incremental reuse:
+For the current g1290 restart, export with incremental reuse:
 
 ```sh
 python scripts/export-training-reports.py \
-  --run artifacts/step5/joint7-v11-2-grouped-lr-critic \
+  --run artifacts/step5/joint7-v11-2-g1290-trained-restart \
   --continue
 ```
 
@@ -35,6 +35,13 @@ It checks the actual old file, not just its manifest hash. New or changed report
 are copied normally; a missing or altered old copy is copied again. Exports from
 another run or a later generation are not used. With no prior export, this flag
 performs a normal first export.
+
+The new run uses its own committed generation, starting at zero. Its seed receipt
+is exported as `fresh-start.json`; startup overrides and auxiliary initialization
+receipts remain in `state.json`, and fitting/warmup metrics remain in iteration
+reports and compact history. Manual IL/v4 retirement and competitive-PL overrides
+need no measured panel files; they are preserved as manual permissions. Older
+`joint7-v11-2-grouped-lr-critic` exports are not reused for this separate run.
 
 The version-1.3 manifest lists newly copied reports in `files`, and skipped
 reports in `reused_files`, with `previous_export`, `previous_path`, and SHA-256.

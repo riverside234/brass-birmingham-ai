@@ -21,6 +21,9 @@ CHECKPOINT='ed8edb039a1257d591cc0d2e2b87eb7a2d7aa411ce0f7710a2d7f8ad487dc3b0'
 CALIBRATION='f56bd03a91e661c5be0f941765ec9420c4729ef6caca0f8d294d61b3d3550670'
 H=runpy.run_path(str(ROOT/'scripts/build-nn-search-choice.py'))
 sha,read,write,pins=(H[k] for k in ('sha','read','write','pins'))
+SCOPE=['src/BrassLocalAI/Policy/AiSelectionCatalog.cs','src/BrassLocalAI/Policy/LocalSetupPreferences.cs',
+       'src/BrassLocalAI/Unity/LocalMenu.cs','src/BrassLocalAI/Unity/AiSelectionPanel.cs']
+SCOPE+=['src/BrassLocalAI/Native/'+n+'.cs' for n in ('NativeModel','NativePackage','NativeProcess','NativeGameState','NativeInput','NativeValidation')]
 
 
 def export():
@@ -103,6 +106,127 @@ def native():
         binary_sha256=sha(out/'brass-ai-local.exe'),source_archive_sha256=sha(out/'native-source.zip'),feature='local-beta'))
 
 
+def package():
+    assert not OUT.exists(),'Preserve candidate'
+    installed=read(ROOT/'artifacts/patch-installation.json');old=read(BASE/'build-manifest.json')
+    assert installed['version']==old['version']=='1.4.47-rust-local' and read(BASE/'qualification.json')['passed']
+    assert pins(ROOT/'BrassNative')==old['nativeFiles']
+    for p in old['files']:assert sha(ROOT/'BrassBirminghamUnity_Data/Managed'/p['name'])==p['sha256']
+    n=read(STUDY/'native-build/native-build.json');model=read(STUDY/'model/manifest.json');assert n['passed']
+    assert model['model_id']==MODEL and model['checkpoint_sha256']==CHECKPOINT
+    for folder in ('runtime','Managed','BrassNative'):shutil.copytree(BASE/folder,OUT/folder)
+    for name in SCOPE:shutil.copyfile(ROOT/name,OUT/'runtime'/name)
+    rsp=OUT/'legacy.rsp';rsp.write_text((BASE/'legacy.rsp').read_text(encoding='utf-8-sig').replace(str(BASE),str(OUT))+
+        '\n"'+str(OUT/'runtime/src/BrassLocalAI/Native/NativeModel.cs')+'"\n',encoding='utf-8-sig')
+    subprocess.run([str(ROOT/'artifacts/patch-tools/microsoft.net.compilers.toolset.4.12.0/tasks/net472/csc.exe'),'@'+str(rsp)],check=True)
+    alpha=OUT/'BrassNative/alpha-g890';beta=OUT/'BrassNative/beta-g1290'
+    shutil.copytree(alpha,beta)
+    for name in ('brass-ai-local.exe','native-source.zip'):shutil.copyfile(STUDY/'native-build'/name,beta/name)
+    for p in (STUDY/'model').iterdir():
+        if p.is_file():shutil.copyfile(p,beta/'model'/p.name)
+    shutil.copyfile(BUNDLE/'manifest.json',beta/'model/checkpoint-manifest.json')
+    warm=read(beta/'warmup.json');warm['context'].update(model_id=MODEL,profile_id='beta-g1290-neutral/1.0.0',style=[0.]*4,intent=[0.]*8)
+    write(beta/'warmup.json',warm)
+    acceptance=dict(version='brass-local-utility-acceptance/1.0.0',scope='part1-local-beta-test',decision='user-2026-11-01',
+        model_id=MODEL,export_sha256=model['export_sha256'],checkpoint_sha256=CHECKPOINT,utility_calibration=model['utility_calibration'],final_model=False)
+    names=['policy.json','policy-k8.json','policy-k32.json','policy-t15.json','policy-k8-t15.json','policy-k32-t15.json']
+    for name in names:
+        policy=read(beta/name);policy.update(backend='brass-gumbel-is-mcts/beta-g1290-v1',
+            model_manifest_sha256=sha(beta/'model/manifest.json'),acceptance=acceptance,warmup_sha256=sha(beta/'warmup.json'))
+        assert policy['method']=='search_v1' and len(json.dumps(policy,indent=2).encode())<65536
+        write(beta/name,policy)
+    build=read(beta/'build.json');build.update(backend='brass-gumbel-is-mcts/beta-g1290-v1',scope='local-beta-test',source_sha256=n['source_sha256'])
+    for p in build['files']:p['sha256']=sha(beta/p['path'])
+    write(beta/'build.json',build)
+    (beta/'README.txt').write_text('Beta g1290 test NN. Neutral context. search_v1, V205 disabled.\n'
+        'Two independent ONNX Runtime CPU sessions; one compute thread per session.\n'
+        'Verified checkpoint and read-only utility receipt: model/checkpoint-manifest.json and model/calibration.json.\n'
+        'Build native/: cargo build --locked --release --bin brass-ai-local --features local-beta --target x86_64-pc-windows-gnu\n'
+        'Corresponding sources: native-source.zip and model/export-source.zip. Existing dependency notices apply.\n',encoding='utf-8')
+    old.update(version='1.4.48-rust-local',baseVersion=installed['version'],baseFiles=installed['files'],baseNative=pins(ROOT/'BrassNative'),
+        sourceScope=SCOPE,sourcePins=pins(OUT/'runtime'),files=[dict(name=p['name'],sha256=sha(OUT/'Managed'/p['name'])) for p in old['files']],
+        nativeFiles=pins(OUT/'BrassNative'),installed_baseline_receipt_sha256=sha(ROOT/'artifacts/patch-installation.json'),
+        beta_model_id=MODEL,beta_checkpoint_sha256=CHECKPOINT,beta_export_sha256=model['export_sha256'],
+        beta_native_source_sha256=n['source_sha256'],beta_native_build_sha256=sha(beta/'build.json'),
+        beta_native_build_receipt_sha256=sha(STUDY/'native-build/native-build.json'),nn_ui_choices=['alpha-test','beta'],
+        nn_ui_focuses=['neutral'],default_nn_focus='neutral',native_unchanged=False)
+    write(OUT/'build-manifest.json',old);shutil.copyfile(ROOT/'artifacts/patch-installation.json',STUDY/'before-installation.json')
+    write(STUDY/'user-data-before.json',dict(files=[dict(path=str(p),sha256=sha(p)) for directory in installed['saveDataPaths']
+        for p in Path(directory).rglob('*') if p.is_file()]))
+    print(OUT,flush=True)
+
+
+def unity(label):
+    d=STUDY/label;assert not d.exists(),'Preserve smoke evidence'
+    env=dict(os.environ,PYTHONDONTWRITEBYTECODE='1');env.pop('BRASS_INDUSTRY_FOCUS_TEST',None);env.pop('BRASS_L14_TRACE',None)
+    command=[shutil.which('pwsh'),'-NoProfile','-File',str(ROOT/'tests/RustBackendLocal/run-unity.ps1'),
+        '-BuildDirectory',str(OUT.relative_to(ROOT)),'-EvidenceDirectory',str(d.relative_to(ROOT)),'-MaxSeconds','60']
+    if label.startswith('ui-'):
+        env['BRASS_BETA_UI_TEST']=label[3:];command+=['-BetaUi']
+    elif label=='legacy-ui':
+        env.pop('BRASS_BETA_UI_TEST',None);command+=['-SetupPreferences','write']
+    else:
+        model='alpha-test' if label=='live-alpha' else 'beta';scenario='cancel' if label=='cancel-beta' else 'normal'
+        env.pop('BRASS_BETA_UI_TEST',None)
+        env.update(BRASS_SEARCH_V2_RESULT=str(d/'result.json'),
+            BRASS_SEARCH_V2_EVENTS=str(ROOT/'artifacts/rust-backend/20261026-l14-study-v2/trusted-live-fixtures/live-92781-CanalEra-2.json'),
+            BRASS_SEARCH_V2_MS='4000',BRASS_SEARCH_K='16',BRASS_NN_TEMPERATURE='1.0',BRASS_NN_FOCUS='neutral',
+            BRASS_NN_MODEL=model,BRASS_SEARCH_V2_SCENARIO=scenario,BRASS_SEARCH_HOLD_UNTIL_MS='0')
+        command+=['-SearchV2']
+    with (STUDY/(label+'.log')).open('w',encoding='utf-8') as log:
+        subprocess.run(command,cwd=ROOT,env=env,stdout=log,stderr=subprocess.STDOUT,check=True,timeout=85)
+    u=read(d/'unity.json');assert u['passed'] and not u['nativeErrors']
+    if label in ('live-alpha','live-beta','cancel-beta'):
+        r=read(d/'result.json');assert r['passed'] and r['nn_model']==model and r['search_method']=='search_v1'
+        assert all(x['model_id']==(MODEL if model=='beta' else read(BASE/'BrassNative/alpha-g890/model/manifest.json')['model_id']) for x in r['replies'])
+        if scenario=='normal':assert len(r['commits'])==2 and r['commits'][-1]['remaining']==0 and r['turn_clock_ms']<5000
+        else:assert r['commits'][-1]['remaining']==1
+    print(label,u['checks'],'checks',flush=True)
+
+
+def qualify():
+    assert not (OUT/'qualification.json').exists()
+    m=read(OUT/'build-manifest.json');old=read(BASE/'build-manifest.json');previous={p['path']:p['sha256'] for p in old['sourcePins']}
+    assert {p['path'] for p in m['sourcePins'] if previous.get(p['path'])!=p['sha256']}==set(SCOPE)
+    for p in m['sourcePins']:assert sha(OUT/'runtime'/p['path'])==p['sha256']
+    for p in SCOPE:assert (ROOT/p).read_bytes()==(OUT/'runtime'/p).read_bytes()
+    for p in m['files']:
+        assert sha(OUT/'Managed'/p['name'])==p['sha256']
+        if p['name']!='BrassLegacyAI.dll':assert p in old['files']
+    assert pins(OUT/'BrassNative')==m['nativeFiles']
+    for p in m['baseNative']:assert p in m['nativeFiles'] and sha(ROOT/'BrassNative'/p['path'])==p['sha256']
+    assert len(m['nativeFiles'])==len(m['baseNative'])+len([p for p in m['nativeFiles'] if p['path'].startswith('beta-g1290/')])
+    assert sha(BUNDLE/'checkpoint.pt')==CHECKPOINT and read(STUDY/'model/export-receipt.json')['passed']
+    assert read(OUT/'BrassNative/beta-g1290/model/manifest.json')['model_id']==MODEL
+    native=read(STUDY/'native-build/native-build.json');assert native['passed'] and native['feature']=='local-beta'
+    support=runpy.run_path(str(ROOT/'scripts/qualify-rust-scaffold.py'));env,_=support['tool_environment']()
+    formatter=ROOT/'artifacts/native-toolchain/rustup/toolchains/1.99.1-x86_64-pc-windows-gnu/bin/rustfmt.exe'
+    for name in native['scope']:
+        archived=(STUDY/'native-build/n'/name).read_bytes()
+        if name.endswith('.rs'):
+            actual=subprocess.run([str(formatter),'--edition','2021','--emit','stdout','--config','skip_children=true'],
+                input=(ROOT/name).read_bytes(),capture_output=True,env=env,check=True).stdout
+        else:actual=(ROOT/name).read_bytes()
+        assert actual.replace(b'\r\n',b'\n')==archived.replace(b'\r\n',b'\n'),'Native source differs: '+name
+    evidence=[]
+    for label in ('ui-write','ui-read','legacy-ui','live-beta','cancel-beta','live-alpha'):
+        d=STUDY/label;t=read(d/'test-build.json');u=read(d/'unity.json')
+        assert u['passed'] and not u['nativeErrors']
+        assert t['candidateManifestSha256']==sha(OUT/'build-manifest.json') and t['testDllSha256']==sha(d/'LocalAiUnityTests.dll')
+        for p in t['sources']:assert sha(d/'test-source'/p['path'])==p['sha256']
+        evidence.append(dict(label=label,checks=u['checks'],unity_sha256=sha(d/'unity.json'),test_build_sha256=sha(d/'test-build.json')))
+    images=OUT/'evidence';images.mkdir()
+    for name in ('beta-1080-largest.png',):
+        shutil.copyfile(ROOT/'artifacts/card-tracker-player/artifacts/patch-build'/name,images/name)
+    write(OUT/'qualification.json',dict(format='brass-nn-beta-release/1.0.0',passed=True,version=m['version'],
+        build_manifest_sha256=sha(OUT/'build-manifest.json'),beta_native_build_receipt_sha256=sha(STUDY/'native-build/native-build.json'),
+        export_receipt_sha256=sha(STUDY/'model/export-receipt.json'),beta_model_id=MODEL,beta_checkpoint_sha256=CHECKPOINT,
+        existing_alpha_package_unchanged=True,source_scope=SCOPE,evidence=evidence,files=pins(OUT),
+        scope='Short local game functional qualification; no strength or long-session claim.'))
+    print('Qualified exact g1290 Beta package; Alpha preserved',flush=True)
+
+
 if __name__=='__main__':
-    parser=argparse.ArgumentParser();parser.add_argument('stage',choices=('export','native'))
-    stage=parser.parse_args().stage;STUDY.mkdir(parents=True,exist_ok=True);globals()[stage]()
+    parser=argparse.ArgumentParser();parser.add_argument('stage',choices=('export','native','package','ui-write','ui-read','legacy-ui','live-beta','live-alpha','cancel-beta','qualify'))
+    stage=parser.parse_args().stage;STUDY.mkdir(parents=True,exist_ok=True)
+    unity(stage) if stage.startswith(('ui-','live-','cancel-')) or stage=='legacy-ui' else globals()[stage]()

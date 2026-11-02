@@ -184,11 +184,15 @@ Export its reports explicitly:
 
 ```bash
 python scripts/export-training-reports.py \
-  --run artifacts/step5/joint7-v11-2-g1290-trained-restart
+  --run artifacts/step5/joint7-v11-2-g1290-trained-restart \
+  --continue
 ```
 
 The exporter now includes `fresh-start.json` with source/cutoff receipts, alongside
-the ordinary reports. It never exports checkpoint tensors or PPG arrays.
+the ordinary reports. This run is also the exporter's default. `--continue`
+reuses verified unchanged reports only from earlier exports of this same new
+run; keep any bundles referenced in `export-manifest.json`. Manual startup
+overrides need no measured panel files. Checkpoint tensors and PPG arrays are excluded.
 
 ## Validation scope
 

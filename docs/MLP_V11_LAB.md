@@ -675,10 +675,11 @@ After an iteration finishes, collect the analysis bundle with:
 
 ```bash
 python scripts/export-training-reports.py \
-  --run artifacts/step5/joint7-v11-2-grouped-lr-critic
+  --run artifacts/step5/joint7-v11-2-g1290-trained-restart \
+  --continue
 ```
 
-The explicit `--run` selects the new GAE/value run; the script's older default run name is unchanged. The destination is a new `results/joint7-v11-2-grouped-lr-critic-gNNNN-<UTC timestamp>/` folder. It includes the latest two committed full iteration reports, available compact history and evaluation reports, the saved config, and the originating IL reports. Descriptor/role/EV gate diagnostics, GAE/value diagnostics, exact categorical KL, grouped anchor evidence, LR decisions, actual learner/sample usage, PFSP estimates/plans/alarms, membership and disabled-teacher status are preserved. Recent rating specs/reports, compact outcome JSONL, panels and SVG curves are included together with the active cumulative rating archive; dense probe/bootstrap tensors and full replay shards are excluded. Use your actual `--run` if it differs. The original completed IL stays at `artifacts/step5/features4-v11-1-batch7-il`; the new handoff is `artifacts/step5/features4-v11-2-batch7-il`. See [export options](EXPORT_TRAINING_REPORTS.md).
+The explicit `--run` selects the current g1290 restart and matches the exporter's default. The destination is a new `results/joint7-v11-2-g1290-trained-restart-gNNNN-<UTC timestamp>/` folder, using this run's own committed generation. It includes the latest two committed full iteration reports, compact history, saved config, `fresh-start.json`, available rating evidence and originating IL reports. Manual startup permissions remain in state without fabricated panel evidence; auxiliary initialization and warmup metrics are retained. `--continue` reuses verified unchanged reports only from this same run; keep earlier bundles referenced by its manifest. Use `--run artifacts/step5/joint7-v11-2-grouped-lr-critic` to export the old source run instead. The completed IL remains `artifacts/step5/features4-v11-2-batch7-il`. See [export options](EXPORT_TRAINING_REPORTS.md).
 
 ## Small local checks
 

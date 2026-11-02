@@ -1,0 +1,10 @@
+[
+  {
+    "targetType": "Frameworks.View.Animation.DOTweenAnimationSequence",
+    "targetMethod": "Play",
+    "parameterTypes": [],
+    "helperType": "BrassPatch.Presentation.ReplaySpeed",
+    "helperMethod": "BeforePlay",
+    "mode": "prefix"
+  }
+]

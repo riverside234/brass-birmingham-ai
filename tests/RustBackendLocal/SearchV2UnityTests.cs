@@ -37,9 +37,10 @@ public sealed partial class LocalAiUnityDriver
         Check(holdUntil>=0 && holdUntil<=(scenario=="expired"?totalAllowance+100:totalAllowance),"late probe is within its declared scope");
         double temperature=Double.Parse(Environment.GetEnvironmentVariable("BRASS_NN_TEMPERATURE")??"1.0",System.Globalization.CultureInfo.InvariantCulture);
         string industryFocus=Environment.GetEnvironmentVariable("BRASS_NN_FOCUS")??"neutral";
+        var selectedModel=NativeModel.FromChoice(Environment.GetEnvironmentVariable("BRASS_NN_MODEL")??"alpha-test");
         int priorK=searchK==32?16:searchK;
         double priorTemperature=searchK==32?temperature:temperature==1.0?1.5:1.0;
-        string method=(string)new NativePackage(NativePackage.Location,searchK,temperature).Policy["method"];
+        string method=(string)new NativePackage(selectedModel.Location,searchK,temperature).Policy["method"];
         Check(!File.Exists(destination),"fresh search study output");
         yield return SceneManager.LoadSceneAsync("GameScene");yield return null;router.ReloadPrefabs();
         var view=(Frameworks.View.Game.PlayAiTurnView)router.GetView<IPlayAiTurnView>();
@@ -55,7 +56,7 @@ public sealed partial class LocalAiUnityDriver
         string difficulty=DifficultyCatalog.Keys.Single(k=>DifficultyCatalog.Milliseconds(k)==allowance);
         int focusedActor=(int)game.GameProgressInformation.CurrentPlayer.Color;
         var app=new BrassApplicationGame(game,metadata);var state=NativeGameState.Create(metadata,p=>difficulty,searchK,temperature,
-            p=>(int)p.PlayerStartConfiguration.Color==focusedActor?industryFocus:"neutral");
+            p=>(int)p.PlayerStartConfiguration.Color==focusedActor?industryFocus:"neutral",selectedModel);
         state["game_id"]=metadata.GameId;state["ready"]=true;SaveExtensions.Set(metadata,state);
         history.Repository.Save(app);history.SetGame(app);
         int actor=(int)game.GameProgressInformation.CurrentPlayer.Color,initial=game.Revision;
@@ -63,20 +64,22 @@ public sealed partial class LocalAiUnityDriver
         var capture=Stopwatch.StartNew();var input=NativeInput.Capture(app,replay,actor,new JArray());capture.Stop();
         // Warm the other policy first, then switch under the scheduler lease.
         // This exercises table replacement without retaining two worker pools.
-        var cold=Stopwatch.StartNew();var warmRequest=NativeInput.Request(input,"warm-"+Guid.NewGuid().ToString("N"),metadata.GameId,1,4000);
+        var priorModel=NativeModel.Alpha;var warmInput=(JObject)input.DeepClone();
+        warmInput["context"]["model_id"]=priorModel.Model;warmInput["context"]["profile_id"]=priorModel.Profile(industryFocus);
+        var cold=Stopwatch.StartNew();var warmRequest=NativeInput.Request(warmInput,"warm-"+Guid.NewGuid().ToString("N"),metadata.GameId,1,4000);
         var warm=new NativeJob(warmRequest,new Stopwatch(),4000,priorK,priorTemperature);
         var warmJob=AiExecutionScheduler.Submit(warm);while(!warmJob.Completion.IsCompleted)yield return null;
         Check(warmJob.Failure==null,"native warmup");cold.Stop();history.SetGame(app);
-        var priorWorker=Get<Process>(NativeProcess.Shared(priorK,priorTemperature),"process");
+        var priorWorker=Get<Process>(NativeProcess.Shared(priorK,priorTemperature,priorModel),"process");
         warmRequest=NativeInput.Request(input,"warm-selected-"+Guid.NewGuid().ToString("N"),metadata.GameId,1,4000);
         warm=new NativeJob(warmRequest,new Stopwatch(),4000,searchK,temperature);warmJob=AiExecutionScheduler.Submit(warm);
         while(!warmJob.Completion.IsCompleted)yield return null;
         Check(warmJob.Failure==null && (int)warm.Result["requested_k"]==searchK,"selected K worker warmed under scheduler");
         bool retired=false;try{retired=priorWorker.HasExited;}catch(InvalidOperationException){retired=true;}
         Check(retired,"previous K worker retired before replacement");
-        var process=Process.GetCurrentProcess();var worker=Get<Process>(NativeProcess.Shared(searchK,temperature),"process");
-        Check(NativeProcess.Shared(searchK,temperature).Readiness["k_by_allowance_ms"].Children<JProperty>().All(p=>(int)p.Value==searchK),"native readiness maps all budgets to selected K");
-        Check((double)NativeProcess.Shared(searchK,temperature).Readiness["policy_temperature"]==temperature,"worker readiness binds selected temperature");
+        var process=Process.GetCurrentProcess();var worker=Get<Process>(NativeProcess.Shared(searchK,temperature,selectedModel),"process");
+        Check(NativeProcess.Shared(searchK,temperature,selectedModel).Readiness["k_by_allowance_ms"].Children<JProperty>().All(p=>(int)p.Value==searchK),"native readiness maps all budgets to selected K");
+        Check((double)NativeProcess.Shared(searchK,temperature,selectedModel).Readiness["policy_temperature"]==temperature,"worker readiness binds selected temperature");
         process.Refresh();worker.Refresh();var cpu=process.TotalProcessorTime;var workerCpu=worker.TotalProcessorTime;
         var timer=Stopwatch.StartNew();var jobs=new List<NativeJob>();var commits=new JArray();
         int previous=initial,requests=0;bool intervened=false;BrassApplicationGame loaded=null;
@@ -126,10 +129,11 @@ public sealed partial class LocalAiUnityDriver
         Check(replies.All(r=>(double)r["policy_temperature"]==temperature && (string)r["temperature_scope"]=="all_nn_policy_evaluations"),"production bridge uses saved temperature for all evaluations");
         bool focused=replies.Any(r=>(bool?)r["search_revision"]?["focus"]?["switched"]==true);
         Check(replies.Count>0,"completed production search reply");
-        Check((string)input["context"]["profile_id"]==NativeFocus.Profile(industryFocus) &&
+        Check((string)input["context"]["profile_id"]==selectedModel.Profile(industryFocus) &&
             JToken.DeepEquals(input["context"]["style"],NativeFocus.Style(industryFocus)) &&
             JToken.DeepEquals(input["context"]["intent"],NativeFocus.Intent(industryFocus)),"live NN input carries the selected industry context");
-        Check(replies.All(r=>(string)r["industry_focus"]==industryFocus && (string)r["ticket"]["profile"]==NativeFocus.Profile(industryFocus)),"native search confirms the selected industry tag");
+        Check(replies.All(r=>(string)r["industry_focus"]==industryFocus && (string)r["ticket"]["profile"]==selectedModel.Profile(industryFocus) &&
+            (string)r["model_id"]==selectedModel.Model && (string)r["export_sha256"]==selectedModel.Export && (string)r["backend"]==selectedModel.Backend),"native search confirms the selected model and neutral tag");
         if(method=="search_v1")Check(replies.All(r=>r["search_revision"]==null),"search_v1 has no focus/composite revision");
         else Check(replies.All(r=>(string)r["search_revision"]?["focus"]?["method"]==method),"effective search method matches package");
         if(scenario=="expired") {
@@ -146,19 +150,20 @@ public sealed partial class LocalAiUnityDriver
             Check(NativeGameState.SearchK(NativeGameState.Read(loaded.Metadata,false))==searchK,"completed-turn save/load retains chosen K");
             Check(NativeGameState.Temperature(NativeGameState.Read(loaded.Metadata,false))==temperature,"completed-turn save/load retains chosen temperature");
             Check(NativeGameState.Focus(NativeGameState.Read(loaded.Metadata,false),actor)==industryFocus,"completed-turn save/load retains industry focus");
+            Check(NativeGameState.Model(NativeGameState.Read(loaded.Metadata,false))==selectedModel,"completed-turn save/load retains selected NN model");
         }else {
             Check(intervened && game.TurnFlow.GetRemainingActionsCount()==1,"interruption prevented action two");
             if(loaded!=null)Check(loaded.Game.Revision==initial,"load discarded unsaved action and old receipt");
         }
         Check(errors.Count==0,"no Unity errors");
         File.WriteAllText(destination,new JObject{["passed"]=true,["scenario"]=scenario,["allowance_ms"]=allowance,["search_k"]=searchK,["focused"]=focused,
-            ["temperature"]=temperature,["search_method"]=method,["industry_focus"]=industryFocus,
+            ["temperature"]=temperature,["search_method"]=method,["industry_focus"]=industryFocus,["nn_model"]=selectedModel.Key,
             ["requests"]=requests,["initial_snapshot_ms"]=capture.Elapsed.TotalMilliseconds,["cold_warmup_ms"]=cold.Elapsed.TotalMilliseconds,
             ["delivery_grace_ms"]=grace,["total_allowance_ms"]=totalAllowance,["original_response_received_clock_ms"]=originalReceived,
             ["late_delivery_hold_until_ms"]=holdUntil,["late_delivery_resumed_ms"]=resumed,["native_reply_observed_clock_ms"]=replyObserved,
             ["turn_clock_ms"]=turnClockMs,["delivery_tail_after_resume_ms"]=resumed<0?JValue.CreateNull():new JValue(turnClockMs-resumed),
             ["delivery_ms"]=timer.Elapsed.TotalMilliseconds,["unity_cpu_ms"]=(process.TotalProcessorTime-cpu).TotalMilliseconds,
             ["native_cpu_ms"]=(worker.TotalProcessorTime-workerCpu).TotalMilliseconds,["native_peak_bytes"]=worker.PeakWorkingSet64>0?new JValue(worker.PeakWorkingSet64):JValue.CreateNull(),
-            ["commits"]=commits,["input"]=input,["replies"]=replies,["readiness"]=NativeProcess.Shared(searchK,temperature).Readiness}.ToString());
+            ["commits"]=commits,["input"]=input,["replies"]=replies,["readiness"]=NativeProcess.Shared(searchK,temperature,selectedModel).Readiness}.ToString());
     }
 }

@@ -70,6 +70,53 @@ class ExportTests(unittest.TestCase):
         path.write_bytes(b'{}')
         with self.assertRaisesRegex(ValueError,'seed manifest changed'):self.export()
 
+    def test_trained_restart_default_cli_and_incremental_manual_panel_overrides(self):
+        self.run='artifacts/step5/joint7-v11-2-g1290-trained-restart'
+        receipt=dict(seed_generation=1290,history_through=1330)
+        seed=self.put(self.run+'/seed/manifest.json',receipt)
+        auth=dict(contract='trained-selfplay-startup/1.0.0',authority='user',generation=0)
+        retired={name:dict(contract='manual-training-qualification/1.0.0',kind='manual_override',
+            generation=0,panel=name,authorization=auth,measured=False) for name in ('il-panel','v4-panel')}
+        self.state=dict(format='step5-recovery-league/2.2.0',iteration=1,games_done=320,
+            signature=dict(implementation='recorded-source',config=dict(fresh_selfplay_seed=dict(
+                manifest=self.run+'/seed/manifest.json',sha256=reports.checksum(seed.read_bytes())))),
+            ratings=dict(slots=[],startup_override=auth,panel_gates=dict(retired=retired),
+                coverage=dict(activated=dict(generation=0,manual_override=auth))),
+            startup_initialization=dict(authorization=auth,measured_qualification=False),
+            auxiliary_initialization=dict(kind='fresh',generation=0))
+        self.put(self.run+'/state.json',self.state)
+        self.put(self.run+'/retention-history.json',{})
+        self.put(self.run+'/iteration-0000/report.json',dict(iteration=0,
+            timings=dict(iteration_seconds=1),local_scoring_auxiliary=dict(fitting_steps=32,encoder_scale=0.)))
+        self.put(self.run+'/seed/weights.pt',b'not a report')
+        source_before={p:p.read_bytes() for p in (self.root/self.run).rglob('*') if p.is_file()}
+        def cli(output):
+            completed=subprocess.run([sys.executable,str(ROOT/'scripts/export-training-reports.py'),
+                '--root',str(self.root),'--output',output,'--continue'],capture_output=True,text=True)
+            self.assertEqual(completed.returncode,0,completed.stderr)
+            directory=self.root/output
+            return directory,reports.load_json(directory/'export-manifest.json')
+        output,manifest=cli('results/restart-first')
+        self.assertEqual(manifest['run'],self.run)
+        self.assertEqual(manifest['committed_generation'],1)
+        self.assertEqual(manifest['latest_iterations'],[0])
+        self.assertIsNone(manifest['rating_slot_generation'])
+        self.assertEqual(manifest['reused_files'],[])
+        self.assertEqual(manifest['missing'],[])
+        self.assertEqual(reports.load_json(output/'fresh-start.json'),receipt)
+        self.assertEqual(reports.load_json(output/'state.json'),self.state)
+        self.assertFalse((output/'ratings/slots').exists())
+        self.assertFalse(list(output.rglob('*.pt')))
+        self.assertEqual(source_before,{p:p.read_bytes() for p in source_before})
+        self.advance_run(2)
+        output,manifest=cli('results/restart-next')
+        self.assertEqual(manifest['committed_generation'],2)
+        self.assertEqual(manifest['latest_iterations'],[0,1])
+        self.assertTrue((output/'iteration-0001/report.json').exists())
+        reused={entry['path'] for entry in manifest['reused_files']}
+        self.assertIn('fresh-start.json',reused)
+        self.assertIn('iteration-0000/report.json',reused)
+
     def assert_exported(self, entry, raw, source):
         self.assertEqual(len(raw),entry['bytes'])
         self.assertEqual(reports.checksum(raw),entry['sha256'])
@@ -413,14 +460,14 @@ class ExportTests(unittest.TestCase):
                 timings=dict(iteration_seconds=100)))
         return controller
 
-    def test_default_cli_exports_new_run_and_keeps_completed_il_name(self):
+    def test_explicit_cli_exports_older_run_and_keeps_completed_il_name(self):
         controller = self.modern_run(generation=1)
         # An explicitly null gate must also work for a gate-disabled run.
         self.state['champion_gate'] = None
         self.put(self.run + '/state.json', self.state)
         before = {p: p.read_bytes() for p in (self.root / 'artifacts').rglob('*') if p.is_file()}
         completed = subprocess.run([sys.executable, str(ROOT / 'scripts/export-training-reports.py'),
-            '--root', str(self.root)], capture_output=True, text=True)
+            '--root', str(self.root), '--run', self.run], capture_output=True, text=True)
         self.assertEqual(completed.returncode, 0, completed.stderr)
         outputs = list((self.root / 'results').iterdir())
         self.assertEqual(len(outputs), 1)
