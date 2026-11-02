@@ -163,6 +163,73 @@ class CheckpointExportTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'unique run'):
             exporter.find_run(self.root)
 
+    def il_upgrade(self):
+        run = self.root / exporter.DEFAULT_IL_RUN
+        source = self.put(exporter.DEFAULT_IL_RUN + '/candidate.pt', b'upgraded IL checkpoint')
+        entry = dict(path=source.relative_to(self.root).as_posix(),
+                     sha256=exporter.receipt(source)['sha256'], model_id='IL-model')
+        raw = exporter.encode(dict(contract='completed-il-critic-upgrade/1.0.0',
+                                   architecture=dict(architecture='IL'), candidate=entry))
+        self.put(exporter.DEFAULT_IL_RUN + '/upgrade.json', raw)
+        return run, entry, raw
+
+    def test_il_defaults_to_upgrade_candidate_and_preserves_source_snapshot(self):
+        run, entry, raw = self.il_upgrade()
+        bundle = self.export('IL', calibration=dict(host='not-used'))['IL']
+        manifest = exporter.verify_bundle(bundle)
+        self.assertEqual(manifest['recorded_checkpoint'], entry)
+        self.assertEqual(manifest['source_run'], exporter.DEFAULT_IL_RUN)
+        self.assertEqual(manifest['source_state_path'], exporter.DEFAULT_IL_RUN + '/upgrade.json')
+        self.assertEqual((bundle / 'state.json').read_bytes(), raw)
+        self.assertEqual(exporter.read(bundle / 'config.json'), dict(architecture=dict(architecture='IL')))
+        self.assertNotIn('calibration', manifest)
+        self.assertEqual(exporter.materialize(self.root, 'IL').read_bytes(), b'upgraded IL checkpoint')
+        self.assertEqual((run / 'upgrade.json').read_bytes(), raw)
+        self.assertFalse((self.root / 'test_nn/latest.json').exists())
+        self.assertEqual(self.export('IL')['IL'], bundle)
+
+    def test_il_explicit_native_run_uses_recorded_best_not_last_or_alias(self):
+        self.run = 'artifacts/step5/custom-il'
+        best = self.checkpoint('epoch-0002.pt', b'IL best', 2)
+        best = dict(path='epoch-0002.pt', sha256=best['sha256'])
+        self.put(self.run + '/best.pt', b'uncommitted alias')
+        signature = dict(format='bc-training/2.2.0', architecture=dict(architecture='IL'),
+                         update=dict(effective_batch_size=16))
+        self.state = dict(signature=signature, epoch=3, best=best,
+                          last=dict(path='epoch-0003.pt', sha256='0' * 64))
+        self.write_state()
+        bundle = self.export('IL', run=self.run)['IL']
+        self.assertEqual(exporter.verify_bundle(bundle)['recorded_checkpoint'], best)
+        self.assertEqual(exporter.read(bundle / 'config.json'), signature)
+        self.assertEqual(exporter.materialize(self.root, 'IL').read_bytes(), b'IL best')
+
+    def test_il_rejects_missing_wrong_run_and_changed_candidate(self):
+        with self.assertRaises(FileNotFoundError):
+            self.export('IL')
+        with self.assertRaisesRegex(ValueError, 'requires an imitation run'):
+            self.export('IL', run=self.run)
+        run, entry, raw = self.il_upgrade()
+        (run / 'candidate.pt').write_bytes(b'changed')
+        with self.assertRaisesRegex(ValueError, 'hash differs'):
+            self.export('IL')
+        self.assertFalse((self.root / 'test_nn/IL.json').exists())
+
+    def test_il_cli_export_verify_restore_without_utility_validation(self):
+        self.il_upgrade()
+        for mode in ((), ('--verify',), ('--restore',)):
+            result = subprocess.run([sys.executable, str(ROOT / 'scripts/export-test-nn.py'),
+                                     '--root', str(self.root), '--select', 'IL', *mode],
+                                    capture_output=True, text=True, timeout=30)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn('IL:', result.stdout)
+            if not mode:
+                self.assertIn('utility validation skipped', result.stdout)
+                self.assertIn('--restore --select IL', result.stdout)
+                pointer = exporter.read(self.root / 'test_nn/IL.json')
+                target = self.root / 'test_nn' / pointer['bundle'] / 'checkpoint.pt'
+            self.assertEqual(target.exists(), mode == ('--restore',))
+        self.assertEqual(target.read_bytes(), b'upgraded IL checkpoint')
+
     def test_external_or_traversing_checkpoint_paths_are_rejected(self):
         for path in ('../outside.pt', str(self.root.parent / 'outside.pt')):
             with self.subTest(path=path), self.assertRaises(ValueError):

@@ -32,6 +32,22 @@ otherwise the accepted `champion`, otherwise the qualified policy anchor. The
 manifest records this choice; an anchor is not a claim of globally best strength.
 If no such selection exists, `best` fails rather than substituting latest.
 
+To export the IL model:
+
+```bash
+python scripts/export-test-nn.py --select IL
+```
+
+`IL` defaults to `artifacts/step5/features4-v11-2-batch7-il`; use `--run` to
+choose another IL directory. It selects the recorded `candidate` from `upgrade.json`
+for an upgraded IL model, or the recorded `best` from a native IL run's `state.json`.
+The original metadata snapshot is preserved as the bundle's `state.json`, with
+its original path recorded in `manifest.json` as `source_state_path`.
+IL exports copy the original checkpoint bytes and skip utility validation because
+IL has no utility head. They write a separate `IL.json` selection pointer.
+After pulling locally, use `python scripts/export-test-nn.py --restore --select IL`
+(or `--verify --select IL` to verify without reconstructing the checkpoint).
+
 The script first preserves a byte-for-byte source bundle, verifies its SHA-256
 against the training receipt, and then exports a copy with a validation receipt.
 Checkpoint parts are at most 48 MiB. Source metadata includes:

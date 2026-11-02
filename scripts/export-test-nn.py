@@ -18,6 +18,7 @@ import tempfile
 
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_RUN = 'artifacts/step5/joint7-v11-2-grouped-lr-critic'
+DEFAULT_IL_RUN = 'artifacts/step5/features4-v11-2-batch7-il'
 FORMAT = 'migration-test-nn/1.0.0'
 POINTER = 'migration-test-nn-selection/1.0.0'
 CHUNK = 1024 * 1024
@@ -80,7 +81,9 @@ def git_info(root):
                 scope='Exporter checkout; checkpoint source identity remains in state.signature')
 
 
-def find_run(root, name=None):
+def find_run(root, name=None, *, choice='latest'):
+    if choice == 'IL':
+        return below(root, name or DEFAULT_IL_RUN)
     if name:
         return below(root, name)
     preferred = below(root, DEFAULT_RUN)
@@ -101,7 +104,14 @@ def selections(state, choice):
     labels = ('latest', 'best') if choice == 'both' else (choice,)
     result = {}
     for label in labels:
-        if label == 'latest':
+        if label == 'IL':
+            if state.get('contract') == 'completed-il-critic-upgrade/1.0.0':
+                entry, reason = state.get('candidate'), 'recorded upgraded IL candidate'
+            else:
+                require(str(state.get('signature', {}).get('format', '')).startswith('bc-training/'),
+                        'IL selection requires an imitation run or a completed IL critic upgrade')
+                entry, reason = state.get('best'), 'recorded IL best (validation loss)'
+        elif label == 'latest':
             history = state.get('history')
             entry = history[-1] if history else state.get('last')
             reason = 'committed history[-1]' if history else 'committed last'
@@ -113,6 +123,7 @@ def selections(state, choice):
             active = (state.get('policy_anchor') or {}).get('active') or {}
             entry, reason = active.get('checkpoint'), 'qualified policy anchor (not a global best claim)'
         require(isinstance(entry, dict),
+                'No committed IL candidate/best checkpoint.' if label == 'IL' else
                 f'No committed {label} checkpoint. Use --select latest if no best/anchor exists.')
         require(isinstance(entry.get('path'), str) and entry['path'].endswith('.pt'),
                 f'{label}: checkpoint must be a recorded .pt file, not a temporary file')
@@ -189,7 +200,7 @@ def verify_bundle(bundle):
 
 
 def make_bundle(root, output, run, raw_state, state, entry, source, part_bytes, *,
-                extra_files=None, provenance=None):
+                extra_files=None, provenance=None, config=None):
     run_name = re.sub('[^A-Za-z0-9_.-]', '-', run.name)[:64]
     run_ref = run.relative_to(root).as_posix()
     state_hash = digest(raw_state)
@@ -229,7 +240,8 @@ def make_bundle(root, output, run, raw_state, state, entry, source, part_bytes, 
                 'Checkpoint hash differs from captured committed state; nothing published. '
                 'Retry if training retention advanced during copying.')
         (stage / 'state.json').write_bytes(raw_state)
-        config = state.get('signature', {}).get('config', state.get('config'))
+        if config is None:
+            config = state.get('signature', {}).get('config', state.get('config'))
         require(isinstance(config, dict), 'No effective run config in captured state')
         (stage / 'config.json').write_bytes(encode(config))
         (stage / 'source.json').write_bytes(encode(git_info(root)))
@@ -295,15 +307,25 @@ def calibrate_bundle(root, bundle, options, label, part_bytes):
 def export(root, run=None, choice='latest', *, part_bytes=48 * CHUNK, calibration=None):
     root = Path(root).resolve()
     require(0 < part_bytes <= 48 * CHUNK, 'Part size must be 1 byte to 48 MiB')
-    run = find_run(root, run)
-    raw_state = below(root, run / 'state.json').read_bytes()
+    run = find_run(root, run, choice=choice)
+    snapshot = 'upgrade.json' if choice == 'IL' and (run / 'upgrade.json').is_file() else 'state.json'
+    raw_state = below(root, run / snapshot).read_bytes()
     state = json.loads(raw_state.decode('utf-8-sig'))
     selected = selections(state, choice)
+    config = provenance = None
+    if choice == 'IL':
+        # Base IL has no utility head. Preserve its original checkpoint bytes.
+        calibration = None
+        config = dict(architecture=state['architecture']) if snapshot == 'upgrade.json' else state['signature']
+        provenance = dict(source_state_path=(run / snapshot).relative_to(root).as_posix(),
+                          config_scope='IL architecture/upgrade or training signature from source_state_path; '
+                                       'checkpoint.model_config is authoritative. Not a resume bundle.')
     sources = {label: checkpoint_path(root, run, value['entry']) for label, value in selected.items()}
     output = below(root, 'test_nn')
     output.mkdir(exist_ok=True)
     bundles = {label: make_bundle(root, output, run, raw_state, state, value['entry'],
-                                 sources[label], part_bytes) for label, value in selected.items()}
+                                 sources[label], part_bytes, config=config, provenance=provenance)
+               for label, value in selected.items()}
     if calibration is not None:
         completed = {}
         for label, bundle in list(bundles.items()):
@@ -349,8 +371,10 @@ def materialize(root, label, *, restore=True):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--root', type=Path, default=ROOT)
-    parser.add_argument('--run', help='Project-relative run; defaults to the current v11.2 run')
-    parser.add_argument('--select', choices=('latest', 'best', 'both'), default='latest')
+    parser.add_argument('--run', help='Project-relative run; defaults to the v11.2 self-play run, '
+                                    'or the v11.2 IL run for --select IL')
+    parser.add_argument('--select', choices=('latest', 'best', 'both', 'IL'), default='latest',
+                        help='IL selects the upgraded IL candidate or recorded IL best; byte-copy only')
     mode = parser.add_mutually_exclusive_group()
     mode.add_argument('--restore', action='store_true', help='After Git pull: verify and reconstruct checkpoint.pt')
     mode.add_argument('--verify', action='store_true', help='Verify exported bytes without creating checkpoints')
@@ -379,6 +403,8 @@ def main():
             for label, bundle in export(args.root, args.run, args.select,
                                        part_bytes=args.part_mib * CHUNK, calibration=calibration).items():
                 print(f'{label}: {bundle}')
+            if args.select == 'IL':
+                print('IL: original checkpoint bytes preserved; utility validation skipped (no utility head).')
             print('Prepared test_nn/. Commit and push it on the lab, then pull locally and run:')
             print(f'python scripts/export-test-nn.py --restore --select {args.select}')
     except (ValueError, OSError, KeyError, TypeError, RuntimeError, ImportError, json.JSONDecodeError) as error:
