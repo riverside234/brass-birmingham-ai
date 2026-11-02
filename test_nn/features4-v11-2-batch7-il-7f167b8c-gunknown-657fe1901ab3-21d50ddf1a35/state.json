@@ -1,0 +1,94 @@
+{
+  "contract": "completed-il-critic-upgrade/1.0.0",
+  "parent": {
+    "bc_run": "artifacts/step5/features4-v11-1-batch7-il",
+    "path": "artifacts/step5/features4-v11-1-batch7-il/epoch-0010.pt",
+    "sha256": "8ec1e240b66b38f37cbf25e5eae7486e07d6d80d1173292dba86c9665bc74a87",
+    "model_id": "52d1bb6cc525f939a0faf9fd7505b036702d5af12a59b55e1715ad2075cea696",
+    "manifest": "artifacts/il-replay/features4-compact-v8-batch7/manifest.json",
+    "manifest_sha256": "c382a8d184ad128de0298dc8bf0f738bf2b8266baa9d8002a1a84910266596d9",
+    "bc_signature": "c5471a15d68a3ebe574f92f4f0a51ded1a6dc7b517486fb2d3e78017f1f9385d"
+  },
+  "compatibility": {
+    "learning_contract": "four-seat-learning/4.0.0",
+    "players": 4,
+    "rules": "steam-brass-patch-1.1.0",
+    "wire_sha256": "fabe2ef3e1de73aa9f3ddd05b67c08f9ef564a25ab4ff42963a03ab6fe3b6e3d",
+    "observation": "public-state/0.2.0",
+    "choices": "phase-choice/0.2.0",
+    "objective": "win-share/1.0.0",
+    "placement": "competition-rank/1.0.0",
+    "seat_order": "stable-0-1-2-3",
+    "vp_scale": 100.0,
+    "features_sha256": "59facdd72a386b6046abbb875daf3e1051b92e580ff55d0ab37250dd0c1dfb6a",
+    "feature_version": "permitted-features/4.0.0",
+    "derived_source_sha256": "47afe02b5e98549081f5ab119a2dca2c90448c74fba8020fc7e04cb6bc16f260",
+    "producer_profile_sha256": "ffae2fa230bcc42c3877d7817a584b608b60961c0b719316884d6c694a1384d7",
+    "encoder_sha256": "7d21b3052bf65c2d272a59859eebc6b3be1117b77e906a677402784b5ab90f06",
+    "architecture_sha256": "05368f9337d8a7a37459508f67d0bfd1c9092c4bc4a1e0d5c01748df1502f0d9",
+    "loss": "win-ce+0.25-rank-huber+0.1-vp-huber/1.0.0",
+    "reference_lock_sha256": "9cf98163e7ed9cbeef0cd9ce9178c4eeea933063d361f5a5e42d2fdddcdd5158",
+    "heads": [
+      "policy_logits",
+      "win_share_4",
+      "placement_4",
+      "vp_4"
+    ]
+  },
+  "implementation": "de2aac3edd606da9c23fad732c6bc4d8dc6118ad2d801af8b9ae6ffb9326f314",
+  "architecture": {
+    "state_dim": 3128,
+    "action_dim": 327,
+    "hidden": 512,
+    "action_hidden": 160,
+    "players": 4,
+    "architecture": "brass-four-seat-mlp-resnet/11.2.0",
+    "residual_blocks": 8,
+    "head_hidden": 192,
+    "outcome_hidden": 128,
+    "parameter_limit": 6500000,
+    "group_layout": "9dcb18c8bfc04ca9b020b43ddcfa20a27785d3baf08d19679c8751747a18d53d",
+    "projection_widths": [
+      32,
+      64,
+      48,
+      320,
+      352,
+      48
+    ],
+    "entity_layout": "a4e1ca6a7588f8839275ff527918a3080f324db6d300215e7328410fb430a4e9",
+    "entity_hidden": 64
+  },
+  "from_architecture": {
+    "state_dim": 3128,
+    "action_dim": 327,
+    "hidden": 512,
+    "action_hidden": 160,
+    "players": 4,
+    "architecture": "brass-four-seat-mlp-resnet/11.1.0",
+    "residual_blocks": 8,
+    "head_hidden": 192,
+    "outcome_hidden": 128,
+    "parameter_limit": 6500000,
+    "group_layout": "9dcb18c8bfc04ca9b020b43ddcfa20a27785d3baf08d19679c8751747a18d53d",
+    "projection_widths": [
+      32,
+      64,
+      48,
+      320,
+      352,
+      48
+    ],
+    "entity_layout": "a4e1ca6a7588f8839275ff527918a3080f324db6d300215e7328410fb430a4e9",
+    "entity_hidden": 64
+  },
+  "parameters": 5910916,
+  "extra_parameters": 6272,
+  "optimizer": "Fresh self-play Adam; no IL optimizer conversion",
+  "initialization": "Copied policy/trunk/old critic tensors; descriptor head columns exactly zero; encoder seeded 112032",
+  "candidate": {
+    "path": "artifacts/step5/features4-v11-2-batch7-il/candidate.pt",
+    "sha256": "657fe1901ab35d144e5d86e16b42e795d281946829c87bcb8e0245927b70a263",
+    "model_id": "94bebe397ac8ab1f8fe3cfb46d7d293cdb8bc10116dcd5efaf2d2afdd813270b"
+  }
+}

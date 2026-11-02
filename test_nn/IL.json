@@ -1,0 +1,10 @@
+{
+  "format": "migration-test-nn-selection/1.0.0",
+  "selection": "IL",
+  "selection_reason": "recorded upgraded IL candidate",
+  "bundle": "features4-v11-2-batch7-il-7f167b8c-gunknown-657fe1901ab3-21d50ddf1a35",
+  "generation": null,
+  "model_id": "94bebe397ac8ab1f8fe3cfb46d7d293cdb8bc10116dcd5efaf2d2afdd813270b",
+  "checkpoint_sha256": "657fe1901ab35d144e5d86e16b42e795d281946829c87bcb8e0245927b70a263",
+  "manifest_sha256": "6d64ab461052efe6b79d3f3d45c3445ded1138304c62999ddf4f9002a44da03d"
+}

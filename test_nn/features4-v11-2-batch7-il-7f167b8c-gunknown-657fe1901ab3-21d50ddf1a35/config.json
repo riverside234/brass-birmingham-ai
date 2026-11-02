@@ -1,0 +1,25 @@
+{
+  "architecture": {
+    "state_dim": 3128,
+    "action_dim": 327,
+    "hidden": 512,
+    "action_hidden": 160,
+    "players": 4,
+    "architecture": "brass-four-seat-mlp-resnet/11.2.0",
+    "residual_blocks": 8,
+    "head_hidden": 192,
+    "outcome_hidden": 128,
+    "parameter_limit": 6500000,
+    "group_layout": "9dcb18c8bfc04ca9b020b43ddcfa20a27785d3baf08d19679c8751747a18d53d",
+    "projection_widths": [
+      32,
+      64,
+      48,
+      320,
+      352,
+      48
+    ],
+    "entity_layout": "a4e1ca6a7588f8839275ff527918a3080f324db6d300215e7328410fb430a4e9",
+    "entity_hidden": 64
+  }
+}

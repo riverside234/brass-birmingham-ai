@@ -1,0 +1,43 @@
+{
+  "format": "migration-test-nn/1.0.0",
+  "created_utc": "2026-11-02T20:36:48.371877+00:00",
+  "source_run": "artifacts/step5/features4-v11-2-batch7-il",
+  "committed_generation": null,
+  "state_sha256": "21d50ddf1a3562fc62679bd4c0028998615d50e55390b75e043baf4934b8d800",
+  "recorded_checkpoint": {
+    "path": "artifacts/step5/features4-v11-2-batch7-il/candidate.pt",
+    "sha256": "657fe1901ab35d144e5d86e16b42e795d281946829c87bcb8e0245927b70a263",
+    "model_id": "94bebe397ac8ab1f8fe3cfb46d7d293cdb8bc10116dcd5efaf2d2afdd813270b"
+  },
+  "checkpoint": {
+    "path": "checkpoint.pt",
+    "bytes": 23846752,
+    "sha256": "657fe1901ab35d144e5d86e16b42e795d281946829c87bcb8e0245927b70a263"
+  },
+  "parts": [
+    {
+      "path": "checkpoint.pt.part0001",
+      "bytes": 23846752,
+      "sha256": "657fe1901ab35d144e5d86e16b42e795d281946829c87bcb8e0245927b70a263"
+    }
+  ],
+  "metadata": [
+    {
+      "path": "state.json",
+      "bytes": 3629,
+      "sha256": "21d50ddf1a3562fc62679bd4c0028998615d50e55390b75e043baf4934b8d800"
+    },
+    {
+      "path": "config.json",
+      "bytes": 599,
+      "sha256": "a831ee1b93d7ea797e24bae93f3d8797c4271e05bdb02d7c14a834076c3a6693"
+    },
+    {
+      "path": "source.json",
+      "bytes": 171,
+      "sha256": "153f6b61953aabb0d543c9ebc9589d116474ca5c47ef0ef7fd8df38a427e93f7"
+    }
+  ],
+  "config_scope": "IL architecture/upgrade or training signature from source_state_path; checkpoint.model_config is authoritative. Not a resume bundle.",
+  "source_state_path": "artifacts/step5/features4-v11-2-batch7-il/upgrade.json"
+}
