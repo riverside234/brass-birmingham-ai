@@ -28,7 +28,7 @@ namespace BrassLegacyAI.Native
         public readonly JObject Policy, ModelManifest;
         public static string GameRoot { get { return Path.GetFullPath(Path.Combine(Path.GetDirectoryName(typeof(NativePackage).Assembly.Location), "../..")); } }
         public static string Location { get { return Path.Combine(GameRoot, "BrassNative", "alpha-g890"); } }
-        public static bool Enabled { get { return NativeModel.Alpha.Enabled || NativeModel.Beta.Enabled; } }
+        public static bool Enabled { get { return NativeModel.Alpha.Enabled || NativeModel.Beta.Enabled || NativeModel.IL.Enabled; } }
         public static string Hash(string path) { using(var sha=SHA256.Create()) using(var stream=File.OpenRead(path)) return BitConverter.ToString(sha.ComputeHash(stream)).Replace("-", "").ToLowerInvariant(); }
         public NativePackage(string directory) : this(directory,16) { }
         public NativePackage(string directory,int searchK)
@@ -43,7 +43,7 @@ namespace BrassLegacyAI.Native
             ModelSpec=NativeModel.FromDirectory(Directory);
             var build=JObject.Parse(File.ReadAllText(Path.Combine(Directory,"build.json")));
             if((string)build["format"]!="brass-local-package/1.0.0" || (string)build["backend"]!=ModelSpec.Backend ||
-                (string)build["target"]!="x86_64-pc-windows-gnu" || (string)build["scope"]!=(ModelSpec==NativeModel.Alpha?"local-alpha-test":"local-beta-test")) throw new InvalidDataException("Unsupported native package");
+                (string)build["target"]!="x86_64-pc-windows-gnu" || (string)build["scope"]!=(ModelSpec==NativeModel.Alpha?"local-alpha-test":ModelSpec==NativeModel.Beta?"local-beta-test":"local-il-test")) throw new InvalidDataException("Unsupported native package");
             var files=(JArray)build["files"];
             string[] required={"brass-ai-local.exe","policy.json","policy-k8.json","policy-k32.json","policy-t15.json","policy-k8-t15.json","policy-k32-t15.json","warmup.json","model/manifest.json","model/model.json","model/model.onnx","model/onnxruntime.dll"};
             if(files.Count!=required.Length || required.Any(n=>files.Count(f=>(string)f["path"]==n)!=1)) throw new InvalidDataException("Incomplete native package");
@@ -70,6 +70,17 @@ namespace BrassLegacyAI.Native
         {
             if(model==null)throw new InvalidDataException("Missing NN manifest");
             var spec=NativeModel.FromModel((string)model["model_id"]);
+            if(spec==NativeModel.IL) {
+                if(acceptance==null || (string)acceptance["version"]!="brass-local-utility-acceptance/1.0.0" ||
+                    (string)acceptance["scope"]!=spec.Scope || (string)acceptance["decision"]!=spec.Decision ||
+                    (string)acceptance["model_id"]!=spec.Model || (string)acceptance["export_sha256"]!=spec.Export ||
+                    (string)model["export_sha256"]!=spec.Export || (string)acceptance["checkpoint_sha256"]!=spec.Checkpoint ||
+                    (string)model["checkpoint_sha256"]!=spec.Checkpoint || (bool?)acceptance["final_model"]!=false ||
+                    (bool?)model["mechanical_only"]!=true || model["utility_calibration"]?.Type!=JTokenType.Null ||
+                    acceptance["utility_calibration"]?.Type!=JTokenType.Null)
+                    throw new InvalidDataException("IL lacks its exact outcome-prior export acceptance");
+                return;
+            }
             if(spec==NativeModel.Beta) {
                 if(acceptance==null || (string)acceptance["version"]!="brass-local-utility-acceptance/1.0.0" ||
                     (string)acceptance["scope"]!=spec.Scope || (string)acceptance["decision"]!=spec.Decision ||

@@ -92,8 +92,8 @@ namespace BrassLegacyAI
             SelectDifficulty(player, key); Refresh(Selections.GetValue(player, p => new Selection()).Owner); return true;
         }
         public static readonly string[] Choices = ProfileCatalog.Keys.Concat(new[] { "random" }).ToArray();
-        public static string ChoiceLabel(string key) { if(key=="beta")return "Beta"; var focus=Native.NativeFocus.FromChoice(key); return focus!=null?"NN · "+Native.NativeFocus.Label(focus):key == "random" ? "Random" : ProfileCatalog.Labels[ProfileCatalog.Index(key)]; }
-        public static string ChoiceDescription(string key) { if(key=="beta")return "Test neural network g1290 · Neutral context."; var focus=Native.NativeFocus.FromChoice(key); return focus!=null?"Experimental g890 test neural network · "+Native.NativeFocus.Label(focus)+" context.":key == "random" ? "Chooses one of " + ProfileCatalog.Keys.Length + " starting styles. Plans adapt, with balanced fallback when needed." : ProfileCatalog.Description(key); }
+        public static string ChoiceLabel(string key) { if(key=="il")return "IL"; if(key=="beta")return "Beta"; var focus=Native.NativeFocus.FromChoice(key); return focus!=null?"NN · "+Native.NativeFocus.Label(focus):key == "random" ? "Random" : ProfileCatalog.Labels[ProfileCatalog.Index(key)]; }
+        public static string ChoiceDescription(string key) { if(key=="il")return "Imitation-learning model · Neutral context. Search values combine win, placement and VP predictions."; if(key=="beta")return "Test neural network g1290 · Neutral context."; var focus=Native.NativeFocus.FromChoice(key); return focus!=null?"Experimental g890 test neural network · "+Native.NativeFocus.Label(focus)+" context.":key == "random" ? "Chooses one of " + ProfileCatalog.Keys.Length + " starting styles. Plans adapt, with balanced fallback when needed." : ProfileCatalog.Description(key); }
         static string ResolveStrategy(string key)
         {
             if (key != "random") return key;
@@ -308,7 +308,7 @@ namespace BrassLegacyAI
             foreach (var p in app.Metadata.PlayerMetadata.Where(p => p.AiType != AIType.Human)) {
                 var row = LocalGameState.Assignment(state, (int)p.PlayerStartConfiguration.Color);
                 if(Native.NativeGameState.IsNative(state))Selections.GetValue(p,x=>new Selection()).Choice=new AiChoice(AiFamily.AlphaTest,
-                    Native.NativeGameState.Model(state)==Native.NativeModel.Beta?"beta":Native.NativeFocus.ChoiceId(Native.NativeGameState.Focus(state,(int)p.PlayerStartConfiguration.Color)));
+                    Native.NativeGameState.Model(state)!=Native.NativeModel.Alpha?Native.NativeGameState.Model(state).Key:Native.NativeFocus.ChoiceId(Native.NativeGameState.Focus(state,(int)p.PlayerStartConfiguration.Color)));
                 else Select(p, (string)row["strategy"]);
                 var selection = Selections.GetValue(p, x => new Selection()); selection.Difficulty = LocalGameState.Difficulty(state, row); selection.Owner = null;
                 selection.DisplayFamily = (string)state["runtime"] == ProfileCatalog.Runtime ? "V4" :

@@ -42,7 +42,9 @@ namespace BrassLegacyAI
                 "Current test neural network (g890). Neutral context; this is not the final trained model.",
                 Native.NativeModel.Alpha.Enabled,"Test runtime is not installed"),
                 new AiCatalogEntry(family,"beta","Beta","Test neural network g1290 · Neutral context.",
-                    Native.NativeModel.Beta.Enabled,"Beta runtime is not installed")});
+                    Native.NativeModel.Beta.Enabled,"Beta runtime is not installed"),
+                new AiCatalogEntry(family,"il","IL","Imitation-learning model · Neutral context. Search values combine its win, placement and VP predictions.",
+                    Native.NativeModel.IL.Enabled,"IL runtime is not installed")});
             throw new ArgumentOutOfRangeException("family");
         }
         public static AiCatalogEntry Random(AiFamily family)
@@ -56,7 +58,7 @@ namespace BrassLegacyAI
         public static AiCatalogEntry Find(AiChoice choice)
         {
             if (choice.Family != AiFamily.V4 && choice.Family != AiFamily.Gamma && choice.Family != AiFamily.AlphaTest) return null;
-            if (choice.Family == AiFamily.AlphaTest && choice.EntryId!="beta" && Native.NativeFocus.FromChoice(choice.EntryId) == null) return null;
+            if (choice.Family == AiFamily.AlphaTest && !Native.NativeModel.ValidChoice(choice.EntryId) && Native.NativeFocus.FromChoice(choice.EntryId) == null) return null;
             return choice.EntryId == "random" ? Random(choice.Family) : Entries(choice.Family).FirstOrDefault(e => e.Choice.Equals(choice));
         }
         public static bool CanChoose(AiChoice choice)

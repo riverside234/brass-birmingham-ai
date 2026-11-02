@@ -50,6 +50,8 @@ BALANCED_BRANCH = dict(THREE_T2_BRANCH,contract='selfplay-branching/6.0.0',
     move_distribution=dict(temperature_2=.5,exploration_q=.5))
 NEUTRAL_BRANCH = dict(THREE_BRANCH,contract='selfplay-branching/7.0.0',
     move_distribution=dict(temperature_1=.6,temperature_2=.3,exploration_q=.1))
+T2_ONLY_BRANCH = dict(NEUTRAL_BRANCH,contract='selfplay-branching/8.0.0',rate_per_decision=.005,
+    move_distribution=dict(temperature_2=1.))
 ROLLOUT = dict(contract='exploration-rollout/1.0.0', mode='fresh',
     opening_after_iterations=0, raw_entropy_after_iterations=0, branching_after_iterations=20)
 TRAINED_ROLLOUT = dict(ROLLOUT,contract='exploration-rollout/2.0.0',branching_after_iterations=0)
@@ -167,7 +169,7 @@ def validate(config):
     revised=(config['opening']==REVISED_OPENING and config['branching']==REVISED_BRANCH) or (
         config['opening']==THREE_OPENING and config['branching']==THREE_BRANCH)
     three_t2=config['opening']==THREE_T2_OPENING and config['branching'] in (THREE_T2_BRANCH,BALANCED_BRANCH)
-    neutral=config['opening']==THREE_OPENING and config['branching']==NEUTRAL_BRANCH
+    neutral=config['opening']==THREE_OPENING and config['branching'] in (NEUTRAL_BRANCH,T2_ONLY_BRANCH)
     current=(config['opening']==OPENING and config['branching'] in (BRANCH,LOCAL_SCORING_BRANCH)) or revised or three_t2 or neutral
     uniform=config['opening']==OPENING and config['branching']==HIGH_BRANCH
     legacy=config['opening']==LEGACY_OPENING and config['branching']==LEGACY_BRANCH

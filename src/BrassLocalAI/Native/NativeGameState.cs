@@ -32,7 +32,7 @@ namespace BrassLegacyAI.Native
     public static class NativeGameState
     {
         public const string Format="brass-local-native-save/1.0.0";
-        public static bool IsNative(JObject state) {return (string)state?["format"]==Format || (string)state?["runtime"]==NativePackage.Backend || (string)state?["runtime"]==NativeModel.Beta.Backend;}
+        public static bool IsNative(JObject state) {return (string)state?["format"]==Format || (string)state?["runtime"]==NativePackage.Backend || (string)state?["runtime"]==NativeModel.Beta.Backend || (string)state?["runtime"]==NativeModel.IL.Backend;}
         public static NativeModel Model(JObject state) { return NativeModel.FromBackend((string)state?["runtime"]); }
         public static bool Supported(GameMetadata metadata) {return metadata!=null && (int)metadata.GameStartConfiguration.NumberOfPlayers==4 && !metadata.GameStartConfiguration.IsIntroductoryGame;}
         static string AssignmentHash(JObject s) {

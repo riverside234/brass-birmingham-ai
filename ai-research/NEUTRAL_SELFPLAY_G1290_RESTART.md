@@ -1,6 +1,76 @@
 # Fresh neutral self-play from g1290
 
-## Current continuation: g253, GAE lambda floor 0.98
+## Current continuation: g370, direct lambda 0.95 and T2 forks
+
+The `g0370-20261102T221517838215Z` export records **370 committed generations /
+118,400 ordinary games**, active lambda **0.98** and next PPG beta **0.5**.
+This reviewed continuation applies:
+
+| Setting | Effective value from g371 |
+| --- | --- |
+| All four entropy coefficients | **0.005**, unchanged; adaptive entropy remains off |
+| GAE lambda and floor | **0.95 immediately**, explicit user-authorized hotfix |
+| Branch rate per eligible decision | **0.5%**, down from 1%; self-play tables only |
+| Fork action distribution | **100% T2**, excluding the played move before normalization |
+| PPG beta floor | **1.0**; saved 0.5 is raised to 1, values already above 1 are preserved |
+
+Parent/post-fork openings remain **T1.3 for three decisions**, with
+`skip_opening_decisions=3`. T2 here selects the alternative fork action only.
+Fork moves remain excluded from training; hidden-deck reshuffling and opening
+counter resets remain intact. Ordinary epsilon stays **0.05**. Rehearsal,
+DOMiNO, fingerprints and AnchorKL stay off. The **160/154/6** table mix and PFSP
+remain unchanged.
+
+The direct GAE change is a user setting, not measured gate qualification.
+History/v4 qualification flags and their evidence are preserved. Already-enabled
+tables use 0.95; unqualified mixed tables still use 1.0 until their existing gates
+qualify. Lambda-stage age restarts at this boundary, without resetting training
+progress, work counters or independent evidence. No new healthy iterations are
+invented. PPG retains its two-iteration buffer, every-iteration cadence,
+loss16/KL32 checks, 0.002 safeguards and current LR schedule. Beta can still
+increase on KL trips and decrease after low-KL accepted phases, bounded below by 1.
+
+Model/companion weights, all Adam states, RNG, LR state, utility calibration,
+compatible PPG caches, population and lineage are preserved. The generation-zero
+startup receipt stays historical and unchanged. The helper creates a new config;
+reviewed startup applies the checkpoint migration once and logs its before/after
+values. Retrying before a new commit repeats the same restoration, not a reset.
+
+After stopping the trainer, run from the Linux repository root:
+
+```bash
+python scripts/recover-step5-iteration.py --root "$PWD" \
+  --run artifacts/step5/joint7-v11-2-g1290-trained-restart \
+  --expected-iteration 370 --apply && \
+python scripts/configure-training-g370.py \
+  --run artifacts/step5/joint7-v11-2-g1290-trained-restart \
+  --expected-generation 370 \
+  --output configs/step5/joint7-v11-2-g1290-trained-restart-g370.json && \
+python scripts/step5.py \
+  --config configs/step5/joint7-v11-2-g1290-trained-restart-g370.json train \
+  --run artifacts/step5/joint7-v11-2-g1290-trained-restart \
+  --imitation-run artifacts/step5/features4-v11-2-batch7-il \
+  --resume-reviewed-source --expected-generation 370 --iterations 20
+```
+
+This continues **g371–g390**. Recovery archives an uncommitted Ctrl+C collection,
+without rewinding g370. The helper verifies the actual full checkpoint hash and
+rejects stale generations or conflicting output files. The desktop report bundle
+cannot replace the Linux model/optimizer checkpoint. No fresh PPG cache is needed:
+reward, encoding, targets and holdout contracts have not changed.
+
+Validation: **18 focused checks passed** across the new continuation tests and
+existing GAE/branching/PPG regressions. The isolated CPU PPG smoke retained **4 of
+4 attempted steps**, with probe KL **1.58e-7**. It used small authored data and
+actual two-age disk caches, checking cache hashes, unchanged model/Adam/RNG at
+adoption, beta clamps, restart continuity, T2 probabilities, opening resets and
+strict source/config checks. One initial smoke assertion used the wrong report
+field name; correcting the test to `attempted_steps` resolved it. No production
+code or safeguard was relaxed. Logs: `artifacts/g370-tests.log` and
+`artifacts/g370-regressions.log`. No long training or evaluation was launched;
+these tests do not establish improved playing strength or training throughput.
+
+## Previous continuation: g253, GAE lambda floor 0.98
 
 The `g0253-20261102T075610938330Z` export confirms **253 committed generations /
 80,960 ordinary games**. Its latest report (`iteration-0252/report.json`, which

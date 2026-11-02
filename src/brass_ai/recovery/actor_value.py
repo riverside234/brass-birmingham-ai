@@ -100,10 +100,11 @@ class TrainingPhases:
         self.snapshot_fixed_migration=None
         saved=(raw or {}).get('training',{}).get(KEY)
         self.gae_floor_migration=None
-        if (saved is not None and config['advantage'].get('contract')==gae.FLOOR_CONTRACT
+        if (saved is not None and config['advantage'].get('contract') in (gae.FLOOR_CONTRACT,gae.DIRECT_095_CONTRACT)
                 and saved['options']['advantage']!=config['advantage']):
             old=saved['options']['advantage']
-            migrated,self.gae_floor_migration=gae.migrate_floor(saved['gae'],old,config['advantage'],generation)
+            migrate=gae.migrate_direct_095 if config['advantage']['contract']==gae.DIRECT_095_CONTRACT else gae.migrate_floor
+            migrated,self.gae_floor_migration=migrate(saved['gae'],old,config['advantage'],generation)
             saved=dict(saved,options=dict(saved['options'],advantage=copy.deepcopy(config['advantage'])),gae=migrated)
             raw=dict(raw,training=dict(raw['training'],**{KEY:saved}))
         old_critic=(saved or {}).get('options',{}).get('critic_data')

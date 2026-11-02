@@ -135,7 +135,7 @@ namespace BrassLegacyAI
                 if(native)bridge.budget=bridge.nativeTurn.BindDeadline(NativeJob.TotalAllowanceMilliseconds(bridge.nativeAllowance));
                 if (!native) bridge.profile.work_limit = SearchWorkLimit;
                 bridge.composition = Host.Composition((JObject)state["configuration"]);
-                bridge.controls = AiTurnControls.Attach(router, (native ? "Alpha Test" : ProfileCatalog.Label(bridge.strategy)) + " · " + DifficultyCatalog.Label(difficulty));
+                bridge.controls = AiTurnControls.Attach(router, (native ? NativeGameState.Model(state).Label : ProfileCatalog.Label(bridge.strategy)) + " · " + DifficultyCatalog.Label(difficulty));
                 bridge.StartRequest(state);
             }
             catch (Exception error)
@@ -222,8 +222,8 @@ namespace BrassLegacyAI
                 var lease=NativeTurnClock.For(app,actor,true);bridge.nativeTurn=lease;bridge.instance=lease.Instance;bridge.clock=lease.Clock;
                 bridge.budget=bridge.nativeAllowance=DifficultyCatalog.Milliseconds(LocalGameState.Difficulty(state,LocalGameState.Assignment(state,actor)));
                 bridge.budget=lease.BindDeadline(NativeJob.TotalAllowanceMilliseconds(bridge.nativeAllowance));
-                bridge.composition=Host.Composition((JObject)state["configuration"]);bridge.controls=AiTurnControls.Attach(router,"Alpha Test · liquidation");bridge.StartRequest(state);
-            } catch(Exception error){CancelActive();LocalMenu.ShowError(router,"Alpha Test stopped. The NN table and save are preserved.\n"+error.Message,error);}
+                bridge.composition=Host.Composition((JObject)state["configuration"]);bridge.controls=AiTurnControls.Attach(router,NativeGameState.Model(state).Label+" · liquidation");bridge.StartRequest(state);
+            } catch(Exception error){CancelActive();LocalMenu.ShowError(router,"NN stopped. The NN table and save are preserved.\n"+error.Message,error);}
             return true;
         }
         void Update()

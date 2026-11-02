@@ -2,10 +2,12 @@
 
 ## Current: fresh neutral self-play from g1290
 
-For the stopped **g253** trained-restart run, use the
-[GAE 0.98 floor continuation command](../ai-research/NEUTRAL_SELFPLAY_G1290_RESTART.md#current-continuation-g253-gae-lambda-floor-098).
-It archives the Ctrl+C partial collection, adopts only the reviewed lambda floor,
-and continues **g254–g273** with existing optimizers, caches and progress.
+For the stopped **g370** trained-restart run, use the
+[g370 continuation command](../ai-research/NEUTRAL_SELFPLAY_G1290_RESTART.md#current-continuation-g370-direct-lambda-095-and-t2-forks).
+It keeps entropy at **0.005**, directly sets GAE lambda/floor to **0.95**, uses
+**0.5% T2-only branching**, and raises the PPG beta floor to **1**. It archives
+the Ctrl+C partial collection and continues **g371–g390**, preserving optimizers,
+compatible PPG caches, independent gates and progress.
 
 Use [the fresh g1290 start command and import rules](../ai-research/NEUTRAL_SELFPLAY_G1290_RESTART.md).
 The source is the stopped g1360 run; a separate `joint7-v11-2-g1290-trained-restart`

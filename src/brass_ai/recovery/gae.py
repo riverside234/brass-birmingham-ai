@@ -13,6 +13,8 @@ CONTRACT='gae-advantage/2.0.0'
 TRAINED_CONTRACT='gae-advantage/3.0.0'
 FLOOR_CONTRACT='gae-advantage/4.0.0'
 FLOOR_MIGRATION='gae-lambda-floor-098/1.0.0'
+DIRECT_095_CONTRACT='gae-advantage/5.0.0'
+DIRECT_095_MIGRATION='gae-direct-095/1.0.0'
 LEGACY_GATE=dict(contract='staged-gae-gate/1.0.0',mode='auto',minimum_value_iterations=10,
     heldout_ev_min=.5,ev_streak=5,fallback_value_iterations=30,healthy_iterations=20,
     rating_slots=3,rating_min_slope=0.)
@@ -55,12 +57,33 @@ def migrate_floor(state,old,new,generation):
         scope='Apply before resumed advantages; preserve optimizer/RNG, work counters and mixed-table evidence. New lambda stage origin only if lambda changed.')
 
 
+def direct_095_options(options):
+    result=copy.deepcopy(options);c=result['advantage'];validate(c)
+    require(c['contract'] in (FLOOR_CONTRACT,DIRECT_095_CONTRACT),'Direct 0.95 requires the trained 0.98-floor recipe')
+    c.update(contract=DIRECT_095_CONTRACT,lambda_floor=.95,**{'lambda':.95})
+    validate(c)
+    return result
+
+
+def migrate_direct_095(state,old,new,generation):
+    validate_state(state,old,generation)
+    require(old['contract']==FLOOR_CONTRACT and direct_095_options(dict(advantage=old))['advantage']==new,
+        'Unreviewed direct GAE 0.95 migration')
+    result=copy.deepcopy(state);before=state['active_lambda']
+    result.update(active_lambda=.95,stage_origin=generation,healthy_streak=0)
+    validate_state(result,new,generation)
+    return result,dict(contract=DIRECT_095_MIGRATION,generation=generation,
+        lambda_before=before,lambda_after=.95,lambda_floor=.95,authority='user',
+        scope='Explicit direct lambda hotfix before advantages; preserve work counters and mixed-table gates/evidence. No measured qualification is fabricated.')
+
+
 def validate(config,*,combined=True):
     legacy=config.get('contract')=='gae-advantage/1.0.0'
-    floored=config.get('contract')==FLOOR_CONTRACT
+    direct=config.get('contract')==DIRECT_095_CONTRACT
+    floored=config.get('contract') in (FLOOR_CONTRACT,DIRECT_095_CONTRACT)
     fields=set(DEFAULT)-{'table_gate'} if legacy else set(DEFAULT)|({'lambda_floor'} if floored else set())
     require(type(config) is dict and set(config)==fields and
-            config['contract'] in (CONTRACT,TRAINED_CONTRACT,FLOOR_CONTRACT,'gae-advantage/1.0.0')
+            config['contract'] in (CONTRACT,TRAINED_CONTRACT,FLOOR_CONTRACT,DIRECT_095_CONTRACT,'gae-advantage/1.0.0')
             and config['chain']=='nonforced','Invalid GAE contract/fields/chain')
     if not legacy:
         t=config['table_gate']
@@ -89,12 +112,13 @@ def validate(config,*,combined=True):
         require(type(gate['minimum_accepted_steps']) is int and gate['minimum_accepted_steps']>0
             and type(gate['minimum_value_iterations_in_window']) is int
             and 1<=gate['minimum_value_iterations_in_window']<=20,'Invalid GAE accepted-work support')
-    trained=config['contract'] in (TRAINED_CONTRACT,FLOOR_CONTRACT)
-    require(not floored or (finite(config['lambda_floor']) and config['lambda_floor']==.98),
-        'Invalid GAE lambda floor; this contract requires 0.98')
-    require(not trained or (config['lambda']==.98 and gate==GATE and config['table_gate']==TABLE_GATE),
-        'Trained GAE starts at 0.98 with unchanged automatic evidence gates')
-    require(gate['mode']!='auto' or config['lambda']==(.98 if trained else 1.),'Automatic GAE initial lambda differs')
+    trained=config['contract'] in (TRAINED_CONTRACT,FLOOR_CONTRACT,DIRECT_095_CONTRACT)
+    start=.95 if direct else .98 if trained else 1.
+    require(not floored or (finite(config['lambda_floor']) and config['lambda_floor']==start),
+        'Invalid GAE lambda floor for this contract')
+    require(not trained or (config['lambda']==start and gate==GATE and config['table_gate']==TABLE_GATE),
+        'Trained GAE must retain the versioned initial lambda and evidence gates')
+    require(gate['mode']!='auto' or config['lambda']==start,'Automatic GAE initial lambda differs')
     require(combined or (config['lambda']==1. and gate['mode']=='fixed'),
             'GAE lambda below 1 / automatic gate requires combined reward')
     return config
@@ -225,6 +249,7 @@ def validate_state(state,config,generation):
     for key in ('generation','value_iterations','ev_streak','healthy_streak','stage_origin'):
         require(type(state[key]) is int and 0<=state[key]<=generation,'Invalid GAE checkpoint '+key)
     allowed=((.98,.95) if config['contract'] in (TRAINED_CONTRACT,FLOOR_CONTRACT) else (1.,.98,.95)) if config['gate']['mode']=='auto' else (config['lambda'],)
+    if config['contract']==DIRECT_095_CONTRACT:allowed=(.95,)
     allowed=tuple(x for x in allowed if x>=lambda_floor(config)) if config['gate']['mode']=='auto' else allowed
     require(finite(state['active_lambda']) and state['active_lambda'] in allowed,'Invalid persisted GAE lambda')
     require(state['ev_streak']<=state['value_iterations'] and

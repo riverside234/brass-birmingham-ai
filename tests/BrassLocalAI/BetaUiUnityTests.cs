@@ -38,7 +38,7 @@ public sealed partial class LocalAiUnityDriver
         Call(menu,"CreateNewGameConfiguration");yield return null;
         if(!read) {
             while(Get<int>(menu,"_numberOfPlayers")<4)menu.IncreaseNumberOfPlayers();menu.SetIntroductoryGame(false);yield return null;
-            Check(AiSelectionCatalog.Entries(AiFamily.AlphaTest).Select(e=>e.Choice.EntryId).SequenceEqual(new[]{"alpha-test","beta"}),"Alpha Test and Beta are separate NN options");
+            Check(AiSelectionCatalog.Entries(AiFamily.AlphaTest).Select(e=>e.Choice.EntryId).SequenceEqual(new[]{"alpha-test","beta","il"}),"Alpha Test, Beta and IL are separate NN options");
             Rows()[1].GetComponent<AiSetupRow>().OpenPicker();var panel=AiSelectionPanel.Active;panel.SwitchFamily(AiFamily.AlphaTest);
             BetaButton("Beta table").onClick.Invoke();
             Check(panel.Tiles.Count(b=>b.gameObject.activeSelf)==1 && panel.Tiles.Any(b=>b.name=="beta" && b.gameObject.activeSelf),"Beta page shows one neutral model card");

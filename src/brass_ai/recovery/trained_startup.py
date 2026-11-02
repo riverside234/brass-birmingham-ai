@@ -34,15 +34,19 @@ def validate(config):
     require(enabled(config),'Invalid trained startup settings')
     require(neutral_training.enabled(config) and policy_observations.enabled(config),
         'Trained startup requires neutral contexts/fingerprints and AnchorKL off')
+    revised=config['advantage']['contract']==gae.DIRECT_095_CONTRACT
     require(config['exploration_rollout']==exploration.TRAINED_ROLLOUT
-        and config['branching']==exploration.NEUTRAL_BRANCH and config['opening']==exploration.THREE_OPENING
+        and config['branching']==(exploration.T2_ONLY_BRANCH if revised else exploration.NEUTRAL_BRANCH) and config['opening']==exploration.THREE_OPENING
         and config['rehearsal_weight']==0. and config['diversity']['mode']=='off'
         and config['context_evaluation']['mode']=='off' and config['exploration']==.05
         and config['update']['fixed_entropy']==exploration.FIXED_ENTROPY_005
         and config['insolvency']==dict(event_cost=.02,max_cost=.075), 'Trained rollback recipe differs')
-    require(config['advantage']['contract'] in (gae.TRAINED_CONTRACT,gae.FLOOR_CONTRACT) and config['advantage']['lambda']==.98
+    require(config['advantage']['contract'] in (gae.TRAINED_CONTRACT,gae.FLOOR_CONTRACT,gae.DIRECT_095_CONTRACT) and config['advantage']['lambda']==(.95 if revised else .98)
         and config['advantage']['gate']==gae.GATE and config['advantage']['table_gate']==gae.TABLE_GATE,
         'Trained startup must preserve automatic GAE health/support gates')
+    if revised:
+        from .ppg_g210 import BETA1_CONTRACT
+        require(config['value_phase']['contract']==BETA1_CONTRACT,'Revised trained recipe requires PPG beta floor one')
     require(config['learning_rate_warmup']['selfplay_steps']==100,'Trained startup needs 100 optimizer-step PPO warmup')
     require(config['panel_gates']==panel_gates.DEFAULT and config['v4_share_gate']==v4_share.CURRENT_DEFAULT
         and config['rating_coverage']==rating_coverage.DEFAULT and config['rating']['enabled']

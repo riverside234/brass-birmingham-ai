@@ -45,7 +45,7 @@ public sealed partial class LocalAiUnityDriver
         Check(Setup.PlayerMetadata.All(p=>LocalMenu.Choice(p).Family==AiFamily.AlphaTest),"restored one coherent NN family");
         Check(LocalMenu.TableFamily(Setup.PlayerMetadata[0])==AiFamily.AlphaTest && LocalMenu.CanStart(menu),"NN family retained for Human seat and Start allowed");
         Check(Setup.PlayerMetadata.All(p=>LocalMenu.TableSearchK(p)==expectedK),"saved K restored for the whole table independently of seat allowances");
-        Check(AiSelectionCatalog.Entries(AiFamily.AlphaTest).Count==2 && Setup.PlayerMetadata.All(p=>LocalMenu.Choice(p).EntryId=="alpha-test"),"NN catalog offers Alpha Test/Beta and retains the default Alpha choice");
+        Check(AiSelectionCatalog.Entries(AiFamily.AlphaTest).Count==3 && Setup.PlayerMetadata.All(p=>LocalMenu.Choice(p).EntryId=="alpha-test"),"NN catalog offers Alpha Test/Beta/IL and retains the default Alpha choice");
         Check(NativeFocus.Keys.Skip(1).All(f=>!AiSelectionCatalog.CanChoose(new AiChoice(AiFamily.AlphaTest,NativeFocus.ChoiceId(f)))),"industry tag choices cannot bypass the single NN menu");
     }
     IEnumerator SetupPreferencesCases()

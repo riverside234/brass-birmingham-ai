@@ -710855,6 +710855,29 @@
       "reason_ref": "180",
       "preserve_gae_calibration": true,
       "config_migrations_ref": "1701"
+    },
+    {
+      "from_implementation": "ea569b6238657d0667b3550efa2a0ea0e0f5960699a38cbb77991c91d0fd93b6",
+      "to_implementation": "f7a48a025e2c247e63da4df301ce2b80c7c6aabf1073220a5be97f0929719c78",
+      "learning_compatibility_ref": "5",
+      "preserve_g370_calibration": true,
+      "reason_ref": "181"
+    },
+    {
+      "from_implementation": "ea569b6238657d0667b3550efa2a0ea0e0f5960699a38cbb77991c91d0fd93b6",
+      "to_implementation": "f7a48a025e2c247e63da4df301ce2b80c7c6aabf1073220a5be97f0929719c78",
+      "learning_compatibility_ref": "5",
+      "preserve_g370_calibration": true,
+      "reason_ref": "181",
+      "config_migrations_ref": "1702"
+    },
+    {
+      "from_implementation": "f7a48a025e2c247e63da4df301ce2b80c7c6aabf1073220a5be97f0929719c78",
+      "to_implementation": "f7a48a025e2c247e63da4df301ce2b80c7c6aabf1073220a5be97f0929719c78",
+      "learning_compatibility_ref": "5",
+      "preserve_g370_calibration": true,
+      "reason_ref": "181",
+      "config_migrations_ref": "1702"
     }
   ],
   "definitions": {
@@ -711039,7 +711062,8 @@
       "177": "Reviewed additive fresh-neutral initialization: existing explicit configurations retain behavior, optimizer/RNG and safeguards; new defaults do not rewrite saved recipes. New weights-seeded runs require their own hash-bound manifest and separate directory. No rollback/resume config migration is authorized by this review. Existing individually reviewed migration restrictions remain exact.",
       "178": "Reviewed optional fresh-run preparation flag: no_rehearsal sets only rehearsal_weight=0 before signing the new seed manifest. The default is false; existing configurations, optimizers/RNG, progress, schedules and safeguards are unchanged. No same-run configuration migration is authorized. Previously reviewed migration restrictions remain exact.",
       "179": "Reviewed fresh g1290 startup: explicit manual scheduling receipts, immediate branching, initial GAE .98 and independent fresh Ownership/VP companion initialization with committed retained-PPG warmup. These are signed new-run opt-ins; no same-run adoption or reset is authorized. Existing config contracts retain optimizer, RNG, model and progress semantics. Auxiliary diagnostics add bounded occupied-entity errors. Existing reviewed transitions retain exact restrictions. Review: ai-research/NEUTRAL_SELFPLAY_G1290_RESTART.md.",
-      "180": "Reviewed actor-only GAE floor adoption from trained-start GAE 3 to 4: lambda .95 -> .98 before advantages, no subsequent .95 stage. Preserve model/Adam/RNG, independent evidence, PPG cache and utility calibration. Only the advantage config block may change via the named migration. Review: ai-research/NEUTRAL_SELFPLAY_G1290_RESTART.md."
+      "180": "Reviewed actor-only GAE floor adoption from trained-start GAE 3 to 4: lambda .95 -> .98 before advantages, no subsequent .95 stage. Preserve model/Adam/RNG, independent evidence, PPG cache and utility calibration. Only the advantage config block may change via the named migration. Review: ai-research/NEUTRAL_SELFPLAY_G1290_RESTART.md.",
+      "181": "Reviewed g370 continuation: preserve entropy .005, adopt direct lambda .95/floor .95, half-percent T2-only forks, and PPG beta floor 1. Preserve compatible cache, weights/Adam/RNG, utility calibration, independent gates and progress. Review: ai-research/NEUTRAL_SELFPLAY_G1290_RESTART.md."
     },
     "config_changes": {
       "0": {
@@ -732803,6 +732827,9 @@
       ],
       "1701": [
         "gae-lambda-floor-098/1.0.0"
+      ],
+      "1702": [
+        "trained-restart-g370/1.0.0"
       ]
     },
     "config_migration": {

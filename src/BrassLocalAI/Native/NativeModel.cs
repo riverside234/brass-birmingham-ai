@@ -18,6 +18,11 @@ namespace BrassLegacyAI.Native
             "1ee3340c0279592eb28cf2ce0bdbd24691e63be60f81d0196984bfc27c921424",
             "ed8edb039a1257d591cc0d2e2b87eb7a2d7aa411ce0f7710a2d7f8ad487dc3b0",
             "beta-g1290","part1-local-beta-test","user-2026-11-01",Array.AsReadOnly(new[]{"neutral"}));
+        public static readonly NativeModel IL = new NativeModel("il","IL","brass-gumbel-is-mcts/il-v11-2-v1",
+            "c4cdf78a1b90ae9ade7156878009e34ee355ec71ee67226f3fd8a95d09335a94",
+            "a42304fa909cbc833cf258bcbe7d046647a272a6a1424def2e6d968bb079a141",
+            "657fe1901ab35d144e5d86e16b42e795d281946829c87bcb8e0245927b70a263",
+            "il-v11-2","part1-local-il-test","user-2026-11-02",Array.AsReadOnly(new[]{"neutral"}));
         NativeModel(string key,string label,string backend,string model,string export,string checkpoint,string directory,string scope,string decision,IReadOnlyList<string> focuses)
         { Key=key;Label=label;Backend=backend;Model=model;Export=export;Checkpoint=checkpoint;DirectoryName=directory;Scope=scope;Decision=decision;Focuses=focuses; }
         public string Location { get { return Path.Combine(NativePackage.GameRoot,"BrassNative",DirectoryName); } }
@@ -25,18 +30,19 @@ namespace BrassLegacyAI.Native
         public string Profile(string focus)
         {
             if(this==Alpha)return NativeFocus.Profile(focus);
-            if(focus!="neutral")throw new InvalidDataException("Beta supports neutral context only");
-            return "beta-g1290-neutral/1.0.0";
+            if(focus!="neutral")throw new InvalidDataException(Label+" supports neutral context only");
+            return this==IL?"il-v11-2-neutral/1.0.0":"beta-g1290-neutral/1.0.0";
         }
         public static NativeModel FromChoice(string choice)
-        { if(choice=="beta")return Beta;if(NativeFocus.FromChoice(choice)!=null)return Alpha;throw new InvalidDataException("Unknown NN selection"); }
+        { if(choice=="il")return IL;if(choice=="beta")return Beta;if(NativeFocus.FromChoice(choice)!=null)return Alpha;throw new InvalidDataException("Unknown NN selection"); }
         public static NativeModel FromBackend(string backend)
-        { if(backend==Alpha.Backend)return Alpha;if(backend==Beta.Backend)return Beta;throw new InvalidDataException("Unknown saved NN backend"); }
+        { if(backend==Alpha.Backend)return Alpha;if(backend==Beta.Backend)return Beta;if(backend==IL.Backend)return IL;throw new InvalidDataException("Unknown saved NN backend"); }
         public static NativeModel FromModel(string model)
-        { if(model==Alpha.Model)return Alpha;if(model==Beta.Model)return Beta;throw new InvalidDataException("Unknown NN model"); }
+        { if(model==Alpha.Model)return Alpha;if(model==Beta.Model)return Beta;if(model==IL.Model)return IL;throw new InvalidDataException("Unknown NN model"); }
         public static NativeModel FromProfile(string profile)
         {
             if(profile==Beta.Profile("neutral"))return Beta;
+            if(profile==IL.Profile("neutral"))return IL;
             foreach(string focus in NativeFocus.Keys)if(profile==Alpha.Profile(focus))return Alpha;
             throw new InvalidDataException("Unknown NN request profile");
         }
@@ -44,9 +50,10 @@ namespace BrassLegacyAI.Native
         {
             string name=Path.GetFileName(Path.GetFullPath(directory).TrimEnd(Path.DirectorySeparatorChar));
             if(name==Alpha.DirectoryName)return Alpha;if(name==Beta.DirectoryName)return Beta;
+            if(name==IL.DirectoryName)return IL;
             throw new InvalidDataException("Unknown NN package directory");
         }
-        public static bool ValidChoice(string choice) { return choice=="alpha-test" || choice=="beta"; }
+        public static bool ValidChoice(string choice) { return choice=="alpha-test" || choice=="beta" || choice=="il"; }
         public static bool BetaReceipt(JToken r)
         {
             return r!=null && (string)r["version"]=="migration-utility-readonly-validation/1.0.0" &&

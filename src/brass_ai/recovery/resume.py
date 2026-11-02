@@ -104,6 +104,8 @@ def check_signature(state, signature, reviewed=False):
             handlers[EV_MIGRATION]=evidence_config
             from .gae import FLOOR_MIGRATION as GAE_FLOOR_MIGRATION,floor_options
             handlers[GAE_FLOOR_MIGRATION]=floor_options
+            from .training_revision_g370 import MIGRATION as G370_MIGRATION,configure as g370_config
+            handlers[G370_MIGRATION]=g370_config
             from .lr_controller import THRESHOLD_MIGRATION,threshold_config
             if THRESHOLD_MIGRATION in migrations:
                 require(state['iteration']>=560,'LR threshold hotfix starts from committed generation 560 or later')
@@ -329,16 +331,25 @@ def load_resume(root, run, state, signature, *, device='cpu', reviewed=False, di
 
 def gae_floor_receipt_preserved(state,signature,raw,entry):
     """An explicitly reviewed actor-only lambda change leaves critic calibration valid."""
-    from .gae import floor_options,TRAINED_CONTRACT,FLOOR_CONTRACT
+    from .gae import floor_options,TRAINED_CONTRACT,FLOOR_CONTRACT,DIRECT_095_CONTRACT
     known={digest(state['signature']):state['signature']}
     for transition in reversed(state.get('source_transitions',[])):
         if transition['checkpoint']==entry and transition['to_signature'] in known:
             known[digest(transition['from_signature'])]=transition['from_signature']
     before=known.get(raw['training'].get('signature'))
-    if before is None or before['config'].get('advantage',{}).get('contract') not in (TRAINED_CONTRACT,FLOOR_CONTRACT):return False
+    if before is None:return False
+    contract=before['config'].get('advantage',{}).get('contract')
+    if contract not in (TRAINED_CONTRACT,FLOOR_CONTRACT,DIRECT_095_CONTRACT):return False
     if {k:v for k,v in before.items() if k not in ('implementation','config')}!={k:v for k,v in signature.items() if k not in ('implementation','config')}:return False
-    if signature['config'] not in (before['config'],floor_options(before['config'])):return False
-    return any(e.get('preserve_gae_calibration') is True and e['from_implementation']==before['implementation']
+    flags=[]
+    if contract in (TRAINED_CONTRACT,FLOOR_CONTRACT) and signature['config'] in (before['config'],floor_options(before['config'])):
+        flags.append('preserve_gae_calibration')
+    if contract in (FLOOR_CONTRACT,DIRECT_095_CONTRACT):
+        from .training_revision_g370 import configure
+        from .trained_startup import enabled
+        if enabled(before['config']) and signature['config'] in (before['config'],configure(before['config'])):
+            flags.append('preserve_g370_calibration')
+    return any(any(e.get(flag) is True for flag in flags) and e['from_implementation']==before['implementation']
         and e['to_implementation']==signature['implementation'] and e['learning_compatibility']==digest(signature['compatibility'])
         for e in expand_source_reviews(read(CONFIG_DIR/'selfplay-resume-sources.json'))['transitions'])
 
