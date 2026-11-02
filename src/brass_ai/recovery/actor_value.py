@@ -99,6 +99,13 @@ class TrainingPhases:
         self.snapshot_floor_migration=None
         self.snapshot_fixed_migration=None
         saved=(raw or {}).get('training',{}).get(KEY)
+        self.gae_floor_migration=None
+        if (saved is not None and config['advantage'].get('contract')==gae.FLOOR_CONTRACT
+                and saved['options']['advantage']!=config['advantage']):
+            old=saved['options']['advantage']
+            migrated,self.gae_floor_migration=gae.migrate_floor(saved['gae'],old,config['advantage'],generation)
+            saved=dict(saved,options=dict(saved['options'],advantage=copy.deepcopy(config['advantage'])),gae=migrated)
+            raw=dict(raw,training=dict(raw['training'],**{KEY:saved}))
         old_critic=(saved or {}).get('options',{}).get('critic_data')
         if old_critic is not None and old_critic!=config.get('critic_data') and critic_data.fixed(config.get('critic_data',{})):
             options=critic_data.fixed_config(saved['options'])
@@ -719,6 +726,7 @@ class TrainingPhases:
             report['health_scope']='Economic health and existing PPO/PPG evidence rules; AnchorKL measurement, calibration and gating disabled'
         if getattr(self,'window_migration',None):report['window_migration']=copy.deepcopy(self.window_migration)
         if self.evidence_migration:report['evidence_migration']=copy.deepcopy(self.evidence_migration)
+        if self.gae_floor_migration:report['floor_migration']=copy.deepcopy(self.gae_floor_migration)
         if self.critic_state is not None:
             from .snapshot_r2 import regime
             self.critic_state,value['critic_rollout']=critic_data.advance(self.critic_state,self.config['critic_data'],
@@ -752,6 +760,7 @@ class TrainingPhases:
             **({'buffer':copy.deepcopy(self.buffer.pending)} if self.buffer else {}))
 
     def committed(self,generation):
+        self.gae_floor_migration=None
         if self.buffer:
             self.value_report['buffer']['committed_cleanup']=self.buffer.committed(generation)
         elif self.critic_evidence is not None and self.root is not None and self.run is not None:

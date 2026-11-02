@@ -11,6 +11,8 @@ from . import ev_evidence,gae_health
 
 CONTRACT='gae-advantage/2.0.0'
 TRAINED_CONTRACT='gae-advantage/3.0.0'
+FLOOR_CONTRACT='gae-advantage/4.0.0'
+FLOOR_MIGRATION='gae-lambda-floor-098/1.0.0'
 LEGACY_GATE=dict(contract='staged-gae-gate/1.0.0',mode='auto',minimum_value_iterations=10,
     heldout_ev_min=.5,ev_streak=5,fallback_value_iterations=30,healthy_iterations=20,
     rating_slots=3,rating_min_slope=0.)
@@ -26,10 +28,39 @@ DEFAULT=dict(contract=CONTRACT,**{'lambda':1.0},shadow_lambdas=[.98,.95,.9],chai
 def finite(x):return type(x) in (int,float) and math.isfinite(x)
 
 
+def lambda_floor(config):return config.get('lambda_floor',.95)
+
+
+def floor_options(options):
+    """Explicit opt-in; old signed recipes retain their original floor."""
+    result=copy.deepcopy(options);c=result['advantage'];validate(c)
+    require(c['contract'] in (TRAINED_CONTRACT,FLOOR_CONTRACT),
+        'The 0.98 floor requires the trained-start GAE recipe')
+    c.update(contract=FLOOR_CONTRACT,lambda_floor=.98)
+    validate(c)
+    return result
+
+
+def migrate_floor(state,old,new,generation):
+    validate_state(state,old,generation)
+    require(old['contract']==TRAINED_CONTRACT and
+        floor_options(dict(advantage=old))['advantage']==new,'Unreviewed GAE floor migration')
+    result=copy.deepcopy(state);before=state['active_lambda']
+    result['active_lambda']=max(before,lambda_floor(new))
+    if result['active_lambda']!=before:
+        result.update(stage_origin=generation,healthy_streak=0)
+    validate_state(result,new,generation)
+    return result,dict(contract=FLOOR_MIGRATION,generation=generation,
+        lambda_before=before,lambda_after=result['active_lambda'],lambda_floor=lambda_floor(new),
+        scope='Apply before resumed advantages; preserve optimizer/RNG, work counters and mixed-table evidence. New lambda stage origin only if lambda changed.')
+
+
 def validate(config,*,combined=True):
     legacy=config.get('contract')=='gae-advantage/1.0.0'
-    require(type(config) is dict and set(config)==(set(DEFAULT)-{'table_gate'} if legacy else set(DEFAULT)) and
-            config['contract'] in (CONTRACT,TRAINED_CONTRACT,'gae-advantage/1.0.0')
+    floored=config.get('contract')==FLOOR_CONTRACT
+    fields=set(DEFAULT)-{'table_gate'} if legacy else set(DEFAULT)|({'lambda_floor'} if floored else set())
+    require(type(config) is dict and set(config)==fields and
+            config['contract'] in (CONTRACT,TRAINED_CONTRACT,FLOOR_CONTRACT,'gae-advantage/1.0.0')
             and config['chain']=='nonforced','Invalid GAE contract/fields/chain')
     if not legacy:
         t=config['table_gate']
@@ -58,7 +89,9 @@ def validate(config,*,combined=True):
         require(type(gate['minimum_accepted_steps']) is int and gate['minimum_accepted_steps']>0
             and type(gate['minimum_value_iterations_in_window']) is int
             and 1<=gate['minimum_value_iterations_in_window']<=20,'Invalid GAE accepted-work support')
-    trained=config['contract']==TRAINED_CONTRACT
+    trained=config['contract'] in (TRAINED_CONTRACT,FLOOR_CONTRACT)
+    require(not floored or (finite(config['lambda_floor']) and config['lambda_floor']==.98),
+        'Invalid GAE lambda floor; this contract requires 0.98')
     require(not trained or (config['lambda']==.98 and gate==GATE and config['table_gate']==TABLE_GATE),
         'Trained GAE starts at 0.98 with unchanged automatic evidence gates')
     require(gate['mode']!='auto' or config['lambda']==(.98 if trained else 1.),'Automatic GAE initial lambda differs')
@@ -191,7 +224,8 @@ def validate_state(state,config,generation):
     require(state['generation']==generation,'GAE checkpoint progress differs')
     for key in ('generation','value_iterations','ev_streak','healthy_streak','stage_origin'):
         require(type(state[key]) is int and 0<=state[key]<=generation,'Invalid GAE checkpoint '+key)
-    allowed=((.98,.95) if config['contract']==TRAINED_CONTRACT else (1.,.98,.95)) if config['gate']['mode']=='auto' else (config['lambda'],)
+    allowed=((.98,.95) if config['contract'] in (TRAINED_CONTRACT,FLOOR_CONTRACT) else (1.,.98,.95)) if config['gate']['mode']=='auto' else (config['lambda'],)
+    allowed=tuple(x for x in allowed if x>=lambda_floor(config)) if config['gate']['mode']=='auto' else allowed
     require(finite(state['active_lambda']) and state['active_lambda'] in allowed,'Invalid persisted GAE lambda')
     require(state['ev_streak']<=state['value_iterations'] and
             state['healthy_streak']<=generation-state['stage_origin'],'Invalid GAE checkpoint streak')
@@ -231,7 +265,8 @@ def advance(state,config,*,generation,value_report,health_ok,rating):
     fallback=state['value_iterations']>=gate['fallback_value_iterations']
     reason='fixed' if gate['mode']=='fixed' else 'improving_critic';decision='hold'
     if gate['mode']=='auto':
-        if used==1. and (ready or fallback):
+        if used<=lambda_floor(config):reason='final_stage'
+        elif used==1. and (ready or fallback):
             if healthy:
                 state['active_lambda']=.98;decision='advance';reason='critic_ev_gate' if ready else 'value_iteration_fallback'
             else:reason='health_not_ready'
@@ -239,7 +274,7 @@ def advance(state,config,*,generation,value_report,health_ok,rating):
             reason='collecting_healthy_iterations'
             if state['healthy_streak']>=gate['healthy_iterations']:
                 if stage_evidence is not None and not stage_evidence['ready']:reason='accepted_value_window_not_ready'
-                elif rating.get('ok') is True:state['active_lambda']=.95;decision='advance';reason='healthy_streak_and_rating'
+                elif rating.get('ok') is True:state['active_lambda']=max(.95,lambda_floor(config));decision='advance';reason='healthy_streak_and_rating'
                 else:reason='rating_evidence_not_ready'
         elif used==.95:reason='final_stage'
     if decision=='advance':state['stage_origin']=generation;state['healthy_streak']=0
@@ -287,7 +322,7 @@ def advance(state,config,*,generation,value_report,health_ok,rating):
                     streak_scope='Consecutive PPO/economic health and applicable value KL guard; critic work supported across the mixed-table EV window')
     return state,dict(contract=gate['contract'],mode=gate['mode'],lambda_used=used,
         table_gate=table_report,
-        lambda_next=state['active_lambda'],decision=decision,reason=reason,generation=generation,
+        lambda_next=state['active_lambda'],lambda_floor=lambda_floor(config),decision=decision,reason=reason,generation=generation,
         value_iterations=state['value_iterations'],heldout_ev=ev,ev_streak=state['ev_streak'],
         healthy=healthy,healthy_streak=state['healthy_streak'],stage_origin=state['stage_origin'],rating=rating,
         stage_evidence=stage_evidence,critic_training=work,

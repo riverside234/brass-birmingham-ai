@@ -2,6 +2,11 @@
 
 ## Current: fresh neutral self-play from g1290
 
+For the stopped **g253** trained-restart run, use the
+[GAE 0.98 floor continuation command](../ai-research/NEUTRAL_SELFPLAY_G1290_RESTART.md#current-continuation-g253-gae-lambda-floor-098).
+It archives the Ctrl+C partial collection, adopts only the reviewed lambda floor,
+and continues **g254–g273** with existing optimizers, caches and progress.
+
 Use [the fresh g1290 start command and import rules](../ai-research/NEUTRAL_SELFPLAY_G1290_RESTART.md).
 The source is the stopped g1360 run; a separate `joint7-v11-2-g1290-trained-restart`
 run begins at generation zero with g1290 weights, new optimizers and fresh PPG

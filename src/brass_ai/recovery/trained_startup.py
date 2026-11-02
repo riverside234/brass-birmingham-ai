@@ -40,7 +40,7 @@ def validate(config):
         and config['context_evaluation']['mode']=='off' and config['exploration']==.05
         and config['update']['fixed_entropy']==exploration.FIXED_ENTROPY_005
         and config['insolvency']==dict(event_cost=.02,max_cost=.075), 'Trained rollback recipe differs')
-    require(config['advantage']['contract']==gae.TRAINED_CONTRACT and config['advantage']['lambda']==.98
+    require(config['advantage']['contract'] in (gae.TRAINED_CONTRACT,gae.FLOOR_CONTRACT) and config['advantage']['lambda']==.98
         and config['advantage']['gate']==gae.GATE and config['advantage']['table_gate']==gae.TABLE_GATE,
         'Trained startup must preserve automatic GAE health/support gates')
     require(config['learning_rate_warmup']['selfplay_steps']==100,'Trained startup needs 100 optimizer-step PPO warmup')

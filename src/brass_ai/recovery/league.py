@@ -344,6 +344,10 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
     if 'advantage' in config:
         from .actor_value import TrainingPhases
         phases=TrainingPhases(model,config,raw=phase_raw,generation=state['iteration'],root=root,run=run)
+        if phases.gae_floor_migration:
+            change=phases.gae_floor_migration
+            print(f'GAE lambda floor: {change["lambda_before"]:.2f} -> {change["lambda_after"]:.2f}; '
+                  f'minimum={change["lambda_floor"]:.2f}; training progress and mixed-table evidence preserved',flush=True)
         phases.local_scoring=local_scoring
         phases.diversity=diversity
         if raw is not None and state['iteration']>0:

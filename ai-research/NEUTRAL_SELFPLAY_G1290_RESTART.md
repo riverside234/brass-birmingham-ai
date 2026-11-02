@@ -1,5 +1,59 @@
 # Fresh neutral self-play from g1290
 
+## Current continuation: g253, GAE lambda floor 0.98
+
+The `g0253-20261102T075610938330Z` export confirms **253 committed generations /
+80,960 ordinary games**. Its latest report (`iteration-0252/report.json`, which
+commits generation 253) uses lambda **0.95**. The reviewed continuation below
+adopts `gae-advantage/4.0.0` with `lambda_floor=0.98`: before the next advantage
+calculation, saved 0.95 becomes 0.98 and cannot automatically fall back to 0.95.
+Already-qualified history/v4 tables use 0.98 too; unqualified tables remain at
+1.0 until their existing independent EV gates qualify. Lower-lambda shadow
+diagnostics remain comparisons only, not the trained advantages.
+
+This changes only the signed `advantage` block. Weights, both main Adam states,
+companion heads/Adam, RNG, LR state, ordinary progress, population, reward,
+utility calibration and the two-iteration PPG cache remain intact. Mixed-table
+qualification origins and evidence remain intact. If lambda changes, its stage
+origin becomes g253 and its stage streak starts at zero; prior work counters and
+recorded observations are retained. No restart from the original g1290 seed.
+
+After Ctrl+C, run from the Linux repository root:
+
+```bash
+python scripts/recover-step5-iteration.py --root "$PWD" \
+  --run artifacts/step5/joint7-v11-2-g1290-trained-restart \
+  --expected-iteration 253 --apply && \
+python scripts/configure-gae-floor.py \
+  --run artifacts/step5/joint7-v11-2-g1290-trained-restart \
+  --expected-generation 253 \
+  --output configs/step5/joint7-v11-2-g1290-trained-restart-gae098-g253.json && \
+python scripts/step5.py \
+  --config configs/step5/joint7-v11-2-g1290-trained-restart-gae098-g253.json train \
+  --run artifacts/step5/joint7-v11-2-g1290-trained-restart \
+  --imitation-run artifacts/step5/features4-v11-2-batch7-il \
+  --resume-reviewed-source --expected-generation 253 --iterations 20
+```
+
+This runs **g254–g273**. Recovery archives any uncommitted partial collection;
+it does not rewind committed progress. The helper verifies the full checkpoint
+hash and writes a new configuration without editing run state. Actual adoption
+occurs during reviewed training startup and is safe to retry before the first
+new commit. Subsequent continuations use this same configuration and the latest
+committed generation. The original generation-zero manifest stays unchanged;
+the original launch recipe below documents how this run was created.
+
+**16 focused checks passed**, including the isolated CPU smoke. Validation covers strict floor configuration, healthy-window clamping, mixed
+table evidence preservation, reviewed signature/retry checks, helper safety and
+an isolated CPU Adam checkpoint/advantage smoke. No long training or evaluation
+is launched; this is a requested algorithm setting, not evidence of strength gain.
+Logs: `artifacts/gae-floor-tests.log`, `artifacts/gae-floor-regressions.log`,
+`artifacts/gae-floor-legacy-fixture.log`. The legacy startup test initially lacked
+its archived g1360 export; its unchanged assertions passed with the available
+g253 GAE-3 configuration. No production validation was weakened. `git diff --check`
+passed. The actual Linux full checkpoint is checked by the continuation command;
+the desktop export contains reports, not those model/optimizer tensors.
+
 This starts a **new run at generation 0**, initialized with the retained g1290
 model tensors. It does not rewind or modify the g1360 source run. The source
 inventory is `results/joint7-v11-2-grouped-lr-critic-g1360-20261101T011723464975Z`.

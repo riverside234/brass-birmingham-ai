@@ -710832,6 +710832,29 @@
       "learning_compatibility_ref": "5",
       "reason_ref": "179",
       "config_migrations_ref": "1700"
+    },
+    {
+      "from_implementation": "0cb915f8becd204baedaeb3996be46298924fbe99c5bf4fe9ae6f2446b894a01",
+      "to_implementation": "ea569b6238657d0667b3550efa2a0ea0e0f5960699a38cbb77991c91d0fd93b6",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "180",
+      "preserve_gae_calibration": true
+    },
+    {
+      "from_implementation": "0cb915f8becd204baedaeb3996be46298924fbe99c5bf4fe9ae6f2446b894a01",
+      "to_implementation": "ea569b6238657d0667b3550efa2a0ea0e0f5960699a38cbb77991c91d0fd93b6",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "180",
+      "preserve_gae_calibration": true,
+      "config_migrations_ref": "1701"
+    },
+    {
+      "from_implementation": "ea569b6238657d0667b3550efa2a0ea0e0f5960699a38cbb77991c91d0fd93b6",
+      "to_implementation": "ea569b6238657d0667b3550efa2a0ea0e0f5960699a38cbb77991c91d0fd93b6",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "180",
+      "preserve_gae_calibration": true,
+      "config_migrations_ref": "1701"
     }
   ],
   "definitions": {
@@ -711015,7 +711038,8 @@
       "176": "Reviewed diagnostic/retention performance revision: retire original-IL report comparisons, retain exact operative anchor and PFSP probes with cached admitted inputs and same-weight output reuse; auxiliary report only every five committed iterations, at most 512 rows and reduced metrics; general retention every five committed iterations with batch intent journals and unchanged pins, hash checks and per-commit PPG cache expiration. Preserve training tensors/Adam/RNG/controllers. Explicit neutral-fingerprints-economic-lr migration zeroes only the 28 fingerprint columns, disables AnchorKL inference/calibration/LR gating, preserves economic evidence and PPO KL guards, and limits fixed probes to due healthy history admission/eviction. Legacy signed configs retain their anchor gate. Existing explicit configuration migrations retain their exact restrictions.",
       "177": "Reviewed additive fresh-neutral initialization: existing explicit configurations retain behavior, optimizer/RNG and safeguards; new defaults do not rewrite saved recipes. New weights-seeded runs require their own hash-bound manifest and separate directory. No rollback/resume config migration is authorized by this review. Existing individually reviewed migration restrictions remain exact.",
       "178": "Reviewed optional fresh-run preparation flag: no_rehearsal sets only rehearsal_weight=0 before signing the new seed manifest. The default is false; existing configurations, optimizers/RNG, progress, schedules and safeguards are unchanged. No same-run configuration migration is authorized. Previously reviewed migration restrictions remain exact.",
-      "179": "Reviewed fresh g1290 startup: explicit manual scheduling receipts, immediate branching, initial GAE .98 and independent fresh Ownership/VP companion initialization with committed retained-PPG warmup. These are signed new-run opt-ins; no same-run adoption or reset is authorized. Existing config contracts retain optimizer, RNG, model and progress semantics. Auxiliary diagnostics add bounded occupied-entity errors. Existing reviewed transitions retain exact restrictions. Review: ai-research/NEUTRAL_SELFPLAY_G1290_RESTART.md."
+      "179": "Reviewed fresh g1290 startup: explicit manual scheduling receipts, immediate branching, initial GAE .98 and independent fresh Ownership/VP companion initialization with committed retained-PPG warmup. These are signed new-run opt-ins; no same-run adoption or reset is authorized. Existing config contracts retain optimizer, RNG, model and progress semantics. Auxiliary diagnostics add bounded occupied-entity errors. Existing reviewed transitions retain exact restrictions. Review: ai-research/NEUTRAL_SELFPLAY_G1290_RESTART.md.",
+      "180": "Reviewed actor-only GAE floor adoption from trained-start GAE 3 to 4: lambda .95 -> .98 before advantages, no subsequent .95 stage. Preserve model/Adam/RNG, independent evidence, PPG cache and utility calibration. Only the advantage config block may change via the named migration. Review: ai-research/NEUTRAL_SELFPLAY_G1290_RESTART.md."
     },
     "config_changes": {
       "0": {
@@ -732776,6 +732800,9 @@
       ],
       "1700": [
         "neutral-fingerprints-economic-lr/1.0.0"
+      ],
+      "1701": [
+        "gae-lambda-floor-098/1.0.0"
       ]
     },
     "config_migration": {

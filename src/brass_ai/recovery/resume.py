@@ -102,6 +102,8 @@ def check_signature(state, signature, reviewed=False):
                       ARCHIVED_TIME_CONFIG_MIGRATION:archived_time_budget_config}
             from .gae import CONFIG_MIGRATION as EV_MIGRATION,evidence_config
             handlers[EV_MIGRATION]=evidence_config
+            from .gae import FLOOR_MIGRATION as GAE_FLOOR_MIGRATION,floor_options
+            handlers[GAE_FLOOR_MIGRATION]=floor_options
             from .lr_controller import THRESHOLD_MIGRATION,threshold_config
             if THRESHOLD_MIGRATION in migrations:
                 require(state['iteration']>=560,'LR threshold hotfix starts from committed generation 560 or later')
@@ -311,6 +313,7 @@ def load_resume(root, run, state, signature, *, device='cpu', reviewed=False, di
             verified.add(frozen['path'])
     if (getattr(model.config,'utility',None) is not None and raw['training'].get('signature')!=digest(signature)
             and not teacher_receipt_preserved(state,signature,raw,entry)
+            and not gae_floor_receipt_preserved(state,signature,raw,entry)
             and not evaluation_receipt_preserved(state,signature,raw,entry)):
         # The old receipt can predate a post-calibration policy/distillation
         # update. A reviewed source transition preserves its weights and Adam,
@@ -322,6 +325,22 @@ def load_resume(root, run, state, signature, *, device='cpu', reviewed=False, di
             reason='Reviewed source continuation requires fresh ordinary utility calibration',
             checkpoint_signature=raw['training'].get('signature'),current_signature=digest(signature))
     return model, raw, changed
+
+
+def gae_floor_receipt_preserved(state,signature,raw,entry):
+    """An explicitly reviewed actor-only lambda change leaves critic calibration valid."""
+    from .gae import floor_options,TRAINED_CONTRACT,FLOOR_CONTRACT
+    known={digest(state['signature']):state['signature']}
+    for transition in reversed(state.get('source_transitions',[])):
+        if transition['checkpoint']==entry and transition['to_signature'] in known:
+            known[digest(transition['from_signature'])]=transition['from_signature']
+    before=known.get(raw['training'].get('signature'))
+    if before is None or before['config'].get('advantage',{}).get('contract') not in (TRAINED_CONTRACT,FLOOR_CONTRACT):return False
+    if {k:v for k,v in before.items() if k not in ('implementation','config')}!={k:v for k,v in signature.items() if k not in ('implementation','config')}:return False
+    if signature['config'] not in (before['config'],floor_options(before['config'])):return False
+    return any(e.get('preserve_gae_calibration') is True and e['from_implementation']==before['implementation']
+        and e['to_implementation']==signature['implementation'] and e['learning_compatibility']==digest(signature['compatibility'])
+        for e in expand_source_reviews(read(CONFIG_DIR/'selfplay-resume-sources.json'))['transitions'])
 
 
 def evaluation_receipt_preserved(state,signature,raw,entry):
