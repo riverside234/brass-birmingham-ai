@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
-"""Seal B01-B04 for the recorded g570 checkpoint and current reviewed source."""
+"""Seal g570-r2 with complete detached Rust test inputs; prior ZIPs stay immutable."""
 import argparse
 import hashlib
+import importlib.util
 import json
 from pathlib import Path
 import sys
+import tempfile
 import zipfile
 
 ROOT=Path(__file__).resolve().parents[1]
@@ -27,13 +29,23 @@ def main():
     parser.add_argument('--check-only',action='store_true');args=parser.parse_args()
     from brass_ai.learning.contracts import require,digest
     from brass_ai.step5.league import implementation_id,implementation_sources,write_json
-    from brass_ai.rust_backend.lab_contract import sha,SOURCE
+    from brass_ai.rust_backend.lab_contract import sha,SOURCE,extract_new,verify_inputs
     from brass_ai.rust_backend.lab_transfer import CONTRACT,RETIRED,implementation_inventory
     from brass_ai.rust_backend.lab_teacher_overlay import source_fingerprint
-    out=ROOT/DIRECTORY;archive=out/'rust-lab-b01-b04-g570.zip'
+    out=ROOT/DIRECTORY;archive=out/'rust-lab-b01-b04-g570-r2.zip'
     require(not archive.exists(),'This bundle is already sealed; publish a new version')
     for n,h in ARCHIVES.items():require(sha(ROOT/n)==h,'Changed historical archive: '+n)
+    require(sha(out/'rust-lab-b01-b04-g570.zip')=='7bbceb50b1b2ffa3c3797aa2aae452a90edde2f15be8a2d627b452f7c64a53a4',
+            'Previous g570 archive changed')
     require(all(not (ROOT/n).exists() for n in RETIRED),'Retired AZ_DB source still present')
+    spec=importlib.util.spec_from_file_location('b01_package_inputs',ROOT/'scripts/qualify-rust-lab.py')
+    b01=importlib.util.module_from_spec(spec);spec.loader.exec_module(b01)
+    with tempfile.TemporaryDirectory(dir=ROOT/'artifacts',prefix='g570-r2-inputs-') as directory:
+        directory=Path(directory)
+        extract_new(ROOT/'distribution/rust-lab-b01/b01-search-v1-inputs.zip',directory/'inputs')
+        verify_inputs(directory/'inputs',json.loads((ROOT/'configs/search/lab-search-v1.json').read_text(encoding='utf-8')))
+        extract_new(directory/'inputs/source.zip',directory/'checkout')
+        native_inputs=b01.prepare_test_inputs(directory/'checkout/native')
     state=json.loads((ROOT/REPORT/'state.json').read_text(encoding='utf-8'))
     exported=json.loads((ROOT/REPORT/'export-manifest.json').read_text(encoding='utf-8'))
     config=json.loads((ROOT/CONFIG).read_text(encoding='utf-8'))
@@ -56,6 +68,7 @@ def main():
         'native/brass-ai-core/tests/data/initial-state.json','tests/GumbelISMCTS/fixtures/session-v1.json',
         'ai-research/RUST_AI_BACKEND_MIGRATION_PLAN.md','ai-research/TEACHER_SEARCH_PHASE_REVISION_PLAN.md',
         'ai-research/RUST_BACKEND_G570_REFRESH.md',
+        'ai-research/RUST_BACKEND_B01_G570_FIX.md',
         'results/joint7-v11-2-g1290-trained-restart-g0370-20261102T221517838215Z/state.json','distribution/RUST_LAB_SEARCH_V1.md'}
     folders=[('src/brass_ai',{'.py'}),('configs',{'.json','.md'}),('scripts',{'.py','.sh'}),
         ('lab-native',{'.rs','.toml','.lock'}),('tests/R2',{'.py','.json'}),('tests/Recovery',{'.py','.json'}),
@@ -74,11 +87,14 @@ def main():
         prior=json.loads((ROOT/base/'transfer-manifest.json').read_text(encoding='utf-8'))
         names|={n for n in prior['files'] if (ROOT/n).is_file() and n not in RETIRED}
     names |= set(implementation_sources())
+    names |= set(b01.TEST_FIXTURES)
     names={n for n in names if (ROOT/n).is_file() and n != 'scripts/build-mixed-ai.py'}
     checks=json.loads((out/'local-development.json').read_text(encoding='utf-8'))
     implementation=implementation_id();producer=source_fingerprint()
     require(checks['passed'] and checks['implementation']==implementation and checks['producer']==producer,
         'Bounded development evidence does not match current source')
+    require(checks['b01_inputs_fix']['passed'] and checks['b01_inputs_fix']['native_inputs']==native_inputs,
+            'Detached native test-input evidence differs')
     require(sha(ROOT/'configs/learning/selfplay-resume-sources.json')==checks['source_review_sha256'],
         'Source approvals changed since continuation checks')
     from brass_ai.recovery.resume import check_signature
@@ -98,6 +114,9 @@ def main():
         retired_files=list(RETIRED),training_reference=reference,
         files={n:hashlib.sha256(v.replace(b'\r\n',b'\n')).hexdigest() for n,v in files.items()},
         archives=ARCHIVES,local_checks=checks,lab_qualification='Pending',production_teacher_enabled=False,
+        native_test_inputs=native_inputs,
+        supersedes=dict(path=DIRECTORY+'/rust-lab-b01-b04-g570.zip',
+                        sha256='7bbceb50b1b2ffa3c3797aa2aae452a90edde2f15be8a2d627b452f7c64a53a4'),
         results_directory='results/rust-lab-qualification',extraction_order=['Current checkout with deletions, then g570 supplement only'])
     if args.check_only:
         print(json.dumps(dict(passed=True,files=len(files),implementation=implementation,producer=producer)));return

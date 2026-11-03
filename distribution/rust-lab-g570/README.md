@@ -1,6 +1,8 @@
-# B01–B04 qualification at g570
+# B01–B04 qualification at g570 (r2)
 
 Updated 2026-11-03. **Linux/CUDA qualification: Pending. Production teacher: off.**
+
+**r2 fixes the B01 test-build failure** reported in `20261103T221537604835Z-20261103T221420894333Z-g570-all-e62eab7a-24e9530b`. The release binaries compiled, but the isolated native checkout lacked external Rust test fixtures. The runner now stages and verifies all three fixtures, checks every literal Rust include before compiling, and records `native-test-inputs.json`. B04 uses the same preparation. The trainer, native core, checkpoint/config and source approvals are unchanged. See the [failure analysis](../../ai-research/RUST_BACKEND_B01_G570_FIX.md).
 
 This bundle supersedes `rust-lab-restart-r2` for the current checkout. The previous transfer pinned an older implementation. Added Python modules participate in the implementation hash even if every file listed in that older transfer still matches. This transfer pins the complete fingerprint input inventory and names added, changed or missing dependencies when it rejects source drift. Integrity checks remain mandatory.
 
@@ -10,7 +12,7 @@ Pull the matching current checkout, including added files and deletions. Keep tr
 
 ```bash
 conda activate ai-training
-unzip -o distribution/rust-lab-g570/rust-lab-b01-b04-g570.zip
+unzip -o distribution/rust-lab-g570/rust-lab-b01-b04-g570-r2.zip
 python scripts/run-rust-lab-qualification.py --stage all --device cuda:0 \
   --expected-generation 570 \
   --checkpoint-sha256 06626c1fb7d0b91f64d939f9fbb3db7c5f3aa072331eb3d773f101e729117ab9
@@ -18,7 +20,7 @@ python scripts/run-rust-lab-qualification.py --stage all --device cuda:0 \
 
 The target run is `artifacts/step5/joint7-v11-2-g1290-trained-restart`. The expected full checkpoint is `generation-0570.pt`, model `18f42a48933c18095d96f1cc64b836d3f9aac92361a4e4ee7c423830d9a11a91`, at 182,400 ordinary games. The config defaults to [the exact recorded g570 config](../../results/joint7-v11-2-g1290-trained-restart-g0570-20261103T190804654465Z/recorded-config.json), which matches the prior g370 recipe. Qualification performs no recipe adoption, source-run write or training update. B03 restores all checkpoint/optimizer/RNG/PPG state into an isolated diagnostic fork.
 
-Do not extract an older source ZIP after this one. The six original B01–B04 stage archives inside this bundle are sealed build/reference inputs; the current launcher selects them itself. The new source snapshot contains the current optional g570/entropy modules to keep the checkout consistent, but the recorded config has no entropy schedule or new branch/V4-history adoption. If the lab has already adopted a different config, use its exact reviewed config with `--config`; an unqualified recipe transition cannot be hidden by changing a hash.
+Do not extract an older source ZIP after this one. The original g570 ZIP and six original B01–B04 stage archives remain immutable; the current `bundle.json` and `transfer-manifest.json` select r2. The stage archives inside r2 are sealed build/reference inputs; the current launcher selects them itself. The source snapshot contains the current optional g570/entropy modules to keep the checkout consistent, but the recorded config has no entropy schedule or new branch/V4-history adoption. If the lab has already adopted a different config, use its exact reviewed config with `--config`; an unqualified recipe transition cannot be hidden by changing a hash.
 
 If training has advanced, qualify the actual latest committed checkpoint without rewinding:
 

@@ -65,10 +65,9 @@ def main():
                 checkout=out/'checkout';checkout.mkdir()
                 shutil.copytree(b01/'checkout/native',checkout/'native')
                 require(native_fingerprint(checkout/'native')==SOURCE,'B01 core differs')
+                write_json(out/'native-test-inputs.json',base.prepare_test_inputs(checkout/'native'))
                 overlay=apply(checkout/'native');write_json(out/'overlay.json',overlay)
                 shutil.copytree(ROOT/'lab-native',checkout/'lab-native',ignore=shutil.ignore_patterns('target'))
-                fixture=checkout/'tests/GumbelISMCTS/fixtures/session-v1.json';fixture.parent.mkdir(parents=True)
-                shutil.copyfile(ROOT/'tests/GumbelISMCTS/fixtures/session-v1.json',fixture)
                 b02_tools.check_shared_dependencies(checkout/'native/Cargo.lock',checkout/'lab-native/Cargo.lock')
                 for k in list(env):
                     if k in ('RUSTFLAGS','CARGO_ENCODED_RUSTFLAGS','CARGO_BUILD_TARGET','CARGO_TARGET_DIR') or (k.startswith('CARGO_TARGET_') and k.endswith('_RUSTFLAGS')):env.pop(k)

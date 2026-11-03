@@ -4,10 +4,12 @@ from __future__ import annotations
 
 import argparse
 from datetime import datetime, timezone
+import hashlib
 import json
 import os
 from pathlib import Path
 import platform
+import re
 import signal
 import subprocess
 import sys
@@ -18,6 +20,64 @@ sys.path.insert(0, str(ROOT / 'src'))
 from brass_ai.learning.contracts import read_json, require
 from brass_ai.rust_backend.lab_contract import (B01_CONTRACT, SOURCE, admit, extract_new, native_fingerprint,
                                                pin, sha, verify_inputs)
+
+# These reference fixtures live outside native/ in the installed source tree,
+# so the immutable native-only source.zip does not carry them. Pin their LF
+# bytes separately; never patch the archived Rust source or skip its tests.
+TEST_FIXTURES = {
+    'tests/GumbelISMCTS/fixtures/session-v1.json': '1f97002a7ac7fdb14006279640cc7536d9d00e62278922c81421d22b60473bfd',
+    'tests/GumbelISMCTS/fixtures/coordinator-v1.json': 'f4b86853ce60570a90fd624f87bbaaa8d8b1b326578e2f427aac4894ca8ec96f',
+    'tests/GumbelISMCTS/fixtures/reuse-v1.json': '237ec3ca50af2730978aee0201c82d915f90aa9fb2bdee182540d59e2d8e6f54',
+}
+
+
+def check_compile_inputs(native):
+    """Resolve every literal include in the sealed Rust tree before compilation."""
+    native = Path(native).resolve()
+    checkout = native.parent
+    includes = []
+    pattern = re.compile(r'\binclude(?:_str|_bytes)?!\s*\(\s*"([^"\\]+)"\s*,?\s*\)')
+    for source in sorted(native.rglob('*.rs')):
+        if 'target' in source.relative_to(native).parts:
+            continue
+        for match in pattern.finditer(source.read_text(encoding='utf-8')):
+            path = (source.parent / match[1]).resolve()
+            require(path.is_relative_to(checkout), 'Compile input escapes detached checkout: ' + match[1])
+            name = path.relative_to(checkout).as_posix()
+            require(path.is_file(), 'Missing Rust compile input: ' + name)
+            includes.append(dict(source=source.relative_to(checkout).as_posix(), input=name, sha256=sha(path)))
+    require(includes, 'No Rust compile inputs found')
+    return includes
+
+
+def prepare_test_inputs(native, source_root=ROOT):
+    """Hydrate the detached test tree without changing the pinned native core."""
+    native = Path(native).resolve()
+    source_root = Path(source_root).resolve()
+    require(native != (source_root / 'native').resolve(), 'Test inputs require a detached checkout')
+    require(native_fingerprint(native) == SOURCE, 'Test inputs require the sealed B01 native core')
+    staged = {}
+    # Validate the complete supplement before writing any fixture.
+    for name, expected in TEST_FIXTURES.items():
+        source = source_root / name
+        require(source.is_file(), 'Missing B01 test fixture: ' + name)
+        data = source.read_bytes().replace(b'\r\n', b'\n')
+        require(hashlib.sha256(data).hexdigest() == expected, 'Changed B01 test fixture: ' + name)
+        destination = (native.parent / name).resolve()
+        require(destination.is_relative_to(native.parent) and not destination.is_relative_to(native),
+                'Test fixture must remain outside the native core: ' + name)
+        require(not destination.exists() or (destination.is_file() and destination.read_bytes() == data),
+                'Conflicting detached test fixture: ' + name)
+        staged[destination] = data
+    for destination, data in staged.items():
+        if not destination.exists():
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            with destination.open('xb') as stream:
+                stream.write(data)
+    includes = check_compile_inputs(native)
+    require(native_fingerprint(native) == SOURCE, 'Native core changed while staging test inputs')
+    return dict(contract='brass-lab-native-test-inputs/1.0.0', base_source=SOURCE,
+                fixtures=dict(TEST_FIXTURES), includes=includes)
 
 
 def write(path, value):
@@ -70,6 +130,7 @@ def qualify(args, out):
     extract_new(out / 'inputs/source.zip', out / 'checkout')
     checkout = out / 'checkout/native'
     require(native_fingerprint(checkout) == SOURCE, 'Extracted shared core differs from selected source')
+    write(out / 'native-test-inputs.json', prepare_test_inputs(checkout))
     env = os.environ.copy()
     env.update(CARGO_INCREMENTAL='0', PROPTEST_RNG_SEED='890', PROPTEST_CASES='16')
     env['CUBLAS_WORKSPACE_CONFIG'] = ':4096:8'
@@ -126,7 +187,7 @@ def qualify(args, out):
             tests = cargo + ['test', '--release', '-p', 'brass-ai-worker', '--lib', *common, '--offline', '--', '--test-threads=2']
             commands.append(command(tests, cwd=checkout, env=env, log=out / 'worker-tests.log', timeout=args.build_timeout))
             commands.append(command([sys.executable, '-m', 'unittest', 'discover', '-s',
-                                      ROOT / 'tests/RustBackendLab', '-p', 'test_b01.py', '-v'], cwd=ROOT, env=env,
+                                      ROOT / 'tests/RustBackendLab', '-p', 'test_b01*.py', '-v'], cwd=ROOT, env=env,
                                     log=out / 'adapter-tests.log', timeout=60))
             commands.append(command([sys.executable, '-m', 'unittest', '-v',
                 'test_inference_deadline_race', 'test_inference_failure_review',
@@ -167,6 +228,7 @@ def qualify(args, out):
             return dict(contract=B01_CONTRACT, passed=True, milestone='B01',
                         method=profile['method'], v205_enabled=False, completed_utc=datetime.now(timezone.utc).isoformat(),
                         profile=pin(out / 'profile.json'), local_entry=pin(out / 'local-entry.json'),
+                        test_inputs=pin(out / 'native-test-inputs.json'),
                         lab_state=pin(out / 'lab-state.json'), python_sources=pin(out / 'python-runtime-sources.json'),
                         linux_build=pin(out / 'linux-build.json'), gpu=gpu_reports,
                         commands=pin(out / 'commands.json'),

@@ -379,12 +379,22 @@
   },
   "files": {
     ".gitignore": "d12febb3b1499bd7f570a2c61fc3ea3eada8755d11e8d923eac1f22d9115997b",
-    "ai-research/RUST_AI_BACKEND_MIGRATION_PLAN.md": "0f3a6239d8bcb8591a72ca0ce10250d0cb86fa8d4728d840937b2a106ef687cd",
+    "ai-research/RUST_AI_BACKEND_MIGRATION_PLAN.md": "fb2e4bbd7d58202d4873844e87541ee55d6d8629899fdcd325d4f97a33dfc33d",
+    "ai-research/RUST_BACKEND_B01_G570_FIX.md": "54aa1f5318541e7ba1c2367b01b2485f3336fd64ada579e5b19e3802203bf9b8",
     "ai-research/RUST_BACKEND_B025_REPORT.md": "0a27b35d5073a4c75030cbd2108c3288cfd779835c9ac37ffae3c0f3bbec3584",
     "ai-research/RUST_BACKEND_B03_REPORT.md": "97ec12d8bfa7442aac08a9dc6b40c5b51318f687859eef483ed81c3accad333b",
     "ai-research/RUST_BACKEND_B04_REPORT.md": "21969fe28c7577e0c3b7a6b356c4c3470962468cfcb5d8bf951c576f1c6749b3",
-    "ai-research/RUST_BACKEND_G570_REFRESH.md": "1f1ca5a0482a0a633c652c242b583f1af0aa6afe02b265162704810709a91bc7",
+    "ai-research/RUST_BACKEND_G570_REFRESH.md": "c3ee2c4fd9aabe5d6f895d3f044130e57b01ab6a1c592ab8f55a4c5d3f5b574c",
     "ai-research/TEACHER_SEARCH_PHASE_REVISION_PLAN.md": "ee2f523dab93de06e4fdb2cf872db0303af18ced2de6c1d0f99ebeaa17847fee",
+    "artifacts/rust-backend/g570-b01-fixtures/core-tests.log": "e75d4801d1a5763fb17dda65f5688930b7865325c30b531b2c3302f33329c0b0",
+    "artifacts/rust-backend/g570-b01-fixtures/fixtures.log": "f7a9233d975d75a3e8a8a6ea489d3106ddc4739068ccddd13d81cd1f2c849599",
+    "artifacts/rust-backend/g570-b01-fixtures/native-check.json": "28210fe72fd62ec60e43705a00f32a0c3fc1b79a3b94d96095f12f6152828d04",
+    "artifacts/rust-backend/g570-b01-fixtures/native-check.log": "ec1cf4afcf2b06249614c05c51b6842a28df5d4e27765686cc21b25ba8dea100",
+    "artifacts/rust-backend/g570-b01-fixtures/native-check.py": "0e73b813f082b0df827c71b1bca7b7341df41e6846c46087522cc9c9d54e6be6",
+    "artifacts/rust-backend/g570-b01-fixtures/native-smoke.log": "ca04f443d9225ee3dcac6d1164016e2859e0247990cbcf5b6a2e6c8b747b1fa7",
+    "artifacts/rust-backend/g570-b01-fixtures/native-smoke.py": "db2982f064bbebf5e8d0a12185ccc661d03ae1056675e4a1a50a1b38e85cb1db",
+    "artifacts/rust-backend/g570-b01-fixtures/package-smoke.py": "54dfec6eab84a7da8503ad2728427ae2eda1d53572af8f2416d829edbaa50c35",
+    "artifacts/rust-backend/g570-b01-fixtures/seal-evidence.py": "59cbf30f7f46c0df7b676a9c72a71ab2fdc1b80fb195308c0cdfa011b033efd7",
     "artifacts/rust-backend/g570-refresh/continuation-tests.log": "bc5b36aed79f384f0af6b111ad132a5d052a06d2b5a0f1a6948a7e19c2fd21d2",
     "artifacts/rust-backend/g570-refresh/fixtures.log": "6aded910ce7a37e7b8b27c83ec9f4a8c33df0bf65f9bc270f40adec4003782a8",
     "artifacts/rust-backend/g570-refresh/launcher-help.log": "e36d1eb6dd9bb48f214e7e85056e4606c3a629dc8b931b1c917ee0939cfdfcf1",
@@ -599,8 +609,8 @@
     "distribution/rust-lab-b04/README.md": "d9d679a78860500768ac16b11773554ce59758fd79c95f53d8f446271925e740",
     "distribution/rust-lab-b04/bundle.json": "34e69d61ace552b099f65210871ffaf54c4e1b7f60c72efb0ecfb0782c7f9aae",
     "distribution/rust-lab-b04/transfer-manifest.json": "6f9fea21f005359e7a07addfba18d85696c964a46f8ea94da4ce1e5194c1ab28",
-    "distribution/rust-lab-g570/README.md": "b0e92a30dda992c8cdfbae67faae35ad59f790e7fd3388d6be78e842f94aa9b1",
-    "distribution/rust-lab-g570/local-development.json": "6a6449880d21b1abeb6cd495dc612476fe471cada719bcf8cc0d80adce3fbae5",
+    "distribution/rust-lab-g570/README.md": "708fcb638a4c614100460fae2fc2717368b2ce05c75486382d1d360bf01b4448",
+    "distribution/rust-lab-g570/local-development.json": "0b41dd58df40f7d05df4b604a4882a7990588b5dee5b1f3f1a22f05762a1b0ac",
     "distribution/rust-lab-g570/training-reference.json": "a0fd4443487bc42afb9b00dc957957e67f05fc35dce4e445694b795d3d6242d8",
     "lab-native/Cargo.lock": "8dedcf1eb844cbd03512663053034a7a587adb7a5bad2e6d9bcfc466e605f8d9",
     "lab-native/Cargo.toml": "0dc9649a715137d28ec66504641b30ba50491a6c227e39276fee5c6a313b28b9",
@@ -750,7 +760,7 @@
     "scripts/prepare-rust-lab-b03.py": "93beee443befc510218728796a32359771d399dd27e2cd125cabf7113fe82d9f",
     "scripts/prepare-rust-lab-b04.py": "066dc6bc7a5c3ee148b3565ccb0468139cac33ca0ef54fd5184f384c12764afa",
     "scripts/prepare-rust-lab-g370.py": "63d3d1a9185eefe1f52b981d03e44958895fa1db88d67bf46b4127fee5aab259",
-    "scripts/prepare-rust-lab-g570.py": "8642b9442bbe2b45d202bbca07b359f046a384bf29536706364605b0e86ccfd9",
+    "scripts/prepare-rust-lab-g570.py": "bc3e8d687c32e8d6f6089fc277a7f2f6916cef52422e5bb706b108aabec7f7e9",
     "scripts/prepare-rust-lab-results.py": "2453423e199bcac2a555c560198b4c38404fdfe94041b09194a59c63439d30c7",
     "scripts/prepare-rust-onnx.py": "7f3b94d7fae078c8e97b4a0a5ea34318988630080738ef5e4ebdc5a498774421",
     "scripts/prepare-rust-state-catalog.py": "2be8296a00cdb90bafcb0f033d6cd261f1ca8cf51a2d883dba135ac0a68bbea3",
@@ -768,8 +778,8 @@
     "scripts/qualify-rust-lab-b02.py": "d1850e1020857130f683ecad5dc5d702c9d63c211bb6111b8e978930d60736d3",
     "scripts/qualify-rust-lab-b025.py": "5629d9257f78e934e09ae1c7c722575446d2f6245202a86c669965ff7ea128e8",
     "scripts/qualify-rust-lab-b03.py": "bc1b8c2926be1764edbd8f2dd6863d8e2a18b37aa90f712b66d7b3efda6af08d",
-    "scripts/qualify-rust-lab-b04.py": "0d06574dd7a2c707cf4e1ec07a3526a93c7128e8729213b696cf520c0918c2b5",
-    "scripts/qualify-rust-lab.py": "d0e11781a6091b168ffb2e846083e46c24838e2f850e5b6b901bb5cd33d32a48",
+    "scripts/qualify-rust-lab-b04.py": "3dc43d1160c5dbd2679a5651bc07f73e1b8d711856d93bf72bd58144b64fc52e",
+    "scripts/qualify-rust-lab.py": "1a301fe9b7d287ae3848c8e26f5392cbaccd46eec19d79886054cd16afe7d009",
     "scripts/qualify-rust-local.py": "c162cd8e97bbaf41562a4d57884db1a7341f56685ae7c7b26cff3b4e5be91fdf",
     "scripts/qualify-rust-privacy.py": "6c3e5c0c85788ea6c29ba3d874320c3955b557255af45d97a60e4d8772b35690",
     "scripts/qualify-rust-release.py": "65a80e33f8e88b1f2fbeded19d6cf5988ea0d20bb5fe23b1fb858f44b864148b",
@@ -1209,7 +1219,9 @@
     "tests/FeatureEngineering/test_v11_1.py": "075c5d02ef3f90cd21bc3b9bde1f96628c551077b3e932da5e5926f8645c0b4a",
     "tests/FeatureEngineering/test_v11_architecture.py": "f17bd4c0249192fdaa95166a10f1513f627044238548fccef72c10c8fcfd6a38",
     "tests/FeatureEngineering/test_v11_selectors.py": "7d152d57f657ecd60a867bd385f84e231990dcaf59bf7088686e5de3208c8da4",
+    "tests/GumbelISMCTS/fixtures/coordinator-v1.json": "f4b86853ce60570a90fd624f87bbaaa8d8b1b326578e2f427aac4894ca8ec96f",
     "tests/GumbelISMCTS/fixtures/reference-v1.json": "e7e7a7bd5a7d3a272f09bf50e2ec3e546e728632cb2d4ef88ff3042c9f029206",
+    "tests/GumbelISMCTS/fixtures/reuse-v1.json": "237ec3ca50af2730978aee0201c82d915f90aa9fb2bdee182540d59e2d8e6f54",
     "tests/GumbelISMCTS/fixtures/session-v1.json": "1f97002a7ac7fdb14006279640cc7536d9d00e62278922c81421d22b60473bfd",
     "tests/R2/fixtures.py": "d4937eb49072ba108ea8f3072ffb4d2e0fdd1027e9f800da4391a74a1731e949",
     "tests/R2/integration.py": "9ad2cec2079d6b4149b3c0a3982e01cd15286b7bb2601d2b6e396456209b5964",
@@ -1462,6 +1474,7 @@
     "tests/Recovery/test_vp_plot.py": "3c1867e958ac3db64b13dd5cb954c0869dbc54470fe06e6aaf6e2eacb66a8866",
     "tests/Recovery/test_vp_reward_cap.py": "66dbd2bda42721619d637701625ec29d1613af754d553e66c01cb28be5fc3d4f",
     "tests/RustBackendLab/test_b01.py": "3f84f1c7643114a0edc4da50e1781cd4f2ad626d19f0deb11547d0f4d2f7e946",
+    "tests/RustBackendLab/test_b01_inputs.py": "0933f61320e8bc0d2310f49f7f641625260502db173522a347208537315a969e",
     "tests/RustBackendLab/test_b02.py": "763f2fbea6f3bdb2007fb2ab0d772b899e5020e4dca55d87a5e5b853d196a14f",
     "tests/RustBackendLab/test_b025.py": "213cb55168b4c3364d54b6fb42daab2f2a563cbcc5c546ac12df4ad2e7a30f17",
     "tests/RustBackendLab/test_b03.py": "daf1037619d3577d27b3c77a07d8b48e22090964791a1dfe563d206403e36191",
@@ -1503,16 +1516,419 @@
       "artifacts/rust-backend/g570-refresh/continuation-tests.log": "7ec3fa599a772f339281bf3362f3317d845260ea61827a8f3546ec1c54c68203",
       "artifacts/rust-backend/g570-refresh/source-reviews-applied.json": "e9af66022ad84a21b13cfcd8e0a8c00316687787ca35fb5fb470868b4a0dea66",
       "artifacts/rust-backend/g570-refresh/source-audit.json": "623d29444fa8e92977e7b8315c8ddffe649b7264308a91c8cb04055dbc8efa92",
-      "artifacts/rust-backend/g570-refresh/launcher-help.log": "5d479bd1e701f473f9a7b2550eac22fbb09eea72939fc62b6b84b844b8945a21"
+      "artifacts/rust-backend/g570-refresh/launcher-help.log": "5d479bd1e701f473f9a7b2550eac22fbb09eea72939fc62b6b84b844b8945a21",
+      "artifacts/rust-backend/g570-b01-fixtures/fixtures.log": "1c91f01801500d53fe8edf6d8af3a447387980741d8b362237003f25e47e6fe2",
+      "artifacts/rust-backend/g570-b01-fixtures/native-check.json": "d40075f7640ed2dea7a713a9b48187187dcf334338dcf95032b4690d421489c8",
+      "artifacts/rust-backend/g570-b01-fixtures/native-check.log": "ec1cf4afcf2b06249614c05c51b6842a28df5d4e27765686cc21b25ba8dea100",
+      "artifacts/rust-backend/g570-b01-fixtures/native-check.py": "0e73b813f082b0df827c71b1bca7b7341df41e6846c46087522cc9c9d54e6be6",
+      "artifacts/rust-backend/g570-b01-fixtures/native-smoke.log": "abefb851356a6fb4bbeeb9d778515f4975d9b0812e9b481659ddfa6decfe796a",
+      "artifacts/rust-backend/g570-b01-fixtures/core-tests.log": "e75d4801d1a5763fb17dda65f5688930b7865325c30b531b2c3302f33329c0b0",
+      "artifacts/rust-backend/g570-b01-fixtures/native-smoke.py": "db2982f064bbebf5e8d0a12185ccc661d03ae1056675e4a1a50a1b38e85cb1db",
+      "artifacts/rust-backend/g570-b01-fixtures/seal-evidence.py": "59cbf30f7f46c0df7b676a9c72a71ab2fdc1b80fb195308c0cdfa011b033efd7",
+      "artifacts/rust-backend/g570-b01-fixtures/package-smoke.py": "54dfec6eab84a7da8503ad2728427ae2eda1d53572af8f2416d829edbaa50c35"
     },
     "native_source_unchanged": true,
     "search_timing_retested": false,
     "lab_qualification": "Pending",
     "production_run_modified": false,
-    "scope": "Short authored CPU fixtures and full synthetic state restoration. Actual generation-0570 tensors, Linux/CUDA and live teacher readiness remain untested locally. Final source inventory is frozen; extracted-package verification follows sealing."
+    "scope": "g570-r2 detached native-fixture fix: all core/worker test targets compile-checked on Windows and bounded CPU regression checks. Prior g570 continuation checks retained because every trainer/native implementation input and source approval is unchanged. A cold release test build reached its 300-second compile bound; no native test execution is claimed. Actual Linux/CUDA B01 and g570 checkpoint qualification require a lab rerun; no game, training or search timing session run.",
+    "b01_inputs_fix": {
+      "passed": true,
+      "fixture_tests": 42,
+      "seconds": 31.33,
+      "skipped": 1,
+      "native_inputs": {
+        "contract": "brass-lab-native-test-inputs/1.0.0",
+        "base_source": "fa0b3f7b74e9ed638c8b6f96d3f23b0910b4e5df9387ff8df58d5472a8014dd2",
+        "fixtures": {
+          "tests/GumbelISMCTS/fixtures/session-v1.json": "1f97002a7ac7fdb14006279640cc7536d9d00e62278922c81421d22b60473bfd",
+          "tests/GumbelISMCTS/fixtures/coordinator-v1.json": "f4b86853ce60570a90fd624f87bbaaa8d8b1b326578e2f427aac4894ca8ec96f",
+          "tests/GumbelISMCTS/fixtures/reuse-v1.json": "237ec3ca50af2730978aee0201c82d915f90aa9fb2bdee182540d59e2d8e6f54"
+        },
+        "includes": [
+          {
+            "source": "native/brass-ai-core/src/features/layout.rs",
+            "input": "native/brass-ai-core/data/feature-layout.json",
+            "sha256": "ed1e9a53e630557956bbd06bd7eabcf7beb5b4b89ae179edac067df284a8325e"
+          },
+          {
+            "source": "native/brass-ai-core/src/state/belief.rs",
+            "input": "native/brass-ai-core/tests/data/initial-state.json",
+            "sha256": "c40cbd0e8ba7bb282b13459b1a64866db5dc56c688b4682be5c2ab5bdb8c5973"
+          },
+          {
+            "source": "native/brass-ai-core/src/state/catalog.rs",
+            "input": "native/brass-ai-core/data/state-catalog.json",
+            "sha256": "daed360938390d3b1ef3c0c02f5f42aa2a6ad16fd6555e24b561f371ddd64c2d"
+          },
+          {
+            "source": "native/brass-ai-core/tests/cooperative.rs",
+            "input": "native/brass-ai-core/tests/data/initial-state.json",
+            "sha256": "c40cbd0e8ba7bb282b13459b1a64866db5dc56c688b4682be5c2ab5bdb8c5973"
+          },
+          {
+            "source": "native/brass-ai-core/tests/cooperative.rs",
+            "input": "tests/GumbelISMCTS/fixtures/coordinator-v1.json",
+            "sha256": "f4b86853ce60570a90fd624f87bbaaa8d8b1b326578e2f427aac4894ca8ec96f"
+          },
+          {
+            "source": "native/brass-ai-core/tests/features.rs",
+            "input": "native/brass-ai-core/tests/data/initial-state.json",
+            "sha256": "c40cbd0e8ba7bb282b13459b1a64866db5dc56c688b4682be5c2ab5bdb8c5973"
+          },
+          {
+            "source": "native/brass-ai-core/tests/privacy.rs",
+            "input": "native/brass-ai-core/tests/data/initial-state.json",
+            "sha256": "c40cbd0e8ba7bb282b13459b1a64866db5dc56c688b4682be5c2ab5bdb8c5973"
+          },
+          {
+            "source": "native/brass-ai-core/tests/reuse.rs",
+            "input": "tests/GumbelISMCTS/fixtures/reuse-v1.json",
+            "sha256": "237ec3ca50af2730978aee0201c82d915f90aa9fb2bdee182540d59e2d8e6f54"
+          },
+          {
+            "source": "native/brass-ai-core/tests/rules.rs",
+            "input": "native/brass-ai-core/tests/data/initial-state.json",
+            "sha256": "c40cbd0e8ba7bb282b13459b1a64866db5dc56c688b4682be5c2ab5bdb8c5973"
+          },
+          {
+            "source": "native/brass-ai-core/tests/sessions.rs",
+            "input": "native/brass-ai-core/tests/data/initial-state.json",
+            "sha256": "c40cbd0e8ba7bb282b13459b1a64866db5dc56c688b4682be5c2ab5bdb8c5973"
+          },
+          {
+            "source": "native/brass-ai-core/tests/sessions.rs",
+            "input": "native/brass-ai-core/tests/data/initial-state.json",
+            "sha256": "c40cbd0e8ba7bb282b13459b1a64866db5dc56c688b4682be5c2ab5bdb8c5973"
+          },
+          {
+            "source": "native/brass-ai-core/tests/sessions.rs",
+            "input": "native/brass-ai-core/tests/data/initial-state.json",
+            "sha256": "c40cbd0e8ba7bb282b13459b1a64866db5dc56c688b4682be5c2ab5bdb8c5973"
+          },
+          {
+            "source": "native/brass-ai-core/tests/sessions.rs",
+            "input": "tests/GumbelISMCTS/fixtures/session-v1.json",
+            "sha256": "1f97002a7ac7fdb14006279640cc7536d9d00e62278922c81421d22b60473bfd"
+          },
+          {
+            "source": "native/brass-ai-core/tests/simulation.rs",
+            "input": "native/brass-ai-core/tests/data/initial-state.json",
+            "sha256": "c40cbd0e8ba7bb282b13459b1a64866db5dc56c688b4682be5c2ab5bdb8c5973"
+          },
+          {
+            "source": "native/brass-ai-core/tests/state.rs",
+            "input": "native/brass-ai-core/tests/data/initial-state.json",
+            "sha256": "c40cbd0e8ba7bb282b13459b1a64866db5dc56c688b4682be5c2ab5bdb8c5973"
+          },
+          {
+            "source": "native/brass-ai-inference/tests/contracts.rs",
+            "input": "native/brass-ai-inference/tests/data/manifest.json",
+            "sha256": "3fee37f18cd7963f6dfde7b56fc211b9d424263bf6f27bcc4e7cb6e7a7e132b7"
+          },
+          {
+            "source": "native/brass-ai-inference/tests/contracts.rs",
+            "input": "native/brass-ai-core/tests/data/initial-state.json",
+            "sha256": "c40cbd0e8ba7bb282b13459b1a64866db5dc56c688b4682be5c2ab5bdb8c5973"
+          },
+          {
+            "source": "native/brass-ai-inference/tests/runtime.rs",
+            "input": "native/brass-ai-core/tests/data/initial-state.json",
+            "sha256": "c40cbd0e8ba7bb282b13459b1a64866db5dc56c688b4682be5c2ab5bdb8c5973"
+          },
+          {
+            "source": "native/brass-ai-worker/src/main.rs",
+            "input": "native/brass-ai-core/tests/data/initial-state.json",
+            "sha256": "c40cbd0e8ba7bb282b13459b1a64866db5dc56c688b4682be5c2ab5bdb8c5973"
+          },
+          {
+            "source": "native/brass-ai-worker/src/pair_harness/tests.rs",
+            "input": "native/brass-ai-inference/tests/data/manifest.json",
+            "sha256": "3fee37f18cd7963f6dfde7b56fc211b9d424263bf6f27bcc4e7cb6e7a7e132b7"
+          },
+          {
+            "source": "native/brass-ai-worker/src/pair_harness/tests.rs",
+            "input": "native/brass-ai-core/tests/data/initial-state.json",
+            "sha256": "c40cbd0e8ba7bb282b13459b1a64866db5dc56c688b4682be5c2ab5bdb8c5973"
+          }
+        ]
+      },
+      "native_compile_check": {
+        "passed": true,
+        "platform": "Windows x86_64-pc-windows-gnu",
+        "native_inputs": {
+          "contract": "brass-lab-native-test-inputs/1.0.0",
+          "base_source": "fa0b3f7b74e9ed638c8b6f96d3f23b0910b4e5df9387ff8df58d5472a8014dd2",
+          "fixtures": {
+            "tests/GumbelISMCTS/fixtures/session-v1.json": "1f97002a7ac7fdb14006279640cc7536d9d00e62278922c81421d22b60473bfd",
+            "tests/GumbelISMCTS/fixtures/coordinator-v1.json": "f4b86853ce60570a90fd624f87bbaaa8d8b1b326578e2f427aac4894ca8ec96f",
+            "tests/GumbelISMCTS/fixtures/reuse-v1.json": "237ec3ca50af2730978aee0201c82d915f90aa9fb2bdee182540d59e2d8e6f54"
+          },
+          "includes": [
+            {
+              "source": "native/brass-ai-core/src/features/layout.rs",
+              "input": "native/brass-ai-core/data/feature-layout.json",
+              "sha256": "ed1e9a53e630557956bbd06bd7eabcf7beb5b4b89ae179edac067df284a8325e"
+            },
+            {
+              "source": "native/brass-ai-core/src/state/belief.rs",
+              "input": "native/brass-ai-core/tests/data/initial-state.json",
+              "sha256": "c40cbd0e8ba7bb282b13459b1a64866db5dc56c688b4682be5c2ab5bdb8c5973"
+            },
+            {
+              "source": "native/brass-ai-core/src/state/catalog.rs",
+              "input": "native/brass-ai-core/data/state-catalog.json",
+              "sha256": "daed360938390d3b1ef3c0c02f5f42aa2a6ad16fd6555e24b561f371ddd64c2d"
+            },
+            {
+              "source": "native/brass-ai-core/tests/cooperative.rs",
+              "input": "native/brass-ai-core/tests/data/initial-state.json",
+              "sha256": "c40cbd0e8ba7bb282b13459b1a64866db5dc56c688b4682be5c2ab5bdb8c5973"
+            },
+            {
+              "source": "native/brass-ai-core/tests/cooperative.rs",
+              "input": "tests/GumbelISMCTS/fixtures/coordinator-v1.json",
+              "sha256": "f4b86853ce60570a90fd624f87bbaaa8d8b1b326578e2f427aac4894ca8ec96f"
+            },
+            {
+              "source": "native/brass-ai-core/tests/features.rs",
+              "input": "native/brass-ai-core/tests/data/initial-state.json",
+              "sha256": "c40cbd0e8ba7bb282b13459b1a64866db5dc56c688b4682be5c2ab5bdb8c5973"
+            },
+            {
+              "source": "native/brass-ai-core/tests/privacy.rs",
+              "input": "native/brass-ai-core/tests/data/initial-state.json",
+              "sha256": "c40cbd0e8ba7bb282b13459b1a64866db5dc56c688b4682be5c2ab5bdb8c5973"
+            },
+            {
+              "source": "native/brass-ai-core/tests/reuse.rs",
+              "input": "tests/GumbelISMCTS/fixtures/reuse-v1.json",
+              "sha256": "237ec3ca50af2730978aee0201c82d915f90aa9fb2bdee182540d59e2d8e6f54"
+            },
+            {
+              "source": "native/brass-ai-core/tests/rules.rs",
+              "input": "native/brass-ai-core/tests/data/initial-state.json",
+              "sha256": "c40cbd0e8ba7bb282b13459b1a64866db5dc56c688b4682be5c2ab5bdb8c5973"
+            },
+            {
+              "source": "native/brass-ai-core/tests/sessions.rs",
+              "input": "native/brass-ai-core/tests/data/initial-state.json",
+              "sha256": "c40cbd0e8ba7bb282b13459b1a64866db5dc56c688b4682be5c2ab5bdb8c5973"
+            },
+            {
+              "source": "native/brass-ai-core/tests/sessions.rs",
+              "input": "native/brass-ai-core/tests/data/initial-state.json",
+              "sha256": "c40cbd0e8ba7bb282b13459b1a64866db5dc56c688b4682be5c2ab5bdb8c5973"
+            },
+            {
+              "source": "native/brass-ai-core/tests/sessions.rs",
+              "input": "native/brass-ai-core/tests/data/initial-state.json",
+              "sha256": "c40cbd0e8ba7bb282b13459b1a64866db5dc56c688b4682be5c2ab5bdb8c5973"
+            },
+            {
+              "source": "native/brass-ai-core/tests/sessions.rs",
+              "input": "tests/GumbelISMCTS/fixtures/session-v1.json",
+              "sha256": "1f97002a7ac7fdb14006279640cc7536d9d00e62278922c81421d22b60473bfd"
+            },
+            {
+              "source": "native/brass-ai-core/tests/simulation.rs",
+              "input": "native/brass-ai-core/tests/data/initial-state.json",
+              "sha256": "c40cbd0e8ba7bb282b13459b1a64866db5dc56c688b4682be5c2ab5bdb8c5973"
+            },
+            {
+              "source": "native/brass-ai-core/tests/state.rs",
+              "input": "native/brass-ai-core/tests/data/initial-state.json",
+              "sha256": "c40cbd0e8ba7bb282b13459b1a64866db5dc56c688b4682be5c2ab5bdb8c5973"
+            },
+            {
+              "source": "native/brass-ai-inference/tests/contracts.rs",
+              "input": "native/brass-ai-inference/tests/data/manifest.json",
+              "sha256": "3fee37f18cd7963f6dfde7b56fc211b9d424263bf6f27bcc4e7cb6e7a7e132b7"
+            },
+            {
+              "source": "native/brass-ai-inference/tests/contracts.rs",
+              "input": "native/brass-ai-core/tests/data/initial-state.json",
+              "sha256": "c40cbd0e8ba7bb282b13459b1a64866db5dc56c688b4682be5c2ab5bdb8c5973"
+            },
+            {
+              "source": "native/brass-ai-inference/tests/runtime.rs",
+              "input": "native/brass-ai-core/tests/data/initial-state.json",
+              "sha256": "c40cbd0e8ba7bb282b13459b1a64866db5dc56c688b4682be5c2ab5bdb8c5973"
+            },
+            {
+              "source": "native/brass-ai-worker/src/main.rs",
+              "input": "native/brass-ai-core/tests/data/initial-state.json",
+              "sha256": "c40cbd0e8ba7bb282b13459b1a64866db5dc56c688b4682be5c2ab5bdb8c5973"
+            },
+            {
+              "source": "native/brass-ai-worker/src/pair_harness/tests.rs",
+              "input": "native/brass-ai-inference/tests/data/manifest.json",
+              "sha256": "3fee37f18cd7963f6dfde7b56fc211b9d424263bf6f27bcc4e7cb6e7a7e132b7"
+            },
+            {
+              "source": "native/brass-ai-worker/src/pair_harness/tests.rs",
+              "input": "native/brass-ai-core/tests/data/initial-state.json",
+              "sha256": "c40cbd0e8ba7bb282b13459b1a64866db5dc56c688b4682be5c2ab5bdb8c5973"
+            }
+          ]
+        },
+        "argv": [
+          "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Brass Birmingham\\artifacts\\native-toolchain\\cargo\\bin\\cargo.exe",
+          "+1.99.1",
+          "check",
+          "--release",
+          "-p",
+          "brass-ai-core",
+          "-p",
+          "brass-ai-worker",
+          "--tests",
+          "--manifest-path",
+          "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Brass Birmingham\\artifacts\\rust-backend\\g570-b01-fixtures\\checkout\\native\\Cargo.toml",
+          "--target",
+          "x86_64-pc-windows-gnu",
+          "--target-dir",
+          "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Brass Birmingham\\artifacts\\rust-backend\\g570-b01-fixtures\\target",
+          "--locked",
+          "--offline"
+        ],
+        "seconds": 78.48400000005495,
+        "log_sha256": "ec1cf4afcf2b06249614c05c51b6842a28df5d4e27765686cc21b25ba8dea100",
+        "native_source_unchanged": true,
+        "native_test_execution": false,
+        "cold_release_build": "Stopped at 300-second compile bound before native test execution",
+        "lab_qualification": "Pending",
+        "scope": "cargo check --release --tests for core and worker from the sealed detached source; no CUDA/checkpoint load"
+      },
+      "platform": "Windows x86_64-pc-windows-gnu",
+      "reproduced_original_missing_input": true,
+      "trainer_source_unchanged": true,
+      "source_reviews_unchanged": true,
+      "old_archive_unchanged": true
+    },
+    "previous_g570_checks_reused": true
   },
   "lab_qualification": "Pending",
   "production_teacher_enabled": false,
+  "native_test_inputs": {
+    "contract": "brass-lab-native-test-inputs/1.0.0",
+    "base_source": "fa0b3f7b74e9ed638c8b6f96d3f23b0910b4e5df9387ff8df58d5472a8014dd2",
+    "fixtures": {
+      "tests/GumbelISMCTS/fixtures/session-v1.json": "1f97002a7ac7fdb14006279640cc7536d9d00e62278922c81421d22b60473bfd",
+      "tests/GumbelISMCTS/fixtures/coordinator-v1.json": "f4b86853ce60570a90fd624f87bbaaa8d8b1b326578e2f427aac4894ca8ec96f",
+      "tests/GumbelISMCTS/fixtures/reuse-v1.json": "237ec3ca50af2730978aee0201c82d915f90aa9fb2bdee182540d59e2d8e6f54"
+    },
+    "includes": [
+      {
+        "source": "native/brass-ai-core/src/features/layout.rs",
+        "input": "native/brass-ai-core/data/feature-layout.json",
+        "sha256": "ed1e9a53e630557956bbd06bd7eabcf7beb5b4b89ae179edac067df284a8325e"
+      },
+      {
+        "source": "native/brass-ai-core/src/state/belief.rs",
+        "input": "native/brass-ai-core/tests/data/initial-state.json",
+        "sha256": "c40cbd0e8ba7bb282b13459b1a64866db5dc56c688b4682be5c2ab5bdb8c5973"
+      },
+      {
+        "source": "native/brass-ai-core/src/state/catalog.rs",
+        "input": "native/brass-ai-core/data/state-catalog.json",
+        "sha256": "daed360938390d3b1ef3c0c02f5f42aa2a6ad16fd6555e24b561f371ddd64c2d"
+      },
+      {
+        "source": "native/brass-ai-core/tests/cooperative.rs",
+        "input": "native/brass-ai-core/tests/data/initial-state.json",
+        "sha256": "c40cbd0e8ba7bb282b13459b1a64866db5dc56c688b4682be5c2ab5bdb8c5973"
+      },
+      {
+        "source": "native/brass-ai-core/tests/cooperative.rs",
+        "input": "tests/GumbelISMCTS/fixtures/coordinator-v1.json",
+        "sha256": "f4b86853ce60570a90fd624f87bbaaa8d8b1b326578e2f427aac4894ca8ec96f"
+      },
+      {
+        "source": "native/brass-ai-core/tests/features.rs",
+        "input": "native/brass-ai-core/tests/data/initial-state.json",
+        "sha256": "c40cbd0e8ba7bb282b13459b1a64866db5dc56c688b4682be5c2ab5bdb8c5973"
+      },
+      {
+        "source": "native/brass-ai-core/tests/privacy.rs",
+        "input": "native/brass-ai-core/tests/data/initial-state.json",
+        "sha256": "c40cbd0e8ba7bb282b13459b1a64866db5dc56c688b4682be5c2ab5bdb8c5973"
+      },
+      {
+        "source": "native/brass-ai-core/tests/reuse.rs",
+        "input": "tests/GumbelISMCTS/fixtures/reuse-v1.json",
+        "sha256": "237ec3ca50af2730978aee0201c82d915f90aa9fb2bdee182540d59e2d8e6f54"
+      },
+      {
+        "source": "native/brass-ai-core/tests/rules.rs",
+        "input": "native/brass-ai-core/tests/data/initial-state.json",
+        "sha256": "c40cbd0e8ba7bb282b13459b1a64866db5dc56c688b4682be5c2ab5bdb8c5973"
+      },
+      {
+        "source": "native/brass-ai-core/tests/sessions.rs",
+        "input": "native/brass-ai-core/tests/data/initial-state.json",
+        "sha256": "c40cbd0e8ba7bb282b13459b1a64866db5dc56c688b4682be5c2ab5bdb8c5973"
+      },
+      {
+        "source": "native/brass-ai-core/tests/sessions.rs",
+        "input": "native/brass-ai-core/tests/data/initial-state.json",
+        "sha256": "c40cbd0e8ba7bb282b13459b1a64866db5dc56c688b4682be5c2ab5bdb8c5973"
+      },
+      {
+        "source": "native/brass-ai-core/tests/sessions.rs",
+        "input": "native/brass-ai-core/tests/data/initial-state.json",
+        "sha256": "c40cbd0e8ba7bb282b13459b1a64866db5dc56c688b4682be5c2ab5bdb8c5973"
+      },
+      {
+        "source": "native/brass-ai-core/tests/sessions.rs",
+        "input": "tests/GumbelISMCTS/fixtures/session-v1.json",
+        "sha256": "1f97002a7ac7fdb14006279640cc7536d9d00e62278922c81421d22b60473bfd"
+      },
+      {
+        "source": "native/brass-ai-core/tests/simulation.rs",
+        "input": "native/brass-ai-core/tests/data/initial-state.json",
+        "sha256": "c40cbd0e8ba7bb282b13459b1a64866db5dc56c688b4682be5c2ab5bdb8c5973"
+      },
+      {
+        "source": "native/brass-ai-core/tests/state.rs",
+        "input": "native/brass-ai-core/tests/data/initial-state.json",
+        "sha256": "c40cbd0e8ba7bb282b13459b1a64866db5dc56c688b4682be5c2ab5bdb8c5973"
+      },
+      {
+        "source": "native/brass-ai-inference/tests/contracts.rs",
+        "input": "native/brass-ai-inference/tests/data/manifest.json",
+        "sha256": "3fee37f18cd7963f6dfde7b56fc211b9d424263bf6f27bcc4e7cb6e7a7e132b7"
+      },
+      {
+        "source": "native/brass-ai-inference/tests/contracts.rs",
+        "input": "native/brass-ai-core/tests/data/initial-state.json",
+        "sha256": "c40cbd0e8ba7bb282b13459b1a64866db5dc56c688b4682be5c2ab5bdb8c5973"
+      },
+      {
+        "source": "native/brass-ai-inference/tests/runtime.rs",
+        "input": "native/brass-ai-core/tests/data/initial-state.json",
+        "sha256": "c40cbd0e8ba7bb282b13459b1a64866db5dc56c688b4682be5c2ab5bdb8c5973"
+      },
+      {
+        "source": "native/brass-ai-worker/src/main.rs",
+        "input": "native/brass-ai-core/tests/data/initial-state.json",
+        "sha256": "c40cbd0e8ba7bb282b13459b1a64866db5dc56c688b4682be5c2ab5bdb8c5973"
+      },
+      {
+        "source": "native/brass-ai-worker/src/pair_harness/tests.rs",
+        "input": "native/brass-ai-inference/tests/data/manifest.json",
+        "sha256": "3fee37f18cd7963f6dfde7b56fc211b9d424263bf6f27bcc4e7cb6e7a7e132b7"
+      },
+      {
+        "source": "native/brass-ai-worker/src/pair_harness/tests.rs",
+        "input": "native/brass-ai-core/tests/data/initial-state.json",
+        "sha256": "c40cbd0e8ba7bb282b13459b1a64866db5dc56c688b4682be5c2ab5bdb8c5973"
+      }
+    ]
+  },
+  "supersedes": {
+    "path": "distribution/rust-lab-g570/rust-lab-b01-b04-g570.zip",
+    "sha256": "7bbceb50b1b2ffa3c3797aa2aae452a90edde2f15be8a2d627b452f7c64a53a4"
+  },
   "results_directory": "results/rust-lab-qualification",
   "extraction_order": [
     "Current checkout with deletions, then g570 supplement only"
