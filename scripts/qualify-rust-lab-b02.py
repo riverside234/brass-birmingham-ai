@@ -79,8 +79,7 @@ def build_bootstrap(out, env, command, mono):
 
 def qualify(args,out):
     require(platform.system()=='Linux','Run B02 qualification on the lab Linux host')
-    base=b01_tools();env=os.environ.copy()
-    env['PYTHONPATH']=os.pathsep.join([str(ROOT/'src'),str(ROOT/'tests/Recovery'),env.get('PYTHONPATH','')])
+    base=b01_tools();env=base.python_environment()
     env['CUBLAS_WORKSPACE_CONFIG']=':4096:8'
     state,core=entry(args.b01,args.run,args.device)
     from brass_ai.recovery.retention import run_lock

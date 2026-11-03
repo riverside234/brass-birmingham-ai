@@ -2,7 +2,7 @@
 
 Date: 2026-11-03 (America/Chicago). **Actual Linux/CUDA qualification remains Pending.** Use the [g570 bundle commands](../distribution/rust-lab-g570/README.md).
 
-**Current bundle: g570-r2.** The subsequent lab attempt passed producer verification and the release build, then failed to compile B01 tests because external fixtures were absent from its isolated native checkout. The [B01 fixture fix](RUST_BACKEND_B01_G570_FIX.md) supplies and pins those inputs without changing the trainer or native core. The previous g570 ZIP remains immutable; current sidecars select r2.
+**Current bundle: g570-r4.** The [r2 native-fixture fix](RUST_BACKEND_B01_G570_FIX.md) passed on the lab: 70 core and 10 worker tests completed. The next failure was a missing Python fixture search path in B01's inference tests. The [r4 Python environment fix](RUST_BACKEND_B01_G570_PYTHON_FIX.md) supplies the full fixture path and runs both CPU suites before compilation. The trainer/native core and g570 config are unchanged. Previous g570/r2/r3 ZIPs remain immutable; current sidecars select r4. Full B01 GPU qualification remains Pending.
 
 The requested report is `results/joint7-v11-2-g1290-trained-restart-g0570-20261103T190804654465Z`: generation 570, 182,400 ordinary games, source `f7a48a025e2c247e63da4df301ce2b80c7c6aabf1073220a5be97f0929719c78`, checkpoint `generation-0570.pt` SHA-256 `06626c1fb7d0b91f64d939f9fbb3db7c5f3aa072331eb3d773f101e729117ab9`. Its recorded config exactly matches the g370 recipe already used by the restart: neutral contexts, direct GAE 0.95, epsilon 0.05, 0.5% T2-only branches, fixed group entropy 0.005, PPG beta floor 1 and unchanged task utility/insolvency reward.
 

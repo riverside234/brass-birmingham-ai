@@ -29,6 +29,14 @@ TEST_FIXTURES = {
     'tests/GumbelISMCTS/fixtures/coordinator-v1.json': 'f4b86853ce60570a90fd624f87bbaaa8d8b1b326578e2f427aac4894ca8ec96f',
     'tests/GumbelISMCTS/fixtures/reuse-v1.json': '237ec3ca50af2730978aee0201c82d915f90aa9fb2bdee182540d59e2d8e6f54',
 }
+TEST_PATHS = ('src', 'tests/R2', 'tests/Recovery', 'tests/FeatureEngineering', 'tests/RustBackendLab')
+
+
+def python_environment(environ=None):
+    """Give qualification subprocesses the complete, checkout-local fixture path."""
+    env = dict(os.environ if environ is None else environ)
+    env['PYTHONPATH'] = os.pathsep.join(str(ROOT / name) for name in TEST_PATHS)
+    return env
 
 
 def check_compile_inputs(native):
@@ -104,11 +112,23 @@ def command(args, *, cwd, env, log, timeout):
     return dict(argv=[str(x) for x in args], seconds=time.monotonic()-began, log=pin(log))
 
 
+def python_checks(out, env):
+    """Run the exact lab CPU gates before starting a native build."""
+    checks = [command([sys.executable, '-m', 'unittest', 'discover', '-s',
+                       ROOT / 'tests/RustBackendLab', '-p', 'test_b01*.py', '-v'],
+                      cwd=ROOT, env=env, log=out / 'adapter-tests.log', timeout=60)]
+    checks.append(command([sys.executable, '-m', 'unittest', '-v',
+        'test_inference_deadline_race', 'test_inference_failure_review',
+        'test_followup_inference_review', 'test_inference_performance'],
+        cwd=ROOT / 'tests/Recovery', env=env, log=out / 'existing-inference-tests.log', timeout=90))
+    return checks
+
+
 def source_inventory():
     # The lab runs the current Python trainer/evaluator with the pinned native
     # archive. Identify that combination separately from the saved old producer.
     files = []
-    for folder in ('src', 'configs', 'scripts', 'tests/RustBackendLab', 'training/runtime'):
+    for folder in ('src', 'configs', 'scripts', *TEST_PATHS[1:], 'training/runtime'):
         for p in sorted((ROOT / folder).rglob('*')):
             if p.is_file() and '__pycache__' not in p.parts and p.suffix in (
                     '.py', '.json', '.cs', '.toml', '.dll', '.exe', '.so'):
@@ -131,10 +151,9 @@ def qualify(args, out):
     checkout = out / 'checkout/native'
     require(native_fingerprint(checkout) == SOURCE, 'Extracted shared core differs from selected source')
     write(out / 'native-test-inputs.json', prepare_test_inputs(checkout))
-    env = os.environ.copy()
+    env = python_environment()
     env.update(CARGO_INCREMENTAL='0', PROPTEST_RNG_SEED='890', PROPTEST_CASES='16')
     env['CUBLAS_WORKSPACE_CONFIG'] = ':4096:8'
-    env['PYTHONPATH'] = os.pathsep.join([str(ROOT / 'src'), str(ROOT / 'tests/Recovery'), env.get('PYTHONPATH', '')])
     # Override the archived Windows build target without editing hashed sources.
     for key in list(env):
         if key in ('RUSTFLAGS', 'CARGO_ENCODED_RUSTFLAGS', 'CARGO_BUILD_TARGET', 'CARGO_TARGET_DIR') or (
@@ -165,6 +184,7 @@ def qualify(args, out):
         snapshot['extra_runtime_manifests'] = [pin(p) for p in args.runtime_manifest]
         write(out / 'lab-state.json', snapshot)
         try:
+            commands.extend(python_checks(out, env))
             # Build once, with an explicit native Linux target and isolated target dir.
             common = ['--manifest-path', checkout / 'Cargo.toml', '--target', target,
                       '--target-dir', out / 'target', '--locked']
@@ -186,13 +206,6 @@ def qualify(args, out):
             commands.append(command(tests, cwd=checkout, env=env, log=out / 'core-tests.log', timeout=args.build_timeout))
             tests = cargo + ['test', '--release', '-p', 'brass-ai-worker', '--lib', *common, '--offline', '--', '--test-threads=2']
             commands.append(command(tests, cwd=checkout, env=env, log=out / 'worker-tests.log', timeout=args.build_timeout))
-            commands.append(command([sys.executable, '-m', 'unittest', 'discover', '-s',
-                                      ROOT / 'tests/RustBackendLab', '-p', 'test_b01*.py', '-v'], cwd=ROOT, env=env,
-                                    log=out / 'adapter-tests.log', timeout=60))
-            commands.append(command([sys.executable, '-m', 'unittest', '-v',
-                'test_inference_deadline_race', 'test_inference_failure_review',
-                'test_followup_inference_review', 'test_inference_performance'],
-                cwd=ROOT / 'tests/Recovery', env=env, log=out / 'existing-inference-tests.log', timeout=90))
             require(native_fingerprint(checkout) == SOURCE, 'Native source changed during build')
             binary = out / 'target' / target / 'release/brass-ai-worker'
             fixtures = read_json(out / 'inputs/fixtures.json')

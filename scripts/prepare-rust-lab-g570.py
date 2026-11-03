@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Seal g570-r2 with complete detached Rust test inputs; prior ZIPs stay immutable."""
+"""Seal g570-r4 with complete Python paths and separate verified lab evidence."""
 import argparse
 import hashlib
 import importlib.util
@@ -32,15 +32,19 @@ def main():
     from brass_ai.rust_backend.lab_contract import sha,SOURCE,extract_new,verify_inputs
     from brass_ai.rust_backend.lab_transfer import CONTRACT,RETIRED,implementation_inventory
     from brass_ai.rust_backend.lab_teacher_overlay import source_fingerprint
-    out=ROOT/DIRECTORY;archive=out/'rust-lab-b01-b04-g570-r2.zip'
+    out=ROOT/DIRECTORY;archive=out/'rust-lab-b01-b04-g570-r4.zip'
     require(not archive.exists(),'This bundle is already sealed; publish a new version')
     for n,h in ARCHIVES.items():require(sha(ROOT/n)==h,'Changed historical archive: '+n)
     require(sha(out/'rust-lab-b01-b04-g570.zip')=='7bbceb50b1b2ffa3c3797aa2aae452a90edde2f15be8a2d627b452f7c64a53a4',
             'Previous g570 archive changed')
+    require(sha(out/'rust-lab-b01-b04-g570-r2.zip')=='6d7c1a93d1ae9d9d010509e569bfd55801f9069b3f4c6a64233f75c58bfdafb7',
+            'Previous g570-r2 archive changed')
+    require(sha(out/'rust-lab-b01-b04-g570-r3.zip')=='91542cd7b07330d86129a54aae9aee0c87b6dd758ce2080e1ebc1aae04d721f2',
+            'Previous g570-r3 archive changed')
     require(all(not (ROOT/n).exists() for n in RETIRED),'Retired AZ_DB source still present')
     spec=importlib.util.spec_from_file_location('b01_package_inputs',ROOT/'scripts/qualify-rust-lab.py')
     b01=importlib.util.module_from_spec(spec);spec.loader.exec_module(b01)
-    with tempfile.TemporaryDirectory(dir=ROOT/'artifacts',prefix='g570-r2-inputs-') as directory:
+    with tempfile.TemporaryDirectory(dir=ROOT/'artifacts',prefix='g570-r4-inputs-') as directory:
         directory=Path(directory)
         extract_new(ROOT/'distribution/rust-lab-b01/b01-search-v1-inputs.zip',directory/'inputs')
         verify_inputs(directory/'inputs',json.loads((ROOT/'configs/search/lab-search-v1.json').read_text(encoding='utf-8')))
@@ -69,6 +73,7 @@ def main():
         'ai-research/RUST_AI_BACKEND_MIGRATION_PLAN.md','ai-research/TEACHER_SEARCH_PHASE_REVISION_PLAN.md',
         'ai-research/RUST_BACKEND_G570_REFRESH.md',
         'ai-research/RUST_BACKEND_B01_G570_FIX.md',
+        'ai-research/RUST_BACKEND_B01_G570_PYTHON_FIX.md',
         'results/joint7-v11-2-g1290-trained-restart-g0370-20261102T221517838215Z/state.json','distribution/RUST_LAB_SEARCH_V1.md'}
     folders=[('src/brass_ai',{'.py'}),('configs',{'.json','.md'}),('scripts',{'.py','.sh'}),
         ('lab-native',{'.rs','.toml','.lock'}),('tests/R2',{'.py','.json'}),('tests/Recovery',{'.py','.json'}),
@@ -95,12 +100,20 @@ def main():
         'Bounded development evidence does not match current source')
     require(checks['b01_inputs_fix']['passed'] and checks['b01_inputs_fix']['native_inputs']==native_inputs,
             'Detached native test-input evidence differs')
+    python_checks=checks['b01_python_fix']
+    require(python_checks['passed'] and python_checks['test_paths']==list(b01.TEST_PATHS)
+            and python_checks['inference']['tests']==28 and python_checks['inference']['skipped']==0,
+            'Exact B01 inference suite must pass before packaging')
+    for name,expected in python_checks['tested_files'].items():
+        require(sha(ROOT/name)==expected,'Changed source after B01 Python checks: '+name)
     require(sha(ROOT/'configs/learning/selfplay-resume-sources.json')==checks['source_review_sha256'],
         'Source approvals changed since continuation checks')
     from brass_ai.recovery.resume import check_signature
     check_signature(state,dict(state['signature'],implementation=implementation),reviewed=True)
     for n,h in checks['logs'].items():require(sha(ROOT/n)==h,'Changed development log: '+n)
     names|=set(checks['logs'])
+    require(not any(n.startswith('results/rust-lab-qualification/') and n!='results/rust-lab-qualification/README.md'
+                    for n in names),'Transfer must not overwrite original lab evidence')
     # Source comparison tolerates platform line endings. Transfer bytes must
     # remain exact: runtime wire contracts and report receipts hash raw files.
     files={n:(ROOT/n).read_bytes() for n in sorted(names)}
@@ -115,8 +128,9 @@ def main():
         files={n:hashlib.sha256(v.replace(b'\r\n',b'\n')).hexdigest() for n,v in files.items()},
         archives=ARCHIVES,local_checks=checks,lab_qualification='Pending',production_teacher_enabled=False,
         native_test_inputs=native_inputs,
-        supersedes=dict(path=DIRECTORY+'/rust-lab-b01-b04-g570.zip',
-                        sha256='7bbceb50b1b2ffa3c3797aa2aae452a90edde2f15be8a2d627b452f7c64a53a4'),
+        python_test_paths=list(b01.TEST_PATHS),
+        supersedes=dict(path=DIRECTORY+'/rust-lab-b01-b04-g570-r3.zip',
+                        sha256='91542cd7b07330d86129a54aae9aee0c87b6dd758ce2080e1ebc1aae04d721f2'),
         results_directory='results/rust-lab-qualification',extraction_order=['Current checkout with deletions, then g570 supplement only'])
     if args.check_only:
         print(json.dumps(dict(passed=True,files=len(files),implementation=implementation,producer=producer)));return

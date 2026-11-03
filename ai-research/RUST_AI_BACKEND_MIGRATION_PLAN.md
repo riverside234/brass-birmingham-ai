@@ -854,7 +854,7 @@ Keep Python target construction, GAE, PPO behavior likelihoods, critic/local-sco
 
 | Step | Implementation / current lab status | Exit scope |
 | --- | --- | --- |
-| B01 | g570-r2 fixture fix; **rerun Pending** | Linux release build passed; test compilation failed on missing detached fixtures. r2 stages/pins all include inputs; GPU/lifecycle gates remain Pending |
+| B01 | g570-r4 Python path fix; **rerun Pending** | Lab passed 70 core, 10 worker and 27 adapter tests; inference suite stopped on missing fixture imports. r4 supplies complete test paths and runs CPU gates before compilation; GPU gates remain Pending |
 | B02 | Updated; **Pending** | Ordinary neutral collection and g370 branch families, bounded coverage |
 | B02.5 | Task-only refresh implemented; **Pending** | Explicit default-off teacher adoption, labels/buffer/term/restore fixtures |
 | B03 | Task-only/g570 qualification refresh implemented; **Pending** | Existing-family admission and complete isolated full-checkpoint restoration |
@@ -868,6 +868,8 @@ Keep Python target construction, GAE, PPO behavior likelihoods, critic/local-sco
 Verify the current transfer and unchanged sealed B01 core archive. Capture the actual run, full checkpoint, config/signature, source approvals, runtime inventories, population and device topology under the run lock. Build Linux from pinned Rust/dependencies. Run short rules/observation/feature/tensor/output parity and mixed-model, cancellation, deadline, owner/epoch/slot lifecycle checks on the actual GPU. No complete game, training step, signature write or teacher enablement is needed. Report B01 adapter timing as adapter timing, not a full search speedup.
 
 The [g570-r2 fix](RUST_BACKEND_B01_G570_FIX.md) addresses the received B01 test-build failure. Before compiling, prepare the detached checkout's external session/coordinator/reuse fixtures, verify their pins and every literal Rust include, and retain `native-test-inputs.json` in qualification evidence. Test the nested stage archive itself during packaging. The native archive and fingerprints stay unchanged; no test skip substitutes for a missing fixture. B04 reuses this preparation before its existing overlay. The failed lab attempt is preserved and B01 must be rerun.
+
+The [g570-r4 fix](RUST_BACKEND_B01_G570_PYTHON_FIX.md) addresses the subsequent Python fixture import failure. Set the complete checkout-local test path, including `tests/R2` and `tests/FeatureEngineering`, without depending on the shell's `PYTHONPATH`. Execute the exact adapter and inference suites before compiling and repeat them from a fresh bundle with the existing guarded runtime supplied. Preserve the successful native subtest evidence, but do not mark B01 complete until its GPU smoke and remaining checks pass.
 
 #### B02 — Implement ordinary lanes and branch continuations
 
