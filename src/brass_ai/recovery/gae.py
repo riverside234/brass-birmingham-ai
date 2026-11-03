@@ -267,7 +267,7 @@ def validate_state(state,config,generation):
     return state
 
 
-def advance(state,config,*,generation,value_report,health_ok,rating):
+def advance(state,config,*,generation,value_report,health_ok,rating,retired_tables=()):
     """Decisions apply to the NEXT collection; no backdating or automatic rollback."""
     state=copy.deepcopy(validate_state(state,config,generation-1));gate=config['gate'];used=state['active_lambda']
     state['generation']=generation
@@ -313,8 +313,11 @@ def advance(state,config,*,generation,value_report,health_ok,rating):
             # rather than forcing one accepted step on every sparse sample.
             table_healthy=bool(health_ok and not value_report.get('kl_guard_tripped',False))
             state['table_evidence'],pooled=ev_evidence.advance(state['table_evidence'],tg,
-                generation=generation,metrics=metrics,healthy=table_healthy,value_updated=ran,source=work['source'])
+                generation=generation,metrics=metrics,healthy=table_healthy,value_updated=ran,source=work['source'],retired_tables=retired_tables)
         for kind in ('historical','legacy'):
+            if kind in retired_tables:
+                table_report[kind]=dict(status='retired',reason='v4_moved_to_history',lambda_used=None,lambda_next=None)
+                continue
             table_ev=metrics.get('groups',{}).get('table:'+kind+'/role:learner',{}).get('explained_variance')
             okay=table_healthy if pooled else healthy and finite(ev) and finite(table_ev) and table_ev>=ev-tg['ev_tolerance']
             state['table_streaks'][kind]=state['table_streaks'][kind]+1 if okay else 0

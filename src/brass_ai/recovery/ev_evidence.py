@@ -95,14 +95,16 @@ def validate_state(state,config,generation):
     return state
 
 
-def advance(state,config,*,generation,metrics,healthy,value_updated,source='ppg'):
+def advance(state,config,*,generation,metrics,healthy,value_updated,source='ppg',retired_tables=()):
     state=copy.deepcopy(validate_state(state,config,generation-1));groups=metrics.get('groups',{})
     tables={kind:copy.deepcopy(groups.get('table:'+kind+'/role:learner',{}).get('ev_evidence')) for kind in TABLES}
+    for kind in retired_tables:tables[kind]=None
     state['entries']=(state['entries']+[dict(generation=generation,healthy=bool(healthy),
         value_updated=bool(value_updated),tables=tables)])[-config['window_iterations']:]
     validate_state(state,config,generation)
     reports={}
     for kind in TABLES[1:]:
+        if kind in retired_tables:continue
         paired=[e for e in state['entries'] if e['healthy'] and e['tables'][kind] is not None
                 and e['tables']['selfplay'] is not None]
         mixed=pool([e['tables'][kind] for e in paired]);reference=pool([e['tables']['selfplay'] for e in paired])

@@ -36,6 +36,7 @@ class Behavior:
         self.opening=(settings or {}).get('opening')
         self.raw_entropy=(settings or {}).get('raw_entropy',False)
         self.entropy_alphas=(settings or {}).get('alphas')
+        self.entropy_schedule=(settings or {}).get('entropy_schedule')
         self.policy_id=neural_spec(identity,exploration,'mixed',version=self.exploration_version,opening=self.opening)['policy_id']
 
 
@@ -249,6 +250,9 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
             state['population']=[quality_pool.reference(m) for m in state['quality_pool']['members']]
             state['ratings']=initialize_ratings(root,run,state,config)
             startup.initialize_gates(state,config)
+            if 'v4_history' in config:
+                from .v4_history import migrate as migrate_v4
+                state['quality_pool'],_=migrate_v4(state['quality_pool'],config,fast_specs)
             startup_payload.update(startup_initialization=copy.deepcopy(state['startup_initialization']),
                 v4_share_gate=copy.deepcopy(state['v4_share_gate']))
             print('Manual startup overrides: IL/v4 panels retired without qualification games; IL in PFSP; '
@@ -375,6 +379,11 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
             from .domino_adoption import archive
             archive(run,domino_adoption)
         state=commit_transition(run,state,signature,opponent_pool=resumed_pool,pool_migration=pool_migration,local_scoring_adoption=local_adoption,domino_adoption=domino_adoption)
+    if 'v4_history' in config:
+        from .retention import preserve_available_companions
+        inventory=preserve_available_companions(root,run,state)
+        write_json(run/'auxiliary-checkpoint-inventory.json',inventory)
+        write_json(state_path,state)
     if phases is not None and getattr(phases,'ppg_schedule_migration',None):
         change=phases.ppg_schedule_migration
         print(f'PPG schedule adopted at g{change["origin"]}: beta {change["beta_before"]:g} -> {change["beta_after"]:g}; '
@@ -450,6 +459,9 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                     from .domino_state import regime
                     diversity.change_regime(regime(config,share))
                 exploration_settings=exploration.effective(config,exploration_state,iteration)
+                from . import v4_history
+                retired_v4=v4_history.active(state.get('quality_pool'))
+                if phases is not None:phases.retired_tables=('legacy',) if retired_v4 else ()
                 current=service.register(model);behavior=Behavior(current,config['exploration'],exploration_settings)
                 if teacher_phase is not None:teacher_phase.begin(state,model)
                 fingerprints=None
@@ -516,6 +528,7 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                     next_quality,quality_report=quality_pool.update_scores(state['quality_pool'],games,
                         plan['quality_tables'],plan['quality_planning'],generation=iteration+1,
                         games_done=state['games_done']+len(games))
+                    quality_report['v4_history']=v4_history.advance(next_quality,games,kind_by_group,behavior.policy_id)
                     if pool_migration and not summaries:quality_report['migration']=pool_migration
                 rehearsal_status=rehearsal_schedule(config,state['games_done'],iteration)
                 teacher_term=teacher_phase.prepare(model) if teacher_phase is not None else None
@@ -538,7 +551,8 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                     ppo_ended=time.monotonic()
                 rehearsal_cleaned=time.monotonic()
                 active_rehearsal=None
-                next_limit=limit_report=None;anchor_probe_seconds=0.
+                next_limit=limit_report=None;anchor_probe_seconds=0.;entropy_probe_seconds=0.
+                entropy_measurement=None
                 final_measurement={};final_probabilities=None
                 if observations_off:
                     counts=diagnostics.get('by_composition',{}).get('selfplay',{}).get('health_counts')
@@ -611,6 +625,12 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                     next_limit,limit_report=advance(state['il_kl_limit'],final_measurement,
                         counts,generation=iteration+1,warmup_done=update['controller_warmup_done'])
                     policy_anchor.annotate(limit_report,state)
+                from . import entropy_schedule
+                if observations_off and entropy_schedule.measurement_due(config,iteration+1):
+                    require(fixed_probe is not None,'Entropy monitoring needs the existing fixed probe')
+                    entropy_measurement,final_probabilities=fixed_probe.entropy_only(model,config['update'])
+                    entropy_probe_seconds=entropy_measurement['elapsed_seconds']
+                    final_measurement=entropy_measurement
                 if phases is not None:
                     from .gae import rating_evidence
                     final_probe=(phases.ppo_probe.measure(model,anchor=anchor_model) if weights_changed
@@ -649,6 +669,7 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                     policy_anchor=copy.deepcopy(state.get('policy_anchor')),
                     rating_coverage=copy.deepcopy(state.get('ratings',{}).get('coverage')),
                     exploration_rollout=exploration_settings,entropy_control=entropy_report,
+                    entropy_schedule=(entropy_report or {}).get('entropy_schedule'),entropy_measurement=entropy_measurement,
                     quality_pool=quality_report,
                     il_kl_limit=limit_report,rehearsal_schedule=rehearsal_status,
                     sampling=sampling,curriculum=curriculum_report(state['games_done'],done,config) if latest_model_recipe(config) else None,
@@ -678,6 +699,7 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                                   if quality else '25% initial/IL, 25% recent, 50% older reservoir; unavailable strata fall back')),
                     environment=environment(device),strength='requires fresh post-update evaluation')
                 report['timings'].update(anchor_probe_seconds=anchor_probe_seconds,
+                    entropy_probe_seconds=entropy_probe_seconds,
                     auxiliary_diagnostics_seconds=(local_scoring_report or {}).get('heldout',{}).get('seconds',0.),
                     pool_admission_seconds=diagnostics_finished-pool_admission_began)
                 if share is not None:
@@ -742,7 +764,7 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                 if exploration_state is not None:state['exploration']=exploration_state
                 if quality:
                     for member in next_quality['members']:
-                        if member['generation']==iteration+1:member.update(entry)
+                        if member['generation']==iteration+1 and not v4_history.bot(member):member.update(entry)
                     state['quality_pool']=next_quality
                 if champion_mix.enabled(config):state['champion_mix']['transition_tables']+=transition_added
                 state['recent_training']=(state.get('recent_training',[])+[dict(iteration=iteration,games_done=done,
@@ -750,6 +772,7 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                     panel_gates=report['panel_gates'],
                     policy_anchor=report['policy_anchor'],rating_coverage=report['rating_coverage'],
                     exploration_rollout=exploration_settings,entropy_control=entropy_report,
+                    entropy_schedule=report['entropy_schedule'],entropy_measurement=entropy_measurement,
                     exploration_metrics=diagnostics.get('exploration_metrics'),
                     quality_pool=quality_report,
                     il_kl_limit=limit_report,rehearsal_schedule=rehearsal_status,
@@ -814,8 +837,12 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                     controller_line+=f' v4={composition["legacy"]}/{len(games)}[{"reduced" if share["activated"] else "base"}]'
                 if entropy_report:
                     controller_line+=f' q=3 eps={config["exploration"]:.2f} explore_age={exploration_settings["age"]}'
-                    controller_line+=' entropy='+','.join(f'{g}:{v["effective_alpha"]:.4f}' for g,v in entropy_report['groups'].items())
-                    if entropy_report['mode']=='off':controller_line+='(fixed)'
+                    controller_line+=' entropy='+','.join(f'{g}:{v["effective_alpha"]:.5f}' for g,v in entropy_report['groups'].items())
+                    if report.get('entropy_schedule'):
+                        schedule=report['entropy_schedule']
+                        controller_line+=f' anneal={schedule["progress"]}/{schedule["ramp_iterations"]} held={schedule["held"]} {schedule["reason"]}'
+                        if schedule['waiting_for_insolvency_step']:controller_line+=' REWARD_STEP_PENDING'
+                    elif entropy_report['mode']=='off':controller_line+='(fixed)'
                     elif 'floor_ratio_by_group' in entropy_report:
                         controller_line+=' Hfloor='+','.join(f'{g}:{v:.2f}' for g,v in entropy_report['floor_ratio_by_group'].items())+'*baseline'
                         controller_line+=('(anchor-promotions='+str(entropy_report['floor_anchor_promotions'])+')'
@@ -852,7 +879,7 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                             f' {stage.get("source","ppg").upper()}-critic-window={stage["accepted_steps"]}steps/{stage["accepted_iterations"]}iters')
                     split=value_report.get('split') or {}
                     v4_holdout=split.get('by_table',{}).get('legacy')
-                    if v4_holdout:controller_line+=f' v4_holdout={v4_holdout["heldout_games"]}/{v4_holdout["games"]}'
+                    if v4_holdout and not retired_v4:controller_line+=f' v4_holdout={v4_holdout["heldout_games"]}/{v4_holdout["games"]}'
                     if diversity is not None:
                         controller_line+=f' DOMiNO={diversity.config["mode"]}:{diversity.report.get("readiness","pending")}'
                     if phases.buffer:
@@ -863,7 +890,7 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                         controller_line+=' GAE-mixed='+','.join(f'{k}:{v["lambda_next"]:.2f}[{v["streak"]}/10]'
                             +(f'({v["evidence"]["mixed"]["games"]}g/{v["evidence"]["minimum_games"]},'
                               f'{v["evidence"]["contributing_iterations"]}i)' if 'evidence' in v else '')
-                            for k,v in gate['table_gate'].items())
+                            for k,v in gate['table_gate'].items() if v.get('status')!='retired')
                 if limit_report:
                     if observations_off:controller_line+=' AnchorKL=off'
                     else:controller_line+=(f' AnchorKL[g{limit_report["anchor_reference"]["generation"]}]='

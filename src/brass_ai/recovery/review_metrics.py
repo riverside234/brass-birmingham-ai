@@ -154,8 +154,9 @@ class CategoricalProbe:
                 self.parts.append((part,before))
                 self.raw_parts.append(raw)
                 if self.decoupled:
-                    from .opening_objective import opening_temperature
-                    mask=dataset.temperatures[ix,0]==opening_temperature(config['opening_objective'])
+                    from .opening_objective import opening_temperature,FORK_T15
+                    mask=(dataset.temperatures[ix,0]!=1. if config['opening_objective']==FORK_T15 else
+                        dataset.temperatures[ix,0]==opening_temperature(config['opening_objective']))
                 else:mask=None
                 self.opening_masks.append(mask)
                 if mask is not None:self.opening_positions+=int(mask.sum())

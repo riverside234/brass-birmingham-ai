@@ -12,7 +12,7 @@ from .quality_config import validate_pool,pfsp
 from . import pfsp_pool
 
 PAIRS=tuple(combinations(range(4),2))
-REF_FIELDS=('path','sha256','model_id','generation','weights_only','imported_from')
+REF_FIELDS=('path','sha256','model_id','generation','weights_only','imported_from','auxiliary_heads')
 
 
 def reference(member):return {k:member[k] for k in REF_FIELDS if k in member}
@@ -23,7 +23,7 @@ def state_digest(pool):
     # state. Excluding these fields also avoids a checkpoint hashing itself.
     out=copy.deepcopy(pool)
     for member in out['members']:
-        for key in ('path','sha256','weights_only'):member.pop(key,None)
+        for key in ('path','sha256','weights_only','auxiliary_heads'):member.pop(key,None)
     return digest(out)
 
 
@@ -217,7 +217,8 @@ def finish(root,run,pool,model,entry,probe,update,limit_report,*,probabilities=N
         # only on due, healthy admission attempts. Legacy runs can pass exact
         # same-weight outputs; never reuse post-PPO values after PPG.
         values=probe.probabilities(model,update) if probabilities is None else probabilities
-        cache={m['model_id']:cached(root,m,probe) for m in pool['members']}
+        from .v4_history import bot
+        cache={m['model_id']:cached(root,m,probe) for m in pool['members'] if not bot(m)}
         distances={identity:mean_kl(old,values,probe.arrays['offsets'],probe.config['probability_floor']) for identity,old in cache.items()}
     pair=lambda a,b:mean_kl(cache[a['model_id']],cache[b['model_id']],probe.arrays['offsets'],probe.config['probability_floor'])
     result,event=admission(pool,entry,health,distances,pair)
@@ -238,6 +239,8 @@ def finish_report(report,pool,event):
 
 
 def sampling_description(pool):
+    from .v4_history import active
+    if active(pool):return 'Independent PFSP seats: frozen neural models, IL and the five-variant v4 rule-bot member; only eligible learner/snapshot trajectories train'
     if pfsp(pool) and (pool.get('planning') or {}).get('il_gate'):
         return 'Independent PFSP snapshot seats including IL, with the same uniform floor; IL checkpoint retained as evaluation/calibration anchor'
     if pfsp(pool):return 'Independent snapshot seats: stored reciprocal IL share; remainder PFSP with uniform floor'

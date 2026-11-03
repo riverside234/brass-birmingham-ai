@@ -285,6 +285,10 @@ def verify_behavior_metadata(dataset, behavior):
             from .exploration import check_behavior
             check_behavior(b,row['view']['context']['phase'])
             opening=behavior.opening
+            from .opening_objective import FORK_T15,ROW_KEY
+            if row.get('_branch') and row.get(ROW_KEY)==FORK_T15:
+                from .exploration import FORK_OPENING
+                opening=FORK_OPENING
             expected=(opening['temperature'] if opening and b['action_decision'] is not None and
                       b['action_decision']<opening['action_decisions_per_seat'] else behavior.temperature)
             require(b['exploration']==behavior.exploration and b['temperature']==expected,
@@ -296,6 +300,9 @@ def entropy_term(logits, mixed, dataset, indices, behavior, config):
     if fixed is not None:
         from .exploration import validate_fixed_entropy
         weights=validate_fixed_entropy(fixed)['weights']
+        if 'entropy_schedule' in config:
+            from .entropy_schedule import behavior_weights
+            weights=behavior_weights(config,behavior)
         require(getattr(behavior,'raw_entropy',False) and behavior.entropy_alphas==weights,
             'Fixed group entropy requires the matching raw-policy coefficients')
     if not getattr(behavior,'raw_entropy',False):

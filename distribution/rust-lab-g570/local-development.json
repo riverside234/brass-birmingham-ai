@@ -1,0 +1,30 @@
+{
+  "passed": true,
+  "local_date": "2026-11-03",
+  "timezone": "America/Chicago",
+  "implementation": "70a926e5dfc7aa30829c296b49cb7b53159534ccc5e7c8876c46a9609a44164d",
+  "producer": "bc2c07c397fdc979c9d4376189e723af86620e6361e3cd7052f3500cea3709cb",
+  "source_review_sha256": "302a9d40ef11a735f37902febcee421f3163508baef4c24fcef535d080e82928",
+  "fixtures": {
+    "tests": 81,
+    "seconds": 39.268,
+    "skipped": 3
+  },
+  "continuation": {
+    "tests": 56,
+    "seconds": 192.909,
+    "skipped": 0
+  },
+  "logs": {
+    "artifacts/rust-backend/g570-refresh/fixtures.log": "c1406389814d7a0412088fec44f8b89ecadef8cc199118a5ed09698a4296e063",
+    "artifacts/rust-backend/g570-refresh/continuation-tests.log": "7ec3fa599a772f339281bf3362f3317d845260ea61827a8f3546ec1c54c68203",
+    "artifacts/rust-backend/g570-refresh/source-reviews-applied.json": "e9af66022ad84a21b13cfcd8e0a8c00316687787ca35fb5fb470868b4a0dea66",
+    "artifacts/rust-backend/g570-refresh/source-audit.json": "623d29444fa8e92977e7b8315c8ddffe649b7264308a91c8cb04055dbc8efa92",
+    "artifacts/rust-backend/g570-refresh/launcher-help.log": "5d479bd1e701f473f9a7b2550eac22fbb09eea72939fc62b6b84b844b8945a21"
+  },
+  "native_source_unchanged": true,
+  "search_timing_retested": false,
+  "lab_qualification": "Pending",
+  "production_run_modified": false,
+  "scope": "Short authored CPU fixtures and full synthetic state restoration. Actual generation-0570 tensors, Linux/CUDA and live teacher readiness remain untested locally. Final source inventory is frozen; extracted-package verification follows sealing."
+}

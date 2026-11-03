@@ -305,6 +305,10 @@ def fit(phases,model,preparation_pool):
             membership=np.array([g not in held for g in r['game_ids']],dtype=bool)
             indices.extend((np.flatnonzero(membership[part.array['game']])+offset).tolist())
             selected=np.flatnonzero(~membership[part.array['game']])
+            retired=getattr(phases,'retired_tables',())
+            if retired:
+                eligible=np.array([r['holdout_selection']['games'][g] not in retired for g in r['game_ids']])
+                selected=selected[eligible[part.array['game'][selected]]]
             validation.extend((selected+offset).tolist())
             validation_support.append(dict(generation=r['generation'],rows=len(selected),
                 games=len(set(part.array['game'][selected].tolist()))))
@@ -327,6 +331,7 @@ def fit(phases,model,preparation_pool):
             phases.diversity.report['intrinsic_fit']=companion.report()
         report['cpu_preparation']=preparation.report() if preparation is not None else dict(workers=0)
         if pooled:report['acceptance_support']=validation_support
+        if getattr(phases,'retired_tables',()):report['retired_table_checks']=list(phases.retired_tables)
     if rate is None:report['early_stop_reason']='no_applied_ppo_rate'
     report.update(buffer=cache,split=phases.split,migration=copy.deepcopy(phases.g210_migration),
         phase_interval=1,buffer_iterations=2,validation_iterations=c['validation_iterations'],scheduled=True,

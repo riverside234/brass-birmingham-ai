@@ -556,6 +556,11 @@ class TrainingPhases:
         timings['weights']=time.perf_counter()-started;started=time.perf_counter()
         self.train_ids,self.heldout_ids,self.split=value_phase.split(critic.data,self.options['value_phase']['holdout_fraction'],
             self.options['value_phase'].get('holdout'))
+        if getattr(self,'retired_tables',()):
+            require(all(critic.tables[i] not in self.retired_tables for i in self.heldout_ids),
+                'Retired standalone v4 table in new critic holdout')
+            for kind in self.retired_tables:self.split.get('by_table',{}).pop(kind,None)
+            self.split['retired_tables']=list(self.retired_tables)
         if self.critic_state and (not self.critic_state['snapshots_active'] or self.critic_state['snapshot_weight']==0):
             self.train_ids=[i for i in self.train_ids if critic.roles[i]=='learner']
         self.learner_train_ids=[i for i in self.train_ids if i<len(dataset.data)]
@@ -717,7 +722,7 @@ class TrainingPhases:
             update['optimizer_steps']>0 and not update['kl_early_stop'] and gae.finite(kl) and
             kl<=1.5*self.config['update']['target_kl'])
         self.state,report=gae.advance(self.state,self.options['advantage'],generation=generation,
-            value_report=value,health_ok=healthy,rating=rating)
+            value_report=value,health_ok=healthy,rating=rating,retired_tables=getattr(self,'retired_tables',()))
         report['anchor_gate']=copy.deepcopy(anchor_gate)
         report['training_health']=copy.deepcopy(training_health)
         report['health_scope']='Economic health and PPO/value guards; calibrated IL distance/latch gates LR increases only'

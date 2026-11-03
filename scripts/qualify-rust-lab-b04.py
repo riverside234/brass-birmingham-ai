@@ -52,7 +52,7 @@ def main():
     try:
         report['transfer']=verify('b04',a.transfer_manifest)
         print('B04: short dispatch/inference fixtures',flush=True)
-        report['fixtures']=base.command([sys.executable,'-m','unittest','test_b04','test_g370_lab','-v'],cwd=ROOT,
+        report['fixtures']=base.command([sys.executable,'-m','unittest','test_b04','test_g370_lab','test_lab_transfer','-v'],cwd=ROOT,
             env=dict(env,CUDA_VISIBLE_DEVICES=''),log=out/'fixtures.log',timeout=180)
         if a.fixtures_only:report['passed']=True;report['scope']='CPU fixtures only; native/Linux/CUDA gates remain Pending';return
         require(platform.system()=='Linux','Run full B04 qualification on the Linux/CUDA lab server')

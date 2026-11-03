@@ -9,14 +9,14 @@ import numpy as np
 from brass_ai.learning.contracts import digest,require
 from brass_ai.step5.policy import exploration_distribution,NeuralPolicy
 from .exploration import (BRANCH,LEGACY_BRANCH,OPENING,REVISED_BRANCH,REVISED_OPENING,
-    THREE_BRANCH,THREE_OPENING,THREE_T2_BRANCH,THREE_T2_OPENING,BALANCED_BRANCH,NEUTRAL_BRANCH,T2_ONLY_BRANCH)
+    THREE_BRANCH,THREE_OPENING,THREE_T2_BRANCH,THREE_T2_OPENING,BALANCED_BRANCH,NEUTRAL_BRANCH,T2_ONLY_BRANCH,FORK_T15_BRANCH,FORK_OPENING)
 
 RESET_OPENINGS={BRANCH['contract']:OPENING,REVISED_BRANCH['contract']:REVISED_OPENING,
     THREE_BRANCH['contract']:THREE_OPENING,THREE_T2_BRANCH['contract']:THREE_T2_OPENING,
     BALANCED_BRANCH['contract']:THREE_T2_OPENING,NEUTRAL_BRANCH['contract']:THREE_OPENING,
-    T2_ONLY_BRANCH['contract']:THREE_OPENING}
+    T2_ONLY_BRANCH['contract']:THREE_OPENING,FORK_T15_BRANCH['contract']:FORK_OPENING}
 CONTRACTS=(LEGACY_BRANCH['contract'],*RESET_OPENINGS)
-MOVE_DISTRIBUTIONS={c:(T2_ONLY_BRANCH if c==T2_ONLY_BRANCH['contract'] else NEUTRAL_BRANCH if c==NEUTRAL_BRANCH['contract'] else
+MOVE_DISTRIBUTIONS={c:(T2_ONLY_BRANCH if c in (T2_ONLY_BRANCH['contract'],FORK_T15_BRANCH['contract']) else NEUTRAL_BRANCH if c==NEUTRAL_BRANCH['contract'] else
     BALANCED_BRANCH if c==BALANCED_BRANCH['contract'] else LEGACY_BRANCH)['move_distribution']
     for c in CONTRACTS}
 
@@ -82,8 +82,9 @@ def continue_branch(host,job,parent,packet,assigned,timings,max_decisions,encode
     reset=meta['contract'] in RESET_OPENINGS
     if reset:
         opening=RESET_OPENINGS[meta['contract']]
+        parent_opening=THREE_OPENING if meta['contract']==FORK_T15_BRANCH['contract'] else opening
         require(job['branching']['reset_opening_at_fork'] is True and
-                all(p.opening==opening for p in assigned),'Branch opening policy differs')
+                all(p.opening==parent_opening for p in assigned),'Branch opening policy differs')
     shuffle=int(seed[:8],16)&0x7fffffff if job['branching']['reshuffle_hidden_deck'] else None
     if 'checkpoint' in packet:
         context=host.call('fork_restore',checkpoint=packet['checkpoint'],shuffle_seed=shuffle)
@@ -110,8 +111,14 @@ def continue_branch(host,job,parent,packet,assigned,timings,max_decisions,encode
         # per seat after it; payment/bonus/continuation choices consume none.
         p.action_counts[rngs[s]]=0 if reset else packet['counts'][s]
     context=host.apply(context,row['choices'][row['chosen']])
-    result=_run_turns(host,{k:v for k,v in job.items() if k!='branching'},assigned,timings,
-        max_decisions,context,game,rngs,encoded,encoder,lease)
+    previous=[p.opening for p in assigned]
+    try:
+        if reset:
+            for p in assigned:p.opening=opening
+        result=_run_turns(host,{k:v for k,v in job.items() if k!='branching'},assigned,timings,
+            max_decisions,context,game,rngs,encoded,encoder,lease)
+    finally:
+        for p,original in zip(assigned,previous):p.opening=original
     result['branch']['elapsed_seconds']=time.monotonic()-started
     result['branch']['fraction_remaining']=len(result['records'])/(len(result['records'])+meta['decision'])
     return CheckedGame(result).bind(encoded)
@@ -133,7 +140,7 @@ def validate_child(parent,child):
         meta['component'] in MOVE_DISTRIBUTIONS[meta['contract']],'Invalid branch sampling evidence')
     require(row['behavior']['component']=='branch_move' and
         row['behavior']['probability']==meta['marginal_probability'], 'Branch behavior probability differs')
-    skip=RESET_OPENINGS.get(meta['contract'],OPENING)['action_decisions_per_seat']
+    skip=3 if meta['contract']==FORK_T15_BRANCH['contract'] else RESET_OPENINGS.get(meta['contract'],OPENING)['action_decisions_per_seat']
     require(eligible(source['view'],source['choices'],source['behavior']['action_decision'],skip),'Ineligible branch point')
     raw=np.asarray(meta['raw_probabilities'],dtype=np.float64)
     require(raw.shape==(len(source['choices']),) and np.isfinite(raw).all() and (raw>=0).all() and

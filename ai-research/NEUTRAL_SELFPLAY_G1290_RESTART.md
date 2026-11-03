@@ -1,6 +1,165 @@
 # Fresh neutral self-play from g1290
 
-## Current continuation: g370, direct lambda 0.95 and T2 forks
+## Current continuation: g570, v4 PFSP and trained-start rating reference
+
+The `g0570-20261103T190804654465Z` export records **570 committed generations /
+182,400 ordinary games**. Apply the reviewed changes from collection **g571**:
+
+| Setting | Value |
+| --- | --- |
+| All four entropy coefficients | **0.005 → 0.001**, linear over **100 healthy committed iterations** |
+| Insolvency at schedule start | **0.01/event, cap 0.075**, first reviewed reward step |
+| Ordinary epsilon | **0.02**, same family/context distribution |
+| Normal openings | **T1.3 for three action decisions per seat**, unchanged |
+| After a branch fork | **T1.5 for two action decisions per seat**, then T1 |
+| Branch eligibility/rate/fork move | Skip the three normal opening actions; **0.5%**; **100% T2** alternative, unchanged |
+| Ordinary tables per 320 | **166 self-play / 154 history / 0 standalone v4** |
+
+The branch continuation has a separate versioned behavior contract. Its two
+tempered decisions use the existing decoupled T1 PPO objective and actual
+exploration-inclusive behavior probabilities. The alternative fork move stays
+excluded; legal masks, strict reconstruction and branch-family holdouts remain.
+
+The pending g570 command now starts the
+[entropy/insolvency schedule](ENTROPY_ANNEAL_SCHEDULE_PLAN.md) at **g571**.
+Entropy starts at **0.005**, including the revised fork recipe; the earlier
+fixed **0.0025** proposal is superseded. For each group, use
+`0.005 - 0.004 * min(k / 100, 1)`, where `k` counts only healthy committed
+iterations. Economic health, a nonempty PPO update, no PPO early stop, no PPG
+KL trip, and exact categorical KL at most `1.5 * target_kl` are required.
+An interrupted iteration never advances the schedule. Saved adaptive entropy
+baselines are retained; adaptive entropy remains off.
+
+The same reviewed restart applies insolvency **0.02/0.075 → 0.01/0.075**.
+At **k=50**, entropy reaches **0.003** and holds until a second explicit restart
+applies **0.005/event, cap 0.05**. No running iteration changes its reward.
+Each reward step refreshes incompatible PPG caches and invalidates utility
+calibration; fresh fitting follows the existing DCPG/PPG rules. The first PPG
+phase uses one fresh iteration, then the usual two-iteration buffer refills.
+Main/value/auxiliary Adam, RNG, GAE and controller evidence remain preserved.
+
+Reports and compact history retain used/next coefficients, healthy progress,
+held count, applied reward step, and `waiting_for_insolvency_step`. A report-only
+raw-policy entropy/family/industry probe runs every five iterations (first g575)
+on the existing cached positions, with separate elapsed time. It does not
+compute AnchorKL, compare against IL, reload IL data or restore seat fingerprints.
+Its final-weight probabilities can also serve a due PFSP admission check.
+
+V4 moves immediately through an explicit **manual override at g570**; no 100%
+win rate or qualification evidence is fabricated. The general automatic gate
+requires ten consecutive committed iterations with ordinary v4-table games,
+and a **combined first-place win share of 1.0 for the two learner seats in every
+game**. A tie with an opposing bot fails this criterion; a zero-game iteration
+breaks the evidence window. The gate is persistent and one-way.
+
+The five existing search-free bank-3dc65253a610191d66a5 training variants form
+one rule-bot PFSP member. Its initial S/C estimates are copied from the eligible
+IL member, giving exactly equal **post-insertion** sampling probabilities. Its
+score subsequently follows actual history-table outcomes; variants cycle by
+actual sampled bot seats. The frozen neural pool capacity remains 24, with one
+additional bot member. Bots retain rule-bot descriptors and supply no PPO or
+snapshot-critic trajectories. Standalone v4 EV/GAE checks stop, including old
+v4 holdout rows in the retained PPG buffer. Historical-table learner evidence
+continues normally, including tables where PFSP sampled a v4 opponent.
+
+Main PL evaluation keeps **128 games** and the existing estimator, priors,
+seat correction, paired setup bootstrap and promotion rules. Use **2 IL + 2 v4
++ 4 trained-start + 24 ladder setups**, each rotated through four seats. The
+original source g1290 seed is named **`trained-start-baseline`**. Its rating
+floats; **IL is the only fixed zero**. The original seed hash/identity is checked
+and retained, without confusing it with this run's future generation 1290.
+Reference setups rotate across the fixed seeds; nearby opponents remain
+distinct and balanced, with the existing explicit startup fallback. The new
+baseline first receives measured evidence in the next due slot, g580.
+
+New history/rating/KL-reference snapshots retain every main-model head and the
+complete Ownership/VP companion bundle, with its identity and maturity. Slim
+filenames include the companion identity so identical main weights cannot
+silently reuse different auxiliary weights. Available full checkpoints can
+backfill their own generation's old slim references. Already-deleted companion
+weights cannot be recovered and are never replaced by random or other-generation
+heads. Startup writes `auxiliary-checkpoint-inventory.json`, automatically included
+by the report exporter. The historical g1290 seed remains its original verified
+artifact; companion heads are unnecessary for its policy-only PL evaluation.
+
+GAE remains **0.95**, PPG beta floor **1**, and the
+two-iteration PPG buffer, every-iteration cadence, loss16/KL32 checks and current
+LR schedule remain intact. Preserve model/companion weights, all Adam/RNG state,
+progress, training lineage and compatible replay targets. Rehearsal, DOMiNO,
+seat fingerprints and AnchorKL remain off. The LR controller retains its normal
+data-composition window reset while preserving its multiplier and warmup progress.
+
+After stopping training, run from the Linux repository root:
+
+```bash
+python scripts/recover-step5-iteration.py --root "$PWD" \
+  --run artifacts/step5/joint7-v11-2-g1290-trained-restart \
+  --expected-iteration 570 --apply && \
+python scripts/configure-training-g570.py \
+  --run artifacts/step5/joint7-v11-2-g1290-trained-restart \
+  --expected-generation 570 \
+  --output configs/step5/joint7-v11-2-g1290-trained-restart-g570-anneal.json && \
+python scripts/step5.py \
+  --config configs/step5/joint7-v11-2-g1290-trained-restart-g570-anneal.json train \
+  --run artifacts/step5/joint7-v11-2-g1290-trained-restart \
+  --imitation-run artifacts/step5/features4-v11-2-batch7-il \
+  --resume-reviewed-source --expected-generation 570 --iterations 20
+```
+
+This continues **g571–g590**. Recovery archives an uncommitted Ctrl+C collection;
+the helper verifies the full g570 checkpoint and original seed before writing
+the config. Reviewed resume commits the v4 migration atomically. Retrying before
+g571 restores the same receipt rather than adding the bot or resetting it again.
+The reward change automatically refreshes PPG replay after the configuration
+transition commits; no separate cache deletion command is needed. For a
+separate newly prepared trained-restart recipe,
+`configure(config, manual_generation=None)` enables the measured v4 gate and
+leaves entropy annealing off, without inheriting this run's manual authorization.
+
+When the console reports **`REWARD_STEP_PENDING`**, stop at a committed boundary
+and run this from the Linux repository root. `G` is read from the stopped run;
+the helper rejects a premature step, stale generation or uncommitted collection.
+
+```bash
+G=$(python -c 'import json; print(json.load(open("artifacts/step5/joint7-v11-2-g1290-trained-restart/state.json"))["iteration"])')
+python scripts/recover-step5-iteration.py --root "$PWD" \
+  --run artifacts/step5/joint7-v11-2-g1290-trained-restart \
+  --expected-iteration "$G" --apply && \
+python scripts/configure-entropy-schedule.py insolvency-step \
+  --run artifacts/step5/joint7-v11-2-g1290-trained-restart \
+  --expected-generation "$G" \
+  --output "configs/step5/joint7-v11-2-g1290-trained-restart-anneal-step2-g${G}.json" && \
+python scripts/step5.py \
+  --config "configs/step5/joint7-v11-2-g1290-trained-restart-anneal-step2-g${G}.json" train \
+  --run artifacts/step5/joint7-v11-2-g1290-trained-restart \
+  --imitation-run artifacts/step5/features4-v11-2-batch7-il \
+  --resume-reviewed-source --expected-generation "$G" --iterations 20
+```
+
+Use the same generic helper with `off` to return entropy to **0.005**, keeping
+the current reward and saved progress; `on --start next` resumes that progress.
+An explicit `on --start next --reset` resets only schedule progress and is
+allowed before reward step two. `insolvency-step --reverse` explicitly returns
+the second reward spec to **0.01/0.075**; progress stays unchanged and the ramp
+waits for the forward step again. Returning to **0.02/0.075** is not authorized
+by the existing reward-transition list. None of these helpers edits model files.
+
+Validation: **23 focused tests passed** across `test_entropy_schedule` and
+`test_training_g570`, covering schedule boundaries/holds, applied coefficient
+provenance, on/off/reset and reward steps, interrupted restart chains, actual
+checkpoint/Adam/RNG restoration, PPG cache refresh, and the other g570 changes.
+The isolated CPU reward-change PPG smoke retained **two steps**, exact probe KL
+**2.20e-8**, with only the fresh reward's cache age. The unchanged-reward
+two-age smoke retained four steps. Nine additional legacy regression checks
+passed. Two archived tests have pre-existing fixture issues: an obsolete
+epsilon-zero fresh-default assertion in `test_exploration_revision`, and a
+missing g1340 export in `test_policy_observations`. Equivalent fresh-default
+and LR-health checks using the current g570 fixture passed.
+No long training or evaluation campaign was launched; these checks establish
+implementation behavior, not improved playing strength. Probe overhead is
+measured per invocation; no claim of GPU training-speed improvement is made.
+
+## Previous continuation: g370, direct lambda 0.95 and T2 forks
 
 The `g0370-20261102T221517838215Z` export records **370 committed generations /
 118,400 ordinary games**, active lambda **0.98** and next PPG beta **0.5**.

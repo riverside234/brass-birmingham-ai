@@ -27,6 +27,7 @@ def configure(config):
         exploration_rollout=copy.deepcopy(E.ROLLOUT))
     result['update'].update(entropy_weight=.005,fixed_entropy=copy.deepcopy(E.FIXED_ENTROPY_005),
         opening_objective=copy.deepcopy(O.T13))
+    result['update'].pop('entropy_schedule',None)  # A new run never inherits an anneal origin.
     result['entropy_control']=dict(copy.deepcopy(E.ANCHOR_ENTROPY),mode='off')
     result['search']['reward']=reward_spec(result)
     if 'teacher_phase' in result:

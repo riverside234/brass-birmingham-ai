@@ -14,6 +14,7 @@ from brass_ai.learning.replay import terminal_targets
 from brass_ai.step5.league import seeds_for,write_json,implementation_id
 from .plackett_luce import IL,V4,estimate,check_dependencies
 from .quality_config import validate_rating
+from .rating_coverage import SEED
 
 HISTORY_ITERATIONS=100
 ARCHIVE_FORMAT='plackett-luce-history/1.0.0'
@@ -173,7 +174,7 @@ def slot_spec(root,run,rating,entry,config,*,anchor_agent=None):
     agents=copy.deepcopy(rating['agents']);agents[agent]=dict(kind='model',checkpoint=copy.deepcopy(entry))
     previous=read(project_path(root,rating['latest_report']['path'])) if rating['latest_report'] else None
     scores=previous['ratings'] if previous else {}
-    checkpoints=[a for a in agents if a not in (IL,V4,agent)]
+    checkpoints=[a for a in agents if a not in (IL,V4,SEED,agent) and a in scores]
     last=max(checkpoints,key=lambda a:agents[a]['checkpoint']['generation']) if checkpoints else None
     estimate_theta=scores[last]['theta'] if last else 0.
     nearest=sorted(checkpoints,key=lambda a:(abs(scores[a]['theta']-estimate_theta),a))[:c['nearest_opponents']]
@@ -188,7 +189,7 @@ def slot_spec(root,run,rating,entry,config,*,anchor_agent=None):
     coverage=None
     if 'rating_coverage' in config and rating.get('coverage',{}).get('activated'):
         from .rating_coverage import lineups as competitive_lineups
-        lineups,coverage=competitive_lineups(rating,agents,agent,scores,generation,anchor_agent)
+        lineups,coverage=competitive_lineups(rating,agents,agent,scores,generation,anchor_agent,config['rating_coverage'])
         nearest=coverage['nearest'];estimate_theta=coverage['estimated_theta']
     for seed in rating['seeds'][:c['panel_setups']]:
         for seat in range(4):
@@ -293,7 +294,7 @@ def panel_report(rows,candidate,health,seed,*,gates=None):
 
 
 def alerts(report,state,panels,previous_panels):
-    checkpoints=[a for a in report['ratings'] if a not in (IL,V4)]
+    checkpoints=[a for a in report['ratings'] if a not in (IL,V4,SEED)]
     latest=max(checkpoints,key=lambda a:state['agents'][a]['checkpoint']['generation'])
     best=max(checkpoints,key=lambda a:report['ratings'][a]['points'])
     current=report['ratings'][latest];best_rating=report['ratings'][best]['points']
@@ -316,6 +317,11 @@ def plot_report(path,report,agents,run=None,state=None):
 def schedule(root,run,state,config,*,device='cpu',mono=None,inference_devices=None):
     rating=validate_state(root,state['ratings'],config['rating']);c=config['rating']
     if not c['enabled']:return None
+    from .rating_coverage import seed_reference
+    baseline=seed_reference(root,state,config)
+    if baseline is not None and SEED not in rating['agents']:
+        rating['agents'][SEED]=baseline
+        write_json(run/'state.json',state)
     from . import context_evaluation as contexts
     contexts.prepare(root,run,state,config)
     from . import panel_gates
@@ -340,7 +346,8 @@ def schedule(root,run,state,config,*,device='cpu',mono=None,inference_devices=No
         from .retention import slim_checkpoint
         retained=state['population']+[a['checkpoint'] for a in rating['agents'].values() if a['kind']=='model']
         previous=next((m for m in retained if m['model_id']==entry['model_id'] and m.get('weights_only')),None)
-        entry=slim_checkpoint(root,run,entry,previous)
+        entry=slim_checkpoint(root,run,entry,previous,
+            **(dict(preserve_auxiliary=True) if 'local_scoring_auxiliary' in config else {}))
         anchor=(state.get('policy_anchor',{}).get('active') or {}).get('agent')
         spec=slot_spec(root,run,rating,entry,config,anchor_agent=anchor);write_once(directory/'spec.json',spec)
         contexts.seal(root,run,state,config,spec,directory/'spec.json')

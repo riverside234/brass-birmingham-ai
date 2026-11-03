@@ -174,6 +174,31 @@ class Probe:
         result['elapsed_seconds']=time.perf_counter()-began
         return result,values
 
+    def entropy_only(self,model,update):
+        """Report-only raw T1 entropy on cached positions; no reference KL."""
+        began=time.perf_counter();values=self.probabilities(model,update)
+        offsets=self.arrays['offsets'];lengths=np.diff(offsets)
+        entropies=-np.add.reduceat(values*np.log(np.maximum(values,1e-30)),offsets[:-1])
+        normalized=entropies/np.log(lengths);groups={}
+        for group in GROUPS:
+            ids=[i for i,row in enumerate(self.rows) if row['group']==group]
+            groups[group]=dict(positions=len(ids),raw_entropy=float(np.mean(entropies[ids])) if ids else None,
+                normalized_entropy=float(np.mean(normalized[ids])) if ids else None)
+        families=defaultdict(float);industries=defaultdict(float);action_positions=0;industry_mass=0.
+        for i,row in enumerate(self.rows):
+            if not row['group'].endswith('_action'):continue
+            action_positions+=1;a,b=map(int,offsets[i:i+2])
+            for kind,industry,p in zip(row['kinds'],row['industries'],values[a:b]):
+                families[kind]+=float(p)
+                if kind in ('build','develop') and industry is not None:
+                    industries[industry]+=float(p);industry_mass+=float(p)
+        return dict(positions=len(self.rows),groups=groups,raw_entropy=float(entropies.mean()),
+            normalized_entropy=float(normalized.mean()),elapsed_seconds=time.perf_counter()-began,
+            action_positions=action_positions,family_shares={k:v/max(1,action_positions) for k,v in families.items()},
+            industry_shares={k:v/industry_mass for k,v in industries.items()} if industry_mass else {},
+            input_cache_bytes=self._input_bytes,anchor_kl_measured=False,report_only=True,
+            scope='Current raw T1 policy on existing fixed cached positions; no IL comparison, dataset reload, seat fingerprint input or LR gate'),values
+
 
 def source_binding(root,origin):
     path=project_path(root,origin['manifest'])

@@ -11,6 +11,7 @@ FIXED_ENTROPY = dict(contract='fixed-group-entropy/1.0.0',
     weights=dict(canal_action=.015,canal_other=.005,rail_action=.015,rail_other=.005))
 FIXED_ENTROPY_010 = dict(contract='fixed-group-entropy/1.1.0',weights=dict.fromkeys(GROUPS,.10))
 FIXED_ENTROPY_005 = dict(contract='fixed-group-entropy/1.2.0',weights=dict.fromkeys(GROUPS,.005))
+FIXED_ENTROPY_0025 = dict(contract='fixed-group-entropy/1.3.0',weights=dict.fromkeys(GROUPS,.0025))
 FIXED_010_MIGRATION = 'fixed-group-entropy-010/1.0.0'
 Q = dict(contract='family-weighted-exploration/3.0.0', action_family_weights=FAMILY_WEIGHTS,
     unknown_action_kind_weight=1, pass_only_when_alone=True, industry_subgroups=['build','develop'],
@@ -52,6 +53,9 @@ NEUTRAL_BRANCH = dict(THREE_BRANCH,contract='selfplay-branching/7.0.0',
     move_distribution=dict(temperature_1=.6,temperature_2=.3,exploration_q=.1))
 T2_ONLY_BRANCH = dict(NEUTRAL_BRANCH,contract='selfplay-branching/8.0.0',rate_per_decision=.005,
     move_distribution=dict(temperature_2=1.))
+FORK_OPENING = dict(REVISED_OPENING,temperature=1.5,action_decisions_per_seat=2)
+FORK_T15_BRANCH = dict(T2_ONLY_BRANCH,contract='selfplay-branching/9.0.0',
+    continuation_opening=FORK_OPENING)
 ROLLOUT = dict(contract='exploration-rollout/1.0.0', mode='fresh',
     opening_after_iterations=0, raw_entropy_after_iterations=0, branching_after_iterations=20)
 TRAINED_ROLLOUT = dict(ROLLOUT,contract='exploration-rollout/2.0.0',branching_after_iterations=0)
@@ -159,9 +163,10 @@ def low_branch_config(config):
 
 
 def validate(config):
+    from . import entropy_schedule as anneal
     present=[b in config for b in BLOCKS]
     if not any(present):
-        require('fixed_entropy' not in config.get('update',{}),'Fixed group entropy requires versioned exploration')
+        require(not {'fixed_entropy',anneal.KEY}&set(config.get('update',{})),'Fixed/scheduled entropy requires versioned exploration')
         return
     require(all(present), 'Exploration revision requires all versioned blocks')
     # This initial recipe is deliberately narrow; experiments need explicit
@@ -169,11 +174,12 @@ def validate(config):
     revised=(config['opening']==REVISED_OPENING and config['branching']==REVISED_BRANCH) or (
         config['opening']==THREE_OPENING and config['branching']==THREE_BRANCH)
     three_t2=config['opening']==THREE_T2_OPENING and config['branching'] in (THREE_T2_BRANCH,BALANCED_BRANCH)
-    neutral=config['opening']==THREE_OPENING and config['branching'] in (NEUTRAL_BRANCH,T2_ONLY_BRANCH)
+    fork=config['opening']==THREE_OPENING and config['branching']==FORK_T15_BRANCH
+    neutral=config['opening']==THREE_OPENING and config['branching'] in (NEUTRAL_BRANCH,T2_ONLY_BRANCH,FORK_T15_BRANCH)
     current=(config['opening']==OPENING and config['branching'] in (BRANCH,LOCAL_SCORING_BRANCH)) or revised or three_t2 or neutral
     uniform=config['opening']==OPENING and config['branching']==HIGH_BRANCH
     legacy=config['opening']==LEGACY_OPENING and config['branching']==LEGACY_BRANCH
-    require(type(config['exploration']) in (int,float) and config['exploration'] in ((.08,.05) if three_t2 else (.05,) if revised or neutral else (0.,.02,.03)) and config['exploration_distribution']==Q and
+    require(type(config['exploration']) in (int,float) and config['exploration'] in ((.02,) if fork else (.08,.05) if three_t2 else (.05,) if revised or neutral else (0.,.02,.03)) and config['exploration_distribution']==Q and
         (current or uniform or legacy), 'Invalid exploration revision recipe')
     e=config['entropy_control']
     require(type(e) is dict,'Invalid entropy floor controller')
@@ -181,6 +187,10 @@ def validate(config):
     require('enabled' not in check or check['enabled'] is False,'Temperature comparisons must be explicitly disabled')
     recipes=(ENTROPY,ANCHOR_ENTROPY) if current else (UNIFORM_ENTROPY,ANCHOR_ENTROPY) if uniform else (DECAY_ENTROPY,LEGACY_ENTROPY)
     comparable=dict(e,mode='apply')
+    if fork:
+        require(e['mode']=='off' and e['alpha_base']==(.005 if anneal.KEY in config['update'] else .0025),
+            'Fork recipe entropy preset differs')
+        comparable['alpha_base']=ANCHOR_ENTROPY['alpha_base']
     if e.get('contract')==ANCHOR_ENTROPY['contract']:
         origin=e.get('promotion_origin')
         require(type(origin) is dict and set(origin)=={'generation','event_count','events_sha256'} and
@@ -195,7 +205,8 @@ def validate(config):
         'Revised openings require fixed entropy with adaptive control disabled')
     require(('fixed_entropy' in config['update'])==(three_t2 or neutral),'Fixed group entropy requires a supported three-decision recipe')
     if three_t2 or neutral:validate_fixed_entropy(config['update']['fixed_entropy'])
-    if neutral:require(config['update']['fixed_entropy']==FIXED_ENTROPY_005,'Neutral restart requires fixed 0.005 entropy')
+    if neutral:require(config['update']['fixed_entropy']==(FIXED_ENTROPY_0025 if fork and anneal.KEY not in config['update'] else FIXED_ENTROPY_005),'Neutral restart fixed entropy differs')
+    if anneal.KEY in config['update']:anneal.validate(config)
     r=config['exploration_rollout']
     expected=dict(ROLLOUT,mode='staged',opening_after_iterations=1,raw_entropy_after_iterations=2) if r.get('mode')=='staged' else ROLLOUT
     if 'trained_startup' in config:expected=TRAINED_ROLLOUT
@@ -210,7 +221,7 @@ def group(context):
 
 
 def validate_fixed_entropy(config):
-    require(type(config) is dict and config in (FIXED_ENTROPY,FIXED_ENTROPY_010,FIXED_ENTROPY_005) and
+    require(type(config) is dict and config in (FIXED_ENTROPY,FIXED_ENTROPY_010,FIXED_ENTROPY_005,FIXED_ENTROPY_0025) and
         all(type(v) in (float,int) for v in config['weights'].values()),'Invalid fixed group entropy recipe')
     return config
 
@@ -227,6 +238,8 @@ def fixed_010_config(config):
 
 
 def effective_alphas(config,state):
+    from . import entropy_schedule as anneal
+    if anneal.KEY in config['update']:return anneal.effective(config,state)
     fixed=config['update'].get('fixed_entropy')
     if fixed is not None:return copy.deepcopy(validate_fixed_entropy(fixed)['weights'])
     e=config['entropy_control']
@@ -247,10 +260,13 @@ def check_behavior(b, phase, *, branch_move=False):
 
 def initial(config, generation):
     anchored=config['entropy_control']['contract']==ANCHOR_ENTROPY['contract']
-    return dict(contract=ANCHOR_STATE if anchored else STATE, origin=generation, generation=generation,
+    result=dict(contract=ANCHOR_STATE if anchored else STATE, origin=generation, generation=generation,
         **(dict(floor_anchor_promotions=0) if anchored else {}),
         baseline_rows=[], baseline=None, armed_at=None,
         groups={g:dict(alpha=config['entropy_control']['alpha_base'],window=[],cap_streak=0) for g in GROUPS})
+    from . import entropy_schedule as anneal
+    if anneal.KEY in config['update']:result[anneal.KEY]=anneal.restore(config,None,generation)
+    return result
 
 
 def restore(config, state, checkpoint=None):
@@ -262,6 +278,8 @@ def restore(config, state, checkpoint=None):
     anchored=config['entropy_control']['contract']==ANCHOR_ENTROPY['contract']
     upgraded=saved.get('contract')==ANCHOR_STATE
     fields={'contract','origin','generation','baseline_rows','baseline','armed_at','groups'}
+    from . import entropy_schedule as anneal
+    if anneal.KEY in saved:fields.add(anneal.KEY)
     require(type(saved) is dict and set(saved)==fields|({'floor_anchor_promotions'} if upgraded else set()) and
         saved==checkpoint and saved['contract'] in (STATE,ANCHOR_STATE) and type(saved['generation']) is int and
         type(saved['origin']) is int and saved['generation']==state['iteration'] and
@@ -287,6 +305,8 @@ def restore(config, state, checkpoint=None):
             'Invalid saved entropy controller')
     result=copy.deepcopy(saved)
     if anchored and not upgraded:result.update(contract=ANCHOR_STATE,floor_anchor_promotions=0)
+    schedule=anneal.restore_run(config,state)
+    if schedule is not None:result[anneal.KEY]=schedule
     return sync_anchor_floor(config,result,state.get('policy_anchor'))
 
 
@@ -344,10 +364,12 @@ def effective(config, state, generation):
     e=config['entropy_control']; raw=age>=r['raw_entropy_after_iterations']
     from .policy_observations import enabled as observations_off
     branch_ready=age>=r['branching_after_iterations'] and (state['baseline'] is not None or observations_off(config))
+    from . import entropy_schedule as anneal
     return dict(version=3,opening=config['opening'] if age>=r['opening_after_iterations'] else None,
         raw_entropy=raw,branching=config['branching'] if branch_ready else None,
         branching_status='active' if branch_ready else 'waiting_for_20_iterations' if age<r['branching_after_iterations'] else 'waiting_for_entropy_baseline',
         alphas=effective_alphas(config,state),
+        **({anneal.KEY:anneal.receipt(config,state)} if anneal.KEY in config['update'] else {}),
         age=age,origin=state['origin'])
 
 
@@ -367,9 +389,11 @@ def advance(state, config, measurement, *, generation, warmup_done, healthy, pol
     s=sync_anchor_floor(config,copy.deepcopy(state),policy_anchor); e=config['entropy_control']
     require(generation==s['generation']+1, 'Entropy controller skipped/repeated a generation')
     active=effective(config,s,generation-1)['raw_entropy']
+    from . import entropy_schedule as anneal
+    scheduled=anneal.KEY in config['update'];applied=effective_alphas(config,s)
     values={g:measurement.get('groups',{}).get(g,{}).get('raw_entropy') for g in GROUPS}
     valid=all(type(v) in (float,int) and math.isfinite(v) and v>=0 for v in values.values())
-    if active and warmup_done and valid and s['baseline'] is None:
+    if not scheduled and active and warmup_done and valid and s['baseline'] is None:
         s['baseline_rows'].append(values)
         if len(s['baseline_rows'])==e['baseline_iterations']:
             s['baseline']={g:statistics.mean(r[g] for r in s['baseline_rows']) for g in GROUPS}
@@ -377,7 +401,7 @@ def advance(state, config, measurement, *, generation, warmup_done, healthy, pol
     report={}; targets=floors(config,s,generation)
     for g in GROUPS:
         entry=s['groups'][g]; before=entry['alpha']; h=values[g]; floor=None
-        if active and warmup_done and valid:
+        if not scheduled and active and warmup_done and valid:
             entry['window']=(entry['window']+[h])[-e['median_window']:]
         median=statistics.median(entry['window']) if entry['window'] else None
         reason='baseline_pending'; decision='hold'
@@ -393,14 +417,17 @@ def advance(state, config, measurement, *, generation, warmup_done, healthy, pol
             elif median>e['hysteresis']*floor:
                 entry['alpha']=max(e['alpha_base'],before/e['relax_factor']);decision='relax';reason='above_hysteresis'
             else:reason='hysteresis'
-        entry['cap_streak']=entry['cap_streak']+1 if entry['alpha']>=e['alpha_max'] else 0
+        if not scheduled:entry['cap_streak']=entry['cap_streak']+1 if entry['alpha']>=e['alpha_max'] else 0
         alarms=[]
         if entry['cap_streak']>=10:alarms.append('alpha_at_cap_10_iterations')
         if valid and s['baseline'] and h>1.3*s['baseline'][g]:alarms.append('entropy_above_1.3_baseline')
         report[g]=dict(raw_entropy=h,normalized_entropy=measurement.get('groups',{}).get(g,{}).get('normalized_entropy'),
             baseline=s['baseline'][g] if s['baseline'] else None,floor=floor,median=median,
             alpha_before=before,alpha_after=entry['alpha'],decision=decision,reason=reason,alarms=alarms,
-            effective_alpha=effective_alphas(config,s)[g])
+            effective_alpha=applied[g] if scheduled else effective_alphas(config,s)[g])
+    schedule_report=None
+    if scheduled:
+        s[anneal.KEY],schedule_report=anneal.advance(s[anneal.KEY],config,generation=generation,healthy=healthy)
     s['generation']=generation
     return s,dict(contract=e['contract'],mode=e['mode'],origin=s['origin'],armed_at=s['armed_at'],
         **(dict(fixed_entropy=copy.deepcopy(config['update']['fixed_entropy'])) if 'fixed_entropy' in config['update'] else {}),
@@ -410,6 +437,8 @@ def advance(state, config, measurement, *, generation, warmup_done, healthy, pol
         **(dict(floor_anchor_promotions=s['floor_anchor_promotions'],
             floor_initial_ratio_by_group=copy.deepcopy(e['floor_ratio_by_group'])) if 'floor_anchor_promotions' in s else {}),
         baseline_iterations=len(s['baseline_rows']),healthy=bool(healthy),groups=report,
-        scope=('Fixed entropy weights; fixed-probe diagnostics disabled, saved entropy baseline unchanged'
+        **({anneal.KEY:schedule_report} if scheduled else {}),
+        scope=('Committed-health entropy schedule; occasional report-only raw entropy, saved adaptive baseline unchanged'
+            if scheduled else 'Fixed entropy weights; fixed-probe diagnostics disabled, saved entropy baseline unchanged'
             if config.get('policy_observations',{}).get('anchor_kl')=='off' else
             'Final raw policy on fixed IL probe; prospective post-warmup baseline, no retired IL action checks'))

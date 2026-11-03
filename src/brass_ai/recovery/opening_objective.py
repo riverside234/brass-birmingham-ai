@@ -15,19 +15,20 @@ ROW_KEY='_ppo_opening_objective'
 T15=dict(DEFAULT,contract='opening-ppo-objective/2.0.0',scope='temperature-1.5-action-openings')
 T13=dict(DEFAULT,contract='opening-ppo-objective/3.0.0',scope='temperature-1.3-three-action-openings')
 T2_THREE=dict(DEFAULT,contract='opening-ppo-objective/4.0.0',scope='temperature-2-three-action-openings')
+FORK_T15=dict(DEFAULT,contract='opening-ppo-objective/5.0.0',scope='normal-T1.3-three-branch-T1.5-two')
 
 
 def opening_spec(config):
     from .exploration import OPENING,REVISED_OPENING,THREE_OPENING,THREE_T2_OPENING
     validate(config)
-    return THREE_T2_OPENING if config==T2_THREE else THREE_OPENING if config==T13 else REVISED_OPENING if config==T15 else OPENING
+    return THREE_T2_OPENING if config==T2_THREE else THREE_OPENING if config in (T13,FORK_T15) else REVISED_OPENING if config==T15 else OPENING
 
 
 def opening_temperature(config):return opening_spec(config)['temperature']
 
 
 def validate(c):
-    require(type(c) is dict and c in (DEFAULT,T15,T13,T2_THREE) and
+    require(type(c) is dict and c in (DEFAULT,T15,T13,T2_THREE,FORK_T15) and
         all(type(c[k]) in (int,float) for k in ('target_temperature','importance_cap')),
         'Invalid decoupled opening PPO objective')
     return c
@@ -71,10 +72,11 @@ class Reference:
             require(row.get(ROW_KEY)==config,'Missing/stale opening objective collection provenance')
             require(not row.get('_copied_prefix',False) and row['behavior'].get('component')!='branch_move',
                 'Fork moves/copied prefixes cannot enter PPO')
-            b=row['behavior'];opening=b['temperature']==temperature
-            require(b['temperature'] in (1.,temperature),'Stale opening temperature in PPO rows')
+            row_temp,row_decisions=(1.5,2) if config==FORK_T15 and row.get('_branch') else (temperature,decisions)
+            b=row['behavior'];opening=b['temperature']==row_temp
+            require(b['temperature'] in (1.,row_temp),'Stale opening temperature in PPO rows')
             require(not opening or (row['view']['context']['phase']=='action' and
-                type(b['action_decision']) is int and 0<=b['action_decision']<decisions),
+                type(b['action_decision']) is int and 0<=b['action_decision']<row_decisions),
                 'Tempered row is not an opening action')
             selected.append(opening and len(row['choices'])>1)
         self.mask=torch.tensor(selected,device=dataset.device,dtype=torch.bool)

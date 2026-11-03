@@ -106,6 +106,10 @@ def check_signature(state, signature, reviewed=False):
             handlers[GAE_FLOOR_MIGRATION]=floor_options
             from .training_revision_g370 import MIGRATION as G370_MIGRATION,configure as g370_config
             handlers[G370_MIGRATION]=g370_config
+            from .training_revision_g570 import MIGRATION as G570_MIGRATION,configure as g570_config
+            handlers[G570_MIGRATION]=g570_config
+            from .entropy_schedule import MIGRATION as ANNEAL_MIGRATION,reviewed_config as anneal_config
+            handlers[ANNEAL_MIGRATION]=lambda c:anneal_config(c,state,signature['config'])
             from .lr_controller import THRESHOLD_MIGRATION,threshold_config
             if THRESHOLD_MIGRATION in migrations:
                 require(state['iteration']>=560,'LR threshold hotfix starts from committed generation 560 or later')
@@ -313,6 +317,7 @@ def load_resume(root, run, state, signature, *, device='cpu', reviewed=False, di
             verified.add(frozen['path'])
     if (getattr(model.config,'utility',None) is not None and raw['training'].get('signature')!=digest(signature)
             and not teacher_receipt_preserved(state,signature,raw,entry)
+            and not entropy_receipt_preserved(state,signature,raw,entry)
             and not gae_floor_receipt_preserved(state,signature,raw,entry)
             and not evaluation_receipt_preserved(state,signature,raw,entry)):
         # The old receipt can predate a post-calibration policy/distillation
@@ -325,6 +330,24 @@ def load_resume(root, run, state, signature, *, device='cpu', reviewed=False, di
             reason='Reviewed source continuation requires fresh ordinary utility calibration',
             checkpoint_signature=raw['training'].get('signature'),current_signature=digest(signature))
     return model, raw, changed
+
+
+def entropy_receipt_preserved(state,signature,raw,entry):
+    """Same-source entropy toggles do not invalidate an unchanged critic reward."""
+    from .entropy_schedule import KEY,reviewed_config
+    from .utility import reward_spec
+    known={digest(state['signature']):state['signature']}
+    for transition in reversed(state.get('source_transitions',[])):
+        if transition['checkpoint']==entry and transition['to_signature'] in known:
+            known[digest(transition['from_signature'])]=transition['from_signature']
+    before=known.get(raw['training'].get('signature'))
+    if before is None or before['implementation']!=signature['implementation'] or \
+            reward_spec(before['config'])!=reward_spec(signature['config']) or KEY not in before['config']['update']:
+        return False
+    if before['config']==signature['config']:return True
+    try:reviewed_config(before['config'],state,signature['config'])
+    except (ValueError,KeyError,TypeError):return False
+    return True
 
 
 def gae_floor_receipt_preserved(state,signature,raw,entry):
@@ -345,8 +368,11 @@ def gae_floor_receipt_preserved(state,signature,raw,entry):
     if contract in (FLOOR_CONTRACT,DIRECT_095_CONTRACT):
         from .training_revision_g370 import configure
         from .trained_startup import enabled
-        if enabled(before['config']) and signature['config'] in (before['config'],configure(before['config'])):
+        if enabled(before['config']) and 'v4_history' not in before['config'] and signature['config'] in (before['config'],configure(before['config'])):
             flags.append('preserve_g370_calibration')
+        from .training_revision_g570 import configure as g570_config
+        if enabled(before['config']) and before['config']['advantage']['contract']==DIRECT_095_CONTRACT and signature['config'] in (before['config'],g570_config(before['config'])):
+            flags.append('preserve_g570_calibration')
     return any(any(e.get(flag) is True for flag in flags) and e['from_implementation']==before['implementation']
         and e['to_implementation']==signature['implementation'] and e['learning_compatibility']==digest(signature['compatibility'])
         for e in expand_source_reviews(read(CONFIG_DIR/'selfplay-resume-sources.json'))['transitions'])
@@ -460,6 +486,10 @@ def prepare_opponent_pool(root,run,state,raw,config,source_changed=False):
             if t['opponent_pool_migration'].get('contract')=='domino-adoption/1.0.0':
                 from .domino_adoption import pool_transition
                 migrated,receipt=pool_transition(backup['quality_pool'])
+            elif t['opponent_pool_migration'].get('contract')=='v4-history-pool-adoption/1.0.0':
+                from .v4_history import migrate as migrate_v4
+                transition=t['opponent_pool_migration']
+                migrated,receipt=migrate_v4(backup['quality_pool'],dict(v4_history=transition['config']),transition['policies'])
             else:migrated,receipt=pfsp_pool.migrate(backup['quality_pool'],pool['config'],state['iteration'],state['games_done'])
             require(receipt==t['opponent_pool_migration'] and quality_pool.state_digest(migrated)==actual,
                 'PFSP source transition cannot be reproduced')
@@ -470,6 +500,10 @@ def prepare_opponent_pool(root,run,state,raw,config,source_changed=False):
             require(source_changed,'DOMiNO context sampling requires reviewed adoption')
             from .domino_adoption import pool_transition
             return pool_transition(pool)
+        if 'v4_history' in config:
+            from .v4_history import migrate as migrate_v4,policies
+            require('v4_history' in pool or source_changed,'V4 pool adoption requires reviewed continuation')
+            return migrate_v4(pool,config,policies(root,config))
         return pool,None
     require(source_changed,'Opponent sampling changes require a reviewed source/config transition')
     return pfsp_pool.migrate(pool,config['opponent_pool'],state['iteration'],state['games_done'])

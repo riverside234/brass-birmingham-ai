@@ -1,0 +1,74 @@
+{
+  "passed": true,
+  "local_date": "2026-11-03",
+  "archive": {
+    "path": "distribution/rust-lab-g570/rust-lab-b01-b04-g570.zip",
+    "sha256": "7bbceb50b1b2ffa3c3797aa2aae452a90edde2f15be8a2d627b452f7c64a53a4",
+    "bytes": 7505101,
+    "entries": 1101,
+    "implementation": "70a926e5dfc7aa30829c296b49cb7b53159534ccc5e7c8876c46a9609a44164d",
+    "producer": "bc2c07c397fdc979c9d4376189e723af86620e6361e3cd7052f3500cea3709cb",
+    "lab_qualification": "Pending"
+  },
+  "transfer_stages": [
+    {
+      "manifest_sha256": "0a54156d984919787194651e52380c5b43c3930ba2bb4e5e9b852405d6b745c2",
+      "implementation": "70a926e5dfc7aa30829c296b49cb7b53159534ccc5e7c8876c46a9609a44164d",
+      "producer": "bc2c07c397fdc979c9d4376189e723af86620e6361e3cd7052f3500cea3709cb",
+      "files": 1094,
+      "milestone": "b01",
+      "teacher_profile": "task-only",
+      "lab_qualification": "Pending"
+    },
+    {
+      "manifest_sha256": "0a54156d984919787194651e52380c5b43c3930ba2bb4e5e9b852405d6b745c2",
+      "implementation": "70a926e5dfc7aa30829c296b49cb7b53159534ccc5e7c8876c46a9609a44164d",
+      "producer": "bc2c07c397fdc979c9d4376189e723af86620e6361e3cd7052f3500cea3709cb",
+      "files": 1094,
+      "milestone": "b02",
+      "teacher_profile": "task-only",
+      "lab_qualification": "Pending"
+    },
+    {
+      "manifest_sha256": "0a54156d984919787194651e52380c5b43c3930ba2bb4e5e9b852405d6b745c2",
+      "implementation": "70a926e5dfc7aa30829c296b49cb7b53159534ccc5e7c8876c46a9609a44164d",
+      "producer": "bc2c07c397fdc979c9d4376189e723af86620e6361e3cd7052f3500cea3709cb",
+      "files": 1094,
+      "milestone": "b025",
+      "teacher_profile": "task-only",
+      "lab_qualification": "Pending"
+    },
+    {
+      "manifest_sha256": "0a54156d984919787194651e52380c5b43c3930ba2bb4e5e9b852405d6b745c2",
+      "implementation": "70a926e5dfc7aa30829c296b49cb7b53159534ccc5e7c8876c46a9609a44164d",
+      "producer": "bc2c07c397fdc979c9d4376189e723af86620e6361e3cd7052f3500cea3709cb",
+      "files": 1094,
+      "milestone": "b03",
+      "teacher_profile": "task-only",
+      "lab_qualification": "Pending"
+    },
+    {
+      "manifest_sha256": "0a54156d984919787194651e52380c5b43c3930ba2bb4e5e9b852405d6b745c2",
+      "implementation": "70a926e5dfc7aa30829c296b49cb7b53159534ccc5e7c8876c46a9609a44164d",
+      "producer": "bc2c07c397fdc979c9d4376189e723af86620e6361e3cd7052f3500cea3709cb",
+      "files": 1094,
+      "milestone": "b04",
+      "teacher_profile": "task-only",
+      "lab_qualification": "Pending"
+    }
+  ],
+  "raw_payload_and_crc": "passed",
+  "extracted_fixture_tests": 29,
+  "extracted_fixture_skips": 2,
+  "added_unreviewed_module_rejected": true,
+  "failure_export_verified": true,
+  "success_export_verified": true,
+  "implementation_files": 326,
+  "native_source_unchanged": true,
+  "lab_qualification": "Pending",
+  "scope": "Local Windows CPU and transfer integrity; no actual g570 tensors or CUDA",
+  "logs": {
+    "extracted-package.log": "28ffa1437b4759e84efe867a8c08f78f85e572007c58c0351cfd9175b5eaba90",
+    "extra-module-rejection.log": "def3f07575e63d7ac6f44ab523ecd718da8b30370bc733b48887885cd57cc8bc"
+  }
+}

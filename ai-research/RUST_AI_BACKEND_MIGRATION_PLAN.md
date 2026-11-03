@@ -794,7 +794,7 @@ The first server build must reference this receipt and the same shared-core sour
 
 ## Part 2 — Lab server: migrate training after local acceptance
 
-**Revised 2026-11-02.** B01–B04 qualification targets the **latest committed iteration of `joint7-v11-2-g1290-trained-restart`, such as g390**, using the requested `joint7-v11-2-g1290-trained-restart-g370.json` recipe. The launcher captures the actual generation/checkpoint/config identity once and holds it fixed throughout qualification; g370 is historical reference evidence, not a required checkpoint. **DOMiNO is off and will not be used. AZ_DB is retired and its implementation has been removed from the current teacher/backend path.** Use neutral task-only `search_v1`; search_v2 and V205 remain disabled. The [restart refresh report](RUST_BACKEND_G370_REFRESH.md) and [current bundle commands](../distribution/rust-lab-restart/README.md) supersede the g1326/g1330 qualification instructions. Historical archives and reports remain unchanged evidence of their original scopes.
+**Revised 2026-11-03.** B01–B04 qualification targets the **latest committed iteration of `joint7-v11-2-g1290-trained-restart`, such as g570**, using the requested `joint7-v11-2-g1290-trained-restart-g370.json` recipe. The launcher captures the actual generation/checkpoint/config identity once and holds it fixed throughout qualification; The supplied g570 report is the current reference; explicit g570 commands pin its full checkpoint, while latest-state capture remains available. **DOMiNO is off and will not be used. AZ_DB is retired and its implementation has been removed from the current teacher/backend path.** Use neutral task-only `search_v1`; search_v2 and V205 remain disabled. The [restart refresh report](RUST_BACKEND_G570_REFRESH.md) and [current bundle commands](../distribution/rust-lab-g570/README.md) supersede the g1326/g1330 qualification instructions. Historical archives and reports remain unchanged evidence of their original scopes.
 
 All current lab gates are **Pending** until run on the lab. Local development checks do not certify CUDA, actual checkpoint restoration, training strength or production adoption. B05–B07 below are future implementation requirements. The current `--stage all` launcher covers only B01, B02, B02.5, B03 and B04.
 
@@ -805,16 +805,16 @@ Part 1's accepted local rules/features/search lifecycle is the starting point. P
 | Binding | Reference and qualification policy |
 | --- | --- |
 | Run | `artifacts/step5/joint7-v11-2-g1290-trained-restart` |
-| Qualification checkpoint | Latest committed iteration, e.g. g390; automatically captured once and held fixed |
-| Report | `results/joint7-v11-2-g1290-trained-restart-g0370-20261102T221517838215Z` |
-| Committed progress in report | g370, 118,400 ordinary games |
-| Historical report checkpoint | `generation-0370.pt`, SHA-256 `198af418247e6559eb4e2413acb02afd54e7baa5e446a30fb6ce1442c37dfcdc` |
-| Historical report model | `0b8a138a2cb3a73bce0633c2080d4c87c1ba66d15a58889b0df0b10b2376895f` |
-| Saved report source | `ea569b6238657d0667b3550efa2a0ea0e0f5960699a38cbb77991c91d0fd93b6` |
-| Requested config | [`configs/step5/joint7-v11-2-g1290-trained-restart-g370.json`](../configs/step5/joint7-v11-2-g1290-trained-restart-g370.json) |
+| Qualification checkpoint | Latest committed iteration, e.g. g570; automatically captured once and held fixed |
+| Report | `results/joint7-v11-2-g1290-trained-restart-g0570-20261103T190804654465Z` |
+| Committed progress in report | g570, 182,400 ordinary games |
+| Report checkpoint | `generation-0570.pt`, SHA-256 `06626c1fb7d0b91f64d939f9fbb3db7c5f3aa072331eb3d773f101e729117ab9` |
+| Report model | `18f42a48933c18095d96f1cc64b836d3f9aac92361a4e4ee7c423830d9a11a91` |
+| Saved report source | `f7a48a025e2c247e63da4df301ce2b80c7c6aabf1073220a5be97f0929719c78` |
+| Qualification config | [Exact recorded g570 config](../results/joint7-v11-2-g1290-trained-restart-g0570-20261103T190804654465Z/recorded-config.json), identical to the g370 recipe |
 | Teacher | Off by default. Separate task-only policy-distillation phase; dormant legacy `teacher_value.enabled=true` is disabled only by explicit teacher-phase adoption. |
 
-**The report and requested config are different boundaries.** The exported report predates the g370 revision and still records GAE 0.98, 1% mixed-distribution branches and PPG beta floor 0.5. The requested config is the exact existing `training_revision_g370.configure` transformation: direct GAE 0.95/floor 0.95, 0.5% T2-only branches and PPG v20 beta floor 1. Qualification checks the lab's committed signature against the requested config; it never edits that signature or pretends the report proves adoption. B03 may replay only the already reviewed g370 GAE/beta restoration in its isolated fork if the signature was adopted before the next checkpoint. Otherwise finish the existing config adoption before qualifying. If the run advances, bind its actual latest generation/hash/config rather than rewind.
+**The g570 report already uses the g370 recipe.** Qualification now defaults to that report's exact `recorded-config.json`: GAE 0.95/floor 0.95, 0.5% T2-only branches and PPG v20 beta floor 1. The newer optional g570/entropy/branch/V4-history revisions in the checkout are not inferred as adopted from this report. Require the committed config to match and restore the actual checkpoint's phase state exactly. Do not repeat a completed config adoption or change the reward during backend qualification. Explicit g570 commands assert the report's generation/hash; if training has advanced, capture its actual latest state without rewinding.
 
 Preserve the restart's actual neutral recipe: four zero style and eight zero intent inputs for neural seats, neutral 28-column fingerprints with the unchanged 34-column critic interface, AnchorKL and context panels off, fixed group entropy 0.005, epsilon 0.05, T1.3 for the first three actions per neural seat then T1, insolvency cost 0.02/event capped at 0.075, economic-only LR control, current local-scoring auxiliaries and PFSP/manual-startup provenance. The existing g1290 seed was a past weights-only initialization of this run. **Backend migration must resume the full g370-or-later checkpoint; do not repeat that initialization, reset progress, re-enable DOMiNO or return to the old grouped-lr-critic run.**
 
@@ -854,10 +854,10 @@ Keep Python target construction, GAE, PPO behavior likelihoods, critic/local-sco
 
 | Step | Implementation / current lab status | Exit scope |
 | --- | --- | --- |
-| B01 | Updated; **Pending** | Exact g370/latest pins, Linux build, feature/GPU/lifecycle adapters |
+| B01 | Updated; **Pending** | Exact g570/latest pins and complete producer inventory, Linux build, feature/GPU/lifecycle adapters |
 | B02 | Updated; **Pending** | Ordinary neutral collection and g370 branch families, bounded coverage |
 | B02.5 | Task-only refresh implemented; **Pending** | Explicit default-off teacher adoption, labels/buffer/term/restore fixtures |
-| B03 | Task-only/g370 refresh implemented; **Pending** | Existing-family admission and complete isolated full-checkpoint restoration |
+| B03 | Task-only/g570 qualification refresh implemented; **Pending** | Existing-family admission and complete isolated full-checkpoint restoration |
 | B04 | Task-only 4s+1s refresh implemented; **Pending** | Actual GPU calibration, bounded two-table shadow, timing/correctness |
 | B05 | **Pending** | Current neutral PPO/PPG/local-scoring update, interrupted commit/restart and teacher term |
 | B06 | **Pending** | Matched backend throughput and separately measured teacher overhead |
@@ -945,7 +945,7 @@ Restart discards live trees, GPU owners, clocks and transient verification cache
 
 Keep full model and PPO/PPG/local-scoring optimizer tensors, RNG/gates/counters, source-transition backups, seed/IL/population references, cache payloads/owner metadata and optional teacher receipts needed by every supported rollback. Metadata summaries alone cannot restore training. Use existing strict cache rebuild/ownership rules for source-bound caches; never delete the previous critic age just to clear a compatibility error. Teacher cleanup must respect committed checkpoints and rollback horizons.
 
-Each future milestone publishes a **new immutable bundle under `distribution/`**, its current plan and manifests, exact latest-state commands and honest Pending/pass/deferred scopes. Old ZIPs are never resealed. Current launchers verify the restart supplement and reject remaining retired AZ_DB source files; pull the matching checkout with deletions before extracting it. Export every attempt to a fresh Git-visible `results/rust-lab-qualification/` folder, including failures/deferrals; preserve original lab receipts for dependent gates.
+Each future milestone publishes a **new immutable bundle under `distribution/`**, its current plan and manifests, exact latest-state commands and honest Pending/pass/deferred scopes. Old ZIPs are never resealed. Current launchers verify the g570 supplement and reject remaining retired AZ_DB source files; pull the matching checkout with deletions before extracting it. Export every attempt to a fresh Git-visible `results/rust-lab-qualification/` folder, including failures/deferrals; preserve original lab receipts for dependent gates.
 
 ### B7. Lab risks and completion checklist
 
@@ -976,11 +976,11 @@ Each future milestone publishes a **new immutable bundle under `distribution/`**
 
 ### B8. Implementation references and existing regression anchors
 
-Use [restart bundle instructions](../distribution/rust-lab-restart/README.md), [refresh report](RUST_BACKEND_G370_REFRESH.md), the [original teacher phase specification](TEACHER_SEARCH_PHASE_REVISION_PLAN.md), the [Gumbel reference](GUMBEL_IS_MCTS_REFERENCE.md) and current source. AZ_DB/g1330 documents describe retired historical work; they impose no active fit/objective/strategy gates.
+Use [restart bundle instructions](../distribution/rust-lab-g570/README.md), [refresh report](RUST_BACKEND_G570_REFRESH.md), the [original teacher phase specification](TEACHER_SEARCH_PHASE_REVISION_PLAN.md), the [Gumbel reference](GUMBEL_IS_MCTS_REFERENCE.md) and current source. AZ_DB/g1330 documents describe retired historical work; they impose no active fit/objective/strategy gates.
 
 | Source | Purpose |
 | --- | --- |
-| `scripts/run-rust-lab-qualification.py`, `scripts/prepare-rust-lab-g370.py`, `src/brass_ai/rust_backend/lab_transfer.py` | Current bundle verification, defaults, exact lab commands and automatic result export |
+| `scripts/run-rust-lab-qualification.py`, `scripts/prepare-rust-lab-g570.py`, `src/brass_ai/rust_backend/lab_transfer.py` | Current g570 bundle, full fingerprint inventory, actionable drift diagnostics, exact lab commands and automatic result export |
 | `lab_snapshot.py`, `lab_jobs.py`, `lab_b02_smoke.py`, `lab_families.py`, `lab_admission.py` | Committed source/runtime binding, neutral planner, ordinary family publication/admission |
 | `lab_continuation.py`, `lab_recipe.py`, `training_revision_g370.py`, `actor_value.py`, `ppg_g210.py` | Complete isolated restore and exact pending g370 GAE/beta handling; extend for B05 |
 | `lab-native/src/teacher.rs`, `lab-native/core-overlay/teacher.rs`, `lab_teacher*.py` | Task-only exports, 4s+1s lifecycle, GPU adapter and once-only verification |

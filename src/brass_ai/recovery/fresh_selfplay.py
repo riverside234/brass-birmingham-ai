@@ -53,7 +53,8 @@ def selected(state,seed_generation,history_through):
         0<seed_generation<=history_through<=state['iteration'],'Invalid seed/history cutoff')
     entry=next((e for e in state['history'] if e['generation']==seed_generation),None)
     require(entry is not None,'Seed generation is absent from committed history')
-    members=copy.deepcopy([m for m in state['quality_pool']['members'] if m['generation']<=history_through])
+    from .v4_history import bot
+    members=copy.deepcopy([m for m in state['quality_pool']['members'] if not bot(m) and m['generation']<=history_through])
     require(members and min(m['generation'] for m in members)==0 and
         all(m['generation']>=0 for m in members),'Seed requires a native source pool with its original IL')
     return copy.deepcopy(entry),members
@@ -243,7 +244,7 @@ def initialize_pool(root,run,config,manifest,probe):
     from . import quality_pool,pfsp_pool
     source_anchor=next(m for m in manifest['members'] if m['generation']==0)
     anchor=quality_pool.reference(source_anchor)
-    # slim_checkpoint expects its weights-only cache at population/weights-ID.
+    # Imported neural caches keep their verified main/companion payload intact.
     anchor['weights_only']=bool(source_anchor.get('weights_only'))
     pool=quality_pool.initial(anchor,config['opponent_pool'],source_anchor['probe'])
     for member in manifest['members']:

@@ -14,9 +14,9 @@ import uuid
 from rust_lab_results import ROOT, export, sha, write
 
 STAGES = ('b01', 'b02', 'b025', 'b03', 'b04')
-PACKAGE = ROOT/'distribution/rust-lab-restart'
+PACKAGE = ROOT/'distribution/rust-lab-g570'
 RUN = 'artifacts/step5/joint7-v11-2-g1290-trained-restart'
-CONFIG = 'configs/step5/joint7-v11-2-g1290-trained-restart-g370.json'
+CONFIG = 'results/joint7-v11-2-g1290-trained-restart-g0570-20261103T190804654465Z/recorded-config.json'
 
 
 def verify_package():

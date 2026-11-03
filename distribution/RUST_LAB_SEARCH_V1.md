@@ -1,6 +1,6 @@
 # B01/B02 search_v1 qualification bundles
 
-**Current instructions (2026-11-02):** use the [latest-restart B01–B04 bundle](rust-lab-restart/README.md), which captures the actual committed iteration (for example g390). The archive list and commands below are historical; do not extract their source snapshots over the current checkout.
+**Current qualification (2026-11-03):** use the [g570 B01–B04 bundle](rust-lab-g570/README.md). It pins the recorded g570 checkpoint/config and the complete current source inventory. Older bundles are historical inputs; do not overlay their source snapshots onto this checkout. Search remains task-only search_v1, four seconds plus at most one second post-search, with DOMiNO/AZ_DB and V205 disabled.
 
 Refreshed 2026-10-29. **B01 lab qualification: Pending. B02 lab qualification: Pending.** All current ZIPs are under `distribution/` and explicitly allowed by `.gitignore` so they can be committed and pushed with the project.
 

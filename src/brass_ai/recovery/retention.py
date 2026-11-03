@@ -260,43 +260,59 @@ def _same_payload(left,right):
     return left==right
 
 
-def slim_checkpoint(root,run,entry,existing=None):
+def slim_checkpoint(root,run,entry,existing=None,*,preserve_auxiliary=False):
     path=project_path(root,entry['path']);require(sha(path)==entry['sha256'],'Population checkpoint changed')
-    destination=run/'population'/('weights-'+entry['model_id']+'.pt')
     if existing is not None:
-        require(existing['model_id']==entry['model_id'] and project_path(root,existing['path'])==destination,
-                'Population cache receipt changed')
-        require(destination.is_file() and sha(destination)==existing['sha256'],'Population cache changed')
-        cached_sha=existing['sha256']
-    elif path==destination:
-        cached_sha=entry['sha256']
+        cached_path=safe(run,project_path(root,existing['path']))
+        require(existing['model_id']==entry['model_id'] and cached_path.parent==run/'population'
+            and cached_path.is_file() and sha(cached_path)==existing['sha256'],'Population cache receipt changed')
+        if path==cached_path:return dict(existing)
+        if not preserve_auxiliary and 'auxiliary_heads' not in entry and 'auxiliary_heads' not in existing:
+            return dict(entry,path=existing['path'],sha256=existing['sha256'],weights_only=True)
+    elif path.parent==run/'population' and entry.get('weights_only'):
+        return dict(entry)
+    raw=torch.load(path,map_location='cpu',weights_only=True);raw['optimizer']=None
+    require(raw['model_id']==entry['model_id'],'Population main-model association differs')
+    # The main state_dict already contains win/rank/final-VP/utility heads.
+    # Keep the complete companion bundle (weights, identity and maturity).
+    # Its own Adam metadata is small and retaining it avoids inventing a second
+    # incompatible companion serialization format. This is not a resume file.
+    companion=raw.get('training',{}).get('local_scoring_auxiliary')
+    auxiliary={}
+    if companion is not None:
+        from .local_scoring_auxiliary import bundle_id,head_identity
+        require(companion['identity']==bundle_id({k:v for k,v in companion.items() if k!='identity'})
+            and companion['head_sha256']==head_identity(),'Population companion integrity differs')
+        auxiliary=dict(auxiliary_heads=dict(contract='saved-companion-heads/1.0.0',
+            identity=companion['identity'],generation=companion['generation'],model_id=raw['model_id'],
+            head_sha256=companion['head_sha256']))
+    # Main weights can be identical while companion fitting changes the heads.
+    suffix='-aux-'+companion['identity'][:16] if companion else ''
+    destination=run/'population'/('weights-'+entry['model_id']+suffix+'.pt')
+    raw['training']={k:v for k,v in raw.get('training',{}).items()
+        if k not in ('evidence','imitation','actor_value_phases')}
+    if destination.exists():
+        cached=torch.load(destination,map_location='cpu',weights_only=True)
+        require(_same_payload(raw,cached),'Population cache content changed')
     else:
-        raw=torch.load(path,map_location='cpu',weights_only=True);raw['optimizer']=None
-        # Opponents need model/compatibility/lineage, not copied per-game reports.
-        raw['training']={k:v for k,v in raw.get('training',{}).items()
-                         if k not in ('evidence','imitation','actor_value_phases','local_scoring_auxiliary')}
-        if destination.exists():
-            # An interrupted publication has no committed checksum yet. Verify
-            # the complete derived payload, including calibration and lineage.
-            cached=torch.load(destination,map_location='cpu',weights_only=True)
-            require(_same_payload(raw,cached),'Population cache content changed')
-        else:
-            destination.parent.mkdir(parents=True,exist_ok=True);temporary=destination.with_name(destination.name+'.tmp')
-            torch.save(raw,temporary);temporary.replace(destination)
-        cached_sha=sha(destination)
-    return dict(entry,path=destination.relative_to(root).as_posix(),sha256=cached_sha,weights_only=True)
+        destination.parent.mkdir(parents=True,exist_ok=True);temporary=destination.with_name(destination.name+'.tmp')
+        torch.save(raw,temporary);temporary.replace(destination)
+    return dict(entry,**auxiliary,path=destination.relative_to(root).as_posix(),sha256=sha(destination),weights_only=True)
 
 
 def update_population(root,run,state,config=POPULATION):
+    preserve_auxiliary='local_scoring_auxiliary' in state['signature']['config']
     if 'quality_pool' in state:
         from .quality_pool import reference
+        from .v4_history import bot
         members=[]
         for member in state['quality_pool']['members']:
+            if bot(member):members.append(member);continue
             previous=member if member.get('weights_only') else None
-            frozen=slim_checkpoint(root,run,reference(member),previous)
+            frozen=slim_checkpoint(root,run,reference(member),previous,preserve_auxiliary=preserve_auxiliary)
             members.append(dict(member,**frozen))
         state['quality_pool']['members']=members
-        state['population']=[reference(m) for m in members]
+        state['population']=[reference(m) for m in members if not bot(m)]
         state['resume']=state['history'][-state['signature']['config'].get('retention',RETENTION)['resume_checkpoints']:]
         return state
     # Retired generations retain immutable metadata but are not candidates.
@@ -313,9 +329,41 @@ def update_population(root,run,state,config=POPULATION):
     # must not reorder it. Lineage order also survives a fresh recipe migration.
     order={e['model_id']:i for i,e in enumerate(state['history'])}
     selected=population_entries(sorted(available.values(),key=lambda e:order[e['model_id']]),config)
-    state['population']=[slim_checkpoint(root,run,e,committed.get(e['model_id'])) for e in selected]
+    state['population']=[slim_checkpoint(root,run,e,committed.get(e['model_id']),preserve_auxiliary=preserve_auxiliary) for e in selected]
     state['resume']=state['history'][-state['signature']['config'].get('retention',RETENTION)['resume_checkpoints']:]
     return state
+
+
+def preserve_available_companions(root,run,state):
+    """Upgrade references only when their own full generation still exists.
+
+    Never overwrite immutable old slim files, synthesize missing heads, or use
+    the same policy weights with a different generation's companion bundle.
+    """
+    from .quality_pool import REF_FIELDS
+    from .v4_history import bot
+    full={(e['generation'],e['model_id']):e for e in state['history']
+        if not e.get('weights_only') and project_path(root,e['path']).is_file()}
+    refs=list(state.get('population',[]))+[m for m in state.get('quality_pool',{}).get('members',[]) if not bot(m)]
+    refs+=[a['checkpoint'] for a in state.get('ratings',{}).get('agents',{}).values()
+        if a['kind']=='model' and not a.get('reference_role')]
+    # Active anchor receipts are also bound inside the full checkpoint. Never
+    # mutate those archived bindings here; future anchors use complete slims.
+    upgraded={};inventory={}
+    for ref in refs:
+        key=(ref['generation'],ref['model_id'])
+        if 'auxiliary_heads' not in ref and key in full:
+            source=full[key]
+            if key not in upgraded:upgraded[key]=slim_checkpoint(root,run,source)
+            saved=upgraded[key]
+            if 'auxiliary_heads' in saved:
+                ref.update({k:saved[k] for k in REF_FIELDS if k in saved})
+        inventory[ref['path']]=dict(generation=ref['generation'],model_id=ref['model_id'],
+            status='preserved' if 'auxiliary_heads' in ref else 'legacy_no_companion_receipt',
+            auxiliary_heads=ref.get('auxiliary_heads'))
+    return dict(contract='saved-auxiliary-head-inventory/1.0.0',generation=state['iteration'],
+        recovered=sum('auxiliary_heads' in v for v in upgraded.values()),entries=inventory,
+        scope='All main state_dict heads retained. Exact companion bundles recovered only from available matching full generations; no fabricated historical weights. Old files remain immutable.')
 
 
 def plan(root,run,config=RETENTION):

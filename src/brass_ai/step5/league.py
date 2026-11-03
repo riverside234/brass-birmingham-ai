@@ -12,7 +12,7 @@ def write_json(path, value):
     temporary.replace(path)
 
 
-def implementation_id():
+def implementation_sources():
     # Source-bound runs cannot silently resume with changed learning/search code.
     from brass_ai.learning.state_layout import LAYOUT_FILE
     from brass_ai.learning.contracts import FEATURE_SCHEMA
@@ -46,8 +46,12 @@ def implementation_id():
     from brass_ai.search.legacy_runtime import source_paths
     paths += source_paths(SOURCE_ROOT)
     paths += sorted((SOURCE_ROOT/'configs/legacy-ai').glob('*.json'))
-    return digest({p.relative_to(SOURCE_ROOT).as_posix(): p.read_text(encoding='utf-8').replace('\r\n', '\n')
-                   for p in sorted(paths)})
+    return {p.relative_to(SOURCE_ROOT).as_posix(): p.read_text(encoding='utf-8').replace('\r\n', '\n')
+            for p in sorted(paths)}
+
+
+def implementation_id():
+    return digest(implementation_sources())
 
 
 def seeds_for(start, count, partition='train'):

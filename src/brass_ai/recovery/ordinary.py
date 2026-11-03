@@ -13,6 +13,7 @@ from .population import sample_opponents
 from .champion import enabled as champion_enabled,selfplay_policies
 from . import champion_mix
 from . import v4_share
+from . import v4_history
 
 
 def plan_collection(root,directory,state,config,signature,service,current,profiles,opponent_specs,fast_specs,window,*,fingerprints=None,exploration=None):
@@ -50,8 +51,13 @@ def plan_collection(root,directory,state,config,signature,service,current,profil
         require(not (state['quality_pool'].get('planning') or {}).get('il_gate') or gate==state['quality_pool']['planning']['il_gate'],
             'Committed IL PFSP sampling requires its original retired-panel gate')
         quality_planning=quality_pool.distribution(state['quality_pool'],il_gate=gate)
+    v4_in_history=v4_history.active(state.get('quality_pool'))
+    bot_member=next((m for m in state.get('quality_pool',{}).get('members',[]) if v4_history.bot(m)),None)
+    bot_seats=bot_member['profile_seats'] if bot_member else 0
+    if bot_member:require(bot_member['policies']==fast_specs,'V4 PFSP frozen policies differ from current bank')
     for i in range(config['games_per_iteration']):
         index=state['games_done']+i;kind,boosted=v4_share.table(index,config,window,share)
+        if v4_in_history and kind=='legacy':kind='selfplay'
         selected,cursor=seeds_for(cursor,1);seed=selected[0]
         rng=random.Random(digest(dict(seed=config['seed'],index=index)))
         settings=dict(version=exploration['version'],opening=exploration['opening']) if exploration else {}
@@ -80,6 +86,10 @@ def plan_collection(root,directory,state,config,signature,service,current,profil
                 candidates=sample_opponents(snapshots.values(),current,state['evaluation_anchor'],rng,config['population']['recent'],count=4-learner_count)
             opponents=[]
             for entry in candidates:
+                if v4_history.bot(entry):
+                    names=sorted(entry['policies']);profile=names[bot_seats%len(names)];bot_seats+=1
+                    opponents.append(entry['policies'][profile])
+                    continue
                 historical_generations[entry['generation']]+=1
                 path=project_path(root,entry['path'])
                 if entry['model_id'] not in verified_snapshots:

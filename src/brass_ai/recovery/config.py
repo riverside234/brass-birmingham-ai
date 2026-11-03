@@ -385,6 +385,7 @@ def latest_model_config(config,imitation_checkpoint):
     result=copy.deepcopy(config)
     result.pop('fresh_selfplay_seed',None)
     result.pop('trained_startup',None)
+    result.pop('v4_history',None)  # A run-specific manual move cannot authorize a new IL run.
     from brass_ai.learning.model import ARCHITECTURE,PARAMETER_LIMIT
     from .learning_rate import DEFAULT_WARMUP
     from .lr_controller import AUTO_CONTROLLER,AUTO_CONTRACT
@@ -414,6 +415,7 @@ def latest_model_config(config,imitation_checkpoint):
     # This helper explicitly creates a new recipe. Continuation admits only
     # exact source/config reviews and their separately versioned migrations.
     result['update'].pop('fixed_entropy',None)
+    result['update'].pop('entropy_schedule',None)
     # Re-enter the historical recipe builder when regenerating from the new
     # reduced-cap config. This is fresh config generation, never resume.
     from .training_revision_g1322 import CURRENT as G1322_REWARD,PREVIOUS as G1320_REWARD
@@ -587,7 +589,10 @@ def execution_config(config):
 
 
 def update_config(config):
-    require(set(config)-{'preparation_workers','opening_objective','value_gradient','kl_control','fixed_entropy'} in (set(UPDATE),set(UPDATE_V21)), 'Unknown/missing update field')
+    require(set(config)-{'preparation_workers','opening_objective','value_gradient','kl_control','fixed_entropy','entropy_schedule'} in (set(UPDATE),set(UPDATE_V21)), 'Unknown/missing update field')
+    if 'entropy_schedule' in config:
+        from .entropy_schedule import validate_update
+        validate_update(config)
     if 'fixed_entropy' in config:
         from .exploration import validate_fixed_entropy
         validate_fixed_entropy(config['fixed_entropy'])
@@ -672,6 +677,10 @@ def validate_config(config):
         fields.add('context_evaluation');validate_context_evaluation(config['context_evaluation'],config)
     from .exploration import validate as validate_exploration,BLOCKS
     validate_exploration(config)
+    if 'v4_history' in config:
+        from .v4_history import validate as validate_v4_history
+        fields.add('v4_history');validate_v4_history(config['v4_history'])
+        require('trained_startup' in config,'V4 history requires the qualified trained-start recipe')
     if 'opening_objective' in config.get('update',{}):
         from .opening_objective import opening_spec
         expected=opening_spec(config['update']['opening_objective'])
@@ -913,7 +922,7 @@ def validate_config(config):
         search_wall_fraction(config['search_wall_fraction'])
         require(config['execution']['max_models']>=sum(config['population'].values())+3,
                 'Model cache must cover frozen population plus learner/teacher versions')
-        require(set(config['update'])-{'preparation_workers','opening_objective','value_gradient','kl_control','fixed_entropy'}==set(UPDATE_V21) and
+        require(set(config['update'])-{'preparation_workers','opening_objective','value_gradient','kl_control','fixed_entropy','entropy_schedule'}==set(UPDATE_V21) and
                 set(config['execution'])-{'shared_slot_bytes','inference_routing','replica_backlog','teacher_search_workers_per_turn','padding_ratio','model_cohorts'}==set(EXECUTION_V21),
                 '2.1 requires revised update/execution')
         require(config['update'].get('preparation_workers',0)<=available,'PPO preparation exceeds CPU budget')

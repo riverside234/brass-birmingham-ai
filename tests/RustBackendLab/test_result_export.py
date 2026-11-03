@@ -65,10 +65,10 @@ class Results(unittest.TestCase):
     def fixture_run(self, statuses, *, stage='all', preflight_fail=False, advance=False):
         run = self.root/runner.RUN
         run.mkdir(parents=True)
-        reports.write(run/'state.json', dict(iteration=390, history=[dict(generation=390,
+        reports.write(run/'state.json', dict(iteration=570, history=[dict(generation=570,
             sha256='b'*64)], signature=dict(implementation='original',config={'fixture':True})))
         reports.write(self.root/runner.CONFIG,{'fixture':True})
-        package = self.root/'distribution/rust-lab-restart'; package.mkdir(parents=True)
+        package = self.root/'distribution/rust-lab-g570'; package.mkdir(parents=True)
         reports.write(package/'transfer-manifest.json', {})
         calls = []
         def execute(cmd, log):
@@ -80,12 +80,12 @@ class Results(unittest.TestCase):
             log.write_text('console evidence')
             if advance:
                 state=json.loads((run/'state.json').read_text())
-                state['iteration']=391;state['history'].append(dict(generation=391,sha256='c'*64))
+                state['iteration']=571;state['history'].append(dict(generation=571,sha256='c'*64))
                 reports.write(run/'state.json',state)
             return code
         with patch.object(runner, 'ROOT', self.root), patch.object(runner, 'PACKAGE', package), \
              patch.object(runner, 'verify_package', side_effect=ValueError('bad transfer') if preflight_fail else None,
-                          return_value={'training_reference': {'generation': 370}}), \
+                          return_value={'training_reference': {'generation': 570}}), \
              patch.object(runner, 'execute', side_effect=execute), \
              patch.object(runner, 'export', side_effect=lambda path: reports.export(path, root=self.root)):
             code = runner.main(['--stage', stage, '--run', str(run)])
@@ -103,10 +103,10 @@ class Results(unittest.TestCase):
         self.assertIn('--transfer-manifest', calls[2]); self.assertIn('--transfer-manifest', calls[3])
         self.assertIn('--transfer-manifest', calls[4])
         for cmd in calls:self.assertNotIn('--teacher-profile',cmd)
-        self.assertEqual(result['run']['generation'],390)
+        self.assertEqual(result['run']['generation'],570)
         self.assertEqual(result['run']['checkpoint']['sha256'],'b'*64)
         for cmd in calls[2:]:
-            self.assertEqual(cmd[cmd.index('--expected-generation')+1],'390')
+            self.assertEqual(cmd[cmd.index('--expected-generation')+1],'570')
         for cmd in calls[3:]:
             self.assertEqual(cmd[cmd.index('--checkpoint-sha256')+1],'b'*64)
 

@@ -4,6 +4,7 @@ import math
 
 from brass_ai.learning.contracts import require
 from .quality_config import OPPONENT_POOL,LEGACY_POOL,pfsp,validate_pool
+from .v4_history import bot
 
 
 def capacity(config,games):
@@ -73,13 +74,13 @@ def initial(anchor,config,probe):
 
 def validate_state(pool,config,generation=None):
     validate_pool(config)
-    require(type(pool) is dict and set(pool)=={'contract','config','generation','games_done','members',
+    require(type(pool) is dict and set(pool)-{'v4_history'}=={'contract','config','generation','games_done','members',
         'health_window','planning','next_planning','events'},'Invalid PFSP state fields')
     require(pool['contract']==config['contract'] and pool['config']==config,'PFSP pool config differs')
     g=pool['generation'];require(type(g) is int and g>=0 and (generation is None or generation==g),'PFSP generation differs')
     members=pool['members'];cap=capacity(config,pool['games_done'])
-    require(type(members) is list and 1<=len(members)<=1+cap,'PFSP pool exceeds its committed-game capacity')
-    require(len({m['model_id'] for m in members})==len(members) and sum(m['generation']==0 for m in members)==1,
+    require(type(members) is list and 1<=len([m for m in members if not bot(m)])<=1+cap,'PFSP pool exceeds its committed-game capacity')
+    require(len({m['model_id'] for m in members})==len(members) and sum(m['generation']==0 and not bot(m) for m in members)==1,
         'PFSP membership duplicate or missing pinned IL')
     for m in members:
         if 'imported_from' in m:
@@ -96,6 +97,8 @@ def validate_state(pool,config,generation=None):
     require(type(pool['health_window']) is list and len(pool['health_window'])<=config['admit_health_iterations']
         and all(type(v) is bool for v in pool['health_window']),'Invalid PFSP health window')
     require(type(pool['events']) is list and pool['next_planning']==_distribution(pool),'PFSP stored next plan differs')
+    from .v4_history import validate_state as validate_v4
+    validate_v4(pool)
     return pool
 
 
@@ -128,7 +131,7 @@ def comparisons(pool,games,tables,planned):
         learner=table['learner_seats'];opponents=table['opponents'];seats=[o['seat'] for o in opponents]
         require(len(learner)==len(opponents)==2 and len(set(learner))==len(set(seats))==2 and
             set(learner).isdisjoint(seats) and set(learner+seats)==set(range(4)),
-            'PFSP requires two learner and two separate snapshot seats')
+            'PFSP requires two learner and two separate opponent seats')
         ranks=terminal_targets(game['result'])['placement']
         for o in opponents:
             is_il=o['model_id']==anchor and 'il_gate' not in planned;p=expected.get(o['model_id'])
@@ -181,6 +184,7 @@ def update_counts(pool,rows,planned,*,generation,games_done):
             all(v in (0.,.5,1.) for v in row['outcomes']),'Invalid PFSP comparison counts')
         before=dict(S=m['S'],C=m['C'],x_hat=rate(m))
         m['S']=decay*m['S']+wins;m['C']=decay*m['C']+n
+        if bot(m):m['profile_seats']+=row['seats']
         alarm=c['alarm'];bad=rate(m)<alarm['rate_below'] and m['C']>=alarm['min_decayed_comparisons']
         m['alarm_streak']=min(alarm['iterations'],m['alarm_streak']+1) if bad else 0
         if m['alarm_streak']==alarm['iterations']:
@@ -199,7 +203,7 @@ def update_counts(pool,rows,planned,*,generation,games_done):
     return pool,dict(contract=c['contract'],planning=copy.deepcopy(planned),members=report,alarms=alarms,
         il=dict(share=planned.get('il_probability',planned['il_share']),seats=il['seats_played'],comparisons=il['comparisons'],x_hat=il['x_hat'],C=il['C'],
             sampling='pfsp' if 'il_gate' in planned else 'reserved'),
-        decay=decay,scope='Unweighted learner/snapshot pairs in completed history tables only; p/IL share used are frozen before collection. Decayed rates are training diagnostics, not PL strength.')
+        decay=decay,scope='Unweighted learner/opponent pairs in completed history tables only; p/IL share used are frozen before collection. Decayed rates are training diagnostics, not PL strength.')
 
 
 def admission(pool,entry,health,distances,pair_distance):
@@ -211,13 +215,13 @@ def admission(pool,entry,health,distances,pair_distance):
         event['reason']='five_healthy_iterations_required'
     elif health.get('ok') is not True:event['reason']='health_unavailable'
     elif entry['model_id'] in {m['model_id'] for m in pool['members']}:event['reason']='already_present'
-    elif distances is None or set(distances)!={m['model_id'] for m in pool['members']}:event['reason']='probe_unavailable'
+    elif distances is None or set(distances)!={m['model_id'] for m in pool['members'] if not bot(m)}:event['reason']='probe_unavailable'
     else:
         require(all(type(v) in (int,float) and math.isfinite(v) and v>=0 for v in distances.values()),'Invalid PFSP admission KL')
         event['minimum_kl']=min(distances.values())
         if event['minimum_kl']<c['admit_min_kl']:event['reason']='insufficient_distinctness'
         else:
-            scored=[m for m in pool['members'] if m['generation']!=0];e=c['evict']
+            scored=[m for m in pool['members'] if m['generation']!=0 and not bot(m)];e=c['evict']
             newest={m['model_id'] for m in sorted(scored,key=lambda m:(m['admitted_iteration'],
                 m['generation'] if 'imported_from' in m else 0,m['model_id']))[-e['protect_newest']:]}
             eligible=[m for m in scored if m['model_id'] not in newest and g-m['admitted_iteration']>=e['min_age_iterations']
@@ -228,7 +232,7 @@ def admission(pool,entry,health,distances,pair_distance):
                 if len(scored)>=cap:
                     high=max(rate(m) for m in eligible);shortlist=[m for m in eligible if rate(m)>=high-e['redundancy_band']]
                     def redundancy(m):
-                        values=[pair_distance(m,other) for other in pool['members'] if other['model_id']!=m['model_id']]
+                        values=[pair_distance(m,other) for other in pool['members'] if other['model_id']!=m['model_id'] and not bot(other)]
                         require(all(math.isfinite(v) and v>=0 for v in values),'Invalid PFSP redundancy KL')
                         return min(values)
                     distances_to_nearest={m['model_id']:redundancy(m) for m in shortlist}
@@ -270,14 +274,21 @@ def migrate(pool,config,generation,games_done):
 
 def report_finish(report,pool,event):
     plan=distribution(pool)
+    bots=sum(bot(m) for m in pool['members'])
     report.update(admission=event,next_distribution=plan,size=len(pool['members']),
-        max_members=1+capacity(pool['config'],pool['games_done']),uniform_floor=pool['config']['uniform_floor'],
+        max_members=1+capacity(pool['config'],pool['games_done'])+bots,neural_members=len(pool['members'])-bots,
+        rule_bot_members=bots,uniform_floor=pool['config']['uniform_floor'],
         pinned_seat_share=plan['il_share'],summary={k:plan[k] for k in
             ('k','effective_members','largest_share','recent_share','weighted_outrank_rate')})
+    if 'v4_history' in pool:
+        from .v4_history import report as v4_report
+        report['v4_history']=v4_report(pool)
     return report
 
 
 def console(report):
     if not report or not pfsp(report):return ''
     p=report['next_distribution']
-    return f' PFSP=IL:{p.get("il_probability",p["il_share"]):.3f} effective:{p["effective_members"]:.1f} alarms:{len(report["alarms"])}'
+    v4=report.get('v4_history') or {}
+    suffix=f' v4=PFSP:{v4["probability"]:.3f}' if v4.get('activated') else ''
+    return f' PFSP=IL:{p.get("il_probability",p["il_share"]):.3f} effective:{p["effective_members"]:.1f} alarms:{len(report["alarms"])}'+suffix

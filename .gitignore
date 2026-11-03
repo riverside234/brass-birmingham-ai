@@ -667,3 +667,7 @@ Desktop.ini
 # Current task-only restart qualification bundle and portable evidence.
 !/distribution/rust-lab-restart/
 !/distribution/rust-lab-restart/**
+
+# g570 qualification refresh; prior bundles remain immutable.
+!/distribution/rust-lab-g570/
+!/distribution/rust-lab-g570/**

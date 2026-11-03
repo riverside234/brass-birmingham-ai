@@ -248,6 +248,14 @@ def render(report, output, *, preview=None, agents=None, max_points=DEFAULT_MAX_
             ax.axhspan(v4low, v4high, color=amber, alpha=.045, linewidth=0, zorder=1)
             ax.axhline(v4, color=amber, linewidth=1., linestyle=(0, (5, 4)), alpha=.75, zorder=2)
             ax.axhline(anchor, color='#A0AFB3', linewidth=.9, linestyle=(0, (2, 4)), zorder=2)
+            from .rating_coverage import SEED
+            if SEED in ratings:
+                seed_value,seed_low,seed_high=values(SEED)
+                ax.axhspan(seed_low,seed_high,color='#8267A3',alpha=.045,linewidth=0,zorder=1)
+                ax.axhline(seed_value,color='#8267A3',linewidth=1.,linestyle=(0,(4,3)),zorder=2)
+                ax.annotate(f'Trained start  {seed_value:,.0f}',xy=(1.,seed_value),xycoords=('axes fraction','data'),
+                    xytext=(7,0),textcoords='offset points',fontsize=8.2,color='#8267A3',va='center')
+                lo,hi=ax.get_ylim();ax.set_ylim(min(lo,seed_low-span*.06),max(hi,seed_high+span*.09))
             for value, label, color in ((v4, f'v4  {v4:,.0f}', amber), (anchor, 'IL  0', '#82979D')):
                 ax.annotate(label, xy=(1., value), xycoords=('axes fraction', 'data'),
                     xytext=(7, 0), textcoords='offset points', fontsize=8.2, color=color, va='center')
