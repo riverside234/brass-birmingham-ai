@@ -20,7 +20,7 @@ namespace BrassLegacyAI.Native
             var saved=BrassPatch.Persistence.SaveExtensions.Get(app.Metadata);
             var state=NativeGameState.IsNative(saved)?NativeGameState.Read(app.Metadata,false):null;
             string focus=state==null?"neutral":NativeGameState.Focus(state,actor);
-            return FromView(view,debts,recall,focus,state==null?NativeModel.Alpha:NativeGameState.Model(state));
+            return FromView(view,debts,recall,focus,state==null?NativeModel.Alpha:NativeGameState.Model(state,actor));
         }
         // The clock journal consumes only these confirmed boundary fields. A
         // search_v1 continuation has no projected-successor observation to test;

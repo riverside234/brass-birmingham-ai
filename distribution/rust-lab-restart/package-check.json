@@ -1,0 +1,129 @@
+{
+  "passed": true,
+  "archive": {
+    "path": "distribution/rust-lab-restart/rust-lab-b01-b04-restart-r2.zip",
+    "sha256": "5d3e6874bd7ca65206432a3c30a1f95a6e25839647eca1be93cf7e5ed9da6199",
+    "bytes": 7231410,
+    "entries": 1093,
+    "implementation": "c715ade96f7025be13b29c5d3b418ce1cfdbed4e1dbfc036f97b4066ce18c8be",
+    "producer": "bc2c07c397fdc979c9d4376189e723af86620e6361e3cd7052f3500cea3709cb",
+    "lab_qualification": "Pending"
+  },
+  "stage_transfer_checks": [
+    {
+      "manifest_sha256": "b933b3d3ea92fd0c6a2da160c2f8ce135971c90957c78ca2b0cb838dac45b65a",
+      "implementation": "c715ade96f7025be13b29c5d3b418ce1cfdbed4e1dbfc036f97b4066ce18c8be",
+      "producer": "bc2c07c397fdc979c9d4376189e723af86620e6361e3cd7052f3500cea3709cb",
+      "files": 1086,
+      "milestone": "b01",
+      "teacher_profile": "task-only",
+      "lab_qualification": "Pending"
+    },
+    {
+      "manifest_sha256": "b933b3d3ea92fd0c6a2da160c2f8ce135971c90957c78ca2b0cb838dac45b65a",
+      "implementation": "c715ade96f7025be13b29c5d3b418ce1cfdbed4e1dbfc036f97b4066ce18c8be",
+      "producer": "bc2c07c397fdc979c9d4376189e723af86620e6361e3cd7052f3500cea3709cb",
+      "files": 1086,
+      "milestone": "b02",
+      "teacher_profile": "task-only",
+      "lab_qualification": "Pending"
+    },
+    {
+      "manifest_sha256": "b933b3d3ea92fd0c6a2da160c2f8ce135971c90957c78ca2b0cb838dac45b65a",
+      "implementation": "c715ade96f7025be13b29c5d3b418ce1cfdbed4e1dbfc036f97b4066ce18c8be",
+      "producer": "bc2c07c397fdc979c9d4376189e723af86620e6361e3cd7052f3500cea3709cb",
+      "files": 1086,
+      "milestone": "b025",
+      "teacher_profile": "task-only",
+      "lab_qualification": "Pending"
+    },
+    {
+      "manifest_sha256": "b933b3d3ea92fd0c6a2da160c2f8ce135971c90957c78ca2b0cb838dac45b65a",
+      "implementation": "c715ade96f7025be13b29c5d3b418ce1cfdbed4e1dbfc036f97b4066ce18c8be",
+      "producer": "bc2c07c397fdc979c9d4376189e723af86620e6361e3cd7052f3500cea3709cb",
+      "files": 1086,
+      "milestone": "b03",
+      "teacher_profile": "task-only",
+      "lab_qualification": "Pending"
+    },
+    {
+      "manifest_sha256": "b933b3d3ea92fd0c6a2da160c2f8ce135971c90957c78ca2b0cb838dac45b65a",
+      "implementation": "c715ade96f7025be13b29c5d3b418ce1cfdbed4e1dbfc036f97b4066ce18c8be",
+      "producer": "bc2c07c397fdc979c9d4376189e723af86620e6361e3cd7052f3500cea3709cb",
+      "files": 1086,
+      "milestone": "b04",
+      "teacher_profile": "task-only",
+      "lab_qualification": "Pending"
+    }
+  ],
+  "embedded_files": 1086,
+  "zip_crc": "passed",
+  "extracted_launcher": "B04 CPU fixtures passed with automatic result export",
+  "result": {
+    "contract": "brass-lab-runner/1.0.0",
+    "passed": true,
+    "lab_qualification": "Pending: CPU fixtures only",
+    "requested_generation": null,
+    "requested_checkpoint": null,
+    "fixtures_only": true,
+    "device": "cpu",
+    "stages": [
+      {
+        "stage": "b04",
+        "argv": [
+          "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Brass Birmingham\\artifacts\\p6e\\Scripts\\python.exe",
+          "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Brass Birmingham\\artifacts\\rust-backend\\g370-refresh\\extracted-package-r2\\scripts\\qualify-rust-lab-b04.py",
+          "--out",
+          "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Brass Birmingham\\artifacts\\rust-backend\\g370-refresh\\extracted-package-r2\\artifacts\\rust-backend\\20261103T012538376333Z-latest-b04-6071d18d\\b04",
+          "--device",
+          "cpu",
+          "--fixtures-only",
+          "--transfer-manifest",
+          "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Brass Birmingham\\artifacts\\rust-backend\\g370-refresh\\extracted-package-r2\\distribution\\rust-lab-restart\\transfer-manifest.json"
+        ],
+        "passed": true,
+        "exit_code": 0,
+        "receipt": "b04/qualification.json",
+        "sha256": "994a234560d84b4cac90ff0eb6998d0e8c63142c16e9bf2687cd36d6c626404a",
+        "lab_qualification": "Pending"
+      }
+    ],
+    "bundle": {
+      "manifest_sha256": "b933b3d3ea92fd0c6a2da160c2f8ce135971c90957c78ca2b0cb838dac45b65a",
+      "training_reference": {
+        "run": "artifacts/step5/joint7-v11-2-g1290-trained-restart",
+        "generation": 370,
+        "games_done": 118400,
+        "checkpoint": {
+          "path": "artifacts/step5/joint7-v11-2-g1290-trained-restart/generation-0370.pt",
+          "sha256": "198af418247e6559eb4e2413acb02afd54e7baa5e446a30fb6ce1442c37dfcdc",
+          "model_id": "0b8a138a2cb3a73bce0633c2080d4c87c1ba66d15a58889b0df0b10b2376895f",
+          "generation": 370
+        },
+        "implementation": "ea569b6238657d0667b3550efa2a0ea0e0f5960699a38cbb77991c91d0fd93b6",
+        "report_directory": "results/joint7-v11-2-g1290-trained-restart-g0370-20261102T221517838215Z",
+        "state_export_sha256": "6bcbe4a4d1eb5efde2215ef4e6bf2c16239167f05a38a7683395ea67b824f1ba",
+        "report_manifest_sha256": "22d93376916f964ca8893b12763fc4b0205a437b96790d66b01f3596b03ed65c",
+        "recorded_config_sha256": "b469a7881c6a6278079b12906b87d2975a3d89fe0f5c10f6716cbeaa6f875d5a",
+        "requested_config": "configs/step5/joint7-v11-2-g1290-trained-restart-g370.json",
+        "requested_config_sha256": "f573a1d251cc39ed389aa3dab229d654ba8b2ab31c044b92159368dac522a4d2",
+        "recorded_config_predates_g370_revision": true,
+        "config_adoption": "Not inferred from the report; require matching committed lab signature",
+        "qualification_target": "Latest committed restart iteration, e.g. g390; capture generation/hash once and reject changes during qualification",
+        "reference_generation_only": true,
+        "domino_enabled": false,
+        "az_db_enabled": false,
+        "qualification": "Pending"
+      }
+    },
+    "run": null
+  },
+  "git_visible_bundle": true,
+  "lab_qualification": "Pending",
+  "fixtures": {
+    "tests": 24,
+    "skipped": 2,
+    "scope": "Extracted Windows CPU-only B04 fixtures; native count/timed probes qualified separately",
+    "log_sha256": "4f4ee5c16cca759ee3cf35050a2099e0dbfde03eeca0edd324eb63ae51581b68"
+  }
+}

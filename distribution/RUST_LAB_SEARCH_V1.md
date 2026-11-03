@@ -1,5 +1,7 @@
 # B01/B02 search_v1 qualification bundles
 
+**Current instructions (2026-11-02):** use the [latest-restart B01–B04 bundle](rust-lab-restart/README.md), which captures the actual committed iteration (for example g390). The archive list and commands below are historical; do not extract their source snapshots over the current checkout.
+
 Refreshed 2026-10-29. **B01 lab qualification: Pending. B02 lab qualification: Pending.** All current ZIPs are under `distribution/` and explicitly allowed by `.gitignore` so they can be committed and pushed with the project.
 
 | File | Purpose | SHA-256 |

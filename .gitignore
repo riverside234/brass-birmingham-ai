@@ -663,3 +663,7 @@ Desktop.ini
 !/distribution/rust-lab-g1330/bundle.json
 !/distribution/rust-lab-g1330/local-development.json
 !/distribution/rust-lab-g1330/rust-lab-az-db-g1330.zip
+
+# Current task-only restart qualification bundle and portable evidence.
+!/distribution/rust-lab-restart/
+!/distribution/rust-lab-restart/**

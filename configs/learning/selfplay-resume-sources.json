@@ -710878,6 +710878,157 @@
       "preserve_g370_calibration": true,
       "reason_ref": "181",
       "config_migrations_ref": "1702"
+    },
+    {
+      "from_implementation": "603d1d236ca3da4511467956a9b656b41a4f03017d814b1abd8f060467a4c05c",
+      "to_implementation": "c715ade96f7025be13b29c5d3b418ce1cfdbed4e1dbfc036f97b4066ce18c8be",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "182",
+      "review_report": "ai-research/RUST_BACKEND_G370_REFRESH.md"
+    },
+    {
+      "from_implementation": "603d1d236ca3da4511467956a9b656b41a4f03017d814b1abd8f060467a4c05c",
+      "to_implementation": "c715ade96f7025be13b29c5d3b418ce1cfdbed4e1dbfc036f97b4066ce18c8be",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "182",
+      "review_report": "ai-research/RUST_BACKEND_G370_REFRESH.md",
+      "teacher_phase_changes": true
+    },
+    {
+      "from_implementation": "603d1d236ca3da4511467956a9b656b41a4f03017d814b1abd8f060467a4c05c",
+      "to_implementation": "c715ade96f7025be13b29c5d3b418ce1cfdbed4e1dbfc036f97b4066ce18c8be",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "182",
+      "review_report": "ai-research/RUST_BACKEND_G370_REFRESH.md",
+      "config_migrations_ref": "1626"
+    },
+    {
+      "from_implementation": "6abba7672db47057df6090907c9397eb70ecad52b691653ed552bf250725e96d",
+      "to_implementation": "c715ade96f7025be13b29c5d3b418ce1cfdbed4e1dbfc036f97b4066ce18c8be",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "182",
+      "review_report": "ai-research/RUST_BACKEND_G370_REFRESH.md"
+    },
+    {
+      "from_implementation": "6abba7672db47057df6090907c9397eb70ecad52b691653ed552bf250725e96d",
+      "to_implementation": "c715ade96f7025be13b29c5d3b418ce1cfdbed4e1dbfc036f97b4066ce18c8be",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "182",
+      "review_report": "ai-research/RUST_BACKEND_G370_REFRESH.md",
+      "teacher_phase_changes": true
+    },
+    {
+      "from_implementation": "6abba7672db47057df6090907c9397eb70ecad52b691653ed552bf250725e96d",
+      "to_implementation": "c715ade96f7025be13b29c5d3b418ce1cfdbed4e1dbfc036f97b4066ce18c8be",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "182",
+      "review_report": "ai-research/RUST_BACKEND_G370_REFRESH.md",
+      "config_migrations_ref": "1626"
+    },
+    {
+      "from_implementation": "c715ade96f7025be13b29c5d3b418ce1cfdbed4e1dbfc036f97b4066ce18c8be",
+      "to_implementation": "c715ade96f7025be13b29c5d3b418ce1cfdbed4e1dbfc036f97b4066ce18c8be",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "182",
+      "review_report": "ai-research/RUST_BACKEND_G370_REFRESH.md",
+      "preserve_g370_calibration": true
+    },
+    {
+      "from_implementation": "c715ade96f7025be13b29c5d3b418ce1cfdbed4e1dbfc036f97b4066ce18c8be",
+      "to_implementation": "c715ade96f7025be13b29c5d3b418ce1cfdbed4e1dbfc036f97b4066ce18c8be",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "182",
+      "review_report": "ai-research/RUST_BACKEND_G370_REFRESH.md",
+      "preserve_g370_calibration": true,
+      "teacher_phase_changes": true
+    },
+    {
+      "from_implementation": "c715ade96f7025be13b29c5d3b418ce1cfdbed4e1dbfc036f97b4066ce18c8be",
+      "to_implementation": "c715ade96f7025be13b29c5d3b418ce1cfdbed4e1dbfc036f97b4066ce18c8be",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "182",
+      "review_report": "ai-research/RUST_BACKEND_G370_REFRESH.md",
+      "preserve_g370_calibration": true,
+      "config_migrations_ref": "1626"
+    },
+    {
+      "from_implementation": "c715ade96f7025be13b29c5d3b418ce1cfdbed4e1dbfc036f97b4066ce18c8be",
+      "to_implementation": "c715ade96f7025be13b29c5d3b418ce1cfdbed4e1dbfc036f97b4066ce18c8be",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "182",
+      "review_report": "ai-research/RUST_BACKEND_G370_REFRESH.md",
+      "preserve_g370_calibration": true,
+      "config_migrations_ref": "1702"
+    },
+    {
+      "from_implementation": "ea569b6238657d0667b3550efa2a0ea0e0f5960699a38cbb77991c91d0fd93b6",
+      "to_implementation": "c715ade96f7025be13b29c5d3b418ce1cfdbed4e1dbfc036f97b4066ce18c8be",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "182",
+      "review_report": "ai-research/RUST_BACKEND_G370_REFRESH.md",
+      "preserve_g370_calibration": true
+    },
+    {
+      "from_implementation": "ea569b6238657d0667b3550efa2a0ea0e0f5960699a38cbb77991c91d0fd93b6",
+      "to_implementation": "c715ade96f7025be13b29c5d3b418ce1cfdbed4e1dbfc036f97b4066ce18c8be",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "182",
+      "review_report": "ai-research/RUST_BACKEND_G370_REFRESH.md",
+      "preserve_g370_calibration": true,
+      "teacher_phase_changes": true
+    },
+    {
+      "from_implementation": "ea569b6238657d0667b3550efa2a0ea0e0f5960699a38cbb77991c91d0fd93b6",
+      "to_implementation": "c715ade96f7025be13b29c5d3b418ce1cfdbed4e1dbfc036f97b4066ce18c8be",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "182",
+      "review_report": "ai-research/RUST_BACKEND_G370_REFRESH.md",
+      "preserve_g370_calibration": true,
+      "config_migrations_ref": "1626"
+    },
+    {
+      "from_implementation": "ea569b6238657d0667b3550efa2a0ea0e0f5960699a38cbb77991c91d0fd93b6",
+      "to_implementation": "c715ade96f7025be13b29c5d3b418ce1cfdbed4e1dbfc036f97b4066ce18c8be",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "182",
+      "review_report": "ai-research/RUST_BACKEND_G370_REFRESH.md",
+      "preserve_g370_calibration": true,
+      "config_migrations_ref": "1702"
+    },
+    {
+      "from_implementation": "f7a48a025e2c247e63da4df301ce2b80c7c6aabf1073220a5be97f0929719c78",
+      "to_implementation": "c715ade96f7025be13b29c5d3b418ce1cfdbed4e1dbfc036f97b4066ce18c8be",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "182",
+      "review_report": "ai-research/RUST_BACKEND_G370_REFRESH.md",
+      "preserve_g370_calibration": true
+    },
+    {
+      "from_implementation": "f7a48a025e2c247e63da4df301ce2b80c7c6aabf1073220a5be97f0929719c78",
+      "to_implementation": "c715ade96f7025be13b29c5d3b418ce1cfdbed4e1dbfc036f97b4066ce18c8be",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "182",
+      "review_report": "ai-research/RUST_BACKEND_G370_REFRESH.md",
+      "preserve_g370_calibration": true,
+      "teacher_phase_changes": true
+    },
+    {
+      "from_implementation": "f7a48a025e2c247e63da4df301ce2b80c7c6aabf1073220a5be97f0929719c78",
+      "to_implementation": "c715ade96f7025be13b29c5d3b418ce1cfdbed4e1dbfc036f97b4066ce18c8be",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "182",
+      "review_report": "ai-research/RUST_BACKEND_G370_REFRESH.md",
+      "preserve_g370_calibration": true,
+      "config_migrations_ref": "1626"
+    },
+    {
+      "from_implementation": "f7a48a025e2c247e63da4df301ce2b80c7c6aabf1073220a5be97f0929719c78",
+      "to_implementation": "c715ade96f7025be13b29c5d3b418ce1cfdbed4e1dbfc036f97b4066ce18c8be",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "182",
+      "review_report": "ai-research/RUST_BACKEND_G370_REFRESH.md",
+      "preserve_g370_calibration": true,
+      "config_migrations_ref": "1702"
     }
   ],
   "definitions": {
@@ -711063,7 +711214,8 @@
       "178": "Reviewed optional fresh-run preparation flag: no_rehearsal sets only rehearsal_weight=0 before signing the new seed manifest. The default is false; existing configurations, optimizers/RNG, progress, schedules and safeguards are unchanged. No same-run configuration migration is authorized. Previously reviewed migration restrictions remain exact.",
       "179": "Reviewed fresh g1290 startup: explicit manual scheduling receipts, immediate branching, initial GAE .98 and independent fresh Ownership/VP companion initialization with committed retained-PPG warmup. These are signed new-run opt-ins; no same-run adoption or reset is authorized. Existing config contracts retain optimizer, RNG, model and progress semantics. Auxiliary diagnostics add bounded occupied-entity errors. Existing reviewed transitions retain exact restrictions. Review: ai-research/NEUTRAL_SELFPLAY_G1290_RESTART.md.",
       "180": "Reviewed actor-only GAE floor adoption from trained-start GAE 3 to 4: lambda .95 -> .98 before advantages, no subsequent .95 stage. Preserve model/Adam/RNG, independent evidence, PPG cache and utility calibration. Only the advantage config block may change via the named migration. Review: ai-research/NEUTRAL_SELFPLAY_G1290_RESTART.md.",
-      "181": "Reviewed g370 continuation: preserve entropy .005, adopt direct lambda .95/floor .95, half-percent T2-only forks, and PPG beta floor 1. Preserve compatible cache, weights/Adam/RNG, utility calibration, independent gates and progress. Review: ai-research/NEUTRAL_SELFPLAY_G1290_RESTART.md."
+      "181": "Reviewed g370 continuation: preserve entropy .005, adopt direct lambda .95/floor .95, half-percent T2-only forks, and PPG beta floor 1. Preserve compatible cache, weights/Adam/RNG, utility calibration, independent gates and progress. Review: ai-research/NEUTRAL_SELFPLAY_G1290_RESTART.md.",
+      "182": "Reviewed g370 task-only lab refresh: remove AZ_DB, require DOMiNO off in lab, preserve neutral restart recipe/model/PPO-PPG-local Adam/RNG/progress. Add exact isolated pending g370 phase restore, four-second Rust search plus one-second cumulative post-work, streamed verification and sealed transfer. Production teacher remains off; lab gates Pending."
     },
     "config_changes": {
       "0": {

@@ -24,7 +24,6 @@ def main():
     p.add_argument('--expected-generation',type=int);p.add_argument('--checkpoint-sha256')
     p.add_argument('--device',default='cuda:0');p.add_argument('--mono',default='mono');p.add_argument('--out',type=Path)
     p.add_argument('--offline',action='store_true');p.add_argument('--fixtures-only',action='store_true')
-    p.add_argument('--teacher-profile',choices=('legacy','domino'),default='legacy')
     p.add_argument('--transfer-manifest',type=Path)
     a=p.parse_args()
     from brass_ai.learning.contracts import require,project_path,read_json
@@ -52,9 +51,8 @@ def main():
              CUBLAS_WORKSPACE_CONFIG=':4096:8')
     try:
         report['transfer']=verify('b04',a.transfer_manifest)
-        report['teacher_profile']=a.teacher_profile
         print('B04: short dispatch/inference fixtures',flush=True)
-        report['fixtures']=base.command([sys.executable,'-m','unittest','test_b04',*(['test_teacher_diversity'] if a.teacher_profile=='domino' else []),'-v'],cwd=ROOT,
+        report['fixtures']=base.command([sys.executable,'-m','unittest','test_b04','test_g370_lab','-v'],cwd=ROOT,
             env=dict(env,CUDA_VISIBLE_DEVICES=''),log=out/'fixtures.log',timeout=180)
         if a.fixtures_only:report['passed']=True;report['scope']='CPU fixtures only; native/Linux/CUDA gates remain Pending';return
         require(platform.system()=='Linux','Run full B04 qualification on the Linux/CUDA lab server')
@@ -71,8 +69,6 @@ def main():
                 shutil.copytree(ROOT/'lab-native',checkout/'lab-native',ignore=shutil.ignore_patterns('target'))
                 fixture=checkout/'tests/GumbelISMCTS/fixtures/session-v1.json';fixture.parent.mkdir(parents=True)
                 shutil.copyfile(ROOT/'tests/GumbelISMCTS/fixtures/session-v1.json',fixture)
-                descriptor=checkout/'configs/learning/domino-descriptor-1.0.0.json';descriptor.parent.mkdir(parents=True)
-                shutil.copyfile(ROOT/'configs/learning/domino-descriptor-1.0.0.json',descriptor)
                 b02_tools.check_shared_dependencies(checkout/'native/Cargo.lock',checkout/'lab-native/Cargo.lock')
                 for k in list(env):
                     if k in ('RUSTFLAGS','CARGO_ENCODED_RUSTFLAGS','CARGO_BUILD_TARGET','CARGO_TARGET_DIR') or (k.startswith('CARGO_TARGET_') and k.endswith('_RUSTFLAGS')):env.pop(k)
@@ -87,20 +83,6 @@ def main():
                     print('B04: native '+op,flush=True)
                     commands.append(base.command(['cargo','+1.99.1',op,*common],cwd=ROOT,env=env,log=out/(op+'.log'),timeout=900))
                 binary=out/'target'/target/'release/brass-lab-teacher'
-                if a.teacher_profile=='domino':
-                    core=['--manifest-path',checkout/'native/Cargo.toml','-p','brass-ai-core','--lib','domino',
-                        '--release','--target',target,'--target-dir',out/'target','--locked','-j','2']
-                    if a.offline:core+=['--offline']
-                    commands.append(base.command(['cargo','+1.99.1','test',*core],cwd=ROOT,env=env,
-                        log=out/'core-objective-tests.log',timeout=900))
-                    commands.append(base.command([sys.executable,'-m','unittest',
-                        'test_teacher_diversity.DiversityTeacher.test_native_descriptor_exact_in_four_phases',
-                        'test_teacher_diversity.DiversityTeacher.test_native_descriptor_populated_public_state_all_seats',
-                        'test_teacher_diversity.DiversityTeacher.test_native_intrinsic_probe_and_real_service',
-                        'test_b04.B04.test_native_count_probe_targets_and_actual_model_logits','-v'],
-                        cwd=ROOT,env=dict(env,BRASS_DOMINO_NATIVE=str(binary),BRASS_B04_BINARY=str(binary),
-                            BRASS_B04_NATIVE=str(checkout/'native'),BRASS_B04_CORE=overlay['core_source']),
-                        log=out/'native-python-parity.log',timeout=90))
                 build=dict(contract='brass-lab-b04-build/1.0.0',binary=pin(binary),core_source=overlay['core_source'],
                     base_source=SOURCE,producer=source_fingerprint(),implementation=implementation_id(),bootstrap=old['bootstrap'],
                     b02=pin(a.b02),b03=pin(a.b03),rustc=version,overlay=pin(out/'overlay.json'),lock=pin(checkout/'lab-native/Cargo.lock'))
@@ -109,9 +91,9 @@ def main():
                 command=[sys.executable,'-m','brass_ai.rust_backend.lab_b04_smoke','--run',a.run,
                     '--b02',a.b02.resolve(),'--b03',a.b03.resolve(),'--build',out/'build.json','--out',out,
                     '--expected-generation',str(a.expected_generation),'--checkpoint-sha256',a.checkpoint_sha256,
-                    '--device',a.device,'--mono',a.mono,'--teacher-profile',a.teacher_profile]
+                    '--device',a.device,'--mono',a.mono]
                 commands.append(base.command(command,cwd=ROOT,env=dict(env,BRASS_B04_PARENT_LOCK=(a.run/'.active-run.json').read_text()),
-                    log=out/'lab-smoke.log',timeout=300))
+                    log=out/'lab-smoke.log',timeout=240))
                 report['lab']=read_json(out/'lab-checks.json');report['passed']=report['lab']['passed']
                 report['lab_qualification']='Passed for this exact source/model/device' if report['passed'] else 'Pending: readiness deferred'
                 report['build']=pin(out/'build.json');write_json(out/'commands.json',commands)

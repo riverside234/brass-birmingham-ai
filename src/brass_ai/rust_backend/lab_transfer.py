@@ -1,47 +1,57 @@
-"""Explicit sealed B04 layering for the retained B02.5/B03 qualification tools."""
+"""Verify the task-only restart transfer; qualify its latest committed state."""
 import hashlib
 import json
 from pathlib import Path
 import zipfile
 from brass_ai.learning.contracts import SOURCE_ROOT, require
-from .lab_contract import sha
+from .lab_contract import sha, SOURCE
 
-ARCHIVES = {'b025':'b025-search-v1-teacher-phase.zip','b03':'b03-search-v1-admission.zip',
-            'b04':'b04-search-v1-teacher.zip'}
+DIRECTORY = 'distribution/rust-lab-restart'
+CONTRACT = 'brass-lab-task-transfer/1.0.0'
+RETIRED = (
+    'src/brass_ai/recovery/teacher_diversity.py',
+    'src/brass_ai/recovery/domino_search_fit.py',
+    'src/brass_ai/rust_backend/lab_diversity_transfer.py',
+    'src/brass_ai/rust_backend/lab_domino_normalization.py',
+    'src/brass_ai/rust_backend/lab_domino_overlay.py',
+    'src/brass_ai/rust_backend/lab_intrinsic.py',
+    'lab-native/core-overlay/domino.rs',
+    'scripts/prepare-rust-lab-diversity.py',
+    'tests/RustBackendLab/test_teacher_diversity.py',
+)
 
 
-def text_sha(path):return hashlib.sha256(Path(path).read_bytes().replace(b'\r\n',b'\n')).hexdigest()
+def text_sha(path):
+    return hashlib.sha256(Path(path).read_bytes().replace(b'\r\n', b'\n')).hexdigest()
 
 
 def verify(milestone, supplement=None):
-    if supplement is not None and (SOURCE_ROOT/supplement).resolve()==SOURCE_ROOT/'distribution/rust-lab-g1330/transfer-manifest.json':
-        from .lab_diversity_transfer import verify as verify_diversity
-        return verify_diversity(milestone,supplement)
     from brass_ai.step5.league import implementation_id
-    root = SOURCE_ROOT; destination = root/'distribution/rust-lab-b04/transfer-manifest.json'
-    if supplement is not None:
-        require((root/supplement).resolve() == destination,'Unknown qualification supplement')
-    require(milestone in ARCHIVES,'Unknown qualification milestone')
-    newest = json.loads(destination.read_text(encoding='utf-8'))
-    require(newest['contract'] == 'brass-lab-b04-transfer/1.0.0','Unknown B04 transfer')
-    order = ['b025','b03','b04'] if milestone == 'b025' else ['b03','b04'] if milestone == 'b03' else ['b04']
-    files = {}
-    for m in order:
-        name = 'distribution/rust-lab-'+m+'/transfer-manifest.json';path = root/name
-        manifest = json.loads(path.read_text(encoding='utf-8'))
-        require(manifest['contract'] == 'brass-lab-'+m+'-transfer/1.0.0','Unknown layered transfer')
-        archive_name = 'distribution/rust-lab-'+m+'/'+ARCHIVES[m];archive = root/archive_name
-        if m != 'b04':
-            require(sha(archive) == newest['prior_bundles'][archive_name],'Changed prerequisite archive')
-        else:
-            receipt = json.loads((archive.parent/'bundle.json').read_text(encoding='utf-8'))
-            require(receipt['sha256'] == sha(archive) and receipt['implementation'] == newest['implementation'],
-                    'Changed B04 archive')
-        with zipfile.ZipFile(archive) as z:
-            require(json.loads(z.read(name)) == manifest,'Manifest differs from sealed archive: '+m)
-        files.update(manifest['files'])
-    for name,expected in files.items():
-        path = (root/name).resolve()
-        require(path.is_relative_to(root) and path.is_file() and text_sha(path) == expected,'Changed layered file: '+name)
-    require(implementation_id() == newest['implementation'],'Checkout differs from reviewed B04 source')
-    return dict(manifest_sha256=text_sha(destination),implementation=newest['implementation'],files=len(files),milestone=milestone)
+    from .lab_teacher_overlay import source_fingerprint
+    path = SOURCE_ROOT/DIRECTORY/'transfer-manifest.json'
+    require(milestone in ('b01','b02','b025','b03','b04') and
+            (supplement is None or (SOURCE_ROOT/supplement).resolve() == path), 'Unknown lab transfer/stage')
+    manifest = json.loads(path.read_text(encoding='utf-8'))
+    require(manifest['contract'] == CONTRACT and manifest['base_core'] == SOURCE
+            and manifest['method'] == 'search_v1' and manifest['v205_enabled'] is False
+            and manifest['domino_enabled'] is False and manifest['az_db_enabled'] is False,
+            'Unknown task-only transfer')
+    require(manifest['retired_files'] == list(RETIRED), 'Retired-source inventory differs')
+    for name in RETIRED:
+        require(not (SOURCE_ROOT/name).exists(), 'Retired AZ_DB source remains; use the current checkout: '+name)
+    receipt = json.loads((path.parent/'bundle.json').read_text(encoding='utf-8'))
+    archive = (SOURCE_ROOT/receipt['path']).resolve()
+    require(archive.parent == path.parent and sha(archive) == receipt['sha256'], 'Changed lab archive')
+    with zipfile.ZipFile(archive) as z:
+        require(json.loads(z.read(DIRECTORY+'/transfer-manifest.json')) == manifest, 'Archive/sidecar differs')
+    for name, expected in manifest['files'].items():
+        source = (SOURCE_ROOT/name).resolve()
+        require(source.is_relative_to(SOURCE_ROOT) and source.is_file() and text_sha(source) == expected,
+                'Changed lab source: '+name)
+    for name, expected in manifest['archives'].items():
+        source = (SOURCE_ROOT/name).resolve()
+        require(source.is_relative_to(SOURCE_ROOT) and sha(source) == expected, 'Changed original archive: '+name)
+    require(implementation_id() == manifest['implementation'] and source_fingerprint() == manifest['producer'],
+            'Checkout differs from reviewed producer')
+    return dict(manifest_sha256=sha(path),implementation=manifest['implementation'],producer=manifest['producer'],
+                files=len(manifest['files']),milestone=milestone,teacher_profile='task-only',lab_qualification='Pending')

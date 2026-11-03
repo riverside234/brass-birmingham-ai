@@ -198,7 +198,7 @@ class B04(unittest.TestCase):
     def test_cancel_between_native_actions_discards_unpublished_labels(self):
         import sys
         with tempfile.TemporaryDirectory(dir=SOURCE_ROOT/'artifacts') as d:
-            # A tiny protocol fixture sends a label but never a completed table.
+            # A tiny protocol fixture sends a turn but never a completed table.
             path=Path(d)/'fixture.py';expected=job(self.model)['expected'];core='f'*64
             path.write_text('''import sys,json,struct,time
 def emit(x):
@@ -206,7 +206,7 @@ def emit(x):
  sys.stdout.buffer.write(struct.pack('<I',len(p))+p);sys.stdout.buffer.flush()
 n=struct.unpack('<I',sys.stdin.buffer.read(4))[0];r=json.loads(sys.stdin.buffer.read(n))
 emit(dict(event='hello',contract=r['contract'],job=r['expected'],method='search_v1',v205_enabled=False,core=dict(source_sha256=r['core'])))
-emit(dict(event='label',row={'unpublished':True}))
+emit(dict(event='turn',rows=[{'unpublished':True}]))
 time.sleep(5)
 ''')
             cancel=threading.Event()
@@ -218,7 +218,8 @@ time.sleep(5)
                 worker=T.Worker('fixture',dict(contract=T.CONTRACT,expected=expected,core=core),None,cancel)
             timer=threading.Timer(.3,cancel.set);timer.start()
             try:
-                with self.assertRaisesRegex(ValueError,'cancelled'):worker.collect(expected,core)
+                verifier=Mock();verifier.verify.return_value={'status':'ok'}
+                with self.assertRaisesRegex(ValueError,'cancelled'):worker.collect(expected,core,verifier=verifier)
                 self.assertIsNotNone(worker.process.poll());self.assertFalse(worker.reader.is_alive())
             finally:timer.cancel();worker.close()
 
@@ -266,6 +267,25 @@ time.sleep(5)
         from brass_ai.rust_backend.lab_admission import admit_teacher_rows
         with self.assertRaisesRegex(ValueError,'probes'):
             admit_teacher_rows([row],job=j,model=self.model,history=[dict(generation=10,model_id=model_id(self.model))])
+
+    @unittest.skipUnless(os.environ.get('BRASS_B04_BINARY'),'Native turn probe requires the built export-overlay binary')
+    def test_native_bounded_turn_verification_and_post_budget(self):
+        j=job(self.model);core=os.environ['BRASS_B04_CORE'];native=Path(os.environ['BRASS_B04_NATIVE'])
+        state=json.loads((native/'brass-ai-core/tests/data/initial-state.json').read_text())
+        origins=[dict(state=state,rail_keys=list(range(64)))]
+        history=[dict(generation=10,model_id=model_id(self.model))]
+        with InferenceService(config()['execution'],'cpu') as service:
+            service.register(self.model)
+            c=T.calibrate(os.environ['BRASS_B04_BINARY'],core,origins,j,service)
+            measured=T.turn_probes(os.environ['BRASS_B04_BINARY'],core,origins,j,service,c,self.model,history)
+        turn=measured['turns'][0];self.assertTrue(turn['diagnostic'])
+        metrics=turn['metrics']['turns'][0]
+        self.assertLessEqual(metrics['search_ns'],4_000_000_000)
+        self.assertLessEqual(metrics['post_search_ns'],1_000_000_000)
+        self.assertLessEqual(metrics['elapsed_ns'],5_000_000_000)
+        self.assertEqual(metrics['budget']['work_deadline_ns']-metrics['budget']['started_ns'],4_000_000_000)
+        self.assertTrue(all(r['diagnostic'] for r in turn['rows']))
+        print('Bounded task-only turn:',json.dumps(metrics,sort_keys=True),flush=True)
 
 
 if __name__=='__main__':unittest.main()

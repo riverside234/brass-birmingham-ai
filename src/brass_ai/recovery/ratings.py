@@ -307,10 +307,10 @@ def alerts(report,state,panels,previous_panels):
         deployment_choice=None,deployment_status='Pending separate panel review; no automatic publication')
 
 
-def plot_report(path,report,agents):
+def plot_report(path,report,agents,run=None,state=None):
     # Keep automatic slots, offline refits and manual redraws on one renderer.
-    from .rating_plot import render
-    render(report,path,agents=agents)
+    from .rating_plot import render_progress
+    render_progress(report,path,agents=agents,run=run,state=state,persist_vp=state is not None)
 
 
 def schedule(root,run,state,config,*,device='cpu',mono=None,inference_devices=None):
@@ -388,7 +388,7 @@ def schedule(root,run,state,config,*,device='cpu',mono=None,inference_devices=No
             temporary=samples_path.with_suffix('.tmp')
             with temporary.open('wb') as handle:np.savez(handle,theta=samples,agents=np.asarray(list(fitted['ratings'])))
             temporary.replace(samples_path)
-        plot_report(directory/'progress.svg',fitted,working['agents'])
+        plot_report(directory/'progress.svg',fitted,working['agents'],run,state)
         slot=dict(generation=generation,records=receipt(root,records_path),report=receipt(root,directory/'report.json'),
                   spec=receipt(root,directory/'spec.json'),panels=receipt(root,directory/'panels.json'),
                   bootstrap=receipt(root,samples_path))

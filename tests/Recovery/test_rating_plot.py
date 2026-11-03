@@ -353,12 +353,16 @@ class RatingPlot(unittest.TestCase):
                  patch.object(ratings, 'collect_slot', side_effect=lambda root,directory,spec,*args: fixture_rows(spec)) as collector:
                 fitted = ratings.schedule(root, root, state, cfg)
                 path = root/'ratings/slots/generation-000010/progress.svg'; before = path.read_bytes()
+                vp = path.with_name('progress_vp.svg'); vp_before = vp.read_bytes()
+                self.assertIn('Self-play learner VP', labels(vp))
+                self.assertTrue((root/'ratings/vp-history.json').is_file())
                 self.assertIn('Full training history', labels(path))
                 self.assertIn('Recent progress', labels(path))
                 self.assertIn('Latest slot: 8 games / 2 setups', labels(path))
                 self.assertEqual(fitted['games'], 8)
                 self.assertIsNone(ratings.schedule(root, root, state, cfg))
                 self.assertEqual(path.read_bytes(), before)
+                self.assertEqual(vp.read_bytes(), vp_before)
                 self.assertEqual(collector.call_count, 1)
 
 

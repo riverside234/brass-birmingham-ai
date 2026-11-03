@@ -107,8 +107,10 @@ The script copies:
 - The originating IL run's state/report and available ancestor IL states/reports.
 - The fixed IL-KL probe's `il-kl/manifest.json` and `il-kl/initial-report.json`, when present.
 - The **latest committed** PL rating slot folder: its specifications/reports,
-  separate panels, compact game outcomes (`games.jsonl`), and progress curve
-  (`progress.svg`). Older slots needed by panel-retirement or competitive-coverage
+  separate panels, compact game outcomes (`games.jsonl`), and progress curves
+  (`progress.svg` for PL strength and `progress_vp.svg` for self-play learner VP).
+  The small cumulative `ratings/vp-history.json` is also included when present.
+  Older slots needed by panel-retirement or competitive-coverage
   gate receipts are also included until archived. Other older and pending slot folders are excluded, with or without
   `--continue`. The selection is recorded as `rating_slot_generation`; unchanged
   latest-slot files can be reused with `--continue` when no new rating has run.
@@ -173,10 +175,40 @@ results/joint7-v11-1-grouped-lr-g0021-<timestamp>/
   ratings/slots/generation-000020/report.json
   ratings/slots/generation-000020/spec.json
   ratings/slots/generation-000020/progress.svg
+  ratings/slots/generation-000020/progress_vp.svg
+  ratings/vp-history.json
   lineage/artifacts/step5/features4-v11-1-batch7-il/state.json
   lineage/artifacts/step5/features4-v11-1-batch7-il/report.json
   ...
 ```
+
+Both charts are generated at the existing main-rating cadence. The VP chart
+uses ordinary **self-play tables' learner seats only**, including zero-VP seats;
+history/v4 tables, branches and evaluation games do not contribute. Each point
+is pooled `vp_sum / seat_games` across a fixed group of ten committed iterations:
+g1–10, g11–20, and so on. An `iteration-0009/report.json` belongs to g10.
+The two panels show the full available history and the latest 200 generations,
+in the same visual style as the PL chart. Missing groups remain gaps; unfinished
+groups are omitted. These training scores are not controlled strength ratings.
+
+Automatic generation retains the small per-iteration totals in
+`ratings/vp-history.json`, so later report cleanup does not shorten the curve.
+Already-pruned evidence cannot be invented. To redraw both charts from a run or
+a complete export bundle without training, inference, or a PL refit:
+
+```bash
+python scripts/render-pl-progress.py \
+  --report results/YOUR-BUNDLE/ratings/slots/generation-000370/report.json
+```
+
+This writes sibling `progress.svg` and `progress_vp.svg`. It leaves the report,
+training state and source history unchanged. `--run PATH` explicitly selects
+the run/bundle when it is not an ancestor of the report. Optional repeated
+`--history-source results/OLDER-BUNDLE` arguments fill gaps using complete older
+bundles with the same initial checkpoint lineage; conflicting totals are rejected.
+A PL-only report with no training history produces an explicitly empty VP chart.
+The normal `python scripts/export-training-reports.py` command copies the new
+chart and history automatically, including verified reuse with `--continue`.
 
 Upload/copy the **whole output folder**, including its subfolders, and any older
 bundles referenced by `reused_files` when using `--continue`. It is an

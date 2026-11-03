@@ -27,9 +27,9 @@ namespace BrassLegacyAI.Native
         { return Shared(searchK,temperature,NativeModel.Alpha); }
         public static NativeProcess Shared(int searchK,double temperature,NativeModel model)
         {
-            if(!model.Enabled) throw new InvalidOperationException(model.Label+" is disabled. This NN table must stop or be replaced as a whole.");
+            if(!model.Enabled) throw new InvalidOperationException(model.Label+" is disabled. Restore this seat's model to continue.");
             // Only the scheduler's exclusive compute lease selects a worker.
-            // Retire the old table's process before admitting another K.
+            // Retire the previous seat's process before admitting another model or K.
             if(shared!=null && (shared.Package.ModelSpec!=model || shared.Package.SearchK!=searchK || shared.Package.Temperature!=temperature)){shared.Dispose();shared=null;}
             if(shared==null) shared=new NativeProcess(new NativePackage(model.Location,searchK,temperature));
             if(shared.process.HasExited) {shared.Dispose();shared=null;throw new IOException("Native worker exited; reload the saved game to recover");}

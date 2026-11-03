@@ -23,18 +23,16 @@ def plan(root, run, snapshot, model, raw, service, output):
     fast={p:legacy_spec(root,p,config['legacy_budget'],search_free=True,
         work_budget=config['legacy_opponent_work_budget']) for p in profiles}
     fingerprints=None
-    if 'critic_data' in config:
+    from brass_ai.recovery.policy_observations import enabled as neutral_observations, install
+    install(model, config)
+    require(config.get('diversity', {}).get('mode', 'off') == 'off', 'DOMiNO lab collection is retired')
+    if 'critic_data' in config and not neutral_observations(config):
         require((run/'il-kl/manifest.json').is_file(),'Committed descriptor probe is missing; B02 never creates one')
         origin=signature.get('imitation_source')
         require(origin is not None and state.get('il_kl_limit',{}).get('probe'),'Missing committed descriptor probe binding')
         probe,_=load_probe(root,run,origin,None,config['il_kl_limit'],config['update'],config['audit_workers'],
                           receipt=state['il_kl_limit']['probe'])
         fingerprints=dict(learner=fingerprint(probe,probe.probabilities(model,config['update'])),rule_bot=fingerprint(probe,rule_bot=True))
-        from brass_ai.recovery.domino_config import enabled
-        if enabled(config):
-            from brass_ai.recovery.domino_fingerprints import Fingerprints
-            fingerprints['contexts']=Fingerprints(root,output,probe,model,config['update'],
-                {m['model_id']:m for m in state['quality_pool']['members']})
     current=service.register(model)
     require(current==snapshot['model_id'],'Incoming learner identity changed')
     result=plan_collection(root,output,state,config,signature,service,current,profiles,specs,fast,

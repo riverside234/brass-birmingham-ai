@@ -29,9 +29,52 @@ use std::{
     time::Instant,
 };
 
-pub const CONTRACT: &str = "brass-lab-teacher/2.0.0";
+pub const CONTRACT: &str = "brass-lab-teacher/1.1.0";
 const LIMIT: usize = 64 * 1024 * 1024;
 const ALLOWANCE: u64 = 4_000_000_000;
+const POST: u64 = 1_000_000_000;
+pub const TIMING: &str = "search-plus-post/1.0.0";
+
+/// Four seconds of search admission, plus at most one second of finalization.
+/// Session::narrow retains both absolute cutoffs across action two/replanning.
+pub fn search_budget(started_ns: u64) -> Result<Budget> {
+    let deadline_ns = started_ns.checked_add(ALLOWANCE + POST).ok_or("turn clock overflow")?;
+    Ok(Budget { started_ns, work_deadline_ns: deadline_ns - POST, deadline_ns, reserve_ns: POST })
+}
+
+#[derive(Default)]
+struct TurnWork {
+    search_ns: u64,
+    selection_ns: u64,
+    labels_ns: u64,
+    commit_ns: u64,
+    rows: Vec<Value>,
+}
+
+fn finish_turn<R: Read, W: Write>(peer: &mut Peer<R, W>, budget: Budget,
+    work: &mut TurnWork, index: u64, diagnostic: bool) -> Result<Value> {
+    let before = peer.clock.now_ns();
+    let post_ns = before.saturating_sub(budget.started_ns).saturating_sub(work.search_ns);
+    check(work.search_ns <= ALLOWANCE && post_ns < POST && before < budget.deadline_ns,
+          "teacher post-search allowance exceeded")?;
+    let remaining_ns = (POST - post_ns).min(budget.deadline_ns - before);
+    emit(&mut peer.output, json!({"event":"turn","job":peer.expected,"index":index,
+        "timing":TIMING,"remaining_ns":remaining_ns,"rows":work.rows,"diagnostic":diagnostic,
+        "search_ns":work.search_ns,"native_post_ns":post_ns}))?;
+    let ack: Value = serde_json::from_slice(&read_frame(&mut peer.input)?)?;
+    let after = peer.clock.now_ns();
+    check(ack["job"] == peer.expected && ack["index"] == index && ack["status"] == "ok",
+          "stale/rejected turn verification")?;
+    let total_post = after.saturating_sub(budget.started_ns).saturating_sub(work.search_ns);
+    check(total_post <= POST && after <= budget.deadline_ns, "late turn verification")?;
+    let report = json!({"index":index,"timing":TIMING,"search_ns":work.search_ns,
+        "selection_ns":work.selection_ns,"labels_ns":work.labels_ns,"commit_ns":work.commit_ns,
+        "native_post_ns":post_ns,"verification_ipc_ns":after.saturating_sub(before),
+        "post_search_ns":total_post,"elapsed_ns":after.saturating_sub(budget.started_ns),
+        "budget":budget});
+    *work = TurnWork::default();
+    Ok(report)
+}
 
 fn read_frame(input: &mut impl Read) -> Result<Vec<u8>> {
     let mut size = [0; 4];
@@ -72,15 +115,9 @@ struct Peer<R, W> {
     wait_ns: u64,
     requests: u64,
     bytes: u64,
-    root_owner: usize,
-    strategy: usize,
-    intrinsic: Option<f64>,
-    intrinsic_info: Option<Info<Key,String>>,
-    objective_active: bool,
-    intrinsic_requests: u64,
 }
 impl<R: Read, W: Write> Peer<R, W> {
-    fn evaluate_inner(&mut self, info: &Info<Key, String>, want_intrinsic: bool) -> Result<Statistics> {
+    fn evaluate_inner(&mut self, info: &Info<Key, String>) -> Result<Statistics> {
         check(self.clock.now_ns() < self.deadline, "evaluation deadline")?;
         self.sequence += 1;
         let start = Instant::now();
@@ -97,8 +134,7 @@ impl<R: Read, W: Write> Peer<R, W> {
         self.encoding_ns += start.elapsed().as_nanos() as u64;
         let binding = json!({"job":self.expected,"sequence":self.sequence,"root_epoch":self.epoch,
             "revision":view.context.revision,"seat":info.actor,"legal_ids":info.actions,
-            "context":info.key.context,"information":seal(&serde_json::to_value(info)?),
-            "root_owner":self.root_owner,"strategy_id":self.strategy,"want_intrinsic":want_intrinsic});
+            "context":info.key.context,"information":seal(&serde_json::to_value(info)?)});
         let meta = serde_json::to_vec(&json!({"event":"evaluate","binding":binding,
             "remaining_ns":self.deadline.saturating_sub(self.clock.now_ns()),
             "candidates":info.actions.len(),"state_len":tensors.state.len(),"action_len":tensors.actions.len()}))?;
@@ -129,25 +165,13 @@ impl<R: Read, W: Write> Peer<R, W> {
             logits.len() == info.actions.len() && reply["reward_id"] == info.key.context.reward_id,
             "GPU legal width/reward differs",
         )?;
-        if want_intrinsic {
-            check(info.actor==self.root_owner && self.strategy>0 && reply["evaluator_id"]==self.expected["bundle_id"],"intrinsic owner/bundle")?;
-            let value=reply["intrinsic"].as_f64().ok_or("missing intrinsic reply")?;
-            check(value.is_finite(),"nonfinite intrinsic reply")?;
-            self.intrinsic=Some(value);self.intrinsic_requests+=1;
-            self.intrinsic_info=Some(info.clone());
-        }
         Ok(Statistics::new(logits, utility)?)
     }
 }
 impl<R: Read, W: Write> LeafEvaluator<Key, String> for Peer<R, W> {
     fn evaluate(&mut self, info: &Info<Key, String>) -> search::Result<Statistics> {
-        self.evaluate_inner(info,self.objective_active && info.actor==self.root_owner)
+        self.evaluate_inner(info)
             .map_err(|e| search::invalid(e.to_string()))
-    }
-    fn intrinsic(&mut self,info:&Info<Key,String>)->search::Result<f64> {
-        if self.intrinsic_info.as_ref()==Some(info) {return Ok(self.intrinsic.expect("intrinsic cache"));}
-        self.evaluate_inner(info,true).map_err(|e|search::invalid(e.to_string()))?;
-        self.intrinsic.ok_or_else(||search::invalid("missing intrinsic scalar"))
     }
 }
 
@@ -217,22 +241,9 @@ pub fn label(
     l.as_object_mut()
         .ok_or("invalid expected identity")?
         .extend(fields.as_object().unwrap().clone());
-    if let Some(d)=&e.stats.diversity {
-        let assigned=&expected["seat_contexts"][actual.actor];
-        let means=|s:&Vec<f64>|s.iter().zip(&e.stats.count).map(|(v,n)|if *n==0 {0.} else {*v / *n as f64}).collect::<Vec<_>>();
-        let extra=json!({"source":"search-v1-domino-improved-policy/1.0.0","algorithm":search::domino::ALGORITHM,
-            "session":search::domino::SESSION,"base_algorithm":search::IDENTITY,"base_session":search::session::IDENTITY,
-            "strategy_id":assigned["strategy_id"],"seat_context":assigned,"root_owner":d.owner,
-            "opponent_model":"root-latent-self-play","coefficient":d.coefficient,
-            "task_node_value":d.task_value[d.owner],"intrinsic_node_value":d.intrinsic_value,
-            "task_mean_returns":means(&d.task_returns),"intrinsic_mean_returns":means(&d.intrinsic_returns),
-            "channel_counts":e.stats.count,"channel_watermark":e.completed,"intrinsic_prefix":actual.key.intrinsic_prefix,
-            "normalization":"four-player-phase-actions-7-8-12-4/1.0.0","work":e.work});
-        l.as_object_mut().unwrap().extend(extra.as_object().unwrap().clone());
-    }
     Ok(Some(
         json!({"seat":actual.actor,"view":view,"choices":actual.key.choices,
-        "style":actual.key.context.style,"intent":actual.key.context.intent,"teacher":l}),
+        "style":[0.,0.,0.,0.],"intent":vec![0.;8],"teacher":l}),
     ))
 }
 
@@ -241,27 +252,13 @@ pub fn run() -> Result<()> {
     let output = io::stdout().lock();
     let request: Value = serde_json::from_slice(&read_frame(&mut input)?)?;
     check(request["contract"] == CONTRACT, "teacher protocol")?;
-    if request["op"]=="descriptor" {
-        let mut view:Observation=if request.get("view").is_some() {serde_json::from_value(request["view"].clone())?} else {
-            let dto:StateDto=serde_json::from_value(request["state"].clone())?;
-            NativeState::import(&dto)?.observation(Seat::try_from(dto.context.actor as u8)?)?
-        };
-        if let Some(era)=request.get("era") {view.context.era=serde_json::from_value(era.clone())?;}
-        if let Some(round)=request.get("round") {view.context.round=round.as_u64().ok_or("round")? as u8;}
-        let choice=serde_json::from_value(request["choice"].clone())?;
-        let slots:Vec<String>=serde_json::from_value(request["descriptor"]["slots"].clone())?;
-        let regions:Vec<String>=serde_json::from_value(request["descriptor"]["regions"].clone())?;
-        let (phase,x)=search::domino::event(&view,&choice,&slots,&regions)?;
-        let mut output=output;
-        emit(&mut output,json!({"event":"descriptor","phase":phase,"x":x,"view":view}))?;return Ok(());
-    }
     let job = &request["job"];
     let profile = &job["search"];
     check(
         job["kind"] == "teacher_phase"
             && job["ordinary_training"] == false
             && profile["method"] == "search_v1"
-            && profile.as_object().is_some_and(|p| p.len() == 15)
+            && profile.as_object().is_some_and(|p| p.len() == 17)
             && profile["algorithm"] == search::IDENTITY
             && profile["session"] == search::session::IDENTITY
             && profile["gumbel_noise"] == true
@@ -272,6 +269,8 @@ pub fn run() -> Result<()> {
             && profile["threads_per_session"] == 1
             && profile["pending_paths"] == 1
             && profile["allowance_seconds"] == 4.0
+            && profile["post_search_seconds"] == 1.0
+            && profile["timing"] == TIMING
             && profile["c1"] == 50
             && profile["c2"] == 0.1
             && profile["watchdog_seconds"] == 30.0,
@@ -317,7 +316,6 @@ pub fn run() -> Result<()> {
         wait_ns: 0,
         requests: 0,
         bytes: 0,
-        root_owner: 0, strategy: 0, intrinsic: None, intrinsic_info: None, objective_active: false, intrinsic_requests: 0,
     };
     let identity = Identity {
         game_instance: expected["game_id"].as_str().ok_or("game id")?.into(),
@@ -343,13 +341,11 @@ pub fn run() -> Result<()> {
     let mut no_evidence = 0;
     let mut reserved = 0;
     let mut request_id = 0;
-    let diverse=expected.get("bundle_id").is_some();
-    let mut intrinsic_prefix=[0.;4];
-    let mut phase_counts=[[0u32;4];4];
+    let mut turn_work = TurnWork::default();
+    let mut turn_reports = Vec::new();
     let calibration = request["op"] == "calibrate";
-    let benchmark = request["op"] == "benchmark";
-    let context_control=request["control"]=="context_only";
-    check(!context_control || calibration || benchmark,"diagnostic objective control in live collection")?;
+    let probe = request["op"] == "turn_probe";
+    check(calibration || probe || request["op"] == "run", "unknown teacher operation")?;
     let estimate = request["estimate_ns"].as_u64().unwrap_or(0);
     check(
         calibration || (1_000..=ALLOWANCE).contains(&estimate),
@@ -369,8 +365,6 @@ pub fn run() -> Result<()> {
             "teacher decision cap; incomplete game rejected",
         )?;
         let seat = state.context().actor as usize;
-        peer.root_owner=seat;
-        peer.strategy=if diverse {expected["seat_contexts"][seat]["strategy_id"].as_u64().ok_or("strategy")? as usize} else {0};
         let view = state.observation(Seat::try_from(seat as u8)?)?;
         ledger.observe(&view)?;
         if recalls[seat].last().is_none_or(|r| r.hand != view.own_hand) {
@@ -381,6 +375,14 @@ pub fn run() -> Result<()> {
         }
         let key = TurnKey::from_context(&view.context, seat);
         if turn.as_ref() != Some(&key) {
+            if let Some(owner) = &session {
+                turn_reports.push(finish_turn(&mut peer, owner.budget(), &mut turn_work, reserved, probe)?);
+                if probe {
+                    emit(&mut peer.output,json!({"event":"turn_probe","job":expected,"diagnostic":true,
+                        "metrics":{"turns":turn_reports,"searches":searches,"labels":labels,"reserved_turns":reserved}}))?;
+                    return Ok(());
+                }
+            }
             session = None;
             turn = Some(key);
             first_action = true;
@@ -389,9 +391,9 @@ pub fn run() -> Result<()> {
         let context = FeatureContext {
             model_id: expected["model_id"].as_str().ok_or("model")?.into(),
             reward_id: reward.identity()?,
-            profile_id: if diverse {expected["bundle_id"].as_str().ok_or("bundle id")?.into()} else {CONTRACT.into()},
-            style: if diverse {serde_json::from_value(expected["seat_contexts"][seat]["style"].clone())?} else {[0.;4]},
-            intent: if diverse {serde_json::from_value(expected["seat_contexts"][seat]["intent"].clone())?} else {[0.;8]},
+            profile_id: CONTRACT.into(),
+            style: [0.; 4],
+            intent: [0.; 8],
             remaining: ledger.remaining(),
             max_cost: reward.insolvency.max_cost,
             stable_descriptors: None,
@@ -406,25 +408,15 @@ pub fn run() -> Result<()> {
             sample_seed: seed.wrapping_add(rows),
         };
         let mut game = Brass::new(root.clone(), false)?;
-        let objective=if diverse {
-            let b=&job["evaluator"];
-            let o=search::domino::Objective{owner:seat,strategy:peer.strategy,
-                coefficient:if context_control {1.} else {b["coefficients"][peer.strategy].as_f64().ok_or("coefficient")?},
-                direction:serde_json::from_value(b["directions"][peer.strategy].clone())?,
-                bundle_id:expected["bundle_id"].as_str().ok_or("bundle")?.into(),
-                slots:serde_json::from_value(request["descriptor"]["slots"].clone())?,
-                regions:serde_json::from_value(request["descriptor"]["regions"].clone())?,prefix:intrinsic_prefix[seat]};
-            game.set_objective(o.clone())?;Some(o)
-        } else {None};
         let actual = game.root()?;
-        let scheduled = calibration || benchmark
+        let scheduled = calibration || probe
             || (view.context.phase == Phase::Action
                 && job["reservations"][seat.to_string()][phase(&view)].as_u64()
                     == Some(view.context.round as u64));
         if session.is_none() && scheduled {
             let mut settings = Settings::default();
             settings.search = Config {
-                k: if calibration && request["continuation_probe"]==true {1} else {16},
+                k: 16,
                 simulations: 8,
                 seed: seed.wrapping_add(rows),
                 ..Config::default()
@@ -433,18 +425,15 @@ pub fn run() -> Result<()> {
                 identity.clone(),
                 &root,
                 settings,
-                Budget::new(clock.now_ns(), ALLOWANCE)?,
+                search_budget(clock.now_ns())?,
             )?;
             owner.enable_teacher_exports()?;
-            if let Some(o)=&objective {owner.enable_diversity(o.clone())?;}
             session = Some(owner);
             reserved += 1;
         }
         let mut evidence = None;
         let mut supported = false;
         let choice = if let Some(owner) = &mut session {
-            peer.objective_active=objective.as_ref().is_some_and(|o|o.active());
-            if diverse {owner.set_intrinsic_prefix(intrinsic_prefix[seat])?;}
             request_id += 1;
             peer.epoch += 1;
             peer.deadline = owner.budget().work_deadline_ns;
@@ -478,17 +467,22 @@ pub fn run() -> Result<()> {
                 &mut peer,
                 None,
             )?;
+            let work_end = if out.quota.is_some() {
+                out.work_stopped_ns.min(out.budget.work_deadline_ns).max(began)
+            } else { began }; // cached continuation/forced delivery performs no new search
+            turn_work.search_ns += work_end.saturating_sub(began);
+            turn_work.selection_ns += clock.now_ns().saturating_sub(work_end);
             evidence = owner.take_teacher_export();
             if let Some(quota) = &out.quota {
                 searches.push(json!({"phase":phase(&view),"revision":view.context.revision,"seat":seat,
                     "frozen_n":quota.simulations,"effective_k":out.effective_k,"completed":out.completed,
                     "rounds":out.snapshot.as_ref().map_or(0,|s|s.completed_rounds),"partial":out.partial_completed,
                     "deadline_hit":out.status == "work_deadline","overrun_seconds":out.response_ready_ns.saturating_sub(out.budget.deadline_ns) as f64/1e9,
-                    "elapsed_ns":clock.now_ns().saturating_sub(began),"budget":out.budget,"provenance":out.provenance,"work":out.teacher_work}));
+                    "elapsed_ns":clock.now_ns().saturating_sub(began),"budget":out.budget,"provenance":out.provenance}));
             }
-            if calibration || benchmark {
+            if calibration {
                 check(
-                    !calibration || out.completed == 8,
+                    out.completed == 8,
                     "GPU calibration incomplete; no invented CPU estimate",
                 )?;
                 let played = out
@@ -518,11 +512,9 @@ pub fn run() -> Result<()> {
                     });
                 emit(
                     &mut peer.output,
-                    json!({"event":if benchmark {"benchmark"} else {"calibration"},"completed":out.completed,
+                    json!({"event":"calibration","completed":out.completed,
                     "elapsed_ns":clock.now_ns().saturating_sub(began),"searches":searches,
                     "requests":peer.requests,"wait_ns":peer.wait_ns,"encoding_ns":peer.encoding_ns,
-                    "intrinsic_requests":peer.intrinsic_requests,"work":out.teacher_work,"budget":out.budget,
-                    "diagnostic":true,"control":request["control"],"continuation_probe":request["continuation_probe"],
                     "probe":probe}),
                 )?;
                 return Ok(());
@@ -534,10 +526,8 @@ pub fn run() -> Result<()> {
                 .cloned()
                 .unwrap_or_else(|| actual.actions[0].clone())
         } else if actual.actions.len() == 1 {
-            peer.objective_active=false;
             actual.actions[0].clone()
         } else {
-            peer.objective_active=false;
             peer.epoch += 1;
             peer.deadline = clock.now_ns() + 10_000_000_000;
             let stats = peer.evaluate(&actual)?;
@@ -545,8 +535,9 @@ pub fn run() -> Result<()> {
             draws.categorical(&actual.actions.iter().cloned().zip(p).collect::<Vec<_>>())?
         };
         if session.is_some() && view.context.phase == Phase::Action {
+            let label_started = clock.now_ns();
             if let Some(e) = evidence {
-                if let Some(row) = label(
+                if let Some(mut row) = label(
                     &e,
                     &actual,
                     &expected,
@@ -560,7 +551,8 @@ pub fn run() -> Result<()> {
                     session.as_ref().unwrap().budget(),
                     clock.now_ns(),
                 )? {
-                    emit(&mut peer.output, json!({"event":"label","row":row}))?;
+                    if probe { row["diagnostic"] = json!(true); }
+                    turn_work.rows.push(row);
                     labels += 1;
                 } else {
                     no_evidence += 1;
@@ -569,7 +561,9 @@ pub fn run() -> Result<()> {
                 no_evidence += 1;
             }
             first_action = false;
+            turn_work.labels_ns += clock.now_ns().saturating_sub(label_started);
         }
+        let commit_started = clock.now_ns();
         let selected = actual
             .key
             .choices
@@ -577,25 +571,24 @@ pub fn run() -> Result<()> {
             .find(|c| c.id == choice)
             .ok_or("illegal recommendation")?;
         ledger.chosen(&view, selected);
-        let next = ordinary_after(&state, &choice, &rail, &mut recorder)?;
-        if let Some(o)=&objective {
-            intrinsic_prefix[seat]+=o.reward(&view,selected)?;
-        }
-        if view.context.phase==Phase::Action {
-            let p=match phase(&view) {"canal_early"=>0,"canal_late"=>1,"rail_early"=>2,_=>3};
-            phase_counts[seat][p]+=1;
-        }
-        state=next;
+        state = ordinary_after(&state, &choice, &rail, &mut recorder)?;
+        if session.is_some() { turn_work.commit_ns += clock.now_ns().saturating_sub(commit_started); }
         rows += 1;
     }
-    if diverse {check(phase_counts.iter().all(|counts|*counts==[7,8,12,4]),"unsupported complete-game phase normalization")?;}
+    if let Some(owner) = &session {
+        turn_reports.push(finish_turn(&mut peer, owner.budget(), &mut turn_work, reserved, probe)?);
+    }
+    if probe {
+        emit(&mut peer.output,json!({"event":"turn_probe","job":expected,"diagnostic":true,
+            "metrics":{"turns":turn_reports,"searches":searches,"labels":labels,"reserved_turns":reserved}}))?;
+        return Ok(());
+    }
     emit(
         &mut peer.output,
         json!({"event":"finished","job":expected,"result":state.export().result,
         "metrics":{"decisions":rows,"labels":labels,"no_evidence":no_evidence,"reserved_turns":reserved,
-            "searches":searches,"requests":peer.requests,"encoding_ns":peer.encoding_ns,"gpu_wait_ns":peer.wait_ns,
-            "input_bytes":peer.bytes,"elapsed_ns":clock.now_ns(),"phase_action_counts":phase_counts,
-            "intrinsic_requests":peer.intrinsic_requests},"ordinary_training":false}),
+            "searches":searches,"turns":turn_reports,"requests":peer.requests,"encoding_ns":peer.encoding_ns,"gpu_wait_ns":peer.wait_ns,
+            "input_bytes":peer.bytes,"elapsed_ns":clock.now_ns()},"ordinary_training":false}),
     )?;
     Ok(())
 }

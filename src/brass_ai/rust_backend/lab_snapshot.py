@@ -66,6 +66,8 @@ def capture(root, run, *, devices):
     pending = pending_paths(run, generation)
     require(not pending, 'Recover pending work with its existing backend before B01: ' + ', '.join(pending))
     signature = state['signature']
+    require(signature['config'].get('diversity', {}).get('mode', 'off') == 'off',
+            'Current qualification supports DOMiNO-off training only')
     require(type(signature) is dict and 'implementation' in signature and 'compatibility' in signature,
             'Missing signed source/runtime identity')
     execution = execution_config(signature['config']['execution'])
@@ -82,6 +84,8 @@ def capture(root, run, *, devices):
     # No optimizer load, RNG restore, source transition or utility exception.
     with torch.random.fork_rng(devices=[]):
         model, raw = load_checkpoint(checkpoint, device='cpu')
+    from brass_ai.recovery.policy_observations import install
+    install(model, signature['config'])
     require(raw['training'].get('fresh_run') and project_path(root, raw['training']['fresh_run']) == run,
             'Checkpoint is not the selected run residual learner')
     require(raw['step'] == entry['generation'] == generation and raw['model_id'] == entry['model_id'],

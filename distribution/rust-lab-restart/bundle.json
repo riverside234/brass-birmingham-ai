@@ -1,0 +1,9 @@
+{
+  "path": "distribution/rust-lab-restart/rust-lab-b01-b04-restart-r2.zip",
+  "sha256": "5d3e6874bd7ca65206432a3c30a1f95a6e25839647eca1be93cf7e5ed9da6199",
+  "bytes": 7231410,
+  "entries": 1093,
+  "implementation": "c715ade96f7025be13b29c5d3b418ce1cfdbed4e1dbfc036f97b4066ce18c8be",
+  "producer": "bc2c07c397fdc979c9d4376189e723af86620e6361e3cd7052f3500cea3709cb",
+  "lab_qualification": "Pending"
+}

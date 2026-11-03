@@ -28,16 +28,6 @@ def validate_job(job):
             and job['schedule'] == SCHEDULE, 'Unqualified teacher profile')
     admit_search_request(PROFILE,{k:v for k,v in job['search'].items() if k != 'v205_enabled'})
     e = job['expected']
-    if 'bundle_id' in e:
-        from brass_ai.recovery import teacher_diversity as D
-        bundle=D.validate_bundle(job['evaluator'])
-        require(job['diversity']==D.options() and bundle['identity']==e['bundle_id']
-                and bundle['generation']==e['generation'] and bundle['model_id']==e['model_id']
-                and bundle['export_hash']==e['export_hash'] and e['fit_id']==bundle['fit']['identity']
-                and e['coefficients']==bundle['coefficients'] and e['direction_id']==digest(bundle['directions']),
-                'Teacher objective/evaluator differs')
-        require(e['seat_contexts']==D.assignments(job['assignment_seed_identity'],run_seed=job['run_seed'],
-                model_id=e['model_id'],export_hash=e['export_hash']),'Teacher strategy stream differs')
     require(job.get('readiness',{}).get('ready') is True and job['readiness']['reward_id'] == e['reward_id'],
             'Teacher readiness deferred; no local deployment exception')
     require(e['source_fingerprint'] == source_fingerprint() and e['reward_id'] == digest(job['search']['reward'])
@@ -69,7 +59,8 @@ class Worker:
                     n = struct.unpack('<I',read(4))[0]; require(4 < n <= LIMIT,'Teacher frame bound')
                     data = read(n); size = struct.unpack('<I',data[:4])[0]
                     require(0 < size <= n-4,'Teacher metadata bound')
-                    event = (json.loads(data[4:4+size]),data[4+size:])
+                    received = time.monotonic()
+                    event = (json.loads(data[4:4+size]),data[4+size:],received)
                     while not self.stop.is_set():
                         try:self.events.put(event,timeout=.1);break
                         except queue.Full:pass
@@ -95,7 +86,7 @@ class Worker:
         while view:
             n = self.process.stdin.write(view);require(n,'Teacher input closed');view = view[n:]
 
-    def collect(self, expected, core_source, *, calibration=False):
+    def collect(self, expected, core_source, *, calibration=False, verifier=None, turn_probe=False):
         rows = []; hello = False; started = last = time.monotonic()
         try:
             while True:
@@ -107,7 +98,8 @@ class Worker:
                 if isinstance(event,BaseException):
                     self.err_reader.join(timeout=.2)
                     raise ValueError(str(event)+': '+self.stderr.decode(errors='replace'))
-                meta,payload = event; last = time.monotonic()
+                meta,payload,*stamp = event; last = time.monotonic()
+                received = stamp[0] if stamp else last
                 kind = meta['event']
                 if kind == 'hello':
                     require(not hello and not payload and meta['contract'] == CONTRACT and meta['job'] == expected
@@ -117,16 +109,22 @@ class Worker:
                 require(hello,'Missing teacher handshake')
                 if kind == 'evaluate':self.send(self.client.evaluate(meta,payload));continue
                 require(not payload,'Unexpected teacher binary payload')
-                if kind == 'label':
-                    require(not calibration and len(rows) < 32,'Unexpected/excess teacher label')
-                    rows.append(meta['row'])
-                elif kind in ('calibration','benchmark'):
-                    require((calibration is True and kind=='calibration' and meta['completed']==8
-                             or calibration=='benchmark' and kind=='benchmark') and meta['elapsed_ns']>0,'Incomplete diagnostic probe')
+                if kind == 'turn':
+                    require(not calibration and verifier is not None and len(rows)+len(meta['rows']) <= 32,
+                            'Unexpected/unverified/excess teacher turn')
+                    self.send(verifier.verify(meta,received))
+                    rows.extend(meta['rows'])
+                elif kind == 'calibration':
+                    require(calibration and meta['completed'] == 8 and meta['elapsed_ns'] > 0,'Incomplete calibration')
                     require(not self.cancel.is_set(),'Teacher calibration cancelled before publication')
                     return meta
+                elif kind == 'turn_probe':
+                    require(turn_probe and meta['job'] == expected and meta.get('diagnostic') is True
+                            and meta['metrics']['reserved_turns'] == 1 and meta['metrics']['labels'] == len(rows)
+                            and not self.cancel.is_set(), 'Incomplete/late/misrouted turn probe')
+                    return dict(meta,rows=rows)
                 elif kind == 'finished':
-                    require(not calibration and meta['job'] == expected and meta['ordinary_training'] is False
+                    require(not calibration and not turn_probe and meta['job'] == expected and meta['ordinary_training'] is False
                             and meta['metrics']['labels'] == len(rows) and meta['metrics']['reserved_turns'] == 16,
                             'Incomplete/misrouted teacher table')
                     require(not self.cancel.is_set(),'Teacher table cancelled before publication')
@@ -148,25 +146,29 @@ class TeacherCollector:
     No legacy allowance/work budget is consulted. Production adoption remains
     gated by B05/B07; this class is also the exact two-table qualification path.
     """
-    def __init__(self, executable, core_source, bootstrap, service, calibration, *, lanes=2, cancel=None):
+    def __init__(self, executable, core_source, bootstrap, service, calibration, *, lanes=2, cancel=None,
+                 model=None, history=()):
         self.executable, self.core_source, self.bootstrap = executable,core_source,bootstrap
         self.service, self.calibration = service, calibration
         require(type(lanes) is int and 1 <= lanes <= 64,'Invalid teacher lanes')
         self.lanes = lanes;self.cancel = cancel or threading.Event()
+        self.model,self.history = model,history
+        self.verifier = None
 
     def collect(self, jobs):
         if not jobs:return []
         jobs = copy.deepcopy(jobs)
         require(len({j['expected']['job_id'] for j in jobs}) == len(jobs),'Duplicate teacher job')
         for job in jobs:validate_job(job)
+        require(self.model is not None, 'Frozen independent model required for bounded turn verification')
+        from .lab_teacher_finalization import TurnVerifier
+        self.verifier = TurnVerifier(self.model,self.history,jobs,self.cancel)
         c = self.calibration
-        require(c.get('control') is None,'Diagnostic control calibration cannot collect teacher games')
         require(c['contract'] == CONTRACT and c['source'] == source_fingerprint() and c['core_source'] == self.core_source
                 and c['model_id'] == jobs[0]['expected']['model_id'] and c['export_hash'] == jobs[0]['expected']['export_hash']
                 and c['reward_id'] == jobs[0]['expected']['reward_id'] and c['device'] == str(self.service.device)
                 and c['profile'] == digest(jobs[0]['search']) and c['samples'] and c['estimate_ns'] > 0,
                 'GPU trajectory calibration identity differs')
-        require(c.get('bundle_id')==jobs[0]['expected'].get('bundle_id'),'Intrinsic cost calibration belongs to another evaluator')
         require(all(j['expected']['model_id'] == c['model_id'] and j['expected']['export_hash'] == c['export_hash']
                     and digest(j['search']) == c['profile'] for j in jobs),'Teacher round is not frozen')
         lease = self.service.channels(min(self.lanes,len(jobs)))
@@ -182,11 +184,9 @@ class TeacherCollector:
                     with Pipe(self.bootstrap,binary=False) as bootstrap:origin = bootstrap.call('init',seed=job['seed'])
                     request = dict(contract=CONTRACT,op='run',job=job,origin=origin,core_source=self.core_source,
                                    estimate_ns=c['estimate_ns'],calibration_id=digest(c))
-                    if 'bundle_id' in job['expected']:
-                        from brass_ai.recovery.domino_features import manifest
-                        request['descriptor']=manifest()
                     client = Client(endpoint,job['expected'],self.cancel)
-                    result = Worker(self.executable,request,client,self.cancel).collect(job['expected'],self.core_source)
+                    result = Worker(self.executable,request,client,self.cancel).collect(job['expected'],self.core_source,
+                        verifier=self.verifier)
                 result['metrics']['python_gpu_wait_seconds'] = client.wait_seconds
                 result['metrics']['cpu_admission'] = timings.report()
                 return result
@@ -201,63 +201,47 @@ class TeacherCollector:
             for e in owned:e.close()
 
 
-def calibrate(executable, core_source, origins, job, service, *, control=None):
+def calibrate(executable, core_source, origins, job, service):
     validate_job(job);lease = service.channels(1);e = lease.acquire();cancel = threading.Event();samples = []
     try:
-        probes=[(o,False) for o in origins]
-        if 'bundle_id' in job['expected'] and control!='context_only':probes += [(o,True) for o in origins]
-        for origin,continuation_probe in probes:
-            request = dict(contract=CONTRACT,op='calibrate',job=job,origin=origin,core_source=core_source,
-                           control=control,continuation_probe=continuation_probe)
-            if 'bundle_id' in job['expected']:
-                from brass_ai.recovery.domino_features import manifest
-                request['descriptor']=manifest()
+        for origin in origins:
+            request = dict(contract=CONTRACT,op='calibrate',job=job,origin=origin,core_source=core_source)
             client = Client(e,job['expected'],cancel)
             samples.append(Worker(executable,request,client,cancel).collect(job['expected'],core_source,calibration=True))
     finally:e.close()
     require(samples,'No GPU calibration samples')
-    if 'bundle_id' in job['expected'] and control!='context_only':
-        require(any((s.get('work') or {}).get('continuation_steps',0)>0 for s in samples),
-                'Bounded calibration did not exercise root-owner continuation; revise root corpus before qualification')
     # Includes root setup/encoding, GPU queue and finalisation: conservative and
     # hardware-measured, never the local CPU estimate. Frozen before tables run.
     estimate = max((s['elapsed_ns']+7)//8 for s in samples)
     return dict(contract=CONTRACT,source=source_fingerprint(),core_source=core_source,
         model_id=job['expected']['model_id'],export_hash=job['expected']['export_hash'],reward_id=job['expected']['reward_id'],
-        device=str(service.device),profile=digest(job['search']),bundle_id=job['expected'].get('bundle_id'),
-        control=control,estimate_ns=estimate,samples=samples)
-
-
-def matched_controls(executable,core_source,origins,job,service,diversity_calibration):
-    """Exactly two roots x three four-second probes; zero games/labels admitted."""
-    from brass_ai.recovery.domino_features import manifest
-    neutral=copy.deepcopy(job)
-    for key in ('evaluator','diversity','assignment_seed_identity','run_seed'):neutral.pop(key,None)
-    for key in ('seat_contexts','bundle_id','profile_id','fit_id','direction_id','coefficients'):neutral['expected'].pop(key,None)
-    controls={'neutral':neutral,'context_only':job,'diversity':job}
-    calibrations={'diversity':diversity_calibration}
-    for name in ('neutral','context_only'):
-        calibrations[name]=calibrate(executable,core_source,origins,controls[name],service,control=name)
-    lease=service.channels(1);endpoint=lease.acquire();cancel=threading.Event();results=[]
-    try:
-        for index,origin in enumerate(origins):
-            order=('neutral','context_only','diversity') if index%2==0 else ('diversity','context_only','neutral')
-            for name in order:
-                selected=controls[name];c=calibrations[name]
-                request=dict(contract=CONTRACT,op='benchmark',job=selected,origin=origin,core_source=core_source,
-                    control=name,descriptor=manifest(),estimate_ns=c['estimate_ns'],calibration_id=digest(c))
-                client=Client(endpoint,selected['expected'],cancel)
-                result=Worker(executable,request,client,cancel).collect(selected['expected'],core_source,calibration='benchmark')
-                results.append(dict(root=index,control=name,result=result))
-    finally:endpoint.close()
-    return dict(roots=2,probes=6,allowance_seconds=4,k=16,calibrations=calibrations,results=results,
-        new_games=0,teacher_labels_admitted=0,scope='Bounded counterbalanced latency/work comparison, not playing strength or strategy quality')
+        device=str(service.device),profile=digest(job['search']),estimate_ns=estimate,samples=samples)
 
 
 def collect_barrier(phase, state, model, *, export_hash, epoch, backend, ordinary_jobs=(), ordinary_collect=None):
     """Teacher jobs precede ordinary jobs; labels never reach ordinary callbacks."""
     jobs = phase.begin(state,model,export_hash=export_hash,epoch=epoch,native_source=source_fingerprint())
     results = backend.collect(jobs) if jobs else []
-    phase.admit_collection(results,model)
+    phase.admit_collection(results,model,verifier=backend.verifier if jobs else None)
     ordinary = ordinary_collect(ordinary_jobs) if ordinary_jobs and ordinary_collect is not None else []
     return ordinary, results
+
+
+def turn_probes(executable, core_source, origins, job, service, calibration, model, history):
+    """Two bounded typical/wide 4s/K16 turns; diagnostic rows cannot train."""
+    from .lab_teacher_finalization import TurnVerifier
+    validate_job(job)
+    lease=service.channels(1);endpoint=lease.acquire();cancel=threading.Event();results=[]
+    try:
+        for origin in origins:
+            verifier=TurnVerifier(model,history,[job],cancel,diagnostic=True)
+            request=dict(contract=CONTRACT,op='turn_probe',job=job,origin=origin,core_source=core_source,
+                estimate_ns=calibration['estimate_ns'],calibration_id=digest(calibration))
+            client=Client(endpoint,job['expected'],cancel)
+            result=Worker(executable,request,client,cancel).collect(job['expected'],core_source,
+                verifier=verifier,turn_probe=True)
+            result['verification']=verifier.cache[job['expected']['job_id']]['timings']
+            results.append(result)
+    finally:endpoint.close()
+    return dict(passed=True,diagnostic=True,turns=results,search_seconds=4.,post_search_seconds=1.,k=16,
+                scope='Fixed-root timing and verification probes; no full games or training labels')

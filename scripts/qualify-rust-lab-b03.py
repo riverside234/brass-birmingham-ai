@@ -21,19 +21,8 @@ def text_sha(path):return hashlib.sha256(Path(path).read_bytes().replace(b'\r\n'
 
 
 def verify_transfer(supplement=None):
-    if supplement is not None:
-        from brass_ai.rust_backend.lab_transfer import verify
-        return verify('b03',supplement)
-    from brass_ai.learning.contracts import require
-    from brass_ai.step5.league import implementation_id
-    manifest=ROOT/'distribution/rust-lab-b03/transfer-manifest.json'
-    receipt=json.loads(manifest.read_text(encoding='utf-8'))
-    require(receipt['contract']=='brass-lab-b03-transfer/1.0.0','Unknown B03 transfer')
-    for name,expected in receipt['files'].items():
-        path=(ROOT/name).resolve()
-        require(path.is_relative_to(ROOT) and path.is_file() and text_sha(path)==expected,'Changed B03 file: '+name)
-    require(implementation_id()==receipt['implementation'],'B03 checkout differs from the reviewed source; update the checkout, do not edit the review hash')
-    return dict(manifest_sha256=text_sha(manifest),implementation=receipt['implementation'],files=len(receipt['files']))
+    from brass_ai.rust_backend.lab_transfer import verify
+    return verify('b03',supplement)
 
 
 def lab_check(args,out):

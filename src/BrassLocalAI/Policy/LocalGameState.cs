@@ -108,7 +108,7 @@ namespace BrassLegacyAI
         {
             var row = Assignment(state, color);
             var hashes = HistoryHashes(events);
-            foreach (var record in state["records"].Where(r => (int)r["color"] == color && (int)r["revision"] <= revision).OrderByDescending(r => (int)r["revision"]))
+            foreach (var record in state["records"].Where(r => (int?)r["color"] == color && r["intent"] != null && (int)r["revision"] <= revision).OrderByDescending(r => (int)r["revision"]))
             {
                 string hash;
                 if (!hashes.TryGetValue((int)record["revision"], out hash) || (string)record["history_sha256"] != hash) continue;
@@ -128,7 +128,7 @@ namespace BrassLegacyAI
             var hashes = HistoryHashes(events);
             var records = new JArray(state["records"].Where(r => (int)r["revision"] <= revision && hashes.ContainsKey((int)r["revision"]) &&
                 (string)r["history_sha256"] == hashes[(int)r["revision"]] &&
-                !((int)r["revision"] == revision && (int)r["color"] == intent.seat)).Select(r => r.DeepClone()));
+                !((int)r["revision"] == revision && (int?)r["color"] == intent.seat)).Select(r => r.DeepClone()));
             records.Add(new JObject { ["color"] = intent.seat, ["revision"] = revision,
                 ["history_sha256"] = hashes[revision], ["intent"] = JObject.FromObject(intent) });
             state["records"] = records; state["records_sha256"] = Wire.Hash(records);

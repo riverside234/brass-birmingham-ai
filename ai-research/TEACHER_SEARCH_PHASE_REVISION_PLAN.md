@@ -1,5 +1,7 @@
 # Teacher search phase revision plan
 
+**2026-11-02 current qualification:** use the [latest-restart task-only bundle](../distribution/rust-lab-restart/README.md) and [migration plan Part 2](RUST_AI_BACKEND_MIGRATION_PLAN.md#part-2--lab-server-migrate-training-after-local-acceptance). Qualification captures the latest committed iteration (for example g390); g370 identifies the requested recipe revision. DOMiNO/AZ_DB are retired from the current teacher. The timing contract is now four seconds for search plus at most one second total for post-search work, with both actions/replans sharing the original cutoffs. The details below remain the task-only teacher specification; historical timing/version examples are superseded by this note.
+
 Date: 2026-10-29 (America/Chicago). Status: **T1/B02.5 and T2/B04 implemented; lab qualification Pending.** See the [T1 report](RUST_BACKEND_B025_REPORT.md), [B04 native export/collection report](RUST_BACKEND_B04_REPORT.md) and [B04 transfer/qualification commands](../distribution/rust-lab-b04/README.md). The phase defaults to off; the explicit B04 collector supplies the bounded lab shadow route. B05/B07 still gate production update/adoption. No existing run state was changed.
 
 This plan replaces the legacy Masked-ISMCTS teacher with an policy-only search_v1 teacher phase. The phase is meant to be switched on for roughly the last 100–500 iterations. It fits the Rust migration's B04 step (search_v1 teachers) and B05 step (PPO/PPG qualification), plus Python trainer changes that can be made now.
@@ -13,7 +15,7 @@ This plan replaces the legacy Masked-ISMCTS teacher with an policy-only search_v
 | Tables | 32 per iteration: 28 training tables and 4 held-out tables (validation-split seeds) |
 | Searched turns | 16 per table. Each seat searches one reserved turn per phase, using the existing four-phase schedule. |
 | Labels | Both actions of each searched turn: about 31 per table, or about 870 training labels per iteration |
-| Search | Rust `search_v1` Gumbel IS-MCTS. K = 16, c1 = 50, c2 = 0.1. Gumbel noise on, prior temperature 1. One session with one thread, and one 4 s whole-turn allowance. |
+| Search | Rust `search_v1` Gumbel IS-MCTS. K = 16, c1 = 50, c2 = 0.1. Gumbel noise on, prior temperature 1. One session with one thread, and one 4 s search allowance plus at most 1 s post-search work, shared across the turn. |
 | Target | π′ = softmax(l + σ(completed Q)) over every legal action, built from all completed trajectories |
 | Quality gates | None. The timeout, coverage, fallback, two-visit and diversity gates are removed. Integrity checks stay. |
 | Value | Policy-only. `teacher_value.enabled = false`, the `TEACHER_VALUE` default is off, and no teacher row enters any critic data. |
@@ -61,7 +63,7 @@ Add a separately versioned block. Leave the legacy teacher fields unchanged so h
 
 ```json
 "teacher_phase": {
-  "contract": "teacher-phase/1.0.0",
+  "contract": "teacher-phase/1.1.0",
   "mode": "off",
   "tables": {"train": 28, "held_out": 4},
   "schedule": "four-phase-teacher-turns/2.0.0",
@@ -72,6 +74,8 @@ Add a separately versioned block. Leave the legacy teacher fields unchanged so h
     "session": "brass-gumbel-is-mcts/session-v1",
     "v205_enabled": false,
     "allowance_seconds": 4.0,
+    "post_search_seconds": 1.0,
+    "timing": "search-plus-post/1.0.0",
     "sessions": 1,
     "threads_per_session": 1,
     "pending_paths": 1,
@@ -159,8 +163,8 @@ Add a separately versioned block. Leave the legacy teacher fields unchanged so h
 
 - Use exactly the `teacher_phase.search` block, admitted only through the B04 dispatch boundary (`admit_search_request`).
 - Record per search: method, algorithm and session versions, source fingerprint, model and export identity, reward id, and requested and effective K.
-- `session-v1` pins the finalisation reserve: min(1.2 s, 10% of the allowance), which is 0.4 s at 4 s.
-- The timed quota N is frozen from about 3.6 s of work time and a trajectory-cost estimate. That estimate must be calibrated for the lab GPU path (B04 item 6); the local CPU estimate does not apply.
+- `search-plus-post/1.0.0` gives the session a 4-second work cutoff and a 5-second delivery cutoff, with at most one second of cumulative post-search work. Both actions/replans narrow the same absolute budget. This supersedes the historical 0.4-second inclusive reserve for new qualification.
+- The timed quota N is frozen from the remaining 4-second search allowance and a trajectory-cost estimate. That estimate must be calibrated for the lab GPU path (B04 item 6); the local CPU estimate does not apply. Selection, labeling, verification, IPC and sealing consume the separate bounded post-work allowance and cannot admit more trajectories.
 - Record N, completed trajectories and completed halving rounds for every search. For reference, the local 4 s release completed about 490 trajectories per session (L14: 24,550 trajectories over 25 searched cases with two sessions).
 
 ### 6.2 Decisions that get labels
@@ -206,7 +210,7 @@ q[a]   = v_mix                                                     if n[a] = 0
 ### 6.5 Deadlines and failures
 
 - Reaching the work deadline is the normal end of a timed search. The completed evidence is the label.
-- Finishing after the 4 s allowance (late finalisation) does not invalidate the label. Record the overrun.
+- Finalization within the separate <=1-second post-work allowance does not invalidate a completed label. Record search and post-work separately. Replies outside the original delivery cutoff, cumulative post cap or cancellation boundary cannot be published; never extend the deadline to admit them.
 - A 30 s watchdog cancels a stuck search. It gives no label, and bounded completion plays the move.
 - These are integrity failures and give no label:
   - cancellation (game replaced, shutdown or restart)

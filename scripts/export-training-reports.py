@@ -372,6 +372,9 @@ def export(root, run, output=None, *, latest=2, extras=(), continue_export=False
                 add(path, path.relative_to(run), 'Related iteration/teaching report')
     for path in report_files(root, run / 'evaluations'):
         add(path, path.relative_to(run), 'Evaluation report or specification')
+    vp_history=run/'ratings'/'vp-history.json'
+    if vp_history.is_file():
+        add(vp_history,vp_history.relative_to(run),'Cumulative ordinary self-play learner VP totals')
     for path in report_files(root, run / 'il-kl'):
         add(path, path.relative_to(run), 'Fixed IL-KL probe manifest or initial measurement')
     for path in report_files(root,run/'policy-anchor'):
@@ -426,9 +429,11 @@ def export(root, run, output=None, *, latest=2, extras=(), continue_export=False
             if path.relative_to(run).as_posix() not in files:
                 add(path, path.relative_to(run), 'Append-only held-out rating outcomes or separate panel results',
                     document='jsonl' if key == 'records' else 'json')
-        curve = below(root, Path(slot['report']['path']).parent / 'progress.svg')
-        if curve.exists():
-            add(curve, curve.relative_to(run), 'Strength progress curve', document='svg')
+        for name,reason in (('progress.svg','Strength progress curve'),
+                            ('progress_vp.svg','Ten-iteration self-play learner VP curve')):
+            curve = below(root, Path(slot['report']['path']).parent / name)
+            if curve.exists():
+                add(curve, curve.relative_to(run), reason, document='svg')
     for comparison in state.get('temperature_ratings', []):
         reference=comparison['report'];path=below(root,reference['path'])
         require(path.is_relative_to(run/'ratings') and checksum(path.read_bytes())==reference['sha256'],

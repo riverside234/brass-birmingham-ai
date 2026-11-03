@@ -31,7 +31,7 @@ def main():
         panels=latest['panels'],source_state=dict(path=path.relative_to(ROOT).as_posix(),sha256=before))
     require(sha(path)==before,'Run advanced during refit; retry after the iteration finishes')
     output.mkdir(parents=True);write_json(output/'report.json',report)
-    ratings.plot_report(output/'progress.svg',report,saved['agents'])
+    ratings.plot_report(output/'progress.svg',report,saved['agents'],run)
     print(f'Refitted {len(games)} held-out games; report and curve: {output}')
     print('Deployment qualification is pending separate panel review. No checkpoint was published.')
 

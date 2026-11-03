@@ -14,10 +14,15 @@ import uuid
 from rust_lab_results import ROOT, export, sha, write
 
 STAGES = ('b01', 'b02', 'b025', 'b03', 'b04')
-PACKAGE = ROOT/'distribution/rust-lab-g1330'
+PACKAGE = ROOT/'distribution/rust-lab-restart'
+RUN = 'artifacts/step5/joint7-v11-2-g1290-trained-restart'
+CONFIG = 'configs/step5/joint7-v11-2-g1290-trained-restart-g370.json'
 
 
 def verify_package():
+    sys.path.insert(0, str(ROOT/'src'))
+    from brass_ai.rust_backend.lab_transfer import verify
+    verify('b01', PACKAGE/'transfer-manifest.json')
     manifest = json.loads((PACKAGE/'transfer-manifest.json').read_text(encoding='utf-8'))
     for name, expected in manifest['files'].items():
         path = (ROOT/name).resolve()
@@ -30,12 +35,17 @@ def verify_package():
     return manifest
 
 
-def run_identity(run, generation, checkpoint_hash):
+def run_identity(run, generation=None, checkpoint_hash=None):
     path = run/'state.json'
-    state = json.loads(path.read_text(encoding='utf-8')); latest = state['history'][-1]
-    if state['iteration'] != generation or latest['generation'] != generation or latest['sha256'] != checkpoint_hash:
+    data = path.read_bytes(); state = json.loads(data); latest = state['history'][-1]
+    actual = state['iteration']
+    if (type(actual) is not int or actual < 0 or latest['generation'] != actual
+            or (generation is not None and actual != generation)
+            or (checkpoint_hash is not None and latest['sha256'] != checkpoint_hash)):
         raise ValueError('Committed generation/checkpoint differs; pause training and supply its exact identity')
-    return dict(run=str(run), generation=generation, checkpoint=latest, state_sha256=sha(path),
+    if len(latest['sha256']) != 64 or any(c not in '0123456789abcdef' for c in latest['sha256']):
+        raise ValueError('Invalid committed checkpoint hash')
+    return dict(run=str(run), generation=actual, checkpoint=latest, state_sha256=hashlib.sha256(data).hexdigest(),
                 implementation=state['signature']['implementation'])
 
 
@@ -55,8 +65,6 @@ def command(stage, args, out, receipts):
                 '--bundle-sha256', '935443a477d3a52425923e3d7458a15ae8250f4296a6900c5b9088fbef864a76']
     if stage in ('b025', 'b03','b04'):
         cmd += ['--transfer-manifest', str(PACKAGE/'transfer-manifest.json')]
-    if stage in ('b025','b04'):
-        cmd += ['--teacher-profile','domino']
     if not args.fixtures_only:
         for needed in {'b02': ('b01',), 'b03': ('b02',), 'b04': ('b02', 'b03')}.get(stage, ()):
             if not receipts.get(needed): raise ValueError(stage+' needs --'+needed+' or --stage all')
@@ -86,9 +94,10 @@ def execute(cmd, log):
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--stage', choices=(*STAGES, 'all'), default='all')
-    parser.add_argument('--run', type=Path, default=Path('artifacts/step5/joint7-v11-2-grouped-lr-critic'))
-    parser.add_argument('--expected-generation', type=int, default=1330)
-    parser.add_argument('--checkpoint-sha256', default='d7e4e9473472251289b20991f423908c30a55a548a66e7be6afbc0c1f0c236b8')
+    parser.add_argument('--run', type=Path, default=Path(RUN))
+    parser.add_argument('--expected-generation', type=int, help='Optional assertion; otherwise capture the latest committed generation')
+    parser.add_argument('--checkpoint-sha256', help='Optional assertion; otherwise capture the latest committed checkpoint hash')
+    parser.add_argument('--config', type=Path, default=Path(CONFIG), help='Must match the committed run signature; never adopted by qualification')
     parser.add_argument('--device', default='cuda:0')
     for stage in ('b01', 'b02', 'b03'): parser.add_argument('--'+stage, type=Path)
     parser.add_argument('--fixtures-only', action='store_true', help='CPU development only; stage b025, b03 or b04')
@@ -96,7 +105,8 @@ def main(argv=None):
     if args.fixtures_only and (args.stage not in ('b025', 'b03', 'b04') or args.device != 'cpu'):
         parser.error('--fixtures-only requires --stage b025/b03/b04 --device cpu')
     args.run = (ROOT/args.run).resolve()
-    name = datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S%fZ')+'-g'+str(args.expected_generation)+'-'+args.stage+'-'+uuid.uuid4().hex[:8]
+    target = 'latest' if args.expected_generation is None else 'g'+str(args.expected_generation)
+    name = datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S%fZ')+'-'+target+'-'+args.stage+'-'+uuid.uuid4().hex[:8]
     out = ROOT/'artifacts/rust-backend'/name; out.mkdir(parents=True, exist_ok=False)
     report = dict(contract='brass-lab-runner/1.0.0', passed=False, lab_qualification='Pending',
         requested_generation=args.expected_generation, requested_checkpoint=args.checkpoint_sha256,
@@ -108,6 +118,16 @@ def main(argv=None):
                                 training_reference=verify_package()['training_reference'])
         identity = None if args.fixtures_only else run_identity(args.run, args.expected_generation, args.checkpoint_sha256)
         report['run'] = identity
+        if identity is not None:
+            # Resolve once, then assert these exact pins around every stage.
+            # Never follow an advancing run or qualify an older checkpoint.
+            args.expected_generation = identity['generation']
+            args.checkpoint_sha256 = identity['checkpoint']['sha256']
+            actual = json.loads((args.run/'state.json').read_text(encoding='utf-8'))['signature']['config']
+            requested = json.loads((ROOT/args.config).read_text(encoding='utf-8'))
+            if actual != requested:
+                raise ValueError('Committed config differs from --config. Supply the matching reviewed current config; qualification never adopts a config or changes a run.')
+            report['config'] = dict(path=str(args.config),sha256=sha(ROOT/args.config))
         for stage in STAGES if args.stage == 'all' else (args.stage,):
             if identity is not None and run_identity(args.run, args.expected_generation, args.checkpoint_sha256) != identity:
                 raise ValueError('Training state changed between qualification stages')

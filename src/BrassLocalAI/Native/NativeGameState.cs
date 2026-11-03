@@ -32,8 +32,15 @@ namespace BrassLegacyAI.Native
     public static class NativeGameState
     {
         public const string Format="brass-local-native-save/1.0.0";
-        public static bool IsNative(JObject state) {return (string)state?["format"]==Format || (string)state?["runtime"]==NativePackage.Backend || (string)state?["runtime"]==NativeModel.Beta.Backend || (string)state?["runtime"]==NativeModel.IL.Backend;}
+        // Envelope detection is separate from dispatch, which always reads the actor's row.
+        public static bool IsNative(JObject state) {return MixedGameState.IsMixed(state) || (string)state?["format"]==Format || NativeModel.All.Any(m=>m.Backend==(string)state?["runtime"]);}
         public static NativeModel Model(JObject state) { return NativeModel.FromBackend((string)state?["runtime"]); }
+        public static NativeModel Model(JObject state,int color)
+        { return NativeModel.FromBackend((string)LocalGameState.Assignment(state,color)["backend"]); }
+        public static int SearchK(JObject state,int color)
+        { return SearchK(MixedGameState.IsMixed(state)?LocalGameState.Assignment(state,color):state); }
+        public static double Temperature(JObject state,int color)
+        { return Temperature(MixedGameState.IsMixed(state)?LocalGameState.Assignment(state,color):state); }
         public static bool Supported(GameMetadata metadata) {return metadata!=null && (int)metadata.GameStartConfiguration.NumberOfPlayers==4 && !metadata.GameStartConfiguration.IsIntroductoryGame;}
         static string AssignmentHash(JObject s) {
             var bound=new JObject{["format"]=s["format"],["runtime"]=s["runtime"],["family"]=s["family"],
@@ -98,6 +105,7 @@ namespace BrassLegacyAI.Native
         public static JObject Read(GameMetadata metadata,bool pending)
         {
             var s=SaveExtensions.Get(metadata);
+            if(MixedGameState.IsMixed(s))return MixedGameState.Read(metadata,pending);
             var model=Model(s);
             if(!Supported(metadata) || (string)s["format"]!=Format || (string)s["runtime"]!=model.Backend || (string)s["family"]!="nn" ||
                 (string)s["rules"]!=Wire.Rules || (string)s["schema"]!=Wire.Version || (string)s["game_id"]!=metadata.GameId ||

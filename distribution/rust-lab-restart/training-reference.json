@@ -1,0 +1,25 @@
+{
+  "run": "artifacts/step5/joint7-v11-2-g1290-trained-restart",
+  "generation": 370,
+  "games_done": 118400,
+  "checkpoint": {
+    "path": "artifacts/step5/joint7-v11-2-g1290-trained-restart/generation-0370.pt",
+    "sha256": "198af418247e6559eb4e2413acb02afd54e7baa5e446a30fb6ce1442c37dfcdc",
+    "model_id": "0b8a138a2cb3a73bce0633c2080d4c87c1ba66d15a58889b0df0b10b2376895f",
+    "generation": 370
+  },
+  "implementation": "ea569b6238657d0667b3550efa2a0ea0e0f5960699a38cbb77991c91d0fd93b6",
+  "report_directory": "results/joint7-v11-2-g1290-trained-restart-g0370-20261102T221517838215Z",
+  "state_export_sha256": "6bcbe4a4d1eb5efde2215ef4e6bf2c16239167f05a38a7683395ea67b824f1ba",
+  "report_manifest_sha256": "22d93376916f964ca8893b12763fc4b0205a437b96790d66b01f3596b03ed65c",
+  "recorded_config_sha256": "b469a7881c6a6278079b12906b87d2975a3d89fe0f5c10f6716cbeaa6f875d5a",
+  "requested_config": "configs/step5/joint7-v11-2-g1290-trained-restart-g370.json",
+  "requested_config_sha256": "f573a1d251cc39ed389aa3dab229d654ba8b2ab31c044b92159368dac522a4d2",
+  "recorded_config_predates_g370_revision": true,
+  "config_adoption": "Not inferred from the report; require matching committed lab signature",
+  "qualification_target": "Latest committed restart iteration, e.g. g390; capture generation/hash once and reject changes during qualification",
+  "reference_generation_only": true,
+  "domino_enabled": false,
+  "az_db_enabled": false,
+  "qualification": "Pending"
+}

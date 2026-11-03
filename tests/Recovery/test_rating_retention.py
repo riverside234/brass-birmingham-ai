@@ -54,10 +54,13 @@ class RatingRetention(unittest.TestCase):
         before_games=r.read_games(self.root,self.state['ratings']);before_panels=r.panel_history(self.root,self.state['ratings'])
         self.cfg['retention']['enabled']=True
         write_json(self.run/'state.json',self.state)
+        vp=self.run/'ratings/slots/generation-000010/progress_vp.svg';vp.write_text('<svg/>')
+        vp_history=self.run/'ratings/vp-history.json';vp_history.write_text('{"iterations":[]}')
         r.compact_history(self.root,self.run,self.state)
         self.assertEqual([s['generation'] for s in self.state['ratings']['slots']],list(range(20,111,10)))
         decision=self.cleanup()
         self.assertFalse((self.run/'ratings/slots/generation-000010').exists())
+        self.assertFalse(vp.exists());self.assertEqual(vp_history.read_text(),'{"iterations":[]}')
         self.assertEqual(len(list((self.run/'ratings/slots').glob('generation-*'))),10)
         self.assertEqual(r.read_games(self.root,self.state['ratings']),before_games)
         self.assertEqual(r.panel_history(self.root,self.state['ratings']),before_panels)

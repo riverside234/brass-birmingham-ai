@@ -49,6 +49,7 @@ namespace BrassLegacyAI
         JArray nativeRecall = new JArray();
         AiExecutionScope resources;
         JObject pendingState;
+        string assignmentHash;
         Ticket ticket;
         IntentState intent;
         readonly Queue<string[]> continuation = new Queue<string[]>();
@@ -116,7 +117,7 @@ namespace BrassLegacyAI
                 var state = LocalGameState.Read(app.Metadata);
                 int actor = (int)app.Game.GameProgressInformation.CurrentPlayer.Color;
                 var assignment = LocalGameState.Assignment(state, actor);
-                bool native = NativeGameState.IsNative(state);
+                bool native = (string)assignment["kind"] == "native";
                 if ((string)assignment["kind"] != (native ? "native" : "legacy")) throw new InvalidOperationException("An AI turn was requested for a human player.");
                 if (active != null && ReferenceEquals(active.app, app) && active.revision == app.Game.Revision) return;
                 CancelActive();
@@ -135,7 +136,7 @@ namespace BrassLegacyAI
                 if(native)bridge.budget=bridge.nativeTurn.BindDeadline(NativeJob.TotalAllowanceMilliseconds(bridge.nativeAllowance));
                 if (!native) bridge.profile.work_limit = SearchWorkLimit;
                 bridge.composition = Host.Composition((JObject)state["configuration"]);
-                bridge.controls = AiTurnControls.Attach(router, (native ? NativeGameState.Model(state).Label : ProfileCatalog.Label(bridge.strategy)) + " · " + DifficultyCatalog.Label(difficulty));
+                bridge.controls = AiTurnControls.Attach(router, (native ? NativeGameState.Model(state,actor).Label : ProfileCatalog.Label(bridge.strategy)) + " · " + DifficultyCatalog.Label(difficulty));
                 bridge.StartRequest(state);
             }
             catch (Exception error)
@@ -157,6 +158,8 @@ namespace BrassLegacyAI
         }
         void StartRequest(JObject state)
         {
+            if(assignmentHash==null)assignmentHash=(string)state["assignment_sha256"];
+            else if(assignmentHash!=(string)state["assignment_sha256"])throw new InvalidOperationException("AI assignment changed during its turn");
             nativeDeliveryActive=false;
             coordinator?.Dispose(); coordinator = null;
             if (resources == null) resources = AiExecutionResources.BeginComputation();
@@ -201,11 +204,10 @@ namespace BrassLegacyAI
             budget=nativeTurn.BindDeadline((int)budget);
             planningRequests++;
             nativeAction=0;
-            nativeBackend=NativeJob.WithDeadline(NativeInput.Request(input,instance,app.Metadata.GameId,startedGeneration+1,nativeAllowance),clock,(int)budget,NativeGameState.SearchK(state),NativeGameState.Temperature(state));
+            nativeBackend=NativeJob.WithDeadline(NativeInput.Request(input,instance,app.Metadata.GameId,startedGeneration+1,nativeAllowance),clock,(int)budget,NativeGameState.SearchK(state,actor),NativeGameState.Temperature(state,actor));
             nativeExecution=AiExecutionScheduler.Submit(nativeBackend);resources.Observe(nativeExecution);
         }
-        // Called by the existing liquidation route before its V4 policy. No
-        // single-seat substitution is possible in an NN table, including failure.
+        // Liquidation uses the same immutable per-seat controller as ordinary turns.
         public static bool PlayNativeDebt(PlayGameUseCase owner)
         {
             var history=ReflectionAccess.Get<IGameHistory>(owner,"_gameHistory");var app=history.CurrentGame;
@@ -214,6 +216,7 @@ namespace BrassLegacyAI
             var router=ReflectionAccess.Get<IRouter>(output,"_router");
             try {
                 var state=LocalGameState.Read(app.Metadata);int actor=(int)app.Game.GameProgressInformation.CurrentPlayer.Color;
+                if((string)LocalGameState.Assignment(state,actor)["kind"]!="native")return false;
                 if(active!=null && ReferenceEquals(active.app,app) && active.revision==app.Game.Revision)return true;
                 CancelActive();
                 var bridge=active=new GameObject("Brass native debt").AddComponent<LocalTurnBridge>();
@@ -222,7 +225,7 @@ namespace BrassLegacyAI
                 var lease=NativeTurnClock.For(app,actor,true);bridge.nativeTurn=lease;bridge.instance=lease.Instance;bridge.clock=lease.Clock;
                 bridge.budget=bridge.nativeAllowance=DifficultyCatalog.Milliseconds(LocalGameState.Difficulty(state,LocalGameState.Assignment(state,actor)));
                 bridge.budget=lease.BindDeadline(NativeJob.TotalAllowanceMilliseconds(bridge.nativeAllowance));
-                bridge.composition=Host.Composition((JObject)state["configuration"]);bridge.controls=AiTurnControls.Attach(router,NativeGameState.Model(state).Label+" · liquidation");bridge.StartRequest(state);
+                bridge.composition=Host.Composition((JObject)state["configuration"]);bridge.controls=AiTurnControls.Attach(router,NativeGameState.Model(state,actor).Label+" · liquidation");bridge.StartRequest(state);
             } catch(Exception error){CancelActive();LocalMenu.ShowError(router,"NN stopped. The NN table and save are preserved.\n"+error.Message,error);}
             return true;
         }
@@ -296,14 +299,14 @@ namespace BrassLegacyAI
                     if (++replans > 1) throw;
                     continuation.Clear(); StartRequest(LocalGameState.Read(app.Metadata)); return;
                 }
-                if(native && !NativePackage.Enabled)throw new InvalidOperationException("Alpha Test was disabled; stop this NN table or replace the whole table with V4.");
+                if(native && !NativeModel.FromBackend(nativeBackend.Name).Enabled)throw new InvalidOperationException("This seat's NN model was disabled; restore its model to continue.");
                 // Reading the native save validates current model/export/family
                 // identities. Revision/actor/game reference/generation were
                 // checked at entry; receipt equality covers all remaining
                 // complete-action validator inputs immediately before mutation.
                 if(native) {
                     var currentState=LocalGameState.Read(app.Metadata);
-                    if(!NativeGameState.IsNative(currentState) || (string)LocalGameState.Assignment(currentState,actor)["kind"]!="native" ||
+                    if(assignmentHash!=(string)currentState["assignment_sha256"] || !NativeGameState.IsNative(currentState) || (string)LocalGameState.Assignment(currentState,actor)["kind"]!="native" ||
                         DifficultyCatalog.Milliseconds(LocalGameState.Difficulty(currentState,LocalGameState.Assignment(currentState,actor)))!=nativeAllowance)
                         throw new InvalidOperationException("Native assignment changed before commit");
                     CheckNativeDeadline(true);

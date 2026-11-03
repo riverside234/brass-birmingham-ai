@@ -38,13 +38,8 @@ namespace BrassLegacyAI
         {
             if (family == AiFamily.V4) return v4;
             if (family == AiFamily.Gamma) return gamma;
-            if (family == AiFamily.AlphaTest) return Array.AsReadOnly(new[]{new AiCatalogEntry(family,"alpha-test","Alpha Test",
-                "Current test neural network (g890). Neutral context; this is not the final trained model.",
-                Native.NativeModel.Alpha.Enabled,"Test runtime is not installed"),
-                new AiCatalogEntry(family,"beta","Beta","Test neural network g1290 · Neutral context.",
-                    Native.NativeModel.Beta.Enabled,"Beta runtime is not installed"),
-                new AiCatalogEntry(family,"il","IL","Imitation-learning model · Neutral context. Search values combine its win, placement and VP predictions.",
-                    Native.NativeModel.IL.Enabled,"IL runtime is not installed")});
+            if (family == AiFamily.AlphaTest) return Array.AsReadOnly(Native.NativeModel.All.Select(model =>
+                new AiCatalogEntry(family, model.Key, model.Label, model.Description, model.Enabled, "Model runtime is not installed")).ToArray());
             throw new ArgumentOutOfRangeException("family");
         }
         public static AiCatalogEntry Random(AiFamily family)

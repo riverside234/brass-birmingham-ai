@@ -13,6 +13,10 @@ namespace BrassLegacyAI
             public bool Human;
             public string Style, Difficulty;
             public string NeuralFocus = "neutral";
+            public AiFamily Family;
+            public string NeuralChoice = "alpha-test";
+            public int SearchK = 16;
+            public double Temperature = 1.0;
         }
         public AiFamily Family;
         public int PlayerCount;
@@ -25,13 +29,12 @@ namespace BrassLegacyAI
         public string Encode()
         {
             return new JObject {
-                ["version"] = 2, ["family"] = Family == AiFamily.AlphaTest ? "nn" : "v4",
+                ["version"] = 3,
                 ["players"] = PlayerCount, ["introductory"] = Introductory,
-                ["nn_search_k"] = SearchK,
-                ["nn_temperature"] = Temperature,
-                ["nn_model"] = NeuralChoice,
                 ["seats"] = new JArray(Seats.Select(s => new JObject {
-                    ["human"] = s.Human, ["style"] = s.Style, ["difficulty"] = s.Difficulty, ["nn_focus"] = s.NeuralFocus }))
+                    ["human"] = s.Human, ["style"] = s.Style, ["difficulty"] = s.Difficulty, ["nn_focus"] = s.NeuralFocus,
+                    ["family"] = s.Family == AiFamily.AlphaTest ? "nn" : "v4", ["nn_model"] = s.NeuralChoice,
+                    ["nn_search_k"] = s.SearchK, ["nn_temperature"] = s.Temperature }))
             }.ToString(Newtonsoft.Json.Formatting.None);
         }
 
@@ -40,9 +43,10 @@ namespace BrassLegacyAI
             if (String.IsNullOrEmpty(text) || text.Length > 8192) return null;
             try {
                 var value = JObject.Parse(text);
-                if ((int?)value["version"] != 2 || value["players"]?.Type != JTokenType.Integer ||
+                int? version = (int?)value["version"];
+                if ((version != 2 && version != 3) || value["players"]?.Type != JTokenType.Integer ||
                     value["introductory"]?.Type != JTokenType.Boolean) return null;
-                string family = (string)value["family"];
+                string family = version == 2 ? (string)value["family"] : "v4";
                 var seats = value["seats"] as JArray;
                 int count = (int)value["players"];
                 var k = value["nn_search_k"];
@@ -70,12 +74,22 @@ namespace BrassLegacyAI
                         !DifficultyCatalog.Contains((string)seat["difficulty"])) return null;
                     var focus = seat["nn_focus"];
                     if (focus != null && (focus.Type != JTokenType.String || !Native.NativeFocus.Valid((string)focus))) return null;
+                    string seatFamily = version == 2 ? family : (string)seat["family"];
+                    string seatModel = version == 2 ? result.NeuralChoice : (string)seat["nn_model"];
+                    var seatK = version == 2 ? k : seat["nn_search_k"];
+                    var seatT = version == 2 ? temperature : seat["nn_temperature"];
+                    if ((seatFamily != "v4" && seatFamily != "nn") || !Native.NativeModel.ValidChoice(seatModel) ||
+                        (version == 3 && (seatK == null || seatT == null)) ||
+                        (seatK != null && (seatK.Type != JTokenType.Integer || !Native.NativePackage.ValidSearchK((int)seatK))) ||
+                        (seatT != null && ((seatT.Type != JTokenType.Float && seatT.Type != JTokenType.Integer) || !Native.NativePackage.ValidTemperature((double)seatT)))) return null;
                     result.Seats[i] = new Seat { Human = (bool)seat["human"], Style = (string)seat["style"], Difficulty = (string)seat["difficulty"],
+                        Family = seatFamily == "nn" ? AiFamily.AlphaTest : AiFamily.V4, NeuralChoice = seatModel,
+                        SearchK = seatK == null || (int)seatK == 32 ? 16 : (int)seatK, Temperature = seatT == null ? 1.0 : (double)seatT,
                         // Menu defaults now offer only the neutral NN. Retain
                         // the remaining settings when reading a former tag choice.
                         NeuralFocus = "neutral" };
                 }
-                if (result.Family == AiFamily.AlphaTest && (count != 4 || result.Introductory)) return null;
+                if (version == 2 && result.Family == AiFamily.AlphaTest && (count != 4 || result.Introductory)) return null;
                 return result;
             } catch (Exception e) when (e is Newtonsoft.Json.JsonException || e is ArgumentException || e is FormatException || e is InvalidCastException || e is OverflowException) {
                 return null;

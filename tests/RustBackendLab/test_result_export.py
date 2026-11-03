@@ -62,12 +62,13 @@ class Results(unittest.TestCase):
             result = subprocess.run(['git', 'check-ignore', '-q', '--no-index', 'results/rust-lab-qualification/'+name], cwd=ROOT)
             self.assertEqual(result.returncode, 1)
 
-    def fixture_run(self, statuses, *, stage='all', preflight_fail=False):
-        run = self.root/'artifacts/step5/joint7-v11-2-grouped-lr-critic'
+    def fixture_run(self, statuses, *, stage='all', preflight_fail=False, advance=False):
+        run = self.root/runner.RUN
         run.mkdir(parents=True)
-        reports.write(run/'state.json', dict(iteration=1330, history=[dict(generation=1330,
-            sha256='d7e4e9473472251289b20991f423908c30a55a548a66e7be6afbc0c1f0c236b8')], signature=dict(implementation='original')))
-        package = self.root/'distribution/rust-lab-g1330'; package.mkdir(parents=True)
+        reports.write(run/'state.json', dict(iteration=390, history=[dict(generation=390,
+            sha256='b'*64)], signature=dict(implementation='original',config={'fixture':True})))
+        reports.write(self.root/runner.CONFIG,{'fixture':True})
+        package = self.root/'distribution/rust-lab-restart'; package.mkdir(parents=True)
         reports.write(package/'transfer-manifest.json', {})
         calls = []
         def execute(cmd, log):
@@ -77,10 +78,14 @@ class Results(unittest.TestCase):
             out = Path(cmd[cmd.index(option)+1]); out.mkdir()
             reports.write(out/'qualification.json', dict(passed=passed, lab_qualification='Pending' if not passed else 'Fixture success'))
             log.write_text('console evidence')
+            if advance:
+                state=json.loads((run/'state.json').read_text())
+                state['iteration']=391;state['history'].append(dict(generation=391,sha256='c'*64))
+                reports.write(run/'state.json',state)
             return code
         with patch.object(runner, 'ROOT', self.root), patch.object(runner, 'PACKAGE', package), \
              patch.object(runner, 'verify_package', side_effect=ValueError('bad transfer') if preflight_fail else None,
-                          return_value={'training_reference': {'generation': 1330}}), \
+                          return_value={'training_reference': {'generation': 370}}), \
              patch.object(runner, 'execute', side_effect=execute), \
              patch.object(runner, 'export', side_effect=lambda path: reports.export(path, root=self.root)):
             code = runner.main(['--stage', stage, '--run', str(run)])
@@ -97,7 +102,18 @@ class Results(unittest.TestCase):
             self.assertTrue(path.is_relative_to(self.root/'artifacts/rust-backend'))
         self.assertIn('--transfer-manifest', calls[2]); self.assertIn('--transfer-manifest', calls[3])
         self.assertIn('--transfer-manifest', calls[4])
-        for index in (2,4):self.assertEqual(calls[index][calls[index].index('--teacher-profile')+1],'domino')
+        for cmd in calls:self.assertNotIn('--teacher-profile',cmd)
+        self.assertEqual(result['run']['generation'],390)
+        self.assertEqual(result['run']['checkpoint']['sha256'],'b'*64)
+        for cmd in calls[2:]:
+            self.assertEqual(cmd[cmd.index('--expected-generation')+1],'390')
+        for cmd in calls[3:]:
+            self.assertEqual(cmd[cmd.index('--checkpoint-sha256')+1],'b'*64)
+
+    def test_latest_is_frozen_and_advancing_run_stops(self):
+        code,result,calls=self.fixture_run([(0,True)],advance=True)
+        self.assertEqual(code,1);self.assertFalse(result['passed']);self.assertEqual(len(calls),1)
+        self.assertIn('Committed generation/checkpoint differs',result['error'])
 
     def test_failure_exports_and_stops_before_next_stage(self):
         code, result, calls = self.fixture_run([(7, False)])

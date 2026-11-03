@@ -46,12 +46,6 @@ class Diversity:
             self.validate_tensors()
         self.pending=None;self.targets={};self.train_keys=set();self.heldout_keys=set();self.report={};self.steps=Counter()
         self.target_receipts={};self._indices=weakref.WeakKeyDictionary()
-        self.search_normalization_proven=False
-        self.search_fit=copy.deepcopy(saved.get('search_fit')) if saved else None
-        self.fit_diagnostics=copy.deepcopy(saved.get('fit_diagnostics')) if saved else None
-        if self.search_fit is not None:
-            from .domino_search_fit import validate
-            validate(self.search_fit)
         self.change_regime(regime)
 
     def change_regime(self,regime):
@@ -69,7 +63,6 @@ class Diversity:
     def prepare(self,ds,train_ids,heldout_ids):
         start=time.perf_counter()
         observations,report=S.prepare(ds,train_ids,self.state,self.config)
-        self.search_normalization_proven=bool(observations) and all(o['phases']==[7,8,12,4] for o in observations)
         self.pending=S.advance(self.state,self.config,observations,self.state['generation']+1)
         self.targets={row_key(ds,i):r['_domino_target'] for i,r in enumerate(ds.rows) if '_domino_target' in r}
         require(len(self.targets)==sum('_domino_target' in r for r in ds.rows),'Duplicate intrinsic decision identity')
@@ -161,19 +154,17 @@ class Diversity:
 
     def snapshot(self):
         return copy.deepcopy(dict(head=self.head.state_dict(),optimizers={p:o.state_dict() for p,o in self.optimizers.items()},
-            steps=self.steps,search_fit=self.search_fit,fit_diagnostics=self.fit_diagnostics))
+            steps=self.steps))
 
     def restore(self,s):
         self.head.load_state_dict(s['head'])
         for p,o in self.optimizers.items():o.load_state_dict(s['optimizers'][p])
         self.steps=copy.deepcopy(s['steps'])
-        self.search_fit=copy.deepcopy(s.get('search_fit'));self.fit_diagnostics=copy.deepcopy(s.get('fit_diagnostics'))
 
     def payload(self):
         require(self.pending is not None,'DOMiNO checkpoint requires pending committed evidence')
         self.validate_tensors()
         s=dict(config=self.config,state=self.pending,head=self.head.state_dict(),optimizers={p:o.state_dict() for p,o in self.optimizers.items()})
-        if self.search_fit is not None:s.update(search_fit=self.search_fit,fit_diagnostics=self.fit_diagnostics)
         return dict(s,identity=bundle_id(s))
 
     def committed(self,generation):
@@ -202,8 +193,6 @@ class Diversity:
             target_rms=(target_squared/len(chosen))**.5 if chosen else None,
             by_strategy={z:dict(rows=s['rows'],mse=s['sum']/s['rows']) for z,s in by_strategy.items()})
         self.report['retained_optimizer_steps']=dict(self.steps)
-        if self.search_fit is not None and self.search_fit['collection_generation']==self.state['generation']:
-            self.fit_diagnostics=copy.deepcopy(self.report['intrinsic_heldout'])
 
 
 class PPGCompanions:

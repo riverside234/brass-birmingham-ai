@@ -93,7 +93,7 @@ def _ticks(start, stop, count):
     return ticks
 
 
-def _endpoint_label(axes, generation, score, color):
+def _endpoint_label(axes, generation, score, color, *, prefix='pl'):
     """Reserve a physical gutter so endpoint text never covers the evidence.
 
     Measure the formatted value rather than assuming three-digit ratings. The
@@ -121,8 +121,8 @@ def _endpoint_label(axes, generation, score, color):
                   edgecolor='#C9DEDF', linewidth=.8),
         arrowprops=dict(arrowstyle='-', color=color, linewidth=.9,
                         shrinkA=4, shrinkB=6, relpos=(0., .5)), zorder=8)
-    annotation.set_gid('pl-recent-latest-label')
-    annotation.arrow_patch.set_gid('pl-recent-latest-leader')
+    annotation.set_gid(prefix + '-recent-latest-label')
+    annotation.arrow_patch.set_gid(prefix + '-recent-latest-leader')
 
 
 def render(report, output, *, preview=None, agents=None, max_points=DEFAULT_MAX_POINTS):
@@ -308,4 +308,24 @@ def render(report, output, *, preview=None, agents=None, max_points=DEFAULT_MAX_
                 fig.savefig(preview, format='png', dpi=150, facecolor=paper)
         finally:
             plt.close(fig)
+
+
+def render_progress(report, output, *, run=None, state=None, persist_vp=False, history_sources=(),
+                    preview=None, vp_preview=None, agents=None, max_points=DEFAULT_MAX_POINTS):
+    """Generate both progress charts, leaving PL evidence and rendering unchanged."""
+    from .vp_plot import companion
+    output = Path(output)
+    if output.name.lower() == 'progress_vp.svg':
+        raise ValueError('progress_vp.svg is reserved for the companion VP chart; choose another PL output name')
+    render(report, output, preview=preview, agents=agents, max_points=max_points)
+    generation = report.get('generation')
+    if generation is None:
+        if agents is not None:
+            generation = max(e['checkpoint']['generation'] for name, e in agents.items()
+                if name in report['ratings'] and e['kind'] == 'model')
+        else:
+            generation = max(int(name.removeprefix('generation-')) for name in report['ratings']
+                if name.startswith('generation-') and name.removeprefix('generation-').isdigit())
+    return companion(output, generation, run=run, state=state, persist=persist_vp,
+                     history_sources=history_sources, preview=vp_preview)
 

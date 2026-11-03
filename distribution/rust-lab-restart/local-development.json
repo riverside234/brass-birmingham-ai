@@ -1,0 +1,91 @@
+{
+  "passed": true,
+  "implementation": "c715ade96f7025be13b29c5d3b418ce1cfdbed4e1dbfc036f97b4066ce18c8be",
+  "producer": "bc2c07c397fdc979c9d4376189e723af86620e6361e3cd7052f3500cea3709cb",
+  "local_date": "2026-11-02",
+  "timezone": "America/Chicago",
+  "python_suite": {
+    "tests": 125,
+    "skipped": 2,
+    "seconds": 145.591,
+    "implementation": "2f792d48ba3640aa58c6a1885ab967ce6e1a2663bb7517c51c51c74d91b05481",
+    "scope": "B01/B02/B02.5/B03/B04, result export, g370 recipe; before final native continuation work accounting"
+  },
+  "pre_latest_pin_followup": {
+    "tests": 17,
+    "skipped": 1,
+    "seconds": 12.778,
+    "implementation": "6ddafa0851eaf1defb7ca0df604364557ca1f3e10e72a9a596a16b3a11de1578",
+    "scope": "Refresh, export/failure/defer, actual native 8-count and one timed turn"
+  },
+  "current_source_followup": {
+    "tests": 16,
+    "skipped": 1,
+    "scope": "Latest-g390 capture, original receipt wiring, advance rejection, export/failure/defer, refresh invariants"
+  },
+  "native": {
+    "tests": 32,
+    "failed": 0,
+    "scope": "Pinned sealed core plus current teacher exports, Windows GNU release"
+  },
+  "timing": {
+    "scope": "Authored small CPU neural model; not the g370 checkpoint or lab CUDA",
+    "typical": {
+      "budget": {
+        "deadline_ns": 5000791700,
+        "reserve_ns": 1000000000,
+        "started_ns": 791700,
+        "work_deadline_ns": 4000791700
+      },
+      "commit_ns": 654100,
+      "elapsed_ns": 3033728400,
+      "index": 1,
+      "labels_ns": 543700,
+      "native_post_ns": 2722700,
+      "post_search_ns": 67451600,
+      "search_ns": 2966276800,
+      "selection_ns": 1132800,
+      "timing": "search-plus-post/1.0.0",
+      "verification_ipc_ns": 64728900
+    },
+    "complex_legal_actions": 413,
+    "complex": {
+      "budget": {
+        "deadline_ns": 5000840400,
+        "reserve_ns": 1000000000,
+        "started_ns": 840400,
+        "work_deadline_ns": 4000840400
+      },
+      "commit_ns": 1483000,
+      "elapsed_ns": 4511773500,
+      "index": 1,
+      "labels_ns": 1468700,
+      "native_post_ns": 9072100,
+      "post_search_ns": 520731300,
+      "search_ns": 3991042200,
+      "selection_ns": 4278700,
+      "timing": "search-plus-post/1.0.0",
+      "verification_ipc_ns": 511659200
+    }
+  },
+  "logs": {
+    "artifacts/rust-backend/g370-refresh/python-final.log": "aaa877e2f8bf40b0591f4160f82fb0acae1161b4f144e72ae6b87e0e4a06a721",
+    "artifacts/rust-backend/g370-refresh/current-source-tests.log": "9ea4daffec8f9170c7a93cf06e79b4bb684b1e43d9cb32e3d261fe11d6be7d1c",
+    "artifacts/rust-backend/g370-refresh/latest-state-tests.log": "85a7d4eb977840d2a6c799a700ce60c01408939910757bd250c804a5ebdeabad",
+    "artifacts/rust-backend/g370-refresh/native-final.log": "a2430015f4f96a3d91ec9016054aa5a668598f8ed64299cba34ba333acb465b2",
+    "artifacts/rust-backend/g370-refresh/complex-probe.log": "e35e28dd539e50061a856d24ef2ff38e65a871a115b9dde777e76b530e90e281",
+    "artifacts/rust-backend/g370-refresh/complex-probe.json": "1fd8d75410fce4932b0baf94324ab24ca81acfc9b6c9b0dcf7ca39e4436a940d",
+    "artifacts/rust-backend/g370-refresh/source-validation.json": "2e0aee7f711ba485a0dea2fe7d8841bd75dc15ce42ea70267788f8e567db1f85",
+    "artifacts/rust-backend/g370-refresh/source-reviews-applied.json": "38ee96306fc8b4737eed302eefe053be2defc0e995554e4fd9e4a7f0a037c42e",
+    "artifacts/rust-backend/g370-refresh/overlay.json": "54633664a292e4aef5efba170be41620c2ec9cfc685a1577ccf6b9d7e391b5fb"
+  },
+  "lab_qualification": "Pending",
+  "production_training_modified": false,
+  "installed_game_modified": false,
+  "limits": [
+    "No actual g370 checkpoint/CUDA qualification locally",
+    "No whole-game strength campaign or production update",
+    "Typical early finish follows frozen quota; 4 seconds is the search cutoff, not a forced delay",
+    "Timing samples do not establish broad speedup or hard real-time behavior"
+  ]
+}
