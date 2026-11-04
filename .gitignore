@@ -522,6 +522,7 @@ build/
 .env
 .env.*
 !.env.example
+/.env.results-git
 *.pem
 *.key
 

@@ -575,9 +575,16 @@ def main():
                         help='Skip unchanged files already in previous same-run exports; record their locations in the manifest')
     parser.add_argument('--extra', action='append', default=[], help='Additional JSON report or directory; repeat as needed')
     parser.add_argument('--no-push', action='store_true', help='Local export only; do not initialize/fetch/commit/push results Git')
+    parser.add_argument('--push-only', action='store_true', help='Retry committed results uploads without exporting again')
     parser.add_argument('--results-remote', default=results_git.REMOTE, help='Independent results repository URL')
     args = parser.parse_args()
     try:
+        require(not (args.no_push and args.push_only), '--push-only cannot be combined with --no-push')
+        if args.push_only:
+            with results_git.transaction(args.root, args.results_remote) as directory:
+                commit = results_git.push(args.root, directory, args.results_remote)
+                print(f'Uploaded results commit {commit} to {args.results_remote}')
+            return
         def collect():
             return export(args.root, args.run, args.output, latest=args.latest, extras=args.extra,
                           continue_export=args.continue_export)

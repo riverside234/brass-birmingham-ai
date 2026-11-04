@@ -6,6 +6,7 @@ from pathlib import Path
 import shutil
 import subprocess
 import tempfile
+import results_git_auth
 
 
 REMOTE = 'https://github.com/riverside234/ai-training-results.git'
@@ -16,16 +17,22 @@ def require(value, message):
         raise ValueError(message)
 
 
-def git(directory, *args, data=None, allowed=(0,)):
+def git(directory, *args, data=None, allowed=(0,), auth_root=None, auth_remote=None):
     env = dict(os.environ, GIT_TERMINAL_PROMPT='0', GCM_INTERACTIVE='Never')
     for name in ('GIT_DIR', 'GIT_WORK_TREE', 'GIT_INDEX_FILE', 'GIT_OBJECT_DIRECTORY',
                  'GIT_ALTERNATE_OBJECT_DIRECTORIES', 'GIT_COMMON_DIR'):
         env.pop(name, None)
-    result = subprocess.run(['git', '-c', 'core.longpaths=true', '--literal-pathspecs', '-C', str(directory), *args],
+    authentication = results_git_auth.git_options(auth_root, auth_remote, env) if auth_root is not None else []
+    literal = [] if args[0] == 'check-ignore' else ['--literal-pathspecs']
+    result = subprocess.run(['git', '-c', 'core.longpaths=true', *authentication,
+                             *literal, '-C', str(directory), *args],
                             input=data, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                             env=env, timeout=300)
     if result.returncode not in allowed:
         message = result.stderr.decode('utf-8', 'replace').strip()
+        if 'could not read Username' in message or 'Authentication failed' in message:
+            message += ('\nConfigure credentials once with: python scripts/results_git_auth.py configure'
+                        '\nTo retry an already committed upload: python scripts/export-training-reports.py --push-only')
         raise ValueError(f'Results Git {args[0]} failed: {message}')
     return result
 
@@ -79,7 +86,7 @@ def prepare(root, remote=REMOTE):
         artifacts.mkdir(exist_ok=True)
         with tempfile.TemporaryDirectory(prefix='results-git-', dir=artifacts) as temp:
             clone = Path(temp) / 'checkout'
-            git(root, 'clone', '--no-checkout', '--', remote, str(clone))
+            git(root, 'clone', '--no-checkout', '--', remote, str(clone), auth_root=root, auth_remote=remote)
             git(clone, 'config', 'core.autocrlf', 'false')
             git(clone, 'config', 'core.longpaths', 'true')
             if head(clone) is None:
@@ -112,9 +119,9 @@ def transaction(root, remote=REMOTE):
             stream.write(str(os.getpid()) + '\n')
         require(not git(directory, 'diff', '--cached', '--name-only', '-z').stdout,
                 'Results index has staged changes; finish that commit before automatic export')
-        refs = git(directory, 'ls-remote', '--heads', 'origin', 'refs/heads/main').stdout
+        refs = git(directory, 'ls-remote', '--heads', 'origin', 'refs/heads/main', auth_root=root, auth_remote=remote).stdout
         if refs:
-            git(directory, 'fetch', 'origin', 'refs/heads/main:refs/remotes/origin/main')
+            git(directory, 'fetch', 'origin', 'refs/heads/main:refs/remotes/origin/main', auth_root=root, auth_remote=remote)
             remote_head = head(directory, 'refs/remotes/origin/main')
             local = head(directory)
             require(local is not None, 'Results HEAD is missing')
@@ -180,6 +187,12 @@ def publish(root, directory, output, manifest, remote=REMOTE):
         data=b'\0'.join(path.encode('utf-8') for path in sorted(paths)) + b'\0')
     if git(directory, 'diff', '--cached', '--quiet', allowed=(0, 1)).returncode:
         git(directory, 'commit', '-m', f'Export {Path(manifest["run"]).name} g{manifest["committed_generation"]:04d}')
+    return push(root, directory, remote)
+
+
+def push(root, directory, remote=REMOTE):
+    verify(root, remote)
+    require(head(directory), 'There are no committed reports to upload')
     # No force/rebase/reset. A rejected push leaves the commit available to retry.
-    git(directory, 'push', '--set-upstream', 'origin', 'HEAD:refs/heads/main')
+    git(directory, 'push', '--set-upstream', 'origin', 'HEAD:refs/heads/main', auth_root=root, auth_remote=remote)
     return head(directory)

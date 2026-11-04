@@ -22,6 +22,44 @@ export. Configure Git authentication and your commit name/email on that machine.
 For SSH authentication, append
 `--results-remote git@github.com:riverside234/ai-training-results.git`.
 
+### HTTPS token in an ignored dotenv file
+
+For token-based uploads, configure the credentials **on the training server**:
+
+```bash
+python scripts/results_git_auth.py configure
+```
+
+Enter the GitHub username and paste the token at the hidden prompt. The helper
+writes a private `.env.results-git` in the code checkout root (mode 600 on Linux).
+It verifies the file is ignored and untracked before saving. Its format is:
+
+```dotenv
+RESULTS_GIT_URL=https://YOUR_USERNAME:YOUR_TOKEN@github.com/riverside234/ai-training-results.git
+```
+
+This contains a plaintext secret, so do not share the file or paste its contents
+into logs. Use a token with Contents read/write permission for the results
+repository. Replace/revoke a token that has been exposed. The ignored file is
+not downloaded by `git pull`, so configure it once per machine. Re-run configure
+to replace it when rotating credentials.
+
+The exporter reads this file for HTTPS clone/fetch/push. A temporary credential
+helper returns credentials only for this exact GitHub results repository. The
+token is not put in command arguments, process environment, repository URLs,
+Git config, exported reports or commits. No global credential settings change.
+Existing SSH/credential-helper authentication still works when the file is absent.
+
+If an export already committed locally and only its push failed, retry without
+generating another export:
+
+```bash
+python scripts/export-training-reports.py --push-only
+```
+
+Subsequent exports use the original command automatically; no repeated login or
+special token argument is needed.
+
 Only files listed by the export manifest and its incremental dependencies are
 staged. Arbitrary files/checkpoints placed beside a bundle are not included.
 The code repository's index, commits and remote are untouched. Report bytes are
