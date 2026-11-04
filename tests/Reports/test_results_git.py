@@ -151,6 +151,69 @@ class ResultsGitTests(unittest.TestCase):
         self.assertIsNone(G.head(directory))
         self.assertFalse(self.cmd('diff', '--cached', '--name-only', cwd=directory))
 
+    def test_unreferenced_changed_old_state_does_not_block_or_get_uploaded(self):
+        first = self.cli('first')
+        self.assertEqual(first.returncode, 0, first.stderr)
+        old_state = self.root / 'results/first/state.json'
+        original = old_state.read_bytes()
+        changed = original + b'\n'
+        old_state.write_bytes(changed)
+        result = self.cli('next')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        receipt = json.loads((self.root / 'results/next/export-manifest.json').read_text())
+        self.assertIn('state.json', [entry['path'] for entry in receipt['files']])
+        self.assertTrue(receipt['reused_files'])
+        self.assertNotIn('state.json', [entry['path'] for entry in receipt['reused_files']])
+        self.assertEqual(old_state.read_bytes(), changed)
+        remote_state = subprocess.check_output(['git', '-C', str(self.remote), 'show', 'main:first/state.json'])
+        self.assertEqual(remote_state, original)
+
+    def test_reused_file_changed_after_export_still_rejects_before_staging(self):
+        first = self.cli('first')
+        self.assertEqual(first.returncode, 0, first.stderr)
+        module_spec = importlib.util.spec_from_file_location('export_reuse_changed', ROOT / 'scripts/export-training-reports.py')
+        reports = importlib.util.module_from_spec(module_spec)
+        module_spec.loader.exec_module(reports)
+        with G.transaction(self.root, str(self.remote)) as directory:
+            before = G.head(directory)
+            output, receipt = reports.export(self.root, self.run, 'results/reused-changed', continue_export=True)
+            entry = receipt['reused_files'][0]
+            dependency = self.root / entry['previous_export'] / entry['previous_path']
+            dependency.write_bytes(dependency.read_bytes() + b'\n')
+            with self.assertRaisesRegex(ValueError, 'changed before Git publication'):
+                G.publish(self.root, directory, output, receipt, str(self.remote))
+            self.assertEqual(G.head(directory), before)
+            self.assertFalse(self.cmd('diff', '--cached', '--name-only', cwd=directory))
+
+    def test_unpublished_cache_with_unrelated_bad_file_keeps_flat_reuse_after_clone(self):
+        module_spec = importlib.util.spec_from_file_location('export_unpublished_cache', ROOT / 'scripts/export-training-reports.py')
+        reports = importlib.util.module_from_spec(module_spec)
+        module_spec.loader.exec_module(reports)
+        output, _ = reports.export(self.root, self.run, 'results/local-cache')
+        state = output / 'state.json'
+        state.write_bytes(state.read_bytes() + b'\n')
+        result = self.cli('published')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        names = self.cmd('ls-tree', '-r', '--name-only', 'main', cwd=self.remote)
+        self.assertNotIn('local-cache/state.json', names)
+        self.assertIn('local-cache/export-manifest.json', names)
+        self.assertIn('local-cache/iteration-0000/report.json', names)
+        # A fresh clone can reuse the real referenced file using the old index
+        # without needing an unrelated, invalid file from that same cache.
+        fresh = self.base / 'fresh'
+        fresh.mkdir()
+        G.prepare(fresh, str(self.remote))
+        copied = fresh / self.run
+        for file in (self.root / self.run).rglob('*'):
+            if file.is_file():
+                target = copied / file.relative_to(self.root / self.run)
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_bytes(file.read_bytes())
+        _, receipt = reports.export(fresh, self.run, 'results/fresh-next', continue_export=True)
+        self.assertTrue(any(entry['previous_export'] == 'results/local-cache'
+                            and entry['previous_path'] == 'iteration-0000/report.json'
+                            for entry in receipt['reused_files']))
+
     def test_staged_results_and_concurrent_export_are_preserved_and_rejected(self):
         result = self.cli('first')
         self.assertEqual(result.returncode, 0, result.stderr)

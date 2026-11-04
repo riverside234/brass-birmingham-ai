@@ -1,7 +1,6 @@
 """Publish analysis bundles to their own repository, never the code index."""
 from contextlib import contextmanager
 import hashlib
-import json
 import os
 from pathlib import Path
 import shutil
@@ -138,35 +137,42 @@ def publish(root, directory, output, manifest, remote=REMOTE):
     verify(root, remote)
     root, directory, output = Path(root).resolve(), Path(directory).resolve(), Path(output).resolve()
     require(output.is_relative_to(directory) and output != directory, 'Export is outside the results repository')
-    paths, visited = set(), set()
-    def bundle(base, receipt):
+    paths, metadata = set(), set()
+    def include(base, name, expected=None):
         base = Path(base).resolve()
         require(base.is_relative_to(directory) and base != directory, 'Incremental dependency is outside results/')
-        if base in visited:
-            return
-        visited.add(base)
-        require(str(receipt.get('format', '')).startswith('selfplay-report-export/'), 'Invalid dependency manifest')
-        def include(name, expected=None):
-            path = base / name
-            require(not Path(name).is_absolute() and '..' not in Path(name).parts
-                    and path.resolve().is_relative_to(base) and not path.is_symlink() and path.is_file(),
-                    'Missing/unsafe report publication path')
-            if expected is not None:
-                require(hashlib.sha256(path.read_bytes()).hexdigest() == expected,
-                        'Report changed before Git publication: ' + str(path))
-            paths.add(path.relative_to(directory).as_posix())
-        for entry in receipt['files']:
-            include(entry['path'], entry['sha256'])
-        for name in receipt.get('generated', ['recorded-config.json', 'export-manifest.json']):
-            include(name)
-        include('export-manifest.json')
-        for entry in receipt.get('reused_files', []):
-            previous = root / entry['previous_export']
-            require(previous.resolve().is_relative_to(directory) and previous.resolve() != directory,
-                    'Incremental dependency is outside results/')
-            previous_manifest = previous / 'export-manifest.json'
-            bundle(previous, json.loads(previous_manifest.read_text(encoding='utf-8-sig')))
-    bundle(output, manifest)
+        path = base / name
+        require(not Path(name).is_absolute() and '..' not in Path(name).parts
+                and '.git' not in Path(name).parts
+                and path.resolve().is_relative_to(base) and not path.is_symlink() and path.is_file(),
+                'Missing/unsafe report publication path')
+        if expected is not None:
+            require(hashlib.sha256(path.read_bytes()).hexdigest() == expected,
+                    'Report changed before Git publication: ' + str(path))
+        paths.add(path.relative_to(directory).as_posix())
+
+    require(str(manifest.get('format', '')).startswith('selfplay-report-export/'), 'Invalid export manifest')
+    for entry in manifest['files']:
+        include(output, entry['path'], entry['sha256'])
+    for name in manifest.get('generated', ['recorded-config.json', 'export-manifest.json']):
+        include(output, name)
+    include(output, 'export-manifest.json')
+    for entry in manifest.get('reused_files', []):
+        previous = root / entry['previous_export']
+        # Export receipts point directly to physical files, not to a dependency
+        # chain. Only this exact reused file is part of the new publication.
+        # Revalidating/re-staging every file in its old bundle would block on
+        # unrelated stale reports, or silently upload historical local edits.
+        include(previous, entry['previous_path'], entry['sha256'])
+        previous_manifest = previous / 'export-manifest.json'
+        if previous_manifest not in metadata and previous_manifest.is_file():
+            metadata.add(previous_manifest)
+            relative = previous_manifest.relative_to(directory).as_posix()
+            tracked = git(directory, 'ls-files', '--error-unmatch', '--', relative, allowed=(0, 1))
+            if tracked.returncode:
+                # An unpublished local cache needs its existing index so a
+                # fresh clone can discover the supplied physical file again.
+                include(previous, 'export-manifest.json')
     if (directory / '.gitattributes').is_file() and not git(directory, 'ls-files', '--', '.gitattributes').stdout:
         require((directory / '.gitattributes').read_bytes() == b'* -text\n', 'Unexpected pending results attributes')
         paths.add('.gitattributes')

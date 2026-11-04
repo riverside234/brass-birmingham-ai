@@ -27,6 +27,13 @@ staged. Arbitrary files/checkpoints placed beside a bundle are not included.
 The code repository's index, commits and remote are untouched. Report bytes are
 preserved with `* -text` in the results repository's attributes.
 
+Publication checks every newly copied report and every **actually reused file**
+against the new export's recorded hash. It does not recursively validate or
+re-upload unrelated files from historical bundles. Existing historical local
+edits are left untouched. For an unpublished local cache, its existing manifest
+is included as an index alongside the required physical files; missing unrelated
+cache files do not become dependencies of the new export.
+
 For local-only export, without Git or network access:
 
 ```bash
@@ -41,6 +48,12 @@ export reuses existing reports and pushes retained commits. Publication never
 force-pushes or automatically resolves divergent history. Existing staged result
 changes are rejected. If a process was forcibly killed, first verify it is no
 longer running before removing its `results/.git/report-export.lock`.
+
+If an older uploader reports `Report changed before Git publication` for an
+**unreferenced historical** file, update the code checkout with `git pull --ff-only`
+and rerun the normal export command. Keep the previous export directories;
+there is no need to delete them or repeat the history migration. A mismatch in
+a newly exported or actually reused file still stops publication.
 
 ## Existing checkouts after the one-time history rewrite
 
