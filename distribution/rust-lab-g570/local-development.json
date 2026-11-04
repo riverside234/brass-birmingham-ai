@@ -135,13 +135,20 @@
     "artifacts/rust-backend/g570-b03-cuda/lab-evidence/evidence/b02/qualification.json": "88e7136e4d935c63dee3f71c4b3cc49b9202356792bf36a96e4d71b6945122ec",
     "artifacts/rust-backend/g570-b03-cuda/lab-evidence/evidence/b025/qualification.json": "6069cb5802e0d3f17069aa67173c9e4c6c85716281e3867fefe1c517b65045a0",
     "artifacts/rust-backend/g570-b03-cuda/lab-evidence/evidence/b03/lab-checks.log": "30b1b5a828d7e75ae543a4c73eb6dca222f9ca69c00da387249846c7d7ac7d14",
-    "artifacts/rust-backend/g570-b03-cuda/lab-evidence/evidence/b03/qualification.json": "d7dc2afcb3ec4e6d9430d410e793575b55fe619a6e16c08b50035af1051d9bef"
+    "artifacts/rust-backend/g570-b03-cuda/lab-evidence/evidence/b03/qualification.json": "d7dc2afcb3ec4e6d9430d410e793575b55fe619a6e16c08b50035af1051d9bef",
+    "artifacts/rust-backend/g570-b03-topology/export.json": "bacad3c46d426a703470103e908283232d17e433fffb06e8e4348269d7211f89",
+    "artifacts/rust-backend/g570-b03-topology/export.log": "f8a68666f755f3e69eddb17f0f4e88a3f8e153bdfcb06751e4bbb65f08d68293",
+    "artifacts/rust-backend/g570-b03-topology/regression.json": "d1021dcfa5cf979dc5cadc859ba5ea3c75163f5abed2f8c91b4403cdea8670f7",
+    "artifacts/rust-backend/g570-b03-topology/regression.log": "d355477c7cd0246da09eab13151f4e65888798bb2def6c75a0a7b9c4c4fcd62f",
+    "artifacts/rust-backend/g570-b03-topology/review.json": "88015a0ba542060fe56c044abcd76d9cdd996f36fc116e4bec8381c472ad6fcb",
+    "artifacts/rust-backend/g570-b03-topology/run-checks.py": "c49403be901cfc860a9ffdfb324a20ac7be7fea27d5507d07012b493715297bc",
+    "artifacts/rust-backend/g570-b03-topology/seal-evidence.py": "e834cc6bdbd81b1fe037dd58553d6555010347648be9f58a7f7622849de07e56"
   },
   "native_source_unchanged": true,
   "search_timing_retested": false,
   "lab_qualification": "B01/B02/B02.5 passing original scopes retained; B03/B04 Pending",
   "production_run_modified": false,
-  "scope": "R8 diagnostic CUDA comparator and exact prerequisite reuse; successful B01/B02/B02.5 evidence retained.",
+  "scope": "R9 launcher exposes the existing B03 logical-GPU RNG compatibility option. R8 trainer/source/reuse reviews and original passing prerequisites unchanged.",
   "b01_inputs_fix": {
     "passed": true,
     "fixture_tests": 42,
@@ -1059,6 +1066,137 @@
     "limitations": [
       "Local PyTorch is CPU-only: actual CUDA payload test and two native overlay probes skipped.",
       "No previously successful lab qualification or full-game collection was repeated."
+    ]
+  },
+  "b03_topology_fix": {
+    "passed": true,
+    "implementation": "8b9614d736c727d682e85753d1c851c3663461c733501eefac568624fca0dfe5",
+    "producer": "bc2c07c397fdc979c9d4376189e723af86620e6361e3cd7052f3500cea3709cb",
+    "tests": {
+      "passed": true,
+      "tests": 43,
+      "seconds": 74.368,
+      "skipped": 1,
+      "command": [
+        "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Brass Birmingham\\artifacts\\p6e\\Scripts\\python.exe",
+        "-X",
+        "utf8",
+        "-m",
+        "unittest",
+        "-v",
+        "test_b03_topology",
+        "test_b03_cuda_restore",
+        "test_b03",
+        "test_qualification_runner",
+        "test_lab_transfer"
+      ]
+    },
+    "export_tests": {
+      "passed": true,
+      "tests": 13,
+      "skipped": 1,
+      "seconds": 0.887
+    },
+    "tested_files": {
+      "scripts/prepare-rust-lab-g570.py": "2bbcf6c1c0ddab809a526cd05b8587394de6f33ee2f61e9c95d34ed0fca2e38c",
+      "scripts/run-rust-lab-qualification.py": "57561c9aa2456eab86dd518a9dbae63efd2097807814a367e3edc35a9249ca56",
+      "scripts/qualify-rust-lab-b03.py": "c2a6ddb3f54e3939cf35b2bf1e208b4944954a5a84feb55afb5a757d9081e57a",
+      "tests/RustBackendLab/test_b03_topology.py": "b1019fea4b427a4689d28bd1c9b811b100b67d39718bc885bc68c018ac61827a"
+    },
+    "runtime_source_changed": false,
+    "prerequisites_repeated": false,
+    "preserved_passes": {
+      "b01": {
+        "path": "/data/not_backed_up/yxu209/ai-training/artifacts/rust-backend/20261104T011422740838Z-g570-all-8bee9d91/b01/qualification.json",
+        "bytes": 2531,
+        "sha256": "4c86c17674187dbfd38bbd37ae64b79aeb07af0f6da3aac0e03afa48478ba1bb"
+      },
+      "b02": {
+        "path": "/data/not_backed_up/yxu209/ai-training/artifacts/rust-backend/20261104T011422740838Z-g570-all-8bee9d91/b02/qualification.json",
+        "bytes": 1194,
+        "sha256": "88e7136e4d935c63dee3f71c4b3cc49b9202356792bf36a96e4d71b6945122ec"
+      },
+      "b025": {
+        "path": "/data/not_backed_up/yxu209/ai-training/artifacts/rust-backend/20261104T011422740838Z-g570-all-8bee9d91/b025/qualification.json",
+        "bytes": 1906,
+        "sha256": "6069cb5802e0d3f17069aa67173c9e4c6c85716281e3867fefe1c517b65045a0"
+      }
+    },
+    "restart_at": "b03",
+    "allow_cuda_topology_change": true,
+    "learner_device": "cuda:0",
+    "source_report": "results/rust-lab-qualification/20261104T014313172885Z-20261104T014145936407Z-g570-all-8a6142e0-696c1276",
+    "verified_export_files": [
+      {
+        "source": "b03-console.log",
+        "path": "evidence/b03-console.log",
+        "source_bytes": 1232,
+        "source_sha256": "493b17cb75cc42759f6acaf0dd07a240d3955aa4b50dd5b70d0e28b76d88d570",
+        "bytes": 1232,
+        "sha256": "493b17cb75cc42759f6acaf0dd07a240d3955aa4b50dd5b70d0e28b76d88d570",
+        "gzip": false
+      },
+      {
+        "source": "runner.json",
+        "path": "evidence/runner.json",
+        "source_bytes": 4309,
+        "source_sha256": "edef3510e490a86f8cb9f9296a1531345993ccadde4e1abf697480053453b47e",
+        "bytes": 4309,
+        "sha256": "edef3510e490a86f8cb9f9296a1531345993ccadde4e1abf697480053453b47e",
+        "gzip": false
+      },
+      {
+        "source": "b03/continuation-preflight.json",
+        "path": "evidence/b03/continuation-preflight.json.gz",
+        "source_bytes": 1661955,
+        "source_sha256": "c1e09b71406eda258e49ceb0d7b441f5e0ab8c0f59e602575e1206f3725d64e4",
+        "bytes": 318680,
+        "sha256": "b269d345f84479a32c972abaefe6af28ab8e9ca33492b4a006524ab5c7605dad",
+        "gzip": true
+      },
+      {
+        "source": "b03/fixtures.log",
+        "path": "evidence/b03/fixtures.log",
+        "source_bytes": 4822,
+        "source_sha256": "426c08d6ac9cfd1a6eee4ce553ffa4cf9f3a99ee243fff0a528be4316ec47aea",
+        "bytes": 4822,
+        "sha256": "426c08d6ac9cfd1a6eee4ce553ffa4cf9f3a99ee243fff0a528be4316ec47aea",
+        "gzip": false
+      },
+      {
+        "source": "b03/lab-checks.log",
+        "path": "evidence/b03/lab-checks.log",
+        "source_bytes": 1473,
+        "source_sha256": "12a520fa233299adffad1041398f005051ddde00446a15f2b249b41e00e14904",
+        "bytes": 1473,
+        "sha256": "12a520fa233299adffad1041398f005051ddde00446a15f2b249b41e00e14904",
+        "gzip": false
+      },
+      {
+        "source": "b03/qualification.json",
+        "path": "evidence/b03/qualification.json",
+        "source_bytes": 1703,
+        "source_sha256": "bef50c0f3cf7383277ff8e56726e104d55bdf2c151f3689394db1bd15dd553b3",
+        "bytes": 1703,
+        "sha256": "bef50c0f3cf7383277ff8e56726e104d55bdf2c151f3689394db1bd15dd553b3",
+        "gzip": false
+      },
+      {
+        "source": "b03/continuation/diagnostic-fork.json",
+        "path": "evidence/b03/continuation/diagnostic-fork.json.gz",
+        "source_bytes": 1728163,
+        "source_sha256": "5ec44ee4edf6625a0a0cce3ac1471ad7e5b158e1a9e7bbe87cc6e2d3c17457b8",
+        "bytes": 319670,
+        "sha256": "fb7bf34ae0c4b3de786a5de6e847c260c5ba3431c67454237cc82ad46f6b482a",
+        "gzip": true
+      }
+    ],
+    "new_games": 0,
+    "optimizer_steps": 0,
+    "lab_qualification": "B01/B02/B02.5 original passes retained; B03/B04 Pending",
+    "limitations": [
+      "CPU-only development; actual CUDA restoration remains a lab check.",
+      "GPU topology regression mocks only CUDA hardware; real Adam and CPU RNG restoration are exercised."
     ]
   }
 }

@@ -50,6 +50,7 @@ def lab_check(args,out):
         with torch.random.fork_rng(devices=list(range(torch.cuda.device_count()))):
             restored=continuation.restore(fork,device=args.device,allow_cuda_topology_change=args.allow_cuda_topology_change)
             write_json(out/'restoration.json',restored.report)
+            print('B03 CUDA RNG restoration: '+json.dumps(restored.report['topology']),flush=True)
         admitted=replay.run(snapshot,jobs,families,producer,out/'admitted-replay')
         write_json(out/'replay-admission.json',admitted)
         il=continuation.check_completed_il(ROOT,args.il_run) if args.il_run else dict(status='Not requested',scope='Optional fresh IL handoff; separate from established joint7 continuation')
@@ -58,6 +59,7 @@ def lab_check(args,out):
         return dict(passed=True,preflight=pin(out/'continuation-preflight.json'),restoration=pin(out/'restoration.json'),
             replay=pin(out/'replay-admission.json'),diagnostic_fork=pin(fork.directory/'diagnostic-fork.json'),
             il=pin(out/'il-handoff.json'),new_games=0,optimizer_steps=0,source_run_modified=False,
+            allow_cuda_topology_change=args.allow_cuda_topology_change,cuda_topology=restored.report['topology'],
             next='B04 teacher exports and B05 fixed-data update/commit; production adoption remains B07')
     finally:
         continuation.verify_dependencies(ROOT,incoming);verify_unchanged(incoming['snapshot'])
@@ -73,6 +75,8 @@ def main():
     p.add_argument('--lab-child',action='store_true',help=argparse.SUPPRESS)
     p.add_argument('--transfer-manifest',type=Path,help='Explicit sealed B04 supplement')
     a=p.parse_args()
+    if a.allow_cuda_topology_change and (a.fixtures_only or a.device != 'cuda:0'):
+        p.error('--allow-cuda-topology-change requires a real lab run with --device cuda:0')
     from brass_ai.learning.contracts import require,project_path
     from brass_ai.recovery.retention import owned,run_lock
     from brass_ai.step5.league import write_json
@@ -91,7 +95,8 @@ def main():
         require(not out.is_relative_to(a.run) and not a.run.is_relative_to(out),'Evidence cannot overlap production')
     out.mkdir(parents=True);start=time.monotonic()
     report=dict(contract='brass-lab-b03/1.0.0',milestone='B03',passed=False,method='search_v1',v205_enabled=False,
-        lab_qualification='Pending',scope='CPU fixture development' if a.fixtures_only else 'Replay admission and full-state restoration; no games or training steps')
+        lab_qualification='Pending',allow_cuda_topology_change=a.allow_cuda_topology_change,
+        scope='CPU fixture development' if a.fixtures_only else 'Replay admission and full-state restoration; no games or training steps')
     try:
         report['transfer']=verify_transfer(a.transfer_manifest)
         if a.b02:
@@ -104,7 +109,7 @@ def main():
         env=dict(os.environ,PYTHONPATH=os.pathsep.join(str(ROOT/n) for n in TEST_PATHS),CUBLAS_WORKSPACE_CONFIG=':4096:8')
         print('B03: bounded CPU fixtures',flush=True)
         with (out/'fixtures.log').open('wb') as log:
-            test=subprocess.run([sys.executable,'-m','unittest','test_b03','test_b03_cuda_restore','-v'],cwd=ROOT,
+            test=subprocess.run([sys.executable,'-m','unittest','test_b03','test_b03_cuda_restore','test_b03_topology','-v'],cwd=ROOT,
                 env=dict(env,CUDA_VISIBLE_DEVICES=''),stdout=log,stderr=subprocess.STDOUT,timeout=180)
         require(test.returncode==0,'B03 fixtures failed; see fixtures.log')
         report['fixtures']=dict(passed=True,sha256=text_sha(out/'fixtures.log'))
