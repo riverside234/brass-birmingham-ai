@@ -1,8 +1,8 @@
 {
-  "path": "distribution/rust-lab-g570/rust-lab-b01-b04-g570-r4.zip",
-  "sha256": "02c4780062444fa056dc4adb5757f5d56b9cbb2cbee78eec3c4d28c9b5986993",
-  "bytes": 7561620,
-  "entries": 1131,
+  "path": "distribution/rust-lab-g570/rust-lab-b01-b04-g570-r5.zip",
+  "sha256": "cbd9eb905d4a40cdcedf81d1091d90d4e2189acea2faf84023cf8db65f891968",
+  "bytes": 29243177,
+  "entries": 1162,
   "implementation": "70a926e5dfc7aa30829c296b49cb7b53159534ccc5e7c8876c46a9609a44164d",
   "producer": "bc2c07c397fdc979c9d4376189e723af86620e6361e3cd7052f3500cea3709cb",
   "lab_qualification": "Pending"

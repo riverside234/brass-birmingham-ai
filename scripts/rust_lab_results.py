@@ -10,7 +10,7 @@ import uuid
 
 ROOT = Path(__file__).resolve().parents[1]
 RESULTS = Path('results/rust-lab-qualification')
-SKIP_DIRS = {'target', 'checkout', 'inputs', 'bootstrap', '__pycache__', '.git',
+SKIP_DIRS = {'target', 'checkout', 'inputs', 'bootstrap', 'toolchain', '__pycache__', '.git',
              'payload', '.prepared', '.ppg-eight-cache', '.value-cache'}
 TEXT = {'.json', '.log', '.txt', '.md', '.csv'}
 

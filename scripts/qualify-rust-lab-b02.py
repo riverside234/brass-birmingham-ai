@@ -38,6 +38,7 @@ def entry(path, run, device):
             and value.get('method')==METHOD,'B01 qualification is Pending, failed or from an older profile; complete search_v1 B01 first')
     for key in ('profile','local_entry','lab_state','linux_build','python_sources','commands'):
         require(pin(value[key]['path'])==value[key], 'Changed B01 '+key)
+    verify_b01_sources(read_json(value['python_sources']['path']))
     admit(read_json(value['profile']['path']))
     verify_inputs(path.parent/'inputs',read_json(value['profile']['path']))
     state=read_json(value['lab_state']['path'])
@@ -56,7 +57,25 @@ def entry(path, run, device):
     return state,checkout
 
 
+def verify_b01_sources(recorded):
+    """Harness repairs may reuse B01; changed executable inputs require a rerun."""
+    def relevant(name):
+        return name.startswith(('src/', 'configs/', 'training/runtime/')) or name in (
+            'scripts/build-training-host.py', 'scripts/build-search-host.py',
+            'scripts/build-local-scoring-host.py')
+    previous = {i['path']: i['sha256'] for i in recorded if relevant(i['path'])}
+    current = {i['path']: i['sha256'] for i in b01_tools().source_inventory() if relevant(i['path'])}
+    require(previous and previous == current,
+            'B01 executable sources/runtime changed; rerun B01 with this checkout')
+
+
 def build_bootstrap(out, env, command, mono):
+    # Import explicitly for callers loading this script through importlib.
+    spec=importlib.util.spec_from_file_location('lab_toolchain',ROOT/'scripts/rust_lab_toolchain.py')
+    toolchain=importlib.util.module_from_spec(spec);spec.loader.exec_module(toolchain)
+    compiler=toolchain.restore(out,root=ROOT)
+    prefix=[str(compiler)] if os.name=='nt' else [mono,str(compiler)]
+    command([*prefix,'/version'],cwd=ROOT,env=env,log=out/'compiler-preflight.log',timeout=20)
     from brass_ai.recovery.host_runtime import local_scoring_host
     source=local_scoring_host(ROOT);manifest=read_json(source/'runtime.json')
     target=out/'bootstrap';target.mkdir()
@@ -65,15 +84,27 @@ def build_bootstrap(out, env, command, mono):
         shutil.copyfile(source/item['name'],target/item['name'])
     shutil.copyfile(source/'runtime.json',target/'runtime.json')
     code=ROOT/'src/BrassLabBootstrap/Bootstrap.cs'
-    compiler=ROOT/'artifacts/patch-tools/microsoft.net.compilers.toolset.4.12.0/tasks/net472/csc.exe'
-    require(compiler.is_file(),'Pinned C# compiler missing; restore existing patch toolchain')
     args=['/nologo','/target:exe','/langversion:7.3','/nostdlib+','/deterministic+','/optimize+',
           f'/out:"{target / "BrassLabBootstrap.exe"}"',f'/reference:"{target / "BrassHost.exe"}"']
     args += [f'/reference:"{p}"' for p in sorted(target.glob('*.dll'))]+[f'"{code}"']
     rsp=target/'build.rsp';rsp.write_text('\n'.join(args),encoding='utf-8-sig')
-    prefix=[str(compiler)] if os.name=='nt' else [mono,str(compiler)]
     command([*prefix,'@'+str(rsp)],cwd=ROOT,env=env,log=out/'bootstrap-build.log',timeout=120)
+    # Catch missing Mono/runtime dependencies before native compilation or games.
+    from brass_ai.rust_backend.lab_transport import Pipe
+    launch=[str(target/'BrassLabBootstrap.exe')]
+    if os.name!='nt':launch.insert(0,mono)
+    with Pipe(launch,binary=False,timeout=10) as host:
+        origin=host.call('init',seed=153);decision=host.call('decision')
+        require(origin['state']['format']=='brass-native-state/1.0.0' and decision['choices'],
+                'Bootstrap initial state/decision missing')
+        checkpoint=host.call('checkpoint')
+        host.call('step',choice=decision['choices'][0]['id'])
+        require(host.call('restore',checkpoint=checkpoint)==decision,'Bootstrap checkpoint restore differs')
+    smoke=dict(passed=True,seed=153,choices=len(decision['choices']),steps=1,checkpoint_restored=True,
+               scope='Reference host startup and one reversible action; no full game or training')
+    b01_tools().write(out/'bootstrap-smoke.json',smoke)
     return dict(binary=pin(target/'BrassLabBootstrap.exe'),source=pin(code),compiler=pin(compiler),reference=pin(source/'runtime.json'),
+                toolchain_package=pin(ROOT/toolchain.PACKAGE),smoke=pin(out/'bootstrap-smoke.json'),
                 dependencies=[pin(target/i['name']) for i in manifest['files']])
 
 
@@ -89,6 +120,7 @@ def qualify(args,out):
     with run_lock(args.run):
         verify_unchanged(state)
         try:
+            bootstrap=build_bootstrap(out,env,base.command,args.mono)
             checkout=out/'checkout';checkout.mkdir()
             shutil.copytree(core,checkout/'native')
             shutil.copytree(ROOT/'lab-native',checkout/'lab-native',ignore=shutil.ignore_patterns('target'))
@@ -107,7 +139,6 @@ def qualify(args,out):
                     log=out/(operation+'.log'),timeout=900))
             commands.append(base.command([sys.executable,'-m','unittest','discover','-s','tests/RustBackendLab','-p','test_b02.py','-v'],
                 cwd=ROOT,env=env,log=out/'adapter-tests.log',timeout=90))
-            bootstrap=build_bootstrap(out,env,base.command,args.mono)
             executable=out/'target'/target/'release/brass-lab-collector'
             identity=dict(contract='brass-lab-b02-build/1.0.0',shared_core=SOURCE,collector=pin(executable),
                 bootstrap=bootstrap,source=source,rustc=version,cargo_lock=pin(checkout/'lab-native/Cargo.lock'),

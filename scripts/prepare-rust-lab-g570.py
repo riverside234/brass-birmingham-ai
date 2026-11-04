@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Seal g570-r4 with complete Python paths and separate verified lab evidence."""
+"""Seal g570-r5 with offline Roslyn, guarded B01 reuse and bounded review evidence."""
 import argparse
 import hashlib
 import importlib.util
@@ -15,6 +15,7 @@ DIRECTORY='distribution/rust-lab-g570'
 REPORT='results/joint7-v11-2-g1290-trained-restart-g0570-20261103T190804654465Z'
 CONFIG=REPORT+'/recorded-config.json'
 ARCHIVES={
+    'distribution/rust-lab-toolchain/microsoft.net.compilers.toolset.4.12.0.nupkg':'fe24ef31a6ffcb7c49383d2fd362763dee291ad9b9d98cc0c19ef80203b99ebc',
     'distribution/rust-lab-b01/b01-search-v1-inputs.zip':'935443a477d3a52425923e3d7458a15ae8250f4296a6900c5b9088fbef864a76',
     'distribution/rust-lab-b01/b01-search-v1-update.zip':'ae634e746dd1864bee281b36f2415112510aeb66a8c5de7faf8d7e4c75dac685',
     'distribution/rust-lab-b02/b02-search-v1-update.zip':'62a9d022bb3daa41f8ad874dfbbf40cb24e3b526c478d559db9db115e4725664',
@@ -32,7 +33,7 @@ def main():
     from brass_ai.rust_backend.lab_contract import sha,SOURCE,extract_new,verify_inputs
     from brass_ai.rust_backend.lab_transfer import CONTRACT,RETIRED,implementation_inventory
     from brass_ai.rust_backend.lab_teacher_overlay import source_fingerprint
-    out=ROOT/DIRECTORY;archive=out/'rust-lab-b01-b04-g570-r4.zip'
+    out=ROOT/DIRECTORY;archive=out/'rust-lab-b01-b04-g570-r5.zip'
     require(not archive.exists(),'This bundle is already sealed; publish a new version')
     for n,h in ARCHIVES.items():require(sha(ROOT/n)==h,'Changed historical archive: '+n)
     require(sha(out/'rust-lab-b01-b04-g570.zip')=='7bbceb50b1b2ffa3c3797aa2aae452a90edde2f15be8a2d627b452f7c64a53a4',
@@ -41,10 +42,12 @@ def main():
             'Previous g570-r2 archive changed')
     require(sha(out/'rust-lab-b01-b04-g570-r3.zip')=='91542cd7b07330d86129a54aae9aee0c87b6dd758ce2080e1ebc1aae04d721f2',
             'Previous g570-r3 archive changed')
+    require(sha(out/'rust-lab-b01-b04-g570-r4.zip')=='02c4780062444fa056dc4adb5757f5d56b9cbb2cbee78eec3c4d28c9b5986993',
+            'Previous g570-r4 archive changed')
     require(all(not (ROOT/n).exists() for n in RETIRED),'Retired AZ_DB source still present')
     spec=importlib.util.spec_from_file_location('b01_package_inputs',ROOT/'scripts/qualify-rust-lab.py')
     b01=importlib.util.module_from_spec(spec);spec.loader.exec_module(b01)
-    with tempfile.TemporaryDirectory(dir=ROOT/'artifacts',prefix='g570-r4-inputs-') as directory:
+    with tempfile.TemporaryDirectory(dir=ROOT/'artifacts',prefix='g570-r5-inputs-') as directory:
         directory=Path(directory)
         extract_new(ROOT/'distribution/rust-lab-b01/b01-search-v1-inputs.zip',directory/'inputs')
         verify_inputs(directory/'inputs',json.loads((ROOT/'configs/search/lab-search-v1.json').read_text(encoding='utf-8')))
@@ -74,6 +77,8 @@ def main():
         'ai-research/RUST_BACKEND_G570_REFRESH.md',
         'ai-research/RUST_BACKEND_B01_G570_FIX.md',
         'ai-research/RUST_BACKEND_B01_G570_PYTHON_FIX.md',
+        'ai-research/RUST_BACKEND_B01_B04_G570_REVIEW.md',
+        'distribution/rust-lab-toolchain/README.md','distribution/rust-lab-toolchain/License.txt',
         'results/joint7-v11-2-g1290-trained-restart-g0370-20261102T221517838215Z/state.json','distribution/RUST_LAB_SEARCH_V1.md'}
     folders=[('src/brass_ai',{'.py'}),('configs',{'.json','.md'}),('scripts',{'.py','.sh'}),
         ('lab-native',{'.rs','.toml','.lock'}),('tests/R2',{'.py','.json'}),('tests/Recovery',{'.py','.json'}),
@@ -106,6 +111,11 @@ def main():
             'Exact B01 inference suite must pass before packaging')
     for name,expected in python_checks['tested_files'].items():
         require(sha(ROOT/name)==expected,'Changed source after B01 Python checks: '+name)
+    review=checks['qualification_review']
+    require(review['passed'] and review['bootstrap']['passed'] and review['b01_lab_passed']
+            and review['runtime_sources_unchanged'], 'Missing qualification harness/host review')
+    for name,expected in review['tested_files'].items():
+        require(sha(ROOT/name)==expected,'Changed source after qualification review: '+name)
     require(sha(ROOT/'configs/learning/selfplay-resume-sources.json')==checks['source_review_sha256'],
         'Source approvals changed since continuation checks')
     from brass_ai.recovery.resume import check_signature
@@ -129,8 +139,8 @@ def main():
         archives=ARCHIVES,local_checks=checks,lab_qualification='Pending',production_teacher_enabled=False,
         native_test_inputs=native_inputs,
         python_test_paths=list(b01.TEST_PATHS),
-        supersedes=dict(path=DIRECTORY+'/rust-lab-b01-b04-g570-r3.zip',
-                        sha256='91542cd7b07330d86129a54aae9aee0c87b6dd758ce2080e1ebc1aae04d721f2'),
+        supersedes=dict(path=DIRECTORY+'/rust-lab-b01-b04-g570-r4.zip',
+                        sha256='02c4780062444fa056dc4adb5757f5d56b9cbb2cbee78eec3c4d28c9b5986993'),
         results_directory='results/rust-lab-qualification',extraction_order=['Current checkout with deletions, then g570 supplement only'])
     if args.check_only:
         print(json.dumps(dict(passed=True,files=len(files),implementation=implementation,producer=producer)));return

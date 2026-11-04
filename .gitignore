@@ -671,3 +671,7 @@ Desktop.ini
 # g570 qualification refresh; prior bundles remain immutable.
 !/distribution/rust-lab-g570/
 !/distribution/rust-lab-g570/**
+
+# Public, pinned compiler required by the lab's reference-host bootstrap.
+!/distribution/rust-lab-toolchain/
+!/distribution/rust-lab-toolchain/**

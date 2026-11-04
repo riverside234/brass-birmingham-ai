@@ -62,7 +62,7 @@ class Results(unittest.TestCase):
             result = subprocess.run(['git', 'check-ignore', '-q', '--no-index', 'results/rust-lab-qualification/'+name], cwd=ROOT)
             self.assertEqual(result.returncode, 1)
 
-    def fixture_run(self, statuses, *, stage='all', preflight_fail=False, advance=False):
+    def fixture_run(self, statuses, *, stage='all', preflight_fail=False, advance=False, start_at=None, reuse=False):
         run = self.root/runner.RUN
         run.mkdir(parents=True)
         reports.write(run/'state.json', dict(iteration=570, history=[dict(generation=570,
@@ -70,6 +70,8 @@ class Results(unittest.TestCase):
         reports.write(self.root/runner.CONFIG,{'fixture':True})
         package = self.root/'distribution/rust-lab-g570'; package.mkdir(parents=True)
         reports.write(package/'transfer-manifest.json', {})
+        previous = self.root/'old-b01.json'
+        reports.write(previous, dict(passed=True))
         calls = []
         def execute(cmd, log):
             calls.append(cmd)
@@ -88,11 +90,31 @@ class Results(unittest.TestCase):
                           return_value={'training_reference': {'generation': 570}}), \
              patch.object(runner, 'execute', side_effect=execute), \
              patch.object(runner, 'export', side_effect=lambda path: reports.export(path, root=self.root)):
-            code = runner.main(['--stage', stage, '--run', str(run)])
+            arguments = ['--stage', stage, '--run', str(run)]
+            if start_at: arguments += ['--start-at', start_at]
+            if reuse: arguments += ['--b01', str(previous)]
+            code = runner.main(arguments)
         exported = list((self.root/reports.RESULTS).iterdir())
         self.assertEqual(len(exported), 1)
         result = json.loads((exported[0]/'evidence/runner.json').read_text())
         return code, result, calls
+
+    def test_resume_after_passing_b01_runs_all_remaining_gates(self):
+        code, result, calls = self.fixture_run([(0, True)]*4, start_at='b02', reuse=True)
+        self.assertEqual(code, 0)
+        self.assertEqual(result['selected_stages'], ['b02', 'b025', 'b03', 'b04'])
+        self.assertEqual(result['reused_receipts']['b01']['sha256'], reports.sha(self.root/'old-b01.json'))
+        self.assertEqual(calls[0][calls[0].index('--b01')+1], str(self.root/'old-b01.json'))
+        self.assertTrue(all('qualify-rust-lab.py' not in cmd[1] for cmd in calls))
+
+    def test_resume_requires_prior_receipts_before_any_stage(self):
+        code, result, calls = self.fixture_run([], start_at='b02')
+        self.assertEqual(code, 1); self.assertFalse(calls)
+        self.assertIn('requires --b01', result['error'])
+
+    def test_resume_does_not_ignore_failed_b02(self):
+        code, result, calls = self.fixture_run([(1, False)], start_at='b02', reuse=True)
+        self.assertEqual(code, 1); self.assertFalse(result['passed']); self.assertEqual(len(calls), 1)
 
     def test_full_chain_exports_and_wires_original_receipts(self):
         code, result, calls = self.fixture_run([(0, True)]*5)

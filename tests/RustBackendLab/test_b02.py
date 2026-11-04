@@ -48,7 +48,7 @@ class Contract(unittest.TestCase):
                 profile=sealed('profile.json',read_json(SOURCE_ROOT/'configs/search/lab-search-v1.json')),
                 lab_state=sealed('state-receipt.json',state),local_entry=sealed('entry.json',{}),
                 linux_build=sealed('build.json',dict(binary=pin(binary),handshake=dict(build=dict(source_sha256=SOURCE)))),
-                python_sources=sealed('sources.json',[]),commands=sealed('commands.json',[]),
+                python_sources=sealed('sources.json',m.b01_tools().source_inventory()),commands=sealed('commands.json',[]),
                 gpu=[sealed('gpu.json',dict(passed=True,device='cuda:0'))])
             path=temp/'qualification.json';path.write_text(json.dumps(value),encoding='utf-8')
             with patch.object(m,'native_fingerprint',return_value=SOURCE),patch('brass_ai.rust_backend.lab_snapshot.verify_unchanged'):

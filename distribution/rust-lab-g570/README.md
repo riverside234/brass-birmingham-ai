@@ -1,38 +1,68 @@
-# B01–B04 qualification at g570 (r4)
+# B01–B04 qualification at g570 (r5)
 
-Updated 2026-11-03. **Linux/CUDA qualification: Pending. Production teacher: off.**
+Updated 2026-11-03. **B01 passed on g570 / cuda:0. B02–B04 lab gates remain Pending. Production teacher remains off.**
 
-**r4 fixes the B01 Python fixture import failure** reported in `20261103T223841656406Z-20261103T223616837419Z-g570-all-2c69c499-f603530c`. That lab attempt passed 70 core tests, 10 worker tests and 27 adapter tests, then 19 of 28 inference tests failed because `fe_fixtures` was not on `PYTHONPATH`. B01 and B02 now set all checkout-local fixture roots explicitly. B01 runs its CPU suites before the Rust build. See the [r4 failure analysis](../../ai-research/RUST_BACKEND_B01_G570_PYTHON_FIX.md).
+The latest received attempt (`20261103T232335735601Z-20261103T232040081783Z-g570-all-fc1a5f74-025ddb53`)
+passed B01, including real CUDA output parity on 13 roots and nine staged
+transitions. B02 built/tested its Rust collector and passed 20 adapter tests,
+then stopped because the reference-host C# compiler was missing.
 
-The [r2 native-fixture fix](../../ai-research/RUST_BACKEND_B01_G570_FIX.md) remains in place: all three external Rust fixtures are pinned and staged, with every literal include checked before compilation. The trainer, native core, checkpoint/config and source approvals remain unchanged. Full B01 GPU smoke and later lab gates still require a passing rerun.
+**r5 bundles the pinned public Roslyn 4.12.0 package.** B02 restores it into its
+new evidence directory, checks compiler startup, builds the bootstrap and tests
+one action/checkpoint restoration before compiling Rust. No compiler download or
+Windows developer cache is needed. B04 reuses that verified bootstrap.
 
-This bundle supersedes `rust-lab-restart-r2` for the current checkout. The previous transfer pinned an older implementation. Added Python modules participate in the implementation hash even if every file listed in that older transfer still matches. This transfer pins the complete fingerprint input inventory and names added, changed or missing dependencies when it rejects source drift. Integrity checks remain mandatory.
+The [B01–B04 review](../../ai-research/RUST_BACKEND_B01_B04_G570_REVIEW.md) also
+documents the receipt-reuse and timeout-cleanup fixes. Trainer, native core,
+checkpoint, recipe and source approvals are unchanged. The earlier native-input
+and Python-path fixes remain in place.
 
-## Run on the lab
+## Continue from the passing B01
 
-Pull the matching current checkout, including added files and deletions. Keep training paused at a clean committed boundary. From the repository root:
+Pull the matching checkout, including added files and deletions. Keep training
+paused at the same clean g570 boundary. From the repository root:
 
 ```bash
 conda activate ai-training
-unzip -o distribution/rust-lab-g570/rust-lab-b01-b04-g570-r4.zip
+unzip -o distribution/rust-lab-g570/rust-lab-b01-b04-g570-r5.zip
+python scripts/run-rust-lab-qualification.py --stage all --start-at b02 --device cuda:0 \
+  --expected-generation 570 \
+  --checkpoint-sha256 06626c1fb7d0b91f64d939f9fbb3db7c5f3aa072331eb3d773f101e729117ab9 \
+  --b01 artifacts/rust-backend/20261103T232040081783Z-g570-all-fc1a5f74/b01/qualification.json
+```
+
+This runs B02, B02.5, B03 and B04. It verifies the original B01 receipt, native
+binary/source, GPU receipt, executable source/runtime inventory and unchanged
+run/checkpoint/population. Harness-only repairs may reuse B01; changed executable
+inputs or training state require a new B01. A failed/deferred stage still stops
+the chain and exports its evidence. The Git-visible review copy is not a
+replacement for the original lab receipts and build products.
+
+## Start again or qualify a later generation
+
+If the original evidence is missing, rerun the chain:
+
+```bash
 python scripts/run-rust-lab-qualification.py --stage all --device cuda:0 \
   --expected-generation 570 \
   --checkpoint-sha256 06626c1fb7d0b91f64d939f9fbb3db7c5f3aa072331eb3d773f101e729117ab9
 ```
 
-The target run is `artifacts/step5/joint7-v11-2-g1290-trained-restart`. The expected full checkpoint is `generation-0570.pt`, model `18f42a48933c18095d96f1cc64b836d3f9aac92361a4e4ee7c423830d9a11a91`, at 182,400 ordinary games. The config defaults to [the exact recorded g570 config](../../results/joint7-v11-2-g1290-trained-restart-g0570-20261103T190804654465Z/recorded-config.json), which matches the prior g370 recipe. Qualification performs no recipe adoption, source-run write or training update. B03 restores all checkpoint/optimizer/RNG/PPG state into an isolated diagnostic fork.
-
-Do not extract an older source ZIP after this one. The original g570/r2/r3 ZIPs and six original B01–B04 stage archives remain immutable; the current `bundle.json` and `transfer-manifest.json` select r4. The stage archives inside r4 are sealed build/reference inputs; the current launcher selects them itself. No manual `PYTHONPATH` export is needed. The source snapshot contains the current optional g570/entropy modules to keep the checkout consistent, but the recorded config has no entropy schedule or new branch/V4-history adoption. If the lab has already adopted a different config, use its exact reviewed config with `--config`; an unqualified recipe transition cannot be hidden by changing a hash.
-
-If training has advanced, qualify the actual latest committed checkpoint without rewinding:
+If training has advanced, capture the actual latest committed state instead:
 
 ```bash
 python scripts/run-rust-lab-qualification.py --stage all --device cuda:0
 ```
 
-The launcher captures its generation/hash/state identity once and stops if that state changes. The default config must still match. Explicit generation/hash arguments assert the latest state; they do not select an older checkpoint.
+The default run is `artifacts/step5/joint7-v11-2-g1290-trained-restart`. The default
+config is the [exact recorded g570 config](../../results/joint7-v11-2-g1290-trained-restart-g0570-20261103T190804654465Z/recorded-config.json),
+which matches the g370 recipe. The launcher captures generation/hash/state once
+and rejects advancement. Explicit pins assert the latest state; they never rewind
+training. If a different reviewed config was adopted, supply that exact config
+with `--config`. Qualification does not adopt a recipe, change production state
+or run a training iteration. B03 restores the full checkpoint into an isolated fork.
 
-## Individual stages and results
+## Individual gates and evidence
 
 ```bash
 python scripts/run-rust-lab-qualification.py --stage b01 --device cuda:0 --expected-generation 570
@@ -43,8 +73,23 @@ python scripts/run-rust-lab-qualification.py --stage b04 --device cuda:0 --expec
   --b02 ORIGINAL_B02_QUALIFICATION_JSON --b03 ORIGINAL_B03_QUALIFICATION_JSON
 ```
 
-Every attempt, including failure or deferral, exports a fresh Git-visible folder under `results/rust-lab-qualification/`. Open `evidence/runner.json` first. Push the new result folder and pull it on the local computer. Keep original `artifacts/rust-backend/...` receipts on the lab for dependent stages. The reported old producer failure is not a passing qualification.
+Each attempt exports a new Git-visible folder under `results/rust-lab-qualification/`.
+Open `evidence/runner.json` first, push the folder and pull it locally for review.
+Retain original `artifacts/rust-backend/...` receipts on the lab for subsequent
+gates. The bundle never overwrites original result folders.
 
-Search remains task-only `search_v1`, K16, four seconds of search plus at most one second total post-search work. B04 uses two independent one-thread sessions and exactly two shadow tables, with bounded typical/complex root probes. DOMiNO/AZ_DB and search_v2/V205 remain disabled. Required current-reward utility readiness still gates B04.
+Search remains task-only `search_v1`, K16, four seconds of search plus at most
+one second total post-search work. B04 uses two independent one-thread sessions,
+two shadow tables and bounded typical/complex root probes. DOMiNO/AZ_DB and
+search_v2/V205 remain disabled. Current-reward utility readiness still gates B04.
 
-Prerequisites remain the existing CUDA Python environment, Rust 1.99.1, Linux linker, Mono, pinned Roslyn/private game runtimes, full checkpoint, retained PPG caches and opponent/seed references. The bundle includes source and reports, not checkpoint tensors or proprietary runtimes. `bundle.json`, `transfer-manifest.json` and `local-development.json` record the exact archive, sources and bounded local checks. Full lab qualification and B05–B07 remain Pending.
+Prerequisites: existing CUDA Python environment, Rust 1.99.1, Linux linker, Mono,
+admitted private game runtimes, full checkpoint, retained PPG caches and frozen
+opponent/seed references. The [public compiler](../rust-lab-toolchain/README.md)
+is included; checkpoint tensors and proprietary game binaries are not.
+
+Extract only the current supplement over its matching checkout. Original
+g570/r2/r3/r4 and six stage ZIPs stay immutable; current `bundle.json` and
+`transfer-manifest.json` select r5. `local-development.json` records short local
+checks, and `package-check.json` records fresh extraction verification. These do
+not certify B02–B04 Linux/CUDA execution or B05–B07 production adoption.

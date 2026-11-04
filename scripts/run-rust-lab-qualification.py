@@ -72,6 +72,19 @@ def command(stage, args, out, receipts):
     return cmd
 
 
+def selected_stages(args, receipts):
+    if args.stage != 'all':
+        return (args.stage,)
+    stages = STAGES[STAGES.index(args.start_at or 'b01'):]
+    available = {s for s, value in receipts.items() if value is not None}
+    for stage in stages:
+        for needed in {'b02': ('b01',), 'b03': ('b02',), 'b04': ('b02', 'b03')}.get(stage, ()):
+            if needed not in available:
+                raise ValueError('Starting at '+stages[0]+' requires --'+needed+' with its original passing receipt')
+        available.add(stage)
+    return stages
+
+
 def execute(cmd, log):
     with log.open('w', encoding='utf-8') as stream:
         process = subprocess.Popen(cmd, cwd=ROOT, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
@@ -94,6 +107,8 @@ def execute(cmd, log):
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--stage', choices=(*STAGES, 'all'), default='all')
+    parser.add_argument('--start-at', choices=STAGES,
+                        help='Resume --stage all at this stage, supplying prior original receipts; every gate still verifies them')
     parser.add_argument('--run', type=Path, default=Path(RUN))
     parser.add_argument('--expected-generation', type=int, help='Optional assertion; otherwise capture the latest committed generation')
     parser.add_argument('--checkpoint-sha256', help='Optional assertion; otherwise capture the latest committed checkpoint hash')
@@ -102,6 +117,8 @@ def main(argv=None):
     for stage in ('b01', 'b02', 'b03'): parser.add_argument('--'+stage, type=Path)
     parser.add_argument('--fixtures-only', action='store_true', help='CPU development only; stage b025, b03 or b04')
     args = parser.parse_args(argv)
+    if args.start_at is not None and (args.stage != 'all' or args.fixtures_only):
+        parser.error('--start-at requires --stage all and a real lab run')
     if args.fixtures_only and (args.stage not in ('b025', 'b03', 'b04') or args.device != 'cpu'):
         parser.error('--fixtures-only requires --stage b025/b03/b04 --device cpu')
     args.run = (ROOT/args.run).resolve()
@@ -116,6 +133,10 @@ def main(argv=None):
     try:
         report['bundle'] = dict(manifest_sha256=sha(PACKAGE/'transfer-manifest.json'),
                                 training_reference=verify_package()['training_reference'])
+        stages = selected_stages(args, receipts)
+        report['selected_stages'] = list(stages)
+        report['reused_receipts'] = {stage: dict(path=str(path.resolve()),sha256=sha(path))
+            for stage,path in receipts.items() if path is not None and stage not in stages}
         identity = None if args.fixtures_only else run_identity(args.run, args.expected_generation, args.checkpoint_sha256)
         report['run'] = identity
         if identity is not None:
@@ -128,7 +149,7 @@ def main(argv=None):
             if actual != requested:
                 raise ValueError('Committed config differs from --config. Supply the matching reviewed current config; qualification never adopts a config or changes a run.')
             report['config'] = dict(path=str(args.config),sha256=sha(ROOT/args.config))
-        for stage in STAGES if args.stage == 'all' else (args.stage,):
+        for stage in stages:
             if identity is not None and run_identity(args.run, args.expected_generation, args.checkpoint_sha256) != identity:
                 raise ValueError('Training state changed between qualification stages')
             folder = out/stage

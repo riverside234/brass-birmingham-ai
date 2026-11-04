@@ -98,17 +98,29 @@ def write(path, value):
 def command(args, *, cwd, env, log, timeout):
     """Bounded process group, including compiler children; retain complete logs."""
     began = time.monotonic()
-    print('B01:', log.stem, flush=True)
+    print('Qualification:', log.stem, flush=True)
     with log.open('wb') as stream:
         process = subprocess.Popen([str(x) for x in args], cwd=cwd, env=env,
-                                   stdout=stream, stderr=subprocess.STDOUT, start_new_session=True)
+                                   stdout=stream, stderr=subprocess.STDOUT, start_new_session=True,
+                                   creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0))
         try:
             code = process.wait(timeout=timeout)
         except BaseException:
-            os.killpg(process.pid, signal.SIGKILL)
+            if os.name == 'posix':
+                try: os.killpg(process.pid, signal.SIGKILL)
+                except ProcessLookupError: pass  # Child exited during cancellation.
+            elif process.poll() is None:
+                # Kill only this owned process tree, including compiler children.
+                try:
+                    subprocess.run(['taskkill', '/PID', str(process.pid), '/T', '/F'],
+                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=10,
+                        creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0))
+                except (OSError, subprocess.TimeoutExpired): pass
+                finally:
+                    if process.poll() is None: process.kill()
             process.wait()
             raise
-    require(code == 0, 'B01 command failed; see ' + str(log))
+    require(code == 0, 'Qualification command failed; see ' + str(log))
     return dict(argv=[str(x) for x in args], seconds=time.monotonic()-began, log=pin(log))
 
 
