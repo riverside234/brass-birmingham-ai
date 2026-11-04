@@ -148,7 +148,7 @@ def qualify(args,out):
             base.write(out/'build.json',identity)
             commands.append(base.command([sys.executable,'-m','brass_ai.rust_backend.lab_b02_smoke',
                 '--run',Path(args.run).resolve(),'--state',read_json(args.b01)['lab_state']['path'],
-                '--build',out/'build.json','--out',out,'--device',args.device,'--mono',args.mono],
+                '--build',out/'build.json','--out',out,'--device',args.device,'--mono',args.mono,'--workers',str(args.workers)],
                 cwd=ROOT,env=env,log=out/'collection-smoke.log',timeout=args.smoke_timeout))
             smoke=read_json(out/'collection-smoke.json')
             require(smoke['passed'] is True and smoke['branch_exit_qualified'] is True
@@ -171,10 +171,12 @@ def main():
     p.add_argument('--device',default='cuda:0');p.add_argument('--mono',default='mono')
     p.add_argument('--out',type=Path,required=True);p.add_argument('--offline',action='store_true')
     p.add_argument('--smoke-timeout',type=int,default=240,help='Bounded short coverage smoke, maximum 600 seconds')
+    p.add_argument('--workers',type=int,default=60,help='Lane ceiling (1..60), bounded by training CPU capacity and available smoke jobs')
     a=p.parse_args();a.out=a.out.resolve()
     require(a.out.is_relative_to(ROOT/'artifacts/rust-backend') and a.out!=ROOT/'artifacts/rust-backend','Evidence must be under artifacts/rust-backend')
     require(not a.out.is_relative_to(a.run.resolve()) and not a.run.resolve().is_relative_to(a.out),'Evidence cannot overlap training run')
-    require(0<a.smoke_timeout<=600,'Invalid smoke watchdog');a.out.mkdir(parents=True,exist_ok=False)
+    require(0<a.smoke_timeout<=600,'Invalid smoke watchdog')
+    require(1<=a.workers<=60,'B02 worker cap must be 1..60');a.out.mkdir(parents=True,exist_ok=False)
     write=b01_tools().write
     try:result=qualify(a,a.out)
     except Exception as error:

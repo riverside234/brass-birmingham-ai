@@ -1,6 +1,6 @@
 {
   "contract": "brass-lab-task-transfer/2.0.0",
-  "implementation": "70a926e5dfc7aa30829c296b49cb7b53159534ccc5e7c8876c46a9609a44164d",
+  "implementation": "20efa9ea06dad63f8301f0352d56f254c245b0a138caea2bd529dfc17873629e",
   "producer": "bc2c07c397fdc979c9d4376189e723af86620e6361e3cd7052f3500cea3709cb",
   "base_core": "fa0b3f7b74e9ed638c8b6f96d3f23b0910b4e5df9387ff8df58d5472a8014dd2",
   "implementation_files": {
@@ -125,7 +125,7 @@
     "src/brass_ai/learning/state_layout.py": "a6b92e2b8bff2ce1593500d7df4a6add59dae34ebee9c4449ca628e7a1603578",
     "src/brass_ai/learning/training.py": "ef452d909fdfa61b02c015df07a54aeffe68b92d6d31d62b3bb58734587ce04c",
     "src/brass_ai/learning/utility_model.py": "801410dfc8d7bcc145213dcf65e3cfa33e06f5a44d9adf6197e91a1f51dd3818",
-    "src/brass_ai/legacy.py": "284a18b127e9b09484ae3f5322375f51bbac6e9b0aacd887a21c612027d28e96",
+    "src/brass_ai/legacy.py": "bb15ef981f60bfcf9edd74e4a17ab599848660efcc8676b784de1eb2ff269ae2",
     "src/brass_ai/recovery/__init__.py": "f661ac41dd00ee542328b8cd9c6a4cabcc0074acf871a08b168a2a54dd78e10c",
     "src/brass_ai/recovery/actor_value.py": "dfb92346ed205d9d615ce5235bb2a4294d59ec0c542c5c92b27668f7a25c9a36",
     "src/brass_ai/recovery/batch_cache.py": "ba8b9731fad113547788104d63372460a2405c26a15c2cc0c2eed0782837f2f4",
@@ -260,7 +260,7 @@
     "src/brass_ai/recovery/vp_plot.py": "d7deba8b4c9e72ccc126c8f557c8b2a99a4595a3ff882892a9911207bdf954e9",
     "src/brass_ai/runtime_contracts.py": "5fe6fd25f8754ac888758e8db469f888f8b037961815de44b854bca42287062d",
     "src/brass_ai/rust_backend/lab_admission.py": "ec1d512b17a15739397154d5c28a2d4bf339b3edea751ea07f9f451d64e4aaff",
-    "src/brass_ai/rust_backend/lab_b02_smoke.py": "5353587ad3431ee9da9e35cb29b2a79d8c202cab3a1bd0962717063c4dff2df8",
+    "src/brass_ai/rust_backend/lab_b02_smoke.py": "d709c77a5f54041b9503594c5b9af60dbfce1a141595c24915f546c0b87def76",
     "src/brass_ai/rust_backend/lab_b03_smoke.py": "3827fe7313c2bbe95266d23fd3da4fda21414f8075cf5c64fda17b0cc6ce82b5",
     "src/brass_ai/rust_backend/lab_b04_smoke.py": "946ae88b820d536368ee7834aeea286fdb194335934bd8f6cdfd53a6ca096bec",
     "src/brass_ai/rust_backend/lab_collection.py": "7f9c38965c15571a2f244055e8c145671d5eabfc7752ce3daa68b8b42027f2f1",
@@ -379,11 +379,12 @@
   },
   "files": {
     ".gitignore": "7fa6dc7d11bc3aeb49fbfbdb05695ffd5fb4895eee7449dcf92c7c1b0987fa0d",
-    "ai-research/RUST_AI_BACKEND_MIGRATION_PLAN.md": "d26fabcdf142a7446b2e9643de950a99a0582466a471c03c30f5929347551265",
+    "ai-research/RUST_AI_BACKEND_MIGRATION_PLAN.md": "8c2d610b7f5404e56bfc7ab6e15e5ebd2833fa173cb0a9ab89bc2a3bb03b5bf3",
     "ai-research/RUST_BACKEND_B01_B04_G570_REVIEW.md": "5be0688006aeb29d96fbeb7ffa047223cb8bc887a530ae70c600e814016ca28b",
     "ai-research/RUST_BACKEND_B01_G570_FIX.md": "54aa1f5318541e7ba1c2367b01b2485f3336fd64ada579e5b19e3802203bf9b8",
     "ai-research/RUST_BACKEND_B01_G570_PYTHON_FIX.md": "41be485e0ed78abc04c66b299b23b108544126cd922e1b246fdf0dde410c4438",
     "ai-research/RUST_BACKEND_B025_REPORT.md": "0a27b35d5073a4c75030cbd2108c3288cfd779835c9ac37ffae3c0f3bbec3584",
+    "ai-research/RUST_BACKEND_B02_COLLECTION_FIX.md": "7fcf8eabf9ef409b43413d898de21f86a35fa56e6a653326dc61e01150ee262c",
     "ai-research/RUST_BACKEND_B03_REPORT.md": "97ec12d8bfa7442aac08a9dc6b40c5b51318f687859eef483ed81c3accad333b",
     "ai-research/RUST_BACKEND_B04_REPORT.md": "21969fe28c7577e0c3b7a6b356c4c3470962468cfcb5d8bf951c576f1c6749b3",
     "ai-research/RUST_BACKEND_G570_REFRESH.md": "4b1652a95581eea4ebfbcddfefbf8e79150bb4c15adc00b8118a23cbf2b301c5",
@@ -412,6 +413,27 @@
     "artifacts/rust-backend/g570-b01-python/r3-package-check.json": "66f9cb9b6ec85557e1d78d9ab75c8567f2db0fe660c99167c9397320ca59f618",
     "artifacts/rust-backend/g570-b01-python/run-python-checks.py": "a7f1f5c26a24cef3a013c083a20404e7f50ff9fda81f3bffc089c2aac6b2f035",
     "artifacts/rust-backend/g570-b01-python/seal-evidence.py": "3a1a3c9a1e89fc9f1730d1a25f0f30f8ca8a413d83213e882feda452a4073486",
+    "artifacts/rust-backend/g570-b02-collection/adoption-pass/tests.log": "1044a7deb748c35efb8d7ecbc1f6dbc80ec21b939fbb19f7e082ed0d275c915a",
+    "artifacts/rust-backend/g570-b02-collection/b01/adapter-tests.log": "323cf7878d2d685431741873baa682ea379baa41618f0cd7cc4b2d3e391e5720",
+    "artifacts/rust-backend/g570-b02-collection/b01/existing-inference-tests.log": "cd0acb13ea63ad95820200d39e1e2f047043175bd7efab12f1a3ea2c87f2168d",
+    "artifacts/rust-backend/g570-b02-collection/b01/python-checks.json": "a3485f498e2e433d5b8958674dfa050b3f5a99415bfe45614d192bd9563ec1d7",
+    "artifacts/rust-backend/g570-b02-collection/changed-implementation-inputs.json": "c9f82ade60a1eab5e1444049a4ca2a46ccd4b5e499c4177ebbc62ac02e89fd66",
+    "artifacts/rust-backend/g570-b02-collection/continuation-pass/checks.json": "8d6acfb69008abd9be95a535cdadf2f24e5be536d51be7740c3d847812c7d2bb",
+    "artifacts/rust-backend/g570-b02-collection/continuation-pass/tests.log": "97e9bcff69909ed2734675285548ecf8eb0a38e76de35f6497d02cd768fdf7fc",
+    "artifacts/rust-backend/g570-b02-collection/continuation/tests.log": "31b3be73a2329ca4a445da13f42f9bce1e110d5cba362466d97444199ca9a384",
+    "artifacts/rust-backend/g570-b02-collection/fixture-reviews.py": "f3c34f379b460428a0ac9f66de868b64addf7a42a431b734fedfd374e933ec17",
+    "artifacts/rust-backend/g570-b02-collection/focused-pass/checks.json": "2bf93673a077559eedafecb5fad5297022ffb2d67ee9962f6f11ddfad6e6c14f",
+    "artifacts/rust-backend/g570-b02-collection/focused-pass/tests.log": "a964c6b890aa5bfe4b11a5ca15f936b402152a8521653714823ff6bad9d0ffa3",
+    "artifacts/rust-backend/g570-b02-collection/focused/tests.log": "55c528e23884bdb08de9899a395aa0eeff0970b742e2175cd433b83491336097",
+    "artifacts/rust-backend/g570-b02-collection/lab-evidence/evidence/b02/collection-smoke.json": "9745dae476459ddaf0bdc43833cd6fe2aaae1f62859ec70abc41698b6201cfe9",
+    "artifacts/rust-backend/g570-b02-collection/lab-evidence/evidence/b02/collection-smoke.log": "2397164b080258dd3e7fe67c25f8b3d4ee69dcae8b0102680822d607edf9ba64",
+    "artifacts/rust-backend/g570-b02-collection/lab-evidence/evidence/runner.json": "99c7e1f63e4f9f122a73fb76ceee3369d4b6aa2fe53f85b2ab0c38332d8a8e8a",
+    "artifacts/rust-backend/g570-b02-collection/lab-evidence/export-manifest.json": "6ec799560551affa64a9768daa4938f0feb207680671c3f98f77dca1e0157638",
+    "artifacts/rust-backend/g570-b02-collection/package-verify-r6.py": "c737d89a5fd0862bd48a63b4eb3043a17aceee052cf8379dfda276dd954dfbf7",
+    "artifacts/rust-backend/g570-b02-collection/review-source.py": "8d17858c949f71e4539cbcb8adc4dedc23dcbe273088975e865355bedcf92680",
+    "artifacts/rust-backend/g570-b02-collection/review.json": "04910fa242773221c49b7f5866aa5ad11839a539ad8a86ceb4c8bc2d83aa07bc",
+    "artifacts/rust-backend/g570-b02-collection/seal-evidence.py": "d49f50d56d548a31a06c9ad093f38893329dfca8d32855d6883164fa34d9616f",
+    "artifacts/rust-backend/g570-b02-collection/source-review.json": "d32bd1513cc6ff9045e74eb8286a3ba5c62d56bc37f0427517f1a910a0e15339",
     "artifacts/rust-backend/g570-refresh/continuation-tests.log": "bc5b36aed79f384f0af6b111ad132a5d052a06d2b5a0f1a6948a7e19c2fd21d2",
     "artifacts/rust-backend/g570-refresh/fixtures.log": "6aded910ce7a37e7b8b27c83ec9f4a8c33df0bf65f9bc270f40adec4003782a8",
     "artifacts/rust-backend/g570-refresh/launcher-help.log": "e36d1eb6dd9bb48f214e7e85056e4606c3a629dc8b931b1c917ee0939cfdfcf1",
@@ -475,7 +497,7 @@
     "configs/learning/lab.json": "fd55c34066951d4b4fb6b746230a52012caa1b676280705d5e6e3b81e960a041",
     "configs/learning/local-entity-topology-2.0.0.json": "62d674d56f8917509a986b15f1d10e5874f6156f4e4fa491344fa4dbb1708fd8",
     "configs/learning/reward-source-equivalence.json": "0f57ec742a69b11d5a0ec998fb19a54f1e1ccb80287fa4011b4fc3e6c9289a9f",
-    "configs/learning/selfplay-resume-sources.json": "302a9d40ef11a735f37902febcee421f3163508baef4c24fcef535d080e82928",
+    "configs/learning/selfplay-resume-sources.json": "9d7d1a8c1ae332c9a5a005e86a750839627c93054153bc4f3c19efc8d10ace71",
     "configs/learning/state-groups-1.0.0.json": "626b8a350980a5e011db234f2a8d4cb310a2b72476ebd0849be9fe0f51c66fe9",
     "configs/learning/state-groups-2.0.0.json": "312531d8a92c724719ee3d75a9b9e8eefac7ff0c8e28fafe8e5783ea8731c8b5",
     "configs/learning/state-groups-3.0.0.json": "1cf0dc839f9982f4c4be2f06893cf59ee9e771f21446059a0024dd91cdf19721",
@@ -641,7 +663,7 @@
     "configs/step5/previous-smoke.json": "eea120865971cd6b625c1c8c2abd8977d4cb68dcdcbcca231816797ca038d2d3",
     "configs/step5/recovery-smoke.json": "4f82a08434262ac5e94cf291ac9651c1e3eb9b4ed0f674cbfdc550b59380833f",
     "configs/step5/smoke.json": "3f600b4abaaf88e868b18d7545e17b963eeafdc6e45dc52a7d58770e43a76be0",
-    "distribution/RUST_LAB_SEARCH_V1.md": "a2c947691ee95acd8bbb71400f8d414fdd084aedae3f68b17a3e959234b4724c",
+    "distribution/RUST_LAB_SEARCH_V1.md": "61c3dd38fead1a6eaa1bb6785c99fa364877feaf1ece459e20515abbb73d041e",
     "distribution/rust-lab-b025/README.md": "f9accb45b3480a6561dce5a13e54362b96cdb2662b7272a29c74f86d7f3a8762",
     "distribution/rust-lab-b025/bundle.json": "a12b7e7ff7ff72969ad05abf98ad6d90570e1325ad08a1643fa66699defeffca",
     "distribution/rust-lab-b025/transfer-manifest.json": "9db1d9fdda4c4e09be41a9166090c33adc9ba7028b8da009857dfe56a459da6c",
@@ -651,8 +673,8 @@
     "distribution/rust-lab-b04/README.md": "d9d679a78860500768ac16b11773554ce59758fd79c95f53d8f446271925e740",
     "distribution/rust-lab-b04/bundle.json": "34e69d61ace552b099f65210871ffaf54c4e1b7f60c72efb0ecfb0782c7f9aae",
     "distribution/rust-lab-b04/transfer-manifest.json": "6f9fea21f005359e7a07addfba18d85696c964a46f8ea94da4ce1e5194c1ab28",
-    "distribution/rust-lab-g570/README.md": "de4c09d511cbf7054e66cae0aa8b73b534b128f8c65bb686eaf2067449c32218",
-    "distribution/rust-lab-g570/local-development.json": "9bb3a42d52ff39083651f3965ad19cddf26c34597a50d8136fbed9280f97cf45",
+    "distribution/rust-lab-g570/README.md": "d0ae51c422625c6760b2cf45d4d24888fea2b9bf2317d4a13d4d76c0973d4925",
+    "distribution/rust-lab-g570/local-development.json": "9222c944d262d4080578eb20a7278876426d5a973e9b8b9e67d5e54365b4b909",
     "distribution/rust-lab-g570/training-reference.json": "a0fd4443487bc42afb9b00dc957957e67f05fc35dce4e445694b795d3d6242d8",
     "distribution/rust-lab-toolchain/License.txt": "cfc21f5e8bd655ae997eec916138b707b1d290b83272c02a95c9f821b8c87310",
     "distribution/rust-lab-toolchain/README.md": "c6cd090bccdbebb0432c0688b25ee9a2b8c0a5842183e36fc4127d848b013b0a",
@@ -804,7 +826,7 @@
     "scripts/prepare-rust-lab-b03.py": "93beee443befc510218728796a32359771d399dd27e2cd125cabf7113fe82d9f",
     "scripts/prepare-rust-lab-b04.py": "066dc6bc7a5c3ee148b3565ccb0468139cac33ca0ef54fd5184f384c12764afa",
     "scripts/prepare-rust-lab-g370.py": "63d3d1a9185eefe1f52b981d03e44958895fa1db88d67bf46b4127fee5aab259",
-    "scripts/prepare-rust-lab-g570.py": "bcb71a43a7cd9eebefcfcc6b8fc0896e3131f050a91da70a839ef32889c47717",
+    "scripts/prepare-rust-lab-g570.py": "fe6735f932216fd13823cb286f7cc465e16fa789c29ce6ec18da072b9a0790a2",
     "scripts/prepare-rust-lab-results.py": "2453423e199bcac2a555c560198b4c38404fdfe94041b09194a59c63439d30c7",
     "scripts/prepare-rust-onnx.py": "7f3b94d7fae078c8e97b4a0a5ea34318988630080738ef5e4ebdc5a498774421",
     "scripts/prepare-rust-state-catalog.py": "2be8296a00cdb90bafcb0f033d6cd261f1ca8cf51a2d883dba135ac0a68bbea3",
@@ -819,7 +841,7 @@
     "scripts/qualify-rust-coordinator.py": "0f8bd28981b41a3d3d8b5feac96d1e681a892228f9b134a8496ef915ae4726c2",
     "scripts/qualify-rust-features.py": "01d6450d567fa0b6911fc23c1094987c22f0fc334b2839f920f731d0fc2ccf38",
     "scripts/qualify-rust-inference.py": "321984fc60fbaecea1f75de433a19bc113d5aadcb24a0cd7093e0b496d95f910",
-    "scripts/qualify-rust-lab-b02.py": "ccc8362aee644db90df68b890386a256a18427c8de9733d41b7ff252c6549227",
+    "scripts/qualify-rust-lab-b02.py": "0d6167b8c6aa80628654b3300a0d0d737092de255c63aec4cf1d0e8ce6a5ef42",
     "scripts/qualify-rust-lab-b025.py": "5629d9257f78e934e09ae1c7c722575446d2f6245202a86c669965ff7ea128e8",
     "scripts/qualify-rust-lab-b03.py": "bc1b8c2926be1764edbd8f2dd6863d8e2a18b37aa90f712b66d7b3efda6af08d",
     "scripts/qualify-rust-lab-b04.py": "3dc43d1160c5dbd2679a5651bc07f73e1b8d711856d93bf72bd58144b64fc52e",
@@ -860,7 +882,7 @@
     "scripts/run-rust-lab-b025.sh": "00a2b31420f445e131596410747e530f6ee6d21c94c384fe37554e3803492741",
     "scripts/run-rust-lab-b03.sh": "c64964bc9581a6bcdcf07b42d287e36999c27d9c26089cda650fd58888bc5b45",
     "scripts/run-rust-lab-b04.sh": "847c9cde1dd2b7d5acc86dde84d4928c4d2e8aa5f5a2ffa222fe92b46b84bfa8",
-    "scripts/run-rust-lab-qualification.py": "59e52c32ca729be8c4decc4003bb18ef1c0ed6f49f7c5de291678ebe34140b7c",
+    "scripts/run-rust-lab-qualification.py": "2b7a6915fdc8980d3e3d26628c79cd8ee1e1317f3775ae4e8661f4245686a2f0",
     "scripts/rust_lab_results.py": "62ad10990d2da1a868e0b1fb14fc17d2787214dbddd8d01c559e011b2fc8af87",
     "scripts/rust_lab_toolchain.py": "1435e502c673d4f7afb5c5e978d8de97b861b8bea55c709d9250c838e6afebb1",
     "scripts/sample-legacy-pool.py": "5d9ae6b68a1c4bf739a7b8caa085c176abdfb4ecbd27d7dcaa49800020ea9012",
@@ -985,7 +1007,7 @@
     "src/brass_ai/learning/state_layout.py": "a6b92e2b8bff2ce1593500d7df4a6add59dae34ebee9c4449ca628e7a1603578",
     "src/brass_ai/learning/training.py": "ef452d909fdfa61b02c015df07a54aeffe68b92d6d31d62b3bb58734587ce04c",
     "src/brass_ai/learning/utility_model.py": "801410dfc8d7bcc145213dcf65e3cfa33e06f5a44d9adf6197e91a1f51dd3818",
-    "src/brass_ai/legacy.py": "284a18b127e9b09484ae3f5322375f51bbac6e9b0aacd887a21c612027d28e96",
+    "src/brass_ai/legacy.py": "bb15ef981f60bfcf9edd74e4a17ab599848660efcc8676b784de1eb2ff269ae2",
     "src/brass_ai/multiplayer.py": "c376b20442535d9527294eb7e9f82f8cf2354cbc244fc79e7392883dd1c20e01",
     "src/brass_ai/native/__init__.py": "74af971be8bcca073039c4e1ade3cf708d8ecc7b7815ccde260c7020d5afd574",
     "src/brass_ai/native/backend.py": "7e98092051b17c84faff4131cc7318e7c99da3dd2598f5c46351396bd3651383",
@@ -1189,7 +1211,7 @@
     "src/brass_ai/rust_backend/contracts.py": "549c1c8ca03537d8b1659e98d992509d5e5ba2ac91bdb8a55652b1bd36c36afa",
     "src/brass_ai/rust_backend/fixtures.py": "f5977700c97f901c212ade72a8b276ad69dc8098858b62fab24eabfe8990d4c1",
     "src/brass_ai/rust_backend/lab_admission.py": "ec1d512b17a15739397154d5c28a2d4bf339b3edea751ea07f9f451d64e4aaff",
-    "src/brass_ai/rust_backend/lab_b02_smoke.py": "5353587ad3431ee9da9e35cb29b2a79d8c202cab3a1bd0962717063c4dff2df8",
+    "src/brass_ai/rust_backend/lab_b02_smoke.py": "d709c77a5f54041b9503594c5b9af60dbfce1a141595c24915f546c0b87def76",
     "src/brass_ai/rust_backend/lab_b03_smoke.py": "3827fe7313c2bbe95266d23fd3da4fda21414f8075cf5c64fda17b0cc6ce82b5",
     "src/brass_ai/rust_backend/lab_b04_smoke.py": "946ae88b820d536368ee7834aeea286fdb194335934bd8f6cdfd53a6ca096bec",
     "src/brass_ai/rust_backend/lab_collection.py": "7f9c38965c15571a2f244055e8c145671d5eabfc7752ce3daa68b8b42027f2f1",
@@ -1523,6 +1545,7 @@
     "tests/RustBackendLab/test_b01_inputs.py": "0933f61320e8bc0d2310f49f7f641625260502db173522a347208537315a969e",
     "tests/RustBackendLab/test_b02.py": "9b733c3637f3ffc03709a2766c1af611c08fdc3d7ade868924a0813ddc769de4",
     "tests/RustBackendLab/test_b025.py": "213cb55168b4c3364d54b6fb42daab2f2a563cbcc5c546ac12df4ad2e7a30f17",
+    "tests/RustBackendLab/test_b02_collection_fix.py": "2ecc6e2e69242ac3e8c416f311bbce6a4c7a1c126ea4fff257a1028f321ecd6d",
     "tests/RustBackendLab/test_b03.py": "daf1037619d3577d27b3c77a07d8b48e22090964791a1dfe563d206403e36191",
     "tests/RustBackendLab/test_b04.py": "f043448f9e932c86a03c66ac712277b05d741b9f91ea6a9fc86a3002317def74",
     "tests/RustBackendLab/test_g370_lab.py": "467d455181be4d268879a8de641aa14870b2f2b168d9c49c8270d0cd8c2421e5",
@@ -1546,9 +1569,9 @@
     "passed": true,
     "local_date": "2026-11-03",
     "timezone": "America/Chicago",
-    "implementation": "70a926e5dfc7aa30829c296b49cb7b53159534ccc5e7c8876c46a9609a44164d",
+    "implementation": "20efa9ea06dad63f8301f0352d56f254c245b0a138caea2bd529dfc17873629e",
     "producer": "bc2c07c397fdc979c9d4376189e723af86620e6361e3cd7052f3500cea3709cb",
-    "source_review_sha256": "302a9d40ef11a735f37902febcee421f3163508baef4c24fcef535d080e82928",
+    "source_review_sha256": "9d7d1a8c1ae332c9a5a005e86a750839627c93054153bc4f3c19efc8d10ace71",
     "fixtures": {
       "tests": 81,
       "seconds": 39.268,
@@ -1613,13 +1636,34 @@
       "artifacts/rust-backend/g570-review/bootstrap/bootstrap-smoke.json": "f008f13191477c014dd0be79a72afdaf78ccc746dc98b5aaead0e212e85d77c9",
       "artifacts/rust-backend/g570-review/bootstrap/checks.json": "e2dd945eb0bbe457f10d945176cc33d6f20972e7ada3b28234f521d936ae1072",
       "artifacts/rust-backend/g570-review/bootstrap/compiler-preflight.log": "87d45ea495172513977274f5df00d08b5c87ae8d341dc865dc3bbcd07cf2a9e0",
-      "artifacts/rust-backend/g570-review/package-check.py": "f675efe8ba7ee3b6f4554c37447c9406c071688af5d85a9d6366a5f4198f6e59"
+      "artifacts/rust-backend/g570-review/package-check.py": "f675efe8ba7ee3b6f4554c37447c9406c071688af5d85a9d6366a5f4198f6e59",
+      "artifacts/rust-backend/g570-b02-collection/changed-implementation-inputs.json": "20c82c7c5fd241d444d60117b9eb14c4b53502cc058ebc9b5d6a9c34e528057f",
+      "artifacts/rust-backend/g570-b02-collection/fixture-reviews.py": "f3c34f379b460428a0ac9f66de868b64addf7a42a431b734fedfd374e933ec17",
+      "artifacts/rust-backend/g570-b02-collection/package-verify-r6.py": "c737d89a5fd0862bd48a63b4eb3043a17aceee052cf8379dfda276dd954dfbf7",
+      "artifacts/rust-backend/g570-b02-collection/review-source.py": "8d17858c949f71e4539cbcb8adc4dedc23dcbe273088975e865355bedcf92680",
+      "artifacts/rust-backend/g570-b02-collection/review.json": "d4db6d4235dec2c2c63fffd39b841990616cc4cde9af398880231c68aade78a5",
+      "artifacts/rust-backend/g570-b02-collection/seal-evidence.py": "d49f50d56d548a31a06c9ad093f38893329dfca8d32855d6883164fa34d9616f",
+      "artifacts/rust-backend/g570-b02-collection/source-review.json": "3867b651f21d49de3ea8ac6c1183754ebc9b640b584fabd21119841a662d51c6",
+      "artifacts/rust-backend/g570-b02-collection/adoption-pass/tests.log": "a386fff7108ac177609a6f3087c1bb20538fa50e502032a778e490b8331f8628",
+      "artifacts/rust-backend/g570-b02-collection/b01/adapter-tests.log": "42b97917256e1872297e59e00da7cd1edc1e7bed35a5e2b265542638fba55efb",
+      "artifacts/rust-backend/g570-b02-collection/b01/existing-inference-tests.log": "119f18901e404e9df093ce9b7ce51ab556173cb43d1847da0868954c03b7d534",
+      "artifacts/rust-backend/g570-b02-collection/b01/python-checks.json": "24089b84be22464cfdbd0604964c4b3b07abcb818c29a4972857ab939a49bf35",
+      "artifacts/rust-backend/g570-b02-collection/continuation/tests.log": "3d4d731110decb38722660e1e81afa858e6481b831856bd72b0117f0d5fa3a93",
+      "artifacts/rust-backend/g570-b02-collection/continuation-pass/checks.json": "57ee20c1e2bf6ded40e120b492545e4bf0c656f7f97de993de879b557f20dfce",
+      "artifacts/rust-backend/g570-b02-collection/continuation-pass/tests.log": "c2d3bd81d79685111e27ea1c9325ea05c4d6a5c8c033d4a8494d45d751735045",
+      "artifacts/rust-backend/g570-b02-collection/focused/tests.log": "c69fda4be1a47035610d598fd01160243c3650ffc663bd458e9f9b5f1dcc01d7",
+      "artifacts/rust-backend/g570-b02-collection/focused-pass/checks.json": "94c8e6313e5e13bbae05d0f673f08fc34a75951811fc30a864d6954c4fc0f274",
+      "artifacts/rust-backend/g570-b02-collection/focused-pass/tests.log": "bb2a44705df69d25fb817073c6e734c0736519ed347822a176cfe2c35e781fbc",
+      "artifacts/rust-backend/g570-b02-collection/lab-evidence/export-manifest.json": "6ec799560551affa64a9768daa4938f0feb207680671c3f98f77dca1e0157638",
+      "artifacts/rust-backend/g570-b02-collection/lab-evidence/evidence/runner.json": "99c7e1f63e4f9f122a73fb76ceee3369d4b6aa2fe53f85b2ab0c38332d8a8e8a",
+      "artifacts/rust-backend/g570-b02-collection/lab-evidence/evidence/b02/collection-smoke.json": "9745dae476459ddaf0bdc43833cd6fe2aaae1f62859ec70abc41698b6201cfe9",
+      "artifacts/rust-backend/g570-b02-collection/lab-evidence/evidence/b02/collection-smoke.log": "2397164b080258dd3e7fe67c25f8b3d4ee69dcae8b0102680822d607edf9ba64"
     },
     "native_source_unchanged": true,
     "search_timing_retested": false,
-    "lab_qualification": "B01 passed for g570/cuda:0; B02-B04 Pending",
+    "lab_qualification": "Pending",
     "production_run_modified": false,
-    "scope": "Qualification harness only; same trainer/native core/source approvals. B01 Linux/CUDA passed in received report; B02-B04 real lab gates remain Pending.",
+    "scope": "R6 shared V4 text identity and 60-worker-cap diagnostic smoke; full g570 continuation preserved.",
     "b01_inputs_fix": {
       "passed": true,
       "fixture_tests": 42,
@@ -1905,23 +1949,23 @@
       ],
       "adapter": {
         "tests": 29,
-        "seconds": 12.125,
+        "seconds": 13.145,
         "skipped": 0
       },
       "inference": {
         "tests": 28,
-        "seconds": 6.656,
+        "seconds": 8.939,
         "skipped": 0
       },
       "ambient_pythonpath_removed": true,
       "tested_files": {
         "scripts/qualify-rust-lab.py": "c38284c754ea1dccd97affad3a44576fd27f98861c69c46c8cfcce4db0670490",
-        "scripts/qualify-rust-lab-b02.py": "ccc8362aee644db90df68b890386a256a18427c8de9733d41b7ff252c6549227",
+        "scripts/qualify-rust-lab-b02.py": "0d6167b8c6aa80628654b3300a0d0d737092de255c63aec4cf1d0e8ce6a5ef42",
         "tests/RustBackendLab/test_b01_environment.py": "5a48b268739e44d174fc556e89439a66292bbfa2c68dcaeb03e865ede654bdfb"
       },
-      "trainer_source_unchanged": true,
+      "trainer_source_unchanged": false,
       "native_source_unchanged": true,
-      "source_reviews_unchanged": true,
+      "source_reviews_unchanged": false,
       "lab_partial": {
         "report": "results/rust-lab-qualification/20261103T223841656406Z-20261103T223616837419Z-g570-all-2c69c499-f603530c",
         "native_tests": {
@@ -2003,6 +2047,51 @@
         "tests/RustBackendLab/test_lab_transfer.py": "c3d131354d33ccc7fad6ced9a217dd6fc775fecb896fe7089a6f233a7a3f6ad0"
       },
       "scope": "Qualification harness only; same trainer/native core/source approvals. B01 Linux/CUDA passed in received report; B02-B04 real lab gates remain Pending."
+    },
+    "collection_fix": {
+      "passed": true,
+      "implementation": "20efa9ea06dad63f8301f0352d56f254c245b0a138caea2bd529dfc17873629e",
+      "worker_cap": 60,
+      "tests": {
+        "focused": {
+          "tests": 63,
+          "seconds": 31.343,
+          "skipped": 1
+        },
+        "continuation": {
+          "tests": 72,
+          "seconds": 92.09,
+          "skipped": 2
+        },
+        "b01_adapter": {
+          "tests": 29,
+          "seconds": 13.145,
+          "skipped": 0
+        },
+        "b01_inference": {
+          "tests": 28,
+          "seconds": 8.939,
+          "skipped": 0
+        }
+      },
+      "tested_files": {
+        "src/brass_ai/legacy.py": "bb15ef981f60bfcf9edd74e4a17ab599848660efcc8676b784de1eb2ff269ae2",
+        "src/brass_ai/rust_backend/lab_b02_smoke.py": "d709c77a5f54041b9503594c5b9af60dbfce1a141595c24915f546c0b87def76",
+        "scripts/qualify-rust-lab-b02.py": "0d6167b8c6aa80628654b3300a0d0d737092de255c63aec4cf1d0e8ce6a5ef42",
+        "scripts/run-rust-lab-qualification.py": "2b7a6915fdc8980d3e3d26628c79cd8ee1e1317f3775ae4e8661f4245686a2f0",
+        "tests/RustBackendLab/test_b02_collection_fix.py": "2ecc6e2e69242ac3e8c416f311bbce6a4c7a1c126ea4fff257a1028f321ecd6d"
+      },
+      "source_review_sha256": "9d7d1a8c1ae332c9a5a005e86a750839627c93054153bc4f3c19efc8d10ace71",
+      "verified_lab_files": [
+        "evidence/runner.json",
+        "evidence/b02/collection-smoke.json",
+        "evidence/b02/collection-smoke.log"
+      ],
+      "lab_qualification": "Pending: rerun B01-B04 for changed executable source",
+      "limitations": [
+        "One optional broad rating-plot test could not run without matplotlib; focused frozen-runtime checks passed.",
+        "Windows symlink and two optional built-native teacher checks skipped; actual Linux/CUDA gates remain on lab."
+      ]
     }
   },
   "lab_qualification": "Pending",
@@ -2131,8 +2220,8 @@
     "tests/RustBackendLab"
   ],
   "supersedes": {
-    "path": "distribution/rust-lab-g570/rust-lab-b01-b04-g570-r4.zip",
-    "sha256": "02c4780062444fa056dc4adb5757f5d56b9cbb2cbee78eec3c4d28c9b5986993"
+    "path": "distribution/rust-lab-g570/rust-lab-b01-b04-g570-r5.zip",
+    "sha256": "cbd9eb905d4a40cdcedf81d1091d90d4e2189acea2faf84023cf8db65f891968"
   },
   "results_directory": "results/rust-lab-qualification",
   "extraction_order": [

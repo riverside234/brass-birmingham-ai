@@ -40,10 +40,23 @@ class LegacyWorker:
             file = directory / p['name']
             if file.parent != directory or hashlib.sha256(file.read_bytes()).hexdigest() != p['sha256']:
                 raise ValueError(f'Runtime fingerprint mismatch: {p["name"]}')
+        source_mismatch = False
         for p in self.manifest['sources'] if frozen_manifest_sha256 is None else ():
             file = resolve_project_path(self.root, p['path'])
             if not file.is_relative_to(self.root) or hashlib.sha256(file.read_bytes()).hexdigest() != p['sha256']:
-                raise ValueError(f'Rebuild legacy runtime after source change: {p["path"]}')
+                source_mismatch = True
+        if source_mismatch:
+            # Shared-search receipts bind canonical source text AND the exact
+            # runtime manifest. Git/ZIP line endings can differ from build-time
+            # bytes without changing the policy. Only that authenticated current
+            # runtime may use canonical comparison; ordinary banks stay strict.
+            from .search.legacy_runtime import recorded, runtime_directory
+            if not (directory.parent / 'search.json').is_file():
+                raise ValueError('Rebuild legacy runtime after source change')
+            ref = recorded(self.root, directory.parent.name)
+            if (runtime_directory(self.root, ref) != directory or
+                    {p['path'] for p in self.manifest['sources']} != set(ref['recipe']['sources'])):
+                raise ValueError('Legacy runtime source inventory differs')
         exe = str(directory / 'BrassLegacyAI.exe')
         command = [exe, str(self.root)] if os.name == 'nt' else [mono or 'mono', exe, str(self.root)]
         self.process = subprocess.Popen(command, stdin=subprocess.PIPE, stdout=subprocess.PIPE,

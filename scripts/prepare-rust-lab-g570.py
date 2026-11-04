@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Seal g570-r5 with offline Roslyn, guarded B01 reuse and bounded review evidence."""
+"""Seal g570-r6 with shared-runtime text identity and a bounded 60-worker smoke cap."""
 import argparse
 import hashlib
 import importlib.util
@@ -33,7 +33,7 @@ def main():
     from brass_ai.rust_backend.lab_contract import sha,SOURCE,extract_new,verify_inputs
     from brass_ai.rust_backend.lab_transfer import CONTRACT,RETIRED,implementation_inventory
     from brass_ai.rust_backend.lab_teacher_overlay import source_fingerprint
-    out=ROOT/DIRECTORY;archive=out/'rust-lab-b01-b04-g570-r5.zip'
+    out=ROOT/DIRECTORY;archive=out/'rust-lab-b01-b04-g570-r6.zip'
     require(not archive.exists(),'This bundle is already sealed; publish a new version')
     for n,h in ARCHIVES.items():require(sha(ROOT/n)==h,'Changed historical archive: '+n)
     require(sha(out/'rust-lab-b01-b04-g570.zip')=='7bbceb50b1b2ffa3c3797aa2aae452a90edde2f15be8a2d627b452f7c64a53a4',
@@ -44,6 +44,8 @@ def main():
             'Previous g570-r3 archive changed')
     require(sha(out/'rust-lab-b01-b04-g570-r4.zip')=='02c4780062444fa056dc4adb5757f5d56b9cbb2cbee78eec3c4d28c9b5986993',
             'Previous g570-r4 archive changed')
+    require(sha(out/'rust-lab-b01-b04-g570-r5.zip')=='cbd9eb905d4a40cdcedf81d1091d90d4e2189acea2faf84023cf8db65f891968',
+            'Previous g570-r5 archive changed')
     require(all(not (ROOT/n).exists() for n in RETIRED),'Retired AZ_DB source still present')
     spec=importlib.util.spec_from_file_location('b01_package_inputs',ROOT/'scripts/qualify-rust-lab.py')
     b01=importlib.util.module_from_spec(spec);spec.loader.exec_module(b01)
@@ -78,6 +80,7 @@ def main():
         'ai-research/RUST_BACKEND_B01_G570_FIX.md',
         'ai-research/RUST_BACKEND_B01_G570_PYTHON_FIX.md',
         'ai-research/RUST_BACKEND_B01_B04_G570_REVIEW.md',
+        'ai-research/RUST_BACKEND_B02_COLLECTION_FIX.md',
         'distribution/rust-lab-toolchain/README.md','distribution/rust-lab-toolchain/License.txt',
         'results/joint7-v11-2-g1290-trained-restart-g0370-20261102T221517838215Z/state.json','distribution/RUST_LAB_SEARCH_V1.md'}
     folders=[('src/brass_ai',{'.py'}),('configs',{'.json','.md'}),('scripts',{'.py','.sh'}),
@@ -111,9 +114,9 @@ def main():
             'Exact B01 inference suite must pass before packaging')
     for name,expected in python_checks['tested_files'].items():
         require(sha(ROOT/name)==expected,'Changed source after B01 Python checks: '+name)
-    review=checks['qualification_review']
-    require(review['passed'] and review['bootstrap']['passed'] and review['b01_lab_passed']
-            and review['runtime_sources_unchanged'], 'Missing qualification harness/host review')
+    review=checks['collection_fix']
+    require(review['passed'] and review['implementation']==implementation and review['worker_cap']==60,
+            'Missing collection/runtime review')
     for name,expected in review['tested_files'].items():
         require(sha(ROOT/name)==expected,'Changed source after qualification review: '+name)
     require(sha(ROOT/'configs/learning/selfplay-resume-sources.json')==checks['source_review_sha256'],
@@ -139,8 +142,8 @@ def main():
         archives=ARCHIVES,local_checks=checks,lab_qualification='Pending',production_teacher_enabled=False,
         native_test_inputs=native_inputs,
         python_test_paths=list(b01.TEST_PATHS),
-        supersedes=dict(path=DIRECTORY+'/rust-lab-b01-b04-g570-r4.zip',
-                        sha256='02c4780062444fa056dc4adb5757f5d56b9cbb2cbee78eec3c4d28c9b5986993'),
+        supersedes=dict(path=DIRECTORY+'/rust-lab-b01-b04-g570-r5.zip',
+                        sha256='cbd9eb905d4a40cdcedf81d1091d90d4e2189acea2faf84023cf8db65f891968'),
         results_directory='results/rust-lab-qualification',extraction_order=['Current checkout with deletions, then g570 supplement only'])
     if args.check_only:
         print(json.dumps(dict(passed=True,files=len(files),implementation=implementation,producer=producer)));return

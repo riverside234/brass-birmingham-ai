@@ -1,6 +1,6 @@
 # B01/B02 search_v1 qualification bundles
 
-**Current qualification (2026-11-03):** use the [g570-r5 B01–B04 bundle](rust-lab-g570/README.md). B01 passed at g570/cuda:0; r5 fixes B02's missing compiler and supports guarded continuation at B02. It pins the recorded checkpoint/config and complete current source inventory. The commands below describe historical transfers; follow the current r5 README instead. Search remains task-only search_v1, four seconds plus at most one second post-search, with DOMiNO/AZ_DB and V205 disabled.
+**Current qualification (2026-11-03):** use the [g570-r6 B01–B04 bundle](rust-lab-g570/README.md). R6 fixes B02's shared-runtime text identity check and uses a 60-worker smoke ceiling. Restart at B01 because executable source changed; all r6 lab gates are Pending. It preserves the recorded checkpoint/config. The commands below describe historical transfers; follow the current README instead. Search remains task-only search_v1, four seconds plus at most one second post-search, with DOMiNO/AZ_DB and V205 disabled.
 
 Refreshed 2026-10-29. **B01 lab qualification: Pending. B02 lab qualification: Pending.** All current ZIPs are under `distribution/` and explicitly allowed by `.gitignore` so they can be committed and pushed with the project.
 

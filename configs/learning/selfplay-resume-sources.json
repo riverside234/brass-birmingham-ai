@@ -711297,6 +711297,185 @@
       "preserve_g570_calibration": true,
       "reason_ref": "184",
       "config_migrations_ref": "1705"
+    },
+    {
+      "from_implementation": "603d1d236ca3da4511467956a9b656b41a4f03017d814b1abd8f060467a4c05c",
+      "to_implementation": "20efa9ea06dad63f8301f0352d56f254c245b0a138caea2bd529dfc17873629e",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "185",
+      "review_report": "ai-research/RUST_BACKEND_B02_COLLECTION_FIX.md"
+    },
+    {
+      "from_implementation": "603d1d236ca3da4511467956a9b656b41a4f03017d814b1abd8f060467a4c05c",
+      "to_implementation": "20efa9ea06dad63f8301f0352d56f254c245b0a138caea2bd529dfc17873629e",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "185",
+      "review_report": "ai-research/RUST_BACKEND_B02_COLLECTION_FIX.md",
+      "teacher_phase_changes": true
+    },
+    {
+      "from_implementation": "6abba7672db47057df6090907c9397eb70ecad52b691653ed552bf250725e96d",
+      "to_implementation": "20efa9ea06dad63f8301f0352d56f254c245b0a138caea2bd529dfc17873629e",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "185",
+      "review_report": "ai-research/RUST_BACKEND_B02_COLLECTION_FIX.md"
+    },
+    {
+      "from_implementation": "6abba7672db47057df6090907c9397eb70ecad52b691653ed552bf250725e96d",
+      "to_implementation": "20efa9ea06dad63f8301f0352d56f254c245b0a138caea2bd529dfc17873629e",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "185",
+      "review_report": "ai-research/RUST_BACKEND_B02_COLLECTION_FIX.md",
+      "teacher_phase_changes": true
+    },
+    {
+      "from_implementation": "70a926e5dfc7aa30829c296b49cb7b53159534ccc5e7c8876c46a9609a44164d",
+      "to_implementation": "20efa9ea06dad63f8301f0352d56f254c245b0a138caea2bd529dfc17873629e",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "185",
+      "review_report": "ai-research/RUST_BACKEND_B02_COLLECTION_FIX.md",
+      "preserve_g370_calibration": true,
+      "preserve_g570_calibration": true
+    },
+    {
+      "from_implementation": "70a926e5dfc7aa30829c296b49cb7b53159534ccc5e7c8876c46a9609a44164d",
+      "to_implementation": "20efa9ea06dad63f8301f0352d56f254c245b0a138caea2bd529dfc17873629e",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "185",
+      "review_report": "ai-research/RUST_BACKEND_B02_COLLECTION_FIX.md",
+      "preserve_g370_calibration": true,
+      "preserve_g570_calibration": true,
+      "teacher_phase_changes": true
+    },
+    {
+      "from_implementation": "f7a48a025e2c247e63da4df301ce2b80c7c6aabf1073220a5be97f0929719c78",
+      "to_implementation": "20efa9ea06dad63f8301f0352d56f254c245b0a138caea2bd529dfc17873629e",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "185",
+      "review_report": "ai-research/RUST_BACKEND_B02_COLLECTION_FIX.md",
+      "preserve_g370_calibration": true,
+      "preserve_g570_calibration": true
+    },
+    {
+      "from_implementation": "f7a48a025e2c247e63da4df301ce2b80c7c6aabf1073220a5be97f0929719c78",
+      "to_implementation": "20efa9ea06dad63f8301f0352d56f254c245b0a138caea2bd529dfc17873629e",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "185",
+      "review_report": "ai-research/RUST_BACKEND_B02_COLLECTION_FIX.md",
+      "preserve_g370_calibration": true,
+      "preserve_g570_calibration": true,
+      "teacher_phase_changes": true
+    },
+    {
+      "from_implementation": "f7a48a025e2c247e63da4df301ce2b80c7c6aabf1073220a5be97f0929719c78",
+      "to_implementation": "20efa9ea06dad63f8301f0352d56f254c245b0a138caea2bd529dfc17873629e",
+      "learning_compatibility_ref": "5",
+      "preserve_g570_calibration": true,
+      "reason_ref": "185",
+      "review_report": "ai-research/RUST_BACKEND_B02_COLLECTION_FIX.md"
+    },
+    {
+      "from_implementation": "70a926e5dfc7aa30829c296b49cb7b53159534ccc5e7c8876c46a9609a44164d",
+      "to_implementation": "20efa9ea06dad63f8301f0352d56f254c245b0a138caea2bd529dfc17873629e",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "185",
+      "review_report": "ai-research/RUST_BACKEND_B02_COLLECTION_FIX.md",
+      "preserve_g370_calibration": true,
+      "preserve_g570_calibration": true
+    },
+    {
+      "from_implementation": "f7a48a025e2c247e63da4df301ce2b80c7c6aabf1073220a5be97f0929719c78",
+      "to_implementation": "20efa9ea06dad63f8301f0352d56f254c245b0a138caea2bd529dfc17873629e",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "185",
+      "review_report": "ai-research/RUST_BACKEND_B02_COLLECTION_FIX.md",
+      "preserve_g370_calibration": true,
+      "preserve_g570_calibration": true
+    },
+    {
+      "from_implementation": "20efa9ea06dad63f8301f0352d56f254c245b0a138caea2bd529dfc17873629e",
+      "to_implementation": "20efa9ea06dad63f8301f0352d56f254c245b0a138caea2bd529dfc17873629e",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "185",
+      "review_report": "ai-research/RUST_BACKEND_B02_COLLECTION_FIX.md",
+      "preserve_g370_calibration": true,
+      "preserve_g570_calibration": true
+    },
+    {
+      "from_implementation": "70a926e5dfc7aa30829c296b49cb7b53159534ccc5e7c8876c46a9609a44164d",
+      "to_implementation": "20efa9ea06dad63f8301f0352d56f254c245b0a138caea2bd529dfc17873629e",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "185",
+      "review_report": "ai-research/RUST_BACKEND_B02_COLLECTION_FIX.md",
+      "preserve_g370_calibration": true,
+      "preserve_g570_calibration": true,
+      "teacher_phase_changes": true
+    },
+    {
+      "from_implementation": "f7a48a025e2c247e63da4df301ce2b80c7c6aabf1073220a5be97f0929719c78",
+      "to_implementation": "20efa9ea06dad63f8301f0352d56f254c245b0a138caea2bd529dfc17873629e",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "185",
+      "review_report": "ai-research/RUST_BACKEND_B02_COLLECTION_FIX.md",
+      "preserve_g370_calibration": true,
+      "preserve_g570_calibration": true,
+      "teacher_phase_changes": true
+    },
+    {
+      "from_implementation": "20efa9ea06dad63f8301f0352d56f254c245b0a138caea2bd529dfc17873629e",
+      "to_implementation": "20efa9ea06dad63f8301f0352d56f254c245b0a138caea2bd529dfc17873629e",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "185",
+      "review_report": "ai-research/RUST_BACKEND_B02_COLLECTION_FIX.md",
+      "preserve_g370_calibration": true,
+      "preserve_g570_calibration": true,
+      "teacher_phase_changes": true
+    },
+    {
+      "from_implementation": "70a926e5dfc7aa30829c296b49cb7b53159534ccc5e7c8876c46a9609a44164d",
+      "to_implementation": "20efa9ea06dad63f8301f0352d56f254c245b0a138caea2bd529dfc17873629e",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "185",
+      "review_report": "ai-research/RUST_BACKEND_B02_COLLECTION_FIX.md",
+      "preserve_g370_calibration": true,
+      "preserve_g570_calibration": true,
+      "config_migrations_ref": "1626"
+    },
+    {
+      "from_implementation": "f7a48a025e2c247e63da4df301ce2b80c7c6aabf1073220a5be97f0929719c78",
+      "to_implementation": "20efa9ea06dad63f8301f0352d56f254c245b0a138caea2bd529dfc17873629e",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "185",
+      "review_report": "ai-research/RUST_BACKEND_B02_COLLECTION_FIX.md",
+      "preserve_g370_calibration": true,
+      "preserve_g570_calibration": true,
+      "config_migrations_ref": "1626"
+    },
+    {
+      "from_implementation": "20efa9ea06dad63f8301f0352d56f254c245b0a138caea2bd529dfc17873629e",
+      "to_implementation": "20efa9ea06dad63f8301f0352d56f254c245b0a138caea2bd529dfc17873629e",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "185",
+      "review_report": "ai-research/RUST_BACKEND_B02_COLLECTION_FIX.md",
+      "preserve_g370_calibration": true,
+      "preserve_g570_calibration": true,
+      "config_migrations_ref": "1626"
+    },
+    {
+      "from_implementation": "603d1d236ca3da4511467956a9b656b41a4f03017d814b1abd8f060467a4c05c",
+      "to_implementation": "20efa9ea06dad63f8301f0352d56f254c245b0a138caea2bd529dfc17873629e",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "185",
+      "review_report": "ai-research/RUST_BACKEND_B02_COLLECTION_FIX.md",
+      "config_migrations_ref": "1626"
+    },
+    {
+      "from_implementation": "6abba7672db47057df6090907c9397eb70ecad52b691653ed552bf250725e96d",
+      "to_implementation": "20efa9ea06dad63f8301f0352d56f254c245b0a138caea2bd529dfc17873629e",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "185",
+      "review_report": "ai-research/RUST_BACKEND_B02_COLLECTION_FIX.md",
+      "config_migrations_ref": "1626"
     }
   ],
   "definitions": {
@@ -711485,7 +711664,8 @@
       "181": "Reviewed g370 continuation: preserve entropy .005, adopt direct lambda .95/floor .95, half-percent T2-only forks, and PPG beta floor 1. Preserve compatible cache, weights/Adam/RNG, utility calibration, independent gates and progress. Review: ai-research/NEUTRAL_SELFPLAY_G1290_RESTART.md.",
       "182": "Reviewed g370 task-only lab refresh: remove AZ_DB, require DOMiNO off in lab, preserve neutral restart recipe/model/PPO-PPG-local Adam/RNG/progress. Add exact isolated pending g370 phase restore, four-second Rust search plus one-second cumulative post-work, streamed verification and sealed transfer. Production teacher remains off; lab gates Pending.",
       "183": "Reviewed g570 lab transfer refresh: preserve the recorded neutral g570 config, full model/Adam/RNG/PPG/progress and task utility. Pin the complete source inventory including added modules, preserve byte-bound runtime files, and diagnose producer drift. No g570/entropy recipe adoption; search_v1 4s+1s and production teacher-off gates unchanged. Actual Linux/CUDA qualification remains Pending.",
-      "184": "Reviewed g570: preserve main/auxiliary weights, Adam/RNG, progress and PPG/GAE. Save companion bundles in frozen snapshots; T1.3x3 normal/T1.5x2 fork openings, epsilon .02, v4 PFSP manual adoption, 166/154/0, floating trained-start PL baseline. Entropy preset .005; optional committed-health linear anneal to .001 over 100 healthy iterations. Exact signed helper commands only; reward step one .01/.075, step two .005/.05 after k>=50, reward changes invalidate calibration/refresh PPG targets, no live automatic reward mutation. Off keeps reward and progress; scheduled probe is report-only, no AnchorKL. Review: ai-research/NEUTRAL_SELFPLAY_G1290_RESTART.md."
+      "184": "Reviewed g570: preserve main/auxiliary weights, Adam/RNG, progress and PPG/GAE. Save companion bundles in frozen snapshots; T1.3x3 normal/T1.5x2 fork openings, epsilon .02, v4 PFSP manual adoption, 166/154/0, floating trained-start PL baseline. Entropy preset .005; optional committed-health linear anneal to .001 over 100 healthy iterations. Exact signed helper commands only; reward step one .01/.075, step two .005/.05 after k>=50, reward changes invalidate calibration/refresh PPG targets, no live automatic reward mutation. Off keeps reward and progress; scheduled probe is report-only, no AnchorKL. Review: ai-research/NEUTRAL_SELFPLAY_G1290_RESTART.md.",
+      "185": "B02 qualification repair: canonical source verification for an already pinned current shared V4 runtime; binary/dependency/manifest and semantic source checks preserved. Raise bounded smoke worker ceiling to 60, retain three frozen parent families and branch coverage; early reference preflight and partial-setup cleanup. No model, optimizer, reward, search, training recipe or saved-state change. Actual Linux/CUDA gates Pending."
     },
     "config_changes": {
       "0": {

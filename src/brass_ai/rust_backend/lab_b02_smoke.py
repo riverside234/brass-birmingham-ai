@@ -34,6 +34,31 @@ def require_coverage(kinds, branches=None):
         require(branches>0,'B02 needs a complete branch family; a branch-disabled recipe cannot qualify this gate')
 
 
+def worker_settings(execution, config, jobs, requested=60):
+    require(type(requested) is int and 1 <= requested <= 60, 'B02 worker cap must be 1..60')
+    available = execution.get('cpu_budget',64)-execution.get('cpu_reserve',4)
+    cap = min(requested, available, config['legacy_budget']['global_workers'])
+    require(cap > 0, 'No CPU capacity for B02 smoke')
+    # Three frozen parent families plus their bounded continuations. Extra
+    # empty workers would add memory without increasing useful concurrency.
+    runnable = len(jobs)+sum(bool(j.get('branching')) and route(j)[0]=='rust' for j in jobs)
+    return dict(requested_cap=requested, training_cap=config['legacy_budget']['global_workers'],
+                cpu_capacity=available, effective_cap=cap, lanes=min(cap,runnable),
+                parents=len(jobs), max_continuations=runnable-len(jobs))
+
+
+def preflight_reference(root, jobs, execution, mono):
+    from brass_ai.recovery.execution import make_policy
+    checked = set()
+    for job in jobs:
+        for spec in job['policies']:
+            if spec['kind']=='neural' or spec['policy_id'] in checked: continue
+            policy = make_policy(spec,root,None,execution,mono)
+            try: checked.add(spec['policy_id'])
+            finally: policy.close()
+    return sorted(checked)
+
+
 def reference_part(root,job,endpoint,execution,mono):
     """Exact whole-table fallback. No native label is attached to these rows."""
     from brass_ai.host import RulesHost
@@ -43,9 +68,12 @@ def reference_part(root,job,endpoint,execution,mono):
     with ExitStack() as stack:
         directory=local_scoring_host(root) if 'local_scoring' in job['provenance'] else training_host(root)
         host=stack.enter_context(RulesHost(directory,mono=mono));raw={}
-        policies=[make_policy(p,root,endpoint,execution,mono) for p in job['policies']]
-        for p in policies:
+        policies=[]
+        for spec in job['policies']:
+            p=make_policy(spec,root,endpoint,execution,mono)
             stack.callback(p.close)
+            policies.append(p)
+        for p in policies:
             if hasattr(p,'evaluator'):
                 predict=p.evaluator.predict
                 def record(requests,p=p,predict=predict):
@@ -120,7 +148,12 @@ def run(args):
         require(all(route(j)[0]=='rust' or j['provenance']['legacy_mode']=='fast' for j in jobs),'B02 does not qualify enabled search jobs')
         write(out/'frozen-jobs.json',dict(jobs=jobs,full_plan_sha256=digest(planned['jobs']),
             full_plan_composition=planned['composition'],diagnostic_subset=True,table_mix_changed=False))
-        lanes=min(2,execution['processes']*execution['hosts_per_process'])
+        print('B02: preflight frozen reference policies',flush=True)
+        reference_policies=preflight_reference(root,jobs,execution,args.mono)
+        workers=worker_settings(execution,config,jobs,getattr(args,'workers',60))
+        write(out/'worker-settings.json',dict(workers,reference_policies=reference_policies))
+        lanes=workers['lanes']
+        print(f'B02: {lanes} active lanes, cap {workers["effective_cap"]}; {len(jobs)} frozen families',flush=True)
         leases=service.channels(lanes);endpoints=queue.Queue()
         owned=[leases.acquire() for _ in range(lanes)]
         for endpoint in owned: endpoint.timeout=20.;endpoints.put(endpoint)
@@ -178,7 +211,7 @@ def run(args):
     require_coverage(seen, branches)
     return dict(passed=True,scope='bounded diagnostic subset of frozen ordinary jobs; native neural tables, whole-table reference legacy route; no training admission',
         frozen_jobs=pin(out/'frozen-jobs.json'),families=[pin(store.path(job)) for job in jobs],
-        roots=coverage,metrics=metrics,scheduler=scheduler,cached=cached,service=report,branch_families=branches,
+        roots=coverage,metrics=metrics,scheduler=scheduler,cached=cached,service=report,branch_families=branches,workers=workers,
         missing_table_kinds=sorted({'selfplay','historical','legacy'}-seen),training_started=False,lab_deployed=False,
         full_native_coverage=False,method=METHOD,search_enabled=False,v205_enabled=False,diagnostic_branch_trigger='first eligible decision; alternative draws and fork semantics unchanged',
         branch_exit_qualified=branches>0)
@@ -188,7 +221,8 @@ def main():
     import argparse
     p=argparse.ArgumentParser(description=__doc__)
     for name in ('run','state','build','out'):p.add_argument('--'+name,type=Path,required=True)
-    p.add_argument('--device',required=True);p.add_argument('--mono',default='mono');a=p.parse_args()
+    p.add_argument('--device',required=True);p.add_argument('--mono',default='mono')
+    p.add_argument('--workers',type=int,default=60);a=p.parse_args()
     try:value=run(a)
     except Exception as e:
         write(a.out/'collection-smoke.json',dict(passed=False,error=f'{type(e).__name__}: {e}'));raise

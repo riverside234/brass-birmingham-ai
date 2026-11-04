@@ -63,6 +63,7 @@ def command(stage, args, out, receipts):
         cmd += ['--profile', str(ROOT/'configs/search/lab-search-v1.json'),
                 '--bundle', str(ROOT/'distribution/rust-lab-b01/b01-search-v1-inputs.zip'),
                 '--bundle-sha256', '935443a477d3a52425923e3d7458a15ae8250f4296a6900c5b9088fbef864a76']
+    if stage == 'b02': cmd += ['--workers', str(args.b02_workers)]
     if stage in ('b025', 'b03','b04'):
         cmd += ['--transfer-manifest', str(PACKAGE/'transfer-manifest.json')]
     if not args.fixtures_only:
@@ -114,9 +115,11 @@ def main(argv=None):
     parser.add_argument('--checkpoint-sha256', help='Optional assertion; otherwise capture the latest committed checkpoint hash')
     parser.add_argument('--config', type=Path, default=Path(CONFIG), help='Must match the committed run signature; never adopted by qualification')
     parser.add_argument('--device', default='cuda:0')
+    parser.add_argument('--b02-workers', type=int, default=60, help='B02 collection lane ceiling; 1..60')
     for stage in ('b01', 'b02', 'b03'): parser.add_argument('--'+stage, type=Path)
     parser.add_argument('--fixtures-only', action='store_true', help='CPU development only; stage b025, b03 or b04')
     args = parser.parse_args(argv)
+    if not 1 <= args.b02_workers <= 60: parser.error('--b02-workers must be 1..60')
     if args.start_at is not None and (args.stage != 'all' or args.fixtures_only):
         parser.error('--start-at requires --stage all and a real lab run')
     if args.fixtures_only and (args.stage not in ('b025', 'b03', 'b04') or args.device != 'cpu'):
