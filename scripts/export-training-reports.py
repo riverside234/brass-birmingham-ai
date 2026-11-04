@@ -8,6 +8,8 @@ feature caches and profiler traces are not part of this report-only export.
 With --continue, unchanged reports remain in earlier bundles and the new
 manifest records their verified locations. Rating slots include only the latest
 committed generation; the cumulative archive is still included when present.
+The CLI publishes to the independent ai-training-results repository by default.
+Use --no-push to export locally without Git or network operations.
 """
 import argparse
 from datetime import datetime, timezone
@@ -19,8 +21,14 @@ import os
 from pathlib import Path
 import re
 import stat
+import subprocess
 import tempfile
 import time
+import sys
+
+# Keep direct CLI and importlib-based report tests independent of trainer imports.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import results_git
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -566,11 +574,21 @@ def main():
     parser.add_argument('--continue', dest='continue_export', action='store_true',
                         help='Skip unchanged files already in previous same-run exports; record their locations in the manifest')
     parser.add_argument('--extra', action='append', default=[], help='Additional JSON report or directory; repeat as needed')
+    parser.add_argument('--no-push', action='store_true', help='Local export only; do not initialize/fetch/commit/push results Git')
+    parser.add_argument('--results-remote', default=results_git.REMOTE, help='Independent results repository URL')
     args = parser.parse_args()
     try:
-        output, manifest = export(args.root, args.run, args.output, latest=args.latest, extras=args.extra,
-                                  continue_export=args.continue_export)
-    except (ValueError, OSError, EOFError) as error:
+        def collect():
+            return export(args.root, args.run, args.output, latest=args.latest, extras=args.extra,
+                          continue_export=args.continue_export)
+        if args.no_push:
+            output, manifest = collect()
+        else:
+            with results_git.transaction(args.root, args.results_remote) as directory:
+                output, manifest = collect()
+                commit = results_git.publish(args.root, directory, output, manifest, args.results_remote)
+                print(f'Uploaded results commit {commit} to {args.results_remote}')
+    except (ValueError, OSError, EOFError, subprocess.TimeoutExpired) as error:
         parser.exit(1, f'Export failed: {error}\n')
     print(f'Copied {len(manifest["files"])} reports/metadata files to {output}')
     print(f'Reused {len(manifest["reused_files"])} unchanged files; latest rating slot: {manifest["rating_slot_generation"]}')

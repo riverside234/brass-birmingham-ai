@@ -1,5 +1,10 @@
 # Fresh training in conda: selected v4 teachers and Masked ISMCTS NN
 
+Report storage is now independent of code Git. The existing
+`python scripts/export-training-reports.py --run artifacts/step5/joint7-v11-2-g1290-trained-restart --continue`
+command exports and uploads to `riverside234/ai-training-results` automatically.
+Use `--no-push` for a local export. See [storage and old-checkout migration instructions](RESULTS_STORAGE.md).
+
 ## Current: fresh neutral self-play from g1290
 
 For the stopped **g570** trained-restart run, use the

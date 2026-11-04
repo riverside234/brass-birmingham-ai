@@ -99,6 +99,12 @@ Full collection and Unity integration require a compatible Steam installation an
 
 ## Repository guide
 
+Training reports live in the separate
+[ai-training-results](https://github.com/riverside234/ai-training-results)
+repository. The local `results/` directory is ignored by this code repository;
+the [export command](docs/RESULTS_STORAGE.md) automatically commits and uploads
+new reports there. It is not a submodule, so code clones do not download results.
+
 | Location | Purpose |
 | --- | --- |
 | [native/brass-ai-core/](native/brass-ai-core/) | Rules adapter, permitted observations, world sampling, features, and Gumbel IS-MCTS |

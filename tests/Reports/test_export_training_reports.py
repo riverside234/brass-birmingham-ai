@@ -92,7 +92,7 @@ class ExportTests(unittest.TestCase):
         source_before={p:p.read_bytes() for p in (self.root/self.run).rglob('*') if p.is_file()}
         def cli(output):
             completed=subprocess.run([sys.executable,str(ROOT/'scripts/export-training-reports.py'),
-                '--root',str(self.root),'--output',output,'--continue'],capture_output=True,text=True)
+                '--root',str(self.root),'--output',output,'--continue','--no-push'],capture_output=True,text=True)
             self.assertEqual(completed.returncode,0,completed.stderr)
             directory=self.root/output
             return directory,reports.load_json(directory/'export-manifest.json')
@@ -467,7 +467,7 @@ class ExportTests(unittest.TestCase):
         self.put(self.run + '/state.json', self.state)
         before = {p: p.read_bytes() for p in (self.root / 'artifacts').rglob('*') if p.is_file()}
         completed = subprocess.run([sys.executable, str(ROOT / 'scripts/export-training-reports.py'),
-            '--root', str(self.root), '--run', self.run], capture_output=True, text=True)
+            '--root', str(self.root), '--run', self.run, '--no-push'], capture_output=True, text=True)
         self.assertEqual(completed.returncode, 0, completed.stderr)
         outputs = list((self.root / 'results').iterdir())
         self.assertEqual(len(outputs), 1)
@@ -660,7 +660,7 @@ class ExportTests(unittest.TestCase):
             self.assertEqual((output/name).read_bytes(),raw)
             self.assertEqual(sum(e['path']==name for e in manifest['files']),1)
         completed=subprocess.run([sys.executable,'-B',str(ROOT/'scripts/export-training-reports.py'),
-            '--root',str(self.root),'--run',self.run,'--output','results/anchor-continued','--continue'],
+            '--root',str(self.root),'--run',self.run,'--output','results/anchor-continued','--continue','--no-push'],
             capture_output=True,text=True)
         self.assertEqual(completed.returncode,0,completed.stderr)
         continued=self.root/'results/anchor-continued'
@@ -789,7 +789,7 @@ class ExportTests(unittest.TestCase):
         self.export(output='results/previous')
         self.advance_run(61)
         completed=subprocess.run([sys.executable,str(ROOT/'scripts/export-training-reports.py'),
-            '--root',str(self.root),'--run',self.run,'--output','results/continued','--continue'],
+            '--root',str(self.root),'--run',self.run,'--output','results/continued','--continue','--no-push'],
             capture_output=True,text=True)
         self.assertEqual(completed.returncode,0,completed.stderr)
         output=self.root/'results/continued'
@@ -799,6 +799,8 @@ class ExportTests(unittest.TestCase):
         self.assertEqual(manifest['rating_slot_generation'],60)
         self.assertIn('Reused',completed.stdout)
 
+    @unittest.skipUnless((ROOT / 'results/selfplay-joint/state.json').is_file(),
+                         'Optional archived iteration-60 reports are not installed')
     def test_real_iteration60_exports_can_be_bundled_without_models_or_torch(self):
         # Reconstruct only report paths in a temporary fixture, never the real run.
         source = ROOT / 'results/selfplay-joint'

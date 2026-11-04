@@ -586,9 +586,8 @@ Desktop.ini
 /tests/BrassPatch/**/results.txt
 /tests/BrassPatch/**/isolated-saves/
 
-# Track results copied from the lab computer.
-!/results/
-!/results/**
+# Reports have their own Git repository; never upload them with the code.
+/results/
 
 # Explicit checkpoint transfer bundles for local migration tests.
 !/test_nn/
