@@ -65,8 +65,12 @@ def verify_b01_sources(recorded):
             'scripts/build-local-scoring-host.py')
     previous = {i['path']: i['sha256'] for i in recorded if relevant(i['path'])}
     current = {i['path']: i['sha256'] for i in b01_tools().source_inventory() if relevant(i['path'])}
-    require(previous and previous == current,
-            'B01 executable sources/runtime changed; rerun B01 with this checkout')
+    require(previous, 'B01 executable source inventory is empty; rerun B01')
+    if previous != current:
+        from brass_ai.rust_backend.lab_prerequisite_reuse import reviewed, verify_delta
+        try: verify_delta(previous, current, reviewed())
+        except (KeyError, OSError, ValueError) as error:
+            raise ValueError('B01 executable sources/runtime changed outside an exact reviewed repair; rerun B01') from error
 
 
 def build_bootstrap(out, env, command, mono):

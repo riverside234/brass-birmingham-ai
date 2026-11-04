@@ -2,9 +2,9 @@
   "passed": true,
   "local_date": "2026-11-03",
   "timezone": "America/Chicago",
-  "implementation": "a7d39190382b768058f699ba94a8e870b7ca18eb54c636392fc2eeec6b8dc31b",
+  "implementation": "8b9614d736c727d682e85753d1c851c3663461c733501eefac568624fca0dfe5",
   "producer": "bc2c07c397fdc979c9d4376189e723af86620e6361e3cd7052f3500cea3709cb",
-  "source_review_sha256": "508101b8e45a188b355b2dbb977499902048b04715d9998cf033671f0fc1c46c",
+  "source_review_sha256": "50f66098d1496f026ac0f44b62e559db5fb73b424733526d27c1aa60990cc9f3",
   "fixtures": {
     "tests": 81,
     "seconds": 39.268,
@@ -114,13 +114,34 @@
     "artifacts/rust-backend/g570-b02-timeout/lab-evidence/evidence/b02/collection-smoke.log": "ef64fa96a13802d910f9fe3f6c235935b6040c6102c52ab6f49beda1b8cfe283",
     "artifacts/rust-backend/g570-b02-timeout/lab-evidence/evidence/b02/frozen-jobs.json": "f9bad9f40cd3a65a74133444c03f9c5b54f0f9660092e454cf5fc7913e49cbb4",
     "artifacts/rust-backend/g570-b02-timeout/lab-evidence/evidence/b02/qualification.json": "dd7ec4dd73913ab24dfcd770000fa3ea250d6aa1780ee56600c5900a11c0ef76",
-    "artifacts/rust-backend/g570-b02-timeout/lab-evidence/evidence/b02/worker-settings.json": "04019b5ac9e1d09f8f4d5b93212df45fbcdc92c8d0cf4435d519da015c7b889f"
+    "artifacts/rust-backend/g570-b02-timeout/lab-evidence/evidence/b02/worker-settings.json": "04019b5ac9e1d09f8f4d5b93212df45fbcdc92c8d0cf4435d519da015c7b889f",
+    "artifacts/rust-backend/g570-b03-cuda/package-verify-r8.py": "fba23b5caece648f3bf26f2ae2a2efb7048aad167135738e0991e39e56910696",
+    "artifacts/rust-backend/g570-b03-cuda/review-source.py": "56344035bd2c0862a3c05131520af5ca46eac878a45cfd3ba7acc2383334c737",
+    "artifacts/rust-backend/g570-b03-cuda/review.json": "75f966c802e967aa44c8b5cb920c9674c5d5a886c4acf2ea40adfc0a7f4443d6",
+    "artifacts/rust-backend/g570-b03-cuda/seal-evidence.py": "44c29d42b5e431a62f199ba5e49e4eb17a4607ef90703491dd0c958007c6317d",
+    "artifacts/rust-backend/g570-b03-cuda/source-review.json": "cad4baceb361a3b2e79d60934c7faea0ec021e455abaec6802687d220f4267c1",
+    "artifacts/rust-backend/g570-b03-cuda/focused/checks.json": "f2fbaad72cb1f54f8ef8277afcedb2bdaa9735841a2372ee894e294f67910c6a",
+    "artifacts/rust-backend/g570-b03-cuda/focused/tests.log": "7d91df77f5925b44dd4822a9f34eec057cf27652ee8e2ed801ff40ef10a7056b",
+    "artifacts/rust-backend/g570-b03-cuda/lab-evidence/export-manifest.json": "94cf897361f4ee6c97fe77e56b13fb661841cb32bd85c19e733d7da5d988cb29",
+    "artifacts/rust-backend/g570-b03-cuda/regression/checks.json": "8190cea109bd65b3292e27907a6dca0c021f6159b0017d615a6fd0c0095e4ec3",
+    "artifacts/rust-backend/g570-b03-cuda/regression/tests.log": "1afe636b98b67e6f9c08f6bb1f6bf02592ba45f9bd94d2244cefc296682e38b9",
+    "artifacts/rust-backend/g570-b03-cuda/lab-evidence/evidence/runner.json": "f8d37b421b697bacc2534154bbff84c74632ef3171e11c68323949902115ea64",
+    "artifacts/rust-backend/g570-b03-cuda/lab-evidence/evidence/b01/python-runtime-sources.json": "e020cd9a215494a841c69f6131c0265a25a3e7a19154d410410d4d1f0d08b3a3",
+    "artifacts/rust-backend/g570-b03-cuda/lab-evidence/evidence/b01/qualification.json": "4c86c17674187dbfd38bbd37ae64b79aeb07af0f6da3aac0e03afa48478ba1bb",
+    "artifacts/rust-backend/g570-b03-cuda/lab-evidence/evidence/b02/build.json": "e9940385ba19ed30f59e380c113e56f1801caf1a037d7f23a21a913f18febf43",
+    "artifacts/rust-backend/g570-b03-cuda/lab-evidence/evidence/b02/collection-progress.json": "a0746bbe41be00848a126ee222190f9bfdd6c9f81e2bab286a0dfc2f44200329",
+    "artifacts/rust-backend/g570-b03-cuda/lab-evidence/evidence/b02/collection-smoke.json": "0ea0c0769a25e1ad5889c7513edb7e0056ca5fbf90dda8ba662db2f638bebe6d",
+    "artifacts/rust-backend/g570-b03-cuda/lab-evidence/evidence/b02/commands.json": "b8b3fe83215fc29149a2e316ca85fce4f137471c16ab46188a209cd860b279ec",
+    "artifacts/rust-backend/g570-b03-cuda/lab-evidence/evidence/b02/qualification.json": "88e7136e4d935c63dee3f71c4b3cc49b9202356792bf36a96e4d71b6945122ec",
+    "artifacts/rust-backend/g570-b03-cuda/lab-evidence/evidence/b025/qualification.json": "6069cb5802e0d3f17069aa67173c9e4c6c85716281e3867fefe1c517b65045a0",
+    "artifacts/rust-backend/g570-b03-cuda/lab-evidence/evidence/b03/lab-checks.log": "30b1b5a828d7e75ae543a4c73eb6dca222f9ca69c00da387249846c7d7ac7d14",
+    "artifacts/rust-backend/g570-b03-cuda/lab-evidence/evidence/b03/qualification.json": "d7dc2afcb3ec4e6d9430d410e793575b55fe619a6e16c08b50035af1051d9bef"
   },
   "native_source_unchanged": true,
   "search_timing_retested": false,
-  "lab_qualification": "Pending",
+  "lab_qualification": "B01/B02/B02.5 passing original scopes retained; B03/B04 Pending",
   "production_run_modified": false,
-  "scope": "R7 buffered text oracle transport, exact decision reuse and watchdog diagnostics; full g570 continuation preserved.",
+  "scope": "R8 diagnostic CUDA comparator and exact prerequisite reuse; successful B01/B02/B02.5 evidence retained.",
   "b01_inputs_fix": {
     "passed": true,
     "fixture_tests": 42,
@@ -980,6 +1001,64 @@
     "limitations": [
       "Two optional built-native teacher probes skipped; actual Linux/CUDA gate remains on lab.",
       "Transport measurement is local Windows oracle IPC only, not a whole-game or Linux speedup."
+    ]
+  },
+  "b03_cuda_fix": {
+    "passed": true,
+    "implementation": "8b9614d736c727d682e85753d1c851c3663461c733501eefac568624fca0dfe5",
+    "worker_cap": 60,
+    "tests": {
+      "tests": 62,
+      "seconds": 78.142,
+      "skipped": 3
+    },
+    "tested_files": {
+      "src/brass_ai/rust_backend/lab_b03_smoke.py": "61dc4e1450befcba56d2ada4724e0625f3409b1e77b0aca20f37f3dea848b288",
+      "src/brass_ai/rust_backend/lab_continuation.py": "91aebbd3bd7f5b9007e2c2067a65f47de8635a453a784cd3539387f56c1524b6",
+      "src/brass_ai/rust_backend/lab_prerequisite_reuse.py": "c78d81a60c53acda823f0552f10791de508a24c5296e2e8f67e42e41da05c0fb",
+      "scripts/prepare-rust-lab-g570.py": "53d48d9ca3bf890c917606d0ce50d8e99e0cac7995933beba6f6f92b5e9ede3f",
+      "scripts/qualify-rust-lab-b02.py": "4b911f218c69f3ac6bb215535f6f5edd28283f252f4bb5e251aa0f342e49150c",
+      "scripts/qualify-rust-lab-b03.py": "291a5b02c4eb1e0bd13a1817db9b3ef94372fc0b972523277d24a2a334745afd",
+      "tests/RustBackendLab/test_b03_cuda_restore.py": "8b3b0b8efbabfeeb5b8c395b66d8ef75d4f5b834fe3f97cf7c6cd1162e2d046e"
+    },
+    "verified_lab_files": [
+      "evidence/runner.json",
+      "evidence/b01/python-runtime-sources.json",
+      "evidence/b01/qualification.json",
+      "evidence/b02/build.json",
+      "evidence/b02/collection-progress.json",
+      "evidence/b02/collection-smoke.json",
+      "evidence/b02/commands.json",
+      "evidence/b02/qualification.json",
+      "evidence/b025/qualification.json",
+      "evidence/b03/lab-checks.log",
+      "evidence/b03/qualification.json"
+    ],
+    "source_review_sha256": "50f66098d1496f026ac0f44b62e559db5fb73b424733526d27c1aa60990cc9f3",
+    "prerequisite_review_sha256": "d31f3f750e0b7826c53e6b9dcfb0df209bcde7a88bd56b0cf5e973df5ad061b9",
+    "preserved_passes": {
+      "b01": {
+        "path": "/data/not_backed_up/yxu209/ai-training/artifacts/rust-backend/20261104T011422740838Z-g570-all-8bee9d91/b01/qualification.json",
+        "bytes": 2531,
+        "sha256": "4c86c17674187dbfd38bbd37ae64b79aeb07af0f6da3aac0e03afa48478ba1bb"
+      },
+      "b02": {
+        "path": "/data/not_backed_up/yxu209/ai-training/artifacts/rust-backend/20261104T011422740838Z-g570-all-8bee9d91/b02/qualification.json",
+        "bytes": 1194,
+        "sha256": "88e7136e4d935c63dee3f71c4b3cc49b9202356792bf36a96e4d71b6945122ec"
+      },
+      "b025": {
+        "path": "/data/not_backed_up/yxu209/ai-training/artifacts/rust-backend/20261104T011422740838Z-g570-all-8bee9d91/b025/qualification.json",
+        "bytes": 1906,
+        "sha256": "6069cb5802e0d3f17069aa67173c9e4c6c85716281e3867fefe1c517b65045a0"
+      }
+    },
+    "restart_at": "b03",
+    "new_games": 0,
+    "lab_qualification": "B01/B02/B02.5 passing original scopes retained; B03/B04 Pending",
+    "limitations": [
+      "Local PyTorch is CPU-only: actual CUDA payload test and two native overlay probes skipped.",
+      "No previously successful lab qualification or full-game collection was repeated."
     ]
   }
 }

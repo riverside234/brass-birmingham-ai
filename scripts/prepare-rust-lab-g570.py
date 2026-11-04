@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Seal g570-r7 with buffered oracle transport and bounded timeout diagnostics."""
+"""Seal g570-r8: exact CUDA restoration checks and reviewed prerequisite reuse."""
 import argparse
 import hashlib
 import importlib.util
@@ -33,7 +33,7 @@ def main():
     from brass_ai.rust_backend.lab_contract import sha,SOURCE,extract_new,verify_inputs
     from brass_ai.rust_backend.lab_transfer import CONTRACT,RETIRED,implementation_inventory
     from brass_ai.rust_backend.lab_teacher_overlay import source_fingerprint
-    out=ROOT/DIRECTORY;archive=out/'rust-lab-b01-b04-g570-r7.zip'
+    out=ROOT/DIRECTORY;archive=out/'rust-lab-b01-b04-g570-r8.zip'
     require(not archive.exists(),'This bundle is already sealed; publish a new version')
     for n,h in ARCHIVES.items():require(sha(ROOT/n)==h,'Changed historical archive: '+n)
     require(sha(out/'rust-lab-b01-b04-g570.zip')=='7bbceb50b1b2ffa3c3797aa2aae452a90edde2f15be8a2d627b452f7c64a53a4',
@@ -48,10 +48,12 @@ def main():
             'Previous g570-r5 archive changed')
     require(sha(out/'rust-lab-b01-b04-g570-r6.zip')=='887117aff5c8cfa2976573584c72ecee287695a546e2ae6d72692e0c6935db20',
             'Previous g570-r6 archive changed')
+    require(sha(out/'rust-lab-b01-b04-g570-r7.zip')=='dd83356ccaba65d90c8be97b6e6778777b0b16dd3072f87d296a62a91ebc9657',
+            'Previous g570-r7 archive changed')
     require(all(not (ROOT/n).exists() for n in RETIRED),'Retired AZ_DB source still present')
     spec=importlib.util.spec_from_file_location('b01_package_inputs',ROOT/'scripts/qualify-rust-lab.py')
     b01=importlib.util.module_from_spec(spec);spec.loader.exec_module(b01)
-    with tempfile.TemporaryDirectory(dir=ROOT/'artifacts',prefix='g570-r7-inputs-') as directory:
+    with tempfile.TemporaryDirectory(dir=ROOT/'artifacts',prefix='g570-r8-inputs-') as directory:
         directory=Path(directory)
         extract_new(ROOT/'distribution/rust-lab-b01/b01-search-v1-inputs.zip',directory/'inputs')
         verify_inputs(directory/'inputs',json.loads((ROOT/'configs/search/lab-search-v1.json').read_text(encoding='utf-8')))
@@ -75,6 +77,7 @@ def main():
     write_json(out/'training-reference.json',reference)
     names={'.gitignore',CONFIG,'pyproject.toml','scripts/prepare-rust-lab-g570.py',
         DIRECTORY+'/README.md',DIRECTORY+'/training-reference.json',DIRECTORY+'/local-development.json',
+        DIRECTORY+'/prerequisite-reuse.json',
         'results/rust-lab-qualification/README.md',REPORT+'/state.json',REPORT+'/export-manifest.json',REPORT+'/recorded-config.json',
         'native/brass-ai-core/tests/data/initial-state.json','tests/GumbelISMCTS/fixtures/session-v1.json',
         'ai-research/RUST_AI_BACKEND_MIGRATION_PLAN.md','ai-research/TEACHER_SEARCH_PHASE_REVISION_PLAN.md',
@@ -84,6 +87,7 @@ def main():
         'ai-research/RUST_BACKEND_B01_B04_G570_REVIEW.md',
         'ai-research/RUST_BACKEND_B02_COLLECTION_FIX.md',
         'ai-research/RUST_BACKEND_B02_TIMEOUT_FIX.md',
+        'ai-research/RUST_BACKEND_B03_CUDA_RESTORE_FIX.md',
         'distribution/rust-lab-toolchain/README.md','distribution/rust-lab-toolchain/License.txt',
         'results/joint7-v11-2-g1290-trained-restart-g0370-20261102T221517838215Z/state.json','distribution/RUST_LAB_SEARCH_V1.md'}
     folders=[('src/brass_ai',{'.py'}),('configs',{'.json','.md'}),('scripts',{'.py','.sh'}),
@@ -115,11 +119,13 @@ def main():
     require(python_checks['passed'] and python_checks['test_paths']==list(b01.TEST_PATHS)
             and python_checks['inference']['tests']==28 and python_checks['inference']['skipped']==0,
             'Exact B01 inference suite must pass before packaging')
+    review=checks['b03_cuda_fix']
     for name,expected in python_checks['tested_files'].items():
-        require(sha(ROOT/name)==expected,'Changed source after B01 Python checks: '+name)
-    review=checks['collection_timeout_fix']
+        require(sha(ROOT/name)==expected or (name=='scripts/qualify-rust-lab-b02.py'
+                and sha(ROOT/name)==review['tested_files'].get(name)),
+                'Changed source outside retained B01 checks and reviewed prerequisite guard: '+name)
     require(review['passed'] and review['implementation']==implementation and review['worker_cap']==60,
-            'Missing collection timeout/transport review')
+            'Missing CUDA restoration/prerequisite reuse review')
     for name,expected in review['tested_files'].items():
         require(sha(ROOT/name)==expected,'Changed source after qualification review: '+name)
     require(sha(ROOT/'configs/learning/selfplay-resume-sources.json')==checks['source_review_sha256'],
@@ -145,8 +151,9 @@ def main():
         archives=ARCHIVES,local_checks=checks,lab_qualification='Pending',production_teacher_enabled=False,
         native_test_inputs=native_inputs,
         python_test_paths=list(b01.TEST_PATHS),
-        supersedes=dict(path=DIRECTORY+'/rust-lab-b01-b04-g570-r6.zip',
-                        sha256='887117aff5c8cfa2976573584c72ecee287695a546e2ae6d72692e0c6935db20'),
+        supersedes=dict(path=DIRECTORY+'/rust-lab-b01-b04-g570-r7.zip',
+                        sha256='dd83356ccaba65d90c8be97b6e6778777b0b16dd3072f87d296a62a91ebc9657'),
+        qualified_prerequisite_reuse=json.loads((out/'prerequisite-reuse.json').read_text(encoding='utf-8')),
         results_directory='results/rust-lab-qualification',extraction_order=['Current checkout with deletions, then g570 supplement only'])
     if args.check_only:
         print(json.dumps(dict(passed=True,files=len(files),implementation=implementation,producer=producer)));return

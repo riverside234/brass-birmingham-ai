@@ -94,10 +94,17 @@ def main():
         lab_qualification='Pending',scope='CPU fixture development' if a.fixtures_only else 'Replay admission and full-state restoration; no games or training steps')
     try:
         report['transfer']=verify_transfer(a.transfer_manifest)
+        if a.b02:
+            original=json.loads(a.b02.read_text(encoding='utf-8'))
+            build=json.loads(Path(original['build']['path']).read_text(encoding='utf-8'))
+            from brass_ai.step5.league import implementation_id
+            if build.get('trainer_implementation') != implementation_id():
+                from brass_ai.rust_backend.lab_prerequisite_reuse import verify_b02
+                report['prerequisite_reuse']=verify_b02(a.b02,build.get('trainer_implementation'))
         env=dict(os.environ,PYTHONPATH=os.pathsep.join(str(ROOT/n) for n in TEST_PATHS),CUBLAS_WORKSPACE_CONFIG=':4096:8')
         print('B03: bounded CPU fixtures',flush=True)
         with (out/'fixtures.log').open('wb') as log:
-            test=subprocess.run([sys.executable,'-m','unittest','test_b03','-v'],cwd=ROOT,
+            test=subprocess.run([sys.executable,'-m','unittest','test_b03','test_b03_cuda_restore','-v'],cwd=ROOT,
                 env=dict(env,CUDA_VISIBLE_DEVICES=''),stdout=log,stderr=subprocess.STDOUT,timeout=180)
         require(test.returncode==0,'B03 fixtures failed; see fixtures.log')
         report['fixtures']=dict(passed=True,sha256=text_sha(out/'fixtures.log'))

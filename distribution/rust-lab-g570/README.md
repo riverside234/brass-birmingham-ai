@@ -1,68 +1,53 @@
-# B01–B04 qualification at g570 (r7)
+# B01–B04 qualification at g570 (r8)
 
-Updated 2026-11-03. **r7 lab qualification: Pending; production teacher off.**
-The latest B01 pass remains valid evidence for its r6 source only.
+Updated 2026-11-03. **B01, B02 and B02.5 passed on the lab. Do not repeat them.**
+The received r7 run failed at B03's CUDA/CPU optimizer-state comparison, after
+B02 collection completed in 204.513 seconds within its 240-second watchdog.
+The periodic `Timeout (0:01:00)!` stack headings in the B02 log are diagnostics;
+its final `qualification.json` and `collection-smoke.json` both say passed.
 
-r7 fixes a collection transport bottleneck: large C# JSON replies were read one
-byte at a time. It buffers text reads, reuses complete step/restore replies and
-adds progress snapshots and thread stacks for watchdog diagnosis. All existing
-correctness checks, the r6 runtime fix and the 240-second watchdog remain.
-See the [diagnosis and measured evidence](../../ai-research/RUST_BACKEND_B02_TIMEOUT_FIX.md).
+r8 compares exact detached CPU copies of saved/restored tensors, preserving
+types, dtypes, shapes and values without modifying optimizer state. It includes
+an exact, sealed review that allows the original successful prerequisites to
+be reused for this diagnostic repair. See the
+[diagnosis and review](../../ai-research/RUST_BACKEND_B03_CUDA_RESTORE_FIX.md).
 
-The B02 smoke now defaults to a **60-worker ceiling**, bounded by the saved
-training cap and CPU budget. It allocates only lanes with useful work: three
-frozen table families and their eligible continuations, normally four or five
-lanes instead of two. It retains the 240-second collection watchdog and all
-coverage checks. Worker limits and actual lanes are saved in the results.
+## Resume on the lab at B03
 
-## Run on the lab
-
-Sync the matching checkout, including added/deleted files. Pause training at a
-clean committed boundary. From the repository root:
+Sync the matching checkout, including added/deleted files. Keep training paused
+at the same g570 checkpoint and retain the original lab artifacts. From the
+repository root:
 
 ```bash
 conda activate ai-training
-unzip -o distribution/rust-lab-g570/rust-lab-b01-b04-g570-r7.zip
-python scripts/run-rust-lab-qualification.py --stage all --device cuda:0 --b02-workers 60 \
+unzip -o distribution/rust-lab-g570/rust-lab-b01-b04-g570-r8.zip
+python scripts/run-rust-lab-qualification.py --stage all --start-at b03 --device cuda:0 \
+  --b02 artifacts/rust-backend/20261104T011422740838Z-g570-all-8bee9d91/b02/qualification.json \
   --expected-generation 570 \
   --checkpoint-sha256 06626c1fb7d0b91f64d939f9fbb3db7c5f3aa072331eb3d773f101e729117ab9
 ```
 
-**Start from B01 for r7:** executable source changed, so the old B01 source
-inventory must not authorize this checkout. B01–B04 all use the new exact
-implementation; source-continuation reviews preserve the full g570 checkpoint and
-recipe. Qualification never changes the production run or starts training.
+This runs B03 and then B04. It reuses the original B02 families, native binaries
+and B01/device receipts. No B01/B02/B02.5 qualification or B02 collection is
+repeated. Reuse requires the exact original receipt, unchanged run/checkpoint
+and all existing file pins; only the reviewed diagnostic-source delta is
+allowed. Do not substitute the Git-visible review copy for the original receipt.
 
-If training has advanced, capture its actual latest committed state instead:
-
-```bash
-python scripts/run-rust-lab-qualification.py --stage all --device cuda:0 --b02-workers 60
-```
-
-The run defaults to `artifacts/step5/joint7-v11-2-g1290-trained-restart` and the
-config to the exact recorded g570 recipe. Supply `--config` only for a different
-already-adopted reviewed recipe. Generation/hash assertions never rewind a run.
-
-After an r7 B01 pass, an independent B02 retry can use its original receipt:
-
-```bash
-python scripts/run-rust-lab-qualification.py --stage all --start-at b02 --device cuda:0 \
-  --b02-workers 60 --expected-generation 570 --b01 ORIGINAL_R7_B01_QUALIFICATION_JSON
-```
+The run defaults to `artifacts/step5/joint7-v11-2-g1290-trained-restart`, with its
+exact recorded g570 recipe. Qualification never adopts another config, advances
+training or rewinds a run. B03 records the prerequisite review in its new receipt.
+If training has advanced, these g570 receipts cannot qualify that different state.
 
 Each attempt exports a new Git-visible `results/rust-lab-qualification/` folder.
 Open `evidence/runner.json` first. Push that folder and pull it locally for review.
-For a collection timeout, inspect `evidence/b02/collection-progress.json` and
-`evidence/b02/collection-smoke.log` for the last stage and thread stacks.
-Retain original lab artifacts for dependent stages. No original results or old
-ZIPs are overwritten.
+No original results, source checkpoint, old ZIP or passing receipt is overwritten.
 
-The public pinned Roslyn compiler is included. Existing Mono, CUDA Python,
-Rust 1.99.1, the matching checkout/private game runtime, full checkpoints,
-opponent references and retained PPG caches remain required. Current bundle
-metadata selects r7; do not extract older supplements afterward.
+The 60-worker B02 ceiling and 240-second watchdog remain unchanged for future
+collection. Existing Mono, CUDA Python, Rust 1.99.1, private runtimes, full
+checkpoints, opponent references and retained PPG caches remain required.
+Current bundle metadata selects r8; do not extract older supplements afterward.
 
-Task-only `search_v1`, K16, DOMiNO/AZ_DB off and search_v2/V205 disabled remain
-unchanged. B04 retains two independent one-thread sessions, 4 seconds search and
-at most 1 second cumulative post-work. Its utility readiness gate still applies.
-B05–B07 production adoption remains Pending.
+Task-only `search_v1`, K16, DOMiNO/AZ_DB off and search_v2/V205 disabled remain.
+B04 retains two independent one-thread sessions, 4 seconds search and at most
+1 second cumulative post-work. Its utility readiness gate still applies.
+**B03/B04 lab qualification and B05–B07 production adoption remain Pending.**

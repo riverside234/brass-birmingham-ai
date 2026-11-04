@@ -1,0 +1,49 @@
+{
+  "contract": "brass-lab-prerequisite-reuse/1.0.0",
+  "scope": [
+    "b01",
+    "b02",
+    "b025"
+  ],
+  "from_implementation": "a7d39190382b768058f699ba94a8e870b7ca18eb54c636392fc2eeec6b8dc31b",
+  "to_implementation": "8b9614d736c727d682e85753d1c851c3663461c733501eefac568624fca0dfe5",
+  "producer": "bc2c07c397fdc979c9d4376189e723af86620e6361e3cd7052f3500cea3709cb",
+  "receipts": {
+    "b01": {
+      "path": "/data/not_backed_up/yxu209/ai-training/artifacts/rust-backend/20261104T011422740838Z-g570-all-8bee9d91/b01/qualification.json",
+      "bytes": 2531,
+      "sha256": "4c86c17674187dbfd38bbd37ae64b79aeb07af0f6da3aac0e03afa48478ba1bb"
+    },
+    "b02": {
+      "path": "/data/not_backed_up/yxu209/ai-training/artifacts/rust-backend/20261104T011422740838Z-g570-all-8bee9d91/b02/qualification.json",
+      "bytes": 1194,
+      "sha256": "88e7136e4d935c63dee3f71c4b3cc49b9202356792bf36a96e4d71b6945122ec"
+    },
+    "b025": {
+      "path": "/data/not_backed_up/yxu209/ai-training/artifacts/rust-backend/20261104T011422740838Z-g570-all-8bee9d91/b025/qualification.json",
+      "bytes": 1906,
+      "sha256": "6069cb5802e0d3f17069aa67173c9e4c6c85716281e3867fefe1c517b65045a0"
+    }
+  },
+  "changes": {
+    "configs/learning/selfplay-resume-sources.json": {
+      "before": "508101b8e45a188b355b2dbb977499902048b04715d9998cf033671f0fc1c46c",
+      "after": "50f66098d1496f026ac0f44b62e559db5fb73b424733526d27c1aa60990cc9f3"
+    },
+    "src/brass_ai/rust_backend/lab_b03_smoke.py": {
+      "before": "3827fe7313c2bbe95266d23fd3da4fda21414f8075cf5c64fda17b0cc6ce82b5",
+      "after": "61dc4e1450befcba56d2ada4724e0625f3409b1e77b0aca20f37f3dea848b288"
+    },
+    "src/brass_ai/rust_backend/lab_continuation.py": {
+      "before": "a42c8261caf14395d9113ff018bcc85ec068016afc969233dc25374e5b6080b2",
+      "after": "91aebbd3bd7f5b9007e2c2067a65f47de8635a453a784cd3539387f56c1524b6"
+    },
+    "src/brass_ai/rust_backend/lab_prerequisite_reuse.py": {
+      "before": null,
+      "after": "c78d81a60c53acda823f0552f10791de508a24c5296e2e8f67e42e41da05c0fb"
+    }
+  },
+  "report": "ai-research/RUST_BACKEND_B03_CUDA_RESTORE_FIX.md",
+  "reason": "B03 diagnostic verification repair: compare exact detached CPU copies of restored CUDA Adam/PPG/auxiliary payload tensors without modifying their values/devices. Reuse the exact passing r7 B01/B02/B02.5 receipts under an enumerated, sealed source-delta review; all other source/runtime/receipt and run pins remain mandatory. No collector, search, model, optimizer-update, RNG or recipe changes; B03/B04 Pending.",
+  "source_report": "results/rust-lab-qualification/20261104T012220551953Z-20261104T011422740838Z-g570-all-8bee9d91-e1605e8c"
+}

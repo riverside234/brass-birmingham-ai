@@ -15,12 +15,30 @@ import torch
 
 from brass_ai.bank import read, sha
 from brass_ai.learning.contracts import digest, project_path, require
-from brass_ai.recovery.retention import owned, safe, link, _same_payload
+from brass_ai.recovery.retention import owned, safe, link
 from brass_ai.step5.league import implementation_id, write_json
 from .lab_snapshot import capture, pending_paths, tree_digest, verify_unchanged
 
 CONTRACT = 'brass-joint7-continuation/1.0.0'
 FORK = 'brass-diagnostic-fork/1.0.0'
+
+
+def _same_payload(left, right):
+    """Exact restored values, independent of the optimizer's target device.
+
+    Checkpoints load on CPU; Adam moments follow their parameters to CUDA.
+    Compare detached CPU copies without casting or mutating either payload.
+    Container types, dtype, shape and every tensor value must still match.
+    """
+    if type(left) is not type(right): return False
+    if isinstance(left, torch.Tensor):
+        return (left.dtype == right.dtype and left.shape == right.shape
+                and torch.equal(left.detach().cpu(), right.detach().cpu()))
+    if isinstance(left, dict):
+        return left.keys() == right.keys() and all(_same_payload(left[k], right[k]) for k in left)
+    if isinstance(left, (list, tuple)):
+        return len(left) == len(right) and all(_same_payload(a, b) for a, b in zip(left, right))
+    return left == right
 
 
 def target_signature(state):

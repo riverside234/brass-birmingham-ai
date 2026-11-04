@@ -32,9 +32,13 @@ def entry(path, run, device):
     snapshot, _ = module.entry(receipt['b01']['path'], run, device)
     build = json.loads(Path(receipt['build']['path']).read_text(encoding='utf-8'))
     smoke = json.loads(Path(receipt['smoke']['path']).read_text(encoding='utf-8'))
-    require(build['shared_core'] == SOURCE and build['b01'] == receipt['b01'] and build['search_method'] == METHOD
-            and build.get('trainer_implementation') == implementation_id(),
-            'B02 must run with the B03 checkout so its evidence binds this exact trainer')
+    require(build['shared_core'] == SOURCE and build['b01'] == receipt['b01'] and build['search_method'] == METHOD,
+            'B02 shared core, B01 receipt or search method differs')
+    if build.get('trainer_implementation') != implementation_id():
+        from .lab_prerequisite_reuse import verify_b02
+        try: verify_b02(path, build.get('trainer_implementation'))
+        except (KeyError, OSError, ValueError) as error:
+            raise ValueError('B02 evidence must bind this exact trainer or its exact reviewed diagnostic repair') from error
     require(smoke.get('passed') is True and smoke.get('branch_exit_qualified') is True
             and not smoke['missing_table_kinds'] and 'frozen_jobs' in smoke and 'families' in smoke,
             'B02 lacks sealed admission inputs; rerun the bounded B02 qualification with the B03 update')
