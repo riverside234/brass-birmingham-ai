@@ -49,7 +49,7 @@ def main():
     p.add_argument('--output',required=True)
     p.add_argument('--start',help='next or the first generation to collect (on only)')
     p.add_argument('--reset',action='store_true',help='Explicitly restart entropy progress (on only, before reward step two)')
-    p.add_argument('--reverse',action='store_true',help='Explicitly reverse the second reward step; entropy progress stays unchanged')
+    p.add_argument('--reverse',action='store_true',help='Explicitly reverse the latest applied reward step; entropy progress stays unchanged')
     a=p.parse_args();print(json.dumps(generate(a.root.resolve(),a.run,a.output,a.expected_generation,a.command,
         start=a.start,reset=a.reset,reverse=a.reverse),indent=2))
 

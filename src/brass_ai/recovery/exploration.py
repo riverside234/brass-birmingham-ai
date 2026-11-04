@@ -164,6 +164,7 @@ def low_branch_config(config):
 
 def validate(config):
     from . import entropy_schedule as anneal
+    from .ppg_g210 import QUARTER_CONTRACT
     present=[b in config for b in BLOCKS]
     if not any(present):
         require(not {'fixed_entropy',anneal.KEY}&set(config.get('update',{})),'Fixed/scheduled entropy requires versioned exploration')
@@ -175,11 +176,12 @@ def validate(config):
         config['opening']==THREE_OPENING and config['branching']==THREE_BRANCH)
     three_t2=config['opening']==THREE_T2_OPENING and config['branching'] in (THREE_T2_BRANCH,BALANCED_BRANCH)
     fork=config['opening']==THREE_OPENING and config['branching']==FORK_T15_BRANCH
+    quarter=config.get('value_phase',{}).get('contract')==QUARTER_CONTRACT
     neutral=config['opening']==THREE_OPENING and config['branching'] in (NEUTRAL_BRANCH,T2_ONLY_BRANCH,FORK_T15_BRANCH)
     current=(config['opening']==OPENING and config['branching'] in (BRANCH,LOCAL_SCORING_BRANCH)) or revised or three_t2 or neutral
     uniform=config['opening']==OPENING and config['branching']==HIGH_BRANCH
     legacy=config['opening']==LEGACY_OPENING and config['branching']==LEGACY_BRANCH
-    require(type(config['exploration']) in (int,float) and config['exploration'] in ((.02,) if fork else (.08,.05) if three_t2 else (.05,) if revised or neutral else (0.,.02,.03)) and config['exploration_distribution']==Q and
+    require(type(config['exploration']) in (int,float) and config['exploration'] in ((0.,) if fork and quarter else (.02,) if fork else (.08,.05) if three_t2 else (.05,) if revised or neutral else (0.,.02,.03)) and config['exploration_distribution']==Q and
         (current or uniform or legacy), 'Invalid exploration revision recipe')
     e=config['entropy_control']
     require(type(e) is dict,'Invalid entropy floor controller')

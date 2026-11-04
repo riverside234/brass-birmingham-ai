@@ -7,17 +7,17 @@ Use `--no-push` for a local export. See [storage and old-checkout migration inst
 
 ## Current: fresh neutral self-play from g1290
 
-For the stopped **g570** trained-restart run, use the
-[g570 continuation command](../ai-research/NEUTRAL_SELFPLAY_G1290_RESTART.md#current-continuation-g570-v4-pfsp-and-trained-start-rating-reference).
-It starts entropy at **0.005**, anneals to **0.001** over 100 healthy committed
-iterations, keeps epsilon **0.02**, and uses **two T1.5 post-fork
-actions** while retaining normal three-action T1.3 openings. V4 moves immediately
-into PFSP, giving **166/154/0** tables; the original seed becomes the floating
-`trained-start-baseline` PL reference. New frozen snapshots retain companion
-heads. The same restart reduces insolvency to **0.01/0.075** and automatically
-refreshes incompatible PPG replay. At 50 healthy iterations, the schedule waits
-for the explicit **0.005/0.05** reward step. It archives a Ctrl+C partial
-collection and continues **g571–g590**, preserving optimizers and progress.
+For the stopped **g611** trained-restart run, use the
+[g611 continuation command](../ai-research/NEUTRAL_SELFPLAY_G1290_RESTART.md#current-continuation-g611-extended-insolvency-schedule-and-ppg-beta-range).
+It preserves entropy progress **k=41** (next coefficient **0.00336**), sets
+epsilon to **0**, and lowers the PPG beta floor to **0.25** with a **0.003** KL
+cap and **0.0015** low-KL threshold. Saved beta/trips, optimizers, RNG and
+compatible PPG cache remain intact. The command collects **g612–g620**: nine
+healthy commits would reach the existing **0.005/0.05** reward step at k=50.
+The extended plan adds **0.0025/0.025** at k=100. Both reward changes still
+require an explicit boundary restart and refresh incompatible PPG targets.
+The 166/154/0 table mix, normal T1.3x3/post-fork T1.5x2 openings and PL reference
+setup remain unchanged.
 
 Use [the fresh g1290 start command and import rules](../ai-research/NEUTRAL_SELFPLAY_G1290_RESTART.md).
 The source is the stopped g1360 run; a separate `joint7-v11-2-g1290-trained-restart`

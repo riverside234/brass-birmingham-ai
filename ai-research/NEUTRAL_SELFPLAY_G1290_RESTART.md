@@ -1,6 +1,82 @@
 # Fresh neutral self-play from g1290
 
-## Current continuation: g570, v4 PFSP and trained-start rating reference
+## Current continuation: g611, extended insolvency schedule and PPG beta range
+
+The `g0611-20261104T073052792185Z` export records **611 committed generations /
+195,520 ordinary games**, with entropy progress **k=41**, no held iterations,
+and next-collection entropy **0.00336** in all four groups. Preserve these
+counters and the original entropy baseline; the g611 helper makes only these
+reviewed changes:
+
+- **Epsilon 0.02 → 0.00** for ordinary learner collection. Probabilistic sampling,
+  T1.3 three-decision normal openings, T1.5 two-decision post-fork openings,
+  decoupled PPO and the 0.5% T2-only branching recipe remain unchanged. Recorded
+  epsilon and policy identities change; stale PPO behavior is rejected.
+- **PPG beta floor 1.0 → 0.25**, with the saved beta and trip window preserved.
+  The g611 report records beta 1.0. A clean phase with accepted optimizer steps
+  and retained exact policy KL **strictly below 0.0015** halves beta for the
+  next phase: **1.0 → 0.5 → 0.25**. Phases with no retained steps do not lower it.
+  A new cap trip with three trips in the last five phases still doubles beta,
+  up to 32. PPG's hard cap becomes **0.003**. Loss checks remain every 16 steps,
+  KL checks every 32 plus epoch tails/retention, two epochs, every iteration,
+  two replay ages and full two-age held-out loss checks. PPO KL is unchanged.
+- Extend the versioned insolvency plan with **0.0025/event, cap 0.025 at k=100**,
+  after the existing **0.005/event, cap 0.05 at k=50**. This timing was explicitly
+  confirmed by the user. The current reward stays **0.01/event, cap 0.075**
+  until the k=50 restart. Entropy still ends at 0.001 at k=100.
+
+Each reward boundary uses the existing explicit `insolvency-step` helper.
+Entropy holds at the boundary until that step is applied. Reward changes refresh
+incompatible PPG targets after the durable transition; extending the plan and
+changing epsilon/beta/cap alone preserve the compatible two-age critic cache.
+Main/auxiliary weights, Adam/RNG, warmup/LR multiplier, population, lineage and
+committed GAE/entropy evidence remain intact. The new PPG adoption receipt and
+feedback report include the floor, cap, threshold and preserved beta.
+
+After syncing the complete reviewed checkout, recover Ctrl+C work and collect
+**nine iterations, g612–g620**. Nine healthy commits would reach the first
+pending reward boundary; if any iteration is unhealthy, k remains below 50 and
+the reward-step helper correctly refuses an early change.
+
+```bash
+python scripts/recover-step5-iteration.py --root "$PWD" \
+  --run artifacts/step5/joint7-v11-2-g1290-trained-restart \
+  --expected-iteration 611 --apply && \
+python scripts/configure-training-g611.py \
+  --run artifacts/step5/joint7-v11-2-g1290-trained-restart \
+  --expected-generation 611 \
+  --output configs/step5/joint7-v11-2-g1290-trained-restart-g611.json && \
+python scripts/step5.py \
+  --config configs/step5/joint7-v11-2-g1290-trained-restart-g611.json train \
+  --run artifacts/step5/joint7-v11-2-g1290-trained-restart \
+  --imitation-run artifacts/step5/features4-v11-2-batch7-il \
+  --resume-reviewed-source --expected-generation 611 --iterations 9
+```
+
+At **`REWARD_STEP_PENDING`**, use the reward-step command below with the current
+committed generation. The same helper applies the next listed stage at k=50
+and k=100; it does not skip stages or change reward during a collection. A
+longer `--iterations` count is allowed, but entropy will hold at a pending
+boundary until the explicit restart. To continue while health holds delay the
+boundary, reuse the generated config with the actual committed generation;
+do not rerun the g611-specific configuration helper after advancing.
+
+Validation: **26 distinct focused checks passed** across the main batch and
+the corrected isolated-checkpoint fixture rerun. Coverage includes old/new
+contracts, k=50/k=100 boundaries, preserved k=41/baselines, epsilon-zero behavior
+reconstruction, stale-row rejection, beta thresholds/clamps, rollback of weights
+and Adam above 0.003, helper retries and exact checkpoint state. The small CPU
+PPG smoke retained **4/4 steps**, measured KL **1.47e-7**, and moved beta from
+**1.0 to 0.5** while keeping both replay ages. The third-reward-step test verifies
+cache retirement happens only after durable config adoption. Existing g570
+helper/source-approval regressions pass too. Evidence is in
+`artifacts/g611-validation.log` and `artifacts/g611-checkpoint-validation.log`.
+No production checkpoints, long training or evaluation games were run. These
+checks verify implementation behavior, not improved playing strength or GPU
+throughput. A larger allowed PPG KL can permit more retained fitting work;
+actual wall time depends on the loss/KL stopping points.
+
+## Earlier continuation: g570, v4 PFSP and trained-start rating reference
 
 The `g0570-20261103T190804654465Z` export records **570 committed generations /
 182,400 ordinary games**. Apply the reviewed changes from collection **g571**:
@@ -148,9 +224,9 @@ python scripts/recover-step5-iteration.py --root "$PWD" \
 python scripts/configure-entropy-schedule.py insolvency-step \
   --run artifacts/step5/joint7-v11-2-g1290-trained-restart \
   --expected-generation "$G" \
-  --output "configs/step5/joint7-v11-2-g1290-trained-restart-anneal-step2-g${G}.json" && \
+  --output "configs/step5/joint7-v11-2-g1290-trained-restart-anneal-reward-g${G}.json" && \
 python scripts/step5.py \
-  --config "configs/step5/joint7-v11-2-g1290-trained-restart-anneal-step2-g${G}.json" train \
+  --config "configs/step5/joint7-v11-2-g1290-trained-restart-anneal-reward-g${G}.json" train \
   --run artifacts/step5/joint7-v11-2-g1290-trained-restart \
   --imitation-run artifacts/step5/features4-v11-2-batch7-il \
   --resume-reviewed-source --expected-generation "$G" --iterations 20
@@ -159,8 +235,9 @@ python scripts/step5.py \
 Use the same generic helper with `off` to return entropy to **0.005**, keeping
 the current reward and saved progress; `on --start next` resumes that progress.
 An explicit `on --start next --reset` resets only schedule progress and is
-allowed before reward step two. `insolvency-step --reverse` explicitly returns
-the second reward spec to **0.01/0.075**; progress stays unchanged and the ramp
+allowed before reward step two. `insolvency-step --reverse` explicitly moves
+one listed reward step back: **0.005/0.05 → 0.01/0.075**, or for the extended
+g611 plan **0.0025/0.025 → 0.005/0.05**. Progress stays unchanged and the ramp
 waits for the forward step again. Returning to **0.02/0.075** is not authorized
 by the existing reward-transition list. None of these helpers edits model files.
 

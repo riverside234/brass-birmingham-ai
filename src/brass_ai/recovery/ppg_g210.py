@@ -41,21 +41,33 @@ KL32_DEFAULT=dict(LOSS16_DEFAULT,contract=KL32_CONTRACT,kl_check_steps=32)
 BETA1_CONTRACT='ppg-value-phase/20.0.0'
 BETA1_MIGRATION='ppg-loss16-kl32-beta-floor-one/1.0.0'
 BETA1_DEFAULT=dict(KL32_DEFAULT,contract=BETA1_CONTRACT,beta_clone_min=1.)
+QUARTER_CONTRACT='ppg-value-phase/21.0.0'
+QUARTER_MIGRATION='ppg-loss16-kl32-quarter-beta-cap003/1.0.0'
+QUARTER_DEFAULT=dict(BETA1_DEFAULT,contract=QUARTER_CONTRACT,beta_clone_min=.25,kl_cap=.003)
 
 
-def active(c):return c.get('contract') in (CONTRACT,COSINE_CONTRACT,LINEAR_CONTRACT,SHORT_CONTRACT,LOSS16_CONTRACT,KL32_CONTRACT,BETA1_CONTRACT)
+def active(c):return c.get('contract') in (CONTRACT,COSINE_CONTRACT,LINEAR_CONTRACT,SHORT_CONTRACT,LOSS16_CONTRACT,KL32_CONTRACT,BETA1_CONTRACT,QUARTER_CONTRACT)
 
 
 def cosine(c):return c.get('contract')==COSINE_CONTRACT
 
 
-def linear(c):return c.get('contract') in (LINEAR_CONTRACT,SHORT_CONTRACT,LOSS16_CONTRACT,KL32_CONTRACT,BETA1_CONTRACT)
+def linear(c):return c.get('contract') in (LINEAR_CONTRACT,SHORT_CONTRACT,LOSS16_CONTRACT,KL32_CONTRACT,BETA1_CONTRACT,QUARTER_CONTRACT)
 
 
 def short(c):return c.get('contract')==SHORT_CONTRACT
 
 
 def scheduled(c):return cosine(c) or linear(c)
+
+
+def quarter_options(config):
+    validate(config['value_phase'])
+    require(config['value_phase']['contract'] in (BETA1_CONTRACT,QUARTER_CONTRACT),
+        'Quarter-beta continuation requires loss16/KL32 beta-floor-one PPG')
+    result=copy.deepcopy(config)
+    result['value_phase'].update(contract=QUARTER_CONTRACT,beta_clone_min=.25,kl_cap=.003)
+    validate(result['value_phase']);return result
 
 
 def beta1_options(config):
@@ -124,7 +136,7 @@ def rate_factor(step,total,config):
 
 
 def validate(c):
-    default=BETA1_DEFAULT if c.get('contract')==BETA1_CONTRACT else KL32_DEFAULT if c.get('contract')==KL32_CONTRACT else LOSS16_DEFAULT if c.get('contract')==LOSS16_CONTRACT else SHORT_DEFAULT if short(c) else LINEAR_DEFAULT if linear(c) else COSINE_DEFAULT if cosine(c) else DEFAULT
+    default=QUARTER_DEFAULT if c.get('contract')==QUARTER_CONTRACT else BETA1_DEFAULT if c.get('contract')==BETA1_CONTRACT else KL32_DEFAULT if c.get('contract')==KL32_CONTRACT else LOSS16_DEFAULT if c.get('contract')==LOSS16_CONTRACT else SHORT_DEFAULT if short(c) else LINEAR_DEFAULT if linear(c) else COSINE_DEFAULT if cosine(c) else DEFAULT
     require(type(c) is dict and set(c)==set(default) and active(c),'Invalid g210 PPG fields/contract')
     # Smaller batches are useful for bounded regression/smoke fixtures only.
     for k,v in default.items():
@@ -172,7 +184,8 @@ def beta_after_phase(beta,trips,report,config):
     elif not trips[-1]:reason='no_accepted_steps'
     return after,trips,dict(before=beta,after=after,reason=reason,
         decision='up' if after>beta else 'down' if after<beta else 'hold',
-        threshold=.5*config['kl_cap'],scope='Next phase only; a new hard-cap trip with 3/5 hits doubles beta. Clean accepted phases below half cap halve beta. No within-phase retries.')
+        threshold=.5*config['kl_cap'],minimum=config['beta_clone_min'],maximum=config['beta_clone_max'],kl_cap=config['kl_cap'],
+        scope='Next phase only; a new hard-cap trip with 3/5 hits doubles beta. Clean accepted phases below half cap halve beta. No within-phase retries.')
 
 
 def initialize(phases,model,config,*,raw,generation,root,run):
@@ -224,10 +237,19 @@ def initialize(phases,model,config,*,raw,generation,root,run):
             if adopting_kl32:options_match=kl32_options(saved['options'])==phases.options
             adopting_beta1=config['value_phase']['contract']==BETA1_CONTRACT and saved['options']['value_phase']['contract']==KL32_CONTRACT
             if adopting_beta1:options_match=beta1_options(saved['options'])==phases.options
+            adopting_quarter=config['value_phase']['contract']==QUARTER_CONTRACT and saved['options']['value_phase']['contract']==BETA1_CONTRACT
+            if adopting_quarter:options_match=quarter_options(saved['options'])==phases.options
             require(saved.get('contract')==CHECKPOINT and set(saved)==fields and options_match,
                 'g210 checkpoint configuration differs')
             phases.beta=saved['beta_clone'];phases.trips=saved['kl_trips']
             phases.cache_origin=saved['cache_origin'];receipts=saved['rolling_buffer'];phases.adoption=saved['adoption']
+            if adopting_quarter:
+                require(type(phases.beta) in (int,float) and math.isfinite(phases.beta)
+                    and saved['options']['value_phase']['beta_clone_min']<=phases.beta<=32,'Invalid beta before quarter-floor adoption')
+                phases.ppg_schedule_migration=dict(contract=QUARTER_MIGRATION,origin=generation,
+                    beta_before=phases.beta,beta_after=phases.beta,previous_adoption=copy.deepcopy(phases.adoption),
+                    scope='Preserve saved beta/trips, Adam/RNG, compatible cache and cadence. New floor .25; cap .003; clean accepted phases below .0015 halve beta for the next phase.')
+                phases.adoption=copy.deepcopy(phases.ppg_schedule_migration)
             if adopting_beta1:
                 require(type(phases.beta) in (int,float) and math.isfinite(phases.beta)
                     and saved['options']['value_phase']['beta_clone_min']<=phases.beta<=32,'Invalid beta before floor adoption')

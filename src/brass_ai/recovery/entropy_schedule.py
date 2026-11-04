@@ -6,6 +6,7 @@ from brass_ai.learning.contracts import digest, require
 
 KEY='entropy_schedule'
 CONTRACT='entropy-anneal-schedule/1.1.0'
+EXTENDED_CONTRACT='entropy-anneal-schedule/1.2.0'
 STATE='entropy-anneal-state/1.0.0'
 MIGRATION='entropy-anneal-adoption/1.0.0'
 GROUPS=('canal_action','canal_other','rail_action','rail_other')
@@ -15,12 +16,30 @@ DEFAULT=dict(contract=CONTRACT,mode='off',start_generation=None,reset_generation
     insolvency_start=dict(event_cost=.02,max_cost=.075),insolvency_steps=[
         dict(at_progress=0,insolvency=dict(event_cost=.01,max_cost=.075)),
         dict(at_progress=50,insolvency=dict(event_cost=.005,max_cost=.05))])
+EXTENDED_STEPS=copy.deepcopy(DEFAULT['insolvency_steps'])+[
+    dict(at_progress=100,insolvency=dict(event_cost=.0025,max_cost=.025))]
+
+
+def extended(c):
+    """Append one prospective boundary; retain the original entropy clock."""
+    require(c['contract'] in (CONTRACT,EXTENDED_CONTRACT) and c['ramp_iterations']==100 and
+        c['insolvency_steps']==(EXTENDED_STEPS if c['contract']==EXTENDED_CONTRACT else DEFAULT['insolvency_steps']),
+        'Third insolvency step requires the original 100-healthy-iteration schedule')
+    return dict(copy.deepcopy(c),contract=EXTENDED_CONTRACT,insolvency_steps=copy.deepcopy(EXTENDED_STEPS))
+
+
+def extend_config(config):
+    result=copy.deepcopy(config);validate(result)
+    result['update'][KEY]=extended(result['update'][KEY])
+    validate(result)
+    return result
 
 
 def validate_update(update):
     c=update[KEY]
-    require(type(c) is dict and set(c)==set(DEFAULT) and c['contract']==CONTRACT,
+    require(type(c) is dict and set(c)==set(DEFAULT) and c['contract'] in (CONTRACT,EXTENDED_CONTRACT),
         'Invalid entropy anneal contract/fields')
+    if c['contract']==EXTENDED_CONTRACT:extended(c)
     require(c['mode'] in ('off','on') and c['shape']=='linear' and c['advance_on']=='healthy-entropy-update',
         'Invalid entropy anneal mode/shape/health rule')
     require((c['start_generation'] is None if c['mode']=='off' else
@@ -127,7 +146,10 @@ def restore(config,saved,generation):
             last_generation=generation,insolvency=copy.deepcopy(config['insolvency']),insolvency_steps_applied=n,reset_count=0))
     s=copy.deepcopy(validate_state(saved,generation));old=s['config'];previous=s['insolvency_steps_applied']
     immutable=lambda x:{k:v for k,v in x.items() if k not in ('mode','start_generation','reset_generation')}
-    require(immutable(old)==immutable(c),'Cannot silently alter an adopted entropy ramp or reward plan')
+    same=immutable(old)==immutable(c)
+    if not same and old['contract']==CONTRACT and c['contract']==EXTENDED_CONTRACT:
+        same=extended(old)==c
+    require(same,'Cannot silently alter an adopted entropy ramp or reward plan')
     reset=c['reset_generation']!=old['reset_generation']
     if reset:
         require(c['mode']=='on' and c['reset_generation']==generation and c['start_generation']>=generation+1
@@ -173,14 +195,14 @@ def effective(config,state):
 
 def receipt(config,state):
     s=state[KEY]
-    return dict(contract=CONTRACT,config_id=digest(config['update'][KEY]),generation=state['generation']+1,
+    return dict(contract=s['config']['contract'],config_id=digest(config['update'][KEY]),generation=state['generation']+1,
         progress=s['progress'],alphas=effective(config,state))
 
 
 def behavior_weights(update,behavior):
     c=validate_update(update);r=getattr(behavior,KEY,None)
     require(type(r) is dict and set(r)=={'contract','config_id','generation','progress','alphas'} and
-        r['contract']==CONTRACT and r['config_id']==digest(c) and type(r['generation']) is int and r['generation']>=1
+        r['contract']==c['contract'] and r['config_id']==digest(c) and type(r['generation']) is int and r['generation']>=1
         and type(r['progress']) is int and 0<=r['progress']<=c['ramp_iterations'],
         'Missing/incompatible collected entropy schedule receipt')
     expected=weights(c,r['progress'],r['generation'])
@@ -199,7 +221,7 @@ def advance(s,config,*,generation,healthy):
     elif healthy:s['progress']+=1;reason='healthy_commit'
     else:s['held']+=1;reason='unhealthy'
     s['last_generation']=generation;seal(s)
-    report=dict(contract=CONTRACT,mode=c['mode'],generation=generation,started_at=s['started_at'],
+    report=dict(contract=c['contract'],mode=c['mode'],generation=generation,started_at=s['started_at'],
         progress_before=before,progress=s['progress'],ramp_iterations=c['ramp_iterations'],held=s['held'],
         healthy=bool(healthy),reason=reason,effective_alpha=applied,next_alpha=copy.deepcopy(s['applied']),
         insolvency=copy.deepcopy(s['insolvency']),insolvency_steps_applied=s['insolvency_steps_applied'],

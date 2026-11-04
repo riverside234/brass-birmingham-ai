@@ -108,6 +108,8 @@ def check_signature(state, signature, reviewed=False):
             handlers[G370_MIGRATION]=g370_config
             from .training_revision_g570 import MIGRATION as G570_MIGRATION,configure as g570_config
             handlers[G570_MIGRATION]=g570_config
+            from .training_revision_g611 import MIGRATION as G611_MIGRATION,configure as g611_config
+            handlers[G611_MIGRATION]=g611_config
             from .entropy_schedule import MIGRATION as ANNEAL_MIGRATION,reviewed_config as anneal_config
             handlers[ANNEAL_MIGRATION]=lambda c:anneal_config(c,state,signature['config'])
             from .lr_controller import THRESHOLD_MIGRATION,threshold_config
@@ -371,8 +373,16 @@ def gae_floor_receipt_preserved(state,signature,raw,entry):
         if enabled(before['config']) and 'v4_history' not in before['config'] and signature['config'] in (before['config'],configure(before['config'])):
             flags.append('preserve_g370_calibration')
         from .training_revision_g570 import configure as g570_config
-        if enabled(before['config']) and before['config']['advantage']['contract']==DIRECT_095_CONTRACT and signature['config'] in (before['config'],g570_config(before['config'])):
-            flags.append('preserve_g570_calibration')
+        if enabled(before['config']) and before['config']['advantage']['contract']==DIRECT_095_CONTRACT:
+            # Older migrations are alternatives, not recipes to reapply to a
+            # newer signed config (e.g. g611 has a different epsilon/PPG pair).
+            try:matched=signature['config']==before['config'] or signature['config']==g570_config(before['config'])
+            except (ValueError,KeyError):matched=False
+            if matched:flags.append('preserve_g570_calibration')
+            from .training_revision_g611 import configure as g611_config
+            try:matched=signature['config']==g611_config(before['config'])
+            except (ValueError,KeyError):matched=False
+            if matched:flags.append('preserve_g611_calibration')
     return any(any(e.get(flag) is True for flag in flags) and e['from_implementation']==before['implementation']
         and e['to_implementation']==signature['implementation'] and e['learning_compatibility']==digest(signature['compatibility'])
         for e in expand_source_reviews(read(CONFIG_DIR/'selfplay-resume-sources.json'))['transitions'])

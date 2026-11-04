@@ -1,5 +1,17 @@
 # Entropy anneal schedule with insolvency-cost steps (OpenAI Five style)
 
+**2026-11-04 extension, adopted from g611:** append a third explicit reward step
+at **k=100**: **0.005/event, cap 0.05 → 0.0025/event, cap 0.025**. Preserve the
+existing k=0 and k=50 steps and all entropy coefficients/counters. The user
+confirmed k=100 rather than an immediate reward change. Version 1.2.0 records
+this append-only extension; older signed 1.1.0 schedules remain unchanged.
+Entropy holds at each unapplied boundary, including k=100, until the existing
+`insolvency-step` restart applies it. The g611 revision also sets epsilon to 0
+and PPG beta floor/cap to 0.25/0.003, with clean accepted phases lowering beta
+below KL 0.0015. See the current commands in
+[the launch instructions](NEUTRAL_SELFPLAY_G1290_RESTART.md).
+The original two-stage rationale and recipe below describe the earlier version.
+
 Implemented for the pending g570 continuation; see the
 [launch and reward-step commands](NEUTRAL_SELFPLAY_G1290_RESTART.md).
 The user selected an initial entropy of **0.005**, including the revised fork

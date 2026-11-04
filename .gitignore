@@ -675,3 +675,8 @@ Desktop.ini
 # Public, pinned compiler required by the lab's reference-host bootstrap.
 !/distribution/rust-lab-toolchain/
 !/distribution/rust-lab-toolchain/**
+
+# Small portable VP-report backfill for the trained g1290 restart.
+!/ai-research/vp-history/
+/ai-research/vp-history/*
+!/ai-research/vp-history/joint7-v11-2-g1290-trained-restart/

@@ -1,0 +1,87 @@
+{
+  "format": "selfplay-vp-backfill/1.0.0",
+  "created_utc": "2026-11-04T08:25:21.987654+00:00",
+  "target_bundle": "results/joint7-v11-2-g1290-trained-restart-g0611-20261104T073052792185Z",
+  "initial_checkpoint": {
+    "path": "artifacts/step5/joint7-v11-2-g1290-trained-restart/initial.pt",
+    "sha256": "af00f705ea1864d066e91b4b4605930c09ff88227218071e397b3d8c81f787fd",
+    "model_id": "73fd0aa12a7a6496414b03e106ae52367d865767922aed7b40ea88a7940891ff"
+  },
+  "committed_generation": 611,
+  "iterations": 471,
+  "ranges": [
+    [
+      71,
+      370
+    ],
+    [
+      441,
+      611
+    ]
+  ],
+  "missing_ranges": [
+    [
+      1,
+      70
+    ],
+    [
+      371,
+      440
+    ]
+  ],
+  "original_cache_sha256": "e6830eeebd3e8a4462e60fcaefc845da17fe65eedebf79bcdb651083a13b29c1",
+  "original_chart_sha256": "5efc0b238b7c3eada78a1484311badf73a040406b3ad1c81d963b6ab7bb368ff",
+  "original_manifest_sha256": "5c0c75c78f6612d5730b558bd6ac78677202b62764a08f106a3bb3d0dbf4a0c4",
+  "cache_sha256": "bbe2e30f2733f51a67024bc75eed0c33910d93ac881551ee67d7396514cfb5f1",
+  "sources": [
+    {
+      "bundle": "results/joint7-v11-2-g1290-trained-restart-g0200-20261102T015209145176Z",
+      "files": {
+        "state.json": "cfa1ebc59367323505d802109f9a0409af20c40ef982e65a719e105e43661b3d",
+        "retention-history.json.gz": "2a449e14abc241c300bd35f573cf7e4c627fb0c1388308c0bdd6b383ac6af0f8",
+        "iteration-0198/report.json": "bce8c861ec636717ccbf31bbac5977d7100a3c1dc7c13c003d442aeeb272bc4f",
+        "iteration-0199/report.json": "144164e448d5c3d47ade8bf10ce79f76281e89d9e71face1cefcb618acf9c38c"
+      }
+    },
+    {
+      "bundle": "results/joint7-v11-2-g1290-trained-restart-g0253-20261102T075610938330Z",
+      "files": {
+        "state.json": "bf9c75507962cc43b1fa946ef0c60d7cb305c245cde3e1d70592bb23c71f680f",
+        "retention-history.json.gz": "b4aeba756bf83acbe7650ff32feacfe1ee123f5c8833e2c827fb498f3e55cd47",
+        "iteration-0248/report.json": "2362912940665a262a3d36f462db10afa2b2d4b1ecdd67a3b8ddf3cf6aa76e0f",
+        "iteration-0249/report.json": "d89aea5ceb4141c7848dea1640e5c942a5744e85359fcf6bc22f1688dcb1849d",
+        "iteration-0250/report.json": "8baafee5f6f9c55591b14299897ac3846d32d691758d989787446856d09adab7",
+        "iteration-0251/report.json": "e2e253864da8bd5c6a8a059749ba80e0d96fd659b99b0dda0643b896ed38a987",
+        "iteration-0252/report.json": "973e4102aa54d6ecf6b532cad4191c7317e09093090a887dff677da39be3c126"
+      }
+    },
+    {
+      "bundle": "results/joint7-v11-2-g1290-trained-restart-g0370-20261102T221517838215Z",
+      "files": {
+        "state.json": "e91e35d764c86e2e2f6896b5f23b9a6ba4cb8597830969f80216345a5cf8e18f",
+        "retention-history.json.gz": "3407d08e4773c4d49b281e4f47bf596fa4fd13a421b2da86d14eed10da7f67dd",
+        "iteration-0368/report.json": "a5386342ffae0064a7206e12365b1ce900ed6ec7761b9cd6c604ee92f16ba53d",
+        "iteration-0369/report.json": "335d5340eea1bd3da5e41cdc291da492acbdf63d6ea2a46018bb3692e6dfce69"
+      }
+    },
+    {
+      "bundle": "results/joint7-v11-2-g1290-trained-restart-g0570-20261103T190804654465Z",
+      "files": {
+        "state.json": "57a3586f2fcfa9e0531acb1ecb5932dd9ac6df518499e0ecc6608e3333bef2ee",
+        "retention-history.json.gz": "1be83241123497fd7de1b1d7d13b4bec3a660297073ef5bc083c4ae21ce189f4",
+        "iteration-0568/report.json": "dc0b5d0fda286d9f74fc9f6250fe9dff0b551cfbc3b5d0c592b47413425e44b7",
+        "iteration-0569/report.json": "036925db24e79d2a4532f032c4c819571ba3a21eed6501104a067155c2d029b0"
+      }
+    },
+    {
+      "bundle": "results/joint7-v11-2-g1290-trained-restart-g0611-20261104T073052792185Z",
+      "files": {
+        "state.json": "53c33869d6d56f908bd2d3a1da2bcbeaf3d3883e656ec35f4841cd6c19eb1d87",
+        "retention-history.json.gz": "9a02f6c3a6b74e4c716fb5714e95285c98c40229cfc7bee36e52c3dfde592cdc",
+        "iteration-0608/report.json": "b71212af2566f55cb729b20745fd02a9e8c75029584ef65c46c864ec75899e6d",
+        "iteration-0609/report.json": "99b402ebd629a6818878e37ad50135977865990389c8fed461c80dca689eed17",
+        "iteration-0610/report.json": "17d7d21d2df2658aaac9968b8f850fbebfb27321960672c5061bb783008ff3d1"
+      }
+    }
+  ]
+}
