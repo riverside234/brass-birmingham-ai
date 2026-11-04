@@ -1,6 +1,6 @@
 # B01/B02 search_v1 qualification bundles
 
-**Current qualification (2026-11-03):** use the [g570-r6 B01–B04 bundle](rust-lab-g570/README.md). R6 fixes B02's shared-runtime text identity check and uses a 60-worker smoke ceiling. Restart at B01 because executable source changed; all r6 lab gates are Pending. It preserves the recorded checkpoint/config. The commands below describe historical transfers; follow the current README instead. Search remains task-only search_v1, four seconds plus at most one second post-search, with DOMiNO/AZ_DB and V205 disabled.
+**Current qualification (2026-11-03):** use the [g570-r7 B01–B04 bundle](rust-lab-g570/README.md). R7 buffers B02's C# oracle replies, removes a duplicate decision request and adds timeout diagnostics; it retains the 60-worker ceiling and 240-second watchdog. Restart at B01 because executable source changed; all r7 lab gates are Pending. It preserves the recorded checkpoint/config. The commands below describe historical transfers; follow the current README instead. Search remains task-only search_v1, four seconds plus at most one second post-search, with DOMiNO/AZ_DB and V205 disabled.
 
 Refreshed 2026-10-29. **B01 lab qualification: Pending. B02 lab qualification: Pending.** All current ZIPs are under `distribution/` and explicitly allowed by `.gitignore` so they can be committed and pushed with the project.
 

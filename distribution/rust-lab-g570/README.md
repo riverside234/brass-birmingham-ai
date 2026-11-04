@@ -1,13 +1,13 @@
-# B01–B04 qualification at g570 (r6)
+# B01–B04 qualification at g570 (r7)
 
-Updated 2026-11-03. **r6 lab qualification: Pending; production teacher off.**
-The earlier B01 pass remains valid evidence for its r5 source only.
+Updated 2026-11-03. **r7 lab qualification: Pending; production teacher off.**
+The latest B01 pass remains valid evidence for its r6 source only.
 
-r6 fixes B02 collection's shared V4 source-byte mismatch after Git/ZIP newline
-conversion. It preserves the frozen runtime binary, manifest and policy identity,
-and still rejects semantic edits or changed dependencies. It also checks
-reference policies before collection and cleans up partial policy construction.
-See the [diagnosis and review](../../ai-research/RUST_BACKEND_B02_COLLECTION_FIX.md).
+r7 fixes a collection transport bottleneck: large C# JSON replies were read one
+byte at a time. It buffers text reads, reuses complete step/restore replies and
+adds progress snapshots and thread stacks for watchdog diagnosis. All existing
+correctness checks, the r6 runtime fix and the 240-second watchdog remain.
+See the [diagnosis and measured evidence](../../ai-research/RUST_BACKEND_B02_TIMEOUT_FIX.md).
 
 The B02 smoke now defaults to a **60-worker ceiling**, bounded by the saved
 training cap and CPU budget. It allocates only lanes with useful work: three
@@ -22,13 +22,13 @@ clean committed boundary. From the repository root:
 
 ```bash
 conda activate ai-training
-unzip -o distribution/rust-lab-g570/rust-lab-b01-b04-g570-r6.zip
+unzip -o distribution/rust-lab-g570/rust-lab-b01-b04-g570-r7.zip
 python scripts/run-rust-lab-qualification.py --stage all --device cuda:0 --b02-workers 60 \
   --expected-generation 570 \
   --checkpoint-sha256 06626c1fb7d0b91f64d939f9fbb3db7c5f3aa072331eb3d773f101e729117ab9
 ```
 
-**Start from B01 for r6:** executable source changed, so the old B01 source
+**Start from B01 for r7:** executable source changed, so the old B01 source
 inventory must not authorize this checkout. B01–B04 all use the new exact
 implementation; source-continuation reviews preserve the full g570 checkpoint and
 recipe. Qualification never changes the production run or starts training.
@@ -43,22 +43,24 @@ The run defaults to `artifacts/step5/joint7-v11-2-g1290-trained-restart` and the
 config to the exact recorded g570 recipe. Supply `--config` only for a different
 already-adopted reviewed recipe. Generation/hash assertions never rewind a run.
 
-After an r6 B01 pass, an independent B02 retry can use its original receipt:
+After an r7 B01 pass, an independent B02 retry can use its original receipt:
 
 ```bash
 python scripts/run-rust-lab-qualification.py --stage all --start-at b02 --device cuda:0 \
-  --b02-workers 60 --expected-generation 570 --b01 ORIGINAL_R6_B01_QUALIFICATION_JSON
+  --b02-workers 60 --expected-generation 570 --b01 ORIGINAL_R7_B01_QUALIFICATION_JSON
 ```
 
 Each attempt exports a new Git-visible `results/rust-lab-qualification/` folder.
 Open `evidence/runner.json` first. Push that folder and pull it locally for review.
+For a collection timeout, inspect `evidence/b02/collection-progress.json` and
+`evidence/b02/collection-smoke.log` for the last stage and thread stacks.
 Retain original lab artifacts for dependent stages. No original results or old
 ZIPs are overwritten.
 
 The public pinned Roslyn compiler is included. Existing Mono, CUDA Python,
 Rust 1.99.1, the matching checkout/private game runtime, full checkpoints,
 opponent references and retained PPG caches remain required. Current bundle
-metadata selects r6; do not extract older supplements afterward.
+metadata selects r7; do not extract older supplements afterward.
 
 Task-only `search_v1`, K16, DOMiNO/AZ_DB off and search_v2/V205 disabled remain
 unchanged. B04 retains two independent one-thread sessions, 4 seconds search and

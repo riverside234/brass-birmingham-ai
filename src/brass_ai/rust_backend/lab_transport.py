@@ -1,5 +1,6 @@
 """Private, bounded, deadline-controlled ordinary lane transport."""
 from __future__ import annotations
+import io
 import json
 import queue
 import struct
@@ -26,6 +27,11 @@ class Pipe:
         self.jobs, self.results = queue.Queue(1), queue.Queue(1)
         self.process = subprocess.Popen([str(x) for x in command], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
             stderr=subprocess.DEVNULL, bufsize=0, creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0))
+        # FileIO.readline on an unbuffered pipe makes one OS read per byte.
+        # Oracle decisions are hundreds of KB; concurrent lanes amplify this
+        # cost. Buffer only stdout: requests must still be written immediately.
+        if not binary:
+            self.process.stdout = io.BufferedReader(self.process.stdout, buffer_size=64*1024)
         self.thread = threading.Thread(target=self._loop, daemon=True); self.thread.start()
 
     def _read(self, n):

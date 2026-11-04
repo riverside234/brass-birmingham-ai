@@ -21,6 +21,23 @@ from .lab_collection import collect_lane,frozen_id,route
 from .lab_transport import Collector,DecisionEncoder,Pipe,CONTRACT
 from .lab_families import FamilyStore,collect_families
 from .lab_contract import METHOD,pin,sha
+from .lab_smoke_progress import Progress
+
+
+class Oracle:
+    """The step/restore reply is already the complete next decision."""
+    def __init__(self, pipe):
+        self.pipe=pipe;self.current=None
+
+    def decision(self):
+        if self.current is None:self.current=self.pipe.call('decision')
+        return self.current
+
+    def step(self, choice):
+        self.current=self.pipe.call('step',choice=choice)
+
+    def restore(self, checkpoint, shuffle_seed):
+        self.current=self.pipe.call('restore',checkpoint=checkpoint,shuffle_seed=shuffle_seed)
 
 
 def write(path,value):
@@ -134,7 +151,8 @@ def run(args):
     coverage=fixture_checks(build['collector']['path'],fixtures,snapshot['model_id'])
     # Match each actual frozen job. Only select a bounded diagnostic subset;
     # preserve original indices, policies, rotations, seed and branch settings.
-    with InferenceService(execution,args.device) as service:
+    with Progress(out/'collection-progress.json') as progress, InferenceService(execution,args.device) as service:
+        progress.update('collection','plan')
         from .lab_jobs import plan
         planned=plan(root,args.run,snapshot,model,raw,service,out/'diagnostic-jobs')
         jobs=[];seen=set()
@@ -149,11 +167,13 @@ def run(args):
         write(out/'frozen-jobs.json',dict(jobs=jobs,full_plan_sha256=digest(planned['jobs']),
             full_plan_composition=planned['composition'],diagnostic_subset=True,table_mix_changed=False))
         print('B02: preflight frozen reference policies',flush=True)
+        progress.update('collection','reference-preflight')
         reference_policies=preflight_reference(root,jobs,execution,args.mono)
         workers=worker_settings(execution,config,jobs,getattr(args,'workers',60))
         write(out/'worker-settings.json',dict(workers,reference_policies=reference_policies))
         lanes=workers['lanes']
         print(f'B02: {lanes} active lanes, cap {workers["effective_cap"]}; {len(jobs)} frozen families',flush=True)
+        progress.update('collection','collect',workers=workers)
         leases=service.channels(lanes);endpoints=queue.Queue()
         owned=[leases.acquire() for _ in range(lanes)]
         for endpoint in owned: endpoint.timeout=20.;endpoints.put(endpoint)
@@ -161,52 +181,72 @@ def run(args):
         bootstrap=[args.mono,build['bootstrap']['binary']['path']]
         if os.name=='nt':bootstrap=bootstrap[1:]
         def native(job,continuation,submit):
+            key=f'{job["index"]}/'+('child' if continuation is not None else 'parent')
+            progress.update(key,'starting',kind=job['provenance']['kind'])
             endpoint=endpoints.get(timeout=20)
             try:
                 with Pipe(bootstrap,binary=False) as reference,Pipe(bootstrap,binary=False) as draws:
                     origin=reference.call('init',seed=job['seed']);reference_records=[]
+                    oracle=Oracle(reference);encoder=Encoder()
                     if continuation is not None:
                         with lock:cp=oracle_checkpoints.pop((frozen_id(job),continuation['metadata']['seed']))
-                        reference.call('restore',checkpoint=cp,shuffle_seed=int(continuation['metadata']['seed'][:8],16)&0x7fffffff if job['branching']['reshuffle_hidden_deck'] else None)
+                        oracle.restore(cp,int(continuation['metadata']['seed'][:8],16)&0x7fffffff if job['branching']['reshuffle_hidden_deck'] else None)
                     def compare(row,encoded,lane):
-                        ref=reference.call('decision')
-                        require(row['view']==ref['view'] and row['choices']==ref['choices'],'Reference/native decision differs at '+str(row['step']))
-                        if encoded is not None:
-                            py=Encoder().encode(ref['view'],ref['choices'],row['style'],row['intent'])
-                            for key in ('state','actions','stable_to_relative'):np.testing.assert_array_equal(getattr(py,key),getattr(encoded,key))
-                        reference_records.append(dict(row,view=ref['view'],choices=ref['choices']))
-                        reference.call('step',choice=row['choices'][row['chosen']]['id'])
+                        context=row['view']['context']
+                        details=dict(step=row['step'],era=context['era'],phase=context['phase'],candidates=len(row['choices']))
+                        with progress.stage(key,'oracle-compare',**details):
+                            ref=oracle.decision()
+                            require(row['view']==ref['view'] and row['choices']==ref['choices'],'Reference/native decision differs at '+str(row['step']))
+                            if encoded is not None:
+                                py=encoder.encode(ref['view'],ref['choices'],row['style'],row['intent'])
+                                for field in ('state','actions','stable_to_relative'):np.testing.assert_array_equal(getattr(py,field),getattr(encoded,field))
+                            reference_records.append(dict(row,view=ref['view'],choices=ref['choices']))
+                        with progress.stage(key,'oracle-step',**details):oracle.step(row['choices'][row['chosen']]['id'])
+                        progress.update(key,'native-collection',**details)
                     def fork(packet):
                         with lock:oracle_checkpoints[(frozen_id(job),packet['metadata']['seed'])]=reference.call('checkpoint')
                         submit(packet)
-                    part=collect_lane(root,build['collector']['path'],draws,job,endpoint,execution,origin=origin,
-                        continuation=continuation,submit_branch=fork,cancel=stop,compare=compare,
-                        diagnostic_branch_probe=continuation is None and bool(job.get('branching')))
-                    final=reference.call('decision');require(final['context']['terminal'] and part['game']['result']==final['result'],'Final result differs')
+                    with progress.stage(key,'native-collection'):
+                        part=collect_lane(root,build['collector']['path'],draws,job,endpoint,execution,origin=origin,
+                            continuation=continuation,submit_branch=fork,cancel=stop,compare=compare,
+                            diagnostic_branch_probe=continuation is None and bool(job.get('branching')))
+                    final=oracle.decision();require(final['context']['terminal'] and part['game']['result']==final['result'],'Final result differs')
                     scoring=reference.call('scoring')
                     require({k:v for k,v in scoring.items() if k!='producer'}=={k:v for k,v in part['scoring'].items() if k!='producer'},'Native scoring receipt differs')
                     reference_game=dict(part['game'],records=reference_records,result=final['result'])
-                    targets=compare_targets(part['game'],reference_game,config)
+                    with progress.stage(key,'target-validation',rows=len(reference_records)):
+                        targets=compare_targets(part['game'],reference_game,config)
                     with lock:metrics.append(dict(job=job['index'],branch=continuation is not None,rows=len(reference_records),targets=targets,
                         timings=part['timings'],native_cost=part['native_receipt']['cost'],buffer_bytes=part['native_receipt']['buffer_bytes']))
-                    return part
+                    progress.update(key,'complete',rows=len(reference_records));return part
             except BaseException:stop.set();raise
             finally:endpoints.put(endpoint)
         def fallback(job,continuation,submit):
             require(continuation is None,'Reference continuation unsupported')
             endpoint=endpoints.get(timeout=20)
-            try:return reference_part(root,job,endpoint,execution,args.mono)
+            try:
+                key=f'{job["index"]}/reference'
+                with progress.stage(key,'reference-collection',kind=job['provenance']['kind']):
+                    part=reference_part(root,job,endpoint,execution,args.mono)
+                progress.update(key,'complete',rows=len(part['game']['records']));return part
             except BaseException:stop.set();raise
             finally:endpoints.put(endpoint)
         producer=dict(build_sha256=sha(args.build),b01_sha256=sha(build['b01']['path']),signature=snapshot['signature_sha256'],profile=METHOD,v205_enabled=False)
-        store=FamilyStore(out/'families',producer)
+        class DiagnosticStore(FamilyStore):
+            def publish(self, job, *args, **kwargs):
+                with progress.stage(f'{job["index"]}/family','validate-publish'):
+                    value=super().publish(job,*args,**kwargs)
+                progress.update(f'{job["index"]}/family','published');return value
+        store=DiagnosticStore(out/'families',producer)
         try:
             families,scheduler=collect_families(jobs,store,native,fallback,lanes=lanes,cancel=stop,model_cohorts=execution.get('model_cohorts',False))
+            progress.update('collection','cached-retry')
             _,cached=collect_families(jobs,store,lambda *a:require(False,'Cached family recollected'),lambda *a:require(False,'Cached reference recollected'),lanes=lanes)
             require(cached['counts']['cached']==len(jobs) and not oracle_checkpoints,'Retry/fork leak')
         finally:
             for endpoint in owned:endpoint.close()
         report=service.report();require(report['error'] is None,'Inference service failure')
+        progress.update('collection','complete')
     branches=sum(f['child'] is not None for f in families)
     require_coverage(seen, branches)
     return dict(passed=True,scope='bounded diagnostic subset of frozen ordinary jobs; native neural tables, whole-table reference legacy route; no training admission',
@@ -219,13 +259,18 @@ def run(args):
 
 def main():
     import argparse
+    import faulthandler
     p=argparse.ArgumentParser(description=__doc__)
     for name in ('run','state','build','out'):p.add_argument('--'+name,type=Path,required=True)
     p.add_argument('--device',required=True);p.add_argument('--mono',default='mono')
     p.add_argument('--workers',type=int,default=60);a=p.parse_args()
+    # The outer watchdog kills the process group. Keep bounded progress and
+    # thread stacks in its captured log even if Python cannot unwind normally.
+    faulthandler.dump_traceback_later(60,repeat=True)
     try:value=run(a)
     except Exception as e:
         write(a.out/'collection-smoke.json',dict(passed=False,error=f'{type(e).__name__}: {e}'));raise
+    finally:faulthandler.cancel_dump_traceback_later()
     write(a.out/'collection-smoke.json',value)
     print(json.dumps(value,indent=2))
 
