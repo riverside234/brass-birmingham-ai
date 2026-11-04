@@ -712187,6 +712187,51 @@
       "preserve_g370_calibration": true,
       "preserve_g570_calibration": true,
       "config_migrations_ref": "1626"
+    },
+    {
+      "from_implementation": "f7a48a025e2c247e63da4df301ce2b80c7c6aabf1073220a5be97f0929719c78",
+      "to_implementation": "f74d78220d8dd622929d36618d374dfc0c4bfde313051cd2d60e5ba6a19cc296",
+      "learning_compatibility_ref": "5",
+      "preserve_g570_calibration": true,
+      "reason_ref": "189",
+      "review_report": "ai-research/NEUTRAL_SELFPLAY_G1290_RESTART.md",
+      "config_migrations_ref": "1703"
+    },
+    {
+      "from_implementation": "f7a48a025e2c247e63da4df301ce2b80c7c6aabf1073220a5be97f0929719c78",
+      "to_implementation": "f74d78220d8dd622929d36618d374dfc0c4bfde313051cd2d60e5ba6a19cc296",
+      "learning_compatibility_ref": "5",
+      "preserve_g570_calibration": true,
+      "reason_ref": "189",
+      "review_report": "ai-research/NEUTRAL_SELFPLAY_G1290_RESTART.md",
+      "config_migrations_ref": "1704"
+    },
+    {
+      "from_implementation": "f74d78220d8dd622929d36618d374dfc0c4bfde313051cd2d60e5ba6a19cc296",
+      "to_implementation": "f74d78220d8dd622929d36618d374dfc0c4bfde313051cd2d60e5ba6a19cc296",
+      "learning_compatibility_ref": "5",
+      "preserve_g570_calibration": true,
+      "reason_ref": "189",
+      "review_report": "ai-research/NEUTRAL_SELFPLAY_G1290_RESTART.md",
+      "config_migrations_ref": "1703"
+    },
+    {
+      "from_implementation": "f74d78220d8dd622929d36618d374dfc0c4bfde313051cd2d60e5ba6a19cc296",
+      "to_implementation": "f74d78220d8dd622929d36618d374dfc0c4bfde313051cd2d60e5ba6a19cc296",
+      "learning_compatibility_ref": "5",
+      "preserve_g570_calibration": true,
+      "reason_ref": "189",
+      "review_report": "ai-research/NEUTRAL_SELFPLAY_G1290_RESTART.md",
+      "config_migrations_ref": "1704"
+    },
+    {
+      "from_implementation": "f74d78220d8dd622929d36618d374dfc0c4bfde313051cd2d60e5ba6a19cc296",
+      "to_implementation": "f74d78220d8dd622929d36618d374dfc0c4bfde313051cd2d60e5ba6a19cc296",
+      "learning_compatibility_ref": "5",
+      "preserve_g570_calibration": true,
+      "reason_ref": "189",
+      "review_report": "ai-research/NEUTRAL_SELFPLAY_G1290_RESTART.md",
+      "config_migrations_ref": "1705"
     }
   ],
   "definitions": {
@@ -712379,7 +712424,8 @@
       "185": "B02 qualification repair: canonical source verification for an already pinned current shared V4 runtime; binary/dependency/manifest and semantic source checks preserved. Raise bounded smoke worker ceiling to 60, retain three frozen parent families and branch coverage; early reference preflight and partial-setup cleanup. No model, optimizer, reward, search, training recipe or saved-state change. Actual Linux/CUDA gates Pending.",
       "186": "B02 timeout repair: buffer the existing bounded C# JSON transport, reuse exact step/restore decisions, reuse the independent feature encoder instance, and record bounded progress/stacks. No rule, model, optimizer, RNG, sampling, search or recipe change; all correctness gates and 240-second watchdog retained. Full g570 continuation preserved; Linux/CUDA qualification Pending.",
       "187": "B03 diagnostic verification repair: compare exact detached CPU copies of restored CUDA Adam/PPG/auxiliary payload tensors without modifying their values/devices. Reuse the exact passing r7 B01/B02/B02.5 receipts under an enumerated, sealed source-delta review; all other source/runtime/receipt and run pins remain mandatory. No collector, search, model, optimizer-update, RNG or recipe changes; B03/B04 Pending.",
-      "188": "B04 diagnostic-only user-authorized null utility readiness for the exact g570 checkpoint; retain original B01/B02/B02.5 and the passed r9 B03 full-state/admission qualification via exact source-delta/receipt pins. No production calibration, model, optimizer, RNG, native producer or recipe changes."
+      "188": "B04 diagnostic-only user-authorized null utility readiness for the exact g570 checkpoint; retain original B01/B02/B02.5 and the passed r9 B03 full-state/admission qualification via exact source-delta/receipt pins. No production calibration, model, optimizer, RNG, native producer or recipe changes.",
+      "189": "Reviewed g570 production adoption on the current Rust lab r10 source. The lab-only source receipts omitted the exact trained-restart-g570 and entropy-anneal config migrations. Recovery/training source is unchanged from the previously reviewed scheduler. Admit only the existing exact migration handlers; preserve weights, Adam/RNG, committed progress and lineage. Reward changes still invalidate utility calibration and refresh incompatible PPG targets. No diagnostic readiness override or implicit/transitive source approval."
     },
     "config_changes": {
       "0": {

@@ -91,6 +91,26 @@ data-composition window reset while preserving its multiplier and warmup progres
 
 After stopping training, run from the Linux repository root:
 
+**g570 resume approval repair (2026-11-03):** the Rust lab r10 changes moved the
+aggregate source identity to
+`f74d78220d8dd622929d36618d374dfc0c4bfde313051cd2d60e5ba6a19cc296`.
+Their unchanged-config qualification receipts did not include the pending
+`trained-restart-g570/1.0.0` + `entropy-anneal-adoption/1.0.0` migrations. As a
+result, the config helper raised `Reviewed resume requires unchanged config
+except explicitly pinned review changes` before writing its output or starting
+training. The registry now adds these exact routes, including same-source
+retries and later entropy/reward helper transitions. Existing approvals remain
+unchanged; unknown sources and unrelated config edits still fail admission.
+Sync the repaired `configs/learning/selfplay-resume-sources.json` with the
+current checkout, then rerun the command below. Do not overlay the older sealed
+Rust qualification ZIP afterward: it contains the older registry. This repair
+does not change the trainer's source fingerprint or the sealed lab bundles.
+Validation: 11 focused checks passed in 49.5 seconds, including the actual
+config helper, strict rejection cases, schedule toggles/retries and an isolated
+checkpoint resume preserving exact model/Adam/RNG state. All 78,503 previous
+approval entries remain intact; five explicit routes were appended. No
+production checkpoint or training progress was changed.
+
 ```bash
 python scripts/recover-step5-iteration.py --root "$PWD" \
   --run artifacts/step5/joint7-v11-2-g1290-trained-restart \
