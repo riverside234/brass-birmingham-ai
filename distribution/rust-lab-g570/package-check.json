@@ -1,70 +1,70 @@
 {
   "passed": true,
   "archive": {
-    "path": "distribution/rust-lab-g570/rust-lab-b01-b04-g570-r9.zip",
-    "sha256": "c488341f929dce0b3c9ed51511e337d2f71bcc8050d133743db5c84edc852f8a",
-    "bytes": 29519250,
-    "entries": 1246,
-    "implementation": "8b9614d736c727d682e85753d1c851c3663461c733501eefac568624fca0dfe5",
+    "path": "distribution/rust-lab-g570/rust-lab-b01-b04-g570-r10.zip",
+    "sha256": "881c3632e8d2390bfebc6adabb7429478804e208865ec93bd997a5bfd03cf69a",
+    "bytes": 29558402,
+    "entries": 1263,
+    "implementation": "f74d78220d8dd622929d36618d374dfc0c4bfde313051cd2d60e5ba6a19cc296",
     "producer": "bc2c07c397fdc979c9d4376189e723af86620e6361e3cd7052f3500cea3709cb",
     "lab_qualification": "Pending"
   },
   "fresh_extraction": true,
   "transfer_stages": [
     {
-      "manifest_sha256": "83729ba2796869972ca21080304e2307f558e669373024fc47e8711ff059f998",
-      "implementation": "8b9614d736c727d682e85753d1c851c3663461c733501eefac568624fca0dfe5",
+      "manifest_sha256": "d077eb973751e6e429d2eb087e2093f5dd40b51a706abacbd9fbabc70884d7a1",
+      "implementation": "f74d78220d8dd622929d36618d374dfc0c4bfde313051cd2d60e5ba6a19cc296",
       "producer": "bc2c07c397fdc979c9d4376189e723af86620e6361e3cd7052f3500cea3709cb",
-      "files": 1238,
+      "files": 1255,
       "milestone": "b01",
       "teacher_profile": "task-only",
       "lab_qualification": "Pending"
     },
     {
-      "manifest_sha256": "83729ba2796869972ca21080304e2307f558e669373024fc47e8711ff059f998",
-      "implementation": "8b9614d736c727d682e85753d1c851c3663461c733501eefac568624fca0dfe5",
+      "manifest_sha256": "d077eb973751e6e429d2eb087e2093f5dd40b51a706abacbd9fbabc70884d7a1",
+      "implementation": "f74d78220d8dd622929d36618d374dfc0c4bfde313051cd2d60e5ba6a19cc296",
       "producer": "bc2c07c397fdc979c9d4376189e723af86620e6361e3cd7052f3500cea3709cb",
-      "files": 1238,
+      "files": 1255,
       "milestone": "b02",
       "teacher_profile": "task-only",
       "lab_qualification": "Pending"
     },
     {
-      "manifest_sha256": "83729ba2796869972ca21080304e2307f558e669373024fc47e8711ff059f998",
-      "implementation": "8b9614d736c727d682e85753d1c851c3663461c733501eefac568624fca0dfe5",
+      "manifest_sha256": "d077eb973751e6e429d2eb087e2093f5dd40b51a706abacbd9fbabc70884d7a1",
+      "implementation": "f74d78220d8dd622929d36618d374dfc0c4bfde313051cd2d60e5ba6a19cc296",
       "producer": "bc2c07c397fdc979c9d4376189e723af86620e6361e3cd7052f3500cea3709cb",
-      "files": 1238,
+      "files": 1255,
       "milestone": "b025",
       "teacher_profile": "task-only",
       "lab_qualification": "Pending"
     },
     {
-      "manifest_sha256": "83729ba2796869972ca21080304e2307f558e669373024fc47e8711ff059f998",
-      "implementation": "8b9614d736c727d682e85753d1c851c3663461c733501eefac568624fca0dfe5",
+      "manifest_sha256": "d077eb973751e6e429d2eb087e2093f5dd40b51a706abacbd9fbabc70884d7a1",
+      "implementation": "f74d78220d8dd622929d36618d374dfc0c4bfde313051cd2d60e5ba6a19cc296",
       "producer": "bc2c07c397fdc979c9d4376189e723af86620e6361e3cd7052f3500cea3709cb",
-      "files": 1238,
+      "files": 1255,
       "milestone": "b03",
       "teacher_profile": "task-only",
       "lab_qualification": "Pending"
     },
     {
-      "manifest_sha256": "83729ba2796869972ca21080304e2307f558e669373024fc47e8711ff059f998",
-      "implementation": "8b9614d736c727d682e85753d1c851c3663461c733501eefac568624fca0dfe5",
+      "manifest_sha256": "d077eb973751e6e429d2eb087e2093f5dd40b51a706abacbd9fbabc70884d7a1",
+      "implementation": "f74d78220d8dd622929d36618d374dfc0c4bfde313051cd2d60e5ba6a19cc296",
       "producer": "bc2c07c397fdc979c9d4376189e723af86620e6361e3cd7052f3500cea3709cb",
-      "files": 1238,
+      "files": 1255,
       "milestone": "b04",
       "teacher_profile": "task-only",
       "lab_qualification": "Pending"
     }
   ],
   "exact_lab_inventory_overlay": true,
-  "runtime_identical_to_r8": true,
+  "native_and_training_production_runtime_unchanged": true,
   "original_results_untouched": true,
   "prerequisites_repeated": false,
-  "scope": "Package and CPU tests only; original B01/B02/B02.5 passes retained; B03/B04 lab Pending",
+  "scope": "Package and CPU tests only; original B01/B02/B02.5/B03 passes retained; B04 GPU/search Pending",
   "logs": {
-    "distribution/rust-lab-g570/verify-r9.py": "012a081751ce6707894980604a49545a6b8d1a2cd3d5610d1150a657d1e646f5",
-    "artifacts/rust-backend/g570-b03-topology-package/integrity.log": "0ce9c886119765e25b8b17f278bf10fc5282431ebfb1a5555e2a305b9600a468",
-    "artifacts/rust-backend/g570-b03-topology-package/regression.log": "cbdef62a06414112c98f3cda3772e26ce26fc5901b49e04d52df4b4c94752884"
+    "distribution/rust-lab-g570/verify-r10.py": "8379be9cfd5737ee9b5b7e3813f31a6acb783ab2332360dbd0d672031351e929",
+    "artifacts/rust-backend/g570-b04-readiness-package/integrity.log": "9f880ff30e058a74697b9d216c3988cb1be7be4b56385a2fc930f1bfcc361729",
+    "artifacts/rust-backend/g570-b04-readiness-package/regression.log": "3786f1780085645bb25806610af8ea65ab467c8e3774c186db928157665a887a"
   }
 }

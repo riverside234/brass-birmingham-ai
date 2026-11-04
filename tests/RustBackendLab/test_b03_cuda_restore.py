@@ -93,7 +93,7 @@ class Reuse(unittest.TestCase):
 
     def test_read_review_requires_manifest_seal_and_current_implementation(self):
         proof=dict(contract='brass-lab-prerequisite-reuse/1.0.0',to_implementation='current',producer='native',
-                   scope=['b01','b02','b025'],changes={n:{} for n in R.ALLOWED})
+                   scope=['b01','b02','b025','b03'],changes={n:{} for n in R.ALLOWED})
         raw=json.dumps(proof).encode();manifest=dict(implementation='current',producer='native',
             files={R.REVIEW:R.hashlib.sha256(raw).hexdigest()})
         with patch.object(Path,'read_bytes',return_value=raw),patch.object(R,'read_json',side_effect=[manifest,proof]),\

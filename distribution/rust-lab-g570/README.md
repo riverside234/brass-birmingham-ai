@@ -1,61 +1,55 @@
-# B01–B04 qualification at g570 (r9)
+# B01–B04 qualification at g570 (r10)
 
-Updated 2026-11-03. **B01, B02 and B02.5 passed on the lab. Do not repeat them.**
-The latest r8 attempt passed B03's optimizer comparisons, then failed with
-`CUDA device topology differs on resume`: checkpoint and visible GPU counts
-differ. Training already supports this through logical-GPU RNG restoration;
-the unified launcher did not expose B03's existing opt-in flag.
+Updated 2026-11-03. **B01, B02, B02.5 and B03 passed. Do not repeat them.**
+B03 restored the full g570 state and admitted the sealed B02 replay successfully.
+Its CUDA report shows one saved RNG device, eight visible devices and one restored
+stream. B04 compiled and passed fixtures/native tests, then deferred before any
+teacher table because the utility-calibration receipt was null.
 
-r9 forwards `--allow-cuda-topology-change` to B03 and records it in the receipts.
-It retains the exact r8 trainer, native code, source approvals and prerequisite
-reuse review. See the [topology repair](../../ai-research/RUST_BACKEND_B03_CUDA_TOPOLOGY_FIX.md).
+For this exact g570 checkpoint, the user explicitly accepts null as ready. r10
+records `receipt: null, ready: true` with `user-authorized-g570-null-utility`
+evidence. It keeps the original checkpoint/model calibration unchanged and does
+not claim that a calibration measurement was performed. See the
+[review](../../ai-research/RUST_BACKEND_B04_G570_READINESS_FIX.md).
 
-## Resume on the lab at B03
+## Run only the remaining B04 qualification
 
-Sync the matching checkout, including added/deleted files. Keep training paused
-at the same g570 checkpoint and retain the original lab artifacts. From the
-repository root:
+Sync the matching checkout, then run from the lab repository root with training
+paused at the unchanged g570 checkpoint. Keep both original evidence directories.
 
 ```bash
 conda activate ai-training
-unzip -o distribution/rust-lab-g570/rust-lab-b01-b04-g570-r9.zip
-python scripts/run-rust-lab-qualification.py --stage all --start-at b03 --device cuda:0 \
-  --allow-cuda-topology-change \
+unzip -o distribution/rust-lab-g570/rust-lab-b01-b04-g570-r10.zip
+python scripts/run-rust-lab-qualification.py --stage b04 --device cuda:0 \
   --b02 artifacts/rust-backend/20261104T011422740838Z-g570-all-8bee9d91/b02/qualification.json \
+  --b03 artifacts/rust-backend/20261104T015819818200Z-g570-all-4c81aca9/b03/qualification.json \
+  --b04-build artifacts/rust-backend/20261104T015819818200Z-g570-all-4c81aca9/b04/build.json \
   --expected-generation 570 \
   --checkpoint-sha256 06626c1fb7d0b91f64d939f9fbb3db7c5f3aa072331eb3d773f101e729117ab9
 ```
 
-This runs B03 and then B04. It reuses the original B02 families, native binaries
-and B01/device receipts. No B01/B02/B02.5 qualification or B02 collection is
-repeated. Reuse requires the exact original receipt, unchanged run/checkpoint
-and all existing file pins; only the reviewed diagnostic-source delta is
-allowed. Do not substitute the Git-visible review copy for the original receipt.
+This runs B04 only and reuses its verified native binary instead of recompiling.
+The original B01/B02/B02.5/B03 qualifications and B02 games are not repeated.
+Original receipt, checkpoint/state, runtime, source-delta, overlay, lockfile,
+binary and dependency pins remain mandatory. The build's previous source
+identity stays in the old receipt; the new diagnostic binding records
+`reused_from`. No original report is rewritten.
 
-The run defaults to `artifacts/step5/joint7-v11-2-g1290-trained-restart`, with its
-exact recorded g570 recipe. Qualification never adopts another config, advances
-training or rewinds a run. B03 records the prerequisite review in its new receipt.
-If training has advanced, these g570 receipts cannot qualify that different state.
+The run remains `artifacts/step5/joint7-v11-2-g1290-trained-restart` with its exact
+recorded recipe. Keep the original qualified `cuda:0` allocation. This command
+does not restore RNG or run B03, so no topology-change flag is needed.
 
-Keep the original GPU visibility/allocation and qualified `cuda:0` device. The
-flag restores saved RNG streams to matching logical indices, including learner
-GPU 0. Additional visible devices keep their initialized streams; unavailable
-saved streams remain in the unchanged checkpoint. `restoration.json` and the
-lab receipt record saved/visible/restored counts and verify restored values.
-The strict equal-count default remains for callers without the flag. This is
-an isolated, zero-update restoration check, not a bitwise equivalence claim for
-training on a different GPU allocation.
+Null acceptance is scoped to B04 shadow testing of the pinned g570 SHA/model/run
+and matching utility reward. Explicit false or reward-mismatched receipts remain
+rejected; other checkpoints retain the existing readiness checks. This does not
+change production teacher mode or the stored utility calibration.
+
+B04 retains two separate one-thread sessions, 4s/K16 search and at most one second
+of cumulative post-work, with bounded GPU probes and two shadow tables. The
+existing 240-second collection watchdog remains. Search is task-only `search_v1`;
+search_v2/V205, DOMiNO and AZ_DB remain off. No production training update occurs.
 
 Each attempt exports a new Git-visible `results/rust-lab-qualification/` folder.
-Open `evidence/runner.json` first. Push that folder and pull it locally for review.
-No original results, source checkpoint, old ZIP or passing receipt is overwritten.
-
-The 60-worker B02 ceiling and 240-second watchdog remain unchanged for future
-collection. Existing Mono, CUDA Python, Rust 1.99.1, private runtimes, full
-checkpoints, opponent references and retained PPG caches remain required.
-Current bundle metadata selects r9; do not extract older supplements afterward.
-
-Task-only `search_v1`, K16, DOMiNO/AZ_DB off and search_v2/V205 disabled remain.
-B04 retains two independent one-thread sessions, 4 seconds search and at most
-1 second cumulative post-work. Its utility readiness gate still applies.
-**B03/B04 lab qualification and B05–B07 production adoption remain Pending.**
+Push that folder for review. **B04 GPU/search qualification and B05–B07 production
+adoption remain Pending.** The null receipt no longer blocks this g570 smoke.
+Current bundle metadata selects r10; do not extract older supplements afterward.

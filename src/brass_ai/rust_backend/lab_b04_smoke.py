@@ -18,14 +18,20 @@ from .lab_b03_smoke import entry as b02_entry
 from .lab_teacher import TeacherCollector,calibrate
 from .lab_teacher_overlay import source_fingerprint
 
+G570_RUN = 'artifacts/step5/joint7-v11-2-g1290-trained-restart'
+G570_CHECKPOINT = '06626c1fb7d0b91f64d939f9fbb3db7c5f3aa072331eb3d773f101e729117ab9'
+G570_MODEL = '18f42a48933c18095d96f1cc64b836d3f9aac92361a4e4ee7c423830d9a11a91'
+
 
 def entry(b02,b03,run,device):
     snapshot,_,_,_=b02_entry(b02,run,device)
     r=read_json(b03)
     require(r.get('contract')=='brass-lab-b03/1.0.0' and r.get('passed') is True
         and r.get('lab_qualification')=='Passed for this exact committed checkpoint'
-        and r['method']=='search_v1' and r['v205_enabled'] is False
-        and r['transfer']['implementation']==implementation_id(),'B04 requires current-source passing lab B03')
+        and r['method']=='search_v1' and r['v205_enabled'] is False,'B04 requires passing lab B03')
+    if r['transfer']['implementation']!=implementation_id():
+        from .lab_prerequisite_reuse import verify_b03
+        verify_b03(b03,r['transfer']['implementation'])
     lab=r['lab'];require(lab['passed'] is True and lab['new_games']==0 and lab['optimizer_steps']==0,'Invalid B03 scope')
     for k in ('preflight','restoration','replay','diagnostic_fork'):
         require(pin(lab[k]['path'])==lab[k],'Changed B03 '+k)
@@ -35,18 +41,34 @@ def entry(b02,b03,run,device):
     return snapshot
 
 
-def latest_readiness(root,state,raw,reward_id):
+def latest_readiness(root,state,raw,reward_id,*,checkpoint=None):
     """Most recent non-null committed receipt, never skip an unknown gap/false.
 
     Adoption may precede a saved teacher phase. Inspect retained checkpoints in
     descending order only while consecutive lineage entries remain available.
-    Missing history means deferred, not permission to resurrect an older fit.
+    Missing history means deferred, except for the explicit user-authorized
+    null-receipt assumption on the exact g570 diagnostic checkpoint below.
     """
     current=raw['training'].get('utility_calibration')
     saved=state.get('teacher_phase',{}).get('readiness')
     if current is not None or saved is not None:
         receipt,ready=readiness(saved,current,reward_id)
         return receipt,ready,dict(kind='committed-current-or-phase',generation=state['iteration'])
+    if checkpoint is not None and checkpoint.get('sha256')==G570_CHECKPOINT:
+        latest=state['history'][-1]
+        require(state['iteration']==raw['step']==latest['generation']==570
+                and raw['model_id']==latest['model_id']==G570_MODEL
+                and latest['sha256']==G570_CHECKPOINT
+                and latest['path']==G570_RUN+'/generation-0570.pt'
+                and raw['training']['fresh_run']==G570_RUN
+                and raw['model_config'].get('utility') is not None
+                and digest(raw['model_config']['utility'])==reward_id,
+                'G570 null-readiness assumption checkpoint/model/run/reward differs')
+        # This is an explicit diagnostic assumption, not a fitted calibration
+        # receipt. Preserve the real null in reports and checkpoint metadata.
+        return None,True,dict(kind='user-authorized-g570-null-utility',generation=570,
+            checkpoint_sha256=G570_CHECKPOINT,model_id=G570_MODEL,reward_id=reward_id,
+            scope='B04 shadow qualification only',calibration_measured=False)
     for item in reversed(state['history'][:-1]):
         path=(Path(root)/item['path']).resolve()
         require(path.is_relative_to(Path(root).resolve()),'Readiness checkpoint escaped project')
@@ -79,7 +101,7 @@ def run(args):
     model,raw=load_checkpoint(snapshot['checkpoint']['path'],device='cpu');model.eval()
     config=adopt(snapshot['state']['signature']['config']);config['teacher_phase']['mode']='shadow'
     reward=digest(config['teacher_phase']['search']['reward'])
-    receipt,ready,evidence=latest_readiness(root,snapshot['state'],raw,reward)
+    receipt,ready,evidence=latest_readiness(root,snapshot['state'],raw,reward,checkpoint=snapshot['checkpoint'])
     write_json(out/'readiness.json',dict(receipt=receipt,ready=ready,evidence=evidence,model_calibration_unchanged=True))
     if not ready:
         return dict(passed=False,deferred=True,reason='Latest current-reward lab readiness is not ready/unavailable; no teacher tables dispatched',
@@ -87,7 +109,9 @@ def run(args):
     state=dict(iteration=snapshot['generation'],history=copy.deepcopy(snapshot['state']['history']))
     if 'teacher_seed_cursor' in snapshot['state']:state['teacher_seed_cursor']=snapshot['state']['teacher_seed_cursor']
     phase=TeacherPhase(root,out/'diagnostic-phase',config,state,model)
-    phase.receipt=receipt;phase.ready=ready
+    phase.receipt=(receipt if receipt is not None else
+        dict(ready=True,reward_id=reward,basis=copy.deepcopy(evidence)))
+    phase.ready=ready
     full=phase.begin(state,model,export_hash=snapshot['checkpoint']['sha256'],epoch=0,native_source=source_fingerprint())
     jobs=[next(j for j in full if j['split']==split) for split in ('train','heldout')]
     phase.jobs=jobs

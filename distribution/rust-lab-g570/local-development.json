@@ -2,9 +2,9 @@
   "passed": true,
   "local_date": "2026-11-03",
   "timezone": "America/Chicago",
-  "implementation": "8b9614d736c727d682e85753d1c851c3663461c733501eefac568624fca0dfe5",
+  "implementation": "f74d78220d8dd622929d36618d374dfc0c4bfde313051cd2d60e5ba6a19cc296",
   "producer": "bc2c07c397fdc979c9d4376189e723af86620e6361e3cd7052f3500cea3709cb",
-  "source_review_sha256": "50f66098d1496f026ac0f44b62e559db5fb73b424733526d27c1aa60990cc9f3",
+  "source_review_sha256": "7e3f95ca455ae4762ee5496fc97c4535228adb15864da7839672ab369219413f",
   "fixtures": {
     "tests": 81,
     "seconds": 39.268,
@@ -142,13 +142,28 @@
     "artifacts/rust-backend/g570-b03-topology/regression.log": "d355477c7cd0246da09eab13151f4e65888798bb2def6c75a0a7b9c4c4fcd62f",
     "artifacts/rust-backend/g570-b03-topology/review.json": "88015a0ba542060fe56c044abcd76d9cdd996f36fc116e4bec8381c472ad6fcb",
     "artifacts/rust-backend/g570-b03-topology/run-checks.py": "c49403be901cfc860a9ffdfb324a20ac7be7fea27d5507d07012b493715297bc",
-    "artifacts/rust-backend/g570-b03-topology/seal-evidence.py": "e834cc6bdbd81b1fe037dd58553d6555010347648be9f58a7f7622849de07e56"
+    "artifacts/rust-backend/g570-b03-topology/seal-evidence.py": "e834cc6bdbd81b1fe037dd58553d6555010347648be9f58a7f7622849de07e56",
+    "artifacts/rust-backend/g570-b04-readiness/regression.json": "9f3d6dd14e77c303ba871525ae018908d0934361b8e3aa88db29fa6ff2550d84",
+    "artifacts/rust-backend/g570-b04-readiness/regression.log": "d851800143692640a5694f6e6d2f123ae80f4752573d8db8b7355b56ebcdd0a3",
+    "artifacts/rust-backend/g570-b04-readiness/review-source.py": "73475825aa5e5a07dd09c36b9cceaca6de2c64a2540818d2aedddfe2131c0e40",
+    "artifacts/rust-backend/g570-b04-readiness/review.json": "27553fde557599d724c981298393442c56b1af8c4d180f4f366b2e7f9d6034a6",
+    "artifacts/rust-backend/g570-b04-readiness/run-checks.py": "de37367bd8c8d34014e472d6cbd995c7c3363604f547265f5d20e845407d5086",
+    "artifacts/rust-backend/g570-b04-readiness/seal-evidence.py": "b242c224800c544e97ca2d831c3d97c2a57f0eeac56bc0c8e868a1ec9eca94fe",
+    "artifacts/rust-backend/g570-b04-readiness/source-review.json": "647e558525cd1a2d860da19e3e43f983b476352877e2ed5a69877ac9ef669f68",
+    "artifacts/rust-backend/g570-b04-readiness/lab-evidence/evidence/b03/qualification.json": "58b9f30024499d166fdc821ddd5db4777bc06a36b483b7da1932b6934516a6aa",
+    "artifacts/rust-backend/g570-b04-readiness/lab-evidence/evidence/b03/restoration.json": "dab20b637039b7b5c95ec4d23696368857c9f2dbf392d41eae0afbecfc7a02b7",
+    "artifacts/rust-backend/g570-b04-readiness/lab-evidence/evidence/b04/build.json": "994c4fbf47240cb925d8f54e208def44fb8e52a8b60d8c0b069de010beeab7f1",
+    "artifacts/rust-backend/g570-b04-readiness/lab-evidence/evidence/b04/fixtures.log": "ebdd1b44fbe59f01b3f2efb1f2b93ca50180b82931d9b3ae92dd7b6cb09a6705",
+    "artifacts/rust-backend/g570-b04-readiness/lab-evidence/evidence/b04/overlay.json": "0951279469f847cb66732ce48ef50507dbd1afb6afa1914c9af6163477541db3",
+    "artifacts/rust-backend/g570-b04-readiness/lab-evidence/evidence/b04/qualification.json": "617c3503d5ae3d828a0d9364c33a208d1ea0d92cc1a5d353cb005ce0ec77a11b",
+    "artifacts/rust-backend/g570-b04-readiness/lab-evidence/evidence/b04/readiness.json": "85a8208b10c5df5097dc415b66e3d65cf56a6a2d867e81ac3bc72076cb30c513",
+    "artifacts/rust-backend/g570-b04-readiness/lab-evidence/evidence/b04/test.log": "d259c5d8eb9c9fd8f0e3c7db98fbda6bd0284fab37f57b8bb3178dbb342130a4"
   },
   "native_source_unchanged": true,
   "search_timing_retested": false,
-  "lab_qualification": "B01/B02/B02.5 passing original scopes retained; B03/B04 Pending",
+  "lab_qualification": "B01/B02/B02.5/B03 original passes retained; B04 GPU/search Pending",
   "production_run_modified": false,
-  "scope": "R9 launcher exposes the existing B03 logical-GPU RNG compatibility option. R8 trainer/source/reuse reviews and original passing prerequisites unchanged.",
+  "scope": "R10 pinned g570 null readiness; exact B01/B02/B02.5/B03 and tested native build reuse.",
   "b01_inputs_fix": {
     "passed": true,
     "fixture_tests": 42,
@@ -1197,6 +1212,83 @@
     "limitations": [
       "CPU-only development; actual CUDA restoration remains a lab check.",
       "GPU topology regression mocks only CUDA hardware; real Adam and CPU RNG restoration are exercised."
+    ]
+  },
+  "b04_g570_fix": {
+    "passed": true,
+    "implementation": "f74d78220d8dd622929d36618d374dfc0c4bfde313051cd2d60e5ba6a19cc296",
+    "producer": "bc2c07c397fdc979c9d4376189e723af86620e6361e3cd7052f3500cea3709cb",
+    "tests": {
+      "passed": true,
+      "tests": 72,
+      "seconds": 22.215,
+      "skipped": 4,
+      "command": [
+        "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Brass Birmingham\\artifacts\\p6e\\Scripts\\python.exe",
+        "-X",
+        "utf8",
+        "-m",
+        "unittest",
+        "-v",
+        "test_b04_g570_readiness",
+        "test_b04",
+        "test_g370_lab",
+        "test_b03.Qualification",
+        "test_b03_cuda_restore",
+        "test_b03_topology",
+        "test_qualification_runner",
+        "test_lab_transfer",
+        "test_result_export"
+      ]
+    },
+    "tested_files": {
+      "src/brass_ai/rust_backend/lab_b04_smoke.py": "d01f6d646e0301620d7650dac27ee19a54e0c02543fd40b94aeee2661183c7ff",
+      "src/brass_ai/rust_backend/lab_prerequisite_reuse.py": "61ff8bcc43b965174309a0dec3260da54b4f319b5f5db72cfb10d8a14e05a1f1",
+      "scripts/prepare-rust-lab-g570.py": "3ce9254cd7dc5f180b5562c009da140e5810f4d62cdc6368f3c84f4b220a948d",
+      "scripts/run-rust-lab-qualification.py": "35a2a01c8f422817be72711310e175f88500d6cbd513511b1ebfcbdccbd5d20e",
+      "scripts/qualify-rust-lab-b04.py": "d5d1ab444fe606b4587a8760cbdf9ed08ba71b59b971d0c43601b557ed1de62a",
+      "tests/RustBackendLab/test_b04_g570_readiness.py": "b24d826c1d3be2d1b02c453c15079a5afb151504c3d787597cd31d58d1da5349",
+      "tests/RustBackendLab/test_b03_topology.py": "683ee8d62508ef4f4a1fa7a41aa512447e9efcefa59817dd9e6a04ef6e5fe8f3",
+      "tests/RustBackendLab/test_b03_cuda_restore.py": "69d3dff55e960fad1b9d448aa92541a0e9a69e52133fbb2a2fc6a2d992663f27"
+    },
+    "source_review_sha256": "7e3f95ca455ae4762ee5496fc97c4535228adb15864da7839672ab369219413f",
+    "preserved_passes": {
+      "b01": {
+        "path": "/data/not_backed_up/yxu209/ai-training/artifacts/rust-backend/20261104T011422740838Z-g570-all-8bee9d91/b01/qualification.json",
+        "bytes": 2531,
+        "sha256": "4c86c17674187dbfd38bbd37ae64b79aeb07af0f6da3aac0e03afa48478ba1bb"
+      },
+      "b02": {
+        "path": "/data/not_backed_up/yxu209/ai-training/artifacts/rust-backend/20261104T011422740838Z-g570-all-8bee9d91/b02/qualification.json",
+        "bytes": 1194,
+        "sha256": "88e7136e4d935c63dee3f71c4b3cc49b9202356792bf36a96e4d71b6945122ec"
+      },
+      "b025": {
+        "path": "/data/not_backed_up/yxu209/ai-training/artifacts/rust-backend/20261104T011422740838Z-g570-all-8bee9d91/b025/qualification.json",
+        "bytes": 1906,
+        "sha256": "6069cb5802e0d3f17069aa67173c9e4c6c85716281e3867fefe1c517b65045a0"
+      },
+      "b03": {
+        "path": "/data/not_backed_up/yxu209/ai-training/artifacts/rust-backend/20261104T015819818200Z-g570-all-4c81aca9/b03/qualification.json",
+        "bytes": 4483,
+        "sha256": "58b9f30024499d166fdc821ddd5db4777bc06a36b483b7da1932b6934516a6aa"
+      }
+    },
+    "reused_native_build": {
+      "path": "/data/not_backed_up/yxu209/ai-training/artifacts/rust-backend/20261104T015819818200Z-g570-all-4c81aca9/b04/build.json",
+      "bytes": 36102,
+      "sha256": "994c4fbf47240cb925d8f54e208def44fb8e52a8b60d8c0b069de010beeab7f1"
+    },
+    "prerequisites_repeated": false,
+    "new_games": 0,
+    "optimizer_steps": 0,
+    "production_modified": false,
+    "restart_at": "b04",
+    "readiness_basis": "User-authorized exact g570 null utility receipt; no calibration measurement",
+    "lab_qualification": "B01/B02/B02.5/B03 original passes retained; B04 GPU/search Pending",
+    "limitations": [
+      "CPU-only development: actual CUDA and two optional native probes skipped; Windows symlink test skipped.",
+      "No full games, original prerequisite qualification or native compilation repeated."
     ]
   }
 }

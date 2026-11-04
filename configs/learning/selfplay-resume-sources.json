@@ -711921,6 +711921,272 @@
       "preserve_g370_calibration": true,
       "preserve_g570_calibration": true,
       "config_migrations_ref": "1626"
+    },
+    {
+      "from_implementation": "603d1d236ca3da4511467956a9b656b41a4f03017d814b1abd8f060467a4c05c",
+      "to_implementation": "f74d78220d8dd622929d36618d374dfc0c4bfde313051cd2d60e5ba6a19cc296",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "188",
+      "review_report": "ai-research/RUST_BACKEND_B04_G570_READINESS_FIX.md"
+    },
+    {
+      "from_implementation": "603d1d236ca3da4511467956a9b656b41a4f03017d814b1abd8f060467a4c05c",
+      "to_implementation": "f74d78220d8dd622929d36618d374dfc0c4bfde313051cd2d60e5ba6a19cc296",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "188",
+      "review_report": "ai-research/RUST_BACKEND_B04_G570_READINESS_FIX.md",
+      "teacher_phase_changes": true
+    },
+    {
+      "from_implementation": "6abba7672db47057df6090907c9397eb70ecad52b691653ed552bf250725e96d",
+      "to_implementation": "f74d78220d8dd622929d36618d374dfc0c4bfde313051cd2d60e5ba6a19cc296",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "188",
+      "review_report": "ai-research/RUST_BACKEND_B04_G570_READINESS_FIX.md"
+    },
+    {
+      "from_implementation": "6abba7672db47057df6090907c9397eb70ecad52b691653ed552bf250725e96d",
+      "to_implementation": "f74d78220d8dd622929d36618d374dfc0c4bfde313051cd2d60e5ba6a19cc296",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "188",
+      "review_report": "ai-research/RUST_BACKEND_B04_G570_READINESS_FIX.md",
+      "teacher_phase_changes": true
+    },
+    {
+      "from_implementation": "70a926e5dfc7aa30829c296b49cb7b53159534ccc5e7c8876c46a9609a44164d",
+      "to_implementation": "f74d78220d8dd622929d36618d374dfc0c4bfde313051cd2d60e5ba6a19cc296",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "188",
+      "review_report": "ai-research/RUST_BACKEND_B04_G570_READINESS_FIX.md",
+      "preserve_g370_calibration": true,
+      "preserve_g570_calibration": true
+    },
+    {
+      "from_implementation": "70a926e5dfc7aa30829c296b49cb7b53159534ccc5e7c8876c46a9609a44164d",
+      "to_implementation": "f74d78220d8dd622929d36618d374dfc0c4bfde313051cd2d60e5ba6a19cc296",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "188",
+      "review_report": "ai-research/RUST_BACKEND_B04_G570_READINESS_FIX.md",
+      "preserve_g370_calibration": true,
+      "preserve_g570_calibration": true,
+      "teacher_phase_changes": true
+    },
+    {
+      "from_implementation": "f7a48a025e2c247e63da4df301ce2b80c7c6aabf1073220a5be97f0929719c78",
+      "to_implementation": "f74d78220d8dd622929d36618d374dfc0c4bfde313051cd2d60e5ba6a19cc296",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "188",
+      "review_report": "ai-research/RUST_BACKEND_B04_G570_READINESS_FIX.md",
+      "preserve_g370_calibration": true,
+      "preserve_g570_calibration": true
+    },
+    {
+      "from_implementation": "f7a48a025e2c247e63da4df301ce2b80c7c6aabf1073220a5be97f0929719c78",
+      "to_implementation": "f74d78220d8dd622929d36618d374dfc0c4bfde313051cd2d60e5ba6a19cc296",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "188",
+      "review_report": "ai-research/RUST_BACKEND_B04_G570_READINESS_FIX.md",
+      "preserve_g370_calibration": true,
+      "preserve_g570_calibration": true,
+      "teacher_phase_changes": true
+    },
+    {
+      "from_implementation": "f7a48a025e2c247e63da4df301ce2b80c7c6aabf1073220a5be97f0929719c78",
+      "to_implementation": "f74d78220d8dd622929d36618d374dfc0c4bfde313051cd2d60e5ba6a19cc296",
+      "learning_compatibility_ref": "5",
+      "preserve_g570_calibration": true,
+      "reason_ref": "188",
+      "review_report": "ai-research/RUST_BACKEND_B04_G570_READINESS_FIX.md"
+    },
+    {
+      "from_implementation": "70a926e5dfc7aa30829c296b49cb7b53159534ccc5e7c8876c46a9609a44164d",
+      "to_implementation": "f74d78220d8dd622929d36618d374dfc0c4bfde313051cd2d60e5ba6a19cc296",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "188",
+      "review_report": "ai-research/RUST_BACKEND_B04_G570_READINESS_FIX.md",
+      "preserve_g370_calibration": true,
+      "preserve_g570_calibration": true
+    },
+    {
+      "from_implementation": "f7a48a025e2c247e63da4df301ce2b80c7c6aabf1073220a5be97f0929719c78",
+      "to_implementation": "f74d78220d8dd622929d36618d374dfc0c4bfde313051cd2d60e5ba6a19cc296",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "188",
+      "review_report": "ai-research/RUST_BACKEND_B04_G570_READINESS_FIX.md",
+      "preserve_g370_calibration": true,
+      "preserve_g570_calibration": true
+    },
+    {
+      "from_implementation": "20efa9ea06dad63f8301f0352d56f254c245b0a138caea2bd529dfc17873629e",
+      "to_implementation": "f74d78220d8dd622929d36618d374dfc0c4bfde313051cd2d60e5ba6a19cc296",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "188",
+      "review_report": "ai-research/RUST_BACKEND_B04_G570_READINESS_FIX.md",
+      "preserve_g370_calibration": true,
+      "preserve_g570_calibration": true
+    },
+    {
+      "from_implementation": "70a926e5dfc7aa30829c296b49cb7b53159534ccc5e7c8876c46a9609a44164d",
+      "to_implementation": "f74d78220d8dd622929d36618d374dfc0c4bfde313051cd2d60e5ba6a19cc296",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "188",
+      "review_report": "ai-research/RUST_BACKEND_B04_G570_READINESS_FIX.md",
+      "preserve_g370_calibration": true,
+      "preserve_g570_calibration": true,
+      "teacher_phase_changes": true
+    },
+    {
+      "from_implementation": "f7a48a025e2c247e63da4df301ce2b80c7c6aabf1073220a5be97f0929719c78",
+      "to_implementation": "f74d78220d8dd622929d36618d374dfc0c4bfde313051cd2d60e5ba6a19cc296",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "188",
+      "review_report": "ai-research/RUST_BACKEND_B04_G570_READINESS_FIX.md",
+      "preserve_g370_calibration": true,
+      "preserve_g570_calibration": true,
+      "teacher_phase_changes": true
+    },
+    {
+      "from_implementation": "20efa9ea06dad63f8301f0352d56f254c245b0a138caea2bd529dfc17873629e",
+      "to_implementation": "f74d78220d8dd622929d36618d374dfc0c4bfde313051cd2d60e5ba6a19cc296",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "188",
+      "review_report": "ai-research/RUST_BACKEND_B04_G570_READINESS_FIX.md",
+      "preserve_g370_calibration": true,
+      "preserve_g570_calibration": true,
+      "teacher_phase_changes": true
+    },
+    {
+      "from_implementation": "70a926e5dfc7aa30829c296b49cb7b53159534ccc5e7c8876c46a9609a44164d",
+      "to_implementation": "f74d78220d8dd622929d36618d374dfc0c4bfde313051cd2d60e5ba6a19cc296",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "188",
+      "review_report": "ai-research/RUST_BACKEND_B04_G570_READINESS_FIX.md",
+      "preserve_g370_calibration": true,
+      "preserve_g570_calibration": true,
+      "config_migrations_ref": "1626"
+    },
+    {
+      "from_implementation": "f7a48a025e2c247e63da4df301ce2b80c7c6aabf1073220a5be97f0929719c78",
+      "to_implementation": "f74d78220d8dd622929d36618d374dfc0c4bfde313051cd2d60e5ba6a19cc296",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "188",
+      "review_report": "ai-research/RUST_BACKEND_B04_G570_READINESS_FIX.md",
+      "preserve_g370_calibration": true,
+      "preserve_g570_calibration": true,
+      "config_migrations_ref": "1626"
+    },
+    {
+      "from_implementation": "20efa9ea06dad63f8301f0352d56f254c245b0a138caea2bd529dfc17873629e",
+      "to_implementation": "f74d78220d8dd622929d36618d374dfc0c4bfde313051cd2d60e5ba6a19cc296",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "188",
+      "review_report": "ai-research/RUST_BACKEND_B04_G570_READINESS_FIX.md",
+      "preserve_g370_calibration": true,
+      "preserve_g570_calibration": true,
+      "config_migrations_ref": "1626"
+    },
+    {
+      "from_implementation": "603d1d236ca3da4511467956a9b656b41a4f03017d814b1abd8f060467a4c05c",
+      "to_implementation": "f74d78220d8dd622929d36618d374dfc0c4bfde313051cd2d60e5ba6a19cc296",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "188",
+      "review_report": "ai-research/RUST_BACKEND_B04_G570_READINESS_FIX.md",
+      "config_migrations_ref": "1626"
+    },
+    {
+      "from_implementation": "6abba7672db47057df6090907c9397eb70ecad52b691653ed552bf250725e96d",
+      "to_implementation": "f74d78220d8dd622929d36618d374dfc0c4bfde313051cd2d60e5ba6a19cc296",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "188",
+      "review_report": "ai-research/RUST_BACKEND_B04_G570_READINESS_FIX.md",
+      "config_migrations_ref": "1626"
+    },
+    {
+      "from_implementation": "a7d39190382b768058f699ba94a8e870b7ca18eb54c636392fc2eeec6b8dc31b",
+      "to_implementation": "f74d78220d8dd622929d36618d374dfc0c4bfde313051cd2d60e5ba6a19cc296",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "188",
+      "review_report": "ai-research/RUST_BACKEND_B04_G570_READINESS_FIX.md",
+      "preserve_g370_calibration": true,
+      "preserve_g570_calibration": true
+    },
+    {
+      "from_implementation": "a7d39190382b768058f699ba94a8e870b7ca18eb54c636392fc2eeec6b8dc31b",
+      "to_implementation": "f74d78220d8dd622929d36618d374dfc0c4bfde313051cd2d60e5ba6a19cc296",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "188",
+      "review_report": "ai-research/RUST_BACKEND_B04_G570_READINESS_FIX.md",
+      "preserve_g370_calibration": true,
+      "preserve_g570_calibration": true,
+      "teacher_phase_changes": true
+    },
+    {
+      "from_implementation": "a7d39190382b768058f699ba94a8e870b7ca18eb54c636392fc2eeec6b8dc31b",
+      "to_implementation": "f74d78220d8dd622929d36618d374dfc0c4bfde313051cd2d60e5ba6a19cc296",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "188",
+      "review_report": "ai-research/RUST_BACKEND_B04_G570_READINESS_FIX.md",
+      "preserve_g370_calibration": true,
+      "preserve_g570_calibration": true,
+      "config_migrations_ref": "1626"
+    },
+    {
+      "from_implementation": "8b9614d736c727d682e85753d1c851c3663461c733501eefac568624fca0dfe5",
+      "to_implementation": "f74d78220d8dd622929d36618d374dfc0c4bfde313051cd2d60e5ba6a19cc296",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "188",
+      "review_report": "ai-research/RUST_BACKEND_B04_G570_READINESS_FIX.md",
+      "preserve_g370_calibration": true,
+      "preserve_g570_calibration": true
+    },
+    {
+      "from_implementation": "8b9614d736c727d682e85753d1c851c3663461c733501eefac568624fca0dfe5",
+      "to_implementation": "f74d78220d8dd622929d36618d374dfc0c4bfde313051cd2d60e5ba6a19cc296",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "188",
+      "review_report": "ai-research/RUST_BACKEND_B04_G570_READINESS_FIX.md",
+      "preserve_g370_calibration": true,
+      "preserve_g570_calibration": true,
+      "teacher_phase_changes": true
+    },
+    {
+      "from_implementation": "8b9614d736c727d682e85753d1c851c3663461c733501eefac568624fca0dfe5",
+      "to_implementation": "f74d78220d8dd622929d36618d374dfc0c4bfde313051cd2d60e5ba6a19cc296",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "188",
+      "review_report": "ai-research/RUST_BACKEND_B04_G570_READINESS_FIX.md",
+      "preserve_g370_calibration": true,
+      "preserve_g570_calibration": true,
+      "config_migrations_ref": "1626"
+    },
+    {
+      "from_implementation": "f74d78220d8dd622929d36618d374dfc0c4bfde313051cd2d60e5ba6a19cc296",
+      "to_implementation": "f74d78220d8dd622929d36618d374dfc0c4bfde313051cd2d60e5ba6a19cc296",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "188",
+      "review_report": "ai-research/RUST_BACKEND_B04_G570_READINESS_FIX.md",
+      "preserve_g370_calibration": true,
+      "preserve_g570_calibration": true
+    },
+    {
+      "from_implementation": "f74d78220d8dd622929d36618d374dfc0c4bfde313051cd2d60e5ba6a19cc296",
+      "to_implementation": "f74d78220d8dd622929d36618d374dfc0c4bfde313051cd2d60e5ba6a19cc296",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "188",
+      "review_report": "ai-research/RUST_BACKEND_B04_G570_READINESS_FIX.md",
+      "preserve_g370_calibration": true,
+      "preserve_g570_calibration": true,
+      "teacher_phase_changes": true
+    },
+    {
+      "from_implementation": "f74d78220d8dd622929d36618d374dfc0c4bfde313051cd2d60e5ba6a19cc296",
+      "to_implementation": "f74d78220d8dd622929d36618d374dfc0c4bfde313051cd2d60e5ba6a19cc296",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "188",
+      "review_report": "ai-research/RUST_BACKEND_B04_G570_READINESS_FIX.md",
+      "preserve_g370_calibration": true,
+      "preserve_g570_calibration": true,
+      "config_migrations_ref": "1626"
     }
   ],
   "definitions": {
@@ -712112,7 +712378,8 @@
       "184": "Reviewed g570: preserve main/auxiliary weights, Adam/RNG, progress and PPG/GAE. Save companion bundles in frozen snapshots; T1.3x3 normal/T1.5x2 fork openings, epsilon .02, v4 PFSP manual adoption, 166/154/0, floating trained-start PL baseline. Entropy preset .005; optional committed-health linear anneal to .001 over 100 healthy iterations. Exact signed helper commands only; reward step one .01/.075, step two .005/.05 after k>=50, reward changes invalidate calibration/refresh PPG targets, no live automatic reward mutation. Off keeps reward and progress; scheduled probe is report-only, no AnchorKL. Review: ai-research/NEUTRAL_SELFPLAY_G1290_RESTART.md.",
       "185": "B02 qualification repair: canonical source verification for an already pinned current shared V4 runtime; binary/dependency/manifest and semantic source checks preserved. Raise bounded smoke worker ceiling to 60, retain three frozen parent families and branch coverage; early reference preflight and partial-setup cleanup. No model, optimizer, reward, search, training recipe or saved-state change. Actual Linux/CUDA gates Pending.",
       "186": "B02 timeout repair: buffer the existing bounded C# JSON transport, reuse exact step/restore decisions, reuse the independent feature encoder instance, and record bounded progress/stacks. No rule, model, optimizer, RNG, sampling, search or recipe change; all correctness gates and 240-second watchdog retained. Full g570 continuation preserved; Linux/CUDA qualification Pending.",
-      "187": "B03 diagnostic verification repair: compare exact detached CPU copies of restored CUDA Adam/PPG/auxiliary payload tensors without modifying their values/devices. Reuse the exact passing r7 B01/B02/B02.5 receipts under an enumerated, sealed source-delta review; all other source/runtime/receipt and run pins remain mandatory. No collector, search, model, optimizer-update, RNG or recipe changes; B03/B04 Pending."
+      "187": "B03 diagnostic verification repair: compare exact detached CPU copies of restored CUDA Adam/PPG/auxiliary payload tensors without modifying their values/devices. Reuse the exact passing r7 B01/B02/B02.5 receipts under an enumerated, sealed source-delta review; all other source/runtime/receipt and run pins remain mandatory. No collector, search, model, optimizer-update, RNG or recipe changes; B03/B04 Pending.",
+      "188": "B04 diagnostic-only user-authorized null utility readiness for the exact g570 checkpoint; retain original B01/B02/B02.5 and the passed r9 B03 full-state/admission qualification via exact source-delta/receipt pins. No production calibration, model, optimizer, RNG, native producer or recipe changes."
     },
     "config_changes": {
       "0": {

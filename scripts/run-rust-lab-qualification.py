@@ -64,6 +64,8 @@ def command(stage, args, out, receipts):
                 '--bundle', str(ROOT/'distribution/rust-lab-b01/b01-search-v1-inputs.zip'),
                 '--bundle-sha256', '935443a477d3a52425923e3d7458a15ae8250f4296a6900c5b9088fbef864a76']
     if stage == 'b02': cmd += ['--workers', str(args.b02_workers)]
+    if stage == 'b04' and args.b04_build is not None:
+        cmd += ['--reuse-build', str(args.b04_build)]
     if stage == 'b03' and not args.fixtures_only and args.allow_cuda_topology_change:
         cmd += ['--allow-cuda-topology-change']
     if stage in ('b025', 'b03','b04'):
@@ -120,6 +122,7 @@ def main(argv=None):
     parser.add_argument('--allow-cuda-topology-change', action='store_true',
                         help='B03 only: use the existing logical-GPU RNG compatibility route; keep learner on cuda:0')
     parser.add_argument('--b02-workers', type=int, default=60, help='B02 collection lane ceiling; 1..60')
+    parser.add_argument('--b04-build', type=Path, help='Reuse the exact reviewed B04 native build without recompilation')
     for stage in ('b01', 'b02', 'b03'): parser.add_argument('--'+stage, type=Path)
     parser.add_argument('--fixtures-only', action='store_true', help='CPU development only; stage b025, b03 or b04')
     args = parser.parse_args(argv)
@@ -128,6 +131,8 @@ def main(argv=None):
         parser.error('--start-at requires --stage all and a real lab run')
     if args.fixtures_only and (args.stage not in ('b025', 'b03', 'b04') or args.device != 'cpu'):
         parser.error('--fixtures-only requires --stage b025/b03/b04 --device cpu')
+    if args.b04_build is not None and (args.fixtures_only or args.stage not in ('all', 'b04')):
+        parser.error('--b04-build requires a real B04 stage')
     if args.allow_cuda_topology_change and (args.fixtures_only or args.device != 'cuda:0'
             or (args.stage != 'b03' and not (args.stage == 'all' and args.start_at != 'b04'))):
         parser.error('--allow-cuda-topology-change requires a real B03 stage with --device cuda:0')

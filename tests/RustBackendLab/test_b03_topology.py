@@ -33,7 +33,7 @@ class Launcher(unittest.TestCase):
     def args(self, **values):
         return SimpleNamespace(**dict(dict(device='cuda:0', fixtures_only=False, run=Path('run'),
             expected_generation=570, checkpoint_sha256='a'*64, b02_workers=60,
-            allow_cuda_topology_change=False), **values))
+            allow_cuda_topology_change=False, b04_build=None), **values))
 
     def test_flag_is_opt_in_and_forwarded_only_to_real_b03(self):
         receipts = {s: Path(s+'.json') for s in ('b01', 'b02', 'b03')}

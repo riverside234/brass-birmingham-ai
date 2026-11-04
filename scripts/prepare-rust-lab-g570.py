@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Seal g570-r9: expose B03's existing CUDA topology compatibility route."""
+"""Seal g570-r10: pinned B04 null-readiness assumption and exact prerequisite reuse."""
 import argparse
 import hashlib
 import importlib.util
@@ -33,7 +33,7 @@ def main():
     from brass_ai.rust_backend.lab_contract import sha,SOURCE,extract_new,verify_inputs
     from brass_ai.rust_backend.lab_transfer import CONTRACT,RETIRED,implementation_inventory
     from brass_ai.rust_backend.lab_teacher_overlay import source_fingerprint
-    out=ROOT/DIRECTORY;archive=out/'rust-lab-b01-b04-g570-r9.zip'
+    out=ROOT/DIRECTORY;archive=out/'rust-lab-b01-b04-g570-r10.zip'
     require(not archive.exists(),'This bundle is already sealed; publish a new version')
     for n,h in ARCHIVES.items():require(sha(ROOT/n)==h,'Changed historical archive: '+n)
     require(sha(out/'rust-lab-b01-b04-g570.zip')=='7bbceb50b1b2ffa3c3797aa2aae452a90edde2f15be8a2d627b452f7c64a53a4',
@@ -52,10 +52,12 @@ def main():
             'Previous g570-r7 archive changed')
     require(sha(out/'rust-lab-b01-b04-g570-r8.zip')=='8fdb70738e042795b4f9393464f9d33b76ed1435c09b8c93d39d81f11b00b97b',
             'Previous g570-r8 archive changed')
+    require(sha(out/'rust-lab-b01-b04-g570-r9.zip')=='c488341f929dce0b3c9ed51511e337d2f71bcc8050d133743db5c84edc852f8a',
+            'Previous g570-r9 archive changed')
     require(all(not (ROOT/n).exists() for n in RETIRED),'Retired AZ_DB source still present')
     spec=importlib.util.spec_from_file_location('b01_package_inputs',ROOT/'scripts/qualify-rust-lab.py')
     b01=importlib.util.module_from_spec(spec);spec.loader.exec_module(b01)
-    with tempfile.TemporaryDirectory(dir=ROOT/'artifacts',prefix='g570-r9-inputs-') as directory:
+    with tempfile.TemporaryDirectory(dir=ROOT/'artifacts',prefix='g570-r10-inputs-') as directory:
         directory=Path(directory)
         extract_new(ROOT/'distribution/rust-lab-b01/b01-search-v1-inputs.zip',directory/'inputs')
         verify_inputs(directory/'inputs',json.loads((ROOT/'configs/search/lab-search-v1.json').read_text(encoding='utf-8')))
@@ -91,6 +93,7 @@ def main():
         'ai-research/RUST_BACKEND_B02_TIMEOUT_FIX.md',
         'ai-research/RUST_BACKEND_B03_CUDA_RESTORE_FIX.md',
         'ai-research/RUST_BACKEND_B03_CUDA_TOPOLOGY_FIX.md',
+        'ai-research/RUST_BACKEND_B04_G570_READINESS_FIX.md',
         'distribution/rust-lab-toolchain/README.md','distribution/rust-lab-toolchain/License.txt',
         'results/joint7-v11-2-g1290-trained-restart-g0370-20261102T221517838215Z/state.json','distribution/RUST_LAB_SEARCH_V1.md'}
     folders=[('src/brass_ai',{'.py'}),('configs',{'.json','.md'}),('scripts',{'.py','.sh'}),
@@ -122,31 +125,31 @@ def main():
     require(python_checks['passed'] and python_checks['test_paths']==list(b01.TEST_PATHS)
             and python_checks['inference']['tests']==28 and python_checks['inference']['skipped']==0,
             'Exact B01 inference suite must pass before packaging')
-    review=checks['b03_cuda_fix']
-    topology=checks['b03_topology_fix']
-    require(topology['passed'] and topology['implementation']==implementation
-            and topology['runtime_source_changed'] is False and topology['prerequisites_repeated'] is False,
-            'Missing B03 topology launcher regression evidence')
-    # Only the launcher/test plumbing changes in r9. Keep r8's exact source
-    # approvals, prerequisite review and all implementation inputs unchanged.
-    with zipfile.ZipFile(out/'rust-lab-b01-b04-g570-r8.zip') as prior:
+    review=checks['b04_g570_fix']
+    require(review['passed'] and review['implementation']==implementation and review['producer']==producer
+            and review['prerequisites_repeated'] is False,'Missing B04 g570 readiness regression evidence')
+    with zipfile.ZipFile(out/'rust-lab-b01-b04-g570-r9.zip') as prior:
         old=json.loads(prior.read(DIRECTORY+'/transfer-manifest.json'))
-        require(old['implementation']==implementation and old['producer']==producer,
-                'R9 may not alter the trainer or native producer')
-        for name in ('configs/learning/selfplay-resume-sources.json',DIRECTORY+'/prerequisite-reuse.json'):
-            require((ROOT/name).read_bytes()==prior.read(name),'R9 changed an existing source/reuse review: '+name)
-    for name,expected in topology['tested_files'].items():
-        require(sha(ROOT/name)==expected,'Changed source after topology checks: '+name)
-    for name,expected in python_checks['tested_files'].items():
-        require(sha(ROOT/name)==expected or (name=='scripts/qualify-rust-lab-b02.py'
-                and sha(ROOT/name)==review['tested_files'].get(name)),
-                'Changed source outside retained B01 checks and reviewed prerequisite guard: '+name)
-    require(review['passed'] and review['implementation']==implementation and review['worker_cap']==60,
-            'Missing CUDA restoration/prerequisite reuse review')
+        sources=implementation_sources()
+        require(set(sources)==set(old['implementation_files']) and old['producer']==producer,
+                'B04 diagnostic repair changed native producer or implementation input set')
+        changed={name for name,value in sources.items()
+                 if value!=prior.read(name).decode('utf-8').replace('\r\n','\n')}
+        require(changed=={'src/brass_ai/rust_backend/lab_b04_smoke.py',
+                          'src/brass_ai/rust_backend/lab_prerequisite_reuse.py'},
+                'Changed source outside the B04 diagnostic repair')
     for name,expected in review['tested_files'].items():
-        require(sha(ROOT/name)==expected or (name in ('scripts/prepare-rust-lab-g570.py','scripts/qualify-rust-lab-b03.py')
-                and sha(ROOT/name)==topology['tested_files'].get(name)),
-                'Changed source after qualification review: '+name)
+        require(sha(ROOT/name)==expected,'Changed source after B04 readiness checks: '+name)
+    # Preserve historical evidence, checking changed harnesses against the new
+    # tests instead of relabelling old qualifications as newly executed.
+    retained=[python_checks,checks['b03_cuda_fix'],checks['b03_topology_fix']]
+    for prior_checks in retained:
+        for name,expected in prior_checks['tested_files'].items():
+            require(sha(ROOT/name)==expected or sha(ROOT/name)==review['tested_files'].get(name)
+                    or sha(ROOT/name)==checks['b03_topology_fix']['tested_files'].get(name)
+                    or (name=='scripts/qualify-rust-lab-b02.py'
+                        and sha(ROOT/name)==checks['b03_cuda_fix']['tested_files'].get(name)),
+                    'Changed source outside retained and new bounded checks: '+name)
     require(sha(ROOT/'configs/learning/selfplay-resume-sources.json')==checks['source_review_sha256'],
         'Source approvals changed since continuation checks')
     from brass_ai.recovery.resume import check_signature
@@ -170,8 +173,8 @@ def main():
         archives=ARCHIVES,local_checks=checks,lab_qualification='Pending',production_teacher_enabled=False,
         native_test_inputs=native_inputs,
         python_test_paths=list(b01.TEST_PATHS),
-        supersedes=dict(path=DIRECTORY+'/rust-lab-b01-b04-g570-r8.zip',
-                        sha256='8fdb70738e042795b4f9393464f9d33b76ed1435c09b8c93d39d81f11b00b97b'),
+        supersedes=dict(path=DIRECTORY+'/rust-lab-b01-b04-g570-r9.zip',
+                        sha256='c488341f929dce0b3c9ed51511e337d2f71bcc8050d133743db5c84edc852f8a'),
         qualified_prerequisite_reuse=json.loads((out/'prerequisite-reuse.json').read_text(encoding='utf-8')),
         results_directory='results/rust-lab-qualification',extraction_order=['Current checkout with deletions, then g570 supplement only'])
     if args.check_only:
