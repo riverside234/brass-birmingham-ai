@@ -712527,6 +712527,16 @@
       "review_report": "ai-research/NEUTRAL_SELFPLAY_G1290_RESTART.md",
       "from_implementation": "4c514df4931721b1f8a96b6639ef9f5ee3b7cc1c98010e24536276c712f80fa6",
       "config_migrations_ref": "1708"
+    },
+    {
+      "from_implementation": "4c514df4931721b1f8a96b6639ef9f5ee3b7cc1c98010e24536276c712f80fa6",
+      "to_implementation": "36202b9e4bd3498a52671081f2cc37406ef2b3165dd24a37f1dfe79e44a625c1",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "192",
+      "reviewed_from_commit": "6e71c4e",
+      "reviewed_evidence": "results/joint7-v11-2-g1290-trained-restart-g0921-20261105T213224468369Z/state.json",
+      "review_report": "docs/COMPACT_IL_REPLAYS.md",
+      "preserve_g570_calibration": true
     }
   ],
   "definitions": {
@@ -712722,7 +712732,8 @@
       "188": "B04 diagnostic-only user-authorized null utility readiness for the exact g570 checkpoint; retain original B01/B02/B02.5 and the passed r9 B03 full-state/admission qualification via exact source-delta/receipt pins. No production calibration, model, optimizer, RNG, native producer or recipe changes.",
       "189": "Reviewed g570 production adoption on the current Rust lab r10 source. The lab-only source receipts omitted the exact trained-restart-g570 and entropy-anneal config migrations. Recovery/training source is unchanged from the previously reviewed scheduler. Admit only the existing exact migration handlers; preserve weights, Adam/RNG, committed progress and lineage. Reward changes still invalidate utility calibration and refresh incompatible PPG targets. No diagnostic readiness override or implicit/transitive source approval.",
       "190": "Reviewed g611 entropy/reward extension, epsilon zero and quarter-beta PPG: append .0025/.025 at k=100 without changing saved k/baselines or current reward; epsilon 0 with strict fresh behavior; PPG floor .25/cap .003/half-cap down rule, retain saved beta/trips, two-age MC cache, all Adam/RNG and progress. Actual listed reward steps invalidate calibration and retire incompatible caches only after durable adoption. Existing g570/anneal routes remain explicit; no blanket source/config approval.",
-      "191": "Reviewed g760 automatic reward stages and CUDA selection: exact opt-in 1.2 to 1.3 plan, automatic next due reward only at committed boundaries, verified reload of weights/Adam/RNG and state; reward-specific calibration invalidation and replay retirement after durable adoption. GPU mask applied before Torch; mask/logical-device/UUID reporting. Existing VP plot edits preserved (presentation only). Prior g570/g611 routes retained explicitly; no transitive approvals."
+      "191": "Reviewed g760 automatic reward stages and CUDA selection: exact opt-in 1.2 to 1.3 plan, automatic next due reward only at committed boundaries, verified reload of weights/Adam/RNG and state; reward-specific calibration invalidation and replay retirement after durable adoption. GPU mask applied before Torch; mask/logical-device/UUID reporting. Existing VP plot edits preserved (presentation only). Prior g570/g611 routes retained explicitly; no transitive approvals.",
+      "192": "Reviewed compact-IL storage source update with identical self-play configuration. Pin the converter-only derived source equivalence, retain the existing trained-restart critic calibration and all checkpoint state, and keep pending-old-collection rejection/recovery active. Evidence: docs/COMPACT_IL_REPLAYS.md and tests/Recovery/test_compact_il_resume.py."
     },
     "config_changes": {
       "0": {

@@ -1,0 +1,6 @@
+{
+  "format": "derived-source-equivalence/1.0.0",
+  "original_sha256": "47afe02b5e98549081f5ab119a2dca2c90448c74fba8020fc7e04cb6bc16f260",
+  "equivalent_sha256": "f77c6f0ce47e5798d3103e28e3be6d3a8a7e3379178814510dd3f8921b151b10",
+  "reason": "IL compaction changes feature_engineering/data.py transport ingress only. The converter reconstructs full observations before the existing audit and encoding. State/action layout, values, targets and model tensors are identical. Two full games (691 decisions) passed native replay audits and produced byte-identical dense IL inputs. Unknown source edits retain their own fingerprint."
+}

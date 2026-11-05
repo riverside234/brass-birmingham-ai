@@ -43,7 +43,45 @@ The implementation also fixes missing `InputAudit`/`BatchCache` initialization
 in the disk-backed `PreparedDataset`, required by inherited minibatch collation.
 
 Self-play/PPG storage formats, training settings and active run state are
-unchanged. This change does not add a self-play source-review override.
+unchanged.
+
+## Reviewed g921 continuation
+
+The g921 trained-restart run can use the current source without checking out an
+older commit. The source-review registry permits the exact transition from its
+saved `4c514df4...` implementation with unchanged effective configuration. It
+still requires `--resume-reviewed-source`; arbitrary source or config changes
+remain rejected.
+
+`configs/learning/derived-source-equivalence.json` also records the exact
+transport-only change to `feature_engineering/data.py` as feature-equivalent.
+This preserves compatibility with the existing model and completed IL dataset:
+the decoder reconstructs the original observations and the encoded tensors are
+unchanged. Unknown feature-source edits retain their own fingerprint. The
+equivalence receipt itself participates in the training source fingerprint.
+
+After syncing the updated source, run from the repository root on the lab host:
+
+```bash
+python scripts/recover-step5-iteration.py --root "$PWD" \
+  --run artifacts/step5/joint7-v11-2-g1290-trained-restart \
+  --expected-iteration 921 --apply && \
+CUDA_DEVICE_ORDER=PCI_BUS_ID python scripts/step5.py \
+  --cuda-visible-devices 7 --device cuda \
+  --config configs/step5/joint7-v11-2-g1290-trained-restart-g760.json train \
+  --run artifacts/step5/joint7-v11-2-g1290-trained-restart \
+  --imitation-run artifacts/step5/features4-v11-2-batch7-il \
+  --resume-reviewed-source --expected-generation 921 --iterations 120
+```
+
+Recovery archives any unfinished old-source collection left by Ctrl+C; it does
+not roll back the committed g921 checkpoint. Training then produces g922–g1041.
+The existing g760 config follows the already committed automatic reward stage.
+This source-only transition preserves weights, Adam/RNG state, utility
+calibration, population, progress and controller state. Focused tests use the
+exported g921 signature and an isolated real CPU checkpoint to check restoration,
+retry before the first new commit, strict rejection and partial-collection
+archival. No production training checkpoint is modified by these tests.
 
 ## Local verification
 

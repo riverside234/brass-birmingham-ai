@@ -76,8 +76,7 @@ def compatibility():
         'seat_order': 'stable-0-1-2-3', 'vp_scale': 100.0,
         'features_sha256': digest(schema),
         'feature_version': FEATURE_VERSION,
-        'derived_source_sha256': digest({p.name:p.read_text(encoding='utf-8').replace('\r\n','\n')
-            for p in sorted((SOURCE_ROOT/'src/brass_ai/feature_engineering').glob('*.py'))}),
+        'derived_source_sha256': derived_source_fingerprint(),
         'producer_profile_sha256': digest(read_json(CONFIG_DIR / 'host-1.0.0.json')),
         'encoder_sha256': hashlib.sha256((Path(__file__).parent / 'features.py').read_text().replace('\r\n', '\n').encode()).hexdigest(),
         'architecture_sha256': architecture_fingerprint(),
@@ -85,6 +84,20 @@ def compatibility():
         'reference_lock_sha256': digest(read_json(SOURCE_ROOT / 'configs/references/upstream.lock.json')),
         'heads': ['policy_logits', 'win_share_4', 'placement_4', 'vp_4'],
     }
+
+
+def derived_source_fingerprint():
+    """Pin the reviewed IL transport edit to its identical feature semantics."""
+    actual = digest({p.name:p.read_text(encoding='utf-8').replace('\r\n','\n')
+        for p in sorted((SOURCE_ROOT/'src/brass_ai/feature_engineering').glob('*.py'))})
+    receipt = read_json(CONFIG_DIR/'derived-source-equivalence.json')
+    keys(receipt, ('format', 'original_sha256', 'equivalent_sha256', 'reason'))
+    require(receipt['format'] == 'derived-source-equivalence/1.0.0' and
+            all(type(receipt[k]) is str and len(receipt[k]) == 64 and
+                all(c in '0123456789abcdef' for c in receipt[k])
+                for k in ('original_sha256', 'equivalent_sha256')),
+            'Invalid derived source equivalence')
+    return receipt['original_sha256'] if actual == receipt['equivalent_sha256'] else actual
 
 
 def architecture_fingerprint():
