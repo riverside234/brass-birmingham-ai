@@ -712350,6 +712350,183 @@
       "review_report": "ai-research/NEUTRAL_SELFPLAY_G1290_RESTART.md",
       "from_implementation": "2f9f1a230fff12a922b36d5a8a7e081edf80643860e74c6db0af4a1f2adaa567",
       "config_migrations_ref": "1706"
+    },
+    {
+      "to_implementation": "4c514df4931721b1f8a96b6639ef9f5ee3b7cc1c98010e24536276c712f80fa6",
+      "learning_compatibility_ref": "5",
+      "preserve_g570_calibration": true,
+      "preserve_g611_calibration": true,
+      "reason_ref": "191",
+      "review_report": "ai-research/NEUTRAL_SELFPLAY_G1290_RESTART.md",
+      "from_implementation": "f7a48a025e2c247e63da4df301ce2b80c7c6aabf1073220a5be97f0929719c78"
+    },
+    {
+      "to_implementation": "4c514df4931721b1f8a96b6639ef9f5ee3b7cc1c98010e24536276c712f80fa6",
+      "learning_compatibility_ref": "5",
+      "preserve_g570_calibration": true,
+      "preserve_g611_calibration": true,
+      "reason_ref": "191",
+      "review_report": "ai-research/NEUTRAL_SELFPLAY_G1290_RESTART.md",
+      "from_implementation": "f7a48a025e2c247e63da4df301ce2b80c7c6aabf1073220a5be97f0929719c78",
+      "config_migrations_ref": "1703"
+    },
+    {
+      "to_implementation": "4c514df4931721b1f8a96b6639ef9f5ee3b7cc1c98010e24536276c712f80fa6",
+      "learning_compatibility_ref": "5",
+      "preserve_g570_calibration": true,
+      "preserve_g611_calibration": true,
+      "reason_ref": "191",
+      "review_report": "ai-research/NEUTRAL_SELFPLAY_G1290_RESTART.md",
+      "from_implementation": "f7a48a025e2c247e63da4df301ce2b80c7c6aabf1073220a5be97f0929719c78",
+      "config_migrations_ref": "1704"
+    },
+    {
+      "to_implementation": "4c514df4931721b1f8a96b6639ef9f5ee3b7cc1c98010e24536276c712f80fa6",
+      "learning_compatibility_ref": "5",
+      "preserve_g570_calibration": true,
+      "preserve_g611_calibration": true,
+      "reason_ref": "191",
+      "review_report": "ai-research/NEUTRAL_SELFPLAY_G1290_RESTART.md",
+      "from_implementation": "f74d78220d8dd622929d36618d374dfc0c4bfde313051cd2d60e5ba6a19cc296"
+    },
+    {
+      "to_implementation": "4c514df4931721b1f8a96b6639ef9f5ee3b7cc1c98010e24536276c712f80fa6",
+      "learning_compatibility_ref": "5",
+      "preserve_g570_calibration": true,
+      "preserve_g611_calibration": true,
+      "reason_ref": "191",
+      "review_report": "ai-research/NEUTRAL_SELFPLAY_G1290_RESTART.md",
+      "from_implementation": "f74d78220d8dd622929d36618d374dfc0c4bfde313051cd2d60e5ba6a19cc296",
+      "config_migrations_ref": "1703"
+    },
+    {
+      "to_implementation": "4c514df4931721b1f8a96b6639ef9f5ee3b7cc1c98010e24536276c712f80fa6",
+      "learning_compatibility_ref": "5",
+      "preserve_g570_calibration": true,
+      "preserve_g611_calibration": true,
+      "reason_ref": "191",
+      "review_report": "ai-research/NEUTRAL_SELFPLAY_G1290_RESTART.md",
+      "from_implementation": "f74d78220d8dd622929d36618d374dfc0c4bfde313051cd2d60e5ba6a19cc296",
+      "config_migrations_ref": "1704"
+    },
+    {
+      "to_implementation": "4c514df4931721b1f8a96b6639ef9f5ee3b7cc1c98010e24536276c712f80fa6",
+      "learning_compatibility_ref": "5",
+      "preserve_g570_calibration": true,
+      "preserve_g611_calibration": true,
+      "reason_ref": "191",
+      "review_report": "ai-research/NEUTRAL_SELFPLAY_G1290_RESTART.md",
+      "from_implementation": "f74d78220d8dd622929d36618d374dfc0c4bfde313051cd2d60e5ba6a19cc296",
+      "config_migrations_ref": "1705"
+    },
+    {
+      "to_implementation": "4c514df4931721b1f8a96b6639ef9f5ee3b7cc1c98010e24536276c712f80fa6",
+      "learning_compatibility_ref": "5",
+      "preserve_g570_calibration": true,
+      "preserve_g611_calibration": true,
+      "reason_ref": "191",
+      "review_report": "ai-research/NEUTRAL_SELFPLAY_G1290_RESTART.md",
+      "from_implementation": "f74d78220d8dd622929d36618d374dfc0c4bfde313051cd2d60e5ba6a19cc296",
+      "config_migrations_ref": "1706"
+    },
+    {
+      "to_implementation": "4c514df4931721b1f8a96b6639ef9f5ee3b7cc1c98010e24536276c712f80fa6",
+      "learning_compatibility_ref": "5",
+      "preserve_g570_calibration": true,
+      "preserve_g611_calibration": true,
+      "reason_ref": "191",
+      "review_report": "ai-research/NEUTRAL_SELFPLAY_G1290_RESTART.md",
+      "from_implementation": "2f9f1a230fff12a922b36d5a8a7e081edf80643860e74c6db0af4a1f2adaa567"
+    },
+    {
+      "to_implementation": "4c514df4931721b1f8a96b6639ef9f5ee3b7cc1c98010e24536276c712f80fa6",
+      "learning_compatibility_ref": "5",
+      "preserve_g570_calibration": true,
+      "preserve_g611_calibration": true,
+      "reason_ref": "191",
+      "review_report": "ai-research/NEUTRAL_SELFPLAY_G1290_RESTART.md",
+      "from_implementation": "2f9f1a230fff12a922b36d5a8a7e081edf80643860e74c6db0af4a1f2adaa567",
+      "config_migrations_ref": "1707"
+    },
+    {
+      "to_implementation": "4c514df4931721b1f8a96b6639ef9f5ee3b7cc1c98010e24536276c712f80fa6",
+      "learning_compatibility_ref": "5",
+      "preserve_g570_calibration": true,
+      "preserve_g611_calibration": true,
+      "reason_ref": "191",
+      "review_report": "ai-research/NEUTRAL_SELFPLAY_G1290_RESTART.md",
+      "from_implementation": "2f9f1a230fff12a922b36d5a8a7e081edf80643860e74c6db0af4a1f2adaa567",
+      "config_migrations_ref": "1708"
+    },
+    {
+      "to_implementation": "4c514df4931721b1f8a96b6639ef9f5ee3b7cc1c98010e24536276c712f80fa6",
+      "learning_compatibility_ref": "5",
+      "preserve_g570_calibration": true,
+      "preserve_g611_calibration": true,
+      "reason_ref": "191",
+      "review_report": "ai-research/NEUTRAL_SELFPLAY_G1290_RESTART.md",
+      "from_implementation": "2f9f1a230fff12a922b36d5a8a7e081edf80643860e74c6db0af4a1f2adaa567",
+      "config_migrations_ref": "1705"
+    },
+    {
+      "to_implementation": "4c514df4931721b1f8a96b6639ef9f5ee3b7cc1c98010e24536276c712f80fa6",
+      "learning_compatibility_ref": "5",
+      "preserve_g570_calibration": true,
+      "preserve_g611_calibration": true,
+      "reason_ref": "191",
+      "review_report": "ai-research/NEUTRAL_SELFPLAY_G1290_RESTART.md",
+      "from_implementation": "4c514df4931721b1f8a96b6639ef9f5ee3b7cc1c98010e24536276c712f80fa6",
+      "config_migrations_ref": "1703"
+    },
+    {
+      "to_implementation": "4c514df4931721b1f8a96b6639ef9f5ee3b7cc1c98010e24536276c712f80fa6",
+      "learning_compatibility_ref": "5",
+      "preserve_g570_calibration": true,
+      "preserve_g611_calibration": true,
+      "reason_ref": "191",
+      "review_report": "ai-research/NEUTRAL_SELFPLAY_G1290_RESTART.md",
+      "from_implementation": "4c514df4931721b1f8a96b6639ef9f5ee3b7cc1c98010e24536276c712f80fa6",
+      "config_migrations_ref": "1704"
+    },
+    {
+      "to_implementation": "4c514df4931721b1f8a96b6639ef9f5ee3b7cc1c98010e24536276c712f80fa6",
+      "learning_compatibility_ref": "5",
+      "preserve_g570_calibration": true,
+      "preserve_g611_calibration": true,
+      "reason_ref": "191",
+      "review_report": "ai-research/NEUTRAL_SELFPLAY_G1290_RESTART.md",
+      "from_implementation": "4c514df4931721b1f8a96b6639ef9f5ee3b7cc1c98010e24536276c712f80fa6",
+      "config_migrations_ref": "1705"
+    },
+    {
+      "to_implementation": "4c514df4931721b1f8a96b6639ef9f5ee3b7cc1c98010e24536276c712f80fa6",
+      "learning_compatibility_ref": "5",
+      "preserve_g570_calibration": true,
+      "preserve_g611_calibration": true,
+      "reason_ref": "191",
+      "review_report": "ai-research/NEUTRAL_SELFPLAY_G1290_RESTART.md",
+      "from_implementation": "4c514df4931721b1f8a96b6639ef9f5ee3b7cc1c98010e24536276c712f80fa6",
+      "config_migrations_ref": "1706"
+    },
+    {
+      "to_implementation": "4c514df4931721b1f8a96b6639ef9f5ee3b7cc1c98010e24536276c712f80fa6",
+      "learning_compatibility_ref": "5",
+      "preserve_g570_calibration": true,
+      "preserve_g611_calibration": true,
+      "reason_ref": "191",
+      "review_report": "ai-research/NEUTRAL_SELFPLAY_G1290_RESTART.md",
+      "from_implementation": "4c514df4931721b1f8a96b6639ef9f5ee3b7cc1c98010e24536276c712f80fa6",
+      "config_migrations_ref": "1707"
+    },
+    {
+      "to_implementation": "4c514df4931721b1f8a96b6639ef9f5ee3b7cc1c98010e24536276c712f80fa6",
+      "learning_compatibility_ref": "5",
+      "preserve_g570_calibration": true,
+      "preserve_g611_calibration": true,
+      "reason_ref": "191",
+      "review_report": "ai-research/NEUTRAL_SELFPLAY_G1290_RESTART.md",
+      "from_implementation": "4c514df4931721b1f8a96b6639ef9f5ee3b7cc1c98010e24536276c712f80fa6",
+      "config_migrations_ref": "1708"
     }
   ],
   "definitions": {
@@ -712544,7 +712721,8 @@
       "187": "B03 diagnostic verification repair: compare exact detached CPU copies of restored CUDA Adam/PPG/auxiliary payload tensors without modifying their values/devices. Reuse the exact passing r7 B01/B02/B02.5 receipts under an enumerated, sealed source-delta review; all other source/runtime/receipt and run pins remain mandatory. No collector, search, model, optimizer-update, RNG or recipe changes; B03/B04 Pending.",
       "188": "B04 diagnostic-only user-authorized null utility readiness for the exact g570 checkpoint; retain original B01/B02/B02.5 and the passed r9 B03 full-state/admission qualification via exact source-delta/receipt pins. No production calibration, model, optimizer, RNG, native producer or recipe changes.",
       "189": "Reviewed g570 production adoption on the current Rust lab r10 source. The lab-only source receipts omitted the exact trained-restart-g570 and entropy-anneal config migrations. Recovery/training source is unchanged from the previously reviewed scheduler. Admit only the existing exact migration handlers; preserve weights, Adam/RNG, committed progress and lineage. Reward changes still invalidate utility calibration and refresh incompatible PPG targets. No diagnostic readiness override or implicit/transitive source approval.",
-      "190": "Reviewed g611 entropy/reward extension, epsilon zero and quarter-beta PPG: append .0025/.025 at k=100 without changing saved k/baselines or current reward; epsilon 0 with strict fresh behavior; PPG floor .25/cap .003/half-cap down rule, retain saved beta/trips, two-age MC cache, all Adam/RNG and progress. Actual listed reward steps invalidate calibration and retire incompatible caches only after durable adoption. Existing g570/anneal routes remain explicit; no blanket source/config approval."
+      "190": "Reviewed g611 entropy/reward extension, epsilon zero and quarter-beta PPG: append .0025/.025 at k=100 without changing saved k/baselines or current reward; epsilon 0 with strict fresh behavior; PPG floor .25/cap .003/half-cap down rule, retain saved beta/trips, two-age MC cache, all Adam/RNG and progress. Actual listed reward steps invalidate calibration and retire incompatible caches only after durable adoption. Existing g570/anneal routes remain explicit; no blanket source/config approval.",
+      "191": "Reviewed g760 automatic reward stages and CUDA selection: exact opt-in 1.2 to 1.3 plan, automatic next due reward only at committed boundaries, verified reload of weights/Adam/RNG and state; reward-specific calibration invalidation and replay retirement after durable adoption. GPU mask applied before Torch; mask/logical-device/UUID reporting. Existing VP plot edits preserved (presentation only). Prior g570/g611 routes retained explicitly; no transitive approvals."
     },
     "config_changes": {
       "0": {
@@ -734324,6 +734502,13 @@
       ],
       "1706": [
         "trained-restart-g611/1.0.0"
+      ],
+      "1707": [
+        "automatic-insolvency-stages/1.0.0"
+      ],
+      "1708": [
+        "automatic-insolvency-stages/1.0.0",
+        "entropy-anneal-adoption/1.0.0"
       ]
     },
     "config_migration": {

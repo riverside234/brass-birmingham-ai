@@ -220,6 +220,8 @@ def check_signature(state, signature, reviewed=False):
             handlers[HIGH_BRANCH_MIGRATION]=high_branch_config
             from .exploration import LOW_BRANCH_MIGRATION,low_branch_config
             handlers[LOW_BRANCH_MIGRATION]=low_branch_config
+            from .entropy_schedule import AUTO_MIGRATION,automatic_config
+            handlers[AUTO_MIGRATION]=automatic_config
             applicable=True
             for migration in migrations:
                 require(migration in handlers,'Unknown reviewed configuration migration')
@@ -544,6 +546,10 @@ def commit_transition(run, state, signature,*,opponent_pool=None,pool_migration=
         config_changes={k:dict(before=previous['signature']['config'].get(k),after=v)
                         for k,v in signature['config'].items() if previous['signature']['config'].get(k)!=v}))
     updated['signature'] = signature
+    from .entropy_schedule import automatic_receipt
+    reward_transition=automatic_receipt(signature['config'],previous)
+    if reward_transition is not None:
+        updated['source_transitions'][-1]['automatic_reward_step']=reward_transition
     if domino_adoption is not None:
         require('domino_adoption' not in updated or updated['domino_adoption']==domino_adoption,'DOMiNO adoption differs')
         updated['domino_adoption']=copy.deepcopy(domino_adoption)

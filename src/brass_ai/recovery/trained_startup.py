@@ -41,7 +41,7 @@ def validate(config):
     quarter=config['value_phase']['contract']==QUARTER_CONTRACT
     scheduled=anneal.KEY in config['update']
     if scheduled:anneal.validate(config)  # Runtime restore also verifies the applied-step receipt.
-    if quarter:require(fork and scheduled and config['update'][anneal.KEY]['contract']==anneal.EXTENDED_CONTRACT,
+    if quarter:require(fork and scheduled and config['update'][anneal.KEY]['contract'] in (anneal.EXTENDED_CONTRACT,anneal.AUTO_CONTRACT),
         'Quarter-beta trained recipe requires the extended insolvency schedule')
     require(config['exploration_rollout']==exploration.TRAINED_ROLLOUT
         and config['branching']==(exploration.FORK_T15_BRANCH if fork else exploration.T2_ONLY_BRANCH if revised else exploration.NEUTRAL_BRANCH) and config['opening']==exploration.THREE_OPENING

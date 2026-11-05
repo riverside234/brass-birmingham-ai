@@ -7,15 +7,16 @@ Use `--no-push` for a local export. See [storage and old-checkout migration inst
 
 ## Current: fresh neutral self-play from g1290
 
-For the stopped **g611** trained-restart run, use the
-[g611 continuation command](../ai-research/NEUTRAL_SELFPLAY_G1290_RESTART.md#current-continuation-g611-extended-insolvency-schedule-and-ppg-beta-range).
-It preserves entropy progress **k=41** (next coefficient **0.00336**), sets
-epsilon to **0**, and lowers the PPG beta floor to **0.25** with a **0.003** KL
-cap and **0.0015** low-KL threshold. Saved beta/trips, optimizers, RNG and
-compatible PPG cache remain intact. The command collects **g612–g620**: nine
-healthy commits would reach the existing **0.005/0.05** reward step at k=50.
-The extended plan adds **0.0025/0.025** at k=100. Both reward changes still
-require an explicit boundary restart and refresh incompatible PPG targets.
+For the stopped **g760** trained-restart run, use the
+[g760 continuation command](../ai-research/NEUTRAL_SELFPLAY_G1290_RESTART.md#current-continuation-g760-automatic-reward-stages-and-explicit-gpu-selection).
+It preserves entropy progress **k=50**, automatically applies **0.005/0.05**
+before g761, and switches to **0.0025/0.025** at k=100 without a manual restart.
+Both reward boundaries retire incompatible PPG targets after durable adoption;
+weights, optimizers, RNG, beta/trips and progress are preserved. Epsilon stays
+**0**, PPG beta floor **0.25**, KL cap **0.003**, low-KL threshold **0.0015**.
+The command collects **g761–g780** and selects GPU 7 through the new pre-import
+`--cuda-visible-devices 7` option. Startup/report mask and UUID identify the
+physical GPU; logical `cuda:0` means the first visible GPU.
 The 166/154/0 table mix, normal T1.3x3/post-fork T1.5x2 openings and PL reference
 setup remain unchanged.
 

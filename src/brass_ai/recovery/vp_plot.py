@@ -9,7 +9,7 @@ import math
 from pathlib import Path
 import re
 
-from .rating_plot import RECENT_GENERATIONS, _endpoint_label, _ticks
+from .rating_plot import DEFAULT_MAX_POINTS, RECENT_GENERATIONS, display_points, _endpoint_label, _ticks
 
 
 FORMAT = 'selfplay-vp-history/1.0.0'
@@ -156,7 +156,33 @@ def groups(history, generation):
     return result
 
 
-def render(history, output, *, generation=None, preview=None):
+def display_groups(data, max_points=DEFAULT_MAX_POINTS):
+    """Bound the overview using PL's adjacent buckets, pooling VP by seats.
+
+    First/latest available groups stay exact. A bucket containing missing
+    evidence remains a gap; the recent panel still shows the original groups.
+    """
+    present = [i for i, row in enumerate(data) if row['mean_vp'] is not None]
+    if not present:
+        return []
+    data = data[present[0]:present[-1]+1]
+    buckets = display_points([r['last'] for r in data], [0.] * len(data), max_points)
+    result = []; offset = 0
+    for bucket in buckets:
+        part = data[offset:offset+bucket['count']]; offset += bucket['count']
+        if len(part) == 1:
+            result.append(part[0])
+            continue
+        seats = sum(r['seat_games'] for r in part)
+        total = math.fsum(r['vp_sum'] for r in part)
+        complete = all(r['mean_vp'] is not None for r in part)
+        result.append(dict(first=part[0]['first'], last=part[-1]['last'],
+                           generation=bucket['generation'], seat_games=seats, vp_sum=total,
+                           mean_vp=total/seats if complete and seats else None))
+    return result
+
+
+def render(history, output, *, generation=None, preview=None, max_points=DEFAULT_MAX_POINTS):
     """Match progress.svg's visual style without implying rating uncertainty."""
     import matplotlib
     matplotlib.use('Agg')
@@ -168,6 +194,9 @@ def render(history, output, *, generation=None, preview=None):
     generation = history['committed_generation'] if generation is None else generation
     data = groups(history, generation)
     valid = [r for r in data if r['mean_vp'] is not None]
+    shown = display_groups(data, max_points)
+    averaged = any('generation' in r for r in shown)
+    shown_count = sum(r['mean_vp'] is not None for r in shown)
     latest = valid[-1] if valid else None
     previous = next((r for r in valid if r['last'] == latest['first']-1), None) if latest else None
     recent_start = max(0, generation-RECENT_GENERATIONS)
@@ -203,7 +232,7 @@ def render(history, output, *, generation=None, preview=None):
             text(.681, .888, 'TRAINING COVERAGE', fontsize=7.2, weight='bold', color=muted)
             missing = len(data)-len(valid)
             coverage = [f'{len(valid):,} complete groups / {len(valid)*GROUP_SIZE:,} iterations',
-                        f'{sum(r["seat_games"] for r in valid):,} learner-seat games plotted',
+                        f'{sum(r["seat_games"] for r in valid):,} learner-seat games with VP evidence',
                         f'{missing:,} groups missing evidence · {generation % GROUP_SIZE} iterations in unfinished group']
             for yy, label in zip((.865, .847, .829), coverage):
                 text(.681, yy, label, fontsize=8.1, color=ink if yy == .865 else muted)
@@ -218,7 +247,7 @@ def render(history, output, *, generation=None, preview=None):
                 ax.tick_params(axis='both', length=0, pad=8, labelsize=8.6)
                 ax.yaxis.set_major_locator(MaxNLocator(nbins=6, steps=[1, 2, 2.5, 5, 10]))
                 ax.yaxis.set_major_formatter(StrMethodFormatter('{x:,.1f}'))
-                ax.set_xlabel('Committed training generation (group end)', fontsize=9, labelpad=12)
+                ax.set_xlabel('Committed training generation', fontsize=9, labelpad=12)
                 ax.set_ylabel('Mean learner VP', fontsize=9, labelpad=9)
                 ax.set_xlim(start-max(1, (generation-start)*.015), generation+max(4, (generation-start)*.025))
                 ax.set_xticks(_ticks(start, generation, ticks))
@@ -227,10 +256,11 @@ def render(history, output, *, generation=None, preview=None):
                 return ax
 
             ax = panel([.075, .190, .460, .527], 'Full training history',
-                       'Fixed groups: g1–10, g11–20, … · gaps remain missing', 0, 7)
+                       f'{shown_count} points / {len(valid)} complete groups · ' +
+                       ('adjacent pooled averages' if averaged else f'maximum {max_points} points'), 0, 7)
             detail = panel([.635, .190, .313, .527], 'Recent progress',
                            f'g{recent_start}–g{generation} · same groups · separate y-axis', recent_start, 4)
-            for axes, part, name in ((ax, data, 'history'),
+            for axes, part, name in ((ax, shown, 'history'),
                                       (detail, [r for r in data if r['last'] >= recent_start], 'recent')):
                 present = [r for r in part if r['mean_vp'] is not None]
                 if not present:
@@ -238,34 +268,42 @@ def render(history, output, *, generation=None, preview=None):
                     axes.text(.5, .5, 'No complete 10-iteration group available', transform=axes.transAxes,
                               ha='center', va='center', fontsize=9, color=muted)
                     continue
-                x = [r['last'] for r in part]
+                x = [r.get('generation', r['last']) for r in part]
                 y = [r['mean_vp'] if r['mean_vp'] is not None else math.nan for r in part]
                 line, = axes.plot(x, y, color=blue, linewidth=2., zorder=4)
                 line.set_gid('vp-' + name + '-line')
-                axes.scatter([r['last'] for r in present], [r['mean_vp'] for r in present],
-                             s=23, facecolor='white', edgecolor=blue, linewidth=1.05, zorder=5)
+                ordinary = [r for r in present if r != latest]
+                dots = axes.scatter([r.get('generation', r['last']) for r in ordinary],
+                                    [r['mean_vp'] for r in ordinary],
+                                    s=23, facecolor='white', edgecolor=blue, linewidth=1.05, zorder=5)
+                dots.set_gid('vp-' + name + '-markers')
                 low = min(r['mean_vp'] for r in present); high = max(r['mean_vp'] for r in present)
                 span = max(2., high-low)
                 axes.set_ylim(low-span*.12, high+span*.16)
                 if latest in present:
-                    axes.scatter([latest['last']], [latest['mean_vp']], s=53, color=dark,
-                                 edgecolor='white', linewidth=1.4, zorder=6)
+                    last = axes.scatter([latest['last']], [latest['mean_vp']], s=53, color=dark,
+                                        edgecolor='white', linewidth=1.4, zorder=6)
+                    last.set_gid('vp-' + name + '-latest-point')
             if latest and latest['last'] >= recent_start:
                 _endpoint_label(detail, latest['last'], latest['mean_vp'], dark, prefix='vp')
             if recent_start > 0:
                 ax.axvspan(recent_start, generation, color=blue, alpha=.035, linewidth=0, zorder=0)
                 ax.axvline(recent_start, color=blue, alpha=.25, linewidth=.8, linestyle=(0, (3, 4)), zorder=1)
             fig.legend(handles=[Line2D([], [], color=blue, marker='o', markerfacecolor='white',
-                       linewidth=1.8, markersize=4, label='10-iteration pooled mean VP')],
+                       linewidth=1.8, markersize=4, label='Seat-weighted pooled mean VP')],
                        loc='center left', bbox_to_anchor=(.066, .095), frameon=False, fontsize=8.4, labelcolor=muted)
-            text(.055, .055, 'Each point = total VP / learner-seat games across 10 committed iterations. Zero-VP seats are included.',
+            text(.055, .055, 'Full history: adjacent 10-iteration groups pooled; first/latest exact. Recent panel: original groups. Zero-VP seats included.'
+                 if averaged else 'Each point = total VP / learner-seat games across 10 committed iterations. Zero-VP seats are included.',
                  fontsize=8.1, color=muted)
-            text(.055, .033, 'History/v4 tables, branch games and evaluation games are excluded. Missing or unfinished groups are not plotted.',
+            text(.055, .033, 'History/v4 tables, branch games and evaluation games excluded. Windows with missing evidence are omitted; gaps remain.'
+                 if averaged else 'History/v4 tables, branch games and evaluation games are excluded. Missing or unfinished groups are not plotted.',
                  fontsize=8.1, color=muted)
             text(.945, .011, 'Training score trend · not a controlled playing-strength evaluation', fontsize=8, color=muted, ha='right')
             fig.savefig(output, format='svg', facecolor=paper, metadata=dict(Date=None,
                 Title='Brass Birmingham — self-play learner VP',
-                Description=f'Fixed ten-iteration groups through generation {generation}. ' + '; '.join(coverage)))
+                Description=f'Fixed ten-iteration groups through generation {generation}. '
+                    f'Full history: {shown_count} displayed points (cap {max_points}); adjacent seat-weighted averages, first/latest exact. '
+                    'Recent detail and summary cards use original groups. ' + '; '.join(coverage)))
             output = Path(output)
             output.write_text('\n'.join(line.rstrip() for line in output.read_text(encoding='utf-8').splitlines())+'\n',
                               encoding='utf-8', newline='\n')
@@ -275,12 +313,13 @@ def render(history, output, *, generation=None, preview=None):
             plt.close(fig)
 
 
-def companion(output, generation, *, run=None, state=None, persist=False, history_sources=(), preview=None):
+def companion(output, generation, *, run=None, state=None, persist=False, history_sources=(), preview=None,
+              max_points=DEFAULT_MAX_POINTS):
     """Generate the sibling chart; standalone redraws only read source evidence."""
     output = Path(output).with_name('progress_vp.svg')
     history = (collect(run, state=state, history_sources=history_sources) if run is not None else
                dict(format=FORMAT, initial_checkpoint={}, committed_generation=generation, iterations=[]))
-    render(history, output, generation=generation, preview=preview)
+    render(history, output, generation=generation, preview=preview, max_points=max_points)
     if persist:
         if run is None:
             raise ValueError('A training run is required to persist VP history')

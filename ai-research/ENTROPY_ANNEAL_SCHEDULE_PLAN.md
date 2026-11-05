@@ -1,5 +1,14 @@
 # Entropy anneal schedule with insolvency-cost steps (OpenAI Five style)
 
+**2026-11-04 g760 revision:** contract `entropy-anneal-schedule/1.3.0`
+automatically applies the next listed reward before collection at each
+committed boundary. This supersedes the manual-restart requirement below for
+opted-in runs. The k=50 and k=100 thresholds and entropy clock are unchanged.
+Weights/Adam/RNG are restored through the verified checkpoint path; old-reward
+PPG caches are retired after durable adoption. See the current
+[g760 command and GPU selection](NEUTRAL_SELFPLAY_G1290_RESTART.md#current-continuation-g760-automatic-reward-stages-and-explicit-gpu-selection).
+Legacy 1.1/1.2 configs retain their original semantics until explicitly adopted.
+
 **2026-11-04 extension, adopted from g611:** append a third explicit reward step
 at **k=100**: **0.005/event, cap 0.05 → 0.0025/event, cap 0.025**. Preserve the
 existing k=0 and k=50 steps and all entropy coefficients/counters. The user

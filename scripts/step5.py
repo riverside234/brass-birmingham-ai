@@ -8,6 +8,18 @@ def _limit_default_gpu(argv):
     # Do this before importing Torch: checkpoint RNG capture also enumerates
     # visible GPUs. The normal one-GPU path must not initialize idle devices.
     # An explicit inference override retains the caller's logical GPU indices.
+    # A shell prefix on the recovery/config command in an && chain does not
+    # reach the later training command. Offer a training-launcher option that
+    # is applied before importing any module that can initialize CUDA.
+    import argparse
+    parser=argparse.ArgumentParser(add_help=False,allow_abbrev=False)
+    parser.add_argument('--cuda-visible-devices')
+    args,_=parser.parse_known_args(argv)
+    if args.cuda_visible_devices is not None:
+        visible=args.cuda_visible_devices
+        if visible and (any(not token or token!=token.strip() for token in visible.split(','))):
+            parser.error('--cuda-visible-devices expects comma-separated GPU ordinals or UUIDs without spaces')
+        os.environ['CUDA_VISIBLE_DEVICES']=visible
     flags=[arg.split('=',1)[0] for arg in argv if arg.startswith('--')]
     if not any('--inference-devices'.startswith(flag) for flag in flags):
         visible=os.environ.get('CUDA_VISIBLE_DEVICES','0')

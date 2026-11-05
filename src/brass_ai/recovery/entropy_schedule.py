@@ -1,4 +1,4 @@
-"""Committed-health entropy annealing; reward steps require reviewed restarts."""
+"""Committed-health entropy annealing and versioned reward boundaries."""
 import copy
 import math
 
@@ -7,6 +7,8 @@ from brass_ai.learning.contracts import digest, require
 KEY='entropy_schedule'
 CONTRACT='entropy-anneal-schedule/1.1.0'
 EXTENDED_CONTRACT='entropy-anneal-schedule/1.2.0'
+AUTO_CONTRACT='entropy-anneal-schedule/1.3.0'
+AUTO_MIGRATION='automatic-insolvency-stages/1.0.0'
 STATE='entropy-anneal-state/1.0.0'
 MIGRATION='entropy-anneal-adoption/1.0.0'
 GROUPS=('canal_action','canal_other','rail_action','rail_other')
@@ -37,9 +39,10 @@ def extend_config(config):
 
 def validate_update(update):
     c=update[KEY]
-    require(type(c) is dict and set(c)==set(DEFAULT) and c['contract'] in (CONTRACT,EXTENDED_CONTRACT),
+    require(type(c) is dict and set(c)==set(DEFAULT) and c['contract'] in (CONTRACT,EXTENDED_CONTRACT,AUTO_CONTRACT),
         'Invalid entropy anneal contract/fields')
     if c['contract']==EXTENDED_CONTRACT:extended(c)
+    if c['contract']==AUTO_CONTRACT:extended(dict(c,contract=EXTENDED_CONTRACT))
     require(c['mode'] in ('off','on') and c['shape']=='linear' and c['advance_on']=='healthy-entropy-update',
         'Invalid entropy anneal mode/shape/health rule')
     require((c['start_generation'] is None if c['mode']=='off' else
@@ -149,6 +152,8 @@ def restore(config,saved,generation):
     same=immutable(old)==immutable(c)
     if not same and old['contract']==CONTRACT and c['contract']==EXTENDED_CONTRACT:
         same=extended(old)==c
+    if not same and old['contract']==EXTENDED_CONTRACT and c['contract']==AUTO_CONTRACT:
+        same=dict(old,contract=AUTO_CONTRACT)==c
     require(same,'Cannot silently alter an adopted entropy ramp or reward plan')
     reset=c['reset_generation']!=old['reset_generation']
     if reset:
@@ -228,7 +233,8 @@ def advance(s,config,*,generation,healthy):
         waiting_for_insolvency_step=s['waiting_for_insolvency_step'],
         next_insolvency_step=copy.deepcopy(c['insolvency_steps'][s['insolvency_steps_applied']])
             if s['insolvency_steps_applied']<len(c['insolvency_steps']) else None,
-        scope='Loss coefficients used this iteration; progress commits with the checkpoint. Reward changes require a reviewed restart, never a live automatic edit.')
+        scope=('Loss coefficients used this iteration; progress commits with the checkpoint. Due reward stages apply automatically before the next collection, with incompatible replay retired.'
+            if automatic(config) else 'Loss coefficients used this iteration; progress commits with the checkpoint. Reward changes require a reviewed restart, never a live automatic edit.'))
     return s,report
 
 
@@ -242,6 +248,57 @@ def _reward(config,cost):
     from .utility import reward_spec
     config['insolvency']=copy.deepcopy(cost);config['search']['reward']=reward_spec(config)
     if 'teacher_phase' in config:config['teacher_phase']['search']['reward']=reward_spec(config)
+
+
+def automatic(config):
+    return config.get('update',{}).get(KEY,{}).get('contract')==AUTO_CONTRACT
+
+
+def automatic_config(config):
+    """Opt in without changing the clock, applied reward, or unrelated recipe."""
+    result=copy.deepcopy(config);c=validate(result)
+    require(c['contract'] in (EXTENDED_CONTRACT,AUTO_CONTRACT),'Automatic stages require the extended reward plan')
+    c['contract']=AUTO_CONTRACT;validate(result)
+    return result
+
+
+def follow_committed(config,state):
+    """An original launch config follows its own durable automatic stages.
+
+    Only the three synchronized reward fields may differ. Never silently
+    overwrite a different plan, unrelated config edit, or source identity.
+    """
+    if not automatic(config):return config
+    saved=state['signature']['config']
+    if not automatic(saved):return config
+    validate(config);validate(saved)
+    if config==saved:return config
+    c=config['update'][KEY]
+    if step_count(c,config['insolvency'])>=step_count(c,saved['insolvency']):return config
+    expected=copy.deepcopy(config);_reward(expected,saved['insolvency'])
+    require(expected==saved,'Automatic reward resume cannot replace unrelated configuration changes')
+    restore_run(saved,state)  # Verify the checkpoint-bound transition chain.
+    return copy.deepcopy(saved)
+
+
+def automatic_next(config,state):
+    """One due stage, only from committed evidence, before any new collection."""
+    if not automatic(config):return config
+    current=restore_run(config,state)
+    if not waiting(current):return config
+    return configure(config,state,'insolvency-step')
+
+
+def automatic_receipt(config,state):
+    if not automatic(config) or config['insolvency']==state['signature']['config']['insolvency']:return None
+    before=automatic_config(state['signature']['config'])
+    current=restore_run(before,state)
+    require(automatic_next(before,state)==config,'Automatic reward receipt differs from the next committed boundary')
+    return dict(contract=AUTO_MIGRATION,generation=state['iteration'],progress=current['progress'],
+        step_before=current['insolvency_steps_applied'],step_after=current['insolvency_steps_applied']+1,
+        before=copy.deepcopy(current['insolvency']),after=copy.deepcopy(config['insolvency']),
+        first_collection_generation=state['iteration']+1,
+        scope='Automatic committed boundary; preserve weights/Adam/RNG/progress; retire incompatible PPG targets after durable adoption')
 
 
 def configure(config,state,command,*,start=None,reset=False,reverse=False):

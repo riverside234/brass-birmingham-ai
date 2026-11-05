@@ -1,6 +1,87 @@
 # Fresh neutral self-play from g1290
 
-## Current continuation: g611, extended insolvency schedule and PPG beta range
+## Current continuation: g760, automatic reward stages and explicit GPU selection
+
+The pulled `g0760-20261105T004442699955Z` export contains **760 committed
+generations / 243,200 ordinary games**. Its entropy schedule is at **k=50**, with
+**140 held iterations**, and reward is still **0.01/event, cap 0.075**. Entropy
+is **0.003** in all four groups. The schedule had been waiting for a manual
+reward step; the old log does not identify the physical GPU.
+
+The new `entropy-anneal-schedule/1.3.0` contract automatically applies the next
+listed reward at a committed boundary, before collection:
+
+- Before **g761**: apply the overdue **0.005/event, cap 0.05** stage.
+- At **k=100**: apply **0.0025/event, cap 0.025** before the next collection.
+- Keep the current entropy clock, baselines and healthy-iteration rules.
+  Entropy continues from 0.003 to 0.001. No held iterations are backfilled.
+
+No `REWARD_STEP_PENDING` action or manual `insolvency-step` command is needed
+with this contract. At a boundary the trainer closes collection workers and
+uses the same verified checkpoint restoration path in the running command.
+It preserves main/companion weights, both Adam states, RNG, warmup/controller
+progress, population and lineage. It invalidates reward-dependent utility
+calibration and retires incompatible PPG targets only after durable adoption,
+before collecting new targets. The transition receipt records the committed
+generation, entropy progress, old/new reward and first affected collection.
+An interruption retries that same transition; it does not advance the clock.
+The originally generated config can be reused on later continuation: only its
+already committed automatic reward stage is advanced from `state.json`.
+Unrelated config changes still require their usual exact source review.
+
+Sync the complete reviewed checkout, then run this from the Linux lab root
+for **g761–g780** (change `--iterations` to continue longer):
+
+```bash
+python scripts/recover-step5-iteration.py --root "$PWD" \
+  --run artifacts/step5/joint7-v11-2-g1290-trained-restart \
+  --expected-iteration 760 --apply && \
+python scripts/configure-training-g760.py \
+  --run artifacts/step5/joint7-v11-2-g1290-trained-restart \
+  --expected-generation 760 \
+  --output configs/step5/joint7-v11-2-g1290-trained-restart-g760.json && \
+CUDA_DEVICE_ORDER=PCI_BUS_ID python scripts/step5.py \
+  --cuda-visible-devices 7 --device cuda \
+  --config configs/step5/joint7-v11-2-g1290-trained-restart-g760.json train \
+  --run artifacts/step5/joint7-v11-2-g1290-trained-restart \
+  --imitation-run artifacts/step5/features4-v11-2-batch7-il \
+  --resume-reviewed-source --expected-generation 760 --iterations 20
+```
+
+`--cuda-visible-devices 7` is applied by `scripts/step5.py` **before importing
+Torch**, so it does not depend on an environment prefix on an earlier command.
+You can instead `export CUDA_VISIBLE_DEVICES=7` before the entire command chain.
+An unexported `CUDA_VISIBLE_DEVICES=7 python recover... && python train...`
+sets the variable only for recovery. Existing inherited masks are preserved.
+For unambiguous selection across host enumeration orders, the option also
+accepts the GPU UUID shown by `nvidia-smi --query-gpu=index,uuid --format=csv`.
+
+With a single visible GPU, PyTorch calls it **logical `cuda:0`** even when the
+mask selects physical GPU 7. Do not pass `--inference-devices cuda:7` with that
+mask. Startup now prints the effective visibility mask, logical device,
+selected mask token and UUID; iteration environment reports retain them.
+Match the UUID against `nvidia-smi` to verify physical placement. No lab CUDA
+hardware is available in the local test environment, so physical placement
+must be confirmed from that startup line on the lab machine.
+
+Validation: **35 distinct checks passed** across the focused batch and two
+corrected test-fixture reruns, including all eight g760 cases, exact checkpoint
+weights/Adam/RNG restoration, automatic k=50/k=100 boundaries, interrupted
+adoption retry, reuse of the original launch config, durable reward-cache
+retirement and pre-Torch GPU mask/child-process inheritance. The bounded CPU
+PPG smoke retained **4/4 steps**, KL **1.49e-7** versus cap 0.003. No production
+training or evaluation games were run. Logs: `artifacts/g760-validation.log`
+and `artifacts/g760-fixture-rerun.log`.
+
+The broader legacy `test_single_gpu_performance` batch also has **four unresolved
+fixture failures**: three use synthetic R2 links that fail current v11 topology
+admission, and one requests an unapproved old `f19424...` source transition.
+These fixtures are outside this revision; no topology or source-admission
+guard was weakened. The current g760 resume, GPU-selection and smoke checks
+pass. Boundary setup adds one worker teardown/checkpoint reload per reward
+change, with no additional games; lab wall time has not been benchmarked.
+
+## Earlier continuation: g611, extended insolvency schedule and PPG beta range
 
 The `g0611-20261104T073052792185Z` export records **611 committed generations /
 195,520 ordinary games**, with entropy progress **k=41**, no held iterations,

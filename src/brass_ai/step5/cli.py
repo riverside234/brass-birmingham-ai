@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 from pathlib import Path
 
 import torch
@@ -18,6 +19,7 @@ def parser():
     p.add_argument('--config', help='Training defaults to joint7-latest.json; evaluation uses evaluation.json; other commands use lab.json')
     p.add_argument('--device', choices=['auto', 'cpu', 'cuda'], default='auto',
                    help='Default: one visible CUDA GPU when available, otherwise CPU. Use CUDA_VISIBLE_DEVICES to select the allocated GPU.')
+    p.add_argument('--cuda-visible-devices',help='GPU visibility mask (ordinal or UUID); scripts/step5.py applies it before Torch import. With mask 7 the learner uses logical cuda:0 on the selected GPU, not physical GPU 0.')
     p.add_argument('--inference-devices',help='Optional train/evaluate override; omitted by default so inference shares the learner GPU without a router. Explicit cuda:N list or auto to opt into all visible GPUs.')
     p.add_argument('--mono')
     sub = p.add_subparsers(dest='command', required=True)
@@ -89,9 +91,19 @@ def main(argv=None):
     a = parser().parse_args(argv)
     require(a.root.is_absolute(), 'Pass an absolute --root on this platform')
     root = a.root.resolve()
+    if a.cuda_visible_devices is not None:
+        expected=a.cuda_visible_devices if a.inference_devices is not None else a.cuda_visible_devices.split(',',1)[0]
+        require(os.environ.get('CUDA_VISIBLE_DEVICES')==expected,
+            'GPU mask must be set before importing Torch; launch through python scripts/step5.py --cuda-visible-devices ...')
     if a.device=='auto':
         a.device='cuda' if a.command in ('train','imitate','evaluate','preflight') and torch.cuda.is_available() else 'cpu'
     require(a.device != 'cuda' or torch.cuda.is_available(), 'CUDA requested but unavailable')
+    if a.device=='cuda':
+        from brass_ai.recovery.telemetry import cuda_selection
+        selected=cuda_selection(a.device)
+        print(f'CUDA selection: logical {selected["logical_device"]}; '
+            f'CUDA_VISIBLE_DEVICES={selected["visible_devices"]!r}; selected token={selected["selected_token"]!r}; '
+            f'UUID={selected["uuid"]}. Logical cuda:0 is the first visible GPU.',flush=True)
     inference_devices=None
     if a.inference_devices is not None:
         require(a.command in ('train','evaluate'),'--inference-devices applies only to train/evaluate')

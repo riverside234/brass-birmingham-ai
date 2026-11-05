@@ -335,5 +335,5 @@ def render_progress(report, output, *, run=None, state=None, persist_vp=False, h
             generation = max(int(name.removeprefix('generation-')) for name in report['ratings']
                 if name.startswith('generation-') and name.removeprefix('generation-').isdigit())
     return companion(output, generation, run=run, state=state, persist=persist_vp,
-                     history_sources=history_sources, preview=vp_preview)
+                     history_sources=history_sources, preview=vp_preview, max_points=max_points)
 

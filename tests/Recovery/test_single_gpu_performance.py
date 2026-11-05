@@ -78,6 +78,8 @@ class SingleGPUPerformanceTests(unittest.TestCase):
         self.assertEqual(cli.parser().parse_args(['preflight']).device,'auto')
         for available in (True,False):
             with patch.object(torch.cuda,'is_available',return_value=available),\
+                 patch('brass_ai.recovery.telemetry.cuda_selection',return_value=dict(
+                     logical_device='cuda:0',visible_devices='7',selected_token='7',uuid='GPU-fixture')),\
                  patch.object(cli,'preflight',return_value={}) as preflight,contextlib.redirect_stdout(io.StringIO()):
                 cli.main(['--root',str(SOURCE_ROOT),'preflight'])
             self.assertEqual(preflight.call_args.kwargs['device'],'cuda' if available else 'cpu')

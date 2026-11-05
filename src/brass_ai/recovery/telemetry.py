@@ -80,11 +80,29 @@ def instrument_host(host,timings=None):
     return host
 
 
+def cuda_selection(device):
+    """Expose the mask AND device UUID; cuda:0 alone is not a physical index."""
+    visible=os.environ.get('CUDA_VISIBLE_DEVICES')
+    result=dict(visible_devices=visible,device_order=os.environ.get('CUDA_DEVICE_ORDER'),
+        logical_device=None,selected_token=None,uuid=None)
+    if str(device).startswith('cuda'):
+        index=torch.device(device).index
+        if index is None:index=torch.cuda.current_device()
+        result['logical_device']=f'cuda:{index}'
+        if visible is not None:
+            tokens=visible.split(',')
+            if 0<=index<len(tokens):result['selected_token']=tokens[index]
+        identity=getattr(torch.cuda.get_device_properties(index),'uuid',None)
+        if identity is not None:result['uuid']=str(identity)
+    return result
+
+
 def environment(device):
     return dict(platform=platform.platform(), pid=os.getpid(), cpu_count=os.cpu_count(),
         cpu_affinity=sorted(os.sched_getaffinity(0)) if hasattr(os, 'sched_getaffinity') else None,
         torch=str(torch.__version__), cuda=torch.version.cuda, device=str(device),
         gpu=torch.cuda.get_device_name(device) if str(device).startswith('cuda') else None,
+        cuda_selection=cuda_selection(device),
         tensor_threads=torch.get_num_threads(),
         omp_threads=os.environ.get('OMP_NUM_THREADS'), mkl_threads=os.environ.get('MKL_NUM_THREADS'))
 

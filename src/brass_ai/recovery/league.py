@@ -68,7 +68,8 @@ def train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=Non
         if 'rehearsal_sampling' in config:
             from .rehearsal_window import cleanup
             cleanup(root,run)
-        return _train(root,run_path,config,iterations=iterations,device=device,initial=initial,mono=mono,from_run=from_run,imitation_run=imitation_run,resume_reviewed_source=resume_reviewed_source,inference_devices=inference_devices,il_kl_probe_from_run=il_kl_probe_from_run)
+        from .automatic_training import run as run_stages
+        return run_stages(Path(root),run_path,config,runner=_train,iterations=iterations,device=device,initial=initial,mono=mono,from_run=from_run,imitation_run=imitation_run,resume_reviewed_source=resume_reviewed_source,inference_devices=inference_devices,il_kl_probe_from_run=il_kl_probe_from_run)
 
 
 def require_start_generation(run,expected):
@@ -324,7 +325,7 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
         anchor_model.eval().requires_grad_(False)
     if cuda_resume and cuda_resume['saved_devices']!=cuda_resume['visible_devices']:
         print(f'CUDA resume: {cuda_resume["saved_devices"]} saved / {cuda_resume["visible_devices"]} visible GPUs; '
-              f'restored {cuda_resume["restored_devices"]} matching logical-device RNG streams (learner stays on cuda:0)',flush=True)
+              f'restored {cuda_resume["restored_devices"]} matching logical-device RNG streams (indices are relative to CUDA_VISIBLE_DEVICES)',flush=True)
     reward=reward_spec(config)
     migration=migrate(model,optimizer,reward)
     policy_observations.install(model,config)
@@ -841,7 +842,9 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                     if report.get('entropy_schedule'):
                         schedule=report['entropy_schedule']
                         controller_line+=f' anneal={schedule["progress"]}/{schedule["ramp_iterations"]} held={schedule["held"]} {schedule["reason"]}'
-                        if schedule['waiting_for_insolvency_step']:controller_line+=' REWARD_STEP_PENDING'
+                        if schedule['waiting_for_insolvency_step']:
+                            from .entropy_schedule import automatic
+                            controller_line+=(' REWARD_AUTO_NEXT' if automatic(config) else ' REWARD_STEP_PENDING')
                     elif entropy_report['mode']=='off':controller_line+='(fixed)'
                     elif 'floor_ratio_by_group' in entropy_report:
                         controller_line+=' Hfloor='+','.join(f'{g}:{v:.2f}' for g,v in entropy_report['floor_ratio_by_group'].items())+'*baseline'
@@ -941,6 +944,12 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                       f'insolvency events={update["insolvency"].get("events",0)} '
                       f'mean cost={update["insolvency"].get("mean_cost_per_trajectory",0):.4f}; '
                       +teacher_line,flush=True)
+                from . import entropy_schedule as anneal
+                if anneal.automatic(config) and anneal.waiting(exploration_state[anneal.KEY]):
+                    # Checkpoint, caches, ratings and compact history are fully
+                    # committed. Close all workers before the outer loop adopts
+                    # the next reward through the normal verified resume path.
+                    break
     return dict(run=str(run),completed_iteration=state['iteration'],checkpoint=state['history'][-1],
                 best=state.get('champion'),summaries=summaries,
                 summary_scope='latest two iterations; bounded compact older metrics in retention-history.json')
