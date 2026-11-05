@@ -44,6 +44,7 @@ def raw_compatible(actual):
 
 def convert(root,manifest_path,output,*,mono=None):
     from brass_ai.recovery.demonstrations import _audit_path,_manifest
+    from brass_ai.recovery import il_replay_storage as storage
     from brass_ai.step5.league import write_json
     root=Path(root).resolve();source=project_path(root,manifest_path);out=project_path(root,output)
     require(not out.exists(),'Conversion requires a new output directory; old files are preserved')
@@ -67,8 +68,11 @@ def convert(root,manifest_path,output,*,mono=None):
         try:
             with gzip.open(path,'rt',encoding='utf-8') as incoming,gzip.open(target,'wt',encoding='utf-8') as outgoing:
                 header=decode_json(next(incoming));raw_compatible(header['compatibility'])
-                require(header['format']=='four-seat-replay/1.0.0' and header['provenance'].get('purpose')=='training',
+                require(header['format'] in (storage.LEGACY_FORMAT,storage.FORMAT) and header['provenance'].get('purpose')=='training',
                         'Only training heuristic replays can be converted')
+                if header['format']==storage.FORMAT:
+                    require(storage.storage_format(header['provenance'])==storage.FORMAT,
+                            'Compact IL replay lacks pinned storage provenance')
                 original_contract=header['compatibility'];header['compatibility']=compatibility()
                 header['provenance']=dict(header['provenance'],feature_conversion=dict(
                     version=CONVERSION,source_sha256=before,
@@ -77,6 +81,7 @@ def convert(root,manifest_path,output,*,mono=None):
                 outgoing.write(json.dumps(header)+'\n')
                 for line in incoming:
                     game=decode_json(line)
+                    if header['format']==storage.FORMAT:game=storage.unpack(game)
                     if game['game_id'] not in wanted:continue
                     require(game['game_id'] not in found,'Duplicate raw game')
                     require(game['split']==wanted[game['game_id']]['split'] and

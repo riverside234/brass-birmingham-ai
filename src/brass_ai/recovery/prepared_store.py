@@ -287,6 +287,11 @@ class PreparedDataset(Dataset):
     """Supervised Dataset with identical batching/loss semantics and lazy features."""
     def __init__(self,data,device,weights=None):
         self.data,self.device=data,device;columns=data.columns
+        # This lazy subclass skips Dataset.__init__, but inherits its audited
+        # collation and optional scan-cache paths. Do not eagerly read features.
+        from .batch_cache import InputAudit, BatchCache
+        self.input_audit=InputAudit()
+        self.scan_cache=BatchCache()
         self.rows=_Column(data,0);self.encoded=_Column(data,3)
         self.chosen=torch.tensor(columns['chosen'],device=device)
         self.seats=torch.tensor(columns['seats'],device=device)

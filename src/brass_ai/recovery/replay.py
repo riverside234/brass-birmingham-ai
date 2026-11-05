@@ -1,6 +1,6 @@
 """Validated complete-game shards and fingerprinted derived feature caches.
 
-The authoritative raw replay wire format stays unchanged; encodings are versioned.
+Legacy raw replays and versioned compact IL replays share the same admission.
 Imported records are validated on ingress. Independently recorded validation
 receipts allow exact byte reuse; an unsigned sidecar never grants trust.
 An in-memory game binds each reusable row to its complete input digest.
@@ -19,6 +19,7 @@ from brass_ai.learning.local_entities import check_action_selectors
 from brass_ai.learning.replay import split_for, terminal_targets, validate_teacher
 from .encoding import PreparedEncoder
 from .inputs import BOUNDARY
+from . import il_replay_storage
 
 
 def row_key(row):
@@ -132,7 +133,7 @@ def _cache_paths(path):
 
 
 def cache_version():
-    paths=['recovery/'+n for n in ('encoding.py','inputs.py','replay.py')]+['runtime_contracts.py']
+    paths=['recovery/'+n for n in ('encoding.py','inputs.py','replay.py','il_replay_storage.py')]+['runtime_contracts.py']
     return digest(dict(source={name:sha(SOURCE_ROOT/'src/brass_ai'/name) for name in paths},compatibility=compatibility()))
 
 
@@ -206,11 +207,15 @@ def write_shard(path,games,provenance,*,cache=True):
     require(len({g['game_id'] for g in games})==len(games),'Duplicate game IDs')
     for game in games:game.assert_metadata()
     checked=games
+    storage=il_replay_storage.storage_format(provenance)
     path.parent.mkdir(parents=True,exist_ok=True);tmp=path.with_name(path.name+'.tmp')
     try:
         with gzip.open(tmp,'wt',encoding='utf-8',compresslevel=1) as stream:
-            stream.write(json.dumps(dict(format='four-seat-replay/1.0.0',compatibility=compatibility(),provenance=provenance))+'\n')
-            for game in serialized:stream.write(game.line)
+            stream.write(json.dumps(dict(format=storage,compatibility=compatibility(),provenance=provenance))+'\n')
+            for game in serialized:
+                line=(json.dumps(il_replay_storage.pack(game.game),separators=(',',':'),allow_nan=False)+'\n'
+                      if storage==il_replay_storage.FORMAT else game.line)
+                stream.write(line)
         tmp.replace(path)
         if cache: write_cache(path,checked)
     finally: tmp.unlink(missing_ok=True)
@@ -232,7 +237,10 @@ def read_shards(paths,partition=None,receipts=None,*,heuristic_only=False,native
                 if partition is None or game['split']==partition:output.append(game)
                 continue
             keys(header,('format','compatibility','provenance'))
-            require(header['format']=='four-seat-replay/1.0.0','Unsupported replay format')
+            require(header['format'] in (il_replay_storage.LEGACY_FORMAT,il_replay_storage.FORMAT),'Unsupported replay format')
+            if header['format']==il_replay_storage.FORMAT:
+                require(il_replay_storage.storage_format(header['provenance'])==il_replay_storage.FORMAT,
+                        'Compact IL replay lacks pinned storage provenance')
             if heuristic_only:
                 from brass_ai.learning.contracts import assert_heuristic_data_compatible
                 assert_heuristic_data_compatible(header['compatibility'])
@@ -240,6 +248,8 @@ def read_shards(paths,partition=None,receipts=None,*,heuristic_only=False,native
             require(type(header['provenance']) is dict,'Invalid provenance')
             require(partition!='train' or header['provenance'].get('purpose')!='evaluation','Evaluation replay in training')
             raw=[decode_json(line) for line in stream]
+            if header['format']==il_replay_storage.FORMAT:
+                raw=[il_replay_storage.unpack(game) for game in raw]
         if heuristic_only:
             require(all(r['behavior']['kind']=='external' and r['teacher'] is None for g in raw for r in g['records']),
                     'Audited heuristic ingress prohibits neural behavior and search targets')

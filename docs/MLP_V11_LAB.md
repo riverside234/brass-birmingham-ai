@@ -51,6 +51,12 @@ V11.2 is the current default: projections **32/64/48/320/352/48 + 12**, fusion *
 
 ## Existing joint7 IL data
 
+New `demo-generate` collections automatically write [compact raw IL replays](COMPACT_IL_REPLAYS.md).
+Use the same generation/audit commands with a new output directory; no config
+change is needed. Existing datasets remain readable. Prepared training arrays
+stay dense, with exact reconstruction before audit/encoding. The linked note
+includes storage/load measurements and the one-time source-cache rebuild caveat.
+
 The official heuristic strategy remains **v4, `bank-3dc65253a610191d66a5`**. Names such as `balanced-v3-masked-economy` are retained profile aliases; Network/Scout candidates are not enabled. Game and lab now compile the shared search core and the same game policy helpers. New collections have a separate search-runtime fingerprint; old bank/data identities are not rewritten. Reuse completed IL and its dataset unchanged.
 
 The experimental v5 strategy, profiles, candidates and three banks were removed on 19 October at the user's request. The portable v4 bundle is restored to `search-76a2f9ad7529c0e5e2117a36`, the same v4 reference used in the generation-55 run. Pull the restored executable and receipt together with the source before preparing the lab worker. This retains the current search-performance and five-profile sampling fixes.

@@ -46,8 +46,10 @@ def generate(root,output,games,config,*,seed=17100000,mono=None,partition=None,b
     legacy_opponent_work_budget_config(work_budget)
     work_budget=dict(LEGACY_TIME_BUDGET)
     teacher_specs={p:legacy_spec(root,p,budget,work_budget=work_budget) for p in profiles}
+    from .il_replay_storage import FORMAT as replay_format
     spec=dict(format='v3-demonstration-collection/1.0.0',games=games,seed=seed,partition=partition,
-        teachers=teacher_specs,execution=config,budget=budget,implementation=implementation_id(),compatibility=compatibility())
+        teachers=teacher_specs,execution=config,budget=budget,replay_format=replay_format,
+        implementation=implementation_id(),compatibility=compatibility())
     if (out/'spec.json').exists(): require(read(out/'spec.json')==spec,'Demonstration spec changed')
     else:
         require(not out.exists() or not any(out.iterdir()),'Use an empty demonstration output')
@@ -58,12 +60,15 @@ def generate(root,output,games,config,*,seed=17100000,mono=None,partition=None,b
         else: selected=cursor;cursor+=1
         policies=[teacher_specs[profiles[(i*4+s)%len(profiles)]] for s in range(4)]
         provenance=dict(producer='recovery/2.0.0',purpose='training',kind='v3-demonstration',
-            spec=digest(spec),seed=selected,sampling_seed=seed*7+i,policies=[p['policy_id'] for p in policies])
+            spec=digest(spec),seed=selected,sampling_seed=seed*7+i,policies=[p['policy_id'] for p in policies],
+            replay_format=replay_format)
         jobs.append(dict(index=i,seed=selected,rotation=i%4,sampling_seed=seed*7+i,policies=policies,
             path=str(out/f'game-{i:06d}.jsonl.gz'),provenance=provenance))
     with InferenceService(config,'cpu') as service,ActorPool(root,'artifacts/r1-host/guarded',service,config,mono=mono,heavy=True) as actors:
         records=actors.collect(jobs)
     result=dict(format='v3-demonstration-collection-report/1.0.0',spec=digest(spec),games=games,replays=records,
+        replay_storage=dict(format=replay_format,shards=len({r['path'] for r in records}),
+                            bytes=sum(Path(p).stat().st_size for p in {r['path'] for r in records})),
         eligible_for_bc=False,note='Run demo-audit to verify replay transitions and produce an admitted manifest')
     write_json(out/'report.json',result);return result
 
