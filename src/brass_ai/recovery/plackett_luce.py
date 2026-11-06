@@ -2,6 +2,7 @@
 import math
 import os
 import multiprocessing
+import time
 from concurrent.futures import ProcessPoolExecutor
 from contextlib import contextmanager
 import numpy as np
@@ -9,14 +10,14 @@ from brass_ai.learning.contracts import require
 
 IL='generation-0'
 V4='v4'
-COMPUTE=dict(contract='pl-bootstrap-compute/1.0.0',workers=4,threads_per_worker=1,warm_start=True)
+COMPUTE=dict(contract='pl-bootstrap-compute/1.0.0',workers=16,threads_per_worker=1,warm_start=True)
 
 
 def validate_compute(config):
     require(type(config) is dict and set(config)==set(COMPUTE) and
-        config['contract']==COMPUTE['contract'] and type(config['workers']) is int and 4<=config['workers']<=8 and
+        config['contract']==COMPUTE['contract'] and type(config['workers']) is int and 4<=config['workers']<=16 and
         type(config['threads_per_worker']) is int and config['threads_per_worker']==1 and config['warm_start'] is True,
-        'Invalid PL bootstrap execution settings (4-8 processes, one thread, full-fit warm start)')
+        'Invalid PL bootstrap execution settings (4-16 processes, one thread, full-fit warm start)')
     return config
 
 
@@ -123,9 +124,12 @@ def fit(games,agents,config):
     return dict(agents=agents,theta=theta.tolist(),seat=seat.tolist(),diagnostic=diagnostic)
 
 
-def estimate(games,agents,config,*,compute=None,parallel=True):
+def estimate(games,agents,config,*,compute=None,parallel=True,telemetry=None):
+    timings=telemetry if telemetry is not None else {};began=time.perf_counter()
     games,agents,ordered,orders=encode(games,agents);n=len(agents)
+    timings['fit_encode_seconds']=time.perf_counter()-began;began=time.perf_counter()
     theta,seat,diagnostic=fit_encoded(ordered,orders,n,config)
+    timings['full_fit_seconds']=time.perf_counter()-began;began=time.perf_counter()
     # A setup gets one bootstrap multiplicity across ALL slots and rotations.
     setups,cluster,draws=bootstrap_draws(games,config)
     samples=[];execution=None
@@ -148,6 +152,7 @@ def estimate(games,agents,config,*,compute=None,parallel=True):
             bootstrap_iterations=[r[1]['iterations'] for r in refits],
             gradient_max=max(r[1]['gradient_max'] for r in refits),
             converged=all(r[1]['converged'] for r in refits),cold_retries=sum(r[1]['cold_retry'] for r in refits))
+    timings['bootstrap_seconds']=time.perf_counter()-began;began=time.perf_counter()
     samples=np.asarray(samples);low,high=np.quantile(samples,[.025,.975],axis=0)
     scale=config['elo_scale'];v4=agents.index(V4)
     sigmoid=lambda x:float(1/(1+math.exp(-max(-700.,min(700.,float(x))))))
@@ -160,6 +165,7 @@ def estimate(games,agents,config,*,compute=None,parallel=True):
             interval=np.quantile(samples[:,j]-samples[:,i],[.025,.975])*scale
             differences.append(dict(a=a,b=agents[j],points_delta=scale*float(theta[j]-theta[i]),
                 points_delta_ci95=interval.tolist(),b_stronger=bool(interval[0]>0),a_stronger=bool(interval[1]<0)))
+    timings['intervals_seconds']=time.perf_counter()-began
     return dict(contract=config['contract'],ratings=rated,seat_offsets=seat.tolist(),fit=diagnostic,
         games=len(games),setups=len(setups),bootstrap_refits=len(samples),differences=differences,
         **(dict(bootstrap_execution=execution) if execution is not None else {}),

@@ -45,7 +45,7 @@ namespace BrassPatch.CardTracker
         {
             var app = history == null ? null : history.CurrentGame;
             CardTrackerSession existing;
-            if (app == null || board == null || (int)app.Game.GameStartConfiguration.NumberOfPlayers != 4 ||
+            if (app == null || board == null || !CardTrackerManifest.Supports((int)app.Game.GameStartConfiguration.NumberOfPlayers) ||
                 app.Metadata.GameType == GameType.Network || app.Game.GameProgressInformation.IsGameOver) {
                 if (router != null && sessions.TryGetValue(router,out existing)) existing.Retire();
                 return null;
@@ -56,7 +56,7 @@ namespace BrassPatch.CardTracker
             }
             // Resolve the use case before adding a persistent view owner.
             var replay = router.UseCaseBuilder.GetUseCase<ReplayUseCase>();
-            var root = Statistics.StatisticsWidgets.Rect(board.transform, "Four-player Card Tracker", Vector2.zero, Vector2.zero);
+            var root = Statistics.StatisticsWidgets.Rect(board.transform, "Public Card Tracker", Vector2.zero, Vector2.zero);
             root.pivot = new Vector2(.5f,.5f);
             Statistics.StatisticsWidgets.Stretch(root,Vector2.zero,Vector2.zero);
             var canvas = root.gameObject.AddComponent<Canvas>(); canvas.overrideSorting = true; canvas.sortingOrder = 450;
@@ -110,7 +110,7 @@ namespace BrassPatch.CardTracker
             var app = History == null ? null : History.CurrentGame;
             if (retired || app == null || Board == null || !Board.isActiveAndEnabled || !Board.IsViewVisible() ||
                 app.Metadata.GameId != GameId || app.Metadata.GameType == GameType.Network ||
-                (int)app.Game.GameStartConfiguration.NumberOfPlayers != 4 || app.Game.GameProgressInformation.IsGameOver ||
+                !CardTrackerManifest.Supports((int)app.Game.GameStartConfiguration.NumberOfPlayers) || app.Game.GameProgressInformation.IsGameOver ||
                 app.Game.TurnFlow.CurrentAction != null || replay == null || replay.GetIsReplayInProgress()) return false;
             if (History is BrassGameHistory && ReflectionAccess.Get<bool>(History,"_movedBackInHistory")) return false;
             if (app.Metadata.GetPlayerMetadataByColor(app.Game.GameProgressInformation.CurrentPlayer.Color).AiType != AIType.Human) return false;
@@ -151,7 +151,7 @@ namespace BrassPatch.CardTracker
             if (retired) return;
             var app = History.CurrentGame;
             if (app == null || app.Metadata.GameId != GameId || app.Game.GameProgressInformation.IsGameOver ||
-                (int)app.Game.GameStartConfiguration.NumberOfPlayers != 4) { Retire(); return; }
+                !CardTrackerManifest.Supports((int)app.Game.GameStartConfiguration.NumberOfPlayers)) { Retire(); return; }
             if (IsOpen && (!Eligible() || app.Game.Revision != Snapshot.Revision)) Close();
             Refresh(); if (Overlay != null) Overlay.Layout();
         }

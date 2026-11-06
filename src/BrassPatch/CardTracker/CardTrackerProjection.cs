@@ -21,22 +21,35 @@ namespace BrassPatch.CardTracker
     }
     public static class FourPlayerCardManifest
     {
-        public static List<TrackedCard> Create()
+        // Preserve the original public API for existing tools.
+        public static List<TrackedCard> Create() { return CardTrackerManifest.Create(4); }
+        public static string IndustryKey(BuildingType type) { return CardTrackerManifest.IndustryKey(type); }
+        public static string CardKey(BaseCard card) { return CardTrackerManifest.CardKey(card); }
+    }
+    public static class CardTrackerManifest
+    {
+        public static bool Supports(int players) { return players == 3 || players == 4; }
+        public static List<TrackedCard> Create(int players)
         {
+            if (!Supports(players)) throw new ArgumentOutOfRangeException("players");
             var cards = new List<TrackedCard>();
             string[] cities = { "Belper", "Birmingham", "BurtonOnTrent", "Cannock", "Coalbrookdale", "Coventry", "Derby", "Dudley",
                 "Kidderminster", "Leek", "Nuneaton", "Redditch", "Stafford", "StokeOnTrent", "Stone", "Tamworth", "Uttoxeter", "Walsall", "Wolverhampton", "Worcester" };
             int[] totals = { 2,3,2,2,3,3,3,2,2,2,1,1,2,3,2,1,2,1,2,2 };
+            // Public deck composition, verified against the vendor setup for
+            // both counts. Never derive this from live hands or the draw pile.
+            if (players == 3) { totals[0] = 0; totals[6] = 0; totals[16] = 1; }
             for (int i = 0; i < cities.Length; i++) {
+                if (totals[i] == 0) continue;
                 var city = (RegionName)Enum.Parse(typeof(RegionName), cities[i]);
                 cards.Add(new TrackedCard { Key = "location:" + city, City = city, Total = totals[i],
                     Name = cities[i] == "BurtonOnTrent" ? "Burton-on-Trent" : cities[i] == "StokeOnTrent" ? "Stoke-on-Trent" : cities[i] });
             }
             cards.Add(new TrackedCard { Key = "industry:Brewery", Name = "Brewery", Total = 5 });
-            cards.Add(new TrackedCard { Key = "industry:CoalMine", Name = "Coal Mine", Total = 3 });
+            cards.Add(new TrackedCard { Key = "industry:CoalMine", Name = "Coal Mine", Total = players == 3 ? 2 : 3 });
             cards.Add(new TrackedCard { Key = "industry:IronWorks", Name = "Iron Works", Total = 4 });
-            cards.Add(new TrackedCard { Key = "industry:CottonMill+Manufacturer", Name = "Cotton / Manufacturer", Total = 8 });
-            cards.Add(new TrackedCard { Key = "industry:Pottery", Name = "Pottery", Total = 3 });
+            cards.Add(new TrackedCard { Key = "industry:CottonMill+Manufacturer", Name = "Cotton / Manufacturer", Total = players == 3 ? 6 : 8 });
+            cards.Add(new TrackedCard { Key = "industry:Pottery", Name = "Pottery", Total = players == 3 ? 2 : 3 });
             return cards;
         }
         public static string IndustryKey(BuildingType type)
@@ -55,12 +68,15 @@ namespace BrassPatch.CardTracker
     public sealed class CardTrackerProjection
     {
         public readonly List<TrackedCard> Cards = FourPlayerCardManifest.Create();
+        public int PlayerCount { get; private set; } = 4;
+        public int Total { get { return Cards.Sum(c => c.Total); } }
+        public int HiddenCanalDiscards { get { return Rail ? 0 : PlayerCount; } }
         public readonly Dictionary<PlayerColor, bool[]> Wild = new Dictionary<PlayerColor, bool[]>();
         public bool Complete, Rail, Ended;
         public int Revision;
         public string Availability;
         public int Played { get { return Cards.Sum(c => c.Played); } }
-        public int Unseen { get { return 64 - Played; } }
+        public int Unseen { get { return Total - Played; } }
         public TrackedCard Find(string key) { return Cards.First(c => c.Key == key); }
         static string Signature(IEvent change)
         {
@@ -79,7 +95,7 @@ namespace BrassPatch.CardTracker
             var result = new CardTrackerProjection { Revision = revision, Availability = "Public card history" };
             try {
                 foreach (var player in players) result.Wild.Add(player, new bool[2]);
-                if (result.Wild.Count != 4) throw new InvalidOperationException("Card Tracker requires four players.");
+                result.Configure(result.Wild.Count);
                 var events = new SortedDictionary<int,IEvent>();
                 foreach (var change in persisted.Concat(pending)) {
                     if (change == null || change.Metadata == null) throw new InvalidOperationException("Invalid event record.");
@@ -93,7 +109,9 @@ namespace BrassPatch.CardTracker
                 if (events.Count != revision || !events.ContainsKey(1) || !(events[1] is GameStarted))
                     throw new InvalidOperationException("History incomplete.");
                 var started = (GameStarted)events[1];
-                if ((int)started.GameStartConfiguration.NumberOfPlayers != 4) throw new InvalidOperationException("Card Tracker requires four players.");
+                if ((int)started.GameStartConfiguration.NumberOfPlayers != result.PlayerCount ||
+                    !started.GameStartConfiguration.Players.Select(p => p.Color).OrderBy(p => p).SequenceEqual(result.Wild.Keys.OrderBy(p => p)))
+                    throw new InvalidOperationException("Card Tracker player configuration differs from its history.");
                 var seen = new HashSet<string>(StringComparer.Ordinal);
                 int expected = 1;
                 foreach (var pair in events) {
@@ -123,6 +141,11 @@ namespace BrassPatch.CardTracker
             }
             return result;
         }
+        void Configure(int players)
+        {
+            var cards = CardTrackerManifest.Create(players);
+            PlayerCount = players; Cards.Clear(); Cards.AddRange(cards);
+        }
         void Discard(BaseCard card, PlayerColor player, HashSet<string> seen)
         {
             string key = FourPlayerCardManifest.CardKey(card);
@@ -146,8 +169,11 @@ namespace BrassPatch.CardTracker
                 if(!result.Complete)result.Rail=app.Game.GameProgressInformation.CurrentGameEra.ToString()=="RailEra";
                 return result;
             } catch (Exception error) {
-                return new CardTrackerProjection { Revision = app.Game.Revision, Availability = "History unavailable: " + error.Message,
+                var result = new CardTrackerProjection { Revision = app.Game.Revision, Availability = "History unavailable: " + error.Message,
                     Rail = app.Game.GameProgressInformation.CurrentGameEra.ToString() == "RailEra" };
+                if (CardTrackerManifest.Supports((int)app.Game.GameStartConfiguration.NumberOfPlayers))
+                    result.Configure((int)app.Game.GameStartConfiguration.NumberOfPlayers);
+                return result;
             }
         }
         public string Description(TrackedCard card)
@@ -156,9 +182,9 @@ namespace BrassPatch.CardTracker
             string text = card.Name + (card.City.HasValue ? " — Location cards" : " — Industry cards") +
                 "\nPlayed: " + card.Played + " / " + card.Total + "    Unseen: " + card.Unseen;
             if (Rail) text += "\nUnseen cards are in hands or the draw deck.";
-            else text += "\nUnseen includes the four hidden Canal setup discards. Playable copies for this category: " +
-                Math.Max(0,card.Unseen-4) + "–" + card.Unseen + ".";
-            if (card.Key == "industry:CottonMill+Manufacturer") text += "\nCotton Mill and Manufacturer share these same eight dual-purpose cards.";
+            else text += "\nUnseen includes " + HiddenCanalDiscards + " hidden Canal setup discards. Playable copies for this category: " +
+                Math.Max(0,card.Unseen-HiddenCanalDiscards) + "–" + Math.Max(0,Math.Min(card.Unseen,Unseen-HiddenCanalDiscards)) + ".";
+            if (card.Key == "industry:CottonMill+Manufacturer") text += "\nCotton Mill and Manufacturer share these same " + card.Total + " dual-purpose cards.";
             if (card.City.HasValue && card.Unseen == 0) text += "\nOrdinary city cards are depleted. Wild Location and legal industry-card builds can still reach this city.";
             return text;
         }

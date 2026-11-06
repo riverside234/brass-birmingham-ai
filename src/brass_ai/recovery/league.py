@@ -530,6 +530,9 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                         plan['quality_tables'],plan['quality_planning'],generation=iteration+1,
                         games_done=state['games_done']+len(games))
                     quality_report['v4_history']=v4_history.advance(next_quality,games,kind_by_group,behavior.policy_id)
+                    if plan.get('table_mix') is not None:
+                        quality_report['table_mix']=plan['table_mix']
+                        quality_report['v4_history']['next_table_counts']=dict(plan['table_mix']['tables'])
                     if pool_migration and not summaries:quality_report['migration']=pool_migration
                 rehearsal_status=rehearsal_schedule(config,state['games_done'],iteration)
                 teacher_term=teacher_phase.prepare(model) if teacher_phase is not None else None
@@ -926,6 +929,7 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                     teacher_line=(f'teacher={teacher_report["mode"]} labels={teacher_report["collection"].get("labels",0)} '
                         f'beta={tt.get("beta")} share={tt.get("share",{}).get("median")} '
                         f'heldout_dKL={teacher_report["heldout"]["delta"]["all"]}')
+                from .ppo_kl_control import sampled_console
                 print(f'Recovery generation {iteration+1}: {done} games, {update["optimizer_steps"]} PPO steps; '
                       f'collect={load_began-began:.1f}s prepare={collected-load_began:.1f}s '
                       f'rehearsal={rehearsal_seconds:.1f}s PPO={report["timings"]["ppo_seconds"]:.1f}s '
@@ -938,7 +942,7 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                       f'LR={update["learning_rates"][0]:.1e}{controller_line} '
                       f'{"KLT1" if "opening_objective" in update else "KLcat"}={update.get("categorical_probe",{}).get("categorical_kl",0.):.5f} '
                       + (f'KLbehavior={update["categorical_probe"]["behavior_categorical_kl"]:.5f} ' if 'opening_objective' in update else '') +
-                      f'KLsample={update["epochs"][-1]["post_update_kl"]:.5f} '
+                      sampled_console(update) +
                       f'KLstop={update.get("kl_guard",{}).get("stop_reason") or "none"} '
                       f'value={update["epochs"][-1]["value"]:.4f}; '
                       f'insolvency events={update["insolvency"].get("events",0)} '

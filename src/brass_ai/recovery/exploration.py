@@ -164,7 +164,7 @@ def low_branch_config(config):
 
 def validate(config):
     from . import entropy_schedule as anneal
-    from .ppg_g210 import QUARTER_CONTRACT
+    from .ppg_g210 import QUARTER_CONTRACT,EARLY_CONTRACT
     present=[b in config for b in BLOCKS]
     if not any(present):
         require(not {'fixed_entropy',anneal.KEY}&set(config.get('update',{})),'Fixed/scheduled entropy requires versioned exploration')
@@ -176,7 +176,7 @@ def validate(config):
         config['opening']==THREE_OPENING and config['branching']==THREE_BRANCH)
     three_t2=config['opening']==THREE_T2_OPENING and config['branching'] in (THREE_T2_BRANCH,BALANCED_BRANCH)
     fork=config['opening']==THREE_OPENING and config['branching']==FORK_T15_BRANCH
-    quarter=config.get('value_phase',{}).get('contract')==QUARTER_CONTRACT
+    quarter=config.get('value_phase',{}).get('contract') in (QUARTER_CONTRACT,EARLY_CONTRACT)
     neutral=config['opening']==THREE_OPENING and config['branching'] in (NEUTRAL_BRANCH,T2_ONLY_BRANCH,FORK_T15_BRANCH)
     current=(config['opening']==OPENING and config['branching'] in (BRANCH,LOCAL_SCORING_BRANCH)) or revised or three_t2 or neutral
     uniform=config['opening']==OPENING and config['branching']==HIGH_BRANCH

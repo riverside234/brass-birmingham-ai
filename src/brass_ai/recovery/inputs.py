@@ -86,6 +86,9 @@ class InputBoundary:
                     self.checked_events += 1
 
     def check(self, view, choices):
+        from .admitted_inputs import admitted_digest
+        admitted=admitted_digest(view,choices)
+        if admitted is not None:return admitted
         key = digest(dict(view=view, choices=choices))
         with self.lock:
             if key in self.frames:
@@ -120,6 +123,10 @@ class InputBoundary:
             self.checked_frames += 1
         return key
 
+    def admit(self,view,choices):
+        from .admitted_inputs import freeze
+        return freeze(view,choices,self.check(view,choices))
+
     def report(self):
         return dict(validated_frames=self.checked_frames, validated_history_events=self.checked_events,
                     frame_cache_hits=self.frame_hits, retained_frames=len(self.frames),
@@ -128,3 +135,9 @@ class InputBoundary:
 
 
 BOUNDARY = InputBoundary()
+
+
+def input_digest(view,choices):
+    from .admitted_inputs import admitted_digest
+    admitted=admitted_digest(view,choices)
+    return admitted if admitted is not None else digest(dict(view=view,choices=choices))

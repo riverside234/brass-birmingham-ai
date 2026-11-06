@@ -128,6 +128,9 @@ class MultiChannelLease:
 
 
 class RemoteEvaluator:
+    from .admitted_inputs import request as _request
+    request_factory=staticmethod(_request)
+
     def __init__(self, endpoint, identity, batch_size=64, max_candidate_cells=131072):
         self.endpoint,self.model_id=endpoint,identity
         self.batch_size,self.max_candidate_cells=batch_size,max_candidate_cells

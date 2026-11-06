@@ -485,6 +485,8 @@ def _ppo_nonforced(model,optimizer,games,behavior,config,*,profile,profile_steps
     from . import dcpg_config
     from . import ppo_kl_control
     exact_only=ppo_kl_control.active(config)
+    probe_interval=ppo_kl_control.probe_interval(config)
+    full_dataset_enabled=ppo_kl_control.full_dataset_enabled(config)
     detach_critic=detached(config)
     preserve=dcpg_config.enabled(config)
     from .ppg_g210 import active as restored_ppg
@@ -577,6 +579,7 @@ def _ppo_nonforced(model,optimizer,games,behavior,config,*,profile,profile_steps
     gradient_norms=[]
     epochs=[];steps=0;critic_steps=0;clips=0;stopped=False;rehearsal_steps=0
     stop_reason=None;max_categorical_kl=0.;max_behavior_kl=0.
+    probe_check_steps=[];full_dataset_checks=0
     actor_used=set();critic_used=set();actor_presentations=Counter();critic_presentations=Counter();critic_roles=Counter()
     groups=[(sample_groups or {}).get(d[2][0],'unknown') for d in data]
     with profile_window(profile,device,profile_steps) as profiler:
@@ -588,7 +591,7 @@ def _ppo_nonforced(model,optimizer,games,behavior,config,*,profile,profile_steps
             actor_totals=torch.zeros(3,device=device);value_totals=torch.zeros(4,device=device)
             actor_seen=critic_seen=0;norm=torch.zeros((),device=device);kl=exact_kl=0.0
             utility_squared=torch.zeros((),device=device);utility_absolute=torch.zeros((),device=device)
-            for batch in actor_batches:
+            for batch_index,batch in enumerate(actor_batches):
                 if critic_cursor>=critic_count: critic_order=[critic_ids[j] for j in torch.randperm(critic_count).tolist()];critic_cursor=0
                 crit=critic_order[critic_cursor:critic_cursor+config['critic_batch_size']];critic_cursor+=len(crit)
                 optimizer.zero_grad(set_to_none=True);model.train()
@@ -667,8 +670,11 @@ def _ppo_nonforced(model,optimizer,games,behavior,config,*,profile,profile_steps
                     critic_roles.update(critic_ds.roles[i] for i in crit)
                 if profiler: profiler.step()
                 model.eval()
+                if not ppo_kl_control.probe_due(steps,probe_interval,batch_index==len(actor_batches)-1):
+                    continue
                 with timings.phase('ppo.kl_probe'):
                     measured=categorical_probe.measure_step(model,executor=executor)
+                probe_check_steps.append(steps)
                 exact_kl=measured['categorical_kl'];kl=measured['sampled_kl']
                 max_categorical_kl=max(max_categorical_kl,exact_kl)
                 max_behavior_kl=max(max_behavior_kl,measured.get('behavior_categorical_kl',exact_kl))
@@ -676,8 +682,11 @@ def _ppo_nonforced(model,optimizer,games,behavior,config,*,profile,profile_steps
                     stopped=True;stop_reason=('temperature1_categorical_probe' if 'opening_objective' in config else 'categorical_probe');break
                 if measured.get('behavior_categorical_kl',0.)>config['target_kl']:
                     stopped=True;stop_reason='behavior_categorical_probe';break
-            full=policy_measure(model,ds,actor_ids,behavior,config,timings,executor=executor)
-            require(math.isfinite(full),'Nonfinite full-dataset PPO sampled KL; refusing further updates')
+            full=None
+            if full_dataset_enabled:
+                full=policy_measure(model,ds,actor_ids,behavior,config,timings,executor=executor)
+                full_dataset_checks+=1
+                require(math.isfinite(full),'Nonfinite full-dataset PPO sampled KL; refusing further updates')
             if not exact_only and not stopped and full>config['target_kl']:
                 stopped=True;stop_reason='sampled_full_dataset'
             aa=(actor_totals/max(1,actor_seen)).cpu().tolist();vv=(value_totals/max(1,critic_seen)).cpu().tolist()
@@ -738,15 +747,20 @@ def _ppo_nonforced(model,optimizer,games,behavior,config,*,profile,profile_steps
         categorical_probe=final_probe,gradient_norms=distribution(gradient_norms),
         input_cache=dict(probe=categorical_probe.cache_report(),scans=ds.scan_cache.report(),
                          admission=ds.input_audit.report()),
-        kl_estimator=('probe_categorical_kl/categorical_kl: exact KL(old raw T1 || current raw T1), per-step guard and LR signal; behavior_categorical_kl: independent exact behavior-policy guard at the same limit; '
-            if 'opening_objective' in config else 'probe_categorical_kl: exact KL(old behavior || current behavior), per-step guard; ')+
+        kl_estimator=('probe_categorical_kl/categorical_kl: exact KL(old raw T1 || current raw T1), scheduled guard and LR signal; behavior_categorical_kl: independent exact behavior-policy guard at the same limit; '
+            if 'opening_objective' in config else 'probe_categorical_kl: exact KL(old behavior || current behavior), scheduled guard; ')+
             'post_update_kl/probe_kl: sampled behavior chosen-action ((ratio-1)-log(ratio)); '+
             ('diagnostics only, never a stop or LR signal. ' if exact_only else 'full means all nonforced rows, retained as secondary epoch guard. ')+
-            'Behavior reconstruction is verified separately before updates.',
-        kl_guard=dict(contract=ppo_kl_control.CONTRACT if exact_only else 'ppo-categorical-kl-guard/2.0.0' if 'opening_objective' in config else PPO_KL_GUARD,
+            ('Full-dataset post_update_kl is null because the diagnostic scan is disabled. ' if not full_dataset_enabled else '')+
+            'Behavior reconstruction is verified on all rows separately before updates.',
+        kl_guard=dict(contract=ppo_kl_control.guard_contract(config) if exact_only else 'ppo-categorical-kl-guard/2.0.0' if 'opening_objective' in config else PPO_KL_GUARD,
             target_kl=config['target_kl'],probe_positions=len(probe),
             requested_probe_positions=config['kl_probe_rows'],sampled_kl_stop_enabled=not exact_only,
-            probe_checks=steps,full_dataset_checks=len(epochs),max_categorical_kl=max_categorical_kl,
+            probe_checks=len(probe_check_steps),probe_check_steps=probe_check_steps,probe_check_interval=probe_interval,
+            first_step_check=True,epoch_end_check=True,final_probe_reporting=True,
+            full_dataset_checks=full_dataset_checks,full_dataset_kl_enabled=full_dataset_enabled,
+            max_unchecked_optimizer_steps=probe_interval-1,
+            max_categorical_kl=max_categorical_kl,maximum_scope='Measured check points only; unchecked steps are not bounded',
             **(dict(max_behavior_categorical_kl=max_behavior_kl,
                 operative_policy='raw-temperature-1',behavior_guard_preserved=True) if 'opening_objective' in config else {}),
             stop_reason=stop_reason,stop_step=steps if stopped else None),

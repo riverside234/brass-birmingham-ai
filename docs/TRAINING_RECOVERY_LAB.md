@@ -5,7 +5,13 @@ Report storage is now independent of code Git. The existing
 command exports and uploads to `riverside234/ai-training-results` automatically.
 Use `--no-push` for a local export. See [storage and old-checkout migration instructions](RESULTS_STORAGE.md).
 
-## Current: fresh neutral self-play from g1290
+## Current: g1041 trained-restart continuation
+
+Use [TRAINING_G1041.md](TRAINING_G1041.md) for the combined 70/30 table mix,
+early retained-step PPG beta response, sparse PPO probes and throughput update.
+It preserves the g1041 checkpoint and starts g1042 in the same run folder.
+
+## Earlier: fresh neutral self-play from g1290
 
 For the stopped **g760** trained-restart run, use the
 [g760 continuation command](../ai-research/NEUTRAL_SELFPLAY_G1290_RESTART.md#current-continuation-g760-automatic-reward-stages-and-explicit-gpu-selection).

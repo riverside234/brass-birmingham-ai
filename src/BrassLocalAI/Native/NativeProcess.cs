@@ -1,6 +1,7 @@
 using System;
 using System.Diagnostics;
 using System.IO;
+using System.Linq;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -139,6 +140,20 @@ namespace BrassLegacyAI.Native
         readonly double temperature;
         readonly NativeModel model;
         NativeProcess worker;
+        JObject validationView,validationComposition;
+        string validationLifetime;
+        long validationGeneration,validationRequest;
+        int commitThread;
+        public NativeValidation FirstActionValidation {get;private set;}
+        // Called by Unity before submission. Only detached JSON and scalar
+        // identity cross the scheduler boundary; no live Host/app is retained.
+        public void PrepareFirstActionValidation(JObject view,JObject composition,string lifetime,long generation,long requestNumber)
+        {
+            if(commitThread!=0 || Result!=null)throw new InvalidOperationException("Validation already configured or search completed");
+            validationView=(JObject)view.DeepClone();validationComposition=(JObject)composition.DeepClone();
+            validationLifetime=lifetime;validationGeneration=generation;validationRequest=requestNumber;
+            commitThread=Thread.CurrentThread.ManagedThreadId;
+        }
         public string FailureBundle {get;private set;}
         public JObject Result {get;private set;}
         public double ResponseReceivedMilliseconds {get;private set;}=-1;
@@ -190,6 +205,15 @@ namespace BrassLegacyAI.Native
             if((int?)Result["requested_k"]!=searchK)throw new IOException("Native response used a different search K");
             if((double?)Result["policy_temperature"]!=temperature || (string)Result["temperature_scope"]!="all_nn_policy_evaluations")
                 throw new IOException("Native response used a different NN temperature");
+            if(validationView!=null) {
+                var ticket=(JObject)request["ticket"];
+                var first=NativeInput.Actions(Result).First();
+                var binding=NativeValidation.Binding(validationLifetime,(string)ticket["game_instance"],(string)ticket["game_id"],
+                    validationGeneration,validationRequest,0,(int)ticket["revision"],(int)ticket["actor"],"action",Result);
+                var validation=new NativeValidation(validationView,validationComposition,first,binding,commitThread);
+                validation.ExecuteAsync(cancellation).GetAwaiter().GetResult();
+                cancellation.ThrowIfCancellationRequested();FirstActionValidation=validation;
+            }
             return Task.FromResult(0);
         }
     }

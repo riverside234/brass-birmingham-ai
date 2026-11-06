@@ -71,8 +71,8 @@ class Parallel(unittest.TestCase):
             with self.assertRaises(ValueError):P._bootstrap_refit(np.ones(4,dtype=int),(ordered,orders,n,RATING,np.repeat(np.arange(4),4),np.zeros(n+2)))
 
     def test_execution_contract_and_spawn_environment_restoration(self):
-        for n in (4,6,8):P.validate_compute(dict(P.COMPUTE,workers=n))
-        for change in (dict(workers=9),dict(workers=True),dict(threads_per_worker=2),dict(warm_start=False)):
+        for n in (4,6,8,16):P.validate_compute(dict(P.COMPUTE,workers=n))
+        for change in (dict(workers=17),dict(workers=True),dict(threads_per_worker=2),dict(warm_start=False)):
             with self.assertRaises(ValueError):P.validate_compute(dict(P.COMPUTE,**change))
         before=copy.deepcopy(dict(os.environ))
         with self.assertRaises(RuntimeError):

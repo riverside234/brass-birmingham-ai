@@ -15,6 +15,10 @@ from brass_ai.runtime_contracts import validate
 class InputPerformanceTests(unittest.TestCase):
     def history(self):
         view, choices = position()
+        from brass_ai.learning.board_topology import topology
+        board=topology()
+        for link in view['links']:
+            link['regions']=list(board['link_endpoints'][link['id']]);link['era']=board['link_eras'][link['id']]
         view['history'] = [dict(seat=i%4, era='CanalEra',
                                 choice=dict(choices[i%3], id=str(i))) for i in range(96)]
         return view, choices

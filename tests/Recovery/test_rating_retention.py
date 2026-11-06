@@ -27,7 +27,7 @@ class RatingRetention(unittest.TestCase):
         self.state=fixtures.Slots().state(self.root,self.c);self.state['signature']=dict(config=self.cfg)
         for item in (
             patch('brass_ai.recovery.retention.slim_checkpoint',side_effect=lambda root,run,e,old=None:e),
-            patch.object(r,'collect_slot',side_effect=lambda root,directory,spec,*args:fixtures.fixture_rows(spec)),
+            patch.object(r,'collect_slot',side_effect=lambda root,directory,spec,*args,**kwargs:fixtures.fixture_rows(spec)),
             patch.object(r,'plot_report',side_effect=lambda path,*args:path.write_text('<svg/>'))):
             item.start();self.addCleanup(item.stop)
 

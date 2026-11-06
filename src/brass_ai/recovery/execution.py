@@ -227,7 +227,11 @@ def _run_turns(host,job,assigned,timings,max_decisions,context,game,rngs,encoded
         else:
             with timings.phase('host.observe'): view=host.observe(seat)
             with timings.phase('host.choices'): choices=host.choices()
-        with timings.phase('inputs.validate'): BOUNDARY.check(view,choices)
+        with timings.phase('inputs.validate'):
+            # Only ordinary neural decisions share an immutable admitted frame
+            # with inference and replay encoding. Search/bot paths stay intact.
+            if type(p) is NeuralPolicy and len(choices)>1:view,choices=BOUNDARY.admit(view,choices)
+            else:BOUNDARY.check(view,choices)
         require(view['seat']==seat and view['context']['revision']==context['revision'],'Stale actor observation')
         if ledger is not None:
             ledger.observe(view)

@@ -52,6 +52,10 @@ def plan_collection(root,directory,state,config,signature,service,current,profil
             'Committed IL PFSP sampling requires its original retired-panel gate')
         quality_planning=quality_pool.distribution(state['quality_pool'],il_gate=gate)
     v4_in_history=v4_history.active(state.get('quality_pool'))
+    from .training_revision_g1041 import mixed,exposure
+    if mixed(config):
+        require(v4_in_history and config['table_plan']['origin_games']<=state['games_done'],
+            '70/30 collection requires committed v4 retirement and mix origin')
     bot_member=next((m for m in state.get('quality_pool',{}).get('members',[]) if v4_history.bot(m)),None)
     bot_seats=bot_member['profile_seats'] if bot_member else 0
     if bot_member:require(bot_member['policies']==fast_specs,'V4 PFSP frozen policies differ from current bank')
@@ -183,10 +187,13 @@ def plan_collection(root,directory,state,config,signature,service,current,profil
                 jobs[-1]['branching']=exploration['branching']
         kind_by_group[setup]=kind
         composition[kind]+=1
+    if mixed(config):
+        require(composition==dict(selfplay=224,historical=96),'70/30 collection quota differs')
     return dict(jobs=jobs,kind_by_group=kind_by_group,composition=composition,cursor=cursor,
         context_counter=context_counter,historical_generations=historical_generations,
         mix_receipts=mix_receipts,transition_added=transition_added,incumbent=incumbent,
-        quality_planning=quality_planning,quality_tables=quality_tables)
+        quality_planning=quality_planning,quality_tables=quality_tables,
+        table_mix=exposure(quality_planning) if mixed(config) else None)
 
 
 def sampling_report(games,data,policy_id,kinds,config,*,legacy_profiles=None):

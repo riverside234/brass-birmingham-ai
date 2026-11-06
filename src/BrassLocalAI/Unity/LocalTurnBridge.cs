@@ -205,6 +205,8 @@ namespace BrassLegacyAI
             planningRequests++;
             nativeAction=0;
             nativeBackend=NativeJob.WithDeadline(NativeInput.Request(input,instance,app.Metadata.GameId,startedGeneration+1,nativeAllowance),clock,(int)budget,NativeGameState.SearchK(state,actor),NativeGameState.Temperature(state,actor));
+            if(debtOwner==null && NativeValidation.Enabled)
+                nativeBackend.PrepareFirstActionValidation(Host.Capture(app,events).ObserveToken(actor),composition,validationLifetime,startedGeneration,planningRequests);
             nativeExecution=AiExecutionScheduler.Submit(nativeBackend);resources.Observe(nativeExecution);
         }
         // Liquidation uses the same immutable per-seat controller as ordinary turns.
@@ -272,12 +274,17 @@ namespace BrassLegacyAI
                 // events, never validated speculatively on the first root.
                 if(native && debtOwner==null && NativeValidation.Enabled) {
                     if(validatingPath==null) {
+                        if(nativeAction==0 && nativeBackend.FirstActionValidation!=null) {
+                            validatingPath=continuation.Dequeue();nativeValidation=nativeBackend.FirstActionValidation;
+                            validationExecution=nativeExecution;
+                        } else {
                         var captured=Host.Capture(app,Events());
                         if(captured.Phase!="action" || app.Game.TurnFlow.CurrentAction!=null)throw new InvalidOperationException("Native validation boundary changed");
                         validatingPath=continuation.Dequeue();
                         nativeValidation=new NativeValidation(captured.ObserveToken(actor),composition,validatingPath,ValidationBinding(captured));
                         validationExecution=AiExecutionScheduler.Submit(nativeValidation);resources.ObserveDelivery(validationExecution);
                         return;
+                        }
                     }
                     if(!validationExecution.Completion.IsCompleted)return;
                     if(validationExecution.CancellationRequested)throw new InvalidOperationException("Native validation cancelled");
@@ -366,7 +373,7 @@ namespace BrassLegacyAI
             double deadline=budget;
             if(nativeDeliveryActive && nativeBackend!=null)deadline=Math.Min(deadline,nativeBackend.DeliveryDeadlineMilliseconds);
             if(clock.Elapsed.TotalMilliseconds>=deadline-(committing?NativeJob.CommitHeadroomMilliseconds:0))
-                throw new TimeoutException("Alpha Test delivery exceeded its original deadline or has insufficient commit headroom");
+                throw new TimeoutException("NN delivery exceeded its original deadline or has insufficient commit headroom");
         }
         void Stop()
         {

@@ -120,6 +120,12 @@ def check_signature(state, signature, reviewed=False):
             handlers[CUT_MIGRATION]=cut_config
             from .ppo_kl_control import MIGRATION as EXACT_KL_MIGRATION,configure as exact_kl_config
             handlers[EXACT_KL_MIGRATION]=exact_kl_config
+            from .ppo_kl_control import SPARSE_MIGRATION,configure_sparse
+            handlers[SPARSE_MIGRATION]=configure_sparse
+            from .throughput_config import MIGRATION as THROUGHPUT_MIGRATION,configure as throughput_config
+            handlers[THROUGHPUT_MIGRATION]=throughput_config
+            from .training_revision_g1041 import MIGRATION as G1041_MIGRATION,configure as g1041_config
+            handlers[G1041_MIGRATION]=lambda c:g1041_config(c,state)
             from .quality_config import CONFIG_MIGRATION as PFSP_MIGRATION,sampling_config
             handlers[PFSP_MIGRATION]=sampling_config
             from .config import INSOLVENCY_EVENT_CONFIG_MIGRATION,insolvency_event_config
@@ -322,6 +328,8 @@ def load_resume(root, run, state, signature, *, device='cpu', reviewed=False, di
     if (getattr(model.config,'utility',None) is not None and raw['training'].get('signature')!=digest(signature)
             and not teacher_receipt_preserved(state,signature,raw,entry)
             and not entropy_receipt_preserved(state,signature,raw,entry)
+            and not ppo_probe_receipt_preserved(state,signature,raw,entry)
+            and not throughput_receipt_preserved(state,signature,raw,entry)
             and not gae_floor_receipt_preserved(state,signature,raw,entry)
             and not evaluation_receipt_preserved(state,signature,raw,entry)):
         # The old receipt can predate a post-calibration policy/distillation
@@ -334,6 +342,53 @@ def load_resume(root, run, state, signature, *, device='cpu', reviewed=False, di
             reason='Reviewed source continuation requires fresh ordinary utility calibration',
             checkpoint_signature=raw['training'].get('signature'),current_signature=digest(signature))
     return model, raw, changed
+
+
+def throughput_receipt_preserved(state,signature,raw,entry):
+    """Reviewed execution changes do not reset a calibrated critic."""
+    from .throughput_config import configure
+    from .ppo_kl_control import configure_sparse
+    known={digest(state['signature']):state['signature']}
+    for transition in reversed(state.get('source_transitions',[])):
+        if transition['checkpoint']==entry and transition['to_signature'] in known:
+            known[digest(transition['from_signature'])]=transition['from_signature']
+    before=known.get(raw['training'].get('signature'))
+    if before is None:return False
+    without=lambda s:{k:v for k,v in s.items() if k not in ('config','implementation')}
+    if without(before)!=without(signature):return False
+    options=[before['config']]
+    try:options+=[configure(before['config']),configure_sparse(before['config']),configure(configure_sparse(before['config']))]
+    except (ValueError,KeyError,TypeError):return False
+    # The g1041 recipe changes future table exposure and beta feedback, not
+    # critic targets/reward or stored weights. Require its exact review too.
+    from .training_revision_g1041 import configure as g1041_config
+    try:options.append(g1041_config(before['config'],state))
+    except (ValueError,KeyError,TypeError):pass
+    if signature['config'] not in options:return False
+    return any(e.get('preserve_throughput_calibration') is True and
+        e['from_implementation']==before['implementation'] and e['to_implementation']==signature['implementation'] and
+        e['learning_compatibility']==digest(signature['compatibility'])
+        for e in expand_source_reviews(read(CONFIG_DIR/'selfplay-resume-sources.json'))['transitions'])
+
+
+def ppo_probe_receipt_preserved(state,signature,raw,entry):
+    """A pinned observation-only PPO change leaves critic calibration intact."""
+    from .ppo_kl_control import configure_sparse
+    known={digest(state['signature']):state['signature']}
+    for transition in reversed(state.get('source_transitions',[])):
+        if transition['checkpoint']==entry and transition['to_signature'] in known:
+            known[digest(transition['from_signature'])]=transition['from_signature']
+    before=known.get(raw['training'].get('signature'))
+    if before is None:return False
+    without=lambda s:{k:v for k,v in s.items() if k not in ('config','implementation')}
+    if without(before)!=without(signature):return False
+    try:expected=configure_sparse(before['config'])
+    except (ValueError,KeyError,TypeError):return False
+    if signature['config']!=expected:return False
+    return any(e.get('preserve_ppo_probe_calibration') is True and
+        e['from_implementation']==before['implementation'] and e['to_implementation']==signature['implementation'] and
+        e['learning_compatibility']==digest(signature['compatibility'])
+        for e in expand_source_reviews(read(CONFIG_DIR/'selfplay-resume-sources.json'))['transitions'])
 
 
 def entropy_receipt_preserved(state,signature,raw,entry):

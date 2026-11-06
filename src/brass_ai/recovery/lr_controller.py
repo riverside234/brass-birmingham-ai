@@ -280,7 +280,7 @@ def finish_iteration(optimizer,update,config,sampling,games,policy_id,kinds,anch
     exact_only=ppo_kl_control.active(config['update'])
     if exact_only:
         guard=update['kl_guard']
-        require(guard['contract']==ppo_kl_control.CONTRACT and not guard['sampled_kl_stop_enabled'] and
+        require(guard['contract']==ppo_kl_control.guard_contract(config['update']) and not guard['sampled_kl_stop_enabled'] and
             guard['stop_reason']!='sampled_full_dataset','PPO LR feedback received an incompatible sampled-KL stop')
     measurements=dict(kl=probe['categorical_kl'] if probe['positions'] else None,
         steps_done=update['optimizer_steps'],steps_planned=update['optimizer_steps_planned'],

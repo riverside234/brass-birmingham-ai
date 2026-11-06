@@ -129,6 +129,10 @@ public sealed partial class LocalAiUnityDriver
         Check(replies.All(r=>(double)r["policy_temperature"]==temperature && (string)r["temperature_scope"]=="all_nn_policy_evaluations"),"production bridge uses saved temperature for all evaluations");
         bool focused=replies.Any(r=>(bool?)r["search_revision"]?["focus"]?["switched"]==true);
         Check(replies.Count>0,"completed production search reply");
+        var earlyValidation=typeof(NativeJob).GetProperty("FirstActionValidation");
+        if(earlyValidation!=null && scenario=="normal")
+            Check(jobs.All(j=>((NativeValidation)earlyValidation.GetValue(j,null))?.Validated==true),
+                "first action validated inside the search scheduler lease before Unity delivery");
         Check((string)input["context"]["profile_id"]==selectedModel.Profile(industryFocus) &&
             JToken.DeepEquals(input["context"]["style"],NativeFocus.Style(industryFocus)) &&
             JToken.DeepEquals(input["context"]["intent"],NativeFocus.Intent(industryFocus)),"live NN input carries the selected industry context");

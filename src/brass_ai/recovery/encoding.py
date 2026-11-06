@@ -13,7 +13,7 @@ from brass_ai.learning.contracts import finite_vector, require
 from brass_ai.learning.features import Encoder, Encoded
 from brass_ai.learning.encoding_budget import check_budget
 from brass_ai.learning.contracts import digest
-from .inputs import BOUNDARY
+from .inputs import BOUNDARY,input_digest
 
 @lru_cache(maxsize=128)
 def vocabulary(values):
@@ -104,7 +104,7 @@ class PreparedEncoder(Encoder):
         check_budget(deadline,cancelled)
         from brass_ai.learning.board_topology import admit_topology
         admit_topology(view)
-        source = digest(dict(view=view, choices=choices)) if validated else BOUNDARY.check(view, choices)
+        source = input_digest(view,choices) if validated else BOUNDARY.check(view, choices)
         key = digest(dict(schema=self.derived.schema,input=source, style=style, intent=intent))
         check_budget(deadline,cancelled)
         cached=self.cache.get(key)

@@ -140,7 +140,8 @@ class NeuralPolicy:
                 from brass_ai.search.common import SearchIncomplete
                 raise SearchIncomplete('inference_deadline')
             style, intent = self.context_features(view, rng)
-            requests.append(Request(uuid.uuid4().hex, self.evaluator.model_id, view, choices,
+            request_factory=getattr(self.evaluator,'request_factory',Request)
+            requests.append(request_factory(uuid.uuid4().hex, self.evaluator.model_id, view, choices,
                 min(time.monotonic()+120,self.request_deadline) if self.request_deadline is not None else time.monotonic()+120,
                 tuple(style), tuple(intent),remaining=self.utility_remaining.get(rng)))
         return requests

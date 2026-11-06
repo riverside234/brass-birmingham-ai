@@ -60,6 +60,34 @@ public static class NativeValidationContractChecks
             bool wrongThread=false;
             try {Task.Run(()=>receipt.Commit(h,Composition(h),legal,binding,false)).GetAwaiter().GetResult();}catch(InvalidOperationException){wrongThread=true;}
             Check(wrongThread && before==Wire.Json(h.Canonical()),"a validated receipt cannot commit from a worker thread");
+            // Production can construct the receipt on the search worker, but
+            // mutation must still belong to the original capturing thread.
+            int owner=Thread.CurrentThread.ManagedThreadId;
+            var ctor=typeof(NativeValidation).GetConstructor(System.Reflection.BindingFlags.NonPublic|System.Reflection.BindingFlags.Instance,null,
+                new[]{typeof(JObject),typeof(JObject),typeof(string[]),typeof(string),typeof(int)},null);
+            if(ctor!=null) {
+                var snapshot=View(h);var composition=Composition(h);var cancel=new CancellationTokenSource();
+                var early=Task.Run(()=>{
+                    var v=(NativeValidation)ctor.Invoke(new object[]{snapshot,composition,legal,binding,owner});
+                    v.ExecuteAsync(cancel.Token).GetAwaiter().GetResult();return v;
+                }).GetAwaiter().GetResult();
+                wrongThread=false;
+                try{Task.Run(()=>early.Commit(h,composition,legal,binding,false)).GetAwaiter().GetResult();}catch(InvalidOperationException){wrongThread=true;}
+                Check(wrongThread && before==Wire.Json(h.Canonical()),"worker-prepared receipt cannot commit on worker");
+                var changed=(JObject)composition.DeepClone();changed["invalid"]=1;bool stale=false;
+                try{early.Commit(h,changed,legal,binding,false);}catch(InvalidOperationException){stale=true;}
+                Check(stale && before==Wire.Json(h.Canonical()),"worker-prepared receipt rejects changed composition");
+                cancel.Cancel();bool cancelled=false;
+                try{early.Commit(h,composition,legal,binding,false);}catch(InvalidOperationException){cancelled=true;}
+                Check(cancelled && before==Wire.Json(h.Canonical()),"cancellation after worker validation prevents mutation");
+                var fresh=Task.Run(()=>{
+                    var v=(NativeValidation)ctor.Invoke(new object[]{snapshot,composition,legal,binding,owner});
+                    v.ExecuteAsync(CancellationToken.None).GetAwaiter().GetResult();return v;
+                }).GetAwaiter().GetResult();
+                fresh.Commit(h,composition,legal,binding,false);var after=Wire.Json(h.Canonical());
+                bool consumed=false;try{fresh.Commit(h,composition,legal,binding,false);}catch(InvalidOperationException){consumed=true;}
+                Check(before!=after && consumed && after==Wire.Json(h.Canonical()),"worker-prepared receipt commits once on capturing thread");
+            }
         } catch(Exception error){failure=error;}
         File.WriteAllText(args[1],new JObject{["passed"]=failure==null,["checks"]=checks,["error"]=failure?.ToString(),["events"]=evidence,
             ["event_metadata_comparison"]="Revision retained; wall-clock/instance metadata excluded. Every semantic payload field and event type/order compared."}.ToString());

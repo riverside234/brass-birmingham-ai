@@ -366,7 +366,7 @@ def preserve_available_companions(root,run,state):
         scope='All main state_dict heads retained. Exact companion bundles recovered only from available matching full generations; no fabricated historical weights. Old files remain immutable.')
 
 
-def plan(root,run,config=RETENTION):
+def plan(root,run,config=RETENTION,*,_digests=None):
     root,run=owned(root,run);require(run.exists(),'Run does not exist')
     require(not active(run,allow_owner=True),'Cannot prune an active run')
     pins=references(root,run);state_path=run/'state.json';state=read(state_path) if state_path.exists() else {}
@@ -384,7 +384,7 @@ def plan(root,run,config=RETENTION):
         archived=archived_history(root,state.get('ratings',{}))
         for slot in archived['slots']:
             directory=archived_slot_directory(run,slot)
-            for name in ('spec.json','report.json','panels.json','progress.svg','progress_vp.svg','bootstrap.npz','games.jsonl','games-manifest.json'):
+            for name in ('spec.json','report.json','panels.json','progress.svg','progress_vp.svg','bootstrap.npz','games.jsonl','games-manifest.json','timing-report.json'):
                 candidate(directory/name,'retired strength-rating slot')
             for p in directory.glob('*.jsonl.gz*'):candidate(p,'retired strength-rating replay or features')
         # Only the active content-addressed archive stays pinned. Abandoned
@@ -463,7 +463,8 @@ def plan(root,run,config=RETENTION):
     # Profiles are derived and not training data.
     profiles=sorted(p for p in run.rglob('*.pt.trace.json') if '.retention-trash' not in p.parts)
     for p in profiles[:-config['profile_traces']]: candidate(p,'old profiler trace')
-    entries=[dict(path=p.relative_to(run).as_posix(),sha256=sha(p),bytes=p.stat().st_size,reason=reason)
+    file_digest=sha if _digests is None else _digests.digest
+    entries=[dict(path=p.relative_to(run).as_posix(),sha256=file_digest(p),bytes=p.stat().st_size,reason=reason)
              for p,reason in sorted(candidates.items()) if p not in keep]
     return dict(format='retention-plan/1.0.0',run=str(run),created=time.time(),
         generation=state.get('iteration',state.get('epoch',0)),entries=entries,
@@ -472,7 +473,9 @@ def plan(root,run,config=RETENTION):
 
 
 def prune(root,run,config=RETENTION,*,apply=False):
-    began=time.perf_counter();root,run=owned(root,run);decision=plan(root,run,config)
+    from .retention_digests import PlanDigests
+    digests=PlanDigests()
+    began=time.perf_counter();root,run=owned(root,run);decision=plan(root,run,config,_digests=digests)
     planned=time.perf_counter()
     if not apply: return dict(decision,dry_run=True)
     from .history import compact_history
@@ -493,7 +496,7 @@ def prune(root,run,config=RETENTION,*,apply=False):
         batch=decision['entries'][start:start+JOURNAL_BATCH];paths=[]
         for entry in batch:
             source=safe(run,run/entry['path']);destination=safe(run,trash/entry['path'])
-            require(sha(source)==entry['sha256'],'Artifact changed during cleanup')
+            require(digests.digest(source)==entry['sha256'],'Artifact changed during cleanup')
             require(not destination.exists(),'Quarantine would overwrite a file')
             entry['quarantine']=destination.relative_to(run).as_posix();entry['moving']=True
             paths.append((source,destination))
@@ -510,7 +513,7 @@ def prune(root,run,config=RETENTION,*,apply=False):
         report=read(report_path);report.update(raw_records_pruned=True,promotion_eligible=False)
         report['retention_manifest']=manifest.relative_to(root).as_posix();write_json(report_path,report)
     moved=time.perf_counter();result=purge(root,run,config,automatic=True)
-    return dict(decision,manifest=str(manifest),**result,timings=dict(plan_seconds=planned-began,
+    return dict(decision,manifest=str(manifest),**result,hash_reuse=digests.report(),timings=dict(plan_seconds=planned-began,
         archive_move_seconds=moved-planned,purge_seconds=time.perf_counter()-moved))
 
 
@@ -535,6 +538,7 @@ def scheduled_prune(root,run,config=RETENTION):
     write_json(receipt,dict(format='automatic-retention/1.0.0',generation=generation,every_iterations=interval))
     result.update(performed=True,last_cleanup_generation=generation,next_cleanup_generation=generation+interval,reason='due')
     result.update({k:cleanup[k] for k in ('reclaimable_bytes','permanently_deleted_files','permanently_deleted_bytes','timings')})
+    if 'hash_reuse' in cleanup:result['hash_reuse']=cleanup['hash_reuse']
     return result
 
 
@@ -602,7 +606,11 @@ def purge(root,run,config=RETENTION,*,automatic=False):
                     path.unlink();entry.update(deleted=True,deleting=False);count+=1;deleted_bytes+=entry['bytes']
                     empty_paths.extend((path,origin))
             if actions:write_json(manifest,data)
-            for path in empty_paths:remove_empty_parents(run,path)
+            # Sibling replay/feature files share parents. Walk each directory
+            # once per journal batch instead of retrying it for every sibling.
+            parents={path.parent:path for path in empty_paths}
+            for parent in sorted(parents,key=lambda p:len(p.parts),reverse=True):
+                remove_empty_parents(run,parents[parent])
         if data.get('status')!='quarantined':
             data['status']='quarantined';write_json(manifest,data)
     # Bound the cleanup journal too; unsettled receipts remain recoverable.

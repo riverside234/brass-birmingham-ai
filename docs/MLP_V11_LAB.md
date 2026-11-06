@@ -574,6 +574,19 @@ The per-update LR signal remains exact **KL(old behavior || post-PPO behavior)**
 
 The exact and sampled probe values share one forward pass per microbatch. Reports and compact history retain `actor.kl_guard` (contract `ppo-categorical-kl-guard/1.0.0`, checks, maximum exact KL, stop reason and step), plus each epoch's `probe_categorical_kl`. Existing `probe_kl` and `post_update_kl` retain their sampled-action meaning. The console prints `KLstop=categorical_probe`, `sampled_full_dataset` or `none`; the LR report records the same stop reason and actual completed/planned steps.
 
+Current update (2026-11-06): newly generated latest-model configurations use the
+[sparse PPO probe revision](PPO_SPARSE_PROBES.md). It disables logging-only full
+scans (`post_update_kl=null`) and checks the fixed exact probe every four
+optimizer steps, plus step 1 and every epoch tail. Full behavior verification
+before PPO and final exact KL for LR feedback remain enabled. Existing runs
+must use the documented reviewed configuration helper; old signed settings
+retain their original cadence.
+
+The [collection/rating throughput revision](SELFPLAY_THROUGHPUT.md) adds streaming
+parallel evaluation replay validation, separate rating phase timings, immutable
+actor input/digest reuse, 16-worker bootstrap and cleanup read reuse. Its helper
+also includes the sparse PPO settings above and preserves committed run progress.
+
 Raise by 1.25 after a full three-valid-iteration median **below 0.005 (50% of target_kl)** with no stops, no cooldown and passing health/anchor checks. Older recorded configs remain at 45% until the explicit g560 adoption/hotfix above is selected. Cut by 1.5 immediately on an early stop before half the planned steps, two stops in three valid iterations, or current exact KL above 0.015. Cuts start a three-valid-iteration cooldown; multiplier bounds remain 0.5–3. Warmup, empty/nonfinite update handling, shadow/off modes and PPO-only multiplier application remain unchanged. **Protective LR cuts never depend on anchor/health approval.** Full and compact LR reports include the effective raise ratio and absolute threshold.
 
 The categorical guard remains enabled and its preceding guard-only source approvals are preserved. Those approvals do **not** authorize the new quality-pool/rating recipe on an existing PPO run. For this revision, generate a new recipe-3 config and use the earlier `--fresh` command without a source-resume flag. Completed v11.1 IL remains usable; the PPO guard does not alter supervised IL updates. Signed older recipes are not silently upgraded, and pending-collection safeguards remain active.

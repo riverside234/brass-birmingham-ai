@@ -28,7 +28,7 @@ def main():
     require(len(games)==len({g['game_id'] for g in games}),'Duplicated history')
     reports={};arrays={};timings={}
     for name,kwargs in [('cold_serial',{}),('warm_serial',dict(compute=P.COMPUTE,parallel=False)),
-                        ('warm_parallel4',dict(compute=P.COMPUTE))]:
+                        ('warm_parallel4',dict(compute=dict(P.COMPUTE,workers=4)))]:
         print(f'{name}: {len(games)} games, {len(agents)} agents, {args.refits} refits',flush=True)
         start=time.perf_counter();reports[name],arrays[name]=P.estimate(games,agents,config,**kwargs)
         timings[name]=time.perf_counter()-start;print(f'{name}: {timings[name]:.3f}s',flush=True)

@@ -491,6 +491,10 @@ def latest_model_config(config,imitation_checkpoint):
     result=policy_observations_config(result)
     from .neutral_training import configure as neutral_config
     result=neutral_config(result)
+    from .ppo_kl_control import configure_sparse
+    result=configure_sparse(result)
+    from .throughput_config import configure as configure_throughput
+    result=configure_throughput(result)
     return validate_config(result)
 
 
@@ -690,6 +694,8 @@ def validate_config(config):
         fields.add('rating_compute');validate_compute(config['rating_compute'])
         require(config['rating_compute']['workers']<=config['audit_workers'],
             'Rating processes exceed the existing CPU reader budget')
+        require(config['rating_compute']['workers']<=config['execution']['cpu_budget']-config['execution']['cpu_reserve'],
+            'Rating processes exceed the available CPU budget')
     fields.update(k for k in BLOCKS if k in config)
     require(('critic_data' in config)==('seat_descriptors' in config),'Critic/descriptor blocks must be supplied together')
     if 'critic_data' in config:
@@ -795,7 +801,9 @@ def validate_config(config):
     if quality:
         from .quality_config import TABLE_PLAN,validate_pool,validate_rating,maximum_members
         fields|={'table_plan','opponent_pool','rating'}
-        require(config['table_plan']==TABLE_PLAN,'Quality recipe requires base 50/45/5 and six seat pairs')
+        from .training_revision_g1041 import mixed,validate_mix
+        if mixed(config):validate_mix(config)
+        else:require(config['table_plan']==TABLE_PLAN,'Quality recipe requires a versioned table plan and six seat pairs')
         validate_pool(config['opponent_pool']);validate_rating(config['rating'])
         require(auto and sum(config['population'].values())==maximum_members(config['opponent_pool']),
                 'Quality pool requires calibrated health and matching population capacity')
@@ -812,7 +820,7 @@ def validate_config(config):
         require(config.get('champion',{}).get('enabled') is False and 'champion_opponents' not in config,
                 'Latest-model self-play forbids champion gates and mixing')
         if fixed_selfplay_recipe(config):
-            expected_curriculum=CURRICULUM if quality else PREVIOUS_FIXED_CURRICULUM
+            expected_curriculum=(config['curriculum'] if quality and mixed(config) else CURRICULUM if quality else PREVIOUS_FIXED_CURRICULUM)
             require(config['curriculum']==expected_curriculum and 'legacy_boost' not in config and
                     config['legacy_opponents']==dict(search_free_until_games=0),
                     'Fixed self-play curriculum differs from its versioned recipe')

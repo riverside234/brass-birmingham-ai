@@ -239,23 +239,44 @@ def game_record(game,row,spec):
         official_placement=targets['placement'],vp=targets['vp'],win_share=targets['win_share'],spec_digest=digest(spec))
 
 
-def collect_slot(root,directory,spec,config,device,mono,inference_devices,*,context_sink=None):
+def collect_slot(root,directory,spec,config,device,mono,inference_devices,*,context_sink=None,telemetry=None):
     from .inference import InferenceService
     from .execution import ActorPool
     from .replay import read_shards
-    jobs=jobs_for(spec,directory);rows=[]
+    jobs=jobs_for(spec,directory);rows=[];started=time.perf_counter()
+    metrics=telemetry if telemetry is not None else {}
     with InferenceService(config['execution'],device,inference_devices=inference_devices) as service:
         for ref in spec['agents'].values():
             if ref['kind']=='model':
                 e=ref['checkpoint'];path=project_path(root,e['path'])
                 require(sha(path)==e['sha256'],'Rated checkpoint changed')
                 if e['model_id'] not in service.models:service.register_checkpoint(path)
-        with ActorPool(root,config['host'],service,config['execution'],mono=mono) as actors:
-            records=actors.collect(jobs)
+        metrics['model_registration_seconds']=time.perf_counter()-started
+        # Context extraction consumes complete games in the parent process. Its
+        # existing serial path stays available; ordinary PL needs outcomes only.
+        workers=min(config.get('audit_workers',1),config['execution']['cpu_budget']-config['execution']['cpu_reserve'])
+        parallel=workers>1 and context_sink is None
+        if parallel:
+            from .ingress import reader_pool
+            from .rating_ingress import RatingIngress
+            began=time.perf_counter()
+            with reader_pool(workers,admission=service.cpu) as readers:
+                ingress=RatingIngress(readers,jobs,spec)
+                with ActorPool(root,config['host'],service,config['execution'],mono=mono) as actors:
+                    records=actors.collect(jobs,on_records=ingress.submit)
+                metrics['games_seconds']=time.perf_counter()-began
+                rows,metrics['replay_validation']=ingress.finish(records)
+                joined=time.perf_counter()
+            metrics['reader_shutdown_seconds']=time.perf_counter()-joined
+        else:
+            began=time.perf_counter()
+            with ActorPool(root,config['host'],service,config['execution'],mono=mono) as actors:
+                records=actors.collect(jobs)
+            metrics['games_seconds']=time.perf_counter()-began
         require(len(records)==len(jobs) and {r['job'] for r in records}==set(range(len(jobs))),
                 'Incomplete rating slot')
-        loaded={}
-        for record in records:
+        loaded={};began=time.perf_counter()
+        for record in ([] if parallel else records):
             job=jobs[record['job']]
             require(sha(record['path'])==record['sha256'],'Rating replay changed')
             if record['path'] not in loaded:
@@ -267,6 +288,11 @@ def collect_slot(root,directory,spec,config,device,mono,inference_devices,*,cont
                     'Rating game seat/setup identity differs')
             rows.append(game_record(game,spec['lineups'][record['job']],spec))
             if context_sink is not None:context_sink(game,job,record)
+        if not parallel:metrics['replay_validation']=dict(join_seconds=time.perf_counter()-began,
+            scope='Serial full replay validation; context extraction when enabled')
+        metrics.update(validation_workers=workers if parallel else 1,streaming_validation=parallel,
+            inference=service.report())
+    metrics['collection_seconds']=time.perf_counter()-started
     return rows
 
 
@@ -340,7 +366,7 @@ def schedule(root,run,state,config,*,device='cpu',mono=None,inference_devices=No
     for generation in range(c['every_iterations'],state['iteration']+1,c['every_iterations']):
         if generation in completed:continue
         require(generation in available,'Missing checkpoint for uncommitted rating slot '+str(generation))
-        began=time.perf_counter();entry=available[generation]
+        began=time.perf_counter();entry=available[generation];timing={}
         from .resume import evidence_directory
         directory=evidence_directory(root,run,state,run/'ratings'/'slots'/f'generation-{generation:06d}')
         from .retention import slim_checkpoint
@@ -353,6 +379,8 @@ def schedule(root,run,state,config,*,device='cpu',mono=None,inference_devices=No
         contexts.seal(root,run,state,config,spec,directory/'spec.json')
         records_path=directory/'games.jsonl'
         manifest_path=directory/'games-manifest.json'
+        timing['preparation_seconds']=time.perf_counter()-began
+        phase=time.perf_counter()
         if records_path.exists() and manifest_path.exists():
             manifest=read(manifest_path)
             require(manifest==dict(spec_digest=digest(spec),records=receipt(root,records_path)),
@@ -361,21 +389,30 @@ def schedule(root,run,state,config,*,device='cpu',mono=None,inference_devices=No
             expected={(r['kind'],r['seed'],r['seat']) for r in spec['lineups']}
             require(len(rows)==len(expected) and {(r['kind'],r['setup_seed'],r['candidate_seat']) for r in rows}==expected
                     and all(r['slot']==generation and r['spec_digest']==digest(spec) for r in rows),'Incomplete cached rating games')
+            timing['cached_games']=True
         else:
             sink=contexts.neutral_sink(root,run,state,spec)
+            collection={}
             try:
                 rows=collect_slot(root,directory,spec,config,device,mono,inference_devices,
+                    telemetry=collection,
                     **(dict(context_sink=sink) if sink is not None else {}))
             finally:
                 if sink is not None:sink.finish()
             append_games(records_path,rows)
             write_once(manifest_path,dict(spec_digest=digest(spec),records=receipt(root,records_path)))
+            timing.update(cached_games=False,collection=collection)
+        timing['games_and_validation_seconds']=time.perf_counter()-phase
+        phase=time.perf_counter()
         working=copy.deepcopy(rating);working['agents'][spec['candidate']]=spec['agents'][spec['candidate']]
         # Only the 128 main games enter PL; diagnostic panels stay separate.
         all_rows=read_games(root,rating)+rows
+        timing['history_read_seconds']=time.perf_counter()-phase
         compute=config.get('rating_compute')
         fitted,samples=estimate([r for r in all_rows if r['kind']=='rating'],working['agents'],c,
+            telemetry=timing,
             **(dict(compute=compute) if compute is not None else {}))
+        phase=time.perf_counter()
         recent=state.get('recent_training',[])
         health=next((r['il_kl_limit']['health'] for r in reversed(recent) if r.get('il_kl_limit') and r['iteration']+1==generation),None)
         panels=panel_report(rows,spec['candidate'],health,c['seed'],gates=rating.get('panel_gates'));write_once(directory/'panels.json',panels)
@@ -395,7 +432,11 @@ def schedule(root,run,state,config,*,device='cpu',mono=None,inference_devices=No
             temporary=samples_path.with_suffix('.tmp')
             with temporary.open('wb') as handle:np.savez(handle,theta=samples,agents=np.asarray(list(fitted['ratings'])))
             temporary.replace(samples_path)
+        timing['report_publish_seconds']=time.perf_counter()-phase
+        phase=time.perf_counter()
         plot_report(directory/'progress.svg',fitted,working['agents'],run,state)
+        timing['plot_seconds']=time.perf_counter()-phase
+        phase=time.perf_counter()
         slot=dict(generation=generation,records=receipt(root,records_path),report=receipt(root,directory/'report.json'),
                   spec=receipt(root,directory/'spec.json'),panels=receipt(root,directory/'panels.json'),
                   bootstrap=receipt(root,samples_path))
@@ -405,9 +446,17 @@ def schedule(root,run,state,config,*,device='cpu',mono=None,inference_devices=No
         coverage=prepare_coverage(root,state,config)
         if coverage is not None:rating['coverage']=coverage
         write_json(run/'state.json',state)
+        timing['state_commit_seconds']=time.perf_counter()-phase
+        timing['slot_seconds']=time.perf_counter()-began
+        # Timing is nondeterministic operational metadata, never a PL evidence
+        # receipt. A cached retry may refresh it without changing fitted bytes.
+        write_json(directory/'timing-report.json',dict(generation=generation,spec_digest=digest(spec),
+            timing=timing,scope='Operational wall timings; not rating or qualification evidence'))
         print(f'Rating generation {generation}: {c["setups"]*4} main + {sum(p["games"] for p in panels["panels"].values())} panel games; '
               f'{fitted["ratings"][spec["candidate"]]["points"]:.1f} PL points; '
-              f'{c["bootstrap"]} bootstrap refits; {time.perf_counter()-began:.1f}s',flush=True)
+              f'{c["bootstrap"]} bootstrap refits; {timing["slot_seconds"]:.1f}s '
+              f'(games+validate={timing["games_and_validation_seconds"]:.1f}s '
+              f'fit={timing["full_fit_seconds"]:.1f}s bootstrap={timing["bootstrap_seconds"]:.1f}s)',flush=True)
         last_report=fitted
     contexts.run_pending(root,run,state,config,device=device,mono=mono,inference_devices=inference_devices)
     if config.get('retention',{}).get('enabled',True):compact_history(root,run,state)

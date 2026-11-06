@@ -32,12 +32,14 @@ namespace BrassLegacyAI.Native
         public string Name { get { return "Alpha Test detached action validation"; } }
         public bool Validated { get { return Volatile.Read(ref validated)==1; } }
         public NativeValidation(JObject view,JObject composition,string[] path,string binding)
+            : this(view,composition,path,binding,Thread.CurrentThread.ManagedThreadId) { }
+        internal NativeValidation(JObject view,JObject composition,string[] path,string binding,int commitThread)
         {
             if(view==null || composition==null || String.IsNullOrEmpty(binding))throw new ArgumentException("Missing validation identity");
             CheckPath(path);
             if((string)view["context"]?["phase"]!="action")throw new InvalidOperationException("Native validation requires an ordinary action boundary");
             this.view=(JObject)view.DeepClone();this.composition=(JObject)composition.DeepClone();
-            this.path=(string[])path.Clone();this.binding=binding;capturedThread=Thread.CurrentThread.ManagedThreadId;
+            this.path=(string[])path.Clone();this.binding=binding;capturedThread=commitThread;
         }
         static void CheckPath(string[] value)
         {

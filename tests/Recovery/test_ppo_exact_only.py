@@ -20,7 +20,7 @@ class ExactOnly(unittest.TestCase):
     def setUpClass(cls):torch.set_num_threads(2)
 
     def test_narrow_versioned_config_and_fresh_defaults(self):
-        old=read(SOURCE_ROOT/'results/joint7-v11-2-grouped-lr-critic-g0650-20261023T202940235880Z/state.json')['signature']['config']
+        old=read(SOURCE_ROOT/'configs/step5/joint7-latest.json')
         new=K.configure(old);validate_config(new)
         self.assertEqual({k for k in old if old[k]!=new[k]},{'update'})
         self.assertEqual(new['update'],dict(old['update'],kl_control=K.DEFAULT))

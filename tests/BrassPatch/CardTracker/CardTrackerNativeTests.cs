@@ -61,6 +61,9 @@ public static class LocalAiUnityTests
 public sealed class CardTrackerTestDriver : MonoBehaviour
 {
     public string Output;
+    int PlayerCount { get { return Int32.Parse(Environment.GetEnvironmentVariable("BRASS_TRACKER_PLAYERS") ?? "4"); } }
+    int DeckTotal { get { return PlayerCount == 3 ? 54 : 64; } }
+    int CityCount { get { return PlayerCount == 3 ? 18 : 20; } }
     int checks,failures;readonly List<object> cases=new List<object>();readonly List<string> errors=new List<string>();
     readonly Vector2Int[] resolutions={new Vector2Int(1920,1200),new Vector2Int(1920,1080)};
     void Check(bool pass,string name,object detail=null){checks++;if(!pass)failures++;cases.Add(new{name,passed=pass,detail});}
@@ -71,7 +74,7 @@ public sealed class CardTrackerTestDriver : MonoBehaviour
         Exception failure=null;var run=Run();
         while(true){bool next=false;object current=null;try{next=run.MoveNext();if(next)current=run.Current;}catch(Exception e){failure=e;}if(failure!=null||!next)break;yield return current;}
         Time.timeScale=1;DOTween.timeScale=1;
-        try{File.WriteAllText(Output,JsonConvert.SerializeObject(new{passed=failure==null&&failures==0&&errors.Count==0,checks,failures,cases,layouts=resolutions.Select(r=>new{width=r.x,height=r.y}).ToArray(),nativeErrors=errors,error=failure==null?null:failure.ToString()},Formatting.Indented));}
+        try{File.WriteAllText(Output,JsonConvert.SerializeObject(new{passed=failure==null&&failures==0&&errors.Count==0,players=PlayerCount,checks,failures,cases,layouts=resolutions.Select(r=>new{width=r.x,height=r.y}).ToArray(),nativeErrors=errors,error=failure==null?null:failure.ToString()},Formatting.Indented));}
         catch(Exception reportError){failure=reportError;File.WriteAllText(Output,JsonConvert.SerializeObject(new{passed=false,checks,failures,error=reportError.ToString()},Formatting.Indented));}
         Application.Quit(failure==null&&failures==0&&errors.Count==0?0:1);
     }
@@ -109,16 +112,18 @@ public sealed class CardTrackerTestDriver : MonoBehaviour
     void ProjectionChecks()
     {
         foreach(bool intro in new[]{false,true}) {
-            var match=NewMatch(4,intro,intro?20261101:20261001);var game=match.App.Game;
+            var match=NewMatch(PlayerCount,intro,intro?20261101:20261001);var game=match.App.Game;
             var all=game.Board.CardDeck.Concat(game.PlayersTrack.Players.SelectMany(p=>p.Hand.Concat(p.DiscardPile))).ToArray();
             var initial=match.Projection();
-            Check(initial.Complete&&initial.Played==0&&initial.Unseen==64,"initial public count includes hidden setup cards",intro);
-            Check(all.Length==64&&all.Select(c=>c.UniqueId).Distinct().Count()==64&&game.Board.CardDeck.Count==28&&game.PlayersTrack.Players.All(p=>p.Hand.Count==8&&p.DiscardPile.Count==1),"actual four-player setup is 32 hands / 28 deck / 4 hidden",intro);
+            Check(initial.Complete&&initial.Played==0&&initial.Unseen==DeckTotal&&initial.HiddenCanalDiscards==PlayerCount,"initial public count includes hidden setup cards",intro);
+            Check(all.Length==DeckTotal&&all.Select(c=>c.UniqueId).Distinct().Count()==DeckTotal&&game.Board.CardDeck.Count==DeckTotal-9*PlayerCount&&game.PlayersTrack.Players.All(p=>p.Hand.Count==8&&p.DiscardPile.Count==1),"actual setup has eight cards in each hand and one hidden discard per player",intro);
             foreach(var card in initial.Cards) {
                 int total=all.Count(c=>card.City.HasValue?c is LocationCard&&((LocationCard)c).Region==card.City.Value:
                     c is IndustryCard&&(card.Key.EndsWith("CottonMill+Manufacturer")?((IndustryCard)c).BuildingTypes.Count==2:((IndustryCard)c).BuildingTypes.Count==1&&((IndustryCard)c).BuildingTypes[0].ToString()==card.Key.Substring(9)));
                 Check(total==card.Total,"manifest matches actual physical card family",new{intro,card.Name,total});
             }
+            Check(initial.Find("industry:CottonMill+Manufacturer").Total==(PlayerCount==3?6:8),"shared industry pool uses selected table size");
+            Check(initial.Cards.Count==CityCount+5 && (PlayerCount==4 || initial.Cards.All(c=>c.Key!="location:Belper"&&c.Key!="location:Derby")),"inactive location cards omitted for three players");
             var railStarts=new Dictionary<PlayerColor,int>();int turns=0;
             while(!game.GameProgressInformation.IsGameOver) {
                 if(++turns>120)throw new Exception("Pass fixture did not end.");
@@ -127,14 +132,16 @@ public sealed class CardTrackerTestDriver : MonoBehaviour
                 foreach(var p in game.PlayersTrack.Players)if(!railStarts.ContainsKey(p.Color))railStarts[p.Color]=0;
                 var publicCards=game.PlayersTrack.Players.SelectMany(p=>p.DiscardPile.Skip(projection.Rail?railStarts[p.Color]:1)).ToArray();
                 Check(projection.Complete&&projection.Played==publicCards.Length&&projection.Cards.All(c=>c.Played>=0&&c.Unseen>=0),"projection reconciles with independent public discard-pile oracle",new{intro,turns,projection.Rail});
+                if (!projection.Rail && projection.Played == DeckTotal-PlayerCount)
+                    Check(projection.Cards.All(c=>projection.Description(c).Contains("category: 0–0.")),"Canal exhaustion correctly identifies all unseen cards as hidden setup discards");
                 bool wasRail=projection.Rail;
                 EndTurn(match);
                 if(!wasRail&&game.GameProgressInformation.CurrentGameEra==GameEra.RailEra) {
                     foreach(var p in game.PlayersTrack.Players)railStarts[p.Color]=p.DiscardPile.Count;
-                    var start=match.Projection();Check(start.Complete&&start.Rail&&start.Played==0&&start.Unseen==64,"Rail resets counts despite retained Canal discard aliases");
+                    var start=match.Projection();Check(start.Complete&&start.Rail&&start.Played==0&&start.Unseen==DeckTotal&&start.HiddenCanalDiscards==0,"Rail resets counts despite retained Canal discard aliases");
                 }
             }
-            var ended=match.Projection();Check(ended.Complete&&ended.Ended&&ended.Played==(intro?60:64),"ordinary era exhaustion reconciles",intro);
+            var ended=match.Projection();Check(ended.Complete&&ended.Ended&&ended.Played==(intro?DeckTotal-PlayerCount:DeckTotal),"ordinary era exhaustion reconciles",intro);
             var events=match.Events();var colors=game.PlayersTrack.Players.Select(p=>p.Color).ToArray();
             var duplicate=CardTrackerProjection.Build(events,events,game.Revision,colors);Check(duplicate.Complete&&duplicate.Played==ended.Played,"duplicate persisted/uncommitted delivery is counted once");
             var missing=CardTrackerProjection.Build(events.Skip(1),new IEvent[0],game.Revision,colors);Check(!missing.Complete,"missing setup produces unknown counts");
@@ -145,9 +152,9 @@ public sealed class CardTrackerTestDriver : MonoBehaviour
             match.History.SetGame(loaded);var resumed=match.Projection();
             Check(resumed.Complete&&resumed.Played==ended.Played&&resumed.Rail==ended.Rail,"persisted continue reconstructs same public counts");
         }
-        var scout=NewMatch(4);
-        for(int i=0;i<4;i++){Scout(scout);EndTurn(scout);}
-        var scouted=scout.Projection();Check(scouted.Complete&&scouted.Played==12&&scouted.Wild.Values.All(w=>w[0]&&w[1]),"four Scouts account for twelve ordinary cards and eight public wild holders");
+        var scout=NewMatch(PlayerCount);
+        for(int i=0;i<PlayerCount;i++){Scout(scout);EndTurn(scout);}
+        var scouted=scout.Projection();Check(scouted.Complete&&scouted.Played==3*PlayerCount&&scouted.Wild.Values.All(w=>w[0]&&w[1]),"each Scout spends three ordinary cards and acquires two public wild cards");
         var actor=scout.App.Game.GameProgressInformation.CurrentPlayer;int ordinary=scouted.Played;
         Pass(scout,actor.Hand.First(c=>c is WildLocationCard));var once=scout.Projection();
         Check(once.Complete&&!once.Wild[actor.Color][0]&&once.Wild[actor.Color][1]&&once.Played==ordinary,"wild Location spend updates only matching holder");
@@ -160,13 +167,13 @@ public sealed class CardTrackerTestDriver : MonoBehaviour
         var b=scout.Projection();
         Check(a.Complete&&b.Complete&&a.Cards.Select(c=>c.Played).SequenceEqual(b.Cards.Select(c=>c.Played)),"hidden setup cards, opponent hands and draw order cannot influence public output");
         Check(JsonConvert.SerializeObject(scout.Events())==payload,"tracker capture does not mutate live events");
-        Check(FourPlayerCardManifest.IndustryKey(BuildingType.CottonMill)==FourPlayerCardManifest.IndustryKey(BuildingType.Manufacturer)&&a.Cards.Sum(c=>c.Total)==64,"dual-purpose industry cards share one eight-card pool");
+        Check(FourPlayerCardManifest.IndustryKey(BuildingType.CottonMill)==FourPlayerCardManifest.IndustryKey(BuildingType.Manufacturer)&&a.Cards.Sum(c=>c.Total)==DeckTotal,"dual-purpose industry cards share one pool");
     }
     IEnumerator Run()
     {
         ProjectionChecks();yield return null;
         var templates=Resources.FindObjectsOfTypeAll<UnityViewFactory>().First(f=>f.ViewList!=null&&f.ViewList.Views.OfType<BoardView>().Any()).ViewList;
-        var match=NewMatch(4);for(int i=0;i<4;i++){Scout(match);EndTurn(match);}
+        var match=NewMatch(PlayerCount);for(int i=0;i<PlayerCount;i++){Scout(match);EndTurn(match);}
         var root=new GameObject("Tracker test canvas",typeof(RectTransform),typeof(Canvas),typeof(GraphicRaycaster),typeof(CanvasScaler));
         var canvas=root.GetComponent<Canvas>();var scaler=root.GetComponent<CanvasScaler>();scaler.uiScaleMode=CanvasScaler.ScaleMode.ScaleWithScreenSize;scaler.referenceResolution=new Vector2(1920,1080);
         var cameraNode=new GameObject("Tracker render camera",typeof(Camera));var camera=cameraNode.GetComponent<Camera>();camera.enabled=false;camera.orthographic=true;camera.clearFlags=CameraClearFlags.SolidColor;
@@ -198,7 +205,11 @@ public sealed class CardTrackerTestDriver : MonoBehaviour
         ReflectionAccess.Set(builder.Replay,"_isReplayInProgress",true);Check(!session.Eligible(),"replay disables tracker");ReflectionAccess.Set(builder.Replay,"_isReplayInProgress",false);
         float animationValue=0;var scoring=DOTween.To(()=>animationValue,v=>animationValue=v,1,1).SetId("AnimationFactory");
         session.Refresh();Check(!session.Toggle.interactable&&!session.Open(),"turn/scoring animation disables tracker even for a human");scoring.Kill();
-        var pending=match.App.Game.TurnFlow.StartPassAction();Check(!session.Eligible(),"in-progress human action disables tracker");match.History.CancelAction();match.App=match.History.CurrentGame;
+        var pending=match.App.Game.TurnFlow.StartPassAction();Check(!session.Eligible(),"in-progress human action disables tracker");
+        // The current history patch only cancels actions that emitted events.
+        var pendingPlayer=match.App.Game.GameProgressInformation.CurrentPlayer;
+        pending.Pass(pendingPlayer.Hand[0],pendingPlayer);
+        match.History.CancelAction();match.App=match.History.CurrentGame;
         foreach(var resolution in resolutions) {
             var target=new RenderTexture(resolution.x,resolution.y,24,RenderTextureFormat.ARGB32);target.Create();camera.targetTexture=target;yield return null;Canvas.ForceUpdateCanvases();
             session.Overlay.Layout();Canvas.ForceUpdateCanvases();
@@ -253,7 +264,7 @@ public sealed class CardTrackerTestDriver : MonoBehaviour
                 int revision=match.App.Game.Revision;var before=JsonConvert.SerializeObject(match.Events());
                 Check(session.Open()&&Time.timeScale==0&&DOTween.timeScale==0,"opening freezes gameplay and all DOTween clocks",new{resolution.x,night});
                 yield return null;yield return null;Canvas.ForceUpdateCanvases();
-                Check(session.Overlay.CityBadges==20&&session.Overlay.IndustryBadges==6,"all twenty cities and six industry rows have counters");
+                Check(session.Overlay.CityBadges==CityCount&&session.Overlay.IndustryBadges==6,"all available city cards and six industry rows have counters");
                 foreach(var control in session.GetComponentsInChildren<RectTransform>().Where(t=>t.name=="Tracker header"||t.name=="Wild cards strip"||t.name=="Card Tracker toggle"||t.name.StartsWith("Wild holder ")&&t.name!="Wild holder name"||t.name.StartsWith("City cards ")||t.name.StartsWith("Industry cards "))) {
                     var bounds=ScreenBounds(control,camera);
                     Check(bounds.xMin>=-1&&bounds.yMin>=-1&&bounds.xMax<=resolution.x+1&&bounds.yMax<=resolution.y+1,"tracker control stays inside display",new{control.name,resolution.x,bounds.xMin,bounds.xMax,bounds.yMin,bounds.yMax});
@@ -283,7 +294,7 @@ public sealed class CardTrackerTestDriver : MonoBehaviour
                 var headerMesh=GraphicMesh(headerSurface);
                 Check(headerMesh.colors32.Length>0&&headerMesh.colors32[0].r>=245&&headerMesh.colors32[0].g>=240&&headerMesh.colors32[0].b>=220,"CT25-THEME header uses Game History ivory surface");Destroy(headerMesh);
                 Check(session.GetComponentsInChildren<TextMeshProUGUI>().Where(t=>t.name=="Paused title"||t.name=="Public summary"||t.name=="Wild type name"||t.name=="Tracker legend").All(t=>t.color.r<.5f&&t.color.g<.5f&&t.color.b<.5f),"CT25-THEME dark text remains legible on light panels");
-                Check(session.GetComponentsInChildren<CardTrackerGlyph>().Count(g=>g.Kind==4)==20,"CT25-CITY every city badge has a location-card symbol");
+                Check(session.GetComponentsInChildren<CardTrackerGlyph>().Count(g=>g.Kind==4)==CityCount,"CT25-CITY every city badge has a location-card symbol");
                 var cityDots=session.GetComponentsInChildren<CardTrackerGlyph>().Where(g=>g.Kind==0&&g.name=="City card dots"&&g.Unseen>0).ToArray();
                 Check(cityDots.Length>0&&cityDots.All(g=>{var mesh=GraphicMesh(g);bool red=mesh.colors32.Any(c=>c.r==195&&c.g==77&&c.b==72);Destroy(mesh);return red;}),"CT25-CITY unseen dots render red in actual geometry");
                 var cityRects=session.GetComponentsInChildren<RectTransform>().Where(t=>t.name.StartsWith("City cards ")).Select(t=>new{Name=t.name,Bounds=ScreenBounds(t,camera)}).ToArray();
@@ -297,8 +308,8 @@ public sealed class CardTrackerTestDriver : MonoBehaviour
                     var badge=session.GetComponentsInChildren<Button>().Single(b=>b.name=="Industry cards "+type);
                     Check(ScreenBounds((RectTransform)badge.transform,camera).xMax<ScreenBounds((RectTransform)row,camera).xMin,"industry counts appear left of matching row",type);
                 }
-                Check(session.GetComponentsInChildren<CardTrackerGlyph>().Count(g=>g.Kind==1)==4&&session.GetComponentsInChildren<CardTrackerGlyph>().Count(g=>g.Kind==2)==4,"wild strip shows two distinct symbols per stable player");
-                Check(session.GetComponentsInChildren<TextMeshProUGUI>().Any(t=>t.name=="Wild cards heading"&&t.text=="Wild cards")&&session.GetComponentsInChildren<TextMeshProUGUI>().Count(t=>t.name=="Wild type name"&&t.text=="Location")==4&&session.GetComponentsInChildren<TextMeshProUGUI>().Count(t=>t.name=="Wild type name"&&t.text=="Industry")==4,"wild cards are explicitly labeled with both card types");
+                Check(session.GetComponentsInChildren<CardTrackerGlyph>().Count(g=>g.Kind==1)==PlayerCount&&session.GetComponentsInChildren<CardTrackerGlyph>().Count(g=>g.Kind==2)==PlayerCount,"wild strip shows two distinct symbols per stable player");
+                Check(session.GetComponentsInChildren<TextMeshProUGUI>().Any(t=>t.name=="Wild cards heading"&&t.text=="Wild cards")&&session.GetComponentsInChildren<TextMeshProUGUI>().Count(t=>t.name=="Wild type name"&&t.text=="Location")==PlayerCount&&session.GetComponentsInChildren<TextMeshProUGUI>().Count(t=>t.name=="Wild type name"&&t.text=="Industry")==PlayerCount,"wild cards are explicitly labeled with both card types");
                 Check(session.GetComponentsInChildren<TextMeshProUGUI>().Where(t=>t.name=="Wild held count").All(t=>t.text=="1")&&session.GetComponentsInChildren<TextMeshProUGUI>().Any(t=>t.text=="1 held\n0 none"),"wild holder counts explain possession, rather than cards played");
                 Check(session.GetComponentsInChildren<TextMeshProUGUI>().Where(t=>t.name=="Wild type name"||t.name=="Wild cards heading"||t.name=="Wild held count").All(t=>!t.isTextTruncated&&t.textInfo.characterInfo.Take(t.textInfo.characterCount).Any(c=>c.isVisible)),"full wild-card type labels fit the compact strip",resolution.x);
                 Check(session.GetComponentsInChildren<TextMeshProUGUI>().Where(t=>!String.IsNullOrWhiteSpace(t.text)).All(t=>t.fontSize*canvas.scaleFactor>=17.5f),"tracker text stays readable at physical display size",resolution.x);
@@ -314,12 +325,12 @@ public sealed class CardTrackerTestDriver : MonoBehaviour
                 }
                 session.Overlay.ShowList();yield return null;
                 Check(session.GetComponentsInChildren<TextMeshProUGUI>().Where(t=>t.name=="List heading"||t.name=="Card name"||t.name=="Played count").All(t=>t.color==BrassPatch.Statistics.StatisticsTheme.Ink),"CT25-THEME card list also uses the light theme");
-                Check(session.Overlay.HasList&&session.GetComponentsInChildren<Button>().Count(t=>t.name.StartsWith("Tracked row "))==25,"scrolling card list includes all twenty-five physical categories");
+                Check(session.Overlay.HasList&&session.GetComponentsInChildren<Button>().Count(t=>t.name.StartsWith("Tracked row "))==CityCount+5,"scrolling card list includes all physical card categories");
                 var scroll=session.GetComponentsInChildren<ScrollRect>().Single(s=>s.name=="All card categories");scroll.OnScroll(new PointerEventData(events){scrollDelta=new Vector2(0,-8)});
                 Check(scroll.verticalNormalizedPosition<1,"card list scroll works while time is paused");
                 if(resolution.x==1920&&!night)Capture(camera,target,"tracker-card-list-"+resolution.x+"x"+resolution.y);
                 session.GetComponentsInChildren<Button>().First(t=>t.name=="Tracked row Birmingham").onClick.Invoke();yield return null;
-                Check(session.Overlay.HasDetail&&session.GetComponentsInChildren<TextMeshProUGUI>().Any(t=>t.text.Contains("four hidden Canal")),"city detail explains public counting uncertainty");
+                Check(session.Overlay.HasDetail&&session.GetComponentsInChildren<TextMeshProUGUI>().Any(t=>t.text.Contains(PlayerCount+" hidden Canal")),"city detail explains public counting uncertainty");
                 if(resolution.x==1920&&!night)Capture(camera,target,"tracker-card-detail-"+resolution.x+"x"+resolution.y);
                 input.Down=KeyEnum.Escape;router.ProcessInput();Check(session.IsOpen&&!session.Overlay.HasDetail,"Escape first closes pinned details");
                 router.ProcessInput();Check(session.IsOpen&&!session.Overlay.HasList,"Escape next closes card list");
@@ -348,12 +359,12 @@ public sealed class CardTrackerTestDriver : MonoBehaviour
             camera.targetTexture=null;target.Release();Destroy(target);
         }
         Check(session.Open(),"tracker can reopen");session.gameObject.SetActive(false);Check(Time.timeScale==1&&DOTween.timeScale==1&&!session.IsOpen,"disabled view restores pause state");session.gameObject.SetActive(true);
-        foreach(int count in new[]{2,3}) {
-            var smaller=NewMatch(count);Check(CardTrackerEntryPoints.Attach(router,smaller.History,board)==null,"two-/three-player games have no tracker",count);yield return null;
+        foreach(int count in new[]{2}) {
+            var smaller=NewMatch(count);Check(CardTrackerEntryPoints.Attach(router,smaller.History,board)==null,"two-player games remain outside tracker support",count);yield return null;
         }
         Check(root.GetComponentsInChildren<CardTrackerSession>(true).Length==0,"retired matches leave no overlay owner");
-        var replacement=NewMatch(4);var replaced=CardTrackerEntryPoints.Attach(router,replacement.History,board);
-        Check(replaced!=null&&replaced.Open(),"replacement four-player match can open its own tracker");
+        var replacement=NewMatch(PlayerCount);var replaced=CardTrackerEntryPoints.Attach(router,replacement.History,board);
+        Check(replaced!=null&&replaced.Open(),"replacement supported match can open its own tracker");
         Destroy(root);Destroy(cameraNode);yield return null;
         Check(Time.timeScale==1&&DOTween.timeScale==1,"destroying an open board releases the global pause");
     }
@@ -375,7 +386,7 @@ public sealed class CardTrackerTestDriver : MonoBehaviour
     {
         Canvas.ForceUpdateCanvases();camera.Render();var previous=RenderTexture.active;RenderTexture.active=target;
         var texture=new Texture2D(target.width,target.height,TextureFormat.RGB24,false);texture.ReadPixels(new Rect(0,0,target.width,target.height),0,0);texture.Apply();RenderTexture.active=previous;
-        File.WriteAllBytes(Path.Combine(Path.GetDirectoryName(Output),name+".png"),texture.EncodeToPNG());Destroy(texture);
+        File.WriteAllBytes(Path.Combine(Environment.GetEnvironmentVariable("BRASS_TRACKER_IMAGES")??Path.GetDirectoryName(Output),name+".png"),texture.EncodeToPNG());Destroy(texture);
     }
     sealed class Input:IInputSource {public KeyEnum Down=(KeyEnum)(-1);public bool GetKeyDown(KeyEnum key){return key==Down;}public bool GetKey(KeyEnum key){return false;}public bool GetKeyUp(KeyEnum key){return false;}}
     sealed class Localization:ILocalization {public string GetTranslation(string text){return text.Split('/').Last();}}

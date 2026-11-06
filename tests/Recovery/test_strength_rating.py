@@ -141,7 +141,7 @@ class Slots(unittest.TestCase):
         with tempfile.TemporaryDirectory(dir=SOURCE_ROOT/'artifacts') as tmp:
             root=Path(tmp);c=dict(RATING,setups=2,panel_setups=1,bootstrap=4)
             state=self.state(root,c);before=copy.deepcopy(state);cfg=dict(rating=c,host='host',execution={})
-            def collect(root,directory,spec,*args):return fixture_rows(spec)
+            def collect(root,directory,spec,*args,**kwargs):return fixture_rows(spec)
             def plot(path,*args):path.write_text('<svg xmlns="http://www.w3.org/2000/svg"/>')
             with patch('brass_ai.recovery.retention.slim_checkpoint',side_effect=lambda root,run,e,old=None:e),\
                  patch.object(r,'collect_slot',side_effect=collect) as collector,patch.object(r,'plot_report',side_effect=plot):
@@ -172,7 +172,7 @@ class Slots(unittest.TestCase):
             state=self.state(root,c);cfg=dict(rating=c,host='host',execution={})
             def slim(root,run,entry,old=None):return dict(entry,weights_only=True)
             with patch('brass_ai.recovery.retention.slim_checkpoint',side_effect=slim) as cached,\
-                 patch.object(r,'collect_slot',side_effect=lambda root,directory,spec,*args:fixture_rows(spec)),\
+                 patch.object(r,'collect_slot',side_effect=lambda root,directory,spec,*args,**kwargs:fixture_rows(spec)),\
                  patch.object(r,'plot_report',side_effect=lambda path,*args:path.write_text('<svg/>')):
                 r.schedule(root,root,state,cfg)
                 frozen=state['ratings']['agents']['generation-000010']['checkpoint']
@@ -186,7 +186,7 @@ class Slots(unittest.TestCase):
             root=Path(tmp);run=root/'artifacts/run';c=dict(RATING,setups=2,panel_setups=1,bootstrap=4)
             state=self.state(root,c);cfg=dict(rating=c,host='host',execution={});state['signature']=dict(config=cfg)
             with patch('brass_ai.recovery.retention.slim_checkpoint',side_effect=lambda root,run,e,old=None:e),\
-                 patch.object(r,'collect_slot',side_effect=lambda root,directory,spec,*args:fixture_rows(spec)) as collector,\
+                 patch.object(r,'collect_slot',side_effect=lambda root,directory,spec,*args,**kwargs:fixture_rows(spec)) as collector,\
                  patch.object(r,'plot_report',side_effect=lambda path,*args:path.write_text('<svg/>')):
                 first=r.schedule(root,run,state,cfg)
                 before={p:p.read_bytes() for p in run.rglob('*') if p.is_file()}

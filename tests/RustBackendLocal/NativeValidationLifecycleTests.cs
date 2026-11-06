@@ -46,10 +46,21 @@ public sealed partial class LocalAiUnityDriver
         foreach(string scenario in new[]{"cancel","load","actor","revision"}) {
             var app=HumanCheckpoint(93811);int revision=app.Game.Revision;int actor=(int)app.Game.GameProgressInformation.CurrentPlayer.Color;
             router.ShowView<IPlayAiTurnView>();turn.PlayAITurn(false);
+            // First-action validation may now finish in the search lease.
+            // Hold only Unity consumption so stale/cancel cases still act
+            // before either move; the real search and validation keep running.
+            var prepared=typeof(NativeJob).GetProperty("FirstActionValidation");
+            var held=typeof(LocalTurnBridge).GetField("active",ReflectionAccess.Flags).GetValue(null) as Behaviour;
+            if(prepared!=null && held!=null)held.enabled=false;
             object bridge=null;AiExecutionJob job=null;float until=Time.realtimeSinceStartup+15;
             while(Time.realtimeSinceStartup<until) {
                 bridge=typeof(LocalTurnBridge).GetField("active",ReflectionAccess.Flags).GetValue(null);
-                if(bridge!=null)job=(AiExecutionJob)field.GetValue(bridge);
+                if(bridge!=null) {
+                    if(prepared!=null) {
+                        var search=Get<NativeJob>(bridge,"nativeBackend");var execution=Get<AiExecutionJob>(bridge,"nativeExecution");
+                        if(execution!=null && execution.Completion.IsCompleted && search!=null && prepared.GetValue(search,null)!=null)job=execution;
+                    } else job=(AiExecutionJob)field.GetValue(bridge);
+                }
                 if(job!=null)break;yield return null;
             }
             Check(job!=null && app.Game.Revision==revision,"validation handoff reached before mutation: "+scenario);
@@ -67,6 +78,7 @@ public sealed partial class LocalAiUnityDriver
                 Check(loaded.Game.Revision==revision,"load uses the human End checkpoint, with no in-flight AI save");
                 history.SetGame(loaded);
             }
+            if(held!=null)held.enabled=true;
             until=Time.realtimeSinceStartup+10;
             while((LocalTurnBridge.IsThinking || !AiExecutionScheduler.IsIdle) && Time.realtimeSinceStartup<until)yield return null;
             Check(!LocalTurnBridge.IsThinking && job.ResourcesReleased && AiExecutionScheduler.IsIdle && app.Game.Revision==revision,"stale/cancelled validation retires without commit: "+scenario+", in-flight="+inFlight);

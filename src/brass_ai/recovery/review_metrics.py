@@ -117,7 +117,7 @@ class CategoricalProbe:
     Old probabilities are captured once before PPO and remain fixed across all
     steps/epochs. The same probe drives early stopping and post-update reporting.
     Tensor snapshots use a bounded device/host budget and live for this probe
-    only. Probability checks still run after every optimizer step.
+    only. The caller schedules checks, always including the final optimizer step.
     """
     def __init__(self, model, dataset, indices, behavior, config):
         from .updates import row_probabilities
@@ -219,7 +219,7 @@ class CategoricalProbe:
             temperature1_categorical_kl=raw/max(1,self.positions),
             opening_temperature1_categorical_kl=opening/self.opening_positions if self.opening_positions else None,
             opening_positions=self.opening_positions,
-            kl_scope='categorical_kl is raw T1 movement and the LR signal. Raw T1 and actual-behavior exact KL each retain the PPO per-step cap. Opening-only KL is a diagnostic; sampled KL remains behavior-policy movement.')
+            kl_scope='categorical_kl is raw T1 movement and the LR signal. Raw T1 and actual-behavior exact KL each retain the cap at scheduled PPO checks. Opening-only KL is a diagnostic; sampled KL remains behavior-policy movement.')
 
     def measure(self, model, anchor=None):
         from .updates import row_probabilities
@@ -285,7 +285,7 @@ class CategoricalProbe:
                         anchor_scope='Exact KL(fixed IL behavior || post-PPO behavior), same probe and exploration mixture') if anchor is not None else {}),
                     scope=('Exact KL(old raw T1 || new raw T1) plus separate behavior-policy KL' if self.decoupled else
                         'Exact categorical KL(old behavior || new behavior)')+
-                        ' on the proportional era/phase nonforced probe; PPO per-step early stopping and optional LR feedback')
+                        ' on the proportional era/phase nonforced probe; scheduled PPO early stopping and optional LR feedback')
 
 
 def teacher_drift_probe(model, data, behavior, config):

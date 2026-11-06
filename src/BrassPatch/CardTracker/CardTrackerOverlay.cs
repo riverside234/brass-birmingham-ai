@@ -60,7 +60,7 @@ namespace BrassPatch.CardTracker
             Translucent(Toggle.gameObject,.76f);
             toggleInput=Toggle.gameObject.AddComponent<CanvasGroup>();
             toggleLabel=Toggle.GetComponentInChildren<TextMeshProUGUI>();
-            Hover(Toggle.gameObject,"Four-player public card counts.\nAvailable on your turn, between actions, after animations finish.\nOpening pauses the game. Closing resumes it.");
+            Hover(Toggle.gameObject,"Public card counts for this table.\nAvailable on your turn, between actions, after animations finish.\nOpening pauses the game. Closing resumes it.");
             Layout();
         }
         void UpdateUnit()
@@ -173,7 +173,7 @@ namespace BrassPatch.CardTracker
             Text(wildKey,"Wild cards heading","Wild cards",new Vector2(8,-2),new Vector2(128,wildRow),18).color=StatisticsTheme.Accent;
             Text(wildKey,"Wild cards status key","1 held\n0 none",new Vector2(8,-wildRow-2),new Vector2(128,2*wildRow),17.5f,true);
             var players=session.History.CurrentGame.Metadata.PlayerMetadata.OrderBy(p=>(int)p.PlayerStartConfiguration.Color).ToArray();
-            float available=headerWidth-150,chip=available/4;
+            float available=headerWidth-150,chip=available/players.Length;
             for(int i=0;i<players.Length;i++) {
                 var p=players[i];var color=p.PlayerStartConfiguration.Color;float x=150+i*chip;
                 var node=StatisticsWidgets.Rect(wildHeader,"Wild holder "+color,new Vector2(x,0)*unit,new Vector2(chip-8,wildHeight)*unit);
@@ -228,7 +228,7 @@ namespace BrassPatch.CardTracker
                     anchors.Add(new Anchor{Badge=(RectTransform)badge.transform,Target=row as RectTransform});
                 }
             }
-            string legend=snapshot.Rail?"Rail: unseen cards are in hands or the draw deck.":"Canal includes 4 hidden setup discards.";
+            string legend=snapshot.Rail?"Rail: unseen cards are in hands or the draw deck.":"Canal includes "+snapshot.HiddenCanalDiscards+" hidden setup discards.";
             this.legend=Rect(layer,"Tracker legend panel",new Vector2(Math.Max(460,root.rect.width/unit-410),60));
             this.legend.gameObject.AddComponent<StatisticsSurface>();Translucent(this.legend.gameObject,.92f);
             var key=StatisticsWidgets.Rect(this.legend,"Count key",new Vector2(12,-18)*unit,new Vector2(40,22)*unit).gameObject.AddComponent<CardTrackerGlyph>();
