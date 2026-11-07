@@ -37,8 +37,8 @@ def validate(config):
     revised=config['advantage']['contract']==gae.DIRECT_095_CONTRACT
     fork=config['branching']==exploration.FORK_T15_BRANCH
     from . import entropy_schedule as anneal
-    from .ppg_g210 import BETA1_CONTRACT,QUARTER_CONTRACT,EARLY_CONTRACT
-    quarter=config['value_phase']['contract'] in (QUARTER_CONTRACT,EARLY_CONTRACT)
+    from .ppg_g210 import BETA1_CONTRACT,QUARTER_CONTRACT,EARLY_CONTRACT,TWO_ITER_CONTRACT
+    quarter=config['value_phase']['contract'] in (QUARTER_CONTRACT,EARLY_CONTRACT,TWO_ITER_CONTRACT)
     scheduled=anneal.KEY in config['update']
     if scheduled:anneal.validate(config)  # Runtime restore also verifies the applied-step receipt.
     if quarter:require(fork and scheduled and config['update'][anneal.KEY]['contract'] in (anneal.EXTENDED_CONTRACT,anneal.AUTO_CONTRACT),
@@ -53,7 +53,7 @@ def validate(config):
         and config['advantage']['gate']==gae.GATE and config['advantage']['table_gate']==gae.TABLE_GATE,
         'Trained startup must preserve automatic GAE health/support gates')
     if revised:
-        require(config['value_phase']['contract'] in (BETA1_CONTRACT,QUARTER_CONTRACT,EARLY_CONTRACT),
+        require(config['value_phase']['contract'] in (BETA1_CONTRACT,QUARTER_CONTRACT,EARLY_CONTRACT,TWO_ITER_CONTRACT),
             'Revised trained recipe requires a reviewed loss16/KL32 PPG contract')
     require(config['learning_rate_warmup']['selfplay_steps']==100,'Trained startup needs 100 optimizer-step PPO warmup')
     require(config['panel_gates']==panel_gates.DEFAULT and config['v4_share_gate']==v4_share.CURRENT_DEFAULT

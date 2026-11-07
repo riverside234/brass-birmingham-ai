@@ -1,7 +1,8 @@
 # PPO diagnostic scan and probe cadence revision
 
-For the current g1041 run, use the [combined g1041 continuation](TRAINING_G1041.md).
-It includes this update, the throughput update, 70/30 tables and early PPG beta
+For the latest g1241 run, use the [g1241 continuation](TRAINING_G1241.md), which
+preserves this update. The [combined g1041 continuation](TRAINING_G1041.md)
+included this update, the throughput update, 70/30 tables and early PPG beta
 feedback in one reviewed config. The g921 example below is historical.
 
 The new versioned `update.kl_control` disables logging-only full-dataset scans

@@ -713014,6 +713014,256 @@
       "reason_ref": "195",
       "review_report": "docs/TRAINING_G1041.md",
       "from_implementation": "fb61559cd8ec9f6f1e5facdb6cb6b1a04df44c6173fbc3e383aeb98331bc6062"
+    },
+    {
+      "from_implementation": "4c514df4931721b1f8a96b6639ef9f5ee3b7cc1c98010e24536276c712f80fa6",
+      "to_implementation": "ff608f48a8372039cedb98ceca3bb149e0f62f4089f9d06a5792723fbb44a497",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "196",
+      "review_report": "docs/TRAINING_G1241.md",
+      "preserve_g570_calibration": true,
+      "preserve_g611_calibration": true,
+      "preserve_ppo_probe_calibration": true,
+      "preserve_throughput_calibration": true
+    },
+    {
+      "from_implementation": "4c514df4931721b1f8a96b6639ef9f5ee3b7cc1c98010e24536276c712f80fa6",
+      "to_implementation": "ff608f48a8372039cedb98ceca3bb149e0f62f4089f9d06a5792723fbb44a497",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "196",
+      "review_report": "docs/TRAINING_G1241.md",
+      "preserve_g570_calibration": true,
+      "preserve_g611_calibration": true,
+      "preserve_ppo_probe_calibration": true,
+      "preserve_throughput_calibration": true,
+      "config_migrations_ref": "1710"
+    },
+    {
+      "from_implementation": "4c514df4931721b1f8a96b6639ef9f5ee3b7cc1c98010e24536276c712f80fa6",
+      "to_implementation": "ff608f48a8372039cedb98ceca3bb149e0f62f4089f9d06a5792723fbb44a497",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "196",
+      "review_report": "docs/TRAINING_G1241.md",
+      "preserve_g570_calibration": true,
+      "preserve_g611_calibration": true,
+      "preserve_ppo_probe_calibration": true,
+      "preserve_throughput_calibration": true,
+      "config_migrations_ref": "1709"
+    },
+    {
+      "from_implementation": "4c514df4931721b1f8a96b6639ef9f5ee3b7cc1c98010e24536276c712f80fa6",
+      "to_implementation": "ff608f48a8372039cedb98ceca3bb149e0f62f4089f9d06a5792723fbb44a497",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "196",
+      "review_report": "docs/TRAINING_G1241.md",
+      "preserve_g570_calibration": true,
+      "preserve_g611_calibration": true,
+      "preserve_ppo_probe_calibration": true,
+      "preserve_throughput_calibration": true,
+      "config_migrations_ref": "1711"
+    },
+    {
+      "from_implementation": "36202b9e4bd3498a52671081f2cc37406ef2b3165dd24a37f1dfe79e44a625c1",
+      "to_implementation": "ff608f48a8372039cedb98ceca3bb149e0f62f4089f9d06a5792723fbb44a497",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "196",
+      "review_report": "docs/TRAINING_G1241.md",
+      "preserve_g570_calibration": true,
+      "preserve_g611_calibration": true,
+      "preserve_ppo_probe_calibration": true,
+      "preserve_throughput_calibration": true
+    },
+    {
+      "from_implementation": "36202b9e4bd3498a52671081f2cc37406ef2b3165dd24a37f1dfe79e44a625c1",
+      "to_implementation": "ff608f48a8372039cedb98ceca3bb149e0f62f4089f9d06a5792723fbb44a497",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "196",
+      "review_report": "docs/TRAINING_G1241.md",
+      "preserve_g570_calibration": true,
+      "preserve_g611_calibration": true,
+      "preserve_ppo_probe_calibration": true,
+      "preserve_throughput_calibration": true,
+      "config_migrations_ref": "1710"
+    },
+    {
+      "from_implementation": "36202b9e4bd3498a52671081f2cc37406ef2b3165dd24a37f1dfe79e44a625c1",
+      "to_implementation": "ff608f48a8372039cedb98ceca3bb149e0f62f4089f9d06a5792723fbb44a497",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "196",
+      "review_report": "docs/TRAINING_G1241.md",
+      "preserve_g570_calibration": true,
+      "preserve_g611_calibration": true,
+      "preserve_ppo_probe_calibration": true,
+      "preserve_throughput_calibration": true,
+      "config_migrations_ref": "1709"
+    },
+    {
+      "from_implementation": "36202b9e4bd3498a52671081f2cc37406ef2b3165dd24a37f1dfe79e44a625c1",
+      "to_implementation": "ff608f48a8372039cedb98ceca3bb149e0f62f4089f9d06a5792723fbb44a497",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "196",
+      "review_report": "docs/TRAINING_G1241.md",
+      "preserve_g570_calibration": true,
+      "preserve_g611_calibration": true,
+      "preserve_ppo_probe_calibration": true,
+      "preserve_throughput_calibration": true,
+      "config_migrations_ref": "1711"
+    },
+    {
+      "from_implementation": "57e69a7cd736044b6927c8d30177de0f570ec433af4dfe96f143f96578e90789",
+      "to_implementation": "ff608f48a8372039cedb98ceca3bb149e0f62f4089f9d06a5792723fbb44a497",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "196",
+      "review_report": "docs/TRAINING_G1241.md",
+      "preserve_g570_calibration": true,
+      "preserve_g611_calibration": true,
+      "preserve_ppo_probe_calibration": true,
+      "preserve_throughput_calibration": true
+    },
+    {
+      "from_implementation": "57e69a7cd736044b6927c8d30177de0f570ec433af4dfe96f143f96578e90789",
+      "to_implementation": "ff608f48a8372039cedb98ceca3bb149e0f62f4089f9d06a5792723fbb44a497",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "196",
+      "review_report": "docs/TRAINING_G1241.md",
+      "preserve_g570_calibration": true,
+      "preserve_g611_calibration": true,
+      "preserve_ppo_probe_calibration": true,
+      "preserve_throughput_calibration": true,
+      "config_migrations_ref": "1710"
+    },
+    {
+      "from_implementation": "57e69a7cd736044b6927c8d30177de0f570ec433af4dfe96f143f96578e90789",
+      "to_implementation": "ff608f48a8372039cedb98ceca3bb149e0f62f4089f9d06a5792723fbb44a497",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "196",
+      "review_report": "docs/TRAINING_G1241.md",
+      "preserve_g570_calibration": true,
+      "preserve_g611_calibration": true,
+      "preserve_ppo_probe_calibration": true,
+      "preserve_throughput_calibration": true,
+      "config_migrations_ref": "1709"
+    },
+    {
+      "from_implementation": "57e69a7cd736044b6927c8d30177de0f570ec433af4dfe96f143f96578e90789",
+      "to_implementation": "ff608f48a8372039cedb98ceca3bb149e0f62f4089f9d06a5792723fbb44a497",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "196",
+      "review_report": "docs/TRAINING_G1241.md",
+      "preserve_g570_calibration": true,
+      "preserve_g611_calibration": true,
+      "preserve_ppo_probe_calibration": true,
+      "preserve_throughput_calibration": true,
+      "config_migrations_ref": "1711"
+    },
+    {
+      "from_implementation": "fb61559cd8ec9f6f1e5facdb6cb6b1a04df44c6173fbc3e383aeb98331bc6062",
+      "to_implementation": "ff608f48a8372039cedb98ceca3bb149e0f62f4089f9d06a5792723fbb44a497",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "196",
+      "review_report": "docs/TRAINING_G1241.md",
+      "preserve_g570_calibration": true,
+      "preserve_g611_calibration": true,
+      "preserve_ppo_probe_calibration": true,
+      "preserve_throughput_calibration": true,
+      "config_migrations_ref": "1710"
+    },
+    {
+      "from_implementation": "fb61559cd8ec9f6f1e5facdb6cb6b1a04df44c6173fbc3e383aeb98331bc6062",
+      "to_implementation": "ff608f48a8372039cedb98ceca3bb149e0f62f4089f9d06a5792723fbb44a497",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "196",
+      "review_report": "docs/TRAINING_G1241.md",
+      "preserve_g570_calibration": true,
+      "preserve_g611_calibration": true,
+      "preserve_ppo_probe_calibration": true,
+      "preserve_throughput_calibration": true,
+      "config_migrations_ref": "1709"
+    },
+    {
+      "from_implementation": "fb61559cd8ec9f6f1e5facdb6cb6b1a04df44c6173fbc3e383aeb98331bc6062",
+      "to_implementation": "ff608f48a8372039cedb98ceca3bb149e0f62f4089f9d06a5792723fbb44a497",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "196",
+      "review_report": "docs/TRAINING_G1241.md",
+      "preserve_g570_calibration": true,
+      "preserve_g611_calibration": true,
+      "preserve_ppo_probe_calibration": true,
+      "preserve_throughput_calibration": true,
+      "config_migrations_ref": "1711"
+    },
+    {
+      "from_implementation": "fb61559cd8ec9f6f1e5facdb6cb6b1a04df44c6173fbc3e383aeb98331bc6062",
+      "to_implementation": "ff608f48a8372039cedb98ceca3bb149e0f62f4089f9d06a5792723fbb44a497",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "196",
+      "review_report": "docs/TRAINING_G1241.md",
+      "preserve_g570_calibration": true,
+      "preserve_g611_calibration": true,
+      "preserve_ppo_probe_calibration": true,
+      "preserve_throughput_calibration": true,
+      "config_migrations_ref": "1708"
+    },
+    {
+      "to_implementation": "ff608f48a8372039cedb98ceca3bb149e0f62f4089f9d06a5792723fbb44a497",
+      "learning_compatibility_ref": "5",
+      "preserve_throughput_calibration": true,
+      "reason_ref": "196",
+      "review_report": "docs/TRAINING_G1241.md",
+      "from_implementation": "36202b9e4bd3498a52671081f2cc37406ef2b3165dd24a37f1dfe79e44a625c1",
+      "config_migrations_ref": "1712"
+    },
+    {
+      "to_implementation": "ff608f48a8372039cedb98ceca3bb149e0f62f4089f9d06a5792723fbb44a497",
+      "learning_compatibility_ref": "5",
+      "preserve_throughput_calibration": true,
+      "reason_ref": "196",
+      "review_report": "docs/TRAINING_G1241.md",
+      "from_implementation": "fb61559cd8ec9f6f1e5facdb6cb6b1a04df44c6173fbc3e383aeb98331bc6062",
+      "config_migrations_ref": "1712"
+    },
+    {
+      "to_implementation": "ff608f48a8372039cedb98ceca3bb149e0f62f4089f9d06a5792723fbb44a497",
+      "learning_compatibility_ref": "5",
+      "preserve_throughput_calibration": true,
+      "reason_ref": "196",
+      "review_report": "docs/TRAINING_G1241.md",
+      "from_implementation": "9fefc97d1dbf4757039c8f58e7b55c2d764dbc89d0bd653188cce9acc1a37449",
+      "config_migrations_ref": "1712"
+    },
+    {
+      "to_implementation": "ff608f48a8372039cedb98ceca3bb149e0f62f4089f9d06a5792723fbb44a497",
+      "learning_compatibility_ref": "5",
+      "preserve_throughput_calibration": true,
+      "reason_ref": "196",
+      "review_report": "docs/TRAINING_G1241.md",
+      "from_implementation": "fb61559cd8ec9f6f1e5facdb6cb6b1a04df44c6173fbc3e383aeb98331bc6062"
+    },
+    {
+      "to_implementation": "ff608f48a8372039cedb98ceca3bb149e0f62f4089f9d06a5792723fbb44a497",
+      "learning_compatibility_ref": "5",
+      "preserve_throughput_calibration": true,
+      "reason_ref": "196",
+      "review_report": "docs/TRAINING_G1241.md",
+      "from_implementation": "9fefc97d1dbf4757039c8f58e7b55c2d764dbc89d0bd653188cce9acc1a37449",
+      "config_migrations_ref": "1713"
+    },
+    {
+      "to_implementation": "ff608f48a8372039cedb98ceca3bb149e0f62f4089f9d06a5792723fbb44a497",
+      "learning_compatibility_ref": "5",
+      "preserve_throughput_calibration": true,
+      "reason_ref": "196",
+      "review_report": "docs/TRAINING_G1241.md",
+      "from_implementation": "ff608f48a8372039cedb98ceca3bb149e0f62f4089f9d06a5792723fbb44a497",
+      "config_migrations_ref": "1713"
+    },
+    {
+      "to_implementation": "ff608f48a8372039cedb98ceca3bb149e0f62f4089f9d06a5792723fbb44a497",
+      "learning_compatibility_ref": "5",
+      "preserve_throughput_calibration": true,
+      "reason_ref": "196",
+      "review_report": "docs/TRAINING_G1241.md",
+      "from_implementation": "9fefc97d1dbf4757039c8f58e7b55c2d764dbc89d0bd653188cce9acc1a37449"
     }
   ],
   "definitions": {
@@ -713213,7 +713463,8 @@
       "192": "Reviewed compact-IL storage source update with identical self-play configuration. Pin the converter-only derived source equivalence, retain the existing trained-restart critic calibration and all checkpoint state, and keep pending-old-collection rejection/recovery active. Evidence: docs/COMPACT_IL_REPLAYS.md and tests/Recovery/test_compact_il_resume.py.",
       "193": "Reviewed PPO probe cadence: explicit four-step checks with mandatory first/epoch-tail and final reporting; disable only diagnostic full-dataset scans. Preserve strict all-row pre-update behavior reconstruction, exact T1/behavior KL thresholds, Adam/RNG, warmup/LR controller, PPG caches/objectives and reward progress. Existing compact-IL source review retained. Evidence: docs/PPO_SPARSE_PROBES.md and tests/Recovery/test_ppo_sparse_probes.py.",
       "194": "Reviewed collection input/digest reuse, streaming complete rating validation and timings, 16-worker bootstrap and conservative cleanup reuse; exact training/checkpoint state retained. Includes optional prior sparse PPO adoption; no recipe edits.",
-      "195": "Reviewed g1041 table mix and early PPG beta: explicit versioned 70/30 future tables with old ordinal history retained, unchanged PFSP conditional weights and actual counts; PPG <=16 retained-step KL response, preserve saved beta/trips/replay and both optimizer/RNG states. Sparse PPO probes and collection/rating/retention throughput edits retained. Exact recipe only; no reward, model, target, bootstrap evidence, or calibration reset. Unrelated local native/UI edits preserved."
+      "195": "Reviewed g1041 table mix and early PPG beta: explicit versioned 70/30 future tables with old ordinal history retained, unchanged PFSP conditional weights and actual counts; PPG <=16 retained-step KL response, preserve saved beta/trips/replay and both optimizer/RNG states. Sparse PPO probes and collection/rating/retention throughput edits retained. Exact recipe only; no reward, model, target, bootstrap evidence, or calibration reset. Unrelated local native/UI edits preserved.",
+      "196": "Reviewed g1241 two-iteration PPG: exact v22 to v23 PPG-only floor .125, current actual PPO peak factor .5, committed-origin two-iteration cadence. Preserve main/companion weights, both Adams/RNG, replay and all gate/calibration evidence. Off-cycle phases have current holdout evidence and zero fitting work; no beta-trip window dilution. Existing source behavior and explicit reviewed migrations otherwise unchanged."
     },
     "config_changes": {
       "0": {
@@ -735013,6 +735264,9 @@
       ],
       "1712": [
         "selfplay-70-30-early-ppg-and-throughput/1.0.0"
+      ],
+      "1713": [
+        "ppg-two-iteration-half-rate-eighth-beta/1.0.0"
       ]
     },
     "config_migration": {

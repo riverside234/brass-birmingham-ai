@@ -600,7 +600,7 @@ class TrainingPhases:
                 scope='Frozen-output preservation steps, not fresh-target critic fitting; GAE work evidence uses retained PPG steps only')
         from . import ppg_g210
         if ppg_g210.active(self.options['value_phase']):
-            self.ppo_peak=ppg_g210.rate_receipt(ppo_rate,self.state['generation']+1,ppo_steps) if ppo_steps else None
+            self.ppo_peak=ppg_g210.rate_receipt(ppo_rate,self.state['generation']+1,ppo_steps,self.options['value_phase']) if ppo_steps else None
         if ppg_config.linked(self.options['value_phase']):
             self.ppo_peak=((dcpg_config.rate_receipt(ppo_rate,self.state['generation']+1,ppo_steps)
                 if dcpg_config.active(self.options['value_phase']) else
@@ -689,7 +689,7 @@ class TrainingPhases:
         rolling=getattr(self,'rolling',False)
         from . import ppg_g210
         restored=ppg_g210.active(self.options['value_phase'])
-        phase_ran=enabled and (not rolling or value['scheduled'])
+        phase_ran=enabled and (value['scheduled'] if rolling or restored else True)
         if phase_ran and not restored:self.trips=(self.trips+[value['kl_guard_tripped']])[-5:]
         # A clean iteration must not re-escalate on the same old cap hits.
         # Keep the rolling evidence on resume, but require a new trip to act.

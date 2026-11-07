@@ -5,7 +5,13 @@ Report storage is now independent of code Git. The existing
 command exports and uploads to `riverside234/ai-training-results` automatically.
 Use `--no-push` for a local export. See [storage and old-checkout migration instructions](RESULTS_STORAGE.md).
 
-## Current: g1041 trained-restart continuation
+## Current: g1241 trained-restart continuation
+
+Use [TRAINING_G1241.md](TRAINING_G1241.md) for the PPG floor 0.125, peak LR
+0.5× actual PPO LR and two-iteration cadence. Continue g1242 in the same folder;
+the earlier 70/30 mix, sparse probes and throughput settings remain active.
+
+## Earlier: g1041 trained-restart continuation
 
 Use [TRAINING_G1041.md](TRAINING_G1041.md) for the combined 70/30 table mix,
 early retained-step PPG beta response, sparse PPO probes and throughput update.
