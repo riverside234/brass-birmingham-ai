@@ -53,15 +53,19 @@ TWO_ITER_MIGRATION='ppg-two-iteration-half-rate-eighth-beta/1.0.0'
 TWO_ITER_CHECKPOINT='actor-value-phases/12.0.0'
 TWO_ITER_DEFAULT=dict(EARLY_DEFAULT,contract=TWO_ITER_CONTRACT,
     beta_clone_min=.125,learning_rate_factor=.5,phase_interval=2)
+EVERY_ITER_CONTRACT='ppg-value-phase/24.0.0'
+EVERY_ITER_MIGRATION='ppg-every-iteration-beta-eighth-hotfix/1.0.0'
+EVERY_ITER_DEFAULT=dict(TWO_ITER_DEFAULT,contract=EVERY_ITER_CONTRACT,
+    learning_rate_factor=.65,phase_interval=1)
 
 
-def active(c):return c.get('contract') in (CONTRACT,COSINE_CONTRACT,LINEAR_CONTRACT,SHORT_CONTRACT,LOSS16_CONTRACT,KL32_CONTRACT,BETA1_CONTRACT,QUARTER_CONTRACT,EARLY_CONTRACT,TWO_ITER_CONTRACT)
+def active(c):return c.get('contract') in (CONTRACT,COSINE_CONTRACT,LINEAR_CONTRACT,SHORT_CONTRACT,LOSS16_CONTRACT,KL32_CONTRACT,BETA1_CONTRACT,QUARTER_CONTRACT,EARLY_CONTRACT,TWO_ITER_CONTRACT,EVERY_ITER_CONTRACT)
 
 
 def cosine(c):return c.get('contract')==COSINE_CONTRACT
 
 
-def linear(c):return c.get('contract') in (LINEAR_CONTRACT,SHORT_CONTRACT,LOSS16_CONTRACT,KL32_CONTRACT,BETA1_CONTRACT,QUARTER_CONTRACT,EARLY_CONTRACT,TWO_ITER_CONTRACT)
+def linear(c):return c.get('contract') in (LINEAR_CONTRACT,SHORT_CONTRACT,LOSS16_CONTRACT,KL32_CONTRACT,BETA1_CONTRACT,QUARTER_CONTRACT,EARLY_CONTRACT,TWO_ITER_CONTRACT,EVERY_ITER_CONTRACT)
 
 
 def short(c):return c.get('contract')==SHORT_CONTRACT
@@ -71,6 +75,15 @@ def scheduled(c):return cosine(c) or linear(c)
 
 
 def two_iteration(c):return c.get('contract')==TWO_ITER_CONTRACT
+
+
+def every_iteration_options(config):
+    validate(config['value_phase'])
+    require(config['value_phase']['contract'] in (TWO_ITER_CONTRACT,EVERY_ITER_CONTRACT),
+        'Every-iteration beta hotfix requires the two-iteration PPG recipe')
+    result=copy.deepcopy(config)
+    result['value_phase'].update(contract=EVERY_ITER_CONTRACT,learning_rate_factor=.65,phase_interval=1)
+    validate(result['value_phase']);return result
 
 
 def two_iteration_options(config):
@@ -179,7 +192,7 @@ def rate_factor(step,total,config):
 
 
 def validate(c):
-    default=TWO_ITER_DEFAULT if two_iteration(c) else EARLY_DEFAULT if c.get('contract')==EARLY_CONTRACT else QUARTER_DEFAULT if c.get('contract')==QUARTER_CONTRACT else BETA1_DEFAULT if c.get('contract')==BETA1_CONTRACT else KL32_DEFAULT if c.get('contract')==KL32_CONTRACT else LOSS16_DEFAULT if c.get('contract')==LOSS16_CONTRACT else SHORT_DEFAULT if short(c) else LINEAR_DEFAULT if linear(c) else COSINE_DEFAULT if cosine(c) else DEFAULT
+    default=EVERY_ITER_DEFAULT if c.get('contract')==EVERY_ITER_CONTRACT else TWO_ITER_DEFAULT if two_iteration(c) else EARLY_DEFAULT if c.get('contract')==EARLY_CONTRACT else QUARTER_DEFAULT if c.get('contract')==QUARTER_CONTRACT else BETA1_DEFAULT if c.get('contract')==BETA1_CONTRACT else KL32_DEFAULT if c.get('contract')==KL32_CONTRACT else LOSS16_DEFAULT if c.get('contract')==LOSS16_CONTRACT else SHORT_DEFAULT if short(c) else LINEAR_DEFAULT if linear(c) else COSINE_DEFAULT if cosine(c) else DEFAULT
     require(type(c) is dict and set(c)==set(default) and active(c),'Invalid g210 PPG fields/contract')
     # Smaller batches are useful for bounded regression/smoke fixtures only.
     for k,v in default.items():
@@ -188,7 +201,7 @@ def validate(c):
     if scheduled(c):
         require(all(type(c['rate_schedule'][k]) is type(v) for k,v in default['rate_schedule'].items()),
             'Invalid PPG rate schedule field type')
-    if c['contract'] in (EARLY_CONTRACT,TWO_ITER_CONTRACT):
+    if c['contract'] in (EARLY_CONTRACT,TWO_ITER_CONTRACT,EVERY_ITER_CONTRACT):
         require(all(type(c['early_kl_beta'][k]) is type(v) for k,v in EARLY_DEFAULT['early_kl_beta'].items()),
             'Invalid early-KL beta field type')
     require(all(type(c[k]) is int and 1<=c[k]<=DEFAULT[k] for k in ('batch_size','clone_rows','clone_batch_size'))
@@ -308,12 +321,23 @@ def initialize(phases,model,config,*,raw,generation,root,run):
             if adopting_early:options_match=early_options(saved['options'])==phases.options
             adopting_two_iteration=two_iteration(config['value_phase']) and saved['options']['value_phase']['contract']==EARLY_CONTRACT
             if adopting_two_iteration:options_match=two_iteration_options(saved['options'])==phases.options
+            adopting_every_iteration=config['value_phase']['contract']==EVERY_ITER_CONTRACT and two_iteration(saved['options']['value_phase'])
+            if adopting_every_iteration:options_match=every_iteration_options(saved['options'])==phases.options
             if two_iteration(saved['options']['value_phase']):fields.add('phase_origin')
             expected_contract=TWO_ITER_CHECKPOINT if two_iteration(saved['options']['value_phase']) else CHECKPOINT
             require(saved.get('contract')==expected_contract and set(saved)==fields and options_match,
                 'g210 checkpoint configuration differs')
             phases.beta=saved['beta_clone'];phases.trips=saved['kl_trips']
             phases.cache_origin=saved['cache_origin'];receipts=saved['rolling_buffer'];phases.adoption=saved['adoption']
+            if adopting_every_iteration:
+                phase_clock(saved['phase_origin'],generation,saved['options']['value_phase'])
+                require(type(phases.beta) in (int,float) and math.isfinite(phases.beta) and
+                    saved['options']['value_phase']['beta_clone_min']<=phases.beta<=32,'Invalid beta before one-time hotfix')
+                phases.ppg_schedule_migration=dict(contract=EVERY_ITER_MIGRATION,origin=generation,
+                    beta_before=phases.beta,beta_after=.125,previous_adoption=copy.deepcopy(phases.adoption),
+                    previous_phase_origin=saved['phase_origin'],next_phase=generation+1,
+                    scope='One-time beta .125 reset; every iteration, PPO peak factor .65. Preserve trip history, replay, both Adams/RNG, weights and gate evidence.')
+                phases.adoption=copy.deepcopy(phases.ppg_schedule_migration);phases.beta=.125
             if two_iteration(config['value_phase']):
                 phases.phase_origin=generation if adopting_two_iteration else saved['phase_origin']
             if adopting_two_iteration:

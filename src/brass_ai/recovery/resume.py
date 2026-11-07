@@ -180,6 +180,8 @@ def check_signature(state, signature, reviewed=False):
             handlers[LINEAR_MIGRATION]=linear_options
             from .ppg_g210 import TWO_ITER_MIGRATION,two_iteration_options
             handlers[TWO_ITER_MIGRATION]=two_iteration_options
+            from .ppg_g210 import EVERY_ITER_MIGRATION,every_iteration_options
+            handlers[EVERY_ITER_MIGRATION]=every_iteration_options
             from .ppg_g210 import SHORT_MIGRATION as LOSS8_MIGRATION,short_options as loss8_options
             handlers[LOSS8_MIGRATION]=loss8_options
             from .training_revision_g1120 import MIGRATION as G1120_MIGRATION,configure as g1120_config
@@ -368,6 +370,9 @@ def throughput_receipt_preserved(state,signature,raw,entry):
     except (ValueError,KeyError,TypeError):pass
     from .ppg_g210 import two_iteration_options
     try:options.append(two_iteration_options(before['config']))
+    except (ValueError,KeyError,TypeError):pass
+    from .ppg_g210 import every_iteration_options
+    try:options.append(every_iteration_options(before['config']))
     except (ValueError,KeyError,TypeError):pass
     if signature['config'] not in options:return False
     return any(e.get('preserve_throughput_calibration') is True and

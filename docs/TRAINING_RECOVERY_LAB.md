@@ -5,7 +5,12 @@ Report storage is now independent of code Git. The existing
 command exports and uploads to `riverside234/ai-training-results` automatically.
 Use `--no-push` for a local export. See [storage and old-checkout migration instructions](RESULTS_STORAGE.md).
 
-## Current: g1241 trained-restart continuation
+## Current: g1247 trained-restart continuation
+
+Use [TRAINING_G1247.md](TRAINING_G1247.md): PPG every iteration, peak LR 0.65×
+actual PPO LR, and a one-time beta reset to 0.125. Resume g1248 in the same run.
+
+## Earlier: g1241 trained-restart continuation
 
 Use [TRAINING_G1241.md](TRAINING_G1241.md) for the PPG floor 0.125, peak LR
 0.5× actual PPO LR and two-iteration cadence. Continue g1242 in the same folder;
