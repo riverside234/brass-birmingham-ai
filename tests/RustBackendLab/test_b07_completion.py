@@ -134,6 +134,24 @@ class Completion(unittest.TestCase):
             path.write_text('{}')
             with self.assertRaisesRegex(ValueError,'receipt changed'):C.reuse_build(value,'ordinary')
 
+    def test_checkpoint_only_teacher_reuse_preserves_binary_and_checks_original_receipt(self):
+        from brass_ai.rust_backend.lab_teacher_overlay import source_fingerprint
+        name='src/brass_ai/recovery/search_value_phase.py'
+        value=dict(implementation='r6',producer=source_fingerprint(),binary={'sha256':'unchanged'})
+        path=self.out/'r6-teacher.json';write_json(path,value)
+        review=dict(from_implementation='r6',to_implementation=implementation_id(),changes={name:dict(
+            after=hashlib.sha256((ROOT/name).read_bytes().replace(b'\r\n',b'\n')).hexdigest())})
+        write_json(self.out/'reference.json',dict(checkpoint_source_review=review,
+            teacher_checkpoint_reuse={'original_receipt':pin(path)}))
+        with patch.object(C,'DIRECTORY',self.out),patch.object(C,'reviewed_source',return_value={}):
+            rebound=C.reuse_build(value,'teacher')
+            self.assertEqual(rebound['binary'],value['binary'])
+            self.assertEqual(C.reuse_build(rebound,'teacher'),rebound)
+            with self.assertRaisesRegex(ValueError,'differs from original'):
+                C.reuse_build(dict(rebound,binary={'sha256':'changed'}),'teacher')
+            path.write_text('{}')
+            with self.assertRaisesRegex(ValueError,'receipt changed'):C.reuse_build(value,'teacher')
+
 
 class Workflow(unittest.TestCase):
     def setUp(self):

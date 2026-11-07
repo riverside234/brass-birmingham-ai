@@ -1,11 +1,11 @@
 {
-  "archive": "rust-lab-b07-g1250-r6.zip",
-  "sha256": "e22fca39d68107d53b0815850bb2091024c7e4a47f8dcb13e00cfea47bfa6a48",
-  "bytes": 9421674,
-  "entries": 1367,
-  "implementation": "0126dd6a9d3c1b2e3981ea668256d2c2477dac4de25c59b5c9b7f8cfa24d750e",
-  "qualification": "R4 ordinary passed and unchanged; R6 teacher deadline/canaries/continuation/adoption Pending",
+  "archive": "rust-lab-b07-g1250-r7.zip",
+  "sha256": "84dd16d8de0828dd7b9433c4924f19e3584cd3d7b1d78cf5eb820476babbfd5a",
+  "bytes": 9439370,
+  "entries": 1372,
+  "implementation": "8458dc6f2e4f5d943ea0a911aef114337879650cf92021f091700545bb7c5cd7",
+  "qualification": "R4 ordinary and R6 sealing passed; R7 checkpoint/canaries/continuation/adoption Pending",
   "ordinary_qualification_reused": true,
-  "teacher_rebuild_required": true,
+  "teacher_rebuild_required": false,
   "production_modified": false
 }

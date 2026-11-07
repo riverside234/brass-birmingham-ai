@@ -41,6 +41,25 @@ def reuse_build(value, kind):
     """Rebind only the unchanged ordinary executable, never an old teacher."""
     if value['implementation'] == implementation_id() and 'source_reuse' not in value:return value
     reference=json.loads((DIRECTORY/'reference.json').read_text());review=reviewed_source(reference)
+    if kind == 'teacher' and 'teacher_checkpoint_reuse' in reference:
+        entry=reference['teacher_checkpoint_reuse'];change=reference['checkpoint_source_review']
+        require(change['to_implementation']==implementation_id() and
+                set(change['changes'])=={'src/brass_ai/recovery/search_value_phase.py'}, 'Unreviewed checkpoint source')
+        for name,item in change['changes'].items():
+            require(hashlib.sha256((ROOT/name).read_bytes().replace(b'\r\n',b'\n')).hexdigest()==item['after'],
+                    'Checkpoint source review changed')
+        require(value['implementation'] in (change['from_implementation'],implementation_id()), 'Unreviewed teacher source')
+        original=entry['original_receipt']
+        require(pin(original['path'])==original, 'Original teacher build receipt changed')
+        saved=json.loads(Path(original['path']).read_text())
+        from brass_ai.rust_backend.lab_teacher_overlay import source_fingerprint
+        require(saved['implementation']==change['from_implementation'] and saved['producer']==source_fingerprint(),
+                'Teacher native inputs changed')
+        rebound=dict(saved,implementation=implementation_id(),source_reuse=dict(original_receipt=original,
+            from_implementation=saved['implementation'],review=digest(change),native_bytes_unchanged=True,
+            scope='R7 plain checkpoint labels only; exact R6 teacher executable and tests'))
+        require(value==saved or value==rebound, 'Reused teacher differs from original receipt')
+        return rebound
     require(kind == 'ordinary', 'Changed teacher deadline requires a new teacher build')
     require(value['implementation'] in (review['from_implementation'],implementation_id()), 'Unreviewed build source')
     entry=reference['build_reuse'][kind];original=entry['original_receipt']
@@ -113,7 +132,7 @@ def resume(path, snapshot):
         reference=json.loads((DIRECTORY/'reference.json').read_text())
         legacy=pin(path)['sha256']==reference.get('previous_completion',{}).get('sha256')
         require(legacy and not value.get('completed_phases'), 'Resume only this exact B07 completion workflow')
-        previous=reviewed_source(reference)['from_implementation']
+        previous=reference.get('previous_completion',{}).get('implementation') or reviewed_source(reference)['from_implementation']
     boundary(value, snapshot,implementation=previous)
     require(value.get('milestone') == 'B07' and (legacy or value.get('completion_workflow') == workflow_id()),
             'Resume only this exact B07 completion workflow')

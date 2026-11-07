@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Seal R6 teacher finalization/deadline repair; preserve passing ordinary work."""
+"""Seal R7 plain checkpoint label repair; reuse native builds and ordinary work."""
 import hashlib
 import json
 from pathlib import Path
@@ -8,20 +8,21 @@ import zipfile
 
 ROOT=Path(__file__).resolve().parents[1];sys.path.insert(0,str(ROOT/'src'))
 DIRECTORY=ROOT/'distribution/rust-lab-b07-g1250'
-R5_SHA='97e5b6535e6e4c9310db4b1bad782ef089df305f3af44937557da532cd340f33'
+R6_SHA='e22fca39d68107d53b0815850bb2091024c7e4a47f8dcb13e00cfea47bfa6a48'
 
 
 def main():
     from brass_ai.learning.contracts import require
     from brass_ai.step5.league import implementation_id,implementation_sources,write_json
     from rust_lab_b07_completion import reviewed_source,COMPLETION_CHANGES
-    archive=DIRECTORY/'rust-lab-b07-g1250-r6.zip'
+    archive=DIRECTORY/'rust-lab-b07-g1250-r7.zip'
     require(not archive.exists(),'Publish a new B07 revision; never reseal')
-    source=DIRECTORY/'rust-lab-b07-g1250-r5.zip'
-    require(hashlib.sha256(source.read_bytes()).hexdigest()==R5_SHA,'Immutable R5 archive changed')
+    source=DIRECTORY/'rust-lab-b07-g1250-r6.zip'
+    require(hashlib.sha256(source.read_bytes()).hexdigest()==R6_SHA,'Immutable R6 archive changed')
     with zipfile.ZipFile(source) as z:blobs={n:z.read(n) for n in z.namelist()}
     manifest_name='distribution/rust-lab-b07-g1250/manifest.json'
-    original=json.loads(blobs.pop(manifest_name));review=reviewed_source()
+    original=json.loads(blobs.pop(manifest_name));reviewed_source()
+    review=json.loads((DIRECTORY/'reference.json').read_text())['checkpoint_source_review']
     require(review['from_implementation']==original['implementation'],'Unexpected review baseline')
     changes={}
     for name,data in implementation_sources().items():
@@ -50,23 +51,23 @@ def main():
         if name in names or not path.is_file():continue
         data=path.read_bytes()
         if path.suffix in original['text']:data=data.replace(b'\r\n',b'\n')
-        require(hashlib.sha256(data).hexdigest()==expected,'Unreviewed R6 bundle change: '+name)
+        require(hashlib.sha256(data).hexdigest()==expected,'Unreviewed R7 bundle change: '+name)
     for name in names:
         data=(ROOT/name).read_bytes()
         blobs[name]=data.replace(b'\r\n',b'\n') if Path(name).suffix in original['text'] else data
-    for pattern in ('b07-r5-*','r6-*'):
+    for pattern in ('b07-r6-*','r7-*'):
         for path in (DIRECTORY/'evidence').glob(pattern):blobs[path.relative_to(ROOT).as_posix()]=path.read_bytes()
     manifest=dict(implementation=implementation_id(),text=original['text'],
-        qualification='R4 ordinary passed and unchanged; R6 teacher deadline/canaries/continuation/adoption Pending',
+        qualification='R4 ordinary and R6 sealing passed; R7 checkpoint/canaries/continuation/adoption Pending',
         files={n:hashlib.sha256(v).hexdigest() for n,v in sorted(blobs.items())})
     write_json(DIRECTORY/'manifest.json',manifest)
     blobs[manifest_name]=(DIRECTORY/'manifest.json').read_bytes()
     with zipfile.ZipFile(archive,'x',compression=zipfile.ZIP_DEFLATED,compresslevel=6) as z:
         for name,data in sorted(blobs.items()):z.writestr(name,data)
-    with zipfile.ZipFile(archive) as z:require(z.testzip() is None,'Corrupt R6 archive')
+    with zipfile.ZipFile(archive) as z:require(z.testzip() is None,'Corrupt R7 archive')
     write_json(DIRECTORY/'bundle.json',dict(archive=archive.name,sha256=hashlib.sha256(archive.read_bytes()).hexdigest(),
         bytes=archive.stat().st_size,entries=len(blobs),implementation=implementation_id(),
-        qualification=manifest['qualification'],ordinary_qualification_reused=True,teacher_rebuild_required=True,
+        qualification=manifest['qualification'],ordinary_qualification_reused=True,teacher_rebuild_required=False,
         production_modified=False))
     print(archive)
 

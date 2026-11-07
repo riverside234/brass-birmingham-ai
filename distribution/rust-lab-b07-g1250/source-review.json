@@ -1,6 +1,6 @@
 {
   "from_implementation": "63564be49e282c4b2c0fff02b7640238c63d04d35f7c072bf8c017d12ce6ace5",
-  "to_implementation": "0126dd6a9d3c1b2e3981ea668256d2c2477dac4de25c59b5c9b7f8cfa24d750e",
+  "to_implementation": "8458dc6f2e4f5d943ea0a911aef114337879650cf92021f091700545bb7c5cd7",
   "reviewed_commit": "f327d6c",
   "changes": {
     "src/brass_ai/recovery/league.py": {
@@ -89,7 +89,7 @@
     },
     "src/brass_ai/recovery/search_value_phase.py": {
       "before": "4a822763b8d07010eddcd8cf769b82281c9a5adc4c962c23893d0c5a119fc7cc",
-      "after": "2ec16b4abf8876ffcc5b26e399d5b3cfa0da5e2309d349147a41e09c142de5ee"
+      "after": "bcdf44e87b9c1028017d7bed38cc82e50c47404bdc58e8f85f474d14421d0a2a"
     },
     "src/brass_ai/recovery/teacher_phase.py": {
       "before": "ec1074f6cf6ef2aade86ef089cbd2dc3596856cc38e2415afd7c5f4b8fa5d083",
@@ -108,7 +108,7 @@
   "native_binaries_unchanged": false,
   "teacher_default": "off",
   "default_without_adoption": "reference",
-  "lab_qualification": "R4 ordinary passed and reused; R6 teacher canaries/continuation/adoption Pending",
+  "lab_qualification": "R4 ordinary and R6 sealing passed; R7 checkpoint reload/canaries/continuation/adoption Pending",
   "ordinary_binary_unchanged": false,
   "retry": {
     "from_implementation": "f6372cefd9a48c98994d2f2e8424b032f4d5c808aceab140bb6442b92214cfc9",
@@ -220,5 +220,17 @@
     "scope": "R6 detaches verified teacher histories once inside the per-turn deadline, safely shares immutable rows through sealing, and charges each table its own policy sealing. User-authorized fast post cap 0.5s (search 0.8s/K4), full 4s/K16 plus 1s unchanged. Rebuild teacher only; ordinary executable inputs, saved teacher-off recipe, all search_v1 equations, weights, learning contracts, optimizers and replay bytes unchanged.",
     "ordinary_compile_inputs_unchanged": true,
     "teacher_rebuild_required": true
+  },
+  "completion_r7": {
+    "from_implementation": "0126dd6a9d3c1b2e3981ea668256d2c2477dac4de25c59b5c9b7f8cfa24d750e",
+    "to_implementation": "8458dc6f2e4f5d943ea0a911aef114337879650cf92021f091700545bb7c5cd7",
+    "reviewed_commit": "12794a1",
+    "changes": {
+      "src/brass_ai/recovery/search_value_phase.py": {
+        "before": "2ec16b4abf8876ffcc5b26e399d5b3cfa0da5e2309d349147a41e09c142de5ee",
+        "after": "bcdf44e87b9c1028017d7bed38cc82e50c47404bdc58e8f85f474d14421d0a2a"
+      }
+    },
+    "scope": "R7 converts only persisted search-value label ages from immutable live JSON containers to detached plain JSON trees. Preserve strict weights_only loading without allowlists; no search, native binary, recipe, optimizer, reward, feature or target changes. R6 sealing passed on lab; checkpoint reload and subsequent stages remain Pending."
   }
 }

@@ -1,5 +1,6 @@
 """B04.5 lifecycle kept outside ordinary replay, PPO and the ordinary PPG pass."""
 import copy
+import json
 import math
 from collections import defaultdict
 
@@ -140,8 +141,14 @@ class SearchValuePhase:
         return copy.deepcopy(self.report)
 
     def payload(self):
+        # Live labels may be FrozenDict/FrozenList. deepcopy deliberately shares
+        # those objects; their pickle reducers require constructor globals that
+        # the strict weights-only loader rejects. Persist only plain JSON trees,
+        # stripping process-local admission identity without changing row values.
+        # Keep this conversion at checkpoint publication, outside search/sealing.
+        labels = json.loads(json.dumps(self.label_ages, allow_nan=False))
         return dict(stage=copy.deepcopy(self.machine.state),companion=self.companion.snapshot() if self.companion else None,
-                    buffer=self.buffer.payload(),label_ages=copy.deepcopy(self.label_ages))
+                    buffer=self.buffer.payload(),label_ages=labels)
 
     def job_state(self):
         """Small committed scheduling state; Adam stays in the checkpoint only."""

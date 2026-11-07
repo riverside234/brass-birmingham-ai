@@ -1,6 +1,6 @@
 {
-  "revision": "r6",
-  "local_testing_stopped_by_user": true,
-  "fresh_extraction_execution": "Pending lab; not run locally",
+  "revision": "r7",
+  "local_tests_run": false,
+  "lab_qualification": "Pending",
   "production_modified": false
 }

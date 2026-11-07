@@ -178,6 +178,11 @@ def main():
                     active='teacher-build'
                     saved_build=previous.get('teacher_build') if previous else None
                     teacher_path=args.teacher_build or completion.resumable_teacher(saved_build,reused)
+                    if teacher_path is None:
+                        pinned=reference.get('teacher_checkpoint_reuse',{}).get('original_receipt')
+                        if pinned:
+                            require(pin(pinned['path'])==pinned,'Qualified teacher receipt changed')
+                            teacher_path=pinned['path']
                     teacher=retry.verify_teacher(read_json(teacher_path),original) if teacher_path else retry.build_teacher(out/'teacher-runtime',original,offline=args.offline)
                     if reused:require(teacher==read_json(saved_build['path']),'Cannot reuse phases with a different teacher build')
                     write_json(out/'teacher-build.json',teacher);report['teacher_build']=pin(out/'teacher-build.json')

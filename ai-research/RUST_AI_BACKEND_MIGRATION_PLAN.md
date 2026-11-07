@@ -863,7 +863,7 @@ Keep Python target construction, GAE, PPO behavior likelihoods, critic/local-sco
 | B04.5 | **Passed on pinned g1250** | Exact r3 source/model/device; two shadow tables, 49 policy labels, 128 value rows, one isolated head step; production unchanged |
 | B05 | **Passed on pinned g1250** | R2 CUDA ordinary/teacher component updates, head-only update, full-state/age restoration; no new games or production adoption |
 | B06 | **Passed bounded correctness/measurement; useful performance gate not passed** | Same 3 families / 1,161 decisions; native accepted work 55.265s vs reference 28.596s; Python collection/admission bottleneck identified; eight 4s/K16 teacher turns passed |
-| B07 | **R4 ordinary correctness/useful performance passed; R6 sealing/deadline repair implemented; lab canaries/adoption/G→G+1 Pending** | Reuse qualified Rust ordinary backend, finish only remaining shadow/restore gates, then locked same-run adoption and one real iteration/restart |
+| B07 | **R4 ordinary correctness/useful performance passed; R7 checkpoint repair implemented; lab canaries/adoption/G→G+1 Pending** | Reuse qualified Rust ordinary backend, finish only remaining shadow/restore gates, then locked same-run adoption and one real iteration/restart |
 
 #### B01 — Pin lab state and qualify Linux/GPU adapters
 
@@ -959,6 +959,15 @@ B06 also measures all-seat teacher tables separately from the older policy-only 
 Keep the short-test scope: eight fixed-root turns in ABBA pairs, two concurrent independent one-thread sessions, shared frozen calibration and fixed-count w=0 parity. Both arms use 4s/K16 + <=1s post-work; this compares policy-only versus all-seat w=0 export paths, not whole schedules. Reuse the exact successful g1250 all-seat table metrics for full-table/lane costs; label them historical and never form a speed ratio against g570 policy-only tables. Compare original batch validation with streamed verification/reuse on identical frozen rows outside collection. Measure policy/value sealing and reads, one isolated head step and actual g1250 teacher-KL gradient kernels separately. B05's bounded authored-input helper supplies actual current-model/Adam/recipe PPO/PPG kernel timings, explicitly not a full-iteration benchmark. Ordinary/teacher/kernel watchdogs are 360/150/180 seconds; failures export partial evidence without extending the sample. B06 passing mechanical measurements still require review of useful performance and coverage before B07 adoption.
 
 #### B07 — Bounded server canary, then explicit adoption
+
+**R7 update (2026-11-07):** R6 sealing passed on the lab; shadow checkpoint
+reload then rejected immutable label-container pickle reducers. Persist label ages
+as detached plain JSON containers in the shared checkpoint payload, retaining
+strict weights-only loading and all live immutable optimizations. No native/search
+change; reuse R6 teacher build and R4 ordinary qualification under explicit source
+reviews. Add lab regressions for strict reload/detachment and receipt reuse; do not
+run local tests. Remaining canaries, continuation/adoption and next commit stay
+Pending. Use the [R7 commands](../distribution/rust-lab-b07-g1250/README.md).
 
 **R6 update (2026-11-07):** R5 reached two completed canary tables but failed
 final value sealing: 0.258618s value + 0.226983s policy + 0.016149s native post

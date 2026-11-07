@@ -1,11 +1,42 @@
 # B07: cheaper native collection and bounded adoption
 
 Updated on 2026-11-07. **R4 ordinary correctness and useful performance passed
-on g1250. R6 repairs final sealing and raises fast post-work to 0.5s;
+on g1250. R7 repairs strict shadow-checkpoint reload after R6 sealing passed;
 its lab canaries, production adoption and next commit/restart remain Pending
 until that command succeeds on the lab.** Run the
 [new g1250 bundle](../distribution/rust-lab-b07-g1250/README.md); do not rerun
 passing B01–B06 qualifications. The installed game is unchanged.
+
+## R7: strict checkpoint reload repair
+
+Pulled inside `results/` to `06baece`. Latest export:
+`20261107T120105221052Z-20261107T115808701063Z-b07-continue-1128185f-142111ac`.
+Both tables and their sealing completed. Train policy/value sealing measured
+0.088712s + 0.066669s; heldout 0.048026s + 0.038263s. The next step, loading
+`shadow.pt`, failed with `Unsupported global: GLOBAL dict` under weights-only
+loading. R6's immutable rows survived `deepcopy` into `label_ages`; their custom
+pickle reducers emitted constructor globals. No production training started.
+
+R7 converts only the label-age JSON subtree to detached plain containers in
+`SearchValuePhase.payload()`. This common checkpoint boundary covers shadow and
+future production search-value payloads. It preserves row values and rejects
+nonfinite JSON; companion tensors/optimizer state keep their existing serialization.
+No changes to strict `weights_only=True`, no allowlisting, no arbitrary-pickle
+fallback. Live immutable reuse and per-turn deadlines remain unchanged. Conversion
+is checkpoint publication work and does not repeat admission or search.
+
+New lab fixtures cover real checkpoint save/strict reload with frozen rows,
+plain nested container types, identical labels, restored phase payloads and
+mutation detachment; native-build reuse tests cover original receipt pinning and
+tampering. **No local tests or benchmarks run, per user request.** These new checks
+remain unexecuted locally. The first lab fixture stage runs them before games.
+
+Only one runtime source file changed from R6; explicit source/resume reviews
+preserve the same saved configuration and all prior restrictions. Reuse the exact
+R6 native teacher executable/test/build receipts and passing R4 ordinary evidence.
+The failed canary is not counted as passed; rerun pending canaries and continuation.
+New immutable R7 bundle/commands are in `distribution/rust-lab-b07-g1250/README.md`.
+Lab qualification, adoption and real next-generation commit remain Pending.
 
 ## R6: fast post-work and sealing repair
 

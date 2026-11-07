@@ -1,4 +1,4 @@
-# B07 g1250 R6: repair sealing and continue training
+# B07 g1250 R7: repair checkpoint reload and continue training
 
 **R4 ordinary qualification passed.** The result was pulled inside `results/`
 at `9e219a2`. Same 3 families / 1,161 decisions / 675 forced rows, with equivalent
@@ -6,14 +6,19 @@ trajectories/features/targets: accepted work **30.632s → 26.820s (12.4% less t
 Sampled peak host memory was 4.917GB → 7.479GB. This is one bounded matched batch,
 not a statistical or whole-training speed claim.
 
-R6 fixes the R5 first-canary sealing failure. It detaches verified histories once
-inside each turn's checked budget and reuses immutable rows during publication.
-It also charges each table for its own policy sealing. Fast turns now get **0.8s/K4
-search plus at most 0.5s post-work**; full turns retain **4s/K16 plus at most 1s**.
-The Rust teacher is rebuilt for the new deadline. The passing R4 ordinary result
-and exact ordinary binary are reused under a source review; no unrelated successful
-qualification repeats. **Remaining canaries, continuation and production adoption
-are Pending until the lab command succeeds.** The installed game is unchanged.
+R7 fixes the R6 shadow-checkpoint reload failure: immutable live label containers
+were pickled using constructor globals rejected by `weights_only=True`. Checkpoint
+publication now detaches label ages into plain JSON containers. Strict loading
+remains enabled, with no allowlist or unsafe fallback. Live immutable reuse,
+rewards, targets, search_v1 and the saved teacher-off recipe remain unchanged.
+
+The latest lab run passed sealing: train policy + value cost **0.1554s**, heldout
+**0.0863s**, before their recorded native post-work. Fast turns still allow
+0.8s/K4 + <=0.5s post-work; full turns 4s/K16 + <=1s. R7 reuses the exact pinned
+R6 teacher build and passing R4 ordinary result/binary. No native rebuild or
+unrelated successful qualification repeats. Canaries, continuation and adoption
+remain **Pending**. No local tests were run, per user instruction; new checkpoint
+and receipt-reuse regressions run in the lab's initial fixture stage.
 
 ## One command for real g1250 → g1251 continuation
 
@@ -21,7 +26,7 @@ From the lab code checkout, in the existing training environment, with the run
 paused at the qualified g1250 checkpoint:
 
 ```bash
-unzip -o distribution/rust-lab-b07-g1250/rust-lab-b07-g1250-r6.zip
+unzip -o distribution/rust-lab-b07-g1250/rust-lab-b07-g1250-r7.zip
 python scripts/continue-rust-lab-b07.py --expected-generation 1250
 ```
 
@@ -32,8 +37,8 @@ iteration after the remaining gates pass**. It automatically:
    state, checkpoint, config, population and runtime pins. It does not repeat
    passing B01–B06 or R4 ordinary qualification.
 2. Runs the two pending shadow passes (two tables each, w=0, 4s/K16 +
-   <=1s post-work and 0.8s/K4 + <=0.5s on fast turns) and the bounded continuation/update/reload check. It builds the
-   repaired teacher once unless an exact current-source build is supplied.
+   <=1s post-work and 0.8s/K4 + <=0.5s on fast turns) and the bounded continuation/update/reload check. It reuses the
+   pinned R6 teacher build after checking its source, binary and regression logs.
 3. Selects Rust ordinary collection in the same run with **teaching off**, under
    the existing run lock. It restores a complete rollback copy before adoption
    and verifies that copy again. No optimizer, seed, progress or recipe reset.
@@ -82,7 +87,7 @@ If a later phase fails, preserve the original attempt and reuse successful phase
 python scripts/continue-rust-lab-b07.py --expected-generation 1250 --resume-qualification artifacts/rust-backend/REPLACE_WITH_PARTIAL_ATTEMPT/qualification.json
 ```
 
-The saved phases must match the exact R6 workflow, source, committed state and
+The saved phases must match the exact R7 workflow, source, committed state and
 teacher build; their bytes are rechecked. Failed phases are never reused. The
 ordinary result and build are always the pinned successful R4 ones. An existing
 current-source R6 teacher build can be supplied with `--teacher-build PATH/build.json`;
@@ -132,5 +137,5 @@ other computer. Exported review copies do not relocate original lab binaries.
 Local checks cover exact reuse, stale/tampered evidence, phase selection,
 failed adoption/training, full-state restore, rollback integrity, committed-config
 forwarding and no duplicate iteration. No full training session or unrelated
-successful qualification is run locally. See [implementation and evidence](../../ai-research/RUST_BACKEND_B07_IMPLEMENTATION.md#r6-fast-post-work-and-sealing-repair).
+successful qualification is run locally. See [implementation and evidence](../../ai-research/RUST_BACKEND_B07_IMPLEMENTATION.md#r7-strict-checkpoint-reload-repair).
 Archives are immutable; future changes require a new revision.

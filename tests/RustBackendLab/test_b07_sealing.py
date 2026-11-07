@@ -108,6 +108,31 @@ class Sealing(unittest.TestCase):
         self.assertNotIn(key,v.cache)
         with self.assertRaisesRegex(ValueError,'Changed/unverified'):v.take(result,job,model)
 
+    def test_frozen_label_ages_save_and_reload_with_strict_checkpoint_loader(self):
+        from brass_ai.learning.checkpoint import save_checkpoint,load_checkpoint
+        model,job,_,result,_,_=self.stream()
+        with tempfile.TemporaryDirectory(dir=SOURCE_ROOT/'artifacts') as tmp:
+            options=adopt(config())['teacher_phase']['search_value']
+            phase=SearchValuePhase(tmp,model,options,job['expected']['reward_id'])
+            phase.label_ages=[dict(generation=10,reward_id=job['expected']['reward_id'],rows=result['rows'])]
+            payload=phase.payload()
+            def plain(v):
+                if isinstance(v,dict):
+                    self.assertIs(type(v),dict)
+                    for x in v.values():plain(x)
+                elif isinstance(v,list):
+                    self.assertIs(type(v),list)
+                    for x in v:plain(x)
+            plain(payload['label_ages'])
+            self.assertEqual(digest(payload['label_ages']),digest(phase.label_ages))
+            path=Path(tmp)/'shadow.pt'
+            save_checkpoint(path,model,step=10,training={'search_value':payload})
+            restored,saved=load_checkpoint(path)  # weights_only=True, no allowlist
+            cold=SearchValuePhase(tmp,restored,options,job['expected']['reward_id'],saved=saved['training']['search_value'])
+            self.assertEqual(cold.payload()['label_ages'],payload['label_ages'])
+            payload['label_ages'][0]['rows'][0]['teacher']['epoch']+=1
+            self.assertNotEqual(digest(payload['label_ages']),digest(phase.label_ages))
+
     def test_each_table_pays_own_seal_and_no_cap_is_relaxed(self):
         model=model_fixture();row,job,_=value_fixture(model,split='heldout')
         second=copy.deepcopy(job);second['expected'].update(job_id='second',game_id='second-game')
