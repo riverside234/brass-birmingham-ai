@@ -1,7 +1,7 @@
 {
   "contract": "brass-b07-replay-location-review/1.0.0",
   "qualified_implementation": "9efcf34f853d75ab844366b6819da4b0921be38d3e2dfb806cf282ace76e7a30",
-  "execution_implementation": "39b9a8334ae3a86804f9f1ecbf35db009153e40fed6bfb57dfcaf30120635bfc",
+  "execution_implementation": "94a0e5d1d03210ad93759f2aedd6f7f15cca4bb826300df7b6de04f033199ff2",
   "base_commit": "7244d6b",
   "changes": {
     "src/brass_ai/recovery/value_buffer.py": {
@@ -23,8 +23,13 @@
     "src/brass_ai/rust_backend/lab_replay_compat.py": {
       "before": null,
       "after": "ac6ab04844ec9997e51e3b38972ef3814ac3d6acb167425be4614819ec8a991d"
+    },
+    "src/brass_ai/recovery/automatic_training.py": {
+      "before": "38046abd8f653f6b12f87f2f4747899b0cc565fbc4ae0ac4edb8cd15fee37df3",
+      "after": "c591a79615b4a192f37690d73f67283b6b2d70a91fd6874f5f33a18c52158044"
     }
   },
-  "scope": "Native replay path validation and source-only retry integration; unchanged collection, RNG, features, targets, search, optimizer, recipe and signature contents. Preserve pending family bytes and original qualification receipts; record actual execution separately.",
-  "evidence": "results/rust-lab-qualification/20261107T125446333545Z-20261107T124611526805Z-b07-continue-e84bd233-c1155826/evidence/training.log"
+  "scope": "Native replay path validation and source-only retry integration; unchanged collection, RNG, features, targets, search, optimizer, recipe and signature contents. Preserve pending family bytes and original qualification receipts; record actual execution separately. Apply the identical source-only check at automatic scheduler startup before its normal signature validation; no new source/config permission.",
+  "evidence": "results/rust-lab-qualification/20261107T125446333545Z-20261107T124611526805Z-b07-continue-e84bd233-c1155826/evidence/training.log",
+  "startup_evidence": "results/rust-lab-qualification/20261107T131709467058Z-20261107T131647644898Z-b07-continue-953a2157-2b90dbc8/evidence/training.log"
 }

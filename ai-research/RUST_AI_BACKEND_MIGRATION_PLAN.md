@@ -863,7 +863,7 @@ Keep Python target construction, GAE, PPO behavior likelihoods, critic/local-sco
 | B04.5 | **Passed on pinned g1250** | Exact r3 source/model/device; two shadow tables, 49 policy labels, 128 value rows, one isolated head step; production unchanged |
 | B05 | **Passed on pinned g1250** | R2 CUDA ordinary/teacher component updates, head-only update, full-state/age restoration; no new games or production adoption |
 | B06 | **Passed bounded correctness/measurement; useful performance gate not passed** | Same 3 families / 1,161 decisions; native accepted work 55.265s vs reference 28.596s; Python collection/admission bottleneck identified; eight 4s/K16 teacher turns passed |
-| B07 | **R8 qualification, canaries, diagnostic continuation, Rust adoption and rollback passed; real G→G+1 commit/restart Pending** | Git-only PPG path fix admits the native replay layout; exact execution review preserves pending family reuse and passed qualification |
+| B07 | **R8 qualification, canaries, diagnostic continuation, Rust adoption and rollback passed; real G→G+1 commit/restart Pending** | Git-only PPG path repair and automatic-scheduler startup check share the exact execution review; preserve pending family reuse and passed qualification |
 
 #### B01 — Pin lab state and qualify Linux/GPU adapters
 
@@ -959,6 +959,18 @@ B06 also measures all-seat teacher tables separately from the older policy-only 
 Keep the short-test scope: eight fixed-root turns in ABBA pairs, two concurrent independent one-thread sessions, shared frozen calibration and fixed-count w=0 parity. Both arms use 4s/K16 + <=1s post-work; this compares policy-only versus all-seat w=0 export paths, not whole schedules. Reuse the exact successful g1250 all-seat table metrics for full-table/lane costs; label them historical and never form a speed ratio against g570 policy-only tables. Compare original batch validation with streamed verification/reuse on identical frozen rows outside collection. Measure policy/value sealing and reads, one isolated head step and actual g1250 teacher-KL gradient kernels separately. B05's bounded authored-input helper supplies actual current-model/Adam/recipe PPO/PPG kernel timings, explicitly not a full-iteration benchmark. Ordinary/teacher/kernel watchdogs are 360/150/180 seconds; failures export partial evidence without extending the sample. B06 passing mechanical measurements still require review of useful performance and coverage before B07 adoption.
 
 #### B07 — Bounded server canary, then explicit adoption
+
+**Automatic startup follow-up (2026-11-07):** Results pulled to `a679f02`, export
+`20261107T131709467058Z-20261107T131647644898Z-b07-continue-953a2157-2b90dbc8`.
+The earlier source precheck in `automatic_training.run` rejected the reviewed
+execution before the inner trainer's compatibility handling ran. Apply the same
+strict `training_signature` helper before that existing check and refresh the
+exact execution review. Preserve config checks, frozen signatures, pending
+replays and existing qualification/adoption receipts; do not add a blanket source
+override. Test the actual launcher command through CLI/config/run-lock/generation
+checks and the scheduler, stopping before collection, plus retry and rejection
+cases. No new bundle or benchmark. Retry the existing g1250 continuation command;
+the real next commit/restart remains Pending.
 
 **Git-only PPG path update (2026-11-07):** Pulled results to `f08a704`, export
 `20261107T125446333545Z-20261107T124611526805Z-b07-continue-e84bd233-c1155826`.

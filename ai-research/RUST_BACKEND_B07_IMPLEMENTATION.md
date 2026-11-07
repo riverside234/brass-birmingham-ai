@@ -6,6 +6,35 @@ The real g1250→g1251 commit/restart remains Pending.** Use the
 [Git checkout continuation commands](../distribution/rust-lab-b07-g1250/README.md);
 do not repeat passed qualifications. The installed game is unchanged.
 
+## Automatic training startup follow-up
+
+Pulled results inside `results/` to `a679f02`, export
+`20261107T131709467058Z-20261107T131647644898Z-b07-continue-953a2157-2b90dbc8`.
+The retry passed rollback verification, then stopped in the automatic reward
+scheduler's source precheck before entering the inner trainer. The preceding
+repair applied the exact source-compatibility check only inside that trainer;
+it missed the earlier check in `automatic_training.run`.
+
+Apply the same `training_signature` helper before the scheduler's existing
+`check_signature`. The full execution-source review includes these two added
+lines; its qualified source, same-config restriction and frozen job/receipt
+bindings stay unchanged. No general `--resume-reviewed-source` override is
+needed, and unknown execution changes or recipe edits still fail. The scheduler
+retains its normal automatic-stage validation. This attempt collected no new
+games or updates; the earlier pending iteration remains available for retry.
+
+Regression coverage now follows the continuation launcher's command through the
+real CLI, config validation, run lock, generation guard and automatic scheduler,
+stopping before model loading/collection. It also exercises repeated startup,
+stale generations, changed recipes, unknown execution (including an attempted
+override), missing backend selection and reference startup, checking that state
+and pending replay bytes stay unchanged and the lock is released. Run the same
+g1250 continuation command after syncing Git; do not repeat passing qualifications
+or extract an older ZIP. Real commit/restart remains Pending on the lab.
+
+All **11 affected debug checks passed in 28.291s** (seven startup checks plus
+four source/reload binding checks). No models, games, updates or benchmarks ran.
+
 ## Git-only PPG replay-location fix
 
 Results pulled inside `results/` to `f08a704`, export

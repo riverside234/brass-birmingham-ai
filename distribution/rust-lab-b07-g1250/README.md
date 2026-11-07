@@ -1,11 +1,12 @@
 # B07 g1250: Git checkout continuation after passed qualification
 
 **Latest lab status:** R8 qualification, both canaries, diagnostic continuation,
-Rust adoption and complete rollback restoration passed. The next retry prepared
-all 320 shards, then PPG rejected Rust's nested replay directory. The shared PPG
-source/rebuild checks now accept that exact native layout with its generation,
-model/reward/job/replay/feature bindings. The earlier missing-imitation-argument
-fix is retained. No new bundle or native build is needed. Pull Git and retry:
+Rust adoption and complete rollback restoration passed. The latest retry stopped
+at the automatic scheduler's source precheck, before the inner trainer could
+apply the reviewed PPG repair. That earlier precheck now uses the same exact
+source-compatibility helper. The PPG native-layout and imitation-argument fixes
+remain in place. No new source override, bundle or native build is needed. Pull
+Git and retry:
 
 ```bash
 git pull --ff-only
@@ -26,6 +27,9 @@ and its compatibility record. Historical ZIPs retain their original bytes.
 The actual next commit/restart remains **Pending** until the retry succeeds.
 The PPG path/retry repair has **39 passing focused debug checks**; no local
 benchmark or real training iteration was run.
+The startup follow-up passed **11 affected debug checks in 28.291s**, including
+the actual launcher → CLI → scheduler path, stopping before collection and
+checking that retries preserve pending work. No benchmarks ran.
 
 **R4 ordinary qualification passed.** The result was pulled inside `results/`
 at `9e219a2`. Same 3 families / 1,161 decisions / 675 forced rows, with equivalent

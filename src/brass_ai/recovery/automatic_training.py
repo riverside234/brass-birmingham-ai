@@ -21,6 +21,8 @@ def run(root,run_path,config,*,runner,iterations,**kwargs):
             config=S.follow_committed(config,state)
             from .resume import check_signature
             signature=dict(state['signature'],config=config,implementation=implementation_id())
+            from brass_ai.rust_backend.lab_replay_compat import training_signature
+            signature=training_signature(state,signature)
             check_signature(state,signature,reviewed=kwargs.get('resume_reviewed_source',False))
             target=S.automatic_next(config,state)
             if target!=config:
