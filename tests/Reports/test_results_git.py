@@ -1,5 +1,7 @@
 """Real local remotes cover automatic publication and isolation from code Git."""
 import importlib.util
+import contextlib
+import io
 import json
 import os
 from pathlib import Path
@@ -39,6 +41,13 @@ class RemoteIdentityTests(unittest.TestCase):
             'https://github.com:invalid/riverside234/ai-training-results.git',
         ):
             self.assertNotEqual(G.identity(remote), G.identity(G.REMOTE))
+
+    def test_remote_diagnostics_hide_credentials_and_query_fragment_values(self):
+        value = G.display('https://private_user:unit_test_only@github.com/another/repository.git?unit_query#unit_fragment')
+        self.assertIn('github.com/another/repository.git', value)
+        for secret in ('private_user', 'unit_test_only', 'unit_query', 'unit_fragment'):
+            self.assertNotIn(secret, value)
+        self.assertEqual(G.display('https://user:unit_test_only@github.com:invalid/path'), '<invalid remote URL>')
 
 
 class ResultsGitTests(unittest.TestCase):
@@ -122,16 +131,16 @@ class ResultsGitTests(unittest.TestCase):
         self.assertFalse((self.root / 'results/.git').exists())
         self.assertIsNone(G.head(self.remote))
 
-    def test_parent_repository_and_wrong_origin_are_rejected(self):
+    def test_parent_repository_is_rejected_but_existing_origin_does_not_select_target(self):
         (self.root / 'results').mkdir()
         with self.assertRaisesRegex(ValueError, 'own .git'):
             G.verify(self.root, str(self.remote))
         directory = G.prepare(self.root, str(self.remote))
-        with self.assertRaisesRegex(ValueError, 'origin'):
-            G.verify(self.root, 'https://github.com/another/repository.git')
+        self.cmd('remote', 'set-url', 'origin', 'https://github.com/another/repository.git', cwd=directory)
         self.cmd('config', 'remote.origin.pushurl', 'https://github.com/another/repository.git', cwd=directory)
-        with self.assertRaisesRegex(ValueError, 'origin'):
-            G.verify(self.root, str(self.remote))
+        before = (directory / '.git/config').read_bytes()
+        self.assertEqual(G.verify(self.root, str(self.remote)), directory)
+        self.assertEqual(before, (directory / '.git/config').read_bytes())
 
     def test_authenticated_github_origin_and_equivalent_ssh_push_pass_without_config_changes(self):
         directory = G.prepare(self.root, str(self.remote))
@@ -154,28 +163,90 @@ class ResultsGitTests(unittest.TestCase):
         self.assertEqual(G.verify(self.root), directory)
         self.assertEqual(before, (directory / '.git/config').read_bytes())
 
-    def test_additional_push_destination_is_rejected_without_disclosing_credentials(self):
+    def test_push_instead_of_cannot_redirect_the_explicit_scripted_target(self):
         directory = G.prepare(self.root, str(self.remote))
-        self.cmd('config', '--add', 'remote.origin.pushurl', str(self.remote), cwd=directory)
         token = 'unit_test_only_never_print'
-        self.cmd('config', '--add', 'remote.origin.pushurl',
-                 f'https://user:{token}@github.com/another/repository.git', cwd=directory)
+        self.cmd('config', f'url.https://user:{token}@github.com/another/repository.git.pushInsteadOf',
+                 str(self.remote), cwd=directory)
         before = (directory / '.git/config').read_bytes()
-        with self.assertRaisesRegex(ValueError, 'push does not identify') as error:
-            G.verify(self.root, str(self.remote))
-        self.assertNotIn(token, str(error.exception))
-        self.assertNotIn('https://user:', str(error.exception))
-        self.assertIn('--results-remote', str(error.exception))
+        result = self.cli('explicit-push')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn('explicit-push/export-manifest.json',
+                      self.cmd('ls-tree', '-r', '--name-only', 'main', cwd=self.remote))
+        self.assertNotIn(token, result.stdout + result.stderr)
         self.assertEqual(before, (directory / '.git/config').read_bytes())
 
-    def test_additional_fetch_destination_is_rejected(self):
+    def test_fetch_rewrite_to_another_repository_is_rejected(self):
         directory = G.prepare(self.root, str(self.remote))
-        self.cmd('config', '--add', 'remote.origin.url',
-                 'https://github.com/another/repository.git', cwd=directory)
+        self.cmd('config', 'url.https://github.com/another/repository.git.insteadOf',
+                 G.REMOTE, cwd=directory)
         before = (directory / '.git/config').read_bytes()
-        with self.assertRaisesRegex(ValueError, 'fetch/push does not identify'):
-            G.verify(self.root, str(self.remote))
+        with self.assertRaisesRegex(ValueError, 'fetch/push rewrite does not identify'):
+            G.verify(self.root)
         self.assertEqual(before, (directory / '.git/config').read_bytes())
+
+    def test_cli_default_uses_scripted_target_not_existing_origin_or_pushurl(self):
+        directory = G.prepare(self.root, str(self.remote))
+        unrelated = self.base / 'unrelated.git'
+        self.cmd('init', '--bare', '--initial-branch=main', str(unrelated), cwd=self.base)
+        self.cmd('remote', 'set-url', 'origin', str(unrelated), cwd=directory)
+        self.cmd('config', 'remote.origin.pushurl', str(unrelated), cwd=directory)
+        before = (directory / '.git/config').read_bytes()
+        spec = importlib.util.spec_from_file_location('export_selected_default', ROOT / 'scripts/export-training-reports.py')
+        reports = importlib.util.module_from_spec(spec);spec.loader.exec_module(reports)
+        argv = ['export-training-reports.py', '--root', str(self.root), '--run', self.run,
+                '--output', 'results/scripted-target', '--continue']
+        with patch.object(G, 'REMOTE', str(self.remote)), patch.object(sys, 'argv', argv), \
+                contextlib.redirect_stdout(io.StringIO()):
+            reports.main()
+        self.assertIn('scripted-target/export-manifest.json',
+                      self.cmd('ls-tree', '-r', '--name-only', 'main', cwd=self.remote))
+        self.assertIsNone(G.head(unrelated))
+        self.assertEqual(before, (directory / '.git/config').read_bytes())
+
+    def test_publication_without_origin_uses_selected_target(self):
+        directory = G.prepare(self.root, str(self.remote))
+        self.cmd('remote', 'remove', 'origin', cwd=directory)
+        result = self.cli('without-origin')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn('without-origin/export-manifest.json',
+                      self.cmd('ls-tree', '-r', '--name-only', 'main', cwd=self.remote))
+        self.assertEqual(self.cmd('remote', cwd=directory), '')
+
+    def remote_commit(self, directory, parent, message):
+        tree = self.cmd('rev-parse', parent + '^{tree}', cwd=directory)
+        return G.git(directory, 'commit-tree', tree, '-p', parent, data=message.encode()).stdout.decode().strip()
+
+    def test_selected_target_fast_forward_works_with_unrelated_origin(self):
+        first = self.cli('first')
+        self.assertEqual(first.returncode, 0, first.stderr)
+        directory = self.root / 'results'
+        parent = G.head(self.remote)
+        advanced = self.remote_commit(self.remote, parent, 'External results advance\n')
+        self.cmd('update-ref', 'refs/heads/main', advanced, cwd=self.remote)
+        self.cmd('remote', 'set-url', 'origin', 'https://example.invalid/unrelated.git', cwd=directory)
+        config = (directory / '.git/config').read_bytes()
+        result = self.cli('after-advance')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(self.cmd('merge-base', advanced, 'HEAD', cwd=directory), advanced)
+        self.assertEqual(G.head(directory), G.head(self.remote))
+        self.assertEqual(config, (directory / '.git/config').read_bytes())
+
+    def test_selected_target_divergence_rejects_before_export_and_keeps_both_histories(self):
+        first = self.cli('first')
+        self.assertEqual(first.returncode, 0, first.stderr)
+        directory = self.root / 'results';parent = G.head(self.remote)
+        local = self.remote_commit(directory, parent, 'Local results advance\n')
+        external = self.remote_commit(self.remote, parent, 'External results advance\n')
+        self.cmd('update-ref', 'refs/heads/main', local, cwd=directory)
+        self.cmd('update-ref', 'refs/heads/main', external, cwd=self.remote)
+        before = (directory / '.git/index').read_bytes()
+        result = self.cli('divergent')
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('history diverged', result.stderr)
+        self.assertFalse((directory / 'divergent').exists())
+        self.assertEqual(G.head(directory), local);self.assertEqual(G.head(self.remote), external)
+        self.assertEqual(before, (directory / '.git/index').read_bytes())
 
     def test_main_tracked_results_are_rejected_before_nested_repo_creation(self):
         (self.root / 'results').mkdir()

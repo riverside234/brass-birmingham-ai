@@ -8,6 +8,7 @@ import shutil
 import subprocess
 import tempfile
 from urllib.parse import urlsplit
+import uuid
 import results_git_auth
 
 
@@ -19,14 +20,15 @@ def require(value, message):
         raise ValueError(message)
 
 
-def git(directory, *args, data=None, allowed=(0,), auth_root=None, auth_remote=None):
+def git(directory, *args, data=None, allowed=(0,), auth_root=None, auth_remote=None, config=()):
     env = dict(os.environ, GIT_TERMINAL_PROMPT='0', GCM_INTERACTIVE='Never')
     for name in ('GIT_DIR', 'GIT_WORK_TREE', 'GIT_INDEX_FILE', 'GIT_OBJECT_DIRECTORY',
                  'GIT_ALTERNATE_OBJECT_DIRECTORIES', 'GIT_COMMON_DIR'):
         env.pop(name, None)
     authentication = results_git_auth.git_options(auth_root, auth_remote, env) if auth_root is not None else []
+    options = [arg for setting in config for arg in ('-c', setting)]
     literal = [] if args[0] == 'check-ignore' else ['--literal-pathspecs']
-    result = subprocess.run(['git', '-c', 'core.longpaths=true', *authentication,
+    result = subprocess.run(['git', '-c', 'core.longpaths=true', *authentication, *options,
                              *literal, '-C', str(directory), *args],
                             input=data, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                             env=env, timeout=300)
@@ -37,6 +39,19 @@ def git(directory, *args, data=None, allowed=(0,), auth_root=None, auth_remote=N
                         '\nTo retry an already committed upload: python scripts/export-training-reports.py --push-only')
         raise ValueError(f'Results Git {args[0]} failed: {message}')
     return result
+
+
+def selected_git(directory, remote, command, *args, before=(), auth_root=None):
+    """Pin both URLs per command; never write origin/upstream configuration.
+
+    An explicit push URL also prevents pushInsteadOf from redirecting uploads.
+    Normal insteadOf resolution applies equally to both URLs and is verified.
+    Git transport commands accept command-scoped remotes without creating them.
+    """
+    alias = 'report-export-' + uuid.uuid4().hex
+    settings = (f'remote.{alias}.url={remote}', f'remote.{alias}.pushurl={remote}')
+    return git(directory, command, *before, alias, *args, config=settings,
+               auth_root=auth_root, auth_remote=remote)
 
 
 def identity(remote):
@@ -65,6 +80,25 @@ def identity(remote):
     return value.removesuffix('.git')
 
 
+def display(remote):
+    """Describe a repository without printing URL credentials/query values."""
+    scp = re.fullmatch(r'(?:[^@/:]+@)?([A-Za-z0-9.-]+):([^\s]+)', remote)
+    try:
+        url = urlsplit(remote)
+        if url.hostname and re.fullmatch(r'[A-Za-z0-9.-]+', url.hostname):
+            host = url.hostname + (':' + str(url.port) if url.port is not None else '')
+            path = url.path.removeprefix('/').rstrip('/')
+            suffix = ' [query/fragment present]' if url.query or url.fragment else ''
+        elif scp:
+            host, path = scp.groups();suffix = ''
+        else:
+            return '<local or unrecognized remote>'
+        path = path if re.fullmatch(r'[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+', path) else '<path hidden>'
+        return host + '/' + path + suffix
+    except ValueError:
+        return '<invalid remote URL>'
+
+
 def head(directory, ref='HEAD'):
     result = git(directory, 'rev-parse', '--verify', ref, allowed=(0, 128))
     return result.stdout.decode().strip() if result.returncode == 0 else None
@@ -79,16 +113,20 @@ def verify(root, remote=REMOTE):
             'results/ must have its own .git directory; a parent repository or submodule is not accepted')
     top = Path(git(directory, 'rev-parse', '--show-toplevel').stdout.decode().strip()).resolve()
     require(top == directory.resolve(), 'Refusing to publish the parent code repository')
-    origins = git(directory, 'remote', 'get-url', '--all', 'origin').stdout.decode().splitlines()
-    push_origins = git(directory, 'remote', 'get-url', '--push', '--all', 'origin').stdout.decode().splitlines()
+    # Resolve the exact command-scoped target, not origin. Both explicit URLs
+    # are equal, so ordinary URL rewrites must produce the same destination.
+    origins = selected_git(directory, remote, 'ls-remote', before=('--get-url',)).stdout.decode().splitlines()
+    push_origins = origins
     expected = identity(remote)
     mismatch = [kind for kind, urls in (('fetch', origins), ('push', push_origins))
                 if not urls or any(identity(url) != expected for url in urls)]
     require(not mismatch,
-            'Unexpected results origin/push URL: ' + '/'.join(mismatch) +
-            ' does not identify the selected results repository. Correct results/ origin, '
+            'Unexpected results target URL: ' + '/'.join(mismatch) +
+            ' rewrite does not identify the selected results repository. Correct the Git URL rewrite, '
             'or use --results-remote URL for an intentional alternate repository. '
-            'Equivalent GitHub HTTPS/SSH URLs, including HTTPS credentials, are accepted.')
+            'Equivalent GitHub HTTPS/SSH URLs, including HTTPS credentials, are accepted. '
+            'Selected: ' + display(remote) + '; resolved fetch: ' + ', '.join(map(display, origins)) +
+            '; resolved push: ' + ', '.join(map(display, push_origins)))
     branch = git(directory, 'symbolic-ref', '--quiet', '--short', 'HEAD').stdout.decode().strip()
     require(branch == 'main', 'Results repository must use the main branch')
     parent = git(root, 'rev-parse', '--show-toplevel', allowed=(0, 128))
@@ -146,10 +184,11 @@ def transaction(root, remote=REMOTE):
             stream.write(str(os.getpid()) + '\n')
         require(not git(directory, 'diff', '--cached', '--name-only', '-z').stdout,
                 'Results index has staged changes; finish that commit before automatic export')
-        refs = git(directory, 'ls-remote', '--heads', 'origin', 'refs/heads/main', auth_root=root, auth_remote=remote).stdout
+        refs = selected_git(directory, remote, 'ls-remote', 'refs/heads/main', before=('--heads',), auth_root=root).stdout
         if refs:
-            git(directory, 'fetch', 'origin', 'refs/heads/main:refs/remotes/origin/main', auth_root=root, auth_remote=remote)
-            remote_head = head(directory, 'refs/remotes/origin/main')
+            remote_ref = 'refs/results-export/' + hashlib.sha256(identity(remote).encode()).hexdigest() + '/main'
+            selected_git(directory, remote, 'fetch', 'refs/heads/main:' + remote_ref, auth_root=root)
+            remote_head = head(directory, remote_ref)
             local = head(directory)
             require(local is not None, 'Results HEAD is missing')
             if local != remote_head:
@@ -221,5 +260,5 @@ def push(root, directory, remote=REMOTE):
     verify(root, remote)
     require(head(directory), 'There are no committed reports to upload')
     # No force/rebase/reset. A rejected push leaves the commit available to retry.
-    git(directory, 'push', '--set-upstream', 'origin', 'HEAD:refs/heads/main', auth_root=root, auth_remote=remote)
+    selected_git(directory, remote, 'push', 'HEAD:refs/heads/main', auth_root=root)
     return head(directory)

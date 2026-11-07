@@ -9,8 +9,9 @@ With --continue, unchanged reports remain in earlier bundles and the new
 manifest records their verified locations. Rating slots include only the latest
 committed generation; the cumulative archive is still included when present.
 The CLI publishes to the independent ai-training-results repository by default.
-Existing GitHub HTTPS (including authenticated URLs) and SSH remotes are matched
-by repository identity; every configured fetch/push destination must match.
+Fetch/push use the configured results URL directly, independently of origin.
+Git URL rewrites must preserve that repository's identity. Authentication may
+come from the existing private .env.results-git credential file.
 Use --no-push to export locally without Git or network operations.
 """
 import argparse
@@ -585,7 +586,7 @@ def main():
         if args.push_only:
             with results_git.transaction(args.root, args.results_remote) as directory:
                 commit = results_git.push(args.root, directory, args.results_remote)
-                print(f'Uploaded results commit {commit} to {args.results_remote}')
+                print(f'Uploaded results commit {commit} to {results_git.display(args.results_remote)}')
             return
         def collect():
             return export(args.root, args.run, args.output, latest=args.latest, extras=args.extra,
@@ -596,7 +597,7 @@ def main():
             with results_git.transaction(args.root, args.results_remote) as directory:
                 output, manifest = collect()
                 commit = results_git.publish(args.root, directory, output, manifest, args.results_remote)
-                print(f'Uploaded results commit {commit} to {args.results_remote}')
+                print(f'Uploaded results commit {commit} to {results_git.display(args.results_remote)}')
     except (ValueError, OSError, EOFError, subprocess.TimeoutExpired) as error:
         parser.exit(1, f'Export failed: {error}\n')
     print(f'Copied {len(manifest["files"])} reports/metadata files to {output}')

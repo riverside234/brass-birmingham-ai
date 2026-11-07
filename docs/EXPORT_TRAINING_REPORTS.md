@@ -29,12 +29,18 @@ python scripts/export-training-reports.py \
 ```
 
 The CLI fetches and publishes through the independent `results/` repository.
-Its default destination is `riverside234/ai-training-results` on GitHub. Remote
-validation accepts equivalent HTTPS/SSH addresses, including HTTPS usernames or
-credentials and Git's authenticated URL rewrites. Every configured fetch and
-push URL must identify that same repository; a second push destination is also
-checked. Validation errors identify the fetch/push mismatch without printing
-remote credentials. For an intentional alternate results repository, supply
+Its default destination is `https://github.com/riverside234/ai-training-results.git`,
+configured in `scripts/results_git.py`. Every fetch/push uses that URL directly;
+an older or absent `results/origin` does not select the destination or block
+export. Each operation pins both URLs in command-scoped Git configuration;
+`pushInsteadOf` cannot redirect the upload. Existing origin URLs and upstream
+settings are preserved. The private
+project-root `.env.results-git` file (`RESULTS_GIT_URL`) supplies authentication;
+it does not replace the scripted destination. Validation accepts equivalent
+HTTPS/SSH addresses and authenticated URL rewrites for the selected repository,
+and rejects rewrites to another host/repository without printing credentials.
+Selected-target history must still be compatible; divergent history is never
+force-pushed. For an intentional alternate results repository, supply
 `--results-remote URL`. Use `--no-push` for a local export with no Git operations.
 
 `--continue` still creates a **new** generation/timestamp folder. It finds prior
