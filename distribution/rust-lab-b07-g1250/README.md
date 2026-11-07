@@ -1,30 +1,32 @@
 # B07 g1250: Git checkout continuation after passed qualification
 
 **Latest lab status:** R8 qualification, both canaries, diagnostic continuation,
-Rust adoption and complete rollback restoration passed. The latest retry stopped
-at the automatic scheduler's source precheck, before the inner trainer could
-apply the reviewed PPG repair. That earlier precheck now uses the same exact
-source-compatibility helper. The PPG native-layout and imitation-argument fixes
-remain in place. No new source override, bundle or native build is needed. Pull
-Git and retry:
+Rust adoption, complete rollback restoration and the **real g1250→g1251 training
+commit/full restart passed**. Results were pulled inside `results/` to `c51c7d9`:
+[successful production receipt](../../results/rust-lab-qualification/20261107T134344148855Z-20261107T133341969715Z-b07-continue-cf42c992-3ed81ebb/evidence/qualification.json).
+Rust collected the training data; g1251 and its full optimizer/RNG/PPG state
+restored successfully. All eight exported files passed byte/hash verification.
+This closes B07's teacher-off backend adoption gate. Continue normally from
+g1251 using the command below; keep the original lab evidence and native binaries.
+No new source override, bundle or native build is needed.
+
+The earlier scheduler/PPG/imitation failures are resolved. If verifying the
+already completed adoption boundary, the repeat-safe command is:
 
 ```bash
 git pull --ff-only
 python scripts/continue-rust-lab-b07.py --expected-generation 1250
 ```
 
-Since Rust is already selected at g1250, this skips the passed qualifications and
-adoption, verifies rollback, runs one real iteration and verifies its checkpoint.
-Keep `iteration-1250` intact: the exact execution-source review preserves its
-frozen collection signature, allowing normal validated reuse of the collected
-families. It does not rebind or rewrite old receipts. The new actual execution
-fingerprint is recorded separately; any unreviewed code or recipe change fails.
-If g1251 already committed, it verifies only. Keep the original lab evidence and
-native binaries. Do not extract R8 or an older ZIP over this Git update. The
+At the observed g1251 boundary, it verifies only and never starts g1252. If
+recovering the earlier adopted g1250 boundary, it skips passed qualifications,
+preserves collected families and runs only that first real iteration. The exact
+execution-source review retains frozen collection signatures and records actual
+execution separately; unreviewed code or recipe changes fail. Do not extract R8
+or an older ZIP over this Git update. The
 tracked manifest still checks every listed file, including the reviewed repair
 and its compatibility record. Historical ZIPs retain their original bytes.
 
-The actual next commit/restart remains **Pending** until the retry succeeds.
 The PPG path/retry repair has **39 passing focused debug checks**; no local
 benchmark or real training iteration was run.
 The startup follow-up passed **11 affected debug checks in 28.291s**, including
@@ -141,8 +143,8 @@ this workflow does not enable production teaching or change checkpoint metadata.
 
 ## Continue from g1251 after qualification/adoption finishes
 
-After the command above succeeds and g1251 is committed, run from the lab code
-checkout in the same training environment:
+The latest lab receipt confirms g1251 is committed. Run from the lab code checkout
+in the same training environment:
 
 ```bash
 python scripts/step5.py --root "$PWD" --config configs/step5/joint7-v11-2-g1290-trained-restart-g1247.json --device cuda --mono mono train --run artifacts/step5/joint7-v11-2-g1290-trained-restart --imitation-run artifacts/step5/features4-v11-2-batch7-il --expected-generation 1251 --iterations 1

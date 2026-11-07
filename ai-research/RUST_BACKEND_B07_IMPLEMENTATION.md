@@ -1,10 +1,33 @@
 # B07: cheaper native collection and bounded adoption
 
 Updated on 2026-11-07. **R8 lab qualification, both shadow canaries, diagnostic
-continuation, Rust adoption and full rollback restoration passed on g1250.
-The real g1250→g1251 commit/restart remains Pending.** Use the
-[Git checkout continuation commands](../distribution/rust-lab-b07-g1250/README.md);
+continuation, Rust adoption and full rollback restoration passed on g1250;
+the real g1250→g1251 commit and full restart now passed on the lab.** Use the
+[normal g1251 continuation command](../distribution/rust-lab-b07-g1250/README.md#continue-from-g1251-after-qualificationadoption-finishes);
 do not repeat passed qualifications. The installed game is unchanged.
+
+## Lab g1250 → g1251 acceptance
+
+Pulled inside `results/` to `c51c7d9`, export
+`20261107T134344148855Z-20261107T133341969715Z-b07-continue-cf42c992-3ed81ebb`.
+Its [production receipt](../results/rust-lab-qualification/20261107T134344148855Z-20261107T133341969715Z-b07-continue-cf42c992-3ed81ebb/evidence/qualification.json)
+reports `passed=true`, Rust active, teacher off and generation 1251. The real
+trainer prepared 320 shards, performed 52 PPO steps and 48 accepted value steps,
+and committed checkpoint
+`a6ccace46d17b14751086d1715a70543355b9a6e6a89fa55eb080917882adf27`.
+The next-checkpoint verifier checked actual native collection and persisted
+backend identity, then restored the complete new checkpoint and dependencies
+in isolation, including all four optimizers, CUDA RNG and PPG ages 1250/1251.
+The saved pre-adoption g1250 rollback also passed its separate full restore.
+
+All eight exported files match their recorded byte counts and SHA256 bindings,
+including the decompressed diagnostic fork. This latest export contains no
+failure traceback. It closes B07's teacher-off production backend migration and
+first normal commit/restart gate. Production teaching and later strength or
+throughput campaigns retain their separate gates. These are evidence and status
+updates only: execution source remains
+`94a0e5d1d03210ad93759f2aedd6f7f15cca4bb826300df7b6de04f033199ff2`.
+No local tests, benchmarks, training or new archive were needed for this review.
 
 ## Automatic training startup follow-up
 
@@ -30,7 +53,7 @@ stale generations, changed recipes, unknown execution (including an attempted
 override), missing backend selection and reference startup, checking that state
 and pending replay bytes stay unchanged and the lock is released. Run the same
 g1250 continuation command after syncing Git; do not repeat passing qualifications
-or extract an older ZIP. Real commit/restart remains Pending on the lab.
+or extract an older ZIP. That retry subsequently passed; see the acceptance above.
 
 All **11 affected debug checks passed in 28.291s** (seven startup checks plus
 four source/reload binding checks). No models, games, updates or benchmarks ran.
@@ -67,8 +90,8 @@ unchanged; the review covers the path repair and its retry integration only.
 Retry with the same `continue-rust-lab-b07.py --expected-generation 1250` command
 after pulling Git. Keep the pending iteration and original qualification/build
 directories; do not delete, rename or rewrite its collected shards. Passing
-qualification/adoption is reused. No archive is created. The real commit/restart
-remains Pending until the lab retry completes.
+qualification/adoption is reused. No archive is created. This repair and the
+startup follow-up subsequently passed the real commit/restart gate above.
 
 Thirty-nine focused debug checks passed across the affected suites, including
 actual native-layout PPG staging with old/new critic ages, cold feature/target
@@ -158,8 +181,8 @@ to R7. Keep explicit same-config continuation approvals and exact native receipt
 pins. Reuse the R6 teacher binary/tests and R4 ordinary result; the R7 fixture
 failure provides no successful canary to reuse. The [R8 bundle commands](../distribution/rust-lab-b07-g1250/README.md)
 run only remaining gates, with adoption and g1251 continuation commands retained.
-Those lab qualification/adoption gates subsequently passed; see the Git-only
-continuation result above. The real next checkpoint/restart is still Pending.
+Those lab qualification/adoption gates and the real next checkpoint/restart
+subsequently passed; see the acceptance above.
 
 ## R7: strict checkpoint reload repair
 
