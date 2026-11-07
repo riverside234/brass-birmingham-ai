@@ -15,6 +15,32 @@ sys.path.insert(0, str(ROOT / 'scripts'))
 import results_git as G
 
 
+class RemoteIdentityTests(unittest.TestCase):
+    def test_github_transport_and_auth_variants_share_one_repository_identity(self):
+        for remote in (
+            G.REMOTE, 'https://github.com/riverside234/ai-training-results/',
+            'https://riverside234@github.com/riverside234/ai-training-results.git',
+            'https://user:unit_test_only@github.com/riverside234/ai-training-results.git',
+            'https://user%40name:unit%2Ftest@github.com:443/RIVERSIDE234/AI-TRAINING-RESULTS.GIT/',
+            'git@GitHub.com:Riverside234/ai-training-results.git',
+            'ssh://git@github.com:22/riverside234/ai-training-results.git',
+        ):
+            self.assertEqual(G.identity(remote), G.identity(G.REMOTE))
+
+    def test_other_repositories_hosts_and_url_modifiers_do_not_match(self):
+        for remote in (
+            'https://github.com/riverside234/brass-birmingham-ai.git',
+            'https://github.com/another/ai-training-results.git',
+            'https://github.com.invalid/riverside234/ai-training-results.git',
+            'https://github.com@example.invalid/riverside234/ai-training-results.git',
+            G.REMOTE + '?other', G.REMOTE + '#other',
+            'https://github.com:444/riverside234/ai-training-results.git',
+            'ssh://git@github.com:2222/riverside234/ai-training-results.git',
+            'https://github.com:invalid/riverside234/ai-training-results.git',
+        ):
+            self.assertNotEqual(G.identity(remote), G.identity(G.REMOTE))
+
+
 class ResultsGitTests(unittest.TestCase):
     def setUp(self):
         temp = tempfile.TemporaryDirectory(dir=ROOT / 'artifacts', prefix='results-push-test-')
@@ -106,6 +132,50 @@ class ResultsGitTests(unittest.TestCase):
         self.cmd('config', 'remote.origin.pushurl', 'https://github.com/another/repository.git', cwd=directory)
         with self.assertRaisesRegex(ValueError, 'origin'):
             G.verify(self.root, str(self.remote))
+
+    def test_authenticated_github_origin_and_equivalent_ssh_push_pass_without_config_changes(self):
+        directory = G.prepare(self.root, str(self.remote))
+        index = (self.root / '.git/index').read_bytes()
+        self.cmd('remote', 'set-url', 'origin',
+                 'https://user:unit_test_only@github.com/riverside234/ai-training-results.git', cwd=directory)
+        self.cmd('config', 'remote.origin.pushurl',
+                 'ssh://git@github.com:22/riverside234/ai-training-results.git', cwd=directory)
+        config = (directory / '.git/config').read_bytes()
+        self.assertEqual(G.verify(self.root), directory)
+        self.assertEqual(config, (directory / '.git/config').read_bytes())
+        self.assertEqual(index, (self.root / '.git/index').read_bytes())
+
+    def test_git_authenticated_url_rewrite_is_recognized_without_network(self):
+        directory = G.prepare(self.root, str(self.remote))
+        self.cmd('remote', 'set-url', 'origin', G.REMOTE, cwd=directory)
+        self.cmd('config', 'url.https://user:unit_test_only@github.com/.insteadOf',
+                 'https://github.com/', cwd=directory)
+        before = (directory / '.git/config').read_bytes()
+        self.assertEqual(G.verify(self.root), directory)
+        self.assertEqual(before, (directory / '.git/config').read_bytes())
+
+    def test_additional_push_destination_is_rejected_without_disclosing_credentials(self):
+        directory = G.prepare(self.root, str(self.remote))
+        self.cmd('config', '--add', 'remote.origin.pushurl', str(self.remote), cwd=directory)
+        token = 'unit_test_only_never_print'
+        self.cmd('config', '--add', 'remote.origin.pushurl',
+                 f'https://user:{token}@github.com/another/repository.git', cwd=directory)
+        before = (directory / '.git/config').read_bytes()
+        with self.assertRaisesRegex(ValueError, 'push does not identify') as error:
+            G.verify(self.root, str(self.remote))
+        self.assertNotIn(token, str(error.exception))
+        self.assertNotIn('https://user:', str(error.exception))
+        self.assertIn('--results-remote', str(error.exception))
+        self.assertEqual(before, (directory / '.git/config').read_bytes())
+
+    def test_additional_fetch_destination_is_rejected(self):
+        directory = G.prepare(self.root, str(self.remote))
+        self.cmd('config', '--add', 'remote.origin.url',
+                 'https://github.com/another/repository.git', cwd=directory)
+        before = (directory / '.git/config').read_bytes()
+        with self.assertRaisesRegex(ValueError, 'fetch/push does not identify'):
+            G.verify(self.root, str(self.remote))
+        self.assertEqual(before, (directory / '.git/config').read_bytes())
 
     def test_main_tracked_results_are_rejected_before_nested_repo_creation(self):
         (self.root / 'results').mkdir()

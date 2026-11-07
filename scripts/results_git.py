@@ -3,9 +3,11 @@ from contextlib import contextmanager
 import hashlib
 import os
 from pathlib import Path
+import re
 import shutil
 import subprocess
 import tempfile
+from urllib.parse import urlsplit
 import results_git_auth
 
 
@@ -38,10 +40,28 @@ def git(directory, *args, data=None, allowed=(0,), auth_root=None, auth_remote=N
 
 
 def identity(remote):
+    """Compare GitHub repositories independently of transport and credentials.
+
+    Git expands insteadOf/pushInsteadOf in get-url, so authenticated HTTPS URLs
+    can appear even when origin was configured with a clean URL. Never include
+    those URLs in validation errors. Non-GitHub/local remotes retain their exact
+    identity; --results-remote still explicitly selects an alternate repository.
+    """
     value = remote.rstrip('/')
-    for prefix in ('https://github.com/', 'ssh://git@github.com/', 'git@github.com:'):
-        if value.startswith(prefix):
-            return 'github.com/' + value[len(prefix):].removesuffix('.git').lower()
+    scp = re.fullmatch(r'git@github\.com:(.+)', value, flags=re.IGNORECASE)
+    if scp:
+        return 'github.com/' + scp[1].lower().removesuffix('.git')
+    try:
+        url = urlsplit(value)
+        github = (url.hostname == 'github.com' and not url.query and not url.fragment
+                  and ((url.scheme == 'https' and url.port in (None, 443))
+                       or (url.scheme == 'ssh' and url.username == 'git'
+                           and url.password is None and url.port in (None, 22))))
+        if github:
+            return 'github.com/' + url.path.removeprefix('/').lower().removesuffix('.git')
+    except ValueError:
+        # Malformed URLs cannot gain the canonical identity of the expected URL.
+        pass
     return value.removesuffix('.git')
 
 
@@ -59,9 +79,16 @@ def verify(root, remote=REMOTE):
             'results/ must have its own .git directory; a parent repository or submodule is not accepted')
     top = Path(git(directory, 'rev-parse', '--show-toplevel').stdout.decode().strip()).resolve()
     require(top == directory.resolve(), 'Refusing to publish the parent code repository')
-    origin = git(directory, 'remote', 'get-url', 'origin').stdout.decode().strip()
-    push_origin = git(directory, 'remote', 'get-url', '--push', 'origin').stdout.decode().strip()
-    require(identity(origin) == identity(push_origin) == identity(remote), 'Unexpected results origin/push URL')
+    origins = git(directory, 'remote', 'get-url', '--all', 'origin').stdout.decode().splitlines()
+    push_origins = git(directory, 'remote', 'get-url', '--push', '--all', 'origin').stdout.decode().splitlines()
+    expected = identity(remote)
+    mismatch = [kind for kind, urls in (('fetch', origins), ('push', push_origins))
+                if not urls or any(identity(url) != expected for url in urls)]
+    require(not mismatch,
+            'Unexpected results origin/push URL: ' + '/'.join(mismatch) +
+            ' does not identify the selected results repository. Correct results/ origin, '
+            'or use --results-remote URL for an intentional alternate repository. '
+            'Equivalent GitHub HTTPS/SSH URLs, including HTTPS credentials, are accepted.')
     branch = git(directory, 'symbolic-ref', '--quiet', '--short', 'HEAD').stdout.decode().strip()
     require(branch == 'main', 'Results repository must use the main branch')
     parent = git(root, 'rev-parse', '--show-toplevel', allowed=(0, 128))

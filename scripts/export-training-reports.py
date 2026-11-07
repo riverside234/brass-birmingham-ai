@@ -9,6 +9,8 @@ With --continue, unchanged reports remain in earlier bundles and the new
 manifest records their verified locations. Rating slots include only the latest
 committed generation; the cumulative archive is still included when present.
 The CLI publishes to the independent ai-training-results repository by default.
+Existing GitHub HTTPS (including authenticated URLs) and SSH remotes are matched
+by repository identity; every configured fetch/push destination must match.
 Use --no-push to export locally without Git or network operations.
 """
 import argparse
