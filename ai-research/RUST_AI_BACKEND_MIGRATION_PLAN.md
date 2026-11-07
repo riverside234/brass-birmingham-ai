@@ -825,9 +825,9 @@ PPG retains two ages, up to two epochs each iteration, batch 4096, clone set 819
 
 Use the pinned existing Rust `search_v1` Gumbel IS-MCTS equations and session lifecycle: full legal priors, raw actor task utility, c1=50/c2=0.1, Gumbel root candidates, sequential halving, completed-round recommendation eligibility, information-set ownership, exact terminal settlement and causal insolvency ledger. Root belief sampling remains the admitted current-view approximation. No negamax, Q normalization, hidden-state policy leakage, tree-sharing, search_v2 or V205 substitution.
 
-The historical B04 teacher profile is `teacher-phase/1.1.0`, producer `brass-lab-teacher/1.1.0`; B04.5 extends these to version 2.0.0 for all-seat search. The 16 reserved full-profile turns get **4 seconds of search admission plus at most 1 additional second of post-search work**, K16. The other 48 turns get 0.8s/K4 plus at most 0.2s post-work and no policy labels. Keep one session/thread/pending path per table. Two smoke tables run concurrently in separate one-thread sessions. Finalization is not deducted from search time. Search may finish early under its frozen quota/admission rules; unused time does not authorize more search during finalization. Action two, payment, continuation, bonus and replans retain the same absolute search/delivery cutoffs and cumulative post-work cap.
+The historical B04 teacher profile is `teacher-phase/1.1.0`, producer `brass-lab-teacher/1.1.0`; B04.5 extends these to version 2.0.0 for all-seat search. The 16 reserved full-profile turns get **4 seconds of search admission plus at most 1 additional second of post-search work**, K16. The other 48 turns get 0.8s/K4 plus at most 0.5s post-work and no policy labels. Keep one session/thread/pending path per table. Two smoke tables run concurrently in separate one-thread sessions. Finalization is not deducted from search time. Search may finish early under its frozen quota/admission rules; unused time does not authorize more search during finalization. Action two, payment, continuation, bonus and replans retain the same absolute search/delivery cutoffs and cumulative post-work cap.
 
-Measure selection, label construction, actual-state commit, verification/encoding, IPC, deferred sealing and total delivery separately. Complete-turn labels cross IPC together. Keep all identity, actor/revision, cancellation, actual-successor, legality, finite tensor, target and logit checks. A one-use frozen verification cache avoids repeating those checks at the phase barrier; changed model/job/table bytes invalidate it. Fast shard compression and small receipts reduce sealing cost. Charge deferred sealing to the last searched turn's remaining post-work allowance (1s full, 0.2s fast); never grant a new allowance for it. Late results fail publication. The 30-second process watchdog is failure recovery, not permitted latency. Historical 4-second-inclusive/0.4-second-reserve receipts cannot establish this new timing gate.
+Measure selection, label construction, actual-state commit, verification/encoding, IPC, deferred sealing and total delivery separately. Complete-turn labels cross IPC together. Keep all identity, actor/revision, cancellation, actual-successor, legality, finite tensor, target and logit checks. A one-use frozen verification cache avoids repeating those checks at the phase barrier; changed model/job/table bytes invalidate it. Fast shard compression and small receipts reduce sealing cost. Charge deferred sealing to the last searched turn's remaining post-work allowance (1s full, 0.5s fast); never grant a new allowance for it. Late results fail publication. The 30-second process watchdog is failure recovery, not permitted latency. Historical 4-second-inclusive/0.4-second-reserve receipts cannot establish this new timing gate.
 
 #### Required continuation of joint7-v11-2-g1290-trained-restart
 
@@ -863,7 +863,7 @@ Keep Python target construction, GAE, PPO behavior likelihoods, critic/local-sco
 | B04.5 | **Passed on pinned g1250** | Exact r3 source/model/device; two shadow tables, 49 policy labels, 128 value rows, one isolated head step; production unchanged |
 | B05 | **Passed on pinned g1250** | R2 CUDA ordinary/teacher component updates, head-only update, full-state/age restoration; no new games or production adoption |
 | B06 | **Passed bounded correctness/measurement; useful performance gate not passed** | Same 3 families / 1,161 decisions; native accepted work 55.265s vs reference 28.596s; Python collection/admission bottleneck identified; eight 4s/K16 teacher turns passed |
-| B07 | **R4 ordinary correctness/useful performance passed; R5 completion workflow implemented; lab canaries/adoption/G→G+1 Pending** | Reuse qualified Rust ordinary backend, finish only remaining shadow/restore gates, then locked same-run adoption and one real iteration/restart |
+| B07 | **R4 ordinary correctness/useful performance passed; R6 sealing/deadline repair implemented; lab canaries/adoption/G→G+1 Pending** | Reuse qualified Rust ordinary backend, finish only remaining shadow/restore gates, then locked same-run adoption and one real iteration/restart |
 
 #### B01 — Pin lab state and qualify Linux/GPU adapters
 
@@ -911,7 +911,7 @@ Compare the once-only verification path against the previous end-of-table verifi
 
 #### B04.5 — Search-play value
 
-Follow [RUST_BACKEND_B045_SEARCH_VALUE_PLAN.md](RUST_BACKEND_B045_SEARCH_VALUE_PLAN.md) and the [implementation/compatibility notes](RUST_BACKEND_B045_IMPLEMENTATION.md). The lab Rust protocol is version 2; deployment stays on its existing main-utility path. All 64 turns search: 16 reserved full turns at 4s/K16 plus at most 1s post-work, 48 unlabelled fast turns at 0.8s/K4 plus at most 0.2s post-work. Use one session/thread per table. Keep policy labels unchanged and value rows entirely separate from ordinary replay.
+Follow [RUST_BACKEND_B045_SEARCH_VALUE_PLAN.md](RUST_BACKEND_B045_SEARCH_VALUE_PLAN.md) and the [implementation/compatibility notes](RUST_BACKEND_B045_IMPLEMENTATION.md). The lab Rust protocol is version 2; deployment stays on its existing main-utility path. All 64 turns search: 16 reserved full turns at 4s/K16 plus at most 1s post-work, 48 unlabelled fast turns at 0.8s/K4 plus at most 0.5s post-work. Use one session/thread per table. Keep policy labels unchanged and value rows entirely separate from ordinary replay.
 
 The opt-in, zero-initialized registered correction head, companion Adam, lambda returns, eight-age reward-bound buffer, deterministic G0/G1/G2 gates, stage machine and guarded post-PPG pass are implemented. Teacher modes remain disabled in production. The separate 256-game 2v2/seat-rotation evaluation tool is not part of smoke tests.
 
@@ -960,6 +960,20 @@ Keep the short-test scope: eight fixed-root turns in ABBA pairs, two concurrent 
 
 #### B07 — Bounded server canary, then explicit adoption
 
+**R6 update (2026-11-07):** R5 reached two completed canary tables but failed
+final value sealing: 0.258618s value + 0.226983s policy + 0.016149s native post
+exceeded the old 0.2s fast cap. No production training/adoption started. R6 uses
+immutable verified histories to remove repeated deep copies, exact identity reuse
+with strict canonical fallback, and each table's own policy sealing time.
+Per user instruction, fast turns allow **0.5s post-search**, retaining **0.8s/K4
+search**; full turns retain 4s/K16 plus 1s. Rebuild the teacher for the changed
+cap, reuse the exact passing R4 ordinary binary/result under the reviewed
+teacher-only source delta, and run only unfinished canaries and continuation.
+All cancellation, identity, model, legality, feature/target, cold-replay integrity
+and absolute cumulative deadlines remain enforced. Lab adoption stays Pending.
+After the g1250→g1251 adoption workflow succeeds, use the normal trainer from
+g1251 with its identical saved g1247 config; see the [R6 commands](../distribution/rust-lab-b07-g1250/README.md).
+
 **R5 update (2026-11-07): R4 ordinary correctness and useful performance passed.**
 Pulled from inside `results/` at `9e219a2`, export
 `20261107T110307031706Z-20261107T110018084733Z-g1250-b07-49ed6ce1-fc892c78`.
@@ -980,7 +994,7 @@ with `--resume-from` under exact workflow/state/build/receipt checks.
 teacher off, restores the full rollback copy, runs **one real same-run iteration**
 using the committed config, and verifies the g1251 checkpoint/report/full restart.
 The command is safe to repeat after g1251 commits: verification only, never g1252.
-No local full training session is added. See the [R5 bundle commands](../distribution/rust-lab-b07-g1250/README.md).
+No local full training session is added. See the [current bundle commands](../distribution/rust-lab-b07-g1250/README.md).
 **Lab canaries, production adoption and G→G+1 remain Pending until their actual
 lab receipts pass; do not mark the whole server migration complete from the
 ordinary-only result.**
@@ -1001,7 +1015,7 @@ component-only performance status.
 
 R3 ordinary transport uses compact semantic action IDs with token/revision/model/context bindings; one bounded little-endian binary array reply per nonforced decision; at most 16 forced previews under the reference actor/turn/era/non-debt guards; and batch export of the exact once-serialized record bytes. Python retains the existing RNG/sampling/counters and acknowledges every forced record before publication. Preserve branch opportunities, cancellation, byte seals, full first admission and cold recovery checks. Reuse validated tensors/seals and hash the same file bytes being decoded. Keep search_v1 equations unchanged. See [wire design and tests](RUST_BACKEND_B07_IMPLEMENTATION.md#compact-ordinary-transport-r3). The bundle supports `--ordinary-only`, identical frozen g1250 jobs/checkpoint, and separate startup, serialization/IPC, feature transfer, collection/export, part I/O, publication, replay read, preparation and accepted-work timings. No earlier successful qualification is repeated.
 
-**Implemented; R4 ordinary correctness and useful performance passed; remaining lab canaries, production adoption and next normal commit/restart Pending.** See [implementation](RUST_BACKEND_B07_IMPLEMENTATION.md) and [g1250 bundle/commands](../distribution/rust-lab-b07-g1250/README.md). The bundle retains the exact passing B04.5/B05/B06 g1250 checkpoint/config and original C# binaries. Reuse the exact qualified R4 ordinary adapter for R5; teacher work remains separate and search_v1 is unchanged. Require receipts bound to the actual committed restart checkpoint; a later checkpoint needs refreshed gates. Never rewind a newer run or silently reuse stale evidence.
+**Implemented; R4 ordinary correctness and useful performance passed; remaining lab canaries, production adoption and next normal commit/restart Pending.** See [implementation](RUST_BACKEND_B07_IMPLEMENTATION.md) and [g1250 bundle/commands](../distribution/rust-lab-b07-g1250/README.md). The bundle retains the exact passing B04.5/B05/B06 g1250 checkpoint/config and original C# binaries. Reuse the exact qualified R4 ordinary adapter for R6 under the explicit teacher-only review; teacher work remains separate and search_v1 is unchanged. Require receipts bound to the actual committed restart checkpoint; a later checkpoint needs refreshed gates. Never rewind a newer run or silently reuse stale evidence.
 
 R2's lab result (`20261107T090047266944Z-20261107T085645018439Z-g1250-b07-d0097dac-faa1535f`) matched 3 families/1,161 decisions/675 forced rows; native accepted work was 40.246s versus reference 28.833s. Preserve this negative result as history. GPU forward time is now below reference; remaining measured overhead includes serial 4.2s-per-family publication and 5.247s first read. R3 removes duplicate row validation/deep copies and permits at most two publishers under the existing CPU cap, with serialized callbacks and exact byte/mutation checks. Remeasure this changed scope using the same short matched batch. The first canary failed after 52 verified turns because Rust's default JSON parser rounded the echoed remaining budget `0.015000000000000001` to `0.015`. R3 enables `serde_json/float_roundtrip` for exact teacher bindings and ordinary probabilities and adds exact roundtrip/mutated-binding regressions; preserve every strict identity check. The retry builds/tests both native adapters against their unchanged sealed cores and runs the affected ordinary scope plus unfinished canaries/continuation, without repeating B01–B06. Passing correctness alone does not waive the useful-performance adoption gate.
 
@@ -1059,7 +1073,7 @@ Each future milestone publishes a **new immutable bundle under `distribution/`**
 - [x] B05 fixed-data PPO/PPG/companion equivalence, teacher term, interruption and old/new age reload pass without resetting the run (g1250 r2 bounded component scope; normal production iteration remains B07).
 - [ ] B06 proves useful matched performance and separately accounts for teacher/validation costs without correctness loss.
 - [x] B07 R4 ordinary correctness and useful accepted-work improvement pass on pinned g1250.
-- [ ] B07 remaining shadow canaries/continuation, locked backend adoption with teacher off, real g1250→g1251 commit/restart and complete rollback pass on lab (R5 command implemented).
+- [ ] B07 remaining shadow canaries/continuation, locked backend adoption with teacher off, real g1250→g1251 commit/restart and complete rollback pass on lab (R6 repair and commands implemented).
 - [ ] Later production task-teacher enablement has its own explicit decision, readiness/calibration and qualified commands.
 - [ ] Every later stage has a new versioned distribution bundle and Git-visible success/failure/deferred report.
 

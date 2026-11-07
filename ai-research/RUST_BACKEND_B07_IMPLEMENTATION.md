@@ -1,11 +1,79 @@
 # B07: cheaper native collection and bounded adoption
 
 Updated on 2026-11-07. **R4 ordinary correctness and useful performance passed
-on g1250. R5 implements the remaining gate/adoption/real G-to-G+1 workflow;
+on g1250. R6 repairs final sealing and raises fast post-work to 0.5s;
 its lab canaries, production adoption and next commit/restart remain Pending
 until that command succeeds on the lab.** Run the
 [new g1250 bundle](../distribution/rust-lab-b07-g1250/README.md); do not rerun
 passing B01–B06 qualifications. The installed game is unchanged.
+
+## R6: fast post-work and sealing repair
+
+Pulled inside `results/` to `d9bb26c`. The latest export is
+`20261107T112657686949Z-20261107T112405895418Z-b07-continue-d8c78a96-64e2b7c9`.
+R5 completed both canary tables, but first-table value sealing took 0.258618s,
+policy sealing 0.226983s, and native post-work 0.016149s: 0.501750s against the
+old 0.2s fast cap. No training or production adoption started. Raising the cap
+alone to 0.5s would still miss that recorded total, so R6 also removes the
+measured repeated-history-copy bottleneck.
+
+- Detach validated raw and admitted label trees once using the existing immutable
+  JSON containers inside the original per-turn verification deadline. Reuse them
+  through policy and value publication. Feature arrays still get detached copies;
+  all sealed hashes, cold-reader validation, target and reward checks remain.
+- Allow the exact live immutable objects to cross the one-use cache by identity.
+  Plain reloaded/copied objects retain full canonical-byte comparison, including
+  numeric type differences. Model/job identity, completeness and cancellation
+  remain checked. A late/canceled final cache publication is retired.
+- Charge each canary table's own policy sealing before its value sealing; do not
+  charge another table's larger cost. Missing, negative, nonfinite or boolean
+  accounting entries are rejected. Late publication still fails qualification.
+- Fast turns now permit **0.8s/K4 search + at most 0.5s cumulative post-work**,
+  per user instruction. Python config/verifier/sealing and Rust job/deadline
+  validation agree. Full turns remain **4s/K16 + 1s**. Search admission, action-two
+  absolute cutoffs, RNG and search_v1 equations are unchanged.
+
+Two AB/BA pairs replayed the exact two failed lab tables through real encoders,
+policy/value publication and cold readers, without new games or training:
+
+| Local component measurement, sum of two tables | R5 median | R6 median |
+| --- | ---: | ---: |
+| Snapshot detachment during turns | 0.367s | 0.696s |
+| Deferred finalization | 1.734s | 0.811s |
+| Detachment + finalization | 2.101s | 1.507s |
+
+Deferred finalization fell **53.2%**; including the additional detachment cost,
+these measured components fell **28.3%**. All policy/value rows, targets and
+cold-read features matched. Both R6 pairs fit their revised caps in this local
+component probe; R5 overruns are retained. Model fingerprinting and independent
+NN verification were excluded from both arms, and cold-reader correctness was
+checked outside the timed finalization. This is neither an end-to-end lab deadline
+pass nor a whole-training throughput claim. Remaining cost includes immutable
+snapshot construction, required encoding and durable shard compression/integrity.
+The probe is `scripts/rust_lab_b07_sealing.py`; shipped evidence is `r6-sealing.json`.
+
+R6 reuses only the original byte-pinned passing R4 ordinary executable and result.
+Its source review enumerates exactly the changed teacher Python files and Rust
+teacher-only module/tests; ordinary compiled inputs and execution are unchanged.
+Rebound receipts retain the original producer/source and receipt pins. The old
+teacher cannot be reused because its fast deadline differs: rebuild and run its
+short Rust regressions before pending canaries. R5 has no successful completion
+phase to reuse; any later R6 retry can reuse byte-bound successful phases of the
+same workflow. No B01-B06 or passing ordinary benchmark is repeated.
+
+Local validation: 32 distinct focused Python regressions and 34 Rust teacher/wire
+regressions, including absolute deadline edges, narrowing, overflow, cancellation,
+immutable detachment, strict reload fallback, cold replay equality, stale/tampered
+source/build/phase receipts, teacher rebuild selection, and exactly-once training
+orchestration. Source approval covers the unchanged g1250 recipe and rejects an
+unrelated recipe change. The g1251 continuation CLI is parsed by a regression and
+its g1247 config is verified equal to the saved config. The user then stopped local testing. Fresh-extraction execution is Pending on
+the lab; archive construction records input hashes without running more tests.
+
+The [R6 commands](../distribution/rust-lab-b07-g1250/README.md) finish remaining
+qualification/adoption and g1250→g1251; then the normal trainer continues g1251→g1252.
+Production teaching stays off. Full-scale teacher publication and Linux/CUDA
+canary/adoption/next-commit success remain lab gates, not locally claimed passes.
 
 ## R5: finish qualification and continue the real run
 
@@ -399,7 +467,7 @@ B01-B06 evidence are reused. New ordinary producer/build pins bind the new data.
 3. Two independent shadow passes, at most two all-seat tables per pass (train
    and held-out), frozen g1250 and w=0. Full turns use search_v1, 4s/K16, two
    independent one-thread sessions; the existing all-seat fast turns remain
-   0.8s/K4. Original 1s/0.2s post caps include verification and sealing. The
+   0.8s/K4. Current 1s/0.5s post caps include verification and sealing (R6 fast-cap revision). The
    slower table's policy-sealing cost is conservatively charged to each final
    turn before its value sealing. Reload both buffers and a shadow checkpoint.
    No teacher, search-head, PPO or PPG update in these passes. Watchdog: 210s each.

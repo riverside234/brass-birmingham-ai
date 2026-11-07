@@ -5,6 +5,7 @@ from brass_ai.learning.contracts import digest, require
 from brass_ai.learning.search_value import CONTRACT, binding
 
 PHASE = 'teacher-phase/2.0.0'
+FAST_POST_SECONDS = .5
 
 
 def defaults():
@@ -22,7 +23,7 @@ def defaults():
 
 
 def fast_profile(search):
-    return dict(copy.deepcopy(search), k=4, allowance_seconds=.8, post_search_seconds=.2)
+    return dict(copy.deepcopy(search), k=4, allowance_seconds=.8, post_search_seconds=FAST_POST_SECONDS)
 
 
 def adopt(config):

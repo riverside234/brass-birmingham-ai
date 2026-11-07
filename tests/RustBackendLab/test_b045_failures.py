@@ -95,13 +95,13 @@ class CollectionFailures(unittest.TestCase):
                  patch('brass_ai.learning.reward.terminal_utility',return_value=np.zeros(4)), \
                  patch.object(phase.buffer,'publish') as publish:
                 # Total batch cost exceeds one turn, but each table stays below
-                # its own 200ms cap including the already measured 20ms post.
-                with patch('time.monotonic',side_effect=[0.,0.,.12,.12,.24,.24]):
+                # its own 500ms cap including the already measured 20ms post.
+                with patch('time.monotonic',side_effect=[0.,0.,.32,.32,.64,.64]):
                     phase.admit(tables,[job,second],10)
                 self.assertEqual(len(publish.call_args_list),2)
-                self.assertAlmostEqual(phase.report['value_admission_seconds'],.24)
-                with patch('time.monotonic',side_effect=[0.,0.,.19]):
-                    with self.assertRaisesRegex(ValueError,'Value sealing exceeded.*seal=0.190000s'):
+                self.assertAlmostEqual(phase.report['value_admission_seconds'],.64)
+                with patch('time.monotonic',side_effect=[0.,0.,.49]):
+                    with self.assertRaisesRegex(ValueError,'Value sealing exceeded.*seal=0.490000s'):
                         phase.admit(tables[:1],[job],10)
 
 
@@ -148,7 +148,7 @@ class NativeScriptedTables(unittest.TestCase):
                 for turn in table['metrics']['turns']:
                     budget=turn['budget'];full=turn['profile']=='full'
                     self.assertEqual(budget['work_deadline_ns']-budget['started_ns'],4_000_000_000 if full else 800_000_000)
-                    self.assertEqual(budget['deadline_ns']-budget['work_deadline_ns'],1_000_000_000 if full else 200_000_000)
+                    self.assertEqual(budget['deadline_ns']-budget['work_deadline_ns'],1_000_000_000 if full else 500_000_000)
             from brass_ai.recovery.search_value_phase import SearchValuePhase
             with tempfile.TemporaryDirectory(dir=SOURCE_ROOT/'artifacts') as tmp:
                 phase=SearchValuePhase(tmp,model,c['teacher_phase']['search_value'],jobs[0]['expected']['reward_id'])

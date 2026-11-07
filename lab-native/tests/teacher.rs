@@ -52,10 +52,15 @@ mod baseline {
         use brass_lab_collector::teacher::{profile_budget, root_value};
         let mut b = profile_budget(50, true).unwrap();
         assert_eq!(b.work_deadline_ns, 800_000_050);
-        assert_eq!(b.deadline_ns, 1_000_000_050);
-        assert_eq!(b.reserve_ns, 200_000_000);
+        assert_eq!(b.deadline_ns, 1_300_000_050);
+        assert_eq!(b.reserve_ns, 500_000_000);
         b.narrow(700_000_050, 9_000_000_000);
-        assert_eq!(b.deadline_ns, 1_000_000_050);
+        assert_eq!(b.deadline_ns, 1_300_000_050);
+        let c = Fake::default();
+        c.now.set(800_000_050); assert!(!b.work_open(&c)); assert!(b.delivery_open(&c));
+        c.now.set(1_300_000_049); assert!(b.delivery_open(&c));
+        c.now.set(1_300_000_050); assert!(!b.delivery_open(&c));
+        assert!(profile_budget(u64::MAX, true).is_err());
         let mut stats = brass_ai_core::search::math::Statistics::new(vec![0., 0.], [1.,2.,3.,4.]).unwrap();
         assert_eq!(root_value(&stats).unwrap(), [1.,2.,3.,4.]);
         stats.count = vec![2, 1];

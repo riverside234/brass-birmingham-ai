@@ -126,7 +126,7 @@ def main():
         from rust_lab_b06_metrics import measurement_preflight
         report['environment']=measurement_preflight()
         active='fixtures'
-        tests=['test_b07_completion'] if args.complete_remaining else ['test_b07_retry','test_b07.collection_smoke','test_b07_wire','test_b07_r4','test_b02.Behavior']
+        tests=['test_b07_completion','test_b07_sealing','test_b07_retry'] if args.complete_remaining else ['test_b07_retry','test_b07.collection_smoke','test_b07_wire','test_b07_r4','test_b02.Behavior']
         base.command([sys.executable,'-m','unittest',*tests,'-q'],cwd=ROOT,env=dict(env,CUDA_VISIBLE_DEVICES=''),log=out/'fixtures.log',timeout=180)
         if args.fixtures_only:
             report.update(passed=True,scope='CPU fixtures only; B07 lab and adoption Pending');return
@@ -177,9 +177,7 @@ def main():
                         report['resumed_from']=pin(project_path(ROOT,args.resume_from))
                     active='teacher-build'
                     saved_build=previous.get('teacher_build') if previous else None
-                    teacher_path=args.teacher_build or (saved_build['path'] if saved_build else None)
-                    if saved_build:require(pin(saved_build['path'])==saved_build,'Resumed teacher build changed')
-                    require(not reused or saved_build is not None,'Completed phases lost their teacher build')
+                    teacher_path=args.teacher_build or completion.resumable_teacher(saved_build,reused)
                     teacher=retry.verify_teacher(read_json(teacher_path),original) if teacher_path else retry.build_teacher(out/'teacher-runtime',original,offline=args.offline)
                     if reused:require(teacher==read_json(saved_build['path']),'Cannot reuse phases with a different teacher build')
                     write_json(out/'teacher-build.json',teacher);report['teacher_build']=pin(out/'teacher-build.json')

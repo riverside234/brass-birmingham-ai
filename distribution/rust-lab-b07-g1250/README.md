@@ -1,4 +1,4 @@
-# B07 g1250 R5: finish adoption and continue training
+# B07 g1250 R6: repair sealing and continue training
 
 **R4 ordinary qualification passed.** The result was pulled inside `results/`
 at `9e219a2`. Same 3 families / 1,161 decisions / 675 forced rows, with equivalent
@@ -6,10 +6,14 @@ trajectories/features/targets: accepted work **30.632s → 26.820s (12.4% less t
 Sampled peak host memory was 4.917GB → 7.479GB. This is one bounded matched batch,
 not a statistical or whole-training speed claim.
 
-R5 keeps the qualified implementation and Rust binaries unchanged. It finishes
-only the remaining shadow canaries, full-state continuation, backend adoption,
-rollback and real G→G+1 restart checks. **Those lab stages remain Pending until
-this command succeeds.** The installed game and search_v1 remain unchanged.
+R6 fixes the R5 first-canary sealing failure. It detaches verified histories once
+inside each turn's checked budget and reuses immutable rows during publication.
+It also charges each table for its own policy sealing. Fast turns now get **0.8s/K4
+search plus at most 0.5s post-work**; full turns retain **4s/K16 plus at most 1s**.
+The Rust teacher is rebuilt for the new deadline. The passing R4 ordinary result
+and exact ordinary binary are reused under a source review; no unrelated successful
+qualification repeats. **Remaining canaries, continuation and production adoption
+are Pending until the lab command succeeds.** The installed game is unchanged.
 
 ## One command for real g1250 → g1251 continuation
 
@@ -17,7 +21,7 @@ From the lab code checkout, in the existing training environment, with the run
 paused at the qualified g1250 checkpoint:
 
 ```bash
-unzip -o distribution/rust-lab-b07-g1250/rust-lab-b07-g1250-r5.zip
+unzip -o distribution/rust-lab-b07-g1250/rust-lab-b07-g1250-r6.zip
 python scripts/continue-rust-lab-b07.py --expected-generation 1250
 ```
 
@@ -27,8 +31,8 @@ iteration after the remaining gates pass**. It automatically:
 1. Verifies the sealed R4 result, original ordinary build, source, committed
    state, checkpoint, config, population and runtime pins. It does not repeat
    passing B01–B06 or R4 ordinary qualification.
-2. Runs the two pending shadow passes (two tables each, w=0, original 4s/K16 +
-   <=1s post-work) and the bounded continuation/update/reload check. It builds the
+2. Runs the two pending shadow passes (two tables each, w=0, 4s/K16 +
+   <=1s post-work and 0.8s/K4 + <=0.5s on fast turns) and the bounded continuation/update/reload check. It builds the
    repaired teacher once unless an exact current-source build is supplied.
 3. Selects Rust ordinary collection in the same run with **teaching off**, under
    the existing run lock. It restores a complete rollback copy before adoption
@@ -78,10 +82,10 @@ If a later phase fails, preserve the original attempt and reuse successful phase
 python scripts/continue-rust-lab-b07.py --expected-generation 1250 --resume-qualification artifacts/rust-backend/REPLACE_WITH_PARTIAL_ATTEMPT/qualification.json
 ```
 
-The saved phases must match the exact R5 workflow, source, committed state and
+The saved phases must match the exact R6 workflow, source, committed state and
 teacher build; their bytes are rechecked. Failed phases are never reused. The
 ordinary result and build are always the pinned successful R4 ones. An existing
-current-source teacher build can be supplied with `--teacher-build PATH/build.json`;
+current-source R6 teacher build can be supplied with `--teacher-build PATH/build.json`;
 add `--offline` for Cargo-cache-only builds. Original C# binaries and Rust 1.99.1
 remain required. Preserve the existing environment; if its measurement dependency
 is missing, use `python -m pip install -r distribution/rust-lab-b06-g1250/requirements.txt`.
@@ -92,12 +96,24 @@ Do not rewind a newer run. A different committed checkpoint needs refreshed gate
 The g1250 null-utility receipt exception applies only to the shadow canaries;
 this workflow does not enable production teaching or change checkpoint metadata.
 
-## After the first Rust commit
+## Continue from g1251 after qualification/adoption finishes
 
-Rust selection persists in state/checkpoints. Future ordinary training can use
-the existing `scripts/step5.py ... train` command with the same saved config;
-no per-run backend flag is needed. The G→G+1 wrapper deliberately verifies only
-the first adopted generation, rather than acting as a multi-iteration launcher.
+After the command above succeeds and g1251 is committed, run from the lab code
+checkout in the same training environment:
+
+```bash
+python scripts/step5.py --root "$PWD" --config configs/step5/joint7-v11-2-g1290-trained-restart-g1247.json --device cuda --mono mono train --run artifacts/step5/joint7-v11-2-g1290-trained-restart --expected-generation 1251 --iterations 1
+```
+
+This resumes **g1251 → g1252** with the persisted Rust backend, optimizer, RNG,
+replay and teacher-off recipe. The g1247 config file was checked against the
+actual committed g1250 config: it is exactly equal, SHA256
+`895d866502425dad30f2277b822dba2a15247f9a701d2dd5dd10b7e396de3ca8`.
+The adoption wrapper carries that same config into g1251. The generation guard
+rejects a stale command. No source override or fresh-run flag is needed.
+`--iterations 1` deliberately advances one real generation; change it only when
+you intend to run more iterations. The adoption wrapper verifies only its first
+adopted boundary, so do not invoke it with `--expected-generation 1251`.
 
 For an explicit return to reference collection at the current clean boundary:
 
@@ -116,5 +132,5 @@ other computer. Exported review copies do not relocate original lab binaries.
 Local checks cover exact reuse, stale/tampered evidence, phase selection,
 failed adoption/training, full-state restore, rollback integrity, committed-config
 forwarding and no duplicate iteration. No full training session or unrelated
-successful qualification is run locally. See [implementation and evidence](../../ai-research/RUST_BACKEND_B07_IMPLEMENTATION.md#r5-finish-qualification-and-continue-the-real-run).
+successful qualification is run locally. See [implementation and evidence](../../ai-research/RUST_BACKEND_B07_IMPLEMENTATION.md#r6-fast-post-work-and-sealing-repair).
 Archives are immutable; future changes require a new revision.

@@ -33,7 +33,7 @@ The search reads `U_main + w · Δ`. PPO and the ordinary critic never read Δ.
 | Tables | 32 per iteration: 28 train and 4 held-out (validation-split seeds), as today |
 | Who searches | All four seats, every turn: 64 searched turns per table |
 | Full searches | The 16 reserved turns (one per seat per phase). `search_v1`, 4 s plus ≤1 s post-work, K = 16, Gumbel noise on. These produce all the policy labels: about 31 per table (B04 measured 30) |
-| Fast searches | The other 48 turns. `search_v1`, 0.8 s plus ≤0.2 s post-work, K = 4, Gumbel noise on. No labels |
+| Fast searches | The other 48 turns. `search_v1`, 0.8 s plus ≤0.5 s post-work, K = 4, Gumbel noise on. No labels |
 | Move played | search_v1's recommendation, with Gumbel noise, at every turn |
 | Value rows | One per searched turn: 64 per table, so 1,792 train and 256 held-out rows per iteration |
 | Value target | Per-seat λ-return over the game's root values, ending at the final utility-to-go (insolvency costs included) |
@@ -299,7 +299,7 @@ expectations, not fixed counts; the gates decide.
   "seating": "all-seat-search",
   "search": {"method": "search_v1", "k": 16, "allowance_seconds": 4.0, "post_search_seconds": 1.0,
              "turns": "four-phase-reserved", "labels": true},
-  "fast_search": {"method": "search_v1", "k": 4, "allowance_seconds": 0.8, "post_search_seconds": 0.2,
+  "fast_search": {"method": "search_v1", "k": 4, "allowance_seconds": 0.8, "post_search_seconds": 0.5,
                   "turns": "all-other-turns", "labels": false},
   "search_value": {
     "contract": "search-value-correction/1.0.0",
@@ -329,7 +329,7 @@ expectations, not fixed counts; the gates decide.
 ## 11. Validation
 
 - All-seat seating requires both profiles. The full profile is exactly 4 s plus
-  1 s with K = 16 and labels. The fast profile is 0.8 s plus 0.2 s with K = 4
+  1 s with K = 16 and labels. The fast profile is 0.8 s plus 0.5 s with K = 4
   and no labels.
 - Stages advance only through the state machine. A manual change may only go to
   `off` or move back a stage.
@@ -361,7 +361,7 @@ expectations, not fixed counts; the gates decide.
 
 **Native (Rust)**
 - Fast profile:
-  - the 0.8 s and 0.2 s cutoffs
+  - the 0.8 s and 0.5 s cutoffs
   - the frozen quota and effective K = 4 with two rounds
   - no labels
   - cancellation and late replies

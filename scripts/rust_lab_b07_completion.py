@@ -11,6 +11,13 @@ from brass_ai.step5.league import implementation_id
 
 DIRECTORY = ROOT / 'distribution/rust-lab-b07-g1250'
 PHASES = ('canary-1', 'canary-2', 'continuation')
+COMPLETION_CHANGES = {
+    'src/brass_ai/recovery/search_value_config.py',
+    'src/brass_ai/recovery/search_value_phase.py',
+    'src/brass_ai/recovery/teacher_phase.py',
+    'src/brass_ai/rust_backend/lab_teacher.py',
+    'src/brass_ai/rust_backend/lab_teacher_finalization.py',
+    'lab-native/src/teacher.rs', 'lab-native/tests/teacher.rs'}
 
 
 def workflow_id():
@@ -19,8 +26,53 @@ def workflow_id():
     return digest({n: (ROOT/'scripts'/n).read_text(encoding='utf-8') for n in names})
 
 
-def boundary(value, snapshot):
-    require(value['implementation'] == implementation_id(), 'Completion source differs')
+def reviewed_source(reference=None):
+    reference = reference or json.loads((DIRECTORY/'reference.json').read_text())
+    review = reference.get('completion_source_review')
+    require(isinstance(review,dict) and review['to_implementation'] == implementation_id()
+            and set(review['changes']) == COMPLETION_CHANGES, 'Unreviewed completion source')
+    for name, change in review['changes'].items():
+        require(hashlib.sha256((ROOT/name).read_bytes().replace(b'\r\n',b'\n')).hexdigest() == change['after'],
+                'Completion source review changed')
+    return review
+
+
+def reuse_build(value, kind):
+    """Rebind only the unchanged ordinary executable, never an old teacher."""
+    if value['implementation'] == implementation_id() and 'source_reuse' not in value:return value
+    reference=json.loads((DIRECTORY/'reference.json').read_text());review=reviewed_source(reference)
+    require(kind == 'ordinary', 'Changed teacher deadline requires a new teacher build')
+    require(value['implementation'] in (review['from_implementation'],implementation_id()), 'Unreviewed build source')
+    entry=reference['build_reuse'][kind];original=entry['original_receipt']
+    require(pin(original['path'])==original, 'Original reused build receipt changed')
+    saved=json.loads(Path(original['path']).read_text())
+    require(saved['implementation']==review['from_implementation'] and
+            saved['producer']==entry['from_producer'] and entry['ordinary_compile_inputs_unchanged'] is True,
+            'Unreviewed ordinary build source')
+    from brass_ai.rust_backend.lab_teacher_overlay import source_fingerprint
+    rebound=dict(saved,implementation=implementation_id(),producer=source_fingerprint(),
+        source_reuse=dict(original_receipt=original,from_implementation=saved['implementation'],
+            from_producer=saved['producer'],review=digest(review),native_bytes_unchanged=True,
+            scope='Ordinary inputs unchanged; teacher-only module/test deadline rebuilt separately'))
+    require(value==saved or value==rebound, 'Reused build differs from original receipt')
+    return rebound
+
+
+def resumable_teacher(saved_build, reused):
+    """Old failed canaries may supply context but cannot supply an old deadline."""
+    if saved_build is None:
+        require(not reused, 'Completed phases lost their teacher build')
+        return None
+    require(pin(saved_build['path'])==saved_build, 'Resumed teacher build changed')
+    value=json.loads(Path(saved_build['path']).read_text())
+    from brass_ai.rust_backend.lab_teacher_overlay import source_fingerprint
+    current=value.get('implementation')==implementation_id() and value.get('producer')==source_fingerprint()
+    require(current or not reused, 'Cannot reuse phases with a different teacher build')
+    return saved_build['path'] if current else None
+
+
+def boundary(value, snapshot, *, implementation=None):
+    require(value['implementation'] == (implementation or implementation_id()), 'Completion source differs')
     require(value['generation'] == snapshot['generation'] and
             value['checkpoint_sha256'] == snapshot['checkpoint']['sha256'] and
             value['config_sha256'] == snapshot['config_sha256'],
@@ -38,7 +90,8 @@ def ordinary(reference, snapshot):
         require(hashlib.sha256(data).hexdigest() == item['sha256'], 'Completed ordinary evidence changed')
         values[name] = json.loads(gzip.decompress(data) if path.suffix == '.gz' else data)
     q, checked, original = values['qualification'], values['ordinary'], values['snapshot']
-    boundary(q, snapshot)
+    previous = reviewed_source(reference)['from_implementation'] if q['implementation']!=implementation_id() else None
+    boundary(q, snapshot, implementation=previous)
     require(q['milestone'] == 'B07' and q['passed'] is True and q['ordinary'] == checked and
             checked['passed'] is True and checked['matched']['equal'] is True and
             checked['performance']['useful_accepted_work_gain'] is True,
@@ -55,8 +108,14 @@ def resume(path, snapshot):
     """Failed later phases do not invalidate earlier successful, sealed phases."""
     path = Path(path).resolve()
     value = json.loads(path.read_text(encoding='utf-8'))
-    boundary(value, snapshot)
-    require(value.get('milestone') == 'B07' and value.get('completion_workflow') == workflow_id(),
+    previous=None;legacy=False
+    if value.get('completion_workflow') != workflow_id():
+        reference=json.loads((DIRECTORY/'reference.json').read_text())
+        legacy=pin(path)['sha256']==reference.get('previous_completion',{}).get('sha256')
+        require(legacy and not value.get('completed_phases'), 'Resume only this exact B07 completion workflow')
+        previous=reviewed_source(reference)['from_implementation']
+    boundary(value, snapshot,implementation=previous)
+    require(value.get('milestone') == 'B07' and (legacy or value.get('completion_workflow') == workflow_id()),
             'Resume only this exact B07 completion workflow')
     require(value['completion_state'] == snapshot['state_file'], 'Resume committed state changed')
     result = {}

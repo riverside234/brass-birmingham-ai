@@ -89,6 +89,51 @@ class Completion(unittest.TestCase):
         for key,value in [('implementation','wrong'),('checkpoint_sha256','wrong')]:
             with self.subTest(key=key),self.assertRaises(ValueError):C.boundary(dict(self.identity,**{key:value}),self.snapshot)
 
+    def test_shipped_source_review_and_resume_command_keep_exact_saved_recipe(self):
+        from brass_ai.recovery.resume import check_signature
+        from brass_ai.step5.cli import parser
+        review=C.reviewed_source()
+        snapshot=json.loads(gzip.decompress((C.DIRECTORY/'evidence/b07-r4-snapshot.json.gz').read_bytes()))
+        state=snapshot['state'];target=dict(state['signature'],implementation=implementation_id())
+        self.assertTrue(check_signature(state,target,reviewed=True))
+        config='configs/step5/joint7-v11-2-g1290-trained-restart-g1247.json'
+        self.assertEqual(json.loads((ROOT/config).read_text()),state['signature']['config'])
+        args=parser().parse_args(['--root',str(ROOT),'--config',config,'--device','cuda','--mono','mono',
+            'train','--run','artifacts/step5/joint7-v11-2-g1290-trained-restart','--expected-generation','1251','--iterations','1'])
+        self.assertEqual(args.expected_generation,1251);self.assertEqual(args.iterations,1)
+        self.assertFalse(args.fresh);self.assertIsNone(args.initial)
+        changed=copy.deepcopy(target);changed['config']['selfplay_recipe']='changed'
+        with self.assertRaises(ValueError):check_signature(state,changed,reviewed=True)
+
+    def test_old_failed_teacher_is_rebuilt_and_successful_phases_cannot_change_teacher(self):
+        from brass_ai.rust_backend.lab_teacher_overlay import source_fingerprint
+        path=self.out/'teacher.json';write_json(path,dict(implementation='old',producer='old'))
+        self.assertIsNone(C.resumable_teacher(pin(path),{}))
+        with self.assertRaisesRegex(ValueError,'different teacher'):C.resumable_teacher(pin(path),{'canary-1':{}})
+        write_json(path,dict(implementation=implementation_id(),producer=source_fingerprint()))
+        self.assertEqual(C.resumable_teacher(pin(path),{'canary-1':{}}),str(path.resolve()))
+        receipt=pin(path);path.write_text('{}')
+        with self.assertRaisesRegex(ValueError,'build changed'):C.resumable_teacher(receipt,{})
+
+    def test_ordinary_rebind_keeps_exact_old_receipt_and_rejects_teacher_or_tampering(self):
+        from brass_ai.rust_backend.lab_teacher_overlay import source_fingerprint
+        value=dict(implementation='old',producer='old-native',collector={'exact':'bytes'})
+        path=self.out/'original.json';write_json(path,value)
+        review=dict(from_implementation='old')
+        reference=dict(build_reuse={'ordinary':dict(original_receipt=pin(path),from_producer='old-native',
+                                                   ordinary_compile_inputs_unchanged=True)})
+        write_json(self.out/'reference.json',reference)
+        with patch.object(C,'DIRECTORY',self.out),patch.object(C,'reviewed_source',return_value=review):
+            updated=C.reuse_build(value,'ordinary')
+            self.assertEqual(updated['collector'],value['collector'])
+            self.assertEqual(updated['producer'],source_fingerprint())
+            self.assertEqual(C.reuse_build(updated,'ordinary'),updated)
+            with self.assertRaisesRegex(ValueError,'new teacher build'):C.reuse_build(value,'teacher')
+            with self.assertRaisesRegex(ValueError,'differs from original'):
+                C.reuse_build(dict(updated,collector={'tampered':True}),'ordinary')
+            path.write_text('{}')
+            with self.assertRaisesRegex(ValueError,'receipt changed'):C.reuse_build(value,'ordinary')
+
 
 class Workflow(unittest.TestCase):
     def setUp(self):
@@ -176,7 +221,8 @@ class Launcher(unittest.TestCase):
         bundle=self.out/'bundle';bundle.mkdir()
         write_json(bundle/'reference.json',dict(self.identity,prerequisites={},b06={},completed_ordinary={}))
         original=self.out/'qualified-build.json';write_json(original,{'binary':'original'})
-        teacher=self.out/'teacher-build.json';write_json(teacher,{'teacher':'same'})
+        from brass_ai.rust_backend.lab_teacher_overlay import source_fingerprint
+        teacher=self.out/'teacher-build.json';write_json(teacher,{'implementation':implementation_id(),'producer':source_fingerprint()})
         prior=dict(ordinary_build=pin(original))
         checked=dict(passed=True,matched={'equal':True},performance={'useful_accepted_work_gain':True})
         done=dict(passed=True,pass_index=1,tables=2,blend_weight=0,checkpoint_reloaded=True,buffer_reloaded=True)

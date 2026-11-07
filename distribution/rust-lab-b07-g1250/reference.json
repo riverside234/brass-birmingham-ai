@@ -13,9 +13,9 @@
     "lab-native/src/lib.rs": "2a1b9450ea990f45b47d188fbc7ddf36531978e0bfd9138d242bf43ab3f919ba",
     "lab-native/src/main.rs": "79b076553edd272a147c44925e2b803136549ee7ff4b451b05d0366bb8ec267f",
     "lab-native/src/scoring.rs": "2e41cb5647dc5b41bf305330fae8869fa8fa969936f8e3b7240d22262c331ecd",
-    "lab-native/src/teacher.rs": "88b54a27d6235dd928477e2de13e7c7115dfbb9040f77bbc730157779671d725",
+    "lab-native/src/teacher.rs": "50752978f897e27eceec6ef529d815e5be86713e5bc05c7ea9a4d7938e6e674b",
     "lab-native/tests/lanes.rs": "9b1b08c4c4665ec35ed0ecd129a7662a07f07409ce902d8cb8be729c18932a86",
-    "lab-native/tests/teacher.rs": "f8ca6922a334290dfa4b2904033d352967f965f2902074391c11c395737d218b",
+    "lab-native/tests/teacher.rs": "58d24527e3106b0ea9a3f7b4b494ad06549018163ac2cf0b7343e7dc8538165f",
     "lab-native/tests/teacher_wire.rs": "53de15eea61ba0b5896e5ae3c224017fb88a99bb17a553944806f1856f60e52c"
   },
   "prerequisites": {
@@ -32,7 +32,7 @@
       "sha256": "b323c55579bdfc875707cc1d36c42f01a9713fc88a82648aab24395962ab3b0c"
     }
   },
-  "source_policy": "R5 completion/adoption/one-iteration launcher only; exact R4 runtime, config, recipes, C# V4 and search_v1 unchanged",
+  "source_policy": "R6 detaches verified teacher histories once inside the per-turn deadline, safely shares immutable rows through sealing, and charges each table its own policy sealing. User-authorized fast post cap 0.5s (search 0.8s/K4), full 4s/K16 plus 1s unchanged. Rebuild teacher only; ordinary executable inputs, saved teacher-off recipe, all search_v1 equations, weights, learning contracts, optimizers and replay bytes unchanged.",
   "source_reuse": {
     "from_implementation": "ce40147f02d7a4eec641cebfd4ff5186ced427d8cf505cbe988c8bf22fb9387a",
     "to_implementation": "63564be49e282c4b2c0fff02b7640238c63d04d35f7c072bf8c017d12ce6ace5",
@@ -51,7 +51,7 @@
     "native_binaries_unchanged": true,
     "production_modified": false
   },
-  "native_runtime_policy": "Reuse exact passing R4 ordinary build; build/test repaired teacher only if a current-source receipt is unavailable",
+  "native_runtime_policy": "Reuse the exact pinned passing R4 ordinary binary; rebuild changed fast-deadline teacher. No successful qualifications repeated.",
   "b06": {
     "path": "results/rust-lab-qualification/20261107T080012822445Z-20261107T075601452661Z-g1250-b06-c1cd94b2-2c29d5e3/evidence/qualification.json",
     "sha256": "fc07359069538cf75a7413bd8f522f0e5bea133f56daa8d0a86c3b64f07e4081"
@@ -69,7 +69,7 @@
   },
   "b07_source_review": {
     "from_implementation": "63564be49e282c4b2c0fff02b7640238c63d04d35f7c072bf8c017d12ce6ace5",
-    "to_implementation": "12d996a03debe816d1c3661872faeafa9e79c6ea97646d83cf19393dd57bd5ba",
+    "to_implementation": "0126dd6a9d3c1b2e3981ea668256d2c2477dac4de25c59b5c9b7f8cfa24d750e",
     "reviewed_commit": "f327d6c",
     "changes": {
       "src/brass_ai/recovery/league.py": {
@@ -143,13 +143,41 @@
       "src/brass_ai/rust_backend/lab_session.py": {
         "before": null,
         "after": "c095228693c495b43adaddfad9c3c569b12969947d70d44e048ab5f1e6301d02"
+      },
+      "lab-native/src/teacher.rs": {
+        "before": "88b54a27d6235dd928477e2de13e7c7115dfbb9040f77bbc730157779671d725",
+        "after": "50752978f897e27eceec6ef529d815e5be86713e5bc05c7ea9a4d7938e6e674b"
+      },
+      "lab-native/tests/teacher.rs": {
+        "before": "f8ca6922a334290dfa4b2904033d352967f965f2902074391c11c395737d218b",
+        "after": "58d24527e3106b0ea9a3f7b4b494ad06549018163ac2cf0b7343e7dc8538165f"
+      },
+      "src/brass_ai/recovery/search_value_config.py": {
+        "before": "5801c7c8d4afb40c78235e3ec48c40ec1ebca3199332d06e8f2778fb42471400",
+        "after": "02ffa1057fc4c9f8f095875682865f2fcd47741aa6e92616aedf9bc290ef1dc7"
+      },
+      "src/brass_ai/recovery/search_value_phase.py": {
+        "before": "4a822763b8d07010eddcd8cf769b82281c9a5adc4c962c23893d0c5a119fc7cc",
+        "after": "2ec16b4abf8876ffcc5b26e399d5b3cfa0da5e2309d349147a41e09c142de5ee"
+      },
+      "src/brass_ai/recovery/teacher_phase.py": {
+        "before": "ec1074f6cf6ef2aade86ef089cbd2dc3596856cc38e2415afd7c5f4b8fa5d083",
+        "after": "39c0af06ae0b59fede563760cd0b0b239f15bf79ed4cdfd3d6172be17043f328"
+      },
+      "src/brass_ai/rust_backend/lab_teacher.py": {
+        "before": "0de02ddd8edcc13c8c8edd7396ca8feb54b2e79ccc30e54268af7e111caa01e6",
+        "after": "2fa41cbf32b1bdfb21e4f92c7a755119ea011e38a01727dd099352f7cb0a93fb"
+      },
+      "src/brass_ai/rust_backend/lab_teacher_finalization.py": {
+        "before": "58a67451eef10378fa217fa623857488a2b9eb805b66da4e8e17dd412efa0197",
+        "after": "1719b9dc55148b22bc4cab0e4ce2630f0e4ffd0003f776ed1d0de72b50a6d5a8"
       }
     },
     "scope": "B07 R4 keeps Rust authoritative for frozen V4 ordinary tables through the original C# decision policy. Retains all native/archived-reference actor features and CheckedGame bindings through one sealed handoff, independently validates behavior/RNG, specializes exact forced verification, incrementally hashes/drains row buffers, and reuses bounded per-lane collectors/policies with complete game/seat reset and failure cleanup. Benchmark-only float32 tolerance fixes the observed R3 comparison boundary; production denominators remain independently reconstructed at 1e-12. No search_v1 equations, shared core, C# policy, weights, optimizer, replay schema, recipe or saved config change. Preserve earlier config restrictions and require new bounded ordinary qualification; no production adoption.",
     "native_binaries_unchanged": false,
     "teacher_default": "off",
     "default_without_adoption": "reference",
-    "lab_qualification": "R4 ordinary correctness/useful performance passed; remaining canaries/adoption/G-to-G+1 Pending",
+    "lab_qualification": "R4 ordinary passed and reused; R6 teacher canaries/continuation/adoption Pending",
     "ordinary_binary_unchanged": false,
     "retry": {
       "from_implementation": "f6372cefd9a48c98994d2f2e8424b032f4d5c808aceab140bb6442b92214cfc9",
@@ -223,17 +251,55 @@
       "scope": "Completion, exact passing phase reuse, locked existing adoption, rollback and one real same-run iteration/restart orchestration only; no runtime/recipe/source registry changes",
       "result": "results/rust-lab-qualification/20261107T110307031706Z-20261107T110018084733Z-g1250-b07-49ed6ce1-fc892c78",
       "production_modified": false
+    },
+    "completion_r6": {
+      "from_implementation": "12d996a03debe816d1c3661872faeafa9e79c6ea97646d83cf19393dd57bd5ba",
+      "to_implementation": "0126dd6a9d3c1b2e3981ea668256d2c2477dac4de25c59b5c9b7f8cfa24d750e",
+      "reviewed_commit": "aaf741e",
+      "changes": {
+        "lab-native/src/teacher.rs": {
+          "before": "88b54a27d6235dd928477e2de13e7c7115dfbb9040f77bbc730157779671d725",
+          "after": "50752978f897e27eceec6ef529d815e5be86713e5bc05c7ea9a4d7938e6e674b"
+        },
+        "lab-native/tests/teacher.rs": {
+          "before": "f8ca6922a334290dfa4b2904033d352967f965f2902074391c11c395737d218b",
+          "after": "58d24527e3106b0ea9a3f7b4b494ad06549018163ac2cf0b7343e7dc8538165f"
+        },
+        "src/brass_ai/recovery/search_value_config.py": {
+          "before": "5801c7c8d4afb40c78235e3ec48c40ec1ebca3199332d06e8f2778fb42471400",
+          "after": "02ffa1057fc4c9f8f095875682865f2fcd47741aa6e92616aedf9bc290ef1dc7"
+        },
+        "src/brass_ai/recovery/search_value_phase.py": {
+          "before": "4a822763b8d07010eddcd8cf769b82281c9a5adc4c962c23893d0c5a119fc7cc",
+          "after": "2ec16b4abf8876ffcc5b26e399d5b3cfa0da5e2309d349147a41e09c142de5ee"
+        },
+        "src/brass_ai/recovery/teacher_phase.py": {
+          "before": "ec1074f6cf6ef2aade86ef089cbd2dc3596856cc38e2415afd7c5f4b8fa5d083",
+          "after": "39c0af06ae0b59fede563760cd0b0b239f15bf79ed4cdfd3d6172be17043f328"
+        },
+        "src/brass_ai/rust_backend/lab_teacher.py": {
+          "before": "0de02ddd8edcc13c8c8edd7396ca8feb54b2e79ccc30e54268af7e111caa01e6",
+          "after": "2fa41cbf32b1bdfb21e4f92c7a755119ea011e38a01727dd099352f7cb0a93fb"
+        },
+        "src/brass_ai/rust_backend/lab_teacher_finalization.py": {
+          "before": "58a67451eef10378fa217fa623857488a2b9eb805b66da4e8e17dd412efa0197",
+          "after": "1719b9dc55148b22bc4cab0e4ce2630f0e4ffd0003f776ed1d0de72b50a6d5a8"
+        }
+      },
+      "scope": "R6 detaches verified teacher histories once inside the per-turn deadline, safely shares immutable rows through sealing, and charges each table its own policy sealing. User-authorized fast post cap 0.5s (search 0.8s/K4), full 4s/K16 plus 1s unchanged. Rebuild teacher only; ordinary executable inputs, saved teacher-off recipe, all search_v1 equations, weights, learning contracts, optimizers and replay bytes unchanged.",
+      "ordinary_compile_inputs_unchanged": true,
+      "teacher_rebuild_required": true
     }
   },
   "teacher_wire_review": {
     "from_producer": "abcb8810de02911314a55e516f0aefee2678966e7e79549b0566a4de8589f9e8",
-    "to_producer": "8370b5ad86401029fb8a26ddec40eaf9906100ede5025361e3977ccef9d7cb1f",
+    "to_producer": "dbe27fb771be5297cebcdcdf56d9d054bf5a6b270ec37008f75f80ce3f717101",
     "feature": "serde_json/float_roundtrip",
-    "scope": "Exact float decoding; search_v1 equations and both sealed shared-core sources unchanged"
+    "scope": "Retain exact float decoding and unchanged shared core/search_v1; R6 rebuilds the teacher for the authorized 0.5s fast post cap."
   },
   "ordinary_baseline": {
     "from_implementation": "87cdd916e20f513302feca259604ba074948ea38b26275a6fd4e43a899ad273f",
-    "to_implementation": "12d996a03debe816d1c3661872faeafa9e79c6ea97646d83cf19393dd57bd5ba",
+    "to_implementation": "0126dd6a9d3c1b2e3981ea668256d2c2477dac4de25c59b5c9b7f8cfa24d750e",
     "result": "results/rust-lab-qualification/20261107T090047266944Z-20261107T085645018439Z-g1250-b07-d0097dac-faa1535f/evidence",
     "evidence": {
       "qualification": {
@@ -275,7 +341,7 @@
   "completed_ordinary": {
     "result": "results/rust-lab-qualification/20261107T110307031706Z-20261107T110018084733Z-g1250-b07-49ed6ce1-fc892c78",
     "implementation": "12d996a03debe816d1c3661872faeafa9e79c6ea97646d83cf19393dd57bd5ba",
-    "runtime_unchanged": true,
+    "runtime_unchanged": false,
     "evidence": {
       "qualification": {
         "file": "b07-r4-qualification.json",
@@ -297,6 +363,63 @@
         "file": "b07-r4-ordinary-build.json",
         "sha256": "b3c0de6ee6d5db06903f20008b2518c39c0fce527e5c843df46683203c84eb6f"
       }
+    },
+    "ordinary_execution_unchanged": true
+  },
+  "completion_source_review": {
+    "from_implementation": "12d996a03debe816d1c3661872faeafa9e79c6ea97646d83cf19393dd57bd5ba",
+    "to_implementation": "0126dd6a9d3c1b2e3981ea668256d2c2477dac4de25c59b5c9b7f8cfa24d750e",
+    "reviewed_commit": "aaf741e",
+    "changes": {
+      "lab-native/src/teacher.rs": {
+        "before": "88b54a27d6235dd928477e2de13e7c7115dfbb9040f77bbc730157779671d725",
+        "after": "50752978f897e27eceec6ef529d815e5be86713e5bc05c7ea9a4d7938e6e674b"
+      },
+      "lab-native/tests/teacher.rs": {
+        "before": "f8ca6922a334290dfa4b2904033d352967f965f2902074391c11c395737d218b",
+        "after": "58d24527e3106b0ea9a3f7b4b494ad06549018163ac2cf0b7343e7dc8538165f"
+      },
+      "src/brass_ai/recovery/search_value_config.py": {
+        "before": "5801c7c8d4afb40c78235e3ec48c40ec1ebca3199332d06e8f2778fb42471400",
+        "after": "02ffa1057fc4c9f8f095875682865f2fcd47741aa6e92616aedf9bc290ef1dc7"
+      },
+      "src/brass_ai/recovery/search_value_phase.py": {
+        "before": "4a822763b8d07010eddcd8cf769b82281c9a5adc4c962c23893d0c5a119fc7cc",
+        "after": "2ec16b4abf8876ffcc5b26e399d5b3cfa0da5e2309d349147a41e09c142de5ee"
+      },
+      "src/brass_ai/recovery/teacher_phase.py": {
+        "before": "ec1074f6cf6ef2aade86ef089cbd2dc3596856cc38e2415afd7c5f4b8fa5d083",
+        "after": "39c0af06ae0b59fede563760cd0b0b239f15bf79ed4cdfd3d6172be17043f328"
+      },
+      "src/brass_ai/rust_backend/lab_teacher.py": {
+        "before": "0de02ddd8edcc13c8c8edd7396ca8feb54b2e79ccc30e54268af7e111caa01e6",
+        "after": "2fa41cbf32b1bdfb21e4f92c7a755119ea011e38a01727dd099352f7cb0a93fb"
+      },
+      "src/brass_ai/rust_backend/lab_teacher_finalization.py": {
+        "before": "58a67451eef10378fa217fa623857488a2b9eb805b66da4e8e17dd412efa0197",
+        "after": "1719b9dc55148b22bc4cab0e4ce2630f0e4ffd0003f776ed1d0de72b50a6d5a8"
+      }
+    },
+    "scope": "R6 detaches verified teacher histories once inside the per-turn deadline, safely shares immutable rows through sealing, and charges each table its own policy sealing. User-authorized fast post cap 0.5s (search 0.8s/K4), full 4s/K16 plus 1s unchanged. Rebuild teacher only; ordinary executable inputs, saved teacher-off recipe, all search_v1 equations, weights, learning contracts, optimizers and replay bytes unchanged.",
+    "ordinary_compile_inputs_unchanged": true,
+    "teacher_rebuild_required": true
+  },
+  "build_reuse": {
+    "ordinary": {
+      "original_receipt": {
+        "path": "/data/not_backed_up/yxu209/ai-training/artifacts/rust-backend/20261107T110018084733Z-g1250-b07-49ed6ce1/ordinary-build.json",
+        "bytes": 220645,
+        "sha256": "b3c0de6ee6d5db06903f20008b2518c39c0fce527e5c843df46683203c84eb6f"
+      },
+      "from_producer": "8370b5ad86401029fb8a26ddec40eaf9906100ede5025361e3977ccef9d7cb1f",
+      "ordinary_compile_inputs_unchanged": true,
+      "scope": "All ordinary Rust dependencies unchanged. Only teacher.rs and teacher-only tests differ; both excluded without feature teacher. Python changes are restricted to teacher modules and have no teacher-off ordinary execution."
     }
+  },
+  "previous_completion": {
+    "sha256": "09d3657a2705d4d8c4f8e344675ed109f96d490a92a6e7b341bbf9f5579f6518",
+    "result": "results/rust-lab-qualification/20261107T112657686949Z-20261107T112405895418Z-b07-continue-d8c78a96-64e2b7c9/evidence",
+    "passed": false,
+    "training_started": false
   }
 }

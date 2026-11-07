@@ -1,11 +1,12 @@
 """B04.5 lifecycle kept outside ordinary replay, PPO and the ordinary PPG pass."""
 import copy
+import math
 from collections import defaultdict
 
 import numpy as np
 
 from brass_ai.learning.contracts import digest, require
-from .search_value_config import validate
+from .search_value_config import validate, FAST_POST_SECONDS
 from .search_value_rows import ValueBuffer, complete_game
 from .search_value_training import Companion, StageMachine, clustered_gate, predict_rows, guarded_pass
 
@@ -30,6 +31,9 @@ class SearchValuePhase:
         by_id = {r['job_id']: r for r in results}
         require(len(by_id) == len(results) == len(jobs) and
                 set(by_id) == {j['expected']['job_id'] for j in jobs}, 'Missing/duplicate value table')
+        spent = post_spent if isinstance(post_spent,dict) else {key:post_spent for key in by_id}
+        require(set(spent)==set(by_id) and all(type(v) in (float,int) and math.isfinite(v) and v>=0
+                for v in spent.values()), 'Invalid per-table post-search accounting')
         counts = defaultdict(int)
         timings, labels = {}, []
         self.report.update(rows=counts,value_admission_per_table_seconds=timings)
@@ -52,10 +56,11 @@ class SearchValuePhase:
             timings[job['expected']['job_id']] = elapsed
             if result.get('metrics', {}).get('turns'):
                 turn = result['metrics']['turns'][-1]
-                allowance = .2 if turn.get('profile') == 'fast' else 1.
-                require(turn['post_search_ns']/1e9+post_spent+elapsed <= allowance,
+                allowance = FAST_POST_SECONDS if turn.get('profile') == 'fast' else 1.
+                policy_spent = spent[job['expected']['job_id']]
+                require(turn['post_search_ns']/1e9+policy_spent+elapsed <= allowance,
                         f"Value sealing exceeded final-turn post allowance for {job['expected']['job_id']}: "
-                        f"seal={elapsed:.6f}s policy_seal={post_spent:.6f}s "
+                        f"seal={elapsed:.6f}s policy_seal={policy_spent:.6f}s "
                         f"post={turn['post_search_ns']/1e9:.6f}s limit={allowance}s")
         self.label_ages = [a for a in self.label_ages if 0 <= generation-a['generation'] < 8 and a['reward_id'] == self.reward_id]
         self.label_ages.append(dict(generation=generation,reward_id=self.reward_id,

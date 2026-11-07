@@ -716301,6 +716301,394 @@
       "reviewed_from_commit": "bacbb60",
       "review_report": "ai-research/RUST_BACKEND_B07_IMPLEMENTATION.md",
       "preserve_throughput_calibration": true
+    },
+    {
+      "from_implementation": "6abba7672db47057df6090907c9397eb70ecad52b691653ed552bf250725e96d",
+      "to_implementation": "0126dd6a9d3c1b2e3981ea668256d2c2477dac4de25c59b5c9b7f8cfa24d750e",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "207",
+      "review_report": "ai-research/RUST_BACKEND_B07_IMPLEMENTATION.md"
+    },
+    {
+      "from_implementation": "6abba7672db47057df6090907c9397eb70ecad52b691653ed552bf250725e96d",
+      "to_implementation": "0126dd6a9d3c1b2e3981ea668256d2c2477dac4de25c59b5c9b7f8cfa24d750e",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "207",
+      "review_report": "ai-research/RUST_BACKEND_B07_IMPLEMENTATION.md",
+      "teacher_phase_changes": true
+    },
+    {
+      "from_implementation": "6abba7672db47057df6090907c9397eb70ecad52b691653ed552bf250725e96d",
+      "to_implementation": "0126dd6a9d3c1b2e3981ea668256d2c2477dac4de25c59b5c9b7f8cfa24d750e",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "207",
+      "review_report": "ai-research/RUST_BACKEND_B07_IMPLEMENTATION.md",
+      "config_migrations_ref": "1626"
+    },
+    {
+      "from_implementation": "4c514df4931721b1f8a96b6639ef9f5ee3b7cc1c98010e24536276c712f80fa6",
+      "to_implementation": "0126dd6a9d3c1b2e3981ea668256d2c2477dac4de25c59b5c9b7f8cfa24d750e",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "207",
+      "review_report": "ai-research/RUST_BACKEND_B07_IMPLEMENTATION.md",
+      "preserve_g570_calibration": true,
+      "preserve_g611_calibration": true,
+      "preserve_ppo_probe_calibration": true,
+      "preserve_throughput_calibration": true
+    },
+    {
+      "from_implementation": "4c514df4931721b1f8a96b6639ef9f5ee3b7cc1c98010e24536276c712f80fa6",
+      "to_implementation": "0126dd6a9d3c1b2e3981ea668256d2c2477dac4de25c59b5c9b7f8cfa24d750e",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "207",
+      "review_report": "ai-research/RUST_BACKEND_B07_IMPLEMENTATION.md",
+      "preserve_g570_calibration": true,
+      "preserve_g611_calibration": true,
+      "preserve_ppo_probe_calibration": true,
+      "preserve_throughput_calibration": true,
+      "config_migrations_ref": "1710"
+    },
+    {
+      "from_implementation": "4c514df4931721b1f8a96b6639ef9f5ee3b7cc1c98010e24536276c712f80fa6",
+      "to_implementation": "0126dd6a9d3c1b2e3981ea668256d2c2477dac4de25c59b5c9b7f8cfa24d750e",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "207",
+      "review_report": "ai-research/RUST_BACKEND_B07_IMPLEMENTATION.md",
+      "preserve_g570_calibration": true,
+      "preserve_g611_calibration": true,
+      "preserve_ppo_probe_calibration": true,
+      "preserve_throughput_calibration": true,
+      "config_migrations_ref": "1709"
+    },
+    {
+      "from_implementation": "4c514df4931721b1f8a96b6639ef9f5ee3b7cc1c98010e24536276c712f80fa6",
+      "to_implementation": "0126dd6a9d3c1b2e3981ea668256d2c2477dac4de25c59b5c9b7f8cfa24d750e",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "207",
+      "review_report": "ai-research/RUST_BACKEND_B07_IMPLEMENTATION.md",
+      "preserve_g570_calibration": true,
+      "preserve_g611_calibration": true,
+      "preserve_ppo_probe_calibration": true,
+      "preserve_throughput_calibration": true,
+      "config_migrations_ref": "1711"
+    },
+    {
+      "from_implementation": "36202b9e4bd3498a52671081f2cc37406ef2b3165dd24a37f1dfe79e44a625c1",
+      "to_implementation": "0126dd6a9d3c1b2e3981ea668256d2c2477dac4de25c59b5c9b7f8cfa24d750e",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "207",
+      "review_report": "ai-research/RUST_BACKEND_B07_IMPLEMENTATION.md",
+      "preserve_g570_calibration": true,
+      "preserve_g611_calibration": true,
+      "preserve_ppo_probe_calibration": true,
+      "preserve_throughput_calibration": true
+    },
+    {
+      "from_implementation": "36202b9e4bd3498a52671081f2cc37406ef2b3165dd24a37f1dfe79e44a625c1",
+      "to_implementation": "0126dd6a9d3c1b2e3981ea668256d2c2477dac4de25c59b5c9b7f8cfa24d750e",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "207",
+      "review_report": "ai-research/RUST_BACKEND_B07_IMPLEMENTATION.md",
+      "preserve_g570_calibration": true,
+      "preserve_g611_calibration": true,
+      "preserve_ppo_probe_calibration": true,
+      "preserve_throughput_calibration": true,
+      "config_migrations_ref": "1710"
+    },
+    {
+      "from_implementation": "36202b9e4bd3498a52671081f2cc37406ef2b3165dd24a37f1dfe79e44a625c1",
+      "to_implementation": "0126dd6a9d3c1b2e3981ea668256d2c2477dac4de25c59b5c9b7f8cfa24d750e",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "207",
+      "review_report": "ai-research/RUST_BACKEND_B07_IMPLEMENTATION.md",
+      "preserve_g570_calibration": true,
+      "preserve_g611_calibration": true,
+      "preserve_ppo_probe_calibration": true,
+      "preserve_throughput_calibration": true,
+      "config_migrations_ref": "1709"
+    },
+    {
+      "from_implementation": "36202b9e4bd3498a52671081f2cc37406ef2b3165dd24a37f1dfe79e44a625c1",
+      "to_implementation": "0126dd6a9d3c1b2e3981ea668256d2c2477dac4de25c59b5c9b7f8cfa24d750e",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "207",
+      "review_report": "ai-research/RUST_BACKEND_B07_IMPLEMENTATION.md",
+      "preserve_g570_calibration": true,
+      "preserve_g611_calibration": true,
+      "preserve_ppo_probe_calibration": true,
+      "preserve_throughput_calibration": true,
+      "config_migrations_ref": "1711"
+    },
+    {
+      "from_implementation": "57e69a7cd736044b6927c8d30177de0f570ec433af4dfe96f143f96578e90789",
+      "to_implementation": "0126dd6a9d3c1b2e3981ea668256d2c2477dac4de25c59b5c9b7f8cfa24d750e",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "207",
+      "review_report": "ai-research/RUST_BACKEND_B07_IMPLEMENTATION.md",
+      "preserve_g570_calibration": true,
+      "preserve_g611_calibration": true,
+      "preserve_ppo_probe_calibration": true,
+      "preserve_throughput_calibration": true
+    },
+    {
+      "from_implementation": "57e69a7cd736044b6927c8d30177de0f570ec433af4dfe96f143f96578e90789",
+      "to_implementation": "0126dd6a9d3c1b2e3981ea668256d2c2477dac4de25c59b5c9b7f8cfa24d750e",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "207",
+      "review_report": "ai-research/RUST_BACKEND_B07_IMPLEMENTATION.md",
+      "preserve_g570_calibration": true,
+      "preserve_g611_calibration": true,
+      "preserve_ppo_probe_calibration": true,
+      "preserve_throughput_calibration": true,
+      "config_migrations_ref": "1710"
+    },
+    {
+      "from_implementation": "57e69a7cd736044b6927c8d30177de0f570ec433af4dfe96f143f96578e90789",
+      "to_implementation": "0126dd6a9d3c1b2e3981ea668256d2c2477dac4de25c59b5c9b7f8cfa24d750e",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "207",
+      "review_report": "ai-research/RUST_BACKEND_B07_IMPLEMENTATION.md",
+      "preserve_g570_calibration": true,
+      "preserve_g611_calibration": true,
+      "preserve_ppo_probe_calibration": true,
+      "preserve_throughput_calibration": true,
+      "config_migrations_ref": "1709"
+    },
+    {
+      "from_implementation": "57e69a7cd736044b6927c8d30177de0f570ec433af4dfe96f143f96578e90789",
+      "to_implementation": "0126dd6a9d3c1b2e3981ea668256d2c2477dac4de25c59b5c9b7f8cfa24d750e",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "207",
+      "review_report": "ai-research/RUST_BACKEND_B07_IMPLEMENTATION.md",
+      "preserve_g570_calibration": true,
+      "preserve_g611_calibration": true,
+      "preserve_ppo_probe_calibration": true,
+      "preserve_throughput_calibration": true,
+      "config_migrations_ref": "1711"
+    },
+    {
+      "from_implementation": "fb61559cd8ec9f6f1e5facdb6cb6b1a04df44c6173fbc3e383aeb98331bc6062",
+      "to_implementation": "0126dd6a9d3c1b2e3981ea668256d2c2477dac4de25c59b5c9b7f8cfa24d750e",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "207",
+      "review_report": "ai-research/RUST_BACKEND_B07_IMPLEMENTATION.md",
+      "preserve_g570_calibration": true,
+      "preserve_g611_calibration": true,
+      "preserve_ppo_probe_calibration": true,
+      "preserve_throughput_calibration": true,
+      "config_migrations_ref": "1710"
+    },
+    {
+      "from_implementation": "fb61559cd8ec9f6f1e5facdb6cb6b1a04df44c6173fbc3e383aeb98331bc6062",
+      "to_implementation": "0126dd6a9d3c1b2e3981ea668256d2c2477dac4de25c59b5c9b7f8cfa24d750e",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "207",
+      "review_report": "ai-research/RUST_BACKEND_B07_IMPLEMENTATION.md",
+      "preserve_g570_calibration": true,
+      "preserve_g611_calibration": true,
+      "preserve_ppo_probe_calibration": true,
+      "preserve_throughput_calibration": true,
+      "config_migrations_ref": "1709"
+    },
+    {
+      "from_implementation": "fb61559cd8ec9f6f1e5facdb6cb6b1a04df44c6173fbc3e383aeb98331bc6062",
+      "to_implementation": "0126dd6a9d3c1b2e3981ea668256d2c2477dac4de25c59b5c9b7f8cfa24d750e",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "207",
+      "review_report": "ai-research/RUST_BACKEND_B07_IMPLEMENTATION.md",
+      "preserve_g570_calibration": true,
+      "preserve_g611_calibration": true,
+      "preserve_ppo_probe_calibration": true,
+      "preserve_throughput_calibration": true,
+      "config_migrations_ref": "1711"
+    },
+    {
+      "from_implementation": "fb61559cd8ec9f6f1e5facdb6cb6b1a04df44c6173fbc3e383aeb98331bc6062",
+      "to_implementation": "0126dd6a9d3c1b2e3981ea668256d2c2477dac4de25c59b5c9b7f8cfa24d750e",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "207",
+      "review_report": "ai-research/RUST_BACKEND_B07_IMPLEMENTATION.md",
+      "preserve_g570_calibration": true,
+      "preserve_g611_calibration": true,
+      "preserve_ppo_probe_calibration": true,
+      "preserve_throughput_calibration": true,
+      "config_migrations_ref": "1708"
+    },
+    {
+      "to_implementation": "0126dd6a9d3c1b2e3981ea668256d2c2477dac4de25c59b5c9b7f8cfa24d750e",
+      "learning_compatibility_ref": "5",
+      "preserve_throughput_calibration": true,
+      "reason_ref": "207",
+      "review_report": "ai-research/RUST_BACKEND_B07_IMPLEMENTATION.md",
+      "from_implementation": "36202b9e4bd3498a52671081f2cc37406ef2b3165dd24a37f1dfe79e44a625c1",
+      "config_migrations_ref": "1712"
+    },
+    {
+      "to_implementation": "0126dd6a9d3c1b2e3981ea668256d2c2477dac4de25c59b5c9b7f8cfa24d750e",
+      "learning_compatibility_ref": "5",
+      "preserve_throughput_calibration": true,
+      "reason_ref": "207",
+      "review_report": "ai-research/RUST_BACKEND_B07_IMPLEMENTATION.md",
+      "from_implementation": "fb61559cd8ec9f6f1e5facdb6cb6b1a04df44c6173fbc3e383aeb98331bc6062",
+      "config_migrations_ref": "1712"
+    },
+    {
+      "to_implementation": "0126dd6a9d3c1b2e3981ea668256d2c2477dac4de25c59b5c9b7f8cfa24d750e",
+      "learning_compatibility_ref": "5",
+      "preserve_throughput_calibration": true,
+      "reason_ref": "207",
+      "review_report": "ai-research/RUST_BACKEND_B07_IMPLEMENTATION.md",
+      "from_implementation": "9fefc97d1dbf4757039c8f58e7b55c2d764dbc89d0bd653188cce9acc1a37449",
+      "config_migrations_ref": "1712"
+    },
+    {
+      "to_implementation": "0126dd6a9d3c1b2e3981ea668256d2c2477dac4de25c59b5c9b7f8cfa24d750e",
+      "learning_compatibility_ref": "5",
+      "preserve_throughput_calibration": true,
+      "reason_ref": "207",
+      "review_report": "ai-research/RUST_BACKEND_B07_IMPLEMENTATION.md",
+      "from_implementation": "fb61559cd8ec9f6f1e5facdb6cb6b1a04df44c6173fbc3e383aeb98331bc6062"
+    },
+    {
+      "to_implementation": "0126dd6a9d3c1b2e3981ea668256d2c2477dac4de25c59b5c9b7f8cfa24d750e",
+      "learning_compatibility_ref": "5",
+      "preserve_throughput_calibration": true,
+      "reason_ref": "207",
+      "review_report": "ai-research/RUST_BACKEND_B07_IMPLEMENTATION.md",
+      "from_implementation": "9fefc97d1dbf4757039c8f58e7b55c2d764dbc89d0bd653188cce9acc1a37449",
+      "config_migrations_ref": "1713"
+    },
+    {
+      "to_implementation": "0126dd6a9d3c1b2e3981ea668256d2c2477dac4de25c59b5c9b7f8cfa24d750e",
+      "learning_compatibility_ref": "5",
+      "preserve_throughput_calibration": true,
+      "reason_ref": "207",
+      "review_report": "ai-research/RUST_BACKEND_B07_IMPLEMENTATION.md",
+      "from_implementation": "ff608f48a8372039cedb98ceca3bb149e0f62f4089f9d06a5792723fbb44a497",
+      "config_migrations_ref": "1713"
+    },
+    {
+      "to_implementation": "0126dd6a9d3c1b2e3981ea668256d2c2477dac4de25c59b5c9b7f8cfa24d750e",
+      "learning_compatibility_ref": "5",
+      "preserve_throughput_calibration": true,
+      "reason_ref": "207",
+      "review_report": "ai-research/RUST_BACKEND_B07_IMPLEMENTATION.md",
+      "from_implementation": "9fefc97d1dbf4757039c8f58e7b55c2d764dbc89d0bd653188cce9acc1a37449"
+    },
+    {
+      "to_implementation": "0126dd6a9d3c1b2e3981ea668256d2c2477dac4de25c59b5c9b7f8cfa24d750e",
+      "learning_compatibility_ref": "5",
+      "preserve_throughput_calibration": true,
+      "reason_ref": "207",
+      "review_report": "ai-research/RUST_BACKEND_B07_IMPLEMENTATION.md",
+      "from_implementation": "ff608f48a8372039cedb98ceca3bb149e0f62f4089f9d06a5792723fbb44a497",
+      "config_migrations_ref": "1714"
+    },
+    {
+      "to_implementation": "0126dd6a9d3c1b2e3981ea668256d2c2477dac4de25c59b5c9b7f8cfa24d750e",
+      "learning_compatibility_ref": "5",
+      "preserve_throughput_calibration": true,
+      "reason_ref": "207",
+      "review_report": "ai-research/RUST_BACKEND_B07_IMPLEMENTATION.md",
+      "from_implementation": "921a020f0254aed9aea7cab5e2dde9390c995138e4b2e7f3a3dbb31c8910a8d6",
+      "config_migrations_ref": "1714"
+    },
+    {
+      "to_implementation": "0126dd6a9d3c1b2e3981ea668256d2c2477dac4de25c59b5c9b7f8cfa24d750e",
+      "learning_compatibility_ref": "5",
+      "preserve_throughput_calibration": true,
+      "reason_ref": "207",
+      "review_report": "ai-research/RUST_BACKEND_B07_IMPLEMENTATION.md",
+      "from_implementation": "ff608f48a8372039cedb98ceca3bb149e0f62f4089f9d06a5792723fbb44a497"
+    },
+    {
+      "from_implementation": "921a020f0254aed9aea7cab5e2dde9390c995138e4b2e7f3a3dbb31c8910a8d6",
+      "to_implementation": "0126dd6a9d3c1b2e3981ea668256d2c2477dac4de25c59b5c9b7f8cfa24d750e",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "207",
+      "review_report": "ai-research/RUST_BACKEND_B07_IMPLEMENTATION.md",
+      "preserve_throughput_calibration": true
+    },
+    {
+      "from_implementation": "3eb5cf572f3f358a173ff45ca063995159c0136e885361efc63042e70295f94d",
+      "to_implementation": "0126dd6a9d3c1b2e3981ea668256d2c2477dac4de25c59b5c9b7f8cfa24d750e",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "207",
+      "review_report": "ai-research/RUST_BACKEND_B07_IMPLEMENTATION.md",
+      "preserve_throughput_calibration": true
+    },
+    {
+      "from_implementation": "bd1ffe2df246beb006e7d218233fb99354dbaa449cca976a37a74954f80ec3a1",
+      "to_implementation": "0126dd6a9d3c1b2e3981ea668256d2c2477dac4de25c59b5c9b7f8cfa24d750e",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "207",
+      "review_report": "ai-research/RUST_BACKEND_B07_IMPLEMENTATION.md",
+      "preserve_throughput_calibration": true
+    },
+    {
+      "from_implementation": "c70a13770460c4a58381f42ab07192699a17c07af936d0f9956b2a3ab510a31f",
+      "to_implementation": "0126dd6a9d3c1b2e3981ea668256d2c2477dac4de25c59b5c9b7f8cfa24d750e",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "207",
+      "review_report": "ai-research/RUST_BACKEND_B07_IMPLEMENTATION.md",
+      "preserve_throughput_calibration": true
+    },
+    {
+      "from_implementation": "603d1d236ca3da4511467956a9b656b41a4f03017d814b1abd8f060467a4c05c",
+      "to_implementation": "0126dd6a9d3c1b2e3981ea668256d2c2477dac4de25c59b5c9b7f8cfa24d750e",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "207",
+      "review_report": "ai-research/RUST_BACKEND_B07_IMPLEMENTATION.md",
+      "config_migrations_ref": "1626"
+    },
+    {
+      "from_implementation": "ce40147f02d7a4eec641cebfd4ff5186ced427d8cf505cbe988c8bf22fb9387a",
+      "to_implementation": "0126dd6a9d3c1b2e3981ea668256d2c2477dac4de25c59b5c9b7f8cfa24d750e",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "207",
+      "review_report": "ai-research/RUST_BACKEND_B07_IMPLEMENTATION.md",
+      "teacher_phase_changes": true
+    },
+    {
+      "from_implementation": "63564be49e282c4b2c0fff02b7640238c63d04d35f7c072bf8c017d12ce6ace5",
+      "to_implementation": "0126dd6a9d3c1b2e3981ea668256d2c2477dac4de25c59b5c9b7f8cfa24d750e",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "207",
+      "review_report": "ai-research/RUST_BACKEND_B07_IMPLEMENTATION.md",
+      "teacher_phase_changes": true
+    },
+    {
+      "from_implementation": "87cdd916e20f513302feca259604ba074948ea38b26275a6fd4e43a899ad273f",
+      "to_implementation": "0126dd6a9d3c1b2e3981ea668256d2c2477dac4de25c59b5c9b7f8cfa24d750e",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "207",
+      "review_report": "ai-research/RUST_BACKEND_B07_IMPLEMENTATION.md",
+      "teacher_phase_changes": true
+    },
+    {
+      "from_implementation": "87cdd916e20f513302feca259604ba074948ea38b26275a6fd4e43a899ad273f",
+      "to_implementation": "0126dd6a9d3c1b2e3981ea668256d2c2477dac4de25c59b5c9b7f8cfa24d750e",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "207",
+      "review_report": "ai-research/RUST_BACKEND_B07_IMPLEMENTATION.md",
+      "preserve_throughput_calibration": true
+    },
+    {
+      "from_implementation": "f6372cefd9a48c98994d2f2e8424b032f4d5c808aceab140bb6442b92214cfc9",
+      "to_implementation": "0126dd6a9d3c1b2e3981ea668256d2c2477dac4de25c59b5c9b7f8cfa24d750e",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "207",
+      "reviewed_from_commit": "bacbb60",
+      "review_report": "ai-research/RUST_BACKEND_B07_IMPLEMENTATION.md",
+      "preserve_throughput_calibration": true
+    },
+    {
+      "from_implementation": "12d996a03debe816d1c3661872faeafa9e79c6ea97646d83cf19393dd57bd5ba",
+      "to_implementation": "0126dd6a9d3c1b2e3981ea668256d2c2477dac4de25c59b5c9b7f8cfa24d750e",
+      "learning_compatibility_ref": "5",
+      "reason_ref": "207",
+      "review_report": "ai-research/RUST_BACKEND_B07_IMPLEMENTATION.md",
+      "preserve_throughput_calibration": true
     }
   ],
   "definitions": {
@@ -716511,7 +716899,8 @@
       "203": "B07 process-isolated native ordinary actors/writer, single full writer validation with source-and-byte-bound reuse, strict restart revalidation, explicit teacher-off backend adoption, persisted checkpoint identity, full rollback and retention. Default/reference training, native rules, search_v1, PPO/PPG/companion objectives and saved recipe remain unchanged. Preserve all prior config restrictions. See RUST_BACKEND_B07_IMPLEMENTATION.md.",
       "204": "B07 r3 fixes exact teacher JSON float roundtrip using teacher-only serde_json feature; removes repeated native row validation/copies and uses at most two independent publishers under the existing shared CPU gate. Full ingress, RNG/behavior, byte integrity, per-row mutation checks, branch atomicity and serialized reader callbacks remain. Preserve all existing config restrictions, checkpoints, optimizers and teacher-off default; require new bounded ordinary performance/canary evidence before adoption.",
       "205": "B07 r3 adds compact action IDs/revision/context bindings, binary arrays, bounded forced previews with original Python RNG acknowledgement and batched sealed record export. Exact JSON float roundtrip covers behavior probabilities and teacher bindings. Removes repeated native row validation/copies and uses at most two independent publishers under the existing shared CPU gate. Full ingress, RNG/behavior, byte integrity, per-row mutation checks, branch atomicity and serialized reader callbacks remain. Preserve all existing config restrictions, checkpoints, optimizers and teacher-off default; require new bounded ordinary performance/canary evidence before adoption.",
-      "206": "B07 R4 keeps Rust authoritative for frozen V4 ordinary tables through the original C# decision policy. Retains all native/archived-reference actor features and CheckedGame bindings through one sealed handoff, independently validates behavior/RNG, specializes exact forced verification, incrementally hashes/drains row buffers, and reuses bounded per-lane collectors/policies with complete game/seat reset and failure cleanup. Benchmark-only float32 tolerance fixes the observed R3 comparison boundary; production denominators remain independently reconstructed at 1e-12. No search_v1 equations, shared core, C# policy, weights, optimizer, replay schema, recipe or saved config change. Preserve earlier config restrictions and require new bounded ordinary qualification; no production adoption."
+      "206": "B07 R4 keeps Rust authoritative for frozen V4 ordinary tables through the original C# decision policy. Retains all native/archived-reference actor features and CheckedGame bindings through one sealed handoff, independently validates behavior/RNG, specializes exact forced verification, incrementally hashes/drains row buffers, and reuses bounded per-lane collectors/policies with complete game/seat reset and failure cleanup. Benchmark-only float32 tolerance fixes the observed R3 comparison boundary; production denominators remain independently reconstructed at 1e-12. No search_v1 equations, shared core, C# policy, weights, optimizer, replay schema, recipe or saved config change. Preserve earlier config restrictions and require new bounded ordinary qualification; no production adoption.",
+      "207": "R6 detaches verified teacher histories once inside the per-turn deadline, safely shares immutable rows through sealing, and charges each table its own policy sealing. User-authorized fast post cap 0.5s (search 0.8s/K4), full 4s/K16 plus 1s unchanged. Rebuild teacher only; ordinary executable inputs, saved teacher-off recipe, all search_v1 equations, weights, learning contracts, optimizers and replay bytes unchanged. Preserve all existing config restrictions and throughput calibration; require new remaining shadow canaries before adoption."
     },
     "config_changes": {
       "0": {

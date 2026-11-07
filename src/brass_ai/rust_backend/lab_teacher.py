@@ -13,6 +13,7 @@ import traceback
 
 from brass_ai.learning.contracts import digest, require
 from brass_ai.recovery.teacher_phase_config import defaults, SCHEDULE, PROFILE
+from brass_ai.recovery.search_value_config import FAST_POST_SECONDS
 from .lab_contract import admit_search_request, pin
 from .lab_teacher_overlay import CONTRACT, source_fingerprint
 from .lab_teacher_inference import Client
@@ -305,5 +306,5 @@ def turn_probes(executable, core_source, origins, job, service, calibration, mod
             result['verification']=verifier.cache[job['expected']['job_id']]['timings']
             results.append(result)
     finally:endpoint.close()
-    return dict(passed=True,diagnostic=True,turns=results,search_seconds=.8 if profile=='fast' else 4.,post_search_seconds=.2 if profile=='fast' else 1.,k=4 if profile=='fast' else 16,
+    return dict(passed=True,diagnostic=True,turns=results,search_seconds=.8 if profile=='fast' else 4.,post_search_seconds=FAST_POST_SECONDS if profile=='fast' else 1.,k=4 if profile=='fast' else 16,
                 scope='Fixed-root timing and verification probes; no full games or training labels')

@@ -3,6 +3,7 @@ import copy
 import random
 import time
 from collections import Counter
+from .search_value_config import FAST_POST_SECONDS
 
 from brass_ai.learning.contracts import digest, require
 from brass_ai.step5.league import seeds_for
@@ -156,7 +157,7 @@ class TeacherPhase:
             # it receives no extra allowance of its own.
             require(all(r['metrics']['turns'] and
                 r['metrics']['turns'][-1]['post_search_ns']/1e9 + self.admission_seconds <=
-                    (.2 if r['metrics']['turns'][-1].get('profile')=='fast' else 1.)
+                    (FAST_POST_SECONDS if r['metrics']['turns'][-1].get('profile')=='fast' else 1.)
                 for r in results), 'Teacher sealing exceeded the remaining post-search allowance')
             self.metrics['deferred_sealing_seconds'] = self.admission_seconds
         if self.search_value is not None:

@@ -1,18 +1,6 @@
 {
-  "archive": "rust-lab-b07-g1250-r5.zip",
-  "sha256": "97e5b6535e6e4c9310db4b1bad782ef089df305f3af44937557da532cd340f33",
-  "implementation": "12d996a03debe816d1c3661872faeafa9e79c6ea97646d83cf19393dd57bd5ba",
-  "passed": true,
-  "clean_extraction": ".b75",
-  "manifest_verified": true,
-  "python_tests": 12,
-  "python_test_seconds": 11.164,
-  "continuation_cli_help_passed": true,
-  "clean_log_sha256": "af1fa2f85234acb71fa0970f21f2a973122e96a0489654a49e2c7ee7f449d5d2",
-  "unique_affected_tests_total": 19,
-  "runtime_implementation_unchanged": true,
-  "ordinary_lab_qualification": "R4 passed, reused",
-  "remaining_canaries_adoption_real_commit": "Pending lab execution",
-  "production_modified": false,
-  "committed_or_pushed": false
+  "revision": "r6",
+  "local_testing_stopped_by_user": true,
+  "fresh_extraction_execution": "Pending lab; not run locally",
+  "production_modified": false
 }

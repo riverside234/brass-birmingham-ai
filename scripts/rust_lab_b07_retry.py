@@ -38,6 +38,8 @@ def original_runtime(reference):
 
 
 def verify_teacher(value,original):
+    from rust_lab_b07_completion import reuse_build
+    value=reuse_build(value,'teacher')
     require(value['contract']=='brass-lab-b07-teacher-build/1.0.0' and
             value['producer']==source_fingerprint() and value['implementation']==implementation_id() and
             value['core_source']==original['core_source'] and value['bootstrap']==original['bootstrap'] and
@@ -49,6 +51,8 @@ def verify_teacher(value,original):
 
 
 def verify_ordinary(value,original):
+    from rust_lab_b07_completion import reuse_build
+    value=reuse_build(value,'ordinary')
     require(value['contract']=='brass-lab-b07-ordinary-build/1.0.0' and value['shared_core']==SOURCE
             and value['producer']==source_fingerprint() and value['implementation']==implementation_id()
             and value['bootstrap']==original['bootstrap'] and value['b01']==original['b01']

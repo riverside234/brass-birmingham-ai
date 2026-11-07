@@ -41,7 +41,7 @@ pub fn search_budget(started_ns: u64) -> Result<Budget> {
     profile_budget(started_ns, false)
 }
 pub fn profile_budget(started_ns: u64, fast: bool) -> Result<Budget> {
-    let (search, post) = if fast { (800_000_000, 200_000_000) } else { (ALLOWANCE, POST) };
+    let (search, post) = if fast { (800_000_000, 500_000_000) } else { (ALLOWANCE, POST) };
     let deadline_ns = started_ns.checked_add(search + post).ok_or("turn clock overflow")?;
     Ok(Budget { started_ns, work_deadline_ns: deadline_ns - post, deadline_ns, reserve_ns: post })
 }
@@ -312,7 +312,7 @@ pub fn run() -> Result<()> {
     check(!h2h || (all_seat && job["seat_values"].as_array().is_some_and(|v| v.len() == 4)), "head-to-head seat bindings")?;
     if all_seat {
         let mut fast = profile.clone();
-        fast["k"] = json!(4); fast["allowance_seconds"] = json!(0.8); fast["post_search_seconds"] = json!(0.2);
+        fast["k"] = json!(4); fast["allowance_seconds"] = json!(0.8); fast["post_search_seconds"] = json!(0.5);
         check(job["fast_search"] == fast, "fast profile differs")?;
         let w = job["search_value"]["w"].as_f64().ok_or("search blend")?;
         check(job["search_value"]["protocol"] == "search-utility/1.0.0" && w.is_finite() && (0.0..=1.0).contains(&w)

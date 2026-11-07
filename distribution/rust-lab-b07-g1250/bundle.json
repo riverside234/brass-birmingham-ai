@@ -1,10 +1,11 @@
 {
-  "archive": "rust-lab-b07-g1250-r5.zip",
-  "sha256": "97e5b6535e6e4c9310db4b1bad782ef089df305f3af44937557da532cd340f33",
-  "bytes": 8491474,
-  "entries": 1353,
-  "implementation": "12d996a03debe816d1c3661872faeafa9e79c6ea97646d83cf19393dd57bd5ba",
-  "qualification": "R4 ordinary passed; R5 remaining lab/adoption/next commit Pending",
+  "archive": "rust-lab-b07-g1250-r6.zip",
+  "sha256": "e22fca39d68107d53b0815850bb2091024c7e4a47f8dcb13e00cfea47bfa6a48",
+  "bytes": 9421674,
+  "entries": 1367,
+  "implementation": "0126dd6a9d3c1b2e3981ea668256d2c2477dac4de25c59b5c9b7f8cfa24d750e",
+  "qualification": "R4 ordinary passed and unchanged; R6 teacher deadline/canaries/continuation/adoption Pending",
   "ordinary_qualification_reused": true,
+  "teacher_rebuild_required": true,
   "production_modified": false
 }

@@ -97,9 +97,9 @@ def canary(args,snapshot,build,inputs,index):
                 digest([(age,r.row) for age,r in buffer.rows(generation,split)]),'Canary buffer reload differs')
     model.to(args.device)
     values=SearchValuePhase(out/'value',model,config['teacher_phase']['search_value'],reward)
-    # Conservatively charge the slower table's policy sealing to both final
-    # turns; the existing value admission adds its own per-table cost to <=1s.
-    try:values.admit(tables,jobs,generation,post_spent=max(policy_sealing.values()))
+    # Each final turn pays its own policy + value seal, plus native post-work.
+    # Keep the user-selected 0.5s fast / unchanged 1s full caps; never charge another lane's work.
+    try:values.admit(tables,jobs,generation,post_spent=policy_sealing)
     finally:write_json(out/'admission.json',dict(policy_sealing_seconds=policy_sealing,value=values.report))
     # Shadow canary validates buffer/checkpoint/optimizer restore; does not enable
     # teacher PPO or calibrate production beta from these two tables.

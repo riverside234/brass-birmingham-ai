@@ -11,6 +11,7 @@ import threading
 from brass_ai.learning.batching import model_id
 from brass_ai.learning.contracts import digest, require
 from brass_ai.recovery.teacher_phase_config import TIMING
+from brass_ai.recovery.search_value_config import FAST_POST_SECONDS
 from .lab_admission import admit_teacher_rows
 
 
@@ -30,7 +31,7 @@ class TurnVerifier:
                 'Stale turn/job/timing identity')
         require(meta.get('diagnostic',False) is self.diagnostic, 'Wrong turn verification scope')
         fast = meta.get('profile', 'full') == 'fast'
-        search_ns, post_ns = (800_000_000,200_000_000) if fast else (4_000_000_000,1_000_000_000)
+        search_ns, post_ns = (800_000_000,int(FAST_POST_SECONDS*1e9)) if fast else (4_000_000_000,1_000_000_000)
         require(not fast or (job.get('seating') == 'all-seat-search' and not meta['rows']), 'Fast searches cannot label')
         require(type(meta['remaining_ns']) is int and 0 < meta['remaining_ns'] <= post_ns
                 and 0 <= meta['native_post_ns'] < post_ns
@@ -51,7 +52,7 @@ class TurnVerifier:
         began = time.monotonic()
         if not meta['rows']:
             # Fast/value-only turns do not touch model mode or RNG. Do not make
-            # their 0.2s budget wait behind another lane's policy validation.
+            # their 0.5s budget wait behind another lane's policy validation.
             accepted, rejected = [], {}
         else:
             # policy_context preserves the process RNG/model mode. Serialize
@@ -72,13 +73,27 @@ class TurnVerifier:
         check()
         # Publish only after identity, legality, target and independent batched
         # model-logit checks pass within the original allowance.
-        record['raw'].extend(copy.deepcopy(meta['rows']))
+        # Reuse the existing immutable JSON snapshot containers. Detach once
+        # inside this turn's post-work budget, then share safely through take,
+        # policy publication and value-label ages instead of copying growing
+        # histories again at the final fast turn. No actor admission is granted.
+        from brass_ai.recovery.admitted_inputs import _freeze
+        from brass_ai.recovery.teacher_labels import LabelRow
+        meta['rows'] = [_freeze(row) for row in meta['rows']]
+        accepted = [LabelRow(_freeze(row.row),row.encoded) for row in accepted]
+        check()
+        record['raw'].extend(meta['rows'])
         record['accepted'].extend(accepted); record['rejected'].update(rejected)
         record['last'] = meta['index']
         record['timings'].append(dict(index=meta['index'], rows=len(meta['rows']),
             verification_seconds=time.monotonic()-began, receive_to_ready_seconds=time.monotonic()-received,
             allowance_seconds=meta['remaining_ns']/1e9))
-        check()
+        try:check()
+        except BaseException:
+            # Even the final turn cannot leave a complete-looking cache after
+            # crossing its deadline or receiving cancellation during publication.
+            self.cache.pop(identity,None)
+            raise
         return dict(job=job['expected'], index=meta['index'], status='ok')
 
     def take(self, result, job, model):
@@ -86,8 +101,15 @@ class TurnVerifier:
         require(not self.diagnostic, 'Diagnostic probes cannot enter the teacher buffer')
         require(not self.cancel.is_set() and model_id(model) == self.model_id, 'Retired/changed verifier model')
         key = job['expected']['job_id']; record = self.cache.get(key)
-        require(record is not None and job == self.jobs[key] and result['job_id'] == key
-                and digest(result['rows']) == digest(record['raw']), 'Changed/unverified teacher table')
+        require(record is not None and job == self.jobs[key] and result['job_id'] == key,
+                'Changed/unverified teacher table')
+        # The live Worker holds these exact immutable per-turn rows. Plain JSON
+        # reloads/copies still take the original full canonical-byte check.
+        from brass_ai.recovery.admitted_inputs import FrozenDict
+        same = len(result['rows']) == len(record['raw']) and all(
+            type(expected) is FrozenDict and actual is expected
+            for actual,expected in zip(result['rows'],record['raw'],strict=True))
+        require(same or digest(result['rows']) == digest(record['raw']), 'Changed/unverified teacher table')
         require(record['last'] == result['metrics'].get('searched_turns',result['metrics']['reserved_turns'])
                 and record['last'] == (64 if job.get('seating') == 'all-seat-search' else 16),
                 'Incomplete turn verification')
