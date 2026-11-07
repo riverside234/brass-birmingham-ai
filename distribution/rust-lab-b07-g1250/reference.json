@@ -32,7 +32,7 @@
       "sha256": "b323c55579bdfc875707cc1d36c42f01a9713fc88a82648aab24395962ab3b0c"
     }
   },
-  "source_policy": "B07 R4 Rust state for V4 tables, retained binary training features, exact forced sampling verification, one-file handoff, reusable lanes/policies; teacher off and search_v1 unchanged",
+  "source_policy": "R5 completion/adoption/one-iteration launcher only; exact R4 runtime, config, recipes, C# V4 and search_v1 unchanged",
   "source_reuse": {
     "from_implementation": "ce40147f02d7a4eec641cebfd4ff5186ced427d8cf505cbe988c8bf22fb9387a",
     "to_implementation": "63564be49e282c4b2c0fff02b7640238c63d04d35f7c072bf8c017d12ce6ace5",
@@ -51,7 +51,7 @@
     "native_binaries_unchanged": true,
     "production_modified": false
   },
-  "native_runtime_policy": "Rebuild ordinary adapter against unchanged B01 core and teacher against unchanged teacher overlay; reuse exact original C# pins",
+  "native_runtime_policy": "Reuse exact passing R4 ordinary build; build/test repaired teacher only if a current-source receipt is unavailable",
   "b06": {
     "path": "results/rust-lab-qualification/20261107T080012822445Z-20261107T075601452661Z-g1250-b06-c1cd94b2-2c29d5e3/evidence/qualification.json",
     "sha256": "fc07359069538cf75a7413bd8f522f0e5bea133f56daa8d0a86c3b64f07e4081"
@@ -149,7 +149,7 @@
     "native_binaries_unchanged": false,
     "teacher_default": "off",
     "default_without_adoption": "reference",
-    "lab_qualification": "Pending",
+    "lab_qualification": "R4 ordinary correctness/useful performance passed; remaining canaries/adoption/G-to-G+1 Pending",
     "ordinary_binary_unchanged": false,
     "retry": {
       "from_implementation": "f6372cefd9a48c98994d2f2e8424b032f4d5c808aceab140bb6442b92214cfc9",
@@ -215,6 +215,14 @@
         "before": "0134f1d61c1e4338958baf981bb12315f71854962a642ed9799509d51644e989",
         "after": "29fb566b30950cceef207b4be335afc4767706c67b99357dd61815198fb14996"
       }
+    },
+    "completion_r5": {
+      "runtime_implementation_unchanged": true,
+      "implementation": "12d996a03debe816d1c3661872faeafa9e79c6ea97646d83cf19393dd57bd5ba",
+      "reviewed_commit": "9e55c30",
+      "scope": "Completion, exact passing phase reuse, locked existing adoption, rollback and one real same-run iteration/restart orchestration only; no runtime/recipe/source registry changes",
+      "result": "results/rust-lab-qualification/20261107T110307031706Z-20261107T110018084733Z-g1250-b07-49ed6ce1-fc892c78",
+      "production_modified": false
     }
   },
   "teacher_wire_review": {
@@ -262,6 +270,33 @@
       "b07-r3-frozen-jobs.json": "15441b2fbc99d296c70bd59b5b43cab199672569fa0a1d524c4ca5250cc4cd82",
       "b07-r3-reference-report.json": "a53a9c5b28ec474be4c0fbb5cdedc35d5f526ee652d39f2cf6e41cd850e34ed8",
       "b07-r3-native-report.json": "406d5adb95345b009f763288952a12cd8640038efb98a1ca266d76e5d9fe8792"
+    }
+  },
+  "completed_ordinary": {
+    "result": "results/rust-lab-qualification/20261107T110307031706Z-20261107T110018084733Z-g1250-b07-49ed6ce1-fc892c78",
+    "implementation": "12d996a03debe816d1c3661872faeafa9e79c6ea97646d83cf19393dd57bd5ba",
+    "runtime_unchanged": true,
+    "evidence": {
+      "qualification": {
+        "file": "b07-r4-qualification.json",
+        "sha256": "0ba62d2e43bcced23e270154e48b175846d30cf9cd212ea30c8d8c9d8a889393"
+      },
+      "ordinary": {
+        "file": "b07-r4-ordinary-checks.json",
+        "sha256": "4f7f0a8264b43cc664727505d748f29d732ad0c0ca6db3393bfe1b208b67fc17"
+      },
+      "snapshot": {
+        "file": "b07-r4-snapshot.json.gz",
+        "sha256": "784d53a88ec6435dff3cfe16a66f5fff9013f9b415f44950b24886228a4562e9"
+      },
+      "v4": {
+        "file": "b07-r4-v4-parity.json",
+        "sha256": "03c1a074ae6ac49f9ebbcff748434a5ecf8dd5fbf26e0bd0425814c60d383dec"
+      },
+      "build": {
+        "file": "b07-r4-ordinary-build.json",
+        "sha256": "b3c0de6ee6d5db06903f20008b2518c39c0fce527e5c843df46683203c84eb6f"
+      }
     }
   }
 }

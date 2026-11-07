@@ -863,7 +863,7 @@ Keep Python target construction, GAE, PPO behavior likelihoods, critic/local-sco
 | B04.5 | **Passed on pinned g1250** | Exact r3 source/model/device; two shadow tables, 49 policy labels, 128 value rows, one isolated head step; production unchanged |
 | B05 | **Passed on pinned g1250** | R2 CUDA ordinary/teacher component updates, head-only update, full-state/age restoration; no new games or production adoption |
 | B06 | **Passed bounded correctness/measurement; useful performance gate not passed** | Same 3 families / 1,161 decisions; native accepted work 55.265s vs reference 28.596s; Python collection/admission bottleneck identified; eight 4s/K16 teacher turns passed |
-| B07 | **Implemented; lab qualification/adoption Pending** | Process-isolated ordinary collection, single full writer validation and attested reads; short canary, guarded same-run adoption/rollback and next normal commit verification |
+| B07 | **R4 ordinary correctness/useful performance passed; R5 completion workflow implemented; lab canaries/adoption/G→G+1 Pending** | Reuse qualified Rust ordinary backend, finish only remaining shadow/restore gates, then locked same-run adoption and one real iteration/restart |
 
 #### B01 — Pin lab state and qualify Linux/GPU adapters
 
@@ -960,13 +960,30 @@ Keep the short-test scope: eight fixed-root turns in ABBA pairs, two concurrent 
 
 #### B07 — Bounded server canary, then explicit adoption
 
-**R4 update (2026-11-07): ordinary qualification Pending.** The latest pulled R3
-run completed collection but failed a float32 behavior-probability comparison
-(absolute 4.68e-7). Its native accepted time was 32.684s versus reference 27.212s;
-do not treat it as passed. R4 preserves exact trajectories/features/targets and
-independent sampling verification while using a documented float32 tolerance
-only for cross-batch benchmark probabilities. Full details and evidence are in
-[the R4 implementation notes](RUST_BACKEND_B07_IMPLEMENTATION.md#r4-v4-tables-retained-features-and-reusable-lanes).
+**R5 update (2026-11-07): R4 ordinary correctness and useful performance passed.**
+Pulled from inside `results/` at `9e219a2`, export
+`20261107T110307031706Z-20261107T110018084733Z-g1250-b07-49ed6ce1-fc892c78`.
+The same three frozen strata/1,161 decisions/675 forced rows matched exact
+trajectories, prepared features and targets. Accepted work improved from 30.632s
+to 26.820s (12.4% less time); collection 27.616s to 23.614s. Sampled peak host
+RSS rose from 4.917GB to 7.479GB; first read remains a cost. These are bounded
+measurements, not a whole-iteration or statistical claim. No natural branch
+occurred; retain earlier branch coverage. See [evidence and remaining workflow](RUST_BACKEND_B07_IMPLEMENTATION.md#r5-finish-qualification-and-continue-the-real-run).
+
+R5 preserves the complete qualified R4 implementation and native inputs.
+`qualify-rust-lab-b07.py --complete-remaining` reuses exact passing ordinary
+fixtures/wire/V4/performance evidence and build, verifies the unchanged committed
+state/checkpoint/config/population/runtime, and runs only the two pending shadow
+passes plus bounded continuation/update/reload. Successful phases can be reused
+with `--resume-from` under exact workflow/state/build/receipt checks.
+`continue-rust-lab-b07.py --expected-generation 1250` then adopts Rust with
+teacher off, restores the full rollback copy, runs **one real same-run iteration**
+using the committed config, and verifies the g1251 checkpoint/report/full restart.
+The command is safe to repeat after g1251 commits: verification only, never g1252.
+No local full training session is added. See the [R5 bundle commands](../distribution/rust-lab-b07-g1250/README.md).
+**Lab canaries, production adoption and G→G+1 remain Pending until their actual
+lab receipts pass; do not mark the whole server migration complete from the
+ordinary-only result.**
 
 Keep Rust authoritative for ordinary tables containing V4, using the existing C#
 decision worker and unchanged plan queues, intent, RNG, budgets and policy IDs.
@@ -977,18 +994,18 @@ with the exact original draws and no unnecessary distribution work. Incrementall
 hash/drain Rust record buffers, reuse verified replay hashes, and keep bounded
 collector/policy caches with full per-game/seat reset and failure/cancel retirement.
 Keep source/byte/row/revision/legality/behavior/branch/recovery checks and the existing
-training recipe. Reuse successful B01–B06 evidence. Rerun only the short affected
-ordinary scope with `--ordinary-only`, including the actual frozen V4-containing
-stratum. The local component improvements (V4 progression and ~19.5% publication
-plus first-read reduction) do not close the g1250 lab accepted-work gate.
+training recipe. Reuse successful B01–B06 and R4 ordinary evidence, including
+the actual frozen V4-containing stratum. Do not rerun these for R5 completion.
+The passing lab accepted-work measurement above supersedes the earlier local
+component-only performance status.
 
 R3 ordinary transport uses compact semantic action IDs with token/revision/model/context bindings; one bounded little-endian binary array reply per nonforced decision; at most 16 forced previews under the reference actor/turn/era/non-debt guards; and batch export of the exact once-serialized record bytes. Python retains the existing RNG/sampling/counters and acknowledges every forced record before publication. Preserve branch opportunities, cancellation, byte seals, full first admission and cold recovery checks. Reuse validated tensors/seals and hash the same file bytes being decoded. Keep search_v1 equations unchanged. See [wire design and tests](RUST_BACKEND_B07_IMPLEMENTATION.md#compact-ordinary-transport-r3). The bundle supports `--ordinary-only`, identical frozen g1250 jobs/checkpoint, and separate startup, serialization/IPC, feature transfer, collection/export, part I/O, publication, replay read, preparation and accepted-work timings. No earlier successful qualification is repeated.
 
-**Implemented; R2 ordinary correctness passed, R3 comparison failed, R4 ordinary qualification and useful performance Pending; canaries, production adoption and next normal commit/restart Pending.** See [implementation](RUST_BACKEND_B07_IMPLEMENTATION.md) and [g1250 bundle/commands](../distribution/rust-lab-b07-g1250/README.md). The bundle retains the exact passing B04.5/B05/B06 g1250 checkpoint/config and original C# binaries. Rebuild the ordinary adapter for R4; teacher work remains separate and search_v1 is unchanged. Require receipts bound to the actual committed restart checkpoint; a later checkpoint needs refreshed gates. Never rewind a newer run or silently reuse stale evidence.
+**Implemented; R4 ordinary correctness and useful performance passed; remaining lab canaries, production adoption and next normal commit/restart Pending.** See [implementation](RUST_BACKEND_B07_IMPLEMENTATION.md) and [g1250 bundle/commands](../distribution/rust-lab-b07-g1250/README.md). The bundle retains the exact passing B04.5/B05/B06 g1250 checkpoint/config and original C# binaries. Reuse the exact qualified R4 ordinary adapter for R5; teacher work remains separate and search_v1 is unchanged. Require receipts bound to the actual committed restart checkpoint; a later checkpoint needs refreshed gates. Never rewind a newer run or silently reuse stale evidence.
 
 R2's lab result (`20261107T090047266944Z-20261107T085645018439Z-g1250-b07-d0097dac-faa1535f`) matched 3 families/1,161 decisions/675 forced rows; native accepted work was 40.246s versus reference 28.833s. Preserve this negative result as history. GPU forward time is now below reference; remaining measured overhead includes serial 4.2s-per-family publication and 5.247s first read. R3 removes duplicate row validation/deep copies and permits at most two publishers under the existing CPU cap, with serialized callbacks and exact byte/mutation checks. Remeasure this changed scope using the same short matched batch. The first canary failed after 52 verified turns because Rust's default JSON parser rounded the echoed remaining budget `0.015000000000000001` to `0.015`. R3 enables `serde_json/float_roundtrip` for exact teacher bindings and ordinary probabilities and adds exact roundtrip/mutated-binding regressions; preserve every strict identity check. The retry builds/tests both native adapters against their unchanged sealed cores and runs the affected ordinary scope plus unfinished canaries/continuation, without repeating B01–B06. Passing correctness alone does not waive the useful-performance adoption gate.
 
-Minimize Python-side collection and validation: ordinary lanes and at most two validating writers run in separate processes from the learner/GPU service; only bounded file/hash handles and compact receipts cross the coordinator. Keep existing branch scheduling, CPU admission (60-slot cap), inference batching, streaming preparation and whole-table V4 fallback. Validate each new family fully once at publication. Reuse that result only with independently held writer receipts binding current source, job, replay and all feature-cache bytes. Changed bytes fail; old-source/missing-cache reads and restart sidecars undergo full validation. Preserve row mutation checks, diagnostic exclusion, behavior/RNG/target equality and all original legality/identity checks. Retention pins native replay dependencies and current v4 feature sidecars. Compare collection plus first admission/preparation, not just native kernel time.
+Minimize Python-side collection and validation: ordinary lanes and at most two validating writers run in separate processes from the learner/GPU service; only bounded file/hash handles and compact receipts cross the coordinator. Keep existing branch scheduling, CPU admission (60-slot cap), inference batching and streaming preparation. Ordinary V4-containing tables now retain Rust state through the original C# decision worker; only searched/nonordinary policies retain their explicit reference route. Validate each new family fully once at publication. Reuse that result only with independently held writer receipts binding current source, job, replay and all feature-cache bytes. Changed bytes fail; old-source/missing-cache reads and restart sidecars undergo full validation. Preserve row mutation checks, diagnostic exclusion, behavior/RNG/target equality and all original legality/identity checks. Retention pins native replay dependencies and current v4 feature sidecars. Compare collection plus first admission/preparation, not just native kernel time.
 
 Use two short diagnostic shadow passes, at most two teacher tables per pass (one train and one held-out), reusing fixed ordinary data. Keep 4s/K16, two independent one-thread sessions and the <=1s post-work cap. Include buffer/checkpoint reload, cancellation/stale replies, dropped/duplicate results and crash recovery. Missing task readiness defers teachers; invalid identities, nonfinite values or excess latency fail their scope. Reduced-volume shadow calibration does not authorize production beta, full 28+4 throughput or strength claims.
 
@@ -1041,7 +1058,8 @@ Each future milestone publishes a **new immutable bundle under `distribution/`**
 - [x] B04.5 g1250 GPU recalibration, full/fast timings, two all-seat shadow tables and isolated head update pass on the lab (r3 receipt above).
 - [x] B05 fixed-data PPO/PPG/companion equivalence, teacher term, interruption and old/new age reload pass without resetting the run (g1250 r2 bounded component scope; normal production iteration remains B07).
 - [ ] B06 proves useful matched performance and separately accounts for teacher/validation costs without correctness loss.
-- [ ] B07 short canary, latest-state backend adoption with teacher off, next normal commit/restart and complete rollback pass.
+- [x] B07 R4 ordinary correctness and useful accepted-work improvement pass on pinned g1250.
+- [ ] B07 remaining shadow canaries/continuation, locked backend adoption with teacher off, real g1250→g1251 commit/restart and complete rollback pass on lab (R5 command implemented).
 - [ ] Later production task-teacher enablement has its own explicit decision, readiness/calibration and qualified commands.
 - [ ] Every later stage has a new versioned distribution bundle and Git-visible success/failure/deferred report.
 
@@ -1059,4 +1077,4 @@ Use [restart bundle instructions](../distribution/rust-lab-g570/README.md), [ref
 | `neutral_training.py`, `policy_observations.py`, `trained_startup.py`, `exploration.py`, `branching.py` | Current neutral inputs, manual-startup provenance and g370 exploration/fork semantics |
 | `local_scoring_auxiliary.py`, `critic_data.py`, `ppg_replay.py`, `value_phase.py` | Existing companion/critic/cache/preparation semantics and selected rollback |
 
-Keep the existing B01/B02/B02.5/B03/B04, training-g370, neutral-input, branch, inference deadline/race and PPO/PPG regression assertions. Add bounded native variants and `tests/RustBackendLab/test_g370_lab.py` coverage for current source/config, removed profiles, exact pending restore, clock boundaries, stale/canceled turns and one-use admission. Short local tests do not close Linux/CUDA gates. **B05 and B06 bounded correctness/measurements passed on pinned g1250. B06 did not show useful native performance. B07 collection optimizations, bounded canary and adoption/rollback tooling are implemented; optimized lab performance/canary, production adoption and next normal commit/restart remain Pending.**
+Keep the existing B01/B02/B02.5/B03/B04, training-g370, neutral-input, branch, inference deadline/race and PPO/PPG regression assertions. Add bounded native variants and `tests/RustBackendLab/test_g370_lab.py` coverage for current source/config, removed profiles, exact pending restore, clock boundaries, stale/canceled turns and one-use admission. Short local tests do not close Linux/CUDA gates. **B05 and B06 bounded correctness/measurements passed on pinned g1250. B06 did not show useful native performance. B07 R4 ordinary correctness and useful lab performance passed. R5 implements remaining-gate reuse and real one-iteration adoption/rollback/restart orchestration; its lab canaries, production adoption and next normal commit/restart remain Pending.**

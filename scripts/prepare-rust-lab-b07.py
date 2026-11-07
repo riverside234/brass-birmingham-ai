@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Seal immutable B07 code/evidence supplement over the qualified B06 inputs."""
+"""Seal R5 completion tooling over the unchanged, qualified R4 implementation."""
 import hashlib
 import json
 from pathlib import Path
@@ -8,96 +8,73 @@ import zipfile
 
 ROOT=Path(__file__).resolve().parents[1];sys.path.insert(0,str(ROOT/'src'))
 DIRECTORY=ROOT/'distribution/rust-lab-b07-g1250'
-B06='results/rust-lab-qualification/20261107T080012822445Z-20261107T075601452661Z-g1250-b06-c1cd94b2-2c29d5e3/evidence'
-B07='results/rust-lab-qualification/20261107T090047266944Z-20261107T085645018439Z-g1250-b07-d0097dac-faa1535f/evidence'
-B07_R3='results/rust-lab-qualification/20261107T101615796829Z-20261107T101336169559Z-g1250-b07-2fcbfcca-0192d294/evidence'
-TEXT={'.py','.rs','.cs','.md','.toml','.lock','.ps1','.sh','.txt'}
+RESULT='results/rust-lab-qualification/20261107T110307031706Z-20261107T110018084733Z-g1250-b07-49ed6ce1-fc892c78'
+R4_SHA='e979861f03e5508dd5748a54309ad3f5e0ff540b352e435939a871bde23035c2'
 
 
 def main():
     from brass_ai.learning.contracts import require
     from brass_ai.step5.league import implementation_id,implementation_sources,write_json
-    DIRECTORY.mkdir(parents=True,exist_ok=True)
-    archive=DIRECTORY/'rust-lab-b07-g1250-r4.zip';require(not archive.exists(),'Publish a new B07 revision; never reseal')
-    q=json.loads((ROOT/B06/'qualification.json').read_text());require(q['passed'],'B06 correctness gate missing')
-    prior=json.loads((ROOT/'distribution/rust-lab-b06-g1250/bundle.json').read_text())
-    source=ROOT/'distribution/rust-lab-b06-g1250'/prior['archive']
-    require(hashlib.sha256(source.read_bytes()).hexdigest()==prior['sha256'],'B06 archive changed')
+    archive=DIRECTORY/'rust-lab-b07-g1250-r5.zip'
+    require(not archive.exists(),'Publish a new B07 revision; never reseal')
+    source=DIRECTORY/'rust-lab-b07-g1250-r4.zip'
+    require(hashlib.sha256(source.read_bytes()).hexdigest()==R4_SHA,'Qualified R4 archive changed')
     with zipfile.ZipFile(source) as z:blobs={n:z.read(n) for n in z.namelist()}
-    reference=json.loads(blobs['distribution/rust-lab-b06-g1250/reference.json'])
-    reference['b06']=dict(path=B06+'/qualification.json',sha256=hashlib.sha256((ROOT/B06/'qualification.json').read_bytes()).hexdigest())
-    reference['b06_baseline']=q['performance']
-    reference['b07_source_review']=json.loads((DIRECTORY/'source-review.json').read_text())
-    reference['source_policy']='B07 R4 Rust state for V4 tables, retained binary training features, exact forced sampling verification, one-file handoff, reusable lanes/policies; teacher off and search_v1 unchanged'
-    # Bound the source review. Ordinary publication changed, so the old phase
-    # is retained as historical timing only; the launcher remeasures that scope.
-    r2=DIRECTORY/'rust-lab-b07-g1250-r2.zip'
-    require(hashlib.sha256(r2.read_bytes()).hexdigest()=='1cda06a47ee5c7b875e55ca011b722549d2d79191dca750b36227c3e4d17df92','Original B07 r2 archive changed')
-    with zipfile.ZipFile(r2) as z:
-        old_manifest=json.loads(z.read('distribution/rust-lab-b07-g1250/manifest.json'))
-        before=z.read('lab-native/Cargo.toml')
-        old_sources={n:hashlib.sha256(z.read(n).replace(b'\r\n',b'\n')).hexdigest()
-                     for n in implementation_sources() if n in z.namelist()}
-    changed={n for n,data in implementation_sources().items()
-             if hashlib.sha256(data.encode()).hexdigest()!=old_sources.get(n)}
-    require(changed=={'lab-native/Cargo.toml','lab-native/tests/teacher_wire.rs','lab-native/tests/lanes.rs',
-        'lab-native/src/collection_wire.rs','lab-native/src/lib.rs','lab-native/src/main.rs',
-        'src/brass_ai/rust_backend/lab_transport.py','src/brass_ai/rust_backend/lab_collection.py',
-        'src/brass_ai/rust_backend/lab_admission.py','src/brass_ai/rust_backend/lab_families.py',
-        'src/brass_ai/rust_backend/lab_pool.py','src/brass_ai/rust_backend/lab_b02_smoke.py',
-        'src/brass_ai/rust_backend/lab_features.py','src/brass_ai/rust_backend/lab_session.py'},'Unreviewed B07 dependency change')
-    for name in ('scripts/rust_lab_b07_smoke.py','scripts/rust_lab_b06_ordinary.py','scripts/rust_lab_b06_metrics.py'):
-        expected=reference['b07_source_review']['benchmark_changes'].get(name,{}).get('after',old_manifest['files'][name])
-        require(hashlib.sha256((ROOT/name).read_bytes().replace(b'\r\n',b'\n')).hexdigest()==expected,
-                'Unreviewed ordinary benchmark change: '+name)
-    blobs['distribution/rust-lab-b07-g1250/evidence/b07-r2-Cargo.toml']=before
-    teacher=json.loads(blobs['distribution/rust-lab-b06-g1250/evidence/teacher-build.json'])
-    from brass_ai.rust_backend.lab_teacher_overlay import source_fingerprint
-    reference['teacher_wire_review']=dict(from_producer=teacher['producer'],to_producer=source_fingerprint(),
-        feature='serde_json/float_roundtrip',scope='Exact float decoding; search_v1 equations and both sealed shared-core sources unchanged')
-    reference['ordinary_native_source_review']={n:hashlib.sha256(data.encode()).hexdigest()
-        for n,data in implementation_sources().items() if n.startswith('lab-native/')}
-    reuse=dict(from_implementation=old_manifest['implementation'],to_implementation=implementation_id(),
-        result=B07,evidence={},changed_dependencies=sorted(changed))
-    for key,name in [('qualification','qualification.json'),('ordinary','ordinary-checks.json')]:
-        data=(ROOT/B07/name).read_bytes();target='b07-r2-'+name
-        blobs['distribution/rust-lab-b07-g1250/evidence/'+target]=data
+    manifest_name='distribution/rust-lab-b07-g1250/manifest.json'
+    original=json.loads(blobs.pop(manifest_name))
+    require(original['implementation']==implementation_id(),'R5 must preserve the qualified runtime implementation')
+    for name,data in implementation_sources().items():
+        require(data==blobs[name].decode('utf-8').replace('\r\n','\n'),
+                'R5 cannot reuse ordinary qualification after runtime change: '+name)
+    reference=json.loads(blobs['distribution/rust-lab-b07-g1250/reference.json'])
+    q=json.loads((ROOT/RESULT/'evidence/qualification.json').read_text())
+    require(q['passed'] and q['implementation']==implementation_id() and
+            q['ordinary']['matched']['equal'] and q['performance']['useful_accepted_work_gain'],
+            'Missing qualified useful R4 ordinary result')
+    reuse=dict(result=RESULT,implementation=implementation_id(),runtime_unchanged=True,evidence={})
+    for key,name in [('qualification','qualification.json'),('ordinary','ordinary-checks.json'),
+                     ('snapshot','snapshot.json.gz'),('v4','v4-parity.json'),('build','ordinary-build.json')]:
+        data=(ROOT/RESULT/'evidence'/name).read_bytes()
+        target='b07-r4-'+name
         reuse['evidence'][key]=dict(file=target,sha256=hashlib.sha256(data).hexdigest())
-    reference['ordinary_baseline']=reuse
-    reference['r3_failure']=dict(result=B07_R3,implementation='f6372cefd9a48c98994d2f2e8424b032f4d5c808aceab140bb6442b92214cfc9',evidence={})
-    for name,target in [('qualification.json','b07-r3-qualification.json'),('ordinary/frozen-jobs.json','b07-r3-frozen-jobs.json'),
-            ('ordinary/reference/report.json','b07-r3-reference-report.json'),('ordinary/rust/report.json','b07-r3-native-report.json')]:
-        data=(ROOT/B07_R3/name).read_bytes()
         blobs['distribution/rust-lab-b07-g1250/evidence/'+target]=data
-        reference['r3_failure']['evidence'][target]=hashlib.sha256(data).hexdigest()
-    reference['native_runtime_policy']='Rebuild ordinary adapter against unchanged B01 core and teacher against unchanged teacher overlay; reuse exact original C# pins'
+        (DIRECTORY/'evidence').mkdir(exist_ok=True)
+        (DIRECTORY/'evidence'/target).write_bytes(data)
+    reference['completed_ordinary']=reuse
+    reference['source_policy']='R5 completion/adoption/one-iteration launcher only; exact R4 runtime, config, recipes, C# V4 and search_v1 unchanged'
+    reference['native_runtime_policy']='Reuse exact passing R4 ordinary build; build/test repaired teacher only if a current-source receipt is unavailable'
+    reference['b07_source_review']=json.loads((DIRECTORY/'source-review.json').read_text())
     write_json(DIRECTORY/'reference.json',reference)
-    names=set(implementation_sources())
-    for folder,extensions in [('src',{'.py','.cs','.json','.csproj'}),('configs',{'.json'}),('scripts',{'.py','.sh'}),
-            ('tests/RustBackendLab',{'.py'}),('tests/Recovery',{'.py'})]:
-        names.update(p.relative_to(ROOT).as_posix() for p in (ROOT/folder).rglob('*') if p.is_file()
-            and p.suffix in extensions and not any(x in p.parts for x in ('__pycache__','obj','bin')))
-    names.update('distribution/rust-lab-b07-g1250/'+n for n in ('README.md','reference.json','local-checks.json','source-review.json'))
-    names.update(['ai-research/RUST_AI_BACKEND_MIGRATION_PLAN.md','ai-research/RUST_BACKEND_B07_IMPLEMENTATION.md',
-                  'ai-research/RUST_BACKEND_B06_IMPLEMENTATION.md','distribution/rust-lab-g1250/inputs.zip'])
-    for name in ('qualification.json','ordinary-checks.json','teacher-checks.json','kernels-checks.json'):
-        target='distribution/rust-lab-b07-g1250/evidence/b06-'+name
-        blobs[target]=(ROOT/B06/name).read_bytes()
-    for path in (DIRECTORY/'evidence').glob('r4-*'):
-        blobs[path.relative_to(ROOT).as_posix()]=path.read_bytes()
+    names={
+        'scripts/prepare-rust-lab-b07.py','scripts/qualify-rust-lab-b07.py','scripts/manage-rust-lab-b07.py',
+        'scripts/continue-rust-lab-b07.py','scripts/rust_lab_b07_completion.py',
+        'tests/RustBackendLab/test_b07_completion.py',
+        'ai-research/RUST_AI_BACKEND_MIGRATION_PLAN.md','ai-research/RUST_BACKEND_B07_IMPLEMENTATION.md',
+        *('distribution/rust-lab-b07-g1250/'+n for n in ('README.md','reference.json','local-checks.json','source-review.json'))}
+    # Reject accidental changes to any other sealed input, including benchmarks,
+    # source-transition registries, tests and historical prerequisites.
+    for name,expected in original['files'].items():
+        path=ROOT/name
+        if name in names or not path.is_file():continue
+        data=path.read_bytes()
+        if path.suffix in original['text']:data=data.replace(b'\r\n',b'\n')
+        require(hashlib.sha256(data).hexdigest()==expected,'Unreviewed R5 bundle change: '+name)
     for name in names:
-        path=ROOT/name;data=path.read_bytes();blobs[name]=data.replace(b'\r\n',b'\n') if path.suffix in TEXT else data
-    # The old B06 manifest remains archival; the B07 launcher verifies this
-    # complete overlay, including newly added files and the exact frozen inputs.
-    manifest=dict(implementation=implementation_id(),text=sorted(TEXT),qualification='Pending',
+        data=(ROOT/name).read_bytes()
+        blobs[name]=data.replace(b'\r\n',b'\n') if Path(name).suffix in original['text'] else data
+    for path in (DIRECTORY/'evidence').glob('r5-*'):
+        blobs[path.relative_to(ROOT).as_posix()]=path.read_bytes()
+    manifest=dict(implementation=implementation_id(),text=original['text'],
+        qualification='R4 ordinary passed; R5 remaining lab/adoption/next commit Pending',
         files={n:hashlib.sha256(v).hexdigest() for n,v in sorted(blobs.items())})
     write_json(DIRECTORY/'manifest.json',manifest)
-    blobs['distribution/rust-lab-b07-g1250/manifest.json']=(DIRECTORY/'manifest.json').read_bytes()
+    blobs[manifest_name]=(DIRECTORY/'manifest.json').read_bytes()
     with zipfile.ZipFile(archive,'x',compression=zipfile.ZIP_DEFLATED,compresslevel=6) as z:
-        for name,value in sorted(blobs.items()):z.writestr(name,value)
-    with zipfile.ZipFile(archive) as z:require(z.testzip() is None,'Corrupt B07 archive')
+        for name,data in sorted(blobs.items()):z.writestr(name,data)
+    with zipfile.ZipFile(archive) as z:require(z.testzip() is None,'Corrupt R5 archive')
     write_json(DIRECTORY/'bundle.json',dict(archive=archive.name,sha256=hashlib.sha256(archive.read_bytes()).hexdigest(),
-        bytes=archive.stat().st_size,entries=len(blobs),implementation=implementation_id(),qualification='Pending'))
+        bytes=archive.stat().st_size,entries=len(blobs),implementation=implementation_id(),
+        qualification=manifest['qualification'],ordinary_qualification_reused=True,production_modified=False))
     print(archive)
 
 

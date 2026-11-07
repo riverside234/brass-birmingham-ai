@@ -1,10 +1,82 @@
 # B07: cheaper native collection and bounded adoption
 
-Updated on 2026-11-07. **R4 ordinary qualification is Pending. R3 completed
-collection but failed the matched probability tolerance; useful performance,
-canaries, production adoption and the next normal commit/restart remain Pending.** Run the
+Updated on 2026-11-07. **R4 ordinary correctness and useful performance passed
+on g1250. R5 implements the remaining gate/adoption/real G-to-G+1 workflow;
+its lab canaries, production adoption and next commit/restart remain Pending
+until that command succeeds on the lab.** Run the
 [new g1250 bundle](../distribution/rust-lab-b07-g1250/README.md); do not rerun
 passing B01–B06 qualifications. The installed game is unchanged.
+
+## R5: finish qualification and continue the real run
+
+Pulled **inside `results/`**, from `e71dc25` to `9e219a2`. Passing ordinary export:
+`rust-lab-qualification/20261107T110307031706Z-20261107T110018084733Z-g1250-b07-49ed6ce1-fc892c78`.
+All three frozen strata (self-play, historical NN, historical V4) matched:
+1,161 decisions, 675 forced rows, exact discrete trajectories and prepared
+features/targets. GPU-derived probability maximum error was 8.234e-7 absolute,
+3.703e-6 relative, within the documented benchmark tolerance. No natural branch
+occurred in this sample; branch correctness retains its earlier focused evidence.
+
+| Bounded matched measurement | Reference | R4 Rust |
+| --- | ---: | ---: |
+| Collection including publication | 27.616s | 23.614s |
+| First replay read | 2.430s | 2.613s |
+| First preparation | 0.586s | 0.592s |
+| Total accepted work | 30.632s | 26.820s |
+| Warm replay read | 2.907s | 1.998s |
+| Sampled process-tree CPU | 102.97s | 85.25s |
+| Sampled peak process-tree RSS | 4.917GB | 7.479GB |
+
+Accepted work is **12.4% lower wall time (1.142× throughput)** in this one
+bounded comparison; collection is 14.5% lower. This closes the useful-gain gate
+for this scope, not a statistical or whole-iteration performance claim. First
+read and peak host memory remain tradeoffs. Do not repeat the passing ordinary
+batch merely to complete adoption.
+
+R5 leaves every `implementation_sources()` byte, runtime/NN/config/optimizer,
+native binary input, benchmark equation, C# V4 policy and search_v1 unchanged
+from R4 (`12d996a03debe816d1c3661872faeafa9e79c6ea97646d83cf19393dd57bd5ba`).
+Only qualification/management scripts, their focused regressions and documentation
+change. The immutable R4 archive and passing evidence are pinned inside R5.
+
+`qualify-rust-lab-b07.py --complete-remaining` verifies the original g1250
+state/checkpoint/config/source, population/runtime pins and ordinary build,
+reuses its passing fixtures/wire/V4/ordinary scope, and runs only two existing
+two-table shadow passes plus the bounded full-state continuation/update/reload
+check. The repaired teacher build is reused if supplied and exact; otherwise it
+is built/tested once. Shadow teaching stays at w=0 with its g1250-only null-receipt
+authorization. Production teaching stays off. Search remains 4s/K16 plus <=1s
+post-work, with two independent one-thread sessions. Each canary retains its
+210s watchdog; continuation retains 180s. `--resume-from` accepts only this exact
+workflow, committed-state identity and byte-pinned successful phase receipts;
+an interrupted later phase never authorizes incomplete scope or reruns an earlier pass.
+
+`continue-rust-lab-b07.py --expected-generation 1250` performs those remaining
+gates, calls the existing locked backend adoption, verifies the full rollback
+copy, writes the **actual committed config** to the new evidence directory,
+and invokes the existing `step5.py train --iterations 1 --expected-generation 1250`.
+It uses the same restart run, full model/Adam/RNG/counters/PPG ages/local-scoring
+state and saved 60-worker cap. No latest-config substitution, fresh initialization,
+data-recipe change or new source waiver occurs. Rust becomes the persisted
+ordinary training backend; evaluation remains on its established path.
+
+After the real iteration, `verify-next` checks g1251 generation/model, Rust
+selection in the checkpoint and report, qualification identity, actual native
+family use and full isolated checkpoint/optimizer/dependency restart. The command
+then exports the combined result under `results/rust-lab-qualification/`.
+This one iteration is real training, not a shortened smoke or a benchmark.
+It can take the normal iteration time; local development does not run it.
+Re-running the same G command after G+1 committed performs verification only;
+it cannot launch G+2. Interruption after adoption resumes the selected Rust
+backend through the normal trainer's pending-work recovery. A failed qualification
+never adopts or starts training. `reference` remains the explicit progress-preserving
+fallback; the wrapper will not override a deliberate reference switch.
+
+Local regressions cover source/state/build/phase tampering, failed-phase reuse,
+the CLI's actual phase selection, exact committed-config forwarding, failure
+before adoption/during training, interrupted adoption, and no duplicate iteration.
+The existing real full-state adoption/restore/reference/rollback fixture checks
+are also run. These are development checks, not claims of production lab adoption.
 
 ## R4: V4 tables, retained features and reusable lanes
 

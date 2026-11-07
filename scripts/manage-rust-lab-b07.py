@@ -23,8 +23,11 @@ def main():
     p.add_argument('--run',default='artifacts/step5/joint7-v11-2-g1290-trained-restart')
     p.add_argument('--qualification',type=Path)
     p.add_argument('--expected-generation',type=int,required=True)
+    p.add_argument('--out',type=Path,help=argparse.SUPPRESS)
     args=p.parse_args();run=project_path(ROOT,args.run)
-    out=ROOT/'artifacts/rust-backend'/(datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S%fZ')+'-b07-'+args.action+'-'+uuid.uuid4().hex[:8])
+    out=project_path(ROOT,args.out) if args.out else ROOT/'artifacts/rust-backend'/(datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S%fZ')+'-b07-'+args.action+'-'+uuid.uuid4().hex[:8])
+    require(out.is_relative_to(ROOT/'artifacts/rust-backend') and out!=ROOT/'artifacts/rust-backend'
+            and not out.is_relative_to(run) and not out.exists(),'Use a new owned management output directory')
     out.mkdir(parents=True);report=dict(action=args.action,passed=False,training_advanced=False)
     try:
         spec=importlib.util.spec_from_file_location('b07_manager_verify',ROOT/'scripts/qualify-rust-lab-b07.py')
@@ -49,10 +52,13 @@ def main():
                 require(state['iteration']==value['adopted_generation']+1,'Verify immediately after the next normal G-to-G+1 commit')
                 entry=state['history'][-1];path=project_path(ROOT,entry['path']);require(sha(path)==entry['sha256'],'Checkpoint changed')
                 _,raw=load_checkpoint(path);backend.validate_state(state,raw)
+                require(raw['step']==entry['generation']==state['iteration'] and raw['model_id']==entry['model_id'],
+                        'Next checkpoint generation/model differs')
                 require(raw['training'].get('native_backend')==value,'Backend was not persisted in the next checkpoint')
                 iteration=read(run/f"iteration-{value['adopted_generation']:04d}"/'report.json')
                 require(iteration['native_backend']['mode']=='rust' and
-                        iteration['native_backend']['collection']['native_families']>0,'Next iteration did not use the native collector')
+                        iteration['native_backend']['qualification']==value['qualification'] and
+                        iteration['native_backend']['collection']['native_families']>0,'Next iteration did not use the qualified native collector')
                 incoming=continuation.preflight(ROOT,run,generation=state['iteration'],checkpoint_sha256=entry['sha256'])
                 fork=continuation.create_fork(ROOT,out/'restart',incoming)
                 restored=continuation.restore(fork,device='cpu',allow_cuda_topology_change=True)

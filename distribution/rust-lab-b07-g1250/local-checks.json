@@ -1,180 +1,199 @@
 {
   "passed": true,
   "implementation": "12d996a03debe816d1c3661872faeafa9e79c6ea97646d83cf19393dd57bd5ba",
-  "lab_qualification": "Pending",
-  "production_modified": false,
+  "scope": "R5 completion/adoption/restart only; exact R4 runtime preserved",
   "python_tests": {
-    "unique_checks": 48,
-    "focused": 41,
-    "focused_seconds": 122.665,
-    "retry": 5,
-    "retry_seconds": 7.055,
-    "cancellation_checks": 2,
-    "cancellation_seconds": 0.278,
-    "native_wire_enabled": true,
-    "scope": "Affected collection/publication/reading/reset/cancellation/recovery and qualification comparisons; no full adoption/update tests repeated",
-    "complete_lane_integration": 1,
-    "complete_lane_integration_seconds": 1.048
+    "unique_checks": 19,
+    "prior_focused": 18,
+    "prior_focused_seconds": 63.523,
+    "completion_workflow_checks": 12,
+    "completion_workflow_seconds": 8.327
   },
-  "rust_tests": {
-    "ordinary": 8,
-    "seconds": 4.44,
+  "runtime_rebuilt": false,
+  "ordinary_qualification_repeated": false,
+  "prior_qualifications_repeated": false,
+  "production_modified": false,
+  "real_training_run": false,
+  "lab_ordinary": "Passed R4, reused",
+  "remaining_lab_canaries_adoption_next_commit": "Pending",
+  "r4_local_history": {
     "passed": true,
-    "scope": "Unmodified sealed B01 core; ordinary adapter only; teacher/search unchanged"
-  },
-  "source_review": {
-    "g1250_resume_verified": true,
-    "shared_core_unchanged": true,
-    "search_v1_unchanged": true
-  },
-  "v4": {
-    "passed": true,
-    "counts": {
-      "decisions": 24,
-      "forced": 13,
-      "queued_continuations": 18
+    "implementation": "12d996a03debe816d1c3661872faeafa9e79c6ea97646d83cf19393dd57bd5ba",
+    "lab_qualification": "Pending",
+    "production_modified": false,
+    "python_tests": {
+      "unique_checks": 48,
+      "focused": 41,
+      "focused_seconds": 122.665,
+      "retry": 5,
+      "retry_seconds": 7.055,
+      "cancellation_checks": 2,
+      "cancellation_seconds": 0.278,
+      "native_wire_enabled": true,
+      "scope": "Affected collection/publication/reading/reset/cancellation/recovery and qualification comparisons; no full adoption/update tests repeated",
+      "complete_lane_integration": 1,
+      "complete_lane_integration_seconds": 1.048
     },
-    "phases": {
-      "csharp_step_seconds": 1.3443310001166537,
-      "rust_step_seconds": 0.4147735999431461,
-      "v4_reference_seconds": 11.391415800200775,
-      "v4_native_seconds": 11.300788900116459
+    "rust_tests": {
+      "ordinary": 8,
+      "seconds": 4.44,
+      "passed": true,
+      "scope": "Unmodified sealed B01 core; ordinary adapter only; teacher/search unchanged"
     },
-    "trace_sha256": "364b73976029e6394270cfc9e19ea896eb44d19f48b7e1308c1220eb558ffbcd",
-    "policy_id": "shared-legacy-search/7daaeedaafb8da25d177caafc0c4fb4f23477abd734442a2d9b1b99eb360026e",
-    "seed": 19553778,
-    "spec_sha256": "7487d539116dedfc491941cd7465c6ce039794afcaf2dc14b7af104102d1ecac",
-    "rng_equal": true,
-    "plans_intent_budgets_equal": true,
-    "scope": "24 stages; original C# V4 worker against Rust and C# progression; no full game/NN or throughput claim"
-  },
-  "publication": {
-    "passed": true,
-    "medians": {
-      "r3": {
-        "publication_seconds": 2.0299835999612696,
-        "first_read_seconds": 0.9837824000278488,
-        "warm_read_seconds": 0.8848873499664478,
-        "publication_first_read_seconds": 3.0137659999891184,
-        "validation_assembly_seconds": 0.45070379989920184
-      },
-      "r4": {
-        "publication_seconds": 1.6260826999787241,
-        "first_read_seconds": 0.8004753499408253,
-        "warm_read_seconds": 0.618540600000415,
-        "publication_first_read_seconds": 2.4265580499195494,
-        "validation_assembly_seconds": 0.27426144998753443
-      }
+    "source_review": {
+      "g1250_resume_verified": true,
+      "shared_core_unchanged": true,
+      "search_v1_unchanged": true
     },
-    "samples": [
-      {
-        "arm": "r3",
-        "repeat": 0,
-        "publication_seconds": 2.1892676999559626,
-        "first_read_seconds": 0.8869211000856012,
-        "warm_read_seconds": 0.844211500021629,
-        "publication_first_read_seconds": 3.076188800041564,
-        "validation_assembly_seconds": 0.4171360998880118
+    "v4": {
+      "passed": true,
+      "counts": {
+        "decisions": 24,
+        "forced": 13,
+        "queued_continuations": 18
       },
-      {
-        "arm": "r4",
-        "repeat": 0,
-        "publication_seconds": 1.8020176999270916,
-        "first_read_seconds": 0.8851902999449521,
-        "warm_read_seconds": 0.6077573000220582,
-        "publication_first_read_seconds": 2.6872079998720437,
-        "validation_assembly_seconds": 0.24024089996237308
+      "phases": {
+        "csharp_step_seconds": 1.3443310001166537,
+        "rust_step_seconds": 0.4147735999431461,
+        "v4_reference_seconds": 11.391415800200775,
+        "v4_native_seconds": 11.300788900116459
       },
-      {
-        "arm": "r4",
-        "repeat": 1,
-        "publication_seconds": 1.4501477000303566,
-        "first_read_seconds": 0.7157603999366984,
-        "warm_read_seconds": 0.6293238999787718,
-        "publication_first_read_seconds": 2.165908099967055,
-        "validation_assembly_seconds": 0.3082820000126958
-      },
-      {
-        "arm": "r3",
-        "repeat": 1,
-        "publication_seconds": 1.8706994999665767,
-        "first_read_seconds": 1.0806436999700963,
-        "warm_read_seconds": 0.9255631999112666,
-        "publication_first_read_seconds": 2.951343199936673,
-        "validation_assembly_seconds": 0.48427149991039187
-      }
-    ],
-    "identical_games_features_targets": true,
-    "scope": "Two alternating pairs; same three small authored families, including archived V4 fallback. Component timings, no g1250 GPU/accepted-work claim."
-  },
-  "intermediate_handoff_regression": {
-    "passed": true,
-    "medians": {
-      "r3": {
-        "publication_seconds": 1.9927759999991395,
-        "first_read_seconds": 0.7840566500090063,
-        "warm_read_seconds": 0.7736593500012532,
-        "publication_first_read_seconds": 2.7768326500081457,
-        "validation_assembly_seconds": 0.42086799995740876
-      },
-      "r4": {
-        "publication_seconds": 2.2724453499540687,
-        "first_read_seconds": 0.9082748999935575,
-        "warm_read_seconds": 0.725005499960389,
-        "publication_first_read_seconds": 3.180720249947626,
-        "validation_assembly_seconds": 0.25887950003379956
-      }
+      "trace_sha256": "364b73976029e6394270cfc9e19ea896eb44d19f48b7e1308c1220eb558ffbcd",
+      "policy_id": "shared-legacy-search/7daaeedaafb8da25d177caafc0c4fb4f23477abd734442a2d9b1b99eb360026e",
+      "seed": 19553778,
+      "spec_sha256": "7487d539116dedfc491941cd7465c6ce039794afcaf2dc14b7af104102d1ecac",
+      "rng_equal": true,
+      "plans_intent_budgets_equal": true,
+      "scope": "24 stages; original C# V4 worker against Rust and C# progression; no full game/NN or throughput claim"
     },
-    "samples": [
-      {
-        "arm": "r3",
-        "repeat": 0,
-        "publication_seconds": 2.035630999947898,
-        "first_read_seconds": 0.7100634999806061,
-        "warm_read_seconds": 0.7213776999851689,
-        "publication_first_read_seconds": 2.7456944999285042,
-        "validation_assembly_seconds": 0.3972822999348864
+    "publication": {
+      "passed": true,
+      "medians": {
+        "r3": {
+          "publication_seconds": 2.0299835999612696,
+          "first_read_seconds": 0.9837824000278488,
+          "warm_read_seconds": 0.8848873499664478,
+          "publication_first_read_seconds": 3.0137659999891184,
+          "validation_assembly_seconds": 0.45070379989920184
+        },
+        "r4": {
+          "publication_seconds": 1.6260826999787241,
+          "first_read_seconds": 0.8004753499408253,
+          "warm_read_seconds": 0.618540600000415,
+          "publication_first_read_seconds": 2.4265580499195494,
+          "validation_assembly_seconds": 0.27426144998753443
+        }
       },
-      {
-        "arm": "r4",
-        "repeat": 0,
-        "publication_seconds": 2.547535300021991,
-        "first_read_seconds": 1.0125143999466673,
-        "warm_read_seconds": 0.7556534999748692,
-        "publication_first_read_seconds": 3.5600496999686584,
-        "validation_assembly_seconds": 0.25612800009548664
+      "samples": [
+        {
+          "arm": "r3",
+          "repeat": 0,
+          "publication_seconds": 2.1892676999559626,
+          "first_read_seconds": 0.8869211000856012,
+          "warm_read_seconds": 0.844211500021629,
+          "publication_first_read_seconds": 3.076188800041564,
+          "validation_assembly_seconds": 0.4171360998880118
+        },
+        {
+          "arm": "r4",
+          "repeat": 0,
+          "publication_seconds": 1.8020176999270916,
+          "first_read_seconds": 0.8851902999449521,
+          "warm_read_seconds": 0.6077573000220582,
+          "publication_first_read_seconds": 2.6872079998720437,
+          "validation_assembly_seconds": 0.24024089996237308
+        },
+        {
+          "arm": "r4",
+          "repeat": 1,
+          "publication_seconds": 1.4501477000303566,
+          "first_read_seconds": 0.7157603999366984,
+          "warm_read_seconds": 0.6293238999787718,
+          "publication_first_read_seconds": 2.165908099967055,
+          "validation_assembly_seconds": 0.3082820000126958
+        },
+        {
+          "arm": "r3",
+          "repeat": 1,
+          "publication_seconds": 1.8706994999665767,
+          "first_read_seconds": 1.0806436999700963,
+          "warm_read_seconds": 0.9255631999112666,
+          "publication_first_read_seconds": 2.951343199936673,
+          "validation_assembly_seconds": 0.48427149991039187
+        }
+      ],
+      "identical_games_features_targets": true,
+      "scope": "Two alternating pairs; same three small authored families, including archived V4 fallback. Component timings, no g1250 GPU/accepted-work claim."
+    },
+    "intermediate_handoff_regression": {
+      "passed": true,
+      "medians": {
+        "r3": {
+          "publication_seconds": 1.9927759999991395,
+          "first_read_seconds": 0.7840566500090063,
+          "warm_read_seconds": 0.7736593500012532,
+          "publication_first_read_seconds": 2.7768326500081457,
+          "validation_assembly_seconds": 0.42086799995740876
+        },
+        "r4": {
+          "publication_seconds": 2.2724453499540687,
+          "first_read_seconds": 0.9082748999935575,
+          "warm_read_seconds": 0.725005499960389,
+          "publication_first_read_seconds": 3.180720249947626,
+          "validation_assembly_seconds": 0.25887950003379956
+        }
       },
-      {
-        "arm": "r4",
-        "repeat": 1,
-        "publication_seconds": 1.9973553998861462,
-        "first_read_seconds": 0.8040354000404477,
-        "warm_read_seconds": 0.6943574999459088,
-        "publication_first_read_seconds": 2.801390799926594,
-        "validation_assembly_seconds": 0.2616309999721125
-      },
-      {
-        "arm": "r3",
-        "repeat": 1,
-        "publication_seconds": 1.9499210000503808,
-        "first_read_seconds": 0.8580498000374064,
-        "warm_read_seconds": 0.8259410000173375,
-        "publication_first_read_seconds": 2.807970800087787,
-        "validation_assembly_seconds": 0.4444536999799311
-      }
-    ],
-    "identical_games_features_targets": true,
-    "scope": "Two alternating pairs; same three small authored families, including archived V4 fallback. Component timings, no g1250 GPU/accepted-work claim."
-  },
-  "evidence": {
-    "r4-focused.log": "6e329b6fd86b6388e5ae362b9b642b9bd8a5d204e528e074d0ebe833dbabc62d",
-    "r4-retry.log": "6671ee017d3dac6271c3fe118279f49ab1456c571b06823d41b48877a062b483",
-    "r4-cancel.log": "8610d243b3442f9324af2fd40da50ba1ab06f5d812d5cde4f3e320230e5926d2",
-    "r4-test.log": "d9a8deb91919120148bebe480b13b14a4180597b6b34706fa0afcce4a3e9d8c2",
-    "r4-build.log": "3b15fbb182f814750cf038dda8e181371e4b2b02e5737186ebdd69df6bf3861c",
-    "r4-v4.json": "2194e19a21195c71fc2b844ffa139a54eb19f47ba32ba55b3a6dd455f8edc270",
-    "r4-publication-combined.json": "056a9093c1447f2190b29d82704a23e9b7300044b6a90d99c28fe56d6d66e369",
-    "r4-publication.json": "867a0fd70796156da0480bae616a7ee0148fc021d852cb5b2aaaa8de90b75f76",
-    "r4-integration.log": "31f02c1641de834f108882689b8327680cb9de02768171e43cc1b239a7a0ebfe"
+      "samples": [
+        {
+          "arm": "r3",
+          "repeat": 0,
+          "publication_seconds": 2.035630999947898,
+          "first_read_seconds": 0.7100634999806061,
+          "warm_read_seconds": 0.7213776999851689,
+          "publication_first_read_seconds": 2.7456944999285042,
+          "validation_assembly_seconds": 0.3972822999348864
+        },
+        {
+          "arm": "r4",
+          "repeat": 0,
+          "publication_seconds": 2.547535300021991,
+          "first_read_seconds": 1.0125143999466673,
+          "warm_read_seconds": 0.7556534999748692,
+          "publication_first_read_seconds": 3.5600496999686584,
+          "validation_assembly_seconds": 0.25612800009548664
+        },
+        {
+          "arm": "r4",
+          "repeat": 1,
+          "publication_seconds": 1.9973553998861462,
+          "first_read_seconds": 0.8040354000404477,
+          "warm_read_seconds": 0.6943574999459088,
+          "publication_first_read_seconds": 2.801390799926594,
+          "validation_assembly_seconds": 0.2616309999721125
+        },
+        {
+          "arm": "r3",
+          "repeat": 1,
+          "publication_seconds": 1.9499210000503808,
+          "first_read_seconds": 0.8580498000374064,
+          "warm_read_seconds": 0.8259410000173375,
+          "publication_first_read_seconds": 2.807970800087787,
+          "validation_assembly_seconds": 0.4444536999799311
+        }
+      ],
+      "identical_games_features_targets": true,
+      "scope": "Two alternating pairs; same three small authored families, including archived V4 fallback. Component timings, no g1250 GPU/accepted-work claim."
+    },
+    "evidence": {
+      "r4-focused.log": "6e329b6fd86b6388e5ae362b9b642b9bd8a5d204e528e074d0ebe833dbabc62d",
+      "r4-retry.log": "6671ee017d3dac6271c3fe118279f49ab1456c571b06823d41b48877a062b483",
+      "r4-cancel.log": "8610d243b3442f9324af2fd40da50ba1ab06f5d812d5cde4f3e320230e5926d2",
+      "r4-test.log": "d9a8deb91919120148bebe480b13b14a4180597b6b34706fa0afcce4a3e9d8c2",
+      "r4-build.log": "3b15fbb182f814750cf038dda8e181371e4b2b02e5737186ebdd69df6bf3861c",
+      "r4-v4.json": "2194e19a21195c71fc2b844ffa139a54eb19f47ba32ba55b3a6dd455f8edc270",
+      "r4-publication-combined.json": "056a9093c1447f2190b29d82704a23e9b7300044b6a90d99c28fe56d6d66e369",
+      "r4-publication.json": "867a0fd70796156da0480bae616a7ee0148fc021d852cb5b2aaaa8de90b75f76",
+      "r4-integration.log": "31f02c1641de834f108882689b8327680cb9de02768171e43cc1b239a7a0ebfe"
+    }
   }
 }

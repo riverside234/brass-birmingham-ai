@@ -80,7 +80,7 @@
   "native_binaries_unchanged": false,
   "teacher_default": "off",
   "default_without_adoption": "reference",
-  "lab_qualification": "Pending",
+  "lab_qualification": "R4 ordinary correctness/useful performance passed; remaining canaries/adoption/G-to-G+1 Pending",
   "ordinary_binary_unchanged": false,
   "retry": {
     "from_implementation": "f6372cefd9a48c98994d2f2e8424b032f4d5c808aceab140bb6442b92214cfc9",
@@ -146,5 +146,13 @@
       "before": "0134f1d61c1e4338958baf981bb12315f71854962a642ed9799509d51644e989",
       "after": "29fb566b30950cceef207b4be335afc4767706c67b99357dd61815198fb14996"
     }
+  },
+  "completion_r5": {
+    "runtime_implementation_unchanged": true,
+    "implementation": "12d996a03debe816d1c3661872faeafa9e79c6ea97646d83cf19393dd57bd5ba",
+    "reviewed_commit": "9e55c30",
+    "scope": "Completion, exact passing phase reuse, locked existing adoption, rollback and one real same-run iteration/restart orchestration only; no runtime/recipe/source registry changes",
+    "result": "results/rust-lab-qualification/20261107T110307031706Z-20261107T110018084733Z-g1250-b07-49ed6ce1-fc892c78",
+    "production_modified": false
   }
 }

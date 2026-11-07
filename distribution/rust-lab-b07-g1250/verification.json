@@ -1,12 +1,18 @@
 {
-  "passed": true,
-  "archive": "rust-lab-b07-g1250-r4.zip",
-  "archive_sha256": "e979861f03e5508dd5748a54309ad3f5e0ff540b352e435939a871bde23035c2",
+  "archive": "rust-lab-b07-g1250-r5.zip",
+  "sha256": "97e5b6535e6e4c9310db4b1bad782ef089df305f3af44937557da532cd340f33",
   "implementation": "12d996a03debe816d1c3661872faeafa9e79c6ea97646d83cf19393dd57bd5ba",
-  "clean_extraction": true,
+  "passed": true,
+  "clean_extraction": ".b75",
   "manifest_verified": true,
-  "python_checks": 12,
-  "native_tests_repeated": false,
-  "log_sha256": "8c9a29a308dc6d7891890338ca54d094f86c64b2b53b2da06ca765dfb4eceb21",
-  "lab_qualification": "Pending"
+  "python_tests": 12,
+  "python_test_seconds": 11.164,
+  "continuation_cli_help_passed": true,
+  "clean_log_sha256": "af1fa2f85234acb71fa0970f21f2a973122e96a0489654a49e2c7ee7f449d5d2",
+  "unique_affected_tests_total": 19,
+  "runtime_implementation_unchanged": true,
+  "ordinary_lab_qualification": "R4 passed, reused",
+  "remaining_canaries_adoption_real_commit": "Pending lab execution",
+  "production_modified": false,
+  "committed_or_pushed": false
 }

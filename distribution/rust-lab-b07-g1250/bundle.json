@@ -1,8 +1,10 @@
 {
-  "archive": "rust-lab-b07-g1250-r4.zip",
-  "sha256": "e979861f03e5508dd5748a54309ad3f5e0ff540b352e435939a871bde23035c2",
-  "bytes": 7895655,
-  "entries": 1343,
+  "archive": "rust-lab-b07-g1250-r5.zip",
+  "sha256": "97e5b6535e6e4c9310db4b1bad782ef089df305f3af44937557da532cd340f33",
+  "bytes": 8491474,
+  "entries": 1353,
   "implementation": "12d996a03debe816d1c3661872faeafa9e79c6ea97646d83cf19393dd57bd5ba",
-  "qualification": "Pending"
+  "qualification": "R4 ordinary passed; R5 remaining lab/adoption/next commit Pending",
+  "ordinary_qualification_reused": true,
+  "production_modified": false
 }
