@@ -1,0 +1,21 @@
+{
+  "scope": "ABBA verified feature binding only; same replay/feature bytes and receipts; no NN/games/training",
+  "families": 4,
+  "decisions": 1024,
+  "timings": {
+    "legacy": [
+      1.5842359999660403,
+      1.5400174000533298
+    ],
+    "current": [
+      1.2950172999408096,
+      1.3967648999532685
+    ]
+  },
+  "median_seconds": {
+    "legacy": 1.562126700009685,
+    "current": 1.345891099947039
+  },
+  "equal_training_games": true,
+  "implementation": "1b8405e0457a8349e66bc26baaff6096a33c4a7cf477d4a0c002f65fe04dda20"
+}

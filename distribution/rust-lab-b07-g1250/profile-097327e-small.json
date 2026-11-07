@@ -1,0 +1,109 @@
+{
+  "scope": "Authored frozen CPU publication/cold recovery only; no NN, simulator or training; startup separate",
+  "families": 8,
+  "decisions": 1024,
+  "source_results_commit": "097327ef4fab7190f8d91ce4996dd1d4db4c5ce2",
+  "baseline": {
+    "workers": 2,
+    "startup_seconds": 6.777010399964638,
+    "publication_seconds": 2.5246508000418544,
+    "cold_recovery_seconds": 2.9701712999958545,
+    "reader_seconds": 3.28677260002587,
+    "recovery_and_read_seconds": 6.256943900021724,
+    "publication_worker_phase_sums": {
+      "part_read_seconds": 1.4623986000660807,
+      "family_seal_seconds": 0.2905537000624463,
+      "full_validation_and_assembly_seconds": 1.511109699960798,
+      "json_encoding_seconds": 0.32855750003363937,
+      "replay_write_hash_seconds": 0.13766260002739727,
+      "feature_cache_seconds": 0.597213399829343
+    },
+    "cpu_peak": 2,
+    "semantic_outputs": [
+      {
+        "game": "710ba87cb127a69a1208d819284f26f4d836b6d8ad9dc1055e1ce69a8526ca53",
+        "features": "fbc52dcbdf3b2356bafc4c085789a0e1c8158a06af76b69794a9c6de332f2e2e"
+      },
+      {
+        "game": "8ff9ad8fbfe4b66f88e75bc93a1c862fa3a8c6f5bd3547c74e244178575384f5",
+        "features": "fbc52dcbdf3b2356bafc4c085789a0e1c8158a06af76b69794a9c6de332f2e2e"
+      },
+      {
+        "game": "1150ddfa160271ecb7f5ee385a2a6a5cda06e1f55905e825388c6961091259fb",
+        "features": "fbc52dcbdf3b2356bafc4c085789a0e1c8158a06af76b69794a9c6de332f2e2e"
+      },
+      {
+        "game": "ee5e73c22a52aef1813deb88e4084ceeffe9ab5021156296be03a5cc1050a097",
+        "features": "fbc52dcbdf3b2356bafc4c085789a0e1c8158a06af76b69794a9c6de332f2e2e"
+      },
+      {
+        "game": "d330b9d14291f5726590eeff52da3a374eb7aa588e84d7e3fbf9b3e003129f57",
+        "features": "fbc52dcbdf3b2356bafc4c085789a0e1c8158a06af76b69794a9c6de332f2e2e"
+      },
+      {
+        "game": "0d652b7a4538c1a53b0f9234969ecd47ee607b30521c85ab4c4b2d1ffa08665d",
+        "features": "fbc52dcbdf3b2356bafc4c085789a0e1c8158a06af76b69794a9c6de332f2e2e"
+      },
+      {
+        "game": "8c139c6454af3fddd2ea1c7d6aeb8c808407958740bde046b38d0bbd4d9c5c7b",
+        "features": "fbc52dcbdf3b2356bafc4c085789a0e1c8158a06af76b69794a9c6de332f2e2e"
+      },
+      {
+        "game": "5501caab7a6efdb414d0db13d3834b1ed08876a14b9d4ce689dca97175fad3b0",
+        "features": "fbc52dcbdf3b2356bafc4c085789a0e1c8158a06af76b69794a9c6de332f2e2e"
+      }
+    ]
+  },
+  "candidate": {
+    "workers": 4,
+    "startup_seconds": 12.1385777000105,
+    "publication_seconds": 1.5834198000375181,
+    "cold_recovery_seconds": 0.7418408999219537,
+    "reader_seconds": 2.576074399985373,
+    "recovery_and_read_seconds": 3.3179152999073267,
+    "publication_worker_phase_sums": {
+      "part_read_seconds": 1.8229636999312788,
+      "family_seal_seconds": 0.285054299980402,
+      "full_validation_and_assembly_seconds": 1.7818582998588681,
+      "json_encoding_seconds": 0.33951440011151135,
+      "replay_write_hash_seconds": 0.17299570003524423,
+      "feature_cache_seconds": 0.6020735000493005
+    },
+    "cpu_peak": 4,
+    "semantic_outputs": [
+      {
+        "game": "710ba87cb127a69a1208d819284f26f4d836b6d8ad9dc1055e1ce69a8526ca53",
+        "features": "fbc52dcbdf3b2356bafc4c085789a0e1c8158a06af76b69794a9c6de332f2e2e"
+      },
+      {
+        "game": "8ff9ad8fbfe4b66f88e75bc93a1c862fa3a8c6f5bd3547c74e244178575384f5",
+        "features": "fbc52dcbdf3b2356bafc4c085789a0e1c8158a06af76b69794a9c6de332f2e2e"
+      },
+      {
+        "game": "1150ddfa160271ecb7f5ee385a2a6a5cda06e1f55905e825388c6961091259fb",
+        "features": "fbc52dcbdf3b2356bafc4c085789a0e1c8158a06af76b69794a9c6de332f2e2e"
+      },
+      {
+        "game": "ee5e73c22a52aef1813deb88e4084ceeffe9ab5021156296be03a5cc1050a097",
+        "features": "fbc52dcbdf3b2356bafc4c085789a0e1c8158a06af76b69794a9c6de332f2e2e"
+      },
+      {
+        "game": "d330b9d14291f5726590eeff52da3a374eb7aa588e84d7e3fbf9b3e003129f57",
+        "features": "fbc52dcbdf3b2356bafc4c085789a0e1c8158a06af76b69794a9c6de332f2e2e"
+      },
+      {
+        "game": "0d652b7a4538c1a53b0f9234969ecd47ee607b30521c85ab4c4b2d1ffa08665d",
+        "features": "fbc52dcbdf3b2356bafc4c085789a0e1c8158a06af76b69794a9c6de332f2e2e"
+      },
+      {
+        "game": "8c139c6454af3fddd2ea1c7d6aeb8c808407958740bde046b38d0bbd4d9c5c7b",
+        "features": "fbc52dcbdf3b2356bafc4c085789a0e1c8158a06af76b69794a9c6de332f2e2e"
+      },
+      {
+        "game": "5501caab7a6efdb414d0db13d3834b1ed08876a14b9d4ce689dca97175fad3b0",
+        "features": "fbc52dcbdf3b2356bafc4c085789a0e1c8158a06af76b69794a9c6de332f2e2e"
+      }
+    ]
+  },
+  "equivalent_training_game_and_features": true
+}

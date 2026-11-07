@@ -1,0 +1,21 @@
+{
+  "scope": "ABBA warm read: legacy deep checks/double input hashes vs attested reuse; same bytes/receipts; no NN/games/training",
+  "families": 4,
+  "decisions": 1024,
+  "timings": {
+    "legacy": [
+      1.5205711000598967,
+      1.6031271000392735
+    ],
+    "current": [
+      1.1863690000027418,
+      1.339122600038536
+    ]
+  },
+  "median_seconds": {
+    "legacy": 1.561849100049585,
+    "current": 1.2627458000206389
+  },
+  "equal_training_games": true,
+  "implementation": "a7a2df3e4267f1c50b0646d4c997a921df970f41ed305edff1963e95fdd7bce8"
+}

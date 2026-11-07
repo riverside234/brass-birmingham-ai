@@ -223,23 +223,29 @@ def _failure_scope(cancel,on_error):
 
 
 def collect_families(jobs, store, run_native, run_reference, *, lanes, cancel=None, model_cohorts=False,on_error=None,
-                     publication_workers=1):
+                     publication_workers=1,cached_records=None):
     """Callbacks receive (job, continuation, submit_branch). Never wait on sibling.
 
     At most 2*lanes unfinished families. This bounds the ready checkpoint queue,
     completed sibling buffers, and publication queue independently of job count.
     """
     require(type(lanes) is int and lanes>0,'Invalid ordinary lane count')
-    require(type(publication_workers) is int and 1<=publication_workers<=min(2,lanes),
+    require(type(publication_workers) is int and 1<=publication_workers<=min(24,lanes),
             'Invalid bounded publication workers')
     require(len({j['index'] for j in jobs})==len(jobs) and len({frozen_id(j) for j in jobs})==len(jobs),'Duplicate frozen jobs')
     jobs=copy.deepcopy(jobs); by_id={j['index']:j for j in jobs}
     ready=ReadyWork([dict(jobs=[j]) for j in jobs],model_cohorts=model_cohorts)
     messages=queue.Queue(maxsize=2*lanes);active={};pending={};published={};futures={};writes={};forked=set();counts={'rust':0,'reference':0,'cached':0}
     reasons={};began=time.monotonic();peak=0
-    for j in jobs:
-        saved=store.load(j)
-        if saved is not None:published[j['index']]=saved;counts['cached']+=1
+    if cached_records is None:
+        for j in jobs:
+            saved=store.load(j)
+            if saved is not None:published[j['index']]=saved;counts['cached']+=1
+    else:
+        for record in cached_records:
+            index=record['job']
+            require(index in by_id and index not in published,'Duplicate/foreign recovered family')
+            published[index]=record;counts['cached']+=1
     def submit(index,packet):
         require(cancel is None or not cancel.is_set(),'Canceled fork')
         messages.put((index,packet),timeout=10)

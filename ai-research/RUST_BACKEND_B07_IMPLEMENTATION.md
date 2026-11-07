@@ -6,6 +6,98 @@ the real g1250→g1251 commit and full restart now passed on the lab.** Use the
 [normal g1251 continuation command](../distribution/rust-lab-b07-g1250/README.md#continue-from-g1251-after-qualificationadoption-finishes);
 do not repeat passed qualifications. The installed game is unchanged.
 
+## Full-size collection repair from results 097327e
+
+Results commit `097327ef4fab7190f8d91ce4996dd1d4db4c5ce2` contains
+`joint7-v11-2-g1290-trained-restart-g1253-20261107T145415686647Z`.
+The earlier g1251 attempt recovered all 320 cached families; its 397.814s collection
+was mostly serial cold validation. The next two collections were genuinely new:
+320 Rust families each, zero cache hits, **501.496s / 496.159s**. Thus cache-only
+recovery does not explain the fresh-collection regression. The last available
+reference/C# collections were 246.754s / 258.527s. These successive iterations
+are operational evidence, not matched frozen-job/checkpoint speed ratios.
+
+`FastHost.StepDecision` already batches forced actions. The existing reference
+collector also serializes/writes asynchronously in each of its 24 actor processes,
+starts actors only for missing work and prepares published shards in bounded
+readers. Rust retained the forced-action protocol but centralized complete
+publication in **two** isolated Python writers. In iteration 1252, their summed
+publication phases were about **737s**, while the unfinished-family peak reached
+92/96. The summed Rust transition time was only 147s. The publication queue is a
+clear bottleneck; IPC/export remains another substantial cost (about 37.8GB of
+received data in that iteration). Worker-time sums overlap and are not wall time.
+
+The repair reuses these existing mechanisms:
+
+- Adapt publisher concurrency to job count and the existing shared CPU
+  admission: small batches retain at most two; 64 families use eight, and the
+  current 320-family lab batch uses **24**, as requested. This matches the old
+  24 publication channels; those were threads inside actor processes, whereas
+  the Rust collector uses separate publisher processes. Actors, publishers
+  and replay readers still share the 60-slot cap. The family queue stays bounded.
+- Recover durable hits with a bounded queue and parallel full validators, then
+  start only missing parent actors. A cache-only restart creates no engine
+  actors or inference channels. Partial resumes retain their original jobs.
+- Fully revalidate cold disk receipts before issuing a current in-memory
+  validation receipt. Readers can reuse that independent result; old sidecars,
+  replay bytes, feature files and original source bindings are not rewritten.
+- Native ingress hashes/decodes its replay in one pass instead of a separate
+  pre-hash and gzip header read. Verified feature unpacking supplies process-local
+  row bindings to immediate assembly, avoiding a second full-history input hash.
+  Exact row object/order checks and detached input/label/context mutation seals
+  remain; this capability is never accepted from a serialized flag.
+- Disable repeated feature finite/selector/seat/context deep scans only for
+  current independently attested bytes. Replay/feature hashes, version/layout,
+  row binding, scope and frozen-job checks stay active. First publication,
+  cold recovery, old-source or unsealed receipts retain complete validation.
+- Check all-worker liveness at one-second intervals, matching the reference's
+  idle check, instead of every lane scanning all processes every 50ms.
+  Cancellation, EOF/protocol errors and inference-service failure still interrupt
+  promptly. The new counters separate writer/actor startup, cache recovery,
+  live collection and collector wall time before shutdown; the outer iteration
+  collection clock also includes shutdown and planning. Cache-hit records retain their
+  original collection metrics; use the new phase/count fields for current work.
+
+Only collection scheduling/I/O/check reuse changes. Search_v1, RNG consumption,
+policy equations, forced decisions, branch opportunities, feature values,
+reward/targets, optimizer and the training recipe are unchanged. Exact execution
+review now also accepts the original complete g1251–g1253 execution receipt
+(`94a0e5d1…`, review `cc50be97…`) as a predecessor. Unknown source/review/config
+changes still fail. Next checkpoints record the actual repaired execution;
+existing checkpoints and qualification evidence retain their original identity.
+
+Short CPU profiles use identical authored frozen families and real publication,
+replay/cache files and validators. They run no simulator, NN inference or training.
+Two controlled two-versus-four-writer probes measured publication
+**2.525→1.583s** (1,024 decisions) and **6.219→4.421s** (4,096 decisions).
+Serial-to-parallel cold recovery measured **2.970→0.742s** and **5.415→2.483s**.
+All compared game fields and feature arrays matched. Preserve the negative
+startup result too: Windows startup rose 6.777→12.139s and 6.160→12.765s;
+including startup/publication/recovery/read, these forced-four-worker tiny probes
+took 15.559→17.040s and 24.944→28.060s. This motivated the adaptive small-batch
+limit, rather than enabling 24 writers for every smoke. The larger probe's
+reader phase was also slower before the binding repair; it is retained unchanged.
+A separate fixed-byte ABBA probe isolated duplicate input sealing and reduced
+median warm read from **1.562→1.346s** before disabling redundant deep scans.
+The post-validation-change ABBA probe, with redundant warm deep scans disabled,
+measured **1.562→1.263s** (about 19% less time) on the same four families / 1,024
+decisions and unchanged feature bytes. Nonfinite feature arrays are rejected once
+before cache publication; first/cold reads still scan them fully.
+
+**38 distinct focused debug regressions passed** across recovery scheduling,
+first/cold versus warm validation, nonfinite values, feature/replay tampering,
+exact output/target equality, branch/reference fallbacks, cancellation/failure
+cleanup, public launcher/CLI/scheduler startup and exact predecessor checkpoint
+execution. No simulator game, NN update, long training run or unrelated successful
+lab qualification was run locally.
+
+Raw component evidence and exact repeat commands are in
+[the distribution notes](../distribution/rust-lab-b07-g1250/README.md).
+These component results do not establish whole-training speedup. Full repaired
+320-family latency is **Pending on the lab's next normal iteration**. Preserve
+successful B01–B07 adoption receipts; no unrelated qualification or native rebuild
+is required. Continue the latest same run from g1253 with teacher off.
+
 ## Lab g1250 → g1251 acceptance
 
 Pulled inside `results/` to `c51c7d9`, export

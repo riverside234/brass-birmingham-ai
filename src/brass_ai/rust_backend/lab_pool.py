@@ -2,10 +2,10 @@
 
 The existing ready-family scheduler still releases branches immediately. Native
 parts cross the coordinator as file/hash handles, never full board histories.
-At most two isolated publishers perform complete admission once per family.
+Bounded isolated publishers perform complete admission once per family.
 Durable replay and cold reader validation retain the B03 contracts unchanged.
 """
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, wait, FIRST_COMPLETED
 import copy
 import gzip
 import hashlib
@@ -26,7 +26,7 @@ from brass_ai.learning.contracts import digest, require
 from brass_ai.step5.league import write_json
 from . import lab_admission as admission
 from .lab_collection import collect_lane, frozen_id, route
-from .lab_families import FORMAT, collect_families
+from .lab_families import FORMAT, collect_families, _failure_scope
 from .lab_transport import Pipe
 
 
@@ -89,9 +89,8 @@ def part_read(directory, handle):
     require(value['branch_expected']==handle['branch_expected'],'Native part role changed')
     if combined:
         from . import lab_features
-        from brass_ai.recovery.replay import CheckedGame
         arrays=lab_features.unpack(packed,[value['game']],meta,combined=True)
-        value['game']=CheckedGame(value['game']).bind(arrays)
+        value['game']=lab_features.bind(value['game'],arrays)
         value['game'].actor_validated=handle.get('actor_validated') is True
     return value
 
@@ -112,13 +111,23 @@ class Publisher:
     def load(self,job):
         path=self.path(job);receipt=path.with_name(path.name+'.record.json')
         if not receipt.exists():return None
+        from brass_ai.recovery.retention import safe
+        for target in (path,receipt):safe(self.directory.resolve(),target)
         record=json.loads(receipt.read_text())
         require(record['path']==str(path) and record['native_admission']['admission']==self.binding(job),
                 'Cached collection belongs to a different job/producer/config')
         # A disk sidecar alone cannot confer validation trust after a crash.
         # Re-admit it against this frozen plan before returning it to the caller.
-        admission.read(path,record['native_admission'],allow_diagnostic=self.scope=='diagnostic',reuse_validation=False)
-        return record
+        game=admission.read(path,record['native_admission'],allow_diagnostic=self.scope=='diagnostic',reuse_validation=False)
+        issued={k:v for k,v in record['native_admission'].items() if k!='validation'}
+        expected=admission.record(path,game,issued['admission'],issued)
+        require(all(record.get(k)==v for k,v in expected.items() if k!='native_admission'),
+                'Cached collection record differs from validated family')
+        # Cold disk metadata is never trusted. Only AFTER complete validation
+        # issue a current-process receipt for readers, preserving feature bytes.
+        # It travels over private IPC; do not rewrite the old disk sidecar.
+        admission._attest(issued)
+        return dict(record,native_admission=issued)
 
     def publish(self,job,parent,child):
         began=time.perf_counter();parts=self.directory/'parts';timings={}
@@ -201,6 +210,37 @@ def _actors(connections, root, build, execution, mono, lease, cpu, stop, directo
         list(pool.map(lane,connections))
 
 
+def recover_cached(jobs,load,*,workers,cancel,on_error):
+    """Bounded CPU work/IPC; abort readers before executor joins on failure."""
+    require(type(workers) is int and 1<=workers<=24,'Invalid recovery worker count')
+    remaining=iter(jobs);pending={};records={}
+    with ThreadPoolExecutor(max_workers=workers) as pool,_failure_scope(cancel,on_error):
+        def submit():
+            require(not cancel.is_set(),'Native recovery canceled')
+            job=next(remaining,None)
+            if job is not None:pending[pool.submit(load,job)]=job['index']
+        for _ in range(min(len(jobs),2*workers)):submit()
+        while pending:
+            require(not cancel.is_set(),'Native recovery canceled')
+            done,_=wait(pending,timeout=.05,return_when=FIRST_COMPLETED)
+            for future in done:
+                index=pending.pop(future);record=future.result()
+                if record is not None:
+                    require(record['job']==index and index not in records,'Misrouted cached collection')
+                    records[index]=record
+                submit()
+    return [records[j['index']] for j in jobs if j['index'] in records]
+
+
+def publisher_workers(jobs,capacity):
+    # Validation is CPU-bound Python work, like the reference's per-actor
+    # writers. Shared admission still bounds actors + writers + replay readers.
+    # Keep short batches cheap: Windows spawn/import cost dominated the eight-
+    # family profile. Scale beyond two only when there is work to amortize it.
+    desired=max(2,(len(jobs)+7)//8)
+    return min(24,desired,len(jobs),capacity)
+
+
 class NativePool:
     def __init__(self,root,service,execution,build,config,signature,*,mono='mono',scope='ordinary'):
         require(scope in ('ordinary','diagnostic'),'Unknown native pool scope')
@@ -214,7 +254,7 @@ class NativePool:
                            signature=signature,profile='search_v1',v205_enabled=False)
 
     def receive(self,connection,*,submit=None,timeout=120):
-        end=time.monotonic()+timeout
+        end=time.monotonic()+timeout;next_health_check=0.
         while time.monotonic()<end:
             require(not self.stop.is_set(),'Native pool canceled')
             if connection.poll(.05):
@@ -225,7 +265,13 @@ class NativePool:
                     require(submit is not None,'Unexpected branch reply');submit(message['branch']);continue
                 return message
             require(self.service.error is None,'Native inference service failed: '+str(self.service.error))
-            require(all(p.is_alive() for p in self.processes),'Native worker exited without a result')
+            now=time.monotonic()
+            if now>=next_health_check:
+                # Reference dispatch checks liveness on a one-second idle
+                # timeout. Re-scanning every process in every lane every 50ms
+                # adds millions of process polls at the 48-lane lab setting.
+                require(all(p.is_alive() for p in self.processes),'Native worker exited without a result')
+                next_health_check=now+1.
         raise TimeoutError('Native worker timed out; partial family cannot train')
 
     def collect(self,jobs,*,on_records=None):
@@ -238,30 +284,25 @@ class NativePool:
         require(len(parents)==1,'Native jobs must share an iteration directory')
         directory=next(iter(parents))/'native-ordinary';directory.mkdir(parents=True,exist_ok=True)
         config=self.execution;lanes_per=config['hosts_per_process']
-        # Match ActorPool.start: one process per pending parent up to its cap,
-        # with all configured lanes available for ready continuations.
-        width=min(config['processes'],len(jobs))
-        # Writer and actors share the existing global CPU admission budget.
-        lanes=width*lanes_per;lease=self.service.channels(lanes);available=queue.Queue()
+        # As in the C# reference, inspect/recover caches before starting actors.
+        # Presence is only a scheduling hint: every hit is independently read
+        # and fully validated by a publisher before it is returned or reused.
+        probe=Publisher(directory,self.producer,self.config,self.scope)
+        candidates=[j for j in jobs if Path(str(probe.path(j))+'.record.json').exists()]
+        available=queue.Queue();width=lanes=0
         began=time.perf_counter();first=[];failure_lock=threading.Lock()
         def fail(error):
             with failure_lock:
                 if not first:first.append((error,error.__traceback__))
             self.stop.set();self.service.cpu.abort()
         try:
-            for _ in range(width):
-                pairs=[self.mp.Pipe() for _ in range(lanes_per)]
-                p=self.mp.Process(target=_actors,args=([b for a,b in pairs],str(self.root),self.build,config,
-                    self.mono,lease,self.service.cpu,self.stop,str(directory/'parts')))
-                p.start();self.processes.append(p)
-                for a,b in pairs:b.close();self.connections.append(a);available.put(a)
-            publishers=queue.Queue();publisher_count=min(2,width)
+            publishers=queue.Queue();publisher_count=publisher_workers(jobs,self.service.cpu.capacity)
             for _ in range(publisher_count):
                 writer,child=self.mp.Pipe();self.connections.append(writer)
                 p=self.mp.Process(target=_writer,args=(child,str(directory),self.producer,self.config,self.scope,self.service.cpu,self.stop))
                 p.start();child.close();self.processes.append(p);publishers.put(writer)
             for connection in self.connections:require(self.receive(connection).get('ready') is True,'Native startup failed')
-            startup=time.perf_counter()-began;callback_lock=threading.Lock();owner=self
+            writer_startup=time.perf_counter()-began;callback_lock=threading.Lock();owner=self
             class Store:
                 def call(self,op,*args):
                     writer=publishers.get(timeout=120)
@@ -286,6 +327,24 @@ class NativePool:
                     require(not owner.stop.is_set(),'Native publication canceled')
                     self.notify(record)
                     return record
+            store=Store();recovery_began=time.perf_counter()
+            cached=recover_cached(candidates,store.load,workers=publisher_count,cancel=self.stop,on_error=fail)
+            recovery_seconds=time.perf_counter()-recovery_began
+            recovered={r['job'] for r in cached};missing=[j for j in jobs if j['index'] not in recovered]
+            actor_began=time.perf_counter()
+            if missing:
+                # Start only missing parents, with all configured lanes for
+                # continuations. A cache-only restart needs no engine or NN IPC.
+                width=min(config['processes'],len(missing));lanes=width*lanes_per
+                lease=self.service.channels(lanes);new_connections=[]
+                for _ in range(width):
+                    pairs=[self.mp.Pipe() for _ in range(lanes_per)]
+                    p=self.mp.Process(target=_actors,args=([b for a,b in pairs],str(self.root),self.build,config,
+                        self.mono,lease,self.service.cpu,self.stop,str(directory/'parts')))
+                    p.start();self.processes.append(p)
+                    for a,b in pairs:b.close();self.connections.append(a);available.put(a);new_connections.append(a)
+                for connection in new_connections:require(self.receive(connection).get('ready') is True,'Native startup failed')
+            actor_startup=time.perf_counter()-actor_began if missing else 0.
             def collect(job,continuation,submit):
                 connection=available.get(timeout=120)
                 try:
@@ -294,9 +353,15 @@ class NativePool:
                 except BaseException as error:
                     fail(error);raise
                 finally:available.put(connection)
-            records,report=collect_families(jobs,Store(),collect,collect,lanes=lanes,cancel=self.stop,
-                model_cohorts=config.get('model_cohorts',False),on_error=fail,publication_workers=publisher_count)
-            report.update(startup_seconds=startup,processes=width,publisher_processes=publisher_count,
+            records,report=collect_families(jobs,store,collect,collect,lanes=max(1,lanes),cancel=self.stop,
+                model_cohorts=config.get('model_cohorts',False),on_error=fail,
+                publication_workers=min(publisher_count,max(1,lanes)),cached_records=cached)
+            live_seconds=report['wall_seconds']
+            report.update(startup_seconds=writer_startup+actor_startup,processes=width,publisher_processes=publisher_count,
+                writer_startup_seconds=writer_startup,actor_startup_seconds=actor_startup,
+                cache_recovery_seconds=recovery_seconds,cache_candidates=len(candidates),
+                live_collection_seconds=live_seconds,wall_seconds=time.perf_counter()-began,
+                lanes=lanes,limit=2*lanes,publication_workers=min(publisher_count,lanes),
                 board_histories_cross_learner=False,full_family_validation_passes_per_publication=1,
                 native_families=sum(route(r['native_admission']['admission']['job'])[0]=='rust' for r in records))
             self.last_collection_report=report

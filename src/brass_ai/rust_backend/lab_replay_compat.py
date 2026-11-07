@@ -39,6 +39,19 @@ def accepts(implementation):
     return implementation in (current['implementation'],current['qualified_implementation'])
 
 
+def accepts_execution(saved):
+    """Only exact reviewed predecessor checkpoints may cross this repair.
+
+    Keep their old execution/review receipt intact; subsequent commits record
+    the actual new execution. Unknown source or review digests still fail.
+    """
+    current=execution()
+    if saved==current:return True
+    return (current['replay_location_review'] is not None and
+            saved in read(REVIEW).get('predecessor_executions',[]) and
+            saved.get('qualified_implementation')==current['qualified_implementation'])
+
+
 def training_signature(state,signature):
     """Keep frozen jobs/receipts byte-identical only for the exact native fix."""
     value=state.get('native_backend')

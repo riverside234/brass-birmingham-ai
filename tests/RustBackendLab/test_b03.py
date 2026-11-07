@@ -50,7 +50,7 @@ def scoring(game, native=True):
         start_revision=game['records'][0]['view']['context']['revision'], initial_vp=vp, final_vp=vp, eras=eras)
 
 
-def family_fixture(*, kind='selfplay', seed=0, branch=False, generation=10, branching=None):
+def family_fixture(*, kind='selfplay', seed=0, branch=False, generation=10, branching=None,decisions=None):
     c = config(); c['local_scoring_auxiliary']['adoption'] = None
     if branching is not None:
         from brass_ai.recovery.exploration import THREE_OPENING
@@ -106,7 +106,7 @@ def family_fixture(*, kind='selfplay', seed=0, branch=False, generation=10, bran
         return values,evidence
 
     rngs=[random.Random(digest(dict(sampling_seed=57,game=0,seat=s))) for s in range(4)]
-    r,e=rows(0,24 if branch else 8,rngs,samplers)
+    r,e=rows(0,decisions if decisions is not None else (24 if branch else 8),rngs,samplers)
     game=dict(game_id=job['stable_game_id'],setup_group=group,players=4,split=split_for(group),
         opponents=[p['policy_id'] for p in policies],result=result(),records=r)
 

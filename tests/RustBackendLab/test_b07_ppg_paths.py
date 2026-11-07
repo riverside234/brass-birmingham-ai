@@ -155,6 +155,9 @@ class ReviewedRetry(unittest.TestCase):
                 self.assertEqual(B.validate_state(state,raw),value)
                 raw['training']['native_backend_execution']=execution
                 self.assertEqual(B.validate_state(state,raw),value)
+                for previous in json.loads(R.REVIEW.read_text()).get('predecessor_executions',[]):
+                    raw['training']['native_backend_execution']=previous
+                    self.assertEqual(B.validate_state(state,raw),value)
                 raw['training']['native_backend_execution']=dict(execution,implementation='f'*64)
                 with self.assertRaisesRegex(ValueError,'execution source'):B.validate_state(state,raw)
                 with patch.object(R,'implementation_id',return_value='f'*64):

@@ -1,7 +1,7 @@
 {
   "contract": "brass-b07-replay-location-review/1.0.0",
   "qualified_implementation": "9efcf34f853d75ab844366b6819da4b0921be38d3e2dfb806cf282ace76e7a30",
-  "execution_implementation": "94a0e5d1d03210ad93759f2aedd6f7f15cca4bb826300df7b6de04f033199ff2",
+  "execution_implementation": "1a4683f397c6162cbc8208e326d31dd0b864a790e3ec7b1ada752b0cc1cd9aed",
   "base_commit": "7244d6b",
   "changes": {
     "src/brass_ai/recovery/value_buffer.py": {
@@ -14,7 +14,7 @@
     },
     "src/brass_ai/rust_backend/lab_backend.py": {
       "before": "8e6496a7e67371bb9f5898e1dde864731f49a60062768ab66773ec4e5a9749d3",
-      "after": "b7ca204a19ea7367d7c9f8949fd49b795269296f05038b9b8d01ad4bcb171218"
+      "after": "bfffb2922c636820f45c891ad996439db06b16a42883efb081f14a4fcfe21268"
     },
     "src/brass_ai/rust_backend/lab_continuation.py": {
       "before": "1ff80d1ff8523676fd03a03f9890d14895543029d81715aa9006acd0c2444512",
@@ -22,14 +22,42 @@
     },
     "src/brass_ai/rust_backend/lab_replay_compat.py": {
       "before": null,
-      "after": "ac6ab04844ec9997e51e3b38972ef3814ac3d6acb167425be4614819ec8a991d"
+      "after": "d1ddcc35f917bd75d74d124ee0c2740ff6a5a5895704b3ddb08b635aa9af761f"
     },
     "src/brass_ai/recovery/automatic_training.py": {
       "before": "38046abd8f653f6b12f87f2f4747899b0cc565fbc4ae0ac4edb8cd15fee37df3",
       "after": "c591a79615b4a192f37690d73f67283b6b2d70a91fd6874f5f33a18c52158044"
+    },
+    "src/brass_ai/rust_backend/lab_pool.py": {
+      "before": "1561e48d93b258d57511f4c79e6b0e5de98baedbc9dda0b1cfe325ec57af22f1",
+      "after": "b17715e27a4275fb8d999df976649eacc71e969232c940e89b92cd7307081be7"
+    },
+    "src/brass_ai/rust_backend/lab_families.py": {
+      "before": "a3ee17f38fbd524785ff41450eda6cdfb1f829b469b586777cf5d681863e27d8",
+      "after": "3a01a3237a704ef93fca7aa302a05336f933ae559c3424f45994c0caa2d0ccac"
+    },
+    "src/brass_ai/recovery/ingress.py": {
+      "before": "f6aa8c4c07220aea239da3aac78cd0361b4fdb937746d0e6b98b320c1d755533",
+      "after": "e5ba5431186a3aca4314c5b2083655af11514ba0b23f7cb87fec1f94c7ebb905"
+    },
+    "src/brass_ai/rust_backend/lab_features.py": {
+      "before": "c763fb68343ed383be22ce42f13ce0e606ab235254c275e6a36b187cba393b84",
+      "after": "8e8a89bd4dfba236637b4399faa10f2944a0ce48fa52deb3a846ba858c0d7dfe"
+    },
+    "src/brass_ai/rust_backend/lab_admission.py": {
+      "before": "6d616c754ab1337005b2e65e7e766b6810b775f24f979e13c40e3c16b32e85f9",
+      "after": "703d6883eda9ee91e2222a8791aed5db1f26c21db0ccb0e0de4526a1e26ead5e"
     }
   },
-  "scope": "Native replay path validation and source-only retry integration; unchanged collection, RNG, features, targets, search, optimizer, recipe and signature contents. Preserve pending family bytes and original qualification receipts; record actual execution separately. Apply the identical source-only check at automatic scheduler startup before its normal signature validation; no new source/config permission.",
+  "scope": "Exact teacher-off native collection scheduling/recovery repair: bounded parallel publishers and cache validation, missing-only actor startup, fresh validator receipts after full cold validation, and one native ingress byte read. Original jobs, collection signatures, policy/RNG, features, branch rules, rewards, search_v1, optimizer and recipe remain unchanged. Preserve predecessor checkpoint execution provenance and record new execution on the next normal commit. Reuse process-local verified row input hashes between feature unpacking and immediate game binding, retaining exact row identity/order, detached label/context seals and later mutation checks; no durable trust flag or feature-format change. Disable redundant feature deep scans only after validating the current independent receipt and exact replay/feature bytes; preserve complete cold checks and restrict process-liveness scans to one-second intervals while cancellation/IPC errors remain prompt. User-selected 24 publisher/recovery-process ceiling for full-size jobs, with adaptive small batches and the unchanged global CPU admission cap.",
   "evidence": "results/rust-lab-qualification/20261107T125446333545Z-20261107T124611526805Z-b07-continue-e84bd233-c1155826/evidence/training.log",
-  "startup_evidence": "results/rust-lab-qualification/20261107T131709467058Z-20261107T131647644898Z-b07-continue-953a2157-2b90dbc8/evidence/training.log"
+  "startup_evidence": "results/rust-lab-qualification/20261107T131709467058Z-20261107T131647644898Z-b07-continue-953a2157-2b90dbc8/evidence/training.log",
+  "predecessor_executions": [
+    {
+      "implementation": "94a0e5d1d03210ad93759f2aedd6f7f15cca4bb826300df7b6de04f033199ff2",
+      "qualified_implementation": "9efcf34f853d75ab844366b6819da4b0921be38d3e2dfb806cf282ace76e7a30",
+      "replay_location_review": "cc50be97d02aa00019192e9e47b05e570ca7ae0b8433532401ef3bbc60c1f91b"
+    }
+  ],
+  "performance_evidence": "results/joint7-v11-2-g1290-trained-restart-g1253-20261107T145415686647Z/iteration-1252/report.json"
 }

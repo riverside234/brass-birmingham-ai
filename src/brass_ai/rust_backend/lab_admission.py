@@ -165,9 +165,8 @@ def _assemble(family, admission, *, checked=None, arrays=None, owned=False):
                     'Reference scoring provenance differs')
         if checked is None:
             require(arrays is not None,'Missing independently attested features')
-            count=len(game['records']);encoded=arrays[offset:offset+count];offset+=count
-            require(len(encoded)==count,'Incomplete attested native features')
-            game=CheckedGame(game).bind(encoded)
+            from .lab_features import bind as bind_features
+            count=len(game['records']);game=bind_features(game,arrays,start=offset);offset+=count
         else:
             original=checked[index]
             # validate_family already fully checked these exact rows, behavior,
@@ -294,17 +293,21 @@ def read(path, receipt, *, allow_diagnostic=False, reuse_validation=True):
             'Native replay/writer receipt differs')
     from . import lab_features
     games=[family['parent']['game']]+([family['child']['game']] if family['child'] is not None else [])
-    arrays=lab_features.read(path,games,receipt.get('features'),receipt['replay_sha256'])
-    validation=receipt.get('validation')
+    validation=receipt.get('validation');trusted=False
     if validation is not None:
         keys(validation,('contract','validator','receipt_sha256'))
         require(validation['contract']=='brass-native-validation/1.0.0' and
                 validation['receipt_sha256']==digest({k:v for k,v in receipt.items() if k!='validation'}),
                 'Native validation receipt changed')
-        if reuse_validation and arrays is not None and validation['validator']==_validation_version():
-            admitted=validate_binding(receipt['admission'])
-            require(admitted['scope']=='ordinary' or allow_diagnostic,'Diagnostic replay is not training data')
-            return _assemble(family,admitted,arrays=arrays,owned=True)
+        trusted=reuse_validation and validation['validator']==_validation_version()
+    # Exact replay + feature bytes were independently checked by this loaded
+    # validator. Disable repeated finite/selector/seat/context deep scans on
+    # that warm path; cold recovery and unversioned receipts still check all.
+    arrays=lab_features.read(path,games,receipt.get('features'),receipt['replay_sha256'],deep=not trusted)
+    if trusted and arrays is not None:
+        admitted=validate_binding(receipt['admission'])
+        require(admitted['scope']=='ordinary' or allow_diagnostic,'Diagnostic replay is not training data')
+        return _assemble(family,admitted,arrays=arrays,owned=True)
     return convert(family, receipt['admission'], allow_diagnostic=allow_diagnostic,arrays=arrays,_owned=True)
 
 

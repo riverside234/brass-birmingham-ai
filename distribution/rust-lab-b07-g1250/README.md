@@ -1,5 +1,50 @@
 # B07 g1250: Git checkout continuation after passed qualification
 
+## Current g1253 collection repair
+
+Results were pulled inside `results/` to `097327ef4fab7190f8d91ce4996dd1d4db4c5ce2`.
+New 320-family Rust collections took 501.5s and 496.2s. The repair addresses the
+two-writer bottleneck, serial cache revalidation, unnecessary actor startup and
+repeated byte/history/feature checks. Current full-size jobs use **24 publishers**
+under the same 60-slot CPU allowance; small batches retain at most two. Cold
+validation remains complete; current independent receipts authorize warm reuse.
+See [design, C# comparison and measurement limits](../../ai-research/RUST_BACKEND_B07_IMPLEMENTATION.md#full-size-collection-repair-from-results-097327e).
+
+After syncing this Git update, continue the **existing g1253 → g1254** run in the
+same lab environment. Original binaries, checkpoint/Adam/RNG, recipe, caches,
+backend selection and teacher-off state are preserved. No source override,
+new archive or repeat of passed qualifications is needed:
+
+```bash
+python scripts/step5.py --root "$PWD" --config configs/step5/joint7-v11-2-g1290-trained-restart-g1247.json --device cuda --mono mono train --run artifacts/step5/joint7-v11-2-g1290-trained-restart --imitation-run artifacts/step5/features4-v11-2-batch7-il --expected-generation 1253 --iterations 1
+```
+
+The generation guard rejects stale commands. If the run advanced, inspect its
+actual committed generation before changing the guard. The old adoption wrapper
+below applies only at the historical g1250/g1251 boundary.
+
+For a bounded CPU component profile first (no simulator, NN or training):
+
+```bash
+python tests/RustBackendLab/profile_b07_publication.py --out artifacts/b07-publication-profile-lab --families 8 --decisions 128 --workers 4
+python tests/RustBackendLab/profile_b07_publication.py --out artifacts/b07-binding-profile-lab --read-existing artifacts/b07-publication-profile-lab
+```
+
+Use new output paths when repeating. These compare authored frozen records and
+feature values, startup, publication, cold validation and replay reading; the
+forced component worker count does not change production config. Raw Windows
+profiles are `profile-097327e-small.json`, `profile-097327e-medium.json`,
+`profile-097327e-binding.json` and `profile-097327e-warm-checks.json` beside this README.
+The last file measures the final hot-check repair: 1.562→1.263s median warm read,
+with equal training games and unchanged feature bytes. They include both positive
+phase improvements and negative startup totals. Complete 320-family speedup
+remains Pending until the next normal lab report. The affected debug suites passed
+38 distinct checks, including the 24-lane publication scheduler; historical
+qualification archives remain byte-for-byte intact. The CPU timing probes use
+two/four workers; the requested 24-process full-size throughput awaits the lab.
+
+The rest of this document preserves the original qualification/adoption history.
+
 **Latest lab status:** R8 qualification, both canaries, diagnostic continuation,
 Rust adoption, complete rollback restoration and the **real g1250→g1251 training
 commit/full restart passed**. Results were pulled inside `results/` to `c51c7d9`:

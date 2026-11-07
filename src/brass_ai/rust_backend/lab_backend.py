@@ -59,8 +59,8 @@ def validate_state(state,raw=None,*,check_runtime=True):
                 transition['before']==raw['training'].get('native_backend') and transition['after']==value,
                 'Backend/checkpoint mismatch without an explicit switch receipt')
     if raw is not None and 'native_backend_execution' in raw['training']:
-        from .lab_replay_compat import execution
-        require(raw['training']['native_backend_execution']==execution(),
+        from .lab_replay_compat import accepts_execution
+        require(accepts_execution(raw['training']['native_backend_execution']),
                 'Native checkpoint execution source/review changed')
     if check_runtime and value['mode']=='rust':check_build(value['build'])
     receipt=checked_pin(value['qualification'])
