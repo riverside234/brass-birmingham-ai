@@ -7,7 +7,7 @@ from pathlib import Path
 from brass_ai.learning.contracts import SOURCE_ROOT as ROOT, digest, require
 from brass_ai.rust_backend.lab_contract import pin
 from brass_ai.rust_backend.lab_snapshot import verify_unchanged
-from brass_ai.step5.league import implementation_id
+from brass_ai.rust_backend.lab_replay_compat import qualified_implementation as implementation_id
 
 DIRECTORY = ROOT / 'distribution/rust-lab-b07-g1250'
 PHASES = ('canary-1', 'canary-2', 'continuation')

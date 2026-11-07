@@ -128,6 +128,8 @@ def execute(args, out, report, invoke):
         report[action] = pin(target/'qualification.json')
 
     state, selected = inspect()
+    from brass_ai.rust_backend.lab_replay_compat import execution
+    report['execution_source'] = execution()
     initial_config = digest(state['signature']['config'])
     initial_imitation = digest(state['signature'].get('imitation_source'))
     if selected == 'adopt':

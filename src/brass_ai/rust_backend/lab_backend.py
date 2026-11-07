@@ -8,7 +8,8 @@ from pathlib import Path
 
 from brass_ai.bank import read,sha
 from brass_ai.learning.contracts import digest,project_path,require
-from brass_ai.step5.league import implementation_id,write_json
+from brass_ai.step5.league import write_json
+from .lab_replay_compat import accepts
 from .lab_contract import pin,SOURCE
 
 CONTRACT='brass-ordinary-backend/1.0.0'
@@ -30,7 +31,7 @@ def check_build(item):
 
 def qualify_receipt(value,state):
     require(value.get('milestone')=='B07' and value.get('passed') is True and
-            value.get('implementation')==implementation_id(),'B07 qualification is absent or source differs')
+            accepts(value.get('implementation')),'B07 qualification is absent or source differs')
     require(value['generation']==state['iteration'] and value['checkpoint_sha256']==state['history'][-1]['sha256']
             and value['config_sha256']==digest(state['signature']['config']),
             'B07 qualification is stale; qualify the actual committed checkpoint/config')
@@ -49,7 +50,7 @@ def validate_state(state,raw=None,*,check_runtime=True):
         require(raw is None or raw['training'].get('native_backend') is None,'Native checkpoint lost backend state')
         return None
     require(value['contract']==CONTRACT and value['mode'] in ('rust','reference') and
-            value['implementation']==implementation_id()==state['signature']['implementation'] and
+            accepts(value['implementation']) and value['implementation']==state['signature']['implementation'] and
             value['config_sha256']==digest(state['signature']['config']), 'Backend source/config binding changed')
     require(state['signature']['config'].get('teacher_phase',{}).get('mode','off')=='off','Teacher enablement is a separate gate')
     if raw is not None and raw['training'].get('native_backend')!=value:
@@ -57,9 +58,13 @@ def validate_state(state,raw=None,*,check_runtime=True):
         require(transition is not None and transition['checkpoint']==state['history'][-1] and
                 transition['before']==raw['training'].get('native_backend') and transition['after']==value,
                 'Backend/checkpoint mismatch without an explicit switch receipt')
+    if raw is not None and 'native_backend_execution' in raw['training']:
+        from .lab_replay_compat import execution
+        require(raw['training']['native_backend_execution']==execution(),
+                'Native checkpoint execution source/review changed')
     if check_runtime and value['mode']=='rust':check_build(value['build'])
     receipt=checked_pin(value['qualification'])
-    require(receipt['passed'] and receipt['implementation']==implementation_id(),'Backend qualification changed')
+    require(receipt['passed'] and accepts(receipt['implementation']),'Backend qualification changed')
     require(sha(value['rollback']['path'])==value['rollback']['sha256'],'Backend rollback manifest changed')
     return value
 
@@ -120,7 +125,7 @@ def adopt(root,run,qualification,output):
     # dependencies. Never replace this with a metadata-only backup.
     changed=state['signature']!=source['target_signature']
     if changed:state=commit_transition(run,state,source['target_signature'])
-    value=dict(contract=CONTRACT,mode='rust',implementation=implementation_id(),
+    value=dict(contract=CONTRACT,mode='rust',implementation=state['signature']['implementation'],
         config_sha256=digest(state['signature']['config']),qualification=qpin,build=q['ordinary_build'],
         adopted_generation=state['iteration'],adopted_checkpoint=copy.deepcopy(state['history'][-1]),
         rollback=pin(output/'diagnostic-fork.json'))

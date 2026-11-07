@@ -14,7 +14,8 @@ from unittest.mock import Mock,patch
 
 from brass_ai.bank import sha
 from brass_ai.learning.contracts import SOURCE_ROOT,digest
-from brass_ai.step5.league import write_json,implementation_id
+from brass_ai.step5.league import write_json
+from brass_ai.rust_backend.lab_replay_compat import qualified_implementation as implementation_id
 from brass_ai.rust_backend import lab_pool as P,lab_admission as A,lab_backend as B
 from brass_ai.rust_backend.lab_families import FamilyStore
 from brass_ai.recovery.resources import CPUAdmission

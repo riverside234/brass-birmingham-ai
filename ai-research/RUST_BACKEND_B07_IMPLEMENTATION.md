@@ -6,6 +6,49 @@ The real g1250→g1251 commit/restart remains Pending.** Use the
 [Git checkout continuation commands](../distribution/rust-lab-b07-g1250/README.md);
 do not repeat passed qualifications. The installed game is unchanged.
 
+## Git-only PPG replay-location fix
+
+Results pulled inside `results/` to `f08a704`, export
+`20261107T125446333545Z-20261107T124611526805Z-b07-continue-e84bd233-c1155826`.
+The imitation dependency fix worked. The real run prepared all 320 shards, then
+stopped before PPO at `PPG cache needs current ordinary replays`. The PPG source
+builder accepted only files directly under `iteration-1250`; Rust's publisher
+uses `iteration-1250/native-ordinary/replay/<frozen-job-id>.jsonl.gz`. Earlier
+critic-cache tests used the old direct layout and missed this integration gap.
+
+The shared PPG source builder now accepts that exact nested native layout with
+ordinary admission, matching generation, model, reward, job, replay hash, feature
+receipt and frozen-job filename. Other nested directories and stale generations
+remain rejected. Project confinement and link rejection stay in place. The older
+disk buffer's cold rebuild uses the same path checks. Both PPG cache types retain
+the complete original native admission and encoded-feature receipts, without
+moving replays or rereading/encoding families at source-receipt creation.
+
+An explicit `b07-replay-location-review.json` binds the complete new execution
+fingerprint to the previously qualified source. Only that exact code revision,
+the same teacher-off config/data/opponents and an existing native-backend state
+may preserve the frozen collection signature on retry. Unknown source changes
+fail closed. This keeps all collected job IDs, native receipts and checkpoint
+bindings unchanged; the normal cold admission still checks their bytes. The full
+execution fingerprint and review digest are recorded separately in launcher
+evidence and the next native checkpoint/report, and checked at reload. The
+ordinary/search implementation, sampling, features, rewards and optimizer are
+unchanged; the review covers the path repair and its retry integration only.
+
+Retry with the same `continue-rust-lab-b07.py --expected-generation 1250` command
+after pulling Git. Keep the pending iteration and original qualification/build
+directories; do not delete, rename or rewrite its collected shards. Passing
+qualification/adoption is reused. No archive is created. The real commit/restart
+remains Pending until the lab retry completes.
+
+Thirty-nine focused debug checks passed across the affected suites, including
+actual native-layout PPG staging with old/new critic ages, cold feature/target
+rebuild and byte-tamper rejection, path/generation/model/reward guards, full
+adoption/rollback restoration, unchanged frozen-signature retry, unknown-source
+rejection and launcher/receipt reuse. Fixture-only failures during development
+were corrected; only those failing checks were repeated. No benchmark, complete
+game, training iteration or unrelated lab qualification ran locally.
+
 ## Git-only continuation fix: preserve the completed imitation dependency
 
 Pulled inside `results/` to `e92a29e`, export

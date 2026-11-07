@@ -42,7 +42,8 @@ def verify():
     require(hashlib.sha256(path.read_bytes()).hexdigest()==reference['b06']['sha256'] and baseline['passed'] and
             baseline['implementation']==reference['b07_source_review']['from_implementation'],
             'B06 baseline/source review differs')
-    require(reference['b07_source_review']['to_implementation']==manifest['implementation'],'B07 source review differs')
+    from brass_ai.rust_backend.lab_replay_compat import qualified_implementation
+    require(reference['b07_source_review']['to_implementation']==qualified_implementation(),'B07 source review differs')
     return manifest
 
 
@@ -119,14 +120,17 @@ def main():
     base=module('b07_base',ROOT/'scripts/qualify-rust-lab.py');active='bundle'
     env=base.python_environment();env['PYTHONPATH']=str(ROOT/'scripts')+os.pathsep+env['PYTHONPATH'];env['CUBLAS_WORKSPACE_CONFIG']=':4096:8'
     try:
-        report['implementation']=verify()['implementation']
+        verify()
+        from brass_ai.rust_backend.lab_replay_compat import execution
+        report['execution_source']=execution()
+        report['implementation']=report['execution_source']['qualified_implementation']
         reference=read_json(DIRECTORY/'reference.json')
         report['prerequisites']=dict(reference['prerequisites'],B06=reference['b06'])
         active='environment'
         from rust_lab_b06_metrics import measurement_preflight
         report['environment']=measurement_preflight()
         active='fixtures'
-        tests=['test_b07_completion','test_b07_sealing','test_b07_checkpoint','test_b07_retry'] if args.complete_remaining else ['test_b07_retry','test_b07.collection_smoke','test_b07_wire','test_b07_r4','test_b02.Behavior']
+        tests=['test_b07_completion','test_b07_sealing','test_b07_checkpoint','test_b07_retry','test_b07_ppg_paths'] if args.complete_remaining else ['test_b07_retry','test_b07.collection_smoke','test_b07_wire','test_b07_r4','test_b02.Behavior']
         base.command([sys.executable,'-m','unittest',*tests,'-q'],cwd=ROOT,env=dict(env,CUDA_VISIBLE_DEVICES=''),log=out/'fixtures.log',timeout=180)
         if args.fixtures_only:
             report.update(passed=True,scope='CPU fixtures only; B07 lab and adoption Pending');return

@@ -1,0 +1,30 @@
+{
+  "contract": "brass-b07-replay-location-review/1.0.0",
+  "qualified_implementation": "9efcf34f853d75ab844366b6819da4b0921be38d3e2dfb806cf282ace76e7a30",
+  "execution_implementation": "39b9a8334ae3a86804f9f1ecbf35db009153e40fed6bfb57dfcaf30120635bfc",
+  "base_commit": "7244d6b",
+  "changes": {
+    "src/brass_ai/recovery/value_buffer.py": {
+      "before": "d58b3fcb1cf97c52296187b24e53e049023590bb95ddf2398c5d4568657e6d9b",
+      "after": "043f681cd677701b51cc677ca4a189db1da8df16a8e1817c5823260ea1778ce1"
+    },
+    "src/brass_ai/recovery/league.py": {
+      "before": "62e4a3613e44ea69f910f9ecde342e1b36d31bfa9005eec383311f8e8055097b",
+      "after": "8db6726e12328bde992491e71530f93471803fc0d1d900ff5b51a27aed431696"
+    },
+    "src/brass_ai/rust_backend/lab_backend.py": {
+      "before": "8e6496a7e67371bb9f5898e1dde864731f49a60062768ab66773ec4e5a9749d3",
+      "after": "b7ca204a19ea7367d7c9f8949fd49b795269296f05038b9b8d01ad4bcb171218"
+    },
+    "src/brass_ai/rust_backend/lab_continuation.py": {
+      "before": "1ff80d1ff8523676fd03a03f9890d14895543029d81715aa9006acd0c2444512",
+      "after": "908bb38e72d4556afe7d7c41573b7e2db91d7d1edd66edca0703d5c0b70d3e25"
+    },
+    "src/brass_ai/rust_backend/lab_replay_compat.py": {
+      "before": null,
+      "after": "ac6ab04844ec9997e51e3b38972ef3814ac3d6acb167425be4614819ec8a991d"
+    }
+  },
+  "scope": "Native replay path validation and source-only retry integration; unchanged collection, RNG, features, targets, search, optimizer, recipe and signature contents. Preserve pending family bytes and original qualification receipts; record actual execution separately.",
+  "evidence": "results/rust-lab-qualification/20261107T125446333545Z-20261107T124611526805Z-b07-continue-e84bd233-c1155826/evidence/training.log"
+}

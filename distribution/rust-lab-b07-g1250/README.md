@@ -1,11 +1,11 @@
 # B07 g1250: Git checkout continuation after passed qualification
 
 **Latest lab status:** R8 qualification, both canaries, diagnostic continuation,
-Rust adoption and complete rollback restoration passed. Real g1250→g1251
-training stopped before collection because the launcher omitted `--imitation-run`.
-The Git-only fix reads that dependency from the committed signature and checks
-its recipe binding. No new bundle or native build is needed; existing receipts
-remain valid. Pull the code checkout and retry:
+Rust adoption and complete rollback restoration passed. The next retry prepared
+all 320 shards, then PPG rejected Rust's nested replay directory. The shared PPG
+source/rebuild checks now accept that exact native layout with its generation,
+model/reward/job/replay/feature bindings. The earlier missing-imitation-argument
+fix is retained. No new bundle or native build is needed. Pull Git and retry:
 
 ```bash
 git pull --ff-only
@@ -14,12 +14,18 @@ python scripts/continue-rust-lab-b07.py --expected-generation 1250
 
 Since Rust is already selected at g1250, this skips the passed qualifications and
 adoption, verifies rollback, runs one real iteration and verifies its checkpoint.
+Keep `iteration-1250` intact: the exact execution-source review preserves its
+frozen collection signature, allowing normal validated reuse of the collected
+families. It does not rebind or rewrite old receipts. The new actual execution
+fingerprint is recorded separately; any unreviewed code or recipe change fails.
 If g1251 already committed, it verifies only. Keep the original lab evidence and
 native binaries. Do not extract R8 or an older ZIP over this Git update. The
-tracked manifest still checks every listed file; only changed launcher/test/docs
-hashes are refreshed. Historical ZIPs retain their original bytes.
+tracked manifest still checks every listed file, including the reviewed repair
+and its compatibility record. Historical ZIPs retain their original bytes.
 
 The actual next commit/restart remains **Pending** until the retry succeeds.
+The PPG path/retry repair has **39 passing focused debug checks**; no local
+benchmark or real training iteration was run.
 
 **R4 ordinary qualification passed.** The result was pulled inside `results/`
 at `9e219a2`. Same 3 families / 1,161 decisions / 675 forced rows, with equivalent

@@ -149,6 +149,8 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
         if bc_origin:
             signature['imitation_source']=bound_reference(root,bc_origin,state['signature'].get('imitation_source'),
                 ('bc_run','path','manifest'))
+        from brass_ai.rust_backend.lab_replay_compat import training_signature
+        signature=training_signature(state,signature)
         require(initial is None and from_run is None,'Omit initialization when resuming')
         from .resume import load_resume
         model,raw,source_changed=load_resume(root,run,state,signature,device=device,reviewed=resume_reviewed_source)
@@ -749,8 +751,11 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                 anchor_commit=policy_anchor.checkpoint_state(state)
                 search_value_payload=search_values.payload(iteration+1) if search_values is not None else None
                 if 'native_backend' in state:
+                    from brass_ai.rust_backend.lab_replay_compat import execution
+                    native_execution=execution()
                     report['native_backend']=dict(mode=state['native_backend']['mode'],
-                        qualification=state['native_backend']['qualification'],collection=ordinary.last_collection_report)
+                        qualification=state['native_backend']['qualification'],collection=ordinary.last_collection_report,
+                        execution=native_execution)
                 if search_value_report is not None: report['search_value']=search_value_report
                 identity=save_checkpoint(output,model,optimizer,step=iteration+1,
                     training=dict(mode='step5-population-ppo',recipe=update['format'],
@@ -764,6 +769,7 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                         **({'exploration':exploration_state} if exploration_state is not None else {}),
                         **({'teacher_phase':teacher_phase.payload(iteration+1)} if teacher_phase is not None else {}),
                         **({'native_backend':state['native_backend']} if 'native_backend' in state else {}),
+                        **({'native_backend_execution':native_execution} if 'native_backend' in state else {}),
                         **({'search_value':search_value_payload} if search_value_payload is not None else {}),
                         **({'v4_share_gate':share} if share is not None else {}),
                         **({'actor_value_phases':phases.payload()} if phases is not None else {}),

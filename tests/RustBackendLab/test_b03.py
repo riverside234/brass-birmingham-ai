@@ -431,7 +431,9 @@ class Continuation(Base):
         original=copy.deepcopy(phase.buffer.receipts);games=[];records=[];seed=0;cfg=restored.state['signature']['config']
         for _ in range(9):
             f,a,_=family_fixture(seed=seed,generation=1);seed=a['job']['seed']+1
-            path=fork.run/'iteration-0001'/('actor-'+str(seed)+'.gz')
+            # Exercise the real publisher layout, including PPG provenance.
+            from brass_ai.rust_backend.lab_pool import Publisher
+            path=Publisher(fork.run/'iteration-0001/native-ordinary',f['producer'],cfg,'ordinary').path(a['job'])
             record=A.publish(path,f,a);records.append(record);games.append(A.read(path,record['native_admission']))
         from brass_ai.rust_backend.lab_b03_smoke import prepared_rows
         from brass_ai.recovery.updates import Dataset

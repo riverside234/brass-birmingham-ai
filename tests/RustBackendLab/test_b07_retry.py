@@ -8,7 +8,7 @@ from unittest.mock import patch
 
 from brass_ai.learning.contracts import SOURCE_ROOT
 from brass_ai.rust_backend.lab_contract import pin
-from brass_ai.step5.league import implementation_id
+from brass_ai.rust_backend.lab_replay_compat import qualified_implementation as implementation_id
 import rust_lab_b07_retry as R
 
 

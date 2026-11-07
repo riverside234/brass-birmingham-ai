@@ -28,6 +28,30 @@ TARGETS=('win_share','placement','vp')
 FILE=re.compile(r'generation-([0-9]{6,})\.(npy|json)(\.partial|\.tmp)?$')
 
 
+def replay_path(root,run,record,generation,*,model_id,reward_id):
+    """Accept only the two ordinary publication layouts at this generation.
+
+    Readers still validate replay/feature bytes. This small metadata check does
+    not reread or encode an already admitted family when creating a PPG receipt.
+    """
+    p=safe(run,project_path(root,record['path']))
+    iteration=run/f'iteration-{generation:04d}'
+    if p.parent==iteration:return p  # Historical reference and B03 layout.
+    require(p.parent==iteration/'native-ordinary/replay',
+            'PPG cache needs current ordinary replays')
+    from brass_ai.rust_backend.lab_admission import CONTRACT,validate_binding
+    receipt=record.get('native_admission')
+    require(isinstance(receipt,dict) and receipt.get('contract')==CONTRACT,
+            'Nested PPG replay requires native admission')
+    admitted=validate_binding(receipt['admission'])
+    require(admitted['scope']=='ordinary' and admitted['generation']==generation and
+            admitted['model_id']==model_id and admitted['reward_id']==reward_id and
+            p.name==admitted['job_id']+'.jsonl.gz' and record['job']==admitted['job']['index'] and
+            record['sha256']==receipt['replay_sha256'] and record['features']==receipt.get('features'),
+            'PPG native replay binding differs')
+    return p
+
+
 def enabled(config):
     c=config.get('value_phase',{})
     return c.get('enabled',False) and c.get('buffer_iterations')==2
@@ -243,8 +267,7 @@ class DiskBuffer:
     def source(self,records,policy_id,kinds,model_id):
         selected=[]
         for r in sorted(records,key=lambda r:r['job']):
-            p=safe(self.run,project_path(self.root,r['path']))
-            require(p.parent==self.run/f'iteration-{self.generation:04d}','PPG cache needs current ordinary replays')
+            p=replay_path(self.root,self.run,r,self.generation,model_id=model_id,reward_id=self.reward_id)
             selected.append(dict({k:r[k] for k in ('job','game_id','sha256','features')},
                                  path=p.relative_to(self.run).as_posix(),
                                  **({'native_admission':copy.deepcopy(r['native_admission'])} if 'native_admission' in r else {})))
@@ -310,8 +333,8 @@ class DiskBuffer:
         source=self.receipt['source'];groups={}
         require(source['records'],'PPG buffer missing and no sealed replay receipts are available')
         for r in source['records']:
-            p=safe(self.run,self.run/r['path'])
-            require(p.parent==self.run/f'iteration-{self.generation-1:04d}','Wrong PPG rebuild generation')
+            p=replay_path(self.root,self.run,dict(r,path=str(self.run/r['path'])),self.generation-1,
+                          model_id=source['model_id'],reward_id=self.reward_id)
             groups.setdefault(str(p),[]).append(dict(r,path=str(p)))
         for role in (('learner','snapshot') if source.get('snapshot_rows') else ('learner',)):
             for records in groups.values():

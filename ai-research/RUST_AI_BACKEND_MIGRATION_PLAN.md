@@ -863,7 +863,7 @@ Keep Python target construction, GAE, PPO behavior likelihoods, critic/local-sco
 | B04.5 | **Passed on pinned g1250** | Exact r3 source/model/device; two shadow tables, 49 policy labels, 128 value rows, one isolated head step; production unchanged |
 | B05 | **Passed on pinned g1250** | R2 CUDA ordinary/teacher component updates, head-only update, full-state/age restoration; no new games or production adoption |
 | B06 | **Passed bounded correctness/measurement; useful performance gate not passed** | Same 3 families / 1,161 decisions; native accepted work 55.265s vs reference 28.596s; Python collection/admission bottleneck identified; eight 4s/K16 teacher turns passed |
-| B07 | **R8 qualification, canaries, diagnostic continuation, Rust adoption and rollback passed; real G→G+1 commit/restart Pending** | Git-only launcher fix forwards the pinned imitation dependency; retry the adopted run without repeating passed qualification |
+| B07 | **R8 qualification, canaries, diagnostic continuation, Rust adoption and rollback passed; real G→G+1 commit/restart Pending** | Git-only PPG path fix admits the native replay layout; exact execution review preserves pending family reuse and passed qualification |
 
 #### B01 — Pin lab state and qualify Linux/GPU adapters
 
@@ -959,6 +959,22 @@ B06 also measures all-seat teacher tables separately from the older policy-only 
 Keep the short-test scope: eight fixed-root turns in ABBA pairs, two concurrent independent one-thread sessions, shared frozen calibration and fixed-count w=0 parity. Both arms use 4s/K16 + <=1s post-work; this compares policy-only versus all-seat w=0 export paths, not whole schedules. Reuse the exact successful g1250 all-seat table metrics for full-table/lane costs; label them historical and never form a speed ratio against g570 policy-only tables. Compare original batch validation with streamed verification/reuse on identical frozen rows outside collection. Measure policy/value sealing and reads, one isolated head step and actual g1250 teacher-KL gradient kernels separately. B05's bounded authored-input helper supplies actual current-model/Adam/recipe PPO/PPG kernel timings, explicitly not a full-iteration benchmark. Ordinary/teacher/kernel watchdogs are 360/150/180 seconds; failures export partial evidence without extending the sample. B06 passing mechanical measurements still require review of useful performance and coverage before B07 adoption.
 
 #### B07 — Bounded server canary, then explicit adoption
+
+**Git-only PPG path update (2026-11-07):** Pulled results to `f08a704`, export
+`20261107T125446333545Z-20261107T124611526805Z-b07-continue-e84bd233-c1155826`.
+The run prepared 320 shards, then failed before PPO because PPG accepted only
+direct iteration children. Accept the exact `native-ordinary/replay/` layout in
+both source-receipt creation and cold rebuild, retaining generation, ordinary
+admission, model/reward/job/replay/feature bindings, path confinement and link
+rejection. Keep native admission/encoded features in the checkpoint-owned source.
+Use the exact execution-fingerprint review to preserve the same teacher-off
+training signature, pending job IDs and original receipts while recording the
+new execution fingerprint/review separately in checkpoint/report evidence.
+Unknown code/config changes remain rejected. Preserve the pending iteration;
+retry g1250→g1251 without repeating passed gates or creating a bundle. Cover
+the real native publisher path, mixed old/new critic ages, cold reads, tampering
+and retry source bindings in focused local debug tests. Real commit/restart is
+still Pending. See [implementation](RUST_BACKEND_B07_IMPLEMENTATION.md).
 
 **Git-only continuation update (2026-11-07):** Results pulled inside `results/`
 to `e92a29e`, export
@@ -1110,7 +1126,7 @@ Future milestones deliver **code, tests, documentation and current manifests thr
 - [ ] B06 proves useful matched performance and separately accounts for teacher/validation costs without correctness loss.
 - [x] B07 R4 ordinary correctness and useful accepted-work improvement pass on pinned g1250.
 - [x] B07 two shadow canaries, diagnostic continuation, locked Rust adoption with teacher off and complete rollback restoration pass on lab (R8 receipt above).
-- [ ] B07 real g1250→g1251 commit/restart passes on lab (Git-only missing-imitation-argument fix implemented).
+- [ ] B07 real g1250→g1251 commit/restart passes on lab (Git-only imitation-argument and PPG replay-path fixes implemented).
 - [ ] Later production task-teacher enablement has its own explicit decision, readiness/calibration and qualified commands.
 - [ ] Every later stage has Git-delivered code/commands, pinned supplemental assets only when needed, and a Git-visible success/failure/deferred report.
 

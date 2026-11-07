@@ -10,7 +10,8 @@ import subprocess
 from brass_ai.learning.contracts import SOURCE_ROOT as ROOT, read_json, require
 from brass_ai.rust_backend.lab_contract import SOURCE, extract_new, pin, native_fingerprint
 from brass_ai.rust_backend.lab_teacher_overlay import apply, source_fingerprint
-from brass_ai.step5.league import implementation_id, write_json
+from brass_ai.step5.league import write_json
+from brass_ai.rust_backend.lab_replay_compat import qualified_implementation as implementation_id
 
 DIRECTORY=ROOT/'distribution/rust-lab-b07-g1250'
 INPUTS=ROOT/'distribution/rust-lab-b06-g1250/evidence'

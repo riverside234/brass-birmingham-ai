@@ -17,7 +17,8 @@ import torch
 from brass_ai.bank import read, sha
 from brass_ai.learning.contracts import digest, project_path, require
 from brass_ai.recovery.retention import owned, safe, link
-from brass_ai.step5.league import implementation_id, write_json
+from brass_ai.step5.league import write_json
+from .lab_replay_compat import execution
 from .lab_snapshot import capture, pending_paths, tree_digest, verify_unchanged
 
 CONTRACT = 'brass-joint7-continuation/1.0.0'
@@ -47,7 +48,10 @@ def target_signature(state):
     from brass_ai.recovery.config import validate_config
     config = copy.deepcopy(state['signature']['config'])
     validate_config(config)
-    return dict(copy.deepcopy(state['signature']), config=config, implementation=implementation_id())
+    source=execution()
+    target=(source['implementation'] if state['signature']['implementation']==source['implementation']
+            else source['qualified_implementation'])
+    return dict(copy.deepcopy(state['signature']), config=config, implementation=target)
 
 
 def inventory(root, run, state, raw):
