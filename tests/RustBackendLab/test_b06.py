@@ -240,5 +240,86 @@ class B06(unittest.TestCase):
         self.assertGreater(report['peak_process_tree_rss_bytes'],0)
         self.assertGreaterEqual(report['phases']['outer']['total_seconds'],report['phases']['inner']['total_seconds'])
 
+    def test_measurement_dependency_is_bundled_pinned_and_checks_native_import(self):
+        requirements=(SOURCE_ROOT/M.REQUIREMENTS).read_text().splitlines()
+        self.assertIn('psutil=='+M.PSUTIL_VERSION,requirements)
+        for error in (ModuleNotFoundError('psutil'),ImportError('broken extension'),OSError('missing shared library')):
+            with self.subTest(error=error),patch.object(M.importlib,'import_module',side_effect=error):
+                with self.assertRaisesRegex(RuntimeError,'python -m pip install -r'):
+                    M.measurement_preflight()
+        with patch.object(M.importlib,'import_module',return_value=SimpleNamespace(__version__='0.0')):
+            with self.assertRaisesRegex(ValueError,'found 0.0'):M.measurement_preflight()
+        self.assertEqual(M.measurement_preflight()['psutil'],M.PSUTIL_VERSION)
+
+    def test_missing_dependency_exports_actionable_error_before_fixtures_or_run_lock(self):
+        m=launcher();written={};out=[]
+        def write(path,value):written[Path(path).name]=copy.deepcopy(value)
+        def export(path):out.append(path);return path
+        with patch.object(m,'verify_bundle',return_value={'implementation':'test'}), \
+             patch.object(m,'arguments',return_value=m.arguments(['--fixtures-only'])), \
+             patch('brass_ai.learning.contracts.read_json',return_value={'prerequisites':{}}), \
+             patch('brass_ai.step5.league.write_json',side_effect=write), \
+             patch('rust_lab_results.export',side_effect=export), \
+             patch('brass_ai.recovery.retention.run_lock') as lock, \
+             patch('subprocess.Popen') as child,patch.dict(sys.modules,{'psutil':None}), \
+             contextlib.redirect_stdout(io.StringIO()):
+            with self.assertRaisesRegex(RuntimeError,'same Python environment'):m.main()
+        self.assertEqual(len(out),1);self.addCleanup(out[0].rmdir)
+        child.assert_not_called();lock.assert_not_called()
+        report=written['qualification.json']
+        self.assertEqual(report['failed_phase'],'environment')
+        self.assertFalse(report['passed']);self.assertFalse(report['production_modified'])
+        self.assertIn(M.REQUIREMENTS,report['error'])
+        self.assertNotIn('fixtures.log',written)
+
+    @staticmethod
+    def process(pid,cpu):
+        process=Mock(pid=pid)
+        process.children.return_value=[];process.create_time.return_value=float(pid)
+        process.cpu_times.return_value=SimpleNamespace(user=cpu,system=0.)
+        process.memory_info.return_value=SimpleNamespace(rss=1024)
+        return process
+
+    def test_meter_baselines_already_running_children(self):
+        import psutil
+        parent=self.process(1,10.);child=self.process(2,25.);parent.children.return_value=[child]
+        with patch.object(psutil,'Process',return_value=parent),M.Meter() as meter:
+            report=meter.report()
+        self.assertEqual(report['sampled_process_tree_cpu_seconds'],0.)
+        self.assertEqual(report['peak_process_tree_rss_bytes'],2048)
+
+    def test_meter_tolerates_exited_child_but_rejects_inaccessible_counters(self):
+        import psutil
+        parent=self.process(1,10.);child=self.process(2,1.);parent.children.return_value=[child]
+        child.cpu_times.side_effect=psutil.NoSuchProcess(child.pid)
+        with patch.object(psutil,'Process',return_value=parent),M.Meter() as meter:
+            report=meter.report()
+        self.assertGreater(report['exited_process_reads'],0)
+        self.assertEqual(report['peak_process_tree_rss_bytes'],1024)
+        child.cpu_times.side_effect=psutil.AccessDenied(child.pid)
+        with patch.object(psutil,'Process',return_value=parent),patch.object(M.threading,'Thread') as thread:
+            with self.assertRaises(psutil.AccessDenied):M.Meter().__enter__()
+            thread.assert_not_called()
+
+    def test_meter_background_failure_invalidates_report_and_keeps_primary_error(self):
+        import psutil
+        for primary in (False,True):
+            parent=self.process(1,10.);parent.children.side_effect=[[],RuntimeError('sampler regression')]
+            meter=M.Meter()
+            with self.subTest(primary=primary),patch.object(psutil,'Process',return_value=parent):
+                with self.assertRaisesRegex(RuntimeError,'original collection error' if primary else 'measurements are incomplete') as caught:
+                    with meter:
+                        self.assertTrue(meter.stop.wait(2),'Sampler failure was not signaled')
+                        with self.assertRaisesRegex(RuntimeError,'sampler regression'):meter.report()
+                        if primary:raise RuntimeError('original collection error')
+                self.assertFalse(meter.thread.is_alive())
+                if primary:self.assertIn('sampler regression',caught.exception.__notes__[0])
+
+    def test_meter_cuda_initialization_failure_does_not_leak_sampler(self):
+        with patch.object(torch.cuda,'reset_peak_memory_stats',side_effect=RuntimeError('CUDA unavailable')), \
+             patch.object(M.threading,'Thread') as thread:
+            with self.assertRaisesRegex(RuntimeError,'CUDA unavailable'):M.Meter('cuda:0').__enter__()
+            thread.assert_not_called()
+
 
 if __name__=='__main__':unittest.main()

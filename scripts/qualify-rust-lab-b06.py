@@ -108,7 +108,9 @@ def run_child(args,reference):
     report={};snapshot=None
     try:
         import torch
+        from rust_lab_b06_metrics import measurement_preflight
         require(platform.system()=='Linux' and torch.cuda.is_available(),'Linux/CUDA lab required')
+        report['environment']=measurement_preflight()
         lock=(args.run/'.active-run.json').read_text()
         require(lock==os.environ.get('BRASS_B06_PARENT_LOCK') and json.loads(lock)['pid']==os.getppid(),'Missing parent run lock')
         torch.set_num_threads(2);torch.set_num_interop_threads(1)
@@ -150,16 +152,23 @@ def main():
     base=importlib.util.module_from_spec(spec);spec.loader.exec_module(base)
     env=base.python_environment();env['CUBLAS_WORKSPACE_CONFIG']=':4096:8'
     env['PYTHONPATH']=str(ROOT/'scripts')+os.pathsep+env['PYTHONPATH']
-    active=None
+    active='bundle'
     try:
         report['implementation']=verify_bundle()['implementation'];reference=read_json(DIRECTORY/'reference.json')
         report['prerequisites']=reference['prerequisites']
+        active='environment'
+        from rust_lab_b06_metrics import measurement_preflight
+        report['environment']=measurement_preflight()
+        write_json(out/'environment.json',report['environment'])
+        active='fixtures'
         base.command([sys.executable,'-m','unittest',*TESTS,'-q'],cwd=ROOT,
             env=dict(env,CUDA_VISIBLE_DEVICES=''),log=out/'fixtures.log',timeout=120)
         if args.fixtures_only:
             report.update(passed=True,scope='CPU fixtures only; Linux/CUDA B06 Pending');return
+        active='runtime'
         require(platform.system()=='Linux','Full B06 requires Linux/CUDA; use --fixtures-only locally')
         verify_runtime(reference)
+        active='snapshot'
         with run_lock(args.run):
             snapshot,_,_=capture(ROOT,args.run,devices=[args.device])
             require(snapshot['generation']==1250 and snapshot['checkpoint']['sha256']==reference['checkpoint_sha256']
@@ -182,7 +191,7 @@ def main():
                     performance_acceptance='Review measured phase costs and coverage before B07; no automatic production adoption')
             finally:verify_unchanged(snapshot)
     except BaseException as error:
-        report.update(passed=False,error=str(error),traceback=traceback.format_exc(),failed_phase=active)
+        report.update(passed=False,error=str(error),error_type=type(error).__name__,traceback=traceback.format_exc(),failed_phase=active)
         if active and (out/(active+'-checks.json')).is_file():
             detail=read_json(out/(active+'-checks.json'))
             if detail.get('passed') is False:report['failure']=detail

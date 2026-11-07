@@ -12,7 +12,7 @@ REPORT='results/joint7-v11-2-g1290-trained-restart-g1250-20261107T041141451177Z'
 B02='results/rust-lab-qualification/20261104T012220551953Z-20261104T011422740838Z-g570-all-8bee9d91-e1605e8c/evidence/b02'
 B045='results/rust-lab-qualification/20261107T060856941600Z-20261107T060554386081Z-g1250-b045-76165ac4-a1db73ac/evidence'
 B05='results/rust-lab-qualification/20261107T070806231803Z-20261107T070539193547Z-g1250-b05-88497ac1-cf4704fd/evidence'
-TEXT={'.py','.rs','.cs','.md','.toml','.lock','.ps1','.sh'}
+TEXT={'.py','.rs','.cs','.md','.toml','.lock','.ps1','.sh','.txt'}
 
 
 def main():
@@ -20,7 +20,7 @@ def main():
     from brass_ai.rust_backend.lab_contract import sha
     from brass_ai.rust_backend.lab_teacher_overlay import source_fingerprint
     from brass_ai.step5.league import write_json,implementation_id,implementation_sources
-    archive=DIRECTORY/'rust-lab-b06-g1250-r2.zip'
+    archive=DIRECTORY/'rust-lab-b06-g1250-r3.zip'
     require(not archive.exists(),'B06 bundle already sealed; publish a new revision')
     read=lambda name:json.loads((ROOT/name).read_text())
     state=read(REPORT+'/state.json')
@@ -73,7 +73,7 @@ def main():
             'results/joint7-v11-2-g1290-trained-restart-g0921-20261105T213224468369Z'):
         names.update((Path(folder)/n).as_posix() for n in ('state.json','recorded-config.json','export-manifest.json') if (ROOT/folder/n).is_file())
     names.update(p.relative_to(ROOT).as_posix() for p in inputs.iterdir())
-    names.update('distribution/rust-lab-b06-g1250/'+n for n in ('reference.json','README.md','local-checks.json','source-reuse.json'))
+    names.update('distribution/rust-lab-b06-g1250/'+n for n in ('reference.json','README.md','local-checks.json','source-reuse.json','requirements.txt'))
     names.update(['ai-research/RUST_AI_BACKEND_MIGRATION_PLAN.md','ai-research/RUST_BACKEND_B06_IMPLEMENTATION.md',
                   'native/brass-ai-core/tests/data/initial-state.json'])
     blobs={}

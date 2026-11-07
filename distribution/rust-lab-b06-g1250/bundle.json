@@ -1,8 +1,8 @@
 {
-  "archive": "rust-lab-b06-g1250-r2.zip",
-  "sha256": "3da6dfa8c7a47cc959076139592f8e73009e42e29941ebd7158a12ea127b89a1",
-  "bytes": 6848468,
-  "entries": 1295,
+  "archive": "rust-lab-b06-g1250-r3.zip",
+  "sha256": "bfa5fa545fd8409f9bb586dc58cab01800cb7c31daeff2149897a7272b1b73b9",
+  "bytes": 6852202,
+  "entries": 1296,
   "implementation": "63564be49e282c4b2c0fff02b7640238c63d04d35f7c072bf8c017d12ce6ace5",
   "qualification": "Pending"
 }

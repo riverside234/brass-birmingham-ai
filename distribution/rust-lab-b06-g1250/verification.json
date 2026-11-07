@@ -1,15 +1,15 @@
 {
-  "archive": "rust-lab-b06-g1250-r2.zip",
-  "archive_sha256": "3da6dfa8c7a47cc959076139592f8e73009e42e29941ebd7158a12ea127b89a1",
+  "archive": "rust-lab-b06-g1250-r3.zip",
+  "archive_sha256": "bfa5fa545fd8409f9bb586dc58cab01800cb7c31daeff2149897a7272b1b73b9",
   "implementation": "63564be49e282c4b2c0fff02b7640238c63d04d35f7c072bf8c017d12ce6ace5",
   "clean_extraction": true,
-  "tests": 47,
-  "passed": 45,
+  "tests": 53,
+  "passed": 51,
   "skipped": 2,
   "failures": 0,
   "errors": 0,
-  "seconds": 15.082,
-  "fixture_log_sha256": "4d1bef00447c32216022eea1deffa3e15c001d9e1f06045681e01c770f0988ea",
+  "seconds": 21.228,
+  "fixture_log_sha256": "1beea05c6b371c13e5dd911b3543a8cb74d2777dbc330e9cb91efbc075dbd0ec",
   "qualification": {
     "milestone": "B06",
     "passed": true,
@@ -33,12 +33,36 @@
         "sha256": "b323c55579bdfc875707cc1d36c42f01a9713fc88a82648aab24395962ab3b0c"
       }
     },
+    "environment": {
+      "psutil": "7.2.2",
+      "requirements": "distribution/rust-lab-b06-g1250/requirements.txt",
+      "sampler": {
+        "phases": {},
+        "peak_process_tree_rss_bytes": 204861440,
+        "sampled_process_tree_cpu_seconds": 0,
+        "process_samples": 1,
+        "exited_process_reads": 0,
+        "cpu_scope": "Sampled lower bound, 50ms; initial processes baselined; nested phases overlap",
+        "device_memory": {
+          "host_resident_bytes": 205037568
+        }
+      }
+    },
     "scope": "CPU fixtures only; Linux/CUDA B06 Pending"
   },
-  "evidence": "artifacts\\b06-r2-transfer\\artifacts\\rust-backend\\20261107T073606984611Z-g1250-b06-acd23c91",
-  "scope": "Clean ZIP CPU smoke; g1250 Linux/CUDA B06 Pending",
+  "evidence": "artifacts/b06-r3-transfer/artifacts/rust-backend/20261107T074542580711Z-g1250-b06-862692ba",
+  "scope": "Clean ZIP CPU smoke and dependency-absent launcher/export regression; g1250 Linux/CUDA B06 Pending",
   "skips": [
     "Unprivileged Windows symlink unavailable",
     "Isolated extraction has no results/.git"
-  ]
+  ],
+  "missing_dependency_regression": {
+    "passed": true,
+    "exit_code": 1,
+    "failed_phase": "environment",
+    "exported": true,
+    "fixtures_started": false,
+    "log_sha256": "84ab52e81787ca3efdf73785b47daaac147f99eca5ee1cf39cc209bf60535cf8"
+  },
+  "superseded_r2_bytes_unchanged": true
 }

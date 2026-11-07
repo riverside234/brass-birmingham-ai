@@ -10,7 +10,8 @@ Run from the lab **code repository** in the existing training environment:
 
 ```bash
 git pull --ff-only
-unzip -o distribution/rust-lab-b06-g1250/rust-lab-b06-g1250-r2.zip
+unzip -o distribution/rust-lab-b06-g1250/rust-lab-b06-g1250-r3.zip
+python -m pip install -r distribution/rust-lab-b06-g1250/requirements.txt
 python scripts/qualify-rust-lab-b06.py --device cuda:0
 ```
 
@@ -23,7 +24,19 @@ run or rewrite its signed paths. Native runtime paths/hashes are in the bundled
 `evidence/ordinary-build.json` and `teacher-build.json`. Missing/changed files
 fail before collection; no silent rebuild, source override or qualification rerun.
 
-R2 corrects a compatibility gap found before lab release: current v9 branches use
+R3 fixes the first lab attempt (`06c4bb94-be70601a`), which stopped in CPU
+fixtures because `psutil` was absent; no benchmark or training work ran.
+The bundle now declares its extra measurement dependency (`psutil==7.2.2`).
+Install it with the **same Python interpreter/environment** used for qualification;
+the requirements file does not install Torch/CUDA or change the training recipe.
+A preflight imports the native extension, verifies its version and exercises the
+real process sampler before fixtures, locks or collection. Missing/broken installs
+export an `environment` failure with the install command. No implicit install or
+silent memory/CPU fallback occurs. Unexpected background sampler errors invalidate
+measurements, disappearing child processes are handled, and initial child CPU
+time is excluded from benchmark work. R2 is superseded; do not rerun B01–B05.
+
+R2 corrected a compatibility gap found before lab release: current v9 branches use
 T1.5 for their first two actions per seat while normal turns use T1.3 for three.
 The native adapter and sealed-family validator now use that existing reference
 behavior, retaining frozen policy identities and the excluded fork row. The exact
@@ -62,6 +75,7 @@ on this computer with `git -C results pull --ff-only`.
 For the short local fixture check only:
 
 ```bash
+python -m pip install -r distribution/rust-lab-b06-g1250/requirements.txt
 python scripts/qualify-rust-lab-b06.py --fixtures-only
 ```
 

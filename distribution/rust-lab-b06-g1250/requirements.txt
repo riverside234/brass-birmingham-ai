@@ -1,0 +1,3 @@
+# B06 measurement dependency only. Use the existing training Python environment;
+# this does not install or change Torch/CUDA or the training recipe.
+psutil==7.2.2

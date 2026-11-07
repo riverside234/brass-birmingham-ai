@@ -1,12 +1,38 @@
 """B06 diagnostic measurements. No training source, recipe or admission changes."""
 from contextlib import contextmanager
 import copy
+import importlib
 import math
 import statistics
 import threading
 import time
 
 from brass_ai.learning.contracts import digest, require
+
+PSUTIL_VERSION = '7.2.2'
+REQUIREMENTS = 'distribution/rust-lab-b06-g1250/requirements.txt'
+
+
+def measurement_dependency():
+    """B06's only extra dependency; do not alter the training environment implicitly."""
+    command = 'python -m pip install -r ' + REQUIREMENTS
+    try:
+        module = importlib.import_module('psutil')
+    except (ImportError, OSError) as error:
+        raise RuntimeError('B06 process measurements require psutil==' + PSUTIL_VERSION +
+                           ' in the same Python environment. Run: ' + command) from error
+    require(module.__version__ == PSUTIL_VERSION,
+            f'B06 requires psutil=={PSUTIL_VERSION}; found {module.__version__}. Run: ' + command)
+    return module
+
+
+def measurement_preflight():
+    """Exercise the actual process sampler before CPU fixtures, locks or collection."""
+    module = measurement_dependency()
+    with Meter() as meter:
+        report = meter.report()
+    require(report['peak_process_tree_rss_bytes'] > 0, 'B06 process memory measurement unavailable')
+    return dict(psutil=module.__version__, requirements=REQUIREMENTS, sampler=report)
 
 
 def distribution(values):
@@ -107,6 +133,7 @@ class Meter:
     """
     def __init__(self, device='cpu'):
         self.device=device; self.phases={}; self.stop=threading.Event(); self.peak_rss=0; self.cpu={}
+        self.lock=threading.RLock(); self.error=None; self.samples=0; self.exited_processes=0
 
     @contextmanager
     def phase(self, name):
@@ -116,34 +143,61 @@ class Meter:
         try: yield
         finally:
             if self.device.startswith('cuda'): torch.cuda.synchronize(self.device)
-            self.phases.setdefault(name,[]).append(time.perf_counter()-began)
+            with self.lock:self.phases.setdefault(name,[]).append(time.perf_counter()-began)
 
     def __enter__(self):
-        import psutil
+        psutil=measurement_dependency()
         import torch
         process=psutil.Process()
         def sample():
             resident=0
+            values={};exited=0
             for p in [process]+process.children(recursive=True):
                 try:
                     key=(p.pid,p.create_time());t=p.cpu_times();value=t.user+t.system
-                    if key not in self.cpu:self.cpu[key]=[value if p.pid==process.pid else 0.,value]
-                    self.cpu[key][1]=value;resident+=p.memory_info().rss
-                except (psutil.NoSuchProcess,psutil.AccessDenied): pass
-            self.peak_rss=max(resident,self.peak_rss)
+                    resident+=p.memory_info().rss;values[key]=value
+                except psutil.NoSuchProcess:
+                    # A child may exit between enumeration and reading its counters.
+                    if p.pid==process.pid:raise
+                    exited+=1
+            with self.lock:
+                for key,value in values.items():
+                    # Baseline all already-running children as well as this process.
+                    if key not in self.cpu:self.cpu[key]=[value if self.samples==0 else 0.,value]
+                    self.cpu[key][1]=value
+                self.peak_rss=max(resident,self.peak_rss);self.samples+=1;self.exited_processes+=exited
         sample()
-        def loop():
-            while not self.stop.wait(.05):sample()
-        self.thread=threading.Thread(target=loop,daemon=True);self.thread.start()
         if self.device.startswith('cuda'):torch.cuda.reset_peak_memory_stats(self.device)
+        def loop():
+            try:
+                while not self.stop.wait(.05):sample()
+            except Exception as error:
+                with self.lock:self.error=error
+                self.stop.set()
+        self.thread=threading.Thread(target=loop,daemon=True);self.thread.start()
         return self
 
-    def __exit__(self,*_):
+    def __exit__(self,kind,error,tb):
         self.stop.set();self.thread.join(timeout=2)
+        try:
+            require(not self.thread.is_alive(),'B06 process sampler did not stop')
+            self.check()
+        except Exception as sampling_error:
+            if error is None:raise
+            error.add_note('B06 sampler also failed: '+str(sampling_error))
+
+    def check(self):
+        if self.error is not None:
+            raise RuntimeError('B06 process sampler failed; measurements are incomplete: '+str(self.error)) from self.error
 
     def report(self):
         from brass_ai.recovery.telemetry import memory
-        return dict(phases={k:dict(total_seconds=sum(v),**distribution(v)) for k,v in self.phases.items()},
-                    peak_process_tree_rss_bytes=self.peak_rss,
-                    sampled_process_tree_cpu_seconds=sum(max(0,b-a) for a,b in self.cpu.values()),
-                    cpu_scope='Sampled lower bound, 50ms; nested phases overlap',device_memory=memory(self.device))
+        with self.lock:
+            self.check()
+            result=dict(phases={k:dict(total_seconds=sum(v),**distribution(v)) for k,v in self.phases.items()},
+                        peak_process_tree_rss_bytes=self.peak_rss,
+                        sampled_process_tree_cpu_seconds=sum(max(0,b-a) for a,b in self.cpu.values()),
+                        process_samples=self.samples,exited_process_reads=self.exited_processes,
+                        cpu_scope='Sampled lower bound, 50ms; initial processes baselined; nested phases overlap')
+        result['device_memory']=memory(self.device)
+        return result

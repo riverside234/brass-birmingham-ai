@@ -717,4 +717,5 @@ Desktop.ini
 !/distribution/rust-lab-b06-g1250/local-checks.json
 !/distribution/rust-lab-b06-g1250/verification.json
 !/distribution/rust-lab-b06-g1250/source-reuse.json
-!/distribution/rust-lab-b06-g1250/rust-lab-b06-g1250-r2.zip
+!/distribution/rust-lab-b06-g1250/rust-lab-b06-g1250-r3.zip
+!/distribution/rust-lab-b06-g1250/requirements.txt

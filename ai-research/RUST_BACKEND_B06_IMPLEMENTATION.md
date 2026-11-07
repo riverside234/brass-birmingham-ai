@@ -21,6 +21,20 @@ qualified collector/teacher binary dependencies. It holds the normal run lock,
 checks source dependencies after work, and writes first-error details even when
 a child fails before loading the model. Each phase runs in a bounded child process.
 
+The first r2 lab attempt (`06c4bb94-be70601a`) failed in CPU fixtures because the
+new measurement dependency `psutil` was missing. No benchmark ran. R3 ships a
+pinned qualification-only requirements file and commands using the same Python
+environment. Before fixtures or acquiring the source run lock, the launcher
+checks the dependency version/native extension and samples the actual process
+tree. A missing or broken install exports an actionable `environment` failure.
+Regression coverage recreates that failure, verifies export without subprocesses
+or a run lock, and tests incompatible versions, child exit races, access failures,
+background errors, initial child CPU baselines and failed CUDA initialization.
+Sampling/report updates are synchronized; unexpected sampler errors cannot silently
+produce successful measurements or replace an original collection failure.
+These changes affect diagnostic scripts only; the reviewed training implementation
+and original passing qualification receipts are unchanged. Lab B06 remains Pending.
+
 ## Ordinary comparison
 
 The compatibility review found that the native branch adapter still required
@@ -31,7 +45,7 @@ their frozen policy IDs; family validation derives the same branch window when
 replaying probabilities/RNG. Parent settings, original packet and earlier branch
 contracts remain unchanged. Regression fixtures exercise actual private-lane
 construction, real v9 sampling/likelihood admission, wrong windows and historical
-family admission. The never-published r1 archive is retained locally; use r2.
+family admission. Older archives remain immutable; use r3.
 
 Both arms use the actual frozen planner and exact g1250 recipe, including current
 neutral inputs, cache ownership, sparse probes, two-age PPG, and branch T1.5
@@ -61,7 +75,9 @@ family publication; reference host phases and native cost receipts expose nested
 work. Admission, first/warm replay reads and first/warm preparation are distinct.
 Phase times overlap and are never added as if independent. Process-tree memory
 and CPU are sampled every 50ms; CPU is a lower bound because brief children can
-escape sampling. CUDA allocation peaks and scheduler batch/queue telemetry are
+escape sampling. Processes present at sampler startup have their existing CPU
+time subtracted, and child exits during counter reads are counted. Unexpected
+sampling errors invalidate the attempt. CUDA allocation peaks and scheduler batch/queue telemetry are
 reported separately. This is a bounded batch measurement, not a 320-game iteration
 or saturated 60-worker scaling claim. If no natural fork occurs, its performance
 coverage stays unmeasured; B02's earlier branch correctness evidence is preserved.
