@@ -1,10 +1,13 @@
 """Ephemeral cleanup-plan receipts. Final quarantine deletion rehashes bytes."""
 import stat
-import os
 from brass_ai.bank import sha
 from brass_ai.learning.contracts import require
 
-METADATA_REUSE=os.name!='nt'
+# ctime/mtime are not content versions, including on POSIX filesystems. The
+# g1250 lab reproduced a same-size rewrite with the complete stat stamp intact.
+# Keep this metric/API for existing reports, but never authorize a cache hit
+# from metadata alone. Final quarantine deletion still performs its own hash.
+METADATA_REUSE=False
 
 
 def stamp(path):
@@ -15,22 +18,16 @@ def stamp(path):
 
 class PlanDigests:
     def __init__(self):
-        self.cache={};self.read_bytes=0;self.reused_bytes=0;self.hits=0
+        self.read_bytes=0;self.reused_bytes=0;self.hits=0
 
     def digest(self,path):
-        before=stamp(path);old=self.cache.get(path)
-        # No reuse on filesystems without an identity. A changed stamp forces
-        # a new read, including same-size edits with restored mtime (ctime).
-        # Windows ctime is creation time; observed same-size rapid writes can
-        # retain the complete stat stamp. Keep full reads on that platform.
-        if METADATA_REUSE and before[1] and old is not None and old[0]==before:
-            self.hits+=1;self.reused_bytes+=before[2];return old[1]
+        before=stamp(path)
         value=sha(path);after=stamp(path)
         require(after==before,'Artifact changed while hashing cleanup plan')
-        self.cache[path]=(after,value);self.read_bytes+=after[2]
+        self.read_bytes+=after[2]
         return value
 
     def report(self):
         return dict(plan_and_move_read_bytes=self.read_bytes,reused_read_bytes=self.reused_bytes,
             reuse_hits=self.hits,metadata_reuse_supported=METADATA_REUSE,final_delete_rehash=True,
-            scope='Only unchanged same-path metadata within this prune call; no persisted hash trust or rename reuse')
+            scope='Content rehashed for plan, move and final deletion; metadata is not a content version')

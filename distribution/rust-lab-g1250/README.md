@@ -1,6 +1,6 @@
 # B04.5 — g1250 search-value qualification
 
-Use the current checkout and `rust-lab-b045-g1250.zip`. Earlier qualification
+Use the current checkout and `rust-lab-b045-g1250-r2.zip`. Earlier qualification
 ZIPs are retired from Git tracking; the necessary sealed baseline inputs are
 included here. Training must be paused at the recorded g1250 checkpoint:
 
@@ -10,7 +10,8 @@ From the lab repository root:
 
 ```bash
 conda activate ai-training
-unzip -o distribution/rust-lab-g1250/rust-lab-b045-g1250.zip
+git pull --ff-only
+unzip -o distribution/rust-lab-g1250/rust-lab-b045-g1250-r2.zip
 python scripts/qualify-rust-lab-b045.py --device cuda:0
 ```
 
@@ -31,7 +32,27 @@ dependencies are checked. Rust toolchain `1.99.1` is required as before.
 
 On success or failure, the launcher prints a new
 `results/rust-lab-qualification/...` folder. Commit/push that folder in the
-**results repository** to bring evidence back here.
+**results repository** to bring evidence back here. The exporter checks Git
+visibility there, adds local rules preserving log bytes and allowing diagnostic
+files, and prints the exact `git -C results` commands. The code repository
+intentionally ignores `results/`; pushing the code repository alone does not
+publish qualification evidence. If `results/.git` is missing or a parent rule
+ignores the whole qualification directory, the exporter reports that explicitly.
+
+Recover the already failed attempt **without rerunning any qualification**:
+
+```bash
+git pull --ff-only
+python scripts/rust_lab_results.py artifacts/rust-backend/20261107T050346097403Z-g1250-b045-2caeea3b
+```
+
+Run the exact `git -C results add`, `commit` and `push` commands printed by that
+export command. Its `evidence/qualification.json` and logs preserve the
+original failure. This attempt failed in the cleanup hash-cache fixture before
+native compilation. R2 fixes timestamp-only hash reuse on Linux; it retains
+content verification before quarantine and deletion. Collection, inference and
+PPG optimizations are unchanged. Run the B04.5 command above; previous B01–B04
+qualification need not be repeated.
 
 If only the smoke failed, reuse the new B04.5 build on retry:
 

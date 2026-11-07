@@ -24,7 +24,7 @@ def main():
     from brass_ai.rust_backend.lab_b045_smoke import CHECKPOINT
     from brass_ai.rust_backend.lab_contract import sha
     from brass_ai.rust_backend.lab_teacher_overlay import source_fingerprint
-    archive=DIRECTORY/'rust-lab-b045-g1250.zip'
+    archive=DIRECTORY/'rust-lab-b045-g1250-r2.zip'
     require(not archive.exists(),'Bundle already sealed; publish a new version')
     state=read_json(ROOT/REPORT/'state.json')
     require(state['iteration']==1250 and state['history'][-1]['sha256']==CHECKPOINT,'Wrong g1250 report')

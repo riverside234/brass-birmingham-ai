@@ -58,9 +58,52 @@ class Results(unittest.TestCase):
         self.assertFalse((result/'evidence/link.json').exists())
 
     def test_git_will_include_reports_and_compressed_logs(self):
+        repository=ROOT/'results'
+        if not (repository/'.git').exists():
+            self.skipTest('No results repository; isolated Git tests still run')
         for name in ('README.md', 'future/evidence/runner.json', 'future/evidence/build.log', 'future/evidence/tables.json.gz'):
-            result = subprocess.run(['git', 'check-ignore', '-q', '--no-index', 'results/rust-lab-qualification/'+name], cwd=ROOT)
+            result = subprocess.run(['git', 'check-ignore', '-q', '--no-index', 'rust-lab-qualification/'+name], cwd=repository)
             self.assertEqual(result.returncode, 1)
+
+    def test_export_visible_in_results_repo_even_when_parent_ignores_results(self):
+        subprocess.run(['git','init','-q',str(self.root)],check=True)
+        (self.root/'.gitignore').write_text('/results/\n')
+        repository=self.root/'results'
+        subprocess.run(['git','init','-q',str(repository)],check=True)
+        (repository/'.gitignore').write_text('*.log\n*.gz\n')
+        (repository/'.gitattributes').write_text('* text=auto\n')
+        (self.evidence/'qualification.json').write_text('{"passed":false}')
+        (self.evidence/'fixtures.log').write_bytes(b'failure traceback\r\n')
+        (self.evidence/'huge.log').write_bytes(b'trace\n'*220000)
+        result=reports.export(self.evidence,root=self.root)
+        visible=subprocess.check_output(['git','-C',str(repository),'ls-files','--others','--exclude-standard'],text=True)
+        for name in ('qualification.json','fixtures.log','huge.log.gz'):
+            self.assertIn((result/'evidence'/name).relative_to(repository).as_posix(),visible)
+        log=(result/'evidence/fixtures.log').relative_to(repository).as_posix()
+        attributes=subprocess.check_output(['git','-C',str(repository),'check-attr','text','--',log],text=True)
+        self.assertTrue(attributes.strip().endswith(': text: unset'),attributes)
+        subprocess.run(['git','-C',str(repository),'-c','core.autocrlf=true','add','--',
+                        result.relative_to(repository).as_posix()],check=True)
+        self.assertEqual(subprocess.check_output(['git','-C',str(repository),'show',':'+log]),b'failure traceback\r\n')
+
+    def test_export_reports_local_ignore_override_without_losing_evidence(self):
+        repository=self.root/'results'
+        subprocess.run(['git','init','-q',str(repository)],check=True)
+        (repository/'.gitignore').write_text('/rust-lab-qualification/\n')
+        (self.evidence/'qualification.json').write_text('{"passed":false}')
+        with self.assertRaisesRegex(ValueError,'saved but is Git-ignored'):
+            reports.export(self.evidence,root=self.root)
+        saved=list((self.root/reports.RESULTS).glob('*/evidence/qualification.json'))
+        self.assertEqual(len(saved),1)
+
+    def test_missing_results_repository_does_not_claim_ignore_verification(self):
+        (self.evidence/'qualification.json').write_text('{"passed":false}')
+        with patch('builtins.print') as output:
+            result=reports.export(self.evidence,root=self.root)
+        message='\n'.join(call.args[0] for call in output.call_args_list)
+        self.assertIn('Git visibility not checked',message)
+        self.assertIn('git -C results add -- rust-lab-qualification/',message)
+        self.assertTrue((result/'evidence/qualification.json').is_file())
 
     def fixture_run(self, statuses, *, stage='all', preflight_fail=False, advance=False, start_at=None, reuse=False):
         run = self.root/runner.RUN

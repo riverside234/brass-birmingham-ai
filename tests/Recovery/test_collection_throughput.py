@@ -156,14 +156,21 @@ class RatingValidation(unittest.TestCase):
 
 
 class CleanupDigests(unittest.TestCase):
-    def test_posix_reuse_invalidates_on_ctime_even_with_restored_size_mtime(self):
+    def test_same_stat_stamp_cannot_reuse_digest_after_same_size_write(self):
         from brass_ai.recovery import retention_digests as module
-        first=(1,2,4,100,100,0o100644,1);changed=(*first[:4],101,*first[5:])
-        with patch.object(module,'METADATA_REUSE',True),patch.object(module,'stamp',side_effect=[first,first,first,changed,changed]),\
-                patch.object(module,'sha',side_effect=['old','new']) as hashed:
-            cache=PlanDigests();self.assertEqual(cache.digest('fixture'),'old')
-            self.assertEqual(cache.digest('fixture'),'old');self.assertEqual(cache.digest('fixture'),'new')
-            self.assertEqual(hashed.call_count,2);self.assertEqual(cache.hits,1)
+        first=(1,2,4,100,100,0o100644,1)
+        with tempfile.TemporaryDirectory(dir=SOURCE_ROOT/'artifacts') as tmp:
+            path=Path(tmp)/'fixture';path.write_bytes(b'abcd')
+            # Model the lab's coarse timestamps deterministically, without sleeps
+            # or weakening the real-file test that caught the regression.
+            with patch.object(module,'stamp',return_value=first):
+                cache=PlanDigests();old=cache.digest(path)
+                self.assertEqual(cache.digest(path),old)
+                path.write_bytes(b'efgh')
+                self.assertNotEqual(cache.digest(path),old)
+                self.assertEqual(cache.digest(path),sha(path))
+                self.assertEqual(cache.hits,0);self.assertEqual(cache.read_bytes,16)
+        self.assertFalse(METADATA_REUSE)
 
     def test_reuse_only_unchanged_local_file_and_detect_same_size_edit(self):
         with tempfile.TemporaryDirectory(dir=SOURCE_ROOT/'artifacts') as tmp:
@@ -180,7 +187,7 @@ class CleanupDigests(unittest.TestCase):
             with patch('brass_ai.recovery.retention_digests.sha',side_effect=changed):
                 with self.assertRaisesRegex(ValueError,'while hashing'):PlanDigests().digest(path)
 
-    def test_prune_reuses_plan_hash_but_rehashes_before_delete(self):
+    def test_prune_rehashes_before_move_and_final_delete(self):
         with tempfile.TemporaryDirectory(dir=SOURCE_ROOT/'artifacts') as tmp:
             root=Path(tmp);run=root/'artifacts/run';run.mkdir(parents=True)
             path=run/'orphan.pt';path.write_bytes(b'cleanup fixture')
@@ -193,6 +200,23 @@ class CleanupDigests(unittest.TestCase):
             self.assertEqual(result['hash_reuse']['reuse_hits'],int(METADATA_REUSE))
             self.assertTrue(any('.retention-trash' in str(c.args[0]) for c in final_hash.call_args_list))
             self.assertEqual(result['permanently_deleted_files'],1);self.assertFalse(path.exists())
+
+    def test_prune_rejects_same_size_changed_file_before_quarantine(self):
+        with tempfile.TemporaryDirectory(dir=SOURCE_ROOT/'artifacts') as tmp:
+            root=Path(tmp);run=root/'artifacts/run';run.mkdir(parents=True)
+            path=run/'orphan.pt';path.write_bytes(b'abcd')
+            def plan(root,run,config,*,_digests):
+                expected=_digests.digest(path)
+                path.write_bytes(b'efgh')
+                return dict(format='retention-plan/1.0.0',run=str(run),created=0,generation=0,
+                    entries=[dict(path=path.name,sha256=expected,bytes=4,reason='fixture')],
+                    reclaimable_bytes=4,protected=[])
+            with patch.object(retention,'plan',side_effect=plan),\
+                    patch('brass_ai.recovery.retention_digests.stamp',return_value=(1,2,4,100,100,0o100644,1)):
+                with self.assertRaisesRegex(ValueError,'changed during cleanup'):
+                    retention.prune(root,run,dict(RETENTION,quarantine_hours=0),apply=True)
+            self.assertEqual(path.read_bytes(),b'efgh')
+            self.assertFalse((run/'.retention-trash').exists())
 
 
 class Configuration(unittest.TestCase):

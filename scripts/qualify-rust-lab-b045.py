@@ -9,6 +9,7 @@ import platform
 import shutil
 import subprocess
 import sys
+import traceback
 import uuid
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -88,7 +89,7 @@ def main():
     env['CUBLAS_WORKSPACE_CONFIG'] = ':4096:8'
     try:
         report['bundle'] = verify_bundle()['implementation']
-        base.command([sys.executable,'-m','unittest','test_b045','test_b04','test_collection_throughput','-q'],
+        base.command([sys.executable,'-m','unittest','test_b045','test_b04','test_collection_throughput','test_result_export','-q'],
                      cwd=ROOT,env=dict(env,CUDA_VISIBLE_DEVICES=''),log=out/'fixtures.log',timeout=120)
         if args.fixtures_only:
             report.update(passed=True,scope='CPU fixtures only; lab Pending'); return
@@ -113,6 +114,7 @@ def main():
             finally: verify_unchanged(snapshot)
     except BaseException as error:
         report['error'] = str(error)
+        report['traceback'] = traceback.format_exc()
         raise
     finally:
         write_json(out/'qualification.json',report)

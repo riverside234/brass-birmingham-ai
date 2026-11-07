@@ -6,9 +6,13 @@ import json
 import os
 from pathlib import Path
 import shutil
+import shlex
+import subprocess
 import uuid
 
 ROOT = Path(__file__).resolve().parents[1]
+# results/ is its own Git repository. Check and publish relative to that
+# repository; the code repository deliberately ignores the whole directory.
 RESULTS = Path('results/rust-lab-qualification')
 SKIP_DIRS = {'target', 'checkout', 'inputs', 'bootstrap', 'toolchain', '__pycache__', '.git',
              'payload', '.prepared', '.ppg-eight-cache', '.value-cache'}
@@ -24,6 +28,22 @@ def write(path, value):
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(value, indent=2, allow_nan=False)+'\n', encoding='utf-8')
+
+
+def check_git_visibility(root, paths):
+    """Read-only check of the effective ignore rules, including local excludes."""
+    repository = root/'results'
+    if not (repository/'.git').exists():
+        return False  # Preserve evidence even before the results repo is set up.
+    result = subprocess.run(['git', '-C', str(repository), 'check-ignore', '--no-index', '--stdin', '-z'],
+        input=b''.join(p.relative_to(repository).as_posix().encode()+b'\0' for p in paths),
+        stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=15)
+    if result.returncode not in (0, 1):
+        raise ValueError('Cannot verify qualification Git visibility: '+result.stderr.decode(errors='replace'))
+    if result.stdout:
+        raise ValueError('Qualification evidence was saved but is Git-ignored: '+
+                         ', '.join(x.decode(errors='replace') for x in result.stdout.split(b'\0') if x))
+    return True
 
 
 def export(evidence, *, root=ROOT):
@@ -75,7 +95,25 @@ def export(evidence, *, root=ROOT):
         '`export-manifest.json` maps original evidence paths to portable files and hashes. '
         'Original receipts are byte-for-byte copies, including lab-local paths. '
         'This is review evidence, not a relocated executable qualification. Build products, '
-        'models, replay payloads and runtime dependencies stay on the lab machine.\n', encoding='utf-8')
+        'models, replay payloads and runtime dependencies stay on the lab machine.\n\n'
+        'Push this folder from the separate results repository: use git -C results from the '
+        'code repository root. The code repository intentionally ignores results/.\n', encoding='utf-8')
+    # Keep diagnostics visible and byte-exact despite global *.log/*.gz rules
+    # or core.autocrlf. A parent rule excluding the whole folder still fails the
+    # explicit visibility check; do not silently claim such an export is ready.
+    (destination/'.gitignore').write_bytes(b'!*\n')
+    (destination/'.gitattributes').write_bytes(b'* -text\n')
+    verified = check_git_visibility(root, [destination/'export-manifest.json', destination/'README.md',
+                               destination/'.gitignore',destination/'.gitattributes',
+                               *(destination/f['path'] for f in files)])
+    if not verified:
+        print('Qualification evidence saved; Git visibility not checked because results/.git is absent. '
+              'Set up the separate results repository before pushing; the code repository ignores results/.',flush=True)
+    relative = destination.relative_to(root/'results').as_posix()
+    print('Push qualification evidence from the code repository root:\n'
+          'git -C results add -- '+shlex.quote(relative)+'\n'
+          'git -C results commit -m "Export Rust lab qualification evidence"\n'
+          'git -C results push',flush=True)
     return destination
 
 
@@ -83,4 +121,5 @@ if __name__ == '__main__':
     import argparse
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('evidence', type=Path)
-    print(export(parser.parse_args().evidence))
+    destination = export(parser.parse_args().evidence)
+    print('Git-visible results: '+str(destination))

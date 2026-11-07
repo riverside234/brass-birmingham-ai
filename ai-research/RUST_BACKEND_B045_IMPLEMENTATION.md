@@ -4,6 +4,22 @@
 [the search-value plan](RUST_BACKEND_B045_SEARCH_VALUE_PLAN.md). Linux/CUDA
 qualification is **Pending**. Production teaching remains behind B05/B07.
 
+The r2 transfer fixes the g1250 attempt ending `2caeea3b-b0d5a86e`: the cleanup
+digest fixture caught a same-size rewrite with unchanged POSIX metadata. The
+cache returned the previous digest, so qualification stopped before building
+Rust. Cleanup now reads content for plan, quarantine and final deletion on all
+platforms. Deterministic identical-stat regressions cover the digest and the
+actual quarantine boundary; altered files stay in place. This adds a cleanup
+read on Linux, while collection, admission, inference and PPG optimizations
+remain unchanged. Exact source-review routes preserve current continuation.
+
+Exports remain under `results/rust-lab-qualification/` as requested. They check
+Git visibility in the results repository, include local rules to keep logs
+visible and byte-exact, and print exact `git -C results` commands. The launcher
+runs the export regressions and preserves a traceback on failure. Existing
+evidence can be re-exported without repeating qualification. No native/search
+algorithm or production teacher change is included in r2.
+
 ## Integration
 
 The lab-only Rust teacher protocol is now `brass-lab-teacher/2.0.0`. Each

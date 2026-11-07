@@ -1,6 +1,6 @@
 {
   "contract": "brass-b045-local-checks/1.0.0",
-  "implementation": "3eb5cf572f3f358a173ff45ca063995159c0136e885361efc63042e70295f94d",
+  "implementation": "bd1ffe2df246beb006e7d218233fb99354dbaa449cca976a37a74954f80ec3a1",
   "producer": "cb96c3c8845937ed19530ff91a9aa75ef1487a44bc00cce53b6b0dd038976aac",
   "qualification": "Pending: exact g1250 Linux/CUDA smoke must run on lab",
   "production_modified": false,
@@ -135,5 +135,19 @@
     "final-b045.log": "13603f66caf365cb841ffab2e6ccf955072e5fa1444a3977580f7141115c3bb7",
     "native-tests.log": "02539d2bc3731514040a8e6cb79919ae1faca720af88166c43a6e87c33a229d2",
     "native-probe.log": "3ace3a32221740c8f872e39217a71c7afb30c3b520815b53165c0b0639001364"
+  },
+  "r2": {
+    "reason": "POSIX timestamp collision returned a stale cleanup digest",
+    "tests": 81,
+    "passed": 78,
+    "skipped": 3,
+    "scope": "B045/B04, collection/continuation, result export, cleanup interruption/restore; CPU fixtures only",
+    "native_unchanged": true,
+    "lab_qualification": "Pending",
+    "evidence": "results/rust-lab-qualification/20261107T050352039307Z-20261107T050346097403Z-g1250-b045-2caeea3b-b0d5a86e",
+    "logs": {
+      "r2-final.log": "9208799d9670117dc6b27be6e24a9a1bdb337f0f502c69499991c1294ee7c960",
+      "r2-retention.log": "422e81debffcbd06d1cc0770861bfb75d9939286c7053c10de3dedfda9c785b6"
+    }
   }
 }

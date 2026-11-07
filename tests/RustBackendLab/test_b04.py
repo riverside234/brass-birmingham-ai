@@ -247,7 +247,7 @@ time.sleep(5)
             bundle=SOURCE_ROOT/'distribution/rust-lab-g1250'
             inputs=bundle/'inputs.zip'
             if not inputs.exists():
-                with zipfile.ZipFile(bundle/'rust-lab-b045-g1250.zip') as z:
+                with zipfile.ZipFile(bundle/json.loads((bundle/'bundle.json').read_text())['archive']) as z:
                     inputs=io.BytesIO(z.read('distribution/rust-lab-g1250/inputs.zip'))
             with zipfile.ZipFile(inputs) as z:
                 (tmp/'source.zip').write_bytes(z.read('source.zip'))
