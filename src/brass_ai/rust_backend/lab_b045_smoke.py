@@ -61,7 +61,6 @@ def run(args):
     jobs=[next(j for j in jobs if j['split']==split) for split in ('train','heldout')]
     for j in jobs:j['readiness']=receipt
     write_json(out/'jobs.json',dict(jobs=jobs,source_model=source_id,diagnostic_model=identity,zero_head_added=True))
-    phase=SearchValuePhase(out/'value-buffer',model,config['teacher_phase']['search_value'],reward)
     fixtures=read_json(build['fixtures']['path'])
     roots=[r for r in fixtures['roots'] if r['view']['context']['phase']=='action' and len(r['expected']['choices'])>1]
     roots=[roots[0],max(roots,key=lambda r:len(r['expected']['choices']))]
@@ -93,18 +92,28 @@ def run(args):
             bootstrap=[args.mono,build['bootstrap']['binary']['path']]
             backend=TeacherCollector(build['binary']['path'],build['core_source'],bootstrap,service,calibration,
                 lanes=2,model=model,history=state['history'])
-            tables=backend.collect(jobs)
+            try:
+                tables=backend.collect(jobs)
+            except BaseException:
+                write_json(out/'collection-failure.json',dict(failures=backend.failures))
+                raise
+            finally:
+                write_json(out/'inference.json',service.report())
             for table,job in zip(tables,jobs,strict=True):
                 accepted,_=backend.verifier.take(table,job,model)
                 require(accepted,'Full-profile labels absent')
             write_json(out/'tables.json',tables)
             write_json(out/'inference.json',service.report())
             require(service.error is None,'Inference service failed')
-        phase.admit(tables,jobs,1250)
+        # Bind Adam only after the diagnostic learner reaches its final device.
+        # Device conversion may replace Parameter objects on some torch paths.
+        model.to(args.device)
+        phase=SearchValuePhase(out/'value-buffer',model,config['teacher_phase']['search_value'],reward)
+        try:phase.admit(tables,jobs,1250)
+        finally:write_json(out/'value-admission.json',phase.report)
         rows=phase.buffer.rows(1250)
         require(len(rows)==64 and len(phase.buffer.rows(1250,'heldout'))==64,'Two-table value volume differs')
         before={k:tree_digest(v) for k,v in model.state_dict().items()}
-        model.to(args.device)
         update=phase.companion.head_only(rows,generation=1250,steps=1)
         after={k:tree_digest(v) for k,v in model.state_dict().items()}
         changed=[k for k in before if before[k]!=after[k]]

@@ -1,19 +1,19 @@
 {
-  "archive": "rust-lab-b045-g1250-r2.zip",
-  "sha256": "db440e2354a4b120ff24c54f807a39f6a22809939fe59206b0313a969eb74c99",
-  "bytes": 27184661,
-  "entries": 1270,
-  "implementation": "bd1ffe2df246beb006e7d218233fb99354dbaa449cca976a37a74954f80ec3a1",
-  "producer": "cb96c3c8845937ed19530ff91a9aa75ef1487a44bc00cce53b6b0dd038976aac",
+  "archive": "rust-lab-b045-g1250-r3.zip",
+  "sha256": "e476e0c1a9ce0653efc0d901ff0e08c2b78dd9bc6d3d732683dce4e9ddaa2df7",
+  "bytes": 27192771,
+  "entries": 1271,
+  "implementation": "c70a13770460c4a58381f42ab07192699a17c07af936d0f9956b2a3ab510a31f",
+  "producer": "abcb8810de02911314a55e516f0aefee2678966e7e79549b0566a4de8589f9e8",
   "qualification": "Pending",
   "previous_qualifications_repeated": false,
   "fresh_transfer": {
     "passed": true,
-    "tests": 63,
-    "skipped": 4,
-    "fixture_log_sha256": "b6923aeff595429593d534d9a086afe0d5696e37c035129fec2ac82b61fb02c9",
-    "scope": "Windows CPU fixtures from empty extraction; Linux/CUDA Pending",
-    "verified_archive_sha256": "db440e2354a4b120ff24c54f807a39f6a22809939fe59206b0313a969eb74c99",
-    "path_note": "Verified under short workspace path; initial deeply nested extraction exceeded Windows path limit in test fixtures"
+    "scope": "Fresh extraction, manifest pins and CPU fixture launcher; CUDA remains Pending",
+    "tests": 68,
+    "passed_tests": 63,
+    "skipped": 5,
+    "fixtures_sha256": "8249fa1ad46681bd3ff063e1a00ea63b5867b4a0d28f74e6beb63a5d8d27e6ee",
+    "qualification_sha256": "38c9eb1f8269963b35cbe1070d9e96de21ea2272ad37809c94cbf63d5a18f578"
   }
 }

@@ -5,6 +5,49 @@ mod baseline {
     include!("../../native/brass-ai-core/tests/sessions.rs");
 
     #[test]
+    fn teacher_later_turns_keep_absolute_deadlines_and_completed_work() {
+        use brass_lab_collector::teacher::{decide_turn, profile_budget};
+        for fast in [false, true] {
+            for started in [0, 12_000_000_000, 120_000_000_000] {
+                let i = input(); let c = Fake::default(); c.now.set(started);
+                let budget = profile_budget(started, fast).unwrap();
+                let mut s = Session::new(identity(), &i, settings(8), budget).unwrap();
+                s.enable_teacher_exports().unwrap();
+                let mut e = Eval { clock: &c, calls: 0, late_at: 0, cancel: false };
+                let out = decide_turn(&mut s,&identity(),1,i,Mode::Count,&c,&mut e).unwrap();
+                assert_eq!(out.budget.deadline_ns,budget.deadline_ns);
+                assert_eq!(out.budget.work_deadline_ns,budget.work_deadline_ns);
+                assert_eq!(out.completed,8);
+                assert!(s.take_teacher_export().is_some());
+            }
+        }
+    }
+
+    #[test]
+    fn teacher_second_action_keeps_original_later_turn_cutoffs() {
+        use brass_lab_collector::teacher::{decide_turn, profile_budget};
+        for fast in [false,true] {
+            let mut i=ordinary_input();
+            i.ledger.settled=vec![(brass_ai_core::types::Era::CanalEra,1)];
+            let c=Fake::default(); let started=120_000_000_000; c.now.set(started);
+            let budget=profile_budget(started,fast).unwrap();
+            let mut s=Session::new(identity(),&i,settings(24),budget).unwrap();
+            s.enable_teacher_exports().unwrap();
+            let mut e=Eval { clock:&c,calls:0,late_at:0,cancel:false };
+            let first=decide_turn(&mut s,&identity(),1,i.clone(),Mode::Count,&c,&mut e).unwrap();
+            assert_eq!(first.actions.len(),2);
+            let info=&first.actions[1].action.steps[0].precondition;
+            let mut next=i; next.view=info.key.information.observation.view.clone().unwrap();
+            next.context=info.key.context.clone(); next.recall=vec![];
+            c.now.set(budget.work_deadline_ns-50_000_000);
+            let second=decide_turn(&mut s,&identity(),2,next,Mode::Count,&c,&mut e).unwrap();
+            assert_eq!(second.budget.deadline_ns,budget.deadline_ns);
+            assert_eq!(second.budget.work_deadline_ns,budget.work_deadline_ns);
+            assert!(s.take_teacher_export().unwrap().continuation);
+        }
+    }
+
+    #[test]
     fn fast_profile_cutoffs_and_root_mean() {
         use brass_lab_collector::teacher::{profile_budget, root_value};
         let mut b = profile_budget(50, true).unwrap();

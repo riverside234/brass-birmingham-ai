@@ -46,6 +46,16 @@ pub fn profile_budget(started_ns: u64, fast: bool) -> Result<Budget> {
     Ok(Budget { started_ns, work_deadline_ns: deadline_ns - post, deadline_ns, reserve_ns: post })
 }
 
+/// Session::decide accepts an absolute deadline on the shared game clock.
+/// Passing remaining time only happens to work near clock origin zero.
+pub fn decide_turn<E: LeafEvaluator<Key, String>, C: Clock>(
+    owner: &mut Session, identity: &Identity, request: u64, root: Input,
+    mode: Mode, clock: &C, evaluator: &mut E,
+) -> search::Result<search::session::Outcome> {
+    let deadline = owner.budget().deadline_ns;
+    owner.decide(identity, request, root, deadline, mode, clock, evaluator, None)
+}
+
 #[derive(Default)]
 struct TurnWork {
     search_ns: u64,
@@ -500,15 +510,14 @@ pub fn run() -> Result<()> {
                     }),
                 }
             };
-            let out = owner.decide(
+            let out = decide_turn(
+                owner,
                 &identity,
                 request_id,
                 root.clone(),
-                owner.budget().deadline_ns.saturating_sub(clock.now_ns()),
                 mode,
                 &clock,
                 &mut peer,
-                None,
             )?;
             let work_end = if out.quota.is_some() {
                 out.work_stopped_ns.min(out.budget.work_deadline_ns).max(began)
@@ -646,7 +655,9 @@ pub fn run() -> Result<()> {
             "metrics":{"turns":turn_reports,"searches":searches,"labels":labels,"reserved_turns":reserved}}))?;
         return Ok(());
     }
-    ledger.observe(&state.observation(Seat::try_from(state.context().actor as u8)?)?)?;
+    // Terminal contexts use actor=255 (no player to act). The ledger consumes
+    // public end-state fields; use a valid observer rather than that sentinel.
+    ledger.observe(&state.observation(Seat::Zero)?)?;
     check(!all_seat || (searched_turns == 64 && values.len() == 64 && reserved == if h2h { 64 } else { 16 }), "all-seat turn coverage")?;
     emit(
         &mut peer.output,

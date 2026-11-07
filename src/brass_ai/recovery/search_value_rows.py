@@ -75,8 +75,18 @@ def complete_game(rows, result, final_spent, job, *, lam=1.):
     for row in rows: validate_root(row, job)
     require(sum(r['profile'] == 'full' for r in rows) == 16, 'Reserved full profile count differs')
     g, u = targets(rows, result, final_spent, job['search']['reward'], lam)
-    return [dict(copy.deepcopy(r), target=t.tolist(), u=v.tolist(), target_lambda=lam)
+    return [dict(copy_row(r), target=t.tolist(), u=v.tolist(), target_lambda=lam)
             for r, t, v in zip(rows, g, u, strict=True)]
+
+
+def copy_row(row):
+    """Detach validated flat numeric tensors without per-number deepcopy work."""
+    vectors = {'state','mapping','remaining','spent','r','v','counts','turn_key',
+               'target','u','terminal_utility'}
+    result = copy.deepcopy({k:v for k,v in row.items() if k not in vectors and k != 'returns'})
+    result.update({k:list(v) for k,v in row.items() if k in vectors})
+    if 'returns' in row: result['returns'] = [list(v) for v in row['returns']]
+    return result
 
 
 class ValueBuffer:
@@ -105,17 +115,22 @@ class ValueBuffer:
             rows = json.loads(gzip.decompress(data))
             require(len(rows) == receipt['rows'] and all(r['generation'] == receipt['generation'] and
                     r['split'] == receipt['split'] and r['reward_id'] == receipt['reward_id'] for r in rows), 'Value shard identity differs')
+            require('game_id' not in receipt or all(r['game_id'] == receipt['game_id'] for r in rows),
+                    'Value shard game differs')
             self.cache[receipt['sha256']] = rows
         return self.cache[receipt['sha256']]
 
-    def publish(self, generation, split, rows):
+    def publish(self, generation, split, rows, *, game_id=None):
         require(split in ('train', 'heldout') and rows and all(r['generation'] == generation and r['split'] == split and
                 r['reward_id'] == self.reward_id for r in rows), 'Value buffer attribution differs')
         require(len({(r['game_id'], r['index']) for r in rows}) == len(rows), 'Duplicate value row')
+        require(game_id is None or all(r['game_id'] == game_id for r in rows), 'Value shard game differs')
         self.directory.mkdir(parents=True, exist_ok=True)
         data = gzip.compress(json.dumps(rows, separators=(',', ':'), allow_nan=False).encode(), mtime=0, compresslevel=1)
-        receipt = dict(contract=CONTRACT, file=f'{generation:06d}-{split}.json.gz', generation=generation,
+        suffix = '' if game_id is None else '-' + digest(game_id)
+        receipt = dict(contract=CONTRACT, file=f'{generation:06d}-{split}{suffix}.json.gz', generation=generation,
                        split=split, reward_id=self.reward_id, rows=len(rows), sha256=hashlib.sha256(data).hexdigest())
+        if game_id is not None: receipt['game_id'] = game_id
         path = self._path(receipt)
         require(not path.exists() or path.read_bytes() == data, 'Uncommitted value buffer differs')
         if not path.exists():
@@ -123,6 +138,10 @@ class ValueBuffer:
             with partial.open('xb') as f: f.write(data)
             partial.replace(path)
         self.receipts = [r for r in self.receipts if r['file'] != receipt['file']] + [receipt]
+        # We just encoded these admitted rows. Keep an independent cache copy
+        # instead of immediately decompressing and parsing the same tensors.
+        # _read still rehashes the actual file; cold restore still fully decodes.
+        self.cache[receipt['sha256']] = [copy_row(r) for r in rows]
         self._read(receipt)
         return receipt
 

@@ -917,6 +917,8 @@ The opt-in, zero-initialized registered correction head, companion Adam, lambda 
 
 The g1250 qualifier excludes cold warmup from the trajectory estimate, takes three warm probes per root type, checks both profiles and full-profile zero-blend parity, then runs exactly two shadow tables (one train/one held-out) and one head-only update on copied weights. No earlier qualification or production update is repeated. Use the g1250 null-receipt authorization only for the pinned shadow checkpoint; explicit false/reward mismatches still fail.
 
+R3 fixes the absolute-deadline adapter on later turns/second actions and terminal actor handling; rebuild the native teacher instead of reusing r2. Before the CUDA smoke, two bounded scripted games cover all 64 turns, both eras, terminal settlement and value-buffer sealing/reload. Retain the first failing lane's exception, stderr, last frame and inference metrics instead of reporting only sibling cancellation. Seal value rows per game, report each game's cost against its unchanged final-turn post allowance, and preserve old shard reload compatibility. Actual g1250 Linux/CUDA qualification remains **Pending**; these fixture fixes do not enable production teaching.
+
 Preserve current admitted-input reuse, central GPU batching, shared-memory transport, demand routing, candidate padding controls, PPG caches and current learning-rate schedule. g1250 ordinary PPG uses a 0.003 cap; B04.5's shared cap is min(0.002, the current ordinary cap), measured against the pre-PPG probe. Skip its trunk pass if the ordinary phase already uses that budget. Do not regress the ordinary phase to an older recipe.
 
 #### B05 — Qualify PPO/PPG, interruption and resume

@@ -29,8 +29,11 @@ class SearchValuePhase:
         began = time.monotonic()
         by_id = {r['job_id']: r for r in results}
         require(len(by_id) == len(results) == len(jobs), 'Missing/duplicate value table')
-        splits = defaultdict(list)
+        counts = defaultdict(int)
+        timings, labels = {}, []
+        self.report.update(rows=counts,value_admission_per_table_seconds=timings)
         for job in jobs:
+            table_began = time.monotonic()
             result = by_id[job['expected']['job_id']]
             rows = complete_game(result['value_rows'], result['result'], result['final_spent'], job,
                                  lam=self.machine.state['lam'] or 1.)
@@ -39,21 +42,25 @@ class SearchValuePhase:
             from brass_ai.learning.reward import terminal_utility
             terminal = terminal_utility(result['result'],job['search']['reward']).tolist()
             for row in rows: row['terminal_utility'] = terminal
-            splits[job['split']].extend(rows)
-        for split, rows in splits.items(): self.buffer.publish(generation,split,rows)
-        self.label_ages = [a for a in self.label_ages if 0 <= generation-a['generation'] < 8 and a['reward_id'] == self.reward_id]
-        self.label_ages.append(dict(generation=generation,reward_id=self.reward_id,
-            rows=[copy.deepcopy(row) for j in jobs if j['split']=='train' for row in by_id[j['expected']['job_id']]['rows']]))
-        self.report['rows'] = {split:len(rows) for split,rows in splits.items()}
-        self.report['value_admission_seconds'] = time.monotonic()-began
-        # Sealing has no new time allowance. It consumes the remaining final
-        # turn's post-work allowance, just like the existing label-buffer seal.
-        for result in results:
+            # Seal each complete table independently. Charging the entire batch
+            # to every final turn makes identical work fail as lane count grows.
+            self.buffer.publish(generation,job['split'],rows,game_id=job['expected']['game_id'])
+            if job['split'] == 'train': labels.extend(copy.deepcopy(result['rows']))
+            counts[job['split']] += len(rows)
+            elapsed = time.monotonic()-table_began
+            timings[job['expected']['job_id']] = elapsed
             if result.get('metrics', {}).get('turns'):
                 turn = result['metrics']['turns'][-1]
                 allowance = .2 if turn.get('profile') == 'fast' else 1.
-                require(turn['post_search_ns']/1e9+self.report['value_admission_seconds'] <= allowance,
-                        'Value sealing exceeded final-turn post allowance')
+                require(turn['post_search_ns']/1e9+elapsed <= allowance,
+                        f"Value sealing exceeded final-turn post allowance for {job['expected']['job_id']}: "
+                        f"seal={elapsed:.6f}s post={turn['post_search_ns']/1e9:.6f}s limit={allowance}s")
+        self.label_ages = [a for a in self.label_ages if 0 <= generation-a['generation'] < 8 and a['reward_id'] == self.reward_id]
+        self.label_ages.append(dict(generation=generation,reward_id=self.reward_id,
+            rows=labels))
+        self.report['rows'] = dict(counts)
+        self.report['value_admission_seconds'] = time.monotonic()-began
+        self.report['value_admission_per_table_seconds'] = timings
 
     def stale_ages(self, generation):
         """Same per-age KL rule as the label buffer, including value ages 4–7."""

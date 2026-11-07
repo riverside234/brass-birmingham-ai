@@ -89,7 +89,7 @@ def main():
     env['CUBLAS_WORKSPACE_CONFIG'] = ':4096:8'
     try:
         report['bundle'] = verify_bundle()['implementation']
-        base.command([sys.executable,'-m','unittest','test_b045','test_b04','test_collection_throughput','test_result_export','-q'],
+        base.command([sys.executable,'-m','unittest','test_b045','test_b045_failures','test_b04','test_collection_throughput','test_result_export','-q'],
                      cwd=ROOT,env=dict(env,CUDA_VISIBLE_DEVICES=''),log=out/'fixtures.log',timeout=120)
         if args.fixtures_only:
             report.update(passed=True,scope='CPU fixtures only; lab Pending'); return
@@ -106,7 +106,15 @@ def main():
                 if args.build:
                     from brass_ai.rust_backend.lab_b045_smoke import verify_build
                     built=verify_build(read_json(args.build)); write_json(out/'build.json',built)
-                else: build(out,offline=args.offline,mono=args.mono)
+                else: built=build(out,offline=args.offline,mono=args.mono)
+                # Short scripted full-game fixtures catch later-turn clock and
+                # terminal-state bugs that fixed-root timing probes cannot.
+                import json
+                base.command([sys.executable,'-m','unittest','test_b045_failures.NativeScriptedTables','-q'],
+                    cwd=ROOT,env=dict(env,CUDA_VISIBLE_DEVICES='',BRASS_B045_BINARY=built['binary']['path'],
+                        BRASS_B045_CORE=built['core_source'],
+                        BRASS_B045_BOOTSTRAP=json.dumps([args.mono,built['bootstrap']['binary']['path']])),
+                    log=out/'scripted-tables.log',timeout=45)
                 base.command([sys.executable,'-m','brass_ai.rust_backend.lab_b045_smoke','--out',out,
                     '--device',args.device,'--mono',args.mono],cwd=ROOT,
                     env=dict(env,BRASS_B045_PARENT_LOCK=(run/'.active-run.json').read_text()),log=out/'lab-smoke.log',timeout=240)

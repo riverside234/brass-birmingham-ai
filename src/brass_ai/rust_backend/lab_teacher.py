@@ -9,6 +9,7 @@ import struct
 import subprocess
 import threading
 import time
+import traceback
 
 from brass_ai.learning.contracts import digest, require
 from brass_ai.recovery.teacher_phase_config import defaults, SCHEDULE, PROFILE
@@ -99,6 +100,7 @@ class Worker:
 
     def collect(self, expected, core_source, *, calibration=False, verifier=None, turn_probe=False):
         rows = []; values = []; hello = False; started = last = time.monotonic()
+        meta = None; self.failure = None; verified_turns = 0
         try:
             while True:
                 require(not self.cancel.is_set(),'Teacher table cancelled; discard unpublished labels')
@@ -124,6 +126,7 @@ class Worker:
                     require(not calibration and verifier is not None and len(rows)+len(meta['rows']) <= 32,
                             'Unexpected/unverified/excess teacher turn')
                     self.send(verifier.verify(meta,received))
+                    verified_turns += 1
                     rows.extend(meta['rows'])
                     if meta.get('value_row') is not None: values.append(meta['value_row'])
                 elif kind == 'calibration':
@@ -144,7 +147,18 @@ class Worker:
                     return dict(job_id=expected['job_id'],rows=rows,metrics=meta['metrics'],result=meta['result'],
                                 value_rows=values, final_spent=meta.get('final_spent'))
                 else:raise ValueError('Unknown teacher event')
-        finally:self.close()
+        except BaseException as error:
+            self.failure = dict(error=str(error),type=type(error).__name__,last_frame=meta,
+                                verified_turns=verified_turns,elapsed_seconds=time.monotonic()-started)
+            raise
+        finally:
+            try:self.close()
+            except BaseException as close_error:
+                if self.failure is None:raise
+                self.failure['close_error']=str(close_error)
+            if self.failure is not None:
+                self.failure.update(stderr=getattr(self,'stderr',b'').decode(errors='replace'),
+                                    exit_code=getattr(getattr(self,'process',None),'returncode',None))
 
     def close(self):
         self.stop.set()
@@ -168,6 +182,7 @@ class TeacherCollector:
         self.lanes = lanes;self.cancel = cancel or threading.Event()
         self.model,self.history = model,history
         self.verifier = None
+        self.failures = []
 
     def collect(self, jobs):
         if not jobs:return []
@@ -188,9 +203,11 @@ class TeacherCollector:
         lease = self.service.channels(min(self.lanes,len(jobs)))
         endpoints = queue.Queue();owned = [lease.acquire() for _ in range(min(self.lanes,len(jobs)))]
         for e in owned:endpoints.put(e)
+        failure_lock = threading.Lock(); first_failure = []; self.failures = []
         def one(job):
-            endpoint = endpoints.get(timeout=30)
+            endpoint = None; worker = None
             try:
+                endpoint = endpoints.get(timeout=30)
                 from brass_ai.recovery.telemetry import Timings
                 timings=Timings()
                 with self.service.cpu.acquire(1,timings):
@@ -199,20 +216,44 @@ class TeacherCollector:
                     request = dict(contract=CONTRACT,op='run',job=job,origin=origin,core_source=self.core_source,
                                    estimate_ns=c['estimate_ns'],calibration_id=digest(c))
                     client = Client(endpoint,job['expected'],self.cancel,job.get('search_value'),job.get('seat_values'))
-                    result = Worker(self.executable,request,client,self.cancel).collect(job['expected'],self.core_source,
-                        verifier=self.verifier)
+                    worker = Worker(self.executable,request,client,self.cancel)
+                    result = worker.collect(job['expected'],self.core_source,verifier=self.verifier)
                 result['metrics']['python_gpu_wait_seconds'] = client.wait_seconds
                 result['metrics']['cpu_admission'] = timings.report()
                 return result
-            except BaseException:self.cancel.set();raise
-            finally:endpoints.put(endpoint)
+            except BaseException as error:
+                # Publish the initiating exception BEFORE cancellation. pool.map
+                # yields in job order, so a cancelled earlier lane can otherwise
+                # mask the actual failure of a later lane.
+                with failure_lock:
+                    self.failures.append(dict(job_id=job['expected']['job_id'],split=job['split'],seed=job['seed'],
+                        error=str(error),type=type(error).__name__,traceback=traceback.format_exc(),
+                        worker=getattr(worker,'failure',None),primary=not first_failure))
+                    if not first_failure:first_failure.append((error,error.__traceback__))
+                    self.cancel.set()
+                raise
+            finally:
+                if endpoint is not None:endpoints.put(endpoint)
         try:
-            with ThreadPoolExecutor(max_workers=len(owned),thread_name_prefix='rust-teacher') as pool:
-                results = list(pool.map(one,jobs))
+            try:
+                with ThreadPoolExecutor(max_workers=len(owned),thread_name_prefix='rust-teacher') as pool:
+                    results = list(pool.map(one,jobs))
+            except BaseException:
+                if first_failure:
+                    error,tb=first_failure[0]
+                    raise error.with_traceback(tb)
+                raise
             require(not self.cancel.is_set(),'Teacher collection cancelled before publication')
             return results
         finally:
-            for e in owned:e.close()
+            close_errors = []
+            for e in owned:
+                try:e.close()
+                except BaseException as error:close_errors.append(error)
+            if close_errors:
+                if first_failure:
+                    self.failures[0]['endpoint_cleanup_errors'] = [str(e) for e in close_errors]
+                else:raise close_errors[0]
 
 
 def calibrate(executable, core_source, origins, job, service):

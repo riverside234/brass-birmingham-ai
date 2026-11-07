@@ -1,142 +1,185 @@
 {
   "contract": "brass-b045-local-checks/1.0.0",
-  "implementation": "bd1ffe2df246beb006e7d218233fb99354dbaa449cca976a37a74954f80ec3a1",
-  "producer": "cb96c3c8845937ed19530ff91a9aa75ef1487a44bc00cce53b6b0dd038976aac",
+  "implementation": "c70a13770460c4a58381f42ab07192699a17c07af936d0f9956b2a3ab510a31f",
+  "producer": "abcb8810de02911314a55e516f0aefee2678966e7e79549b0566a4de8589f9e8",
   "qualification": "Pending: exact g1250 Linux/CUDA smoke must run on lab",
   "production_modified": false,
   "previous_lab_qualifications_repeated": false,
   "python": {
-    "unique_tests": 96,
-    "passed": 94,
-    "skipped": 2,
-    "scope": "B045/B04/B02/B03 fixtures, collection throughput, continuation, g1247 PPG",
-    "retries": "Exact source-review routes restored; legacy calibration-retirement flag retained. Failed continuation cases rerun successfully."
+    "unique_tests": 76,
+    "passed": 73,
+    "skipped": 3,
+    "scope": "B045/B04, failure ordering and cleanup, value seal/cold restore/budget, two scripted 64-turn native tables, collection throughput, continuation and result export"
   },
   "native": {
-    "passed": 34,
+    "passed": 36,
     "toolchain": "1.99.1-x86_64-pc-windows-gnu",
     "profile": "release",
-    "scope": "5 collection lane + 29 teacher/session tests"
+    "scope": "5 collection lane + 31 teacher/session tests"
   },
-  "cpu_turn_probe": {
+  "scripted_tables": {
     "passed": true,
-    "zero_blend_fixed_count_parity": true,
-    "scope": "Small authored CPU model, single typical root; diagnostic correctness only, concurrent CPU unit load; not g1250 performance",
-    "profiles": {
-      "full": {
-        "search_seconds": 4.0,
-        "post_seconds": 1.0,
-        "k": 16,
-        "labels": 1,
-        "value_rows": 1,
-        "searches": [
-          {
-            "budget": {
-              "deadline_ns": 5001004600,
-              "reserve_ns": 1000000000,
-              "started_ns": 1004600,
-              "work_deadline_ns": 4001004600
-            },
-            "completed": 148,
-            "deadline_hit": true,
-            "effective_k": 16,
-            "elapsed_ns": 3981221200,
-            "frozen_n": 185,
-            "overrun_seconds": 0.0,
-            "partial": 32,
-            "phase": "canal_early",
-            "profile": "full",
-            "provenance": "search_supported",
-            "revision": 0,
-            "rounds": 3,
-            "seat": 3
-          }
-        ],
-        "turns": [
-          {
-            "budget": {
-              "deadline_ns": 5001004600,
-              "reserve_ns": 1000000000,
-              "started_ns": 1004600,
-              "work_deadline_ns": 4001004600
-            },
-            "commit_ns": 1143400,
-            "elapsed_ns": 4128378500,
-            "index": 1,
-            "labels_ns": 1135600,
-            "native_post_ns": 6000700,
-            "post_search_ns": 148616900,
-            "profile": "full",
-            "search_ns": 3979761600,
-            "selection_ns": 2306700,
-            "timing": "search-plus-post/1.0.0",
-            "verification_ipc_ns": 142616200
-          }
-        ]
+    "tables": 2,
+    "value_rows": 128,
+    "profile": "zero-count scripted values, CPU wire/rules coverage only",
+    "training_evidence": false,
+    "cold_reload": true,
+    "metrics": {
+      "rows": {
+        "heldout": 128
       },
-      "fast": {
-        "search_seconds": 0.8,
-        "post_seconds": 0.2,
-        "k": 4,
-        "labels": 0,
-        "value_rows": 1,
-        "searches": [
-          {
-            "budget": {
-              "deadline_ns": 1000720700,
-              "reserve_ns": 200000000,
-              "started_ns": 720700,
-              "work_deadline_ns": 800720700
-            },
-            "completed": 33,
-            "deadline_hit": true,
-            "effective_k": 4,
-            "elapsed_ns": 798428900,
-            "frozen_n": 36,
-            "overrun_seconds": 0.0,
-            "partial": 17,
-            "phase": "canal_early",
-            "profile": "fast",
-            "provenance": "search_supported",
-            "revision": 0,
-            "rounds": 1,
-            "seat": 3
-          }
-        ],
-        "turns": [
-          {
-            "budget": {
-              "deadline_ns": 1000720700,
-              "reserve_ns": 200000000,
-              "started_ns": 720700,
-              "work_deadline_ns": 800720700
-            },
-            "commit_ns": 564700,
-            "elapsed_ns": 801925200,
-            "index": 1,
-            "labels_ns": 0,
-            "native_post_ns": 2541100,
-            "post_search_ns": 4389800,
-            "profile": "fast",
-            "search_ns": 797535400,
-            "selection_ns": 1225300,
-            "timing": "search-plus-post/1.0.0",
-            "verification_ipc_ns": 1848700
-          }
-        ]
-      }
+      "value_admission_per_table_seconds": {
+        "0f0b29faff2cc3240d812306711c221f7de1939a2649c65b9bc23e9fe8d38523": 0.10899999993853271,
+        "e662c7b83170bfc7df4c74b0596e3b811212635d687e1a5d07aca20a30f18c69": 0.10999999998603016
+      },
+      "value_admission_seconds": 0.21899999992456287
     }
   },
-  "logs": {
-    "python-regression.log": "2e1f2eebc0068b42244816706e12552ce83b769882df0c42cbaed84e4aff9916",
-    "final-compatibility.log": "f7466df81be22222a7b2012b1c08d2b4e391a9fb9210a9ec981bcd3202e3924d",
-    "final-resume.log": "66345a2c24f956ee757774dae773a9203a1ace9fbdf189c289cea1d841deefbb",
-    "final-legacy-resume.log": "9f50ad0190d4744b036fb5b4d0a5b4f069bbebd7c9c92e58df536085dc2068ee",
-    "final-b045.log": "13603f66caf365cb841ffab2e6ccf955072e5fa1444a3977580f7141115c3bb7",
-    "native-tests.log": "02539d2bc3731514040a8e6cb79919ae1faca720af88166c43a6e87c33a229d2",
-    "native-probe.log": "3ace3a32221740c8f872e39217a71c7afb30c3b520815b53165c0b0639001364"
+  "continuation": {
+    "g1250_same_config_reviewed": true,
+    "ordinary_optimizer_rng_calibration_preserved": true,
+    "production_adopted": false
   },
-  "r2": {
+  "evidence": "results/rust-lab-qualification/20261107T053450972804Z-20261107T053153483428Z-g1250-b045-84552797-d6c8c809",
+  "logs": {
+    "r3-regression-verified.log": "14c1ff070f9ed4ef5e6e039f6bdb8eff10c0229b2408ee9da2d3c73136e39309",
+    "r3-final-native-test.log": "e3bc768d96f316869b6ff0be9ff856eaef30a7c5d20259b9259eb9190fc967ac",
+    "r3-final-native-build.log": "6bf647cedefcdca5ad28a1eac23f674e1ced681d3cbb98f7d31c1596586a24ea"
+  },
+  "previous_r1": {
+    "python": {
+      "unique_tests": 96,
+      "passed": 94,
+      "skipped": 2,
+      "scope": "B045/B04/B02/B03 fixtures, collection throughput, continuation, g1247 PPG",
+      "retries": "Exact source-review routes restored; legacy calibration-retirement flag retained. Failed continuation cases rerun successfully."
+    },
+    "native": {
+      "passed": 34,
+      "toolchain": "1.99.1-x86_64-pc-windows-gnu",
+      "profile": "release",
+      "scope": "5 collection lane + 29 teacher/session tests"
+    },
+    "cpu_turn_probe": {
+      "passed": true,
+      "zero_blend_fixed_count_parity": true,
+      "scope": "Small authored CPU model, single typical root; diagnostic correctness only, concurrent CPU unit load; not g1250 performance",
+      "profiles": {
+        "full": {
+          "search_seconds": 4.0,
+          "post_seconds": 1.0,
+          "k": 16,
+          "labels": 1,
+          "value_rows": 1,
+          "searches": [
+            {
+              "budget": {
+                "deadline_ns": 5001004600,
+                "reserve_ns": 1000000000,
+                "started_ns": 1004600,
+                "work_deadline_ns": 4001004600
+              },
+              "completed": 148,
+              "deadline_hit": true,
+              "effective_k": 16,
+              "elapsed_ns": 3981221200,
+              "frozen_n": 185,
+              "overrun_seconds": 0.0,
+              "partial": 32,
+              "phase": "canal_early",
+              "profile": "full",
+              "provenance": "search_supported",
+              "revision": 0,
+              "rounds": 3,
+              "seat": 3
+            }
+          ],
+          "turns": [
+            {
+              "budget": {
+                "deadline_ns": 5001004600,
+                "reserve_ns": 1000000000,
+                "started_ns": 1004600,
+                "work_deadline_ns": 4001004600
+              },
+              "commit_ns": 1143400,
+              "elapsed_ns": 4128378500,
+              "index": 1,
+              "labels_ns": 1135600,
+              "native_post_ns": 6000700,
+              "post_search_ns": 148616900,
+              "profile": "full",
+              "search_ns": 3979761600,
+              "selection_ns": 2306700,
+              "timing": "search-plus-post/1.0.0",
+              "verification_ipc_ns": 142616200
+            }
+          ]
+        },
+        "fast": {
+          "search_seconds": 0.8,
+          "post_seconds": 0.2,
+          "k": 4,
+          "labels": 0,
+          "value_rows": 1,
+          "searches": [
+            {
+              "budget": {
+                "deadline_ns": 1000720700,
+                "reserve_ns": 200000000,
+                "started_ns": 720700,
+                "work_deadline_ns": 800720700
+              },
+              "completed": 33,
+              "deadline_hit": true,
+              "effective_k": 4,
+              "elapsed_ns": 798428900,
+              "frozen_n": 36,
+              "overrun_seconds": 0.0,
+              "partial": 17,
+              "phase": "canal_early",
+              "profile": "fast",
+              "provenance": "search_supported",
+              "revision": 0,
+              "rounds": 1,
+              "seat": 3
+            }
+          ],
+          "turns": [
+            {
+              "budget": {
+                "deadline_ns": 1000720700,
+                "reserve_ns": 200000000,
+                "started_ns": 720700,
+                "work_deadline_ns": 800720700
+              },
+              "commit_ns": 564700,
+              "elapsed_ns": 801925200,
+              "index": 1,
+              "labels_ns": 0,
+              "native_post_ns": 2541100,
+              "post_search_ns": 4389800,
+              "profile": "fast",
+              "search_ns": 797535400,
+              "selection_ns": 1225300,
+              "timing": "search-plus-post/1.0.0",
+              "verification_ipc_ns": 1848700
+            }
+          ]
+        }
+      }
+    },
+    "logs": {
+      "python-regression.log": "2e1f2eebc0068b42244816706e12552ce83b769882df0c42cbaed84e4aff9916",
+      "final-compatibility.log": "f7466df81be22222a7b2012b1c08d2b4e391a9fb9210a9ec981bcd3202e3924d",
+      "final-resume.log": "66345a2c24f956ee757774dae773a9203a1ace9fbdf189c289cea1d841deefbb",
+      "final-legacy-resume.log": "9f50ad0190d4744b036fb5b4d0a5b4f069bbebd7c9c92e58df536085dc2068ee",
+      "final-b045.log": "13603f66caf365cb841ffab2e6ccf955072e5fa1444a3977580f7141115c3bb7",
+      "native-tests.log": "02539d2bc3731514040a8e6cb79919ae1faca720af88166c43a6e87c33a229d2",
+      "native-probe.log": "3ace3a32221740c8f872e39217a71c7afb30c3b520815b53165c0b0639001364"
+    }
+  },
+  "previous_r2": {
     "reason": "POSIX timestamp collision returned a stale cleanup digest",
     "tests": 81,
     "passed": 78,

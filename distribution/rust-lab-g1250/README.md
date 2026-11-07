@@ -1,6 +1,6 @@
 # B04.5 — g1250 search-value qualification
 
-Use the current checkout and `rust-lab-b045-g1250-r2.zip`. Earlier qualification
+Use the current checkout and `rust-lab-b045-g1250-r3.zip`. Earlier qualification
 ZIPs are retired from Git tracking; the necessary sealed baseline inputs are
 included here. Training must be paused at the recorded g1250 checkpoint:
 
@@ -11,7 +11,7 @@ From the lab repository root:
 ```bash
 conda activate ai-training
 git pull --ff-only
-unzip -o distribution/rust-lab-g1250/rust-lab-b045-g1250-r2.zip
+unzip -o distribution/rust-lab-g1250/rust-lab-b045-g1250-r3.zip
 python scripts/qualify-rust-lab-b045.py --device cuda:0
 ```
 
@@ -23,6 +23,17 @@ tables, and applies one diagnostic head-only update on copied weights. Full
 search is 4s/K16 plus at most 1s post-work; fast search is 0.8s/K4 plus at most
 0.2s post-work. Two sessions, each with one thread. The CUDA child has a
 240-second watchdog. No 256-game evaluation runs in this command.
+
+R3 fixes absolute deadlines on later turns and second actions, terminal actor
+handling, and a worker-cancellation race that hid the initiating error. Before
+the GPU smoke, two bounded scripted games exercise all 64 turns, both eras,
+terminal settlement and value-buffer sealing. These use zero search counts
+and synthetic values solely as fixtures; they produce no training evidence.
+On collection failure, `collection-failure.json` retains the original exception,
+job, stderr and last native frame; `inference.json` is also saved.
+Value sealing avoids redundant tensor copying/decoding and measures each game's
+shard against its own final-turn allowance; batch size does not multiply that
+charge. Existing value-buffer shards remain readable.
 
 The user-approved null readiness assumption is limited to the exact g1250
 checkpoint and shadow qualification. Explicit false or reward mismatch still
@@ -39,22 +50,19 @@ intentionally ignores `results/`; pushing the code repository alone does not
 publish qualification evidence. If `results/.git` is missing or a parent rule
 ignores the whole qualification directory, the exporter reports that explicitly.
 
-Recover the already failed attempt **without rerunning any qualification**:
+Recover an attempt's export **without rerunning any qualification**:
 
 ```bash
 git pull --ff-only
-python scripts/rust_lab_results.py artifacts/rust-backend/20261107T050346097403Z-g1250-b045-2caeea3b
+python scripts/rust_lab_results.py artifacts/rust-backend/PASTE_ATTEMPT_DIRECTORY
 ```
 
 Run the exact `git -C results add`, `commit` and `push` commands printed by that
 export command. Its `evidence/qualification.json` and logs preserve the
-original failure. This attempt failed in the cleanup hash-cache fixture before
-native compilation. R2 fixes timestamp-only hash reuse on Linux; it retains
-content verification before quarantine and deletion. Collection, inference and
-PPG optimizations are unchanged. Run the B04.5 command above; previous B01–B04
-qualification need not be repeated.
+original failure. R2's cleanup hashing fix remains in place. Run the B04.5
+command above; previous B01–B04 qualification need not be repeated.
 
-If only the smoke failed, reuse the new B04.5 build on retry:
+If only the smoke failed, reuse a matching **r3** B04.5 build on retry:
 
 ```bash
 python scripts/qualify-rust-lab-b045.py --device cuda:0 \
@@ -62,7 +70,8 @@ python scripts/qualify-rust-lab-b045.py --device cuda:0 \
 ```
 
 The build's source, binary, bootstrap dependencies and fixtures must still match.
-No g570 build can substitute for the changed B04.5 protocol.
+The r2 native binary contains the deadline/terminal bugs and must be rebuilt;
+do not pass its `build.json`. No g570 build can substitute either.
 
 After stage B (not now), the explicit one-off evaluation tool is:
 

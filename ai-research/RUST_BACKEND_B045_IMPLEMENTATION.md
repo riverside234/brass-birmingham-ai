@@ -4,6 +4,40 @@
 [the search-value plan](RUST_BACKEND_B045_SEARCH_VALUE_PLAN.md). Linux/CUDA
 qualification is **Pending**. Production teaching remains behind B05/B07.
 
+R3 addresses the attempt ending `84552797-d6c8c809`. That run passed CPU/native
+checks, warm GPU calibration, zero-blend parity and full/fast timing probes;
+collection failed with an uninformative sibling cancellation. The collector now
+records the initiating exception before cancelling siblings and retains per-job
+traceback, native stderr/last frame, verified-turn count and inference metrics.
+Cleanup errors cannot replace an earlier worker failure.
+
+A short native reproduction exposed the adapter passing remaining time into
+`Session::decide`, whose deadline is absolute on the game clock. The adapter
+now passes the original absolute deadline. Rust regressions cover nonzero
+origins, later turns and second-action continuation for both profiles, without
+replenishing either cutoff. Expanded scripted end-to-end coverage also caught
+terminal actor `255` being converted into a seat; final public ledger observation
+now uses `Seat::Zero`. Two zero-count scripted games cover both eras, all 64
+turns, terminal completion and held-out value sealing under a 30-second guard.
+They do not supply training data or claim GPU performance. This check runs on
+each lab B04.5 build before the actual g1250 CUDA smoke. The diagnostic Adam is
+created after device placement so it owns the parameters actually updated.
+
+Value sealing now copies flat numeric tensors directly, retaining independent
+cache ownership, disk hash checks and cold-load identity checks. It no longer
+immediately decodes the JSON it just encoded. Each complete game has its own
+immutable shard and measured sealing cost, charged to that game's remaining
+final-turn allowance rather than charging the whole batch to every game. Old
+generation/split shards still load. A deterministic timing regression rejects
+an individual overrun; the two scripted games sealed 128 rows in 94ms and
+109ms per table and passed a cold reload. These CPU fixture timings do not
+predict g1250 GPU performance.
+
+The masked r2 log cannot establish which native error happened first on that
+host. These independently reproduced bugs are fixed; actual g1250 two-table
+CUDA completion remains Pending until r3 qualification. The installed game,
+sealed core, search equations and 4s/0.8s plus 1s/0.2s limits are unchanged.
+
 The r2 transfer fixes the g1250 attempt ending `2caeea3b-b0d5a86e`: the cleanup
 digest fixture caught a same-size rewrite with unchanged POSIX metadata. The
 cache returned the previous digest, so qualification stopped before building
