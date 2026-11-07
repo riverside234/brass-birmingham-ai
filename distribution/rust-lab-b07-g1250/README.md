@@ -1,4 +1,25 @@
-# B07 g1250 R8: reuse checkpoint snapshots and repair the fixture
+# B07 g1250: Git checkout continuation after passed qualification
+
+**Latest lab status:** R8 qualification, both canaries, diagnostic continuation,
+Rust adoption and complete rollback restoration passed. Real g1250→g1251
+training stopped before collection because the launcher omitted `--imitation-run`.
+The Git-only fix reads that dependency from the committed signature and checks
+its recipe binding. No new bundle or native build is needed; existing receipts
+remain valid. Pull the code checkout and retry:
+
+```bash
+git pull --ff-only
+python scripts/continue-rust-lab-b07.py --expected-generation 1250
+```
+
+Since Rust is already selected at g1250, this skips the passed qualifications and
+adoption, verifies rollback, runs one real iteration and verifies its checkpoint.
+If g1251 already committed, it verifies only. Keep the original lab evidence and
+native binaries. Do not extract R8 or an older ZIP over this Git update. The
+tracked manifest still checks every listed file; only changed launcher/test/docs
+hashes are refreshed. Historical ZIPs retain their original bytes.
+
+The actual next commit/restart remains **Pending** until the retry succeeds.
 
 **R4 ordinary qualification passed.** The result was pulled inside `results/`
 at `9e219a2`. Same 3 families / 1,161 decisions / 675 forced rows, with equivalent
@@ -22,7 +43,7 @@ receipts, recovery bindings and search behavior remain enforced.
 **34 distinct focused debugging checks passed**, following the user's clarification.
 No benchmarks, new games, training sessions or unrelated qualifications are run.
 The exact successful R6 native teacher build and R4 ordinary qualification are
-reused. Remaining canaries/continuation/adoption are still **Pending on the lab**.
+reused. Canaries/diagnostic continuation/adoption subsequently **passed on the lab**.
 The fast 0.8s/K4 + <=0.5s and full 4s/K16 + <=1s budgets are unchanged.
 
 ## One command for real g1250 → g1251 continuation
@@ -31,7 +52,7 @@ From the lab code checkout, in the existing training environment, with the run
 paused at the qualified g1250 checkpoint:
 
 ```bash
-unzip -o distribution/rust-lab-b07-g1250/rust-lab-b07-g1250-r8.zip
+git pull --ff-only
 python scripts/continue-rust-lab-b07.py --expected-generation 1250
 ```
 
@@ -47,8 +68,9 @@ iteration after the remaining gates pass**. It automatically:
 3. Selects Rust ordinary collection in the same run with **teaching off**, under
    the existing run lock. It restores a complete rollback copy before adoption
    and verifies that copy again. No optimizer, seed, progress or recipe reset.
-4. Uses the config saved in `state.json`, writes it to the evidence directory,
-   and calls the existing trainer with `--iterations 1 --expected-generation 1250`.
+4. Uses the config and `imitation_source.bc_run` saved in `state.json`, writes the
+   config to the evidence directory, and calls the existing trainer with
+   `--iterations 1 --expected-generation 1250 --imitation-run SAVED_IL_RUN`.
    The checkpoint, Adam/RNG, PPG ages, local-scoring state, replay and worker cap
    are preserved. Rust owns ordinary game state, including V4 tables; the C# V4
    decision worker is retained. Established evaluation routing is unchanged.
@@ -74,7 +96,8 @@ qualification/rollback directories on the lab machine.
 
 ## Run only the remaining qualification first
 
-This command performs no production adoption or real training:
+For a run not yet adopted, this command performs no production adoption or real
+training. The current lab run has already passed it; do not rerun it:
 
 ```bash
 python scripts/qualify-rust-lab-b07.py --device cuda:0 --complete-remaining
@@ -112,7 +135,7 @@ After the command above succeeds and g1251 is committed, run from the lab code
 checkout in the same training environment:
 
 ```bash
-python scripts/step5.py --root "$PWD" --config configs/step5/joint7-v11-2-g1290-trained-restart-g1247.json --device cuda --mono mono train --run artifacts/step5/joint7-v11-2-g1290-trained-restart --expected-generation 1251 --iterations 1
+python scripts/step5.py --root "$PWD" --config configs/step5/joint7-v11-2-g1290-trained-restart-g1247.json --device cuda --mono mono train --run artifacts/step5/joint7-v11-2-g1290-trained-restart --imitation-run artifacts/step5/features4-v11-2-batch7-il --expected-generation 1251 --iterations 1
 ```
 
 This resumes **g1251 → g1252** with the persisted Rust backend, optimizer, RNG,
@@ -143,4 +166,5 @@ Local checks cover exact reuse, stale/tampered evidence, phase selection,
 failed adoption/training, full-state restore, rollback integrity, committed-config
 forwarding and no duplicate iteration. No full training session or unrelated
 successful qualification is run locally. See [implementation and evidence](../../ai-research/RUST_BACKEND_B07_IMPLEMENTATION.md#r8-one-snapshot-per-checkpoint-commit).
-Archives are immutable; future changes require a new revision.
+Code updates travel through Git. Archives are immutable historical inputs; create
+new supplemental archives only for required assets not already supplied by Git.

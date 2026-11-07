@@ -863,7 +863,7 @@ Keep Python target construction, GAE, PPO behavior likelihoods, critic/local-sco
 | B04.5 | **Passed on pinned g1250** | Exact r3 source/model/device; two shadow tables, 49 policy labels, 128 value rows, one isolated head step; production unchanged |
 | B05 | **Passed on pinned g1250** | R2 CUDA ordinary/teacher component updates, head-only update, full-state/age restoration; no new games or production adoption |
 | B06 | **Passed bounded correctness/measurement; useful performance gate not passed** | Same 3 families / 1,161 decisions; native accepted work 55.265s vs reference 28.596s; Python collection/admission bottleneck identified; eight 4s/K16 teacher turns passed |
-| B07 | **R4 ordinary correctness/useful performance passed; R8 publication/fixture repair implemented; lab canaries/adoption/G→G+1 Pending** | Reuse qualified Rust ordinary backend, finish only remaining shadow/restore gates, then locked same-run adoption and one real iteration/restart |
+| B07 | **R8 qualification, canaries, diagnostic continuation, Rust adoption and rollback passed; real G→G+1 commit/restart Pending** | Git-only launcher fix forwards the pinned imitation dependency; retry the adopted run without repeating passed qualification |
 
 #### B01 — Pin lab state and qualify Linux/GPU adapters
 
@@ -960,6 +960,23 @@ Keep the short-test scope: eight fixed-root turns in ABBA pairs, two concurrent 
 
 #### B07 — Bounded server canary, then explicit adoption
 
+**Git-only continuation update (2026-11-07):** Results pulled inside `results/`
+to `e92a29e`, export
+`20261107T123415579666Z-20261107T122742698740Z-b07-continue-537723a8-89005841`.
+R8's two canaries, diagnostic continuation, production Rust adoption and complete
+rollback restoration passed. The real trainer stopped before collection because
+the launcher omitted the recipe's required `--imitation-run`. Carry it from
+`state.signature.imitation_source.bc_run`, validate the config/source binding
+before any child starts, and retain strict IL lineage/self-play resume checks.
+Use the existing project relocation resolver and reject any adoption-time change
+to that dependency. The launcher records its exact training command. Twelve
+focused debug checks passed; no local benchmark/game/training session ran.
+The training implementation and native binaries are unchanged. Pull Git and retry
+`python scripts/continue-rust-lab-b07.py --expected-generation 1250`; it skips
+completed qualification/adoption for the selected backend. **Only the real next
+commit/restart remains Pending.** No new bundle is needed. See
+[commands, including the corrected g1251 resume](../distribution/rust-lab-b07-g1250/README.md).
+
 **R8 update (2026-11-07):** R7's lab fixture loaded the checkpoint successfully,
 then incorrectly used its parent as the value-shard directory. Separate those
 paths without relaxing unknown-file rejection. Prepare one detached finite plain
@@ -1014,9 +1031,9 @@ teacher off, restores the full rollback copy, runs **one real same-run iteration
 using the committed config, and verifies the g1251 checkpoint/report/full restart.
 The command is safe to repeat after g1251 commits: verification only, never g1252.
 No local full training session is added. See the [current bundle commands](../distribution/rust-lab-b07-g1250/README.md).
-**Lab canaries, production adoption and G→G+1 remain Pending until their actual
-lab receipts pass; do not mark the whole server migration complete from the
-ordinary-only result.**
+**Canaries, diagnostic continuation, adoption and rollback now have passing lab
+receipts; the real G→G+1 commit/restart remains Pending. Do not mark the whole
+server migration complete before that boundary passes.**
 
 Keep Rust authoritative for ordinary tables containing V4, using the existing C#
 decision worker and unchanged plan queues, intent, RNG, budgets and policy IDs.
@@ -1034,7 +1051,7 @@ component-only performance status.
 
 R3 ordinary transport uses compact semantic action IDs with token/revision/model/context bindings; one bounded little-endian binary array reply per nonforced decision; at most 16 forced previews under the reference actor/turn/era/non-debt guards; and batch export of the exact once-serialized record bytes. Python retains the existing RNG/sampling/counters and acknowledges every forced record before publication. Preserve branch opportunities, cancellation, byte seals, full first admission and cold recovery checks. Reuse validated tensors/seals and hash the same file bytes being decoded. Keep search_v1 equations unchanged. See [wire design and tests](RUST_BACKEND_B07_IMPLEMENTATION.md#compact-ordinary-transport-r3). The bundle supports `--ordinary-only`, identical frozen g1250 jobs/checkpoint, and separate startup, serialization/IPC, feature transfer, collection/export, part I/O, publication, replay read, preparation and accepted-work timings. No earlier successful qualification is repeated.
 
-**Implemented; R4 ordinary correctness and useful performance passed; remaining lab canaries, production adoption and next normal commit/restart Pending.** See [implementation](RUST_BACKEND_B07_IMPLEMENTATION.md) and [g1250 bundle/commands](../distribution/rust-lab-b07-g1250/README.md). The bundle retains the exact passing B04.5/B05/B06 g1250 checkpoint/config and original C# binaries. Reuse the exact qualified R4 ordinary adapter for R6 under the explicit teacher-only review; teacher work remains separate and search_v1 is unchanged. Require receipts bound to the actual committed restart checkpoint; a later checkpoint needs refreshed gates. Never rewind a newer run or silently reuse stale evidence.
+**Implemented; R4 ordinary correctness/useful performance and R8 canaries, diagnostic continuation, adoption and rollback passed; real next commit/restart Pending.** See [implementation](RUST_BACKEND_B07_IMPLEMENTATION.md) and [g1250 commands](../distribution/rust-lab-b07-g1250/README.md). Existing inputs retain the exact passing B04.5/B05/B06 g1250 checkpoint/config and original C# binaries. Reuse the exact qualified R4 ordinary adapter under the explicit teacher-only review; teacher work remains separate and search_v1 is unchanged. Require receipts bound to the actual committed restart checkpoint; a later checkpoint needs refreshed gates. Never rewind a newer run or silently reuse stale evidence.
 
 R2's lab result (`20261107T090047266944Z-20261107T085645018439Z-g1250-b07-d0097dac-faa1535f`) matched 3 families/1,161 decisions/675 forced rows; native accepted work was 40.246s versus reference 28.833s. Preserve this negative result as history. GPU forward time is now below reference; remaining measured overhead includes serial 4.2s-per-family publication and 5.247s first read. R3 removes duplicate row validation/deep copies and permits at most two publishers under the existing CPU cap, with serialized callbacks and exact byte/mutation checks. Remeasure this changed scope using the same short matched batch. The first canary failed after 52 verified turns because Rust's default JSON parser rounded the echoed remaining budget `0.015000000000000001` to `0.015`. R3 enables `serde_json/float_roundtrip` for exact teacher bindings and ordinary probabilities and adds exact roundtrip/mutated-binding regressions; preserve every strict identity check. The retry builds/tests both native adapters against their unchanged sealed cores and runs the affected ordinary scope plus unfinished canaries/continuation, without repeating B01–B06. Passing correctness alone does not waive the useful-performance adoption gate.
 
@@ -1065,7 +1082,7 @@ Restart discards live trees, GPU owners, clocks and transient verification cache
 
 Keep full model and PPO/PPG/local-scoring optimizer tensors, RNG/gates/counters, source-transition backups, seed/IL/population references, cache payloads/owner metadata and optional teacher receipts needed by every supported rollback. Metadata summaries alone cannot restore training. Use existing strict cache rebuild/ownership rules for source-bound caches; never delete the previous critic age just to clear a compatibility error. Teacher cleanup must respect committed checkpoints and rollback horizons.
 
-Each future milestone publishes a **new immutable bundle under `distribution/`**, its current plan and manifests, exact state commands and honest Pending/pass/deferred scopes. Old ZIPs are never resealed. The current B04.5 launcher verifies the self-contained g1250 supplement; pull the matching checkout with deletions before extracting it. Obsolete ZIPs are untracked with `git rm --cached` and kept locally. Export every attempt to a fresh Git-visible `results/rust-lab-qualification/` folder, including failures/deferrals; preserve original lab receipts for dependent gates. Check effective ignore rules in the **results repository**, preserve report bytes, and print exact `git -C results` publication commands. The code repository intentionally ignores `results/`; fetch qualification evidence with `git -C results pull --ff-only`. Old evidence can be re-exported without rerunning qualification. R2 disables unsafe metadata-only cleanup hash reuse after the g1250 lab reproduced a same-size rewrite with unchanged timestamps; other collection/PPG optimizations remain in place.
+Future milestones deliver **code, tests, documentation and current manifests through Git**, with exact commands and honest Pending/pass/deferred scopes. Do not duplicate Git-tracked files into a full qualification bundle for each patch. Use `distribution/` supplements only for required inputs/assets not already supplied by the checkout, with immutable hashes and provenance. Old ZIPs are never resealed or extracted over newer Git code. Existing B04.5/g1250 supplements remain pinned dependencies. Obsolete ZIPs are untracked with `git rm --cached` and kept locally. Export every attempt to a fresh Git-visible `results/rust-lab-qualification/` folder, including failures/deferrals; preserve original lab receipts for dependent gates. Check effective ignore rules in the **results repository**, preserve report bytes, and print exact `git -C results` publication commands. The code repository intentionally ignores `results/`; fetch qualification evidence with `git -C results pull --ff-only`. Old evidence can be re-exported without rerunning qualification. R2 disables unsafe metadata-only cleanup hash reuse after the g1250 lab reproduced a same-size rewrite with unchanged timestamps; other collection/PPG optimizations remain in place.
 
 ### B7. Lab risks and completion checklist
 
@@ -1092,9 +1109,10 @@ Each future milestone publishes a **new immutable bundle under `distribution/`**
 - [x] B05 fixed-data PPO/PPG/companion equivalence, teacher term, interruption and old/new age reload pass without resetting the run (g1250 r2 bounded component scope; normal production iteration remains B07).
 - [ ] B06 proves useful matched performance and separately accounts for teacher/validation costs without correctness loss.
 - [x] B07 R4 ordinary correctness and useful accepted-work improvement pass on pinned g1250.
-- [ ] B07 remaining shadow canaries/continuation, locked backend adoption with teacher off, real g1250→g1251 commit/restart and complete rollback pass on lab (R6 repair and commands implemented).
+- [x] B07 two shadow canaries, diagnostic continuation, locked Rust adoption with teacher off and complete rollback restoration pass on lab (R8 receipt above).
+- [ ] B07 real g1250→g1251 commit/restart passes on lab (Git-only missing-imitation-argument fix implemented).
 - [ ] Later production task-teacher enablement has its own explicit decision, readiness/calibration and qualified commands.
-- [ ] Every later stage has a new versioned distribution bundle and Git-visible success/failure/deferred report.
+- [ ] Every later stage has Git-delivered code/commands, pinned supplemental assets only when needed, and a Git-visible success/failure/deferred report.
 
 ### B8. Implementation references and existing regression anchors
 
@@ -1110,4 +1128,4 @@ Use [restart bundle instructions](../distribution/rust-lab-g570/README.md), [ref
 | `neutral_training.py`, `policy_observations.py`, `trained_startup.py`, `exploration.py`, `branching.py` | Current neutral inputs, manual-startup provenance and g370 exploration/fork semantics |
 | `local_scoring_auxiliary.py`, `critic_data.py`, `ppg_replay.py`, `value_phase.py` | Existing companion/critic/cache/preparation semantics and selected rollback |
 
-Keep the existing B01/B02/B02.5/B03/B04, training-g370, neutral-input, branch, inference deadline/race and PPO/PPG regression assertions. Add bounded native variants and `tests/RustBackendLab/test_g370_lab.py` coverage for current source/config, removed profiles, exact pending restore, clock boundaries, stale/canceled turns and one-use admission. Short local tests do not close Linux/CUDA gates. **B05 and B06 bounded correctness/measurements passed on pinned g1250. B06 did not show useful native performance. B07 R4 ordinary correctness and useful lab performance passed. R5 implements remaining-gate reuse and real one-iteration adoption/rollback/restart orchestration; its lab canaries, production adoption and next normal commit/restart remain Pending.**
+Keep the existing B01/B02/B02.5/B03/B04, training-g370, neutral-input, branch, inference deadline/race and PPO/PPG regression assertions. Add bounded native variants and `tests/RustBackendLab/test_g370_lab.py` coverage for current source/config, removed profiles, exact pending restore, clock boundaries, stale/canceled turns and one-use admission. Short local tests do not close Linux/CUDA gates. **B05 and B06 bounded correctness/measurements passed on pinned g1250. B06 did not show useful native performance. B07 R4 ordinary correctness/useful performance and R8 lab canaries, diagnostic continuation, Rust adoption and rollback restoration passed. The real next normal commit/restart remains Pending.**

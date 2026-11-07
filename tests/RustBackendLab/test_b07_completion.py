@@ -159,8 +159,16 @@ class Workflow(unittest.TestCase):
         self.tmp=tempfile.TemporaryDirectory(dir=ROOT/'artifacts');self.addCleanup(self.tmp.cleanup)
         self.base=Path(self.tmp.name);self.run=self.base/'run';self.run.mkdir()
         self.out=self.base/'output';self.out.mkdir()
-        self.config={'teacher_phase':{'mode':'off'},'saved_recipe':'unchanged','execution':{'workers':60}}
-        self.state=dict(iteration=1250,history=[{'sha256':'checkpoint'}],signature={'config':self.config})
+        from brass_ai.recovery.config import LATEST_MODEL_RECIPE
+        self.source=dict(bc_run=(self.base/'completed-il').relative_to(ROOT).as_posix(),
+            path=(self.base/'completed-il/candidate.pt').relative_to(ROOT).as_posix(),sha256='il-checkpoint',
+            manifest=(self.base/'demonstrations.json').relative_to(ROOT).as_posix(),manifest_sha256='dataset',
+            model_id='il-model',bc_signature='il-signature')
+        self.config={'teacher_phase':{'mode':'off'},'saved_recipe':'unchanged','execution':{'workers':60},
+            'selfplay_recipe':LATEST_MODEL_RECIPE,'imitation_checkpoint':copy.deepcopy(self.source),
+            'imitation':{'manifest':None}}
+        self.state=dict(iteration=1250,history=[{'sha256':'checkpoint'}],
+            signature={'config':self.config,'imitation_source':copy.deepcopy(self.source)})
         write_json(self.run/'state.json',self.state)
         self.args=SimpleNamespace(run=str(self.run),expected_generation=1250,qualification=None,
             resume_qualification=None,teacher_build=None,offline=False,mono='mono')
@@ -175,7 +183,14 @@ class Workflow(unittest.TestCase):
             self.assertEqual(actual,self.config)
             self.assertEqual(argv[argv.index('--iterations')+1],'1')
             self.assertEqual(argv[argv.index('--expected-generation')+1],'1250')
+            # Parse through the real trainer CLI; the latest-model recipe needs
+            # this even on resume, where learner weights/Adam come from self-play.
+            from brass_ai.step5.cli import parser
+            parsed=parser().parse_args(argv[2:])
+            self.assertEqual(Path(parsed.imitation_run),ROOT/self.source['bc_run'])
+            self.assertEqual(parsed.run,str(self.run));self.assertEqual(parsed.iterations,1)
             self.assertNotIn('--fresh',argv);self.assertNotIn('--initial',argv)
+            self.assertNotIn('--from-run',argv);self.assertNotIn('--resume-reviewed-source',argv)
             self.state['iteration']=1251;write_json(self.run/'state.json',self.state)
         else:
             if name=='adopt':
@@ -203,6 +218,31 @@ class Workflow(unittest.TestCase):
         self.state['native_backend']={'mode':'rust','adopted_generation':1250}
         write_json(self.run/'state.json',self.state);self.execute()
         self.assertEqual([n for n,_ in self.calls],['verify-rollback','training','verify-next'])
+        self.assertEqual(self.report['training_command'],self.calls[1][1])
+
+    def test_missing_or_changed_il_binding_fails_before_any_child(self):
+        original=copy.deepcopy(self.state)
+        for adopted in (False,True):
+            for invalid in (None,{},dict(self.source,sha256='wrong'),dict(self.source,bc_run='../outside')):
+                with self.subTest(adopted=adopted,source=invalid):
+                    self.state=copy.deepcopy(original)
+                    self.state['signature']['imitation_source']=invalid
+                    if adopted:self.state['native_backend']={'mode':'rust','adopted_generation':1250}
+                    write_json(self.run/'state.json',self.state)
+                    with self.assertRaises(ValueError):self.execute()
+                    self.assertEqual(self.calls,[])
+                    self.assertEqual(json.loads((self.run/'state.json').read_text()),self.state)
+
+    def test_adoption_cannot_change_legacy_imitation_binding(self):
+        self.config.pop('selfplay_recipe')
+        write_json(self.run/'state.json',self.state)
+        def changed(name,argv):
+            self.invoke(name,argv)
+            if name=='adopt':
+                self.state['signature']['imitation_source']['bc_run']=str(self.base/'other-il')
+                write_json(self.run/'state.json',self.state)
+        with self.assertRaisesRegex(ValueError,'changed the committed imitation dependency'):self.execute(changed)
+        self.assertNotIn('training',[n for n,_ in self.calls])
 
     def test_no_adoption_after_incomplete_qualification(self):
         def fail(name,argv):
@@ -228,6 +268,50 @@ class Workflow(unittest.TestCase):
                 self.state['signature']['config']=dict(self.config,saved_recipe='wrong')
                 write_json(self.run/'state.json',self.state)
         with self.assertRaisesRegex(ValueError,'recipe'):self.execute(changed)
+
+
+class TrainingArguments(unittest.TestCase):
+    setUp=Completion.setUp
+
+    def test_actual_g1250_recipe_passes_pinned_imitation_run_to_real_cli(self):
+        from brass_ai.step5.cli import parser
+        config=json.loads((ROOT/'configs/step5/joint7-v11-2-g1290-trained-restart-g1247.json').read_text())
+        state={'signature':{'config':config,'imitation_source':copy.deepcopy(config['imitation_checkpoint'])}}
+        before=copy.deepcopy(state)
+        argv=W.training_command(ROOT,ROOT/'artifacts/step5/joint7-v11-2-g1290-trained-restart',
+            self.out/'config.json',1250,'mono',state=state)
+        parsed=parser().parse_args(argv[2:])
+        self.assertEqual(Path(parsed.imitation_run),ROOT/config['imitation_checkpoint']['bc_run'])
+        self.assertEqual(parsed.expected_generation,1250)
+        self.assertEqual(parsed.iterations,1)
+        self.assertEqual(state,before)
+
+    def test_legacy_dependency_is_forwarded_but_no_dependency_is_invented(self):
+        state={'signature':{'config':{}}}
+        self.assertEqual(W.imitation_arguments(ROOT,self.out,state),[])
+        state['signature']['imitation_source']={'bc_run':str(self.out/'il')}
+        self.assertEqual(W.imitation_arguments(ROOT,self.out,state),['--imitation-run',str(self.out/'il')])
+
+    def test_project_relocation_uses_current_root_and_preserves_saved_binding(self):
+        from brass_ai.learning.paths import make_relocation,RELOCATION_FILE
+        from brass_ai.recovery.config import LATEST_MODEL_RECIPE
+        prior='/prior/lab/project'
+        write_json(self.out/RELOCATION_FILE,make_relocation(self.out,[prior],'a'*64))
+        saved={'bc_run':prior+'/artifacts/il','path':prior+'/artifacts/il/candidate.pt',
+               'manifest':prior+'/artifacts/data.json','sha256':'unchanged'}
+        cfg=dict(saved,bc_run='artifacts/il',path='artifacts/il/candidate.pt',manifest='artifacts/data.json')
+        state={'signature':{'config':{'selfplay_recipe':LATEST_MODEL_RECIPE,'imitation_checkpoint':cfg},
+                            'imitation_source':saved}}
+        before=copy.deepcopy(state)
+        self.assertEqual(W.imitation_arguments(self.out,self.out/'run',state),
+                         ['--imitation-run',str(self.out/'artifacts/il')])
+        self.assertEqual(state,before)
+
+    def test_outside_project_self_dependency_and_conflicting_imitation_fail(self):
+        for source,config in [({'bc_run':'../outside'},{}),({'bc_run':str(self.out)},{}),
+                              ({'bc_run':str(self.out/'il')},{'imitation':{'manifest':'data.json'}})]:
+            with self.subTest(source=source,config=config),self.assertRaises(ValueError):
+                W.imitation_arguments(ROOT,self.out,{'signature':{'config':config,'imitation_source':source}})
 
 
 class Launcher(unittest.TestCase):

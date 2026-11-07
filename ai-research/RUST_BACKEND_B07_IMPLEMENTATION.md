@@ -1,11 +1,41 @@
 # B07: cheaper native collection and bounded adoption
 
-Updated on 2026-11-07. **R4 ordinary correctness and useful performance passed
-on g1250. R8 fixes the debug fixture and reuses one checkpoint snapshot per commit;
-its lab canaries, production adoption and next commit/restart remain Pending
-until that command succeeds on the lab.** Run the
-[new g1250 bundle](../distribution/rust-lab-b07-g1250/README.md); do not rerun
-passing B01–B06 qualifications. The installed game is unchanged.
+Updated on 2026-11-07. **R8 lab qualification, both shadow canaries, diagnostic
+continuation, Rust adoption and full rollback restoration passed on g1250.
+The real g1250→g1251 commit/restart remains Pending.** Use the
+[Git checkout continuation commands](../distribution/rust-lab-b07-g1250/README.md);
+do not repeat passed qualifications. The installed game is unchanged.
+
+## Git-only continuation fix: preserve the completed imitation dependency
+
+Pulled inside `results/` to `e92a29e`, export
+`20261107T123415579666Z-20261107T122742698740Z-b07-continue-537723a8-89005841`.
+The remaining qualification returned `passed=true` and `adoption_ready=true`.
+Production selected Rust with teaching off and verified the complete rollback
+copy. The ordinary trainer then stopped before collection with
+`Latest-model recipe requires the pinned completed --imitation-run`.
+The launcher carried the committed config but omitted that CLI dependency.
+
+The launcher now derives `--imitation-run` from the committed signature's
+`imitation_source.bc_run`, checks the required recipe/source binding before any
+child process, and preserves it across adoption. It uses the existing project
+relocation resolver. The real trainer retains full IL lineage validation and
+strict self-play checkpoint/optimizer loading; the launcher adds no model load,
+initialization or source override. It records the exact training command.
+
+Twelve focused debug regressions passed, including the actual saved g1250 recipe
+through the real trainer argument parser, retry after adoption, verification-only
+after g1251, malformed/missing/conflicting dependencies, relocation and failure
+without a new commit. No benchmarks, games or training ran locally.
+
+This changes the launcher, tests, documentation and their tracked manifest hashes.
+The training implementation remains
+`9efcf34f853d75ab844366b6819da4b0921be38d3e2dfb806cf282ace76e7a30`;
+native binaries and passing qualification receipts remain valid. There is **no
+new archive**. Pull the code repository and run the same continuation command;
+the selected backend skips qualification/adoption and retries the one real
+iteration. Do not extract an old ZIP over the updated checkout. Subsequent
+g1251 training commands must also carry the pinned imitation dependency.
 
 ## R8: one snapshot per checkpoint commit
 
@@ -56,7 +86,8 @@ to R7. Keep explicit same-config continuation approvals and exact native receipt
 pins. Reuse the R6 teacher binary/tests and R4 ordinary result; the R7 fixture
 failure provides no successful canary to reuse. The [R8 bundle commands](../distribution/rust-lab-b07-g1250/README.md)
 run only remaining gates, with adoption and g1251 continuation commands retained.
-Lab qualification/adoption remains Pending.
+Those lab qualification/adoption gates subsequently passed; see the Git-only
+continuation result above. The real next checkpoint/restart is still Pending.
 
 ## R7: strict checkpoint reload repair
 

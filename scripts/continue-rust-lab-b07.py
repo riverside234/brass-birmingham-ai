@@ -39,10 +39,37 @@ def stage(state, generation):
     return 'train' if state['iteration'] == generation else 'verify'
 
 
-def training_command(root, run, config, generation, mono):
+def imitation_arguments(root, run, state):
+    """Carry the committed IL dependency, never infer a new initialization.
+
+    The trainer still loads and validates the complete IL lineage and the saved
+    self-play checkpoint. Do not duplicate that model load in this launcher.
+    """
+    from brass_ai.learning.contracts import project_path, require
+    from brass_ai.learning.paths import bound_reference
+    from brass_ai.recovery.config import latest_model_recipe
+    config = state['signature']['config']
+    source = state['signature'].get('imitation_source')
+    required = latest_model_recipe(config)
+    require(source is not None or not required,
+            'Committed latest-model recipe is missing its imitation_source binding')
+    if source is None:return []
+    require(isinstance(source, dict) and isinstance(source.get('bc_run'), str) and source['bc_run'],
+            'Committed imitation_source is missing its bc_run binding')
+    require(config.get('imitation', {}).get('manifest') is None,
+            'Committed imitation_source conflicts with in-run imitation')
+    if required:
+        bound_reference(root, source, config.get('imitation_checkpoint'), ('bc_run', 'path', 'manifest'))
+    dependency = project_path(root, source['bc_run'])
+    require(dependency != project_path(root, run), 'Self-play cannot use itself as its imitation dependency')
+    return ['--imitation-run', str(dependency)]
+
+
+def training_command(root, run, config, generation, mono, *, state):
     return [sys.executable, str(root/'scripts/step5.py'), '--root', str(root),
             '--config', str(config), '--device', 'cuda', '--mono', mono,
-            'train', '--run', str(run), '--iterations', '1', '--expected-generation', str(generation)]
+            'train', '--run', str(run), '--iterations', '1', '--expected-generation', str(generation),
+            *imitation_arguments(root, run, state)]
 
 
 def command(argv, log, env):
@@ -88,6 +115,7 @@ def execute(args, out, report, invoke):
             selected = stage(state, args.expected_generation)
             require(state['signature']['config'].get('teacher_phase', {}).get('mode', 'off') == 'off',
                     'Backend continuation requires teacher off')
+            imitation_arguments(ROOT, run, state)
             if selected != 'adopt':backend.validate_state(state)
             return state, selected
 
@@ -101,6 +129,7 @@ def execute(args, out, report, invoke):
 
     state, selected = inspect()
     initial_config = digest(state['signature']['config'])
+    initial_imitation = digest(state['signature'].get('imitation_source'))
     if selected == 'adopt':
         if args.qualification:
             qualification = project_path(ROOT, args.qualification)
@@ -119,15 +148,19 @@ def execute(args, out, report, invoke):
         manage('adopt', args.expected_generation, ['--qualification', str(qualification)])
         state, selected = inspect()
     require(digest(state['signature']['config']) == initial_config, 'Backend adoption changed the training recipe')
+    require(digest(state['signature'].get('imitation_source')) == initial_imitation,
+            'Backend adoption changed the committed imitation dependency')
     report.update(production_adoption='Passed',backend='rust',teacher='off')
     # Full old-state restoration is read-only; production remains at its current boundary.
     manage('verify-rollback', state['iteration'])
     if selected == 'train':
         config = out/'committed-training-config.json'
         write_json(config, state['signature']['config'])
-        report.update(training_config=pin(config),starting_checkpoint=state['history'][-1],training_started=True)
+        argv = training_command(ROOT, run, config, args.expected_generation, args.mono, state=state)
+        report.update(training_config=pin(config),starting_checkpoint=state['history'][-1],
+                      training_started=True,training_command=argv)
         write_json(out/'qualification.json', report)
-        invoke('training', training_command(ROOT, run, config, args.expected_generation, args.mono))
+        invoke('training', argv)
     manage('verify-next', args.expected_generation+1)
     report.update(passed=True,backend='rust',teacher='off',generation=args.expected_generation+1,
                   production_adoption='Passed',next_normal_commit_restart='Passed',
