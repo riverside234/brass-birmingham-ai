@@ -131,7 +131,8 @@ class Collector(Pipe):
             self.hello = self.call('hello')
             require(self.hello['contract'] == CONTRACT and self.hello['core']['source_sha256'] == SOURCE
                     and self.hello['search_enabled'] is False
-                    and self.hello.get('collection_wire')=='compact-arrays-forced/1', 'Collector uses an unqualified shared core/wire')
+                    and self.hello.get('collection_wire')=='compact-arrays-forced/1'
+                    and self.hello.get('training_arrays')=='ordinary-training-arrays/1', 'Collector uses an unqualified shared core/wire')
         except BaseException:
             self.close(); raise
         self.token = None; self.current = None
@@ -144,10 +145,11 @@ class Collector(Pipe):
         self.current = self.call('begin', **fields, state=origin['state'], rail_keys=origin['rail_keys']) if checkpoint is None else \
             self.call('fork', **fields, checkpoint=checkpoint, indices=indices)
 
-    def append(self, row, evidence):
+    def append(self, row, evidence, *, allow_forced=True):
         require(row['teacher'] is None and row['view']==self.current['decision']['view']
                 and row['choices']==self.current['decision']['choices'], 'Compact ordinary input differs')
-        context = feature_context(evidence.get('model_id') or self.context['model_id'],row['style'],row['intent'])
+        model = 'ordinary-external' if row['behavior']['kind']=='external' else evidence.get('model_id') or self.context['model_id']
+        context = feature_context(model,row['style'],row['intent'])
         record = dict(revision=row['view']['context']['revision'], action_id=row['choices'][row['chosen']]['id'],
                       context=context, seconds=row['seconds'], behavior=row['behavior'], evidence=evidence)
         if self.forced:
@@ -158,7 +160,7 @@ class Collector(Pipe):
                 self.current = self.call('append_forced',token=self.token,records=self.acknowledgements)
                 self.acknowledgements = []
         else:
-            reply = self.call('append_compact',token=self.token,record=record,forced_limit=16 if self.batch_forced else 0)
+            reply = self.call('append_compact',token=self.token,record=record,forced_limit=16 if self.batch_forced and allow_forced else 0)
             self.forced.extend(reply['forced'])
             if self.forced:
                 require(reply['current'] is None and len(self.forced)<=16 and all(
@@ -172,11 +174,36 @@ class Collector(Pipe):
     def release(self):
         self.call('release'); self.current = self.token = None
         self.forced.clear(); self.acknowledgements.clear()
+        self.context = None
 
-    def records(self, receipt):
+    def training_features(self, receipt, rows, *, drain=False):
+        require(len(rows)==receipt['rows'], 'Incomplete training records')
+        start=0
+        while start<len(rows):
+            page=self.call('drain_training' if drain else 'training_arrays',token=self.token,start=start)
+            require(page['wire']=='ordinary-training-arrays/1' and page['token']==self.token
+                    and page['start']==start and page['rows']==len(rows)
+                    and start<page['end']<=min(start+64,len(rows))
+                    and len(page['lengths'])==page['end']-start
+                    and page['feature_version']==VERSION and page['schema_sha256']==SCHEMA,
+                    'Training array binding differs')
+            raw=page['_arrays'];offset=0
+            for index,size in enumerate(page['lengths'],start):
+                row=rows[index];count=len(row['choices'])
+                require(type(size) is int and size==(3128+count*327)*4+32 and offset+size<=len(raw),
+                        'Training array size differs')
+                e=decode_arrays(raw[offset:offset+size],row['choices'])
+                require(np.array_equal(e.state[-12:],np.asarray(row['style']+row['intent'],dtype=np.float32))
+                        and np.array_equal(e.stable_to_relative,[(s-row['seat'])%4 for s in range(4)]),
+                        'Training array context/seat differs')
+                yield e;offset+=size
+            require(offset==len(raw),'Trailing training arrays')
+            start=page['end']
+
+    def records(self, receipt, *, drain=False):
         start = 0
         while start < receipt['rows']:
-            page = self.call('record_arrays',token=self.token,start=start)
+            page = self.call('drain_records' if drain else 'record_arrays',token=self.token,start=start)
             require(page['wire']=='ordinary-records/1' and page['token']==self.token and page['start']==start
                     and page['rows']==receipt['rows'] and start<page['end']<=min(start+64,receipt['rows'])
                     and len(page['lengths'])==page['end']-start, 'Record batch binding differs')
@@ -192,6 +219,17 @@ class Collector(Pipe):
 def feature_context(model_id,style,intent):
     return dict(model_id=model_id,reward_id='ordinary-policy-only',profile_id=CONTRACT,
         style=list(style),intent=list(intent),remaining=[0.]*4,max_cost=0.,stable_descriptors=None)
+
+
+def decode_arrays(raw,choices):
+    count=len(choices)
+    require(len(raw)==(3128+count*327)*4+32, 'Native array dimensions differ')
+    e=Encoded(np.frombuffer(raw,dtype='<f4',count=3128),
+        np.frombuffer(raw,dtype='<f4',count=count*327,offset=3128*4).reshape(count,327),
+        np.frombuffer(raw,dtype='<i8',count=4,offset=(3128+count*327)*4),tuple(x['id'] for x in choices))
+    for a in (e.state,e.actions,e.stable_to_relative):a.flags.writeable=False
+    check_encoded(e)
+    return e
 
 
 class DecisionEncoder:
@@ -218,10 +256,6 @@ class DecisionEncoder:
                 and len(raw)==(3128+count*327)*4+32, 'Native feature array binding/shape differs')
         require((page['format'],page['feature_version'],page['schema_sha256'],page['group_layout'],page['entity_layout'])==
                 (FEATURE_FORMAT,VERSION,SCHEMA,GROUP,ENTITY), 'Native feature contract differs')
-        encoded = Encoded(np.frombuffer(raw,dtype='<f4',count=3128),
-            np.frombuffer(raw,dtype='<f4',count=count*327,offset=3128*4).reshape(count,327),
-            np.frombuffer(raw,dtype='<i8',count=4,offset=(3128+count*327)*4),tuple(x['id'] for x in choices))
-        for value in (encoded.state,encoded.actions,encoded.stable_to_relative): value.flags.writeable=False
-        check_encoded(encoded)
+        encoded = decode_arrays(raw,choices)
         self.cached = key, encoded
         return encoded

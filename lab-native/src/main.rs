@@ -32,7 +32,7 @@ fn run() -> Result<()> {
             match r["op"].as_str().unwrap_or("") {
                 "hello" => Ok(
                     json!({"contract":CONTRACT,"core":brass_ai_core::protocol::BuildIdentity::current(),"search_enabled":false,
-                        "collection_wire":"compact-arrays-forced/1"}),
+                        "collection_wire":"compact-arrays-forced/1", "training_arrays":"ordinary-training-arrays/1"}),
                 ),
                 "begin" | "fork" => {
                     check(lane.is_none(), "release prior lane before begin")?;
@@ -116,6 +116,25 @@ fn run() -> Result<()> {
                         token,
                         r["start"].as_u64().ok_or("missing record cursor")? as usize,
                     )?;
+                    arrays = Some(bytes);
+                    Ok(meta)
+                }
+                "training_arrays" => {
+                    let (meta, bytes) = lane.as_ref().ok_or("missing lane")?.training_arrays(
+                        token,
+                        r["start"].as_u64().ok_or("missing training cursor")? as usize,
+                    )?;
+                    arrays = Some(bytes);
+                    Ok(meta)
+                }
+                "drain_records" | "drain_training" => {
+                    let l = lane.as_mut().ok_or("missing lane")?;
+                    let start = r["start"].as_u64().ok_or("missing drain cursor")? as usize;
+                    let (meta, bytes) = if r["op"] == "drain_records" {
+                        l.drain_records(token, start)?
+                    } else {
+                        l.drain_training(token, start)?
+                    };
                     arrays = Some(bytes);
                     Ok(meta)
                 }

@@ -51,6 +51,11 @@ pub struct Lane {
     max_candidates: usize,
     pending: std::collections::VecDeque<collection_wire::Forced>,
     wire_rows: Vec<(Vec<u8>, Vec<u8>)>,
+    training_arrays: Vec<Vec<u8>>,
+    row_hash: Sha256,
+    evidence_hash: Sha256,
+    drained_rows: usize,
+    drained_features: usize,
 }
 
 impl Lane {
@@ -87,6 +92,11 @@ impl Lane {
             max_candidates: 0,
             pending: Default::default(),
             wire_rows: vec![],
+            training_arrays: vec![],
+            row_hash: Sha256::new_with_prefix(b"["),
+            evidence_hash: Sha256::new_with_prefix(b"["),
+            drained_rows: 0,
+            drained_features: 0,
         })
     }
 
@@ -259,7 +269,8 @@ impl Lane {
         )?;
         row["step"] = json!(self.wire_rows.len());
         let wire = (serde_json::to_vec(&row)?, serde_json::to_vec(&evidence)?);
-        let size = wire.0.len() + wire.1.len();
+        let features = self.tensor_bytes()?;
+        let size = wire.0.len() + wire.1.len() + features.len();
         check(self.bytes + size <= MAX_BYTES, "lane buffer limit reached")?;
         // Stage every fallible operation before publishing the row or new state.
         let mut recorder = self.recorder.clone();
@@ -277,7 +288,14 @@ impl Lane {
         self.transition_time += began.elapsed();
         self.state = next;
         self.recorder = recorder;
+        if !self.wire_rows.is_empty() {
+            self.row_hash.update(b",");
+            self.evidence_hash.update(b",");
+        }
+        self.row_hash.update(&wire.0);
+        self.evidence_hash.update(&wire.1);
         self.wire_rows.push(wire);
+        self.training_arrays.push(features);
         self.pending.pop_front();
         self.bytes += size;
         self.decision = None;
@@ -290,7 +308,10 @@ impl Lane {
             self.state.context().terminal,
             "incomplete lane cannot publish records",
         )?;
-        check(index < self.wire_rows.len(), "row index out of bounds")?;
+        check(
+            index >= self.drained_rows && index < self.wire_rows.len(),
+            "row index out of bounds or retired",
+        )?;
         // Preserve the exact bytes used by the complete-array seals. Python
         // checks these before decoding, avoiding cross-language float formatting.
         Ok(

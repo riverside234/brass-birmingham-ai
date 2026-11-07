@@ -1,10 +1,95 @@
 # B07: cheaper native collection and bounded adoption
 
-Implemented on 2026-11-07. **Ordinary lab correctness passed; useful performance
-did not pass. Repaired canaries, production adoption, and the next normal
-production commit/restart remain Pending.** Run the
+Updated on 2026-11-07. **R4 ordinary qualification is Pending. R3 completed
+collection but failed the matched probability tolerance; useful performance,
+canaries, production adoption and the next normal commit/restart remain Pending.** Run the
 [new g1250 bundle](../distribution/rust-lab-b07-g1250/README.md); do not rerun
 passing B01–B06 qualifications. The installed game is unchanged.
+
+## R4: V4 tables, retained features and reusable lanes
+
+Pulled **inside `results/`**, from `f4652ed` to `e71dc25`. Latest failure:
+`rust-lab-qualification/20261107T101615796829Z-20261107T101336169559Z-g1250-b07-2fcbfcca-0192d294`.
+Both arms completed 3 families, 1,161 decisions and 675 forced rows. Native
+collection took 30.066s versus reference 24.149s; accepted work was 32.684s
+versus 27.212s. Native first read was 2.071s versus 2.467s. Per-family full
+validation/assembly cost 2.119–2.444s. These measurements remain failed-run
+evidence, not a current qualification pass.
+
+The comparison stopped on probability difference **4.68192948e-7**, relative
+**3.22833888e-6**, just outside `rtol=3e-6, atol=1e-8`. Different queue/batch
+shapes can change float32 GPU reductions; the discrete rows inspected before
+the assertion matched. This is consistent with batching roundoff, not proof
+that all later rows matched. R4 checks *all prepared features and targets first*,
+then uses the existing float32 head-check scale (`rtol=1e-5, atol=1e-7`) for
+GPU-derived behavior/branch probabilities and reports maximum errors. Actions,
+candidate order, observations, results, opponent identity, contexts and RNG
+components remain exact; forced/external probabilities must equal one exactly.
+Independently, publication reconstructs each row's probability from its own
+raw evidence with **1e-12 absolute tolerance** (previously 3e-6), and replays
+every sampling draw. Benchmark tolerance never changes stored training data.
+
+R4 retains the completed R3 compact requests, binary features, forced batches,
+batched records and two CPU-admitted publishers. The remaining changes are:
+
+- **V4-containing ordinary tables stay in Rust.** Use the original `LegacyPolicy`
+  / `LabLegacyPolicy` and its C# decision worker on Rust's public observation
+  and ordered legal IDs. Rust alone advances the authoritative state. The C#
+  worker's private planning simulations, plan queues, intent, seed draws,
+  per-turn work/budget accounting and policy IDs are unchanged. Only neural
+  seats use forced batching, matching the reference actor. Searched/nonordinary
+  policies retain their explicit reference route; archived V4 fallback replay
+  remains readable with its original C# producer identity.
+- **Keep training arrays.** Rust captures the exact features at every accepted
+  revision, including forced and V4 rows, and exports bounded binary batches.
+  The Python actor retains `CheckedGame` arrays/seals and its input-validation
+  proof. A single transient NPZ file carries compressed JSON, binary arrays
+  and bindings; the scheduler holds its hash/proof separately. Publication still
+  performs full behavior/RNG/game validation, reusing those arrays. The final
+  cache remains `derived-features/4.0.0`, compatible with existing readers.
+  Archived reference collectors retain their existing CheckedGame metadata too.
+  Missing/obsolete caches still use full validation and regeneration.
+- **Cheaper verification and fewer copies.** Forced verification checks the
+  singleton/evidence/context/counter/probability and consumes exactly one
+  `random()` for v2, two for v3 including its component draw, without NumPy
+  distribution construction. Other sampling math is unchanged. Rust hashes
+  record bytes incrementally and drains exported buffers in order; stale cursors
+  fail and completion seals survive draining. Readers hash the same bytes they
+  decode, verify row/context/seat bindings, and reuse the already verified replay
+  hash. Cache version is pinned once per immutable process; byte hashes are never
+  replaced with stat/mtime trust. Private assembly transfers validated seals;
+  public conversion still detaches data and later mutations remain detectable.
+- **Reuse per-lane processes and policies.** A bounded 12-entry cache retains
+  original policy objects/C# workers and the collector between games in the
+  ordinary pool. Each game gets a new token and per-seat RNG; queues, intents,
+  counters, contexts, branch opening overrides and feature bindings reset.
+  Cancellation retires the lane and private C# workers; failures never reuse a
+  partially completed game. Existing CPU admission, model cohorts, callbacks,
+  branch scheduling and whole-family recovery stay in place.
+
+Short local checks: the 24-stage original C# V4 worker smoke matched every
+observation, action, queued plan, intent, RNG and work-budget field, covering
+13 forced stages and 18 queued continuations. C# state progression took 1.344s
+versus Rust 0.415s; the unchanged V4 decision worker itself took about 11.3s per
+arm and remains a bottleneck. Two alternating publication pairs on the same
+three small authored families matched games/features/targets: median publication
+plus first read **3.014s → 2.427s (19.5% lower)**; validation/assembly
+**0.451s → 0.274s**, warm read **0.885s → 0.619s**. An intermediate separate-file
+handoff regressed and was replaced with the single-file design; its measurement
+is retained. These are component smokes, not g1250 GPU throughput evidence.
+
+Regressions cover retained arrays on native and archived fallback paths,
+independent receipt/cache/row tampering, no Python re-encoding, exact forced RNG,
+V4 queue continuity/reset, process/token reuse, stale and canceled work, draining,
+publisher failure and cold recovery. Run `--ordinary-only` for the new bundle.
+Local validation passed 48 distinct focused Python checks and eight Rust checks;
+the complete two-decision lane smoke also reused the real collector and original
+NeuralPolicy objects across games with a deterministic test inference reply.
+The actual g1250 matched batch still includes self-play, historical NN and
+historical V4 strata: selection now uses V4 presence, so changing the backend
+route does not accidentally drop that third table. Keep the original checkpoint,
+config, 60-worker cap, teacher-off default and search_v1 behavior. No B01–B06
+qualification or long session is repeated. Canary/adoption work remains separate.
 
 ## B07 R3 qualification repair
 

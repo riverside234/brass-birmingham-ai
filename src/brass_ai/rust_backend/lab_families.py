@@ -46,7 +46,13 @@ def same_fork_evidence(native,original):
 
 
 def validate_part(part, job, *, child=False, arrays=None):
-    game=check_game(part['game']) if arrays is None else check_game(part['game'],arrays,validated_inputs=True)
+    from brass_ai.recovery.replay import CheckedGame
+    original=part['game'];validated=arrays is not None
+    if arrays is None and isinstance(original,CheckedGame):
+        original.assert_metadata()
+        arrays=[original.encoded(r,None) for r in original['records']]
+        validated=getattr(original,'actor_validated',False)
+    game=check_game(original) if arrays is None else check_game(original,arrays,validated_inputs=validated)
     group=digest(dict(rules='steam-brass-patch-1.1.0',setup_seed=job['seed']))
     parent_id=job.get('stable_game_id') or digest(dict(job=frozen_id(job),seed=job['seed']))
     expected_id=parent_id+'/branch/'+game['branch']['seed'] if child else parent_id
@@ -84,7 +90,13 @@ def validate_part(part, job, *, child=False, arrays=None):
                     'Missing/unsafe excluded-fork evidence');continue
         require(set(evidence)<= {'kind','model_id','policy_id','forced','raw_probabilities','feature_version','semantic_id'},
                 'Unexpected/private ordinary evidence')
-        if spec['kind']!='neural':continue
+        if spec['kind']!='neural':
+            require(row['behavior']['kind']=='external' and row['behavior']['probability']==1.
+                    and evidence['model_id'] is None and evidence['raw_probabilities'] is None
+                    and evidence['policy_id']==spec['policy_id'] and evidence['kind']=='ordinary'
+                    and evidence['semantic_id']==row['choices'][row['chosen']]['id'],
+                    'External behavior attribution differs')
+            continue
         b=row['behavior'];phase=row['view']['context']['phase'];seat=row['seat'];opening=spec.get('opening')
         if child:opening=branch_opening(job,opening)
         focus=job.get('focuses',{}).get(str(seat),'neutral') if spec['focus']=='mixed' else spec['focus']
@@ -103,15 +115,24 @@ def validate_part(part, job, *, child=False, arrays=None):
             require(b['exploration_version']==version and b['exploration']==spec['exploration'],
                     'Frozen exploration settings differ')
         if phase=='action':counts[seat]+=1
+        require(evidence['model_id']==spec['model_id'] and evidence['policy_id']==spec['policy_id']
+                and evidence['semantic_id']==row['choices'][row['chosen']]['id'],'Evidence attribution differs')
+        require('forced' not in evidence or evidence['forced']==(len(row['choices'])==1),'Forced evidence differs')
+        if len(row['choices'])==1:
+            require(evidence['raw_probabilities']==[1.] and row['chosen']==0 and b['probability']==1.,'Forced choice differs')
+            if version==3:
+                explore=rngs[seat].random()<spec['exploration']
+                require(b['component']==('exploration' if explore else 'policy'),'Sampling component differs')
+            # random.choices([0], weights=[1.]) consumes exactly one random().
+            rngs[seat].random()
+            continue
         raw=np.asarray(evidence['raw_probabilities'],dtype=np.float64)
         require(raw.shape==(len(row['choices']),) and np.isfinite(raw).all() and (raw>=0).all()
                 and abs(raw.sum()-1)<1e-5,'Invalid raw policy evidence')
-        require(evidence['model_id']==spec['model_id'] and evidence['policy_id']==spec['policy_id']
-                and evidence['semantic_id']==row['choices'][row['chosen']]['id'],'Evidence attribution differs')
         raw/=raw.sum(); p=np.power(raw.clip(1e-30),1/temperature);p/=p.sum()
         q=exploration_distribution(row['choices'],row['intent'],spec.get('exploration_version',2),phase)
         mixed=(1-spec['exploration'])*p+spec['exploration']*q
-        require(abs(b['probability']-float(mixed[row['chosen']]))<3e-6,'Behavior denominator differs')
+        require(abs(b['probability']-float(mixed[row['chosen']]))<1e-12,'Behavior denominator differs')
         require(len(row['choices'])!=1 or b['probability']==1.,'Forced choice probability differs')
         # Replay the original per-seat random stream, including forced and
         # intermediate choices. No GPU call or new policy identity is involved.

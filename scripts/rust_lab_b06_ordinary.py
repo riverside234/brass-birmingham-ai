@@ -131,7 +131,7 @@ def run(args,snapshot,build,reference_info):
                 if frozen is None:
                     frozen=[frozen_id(j) for j in jobs]
                     write_json(output/'frozen-jobs.json',dict(jobs=jobs,full_plan_hash=digest(planned['jobs']),
-                        composition=planned['composition'],subset_by='first actual (kind,route) stratum',
+                        composition=planned['composition'],subset_by='first actual (kind,V4 presence) stratum',
                         branch_override=False,execution=execution,teacher='off'))
                 require(frozen==[frozen_id(j) for j in jobs],'Comparison replanned different jobs')
                 with meter.phase('reference_policy_preflight'):
@@ -161,8 +161,8 @@ def run(args,snapshot,build,reference_info):
             write_json(directory/'report.json',report)
             arms[arm]=report;all_games[arm]=games;all_rows[arm]=rows
             del model,raw
-    matched=compare_games(all_games['reference'],all_games['rust'])
     prepared_count=sum(compare_rows(a,b) for a,b in zip(all_rows['reference'],all_rows['rust'],strict=True))
+    matched=compare_games(all_games['reference'],all_games['rust'])
     result=dict(passed=True,arms=arms,matched=matched,prepared_rows=prepared_count,
         performance=performance(arms['reference'],arms['rust'],matched['equal']),
         natural_branch_observed=bool(matched['work']['branches']),

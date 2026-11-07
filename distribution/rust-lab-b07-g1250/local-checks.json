@@ -1,345 +1,180 @@
 {
   "passed": true,
-  "implementation": "f6372cefd9a48c98994d2f2e8424b032f4d5c808aceab140bb6442b92214cfc9",
+  "implementation": "12d996a03debe816d1c3661872faeafa9e79c6ea97646d83cf19393dd57bd5ba",
   "lab_qualification": "Pending",
   "production_modified": false,
   "python_tests": {
-    "run": 43,
-    "seconds": 144.365,
-    "passed": true,
-    "command": "python -m unittest test_b07_retry test_b07 test_b07_wire test_b02.Behavior -q",
-    "native_wire_enabled": true
+    "unique_checks": 48,
+    "focused": 41,
+    "focused_seconds": 122.665,
+    "retry": 5,
+    "retry_seconds": 7.055,
+    "cancellation_checks": 2,
+    "cancellation_seconds": 0.278,
+    "native_wire_enabled": true,
+    "scope": "Affected collection/publication/reading/reset/cancellation/recovery and qualification comparisons; no full adoption/update tests repeated",
+    "complete_lane_integration": 1,
+    "complete_lane_integration_seconds": 1.048
   },
   "rust_tests": {
-    "ordinary": 7,
-    "teacher_feature": 41,
+    "ordinary": 8,
+    "seconds": 4.44,
     "passed": true,
-    "scope": "Same seven lane tests against unmodified B01 and teacher overlay; 31 teacher and three exact float-wire regressions."
+    "scope": "Unmodified sealed B01 core; ordinary adapter only; teacher/search unchanged"
   },
   "source_review": {
     "g1250_resume_verified": true,
-    "search_core_source_unchanged": true,
-    "search_v1_equations_unchanged": true
+    "shared_core_unchanged": true,
+    "search_v1_unchanged": true
   },
-  "transport": {
+  "v4": {
     "passed": true,
-    "scope": "Two alternating matched wire-only fixture pairs; no NN/inference or accepted-work speed claim",
-    "frozen_origins": "cca86e6c515edb543af55b5054c13e2d7737776fcc8e12d796ab876eb3789622",
-    "runs": [
-      {
-        "root": "game-731003-root-004",
-        "repeat": 0,
-        "decisions": 24,
-        "forced": 12,
-        "completed": false,
-        "baseline": {
-          "startup_seconds": 0.1019633999094367,
-          "features_seconds": 0.7233701999066398,
-          "sampling_seconds": 0.010264200158417225,
-          "append_seconds": 0.3661987998057157,
-          "collection_seconds": 1.1776555000105873,
-          "ipc_request_encode_seconds": 0.04127300041727722,
-          "ipc_sent_bytes": 1946375,
-          "ipc_calls": 119,
-          "ipc_hello_calls": 1,
-          "ipc_received_bytes": 10169707,
-          "ipc_reply_decode_seconds": 0.4122827001847327,
-          "ipc_round_trip_seconds": 1.0786365998210385,
-          "ipc_hello_seconds": 0.05706999998074025,
-          "ipc_begin_calls": 1,
-          "ipc_begin_seconds": 0.013665299979038537,
-          "ipc_features_calls": 81,
-          "ipc_features_seconds": 0.6034318996826187,
-          "ipc_checkpoint_calls": 12,
-          "ipc_checkpoint_seconds": 0.07424480014014989,
-          "ipc_append_calls": 24,
-          "ipc_append_seconds": 0.3307918998179957
-        },
-        "optimized": {
-          "startup_seconds": 0.10979369992855936,
-          "features_seconds": 0.05972870020195842,
-          "sampling_seconds": 0.009430999867618084,
-          "append_seconds": 0.251617299974896,
-          "collection_seconds": 0.39473639999050647,
-          "ipc_request_encode_seconds": 0.005423099733889103,
-          "ipc_sent_bytes": 98745,
-          "ipc_calls": 50,
-          "ipc_hello_calls": 1,
-          "ipc_received_bytes": 8198752,
-          "ipc_reply_decode_seconds": 0.057643699226900935,
-          "ipc_round_trip_seconds": 0.440740299760364,
-          "ipc_hello_seconds": 0.06509609997738153,
-          "ipc_begin_calls": 1,
-          "ipc_begin_seconds": 0.01770970004145056,
-          "ipc_feature_arrays_calls": 12,
-          "ipc_feature_arrays_seconds": 0.040761000011116266,
-          "ipc_checkpoint_calls": 12,
-          "ipc_checkpoint_seconds": 0.07049229985568672,
-          "ipc_append_compact_calls": 12,
-          "ipc_append_compact_seconds": 0.12729490001220256,
-          "ipc_append_forced_calls": 12,
-          "ipc_append_forced_seconds": 0.1196314999833703
-        }
-      },
-      {
-        "root": "game-731007-root-027",
-        "repeat": 0,
-        "decisions": 2,
-        "forced": 1,
-        "completed": true,
-        "baseline": {
-          "startup_seconds": 0.09360839996952564,
-          "features_seconds": 0.013465099968016148,
-          "sampling_seconds": 0.000990399974398315,
-          "append_seconds": 0.03119329991750419,
-          "collection_seconds": 0.04577999992761761,
-          "export_seconds": 0.005149599979631603,
-          "ipc_request_encode_seconds": 0.004275700077414513,
-          "ipc_sent_bytes": 231705,
-          "ipc_calls": 9,
-          "ipc_hello_calls": 1,
-          "ipc_received_bytes": 382368,
-          "ipc_reply_decode_seconds": 0.007098100264556706,
-          "ipc_round_trip_seconds": 0.11777810018975288,
-          "ipc_hello_seconds": 0.05773940007202327,
-          "ipc_begin_calls": 1,
-          "ipc_begin_seconds": 0.014704299974255264,
-          "ipc_features_calls": 2,
-          "ipc_features_seconds": 0.012210700078867376,
-          "ipc_append_calls": 2,
-          "ipc_append_seconds": 0.028294800082221627,
-          "ipc_finish_calls": 1,
-          "ipc_finish_seconds": 0.002502199960872531,
-          "ipc_row_calls": 2,
-          "ipc_row_seconds": 0.0023737000301480293
-        },
-        "optimized": {
-          "startup_seconds": 0.1580118000274524,
-          "features_seconds": 0.0069518000818789005,
-          "sampling_seconds": 0.00046980008482933044,
-          "append_seconds": 0.021509800106287003,
-          "collection_seconds": 0.029182099970057607,
-          "export_seconds": 0.004232999985106289,
-          "ipc_request_encode_seconds": 0.0015527998330071568,
-          "ipc_sent_bytes": 80518,
-          "ipc_calls": 7,
-          "ipc_hello_calls": 1,
-          "ipc_received_bytes": 334104,
-          "ipc_reply_decode_seconds": 0.005183399887755513,
-          "ipc_round_trip_seconds": 0.12869189982302487,
-          "ipc_hello_seconds": 0.08102440007496625,
-          "ipc_begin_calls": 1,
-          "ipc_begin_seconds": 0.01613169990014285,
-          "ipc_feature_arrays_calls": 1,
-          "ipc_feature_arrays_seconds": 0.006390800001099706,
-          "ipc_append_compact_calls": 1,
-          "ipc_append_compact_seconds": 0.018105000024661422,
-          "ipc_append_forced_calls": 1,
-          "ipc_append_forced_seconds": 0.0031177999917417765,
-          "ipc_finish_calls": 1,
-          "ipc_finish_seconds": 0.0026076999492943287,
-          "ipc_record_arrays_calls": 1,
-          "ipc_record_arrays_seconds": 0.0013507000403478742
-        }
-      },
-      {
-        "root": "game-731003-root-004",
-        "repeat": 1,
-        "decisions": 24,
-        "forced": 12,
-        "completed": false,
-        "optimized": {
-          "startup_seconds": 0.10126080003101379,
-          "features_seconds": 0.053557199658825994,
-          "sampling_seconds": 0.010125600034371018,
-          "append_seconds": 0.2675717998063192,
-          "collection_seconds": 0.40653769997879863,
-          "ipc_request_encode_seconds": 0.004301200387999415,
-          "ipc_sent_bytes": 98745,
-          "ipc_calls": 50,
-          "ipc_hello_calls": 1,
-          "ipc_received_bytes": 8198752,
-          "ipc_reply_decode_seconds": 0.05444750003516674,
-          "ipc_round_trip_seconds": 0.4492805997142568,
-          "ipc_hello_seconds": 0.061920000007376075,
-          "ipc_begin_calls": 1,
-          "ipc_begin_seconds": 0.013813800062052906,
-          "ipc_feature_arrays_calls": 12,
-          "ipc_feature_arrays_seconds": 0.03877399966586381,
-          "ipc_checkpoint_calls": 12,
-          "ipc_checkpoint_seconds": 0.07175710005685687,
-          "ipc_append_compact_calls": 12,
-          "ipc_append_compact_seconds": 0.13165490003302693,
-          "ipc_append_forced_calls": 12,
-          "ipc_append_forced_seconds": 0.13162189989816397
-        },
-        "baseline": {
-          "startup_seconds": 0.11467959999572486,
-          "features_seconds": 0.7069058998022228,
-          "sampling_seconds": 0.01034320006147027,
-          "append_seconds": 0.45164109976030886,
-          "collection_seconds": 1.2487647000234574,
-          "ipc_request_encode_seconds": 0.03776009986177087,
-          "ipc_sent_bytes": 1946375,
-          "ipc_calls": 119,
-          "ipc_hello_calls": 1,
-          "ipc_received_bytes": 10169707,
-          "ipc_reply_decode_seconds": 0.49338000104762614,
-          "ipc_round_trip_seconds": 1.15748890012037,
-          "ipc_hello_seconds": 0.0572607999201864,
-          "ipc_begin_calls": 1,
-          "ipc_begin_seconds": 0.01410779997240752,
-          "ipc_features_calls": 81,
-          "ipc_features_seconds": 0.5908332004910335,
-          "ipc_checkpoint_calls": 12,
-          "ipc_checkpoint_seconds": 0.07656910025980324,
-          "ipc_append_calls": 24,
-          "ipc_append_seconds": 0.4193271001568064
-        }
-      },
-      {
-        "root": "game-731007-root-027",
-        "repeat": 1,
-        "decisions": 2,
-        "forced": 1,
-        "completed": true,
-        "optimized": {
-          "startup_seconds": 0.10983189998660237,
-          "features_seconds": 0.005633300053887069,
-          "sampling_seconds": 0.00043970008846372366,
-          "append_seconds": 0.01702339993789792,
-          "collection_seconds": 0.023213200038298965,
-          "export_seconds": 0.002657799981534481,
-          "ipc_request_encode_seconds": 0.0014386001275852323,
-          "ipc_sent_bytes": 80518,
-          "ipc_calls": 7,
-          "ipc_hello_calls": 1,
-          "ipc_received_bytes": 334104,
-          "ipc_reply_decode_seconds": 0.003630800056271255,
-          "ipc_round_trip_seconds": 0.11251699982676655,
-          "ipc_hello_seconds": 0.06575309997424483,
-          "ipc_begin_calls": 1,
-          "ipc_begin_seconds": 0.022102199960500002,
-          "ipc_feature_arrays_calls": 1,
-          "ipc_feature_arrays_seconds": 0.00538870005402714,
-          "ipc_append_compact_calls": 1,
-          "ipc_append_compact_seconds": 0.01404270005878061,
-          "ipc_append_forced_calls": 1,
-          "ipc_append_forced_seconds": 0.0027436999371275306,
-          "ipc_finish_calls": 1,
-          "ipc_finish_seconds": 0.0018488999921828508,
-          "ipc_record_arrays_calls": 1,
-          "ipc_record_arrays_seconds": 0.0006762000266462564
-        },
-        "baseline": {
-          "startup_seconds": 0.1312542000086978,
-          "features_seconds": 0.011430899961851537,
-          "sampling_seconds": 0.0004360000602900982,
-          "append_seconds": 0.02779770002234727,
-          "collection_seconds": 0.03976240009069443,
-          "export_seconds": 0.00879940006416291,
-          "ipc_request_encode_seconds": 0.005692599923349917,
-          "ipc_sent_bytes": 231705,
-          "ipc_calls": 9,
-          "ipc_hello_calls": 1,
-          "ipc_received_bytes": 382368,
-          "ipc_reply_decode_seconds": 0.00750249985139817,
-          "ipc_round_trip_seconds": 0.15430359996389598,
-          "ipc_hello_seconds": 0.09761499997694045,
-          "ipc_begin_calls": 1,
-          "ipc_begin_seconds": 0.014209400047548115,
-          "ipc_features_calls": 2,
-          "ipc_features_seconds": 0.01043060002848506,
-          "ipc_append_calls": 2,
-          "ipc_append_seconds": 0.023694799980148673,
-          "ipc_finish_calls": 1,
-          "ipc_finish_seconds": 0.003069999977014959,
-          "ipc_row_calls": 2,
-          "ipc_row_seconds": 0.0053270000498741865
-        }
-      }
-    ]
+    "counts": {
+      "decisions": 24,
+      "forced": 13,
+      "queued_continuations": 18
+    },
+    "phases": {
+      "csharp_step_seconds": 1.3443310001166537,
+      "rust_step_seconds": 0.4147735999431461,
+      "v4_reference_seconds": 11.391415800200775,
+      "v4_native_seconds": 11.300788900116459
+    },
+    "trace_sha256": "364b73976029e6394270cfc9e19ea896eb44d19f48b7e1308c1220eb558ffbcd",
+    "policy_id": "shared-legacy-search/7daaeedaafb8da25d177caafc0c4fb4f23477abd734442a2d9b1b99eb360026e",
+    "seed": 19553778,
+    "spec_sha256": "7487d539116dedfc491941cd7465c6ce039794afcaf2dc14b7af104102d1ecac",
+    "rng_equal": true,
+    "plans_intent_budgets_equal": true,
+    "scope": "24 stages; original C# V4 worker against Rust and C# progression; no full game/NN or throughput claim"
   },
   "publication": {
     "passed": true,
-    "samples": [
-      {
-        "arm": "r2",
-        "repeat": 0,
-        "publication_seconds": 1.256137999938801,
-        "first_read_seconds": 0.6154133999953046,
-        "warm_read_seconds": 0.7043823000276461,
-        "publication_first_read_seconds": 1.8715513999341056
-      },
-      {
-        "arm": "r3",
-        "repeat": 0,
-        "publication_seconds": 1.1772182000568137,
-        "first_read_seconds": 0.5656105999369174,
-        "warm_read_seconds": 0.4750044000102207,
-        "publication_first_read_seconds": 1.742828799993731
-      },
-      {
-        "arm": "r3",
-        "repeat": 1,
-        "publication_seconds": 1.0998438999522477,
-        "first_read_seconds": 0.4456131999613717,
-        "warm_read_seconds": 0.5396622000262141,
-        "publication_first_read_seconds": 1.5454570999136195
-      },
-      {
-        "arm": "r2",
-        "repeat": 1,
-        "publication_seconds": 1.1979103999910876,
-        "first_read_seconds": 0.45472529996186495,
-        "warm_read_seconds": 0.6081452000653371,
-        "publication_first_read_seconds": 1.6526356999529526
-      },
-      {
-        "arm": "r2",
-        "repeat": 2,
-        "publication_seconds": 1.21919049997814,
-        "first_read_seconds": 0.5001884999219328,
-        "warm_read_seconds": 0.5779808000661433,
-        "publication_first_read_seconds": 1.7193789999000728
-      },
-      {
-        "arm": "r3",
-        "repeat": 2,
-        "publication_seconds": 1.1243471000343561,
-        "first_read_seconds": 0.4524223000044003,
-        "warm_read_seconds": 0.4625705999787897,
-        "publication_first_read_seconds": 1.5767694000387564
-      }
-    ],
     "medians": {
-      "r2": {
-        "publication_seconds": 1.21919049997814,
-        "first_read_seconds": 0.5001884999219328,
-        "warm_read_seconds": 0.6081452000653371,
-        "publication_first_read_seconds": 1.7193789999000728
-      },
       "r3": {
-        "publication_seconds": 1.1243471000343561,
-        "first_read_seconds": 0.4524223000044003,
-        "warm_read_seconds": 0.4750044000102207,
-        "publication_first_read_seconds": 1.5767694000387564
+        "publication_seconds": 2.0299835999612696,
+        "first_read_seconds": 0.9837824000278488,
+        "warm_read_seconds": 0.8848873499664478,
+        "publication_first_read_seconds": 3.0137659999891184,
+        "validation_assembly_seconds": 0.45070379989920184
+      },
+      "r4": {
+        "publication_seconds": 1.6260826999787241,
+        "first_read_seconds": 0.8004753499408253,
+        "warm_read_seconds": 0.618540600000415,
+        "publication_first_read_seconds": 2.4265580499195494,
+        "validation_assembly_seconds": 0.27426144998753443
       }
     },
+    "samples": [
+      {
+        "arm": "r3",
+        "repeat": 0,
+        "publication_seconds": 2.1892676999559626,
+        "first_read_seconds": 0.8869211000856012,
+        "warm_read_seconds": 0.844211500021629,
+        "publication_first_read_seconds": 3.076188800041564,
+        "validation_assembly_seconds": 0.4171360998880118
+      },
+      {
+        "arm": "r4",
+        "repeat": 0,
+        "publication_seconds": 1.8020176999270916,
+        "first_read_seconds": 0.8851902999449521,
+        "warm_read_seconds": 0.6077573000220582,
+        "publication_first_read_seconds": 2.6872079998720437,
+        "validation_assembly_seconds": 0.24024089996237308
+      },
+      {
+        "arm": "r4",
+        "repeat": 1,
+        "publication_seconds": 1.4501477000303566,
+        "first_read_seconds": 0.7157603999366984,
+        "warm_read_seconds": 0.6293238999787718,
+        "publication_first_read_seconds": 2.165908099967055,
+        "validation_assembly_seconds": 0.3082820000126958
+      },
+      {
+        "arm": "r3",
+        "repeat": 1,
+        "publication_seconds": 1.8706994999665767,
+        "first_read_seconds": 1.0806436999700963,
+        "warm_read_seconds": 0.9255631999112666,
+        "publication_first_read_seconds": 2.951343199936673,
+        "validation_assembly_seconds": 0.48427149991039187
+      }
+    ],
     "identical_games_features_targets": true,
-    "scope": "Three alternating batches; three eight-decision authored families each. Serial publication isolates reduced work; no game/GPU/parallel-publisher throughput claim.",
-    "lab_qualification": "Pending"
+    "scope": "Two alternating pairs; same three small authored families, including archived V4 fallback. Component timings, no g1250 GPU/accepted-work claim."
   },
-  "intermediate_regression": {
-    "retained": "evidence/r3-publication-intermediate-regression.json",
-    "reason": "Maximum-sized buffered file reads allocated oversized buffers; replaced with opened-file size plus one byte and length/hash checks."
+  "intermediate_handoff_regression": {
+    "passed": true,
+    "medians": {
+      "r3": {
+        "publication_seconds": 1.9927759999991395,
+        "first_read_seconds": 0.7840566500090063,
+        "warm_read_seconds": 0.7736593500012532,
+        "publication_first_read_seconds": 2.7768326500081457,
+        "validation_assembly_seconds": 0.42086799995740876
+      },
+      "r4": {
+        "publication_seconds": 2.2724453499540687,
+        "first_read_seconds": 0.9082748999935575,
+        "warm_read_seconds": 0.725005499960389,
+        "publication_first_read_seconds": 3.180720249947626,
+        "validation_assembly_seconds": 0.25887950003379956
+      }
+    },
+    "samples": [
+      {
+        "arm": "r3",
+        "repeat": 0,
+        "publication_seconds": 2.035630999947898,
+        "first_read_seconds": 0.7100634999806061,
+        "warm_read_seconds": 0.7213776999851689,
+        "publication_first_read_seconds": 2.7456944999285042,
+        "validation_assembly_seconds": 0.3972822999348864
+      },
+      {
+        "arm": "r4",
+        "repeat": 0,
+        "publication_seconds": 2.547535300021991,
+        "first_read_seconds": 1.0125143999466673,
+        "warm_read_seconds": 0.7556534999748692,
+        "publication_first_read_seconds": 3.5600496999686584,
+        "validation_assembly_seconds": 0.25612800009548664
+      },
+      {
+        "arm": "r4",
+        "repeat": 1,
+        "publication_seconds": 1.9973553998861462,
+        "first_read_seconds": 0.8040354000404477,
+        "warm_read_seconds": 0.6943574999459088,
+        "publication_first_read_seconds": 2.801390799926594,
+        "validation_assembly_seconds": 0.2616309999721125
+      },
+      {
+        "arm": "r3",
+        "repeat": 1,
+        "publication_seconds": 1.9499210000503808,
+        "first_read_seconds": 0.8580498000374064,
+        "warm_read_seconds": 0.8259410000173375,
+        "publication_first_read_seconds": 2.807970800087787,
+        "validation_assembly_seconds": 0.4444536999799311
+      }
+    ],
+    "identical_games_features_targets": true,
+    "scope": "Two alternating pairs; same three small authored families, including archived V4 fallback. Component timings, no g1250 GPU/accepted-work claim."
   },
   "evidence": {
-    "r3-python.log": "7d0f0294018b4ce44e012936ef9196992da3f866a4748eea82a73c00547f0dc8",
-    "r3-native-ordinary.log": "af6c492188af51a643d7387b00260b709ba8e17ff4dc20148508918c02e9eb25",
-    "r3-native-teacher.log": "8b0cfcb49a227bf3e5ead48f8eb9e91a586904e4b92af03899c4260ea803cf05",
-    "r3-transport.json": "4659d9c17b1d9f30540358de44846789091c9fd6da19cd30bcd91c0d0614ad4f",
-    "r3-publication.json": "5b28757e1877d8e40ca57a819815b951716bda9f584c598fea5b35729cc0bafa",
-    "r3-publication-intermediate-regression.json": "9ac9a781fd26de7e25c62315197970bf0338b898817e362b243a3d38110bc89e"
+    "r4-focused.log": "6e329b6fd86b6388e5ae362b9b642b9bd8a5d204e528e074d0ebe833dbabc62d",
+    "r4-retry.log": "6671ee017d3dac6271c3fe118279f49ab1456c571b06823d41b48877a062b483",
+    "r4-cancel.log": "8610d243b3442f9324af2fd40da50ba1ab06f5d812d5cde4f3e320230e5926d2",
+    "r4-test.log": "d9a8deb91919120148bebe480b13b14a4180597b6b34706fa0afcce4a3e9d8c2",
+    "r4-build.log": "3b15fbb182f814750cf038dda8e181371e4b2b02e5737186ebdd69df6bf3861c",
+    "r4-v4.json": "2194e19a21195c71fc2b844ffa139a54eb19f47ba32ba55b3a6dd455f8edc270",
+    "r4-publication-combined.json": "056a9093c1447f2190b29d82704a23e9b7300044b6a90d99c28fe56d6d66e369",
+    "r4-publication.json": "867a0fd70796156da0480bae616a7ee0148fc021d852cb5b2aaaa8de90b75f76",
+    "r4-integration.log": "31f02c1641de834f108882689b8327680cb9de02768171e43cc1b239a7a0ebfe"
   }
 }

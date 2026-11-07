@@ -10,6 +10,18 @@ pub(crate) struct Forced {
 }
 
 impl Lane {
+    pub(super) fn tensor_bytes(&self) -> Result<Vec<u8>> {
+        let t = self.encoder.tensors().ok_or("missing tensors")?;
+        check(t.legal_mask.iter().all(|x| *x), "ordinary candidate mask")?;
+        let mut bytes = Vec::with_capacity((t.state.len() + t.actions.len()) * 4 + 32);
+        for x in t.state.iter().chain(&t.actions) {
+            bytes.extend_from_slice(&x.to_le_bytes());
+        }
+        for x in &t.stable_to_relative {
+            bytes.extend_from_slice(&x.to_le_bytes());
+        }
+        Ok(bytes)
+    }
     pub fn public_context(&self) -> Result<Value> {
         Ok(serde_json::to_value(self.state.context())?)
     }
@@ -90,9 +102,14 @@ impl Lane {
                 .is_some_and(|x| x.is_finite() && x >= 0.),
             "invalid policy timing",
         )?;
-        if forced {
-            // No inference for a singleton. Admission still encodes and checks its
-            // training features; do not ship unused actor tensors across the pipe.
+        if forced || value["behavior"]["kind"] == "external" {
+            // Preserve every training tensor at its authoritative revision. No
+            // actor feature RPC is needed for forced choices or C# V4 decisions.
+            let began = Instant::now();
+            let (view, choices) = self.decision.as_ref().unwrap();
+            self.encoder
+                .encode(view, choices, &context, &mut || Ok(()))?;
+            self.feature_time += began.elapsed();
             self.encoded = Some(context.clone());
         }
         check(
@@ -103,7 +120,11 @@ impl Lane {
         check(
             evidence["kind"] == "excluded-fork"
                 || (evidence["kind"] == "ordinary"
-                    && evidence["model_id"] == context.model_id
+                    && (evidence["model_id"] == context.model_id
+                        || (row["behavior"]["kind"] == "external"
+                            && evidence["model_id"].is_null()
+                            && context.model_id == "ordinary-external"
+                            && evidence["raw_probabilities"].is_null()))
                     && evidence["policy_id"] == row["behavior"]["policy_id"]
                     && evidence["semantic_id"] == id
                     && evidence["forced"] == forced
@@ -190,7 +211,10 @@ impl Lane {
             token == self.token && self.pending.is_empty() && self.state.context().terminal,
             "incomplete/foreign record export",
         )?;
-        check(start < self.wire_rows.len(), "invalid record cursor")?;
+        check(
+            start >= self.drained_rows && start < self.wire_rows.len(),
+            "invalid record cursor",
+        )?;
         let mut bytes = vec![];
         let mut lengths = vec![];
         for (row, evidence) in self.wire_rows.iter().skip(start).take(64) {
@@ -209,15 +233,64 @@ impl Lane {
     }
 
     pub(super) fn records_seal(&self, evidence: bool) -> String {
-        let mut hash = Sha256::new();
-        hash.update(b"[");
-        for (i, (row, ev)) in self.wire_rows.iter().enumerate() {
-            if i > 0 {
-                hash.update(b",");
-            }
-            hash.update(if evidence { ev } else { row });
-        }
+        let mut hash = if evidence {
+            self.evidence_hash.clone()
+        } else {
+            self.row_hash.clone()
+        };
         hash.update(b"]");
         format!("{:x}", hash.finalize())
+    }
+
+    pub fn drain_records(&mut self, token: &str, start: usize) -> Result<(Value, Vec<u8>)> {
+        check(start == self.drained_rows, "stale record drain cursor")?;
+        let result = self.record_arrays(token, start)?;
+        let end = result.0["end"].as_u64().ok_or("missing drain end")? as usize;
+        for row in &mut self.wire_rows[start..end] {
+            *row = (vec![], vec![]);
+        }
+        self.drained_rows = end;
+        Ok(result)
+    }
+
+    pub fn drain_training(&mut self, token: &str, start: usize) -> Result<(Value, Vec<u8>)> {
+        check(start == self.drained_features, "stale feature drain cursor")?;
+        let result = self.training_arrays(token, start)?;
+        let end = result.0["end"].as_u64().ok_or("missing drain end")? as usize;
+        for features in &mut self.training_arrays[start..end] {
+            *features = vec![];
+        }
+        self.drained_features = end;
+        Ok(result)
+    }
+
+    /// Training arrays share the exact row ordinal/context from append. The
+    /// actor validates the raw inputs; the independent publisher rechecks the
+    /// behavior and binds these arrays to its authoritative replay receipt.
+    pub fn training_arrays(&self, token: &str, start: usize) -> Result<(Value, Vec<u8>)> {
+        check(
+            token == self.token && self.pending.is_empty() && self.state.context().terminal,
+            "incomplete/foreign training export",
+        )?;
+        check(
+            start >= self.drained_features && start < self.training_arrays.len(),
+            "invalid training cursor",
+        )?;
+        let mut bytes = vec![];
+        let mut lengths = vec![];
+        for raw in self.training_arrays.iter().skip(start).take(64) {
+            if !lengths.is_empty() && bytes.len() + raw.len() > 2 * 1024 * 1024 {
+                break;
+            }
+            lengths.push(raw.len());
+            bytes.extend_from_slice(raw);
+        }
+        Ok((
+            json!({"wire":"ordinary-training-arrays/1","token":token,"start":start,
+            "end":start+lengths.len(),"rows":self.training_arrays.len(),"lengths":lengths,
+            "feature_version":FEATURE_VERSION,"schema_sha256":META.feature_schema_sha256,
+            "bytes":bytes.len()}),
+            bytes,
+        ))
     }
 }

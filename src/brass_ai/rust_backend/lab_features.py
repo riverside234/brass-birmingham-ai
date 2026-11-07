@@ -1,0 +1,116 @@
+"""Native I/O for the existing derived-features/4 cache and CheckedGame.
+
+The scheduler holds receipts separately. Read each byte once, reuse the replay
+hash already verified by admission, and retain row bindings across process IPC.
+The general replay format/encoder version and historical datasets are unchanged.
+"""
+import hashlib
+import io
+import json
+from functools import lru_cache
+from pathlib import Path
+import numpy as np
+from brass_ai.learning.contracts import compatibility, digest, require
+from brass_ai.learning.features import Encoded, check_encoded
+from brass_ai.learning.local_entities import check_action_selectors
+from brass_ai.recovery.replay import CheckedGame, _cache_paths, cache_version, row_key, label_key
+
+LIMIT = 512*1024**2
+
+# Like admission's validator ID, this pins the loaded code for one immutable
+# process. A source deployment always starts fresh workers/readers.
+version=lru_cache(maxsize=1)(cache_version)
+
+
+def read_bytes(path):
+    import os
+    with Path(path).open('rb') as stream:
+        size=os.fstat(stream.fileno()).st_size
+        require(0<size<=LIMIT,'Feature cache exceeds bound')
+        data=stream.read(size+1)
+    require(len(data)==size,'Feature cache size changed')
+    return data
+
+
+def pack(games, replay_sha256, *, compressed=True):
+    arrays=[];keys=[]
+    for game in games:
+        require(isinstance(game,CheckedGame),'Feature handoff requires checked game')
+        game.assert_metadata()
+        for row in game['records']:
+            # One source hash verifies mutation and provides the cache row key.
+            source=digest(dict(view=row['view'],choices=row['choices']))
+            seal=game.seals[(row['step'],row['seat'])]
+            require(seal==dict(input=source,label=label_key(row),style=row['style'],intent=row['intent']),
+                    'Validated replay record changed')
+            key=digest(dict(input=source,style=row['style'],intent=row['intent']))
+            e=game.features[key];check_encoded(e)
+            require(e.choice_ids==tuple(c['id'] for c in row['choices']),'Feature choices changed')
+            arrays.append(e);keys.append(key)
+    out=io.BytesIO()
+    (np.savez_compressed if compressed else np.savez)(out,
+        states=np.stack([e.state for e in arrays]),actions=np.concatenate([e.actions for e in arrays]),
+        offsets=np.cumsum([0]+[len(e.choice_ids) for e in arrays]),
+        seats=np.stack([e.stable_to_relative for e in arrays]))
+    raw=out.getvalue();require(len(raw)<=LIMIT,'Feature archive exceeds bound')
+    meta=dict(format='derived-features/4.0.0',replay_sha256=replay_sha256,data_sha256=hashlib.sha256(raw).hexdigest(),
+        compatibility=compatibility(),encoder=version(),rows=keys)
+    return raw,meta
+
+
+def write(path, games, replay_sha256, *, compressed=True):
+    raw,meta=pack(games,replay_sha256,compressed=compressed)
+    data,manifest=_cache_paths(path)
+    for target,value in ((data,raw),(manifest,json.dumps(meta,separators=(',',':')).encode())):
+        temporary=target.with_name(target.name+'.tmp')
+        try:temporary.write_bytes(value);temporary.replace(target)
+        finally:temporary.unlink(missing_ok=True)
+    raw=json.dumps(meta,separators=(',',':')).encode();data_hash=meta['data_sha256']
+    return dict(data_sha256=data_hash,manifest_sha256=hashlib.sha256(raw).hexdigest(),
+                replay_sha256=replay_sha256,validator=meta['encoder'])
+
+
+def read(path, games, receipt, replay_sha256):
+    data,manifest=_cache_paths(path)
+    if receipt is None or receipt.get('validator')!=version() or not data.exists() or not manifest.exists():return None
+    require(receipt['replay_sha256']==replay_sha256,'Feature replay binding changed')
+    meta_bytes=read_bytes(manifest);raw=read_bytes(data)
+    require(hashlib.sha256(meta_bytes).hexdigest()==receipt['manifest_sha256']
+            and hashlib.sha256(raw).hexdigest()==receipt['data_sha256'],'Derived feature receipt changed')
+    meta=json.loads(meta_bytes)
+    require(meta['format']=='derived-features/4.0.0' and meta['replay_sha256']==replay_sha256
+            and meta['data_sha256']==receipt['data_sha256'] and meta['encoder']==version()
+            and meta['compatibility']==compatibility(),'Feature cache binding changed')
+    return unpack(raw,games,meta)
+
+
+def unpack(raw,games,meta,*,combined=False):
+    require(meta['encoder']==version() and meta['compatibility']==compatibility()
+            and meta['format']=='derived-features/4.0.0','Feature schema differs')
+    rows=[r for g in games for r in g['records']]
+    require(meta['rows']==[row_key(r) for r in rows],'Feature row binding changed')
+    # Bounds are checked before NumPy allocates an archive member.
+    import zipfile
+    with zipfile.ZipFile(io.BytesIO(raw)) as archive:
+        expected={'states.npy','actions.npy','offsets.npy','seats.npy'}
+        if combined:expected|={'record.json.gz','features.json'}
+        require(set(archive.namelist())==expected and len(archive.infolist())==len(expected)
+                and sum(x.file_size for x in archive.infolist())<=LIMIT,
+                'Feature archive exceeds bound')
+    with np.load(io.BytesIO(raw),allow_pickle=False) as values:
+        states,actions,offsets,seats=(values[k] for k in ('states','actions','offsets','seats'))
+    require(states.shape==(len(rows),3128) and seats.shape==(len(rows),4)
+            and actions.ndim==2 and actions.shape[1]==327 and offsets.shape==(len(rows)+1,)
+            and offsets.dtype.kind in 'iu' and offsets[0]==0 and offsets[-1]==len(actions)
+            and np.array_equal(np.diff(offsets),[len(r['choices']) for r in rows]),'Malformed feature arrays')
+    require(all(np.isfinite(a).all() for a in (states,actions,seats)),'Non-finite feature arrays')
+    out=[]
+    for i,row in enumerate(rows):
+        e=Encoded(states[i],actions[offsets[i]:offsets[i+1]],seats[i],tuple(c['id'] for c in row['choices']))
+        check_encoded(e);check_action_selectors(e.actions)
+        require(np.array_equal(e.stable_to_relative,[(s-row['seat'])%4 for s in range(4)])
+                and np.array_equal(e.state[-12:],np.asarray(row['style']+row['intent'],dtype=np.float32)),
+                'Cached seat/context differs')
+        for a in (e.state,e.actions,e.stable_to_relative):a.setflags(write=False)
+        out.append(e)
+    return out

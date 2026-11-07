@@ -119,7 +119,7 @@ def main():
         from rust_lab_b06_metrics import measurement_preflight
         report['environment']=measurement_preflight()
         active='fixtures'
-        tests=['test_b07_retry','test_b07.collection_smoke','test_b07_wire','test_b02.Behavior']
+        tests=['test_b07_retry','test_b07.collection_smoke','test_b07_wire','test_b07_r4','test_b02.Behavior']
         base.command([sys.executable,'-m','unittest',*tests,'-q'],cwd=ROOT,env=dict(env,CUDA_VISIBLE_DEVICES=''),log=out/'fixtures.log',timeout=180)
         if args.fixtures_only:
             report.update(passed=True,scope='CPU fixtures only; B07 lab and adoption Pending');return
@@ -132,12 +132,16 @@ def main():
         write_json(out/'ordinary-build.json',ordinary);report['ordinary_build']=pin(out/'ordinary-build.json')
         active='native-wire'
         fixture_path=Path(old_ordinary['b01']['path']).parent/'inputs/fixtures.json'
-        base.command([sys.executable,'-m','unittest','test_b07_wire.Native','-q'],cwd=ROOT,
+        base.command([sys.executable,'-m','unittest','test_b07_wire.Native','test_b07_r4.NativeR4','-q'],cwd=ROOT,
             env=dict(env,BRASS_B07_COLLECTOR=ordinary['collector']['path'],BRASS_B07_FIXTURES=str(fixture_path)),
             log=out/'native-wire.log',timeout=60)
         base.command([sys.executable,str(ROOT/'scripts/rust_lab_b07_transport.py'),'--binary',ordinary['collector']['path'],
             '--fixtures',str(fixture_path),'--out',str(out/'transport-micro.json')],cwd=ROOT,env=env,
             log=out/'transport-micro.log',timeout=60)
+        active='v4-parity'
+        base.command([sys.executable,str(ROOT/'scripts/rust_lab_b07_v4.py'),'--binary',ordinary['collector']['path'],
+            '--bootstrap',ordinary['bootstrap']['binary']['path'],'--frozen',str(DIRECTORY/'evidence/b07-r3-frozen-jobs.json'),
+            '--mono',args.mono,'--out',str(out/'v4-parity.json')],cwd=ROOT,env=env,log=out/'v4-parity.log',timeout=90)
         if not args.ordinary_only:
             active='teacher-build'
             teacher=retry.verify_teacher(read_json(args.teacher_build),original) if args.teacher_build else retry.build_teacher(out/'teacher-runtime',original,offline=args.offline)

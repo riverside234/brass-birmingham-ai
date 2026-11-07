@@ -19,6 +19,7 @@ import threading
 import time
 import traceback
 import uuid
+import zipfile
 
 from brass_ai.bank import sha
 from brass_ai.learning.contracts import digest, require
@@ -38,10 +39,31 @@ def part_write(directory, part):
     require(len(value)<=admission.LIMIT,'Native part exceeds bound')
     packed=gzip.compress(value,compresslevel=1,mtime=0)
     timings['compression_seconds']=time.perf_counter()-began;began=time.perf_counter()
+    from brass_ai.recovery.replay import CheckedGame
+    checked=isinstance(part['game'],CheckedGame)
+    if checked:
+        from . import lab_features
+        path=path.with_name(path.name.replace('.json.gz','.npz'))
+        features,meta=lab_features.pack([part['game']],hashlib.sha256(packed).hexdigest(),compressed=False)
+        # One transient file/receipt, using the existing NPZ arrays. The actor
+        # has validated its bindings; the publisher independently validates
+        # behavior. No dense feature lists or board histories cross the learner.
+        buffer=io.BytesIO(features)
+        with zipfile.ZipFile(buffer,'a',compression=zipfile.ZIP_STORED) as archive:
+            archive.writestr('record.json.gz',packed)
+            archive.writestr('features.json',json.dumps(meta,separators=(',',':')))
+        packed=buffer.getvalue()
+        require(len(packed)<=admission.LIMIT,'Native part exceeds bound')
+        timings['feature_handoff_seconds']=time.perf_counter()-began;began=time.perf_counter()
     with path.open('xb') as raw:raw.write(packed)
     fingerprint=hashlib.sha256(packed).hexdigest()
     timings['write_hash_seconds']=time.perf_counter()-began
-    return dict(path=str(path),sha256=fingerprint,branch_expected=part['branch_expected'],transfer_timings=timings)
+    handle=dict(path=str(path),sha256=fingerprint,branch_expected=part['branch_expected'],transfer_timings=timings)
+    if checked:
+        handle['feature_archive']='derived-features/4.0.0'
+        # This proof travels over the actor's private IPC, never in the part JSON.
+        handle['actor_validated']=getattr(part['game'],'actor_validated',False)
+    return handle
 
 
 def part_read(directory, handle):
@@ -53,10 +75,24 @@ def part_read(directory, handle):
         packed=stream.read(size+1)
     require(len(packed)==size,'Native part size changed')
     require(len(packed)<=admission.LIMIT and hashlib.sha256(packed).hexdigest()==handle['sha256'],'Native part changed')
-    with gzip.GzipFile(fileobj=io.BytesIO(packed),mode='rb') as stream:data=stream.read(admission.LIMIT+1)
+    combined=handle.get('feature_archive');meta=None;record=packed
+    if combined:
+        require(combined=='derived-features/4.0.0','Unknown part feature archive')
+        with zipfile.ZipFile(io.BytesIO(packed)) as archive:
+            require(len(archive.infolist())==6 and sum(x.file_size for x in archive.infolist())<=admission.LIMIT,
+                    'Part archive exceeds bound')
+            record=archive.read('record.json.gz');meta=json.loads(archive.read('features.json'))
+        require(meta['replay_sha256']==hashlib.sha256(record).hexdigest(),'Part feature binding changed')
+    with gzip.GzipFile(fileobj=io.BytesIO(record),mode='rb') as stream:data=stream.read(admission.LIMIT+1)
     require(len(data)<=admission.LIMIT,'Native part exceeds bound')
     value=json.loads(data)
     require(value['branch_expected']==handle['branch_expected'],'Native part role changed')
+    if combined:
+        from . import lab_features
+        from brass_ai.recovery.replay import CheckedGame
+        arrays=lab_features.unpack(packed,[value['game']],meta,combined=True)
+        value['game']=CheckedGame(value['game']).bind(arrays)
+        value['game'].actor_validated=handle.get('actor_validated') is True
     return value
 
 
@@ -137,7 +173,10 @@ def _actors(connections, root, build, execution, mono, lease, cpu, stop, directo
     def lane(connection):
         endpoint=lease.acquire();endpoint.timeout=30.
         try:
-            with Pipe([mono,build['bootstrap']['binary']['path']],binary=False) as bootstrap:
+            from .lab_session import OrdinarySession
+            command=[build['bootstrap']['binary']['path']]
+            if os.name!='nt':command.insert(0,mono)
+            with Pipe(command,binary=False) as bootstrap, OrdinarySession(root,build['collector']['path'],endpoint,execution,mono) as session:
                 connection.send(dict(ready=True))
                 while not stop.is_set():
                     if not connection.poll(.1):continue
@@ -149,7 +188,7 @@ def _actors(connections, root, build, execution, mono, lease, cpu, stop, directo
                             if route(job)[0]=='rust':
                                 part=collect_lane(root,build['collector']['path'],bootstrap,job,endpoint,execution,
                                     continuation=continuation,cancel=stop,
-                                    submit_branch=lambda packet:connection.send(dict(branch=packet)))
+                                    submit_branch=lambda packet:connection.send(dict(branch=packet)),session=session,mono=mono)
                             else:
                                 require(continuation is None,'Reference continuation unsupported')
                                 part=reference_part(root,job,endpoint,execution,mono)

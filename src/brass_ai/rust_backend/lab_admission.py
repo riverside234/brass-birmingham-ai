@@ -143,7 +143,8 @@ def _assemble(family, admission, *, checked=None, arrays=None, owned=False):
     for index,part in enumerate((family['parent'], family['child'])):
         if part is None: continue
         native = part['producer']['contract'] == 'brass-lab-collection/1.0.0'
-        require(native == (expected_route == 'rust'), 'Frozen whole-table route changed')
+        legacy_archive=(not native and any(s['kind'] in ('legacy','lab-legacy') for s in job['policies']))
+        require(native == (expected_route == 'rust') or legacy_archive, 'Frozen whole-table route changed')
         # read() owns freshly decoded JSON; publish() uses the game only inside
         # this synchronous call and returns a compact receipt. Copying every
         # board/history adds no isolation on either private path. Public
@@ -174,8 +175,8 @@ def _assemble(family, admission, *, checked=None, arrays=None, owned=False):
             # was added (and independently validated by bind). Reuse the row
             # seals instead of walking/validating and hashing every row again.
             game=CheckedGame(game)
-            game.features=dict(original.features)
-            game.seals=copy.deepcopy(original.seals)
+            game.features=original.features if owned else dict(original.features)
+            game.seals=original.seals if owned else copy.deepcopy(original.seals)
             game.header_seal=digest({k:v for k,v in game.items() if k!='records'})
         if 'seat_contexts' in proof:
             from brass_ai.recovery.neutral_training import check_rows
@@ -223,15 +224,17 @@ def publish(path, family, admission, *, cache=True, validation_receipt=False, ti
         receipt['replay_sha256'] = sha(path)
         read(path, receipt, allow_diagnostic=True)
         if cache:
-            from brass_ai.recovery.replay import write_cache,cache_receipt
-            write_cache(path,[game]+game.get('branches',[]));receipt['features']=cache_receipt(path)
+            from . import lab_features
+            receipt['features']=lab_features.write(path,[game]+game.get('branches',[]),receipt['replay_sha256'])
         if validation_receipt:_attest(receipt)
         return record(path, game, admission, receipt)
     temp = path.with_name(path.name + '.' + uuid.uuid4().hex + '.tmp')
     began=time.perf_counter()
+    packed=gzip.compress(value,compresslevel=1,mtime=0)
+    replay_hash=hashlib.sha256(packed).hexdigest()
     try:
         with temp.open('xb') as raw:
-            with gzip.GzipFile(fileobj=raw, mode='wb', mtime=0, compresslevel=1) as stream: stream.write(value)
+            raw.write(packed)
             raw.flush(); os.fsync(raw.fileno())
         # Windows rename is no-replace; Linux hard-link provides the same
         # atomic publication rule. A concurrent writer never gets overwritten.
@@ -239,11 +242,11 @@ def publish(path, family, admission, *, cache=True, validation_receipt=False, ti
         else: os.link(temp, path)
     finally:
         temp.unlink(missing_ok=True)
-    receipt['replay_sha256'] = sha(path)
+    receipt['replay_sha256'] = replay_hash
     timings['replay_write_hash_seconds']=time.perf_counter()-began;began=time.perf_counter()
     if cache:
-        from brass_ai.recovery.replay import write_cache,cache_receipt
-        write_cache(path,[game]+game.get('branches',[]));receipt['features']=cache_receipt(path)
+        from . import lab_features
+        receipt['features']=lab_features.write(path,[game]+game.get('branches',[]),replay_hash)
     timings['feature_cache_seconds']=time.perf_counter()-began
     if validation_receipt:_attest(receipt)
     return record(path, game, admission, receipt)
@@ -289,9 +292,9 @@ def read(path, receipt, *, allow_diagnostic=False, reuse_validation=True):
     require(header['format'] == FORMAT and header['compatibility'] == compatibility()
             and header['admission'] == receipt['admission'] and family['sha256'] == receipt['family_sha256'],
             'Native replay/writer receipt differs')
-    from brass_ai.recovery.replay import load_cache
+    from . import lab_features
     games=[family['parent']['game']]+([family['child']['game']] if family['child'] is not None else [])
-    arrays=load_cache(path,games,receipt.get('features'))
+    arrays=lab_features.read(path,games,receipt.get('features'),receipt['replay_sha256'])
     validation=receipt.get('validation')
     if validation is not None:
         keys(validation,('contract','validator','receipt_sha256'))
@@ -302,7 +305,7 @@ def read(path, receipt, *, allow_diagnostic=False, reuse_validation=True):
             admitted=validate_binding(receipt['admission'])
             require(admitted['scope']=='ordinary' or allow_diagnostic,'Diagnostic replay is not training data')
             return _assemble(family,admitted,arrays=arrays,owned=True)
-    return convert(family, receipt['admission'], allow_diagnostic=allow_diagnostic,arrays=arrays)
+    return convert(family, receipt['admission'], allow_diagnostic=allow_diagnostic,arrays=arrays,_owned=True)
 
 
 def admit_teacher_rows(rows, *, job, model, history):

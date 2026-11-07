@@ -9,7 +9,6 @@ import hashlib
 import json
 from collections import Counter
 from contextlib import ExitStack
-from pathlib import Path
 import random
 import time
 
@@ -17,10 +16,9 @@ import numpy as np
 from brass_ai.learning.contracts import digest, require
 from brass_ai.learning.replay import split_for
 from brass_ai.step5.policy import NeuralPolicy, context_for
-from brass_ai.recovery.execution import make_policy
 from brass_ai.recovery.branching import eligible, capture, seed_for, RESET_OPENINGS
 from brass_ai.recovery.inputs import BOUNDARY
-from .lab_transport import CONTRACT, VERSION, DecisionEncoder, Collector
+from .lab_transport import CONTRACT, VERSION, DecisionEncoder
 
 
 def frozen_id(job):
@@ -44,10 +42,8 @@ def route(job):
     require(len(job['policies']) == 4, 'Frozen ordinary job needs four policies')
     if any(p['kind'] not in ('neural', 'legacy', 'lab-legacy') for p in job['policies']):
         return 'reference', 'enabled search/unsupported policy is outside B02'
-    if any(p['kind'] in ('legacy', 'lab-legacy') for p in job['policies']):
-        # Existing frozen V4 CPU adapter remains exact, but its full environment
-        # integration is reference-routed as one job, never seat-by-seat fallback.
-        return 'reference', 'frozen legacy/IL rule adapter retained as a complete reference table'
+    if any(p['kind'] != 'neural' and not p.get('search_free',False) for p in job['policies']):
+        return 'reference', 'searched legacy policy is outside ordinary collection'
     if job.get('branching'):
         from brass_ai.recovery.branching import CONTRACTS
         require(job['branching']['contract'] in CONTRACTS and job['branching']['max_per_game'] == 1,
@@ -70,27 +66,15 @@ def _causal(row):
 
 
 def collect_lane(root, executable, bootstrap, job, endpoint, execution, *, origin=None,
-                 continuation=None, submit_branch=None, cancel=None, compare=None, diagnostic_branch_probe=False):
+                 continuation=None, submit_branch=None, cancel=None, compare=None, diagnostic_branch_probe=False,
+                 session=None, mono=None):
     require(route(job)[0] == 'rust', 'Unsupported whole job must use reference route')
     start = time.monotonic(); timings = Counter(); job_id = frozen_id(job)
     with ExitStack() as cleanup:
-        t=time.monotonic()
-        lane = cleanup.enter_context(Collector(executable,batch_forced=compare is None))
-        lane.cancel_event=cancel
-        timings['native_startup_seconds']+=time.monotonic()-t
-        policies = [make_policy(p, root, endpoint, execution, None) for p in job['policies']]
-        for p in policies:
-            cleanup.callback(p.close)
-            p.evaluator.encoder = DecisionEncoder(lane, p.evaluator.model_id)
-            predict=p.evaluator.predict
-            def recorded(requests, p=p, predict=predict):
-                began=time.monotonic()
-                responses=predict(requests)
-                timings['inference_envelope_seconds']+=time.monotonic()-began
-                require(len(responses)==len(requests),'Incomplete ordinary inference batch')
-                p.native_raw=np.asarray(responses[0]['probabilities'],dtype=np.float64)
-                return responses
-            p.evaluator.predict=recorded
+        from .lab_session import OrdinarySession
+        if session is None:
+            session=cleanup.enter_context(OrdinarySession(root,executable,endpoint,execution,mono))
+        lane,policies=cleanup.enter_context(session.game(job,timings,cancel,compare))
         assigned = [policies[(s-job.get('rotation',0))%4] for s in range(4)]
         group = digest(dict(rules='steam-brass-patch-1.1.0',setup_seed=job['seed']))
         game_id = job.get('stable_game_id') or digest(dict(job=job_id, seed=job['seed']))
@@ -103,7 +87,7 @@ def collect_lane(root, executable, bootstrap, job, endpoint, execution, *, origi
             lane.begin(job_id, origin, cap)
             rngs = [random.Random(digest(dict(sampling_seed=job['sampling_seed'],game=job.get('rng_index',0),seat=s))) for s in range(4)]
             for s,p in enumerate(assigned):
-                if p.focus == 'mixed': p.contexts[rngs[s]] = context_for(job.get('focuses',{}).get(str(s),'neutral'))
+                if getattr(p,'focus',None) == 'mixed': p.contexts[rngs[s]] = context_for(job.get('focuses',{}).get(str(s),'neutral'))
             from brass_ai.recovery.domino_sampling import install
             install(job,assigned,rngs)
         else:
@@ -132,26 +116,34 @@ def collect_lane(root, executable, bootstrap, job, endpoint, execution, *, origi
             decision = lane.current['decision']; view, choices = decision['view'],decision['choices']
             # Same immutable admitted frame as the reference actor: policy and
             # encoder reuse its exact input identity instead of hashing it again.
-            if len(choices)>1:view,choices=BOUNDARY.admit(view,choices)
-            else:BOUNDARY.check(view,choices)
             seat=view['seat']; p=assigned[seat]; rng=rngs[seat]
+            neural=type(p) is NeuralPolicy
+            if neural and len(choices)>1:
+                view,choices=BOUNDARY.admit(view,choices)
+                # Same immutable admitted objects flow through policy, encoder
+                # and append. Avoid comparing each history against a duplicate
+                # mutable JSON tree at both inner-loop boundaries.
+                decision.update(view=view,choices=choices)
+            else:BOUNDARY.check(view,choices)
             t=time.monotonic()
-            if len(choices)==1:
+            if hasattr(p,'admit_legacy_turn'):p.admit_legacy_turn(view['context'],rng)
+            if neural and len(choices)==1:
                 _,intent=p.context_features(view,rng)
                 if p.exploration_version==3: chosen,probability,teacher=p.sample_training(view,choices,rng,np.ones(1),intent)
                 else: rng.choices([0],weights=[1.],k=1); chosen,probability,teacher=0,1.,None
             else: chosen,probability,teacher=p.select_batch([(view,choices,rng)])[0]
             style,intent=p.context_features(view,rng)
-            behavior=dict(kind=p.kind,policy_id=p.policy_id,probability=probability,temperature=p.temperature)
-            if p.exploration_version==3: behavior.update(p.last_behavior[rng])
+            behavior=dict(kind=p.kind,policy_id=p.policy_id,probability=probability,temperature=getattr(p,'temperature',1.))
+            if neural and p.exploration_version==3: behavior.update(p.last_behavior[rng])
             row=dict(step=lane.current['step'],seat=seat,view=view,choices=choices,chosen=chosen,teacher=teacher,
                      style=style,intent=intent,seconds=time.monotonic()-t,behavior=behavior)
             timings['policy_seconds']+=row['seconds']
             t=time.monotonic()
-            encoded=p.evaluator.encoder.encode(view,choices,style,intent,validated=True) if len(choices)>1 or compare else None
+            encoder=p.evaluator.encoder if neural else DecisionEncoder(lane,'ordinary-external')
+            encoded=encoder.encode(view,choices,style,intent,validated=True) if compare or (neural and len(choices)>1) else None
             timings['encoding_seconds']+=time.monotonic()-t
-            evidence=dict(kind='ordinary',model_id=p.evaluator.model_id,policy_id=p.policy_id,forced=len(choices)==1,
-                raw_probabilities=(np.ones(1) if len(choices)==1 else p.native_raw).tolist(),
+            evidence=dict(kind='ordinary',model_id=p.evaluator.model_id if neural else None,policy_id=p.policy_id,forced=len(choices)==1,
+                raw_probabilities=(np.ones(1) if len(choices)==1 else p.native_raw).tolist() if neural else None,
                 feature_version=VERSION,semantic_id=choices[chosen]['id'])
             if job.get('branching') and continuation is None:
                 if not forked: causal.append(_causal(row))
@@ -166,13 +158,13 @@ def collect_lane(root, executable, bootstrap, job, endpoint, execution, *, origi
                             require(submit_branch is not None, 'Native fork needs an asynchronous family scheduler')
                             submit_branch(packet)
             if compare: compare(row,encoded,lane)
-            t=time.monotonic(); lane.append(row,evidence); timings['native_step_seconds']+=time.monotonic()-t
+            t=time.monotonic(); lane.append(row,evidence,allow_forced=neural); timings['native_step_seconds']+=time.monotonic()-t
         receipt=lane.call('finish'); records=[]; evidence=[]
         require(receipt['contract']==CONTRACT and receipt['job']==job_id and receipt['token']==lane.token,
                 'Foreign native completion receipt')
         record_hash=hashlib.sha256(b'[');evidence_hash=hashlib.sha256(b'[')
         t=time.monotonic()
-        for index,(row_bytes,evidence_bytes) in enumerate(lane.records(receipt)):
+        for index,(row_bytes,evidence_bytes) in enumerate(lane.records(receipt,drain=True)):
             require(cancel is None or not cancel.is_set(), 'Collection canceled during export')
             for values,hasher,raw_bytes in ((records,record_hash,row_bytes),(evidence,evidence_hash,evidence_bytes)):
                 if index:hasher.update(b',')
@@ -186,7 +178,13 @@ def collect_lane(root, executable, bootstrap, job, endpoint, execution, *, origi
         if continuation is not None:
             game['branch'].update(elapsed_seconds=time.monotonic()-start,
                 fraction_remaining=len(records)/(len(records)+game['branch']['decision']))
+        t=time.monotonic()
+        from brass_ai.recovery.replay import CheckedGame
+        arrays=list(lane.training_features(receipt,records,drain=True))
         lane.release()
+        game=CheckedGame(game).bind(arrays)
+        game.actor_validated=True  # Each original frame crossed BOUNDARY above.
+        timings['training_feature_export_seconds']+=time.monotonic()-t
         timings.update({'ipc_'+k:v for k,v in lane.metrics.items()})
         return dict(game=game,scoring=receipt['scoring'],evidence=evidence,native_receipt=receipt,
             origin_counts=continuation['counts'] if continuation is not None else [0]*4,

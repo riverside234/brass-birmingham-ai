@@ -10,6 +10,7 @@ ROOT=Path(__file__).resolve().parents[1];sys.path.insert(0,str(ROOT/'src'))
 DIRECTORY=ROOT/'distribution/rust-lab-b07-g1250'
 B06='results/rust-lab-qualification/20261107T080012822445Z-20261107T075601452661Z-g1250-b06-c1cd94b2-2c29d5e3/evidence'
 B07='results/rust-lab-qualification/20261107T090047266944Z-20261107T085645018439Z-g1250-b07-d0097dac-faa1535f/evidence'
+B07_R3='results/rust-lab-qualification/20261107T101615796829Z-20261107T101336169559Z-g1250-b07-2fcbfcca-0192d294/evidence'
 TEXT={'.py','.rs','.cs','.md','.toml','.lock','.ps1','.sh','.txt'}
 
 
@@ -17,7 +18,7 @@ def main():
     from brass_ai.learning.contracts import require
     from brass_ai.step5.league import implementation_id,implementation_sources,write_json
     DIRECTORY.mkdir(parents=True,exist_ok=True)
-    archive=DIRECTORY/'rust-lab-b07-g1250-r3.zip';require(not archive.exists(),'Publish a new B07 revision; never reseal')
+    archive=DIRECTORY/'rust-lab-b07-g1250-r4.zip';require(not archive.exists(),'Publish a new B07 revision; never reseal')
     q=json.loads((ROOT/B06/'qualification.json').read_text());require(q['passed'],'B06 correctness gate missing')
     prior=json.loads((ROOT/'distribution/rust-lab-b06-g1250/bundle.json').read_text())
     source=ROOT/'distribution/rust-lab-b06-g1250'/prior['archive']
@@ -27,7 +28,7 @@ def main():
     reference['b06']=dict(path=B06+'/qualification.json',sha256=hashlib.sha256((ROOT/B06/'qualification.json').read_bytes()).hexdigest())
     reference['b06_baseline']=q['performance']
     reference['b07_source_review']=json.loads((DIRECTORY/'source-review.json').read_text())
-    reference['source_policy']='B07 compact binary ordinary transport, forced acknowledgements, two publishers and attested reads; explicit backend-only adoption with teacher off'
+    reference['source_policy']='B07 R4 Rust state for V4 tables, retained binary training features, exact forced sampling verification, one-file handoff, reusable lanes/policies; teacher off and search_v1 unchanged'
     # Bound the source review. Ordinary publication changed, so the old phase
     # is retained as historical timing only; the launcher remeasures that scope.
     r2=DIRECTORY/'rust-lab-b07-g1250-r2.zip'
@@ -43,10 +44,12 @@ def main():
         'lab-native/src/collection_wire.rs','lab-native/src/lib.rs','lab-native/src/main.rs',
         'src/brass_ai/rust_backend/lab_transport.py','src/brass_ai/rust_backend/lab_collection.py',
         'src/brass_ai/rust_backend/lab_admission.py','src/brass_ai/rust_backend/lab_families.py',
-        'src/brass_ai/rust_backend/lab_pool.py'},'Unreviewed B07 dependency change')
+        'src/brass_ai/rust_backend/lab_pool.py','src/brass_ai/rust_backend/lab_b02_smoke.py',
+        'src/brass_ai/rust_backend/lab_features.py','src/brass_ai/rust_backend/lab_session.py'},'Unreviewed B07 dependency change')
     for name in ('scripts/rust_lab_b07_smoke.py','scripts/rust_lab_b06_ordinary.py','scripts/rust_lab_b06_metrics.py'):
-        require(hashlib.sha256((ROOT/name).read_bytes().replace(b'\r\n',b'\n')).hexdigest()==old_manifest['files'][name],
-                'Ordinary benchmark implementation changed: '+name)
+        expected=reference['b07_source_review']['benchmark_changes'].get(name,{}).get('after',old_manifest['files'][name])
+        require(hashlib.sha256((ROOT/name).read_bytes().replace(b'\r\n',b'\n')).hexdigest()==expected,
+                'Unreviewed ordinary benchmark change: '+name)
     blobs['distribution/rust-lab-b07-g1250/evidence/b07-r2-Cargo.toml']=before
     teacher=json.loads(blobs['distribution/rust-lab-b06-g1250/evidence/teacher-build.json'])
     from brass_ai.rust_backend.lab_teacher_overlay import source_fingerprint
@@ -61,6 +64,12 @@ def main():
         blobs['distribution/rust-lab-b07-g1250/evidence/'+target]=data
         reuse['evidence'][key]=dict(file=target,sha256=hashlib.sha256(data).hexdigest())
     reference['ordinary_baseline']=reuse
+    reference['r3_failure']=dict(result=B07_R3,implementation='f6372cefd9a48c98994d2f2e8424b032f4d5c808aceab140bb6442b92214cfc9',evidence={})
+    for name,target in [('qualification.json','b07-r3-qualification.json'),('ordinary/frozen-jobs.json','b07-r3-frozen-jobs.json'),
+            ('ordinary/reference/report.json','b07-r3-reference-report.json'),('ordinary/rust/report.json','b07-r3-native-report.json')]:
+        data=(ROOT/B07_R3/name).read_bytes()
+        blobs['distribution/rust-lab-b07-g1250/evidence/'+target]=data
+        reference['r3_failure']['evidence'][target]=hashlib.sha256(data).hexdigest()
     reference['native_runtime_policy']='Rebuild ordinary adapter against unchanged B01 core and teacher against unchanged teacher overlay; reuse exact original C# pins'
     write_json(DIRECTORY/'reference.json',reference)
     names=set(implementation_sources())
@@ -74,7 +83,7 @@ def main():
     for name in ('qualification.json','ordinary-checks.json','teacher-checks.json','kernels-checks.json'):
         target='distribution/rust-lab-b07-g1250/evidence/b06-'+name
         blobs[target]=(ROOT/B06/name).read_bytes()
-    for path in (DIRECTORY/'evidence').glob('r3-*'):
+    for path in (DIRECTORY/'evidence').glob('r4-*'):
         blobs[path.relative_to(ROOT).as_posix()]=path.read_bytes()
     for name in names:
         path=ROOT/name;data=path.read_bytes();blobs[name]=data.replace(b'\r\n',b'\n') if path.suffix in TEXT else data

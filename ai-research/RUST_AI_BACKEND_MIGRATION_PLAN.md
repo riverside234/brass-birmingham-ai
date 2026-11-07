@@ -960,9 +960,31 @@ Keep the short-test scope: eight fixed-root turns in ABBA pairs, two concurrent 
 
 #### B07 — Bounded server canary, then explicit adoption
 
+**R4 update (2026-11-07): ordinary qualification Pending.** The latest pulled R3
+run completed collection but failed a float32 behavior-probability comparison
+(absolute 4.68e-7). Its native accepted time was 32.684s versus reference 27.212s;
+do not treat it as passed. R4 preserves exact trajectories/features/targets and
+independent sampling verification while using a documented float32 tolerance
+only for cross-batch benchmark probabilities. Full details and evidence are in
+[the R4 implementation notes](RUST_BACKEND_B07_IMPLEMENTATION.md#r4-v4-tables-retained-features-and-reusable-lanes).
+
+Keep Rust authoritative for ordinary tables containing V4, using the existing C#
+decision worker and unchanged plan queues, intent, RNG, budgets and policy IDs.
+Retain all native training arrays, including forced/V4 rows, and independently
+bound CheckedGame metadata through a single-file actor handoff, publication and
+reading; preserve archived reference fallback metadata too. Verify forced samples
+with the exact original draws and no unnecessary distribution work. Incrementally
+hash/drain Rust record buffers, reuse verified replay hashes, and keep bounded
+collector/policy caches with full per-game/seat reset and failure/cancel retirement.
+Keep source/byte/row/revision/legality/behavior/branch/recovery checks and the existing
+training recipe. Reuse successful B01–B06 evidence. Rerun only the short affected
+ordinary scope with `--ordinary-only`, including the actual frozen V4-containing
+stratum. The local component improvements (V4 progression and ~19.5% publication
+plus first-read reduction) do not close the g1250 lab accepted-work gate.
+
 R3 ordinary transport uses compact semantic action IDs with token/revision/model/context bindings; one bounded little-endian binary array reply per nonforced decision; at most 16 forced previews under the reference actor/turn/era/non-debt guards; and batch export of the exact once-serialized record bytes. Python retains the existing RNG/sampling/counters and acknowledges every forced record before publication. Preserve branch opportunities, cancellation, byte seals, full first admission and cold recovery checks. Reuse validated tensors/seals and hash the same file bytes being decoded. Keep search_v1 equations unchanged. See [wire design and tests](RUST_BACKEND_B07_IMPLEMENTATION.md#compact-ordinary-transport-r3). The bundle supports `--ordinary-only`, identical frozen g1250 jobs/checkpoint, and separate startup, serialization/IPC, feature transfer, collection/export, part I/O, publication, replay read, preparation and accepted-work timings. No earlier successful qualification is repeated.
 
-**Implemented; ordinary correctness passed, useful performance failed; repaired canaries, production adoption and next normal commit/restart Pending.** See [implementation](RUST_BACKEND_B07_IMPLEMENTATION.md) and [g1250 bundle/commands](../distribution/rust-lab-b07-g1250/README.md). The bundle retains the exact passing B04.5/B05/B06 g1250 checkpoint/config and original ordinary/C# binaries. R3 rebuilds only the teacher for exact JSON float decoding. Require receipts bound to the actual committed restart checkpoint; a later checkpoint needs refreshed gates. Never rewind a newer run or silently reuse stale evidence.
+**Implemented; R2 ordinary correctness passed, R3 comparison failed, R4 ordinary qualification and useful performance Pending; canaries, production adoption and next normal commit/restart Pending.** See [implementation](RUST_BACKEND_B07_IMPLEMENTATION.md) and [g1250 bundle/commands](../distribution/rust-lab-b07-g1250/README.md). The bundle retains the exact passing B04.5/B05/B06 g1250 checkpoint/config and original C# binaries. Rebuild the ordinary adapter for R4; teacher work remains separate and search_v1 is unchanged. Require receipts bound to the actual committed restart checkpoint; a later checkpoint needs refreshed gates. Never rewind a newer run or silently reuse stale evidence.
 
 R2's lab result (`20261107T090047266944Z-20261107T085645018439Z-g1250-b07-d0097dac-faa1535f`) matched 3 families/1,161 decisions/675 forced rows; native accepted work was 40.246s versus reference 28.833s. Preserve this negative result as history. GPU forward time is now below reference; remaining measured overhead includes serial 4.2s-per-family publication and 5.247s first read. R3 removes duplicate row validation/deep copies and permits at most two publishers under the existing CPU cap, with serialized callbacks and exact byte/mutation checks. Remeasure this changed scope using the same short matched batch. The first canary failed after 52 verified turns because Rust's default JSON parser rounded the echoed remaining budget `0.015000000000000001` to `0.015`. R3 enables `serde_json/float_roundtrip` for exact teacher bindings and ordinary probabilities and adds exact roundtrip/mutated-binding regressions; preserve every strict identity check. The retry builds/tests both native adapters against their unchanged sealed cores and runs the affected ordinary scope plus unfinished canaries/continuation, without repeating B01–B06. Passing correctness alone does not waive the useful-performance adoption gate.
 

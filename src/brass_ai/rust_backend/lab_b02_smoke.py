@@ -108,7 +108,7 @@ def reference_part(root,job,endpoint,execution,mono):
             evidence.append(dict(kind='ordinary',model_id=spec.get('model_id'),policy_id=spec['policy_id'],
                 raw_probabilities=([1.] if len(row['choices'])==1 else raw[(spec['policy_id'],digest(row['view']))]) if spec['kind']=='neural' else None,
                 semantic_id=row['choices'][row['chosen']]['id']))
-        return dict(game=dict(game),evidence=evidence,scoring=None,branch_expected=False,
+        return dict(game=game,evidence=evidence,scoring=None,branch_expected=False,
             producer=dict(contract='brass-reference-collection/1.0.0',runtime=pin(directory/'runtime.json')),timings={})
 
 

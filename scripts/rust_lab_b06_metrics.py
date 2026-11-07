@@ -56,7 +56,7 @@ def distribution(values):
 
 
 def choose_jobs(jobs):
-    """First job in each actual (table kind, route) stratum, at most three.
+    """First job in each actual (table kind, V4 presence) stratum, at most three.
 
     The g1250 planner can embed V4 seats in historical tables. Never demand an
     obsolete standalone legacy stratum or redraw jobs to manufacture a branch.
@@ -64,7 +64,7 @@ def choose_jobs(jobs):
     from brass_ai.rust_backend.lab_collection import route
     selected = []; seen = set()
     for job in jobs:
-        key = (job['provenance']['kind'], route(job)[0])
+        key = (job['provenance']['kind'], any(p['kind']!='neural' for p in job['policies']))
         if key not in seen:
             selected.append(copy.deepcopy(job)); seen.add(key)
     require(0 < len(selected) <= 3, 'B06 frozen plan has more than three strata; revise bounded scope explicitly')
@@ -80,10 +80,16 @@ def work(games):
 
 
 def compare_games(left, right):
-    """Exact discrete trajectory and targets; only floating probabilities tolerate ULP drift."""
+    """Exact trajectory and targets; bounded float32 inference batch variation.
+
+    GPU queue schedules change batch shapes, and float32 reductions may change
+    their last bits. This is separate from replay admission, which reconstructs
+    each behavior denominator from its OWN recorded logits/probabilities and RNG.
+    """
     import numpy as np
     from brass_ai.recovery.local_scoring_targets import FIELD
     require(work(left) == work(right), 'Matched accepted work differs')
+    errors=[]
     for a, b in zip(left, right, strict=True):
         am, bm = [a]+a.get('branches', []), [b]+b.get('branches', [])
         for x, y in zip(am, bm, strict=True):
@@ -98,7 +104,8 @@ def compare_games(left, right):
                                         {k:v for k,v in y['branch'].items() if k not in omit})
                 for key in floats:
                     if key in x['branch'] or key in y['branch']:
-                        np.testing.assert_allclose(x['branch'][key],y['branch'][key],rtol=1e-14,atol=0)
+                        np.testing.assert_allclose(x['branch'][key],y['branch'][key],rtol=1e-5,atol=1e-7,
+                            err_msg='Matched GPU-derived branch probability: '+key)
             for ra, rb in zip(x['records'], y['records'], strict=True):
                 require({k:v for k,v in ra.items() if k not in ('seconds','behavior')} ==
                         {k:v for k,v in rb.items() if k not in ('seconds','behavior')},
@@ -106,8 +113,18 @@ def compare_games(left, right):
                         f'choices={ra["chosen"]}/{rb["chosen"]}, views={digest(ra["view"])}/{digest(rb["view"])}')
                 require({k:v for k,v in ra['behavior'].items() if k != 'probability'} ==
                         {k:v for k,v in rb['behavior'].items() if k != 'probability'}, 'Matched behavior identity differs')
-                np.testing.assert_allclose(ra['behavior']['probability'], rb['behavior']['probability'], rtol=3e-6, atol=1e-8)
-    return dict(equal=True, work=work(left))
+                pa,pb=ra['behavior']['probability'],rb['behavior']['probability']
+                if len(ra['choices'])==1 or ra['behavior']['kind']=='external':
+                    require(pa==pb==1.,'Matched deterministic probability differs')
+                else:
+                    # Same scale as the existing float32 head/batching checks.
+                    # Never applies to actions, raw features, IDs or replay RNG.
+                    np.testing.assert_allclose(pa,pb,rtol=1e-5,atol=1e-7,
+                        err_msg=f'game={x["game_id"]}, step={ra["step"]}')
+                    errors.append((abs(pa-pb),abs(pa-pb)/max(abs(pa),abs(pb),1e-30)))
+    return dict(equal=True, work=work(left),probability_comparison=dict(rtol=1e-5,atol=1e-7,
+        rows=len(errors),max_absolute=max((a for a,b in errors),default=0.),
+        max_relative=max((b for a,b in errors),default=0.),exact_discrete_trajectory=True))
 
 
 def compare_rows(left, right):

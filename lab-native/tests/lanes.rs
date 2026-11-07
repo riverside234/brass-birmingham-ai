@@ -270,4 +270,48 @@ fn compact_forced_batches_preserve_every_record_state_scoring_and_export_seal() 
     }
     assert!(new.record_arrays("stale", 0).is_err());
     assert!(new.record_arrays("request", total).is_err());
+    let mut start = 0;
+    while start < total {
+        let (meta, raw) = new.drain_training("request", start).unwrap();
+        assert_eq!(
+            (meta.clone(), raw),
+            old.training_arrays("request", start).unwrap()
+        );
+        assert!(new.drain_training("request", start).is_err());
+        start = meta["end"].as_u64().unwrap() as usize;
+    }
+    let mut start = 0;
+    while start < total {
+        let (meta, raw) = new.drain_records("request", start).unwrap();
+        assert_eq!(
+            (meta.clone(), raw),
+            old.record_arrays("request", start).unwrap()
+        );
+        assert!(new.drain_records("request", start).is_err());
+        assert!(new.row(start).is_err());
+        start = meta["end"].as_u64().unwrap() as usize;
+    }
+    assert_eq!(new.finish().unwrap()["records_sha256"], b["records_sha256"]);
+    assert_eq!(
+        new.finish().unwrap()["evidence_sha256"],
+        b["evidence_sha256"]
+    );
+}
+
+#[test]
+fn external_policy_uses_current_state_and_retains_features_without_actor_encoding() {
+    let mut lane = Lane::new(initial(), "job".into(), "request".into(), vec![0; 64], 1000).unwrap();
+    let decision = lane.decision().unwrap();
+    let mut value = compact(&decision, 0);
+    value["behavior"]["kind"] = json!("external");
+    value["context"]["model_id"] = json!("ordinary-external");
+    value["evidence"]["model_id"] = Value::Null;
+    value["evidence"]["raw_probabilities"] = Value::Null;
+    let mut bad = value.clone();
+    bad["evidence"]["policy_id"] = json!("foreign-opponent");
+    assert!(lane.append_compact("request", &bad).is_err());
+    assert_eq!(lane.decision().unwrap(), decision);
+    lane.append_compact("request", &value).unwrap();
+    assert!(lane.append_compact("request", &value).is_err());
+    assert_eq!(lane.export().context.revision, 1);
 }

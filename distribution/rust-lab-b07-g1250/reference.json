@@ -9,12 +9,12 @@
     "lab-native/Cargo.toml": "5c8566eef28f3f1fe0afb3c4e9d65769a3d19a7f7269e74b0bb3d2630588b9c3",
     "lab-native/core-overlay/teacher.rs": "9afd3f8cf9fc7ca6f3d9a7e569cbe4cae3b2d1d49d620d9ffee6b5b7302e710f",
     "lab-native/src/bin/teacher.rs": "245726575b4a362b30c83380d9d28ace4c0d1a5db465e8dd078bd357e5a32646",
-    "lab-native/src/collection_wire.rs": "7ef890f795e2c1d82f40ce1efd8b958735a565ab3fd6ff124de1cf4862d61be8",
-    "lab-native/src/lib.rs": "3c7de1d33a46c1ffd267aeac3945ee5b539af0757ddd6616ede27297dc9533fe",
-    "lab-native/src/main.rs": "9d488a8cc911e9b78c87f735f345a72e715bd9a485992a0eadf37c39508ff4b1",
+    "lab-native/src/collection_wire.rs": "b5cdf1db7c9d3ebc1a057a99258d2553819caa74d8552e9c6ea34c9ece77e0fd",
+    "lab-native/src/lib.rs": "2a1b9450ea990f45b47d188fbc7ddf36531978e0bfd9138d242bf43ab3f919ba",
+    "lab-native/src/main.rs": "79b076553edd272a147c44925e2b803136549ee7ff4b451b05d0366bb8ec267f",
     "lab-native/src/scoring.rs": "2e41cb5647dc5b41bf305330fae8869fa8fa969936f8e3b7240d22262c331ecd",
     "lab-native/src/teacher.rs": "88b54a27d6235dd928477e2de13e7c7115dfbb9040f77bbc730157779671d725",
-    "lab-native/tests/lanes.rs": "e29011c143ec3582fcc2e6f4add7d9fce8038a75d9a84d20c0d789a77632993e",
+    "lab-native/tests/lanes.rs": "9b1b08c4c4665ec35ed0ecd129a7662a07f07409ce902d8cb8be729c18932a86",
     "lab-native/tests/teacher.rs": "f8ca6922a334290dfa4b2904033d352967f965f2902074391c11c395737d218b",
     "lab-native/tests/teacher_wire.rs": "53de15eea61ba0b5896e5ae3c224017fb88a99bb17a553944806f1856f60e52c"
   },
@@ -32,7 +32,7 @@
       "sha256": "b323c55579bdfc875707cc1d36c42f01a9713fc88a82648aab24395962ab3b0c"
     }
   },
-  "source_policy": "B07 compact binary ordinary transport, forced acknowledgements, two publishers and attested reads; explicit backend-only adoption with teacher off",
+  "source_policy": "B07 R4 Rust state for V4 tables, retained binary training features, exact forced sampling verification, one-file handoff, reusable lanes/policies; teacher off and search_v1 unchanged",
   "source_reuse": {
     "from_implementation": "ce40147f02d7a4eec641cebfd4ff5186ced427d8cf505cbe988c8bf22fb9387a",
     "to_implementation": "63564be49e282c4b2c0fff02b7640238c63d04d35f7c072bf8c017d12ce6ace5",
@@ -69,7 +69,7 @@
   },
   "b07_source_review": {
     "from_implementation": "63564be49e282c4b2c0fff02b7640238c63d04d35f7c072bf8c017d12ce6ace5",
-    "to_implementation": "f6372cefd9a48c98994d2f2e8424b032f4d5c808aceab140bb6442b92214cfc9",
+    "to_implementation": "12d996a03debe816d1c3661872faeafa9e79c6ea97646d83cf19393dd57bd5ba",
     "reviewed_commit": "f327d6c",
     "changes": {
       "src/brass_ai/recovery/league.py": {
@@ -82,7 +82,7 @@
       },
       "src/brass_ai/rust_backend/lab_admission.py": {
         "before": "ec1d512b17a15739397154d5c28a2d4bf339b3edea751ea07f9f451d64e4aaff",
-        "after": "1e8acc954936dac49e7352dd12fcd5f96f86e074983a500a4bcfea89991e060b"
+        "after": "6d616c754ab1337005b2e65e7e766b6810b775f24f979e13c40e3c16b32e85f9"
       },
       "src/brass_ai/rust_backend/lab_backend.py": {
         "before": null,
@@ -90,7 +90,7 @@
       },
       "src/brass_ai/rust_backend/lab_collection.py": {
         "before": "a3447bcf29a2dc7f7a584c89e90ea2991376c92f4e583cbc19631ac195a0caf7",
-        "after": "04335416de7bf0625494ebd22d1e1f719e149916fa537135639ce49638f33593"
+        "after": "807c76a8b20bb3a99f776041101096eba7cd3ace309b64d5fb0a8cd1495ca989"
       },
       "src/brass_ai/rust_backend/lab_continuation.py": {
         "before": "538602cc95aeabbb107119f1b0daeca5b1c768094add2ac316c42949db71660f",
@@ -98,11 +98,11 @@
       },
       "src/brass_ai/rust_backend/lab_families.py": {
         "before": "4e74b139cd40bab7c38ea1a24852d82c9ae04dea7d078595ca4164a41ff48599",
-        "after": "1f80c059de023368d5322e8799a7cad0f26f3e92c4e85e89b135b67cad4db5e3"
+        "after": "a3ee17f38fbd524785ff41450eda6cdfb1f829b469b586777cf5d681863e27d8"
       },
       "src/brass_ai/rust_backend/lab_pool.py": {
         "before": null,
-        "after": "18e7387d79b9b5a61bd4893b6886b67b75738a887f7a9b9a78b956ad950be8b4"
+        "after": "1561e48d93b258d57511f4c79e6b0e5de98baedbc9dda0b1cfe325ec57af22f1"
       },
       "lab-native/Cargo.toml": {
         "before": "0dc9649a715137d28ec66504641b30ba50491a6c227e39276fee5c6a313b28b9",
@@ -114,92 +114,118 @@
       },
       "lab-native/src/collection_wire.rs": {
         "before": null,
-        "after": "7ef890f795e2c1d82f40ce1efd8b958735a565ab3fd6ff124de1cf4862d61be8"
+        "after": "b5cdf1db7c9d3ebc1a057a99258d2553819caa74d8552e9c6ea34c9ece77e0fd"
       },
       "lab-native/src/lib.rs": {
         "before": "6d288c969d09557ec1701da881607d418e5e3674199640c435d3f13abd40da95",
-        "after": "3c7de1d33a46c1ffd267aeac3945ee5b539af0757ddd6616ede27297dc9533fe"
+        "after": "2a1b9450ea990f45b47d188fbc7ddf36531978e0bfd9138d242bf43ab3f919ba"
       },
       "lab-native/src/main.rs": {
         "before": "989818021bd26d237ff35daf6280a928adc118ef598c0e2e25d7e41568cd27d5",
-        "after": "9d488a8cc911e9b78c87f735f345a72e715bd9a485992a0eadf37c39508ff4b1"
+        "after": "79b076553edd272a147c44925e2b803136549ee7ff4b451b05d0366bb8ec267f"
       },
       "lab-native/tests/lanes.rs": {
         "before": "1122a2aee8c061edc24e323c1a4f00e415defd4a0f703165b39c5fe251172aa1",
-        "after": "e29011c143ec3582fcc2e6f4add7d9fce8038a75d9a84d20c0d789a77632993e"
+        "after": "9b1b08c4c4665ec35ed0ecd129a7662a07f07409ce902d8cb8be729c18932a86"
       },
       "src/brass_ai/rust_backend/lab_transport.py": {
         "before": "3b7251178bc68ff8afa1398772cc41147bc1c72e39cddd1d81b4a3e81afa6904",
-        "after": "f5b56a480e369376ee943c5e48217dcf58c4f6002a1a71767dc72a873d20127d"
+        "after": "94d9883f480e5a3bb44e8da0b0e91302fc61e62478739b0d70f666bcfd8554b9"
+      },
+      "src/brass_ai/rust_backend/lab_b02_smoke.py": {
+        "before": "8fd65fbe029d077eba523af46c63983866b17a0e4616ce375865c20d6341b3dc",
+        "after": "dee43c8a51bb9a6914d7bb642c8eb0f75b50111f998046262cec65901ccd354c"
+      },
+      "src/brass_ai/rust_backend/lab_features.py": {
+        "before": null,
+        "after": "c763fb68343ed383be22ce42f13ce0e606ab235254c275e6a36b187cba393b84"
+      },
+      "src/brass_ai/rust_backend/lab_session.py": {
+        "before": null,
+        "after": "c095228693c495b43adaddfad9c3c569b12969947d70d44e048ab5f1e6301d02"
       }
     },
-    "scope": "Preserve sealed native game/search core sources and C# pins, B01-B06 evidence and the g1250 recipe. Rebuild ordinary compact/binary/forced transport and teacher exact float parser. Remeasure affected collection, publication and reads; original B07 ordinary timing remains historical. No production adoption.",
+    "scope": "B07 R4 keeps Rust authoritative for frozen V4 ordinary tables through the original C# decision policy. Retains all native/archived-reference actor features and CheckedGame bindings through one sealed handoff, independently validates behavior/RNG, specializes exact forced verification, incrementally hashes/drains row buffers, and reuses bounded per-lane collectors/policies with complete game/seat reset and failure cleanup. Benchmark-only float32 tolerance fixes the observed R3 comparison boundary; production denominators remain independently reconstructed at 1e-12. No search_v1 equations, shared core, C# policy, weights, optimizer, replay schema, recipe or saved config change. Preserve earlier config restrictions and require new bounded ordinary qualification; no production adoption.",
     "native_binaries_unchanged": false,
     "teacher_default": "off",
     "default_without_adoption": "reference",
     "lab_qualification": "Pending",
     "ordinary_binary_unchanged": false,
     "retry": {
-      "from_implementation": "87cdd916e20f513302feca259604ba074948ea38b26275a6fd4e43a899ad273f",
-      "to_implementation": "f6372cefd9a48c98994d2f2e8424b032f4d5c808aceab140bb6442b92214cfc9",
-      "reviewed_commit": "665c964",
+      "from_implementation": "f6372cefd9a48c98994d2f2e8424b032f4d5c808aceab140bb6442b92214cfc9",
+      "to_implementation": "12d996a03debe816d1c3661872faeafa9e79c6ea97646d83cf19393dd57bd5ba",
+      "reviewed_commit": "bacbb60",
       "changes": {
-        "lab-native/Cargo.toml": {
-          "before": "0dc9649a715137d28ec66504641b30ba50491a6c227e39276fee5c6a313b28b9",
-          "after": "5c8566eef28f3f1fe0afb3c4e9d65769a3d19a7f7269e74b0bb3d2630588b9c3"
-        },
         "lab-native/src/collection_wire.rs": {
-          "before": null,
-          "after": "7ef890f795e2c1d82f40ce1efd8b958735a565ab3fd6ff124de1cf4862d61be8"
+          "before": "7ef890f795e2c1d82f40ce1efd8b958735a565ab3fd6ff124de1cf4862d61be8",
+          "after": "b5cdf1db7c9d3ebc1a057a99258d2553819caa74d8552e9c6ea34c9ece77e0fd"
         },
         "lab-native/src/lib.rs": {
-          "before": "6d288c969d09557ec1701da881607d418e5e3674199640c435d3f13abd40da95",
-          "after": "3c7de1d33a46c1ffd267aeac3945ee5b539af0757ddd6616ede27297dc9533fe"
+          "before": "3c7de1d33a46c1ffd267aeac3945ee5b539af0757ddd6616ede27297dc9533fe",
+          "after": "2a1b9450ea990f45b47d188fbc7ddf36531978e0bfd9138d242bf43ab3f919ba"
         },
         "lab-native/src/main.rs": {
-          "before": "989818021bd26d237ff35daf6280a928adc118ef598c0e2e25d7e41568cd27d5",
-          "after": "9d488a8cc911e9b78c87f735f345a72e715bd9a485992a0eadf37c39508ff4b1"
+          "before": "9d488a8cc911e9b78c87f735f345a72e715bd9a485992a0eadf37c39508ff4b1",
+          "after": "79b076553edd272a147c44925e2b803136549ee7ff4b451b05d0366bb8ec267f"
         },
         "lab-native/tests/lanes.rs": {
-          "before": "1122a2aee8c061edc24e323c1a4f00e415defd4a0f703165b39c5fe251172aa1",
-          "after": "e29011c143ec3582fcc2e6f4add7d9fce8038a75d9a84d20c0d789a77632993e"
-        },
-        "lab-native/tests/teacher_wire.rs": {
-          "before": null,
-          "after": "53de15eea61ba0b5896e5ae3c224017fb88a99bb17a553944806f1856f60e52c"
+          "before": "e29011c143ec3582fcc2e6f4add7d9fce8038a75d9a84d20c0d789a77632993e",
+          "after": "9b1b08c4c4665ec35ed0ecd129a7662a07f07409ce902d8cb8be729c18932a86"
         },
         "src/brass_ai/rust_backend/lab_admission.py": {
-          "before": "954f8eb89adbba4696c7b26c902756c38476696a2ec259f1eaaa48eeb0a12601",
-          "after": "1e8acc954936dac49e7352dd12fcd5f96f86e074983a500a4bcfea89991e060b"
+          "before": "1e8acc954936dac49e7352dd12fcd5f96f86e074983a500a4bcfea89991e060b",
+          "after": "6d616c754ab1337005b2e65e7e766b6810b775f24f979e13c40e3c16b32e85f9"
+        },
+        "src/brass_ai/rust_backend/lab_b02_smoke.py": {
+          "before": "8fd65fbe029d077eba523af46c63983866b17a0e4616ce375865c20d6341b3dc",
+          "after": "dee43c8a51bb9a6914d7bb642c8eb0f75b50111f998046262cec65901ccd354c"
         },
         "src/brass_ai/rust_backend/lab_collection.py": {
-          "before": "c686c08e611779c060c5c2cea51a7c34cf693edb6610b83a10dbe3e99b6d1d0c",
-          "after": "04335416de7bf0625494ebd22d1e1f719e149916fa537135639ce49638f33593"
+          "before": "04335416de7bf0625494ebd22d1e1f719e149916fa537135639ce49638f33593",
+          "after": "807c76a8b20bb3a99f776041101096eba7cd3ace309b64d5fb0a8cd1495ca989"
         },
         "src/brass_ai/rust_backend/lab_families.py": {
-          "before": "8dc7cb804dba80323688ab70909f4d5edf2f4688e714cb29a4ea41f0b844a26f",
-          "after": "1f80c059de023368d5322e8799a7cad0f26f3e92c4e85e89b135b67cad4db5e3"
+          "before": "1f80c059de023368d5322e8799a7cad0f26f3e92c4e85e89b135b67cad4db5e3",
+          "after": "a3ee17f38fbd524785ff41450eda6cdfb1f829b469b586777cf5d681863e27d8"
+        },
+        "src/brass_ai/rust_backend/lab_features.py": {
+          "before": null,
+          "after": "c763fb68343ed383be22ce42f13ce0e606ab235254c275e6a36b187cba393b84"
         },
         "src/brass_ai/rust_backend/lab_pool.py": {
-          "before": "3daf4eef9444029505823bae0baaed999d826772697341bbbb66d4693f0b20a3",
-          "after": "18e7387d79b9b5a61bd4893b6886b67b75738a887f7a9b9a78b956ad950be8b4"
+          "before": "18e7387d79b9b5a61bd4893b6886b67b75738a887f7a9b9a78b956ad950be8b4",
+          "after": "1561e48d93b258d57511f4c79e6b0e5de98baedbc9dda0b1cfe325ec57af22f1"
+        },
+        "src/brass_ai/rust_backend/lab_session.py": {
+          "before": null,
+          "after": "c095228693c495b43adaddfad9c3c569b12969947d70d44e048ab5f1e6301d02"
         },
         "src/brass_ai/rust_backend/lab_transport.py": {
-          "before": "3b7251178bc68ff8afa1398772cc41147bc1c72e39cddd1d81b4a3e81afa6904",
-          "after": "f5b56a480e369376ee943c5e48217dcf58c4f6002a1a71767dc72a873d20127d"
+          "before": "f5b56a480e369376ee943c5e48217dcf58c4f6002a1a71767dc72a873d20127d",
+          "after": "94d9883f480e5a3bb44e8da0b0e91302fc61e62478739b0d70f666bcfd8554b9"
         }
+      }
+    },
+    "benchmark_changes": {
+      "scripts/rust_lab_b06_metrics.py": {
+        "before": "fca8a4bc538552ffd0e1c662187bb829720ae56436648c8ae09a5c697d951bb6",
+        "after": "b827ff4e564770534a667da7d2769ac43d519c5fc4bf8e30f28279c3b6a68a20"
+      },
+      "scripts/rust_lab_b06_ordinary.py": {
+        "before": "0134f1d61c1e4338958baf981bb12315f71854962a642ed9799509d51644e989",
+        "after": "29fb566b30950cceef207b4be335afc4767706c67b99357dd61815198fb14996"
       }
     }
   },
   "teacher_wire_review": {
     "from_producer": "abcb8810de02911314a55e516f0aefee2678966e7e79549b0566a4de8589f9e8",
-    "to_producer": "47ba5f7a5da76dae3fa5b80d498e1be72904dafd4b12dc1169b00ea802e5c15b",
+    "to_producer": "8370b5ad86401029fb8a26ddec40eaf9906100ede5025361e3977ccef9d7cb1f",
     "feature": "serde_json/float_roundtrip",
     "scope": "Exact float decoding; search_v1 equations and both sealed shared-core sources unchanged"
   },
   "ordinary_baseline": {
     "from_implementation": "87cdd916e20f513302feca259604ba074948ea38b26275a6fd4e43a899ad273f",
-    "to_implementation": "f6372cefd9a48c98994d2f2e8424b032f4d5c808aceab140bb6442b92214cfc9",
+    "to_implementation": "12d996a03debe816d1c3661872faeafa9e79c6ea97646d83cf19393dd57bd5ba",
     "result": "results/rust-lab-qualification/20261107T090047266944Z-20261107T085645018439Z-g1250-b07-d0097dac-faa1535f/evidence",
     "evidence": {
       "qualification": {
@@ -219,10 +245,23 @@
       "lab-native/tests/lanes.rs",
       "lab-native/tests/teacher_wire.rs",
       "src/brass_ai/rust_backend/lab_admission.py",
+      "src/brass_ai/rust_backend/lab_b02_smoke.py",
       "src/brass_ai/rust_backend/lab_collection.py",
       "src/brass_ai/rust_backend/lab_families.py",
+      "src/brass_ai/rust_backend/lab_features.py",
       "src/brass_ai/rust_backend/lab_pool.py",
+      "src/brass_ai/rust_backend/lab_session.py",
       "src/brass_ai/rust_backend/lab_transport.py"
     ]
+  },
+  "r3_failure": {
+    "result": "results/rust-lab-qualification/20261107T101615796829Z-20261107T101336169559Z-g1250-b07-2fcbfcca-0192d294/evidence",
+    "implementation": "f6372cefd9a48c98994d2f2e8424b032f4d5c808aceab140bb6442b92214cfc9",
+    "evidence": {
+      "b07-r3-qualification.json": "952b9aef3d37d4a1bc078695f24227f3c51d5b1c98c3d20b3b11c1c06818db27",
+      "b07-r3-frozen-jobs.json": "15441b2fbc99d296c70bd59b5b43cab199672569fa0a1d524c4ca5250cc4cd82",
+      "b07-r3-reference-report.json": "a53a9c5b28ec474be4c0fbb5cdedc35d5f526ee652d39f2cf6e41cd850e34ed8",
+      "b07-r3-native-report.json": "406d5adb95345b009f763288952a12cd8640038efb98a1ca266d76e5d9fe8792"
+    }
   }
 }

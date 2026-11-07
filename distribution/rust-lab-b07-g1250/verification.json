@@ -1,22 +1,12 @@
 {
   "passed": true,
-  "archive": "rust-lab-b07-g1250-r3.zip",
-  "sha256": "fd28167f8ea8bbd1fd5087e37ae5ed70937c5e9da2b316bad867ce7494ee840b",
-  "implementation": "f6372cefd9a48c98994d2f2e8424b032f4d5c808aceab140bb6442b92214cfc9",
+  "archive": "rust-lab-b07-g1250-r4.zip",
+  "archive_sha256": "e979861f03e5508dd5748a54309ad3f5e0ff540b352e435939a871bde23035c2",
+  "implementation": "12d996a03debe816d1c3661872faeafa9e79c6ea97646d83cf19393dd57bd5ba",
   "clean_extraction": true,
-  "manifest_and_prerequisite_checks": true,
-  "cpu_fixtures": {
-    "run": 36,
-    "seconds": 83.545,
-    "skipped": 3,
-    "skips": "Real native wire tests require explicit binary/fixture paths; all three ran in the separate 43-test local run."
-  },
-  "scope": "CPU fixtures only; B07 lab and adoption Pending",
-  "qualification_report_sha256": "bf0ffdcea5f6e53fb977138fd1c85046b7bd52b5c5b975ec7246e2038f0d4991",
-  "log_sha256": "51b19a51e95cf35eaa51feb15a31ebb962aeb98feb8405bbcd8b7f5567398577",
-  "runtime_qualification": "Pending Linux/CUDA g1250",
-  "production_adoption": "Pending",
-  "next_normal_commit_restart": "Pending",
-  "export_checked": "Success exported in clean extraction. Its isolated results directory has no Git repo; original results repository remains untouched.",
-  "previous_qualifications_repeated": false
+  "manifest_verified": true,
+  "python_checks": 12,
+  "native_tests_repeated": false,
+  "log_sha256": "8c9a29a308dc6d7891890338ca54d094f86c64b2b53b2da06ca765dfb4eceb21",
+  "lab_qualification": "Pending"
 }
