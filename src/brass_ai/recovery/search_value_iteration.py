@@ -46,11 +46,17 @@ class SearchValueIteration:
         self.generation = state['iteration']
         self.report = None
         self.pending_generation = None
+        self._publication = None
+
+    def _require_mutable(self):
+        require(self._publication is None, 'Search value checkpoint publication is pending')
 
     def admit(self, tables, jobs, *, post_spent=0.):
+        self._require_mutable()
         if jobs: self.phase.admit(tables,jobs,self.generation,post_spent=post_spent)
 
     def prepare_ppg(self, phases, generation, *, ordinary=None, annealing=False):
+        self._require_mutable()
         require(generation == self.generation+1, 'Search value iteration out of order')
         self.pending_generation, self.report = generation, None
         self.ordinary, self.annealing = ordinary, annealing
@@ -83,6 +89,7 @@ class SearchValueIteration:
         self._finish(guard)
 
     def _finish(self, guarded=None):
+        self._require_mutable()
         from .ppg_selection import Selection
         phase = self.phase
         old_stage = copy.deepcopy(phase.machine.state)
@@ -123,11 +130,24 @@ class SearchValueIteration:
 
     def payload(self, generation):
         require(generation == self.generation+1, 'Search value commit generation differs')
-        return dict(self.phase.payload(),contract=CONTRACT,generation=generation,reward_id=self.phase.reward_id)
+        if self._publication is None:
+            # Own exactly the snapshot handed to save_checkpoint. Never copy or
+            # convert label histories again when verifying the durable commit.
+            payload = dict(self.phase.payload(),contract=CONTRACT,generation=generation,reward_id=self.phase.reward_id)
+            self._publication = (payload, stamp(payload))
+        else:
+            require(stamp(self._publication[0]) == self._publication[1], 'Search value publication snapshot changed')
+        return self._publication[0]
 
     def committed(self, state):
-        require(state.get('search_value') == stamp(self.payload(state['iteration'])),
+        require(self._publication is not None and state['iteration'] == self.generation+1,
+                'Search value cleanup requires a prepared next-generation snapshot')
+        payload, expected = self._publication
+        # Rehash the same detached snapshot to detect caller mutation, including
+        # companion tensors and receipts. Do not stamp a second live snapshot.
+        require(state.get('search_value') == expected == stamp(payload),
                 'Search value cleanup requires durable checkpoint/state commit')
         self.generation = state['iteration']
+        self._publication = None
         # Retired shards remain rollback dependencies. B07 retention may delete
         # them only after inventorying every supported checkpoint.

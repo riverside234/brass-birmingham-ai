@@ -1,4 +1,4 @@
-# B07 g1250 R7: repair checkpoint reload and continue training
+# B07 g1250 R8: reuse checkpoint snapshots and repair the fixture
 
 **R4 ordinary qualification passed.** The result was pulled inside `results/`
 at `9e219a2`. Same 3 families / 1,161 decisions / 675 forced rows, with equivalent
@@ -6,19 +6,24 @@ trajectories/features/targets: accepted work **30.632s → 26.820s (12.4% less t
 Sampled peak host memory was 4.917GB → 7.479GB. This is one bounded matched batch,
 not a statistical or whole-training speed claim.
 
-R7 fixes the R6 shadow-checkpoint reload failure: immutable live label containers
-were pickled using constructor globals rejected by `weights_only=True`. Checkpoint
-publication now detaches label ages into plain JSON containers. Strict loading
-remains enabled, with no allowlist or unsafe fallback. Live immutable reuse,
-rewards, targets, search_v1 and the saved teacher-off recipe remain unchanged.
+R8 fixes the latest qualification failure in the checkpoint regression fixture.
+The test placed `shadow.pt` inside the directory reserved for value shards; strict
+recovery correctly rejected the foreign file. Checkpoints and value shards now
+use separate directories, with a negative test retaining that rejection.
 
-The latest lab run passed sealing: train policy + value cost **0.1554s**, heldout
-**0.0863s**, before their recorded native post-work. Fast turns still allow
-0.8s/K4 + <=0.5s post-work; full turns 4s/K16 + <=1s. R7 reuses the exact pinned
-R6 teacher build and passing R4 ordinary result/binary. No native rebuild or
-unrelated successful qualification repeats. Canaries, continuation and adoption
-remain **Pending**. No local tests were run, per user instruction; new checkpoint
-and receipt-reuse regressions run in the lab's initial fixture stage.
+Search-value publication prepares **one detached plain-label snapshot per commit**.
+Checkpoint saving and commit verification use that exact snapshot. Repeated calls
+reuse it; a stored integrity binding detects caller mutations. Failed saves or
+failed state verification retain it for retry; successful commit releases it.
+Further admission or PPG changes are blocked while publication is pending. Strict
+`weights_only=True`, nonfinite rejection, live immutable labels, optimizer state,
+receipts, recovery bindings and search behavior remain enforced.
+
+**34 distinct focused debugging checks passed**, following the user's clarification.
+No benchmarks, new games, training sessions or unrelated qualifications are run.
+The exact successful R6 native teacher build and R4 ordinary qualification are
+reused. Remaining canaries/continuation/adoption are still **Pending on the lab**.
+The fast 0.8s/K4 + <=0.5s and full 4s/K16 + <=1s budgets are unchanged.
 
 ## One command for real g1250 → g1251 continuation
 
@@ -26,7 +31,7 @@ From the lab code checkout, in the existing training environment, with the run
 paused at the qualified g1250 checkpoint:
 
 ```bash
-unzip -o distribution/rust-lab-b07-g1250/rust-lab-b07-g1250-r7.zip
+unzip -o distribution/rust-lab-b07-g1250/rust-lab-b07-g1250-r8.zip
 python scripts/continue-rust-lab-b07.py --expected-generation 1250
 ```
 
@@ -87,7 +92,7 @@ If a later phase fails, preserve the original attempt and reuse successful phase
 python scripts/continue-rust-lab-b07.py --expected-generation 1250 --resume-qualification artifacts/rust-backend/REPLACE_WITH_PARTIAL_ATTEMPT/qualification.json
 ```
 
-The saved phases must match the exact R7 workflow, source, committed state and
+The saved phases must match the exact R8 workflow, source, committed state and
 teacher build; their bytes are rechecked. Failed phases are never reused. The
 ordinary result and build are always the pinned successful R4 ones. An existing
 current-source R6 teacher build can be supplied with `--teacher-build PATH/build.json`;
@@ -137,5 +142,5 @@ other computer. Exported review copies do not relocate original lab binaries.
 Local checks cover exact reuse, stale/tampered evidence, phase selection,
 failed adoption/training, full-state restore, rollback integrity, committed-config
 forwarding and no duplicate iteration. No full training session or unrelated
-successful qualification is run locally. See [implementation and evidence](../../ai-research/RUST_BACKEND_B07_IMPLEMENTATION.md#r7-strict-checkpoint-reload-repair).
+successful qualification is run locally. See [implementation and evidence](../../ai-research/RUST_BACKEND_B07_IMPLEMENTATION.md#r8-one-snapshot-per-checkpoint-commit).
 Archives are immutable; future changes require a new revision.

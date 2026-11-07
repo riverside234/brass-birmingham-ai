@@ -1,6 +1,9 @@
 {
-  "revision": "r7",
-  "local_tests_run": false,
+  "revision": "r8",
+  "local_debug_tests_passed": true,
+  "unique_checks": 34,
+  "benchmarks_run": false,
   "lab_qualification": "Pending",
+  "fresh_archive_execution": "Not repeated; source fixtures passed before packaging",
   "production_modified": false
 }

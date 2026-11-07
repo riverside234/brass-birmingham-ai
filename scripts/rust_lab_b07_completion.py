@@ -14,6 +14,7 @@ PHASES = ('canary-1', 'canary-2', 'continuation')
 COMPLETION_CHANGES = {
     'src/brass_ai/recovery/search_value_config.py',
     'src/brass_ai/recovery/search_value_phase.py',
+    'src/brass_ai/recovery/search_value_iteration.py',
     'src/brass_ai/recovery/teacher_phase.py',
     'src/brass_ai/rust_backend/lab_teacher.py',
     'src/brass_ai/rust_backend/lab_teacher_finalization.py',
@@ -38,13 +39,14 @@ def reviewed_source(reference=None):
 
 
 def reuse_build(value, kind):
-    """Rebind only the unchanged ordinary executable, never an old teacher."""
+    """Rebind byte-pinned native builds only under explicit source reviews."""
     if value['implementation'] == implementation_id() and 'source_reuse' not in value:return value
     reference=json.loads((DIRECTORY/'reference.json').read_text());review=reviewed_source(reference)
     if kind == 'teacher' and 'teacher_checkpoint_reuse' in reference:
         entry=reference['teacher_checkpoint_reuse'];change=reference['checkpoint_source_review']
         require(change['to_implementation']==implementation_id() and
-                set(change['changes'])=={'src/brass_ai/recovery/search_value_phase.py'}, 'Unreviewed checkpoint source')
+                set(change['changes'])=={'src/brass_ai/recovery/search_value_phase.py',
+                    'src/brass_ai/recovery/search_value_iteration.py'}, 'Unreviewed checkpoint source')
         for name,item in change['changes'].items():
             require(hashlib.sha256((ROOT/name).read_bytes().replace(b'\r\n',b'\n')).hexdigest()==item['after'],
                     'Checkpoint source review changed')
@@ -57,7 +59,7 @@ def reuse_build(value, kind):
                 'Teacher native inputs changed')
         rebound=dict(saved,implementation=implementation_id(),source_reuse=dict(original_receipt=original,
             from_implementation=saved['implementation'],review=digest(change),native_bytes_unchanged=True,
-            scope='R7 plain checkpoint labels only; exact R6 teacher executable and tests'))
+            scope='Checkpoint snapshot publication only; exact R6 teacher executable and tests'))
         require(value==saved or value==rebound, 'Reused teacher differs from original receipt')
         return rebound
     require(kind == 'ordinary', 'Changed teacher deadline requires a new teacher build')

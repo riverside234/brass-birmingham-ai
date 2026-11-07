@@ -113,7 +113,8 @@ class Sealing(unittest.TestCase):
         model,job,_,result,_,_=self.stream()
         with tempfile.TemporaryDirectory(dir=SOURCE_ROOT/'artifacts') as tmp:
             options=adopt(config())['teacher_phase']['search_value']
-            phase=SearchValuePhase(tmp,model,options,job['expected']['reward_id'])
+            value_dir=Path(tmp)/'values'
+            phase=SearchValuePhase(value_dir,model,options,job['expected']['reward_id'])
             phase.label_ages=[dict(generation=10,reward_id=job['expected']['reward_id'],rows=result['rows'])]
             payload=phase.payload()
             def plain(v):
@@ -128,10 +129,15 @@ class Sealing(unittest.TestCase):
             path=Path(tmp)/'shadow.pt'
             save_checkpoint(path,model,step=10,training={'search_value':payload})
             restored,saved=load_checkpoint(path)  # weights_only=True, no allowlist
-            cold=SearchValuePhase(tmp,restored,options,job['expected']['reward_id'],saved=saved['training']['search_value'])
+            cold=SearchValuePhase(value_dir,restored,options,job['expected']['reward_id'],saved=saved['training']['search_value'])
             self.assertEqual(cold.payload()['label_ages'],payload['label_ages'])
             payload['label_ages'][0]['rows'][0]['teacher']['epoch']+=1
             self.assertNotEqual(digest(payload['label_ages']),digest(phase.label_ages))
+            # Keep the production directory-integrity check that caught the old
+            # fixture placing shadow.pt in the shard directory.
+            value_dir.mkdir(exist_ok=True);(value_dir/'unexpected.pt').write_bytes(b'foreign')
+            with self.assertRaisesRegex(ValueError,'Unknown/uncommitted'):
+                SearchValuePhase(value_dir,restored,options,job['expected']['reward_id'],saved=saved['training']['search_value'])
 
     def test_each_table_pays_own_seal_and_no_cap_is_relaxed(self):
         model=model_fixture();row,job,_=value_fixture(model,split='heldout')

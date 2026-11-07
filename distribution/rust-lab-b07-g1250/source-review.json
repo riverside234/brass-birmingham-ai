@@ -1,6 +1,6 @@
 {
   "from_implementation": "63564be49e282c4b2c0fff02b7640238c63d04d35f7c072bf8c017d12ce6ace5",
-  "to_implementation": "8458dc6f2e4f5d943ea0a911aef114337879650cf92021f091700545bb7c5cd7",
+  "to_implementation": "9efcf34f853d75ab844366b6819da4b0921be38d3e2dfb806cf282ace76e7a30",
   "reviewed_commit": "f327d6c",
   "changes": {
     "src/brass_ai/recovery/league.py": {
@@ -89,7 +89,7 @@
     },
     "src/brass_ai/recovery/search_value_phase.py": {
       "before": "4a822763b8d07010eddcd8cf769b82281c9a5adc4c962c23893d0c5a119fc7cc",
-      "after": "bcdf44e87b9c1028017d7bed38cc82e50c47404bdc58e8f85f474d14421d0a2a"
+      "after": "9bd6cff9d5a34fa41f997eea6005d0c2d4ba31ca53c0479d15cc74474f5380d2"
     },
     "src/brass_ai/recovery/teacher_phase.py": {
       "before": "ec1074f6cf6ef2aade86ef089cbd2dc3596856cc38e2415afd7c5f4b8fa5d083",
@@ -102,13 +102,17 @@
     "src/brass_ai/rust_backend/lab_teacher_finalization.py": {
       "before": "58a67451eef10378fa217fa623857488a2b9eb805b66da4e8e17dd412efa0197",
       "after": "1719b9dc55148b22bc4cab0e4ce2630f0e4ffd0003f776ed1d0de72b50a6d5a8"
+    },
+    "src/brass_ai/recovery/search_value_iteration.py": {
+      "before": "9a852b1e01d1b58072ace0544e4f59a1fea01956cb775b299c67de7436fc056b",
+      "after": "36c1d1a7580760255b0b1228a5c5d4f384529ec2b07194997118c480d21c29ae"
     }
   },
   "scope": "B07 R4 keeps Rust authoritative for frozen V4 ordinary tables through the original C# decision policy. Retains all native/archived-reference actor features and CheckedGame bindings through one sealed handoff, independently validates behavior/RNG, specializes exact forced verification, incrementally hashes/drains row buffers, and reuses bounded per-lane collectors/policies with complete game/seat reset and failure cleanup. Benchmark-only float32 tolerance fixes the observed R3 comparison boundary; production denominators remain independently reconstructed at 1e-12. No search_v1 equations, shared core, C# policy, weights, optimizer, replay schema, recipe or saved config change. Preserve earlier config restrictions and require new bounded ordinary qualification; no production adoption.",
   "native_binaries_unchanged": false,
   "teacher_default": "off",
   "default_without_adoption": "reference",
-  "lab_qualification": "R4 ordinary and R6 sealing passed; R7 checkpoint reload/canaries/continuation/adoption Pending",
+  "lab_qualification": "R4 ordinary and R6 sealing passed; R8 remaining canaries/continuation/adoption Pending",
   "ordinary_binary_unchanged": false,
   "retry": {
     "from_implementation": "f6372cefd9a48c98994d2f2e8424b032f4d5c808aceab140bb6442b92214cfc9",
@@ -232,5 +236,21 @@
       }
     },
     "scope": "R7 converts only persisted search-value label ages from immutable live JSON containers to detached plain JSON trees. Preserve strict weights_only loading without allowlists; no search, native binary, recipe, optimizer, reward, feature or target changes. R6 sealing passed on lab; checkpoint reload and subsequent stages remain Pending."
+  },
+  "completion_r8": {
+    "from_implementation": "8458dc6f2e4f5d943ea0a911aef114337879650cf92021f091700545bb7c5cd7",
+    "to_implementation": "9efcf34f853d75ab844366b6819da4b0921be38d3e2dfb806cf282ace76e7a30",
+    "reviewed_commit": "ef84bda",
+    "changes": {
+      "src/brass_ai/recovery/search_value_iteration.py": {
+        "before": "9a852b1e01d1b58072ace0544e4f59a1fea01956cb775b299c67de7436fc056b",
+        "after": "36c1d1a7580760255b0b1228a5c5d4f384529ec2b07194997118c480d21c29ae"
+      },
+      "src/brass_ai/recovery/search_value_phase.py": {
+        "before": "bcdf44e87b9c1028017d7bed38cc82e50c47404bdc58e8f85f474d14421d0a2a",
+        "after": "9bd6cff9d5a34fa41f997eea6005d0c2d4ba31ca53c0479d15cc74474f5380d2"
+      }
+    },
+    "scope": "R8 prepares one detached finite plain-label snapshot per search-value commit, retains that exact payload for checkpoint saving and integrity verification, rejects snapshot mutation and late lifecycle updates, and releases it only after successful commit. Preserve strict weights_only loading, labels, native builds, search_v1, rewards, optimizers, recipe and recovery. Fix the regression fixture placing a checkpoint in its value-shard directory."
   }
 }

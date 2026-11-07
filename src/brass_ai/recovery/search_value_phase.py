@@ -12,6 +12,11 @@ from .search_value_rows import ValueBuffer, complete_game
 from .search_value_training import Companion, StageMachine, clustered_gate, predict_rows, guarded_pass
 
 
+def label_snapshot(ages):
+    """Detach JSON labels once at publication, rejecting nonfinite values."""
+    return json.loads(json.dumps(ages, allow_nan=False, separators=(',', ':')))
+
+
 class SearchValuePhase:
     def __init__(self, directory, model, options, reward_id, *, saved=None, startup='immediate', trainable=True):
         self.options = copy.deepcopy(validate(options))
@@ -146,7 +151,7 @@ class SearchValuePhase:
         # the strict weights-only loader rejects. Persist only plain JSON trees,
         # stripping process-local admission identity without changing row values.
         # Keep this conversion at checkpoint publication, outside search/sealing.
-        labels = json.loads(json.dumps(self.label_ages, allow_nan=False))
+        labels = label_snapshot(self.label_ages)
         return dict(stage=copy.deepcopy(self.machine.state),companion=self.companion.snapshot() if self.companion else None,
                     buffer=self.buffer.payload(),label_ages=labels)
 

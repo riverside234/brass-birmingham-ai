@@ -139,8 +139,9 @@ class Completion(unittest.TestCase):
         name='src/brass_ai/recovery/search_value_phase.py'
         value=dict(implementation='r6',producer=source_fingerprint(),binary={'sha256':'unchanged'})
         path=self.out/'r6-teacher.json';write_json(path,value)
-        review=dict(from_implementation='r6',to_implementation=implementation_id(),changes={name:dict(
-            after=hashlib.sha256((ROOT/name).read_bytes().replace(b'\r\n',b'\n')).hexdigest())})
+        review=dict(from_implementation='r6',to_implementation=implementation_id(),changes={n:dict(
+            after=hashlib.sha256((ROOT/n).read_bytes().replace(b'\r\n',b'\n')).hexdigest())
+            for n in (name,'src/brass_ai/recovery/search_value_iteration.py')})
         write_json(self.out/'reference.json',dict(checkpoint_source_review=review,
             teacher_checkpoint_reuse={'original_receipt':pin(path)}))
         with patch.object(C,'DIRECTORY',self.out),patch.object(C,'reviewed_source',return_value={}):

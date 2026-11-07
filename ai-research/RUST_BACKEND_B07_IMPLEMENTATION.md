@@ -1,11 +1,62 @@
 # B07: cheaper native collection and bounded adoption
 
 Updated on 2026-11-07. **R4 ordinary correctness and useful performance passed
-on g1250. R7 repairs strict shadow-checkpoint reload after R6 sealing passed;
+on g1250. R8 fixes the debug fixture and reuses one checkpoint snapshot per commit;
 its lab canaries, production adoption and next commit/restart remain Pending
 until that command succeeds on the lab.** Run the
 [new g1250 bundle](../distribution/rust-lab-b07-g1250/README.md); do not rerun
 passing B01–B06 qualifications. The installed game is unchanged.
+
+## R8: one snapshot per checkpoint commit
+
+Pulled inside `results/` to `0a86890`. Export
+`20261107T121012269722Z-20261107T121006613134Z-g1250-b07-70687251-d0dc643a`
+failed in fixtures, before any native build, game or training. R7 strict checkpoint
+loading succeeded; the fixture then passed its checkpoint directory to ValueBuffer,
+which correctly rejected the unrelated `shadow.pt`. Keep the unknown-file check;
+use a dedicated values subdirectory and test both successful reload and rejection
+of a foreign file in that directory.
+
+Inspection found that the trainer already saves `search_values.payload(G+1)` in
+a local variable, but `committed(state)` called `payload()` again. That repeated
+the full-history JSON detachment and companion/receipt copying. R8 retains the
+first detached payload and its integrity stamp privately in SearchValueIteration.
+The existing trainer saves that object; state commit verification rehashes that
+same object against both its original stamp and the durable state binding. It
+never reconstructs labels from live state during verification. Repeated payload
+requests return the same object after integrity verification. This removes the
+second JSON conversion and companion snapshot; compact JSON also avoids unused
+whitespace in the one required conversion. Integrity hashing is deliberately
+retained, including the initial mutation-detection binding; no wall-time speedup
+is claimed without measurement.
+
+The payload is detached from live age metadata, immutable label trees, companion
+Adam state and buffer receipts. NaN and both infinities still fail conversion.
+A failed snapshot conversion leaves no prepared publication; a failed save or
+state check retains the exact snapshot for retry. Admit, prepare-PPG and phase
+updates cannot run after publication begins. Successful commit advances generation
+and clears the snapshot; duplicate/stale commits fail. A restarted process uses
+the unchanged strict checkpoint/state identity checks and constructs a fresh
+snapshot for the next generation. Checkpoint format, labels, weights_only=True,
+search_v1, deadlines, rewards, recipe, shard integrity and rollback rules are
+unchanged. The companion optimizer remains owned by the existing lifecycle.
+
+**34 distinct focused debugging checks passed** (6 targeted checks, then the
+33-check lab fixture set; five overlap). No benchmarks ran. Coverage includes
+real strict save/load, conversion count exactly one,
+object identity, repeated calls, failed-save retry without partial files, next
+commit/restart, three-generation head/Adam restoration, nonfinite values, payload
+and live-state mutation isolation, forged state stamps, stage/reward/receipt
+mutation, pending-update rejection and foreign-file rejection. New tests are in
+`test_b07_checkpoint.py`; lab fixture selection includes them. No local benchmark,
+full game/training run or unrelated successful qualification is repeated.
+
+The R8 source review changes only search-value phase/iteration publication relative
+to R7. Keep explicit same-config continuation approvals and exact native receipt
+pins. Reuse the R6 teacher binary/tests and R4 ordinary result; the R7 fixture
+failure provides no successful canary to reuse. The [R8 bundle commands](../distribution/rust-lab-b07-g1250/README.md)
+run only remaining gates, with adoption and g1251 continuation commands retained.
+Lab qualification/adoption remains Pending.
 
 ## R7: strict checkpoint reload repair
 

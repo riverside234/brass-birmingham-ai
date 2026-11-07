@@ -1,10 +1,10 @@
 {
-  "archive": "rust-lab-b07-g1250-r7.zip",
-  "sha256": "84dd16d8de0828dd7b9433c4924f19e3584cd3d7b1d78cf5eb820476babbfd5a",
-  "bytes": 9439370,
-  "entries": 1372,
-  "implementation": "8458dc6f2e4f5d943ea0a911aef114337879650cf92021f091700545bb7c5cd7",
-  "qualification": "R4 ordinary and R6 sealing passed; R7 checkpoint/canaries/continuation/adoption Pending",
+  "archive": "rust-lab-b07-g1250-r8.zip",
+  "sha256": "336fb9aa3c425a39b0b4778ee520b5874daaabe292849354ec0feddfdfa23961",
+  "bytes": 9448222,
+  "entries": 1377,
+  "implementation": "9efcf34f853d75ab844366b6819da4b0921be38d3e2dfb806cf282ace76e7a30",
+  "qualification": "R4 ordinary and R6 sealing passed; R8 checkpoint/canaries/continuation/adoption Pending",
   "ordinary_qualification_reused": true,
   "teacher_rebuild_required": false,
   "production_modified": false
