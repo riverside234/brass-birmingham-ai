@@ -1,0 +1,18 @@
+{
+  "from_implementation": "ce40147f02d7a4eec641cebfd4ff5186ced427d8cf505cbe988c8bf22fb9387a",
+  "to_implementation": "63564be49e282c4b2c0fff02b7640238c63d04d35f7c072bf8c017d12ce6ace5",
+  "reviewed_commit": "17956a9",
+  "changes": {
+    "src/brass_ai/rust_backend/lab_collection.py": {
+      "before": "7f9c38965c15571a2f244055e8c145671d5eabfc7752ce3daa68b8b42027f2f1",
+      "after": "a3447bcf29a2dc7f7a584c89e90ea2991376c92f4e583cbc19631ac195a0caf7"
+    },
+    "src/brass_ai/rust_backend/lab_families.py": {
+      "before": "9a389bd6b259f66ebdb7926c7c406e791863fa8f25174de98b73f5bba40f31e8",
+      "after": "4e74b139cd40bab7c38ea1a24852d82c9ae04dea7d078595ca4164a41ff48599"
+    }
+  },
+  "scope": "Reuse B05 optimizer/teacher/restore evidence; only native branch window and its validation change. Current v9 and legacy branch regression tests plus bounded B06 collection cover the affected scope.",
+  "native_binaries_unchanged": true,
+  "production_modified": false
+}

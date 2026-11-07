@@ -1,0 +1,44 @@
+{
+  "archive": "rust-lab-b06-g1250-r2.zip",
+  "archive_sha256": "3da6dfa8c7a47cc959076139592f8e73009e42e29941ebd7158a12ea127b89a1",
+  "implementation": "63564be49e282c4b2c0fff02b7640238c63d04d35f7c072bf8c017d12ce6ace5",
+  "clean_extraction": true,
+  "tests": 47,
+  "passed": 45,
+  "skipped": 2,
+  "failures": 0,
+  "errors": 0,
+  "seconds": 15.082,
+  "fixture_log_sha256": "4d1bef00447c32216022eea1deffa3e15c001d9e1f06045681e01c770f0988ea",
+  "qualification": {
+    "milestone": "B06",
+    "passed": true,
+    "lab_qualification": "Pending",
+    "production_modified": false,
+    "previous_qualifications_repeated": false,
+    "whole_iteration_speedup": null,
+    "new_teacher_tables": 0,
+    "implementation": "63564be49e282c4b2c0fff02b7640238c63d04d35f7c072bf8c017d12ce6ace5",
+    "prerequisites": {
+      "B02": {
+        "path": "results/rust-lab-qualification/20261104T012220551953Z-20261104T011422740838Z-g570-all-8bee9d91-e1605e8c/evidence/b02/qualification.json",
+        "sha256": "88e7136e4d935c63dee3f71c4b3cc49b9202356792bf36a96e4d71b6945122ec"
+      },
+      "B04.5": {
+        "path": "results/rust-lab-qualification/20261107T060856941600Z-20261107T060554386081Z-g1250-b045-76165ac4-a1db73ac/evidence/qualification.json",
+        "sha256": "4830d679141ea1fd1b4e469cc969251b6a5b6d0ec988ea0410039f4090169bc3"
+      },
+      "B05": {
+        "path": "results/rust-lab-qualification/20261107T070806231803Z-20261107T070539193547Z-g1250-b05-88497ac1-cf4704fd/evidence/qualification.json",
+        "sha256": "b323c55579bdfc875707cc1d36c42f01a9713fc88a82648aab24395962ab3b0c"
+      }
+    },
+    "scope": "CPU fixtures only; Linux/CUDA B06 Pending"
+  },
+  "evidence": "artifacts\\b06-r2-transfer\\artifacts\\rust-backend\\20261107T073606984611Z-g1250-b06-acd23c91",
+  "scope": "Clean ZIP CPU smoke; g1250 Linux/CUDA B06 Pending",
+  "skips": [
+    "Unprivileged Windows symlink unavailable",
+    "Isolated extraction has no results/.git"
+  ]
+}

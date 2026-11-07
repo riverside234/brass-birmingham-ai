@@ -50,8 +50,11 @@ def scoring(game, native=True):
         start_revision=game['records'][0]['view']['context']['revision'], initial_vp=vp, final_vp=vp, eras=eras)
 
 
-def family_fixture(*, kind='selfplay', seed=0, branch=False, generation=10):
+def family_fixture(*, kind='selfplay', seed=0, branch=False, generation=10, branching=None):
     c = config(); c['local_scoring_auxiliary']['adoption'] = None
+    if branching is not None:
+        from brass_ai.recovery.exploration import THREE_OPENING
+        c['branching']=copy.deepcopy(branching);c['opening']=copy.deepcopy(THREE_OPENING)
     # Same weights, different policy identity in the snapshot seat.
     learner = neural_spec('a'*64, c['exploration'], 'neutral', version=3, opening=c['opening'])
     policies = [copy.deepcopy(learner) for _ in range(4)]
@@ -128,6 +131,9 @@ def family_fixture(*, kind='selfplay', seed=0, branch=False, generation=10):
         row.update(step=0,chosen=meta['chosen']);row['behavior'].update(component='branch_move',probability=meta['marginal_probability'])
         samplers=[NeuralPolicy(None,evaluator=SimpleNamespace(model_id=p['model_id']),focus=p['focus'],exploration=p['exploration'],
                     exploration_version=3,opening=p['opening']) for p in policies]
+        if branching is not None:
+            from brass_ai.recovery.branching import RESET_OPENINGS
+            for p in samplers:p.opening=copy.deepcopy(RESET_OPENINGS[contract])
         cr,ce=rows(index+1,8,[random.Random(digest(dict(branch=child_seed,seat=s))) for s in range(4)],samplers)
         for j,value in enumerate(cr):value['step']=j+1
         # Continue in the actual fork era; receipt/targets cannot inherit Canal maps.

@@ -1,6 +1,10 @@
 # B05: post-PPG search value and bounded continuation qualification
 
-2026-11-07. Implemented; Linux/CUDA qualification is **Pending**. The completed
+2026-11-07. Linux/CUDA qualification **passed for pinned g1250 diagnostic scope**.
+Receipt: `results/rust-lab-qualification/20261107T070806231803Z-20261107T070539193547Z-g1250-b05-88497ac1-cf4704fd/evidence/qualification.json`.
+R2 completed two PPO/two PPG steps with reload, 32 head steps on 128 frozen rows,
+and four authored teacher/PPO steps. No new games or production modification.
+The completed
 B04.5 r3 receipt is recorded in the migration plan. Production teacher modes
 remain gated, search_v1 remains the default, and V205/DOMiNO/AZ_DB stay disabled.
 
@@ -91,5 +95,6 @@ including failures; earlier successful qualifications remain reusable.
 
 Local validation: 70 CPU regression tests completed in 130.4 seconds, with
 69 passes and one platform-dependent symlink test skipped on Windows. No games
-or lab training sessions were run locally. The actual g1250 CUDA update/restore
-checks remain Pending until the lab command succeeds.
+or lab training sessions were run locally. R2's actual g1250 CUDA update/restore
+checks subsequently passed in the receipt above. Its immutable archive and
+original prequalification metadata remain unchanged; no rerun is needed.

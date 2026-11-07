@@ -706,3 +706,15 @@ Desktop.ini
 !/distribution/rust-lab-b05-g1250/**
 # Superseded B05 archive is retained locally; r2 is the current transfer.
 /distribution/rust-lab-b05-g1250/rust-lab-b05-g1250-r1.zip
+
+# B06 immutable diagnostic bundle; extracted evidence is shipped inside the ZIP.
+!/distribution/rust-lab-b06-g1250/
+/distribution/rust-lab-b06-g1250/*
+!/distribution/rust-lab-b06-g1250/README.md
+!/distribution/rust-lab-b06-g1250/reference.json
+!/distribution/rust-lab-b06-g1250/bundle.json
+!/distribution/rust-lab-b06-g1250/manifest.json
+!/distribution/rust-lab-b06-g1250/local-checks.json
+!/distribution/rust-lab-b06-g1250/verification.json
+!/distribution/rust-lab-b06-g1250/source-reuse.json
+!/distribution/rust-lab-b06-g1250/rust-lab-b06-g1250-r2.zip

@@ -1,0 +1,48 @@
+{
+  "generation": 1250,
+  "checkpoint_sha256": "de427bb22e38cc5dc9d4e79151cccdb321650c02978f79bcdad746c3e6be7985",
+  "model_id": "0e1fe1357722a45ee274edeb2fc7932db3d081719027c6e043647e034f5b0985",
+  "config_sha256": "895d866502425dad30f2277b822dba2a15247f9a701d2dd5dd10b7e396de3ca8",
+  "ordinary_build_sha256": "e9940385ba19ed30f59e380c113e56f1801caf1a037d7f23a21a913f18febf43",
+  "ordinary_native_source_review": {
+    "lab-native/src/lib.rs": "6d288c969d09557ec1701da881607d418e5e3674199640c435d3f13abd40da95",
+    "lab-native/src/main.rs": "989818021bd26d237ff35daf6280a928adc118ef598c0e2e25d7e41568cd27d5",
+    "lab-native/src/scoring.rs": "2e41cb5647dc5b41bf305330fae8869fa8fa969936f8e3b7240d22262c331ecd",
+    "lab-native/Cargo.toml": "0dc9649a715137d28ec66504641b30ba50491a6c227e39276fee5c6a313b28b9",
+    "lab-native/Cargo.lock": "8dedcf1eb844cbd03512663053034a7a587adb7a5bad2e6d9bcfc466e605f8d9"
+  },
+  "prerequisites": {
+    "B02": {
+      "path": "results/rust-lab-qualification/20261104T012220551953Z-20261104T011422740838Z-g570-all-8bee9d91-e1605e8c/evidence/b02/qualification.json",
+      "sha256": "88e7136e4d935c63dee3f71c4b3cc49b9202356792bf36a96e4d71b6945122ec"
+    },
+    "B04.5": {
+      "path": "results/rust-lab-qualification/20261107T060856941600Z-20261107T060554386081Z-g1250-b045-76165ac4-a1db73ac/evidence/qualification.json",
+      "sha256": "4830d679141ea1fd1b4e469cc969251b6a5b6d0ec988ea0410039f4090169bc3"
+    },
+    "B05": {
+      "path": "results/rust-lab-qualification/20261107T070806231803Z-20261107T070539193547Z-g1250-b05-88497ac1-cf4704fd/evidence/qualification.json",
+      "sha256": "b323c55579bdfc875707cc1d36c42f01a9713fc88a82648aab24395962ab3b0c"
+    }
+  },
+  "source_policy": "Diagnostic harness plus exact native v9 branch-window repair; B05 unaffected-component evidence retained",
+  "source_reuse": {
+    "from_implementation": "ce40147f02d7a4eec641cebfd4ff5186ced427d8cf505cbe988c8bf22fb9387a",
+    "to_implementation": "63564be49e282c4b2c0fff02b7640238c63d04d35f7c072bf8c017d12ce6ace5",
+    "reviewed_commit": "17956a9",
+    "changes": {
+      "src/brass_ai/rust_backend/lab_collection.py": {
+        "before": "7f9c38965c15571a2f244055e8c145671d5eabfc7752ce3daa68b8b42027f2f1",
+        "after": "a3447bcf29a2dc7f7a584c89e90ea2991376c92f4e583cbc19631ac195a0caf7"
+      },
+      "src/brass_ai/rust_backend/lab_families.py": {
+        "before": "9a389bd6b259f66ebdb7926c7c406e791863fa8f25174de98b73f5bba40f31e8",
+        "after": "4e74b139cd40bab7c38ea1a24852d82c9ae04dea7d078595ca4164a41ff48599"
+      }
+    },
+    "scope": "Reuse B05 optimizer/teacher/restore evidence; only native branch window and its validation change. Current v9 and legacy branch regression tests plus bounded B06 collection cover the affected scope.",
+    "native_binaries_unchanged": true,
+    "production_modified": false
+  },
+  "native_runtime_policy": "Reuse exact pinned original lab binaries/dependencies; no previous qualification or build rerun"
+}

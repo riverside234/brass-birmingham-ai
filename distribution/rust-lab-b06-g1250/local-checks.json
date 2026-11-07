@@ -1,0 +1,14 @@
+{
+  "implementation": "63564be49e282c4b2c0fff02b7640238c63d04d35f7c072bf8c017d12ce6ace5",
+  "revision": "r2",
+  "tests": 47,
+  "passed": 46,
+  "skipped": 1,
+  "errors": 0,
+  "failures": 0,
+  "seconds": 16.262,
+  "log_sha256": "a2445a99011fc829f9772d6bf92c0a30d61b387c33ff416c7c5dd7780c433a04",
+  "scope": "CPU regression, real replay and v9 branch fixtures; actual g1250 CUDA qualification Pending",
+  "new_games": 0,
+  "production_modified": false
+}

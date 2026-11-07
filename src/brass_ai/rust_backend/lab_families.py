@@ -22,7 +22,7 @@ from brass_ai.recovery.branch_scheduler import ReadyWork
 from brass_ai.recovery.replay import check_game
 from brass_ai.recovery.local_scoring_targets import validate_receipt
 from brass_ai.step5.policy import exploration_distribution,context_for
-from .lab_collection import frozen_id, route
+from .lab_collection import frozen_id, route, branch_opening
 from .lab_contract import SOURCE
 
 FORMAT='brass-lab-family/1.0.0'
@@ -85,6 +85,7 @@ def validate_part(part, job, *, child=False, arrays=None):
                 'Unexpected/private ordinary evidence')
         if spec['kind']!='neural':continue
         b=row['behavior'];phase=row['view']['context']['phase'];seat=row['seat'];opening=spec.get('opening')
+        if child:opening=branch_opening(job,opening)
         focus=job.get('focuses',{}).get(str(seat),'neutral') if spec['focus']=='mixed' else spec['focus']
         assignment=job['provenance'].get('diversity_assignment')
         if assignment is not None:

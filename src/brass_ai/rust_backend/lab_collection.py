@@ -27,6 +27,18 @@ def frozen_id(job):
     return digest({k:v for k,v in job.items() if k != 'path'})
 
 
+def branch_opening(job, parent_opening):
+    """Use the reference branch window without changing the frozen policy ID."""
+    from brass_ai.recovery.exploration import FORK_T15_BRANCH, THREE_OPENING
+    config=job['branching'];contract=config['contract']
+    if contract not in RESET_OPENINGS:return parent_opening
+    opening=RESET_OPENINGS[contract]
+    expected=THREE_OPENING if contract==FORK_T15_BRANCH['contract'] else opening
+    require(config['reset_opening_at_fork'] is True and parent_opening==expected
+            and config.get('continuation_opening',opening)==opening, 'Branch opening policy changed')
+    return copy.deepcopy(opening)
+
+
 def route(job):
     """Never redraw a table or hide unsupported coverage behind a heuristic."""
     require(len(job['policies']) == 4, 'Frozen ordinary job needs four policies')
@@ -103,7 +115,7 @@ def collect_lane(root, executable, bootstrap, job, endpoint, execution, *, origi
             for s,p in enumerate(assigned):
                 p.contexts[rngs[s]] = copy.deepcopy(packet['contexts'][s])
                 reset = meta['contract'] in RESET_OPENINGS
-                require(not reset or (job['branching']['reset_opening_at_fork'] is True and p.opening == RESET_OPENINGS[meta['contract']]), 'Branch opening policy changed')
+                p.opening = branch_opening(job,p.opening)
                 p.action_counts[rngs[s]] = 0 if reset else packet['counts'][s]
             row = copy.deepcopy(packet['row']); row['step'] = 0; row['chosen'] = meta['chosen']
             row['behavior'].update(probability=meta['marginal_probability'],component='branch_move')
