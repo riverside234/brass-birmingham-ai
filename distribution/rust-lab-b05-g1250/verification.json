@@ -1,0 +1,17 @@
+{
+  "archive": "rust-lab-b05-g1250-r1.zip",
+  "archive_sha256": "a03edaade372ebc15d1048e635f6be02422c05ee30812630fe4c81ff86f73c1c",
+  "implementation": "ce40147f02d7a4eec641cebfd4ff5186ced427d8cf505cbe988c8bf22fb9387a",
+  "clean_extraction": true,
+  "launcher": "scripts/qualify-rust-lab-b05.py --fixtures-only",
+  "tests": 70,
+  "passed": 68,
+  "skipped": 2,
+  "failures": 0,
+  "errors": 0,
+  "seconds": 128.96,
+  "fixtures_sha256": "e0e66c4955e7ac7308b7e87318280a0de65987932174818612b11d4509181b36",
+  "lab_qualification": "Pending",
+  "production_modified": false,
+  "new_games": 0
+}

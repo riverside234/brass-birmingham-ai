@@ -203,7 +203,7 @@ class Buffer(Base):
         a = sample_indices([0, 2, 2], [4, 3, 2, 1], 64, seed=7, generation=4, step=2)
         self.assertEqual(len(a), len(set(a))); self.assertEqual(a, sample_indices([0, 2, 2], [4, 3, 2, 1], 64, seed=7, generation=4, step=2))
 
-    def test_seals_resume_window_commit_cleanup_and_unknown_files(self):
+    def test_seals_resume_window_retains_rollback_and_unknown_files(self):
         run = self.temp_run(); m = model_fixture(); c = config(); b = TeacherBuffer(SOURCE_ROOT, run, C.buffer_identity(c))
         for generation in range(10, 15):
             r, expected = example(m, generation=generation)
@@ -213,7 +213,10 @@ class Buffer(Base):
         old = b.directory / 'generation-000010-train.jsonl.gz'; self.assertTrue(old.exists())
         with self.assertRaises((ValueError, FileNotFoundError)): b.committed(15)
         payload = b.payload(); write_json(run / 'state.json', dict(iteration=15, teacher_phase=dict(buffer=payload)))
-        b.committed(15); self.assertFalse(old.exists()); self.assertTrue(unknown.exists())
+        b.committed(15); self.assertTrue(old.exists()); self.assertTrue(unknown.exists())
+        # An earlier full checkpoint still owns the expired shard.
+        previous = TeacherBuffer(SOURCE_ROOT, run, C.buffer_identity(c), receipts=payload['retired'])
+        self.assertEqual(len(previous.rows(10)), 1)
         rebuilt = TeacherBuffer(SOURCE_ROOT, run, C.buffer_identity(c), receipts=payload['receipts'], retired=payload['retired'])
         self.assertEqual([r.identity for _, r in b.rows(14)], [r.identity for _, r in rebuilt.rows(14)])
         (run / payload['receipts'][0]['path']).write_bytes(b'tampered')

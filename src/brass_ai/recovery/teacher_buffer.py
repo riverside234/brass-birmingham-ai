@@ -117,11 +117,10 @@ class TeacherBuffer:
             self.owner()
             require(not path.exists() or sha(path) == receipt['sha256'], 'Refusing changed retired teacher shard')
             require(not sidecar.exists() or read(sidecar) == receipt, 'Refusing changed retired teacher receipt')
-            if path.exists(): path.unlink()
-            if sidecar.exists(): sidecar.unlink()
+            # A prior full checkpoint may still reference this age. Retain its
+            # immutable files until dependency-aware retention qualifies deletion.
             self._rows.pop(receipt['sha256'], None)
         self.receipts = copy.deepcopy(self.pending)
-        self.retired = []  # The next checkpoint need not retain already deleted receipts.
 
 
 def sample_indices(ages, weights, count, *, seed, generation, step):

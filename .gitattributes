@@ -26,6 +26,8 @@ training/runtime/**/*.exe -text
 training/runtime/**/*.json -text
 # Migration bundle receipts and checkpoint parts must survive Git byte-for-byte.
 /distribution/rust-lab-g1250/*.json -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
+/distribution/rust-lab-b05-g1250/**/*.json -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
+/distribution/rust-lab-b05-g1250/*.json -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
 test_nn/**/*.json -text
 test_nn/**/*.pt.part* -text
 test_nn/**/*.jsonl.gz -text

@@ -1,0 +1,13 @@
+{
+  "milestone": "B04.5",
+  "passed": true,
+  "lab_qualification": "Passed for exact g1250 source/model/device",
+  "production_modified": false,
+  "previous_qualifications_repeated": false,
+  "bundle": "c70a13770460c4a58381f42ab07192699a17c07af936d0f9956b2a3ab510a31f",
+  "new_games": 2,
+  "diagnostic_head_steps": 1,
+  "ordinary_optimizer_steps": 0,
+  "labels": 49,
+  "value_rows": 128
+}

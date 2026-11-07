@@ -93,9 +93,15 @@ class TeacherPhase:
                 'Teacher buffer model is not in committed run lineage')
         self.buffer = TeacherBuffer(root, run, buffer_identity(config), receipts=cache.get('receipts', ()), retired=cache.get('retired', ()))
         self.weight = saved.get('weight', {}); self.term = None; self.jobs = []; self.heldout = []
+        if cache and cache.get('identity') != self.buffer.identity:
+            self.weight = {}  # Static producer/profile changes retire beta with its labels.
         self.cursor = state.get('teacher_seed_cursor', initial_cursor(config))
         self.receipt, self.ready = readiness(saved.get('readiness'), getattr(model, 'utility_calibration', None), self.reward_id)
         self.metrics = {}; self.admission_seconds = 0.; self.pre = None; self.post = None
+        self.search_value = None
+        if 'search_value' in self.options:
+            from .search_value_iteration import SearchValueIteration
+            self.search_value = SearchValueIteration(self.buffer.run,config,state,model,raw)
 
     def begin(self, state, model, *, export_hash=None, epoch=None, native_source=SOURCE):
         self.state = state; self.generation = state['iteration']
@@ -153,6 +159,8 @@ class TeacherPhase:
                     (.2 if r['metrics']['turns'][-1].get('profile')=='fast' else 1.)
                 for r in results), 'Teacher sealing exceeded the remaining post-search allowance')
             self.metrics['deferred_sealing_seconds'] = self.admission_seconds
+        if self.search_value is not None:
+            self.search_value.admit(results,self.jobs,post_spent=self.admission_seconds if verifier is not None else 0.)
 
     def prepare(self, model):
         self.pre = heldout_measure(model, self.heldout)

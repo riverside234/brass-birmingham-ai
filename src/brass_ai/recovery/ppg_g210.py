@@ -7,6 +7,7 @@ import copy
 import math
 
 import numpy as np
+from brass_ai.learning.search_value import ordinary_parameters
 import torch
 
 from brass_ai.learning.contracts import require
@@ -277,7 +278,7 @@ def initialize(phases,model,config,*,raw,generation,root,run):
                  'evidence_migration','critic_migration','snapshot_r2_migration','disabled_startup_cleanup','g210_migration',
                  'ppg_schedule_migration'):
         setattr(phases,name,None)
-    phases.optimizer=torch.optim.Adam(model.parameters(),lr=config['learning_rate']*config['value_phase']['learning_rate_factor'])
+    phases.optimizer=torch.optim.Adam(ordinary_parameters(model),lr=config['learning_rate']*config['value_phase']['learning_rate_factor'])
     saved=(raw or {}).get('training',{}).get(actor_value.KEY)
     if saved is None:
         require(generation==0,'Missing g210 continuation checkpoint')
@@ -481,7 +482,7 @@ def fit(phases,model,preparation_pool):
             value_dataset=ds,value_train_ids=indices,validation_dataset=ds if pooled else phases.critic_dataset,
             **(dict(gate_dataset=phases.critic_dataset,gate_ids=phases.heldout_ids) if pooled else {}),
             current_count=receipts[0]['rows'],dropout=(phases.state['generation'],phases.config['seat_descriptors']['dropout_games']) if phases.critic_state else None,
-            companion=companion,preparation=preparation)
+            companion=companion,preparation=preparation,post_fit=getattr(phases,'post_value_fit',None))
         if getattr(phases,'diversity',None) is not None:
             phases.diversity.report['intrinsic_fit']=companion.report()
         report['cpu_preparation']=preparation.report() if preparation is not None else dict(workers=0)

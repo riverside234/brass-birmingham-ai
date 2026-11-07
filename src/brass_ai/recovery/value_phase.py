@@ -290,7 +290,7 @@ class DeferredKL:
 
 def fit(model,optimizer,dataset,train_ids,heldout_ids,actor_ids,probe_ids,config,update,*,beta,
         value_dataset=None,value_train_ids=None,validation_dataset=None,current_count=None,dropout=None,
-        companion=None,preparation=None,gate_dataset=None,gate_ids=None):
+        companion=None,preparation=None,gate_dataset=None,gate_ids=None,post_fit=None):
     from .updates import autocast,value_losses,value_output
     began=time.perf_counter();model.eval()
     value_dataset=dataset if value_dataset is None else value_dataset
@@ -551,4 +551,7 @@ def fit(model,optimizer,dataset,train_ids,heldout_ids,actor_ids,probe_ids,config
         report['strategy_kl']={str(z):dict(rows=len(ids),kl=reference.measure(model,ids)) for z,ids in groups.items()}
         report['strategy_clone_rows']=dict(Counter(str(dataset.rows[i]['_domino']['strategy_id']) for i in clones))
     require(report['probe_kl']<=config['kl_cap']+1e-7,'Accepted value phase exceeds policy KL cap')
+    if post_fit is not None:
+        post_fit(model=model,optimizer=optimizer,reference=reference,clones=clones,probe_ids=probe_ids,
+                 dataset=validation_dataset,heldout_ids=heldout_ids,config=config,update=update,beta=beta,report=report)
     return report

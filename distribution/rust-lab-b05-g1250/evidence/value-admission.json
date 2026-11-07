@@ -1,0 +1,11 @@
+{
+  "rows": {
+    "train": 64,
+    "heldout": 64
+  },
+  "value_admission_per_table_seconds": {
+    "e5f783831269f3df3faf53194a0c5e4632c9a559625cd9acfa94cb54578e1597": 0.1069076550193131,
+    "34af2fadb20d662a9df7d91927860ff207f2fd1b6ec001982db5c0b3594d43e8": 0.03877860901411623
+  },
+  "value_admission_seconds": 0.14572567198774777
+}

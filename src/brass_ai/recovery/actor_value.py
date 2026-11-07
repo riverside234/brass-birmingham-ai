@@ -3,6 +3,7 @@ import copy
 import math
 import time
 
+from brass_ai.learning.search_value import ordinary_parameters
 import torch
 
 from brass_ai.learning.contracts import require
@@ -147,7 +148,7 @@ class TrainingPhases:
         self.config=config;self.dataset=None;self.probe_ids=None
         gae.validate(self.options['advantage'],combined='reward' in config)
         value_phase.validate(self.options['value_phase'])
-        self.optimizer=torch.optim.Adam(model.parameters(),lr=config['value_phase']['learning_rate'] or config['learning_rate'])
+        self.optimizer=torch.optim.Adam(ordinary_parameters(model),lr=config['value_phase']['learning_rate'] or config['learning_rate'])
         buffered=value_buffer.enabled(config)
         descriptors='critic_data' in config
         previous_contract='actor-value-phases/3.0.0' if descriptors else 'actor-value-phases/2.0.0' if buffered else CONTRACT
@@ -313,7 +314,7 @@ class TrainingPhases:
         self.disable_migration=self.holdout_migration=self.refinement_migration=self.window_migration=None
         self.evidence_migration=self.critic_migration=self.snapshot_r2_migration=None
         self.rolling_migration=None;self.critic_evidence=None
-        self.optimizer=torch.optim.Adam(model.parameters(),lr=config['value_phase']['learning_rate'] or config['learning_rate'])
+        self.optimizer=torch.optim.Adam(ordinary_parameters(model),lr=config['value_phase']['learning_rate'] or config['learning_rate'])
         saved=(raw or {}).get('training',{}).get(KEY)
         if saved is None:
             require(generation==0,'Missing actor/value checkpoint; cannot fabricate continuation state')

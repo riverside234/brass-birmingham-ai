@@ -1,0 +1,13 @@
+{
+  "implementation": "ce40147f02d7a4eec641cebfd4ff5186ced427d8cf505cbe988c8bf22fb9387a",
+  "scope": "CPU fixtures; actual g1250 CUDA qualification Pending",
+  "tests": 70,
+  "passed": 69,
+  "skipped": 1,
+  "failures": 0,
+  "errors": 0,
+  "seconds": 130.399,
+  "log_sha256": "a60154c1c97e061b8e08abd0d04a64af71aa605c31157eb32af3961c61080a19",
+  "new_games": 0,
+  "production_modified": false
+}

@@ -61,3 +61,8 @@ def correction(model, encoded, mapping, remaining, *, scale=0.):
 
 def head_parameters(model):
     return list(model.search_value_head.parameters())
+
+
+def ordinary_parameters(model):
+    """Stable legacy order; the search head has exactly one Adam owner."""
+    return (p for name, p in model.named_parameters() if not name.startswith('search_value_head.'))

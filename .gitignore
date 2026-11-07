@@ -700,3 +700,7 @@ Desktop.ini
 !/distribution/rust-lab-g1250/training-reference.json
 !/distribution/rust-lab-g1250/local-checks.json
 !/distribution/rust-lab-g1250/rust-lab-b045-g1250-r3.zip
+
+# B05 immutable source, successful prerequisite evidence and local checks.
+!/distribution/rust-lab-b05-g1250/
+!/distribution/rust-lab-b05-g1250/**

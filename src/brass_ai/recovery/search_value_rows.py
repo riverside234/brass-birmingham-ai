@@ -101,6 +101,11 @@ class ValueBuffer:
         self.receipts = copy.deepcopy(list(receipts))
         self.retired = copy.deepcopy(list(retired))
         self.cache = {}
+        require(len({r['file'] for r in self.receipts}) == len(self.receipts), 'Duplicate value shard receipt')
+        known = {r['file'] for r in self.receipts+self.retired}
+        if self.directory.exists():
+            require(all(p.is_file() and not p.is_symlink() and p.name in known for p in self.directory.iterdir()),
+                    'Unknown/uncommitted value files; recover the interrupted publication before resume')
         for r in self.receipts: self._read(r)
 
     def _path(self, receipt):

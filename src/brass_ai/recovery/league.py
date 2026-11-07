@@ -6,6 +6,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 import time
 
+from brass_ai.learning.search_value import ordinary_parameters
 import torch
 
 from brass_ai.bank import admission,read,sha
@@ -196,7 +197,7 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
         else:
             state['imitation']=fresh_imitation(root,model,config['imitation'],config['update'],run,device,workers=config['audit_workers'],warmup=config.get('learning_rate_warmup'))
         # A new recipe never inherits the old full-epoch optimizer moments.
-        optimizer=torch.optim.AdamW(model.parameters(),lr=config['learning_rate'],weight_decay=config['weight_decay'])
+        optimizer=torch.optim.AdamW(ordinary_parameters(model),lr=config['learning_rate'],weight_decay=config['weight_decay'])
         if 'learning_rate_warmup' in config:
             from .learning_rate import configure
             warmup=config['learning_rate_warmup']
@@ -288,7 +289,7 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
     from . import local_scoring_auxiliary as auxiliary
     if auxiliary.accepted_warmup(config.get(auxiliary.KEY,{})):
         auxiliary.verify_initialization(state,raw,config[auxiliary.KEY])
-    optimizer=torch.optim.AdamW(model.parameters(),lr=config['learning_rate'],weight_decay=config['weight_decay'])
+    optimizer=torch.optim.AdamW(ordinary_parameters(model),lr=config['learning_rate'],weight_decay=config['weight_decay'])
     cuda_resume=resume_optimizer(raw,optimizer,allow_cuda_topology_change=True)
     from .resume import apply_optimizer_config
     optimizer_resume=apply_optimizer_config(optimizer,config)
@@ -578,7 +579,14 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                     kind_by_group,active_anchor,calibrated_anchor=limit_report['lr_gate'] if limit_report and not observations_off else None,
                     economic_health=limit_report['health'] if observations_off else None)
                 ppo_finished=time.monotonic()
+                search_values = teacher_phase.search_value if teacher_phase is not None else None
+                if search_values is not None:
+                    from .search_value_iteration import ordinary_guard
+                    search_values.prepare_ppg(phases,iteration+1,
+                        ordinary=ordinary_guard(update,diagnostics.get('health_counts')),
+                        annealing=config['update'].get('entropy_schedule',{}).get('mode') == 'on')
                 value_report=phases.fit(model,preparation_pool=preparation_pool) if phases is not None else None
+                search_value_report=search_values.finish_ppg() if search_values is not None else None
                 updated=time.monotonic();done=state['games_done']+len(games)
                 ordinary_inference=service.report()
                 if rehearsal_schedule(config,done,iteration+1)['weight']==0:rehearsal=None
@@ -619,7 +627,8 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                             scope='Exact KL(post-PPO behavior || post-teaching behavior); bounded proportional era/phase probe, RNG-neutral; diagnostic only')
                 del teaching_probe
                 teaching_finished=time.monotonic()
-                weights_changed=bool((value_report or {}).get('optimizer_steps') or search.get('updated'))
+                weights_changed=bool((value_report or {}).get('optimizer_steps') or search.get('updated')
+                                     or (search_value_report or {}).get('updated'))
                 # The LR decision above retains its exact post-PPO signal.
                 # Final limits, quality admission and checkpoint probes include
                 # shared-trunk movement from the separate value/teacher phases.
@@ -736,6 +745,8 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                         pfsp_context_regime=config['diversity']['context_contract'])
                     report['diversity']=copy.deepcopy(diversity.report)
                 anchor_commit=policy_anchor.checkpoint_state(state)
+                search_value_payload=search_values.payload(iteration+1) if search_values is not None else None
+                if search_value_report is not None: report['search_value']=search_value_report
                 identity=save_checkpoint(output,model,optimizer,step=iteration+1,
                     training=dict(mode='step5-population-ppo',recipe=update['format'],
                         parent=current,signature=digest(signature),fresh_run=run.relative_to(root).as_posix(),initialization='random-lineage',
@@ -747,6 +758,7 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                         **({'policy_anchor':anchor_commit} if anchor_commit is not None else {}),
                         **({'exploration':exploration_state} if exploration_state is not None else {}),
                         **({'teacher_phase':teacher_phase.payload(iteration+1)} if teacher_phase is not None else {}),
+                        **({'search_value':search_value_payload} if search_value_payload is not None else {}),
                         **({'v4_share_gate':share} if share is not None else {}),
                         **({'actor_value_phases':phases.payload()} if phases is not None else {}),
                         **({'local_scoring_auxiliary':local_scoring.payload(iteration+1)} if local_scoring is not None else {}),
@@ -764,6 +776,9 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                 if teacher_phase is not None:
                     state['teacher_phase']=teacher_phase.payload(iteration+1)
                     state['teacher_seed_cursor']=teacher_phase.cursor
+                if search_value_payload is not None:
+                    from .search_value_iteration import stamp
+                    state['search_value']=stamp(search_value_payload)
                 if anchor_commit is not None:state['policy_anchor']=anchor_commit
                 if exploration_state is not None:state['exploration']=exploration_state
                 if quality:
@@ -794,6 +809,7 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                     from .retention import update_population
                     update_population(root,run,state,config['population'])
                 write_json(state_path,state)
+                if search_values is not None: search_values.committed(state)
                 if teacher_phase is not None:teacher_phase.committed(iteration+1)
                 if local_scoring is not None:local_scoring.committed(iteration+1)
                 if phases is not None:phases.committed(iteration+1)

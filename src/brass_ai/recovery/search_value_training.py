@@ -170,6 +170,13 @@ class Companion:
         require(type(self.steps) is int and self.steps >= 0 and len(self.optimizer.param_groups)==1 and
                 self.optimizer.param_groups[0]['lr']==1e-4 and self.optimizer.param_groups[0]['weight_decay']==1e-4,
                 'Invalid search companion Adam settings')
+        states=list(self.optimizer.state.values())
+        require(len(states) == (len(list(self.model.search_value_head.parameters())) if self.steps else 0)
+                and all(set(s) == {'step','exp_avg','exp_avg_sq'} and int(s['step']) == self.steps
+                        and all(torch.isfinite(v).all() for v in s.values()) for s in states),
+                'Missing/invalid search companion Adam moments')
+        require(all(s['exp_avg'].shape == s['exp_avg_sq'].shape == p.shape
+                    for p,s in self.optimizer.state.items()), 'Search companion Adam moment shape differs')
 
     def head_only(self, rows, *, generation, steps=32):
         require(rows and all(r['split'] == 'train' for r in rows) and 1 <= steps <= 32, 'Invalid head-only training data')
@@ -200,6 +207,7 @@ class Companion:
             require(all(p.grad is None for n,p in model.named_parameters() if not n.startswith('search_value_head.')), 'Search loss reached ordinary parameters')
             torch.nn.utils.clip_grad_norm_(model.search_value_head.parameters(),1.,error_if_nonfinite=True)
             self.optimizer.step(); self.steps += 1; losses.append(float(loss.detach()))
+        self.optimizer.zero_grad(set_to_none=True)
         return dict(steps=steps, rows=len(rows), loss_before=losses[0], loss_after=losses[-1], trunk_gradient=0., policy_kl=0.)
 
 
@@ -249,4 +257,6 @@ def guarded_pass(companion, rows, heldout, value_optimizer, *, scale, measure_or
                 rollback.restore(model,value_optimizer); break
         except BaseException:
             rollback.restore(model,value_optimizer); raise
+        finally:
+            model.zero_grad(set_to_none=True)
     return dict(intervals=reports)

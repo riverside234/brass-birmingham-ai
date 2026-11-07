@@ -2,7 +2,12 @@
 
 2026-11-06 (America/Chicago). Implementation follows
 [the search-value plan](RUST_BACKEND_B045_SEARCH_VALUE_PLAN.md). Linux/CUDA
-qualification is **Pending**. Production teaching remains behind B05/B07.
+qualification **passed** on the exact g1250 checkpoint and r3 source. Production
+teaching remains behind B05/B07. The receipt is
+`results/rust-lab-qualification/20261107T060856941600Z-20261107T060554386081Z-g1250-b045-76165ac4-a1db73ac/evidence/qualification.json`:
+two shadow tables, 49 labels, 128 value rows, one restored diagnostic head step,
+zero ordinary optimizer steps, and no production modification. Historical r3
+bundle bytes remain unchanged. B05 reuses these tables.
 
 R3 addresses the attempt ending `84552797-d6c8c809`. That run passed CPU/native
 checks, warm GPU calibration, zero-blend parity and full/fast timing probes;
@@ -35,7 +40,7 @@ predict g1250 GPU performance.
 
 The masked r2 log cannot establish which native error happened first on that
 host. These independently reproduced bugs are fixed; actual g1250 two-table
-CUDA completion remains Pending until r3 qualification. The installed game,
+The r3 CUDA run subsequently passed, as recorded above. The installed game,
 sealed core, search equations and 4s/0.8s plus 1s/0.2s limits are unchanged.
 
 The r2 transfer fixes the g1250 attempt ending `2caeea3b-b0d5a86e`: the cleanup

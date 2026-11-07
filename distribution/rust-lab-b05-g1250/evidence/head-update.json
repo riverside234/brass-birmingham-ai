@@ -1,0 +1,18 @@
+{
+  "update": {
+    "steps": 1,
+    "rows": 64,
+    "loss_before": 0.23168495297431946,
+    "loss_after": 0.23168495297431946,
+    "trunk_gradient": 0.0,
+    "policy_kl": 0.0
+  },
+  "changed": [
+    "search_value_head.0.weight",
+    "search_value_head.0.bias",
+    "search_value_head.2.weight",
+    "search_value_head.2.bias"
+  ],
+  "restored": true,
+  "source_checkpoint_unchanged": true
+}

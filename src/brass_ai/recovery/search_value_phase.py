@@ -11,24 +11,25 @@ from .search_value_training import Companion, StageMachine, clustered_gate, pred
 
 
 class SearchValuePhase:
-    def __init__(self, directory, model, options, reward_id, *, saved=None, startup='immediate'):
+    def __init__(self, directory, model, options, reward_id, *, saved=None, startup='immediate', trainable=True):
         self.options = copy.deepcopy(validate(options))
         self.model, self.reward_id = model, reward_id
         saved = saved or {}
         self.machine = StageMachine(saved=saved.get('stage'), startup=startup)
         if options['stage'] == 'off': self.machine.manual('off')
         self.companion = (Companion(model, saved=saved.get('companion'))
-                          if options['stage'] != 'off' or hasattr(model,'search_value_head') else None)
+                          if (trainable and options['stage'] != 'off') or hasattr(model,'search_value_head') else None)
         self.buffer = ValueBuffer(directory, reward_id, receipts=saved.get('buffer', {}).get('receipts', ()),
                                   retired=saved.get('buffer', {}).get('retired', ()))
         self.label_ages = copy.deepcopy(saved.get('label_ages', []))
         self.report = {}
 
-    def admit(self, results, jobs, generation):
+    def admit(self, results, jobs, generation, *, post_spent=0.):
         import time
         began = time.monotonic()
         by_id = {r['job_id']: r for r in results}
-        require(len(by_id) == len(results) == len(jobs), 'Missing/duplicate value table')
+        require(len(by_id) == len(results) == len(jobs) and
+                set(by_id) == {j['expected']['job_id'] for j in jobs}, 'Missing/duplicate value table')
         counts = defaultdict(int)
         timings, labels = {}, []
         self.report.update(rows=counts,value_admission_per_table_seconds=timings)
@@ -52,9 +53,10 @@ class SearchValuePhase:
             if result.get('metrics', {}).get('turns'):
                 turn = result['metrics']['turns'][-1]
                 allowance = .2 if turn.get('profile') == 'fast' else 1.
-                require(turn['post_search_ns']/1e9+elapsed <= allowance,
+                require(turn['post_search_ns']/1e9+post_spent+elapsed <= allowance,
                         f"Value sealing exceeded final-turn post allowance for {job['expected']['job_id']}: "
-                        f"seal={elapsed:.6f}s post={turn['post_search_ns']/1e9:.6f}s limit={allowance}s")
+                        f"seal={elapsed:.6f}s policy_seal={post_spent:.6f}s "
+                        f"post={turn['post_search_ns']/1e9:.6f}s limit={allowance}s")
         self.label_ages = [a for a in self.label_ages if 0 <= generation-a['generation'] < 8 and a['reward_id'] == self.reward_id]
         self.label_ages.append(dict(generation=generation,reward_id=self.reward_id,
             rows=labels))
@@ -103,10 +105,11 @@ class SearchValuePhase:
         require(mode in ('off','shadow','on'), 'Invalid search phase mode')
         if mode != 'on' or self.options['stage']=='off':
             return dict(updated=False,reason='Search value off/shadow; no training')
+        self.report.pop('update',None)
         state = self.machine.state
         heldout = self.buffer.rows(generation,'heldout')
         train = self._targets(self.buffer.rows(generation,'train',stale_ages=self.stale_ages(generation)))
-        if train and state['g0_passed']:
+        if train and state['g0_passed'] and not annealing:
             if state['scale'] > 0:
                 require(guarded is not None, 'Trunk pass requires ordinary PPG probes and optimizer')
                 self.report['update'] = guarded_pass(self.companion,train,self._targets(heldout),scale=state['scale'],**guarded)
@@ -127,6 +130,8 @@ class SearchValuePhase:
             self.report['lambda_selection'] = errors
         self.report.update(gate=gate,stage=self.machine.advance(generation,gate,ordinary=ordinary,h2h=h2h,annealing=annealing),
             delta=dict(mean=float(np.abs(delta).mean()) if len(delta) else None,p90=float(np.quantile(np.abs(delta),.9)) if len(delta) else None))
+        self.report['updated'] = bool(self.report.get('update',{}).get('steps') or
+                                      any(i['accepted'] for i in self.report.get('update',{}).get('intervals',[])))
         return copy.deepcopy(self.report)
 
     def payload(self):

@@ -11,6 +11,7 @@ from dataclasses import dataclass
 from pathlib import Path
 import shutil
 
+from brass_ai.learning.search_value import ordinary_parameters
 import torch
 
 from brass_ai.bank import read, sha
@@ -113,6 +114,15 @@ def inventory(root, run, state, raw):
             path, sidecar = buffer.paths(receipt)
             if receipt in cache['receipts'] or path.exists() or sidecar.exists():
                 buffer.verify(receipt); add(path, receipt['sha256']); add(sidecar)
+    search = raw['training'].get('search_value')
+    if search is not None:
+        from brass_ai.recovery.search_value_iteration import stamp
+        from brass_ai.recovery.search_value_rows import ValueBuffer
+        require(state.get('search_value') == stamp(search), 'Search value state/checkpoint differs')
+        cache = search['buffer']; directory = run/'search-values'
+        buffer = ValueBuffer(directory,search['reward_id'],receipts=cache['receipts'],retired=cache['retired'])
+        for receipt in cache['receipts']+cache['retired']:
+            add(buffer._path(receipt),receipt['sha256'])
     # Model/manifest references outside this run keep their original lineage.
     def refs(value, *, required=True):
         if isinstance(value, dict):
@@ -280,7 +290,7 @@ def restore(fork, *, device='cpu', allow_cuda_topology_change=False):
     state = copy.deepcopy(fork.state); config = state['signature']['config']
     model, raw, changed = load_resume(fork.root, fork.run, state, fork.receipt['target_signature'],
                                      device=device, reviewed=True, diagnostic_fork=fork)
-    optimizer = torch.optim.AdamW(model.parameters())
+    optimizer = torch.optim.AdamW(ordinary_parameters(model))
     resume_optimizer(raw, optimizer, restore_rng=False)
     require(_same_payload(optimizer.state_dict(), raw['optimizer']), 'PPO Adam restoration differs')
     phases = TrainingPhases(model, config, raw=raw, generation=state['iteration'], root=fork.root, run=fork.run)
@@ -344,6 +354,7 @@ def restore(fork, *, device='cpu', allow_cuda_topology_change=False):
     report = dict(contract=CONTRACT, generation=state['iteration'], next_generation=state['iteration'] + 1,
         checkpoint=copy.deepcopy(fork.receipt['checkpoint']), target_signature=digest(fork.receipt['target_signature']),
         full_state_restored=True, optimizers=['ppo', 'value'] + (['local-scoring-ppo', 'local-scoring-ppg'] if companion else []),
+        search_value_restored=bool(teacher and teacher.search_value),
         preserved_ppg_ages=[r['generation'] for r in saved.get('rolling_buffer', [])],
         teacher_state_restored=teacher is not None, cuda_rng_checked=cuda_checked, topology=topology,
         snapshot_r2_overlay=copy.deepcopy(snapshot_overlay), recipe_restore=recipe_restore,

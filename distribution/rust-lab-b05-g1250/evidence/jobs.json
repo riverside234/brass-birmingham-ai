@@ -1,0 +1,277 @@
+{
+  "jobs": [
+    {
+      "kind": "teacher_phase",
+      "split": "train",
+      "seed": 48922016,
+      "sampling_seed": 3858203523,
+      "expected": {
+        "job_id": "e5f783831269f3df3faf53194a0c5e4632c9a559625cd9acfa94cb54578e1597",
+        "game_id": "teacher/e5f783831269f3df3faf53194a0c5e4632c9a559625cd9acfa94cb54578e1597",
+        "generation": 1250,
+        "model_id": "b9f0c1e310a73004cd792178e7fad00f7414470889d620e1587bff99d74eea0f",
+        "export_hash": "de427bb22e38cc5dc9d4e79151cccdb321650c02978f79bcdad746c3e6be7985",
+        "reward_id": "49711b4abaa95940928db567fa76ab654a5d60c417e1b5eca8dbb44ffb5327c1",
+        "source_fingerprint": "abcb8810de02911314a55e516f0aefee2678966e7e79549b0566a4de8589f9e8",
+        "epoch": 0
+      },
+      "reservations": {
+        "0": {
+          "canal_early": 4,
+          "canal_late": 7,
+          "rail_early": 3,
+          "rail_late": 8
+        },
+        "1": {
+          "canal_early": 4,
+          "canal_late": 8,
+          "rail_early": 2,
+          "rail_late": 8
+        },
+        "2": {
+          "canal_early": 1,
+          "canal_late": 8,
+          "rail_early": 4,
+          "rail_late": 8
+        },
+        "3": {
+          "canal_early": 2,
+          "canal_late": 7,
+          "rail_early": 3,
+          "rail_late": 8
+        }
+      },
+      "search": {
+        "method": "search_v1",
+        "algorithm": "brass-gumbel-is-mcts/count-v1",
+        "session": "brass-gumbel-is-mcts/session-v1",
+        "v205_enabled": false,
+        "allowance_seconds": 4.0,
+        "post_search_seconds": 1.0,
+        "timing": "search-plus-post/1.0.0",
+        "sessions": 1,
+        "threads_per_session": 1,
+        "pending_paths": 1,
+        "k": 16,
+        "c1": 50,
+        "c2": 0.1,
+        "gumbel_noise": true,
+        "prior_temperature": 1.0,
+        "watchdog_seconds": 30.0,
+        "reward": {
+          "version": "brass-combined-return/2.0.0",
+          "win": 1.0,
+          "placement": 0.1,
+          "vp": 0.001,
+          "vp_cap": 180,
+          "insolvency": {
+            "event_cost": 0.0025,
+            "max_cost": 0.025
+          }
+        }
+      },
+      "unsearched": {
+        "temperature": 1.0,
+        "epsilon": 0.0,
+        "opening_temperature": null,
+        "branching": false
+      },
+      "seats": [
+        "b9f0c1e310a73004cd792178e7fad00f7414470889d620e1587bff99d74eea0f",
+        "b9f0c1e310a73004cd792178e7fad00f7414470889d620e1587bff99d74eea0f",
+        "b9f0c1e310a73004cd792178e7fad00f7414470889d620e1587bff99d74eea0f",
+        "b9f0c1e310a73004cd792178e7fad00f7414470889d620e1587bff99d74eea0f"
+      ],
+      "schedule": "four-phase-teacher-turns/2.0.0",
+      "ordinary_training": false,
+      "seating": "all-seat-search",
+      "fast_search": {
+        "method": "search_v1",
+        "algorithm": "brass-gumbel-is-mcts/count-v1",
+        "session": "brass-gumbel-is-mcts/session-v1",
+        "v205_enabled": false,
+        "allowance_seconds": 0.8,
+        "post_search_seconds": 0.2,
+        "timing": "search-plus-post/1.0.0",
+        "sessions": 1,
+        "threads_per_session": 1,
+        "pending_paths": 1,
+        "k": 4,
+        "c1": 50,
+        "c2": 0.1,
+        "gumbel_noise": true,
+        "prior_temperature": 1.0,
+        "watchdog_seconds": 30.0,
+        "reward": {
+          "version": "brass-combined-return/2.0.0",
+          "win": 1.0,
+          "placement": 0.1,
+          "vp": 0.001,
+          "vp_cap": 180,
+          "insolvency": {
+            "event_cost": 0.0025,
+            "max_cost": 0.025
+          }
+        }
+      },
+      "search_value": {
+        "protocol": "search-utility/1.0.0",
+        "value_source": "main",
+        "w": 0.0
+      },
+      "readiness": {
+        "version": "ppg-value-phase/24.0.0",
+        "reward_id": "49711b4abaa95940928db567fa76ab654a5d60c417e1b5eca8dbb44ffb5327c1",
+        "ready": true,
+        "decisions": 273250,
+        "games": 784,
+        "steps": 16,
+        "before": {
+          "mse": 0.1484258257441367
+        },
+        "after": {
+          "mse": 0.14766843101586039
+        },
+        "scope": "Final accepted value-phase weights; ordinary critic-train games only; heldout games excluded"
+      }
+    },
+    {
+      "kind": "teacher_phase",
+      "split": "heldout",
+      "seed": 48922049,
+      "sampling_seed": 883896237,
+      "expected": {
+        "job_id": "34af2fadb20d662a9df7d91927860ff207f2fd1b6ec001982db5c0b3594d43e8",
+        "game_id": "teacher/34af2fadb20d662a9df7d91927860ff207f2fd1b6ec001982db5c0b3594d43e8",
+        "generation": 1250,
+        "model_id": "b9f0c1e310a73004cd792178e7fad00f7414470889d620e1587bff99d74eea0f",
+        "export_hash": "de427bb22e38cc5dc9d4e79151cccdb321650c02978f79bcdad746c3e6be7985",
+        "reward_id": "49711b4abaa95940928db567fa76ab654a5d60c417e1b5eca8dbb44ffb5327c1",
+        "source_fingerprint": "abcb8810de02911314a55e516f0aefee2678966e7e79549b0566a4de8589f9e8",
+        "epoch": 0
+      },
+      "reservations": {
+        "0": {
+          "canal_early": 4,
+          "canal_late": 5,
+          "rail_early": 4,
+          "rail_late": 8
+        },
+        "1": {
+          "canal_early": 3,
+          "canal_late": 5,
+          "rail_early": 2,
+          "rail_late": 7
+        },
+        "2": {
+          "canal_early": 1,
+          "canal_late": 7,
+          "rail_early": 4,
+          "rail_late": 8
+        },
+        "3": {
+          "canal_early": 3,
+          "canal_late": 7,
+          "rail_early": 2,
+          "rail_late": 8
+        }
+      },
+      "search": {
+        "method": "search_v1",
+        "algorithm": "brass-gumbel-is-mcts/count-v1",
+        "session": "brass-gumbel-is-mcts/session-v1",
+        "v205_enabled": false,
+        "allowance_seconds": 4.0,
+        "post_search_seconds": 1.0,
+        "timing": "search-plus-post/1.0.0",
+        "sessions": 1,
+        "threads_per_session": 1,
+        "pending_paths": 1,
+        "k": 16,
+        "c1": 50,
+        "c2": 0.1,
+        "gumbel_noise": true,
+        "prior_temperature": 1.0,
+        "watchdog_seconds": 30.0,
+        "reward": {
+          "version": "brass-combined-return/2.0.0",
+          "win": 1.0,
+          "placement": 0.1,
+          "vp": 0.001,
+          "vp_cap": 180,
+          "insolvency": {
+            "event_cost": 0.0025,
+            "max_cost": 0.025
+          }
+        }
+      },
+      "unsearched": {
+        "temperature": 1.0,
+        "epsilon": 0.0,
+        "opening_temperature": null,
+        "branching": false
+      },
+      "seats": [
+        "b9f0c1e310a73004cd792178e7fad00f7414470889d620e1587bff99d74eea0f",
+        "b9f0c1e310a73004cd792178e7fad00f7414470889d620e1587bff99d74eea0f",
+        "b9f0c1e310a73004cd792178e7fad00f7414470889d620e1587bff99d74eea0f",
+        "b9f0c1e310a73004cd792178e7fad00f7414470889d620e1587bff99d74eea0f"
+      ],
+      "schedule": "four-phase-teacher-turns/2.0.0",
+      "ordinary_training": false,
+      "seating": "all-seat-search",
+      "fast_search": {
+        "method": "search_v1",
+        "algorithm": "brass-gumbel-is-mcts/count-v1",
+        "session": "brass-gumbel-is-mcts/session-v1",
+        "v205_enabled": false,
+        "allowance_seconds": 0.8,
+        "post_search_seconds": 0.2,
+        "timing": "search-plus-post/1.0.0",
+        "sessions": 1,
+        "threads_per_session": 1,
+        "pending_paths": 1,
+        "k": 4,
+        "c1": 50,
+        "c2": 0.1,
+        "gumbel_noise": true,
+        "prior_temperature": 1.0,
+        "watchdog_seconds": 30.0,
+        "reward": {
+          "version": "brass-combined-return/2.0.0",
+          "win": 1.0,
+          "placement": 0.1,
+          "vp": 0.001,
+          "vp_cap": 180,
+          "insolvency": {
+            "event_cost": 0.0025,
+            "max_cost": 0.025
+          }
+        }
+      },
+      "search_value": {
+        "protocol": "search-utility/1.0.0",
+        "value_source": "main",
+        "w": 0.0
+      },
+      "readiness": {
+        "version": "ppg-value-phase/24.0.0",
+        "reward_id": "49711b4abaa95940928db567fa76ab654a5d60c417e1b5eca8dbb44ffb5327c1",
+        "ready": true,
+        "decisions": 273250,
+        "games": 784,
+        "steps": 16,
+        "before": {
+          "mse": 0.1484258257441367
+        },
+        "after": {
+          "mse": 0.14766843101586039
+        },
+        "scope": "Final accepted value-phase weights; ordinary critic-train games only; heldout games excluded"
+      }
+    }
+  ],
+  "source_model": "0e1fe1357722a45ee274edeb2fc7932db3d081719027c6e043647e034f5b0985",
+  "diagnostic_model": "b9f0c1e310a73004cd792178e7fad00f7414470889d620e1587bff99d74eea0f",
+  "zero_head_added": true
+}
