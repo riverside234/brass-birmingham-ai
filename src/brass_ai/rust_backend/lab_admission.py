@@ -9,15 +9,17 @@ from __future__ import annotations
 import copy
 from functools import lru_cache
 import gzip
+import hashlib
+import io
 import json
 import os
 from pathlib import Path
 import random
+import time
 import uuid
 
 from brass_ai.bank import sha
 from brass_ai.learning.contracts import compatibility, digest, keys, require
-from brass_ai.recovery.replay import check_game
 from .lab_collection import frozen_id, route
 from .lab_contract import METHOD, SOURCE
 from .lab_families import validate_family
@@ -118,16 +120,16 @@ def branch_trigger(family, job, diagnostic):
     require((None if child is None else child['game']['branch']['decision']) == expected, 'Frozen branch trigger differs')
 
 
-def convert(family, admission, *, allow_diagnostic=False, arrays=None):
+def convert(family, admission, *, allow_diagnostic=False, arrays=None, _owned=False):
     admission = validate_binding(admission)
     require(admission['scope'] == 'ordinary' or allow_diagnostic, 'Diagnostic replay is not training data')
     job = admission['job']; proof = job['provenance']; producer = admission['producer']
     checked=validate_family(family, job, producer,arrays=arrays,return_games=True)
     branch_trigger(family, job, admission['scope'] == 'diagnostic')
-    return _assemble(family, admission, checked=checked)
+    return _assemble(family, admission, checked=checked,owned=_owned)
 
 
-def _assemble(family, admission, *, checked=None, arrays=None):
+def _assemble(family, admission, *, checked=None, arrays=None, owned=False):
     """Reconstruct admitted games; arrays-only callers require the writer seal.
 
     This private path is used only after read() verifies the independently held
@@ -142,7 +144,11 @@ def _assemble(family, admission, *, checked=None, arrays=None):
         if part is None: continue
         native = part['producer']['contract'] == 'brass-lab-collection/1.0.0'
         require(native == (expected_route == 'rust'), 'Frozen whole-table route changed')
-        game = copy.deepcopy(dict(part['game']))
+        # read() owns freshly decoded JSON; publish() uses the game only inside
+        # this synchronous call and returns a compact receipt. Copying every
+        # board/history adds no isolation on either private path. Public
+        # convert() still detaches input; all paths retain row mutation seals.
+        game = dict(part['game']) if owned else copy.deepcopy(dict(part['game']))
         require(all(row['teacher'] is None for row in game['records']), 'Teacher/search labels cannot enter ordinary replay')
         require('branches' not in game, 'Family contains an unsealed nested child')
         if native and admission['auxiliary']:
@@ -163,7 +169,14 @@ def _assemble(family, admission, *, checked=None, arrays=None):
             game=CheckedGame(game).bind(encoded)
         else:
             original=checked[index]
-            game = check_game(game,[original.encoded(r,None) for r in original['records']],validated_inputs=True)
+            # validate_family already fully checked these exact rows, behavior,
+            # features and scoring. Only the game-level scoring envelope above
+            # was added (and independently validated by bind). Reuse the row
+            # seals instead of walking/validating and hashing every row again.
+            game=CheckedGame(game)
+            game.features=dict(original.features)
+            game.seals=copy.deepcopy(original.seals)
+            game.header_seal=digest({k:v for k,v in game.items() if k!='records'})
         if 'seat_contexts' in proof:
             from brass_ai.recovery.neutral_training import check_rows
             check_rows(game,proof)
@@ -187,19 +200,22 @@ def _assemble(family, admission, *, checked=None, arrays=None):
     require(checked is not None or offset==len(arrays),'Extra attested native features')
     parent = games[0]
     if len(games) == 2:
-        arrays = [parent.encoded(r, None) for r in parent['records']]
         parent['branches'] = [games[1]]
-        parent.bind(arrays)
+        # Branch attachment changes only the parent header, not its rows.
+        parent.header_seal=digest({k:v for k,v in parent.items() if k!='records'})
     return parent
 
 
-def publish(path, family, admission, *, cache=True, validation_receipt=False):
+def publish(path, family, admission, *, cache=True, validation_receipt=False, timings=None):
     """Exclusive, one-family publication. Retrying requires the identical receipt."""
-    game = convert(family, admission, allow_diagnostic=True)
+    began=time.perf_counter();timings={} if timings is None else timings
+    game = convert(family, admission, allow_diagnostic=True,_owned=True)
+    timings['full_validation_and_assembly_seconds']=time.perf_counter()-began;began=time.perf_counter()
     path = Path(path)
     header = dict(format=FORMAT, compatibility=compatibility(), admission=copy.deepcopy(admission))
     value = (json.dumps(header, separators=(',', ':'), allow_nan=False) + '\n' +
              json.dumps(family, separators=(',', ':'), allow_nan=False) + '\n').encode()
+    timings['json_encoding_seconds']=time.perf_counter()-began
     require(len(value) <= LIMIT, 'Native replay exceeds bound')
     path.parent.mkdir(parents=True, exist_ok=True)
     receipt = dict(contract=CONTRACT, admission=copy.deepcopy(admission), family_sha256=family['sha256'])
@@ -212,6 +228,7 @@ def publish(path, family, admission, *, cache=True, validation_receipt=False):
         if validation_receipt:_attest(receipt)
         return record(path, game, admission, receipt)
     temp = path.with_name(path.name + '.' + uuid.uuid4().hex + '.tmp')
+    began=time.perf_counter()
     try:
         with temp.open('xb') as raw:
             with gzip.GzipFile(fileobj=raw, mode='wb', mtime=0, compresslevel=1) as stream: stream.write(value)
@@ -223,9 +240,11 @@ def publish(path, family, admission, *, cache=True, validation_receipt=False):
     finally:
         temp.unlink(missing_ok=True)
     receipt['replay_sha256'] = sha(path)
+    timings['replay_write_hash_seconds']=time.perf_counter()-began;began=time.perf_counter()
     if cache:
         from brass_ai.recovery.replay import write_cache,cache_receipt
         write_cache(path,[game]+game.get('branches',[]));receipt['features']=cache_receipt(path)
+    timings['feature_cache_seconds']=time.perf_counter()-began
     if validation_receipt:_attest(receipt)
     return record(path, game, admission, receipt)
 
@@ -254,9 +273,15 @@ def _attest(receipt):
 
 
 def read(path, receipt, *, allow_diagnostic=False, reuse_validation=True):
-    require(type(receipt) is dict and receipt.get('contract') == CONTRACT and receipt.get('replay_sha256') == sha(path),
+    with Path(path).open('rb') as stream:
+        size=os.fstat(stream.fileno()).st_size
+        require(0<size<=LIMIT,'Native replay exceeds bound')
+        packed=stream.read(size+1)
+    require(len(packed)==size,'Native replay size changed')
+    require(len(packed)<=LIMIT and type(receipt) is dict and receipt.get('contract') == CONTRACT
+            and receipt.get('replay_sha256') == hashlib.sha256(packed).hexdigest(),
             'Native replay requires its independently bound writer receipt')
-    with gzip.open(path, 'rb') as stream: data = stream.read(LIMIT + 1)
+    with gzip.GzipFile(fileobj=io.BytesIO(packed),mode='rb') as stream: data = stream.read(LIMIT + 1)
     require(len(data) <= LIMIT, 'Native replay exceeds bound')
     lines = data.splitlines(); require(len(lines) == 2, 'Incomplete/extra native replay family')
     header, family = map(json.loads, lines)
@@ -276,7 +301,7 @@ def read(path, receipt, *, allow_diagnostic=False, reuse_validation=True):
         if reuse_validation and arrays is not None and validation['validator']==_validation_version():
             admitted=validate_binding(receipt['admission'])
             require(admitted['scope']=='ordinary' or allow_diagnostic,'Diagnostic replay is not training data')
-            return _assemble(family,admitted,arrays=arrays)
+            return _assemble(family,admitted,arrays=arrays,owned=True)
     return convert(family, receipt['admission'], allow_diagnostic=allow_diagnostic,arrays=arrays)
 
 

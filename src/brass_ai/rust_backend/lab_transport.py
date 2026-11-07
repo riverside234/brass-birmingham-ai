@@ -8,6 +8,7 @@ import subprocess
 import threading
 import time
 import uuid
+from collections import Counter, deque
 
 import numpy as np
 from brass_ai.learning.contracts import require, digest
@@ -18,12 +19,14 @@ from brass_ai.native.features import FORMAT as FEATURE_FORMAT,VERSION,SCHEMA,GRO
 
 CONTRACT = 'brass-lab-collection/1.0.0'
 MAX_FRAME = 4 * 1024**2
+MAX_ARRAY_FRAME = 16 * 1024**2
 
 
 class Pipe:
     def __init__(self, command, *, binary=True, timeout=15):
         self.binary, self.timeout, self.seq, self.closed = binary, timeout, 0, False
         self.lock = threading.RLock()
+        self.metrics = Counter()
         self.jobs, self.results = queue.Queue(1), queue.Queue(1)
         self.process = subprocess.Popen([str(x) for x in command], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
             stderr=subprocess.DEVNULL, bufsize=0, creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0))
@@ -50,11 +53,26 @@ class Pipe:
                     require(count, 'Collector closed input'); view = view[count:]
                 if self.binary:
                     n = struct.unpack('<I', self._read(4))[0]
-                    require(0 < n <= MAX_FRAME, 'Collector frame limit'); result = self._read(n)
+                    arrays = bool(n & (1 << 31)); n &= (1 << 31)-1
+                    require(0 < n <= (MAX_ARRAY_FRAME if arrays else MAX_FRAME), 'Collector frame limit')
+                    result = self._read(n)
                 else:
+                    arrays = False
                     result = self.process.stdout.readline(MAX_FRAME+1)
                     require(result.endswith(b'\n') and len(result) <= MAX_FRAME, 'Bootstrap frame limit')
-                self.results.put(json.loads(result, parse_constant=lambda x: (_ for _ in ()).throw(ValueError(x))))
+                self.metrics['received_bytes'] += len(result)
+                began = time.perf_counter()
+                if arrays:
+                    require(len(result)>=4, 'Truncated array header')
+                    h = struct.unpack_from('<I',result)[0]
+                    require(0<h<=MAX_FRAME and 4+h<=len(result), 'Invalid array header')
+                    reply = json.loads(result[4:4+h])
+                    require(reply.get('ok') is True and reply['data']['bytes']==len(result)-4-h, 'Array size differs')
+                    reply['data']['_arrays'] = memoryview(result)[4+h:]
+                else:
+                    reply = json.loads(result, parse_constant=lambda x: (_ for _ in ()).throw(ValueError(x)))
+                self.metrics['reply_decode_seconds'] += time.perf_counter()-began
+                self.results.put(reply)
         except BaseException as error:
             self.results.put(error)
 
@@ -64,11 +82,27 @@ class Pipe:
             self.seq += 1
             request = dict(op=op, **values)
             if self.binary: request.update(protocol=CONTRACT, id=self.seq)
+            began = time.perf_counter()
             payload = json.dumps(request, separators=(',', ':'), allow_nan=False).encode()
+            self.metrics['request_encode_seconds'] += time.perf_counter()-began
+            self.metrics['sent_bytes'] += len(payload)
+            self.metrics['calls'] += 1
+            self.metrics[op+'_calls'] += 1
             require(len(payload) <= MAX_FRAME, 'Collector request limit')
             try:
+                began = time.perf_counter()
                 self.jobs.put(struct.pack('<I', len(payload))+payload if self.binary else payload+b'\n', timeout=self.timeout)
-                reply = self.results.get(timeout=self.timeout)
+                cancel = getattr(self,'cancel_event',None)
+                if cancel is None: reply = self.results.get(timeout=self.timeout)
+                else:
+                    until=time.monotonic()+self.timeout
+                    while True:
+                        require(not cancel.is_set(), 'Collection canceled during IPC')
+                        try: reply=self.results.get(timeout=min(.05,max(0.,until-time.monotonic())));break
+                        except queue.Empty:
+                            if time.monotonic()>=until:raise
+                self.metrics['round_trip_seconds'] += time.perf_counter()-began
+                self.metrics[op+'_seconds'] += time.perf_counter()-began
                 if isinstance(reply, BaseException): raise reply
                 require(not self.binary or (reply['id'] == self.seq and reply['protocol'] == CONTRACT), 'Collector envelope differs')
                 require(reply.get('ok') is True, str(reply.get('error', 'Collector error')))
@@ -91,15 +125,18 @@ class Pipe:
 
 
 class Collector(Pipe):
-    def __init__(self, executable):
+    def __init__(self, executable, *, batch_forced=True):
         super().__init__([executable])
         try:
             self.hello = self.call('hello')
             require(self.hello['contract'] == CONTRACT and self.hello['core']['source_sha256'] == SOURCE
-                    and self.hello['search_enabled'] is False, 'Collector uses an unqualified shared core')
+                    and self.hello['search_enabled'] is False
+                    and self.hello.get('collection_wire')=='compact-arrays-forced/1', 'Collector uses an unqualified shared core/wire')
         except BaseException:
             self.close(); raise
         self.token = None; self.current = None
+        self.batch_forced = batch_forced
+        self.forced = deque(); self.acknowledgements = []
 
     def begin(self, job_id, origin, cap, *, checkpoint=None, indices=None):
         self.token = uuid.uuid4().hex
@@ -108,10 +145,53 @@ class Collector(Pipe):
             self.call('fork', **fields, checkpoint=checkpoint, indices=indices)
 
     def append(self, row, evidence):
-        self.current = self.call('append', token=self.token, revision=row['view']['context']['revision'], row=row, evidence=evidence)
+        require(row['teacher'] is None and row['view']==self.current['decision']['view']
+                and row['choices']==self.current['decision']['choices'], 'Compact ordinary input differs')
+        context = feature_context(evidence.get('model_id') or self.context['model_id'],row['style'],row['intent'])
+        record = dict(revision=row['view']['context']['revision'], action_id=row['choices'][row['chosen']]['id'],
+                      context=context, seconds=row['seconds'], behavior=row['behavior'], evidence=evidence)
+        if self.forced:
+            require(self.current == self.forced[0], 'Forced cursor differs')
+            self.acknowledgements.append(record); self.forced.popleft()
+            if self.forced: self.current = self.forced[0]
+            else:
+                self.current = self.call('append_forced',token=self.token,records=self.acknowledgements)
+                self.acknowledgements = []
+        else:
+            reply = self.call('append_compact',token=self.token,record=record,forced_limit=16 if self.batch_forced else 0)
+            self.forced.extend(reply['forced'])
+            if self.forced:
+                require(reply['current'] is None and len(self.forced)<=16 and all(
+                    frame['token']==self.token and frame['step']==row['step']+i+1
+                    and frame['decision']['view']['context']['revision']==record['revision']+i+1
+                    and len(frame['decision']['choices'])==1 for i,frame in enumerate(self.forced)),
+                    'Forced preview binding differs')
+            self.current = self.forced[0] if self.forced else reply['current']
 
     def checkpoint(self, revision): return self.call('checkpoint', token=self.token, revision=revision)
-    def release(self): self.call('release'); self.current = self.token = None
+    def release(self):
+        self.call('release'); self.current = self.token = None
+        self.forced.clear(); self.acknowledgements.clear()
+
+    def records(self, receipt):
+        start = 0
+        while start < receipt['rows']:
+            page = self.call('record_arrays',token=self.token,start=start)
+            require(page['wire']=='ordinary-records/1' and page['token']==self.token and page['start']==start
+                    and page['rows']==receipt['rows'] and start<page['end']<=min(start+64,receipt['rows'])
+                    and len(page['lengths'])==page['end']-start, 'Record batch binding differs')
+            raw=page['_arrays']; offset=0
+            for a,b in page['lengths']:
+                require(isinstance(a,int) and isinstance(b,int) and a>0 and b>0 and offset+a+b<=len(raw), 'Record batch lengths differ')
+                yield raw[offset:offset+a],raw[offset+a:offset+a+b]
+                offset += a+b
+            require(offset==len(raw), 'Trailing record batch bytes')
+            start=page['end']
+
+
+def feature_context(model_id,style,intent):
+    return dict(model_id=model_id,reward_id='ordinary-policy-only',profile_id=CONTRACT,
+        style=list(style),intent=list(intent),remaining=[0.]*4,max_cost=0.,stable_descriptors=None)
 
 
 class DecisionEncoder:
@@ -124,26 +204,24 @@ class DecisionEncoder:
         if deadline is not None and time.monotonic() >= deadline: raise EncodingStopped('expired')
         c = self.collector
         require(c.current['decision']['view'] == view and c.current['decision']['choices'] == choices, 'Foreign native input')
-        context = dict(model_id=self.model_id, reward_id='ordinary-policy-only', profile_id=CONTRACT,
-            style=list(style), intent=list(intent), remaining=[0.]*4, max_cost=0., stable_descriptors=None)
+        context = feature_context(self.model_id,style,intent)
+        c.context = context
         key = (c.token, view['context']['revision'], digest(context))
         if self.cached and self.cached[0] == key: return self.cached[1]
-        parts = []; first = None
-        for start in range(0, len(choices), 64):
-            if deadline is not None and time.monotonic() >= deadline: raise EncodingStopped('expired')
-            if cancelled is not None and cancelled.is_set(): raise EncodingStopped('cancelled')
-            page = c.call('features', token=c.token, revision=view['context']['revision'], context=context, start=start)
-            end = min(start+64, len(choices))
-            require(page['choice_ids'] == [x['id'] for x in choices[start:end]] and page['context'] == context
-                    and page['candidate_offsets'] == [start, end] and page['total_candidates'] == len(choices), 'Native feature page differs')
-            require((page['format'],page['feature_version'],page['schema_sha256'],page['group_layout'],page['entity_layout'])==
-                    (FEATURE_FORMAT,VERSION,SCHEMA,GROUP,ENTITY) and page['legal_mask']==[True]*(end-start),
-                    'Native feature contract/mask differs')
-            if first is None: first = page
-            require(all(page[k] == first[k] for k in ('state', 'stable_to_relative', 'descriptors')), 'Native state page changed')
-            parts.append(np.asarray(page['actions'], np.float32).reshape(end-start, 327))
-        encoded = Encoded(np.asarray(first['state'], np.float32), np.concatenate(parts),
-            np.asarray(first['stable_to_relative'], np.int64), tuple(x['id'] for x in choices))
+        page = c.call('feature_arrays', token=c.token,revision=view['context']['revision'],context=context)
+        if cancelled is not None and cancelled.is_set(): raise EncodingStopped('cancelled')
+        if deadline is not None and time.monotonic()>=deadline: raise EncodingStopped('expired')
+        count=len(choices); raw=page['_arrays']
+        require(page['wire']=='ordinary-arrays/1' and page['token']==c.token and page['revision']==view['context']['revision']
+                and page['choice_ids']==[x['id'] for x in choices] and page['context']==context
+                and page['total_candidates']==count and page['state_dim']==3128 and page['action_dim']==327
+                and len(raw)==(3128+count*327)*4+32, 'Native feature array binding/shape differs')
+        require((page['format'],page['feature_version'],page['schema_sha256'],page['group_layout'],page['entity_layout'])==
+                (FEATURE_FORMAT,VERSION,SCHEMA,GROUP,ENTITY), 'Native feature contract differs')
+        encoded = Encoded(np.frombuffer(raw,dtype='<f4',count=3128),
+            np.frombuffer(raw,dtype='<f4',count=count*327,offset=3128*4).reshape(count,327),
+            np.frombuffer(raw,dtype='<i8',count=4,offset=(3128+count*327)*4),tuple(x['id'] for x in choices))
+        for value in (encoded.state,encoded.actions,encoded.stable_to_relative): value.flags.writeable=False
         check_encoded(encoded)
         self.cached = key, encoded
         return encoded

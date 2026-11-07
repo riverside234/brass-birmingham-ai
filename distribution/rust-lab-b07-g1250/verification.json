@@ -1,21 +1,22 @@
 {
   "passed": true,
-  "archive": "rust-lab-b07-g1250-r2.zip",
-  "sha256": "1cda06a47ee5c7b875e55ca011b722549d2d79191dca750b36227c3e4d17df92",
-  "implementation": "87cdd916e20f513302feca259604ba074948ea38b26275a6fd4e43a899ad273f",
+  "archive": "rust-lab-b07-g1250-r3.zip",
+  "sha256": "fd28167f8ea8bbd1fd5087e37ae5ed70937c5e9da2b316bad867ce7494ee840b",
+  "implementation": "f6372cefd9a48c98994d2f2e8424b032f4d5c808aceab140bb6442b92214cfc9",
   "clean_extraction": true,
   "manifest_and_prerequisite_checks": true,
   "cpu_fixtures": {
-    "run": 120,
-    "seconds": 109.173,
-    "skipped": 4
+    "run": 36,
+    "seconds": 83.545,
+    "skipped": 3,
+    "skips": "Real native wire tests require explicit binary/fixture paths; all three ran in the separate 43-test local run."
   },
   "scope": "CPU fixtures only; B07 lab and adoption Pending",
-  "qualification_report_sha256": "34d3452ff5487b87131b43aeff165ab089e6e508bff2c9626308ebc0b8415973",
-  "log_sha256": "23de15b22de4b8f81fe614a862579de471ecc21061ad4f1a037ec26821d5f6ca",
-  "runtime_qualification": "Pending Linux/CUDA",
+  "qualification_report_sha256": "bf0ffdcea5f6e53fb977138fd1c85046b7bd52b5c5b975ec7246e2038f0d4991",
+  "log_sha256": "51b19a51e95cf35eaa51feb15a31ebb962aeb98feb8405bbcd8b7f5567398577",
+  "runtime_qualification": "Pending Linux/CUDA g1250",
   "production_adoption": "Pending",
   "next_normal_commit_restart": "Pending",
-  "export_checked": "Success/failure exports exercised. Isolated checkout has no results Git repo; effective-ignore tests passed in test_result_export.",
-  "previous_check": "Unpublished r1 omitted overlay inputs and used a Windows path too long for nested fixtures; r2 includes inputs and passed from a short isolated root."
+  "export_checked": "Success exported in clean extraction. Its isolated results directory has no Git repo; original results repository remains untouched.",
+  "previous_qualifications_repeated": false
 }

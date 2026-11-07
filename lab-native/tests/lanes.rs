@@ -121,3 +121,153 @@ fn ordinary_draw_keeps_hidden_deck_order_and_one_revision_per_stage() {
     assert_eq!(after.cards.hands[0].last(), deck.first());
     assert!(lane.row(0).is_err()); // Complete-game publication only.
 }
+
+fn ordinary_context() -> FeatureContext {
+    FeatureContext {
+        reward_id: "ordinary-policy-only".into(),
+        profile_id: brass_lab_collector::CONTRACT.into(),
+        ..context()
+    }
+}
+fn compact(decision: &Value, chosen: usize) -> Value {
+    let choices = decision["decision"]["choices"].as_array().unwrap();
+    json!({"revision":decision["decision"]["view"]["context"]["revision"],
+        "action_id":choices[chosen]["id"],"context":ordinary_context(),"seconds":0.,
+        "behavior":{"probability":1.,"policy_id":"test"},
+        "evidence":{"kind":"ordinary","model_id":"test","policy_id":"test",
+            "forced":choices.len()==1,"semantic_id":choices[chosen]["id"],
+            "feature_version":"permitted-features/4.0.0"}})
+}
+fn old_step(lane: &mut Lane, decision: &Value, value: &Value) {
+    let d = &decision["decision"];
+    let chosen = d["choices"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .position(|x| x["id"] == value["action_id"])
+        .unwrap();
+    let revision = value["revision"].as_u64().unwrap() as u32;
+    lane.features("request", revision, ordinary_context(), 0)
+        .unwrap();
+    lane.append("request",revision,json!({"step":0,"seat":d["view"]["seat"],"view":d["view"],
+        "choices":d["choices"],"chosen":chosen,"teacher":null,"style":vec![0.;4],"intent":vec![0.;8],
+        "seconds":0.,"behavior":value["behavior"]}),value["evidence"].clone()).unwrap();
+}
+
+#[test]
+fn binary_features_equal_pages_and_reject_stale_identity() {
+    let mut lane = Lane::new(initial(), "job".into(), "request".into(), vec![0; 64], 1000).unwrap();
+    let (meta, bytes) = lane
+        .feature_arrays("request", 0, ordinary_context())
+        .unwrap();
+    let count = meta["total_candidates"].as_u64().unwrap() as usize;
+    assert_eq!(bytes.len(), (3128 + 327 * count) * 4 + 32);
+    for start in (0..count).step_by(64) {
+        let page = lane
+            .features("request", 0, ordinary_context(), start)
+            .unwrap();
+        for (i, x) in page["state"].as_array().unwrap().iter().enumerate() {
+            assert_eq!(
+                &bytes[i * 4..i * 4 + 4],
+                &(x.as_f64().unwrap() as f32).to_le_bytes()
+            );
+        }
+        for (i, x) in page["actions"].as_array().unwrap().iter().enumerate() {
+            let offset = (3128 + start * 327 + i) * 4;
+            assert_eq!(
+                &bytes[offset..offset + 4],
+                &(x.as_f64().unwrap() as f32).to_le_bytes()
+            );
+        }
+    }
+    assert!(lane.feature_arrays("stale", 0, ordinary_context()).is_err());
+    assert!(lane
+        .feature_arrays("request", 1, ordinary_context())
+        .is_err());
+    let d = lane.decision().unwrap();
+    let mut bad = compact(&d, 0);
+    bad["action_id"] = json!("invalid");
+    let before = lane.export();
+    assert!(lane.append_compact("request", &bad).is_err());
+    assert_eq!(before, lane.export());
+    bad = compact(&d, 0);
+    bad["context"]["model_id"] = json!("foreign");
+    assert!(lane.append_compact("request", &bad).is_err());
+    assert_eq!(before, lane.export());
+}
+
+#[test]
+fn compact_forced_batches_preserve_every_record_state_scoring_and_export_seal() {
+    let create =
+        || Lane::new(initial(), "job".into(), "request".into(), vec![0; 64], 1000).unwrap();
+    let (mut old, mut new) = (create(), create());
+    let mut forced_count = 0;
+    while !new.export().context.terminal {
+        let d = new.decision().unwrap();
+        assert_eq!(d, old.decision().unwrap());
+        let choices = d["decision"]["choices"].as_array().unwrap();
+        let chosen = choices
+            .iter()
+            .position(|x| x["kind"] == "pass")
+            .unwrap_or(0);
+        let value = compact(&d, chosen);
+        let revision = value["revision"].as_u64().unwrap() as u32;
+        let start = new.public_context().unwrap();
+        new.feature_arrays("request", revision, ordinary_context())
+            .unwrap();
+        old_step(&mut old, &d, &value);
+        new.append_compact("request", &value).unwrap();
+        let frames = new.preview_forced(&start, 16).unwrap();
+        if !frames.is_empty() {
+            forced_count += frames.len();
+            let state = new.export();
+            assert!(new.finish().is_err());
+            assert!(new.checkpoint("request", state.context.revision).is_err());
+            assert!(new.record_arrays("request", 0).is_err());
+            assert!(new.acknowledge_forced("request", &[]).is_err());
+            let values = frames.iter().map(|f| compact(f, 0)).collect::<Vec<_>>();
+            let mut bad = values.clone();
+            bad[0]["revision"] = json!(99999);
+            assert!(new.acknowledge_forced("request", &bad).is_err());
+            assert_eq!(state, new.export());
+            for (frame, value) in frames.iter().zip(&values) {
+                assert_eq!(frame, &old.decision().unwrap());
+                old_step(&mut old, frame, value);
+            }
+            new.acknowledge_forced("request", &values).unwrap();
+        }
+        assert_eq!(old.export(), new.export());
+    }
+    assert!(forced_count > 0);
+    let (a, b) = (old.finish().unwrap(), new.finish().unwrap());
+    for key in [
+        "rows",
+        "records_sha256",
+        "evidence_sha256",
+        "result",
+        "scoring",
+    ] {
+        assert_eq!(a[key], b[key], "{key}");
+    }
+    let total = b["rows"].as_u64().unwrap() as usize;
+    let mut start = 0;
+    while start < total {
+        let (page, raw) = new.record_arrays("request", start).unwrap();
+        let mut offset = 0;
+        for (i, pair) in page["lengths"].as_array().unwrap().iter().enumerate() {
+            let row = old.row(start + i).unwrap();
+            for (k, key) in ["row_json", "evidence_json"].iter().enumerate() {
+                let size = pair[k].as_u64().unwrap() as usize;
+                assert_eq!(
+                    &raw[offset..offset + size],
+                    row[key].as_str().unwrap().as_bytes()
+                );
+                offset += size;
+            }
+        }
+        assert_eq!(offset, raw.len());
+        start = page["end"].as_u64().unwrap() as usize;
+    }
+    assert!(new.record_arrays("stale", 0).is_err());
+    assert!(new.record_arrays("request", total).is_err());
+}

@@ -1,9 +1,75 @@
 # B07: cheaper native collection and bounded adoption
 
-Implemented on 2026-11-07. **Lab performance/canary, production adoption, and
-the next normal production commit/restart remain Pending.** Run the
+Implemented on 2026-11-07. **Ordinary lab correctness passed; useful performance
+did not pass. Repaired canaries, production adoption, and the next normal
+production commit/restart remain Pending.** Run the
 [new g1250 bundle](../distribution/rust-lab-b07-g1250/README.md); do not rerun
 passing B01–B06 qualifications. The installed game is unchanged.
+
+## B07 R3 qualification repair
+
+Pulled the results repository at `f4652ed`; failed attempt:
+`results/rust-lab-qualification/20261107T090047266944Z-20261107T085645018439Z-g1250-b07-d0097dac-faa1535f`.
+Ordinary work matched exactly (3 families, 1,161 decisions, 675 forced rows).
+Native accepted work fell from the historical B06 55.265s to 40.246s, but the
+current reference was 28.833s. These are bounded samples, not a statistical or
+whole-iteration speedup claim. The negative useful-gain gate remains in force.
+
+The first shadow table stopped after 52 verified turns: Rust reported
+`stale/model/epoch GPU reply` for a correctly echoed request. A regression test
+reproduces the exact defect: the default serde_json parser decodes
+`0.015000000000000001` as the adjacent f64 `0.015`. This budget occurs naturally
+as `0.025 - 0.01`. Python preserves its original value; the Rust parser caused
+the mismatch. A genuine stale reply was not admitted.
+
+Enable `serde_json/float_roundtrip` for both adapters: exact teacher budgets and ordinary sampling probabilities.
+Do not round budgets, add tolerance, omit fields or weaken exact binding checks.
+No search equations, NN weights, feature definitions or shared-core source change. Native tests cover the exact failed decimal, every spending
+step and adjacent floats, deterministic exponent/mantissa cases, subnormals,
+signed zero and identity/budget mutations. The new teacher binary is explicitly
+built/tested in a detached directory; the ordinary transport adapter is also rebuilt
+against the unchanged B01 core. Original C# bootstrap pins are reused. No installed-game update occurs.
+
+R3 seals the original successful ordinary phase as historical evidence and an
+exact source review. Its benchmark scripts stay byte-identical, but native
+publication/reads changed, so the short matched ordinary scope must be measured
+again. The retry also reruns the unfinished canaries and continuation; it never
+repeats successful B01–B06 qualification.
+The repaired build receipt can be supplied with `--teacher-build` on a further
+retry; producer, implementation, core, binary/test-log and C# pins must match.
+
+The B07 lab GPU forward total was 7.898s versus reference 8.523s, so the remaining
+measured excess is outside GPU forward work. The serial publisher spent
+4.222/4.357/4.182s on three families; native first read was 5.247s versus 2.455s.
+The native tables themselves took 16.691s/17.210s; one historical V4 table still
+uses the exact whole-table reference route. These overlapping times must not
+be summed as an end-to-end attribution.
+
+R3 removes the second per-row `check_game` walk during native assembly after
+complete family validation, preserving the already computed row/label seals
+and independently checked scoring envelope. Public conversion still detaches
+caller input. Private publication/read paths avoid a second deep copy of
+freshly decoded boards/histories, while checking exact replay/cache bytes on
+every read. Branch attachment refreshes only the changed header seal. No source,
+behavior/RNG, scoring, critic, context or mutation check is waived.
+
+At most two isolated publishers can work on different complete families, with
+the same shared CPU admission and bounded family queue. Callback delivery remains
+serialized; results retain frozen-job order. Crash/first-error/cancellation and
+atomic whole-family publication checks remain. New receipts separate part-read,
+family-seal, full validation/assembly, JSON encoding, replay write/hash and
+feature-cache time, so the next lab result can identify the remaining tail.
+
+The short R2/R3 CPU comparison (`rust_lab_b07_r3_publication.py`) uses three
+alternating batches of the same three eight-decision authored families. Median
+publication was 1.219s to 1.124s, first read 0.500s to 0.452s, and warm read
+0.608s to 0.475s. Combined publication/first-read median was 1.719s to 1.577s
+(8.3% lower). An intermediate file-read optimization regressed by allocating
+the full maximum read size; the final version uses the opened file size plus
+one byte, validates the bound and exact length, then hashes those same bytes.
+Games, features and prepared targets matched. This small serial component test
+does not measure GPU throughput or the two-publisher overlap; lab acceptance
+remains Pending and must use current-source matched work.
 
 ## What the completed B06 record shows
 
@@ -40,8 +106,8 @@ B06 therefore passed measurement/correctness, **not useful performance adoption*
 
 `lab_pool.NativePool` retains the existing frozen planner, ready-branch scheduler,
 CPU admission, model cohorts, inference service and reference fallback. Actors
-now run in spawned processes with the configured lanes per process; a separate
-writer owns publication. Processes match the reference pool's active width.
+now run in spawned processes with the configured lanes per process; up to two
+separate writers own publication. Actor processes match the reference pool's active width.
 The saved 60-slot cap is shared by actors, writer and preparation readers.
 Board histories pass as bounded file/hash handles, not learner-process IPC
 payloads. Completed families continue streaming into existing preparation.
@@ -84,7 +150,76 @@ were 0.778s baseline versus 0.821s for publication plus first read, and 0.274s
 versus 0.231s for warm reads. Full validation passes fell from three to one per
 family (warm reads: one to zero), with equal outputs. This tiny fixture shows
 the reduced validation work and a faster warm read, but **does not establish
-end-to-end gain**. The matched lab comparison remains the adoption gate.
+end-to-end gain**. The completed matched lab comparison failed the useful-gain adoption gate.
+
+## Compact ordinary transport (R3)
+
+The existing typed Rust state, candidate list and feature encoder remain the
+sources of truth. `append_compact` sends the selected semantic action ID,
+revision/token, feature context, sampling behavior and evidence. Rust reconstructs
+the row from its held decision; it rejects illegal IDs, stale revisions, foreign
+models/contexts and invalid forced probabilities. The full ingress validator
+still reproduces policy probabilities/RNG and verifies complete training data.
+The old wire operations remain diagnostic controls only.
+
+`feature_arrays` sends all 3,128 state floats, N×327 action floats and four i64
+seat indices in one little-endian binary reply. Metadata binds token, revision,
+model/context, ordered action IDs, schema/layout and exact sizes. Python views
+these arrays without float-list construction and exposes them read-only. Frames
+are bounded (4 MiB JSON, 16 MiB binary); truncated, oversized or foreign replies
+retire the lane. Singleton decisions skip unused actor tensor transfer; the
+existing publication validator still produces/checks their training features.
+
+After an action Rust previews up to 16 consecutive singleton decisions, bounded
+by 2 MiB and the reference collector's actor, era, round, turn, turn-owner and
+non-debt guards. It stops before a meaningful choice, preserving every branch
+opportunity. Python runs the existing sampler on each preview in original order,
+including both v3 RNG draws and action counters, then acknowledges the complete
+batch. Staged native transitions are reused. Pending records cannot checkpoint,
+finish or export; cancellation retires them, and restart uses the normal frozen
+job/revalidated-family recovery. In-flight IPC polls cancellation every 50 ms.
+Oracle-per-step diagnostics disable staging so their live-state comparisons stay
+valid; production and matched ordinary benchmarks enable it.
+
+Rust serializes each accepted record/evidence once, retains those exact bytes,
+hashes the final arrays incrementally, and exports at most 64 rows / about 2 MiB
+per binary batch. Python verifies offsets, identity, lengths and complete-array
+hashes before decoding. No escaped JSON strings or per-row round trips are
+needed. Temporary parts and replay reads hash the same compressed bytes that
+are decoded, avoiding extra file passes. Full first admission, atomic family
+publication, cache hashes and cold recovery validation remain in place.
+
+`rust_lab_b07_transport.py` is a short wire-only comparison with identical frozen
+origins and the real versioned Python sampler, including a 413-candidate state
+and a late-rail completion. It checks every record, RNG state, eligible branch
+checkpoint, transferred feature tensor, scoring result and export hash. This is
+not a checkpoint inference benchmark. The separate lab ordinary gate uses the
+same actual g1250 checkpoint/jobs in both reference/native arms. Use
+`--ordinary-only` to measure that scope without unrelated teacher/update work.
+
+Local wire medians (two alternating matched samples, 24 decisions including
+12 forced rows, starting at 413 legal candidates):
+
+| Component | Previous wire | Compact/binary wire |
+| --- | ---: | ---: |
+| Startup | 0.108s | 0.106s |
+| Collection loop | 1.213s | 0.401s |
+| Feature transfer/conversion | 0.715s | 0.057s |
+| Action acknowledgements | 0.409s | 0.260s |
+| Request serialization | 0.040s | 0.005s |
+| Reply JSON decoding | 0.453s | 0.056s |
+| Pipe calls | 119 | 50 |
+| Request bytes | 1,946,375 | 98,745 |
+| Reply bytes | 10,169,707 | 8,198,752 |
+
+Timings overlap. These are small CPU transport samples, not NN strength or
+whole-training speed measurements. A separate two-row late-rail completion
+checks export/reward seals; the Rust complete-game regression crosses multiple
+64-row export batches. Remaining costs include rich decision-view JSON,
+full independent publication/feature-cache validation, process startup and
+GPU-service orchestration. The lab report must determine their current relative
+cost and the total accepted-work gain. g1250 weights are not present locally;
+no different checkpoint is substituted for that qualification.
 
 ## Bounded lab qualification
 
@@ -93,12 +228,14 @@ The bundle pins the original g1250 checkpoint
 and exact config `895d866502425dad30f2277b822dba2a15247f9a701d2dd5dd10b7e396de3ca8`.
 Its source review records every changed learning dependency relative to B06.
 Existing restricted config/source transitions are retained, not broadened.
-The original successful ordinary/teacher native binaries are reused by hash.
+R3 rebuilds the ordinary adapter against the unchanged B01 core and the teacher
+with exact float decoding against its unchanged overlay. Original C# pins and
+B01-B06 evidence are reused. New ordinary producer/build pins bind the new data.
 
 1. Short CPU regressions cover admission equality, branch targets, cache/source
    invalidation, worker/writer/reader errors, stale/duplicate/canceled teacher
    replies, full-state adoption failure/recovery and rollback integrity.
-2. One matched ordinary batch per backend: at most three frozen parents plus
+2. Remeasure the affected ordinary scope against reference: at most three frozen parents plus
    natural branches, current execution configuration and neutral recipe, no
    forced fork. Measure startup, publication, reads, preparation, GPU queues,
    process CPU/memory and accepted work separately. Watchdog: 360s.

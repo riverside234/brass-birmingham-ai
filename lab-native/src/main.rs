@@ -25,12 +25,14 @@ fn run() -> Result<()> {
             "stale/foreign envelope",
         )?;
         previous = id;
+        let mut arrays = None;
         let result: Result<Value> = (|| {
             let token = r["token"].as_str().unwrap_or("");
             let revision = r["revision"].as_u64().unwrap_or(u64::MAX);
             match r["op"].as_str().unwrap_or("") {
                 "hello" => Ok(
-                    json!({"contract":CONTRACT,"core":brass_ai_core::protocol::BuildIdentity::current(),"search_enabled":false}),
+                    json!({"contract":CONTRACT,"core":brass_ai_core::protocol::BuildIdentity::current(),"search_enabled":false,
+                        "collection_wire":"compact-arrays-forced/1"}),
                 ),
                 "begin" | "fork" => {
                     check(lane.is_none(), "release prior lane before begin")?;
@@ -76,6 +78,47 @@ fn run() -> Result<()> {
                     )?;
                     l.decision()
                 }
+                "feature_arrays" => {
+                    check(revision <= u32::MAX as u64, "invalid revision")?;
+                    let (meta, bytes) = lane.as_mut().ok_or("missing lane")?.feature_arrays(
+                        token,
+                        revision as u32,
+                        serde_json::from_value(r["context"].clone())?,
+                    )?;
+                    arrays = Some(bytes);
+                    Ok(meta)
+                }
+                "append_compact" => {
+                    let l = lane.as_mut().ok_or("missing lane")?;
+                    let start = l.public_context()?;
+                    l.append_compact(token, &r["record"])?;
+                    let forced = l.preview_forced(
+                        &start,
+                        r["forced_limit"].as_u64().ok_or("missing forced limit")? as usize,
+                    )?;
+                    let current = if forced.is_empty() {
+                        l.decision()?
+                    } else {
+                        Value::Null
+                    };
+                    Ok(json!({"current":current,"forced":forced}))
+                }
+                "append_forced" => {
+                    let l = lane.as_mut().ok_or("missing lane")?;
+                    l.acknowledge_forced(
+                        token,
+                        r["records"].as_array().ok_or("missing forced records")?,
+                    )?;
+                    l.decision()
+                }
+                "record_arrays" => {
+                    let (meta, bytes) = lane.as_ref().ok_or("missing lane")?.record_arrays(
+                        token,
+                        r["start"].as_u64().ok_or("missing record cursor")? as usize,
+                    )?;
+                    arrays = Some(bytes);
+                    Ok(meta)
+                }
                 "checkpoint" => {
                     check(revision <= u32::MAX as u64, "invalid revision")?;
                     lane.as_ref()
@@ -104,8 +147,17 @@ fn run() -> Result<()> {
         };
         let bytes = serde_json::to_vec(&reply)?;
         check(bytes.len() <= MAX_FRAME, "response frame too large")?;
-        output.write_all(&(bytes.len() as u32).to_le_bytes())?;
-        output.write_all(&bytes)?;
+        if let Some(raw) = arrays {
+            let length = 4 + bytes.len() + raw.len();
+            check(length <= 16 * 1024 * 1024, "array response too large")?;
+            output.write_all(&((length as u32) | (1 << 31)).to_le_bytes())?;
+            output.write_all(&(bytes.len() as u32).to_le_bytes())?;
+            output.write_all(&bytes)?;
+            output.write_all(&raw)?;
+        } else {
+            output.write_all(&(bytes.len() as u32).to_le_bytes())?;
+            output.write_all(&bytes)?;
+        }
         output.flush()?;
         // Rejected input retires the process; no partially failed lane can resume.
         if failed {

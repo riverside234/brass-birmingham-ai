@@ -31,7 +31,7 @@ def fixture_actors(connections,root,build,execution,mono,lease,cpu,stop,director
             if command is None:return
             if build.get('fail'):
                 connection.send(dict(error='original native lane failure'));return
-            part=json.loads(Path(build['fixture']).read_text())
+            part=json.loads(Path(build.get('fixtures',{}).get(str(command['job']['index']),build['fixture'])).read_text())
             connection.send(dict(result=P.part_write(directory,part)))
     with ThreadPoolExecutor(max_workers=len(connections)) as pool:list(pool.map(lane,connections))
 
@@ -192,6 +192,70 @@ class B07(unittest.TestCase):
             collect_families([f['frozen_job']],store,malformed,malformed,lanes=1,cancel=cancel,on_error=failed)
         self.assertTrue(errors);store.publish.assert_not_called()
 
+    def test_two_publishers_overlap_but_callbacks_remain_serial_and_cpu_bound(self):
+        out=self.temporary();pool,job,cpu=self.pool(out)
+        f,_,_=family_fixture(kind='historical');second=f['frozen_job'];second['index']=2
+        second['path']=str(out/'second.jsonl.gz')
+        # The fixture has an explicit stable ID; a different index does not
+        # change its seeded decisions. Refresh only the native receipt job ID.
+        f['parent']['native_receipt']['job']=P.frozen_id(second)
+        path=out/'second.json';write_json(path,f['parent'])
+        pool.build['fixtures']={str(second['index']):str(path)}
+        pool.execution['processes']=2
+        calls=[];active=0;lock=threading.Lock()
+        def notify(records):
+            nonlocal active
+            with lock:
+                self.assertEqual(active,0);active+=1
+            calls.extend(records)
+            with lock:active-=1
+        with patch.object(P,'_actors',fixture_actors):records=pool.collect([job,second],on_records=notify)
+        self.assertEqual(pool.last_collection_report['publisher_processes'],2)
+        self.assertEqual({r['job'] for r in calls},{r['job'] for r in records})
+        self.assertEqual(cpu.report()['active'],0);self.assertFalse(pool.processes)
+        for record in records:A.read(record['path'],record['native_admission'])
+
+    def test_publication_scheduler_allows_two_independent_writes_and_preserves_order(self):
+        from brass_ai.rust_backend.lab_families import collect_families
+        f,_,_=family_fixture();jobs=[dict(f['frozen_job'],index=i) for i in range(2)]
+        barrier=threading.Barrier(2);store=Mock();store.load.return_value=None
+        def publish(job,*args,**kwargs):barrier.wait(timeout=3);return job['index']
+        store.publish.side_effect=publish
+        def collect(*args):return dict(branch_expected=False)
+        records,_=collect_families(jobs,store,collect,collect,lanes=2,publication_workers=2)
+        self.assertEqual(records,[0,1])
+        with self.assertRaisesRegex(ValueError,'publication workers'):
+            collect_families(jobs,store,collect,collect,lanes=2,publication_workers=3)
+
+    def test_parallel_publication_failure_cancels_sibling_before_join(self):
+        from brass_ai.rust_backend.lab_families import collect_families
+        f,_,_=family_fixture();jobs=[dict(f['frozen_job'],index=i) for i in range(2)]
+        cancel=threading.Event();entered=threading.Event();store=Mock();store.load.return_value=None
+        def publish(job,*args,**kwargs):
+            if job['index']==0:
+                entered.set();self.assertTrue(cancel.wait(3));return 0
+            self.assertTrue(entered.wait(3));raise ValueError('original parallel writer failure')
+        store.publish.side_effect=publish
+        def collect(*args):return dict(branch_expected=False)
+        with self.assertRaisesRegex(ValueError,'original parallel writer failure'):
+            collect_families(jobs,store,collect,collect,lanes=2,publication_workers=2,
+                             cancel=cancel,on_error=lambda error:cancel.set())
+        self.assertTrue(cancel.is_set())
+
+    def test_assembly_reuses_validated_rows_but_retains_detachment_and_mutation_checks(self):
+        for branch in (False,True):
+            f,a,_=family_fixture(branch=branch);game=A.convert(f,a,allow_diagnostic=True)
+            game.assert_metadata()
+            members=[game]+game.get('branches',[])
+            for member in members:
+                row=member['records'][0];member.encoded(row,None)
+                row['behavior']['probability']*=.5
+                with self.assertRaisesRegex(ValueError,'record changed'):member.encoded(row,None)
+            self.assertNotEqual(game['records'][0]['behavior'],f['parent']['game']['records'][0]['behavior'])
+            # Whole-game and attached branch metadata stay sealed as before.
+            game['result']['seats'][0]['vp']+=1
+            with self.assertRaisesRegex(ValueError,'metadata changed'):game.assert_metadata()
+
     def qualification(self):
         state=dict(iteration=1250,history=[{'sha256':'a'*64}],signature={'config':{'teacher_phase':{'mode':'off'}}})
         q=dict(milestone='B07',passed=True,implementation=implementation_id(),generation=1250,checkpoint_sha256='a'*64,
@@ -294,6 +358,28 @@ class B07(unittest.TestCase):
             native.collect.assert_called_once_with(training,on_records=callback)
             self.assertEqual(pool.collect([{'provenance':{'purpose':'evaluation'}}]),[{'reference':1}])
             self.assertEqual(new.call_count,1)
+
+
+def collection_smoke():
+    """Affected collection/publication scope; do not repeat full adoption restores."""
+    names = [
+        'test_one_full_validation_preserves_replay_and_targets',
+        'test_unsealed_partial_family_cannot_be_loaded_and_retry_recovers_publication_gap',
+        'test_changed_parts_receipts_and_scope_fail_closed',
+        'test_invalid_evidence_never_gets_a_writer_receipt',
+        'test_attested_reads_equal_full_validation_including_branches_and_reference_fallback',
+        'test_validation_reuse_rejects_changed_bytes_and_receipts_and_invalidates_old_source',
+        'test_disk_receipt_is_fully_revalidated_on_restart',
+        'test_spawned_pool_streams_only_receipts_reloads_and_closes',
+        'test_spawned_failure_keeps_first_error_and_cancels_without_publication',
+        'test_writer_failure_and_reader_backpressure_failure_cancel_all_workers',
+        'test_duplicate_branch_cancels_before_waiting_for_running_workers',
+        'test_two_publishers_overlap_but_callbacks_remain_serial_and_cpu_bound',
+        'test_publication_scheduler_allows_two_independent_writes_and_preserves_order',
+        'test_parallel_publication_failure_cancels_sibling_before_join',
+        'test_assembly_reuses_validated_rows_but_retains_detachment_and_mutation_checks',
+    ]
+    return unittest.TestSuite(B07(name) for name in names)
 
 
 if __name__=='__main__':unittest.main()

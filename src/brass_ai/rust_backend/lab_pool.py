@@ -2,14 +2,17 @@
 
 The existing ready-family scheduler still releases branches immediately. Native
 parts cross the coordinator as file/hash handles, never full board histories.
-One isolated publisher performs the existing complete admission exactly once.
+At most two isolated publishers perform complete admission once per family.
 Durable replay and cold reader validation retain the B03 contracts unchanged.
 """
 from concurrent.futures import ThreadPoolExecutor
 import copy
 import gzip
+import hashlib
+import io
 import json
 import multiprocessing
+import os
 from pathlib import Path
 import queue
 import threading
@@ -29,18 +32,28 @@ from .lab_transport import Pipe
 def part_write(directory, part):
     directory=Path(directory);directory.mkdir(parents=True,exist_ok=True)
     path=directory/(uuid.uuid4().hex+'.part.json.gz')
+    began=time.perf_counter();timings={}
     value=json.dumps(part,separators=(',',':'),allow_nan=False).encode()
+    timings['json_encoding_seconds']=time.perf_counter()-began;began=time.perf_counter()
     require(len(value)<=admission.LIMIT,'Native part exceeds bound')
-    with path.open('xb') as raw:
-        with gzip.GzipFile(fileobj=raw,mode='wb',mtime=0,compresslevel=1) as stream:stream.write(value)
-    return dict(path=str(path),sha256=sha(path),branch_expected=part['branch_expected'])
+    packed=gzip.compress(value,compresslevel=1,mtime=0)
+    timings['compression_seconds']=time.perf_counter()-began;began=time.perf_counter()
+    with path.open('xb') as raw:raw.write(packed)
+    fingerprint=hashlib.sha256(packed).hexdigest()
+    timings['write_hash_seconds']=time.perf_counter()-began
+    return dict(path=str(path),sha256=fingerprint,branch_expected=part['branch_expected'],transfer_timings=timings)
 
 
 def part_read(directory, handle):
     raw=Path(handle['path']);path=raw.resolve();base=Path(directory).resolve()
     require(path.parent==base and not raw.is_symlink(), 'Foreign native part path')
-    require(sha(path)==handle['sha256'],'Native part changed')
-    with gzip.open(path,'rb') as stream:data=stream.read(admission.LIMIT+1)
+    with path.open('rb') as stream:
+        size=os.fstat(stream.fileno()).st_size
+        require(0<size<=admission.LIMIT,'Native part exceeds bound')
+        packed=stream.read(size+1)
+    require(len(packed)==size,'Native part size changed')
+    require(len(packed)<=admission.LIMIT and hashlib.sha256(packed).hexdigest()==handle['sha256'],'Native part changed')
+    with gzip.GzipFile(fileobj=io.BytesIO(packed),mode='rb') as stream:data=stream.read(admission.LIMIT+1)
     require(len(data)<=admission.LIMIT,'Native part exceeds bound')
     value=json.loads(data)
     require(value['branch_expected']==handle['branch_expected'],'Native part role changed')
@@ -72,18 +85,22 @@ class Publisher:
         return record
 
     def publish(self,job,parent,child):
-        parts=self.directory/'parts'
+        began=time.perf_counter();parts=self.directory/'parts';timings={}
         handles=[h for h in (parent,child) if h]
         parent=part_read(parts,parent);child=part_read(parts,child) if child else None
+        timings['part_read_seconds']=time.perf_counter()-began;began=time.perf_counter()
         value=dict(format=FORMAT,job_id=frozen_id(job),frozen_job={k:v for k,v in job.items() if k!='path'},
             producer=self.producer,parent=parent,child=child,training_admitted=False)
         value['sha256']=digest(value)
+        timings['family_seal_seconds']=time.perf_counter()-began
+        timings['actor_part_transfer']=[h.get('transfer_timings',{}) for h in handles]
         # The sole full family validation is inside admission.publish/convert.
         # In diagnostic scope still enforce the unchanged natural branch draw.
         if self.scope=='diagnostic':admission.branch_trigger(value,job,False)
         began=time.perf_counter()
-        record=admission.publish(self.path(job),value,self.binding(job),validation_receipt=True)
+        record=admission.publish(self.path(job),value,self.binding(job),validation_receipt=True,timings=timings)
         record['publication_seconds']=time.perf_counter()-began
+        record['publication_phases']=timings
         record['native_metrics']=[dict(role=role,timings=part['timings'],
             native_cost=part.get('native_receipt',{}).get('cost'))
             for role,part in (('parent',parent),('child',child)) if part]
@@ -199,20 +216,26 @@ class NativePool:
                     self.mono,lease,self.service.cpu,self.stop,str(directory/'parts')))
                 p.start();self.processes.append(p)
                 for a,b in pairs:b.close();self.connections.append(a);available.put(a)
-            writer,child=self.mp.Pipe();self.connections.append(writer)
-            p=self.mp.Process(target=_writer,args=(child,str(directory),self.producer,self.config,self.scope,self.service.cpu,self.stop))
-            p.start();child.close();self.processes.append(p)
+            publishers=queue.Queue();publisher_count=min(2,width)
+            for _ in range(publisher_count):
+                writer,child=self.mp.Pipe();self.connections.append(writer)
+                p=self.mp.Process(target=_writer,args=(child,str(directory),self.producer,self.config,self.scope,self.service.cpu,self.stop))
+                p.start();child.close();self.processes.append(p);publishers.put(writer)
             for connection in self.connections:require(self.receive(connection).get('ready') is True,'Native startup failed')
-            startup=time.perf_counter()-began;writer_lock=threading.Lock();owner=self
+            startup=time.perf_counter()-began;callback_lock=threading.Lock();owner=self
             class Store:
                 def call(self,op,*args):
+                    writer=publishers.get(timeout=120)
                     try:
-                        with writer_lock:
-                            writer.send(dict(op=op,args=args));return owner.receive(writer)['result']
+                        writer.send(dict(op=op,args=args));return owner.receive(writer)['result']
                     except BaseException as error:fail(error);raise
+                    finally:publishers.put(writer)
                 def notify(self,record):
                     try:
-                        if record and on_records:on_records([record])
+                        # Preserve the coordinator's original serialized callback
+                        # contract while independent families publish in parallel.
+                        with callback_lock:
+                            if record and on_records:on_records([record])
                     except BaseException as error:fail(error);raise
                 def load(self,job):
                     record=self.call('load',job)
@@ -233,8 +256,8 @@ class NativePool:
                     fail(error);raise
                 finally:available.put(connection)
             records,report=collect_families(jobs,Store(),collect,collect,lanes=lanes,cancel=self.stop,
-                                          model_cohorts=config.get('model_cohorts',False),on_error=fail)
-            report.update(startup_seconds=startup,processes=width,publisher_processes=1,
+                model_cohorts=config.get('model_cohorts',False),on_error=fail,publication_workers=publisher_count)
+            report.update(startup_seconds=startup,processes=width,publisher_processes=publisher_count,
                 board_histories_cross_learner=False,full_family_validation_passes_per_publication=1,
                 native_families=sum(route(r['native_admission']['admission']['job'])[0]=='rust' for r in records))
             self.last_collection_report=report

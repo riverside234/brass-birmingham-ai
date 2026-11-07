@@ -201,13 +201,16 @@ def _failure_scope(cancel,on_error):
         raise
 
 
-def collect_families(jobs, store, run_native, run_reference, *, lanes, cancel=None, model_cohorts=False,on_error=None):
+def collect_families(jobs, store, run_native, run_reference, *, lanes, cancel=None, model_cohorts=False,on_error=None,
+                     publication_workers=1):
     """Callbacks receive (job, continuation, submit_branch). Never wait on sibling.
 
     At most 2*lanes unfinished families. This bounds the ready checkpoint queue,
     completed sibling buffers, and publication queue independently of job count.
     """
     require(type(lanes) is int and lanes>0,'Invalid ordinary lane count')
+    require(type(publication_workers) is int and 1<=publication_workers<=min(2,lanes),
+            'Invalid bounded publication workers')
     require(len({j['index'] for j in jobs})==len(jobs) and len({frozen_id(j) for j in jobs})==len(jobs),'Duplicate frozen jobs')
     jobs=copy.deepcopy(jobs); by_id={j['index']:j for j in jobs}
     ready=ReadyWork([dict(jobs=[j]) for j in jobs],model_cohorts=model_cohorts)
@@ -225,7 +228,7 @@ def collect_families(jobs, store, run_native, run_reference, *, lanes, cancel=No
             except queue.Empty:break
             require(index in active and index not in forked,'Duplicate/stale fork submission')
             forked.add(index);ready.add_branch(dict(jobs=[by_id[index]],continuation=packet))
-    with ThreadPoolExecutor(max_workers=lanes) as workers,ThreadPoolExecutor(max_workers=1) as writer,_failure_scope(cancel,on_error):
+    with ThreadPoolExecutor(max_workers=lanes) as workers,ThreadPoolExecutor(max_workers=publication_workers) as writer,_failure_scope(cancel,on_error):
         while len(published)<len(jobs):
             require(cancel is None or not cancel.is_set(),'Collection canceled')
             drain_branches()

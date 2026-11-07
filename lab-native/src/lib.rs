@@ -15,6 +15,7 @@ use brass_ai_core::{
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 use std::time::{Duration, Instant};
+mod collection_wire;
 
 pub type Result<T> = std::result::Result<T, Box<dyn std::error::Error + Send + Sync>>;
 pub const CONTRACT: &str = "brass-lab-collection/1.0.0";
@@ -38,8 +39,6 @@ pub struct Lane {
     job: String,
     token: String,
     rail_keys: Vec<u32>,
-    records: Vec<Value>,
-    evidence: Vec<Value>,
     bytes: usize,
     cap: usize,
     recorder: scoring::Recorder,
@@ -50,6 +49,8 @@ pub struct Lane {
     feature_time: Duration,
     transition_time: Duration,
     max_candidates: usize,
+    pending: std::collections::VecDeque<collection_wire::Forced>,
+    wire_rows: Vec<(Vec<u8>, Vec<u8>)>,
 }
 
 impl Lane {
@@ -76,8 +77,6 @@ impl Lane {
             rail_keys,
             cap,
             recorder,
-            records: vec![],
-            evidence: vec![],
             bytes: 0,
             encoder: FeatureEncoder::default(),
             encoded: None,
@@ -86,6 +85,8 @@ impl Lane {
             feature_time: Duration::ZERO,
             transition_time: Duration::ZERO,
             max_candidates: 0,
+            pending: Default::default(),
+            wire_rows: vec![],
         })
     }
 
@@ -109,7 +110,7 @@ impl Lane {
         }
         let (view, choices) = self.current()?;
         let result = json!({"terminal":false,"view":view,"choices":choices});
-        Ok(json!({"token":self.token,"step":self.records.len(),"decision":result}))
+        Ok(json!({"token":self.token,"step":self.wire_rows.len(),"decision":result}))
     }
 
     pub fn features(
@@ -150,6 +151,7 @@ impl Lane {
     }
 
     pub fn checkpoint(&self, token: &str, revision: u32) -> Result<Value> {
+        check(self.pending.is_empty(), "forced acknowledgements pending")?;
         check(
             token == self.token && revision == self.state.context().revision,
             "stale checkpoint",
@@ -204,21 +206,33 @@ impl Lane {
         &mut self,
         token: &str,
         revision: u32,
+        row: Value,
+        evidence: Value,
+    ) -> Result<()> {
+        self.append_row(token, revision, row, evidence, false)
+    }
+
+    fn append_row(
+        &mut self,
+        token: &str,
+        revision: u32,
         mut row: Value,
         evidence: Value,
+        owned: bool,
     ) -> Result<()> {
         check(
             token == self.token && revision == self.state.context().revision,
             "stale policy reply",
         )?;
         check(
-            self.records.len() < self.cap,
+            self.wire_rows.len() < self.cap,
             "decision cap reached; incomplete lane rejected",
         )?;
         let (view, choices) = self.current()?;
         check(
-            row["view"] == serde_json::to_value(view)?
-                && row["choices"] == serde_json::to_value(&choices)?,
+            owned
+                || (row["view"] == serde_json::to_value(view)?
+                    && row["choices"] == serde_json::to_value(&choices)?),
             "policy mutated permitted decision",
         )?;
         check(
@@ -243,18 +257,28 @@ impl Lane {
             row["style"] == json!(context.style) && row["intent"] == json!(context.intent),
             "row feature context changed",
         )?;
-        row["step"] = json!(self.records.len());
-        let size = serde_json::to_vec(&row)?.len() + serde_json::to_vec(&evidence)?.len();
+        row["step"] = json!(self.wire_rows.len());
+        let wire = (serde_json::to_vec(&row)?, serde_json::to_vec(&evidence)?);
+        let size = wire.0.len() + wire.1.len();
         check(self.bytes + size <= MAX_BYTES, "lane buffer limit reached")?;
         // Stage every fallible operation before publishing the row or new state.
         let mut recorder = self.recorder.clone();
         let began = Instant::now();
-        let next = ordinary_after(&self.state, &id, &self.rail_keys, &mut recorder)?;
+        let next = if let Some(forced) = self.pending.front() {
+            check(
+                forced.revision == revision && forced.id == id,
+                "stale forced acknowledgement",
+            )?;
+            recorder = forced.recorder.clone();
+            forced.after.clone()
+        } else {
+            ordinary_after(&self.state, &id, &self.rail_keys, &mut recorder)?
+        };
         self.transition_time += began.elapsed();
         self.state = next;
         self.recorder = recorder;
-        self.records.push(row);
-        self.evidence.push(evidence);
+        self.wire_rows.push(wire);
+        self.pending.pop_front();
         self.bytes += size;
         self.decision = None;
         self.encoded = None;
@@ -266,23 +290,24 @@ impl Lane {
             self.state.context().terminal,
             "incomplete lane cannot publish records",
         )?;
-        check(index < self.records.len(), "row index out of bounds")?;
+        check(index < self.wire_rows.len(), "row index out of bounds")?;
         // Preserve the exact bytes used by the complete-array seals. Python
         // checks these before decoding, avoiding cross-language float formatting.
         Ok(
-            json!({"row_json":serde_json::to_string(&self.records[index])?,
-                  "evidence_json":serde_json::to_string(&self.evidence[index])?}),
+            json!({"row_json":std::str::from_utf8(&self.wire_rows[index].0)?,
+                  "evidence_json":std::str::from_utf8(&self.wire_rows[index].1)?}),
         )
     }
     pub fn finish(&self) -> Result<Value> {
+        check(self.pending.is_empty(), "forced acknowledgements pending")?;
         check(
-            self.state.context().terminal && !self.records.is_empty(),
+            self.state.context().terminal && !self.wire_rows.is_empty(),
             "incomplete game cannot publish",
         )?;
         let d = self.state.export();
         Ok(
-            json!({"contract":CONTRACT,"job":self.job,"token":self.token,"rows":self.records.len(),
-            "records_sha256":seal(&json!(self.records)),"evidence_sha256":seal(&json!(self.evidence)),
+            json!({"contract":CONTRACT,"job":self.job,"token":self.token,"rows":self.wire_rows.len(),
+            "records_sha256":self.records_seal(false),"evidence_sha256":self.records_seal(true),
             "cost":{"projection_seconds":self.projection_time.as_secs_f64(),"feature_seconds":self.feature_time.as_secs_f64(),
                 "transition_seconds":self.transition_time.as_secs_f64(),"max_candidates":self.max_candidates,
                 "peak_process_rss_bytes":peak_rss()},

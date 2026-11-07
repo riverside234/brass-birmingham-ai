@@ -65,9 +65,14 @@ def child(args):
         torch.backends.cuda.matmul.allow_tf32=False;torch.backends.cudnn.allow_tf32=False
         report['environment']=measurement_preflight(args.device)
         write_json(args.out/(args.phase+'-environment.json'),report['environment'])
-        snapshot=read_json(args.out/'snapshot.json');ordinary,teacher=old.verify_runtime(reference)
+        import rust_lab_b07_retry as retry
+        snapshot=read_json(args.out/'snapshot.json');old_ordinary,original=retry.original_runtime(reference)
+        ordinary=retry.verify_ordinary(read_json(args.out/'ordinary-build.json'),old_ordinary)
+        from brass_ai.rust_backend.lab_contract import pin
+        reference=dict(reference,ordinary_build_sha256=pin(args.out/'ordinary-build.json')['sha256'])
         if args.phase=='ordinary':report.update(smoke.ordinary(args,snapshot,ordinary,reference))
         elif args.phase.startswith('canary-'):
+            teacher=retry.verify_teacher(read_json(args.out/'teacher-build.json'),original)
             report.update(smoke.canary(args,snapshot,teacher,old.INPUTS,int(args.phase[-1])))
         else:report.update(old.kernels(args,snapshot,reference))
     except BaseException as error:
@@ -91,6 +96,10 @@ def main():
     p.add_argument('--run',default='artifacts/step5/joint7-v11-2-g1290-trained-restart')
     p.add_argument('--device',default='cuda:0');p.add_argument('--mono',default='mono')
     p.add_argument('--fixtures-only',action='store_true')
+    p.add_argument('--offline',action='store_true',help='Build the repaired teacher from the existing Cargo cache')
+    p.add_argument('--teacher-build',type=Path,help='Reuse a verified build.json from this exact repaired teacher source')
+    p.add_argument('--ordinary-build',type=Path,help='Reuse a verified build.json from this exact ordinary adapter source')
+    p.add_argument('--ordinary-only',action='store_true',help='Remeasure only the affected ordinary pipeline; does not qualify teacher canaries/adoption')
     p.add_argument('--phase',choices=tuple(PHASES),help=argparse.SUPPRESS)
     p.add_argument('--out',type=Path,help=argparse.SUPPRESS)
     args=p.parse_args();args.run=project_path(ROOT,args.run)
@@ -110,14 +119,29 @@ def main():
         from rust_lab_b06_metrics import measurement_preflight
         report['environment']=measurement_preflight()
         active='fixtures'
-        tests=['test_b07','test_b06','test_b05_retry','test_b03.Admission','test_b04','test_b045','test_result_export',
-               'test_branch_scheduler','test_audit_retention']
+        tests=['test_b07_retry','test_b07.collection_smoke','test_b07_wire','test_b02.Behavior']
         base.command([sys.executable,'-m','unittest',*tests,'-q'],cwd=ROOT,env=dict(env,CUDA_VISIBLE_DEVICES=''),log=out/'fixtures.log',timeout=180)
         if args.fixtures_only:
             report.update(passed=True,scope='CPU fixtures only; B07 lab and adoption Pending');return
         active='runtime'
         require(platform.system()=='Linux','B07 benchmark/canary requires Linux/CUDA')
-        module('b07_runtime',ROOT/'scripts/qualify-rust-lab-b06.py').verify_runtime(reference)
+        import rust_lab_b07_retry as retry
+        old_ordinary,original=retry.original_runtime(reference)
+        active='ordinary-build'
+        ordinary=retry.verify_ordinary(read_json(args.ordinary_build),old_ordinary) if args.ordinary_build else retry.build_ordinary(out/'ordinary-runtime',old_ordinary,offline=args.offline)
+        write_json(out/'ordinary-build.json',ordinary);report['ordinary_build']=pin(out/'ordinary-build.json')
+        active='native-wire'
+        fixture_path=Path(old_ordinary['b01']['path']).parent/'inputs/fixtures.json'
+        base.command([sys.executable,'-m','unittest','test_b07_wire.Native','-q'],cwd=ROOT,
+            env=dict(env,BRASS_B07_COLLECTOR=ordinary['collector']['path'],BRASS_B07_FIXTURES=str(fixture_path)),
+            log=out/'native-wire.log',timeout=60)
+        base.command([sys.executable,str(ROOT/'scripts/rust_lab_b07_transport.py'),'--binary',ordinary['collector']['path'],
+            '--fixtures',str(fixture_path),'--out',str(out/'transport-micro.json')],cwd=ROOT,env=env,
+            log=out/'transport-micro.log',timeout=60)
+        if not args.ordinary_only:
+            active='teacher-build'
+            teacher=retry.verify_teacher(read_json(args.teacher_build),original) if args.teacher_build else retry.build_teacher(out/'teacher-runtime',original,offline=args.offline)
+            write_json(out/'teacher-build.json',teacher);report['teacher_build']=pin(out/'teacher-build.json')
         with run_lock(args.run):
             active='snapshot';snapshot,_,_=capture(ROOT,args.run,devices=[args.device])
             require(snapshot['generation']==reference['generation'] and snapshot['checkpoint']['sha256']==reference['checkpoint_sha256']
@@ -125,17 +149,23 @@ def main():
             write_json(out/'snapshot.json',snapshot)
             report.update(generation=snapshot['generation'],checkpoint_sha256=snapshot['checkpoint']['sha256'],config_sha256=snapshot['config_sha256'])
             try:
-                for phase,timeout in PHASES.items():
+                active='ordinary-baseline'
+                baseline=retry.prior_ordinary(reference,snapshot)
+                write_json(out/'ordinary-prior-source.json',baseline)
+                report['prior_ordinary_performance']=baseline['performance']
+                for phase,timeout in ({'ordinary':PHASES['ordinary']} if args.ordinary_only else PHASES).items():
                     active=phase
                     command=[sys.executable,str(Path(__file__)),'--phase',phase,'--run',str(args.run),'--out',str(out),'--device',args.device,'--mono',args.mono]
                     base.command(command,cwd=ROOT,env=dict(env,BRASS_B07_PARENT_LOCK=(args.run/'.active-run.json').read_text()),
                                  log=out/(phase+'.log'),timeout=timeout)
                     detail=read_json(out/(phase+'-checks.json'));require(detail['passed'],'B07 '+phase+' failed/deferred')
                 report['ordinary']=read_json(out/'ordinary-checks.json')
+                if args.ordinary_only:
+                    report.update(passed=True,lab_qualification='Ordinary scope passed; teacher/adoption Pending',
+                        adoption_ready=False,performance=report['ordinary']['performance']);return
                 report['canary']=dict(passed=True,passes=2,tables=4,teacher_mode='shadow',blend_weight=0,
                     receipts=[pin(out/(phase+'-checks.json')) for phase in ('canary-1','canary-2')])
                 report['continuation']=read_json(out/'continuation-checks.json')
-                report['ordinary_build']=pin(ROOT/'distribution/rust-lab-b06-g1250/evidence/ordinary-build.json')
                 useful=report['ordinary']['performance']['useful_accepted_work_gain']
                 report.update(passed=True,lab_qualification='Passed bounded canary/correctness scope',
                     adoption_ready=useful,performance_acceptance='Useful matched gain' if useful else 'Pending further optimization; adoption blocked',

@@ -10,7 +10,11 @@ publish = false
 [workspace]
 
 [features]
-teacher = []
+# Teacher bindings echo f64 budgets through Python JSON. Preserve every bit on
+# decode so an unchanged reply cannot be mistaken for a stale identity. Keep
+# Ordinary behavior probabilities need the same exact decoding in the new wire.
+default = ["serde_json/float_roundtrip"]
+teacher = ["serde_json/float_roundtrip"]
 
 [[bin]]
 name = "brass-lab-teacher"

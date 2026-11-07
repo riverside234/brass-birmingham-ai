@@ -20,7 +20,7 @@ from brass_ai.step5.policy import NeuralPolicy, context_for
 from brass_ai.recovery.execution import make_policy
 from brass_ai.recovery.branching import eligible, capture, seed_for, RESET_OPENINGS
 from brass_ai.recovery.inputs import BOUNDARY
-from .lab_transport import CONTRACT, DecisionEncoder, Collector
+from .lab_transport import CONTRACT, VERSION, DecisionEncoder, Collector
 
 
 def frozen_id(job):
@@ -74,7 +74,10 @@ def collect_lane(root, executable, bootstrap, job, endpoint, execution, *, origi
     require(route(job)[0] == 'rust', 'Unsupported whole job must use reference route')
     start = time.monotonic(); timings = Counter(); job_id = frozen_id(job)
     with ExitStack() as cleanup:
-        lane = cleanup.enter_context(Collector(executable))
+        t=time.monotonic()
+        lane = cleanup.enter_context(Collector(executable,batch_forced=compare is None))
+        lane.cancel_event=cancel
+        timings['native_startup_seconds']+=time.monotonic()-t
         policies = [make_policy(p, root, endpoint, execution, None) for p in job['policies']]
         for p in policies:
             cleanup.callback(p.close)
@@ -144,11 +147,12 @@ def collect_lane(root, executable, bootstrap, job, endpoint, execution, *, origi
             row=dict(step=lane.current['step'],seat=seat,view=view,choices=choices,chosen=chosen,teacher=teacher,
                      style=style,intent=intent,seconds=time.monotonic()-t,behavior=behavior)
             timings['policy_seconds']+=row['seconds']
-            t=time.monotonic(); encoded=p.evaluator.encoder.encode(view,choices,style,intent,validated=True)
+            t=time.monotonic()
+            encoded=p.evaluator.encoder.encode(view,choices,style,intent,validated=True) if len(choices)>1 or compare else None
             timings['encoding_seconds']+=time.monotonic()-t
             evidence=dict(kind='ordinary',model_id=p.evaluator.model_id,policy_id=p.policy_id,forced=len(choices)==1,
                 raw_probabilities=(np.ones(1) if len(choices)==1 else p.native_raw).tolist(),
-                feature_version=encoded.feature_version,semantic_id=choices[chosen]['id'])
+                feature_version=VERSION,semantic_id=choices[chosen]['id'])
             if job.get('branching') and continuation is None:
                 if not forked: causal.append(_causal(row))
                 if eligible(view,choices,behavior.get('action_decision',0),job['branching']['skip_opening_decisions']):
@@ -168,11 +172,11 @@ def collect_lane(root, executable, bootstrap, job, endpoint, execution, *, origi
                 'Foreign native completion receipt')
         record_hash=hashlib.sha256(b'[');evidence_hash=hashlib.sha256(b'[')
         t=time.monotonic()
-        for index in range(receipt['rows']):
-            reply=lane.call('row',index=index)
-            for values,hasher,key in ((records,record_hash,'row_json'),(evidence,evidence_hash,'evidence_json')):
+        for index,(row_bytes,evidence_bytes) in enumerate(lane.records(receipt)):
+            require(cancel is None or not cancel.is_set(), 'Collection canceled during export')
+            for values,hasher,raw_bytes in ((records,record_hash,row_bytes),(evidence,evidence_hash,evidence_bytes)):
                 if index:hasher.update(b',')
-                hasher.update(reply[key].encode('utf-8'));values.append(json.loads(reply[key]))
+                hasher.update(raw_bytes);values.append(json.loads(bytes(raw_bytes)))
         record_hash.update(b']');evidence_hash.update(b']')
         require(record_hash.hexdigest()==receipt['records_sha256'] and evidence_hash.hexdigest()==receipt['evidence_sha256'],
                 'Native completion data seal differs')
@@ -183,6 +187,7 @@ def collect_lane(root, executable, bootstrap, job, endpoint, execution, *, origi
             game['branch'].update(elapsed_seconds=time.monotonic()-start,
                 fraction_remaining=len(records)/(len(records)+game['branch']['decision']))
         lane.release()
+        timings.update({'ipc_'+k:v for k,v in lane.metrics.items()})
         return dict(game=game,scoring=receipt['scoring'],evidence=evidence,native_receipt=receipt,
             origin_counts=continuation['counts'] if continuation is not None else [0]*4,
             diagnostic_branch_probe=diagnostic_branch_probe,
