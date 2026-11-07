@@ -368,6 +368,8 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
         change=phases.snapshot_fixed_migration
         print(f'Snapshot critic weight: {change["weight_before"]:.2f} -> 1.00 fixed; '
               'recovery and decay disabled, prior controller archived',flush=True)
+    from brass_ai.rust_backend.lab_backend import validate_state as validate_backend,RoutedPool
+    validate_backend(state,raw)
     teacher_phase=None
     if 'teacher_phase' in config:
         from .teacher_phase import TeacherPhase
@@ -441,7 +443,7 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
         collection_host=local_scoring_host(root)
     with InferenceService(config['execution'],device,profile=run/'profile-collection' if config['profile_steps'] else None,
                           profile_steps=config['profile_steps'],inference_devices=inference_devices) as service,reader_pool(config['audit_workers'],admission=service.cpu) as readers:
-        with ActorPool(root,collection_host,service,config['execution'],mono=mono) as ordinary,ActorPool(root,collection_host,service,config['execution'],mono=mono,heavy=True) as heavy,PreparationPool(config['update'].get('preparation_workers',0)) as preparation_pool:
+        with RoutedPool(root,collection_host,service,config,state,mono=mono) as ordinary,ActorPool(root,collection_host,service,config['execution'],mono=mono,heavy=True) as heavy,PreparationPool(config['update'].get('preparation_workers',0)) as preparation_pool:
             from .champion import schedule as schedule_champion
             # Resume an interrupted gate for the committed candidate before
             # advancing the learner or writing a new gate specification.
@@ -746,6 +748,9 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                     report['diversity']=copy.deepcopy(diversity.report)
                 anchor_commit=policy_anchor.checkpoint_state(state)
                 search_value_payload=search_values.payload(iteration+1) if search_values is not None else None
+                if 'native_backend' in state:
+                    report['native_backend']=dict(mode=state['native_backend']['mode'],
+                        qualification=state['native_backend']['qualification'],collection=ordinary.last_collection_report)
                 if search_value_report is not None: report['search_value']=search_value_report
                 identity=save_checkpoint(output,model,optimizer,step=iteration+1,
                     training=dict(mode='step5-population-ppo',recipe=update['format'],
@@ -758,6 +763,7 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                         **({'policy_anchor':anchor_commit} if anchor_commit is not None else {}),
                         **({'exploration':exploration_state} if exploration_state is not None else {}),
                         **({'teacher_phase':teacher_phase.payload(iteration+1)} if teacher_phase is not None else {}),
+                        **({'native_backend':state['native_backend']} if 'native_backend' in state else {}),
                         **({'search_value':search_value_payload} if search_value_payload is not None else {}),
                         **({'v4_share_gate':share} if share is not None else {}),
                         **({'actor_value_phases':phases.payload()} if phases is not None else {}),

@@ -127,7 +127,11 @@ def collect_lane(root, executable, bootstrap, job, endpoint, execution, *, origi
         while not lane.current.get('terminal'):
             require(cancel is None or not cancel.is_set(), 'Collection canceled; incomplete family discarded')
             decision = lane.current['decision']; view, choices = decision['view'],decision['choices']
-            BOUNDARY.check(view,choices); seat=view['seat']; p=assigned[seat]; rng=rngs[seat]
+            # Same immutable admitted frame as the reference actor: policy and
+            # encoder reuse its exact input identity instead of hashing it again.
+            if len(choices)>1:view,choices=BOUNDARY.admit(view,choices)
+            else:BOUNDARY.check(view,choices)
+            seat=view['seat']; p=assigned[seat]; rng=rngs[seat]
             t=time.monotonic()
             if len(choices)==1:
                 _,intent=p.context_features(view,rng)

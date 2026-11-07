@@ -161,6 +161,7 @@ def inventory(root, run, state, raw):
     if source:
         for key, hash_key in (('path', 'sha256'), ('manifest', 'manifest_sha256')):
             if key in source: add(source[key], source[hash_key])
+    refs(state.get('native_backend'))
     return dict(files=files, external=external)
 
 

@@ -1,6 +1,17 @@
 # B06: matched workload measurements
 
-2026-11-07. Implemented; Linux/CUDA qualification **Pending**. B05 r2 passed on
+2026-11-07. **Linux/CUDA bounded correctness/measurements passed; useful native
+performance did not pass.** The pulled r4 receipt is
+`results/rust-lab-qualification/20261107T080012822445Z-20261107T075601452661Z-g1250-b06-c1cd94b2-2c29d5e3/evidence/qualification.json`.
+Reference accepted work was 28.596s; native was 55.265s for the same three
+families. Native first admission/read was 18.457s and warm read 8.179s; the
+Python adapter/validation path dominates the native engine's sub-second core
+work per native family. No natural branch occurred. Eight 4s/K16 root turns and
+fixed-data update/restore checks passed. See [B07's optimization and lab follow-up](RUST_BACKEND_B07_IMPLEMENTATION.md).
+Do not rerun this successful qualification. The following describes the
+original measurement harness and its retry history.
+
+B05 r2 passed on
 the pinned g1250 checkpoint in
 `results/rust-lab-qualification/20261107T070806231803Z-20261107T070539193547Z-g1250-b05-88497ac1-cf4704fd/evidence/qualification.json`.
 It completed two PPO and two PPG steps with diagnostic checkpoint reload, 32

@@ -1,0 +1,88 @@
+{
+  "passed": true,
+  "implementation": "87cdd916e20f513302feca259604ba074948ea38b26275a6fd4e43a899ad273f",
+  "cpu_tests": {
+    "run": 120,
+    "skipped": 3,
+    "seconds": 79.709,
+    "command": "python -m unittest test_b07 test_b06 test_b05_retry test_b03.Admission test_b04 test_b045 test_result_export test_branch_scheduler test_audit_retention -q",
+    "log_sha256": "49b8c3a2d5db150e2ff560dd2a73bd6a22c6cc322bdca1338675f02cca2361cb"
+  },
+  "publication": {
+    "passed": true,
+    "samples": [
+      {
+        "arm": "b06",
+        "repeat": 0,
+        "publish_and_read_seconds": 0.7720692999428138,
+        "warm_read_seconds": 0.29760300007183105,
+        "full_validations_to_first_read": 9,
+        "warm_full_validations": 3
+      },
+      {
+        "arm": "b07",
+        "repeat": 0,
+        "publish_and_read_seconds": 0.9413818999892101,
+        "warm_read_seconds": 0.23108129994943738,
+        "full_validations_to_first_read": 3,
+        "warm_full_validations": 0
+      },
+      {
+        "arm": "b07",
+        "repeat": 1,
+        "publish_and_read_seconds": 0.8207259000046179,
+        "warm_read_seconds": 0.23475340008735657,
+        "full_validations_to_first_read": 3,
+        "warm_full_validations": 0
+      },
+      {
+        "arm": "b06",
+        "repeat": 1,
+        "publish_and_read_seconds": 0.9751633999403566,
+        "warm_read_seconds": 0.27430030005052686,
+        "full_validations_to_first_read": 9,
+        "warm_full_validations": 3
+      },
+      {
+        "arm": "b06",
+        "repeat": 2,
+        "publish_and_read_seconds": 0.7782965999795124,
+        "warm_read_seconds": 0.21699689992237836,
+        "full_validations_to_first_read": 9,
+        "warm_full_validations": 3
+      },
+      {
+        "arm": "b07",
+        "repeat": 2,
+        "publish_and_read_seconds": 0.7368082000175491,
+        "warm_read_seconds": 0.1863740999251604,
+        "full_validations_to_first_read": 3,
+        "warm_full_validations": 0
+      }
+    ],
+    "medians": {
+      "b06": {
+        "publish_and_read_seconds": 0.7782965999795124,
+        "warm_read_seconds": 0.27430030005052686
+      },
+      "b07": {
+        "publish_and_read_seconds": 0.8207259000046179,
+        "warm_read_seconds": 0.23108129994943738
+      }
+    },
+    "scope": "Three alternating CPU fixture batches, three eight-decision families per arm; same rows/features/targets. No games or GPU; not lab throughput.",
+    "validation_passes_per_family": {
+      "b06": 3,
+      "b07": 1,
+      "b06_warm": 1,
+      "b07_warm": 0
+    },
+    "lab_qualification": "Pending"
+  },
+  "development_note": "Broader first pass ran 130 cases; one malformed fault-injection fixture stopped at missing row before duplicate detection. Fixture corrected and covered by the final 120-test passing gate. Additional B03 continuation cases passed in that broader run.",
+  "lab_qualification": "Pending",
+  "production_adoption": "Pending",
+  "next_normal_commit_restart": "Pending",
+  "installed_game_modified": false,
+  "package_review": "R1 clean extraction exposed missing original overlay inputs.zip and Windows long paths in the nested test root. R2 includes the pinned inputs and is tested at a short isolated root. R1 was never published."
+}

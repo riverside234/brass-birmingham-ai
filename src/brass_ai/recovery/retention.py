@@ -150,7 +150,7 @@ def controls(artifacts):
 def feature_sidecars(path):
     """All admitted generations accompany the same authoritative raw replay."""
     return tuple(Path(str(path)+'.features'+version+'.'+ext)
-        for version in ('','-v2','-v3') for ext in ('npz','json'))
+        for version in ('','-v2','-v3','-v4') for ext in ('npz','json'))
 
 
 def references(root,run):
@@ -202,6 +202,7 @@ def _references(root,run):
             selected['context_evaluation']=d.get('context_evaluation',{}).get('pending')
             selected['accepted_gate']=d.get('champion_gate',{}).get('accepted_gate')
             selected['teacher_phase']=d.get('teacher_phase')
+            selected['native_backend']=d.get('native_backend')
             cfg=d.get('signature',{}).get('config',{})
             selected['datasets']=[cfg.get('rehearsal_manifest'),cfg.get('imitation',{}).get('manifest')]
         elif 'best' in d and 'last' in d: selected={k:d.get(k) for k in ('best','last','signature')}
@@ -417,6 +418,10 @@ def plan(root,run,config=RETENTION,*,_digests=None):
             rounds=[p for p in rounds if int(p.name[10:])<state['iteration']]
         for directory in rounds[:-config['replay_rounds']]:
             for p in directory.glob('*.jsonl.gz*'): candidate(p,'expired ordinary or unpinned teacher replay')
+            for p in (directory/'native-ordinary'/'replay').glob('*.jsonl.gz*'):
+                candidate(p,'expired native ordinary replay or derived receipt')
+            for p in (directory/'native-ordinary'/'parts').glob('*.part.json.gz'):
+                candidate(p,'unclaimed native part from an expired completed iteration')
             if int(directory.name.split('-')[-1])<state['iteration'] and str(read(directory/'report.json').get('format','')).startswith('step5-recovery-report/'):
                 candidate(directory/'report.json','archived iteration report')
         # Keep two recent completed development screens per panel. Formal or

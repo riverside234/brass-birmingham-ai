@@ -1,0 +1,107 @@
+{
+  "generation": 1250,
+  "checkpoint_sha256": "de427bb22e38cc5dc9d4e79151cccdb321650c02978f79bcdad746c3e6be7985",
+  "model_id": "0e1fe1357722a45ee274edeb2fc7932db3d081719027c6e043647e034f5b0985",
+  "config_sha256": "895d866502425dad30f2277b822dba2a15247f9a701d2dd5dd10b7e396de3ca8",
+  "ordinary_build_sha256": "e9940385ba19ed30f59e380c113e56f1801caf1a037d7f23a21a913f18febf43",
+  "ordinary_native_source_review": {
+    "lab-native/src/lib.rs": "6d288c969d09557ec1701da881607d418e5e3674199640c435d3f13abd40da95",
+    "lab-native/src/main.rs": "989818021bd26d237ff35daf6280a928adc118ef598c0e2e25d7e41568cd27d5",
+    "lab-native/src/scoring.rs": "2e41cb5647dc5b41bf305330fae8869fa8fa969936f8e3b7240d22262c331ecd",
+    "lab-native/Cargo.toml": "0dc9649a715137d28ec66504641b30ba50491a6c227e39276fee5c6a313b28b9",
+    "lab-native/Cargo.lock": "8dedcf1eb844cbd03512663053034a7a587adb7a5bad2e6d9bcfc466e605f8d9"
+  },
+  "prerequisites": {
+    "B02": {
+      "path": "results/rust-lab-qualification/20261104T012220551953Z-20261104T011422740838Z-g570-all-8bee9d91-e1605e8c/evidence/b02/qualification.json",
+      "sha256": "88e7136e4d935c63dee3f71c4b3cc49b9202356792bf36a96e4d71b6945122ec"
+    },
+    "B04.5": {
+      "path": "results/rust-lab-qualification/20261107T060856941600Z-20261107T060554386081Z-g1250-b045-76165ac4-a1db73ac/evidence/qualification.json",
+      "sha256": "4830d679141ea1fd1b4e469cc969251b6a5b6d0ec988ea0410039f4090169bc3"
+    },
+    "B05": {
+      "path": "results/rust-lab-qualification/20261107T070806231803Z-20261107T070539193547Z-g1250-b05-88497ac1-cf4704fd/evidence/qualification.json",
+      "sha256": "b323c55579bdfc875707cc1d36c42f01a9713fc88a82648aab24395962ab3b0c"
+    }
+  },
+  "source_policy": "B07 process isolation, single writer admission and byte-attested read reuse; explicit backend-only adoption with teacher off",
+  "source_reuse": {
+    "from_implementation": "ce40147f02d7a4eec641cebfd4ff5186ced427d8cf505cbe988c8bf22fb9387a",
+    "to_implementation": "63564be49e282c4b2c0fff02b7640238c63d04d35f7c072bf8c017d12ce6ace5",
+    "reviewed_commit": "17956a9",
+    "changes": {
+      "src/brass_ai/rust_backend/lab_collection.py": {
+        "before": "7f9c38965c15571a2f244055e8c145671d5eabfc7752ce3daa68b8b42027f2f1",
+        "after": "a3447bcf29a2dc7f7a584c89e90ea2991376c92f4e583cbc19631ac195a0caf7"
+      },
+      "src/brass_ai/rust_backend/lab_families.py": {
+        "before": "9a389bd6b259f66ebdb7926c7c406e791863fa8f25174de98b73f5bba40f31e8",
+        "after": "4e74b139cd40bab7c38ea1a24852d82c9ae04dea7d078595ca4164a41ff48599"
+      }
+    },
+    "scope": "Reuse B05 optimizer/teacher/restore evidence; only native branch window and its validation change. Current v9 and legacy branch regression tests plus bounded B06 collection cover the affected scope.",
+    "native_binaries_unchanged": true,
+    "production_modified": false
+  },
+  "native_runtime_policy": "Reuse exact pinned original lab binaries/dependencies; no previous qualification or build rerun",
+  "b06": {
+    "path": "results/rust-lab-qualification/20261107T080012822445Z-20261107T075601452661Z-g1250-b06-c1cd94b2-2c29d5e3/evidence/qualification.json",
+    "sha256": "fc07359069538cf75a7413bd8f522f0e5bea133f56daa8d0a86c3b64f07e4081"
+  },
+  "b06_baseline": {
+    "collection_ratio_reference_over_rust": 0.703518580701927,
+    "collection_seconds_saved": -10.740243140986422,
+    "useful_collection_gain": false,
+    "accepted_work_ratio_reference_over_rust": 0.5174377711976228,
+    "accepted_work_seconds_saved": -26.668666259007296,
+    "useful_accepted_work_gain": false,
+    "statistical_claim": false,
+    "whole_iteration_speedup": null,
+    "scope": "One bounded frozen batch per arm; startup, admission and preparation reported separately"
+  },
+  "b07_source_review": {
+    "from_implementation": "63564be49e282c4b2c0fff02b7640238c63d04d35f7c072bf8c017d12ce6ace5",
+    "to_implementation": "87cdd916e20f513302feca259604ba074948ea38b26275a6fd4e43a899ad273f",
+    "reviewed_commit": "f327d6c",
+    "changes": {
+      "src/brass_ai/recovery/league.py": {
+        "before": "2f37faa41683d29cf275cb1b39177a6cfae1e6dc72ca58222ffc46891b00edd3",
+        "after": "62e4a3613e44ea69f910f9ecde342e1b36d31bfa9005eec383311f8e8055097b"
+      },
+      "src/brass_ai/recovery/retention.py": {
+        "before": "9a61bd37e145a89864ce8b2433ec0203b77450af07f314ed8b997d697fa2ba32",
+        "after": "793f94de15f8fa10a57cd6fd8db33e9a1798a098e8abd5d476f8e043a3de3536"
+      },
+      "src/brass_ai/rust_backend/lab_admission.py": {
+        "before": "ec1d512b17a15739397154d5c28a2d4bf339b3edea751ea07f9f451d64e4aaff",
+        "after": "954f8eb89adbba4696c7b26c902756c38476696a2ec259f1eaaa48eeb0a12601"
+      },
+      "src/brass_ai/rust_backend/lab_backend.py": {
+        "before": null,
+        "after": "8e6496a7e67371bb9f5898e1dde864731f49a60062768ab66773ec4e5a9749d3"
+      },
+      "src/brass_ai/rust_backend/lab_collection.py": {
+        "before": "a3447bcf29a2dc7f7a584c89e90ea2991376c92f4e583cbc19631ac195a0caf7",
+        "after": "c686c08e611779c060c5c2cea51a7c34cf693edb6610b83a10dbe3e99b6d1d0c"
+      },
+      "src/brass_ai/rust_backend/lab_continuation.py": {
+        "before": "538602cc95aeabbb107119f1b0daeca5b1c768094add2ac316c42949db71660f",
+        "after": "1ff80d1ff8523676fd03a03f9890d14895543029d81715aa9006acd0c2444512"
+      },
+      "src/brass_ai/rust_backend/lab_families.py": {
+        "before": "4e74b139cd40bab7c38ea1a24852d82c9ae04dea7d078595ca4164a41ff48599",
+        "after": "8dc7cb804dba80323688ab70909f4d5edf2f4688e714cb29a4ea41f0b844a26f"
+      },
+      "src/brass_ai/rust_backend/lab_pool.py": {
+        "before": null,
+        "after": "3daf4eef9444029505823bae0baaed999d826772697341bbbb66d4693f0b20a3"
+      }
+    },
+    "scope": "Reuse exact original native binaries and unchanged B05 optimizer/recipe evidence; B07 qualifies changed collection, admission reuse and backend state lifecycle. No automatic production adoption.",
+    "native_binaries_unchanged": true,
+    "teacher_default": "off",
+    "default_without_adoption": "reference",
+    "lab_qualification": "Pending"
+  }
+}

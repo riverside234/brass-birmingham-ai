@@ -5,6 +5,7 @@ the explicit native producer before any trainer can consume them.
 """
 from __future__ import annotations
 from concurrent.futures import ThreadPoolExecutor, wait, FIRST_COMPLETED
+from contextlib import contextmanager
 import copy
 import gzip
 import json
@@ -189,7 +190,18 @@ class FamilyStore:
         return value
 
 
-def collect_families(jobs, store, run_native, run_reference, *, lanes, cancel=None, model_cohorts=False):
+@contextmanager
+def _failure_scope(cancel,on_error):
+    try:yield
+    except BaseException as error:
+        # Wake workers and CPU waiters before executor shutdown joins them.
+        # This also covers dispatcher faults, e.g. duplicate branch messages.
+        if on_error is not None:on_error(error)
+        elif cancel is not None:cancel.set()
+        raise
+
+
+def collect_families(jobs, store, run_native, run_reference, *, lanes, cancel=None, model_cohorts=False,on_error=None):
     """Callbacks receive (job, continuation, submit_branch). Never wait on sibling.
 
     At most 2*lanes unfinished families. This bounds the ready checkpoint queue,
@@ -213,7 +225,7 @@ def collect_families(jobs, store, run_native, run_reference, *, lanes, cancel=No
             except queue.Empty:break
             require(index in active and index not in forked,'Duplicate/stale fork submission')
             forked.add(index);ready.add_branch(dict(jobs=[by_id[index]],continuation=packet))
-    with ThreadPoolExecutor(max_workers=lanes) as workers,ThreadPoolExecutor(max_workers=1) as writer:
+    with ThreadPoolExecutor(max_workers=lanes) as workers,ThreadPoolExecutor(max_workers=1) as writer,_failure_scope(cancel,on_error):
         while len(published)<len(jobs):
             require(cancel is None or not cancel.is_set(),'Collection canceled')
             drain_branches()

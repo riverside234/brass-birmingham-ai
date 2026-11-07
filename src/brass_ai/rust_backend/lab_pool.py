@@ -1,0 +1,268 @@
+"""B07 process-isolated ordinary collector; only bounded receipts reach the learner.
+
+The existing ready-family scheduler still releases branches immediately. Native
+parts cross the coordinator as file/hash handles, never full board histories.
+One isolated publisher performs the existing complete admission exactly once.
+Durable replay and cold reader validation retain the B03 contracts unchanged.
+"""
+from concurrent.futures import ThreadPoolExecutor
+import copy
+import gzip
+import json
+import multiprocessing
+from pathlib import Path
+import queue
+import threading
+import time
+import traceback
+import uuid
+
+from brass_ai.bank import sha
+from brass_ai.learning.contracts import digest, require
+from brass_ai.step5.league import write_json
+from . import lab_admission as admission
+from .lab_collection import collect_lane, frozen_id, route
+from .lab_families import FORMAT, collect_families
+from .lab_transport import Pipe
+
+
+def part_write(directory, part):
+    directory=Path(directory);directory.mkdir(parents=True,exist_ok=True)
+    path=directory/(uuid.uuid4().hex+'.part.json.gz')
+    value=json.dumps(part,separators=(',',':'),allow_nan=False).encode()
+    require(len(value)<=admission.LIMIT,'Native part exceeds bound')
+    with path.open('xb') as raw:
+        with gzip.GzipFile(fileobj=raw,mode='wb',mtime=0,compresslevel=1) as stream:stream.write(value)
+    return dict(path=str(path),sha256=sha(path),branch_expected=part['branch_expected'])
+
+
+def part_read(directory, handle):
+    raw=Path(handle['path']);path=raw.resolve();base=Path(directory).resolve()
+    require(path.parent==base and not raw.is_symlink(), 'Foreign native part path')
+    require(sha(path)==handle['sha256'],'Native part changed')
+    with gzip.open(path,'rb') as stream:data=stream.read(admission.LIMIT+1)
+    require(len(data)<=admission.LIMIT,'Native part exceeds bound')
+    value=json.loads(data)
+    require(value['branch_expected']==handle['branch_expected'],'Native part role changed')
+    return value
+
+
+class Publisher:
+    """Admission-bound durable receipts; unclaimed partial outputs cannot train."""
+    def __init__(self, directory, producer, config, scope):
+        self.directory=Path(directory);self.producer=producer;self.config=config;self.scope=scope
+
+    def binding(self,job):
+        generation=job['provenance'].get('critic_table',{}).get('generation')
+        if generation is None:generation=job['provenance']['exploration']['age']
+        return admission.binding(job,self.producer,generation=generation,
+            model_id=job['provenance']['learner_behavior']['model_id'],config=self.config,scope=self.scope)
+
+    def path(self,job):return self.directory/'replay'/(frozen_id(job)+'.jsonl.gz')
+
+    def load(self,job):
+        path=self.path(job);receipt=path.with_name(path.name+'.record.json')
+        if not receipt.exists():return None
+        record=json.loads(receipt.read_text())
+        require(record['path']==str(path) and record['native_admission']['admission']==self.binding(job),
+                'Cached collection belongs to a different job/producer/config')
+        # A disk sidecar alone cannot confer validation trust after a crash.
+        # Re-admit it against this frozen plan before returning it to the caller.
+        admission.read(path,record['native_admission'],allow_diagnostic=self.scope=='diagnostic',reuse_validation=False)
+        return record
+
+    def publish(self,job,parent,child):
+        parts=self.directory/'parts'
+        handles=[h for h in (parent,child) if h]
+        parent=part_read(parts,parent);child=part_read(parts,child) if child else None
+        value=dict(format=FORMAT,job_id=frozen_id(job),frozen_job={k:v for k,v in job.items() if k!='path'},
+            producer=self.producer,parent=parent,child=child,training_admitted=False)
+        value['sha256']=digest(value)
+        # The sole full family validation is inside admission.publish/convert.
+        # In diagnostic scope still enforce the unchanged natural branch draw.
+        if self.scope=='diagnostic':admission.branch_trigger(value,job,False)
+        began=time.perf_counter()
+        record=admission.publish(self.path(job),value,self.binding(job),validation_receipt=True)
+        record['publication_seconds']=time.perf_counter()-began
+        record['native_metrics']=[dict(role=role,timings=part['timings'],
+            native_cost=part.get('native_receipt',{}).get('cost'))
+            for role,part in (('parent',parent),('child',child)) if part]
+        write_json(Path(record['path']+'.record.json'),record)
+        for handle in handles:
+            path=Path(handle['path']).resolve()
+            require(path.parent==parts.resolve() and sha(path)==handle['sha256'],'Retired native part changed')
+            path.unlink()
+        return record
+
+
+def _writer(connection, directory, producer, config, scope, cpu, stop):
+    import torch
+    from brass_ai.recovery.telemetry import Timings
+    torch.set_num_threads(1);publisher=Publisher(directory,producer,config,scope)
+    connection.send(dict(ready=True))
+    while not stop.is_set():
+        if not connection.poll(.1):continue
+        command=connection.recv()
+        if command is None:return
+        try:
+            with cpu.acquire(1,Timings()):
+                result=getattr(publisher,command['op'])(*command['args'])
+            connection.send(dict(result=result))
+        except BaseException:
+            connection.send(dict(error=traceback.format_exc()));return
+
+
+def _actors(connections, root, build, execution, mono, lease, cpu, stop, directory):
+    import torch
+    from brass_ai.recovery.telemetry import Timings
+    from .lab_b02_smoke import reference_part
+    torch.set_num_threads(execution['worker_threads'])
+    def lane(connection):
+        endpoint=lease.acquire();endpoint.timeout=30.
+        try:
+            with Pipe([mono,build['bootstrap']['binary']['path']],binary=False) as bootstrap:
+                connection.send(dict(ready=True))
+                while not stop.is_set():
+                    if not connection.poll(.1):continue
+                    command=connection.recv()
+                    if command is None:return
+                    job,continuation=command['job'],command['continuation']
+                    try:
+                        with cpu.acquire(1,Timings()):
+                            if route(job)[0]=='rust':
+                                part=collect_lane(root,build['collector']['path'],bootstrap,job,endpoint,execution,
+                                    continuation=continuation,cancel=stop,
+                                    submit_branch=lambda packet:connection.send(dict(branch=packet)))
+                            else:
+                                require(continuation is None,'Reference continuation unsupported')
+                                part=reference_part(root,job,endpoint,execution,mono)
+                            result=part_write(directory,part)
+                        connection.send(dict(result=result))
+                    except BaseException:
+                        connection.send(dict(error=traceback.format_exc()));return
+        finally:endpoint.close()
+    with ThreadPoolExecutor(max_workers=len(connections)) as pool:
+        list(pool.map(lane,connections))
+
+
+class NativePool:
+    def __init__(self,root,service,execution,build,config,signature,*,mono='mono',scope='ordinary'):
+        require(scope in ('ordinary','diagnostic'),'Unknown native pool scope')
+        require(config.get('teacher_phase',{}).get('mode','off')=='off','Ordinary backend requires teacher off')
+        require(config.get('diversity',{}).get('mode','off')=='off','DOMiNO is retired')
+        self.root=Path(root);self.service=service;self.execution=execution;self.build=build
+        self.config=config;self.signature=signature;self.mono=mono or 'mono';self.scope=scope
+        self.last_collection_report=None;self.processes=[];self.connections=[]
+        self.mp=multiprocessing.get_context('spawn');self.stop=self.mp.Event()
+        self.producer=dict(build_sha256=build['_receipt_sha256'],b01_sha256=build['b01']['sha256'],
+                           signature=signature,profile='search_v1',v205_enabled=False)
+
+    def receive(self,connection,*,submit=None,timeout=120):
+        end=time.monotonic()+timeout
+        while time.monotonic()<end:
+            require(not self.stop.is_set(),'Native pool canceled')
+            if connection.poll(.05):
+                try:message=connection.recv()
+                except EOFError as error:raise RuntimeError('Native worker exited without a result') from error
+                require('error' not in message,message.get('error',''))
+                if 'branch' in message:
+                    require(submit is not None,'Unexpected branch reply');submit(message['branch']);continue
+                return message
+            require(self.service.error is None,'Native inference service failed: '+str(self.service.error))
+            require(all(p.is_alive() for p in self.processes),'Native worker exited without a result')
+        raise TimeoutError('Native worker timed out; partial family cannot train')
+
+    def collect(self,jobs,*,on_records=None):
+        require(jobs and not self.processes,'Use a fresh native pool collection')
+        self.stop=self.mp.Event()
+        jobs=copy.deepcopy(jobs)
+        require(all(j['provenance']['spec']==self.signature for j in jobs),'Native collection signature differs')
+        for job in jobs:job.setdefault('stable_game_id',digest(dict(job=frozen_id(job),seed=job['seed'])))
+        parents={Path(j['path']).parent.resolve() for j in jobs}
+        require(len(parents)==1,'Native jobs must share an iteration directory')
+        directory=next(iter(parents))/'native-ordinary';directory.mkdir(parents=True,exist_ok=True)
+        config=self.execution;lanes_per=config['hosts_per_process']
+        # Match ActorPool.start: one process per pending parent up to its cap,
+        # with all configured lanes available for ready continuations.
+        width=min(config['processes'],len(jobs))
+        # Writer and actors share the existing global CPU admission budget.
+        lanes=width*lanes_per;lease=self.service.channels(lanes);available=queue.Queue()
+        began=time.perf_counter();first=[];failure_lock=threading.Lock()
+        def fail(error):
+            with failure_lock:
+                if not first:first.append((error,error.__traceback__))
+            self.stop.set();self.service.cpu.abort()
+        try:
+            for _ in range(width):
+                pairs=[self.mp.Pipe() for _ in range(lanes_per)]
+                p=self.mp.Process(target=_actors,args=([b for a,b in pairs],str(self.root),self.build,config,
+                    self.mono,lease,self.service.cpu,self.stop,str(directory/'parts')))
+                p.start();self.processes.append(p)
+                for a,b in pairs:b.close();self.connections.append(a);available.put(a)
+            writer,child=self.mp.Pipe();self.connections.append(writer)
+            p=self.mp.Process(target=_writer,args=(child,str(directory),self.producer,self.config,self.scope,self.service.cpu,self.stop))
+            p.start();child.close();self.processes.append(p)
+            for connection in self.connections:require(self.receive(connection).get('ready') is True,'Native startup failed')
+            startup=time.perf_counter()-began;writer_lock=threading.Lock();owner=self
+            class Store:
+                def call(self,op,*args):
+                    try:
+                        with writer_lock:
+                            writer.send(dict(op=op,args=args));return owner.receive(writer)['result']
+                    except BaseException as error:fail(error);raise
+                def notify(self,record):
+                    try:
+                        if record and on_records:on_records([record])
+                    except BaseException as error:fail(error);raise
+                def load(self,job):
+                    record=self.call('load',job)
+                    self.notify(record)
+                    return record
+                def publish(self,job,parent,child,*,cancel=None):
+                    require(not owner.stop.is_set(),'Native publication canceled')
+                    record=self.call('publish',job,parent,child)
+                    require(not owner.stop.is_set(),'Native publication canceled')
+                    self.notify(record)
+                    return record
+            def collect(job,continuation,submit):
+                connection=available.get(timeout=120)
+                try:
+                    connection.send(dict(job=job,continuation=continuation))
+                    return self.receive(connection,submit=submit,timeout=360)['result']
+                except BaseException as error:
+                    fail(error);raise
+                finally:available.put(connection)
+            records,report=collect_families(jobs,Store(),collect,collect,lanes=lanes,cancel=self.stop,
+                                          model_cohorts=config.get('model_cohorts',False),on_error=fail)
+            report.update(startup_seconds=startup,processes=width,publisher_processes=1,
+                board_histories_cross_learner=False,full_family_validation_passes_per_publication=1,
+                native_families=sum(route(r['native_admission']['admission']['job'])[0]=='rust' for r in records))
+            self.last_collection_report=report
+            return records
+        except BaseException:
+            self.stop.set();self.service.cpu.abort()
+            if first:
+                error,tb=first[0];raise error.with_traceback(tb)
+            raise
+        finally:self.close()
+
+    def close(self):
+        self.stop.set()
+        for connection in self.connections:
+            try:connection.send(None)
+            except (OSError,EOFError):pass
+        for process in self.processes:
+            process.join(timeout=3)
+            if process.is_alive():
+                import psutil
+                try:descendants=psutil.Process(process.pid).children(recursive=True)
+                except psutil.NoSuchProcess:descendants=[]
+                for child in reversed(descendants):
+                    try:child.kill()
+                    except psutil.NoSuchProcess:pass
+                process.terminate();process.join(timeout=3)
+        for connection in self.connections:connection.close()
+        self.connections=[];self.processes=[]
+
+    def __enter__(self):return self
+    def __exit__(self,*_):self.close()

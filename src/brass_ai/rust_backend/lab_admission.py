@@ -7,6 +7,7 @@ the orchestrator binds to its frozen plan. Diagnostic collections never train.
 from __future__ import annotations
 
 import copy
+from functools import lru_cache
 import gzip
 import json
 import os
@@ -123,9 +124,21 @@ def convert(family, admission, *, allow_diagnostic=False, arrays=None):
     job = admission['job']; proof = job['provenance']; producer = admission['producer']
     checked=validate_family(family, job, producer,arrays=arrays,return_games=True)
     branch_trigger(family, job, admission['scope'] == 'diagnostic')
+    return _assemble(family, admission, checked=checked)
+
+
+def _assemble(family, admission, *, checked=None, arrays=None):
+    """Reconstruct admitted games; arrays-only callers require the writer seal.
+
+    This private path is used only after read() verifies the independently held
+    validation receipt, authoritative replay bytes and every feature-cache byte.
+    It does not accept a family's claim that it has already been validated.
+    """
+    from brass_ai.recovery.replay import CheckedGame
+    job=admission['job'];proof=job['provenance'];producer=admission['producer']
     expected_route = route(job)[0]
-    games = []
-    for part, original in zip((family['parent'], family['child']),checked):
+    games = [];offset=0
+    for index,part in enumerate((family['parent'], family['child'])):
         if part is None: continue
         native = part['producer']['contract'] == 'brass-lab-collection/1.0.0'
         require(native == (expected_route == 'rust'), 'Frozen whole-table route changed')
@@ -143,7 +156,14 @@ def convert(family, admission, *, allow_diagnostic=False, arrays=None):
                     and game[FIELD]['producer'] == local['producer']
                     and part['producer']['runtime']['sha256'] == local['producer']['runtime_sha256'],
                     'Reference scoring provenance differs')
-        game = check_game(game,[original.encoded(r,None) for r in original['records']],validated_inputs=True)
+        if checked is None:
+            require(arrays is not None,'Missing independently attested features')
+            count=len(game['records']);encoded=arrays[offset:offset+count];offset+=count
+            require(len(encoded)==count,'Incomplete attested native features')
+            game=CheckedGame(game).bind(encoded)
+        else:
+            original=checked[index]
+            game = check_game(game,[original.encoded(r,None) for r in original['records']],validated_inputs=True)
         if 'seat_contexts' in proof:
             from brass_ai.recovery.neutral_training import check_rows
             check_rows(game,proof)
@@ -164,6 +184,7 @@ def convert(family, admission, *, allow_diagnostic=False, arrays=None):
             from brass_ai.recovery.domino_sampling import bind
             bind(game,proof)
         games.append(game)
+    require(checked is not None or offset==len(arrays),'Extra attested native features')
     parent = games[0]
     if len(games) == 2:
         arrays = [parent.encoded(r, None) for r in parent['records']]
@@ -172,7 +193,7 @@ def convert(family, admission, *, allow_diagnostic=False, arrays=None):
     return parent
 
 
-def publish(path, family, admission, *, cache=True):
+def publish(path, family, admission, *, cache=True, validation_receipt=False):
     """Exclusive, one-family publication. Retrying requires the identical receipt."""
     game = convert(family, admission, allow_diagnostic=True)
     path = Path(path)
@@ -188,6 +209,7 @@ def publish(path, family, admission, *, cache=True):
         if cache:
             from brass_ai.recovery.replay import write_cache,cache_receipt
             write_cache(path,[game]+game.get('branches',[]));receipt['features']=cache_receipt(path)
+        if validation_receipt:_attest(receipt)
         return record(path, game, admission, receipt)
     temp = path.with_name(path.name + '.' + uuid.uuid4().hex + '.tmp')
     try:
@@ -204,6 +226,7 @@ def publish(path, family, admission, *, cache=True):
     if cache:
         from brass_ai.recovery.replay import write_cache,cache_receipt
         write_cache(path,[game]+game.get('branches',[]));receipt['features']=cache_receipt(path)
+    if validation_receipt:_attest(receipt)
     return record(path, game, admission, receipt)
 
 
@@ -212,7 +235,25 @@ def record(path, game, admission, receipt):
                 sha256=receipt['replay_sha256'], features=receipt.get('features'), native_admission=receipt)
 
 
-def read(path, receipt, *, allow_diagnostic=False):
+@lru_cache(maxsize=1)
+def _validation_version():
+    """Pin the loaded implementation once per immutable worker/reader process.
+
+    Deployment/source admission requires a fresh process. Replay and feature
+    bytes are never cached by stat/mtime; every read still hashes them in full.
+    """
+    from brass_ai.step5.league import implementation_id
+    return implementation_id()
+
+
+def _attest(receipt):
+    # Issued only by the full validator, never by the native collector. The
+    # scheduler/checkpoint retains this receipt separately from the replay.
+    receipt['validation']=dict(contract='brass-native-validation/1.0.0',
+        validator=_validation_version(),receipt_sha256=digest(receipt))
+
+
+def read(path, receipt, *, allow_diagnostic=False, reuse_validation=True):
     require(type(receipt) is dict and receipt.get('contract') == CONTRACT and receipt.get('replay_sha256') == sha(path),
             'Native replay requires its independently bound writer receipt')
     with gzip.open(path, 'rb') as stream: data = stream.read(LIMIT + 1)
@@ -226,6 +267,16 @@ def read(path, receipt, *, allow_diagnostic=False):
     from brass_ai.recovery.replay import load_cache
     games=[family['parent']['game']]+([family['child']['game']] if family['child'] is not None else [])
     arrays=load_cache(path,games,receipt.get('features'))
+    validation=receipt.get('validation')
+    if validation is not None:
+        keys(validation,('contract','validator','receipt_sha256'))
+        require(validation['contract']=='brass-native-validation/1.0.0' and
+                validation['receipt_sha256']==digest({k:v for k,v in receipt.items() if k!='validation'}),
+                'Native validation receipt changed')
+        if reuse_validation and arrays is not None and validation['validator']==_validation_version():
+            admitted=validate_binding(receipt['admission'])
+            require(admitted['scope']=='ordinary' or allow_diagnostic,'Diagnostic replay is not training data')
+            return _assemble(family,admitted,arrays=arrays)
     return convert(family, receipt['admission'], allow_diagnostic=allow_diagnostic,arrays=arrays)
 
 
