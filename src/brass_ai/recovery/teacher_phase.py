@@ -52,6 +52,22 @@ def plan_jobs(config, state, *, model_id, export_hash, epoch, ready, native_sour
                 reservations={str(seat): reserved_rounds(seed, sampling, seat) for seat in range(4)},
                 search=copy.deepcopy(c['search']), unsearched=copy.deepcopy(c['unsearched']),
                 seats=[model_id] * 4, schedule=SCHEDULE, ordinary_training=False))
+    if c.get('seating') == 'all-seat-search':
+        from brass_ai.learning.search_value import binding
+        progress = state.get('search_value', {}).get('stage', state.get('search_value', {}))
+        # A saved machine owns the dynamic blend; it is not a manual recipe
+        # edit and must not reset when the ordinary iteration starts again.
+        if not isinstance(progress, dict): progress = state.get('search_value', {})
+        weight = progress.get('w', c['search_value']['blend']['w'])
+        if c['search_value']['blend']['w'] > 0:
+            require(progress.get('stage') in ('B','head_to_head','C') and
+                    progress.get('w') == c['search_value']['blend']['w'], 'Search blend requires committed stage progress')
+        for job in jobs:
+            job.update(seating=c['seating'], fast_search=copy.deepcopy(c['fast_search']),
+                       search_value=binding(0. if c['search_value']['stage']=='off' else weight))
+        if c['startup'] == 'shadow-until-search-informative' and not progress.get('g0_passed', False):
+            jobs = [j for j in jobs if j['split'] == 'heldout']
+            for job in jobs: job['shadow_probe'] = True
     return jobs, cursor
 
 
@@ -133,7 +149,8 @@ class TeacherPhase:
             # Deferred shard sealing is charged to the final searched turn;
             # it receives no extra allowance of its own.
             require(all(r['metrics']['turns'] and
-                r['metrics']['turns'][-1]['post_search_ns']/1e9 + self.admission_seconds <= 1.
+                r['metrics']['turns'][-1]['post_search_ns']/1e9 + self.admission_seconds <=
+                    (.2 if r['metrics']['turns'][-1].get('profile')=='fast' else 1.)
                 for r in results), 'Teacher sealing exceeded the remaining post-search allowance')
             self.metrics['deferred_sealing_seconds'] = self.admission_seconds
 

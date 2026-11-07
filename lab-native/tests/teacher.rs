@@ -5,6 +5,38 @@ mod baseline {
     include!("../../native/brass-ai-core/tests/sessions.rs");
 
     #[test]
+    fn fast_profile_cutoffs_and_root_mean() {
+        use brass_lab_collector::teacher::{profile_budget, root_value};
+        let mut b = profile_budget(50, true).unwrap();
+        assert_eq!(b.work_deadline_ns, 800_000_050);
+        assert_eq!(b.deadline_ns, 1_000_000_050);
+        assert_eq!(b.reserve_ns, 200_000_000);
+        b.narrow(700_000_050, 9_000_000_000);
+        assert_eq!(b.deadline_ns, 1_000_000_050);
+        let mut stats = brass_ai_core::search::math::Statistics::new(vec![0., 0.], [1.,2.,3.,4.]).unwrap();
+        assert_eq!(root_value(&stats).unwrap(), [1.,2.,3.,4.]);
+        stats.count = vec![2, 1];
+        stats.returns = vec![[2.,4.,6.,8.], [1.,3.,5.,7.]];
+        assert_eq!(root_value(&stats).unwrap(), [1.,2.25,3.5,4.75]);
+    }
+
+    #[test]
+    fn fast_k4_keeps_completed_rounds_and_late_reply_guards() {
+        for late in [0, 3, 7] {
+            let i = input(); let c = Fake::default();
+            let mut e = Eval { clock: &c, calls: 0, late_at: late, cancel: false };
+            let mut options = settings(32); options.search.k = 4;
+            let mut s = Session::new(identity(), &i, options,
+                brass_lab_collector::teacher::profile_budget(0,true).unwrap()).unwrap();
+            s.enable_teacher_exports().unwrap();
+            let out = decide(&mut s,i,&c,&mut e);
+            assert!(out.effective_k <= 4);
+            assert!(out.completed <= 32);
+            if late == 0 { assert_eq!(out.snapshot.unwrap().completed_rounds,2); }
+        }
+    }
+
+    #[test]
     fn full_four_second_search_plus_one_second_post_never_replenishes() {
         use brass_lab_collector::teacher::search_budget;
         let mut b = search_budget(10).unwrap();

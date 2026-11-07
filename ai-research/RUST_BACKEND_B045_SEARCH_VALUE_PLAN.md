@@ -1,7 +1,9 @@
 # B04.5 plan: all-seat teacher tables and a search-value correction head
 
-Date: 2026-11-06 (America/Chicago). Status: **plan only.** No code, checkpoint or
-run state was changed.
+Date: 2026-11-06 (America/Chicago). Status: **implemented; g1250 lab qualification Pending.**
+See [implementation and compatibility notes](RUST_BACKEND_B045_IMPLEMENTATION.md) and
+[qualification commands](../distribution/rust-lab-g1250/README.md). Production checkpoint
+and run state are unchanged; production integration remains gated by B05/B07.
 
 This plan inserts a new step, **B04.5**, between B04 (passed) and B05 in
 [RUST_AI_BACKEND_MIGRATION_PLAN.md](RUST_AI_BACKEND_MIGRATION_PLAN.md). It extends
@@ -83,7 +85,7 @@ N ≈ 160 at 4 s (K = 16 needs 64 for four rounds) and N ≈ 32 at 0.8 s.
   as a zero residual on top of them. A continued run has its mature critic.
 - **Teacher start.** Run 32 tables from the first iteration that has a ready
   utility receipt for the current reward. B04's null-receipt authorisation
-  covers g570 only.
+  covers g570 only. The user also explicitly authorizes null readiness for the exact g1250 B04.5 shadow checkpoint; this does not authorize production teaching.
 - **Order:** A → B → head-to-head → C. This is the LP-FT order. A new, randomly
   initialised head trained together with a pretrained trunk distorts the trunk's
   features while the head is still wrong, so train the head on frozen features
@@ -436,7 +438,7 @@ Add this row to the B4 table, between B04 and B05:
 
 | Step | Implementation / current lab status | Exit scope |
 | --- | --- | --- |
-| B04.5 | **Pending.** All-seat mixed-budget teacher tables (16 × 4 s/K16 labelled + 48 × 0.8 s/K4 unlabelled); root-value export; search-value correction head served as `search_utility`; value buffer, targets and staged training (A/B/head-to-head/C) | GPU estimate recalibrated; root-value and `search_utility` parity; at w = 0, full-profile searches reproduce B04; two-table all-seat shadow; one head-only update; no production teaching |
+| B04.5 | **Implemented; g1250 lab qualification Pending.** All-seat mixed-budget teacher tables (16 × 4 s/K16 labelled + 48 × 0.8 s/K4 unlabelled); root-value export; search-value correction head served as `search_utility`; value buffer, targets and staged training (A/B/head-to-head/C) | GPU estimate recalibrated; root-value and `search_utility` parity; at w = 0, full-profile searches reproduce B04; two-table all-seat shadow; one head-only update; no production teaching |
 
 Then add a short `#### B04.5 — Search-play value` section linking to this file.
 

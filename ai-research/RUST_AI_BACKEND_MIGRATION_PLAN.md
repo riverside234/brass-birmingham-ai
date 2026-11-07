@@ -794,9 +794,10 @@ The first server build must reference this receipt and the same shared-core sour
 
 ## Part 2 — Lab server: migrate training after local acceptance
 
-**Revised 2026-11-03.** B01–B04 qualification targets the **latest committed iteration of `joint7-v11-2-g1290-trained-restart`, such as g570**, using the requested `joint7-v11-2-g1290-trained-restart-g370.json` recipe. The launcher captures the actual generation/checkpoint/config identity once and holds it fixed throughout qualification; The supplied g570 report is the current reference; explicit g570 commands pin its full checkpoint, while latest-state capture remains available. **DOMiNO is off and will not be used. AZ_DB is retired and its implementation has been removed from the current teacher/backend path.** Use neutral task-only `search_v1`; search_v2 and V205 remain disabled. The [restart refresh report](RUST_BACKEND_G570_REFRESH.md) and [current bundle commands](../distribution/rust-lab-g570/README.md) supersede the g1326/g1330 qualification instructions. Historical archives and reports remain unchanged evidence of their original scopes.
+**Revised 2026-11-06.** B01/B02/B02.5/B03/B04 passed on g570. B04's passing evidence is `results/rust-lab-qualification/20261104T022520138504Z-20261104T022431456929Z-g570-b04-845a2a56-36de5c8d`. Do not repeat these successful qualifications. Their receipts retain their original source/model scope.
 
-**B01, B02 and B02.5 passed on g570 / cuda:0 in r7, and B03 passed in r9.** B02 completed all three families and its branch in 204.513 seconds. B03 restored the full model/Adam/PPG/auxiliary/RNG state and admitted sealed replay, with one saved CUDA stream restored on a host exposing eight devices. B04 built and passed fixtures/native tests, then deferred before table dispatch because its receipt was null. **The user accepts null utility readiness for the exact g570 checkpoint.** The [r10 repair](RUST_BACKEND_B04_G570_READINESS_FIX.md) records that assumption without changing checkpoint metadata and seals exact reuse of the successful prerequisites and B04 native build. Run only B04 using the [current command](../distribution/rust-lab-g570/README.md); do not repeat B01/B02/B02.5/B03 or recollect B02 games. B04 GPU/search qualification and B05–B07 remain Pending.
+**B04.5 now targets g1250** of `joint7-v11-2-g1290-trained-restart`, report `results/joint7-v11-2-g1290-trained-restart-g1250-20261107T041141451177Z`, checkpoint `de427bb22e38cc5dc9d4e79151cccdb321650c02978f79bcdad746c3e6be7985`. Use the exact recorded config, including current collection and PPG performance improvements. The [g1250 bundle](../distribution/rust-lab-g1250/README.md) runs only the new step and exports a fresh results folder. Earlier qualification ZIPs are retired from Git tracking; g1250 carries the sealed inputs it needs. **DOMiNO and AZ_DB remain off; search_v1 remains the default and V205 stays disabled.** The user authorizes null utility readiness for this exact g1250 shadow only; preserve the null and record the assumption without modifying checkpoint metadata. Production teaching remains gated by B05/B07.
+
 
 ### B1. Entry gate and current self-play contract
 
@@ -805,28 +806,28 @@ Part 1's accepted local rules/features/search lifecycle is the starting point. P
 | Binding | Reference and qualification policy |
 | --- | --- |
 | Run | `artifacts/step5/joint7-v11-2-g1290-trained-restart` |
-| Qualification checkpoint | Latest committed iteration, e.g. g570; automatically captured once and held fixed |
-| Report | `results/joint7-v11-2-g1290-trained-restart-g0570-20261103T190804654465Z` |
-| Committed progress in report | g570, 182,400 ordinary games |
-| Report checkpoint | `generation-0570.pt`, SHA-256 `06626c1fb7d0b91f64d939f9fbb3db7c5f3aa072331eb3d773f101e729117ab9` |
-| Report model | `18f42a48933c18095d96f1cc64b836d3f9aac92361a4e4ee7c423830d9a11a91` |
-| Saved report source | `f7a48a025e2c247e63da4df301ce2b80c7c6aabf1073220a5be97f0929719c78` |
-| Qualification config | [Exact recorded g570 config](../results/joint7-v11-2-g1290-trained-restart-g0570-20261103T190804654465Z/recorded-config.json), identical to the g370 recipe |
+| Qualification checkpoint | Exact g1250 for B04.5; later milestones pin their actual committed iteration |
+| Report | `results/joint7-v11-2-g1290-trained-restart-g1250-20261107T041141451177Z` |
+| Committed progress in report | g1250, 400,000 ordinary games |
+| Report checkpoint | `generation-1250.pt`, SHA-256 `de427bb22e38cc5dc9d4e79151cccdb321650c02978f79bcdad746c3e6be7985` |
+| Report model | `0e1fe1357722a45ee274edeb2fc7932db3d081719027c6e043647e034f5b0985` |
+| Saved report source | `921a020f0254aed9aea7cab5e2dde9390c995138e4b2e7f3a3dbb31c8910a8d6` |
+| Qualification config | [Exact recorded g1250 config](../results/joint7-v11-2-g1290-trained-restart-g1250-20261107T041141451177Z/recorded-config.json), including collection performance and PPG v24 updates |
 | Teacher | Off by default. Separate task-only policy-distillation phase; dormant legacy `teacher_value.enabled=true` is disabled only by explicit teacher-phase adoption. |
 
-**The g570 report already uses the g370 recipe.** Qualification now defaults to that report's exact `recorded-config.json`: GAE 0.95/floor 0.95, 0.5% T2-only branches and PPG v20 beta floor 1. The newer optional g570/entropy/branch/V4-history revisions in the checkout are not inferred as adopted from this report. Require the committed config to match and restore the actual checkpoint's phase state exactly. Do not repeat a completed config adoption or change the reward during backend qualification. Explicit g570 commands assert the report's generation/hash; if training has advanced, capture its actual latest state without rewinding.
+**The g1250 report supersedes the historical g570 recipe for new work.** Require its exact committed config and restore the checkpoint's phase state; do not replay old config adoptions, change rewards or rewind production progress for qualification. B04.5 checks the pinned g1250 source in a shadow scope. If the production run has advanced, use a separately preserved g1250 run with its original full dependencies, rather than editing its state to impersonate g1250.
 
-Preserve the restart's actual neutral recipe: four zero style and eight zero intent inputs for neural seats, neutral 28-column fingerprints with the unchanged 34-column critic interface, AnchorKL and context panels off, fixed group entropy 0.005, epsilon 0.05, T1.3 for the first three actions per neural seat then T1, insolvency cost 0.02/event capped at 0.075, economic-only LR control, current local-scoring auxiliaries and PFSP/manual-startup provenance. The existing g1290 seed was a past weights-only initialization of this run. **Backend migration must resume the full g370-or-later checkpoint; do not repeat that initialization, reset progress, re-enable DOMiNO or return to the old grouped-lr-critic run.**
+Preserve the restart's actual neutral recipe: four zero style and eight zero intent inputs for neural seats, neutral fingerprints, AnchorKL and context panels off, the committed entropy-anneal state, exploration 0, T1.3 for the first three actions per neural seat then T1, capped VP reward (180), insolvency cost 0.0025/event capped at 0.025, economic-only LR control, current local-scoring auxiliaries and PFSP/manual-startup provenance. The existing g1290 seed was a past weights-only initialization of this run. **Backend migration must resume the full current checkpoint; do not repeat that initialization, reset progress, re-enable DOMiNO or return to the old grouped-lr-critic run.**
 
-PPG retains two ages, up to two epochs each iteration, batch 4096, clone set 8192/batch 512, loss/warmup checks at step 16, KL checks at step 32, cap 0.002 and the existing 0.65 × last-applied-PPO LR schedule. Preserve saved beta/trips above the new floor, selected checkpoint/rollback, short tails, CPU preparation/cache fixes and honest unknown/unchecked KL telemetry. Inspect the real config and live state again before later implementation; these values are not permission to overwrite an updated recipe.
+PPG retains two ages, up to two epochs each iteration, batch 4096, clone set 8192/batch 512, loss/warmup checks at step 16, KL checks at step 32, ordinary cap 0.003 and the existing 0.65 × last-applied-PPO LR schedule. Preserve saved beta/trips, selected checkpoint/rollback, short tails, sparse PPO probes, admitted-input reuse, CPU preparation/cache fixes and honest unknown/unchecked KL telemetry. The added search-value trunk pass uses the stricter combined cap `min(0.002, ordinary_cap)`. Inspect the real config and live state again before later implementation; these values are not permission to overwrite an updated recipe.
 
 #### search_v1 contract for the lab adapter
 
 Use the pinned existing Rust `search_v1` Gumbel IS-MCTS equations and session lifecycle: full legal priors, raw actor task utility, c1=50/c2=0.1, Gumbel root candidates, sequential halving, completed-round recommendation eligibility, information-set ownership, exact terminal settlement and causal insolvency ledger. Root belief sampling remains the admitted current-view approximation. No negamax, Q normalization, hidden-state policy leakage, tree-sharing, search_v2 or V205 substitution.
 
-The current teacher profile is `teacher-phase/1.1.0`, producer `brass-lab-teacher/1.1.0`. Every searched ordinary turn gets **4 seconds of search admission plus at most 1 additional second of post-search work**, K16, one session/thread/pending path per table. Two smoke tables run concurrently in separate one-thread sessions. Finalization is not deducted from the four seconds. Search may finish early under its frozen quota/admission rules; unused time does not authorize more search during finalization. Action two, payment, continuation, bonus and replans retain the same absolute search/delivery cutoffs and cumulative post-work cap.
+The historical B04 teacher profile is `teacher-phase/1.1.0`, producer `brass-lab-teacher/1.1.0`; B04.5 extends these to version 2.0.0 for all-seat search. The 16 reserved full-profile turns get **4 seconds of search admission plus at most 1 additional second of post-search work**, K16. The other 48 turns get 0.8s/K4 plus at most 0.2s post-work and no policy labels. Keep one session/thread/pending path per table. Two smoke tables run concurrently in separate one-thread sessions. Finalization is not deducted from search time. Search may finish early under its frozen quota/admission rules; unused time does not authorize more search during finalization. Action two, payment, continuation, bonus and replans retain the same absolute search/delivery cutoffs and cumulative post-work cap.
 
-Measure selection, label construction, actual-state commit, verification/encoding, IPC, deferred sealing and total delivery separately. Complete-turn labels cross IPC together. Keep all identity, actor/revision, cancellation, actual-successor, legality, finite tensor, target and logit checks. A one-use frozen verification cache avoids repeating those checks at the phase barrier; changed model/job/table bytes invalidate it. Fast shard compression and small receipts reduce sealing cost. Charge deferred sealing to the last searched turn's remaining one-second allowance; never grant a new allowance for it. Late results fail publication. The 30-second process watchdog is failure recovery, not permitted latency. Historical 4-second-inclusive/0.4-second-reserve receipts cannot establish this new timing gate.
+Measure selection, label construction, actual-state commit, verification/encoding, IPC, deferred sealing and total delivery separately. Complete-turn labels cross IPC together. Keep all identity, actor/revision, cancellation, actual-successor, legality, finite tensor, target and logit checks. A one-use frozen verification cache avoids repeating those checks at the phase barrier; changed model/job/table bytes invalidate it. Fast shard compression and small receipts reduce sealing cost. Charge deferred sealing to the last searched turn's remaining post-work allowance (1s full, 0.2s fast); never grant a new allowance for it. Late results fail publication. The 30-second process watchdog is failure recovery, not permitted latency. Historical 4-second-inclusive/0.4-second-reserve receipts cannot establish this new timing gate.
 
 #### Required continuation of joint7-v11-2-g1290-trained-restart
 
@@ -858,7 +859,8 @@ Keep Python target construction, GAE, PPO behavior likelihoods, critic/local-sco
 | B02 | r7 **passed**; retained by the r10 exact reuse review | Three frozen families plus branch; 204.513-second collection command under the 240-second watchdog; no recollection |
 | B02.5 | r7 **passed for its reported fixture/device/adoption scope** | Default-off teacher fixtures and read-only optimizer adoption check; no live teacher qualification |
 | B03 | r9 **passed for g570 / cuda:0**; retained by r10 review | Complete isolated full-checkpoint restoration and sealed replay admission; no rerun |
-| B04 | r9 native build/tests passed; r10 accepts the pinned g570 null receipt; **GPU/search Pending** | Reuse the verified build; actual GPU calibration, two-table shadow, timing/correctness |
+| B04 | **Passed on g570** | Existing GPU calibration, two-table shadow and bounded post-work evidence retained |
+| B04.5 | Implemented; **g1250 Linux/CUDA qualification Pending** | All-seat full/fast search, root-value and sixth-output parity, eight-age value buffer, staged correction-head training; two shadow tables and one isolated head update |
 | B05 | **Pending** | Current neutral PPO/PPG/local-scoring update, interrupted commit/restart and teacher term |
 | B06 | **Pending** | Matched backend throughput and separately measured teacher overhead |
 | B07 | **Pending** | Short canary, exact latest-run adoption/rollback and explicit later teaching decision |
@@ -907,9 +909,19 @@ Calibrate the actual GPU path on one typical and one wide/complex root with boun
 
 Compare the once-only verification path against the previous end-of-table verification baseline on the same frozen labels/model, outside the timed collection. Require identical admitted labels/rejections and measure reduction in the final verification pause while reporting total streamed verification cost; record CPU/device, row counts and all measured stages. Do not remove required legality or provenance checks to improve the measurement. No long sessions or production teaching.
 
+#### B04.5 — Search-play value
+
+Follow [RUST_BACKEND_B045_SEARCH_VALUE_PLAN.md](RUST_BACKEND_B045_SEARCH_VALUE_PLAN.md) and the [implementation/compatibility notes](RUST_BACKEND_B045_IMPLEMENTATION.md). The lab Rust protocol is version 2; deployment stays on its existing main-utility path. All 64 turns search: 16 reserved full turns at 4s/K16 plus at most 1s post-work, 48 unlabelled fast turns at 0.8s/K4 plus at most 0.2s post-work. Use one session/thread per table. Keep policy labels unchanged and value rows entirely separate from ordinary replay.
+
+The opt-in, zero-initialized registered correction head, companion Adam, lambda returns, eight-age reward-bound buffer, deterministic G0/G1/G2 gates, stage machine and guarded post-PPG pass are implemented. Teacher modes remain disabled in production. The separate 256-game 2v2/seat-rotation evaluation tool is not part of smoke tests.
+
+The g1250 qualifier excludes cold warmup from the trajectory estimate, takes three warm probes per root type, checks both profiles and full-profile zero-blend parity, then runs exactly two shadow tables (one train/one held-out) and one head-only update on copied weights. No earlier qualification or production update is repeated. Use the g1250 null-receipt authorization only for the pinned shadow checkpoint; explicit false/reward mismatches still fail.
+
+Preserve current admitted-input reuse, central GPU batching, shared-memory transport, demand routing, candidate padding controls, PPG caches and current learning-rate schedule. g1250 ordinary PPG uses a 0.003 cap; B04.5's shared cap is min(0.002, the current ordinary cap), measured against the pre-PPG probe. Skip its trunk pass if the ordinary phase already uses that budget. Do not regress the ordinary phase to an older recipe.
+
 #### B05 — Qualify PPO/PPG, interruption and resume
 
-**Pending implementation and lab qualification.** Bind the actual latest restart G/checkpoint/config and current B04 evidence. This is the original teacher plan's T3 work with task-only semantics.
+**Pending implementation and lab qualification.** Bind the actual latest restart G/checkpoint/config and B04/B04.5 evidence. Wire the search-value lifecycle into the committed iteration after the ordinary PPG phase. Qualify value-buffer reload, stage/blend/scale/lambda/gate persistence, companion Adam restoration, head-only gradient allowlists, shared-probe KL accounting and full model/Adam/companion rollback; interrupt at every stage transition. Preserve collection and current PPG performance improvements. This is the original teacher plan's T3 work with task-only semantics.
 
 1. Compare reference/Rust fixed ordinary families using the same neutral recipe, seed/RNG, targets, current snapshot weight, local-scoring labels, optimizer groups and preparation/cache implementation. Keep GAE 0.95, entropy 0.005, T1.3 openings, epsilon 0.05, 0.5% T2 forks and beta floor 1 unless the live run has a later reviewed config.
 2. Run a short diagnostic ordinary PPO update and PPG acceptance/rollback sequence. Verify two-age reuse, step-16 loss/warmup and step-32 KL checks, short tails, beta/trip updates, shared model plus local-scoring companion selection and rollback. Preserve the source run; use fixed tiny data/fixtures for rare acceptance/rejection cases, without inventing real training qualification.
@@ -927,6 +939,8 @@ Exit separately records ordinary-update equivalence, task-only teacher update qu
 For enabled task-only teacher overhead, use a separately frozen 4s/K16, two independent one-thread-session profile. Both comparison arms get the same 4-second search plus <=1-second post-work contract. Compare typical and complex states with counterbalanced order and short bounded samples. Report completed trajectories/rounds, valid labels, effective K, inference waits, finalization/validation/IPC/sealing and total latency; show failures and p90/max alongside medians. Compare the previous table-batched verifier and streamed verification/reuse on identical frozen labels outside collection. Historical inclusive-4s or AZ_DB timings are not matched controls.
 
 Measure teacher collection, buffer operations and the PPO teacher term separately from ordinary backend speed. Keep normal teacher enablement, quality gates, resource recipe, cache warm state, job mix and learner objective unchanged. No additional full-game campaign, altered branch frequency, skipped legal checks, forced utility calibration or intrinsic experiments. Claim whole-iteration improvement only after measuring a whole comparable iteration; phase estimates are estimates. Preserve useful measured optimizations with transparent correctness and latency results; a single statistical threshold is not an automatic rollback command.
+
+B06 also measures all-seat teacher tables separately from the older policy-only schedule: per-table wall time, lane-seconds, inference evaluations, GPU queue wait and search-value pass cost. Preserve the g1250 collection/caching baseline for comparison. B07's initial canary uses at most two all-seat tables per pass at w=0; progression through A/B/head-to-head/C and any Unity/ORT deployment require their separate gates.
 
 #### B07 — Bounded server canary, then explicit adoption
 
@@ -957,7 +971,7 @@ Restart discards live trees, GPU owners, clocks and transient verification cache
 
 Keep full model and PPO/PPG/local-scoring optimizer tensors, RNG/gates/counters, source-transition backups, seed/IL/population references, cache payloads/owner metadata and optional teacher receipts needed by every supported rollback. Metadata summaries alone cannot restore training. Use existing strict cache rebuild/ownership rules for source-bound caches; never delete the previous critic age just to clear a compatibility error. Teacher cleanup must respect committed checkpoints and rollback horizons.
 
-Each future milestone publishes a **new immutable bundle under `distribution/`**, its current plan and manifests, exact latest-state commands and honest Pending/pass/deferred scopes. Old ZIPs are never resealed. Current launchers verify the g570 supplement and reject remaining retired AZ_DB source files; pull the matching checkout with deletions before extracting it. Export every attempt to a fresh Git-visible `results/rust-lab-qualification/` folder, including failures/deferrals; preserve original lab receipts for dependent gates.
+Each future milestone publishes a **new immutable bundle under `distribution/`**, its current plan and manifests, exact state commands and honest Pending/pass/deferred scopes. Old ZIPs are never resealed. The current B04.5 launcher verifies the self-contained g1250 supplement; pull the matching checkout with deletions before extracting it. Obsolete ZIPs are untracked with `git rm --cached` and kept locally. Export every attempt to a fresh Git-visible `results/rust-lab-qualification/` folder, including failures/deferrals; preserve original lab receipts for dependent gates.
 
 ### B7. Lab risks and completion checklist
 
@@ -975,11 +989,12 @@ Each future milestone publishes a **new immutable bundle under `distribution/`**
 - [x] B01–B04 source/bundle defaults refreshed to the latest committed restart iteration and requested g370 recipe; current default is search_v1, task-only, V205 off. Optional generation/hash arguments assert the latest state rather than selecting an old checkpoint.
 - [x] AZ_DB teacher/intrinsic backend code removed; active lab collection rejects DOMiNO-enabled configs.
 - [x] New 4s search plus <=1s post contract, batched per-turn verification and once-only phase admission implemented.
-- [ ] B01 Linux/GPU adapter gates pass at the actual current source/checkpoint/config.
-- [ ] B02 ordinary/branch families pass under the actual neutral restart recipe.
-- [ ] B02.5 task-only teacher adoption/restore and CUDA policy fixtures pass on the lab.
-- [ ] B03 actual full-checkpoint/PPG/local-scoring/RNG/gate restoration and existing-family admission pass.
-- [ ] B04 current-reward readiness, typical/complex calibration, two shadow tables and bounded post-work checks pass.
+- [x] B01 Linux/GPU adapter gates passed on the original pinned g570 source/checkpoint/config.
+- [x] B02 ordinary/branch families passed under the qualified g570 neutral restart recipe.
+- [x] B02.5 task-only teacher adoption/restore and CUDA policy fixtures passed in their original lab scope.
+- [x] B03 full-checkpoint/PPG/local-scoring/RNG/gate restoration and existing-family admission passed in their original lab scope.
+- [x] B04 passed on g570; retain the original evidence.
+- [ ] B04.5 g1250 GPU recalibration, full/fast timings, two all-seat shadow tables and isolated head update pass on the lab.
 - [ ] B05 fixed-data PPO/PPG/companion equivalence, teacher term, interruption and old/new age reload pass without resetting the run.
 - [ ] B06 proves useful matched performance and separately accounts for teacher/validation costs without correctness loss.
 - [ ] B07 short canary, latest-state backend adoption with teacher off, next normal commit/restart and complete rollback pass.

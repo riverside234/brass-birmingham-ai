@@ -340,9 +340,13 @@ class InferenceService:
         # Each entry has only tensors derived from one permitted observer.
         by_model=defaultdict(list)
         for key,frame in items:
-            require(set(frame)-{'want_logits'} in ({'request_id','model','revision','seat','digest','deadline','submitted','cancelled','encoded'},
+            require(set(frame)-{'want_logits','search_value'} in ({'request_id','model','revision','seat','digest','deadline','submitted','cancelled','encoded'},
                                   {'request_id','model','revision','seat','digest','deadline','submitted','cancelled','encoded','remaining'}),'Invalid inference frame')
             require('want_logits' not in frame or frame['want_logits'] is True,'Invalid raw-logit request')
+            if 'search_value' in frame:
+                from brass_ai.learning.search_value import validate_binding
+                validate_binding(frame['search_value'])
+                require(frame.get('want_logits') is True, 'Search utility requires teacher inference')
             require(type(frame['seat']) is int and 0<=frame['seat']<4 and np.isfinite(frame['deadline']),'Invalid inference attribution')
             self.timings.observe('inference.queue_wait',max(0,time.monotonic()-frame['submitted']))
             status='cancelled' if frame['cancelled'] else ('expired' if time.monotonic()>=frame['deadline'] else None)
@@ -393,7 +397,9 @@ class InferenceService:
                         raw_logits=any(f.get('want_logits',False) for _,f in live)
                         if raw_logits:
                             from brass_ai.rust_backend.lab_teacher_inference import predict
-                        arrays=predict(model,[f['encoded'] for _,f in live],self.device,self.config['max_candidate_cells'],remaining)
+                        search_values = any('search_value' in f for _,f in live)
+                        options = dict(weights=[f.get('search_value', {}).get('w', 0.) for _,f in live]) if search_values else {}
+                        arrays=predict(model,[f['encoded'] for _,f in live],self.device,self.config['max_candidate_cells'],remaining, **options)
                         if self.pack_outputs and max(len(f['encoded'].choice_ids) for _,f in live)<=self.config['max_candidate_cells']:
                             self.metrics['packed_output_batches']+=1
                 meter['forward_seconds']+=time.perf_counter()-forward_started
@@ -421,6 +427,8 @@ class InferenceService:
                             r.update(utility=values(arrays[4][j]),reward_id=digest(model.config.utility))
                         if frame.get('want_logits'):
                             r['logits']=values(arrays[-1][j,:len(frame['encoded'].choice_ids)])
+                        if 'search_value' in frame:
+                            r.update(search_value=frame['search_value'], search_utility=values(arrays[5][j]))
                     responses[key]=r
         return responses
 

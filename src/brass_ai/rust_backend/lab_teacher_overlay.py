@@ -10,7 +10,7 @@ import hashlib
 from brass_ai.learning.contracts import SOURCE_ROOT, digest, require
 from .lab_contract import SOURCE, native_fingerprint
 
-CONTRACT = 'brass-lab-teacher/1.1.0'
+CONTRACT = 'brass-lab-teacher/2.0.0'
 
 
 def source_fingerprint():

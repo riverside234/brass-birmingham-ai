@@ -1,3 +1,7 @@
+# Current qualification: B04.5 at g1250
+
+Use [the g1250 bundle and commands](rust-lab-g1250/README.md). B01–B04 passed on g570; do not rerun them. The g1250 bundle carries its own baseline inputs. Earlier ZIP archives are retired from tracking and the following instructions are historical.
+
 # B01/B02 search_v1 qualification bundles
 
 **Current qualification (2026-11-03):** use the [g570-r10 B01–B04 bundle](rust-lab-g570/README.md). **B01, B02, B02.5 and B03 passed; run B04 only.** The user-authorized null utility receipt is accepted for the exact g570 checkpoint and recorded as an assumption. Reuse the original B02/B03 receipts and the verified B04 native build. No successful prior qualification or collection needs repeating. B04 GPU/search work remains Pending. Production training, task-only search_v1, 4s plus at most 1s post-search, K16, and disabled DOMiNO/AZ_DB/V205 remain unchanged. Follow the current README rather than historical commands below.

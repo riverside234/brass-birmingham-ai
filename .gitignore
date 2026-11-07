@@ -680,3 +680,23 @@ Desktop.ini
 !/ai-research/vp-history/
 /ai-research/vp-history/*
 !/ai-research/vp-history/joint7-v11-2-g1290-trained-restart/
+
+# Retired qualification archives are kept locally, not tracked or re-pushed.
+/distribution/rust-lab-b01/*.zip
+/distribution/rust-lab-b02/*.zip
+/distribution/rust-lab-b025/*.zip
+/distribution/rust-lab-b03/*.zip
+/distribution/rust-lab-b04/*.zip
+/distribution/rust-lab-g1326/*.zip
+/distribution/rust-lab-g1330/*.zip
+/distribution/rust-lab-restart/*.zip
+/distribution/rust-lab-g570/*.zip
+# Current self-contained B04.5 g1250 supplement.
+!/distribution/rust-lab-g1250/
+/distribution/rust-lab-g1250/*
+!/distribution/rust-lab-g1250/README.md
+!/distribution/rust-lab-g1250/bundle.json
+!/distribution/rust-lab-g1250/manifest.json
+!/distribution/rust-lab-g1250/training-reference.json
+!/distribution/rust-lab-g1250/local-checks.json
+!/distribution/rust-lab-g1250/rust-lab-b045-g1250.zip

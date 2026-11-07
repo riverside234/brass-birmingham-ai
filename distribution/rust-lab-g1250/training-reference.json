@@ -1,0 +1,17 @@
+{
+  "run": "artifacts/step5/joint7-v11-2-g1290-trained-restart",
+  "generation": 1250,
+  "checkpoint": {
+    "path": "artifacts/step5/joint7-v11-2-g1290-trained-restart/generation-1250.pt",
+    "sha256": "de427bb22e38cc5dc9d4e79151cccdb321650c02978f79bcdad746c3e6be7985",
+    "model_id": "0e1fe1357722a45ee274edeb2fc7932db3d081719027c6e043647e034f5b0985",
+    "generation": 1250
+  },
+  "config_sha256": "895d866502425dad30f2277b822dba2a15247f9a701d2dd5dd10b7e396de3ca8",
+  "implementation": "921a020f0254aed9aea7cab5e2dde9390c995138e4b2e7f3a3dbb31c8910a8d6",
+  "report": "results/joint7-v11-2-g1290-trained-restart-g1250-20261107T041141451177Z",
+  "report_state_sha256": "5b75066f6f8daeea3df3df13df03875adb3fefe4c317f7fbdbe26c82e8d5c667",
+  "lab_qualification": "Pending",
+  "production_teacher": "off",
+  "null_receipt": "User-authorized for this exact g1250 shadow only"
+}

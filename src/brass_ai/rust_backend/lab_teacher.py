@@ -27,6 +27,16 @@ def validate_job(job):
     require(digest(job['search']) == digest(expected['search']) and job['unsearched'] == expected['unsearched']
             and job['schedule'] == SCHEDULE, 'Unqualified teacher profile')
     admit_search_request(PROFILE,{k:v for k,v in job['search'].items() if k != 'v205_enabled'})
+    if job.get('seating') == 'all-seat-search':
+        from brass_ai.recovery.search_value_config import fast_profile
+        from brass_ai.learning.search_value import validate_binding
+        require(job['fast_search'] == fast_profile(job['search']), 'Fast teacher profile differs')
+        validate_binding(job['search_value'])
+        require(not job.get('shadow_probe') or job['split']=='heldout', 'From-zero probes must stay held out')
+        if job.get('h2h'):
+            from brass_ai.learning.search_value import binding
+            require(len(job['seat_values']) == 4 and job['seat_values'].count(binding(0)) == 2
+                and job['seat_values'].count(binding(1)) == 2, 'Head-to-head needs two main and two corrected seats')
     e = job['expected']
     require(job.get('readiness',{}).get('ready') is True and job['readiness']['reward_id'] == e['reward_id'],
             'Teacher readiness deferred; no local deployment exception')
@@ -44,6 +54,7 @@ class Worker:
     """Length-bounded stdout pump permits cancellation even in native traversal."""
     def __init__(self, executable, request, client, cancel):
         self.client, self.cancel = client, cancel
+        self.job = request.get('job', {})
         self.process = subprocess.Popen([str(executable)], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
             stderr=subprocess.PIPE, bufsize=0, creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0))
         self.events = queue.Queue(2); self.stop = threading.Event(); self.stderr = bytearray()
@@ -87,11 +98,11 @@ class Worker:
             n = self.process.stdin.write(view);require(n,'Teacher input closed');view = view[n:]
 
     def collect(self, expected, core_source, *, calibration=False, verifier=None, turn_probe=False):
-        rows = []; hello = False; started = last = time.monotonic()
+        rows = []; values = []; hello = False; started = last = time.monotonic()
         try:
             while True:
                 require(not self.cancel.is_set(),'Teacher table cancelled; discard unpublished labels')
-                require(time.monotonic()-started < 180,'Teacher table watchdog; incomplete table discarded')
+                require(time.monotonic()-started < (420 if getattr(self, 'job', {}).get('h2h') else 180),'Teacher table watchdog; incomplete table discarded')
                 require(time.monotonic()-last < 30,'Stuck native search watchdog; no labels admitted')
                 try:event = self.events.get(timeout=.05)
                 except queue.Empty:continue
@@ -114,21 +125,24 @@ class Worker:
                             'Unexpected/unverified/excess teacher turn')
                     self.send(verifier.verify(meta,received))
                     rows.extend(meta['rows'])
+                    if meta.get('value_row') is not None: values.append(meta['value_row'])
                 elif kind == 'calibration':
                     require(calibration and meta['completed'] == 8 and meta['elapsed_ns'] > 0,'Incomplete calibration')
                     require(not self.cancel.is_set(),'Teacher calibration cancelled before publication')
                     return meta
                 elif kind == 'turn_probe':
                     require(turn_probe and meta['job'] == expected and meta.get('diagnostic') is True
-                            and meta['metrics']['reserved_turns'] == 1 and meta['metrics']['labels'] == len(rows)
+                            and len(meta['metrics']['turns']) == 1 and meta['metrics']['labels'] == len(rows)
                             and not self.cancel.is_set(), 'Incomplete/late/misrouted turn probe')
-                    return dict(meta,rows=rows)
+                    return dict(meta,rows=rows,value_rows=values)
                 elif kind == 'finished':
                     require(not calibration and not turn_probe and meta['job'] == expected and meta['ordinary_training'] is False
-                            and meta['metrics']['labels'] == len(rows) and meta['metrics']['reserved_turns'] == 16,
+                            and meta['metrics']['labels'] == len(rows) and meta['metrics']['reserved_turns'] == (64 if getattr(self,'job',{}).get('h2h') else 16),
                             'Incomplete/misrouted teacher table')
                     require(not self.cancel.is_set(),'Teacher table cancelled before publication')
-                    return dict(job_id=expected['job_id'],rows=rows,metrics=meta['metrics'],result=meta['result'])
+                    require(meta.get('value_rows', []) == values, 'Changed root value stream')
+                    return dict(job_id=expected['job_id'],rows=rows,metrics=meta['metrics'],result=meta['result'],
+                                value_rows=values, final_spent=meta.get('final_spent'))
                 else:raise ValueError('Unknown teacher event')
         finally:self.close()
 
@@ -184,7 +198,7 @@ class TeacherCollector:
                     with Pipe(self.bootstrap,binary=False) as bootstrap:origin = bootstrap.call('init',seed=job['seed'])
                     request = dict(contract=CONTRACT,op='run',job=job,origin=origin,core_source=self.core_source,
                                    estimate_ns=c['estimate_ns'],calibration_id=digest(c))
-                    client = Client(endpoint,job['expected'],self.cancel)
+                    client = Client(endpoint,job['expected'],self.cancel,job.get('search_value'),job.get('seat_values'))
                     result = Worker(self.executable,request,client,self.cancel).collect(job['expected'],self.core_source,
                         verifier=self.verifier)
                 result['metrics']['python_gpu_wait_seconds'] = client.wait_seconds
@@ -204,18 +218,24 @@ class TeacherCollector:
 def calibrate(executable, core_source, origins, job, service):
     validate_job(job);lease = service.channels(1);e = lease.acquire();cancel = threading.Event();samples = []
     try:
-        for origin in origins:
-            request = dict(contract=CONTRACT,op='calibrate',job=job,origin=origin,core_source=core_source)
-            client = Client(e,job['expected'],cancel)
-            samples.append(Worker(executable,request,client,cancel).collect(job['expected'],core_source,calibration=True))
+        for root_index, origin in enumerate(origins):
+            for repetition in range(4):
+                request = dict(contract=CONTRACT,op='calibrate',job=job,origin=origin,core_source=core_source)
+                client = Client(e,job['expected'],cancel,job.get('search_value'),job.get('seat_values'))
+                sample = Worker(executable,request,client,cancel).collect(job['expected'],core_source,calibration=True)
+                samples.append(dict(sample, root_index=root_index, warmup=repetition == 0))
     finally:e.close()
     require(samples,'No GPU calibration samples')
-    # Includes root setup/encoding, GPU queue and finalisation: conservative and
-    # hardware-measured, never the local CPU estimate. Frozen before tables run.
-    estimate = max((s['elapsed_ns']+7)//8 for s in samples)
+    # Per-root warmup is measured but excluded. Freeze the slower root median;
+    # a single cold CUDA allocation can no longer halve K for an entire run.
+    import statistics
+    medians = [statistics.median((s['elapsed_ns']+7)//8 for s in samples
+               if s['root_index'] == i and not s['warmup']) for i in range(len(origins))]
+    estimate = int(max(medians))
     return dict(contract=CONTRACT,source=source_fingerprint(),core_source=core_source,
         model_id=job['expected']['model_id'],export_hash=job['expected']['export_hash'],reward_id=job['expected']['reward_id'],
-        device=str(service.device),profile=digest(job['search']),estimate_ns=estimate,samples=samples)
+        device=str(service.device),profile=digest(job['search']),estimate_ns=estimate,samples=samples,root_medians_ns=medians,
+        rule='exclude-one-warmup-per-root; median-of-three-warm; max-root-median')
 
 
 def collect_barrier(phase, state, model, *, export_hash, epoch, backend, ordinary_jobs=(), ordinary_collect=None):
@@ -227,21 +247,22 @@ def collect_barrier(phase, state, model, *, export_hash, epoch, backend, ordinar
     return ordinary, results
 
 
-def turn_probes(executable, core_source, origins, job, service, calibration, model, history):
+def turn_probes(executable, core_source, origins, job, service, calibration, model, history, *, profile="full"):
     """Two bounded typical/wide 4s/K16 turns; diagnostic rows cannot train."""
     from .lab_teacher_finalization import TurnVerifier
     validate_job(job)
     lease=service.channels(1);endpoint=lease.acquire();cancel=threading.Event();results=[]
     try:
+        require(profile in ('full','fast'), 'Unknown probe profile')
         for origin in origins:
             verifier=TurnVerifier(model,history,[job],cancel,diagnostic=True)
-            request=dict(contract=CONTRACT,op='turn_probe',job=job,origin=origin,core_source=core_source,
+            request=dict(contract=CONTRACT,op='turn_probe',job=job,origin=origin,core_source=core_source,probe_profile=profile,
                 estimate_ns=calibration['estimate_ns'],calibration_id=digest(calibration))
-            client=Client(endpoint,job['expected'],cancel)
+            client=Client(endpoint,job['expected'],cancel,job.get('search_value'),job.get('seat_values'))
             result=Worker(executable,request,client,cancel).collect(job['expected'],core_source,
                 verifier=verifier,turn_probe=True)
             result['verification']=verifier.cache[job['expected']['job_id']]['timings']
             results.append(result)
     finally:endpoint.close()
-    return dict(passed=True,diagnostic=True,turns=results,search_seconds=4.,post_search_seconds=1.,k=16,
+    return dict(passed=True,diagnostic=True,turns=results,search_seconds=.8 if profile=='fast' else 4.,post_search_seconds=.2 if profile=='fast' else 1.,k=4 if profile=='fast' else 16,
                 scope='Fixed-root timing and verification probes; no full games or training labels')

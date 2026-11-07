@@ -29,10 +29,17 @@ class TurnVerifier:
         require(meta['job'] == job['expected'] and meta['timing'] == TIMING,
                 'Stale turn/job/timing identity')
         require(meta.get('diagnostic',False) is self.diagnostic, 'Wrong turn verification scope')
-        require(type(meta['remaining_ns']) is int and 0 < meta['remaining_ns'] <= 1_000_000_000
-                and 0 <= meta['native_post_ns'] < 1_000_000_000
-                and meta['remaining_ns'] <= 1_000_000_000 - meta['native_post_ns']
-                and 0 <= meta['search_ns'] <= 4_000_000_000, 'Invalid post-search allowance')
+        fast = meta.get('profile', 'full') == 'fast'
+        search_ns, post_ns = (800_000_000,200_000_000) if fast else (4_000_000_000,1_000_000_000)
+        require(not fast or (job.get('seating') == 'all-seat-search' and not meta['rows']), 'Fast searches cannot label')
+        require(type(meta['remaining_ns']) is int and 0 < meta['remaining_ns'] <= post_ns
+                and 0 <= meta['native_post_ns'] < post_ns
+                and meta['remaining_ns'] <= post_ns-meta['native_post_ns']
+                and 0 <= meta['search_ns'] <= search_ns, 'Invalid post-search allowance')
+        if meta.get('value_row') is not None:
+            from brass_ai.recovery.search_value_rows import validate_root
+            validate_root(meta['value_row'], job)
+            require(meta['value_row']['index'] == meta['index'] and meta['value_row']['profile'] == meta['profile'], 'Root turn differs')
         deadline = received + meta['remaining_ns'] / 1e9
         def check():
             require(not self.cancel.is_set(), 'Turn verification cancelled')
@@ -42,17 +49,22 @@ class TurnVerifier:
         require(meta['index'] == record['last'] + 1 and len(meta['rows']) <= 2,
                 'Duplicate/out-of-order/excess teacher turn')
         began = time.monotonic()
-        # policy_context preserves the process RNG/model mode. Serialize that
-        # small reference check across lanes; queue wait consumes this deadline.
-        with self.lock:
-            check()
-            if self.diagnostic:
-                from brass_ai.recovery.teacher_labels import admit_rows
-                require(all(r.get('diagnostic') is True for r in meta['rows']), 'Unmarked diagnostic probe')
-                accepted,rejected=admit_rows(meta['rows'],model=self.model,expected=job['expected'],
-                    history=self.history,admitted_sources={job['expected']['source_fingerprint']})
-            else:
-                accepted, rejected = admit_teacher_rows(meta['rows'], job=job, model=self.model, history=self.history)
+        if not meta['rows']:
+            # Fast/value-only turns do not touch model mode or RNG. Do not make
+            # their 0.2s budget wait behind another lane's policy validation.
+            accepted, rejected = [], {}
+        else:
+            # policy_context preserves the process RNG/model mode. Serialize
+            # reference checks across lanes; queue wait consumes the deadline.
+            with self.lock:
+                check()
+                if self.diagnostic:
+                    from brass_ai.recovery.teacher_labels import admit_rows
+                    require(all(r.get('diagnostic') is True for r in meta['rows']), 'Unmarked diagnostic probe')
+                    accepted,rejected=admit_rows(meta['rows'],model=self.model,expected=job['expected'],
+                        history=self.history,admitted_sources={job['expected']['source_fingerprint']})
+                else:
+                    accepted, rejected = admit_teacher_rows(meta['rows'], job=job, model=self.model, history=self.history)
         for row in accepted:
             ctx = row.row['view']['context']
             require(self.diagnostic or ctx['round'] == job['reservations'][str(row.label['seat'])][row.label['phase']],
@@ -76,7 +88,8 @@ class TurnVerifier:
         key = job['expected']['job_id']; record = self.cache.get(key)
         require(record is not None and job == self.jobs[key] and result['job_id'] == key
                 and digest(result['rows']) == digest(record['raw']), 'Changed/unverified teacher table')
-        require(record['last'] == result['metrics']['reserved_turns'] == 16,
+        require(record['last'] == result['metrics'].get('searched_turns',result['metrics']['reserved_turns'])
+                and record['last'] == (64 if job.get('seating') == 'all-seat-search' else 16),
                 'Incomplete turn verification')
         # A verified table can cross the phase boundary exactly once. Fresh
         # loads always use full sealed-shard validation instead of this cache.

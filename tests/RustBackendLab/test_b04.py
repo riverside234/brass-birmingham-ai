@@ -241,10 +241,15 @@ time.sleep(5)
         with self.assertRaises(ValueError):validate_improved_policy(l,row.row['choices'])
 
     def test_overlay_only_accepts_exact_detached_core_and_changes_fingerprint(self):
-        import zipfile
+        import io, zipfile
         with tempfile.TemporaryDirectory(dir=SOURCE_ROOT/'artifacts') as tmp:
             tmp=Path(tmp)
-            with zipfile.ZipFile(SOURCE_ROOT/'distribution/rust-lab-b01/b01-search-v1-inputs.zip') as z:
+            bundle=SOURCE_ROOT/'distribution/rust-lab-g1250'
+            inputs=bundle/'inputs.zip'
+            if not inputs.exists():
+                with zipfile.ZipFile(bundle/'rust-lab-b045-g1250.zip') as z:
+                    inputs=io.BytesIO(z.read('distribution/rust-lab-g1250/inputs.zip'))
+            with zipfile.ZipFile(inputs) as z:
                 (tmp/'source.zip').write_bytes(z.read('source.zip'))
             extract_new(tmp/'source.zip',tmp/'checkout');core=tmp/'checkout/native'
             self.assertEqual(native_fingerprint(core),SOURCE);result=apply(core)

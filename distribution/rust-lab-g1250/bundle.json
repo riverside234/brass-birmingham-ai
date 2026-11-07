@@ -1,0 +1,18 @@
+{
+  "archive": "rust-lab-b045-g1250.zip",
+  "sha256": "52f22225ad424027aae70302ab115649a1f1306c5d653e8c38c45331d57712bb",
+  "bytes": 27140322,
+  "entries": 1264,
+  "implementation": "3eb5cf572f3f358a173ff45ca063995159c0136e885361efc63042e70295f94d",
+  "producer": "cb96c3c8845937ed19530ff91a9aa75ef1487a44bc00cce53b6b0dd038976aac",
+  "qualification": "Pending",
+  "previous_qualifications_repeated": false,
+  "fresh_transfer": {
+    "passed": true,
+    "tests": 46,
+    "skipped": 2,
+    "fixture_log_sha256": "63217a9212aa53e75f0bb13c807e1e742b0982f574557c2c12eeb9be3c43e892",
+    "scope": "Windows CPU fixtures from empty extraction; Linux/CUDA Pending",
+    "verified_archive_sha256": "52f22225ad424027aae70302ab115649a1f1306c5d653e8c38c45331d57712bb"
+  }
+}

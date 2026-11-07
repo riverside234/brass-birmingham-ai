@@ -9,9 +9,19 @@ from brass_ai.learning.contracts import require, digest
 from brass_ai.learning.features import Encoded, check_encoded
 
 
-def predict(model, encoded, device, candidate_limit, remaining):
+def predict(model, encoded, device, candidate_limit, remaining, *, weights=None):
     """Same heads and all-candidate softmax; retain unnormalised float32 logits."""
-    if max(len(e.choice_ids) for e in encoded) <= candidate_limit:
+    entities = None
+    if weights is not None and any(weights):
+        from brass_ai.learning.search_value import correction
+        require(len(weights) == len(encoded), 'Search blend batch differs')
+        states, actions, mask, mapping = collate(encoded, device)
+        entities = model.encode_state(states)
+        prepared = model.prepare_candidates(entities)
+        logits = torch.cat([model.score_prepared(actions[:, start:start+candidate_limit], prepared)
+                            for start in range(0, actions.shape[1], candidate_limit)], 1).masked_fill(~mask, -torch.inf)
+        outputs = (logits, *model.heads_from_encoded(entities, mapping, remaining))
+    elif max(len(e.choice_ids) for e in encoded) <= candidate_limit:
         outputs = model(*collate(encoded, device), remaining=remaining)
     else:
         require(len(encoded) == 1, 'Oversized teacher position needs its own batch')
@@ -25,7 +35,16 @@ def predict(model, encoded, device, candidate_limit, remaining):
     require(len(outputs) == 5, 'Teacher GPU inference requires the current utility head')
     raw = outputs[0].float().clone()
     for i,e in enumerate(encoded): raw[i,len(e.choice_ids):] = 0.
-    parts = [torch.softmax(outputs[0].float(), -1), *[v.float() for v in outputs[1:]], raw]
+    parts = [torch.softmax(outputs[0].float(), -1), *[v.float() for v in outputs[1:]]]
+    if weights is not None:
+        # Zero blend uses the original path and exact utility bytes; no extra encoder pass.
+        search = outputs[4].float()
+        if any(weights):
+            delta = correction(model, entities, mapping, remaining)
+            w = search.new_tensor(weights)[:, None]
+            search = torch.where(w == 0, search, search + w * delta.float())
+        parts.append(search)
+    parts.append(raw)
     widths = [v.shape[1] for v in parts]; offsets = np.cumsum([0, *widths])
     packed = torch.cat(parts, 1).cpu().numpy()
     return [packed[:, offsets[i]:offsets[i+1]] for i in range(len(parts))]
@@ -51,13 +70,20 @@ def decode(meta, payload):
 
 class Client:
     """One pending envelope per owner. Drain cancelled/late GPU work before reuse."""
-    def __init__(self, endpoint, expected, cancel):
+    def __init__(self, endpoint, expected, cancel, search_value=None, seat_values=None):
         self.endpoint, self.expected, self.cancel = endpoint, expected, cancel
+        self.search_value = search_value
+        self.seat_values = seat_values
         self.sequence = 0; self.epoch = 0; self.retired = False
         self.wait_seconds = 0.; self.requests = 0
 
     def evaluate(self, meta, payload):
         b = meta['binding']; e = self.endpoint
+        search_value = self.search_value
+        if self.seat_values is not None:
+            require(type(b.get('value_seat')) is int and 0 <= b['value_seat'] < 4, 'Missing value owner')
+            search_value = self.seat_values[b['value_seat']]
+        require(b.get('search_value') == search_value, 'Search value source/weight differs')
         require(not self.retired and b['job'] == self.expected and b['sequence'] == self.sequence+1
                 and type(b['root_epoch']) is int and b['root_epoch'] >= self.epoch,
                 'Stale/wrong model/job/epoch native request')
@@ -71,6 +97,7 @@ class Client:
         frame = dict(request_id=str(self.sequence), model=self.expected['model_id'], revision=b['revision'],
             seat=b['seat'], digest=digest(b), deadline=deadline, submitted=time.monotonic(),
             cancelled=self.cancel.is_set(), encoded=encoded, remaining=b['context']['remaining'], want_logits=True)
+        if search_value is not None: frame['search_value'] = search_value
         token = uuid.uuid4().hex; began = time.monotonic()
         with e.lock:
             require(e.pending is None, 'Teacher GPU owner is still pending')
@@ -94,6 +121,11 @@ class Client:
                 require(r['status'] in ('ok','expired','cancelled'), 'Invalid teacher GPU status')
                 result = dict(binding=b,status='cancelled' if self.cancel.is_set() else 'expired' if time.monotonic() >= deadline else r['status'])
                 if result['status'] == 'ok':
+                    if search_value is not None:
+                        require(r.get('search_value') == search_value, 'Search value reply differs')
+                        a = np.asarray(r.get('search_utility'), dtype=float)
+                        require(a.shape == (4,) and np.isfinite(a).all(), 'Invalid search utility')
+                        result.update(search_utility=a.tolist(), search_value=search_value)
                     require(r['choice_ids'] == b['legal_ids'] and r['reward_id'] == self.expected['reward_id'], 'Teacher GPU legal/reward differs')
                     for key,n in (('logits',len(b['legal_ids'])),('utility',4)):
                         a = np.asarray(r.get(key),dtype=float)

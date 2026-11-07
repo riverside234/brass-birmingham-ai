@@ -13,7 +13,7 @@ def restore(out, *, root=ROOT):
     """Do not depend on a Windows developer cache or download during a gate."""
     package = Path(root) / PACKAGE
     if not package.is_file() or hashlib.sha256(package.read_bytes()).hexdigest() != SHA256:
-        raise ValueError('Missing/changed pinned Roslyn package; extract the current g570 bundle: ' + PACKAGE)
+        raise ValueError('Missing/changed pinned Roslyn package; extract the current qualification bundle: ' + PACKAGE)
     target = Path(out).resolve() / 'toolchain/roslyn-4.12.0'
     if target.exists():
         raise ValueError('Use a fresh qualification directory; compiler target already exists')

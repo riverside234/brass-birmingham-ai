@@ -29,7 +29,7 @@ use std::{
     time::Instant,
 };
 
-pub const CONTRACT: &str = "brass-lab-teacher/1.1.0";
+pub const CONTRACT: &str = "brass-lab-teacher/2.0.0";
 const LIMIT: usize = 64 * 1024 * 1024;
 const ALLOWANCE: u64 = 4_000_000_000;
 const POST: u64 = 1_000_000_000;
@@ -38,8 +38,12 @@ pub const TIMING: &str = "search-plus-post/1.0.0";
 /// Four seconds of search admission, plus at most one second of finalization.
 /// Session::narrow retains both absolute cutoffs across action two/replanning.
 pub fn search_budget(started_ns: u64) -> Result<Budget> {
-    let deadline_ns = started_ns.checked_add(ALLOWANCE + POST).ok_or("turn clock overflow")?;
-    Ok(Budget { started_ns, work_deadline_ns: deadline_ns - POST, deadline_ns, reserve_ns: POST })
+    profile_budget(started_ns, false)
+}
+pub fn profile_budget(started_ns: u64, fast: bool) -> Result<Budget> {
+    let (search, post) = if fast { (800_000_000, 200_000_000) } else { (ALLOWANCE, POST) };
+    let deadline_ns = started_ns.checked_add(search + post).ok_or("turn clock overflow")?;
+    Ok(Budget { started_ns, work_deadline_ns: deadline_ns - post, deadline_ns, reserve_ns: post })
 }
 
 #[derive(Default)]
@@ -49,29 +53,33 @@ struct TurnWork {
     labels_ns: u64,
     commit_ns: u64,
     rows: Vec<Value>,
+    value_row: Option<Value>,
+    fast: bool,
 }
 
 fn finish_turn<R: Read, W: Write>(peer: &mut Peer<R, W>, budget: Budget,
     work: &mut TurnWork, index: u64, diagnostic: bool) -> Result<Value> {
     let before = peer.clock.now_ns();
     let post_ns = before.saturating_sub(budget.started_ns).saturating_sub(work.search_ns);
-    check(work.search_ns <= ALLOWANCE && post_ns < POST && before < budget.deadline_ns,
+    let post = budget.reserve_ns;
+    check(work.search_ns <= budget.work_deadline_ns - budget.started_ns && post_ns < post && before < budget.deadline_ns,
           "teacher post-search allowance exceeded")?;
-    let remaining_ns = (POST - post_ns).min(budget.deadline_ns - before);
+    let remaining_ns = (post - post_ns).min(budget.deadline_ns - before);
     emit(&mut peer.output, json!({"event":"turn","job":peer.expected,"index":index,
         "timing":TIMING,"remaining_ns":remaining_ns,"rows":work.rows,"diagnostic":diagnostic,
-        "search_ns":work.search_ns,"native_post_ns":post_ns}))?;
+        "search_ns":work.search_ns,"native_post_ns":post_ns,
+        "profile":if work.fast {"fast"} else {"full"},"value_row":work.value_row}))?;
     let ack: Value = serde_json::from_slice(&read_frame(&mut peer.input)?)?;
     let after = peer.clock.now_ns();
     check(ack["job"] == peer.expected && ack["index"] == index && ack["status"] == "ok",
           "stale/rejected turn verification")?;
     let total_post = after.saturating_sub(budget.started_ns).saturating_sub(work.search_ns);
-    check(total_post <= POST && after <= budget.deadline_ns, "late turn verification")?;
+    check(total_post <= post && after <= budget.deadline_ns, "late turn verification")?;
     let report = json!({"index":index,"timing":TIMING,"search_ns":work.search_ns,
         "selection_ns":work.selection_ns,"labels_ns":work.labels_ns,"commit_ns":work.commit_ns,
         "native_post_ns":post_ns,"verification_ipc_ns":after.saturating_sub(before),
         "post_search_ns":total_post,"elapsed_ns":after.saturating_sub(budget.started_ns),
-        "budget":budget});
+        "budget":budget,"profile":if work.fast {"fast"} else {"full"}});
     *work = TurnWork::default();
     Ok(report)
 }
@@ -115,6 +123,9 @@ struct Peer<R, W> {
     wait_ns: u64,
     requests: u64,
     bytes: u64,
+    search_value: Option<Value>,
+    root_watch: Option<Info<Key, String>>,
+    root_stats: Option<Statistics>,
 }
 impl<R: Read, W: Write> Peer<R, W> {
     fn evaluate_inner(&mut self, info: &Info<Key, String>) -> Result<Statistics> {
@@ -132,9 +143,13 @@ impl<R: Read, W: Write> Peer<R, W> {
             .encode(view, &info.key.choices, &info.key.context, &mut || Ok(()))?;
         let tensors = self.encoder.tensors().ok_or("missing tensors")?;
         self.encoding_ns += start.elapsed().as_nanos() as u64;
-        let binding = json!({"job":self.expected,"sequence":self.sequence,"root_epoch":self.epoch,
+        let mut binding = json!({"job":self.expected,"sequence":self.sequence,"root_epoch":self.epoch,
             "revision":view.context.revision,"seat":info.actor,"legal_ids":info.actions,
             "context":info.key.context,"information":seal(&serde_json::to_value(info)?)});
+        if let Some(value) = &self.search_value {
+            binding["search_value"] = value.clone();
+            binding["value_seat"] = json!(self.root_watch.as_ref().map_or(info.actor, |r| r.actor));
+        }
         let meta = serde_json::to_vec(&json!({"event":"evaluate","binding":binding,
             "remaining_ns":self.deadline.saturating_sub(self.clock.now_ns()),
             "candidates":info.actions.len(),"state_len":tensors.state.len(),"action_len":tensors.actions.len()}))?;
@@ -160,12 +175,18 @@ impl<R: Read, W: Write> Peer<R, W> {
             "expired/cancelled GPU reply",
         )?;
         let logits: Vec<f64> = serde_json::from_value(reply["logits"].clone())?;
-        let utility: [f64; 4] = serde_json::from_value(reply["utility"].clone())?;
+        let field = if let Some(value) = &self.search_value {
+            check(reply["search_value"] == *value, "search value reply binding")?;
+            "search_utility"
+        } else { "utility" };
+        let utility: [f64; 4] = serde_json::from_value(reply[field].clone())?;
         check(
             logits.len() == info.actions.len() && reply["reward_id"] == info.key.context.reward_id,
             "GPU legal width/reward differs",
         )?;
-        Ok(Statistics::new(logits, utility)?)
+        let stats = Statistics::new(logits, utility)?;
+        if self.root_watch.as_ref() == Some(info) { self.root_stats = Some(stats.clone()); }
+        Ok(stats)
     }
 }
 impl<R: Read, W: Write> LeafEvaluator<Key, String> for Peer<R, W> {
@@ -276,6 +297,18 @@ pub fn run() -> Result<()> {
             && profile["watchdog_seconds"] == 30.0,
         "unsupported teacher profile",
     )?;
+    let all_seat = job["seating"] == "all-seat-search";
+    let h2h = job["h2h"] == true;
+    check(!h2h || (all_seat && job["seat_values"].as_array().is_some_and(|v| v.len() == 4)), "head-to-head seat bindings")?;
+    if all_seat {
+        let mut fast = profile.clone();
+        fast["k"] = json!(4); fast["allowance_seconds"] = json!(0.8); fast["post_search_seconds"] = json!(0.2);
+        check(job["fast_search"] == fast, "fast profile differs")?;
+        let w = job["search_value"]["w"].as_f64().ok_or("search blend")?;
+        check(job["search_value"]["protocol"] == "search-utility/1.0.0" && w.is_finite() && (0.0..=1.0).contains(&w)
+            && (w * 20. - (w * 20.).round()).abs() < 1e-8
+            && job["search_value"]["value_source"] == if w == 0. { "main" } else { "corrected" }, "search value binding")?;
+    }
     let expected = job["expected"].clone();
     check(
         job["readiness"]["ready"] == true && job["readiness"]["reward_id"] == expected["reward_id"],
@@ -316,6 +349,8 @@ pub fn run() -> Result<()> {
         wait_ns: 0,
         requests: 0,
         bytes: 0,
+        search_value: if all_seat { Some(job["search_value"].clone()) } else { None },
+        root_watch: None, root_stats: None,
     };
     let identity = Identity {
         game_instance: expected["game_id"].as_str().ok_or("game id")?.into(),
@@ -340,6 +375,8 @@ pub fn run() -> Result<()> {
     let mut labels = 0;
     let mut no_evidence = 0;
     let mut reserved = 0;
+    let mut searched_turns = 0;
+    let mut values = Vec::new();
     let mut request_id = 0;
     let mut turn_work = TurnWork::default();
     let mut turn_reports = Vec::new();
@@ -376,7 +413,8 @@ pub fn run() -> Result<()> {
         let key = TurnKey::from_context(&view.context, seat);
         if turn.as_ref() != Some(&key) {
             if let Some(owner) = &session {
-                turn_reports.push(finish_turn(&mut peer, owner.budget(), &mut turn_work, reserved, probe)?);
+                if let Some(value) = &turn_work.value_row { values.push(value.clone()); }
+                turn_reports.push(finish_turn(&mut peer, owner.budget(), &mut turn_work, searched_turns, probe)?);
                 if probe {
                     emit(&mut peer.output,json!({"event":"turn_probe","job":expected,"diagnostic":true,
                         "metrics":{"turns":turn_reports,"searches":searches,"labels":labels,"reserved_turns":reserved}}))?;
@@ -391,7 +429,7 @@ pub fn run() -> Result<()> {
         let context = FeatureContext {
             model_id: expected["model_id"].as_str().ok_or("model")?.into(),
             reward_id: reward.identity()?,
-            profile_id: CONTRACT.into(),
+            profile_id: "brass-lab-teacher/1.1.0".into(),
             style: [0.; 4],
             intent: [0.; 8],
             remaining: ledger.remaining(),
@@ -409,14 +447,18 @@ pub fn run() -> Result<()> {
         };
         let mut game = Brass::new(root.clone(), false)?;
         let actual = game.root()?;
-        let scheduled = calibration || probe
+        let scheduled = calibration || probe || (h2h && view.context.phase == Phase::Action)
             || (view.context.phase == Phase::Action
                 && job["reservations"][seat.to_string()][phase(&view)].as_u64()
                     == Some(view.context.round as u64));
-        if session.is_none() && scheduled {
+        let forced_fast = request["probe_profile"] == "fast";
+        if session.is_none() && (scheduled || (all_seat && view.context.phase == Phase::Action)) {
+            turn_work.fast = forced_fast || !scheduled;
+            peer.root_watch = Some(actual.clone()); peer.root_stats = None;
+            if h2h { peer.search_value = Some(job["seat_values"][seat].clone()); }
             let mut settings = Settings::default();
             settings.search = Config {
-                k: 16,
+                k: if turn_work.fast { 4 } else { 16 },
                 simulations: 8,
                 seed: seed.wrapping_add(rows),
                 ..Config::default()
@@ -425,11 +467,12 @@ pub fn run() -> Result<()> {
                 identity.clone(),
                 &root,
                 settings,
-                search_budget(clock.now_ns())?,
+                profile_budget(clock.now_ns(), turn_work.fast)?,
             )?;
             owner.enable_teacher_exports()?;
             session = Some(owner);
-            reserved += 1;
+            searched_turns += 1;
+            if !turn_work.fast { reserved += 1; }
         }
         let mut evidence = None;
         let mut supported = false;
@@ -478,7 +521,8 @@ pub fn run() -> Result<()> {
                     "frozen_n":quota.simulations,"effective_k":out.effective_k,"completed":out.completed,
                     "rounds":out.snapshot.as_ref().map_or(0,|s|s.completed_rounds),"partial":out.partial_completed,
                     "deadline_hit":out.status == "work_deadline","overrun_seconds":out.response_ready_ns.saturating_sub(out.budget.deadline_ns) as f64/1e9,
-                    "elapsed_ns":clock.now_ns().saturating_sub(began),"budget":out.budget,"provenance":out.provenance}));
+                    "elapsed_ns":clock.now_ns().saturating_sub(began),"budget":out.budget,"provenance":out.provenance,
+                    "profile":if turn_work.fast {"fast"} else {"full"}}));
             }
             if calibration {
                 check(
@@ -534,7 +578,24 @@ pub fn run() -> Result<()> {
             let p = math::softmax(&stats.logits)?;
             draws.categorical(&actual.actions.iter().cloned().zip(p).collect::<Vec<_>>())?
         };
-        if session.is_some() && view.context.phase == Phase::Action {
+        if all_seat && session.is_some() && view.context.phase == Phase::Action && first_action {
+            let stats = if let Some(e) = &evidence { e.stats.clone() }
+                else if let Some(stats) = &peer.root_stats { stats.clone() }
+                else { peer.evaluate(&actual)? };
+            let n: u64 = stats.count.iter().sum();
+            let root_value = root_value(&stats)?;
+            peer.encoder.encode(&view, &actual.key.choices, &root.context, &mut || Ok(()))?;
+            let t = peer.encoder.tensors().ok_or("missing root tensor")?;
+            turn_work.value_row = Some(json!({"job":expected,"index":searched_turns,"seat":seat,
+                "generation":expected["generation"],"model_id":expected["model_id"],"reward_id":expected["reward_id"],
+                "game_id":expected["game_id"],"split":job["split"],"phase":phase(&view),
+                "profile":if turn_work.fast {"fast"} else {"full"},"search_value":peer.search_value,
+                "state":t.state,"mapping":t.stable_to_relative,"remaining":ledger.remaining(),
+                "spent":ledger.spent,"r":root_value,"v":stats.value,"n":n,
+                "counts":stats.count,"returns":stats.returns,"revision":view.context.revision,
+                "turn_key":[view.context.era,view.context.round,view.context.turn,view.context.turn_owner]}));
+        }
+        if session.is_some() && view.context.phase == Phase::Action && !turn_work.fast && !h2h && job["shadow_probe"] != true {
             let label_started = clock.now_ns();
             if let Some(e) = evidence {
                 if let Some(mut row) = label(
@@ -551,6 +612,7 @@ pub fn run() -> Result<()> {
                     session.as_ref().unwrap().budget(),
                     clock.now_ns(),
                 )? {
+                    if all_seat { row["teacher"]["search_value"] = job["search_value"].clone(); }
                     if probe { row["diagnostic"] = json!(true); }
                     turn_work.rows.push(row);
                     labels += 1;
@@ -560,9 +622,9 @@ pub fn run() -> Result<()> {
             } else {
                 no_evidence += 1;
             }
-            first_action = false;
             turn_work.labels_ns += clock.now_ns().saturating_sub(label_started);
         }
+        if session.is_some() && view.context.phase == Phase::Action { first_action = false; }
         let commit_started = clock.now_ns();
         let selected = actual
             .key
@@ -576,19 +638,36 @@ pub fn run() -> Result<()> {
         rows += 1;
     }
     if let Some(owner) = &session {
-        turn_reports.push(finish_turn(&mut peer, owner.budget(), &mut turn_work, reserved, probe)?);
+        if let Some(value) = &turn_work.value_row { values.push(value.clone()); }
+        turn_reports.push(finish_turn(&mut peer, owner.budget(), &mut turn_work, searched_turns, probe)?);
     }
     if probe {
         emit(&mut peer.output,json!({"event":"turn_probe","job":expected,"diagnostic":true,
             "metrics":{"turns":turn_reports,"searches":searches,"labels":labels,"reserved_turns":reserved}}))?;
         return Ok(());
     }
+    ledger.observe(&state.observation(Seat::try_from(state.context().actor as u8)?)?)?;
+    check(!all_seat || (searched_turns == 64 && values.len() == 64 && reserved == if h2h { 64 } else { 16 }), "all-seat turn coverage")?;
     emit(
         &mut peer.output,
         json!({"event":"finished","job":expected,"result":state.export().result,
-        "metrics":{"decisions":rows,"labels":labels,"no_evidence":no_evidence,"reserved_turns":reserved,
+        "value_rows":values,"final_spent":ledger.spent,
+        "metrics":{"decisions":rows,"labels":labels,"no_evidence":no_evidence,"reserved_turns":reserved,"searched_turns":searched_turns,
             "searches":searches,"turns":turn_reports,"requests":peer.requests,"encoding_ns":peer.encoding_ns,"gpu_wait_ns":peer.wait_ns,
             "input_bytes":peer.bytes,"elapsed_ns":clock.now_ns()},"ordinary_training":false}),
     )?;
     Ok(())
+}
+
+/// Absolute four-seat mean: root prediction plus completed edge returns.
+pub fn root_value(stats: &Statistics) -> Result<[f64; 4]> {
+    check(stats.count.len() == stats.returns.len(), "root statistics width")?;
+    let n: u64 = stats.count.iter().sum();
+    let mut value = stats.value;
+    for returns in &stats.returns {
+        for seat in 0..4 { value[seat] += returns[seat]; }
+    }
+    for v in &mut value { *v /= 1. + n as f64; }
+    check(value.iter().all(|v| v.is_finite()), "nonfinite root value")?;
+    Ok(value)
 }
