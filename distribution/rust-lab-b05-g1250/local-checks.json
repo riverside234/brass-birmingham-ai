@@ -1,13 +1,20 @@
 {
   "implementation": "ce40147f02d7a4eec641cebfd4ff5186ced427d8cf505cbe988c8bf22fb9387a",
-  "scope": "CPU fixtures; actual g1250 CUDA qualification Pending",
-  "tests": 70,
-  "passed": 69,
-  "skipped": 1,
+  "revision": "r2",
+  "scope": "Launcher/topology regression; actual g1250 CUDA qualification Pending",
+  "tests": 6,
+  "passed": 6,
+  "skipped": 0,
   "failures": 0,
   "errors": 0,
-  "seconds": 130.399,
-  "log_sha256": "a60154c1c97e061b8e08abd0d04a64af71aa605c31157eb32af3961c61080a19",
+  "seconds": 3.39,
+  "log_sha256": "11df902cf677c7bfcf54d9af3c3d49a909462734c89d60949e0fa5e9567cb8c9",
+  "previous_lab_fixtures": {
+    "tests": 70,
+    "passed": 70,
+    "sha256": "9c97ee20c74df8f334f6a4b393e4e52940710fe131137ec11f63bd16e98ee6fa",
+    "scope": "Same training implementation, passed before r1 topology failure"
+  },
   "new_games": 0,
   "production_modified": false
 }

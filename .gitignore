@@ -704,3 +704,5 @@ Desktop.ini
 # B05 immutable source, successful prerequisite evidence and local checks.
 !/distribution/rust-lab-b05-g1250/
 !/distribution/rust-lab-b05-g1250/**
+# Superseded B05 archive is retained locally; r2 is the current transfer.
+/distribution/rust-lab-b05-g1250/rust-lab-b05-g1250-r1.zip

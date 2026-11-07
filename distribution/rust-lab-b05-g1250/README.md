@@ -9,7 +9,7 @@ From the lab **code repository**:
 ```bash
 conda activate ai-training
 git pull --ff-only
-unzip -o distribution/rust-lab-b05-g1250/rust-lab-b05-g1250-r1.zip
+unzip -o distribution/rust-lab-b05-g1250/rust-lab-b05-g1250-r2.zip
 python scripts/qualify-rust-lab-b05.py --device cuda:0
 ```
 
@@ -19,9 +19,18 @@ The run must be stopped at the original committed **g1250** checkpoint:
 Use its exact saved config and full dependencies. If production has advanced,
 use an already preserved compatible g1250 run via `--run PATH`; do not rewind
 production or rewrite its saved identities. The normal run lock is held during
-the lab check. CUDA RNG topology remains strict; if the available device count
-has intentionally changed, append `--allow-cuda-topology-change` to record that
-existing diagnostic exception.
+the lab check. R2 defaults to the existing logical-GPU compatibility path for
+this isolated diagnostic: the learner stays on logical `cuda:0`, existing RNG
+streams are restored exactly, unavailable inference devices are skipped and
+new devices keep their initialized streams. The restoration report records
+saved/visible/restored counts. Use `--strict-cuda-topology` to require an equal
+device count. The underlying checkpoint loader's strict default is unchanged.
+The original `--allow-cuda-topology-change` flag remains accepted.
+
+R1's attempt ending `d6e77efd-221a8f6f` passed all 70 CPU fixtures, then stopped
+at the GPU-count check before any diagnostic update. R2 fixes that launcher
+default and reports the original child exception directly in qualification.json.
+It does not alter training/search code, source identity or checkpoint bytes.
 
 Keep the original sealed B03 replay files in the lab artifacts folder. Their
 absolute paths and checksums are recorded in `reference.json`; qualification

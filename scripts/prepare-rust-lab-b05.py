@@ -20,7 +20,7 @@ def main():
     from brass_ai.recovery.utility import reward_spec
     from brass_ai.step5.league import implementation_id,implementation_sources,write_json
     from brass_ai.rust_backend.lab_contract import sha
-    archive=DIRECTORY/'rust-lab-b05-g1250-r1.zip'
+    archive=DIRECTORY/'rust-lab-b05-g1250-r2.zip'
     require(not archive.exists(),'Bundle already sealed; publish a new version')
     DIRECTORY.mkdir(parents=True,exist_ok=True)
     read=lambda p:json.loads((ROOT/p).read_text())

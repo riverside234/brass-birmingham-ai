@@ -4,6 +4,18 @@
 B04.5 r3 receipt is recorded in the migration plan. Production teacher modes
 remain gated, search_v1 remains the default, and V205/DOMiNO/AZ_DB stay disabled.
 
+R2 fixes the lab attempt ending `d6e77efd-221a8f6f`: all 70 CPU fixtures passed,
+but restoration rejected differing saved/visible GPU counts before any update.
+The B05-only launcher now defaults to the existing logical-device restore path
+with the learner on `cuda:0`. It restores all overlapping saved RNG streams,
+preserves initialized streams on additional devices and reports the counts.
+`--strict-cuda-topology` retains the equal-count diagnostic gate. The checkpoint
+library's strict default, training code and implementation identity are unchanged.
+Regressions exercise one-to-six, six-to-one and equal-device restoration, exact
+Adam/CPU RNG preservation, parent/child flag propagation and strict rejection.
+Child exceptions are written into the exported qualification report, retaining
+the initiating cause instead of only a generic subprocess failure.
+
 ## Training integration
 
 `SearchValueIteration` connects collection admission, the ordinary PPG boundary,
