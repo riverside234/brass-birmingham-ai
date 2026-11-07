@@ -10,7 +10,7 @@ Run from the lab **code repository** in the existing training environment:
 
 ```bash
 git pull --ff-only
-unzip -o distribution/rust-lab-b06-g1250/rust-lab-b06-g1250-r3.zip
+unzip -o distribution/rust-lab-b06-g1250/rust-lab-b06-g1250-r4.zip
 python -m pip install -r distribution/rust-lab-b06-g1250/requirements.txt
 python scripts/qualify-rust-lab-b06.py --device cuda:0
 ```
@@ -24,7 +24,16 @@ run or rewrite its signed paths. Native runtime paths/hashes are in the bundled
 `evidence/ordinary-build.json` and `teacher-build.json`. Missing/changed files
 fail before collection; no silent rebuild, source override or qualification rerun.
 
-R3 fixes the first lab attempt (`06c4bb94-be70601a`), which stopped in CPU
+R4 fixes the next lab attempt (`2f3176b0-a1c6d453`): all 53 CPU fixtures passed,
+but the fresh ordinary benchmark process reset CUDA allocator statistics before
+initializing CUDA, causing `RuntimeError: Invalid device argument`. No collection
+or update started. Every CUDA meter now synchronizes the selected logical GPU
+(which initializes PyTorch's allocator) before resetting peaks. Each benchmark
+child also runs a 256-byte allocation/execution/peak-counter preflight and exports
+its own environment receipt. CUDA setup is reported separately from timed work;
+CPU fixtures still require no GPU. Earlier qualification receipts remain valid.
+
+R3 fixed the first lab attempt (`06c4bb94-be70601a`), which stopped in CPU
 fixtures because `psutil` was absent; no benchmark or training work ran.
 The bundle now declares its extra measurement dependency (`psutil==7.2.2`).
 Install it with the **same Python interpreter/environment** used for qualification;
@@ -34,7 +43,7 @@ real process sampler before fixtures, locks or collection. Missing/broken instal
 export an `environment` failure with the install command. No implicit install or
 silent memory/CPU fallback occurs. Unexpected background sampler errors invalidate
 measurements, disappearing child processes are handled, and initial child CPU
-time is excluded from benchmark work. R2 is superseded; do not rerun B01–B05.
+time is excluded from benchmark work. Use r4; do not rerun B01–B05.
 
 R2 corrected a compatibility gap found before lab release: current v9 branches use
 T1.5 for their first two actions per seat while normal turns use T1.3 for three.

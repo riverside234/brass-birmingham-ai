@@ -110,19 +110,20 @@ def run_child(args,reference):
         import torch
         from rust_lab_b06_metrics import measurement_preflight
         require(platform.system()=='Linux' and torch.cuda.is_available(),'Linux/CUDA lab required')
-        report['environment']=measurement_preflight()
         lock=(args.run/'.active-run.json').read_text()
         require(lock==os.environ.get('BRASS_B06_PARENT_LOCK') and json.loads(lock)['pid']==os.getppid(),'Missing parent run lock')
         torch.set_num_threads(2);torch.set_num_interop_threads(1)
         torch.backends.cuda.matmul.allow_tf32=False;torch.backends.cudnn.allow_tf32=False
+        report['environment']=measurement_preflight(args.device)
+        write_json(args.out/(args.phase+'-environment.json'),report['environment'])
         snapshot=read_json(args.out/'snapshot.json');ordinary,teacher=verify_runtime(reference)
         if args.phase=='ordinary':
             from rust_lab_b06_ordinary import run
-            report=run(args,snapshot,ordinary,reference)
+            report.update(run(args,snapshot,ordinary,reference))
         elif args.phase=='teacher':
             from rust_lab_b06_teacher import run
-            report=run(args,snapshot,teacher,INPUTS)
-        else:report=kernels(args,snapshot,reference)
+            report.update(run(args,snapshot,teacher,INPUTS))
+        else:report.update(kernels(args,snapshot,reference))
     except BaseException as error:
         report.update(passed=False,error=str(error),error_type=type(error).__name__,traceback=traceback.format_exc())
         raise

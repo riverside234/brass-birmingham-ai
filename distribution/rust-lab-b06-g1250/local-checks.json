@@ -1,14 +1,14 @@
 {
   "implementation": "63564be49e282c4b2c0fff02b7640238c63d04d35f7c072bf8c017d12ce6ace5",
-  "revision": "r3",
-  "tests": 53,
-  "passed": 52,
+  "revision": "r4",
+  "tests": 57,
+  "passed": 56,
   "skipped": 1,
   "errors": 0,
   "failures": 0,
-  "seconds": 15.178,
-  "log_sha256": "a94df77cd1dbfed7e75fcb2547631fdec90e61b7c35b932cd4466868c6153b3d",
-  "scope": "CPU replay/branch/regression fixtures; missing/broken/versioned dependency, early export, sampler failures and CPU baseline coverage; g1250 CUDA qualification Pending",
+  "seconds": 14.431,
+  "log_sha256": "b303c4e36fc1b345658712ea50e7e693235894b38a224c81c85c44f6e7ec4830",
+  "scope": "CPU replay/branch/regression fixtures; cold/warm CUDA allocator via installed Torch APIs with mocked native calls, all three child preflights and failure export; actual g1250 CUDA qualification Pending",
   "new_games": 0,
   "production_modified": false
 }

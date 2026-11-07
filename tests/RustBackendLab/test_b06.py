@@ -4,6 +4,7 @@ import copy
 import importlib.util
 import io
 import json
+import os
 from pathlib import Path
 import sys
 import tempfile
@@ -316,10 +317,97 @@ class B06(unittest.TestCase):
                 if primary:self.assertIn('sampler regression',caught.exception.__notes__[0])
 
     def test_meter_cuda_initialization_failure_does_not_leak_sampler(self):
-        with patch.object(torch.cuda,'reset_peak_memory_stats',side_effect=RuntimeError('CUDA unavailable')), \
-             patch.object(M.threading,'Thread') as thread:
-            with self.assertRaisesRegex(RuntimeError,'CUDA unavailable'):M.Meter('cuda:0').__enter__()
-            thread.assert_not_called()
+        for stage in ('synchronize','reset_peak_memory_stats'):
+            with self.subTest(stage=stage),patch.object(torch.cuda,'synchronize'), \
+                 patch.object(torch.cuda,'reset_peak_memory_stats'), \
+                 patch.object(torch.cuda,stage,side_effect=RuntimeError('CUDA unavailable')), \
+                 patch.object(M.threading,'Thread') as thread:
+                with self.assertRaisesRegex(RuntimeError,'setup failed on cuda:0: CUDA unavailable'):
+                    M.Meter('cuda:0').__enter__()
+                thread.assert_not_called()
+
+    def test_fresh_cuda_process_initializes_allocator_before_reset_and_measures_probe(self):
+        # Exercise the installed Torch Python synchronize/reset APIs, substituting
+        # only their native driver calls. Availability alone leaves this cold,
+        # exactly as in the lab subprocess. No GPU is needed by CPU fixtures.
+        state=dict(initialized=False,allocated=0,peak=0,devices=[])
+        def initialize():state['initialized']=True
+        def reset(index):
+            if not state['initialized']:raise RuntimeError('Invalid device argument')
+            self.assertEqual(index,0);state['peak']=state['allocated'];state['devices'].append(index)
+        def synchronize():self.assertTrue(state['initialized'])
+        def allocate(size,*,dtype,device):
+            self.assertTrue(state['initialized']);self.assertEqual((size,dtype,device),(256,torch.uint8,'cuda:0'))
+            state['allocated']=state['peak']=256
+            return SimpleNamespace(device=torch.device(device),numel=lambda:256,element_size=lambda:1)
+        def memory(device):
+            self.assertEqual(device,'cuda:0')
+            return dict(cuda_peak_allocated_bytes=state['peak'])
+        class Device:
+            def __init__(self,device):self.idx=torch.device(device).index
+            def __enter__(self):return self
+            def __exit__(self,*_):pass
+        with patch.object(torch.cuda,'_lazy_init',side_effect=initialize), \
+             patch.object(torch.cuda,'is_initialized',side_effect=lambda:state['initialized']), \
+             patch.object(torch.cuda,'device',Device), \
+             patch.object(torch._C,'_cuda_synchronize',side_effect=synchronize,create=True), \
+             patch.object(torch._C,'_cuda_resetPeakMemoryStats',side_effect=reset,create=True), \
+             patch.object(torch,'zeros',side_effect=allocate), \
+             patch('brass_ai.recovery.telemetry.memory',side_effect=memory):
+            with self.assertRaisesRegex(RuntimeError,'Invalid device argument'):
+                torch.cuda.reset_peak_memory_stats('cuda:0')
+            first=M.measurement_preflight('cuda:0');second=M.measurement_preflight('cuda:0')
+        self.assertFalse(first['sampler']['cuda_setup']['initialized_before'])
+        self.assertTrue(second['sampler']['cuda_setup']['initialized_before'])
+        self.assertEqual(first['sampler']['device_memory']['cuda_peak_allocated_bytes'],256)
+        self.assertEqual(state['devices'],[0,0])
+
+    def test_cpu_measurement_never_initializes_cuda(self):
+        with patch.object(torch.cuda,'synchronize') as synchronize, \
+             patch.object(torch.cuda,'reset_peak_memory_stats') as reset,patch.object(torch,'zeros') as allocate:
+            report=M.measurement_preflight()
+        synchronize.assert_not_called();reset.assert_not_called();allocate.assert_not_called()
+        self.assertIsNone(report['sampler']['cuda_setup'])
+
+    def test_each_benchmark_child_checks_its_cuda_context_and_preserves_environment_receipt(self):
+        m=launcher();out=self.temporary();lock=json.dumps(dict(pid=os.getppid()))
+        (out/'.active-run.json').write_text(lock)
+        environment=dict(device='cuda:0',sampler={'cuda_setup':{'initialized_before':False}})
+        for phase,target in (('ordinary',O),('teacher',T),('kernels',m)):
+            args=m.arguments(['--phase',phase]);args.run=args.out=out
+            sequence=[]
+            def preflight(device):
+                self.assertEqual(device,'cuda:0');sequence.append('preflight');return environment
+            def run(*_):
+                sequence.append('benchmark');return dict(passed=True)
+            with self.subTest(phase=phase),patch.object(m.platform,'system',return_value='Linux'), \
+                 patch.object(torch.cuda,'is_available',return_value=True), \
+                 patch.object(torch,'set_num_threads'),patch.object(torch,'set_num_interop_threads'), \
+                 patch.dict(os.environ,{'BRASS_B06_PARENT_LOCK':lock}), \
+                 patch('brass_ai.learning.contracts.read_json',return_value={'snapshot':True}), \
+                 patch('brass_ai.rust_backend.lab_snapshot.verify_unchanged'), \
+                 patch.object(m,'verify_runtime',return_value=({},{})), \
+                 patch.object(M,'measurement_preflight',side_effect=preflight), \
+                 patch.object(target,'kernels' if phase=='kernels' else 'run',side_effect=run):
+                m.run_child(args,{})
+            self.assertEqual(sequence,['preflight','benchmark'])
+            report=json.loads((out/(phase+'-checks.json')).read_text())
+            self.assertTrue(report['passed']);self.assertEqual(report['environment'],environment)
+            self.assertEqual(json.loads((out/(phase+'-environment.json')).read_text()),environment)
+
+    def test_cuda_preflight_failure_exports_without_starting_benchmark(self):
+        m=launcher();out=self.temporary();args=m.arguments(['--phase','ordinary']);args.run=args.out=out
+        lock=json.dumps(dict(pid=os.getppid()));(out/'.active-run.json').write_text(lock)
+        with patch.object(m.platform,'system',return_value='Linux'), \
+             patch.object(torch.cuda,'is_available',return_value=True), \
+             patch.object(torch,'set_num_threads'),patch.object(torch,'set_num_interop_threads'), \
+             patch.dict(os.environ,{'BRASS_B06_PARENT_LOCK':lock}), \
+             patch.object(M,'measurement_preflight',side_effect=RuntimeError('CUDA startup failed')), \
+             patch.object(O,'run') as run,patch.object(m,'verify_runtime') as native:
+            with self.assertRaisesRegex(RuntimeError,'CUDA startup failed'):m.run_child(args,{})
+        run.assert_not_called();native.assert_not_called()
+        report=json.loads((out/'ordinary-checks.json').read_text())
+        self.assertFalse(report['passed']);self.assertEqual(report['error'],'CUDA startup failed')
 
 
 if __name__=='__main__':unittest.main()

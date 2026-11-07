@@ -20,7 +20,7 @@ def main():
     from brass_ai.rust_backend.lab_contract import sha
     from brass_ai.rust_backend.lab_teacher_overlay import source_fingerprint
     from brass_ai.step5.league import write_json,implementation_id,implementation_sources
-    archive=DIRECTORY/'rust-lab-b06-g1250-r3.zip'
+    archive=DIRECTORY/'rust-lab-b06-g1250-r4.zip'
     require(not archive.exists(),'B06 bundle already sealed; publish a new revision')
     read=lambda name:json.loads((ROOT/name).read_text())
     state=read(REPORT+'/state.json')

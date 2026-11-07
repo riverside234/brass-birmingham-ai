@@ -26,13 +26,25 @@ def measurement_dependency():
     return module
 
 
-def measurement_preflight():
-    """Exercise the actual process sampler before CPU fixtures, locks or collection."""
+def measurement_preflight(device='cpu'):
+    """Exercise the process sampler and, in each benchmark child, its CUDA allocator."""
+    import torch
     module = measurement_dependency()
-    with Meter() as meter:
+    with Meter(device) as meter:
+        if device.startswith('cuda'):
+            # No RNG/model work: prove allocation, execution and peak telemetry on
+            # the selected logical device before any collection or update starts.
+            with meter.phase('cuda_preflight_allocation'):
+                probe = torch.zeros(256, dtype=torch.uint8, device=device)
+            require(probe.device == torch.device(device), 'B06 CUDA probe used a different device')
         report = meter.report()
+        if device.startswith('cuda'):
+            require(report['device_memory']['cuda_peak_allocated_bytes'] >= probe.numel()*probe.element_size(),
+                    'B06 CUDA peak measurement unavailable')
+            del probe
     require(report['peak_process_tree_rss_bytes'] > 0, 'B06 process memory measurement unavailable')
-    return dict(psutil=module.__version__, requirements=REQUIREMENTS, sampler=report)
+    return dict(psutil=module.__version__, requirements=REQUIREMENTS, device=device,
+                torch=str(torch.__version__),cuda_build=torch.version.cuda,sampler=report)
 
 
 def distribution(values):
@@ -134,6 +146,7 @@ class Meter:
     def __init__(self, device='cpu'):
         self.device=device; self.phases={}; self.stop=threading.Event(); self.peak_rss=0; self.cpu={}
         self.lock=threading.RLock(); self.error=None; self.samples=0; self.exited_processes=0
+        self.cuda_setup=None
 
     @contextmanager
     def phase(self, name):
@@ -148,6 +161,18 @@ class Meter:
     def __enter__(self):
         psutil=measurement_dependency()
         import torch
+        if self.device.startswith('cuda'):
+            initialized=torch.cuda.is_initialized();began=time.perf_counter()
+            try:
+                # reset_peak_memory_stats does NOT lazy-initialize the allocator.
+                # synchronize does, and also drains earlier work before the reset.
+                # Each spawned benchmark process needs its own initialization.
+                torch.cuda.synchronize(self.device)
+                torch.cuda.reset_peak_memory_stats(self.device)
+            except Exception as error:
+                raise RuntimeError(f'B06 CUDA measurement setup failed on {self.device}: {error}') from error
+            self.cuda_setup=dict(device=self.device,initialized_before=initialized,
+                                 seconds=time.perf_counter()-began)
         process=psutil.Process()
         def sample():
             resident=0
@@ -167,7 +192,6 @@ class Meter:
                     self.cpu[key][1]=value
                 self.peak_rss=max(resident,self.peak_rss);self.samples+=1;self.exited_processes+=exited
         sample()
-        if self.device.startswith('cuda'):torch.cuda.reset_peak_memory_stats(self.device)
         def loop():
             try:
                 while not self.stop.wait(.05):sample()
@@ -198,6 +222,7 @@ class Meter:
                         peak_process_tree_rss_bytes=self.peak_rss,
                         sampled_process_tree_cpu_seconds=sum(max(0,b-a) for a,b in self.cpu.values()),
                         process_samples=self.samples,exited_process_reads=self.exited_processes,
+                        cuda_setup=self.cuda_setup,
                         cpu_scope='Sampled lower bound, 50ms; initial processes baselined; nested phases overlap')
         result['device_memory']=memory(self.device)
         return result

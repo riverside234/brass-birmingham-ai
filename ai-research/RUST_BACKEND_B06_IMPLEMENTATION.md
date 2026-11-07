@@ -35,6 +35,18 @@ produce successful measurements or replace an original collection failure.
 These changes affect diagnostic scripts only; the reviewed training implementation
 and original passing qualification receipts are unchanged. Lab B06 remains Pending.
 
+The r3 lab retry (`2f3176b0-a1c6d453`) passed all 53 CPU fixtures and failed before
+ordinary collection: its newly spawned process called `reset_peak_memory_stats`
+while its CUDA allocator was still uninitialized. Parent-process initialization
+and `is_available()` do not initialize that child's allocator. R4 synchronizes
+the selected device before resetting peaks, and runs a 256-byte CUDA allocation,
+execution and counter preflight in every benchmark child. Separate phase
+environment receipts survive both success and failure. Setup time is reported
+outside measured collection/update phases. CPU tests reproduce cold/warm allocator
+behavior through the installed Torch Python APIs with native driver calls mocked,
+check all three child entry points and error export, and ensure CPU fixtures never
+initialize CUDA. Actual GPU startup and performance remain for lab qualification.
+
 ## Ordinary comparison
 
 The compatibility review found that the native branch adapter still required
@@ -45,7 +57,7 @@ their frozen policy IDs; family validation derives the same branch window when
 replaying probabilities/RNG. Parent settings, original packet and earlier branch
 contracts remain unchanged. Regression fixtures exercise actual private-lane
 construction, real v9 sampling/likelihood admission, wrong windows and historical
-family admission. Older archives remain immutable; use r3.
+family admission. Older archives remain immutable; use r4.
 
 Both arms use the actual frozen planner and exact g1250 recipe, including current
 neutral inputs, cache ownership, sparse probes, two-age PPG, and branch T1.5
