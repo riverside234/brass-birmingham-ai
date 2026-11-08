@@ -1,5 +1,13 @@
 # Teacher shadow verification revision
 
+**Follow-up: adapter policy `/2`.** The next run failed with
+`Native teacher closed output: teacher: teacher post-search allowance exceeded`
+(export `20261108T035830347906Z-20261108T035713286446Z-shadow-training-9c6cf95d-33e7c981`).
+The first repair removed Python/ACK/sealing deadlines but missed Rust's pre-verification handoff
+check. That check is now removed for both profiles. Handoff metadata may report zero remaining
+reserve and native post time beyond the old reserve; timing types and actual search limits remain
+checked. Preparation detects/rebuilds the old adapter, retaining its selector as history.
+
 2026-11-07. The latest pulled result is
 `results/rust-lab-qualification/20261108T032034123141Z-20261108T032009416212Z-shadow-training-a9162cac-7bb81128`.
 It contained only the child's exit status. The supplied traceback identifies
@@ -8,8 +16,9 @@ It contained only the child's exit status. The supplied traceback identifies
 ## Current timing policy
 
 User override: **both 0.8s and 4s searches have no independent verification hard deadline**.
-Remove Python verification, Rust late-ACK and deferred policy/value/cache sealing limits. Keep actual
-search/K/quota/session settings and native selection cutoffs unchanged. Active-search/stuck-worker
+Remove Python verification, Rust pre-handoff/late-ACK and deferred policy/value/cache sealing limits. Keep actual
+search/K/quota/session settings and core selection behavior unchanged. The wrapper no longer aborts
+when serialization/label handoff outlasts the old reserve. Active-search/stuck-worker
 watchdogs, cancellation, IPC bounds, job/model/revision/actor bindings, target/feature/logit checks and
 strict complete-table/checkpoint admission remain. Exclude Python verification wait from the active
 search watchdog; it grants no new search time. The installed local game is unchanged.
@@ -27,8 +36,8 @@ constructed an encoder under the shared verifier lock on every labeled turn. It 
 and froze duplicate row trees. These costs serialized across up to 32 tables.
 
 Full model/source identity is now established once per frozen collection. Each turn checks parameter/
-buffer identity, storage/version/layout/config bindings without copying weights; completed-table handoff
-still hashes the model. Each lane reuses an encoder. Rows detach once into immutable containers shared
+buffer identity, storage/version/layout/config bindings without copying weights; the completed-table batch
+hashes the model once, retaining mutation checks per handoff. Each lane reuses an encoder. Rows detach once into immutable containers shared
 by admitted LabelRows. CPU row/target/schema/feature admission runs outside the shared model lock;
 only RNG/mode-preserving independent logit parity is serialized, with cancellable lock acquisition.
 Plain/cold rows retain full content admission. Policy targets, features, sampling, utility/reward,
@@ -36,6 +45,12 @@ optimizer/RNG, search_v1 and recovery semantics are preserved. `weights_only=Tru
 
 The exact source-equivalence review preserves the semantic teacher/search producer; it does not claim
 that the adapter binary is unchanged. The new binary and original qualification are pinned separately.
+
+The `/2` follow-up also establishes source identity once for the job batch, rather than rescanning
+each job/calibration binding. Rust moves owned label/root-value trees into the outgoing message and
+serializes into one frame buffer, avoiding a second full JSON payload copy. A golden framing check
+asserts byte-for-byte compatibility. These are structural work reductions; no measured throughput
+speedup is claimed without a lab run.
 
 ## Lab command
 
@@ -67,4 +82,6 @@ stale replies, bad targets/logits, changed parameters, live/cold output parity, 
 adapter pin/reuse and failure-log export. Native tests cover late ACKs, wrong job/index/status and unchanged
 absolute search/second-action cutoffs. Exact source/counts are recorded in
 `distribution/rust-collector-performance/shadow-verification-fix.json`.
+The `/2` handoff fix and additional work reductions are recorded separately in
+`distribution/rust-collector-performance/shadow-handoff-fix.json`; the first repair's report remains historical.
 Actual Linux/CUDA continuation/throughput remains pending on lab; debug tests establish no speedup.

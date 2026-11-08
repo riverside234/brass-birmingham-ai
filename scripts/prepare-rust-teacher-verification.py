@@ -30,7 +30,7 @@ def prepare(args,evidence):
             pin(project_path(root,checkpoint['path']))['sha256']==checkpoint['sha256'], 'Committed checkpoint changed')
         original=teacher_build(state,prepared=False);source=fingerprint()
         previous=pin(selected) if selected.exists() else None
-        if selected.exists() and read(selected).get('verification_source')==source:
+        if selected.exists() and read(selected).get('verification_source')==source and read(selected).get('verification_policy')==POLICY:
             result=resolve(root,original)
             print('Reused verified teacher adapter: '+str(selected),flush=True)
             return dict(reused=True,runtime=result['receipt'],generation=state['iteration'])
@@ -48,7 +48,7 @@ def prepare(args,evidence):
                                 original_teacher_receipt=original['receipt']))
         result=resolve(root,original)
     return dict(reused=False,runtime=result['receipt'],generation=state['iteration'],
-                scope='Verification ACK deadline only; search core/quota/selection and checkpoint unchanged')
+                scope='Uncapped post-search handoff/verification; search core/quota/selection and checkpoint unchanged')
 
 
 def main():

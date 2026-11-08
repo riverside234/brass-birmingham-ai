@@ -23,6 +23,10 @@ LIMIT = 64*1024**2
 
 
 def validate_job(job):
+    return _validate_job(job,source_fingerprint())
+
+
+def _validate_job(job,producer):
     require(job['kind'] == 'teacher_phase' and job['ordinary_training'] is False,
             'Teacher jobs cannot be ordinary training games')
     expected = defaults(job['search']['reward'])
@@ -42,7 +46,7 @@ def validate_job(job):
     e = job['expected']
     require(job.get('readiness',{}).get('ready') is True and job['readiness']['reward_id'] == e['reward_id'],
             'Teacher readiness deferred; no local deployment exception')
-    require(e['source_fingerprint'] == source_fingerprint() and e['reward_id'] == digest(job['search']['reward'])
+    require(e['source_fingerprint'] == producer and e['reward_id'] == digest(job['search']['reward'])
             and job['seats'] == [e['model_id']]*4, 'Teacher model/source/reward differs')
     require(job['split'] in ('train','heldout') and type(e['generation']) is int and e['generation'] >= 0
             and type(e['epoch']) is int and e['epoch'] >= 0, 'Invalid teacher attribution')
@@ -193,12 +197,13 @@ class TeacherCollector:
         if not jobs:return []
         jobs = copy.deepcopy(jobs)
         require(len({j['expected']['job_id'] for j in jobs}) == len(jobs),'Duplicate teacher job')
-        for job in jobs:validate_job(job)
+        producer=source_fingerprint()
+        for job in jobs:_validate_job(job,producer)
         require(self.model is not None, 'Frozen independent model required for bounded turn verification')
         from .lab_teacher_finalization import TurnVerifier
         self.verifier = TurnVerifier(self.model,self.history,jobs,self.cancel)
         c = self.calibration
-        require(c['contract'] == CONTRACT and c['source'] == source_fingerprint() and c['core_source'] == self.core_source
+        require(c['contract'] == CONTRACT and c['source'] == producer and c['core_source'] == self.core_source
                 and c['model_id'] == jobs[0]['expected']['model_id'] and c['export_hash'] == jobs[0]['expected']['export_hash']
                 and c['reward_id'] == jobs[0]['expected']['reward_id'] and c['device'] == str(self.service.device)
                 and c['profile'] == digest(jobs[0]['search']) and c['samples'] and c['estimate_ns'] > 0,

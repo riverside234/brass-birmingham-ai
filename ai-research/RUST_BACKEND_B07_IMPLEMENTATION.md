@@ -1,7 +1,8 @@
 # B07: cheaper native collection and bounded adoption
 
 **Current shadow verification revision (2026-11-07):** by user request, independent verification/ACK/
-sealing has no hard deadline for either 0.8s or 4s searches. Search budgets and correctness checks
+sealing has no hard deadline for either 0.8s or 4s searches. Adapter `/2` also removes the missed
+Rust pre-verification handoff cap. Search budgets and correctness checks
 remain; timing is sparse. Prepare the new teacher adapter before ordinary preparation and continuation.
 See [the fix and full lab command](RUST_SHADOW_VERIFICATION_REVISION.md). Prior limit evidence stays historical.
 

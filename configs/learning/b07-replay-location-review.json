@@ -1,12 +1,12 @@
 {
   "contract": "brass-b07-replay-location-review/1.0.0",
   "qualified_implementation": "9efcf34f853d75ab844366b6819da4b0921be38d3e2dfb806cf282ace76e7a30",
-  "execution_implementation": "0f5ef79ba8011fe17541357086911fbf817fb19070c02f1543cc1dbb5e80ac80",
+  "execution_implementation": "3c2bbf761c85acb540241f0f039c53fbe87541ee343e92479ac1f453f3a4992b",
   "base_commit": "7244d6b",
   "changes": {
     "configs/learning/collector-performance-teacher-reuse.json": {
       "before": null,
-      "after": "48b673eb45e30bcec9aa85561cbb3ac79d2e4d9ece3e89fe440a6306eb8ce010"
+      "after": "f5a10eae3dc8126b22ddd682f9d9e4ec9ad435d4e2f1d6188b811a8962947d92"
     },
     "lab-native/Cargo.toml": {
       "before": "5c8566eef28f3f1fe0afb3c4e9d65769a3d19a7f7269e74b0bb3d2630588b9c3",
@@ -22,7 +22,7 @@
     },
     "lab-native/src/teacher.rs": {
       "before": "50752978f897e27eceec6ef529d815e5be86713e5bc05c7ea9a4d7938e6e674b",
-      "after": "7a542e82bc289b4363307323dff728ca59e66ed5bdc6011ab7de43922931369c"
+      "after": "f31be618a0f6346b56bea07b1dbd73ffedb0204a09e7f4849a4d3be67702795e"
     },
     "src/brass_ai/recovery/admitted_inputs.py": {
       "before": "47aec3397f698def017fec3653d15c757fc317279227470f30d1e5077afad750",
@@ -198,11 +198,11 @@
     },
     "src/brass_ai/rust_backend/lab_teacher.py": {
       "before": "2fa41cbf32b1bdfb21e4f92c7a755119ea011e38a01727dd099352f7cb0a93fb",
-      "after": "f7beed72f497a0435ac170d59c04a0c7f1210f724654ca85c208f3e6eff9be65"
+      "after": "0705805dd65d4e451f5d042473b310b1b71afd64b5b119ef2b77bc3bdbaaf602"
     },
     "src/brass_ai/rust_backend/lab_teacher_finalization.py": {
       "before": "1719b9dc55148b22bc4cab0e4ce2630f0e4ffd0003f776ed1d0de72b50a6d5a8",
-      "after": "ad3cc54ca1c64067dd0035f0b4f0269e4e4d15176cdb1b57632dbd034aa4c02a"
+      "after": "347765f14f3576b1e27a6d7e12c83cfb1066aea4f77b8e4e372d2d9a6ceb33a1"
     },
     "src/brass_ai/rust_backend/lab_teacher_overlay.py": {
       "before": "44914835c17e109063a5b181a3293e78195f04ecd3d8e1e014dcface60de804e",
@@ -210,7 +210,7 @@
     },
     "src/brass_ai/rust_backend/lab_teacher_runtime.py": {
       "before": null,
-      "after": "b7e6ceb09d5cc2b5d0d3b08b7ff2d0a4a8ca013e2d4aaef00e232867a6cf5c44"
+      "after": "6598aa9c834a5f74faa3bcd570692b719b22fa25d5713676560ed30217d57b27"
     },
     "src/brass_ai/rust_backend/lab_transport.py": {
       "before": "94d9883f480e5a3bb44e8da0b0e91302fc61e62478739b0d70f666bcfd8554b9",
@@ -254,6 +254,11 @@
       "implementation": "323d07b20c9086c7f69cebb7d3a4e9164f60959caec17b4e48e554bcfb0b4803",
       "qualified_implementation": "9efcf34f853d75ab844366b6819da4b0921be38d3e2dfb806cf282ace76e7a30",
       "replay_location_review": "4d0aba144cc913e25fb72dbe8cdfef0199efea57710c1eb1bd3475cd731b6834"
+    },
+    {
+      "implementation": "0f5ef79ba8011fe17541357086911fbf817fb19070c02f1543cc1dbb5e80ac80",
+      "qualified_implementation": "9efcf34f853d75ab844366b6819da4b0921be38d3e2dfb806cf282ace76e7a30",
+      "replay_location_review": "6d8faa73ffdcb65485f185a844240dc3c00571581c847537d0bc1ec70ea77adc"
     }
   ],
   "performance_evidence": "results/joint7-v11-2-g1290-trained-restart-g1253-20261107T145415686647Z/iteration-1252/report.json",
@@ -299,7 +304,7 @@
     "authority": "User request to store these two settings in training config instead of export"
   },
   "shadow_verification_revision": {
-    "policy": "sampled-unbounded-verification/1",
+    "policy": "sampled-unbounded-verification/2",
     "search_budgets": {
       "fast": 0.8,
       "full": 4.0
@@ -308,6 +313,6 @@
     "independent_verification_deadline": null,
     "verification_sampling": "first-per-profile-per-table-and-every-64-turns",
     "optimization": "Model/source identity once per frozen collection, version bindings per turn, CPU prepare outside model lock, immutable rows detached once; cold rows retain full admission",
-    "scope": "No optimizer/RNG/math/reward/feature/search-v1 change; native ACK handling, Python verification and independent seal deadlines removed by explicit user request"
+    "scope": "No optimizer/RNG/math/reward/feature/search-v1 change; native post-search handoff/ACK, Python verification and independent seal deadlines removed by explicit user request"
   }
 }

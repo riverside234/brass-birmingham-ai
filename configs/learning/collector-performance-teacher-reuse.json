@@ -25,7 +25,7 @@
     "lab-native/src/main.rs": "d04083c21274a3b368ca2ca351f830fbb073fdb79367a3248e3bcaf3f19eda82",
     "lab-native/src/ordinary_delta.rs": "6b58f13039e2a3c9cc32a23e5927455ed2365c1ebd7d7723004a186e7d9e6bd2",
     "lab-native/src/scoring.rs": "2e41cb5647dc5b41bf305330fae8869fa8fa969936f8e3b7240d22262c331ecd",
-    "lab-native/src/teacher.rs": "7a542e82bc289b4363307323dff728ca59e66ed5bdc6011ab7de43922931369c",
+    "lab-native/src/teacher.rs": "f31be618a0f6346b56bea07b1dbd73ffedb0204a09e7f4849a4d3be67702795e",
     "lab-native/tests/lanes.rs": "9b1b08c4c4665ec35ed0ecd129a7662a07f07409ce902d8cb8be729c18932a86",
     "lab-native/tests/teacher.rs": "58d24527e3106b0ea9a3f7b4b494ad06549018163ac2cf0b7343e7dc8538165f",
     "lab-native/tests/teacher_wire.rs": "53de15eea61ba0b5896e5ae3c224017fb88a99bb17a553944806f1856f60e52c",
@@ -60,9 +60,9 @@
     "f103ea62c89a7e2f9e2b3c97faa65e6594a41d9f0fcd964e4c92ee4a35a7ca92"
   ],
   "verification_revision": {
-    "policy": "sampled-unbounded-verification/1",
+    "policy": "sampled-unbounded-verification/2",
     "authority": "User explicitly removed independent verification deadlines for both 0.8s and 4s profiles",
-    "scope": "Exact teacher.rs changes remove only the ACK deadline and sample ACK metrics; search core, quotas, recommendations, labels/features/rewards unchanged. New adapter binary pinned separately; original qualification remains historical.",
+    "scope": "Exact teacher.rs changes remove pre-handoff and ACK deadlines, move owned row trees and remove a full frame copy; search core, quotas, recommendations, labels/features/rewards unchanged. New adapter binary pinned separately; original qualification remains historical.",
     "source_before": "323d07b20c9086c7f69cebb7d3a4e9164f60959caec17b4e48e554bcfb0b4803"
   }
 }

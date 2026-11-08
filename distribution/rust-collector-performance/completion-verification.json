@@ -240,5 +240,10 @@
     "path": "distribution/rust-collector-performance/shadow-verification-fix.json",
     "sha256": "726606bf964e97d811dc5e42ff1c1b40fffbe85a718f3884d42fd8bc00697bda",
     "note": "Supersedes lab verification/sealing hard caps only; older timing reports remain historical."
+  },
+  "shadow_handoff_revision": {
+    "path": "distribution/rust-collector-performance/shadow-handoff-fix.json",
+    "sha256": "86d36a523f10617b7cb4fb431114d4051e1b3cdab7afb4b9c11c264bc8d32c71",
+    "note": "Policy /2 removes the missed native pre-verification cap and further reduces teacher overhead; older repair report remains historical."
   }
 }

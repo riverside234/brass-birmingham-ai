@@ -68,11 +68,66 @@ class Verification(unittest.TestCase):
             self.assertEqual(v.verify(meta,time.monotonic())['status'],'ok')
         self.assertEqual(v.cache[job['expected']['job_id']]['last'],1)
 
+    def test_both_profiles_accept_late_native_handoff_with_zero_remaining(self):
+        for profile in ('fast','full'):
+            _,job,_,v,meta=self.fixture()
+            meta.update(profile=profile,remaining_ns=0,native_post_ns=2_000_000_000,
+                        search_ns=800_000_000 if profile=='fast' else 4_000_000_000)
+            if profile=='fast':meta['rows']=[]
+            with self.subTest(profile=profile):
+                self.assertEqual(v.verify(meta,time.monotonic()-3)['status'],'ok')
+                self.assertIsNone(v.cache[job['expected']['job_id']]['timings'][0]['verification_limit_seconds'])
+
+    def test_handoff_timing_metadata_and_search_limits_still_checked(self):
+        for profile in ('fast','full'):
+            for change in ({'native_post_ns':-1},{'native_post_ns':True},{'native_post_ns':2**64},
+                           {'remaining_ns':-1},{'native_post_ns':2_000_000_000,'remaining_ns':1},
+                           {'search_ns':800_000_001 if profile=='fast' else 4_000_000_001}):
+                _,_,_,v,meta=self.fixture();meta.update(profile=profile,**change)
+                if profile=='fast':meta['rows']=[]
+                with self.subTest(profile=profile,change=change),self.assertRaises(ValueError):v.verify(meta,time.monotonic())
+
+    def test_completed_table_handoffs_hash_frozen_model_once_and_detect_later_mutation(self):
+        for mutate in (False,True):
+            model,job,history,_,meta=self.fixture()
+            second=copy.deepcopy(job);second['expected'].update(job_id='other-table',game_id='other-game')
+            v=F.TurnVerifier(model,history,[job,second],threading.Event());results=[]
+            for frozen_job in (job,second):
+                raw=copy.deepcopy(meta['rows'][0]);raw['teacher'].update(frozen_job['expected'])
+                rows=[]
+                for index in range(1,65):
+                    current=dict(meta,job=frozen_job['expected'],index=index,rows=[raw] if index==1 else [])
+                    v.verify(current,time.monotonic());rows.extend(current['rows'])
+                results.append(dict(job_id=frozen_job['expected']['job_id'],rows=rows,
+                    metrics=dict(searched_turns=64,reserved_turns=16)))
+            with patch.object(F,'model_id',wraps=model_id) as hashed:
+                v.take(results[0],job,model)
+                if mutate:
+                    with torch.no_grad():next(model.parameters()).add_(.1)
+                    with self.assertRaisesRegex(ValueError,'model changed'):v.take(results[1],second,model)
+                else:v.take(results[1],second,model)
+                self.assertEqual(hashed.call_count,1)
+
     def test_changed_weights_or_config_cannot_reuse_frozen_binding(self):
         model,_,_,v,meta=self.fixture()
         with torch.no_grad():next(model.parameters()).add_(.1)
         with self.assertRaisesRegex(ValueError,'model changed'):v.verify(meta,time.monotonic())
         self.assertTrue(all(not r['accepted'] for r in v.cache.values()))
+
+    def test_teacher_job_batch_reuses_one_source_fingerprint(self):
+        from brass_ai.rust_backend import lab_teacher as T
+        model,job,history,_,_=self.fixture()
+        second=copy.deepcopy(job);second['expected'].update(job_id='other-table',game_id='other-game')
+        producer=T.source_fingerprint();expected=job['expected'];service=Mock();service.device='cpu'
+        class StopBeforeWorkers(Exception):pass
+        service.channels.side_effect=StopBeforeWorkers()
+        calibration=dict(contract=T.CONTRACT,source=producer,core_source='core',
+            model_id=expected['model_id'],export_hash=expected['export_hash'],reward_id=expected['reward_id'],
+            device='cpu',profile=digest(job['search']),samples=[1],estimate_ns=1000)
+        collector=T.TeacherCollector('unused','core',[],service,calibration,model=model,history=history)
+        with patch.object(T,'source_fingerprint',return_value=producer) as source,patch.object(F,'TurnVerifier'):
+            with self.assertRaises(StopBeforeWorkers):collector.collect([job,second])
+        source.assert_called_once()
 
     def test_row_preparation_runs_outside_shared_model_lock(self):
         _,_,_,v,meta=self.fixture();ready=threading.Event();original=F.prepare_rows
@@ -124,7 +179,7 @@ class Verification(unittest.TestCase):
     def test_sparse_recorded_timings_keep_offline_row_coverage_replay(self):
         from rust_lab_b06_teacher import replay_stream,summarize_turns
         model,job,history,_,meta=self.fixture()
-        turns=[dict(index=i,label_rows=1 if i==1 else 0,profile='full',native_post_ns=10_000_000,
+        turns=[dict(index=i,label_rows=1 if i==1 else 0,profile='full',native_post_ns=2_000_000_000,
                     search_ns=800_000_000,post_search_ns=2_000_000_000,selection_ns=0,labels_ns=0,
                     commit_ns=0,elapsed_ns=3_000_000_000,**({'verification_ipc_ns':2_000_000_000} if i==1 else {}))
                for i in range(1,65)]
@@ -237,6 +292,20 @@ class RuntimePreparation(unittest.TestCase):
              patch('rust_lab_b07_retry.build_teacher',side_effect=build):
             with self.assertRaisesRegex(ValueError,'changed during teacher build'):self.module.prepare(args,evidence)
         self.assertFalse(self.selector.exists());self.assertEqual(read(self.run/'state.json'),self.state)
+
+    def test_old_handoff_limited_adapter_is_rebuilt_and_selector_retained(self):
+        evidence=self.root/'artifacts/evidence';evidence.mkdir()
+        old=dict(self.selected,verification_policy='sampled-unbounded-verification/1',verification_source='old-source')
+        self.write_json(self.selector,old);original_bytes=self.selector.read_bytes()
+        args=SimpleNamespace(run='artifacts/run',expected_generation=1257,offline=True)
+        with patch('brass_ai.rust_backend.lab_backend.validate_state',return_value={'mode':'rust'}), \
+             patch('brass_ai.rust_backend.lab_shadow.teacher_build',return_value=self.original), \
+             patch('rust_lab_b07_retry.build_teacher',return_value=self.built) as build:
+            result=self.module.prepare(args,evidence)
+        self.assertFalse(result['reused']);build.assert_called_once()
+        self.assertEqual((evidence/'previous-teacher-runtime.json').read_bytes(),original_bytes)
+        self.assertEqual(read(self.selector)['verification_policy'],'sampled-unbounded-verification/2')
+        self.assertEqual(read(self.run/'state.json'),self.state)
 
 
 if __name__=='__main__':unittest.main()

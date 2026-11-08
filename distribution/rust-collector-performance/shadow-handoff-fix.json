@@ -1,0 +1,89 @@
+{
+  "contract": "brass-shadow-handoff-fix/2",
+  "date": "2026-11-07",
+  "execution": {
+    "implementation": "3c2bbf761c85acb540241f0f039c53fbe87541ee343e92479ac1f453f3a4992b",
+    "qualified_implementation": "9efcf34f853d75ab844366b6819da4b0921be38d3e2dfb806cf282ace76e7a30",
+    "replay_location_review": "8e65ab5168786138e19cd2c2ad9082d0c1ff7c7509d2570756af7f106b70bf63"
+  },
+  "policy": "sampled-unbounded-verification/2",
+  "failure_export": "20261108T035830347906Z-20261108T035713286446Z-shadow-training-9c6cf95d-33e7c981",
+  "supplied_traceback_sha256": "37fcb88fa99526253e1fb79c016cdd88af2c8a68b33fdf61fbe02093666e130f",
+  "root_error": "Native teacher closed output: teacher: teacher post-search allowance exceeded",
+  "cause": "Prior repair removed Python/ACK/sealing deadlines but missed native pre-verification handoff and positive-remaining metadata requirements",
+  "correction": {
+    "search_seconds": {
+      "fast": 0.8,
+      "full": 4.0
+    },
+    "handoff_and_verification_limit_seconds": null,
+    "elapsed_native_post_and_zero_remaining_accepted": true,
+    "search_limits_and_timing_types_checked": true,
+    "core_search_and_selection_unchanged": true,
+    "sparse_timing_policy_unchanged": true,
+    "prepared_v1_adapter_automatically_rebuilt": true
+  },
+  "optimization": {
+    "model_handoff": "One full hash per frozen table batch, exact model/config/version/storage guards per table; cold/foreign callers remain strict",
+    "job_source": "One fingerprint for job batch and calibration binding; independent verifier boundary retains its own admission",
+    "native_rows": "Move owned JSON label/root-value trees into message instead of cloning histories",
+    "native_framing": "Serialize directly into one frame buffer, no second full payload copy; golden byte equivalence checked",
+    "measured_throughput_gain": null
+  },
+  "preservation": {
+    "features_labels_rewards_sampling": true,
+    "model_optimizer_rng": true,
+    "cancellation_stale_reply_recovery": true,
+    "original_qualification_archives": true,
+    "installed_game": true,
+    "checkpoint_or_pending_cache_changes": false
+  },
+  "debug": {
+    "python_passed": 71,
+    "python_seconds": 72.925,
+    "rust_passed": 6,
+    "rust_test_seconds": [
+      0.24,
+      0.1
+    ],
+    "logs": [
+      {
+        "path": "artifacts/shadow-handoff-repair/debug.log",
+        "sha256": "631be1b354f520fd880816850d017adb01799f5110ae92c013672e88f4f8b1dc"
+      },
+      {
+        "path": "artifacts/shadow-handoff-repair/native-tests.log",
+        "sha256": "84ee32b10cea6ba289bba8860e5ea10a106c598df58e6d33e5fed7b2f7893d9f"
+      }
+    ],
+    "covers": [
+      "late handoff and late ACK for both profiles",
+      "zero remaining metadata and malformed/overbudget search rejection",
+      "wire byte parity and owned row counts",
+      "batch model/source reuse and subsequent mutation rejection",
+      "old adapter rebuild retaining original selector/checkpoint",
+      "cold output parity, cancellation, stale and corrupt data recovery"
+    ],
+    "no_benchmarks": true,
+    "no_local_training": true,
+    "no_unrelated_qualification_reruns": true
+  },
+  "native": {
+    "executed_source_files_match_checkout": true,
+    "teacher_adapter_source": "15d9ebb267fe471b9d3513d481ca86aabd5b074ab79a8c6d24847a5d1e18dc52",
+    "semantic_teacher_producer": "dbe27fb771be5297cebcdcdf56d9d054bf5a6b270ec37008f75f80ce3f717101",
+    "ordinary_source": "9e2e5ea764d23f62e5f0bb6d6ef0048a3745ba4998803b78adb5838480558df2",
+    "qualified_search_core": "8d59ec4b5716c3b16c9d00d97975f589e481b629afc85f1732db4e37549db4cf"
+  },
+  "source_review": {
+    "qualified_source_reconstructed": true,
+    "source_files": 366,
+    "reviewed_changes": 54
+  },
+  "continuation": [
+    "python scripts/prepare-rust-teacher-verification.py --expected-generation 1257 --offline",
+    "python scripts/prepare-rust-collector-performance.py --expected-generation 1257 --offline",
+    "python scripts/continue-rust-shadow.py --expected-generation 1257 --iterations 2 --share-target 0.25"
+  ],
+  "lab_linux_cuda_training": "Pending"
+}

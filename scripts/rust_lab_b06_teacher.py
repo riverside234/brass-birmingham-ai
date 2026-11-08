@@ -126,7 +126,7 @@ def probes(args,snapshot,build,model,jobs,fixtures):
 def replay_stream(model,history,job,table):
     """Replay identical recorded rows through the actual streamed verifier.
 
-    Native handoff bounds are retained; verification has no hard deadline.
+    Native timing metadata is checked; handoff/verification has no hard deadline.
     This is an offline validator timing,
     never a claim to recollect or republish those historical turns.
     """
@@ -144,7 +144,7 @@ def replay_stream(model,history,job,table):
         count=turn['label_rows'] if sparse else check['rows']
         require(type(count) is int and 0<=count<=2 and (check is None or check['rows']==count),'Recorded row coverage differs')
         rows=table['rows'][offset:offset+count];offset+=count
-        allowance=(500_000_000 if turn['profile']=='fast' else 1_000_000_000)-turn['native_post_ns']
+        allowance=max(0,(500_000_000 if turn['profile']=='fast' else 1_000_000_000)-turn['native_post_ns'])
         if check is not None and 'allowance_seconds' in check:
             allowance=min(int(check['allowance_seconds']*1e9),allowance)
         meta=dict(job=job['expected'],timing=TIMING,index=turn['index'],profile=turn['profile'],

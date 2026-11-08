@@ -31,6 +31,7 @@ class TurnVerifier:
         self.diagnostic = diagnostic
         self.sources = teacher_sources(jobs) if not diagnostic else set()
         self.encoders = threading.local()
+        self.handoff_model_checked = False
 
     def _binding(self):
         # No GPU synchronization or weight copy. The collection is exclusive
@@ -56,13 +57,16 @@ class TurnVerifier:
         require(meta['job'] == job['expected'] and meta['timing'] == TIMING,
                 'Stale turn/job/timing identity')
         require(meta.get('diagnostic',False) is self.diagnostic, 'Wrong turn verification scope')
-        fast = meta.get('profile', 'full') == 'fast'
+        profile = meta.get('profile','full')
+        require(profile in ('fast','full'),'Invalid teacher search profile')
+        fast = profile == 'fast'
         search_ns, post_ns = (800_000_000,int(FAST_POST_SECONDS*1e9)) if fast else (4_000_000_000,1_000_000_000)
         require(not fast or (job.get('seating') == 'all-seat-search' and not meta['rows']), 'Fast searches cannot label')
-        require(type(meta['remaining_ns']) is int and 0 < meta['remaining_ns'] <= post_ns
-                and 0 <= meta['native_post_ns'] < post_ns
-                and meta['remaining_ns'] <= post_ns-meta['native_post_ns']
-                and 0 <= meta['search_ns'] <= search_ns, 'Invalid post-search allowance')
+        require(type(meta['remaining_ns']) is int and 0 <= meta['remaining_ns'] <= post_ns
+                and type(meta['native_post_ns']) is int and 0 <= meta['native_post_ns'] < 2**64
+                and meta['remaining_ns'] <= max(0,post_ns-meta['native_post_ns'])
+                and type(meta['search_ns']) is int and 0 <= meta['search_ns'] <= search_ns,
+                'Invalid post-search timing metadata')
         if meta.get('value_row') is not None:
             from brass_ai.recovery.search_value_rows import validate_root
             validate_root(meta['value_row'], job)
@@ -73,7 +77,6 @@ class TurnVerifier:
         record = self.cache.setdefault(identity, dict(raw=[], accepted=[], rejected=Counter(), timings=[], last=0, sampled_profiles=set()))
         require(meta['index'] == record['last'] + 1 and len(meta['rows']) <= 2,
                 'Duplicate/out-of-order/excess teacher turn')
-        profile = meta.get('profile', 'full')
         sampled = profile not in record['sampled_profiles'] or meta['index'] % 64 == 0
         began = time.monotonic() if sampled else None
         from brass_ai.recovery.admitted_inputs import _freeze
@@ -141,7 +144,16 @@ class TurnVerifier:
     def take(self, result, job, model):
         began = time.monotonic()
         require(not self.diagnostic, 'Diagnostic probes cannot enter the teacher buffer')
-        require(not self.cancel.is_set() and model_id(model) == self.model_id, 'Retired/changed verifier model')
+        require(not self.cancel.is_set(),'Retired/changed verifier model')
+        if hasattr(self,'model_binding'):
+            require(model is self.model,'Retired/changed verifier model')
+            self._check_model()
+            if not self.handoff_model_checked:
+                require(model_id(model)==self.model_id,'Retired/changed verifier model')
+                self.handoff_model_checked=True
+        else:
+            # Foreign/offline diagnostic construction has no private binding.
+            require(model_id(model)==self.model_id,'Retired/changed verifier model')
         key = job['expected']['job_id']; record = self.cache.get(key)
         require(record is not None and job == self.jobs[key] and result['job_id'] == key,
                 'Changed/unverified teacher table')

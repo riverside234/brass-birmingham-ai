@@ -72,13 +72,20 @@ fn finish_turn<R: Read, W: Write>(peer: &mut Peer<R, W>, budget: Budget,
     let before = peer.clock.now_ns();
     let post_ns = before.saturating_sub(budget.started_ns).saturating_sub(work.search_ns);
     let post = budget.reserve_ns;
-    check(work.search_ns <= budget.work_deadline_ns - budget.started_ns && post_ns < post && before < budget.deadline_ns,
-          "teacher post-search allowance exceeded")?;
-    let remaining_ns = (post - post_ns).min(budget.deadline_ns - before);
-    emit(&mut peer.output, json!({"event":"turn","job":peer.expected,"index":index,
-        "timing":TIMING,"remaining_ns":remaining_ns,"rows":work.rows,"diagnostic":diagnostic,
+    check(work.search_ns <= budget.work_deadline_ns - budget.started_ns,
+          "teacher search allowance exceeded")?;
+    // Only search admission is capped. Native serialization/label handoff may
+    // outlast the old reserve, just as independent Python verification may.
+    let remaining_ns = post.saturating_sub(post_ns).min(budget.deadline_ns.saturating_sub(before));
+    let row_count = work.rows.len();
+    let mut message = json!({"event":"turn","job":peer.expected,"index":index,
+        "timing":TIMING,"remaining_ns":remaining_ns,"rows":null,"diagnostic":diagnostic,
         "search_ns":work.search_ns,"native_post_ns":post_ns,
-        "profile":if work.fast {"fast"} else {"full"},"value_row":work.value_row}))?;
+        "profile":if work.fast {"fast"} else {"full"},"value_row":null});
+    // Move owned JSON trees rather than cloning whole board histories again.
+    message["rows"] = Value::Array(std::mem::take(&mut work.rows));
+    message["value_row"] = work.value_row.take().unwrap_or(Value::Null);
+    emit(&mut peer.output, message)?;
     let ack: Value = serde_json::from_slice(&read_frame(&mut peer.input)?)?;
     let after = peer.clock.now_ns();
     check(ack["job"] == peer.expected && ack["index"] == index && ack["status"] == "ok",
@@ -86,7 +93,7 @@ fn finish_turn<R: Read, W: Write>(peer: &mut Peer<R, W>, budget: Budget,
     let total_post = after.saturating_sub(budget.started_ns).saturating_sub(work.search_ns);
     // The search and native selection budgets above are unchanged. Independent
     // Python verification may finish later; its ACK never admits search work.
-    let mut report = json!({"index":index,"timing":TIMING,"search_ns":work.search_ns,"label_rows":work.rows.len(),
+    let mut report = json!({"index":index,"timing":TIMING,"search_ns":work.search_ns,"label_rows":row_count,
         "selection_ns":work.selection_ns,"labels_ns":work.labels_ns,"commit_ns":work.commit_ns,
         "native_post_ns":post_ns,"verification_limit_seconds":null,
         "post_search_ns":total_post,"elapsed_ns":after.saturating_sub(budget.started_ns),
@@ -122,6 +129,10 @@ mod verification_tests {
     }
 
     fn turn(fast: bool, ack: Value) -> Result<Value> {
+        turn_case(fast,ack,false,0)
+    }
+
+    fn turn_case(fast: bool, ack: Value, late_handoff: bool, search_ns: u64) -> Result<Value> {
         let raw = serde_json::to_vec(&ack)?;
         let mut frame = (raw.len() as u32).to_le_bytes().to_vec(); frame.extend(raw);
         let mut peer = Peer {
@@ -132,8 +143,19 @@ mod verification_tests {
         };
         // A deliberately tiny native handoff window, not a search benchmark.
         let budget = Budget { started_ns:0,work_deadline_ns:1,deadline_ns:50_000_001,reserve_ns:50_000_000 };
-        let mut work = TurnWork { fast, ..TurnWork::default() };
-        finish_turn(&mut peer,budget,&mut work,1,false)
+        let expected_rows = if fast {vec![]} else {vec![json!({"history":["row",1],"chosen":0})]};
+        let mut work = TurnWork { fast,search_ns,rows:expected_rows.clone(), ..TurnWork::default() };
+        if late_handoff { thread::sleep(Duration::from_millis(60)); }
+        let result = finish_turn(&mut peer,budget,&mut work,1,false);
+        if result.is_ok() {
+            let payload = read_frame(&mut Cursor::new(peer.output))?;
+            let size = u32::from_le_bytes(payload[..4].try_into().unwrap()) as usize;
+            let message: Value = serde_json::from_slice(&payload[4..4+size])?;
+            assert_eq!(message["rows"],json!(expected_rows));
+            if late_handoff { assert_eq!(message["remaining_ns"],0); }
+            assert!(work.rows.is_empty());
+        }
+        result
     }
 
     #[test]
@@ -154,6 +176,28 @@ mod verification_tests {
             assert!(turn(false,ack).is_err());
         }
     }
+
+    #[test]
+    fn both_profiles_accept_handoff_after_old_post_window_but_still_cap_search() {
+        for fast in [false,true] {
+            let ack = json!({"job":{"job_id":"frozen"},"index":1,"status":"ok"});
+            let report = turn_case(fast,ack.clone(),true,0).unwrap();
+            assert!(report["native_post_ns"].as_u64().unwrap() >= 50_000_000);
+            assert_eq!(report["label_rows"],if fast {0} else {1});
+            assert!(turn_case(fast,ack,false,2).is_err());
+        }
+    }
+
+    #[test]
+    fn single_buffer_emit_preserves_original_wire_bytes() {
+        let history = vec![json!({"x":0.1234567890123456});64];
+        let value = json!({"unicode":"黄", "history":history,"rows":[]});
+        let data = serde_json::to_vec(&value).unwrap();
+        let mut expected = ((data.len()+4) as u32).to_le_bytes().to_vec();
+        expected.extend_from_slice(&(data.len() as u32).to_le_bytes());expected.extend(data);
+        let mut actual = Vec::new();emit(&mut actual,value).unwrap();
+        assert_eq!(actual,expected);
+    }
 }
 fn write_frame(output: &mut impl Write, bytes: &[u8]) -> Result<()> {
     check(
@@ -166,9 +210,11 @@ fn write_frame(output: &mut impl Write, bytes: &[u8]) -> Result<()> {
     Ok(())
 }
 fn emit(output: &mut impl Write, value: Value) -> Result<()> {
-    let data = serde_json::to_vec(&value)?;
-    let mut bytes = (data.len() as u32).to_le_bytes().to_vec();
-    bytes.extend(data);
+    let mut bytes = vec![0; 4];
+    serde_json::to_writer(&mut bytes, &value)?;
+    check(bytes.len() <= LIMIT, "teacher output bound")?;
+    let metadata_len = (bytes.len() - 4) as u32;
+    bytes[..4].copy_from_slice(&metadata_len.to_le_bytes());
     write_frame(output, &bytes)
 }
 
@@ -454,7 +500,7 @@ pub fn run() -> Result<()> {
         &mut peer.output,
         json!({"event":"hello","core":brass_ai_core::protocol::BuildIdentity::current(),
         "contract":CONTRACT,"job":expected,"method":"search_v1","v205_enabled":false,
-        "verification_policy":"sampled-unbounded-verification/1"}),
+        "verification_policy":"sampled-unbounded-verification/2"}),
     )?;
     loop {
         if state.context().terminal {

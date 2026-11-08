@@ -1,7 +1,7 @@
 # Rust Simulation and Gumbel IS-MCTS Backend Migration Plan
 
 **Lab shadow verification override, 2026-11-07:** for both 0.8s and 4s training searches,
-remove independent post-search verification/ACK/sealing hard deadlines. Keep search budgets and all
+remove post-search handoff/verification/ACK/sealing hard deadlines (adapter policy `/2`). Keep search budgets and all
 correctness/recovery checks. Reuse frozen model/source identity, check lightweight mutation bindings,
 move CPU admission outside the model lock and record sparse verification timings. Prepare the new
 teacher adapter against the original core. This supersedes older lab verification/sealing caps below;
