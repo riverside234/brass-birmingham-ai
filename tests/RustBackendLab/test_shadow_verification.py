@@ -295,7 +295,7 @@ class RuntimePreparation(unittest.TestCase):
 
     def test_old_handoff_limited_adapter_is_rebuilt_and_selector_retained(self):
         evidence=self.root/'artifacts/evidence';evidence.mkdir()
-        old=dict(self.selected,verification_policy='sampled-unbounded-verification/1',verification_source='old-source')
+        old=dict(self.selected,verification_policy='sampled-unbounded-verification/2',verification_source='old-source')
         self.write_json(self.selector,old);original_bytes=self.selector.read_bytes()
         args=SimpleNamespace(run='artifacts/run',expected_generation=1257,offline=True)
         with patch('brass_ai.rust_backend.lab_backend.validate_state',return_value={'mode':'rust'}), \
@@ -304,7 +304,8 @@ class RuntimePreparation(unittest.TestCase):
             result=self.module.prepare(args,evidence)
         self.assertFalse(result['reused']);build.assert_called_once()
         self.assertEqual((evidence/'previous-teacher-runtime.json').read_bytes(),original_bytes)
-        self.assertEqual(read(self.selector)['verification_policy'],'sampled-unbounded-verification/2')
+        from brass_ai.rust_backend.lab_teacher_runtime import POLICY
+        self.assertEqual(read(self.selector)['verification_policy'],POLICY)
         self.assertEqual(read(self.run/'state.json'),self.state)
 
 

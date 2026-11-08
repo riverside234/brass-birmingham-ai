@@ -5,7 +5,7 @@ from pathlib import Path
 from brass_ai.learning.contracts import SOURCE_ROOT,digest,require
 from .lab_contract import pin
 
-POLICY='sampled-unbounded-verification/2'
+POLICY='sampled-unbounded-verification/3'
 SELECTOR='artifacts/rust-backend/teacher-verification/build.json'
 
 

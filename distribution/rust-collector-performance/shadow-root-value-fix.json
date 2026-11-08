@@ -1,0 +1,92 @@
+{
+  "contract": "brass-shadow-root-value-fix/3",
+  "date": "2026-11-07",
+  "execution": {
+    "implementation": "3e1de866b56e821c9d8492152c27afff924ffb52fe2c7e75089c45a7a69f0c98",
+    "qualified_implementation": "9efcf34f853d75ab844366b6819da4b0921be38d3e2dfb806cf282ace76e7a30",
+    "replay_location_review": "32006f021a5f730c59330ee5e73c00f93b73068845439dd4cc0544c41818637f"
+  },
+  "policy": "sampled-unbounded-verification/3",
+  "supplied_traceback_sha256": "b3c96de71a1581045800009112f9649e1abe2777ae1848d13cbc68fbebbc0732",
+  "root_error": "Native teacher closed output: teacher: invalid request: evaluation deadline",
+  "cause": "Missing root evidence/cache after forced or expired root evaluation entered a value-only fallback with the expired search deadline",
+  "fix": {
+    "prediction": "After action selection, use the existing 10-second non-search NN delivery watchdog; restore original search deadline on success/error",
+    "features": "Reuse exact root encoding from successful fallback, avoiding a second encoder walk",
+    "cached_root": "Existing root NN statistics still avoid another request",
+    "search_trajectories_added": 0,
+    "policy_labels_invented": 0,
+    "session_cache_modified": false,
+    "expired_and_stale_replies_rejected": true,
+    "wrong_root_rejected": true
+  },
+  "preservation": {
+    "search_seconds": {
+      "fast": 0.8,
+      "full": 4.0
+    },
+    "checkpoint_optimizer_rng": true,
+    "teacher_feature_value_math": true,
+    "qualification_and_completed_table_caches": true,
+    "installed_game": true
+  },
+  "native": {
+    "teacher_adapter_source": "c4ecd7e2ad61726fd4e38108145068dacce7ef8ff3897ac6580c3fa56cad4a3d",
+    "semantic_teacher_producer": "dbe27fb771be5297cebcdcdf56d9d054bf5a6b270ec37008f75f80ce3f717101",
+    "ordinary_source": "9e2e5ea764d23f62e5f0bb6d6ef0048a3745ba4998803b78adb5838480558df2",
+    "qualified_search_core": "8d59ec4b5716c3b16c9d00d97975f589e481b629afc85f1732db4e37549db4cf",
+    "executed_sources_match_checkout": true
+  },
+  "debug": {
+    "python_passed": 13,
+    "python_seconds": 4.255,
+    "rust_passed": 7,
+    "rust_test_seconds": [
+      0.24
+    ],
+    "logs": [
+      {
+        "path": "artifacts/shadow-root-value-repair/final-debug.log",
+        "sha256": "e125b826831b9be481c74c3f54035d3f8c26b302cb737c66031468cbd9c0f6b5"
+      },
+      {
+        "path": "artifacts/shadow-root-value-repair/final-native-tests.log",
+        "sha256": "455161731fb99a4f8cb2d83aab20641d4d0fad3eb30c91fdd81fb6ce11db4ae1"
+      }
+    ],
+    "coverage": [
+      "forced and multi-choice root after expired search deadline",
+      "exact root features/mapping and network utility with zero visits",
+      "deadline restoration on success and error",
+      "cached-root request reuse",
+      "wrong root/epoch and expired reply rejection",
+      "original search deadline restored without new search work",
+      "old adapter rebuild, checkpoint pins and continuation guards"
+    ],
+    "no_local_training": true,
+    "no_benchmarks": true,
+    "no_unrelated_qualification_reruns": true
+  },
+  "investigation": {
+    "expected_misses": [
+      "forced single-action root skips NN",
+      "work/delivery cutoff before first root NN",
+      "root inference produces no accepted result before cutoff"
+    ],
+    "dedicated_root_snapshot_separate_from_session_lru": true,
+    "actual_trigger_from_traceback": "Unknown which expected miss caused this particular fallback; traceback proves expired-deadline fallback only",
+    "diagnostics": "metrics.root_value_sources contains five integer counters per fast/full profile, emitted once per table; no extra NN/clocks/per-turn logs",
+    "old_cached_tables_without_counters": "Unknown coverage; never recollect solely for diagnostics"
+  },
+  "source_review": {
+    "qualified_source_reconstructed": true,
+    "source_files": 366,
+    "reviewed_changes": 54
+  },
+  "continuation": [
+    "python scripts/prepare-rust-teacher-verification.py --expected-generation 1257 --offline",
+    "python scripts/prepare-rust-collector-performance.py --expected-generation 1257 --offline",
+    "python scripts/continue-rust-shadow.py --expected-generation 1257 --iterations 2 --share-target 0.25"
+  ],
+  "lab_linux_cuda_continuation": "Pending"
+}

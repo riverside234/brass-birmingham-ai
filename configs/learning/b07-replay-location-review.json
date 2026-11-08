@@ -1,12 +1,12 @@
 {
   "contract": "brass-b07-replay-location-review/1.0.0",
   "qualified_implementation": "9efcf34f853d75ab844366b6819da4b0921be38d3e2dfb806cf282ace76e7a30",
-  "execution_implementation": "3c2bbf761c85acb540241f0f039c53fbe87541ee343e92479ac1f453f3a4992b",
+  "execution_implementation": "3e1de866b56e821c9d8492152c27afff924ffb52fe2c7e75089c45a7a69f0c98",
   "base_commit": "7244d6b",
   "changes": {
     "configs/learning/collector-performance-teacher-reuse.json": {
       "before": null,
-      "after": "f5a10eae3dc8126b22ddd682f9d9e4ec9ad435d4e2f1d6188b811a8962947d92"
+      "after": "0c2031a00e34d25bc3e6e615104f86ec79ce94f43e045103454a1289d8e3432f"
     },
     "lab-native/Cargo.toml": {
       "before": "5c8566eef28f3f1fe0afb3c4e9d65769a3d19a7f7269e74b0bb3d2630588b9c3",
@@ -22,7 +22,7 @@
     },
     "lab-native/src/teacher.rs": {
       "before": "50752978f897e27eceec6ef529d815e5be86713e5bc05c7ea9a4d7938e6e674b",
-      "after": "f31be618a0f6346b56bea07b1dbd73ffedb0204a09e7f4849a4d3be67702795e"
+      "after": "55461abcf8b7c286d4332183b4918cac90585653b8abc7974d786e49a46ff148"
     },
     "src/brass_ai/recovery/admitted_inputs.py": {
       "before": "47aec3397f698def017fec3653d15c757fc317279227470f30d1e5077afad750",
@@ -210,7 +210,7 @@
     },
     "src/brass_ai/rust_backend/lab_teacher_runtime.py": {
       "before": null,
-      "after": "6598aa9c834a5f74faa3bcd570692b719b22fa25d5713676560ed30217d57b27"
+      "after": "f51196f606d4763c13deb649dfc7016d8631291d722059dc159dcf74bc7df4fe"
     },
     "src/brass_ai/rust_backend/lab_transport.py": {
       "before": "94d9883f480e5a3bb44e8da0b0e91302fc61e62478739b0d70f666bcfd8554b9",
@@ -259,6 +259,11 @@
       "implementation": "0f5ef79ba8011fe17541357086911fbf817fb19070c02f1543cc1dbb5e80ac80",
       "qualified_implementation": "9efcf34f853d75ab844366b6819da4b0921be38d3e2dfb806cf282ace76e7a30",
       "replay_location_review": "6d8faa73ffdcb65485f185a844240dc3c00571581c847537d0bc1ec70ea77adc"
+    },
+    {
+      "implementation": "3c2bbf761c85acb540241f0f039c53fbe87541ee343e92479ac1f453f3a4992b",
+      "qualified_implementation": "9efcf34f853d75ab844366b6819da4b0921be38d3e2dfb806cf282ace76e7a30",
+      "replay_location_review": "8e65ab5168786138e19cd2c2ad9082d0c1ff7c7509d2570756af7f106b70bf63"
     }
   ],
   "performance_evidence": "results/joint7-v11-2-g1290-trained-restart-g1253-20261107T145415686647Z/iteration-1252/report.json",
@@ -304,7 +309,7 @@
     "authority": "User request to store these two settings in training config instead of export"
   },
   "shadow_verification_revision": {
-    "policy": "sampled-unbounded-verification/2",
+    "policy": "sampled-unbounded-verification/3",
     "search_budgets": {
       "fast": 0.8,
       "full": 4.0

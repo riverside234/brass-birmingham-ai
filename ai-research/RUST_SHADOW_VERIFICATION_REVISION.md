@@ -1,6 +1,53 @@
 # Teacher shadow verification revision
 
-**Follow-up: adapter policy `/2`.** The next run failed with
+**Current adapter policy `/3`: missing root-value fallback.** The following pasted lab traceback
+ended in `Native teacher closed output: teacher: invalid request: evaluation deadline`.
+After a forced root or an expired first search evaluation, the Session can legitimately have no
+root evidence or cached NN statistics. The value-record fallback incorrectly reused the expired
+search deadline. It now uses the existing non-search NN delivery watchdog (10 seconds), restoring
+the original search deadline on success or error. The prediction is solely for the root training
+value: it adds no trajectories/policy labels, does not reselect the action or enter the Session cache.
+Stale/cancelled/expired NN replies and wrong root identity remain errors; no substitute values are
+invented. A successful fallback reuses its exact root encoding for the value row, avoiding a second
+feature walk. Cached root statistics still avoid another NN request.
+
+Native debug tests cover forced and multi-choice roots after search expiry, exact root feature/value
+parity, restored deadlines, cache reuse and rejected wrong-identity/expired replies. Current evidence:
+`distribution/rust-collector-performance/shadow-root-value-fix.json`. The same preparation command
+detects and rebuilds `/2` into `/3`, preserving checkpoint, qualification and completed-table caches.
+
+## Investigation: why a completed search call can lack root value
+
+The action-selection engine and the teacher recorder have different requirements. The engine may
+return a legal forced/fallback action without evaluating the root NN. The all-seat teacher still
+requires a root utility record for that turn. Returning from `Session::decide` is not proof that
+the root NN ran or that an acceptable reply was obtained.
+
+| Path | Root NN/evidence | Teacher value source |
+| --- | --- | --- |
+| Valid root prediction/search tree | Root statistics/evidence available | Reuse that exact result |
+| One legal action | Core intentionally skips root NN | Independent value-only prediction |
+| Work/delivery cutoff before root request | No root NN result generated | Independent value-only prediction |
+| First root inference expires/is discarded | No acceptable matching-root result | Independent value-only prediction |
+
+Each new turn creates a new Session with an empty private NN cache. The wrapper also resets its
+dedicated `root_stats` at the new root and sets it only after a matching NN reply passes validation.
+This dedicated snapshot is separate from the Session's 128-entry LRU; LRU eviction does not clear it.
+The present traceback proves that the recorder entered the missing-value fallback after search expiry,
+but contains no evidence distinguishing a forced root from a root request that never completed.
+GPU/CPU queue pressure is a plausible contributor for nonforced misses, not a measured conclusion.
+
+For the next normal lab run, `root_value_sources` reports five integer counters separately for fast/full:
+search evidence, cached root NN, forced root with NN skipped, root NN not issued, and root NN without
+an accepted result. Counters are emitted once per completed table in `metrics`, then retained in
+`iteration-G/teacher-shadow/collection.json` under `collection_metrics`. No extra NN calls, per-turn
+log records, hashing or profiling clocks are introduced. Old recovered tables may lack these counters;
+their coverage is unknown, not zero, and they are not recollected just to obtain diagnostics.
+
+A high forced count is expected optimization behavior. High nonforced not-issued/no-result counts
+would motivate profiling root preparation and inference queueing rather than enlarging the cache.
+
+**Earlier follow-up: adapter policy `/2`.** The next run failed with
 `Native teacher closed output: teacher: teacher post-search allowance exceeded`
 (export `20261108T035830347906Z-20261108T035713286446Z-shadow-training-9c6cf95d-33e7c981`).
 The first repair removed Python/ACK/sealing deadlines but missed Rust's pre-verification handoff

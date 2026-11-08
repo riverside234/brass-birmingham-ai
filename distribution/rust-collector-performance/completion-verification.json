@@ -245,5 +245,10 @@
     "path": "distribution/rust-collector-performance/shadow-handoff-fix.json",
     "sha256": "86d36a523f10617b7cb4fb431114d4051e1b3cdab7afb4b9c11c264bc8d32c71",
     "note": "Policy /2 removes the missed native pre-verification cap and further reduces teacher overhead; older repair report remains historical."
+  },
+  "shadow_root_value_revision": {
+    "path": "distribution/rust-collector-performance/shadow-root-value-fix.json",
+    "sha256": "ec88e4f3bf085abb5b2b14d0321c5683ea3bb591cbb4161a5aa65bb0c1a55a2e",
+    "note": "Adapter /3 fixes value-only prediction after expired search; earlier repair evidence stays historical."
   }
 }

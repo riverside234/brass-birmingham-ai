@@ -67,6 +67,27 @@ struct TurnWork {
     fast: bool,
 }
 
+#[derive(Default,serde::Serialize)]
+struct RootValueCounts {
+    search_evidence: u64,
+    cached_root_nn: u64,
+    forced_root_nn_skipped: u64,
+    search_root_nn_not_issued: u64,
+    search_root_nn_no_accepted_result: u64,
+}
+#[derive(Default,serde::Serialize)]
+struct RootValueSources { fast: RootValueCounts, full: RootValueCounts }
+impl RootValueSources {
+    fn record(&mut self, fast: bool, evidence: bool, cached: bool, forced: bool, search_requests: u64) {
+        let counts=if fast { &mut self.fast } else { &mut self.full };
+        if evidence { counts.search_evidence+=1; }
+        else if cached { counts.cached_root_nn+=1; }
+        else if forced { counts.forced_root_nn_skipped+=1; }
+        else if search_requests==0 { counts.search_root_nn_not_issued+=1; }
+        else { counts.search_root_nn_no_accepted_result+=1; }
+    }
+}
+
 fn finish_turn<R: Read, W: Write>(peer: &mut Peer<R, W>, budget: Budget,
     work: &mut TurnWork, index: u64, diagnostic: bool) -> Result<Value> {
     let before = peer.clock.now_ns();
@@ -198,6 +219,107 @@ mod verification_tests {
         let mut actual = Vec::new();emit(&mut actual,value).unwrap();
         assert_eq!(actual,expected);
     }
+
+    #[derive(Clone,Default)]
+    struct Wire(std::rc::Rc<std::cell::RefCell<Vec<u8>>>);
+    impl Write for Wire {
+        fn write(&mut self, bytes: &[u8]) -> io::Result<usize> {
+            self.0.borrow_mut().extend_from_slice(bytes);Ok(bytes.len())
+        }
+        fn flush(&mut self) -> io::Result<()> { Ok(()) }
+    }
+    struct RootReply { wire: Wire, reply: Option<Cursor<Vec<u8>>>, fault: &'static str }
+    impl Read for RootReply {
+        fn read(&mut self, bytes: &mut [u8]) -> io::Result<usize> {
+            if self.reply.is_none() {
+                let data=self.wire.0.borrow();
+                let n=u32::from_le_bytes(data[4..8].try_into().unwrap()) as usize;
+                let meta: Value=serde_json::from_slice(&data[8..8+n]).unwrap();
+                assert!(meta["remaining_ns"].as_u64().unwrap() > 0);
+                let mut value=json!({"binding":meta["binding"],"status":"ok",
+                    "reward_id":meta["binding"]["context"]["reward_id"],
+                    "logits":vec![0.;meta["candidates"].as_u64().unwrap() as usize],
+                    "utility":[0.1,0.2,0.3,0.4]});
+                if self.fault=="binding" { value["binding"]["root_epoch"]=json!(999); }
+                if self.fault=="expired" { value["status"]=json!("expired"); }
+                let raw=serde_json::to_vec(&value).unwrap();
+                let mut frame=(raw.len() as u32).to_le_bytes().to_vec();frame.extend(raw);
+                self.reply=Some(Cursor::new(frame));
+            }
+            self.reply.as_mut().unwrap().read(bytes)
+        }
+    }
+
+    fn root_peer(forced: bool, fault: &'static str) -> (Peer<RootReply,Wire>,Info<Key,String>) {
+        use brass_ai_core::search::reward::Insolvency;
+        let dto: StateDto=serde_json::from_str(include_str!("../../native/brass-ai-core/tests/data/initial-state.json")).unwrap();
+        let state=NativeState::import(&dto).unwrap();
+        let reward=Reward { version:"brass-combined-return/2.0.0".into(),win:1.,placement:0.1,vp:0.001,vp_cap:Some(180),
+            insolvency:Insolvency {event_cost:0.025,max_cost:0.075} };
+        let input=Input { view:state.observation(Seat::try_from(dto.context.actor as u8).unwrap()).unwrap(),recall:vec![],
+            context:FeatureContext { model_id:"frozen".into(),reward_id:reward.identity().unwrap(),profile_id:"test".into(),
+                style:[0.;4],intent:[0.;8],remaining:[0.075;4],max_cost:0.075,stable_descriptors:None },
+            reward,ledger:LedgerState {spent:[0.;4],settled:vec![]},shuffle_tape:None,sample_seed:7 };
+        let mut info=Brass::new(input,false).unwrap().root().unwrap();
+        if forced {
+            info.actions=Arc::new(vec![info.actions[0].clone()]);
+            Arc::make_mut(&mut info.key).choices.retain(|c| c.id==info.actions[0]);
+        }
+        let wire=Wire::default();
+        let peer=Peer { input:RootReply {wire:wire.clone(),reply:None,fault},output:wire,
+            encoder:FeatureEncoder::default(),clock:MonotonicClock::new(Arc::new(AtomicBool::new(false))),
+            expected:json!({"job_id":"frozen"}),sequence:0,epoch:1,deadline:0,
+            encoding_ns:0,wait_ns:0,requests:0,bytes:0,search_value:None,root_watch:Some(info.clone()),root_stats:None };
+        (peer,info)
+    }
+
+    #[test]
+    fn value_only_root_prediction_has_own_deadline_and_reuses_exact_encoding() {
+        for forced in [false,true] {
+            let (mut peer,info)=root_peer(forced,"");
+            assert!(peer.evaluate(&info).is_err());assert_eq!(peer.requests,0);
+            let (stats,encoded)=peer.post_search_root_stats(&info).unwrap();
+            assert!(encoded);assert_eq!(peer.deadline,0);assert_eq!(peer.requests,1);
+            assert_eq!(root_value(&stats).unwrap(),[0.1,0.2,0.3,0.4]);
+            assert!(stats.count.iter().all(|n| *n==0));
+            let mut reference=FeatureEncoder::default();
+            reference.encode(info.key.information.observation.view.as_ref().unwrap(),&info.key.choices,&info.key.context,&mut || Ok(())).unwrap();
+            let a=peer.encoder.tensors().unwrap();let b=reference.tensors().unwrap();
+            assert_eq!(a.state,b.state);assert_eq!(a.actions,b.actions);assert_eq!(a.stable_to_relative,b.stable_to_relative);
+            let (cached,encoded)=peer.post_search_root_stats(&info).unwrap();
+            assert!(!encoded);assert_eq!(cached.value,stats.value);assert_eq!(peer.requests,1);
+            // The expired search deadline is never extended by value-only work.
+            assert!(peer.evaluate(&info).is_err());assert_eq!(peer.requests,1);
+        }
+    }
+
+    #[test]
+    fn value_only_root_prediction_rejects_stale_and_expired_replies_and_restores_deadline() {
+        for fault in ["binding","expired"] {
+            let (mut peer,info)=root_peer(false,fault);
+            assert!(peer.post_search_root_stats(&info).is_err());
+            assert_eq!(peer.deadline,0);assert!(peer.root_stats.is_none());
+        }
+        let (mut peer,mut wrong)=root_peer(false,"");wrong.actor=(wrong.actor+1)%4;
+        assert!(peer.post_search_root_stats(&wrong).is_err());assert_eq!(peer.requests,0);
+    }
+
+    #[test]
+    fn root_value_source_counts_partition_profiles_without_extra_inference() {
+        let mut sources=RootValueSources::default();
+        for fast in [false,true] {
+            sources.record(fast,true,true,false,8);
+            sources.record(fast,false,true,false,1);
+            sources.record(fast,false,false,true,0);
+            sources.record(fast,false,false,false,0);
+            sources.record(fast,false,false,false,1);
+        }
+        let value=serde_json::to_value(sources).unwrap();
+        for profile in ["fast","full"] {
+            let fields=value[profile].as_object().unwrap();assert_eq!(fields.len(),5);
+            assert!(fields.values().all(|count| count==1));
+        }
+    }
 }
 fn write_frame(output: &mut impl Write, bytes: &[u8]) -> Result<()> {
     check(
@@ -236,6 +358,22 @@ struct Peer<R, W> {
     root_stats: Option<Statistics>,
 }
 impl<R: Read, W: Write> Peer<R, W> {
+    fn post_search_root_stats(&mut self, info: &Info<Key, String>) -> search::Result<(Statistics, bool)> {
+        search::check(self.root_watch.as_ref() == Some(info), "post-search root identity")?;
+        if let Some(stats) = &self.root_stats { return Ok((stats.clone(), false)); }
+        // A forced root or an expired first search evaluation may have no
+        // evidence/cache. Predict its training value after the action is fixed.
+        // Use the existing non-search NN watchdog, never a fresh search budget.
+        let search_deadline = self.deadline;
+        self.deadline = self.clock.now_ns().checked_add(10_000_000_000)
+            .ok_or_else(|| search::invalid("root value inference clock overflow"))?;
+        let result = self.evaluate(info);
+        self.deadline = search_deadline;
+        // The successful request already encoded these exact root features.
+        // No statistics are published into the Session tree/cache.
+        result.map(|stats| (stats, true))
+    }
+
     fn evaluate_inner(&mut self, info: &Info<Key, String>) -> Result<Statistics> {
         check(self.clock.now_ns() < self.deadline, "evaluation deadline")?;
         self.sequence += 1;
@@ -485,6 +623,7 @@ pub fn run() -> Result<()> {
     let mut reserved = 0;
     let mut searched_turns = 0;
     let mut values = Vec::new();
+    let mut root_value_sources = RootValueSources::default();
     let mut request_id = 0;
     let mut turn_work = TurnWork::default();
     let mut turn_reports = Vec::new();
@@ -500,7 +639,7 @@ pub fn run() -> Result<()> {
         &mut peer.output,
         json!({"event":"hello","core":brass_ai_core::protocol::BuildIdentity::current(),
         "contract":CONTRACT,"job":expected,"method":"search_v1","v205_enabled":false,
-        "verification_policy":"sampled-unbounded-verification/2"}),
+        "verification_policy":"sampled-unbounded-verification/3"}),
     )?;
     loop {
         if state.context().terminal {
@@ -585,6 +724,7 @@ pub fn run() -> Result<()> {
         }
         let mut evidence = None;
         let mut supported = false;
+        let mut search_requests = 0;
         let choice = if let Some(owner) = &mut session {
             request_id += 1;
             peer.epoch += 1;
@@ -609,6 +749,7 @@ pub fn run() -> Result<()> {
                     }),
                 }
             };
+            let requests_before = peer.requests;
             let out = decide_turn(
                 owner,
                 &identity,
@@ -618,6 +759,7 @@ pub fn run() -> Result<()> {
                 &clock,
                 &mut peer,
             )?;
+            search_requests = peer.requests.saturating_sub(requests_before);
             let work_end = if out.quota.is_some() {
                 out.work_stopped_ns.min(out.budget.work_deadline_ns).max(began)
             } else { began }; // cached continuation/forced delivery performs no new search
@@ -687,12 +829,15 @@ pub fn run() -> Result<()> {
             draws.categorical(&actual.actions.iter().cloned().zip(p).collect::<Vec<_>>())?
         };
         if all_seat && session.is_some() && view.context.phase == Phase::Action && first_action {
-            let stats = if let Some(e) = &evidence { e.stats.clone() }
-                else if let Some(stats) = &peer.root_stats { stats.clone() }
-                else { peer.evaluate(&actual)? };
+            let cached = peer.root_stats.is_some();
+            let (stats, root_encoded) = if let Some(e) = &evidence { (e.stats.clone(), false) }
+                else { peer.post_search_root_stats(&actual)? };
+            root_value_sources.record(turn_work.fast,evidence.is_some(),cached,actual.actions.len()==1,search_requests);
             let n: u64 = stats.count.iter().sum();
             let root_value = root_value(&stats)?;
-            peer.encoder.encode(&view, &actual.key.choices, &root.context, &mut || Ok(()))?;
+            if !root_encoded {
+                peer.encoder.encode(&view, &actual.key.choices, &root.context, &mut || Ok(()))?;
+            }
             let t = peer.encoder.tensors().ok_or("missing root tensor")?;
             turn_work.value_row = Some(json!({"job":expected,"index":searched_turns,"seat":seat,
                 "generation":expected["generation"],"model_id":expected["model_id"],"reward_id":expected["reward_id"],
@@ -764,7 +909,7 @@ pub fn run() -> Result<()> {
         "value_rows":values,"final_spent":ledger.spent,
         "metrics":{"decisions":rows,"labels":labels,"no_evidence":no_evidence,"reserved_turns":reserved,"searched_turns":searched_turns,
             "searches":searches,"turns":turn_reports,"requests":peer.requests,"encoding_ns":peer.encoding_ns,"gpu_wait_ns":peer.wait_ns,
-            "input_bytes":peer.bytes,"elapsed_ns":clock.now_ns()},"ordinary_training":false}),
+            "input_bytes":peer.bytes,"elapsed_ns":clock.now_ns(),"root_value_sources":root_value_sources},"ordinary_training":false}),
     )?;
     Ok(())
 }

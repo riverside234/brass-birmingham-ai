@@ -7,7 +7,8 @@
 普通传输升级不重建或替换已通过资格的 teacher/search_v1 binary，不启用 teacher on-mode。
 本次另有用户要求的 [teacher 验证修订](../../ai-research/RUST_SHADOW_VERIFICATION_REVISION.md)：
 两档搜索均取消独立验证硬限时，改为稀疏计时；先准备新的 teacher ACK adapter，复用原 search core。
-当前 adapter policy 为 `/2`，也移除了此前遗漏的 Rust 验证前 handoff 上限。
+当前 adapter policy 为 `/3`：包含 `/2` 的 handoff 修复，并修正根节点无缓存时
+补算训练 value 误用已到期搜索 deadline 的错误；补算结果及根特征复用，不增加搜索轨迹。
 同一准备命令会检测并重建旧版，保留 checkpoint、缓存和原资格，无需手动删除 runtime。
 实现和证据限制见 [implementation notes](../../ai-research/RUST_COLLECTOR_PERFORMANCE_PI00_PI03.md)。
 后半部分与当前检查清单见 [PI04–PI05 completion](../../ai-research/RUST_COLLECTOR_PERFORMANCE_PI04_PI05.md)。
