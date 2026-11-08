@@ -92,7 +92,9 @@ def validate(config):
         'Scheduled learner/search/teacher rewards differ')
     # Legacy teacher_value is dormant when teacher_enabled=false; preserve its
     # saved options instead of changing an unrelated, unreachable recipe.
-    require(config.get('teacher_enabled') is False and config.get('teacher_phase',{}).get('mode','off') in ('off','shadow'),
+    from brass_ai.rust_backend.lab_teacher_activation import is_on
+    require(config.get('teacher_enabled') is False and
+        (config.get('teacher_phase',{}).get('mode','off') in ('off','shadow') or is_on(config)),
         'Keep teacher fitting off during the entropy anneal experiment')
     return c
 

@@ -50,17 +50,30 @@ def qualification_upgrade(before,after):
 
 
 def collection_signature(signature):
-    """The measurement window changes no frozen collection input or RNG."""
-    if not is_shadow(signature['config']):return signature
+    """Diagnostic window/gradient mode do not change frozen collection or RNG."""
+    if not is_active(signature['config']):return signature
     result=copy.deepcopy(signature)
+    result['config']['teacher_phase']['mode']='shadow'
     result['config']['teacher_phase']['term']['shadow_iterations']=2
     return result
+
+
+def is_active(config):
+    from .lab_teacher_activation import is_on
+    return is_shadow(config) or is_on(config)
 
 
 def signature_transition(before,after):
     from .lab_replay_compat import QUALIFIED,execution
     old,new=before['config'],after['config']
-    if is_shadow(old):
+    from .lab_teacher_activation import is_on
+    if is_on(new):
+        config_ok=False
+        if is_on(old) or is_shadow(old) and old['teacher_phase']['term']['shadow_iterations']==4:
+            expected=copy.deepcopy(old);expected['teacher_phase']['mode']='on'
+            expected['teacher_phase']['term']['share_target']=new['teacher_phase']['term']['share_target']
+            config_ok=expected==new
+    elif is_shadow(old):
         expected=copy.deepcopy(old);expected['teacher_phase']['term']['share_target']=new.get('teacher_phase',{}).get('term',{}).get('share_target')
         if old['teacher_phase']['term']['shadow_iterations']==2:
             expected['teacher_phase']['term']['shadow_iterations']=new.get('teacher_phase',{}).get('term',{}).get('shadow_iterations')
@@ -74,19 +87,24 @@ def signature_transition(before,after):
 
 def approved(state,signature):
     value=state.get('native_backend',{})
-    return (value.get('mode')=='rust' and state.get('iteration',0)>=1257 and
+    accepted=(value.get('mode')=='rust' and state.get('iteration',0)>=1257 and
         signature_transition(state['signature'],signature))
+    if accepted:
+        from .lab_teacher_activation import is_on,authorize
+        if is_on(signature['config']):authorize(state,signature['config'])
+    return accepted
 
 
 def preserves_pending(state,signature):
-    """Only the reviewed 2->4 measurement change retains frozen collection.
+    """Reviewed diagnostic/on transitions retain the identical frozen collection.
 
     The loader still checks checkpoint/hash/lineage and unfinished checkpoints;
-    collectors revalidate each cached table/family normally. This is not a
-    permission to reuse pending work across source, policy or target changes.
+    collectors revalidate each cached table/family normally. Qualification and
+    identical collection bindings exclude unreviewed actor/source/target edits.
     """
+    from .lab_teacher_activation import is_on
     return (approved(state,signature) and
-        qualification_upgrade(state['signature']['config'],signature['config']) and
+        (qualification_upgrade(state['signature']['config'],signature['config']) or is_on(signature['config'])) and
         collection_signature(state['signature'])==collection_signature(signature))
 
 
@@ -99,6 +117,11 @@ def rebind_backend(previous,updated):
     after['config_sha256']=digest(updated['signature']['config'])
     after['shadow']=dict(contract=CONTRACT,tables=dict(train=28,held_out=4),
         teacher_build=build['receipt'],generation=previous['iteration'])
+    from .lab_teacher_activation import is_on,authorize,CONTRACT as ON
+    if is_on(updated['signature']['config']):
+        q=authorize(previous,updated['signature']['config'])
+        after['teacher']=dict(contract=ON,tables=dict(train=28,held_out=4),gradient_qualification=q['sha256'],
+            beta=q['beta'],qualified_generation=q['qualified_generation'],generation=previous['iteration'])
     updated['native_backend']=after
     updated['native_backend_switch']=dict(checkpoint=copy.deepcopy(previous['history'][-1]),
         before=copy.deepcopy(before),after=copy.deepcopy(after))

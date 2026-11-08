@@ -307,7 +307,9 @@ def publisher_workers(jobs,capacity):
 class NativePool:
     def __init__(self,root,service,execution,build,config,signature,*,mono='mono',scope='ordinary'):
         require(scope in ('ordinary','diagnostic'),'Unknown native pool scope')
-        require(config.get('teacher_phase',{}).get('mode','off') in ('off','shadow'),'Ordinary backend excludes unqualified teacher on-mode')
+        from .lab_teacher_activation import is_on
+        require(config.get('teacher_phase',{}).get('mode','off') in ('off','shadow') or is_on(config),
+                'Ordinary backend excludes unqualified teacher on-mode')
         require(config.get('diversity',{}).get('mode','off')=='off','DOMiNO is retired')
         self.root=Path(root);self.service=service;self.execution=execution;self.build=build
         self.config=config;self.signature=signature;self.mono=mono or 'mono';self.scope=scope

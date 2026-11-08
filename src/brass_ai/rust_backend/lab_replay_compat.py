@@ -70,13 +70,13 @@ def training_signature(state,signature):
     value=state.get('native_backend')
     if value is None or state['signature']==signature:return signature
     current=execution();old=state['signature']
-    from .lab_shadow_config import is_shadow,approved
+    from .lab_shadow_config import is_active,approved
     target=dict(signature,implementation=old['implementation'])
     require(current['replay_location_review'] is not None and
             signature['implementation']==current['implementation'] and
             old['implementation']==value['implementation']==current['qualified_implementation'] and
             value['mode'] in ('rust','reference') and
-            (old['config'].get('teacher_phase',{}).get('mode','off')=='off' or is_shadow(old['config'])) and
+            (old['config'].get('teacher_phase',{}).get('mode','off')=='off' or is_active(old['config'])) and
             (target==old or approved(state,target)),
             'Native continuation source/config differs from the exact replay-location review')
     return copy.deepcopy(target)

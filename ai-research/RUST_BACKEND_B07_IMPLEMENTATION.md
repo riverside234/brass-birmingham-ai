@@ -1,5 +1,17 @@
 # B07: cheaper native collection and bounded adoption
 
+**Current teacher activation (2026-11-08):** results `92dbef3` / `a966c75` confirm
+four full 28+4 shadow iterations through **g1261**, 184 valid measurements and
+qualified fixed β **0.16110139609854138** at target 0.25. Teacher **on** and
+search-value **Stage A** training are now implemented at the user's request.
+Keep `w=0`, trunk scale zero and 32 head-only post-PPG steps. First installation
+is deferred until after collection/PPG; completed entropy annealing is checked
+by progress. Preserve exact source/checkpoint/Adam/RNG, cache and label bindings.
+Thirty-eight affected debug regressions passed; no local benchmarks or real
+training. No native rebuild is needed. See [review and g1261→g1262 command](RUST_TEACHER_ON_STAGE_A_REVIEW.md).
+The first on-mode lab iteration remains Pending; older statuses below are
+historical.
+
 **Pending-resume repair (2026-11-08):** both g1258 adapter preparations passed on
 lab (`results/` pulled to `5e03429`). The real checkpoint loader still rejected
 nonempty pending work during the reviewed 2→4 measurement upgrade. It now admits
@@ -116,8 +128,10 @@ shadow integration, including authored PPO/PPG/strict checkpoint fixtures. The
 full 32-table orchestration was exercised with a mocked native peer, actual sealed
 table I/O and cache recovery; no local native games, live training sessions,
 benchmarks or unrelated successful qualification were run. Actual full-volume
-Linux/CUDA timing and gradient qualification remain **Pending on four qualifying normal
-lab iterations**, g1257→g1261 (the g1258 commit is retained). See [current command and target options](../distribution/rust-lab-b07-g1250/README.md#full-shadow-gradient-qualification).
+Linux/CUDA timing and gradient qualification **passed on four qualifying normal
+lab iterations**, g1257→g1261, with 184 valid measurements and fixed beta
+0.16110139609854138. The user subsequently authorizes on-mode and Stage A;
+see [the current review and command](RUST_TEACHER_ON_STAGE_A_REVIEW.md).
 
 ## g1257 descriptor exhaustion: collection-boundary resource retirement
 

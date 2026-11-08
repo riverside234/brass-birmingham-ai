@@ -42,8 +42,9 @@ class SearchValueIteration:
             require(options['stage'] in ('off','A') and options['blend']['w'] == options['trunk']['scale'] == 0,
                     'Search value adoption cannot skip gates')
         pending_files=[]
-        from brass_ai.rust_backend.lab_shadow_config import is_shadow
-        if self.mode=='shadow' and is_shadow(config):
+        from brass_ai.rust_backend.lab_shadow_config import is_active
+        from brass_ai.rust_backend.lab_teacher_activation import is_on
+        if self.mode in ('shadow','on') and is_active(config):
             from brass_ai.learning.batching import model_id
             from brass_ai.recovery.teacher_phase import plan_jobs
             from brass_ai.rust_backend.lab_teacher_overlay import source_fingerprint
@@ -55,7 +56,8 @@ class SearchValueIteration:
         # validated and normal publication compares the exact recomputed bytes.
         self.phase = SearchValuePhase(run/'search-values', model, options, digest(model.config.utility),
             saved=saved, startup=config['teacher_phase']['startup'], trainable=self.mode == 'on',pending_files=pending_files,
-            pending_directory=run/f"iteration-{state['iteration']:04d}"/'teacher-shadow/value-partials' if pending_files else None)
+            pending_directory=run/f"iteration-{state['iteration']:04d}"/'teacher-shadow/value-partials' if pending_files else None,
+            defer_install=is_on(config) and not hasattr(model,'search_value_head'))
         self.generation = state['iteration']
         self.report = None
         self.pending_generation = None
@@ -105,6 +107,10 @@ class SearchValueIteration:
         self._require_mutable()
         from .ppg_selection import Selection
         phase = self.phase
+        # Keep collection on the exact committed model identity. A newly
+        # enabled residual is attached only at the post-PPG training boundary;
+        # existing companions restore eagerly from the full checkpoint.
+        if self.mode=='on':phase.ensure_companion()
         old_stage = copy.deepcopy(phase.machine.state)
         rollback = (Selection(self.model,guarded['value_optimizer'],{'search':0.},companion=phase.companion)
                     if guarded is not None and old_stage['scale'] > 0 else None)

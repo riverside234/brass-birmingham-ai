@@ -107,15 +107,18 @@ class TableCache:
 
 class ShadowCollector:
     def __init__(self,root,run,state,*,mono=None):
-        from .lab_shadow_config import is_shadow
+        from .lab_shadow_config import is_active
         self.root,self.run=owned(root,run);self.build=teacher_build(state);self.mono=mono or 'mono'
         safe(self.run,self.run/'search-values')
-        require(is_shadow(state['signature']['config']),'Shadow requires its explicit reviewed recipe')
+        require(is_active(state['signature']['config']),'Teacher collection requires its explicit reviewed recipe')
 
     def collect(self,phase,state,model,service,directory):
         from .lab_teacher import TeacherCollector,calibrate
         from .lab_backend import checked_pin
-        require(phase.options['mode']=='shadow','Shadow barrier cannot enable teacher gradients')
+        require(phase.options['mode'] in ('shadow','on'),'Teacher barrier requires shadow/on mode')
+        if phase.options['mode']=='on':
+            from .lab_teacher_activation import authorize
+            authorize(state,state['signature']['config'])
         from brass_ai.recovery import entropy_schedule as S
         if S.KEY in state['signature']['config']['update']:
             schedule=S.restore_run(state['signature']['config'],state)
@@ -167,8 +170,10 @@ class ShadowCollector:
                         if job['expected']['job_id'] in verifier.cache:return verifier.take(result,job,model)
                         return admit_teacher_rows(result['rows'],job=job,model=model,history=state['history'])
                 phase.admit_collection(results,model,verifier=MixedVerifier())
-            phase.metrics.update(shadow=True,cached_tables=len(jobs)-len(missing),new_tables=len(live),
-                wall_seconds=time.monotonic()-began,gradient_qualification='Measured during ordinary PPO; never applied')
+            phase.metrics.update(shadow=phase.options['mode']=='shadow',mode=phase.options['mode'],
+                cached_tables=len(jobs)-len(missing),new_tables=len(live),wall_seconds=time.monotonic()-began,
+                gradient_qualification='Measured during ordinary PPO; never applied' if phase.options['mode']=='shadow' else
+                    'Qualified fixed beta; teacher policy gradients use the existing guarded PPO step')
             phase.metrics['inference']={key:service.metrics.get(key,0)-before.get(key,0) for key in
                 ('positions','batches','model_loads','shared_requests','shared_replies','inline_requests')}
             if phase.search_value is not None:

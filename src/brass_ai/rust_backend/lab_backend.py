@@ -54,10 +54,12 @@ def validate_state(state,raw=None,*,check_runtime=True):
             value['config_sha256']==digest(state['signature']['config']), 'Backend source/config binding changed')
     config=state['signature']['config']
     if config.get('teacher_phase',{}).get('mode','off')!='off':
+        from .lab_teacher_activation import is_on,validate_backend
         from .lab_shadow_config import is_shadow,CONTRACT as SHADOW
         shadow=value.get('shadow',{})
-        require(is_shadow(config) and shadow.get('contract')==SHADOW and
-            shadow.get('tables')==dict(train=28,held_out=4),'Teacher on-mode remains a separate gate; invalid shadow adoption')
+        if is_on(config):validate_backend(state,value)
+        else:require(is_shadow(config) and shadow.get('contract')==SHADOW and
+            shadow.get('tables')==dict(train=28,held_out=4),'Teacher on-mode requires qualified activation; invalid shadow adoption')
     if raw is not None and raw['training'].get('native_backend')!=value:
         transition=state.get('native_backend_switch')
         require(transition is not None and transition['checkpoint']==state['history'][-1] and

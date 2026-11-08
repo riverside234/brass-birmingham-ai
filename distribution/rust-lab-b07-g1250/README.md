@@ -1,6 +1,42 @@
 # B07 g1250: Git checkout continuation after passed qualification
 
-## Current pending-resume repair (2026-11-08)
+## Current teacher on / Stage A continuation (2026-11-08)
+
+Pulled `results/` through `92dbef3` and `a966c75`: four full 28+4 shadow
+iterations passed through **g1261**. The 184 measured gradient ratios qualify
+fixed **beta=0.16110139609854138** for target **0.25**. The user now enables
+teacher **on** and auxiliary search-head **Stage A** training.
+
+Sync the Git code checkout, exit any older trainer, then run in the existing lab
+training environment:
+
+```bash
+python scripts/continue-rust-teacher.py --expected-generation 1261 --iterations 1 --share-target 0.25
+```
+
+This continues the same run **g1261→g1262**, preserving full checkpoints,
+Adam/RNG/population/PPG state, zero branching, search_v1, 28+4 tables and all
+collector performance mechanisms. The policy teacher uses the fixed beta in
+guarded PPO. The search-value head trains **32 head-only steps after PPG** with
+**w=0 and trunk scale zero**; later stage gates remain. First installation is
+delayed to this boundary to preserve the frozen collection model identity, and
+head training now checks completed anneal progress correctly.
+
+The helper requires the real four-iteration qualification and current readiness,
+checks native/source/checkpoint bindings and exports success/failure under
+`results/rust-lab-qualification/`. Repeating the command does only remaining
+requested work. The first real on-mode iteration is **Pending on the lab**.
+Both native adapters are unchanged: **no rebuild, new ZIP or repeat of passed
+qualification**. Thirty-eight affected debug checks passed locally; no games,
+benchmarks or production training were run here. See [review and monitoring](../../ai-research/RUST_TEACHER_ON_STAGE_A_REVIEW.md)
+and [machine-readable receipt](../rust-collector-performance/teacher-on-stage-a.json).
+
+Explicit future `--share-target 0.4` or `0.5` uses the same frozen measurements;
+ordinary monitoring never adapts beta. Use the actual current generation for a
+new continuation request. The sections below retain historical commands and
+qualification scope; the command above is the current next step.
+
+## Historical pending-resume repair (2026-11-08, completed)
 
 Results pulled to `5e03429` confirm both g1258 adapter preparations passed.
 The subsequent `Uncommitted iteration ... iteration-1258` failure came from a
@@ -21,7 +57,7 @@ iterations through g1261. Both adapters are unchanged and already prepared;
 do not repeat their builds or passed qualifications. See [the loader repair](../../ai-research/RUST_SHADOW_BONUS_AND_FOUR_ITERATION_FIX.md#2026-11-08-checkpoint-loader-pending-work-repair)
 and [debug/source receipt](../rust-collector-performance/shadow-resume-fix.json).
 
-## Ordinary collector performance update
+## Historical ordinary collector performance update
 
 PI00–PI05 now use the production ordinary path, including combined completion export and immutable replay reuse.
 Before the shadow command below, build/verify the upgraded **ordinary** adapter once:
@@ -40,7 +76,10 @@ preserves explicit JSON overrides and passes them to workers without changing fr
 Generation must match the actual committed boundary. See [the performance supplement](../rust-collector-performance/README.md)
 for current mode/coverage, short smoke commands and measured component limitations.
 
-## Full shadow gradient qualification
+## Full shadow gradient qualification (passed through g1261)
+
+The following command/settings describe the completed shadow qualification.
+Use the current teacher-on command above to enable training.
 
 The attached log confirms the latest committed checkpoint is **g1258**. Retain that first measurement; see [the bonus transition repair](../../ai-research/RUST_SHADOW_BONUS_AND_FOUR_ITERATION_FIX.md). The current revision fixes the
 descriptor leak below and implements the user's additional settings:

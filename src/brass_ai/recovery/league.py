@@ -94,9 +94,10 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
     observations_off=policy_observations.enabled(config)
     # B04 has an explicit native collector/barrier. B05/B07 must qualify the
     # next committed update/canary before exposing it to the production trainer.
-    from brass_ai.rust_backend.lab_shadow_config import is_shadow
-    require(config.get('teacher_phase',{}).get('mode','off')=='off' or is_shadow(config),
-            'Only the reviewed 32-table shadow recipe is enabled; teacher on-mode remains gated')
+    from brass_ai.rust_backend.lab_shadow_config import is_active
+    from brass_ai.rust_backend.lab_teacher_activation import is_on,authorize,annealing
+    require(config.get('teacher_phase',{}).get('mode','off')=='off' or is_active(config),
+            'Teacher on-mode requires the reviewed qualified 32-table recipe')
     quality=quality_selfplay_recipe(config)
     if quality and config['rating']['enabled']:
         from .ratings import check_dependencies
@@ -155,10 +156,12 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                 ('bc_run','path','manifest'))
         from brass_ai.rust_backend.lab_replay_compat import training_signature
         signature=training_signature(state,signature)
+        if is_on(config):authorize(state,config)
         require(initial is None and from_run is None,'Omit initialization when resuming')
         from .resume import load_resume
         model,raw,source_changed=load_resume(root,run,state,signature,device=device,reviewed=resume_reviewed_source)
     else:
+        require(not is_on(config),'Teacher on-mode requires the existing qualified run')
         # Before the first league commit, interrupted BC may have only its own
         # identity-bound progress receipt. Restart it from the same random seed;
         # never import partially trained or previous-run neural weights.
@@ -390,7 +393,7 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
             archive(run,domino_adoption)
         state=commit_transition(run,state,signature,opponent_pool=resumed_pool,pool_migration=pool_migration,local_scoring_adoption=local_adoption,domino_adoption=domino_adoption)
     shadow_collector=None
-    if is_shadow(config):
+    if is_active(config):
         from brass_ai.rust_backend.lab_shadow import ShadowCollector
         shadow_collector=ShadowCollector(root,run,state,mono=mono)
     if 'v4_history' in config:
@@ -602,7 +605,7 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                     from .search_value_iteration import ordinary_guard
                     search_values.prepare_ppg(phases,iteration+1,
                         ordinary=ordinary_guard(update,diagnostics.get('health_counts')),
-                        annealing=config['update'].get('entropy_schedule',{}).get('mode') == 'on')
+                        annealing=annealing(config,state))
                 value_report=phases.fit(model,preparation_pool=preparation_pool) if phases is not None else None
                 search_value_report=search_values.finish_ppg() if search_values is not None else None
                 updated=time.monotonic();done=state['games_done']+len(games)
@@ -714,7 +717,8 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                     selfplay_opponents=champion_mix.summarize(state,config,mix_receipts) if champion_mix.enabled(config) else None,
                     games_done=done,cumulative_games=state['previous_games']+done,
                     timings=dict(collection_seconds=load_began-began-shadow_seconds,
-                        shadow_collection_seconds=shadow_seconds,
+                        teacher_collection_seconds=shadow_seconds,
+                        shadow_collection_seconds=shadow_seconds if not is_on(config) else 0.,
                         sampling_seconds=sampling_finished-collected,
                         rehearsal_prepare_seconds=rehearsal_seconds,ppo_seconds=ppo_ended-ppo_began,
                         rehearsal_cleanup_seconds=rehearsal_cleaned-ppo_ended,
@@ -982,7 +986,7 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                       f'rehearsal={rehearsal_seconds:.1f}s PPO={report["timings"]["ppo_seconds"]:.1f}s '
                       f'value_phase={report["timings"]["value_phase_seconds"]:.1f}s '
                       f'teacher={report["timings"]["search_and_distill_seconds"]:.1f}s '
-                      +(f'shadow_collect={shadow_seconds:.1f}s ' if shadow_collector is not None else '')+
+                      +(f'{"teacher_collect" if is_on(config) else "shadow_collect"}={shadow_seconds:.1f}s ' if shadow_collector is not None else '')+
                       f'diagnostics={report["timings"]["post_ppo_diagnostics_seconds"]+report["timings"]["final_diagnostics_seconds"]:.1f}s '
                       f'eval={report["timings"].get("evaluation_seconds",0):.1f}s cleanup={report["timings"].get("cleanup_seconds",0):.1f}s; '
                       f'total={report["timings"]["iteration_seconds"]:.1f}s; '

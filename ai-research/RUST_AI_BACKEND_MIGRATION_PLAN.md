@@ -1,5 +1,16 @@
 # Rust Simulation and Gumbel IS-MCTS Backend Migration Plan
 
+**Teacher activation, 2026-11-08:** four full 28+4 shadow iterations g1257→g1261
+passed on the lab. Results commits `92dbef3` and `a966c75` qualify fixed
+β **0.16110139609854138** for target 0.25 from 184 gradient measurements.
+The user now authorizes teacher **on** and auxiliary search-head **Stage A**
+training (`w=0`, frozen trunk, 32 head-only steps after PPG). The exact on-mode
+config and continuation helper are implemented; first actual on-mode lab
+iteration g1261→g1262 remains Pending. Preserve zero branching, search_v1,
+full checkpoint/Adam/RNG, current collector performance and all later stage
+gates. See [four-iteration review, startup fixes and command](RUST_TEACHER_ON_STAGE_A_REVIEW.md).
+Earlier Pending/status notes below retain their historical scope.
+
 **Lab shadow verification override, 2026-11-07:** for both 0.8s and 4s training searches,
 remove post-search handoff/verification/ACK/sealing hard deadlines. Adapter `/3` additionally repairs
 missing-root-value prediction after search expiry, using a separate NN delivery watchdog and restoring
@@ -884,7 +895,15 @@ Keep Python target construction, GAE, PPO behavior likelihoods, critic/local-sco
 | B04.5 | **Passed on pinned g1250** | Exact r3 source/model/device; two shadow tables, 49 policy labels, 128 value rows, one isolated head step; production unchanged |
 | B05 | **Passed on pinned g1250** | R2 CUDA ordinary/teacher component updates, head-only update, full-state/age restoration; no new games or production adoption |
 | B06 | **Passed bounded correctness/measurement; useful performance gate not passed** | Same 3 families / 1,161 decisions; native accepted work 55.265s vs reference 28.596s; Python collection/admission bottleneck identified; eight 4s/K16 teacher turns passed |
-| B07 | **Passed adoption/restart; active through g1257; descriptor fix and full 32-table shadow/fixed-beta continuation implemented; next lab test Pending** | Results `d6ed700` retain g1257 and fresh collection at 367.4–395.9s. Preserve 24 actors / 48 lanes, up to 24 publishers and the 60-slot CPU allowance. User selects branching 0%, 28+4 shadow tables and four gradient-qualification iterations; retain committed g1258 and continue through g1261 without repeating passed qualification |
+| B07 | **Passed adoption/restart and four full shadow iterations through g1261; teacher on / search-head Stage A implemented; first on-mode lab iteration Pending** | Results `92dbef3` / `a966c75` qualify fixed β 0.16110139609854138 at target 0.25 from 184 measurements. Keep branching 0%, 28+4 tables, 24 actors / 48 lanes, up to 24 publishers and 60 CPU slots. Continue g1261→g1262 with the qualified on-mode helper; no repeated qualification or native rebuild. [Review and command](RUST_TEACHER_ON_STAGE_A_REVIEW.md) |
+
+The [g1261 teacher activation review](RUST_TEACHER_ON_STAGE_A_REVIEW.md) supersedes
+the historical full-shadow Pending notes below. On-mode reuses the qualified
+native barrier and PPO term, validates the measured beta/lineage, delays first
+residual installation until post-PPG to preserve collection identity, and checks
+committed anneal progress. Stage A starts training with search blend and trunk
+scale zero; all later stage gates remain. The exact production on-mode iteration
+and its timing are the next lab check.
 
 #### B01 — Pin lab state and qualify Linux/GPU adapters
 
@@ -1169,8 +1188,9 @@ Future milestones deliver **code, tests, documentation and current manifests thr
 - [x] B07 two shadow canaries, diagnostic continuation, locked Rust adoption with teacher off and complete rollback restoration pass on lab (R8 receipt above).
 - [x] B07 real g1250→g1251 commit/full restart passes on lab (export `20261107T134344148855Z-20261107T133341969715Z-b07-continue-cf42c992-3ed81ebb`; checkpoint `a6ccace46d17b14751086d1715a70543355b9a6e6a89fa55eb080917882adf27`).
 - [x] Implement the g1257 descriptor-lifetime repair, user-selected zero branching, full 28+4 shadow barrier, gradient recording/fixed-beta receipt and explicit 0.25/0.4/0.5 targets, with bounded debug coverage.
-- [ ] The four real full-volume shadow iterations g1257→g1261 pass lab timing/recovery and gradient qualification; review the fixed-beta receipt before choosing on-mode.
-- [ ] Later production task-teacher enablement has its own explicit decision, readiness/calibration and qualified commands.
+- [x] Four real full-volume shadow iterations g1257→g1261 pass lab recovery and gradient qualification; the measured receipt is reviewed (β 0.16110139609854138, target 0.25, 184 observations).
+- [x] User explicitly authorizes production task-teacher on-mode and auxiliary search-head Stage A; implement readiness/qualification/source checks and the same-run continuation command.
+- [ ] First normal on-mode g1261→g1262 iteration commits on the lab, with policy-teacher gradients, head-only training and complete restart evidence; retain later blend/trunk gates.
 - [ ] Every later stage has Git-delivered code/commands, pinned supplemental assets only when needed, and a Git-visible success/failure/deferred report.
 
 ### B8. Implementation references and existing regression anchors
@@ -1187,4 +1207,4 @@ Use [restart bundle instructions](../distribution/rust-lab-g570/README.md), [ref
 | `neutral_training.py`, `policy_observations.py`, `trained_startup.py`, `exploration.py`, `branching.py` | Current neutral inputs, manual-startup provenance and g370 exploration/fork semantics |
 | `local_scoring_auxiliary.py`, `critic_data.py`, `ppg_replay.py`, `value_phase.py` | Existing companion/critic/cache/preparation semantics and selected rollback |
 
-Keep the existing B01/B02/B02.5/B03/B04, training-g370, neutral-input, branch, inference deadline/race and PPO/PPG regression assertions. Add bounded native variants and `tests/RustBackendLab/test_g370_lab.py` coverage for current source/config, removed profiles, exact pending restore, clock boundaries, stale/canceled turns and one-use admission. Short local tests do not close Linux/CUDA gates. **B05 and B06 bounded correctness/measurements passed on pinned g1250. B06 did not show useful native performance. B07 R4 ordinary correctness/useful performance, R8 lab canaries, diagnostic continuation, Rust adoption/rollback and the real g1250→g1251 commit/full restart passed. Teacher-off production backend migration is complete; production teaching retains its separate gates.**
+Keep the existing B01/B02/B02.5/B03/B04, training-g370, neutral-input, branch, inference deadline/race and PPO/PPG regression assertions. Add bounded native variants and `tests/RustBackendLab/test_g370_lab.py` coverage for current source/config, removed profiles, exact pending restore, clock boundaries, stale/canceled turns and one-use admission. Short local tests do not close Linux/CUDA gates. **B05 and B06 bounded correctness/measurements passed on pinned g1250. B06 did not show useful native performance. B07 R4 ordinary correctness/useful performance, R8 lab canaries, diagnostic continuation, Rust adoption/rollback and the real g1250→g1251 commit/full restart passed. Four full shadow iterations now qualify the fixed beta through g1261. Production teaching and Stage A are explicitly enabled in the reviewed recipe; the first on-mode lab iteration remains Pending.**

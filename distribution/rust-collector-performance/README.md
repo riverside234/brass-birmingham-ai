@@ -1,6 +1,32 @@
 # PI00–PI05 ordinary collector performance supplement
 
-## 当前续训修复（2026-11-08）
+## 当前 teacher on / Stage A 续训（2026-11-08）
+
+已在 `results/` 拉取用户给出的 `92dbef3` 和 `a966c75`。四轮完整 28+4 shadow
+已通过，当前 committed checkpoint 为 **g1261**。184 个有效梯度比例的 pooled
+median 为 1.551817712660179，target 0.25 对应固定 **beta=0.16110139609854138**。
+按用户要求启用 teacher **on**，辅助 search head 从 **Stage A** 开始训练。
+
+同步 Git 代码并退出旧 trainer 后，在 lab 原训练环境运行：
+
+```bash
+python scripts/continue-rust-teacher.py --expected-generation 1261 --iterations 1 --share-target 0.25
+```
+
+继续同一 run **g1261→g1262**；保留完整 checkpoint/Adam/RNG/PPG/population、
+branching 0%、search_v1、28+4 tables 和原 collector 性能优化。policy teacher 使用固定
+beta；辅助 head 每轮在 PPG 后做 **32 steps head-only Adam**，**w=0、trunk scale=0**，
+后续阶段仍须通过原 gates。首次 head 安装推迟至该边界，避免 collection model ID
+变化；annealing 按已提交 progress 判断，避免静态 on 标志永久阻止训练。
+
+需要真实四轮资格、readiness、source/checkpoint/native bindings；结果自动导出到
+`results/rust-lab-qualification/`。重复同一命令只完成剩余工作。两个 Rust adapter
+均未改变，**无须 rebuild、完整 bundle 或重做通过的 qualification**。本地 38 个相关
+debug 回归通过，无 benchmark、游戏或真实训练。首次 on-mode lab iteration 仍 Pending。
+详见 [审查与监控说明](../../ai-research/RUST_TEACHER_ON_STAGE_A_REVIEW.md) 和
+[机器凭据](teacher-on-stage-a.json)。下方为历史修复/测试记录。
+
+## 历史续训修复（2026-11-08，已完成）
 
 已在 `results/` 拉取到 `5e03429`，确认 g1258 的 teacher/ordinary adapter 准备均通过。
 后续 `Uncommitted iteration ... iteration-1258` 来自真实 checkpoint loader 的第二道 guard。

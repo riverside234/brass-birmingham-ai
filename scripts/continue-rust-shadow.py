@@ -40,17 +40,18 @@ def run_training(argv,log):
         finally:process.stdout.close()
 
 
-def prepare(root,run_path,expected,iterations,share_target=.25):
+def prepare(root,run_path,expected,iterations,share_target=.25,*,mode='shadow'):
     from brass_ai.bank import read,sha
     from brass_ai.learning.contracts import project_path,require
     from brass_ai.recovery.collector_runtime import configured,from_config,recipe
     from brass_ai.recovery.retention import owned,run_lock
     from brass_ai.rust_backend.lab_backend import validate_state
     from brass_ai.rust_backend.lab_shadow import teacher_build
-    from brass_ai.rust_backend.lab_shadow_config import configure,is_shadow,archive_pending,qualification_upgrade
+    from brass_ai.rust_backend.lab_shadow_config import configure,is_shadow,archive_pending,qualification_upgrade,preserves_pending
+    from brass_ai.rust_backend.lab_teacher_activation import configure as enable,is_on,authorize
     from brass_ai.step5.league import write_json
     root,run=owned(root,run_path)
-    require(type(expected) is int and expected>=1257 and type(iterations) is int and iterations>0,'Invalid continuation boundary')
+    require(type(expected) is int and expected>=1257 and type(iterations) is int and iterations>0 and mode in ('shadow','on'),'Invalid continuation boundary')
     with run_lock(run):
         state=read(run/'state.json');validate_state(state)
         require(expected<=state['iteration']<=expected+iterations,'Run is outside the requested continuation boundary')
@@ -59,28 +60,37 @@ def prepare(root,run_path,expected,iterations,share_target=.25):
         teacher_build(state)
         import copy
         before=recipe(state['signature']['config'])
-        if is_shadow(before):
+        if mode=='on':
+            config=enable(before,share_target);authorize(state,config)
+        elif is_shadow(before):
             config=copy.deepcopy(before);config['teacher_phase']['term']['share_target']=share_target
             config['teacher_phase']['term']['shadow_iterations']=4
         else:config=configure(before,share_target)
-        require(is_shadow(config),'Invalid shadow share target')
+        require(is_on(config) if mode=='on' else is_shadow(config),'Invalid teacher continuation recipe')
         diagnostic_only=qualification_upgrade(before,config)
         require(config==before or diagnostic_only or state['iteration']==expected,'Change shadow settings at the requested starting generation')
         tag=str(share_target).replace('.','')
-        output=root/'configs/step5'/(run.name+'-rust-shadow32-no-branch-share'+tag+'.json')
+        prefix='-rust-teacher-on-stage-a-share' if mode=='on' else '-rust-shadow32-no-branch-share'
+        output=root/'configs/step5'/(run.name+prefix+tag+'.json')
         existing=read(output) if output.exists() else state['signature']['config']
         require(not output.exists() or recipe(existing)==config or qualification_upgrade(recipe(existing),config),'Existing shadow config differs')
         config=configured(config,from_config(existing))
-        if recipe(config)!=before and not diagnostic_only:archive_pending(root,run,state)
+        if recipe(config)!=before and not diagnostic_only:
+            target=dict(state['signature'],config=recipe(config))
+            if preserves_pending(state,target):
+                require(not list(run.glob(f"generation-{state['iteration']+1:04d}.pt*")),
+                    'Uncommitted checkpoint exists; recover it before enabling teacher training')
+            else:archive_pending(root,run,state)
         write_json(output,config)
         return state,output,expected+iterations-state['iteration']
 
 
-def main():
+def main(*,default_mode='shadow'):
     p=argparse.ArgumentParser(description=__doc__)
     p.add_argument('--run',default='artifacts/step5/joint7-v11-2-g1290-trained-restart')
     p.add_argument('--expected-generation',type=int,required=True)
-    p.add_argument('--iterations',type=int,default=4)
+    p.add_argument('--mode',choices=('shadow','on'),default=default_mode)
+    p.add_argument('--iterations',type=int,default=1 if default_mode=='on' else 4)
     p.add_argument('--share-target',type=float,choices=(.25,.4,.5),default=.25)
     p.add_argument('--device',default='cuda');p.add_argument('--mono',default='mono')
     args=p.parse_args()
@@ -93,15 +103,17 @@ def main():
     from brass_ai.step5.league import write_json
     from rust_lab_results import export
     from brass_ai.rust_backend.lab_replay_compat import execution
-    out=ROOT/'artifacts/rust-backend'/(datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S%fZ')+'-shadow-training-'+uuid.uuid4().hex[:8])
-    out.mkdir(parents=True);report=dict(passed=False,training_passed=False,teacher_mode='shadow',branching=0.,
+    out=ROOT/'artifacts/rust-backend'/(datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S%fZ')+'-'+args.mode+'-training-'+uuid.uuid4().hex[:8])
+    out.mkdir(parents=True);report=dict(passed=False,training_passed=False,teacher_mode=args.mode,branching=0.,
         tables=dict(train=28,held_out=4),share_target=args.share_target,qualification_iterations=4,expected_generation=args.expected_generation)
     try:
         report['execution_source']=execution()
-        state,config,remaining=prepare(ROOT,args.run,args.expected_generation,args.iterations,args.share_target)
+        state,config,remaining=prepare(ROOT,args.run,args.expected_generation,args.iterations,args.share_target,mode=args.mode)
         from brass_ai.recovery.collector_runtime import from_config
         report['collector_runtime']=from_config(read(config))
-        print('Branching=0%; teacher=shadow; tables=28+4; qualification=4 iterations; teacher gradients are diagnostic only.',flush=True)
+        print('Branching=0%; teacher='+args.mode+'; tables=28+4; '+
+            ('qualified fixed beta; search head Stage A (w=0, frozen trunk).' if args.mode=='on' else
+             'qualification=4 iterations; teacher gradients are diagnostic only.'),flush=True)
         print('Collector runtime: '+str(report['collector_runtime'])+' (training config)',flush=True)
         if remaining:
             argv=[sys.executable,'-u',str(ROOT/'scripts/step5.py'),'--root',str(ROOT),'--config',str(config),
@@ -114,10 +126,10 @@ def main():
         qualification=state.get('teacher_phase',{}).get('weight',{}).get('gradient_qualification')
         report.update(training_passed=True,generation=state['iteration'],checkpoint=state['history'][-1],
             gradient_qualification=qualification,passed=bool(qualification and qualification['passed']),
-            teacher_mode=state['signature']['config']['teacher_phase']['mode'])
-        require(report['teacher_mode']=='shadow','Continuation unexpectedly enabled teacher gradients')
-        print('Shadow gradient qualification: '+('Passed; fixed beta='+str(qualification['beta']) if report['passed'] else
-            'Pending; inspect readiness, table coverage and finite gradient measurements. Shadow remains active.'),flush=True)
+            teacher_mode=state['signature']['config']['teacher_phase']['mode'],search_value=state.get('search_value'))
+        require(report['teacher_mode']==args.mode,'Continuation teacher mode changed unexpectedly')
+        print('Teacher '+args.mode+': '+('qualified fixed beta='+str(qualification['beta']) if report['passed'] else
+            'qualification Pending; inspect readiness, table coverage and finite gradient measurements.'),flush=True)
     except BaseException as error:
         report.update(error=str(error),traceback=traceback.format_exc());raise
     finally:

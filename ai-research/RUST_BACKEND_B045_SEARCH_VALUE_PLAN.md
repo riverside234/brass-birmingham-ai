@@ -1,5 +1,15 @@
 # B04.5 plan: all-seat teacher tables and a search-value correction head
 
+**Current Stage A activation (2026-11-08):** B04.5/B05/B07 lab gates and four
+full 28+4 shadow gradient iterations have passed through g1261. The user now
+requests teacher on-mode and residual-head Stage A training. The reviewed
+on-mode config starts 32 head-only Adam steps per iteration after PPG,
+`w=0` and trunk scale zero; shadow did not train the head. First installation
+at this boundary preserves the committed collection identity. Later eight-age,
+held-out/blend and trunk gates remain. See [review, fixes and continuation](RUST_TEACHER_ON_STAGE_A_REVIEW.md).
+Actual first on-mode training remains Pending on the lab. Earlier status lines
+below describe the original implementation/qualification scope.
+
 Date: 2026-11-06 (America/Chicago). Status: **implemented; g1250 lab qualification Pending.**
 See [implementation and compatibility notes](RUST_BACKEND_B045_IMPLEMENTATION.md) and
 [qualification commands](../distribution/rust-lab-g1250/README.md). Production checkpoint

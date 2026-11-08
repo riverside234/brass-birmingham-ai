@@ -1,0 +1,312 @@
+{
+  "contract": "brass-teacher-on-stage-a-review/1",
+  "date": "2026-11-08",
+  "execution": {
+    "implementation": "e6ee2a8755617efcbdc6516bba8742ed002a229d16da4d96db71dc7a724efa51",
+    "qualified_implementation": "9efcf34f853d75ab844366b6819da4b0921be38d3e2dfb806cf282ace76e7a30",
+    "replay_location_review": "dfc7dd6b93faf1259f37d583a94dc2c408c09e8b8ae0cde29c7f92f9b8ebe2c3"
+  },
+  "results_commits": [
+    "92dbef3e5f76ecfe71f384101ebcd1f91200ffa6",
+    "a966c7583590577393bbf687a14b894cd6c657b3"
+  ],
+  "evidence": [
+    {
+      "path": "results/joint7-v11-2-g1290-trained-restart-g1261-20261108T070035419646Z/state.json",
+      "sha256": "37296ced620f84932737fd0ad07825fcd3e84c0a03b2716dd96826aa32e5e176"
+    },
+    {
+      "path": "results/rust-lab-qualification/20261108T063358240043Z-20261108T060920000950Z-shadow-training-05484c69-61fd605f/evidence/qualification.json",
+      "sha256": "97bff9954d7a8211f0bf0e0c209216a90c9a4f7a2a9d993de15aedb063b6d8eb"
+    }
+  ],
+  "generation": 1261,
+  "checkpoint": {
+    "path": "artifacts/step5/joint7-v11-2-g1290-trained-restart/generation-1261.pt",
+    "sha256": "45ba3988d4a7cd7fa8d6b78fc2edd738268aa179e33023c5b7046439ebd2e578",
+    "model_id": "abed90dda89fd6bf384401c88b9364750eb724f29e9ffb8af34308903d4a8864",
+    "generation": 1261
+  },
+  "games_done": 403520,
+  "gradient_qualification": {
+    "contract": "teacher-fixed-beta-qualification/1.0.0",
+    "passed": true,
+    "target": 0.25,
+    "required_iterations": 4,
+    "reason": "Qualified 4 complete consecutive shadow iterations",
+    "scope": "Pre-clipping PPO actor without entropy; shared state/entity encoders; shadow gradients discarded",
+    "beta": 0.16110139609854138,
+    "raw_median": 1.551817712660179,
+    "qualified_generation": 1261,
+    "clamped": false,
+    "sha256": "e3c986df434df8f4b1a6a26e83486e1784277c596de406e0ccd4cf646e012eab"
+  },
+  "observations": [
+    {
+      "generation": 1257,
+      "valid_steps": 46,
+      "steps": 46,
+      "tables": {
+        "train": 28,
+        "heldout": 4
+      },
+      "labels_by_phase": {
+        "canal_early": 128,
+        "canal_late": 128,
+        "rail_early": 128,
+        "rail_late": 128
+      },
+      "labels_by_kind": {
+        "root": 511,
+        "continuation": 1
+      },
+      "median_raw_share": 1.752155598896488,
+      "median_cosine": 0.0878813937447708,
+      "completed_trajectories": {
+        "median": 51.0,
+        "p10": 42.0,
+        "p90": 58.0
+      },
+      "effective_k": {
+        "16": 485,
+        "8": 7,
+        "2": 10,
+        "4": 10
+      },
+      "root_label_yield": 0.998046875,
+      "deadline_hit_fraction": 0.43359375,
+      "teacher_collection_seconds": 116.6121499830042,
+      "all_tables_cached": false,
+      "model_id": "4ed647d0f5d39c685864b802c92b083874f646c787d4b8668105d7c2c787ebe1",
+      "export_hash": "cad965da88338e6a424cd1e615ffb61da014c52e8ff3237baeeae8d94e429d40"
+    },
+    {
+      "generation": 1258,
+      "valid_steps": 46,
+      "steps": 46,
+      "tables": {
+        "train": 28,
+        "heldout": 4
+      },
+      "labels_by_phase": {
+        "canal_early": 128,
+        "canal_late": 131,
+        "rail_early": 128,
+        "rail_late": 129
+      },
+      "labels_by_kind": {
+        "root": 511,
+        "continuation": 5
+      },
+      "median_raw_share": 1.2887069567555534,
+      "median_cosine": 0.08695735557023639,
+      "completed_trajectories": {
+        "median": 54.0,
+        "p10": 45.0,
+        "p90": 61.0
+      },
+      "effective_k": {
+        "16": 478,
+        "8": 15,
+        "2": 14,
+        "4": 9
+      },
+      "root_label_yield": 0.998046875,
+      "deadline_hit_fraction": 0.4437984496124031,
+      "teacher_collection_seconds": 12.666493475000607,
+      "all_tables_cached": true,
+      "model_id": "30d492731bb91d1d9886835b143ae5d9ac4bc5d33a7667822ef54ab6db27cdf6",
+      "export_hash": "3653935cf45e122085a4c5ba47b5fb2049dab08e9b013a176e7c5946394f7780"
+    },
+    {
+      "generation": 1259,
+      "valid_steps": 46,
+      "steps": 46,
+      "tables": {
+        "train": 28,
+        "heldout": 4
+      },
+      "labels_by_phase": {
+        "canal_early": 128,
+        "canal_late": 128,
+        "rail_early": 129,
+        "rail_late": 128
+      },
+      "labels_by_kind": {
+        "root": 511,
+        "continuation": 2
+      },
+      "median_raw_share": 1.6689514125254468,
+      "median_cosine": 0.05897712504940491,
+      "completed_trajectories": {
+        "median": 52.0,
+        "p10": 45.0,
+        "p90": 57.0
+      },
+      "effective_k": {
+        "16": 490,
+        "8": 12,
+        "4": 5,
+        "2": 6
+      },
+      "root_label_yield": 0.998046875,
+      "deadline_hit_fraction": 0.49707602339181284,
+      "teacher_collection_seconds": 119.09992011499708,
+      "all_tables_cached": false,
+      "model_id": "d38b7e892b8562846f14290f105de5b289cd066593aaa2b813fcd3b5ddc0588c",
+      "export_hash": "699b85d930484b9bf1baf5e0a0363088e1c3c04ce44cf3eab64efed40818d172"
+    },
+    {
+      "generation": 1260,
+      "valid_steps": 46,
+      "steps": 46,
+      "tables": {
+        "train": 28,
+        "heldout": 4
+      },
+      "labels_by_phase": {
+        "canal_early": 128,
+        "canal_late": 128,
+        "rail_early": 128,
+        "rail_late": 128
+      },
+      "labels_by_kind": {
+        "root": 512
+      },
+      "median_raw_share": 1.7091260317906376,
+      "median_cosine": 0.06914999083417558,
+      "completed_trajectories": {
+        "median": 50.0,
+        "p10": 43.1,
+        "p90": 57.0
+      },
+      "effective_k": {
+        "16": 493,
+        "2": 9,
+        "4": 5,
+        "8": 5
+      },
+      "root_label_yield": 1.0,
+      "deadline_hit_fraction": 0.466796875,
+      "teacher_collection_seconds": 120.21643147297436,
+      "all_tables_cached": false,
+      "model_id": "fcc2f557308c6d41ddf02b64126312048fab4945d25eec9a122415e29f04c475",
+      "export_hash": "bea9dab0bade0f7b142e3f3b9c707adc04c58a14cb3c508673be9451347167f1"
+    }
+  ],
+  "raw_gradient_observations": 184,
+  "readiness": {
+    "version": "ppg-value-phase/24.0.0",
+    "reward_id": "49711b4abaa95940928db567fa76ab654a5d60c417e1b5eca8dbb44ffb5327c1",
+    "ready": true,
+    "decisions": 236598,
+    "games": 608,
+    "steps": 16,
+    "before": {
+      "mse": 0.15573972769501399
+    },
+    "after": {
+      "mse": 0.15465599672918648
+    },
+    "scope": "Final accepted value-phase weights; ordinary critic-train games only; heldout games excluded"
+  },
+  "entropy_anneal_complete": true,
+  "activation": {
+    "teacher_mode": "on",
+    "search_value_stage": "A",
+    "w": 0.0,
+    "trunk_scale": 0.0,
+    "steps_per_iteration": 32,
+    "full_tables": {
+      "train": 28,
+      "held_out": 4
+    },
+    "branching": 0.0,
+    "search": "search_v1",
+    "v205": false,
+    "source_config": "configs/step5/joint7-v11-2-g1290-trained-restart-rust-teacher-on-stage-a-share025.json",
+    "fixed_beta": 0.16110139609854138,
+    "target": 0.25,
+    "beta_targets": {
+      "0.25": 0.16110139609854138,
+      "0.4": 0.2577622337576662,
+      "0.5": 0.32220279219708275
+    }
+  },
+  "fixes": [
+    "Defer first residual installation until post-PPG, preserving frozen collection model identity",
+    "Check committed entropy progress/waiting stages instead of static schedule-on flag",
+    "Reuse full qualified native barrier and guarded PPO with actual four-iteration median/lineage authorization",
+    "Persist on activation binding; preserve pending only under identical projected collection signature",
+    "Report generic teacher collection timing separately from ordinary collection"
+  ],
+  "preserved": [
+    "strict weights_only loading",
+    "full checkpoint/Adam/RNG/population/PPG",
+    "ordinary collection performance mechanisms and original CPU/inference limits",
+    "actor-only policy teacher and independent sampling RNG",
+    "held-out isolation and exact stale-label rule",
+    "head-only Adam with frozen ordinary weights/optimizer at w=0",
+    "native search_v1 and unchanged binaries",
+    "sealed cache/value/label admission and mutation isolation",
+    "later stage/blend/trunk gates and interruption recovery"
+  ],
+  "findings": {
+    "coverage": "All 32 tables/four phases in each qualified iteration",
+    "stale_labels": "Older ages exceed drift/improvement bound and remain excluded; current-age rows admitted",
+    "timing": "g1258 collection is cache recovery, not a fresh-throughput benchmark",
+    "heldout_kl": "Shadow drift is diagnostic, not proof of on-mode strength",
+    "inference_channels": "Last three reports have zero active channels/slots/leases; created/released match",
+    "remaining_cost": "Final checkpoint publication 14.870s; monitor history growth and normal evaluation/retention costs"
+  },
+  "debug": {
+    "distinct_passed": 38,
+    "new_activation_checks": 12,
+    "existing_affected_checks": 26,
+    "logs": [
+      {
+        "path": "artifacts/teacher-on-stage-a/activation-debug.log",
+        "sha256": "1b034983f67a1f7feb94eadcaf3dff80e35b0431d655f499d263cc7fbac55203"
+      },
+      {
+        "path": "artifacts/teacher-on-stage-a/head-barrier-debug.log",
+        "sha256": "da9ace99a10aad0687f027dd523a96c2be52700d5caf29874ab192d1acb10573"
+      },
+      {
+        "path": "artifacts/teacher-on-stage-a/affected-debug.log",
+        "sha256": "ff4ef119292de78d9ad28fede97c454e323c27e4637aaf524aa7c8c9e25a9d05"
+      }
+    ],
+    "initial_fixture_repair": "Manually constructed head-restart fixture needed history; corrected strict restore passed in head-barrier-debug.log",
+    "extra_check": "test_b045.B045.test_sixth_output_zero_and_nonzero_preserve_main_heads_and_chunking passed, 1 test in 0.439s",
+    "scope": "Small CPU model/Adam fixtures and authored mocked native barrier with real cache I/O",
+    "no_local_benchmarks": true,
+    "no_native_games": true,
+    "no_real_training": true,
+    "no_unrelated_qualifications": true
+  },
+  "native": {
+    "ordinary_source": "51d8e85bd7aa9c43c87ae609d57da3c8cfcab9473f90b9d4140fb8811c1fb6ec",
+    "teacher_adapter_source": "cb78f5f55ad4f2468841be51dba9cf387ba5830b9319b6dfd6501e980025dbbd",
+    "sources_unchanged": true,
+    "rebuild_required": false
+  },
+  "source_review": {
+    "qualified_source_reconstructed": true,
+    "source_files": 367,
+    "reviewed_changes": 59,
+    "previous_execution": {
+      "implementation": "4bdf312c8202dc2f36e85c95659d011594150e3b0d59123670fb14779f1c9c13",
+      "qualified_implementation": "9efcf34f853d75ab844366b6819da4b0921be38d3e2dfb806cf282ace76e7a30",
+      "replay_location_review": "dd0bee7c1a60006e00f10ba939b4e2555213fac5f191b48331465e7bc2c3401f"
+    }
+  },
+  "continuation": [
+    "python scripts/continue-rust-teacher.py --expected-generation 1261 --iterations 1 --share-target 0.25"
+  ],
+  "first_on_iteration": {
+    "start": 1261,
+    "end": 1262,
+    "status": "Pending lab"
+  }
+}

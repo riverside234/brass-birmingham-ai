@@ -1,7 +1,7 @@
 {
   "contract": "brass-b07-replay-location-review/1.0.0",
   "qualified_implementation": "9efcf34f853d75ab844366b6819da4b0921be38d3e2dfb806cf282ace76e7a30",
-  "execution_implementation": "4bdf312c8202dc2f36e85c95659d011594150e3b0d59123670fb14779f1c9c13",
+  "execution_implementation": "e6ee2a8755617efcbdc6516bba8742ed002a229d16da4d96db71dc7a724efa51",
   "base_commit": "7244d6b",
   "changes": {
     "configs/learning/collector-performance-teacher-reuse.json": {
@@ -58,7 +58,7 @@
     },
     "src/brass_ai/recovery/entropy_schedule.py": {
       "before": "e3b333823fe734e282c283f1b969ad3d933c23c6d044508f523e9706f6bb2ea4",
-      "after": "029e0e975f04b9e7d43aa4b2574fd4742669accee847a7c37f5041de389d09fd"
+      "after": "9a5066b90863484c58168d5fff2bc23853a73644328780203aa1c0278403f781"
     },
     "src/brass_ai/recovery/execution.py": {
       "before": "ba3d8043033b7064ea754e8d2d5d64896a491b64dccb296c2c71a9d6e92ec102",
@@ -90,7 +90,7 @@
     },
     "src/brass_ai/recovery/league.py": {
       "before": "62e4a3613e44ea69f910f9ecde342e1b36d31bfa9005eec383311f8e8055097b",
-      "after": "0ca453da3f33490df31223cbf3b8deae531ba0dd6ee8cc1ccdb140006dbc1511"
+      "after": "ec6a9f3a346af5f4ae1dbbb8ac9e321f04331ee5d1c3c4bcce6cafc4a80514e6"
     },
     "src/brass_ai/recovery/ordinary.py": {
       "before": "1caa8aaa7d0e9ad5cb555da8b6cd105b21250460b2d297292b269e52770476e6",
@@ -114,11 +114,11 @@
     },
     "src/brass_ai/recovery/search_value_iteration.py": {
       "before": "36c1d1a7580760255b0b1228a5c5d4f384529ec2b07194997118c480d21c29ae",
-      "after": "f2f91f9b8738a59c5bc73d9c3ecbe05f1afa9be782c7929c17c6af29d636e050"
+      "after": "b1cd050054a7219b0615bf071cee674f6b3e191022e164797c49ecf2b3cea536"
     },
     "src/brass_ai/recovery/search_value_phase.py": {
       "before": "9bd6cff9d5a34fa41f997eea6005d0c2d4ba31ca53c0479d15cc74474f5380d2",
-      "after": "b346b89912958851a35c13cbe3f016cae445977e666b9c5f5bd36a2b9954e1c7"
+      "after": "1b9f32de98c2d581d1c19c160dd3bf4d633a4be3b0ebd26d675667a2459c8727"
     },
     "src/brass_ai/recovery/search_value_rows.py": {
       "before": "f2b3fe9c9465f6103b9d6509dfa30a50e6ff255f8c18a76cd03fa11c03a5c3ce",
@@ -162,7 +162,7 @@
     },
     "src/brass_ai/rust_backend/lab_backend.py": {
       "before": "8e6496a7e67371bb9f5898e1dde864731f49a60062768ab66773ec4e5a9749d3",
-      "after": "78f02095707de4f05c14a2814ee38318634b0ce1b729cb29b7d1791938588d7c"
+      "after": "609df0a907c8552250b37650977434afe87a65bc3bb3f12d9a3ffd9c58b6a666"
     },
     "src/brass_ai/rust_backend/lab_collection.py": {
       "before": "807c76a8b20bb3a99f776041101096eba7cd3ace309b64d5fb0a8cd1495ca989",
@@ -194,19 +194,19 @@
     },
     "src/brass_ai/rust_backend/lab_pool.py": {
       "before": "1561e48d93b258d57511f4c79e6b0e5de98baedbc9dda0b1cfe325ec57af22f1",
-      "after": "ede0b5d555c2f56bc2be9f446e29cc3b43dc0504064a77e449f4ec9ea67d899e"
+      "after": "712225da924e9727567230d0df6036fb22b02ec0ce75ffa867e6782f8a1c1507"
     },
     "src/brass_ai/rust_backend/lab_replay_compat.py": {
       "before": null,
-      "after": "e917ba57e390ac29976e6adc94102005f1b5382b9ebb59506e3c39d8146b66b3"
+      "after": "3450be38da60b67982ee9e4367b4ccb04d5d01d4c1832d0900560fa97b2727fa"
     },
     "src/brass_ai/rust_backend/lab_shadow.py": {
       "before": null,
-      "after": "6b1dd08076e326df898944dada98d9d194ab92cf907d1ac1847f5bffb635ffa4"
+      "after": "83114e19fec7350d2fadb99f080a37a77540388f901ea08b28c7d27e1f8212b2"
     },
     "src/brass_ai/rust_backend/lab_shadow_config.py": {
       "before": null,
-      "after": "a6646bd4c4d3db858b6915068972a0e2e3d4ceb58b806e90fbcd0caec5a4f37e"
+      "after": "076b4a88d45680dca66bbfbe9d1602ba90b1689328258d73a138597405b29c65"
     },
     "src/brass_ai/rust_backend/lab_shared.py": {
       "before": null,
@@ -215,6 +215,10 @@
     "src/brass_ai/rust_backend/lab_teacher.py": {
       "before": "2fa41cbf32b1bdfb21e4f92c7a755119ea011e38a01727dd099352f7cb0a93fb",
       "after": "0705805dd65d4e451f5d042473b310b1b71afd64b5b119ef2b77bc3bdbaaf602"
+    },
+    "src/brass_ai/rust_backend/lab_teacher_activation.py": {
+      "before": null,
+      "after": "57e59358c38a190e05388c202e5e745ba6e07236f6d9bae168ec9c2dd45ef673"
     },
     "src/brass_ai/rust_backend/lab_teacher_finalization.py": {
       "before": "1719b9dc55148b22bc4cab0e4ce2630f0e4ffd0003f776ed1d0de72b50a6d5a8",
@@ -290,6 +294,11 @@
       "implementation": "057635dbbb00aaf0065291df2eb274b2cdd824ab848ea0a524dab77d274ba487",
       "qualified_implementation": "9efcf34f853d75ab844366b6819da4b0921be38d3e2dfb806cf282ace76e7a30",
       "replay_location_review": "d90d125f2fb468a15b5eda6b18898ad67fe7dc6b30ab881934371879ef3db9dd"
+    },
+    {
+      "implementation": "4bdf312c8202dc2f36e85c95659d011594150e3b0d59123670fb14779f1c9c13",
+      "qualified_implementation": "9efcf34f853d75ab844366b6819da4b0921be38d3e2dfb806cf282ace76e7a30",
+      "replay_location_review": "dd0bee7c1a60006e00f10ba939b4e2555213fac5f191b48331465e7bc2c3401f"
     }
   ],
   "performance_evidence": "results/joint7-v11-2-g1290-trained-restart-g1253-20261107T145415686647Z/iteration-1252/report.json",
@@ -364,5 +373,16 @@
     "gate": "Real load_resume permits a nonempty iteration directory only for the explicitly reviewed native shadow 2-to-4 measurement extension with identical projected collection signature",
     "retained": "Strict full checkpoint loading, explicit review, full signature/lineage, next-checkpoint guard, native/backend switch bindings, normal cold family/table validation",
     "unchanged": "No Rust adapter/core/teacher/search/model/optimizer/RNG change; reuse both passing g1258 preparations"
+  },
+  "teacher_on_stage_a": {
+    "authority": "User explicitly requests teacher search on and auxiliary search-head Stage A after reviewing four lab iterations",
+    "results_commits": [
+      "92dbef3e5f76ecfe71f384101ebcd1f91200ffa6",
+      "a966c7583590577393bbf687a14b894cd6c657b3"
+    ],
+    "qualified_generation": 1261,
+    "beta": 0.16110139609854138,
+    "gradient_receipt": "e3c986df434df8f4b1a6a26e83486e1784277c596de406e0ccd4cf646e012eab",
+    "scope": "Same qualified Rust search/collector; policy teacher uses fixed beta inside guarded PPO, residual head trains after PPG at w=0/frozen trunk; complete anneal uses committed progress; keep exact checkpoints/Adam/RNG, labels, cache bindings and recovery"
   }
 }

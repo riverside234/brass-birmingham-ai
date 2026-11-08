@@ -1,5 +1,16 @@
 # Teacher search phase revision plan
 
+**2026-11-08 activation:** results `92dbef3` and `a966c75` confirm four complete
+full-volume shadow iterations through g1261. The sealed four-iteration receipt
+qualifies β **0.16110139609854138**, target 0.25, from 184 raw gradient
+measurements. The user explicitly selects teacher **on** and auxiliary
+search-head **Stage A** training, with zero blend/trunk scale and 32 post-PPG
+head-only steps. The exact recipe/launcher, qualification checks and activation
+startup repairs are implemented; first on-mode training is Pending on the lab.
+See [review, evidence and current command](RUST_TEACHER_ON_STAGE_A_REVIEW.md).
+This supersedes earlier Pending notes and the historical no-receipt fallback:
+this production activation requires the actual four-iteration qualification.
+
 **2026-11-07 continuation:** the existing Rust training run is committed through
 g1258 per the supplied terminal log. The user explicitly selects branching 0%, full 28+4 shadow tables per
 iteration and four ordinary shadow iterations for gradient qualification. The
