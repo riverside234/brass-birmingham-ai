@@ -1,0 +1,35 @@
+{
+  "contract": "step5-transfer-upgraded-il-repair/1.0.0",
+  "date": "2026-11-08",
+  "base_commit": "1cd1b90aeacdf4bc6052a0465911575659dc60ba",
+  "implementation": "9577ab0db846fe6783963ad11cb1f5ab46d67cbe0ce57e7454425c8fa96431a4",
+  "training_source_changed": false,
+  "native_rebuild_required": false,
+  "prior_qualification_rerun": false,
+  "failure": "Exporter incorrectly required a BC state/report for the current critic-upgraded IL origin",
+  "fix": "Follow upgrade.json and candidate.pt first, bind exact upgrade signature/compatibility/candidate identity and dataset lineage, then recursively retain required completed-parent metadata/checkpoints/manifests",
+  "original_il_replay": "omitted",
+  "original_il_cache": "omitted",
+  "replay_buffers": "omitted; existing destination rebuild unchanged",
+  "original_state_and_checkpoint_bytes": "preserved",
+  "runtime_loading": "Unchanged strict weights_only/checkpoint/lineage loading",
+  "evidence": {
+    "python_debug_checks_passed": 6,
+    "tests": [
+      "test_upgrade_transfer.UpgradedIL.test_candidate_bytes_and_owned_path_are_still_required",
+      "test_upgrade_transfer.UpgradedIL.test_export_and_relocated_restore_include_both_il_formats_without_replay",
+      "test_upgrade_transfer.UpgradedIL.test_missing_parent_checkpoint_and_regular_bc_completion_metadata_fail_closed",
+      "test_upgrade_transfer.UpgradedIL.test_real_g1284_upgrade_receipt_matches_its_pinned_training_origin",
+      "test_upgrade_transfer.UpgradedIL.test_receipt_candidate_dataset_and_compatibility_changes_fail_before_archive",
+      "test_upgrade_transfer.UpgradedIL.test_upgrade_cycles_and_nested_upgrades_are_rejected"
+    ],
+    "ast": "passed",
+    "git_diff_check": "passed",
+    "local_benchmarks": false,
+    "local_training": false,
+    "local_native_build": false,
+    "lab_real_archive": "Pending",
+    "note": "Initial authored Windows path assertion corrected; affected export/relocation/restore test rerun successfully"
+  },
+  "guide": "docs/STEP5_MACHINE_TRANSFER.md"
+}

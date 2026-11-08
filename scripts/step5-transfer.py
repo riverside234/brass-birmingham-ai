@@ -326,11 +326,39 @@ def inventory(root, run, *, mode='compact'):
             if calibration.get('budget', {}).get('calibration'):
                 add(calibration['budget']['calibration'], calibration['sha256'])
     seen = set()
-    def imitation(origin):
+    def imitation(origin, *, legacy_upgrade=False):
         folder = below(root, origin['bc_run'])
         require(folder not in seen and folder.is_relative_to(root / 'artifacts'), 'Cyclic/invalid IL lineage')
         seen.add(folder); runs.add(folder)
         require(not active(folder), 'IL source is active')
+        # completed_imitation() dispatches critic-upgraded IL through its
+        # immutable receipt BEFORE looking for a BC state/report. Such a run
+        # intentionally contains only upgrade.json + candidate.pt; its parent
+        # owns the completed BC state/report and original dataset provenance.
+        upgrade = folder / 'upgrade.json'
+        if upgrade.is_file():
+            require(not legacy_upgrade, 'An upgraded IL cannot be upgraded again')
+            add(upgrade)
+            receipt = read(upgrade)
+            require(receipt.get('contract') == 'completed-il-critic-upgrade/1.0.0'
+                    and receipt.get('compatibility') == state['signature'].get('compatibility')
+                    and isinstance(receipt.get('compatibility'), dict)
+                    and origin.get('bc_signature') == digest(receipt),
+                    'IL upgrade receipt/source binding differs')
+            candidate = receipt['candidate']
+            selected = below(root, candidate['path'])
+            require(selected.parent == folder and selected == below(root, origin['path'])
+                    and all(origin[k] == candidate[k] for k in ('sha256', 'model_id')),
+                    'Upgraded IL candidate identity/ownership differs')
+            add(selected, candidate['sha256'])
+            parent = receipt['parent']
+            require(below(root, origin['manifest']) == below(root, parent['manifest'])
+                    and origin['manifest_sha256'] == parent['manifest_sha256'],
+                    'Upgraded IL dataset lineage differs')
+            dataset(origin['manifest'], origin['manifest_sha256'])
+            if mode == 'full': tree(folder)
+            imitation(parent, legacy_upgrade=True)
+            return
         if mode == 'full':
             tree(folder)
         else:
@@ -346,7 +374,7 @@ def inventory(root, run, *, mode='compact'):
         dataset(origin['manifest'], origin['manifest_sha256'])
         parent = s['signature'].get('parent_imitation')
         if parent:
-            imitation(parent)
+            imitation(parent, legacy_upgrade=legacy_upgrade)
     origin = state['signature'].get('imitation_source')
     if origin:
         imitation(origin)

@@ -28,6 +28,8 @@ The original full IL replay, IL preparation/feature caches, ordinary replay, `.p
 
 The existing IL probe is reused exactly. A committed probe is checked against its original manifest receipt, dataset-manifest/source/model bindings, array SHA-256 and semantic tensor hash. Loading it needs no original IL shards. Building a new/uncommitted probe still requires and verifies the source shards. Keep the small original dataset manifests and completed-IL checkpoint/metadata; copying only `probe.npz` is insufficient.
 
+The current `features4-v11-2-batch7-il` origin is a **critic-upgraded IL directory**: its completion evidence is `upgrade.json` plus `candidate.pt`. It intentionally has no `state.json` or `report.json`. The exporter follows the exact hash-bound upgrade receipt to `features4-v11-1-batch7-il`, then recursively retains the parent's completed-BC state/report, selected checkpoint and dataset manifests. It checks the upgrade signature, compatibility, candidate ownership/hash/model identity and dataset lineage. Ordinary completed-BC directories still require their state/report. No missing metadata is fabricated, and no original replay/preparation cache is added.
+
 The old B07 rollback manifest travels as audit evidence. Its omitted diagnostic payload is not a destination backup; use the retained transfer archive to restore the transferred checkpoint if necessary.
 
 ## Fresh buffers and Stage A
@@ -60,6 +62,8 @@ python scripts/prepare-rust-post-transfer-reward.py \
   --run "$RUN" --expected-generation 1284
 
 # Review included files and sizes; creates no archive and uploads nothing.
+# Stop this command sequence immediately if validation/export fails.
+set -e
 python scripts/step5-transfer.py export \
   --root "$ROOT" --run "$RUN" --bundle "$BUNDLE" --dry-run
 
@@ -70,6 +74,8 @@ python scripts/step5-transfer.py export \
 ```
 
 The preparation tool reuses an existing matching variant. A first build needs the existing Rust 1.99.1 toolchain and tiny sealed core source input; it preserves search_v1 and all old reward behavior while admitting the version-3 payout contract and an exact zero charge. It writes a separate selector, leaving the current source teacher active. If you skip source preparation, the destination preparation command needs Rust 1.99.1 and builds there; the archive carries the small sealed source input when available. No compiler/target cache or full IL data is transferred.
+
+If an earlier export failed asking for `features4-v11-2-batch7-il/state.json`, update the exporter and retry the dry run/export above. A successfully prepared reward adapter remains valid: this transport-only fix changes no training/source fingerprint or native build, so do not repeat its tests/build or any completed training qualification. The trailing `ls ...part*` error only means the failed export produced no archive parts. List/copy parts only after export succeeds.
 
 Output identifies the checkpoint generation, Git commit, archive size, parts and fresh-buffer/reward policy. Each part is bounded to 1900 decimal MB by default; the `.parts.json` index binds all parts. Keep every part and the index. The compressor streams the TAR without creating a second full uncompressed archive. Python 3.11+ is required; `requirements-transfer.txt` supplies zstd for versions that need it. `--format zip` is available for compatibility. Use a new bundle path for every export.
 

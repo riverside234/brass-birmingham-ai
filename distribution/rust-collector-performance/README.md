@@ -248,3 +248,11 @@ restore JSON's `prepare_reward`, `preflight` and `resume` commands. Focused debu
 evidence is recorded in [stage-c-machine-transfer.json](stage-c-machine-transfer.json).
 Actual destination transfer/continuation remains Pending lab; no local benchmark
 or full qualification is requested.
+
+The transfer exporter also supports the current critic-upgraded IL origin
+(`upgrade.json` + `candidate.pt`, without a local BC state/report). It retains
+the exact upgrade receipt and recursively required parent BC provenance while
+continuing to omit original IL replay/cache. See
+[transfer-upgraded-il-fix.json](transfer-upgraded-il-fix.json). This is a
+transport-only repair: reuse the already prepared reward teacher; no training
+qualification, native build or benchmark needs repeating.
