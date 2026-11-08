@@ -1,18 +1,18 @@
 # Teacher search phase revision plan
 
 **2026-11-07 continuation:** the existing Rust training run is committed through
-g1257. The user explicitly selects branching 0%, full 28+4 shadow tables per
-iteration and two ordinary shadow iterations for gradient qualification. The
+g1258 per the supplied terminal log. The user explicitly selects branching 0%, full 28+4 shadow tables per
+iteration and four ordinary shadow iterations for gradient qualification. The
 [current implementation and command](../distribution/rust-lab-b07-g1250/README.md#full-shadow-gradient-qualification)
 reuse the qualified native collector and normal PPO step. Shadow records r at
 beta=1, encoder cosine and norms, phase support/improvement, root-label yield,
 N/effective K, deadlines and cost, while discarding every teacher gradient.
-Two complete consecutive full-volume iterations with finite nonzero gradient
+Four complete consecutive full-volume iterations with finite nonzero gradient
 observations produce a sealed fixed-beta receipt in state/checkpoint. Default
 share_target=0.25; explicit later options 0.4 and 0.5 calculate a new fixed beta
 from the same frozen raw measurements. Monitoring does not adapt beta. Remaining
 on-mode acceptance is separate; no automatic switch occurs after qualification.
-Actual two-iteration Linux/CUDA qualification remains Pending. Older qualification
+Retain the first committed measurement. Actual four-iteration Linux/CUDA qualification remains Pending; see the [bonus repair and recovery command](RUST_SHADOW_BONUS_AND_FOUR_ITERATION_FIX.md). Older qualification
 statuses and commands below describe their historical scope.
 
 **Current qualification (2026-11-03):** use the [g570 B01–B04 bundle](../distribution/rust-lab-g570/README.md). It pins the recorded g570 checkpoint/config and the complete current source inventory. Older bundles are historical inputs; do not overlay their source snapshots onto this checkout. Search remains task-only search_v1, four seconds plus at most one second post-search, with DOMiNO/AZ_DB and V205 disabled.
@@ -106,7 +106,7 @@ Add a separately versioned block. Leave the legacy teacher fields unchanged so h
              "decisions": "action-stage-both-actions",
              "evidence": "completed-trajectories"},
   "buffer": {"iterations": 4, "age_weights": [4, 3, 2, 1], "max_staleness_ratio": 1.0},
-  "term": {"rows_per_step": 64, "share_target": 0.25, "shadow_iterations": 2, "beta_bounds": [0.01, 10.0]}
+  "term": {"rows_per_step": 64, "share_target": 0.25, "shadow_iterations": 4, "beta_bounds": [0.01, 10.0]}
 }
 ```
 
@@ -341,7 +341,7 @@ How the term interacts with the existing update:
 ## 11. Teacher weight
 
 - **Share.** Define r = ‖g_T‖ / ‖g_A‖, measured before clipping on the shared state/entity encoders. This is the `TrunkGradients` parameter set, so r is comparable with the DCPG actor and preservation norms. g_A is the PPO actor gradient that `TrunkGradients.add_actor` already accumulates (without entropy). `TrunkGradients` runs only while DCPG preservation is active, as in the current recipe; without DCPG, measure g_A with the same `autograd.grad` call.
-- **Calibration.** Shadow mode (2 iterations) measures r at β = 1 on every step. On switching to `on`, set β = 0.25 / median r, bounded to [0.01, 10]. β is stored in state and then held fixed.
+- **Calibration.** Shadow mode (4 iterations) measures r at β = 1 on every step. On switching to `on`, set β = 0.25 / median r, bounded to [0.01, 10]. β is stored in state and then held fixed.
 - **No shadow receipt.** Start at β = 1 for one iteration, then set β from that iteration's measurement.
 - **Monitoring.** Report the median r and the cosine between g_T and g_A every iteration. If the median weighted share stays outside [0.125, 0.5] for 3 iterations at target 0.25, warn. Keep the qualified beta fixed; any new calibration is an explicit future operation. A share that falls as labels are absorbed is expected. An explicit target edit to 0.4 or 0.5 rescales beta from the frozen qualification measurements and keeps that new value fixed too.
 - **Adjusting after 10 iterations.**
@@ -400,7 +400,7 @@ Rust / B04 tests:
 ## 14. Rollout near the end of training
 
 1. **Adopt.** Add the block with `mode = off` and disable `teacher_value` at the next planned revision.
-2. **Shadow.** Run 2 shadow iterations about 120 iterations before the planned end, which yields about 100k training labels by the end. Check:
+2. **Shadow.** Run 4 shadow iterations about 120 iterations before the planned end, which yields about 100k training labels by the end. Check:
    - label yield: at least 95% of reached reserved turns give a root label
    - N and effective K, and the deadline-hit rate
    - improvement I by phase

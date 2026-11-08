@@ -381,7 +381,10 @@ class Resume(Base):
         self.assertFalse(teacher_receipt_preserved(state, changed, raw, entry))
 
     def test_full_resume_receipt_mode_toggle_keeps_weights_adam_rng(self):
-        before = self.signature(config()); after = copy.deepcopy(before); after['config']['teacher_phase']['mode'] = 'shadow'
+        # Exercise the pinned historical mode-only review, rather than treating
+        # every future checkout fingerprint as an approved generic transition.
+        reviewed = '6abba7672db47057df6090907c9397eb70ecad52b691653ed552bf250725e96d'
+        before = self.signature(config(), reviewed); after = copy.deepcopy(before); after['config']['teacher_phase']['mode'] = 'shadow'
         run = self.temp_run(); original = model_fixture()
         original.utility_calibration = dict(ready=True, reward_id=digest(original.config.utility))
         optimizer = torch.optim.AdamW(original.parameters(), lr=1e-5)

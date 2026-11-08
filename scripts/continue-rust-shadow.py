@@ -47,7 +47,7 @@ def prepare(root,run_path,expected,iterations,share_target=.25):
     from brass_ai.recovery.retention import owned,run_lock
     from brass_ai.rust_backend.lab_backend import validate_state
     from brass_ai.rust_backend.lab_shadow import teacher_build
-    from brass_ai.rust_backend.lab_shadow_config import configure,is_shadow,archive_pending
+    from brass_ai.rust_backend.lab_shadow_config import configure,is_shadow,archive_pending,qualification_upgrade
     from brass_ai.step5.league import write_json
     root,run=owned(root,run_path)
     require(type(expected) is int and expected>=1257 and type(iterations) is int and iterations>0,'Invalid continuation boundary')
@@ -61,15 +61,17 @@ def prepare(root,run_path,expected,iterations,share_target=.25):
         before=recipe(state['signature']['config'])
         if is_shadow(before):
             config=copy.deepcopy(before);config['teacher_phase']['term']['share_target']=share_target
+            config['teacher_phase']['term']['shadow_iterations']=4
         else:config=configure(before,share_target)
         require(is_shadow(config),'Invalid shadow share target')
-        require(config==before or state['iteration']==expected,'Change shadow settings at the requested starting generation')
+        diagnostic_only=qualification_upgrade(before,config)
+        require(config==before or diagnostic_only or state['iteration']==expected,'Change shadow settings at the requested starting generation')
         tag=str(share_target).replace('.','')
         output=root/'configs/step5'/(run.name+'-rust-shadow32-no-branch-share'+tag+'.json')
         existing=read(output) if output.exists() else state['signature']['config']
-        require(not output.exists() or recipe(existing)==config,'Existing shadow config differs')
+        require(not output.exists() or recipe(existing)==config or qualification_upgrade(recipe(existing),config),'Existing shadow config differs')
         config=configured(config,from_config(existing))
-        if recipe(config)!=before:archive_pending(root,run,state)
+        if recipe(config)!=before and not diagnostic_only:archive_pending(root,run,state)
         write_json(output,config)
         return state,output,expected+iterations-state['iteration']
 
@@ -78,7 +80,7 @@ def main():
     p=argparse.ArgumentParser(description=__doc__)
     p.add_argument('--run',default='artifacts/step5/joint7-v11-2-g1290-trained-restart')
     p.add_argument('--expected-generation',type=int,required=True)
-    p.add_argument('--iterations',type=int,default=2)
+    p.add_argument('--iterations',type=int,default=4)
     p.add_argument('--share-target',type=float,choices=(.25,.4,.5),default=.25)
     p.add_argument('--device',default='cuda');p.add_argument('--mono',default='mono')
     args=p.parse_args()
@@ -93,13 +95,13 @@ def main():
     from brass_ai.rust_backend.lab_replay_compat import execution
     out=ROOT/'artifacts/rust-backend'/(datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S%fZ')+'-shadow-training-'+uuid.uuid4().hex[:8])
     out.mkdir(parents=True);report=dict(passed=False,training_passed=False,teacher_mode='shadow',branching=0.,
-        tables=dict(train=28,held_out=4),share_target=args.share_target,expected_generation=args.expected_generation)
+        tables=dict(train=28,held_out=4),share_target=args.share_target,qualification_iterations=4,expected_generation=args.expected_generation)
     try:
         report['execution_source']=execution()
         state,config,remaining=prepare(ROOT,args.run,args.expected_generation,args.iterations,args.share_target)
         from brass_ai.recovery.collector_runtime import from_config
         report['collector_runtime']=from_config(read(config))
-        print('Branching=0%; teacher=shadow; tables=28+4; teacher gradients are diagnostic only.',flush=True)
+        print('Branching=0%; teacher=shadow; tables=28+4; qualification=4 iterations; teacher gradients are diagnostic only.',flush=True)
         print('Collector runtime: '+str(report['collector_runtime'])+' (training config)',flush=True)
         if remaining:
             argv=[sys.executable,'-u',str(ROOT/'scripts/step5.py'),'--root',str(ROOT),'--config',str(config),

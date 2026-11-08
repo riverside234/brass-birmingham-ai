@@ -207,9 +207,9 @@
     "Actual g1257 to g1259 shadow continuation and ordinary/shadow timing"
   ],
   "continuation": [
-    "python scripts/prepare-rust-teacher-verification.py --expected-generation 1257 --offline",
-    "python scripts/prepare-rust-collector-performance.py --expected-generation 1257 --offline",
-    "python scripts/continue-rust-shadow.py --expected-generation 1257 --iterations 2 --share-target 0.25"
+    "python scripts/prepare-rust-teacher-verification.py --expected-generation 1258 --offline",
+    "python scripts/prepare-rust-collector-performance.py --expected-generation 1258 --offline",
+    "python scripts/continue-rust-shadow.py --expected-generation 1257 --iterations 4 --share-target 0.25"
   ],
   "artifacts": {
     "pi04-components-forward.json": "7d56bd5eedd8c92df6adc7dbe7421781c3c96b8380f24b92d82c960aa3e47e0e",
@@ -250,5 +250,10 @@
     "path": "distribution/rust-collector-performance/shadow-root-value-fix.json",
     "sha256": "ec88e4f3bf085abb5b2b14d0321c5683ea3bb591cbb4161a5aa65bb0c1a55a2e",
     "note": "Adapter /3 fixes value-only prediction after expired search; earlier repair evidence stays historical."
+  },
+  "shadow_bonus_transition_revision": {
+    "path": "distribution/rust-collector-performance/shadow-bonus-fix.json",
+    "sha256": "a794d9d27c8fdfffcd0240801ed58a2572122c7e936fdf694097b62bd5eeff2a",
+    "note": "g1258 committed; fix ordinary intermediate bonus transition, preserve prior work and extend gradient measurements to four. Earlier performance/verification evidence stays historical."
   }
 }

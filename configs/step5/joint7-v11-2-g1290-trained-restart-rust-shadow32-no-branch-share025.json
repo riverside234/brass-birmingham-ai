@@ -1013,7 +1013,7 @@
     "term": {
       "rows_per_step": 64,
       "share_target": 0.25,
-      "shadow_iterations": 2,
+      "shadow_iterations": 4,
       "beta_bounds": [
         0.01,
         10.0

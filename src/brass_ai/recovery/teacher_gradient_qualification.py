@@ -1,4 +1,4 @@
-"""Two full shadow iterations qualify a fixed shared-encoder teacher weight."""
+"""Four full shadow iterations qualify a fixed shared-encoder teacher weight."""
 import copy
 import math
 import statistics
@@ -17,14 +17,26 @@ def seal(receipt):
 def fixed_beta(target,raw):return min(10.,max(.01,target/raw))
 
 
-def restore(receipt,target):
+def restore(receipt,target,iterations=4):
     if receipt is None:return None
+    require(type(iterations) is int and iterations in (2,4),'Invalid gradient qualification window')
     require(receipt==seal(receipt) and receipt['contract']==CONTRACT and receipt['target'] in TARGETS,
         'Teacher gradient qualification changed')
     result=copy.deepcopy(receipt)
+    previous=result.get('required_iterations',2)
+    require(type(previous) is int and previous in (2,4),'Invalid saved gradient qualification window')
     if result['passed']:
-        require(len(result['observations'])==2 and result['raw_median']>0 and
+        require(len(result['observations'])==previous and result['raw_median']>0 and
+            all(b['generation']==a['generation']+1 for a,b in zip(result['observations'],result['observations'][1:])) and
             result['beta']==fixed_beta(result['target'],result['raw_median']), 'Invalid fixed teacher beta')
+    if previous!=iterations:
+        require(previous==2 and iterations==4,'Cannot shorten gradient qualification')
+        # Retain independently measured iterations from the full checkpoint.
+        # A prior two-iteration beta is provisional under the new requirement.
+        result.update(required_iterations=iterations,passed=False,beta=None,raw_median=None,
+            reason='Need four consecutive full 28+4 shadow iterations with finite nonzero actor/teacher measurements')
+        for name in ('qualified_generation','clamped'):result.pop(name,None)
+        result=seal(result)
     require(target in TARGETS,'Fixed teacher beta requires target 0.25, 0.4 or 0.5')
     if target!=result['target']:
         # A manual target edit is the only way to change a qualified weight.
@@ -38,7 +50,8 @@ def finish(term,state):
     if term.config['contract']!='teacher-phase/2.0.0':return
     target=term.config['term']['share_target']
     if target not in TARGETS:return  # Retain historical diagnostic-only recipes.
-    q=restore(term.qualification,target)
+    iterations=term.config['term']['shadow_iterations']
+    q=restore(term.qualification,target,iterations)
     if q is not None and q['passed']:
         term.beta=q['beta'];term.calibrated=True
     elif term.mode=='shadow':
@@ -59,11 +72,11 @@ def finish(term,state):
                 context=copy.deepcopy(context))
             require(not observations or term.generation>observations[-1]['generation'],
                 'Duplicate/out-of-order teacher gradient qualification')
-            observations=(observations+[observation])[-2:]
-        consecutive=len(observations)==2 and observations[1]['generation']==observations[0]['generation']+1
-        q=dict(contract=CONTRACT,passed=consecutive,target=target,observations=observations,
-            reason='Qualified two complete consecutive shadow iterations' if consecutive else
-                'Need two consecutive full 28+4 shadow iterations with finite nonzero actor/teacher measurements',
+            observations=(observations+[observation])[-iterations:]
+        consecutive=len(observations)==iterations and all(b['generation']==a['generation']+1 for a,b in zip(observations,observations[1:]))
+        q=dict(contract=CONTRACT,passed=consecutive,target=target,observations=observations,required_iterations=iterations,
+            reason=f'Qualified {iterations} complete consecutive shadow iterations' if consecutive else
+                f'Need {iterations} consecutive full 28+4 shadow iterations with finite nonzero actor/teacher measurements',
             scope='Pre-clipping PPO actor without entropy; shared state/entity encoders; shadow gradients discarded',
             beta=None,raw_median=None)
         if consecutive:

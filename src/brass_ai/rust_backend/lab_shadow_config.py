@@ -17,6 +17,7 @@ def configure(before,share_target=.25):
     after['teacher_phase']['mode']='shadow'
     after['teacher_phase']['search_value']['stage']='A'
     after['teacher_phase']['term']['share_target']=share_target
+    after['teacher_phase']['term']['shadow_iterations']=4
     validate_config(after)
     return after
 
@@ -31,8 +32,29 @@ def is_shadow(config):
     if 'teacher_value' not in before or 'branching' not in before:return False
     before['teacher_value']['enabled']=True
     before['branching']['rate_per_decision']=.005
-    try:return digest(before)==BASE_CONFIG and config==configure(before,phase['term']['share_target'])
+    try:
+        expected=configure(before,phase['term']['share_target'])
+        if type(phase['term']['shadow_iterations']) is not int or phase['term']['shadow_iterations'] not in (2,4):return False
+        expected['teacher_phase']['term']['shadow_iterations']=phase['term']['shadow_iterations']
+        return digest(before)==BASE_CONFIG and config==expected
     except (ValueError,KeyError,TypeError):return False
+
+
+def qualification_upgrade(before,after):
+    """Only lengthen diagnostic measurements; keep pending games and labels."""
+    if not is_shadow(before) or not is_shadow(after):return False
+    expected=copy.deepcopy(before)
+    if expected['teacher_phase']['term']['shadow_iterations']!=2:return False
+    expected['teacher_phase']['term']['shadow_iterations']=4
+    return expected==after
+
+
+def collection_signature(signature):
+    """The measurement window changes no frozen collection input or RNG."""
+    if not is_shadow(signature['config']):return signature
+    result=copy.deepcopy(signature)
+    result['config']['teacher_phase']['term']['shadow_iterations']=2
+    return result
 
 
 def signature_transition(before,after):
@@ -40,6 +62,8 @@ def signature_transition(before,after):
     old,new=before['config'],after['config']
     if is_shadow(old):
         expected=copy.deepcopy(old);expected['teacher_phase']['term']['share_target']=new.get('teacher_phase',{}).get('term',{}).get('share_target')
+        if old['teacher_phase']['term']['shadow_iterations']==2:
+            expected['teacher_phase']['term']['shadow_iterations']=new.get('teacher_phase',{}).get('term',{}).get('shadow_iterations')
         config_ok=is_shadow(new) and expected==new
     else:config_ok=digest(old)==BASE_CONFIG and is_shadow(new)
     return (before.get('implementation')==after.get('implementation')==QUALIFIED and

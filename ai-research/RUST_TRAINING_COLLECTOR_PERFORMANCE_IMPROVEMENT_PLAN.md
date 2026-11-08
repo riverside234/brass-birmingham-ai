@@ -22,7 +22,7 @@
 按用户最新指示，兼容现有命令：
 
 ```bash
-python scripts/continue-rust-shadow.py --expected-generation 1257 --iterations 2 --share-target 0.25
+python scripts/continue-rust-shadow.py --expected-generation 1257 --iterations 4 --share-target 0.25
 ```
 
 保留该入口的 28 train + 4 held-out teacher shadow tables、零普通分支配置、诊断梯度和固定 beta

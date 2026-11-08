@@ -17,6 +17,8 @@ from . import v4_history
 
 
 def plan_collection(root,directory,state,config,signature,service,current,profiles,opponent_specs,fast_specs,window,*,fingerprints=None,exploration=None):
+    from brass_ai.rust_backend.lab_shadow_config import collection_signature
+    signature=collection_signature(signature)
     from .domino_config import enabled as domino_enabled
     from .neutral_training import enabled as neutral_contexts
     diverse=domino_enabled(config)

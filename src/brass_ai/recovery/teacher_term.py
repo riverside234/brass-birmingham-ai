@@ -74,14 +74,16 @@ class TeacherTerm:
         self.state = copy.deepcopy(state or {})
         self.beta = self.state.get('beta', 1.); self.calibrated = self.state.get('calibrated', False)
         from .teacher_gradient_qualification import restore
-        self.qualification=restore(self.state.get('gradient_qualification'),config['term']['share_target'])
+        self.qualification=restore(self.state.get('gradient_qualification'),config['term']['share_target'],config['term']['shadow_iterations'])
         self.shadow = self.state.get('shadow_shares', []); self.outside = self.state.get('outside_streak', 0)
         require(np.isfinite(self.beta) and .01 <= self.beta <= 10, 'Invalid teacher beta state')
         target = config['term']['share_target']; old_target = self.state.get('share_target', target)
         if self.qualification is not None and self.qualification['passed']:
             self.beta=self.qualification['beta'];self.calibrated=True
         elif self.mode=='on' and self.qualification is not None:
-            raise ValueError('Two full shadow gradient qualifications are required before using fixed beta')
+            raise ValueError(f"{config['term']['shadow_iterations']} full shadow gradient qualifications are required before using fixed beta")
+        elif self.mode=='shadow' and self.qualification is not None:
+            self.beta=1.;self.calibrated=False
         elif self.mode == 'on' and self.shadow and (self.state.get('mode') == 'shadow' or not self.calibrated):
             values = [v for iteration in self.shadow for v in iteration if v > 0]
             if values:

@@ -36,7 +36,7 @@ Final current-code debug groups passed 79 + 39 Python checks; lab-wide throughpu
 ## Full 32-table shadow continuation and fixed beta
 
 The user additionally requests branching **0%**, full **28 train + 4 held-out**
-teacher tables each iteration, two shadow iterations and a qualified fixed beta.
+teacher tables each iteration, four shadow measurements and a qualified fixed beta. The attached log confirms g1258 committed; retain that first measurement. See [bonus-transition repair and current commands](RUST_SHADOW_BONUS_AND_FOUR_ITERATION_FIX.md).
 The default config is
 `configs/step5/joint7-v11-2-g1290-trained-restart-rust-shadow32-no-branch-share025.json`.
 It disables the dormant legacy teacher-value path, retains search_v1 and uses the
@@ -45,7 +45,7 @@ turns per table, with the existing <=1s / <=0.5s post caps). Shadow fits neither
 policy nor correction weights. Its loss/gradient measurement runs inside the
 existing ordinary PPO steps; no separate optimizer steps are added.
 
-`continue-rust-shadow.py --expected-generation 1257 --iterations 2` prepares this
+`continue-rust-shadow.py --expected-generation 1257 --iterations 4` prepares this
 exact config under the run lock, verifies the checkpoint and qualified teacher
 binary pins, and uses the normal reviewed signature transition/optimizer restore.
 Old-config unfinished ordinary work is renamed into an owned, hash-manifested
@@ -53,7 +53,7 @@ Old-config unfinished ordinary work is renamed into an owned, hash-manifested
 before the new plan is generated. It does not relabel/reuse those old branches.
 Existing uncommitted checkpoints or teacher shards require recovery on their
 current config first. An interrupted run already on the shadow config resumes
-that same config/cache. Repeating the two-iteration command after g1259 launches
+that same config/cache. Repeating the four-iteration command after g1261 launches
 no extra generation. The script exports a fresh small Git-visible qualification
 report; Git supplies code/assets and the historical qualification ZIP is unchanged.
 
@@ -88,7 +88,7 @@ and an explicit false receipt still supersedes it.
 beta=1 and the encoder cosine, before clipping, on TrunkGradients' shared
 state/entity encoders. The actor gradient excludes entropy. Reports retain r
 median/p10/p90, cosine, norms, phase improvement, root-label yield, N/effective K,
-deadline hits, table coverage and collection cost. Two complete consecutive 28+4
+deadline hits, table coverage and collection cost. Four complete consecutive 28+4
 iterations with all four phases and finite nonzero gradient observations qualify
 `beta=clip(share_target/median(r),0.01,10)`. The checkpoint/state receipt is
 `teacher_phase.weight.gradient_qualification`; the report is
@@ -107,8 +107,8 @@ shadow integration, including authored PPO/PPG/strict checkpoint fixtures. The
 full 32-table orchestration was exercised with a mocked native peer, actual sealed
 table I/O and cache recovery; no local native games, live training sessions,
 benchmarks or unrelated successful qualification were run. Actual full-volume
-Linux/CUDA timing and gradient qualification remain **Pending on the two normal
-lab iterations**, g1257→g1259. See [current command and target options](../distribution/rust-lab-b07-g1250/README.md#full-shadow-gradient-qualification).
+Linux/CUDA timing and gradient qualification remain **Pending on four qualifying normal
+lab iterations**, g1257→g1261 (the g1258 commit is retained). See [current command and target options](../distribution/rust-lab-b07-g1250/README.md#full-shadow-gradient-qualification).
 
 ## g1257 descriptor exhaustion: collection-boundary resource retirement
 

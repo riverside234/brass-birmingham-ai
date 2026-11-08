@@ -32,11 +32,15 @@ class ShadowConfig(unittest.TestCase):
             self.assertEqual(config['teacher_phase']['tables'],{'train':28,'held_out':4})
             self.assertEqual(config['teacher_phase']['mode'],'shadow')
             self.assertEqual(config['teacher_phase']['term']['share_target'],target)
+            self.assertEqual(config['teacher_phase']['term']['shadow_iterations'],4)
             self.assertFalse(config['teacher_value']['enabled']);self.assertFalse(config['teacher_enabled'])
             self.assertEqual({k:v for k,v in config.items() if k not in ('branching','teacher_value','teacher_phase')},
                 {k:v for k,v in self.base.items() if k not in ('branching','teacher_value','teacher_phase')})
         bad=C.configure(self.base);bad['learning_rate']*=2;self.assertFalse(C.is_shadow(bad))
         bad=C.configure(self.base);bad['teacher_phase']['mode']='on';self.assertFalse(C.is_shadow(bad))
+        for count in (2.0,4.0,True,3):
+            bad=C.configure(self.base);bad['teacher_phase']['term']['shadow_iterations']=count
+            self.assertFalse(C.is_shadow(bad))
         with self.assertRaises(ValueError):C.configure(self.base,.3)
 
     def test_reviewed_source_mapping_keeps_new_config_and_requires_explicit_resume_flag(self):
@@ -146,16 +150,16 @@ class ShadowConfig(unittest.TestCase):
         launcher=importlib.util.module_from_spec(spec);spec.loader.exec_module(launcher)
         run=self.run/'artifacts/run';run.mkdir(parents=True)
         first=dict(iteration=1257,signature={'imitation_source':{'bc_run':'artifacts/il'}})
-        final=dict(iteration=1259,history=[dict(generation=1259,sha256='a'*64)],
+        final=dict(iteration=1261,history=[dict(generation=1261,sha256='a'*64)],
             signature={'config':{'teacher_phase':{'mode':'shadow'}}},
             teacher_phase={'weight':{'gradient_qualification':{'passed':True,'beta':.125}}})
         write_json(self.run/'config.json',C.configure(self.base))
         def train(argv,**kwargs):
             self.assertIn('--resume-reviewed-source',argv)
-            self.assertEqual(argv[argv.index('--iterations')+1],'2')
+            self.assertEqual(argv[argv.index('--iterations')+1],'4')
             self.assertEqual(argv[argv.index('--expected-generation')+1],'1257')
             write_json(run/'state.json',final)
-        with patch.object(launcher,'ROOT',self.run),patch.object(launcher,'prepare',return_value=(first,self.run/'config.json',2)),\
+        with patch.object(launcher,'ROOT',self.run),patch.object(launcher,'prepare',return_value=(first,self.run/'config.json',4)),\
                 patch.object(launcher,'run_training',side_effect=lambda argv,log:train(argv)) as invoke,\
                 patch('rust_lab_results.export',return_value=self.run/'results') as export,\
                 patch.object(sys,'argv',['continue-rust-shadow.py','--run','artifacts/run','--expected-generation','1257']),\
@@ -164,6 +168,50 @@ class ShadowConfig(unittest.TestCase):
         report=read(next((self.run/'artifacts/rust-backend').glob('*/qualification.json')))
         self.assertTrue(report['training_passed']);self.assertTrue(report['passed']);self.assertEqual(report['teacher_mode'],'shadow')
         self.assertEqual(report['gradient_qualification']['beta'],.125)
+
+    def test_four_iteration_upgrade_keeps_frozen_jobs_pending_work_and_completed_measurement(self):
+        from brass_ai.recovery.teacher_phase import plan_jobs
+        from brass_ai.recovery.teacher_phase_config import buffer_identity
+        before=C.configure(self.base);before['teacher_phase']['term']['shadow_iterations']=2
+        after=C.configure(self.base)
+        self.assertTrue(C.is_shadow(before));self.assertTrue(C.qualification_upgrade(before,after))
+        a=dict(config=before,implementation=R.QUALIFIED);b=dict(a,config=after)
+        self.assertTrue(C.signature_transition(a,b));self.assertFalse(C.signature_transition(b,a))
+        self.assertEqual(C.collection_signature(a),C.collection_signature(b))
+        self.assertEqual(buffer_identity(before),buffer_identity(after))
+        args=dict(model_id='frozen',export_hash='a'*64,epoch=1258,ready=True)
+        self.assertEqual(plan_jobs(before,{'iteration':1258},**args),plan_jobs(after,{'iteration':1258},**args))
+        spec=importlib.util.spec_from_file_location('shadow_upgrade',ROOT/'scripts/continue-rust-shadow.py')
+        launcher=importlib.util.module_from_spec(spec);spec.loader.exec_module(launcher)
+        run=self.run/'artifacts/run';run.mkdir(parents=True)
+        checkpoint=run/'generation-1258.pt';checkpoint.write_bytes(b'completed full checkpoint')
+        state=dict(iteration=1258,history=[dict(generation=1258,path=checkpoint.relative_to(self.run).as_posix(),sha256=sha(checkpoint))],
+            signature=a,teacher_phase={'weight':{'gradient_qualification':{'observations':[{'generation':1257}]}}})
+        write_json(run/'state.json',state)
+        pending=run/'iteration-1258/teacher-shadow/table.json.gz';pending.parent.mkdir(parents=True);pending.write_bytes(b'completed table')
+        ordinary=run/'iteration-1258/native-ordinary/game.gz';ordinary.parent.mkdir(parents=True);ordinary.write_bytes(b'completed ordinary family')
+        config_path=self.run/'configs/step5/run-rust-shadow32-no-branch-share025.json'
+        write_json(config_path,before)
+        with patch('brass_ai.rust_backend.lab_backend.validate_state'),patch('brass_ai.rust_backend.lab_shadow.teacher_build'),\
+                patch.object(C,'archive_pending',side_effect=AssertionError('Diagnostic upgrade must not archive')):
+            restored,output,remaining=launcher.prepare(self.run,'artifacts/run',1257,4)
+        self.assertEqual(remaining,3);self.assertEqual(restored,state);self.assertEqual(read(run/'state.json'),state)
+        self.assertEqual(read(output)['teacher_phase']['term']['shadow_iterations'],4)
+        self.assertEqual(pending.read_bytes(),b'completed table');self.assertEqual(ordinary.read_bytes(),b'completed ordinary family')
+
+    def test_routed_native_pool_uses_preserved_collection_binding_with_new_measurement_config(self):
+        from brass_ai.rust_backend import lab_backend as B,lab_pool as P,lab_perf_runtime as RUNTIME
+        after=C.configure(self.base);before=copy.deepcopy(after);before['teacher_phase']['term']['shadow_iterations']=2
+        signature=dict(config=after,implementation=R.QUALIFIED)
+        expected=digest(dict(signature,config=before))
+        state={'signature':signature};jobs=[{'provenance':{'purpose':'training','spec':expected}}]
+        with patch('brass_ai.recovery.execution.ActorPool'),patch.object(B,'validate_state',return_value={'mode':'rust','build':{}}),\
+                patch.object(B,'check_build',return_value={}),patch.object(RUNTIME,'resolve',return_value={}),patch.object(P,'NativePool') as native:
+            pool=B.RoutedPool(ROOT,'host',Mock(),after,state)
+            pool.collect(jobs)
+            args=native.call_args.args
+            self.assertEqual(args[4],after);self.assertEqual(args[5],expected)
+            native.return_value.__enter__.return_value.collect.assert_called_once_with(jobs,on_records=None)
 
 
 class PendingValues(unittest.TestCase):
@@ -222,37 +270,65 @@ class FixedBeta(unittest.TestCase):
             self.assertTrue(torch.equal(p,w));self.assertTrue(p.grad is None if g is None else torch.equal(p.grad,g))
         return term,term.finish()
 
-    def test_two_full_shadow_gradients_qualify_fixed_beta_and_exact_restart(self):
+    def test_four_full_shadow_gradients_qualify_fixed_beta_and_exact_restart(self):
         model,row,options,context=self.fixture()
         first,state=self.measure(model,row,options,context,1257)
         self.assertFalse(state['gradient_qualification']['passed'])
         second,state=self.measure(model,row,options,context,1258,state)
-        q=state['gradient_qualification'];self.assertTrue(q['passed']);self.assertEqual(q['qualified_generation'],1259)
+        self.assertFalse(state['gradient_qualification']['passed'])
+        _,state=self.measure(model,row,options,context,1259,state)
+        self.assertFalse(state['gradient_qualification']['passed'])
+        _,state=self.measure(model,row,options,context,1260,state)
+        q=state['gradient_qualification'];self.assertTrue(q['passed']);self.assertEqual(q['qualified_generation'],1261)
+        self.assertEqual(q['required_iterations'],4);self.assertEqual(len(q['observations']),4)
         raw=[x for o in q['observations'] for x in o['raw_shares']]
         import statistics
         self.assertEqual(q['beta'],Q.fixed_beta(.25,statistics.median(raw)))
         # A later, very different shadow ratio is monitoring, not recalibration.
-        later=TeacherTerm(model,options,[],seed=5,generation=1259,state=state)
+        later=TeacherTerm(model,options,[],seed=5,generation=1261,state=state)
         later.steps=[dict(raw_share=100.,share=100.)]
         same=later.finish();self.assertEqual(same['gradient_qualification'],q);self.assertEqual(same['beta'],q['beta'])
         on=copy.deepcopy(options);on['mode']='on'
-        ready=TeacherTerm(model,on,[],seed=5,generation=1260,state=same)
+        ready=TeacherTerm(model,on,[],seed=5,generation=1262,state=same)
         self.assertEqual(ready.beta_used,q['beta'])
         with tempfile.TemporaryDirectory(dir=ROOT/'artifacts') as temp:
             path=Path(temp)/'weight.pt';torch.save(state,path)
             loaded=torch.load(path,weights_only=True)
-            self.assertEqual(TeacherTerm(model,on,[],seed=5,generation=1260,state=loaded).beta_used,q['beta'])
+            self.assertEqual(TeacherTerm(model,on,[],seed=5,generation=1262,state=loaded).beta_used,q['beta'])
 
     def test_manual_targets_rescale_only_from_frozen_measurements_and_receipt_tampering_fails(self):
         model,row,options,context=self.fixture();_,state=self.measure(model,row,options,context,1257)
-        _,state=self.measure(model,row,options,context,1258,state);q=state['gradient_qualification']
+        for generation in (1258,1259,1260):_,state=self.measure(model,row,options,context,generation,state)
+        q=state['gradient_qualification']
         for target in (.4,.5):
             changed=copy.deepcopy(options);changed['term']['share_target']=target
-            term=TeacherTerm(model,changed,[],seed=5,generation=1259,state=state);after=term.finish()
+            term=TeacherTerm(model,changed,[],seed=5,generation=1261,state=state);after=term.finish()
             self.assertEqual(after['beta'],Q.fixed_beta(target,q['raw_median']))
             self.assertEqual(after['gradient_qualification']['observations'],q['observations'])
         bad=copy.deepcopy(state);bad['gradient_qualification']['beta']*=2
         with self.assertRaisesRegex(ValueError,'qualification changed'):TeacherTerm(model,options,[],seed=5,generation=1259,state=bad)
+
+    def test_existing_two_iteration_receipts_extend_without_losing_observations_or_premature_beta(self):
+        model,row,options,context=self.fixture();old=copy.deepcopy(options);old['term']['shadow_iterations']=2
+        _,state=self.measure(model,row,old,context,1257)
+        legacy=copy.deepcopy(state);legacy['gradient_qualification'].pop('required_iterations')
+        legacy['gradient_qualification']=Q.seal(legacy['gradient_qualification'])
+        # Simulate the actual g1258 checkpoint, written before a window field existed.
+        with tempfile.TemporaryDirectory(dir=ROOT/'artifacts') as temp:
+            checkpoint=Path(temp)/'checkpoint.pt';torch.save(legacy,checkpoint)
+            loaded=torch.load(checkpoint,weights_only=True)
+        _,continued=self.measure(model,row,options,context,1258,loaded)
+        self.assertEqual(continued['gradient_qualification']['observations'][0],legacy['gradient_qualification']['observations'][0])
+        self.assertFalse(continued['gradient_qualification']['passed'])
+        _,passed2=self.measure(model,row,old,context,1258,state)
+        self.assertTrue(passed2['gradient_qualification']['passed'])
+        pending=TeacherTerm(model,options,[],seed=5,generation=1259,state=passed2)
+        self.assertFalse(pending.calibrated);self.assertEqual(pending.beta,1.)
+        self.assertEqual(pending.qualification['observations'],passed2['gradient_qualification']['observations'])
+        on=copy.deepcopy(options);on['mode']='on'
+        with self.assertRaisesRegex(ValueError,'4 full shadow'):TeacherTerm(model,on,[],seed=5,generation=1259,state=passed2)
+        for generation in (1259,1260):_,continued=self.measure(model,row,options,context,generation,continued)
+        self.assertTrue(continued['gradient_qualification']['passed'])
 
     def test_incomplete_phase_or_nonconsecutive_or_nonfinite_measurements_never_qualify(self):
         model,row,options,context=self.fixture();_,state=self.measure(model,row,options,context,1257)

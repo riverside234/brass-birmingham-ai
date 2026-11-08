@@ -6,11 +6,11 @@ PI00–PI05 now use the production ordinary path, including combined completion 
 Before the shadow command below, build/verify the upgraded **ordinary** adapter once:
 
 ```bash
-python scripts/prepare-rust-teacher-verification.py --expected-generation 1257 --offline && \
-python scripts/prepare-rust-collector-performance.py --expected-generation 1257 --offline
+python scripts/prepare-rust-teacher-verification.py --expected-generation 1258 --offline && \
+python scripts/prepare-rust-collector-performance.py --expected-generation 1258 --offline
 ```
 
-The command preserves the qualified teacher/search binary and checkpoint/Adam/RNG.
+The commands prepare source-pinned adapters for the bonus transition repair; the qualified search core and checkpoint/Adam/RNG are preserved.
 Its success/failure report exports under results. Then use the existing shadow continuation
 with `--share-target 0.25`; do not repeat B01–B07 qualification or extract old archives.
 The shadow training JSON now saves `execution.collector_validation="production_fast"`
@@ -21,14 +21,14 @@ for current mode/coverage, short smoke commands and measured component limitatio
 
 ## Full shadow gradient qualification
 
-The latest committed checkpoint is **g1257**. The current revision fixes the
+The attached log confirms the latest committed checkpoint is **g1258**. Retain that first measurement; see [the bonus transition repair](../../ai-research/RUST_SHADOW_BONUS_AND_FOUR_ITERATION_FIX.md). The current revision fixes the
 descriptor leak below and implements the user's additional settings:
 
 - Branching **0%**; full **28 train + 4 held-out** shadow teacher tables per iteration.
-- Rust search_v1; the existing full/fast profiles and strict post-work caps.
+- Rust search_v1; existing full/fast search profiles and the current uncapped independent-verification policy.
 - Measure actual teacher/PPO actor gradient ratios on shared encoders at beta=1,
   with zero teacher gradient applied to ordinary updates.
-- After two qualifying consecutive full shadow iterations, persist a **fixed**
+- After four qualifying consecutive full shadow iterations, persist a **fixed**
   `beta=clip(target/median(raw_ratio),0.01,10)`. Default target **0.25**; later
   explicit target options **0.4** and **0.5** reuse the frozen measurements.
 - Keep 24 ordinary actor processes / 48 lanes, up to 24 publishers and the global
@@ -40,17 +40,18 @@ the existing training environment:
 
 ```bash
 git pull --ff-only
-python scripts/continue-rust-shadow.py --expected-generation 1257 --iterations 2 --share-target 0.25
+python scripts/continue-rust-shadow.py --expected-generation 1257 --iterations 4 --share-target 0.25
 ```
 
 This resumes the same full checkpoint/Adam/RNG/PPG/population state and advances
-**g1257→g1259**. It verifies original native/runtime pins, archives any old-config
-unfinished ordinary work with its state/hash manifest, writes the exact reviewed
+**g1257→g1261**, running only three remaining iterations from g1258. It verifies original native/runtime pins and writes the exact reviewed
 shadow config and invokes the normal trainer. It retains completed new shadow
-tables for validated recovery. Repeating this command after one or both commits
+tables for validated recovery. The 2→4 measurement upgrade preserves pending
+ordinary/teacher work and the first completed observation; only initial adoption
+from a different collection recipe needs its original archive path. Repeating this command after any commits
 does only the remaining work; it never starts an extra generation. A pending
 checkpoint or teacher publication must first recover on its current config.
-No native rebuild, new ZIP or repeat of passed qualifications is needed.
+Prepare both affected adapters above first; no new ZIP or repeat of passed qualifications is needed.
 
 The config is [the default shadow recipe](../../configs/step5/joint7-v11-2-g1290-trained-restart-rust-shadow32-no-branch-share025.json).
 Inspect each iteration's `teacher_phase.term` for raw share/cosine distributions,
@@ -64,7 +65,7 @@ Later, at a clean committed boundary, choose `--share-target 0.4` or
 this runs one further shadow iteration while explicitly selecting target 0.4:
 
 ```bash
-python scripts/continue-rust-shadow.py --expected-generation 1259 --iterations 1 --share-target 0.4
+python scripts/continue-rust-shadow.py --expected-generation 1261 --iterations 1 --share-target 0.4
 ```
 
 Changing the target updates the fixed beta from the saved raw calibration; it
@@ -80,7 +81,7 @@ current checkpoint's calibration field and explicit-false precedence.
 weights/Adam/RNG, fixed-beta/restart/target edits, 32-table authored orchestration,
 cache/staged-shard recovery and resource lifecycle tests. No local benchmarks,
 native games or live training sessions ran. Actual full-volume timing and the
-two gradient qualifications are Pending on this lab continuation.
+four-iteration gradient qualification is Pending on this lab continuation.
 
 ## Current g1257 open-file repair
 

@@ -1,0 +1,135 @@
+{
+  "contract": "brass-shadow-bonus-transition-fix/1",
+  "date": "2026-11-07",
+  "execution": {
+    "implementation": "057635dbbb00aaf0065291df2eb274b2cdd824ab848ea0a524dab77d274ba487",
+    "qualified_implementation": "9efcf34f853d75ab844366b6819da4b0921be38d3e2dfb806cf282ace76e7a30",
+    "replay_location_review": "d90d125f2fb468a15b5eda6b18898ad67fe7dc6b30ab881934371879ef3db9dd"
+  },
+  "pulled_results_commit": "d23483f",
+  "evidence": "Attached terminal traceback: g1258 committed, subsequent ordinary append_compact failed",
+  "traceback_sha256": "8811092d20da1f7e15386ad2e44002a0eee31ca2043fdbbb85188c24400a63ee",
+  "cause": "Typed core allows merchant Develop bonus with one beer still owed; ordinary_after redundantly re-imported that valid successor through a stricter external idle-bonus validator",
+  "fix": "Keep owned typed successor when its revision is correct; retain full external/chance imports, action checks, scoring and chance/deck normalization",
+  "qualification": {
+    "required_iterations": 4,
+    "tables": {
+      "train": 28,
+      "held_out": 4
+    },
+    "targets": [
+      0.25,
+      0.4,
+      0.5
+    ],
+    "branching": 0.0,
+    "mode": "shadow",
+    "completed_observations_preserved": true,
+    "pending_games_and_table_caches_preserved": true,
+    "automatic_on": false,
+    "config_transition": "Exact diagnostic 2 to 4; saved config/backend updated, collection identity retains historical diagnostic projection only",
+    "fixed_beta": "clip(share_target/median(raw teacher-to-actor gradient ratio),0.01,10)",
+    "two_iteration_passed_receipt": "Observations retained; beta provisional until four consecutive full observations qualify"
+  },
+  "native": {
+    "ordinary_source": "51d8e85bd7aa9c43c87ae609d57da3c8cfcab9473f90b9d4140fb8811c1fb6ec",
+    "teacher_adapter_source": "cb78f5f55ad4f2468841be51dba9cf387ba5830b9319b6dfd6501e980025dbbd",
+    "semantic_teacher_producer": "dbe27fb771be5297cebcdcdf56d9d054bf5a6b270ec37008f75f80ce3f717101",
+    "qualified_search_core": "8d59ec4b5716c3b16c9d00d97975f589e481b629afc85f1732db4e37549db4cf",
+    "search_core_changed": false,
+    "both_adapters_need_preparation": true,
+    "executed_sources_match_checkout": true
+  },
+  "debug": {
+    "python_distinct_passed": 40,
+    "rust_passed": 4,
+    "groups": [
+      {
+        "tests": 21,
+        "passed": 21,
+        "scope": "shadow migration, fixed beta, cold caches and orchestration"
+      },
+      {
+        "tests": 19,
+        "passed": 18,
+        "fixture_failure": "Historical mode-only test used an unreviewed current fingerprint"
+      },
+      {
+        "tests": 1,
+        "passed": 1,
+        "scope": "Pin historical review in that fixture; strict full checkpoint/Adam/RNG restart passes"
+      },
+      {
+        "tests": 4,
+        "passed": 4,
+        "scope": "Final exact source bindings, strict typed window settings and actual native router"
+      }
+    ],
+    "native_before": {
+      "passed": 0,
+      "failed": 2,
+      "error": "bonus state mismatch"
+    },
+    "native_after": {
+      "new_tests": 2,
+      "boundary_tests": 2,
+      "passed": 4
+    },
+    "logs": [
+      {
+        "path": "artifacts/shadow-bonus-repair/before-native-tests.log",
+        "sha256": "b4e5e042e47410f93d14b96e5c8e00331b954c6bb83dc2477bbbfc087b2665ec"
+      },
+      {
+        "path": "artifacts/shadow-bonus-repair/after-native-tests.log",
+        "sha256": "b22ba518b2883752d53923c66e044f8c86605e8501df87811d55ecf4e8633ac1"
+      },
+      {
+        "path": "artifacts/shadow-bonus-repair/native-boundary-tests.log",
+        "sha256": "7b168300b2847fc3f73d0741dbeb93d5f1277a353115b6ae0697c6088addb624"
+      },
+      {
+        "path": "artifacts/shadow-bonus-repair/shadow-debug.log",
+        "sha256": "c4e9951ef3a7d1c7004f11f6ebbfa73abfa88e06683e18e656f6b5512acf95e8"
+      },
+      {
+        "path": "artifacts/shadow-bonus-repair/affected-debug.log",
+        "sha256": "34bc95b08134130107be0357199296143bb9ea64fc7f63aeedec26e006caa576"
+      },
+      {
+        "path": "artifacts/shadow-bonus-repair/restart-debug.log",
+        "sha256": "dbd7ffdcac676182567d7719e0e8010946ff3593523aff30416667dc96026cf2"
+      },
+      {
+        "path": "artifacts/shadow-bonus-repair/final-binding-debug.log",
+        "sha256": "43b806e256dfd79858bd23a4ecd844034ccfc7d4307ac7779e960651ca5f6757"
+      }
+    ],
+    "no_local_training": true,
+    "no_benchmarks": true,
+    "no_unrelated_qualification_reruns": true
+  },
+  "source_review": {
+    "qualified_source_reconstructed": true,
+    "source_files": 366,
+    "reviewed_changes": 58,
+    "prior_execution": {
+      "implementation": "3e1de866b56e821c9d8492152c27afff924ffb52fe2c7e75089c45a7a69f0c98",
+      "qualified_implementation": "9efcf34f853d75ab844366b6819da4b0921be38d3e2dfb806cf282ace76e7a30",
+      "replay_location_review": "32006f021a5f730c59330ee5e73c00f93b73068845439dd4cc0544c41818637f"
+    }
+  },
+  "continuation": [
+    "python scripts/prepare-rust-teacher-verification.py --expected-generation 1258 --offline",
+    "python scripts/prepare-rust-collector-performance.py --expected-generation 1258 --offline",
+    "python scripts/continue-rust-shadow.py --expected-generation 1257 --iterations 4 --share-target 0.25"
+  ],
+  "lab_continuation": {
+    "status": "Pending",
+    "committed_generation_from_log": 1258,
+    "requested_start": 1257,
+    "endpoint": 1261,
+    "remaining_iterations": 3,
+    "do_not_delete_pending": true
+  }
+}

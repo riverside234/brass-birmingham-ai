@@ -19,7 +19,7 @@ ai-research/simulations/pfsp_sim_original.py -text
 training/opponents/bank/**/manifest.json -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
 training/opponents/evaluations/**/*.json -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
 # Contract/profile files are byte-pinned; preserve the same bytes on the lab.
-configs/**/*.json -text
+configs/**/*.json -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
 training/models/**/*.pt -text
 training/models/**/*.onnx -text
 training/runtime/**/*.exe -text

@@ -107,10 +107,11 @@ class RoutedPool:
                 return result
         from .lab_pool import NativePool
         from .lab_perf_runtime import resolve
+        from .lab_shadow_config import collection_signature
         if self._ordinary_build is None:self._ordinary_build=resolve(self.root,check_build(self.backend['build']))
         build=self._ordinary_build  # Deployment/reload starts a new RoutedPool.
         with NativePool(self.root,self.service,self.config['execution'],build,
-                        self.config,digest(self.state['signature']),mono=self.mono) as pool:
+                        self.config,digest(collection_signature(self.state['signature'])),mono=self.mono) as pool:
             result=pool.collect(jobs,on_records=on_records)
             self.last_collection_report=pool.last_collection_report
             return result

@@ -27,7 +27,8 @@ def source_fingerprint():
         import json
         value=json.loads(review.read_text(encoding='utf-8'))
         allowed={'lab-native/src/main.rs','lab-native/src/ordinary_delta.rs','lab-native/Cargo.toml',
-                 'src/brass_ai/rust_backend/lab_teacher_overlay.py','lab-native/src/teacher.rs'}
+                 'src/brass_ai/rust_backend/lab_teacher_overlay.py','lab-native/src/teacher.rs',
+                 'lab-native/src/lib.rs','lab-native/tests/lanes.rs'}
         original=value['original_files']
         changed={k for k in set(files)|set(original) if files.get(k)!=original.get(k)}
         if (value.get('contract')=='brass-ordinary-transport-teacher-reuse/1' and changed<=allowed

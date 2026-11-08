@@ -421,5 +421,16 @@ pub fn ordinary_after(
     let mut after = next.export();
     after.context.revision = revision;
     recorder.boundary(&scoring_before, &after)?;
-    Ok(NativeState::import(&after)?)
+    // A regular choice already advances exactly one revision. Keep that owned,
+    // typed result rather than round-tripping through the external DTO importer.
+    // In particular a lawful merchant Develop bonus can interrupt a multi-beer
+    // sale before payment is complete; the sealed importer's idle-bonus rule
+    // cannot represent that intermediate state. Legality/rollback are still
+    // enforced by after_choice. External roots and repaired chance DTOs retain
+    // their full imports above, and chance revision/deck normalization is intact.
+    if next.context().revision == revision {
+        Ok(next)
+    } else {
+        Ok(NativeState::import(&after)?)
+    }
 }

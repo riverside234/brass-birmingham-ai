@@ -25,7 +25,7 @@ def defaults(reward):
             reward=copy.deepcopy(reward)),
         labels=dict(source=LABEL_SOURCE, decisions='action-stage-both-actions', evidence='completed-trajectories'),
         buffer=dict(iterations=4, age_weights=[4, 3, 2, 1], max_staleness_ratio=1.),
-        term=dict(rows_per_step=64, share_target=.25, shadow_iterations=2, beta_bounds=[.01, 10.]))
+        term=dict(rows_per_step=64, share_target=.25, shadow_iterations=4, beta_bounds=[.01, 10.]))
 
 
 def number(value, low, high, name):
@@ -79,7 +79,7 @@ def validate(config):
     require(type(t['rows_per_step']) is int and 1 <= t['rows_per_step'] <= config['update']['effective_batch_size'],
             'Teacher rows exceed effective_batch_size')
     number(t['share_target'], 0, 1, 'share target')
-    require(type(t['shadow_iterations']) is int and t['shadow_iterations'] == 2
+    require(type(t['shadow_iterations']) is int and t['shadow_iterations'] in (2, 4)
             and digest(t['beta_bounds']) == digest([.01, 10.]), 'Invalid teacher calibration settings')
     return c
 

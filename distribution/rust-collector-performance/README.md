@@ -18,9 +18,9 @@
 先同步代码，退出旧 trainer；在项目根目录、同一 Python/Rust/mono 环境运行：
 
 ```bash
-python scripts/prepare-rust-teacher-verification.py --expected-generation 1257 --offline && \
-python scripts/prepare-rust-collector-performance.py --expected-generation 1257 --offline && \
-python scripts/continue-rust-shadow.py --expected-generation 1257 --iterations 2 --share-target 0.25
+python scripts/prepare-rust-teacher-verification.py --expected-generation 1258 --offline && \
+python scripts/prepare-rust-collector-performance.py --expected-generation 1258 --offline && \
+python scripts/continue-rust-shadow.py --expected-generation 1257 --iterations 4 --share-target 0.25
 ```
 
 第一条准备或复用取消验证限时的 teacher adapter，保留原资格与 sealed search core。
@@ -29,8 +29,8 @@ python scripts/continue-rust-shadow.py --expected-generation 1257 --iterations 2
 与构建证据，再发布新的 ordinary runtime selector。同源码重复执行复用该 runtime。
 成功或失败都打印 Git-visible results 与 original evidence 路径。
 
-第三条是用户原来的真实两轮 shadow 续训，不是短 benchmark，也不重做旧资格验证。
-若 generation 已经推进，把三条命令的 starting generation 改为**实际 committed generation**，
+第三条是用户要求的四轮 shadow 资格测量续训（g1258 已完成，只运行剩余三轮至 g1261），不是短 benchmark，也不重做旧资格验证。
+准备命令使用**实际 committed generation**。续训命令保留 starting generation 1257 与 iterations 4，自动只运行剩余轮数，
 不要倒退到 1257，也不要删除 pending collection 来迁就命令。
 新代码保留旧完整 family 的原身份和冷验证恢复路径。
 

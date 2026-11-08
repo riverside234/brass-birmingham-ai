@@ -1,16 +1,20 @@
 {
   "contract": "brass-b07-replay-location-review/1.0.0",
   "qualified_implementation": "9efcf34f853d75ab844366b6819da4b0921be38d3e2dfb806cf282ace76e7a30",
-  "execution_implementation": "3e1de866b56e821c9d8492152c27afff924ffb52fe2c7e75089c45a7a69f0c98",
+  "execution_implementation": "057635dbbb00aaf0065291df2eb274b2cdd824ab848ea0a524dab77d274ba487",
   "base_commit": "7244d6b",
   "changes": {
     "configs/learning/collector-performance-teacher-reuse.json": {
       "before": null,
-      "after": "0c2031a00e34d25bc3e6e615104f86ec79ce94f43e045103454a1289d8e3432f"
+      "after": "606cb632d0fbaa6c6b6569647ca165e0cb5941983e8fc62f5d741e37151bbf5f"
     },
     "lab-native/Cargo.toml": {
       "before": "5c8566eef28f3f1fe0afb3c4e9d65769a3d19a7f7269e74b0bb3d2630588b9c3",
       "after": "74bc3063973ab1162cce21d4f0f10816ac6306857b20142a853be184889e56e5"
+    },
+    "lab-native/src/lib.rs": {
+      "before": "2a1b9450ea990f45b47d188fbc7ddf36531978e0bfd9138d242bf43ab3f919ba",
+      "after": "0bea598e59c29fa3ab0c7e2c96975a4d13b4dbe549695eeea34532d9a49a7132"
     },
     "lab-native/src/main.rs": {
       "before": "79b076553edd272a147c44925e2b803136549ee7ff4b451b05d0366bb8ec267f",
@@ -23,6 +27,10 @@
     "lab-native/src/teacher.rs": {
       "before": "50752978f897e27eceec6ef529d815e5be86713e5bc05c7ea9a4d7938e6e674b",
       "after": "55461abcf8b7c286d4332183b4918cac90585653b8abc7974d786e49a46ff148"
+    },
+    "lab-native/tests/lanes.rs": {
+      "before": "9b1b08c4c4665ec35ed0ecd129a7662a07f07409ce902d8cb8be729c18932a86",
+      "after": "2511906bf3f3885ca963b1d88dacbf6c3938f99ced9103d3254e8be5ae40e1da"
     },
     "src/brass_ai/recovery/admitted_inputs.py": {
       "before": "47aec3397f698def017fec3653d15c757fc317279227470f30d1e5077afad750",
@@ -84,6 +92,10 @@
       "before": "62e4a3613e44ea69f910f9ecde342e1b36d31bfa9005eec383311f8e8055097b",
       "after": "0ca453da3f33490df31223cbf3b8deae531ba0dd6ee8cc1ccdb140006dbc1511"
     },
+    "src/brass_ai/recovery/ordinary.py": {
+      "before": "1caa8aaa7d0e9ad5cb555da8b6cd105b21250460b2d297292b269e52770476e6",
+      "after": "a9b3551d22bf753696e33f62a0fd7b0c5bfccd1ccffa1d75cfca5df59349d581"
+    },
     "src/brass_ai/recovery/ppg_policy_cache.py": {
       "before": "1724b71a097795cd34961dd81fd99cf25f4c94cf1860b1269b7327203f0684b4",
       "after": "b2dbb645c9f0b112d36c756a2e935bd2f754bdb8e6cc298ce9ca92ade9263063"
@@ -114,7 +126,7 @@
     },
     "src/brass_ai/recovery/teacher_gradient_qualification.py": {
       "before": null,
-      "after": "ce7c1c864620be8a4ba37a68db04b314f3e90b7c15fbf0b5517dc5dddd78f317"
+      "after": "e0d5ed575407bd9da67c263e4a7d3473afbb5df4c6e80fb9f9a4b4656d0f9a2d"
     },
     "src/brass_ai/recovery/teacher_labels.py": {
       "before": "d599ed03d3f3267cddd1c362204ed133f738a7a7c86b7a97b96353857b3536b9",
@@ -124,9 +136,13 @@
       "before": "39c0af06ae0b59fede563760cd0b0b239f15bf79ed4cdfd3d6172be17043f328",
       "after": "b3a92cf03626a4e826f87c2ad1d510bd025f0394abcd0f6f76b91ff9bf07f7d1"
     },
+    "src/brass_ai/recovery/teacher_phase_config.py": {
+      "before": "739bab126c983d42bac73b6c14a7c80288c2e9972d6e01c442f65c9b8e30366f",
+      "after": "ea053e4a954b2c07c806a0e61f3ba2fe1a59f20c8d4f88acca851f29a8821dea"
+    },
     "src/brass_ai/recovery/teacher_term.py": {
       "before": "750f69097b19f230db5ee7f68de342ce96919953e288ace145eb57e8e8de8da8",
-      "after": "971e68e7637339a2a6c8163a887367e7a758c6ac19d31df03365b3a5847320dd"
+      "after": "344ed61a69c3eeaec055b40a00dade2d4955e89c8f76d46fdec8ef2375ce32a7"
     },
     "src/brass_ai/recovery/trained_startup.py": {
       "before": "901fb6ae52eb1cdf285e42794938be406fcd8f753d2e092931894ec391e20fea",
@@ -146,7 +162,7 @@
     },
     "src/brass_ai/rust_backend/lab_backend.py": {
       "before": "8e6496a7e67371bb9f5898e1dde864731f49a60062768ab66773ec4e5a9749d3",
-      "after": "0aa8900374e31a3975ae363c32f49f2ba2de5080e0871545f0d1d761207e096b"
+      "after": "78f02095707de4f05c14a2814ee38318634b0ce1b729cb29b7d1791938588d7c"
     },
     "src/brass_ai/rust_backend/lab_collection.py": {
       "before": "807c76a8b20bb3a99f776041101096eba7cd3ace309b64d5fb0a8cd1495ca989",
@@ -190,7 +206,7 @@
     },
     "src/brass_ai/rust_backend/lab_shadow_config.py": {
       "before": null,
-      "after": "a4c2f3b5f8b0ed117e21d0e1299b222e3955481535b3aea94940013305e9f49d"
+      "after": "3c80e7fa773fcd4134b48b7327123bb74ae74701563063d88cfbd38f5b7b9a14"
     },
     "src/brass_ai/rust_backend/lab_shared.py": {
       "before": null,
@@ -206,7 +222,7 @@
     },
     "src/brass_ai/rust_backend/lab_teacher_overlay.py": {
       "before": "44914835c17e109063a5b181a3293e78195f04ecd3d8e1e014dcface60de804e",
-      "after": "8363432f60cb0e425ca3956cfd5c3b7f53f82de88f51852393d842a05237cf69"
+      "after": "c054ef8048a793c19d3ed7acec975a533ea703a46f250e5387e8918447e6b46a"
     },
     "src/brass_ai/rust_backend/lab_teacher_runtime.py": {
       "before": null,
@@ -264,6 +280,11 @@
       "implementation": "3c2bbf761c85acb540241f0f039c53fbe87541ee343e92479ac1f453f3a4992b",
       "qualified_implementation": "9efcf34f853d75ab844366b6819da4b0921be38d3e2dfb806cf282ace76e7a30",
       "replay_location_review": "8e65ab5168786138e19cd2c2ad9082d0c1ff7c7509d2570756af7f106b70bf63"
+    },
+    {
+      "implementation": "3e1de866b56e821c9d8492152c27afff924ffb52fe2c7e75089c45a7a69f0c98",
+      "qualified_implementation": "9efcf34f853d75ab844366b6819da4b0921be38d3e2dfb806cf282ace76e7a30",
+      "replay_location_review": "32006f021a5f730c59330ee5e73c00f93b73068845439dd4cc0544c41818637f"
     }
   ],
   "performance_evidence": "results/joint7-v11-2-g1290-trained-restart-g1253-20261107T145415686647Z/iteration-1252/report.json",
@@ -288,7 +309,7 @@
       0.4,
       0.5
     ],
-    "fixed_beta": "Qualify two consecutive full shadow iterations; never automatically enable on-mode",
+    "fixed_beta": "Qualify four consecutive full shadow iterations, preserving completed measurements; never automatically enable on-mode",
     "authority": "Explicit user request in this chat"
   },
   "collector_performance_review": {
@@ -319,5 +340,17 @@
     "verification_sampling": "first-per-profile-per-table-and-every-64-turns",
     "optimization": "Model/source identity once per frozen collection, version bindings per turn, CPU prepare outside model lock, immutable rows detached once; cold rows retain full admission",
     "scope": "No optimizer/RNG/math/reward/feature/search-v1 change; native post-search handoff/ACK, Python verification and independent seal deadlines removed by explicit user request"
+  },
+  "bonus_transition_revision": {
+    "native_scope": {
+      "scope": "Keep typed after_choice result on ordinary/non-search teacher progression; legal intermediate Develop bonus may have beer remaining. External root/chance imports, scoring and search core remain unchanged.",
+      "rebuild": "Both adapters require source-pinned preparation; prior complete ordinary families and teacher labels retain original identities.",
+      "prior_ordinary_source": "9e2e5ea764d23f62e5f0bb6d6ef0048a3745ba4998803b78adb5838480558df2"
+    },
+    "gradient_iterations": 4,
+    "old_iterations": 2,
+    "collection_signature": "Only the diagnostic window normalizes to its historical value; jobs, table seeds, labels, model/optimizer/RNG and pending receipts stay bound",
+    "user_evidence": "Pasted g1258 commit followed by ordinary append_compact bonus state mismatch",
+    "pasted_traceback_sha256": "8811092d20da1f7e15386ad2e44002a0eee31ca2043fdbbb85188c24400a63ee"
   }
 }
