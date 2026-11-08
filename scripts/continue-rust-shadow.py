@@ -9,6 +9,37 @@ import traceback
 ROOT=Path(__file__).resolve().parents[1];sys.path.insert(0,str(ROOT/'src'))
 
 
+def run_training(argv,log):
+    """Tee the real child traceback to exported evidence; retain Ctrl-C cleanup."""
+    import os,signal
+    with Path(log).open('w',encoding='utf-8') as stream:
+        process=subprocess.Popen(argv,cwd=ROOT,stdout=subprocess.PIPE,stderr=subprocess.STDOUT,
+            text=True,encoding='utf-8',errors='replace',bufsize=1,
+            creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0))
+        try:
+            for line in process.stdout:
+                stream.write(line);stream.flush();print(line,end='',flush=True)
+            code=process.wait()
+            if code:raise subprocess.CalledProcessError(code,argv)
+        except BaseException:
+            if process.poll() is None:
+                import psutil
+                try:children=psutil.Process(process.pid).children(recursive=True)
+                except psutil.NoSuchProcess:children=[]
+                try:
+                    if os.name=='posix':process.send_signal(signal.SIGINT)
+                    else:process.terminate()
+                    process.wait(timeout=15)
+                except (OSError,subprocess.TimeoutExpired):
+                    for child in reversed(children):
+                        try:child.kill()
+                        except psutil.NoSuchProcess:pass
+                    if process.poll() is None:process.kill()
+                    process.wait()
+            raise
+        finally:process.stdout.close()
+
+
 def prepare(root,run_path,expected,iterations,share_target=.25):
     from brass_ai.bank import read,sha
     from brass_ai.learning.contracts import project_path,require
@@ -71,11 +102,11 @@ def main():
         print('Branching=0%; teacher=shadow; tables=28+4; teacher gradients are diagnostic only.',flush=True)
         print('Collector runtime: '+str(report['collector_runtime'])+' (training config)',flush=True)
         if remaining:
-            argv=[sys.executable,str(ROOT/'scripts/step5.py'),'--root',str(ROOT),'--config',str(config),
+            argv=[sys.executable,'-u',str(ROOT/'scripts/step5.py'),'--root',str(ROOT),'--config',str(config),
                 '--device',args.device,'--mono',args.mono,'train','--run',args.run,'--expected-generation',str(state['iteration']),
                 '--iterations',str(remaining),'--imitation-run',state['signature']['imitation_source']['bc_run'],'--resume-reviewed-source']
             report['training_command']=argv;write_json(out/'qualification.json',report)
-            subprocess.run(argv,cwd=ROOT,check=True)
+            run_training(argv,out/'training.log')
         state=read(project_path(ROOT,args.run)/'state.json')
         require(state['iteration']==args.expected_generation+args.iterations,'Requested training boundary did not commit')
         qualification=state.get('teacher_phase',{}).get('weight',{}).get('gradient_qualification')
@@ -88,6 +119,14 @@ def main():
     except BaseException as error:
         report.update(error=str(error),traceback=traceback.format_exc());raise
     finally:
+        log=out/'training.log'
+        if log.exists():
+            from brass_ai.rust_backend.lab_contract import pin
+            report['training_log']=pin(log)
+            if not report['training_passed']:
+                with log.open('rb') as stream:
+                    stream.seek(max(0,log.stat().st_size-16384))
+                    report['training_error_tail']=stream.read().decode('utf-8',errors='replace')
         write_json(out/'qualification.json',report)
         print('Git-visible results: '+str(export(out)),flush=True)
         print('Original lab evidence: '+str(out),flush=True)

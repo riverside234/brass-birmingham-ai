@@ -136,15 +136,20 @@ features/记录 SHA/branch 机会相同；生产收集还省去最后 release RP
 
 ## Lab 续训与回退
 
+2026-11-07 用户修订：0.8s/4s 两档均取消独立验证/ACK/封存硬限时，稀疏记录耗时。
+本节命令已加入新的 teacher adapter 准备；之前有关 teacher binary 不变的描述是普通传输升级的历史范围。
+详见 [验证修订](RUST_SHADOW_VERIFICATION_REVISION.md)。搜索 core/数学和搜索预算保持不变。
+
 同步全部代码后，在 lab 根目录、当前训练 Python 环境执行：
 
 ```bash
+python scripts/prepare-rust-teacher-verification.py --expected-generation 1257 --offline && \
 python scripts/prepare-rust-collector-performance.py --expected-generation 1257 --offline && \
 python scripts/continue-rust-shadow.py --expected-generation 1257 --iterations 2 --share-target 0.25
 ```
 
-第一条 Python 命令只准备普通 binary 和受影响短 wire checks，不启动训练或替换 teacher。
-第二条才进行原来的 g1257→g1259 两轮 shadow continuation。若 checkpoint 已推进，使用实际起点；
+第一条准备新的 teacher ACK adapter，复用原 search core；第二条只准备普通 binary 和短 wire checks。
+第三条才进行原来的 g1257→g1259 两轮 shadow continuation。若 checkpoint 已推进，三条均使用实际起点；
 不删除 pending work、不倒退 generation，不重做通过的 B01–B07。
 同 Rust source 的重复 prepare 可复用 binary；新的 Python execution/source 身份仍真实记录。
 

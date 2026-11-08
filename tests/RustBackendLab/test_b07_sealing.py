@@ -72,7 +72,7 @@ class Sealing(unittest.TestCase):
         field=result['rows'][0]['teacher'];field['epoch']=float(field['epoch'])
         with self.assertRaisesRegex(ValueError,'Changed/unverified'):v.take(result,job,model)
 
-    def test_freezing_is_inside_deadline_and_cancel_still_retires_handoff(self):
+    def test_slow_freezing_has_no_deadline_and_cancel_still_retires_handoff(self):
         model,job,v,result,_,_=self.stream();v.cancel.set()
         with self.assertRaisesRegex(ValueError,'Retired/changed'):v.take(result,job,model)
         v=F.TurnVerifier(model,[],[job],threading.Event());clock=[0.]
@@ -80,10 +80,10 @@ class Sealing(unittest.TestCase):
         def slow(value):clock[0]=2.;return _freeze(value)
         meta=dict(job=job['expected'],timing=TIMING,index=1,profile='full',remaining_ns=900_000_000,
                   native_post_ns=10_000_000,search_ns=800_000_000,rows=[{'fixture':1}])
-        with patch.object(F,'admit_teacher_rows',return_value=([],{})),patch('time.monotonic',side_effect=lambda:clock[0]),\
+        with patch.object(F,'prepare_rows',return_value=([],{})),patch('time.monotonic',side_effect=lambda:clock[0]),\
              patch('brass_ai.recovery.admitted_inputs._freeze',side_effect=slow):
-            with self.assertRaisesRegex(ValueError,'deadline exceeded'):v.verify(meta,0.)
-        self.assertEqual(v.cache[job['expected']['job_id']]['last'],0)
+            self.assertEqual(v.verify(meta,0.)['status'],'ok')
+        self.assertEqual(v.cache[job['expected']['job_id']]['last'],1)
 
     def test_publication_features_are_detached_and_cold_rows_identical(self):
         model,job,v,result,_,expected=self.stream();rows,_=v.take(result,job,model)
@@ -98,15 +98,17 @@ class Sealing(unittest.TestCase):
             self.assertEqual(cold.rows(10)[0][1].row,expected)
             np.testing.assert_array_equal(cold.rows(10)[0][1].encoded.state,before.state)
 
-    def test_final_cache_publication_crossing_deadline_cannot_be_taken(self):
+    def test_cancellation_during_final_publication_cannot_be_taken(self):
         model,job,v,result,_,_=self.stream();key=job['expected']['job_id']
         v.cache[key]['last']=63
         meta=dict(job=job['expected'],timing=TIMING,index=64,profile='fast',remaining_ns=490_000_000,
                   native_post_ns=10_000_000,search_ns=800_000_000,rows=[])
-        with patch('time.monotonic',side_effect=[0.]*6+[.5]):
-            with self.assertRaisesRegex(ValueError,'deadline exceeded'):v.verify(meta,0.)
+        class CancelOnPublish(list):
+            def append(self,value):v.cancel.set();super().append(value)
+        v.cache[key]['timings']=CancelOnPublish()
+        with self.assertRaisesRegex(ValueError,'cancelled'):v.verify(meta,0.)
         self.assertNotIn(key,v.cache)
-        with self.assertRaisesRegex(ValueError,'Changed/unverified'):v.take(result,job,model)
+        with self.assertRaisesRegex(ValueError,'Retired/changed'):v.take(result,job,model)
 
     def test_frozen_label_ages_save_and_reload_with_strict_checkpoint_loader(self):
         from brass_ai.learning.checkpoint import save_checkpoint,load_checkpoint
@@ -139,7 +141,7 @@ class Sealing(unittest.TestCase):
             with self.assertRaisesRegex(ValueError,'Unknown/uncommitted'):
                 SearchValuePhase(value_dir,restored,options,job['expected']['reward_id'],saved=saved['training']['search_value'])
 
-    def test_each_table_pays_own_seal_and_no_cap_is_relaxed(self):
+    def test_each_table_keeps_own_seal_timing_without_verification_cap(self):
         model=model_fixture();row,job,_=value_fixture(model,split='heldout')
         second=copy.deepcopy(job);second['expected'].update(job_id='second',game_id='second-game')
         tables=[dict(job_id=j['expected']['job_id'],value_rows=[],result={},final_spent=[0.]*4,
@@ -153,8 +155,9 @@ class Sealing(unittest.TestCase):
                 self.assertEqual(publish.call_count,2)
                 for bad in ({},dict(spent,second=-1),dict(spent,second=float('nan')),dict(spent,second=True)):
                     with self.assertRaisesRegex(ValueError,'post-search accounting'):phase.admit(tables,[job,second],10,post_spent=bad)
-                with patch('time.monotonic',side_effect=[0.,0.,.39]):
-                    with self.assertRaisesRegex(ValueError,'limit=0.5s'):phase.admit(tables[:1],[job],10,post_spent=.10)
+                with patch('time.monotonic',side_effect=[0.,0.,.39,.39]):
+                    phase.admit(tables[:1],[job],10,post_spent=.10)
+                self.assertIsNone(phase.report['verification_limit_seconds'])
 
 
 if __name__=='__main__':unittest.main()

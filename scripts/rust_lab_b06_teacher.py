@@ -32,7 +32,7 @@ def summarize_turns(results):
     return dict(turns=len(turns),labels=sum(r['metrics']['labels'] for r in results),
         completed_trajectories=sum(s['completed'] for s in searches),
         completed_rounds=sum(s['rounds'] for s in searches),effective_k=distribution([s['effective_k'] for s in searches]),
-        timings={k:distribution([t[k]/1e9 for t in turns]) for k in
+        timings={k:distribution([t[k]/1e9 for t in turns if k in t]) for k in
                  ('search_ns','native_post_ns','post_search_ns','selection_ns','labels_ns','commit_ns','verification_ipc_ns','elapsed_ns')},
         inference_requests=total('requests','inference_requests'),
         gpu_wait_seconds=gpu_ns/1e9 if gpu_ns is not None else None,
@@ -126,18 +126,27 @@ def probes(args,snapshot,build,model,jobs,fixtures):
 def replay_stream(model,history,job,table):
     """Replay identical recorded rows through the actual streamed verifier.
 
-    Original post allowance is retained. This is an offline validator timing,
+    Native handoff bounds are retained; verification has no hard deadline.
+    This is an offline validator timing,
     never a claim to recollect or republish those historical turns.
     """
     from brass_ai.recovery.teacher_phase_config import TIMING
     verifier=TurnVerifier(model,history,[job],threading.Event());offset=0
     turns=table['metrics']['turns'];checks=table['metrics']['verification']
-    require(len(turns)==len(checks)==64,'Incomplete frozen all-seat verification evidence')
-    for turn,check in zip(turns,checks,strict=True):
-        count=check['rows'];rows=table['rows'][offset:offset+count];offset+=count
-        require(turn['index']==check['index'],'Recorded turn/check index differs')
-        allowance=min(int(check['allowance_seconds']*1e9),
-                      (200_000_000 if turn['profile']=='fast' else 1_000_000_000)-turn['native_post_ns'])
+    require(len(turns)==64,'Incomplete frozen all-seat verification evidence')
+    sparse=all('label_rows' in turn for turn in turns)
+    require(sparse or len(checks)==64,'Missing frozen per-turn row coverage')
+    by_index={check['index']:check for check in checks}
+    require(len(by_index)==len(checks),'Duplicate verification samples')
+    for index,turn in enumerate(turns,1):
+        check=by_index.get(index)
+        require(turn['index']==index and (sparse or check is not None),'Recorded turn/check index differs')
+        count=turn['label_rows'] if sparse else check['rows']
+        require(type(count) is int and 0<=count<=2 and (check is None or check['rows']==count),'Recorded row coverage differs')
+        rows=table['rows'][offset:offset+count];offset+=count
+        allowance=(500_000_000 if turn['profile']=='fast' else 1_000_000_000)-turn['native_post_ns']
+        if check is not None and 'allowance_seconds' in check:
+            allowance=min(int(check['allowance_seconds']*1e9),allowance)
         meta=dict(job=job['expected'],timing=TIMING,index=turn['index'],profile=turn['profile'],
             remaining_ns=allowance,native_post_ns=turn['native_post_ns'],search_ns=turn['search_ns'],rows=rows)
         verifier.verify(meta,time.monotonic())
@@ -178,7 +187,7 @@ def frozen_overhead(args,snapshot,model,jobs,tables):
         model.to(args.device)
         phase=SearchValuePhase(args.out/'value-buffer',model,config['teacher_phase']['search_value'],jobs[0]['expected']['reward_id'])
         with meter.phase('value_buffer_seal'):
-            # Original final-turn allowance still checked; no new search deadline.
+            # Independent sealing is timed, without a final-turn verification cap.
             phase.admit(tables,jobs,1250)
         with meter.phase('value_buffer_read'):values=phase.buffer.rows(1250)
         with meter.phase('search_value_head_one_step'):head=phase.companion.head_only(values,generation=1250,steps=1)

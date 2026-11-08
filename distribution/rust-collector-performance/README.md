@@ -5,6 +5,8 @@
 
 兼容当前 teacher shadow 命令，保留 28+4 tables、zero branching 和 share target 0.25。
 普通传输升级不重建或替换已通过资格的 teacher/search_v1 binary，不启用 teacher on-mode。
+本次另有用户要求的 [teacher 验证修订](../../ai-research/RUST_SHADOW_VERIFICATION_REVISION.md)：
+两档搜索均取消独立验证硬限时，改为稀疏计时；先准备新的 teacher ACK adapter，复用原 search core。
 实现和证据限制见 [implementation notes](../../ai-research/RUST_COLLECTOR_PERFORMANCE_PI00_PI03.md)。
 后半部分与当前检查清单见 [PI04–PI05 completion](../../ai-research/RUST_COLLECTOR_PERFORMANCE_PI04_PI05.md)。
 
@@ -13,17 +15,19 @@
 先同步代码，退出旧 trainer；在项目根目录、同一 Python/Rust/mono 环境运行：
 
 ```bash
+python scripts/prepare-rust-teacher-verification.py --expected-generation 1257 --offline && \
 python scripts/prepare-rust-collector-performance.py --expected-generation 1257 --offline && \
 python scripts/continue-rust-shadow.py --expected-generation 1257 --iterations 2 --share-target 0.25
 ```
 
-第一条只构建普通 adapter 并跑受影响的短 wire 回归；复用已缓存的 Rust 依赖。
+第一条准备或复用取消验证限时的 teacher adapter，保留原资格与 sealed search core。
+第二条只构建普通 adapter 并跑受影响的短 wire 回归；复用已缓存的 Rust 依赖。
 若 Cargo cache 不完整，可省略 `--offline`。它校验真实 checkpoint/generation、原 core/bootstrap/source
 与构建证据，再发布新的 ordinary runtime selector。同源码重复执行复用该 runtime。
 成功或失败都打印 Git-visible results 与 original evidence 路径。
 
-第二条是用户原来的真实两轮 shadow 续训，不是短 benchmark，也不重做旧资格验证。
-若 generation 已经推进，把两条命令的 starting generation 改为**实际 committed generation**，
+第三条是用户原来的真实两轮 shadow 续训，不是短 benchmark，也不重做旧资格验证。
+若 generation 已经推进，把三条命令的 starting generation 改为**实际 committed generation**，
 不要倒退到 1257，也不要删除 pending collection 来迁就命令。
 新代码保留旧完整 family 的原身份和冷验证恢复路径。
 

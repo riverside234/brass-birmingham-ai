@@ -41,7 +41,7 @@ def readiness_seed(root,state):
     raise ValueError('Missing pinned g1254 readiness report; restore its original or Git-visible results copy')
 
 
-def teacher_build(state):
+def teacher_build(state,*,prepared=True):
     from .lab_backend import checked_pin
     q=checked_pin(state['native_backend']['qualification'])
     require(q['passed'] and q['canary']['passed'] and q['canary']['passes']==2,
@@ -52,7 +52,11 @@ def teacher_build(state):
         build['wire_regressions_passed'] is True,'Shadow teacher build differs from qualification')
     for item in [build['binary'],build['tests'],build['build_log'],build['bootstrap']['binary'],*build['bootstrap']['dependencies']]:
         require(pin(item['path'])==item,'Shadow runtime changed: '+item['path'])
-    return dict(build,receipt=receipt)
+    original=dict(build,receipt=receipt)
+    if not prepared:return original
+    from .lab_teacher_runtime import resolve
+    from brass_ai.learning.contracts import SOURCE_ROOT
+    return resolve(SOURCE_ROOT,original)
 
 
 class TableCache:
@@ -98,11 +102,6 @@ class TableCache:
         receipt=dict(job=digest(job),file=pin(path),post_seconds=spent)
         write_json(sidecar,receipt)
         elapsed=time.monotonic()-began
-        turn=result['metrics']['turns'][-1]
-        from brass_ai.recovery.search_value_config import FAST_POST_SECONDS
-        if turn['post_search_ns']/1e9+elapsed > (FAST_POST_SECONDS if turn.get('profile')=='fast' else 1.):
-            sidecar.rename(safe(self.run,sidecar.with_name(sidecar.name+'.overrun')))
-            raise ValueError('Shadow table cache exceeded final-turn post allowance')
         return elapsed
 
 

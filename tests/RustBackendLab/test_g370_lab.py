@@ -84,11 +84,11 @@ class Refresh(unittest.TestCase):
         with self.assertRaises(ValueError): v.take(bad,j,self.model)
         with patch('brass_ai.rust_backend.lab_teacher_finalization.admit_teacher_rows',side_effect=AssertionError('duplicate validation')):
             rows,rejected=v.take(result,j,self.model)
-        self.assertEqual(len(rows),1); self.assertEqual(len(result['metrics']['verification']),16)
+        self.assertEqual(len(rows),1); self.assertEqual(len(result['metrics']['verification']),1)
         with self.assertRaises(ValueError): v.take(result,j,self.model)
 
     def test_expiry_cancellation_stale_and_unbounded_allowance(self):
-        for mode in ('expired','cancelled','stale','duplicate','wide'):
+        for mode in ('cancelled','stale','duplicate','wide'):
             j,v,meta,stop=self.fixture();start=time.monotonic()
             if mode=='expired':start-=2
             elif mode=='cancelled':stop.set()
@@ -97,12 +97,15 @@ class Refresh(unittest.TestCase):
             else:meta['remaining_ns']=1_000_000_001
             with self.subTest(mode=mode),self.assertRaises(ValueError):v.verify(meta,start)
 
-    def test_late_verification_cannot_acknowledge_or_publish(self):
+    def test_late_verification_is_sampled_without_a_hard_deadline(self):
         j,v,meta,stop=self.fixture()
-        real=time.monotonic(); times=iter([real,real,real,real+2])
-        with patch('brass_ai.rust_backend.lab_teacher_finalization.time.monotonic',side_effect=lambda:next(times)):
-            with self.assertRaisesRegex(ValueError,'deadline'):v.verify(meta,real)
-        self.assertEqual(v.cache[j['expected']['job_id']]['accepted'],[])
+        real=time.monotonic()
+        with patch('brass_ai.rust_backend.lab_teacher_finalization.time.monotonic',return_value=real+2):
+            self.assertEqual(v.verify(meta,real)['status'],'ok')
+        record=v.cache[j['expected']['job_id']]
+        self.assertEqual(len(record['accepted']),1)
+        self.assertGreaterEqual(record['timings'][0]['receive_to_ready_seconds'],2.)
+        self.assertIsNone(record['timings'][0]['verification_limit_seconds'])
 
 
 if __name__=='__main__':unittest.main()

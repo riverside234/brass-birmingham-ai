@@ -6,6 +6,7 @@ PI00–PI05 now use the production ordinary path, including combined completion 
 Before the shadow command below, build/verify the upgraded **ordinary** adapter once:
 
 ```bash
+python scripts/prepare-rust-teacher-verification.py --expected-generation 1257 --offline && \
 python scripts/prepare-rust-collector-performance.py --expected-generation 1257 --offline
 ```
 

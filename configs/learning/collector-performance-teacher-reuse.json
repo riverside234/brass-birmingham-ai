@@ -17,7 +17,7 @@
     "lab-native/Cargo.lock": "8dedcf1eb844cbd03512663053034a7a587adb7a5bad2e6d9bcfc466e605f8d9"
   },
   "current_files": {
-    "src/brass_ai/rust_backend/lab_teacher_overlay.py": "6f19827f20bae573728659f52ae83617c57e7c573f335806bd7fb9766f6a4478",
+    "src/brass_ai/rust_backend/lab_teacher_overlay.py": "8363432f60cb0e425ca3956cfd5c3b7f53f82de88f51852393d842a05237cf69",
     "lab-native/core-overlay/teacher.rs": "9afd3f8cf9fc7ca6f3d9a7e569cbe4cae3b2d1d49d620d9ffee6b5b7302e710f",
     "lab-native/src/bin/teacher.rs": "245726575b4a362b30c83380d9d28ace4c0d1a5db465e8dd078bd357e5a32646",
     "lab-native/src/collection_wire.rs": "b5cdf1db7c9d3ebc1a057a99258d2553819caa74d8552e9c6ea34c9ece77e0fd",
@@ -25,7 +25,7 @@
     "lab-native/src/main.rs": "d04083c21274a3b368ca2ca351f830fbb073fdb79367a3248e3bcaf3f19eda82",
     "lab-native/src/ordinary_delta.rs": "6b58f13039e2a3c9cc32a23e5927455ed2365c1ebd7d7723004a186e7d9e6bd2",
     "lab-native/src/scoring.rs": "2e41cb5647dc5b41bf305330fae8869fa8fa969936f8e3b7240d22262c331ecd",
-    "lab-native/src/teacher.rs": "50752978f897e27eceec6ef529d815e5be86713e5bc05c7ea9a4d7938e6e674b",
+    "lab-native/src/teacher.rs": "7a542e82bc289b4363307323dff728ca59e66ed5bdc6011ab7de43922931369c",
     "lab-native/tests/lanes.rs": "9b1b08c4c4665ec35ed0ecd129a7662a07f07409ce902d8cb8be729c18932a86",
     "lab-native/tests/teacher.rs": "58d24527e3106b0ea9a3f7b4b494ad06549018163ac2cf0b7343e7dc8538165f",
     "lab-native/tests/teacher_wire.rs": "53de15eea61ba0b5896e5ae3c224017fb88a99bb17a553944806f1856f60e52c",
@@ -58,5 +58,11 @@
   },
   "ordinary_predecessors": [
     "f103ea62c89a7e2f9e2b3c97faa65e6594a41d9f0fcd964e4c92ee4a35a7ca92"
-  ]
+  ],
+  "verification_revision": {
+    "policy": "sampled-unbounded-verification/1",
+    "authority": "User explicitly removed independent verification deadlines for both 0.8s and 4s profiles",
+    "scope": "Exact teacher.rs changes remove only the ACK deadline and sample ACK metrics; search core, quotas, recommendations, labels/features/rewards unchanged. New adapter binary pinned separately; original qualification remains historical.",
+    "source_before": "323d07b20c9086c7f69cebb7d3a4e9164f60959caec17b4e48e554bcfb0b4803"
+  }
 }

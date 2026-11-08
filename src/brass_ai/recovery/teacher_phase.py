@@ -3,7 +3,6 @@ import copy
 import random
 import time
 from collections import Counter
-from .search_value_config import FAST_POST_SECONDS
 
 from brass_ai.learning.contracts import digest, require
 from brass_ai.step5.league import seeds_for
@@ -166,12 +165,9 @@ class TeacherPhase:
         self.metrics['root_label_yield_pass']=bool(reached and self.metrics['root_label_yield']>=.95)
         self.admission_seconds = time.perf_counter() - began
         if verifier is not None:
-            # Deferred shard sealing is charged to the final searched turn;
-            # it receives no extra allowance of its own.
-            require(all(r['metrics']['turns'] and
-                r['metrics']['turns'][-1]['post_search_ns']/1e9 + post_spent[r['job_id']] <=
-                    (FAST_POST_SECONDS if r['metrics']['turns'][-1].get('profile')=='fast' else 1.)
-                for r in results), 'Teacher sealing exceeded the remaining post-search allowance')
+            # Coarse per-table/barrier timing is cheap. Independent admission
+            # and durable publication no longer consume the search budget.
+            self.metrics['verification_limit_seconds'] = None
             self.metrics['deferred_sealing_seconds'] = self.admission_seconds
             self.metrics['post_admission_per_table_seconds']=post_spent
         if self.search_value is not None:

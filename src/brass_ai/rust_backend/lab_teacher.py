@@ -127,6 +127,10 @@ class Worker:
                     require(not calibration and verifier is not None and len(rows)+len(meta['rows']) <= 32,
                             'Unexpected/unverified/excess teacher turn')
                     self.send(verifier.verify(meta,received))
+                    # Verification is outside the active search/stuck-worker
+                    # watchdog. Keep generic search/IPC watchdogs and cancel.
+                    ready = time.monotonic()
+                    started += ready-last; last = ready
                     verified_turns += 1
                     rows.extend(meta['rows'])
                     if meta.get('value_row') is not None: values.append(meta['value_row'])

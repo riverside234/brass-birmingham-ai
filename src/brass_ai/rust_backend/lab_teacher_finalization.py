@@ -1,9 +1,10 @@
-"""Bounded, once-only verification of a completed native teacher turn.
+"""Once-only verification of a completed native teacher turn, sparsely timed.
 
 The cache is private to one frozen collection. It cannot authorize persisted
 rows or a changed model/job. The ordinary shard boundary still seals bytes.
 """
 from collections import Counter
+from contextlib import contextmanager
 import copy
 import time
 import threading
@@ -13,17 +14,42 @@ from brass_ai.learning.contracts import digest, require
 from brass_ai.recovery.teacher_phase_config import TIMING
 from brass_ai.recovery.search_value_config import FAST_POST_SECONDS
 from .lab_admission import admit_teacher_rows
+from .lab_admission import teacher_sources
+from brass_ai.recovery.teacher_labels import prepare_rows, check_logits
 
 
 class TurnVerifier:
     def __init__(self, model, history, jobs, cancel, *, diagnostic=False):
         self.model, self.history, self.cancel = model, copy.deepcopy(history), cancel
         self.model_id = model_id(model)
+        self.model_config = copy.deepcopy(model.config.to_dict())
+        self.model_binding = self._binding()
         self.jobs = {j['expected']['job_id']: copy.deepcopy(j) for j in jobs}
         require(all(j['expected']['model_id'] == self.model_id for j in jobs), 'Verifier model differs')
         self.cache = {}
         self.lock = threading.Lock()
         self.diagnostic = diagnostic
+        self.sources = teacher_sources(jobs) if not diagnostic else set()
+        self.encoders = threading.local()
+
+    def _binding(self):
+        # No GPU synchronization or weight copy. The collection is exclusive
+        # of optimizer updates; take() still hashes the full model at handoff.
+        return tuple((name,id(t),t._version,t.data_ptr(),tuple(t.shape),t.dtype,t.device,t.requires_grad)
+                     for name,t in self.model.state_dict(keep_vars=True).items())
+
+    def _check_model(self):
+        require(self._binding() == self.model_binding and self.model.config.to_dict() == self.model_config,
+                'Frozen verification model changed')
+
+    @contextmanager
+    def _policy_lock(self):
+        while not self.lock.acquire(timeout=.05):
+            require(not self.cancel.is_set(),'Turn verification cancelled')
+        try:
+            require(not self.cancel.is_set(),'Turn verification cancelled')
+            yield
+        finally:self.lock.release()
 
     def verify(self, meta, received):
         identity = meta['job']['job_id']; job = self.jobs[identity]
@@ -41,57 +67,73 @@ class TurnVerifier:
             from brass_ai.recovery.search_value_rows import validate_root
             validate_root(meta['value_row'], job)
             require(meta['value_row']['index'] == meta['index'] and meta['value_row']['profile'] == meta['profile'], 'Root turn differs')
-        deadline = received + meta['remaining_ns'] / 1e9
         def check():
             require(not self.cancel.is_set(), 'Turn verification cancelled')
-            require(time.monotonic() < deadline, 'Post-search verification deadline exceeded')
         check()
-        record = self.cache.setdefault(identity, dict(raw=[], accepted=[], rejected=Counter(), timings=[], last=0))
+        record = self.cache.setdefault(identity, dict(raw=[], accepted=[], rejected=Counter(), timings=[], last=0, sampled_profiles=set()))
         require(meta['index'] == record['last'] + 1 and len(meta['rows']) <= 2,
                 'Duplicate/out-of-order/excess teacher turn')
-        began = time.monotonic()
+        profile = meta.get('profile', 'full')
+        sampled = profile not in record['sampled_profiles'] or meta['index'] % 64 == 0
+        began = time.monotonic() if sampled else None
+        from brass_ai.recovery.admitted_inputs import _freeze
+        # A single detached immutable owner, shared by the admitted LabelRows.
+        # deepcopy(FrozenDict) is identity; cold/mutable callers retain copies.
+        frozen = [_freeze(row) for row in meta['rows']]
         if not meta['rows']:
-            # Fast/value-only turns do not touch model mode or RNG. Do not make
-            # their 0.5s budget wait behind another lane's policy validation.
+            # Fast/value-only turns never wait for the shared policy model.
             accepted, rejected = [], {}
-        else:
+        elif self.diagnostic:
             # policy_context preserves the process RNG/model mode. Serialize
-            # reference checks across lanes; queue wait consumes the deadline.
-            with self.lock:
+            # reference checks across diagnostic lanes as in cold admission.
+            with self._policy_lock():
                 check()
-                if self.diagnostic:
-                    from brass_ai.recovery.teacher_labels import admit_rows
-                    require(all(r.get('diagnostic') is True for r in meta['rows']), 'Unmarked diagnostic probe')
-                    accepted,rejected=admit_rows(meta['rows'],model=self.model,expected=job['expected'],
-                        history=self.history,admitted_sources={job['expected']['source_fingerprint']})
-                else:
-                    accepted, rejected = admit_teacher_rows(meta['rows'], job=job, model=self.model, history=self.history)
+                from brass_ai.recovery.teacher_labels import admit_rows
+                require(all(r.get('diagnostic') is True for r in meta['rows']), 'Unmarked diagnostic probe')
+                accepted,rejected=admit_rows(frozen,model=self.model,expected=job['expected'],
+                    history=self.history,admitted_sources={job['expected']['source_fingerprint']})
+        else:
+            require(all(not row.get('diagnostic',False) for row in frozen), 'Calibration probes cannot enter the teacher buffer')
+            self._check_model()
+            from brass_ai.recovery.encoding import PreparedEncoder
+            if not hasattr(self.encoders,'value'):self.encoders.value = PreparedEncoder()
+            accepted,rejected = prepare_rows(frozen, expected=job['expected'], history=self.history,
+                                             admitted_sources=self.sources, encoder=self.encoders.value)
+            prepared = time.monotonic() if sampled else None
+            with self._policy_lock():
+                check();self._check_model()
+                locked = time.monotonic() if sampled else None
+                check_logits(self.model,accepted)
         for row in accepted:
             ctx = row.row['view']['context']
             require(self.diagnostic or ctx['round'] == job['reservations'][str(row.label['seat'])][row.label['phase']],
                     'Teacher label outside reserved turn')
         check()
         # Publish only after identity, legality, target and independent batched
-        # model-logit checks pass within the original allowance.
+        # model-logit checks pass. Verification has no search-time deadline.
         # Reuse the existing immutable JSON snapshot containers. Detach once
         # inside this turn's post-work budget, then share safely through take,
         # policy publication and value-label ages instead of copying growing
         # histories again at the final fast turn. No actor admission is granted.
-        from brass_ai.recovery.admitted_inputs import _freeze
         from brass_ai.recovery.teacher_labels import LabelRow
-        meta['rows'] = [_freeze(row) for row in meta['rows']]
+        meta['rows'] = frozen
         accepted = [LabelRow(_freeze(row.row),row.encoded) for row in accepted]
         check()
         record['raw'].extend(meta['rows'])
         record['accepted'].extend(accepted); record['rejected'].update(rejected)
         record['last'] = meta['index']
-        record['timings'].append(dict(index=meta['index'], rows=len(meta['rows']),
-            verification_seconds=time.monotonic()-began, receive_to_ready_seconds=time.monotonic()-received,
-            allowance_seconds=meta['remaining_ns']/1e9))
+        if sampled:
+            ended=time.monotonic()
+            timing=dict(index=meta['index'],profile=profile,rows=len(meta['rows']),
+                verification_seconds=ended-began, receive_to_ready_seconds=ended-received,
+                verification_limit_seconds=None,sampling='first-per-profile-and-every-64-turns')
+            if meta['rows'] and not self.diagnostic:
+                timing.update(preparation_seconds=prepared-began,model_queue_seconds=locked-prepared,
+                              model_and_handoff_seconds=ended-locked)
+            record['timings'].append(timing);record['sampled_profiles'].add(profile)
         try:check()
         except BaseException:
-            # Even the final turn cannot leave a complete-looking cache after
-            # crossing its deadline or receiving cancellation during publication.
+            # Cancellation cannot leave a complete-looking cache at publication.
             self.cache.pop(identity,None)
             raise
         return dict(job=job['expected'], index=meta['index'], status='ok')
@@ -136,6 +178,7 @@ class TurnVerifier:
             require(digest([r.row for r in rows]) == digest([r.row for r in record['accepted']])
                 and rejected == dict(record['rejected']), 'Streamed/barrier verification differs')
             comparisons.append(dict(job_id=key,rows=len(rows),previous_barrier_seconds=elapsed,
-                streamed_verification_seconds=sum(r['verification_seconds'] for r in record['timings'])))
+                sampled_verification_seconds=sum(r['verification_seconds'] for r in record['timings']),
+                sampled_turns=len(record['timings'])))
         return dict(passed=True,tables=comparisons,scope='Qualification-only audit, outside timed collection; '
-            'compare former end-of-table pause with verified_reuse_seconds, and report streamed total separately')
+            'compare former end-of-table pause with verified_reuse_seconds; sparse samples are not a streamed total')

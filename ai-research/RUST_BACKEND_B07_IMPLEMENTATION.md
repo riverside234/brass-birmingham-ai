@@ -1,5 +1,10 @@
 # B07: cheaper native collection and bounded adoption
 
+**Current shadow verification revision (2026-11-07):** by user request, independent verification/ACK/
+sealing has no hard deadline for either 0.8s or 4s searches. Search budgets and correctness checks
+remain; timing is sparse. Prepare the new teacher adapter before ordinary preparation and continuation.
+See [the fix and full lab command](RUST_SHADOW_VERIFICATION_REVISION.md). Prior limit evidence stays historical.
+
 Updated on 2026-11-07. **R8 lab qualification, both shadow canaries, diagnostic
 continuation, Rust adoption and full rollback restoration passed on g1250;
 the real g1250→g1251 commit and full restart now passed on the lab.** Use the

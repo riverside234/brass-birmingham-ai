@@ -131,9 +131,16 @@ def admit_rows(rows, *, model, expected, history, admitted_sources):
     """New-generation rows only; old sealed rows are checked by buffer receipts."""
     from brass_ai.learning.batching import model_id
     from .encoding import PreparedEncoder
-    from .teacher_term import policy_logits
     require(model_id(model) == expected['model_id'], 'Teacher admission model differs')
-    encoder = PreparedEncoder(); accepted = []; seen = set(); rejected = dict(no_evidence=0, forced=0, cancelled=0)
+    accepted, rejected = prepare_rows(rows, expected=expected, history=history,
+                                      admitted_sources=admitted_sources, encoder=PreparedEncoder())
+    check_logits(model, accepted)
+    return accepted, rejected
+
+
+def prepare_rows(rows, *, expected, history, admitted_sources, encoder):
+    """Independent row/target/schema/feature admission, without model mutation."""
+    accepted = []; seen = set(); rejected = dict(no_evidence=0, forced=0, cancelled=0)
     for raw in rows:
         row = copy.deepcopy(raw)
         target = validate_row(row, expected, history, admitted_sources)
@@ -144,8 +151,12 @@ def admit_rows(rows, *, model, expected, history, admitted_sources):
         value = LabelRow(row, encoder.encode(row['view'], row['choices'], [0.] * 4, [0.] * 8))
         require(value.identity not in seen, 'Duplicate teacher decision')
         seen.add(value.identity); accepted.append(value)
-    actual = policy_logits(model, accepted)
+    return accepted, rejected
+
+
+def check_logits(model, accepted):
+    from .teacher_term import policy_logits
+    actual = policy_logits(model, accepted) if accepted else []
     for row, logits in zip(accepted, actual):
         require(np.allclose(logits, row.label['logits'], atol=2e-5, rtol=1e-5),
                 'Teacher logits parity failed')
-    return accepted, rejected

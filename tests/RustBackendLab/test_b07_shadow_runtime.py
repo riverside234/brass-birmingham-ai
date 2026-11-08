@@ -156,7 +156,7 @@ class ShadowConfig(unittest.TestCase):
             self.assertEqual(argv[argv.index('--expected-generation')+1],'1257')
             write_json(run/'state.json',final)
         with patch.object(launcher,'ROOT',self.run),patch.object(launcher,'prepare',return_value=(first,self.run/'config.json',2)),\
-                patch.object(launcher.subprocess,'run',side_effect=train) as invoke,\
+                patch.object(launcher,'run_training',side_effect=lambda argv,log:train(argv)) as invoke,\
                 patch('rust_lab_results.export',return_value=self.run/'results') as export,\
                 patch.object(sys,'argv',['continue-rust-shadow.py','--run','artifacts/run','--expected-generation','1257']),\
                 patch.dict(os.environ,{'CUDA_VISIBLE_DEVICES':'0'}):
@@ -302,13 +302,13 @@ class Cache(unittest.TestCase):
             path.write_bytes(raw)
             with self.assertRaisesRegex(ValueError,'Unknown'):cache.load(dict(job,generation=1258))
 
-    def test_unsealed_publication_and_overrun_cannot_confer_cache_trust(self):
+    def test_late_verified_publication_is_sealed_without_verification_deadline(self):
         with tempfile.TemporaryDirectory(dir=ROOT/'artifacts') as temp:
             run=Path(temp);job={'expected':{'job_id':'a'*64}};cache=TableCache(run,run/'shadow',[job])
             result=dict(job_id='a'*64,rows=[],metrics={'turns':[{'post_search_ns':2_000_000_000,'profile':'full'}]})
-            with self.assertRaisesRegex(ValueError,'allowance'):cache.publish(result,job)
-            self.assertIsNone(cache.load(job))
-            self.assertTrue(list((run/'shadow').glob('*.unsealed')))
+            cache.publish(result,job)
+            self.assertEqual(cache.load(job)['job_id'],result['job_id'])
+            self.assertFalse(list((run/'shadow').glob('*.overrun')))
 
     def test_32_table_post_accounting_charges_each_table_and_its_own_split(self):
         from brass_ai.recovery.teacher_phase import TeacherPhase

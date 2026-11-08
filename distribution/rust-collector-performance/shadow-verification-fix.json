@@ -1,0 +1,99 @@
+{
+  "contract": "brass-shadow-verification-fix/1",
+  "date": "2026-11-07",
+  "execution": {
+    "implementation": "0f5ef79ba8011fe17541357086911fbf817fb19070c02f1543cc1dbb5e80ac80",
+    "qualified_implementation": "9efcf34f853d75ab844366b6819da4b0921be38d3e2dfb806cf282ace76e7a30",
+    "replay_location_review": "6d8faa73ffdcb65485f185a844240dc3c00571581c847537d0bc1ec70ea77adc"
+  },
+  "pulled_results_commit": "4f6dc41",
+  "failure": "results/rust-lab-qualification/20261108T032034123141Z-20261108T032009416212Z-shadow-training-a9162cac-7bb81128",
+  "root_error": "Post-search verification deadline exceeded (terminal traceback supplied by user)",
+  "failure_export_limitation": "Original export lacked child stdout/stderr; launcher now exports full training.log and a bounded error tail",
+  "policy": {
+    "search_seconds": {
+      "fast": 0.8,
+      "full": 4.0
+    },
+    "independent_verification_limit_seconds": null,
+    "native_search_selection_bounds_unchanged": true,
+    "post_ack_cache_policy_and_value_caps_removed": true,
+    "timing_samples": "First turn of each profile per table and every 64th turn; native ACK at turn 1 and every 64th turn",
+    "no_sampling_rng_consumption": true,
+    "cancellation_and_integrity_checks_retained": true
+  },
+  "optimization": {
+    "weight_and_source_identity": "Once at frozen verifier construction, lightweight per-turn version/storage/config bindings; full model hash retained at table handoff",
+    "rows": "One immutable detached snapshot shared by admitted labels",
+    "cpu_admission": "Parallel lane-local encoders outside shared model lock",
+    "serialized": "Only RNG/mode-protected reference model logit parity",
+    "measured_speedup": null
+  },
+  "native": {
+    "teacher_adapter_source": "8cf6514c71da91512639035b1e5162596b2c754d84759468eb7780cc7033fb3c",
+    "ordinary_source": "9e2e5ea764d23f62e5f0bb6d6ef0048a3745ba4998803b78adb5838480558df2",
+    "semantic_teacher_producer": "dbe27fb771be5297cebcdcdf56d9d054bf5a6b270ec37008f75f80ce3f717101",
+    "qualified_search_core": "8d59ec4b5716c3b16c9d00d97975f589e481b629afc85f1732db4e37549db4cf",
+    "executed_native_sources_byte_identical": true,
+    "new_adapter_preparation_required": true
+  },
+  "debug": {
+    "python_distinct_passed": 66,
+    "python_groups": [
+      {
+        "tests": 65,
+        "seconds": 36.525
+      },
+      {
+        "tests": 1,
+        "seconds": 0.001
+      }
+    ],
+    "rust_passed": 4,
+    "rust_groups": [
+      {
+        "tests": 2,
+        "seconds": 0.18
+      },
+      {
+        "tests": 2,
+        "seconds": 0.09
+      }
+    ],
+    "logs": {
+      "final-debug.log": {
+        "path": "artifacts/shadow-verification-repair/final-debug.log",
+        "sha256": "b1a30b86dbd6c5ebd13028465c65c8a61b0e2d9ea4e43b2a1a56812a2860dca5"
+      },
+      "watchdog-debug.log": {
+        "path": "artifacts/shadow-verification-repair/watchdog-debug.log",
+        "sha256": "111e9272b91b25526e02c7a4bf0e30f46f761feefa9d92edad0b99ce735aa4f8"
+      },
+      "final-native-tests.log": {
+        "path": "artifacts/shadow-verification-repair/final-native-tests.log",
+        "sha256": "e0bf263d6187c771387dce5c1772c59df37cdbd93fefeec2fcdf79814450970e"
+      }
+    },
+    "no_local_training": true,
+    "no_benchmarks": true,
+    "no_unrelated_qualification_reruns": true
+  },
+  "source_review": {
+    "qualified_source_reconstructed": true,
+    "source_files": 366,
+    "reviewed_changes": 54
+  },
+  "continuation": [
+    "python scripts/prepare-rust-teacher-verification.py --expected-generation 1257 --offline",
+    "python scripts/prepare-rust-collector-performance.py --expected-generation 1257 --offline",
+    "python scripts/continue-rust-shadow.py --expected-generation 1257 --iterations 2 --share-target 0.25"
+  ],
+  "lab_linux_cuda_continuation": "Pending",
+  "unchanged": {
+    "checkpoint_optimizer_rng": true,
+    "search_v1_math_settings": true,
+    "training_features_labels_rewards": true,
+    "original_qualification_archives": true,
+    "installed_local_game": true
+  }
+}

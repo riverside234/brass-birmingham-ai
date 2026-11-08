@@ -350,13 +350,19 @@ def read(path, receipt, *, allow_diagnostic=False, reuse_validation=True, fast_r
     return seal_game(convert(family, receipt['admission'], allow_diagnostic=allow_diagnostic,arrays=arrays,_owned=True,_coverage=coverage),_owned=True)
 
 
+def teacher_sources(jobs):
+    """Bind a frozen collection once; cold callers establish their own boundary."""
+    from .lab_teacher_overlay import source_fingerprint
+    sources = {SOURCE, source_fingerprint()}
+    require(all(job.get('kind') == 'teacher_phase' and job.get('ordinary_training') is False
+                and job['search']['method'] == METHOD and job['search']['v205_enabled'] is False
+                and job['expected']['source_fingerprint'] in sources for job in jobs), 'Unadmitted teacher job/producer')
+    return sources
+
+
 def admit_teacher_rows(rows, *, job, model, history):
     """Separate B02.5 contract; never returns ordinary games or actor samples."""
     from brass_ai.recovery.teacher_labels import admit_rows
-    from .lab_teacher_overlay import source_fingerprint
-    sources = {SOURCE, source_fingerprint()}
+    sources = teacher_sources([job])
     require(all(not row.get('diagnostic',False) for row in rows), 'Calibration probes cannot enter the teacher buffer')
-    require(job.get('kind') == 'teacher_phase' and job.get('ordinary_training') is False
-            and job['search']['method'] == METHOD and job['search']['v205_enabled'] is False
-            and job['expected']['source_fingerprint'] in sources, 'Unadmitted teacher job/producer')
     return admit_rows(rows, model=model, expected=job['expected'], history=history, admitted_sources=sources)
