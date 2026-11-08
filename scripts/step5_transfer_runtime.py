@@ -4,11 +4,66 @@ Replays and preparation caches deliberately do not travel. The exporter still
 retains the small immutable probe, runtime evidence and live opponent state.
 """
 from pathlib import Path
+import json
+import math
+import re
 
 from brass_ai.learning.paths import resolve_project_path
+from brass_ai.learning.contracts import digest
 
 
 REPLAY_POLICY = 'fresh-buffers/1.0.0'
+
+
+def rating_summary(root, run, slot, *, read, require, add):
+    """Retain committed PL outcome rows, never full game/action records.
+
+    The rating loader needs these exact bytes for validation, later refits and
+    history compaction. Mirror its immutable slot/spec bindings without Torch,
+    NumPy, model loading or replay reconstruction in the transfer environment.
+    """
+    path=lambda value:resolve_project_path(root,value)
+    generation=slot['generation'];record=slot['records'];source=path(record['path'])
+    require(type(generation) is int and generation>0 and source.name=='games.jsonl'
+        and source.parent.parent==run/'ratings/slots' and
+        re.fullmatch(r'generation-'+f'{generation:06d}'+r'(-source-[0-9a-f]{16})?',source.parent.name),
+        'Invalid committed rating summary path')
+    spec_path=path(slot['spec']['path'])
+    require(spec_path==source.parent/'spec.json','Rating summary/spec directory differs')
+    add(spec_path,slot['spec']['sha256']);spec=read(spec_path)
+    require(spec.get('format')=='plackett-luce-slot/1.0.0' and spec['generation']==generation,
+        'Rating summary slot/spec generation differs')
+    lineups={(r['kind'],r['seed'],r['seat']):r for r in spec['lineups']}
+    require(lineups and len(lineups)==len(spec['lineups']),'Duplicate/empty rating summary lineups')
+    expected_fields={'game_id','setup_id','setup_seed','slot','candidate_seat','kind',
+        'agents','order','official_placement','vp','win_share','spec_digest'}
+    found=set();games=set();identity=digest(spec)
+    require(source.is_file(),'Missing committed rating outcome summary: '+str(source))
+    with source.open('r',encoding='utf-8') as stream:
+        for line in stream:
+            row=json.loads(line)
+            require(type(row) is dict and set(row)==expected_fields,'Rating outcome summary contains unsupported/replay fields')
+            require(all(type(row[k]) is int for k in ('slot','setup_seed','candidate_seat')),
+                'Invalid rating summary identity')
+            key=(row['kind'],row['setup_seed'],row['candidate_seat']);lineup=lineups.get(key)
+            require(lineup is not None and key not in found and row['slot']==generation and row['spec_digest']==identity,
+                'Rating summary lineage/coverage differs')
+            require(all(type(row[k]) is str and row[k] for k in ('game_id','setup_id')) and row['game_id'] not in games
+                and type(row['agents']) is list and len(row['agents'])==4 and all(type(a) is str and a for a in row['agents'])
+                and row['agents']==[lineup['agents'][(s-row['candidate_seat'])%4] for s in range(4)]
+                and type(row['order']) is list and all(type(s) is int for s in row['order'])
+                and sorted(row['order'])==list(range(4)), 'Invalid rating summary game/seats')
+            for key_name in ('official_placement','vp','win_share'):
+                values=row[key_name]
+                require(type(values) is list and len(values)==4 and
+                    all(type(v) in (int,float) and math.isfinite(v) for v in values),'Invalid rating summary outcome')
+            require(all(type(v) is int and 1<=v<=4 for v in row['official_placement'])
+                and all(0<=v<=1 for v in row['win_share']) and abs(sum(row['win_share'])-1)<1e-8,
+                'Invalid rating summary rank/win share')
+            found.add(key);games.add(row['game_id'])
+    require(found==set(lineups),'Incomplete committed rating outcome summary')
+    add(source,record['sha256'],rating_summary=True)
+    require('bytes' not in record or source.stat().st_size==record['bytes'],'Rating summary size differs')
 
 
 def native_inventory(root, run, state, *, add, read, require, runtime):
@@ -42,7 +97,11 @@ def native_inventory(root, run, state, *, add, read, require, runtime):
     for key in ('policy_anchor', 'champion_mix', 'origin'):
         refs(state.get(key))
     ratings = state.get('ratings', {})
-    refs({k:v for k,v in ratings.items() if k != 'agents'})
+    refs({k:v for k,v in ratings.items() if k not in ('agents','slots')})
+    for slot in ratings.get('slots',[]):
+        require(slot['generation']<=state['iteration'],'Uncommitted future rating slot')
+        rating_summary(root,run,slot,read=read,require=require,add=add)
+        refs({k:v for k,v in slot.items() if k!='records'})
     refs(ratings.get('agents', []), required=False)
     for transition in state.get('source_transitions', []):
         add(run/transition['backup'])

@@ -256,3 +256,12 @@ continuing to omit original IL replay/cache. See
 [transfer-upgraded-il-fix.json](transfer-upgraded-il-fix.json). This is a
 transport-only repair: reuse the already prepared reward teacher; no training
 qualification, native build or benchmark needs repeating.
+
+The rating-transfer follow-up distinguishes committed compact PL outcomes from
+full action replays. Exact state-pinned `ratings/slots/.../games.jsonl` summaries
+are checked against their slot/spec/lineups and copied unchanged for rating
+validation, future refits and compaction. Full replay, IL data/cache and training
+buffers remain excluded. See
+[transfer-rating-summary-fix.json](transfer-rating-summary-fix.json). Sync both
+transfer scripts; training/native fingerprints and the prepared adapter stay
+valid.

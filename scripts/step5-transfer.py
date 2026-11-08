@@ -186,10 +186,19 @@ def inventory(root, run, *, mode='compact'):
     files = {}
     runs = {run}
     hosts = {below(root, state['signature']['config']['host'])}
-    def add(path, expected=None):
+    def add(path, expected=None, *, rating_summary=False):
         path = below(root, path)
         if native and path.is_relative_to(root/'artifacts'):
-            require('.prepared' not in path.relative_to(root).parts and not path.name.endswith(('.jsonl.gz','.jsonl')),
+            if rating_summary:
+                # Only the typed rating importer below may request this. Keep
+                # the exact state receipt: no arbitrary JSONL/replay exception.
+                committed={below(root,s['records']['path']):s['records']['sha256']
+                    for s in state.get('ratings',{}).get('slots',[])}
+                require(path in committed and expected==committed[path] and
+                    path.name=='games.jsonl' and path.parent.parent==run/'ratings/slots',
+                    'Rating summary is outside its committed slot receipt')
+            require('.prepared' not in path.relative_to(root).parts and
+                    (not path.name.endswith(('.jsonl.gz','.jsonl')) or rating_summary),
                 'Replay/preparation data must not enter this transfer: '+str(path))
         if native and path.is_relative_to(run):
             parts = path.relative_to(run).parts

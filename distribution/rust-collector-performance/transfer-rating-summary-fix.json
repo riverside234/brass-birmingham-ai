@@ -1,0 +1,46 @@
+{
+  "contract": "step5-transfer-rating-summary-repair/1.0.0",
+  "date": "2026-11-08",
+  "base_commit": "682b81ff7a0221ee70a47242d547c0fda6bff1b1",
+  "implementation": "9577ab0db846fe6783963ad11cb1f5ab46d67cbe0ce57e7454425c8fa96431a4",
+  "training_source_changed": false,
+  "native_rebuild_required": false,
+  "prior_qualification_rerun": false,
+  "failure": "A suffix-only replay guard rejected committed compact rating outcomes at ratings/slots/generation-001190/games.jsonl",
+  "fix": "Admit only the exact state-pinned canonical committed-slot outcome summary after schema, generation, spec digest, full lineup/rotation coverage, finite outcome and original SHA-256 checks",
+  "preserved": [
+    "Exact rating summary bytes and state/checkpoint receipts",
+    "Slot reports/specs/panels/bootstrap and compact archived rating history",
+    "Existing rating validation, read/refit and compaction semantics"
+  ],
+  "excluded": [
+    "Full action replays and arbitrary JSONL",
+    "Original IL data and preparation cache",
+    "Ordinary PPG, teacher-label and search-value replay buffers"
+  ],
+  "validation": {
+    "distinct_python_debug_checks_passed": 7,
+    "tests": [
+      "test_rating_transfer.RatingTransfer.test_committed_source_suffixed_slot_paths_are_supported",
+      "test_rating_transfer.RatingTransfer.test_export_and_relocated_restore_preserve_outcomes_and_rating_continuation",
+      "test_rating_transfer.RatingTransfer.test_incomplete_duplicate_nonfinite_or_foreign_outcomes_cannot_be_approved",
+      "test_rating_transfer.RatingTransfer.test_missing_or_changed_summary_still_fails_hash_and_dependency_checks",
+      "test_rating_transfer.RatingTransfer.test_only_exact_owned_committed_slot_record_can_use_the_exception",
+      "test_rating_transfer.RatingTransfer.test_transport_repair_keeps_training_fingerprint_and_existing_reward_adapter",
+      "test_rating_transfer.RatingTransfer.test_unrelated_jsonl_or_disguised_full_replay_is_rejected"
+    ],
+    "relocated_rating_validate_state": "passed",
+    "relocated_rating_read_games": "passed: equal outcomes",
+    "changed_whitespace_hash_rejection": "passed",
+    "source_suffixed_slot": "passed",
+    "no_full_replay_exception": "passed",
+    "ast": "passed: 3 files",
+    "git_diff_check": "passed",
+    "local_benchmarks": false,
+    "local_training": false,
+    "local_native_build": false,
+    "actual_lab_export": "Pending"
+  },
+  "guide": "docs/STEP5_MACHINE_TRANSFER.md",
+  "lab_action": "Sync both transfer scripts and retry dry-run/export; reuse prepared reward adapter"
+}
