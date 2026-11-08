@@ -1,7 +1,7 @@
 {
   "contract": "brass-b07-replay-location-review/1.0.0",
   "qualified_implementation": "9efcf34f853d75ab844366b6819da4b0921be38d3e2dfb806cf282ace76e7a30",
-  "execution_implementation": "057635dbbb00aaf0065291df2eb274b2cdd824ab848ea0a524dab77d274ba487",
+  "execution_implementation": "4bdf312c8202dc2f36e85c95659d011594150e3b0d59123670fb14779f1c9c13",
   "base_commit": "7244d6b",
   "changes": {
     "configs/learning/collector-performance-teacher-reuse.json": {
@@ -110,7 +110,7 @@
     },
     "src/brass_ai/recovery/resume.py": {
       "before": "a65a697cb14ac1678be458c8d72f84227cba6d545041adfc27baec517a5fbdae",
-      "after": "e10fa5aa62e4c435062eb962e35fea63cad9299ae3208390eff9c171d55b5682"
+      "after": "9c4dba437ab921962d630c92b817329138f2d399763d633cf0c1742ffd518c96"
     },
     "src/brass_ai/recovery/search_value_iteration.py": {
       "before": "36c1d1a7580760255b0b1228a5c5d4f384529ec2b07194997118c480d21c29ae",
@@ -206,7 +206,7 @@
     },
     "src/brass_ai/rust_backend/lab_shadow_config.py": {
       "before": null,
-      "after": "3c80e7fa773fcd4134b48b7327123bb74ae74701563063d88cfbd38f5b7b9a14"
+      "after": "a6646bd4c4d3db858b6915068972a0e2e3d4ceb58b806e90fbcd0caec5a4f37e"
     },
     "src/brass_ai/rust_backend/lab_shared.py": {
       "before": null,
@@ -285,6 +285,11 @@
       "implementation": "3e1de866b56e821c9d8492152c27afff924ffb52fe2c7e75089c45a7a69f0c98",
       "qualified_implementation": "9efcf34f853d75ab844366b6819da4b0921be38d3e2dfb806cf282ace76e7a30",
       "replay_location_review": "32006f021a5f730c59330ee5e73c00f93b73068845439dd4cc0544c41818637f"
+    },
+    {
+      "implementation": "057635dbbb00aaf0065291df2eb274b2cdd824ab848ea0a524dab77d274ba487",
+      "qualified_implementation": "9efcf34f853d75ab844366b6819da4b0921be38d3e2dfb806cf282ace76e7a30",
+      "replay_location_review": "d90d125f2fb468a15b5eda6b18898ad67fe7dc6b30ab881934371879ef3db9dd"
     }
   ],
   "performance_evidence": "results/joint7-v11-2-g1290-trained-restart-g1253-20261107T145415686647Z/iteration-1252/report.json",
@@ -352,5 +357,12 @@
     "collection_signature": "Only the diagnostic window normalizes to its historical value; jobs, table seeds, labels, model/optimizer/RNG and pending receipts stay bound",
     "user_evidence": "Pasted g1258 commit followed by ordinary append_compact bonus state mismatch",
     "pasted_traceback_sha256": "8811092d20da1f7e15386ad2e44002a0eee31ca2043fdbbb85188c24400a63ee"
+  },
+  "shadow_pending_resume_revision": {
+    "results_commit": "5e03429",
+    "failure": "results/rust-lab-qualification/20261108T054948496735Z-20261108T054939772547Z-shadow-training-a2b85365-219939c9/evidence/qualification.json",
+    "gate": "Real load_resume permits a nonempty iteration directory only for the explicitly reviewed native shadow 2-to-4 measurement extension with identical projected collection signature",
+    "retained": "Strict full checkpoint loading, explicit review, full signature/lineage, next-checkpoint guard, native/backend switch bindings, normal cold family/table validation",
+    "unchanged": "No Rust adapter/core/teacher/search/model/optimizer/RNG change; reuse both passing g1258 preparations"
   }
 }

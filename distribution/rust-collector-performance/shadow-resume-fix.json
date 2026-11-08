@@ -1,0 +1,103 @@
+{
+  "contract": "brass-shadow-pending-resume-fix/1",
+  "date": "2026-11-08",
+  "execution": {
+    "implementation": "4bdf312c8202dc2f36e85c95659d011594150e3b0d59123670fb14779f1c9c13",
+    "qualified_implementation": "9efcf34f853d75ab844366b6819da4b0921be38d3e2dfb806cf282ace76e7a30",
+    "replay_location_review": "dd0bee7c1a60006e00f10ba939b4e2555213fac5f191b48331465e7bc2c3401f"
+  },
+  "results_commit": "5e03429",
+  "failure": "results\\rust-lab-qualification\\20261108T054948496735Z-20261108T054939772547Z-shadow-training-a2b85365-219939c9\\evidence\\qualification.json",
+  "failure_sha256": "0e96a18f7e238eeed8e17c00480f05f7b727648efec66465c92e8829346bc55a",
+  "cause": "Launcher/job preservation missed the real load_resume blanket pending-directory guard on a changed signature",
+  "fix": "Only explicitly reviewed native shadow 2-to-4 measurement extension with identical projected full collection signature may retain pending work",
+  "preservation": [
+    "strict weights_only checkpoint loading",
+    "full model/generation/signature/native-switch bindings",
+    "exact weights/Adam/RNG/readiness and first observation",
+    "pending bytes",
+    "uncommitted-next-checkpoint guard",
+    "normal cold family/table admission and integrity checks"
+  ],
+  "rejected": [
+    "manual share change with pending work",
+    "unreviewed recipe/source/execution",
+    "missing review flag",
+    "reference/missing backend",
+    "unfinished next checkpoint",
+    "pending non-directory",
+    "bad checkpoint hash/signature"
+  ],
+  "native": {
+    "ordinary_source": "51d8e85bd7aa9c43c87ae609d57da3c8cfcab9473f90b9d4140fb8811c1fb6ec",
+    "teacher_adapter_source": "cb78f5f55ad4f2468841be51dba9cf387ba5830b9319b6dfd6501e980025dbbd",
+    "sources_unchanged": true,
+    "rebuild_required": false,
+    "passed_preparations": [
+      {
+        "export": "20261108T054855343356Z-teacher-verification-20261108T054755-d17404ba-25d8e18d",
+        "generation": 1258,
+        "passed": true,
+        "runtime": {
+          "path": "/data/not_backed_up/yxu209/ai-training/artifacts/rust-backend/teacher-verification/build.json",
+          "bytes": 36139,
+          "sha256": "35d338b82402967d7dcd6ca6148246663839bb39606266e1e594ed5ceabd9959"
+        }
+      },
+      {
+        "export": "20261108T054938740268Z-collector-performance-20261108T054856-c3b04b7f-f5a7275c",
+        "generation": 1258,
+        "passed": true,
+        "runtime": {
+          "path": "/data/not_backed_up/yxu209/ai-training/artifacts/rust-backend/collector-performance/build.json",
+          "bytes": 221503,
+          "sha256": "17046ed24860f8b07ed4854cdc7643a4e7bf104302111e9fd559861c5cb9d0a8"
+        }
+      }
+    ]
+  },
+  "debug": {
+    "distinct_passed": 12,
+    "real_loader_tests": 8,
+    "binding_tests": 4,
+    "before_fix": "The reported guard reproduces against the real loader with a strict small checkpoint",
+    "after_fix": "Actual strict loader, Adam/RNG restore, observation restore, backend binding, transition commit and two retry reloads pass",
+    "fixture_scope": "Production config/signatures with a small CPU model preset for allocation; private lab qualification receipt stub",
+    "logs": [
+      {
+        "path": "artifacts/shadow-resume-repair/before-debug.log",
+        "sha256": "8e45593d89a476900f7d807fdc54170f4e8a0e6835cfc68c6721a43fff2b2f68"
+      },
+      {
+        "path": "artifacts/shadow-resume-repair/resume-debug.log",
+        "sha256": "0335c0cf1a91ac4ac204e1dbd3f93fe8c3988aa41bf4a62f6e98aacefbf91f2d"
+      },
+      {
+        "path": "artifacts/shadow-resume-repair/binding-debug.log",
+        "sha256": "854a7df2a07303bc5b62235235236210d94c1036d4434b24819c5c9badeb97b1"
+      }
+    ],
+    "no_benchmarks": true,
+    "no_native_rebuild": true,
+    "no_live_training": true,
+    "no_unrelated_qualification_reruns": true
+  },
+  "source_review": {
+    "qualified_source_reconstructed": true,
+    "source_files": 366,
+    "reviewed_changes": 58,
+    "previous_execution": {
+      "implementation": "057635dbbb00aaf0065291df2eb274b2cdd824ab848ea0a524dab77d274ba487",
+      "qualified_implementation": "9efcf34f853d75ab844366b6819da4b0921be38d3e2dfb806cf282ace76e7a30",
+      "replay_location_review": "d90d125f2fb468a15b5eda6b18898ad67fe7dc6b30ab881934371879ef3db9dd"
+    }
+  },
+  "continuation": [
+    "python scripts/continue-rust-shadow.py --expected-generation 1257 --iterations 4 --share-target 0.25"
+  ],
+  "remaining_iterations": 3,
+  "endpoint": 1261,
+  "qualification_iterations": 4,
+  "teacher_mode": "shadow",
+  "lab_continuation": "Pending"
+}

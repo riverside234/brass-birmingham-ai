@@ -312,10 +312,13 @@ def load_resume(root, run, state, signature, *, device='cpu', reviewed=False, di
     initial = (state['iteration'] == 0 and raw['training'].get('mode') == 'step5-fresh-residual-initial')
     require(bound or initial, 'Checkpoint is not bound to this run signature')
     if changed:
-        # An old partial collection has a different provenance digest. Never mix
-        # it into the updated collection or discard it behind the user's back.
+        # A collection-changing upgrade cannot mix old partial work. The exact
+        # reviewed shadow measurement extension keeps the same frozen jobs and
+        # provenance; leave their normal cold validation/recovery in place.
+        from brass_ai.rust_backend.lab_shadow_config import preserves_pending
         pending = safe(run, run / f"iteration-{state['iteration']:04d}")
-        require(not pending.exists() or (pending.is_dir() and not any(pending.iterdir())),
+        require(not pending.exists() or (pending.is_dir() and
+                (not any(pending.iterdir()) or preserves_pending(state,signature))),
                 f'Uncommitted iteration at {pending}; finish/recover it with the previous source before upgrading')
         output = safe(run, run / f"generation-{state['iteration'] + 1:04d}.pt")
         require(not list(run.glob(output.name+'*')), f'Uncommitted checkpoint at {output}; recover it before upgrading')

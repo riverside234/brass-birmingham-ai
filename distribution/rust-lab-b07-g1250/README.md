@@ -1,5 +1,26 @@
 # B07 g1250: Git checkout continuation after passed qualification
 
+## Current pending-resume repair (2026-11-08)
+
+Results pulled to `5e03429` confirm both g1258 adapter preparations passed.
+The subsequent `Uncommitted iteration ... iteration-1258` failure came from a
+second guard in the real checkpoint loader. The Python-only repair admits only
+the reviewed 2→4 diagnostic extension with identical collection bindings; strict
+checkpoint, source, actor/config, pending-checkpoint and cold-cache checks remain.
+Twelve affected debug checks passed, including real strict checkpoint/Adam/RNG
+restore and a crash after the transition commit. Keep all pending files.
+
+After syncing this fix and exiting the failed trainer, **rerun continuation only**:
+
+```bash
+python scripts/continue-rust-shadow.py --expected-generation 1257 --iterations 4 --share-target 0.25
+```
+
+This retains g1258 and its first measurement, running only the remaining three
+iterations through g1261. Both adapters are unchanged and already prepared;
+do not repeat their builds or passed qualifications. See [the loader repair](../../ai-research/RUST_SHADOW_BONUS_AND_FOUR_ITERATION_FIX.md#2026-11-08-checkpoint-loader-pending-work-repair)
+and [debug/source receipt](../rust-collector-performance/shadow-resume-fix.json).
+
 ## Ordinary collector performance update
 
 PI00–PI05 now use the production ordinary path, including combined completion export and immutable replay reuse.

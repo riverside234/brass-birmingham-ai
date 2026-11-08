@@ -1,5 +1,14 @@
 # B07: cheaper native collection and bounded adoption
 
+**Pending-resume repair (2026-11-08):** both g1258 adapter preparations passed on
+lab (`results/` pulled to `5e03429`). The real checkpoint loader still rejected
+nonempty pending work during the reviewed 2→4 measurement upgrade. It now admits
+only that diagnostic extension with an identical collection signature; all
+checkpoint/source/lineage/next-checkpoint and cold-cache checks remain. Twelve
+affected debug checks passed, including real checkpoint/Adam/RNG restore and
+commit/crash/retry. Reuse the prepared adapters and rerun only continuation;
+see [repair and command](RUST_SHADOW_BONUS_AND_FOUR_ITERATION_FIX.md#2026-11-08-checkpoint-loader-pending-work-repair).
+
 **Current shadow verification revision (2026-11-07):** by user request, independent verification/ACK/
 sealing has no hard deadline for either 0.8s or 4s searches. Adapter `/2` also removes the missed
 Rust pre-verification handoff cap. Current adapter `/3` additionally separates missing-root-value

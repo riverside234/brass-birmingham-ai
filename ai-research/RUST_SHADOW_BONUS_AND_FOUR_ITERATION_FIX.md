@@ -1,5 +1,44 @@
 # Ordinary bonus transition and four-iteration shadow qualification
 
+## 2026-11-08: checkpoint-loader pending-work repair
+
+Pulled inside `results/` to `5e03429`. Both g1258 adapter preparations passed:
+`20261108T054855343356Z-teacher-verification-20261108T054755-d17404ba-25d8e18d`
+and `20261108T054938740268Z-collector-performance-20261108T054856-c3b04b7f-f5a7275c`.
+The following continuation failed in the real `load_resume` guard, as recorded in
+`20261108T054948496735Z-20261108T054939772547Z-shadow-training-a2b85365-219939c9`.
+The earlier tests checked the launcher and frozen bindings but missed this second
+blanket rejection of nonempty iteration directories.
+
+The real loader now permits pending work only for the explicitly reviewed native
+shadow 2→4 measurement extension with an identical projected collection
+signature. Strict checkpoint loading, run/model/generation/signature binding,
+live opponent pins, the uncommitted-next-checkpoint guard and normal cold
+family/table validation remain. Target/source/policy changes gain no exception.
+Commit the transition only after normal Adam/RNG restoration; a crash after that
+commit still reloads the original full checkpoint through its exact transition
+chain. The first observation and all existing pending bytes stay intact.
+
+**12 affected debug checks passed**, including eight new tests of the real
+loader: reproduction, exact weights/Adam/RNG/readiness, native/backend binding,
+commit/crash/retry, tampering, unfinished checkpoints, pending non-directories,
+target changes, missing permission and unreviewed sources. The other four check
+the launcher, scheduler and actual native routing bindings. No native rebuild,
+benchmarks, live training or unrelated qualification reruns were needed.
+
+After syncing this Python-only fix and exiting the failed trainer, run only:
+
+```bash
+python scripts/continue-rust-shadow.py --expected-generation 1257 --iterations 4 --share-target 0.25
+```
+
+The passing adapter preparations are reused. Keep `iteration-1258` and all its
+files. The existing g1258 commit counts as the first measurement, so this command
+runs the three remaining iterations through g1261. Actual lab continuation is
+Pending; see `distribution/rust-collector-performance/shadow-resume-fix.json`.
+
+## Original bonus transition repair
+
 2026-11-07. The supplied log shows **g1258 committed**, with 320 ordinary games,
 46 PPO steps, 512 teacher labels and one pending gradient observation. The next
 ordinary collection failed in `append_compact` with `bonus state mismatch`.
@@ -41,7 +80,7 @@ ordinary collection binding projects this diagnostic setting to its historical
 value; the saved training signature and native config binding record the actual
 four-iteration config. No other config edit inherits that projection.
 
-## Lab continuation
+## Initial adapter preparation (already passed on lab)
 
 Sync these changes and fully exit the failed trainer. At the committed g1258
 boundary, in the existing lab environment:

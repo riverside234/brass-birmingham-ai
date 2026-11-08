@@ -134,6 +134,7 @@ def main():
         tests.append('test_b07_recovery_speed')
         tests.append('test_inference_channel_lifecycle')
         tests.append('test_b07_shadow_runtime')
+        tests.append('test_b07_shadow_resume')
         tests.append('test_collector_performance')
         tests.append('test_collector_performance_tail')
         base.command([sys.executable,'-m','unittest',*tests,'-q'],cwd=ROOT,env=dict(env,CUDA_VISIBLE_DEVICES=''),log=out/'fixtures.log',timeout=180)

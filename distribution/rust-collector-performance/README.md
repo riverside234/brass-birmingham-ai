@@ -1,5 +1,23 @@
 # PI00–PI05 ordinary collector performance supplement
 
+## 当前续训修复（2026-11-08）
+
+已在 `results/` 拉取到 `5e03429`，确认 g1258 的 teacher/ordinary adapter 准备均通过。
+后续 `Uncommitted iteration ... iteration-1258` 来自真实 checkpoint loader 的第二道 guard。
+修复只允许已审查的 2→4 梯度测量窗口扩展复用相同 collection signature；其他配置、源、目标、
+未提交 checkpoint、冷读校验仍受原约束。12 个受影响 debug 检查通过，包括真实 strict checkpoint、
+Adam/RNG 恢复及 transition commit 后中断重试。本次不改 Rust binary，无须重复已通过的准备或资格。
+
+同步代码并退出失败 trainer 后，只运行：
+
+```bash
+python scripts/continue-rust-shadow.py --expected-generation 1257 --iterations 4 --share-target 0.25
+```
+
+保留 `iteration-1258` 中的全部文件和首轮测量；只继续剩余三轮至 g1261。
+详见 [loader 修复说明](../../ai-research/RUST_SHADOW_BONUS_AND_FOUR_ITERATION_FIX.md#2026-11-08-checkpoint-loader-pending-work-repair)
+和 [源码/测试凭据](shadow-resume-fix.json)。下方三条命令是首次准备流程，已准备的 lab 不需重做。
+
 本目录只包含说明与短测原始报告。源码和测试从 Git checkout 取得，不重复打完整 bundle，
 不要把旧 ZIP 提取到新 checkout 上。
 

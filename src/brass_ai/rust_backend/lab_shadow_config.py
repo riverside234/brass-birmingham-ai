@@ -78,6 +78,18 @@ def approved(state,signature):
         signature_transition(state['signature'],signature))
 
 
+def preserves_pending(state,signature):
+    """Only the reviewed 2->4 measurement change retains frozen collection.
+
+    The loader still checks checkpoint/hash/lineage and unfinished checkpoints;
+    collectors revalidate each cached table/family normally. This is not a
+    permission to reuse pending work across source, policy or target changes.
+    """
+    return (approved(state,signature) and
+        qualification_upgrade(state['signature']['config'],signature['config']) and
+        collection_signature(state['signature'])==collection_signature(signature))
+
+
 def rebind_backend(previous,updated):
     """Called by the normal transition only after full optimizer/RNG restore."""
     if not approved(previous,updated['signature']):return
