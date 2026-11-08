@@ -289,6 +289,17 @@ class ProbeTests(unittest.TestCase):
             path.write_bytes(original)
             source.write_bytes(b'changed source')
             with self.assertRaisesRegex(ValueError,'validation data changed'):
+                probes.load(root,root/'run',origin,model,cfg,update,1)
+            # A committed probe is its own exact immutable input. Neither an
+            # unused changed shard nor its omission invalidates that snapshot.
+            cached,again=probes.load(root,root/'run',origin,model,cfg,update,1,receipt)
+            self.assertEqual(again,receipt);self.assertEqual(cached.metadata,loaded.metadata)
+            source.unlink()
+            with patch('brass_ai.recovery.demonstrations.load_dataset',side_effect=AssertionError('No original IL reload')):
+                cached,again=probes.load(root,root/'run',origin,model,cfg,update,1,receipt)
+            self.assertEqual(again,receipt)
+            cache=root/'run/il-kl/probe.npz';cache.write_bytes(cache.read_bytes()+b'changed')
+            with self.assertRaisesRegex(ValueError,'cache changed'):
                 probes.load(root,root/'run',origin,model,cfg,update,1,receipt)
 
     def test_retention_follows_probe_manifest_and_pins_its_cache(self):

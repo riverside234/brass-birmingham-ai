@@ -21,13 +21,21 @@ INPUT_FILES = frozenset(('source.zip', 'candidate.json', 'deployment.json', 'ins
 
 
 def sha(path):
-    with Path(path).open('rb') as stream:
+    from .lab_paths import runtime_path
+    with runtime_path(path).open('rb') as stream:
         return hashlib.file_digest(stream, 'sha256').hexdigest()
 
 
 def pin(path):
-    path = Path(path)
-    return dict(path=str(path.resolve()), bytes=path.stat().st_size, sha256=sha(path))
+    from .lab_paths import runtime_path
+    original = Path(path)
+    actual = runtime_path(path)
+    # Preserve the historical absolute spelling used by an existing pin. New
+    # pins still use the current canonical path. Bytes and hashes stay exact.
+    from pathlib import PureWindowsPath
+    historical = (original.is_absolute() or PureWindowsPath(str(path)).is_absolute()) and actual != original
+    name = str(path) if historical else str(actual.resolve())
+    return dict(path=name, bytes=actual.stat().st_size, sha256=sha(actual))
 
 
 def admit(profile):

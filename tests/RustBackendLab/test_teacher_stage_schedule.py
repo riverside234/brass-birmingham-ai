@@ -220,7 +220,9 @@ class Updates(unittest.TestCase):
         iteration=SearchValueIteration(self.directory/'committed',config,dict(iteration=1280),self.model)
         phase=iteration.phase
         phase.machine.state.update(stage='C',stage_a_iterations=10,stage_b_iterations=20,w=1.,scale=0.)
-        phase.buffer.publish(1280,'train',[self.row],game_id=self.row['game_id'])
+        for game in range(10):
+            rows=[dict(self.row,index=i,game_id=f'c-game-{game}') for i in range(64)]
+            phase.buffer.publish(1280,'train',rows,game_id=rows[0]['game_id'])
         iteration.prepare_ppg(None,1281);guard=self.guard(lambda:.0025);guard.pop('scale')
         iteration._finish(guard)
         self.assertEqual(iteration.report['training_scale'],.1);self.assertEqual(iteration.report['stage']['scale'],.1)

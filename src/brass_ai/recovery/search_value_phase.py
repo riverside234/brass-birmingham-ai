@@ -57,6 +57,8 @@ class SearchValuePhase:
             result = by_id[job['expected']['job_id']]
             rows = complete_game(result['value_rows'], result['result'], result['final_spent'], job,
                                  lam=self.machine.state['lam'] or 1.)
+            if rows[0].get('vp_payments'):
+                self.report.setdefault('vp_payments_per_table',{})[job['expected']['game_id']]=rows[0]['vp_payments']
             # Keep the final utility so all eight ages can be retargeted exactly
             # once lambda is selected. No targets are inferred from policy labels.
             from brass_ai.learning.reward import terminal_utility
@@ -164,13 +166,29 @@ class SearchValuePhase:
         if self.machine.state['lam'] is None:self.machine.choose_lambda(1.)
         # No policy-drift filter or validation gate on residual return fitting.
         # In particular current-G data must remain usable after its PPO update.
-        train=self._targets(self.buffer.rows(generation,'train'))
-        prepared=time.perf_counter()
+        buffered=self.buffer.rows(generation,'train')
         scale=self.trunk_scale();self.report.pop('update',None)
-        if train:
+        rebuild=self.machine.state.get('buffer_rebuild')
+        paused=False
+        if rebuild is not None and rebuild['ready_generation'] is None:
+            require(rebuild['required_ages']==8 and generation>=rebuild['origin_generation'], 'Invalid return-buffer rebuild')
+            ages=sorted({r['generation'] for r in buffered if r['generation']>=rebuild['origin_generation']})
+            paused=ages!=list(range(generation-7,generation+1))
+            if not paused:rebuild['ready_generation']=generation
+            self.report['buffer_rebuild']=dict(rebuild,fresh_ages=len(ages),paused=paused)
+        # Rebuilding phases admit/verify shards but need no copied targets or
+        # encoder preparation until auxiliary fitting can actually resume.
+        train=[] if paused else self._targets(buffered)
+        prepared=time.perf_counter()
+        validation = None
+        if train and scale>0 and not paused:
+            from .search_value_retention import reserve_games
+            train,validation,self.report['retention_holdout']=reserve_games(train,generation,self.companion.seed)
+        if paused:self.report['update']=dict(steps=0,reason='Rebuilding eight fresh return-buffer ages; stage counter paused')
+        elif train:
             if scale>0:
                 if guarded is not None:
-                    self.report['update']=unconditional_pass(self.companion,train,scale=scale,**guarded)
+                    self.report['update']=unconditional_pass(self.companion,train,scale=scale,heldout=validation,**guarded)
                 else:self.report['update']=dict(steps=0,reason='No ordinary PPG probe; trunk update deferred')
             else:self.report['update']=self.companion.head_only(train,generation=generation)
         else:self.report['update']=dict(steps=0,reason='No admitted training value rows')
@@ -179,7 +197,7 @@ class SearchValuePhase:
         heldout=[r for r in self.buffer.rows(generation,'heldout') if r['generation']==generation]
         main,delta=predict_rows(self.model,heldout) if heldout else ([],[])
         diagnostic=diagnostics(heldout,np.asarray(main),np.asarray(delta))
-        self.report.update(validation=diagnostic,stage=self.machine.advance(generation,diagnostic),
+        self.report.update(validation=diagnostic,stage=self.machine.advance(generation,diagnostic,pause=paused),
             updated=bool(self.report['update'].get('steps')),training_scale=scale,
             delta=dict(mean=float(np.abs(delta).mean()) if len(delta) else None,
                 p90=float(np.quantile(np.abs(delta),.9)) if len(delta) else None))

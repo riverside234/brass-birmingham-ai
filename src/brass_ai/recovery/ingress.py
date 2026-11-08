@@ -101,15 +101,17 @@ def _prepare_inner(task):
     games=expand(games)
     diagnosed=time.perf_counter()
     data=[]
+    parents={g['game_id']:g for g in games}
     for game in games:
+        vp_parent=parents.get(game.get('branch',{}).get('parent_game_id'))
         if hasattr(game,'critic_table'):
             from .critic_data import check_table
             table=check_table(game.critic_table,game,policy_id)
             require(game.table_kind==kinds[game['setup_group']],'Critic table kind differs from plan')
             eligible={s for s,seat in enumerate(table['seats']) if seat['role'] in ('learner','snapshot')}
-            data+=prepared([game],lambda r:r['seat'] in eligible,insolvency=insolvency,reward=reward)
+            data+=prepared([game],lambda r:r['seat'] in eligible,insolvency=insolvency,reward=reward,vp_parent=vp_parent)
         else:
-            data+=prepared([game],lambda r:r['behavior']['policy_id']==policy_id,insolvency=insolvency,reward=reward)
+            data+=prepared([game],lambda r:r['behavior']['policy_id']==policy_id,insolvency=insolvency,reward=reward,vp_parent=vp_parent)
     require(all(r['behavior']['kind']=='model' for r,_,_,_ in data),'External actions in PPO')
     prepared_at=time.perf_counter()
     # Only verified features and learning labels cross IPC. No repeated private
@@ -120,7 +122,7 @@ def _prepare_inner(task):
     compact=[(dict(seat=r['seat'],chosen=r['chosen'],behavior=r['behavior'],
                    view=dict(context={k:r['view']['context'][k] for k in ('era','phase','round','revision')}),
                    choices=r['choices'],style=r['style'],intent=r['intent'],teacher=r['teacher'],
-                   **{k:r[k] for k in ('_insolvency_cost_to_go','_insolvency_trajectory','_reward_return','_reward_remaining','_reward_id','_reward_trajectory',
+                   **{k:r[k] for k in ('_insolvency_cost_to_go','_insolvency_trajectory','_reward_return','_reward_remaining','_reward_id','_reward_trajectory','_reward_vp_paid',
                        '_critic_role','_table_kind','_seat_descriptors','_descriptor_generation','_branch','_parent_game_id',
                        '_ppo_opening_objective','_local_scoring','_domino','_domino_event') if k in r}),
               target,identity,encoded) for r,target,identity,encoded in data]

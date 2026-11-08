@@ -87,7 +87,7 @@ def collection_order(teacher_jobs, ordinary_jobs):
 
 
 class TeacherPhase:
-    def __init__(self, root, run, config, state, model, raw=None):
+    def __init__(self, root, run, config, state, model, raw=None, *, rebuild=None):
         self.config = config; self.options = validate(config); self.state = state
         self.generation = state['iteration']; self.reward_id = digest(self.options['search']['reward'])
         saved = copy.deepcopy(state.get(KEY, {}))
@@ -97,6 +97,11 @@ class TeacherPhase:
             require(saved['contract'] == CONTRACT and saved['generation'] == self.generation
                     and saved['teacher_seed_cursor'] == state.get('teacher_seed_cursor'), 'Teacher resume generation/seed differs')
         cache = saved.get('buffer', {})
+        if rebuild is not None:
+            cache = dict(cache, receipts=[], retired=[])
+            # An explicit reward migration retires labels, not the user's
+            # fixed policy-teacher beta/qualification. Keep its provenance.
+            cache['identity']=buffer_identity(config)
         require(all(any(e['generation'] == r['generation'] and e['model_id'] == r['model_id']
                         for e in state['history']) for r in cache.get('receipts', ())),
                 'Teacher buffer model is not in committed run lineage')
@@ -110,7 +115,7 @@ class TeacherPhase:
         self.search_value = None
         if 'search_value' in self.options:
             from .search_value_iteration import SearchValueIteration
-            self.search_value = SearchValueIteration(self.buffer.run,config,state,model,raw)
+            self.search_value = SearchValueIteration(self.buffer.run,config,state,model,raw,rebuild=rebuild)
 
     def begin(self, state, model, *, export_hash=None, epoch=None, native_source=SOURCE):
         self.state = state; self.generation = state['iteration']

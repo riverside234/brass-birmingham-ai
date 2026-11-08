@@ -579,7 +579,8 @@ class TrainingPhases:
 
     def advantages(self,mc,actor_ids):
         ds=self.dataset
-        returns=(ds.utility if ds.utility is not None else ds.targets[0])[
+        from brass_ai.learning.reward_timing import policy_returns
+        returns=policy_returns(ds)[
             torch.arange(len(ds.data),device=ds.device),ds.seats]
         by_table=None
         if 'table_enabled' in self.state:

@@ -1,5 +1,8 @@
 # PI00–PI05 ordinary collector performance supplement
 
+Current g1284 update: Stage C adds eight-game buffered loss retention. Machine transfer ships the fixed IL probe and pinned runtime/checkpoint state, omits replay/IL caches, and rebuilds fresh buffers while auxiliary counters pause. Use [the transfer guide](../../docs/STEP5_MACHINE_TRANSFER.md) and [revision note](../../ai-research/RUST_STAGE_C_TRANSFER_REVISION.md); no new ZIP or unrelated qualification rerun is needed.
+
+
 ## PPG / 辅助 value phase 性能优化
 
 新优化保留 A10/B20/C10、固定 teacher beta、PPG beta floor .25 和 KL cap .003。
@@ -225,3 +228,23 @@ git -C results push
 当前 publisher 仍需一次记录 JSON 解码、最终压缩和持久化；真正冷读仍检查内容 SHA。
 PI04/PI05-B 的剩余实施已完成。最终当前代码通过 118 项受影响 Python 检查及 2 项 Rust unit tests；
 前一阶段的 94 项证据保留原身份，不重复计数。真实 checkpoint/GPU/shadow 整轮性能留给 lab。
+
+## g1284 Stage C and machine transfer follow-up
+
+Current code adds an eight-game buffered Stage-C loss holdout and a compact,
+replay-free server transfer. Only the existing fixed 2048-position IL probe and
+its required provenance travel; original IL data/cache and replay buffers do not.
+Stage A and its counter pause until eight fresh new-reward return ages exist.
+
+The destination-only config uses **placement=.05**, win=1, VP=.001/cap180 and zero
+insolvency charge. VP pays once after canal scoring, then at game end by the
+capped cumulative difference (`brass-combined-return/3.0.0`). Source training is unchanged. Prepare/reuse the separate
+zero-charge Rust teacher before destination preflight; the original ordinary
+worker and installed game remain unchanged. Preserve all Adam/RNG state, stage
+progress and the qualified fixed beta; retire old-reward targets/readiness.
+
+Follow [the transfer guide](../../docs/STEP5_MACHINE_TRANSFER.md) and the generated
+restore JSON's `prepare_reward`, `preflight` and `resume` commands. Focused debug
+evidence is recorded in [stage-c-machine-transfer.json](stage-c-machine-transfer.json).
+Actual destination transfer/continuation remains Pending lab; no local benchmark
+or full qualification is requested.

@@ -26,7 +26,8 @@ def is_shadow(config):
     # Recover the exact reviewed base; no other recipe/search/optimizer edits.
     from brass_ai.recovery.collector_runtime import recipe
     from brass_ai.recovery.search_value_schedule import previous_recipe
-    try:config=previous_recipe(recipe(config))
+    from brass_ai.learning.post_transfer_reward import previous as previous_reward
+    try:config=previous_recipe(previous_reward(recipe(config)))
     except (ValueError,TypeError):return False
     before=copy.deepcopy(config);phase=before.pop('teacher_phase',None)
     if phase is None:return False
@@ -67,12 +68,13 @@ def is_active(config):
 def signature_transition(before,after):
     from .lab_replay_compat import QUALIFIED,execution
     old,new=before['config'],after['config']
+    from brass_ai.learning.post_transfer_reward import previous as previous_reward
     from .lab_teacher_activation import is_on
     from brass_ai.recovery.search_value_schedule import previous_recipe
     old_revised='schedule' in old.get('teacher_phase',{}).get('search_value',{})
     new_revised='schedule' in new.get('teacher_phase',{}).get('search_value',{})
     if old_revised and not new_revised:return False
-    try:old_compare,new_compare=previous_recipe(old),previous_recipe(new)
+    try:old_compare,new_compare=previous_recipe(previous_reward(old)),previous_recipe(previous_reward(new))
     except (ValueError,KeyError,TypeError):return False
     if is_on(new):
         config_ok=False
@@ -97,6 +99,10 @@ def approved(state,signature):
     accepted=(value.get('mode')=='rust' and state.get('iteration',0)>=1257 and
         signature_transition(state['signature'],signature))
     if accepted:
+        from brass_ai.learning.post_transfer_reward import previous as previous_reward,transition,authorized
+        before,after=state['signature']['config'],signature['config']
+        if (before.get('reward'),before.get('insolvency'))!=(after.get('reward'),after.get('insolvency')):
+            if not (transition(before,after) and authorized(state,signature)):return False
         from .lab_teacher_activation import is_on,authorize
         if is_on(signature['config']):authorize(state,signature['config'])
     return accepted
@@ -120,6 +126,11 @@ def rebind_backend(previous,updated):
     if not approved(previous,updated['signature']):return
     from .lab_shadow import teacher_build
     build=teacher_build(previous)  # Pin the previously qualified executable.
+    from brass_ai.learning.post_transfer_reward import is_revised
+    if is_revised(updated['signature']['config']):
+        from brass_ai.learning.contracts import SOURCE_ROOT
+        from .lab_reward_runtime import resolve
+        if not is_revised(previous['signature']['config']):build=resolve(SOURCE_ROOT,build)
     before=previous['native_backend'];after=copy.deepcopy(before)
     after['config_sha256']=digest(updated['signature']['config'])
     after['shadow']=dict(contract=CONTRACT,tables=dict(train=28,held_out=4),

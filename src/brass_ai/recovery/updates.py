@@ -19,10 +19,11 @@ from .progress import Progress
 from .insolvency import returns as insolvency_returns,advantage_costs
 
 
-def prepared(games, predicate=None, neutral=False, insolvency=None, reward=None, outcome_targets=None):
+def prepared(games, predicate=None, neutral=False, insolvency=None, reward=None, outcome_targets=None, vp_parent=None):
     """Targets once per game; filter BEFORE encoding; cached arrays survive epochs."""
     require(reward is None or insolvency==reward['insolvency'],'Return/cost reward mismatch')
     encoder, data = PreparedEncoder(), []
+    canal_by_parent={}
     for game in games:
         from .replay_binding import memo
         if hasattr(game,'assert_metadata'): game.assert_metadata()
@@ -33,8 +34,15 @@ def prepared(games, predicate=None, neutral=False, insolvency=None, reward=None,
             lambda:insolvency_returns(game['records'],insolvency,prior)) if insolvency is not None else (None,None)
         if reward is not None:
             from brass_ai.learning.reward import replay_returns
-            labels,rewards=memo(game,'reward_targets',dict(spec=reward,prior=prior),
-                lambda:replay_returns(game['records'],game['result'],reward,prior))
+            inherited=canal_by_parent.get(game.get('branch',{}).get('parent_game_id')) if game['records'][0]['view']['context']['era']=='RailEra' else None
+            if inherited is None and 'branch' in game and vp_parent is not None and game['records'][0]['view']['context']['era']=='RailEra':
+                from brass_ai.learning.reward_timing import replay_payments
+                require(vp_parent['game_id']==game['branch']['parent_game_id'],'Foreign VP payout parent')
+                _,payments=replay_payments(vp_parent['records'],vp_parent['result'],reward)
+                if payments:inherited=payments['canal']
+            labels,rewards=memo(game,'reward_targets',dict(spec=reward,prior=prior,**(dict(vp_paid=inherited) if inherited is not None else {})),
+                lambda:replay_returns(game['records'],game['result'],reward,prior,initial_vp_paid=inherited))
+            if 'vp_payments' in rewards:canal_by_parent[game['game_id']]=rewards['vp_payments']['canal']
         annotated=set()
         for step,row in enumerate(game['records']):
             if 'branch' in game and step==0:
@@ -45,11 +53,18 @@ def prepared(games, predicate=None, neutral=False, insolvency=None, reward=None,
                 if hasattr(game,'ppo_opening_objective'):
                     r=dict(r,_ppo_opening_objective=game.ppo_opening_objective)
                 if reward is not None:
-                    r=dict(r,_reward_return=labels[step]['utility'],_reward_remaining=labels[step]['remaining'],_reward_id=rewards['reward_id'])
+                    # Raw NN/PPG targets keep their full-game coordinate. For
+                    # future returns/GAE, subtract the already paid canal VP.
+                    label=labels[step]
+                    r=dict(r,_reward_return=label.get('anchored_utility',label['utility']),_reward_remaining=label['remaining'],_reward_id=rewards['reward_id'])
+                    if 'vp_paid' in label:r['_reward_vp_paid']=label['vp_paid']
                     if row['seat'] not in annotated:
                         seat=row['seat']
                         r['_reward_trajectory']=dict(**{k:v[seat] for k,v in rewards['components'].items()},
                             cost=rewards['cost'][seat],utility=rewards['utility'][seat])
+                        if 'vp_payments' in rewards:
+                            r['_reward_trajectory'].update(canal_vp_payment=rewards['vp_payments']['canal'][seat],
+                                final_vp_payment=rewards['vp_payments']['final_delta'][seat])
                 if costs is not None:
                     r=dict(r,_insolvency_cost_to_go=costs[step])
                     if row['seat'] not in annotated:
@@ -115,11 +130,15 @@ class Dataset:
         if log:log(1)
         self.targets=tuple(torch.tensor([d[1][k] for d in data],device=device,dtype=torch.float32)
             for k in ('win_share','placement','vp'))
-        self.utility=self.remaining=None
+        self.utility=self.remaining=self.vp_paid=None
         if any('_reward_return' in r for r in self.rows):
             require(all('_reward_return' in r and '_reward_remaining' in r for r in self.rows),'Mixed reward targets')
             self.utility=torch.tensor([r['_reward_return'] for r in self.rows],device=device,dtype=torch.float32)
             self.remaining=torch.tensor([r['_reward_remaining'] for r in self.rows],device=device,dtype=torch.float32)
+        if any('_reward_vp_paid' in r for r in self.rows):
+            require(all('_reward_vp_paid' in r for r in self.rows),'Mixed VP payout timing')
+            self.vp_paid=torch.tensor([r['_reward_vp_paid'] for r in self.rows],device=device,dtype=torch.float32)
+            require(self.vp_paid.shape==(len(self.rows),4) and bool(torch.isfinite(self.vp_paid).all()),'Invalid paid VP credits')
         if log:log(2)
         self.q=[exploration_distribution(r['choices'],r['intent'],r['behavior'].get('exploration_version',2),
                     r.get('view',{}).get('context',{}).get('phase')).astype(np.float32) for r in self.rows] if policy else None
@@ -564,7 +583,7 @@ def _ppo_nonforced(model,optimizer,games,behavior,config,*,profile,profile_steps
         advantages=(ds.utility-baseline)[torch.arange(count,device=device),ds.seats]
     costs,insolvency_report=advantage_costs(data,insolvency)
     if reward is not None:
-        insolvency_report['objective']='Combined terminal utility minus future capped insolvency costs'
+        insolvency_report['objective']='Combined utility with versioned VP payments minus future capped insolvency costs'
     # Archived win-only recipes subtract costs here. The combined head already
     # predicts the SAME cost-to-go as its target; never subtract costs twice.
     if reward is None:advantages-=torch.tensor(costs,device=device,dtype=advantages.dtype)
@@ -579,7 +598,8 @@ def _ppo_nonforced(model,optimizer,games,behavior,config,*,profile,profile_steps
     std=useful.std(unbiased=False) if actor_ids else torch.zeros((),device=device)
     from .review_metrics import distribution,CategoricalProbe,PPO_KL_GUARD
     advantage_distribution=distribution(useful)
-    target=ds.utility if ds.utility is not None else ds.targets[0]
+    from brass_ai.learning.reward_timing import policy_returns
+    target=policy_returns(ds)
     actor_returns=target[actor_ids,ds.seats[actor_ids]]
     return_distribution=distribution(actor_returns)
     variance=float(actor_returns.var(unbiased=False)) if actor_ids else 0.

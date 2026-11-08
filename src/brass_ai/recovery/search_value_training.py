@@ -88,10 +88,10 @@ class StageMachine:
         if stage != 'C': self.state['baseline'] = None
         if stage in ('off','A'): self.state['w'] = 0.
 
-    def advance(self, generation, gate, *, ordinary=None, h2h=None, annealing=False):
+    def advance(self, generation, gate, *, ordinary=None, h2h=None, annealing=False, pause=False):
         s = self.state
         from .search_value_schedule import CONTRACT as SCHEDULE,advance
-        if s.get('schedule')==SCHEDULE:return advance(s,generation,gate)
+        if s.get('schedule')==SCHEDULE:return advance(s,generation,gate,pause=pause)
         require(type(generation) is int and generation > s['generation'], 'Stage transition already committed/out of order')
         s['generation'] = generation
         if ordinary is not None:
@@ -275,11 +275,11 @@ def guarded_pass(companion, rows, heldout, value_optimizer, *, scale, measure_or
 
 
 def unconditional_pass(companion,rows,value_optimizer,*,scale,cloning_loss,measure_joint_kl,
-                       beta,rate_for_step,kl_cap=.003,**unused):
-    """No validation/loss qualification; retain only the hard pre-PPG KL cap.
+                       beta,rate_for_step,kl_cap=.003,heldout=None,**unused):
+    """Unconditional stage schedule, with interval-level KL/loss retention.
 
-    A rejected interval restores both Adams and weights. There is no stage or
-    validation rollback. Exceptions retain the normal transactional recovery.
+    A rejected interval restores both Adams and weights. Stage counters never
+    roll back. Exceptions retain the normal transactional recovery.
     """
     from .ppg_selection import Selection
     require(rows and all(r['split']=='train' for r in rows) and 0<scale<=1 and kl_cap==.003,
@@ -289,6 +289,13 @@ def unconditional_pass(companion,rows,value_optimizer,*,scale,cloning_loss,measu
     initial=measure_joint_kl()
     require(np.isfinite(initial) and initial>=0,'Nonfinite initial search/PPG joint KL')
     if initial>=kl_cap:return dict(intervals=[],steps=0,reason='No shared PPG KL budget',cap=kl_cap)
+    held_loss = None
+    if heldout is not None:
+        from .search_value_retention import HeldoutLoss
+        require({r['game_id'] for r in rows}.isdisjoint(r['game_id'] for r in heldout),
+            'Stage-C training/held-out game leakage')
+        held_loss = HeldoutLoss(model,heldout)
+    current_loss = initial_loss = held_loss() if held_loss is not None else None
     # Inputs are fixed, but trunk encodings must be recomputed after each
     # optimizer step. Pack numeric rows once, retaining exact sample order/RNG.
     states=np.asarray([r['state'] for r in rows],dtype=np.float32)
@@ -316,12 +323,18 @@ def unconditional_pass(companion,rows,value_optimizer,*,scale,cloning_loss,measu
                 for group in value_optimizer.param_groups:group['lr']=rate_for_step(interval*16+step+1,32)
                 value_optimizer.step();companion.optimizer.step();companion.steps+=1
             kl=measure_joint_kl();require(np.isfinite(kl) and kl>=0,'Nonfinite search/PPG joint KL')
-            accepted=kl<=kl_cap
+            attempted_loss=held_loss() if held_loss is not None and kl<=kl_cap else None
+            loss_increased=attempted_loss is not None and attempted_loss>current_loss
+            accepted=kl<=kl_cap and not loss_increased
+            reason='joint-kl-cap' if kl>kl_cap else 'heldout_loss_increased' if loss_increased else 'within-joint-kl-cap'
             reports.append(dict(accepted=accepted,joint_kl=kl,cap=kl_cap,scale=scale,
-                reason='within-joint-kl-cap' if accepted else 'joint-kl-cap'))
+                reason=reason,heldout_loss_before=current_loss,heldout_loss_attempted=attempted_loss))
             if not accepted:rollback.restore(model,value_optimizer);break
+            if attempted_loss is not None:current_loss=attempted_loss
             steps+=16
         except BaseException:
             rollback.restore(model,value_optimizer);raise
         finally:model.zero_grad(set_to_none=True)
-    return dict(intervals=reports,steps=steps,cap=kl_cap,validation_gates=False)
+    return dict(intervals=reports,steps=steps,cap=kl_cap,validation_gates=held_loss is not None,
+        heldout_loss_before=initial_loss,heldout_loss_after=current_loss,
+        early_stop_reason=reports[-1]['reason'] if reports and not reports[-1]['accepted'] else None)

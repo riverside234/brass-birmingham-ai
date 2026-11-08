@@ -75,14 +75,22 @@ def complete_game(rows, result, final_spent, job, *, lam=1.):
     for row in rows: validate_root(row, job)
     require(sum(r['profile'] == 'full' for r in rows) == 16, 'Reserved full profile count differs')
     g, u = targets(rows, result, final_spent, job['search']['reward'], lam)
-    return [dict(copy_row(r), target=t.tolist(), u=v.tolist(), target_lambda=lam)
+    from brass_ai.learning.reward_timing import teacher_payments
+    payments=teacher_payments(rows,result,job['search']['reward'])
+    output=[dict(copy_row(r), target=t.tolist(), u=v.tolist(), target_lambda=lam)
             for r, t, v in zip(rows, g, u, strict=True)]
+    if payments:
+        for row in output:
+            credit=payments['canal'] if row['turn_key'][0]=='RailEra' else [0.]*4
+            row.update(vp_paid=credit,future_u=(np.asarray(row['u'])-credit).tolist())
+        output[0]['vp_payments']=payments
+    return output
 
 
 def copy_row(row):
     """Detach validated flat numeric tensors without per-number deepcopy work."""
     vectors = {'state','mapping','remaining','spent','r','v','counts','turn_key',
-               'target','u','terminal_utility'}
+               'target','u','terminal_utility','vp_paid','future_u'}
     result = copy.deepcopy({k:v for k,v in row.items() if k not in vectors and k != 'returns'})
     result.update({k:list(v) for k,v in row.items() if k in vectors})
     if 'returns' in row: result['returns'] = [list(v) for v in row['returns']]

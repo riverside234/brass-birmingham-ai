@@ -1,5 +1,11 @@
 # Rust Simulation and Gumbel IS-MCTS Backend Migration Plan
 
+> **After server transfer:** apply the user's latest exact reward: win 1.0, **placement 0.05**, VP .001/cap180 paid at canal end and at final end by difference, insolvency charge 0. Source training keeps its old reward. Prepare/reuse the separate zero-cost Rust teacher adapter; preserve Adam/RNG/progress/beta, invalidate old reward targets/readiness and rebuild buffers before auxiliary progression. [Commands and details](../docs/STEP5_MACHINE_TRANSFER.md).
+
+
+> **g1284 revision (8 November 2026):** Stage C now reserves eight whole buffered games for interval loss retention in addition to its hard 0.003 KL cap. Machine transfer omits replay buffers and original IL data/caches, retains the fixed 2048-position probe, and pauses auxiliary training/stage counts until eight fresh return ages are rebuilt. See [the revision](RUST_STAGE_C_TRANSFER_REVISION.md) and [transfer commands](../docs/STEP5_MACHINE_TRANSFER.md). This supersedes older Stage-C no-loss-stopping and transfer-buffer statements below.
+
+
 **Value-phase performance follow-up, 2026-11-08:** g1278/g1279 spend 44.0/67.9s
 on value work while retaining 0/16 updates. Defer unused full-train diagnostics
 on fully rejected v24/v25 phases, use explicit value-only/policy-only forwards,
@@ -874,7 +880,7 @@ Part 1's accepted local rules/features/search lifecycle is the starting point. P
 
 Preserve the restart's actual neutral recipe: four zero style and eight zero intent inputs for neural seats, neutral fingerprints, AnchorKL and context panels off, the committed entropy-anneal state, exploration 0, T1.3 for the first three actions per neural seat then T1, capped VP reward (180), insolvency cost 0.0025/event capped at 0.025, economic-only LR control, current local-scoring auxiliaries and PFSP/manual-startup provenance. The existing g1290 seed was a past weights-only initialization of this run. **Backend migration must resume the full current checkpoint; do not repeat that initialization, reset progress, re-enable DOMiNO or return to the old grouped-lr-critic run.**
 
-PPG retains two ages, up to two epochs each iteration, batch 4096, clone set 8192/batch 512, loss/warmup checks at step 16, KL checks at step 32, ordinary cap 0.003 and the existing 0.65 × last-applied-PPO LR schedule. Preserve saved beta/trips, selected checkpoint/rollback, short tails, sparse PPO probes, admitted-input reuse, CPU preparation/cache fixes and honest unknown/unchecked KL telemetry. The added search-value trunk pass uses the stricter combined cap `min(0.002, ordinary_cap)`. Inspect the real config and live state again before later implementation; these values are not permission to overwrite an updated recipe.
+PPG retains two ages, up to two epochs each iteration, batch 4096, clone set 8192/batch 512, loss/warmup checks at step 16, KL checks at step 32, ordinary cap 0.003 and the existing 0.65 × last-applied-PPO LR schedule. Preserve saved beta/trips, selected checkpoint/rollback, short tails, sparse PPO probes, admitted-input reuse, CPU preparation/cache fixes and honest unknown/unchecked KL telemetry. The current revised search-value trunk pass uses joint cap `0.003` plus eight buffered holdout games for non-increasing-loss interval retention; its stage warm-up remains unconditional outside explicit machine-transfer buffer rebuilding. Inspect the real config and live state again before later implementation; these values are not permission to overwrite an updated recipe.
 
 #### search_v1 contract for the lab adapter
 
@@ -918,7 +924,7 @@ Keep Python target construction, GAE, PPO behavior likelihoods, critic/local-sco
 | B04.5 | **Passed on pinned g1250** | Exact r3 source/model/device; two shadow tables, 49 policy labels, 128 value rows, one isolated head step; production unchanged |
 | B05 | **Passed on pinned g1250** | R2 CUDA ordinary/teacher component updates, head-only update, full-state/age restoration; no new games or production adoption |
 | B06 | **Passed bounded correctness/measurement; useful performance gate not passed** | Same 3 families / 1,161 decisions; native accepted work 55.265s vs reference 28.596s; Python collection/admission bottleneck identified; eight 4s/K16 teacher turns passed |
-| B07 | **Passed adoption/restart/gradient qualification; policy teacher on through g1280; revised A10/B20/C10 auxiliary schedule implemented, lab training Pending** | Results `ebe6084` reveal head starvation; remove auxiliary policy-staleness/validation gates and the 256-game test. Retain fixed teacher β .16110139609854138, zero branching, 28 train tables, four diagnostic games each tenth iteration (each pending beta round via config), current optimized collection and CPU limits. Joint KL cap .003; PPG beta floor .25. [Review and current command](RUST_TEACHER_STAGE_SCHEDULE_REVISION.md) |
+| B07 | **Passed adoption/restart/gradient qualification; policy teacher on through g1284; revised Stage A trained 4/10; Stage C retention and replay-free transfer implemented, destination check Pending** | Results `a21a13d` confirm 32 head steps per iteration and Stage A 4/10. Stage A/B remain unconditional; Stage C additionally reserves eight buffered games for loss retention. Replay-free transfer pauses auxiliary progression until eight fresh return ages. Skip the 256-game test. Retain fixed teacher β .16110139609854138, zero branching, 28 train tables, four diagnostic games each tenth iteration (each pending beta round via config), current optimized collection and CPU limits. Joint KL cap .003; PPG beta floor .25. [Review and current command](RUST_TEACHER_STAGE_SCHEDULE_REVISION.md) |
 
 The [g1261 teacher activation review](RUST_TEACHER_ON_STAGE_A_REVIEW.md) supersedes
 the historical full-shadow Pending notes below. On-mode reuses the qualified

@@ -60,8 +60,13 @@ def prepare(root,run_path,expected,iterations,share_target=.25,*,mode='shadow',r
         teacher_build(state)
         import copy
         before=recipe(state['signature']['config'])
+        from brass_ai.learning.post_transfer_reward import revise as revise_reward,REVISION,is_revised
+        from brass_ai.recovery.transfer_resume import instruction
+        moved=instruction(root,run)
+        pending_reward=bool(moved and moved.get('reward_revision')==REVISION)
+        working=revise_reward(before) if pending_reward else before
         if mode=='on':
-            config=enable(before,share_target,revise_stages=revise_stages);authorize(state,config)
+            config=enable(working,share_target,revise_stages=revise_stages);authorize(state,config)
         elif is_shadow(before):
             config=copy.deepcopy(before);config['teacher_phase']['term']['share_target']=share_target
             config['teacher_phase']['term']['shadow_iterations']=4
@@ -76,6 +81,7 @@ def prepare(root,run_path,expected,iterations,share_target=.25,*,mode='shadow',r
         prefix='-rust-teacher-on-stage-a-share' if mode=='on' else '-rust-shadow32-no-branch-share'
         if 'schedule' in config['teacher_phase']['search_value']:
             prefix='-rust-teacher-on-stages-v2-share' if mode=='on' else '-rust-shadow-stages-v2-share'
+        if is_revised(config):prefix=prefix.replace('-share','-no-insolvency-share')
         output=root/'configs/step5'/(run.name+prefix+tag+'.json')
         existing=read(output) if output.exists() else state['signature']['config']
         require(not output.exists() or recipe(existing)==config or qualification_upgrade(recipe(existing),config),'Existing shadow config differs')
@@ -128,6 +134,8 @@ def main(*,default_mode='shadow',default_stage_revision=False):
             (('qualified fixed beta; residual stage restored from checkpoint.' if revised else 'qualified fixed beta; search head Stage A (w=0, frozen trunk).') if args.mode=='on' else
              'qualification=4 iterations; teacher gradients are diagnostic only.'),flush=True)
         if revised:print('Residual stages: A10 head-only; B20 blend warm-up; C10 trunk warm-up; KL cap .003; PPG beta floor .25.',flush=True)
+        from brass_ai.learning.post_transfer_reward import is_revised
+        if is_revised(options):print('Transferred reward: win=1, placement=.05, VP=.001 (cap 180); insolvency charge=0.',flush=True)
         print('Collector runtime: '+str(report['collector_runtime'])+' (training config)',flush=True)
         if remaining:
             argv=[sys.executable,'-u',str(ROOT/'scripts/step5.py'),'--root',str(ROOT),'--config',str(config),

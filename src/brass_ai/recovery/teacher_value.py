@@ -217,7 +217,8 @@ class TeacherValue:
         # from raw metadata before asking for any encoded input.
         for game,i,_ in candidates:
             row=game['records'][i];target,labels,summary=targets_by_game[game['game_id']]
-            r=dict(row,_reward_return=labels[i]['utility'],_reward_remaining=labels[i]['remaining'],_reward_id=summary['reward_id'])
+            r=dict(row,_reward_return=labels[i].get('anchored_utility',labels[i]['utility']),_reward_remaining=labels[i]['remaining'],_reward_id=summary['reward_id'])
+            if 'vp_paid' in labels[i]:r['_reward_vp_paid']=labels[i]['vp_paid']
             encoded=game.encoded(row,encoder) if hasattr(game,'encoded') else encoder.encode(row['view'],row['choices'],row['style'],row['intent'])
             prepared.append((r,target,(game['game_id'],row['seat']),encoded))
         require(ordinary_policy_id and ordinary and all(d[0]['teacher'] is None and

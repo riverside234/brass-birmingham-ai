@@ -7,23 +7,27 @@ from .replay import terminal_targets
 
 VERSION = 'brass-combined-return/1.0.0'
 CAPPED_VERSION = 'brass-combined-return/2.0.0'
+ERA_VERSION = 'brass-combined-return/3.0.0'
+VP_TIMING = 'canal-and-final-delta/1.0.0'
 VP_CAP = 180
 MAX_INSOLVENCY_COST = .16
 COEFFICIENTS = dict(win=1.0, placement=.10, vp=.001)
 
 
 def specification(coefficients=None, insolvency=None):
-    coefficients=COEFFICIENTS if coefficients is None else coefficients
-    result=dict(version=CAPPED_VERSION if 'vp_cap' in coefficients else VERSION, **coefficients,
+    coefficients=dict(COEFFICIENTS if coefficients is None else coefficients)
+    timing=coefficients.pop('vp_timing',None)
+    require(timing in (None,VP_TIMING),'Unknown VP payout timing')
+    result=dict(version=ERA_VERSION if timing else CAPPED_VERSION if 'vp_cap' in coefficients else VERSION, **coefficients,
                 insolvency=dict(event_cost=.005,max_cost=.075) if insolvency is None else dict(insolvency))
     validate(result)
     return result
 
 
 def validate(spec):
-    capped=type(spec) is dict and spec.get('version')==CAPPED_VERSION
+    capped=type(spec) is dict and spec.get('version') in (CAPPED_VERSION,ERA_VERSION)
     require(type(spec) is dict and set(spec)=={'version','win','placement','vp','insolvency'}|({'vp_cap'} if capped else set())
-            and spec['version'] in (VERSION,CAPPED_VERSION),
+            and spec['version'] in (VERSION,CAPPED_VERSION,ERA_VERSION),
             'Unknown combined reward contract')
     if capped:
         require(type(spec['vp_cap']) in (int,float) and spec['vp_cap']==VP_CAP,'Invalid VP reward cap; expected 180')
@@ -31,7 +35,8 @@ def validate(spec):
                 for k in COEFFICIENTS) and spec['win']>0,'Invalid reward coefficients')
     costs=spec['insolvency']
     require(set(costs)=={'event_cost','max_cost'} and all(type(v) in (int,float) and math.isfinite(v) for v in costs.values())
-            and 0<costs['event_cost']<=costs['max_cost']<=MAX_INSOLVENCY_COST,'Invalid reward insolvency budget')
+            and 0<=costs['event_cost']<=costs['max_cost']<=MAX_INSOLVENCY_COST
+            and costs['max_cost']>0,'Invalid reward insolvency budget')
     return spec
 
 
@@ -52,11 +57,11 @@ def terminal_utility(result,spec):
 def reward_components(result,spec):
     """Cap only the additive training VP term; official ties/targets stay raw."""
     parts=terminal_components(result)
-    if spec['version']==CAPPED_VERSION:parts['vp']=[min(v,spec['vp_cap']) for v in parts['vp']]
+    if 'vp_cap' in spec:parts['vp']=[min(v,spec['vp_cap']) for v in parts['vp']]
     return parts
 
 
-def replay_returns(records,result,spec,initial_spent=None):
+def replay_returns(records,result,spec,initial_spent=None,initial_vp_paid=None):
     """Four-seat future costs and budgets at each predecision observation."""
     from brass_ai.recovery.insolvency import events
     charges={};spent=np.asarray(initial_spent or [0.]*4,dtype=float).copy();cap=spec['insolvency']['max_cost']
@@ -66,13 +71,19 @@ def replay_returns(records,result,spec,initial_spent=None):
         s=event['seat'];cost=min(spec['insolvency']['event_cost'],max(0.,cap-spent[s]))
         spent[s]+=cost;charges.setdefault(event['before'],np.zeros(4))[s]+=cost
     total=spent.copy();past=np.asarray(initial_spent or [0.]*4,dtype=float).copy();terminal=terminal_utility(result,spec)
+    from .reward_timing import replay_payments
+    paid,payments=replay_payments(records,result,spec,initial_vp_paid=initial_vp_paid)
     output=[]
     for i in range(len(records)):
         past+=charges.get(i,0.)
+        anchored=terminal-(total-past)
         output.append(dict(remaining=(cap-past).clip(0).tolist(),
-                           utility=(terminal-(total-past)).tolist()))
-    return output,dict(components=reward_components(result,spec),cost=total.tolist(),
-                       utility=(terminal-total).tolist(),reward=spec,reward_id=digest(spec))
+                           utility=(anchored-paid[i] if payments else anchored).tolist(),
+                           **(dict(anchored_utility=anchored.tolist(),vp_paid=paid[i].tolist()) if payments else {})))
+    summary=dict(components=reward_components(result,spec),cost=total.tolist(),
+                 utility=(terminal-total).tolist(),reward=spec,reward_id=digest(spec))
+    if payments:summary['vp_payments']=payments
+    return output,summary
 
 
 class CostLedger:

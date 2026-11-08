@@ -17,7 +17,7 @@ on:
         description: Stopped self-play run, relative to source_root
         required: true
         type: string
-        default: artifacts/step5/selfplay-best-v1
+        default: artifacts/step5/joint7-v11-2-g1290-trained-restart
       python_executable:
         description: Python 3.11+ executable on the runner, with venv support
         required: true
@@ -86,7 +86,7 @@ jobs:
             echo 'Select the same branch/tag revision as the saved source checkout. This workflow never updates training code.' >&2
             exit 1
           fi
-          changes="$(git -C "$SOURCE_ROOT" status --porcelain --untracked-files=normal -- src scripts configs training 'requirements*.txt')"
+          changes="$(git -C "$SOURCE_ROOT" status --porcelain --untracked-files=normal -- src scripts configs training lab-native 'requirements*.txt')"
           if [[ -n "$changes" ]]; then
             echo 'Commit and push the matching code/config/runtime changes before exporting; the destination obtains these from Git.' >&2
             printf '%s\n' "$changes" >&2
@@ -145,7 +145,13 @@ jobs:
               "If its absolute path differs, use restore --relocate --root <destination>; see "
               "docs/STEP5_MACHINE_TRANSFER.md for old-archive source-version upgrade instructions. "
               "The assets contain the rules DLLs and continuation state; no source-machine access or separate "
-              "runtime ZIP is required after upload. Restore, verify, then run a fresh destination preflight "
+              "runtime ZIP is required after upload. Current native runs include only the fixed 2048-position IL probe, "
+              "not original IL data/preparation caches or replay buffers. Destination continuation rebuilds fresh buffers "
+              "and pauses auxiliary stages until eight fresh return ages are available. "
+              "The reviewed destination config uses placement=.05 and zero insolvency charge, preserving win/VP. "
+              "VP pays after canal scoring, then at game end by capped cumulative difference (reward v3). "
+              "The source run remains unchanged. Restore, verify, run the restore JSON's prepare_reward command "
+              "to reuse/build the separate teacher variant, then run a fresh destination preflight "
               "before continuing training. Install the documented Python/Mono/CUDA environment separately.\n"
           )
           (folder / 'release-notes.md').write_text(notes, encoding='utf-8')

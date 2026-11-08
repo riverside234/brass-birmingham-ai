@@ -200,14 +200,15 @@ class Probe:
             scope='Current raw T1 policy on existing fixed cached positions; no IL comparison, dataset reload, seat fingerprint input or LR gate'),values
 
 
-def source_binding(root,origin):
+def source_binding(root,origin,*,verify_shards=True):
     path=project_path(root,origin['manifest'])
     require(sha(path)==origin['manifest_sha256'],'IL probe dataset manifest changed')
     manifest=read(path)
     sources={entry['path']:entry['sha256'] for entry in manifest['entries'] if entry['split']=='validation'}
     require(sources,'No IL validation source for the fixed probe')
-    for path,expected in sources.items():
-        require(sha(project_path(root,path))==expected,'IL probe validation data changed: '+path)
+    if verify_shards:
+        for path,expected in sources.items():
+            require(sha(project_path(root,path))==expected,'IL probe validation data changed: '+path)
     return dict(manifest=origin['manifest'],manifest_sha256=origin['manifest_sha256'],sources=sources,
                 il_model_id=origin['model_id'],il_checkpoint_sha256=origin['sha256'],compatibility=compatibility())
 
@@ -255,8 +256,14 @@ def build(root,directory,origin,model,config,update,workers):
 
 def load(root,run,origin,model,config,update,workers,receipt=None):
     directory=run/'il-kl';path=directory/'manifest.json'
-    source=source_binding(root,origin)
     if path.exists():
+        # A committed manifest + exact array/semantic hashes are the complete
+        # fixed-probe input. Original IL shards are needed to BUILD a probe,
+        # not to read its independently bound immutable 2048 positions.
+        if receipt is not None:
+            require(receipt==dict(path=path.relative_to(root).as_posix(),sha256=sha(path),
+                                 probe_hash=receipt['probe_hash']), 'Committed fixed IL probe manifest changed')
+        source=source_binding(root,origin,verify_shards=receipt is None)
         metadata=read(path)
         # Retiring a health-only sales field does not change fixed probe
         # selection, tensors or reference probabilities. Keep its original

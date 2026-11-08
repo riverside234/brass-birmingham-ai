@@ -26,6 +26,7 @@ import zipfile
 from bisect import bisect_right
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'src'))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 from brass_ai.learning.paths import (RELOCATION_FILE, confined, make_relocation, read_relocation,
     reference_suffix, resolve_project_path, root_key, source_roots, validate_roots)
 
@@ -33,9 +34,10 @@ FORMAT = 'step5-private-transfer/1.1.0'
 OLD_FORMAT = 'step5-private-transfer/1.0.0'
 PARTS_FORMAT = 'step5-transfer-parts/1.0.0'
 SOURCE_RECIPE = 3  # 1: Python; 2: hosts/build inputs; 3: bank/legacy path resolvers.
+CURRENT_SOURCE_RECIPE = 4  # Shared complete training inventory, including Rust.
 RELOCATION_VERSION = 'step5-project-relocation/1.1.0'
-SKIP = {'__pycache__', '.git', '.active-run.json', '.run-locks'}
-CODE_TREES = ('src', 'scripts', 'configs', 'training/opponents', 'training/runtime')
+SKIP = {'__pycache__', '.git', '.active-run.json', '.run-locks', 'target'}
+CODE_TREES = ('src', 'scripts', 'configs', 'training/opponents', 'training/runtime', 'lab-native')
 CHUNK = 1024 * 1024
 ZSTD_MAGIC = b'\x28\xb5\x2f\xfd'
 
@@ -92,8 +94,13 @@ def below(root, name):
 
 def source_identity(root, *, recipe=None):
     """The current implementation_id recipe, without importing torch/runtimes."""
-    recipe = SOURCE_RECIPE if recipe is None else recipe
-    require(recipe in (1, 2, 3), 'Unsupported implementation fingerprint recipe')
+    if recipe is None:
+        recipe = (CURRENT_SOURCE_RECIPE if (Path(root)/'src/brass_ai/learning/source_identity.py').is_file()
+                  else SOURCE_RECIPE)
+    require(recipe in (1, 2, 3, 4), 'Unsupported implementation fingerprint recipe')
+    if recipe == 4:
+        from brass_ai.learning.source_identity import implementation_id
+        return implementation_id(root)
     root = Path(root)
     base = root / 'src/brass_ai'
     paths = [p for group in ('step5', 'recovery', 'search', 'learning') for p in (base / group).glob('*.py')]
@@ -160,7 +167,16 @@ def inventory(root, run, *, mode='compact'):
     require(run.is_relative_to(root / 'artifacts'), 'Expected an owned artifacts run')
     state = read(run / 'state.json')
     require(state.get('format') == 'step5-recovery-league/2.2.0', 'Unsupported self-play state')
-    require(source_identity(root) == state['signature']['implementation'],
+    native = state.get('native_backend') is not None
+    require(not native or mode == 'compact', 'Use compact mode for native transfer: replay buffers and original IL caches must be omitted')
+    recipe = CURRENT_SOURCE_RECIPE if native else SOURCE_RECIPE
+    actual_source = source_identity(root, recipe=recipe)
+    qualified_source = actual_source
+    if native and state['signature']['implementation'] != actual_source:
+        review = read(root/'configs/learning/b07-replay-location-review.json')
+        if review['contract'] == 'brass-b07-replay-location-review/1.0.0' and review['execution_implementation'] == actual_source:
+            qualified_source = review['qualified_implementation']
+    require(state['signature']['implementation'] in (actual_source, qualified_source),
             'Source differs from saved run. Complete the supported reviewed source continuation on the old machine '
             'before export, or use matching source. Transfer does not authorize a source upgrade.')
     pending = run / f"iteration-{state['iteration']:04d}"
@@ -172,6 +188,13 @@ def inventory(root, run, *, mode='compact'):
     hosts = {below(root, state['signature']['config']['host'])}
     def add(path, expected=None):
         path = below(root, path)
+        if native and path.is_relative_to(root/'artifacts'):
+            require('.prepared' not in path.relative_to(root).parts and not path.name.endswith(('.jsonl.gz','.jsonl')),
+                'Replay/preparation data must not enter this transfer: '+str(path))
+        if native and path.is_relative_to(run):
+            parts = path.relative_to(run).parts
+            require(parts[0] not in ('.ppg-eight-cache', '.ppg-value-cache', 'teacher-labels', 'search-values')
+                    and parts[:2] != ('il-kl', '.prepared'), 'Replay/preparation cache must not enter this transfer: '+str(path))
         require(path.is_file(), 'Missing dependency: ' + str(path))
         name = path.relative_to(root).as_posix()
         relative(name)
@@ -233,6 +256,7 @@ def inventory(root, run, *, mode='compact'):
                 if (folder / name).is_file():
                     add(folder / name)
     live = state.get('resume', []) + state.get('population', []) + [state['history'][-1], state['evaluation_anchor']]
+    live += [e for e in state.get('quality_pool', {}).get('members', []) if 'path' in e]
     # update_population also considers historical checkpoints still on disk.
     # Keep any such candidate not already represented in the live weight pool;
     # omitting it would silently narrow the next iteration's opponent selection.
@@ -285,6 +309,13 @@ def inventory(root, run, *, mode='compact'):
         path = below(root, name)
         add(path, expected)
         manifests.add(path.relative_to(root).as_posix())
+        if native:
+            # Explicit pins cannot smuggle original IL shards or feature
+            # sidecars into an otherwise fixed-probe-only transfer.
+            for entry in read(path).get('entries',[]):
+                source=below(root,entry['path']).relative_to(root).as_posix()
+                require(not any(n==source or n.startswith(source+'.features') for n in files),
+                    'Original IL replay/cache is pinned; remove the pin before fixed-probe-only transfer')
         if replay:
             data = read(path)
             require(data['format'] == 'bc-dataset/1.0.0', 'Unsupported rehearsal dataset')
@@ -321,13 +352,20 @@ def inventory(root, run, *, mode='compact'):
         imitation(origin)
     cfg = state['signature']['config']
     rehearsal = bool(cfg.get('rehearsal_manifest') and cfg['rehearsal_weight'] and state['games_done'] < cfg['rehearsal_until'])
+    require(not native or not rehearsal, 'Fixed-probe-only transfer requires original IL rehearsal to be disabled through the training config')
     for name in {cfg.get('rehearsal_manifest'), cfg.get('imitation', {}).get('manifest')} - {None}:
         dataset(name, replay=rehearsal and name == cfg.get('rehearsal_manifest'))
     # In-run imitation also binds its source manifest after rehearsal expires.
     if state.get('imitation', {}).get('manifest'):
         dataset(state['imitation']['manifest'], state['imitation']['manifest_sha256'])
+    rebuild = None
+    if native:
+        from step5_transfer_runtime import native_inventory
+        rebuild = native_inventory(root, run, state, add=add, read=read, require=require, runtime=runtime)
+        environment.update(runtime)
     return dict(root=root, run=run, runs=sorted(runs), state=state, files=files,
-                rehearsal_included=rehearsal, datasets=sorted(manifests), environment=environment, runtime=runtime)
+                rehearsal_included=rehearsal, datasets=sorted(manifests), environment=environment, runtime=runtime,
+                source_recipe=recipe, execution_implementation=actual_source, buffer_rebuild=rebuild)
 
 
 def summary(manifest):
@@ -426,22 +464,31 @@ def export(root, run, bundle, *, dry_run=False, mode='compact', dependencies='re
         state_bytes = (run / 'state.json').read_bytes()
         state_hash = hashlib.sha256(state_bytes).hexdigest()
         cfg_name = f'artifacts/step5-transfer/resume-{state_hash[:16]}.json'
-        cfg = encode(data['state']['signature']['config'])
+        target_config=data['state']['signature']['config']
+        if data['buffer_rebuild'] is not None:
+            from brass_ai.learning.post_transfer_reward import eligible,revise,REVISION
+            if eligible(target_config):
+                target_config=revise(target_config)
+                data['buffer_rebuild']['reward_revision']=REVISION
+        cfg = encode(target_config)
         files = dict(data['files'])
         require(cfg_name not in files, 'Transfer config collides with an existing dependency')
         files[cfg_name] = cfg
         commit, tracked = git_baseline(root) if dependencies in ('repo', 'external') else (None, set())
         records = [dict(path=name, sha256=sha(source) if isinstance(source, Path) else hashlib.sha256(source).hexdigest(),
                         bytes=source.stat().st_size if isinstance(source, Path) else len(source),
+                        executable=bool(isinstance(source, Path) and source.stat().st_mode & 0o111),
                         external=name in data['environment'] and (dependencies == 'external' or
                             (name in tracked and name not in data['runtime']))) for name, source in sorted(files.items())]
         manifest = dict(format=FORMAT, source_root=str(root), run=run.relative_to(root).as_posix(),
             runs=[p.relative_to(root).as_posix() for p in data['runs']], iteration=data['state']['iteration'],
-            games_done=data['state']['games_done'], implementation=data['state']['signature']['implementation'],
-            source_recipe=SOURCE_RECIPE, path_roots=source_roots(root), relocation_version=RELOCATION_VERSION,
+            games_done=data['state']['games_done'], implementation=data['execution_implementation'],
+            source_recipe=data['source_recipe'], path_roots=source_roots(root), relocation_version=RELOCATION_VERSION,
             state_sha256=state_hash, config=cfg_name, imitation_run=(below(root, data['state']['signature']['imitation_source']['bc_run']).relative_to(root).as_posix()
                 if data['state']['signature'].get('imitation_source') else None),
             rehearsal_included=data['rehearsal_included'], mode=mode, dependencies=dependencies, git_commit=commit, files=records)
+        if data['buffer_rebuild'] is not None:
+            manifest['buffer_rebuild'] = data['buffer_rebuild']
         manifest['id'] = digest(manifest)
         included = [r for r in records if not r['external']]
         bundled_runtime = [r for r in included if r['path'] in data['runtime']]
@@ -458,6 +505,7 @@ def export(root, run, bundle, *, dry_run=False, mode='compact', dependencies='re
             largest_files=sorted(included, key=lambda r: (-r['bytes'], r['path']))[:10],
             part_mb=part_mb, dry_run=dry_run, archive_format=archive_format,
             zstd_level=zstd_level if archive_format == 'zstd' else None, compression_threads=compression_threads)
+        if data['buffer_rebuild'] is not None: result['buffer_rebuild'] = data['buffer_rebuild']
         if dry_run:
             return result
         target = Path(bundle).absolute()
@@ -481,7 +529,7 @@ def export(root, run, bundle, *, dry_run=False, mode='compact', dependencies='re
                     if index == len(records) or index % max(1, len(records) // 5) == 0:
                         print(f'Transfer export: {index}/{len(records)} files', file=sys.stderr, flush=True)
             require((run / 'state.json').read_bytes() == state_bytes, 'Run changed during export')
-            require(source_identity(root) == manifest['implementation'], 'Training source changed during export')
+            require(source_identity(root, recipe=manifest['source_recipe']) == manifest['implementation'], 'Training source changed during export')
             inspect_bundle(temporary)
             compressed_bytes = temporary.stat().st_size
             require(not target.exists(), 'Bundle target appeared during export')
@@ -638,7 +686,7 @@ def inspect_bundle(bundle):
                 actual[name] = (size, hashlib.file_digest(stream, 'sha256').hexdigest())
     require(manifest is not None, 'Missing transfer manifest')
     require(manifest['format'] in (FORMAT, OLD_FORMAT) and manifest['id'] == digest({k: v for k, v in manifest.items() if k != 'id'}), 'Invalid transfer manifest')
-    require(manifest.get('source_recipe', 1) in (1, 2, 3), 'Unsupported implementation fingerprint recipe')
+    require(manifest.get('source_recipe', 1) in (1, 2, 3, 4), 'Unsupported implementation fingerprint recipe')
     roots = validate_roots(manifest.get('path_roots', [manifest['source_root']]))
     require(roots and root_key(roots[0]) == root_key(manifest['source_root']), 'Transfer source root binding differs')
     if manifest.get('imitation_run'):
@@ -663,6 +711,7 @@ def inspect_bundle(bundle):
         relative(record['path'])
         require(record['path'].casefold() != RELOCATION_FILE.casefold(), 'Archive cannot supply relocation metadata')
         require(type(record.get('external', False)) is bool and type(record['bytes']) is int and record['bytes'] >= 0, 'Invalid file metadata')
+        require(type(record.get('executable',False)) is bool, 'Invalid executable-file metadata')
         require(len(record['sha256']) == 64 and all(c in '0123456789abcdef' for c in record['sha256']), 'Invalid file digest')
         if record.get('external', False):
             require(manifest['format'] == FORMAT, 'Old transfer cannot omit external files')
@@ -674,6 +723,19 @@ def inspect_bundle(bundle):
         relative(name)
     require(manifest['run'] in manifest['runs'] and all(n.startswith('artifacts/') for n in manifest['runs']), 'Invalid run roots')
     by_name = {r['path']: r for r in files}
+    if manifest.get('buffer_rebuild') is not None:
+        expected=dict(contract='fresh-buffers/1.0.0',origin_generation=manifest['iteration'],
+            auxiliary_buffer_iterations=8,il_probe_positions=2048)
+        if 'reward_revision' in manifest['buffer_rebuild']:
+            from brass_ai.learning.post_transfer_reward import REVISION
+            expected['reward_revision']=REVISION
+        require(manifest.get('source_recipe')==4 and manifest['buffer_rebuild']==expected,
+            'Unknown buffer-rebuild transfer policy')
+        prefix=manifest['run']+'/'
+        forbidden=('.ppg-eight-cache/','.ppg-value-cache/','teacher-labels/','search-values/','il-kl/.prepared/')
+        require(not any(n.startswith(prefix+p) for n in names for p in forbidden), 'Replay cache in fresh-buffer archive')
+        require(prefix+'machine-transfer-resume.json' not in by_name, 'Old transfer instruction cannot be replayed into a new transfer')
+        require(all(prefix+'il-kl/'+name in by_name for name in ('manifest.json','probe.npz')), 'Missing fixed IL probe in fresh-buffer archive')
     require(manifest['config'] in by_name, 'Missing saved resume config')
     require(not any(n.casefold() in folded for n in manifest['runs']), 'Run root collides with a transfer file')
     require(by_name[manifest['run'] + '/state.json']['sha256'] == manifest['state_sha256'], 'State binding differs')
@@ -684,14 +746,21 @@ def commands(root, manifest, *, iterations=20, device='cuda'):
     root = Path(root)
     base = ['python', str(root / 'scripts/step5.py'), '--root', str(root), '--config', str(root / manifest['config']), '--device', device]
     resume = base + ['train', '--run', str(root / manifest['run']), '--iterations', str(iterations)]
+    if manifest.get('buffer_rebuild') is not None:
+        resume += ['--expected-generation', str(manifest['iteration']), '--resume-reviewed-source']
     if manifest['imitation_run']:
         resume += ['--imitation-run', str(below(root, manifest['imitation_run']))]
-    return dict(preflight=shlex.join(base + ['preflight']), resume=shlex.join(resume))
+    result=dict(preflight=shlex.join(base + ['preflight']), resume=shlex.join(resume))
+    if manifest.get('buffer_rebuild',{}).get('reward_revision'):
+        result['prepare_reward']=shlex.join(['python',str(root/'scripts/prepare-rust-post-transfer-reward.py'),
+            '--run',str(root/manifest['run']),'--expected-generation',str(manifest['iteration'])])
+    return result
 
 
 def restore(root, bundle, *, verify_only=False, relocate=False):
     root = Path(root).resolve()
     manifest = inspect_bundle(bundle)  # verify all archive bytes BEFORE filesystem writes
+    original_state_present = (root/manifest['run']/'state.json').is_file()
     existing = read_relocation(root)
     same_root = root_key(str(root)) == root_key(manifest['source_root'])
     metadata = make_relocation(root, manifest.get('path_roots', [manifest['source_root']]), manifest['id'])
@@ -754,6 +823,15 @@ def restore(root, bundle, *, verify_only=False, relocate=False):
                             if temporary.exists():
                                 temporary.unlink()
             require(not needed, 'Missing archive payloads during restore')
+        # Native Rust workers launch directly on Linux. Archive payload bytes
+        # alone are insufficient if restoration loses their executable bit.
+        for record in manifest['files']:
+            if record.get('executable',False):
+                path=below(root,record['path'])
+                path.chmod(path.stat().st_mode | stat.S_IXUSR)
+    if verify_only and os.name!='nt':
+        require(all(not r.get('executable',False) or below(root,r['path']).stat().st_mode & stat.S_IXUSR
+            for r in manifest['files']), 'Restored native executable permission is missing')
     # Archives written before the throughput hosts used the previous recipe.
     # Verify their original identity; never relabel it as the current source.
     require(source_identity(root, recipe=manifest.get('source_recipe', 1)) == manifest['implementation'],
@@ -768,6 +846,16 @@ def restore(root, bundle, *, verify_only=False, relocate=False):
             publish(temporary, path)
         finally:
             temporary.unlink(missing_ok=True)
+    if manifest.get('buffer_rebuild') is not None and not verify_only:
+        from brass_ai.recovery.transfer_resume import install_instruction
+        # In-place archive verification on the source must never reset its
+        # buffers. A new destination receives a checkpoint-bound instruction.
+        if not same_root or not original_state_present:
+            install_instruction(root, manifest)
+    if manifest.get('buffer_rebuild') is not None and verify_only and not same_root:
+        from brass_ai.recovery.transfer_resume import instruction
+        marker = instruction(root, root/manifest['run'])
+        require(marker is not None and marker['archive_id'] == manifest['id'], 'Missing/different fresh-buffer transfer instruction')
     return dict(summary(manifest), verified=True, destination_root=str(root), relocated=needs_mapping,
                 imitation_run=(below(root, manifest['imitation_run']).relative_to(root).as_posix()
                                if manifest['imitation_run'] else None),

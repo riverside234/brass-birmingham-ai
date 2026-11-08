@@ -59,9 +59,10 @@ def _validate_job(job,producer):
 class Worker:
     """Length-bounded stdout pump permits cancellation even in native traversal."""
     def __init__(self, executable, request, client, cancel):
+        from .lab_paths import runtime_path
         self.client, self.cancel = client, cancel
         self.job = request.get('job', {})
-        self.process = subprocess.Popen([str(executable)], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+        self.process = subprocess.Popen([str(runtime_path(executable))], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
             stderr=subprocess.PIPE, bufsize=0, creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0))
         self.events = queue.Queue(2); self.stop = threading.Event(); self.stderr = bytearray()
         def read(n):

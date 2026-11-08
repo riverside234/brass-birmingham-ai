@@ -38,12 +38,17 @@ def original_runtime(reference):
     return ordinary,teacher
 
 
-def verify_teacher(value,original):
+def verify_teacher(value,original,*,reward_support=False):
     from rust_lab_b07_completion import reuse_build
     value=reuse_build(value,'teacher')
+    core_ok=value['core_source']==original['core_source']
+    if reward_support:
+        from brass_ai.rust_backend.lab_reward_runtime import BASE_CORE,ZERO_CORE,CONTRACT,fingerprint
+        core_ok=(original['core_source']==BASE_CORE and value['core_source']==ZERO_CORE and
+            value['reward_support']==dict(contract=CONTRACT,source=fingerprint(),base_core_source=BASE_CORE,core_source=ZERO_CORE))
     require(value['contract']=='brass-lab-b07-teacher-build/1.0.0' and
             value['producer']==source_fingerprint() and value['implementation']==implementation_id() and
-            value['core_source']==original['core_source'] and value['bootstrap']==original['bootstrap'] and
+            core_ok and value['bootstrap']==original['bootstrap'] and
             value['wire_regressions_passed'] is True,'Teacher repair build/source differs')
     for item in [value['binary'],value['tests'],value['build_log'],value['bootstrap']['binary'],
                  *value['bootstrap']['dependencies']]:
@@ -69,7 +74,7 @@ def build_teacher(out,original,**kwargs):return build_runtime(out,original,teach
 def build_ordinary(out,original,**kwargs):return build_runtime(out,original,teacher=False,**kwargs)
 
 
-def build_runtime(out,original,*,teacher,offline=False,environment=None):
+def build_runtime(out,original,*,teacher,offline=False,environment=None,reward_support=False):
     """Rebuild each adapter against its original sealed core; reuse C# pins."""
     base=module('qualify-rust-lab.py');b02=module('qualify-rust-lab-b02.py')
     out=Path(out);out.mkdir(parents=True,exist_ok=False)
@@ -83,6 +88,11 @@ def build_runtime(out,original,*,teacher,offline=False,environment=None):
     overlay=apply(out/'checkout/native') if teacher else None
     if teacher:require(overlay['core_source']==original['core_source'],'Teacher repair must preserve shared core source')
     else:require(native_fingerprint(out/'checkout/native')==SOURCE,'Ordinary repair must preserve shared core source')
+    support=None
+    if reward_support:
+        require(teacher,'Zero reward support is teacher-only')
+        from brass_ai.rust_backend.lab_reward_runtime import apply as patch_reward
+        support=patch_reward(out/'checkout/native');overlay['core_source']=support['core_source']
     shutil.copytree(ROOT/'lab-native',out/'checkout/lab-native',ignore=shutil.ignore_patterns('target'))
     b02.check_shared_dependencies(out/'checkout/native/Cargo.lock',out/'checkout/lab-native/Cargo.lock')
     version=subprocess.check_output(['rustc','+1.99.1','-vV'],text=True,env=env,timeout=15)
@@ -91,6 +101,10 @@ def build_runtime(out,original,*,teacher,offline=False,environment=None):
             '--target',target,'--target-dir',out/'target','--locked','-j','2']
     if teacher:common+=['--features','teacher']
     if offline:common+=['--offline']
+    if reward_support:
+        base.command(['cargo','+1.99.1','test','--manifest-path',out/'checkout/native/Cargo.toml',
+            '-p','brass-ai-core','--lib','post_transfer_','--release','--target',target,'--target-dir',out/'target',
+            '--locked','-j','2',*(['--offline'] if offline else [])],cwd=ROOT,env=env,log=out/'reward-tests.log',timeout=900)
     # Cargo runs the wire regression before any live model/game qualification.
     for op in ('test','build'):
         base.command(['cargo','+1.99.1',op,*common,*(['--bin','brass-lab-teacher' if teacher else 'brass-lab-collector'] if op=='build' else [])],
@@ -107,8 +121,9 @@ def build_runtime(out,original,*,teacher,offline=False,environment=None):
         binary=pin(out/'target'/target/'release'/('brass-lab-teacher'+('.exe' if os.name=='nt' else ''))),
         bootstrap=copy.deepcopy(original['bootstrap']),tests=pin(out/'test.log'),build_log=pin(out/'build.log'),
         wire_regressions_passed=True,rustc=version,ordinary_runtime_replaced=False)
+    if support is not None:result.update(reward_support=support,reward_tests=pin(out/'reward-tests.log'))
     write_json(out/'build.json',result)
-    return verify_teacher(result,original)
+    return verify_teacher(result,original,reward_support=reward_support)
 
 
 def prior_ordinary(reference,snapshot):

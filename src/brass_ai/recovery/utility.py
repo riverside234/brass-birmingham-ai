@@ -49,7 +49,8 @@ def vp_cap_upgrade(previous,current):
 
 
 def reviewed_reward_upgrade(previous,current):
-    return cap_upgrade(previous,current) or event_cost_upgrade(previous,current) or vp_cap_upgrade(previous,current)
+    from brass_ai.learning.post_transfer_reward import reward_upgrade
+    return cap_upgrade(previous,current) or event_cost_upgrade(previous,current) or vp_cap_upgrade(previous,current) or reward_upgrade(previous,current)
 
 
 def migrate(model,optimizer,spec):
@@ -58,12 +59,14 @@ def migrate(model,optimizer,spec):
         if model.config.utility==spec:return None
         event_upgrade=event_cost_upgrade(model.config.utility,spec)
         vp_upgrade=vp_cap_upgrade(model.config.utility,spec)
+        from brass_ai.learning.post_transfer_reward import reward_upgrade,REVISION
+        transferred_reward=reward_upgrade(model.config.utility,spec)
         require(getattr(model,'_reviewed_cap_upgrade',False) and reviewed_reward_upgrade(model.config.utility,spec),
                 'Checkpoint reward differs; explicit reward migration required')
         before=model.config.to_dict()
         model.config=replace(model.config,utility=copy.deepcopy(spec))
         model.utility_calibration=None;model._reviewed_cap_upgrade=False
-        return dict(version='vp-capped-return/1.0.0' if vp_upgrade else 'insolvency-event-cost/1.0.0' if event_upgrade else 'insolvency-cap-extension/1.0.0',from_config=before,to_config=model.config.to_dict(),
+        return dict(version=REVISION if transferred_reward else 'vp-capped-return/1.0.0' if vp_upgrade else 'insolvency-event-cost/1.0.0' if event_upgrade else 'insolvency-cap-extension/1.0.0',from_config=before,to_config=model.config.to_dict(),
                     preserved='All weights, Adam moments/steps and RNG; calibration invalidated, subsequent fitting follows the configured value-training recipe')
     before=model.config.to_dict();device=next(model.parameters()).device
     # Do not perturb the restored rollout/PPO RNG or compatible tensors/moments.

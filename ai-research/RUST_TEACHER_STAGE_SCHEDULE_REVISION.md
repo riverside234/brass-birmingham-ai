@@ -1,5 +1,11 @@
 # Unconditional auxiliary-head stages and sparse validation
 
+> **After server transfer:** apply the user's latest exact reward: win 1.0, **placement 0.05**, VP .001/cap180 paid at canal end and at final end by difference, insolvency charge 0. Source training keeps its old reward. Prepare/reuse the separate zero-cost Rust teacher adapter; preserve Adam/RNG/progress/beta, invalidate old reward targets/readiness and rebuild buffers before auxiliary progression. [Commands and details](../docs/STEP5_MACHINE_TRANSFER.md).
+
+
+> **g1284 revision (8 November 2026):** Stage C now reserves eight whole buffered games for interval loss retention in addition to its hard 0.003 KL cap. Machine transfer omits replay buffers and original IL data/caches, retains the fixed 2048-position probe, and pauses auxiliary training/stage counts until eight fresh return ages are rebuilt. See [the revision](RUST_STAGE_C_TRANSFER_REVISION.md) and [transfer commands](../docs/STEP5_MACHINE_TRANSFER.md). This supersedes older Stage-C no-loss-stopping and transfer-buffer statements below.
+
+
 The later [value-phase performance follow-up](RUST_VALUE_PHASE_PERFORMANCE.md)
 preserves this schedule and its learning behavior. It reduces diagnostic/cache/
 copy work and adds phase attribution; a single normal lab iteration can record
@@ -14,7 +20,7 @@ unchanged.
 
 Pulled inside `results/` to commit
 `ebe6084eb2e29486b8e31f9c35fdc6f78529bb49`. The
-[latest export](../results/joint7-v11-2-g1290-trained-restart-g1280-20261108T173525364834Z/state.json)
+[reviewed g1280 export](../results/joint7-v11-2-g1290-trained-restart-g1280-20261108T173525364834Z/state.json)
 committed **g1280**, checkpoint SHA-256
 `0eeb499da77bebe32508731add936eb9f286ded8643547a922fc52625b5e7fcd`, model
 `c37d4c61160739d7414ea284ea35c17ed8565c0e3c62c4acf5e37d0126148068`.
@@ -50,8 +56,8 @@ actual new end-to-end timing remains to be measured during normal lab training.
 | B | 20 committed on-mode iterations | Continue head-only training | 0.05, 0.10, …, 1.00 for its 20 collections | 0 | Directly to C after iteration 20 |
 | C | Warm up over 10 iterations, then stay at full scale | Head plus shared trunk through existing PPG optimizer | 1 | 0.1, 0.2, …, 1.0 | Unconditional warm-up; no validation qualification or stage rollback |
 
-There are **no auxiliary validation gates**, no eight-consecutive-validation
-requirement, no ordinary-health qualification for these stage transitions and
+Stage A/B have **no auxiliary validation gates**. There is no eight-consecutive-validation
+requirement or ordinary-health qualification for stage transitions, and
 **no 256-game head-to-head stage**. Stage A/B fit return targets from the eight
 ages of independently admitted, reward-bound value shards. Old policy-label
 views are no longer copied into the auxiliary checkpoint; the original teacher
@@ -61,8 +67,9 @@ if it has not been selected, use final-return lambda 1 without a validation gate
 Stage C retains the **hard joint KL cap 0.003**, measured against the original
 pre-PPG policy using the existing ordinary probe. As explicitly confirmed by the
 user, an over-cap 16-step trunk interval restores its weights and both Adam
-states, retaining any preceding accepted interval. There is no validation-loss
-acceptance test or validation-based rollback. A spent KL budget or missing PPG
+states, retaining any preceding accepted interval. The g1284 revision also reserves
+eight whole buffered games and rejects an interval whose held-out MSE increases.
+This restores only that interval, without rolling back the stage. A spent KL budget or missing PPG
 probe defers the trunk update; it does not hold the stage warm-up counter.
 Exceptions/cancellation retain transactional restoration for recovery.
 
@@ -72,7 +79,7 @@ larger values, trip history, both Adams, replay, cadence and RNG. This cloning
 beta is separate from the fixed policy-teacher beta 0.16110139609854138.
 
 The old Stage-A gate history does not count as ten iterations of the new
-schedule. From the current g1280 state, initialize the revised A counter to zero
+schedule. At the g1280 adoption boundary, the revised A counter initialized to zero
 while preserving all existing head weights/Adam and value shards:
 
 - **g1280→g1290:** ten A iterations, then enter B.

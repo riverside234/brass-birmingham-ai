@@ -56,7 +56,12 @@ def teacher_build(state,*,prepared=True):
     if not prepared:return original
     from .lab_teacher_runtime import resolve
     from brass_ai.learning.contracts import SOURCE_ROOT
-    return resolve(SOURCE_ROOT,original)
+    selected=resolve(SOURCE_ROOT,original)
+    from brass_ai.learning.post_transfer_reward import is_revised
+    if is_revised(state['signature']['config']):
+        from .lab_reward_runtime import resolve as resolve_reward
+        selected=resolve_reward(SOURCE_ROOT,selected)
+    return selected
 
 
 class TableCache:
@@ -144,7 +149,8 @@ class ShadowCollector:
                 if os.name!='nt':bootstrap.insert(0,self.mono)
                 # Use the same typical/wide qualified roots as the B07 canary.
                 ordinary=checked_pin(state['native_backend']['build'])
-                fixtures=read(Path(ordinary['b01']['path']).parent/'inputs/fixtures.json')
+                from .lab_paths import runtime_path
+                fixtures=read(runtime_path(ordinary['b01']['path']).parent/'inputs/fixtures.json')
                 roots=[r for r in fixtures['roots'] if r['view']['context']['phase']=='action' and len(r['expected']['choices'])>1]
                 require(roots,'Missing qualified teacher calibration roots')
                 origins=[dict(state=r['expected']['state'],rail_keys=list(range(64))) for r in

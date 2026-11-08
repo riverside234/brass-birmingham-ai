@@ -16,8 +16,9 @@ CONTRACT='brass-ordinary-backend/1.0.0'
 
 
 def checked_pin(item):
+    from .lab_paths import runtime_path
     require(pin(item['path'])==item,'Backend runtime/evidence changed: '+item['path'])
-    return read(item['path'])
+    return read(runtime_path(item['path']))
 
 
 def check_build(item):
@@ -72,7 +73,7 @@ def validate_state(state,raw=None,*,check_runtime=True):
     if check_runtime and value['mode']=='rust':check_build(value['build'])
     receipt=checked_pin(value['qualification'])
     require(receipt['passed'] and accepts(receipt['implementation']),'Backend qualification changed')
-    require(sha(value['rollback']['path'])==value['rollback']['sha256'],'Backend rollback manifest changed')
+    require(pin(value['rollback']['path'])==value['rollback'],'Backend rollback manifest changed')
     return value
 
 

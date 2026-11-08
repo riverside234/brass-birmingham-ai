@@ -99,10 +99,11 @@ def trunk_scale(state):
     return min(1.,round(state['scale']+.1,2)) if state['stage']=='C' else 0.
 
 
-def advance(state,generation,diagnostic):
+def advance(state,generation,diagnostic,*,pause=False):
     require(type(generation) is int and generation>state['generation'],'Stage transition already committed/out of order')
     state['generation']=generation
     state['history']=(state['history']+[dict(generation=generation,diagnostic=copy.deepcopy(diagnostic))])[-40:]
+    if pause:return copy.deepcopy(state)
     if state['stage']=='A':
         state['stage_a_iterations']+=1
         if state['stage_a_iterations']==10:state['stage']='B'

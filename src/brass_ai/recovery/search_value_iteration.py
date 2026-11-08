@@ -24,7 +24,7 @@ def stamp(payload):
 
 
 class SearchValueIteration:
-    def __init__(self, run, config, state, model, raw=None):
+    def __init__(self, run, config, state, model, raw=None, *, rebuild=None):
         self.mode = config['teacher_phase']['mode']
         self.config, self.model = config, model
         saved = (raw or {}).get('training', {}).get('search_value')
@@ -33,10 +33,16 @@ class SearchValueIteration:
                 (saved is not None and summary == stamp(saved) and saved['generation'] == state['iteration']),
                 'Search value checkpoint/state differs')
         if saved is not None:
-            require(saved['contract'] == CONTRACT and saved['reward_id'] == digest(model.config.utility),
+            old_reward=(rebuild or {}).get('reward_before')
+            reward_ok=saved['reward_id']==digest(model.config.utility) or (old_reward is not None and
+                saved['reward_id']==digest(old_reward) and model.config.utility==rebuild['reward_after'])
+            require(saved['contract'] == CONTRACT and reward_ok,
                     'Search value reward/contract differs; reviewed retirement required')
             require((saved['companion'] is not None) == hasattr(model,'search_value_head'),
                     'Missing search head/companion optimizer')
+        if rebuild is not None:
+            from .transfer_resume import search_payload
+            saved = search_payload(saved,rebuild)
         options = config['teacher_phase']['search_value']
         if saved is None:
             require(options['stage'] in ('off','A') and options['blend']['w'] == options['trunk']['scale'] == 0,

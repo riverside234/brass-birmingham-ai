@@ -137,6 +137,8 @@ def inventory(root, run, state, raw):
             for child in value: refs(child, required=required)
     for key in ('origin', 'imitation', 'il_kl_limit'):
         refs(state.get(key))
+    if state.get('machine_transfer') is not None:
+        refs({key:state['machine_transfer'][key] for key in ('instruction','original_state')})
     refs(state.get('quality_pool', {}).get('members', []))
     # Retired rating agents may have metadata but no retained checkpoint.
     # All live evidence and active policy references remain mandatory.
@@ -159,7 +161,12 @@ def inventory(root, run, state, raw):
     if probe:
         metadata = read(project_path(root, probe['path']))
         refs(metadata['cache'])
-        for path, expected in metadata['source']['sources'].items(): add(path, expected)
+        # The committed fixed probe is independently bound to its manifest,
+        # cache and source descriptor. Raw IL shards are build inputs, not
+        # continuation dependencies (including after a machine transfer).
+        from brass_ai.recovery.il_kl_probe import source_binding
+        require(metadata['source']==source_binding(root,state['signature']['imitation_source'],verify_shards=False),
+                'Committed IL probe source descriptor changed')
     # Do not copy il-kl/.prepared, unrelated scratch files or stale probe caches.
     source = state['signature'].get('imitation_source')
     if source:

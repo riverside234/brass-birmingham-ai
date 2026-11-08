@@ -529,6 +529,7 @@ def bounded_fields(config, default, name):
         allowed += [fields|{'every_iterations'} for fields in list(allowed)]
     require(type(config) is dict and set(config) in allowed,'Invalid '+name+' fields')
     for key,value in config.items():
+        if name=='insolvency' and key=='event_cost' and type(value) in (int,float) and value==0:continue
         if name=='retention' and key=='every_iterations':
             require(type(value) is int and 1<=value<=20,'Invalid retention.every_iterations');continue
         expected=default[key]

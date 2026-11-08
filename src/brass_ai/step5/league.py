@@ -13,44 +13,8 @@ def write_json(path, value):
 
 
 def implementation_sources():
-    # Source-bound runs cannot silently resume with changed learning/search code.
-    from brass_ai.learning.state_layout import LAYOUT_FILE
-    from brass_ai.learning.contracts import FEATURE_SCHEMA
-    base = Path(__file__).parent.parent
-    paths = [p for group in ('step5','recovery','search','learning','feature_engineering') for p in (base/group).glob('*.py')]
-    paths += [SOURCE_ROOT/'configs/learning'/FEATURE_SCHEMA]
-    paths += [SOURCE_ROOT/'configs/learning'/LAYOUT_FILE]
-    paths += [SOURCE_ROOT/'configs/learning/domino-descriptor-1.0.0.json',SOURCE_ROOT/'src/BrassLabBootstrap/Bootstrap.cs']
-    from brass_ai.learning.state_layout import MODEL_LAYOUT_FILE
-    from brass_ai.learning.board_topology import TOPOLOGY_FILE,BOARD_FILE
-    paths += [SOURCE_ROOT/'configs/learning'/name for name in (MODEL_LAYOUT_FILE,TOPOLOGY_FILE,BOARD_FILE)]
-    paths += [SOURCE_ROOT/'configs/learning/architecture-source-equivalence.json']
-    paths += [SOURCE_ROOT/'configs/learning/v11-selector-source-equivalence.json']
-    paths += [SOURCE_ROOT/'configs/learning/reward-source-equivalence.json']
-    paths += [SOURCE_ROOT/'configs/learning/derived-source-equivalence.json']
-    teacher_reuse=SOURCE_ROOT/'configs/learning/collector-performance-teacher-reuse.json'
-    if teacher_reuse.is_file():paths += [teacher_reuse]
-    paths += [base / 'learning/runner.py', base / 'learning/batching.py']
-    paths += [base/'searchlab/spiel.py',base/'beliefs.py',base/'runtime_contracts.py',base/'host.py',base/'bank.py',base/'legacy.py']
-    # Native replay/admission and diagnostic resume are learning dependencies.
-    paths += sorted((base/'rust_backend').glob('lab_*.py'))
-    paths += [p for p in (SOURCE_ROOT/'lab-native').rglob('*') if p.is_file() and
-              p.suffix in ('.rs','.toml','.lock') and 'target' not in p.parts]
-    paths += sorted((SOURCE_ROOT/'src/BrassTrainingHost').glob('*.cs'))
-    paths += [SOURCE_ROOT/'scripts/build-training-host.py',SOURCE_ROOT/'scripts/build-search-host.py']
-    paths += sorted((SOURCE_ROOT/'training/runtime/throughput').glob('*/runtime.json'))
-    paths += sorted((SOURCE_ROOT/'src/BrassLocalScoringHost').glob('*.cs'))
-    paths += [SOURCE_ROOT/'scripts/build-local-scoring-host.py']
-    paths += sorted((SOURCE_ROOT/'training/runtime/local-scoring').glob('*/runtime.json'))
-    paths += sorted((SOURCE_ROOT/'configs/contracts/masked-ismcts').glob('*.json'))
-    paths += [SOURCE_ROOT/'configs/references/masked-ismcts.lock.json']
-    # Current heuristic opponents share game policy/search sources. A C# or
-    # profile edit is a reviewed continuation, just like a Python search edit.
-    from brass_ai.search.legacy_runtime import source_paths
-    paths += source_paths(SOURCE_ROOT)
-    paths += sorted((SOURCE_ROOT/'configs/legacy-ai').glob('*.json'))
-    return {p.relative_to(SOURCE_ROOT).as_posix(): p.read_text(encoding='utf-8').replace('\r\n', '\n')
-            for p in sorted(paths)}
+    from brass_ai.learning.source_identity import implementation_sources as sources
+    return sources(SOURCE_ROOT)
 
 
 def implementation_id():

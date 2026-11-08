@@ -340,11 +340,14 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
     migration=migrate(model,optimizer,reward)
     policy_observations.install(model,config)
     phases=None
+    from .transfer_resume import prepare as prepare_transfer,ppg_payload,KEY as TRANSFER_KEY
+    transfer_record,reset_buffers=prepare_transfer(root,run,state,raw)
     from .local_scoring_adoption import prepare as prepare_local,cleanup as cleanup_local
     phase_raw,local_adoption,local_adopting=prepare_local(root,run,state,raw,config,reviewed=source_changed)
     from .domino_config import enabled as domino_enabled
     from .domino_adoption import prepare as prepare_domino
     phase_raw,domino_adoption=prepare_domino(root,run,state,raw,config,phase_raw)
+    phase_raw=ppg_payload(phase_raw,transfer_record,reset_buffers)
     diversity=None
     if domino_enabled(config):
         from .domino_auxiliary import Diversity
@@ -382,7 +385,7 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
     teacher_phase=None
     if 'teacher_phase' in config:
         from .teacher_phase import TeacherPhase
-        teacher_phase=TeacherPhase(root,run,config,state,model,raw)
+        teacher_phase=TeacherPhase(root,run,config,state,model,raw,rebuild=transfer_record if reset_buffers else None)
     if source_changed:
         from .resume import commit_transition
         if local_adoption is not None:
@@ -789,6 +792,7 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                         **({'teacher_phase':teacher_phase.payload(iteration+1)} if teacher_phase is not None else {}),
                         **({'native_backend':state['native_backend']} if 'native_backend' in state else {}),
                         **({'native_backend_execution':native_execution} if 'native_backend' in state else {}),
+                        **({TRANSFER_KEY:state[TRANSFER_KEY]} if TRANSFER_KEY in state else {}),
                         **({'search_value':search_value_payload} if search_value_payload is not None else {}),
                         **({'v4_share_gate':share} if share is not None else {}),
                         **({'actor_value_phases':phases.payload()} if phases is not None else {}),

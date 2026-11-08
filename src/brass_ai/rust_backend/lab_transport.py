@@ -26,6 +26,9 @@ MAX_EXPORT_FRAME = 2 * MAX_ARRAY_FRAME + MAX_FRAME
 
 class Pipe:
     def __init__(self, command, *, binary=True, timeout=15):
+        from pathlib import Path, PureWindowsPath
+        from .lab_paths import runtime_path
+        command = [runtime_path(x) if Path(x).is_absolute() or PureWindowsPath(str(x)).is_absolute() else x for x in command]
         self.binary, self.timeout, self.seq, self.closed = binary, timeout, 0, False
         self.lock = threading.RLock()
         self.metrics = Counter()

@@ -167,7 +167,7 @@ def references(root,run):
 
 def _references(root,run):
     """Small control files only. Historical reports do not pin every old replay."""
-    pins={};control=[];quarantined={}
+    pins={};control=[];quarantined={};opaque=set()
     # Repeated manifests often name the same paths. Resolve once in this read
     # pass; never cache across cleanup passes or bypass safe() before deletion.
     resolved_paths={}
@@ -192,6 +192,16 @@ def _references(root,run):
         if '.retention-trash' in p.parts: continue
         d=read(p)
         if d.get('format') in ('step5-recovery-league/2.1.0','step5-recovery-league/2.2.0'):
+            transfer=d.get('machine_transfer')
+            if transfer is not None:
+                # Retain exact reset evidence, without recursively treating the
+                # archived whole state as a pin for every historical replay/model.
+                for key in ('instruction','original_state'):
+                    item=transfer[key];path=resolve(item['path'])
+                    require(path.is_relative_to(p.parent) and path.is_file() and sha(path)==item['sha256'],
+                        'Machine-transfer retention evidence changed')
+                    if path.is_relative_to(run):pins[path]='machine-transfer evidence'
+                    opaque.add(path)
             selected={k:d.get(k) for k in ('resume','population','origin','evaluation_anchor','pins','champion','champion_mix')}
             selected['il_kl_probe']=d.get('il_kl_limit',{}).get('probe')
             anchor=d.get('policy_anchor') or {}
@@ -224,7 +234,7 @@ def _references(root,run):
         if formal and report.exists(): control.append((report,read(report),'formal evidence'))
     for p in inventory['pins.json']:
         if '.retention-trash' not in p.parts: control.append((p,read(p),'explicit pin'))
-    visited=set()
+    visited=set(opaque)
     for p,data,reason in control:
         visited.add(resolve(p))
         for value in dict.fromkeys(strings(data)):

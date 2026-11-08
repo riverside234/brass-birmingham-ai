@@ -306,5 +306,17 @@
     "lab_profile_command": "python scripts/continue-rust-teacher.py --expected-generation 1280 --iterations 1 --share-target 0.25",
     "actual_gpu_wall_speedup": "Pending lab",
     "native_rebuild_required": false
+  },
+  "stage_c_machine_transfer": {
+    "receipt": "distribution/rust-collector-performance/stage-c-machine-transfer.json",
+    "execution": {
+      "implementation": "9577ab0db846fe6783963ad11cb1f5ab46d67cbe0ce57e7454425c8fa96431a4",
+      "qualified_implementation": "9efcf34f853d75ab844366b6819da4b0921be38d3e2dfb806cf282ace76e7a30",
+      "replay_location_review": "50fc205a1d72bbe2e65b83de87ff5f4779eef07635c045969a053438e58610b2"
+    },
+    "generation": 1284,
+    "debug_checks_passed": 58,
+    "rust_numeric_checks_passed": 4,
+    "lab_restore_continuation": "Pending"
   }
 }

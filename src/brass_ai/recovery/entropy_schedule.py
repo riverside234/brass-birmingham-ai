@@ -72,8 +72,17 @@ def validate_update(update):
     return c
 
 
+def post_transfer_cost(c,cost):
+    from brass_ai.learning.post_transfer_reward import OLD_COST,ZERO_COST
+    return (c['contract'] in (EXTENDED_CONTRACT,AUTO_CONTRACT) and
+        c['insolvency_steps'][-1]['insolvency']==OLD_COST and cost==ZERO_COST)
+
+
 def step_count(c,cost):
     specs=[c['insolvency_start']]+[s['insolvency'] for s in c['insolvency_steps']]
+    # Zero charge follows the completed schedule; it does not add a boundary,
+    # change the entropy clock or replay the old insolvency annealing.
+    if post_transfer_cost(c,cost):return len(specs)-1
     require(cost in specs,'Applied insolvency is outside the entropy schedule')
     return specs.index(cost)
 
@@ -84,6 +93,9 @@ def validate(config):
         config['entropy_control']['alpha_base']==config['update']['entropy_weight'],
         'Annealing requires adaptive entropy off and the unchanged start preset')
     n=step_count(c,config['insolvency'])
+    if post_transfer_cost(c,config['insolvency']):
+        from brass_ai.learning.post_transfer_reward import is_revised
+        require(is_revised(config),'Zero charge requires the exact post-transfer reward recipe')
     require(c['mode']=='off' or n>=1,'Enable annealing together with insolvency step one')
     from .utility import reward_spec
     reward=reward_spec(config)
@@ -130,6 +142,8 @@ def validate_state(s,generation):
         (c['mode']=='off' or s['insolvency_steps_applied']>=1 and s['started_at'] is not None) and
         s['applied']==weights(c,s['progress'],generation+1) and s['waiting_for_insolvency_step']==waiting(s),
         'Entropy schedule coefficients/reward receipt differ')
+    require(not post_transfer_cost(c,s['insolvency']) or s['progress']==c['ramp_iterations'],
+        'Post-transfer reward requires the completed entropy clock')
     return s
 
 
@@ -171,6 +185,11 @@ def restore(config,saved,generation):
         require(abs(n-previous)==1 and event_cost_upgrade(reward_spec(before),reward_spec(config)),
             'Entropy reward receipt requires one reviewed step')
         if n>previous:require(s['progress']>=c['insolvency_steps'][n-1]['at_progress'],'Insolvency step is not due')
+    elif config['insolvency']!=s['insolvency']:
+        require(post_transfer_cost(c,config['insolvency']) and
+            s['insolvency']==c['insolvency_steps'][-1]['insolvency'] and
+            s['progress']==c['ramp_iterations'] and not reset,
+            'Only the reviewed completed-clock post-transfer charge removal is allowed')
     s.update(config=copy.deepcopy(c),insolvency=copy.deepcopy(config['insolvency']),insolvency_steps_applied=n)
     return seal(s)
 
@@ -293,6 +312,10 @@ def automatic_next(config,state):
 
 def automatic_receipt(config,state):
     if not automatic(config) or config['insolvency']==state['signature']['config']['insolvency']:return None
+    from brass_ai.learning.post_transfer_reward import transition
+    # This exact externally authorized change follows the completed clock;
+    # it is not an automatically due annealing boundary.
+    if transition(state['signature']['config'],config):return None
     before=automatic_config(state['signature']['config'])
     current=restore_run(before,state)
     require(automatic_next(before,state)==config,'Automatic reward receipt differs from the next committed boundary')
