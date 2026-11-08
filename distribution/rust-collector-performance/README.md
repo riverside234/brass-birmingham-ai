@@ -1,0 +1,130 @@
+# PI00–PI05 ordinary collector performance supplement
+
+本目录只包含说明与短测原始报告。源码和测试从 Git checkout 取得，不重复打完整 bundle，
+不要把旧 ZIP 提取到新 checkout 上。
+
+兼容当前 teacher shadow 命令，保留 28+4 tables、zero branching 和 share target 0.25。
+普通传输升级不重建或替换已通过资格的 teacher/search_v1 binary，不启用 teacher on-mode。
+实现和证据限制见 [implementation notes](../../ai-research/RUST_COLLECTOR_PERFORMANCE_PI00_PI03.md)。
+后半部分与当前检查清单见 [PI04–PI05 completion](../../ai-research/RUST_COLLECTOR_PERFORMANCE_PI04_PI05.md)。
+
+## Lab 准备与正常续训
+
+先同步代码，退出旧 trainer；在项目根目录、同一 Python/Rust/mono 环境运行：
+
+```bash
+python scripts/prepare-rust-collector-performance.py --expected-generation 1257 --offline && \
+python scripts/continue-rust-shadow.py --expected-generation 1257 --iterations 2 --share-target 0.25
+```
+
+第一条只构建普通 adapter 并跑受影响的短 wire 回归；复用已缓存的 Rust 依赖。
+若 Cargo cache 不完整，可省略 `--offline`。它校验真实 checkpoint/generation、原 core/bootstrap/source
+与构建证据，再发布新的 ordinary runtime selector。同源码重复执行复用该 runtime。
+成功或失败都打印 Git-visible results 与 original evidence 路径。
+
+第二条是用户原来的真实两轮 shadow 续训，不是短 benchmark，也不重做旧资格验证。
+若 generation 已经推进，把两条命令的 starting generation 改为**实际 committed generation**，
+不要倒退到 1257，也不要删除 pending collection 来迁就命令。
+新代码保留旧完整 family 的原身份和冷验证恢复路径。
+
+这两个选项已保存在训练配置
+`configs/step5/joint7-v11-2-g1290-trained-restart-rust-shadow32-no-branch-share025.json`
+的 `execution` 中，无需 export：
+
+```json
+{
+  "collector_validation": "production_fast",
+  "replay_bindings": true
+}
+```
+
+需要完整调试复核时，退出 trainer 后把该配置中的 `collector_validation` 改为 `strict`，
+再运行同一续训命令；启动器保留配置文件中的选项。正常训练以配置为准，忽略这两个旧环境变量。
+没有这两个字段的历史配置按上述默认值运行；启动器会补齐字段。它们作为运行设置单独传给
+actor、publisher 和 reader，不改变已签名的学习配方或 frozen job，不为此归档 pending collection。
+独立诊断工具仍可使用旧环境变量。相同轨迹在 strict/fast 中使用相同策略/RNG。
+fast receipt 明确区分 structural_admitted 与 semantic_audited，抽检不冒充全量语义验证。
+`profile` 与 fast 使用相同审核选择，但 IPC 精细计时完整开启；正常训练为每 64 调用采样。
+`replay_bindings=true` 复用准确 owner 下的 row/array/target；退出后改为 `false` 可回到重复检查路径。
+未知数据、可变对象、真正冷读、动作/IPC/取消/提交边界仍保留必要检查。
+配置接线的 19 项短调试回归通过；没有重跑 benchmark。扩展检查另有 5 项旧 fixture/source-review/
+mock 初始化错误，详细结果见 [配置修订检查记录](runtime-config-verification.json)，未记为通过。
+
+## 可选的短组件验证
+
+在**干净的 committed boundary**，可选运行真实同一 checkpoint、同一 frozen jobs 的三桌对照：
+
+```bash
+python scripts/profile-rust-collector-performance.py --expected-generation 1257 --device cuda
+```
+
+每臂最多三个实际 `(kind,V4 presence)` 分层首桌，每臂子进程上限 120s，不改 seed/对手/分支概率，
+比较 C# reference 与当前 NativePool，并核对完整轨迹、feature 和实际 training targets。
+只测普通 collection，不运行 teacher search 或更新模型；当前 committed shadow/off 配置明确记录。
+结果自动导出至新的 results 目录。Rust 数据用 diagnostic admission，不能被普通训练读取器误接纳。
+如果有 pending work，先用正常 continuation 恢复；此工具不会删除或绕过 pending 检查。
+若已经推进到 g1259 等后续 generation，修改 guard 为实际 generation。
+reference 的 process-launch 计时与异步导入无法在现有 API 完全拆开，scope 明确写在报告中；
+总 accepted-work 包含全部启动、读取、准备和关闭，不用两种不同 scope 的 startup 数字推断收益。
+
+只测 authored 固定数据，不加载真实训练 checkpoint、运行 NN 或更新训练：
+
+```bash
+python tests/RustBackendLab/profile_collector_performance.py --out artifacts/rust-backend/pi00-pi03-smoke-lab --families 4 --decisions 64 --workers 2 --export-results
+```
+
+只隔离 PI05-B 的默认复用开关（同一 fast coverage、同一正式模块/冻结数据），每次使用新输出目录：
+
+```bash
+python tests/RustBackendLab/profile_collector_performance.py --out artifacts/rust-backend/pi04-bindings-lab --families 2 --decisions 64 --workers 2 --bindings-compare --export-results
+```
+
+可加 `--reverse` 做第二次反序短测。工具在成功前要求 runtime/helper source 前后完全一致；
+代码变化、输出不等价或超时都不能写成速度结论。每臂原始 phase report 单独保留。
+
+可选的 24-publisher 压力只使用已完成 authored 数据，不模拟 320 桌或运行 NN：
+
+```bash
+python tests/RustBackendLab/profile_collector_performance.py --out artifacts/rust-backend/pi04-publish24-lab --families 24 --decisions 8 --workers 24 --bindings-compare --export-results
+```
+
+此项在 lab 执行；本机没有为覆盖规模额外启动 24 个 Torch publisher。CPU admission 仍共享、
+总 authored decisions 最多 1024，各 IPC/启动等待有界；小批次默认两个 publisher。
+
+使用新输出目录。三臂是 legacy strict / shared strict / shared fast，同一数据和进程数，
+记录 startup、handoff、publication、read、training preparation 和 shutdown，验证训练输出等价。
+失败也保留/导出 report。每臂 publisher 等待有 30s 上限，不自动扩成长会话。
+真实 checkpoint/GPU/full-volume 的收益仍待 lab 正常报告；不能将此组件结果当成 NN throughput。
+
+prepare 已自动运行 native 短回归。只复核受影响的 CPU 测试时：
+
+```bash
+PYTHONPATH=src:scripts:tests/R2:tests/Recovery:tests/FeatureEngineering:tests/RustBackendLab python -B -m unittest test_collector_performance.Performance test_b07_wire.Wire -q
+```
+
+后半部分的 CPU 控制/不可变边界检查为 `test_collector_performance_tail.Bindings`；prepare 同时运行
+原 `NativeWire` 和新 `NativeTail`，核对合并页、stale token/cursor、取消、特征篡改和下一局重置。
+
+导出后按工具打印的新目录，在 results 仓库提交结果；只提交本次目录，不连带无关修改：
+
+```bash
+git -C results add -- rust-lab-qualification/<printed-folder-name>
+git -C results commit -m "Report collector performance smoke"
+git -C results push
+```
+
+## 原始本地证据
+
+- `cpu-components-forward.json`、`cpu-components-reverse.json`：两次反向顺序的短 CPU 发布/准备对照。
+- `native-wire.json`：固定复杂/late roots 的普通 wire 对照；包含接收字节、特征复用字节与原始分项。
+- `verification.json`：受影响检查与 source/runtime 绑定范围，lab Pending 项。
+- `pi04-components-forward.json`、`pi04-components-reverse.json`：最终相同源码/冻结 jobs，复用 off/on 对照。
+- `pi04-native-wire.json`：相同 native 状态/概率/RNG 的双页导出前后对照。
+- `completion-verification.json`：最终代码、回归、前驱/feature cache 兼容与外部 Pending 项。
+- `pi04-initial-eager-components.json`：早期整树 eager-freeze 的负面结果，保留原源码身份，已被替换。
+- `pi04-invalid-source-run.json`：开发中源码发生变化的那次 probe 的无效标记；其原始耗时不用于结论。
+
+这些报告包含启动噪声和较慢的分项，没有剔除负面结果。最终 compatible replay 仍写完整历史，
+当前 publisher 仍需一次记录 JSON 解码、最终压缩和持久化；真正冷读仍检查内容 SHA。
+PI04/PI05-B 的剩余实施已完成。最终当前代码通过 118 项受影响 Python 检查及 2 项 Rust unit tests；
+前一阶段的 94 项证据保留原身份，不重复计数。真实 checkpoint/GPU/shadow 整轮性能留给 lab。

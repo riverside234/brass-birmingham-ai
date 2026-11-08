@@ -144,7 +144,7 @@ class B07(unittest.TestCase):
         f,a,c=family_fixture();job=f['frozen_job'];job['path']=str(out/'job.jsonl.gz')
         path=out/'fixture.json';write_json(path,f['parent'])
         mp=multiprocessing.get_context('spawn');cpu=CPUAdmission(mp,4,1)
-        service=SimpleNamespace(cpu=cpu,error=None,channels=lambda count:None)
+        service=SimpleNamespace(cpu=cpu,error=None,channels=lambda count:None,release_channels=Mock())
         execution=dict(processes=1,hosts_per_process=2,worker_threads=1,cpu_budget=4,cpu_reserve=1)
         build=dict(_receipt_sha256=f['producer']['build_sha256'],b01={'sha256':f['producer']['b01_sha256']},fixture=str(path),fail=fail)
         return P.NativePool(SOURCE_ROOT,service,execution,build,c,f['producer']['signature'],scope='ordinary'),job,cpu
@@ -155,15 +155,18 @@ class B07(unittest.TestCase):
             records=pool.collect([job],on_records=received.extend)
             self.assertEqual(records,received);self.assertNotIn('game',records[0])
             self.assertFalse(pool.processes);self.assertEqual(cpu.report()['active'],0)
+            pool.service.release_channels.assert_called_once_with(None)
             cached=pool.collect([job])
         self.assertEqual(cached,records);self.assertEqual(pool.last_collection_report['counts']['cached'],1)
         self.assertFalse(pool.processes)
+        pool.service.release_channels.assert_called_once_with(None)
 
     def test_spawned_failure_keeps_first_error_and_cancels_without_publication(self):
         out=self.temporary();pool,job,cpu=self.pool(out,fail=True)
         with patch.object(P,'_actors',fixture_actors):
             with self.assertRaisesRegex(ValueError,'original native lane failure'):pool.collect([job])
         self.assertFalse(pool.processes);self.assertTrue(cpu.report()['aborted'])
+        pool.service.release_channels.assert_called_once_with(None)
         self.assertFalse(list(out.glob('native-ordinary/replay/*.record.json')))
 
     def test_writer_failure_and_reader_backpressure_failure_cancel_all_workers(self):

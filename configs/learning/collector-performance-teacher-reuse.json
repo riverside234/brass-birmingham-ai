@@ -1,0 +1,62 @@
+{
+  "contract": "brass-ordinary-transport-teacher-reuse/1",
+  "original_producer": "dbe27fb771be5297cebcdcdf56d9d054bf5a6b270ec37008f75f80ce3f717101",
+  "original_files": {
+    "src/brass_ai/rust_backend/lab_teacher_overlay.py": "44914835c17e109063a5b181a3293e78195f04ecd3d8e1e014dcface60de804e",
+    "lab-native/core-overlay/teacher.rs": "9afd3f8cf9fc7ca6f3d9a7e569cbe4cae3b2d1d49d620d9ffee6b5b7302e710f",
+    "lab-native/src/bin/teacher.rs": "245726575b4a362b30c83380d9d28ace4c0d1a5db465e8dd078bd357e5a32646",
+    "lab-native/src/collection_wire.rs": "b5cdf1db7c9d3ebc1a057a99258d2553819caa74d8552e9c6ea34c9ece77e0fd",
+    "lab-native/src/lib.rs": "2a1b9450ea990f45b47d188fbc7ddf36531978e0bfd9138d242bf43ab3f919ba",
+    "lab-native/src/main.rs": "79b076553edd272a147c44925e2b803136549ee7ff4b451b05d0366bb8ec267f",
+    "lab-native/src/scoring.rs": "2e41cb5647dc5b41bf305330fae8869fa8fa969936f8e3b7240d22262c331ecd",
+    "lab-native/src/teacher.rs": "50752978f897e27eceec6ef529d815e5be86713e5bc05c7ea9a4d7938e6e674b",
+    "lab-native/tests/lanes.rs": "9b1b08c4c4665ec35ed0ecd129a7662a07f07409ce902d8cb8be729c18932a86",
+    "lab-native/tests/teacher.rs": "58d24527e3106b0ea9a3f7b4b494ad06549018163ac2cf0b7343e7dc8538165f",
+    "lab-native/tests/teacher_wire.rs": "53de15eea61ba0b5896e5ae3c224017fb88a99bb17a553944806f1856f60e52c",
+    "lab-native/Cargo.toml": "5c8566eef28f3f1fe0afb3c4e9d65769a3d19a7f7269e74b0bb3d2630588b9c3",
+    "lab-native/Cargo.lock": "8dedcf1eb844cbd03512663053034a7a587adb7a5bad2e6d9bcfc466e605f8d9"
+  },
+  "current_files": {
+    "src/brass_ai/rust_backend/lab_teacher_overlay.py": "6f19827f20bae573728659f52ae83617c57e7c573f335806bd7fb9766f6a4478",
+    "lab-native/core-overlay/teacher.rs": "9afd3f8cf9fc7ca6f3d9a7e569cbe4cae3b2d1d49d620d9ffee6b5b7302e710f",
+    "lab-native/src/bin/teacher.rs": "245726575b4a362b30c83380d9d28ace4c0d1a5db465e8dd078bd357e5a32646",
+    "lab-native/src/collection_wire.rs": "b5cdf1db7c9d3ebc1a057a99258d2553819caa74d8552e9c6ea34c9ece77e0fd",
+    "lab-native/src/lib.rs": "2a1b9450ea990f45b47d188fbc7ddf36531978e0bfd9138d242bf43ab3f919ba",
+    "lab-native/src/main.rs": "d04083c21274a3b368ca2ca351f830fbb073fdb79367a3248e3bcaf3f19eda82",
+    "lab-native/src/ordinary_delta.rs": "6b58f13039e2a3c9cc32a23e5927455ed2365c1ebd7d7723004a186e7d9e6bd2",
+    "lab-native/src/scoring.rs": "2e41cb5647dc5b41bf305330fae8869fa8fa969936f8e3b7240d22262c331ecd",
+    "lab-native/src/teacher.rs": "50752978f897e27eceec6ef529d815e5be86713e5bc05c7ea9a4d7938e6e674b",
+    "lab-native/tests/lanes.rs": "9b1b08c4c4665ec35ed0ecd129a7662a07f07409ce902d8cb8be729c18932a86",
+    "lab-native/tests/teacher.rs": "58d24527e3106b0ea9a3f7b4b494ad06549018163ac2cf0b7343e7dc8538165f",
+    "lab-native/tests/teacher_wire.rs": "53de15eea61ba0b5896e5ae3c224017fb88a99bb17a553944806f1856f60e52c",
+    "lab-native/Cargo.toml": "74bc3063973ab1162cce21d4f0f10816ac6306857b20142a853be184889e56e5",
+    "lab-native/Cargo.lock": "8dedcf1eb844cbd03512663053034a7a587adb7a5bad2e6d9bcfc466e605f8d9"
+  },
+  "scope": "Only ordinary main/transport, serde raw_value and exact producer-equivalence helper changed; teacher bin/module, overlay, scoring, shared lib/core and search untouched. Keep the qualified teacher binary/producer for shadow32/share025; ordinary upgraded binary records its own exact source.",
+  "derived_features": {
+    "original_encoder": "b4fe9a5d5e7136163113d4f039aa72a10fd95c5dea4cf8b36dbff2040a091b50",
+    "previous_encoders": [
+      "60931d8908bd97ca0a1528871ce840b57b9606995555a99efb46565450b5a6e6",
+      "b4fe9a5d5e7136163113d4f039aa72a10fd95c5dea4cf8b36dbff2040a091b50"
+    ],
+    "original_files": {
+      "recovery/encoding.py": "ecf7084e893666ed4c4b1e43c19bd572f21af1e9be2e2d9507512421d0afbbf1",
+      "recovery/inputs.py": "6927a6388be1dd9a93f0aecc8a4551d58563250b69197a4a17f0af23804b22b3",
+      "recovery/replay.py": "28e7ea9e2bb92f064717c6c7d7cd258a38026c03ae95fe00ba2b6178921f7f7c",
+      "recovery/il_replay_storage.py": "b23c02f09bb17ac2d79855b09efd59e41b5614eaa0950263253ccd1e3196c868",
+      "runtime_contracts.py": "5fe6fd25f8754ac888758e8db469f888f8b037961815de44b854bca42287062d"
+    },
+    "current_files": {
+      "recovery/encoding.py": "ecf7084e893666ed4c4b1e43c19bd572f21af1e9be2e2d9507512421d0afbbf1",
+      "recovery/inputs.py": "ec09cae29171b0e82b869a8781f278fa5b83c292260edf72532f5e75547cd93e",
+      "recovery/replay.py": "c3ba0d61bb0aa2fe9d89d863e1734579df5d8cc2f6c8d2c13871866832ed23b7",
+      "recovery/il_replay_storage.py": "b23c02f09bb17ac2d79855b09efd59e41b5614eaa0950263253ccd1e3196c868",
+      "runtime_contracts.py": "5fe6fd25f8754ac888758e8db469f888f8b037961815de44b854bca42287062d"
+    },
+    "compatibility_sha256": "ef6a1b5126de42da8f3277dc9357b6ffb94a435f3faa7fee8dd312bb5a242a54",
+    "scope": "Only replay validation/storage and immutable reuse changed; feature/reward values, dimensions, float32 layout, entity selectors and encoder math unchanged. Exact dependency maps required; unknown sources rebuild derived data."
+  },
+  "ordinary_predecessors": [
+    "f103ea62c89a7e2f9e2b3c97faa65e6594a41d9f0fcd964e4c92ee4a35a7ca92"
+  ]
+}

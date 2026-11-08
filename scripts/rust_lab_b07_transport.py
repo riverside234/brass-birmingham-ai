@@ -42,10 +42,11 @@ class LegacyEncoder:
             np.array(pages[0]['stable_to_relative'],np.int64),tuple(c['id'] for c in choices))
 
 
-def walk(binary,origin,*,legacy=False,limit=64,batch_forced=True):
+def walk(binary,origin,*,legacy=False,limit=64,batch_forced=True,optimize=True,raw_export=False,combined_export=True):
     began=time.perf_counter();metrics=Counter();trace=[];features=[];branches=[];complete=None
     cls=LegacyCollector if legacy else Collector
-    with cls(binary,batch_forced=batch_forced) as lane:
+    training=[]
+    with cls(binary,batch_forced=batch_forced,optimize=optimize) as lane:
         lane.begin('frozen-wire-fixture',origin,5000)
         metrics['startup_seconds']=time.perf_counter()-began
         rngs=[random.Random(317+s) for s in range(4)]
@@ -76,7 +77,17 @@ def walk(binary,origin,*,legacy=False,limit=64,batch_forced=True):
             t=time.perf_counter();lane.append(row,ev);metrics['append_seconds']+=time.perf_counter()-t
         metrics['collection_seconds']=time.perf_counter()-began
         if lane.current.get('terminal'):
-            t=time.perf_counter();receipt=lane.call('finish');raw=list(lane.records(receipt))
+            t=time.perf_counter()
+            if raw_export:
+                from brass_ai.rust_backend.lab_delta import Decoder
+                if combined_export:receipt,pages,training_raw=lane.completed_export()
+                else:
+                    receipt=lane.call('finish');pages=list(lane.record_pages(receipt));training_raw=list(lane.raw_training_features(receipt))
+                decoder=Decoder();raw=[]
+                for meta,payload in pages:raw.extend(decoder.records(meta,payload))
+                training=[hashlib.sha256(x).hexdigest() for x in training_raw]
+            else:
+                receipt=lane.call('finish');raw=list(lane.records(receipt))
             metrics['export_seconds']=time.perf_counter()-t
             for index,key in ((0,'records_sha256'),(1,'evidence_sha256')):
                 require(hashlib.sha256(b'['+b','.join(bytes(x[index]) for x in raw)+b']').hexdigest()==receipt[key],'Export seal differs')
@@ -84,7 +95,8 @@ def walk(binary,origin,*,legacy=False,limit=64,batch_forced=True):
             complete={k:receipt[k] for k in ('rows','records_sha256','evidence_sha256','scoring','result')}
         metrics.update({'ipc_'+k:v for k,v in lane.metrics.items()})
         return dict(metrics=dict(metrics),trace=trace,features=features,branches=branches,
-                    rng=[r.getstate() for r in rngs],complete=complete,forced=sum(len(r['choices'])==1 for r,e in trace))
+                    rng=[r.getstate() for r in rngs],complete=complete,forced=sum(len(r['choices'])==1 for r,e in trace),
+                    training_features=training)
 
 
 def main():

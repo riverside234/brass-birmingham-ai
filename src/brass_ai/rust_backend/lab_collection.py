@@ -67,10 +67,12 @@ def _causal(row):
 
 def collect_lane(root, executable, bootstrap, job, endpoint, execution, *, origin=None,
                  continuation=None, submit_branch=None, cancel=None, compare=None, diagnostic_branch_probe=False,
-                 session=None, mono=None):
+                 session=None, mono=None, raw_export=False, validation=None):
     require(route(job)[0] == 'rust', 'Unsupported whole job must use reference route')
     start = time.monotonic(); timings = Counter(); job_id = frozen_id(job)
     with ExitStack() as cleanup:
+        from brass_ai.recovery.replay_binding import scope
+        binding_counts=cleanup.enter_context(scope())
         from .lab_session import OrdinarySession
         if session is None:
             session=cleanup.enter_context(OrdinarySession(root,executable,endpoint,execution,mono))
@@ -118,7 +120,11 @@ def collect_lane(root, executable, bootstrap, job, endpoint, execution, *, origi
             # encoder reuse its exact input identity instead of hashing it again.
             seat=view['seat']; p=assigned[seat]; rng=rngs[seat]
             neural=type(p) is NeuralPolicy
-            if neural and len(choices)>1:
+            if validation is not None and not validation['semantic']:
+                from .lab_perf import admit
+                view,choices=admit(view,choices)
+                decision.update(view=view,choices=choices)
+            elif neural and len(choices)>1:
                 view,choices=BOUNDARY.admit(view,choices)
                 # Same immutable admitted objects flow through policy, encoder
                 # and append. Avoid comparing each history against a duplicate
@@ -159,9 +165,33 @@ def collect_lane(root, executable, bootstrap, job, endpoint, execution, *, origi
                             submit_branch(packet)
             if compare: compare(row,encoded,lane)
             t=time.monotonic(); lane.append(row,evidence,allow_forced=neural); timings['native_step_seconds']+=time.monotonic()-t
-        receipt=lane.call('finish'); records=[]; evidence=[]
+        if raw_export:
+            t=time.monotonic();receipt,pages,features=lane.completed_export()
+            timings['combined_completion_export_seconds']+=time.monotonic()-t
+        else:receipt=lane.call('finish')
+        records=[]; evidence=[]
         require(receipt['contract']==CONTRACT and receipt['job']==job_id and receipt['token']==lane.token,
                 'Foreign native completion receipt')
+        if raw_export:
+            # No complete JSON tree is decoded/re-encoded in the actor. The
+            # independently admitted publisher checks exact canonical seals.
+            from .lab_shared import Export
+            require(len(features)==receipt['rows'],'Incomplete raw features')
+            game['result']=receipt['result'];game.pop('records')
+            if continuation is None and job.get('branching'):game['branch_statistics']=dict(eligible_decisions=eligible_count)
+            if continuation is not None:
+                game['branch'].update(elapsed_seconds=time.monotonic()-start,
+                    fraction_remaining=receipt['rows']/(receipt['rows']+game['branch']['decision']))
+            timings.update({'ipc_'+k:v for k,v in lane.metrics.items()})
+            producer=dict(contract=CONTRACT,core=lane.hello['core'])
+            lane.release()
+            timings.update({'binding_'+k:v for k,v in binding_counts.items()})
+            return Export(dict(game=game,scoring=receipt['scoring'],native_receipt=receipt,
+                origin_counts=continuation['counts'] if continuation is not None else [0]*4,
+                diagnostic_branch_probe=diagnostic_branch_probe,
+                branch_expected=forked and continuation is None,
+                actor_validated=validation is None or validation['semantic'],
+                timings=dict(timings,total_seconds=time.monotonic()-start),producer=producer),pages,features)
         record_hash=hashlib.sha256(b'[');evidence_hash=hashlib.sha256(b'[')
         t=time.monotonic()
         for index,(row_bytes,evidence_bytes) in enumerate(lane.records(receipt,drain=True)):
@@ -186,6 +216,7 @@ def collect_lane(root, executable, bootstrap, job, endpoint, execution, *, origi
         game.actor_validated=True  # Each original frame crossed BOUNDARY above.
         timings['training_feature_export_seconds']+=time.monotonic()-t
         timings.update({'ipc_'+k:v for k,v in lane.metrics.items()})
+        timings.update({'binding_'+k:v for k,v in binding_counts.items()})
         return dict(game=game,scoring=receipt['scoring'],evidence=evidence,native_receipt=receipt,
             origin_counts=continuation['counts'] if continuation is not None else [0]*4,
             diagnostic_branch_probe=diagnostic_branch_probe,

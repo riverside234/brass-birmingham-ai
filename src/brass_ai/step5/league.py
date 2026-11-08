@@ -28,6 +28,8 @@ def implementation_sources():
     paths += [SOURCE_ROOT/'configs/learning/v11-selector-source-equivalence.json']
     paths += [SOURCE_ROOT/'configs/learning/reward-source-equivalence.json']
     paths += [SOURCE_ROOT/'configs/learning/derived-source-equivalence.json']
+    teacher_reuse=SOURCE_ROOT/'configs/learning/collector-performance-teacher-reuse.json'
+    if teacher_reuse.is_file():paths += [teacher_reuse]
     paths += [base / 'learning/runner.py', base / 'learning/batching.py']
     paths += [base/'searchlab/spiel.py',base/'beliefs.py',base/'runtime_contracts.py',base/'host.py',base/'bank.py',base/'legacy.py']
     # Native replay/admission and diagnostic resume are learning dependencies.

@@ -1,0 +1,5 @@
+{
+  "passed": false,
+  "valid_for_performance_claims": false,
+  "reason": "Runtime source was edited while this development probe was running. Original raw reports are retained; timings are excluded. The probe now verifies exact runtime/helper sources before passing."
+}

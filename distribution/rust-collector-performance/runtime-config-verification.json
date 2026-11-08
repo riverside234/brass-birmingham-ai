@@ -1,0 +1,76 @@
+{
+  "contract": "brass-collector-runtime-config/1",
+  "date": "2026-11-07",
+  "execution": {
+    "implementation": "323d07b20c9086c7f69cebb7d3a4e9164f60959caec17b4e48e554bcfb0b4803",
+    "qualified_implementation": "9efcf34f853d75ab844366b6819da4b0921be38d3e2dfb806cf282ace76e7a30",
+    "replay_location_review": "4d0aba144cc913e25fb72dbe8cdfef0199efea57710c1eb1bd3475cd731b6834"
+  },
+  "training_config": {
+    "path": "configs/step5/joint7-v11-2-g1290-trained-restart-rust-shadow32-no-branch-share025.json",
+    "sha256": "61550ccb4f4676f56cde61e1d98d7daaf94c70a270f53c793f4bbe337dbc69d8",
+    "execution": {
+      "collector_validation": "production_fast",
+      "replay_bindings": true
+    }
+  },
+  "behavior": {
+    "config_overrides_environment": true,
+    "legacy_omission_uses_same_defaults": true,
+    "spawned_actors_publishers_readers_receive_snapshot": true,
+    "recipe_frozen_jobs_model_optimizer_rng_search_unchanged": true,
+    "runtime_only_change_archives_pending": false,
+    "launcher_preserves_explicit_file_overrides": true,
+    "standalone_diagnostics_keep_environment_switches": true
+  },
+  "focused_debug": {
+    "tests": 19,
+    "passed": 19,
+    "seconds": 7.935,
+    "log": "artifacts\\collector-config-change\\focused-debug-tests.log",
+    "sha256": "fddb3526852f7ca2a9e9ee51d6fb1370ab8264a6a3ba3e17a15ee255fdb7d5e5",
+    "targets": [
+      "test_collector_config",
+      "test_b07_shadow_runtime.ShadowConfig",
+      "test_single_gpu_performance.SingleGPUPerformanceTests.test_reader_startup_overlaps_collection_without_a_readiness_barrier",
+      "test_replay_lifecycle_review.ReplayLifecycleReviewTests.test_single_inline_reader_uses_and_restores_shared_admission",
+      "test_replay_lifecycle_review.ReplayLifecycleReviewTests.test_inline_reader_restores_admission_after_validation_failure"
+    ]
+  },
+  "expanded_debug": {
+    "tests": 82,
+    "passed": 73,
+    "errors": 5,
+    "skipped": 4,
+    "seconds": 36.453,
+    "log": "artifacts\\collector-config-change\\debug-tests.log",
+    "sha256": "d7d7fa16aeb114e2ed2c88aa296ec51d88e2856014febef7e4aa3a3700006623",
+    "errors_detail": [
+      {
+        "tests": [
+          "test_bound_but_unvalidated_game_still_runs_full_schema_checks",
+          "test_changed_input_label_context_and_metadata_cannot_use_proof",
+          "test_writer_reuses_checked_inputs_after_verifying_seals"
+        ],
+        "reason": "Historical fixture CanalBelperDerby regions differ from current V11 topology; fixtures and topology unchanged by this request"
+      },
+      {
+        "tests": [
+          "test_failed_close_aborts_before_terminating_actors"
+        ],
+        "reason": "Historical ActorPool.__new__ mock lacks closed; ActorPool.close unchanged by this request"
+      },
+      {
+        "tests": [
+          "test_previous_source_resumes_identical_weights_optimizer_and_counters"
+        ],
+        "reason": "Historical generic source-transition fixture has no reviewed edge; same failure reproduced with pre-request 7ee553d source ID"
+      }
+    ],
+    "skipped_reason": "Four native tests need explicit native test binary; Rust source unchanged, no rebuild/requalification needed for config-only revision"
+  },
+  "benchmarks_run": false,
+  "training_run": false,
+  "lab_continuation": "Pending on lab",
+  "continuation": "python scripts/continue-rust-shadow.py --expected-generation 1257 --iterations 2 --share-target 0.25"
+}

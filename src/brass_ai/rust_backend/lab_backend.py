@@ -52,7 +52,12 @@ def validate_state(state,raw=None,*,check_runtime=True):
     require(value['contract']==CONTRACT and value['mode'] in ('rust','reference') and
             accepts(value['implementation']) and value['implementation']==state['signature']['implementation'] and
             value['config_sha256']==digest(state['signature']['config']), 'Backend source/config binding changed')
-    require(state['signature']['config'].get('teacher_phase',{}).get('mode','off')=='off','Teacher enablement is a separate gate')
+    config=state['signature']['config']
+    if config.get('teacher_phase',{}).get('mode','off')!='off':
+        from .lab_shadow_config import is_shadow,CONTRACT as SHADOW
+        shadow=value.get('shadow',{})
+        require(is_shadow(config) and shadow.get('contract')==SHADOW and
+            shadow.get('tables')==dict(train=28,held_out=4),'Teacher on-mode remains a separate gate; invalid shadow adoption')
     if raw is not None and raw['training'].get('native_backend')!=value:
         transition=state.get('native_backend_switch')
         require(transition is not None and transition['checkpoint']==state['history'][-1] and
@@ -85,6 +90,7 @@ class RoutedPool:
         self.host=host
         self.last_collection_report=None
         self.backend=validate_state(state)
+        self._ordinary_build=None
     def collect(self,jobs,*,on_records=None):
         training=all(j['provenance'].get('purpose')=='training' for j in jobs)
         if not self.backend or self.backend['mode']=='reference':
@@ -100,7 +106,10 @@ class RoutedPool:
                 self.last_collection_report=evaluation.last_collection_report
                 return result
         from .lab_pool import NativePool
-        with NativePool(self.root,self.service,self.config['execution'],check_build(self.backend['build']),
+        from .lab_perf_runtime import resolve
+        if self._ordinary_build is None:self._ordinary_build=resolve(self.root,check_build(self.backend['build']))
+        build=self._ordinary_build  # Deployment/reload starts a new RoutedPool.
+        with NativePool(self.root,self.service,self.config['execution'],build,
                         self.config,digest(self.state['signature']),mono=self.mono) as pool:
             result=pool.collect(jobs,on_records=on_records)
             self.last_collection_report=pool.last_collection_report

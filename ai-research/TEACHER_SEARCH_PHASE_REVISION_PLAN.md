@@ -1,5 +1,20 @@
 # Teacher search phase revision plan
 
+**2026-11-07 continuation:** the existing Rust training run is committed through
+g1257. The user explicitly selects branching 0%, full 28+4 shadow tables per
+iteration and two ordinary shadow iterations for gradient qualification. The
+[current implementation and command](../distribution/rust-lab-b07-g1250/README.md#full-shadow-gradient-qualification)
+reuse the qualified native collector and normal PPO step. Shadow records r at
+beta=1, encoder cosine and norms, phase support/improvement, root-label yield,
+N/effective K, deadlines and cost, while discarding every teacher gradient.
+Two complete consecutive full-volume iterations with finite nonzero gradient
+observations produce a sealed fixed-beta receipt in state/checkpoint. Default
+share_target=0.25; explicit later options 0.4 and 0.5 calculate a new fixed beta
+from the same frozen raw measurements. Monitoring does not adapt beta. Remaining
+on-mode acceptance is separate; no automatic switch occurs after qualification.
+Actual two-iteration Linux/CUDA qualification remains Pending. Older qualification
+statuses and commands below describe their historical scope.
+
 **Current qualification (2026-11-03):** use the [g570 B01–B04 bundle](../distribution/rust-lab-g570/README.md). It pins the recorded g570 checkpoint/config and the complete current source inventory. Older bundles are historical inputs; do not overlay their source snapshots onto this checkout. Search remains task-only search_v1, four seconds plus at most one second post-search, with DOMiNO/AZ_DB and V205 disabled.
 
 Date: 2026-10-29 (America/Chicago). Status: **T1/B02.5 and T2/B04 implemented; lab qualification Pending.** See the [T1 report](RUST_BACKEND_B025_REPORT.md), [B04 native export/collection report](RUST_BACKEND_B04_REPORT.md) and [B04 transfer/qualification commands](../distribution/rust-lab-b04/README.md). The phase defaults to off; the explicit B04 collector supplies the bounded lab shadow route. B05/B07 still gate production update/adoption. No existing run state was changed.
@@ -328,7 +343,7 @@ How the term interacts with the existing update:
 - **Share.** Define r = ‖g_T‖ / ‖g_A‖, measured before clipping on the shared state/entity encoders. This is the `TrunkGradients` parameter set, so r is comparable with the DCPG actor and preservation norms. g_A is the PPO actor gradient that `TrunkGradients.add_actor` already accumulates (without entropy). `TrunkGradients` runs only while DCPG preservation is active, as in the current recipe; without DCPG, measure g_A with the same `autograd.grad` call.
 - **Calibration.** Shadow mode (2 iterations) measures r at β = 1 on every step. On switching to `on`, set β = 0.25 / median r, bounded to [0.01, 10]. β is stored in state and then held fixed.
 - **No shadow receipt.** Start at β = 1 for one iteration, then set β from that iteration's measurement.
-- **Monitoring.** Report the median r and the cosine between g_T and g_A every iteration. If the median r stays outside [0.125, 0.5] for 3 iterations, warn, and recalibrate with one shadow iteration if needed. A share that falls as labels are absorbed is expected.
+- **Monitoring.** Report the median r and the cosine between g_T and g_A every iteration. If the median weighted share stays outside [0.125, 0.5] for 3 iterations at target 0.25, warn. Keep the qualified beta fixed; any new calibration is an explicit future operation. A share that falls as labels are absorbed is expected. An explicit target edit to 0.4 or 0.5 rescales beta from the frozen qualification measurements and keeps that new value fixed too.
 - **Adjusting after 10 iterations.**
   - Raise share_target to 0.4 if held-out KL is not falling faster than it did in shadow mode and PPO health is normal.
   - Lower it to 0.15 if KL stops increase or action-group entropy drops (section 14).

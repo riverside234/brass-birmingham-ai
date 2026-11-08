@@ -1,0 +1,238 @@
+{
+  "contract": "brass-collector-performance-completion/1",
+  "date": "2026-11-07",
+  "implementation_stages_complete": [
+    "PI00",
+    "PI01",
+    "PI02",
+    "PI03",
+    "PI04",
+    "PI05-A",
+    "PI05-B"
+  ],
+  "execution": {
+    "implementation": "7ee553d580b2fe106abad357eb5f99fc5e552b3b92bd1c89b3f0bf343a07df86",
+    "qualified_implementation": "9efcf34f853d75ab844366b6819da4b0921be38d3e2dfb806cf282ace76e7a30",
+    "replay_location_review": "54c73d246d27c05b4d1ea79fbb38fdcb4620c8f376117c941dcb9a02cce20e0a"
+  },
+  "ordinary_source": "9e2e5ea764d23f62e5f0bb6d6ef0048a3745ba4998803b78adb5838480558df2",
+  "teacher_producer": "dbe27fb771be5297cebcdcdf56d9d054bf5a6b270ec37008f75f80ce3f717101",
+  "derived_feature_encoder": "b4fe9a5d5e7136163113d4f039aa72a10fd95c5dea4cf8b36dbff2040a091b50",
+  "local_validation": {
+    "passed": true,
+    "python_distinct_checks": 118,
+    "rust_unit_checks": 2,
+    "python": [
+      {
+        "path": "artifacts/pi04-final-collector-v3-tests.log",
+        "sha256": "53423c24e61007305329d9ab48b208ebc82ebb698c9ef1f159bb7e8bc4bfdd5e",
+        "passed": 79,
+        "seconds": 34.509
+      },
+      {
+        "path": "artifacts/pi04-final-reader-checkpoint-v3-tests.log",
+        "sha256": "bdfdf43e3309df6b5ec72570ab56756c0b2a509298e12fc7b12386fab2dbb41f",
+        "passed": 39,
+        "seconds": 68.197
+      }
+    ],
+    "rust": {
+      "path": "artifacts/pi04-native-20261107/test-final.log",
+      "sha256": "4255bd657d0c080838273fd905e2b8b3305fd7baa624b249ba1c9fe15978e52e"
+    },
+    "native_wire": "pi04-native-wire.json"
+  },
+  "measurements": {
+    "scope": "Two authored families, 128 decisions, two publishers, off/on in opposite order; no NN/checkpoint/training",
+    "source_unchanged": true,
+    "equal_outputs": true,
+    "frozen_jobs": "9ddce1fd802922c87e4fb4b68561e427aecc5ccdcc8b6e969fb1257c83690c77",
+    "phases": {
+      "startup_seconds": {
+        "raw": {
+          "off": [
+            6.290367900044657,
+            6.378046300029382
+          ],
+          "on": [
+            6.344271699897945,
+            6.5984931999119
+          ]
+        },
+        "median": {
+          "off": 6.33420710003702,
+          "on": 6.471382449904922
+        },
+        "reduction_fraction": -0.021656277999988482
+      },
+      "handoff_seconds": {
+        "raw": {
+          "off": [
+            0.009945099940523505,
+            0.009226399939507246
+          ],
+          "on": [
+            0.01801640004850924,
+            0.01110470003914088
+          ]
+        },
+        "median": {
+          "off": 0.009585749940015376,
+          "on": 0.01456055004382506
+        },
+        "reduction_fraction": -0.5189787064069507
+      },
+      "publication_seconds": {
+        "raw": {
+          "off": [
+            0.6344417000655085,
+            0.6684523000149056
+          ],
+          "on": [
+            0.5592168000293896,
+            0.49271710007451475
+          ]
+        },
+        "median": {
+          "off": 0.6514470000402071,
+          "on": 0.5259669500519522
+        },
+        "reduction_fraction": 0.19261743469616155
+      },
+      "reader_seconds": {
+        "raw": {
+          "off": [
+            0.5294870999641716,
+            0.27236089995130897
+          ],
+          "on": [
+            0.25072559993714094,
+            0.4884606999112293
+          ]
+        },
+        "median": {
+          "off": 0.4009239999577403,
+          "on": 0.3695931499241851
+        },
+        "reduction_fraction": 0.07814660643128779
+      },
+      "preparation_seconds": {
+        "raw": {
+          "off": [
+            0.06147760001476854,
+            0.06432300002779812
+          ],
+          "on": [
+            0.020596300018951297,
+            0.04923110001254827
+          ]
+        },
+        "median": {
+          "off": 0.06290030002128333,
+          "on": 0.03491370001574978
+        },
+        "reduction_fraction": 0.4449358746470816
+      },
+      "shutdown_seconds": {
+        "raw": {
+          "off": [
+            0.5634144999785349,
+            0.5595776999834925
+          ],
+          "on": [
+            0.5642433998873457,
+            0.5416173000121489
+          ]
+        },
+        "median": {
+          "off": 0.5614960999810137,
+          "on": 0.5529303499497473
+        },
+        "reduction_fraction": 0.015255226227850915
+      },
+      "accepted_work_seconds": {
+        "raw": {
+          "off": [
+            8.089133900008164,
+            7.951986599946395
+          ],
+          "on": [
+            7.757070199819282,
+            8.181624099961482
+          ]
+        },
+        "median": {
+          "off": 8.02056024997728,
+          "on": 7.969347149890382
+        },
+        "reduction_fraction": 0.006385227277239447
+      },
+      "excluding_startup_seconds": {
+        "raw": {
+          "off": [
+            1.798765999963507,
+            1.5739402999170125
+          ],
+          "on": [
+            1.4127984999213368,
+            1.5831309000495821
+          ]
+        },
+        "median": {
+          "off": 1.6863531499402598,
+          "on": 1.4979646999854594
+        },
+        "reduction_fraction": 0.11171352214183261
+      }
+    },
+    "limits": "Windows startup/first-reader noise retained. Small total gain; no inference/full training throughput claim. Complex native root stops at 24 decisions and does not exercise final export; late root completes in two decisions."
+  },
+  "excluded": {
+    "initial_eager_freeze": "pi04-initial-eager-components.json: valid historical negative result; implementation replaced",
+    "edited_during_probe": "pi04-invalid-source-run.json: original timings excluded; source guard regression now passes"
+  },
+  "preservation": {
+    "search_v1_changed": false,
+    "teacher_shadow_tables": 32,
+    "branching": 0,
+    "share_target": 0.25,
+    "model_optimizer_rng_changed": false,
+    "weights_only_and_strict_loading": true,
+    "training_state_modified": false,
+    "old_qualification_archives_changed": false
+  },
+  "lab_pending": [
+    "Actual frozen-checkpoint Linux/CUDA profile",
+    "24-publisher authored pressure",
+    "Actual g1257 to g1259 shadow continuation and ordinary/shadow timing"
+  ],
+  "continuation": [
+    "python scripts/prepare-rust-collector-performance.py --expected-generation 1257 --offline",
+    "python scripts/continue-rust-shadow.py --expected-generation 1257 --iterations 2 --share-target 0.25"
+  ],
+  "artifacts": {
+    "pi04-components-forward.json": "7d56bd5eedd8c92df6adc7dbe7421781c3c96b8380f24b92d82c960aa3e47e0e",
+    "pi04-components-reverse.json": "c8ddb267a1f256a9a5c737041ddf5e1d99b8898d6099825c73526a6df42563eb",
+    "pi04-native-wire.json": "c6dfa698675cb89cccb5290025dd4ef612c06b0f8c38dde10f0bff204256b004",
+    "pi04-initial-eager-components.json": "e6fa4003611bd3a43460e5cdba049a0aa4f15cea794b627a948255745d2f17c6",
+    "pi04-invalid-source-run.json": "f7a16a6ab70a4a211154912c43c08fbc5244577522a672f0015992628799ba78"
+  },
+  "source_review": {
+    "exact_before_after_maps_verified": true,
+    "qualified_source_reconstructed": true,
+    "source_files": 364,
+    "reviewed_changes": 48,
+    "native_build_sources_byte_identical": true,
+    "git_visible_supplement_verified": true
+  },
+  "runtime_config_revision": {
+    "path": "distribution/rust-collector-performance/runtime-config-verification.json",
+    "sha256": "479796a2c2f2a5748f93ddf0b5bf39a187fd79e70b2d298966cf3f647194b3a0",
+    "execution": {
+      "implementation": "323d07b20c9086c7f69cebb7d3a4e9164f60959caec17b4e48e554bcfb0b4803",
+      "qualified_implementation": "9efcf34f853d75ab844366b6819da4b0921be38d3e2dfb806cf282ace76e7a30",
+      "replay_location_review": "4d0aba144cc913e25fb72dbe8cdfef0199efea57710c1eb1bd3475cd731b6834"
+    },
+    "note": "Operational config follow-up. Earlier measurement/test source identities and reports remain historical, unchanged."
+  }
+}

@@ -45,14 +45,20 @@ def same_fork_evidence(native,original):
         ((b>=0)&(b<=1)).all() and (np.abs(a-b)<=2*np.spacing(b)).all())
 
 
-def validate_part(part, job, *, child=False, arrays=None):
+def validate_part(part, job, *, child=False, arrays=None, semantic=True):
     from brass_ai.recovery.replay import CheckedGame
-    original=part['game'];validated=arrays is not None
+    # Exact cache bytes attest arrays, not a foreign observation's schema.
+    # Only the private actor boundary can reuse its already-checked inputs.
+    original=part['game'];validated=False
     if arrays is None and isinstance(original,CheckedGame):
         original.assert_metadata()
-        arrays=[original.encoded(r,None) for r in original['records']]
+        arrays=(original._native_arrays if not semantic and hasattr(original,'_native_arrays') else
+                [original.encoded(r,None) for r in original['records']])
         validated=getattr(original,'actor_validated',False)
-    game=check_game(original) if arrays is None else check_game(original,arrays,validated_inputs=validated)
+    if not semantic and arrays is not None:
+        from .lab_perf import structural_game
+        game=structural_game(original,arrays)
+    else:game=check_game(original) if arrays is None else check_game(original,arrays,validated_inputs=validated)
     group=digest(dict(rules='steam-brass-patch-1.1.0',setup_seed=job['seed']))
     parent_id=job.get('stable_game_id') or digest(dict(job=frozen_id(job),seed=job['seed']))
     expected_id=parent_id+'/branch/'+game['branch']['seed'] if child else parent_id
@@ -71,6 +77,25 @@ def validate_part(part, job, *, child=False, arrays=None):
         validate_receipt(part['scoring'],game,producer='rust-local-scoring/1.0.0')
     else:
         require(part['producer']['contract']=='brass-reference-collection/1.0.0','Unknown producer')
+    if not semantic:
+        for index,(row,evidence) in enumerate(zip(game['records'],part['evidence'],strict=True)):
+            spec=job['policies'][(row['seat']-job.get('rotation',0))%4]
+            require(row['behavior']['policy_id']==spec['policy_id'],'Changed frozen policy assignment')
+            if child and index==0:
+                require(evidence['kind']=='excluded-fork' and evidence['metadata']['seed']==game['branch']['seed'],
+                        'Missing excluded-fork evidence')
+                continue
+            require(evidence['kind']=='ordinary' and evidence['policy_id']==spec['policy_id'] and
+                    evidence['model_id']==spec.get('model_id') and
+                    evidence['semantic_id']==row['choices'][row['chosen']]['id'],'Evidence attribution differs')
+            if spec['kind']!='neural':
+                require(row['behavior']['kind']=='external' and row['behavior']['probability']==1. and
+                        evidence['raw_probabilities'] is None,'External behavior attribution differs')
+            else:
+                require(row['behavior']['kind']=='model' and row['behavior']['temperature']>0,
+                        'Neural behavior attribution differs')
+                if len(row['choices'])==1:require(evidence['raw_probabilities']==[1.],'Forced choice differs')
+        return game
     counts=[0]*4
     rngs=[random.Random(digest(dict(branch=game['branch']['seed'],seat=s)) if child else
             digest(dict(sampling_seed=job['sampling_seed'],game=job.get('rng_index',0),seat=s))) for s in range(4)]
@@ -147,10 +172,10 @@ def validate_part(part, job, *, child=False, arrays=None):
     return game
 
 
-def validate_family(value, job, producer, *, arrays=None, return_games=False):
+def validate_family(value, job, producer, *, arrays=None, return_games=False, semantic=True, branch_audit=True, owned_seal=False):
     require(value['format']==FORMAT and value['job_id']==frozen_id(job) and value['producer']==producer,
             'Stale/foreign family identity')
-    require(value['sha256']==digest({k:v for k,v in value.items() if k!='sha256'}),'Family seal differs')
+    if not owned_seal:require(value['sha256']==digest({k:v for k,v in value.items() if k!='sha256'}),'Family seal differs')
     require(value['training_admitted'] is False,'B02 family cannot self-admit to training')
     require(value['frozen_job']=={k:v for k,v in job.items() if k!='path'},'Frozen job metadata differs')
     count=0
@@ -158,13 +183,30 @@ def validate_family(value, job, producer, *, arrays=None, return_games=False):
         count=len(value['parent']['game']['records'])
         total=count+(len(value['child']['game']['records']) if value['child'] is not None else 0)
         require(len(arrays)==total,'Native family cached row count differs')
-    parent=validate_part(value['parent'],job,arrays=None if arrays is None else arrays[:count])
+    parent=validate_part(value['parent'],job,arrays=None if arrays is None else arrays[:count],semantic=semantic)
     child=value['child']
     require(value['parent']['branch_expected']==(child is not None),'Incomplete/unexpected family member')
     checked_child=None
     if child is not None:
-        checked_child=validate_part(child,job,child=True,arrays=None if arrays is None else arrays[count:])
-        validate_child(parent,checked_child)
+        require(job.get('branching') is not None,'Branch without a frozen schedule')
+        checked_child=validate_part(child,job,child=True,arrays=None if arrays is None else arrays[count:],semantic=semantic)
+        meta=checked_child['branch']
+        require(meta['parent_game_id']==parent['game_id'] and type(meta['decision']) is int and
+                0<=meta['decision']<len(parent['records']),'Foreign child lineage')
+        source=parent['records'][meta['decision']];first=checked_child['records'][0]
+        from brass_ai.recovery.branching import seed_for
+        require(meta['contract']==job['branching']['contract'] and
+                meta['seed']==seed_for(parent['game_id'],meta['decision'],meta['contract']) and
+                checked_child['setup_group']==parent['setup_group'] and checked_child['split']==parent['split'] and
+                checked_child['opponents']==parent['opponents'] and
+                meta['played']==source['chosen'] and first['chosen']==meta['chosen']!=meta['played'] and
+                first['behavior'].get('component')=='branch_move' and first['behavior']['probability']==meta['marginal_probability'] and
+                first['style']==source['style'] and first['intent']==source['intent'] and
+                parent.seals[(source['step'],source['seat'])]['input']==checked_child.seals[(first['step'],first['seat'])]['input'],
+                'Branch point/row binding differs')
+        require(len(meta['prior_events'])==4 and all(type(n) is int and n>=0 for n in meta['prior_events']),
+                'Branch cost binding differs')
+        if branch_audit:validate_child(parent,checked_child)
     if return_games:return parent,checked_child
     return value
 

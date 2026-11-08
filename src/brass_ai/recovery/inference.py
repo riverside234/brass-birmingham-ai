@@ -111,9 +111,11 @@ def endpoint_encoder(endpoint):
 
 class ChannelLease:
     """A spawn-safe pool of private reply channels, one per worker or host lane."""
+    connection_index=0
     def __init__(self, leases, requests):
-        self.leases,self.requests=leases,requests
+        self.leases,self.requests=leases,requests;self.closed=False
     def acquire(self):
+        require(not self.closed,'Reply lease is closed')
         item=self.leases.get(timeout=60)
         connection,lane=item[:2]
         return Endpoint(self.requests,connection,lane,shared=item[2] if len(item)>2 else None)
@@ -121,8 +123,10 @@ class ChannelLease:
 
 class MultiChannelLease:
     """Pickled during spawn; queue objects never travel inside another queue."""
-    def __init__(self,leases,requests):self.leases,self.requests=leases,requests
+    connection_index=1
+    def __init__(self,leases,requests):self.leases,self.requests=leases,requests;self.closed=False
     def acquire(self):
+        require(not self.closed,'Reply lease is closed')
         item=self.leases.get(timeout=60);index,connection,lane=item[:3]
         return Endpoint(self.requests[index],connection,lane,shared=item[3] if len(item)>3 else None)
 
@@ -236,7 +240,11 @@ class InferenceService:
         from .resources import CPUAdmission
         self.cpu=CPUAdmission(self.mp,config.get('cpu_budget',64),config.get('cpu_reserve',4))
         self.requests=self.mp.Queue(maxsize=4*max(64,config['processes']*config['hosts_per_process']))
-        self.connections={};self.children=[];self.leases=[];self.models={};self.cache=OrderedDict();self.slots={}
+        from .inference_channels import ReplyChannels
+        self.reply_channels=ReplyChannels(self.mp,config.get('shared_slot_bytes',2*1024*1024))
+        self.connections=self.reply_channels.connections;self.children=self.reply_channels.children;self.slots=self.reply_channels.slots
+        self.leases=[];self._lease_channels={}
+        self.models={};self.cache=OrderedDict()
         self.lock=threading.RLock();self.stop=threading.Event();self.error=None
         self.started=self.closed=False
         self.timings=Timings();self.profile,self.profile_steps=profile,profile_steps
@@ -272,20 +280,17 @@ class InferenceService:
                 if key not in keep: self.models.pop(key);self.cache.pop(key,None)
 
     def channels(self,count):
-        leases=self.mp.Queue()
-        self.leases.append(leases)
-        for _ in range(count):
-            leases.put(self._channel())
-        return ChannelLease(leases,self.requests)
+        from .inference_channels import allocate_lease
+        def allocate():
+            item=self._channel();return self.reply_channels,item[1],item
+        return allocate_lease(self,count,ChannelLease,allocate)
+
+    def release_channels(self,lease):
+        from .inference_channels import release_lease
+        release_lease(self,lease)
 
     def _channel(self):
-        parent,child=self.mp.Pipe(duplex=True)
-        lane=len(self.connections);self.connections[lane]=parent;self.children.append(child)
-        from .shared_transport import SharedSlot
-        size=self.config.get('shared_slot_bytes',2*1024*1024)
-        if size:
-            self.slots[lane]=SharedSlot(size=size)
-        return child,lane,self.slots[lane].description if size else None
+        return self.reply_channels.allocate()
 
     def __enter__(self):
         require(not self.started and not self.closed,'Inference service is already started/closed')
@@ -297,16 +302,16 @@ class InferenceService:
         # These are the parent's copies of actor reply handles. Keeping them
         # open after actors retire can leave a failed sender waiting forever
         # for a reader that no longer exists.
-        for child in self.children:child.close()
+        from .inference_channels import release_all
+        release_all(self);self.reply_channels.close_children()
         if self.started:
             self.thread.join(timeout=30)
             require(not self.thread.is_alive(),'Inference service did not shut down')
-        for c in list(self.connections.values())+self.children: c.close()
-        for q in self.leases: q.cancel_join_thread();q.close()
+        self.scheduler.models.clear();self.scheduler.count=0
+        self.reply_channels.close()
         # An aborted collection can leave queued input with no consumer.
         # Joining its feeder would then wait forever on a full pipe.
         self.requests.cancel_join_thread();self.requests.close()
-        for slot in self.slots.values():slot.close()
         self.closed=True
 
     def report(self):
@@ -317,6 +322,7 @@ class InferenceService:
             batching=self.scheduler.report(),
             batch_histogram=dict(self.batch_histogram),per_model=copy.deepcopy(self.per_model),
             resident_models=len(self.cache),registered_models=len(self.models),
+            reply_channels=dict(self.reply_channels.report(),leases=len(self.leases)),
             timing_note='Host elapsed time; CUDA forward kernel duration is in optional profiler traces',
             error=str(self.error) if self.error else None)
 
@@ -448,14 +454,22 @@ class InferenceService:
         self.cpu.abort()
 
     def _reply(self,message,response):
-        try:self.connections[message['lane']].send(response)
-        except BaseException as error:self._failed(error)
+        lane=message['lane']
+        if self.reply_channels.retired(lane):return
+        try:self.connections[lane].send(response)
+        except BaseException as error:
+            if not self.reply_channels.retired(lane):self._failed(error)
 
     def _serve(self):
         pending={};serial=0
 
         def admit(message):
             nonlocal serial
+            # A joined/cancelled worker may leave an envelope in the input
+            # queue. It cannot address a new lane: lane IDs never repeat.
+            if not self.reply_channels.pin(message['lane']):
+                if self.on_complete is not None:self.on_complete([message])
+                return
             key=serial;serial+=1
             pending[key]=dict(message=message,responses=[None]*len(message['frames']),remaining=len(message['frames']))
             require(message['frames'],'Empty inference envelope')
@@ -488,10 +502,12 @@ class InferenceService:
                 # Exactly one reply releases an envelope's shared input slot.
                 # Other model queues may still refer to other private slots.
                 pending.pop(key)
-                self._reply(message,response)
-                if self.on_complete is not None:
-                    try:self.on_complete([message])
-                    except BaseException as failure:self._failed(failure)
+                try:
+                    self._reply(message,response)
+                    if self.on_complete is not None:
+                        try:self.on_complete([message])
+                        except BaseException as failure:self._failed(failure)
+                finally:self.reply_channels.unpin(message['lane'])
 
         try:
             # Current CUDA device is thread-local. Explicit tensor placement and
@@ -559,6 +575,7 @@ class MultiInferenceService:
         self.devices=validate_inference_devices(inference_devices,device)
         self.config,self.learner_device,self.device=config,device,self.devices[0]
         self.mp=multiprocessing.get_context('spawn');self.services=[];self.leases=[];self.cursor=0
+        self._lease_channels={}
         self.closed=False
         self.routing=config.get('inference_routing','demand')
         require(self.routing in ('demand','round_robin'),'Unknown inference routing mode')
@@ -579,7 +596,9 @@ class MultiInferenceService:
             if self.routing=='demand':
                 self.requests=self.mp.Queue(maxsize=4*max(64,config['processes']*config['hosts_per_process']))
                 for index,service in enumerate(self.services):
+                    service.reply_channels=self.services[0].reply_channels
                     service.connections=self.services[0].connections
+                    service.children=self.services[0].children
                     service.slots=self.services[0].slots
                     service.on_complete=lambda messages,i=index:self._complete(i,messages)
                 self.router=threading.Thread(target=self._dispatch,name='brass-inference-router',daemon=True)
@@ -621,16 +640,19 @@ class MultiInferenceService:
         for service in self.services:service.trim(identities)
 
     def channels(self,count):
-        require(type(count) is int and count>0,'Missing inference reply lanes')
-        leases=self.mp.Queue();self.leases.append(leases)
-        if self.routing=='demand':
-            for _ in range(count):leases.put(self.services[0]._channel())
-            return ChannelLease(leases,self.requests)
-        for _ in range(count):
+        from .inference_channels import allocate_lease
+        def allocate():
+            if self.routing=='demand':
+                service=self.services[0];item=service._channel()
+                return service.reply_channels,item[1],item
             index=self.cursor%len(self.services);self.cursor+=1
-            connection,lane,slot=self.services[index]._channel()
-            leases.put((index,connection,lane,slot))
-        return MultiChannelLease(leases,tuple(s.requests for s in self.services))
+            service=self.services[index];connection,lane,slot=service._channel()
+            return service.reply_channels,lane,(index,connection,lane,slot)
+        return allocate_lease(self,count,ChannelLease if self.routing=='demand' else MultiChannelLease,allocate)
+
+    def release_channels(self,lease):
+        from .inference_channels import release_lease
+        release_lease(self,lease)
 
     def __enter__(self):
         require(not self.closed,'Inference pool is closed')
@@ -643,6 +665,8 @@ class MultiInferenceService:
 
     def __exit__(self,*args):
         if self.closed:return
+        from .inference_channels import release_all
+        release_all(self)
         error=None
         if self.routing=='demand':
             self.router_stop.set()
@@ -654,10 +678,12 @@ class MultiInferenceService:
                 for child in service.children:child.close()
             for service in self.services:
                 if service.started:service.thread.join(timeout=30)
+            for service in self.services:
+                require(not service.started or not service.thread.is_alive(),'Inference replica did not shut down')
+                service.scheduler.models.clear();service.scheduler.count=0
         for service in self.services:
             try:service.__exit__(*args)
             except BaseException as failure:error=error or failure
-        for leases in self.leases:leases.cancel_join_thread();leases.close()
         if self.routing=='demand':self.requests.cancel_join_thread();self.requests.close()
         self.closed=True
         if error is not None:raise error
@@ -727,7 +753,10 @@ class MultiInferenceService:
         mem=dict(host_resident_bytes=reports[0]['memory'].get('host_resident_bytes'))
         for key in ('cuda_allocated_bytes','cuda_reserved_bytes'):
             if any(key in r['memory'] for r in reports):mem[key]=sum(r['memory'].get(key,0) for r in reports)
+        channels=[registry.report() for registry in {s.reply_channels for s in self.services}]
+        channel_totals={key:sum(r[key] for r in channels) for key in channels[0]}
         return dict(**self.metrics,timings=timings,device=str(self.device),learner_device=str(self.learner_device),inference_devices=list(self.devices),
+            reply_channels=dict(channel_totals,leases=len(self.leases)),
             batch_histogram=dict(histogram),per_model=per_model,
             batching=dict(contract='streaming-model-batches/1.0.0',
                 batches=sum(r.get('batching',{}).get('batches',0) for r in reports),

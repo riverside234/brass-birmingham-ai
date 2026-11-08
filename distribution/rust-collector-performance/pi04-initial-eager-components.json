@@ -1,0 +1,266 @@
+{
+  "passed": true,
+  "scope": "Frozen authored CPU components only; no NN/checkpoint/simulator/training; not whole-training throughput",
+  "checkpoint_sha256": null,
+  "frozen_jobs": "9ddce1fd802922c87e4fb4b68561e427aecc5ccdcc8b6e969fb1257c83690c77",
+  "families": 2,
+  "decisions": 128,
+  "workers": 2,
+  "arms": {
+    "shared_fast": {
+      "immutable_bindings": true,
+      "startup_seconds": 6.261650600004941,
+      "handoff_seconds": 0.008377199992537498,
+      "temporary_payload_write_bytes": 0,
+      "publication_seconds": 0.7321085999719799,
+      "reader_seconds": 0.7379706000210717,
+      "reader_binding_checks": {
+        "input_hash_executed": 128,
+        "label_hash_executed": 128,
+        "array_detached_bytes": 2102672,
+        "array_validation_reused": 128,
+        "immutable_games_sealed": 2
+      },
+      "preparation_seconds": 0.06025109998881817,
+      "preparation_binding_checks": {
+        "array_validation_reused": 256,
+        "metadata_hash_reused": 8,
+        "terminal_targets_executed": 2,
+        "insolvency_targets_executed": 2,
+        "reward_targets_executed": 2,
+        "immutable_row_reused": 128
+      },
+      "publication_binding_checks": {
+        "label_hash_executed": 320,
+        "metadata_hash_reused": 2,
+        "array_validation_reused": 384,
+        "metadata_hash_executed": 6,
+        "immutable_games_sealed": 2,
+        "input_hash_executed": 320,
+        "array_validation_executed": 128,
+        "immutable_row_reused": 256,
+        "pack_finite_reused": 2
+      },
+      "semantic_outputs": [
+        {
+          "game": "beb528e6ff87f9b53595d8168dc2165c4e81d83248ba4b1ed09c63861a787cbb",
+          "features": "8e061bd7e821e6e038b948205d7a254878b0a34825dafb13da1d59ab4b7ad339"
+        },
+        {
+          "game": "c43b63fb90db04eb6b438754f0d2ecbf86e70b024f9709a48e0e713db0a72797",
+          "features": "8e061bd7e821e6e038b948205d7a254878b0a34825dafb13da1d59ab4b7ad339"
+        }
+      ],
+      "prepared_rows": 128,
+      "coverage": [
+        {
+          "policy": {
+            "contract": "brass-collector-validation/1",
+            "mode": "production_fast",
+            "job": "17edb6aa80bb43fb61c6bb42b2c8c755c25ce47000cd0194bff2a19d5f15c217",
+            "ordinal": 0,
+            "first": true,
+            "semantic": true,
+            "branch": true,
+            "family_every": 64,
+            "branch_every": 16
+          },
+          "structural_admitted": true,
+          "semantic_audited": true,
+          "branch_audited": false
+        },
+        {
+          "policy": {
+            "contract": "brass-collector-validation/1",
+            "mode": "production_fast",
+            "job": "388d69436b9cd993b28c3fb1b9563776dde9f6edb65e3800671993189d680245",
+            "ordinal": 1,
+            "first": false,
+            "semantic": false,
+            "branch": false,
+            "family_every": 64,
+            "branch_every": 16
+          },
+          "structural_admitted": true,
+          "semantic_audited": false,
+          "branch_audited": false
+        }
+      ],
+      "worker_phase_sums": {
+        "part_read_seconds": 0.08415480004623532,
+        "family_seal_seconds": 0.03219070006161928,
+        "full_validation_and_assembly_seconds": 0.7131802999647334,
+        "json_encoding_seconds": 0.06526959990151227,
+        "replay_write_hash_seconds": 0.02685089991427958,
+        "feature_cache_seconds": 0.09831610007677227
+      },
+      "shutdown_seconds": 0.5717424000613391,
+      "resources": {
+        "active_bytes": 0,
+        "peak_bytes": 4316150,
+        "budget_bytes": 1073741824,
+        "active_leases": 0
+      },
+      "cpu": {
+        "capacity": 8,
+        "active": 0,
+        "peak": 2,
+        "queued": 0,
+        "aborted": false
+      },
+      "accepted_work_seconds": 8.372100500040688,
+      "probe_wall_seconds": 8.425802399986424
+    },
+    "shared_strict": {
+      "immutable_bindings": true,
+      "startup_seconds": 6.380260500009172,
+      "handoff_seconds": 0.020967200049199164,
+      "temporary_payload_write_bytes": 0,
+      "publication_seconds": 0.8887791000306606,
+      "reader_seconds": 0.38694599992595613,
+      "reader_binding_checks": {
+        "input_hash_executed": 128,
+        "label_hash_executed": 128,
+        "array_detached_bytes": 2102672,
+        "array_validation_reused": 128,
+        "immutable_games_sealed": 2
+      },
+      "preparation_seconds": 0.024667899939231575,
+      "preparation_binding_checks": {
+        "array_validation_reused": 256,
+        "metadata_hash_reused": 8,
+        "terminal_targets_executed": 2,
+        "insolvency_targets_executed": 2,
+        "reward_targets_executed": 2,
+        "immutable_row_reused": 128
+      },
+      "publication_binding_checks": {
+        "label_hash_executed": 384,
+        "metadata_hash_reused": 2,
+        "array_validation_reused": 384,
+        "metadata_hash_executed": 6,
+        "immutable_games_sealed": 2,
+        "input_hash_executed": 384,
+        "array_validation_executed": 128,
+        "immutable_row_reused": 256,
+        "pack_finite_reused": 2
+      },
+      "semantic_outputs": [
+        {
+          "game": "beb528e6ff87f9b53595d8168dc2165c4e81d83248ba4b1ed09c63861a787cbb",
+          "features": "8e061bd7e821e6e038b948205d7a254878b0a34825dafb13da1d59ab4b7ad339"
+        },
+        {
+          "game": "c43b63fb90db04eb6b438754f0d2ecbf86e70b024f9709a48e0e713db0a72797",
+          "features": "8e061bd7e821e6e038b948205d7a254878b0a34825dafb13da1d59ab4b7ad339"
+        }
+      ],
+      "prepared_rows": 128,
+      "coverage": [
+        null,
+        null
+      ],
+      "worker_phase_sums": {
+        "part_read_seconds": 0.09718720009550452,
+        "family_seal_seconds": 0.03362479992210865,
+        "full_validation_and_assembly_seconds": 0.9317147000692785,
+        "json_encoding_seconds": 0.05888579995371401,
+        "replay_write_hash_seconds": 0.03865229990333319,
+        "feature_cache_seconds": 0.11159770004451275
+      },
+      "shutdown_seconds": 0.49110450001899153,
+      "resources": {
+        "active_bytes": 0,
+        "peak_bytes": 4316150,
+        "budget_bytes": 1073741824,
+        "active_leases": 0
+      },
+      "cpu": {
+        "capacity": 8,
+        "active": 0,
+        "peak": 2,
+        "queued": 0,
+        "aborted": false
+      },
+      "accepted_work_seconds": 8.19272519997321,
+      "probe_wall_seconds": 8.235445700003766
+    },
+    "legacy_strict": {
+      "immutable_bindings": true,
+      "startup_seconds": 6.286649400019087,
+      "handoff_seconds": 0.3235167999519035,
+      "temporary_payload_write_bytes": 2293109,
+      "publication_seconds": 0.7145154000027105,
+      "reader_seconds": 0.4089527999749407,
+      "reader_binding_checks": {
+        "input_hash_executed": 128,
+        "label_hash_executed": 128,
+        "array_detached_bytes": 2102672,
+        "array_validation_reused": 128,
+        "immutable_games_sealed": 2
+      },
+      "preparation_seconds": 0.03922819998115301,
+      "preparation_binding_checks": {
+        "array_validation_reused": 256,
+        "metadata_hash_reused": 8,
+        "terminal_targets_executed": 2,
+        "insolvency_targets_executed": 2,
+        "reward_targets_executed": 2,
+        "immutable_row_reused": 128
+      },
+      "publication_binding_checks": {
+        "array_detached_bytes": 2102672,
+        "label_hash_executed": 384,
+        "metadata_hash_reused": 2,
+        "array_validation_reused": 512,
+        "metadata_hash_executed": 4,
+        "immutable_games_sealed": 2,
+        "input_hash_executed": 384,
+        "immutable_row_reused": 256,
+        "pack_finite_reused": 2
+      },
+      "semantic_outputs": [
+        {
+          "game": "beb528e6ff87f9b53595d8168dc2165c4e81d83248ba4b1ed09c63861a787cbb",
+          "features": "8e061bd7e821e6e038b948205d7a254878b0a34825dafb13da1d59ab4b7ad339"
+        },
+        {
+          "game": "c43b63fb90db04eb6b438754f0d2ecbf86e70b024f9709a48e0e713db0a72797",
+          "features": "8e061bd7e821e6e038b948205d7a254878b0a34825dafb13da1d59ab4b7ad339"
+        }
+      ],
+      "prepared_rows": 128,
+      "coverage": [
+        null,
+        null
+      ],
+      "worker_phase_sums": {
+        "part_read_seconds": 0.3135253000073135,
+        "family_seal_seconds": 0.034449500031769276,
+        "full_validation_and_assembly_seconds": 0.43992459995206445,
+        "json_encoding_seconds": 0.06209370004944503,
+        "replay_write_hash_seconds": 0.02019620011560619,
+        "feature_cache_seconds": 0.05647740000858903
+      },
+      "shutdown_seconds": 0.5487364999717101,
+      "resources": {
+        "active_bytes": 0,
+        "peak_bytes": 0,
+        "budget_bytes": 1073741824,
+        "active_leases": 0
+      },
+      "cpu": {
+        "capacity": 8,
+        "active": 0,
+        "peak": 2,
+        "queued": 0,
+        "aborted": false
+      },
+      "accepted_work_seconds": 8.321599099901505,
+      "probe_wall_seconds": 8.37203780002892
+    }
+  },
+  "implementation": "47d27633015ec9786f5119806798bebf41426ae3f81ba5088c2c803557c4de55",
+  "immutable_bindings": true,
+  "equal_training_outputs": true
+}

@@ -1,5 +1,8 @@
 """Process-local immutable actor snapshots; never trust a serialized receipt."""
 from dataclasses import dataclass
+from collections.abc import ItemsView,ValuesView
+import hashlib
+import json
 from brass_ai.learning.batching import Request
 
 
@@ -31,14 +34,66 @@ class FrozenList(list):
     def __reduce_ex__(self,protocol):return list,(list(self),)
 
 
+class OwnedTree:
+    """Private JSON reader ownership; expose immutable children on demand.
+
+    Source dictionaries/lists must have no external writable aliases. General
+    callers continue to use the eager detached freeze() boundary.
+    """
+    def __init__(self):self.values={}
+    def freeze(self,value):
+        if type(value) not in (dict,list):return _freeze(value)
+        saved=self.values.get(id(value))
+        if saved is not None:
+            if saved[0] is not value:raise TypeError('Owned JSON identity changed')
+            return saved[1]
+        frozen=(OwnedDict if type(value) is dict else OwnedList)(value,self)
+        self.values[id(value)]=(value,frozen)
+        return frozen
+
+
+class OwnedDict(FrozenDict):
+    __slots__=('_owner',)
+    def __new__(cls,value,owner):
+        result=dict.__new__(cls);dict.update(result,value);object.__setattr__(result,'_owner',owner);return result
+    def __init__(self,value,owner):pass
+    def __iter__(self):return dict.__iter__(self)
+    def __getitem__(self,key):return self._owner.freeze(dict.__getitem__(self,key))
+    def get(self,key,default=None):return self[key] if key in self else default
+    def items(self):return ItemsView(self)
+    def values(self):return ValuesView(self)
+    def copy(self):return dict(self)
+    def __or__(self,other):return dict(self)|dict(other) if isinstance(other,dict) else NotImplemented
+    def __ror__(self,other):return dict(other)|dict(self) if isinstance(other,dict) else NotImplemented
+
+
+class OwnedList(FrozenList):
+    __slots__=('_owner',)
+    def __new__(cls,value,owner):
+        result=list.__new__(cls);list.extend(result,value);object.__setattr__(result,'_owner',owner);return result
+    def __init__(self,value,owner):pass
+    def __iter__(self):return (self._owner.freeze(x) for x in list.__iter__(self))
+    def __reversed__(self):return (self[i] for i in range(len(self)-1,-1,-1))
+    def __getitem__(self,key):
+        if isinstance(key,slice):return FrozenList(self[i] for i in range(*key.indices(len(self))))
+        return self._owner.freeze(list.__getitem__(self,key))
+    def copy(self):return list(self)
+    def __add__(self,other):return list(self)+(list(other) if type(other) is OwnedList else other)
+    def __radd__(self,other):return other+list(self)
+    def __mul__(self,n):return list(self)*n
+    __rmul__=__mul__
+
+
 @dataclass(frozen=True)
 class Admission:
     source: str
     view_id: int
     choices_id: int
+    canonical: tuple | None = None
 
 
 def _freeze(value):
+    if type(value) in (FrozenDict,FrozenList,OwnedDict,OwnedList):return value
     if type(value) is dict:return FrozenDict((k,_freeze(v)) for k,v in value.items())
     if type(value) is list:return FrozenList(_freeze(v) for v in value)
     if type(value) in (str,int,float,bool,type(None)):return value
@@ -46,9 +101,14 @@ def _freeze(value):
     raise TypeError('Only admitted JSON containers can be frozen')
 
 
-def freeze(view,choices,source):
-    view,choices=_freeze(view),_freeze(choices)
-    receipt=Admission(source,id(view),id(choices))
+def freeze(view,choices,source,*,canonical=None):
+    if type(view) not in (dict,FrozenDict,OwnedDict) or type(choices) not in (list,FrozenList,OwnedList):
+        raise TypeError('Only admitted JSON roots can be frozen')
+    # New root capabilities for each pair; immutable child subtrees may be
+    # shared without replacing another in-flight request's admission receipt.
+    view=FrozenDict((k,_freeze(v)) for k,v in view.items())
+    choices=FrozenList(_freeze(v) for v in choices)
+    receipt=Admission(source,id(view),id(choices),canonical)
     object.__setattr__(view,'_admission',receipt)
     object.__setattr__(choices,'_admission',receipt)
     return view,choices
@@ -72,10 +132,28 @@ class AdmittedRequest(Request):
             return super().digest()
         key=(admitted,id(self.view),id(self.choices),self.expected_model,self.style,self.intent,self.remaining)
         previous=getattr(self,'_digest_memo',None)
-        if previous is not None and previous[0]==key:return previous[1]
+        if previous is not None and previous[0]==key:
+            from .replay_binding import count
+            count('request_hash_reused');return previous[1]
         # Hash the original request representation once, not a new identity
         # formula. Only immutable inputs can reuse it on submit/response checks.
-        value=super().digest();object.__setattr__(self,'_digest_memo',(key,value));return value
+        receipt=self.view._admission
+        if receipt.canonical is None:value=super().digest()
+        else:
+            # The exact original Request JSON/digest, streamed from already
+            # admitted immutable canonical subtrees. No alternate hash formula.
+            view,choices=receipt.canonical;hashed=hashlib.sha256()
+            def small(x):return json.dumps(x,sort_keys=True,separators=(',',':'),allow_nan=False).encode()
+            for part in (b'{"choices":',choices,b',"intent":',small(self.intent),b',"model":',small(self.expected_model)):
+                hashed.update(part)
+            if self.remaining is not None:hashed.update(b',"remaining":');hashed.update(small(self.remaining))
+            for part in (b',"style":',small(self.style),b',"view":',view,b'}'):hashed.update(part)
+            value=hashed.hexdigest()
+            from .replay_binding import count
+            count('request_json_reused')
+        from .replay_binding import count
+        count('request_hash_executed')
+        object.__setattr__(self,'_digest_memo',(key,value));return value
 
 
 def request(*args,**kwargs):

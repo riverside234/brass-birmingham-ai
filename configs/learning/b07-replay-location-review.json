@@ -1,55 +1,211 @@
 {
   "contract": "brass-b07-replay-location-review/1.0.0",
   "qualified_implementation": "9efcf34f853d75ab844366b6819da4b0921be38d3e2dfb806cf282ace76e7a30",
-  "execution_implementation": "1a4683f397c6162cbc8208e326d31dd0b864a790e3ec7b1ada752b0cc1cd9aed",
+  "execution_implementation": "323d07b20c9086c7f69cebb7d3a4e9164f60959caec17b4e48e554bcfb0b4803",
   "base_commit": "7244d6b",
   "changes": {
-    "src/brass_ai/recovery/value_buffer.py": {
-      "before": "d58b3fcb1cf97c52296187b24e53e049023590bb95ddf2398c5d4568657e6d9b",
-      "after": "043f681cd677701b51cc677ca4a189db1da8df16a8e1817c5823260ea1778ce1"
-    },
-    "src/brass_ai/recovery/league.py": {
-      "before": "62e4a3613e44ea69f910f9ecde342e1b36d31bfa9005eec383311f8e8055097b",
-      "after": "8db6726e12328bde992491e71530f93471803fc0d1d900ff5b51a27aed431696"
-    },
-    "src/brass_ai/rust_backend/lab_backend.py": {
-      "before": "8e6496a7e67371bb9f5898e1dde864731f49a60062768ab66773ec4e5a9749d3",
-      "after": "bfffb2922c636820f45c891ad996439db06b16a42883efb081f14a4fcfe21268"
-    },
-    "src/brass_ai/rust_backend/lab_continuation.py": {
-      "before": "1ff80d1ff8523676fd03a03f9890d14895543029d81715aa9006acd0c2444512",
-      "after": "908bb38e72d4556afe7d7c41573b7e2db91d7d1edd66edca0703d5c0b70d3e25"
-    },
-    "src/brass_ai/rust_backend/lab_replay_compat.py": {
+    "configs/learning/collector-performance-teacher-reuse.json": {
       "before": null,
-      "after": "d1ddcc35f917bd75d74d124ee0c2740ff6a5a5895704b3ddb08b635aa9af761f"
+      "after": "0553c9f634e83d2ec7faa31c6c379bc41227871127e0cfff7e5803bc32ddd5b5"
+    },
+    "lab-native/Cargo.toml": {
+      "before": "5c8566eef28f3f1fe0afb3c4e9d65769a3d19a7f7269e74b0bb3d2630588b9c3",
+      "after": "74bc3063973ab1162cce21d4f0f10816ac6306857b20142a853be184889e56e5"
+    },
+    "lab-native/src/main.rs": {
+      "before": "79b076553edd272a147c44925e2b803136549ee7ff4b451b05d0366bb8ec267f",
+      "after": "d04083c21274a3b368ca2ca351f830fbb073fdb79367a3248e3bcaf3f19eda82"
+    },
+    "lab-native/src/ordinary_delta.rs": {
+      "before": null,
+      "after": "6b58f13039e2a3c9cc32a23e5927455ed2365c1ebd7d7723004a186e7d9e6bd2"
+    },
+    "src/brass_ai/recovery/admitted_inputs.py": {
+      "before": "47aec3397f698def017fec3653d15c757fc317279227470f30d1e5077afad750",
+      "after": "013a93fe30ded2d2e8d8914e439c406427a1bf7c3351b1c240e2acd177b27f74"
     },
     "src/brass_ai/recovery/automatic_training.py": {
       "before": "38046abd8f653f6b12f87f2f4747899b0cc565fbc4ae0ac4edb8cd15fee37df3",
       "after": "c591a79615b4a192f37690d73f67283b6b2d70a91fd6874f5f33a18c52158044"
     },
-    "src/brass_ai/rust_backend/lab_pool.py": {
-      "before": "1561e48d93b258d57511f4c79e6b0e5de98baedbc9dda0b1cfe325ec57af22f1",
-      "after": "b17715e27a4275fb8d999df976649eacc71e969232c940e89b92cd7307081be7"
+    "src/brass_ai/recovery/batch_cache.py": {
+      "before": "ba8b9731fad113547788104d63372460a2405c26a15c2cc0c2eed0782837f2f4",
+      "after": "9397f57a524565d7d4d39dcc83350f7c7a9ff23c6d309d9f011c368c09d4b6c5"
     },
-    "src/brass_ai/rust_backend/lab_families.py": {
-      "before": "a3ee17f38fbd524785ff41450eda6cdfb1f829b469b586777cf5d681863e27d8",
-      "after": "3a01a3237a704ef93fca7aa302a05336f933ae559c3424f45994c0caa2d0ccac"
+    "src/brass_ai/recovery/branching.py": {
+      "before": "f2c42a03eedcb826e259a41e665936bc0e4d4b2527661492cb1af2f0876fe818",
+      "after": "a09621ca7c84290f857850bce27793fd53766006e30d85127ed41d4111777f5f"
+    },
+    "src/brass_ai/recovery/collector_runtime.py": {
+      "before": null,
+      "after": "dff9cd2afaabeeb9ac983e6f576ffd499028deae8bf83e1edda6c6fbc64ffbc8"
+    },
+    "src/brass_ai/recovery/config.py": {
+      "before": "30082bf54f1cc25ce045df01c0bcebefe76e273abfb95958e37c7e2bdb547afa",
+      "after": "3abf082452a031a15bd63621f1f0350f5e8c1a54185f0a7a4bbb171b573082df"
+    },
+    "src/brass_ai/recovery/entropy_schedule.py": {
+      "before": "e3b333823fe734e282c283f1b969ad3d933c23c6d044508f523e9706f6bb2ea4",
+      "after": "029e0e975f04b9e7d43aa4b2574fd4742669accee847a7c37f5041de389d09fd"
+    },
+    "src/brass_ai/recovery/execution.py": {
+      "before": "ba3d8043033b7064ea754e8d2d5d64896a491b64dccb296c2c71a9d6e92ec102",
+      "after": "13195cced5cd66660c0a4a18ae9188209c24b859dd060e0f50791e6743b6c5c7"
+    },
+    "src/brass_ai/recovery/exploration.py": {
+      "before": "b8a04dfd320fa2b0b5a49a63e18a76ad94967aba8563f5dcb04fd90eb588c99d",
+      "after": "4c40d94416c0be9959aa942fe8891e737bfd6673dd022908d4491794f943dadb"
+    },
+    "src/brass_ai/recovery/feature_receipts.py": {
+      "before": null,
+      "after": "4df9ec2f308ed7546276128e8104e508baadbdcfbd46a77251618f2eddfcd83a"
+    },
+    "src/brass_ai/recovery/inference.py": {
+      "before": "c05fad975a8f1bc230523ed977b8c46863576791ec51408c53e6129e45d29e5d",
+      "after": "19e780d7cd4472553c614c265095076e17109731c4cc3445c00c9eb4f3629cd6"
+    },
+    "src/brass_ai/recovery/inference_channels.py": {
+      "before": null,
+      "after": "3fec4035b3687d48916e752d88e25cf0196089a31e8ec28b4df6f6195a4f7ed0"
     },
     "src/brass_ai/recovery/ingress.py": {
       "before": "f6aa8c4c07220aea239da3aac78cd0361b4fdb937746d0e6b98b320c1d755533",
-      "after": "e5ba5431186a3aca4314c5b2083655af11514ba0b23f7cb87fec1f94c7ebb905"
+      "after": "9d5b9a7dcba3a61a47d37cfc3b432057ac72d61e02407192f8c9b1d98d8d15a9"
     },
-    "src/brass_ai/rust_backend/lab_features.py": {
-      "before": "c763fb68343ed383be22ce42f13ce0e606ab235254c275e6a36b187cba393b84",
-      "after": "8e8a89bd4dfba236637b4399faa10f2944a0ce48fa52deb3a846ba858c0d7dfe"
+    "src/brass_ai/recovery/inputs.py": {
+      "before": "6927a6388be1dd9a93f0aecc8a4551d58563250b69197a4a17f0af23804b22b3",
+      "after": "ec09cae29171b0e82b869a8781f278fa5b83c292260edf72532f5e75547cd93e"
+    },
+    "src/brass_ai/recovery/league.py": {
+      "before": "62e4a3613e44ea69f910f9ecde342e1b36d31bfa9005eec383311f8e8055097b",
+      "after": "0ca453da3f33490df31223cbf3b8deae531ba0dd6ee8cc1ccdb140006dbc1511"
+    },
+    "src/brass_ai/recovery/ppg_policy_cache.py": {
+      "before": "1724b71a097795cd34961dd81fd99cf25f4c94cf1860b1269b7327203f0684b4",
+      "after": "b2dbb645c9f0b112d36c756a2e935bd2f754bdb8e6cc298ce9ca92ade9263063"
+    },
+    "src/brass_ai/recovery/replay.py": {
+      "before": "28e7ea9e2bb92f064717c6c7d7cd258a38026c03ae95fe00ba2b6178921f7f7c",
+      "after": "c3ba0d61bb0aa2fe9d89d863e1734579df5d8cc2f6c8d2c13871866832ed23b7"
+    },
+    "src/brass_ai/recovery/replay_binding.py": {
+      "before": null,
+      "after": "8485d879be54a7a3aedddebf25ebf85f39f5dd6790c6b0288ecd15369894c8af"
+    },
+    "src/brass_ai/recovery/resume.py": {
+      "before": "a65a697cb14ac1678be458c8d72f84227cba6d545041adfc27baec517a5fbdae",
+      "after": "e10fa5aa62e4c435062eb962e35fea63cad9299ae3208390eff9c171d55b5682"
+    },
+    "src/brass_ai/recovery/search_value_iteration.py": {
+      "before": "36c1d1a7580760255b0b1228a5c5d4f384529ec2b07194997118c480d21c29ae",
+      "after": "f2f91f9b8738a59c5bc73d9c3ecbe05f1afa9be782c7929c17c6af29d636e050"
+    },
+    "src/brass_ai/recovery/search_value_phase.py": {
+      "before": "9bd6cff9d5a34fa41f997eea6005d0c2d4ba31ca53c0479d15cc74474f5380d2",
+      "after": "5fd0e8662115e08d498a82761da766886b5ec46b8d91876cd309b97342d51a2b"
+    },
+    "src/brass_ai/recovery/search_value_rows.py": {
+      "before": "f2b3fe9c9465f6103b9d6509dfa30a50e6ff255f8c18a76cd03fa11c03a5c3ce",
+      "after": "a2e3200106dc72a5b2396860b83b2255e3e5a70c0fc14804e6e198ac86b1fe3f"
+    },
+    "src/brass_ai/recovery/teacher_gradient_qualification.py": {
+      "before": null,
+      "after": "ce7c1c864620be8a4ba37a68db04b314f3e90b7c15fbf0b5517dc5dddd78f317"
+    },
+    "src/brass_ai/recovery/teacher_phase.py": {
+      "before": "39c0af06ae0b59fede563760cd0b0b239f15bf79ed4cdfd3d6172be17043f328",
+      "after": "cc56bfb70b7d0fc60cf43790057230ade74fa8fde027f16dc0efaef492d8f400"
+    },
+    "src/brass_ai/recovery/teacher_term.py": {
+      "before": "750f69097b19f230db5ee7f68de342ce96919953e288ace145eb57e8e8de8da8",
+      "after": "971e68e7637339a2a6c8163a887367e7a758c6ac19d31df03365b3a5847320dd"
+    },
+    "src/brass_ai/recovery/trained_startup.py": {
+      "before": "901fb6ae52eb1cdf285e42794938be406fcd8f753d2e092931894ec391e20fea",
+      "after": "a9e79a00ed8ac3aa767accc89ae98a9c188c10720e4c1a6453dfd4860842f8a4"
+    },
+    "src/brass_ai/recovery/updates.py": {
+      "before": "74c4a7c3a92a2b8a7cb0de2eef5ebd8f58feb1d0c6798f1f86a281c4f6872628",
+      "after": "1fd8ce3f04148464b845851753a7d18a1af1a7e0f2b07a670935b2f8d8f464cc"
+    },
+    "src/brass_ai/recovery/value_buffer.py": {
+      "before": "d58b3fcb1cf97c52296187b24e53e049023590bb95ddf2398c5d4568657e6d9b",
+      "after": "043f681cd677701b51cc677ca4a189db1da8df16a8e1817c5823260ea1778ce1"
     },
     "src/brass_ai/rust_backend/lab_admission.py": {
       "before": "6d616c754ab1337005b2e65e7e766b6810b775f24f979e13c40e3c16b32e85f9",
-      "after": "703d6883eda9ee91e2222a8791aed5db1f26c21db0ccb0e0de4526a1e26ead5e"
+      "after": "4b5808f6951dd39d830cde2a1cdf5775f53ad32cb694b6e708cf575a01928c92"
+    },
+    "src/brass_ai/rust_backend/lab_backend.py": {
+      "before": "8e6496a7e67371bb9f5898e1dde864731f49a60062768ab66773ec4e5a9749d3",
+      "after": "0aa8900374e31a3975ae363c32f49f2ba2de5080e0871545f0d1d761207e096b"
+    },
+    "src/brass_ai/rust_backend/lab_collection.py": {
+      "before": "807c76a8b20bb3a99f776041101096eba7cd3ace309b64d5fb0a8cd1495ca989",
+      "after": "ea1ce8a3dcc31cbeafc6a0f8a76f0abeca176624b70c1d126470f1def4cbd18c"
+    },
+    "src/brass_ai/rust_backend/lab_continuation.py": {
+      "before": "1ff80d1ff8523676fd03a03f9890d14895543029d81715aa9006acd0c2444512",
+      "after": "908bb38e72d4556afe7d7c41573b7e2db91d7d1edd66edca0703d5c0b70d3e25"
+    },
+    "src/brass_ai/rust_backend/lab_delta.py": {
+      "before": null,
+      "after": "b1bc56128f695b25090771ed875211ad8899d0bd286faf898e9d7f05bd015265"
+    },
+    "src/brass_ai/rust_backend/lab_families.py": {
+      "before": "a3ee17f38fbd524785ff41450eda6cdfb1f829b469b586777cf5d681863e27d8",
+      "after": "639b4ae9b6c9bb26c3ecd1722dfe86039c988ae928efbe135b6a319b4181e429"
+    },
+    "src/brass_ai/rust_backend/lab_features.py": {
+      "before": "c763fb68343ed383be22ce42f13ce0e606ab235254c275e6a36b187cba393b84",
+      "after": "84d85086e219f53ba8c2002c06716e00248a7c04f944c8907e0a36201c215cbc"
+    },
+    "src/brass_ai/rust_backend/lab_perf.py": {
+      "before": null,
+      "after": "7b542dec0f41c7c9587b37bf13d3907ca9b126cead6c97e7ae4976d51324e0e2"
+    },
+    "src/brass_ai/rust_backend/lab_perf_runtime.py": {
+      "before": null,
+      "after": "2ef13fbf74a381e666c81f34c69e67b858d6441538078891f9768343d8865751"
+    },
+    "src/brass_ai/rust_backend/lab_pool.py": {
+      "before": "1561e48d93b258d57511f4c79e6b0e5de98baedbc9dda0b1cfe325ec57af22f1",
+      "after": "ede0b5d555c2f56bc2be9f446e29cc3b43dc0504064a77e449f4ec9ea67d899e"
+    },
+    "src/brass_ai/rust_backend/lab_replay_compat.py": {
+      "before": null,
+      "after": "e917ba57e390ac29976e6adc94102005f1b5382b9ebb59506e3c39d8146b66b3"
+    },
+    "src/brass_ai/rust_backend/lab_shadow.py": {
+      "before": null,
+      "after": "1397dc4b42f99fe309b8bb0b62f2ac4e5d8cb3b8e572ee0e44e83fe6b78cfcff"
+    },
+    "src/brass_ai/rust_backend/lab_shadow_config.py": {
+      "before": null,
+      "after": "a4c2f3b5f8b0ed117e21d0e1299b222e3955481535b3aea94940013305e9f49d"
+    },
+    "src/brass_ai/rust_backend/lab_shared.py": {
+      "before": null,
+      "after": "95eac64800df5ee5a2c3302aec0a6d462b243bda3591d36cbce6ce831aff14f2"
+    },
+    "src/brass_ai/rust_backend/lab_teacher.py": {
+      "before": "2fa41cbf32b1bdfb21e4f92c7a755119ea011e38a01727dd099352f7cb0a93fb",
+      "after": "73ed9986d50f47ab9af5ef681fdf574f35a16ddbdc590397f4af76071dd90c5c"
+    },
+    "src/brass_ai/rust_backend/lab_teacher_overlay.py": {
+      "before": "44914835c17e109063a5b181a3293e78195f04ecd3d8e1e014dcface60de804e",
+      "after": "6f19827f20bae573728659f52ae83617c57e7c573f335806bd7fb9766f6a4478"
+    },
+    "src/brass_ai/rust_backend/lab_transport.py": {
+      "before": "94d9883f480e5a3bb44e8da0b0e91302fc61e62478739b0d70f666bcfd8554b9",
+      "after": "cf4f3ee9e688daee5138f738ae2334a52bf37ef1162b214e234478ff4bf65d1a"
+    },
+    "src/brass_ai/step5/league.py": {
+      "before": "7ccf73825ec333d5d1169161ac897f89ec488f41051e828413aaad9b409b9ddb",
+      "after": "a304ff3b4fba8bd0ffb424af54c9e4651e388bff26eb7f4321a989028a4a4ec4"
     }
   },
-  "scope": "Exact teacher-off native collection scheduling/recovery repair: bounded parallel publishers and cache validation, missing-only actor startup, fresh validator receipts after full cold validation, and one native ingress byte read. Original jobs, collection signatures, policy/RNG, features, branch rules, rewards, search_v1, optimizer and recipe remain unchanged. Preserve predecessor checkpoint execution provenance and record new execution on the next normal commit. Reuse process-local verified row input hashes between feature unpacking and immediate game binding, retaining exact row identity/order, detached label/context seals and later mutation checks; no durable trust flag or feature-format change. Disable redundant feature deep scans only after validating the current independent receipt and exact replay/feature bytes; preserve complete cold checks and restrict process-liveness scans to one-second intervals while cancellation/IPC errors remain prompt. User-selected 24 publisher/recovery-process ceiling for full-size jobs, with adaptive small batches and the unchanged global CPU admission cap.",
+  "scope": "Exact reviewed ordinary collector transport/publication/immutable replay optimization, preserving current shadow32 teacher, search_v1, checkpoint/Adam/RNG, sampling, reward/features/targets and frozen jobs. Existing ordinary source/predecessor and derived-array receipts retain their own identity; unknown sources never inherit the fast path.",
   "evidence": "results/rust-lab-qualification/20261107T125446333545Z-20261107T124611526805Z-b07-continue-e84bd233-c1155826/evidence/training.log",
   "startup_evidence": "results/rust-lab-qualification/20261107T131709467058Z-20261107T131647644898Z-b07-continue-953a2157-2b90dbc8/evidence/training.log",
   "predecessor_executions": [
@@ -57,7 +213,68 @@
       "implementation": "94a0e5d1d03210ad93759f2aedd6f7f15cca4bb826300df7b6de04f033199ff2",
       "qualified_implementation": "9efcf34f853d75ab844366b6819da4b0921be38d3e2dfb806cf282ace76e7a30",
       "replay_location_review": "cc50be97d02aa00019192e9e47b05e570ca7ae0b8433532401ef3bbc60c1f91b"
+    },
+    {
+      "implementation": "1a4683f397c6162cbc8208e326d31dd0b864a790e3ec7b1ada752b0cc1cd9aed",
+      "qualified_implementation": "9efcf34f853d75ab844366b6819da4b0921be38d3e2dfb806cf282ace76e7a30",
+      "replay_location_review": "8b8ed2818a627f51be867a2d478e98f6f841c296a16af4afff46cb3bead2cabf"
+    },
+    {
+      "implementation": "0cadbf2750ce6bf2e5b5e20e7217a359c6f22882d3a47ac33bdf50a071125bce",
+      "qualified_implementation": "9efcf34f853d75ab844366b6819da4b0921be38d3e2dfb806cf282ace76e7a30",
+      "replay_location_review": "8d4349f7e00e2afa56c083e1cd484e65ca9a949cba5e9d0223c74f3b5f79c332"
+    },
+    {
+      "implementation": "52ba99aeba875ccbf785b25022d197c7656aa9b53dcc17e857b9b8d1af8b23ca",
+      "qualified_implementation": "9efcf34f853d75ab844366b6819da4b0921be38d3e2dfb806cf282ace76e7a30",
+      "replay_location_review": "9d9b614858f37e27d0e9e00ac9fe00287a9f4486465273b2c2ebde4e69f54ca9"
+    },
+    {
+      "implementation": "7ee553d580b2fe106abad357eb5f99fc5e552b3b92bd1c89b3f0bf343a07df86",
+      "qualified_implementation": "9efcf34f853d75ab844366b6819da4b0921be38d3e2dfb806cf282ace76e7a30",
+      "replay_location_review": "54c73d246d27c05b4d1ea79fbb38fdcb4620c8f376117c941dcb9a02cce20e0a"
     }
   ],
-  "performance_evidence": "results/joint7-v11-2-g1290-trained-restart-g1253-20261107T145415686647Z/iteration-1252/report.json"
+  "performance_evidence": "results/joint7-v11-2-g1290-trained-restart-g1253-20261107T145415686647Z/iteration-1252/report.json",
+  "descriptor_evidence": {
+    "results_commit": "d6ed70075232997c322231e034cda81bf83e3cb9",
+    "state": "results/joint7-v11-2-g1290-trained-restart-g1257-20261107T170030753211Z/state.json",
+    "generation": 1257,
+    "checkpoint_sha256": "cad965da88338e6a424cd1e615ffb61da014c52e8ff3237baeeae8d94e429d40",
+    "failure": "User-provided Errno 24 traceback at NativePool.collect -> InferenceService.channels -> multiprocessing.Pipe"
+  },
+  "shadow_config_review": {
+    "contract": "brass-native-shadow-adoption/1.0.0",
+    "base_config": "895d866502425dad30f2277b822dba2a15247f9a701d2dd5dd10b7e396de3ca8",
+    "branching": 0.0,
+    "teacher_mode": "shadow",
+    "tables": {
+      "train": 28,
+      "held_out": 4
+    },
+    "share_targets": [
+      0.25,
+      0.4,
+      0.5
+    ],
+    "fixed_beta": "Qualify two consecutive full shadow iterations; never automatically enable on-mode",
+    "authority": "Explicit user request in this chat"
+  },
+  "collector_performance_review": {
+    "contract": "brass-collector-performance-build/1",
+    "ordinary_source": "f103ea62c89a7e2f9e2b3c97faa65e6594a41d9f0fcd964e4c92ee4a35a7ca92",
+    "teacher_reuse": "13fe2c56cd78d449ac7b47edcb22a439c115eeccf07acb0c939077b21cfa4142",
+    "validation_policy": "brass-collector-validation/1",
+    "default_mode": "production_fast",
+    "qualification": "Focused short debug/component evidence; full Linux/CUDA shadow throughput Pending"
+  },
+  "collector_runtime_config_review": {
+    "fields": {
+      "execution.collector_validation": "production_fast",
+      "execution.replay_bindings": true
+    },
+    "propagation": "Training scope and explicit spawn snapshots for ordinary actors, publishers and replay readers",
+    "compatibility": "Operational fields excluded from frozen learning recipe; no pending archive or policy/RNG/search/reward changes",
+    "authority": "User request to store these two settings in training config instead of export"
+  }
 }

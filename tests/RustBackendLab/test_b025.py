@@ -457,7 +457,7 @@ class Lifecycle(Base):
     def test_live_enablement_fails_before_any_collection_or_state_write(self):
         from brass_ai.recovery.league import _train
         c = config(); c['teacher_phase']['mode'] = 'on'; run = self.temp_run()
-        with self.assertRaisesRegex(ValueError, 'B05/B07 teacher update/adoption qualification is Pending'):
+        with self.assertRaisesRegex(ValueError, 'teacher on-mode remains gated'):
             _train(SOURCE_ROOT, run, c)
         self.assertEqual(list(run.iterdir()), [])
 

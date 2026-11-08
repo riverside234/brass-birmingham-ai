@@ -452,7 +452,7 @@ class ActorPool:
     def __init__(self,root,host,service,config,*,mono=None,heavy=False):
         self.root,self.host,self.service,self.config=root,host,service,config
         self.mono,self.heavy=mono,heavy
-        self.processes=[];self.mp=multiprocessing.get_context('spawn')
+        self.processes=[];self.channel_leases=[];self.closed=False;self.mp=multiprocessing.get_context('spawn')
         self.jobs=self.mp.Queue();self.results=self.mp.Queue()
         self.width=config['heavy_processes'] if heavy else config['processes']
         self.lanes=1 if heavy else config['hosts_per_process']
@@ -460,6 +460,7 @@ class ActorPool:
         self.last_collection_report=None;self.duration_estimates={}
 
     def start(self,target=None):
+        require(not self.closed,'Actor pool is closed')
         target=min(self.width,target or self.width)
         if len(self.processes)>=target: return
         from .host_runtime import training_host
@@ -469,10 +470,11 @@ class ActorPool:
         workers=max(search_workers_per_turn(self.config),search_workers_per_turn(self.config,teacher=True))
         search_channels=1+workers if self.heavy and workers>1 else 1
         lease=self.service.channels((target-len(self.processes))*self.lanes*search_channels)
+        self.channel_leases.append(lease)
         for _ in range(target-len(self.processes)):
             p=self.mp.Process(target=_actor,args=(str(self.root),str(self.host),self.jobs,self.results,
                 lease,self.config,self.mono,self.lanes,search_channels,self.service.cpu,len(self.processes),self.inboxes))
-            p.start();self.processes.append(p)
+            self.processes.append(p);p.start()
 
     def collect(self,jobs,*,on_records=None):
         try:
@@ -635,20 +637,28 @@ class ActorPool:
         return sorted(records,key=lambda r:r['job'])
 
     def close(self,failed=False):
+        if self.closed:return
         if failed:
             self.service.cpu.abort()
             for p in self.processes:
-                if p.is_alive(): p.terminate()
+                if p.pid is not None and p.is_alive(): p.terminate()
         else:
             for _ in range(len(self.processes)*self.lanes): self.jobs.put(None)
         for p in self.processes:
+            if p.pid is None:
+                p.close();continue
             p.join(timeout=30)
             if p.is_alive(): p.terminate();p.join(timeout=5)
+            p.close()
+        self.processes=[]
+        for lease in self.channel_leases:self.service.release_channels(lease)
+        self.channel_leases=[]
         # No pending input messages should be flushed into a failed consumer.
         self.jobs.cancel_join_thread();self.results.cancel_join_thread()
         self.jobs.close();self.results.close()
         for inbox in getattr(self,'inboxes',()):
             inbox.cancel_join_thread();inbox.close()
+        self.closed=True
 
     def __enter__(self): return self
     def __exit__(self,kind,*_): self.close(failed=kind is not None)

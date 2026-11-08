@@ -35,7 +35,12 @@ class InputAudit:
         self.lock = threading.RLock()
 
     def check(self, row):
+        from .replay_binding import encoded_digest
         check_encoded(row)
+        admitted=encoded_digest(row,'actions')
+        if admitted is not None:
+            with self.lock:self.hits+=1
+            return admitted
         seal = array_digest(row.actions)
         # A weak reference prevents object-ID reuse from becoming an admission
         # proof, without retaining temporary state-only candidate slices.
@@ -63,8 +68,10 @@ class InputAudit:
         value = hashlib.sha256()
         for row in rows:
             value.update(self.check(row))
-            value.update(array_digest(row.state))
-            value.update(array_digest(row.stable_to_relative))
+            from .replay_binding import encoded_digest
+            for field in ('state','stable_to_relative'):
+                admitted=encoded_digest(row,field)
+                value.update(array_digest(getattr(row,field)) if admitted is None else admitted)
         for q in distributions:
             value.update(array_digest(q))
         return value.digest()

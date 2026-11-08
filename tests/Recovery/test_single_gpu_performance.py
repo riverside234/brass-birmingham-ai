@@ -124,7 +124,8 @@ class SingleGPUPerformanceTests(unittest.TestCase):
                 self.assertEqual(pool.submit.call_count,3)
                 future.result.assert_not_called()
             self.assertEqual(factory.call_args.kwargs['max_workers'],3)
-            self.assertEqual(factory.call_args.kwargs['initargs'],(admission,))
+            from brass_ai.recovery.collector_runtime import current
+            self.assertEqual(factory.call_args.kwargs['initargs'],(admission,current()))
         self.assertEqual(future.result.call_count,3)
         pool.__exit__.assert_called_once()
 

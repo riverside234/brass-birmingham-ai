@@ -19,8 +19,17 @@ SKIP_DIRS = {'target', 'checkout', 'inputs', 'bootstrap', 'toolchain', '__pycach
 TEXT = {'.json', '.log', '.txt', '.md', '.csv'}
 
 
+def io_path(path):
+    """Keep portable manifest paths while supporting long Windows evidence names."""
+    path=Path(path)
+    if os.name!='nt':return path
+    value=str(path.resolve())
+    if value.startswith('\\\\?\\'):return path
+    return Path('\\\\?\\UNC\\'+value[2:] if value.startswith('\\\\') else '\\\\?\\'+value)
+
+
 def sha(path):
-    with Path(path).open('rb') as stream:
+    with io_path(path).open('rb') as stream:
         return hashlib.file_digest(stream, 'sha256').hexdigest()
 
 
@@ -68,20 +77,20 @@ def export(evidence, *, root=ROOT):
             if path.is_symlink() or path.suffix.lower() not in TEXT:
                 omitted.append(dict(source=relative.as_posix(), reason='non-report file or symlink'))
                 continue
-            before = (path.stat().st_size, sha(path))
+            before = (io_path(path).stat().st_size, sha(path))
             target = destination/'evidence'/relative
             compressed = before[0] >= 1024*1024
             if compressed: target = target.with_name(target.name+'.gz')
-            target.parent.mkdir(parents=True, exist_ok=True)
+            io_path(target.parent).mkdir(parents=True, exist_ok=True)
             if compressed:
-                with path.open('rb') as src, target.open('wb') as raw, gzip.GzipFile(fileobj=raw, mode='wb', mtime=0, filename='') as dst:
+                with io_path(path).open('rb') as src, io_path(target).open('wb') as raw, gzip.GzipFile(fileobj=raw, mode='wb', mtime=0, filename='') as dst:
                     shutil.copyfileobj(src, dst)
             else:
-                shutil.copyfile(path, target)
-            if before != (path.stat().st_size, sha(path)):
+                shutil.copyfile(io_path(path), io_path(target))
+            if before != (io_path(path).stat().st_size, sha(path)):
                 raise ValueError('Evidence changed during export: '+str(relative))
             files.append(dict(source=relative.as_posix(), path=target.relative_to(destination).as_posix(),
-                source_bytes=before[0], source_sha256=before[1], bytes=target.stat().st_size,
+                source_bytes=before[0], source_sha256=before[1], bytes=io_path(target).stat().st_size,
                 sha256=sha(target), gzip=compressed))
     # All paths in this index are relative to the export. Original receipt bytes
     # retain lab paths/hashes; this review copy cannot authorize another host.

@@ -56,27 +56,53 @@ def read_bytes(path):
     return data
 
 
-def pack(games, replay_sha256, *, compressed=True):
-    arrays=[];keys=[]
+def pack(games, replay_sha256, *, compressed=True, _owned=False):
+    from brass_ai.recovery.replay_binding import GameBinding,checked_encoded,count
+    arrays=[];keys=[];sealed=True
     for game in games:
         require(isinstance(game,CheckedGame),'Feature handoff requires checked game')
-        game.assert_metadata()
+        if not _owned:game.assert_metadata()
+        else:require(len(game['records'])==len(game.seals),'Owned feature row coverage differs')
+        order=iter(game.seals)
         for row in game['records']:
+            binding=getattr(game,'_immutable_binding',None)
+            if type(binding) is GameBinding:
+                proof=binding.row(game,row)
+                require(proof is not None,'Immutable feature row binding differs')
+                e=game.encoded(row,None);arrays.append(e);keys.append(proof.key)
+                continue
+            if _owned:
+                # Synchronous publisher-only reuse. convert() independently
+                # checked these exact private rows; no borrowed mutable inputs
+                # or serialized "validated" flags enter this scoped path.
+                identity=(row['step'],row['seat'])
+                require(identity==next(order),'Owned feature row order changed')
+                seal=game.seals[identity]
+                require(row['style']==seal['style'] and row['intent']==seal['intent'],'Owned feature context changed')
+                key=digest(dict(input=seal['input'],style=row['style'],intent=row['intent']))
+                e=game.features[key];check_encoded(e)
+                require(len(e.choice_ids)==len(row['choices']),'Owned feature choices changed')
+                arrays.append(e);keys.append(key);sealed=sealed and checked_encoded(e)
+                count('publication_row_binding_reused');continue
             # One source hash verifies mutation and provides the cache row key.
             source=digest(dict(view=row['view'],choices=row['choices']))
+            count('input_hash_executed');count('label_hash_executed')
             seal=game.seals[(row['step'],row['seat'])]
             require(seal==dict(input=source,label=label_key(row),style=row['style'],intent=row['intent']),
                     'Validated replay record changed')
             key=digest(dict(input=source,style=row['style'],intent=row['intent']))
             e=game.features[key];check_encoded(e)
             require(e.choice_ids==tuple(c['id'] for c in row['choices']),'Feature choices changed')
-            arrays.append(e);keys.append(key)
+            arrays.append(e);keys.append(key);sealed=sealed and checked_encoded(e)
     out=io.BytesIO()
     states=np.stack([e.state for e in arrays]);actions=np.concatenate([e.actions for e in arrays])
     seats=np.stack([e.stable_to_relative for e in arrays])
     # Establish this once before the writer can attest/cache these bytes. Warm
     # reads of that exact independently bound cache need not rescan every cell.
-    require(all(np.isfinite(a).all() for a in (states,actions,seats)),'Non-finite feature arrays')
+    if not sealed:
+        require(all(np.isfinite(a).all() for a in (states,actions,seats)),'Non-finite feature arrays')
+        check_action_selectors(actions)
+    count('pack_finite_reused' if sealed else 'pack_finite_executed')
     (np.savez_compressed if compressed else np.savez)(out,
         states=states,actions=actions,
         offsets=np.cumsum([0]+[len(e.choice_ids) for e in arrays]),
@@ -87,8 +113,8 @@ def pack(games, replay_sha256, *, compressed=True):
     return raw,meta
 
 
-def write(path, games, replay_sha256, *, compressed=True):
-    raw,meta=pack(games,replay_sha256,compressed=compressed)
+def write(path, games, replay_sha256, *, compressed=True, _owned=False):
+    raw,meta=pack(games,replay_sha256,compressed=compressed,_owned=_owned)
     data,manifest=_cache_paths(path)
     for target,value in ((data,raw),(manifest,json.dumps(meta,separators=(',',':')).encode())):
         temporary=target.with_name(target.name+'.tmp')
@@ -100,26 +126,30 @@ def write(path, games, replay_sha256, *, compressed=True):
 
 
 def read(path, games, receipt, replay_sha256,*,deep=True):
+    from brass_ai.recovery.feature_receipts import versions
     data,manifest=_cache_paths(path)
-    if receipt is None or receipt.get('validator')!=version() or not data.exists() or not manifest.exists():return None
+    if receipt is None or receipt.get('validator') not in versions(version()) or not data.exists() or not manifest.exists():return None
     require(receipt['replay_sha256']==replay_sha256,'Feature replay binding changed')
     meta_bytes=read_bytes(manifest);raw=read_bytes(data)
     require(hashlib.sha256(meta_bytes).hexdigest()==receipt['manifest_sha256']
             and hashlib.sha256(raw).hexdigest()==receipt['data_sha256'],'Derived feature receipt changed')
     meta=json.loads(meta_bytes)
     require(meta['format']=='derived-features/4.0.0' and meta['replay_sha256']==replay_sha256
-            and meta['data_sha256']==receipt['data_sha256'] and meta['encoder']==version()
+            and meta['data_sha256']==receipt['data_sha256'] and meta['encoder']==receipt['validator']
             and meta['compatibility']==compatibility(),'Feature cache binding changed')
     return unpack(raw,games,meta,deep=deep)
 
 
 def unpack(raw,games,meta,*,combined=False,deep=True):
-    require(meta['encoder']==version() and meta['compatibility']==compatibility()
+    from brass_ai.recovery.replay_binding import _bytes_array,seal_encoded,count,enabled
+    from brass_ai.recovery.feature_receipts import versions
+    require(meta['encoder'] in versions(version()) and meta['compatibility']==compatibility()
             and meta['format']=='derived-features/4.0.0','Feature schema differs')
     rows=[r for g in games for r in g['records']]
     bindings=[]
     for row in rows:
         source=digest(dict(view=row['view'],choices=row['choices']))
+        count('input_hash_executed');count('label_hash_executed')
         key=digest(dict(input=source,style=row['style'],intent=row['intent']))
         bindings.append((key,source,label_key(row),tuple(row['style']),tuple(row['intent'])))
     require(meta['rows']==[b[0] for b in bindings],'Feature row binding changed')
@@ -138,6 +168,9 @@ def unpack(raw,games,meta,*,combined=False,deep=True):
             and offsets.dtype.kind in 'iu' and offsets[0]==0 and offsets[-1]==len(actions)
             and np.array_equal(np.diff(offsets),[len(r['choices']) for r in rows]),'Malformed feature arrays')
     if deep:require(all(np.isfinite(a).all() for a in (states,actions,seats)),'Non-finite feature arrays')
+    # Freeze the three slabs once, rather than copy each overlapping row.
+    immutable=enabled()
+    if immutable:states,actions,seats=(_bytes_array(a) for a in (states,actions,seats))
     out=[]
     for i,row in enumerate(rows):
         e=Encoded(states[i],actions[offsets[i]:offsets[i+1]],seats[i],tuple(c['id'] for c in row['choices']))
@@ -146,6 +179,8 @@ def unpack(raw,games,meta,*,combined=False,deep=True):
             require(np.array_equal(e.stable_to_relative,[(s-row['seat'])%4 for s in range(4)])
                     and np.array_equal(e.state[-12:],np.asarray(row['style']+row['intent'],dtype=np.float32)),
                     'Cached seat/context differs')
-        for a in (e.state,e.actions,e.stable_to_relative):a.setflags(write=False)
-        out.append(e)
+        if immutable:out.append(seal_encoded(e,_checked=True))
+        else:
+            for a in (e.state,e.actions,e.stable_to_relative):a.setflags(write=False)
+            out.append(e)
     return VerifiedArrays(out,rows,bindings)

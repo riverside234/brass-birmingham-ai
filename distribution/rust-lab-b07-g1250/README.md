@@ -1,6 +1,146 @@
 # B07 g1250: Git checkout continuation after passed qualification
 
-## Current g1253 collection repair
+## Ordinary collector performance update
+
+PI00–PI05 now use the production ordinary path, including combined completion export and immutable replay reuse.
+Before the shadow command below, build/verify the upgraded **ordinary** adapter once:
+
+```bash
+python scripts/prepare-rust-collector-performance.py --expected-generation 1257 --offline
+```
+
+The command preserves the qualified teacher/search binary and checkpoint/Adam/RNG.
+Its success/failure report exports under results. Then use the existing shadow continuation
+with `--share-target 0.25`; do not repeat B01–B07 qualification or extract old archives.
+The shadow training JSON now saves `execution.collector_validation="production_fast"`
+and `execution.replay_bindings=true`; no shell exports are needed. The launcher
+preserves explicit JSON overrides and passes them to workers without changing frozen jobs.
+Generation must match the actual committed boundary. See [the performance supplement](../rust-collector-performance/README.md)
+for current mode/coverage, short smoke commands and measured component limitations.
+
+## Full shadow gradient qualification
+
+The latest committed checkpoint is **g1257**. The current revision fixes the
+descriptor leak below and implements the user's additional settings:
+
+- Branching **0%**; full **28 train + 4 held-out** shadow teacher tables per iteration.
+- Rust search_v1; the existing full/fast profiles and strict post-work caps.
+- Measure actual teacher/PPO actor gradient ratios on shared encoders at beta=1,
+  with zero teacher gradient applied to ordinary updates.
+- After two qualifying consecutive full shadow iterations, persist a **fixed**
+  `beta=clip(target/median(raw_ratio),0.01,10)`. Default target **0.25**; later
+  explicit target options **0.4** and **0.5** reuse the frozen measurements.
+- Keep 24 ordinary actor processes / 48 lanes, up to 24 publishers and the global
+  60-slot CPU allowance. The leak fix adds no inference requests or record scans.
+  Full shadow collection/gradient diagnostics add their separately reported cost.
+
+After syncing the code to the lab and fully exiting the failed trainer, run in
+the existing training environment:
+
+```bash
+git pull --ff-only
+python scripts/continue-rust-shadow.py --expected-generation 1257 --iterations 2 --share-target 0.25
+```
+
+This resumes the same full checkpoint/Adam/RNG/PPG/population state and advances
+**g1257→g1259**. It verifies original native/runtime pins, archives any old-config
+unfinished ordinary work with its state/hash manifest, writes the exact reviewed
+shadow config and invokes the normal trainer. It retains completed new shadow
+tables for validated recovery. Repeating this command after one or both commits
+does only the remaining work; it never starts an extra generation. A pending
+checkpoint or teacher publication must first recover on its current config.
+No native rebuild, new ZIP or repeat of passed qualifications is needed.
+
+The config is [the default shadow recipe](../../configs/step5/joint7-v11-2-g1290-trained-restart-rust-shadow32-no-branch-share025.json).
+Inspect each iteration's `teacher_phase.term` for raw share/cosine distributions,
+phase support, projected weighted share and gradient qualification. The fixed
+receipt/beta persists at `teacher_phase.weight.gradient_qualification` in state
+and checkpoint. Missing/invalid data stays Pending. **It remains shadow after
+qualification**; teacher on-mode requires a separate explicit step.
+
+Later, at a clean committed boundary, choose `--share-target 0.4` or
+`--share-target 0.5` with the actual current `--expected-generation`. For example,
+this runs one further shadow iteration while explicitly selecting target 0.4:
+
+```bash
+python scripts/continue-rust-shadow.py --expected-generation 1259 --iterations 1 --share-target 0.4
+```
+
+Changing the target updates the fixed beta from the saved raw calibration; it
+does not enable gradients or adapt beta automatically. The helper prints and
+exports a fresh `results/rust-lab-qualification/` receipt after success, pending
+qualification or failure. Push that folder from the results repository as usual.
+Old qualification files and native binaries must remain in their original lab
+locations. The exact g1257 null-readiness case carries the actual hash-bound g1254
+fit into teacher state, following the plan's last-non-null rule; it preserves the
+current checkpoint's calibration field and explicit-false precedence.
+
+**81 distinct focused debug checks passed.** This includes unchanged shadow PPO
+weights/Adam/RNG, fixed-beta/restart/target edits, 32-table authored orchestration,
+cache/staged-shard recovery and resource lifecycle tests. No local benchmarks,
+native games or live training sessions ran. Actual full-volume timing and the
+two gradient qualifications are Pending on this lab continuation.
+
+## Current g1257 open-file repair
+
+Results pulled inside `results/` to `d6ed70075232997c322231e034cda81bf83e3cb9`
+confirm committed **g1257**, checkpoint
+`cad965da88338e6a424cd1e615ffb61da014c52e8ff3237baeeae8d94e429d40`.
+The next collection failed with `Too many open files`: private inference pipes,
+lease queues and shared slots survived each retired Rust/evaluation pool until
+the whole training process exited. Joined process sentinels also needed explicit
+closure. The Git-only fix retires these at existing pool shutdown boundaries,
+drains unclaimed handle transfers, protects in-flight shared views and cleans up
+partial startup. See [design and checks](../../ai-research/RUST_BACKEND_B07_IMPLEMENTATION.md#g1257-descriptor-exhaustion-collection-boundary-resource-retirement).
+
+**Speed/behavior constraints:** keep 24 actor processes / 48 lanes, up to 24
+publishers, existing batching/model caches and the same 60-slot CPU allowance.
+No extra NN requests/forwards, feature encoding or record validation is added.
+Small per-envelope lifetime accounting protects shared views; no lifetime lock
+spans inference computation or IPC send. Resource cleanup stays at round/pool
+boundaries. This avoids reducing workers or restarting every generation; exact
+timing impact awaits the next normal lab report, rather than a local benchmark.
+
+For the original teacher-off recipe only, after syncing this fix through Git,
+**fully exit the failed trainer** and resume
+the same run in a fresh process. Preserve `iteration-1257` and every original
+model/cache/qualification/build dependency. The existing strict recovery checks
+reuse valid published families. No override, rebuild, new archive or repeat of
+passed qualification is required:
+
+```bash
+git pull --ff-only
+python scripts/step5.py --root "$PWD" --config configs/step5/joint7-v11-2-g1290-trained-restart-g1247.json --device cuda --mono mono train --run artifacts/step5/joint7-v11-2-g1290-trained-restart --imitation-run artifacts/step5/features4-v11-2-batch7-il --expected-generation 1257 --iterations 1
+```
+
+This older command advances **g1257→g1258** with teaching off; use the full-shadow
+command above for the newly requested settings. The tracked g1247 config is exactly equal to the
+config committed in g1257. Increase `--iterations` for sustained continuation
+after verifying that the resource counts return to their stable baseline. The
+generation guard rejects a stale command; inspect state if training advanced.
+Check the next iteration's `inference.reply_channels` active/retiring/shared-slot
+and lease counts. Persistent search pools may retain their own live channels.
+
+**41 distinct focused debug checks passed**, including 624 real lane allocations
+across repeated rounds with a stable OS handle count, spawned/unused transfers,
+cancel/stale/partial-startup cases, both replica routes, unchanged predictions,
+request/forward counts and strict predecessor checkpoint identity. No benchmark,
+simulator game or training update ran locally. For only the affected lab debug
+checks, if desired:
+
+```bash
+PYTHONPATH=src:scripts:tests/R2:tests/Recovery:tests/FeatureEngineering:tests/RustBackendLab python -m unittest test_inference_channel_lifecycle -v
+```
+
+Check the process limits with `ulimit -Sn` and `ulimit -Hn`. If permitted and the
+soft limit is small, `ulimit -n 4096` before starting the trainer adds descriptor
+headroom for parallel workers; it must stay within the hard limit. Raising a
+limit alone cannot cure a leak. The fix preserves the exact g1257 checkpoint
+execution as a reviewed predecessor and records the new execution on the next
+commit. Old checkpoints, frozen jobs and passing qualification are not rewritten.
+The next normal lab iteration owns verification of this operational repair.
+
+## Historical g1253 collection repair
 
 Results were pulled inside `results/` to `097327ef4fab7190f8d91ce4996dd1d4db4c5ce2`.
 New 320-family Rust collections took 501.5s and 496.2s. The repair addresses the
@@ -37,8 +177,9 @@ profiles are `profile-097327e-small.json`, `profile-097327e-medium.json`,
 `profile-097327e-binding.json` and `profile-097327e-warm-checks.json` beside this README.
 The last file measures the final hot-check repair: 1.562→1.263s median warm read,
 with equal training games and unchanged feature bytes. They include both positive
-phase improvements and negative startup totals. Complete 320-family speedup
-remains Pending until the next normal lab report. The affected debug suites passed
+phase improvements and negative startup totals. Later results `d6ed700` report
+fresh 320-family collection at 367.4–395.9s with 24 publishers and 48 lanes;
+successive jobs are not a matched speed benchmark. The affected debug suites passed
 38 distinct checks, including the 24-lane publication scheduler; historical
 qualification archives remain byte-for-byte intact. The CPU timing probes use
 two/four workers; the requested 24-process full-size throughput awaits the lab.

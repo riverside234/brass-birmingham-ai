@@ -32,6 +32,7 @@ training/runtime/**/*.json -text
 /distribution/rust-lab-b06-g1250/*.json -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
 /distribution/rust-lab-b07-g1250/**/*.json -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
 /distribution/rust-lab-b07-g1250/*.json -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
+/distribution/rust-collector-performance/*.json -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
 test_nn/**/*.json -text
 test_nn/**/*.pt.part* -text
 test_nn/**/*.jsonl.gz -text

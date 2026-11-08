@@ -185,7 +185,7 @@ class TeacherCollector:
         self.verifier = None
         self.failures = []
 
-    def collect(self, jobs):
+    def collect(self, jobs, *, on_result=None):
         if not jobs:return []
         jobs = copy.deepcopy(jobs)
         require(len({j['expected']['job_id'] for j in jobs}) == len(jobs),'Duplicate teacher job')
@@ -219,6 +219,8 @@ class TeacherCollector:
                     client = Client(endpoint,job['expected'],self.cancel,job.get('search_value'),job.get('seat_values'))
                     worker = Worker(self.executable,request,client,self.cancel)
                     result = worker.collect(job['expected'],self.core_source,verifier=self.verifier)
+                    if on_result is not None:
+                        result['metrics']['shadow_cache_seconds']=on_result(result,job)
                 result['metrics']['python_gpu_wait_seconds'] = client.wait_seconds
                 result['metrics']['cpu_admission'] = timings.report()
                 return result
@@ -237,10 +239,11 @@ class TeacherCollector:
                 if endpoint is not None:endpoints.put(endpoint)
         try:
             try:
-                with ThreadPoolExecutor(max_workers=len(owned),thread_name_prefix='rust-teacher') as pool:
+                from .lab_families import _failure_scope
+                with ThreadPoolExecutor(max_workers=len(owned),thread_name_prefix='rust-teacher') as pool, _failure_scope(self.cancel,None):
                     results = list(pool.map(one,jobs))
-            except BaseException:
-                if first_failure:
+            except BaseException as interruption:
+                if isinstance(interruption,Exception) and first_failure:
                     error,tb=first_failure[0]
                     raise error.with_traceback(tb)
                 raise
@@ -251,6 +254,8 @@ class TeacherCollector:
             for e in owned:
                 try:e.close()
                 except BaseException as error:close_errors.append(error)
+            try:self.service.release_channels(lease)
+            except BaseException as error:close_errors.append(error)
             if close_errors:
                 if first_failure:
                     self.failures[0]['endpoint_cleanup_errors'] = [str(e) for e in close_errors]
@@ -266,7 +271,8 @@ def calibrate(executable, core_source, origins, job, service):
                 client = Client(e,job['expected'],cancel,job.get('search_value'),job.get('seat_values'))
                 sample = Worker(executable,request,client,cancel).collect(job['expected'],core_source,calibration=True)
                 samples.append(dict(sample, root_index=root_index, warmup=repetition == 0))
-    finally:e.close()
+    finally:
+        e.close();service.release_channels(lease)
     require(samples,'No GPU calibration samples')
     # Per-root warmup is measured but excluded. Freeze the slower root median;
     # a single cold CUDA allocation can no longer halve K for an entire run.
@@ -305,6 +311,7 @@ def turn_probes(executable, core_source, origins, job, service, calibration, mod
                 verifier=verifier,turn_probe=True)
             result['verification']=verifier.cache[job['expected']['job_id']]['timings']
             results.append(result)
-    finally:endpoint.close()
+    finally:
+        endpoint.close();service.release_channels(lease)
     return dict(passed=True,diagnostic=True,turns=results,search_seconds=.8 if profile=='fast' else 4.,post_search_seconds=FAST_POST_SECONDS if profile=='fast' else 1.,k=4 if profile=='fast' else 16,
                 scope='Fixed-root timing and verification probes; no full games or training labels')

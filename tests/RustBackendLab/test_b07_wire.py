@@ -14,6 +14,20 @@ import test_b02_timeout as transport_tests
 
 
 class Wire(transport_tests.Transport):
+    def test_sampled_timers_keep_all_bytes_and_calls_without_claiming_full_times(self):
+        source='''import json,struct,sys
+r=sys.stdin.buffer;w=sys.stdout.buffer
+for i in range(65):
+ n=struct.unpack('<I',r.read(4))[0];q=json.loads(r.read(n))
+ v=json.dumps(dict(ok=True,id=q['id'],protocol=q['protocol'],data={})).encode()
+ w.write(struct.pack('<I',len(v))+v);w.flush()
+'''
+        pipe=self.pipe(source,timeout=3);pipe.sample_every=64
+        for _ in range(65):pipe.call('echo')
+        self.assertEqual(pipe.metrics['echo_calls'],65);self.assertEqual(pipe.metrics['timing_sampled_calls'],1)
+        self.assertEqual(pipe.metrics['received_bytes'],pipe.metrics['echo_received_bytes'])
+        self.assertGreater(pipe.metrics['reply_decode_sampled_seconds'],0.)
+        self.assertNotIn('round_trip_seconds',pipe.metrics)
     # Inherit the existing real subprocess fragmentation/deadline coverage.
     def test_array_reply_is_bounded_and_exact(self):
         source='''import json,struct,sys

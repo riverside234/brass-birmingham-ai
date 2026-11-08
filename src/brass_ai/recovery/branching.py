@@ -173,7 +173,11 @@ def expand(games):
     for game in games:
         result.append(game)
         for child in game.get('branches',[]):
-            validate_child(game,child)
+            from .replay_binding import GameBinding,count
+            binding=getattr(game,'_immutable_binding',None)
+            if type(binding) is GameBinding:
+                binding.metadata(game);count('branch_deep_reused')
+            else:validate_child(game,child)
             if hasattr(game,'critic_table'):
                 child.critic_table=game.critic_table;child.table_kind=game.table_kind
             if hasattr(game,'ppo_opening_objective'):

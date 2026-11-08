@@ -6,6 +6,180 @@ the real g1250→g1251 commit and full restart now passed on the lab.** Use the
 [normal g1251 continuation command](../distribution/rust-lab-b07-g1250/README.md#continue-from-g1251-after-qualificationadoption-finishes);
 do not repeat passed qualifications. The installed game is unchanged.
 
+## PI00–PI05 collector performance follow-up
+
+All implementation stages of the [performance plan](RUST_TRAINING_COLLECTOR_PERFORMANCE_IMPROVEMENT_PLAN.md)
+are implemented in the actual ordinary collector: bounded parent-owned shared handoff instead of temporary
+payload files, raw record publication, exact inference-feature reuse and lossless history/static-field/candidate
+deltas. Versioned fast/strict coverage reduces independent RNG/probability/branch replay, with mandatory
+identity/byte/numeric/recovery checks retained. Original teacher/search binaries and the current full shadow
+28+4 / branching-off / share-target 0.25 continuation remain supported.
+
+See [implementation, measured gains and limits](RUST_COLLECTOR_PERFORMANCE_PI00_PI03.md) and
+[lab build/continuation commands](../distribution/rust-collector-performance/README.md).
+Native wire/CPU output equivalence is locally checked; full checkpoint/GPU and ordinary-plus-shadow
+throughput remain Pending on lab. Rebuild only the ordinary adapter with the new prepare command before
+expecting PI02/PI03 from a previously qualified binary. Keep prior qualification evidence; no full bundle or
+repeat of successful gates is required. PI04 now combines completion/record/feature pages and retires the lane
+in the final reply. PI05-B reuses private publication bindings, immutable reader inputs/arrays/targets and
+reviewed legacy caches. See [completion, current check inventory and limits](RUST_COLLECTOR_PERFORMANCE_PI04_PI05.md).
+Final current-code debug groups passed 79 + 39 Python checks; lab-wide throughput remains Pending.
+
+## Full 32-table shadow continuation and fixed beta
+
+The user additionally requests branching **0%**, full **28 train + 4 held-out**
+teacher tables each iteration, two shadow iterations and a qualified fixed beta.
+The default config is
+`configs/step5/joint7-v11-2-g1290-trained-restart-rust-shadow32-no-branch-share025.json`.
+It disables the dormant legacy teacher-value path, retains search_v1 and uses the
+existing all-seat w=0 profile (16 labelled 4s/K16 turns + 48 unlabelled 0.8s/K4
+turns per table, with the existing <=1s / <=0.5s post caps). Shadow fits neither
+policy nor correction weights. Its loss/gradient measurement runs inside the
+existing ordinary PPO steps; no separate optimizer steps are added.
+
+`continue-rust-shadow.py --expected-generation 1257 --iterations 2` prepares this
+exact config under the run lock, verifies the checkpoint and qualified teacher
+binary pins, and uses the normal reviewed signature transition/optimizer restore.
+Old-config unfinished ordinary work is renamed into an owned, hash-manifested
+`configuration-history/` archive with its original state, preserving every byte
+before the new plan is generated. It does not relabel/reuse those old branches.
+Existing uncommitted checkpoints or teacher shards require recovery on their
+current config first. An interrupted run already on the shadow config resumes
+that same config/cache. Repeating the two-iteration command after g1259 launches
+no extra generation. The script exports a fresh small Git-visible qualification
+report; Git supplies code/assets and the historical qualification ZIP is unchanged.
+
+Normal training previously rejected every non-off teacher phase. The adapter now
+connects the existing TeacherPhase, qualified native TeacherCollector, GPU
+calibration, streamed turn verifier, label/value buffers and TeacherTerm to the
+ordinary trainer's pre-PPO barrier. It retains Rust-owned ordinary collection and
+the original inference/CPU limits. Teacher jobs/seed cursor and holdouts are
+separate from ordinary replay. Their wall time and inference counts are reported
+separately; full shadow work adds cost as explicitly accepted by the user.
+Per-table cache publication is charged to the final turn; split sealing is charged
+to its own tables rather than charging all 32 tables' work to every final turn.
+
+Completed teacher tables are sealed individually for interrupted-update recovery.
+Live immutable rows retain their independent verifier capability; disk reloads
+take full policy/value admission. Expected staged value filenames confer no
+training permission: they enter receipts only after normal validated publication
+recomputes and compares exact bytes. Known incomplete value writes are preserved
+outside the active buffer; foreign/stale files still fail. This also covers a
+crash after shard publication and before the next checkpoint. Channel leases from
+teacher calibration/collection now retire at their boundaries too.
+
+The latest g1257 report has zero-step recent PPG fits, so its calibration can be
+null. For this exact g1257 adoption, `b07-shadow-readiness.json` pins the actual
+last measured ready receipt from the g1254 checkpoint / iteration-1253 report,
+plus the intervening null receipts and source hashes. It initializes the plan's
+last-non-null teacher readiness rule after verifying the report and checkpoint
+lineage. No readiness is fabricated, current deployment metadata is unchanged,
+and an explicit false receipt still supersedes it.
+
+**Gradient qualification:** each shadow PPO step measures r=||gT||/||gA|| at
+beta=1 and the encoder cosine, before clipping, on TrunkGradients' shared
+state/entity encoders. The actor gradient excludes entropy. Reports retain r
+median/p10/p90, cosine, norms, phase improvement, root-label yield, N/effective K,
+deadline hits, table coverage and collection cost. Two complete consecutive 28+4
+iterations with all four phases and finite nonzero gradient observations qualify
+`beta=clip(share_target/median(r),0.01,10)`. The checkpoint/state receipt is
+`teacher_phase.weight.gradient_qualification`; the report is
+`teacher_phase.term.gradient_qualification`. It carries the observations and
+integrity binding, and persists the fixed beta. Monitoring never adapts it.
+
+The default `teacher_phase.term.share_target` is **0.25**. The continuation helper
+also accepts **0.4** and **0.5** with `--share-target`; at a clean boundary this
+explicit edit calculates a new fixed beta from the same frozen qualification
+measurements. It does not silently recalibrate from later iterations. Shadow
+continues to discard gradients even after qualification. Enabling on-mode is a
+separate decision/gate; this command never switches it automatically.
+
+**81 distinct focused debugging checks passed** across the resource fix and
+shadow integration, including authored PPO/PPG/strict checkpoint fixtures. The
+full 32-table orchestration was exercised with a mocked native peer, actual sealed
+table I/O and cache recovery; no local native games, live training sessions,
+benchmarks or unrelated successful qualification were run. Actual full-volume
+Linux/CUDA timing and gradient qualification remain **Pending on the two normal
+lab iterations**, g1257→g1259. See [current command and target options](../distribution/rust-lab-b07-g1250/README.md#full-shadow-gradient-qualification).
+
+## g1257 descriptor exhaustion: collection-boundary resource retirement
+
+Pulled inside `results/` to `d6ed70075232997c322231e034cda81bf83e3cb9`.
+The newest export is
+`joint7-v11-2-g1290-trained-restart-g1257-20261107T170030753211Z`.
+Its committed state is g1257, checkpoint
+`cad965da88338e6a424cd1e615ffb61da014c52e8ff3237baeeae8d94e429d40`.
+The supplied traceback fails while creating the next collection's inference
+pipe, with `OSError: [Errno 24] Too many open files`. The exception is supplied
+in the chat; the pushed export contains the committed state and successful
+iteration reports, rather than that traceback.
+
+`NativePool.collect` obtains 48 private inference lanes for each fresh full-size
+collection. Its workers close their own endpoints, but InferenceService formerly
+kept the parent's pipe ends, lease queues and shared-memory slots until the
+entire training process exited. Repeated short-lived reference evaluation pools
+had the same service-side lifetime problem. Joined native processes also lacked
+an explicit `Process.close()`, leaving their OS sentinel handles to garbage
+collection. This retained-resource growth explains exhaustion across successive
+iterations; the lab's exact soft/hard file limits are not included in this export.
+
+The fix reuses collection/pool shutdown as the retirement boundary:
+
+- Native and reference pools retain their lease handles, join consumers, close
+  process sentinels and explicitly release the associated service resources.
+  Persistent reference actor pools retain their channels until their own shutdown.
+- Drain unclaimed lease entries through an ordered feeder marker before closing
+  that queue. An empty-queue probe can miss pending writes and strand the
+  multiprocessing resource sharer's duplicated handles.
+- Allocate pipes/slots as a transaction, then publish the lease. Partial pipe,
+  slot, queue or actor startup failure releases already-created resources and
+  preserves the initiating error. Repeated close is safe.
+- Keep shared views pinned for the inference envelope's lifetime. Retirement
+  never unmaps an in-progress forward; its final completion releases the slot.
+  Monotonic lane IDs prevent stale traffic from reaching a later collection.
+  Retired-lane messages are dropped with balanced multi-replica load accounting.
+- Report `inference.reply_channels` with created/released/active/retiring counts,
+  shared slots and lease count. Completed rounds should return to their stable
+  resource baseline; permanently active search pools may retain their own lanes.
+
+**Preserve throughput and learning behavior:** retain 24 actor processes / 48
+lanes, up to 24 publishers and the same global 60-slot CPU allowance. Cleanup
+occurs at existing shutdown boundaries. Lifetime accounting is constant work per
+inference envelope, with no lock spanning NN computation or a reply send. There
+are no extra inference submissions, GPU forwards, feature encodings, record
+validations or per-record file operations. Predictions, batching, sampling/RNG,
+rewards, branch opportunities, optimizer state and search_v1 are unchanged.
+This removes resource growth without reducing concurrency or restarting the
+trainer each generation. Zero timing impact is not claimed without measurement;
+no local benchmark was run.
+
+**41 distinct focused debug checks passed**, including 13 successive 48-lane
+rounds (624 real allocations with a stable OS handle baseline), shared-memory
+unlinking, claimed/unclaimed transfers, spawned consumers, partial startup,
+cancelled in-flight views, stale lanes, both multi-GPU routes, exact local/remote
+predictions, unchanged inference request/batch/model-load counts, first-failure
+attribution and exact checkpoint predecessor reuse. Existing authored native
+publication/recovery fixtures also passed. No simulator games, live training sessions,
+benchmarks, new archive or unrelated successful lab qualification ran locally.
+
+The exact source review retains the complete g1257 predecessor execution
+`1a4683f397c6162cbc8208e326d31dd0b864a790e3ec7b1ada752b0cc1cd9aed`
+and review `8b8ed2818a627f51be867a2d478e98f6f841c296a16af4afff46cb3bead2cabf`.
+The frozen collection signature and passing qualification remain unchanged;
+unknown source/config/review edits still fail. The next checkpoint records
+actual repaired execution (including the explicit shadow revision)
+`0cadbf2750ce6bf2e5b5e20e7217a359c6f22882d3a47ac33bdf50a071125bce`.
+Lab verification is Pending on the next normal lab continuation, using
+[the current recovery command](../distribution/rust-lab-b07-g1250/README.md#current-g1257-open-file-repair).
+
+Recovery suggestions: fully exit the failed trainer and start a new process
+after syncing the fix; leave `iteration-1257`, model/cache files and original
+qualification/build receipts intact for validated recovery. Check `ulimit -Sn`
+and `ulimit -Hn`; a larger permitted soft limit gives parallel workers headroom,
+but does not replace resource retirement. Keep the worker configuration. Verify
+one ordinary generation first and inspect the resource counters before extending
+the run; no repeated adoption/qualification is required.
+
 ## Full-size collection repair from results 097327e
 
 Results commit `097327ef4fab7190f8d91ce4996dd1d4db4c5ce2` contains
@@ -93,10 +267,14 @@ lab qualification was run locally.
 
 Raw component evidence and exact repeat commands are in
 [the distribution notes](../distribution/rust-lab-b07-g1250/README.md).
-These component results do not establish whole-training speedup. Full repaired
-320-family latency is **Pending on the lab's next normal iteration**. Preserve
+These component results do not establish whole-training speedup. Subsequent lab
+reports in results `d6ed700` show fresh 320-family collection at 391.831, 367.419,
+370.804 and 395.909 seconds, with 24 publishers / 48 lanes. These are successive
+training jobs, not matched frozen-job speed ratios. Descriptor exhaustion then
+interrupted the next collection; its repair is described above. Preserve
 successful B01–B07 adoption receipts; no unrelated qualification or native rebuild
-is required. Continue the latest same run from g1253 with teacher off.
+is required. Continue the latest same run from its actual committed boundary
+(now g1257) with teacher off.
 
 ## Lab g1250 → g1251 acceptance
 

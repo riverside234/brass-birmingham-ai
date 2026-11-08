@@ -18,7 +18,7 @@ def label_snapshot(ages):
 
 
 class SearchValuePhase:
-    def __init__(self, directory, model, options, reward_id, *, saved=None, startup='immediate', trainable=True):
+    def __init__(self, directory, model, options, reward_id, *, saved=None, startup='immediate', trainable=True, pending_files=(), pending_directory=None):
         self.options = copy.deepcopy(validate(options))
         self.model, self.reward_id = model, reward_id
         saved = saved or {}
@@ -27,7 +27,7 @@ class SearchValuePhase:
         self.companion = (Companion(model, saved=saved.get('companion'))
                           if (trainable and options['stage'] != 'off') or hasattr(model,'search_value_head') else None)
         self.buffer = ValueBuffer(directory, reward_id, receipts=saved.get('buffer', {}).get('receipts', ()),
-                                  retired=saved.get('buffer', {}).get('retired', ()))
+                                  retired=saved.get('buffer', {}).get('retired', ()),pending_files=pending_files,pending_directory=pending_directory)
         self.label_ages = copy.deepcopy(saved.get('label_ages', []))
         self.report = {}
 

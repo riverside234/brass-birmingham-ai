@@ -1,6 +1,7 @@
 """Private, bounded, deadline-controlled ordinary lane transport."""
 from __future__ import annotations
 import io
+import hashlib
 import json
 import queue
 import struct
@@ -20,6 +21,7 @@ from brass_ai.native.features import FORMAT as FEATURE_FORMAT,VERSION,SCHEMA,GRO
 CONTRACT = 'brass-lab-collection/1.0.0'
 MAX_FRAME = 4 * 1024**2
 MAX_ARRAY_FRAME = 16 * 1024**2
+MAX_EXPORT_FRAME = 2 * MAX_ARRAY_FRAME + MAX_FRAME
 
 
 class Pipe:
@@ -27,6 +29,7 @@ class Pipe:
         self.binary, self.timeout, self.seq, self.closed = binary, timeout, 0, False
         self.lock = threading.RLock()
         self.metrics = Counter()
+        self.sample_every = 1
         self.jobs, self.results = queue.Queue(1), queue.Queue(1)
         self.process = subprocess.Popen([str(x) for x in command], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
             stderr=subprocess.DEVNULL, bufsize=0, creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0))
@@ -38,15 +41,19 @@ class Pipe:
         self.thread = threading.Thread(target=self._loop, daemon=True); self.thread.start()
 
     def _read(self, n):
-        out = bytearray()
-        while len(out) < n:
-            part = self.process.stdout.read(n-len(out))
-            require(part, 'Collector closed output'); out.extend(part)
+        # One bounded allocation, filled directly by the pipe. read()+extend()
+        # allocated/copies every partial OS read of a multi-MB array frame.
+        out = bytearray(n); view = memoryview(out); offset = 0
+        while offset < n:
+            count = self.process.stdout.readinto(view[offset:])
+            require(count, 'Collector closed output'); offset += count
+        self.metrics['receive_buffer_bytes'] += n
         return out
 
     def _loop(self):
         try:
-            while (payload := self.jobs.get()) is not None:
+            while (item := self.jobs.get()) is not None:
+                payload, op, sampled = item
                 view = memoryview(payload)
                 while view:
                     count = self.process.stdin.write(view)
@@ -54,14 +61,16 @@ class Pipe:
                 if self.binary:
                     n = struct.unpack('<I', self._read(4))[0]
                     arrays = bool(n & (1 << 31)); n &= (1 << 31)-1
-                    require(0 < n <= (MAX_ARRAY_FRAME if arrays else MAX_FRAME), 'Collector frame limit')
+                    limit=MAX_EXPORT_FRAME if arrays and op=='export_page' else (MAX_ARRAY_FRAME if arrays else MAX_FRAME)
+                    require(0 < n <= limit, 'Collector frame limit')
                     result = self._read(n)
                 else:
                     arrays = False
                     result = self.process.stdout.readline(MAX_FRAME+1)
                     require(result.endswith(b'\n') and len(result) <= MAX_FRAME, 'Bootstrap frame limit')
                 self.metrics['received_bytes'] += len(result)
-                began = time.perf_counter()
+                self.metrics[op+'_received_bytes'] += len(result)
+                began = time.perf_counter() if sampled else None
                 if arrays:
                     require(len(result)>=4, 'Truncated array header')
                     h = struct.unpack_from('<I',result)[0]
@@ -71,7 +80,9 @@ class Pipe:
                     reply['data']['_arrays'] = memoryview(result)[4+h:]
                 else:
                     reply = json.loads(result, parse_constant=lambda x: (_ for _ in ()).throw(ValueError(x)))
-                self.metrics['reply_decode_seconds'] += time.perf_counter()-began
+                if sampled:
+                    key='reply_decode_seconds' if self.sample_every==1 else 'reply_decode_sampled_seconds'
+                    self.metrics[key] += time.perf_counter()-began
                 self.results.put(reply)
         except BaseException as error:
             self.results.put(error)
@@ -80,18 +91,25 @@ class Pipe:
         with self.lock:
             require(not self.closed, 'Closed collector')
             self.seq += 1
+            sampled=self.sample_every==1 or self.seq % self.sample_every==0
+            self.metrics['timing_sample_every']=self.sample_every
+            self.metrics['timing_eligible_calls']+=1
+            self.metrics['timing_sampled_calls']+=int(sampled)
             request = dict(op=op, **values)
             if self.binary: request.update(protocol=CONTRACT, id=self.seq)
-            began = time.perf_counter()
+            began = time.perf_counter() if sampled else None
             payload = json.dumps(request, separators=(',', ':'), allow_nan=False).encode()
-            self.metrics['request_encode_seconds'] += time.perf_counter()-began
+            if sampled:
+                key='request_encode_seconds' if self.sample_every==1 else 'request_encode_sampled_seconds'
+                self.metrics[key] += time.perf_counter()-began
             self.metrics['sent_bytes'] += len(payload)
+            self.metrics[op+'_sent_bytes'] += len(payload)
             self.metrics['calls'] += 1
             self.metrics[op+'_calls'] += 1
             require(len(payload) <= MAX_FRAME, 'Collector request limit')
             try:
-                began = time.perf_counter()
-                self.jobs.put(struct.pack('<I', len(payload))+payload if self.binary else payload+b'\n', timeout=self.timeout)
+                began = time.perf_counter() if sampled else None
+                self.jobs.put((struct.pack('<I', len(payload))+payload if self.binary else payload+b'\n', op, sampled), timeout=self.timeout)
                 cancel = getattr(self,'cancel_event',None)
                 if cancel is None: reply = self.results.get(timeout=self.timeout)
                 else:
@@ -101,8 +119,11 @@ class Pipe:
                         try: reply=self.results.get(timeout=min(.05,max(0.,until-time.monotonic())));break
                         except queue.Empty:
                             if time.monotonic()>=until:raise
-                self.metrics['round_trip_seconds'] += time.perf_counter()-began
-                self.metrics[op+'_seconds'] += time.perf_counter()-began
+                if sampled:
+                    elapsed=time.perf_counter()-began
+                    key='round_trip_seconds' if self.sample_every==1 else 'round_trip_sampled_seconds'
+                    self.metrics[key] += elapsed
+                    self.metrics[op+('_seconds' if self.sample_every==1 else '_sampled_seconds')] += elapsed
                 if isinstance(reply, BaseException): raise reply
                 require(not self.binary or (reply['id'] == self.seq and reply['protocol'] == CONTRACT), 'Collector envelope differs')
                 require(reply.get('ok') is True, str(reply.get('error', 'Collector error')))
@@ -125,29 +146,54 @@ class Pipe:
 
 
 class Collector(Pipe):
-    def __init__(self, executable, *, batch_forced=True):
+    def __init__(self, executable, *, batch_forced=True, optimize=True):
+        from .lab_perf import mode
+        from .lab_delta import Decoder
+        selected_mode=mode()
         super().__init__([executable])
+        self.sample_every=64 if selected_mode=='production_fast' else 1
+        self.delta = Decoder(); self.optimized = False; self.retained_features = {};self.retained_bytes=0
         try:
             self.hello = self.call('hello')
             require(self.hello['contract'] == CONTRACT and self.hello['core']['source_sha256'] == SOURCE
                     and self.hello['search_enabled'] is False
                     and self.hello.get('collection_wire')=='compact-arrays-forced/1'
                     and self.hello.get('training_arrays')=='ordinary-training-arrays/1', 'Collector uses an unqualified shared core/wire')
+            if optimize and self.hello.get('performance_wire')=='ordinary-collector-fast/1':
+                require(self.call('configure_wire',enabled=True).get('enabled') is True, 'Performance wire unavailable')
+                self.optimized = True
         except BaseException:
             self.close(); raise
-        self.token = None; self.current = None
+        self.token = None; self.current = None; self.retired = False
         self.batch_forced = batch_forced
         self.forced = deque(); self.acknowledgements = []
 
+    def call(self, op, **fields):
+        if op in ('begin','fork'):
+            from .lab_delta import Decoder
+            self.delta = Decoder(); self.retained_features.clear()
+            self.retained_bytes=0
+        result = super().call(op, **fields)
+        if self.optimized:result=self.delta.reply(result)
+        if hasattr(self,'token') and self.token is not None and isinstance(result,dict):
+            frames=[*result.get('forced',()),result.get('current',result)]
+            for frame in frames:
+                if isinstance(frame,dict) and ('decision' in frame or frame.get('terminal')):
+                    require(frame.get('token')==self.token,'Foreign native decision token')
+        return result
+
     def begin(self, job_id, origin, cap, *, checkpoint=None, indices=None):
+        self.retired = False
         self.token = uuid.uuid4().hex
         fields = dict(job=job_id, token=self.token, cap=cap)
         self.current = self.call('begin', **fields, state=origin['state'], rail_keys=origin['rail_keys']) if checkpoint is None else \
             self.call('fork', **fields, checkpoint=checkpoint, indices=indices)
 
     def append(self, row, evidence, *, allow_forced=True):
-        require(row['teacher'] is None and row['view']==self.current['decision']['view']
-                and row['choices']==self.current['decision']['choices'], 'Compact ordinary input differs')
+        require(row['teacher'] is None and
+                (row['view'] is self.current['decision']['view'] or row['view']==self.current['decision']['view']) and
+                (row['choices'] is self.current['decision']['choices'] or row['choices']==self.current['decision']['choices']),
+                'Compact ordinary input differs')
         model = 'ordinary-external' if row['behavior']['kind']=='external' else evidence.get('model_id') or self.context['model_id']
         context = feature_context(model,row['style'],row['intent'])
         record = dict(revision=row['view']['context']['revision'], action_id=row['choices'][row['chosen']]['id'],
@@ -172,9 +218,105 @@ class Collector(Pipe):
 
     def checkpoint(self, revision): return self.call('checkpoint', token=self.token, revision=revision)
     def release(self):
-        self.call('release'); self.current = self.token = None
+        if not self.retired:self.call('release')
+        self.current = self.token = None; self.retired = False
         self.forced.clear(); self.acknowledgements.clear()
         self.context = None
+        self.retained_features.clear()
+        self.retained_bytes=0
+
+    def completed_export(self):
+        """Finish, drain records/features together and retire in the last reply.
+
+        Independent page cursors preserve the core's original byte/64-row
+        bounds. No look-ahead policy context or RNG consumption is involved.
+        """
+        if not (self.optimized and self.hello.get('export_pages')=='ordinary-export-pages/1'):
+            receipt=self.call('finish')
+            return receipt,list(self.record_pages(receipt)),list(self.raw_training_features(receipt))
+        record_start=feature_start=0;receipt=None;records=[];features=[]
+        while True:
+            kept=[self.retained_features.get(i) for i in range(feature_start,feature_start+64)]
+            page=self.call('export_page',token=self.token,record_start=record_start,feature_start=feature_start,
+                           reuse=[v[1] if v else None for v in kept])
+            self.metrics['combined_export_pages']+=1
+            require(page['wire']=='ordinary-export-pages/1' and page['token']==self.token,
+                    'Combined export identity differs')
+            if receipt is None:
+                receipt=page['receipt']
+                require(receipt['contract']==CONTRACT and receipt['token']==self.token and
+                        type(receipt['rows']) is int and receipt['rows']>0,'Combined completion differs')
+            else:require(page['receipt'] is None,'Duplicate combined completion')
+            raw=page['_arrays'];offset=0
+            meta=page['record']
+            require((meta is None)==(record_start==receipt['rows']),'Combined record coverage differs')
+            if meta is not None:
+                require(meta['wire']=='ordinary-records-delta/1' and meta['token']==self.token and
+                        meta['start']==record_start and meta['rows']==receipt['rows'] and
+                        record_start<meta['end']<=min(record_start+64,receipt['rows']) and
+                        len(meta['lengths'])==meta['end']-record_start and
+                        type(meta['bytes']) is int and 0<meta['bytes']<=min(MAX_ARRAY_FRAME,len(raw)),'Combined record page differs')
+                offset=meta['bytes'];records.append((meta,raw[:offset]));record_start=meta['end']
+            meta=page['training']
+            require((meta is None)==(feature_start==receipt['rows']),'Combined feature coverage differs')
+            if meta is not None:
+                require(type(meta['bytes']) is int and 0<=meta['bytes']<=MAX_ARRAY_FRAME,'Combined feature section exceeds bound')
+                meta=dict(meta,_arrays=raw[offset:])
+                features.extend(self._raw_features(meta,receipt,feature_start,kept))
+                feature_start=meta['end'];offset+=meta['bytes']
+            require(offset==len(raw) and type(page['done']) is bool and
+                    page['done']==(record_start==feature_start==receipt['rows']),'Combined export bounds differ')
+            if page['done']:
+                self.retired=True;break
+        return receipt,records,features
+
+    def _raw_features(self,page,receipt,start,reuse):
+        require(page['wire'] == ('ordinary-training-reuse/1' if self.optimized else 'ordinary-training-arrays/1') and
+                page['token'] == self.token and page['start'] == start and page['rows'] == receipt['rows'] and
+                start < page['end'] <= min(start+64,receipt['rows']) and len(page['lengths']) == page['end']-start and
+                page['feature_version'] == VERSION and page['schema_sha256'] == SCHEMA,
+                'Raw training page binding differs')
+        raw=page['_arrays'];offset=0
+        require(page['bytes']==len(raw),'Raw training payload size differs')
+        if self.optimized:
+            require(len(page['sizes'])==len(page['reuse_sha256'])==len(page['lengths']),
+                    'Retained feature coverage differs')
+        for j,size in enumerate(page['lengths']):
+            require(type(size) is int and size>=0,'Invalid feature length')
+            if self.optimized and size==0:
+                kept=reuse[j]
+                require(kept is not None and len(kept[0])==page['sizes'][j] and kept[1]==page['reuse_sha256'][j],
+                        'Retained feature binding differs')
+                value=kept[0];self.metrics['training_reused_rows']+=1;self.metrics['training_reused_bytes']+=len(value)
+            else:
+                require(size>0 and offset+size<=len(raw),'Training payload exceeds bounds')
+                value=raw[offset:offset+size];offset+=size;self.metrics['training_transferred_bytes']+=size
+            yield value
+        require(offset==len(raw),'Trailing raw training bytes')
+
+    def record_pages(self, receipt):
+        """Raw pages, decoded only by the publisher. Native seals survive drain."""
+        start = 0
+        while start < receipt['rows']:
+            page = self.call('drain_records_compact' if self.optimized else 'drain_records',token=self.token,start=start)
+            require(page['wire'] == ('ordinary-records-delta/1' if self.optimized else 'ordinary-records/1') and
+                    page['token'] == self.token and page['start'] == start and page['rows'] == receipt['rows'] and
+                    start < page['end'] <= min(start+64,receipt['rows']) and
+                    len(page['lengths']) == page['end']-start, 'Raw record page binding differs')
+            raw = page.pop('_arrays')
+            require(page['bytes'] == len(raw), 'Raw record payload size differs')
+            yield page,raw
+            start = page['end']
+
+    def raw_training_features(self, receipt):
+        """Keep inference bytes once; Rust verifies omitted feature hashes."""
+        start = 0
+        while start < receipt['rows']:
+            reuse = [self.retained_features.get(i) for i in range(start,min(start+64,receipt['rows']))]
+            page = self.call('drain_training_reuse' if self.optimized else 'drain_training',token=self.token,start=start,
+                             **(dict(reuse=[v[1] if v else None for v in reuse]) if self.optimized else {}))
+            yield from self._raw_features(page,receipt,start,reuse)
+            start = page['end']
 
     def training_features(self, receipt, rows, *, drain=False):
         require(len(rows)==receipt['rows'], 'Incomplete training records')
@@ -241,7 +383,8 @@ class DecisionEncoder:
         if cancelled is not None and cancelled.is_set(): raise EncodingStopped('cancelled')
         if deadline is not None and time.monotonic() >= deadline: raise EncodingStopped('expired')
         c = self.collector
-        require(c.current['decision']['view'] == view and c.current['decision']['choices'] == choices, 'Foreign native input')
+        require((c.current['decision']['view'] is view or c.current['decision']['view'] == view) and
+                (c.current['decision']['choices'] is choices or c.current['decision']['choices'] == choices), 'Foreign native input')
         context = feature_context(self.model_id,style,intent)
         c.context = context
         key = (c.token, view['context']['revision'], digest(context))
@@ -256,6 +399,13 @@ class DecisionEncoder:
                 and len(raw)==(3128+count*327)*4+32, 'Native feature array binding/shape differs')
         require((page['format'],page['feature_version'],page['schema_sha256'],page['group_layout'],page['entity_layout'])==
                 (FEATURE_FORMAT,VERSION,SCHEMA,GROUP,ENTITY), 'Native feature contract differs')
+        raw = bytes(raw)
         encoded = decode_arrays(raw,choices)
+        if getattr(c,'optimized',False):
+            previous=c.retained_features.get(c.current['step'])
+            size=c.retained_bytes-(len(previous[0]) if previous else 0)+len(raw)
+            require(size<=256*1024**2,'Retained features exceed native lane bound')
+            c.retained_bytes=size
+            c.retained_features[c.current['step']] = (raw,hashlib.sha256(raw).hexdigest())
         self.cached = key, encoded
         return encoded

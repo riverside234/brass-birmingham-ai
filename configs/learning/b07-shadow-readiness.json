@@ -1,0 +1,52 @@
+{
+  "contract": "brass-shadow-readiness-seed/1.0.0",
+  "generation": 1257,
+  "checkpoint": {
+    "path": "artifacts/step5/joint7-v11-2-g1290-trained-restart/generation-1257.pt",
+    "sha256": "cad965da88338e6a424cd1e615ffb61da014c52e8ff3237baeeae8d94e429d40",
+    "model_id": "4ed647d0f5d39c685864b802c92b083874f646c787d4b8668105d7c2c787ebe1",
+    "generation": 1257
+  },
+  "fit_checkpoint": {
+    "path": "artifacts/step5/joint7-v11-2-g1290-trained-restart/generation-1254.pt",
+    "sha256": "df92dc668311827ad40c6074d21179a645aa25edeb9d651f5ac70cf3c03c548d",
+    "model_id": "69977d0c473a0e6b84145888bdcb3c3bdad9aea08226dab78111c0d056d03bd0",
+    "generation": 1254
+  },
+  "source": "artifacts/step5/joint7-v11-2-g1290-trained-restart/iteration-1253/report.json",
+  "exported_source": "results/joint7-v11-2-g1290-trained-restart-g1257-20261107T170030753211Z/iteration-1253/report.json",
+  "sha256": "f9bb9c36c553390d9662433e3d995792658bed9f7133f6a9ddeca63be530e947",
+  "receipt": {
+    "version": "ppg-value-phase/24.0.0",
+    "reward_id": "49711b4abaa95940928db567fa76ab654a5d60c417e1b5eca8dbb44ffb5327c1",
+    "ready": true,
+    "decisions": 274270,
+    "games": 784,
+    "steps": 16,
+    "before": {
+      "mse": 0.1498681758542374
+    },
+    "after": {
+      "mse": 0.14877655398842354
+    },
+    "scope": "Final accepted value-phase weights; ordinary critic-train games only; heldout games excluded"
+  },
+  "scope": "Carry the last measured non-null current-reward receipt into shadow state; preserve current checkpoint utility_calibration and explicit false readiness",
+  "intervening_receipts": [
+    {
+      "iteration": 1254,
+      "sha256": "c316f1c8292ddf63649121c45676e93fa30bb238ffe1ff7e2dfc825b12373dee",
+      "receipt": null
+    },
+    {
+      "iteration": 1255,
+      "sha256": "a4333c9b7984f80f3ae789cbc8b6eb3d4fb07a3a652035ed1be51328fb3b3b03",
+      "receipt": null
+    },
+    {
+      "iteration": 1256,
+      "sha256": "3edd6b7d25e7ed664383481190f987e10608f9edf152a4ef89d4787db731bf2a",
+      "receipt": null
+    }
+  ]
+}

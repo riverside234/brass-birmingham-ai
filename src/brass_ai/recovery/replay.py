@@ -6,6 +6,8 @@ receipts allow exact byte reuse; an unsigned sidecar never grants trust.
 An in-memory game binds each reusable row to its complete input digest.
 """
 import gzip
+import hashlib
+import io
 import json
 from pathlib import Path
 
@@ -31,36 +33,64 @@ def label_key(row):
 
 
 class CheckedGame(dict):
+    def __getstate__(self):
+        return {k:v for k,v in self.__dict__.items() if k!='_immutable_binding'}
+
+    def __setstate__(self,value):self.__dict__.update(value)
+
     def bind(self, arrays):
+        from .replay_binding import count
+        self.__dict__.pop('_immutable_binding',None)
         self.features={};self.seals={}
         self.header_seal=digest({k:v for k,v in self.items() if k!='records'})
+        count('metadata_hash_executed')
         for r,e in zip(self['records'],arrays):
             source=digest(dict(view=r['view'],choices=r['choices']))
+            count('input_hash_executed');count('label_hash_executed')
             self.features[digest(dict(input=source,style=r['style'],intent=r['intent']))]=e
             self.seals[(r['step'],r['seat'])]=dict(input=source,label=label_key(r),style=r['style'][:],intent=r['intent'][:])
         return self
 
     def assert_metadata(self):
+        from .replay_binding import GameBinding,count
+        binding=getattr(self,'_immutable_binding',None)
+        if type(binding) is GameBinding:return binding.metadata(self)
+        count('metadata_hash_executed')
         require([(r['step'],r['seat']) for r in self['records']]==list(self.seals)
                 and digest({k:v for k,v in self.items() if k!='records'})==self.header_seal,
                 'Validated game metadata changed')
 
     def encoded(self, row, encoder,*,allow_context=False):
-        source=digest(dict(view=row['view'],choices=row['choices']));seal=self.seals.get((row['step'],row['seat']))
-        require(seal and source==seal['input'] and label_key(row)==seal['label'],'Validated replay record changed')
-        require(allow_context or (row['style']==seal['style'] and row['intent']==seal['intent']),'Validated policy context changed')
-        token=digest(dict(input=source,style=row['style'],intent=row['intent']))
-        if token in self.features: return self.features[token]
+        from .replay_binding import GameBinding,count,seal_encoded
+        binding=getattr(self,'_immutable_binding',None)
+        proof=binding.row(self,row,allow_context=allow_context) if type(binding) is GameBinding else None
+        seal=self.seals.get((row['step'],row['seat']))
+        if proof is None:
+            source=digest(dict(view=row['view'],choices=row['choices']));count('input_hash_executed');count('label_hash_executed')
+            require(seal and source==seal['input'] and label_key(row)==seal['label'],'Validated replay record changed')
+            require(allow_context or (row['style']==seal['style'] and row['intent']==seal['intent']),'Validated policy context changed')
+        else:source=proof.source
+        token=(proof.key if proof is not None and row['style']==proof.row['style'] and row['intent']==proof.row['intent'] else
+               digest(dict(input=source,style=row['style'],intent=row['intent'])))
+        if token in self.features:
+            if proof is not None:
+                from .replay_binding import checked_encoded
+                require(self.features[token] is binding.features.get(token) and checked_encoded(self.features[token]),
+                        'Validated features changed')
+            return self.features[token]
         # The pinned R2 layout appends style[4] + intent[8]; neither changes
         # action features. Derive a separate neutral BC array without a second
         # walk of public history. Verify this layout/context against the source.
         require(allow_context and encoder.schema['intent_dim']==8,'Unsupported context derivation')
         finite_vector(row['style'],4,-1,1);finite_vector(row['intent'],8,-1,1)
         base=self.features[digest(dict(input=source,style=seal['style'],intent=seal['intent']))]
-        require(np.array_equal(base.state[-12:],np.asarray(seal['style']+seal['intent'],dtype=np.float32)),
+        require(np.array_equal(base.state[-12:],np.asarray(list(seal['style'])+list(seal['intent']),dtype=np.float32)),
                 'Pinned context feature layout differs')
         state=base.state.copy();state[-12:]=row['style']+row['intent'];state.setflags(write=False)
-        encoded=Encoded(state,base.actions,base.stable_to_relative,base.choice_ids);self.features[token]=encoded
+        encoded=Encoded(state,base.actions,base.stable_to_relative,base.choice_ids)
+        if proof is not None:encoded=seal_encoded(encoded,_checked=True)
+        self.features[token]=encoded
+        if proof is not None:binding.features[token]=encoded
         return encoded
 
 
@@ -133,6 +163,9 @@ def _cache_paths(path):
 
 
 def cache_version():
+    from .feature_receipts import review
+    reviewed=review()
+    if reviewed:return reviewed['original_encoder']
     paths=['recovery/'+n for n in ('encoding.py','inputs.py','replay.py','il_replay_storage.py')]+['runtime_contracts.py']
     return digest(dict(source={name:sha(SOURCE_ROOT/'src/brass_ai'/name) for name in paths},compatibility=compatibility()))
 
@@ -157,34 +190,12 @@ def write_cache(path, games):
     temp=manifest.with_name(manifest.name+'.tmp');temp.write_text(json.dumps(meta),encoding='utf-8');temp.replace(manifest)
 
 
-def load_cache(path, games, receipt=None):
-    data,manifest=_cache_paths(path)
-    # A self-signed foreign cache is not trusted. Receipts come from committed
-    # actor results or an audited dataset manifest, independent of this sidecar.
-    if receipt is None or receipt.get('validator')!=cache_version() or not manifest.exists() or not data.exists(): return None
-    require(receipt==cache_receipt(path),'Derived feature receipt changed')
-    meta=decode_json(manifest.read_text(encoding='utf-8'))
-    require(meta.get('format')=='derived-features/4.0.0', 'Unknown derived feature cache; explicitly re-encode raw data')
-    # A changed source invalidates derived data, never the authoritative replay.
-    if meta['replay_sha256']!=sha(path) or meta['compatibility']!=compatibility() or meta.get('encoder')!=cache_version(): return None
-    require(meta['data_sha256']==sha(data),'Derived feature cache changed')
-    rows=[r for g in games for r in g['records']]
-    require(len(meta['rows'])==len(rows),'Cached row count differs')
-    with np.load(data,allow_pickle=False) as source:
-        states,actions,offsets,seats=(source[k] for k in ('states','actions','offsets','seats'))
-        require(len(states)==len(rows) and len(offsets)==len(rows)+1 and offsets[0]==0 and offsets[-1]==len(actions),
-                'Malformed derived cache')
-        require(offsets.dtype.kind in 'iu' and np.all(np.diff(offsets)>0) and
-                np.array_equal(np.diff(offsets),[len(r['choices']) for r in rows]),'Malformed cached offsets')
-        require(all(np.isfinite(a).all() for a in (states,actions,seats)), 'Non-finite derived cache')
-        out=[]
-        for i,row in enumerate(rows):
-            e=Encoded(states[i],actions[offsets[i]:offsets[i+1]],seats[i],tuple(c['id'] for c in row['choices']))
-            check_encoded(e)
-            check_action_selectors(e.actions)
-            for a in (e.state,e.actions,e.stable_to_relative): a.setflags(write=False)
-            out.append(e)
-    return out
+def load_cache(path, games, receipt=None,*,replay_sha256=None):
+    from brass_ai.rust_backend.lab_features import read as read_features
+    # Same derived-features/4 format for legacy/native. Read/hash each exact
+    # archive once; no hash-open-hash-open loop or Python re-encoding on reuse.
+    if receipt is None:return None
+    return read_features(path,games,receipt,sha(path) if replay_sha256 is None else replay_sha256)
 
 
 class SerializedGame:
@@ -222,11 +233,18 @@ def write_shard(path,games,provenance,*,cache=True):
     return checked
 
 
-def read_shards(paths,partition=None,receipts=None,*,heuristic_only=False,native_admissions=None):
+def read_shards(paths,partition=None,receipts=None,*,heuristic_only=False,native_admissions=None,_expected_hashes=None):
     require(partition in (None,'train','validation','test'),'Unknown partition')
     output=[];identities=set()
     for path in dict.fromkeys(str(p) for p in paths):
-        with gzip.open(path,'rt',encoding='utf-8') as stream:
+        verified=None
+        if _expected_hashes is not None:
+            from brass_ai.rust_backend.lab_features import read_bytes
+            packed=read_bytes(path);verified=hashlib.sha256(packed).hexdigest()
+            require(verified==_expected_hashes[path],'Self-play replay changed')
+            stream=io.TextIOWrapper(gzip.GzipFile(fileobj=io.BytesIO(packed)),encoding='utf-8')
+        else:stream=gzip.open(path,'rt',encoding='utf-8')
+        with stream:
             header=decode_json(next(stream))
             if header.get('format')=='four-seat-native-replay/1.0.0':
                 require(not heuristic_only,'Native ordinary replay is not completed-IL heuristic data')
@@ -256,7 +274,7 @@ def read_shards(paths,partition=None,receipts=None,*,heuristic_only=False,native
         require(all(m.get('local_scoring_targets',{}).get('producer',{}).get('contract') is None
                     for g in raw for m in [g]+g.get('branches',[])),
                 'Native scoring cannot be relabeled as legacy replay')
-        arrays=load_cache(path,raw,(receipts or {}).get(str(path)));start=0
+        arrays=load_cache(path,raw,(receipts or {}).get(str(path)),replay_sha256=verified);start=0
         jobs=header['provenance'].get('jobs')
         if jobs is not None:require(len(jobs)==len(raw),'Replay provenance job count differs')
         for ordinal,g in enumerate(raw):

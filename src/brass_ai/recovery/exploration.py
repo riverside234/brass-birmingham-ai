@@ -175,9 +175,9 @@ def validate(config):
     revised=(config['opening']==REVISED_OPENING and config['branching']==REVISED_BRANCH) or (
         config['opening']==THREE_OPENING and config['branching']==THREE_BRANCH)
     three_t2=config['opening']==THREE_T2_OPENING and config['branching'] in (THREE_T2_BRANCH,BALANCED_BRANCH)
-    fork=config['opening']==THREE_OPENING and config['branching']==FORK_T15_BRANCH
+    fork=config['opening']==THREE_OPENING and config['branching'] in (FORK_T15_BRANCH,dict(FORK_T15_BRANCH,rate_per_decision=0.))
     quarter=config.get('value_phase',{}).get('contract') in (QUARTER_CONTRACT,EARLY_CONTRACT,TWO_ITER_CONTRACT,EVERY_ITER_CONTRACT)
-    neutral=config['opening']==THREE_OPENING and config['branching'] in (NEUTRAL_BRANCH,T2_ONLY_BRANCH,FORK_T15_BRANCH)
+    neutral=config['opening']==THREE_OPENING and config['branching'] in (NEUTRAL_BRANCH,T2_ONLY_BRANCH,FORK_T15_BRANCH,dict(FORK_T15_BRANCH,rate_per_decision=0.))
     current=(config['opening']==OPENING and config['branching'] in (BRANCH,LOCAL_SCORING_BRANCH)) or revised or three_t2 or neutral
     uniform=config['opening']==OPENING and config['branching']==HIGH_BRANCH
     legacy=config['opening']==LEGACY_OPENING and config['branching']==LEGACY_BRANCH
@@ -368,8 +368,8 @@ def effective(config, state, generation):
     branch_ready=age>=r['branching_after_iterations'] and (state['baseline'] is not None or observations_off(config))
     from . import entropy_schedule as anneal
     return dict(version=3,opening=config['opening'] if age>=r['opening_after_iterations'] else None,
-        raw_entropy=raw,branching=config['branching'] if branch_ready else None,
-        branching_status='active' if branch_ready else 'waiting_for_20_iterations' if age<r['branching_after_iterations'] else 'waiting_for_entropy_baseline',
+        raw_entropy=raw,branching=config['branching'] if branch_ready and config['branching']['rate_per_decision']>0 else None,
+        branching_status='disabled' if config['branching']['rate_per_decision']==0 else 'active' if branch_ready else 'waiting_for_20_iterations' if age<r['branching_after_iterations'] else 'waiting_for_entropy_baseline',
         alphas=effective_alphas(config,state),
         **({anneal.KEY:anneal.receipt(config,state)} if anneal.KEY in config['update'] else {}),
         age=age,origin=state['origin'])

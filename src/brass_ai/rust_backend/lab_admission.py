@@ -120,12 +120,15 @@ def branch_trigger(family, job, diagnostic):
     require((None if child is None else child['game']['branch']['decision']) == expected, 'Frozen branch trigger differs')
 
 
-def convert(family, admission, *, allow_diagnostic=False, arrays=None, _owned=False):
+def convert(family, admission, *, allow_diagnostic=False, arrays=None, _owned=False, _coverage=None, _owned_seal=False):
     admission = validate_binding(admission)
     require(admission['scope'] == 'ordinary' or allow_diagnostic, 'Diagnostic replay is not training data')
     job = admission['job']; proof = job['provenance']; producer = admission['producer']
-    checked=validate_family(family, job, producer,arrays=arrays,return_games=True)
-    branch_trigger(family, job, admission['scope'] == 'diagnostic')
+    checked=validate_family(family, job, producer,arrays=arrays,return_games=True,
+        semantic=_coverage is None or _coverage['semantic_audited'],
+        branch_audit=_coverage is None or _coverage['branch_audited'],owned_seal=_owned and (_owned_seal or _coverage is not None))
+    if _coverage is None or _coverage['semantic_audited'] or _coverage['branch_audited']:
+        branch_trigger(family, job, admission['scope'] == 'diagnostic')
     return _assemble(family, admission, checked=checked,owned=_owned)
 
 
@@ -206,17 +209,34 @@ def _assemble(family, admission, *, checked=None, arrays=None, owned=False):
     return parent
 
 
-def publish(path, family, admission, *, cache=True, validation_receipt=False, timings=None):
+def publish(path, family, admission, *, cache=True, validation_receipt=False, timings=None, coverage=None, _owned_family=False):
     """Exclusive, one-family publication. Retrying requires the identical receipt."""
     began=time.perf_counter();timings={} if timings is None else timings
-    game = convert(family, admission, allow_diagnostic=True,_owned=True)
+    if coverage is not None:
+        from . import lab_perf
+        lab_perf.check(coverage['policy'],admission['job'])
+        require(coverage==lab_perf.coverage(coverage['policy'],child=family['child'] is not None),'Validation coverage differs')
+    game = convert(family, admission, allow_diagnostic=True,_owned=True,_coverage=coverage,_owned_seal=_owned_family)
+    from brass_ai.recovery.replay_binding import enabled
+    owned_pack=_owned_family and enabled()
     timings['full_validation_and_assembly_seconds']=time.perf_counter()-began;began=time.perf_counter()
     path = Path(path)
     header = dict(format=FORMAT, compatibility=compatibility(), admission=copy.deepcopy(admission))
-    value = (json.dumps(header, separators=(',', ':'), allow_nan=False) + '\n' +
-             json.dumps(family, separators=(',', ':'), allow_nan=False) + '\n').encode()
+    # One canonical family encoding serves its original digest AND durable
+    # replay bytes. Append sha256 outside that hashed object, preserving the
+    # original digest formula and JSON replay format.
+    canonical=json.dumps({k:v for k,v in family.items() if k!='sha256'},sort_keys=True,
+                         separators=(',',':'),allow_nan=False).encode()
+    encoded_header=json.dumps(header,separators=(',',':'),allow_nan=False).encode()
     timings['json_encoding_seconds']=time.perf_counter()-began
-    require(len(value) <= LIMIT, 'Native replay exceeds bound')
+    began=time.perf_counter();family_sha=hashlib.sha256(canonical).hexdigest()
+    if _owned_family:family['sha256']=family_sha
+    else:require(family['sha256']==family_sha,'Family changed during publication')
+    timings['family_seal_seconds']=time.perf_counter()-began
+    suffix=b',"sha256":'+json.dumps(family_sha).encode()+b'}\n'
+    require(len(encoded_header)+1+len(canonical)-1+len(suffix)<=LIMIT,'Native replay exceeds bound')
+    from brass_ai.recovery.replay_binding import count
+    count('family_json_encoding_executed');count('replay_family_encoding_reused')
     path.parent.mkdir(parents=True, exist_ok=True)
     receipt = dict(contract=CONTRACT, admission=copy.deepcopy(admission), family_sha256=family['sha256'])
     if path.exists():
@@ -224,12 +244,15 @@ def publish(path, family, admission, *, cache=True, validation_receipt=False, ti
         read(path, receipt, allow_diagnostic=True)
         if cache:
             from . import lab_features
-            receipt['features']=lab_features.write(path,[game]+game.get('branches',[]),receipt['replay_sha256'])
-        if validation_receipt:_attest(receipt)
+            receipt['features']=lab_features.write(path,[game]+game.get('branches',[]),receipt['replay_sha256'],_owned=owned_pack)
+        if validation_receipt:_attest(receipt,coverage=coverage)
         return record(path, game, admission, receipt)
     temp = path.with_name(path.name + '.' + uuid.uuid4().hex + '.tmp')
     began=time.perf_counter()
-    packed=gzip.compress(value,compresslevel=1,mtime=0)
+    buffer=io.BytesIO()
+    with gzip.GzipFile(fileobj=buffer,mode='wb',compresslevel=1,mtime=0,filename='') as stream:
+        stream.write(encoded_header);stream.write(b'\n');stream.write(memoryview(canonical)[:-1]);stream.write(suffix)
+    packed=buffer.getvalue();del canonical
     replay_hash=hashlib.sha256(packed).hexdigest()
     try:
         with temp.open('xb') as raw:
@@ -245,9 +268,9 @@ def publish(path, family, admission, *, cache=True, validation_receipt=False, ti
     timings['replay_write_hash_seconds']=time.perf_counter()-began;began=time.perf_counter()
     if cache:
         from . import lab_features
-        receipt['features']=lab_features.write(path,[game]+game.get('branches',[]),replay_hash)
+        receipt['features']=lab_features.write(path,[game]+game.get('branches',[]),replay_hash,_owned=owned_pack)
     timings['feature_cache_seconds']=time.perf_counter()-began
-    if validation_receipt:_attest(receipt)
+    if validation_receipt:_attest(receipt,coverage=coverage)
     return record(path, game, admission, receipt)
 
 
@@ -267,22 +290,24 @@ def _validation_version():
     return implementation_id()
 
 
-def _attest(receipt):
+def _attest(receipt,*,coverage=None):
     # Issued only by the full validator, never by the native collector. The
     # scheduler/checkpoint retains this receipt separately from the replay.
-    receipt['validation']=dict(contract='brass-native-validation/1.0.0',
-        validator=_validation_version(),receipt_sha256=digest(receipt))
+    bound=dict(receipt,validation_coverage=coverage) if coverage else receipt
+    receipt['validation']=dict(contract='brass-native-validation/2.0.0' if coverage else 'brass-native-validation/1.0.0',
+        validator=_validation_version(),receipt_sha256=digest(bound),**(dict(coverage=coverage) if coverage else {}))
 
 
-def read(path, receipt, *, allow_diagnostic=False, reuse_validation=True):
+def read(path, receipt, *, allow_diagnostic=False, reuse_validation=True, fast_recovery=False):
     with Path(path).open('rb') as stream:
         size=os.fstat(stream.fileno()).st_size
         require(0<size<=LIMIT,'Native replay exceeds bound')
         packed=stream.read(size+1)
     require(len(packed)==size,'Native replay size changed')
-    require(len(packed)<=LIMIT and type(receipt) is dict and receipt.get('contract') == CONTRACT
-            and receipt.get('replay_sha256') == hashlib.sha256(packed).hexdigest(),
+    require(len(packed)<=LIMIT and type(receipt) is dict and receipt.get('contract') == CONTRACT,
             'Native replay requires its independently bound writer receipt')
+    require(receipt.get('replay_sha256') == hashlib.sha256(packed).hexdigest(),
+            'Native replay changed: independently bound writer receipt differs')
     with gzip.GzipFile(fileobj=io.BytesIO(packed),mode='rb') as stream: data = stream.read(LIMIT + 1)
     require(len(data) <= LIMIT, 'Native replay exceeds bound')
     lines = data.splitlines(); require(len(lines) == 2, 'Incomplete/extra native replay family')
@@ -295,11 +320,19 @@ def read(path, receipt, *, allow_diagnostic=False, reuse_validation=True):
     games=[family['parent']['game']]+([family['child']['game']] if family['child'] is not None else [])
     validation=receipt.get('validation');trusted=False
     if validation is not None:
-        keys(validation,('contract','validator','receipt_sha256'))
-        require(validation['contract']=='brass-native-validation/1.0.0' and
-                validation['receipt_sha256']==digest({k:v for k,v in receipt.items() if k!='validation'}),
+        v2=validation.get('contract')=='brass-native-validation/2.0.0'
+        keys(validation,('contract','validator','receipt_sha256'),('coverage',) if v2 else ())
+        body={k:v for k,v in receipt.items() if k!='validation'}
+        if v2:body['validation_coverage']=validation['coverage']
+        require(validation['contract'] in ('brass-native-validation/1.0.0','brass-native-validation/2.0.0') and
+                validation['receipt_sha256']==digest(body),
                 'Native validation receipt changed')
+        if v2:
+            from . import lab_perf
+            coverage=validation['coverage'];lab_perf.check(coverage['policy'],receipt['admission']['job'])
+            require(coverage==lab_perf.coverage(coverage['policy'],child=family['child'] is not None),'Validation coverage changed')
         trusted=reuse_validation and validation['validator']==_validation_version()
+        if v2 and lab_perf.mode()=='strict' and not coverage['semantic_audited']:trusted=False
     # Exact replay + feature bytes were independently checked by this loaded
     # validator. Disable repeated finite/selector/seat/context deep scans on
     # that warm path; cold recovery and unversioned receipts still check all.
@@ -307,8 +340,14 @@ def read(path, receipt, *, allow_diagnostic=False, reuse_validation=True):
     if trusted and arrays is not None:
         admitted=validate_binding(receipt['admission'])
         require(admitted['scope']=='ordinary' or allow_diagnostic,'Diagnostic replay is not training data')
-        return _assemble(family,admitted,arrays=arrays,owned=True)
-    return convert(family, receipt['admission'], allow_diagnostic=allow_diagnostic,arrays=arrays,_owned=True)
+        from brass_ai.recovery.replay_binding import seal_game
+        return seal_game(_assemble(family,admitted,arrays=arrays,owned=True),_owned=True)
+    from .lab_replay_compat import reviewed_validator
+    coverage=(validation['coverage'] if validation and validation.get('contract')=='brass-native-validation/2.0.0'
+              and (validation['validator']==_validation_version() or reviewed_validator(validation['validator']))
+              and fast_recovery and lab_perf.mode()!='strict' else None)
+    from brass_ai.recovery.replay_binding import seal_game
+    return seal_game(convert(family, receipt['admission'], allow_diagnostic=allow_diagnostic,arrays=arrays,_owned=True,_coverage=coverage),_owned=True)
 
 
 def admit_teacher_rows(rows, *, job, model, history):

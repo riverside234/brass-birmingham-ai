@@ -17,9 +17,12 @@ from .updates import prepared
 
 _admission=None
 
-def reader_init(admission=None):
+def reader_init(admission=None,runtime=None):
     global _admission
     _admission=admission
+    if runtime is not None:
+        from .collector_runtime import install
+        install(runtime)
     torch.set_num_threads(1)
 
 
@@ -34,8 +37,9 @@ def _reader_ready():
 
 @contextmanager
 def _spawned_readers(workers,admission):
+    from .collector_runtime import current
     with ProcessPoolExecutor(max_workers=workers,mp_context=multiprocessing.get_context('spawn'),
-                             initializer=reader_init,initargs=(admission,)) as pool:
+                             initializer=reader_init,initargs=(admission,current())) as pool:
         # ProcessPoolExecutor starts lazily. Start its bounded readers while
         # actors play, rather than making the first durable shards pay for
         # Python/Torch imports. Do not insert a readiness barrier in collection.
@@ -63,6 +67,8 @@ def _prepare(task):
 
 
 def _prepare_inner(task):
+    from . import replay_binding
+    before_checks=replay_binding.report()
     began=time.perf_counter();cpu_began=time.process_time()
     records,policy_id,kinds,insolvency,reward=task
     first=records[0];path=first['path']
@@ -82,8 +88,8 @@ def _prepare_inner(task):
         # receipt. Avoid a separate full-file hash and gzip/header parse first.
         games=[read_native(path,native)]
     else:
-        require(sha(path)==first['sha256'],'Self-play replay changed')
-        games=read_shards([path],partition='train',receipts={path:first.get('features')})
+        games=read_shards([path],partition='train',receipts={path:first.get('features')},
+                          _expected_hashes={path:first['sha256']})
     require(all(g['split']=='train' for g in games),'Held-out PPO data')
     expected={r['game_id'] for r in records}
     require(len(expected)==len(records) and {g['game_id'] for g in games}==expected,'Self-play shard membership differs')
@@ -120,10 +126,16 @@ def _prepare_inner(task):
               target,identity,encoded) for r,target,identity,encoded in data]
     headers=[dict({k:v for k,v in g.items() if k not in ('records','branches')},
         **({'_diversity_assignment':g.diversity_assignment} if hasattr(g,'diversity_assignment') else {})) for g in games]
+    # Only small training metadata is detached. Do not let an Owned choice or
+    # envelope retain its whole game in the single-reader/no-pickle path.
+    memo={};headers=replay_binding.compact_metadata(headers,memo)
+    compact=[(replay_binding.compact_metadata(row,memo),replay_binding.compact_metadata(target,memo),identity,encoded)
+             for row,target,identity,encoded in compact]
     ended=time.perf_counter()
     metrics=dict(worker_cpu_seconds=time.process_time()-cpu_began,worker_elapsed_seconds=ended-began,
         read_validate_seconds=loaded-began,diagnostics_seconds=diagnosed-loaded,
-        prepare_seconds=prepared_at-diagnosed,compact_seconds=ended-prepared_at)
+        prepare_seconds=prepared_at-diagnosed,compact_seconds=ended-prepared_at,
+        binding_checks=replay_binding.since(before_checks))
     return headers,compact,diagnostics,metrics
 
 
@@ -151,11 +163,18 @@ def load_collection(records,policy_id,kinds,*,executor=None,workers=1,telemetry=
         while pending:
             future=next(as_completed(pending));index=pending.pop(future)
             parts[index]=future.result();completed+=1;log(completed);submit()
-    result=([g for games,_,_,_ in parts for g in games],
-            [row for _,data,_,_ in parts for row in data],merge_summaries([p[2] for p in parts]))
+    from .replay_binding import seal_encoded,enabled
+    data=[row for _,data,_,_ in parts for row in data]
+    if enabled():
+        # A reader's capabilities never survive pickle. Establish the learner's
+        # own detached numerical boundary once; epochs reuse it thereafter.
+        data=[(row,target,identity,seal_encoded(encoded)) for row,target,identity,encoded in data]
+    result=([g for games,_,_,_ in parts for g in games],data,merge_summaries([p[2] for p in parts]))
     if telemetry is not None:
         seconds=time.perf_counter()-began
-        totals={k:sum(p[3][k] for p in parts) for k in parts[0][3]}
+        totals={k:sum(p[3][k] for p in parts) for k,v in parts[0][3].items() if isinstance(v,(int,float))}
+        keys={k for p in parts for k in p[3].get('binding_checks',{})}
+        totals['binding_checks']={k:sum(p[3].get('binding_checks',{}).get(k,0) for p in parts) for k in keys}
         interval=seconds if stream is None else time.perf_counter()-stream.began
         telemetry.update(totals,wall_seconds=seconds,shards=len(tasks),learner_rows=len(result[1]),
             readers=min(workers,len(tasks)) if executor is not None or (stream is not None and stream.executor is not None) else 1,

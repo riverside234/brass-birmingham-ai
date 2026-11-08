@@ -60,10 +60,13 @@ def finish_training_diagnostics(model,phases,local_scoring,*,generation=None):
 
 def train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=None,from_run=None,imitation_run=None,resume_reviewed_source=False,inference_devices=None,expected_generation=None,fresh=False,il_kl_probe_from_run=None):
     from .retention import owned,run_lock
+    from .collector_runtime import from_config,recipe,scope
+    runtime=from_config(config)
+    config=recipe(config)
     _,run=owned(root,run_path)
     require(not (run/'diagnostic-fork.json').exists() and not (run.parent/'diagnostic-fork.json').exists(),
             'B03 diagnostic forks require the explicit restoration interface; ordinary training cannot adopt their path map')
-    with run_lock(run):
+    with run_lock(run),scope(runtime):
         require(not fresh or not (run/'state.json').exists(),'--fresh requires a new run; existing progress will not be overwritten')
         require_start_generation(run,expected_generation)
         if 'rehearsal_sampling' in config:
@@ -91,8 +94,9 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
     observations_off=policy_observations.enabled(config)
     # B04 has an explicit native collector/barrier. B05/B07 must qualify the
     # next committed update/canary before exposing it to the production trainer.
-    require(config.get('teacher_phase',{}).get('mode','off')=='off',
-            'B05/B07 teacher update/adoption qualification is Pending; use the B04 shadow qualifier')
+    from brass_ai.rust_backend.lab_shadow_config import is_shadow
+    require(config.get('teacher_phase',{}).get('mode','off')=='off' or is_shadow(config),
+            'Only the reviewed 32-table shadow recipe is enabled; teacher on-mode remains gated')
     quality=quality_selfplay_recipe(config)
     if quality and config['rating']['enabled']:
         from .ratings import check_dependencies
@@ -385,6 +389,10 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
             from .domino_adoption import archive
             archive(run,domino_adoption)
         state=commit_transition(run,state,signature,opponent_pool=resumed_pool,pool_migration=pool_migration,local_scoring_adoption=local_adoption,domino_adoption=domino_adoption)
+    shadow_collector=None
+    if is_shadow(config):
+        from brass_ai.rust_backend.lab_shadow import ShadowCollector
+        shadow_collector=ShadowCollector(root,run,state,mono=mono)
     if 'v4_history' in config:
         from .retention import preserve_available_companions
         inventory=preserve_available_companions(root,run,state)
@@ -469,7 +477,13 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                 retired_v4=v4_history.active(state.get('quality_pool'))
                 if phases is not None:phases.retired_tables=('legacy',) if retired_v4 else ()
                 current=service.register(model);behavior=Behavior(current,config['exploration'],exploration_settings)
-                if teacher_phase is not None:teacher_phase.begin(state,model)
+                shadow_seconds=0.
+                if shadow_collector is not None:
+                    shadow_began=time.monotonic()
+                    shadow_collector.collect(teacher_phase,state,model,service,directory)
+                    shadow_seconds=time.monotonic()-shadow_began
+                    inference_before=service.report()
+                elif teacher_phase is not None:teacher_phase.begin(state,model)
                 fingerprints=None
                 if 'critic_data' in config and not observations_off:
                     from .critic_data import fingerprint
@@ -594,7 +608,7 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                 updated=time.monotonic();done=state['games_done']+len(games)
                 ordinary_inference=service.report()
                 if rehearsal_schedule(config,done,iteration+1)['weight']==0:rehearsal=None
-                ordinary_seconds=state.get('ordinary_seconds',0.)+updated-began
+                ordinary_seconds=state.get('ordinary_seconds',0.)+updated-began-shadow_seconds
                 def recalibrate_teacher_utility(auxiliary=None):
                     # Policy distillation moves the shared encoder. Refit only
                     # its utility head against this iteration's fresh ordinary
@@ -609,7 +623,7 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                     if due_collections(done,state['next_search_games'],config) else None)
                 search,next_search,cursor,search_seconds=collect_due(root,run,directory,config,state,signature,
                     model,optimizer,service,heavy,done=done,cursor=cursor,ordinary_seconds=ordinary_seconds,
-                    ordinary_game_seconds=(collected-began)/max(1,len(games)),
+                    ordinary_game_seconds=(collected-began-shadow_seconds)/max(1,len(games)),
                     recalibrate=recalibrate_teacher_utility if reward is not None else None,
                     ordinary_data=([learner_data[i] for i in phases.learner_train_ids] if phases is not None else learner_data),
                     ordinary_policy_id=behavior.policy_id)
@@ -699,7 +713,8 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                     selfplay_incumbent=incumbent,
                     selfplay_opponents=champion_mix.summarize(state,config,mix_receipts) if champion_mix.enabled(config) else None,
                     games_done=done,cumulative_games=state['previous_games']+done,
-                    timings=dict(collection_seconds=load_began-began,
+                    timings=dict(collection_seconds=load_began-began-shadow_seconds,
+                        shadow_collection_seconds=shadow_seconds,
                         sampling_seconds=sampling_finished-collected,
                         rehearsal_prepare_seconds=rehearsal_seconds,ppo_seconds=ppo_ended-ppo_began,
                         rehearsal_cleanup_seconds=rehearsal_cleaned-ppo_ended,
@@ -723,7 +738,7 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                     report['curriculum'].update(effective_tables=dict(composition),
                         v4_share_reduced=share['activated'] is not None)
                 report['utilization']=iteration_utilization(inference_before,ordinary_inference,records,
-                    load_began-began,len(games),config['execution'])
+                    load_began-began-shadow_seconds,len(games),config['execution'])
                 report['utilization']['replay_ingress']=ingress_metrics
                 if 'seat_contexts' in config:
                     report['seat_contexts']=dict(config['seat_contexts'],diversity_enabled=False)
@@ -957,12 +972,17 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                     teacher_line=(f'teacher={teacher_report["mode"]} labels={teacher_report["collection"].get("labels",0)} '
                         f'beta={tt.get("beta")} share={tt.get("share",{}).get("median")} '
                         f'heldout_dKL={teacher_report["heldout"]["delta"]["all"]}')
+                    qualification=tt.get('gradient_qualification') or {}
+                    if qualification:
+                        teacher_line+=(f' grad_qualification={"passed" if qualification["passed"] else "pending"}'
+                            f' fixed_beta={tt.get("fixed_beta")} target={qualification["target"]}')
                 from .ppo_kl_control import sampled_console
                 print(f'Recovery generation {iteration+1}: {done} games, {update["optimizer_steps"]} PPO steps; '
-                      f'collect={load_began-began:.1f}s prepare={collected-load_began:.1f}s '
+                      f'collect={report["timings"]["collection_seconds"]:.1f}s prepare={collected-load_began:.1f}s '
                       f'rehearsal={rehearsal_seconds:.1f}s PPO={report["timings"]["ppo_seconds"]:.1f}s '
                       f'value_phase={report["timings"]["value_phase_seconds"]:.1f}s '
                       f'teacher={report["timings"]["search_and_distill_seconds"]:.1f}s '
+                      +(f'shadow_collect={shadow_seconds:.1f}s ' if shadow_collector is not None else '')+
                       f'diagnostics={report["timings"]["post_ppo_diagnostics_seconds"]+report["timings"]["final_diagnostics_seconds"]:.1f}s '
                       f'eval={report["timings"].get("evaluation_seconds",0):.1f}s cleanup={report["timings"].get("cleanup_seconds",0):.1f}s; '
                       f'total={report["timings"]["iteration_seconds"]:.1f}s; '

@@ -124,8 +124,9 @@ class TeacherPhase:
         began = time.perf_counter(); by_id = {r['job_id']: r for r in results}
         require(len(by_id) == len(results) and set(by_id) == {j['expected']['job_id'] for j in self.jobs},
                 'Missing/duplicate/misrouted teacher table')
-        splits = dict(train=[], heldout=[]); rejected = Counter(); labels = []; table_metrics = []
+        splits = dict(train=[], heldout=[]); rejected = Counter(); labels = []; table_metrics = [];post_spent={}
         for job in self.jobs:
+            table_began=time.perf_counter()
             result = by_id[job['expected']['job_id']]
             from brass_ai.rust_backend.lab_admission import admit_teacher_rows
             rows, dropped = (verifier.take(result,job,model) if verifier is not None else
@@ -136,11 +137,20 @@ class TeacherPhase:
                         'Teacher label outside reserved turn')
             splits[job['split']].extend(rows); rejected.update(dropped); labels.extend(r.label for r in rows)
             table_metrics.append(copy.deepcopy(result.get('metrics', {})))
+            post_spent[job['expected']['job_id']]=time.perf_counter()-table_began+result.get('metrics',{}).get('shadow_cache_seconds',0.)
         if self.jobs:
             for split, rows in splits.items():
+                seal_began=time.perf_counter()
                 self.buffer.publish(self.generation, split, rows, model_id=self.jobs[0]['expected']['model_id'], reward_id=self.reward_id)
+                seal_seconds=time.perf_counter()-seal_began
+                # Charge a shared split seal conservatively to its own tables,
+                # without charging unrelated table validation or the other split.
+                for job in self.jobs:
+                    if job['split']==split:post_spent[job['expected']['job_id']]+=seal_seconds
         self.heldout = splits['heldout']
         self.metrics = dict(tables=dict(Counter(j['split'] for j in self.jobs)), labels=len(labels),
+            reached_reserved_turns=sum(r.get('metrics',{}).get('reserved_turns',0) for r in results),
+            root_labels=sum(l['kind']=='root' for l in labels),
             reserved_turns_by_phase={p: 4 * len(self.jobs) for p in PHASES},
             labels_by_kind=dict(Counter(l['kind'] for l in labels)), labels_by_phase=dict(Counter(l['phase'] for l in labels)),
             discarded=dict(rejected), completed_trajectories=summary([l['completed_trajectories'] for l in labels]),
@@ -151,22 +161,35 @@ class TeacherPhase:
             fallback_played_fraction=sum(l['fallback_played'] for l in labels) / len(labels) if labels else None,
             collection_metrics=table_metrics,
             scope='Native search/lane/inference metrics supplied by B04; absent metrics are unmeasured')
+        reached=self.metrics['reached_reserved_turns']
+        self.metrics['root_label_yield']=self.metrics['root_labels']/reached if reached else None
+        self.metrics['root_label_yield_pass']=bool(reached and self.metrics['root_label_yield']>=.95)
         self.admission_seconds = time.perf_counter() - began
         if verifier is not None:
             # Deferred shard sealing is charged to the final searched turn;
             # it receives no extra allowance of its own.
             require(all(r['metrics']['turns'] and
-                r['metrics']['turns'][-1]['post_search_ns']/1e9 + self.admission_seconds <=
+                r['metrics']['turns'][-1]['post_search_ns']/1e9 + post_spent[r['job_id']] <=
                     (FAST_POST_SECONDS if r['metrics']['turns'][-1].get('profile')=='fast' else 1.)
                 for r in results), 'Teacher sealing exceeded the remaining post-search allowance')
             self.metrics['deferred_sealing_seconds'] = self.admission_seconds
+            self.metrics['post_admission_per_table_seconds']=post_spent
         if self.search_value is not None:
-            self.search_value.admit(results,self.jobs,post_spent=self.admission_seconds if verifier is not None else 0.)
+            self.search_value.admit(results,self.jobs,post_spent=post_spent if verifier is not None else 0.)
 
     def prepare(self, model):
         self.pre = heldout_measure(model, self.heldout)
         rows = self.buffer.rows(self.generation) if self.options['mode'] != 'off' else []
         self.term = TeacherTerm(model, self.options, rows, seed=self.config['seed'], generation=self.generation, state=self.weight)
+        self.term.qualification_context=dict(tables=self.metrics.get('tables',{}),
+            labels_by_phase=self.metrics.get('labels_by_phase',{}),
+            labels_by_kind=self.metrics.get('labels_by_kind',{}),
+            completed_trajectories=self.metrics.get('completed_trajectories'),
+            effective_k=self.metrics.get('effective_k'),deadline_hit_fraction=self.metrics.get('deadline_hit_fraction'),
+            root_label_yield=self.metrics.get('root_label_yield'),root_label_yield_pass=self.metrics.get('root_label_yield_pass'),
+            improvement_by_phase=self.term.improvement_by_phase,
+            collection_seconds=self.metrics.get('wall_seconds'),model_id=self.jobs[0]['expected']['model_id'] if self.jobs else None,
+            export_hash=self.jobs[0]['expected']['export_hash'] if self.jobs else None)
         return self.term if self.term.active else None
 
     def finish(self, model, update):

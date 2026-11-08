@@ -92,7 +92,7 @@ def validate(config):
         'Scheduled learner/search/teacher rewards differ')
     # Legacy teacher_value is dormant when teacher_enabled=false; preserve its
     # saved options instead of changing an unrelated, unreachable recipe.
-    require(config.get('teacher_enabled') is False and config.get('teacher_phase',{}).get('mode','off')=='off',
+    require(config.get('teacher_enabled') is False and config.get('teacher_phase',{}).get('mode','off') in ('off','shadow'),
         'Keep teacher fitting off during the entropy anneal experiment')
     return c
 

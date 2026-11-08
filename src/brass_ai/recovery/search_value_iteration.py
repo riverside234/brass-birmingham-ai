@@ -41,8 +41,21 @@ class SearchValueIteration:
         if saved is None:
             require(options['stage'] in ('off','A') and options['blend']['w'] == options['trunk']['scale'] == 0,
                     'Search value adoption cannot skip gates')
+        pending_files=[]
+        from brass_ai.rust_backend.lab_shadow_config import is_shadow
+        if self.mode=='shadow' and is_shadow(config):
+            from brass_ai.learning.batching import model_id
+            from brass_ai.recovery.teacher_phase import plan_jobs
+            from brass_ai.rust_backend.lab_teacher_overlay import source_fingerprint
+            jobs,_=plan_jobs(config,state,model_id=model_id(model),export_hash=state['history'][-1]['sha256'],
+                epoch=state['iteration'],ready=True,native_source=source_fingerprint())
+            pending_files=[f"{state['iteration']:06d}-{j['split']}-{digest(j['expected']['game_id'])}.json.gz" for j in jobs]
+        # These names permit staging only. No pending byte is read/admitted or
+        # included in payload until complete cached tables are independently
+        # validated and normal publication compares the exact recomputed bytes.
         self.phase = SearchValuePhase(run/'search-values', model, options, digest(model.config.utility),
-            saved=saved, startup=config['teacher_phase']['startup'], trainable=self.mode == 'on')
+            saved=saved, startup=config['teacher_phase']['startup'], trainable=self.mode == 'on',pending_files=pending_files,
+            pending_directory=run/f"iteration-{state['iteration']:04d}"/'teacher-shadow/value-partials' if pending_files else None)
         self.generation = state['iteration']
         self.report = None
         self.pending_generation = None

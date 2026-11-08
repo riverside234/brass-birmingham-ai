@@ -35,7 +35,7 @@ def validate(config):
     require(neutral_training.enabled(config) and policy_observations.enabled(config),
         'Trained startup requires neutral contexts/fingerprints and AnchorKL off')
     revised=config['advantage']['contract']==gae.DIRECT_095_CONTRACT
-    fork=config['branching']==exploration.FORK_T15_BRANCH
+    fork=config['branching'] in (exploration.FORK_T15_BRANCH,dict(exploration.FORK_T15_BRANCH,rate_per_decision=0.))
     from . import entropy_schedule as anneal
     from .ppg_g210 import BETA1_CONTRACT,QUARTER_CONTRACT,EARLY_CONTRACT,TWO_ITER_CONTRACT,EVERY_ITER_CONTRACT
     quarter=config['value_phase']['contract'] in (QUARTER_CONTRACT,EARLY_CONTRACT,TWO_ITER_CONTRACT,EVERY_ITER_CONTRACT)
@@ -44,7 +44,7 @@ def validate(config):
     if quarter:require(fork and scheduled and config['update'][anneal.KEY]['contract'] in (anneal.EXTENDED_CONTRACT,anneal.AUTO_CONTRACT),
         'Quarter-beta trained recipe requires the extended insolvency schedule')
     require(config['exploration_rollout']==exploration.TRAINED_ROLLOUT
-        and config['branching']==(exploration.FORK_T15_BRANCH if fork else exploration.T2_ONLY_BRANCH if revised else exploration.NEUTRAL_BRANCH) and config['opening']==exploration.THREE_OPENING
+        and config['branching']==(config['branching'] if fork else exploration.T2_ONLY_BRANCH if revised else exploration.NEUTRAL_BRANCH) and config['opening']==exploration.THREE_OPENING
         and config['rehearsal_weight']==0. and config['diversity']['mode']=='off'
         and config['context_evaluation']['mode']=='off' and config['exploration']==(0. if quarter else .02 if fork else .05)
         and config['update']['fixed_entropy']==(exploration.FIXED_ENTROPY_0025 if fork and not scheduled else exploration.FIXED_ENTROPY_005)

@@ -571,9 +571,11 @@ def search_workers_per_turn(config,*,teacher=False):
 
 
 def execution_config(config):
-    optional={'shared_slot_bytes','inference_routing','replica_backlog','teacher_search_workers_per_turn','padding_ratio','model_cohorts'}
+    from .collector_runtime import DEFAULTS,validate as validate_collector
+    validate_collector(config)
+    optional={'shared_slot_bytes','inference_routing','replica_backlog','teacher_search_workers_per_turn','padding_ratio','model_cohorts'} | set(DEFAULTS)
     require(set(config)-optional in (set(EXECUTION),set(EXECUTION_V21)), 'Unknown/missing execution field')
-    for key in set(config)-{'feature_cache','shared_slot_bytes','inference_routing','padding_ratio','model_cohorts'}:
+    for key in set(config)-{'feature_cache','shared_slot_bytes','inference_routing','padding_ratio','model_cohorts'}-set(DEFAULTS):
         positive(config[key], key, integer=key != 'flush_ms')
     if 'shared_slot_bytes' in config:
         require(type(config['shared_slot_bytes']) is int and (config['shared_slot_bytes']==0 or 65536<=config['shared_slot_bytes']<=16777216),'Invalid shared slot capacity')
@@ -931,7 +933,7 @@ def validate_config(config):
         require(config['execution']['max_models']>=sum(config['population'].values())+3,
                 'Model cache must cover frozen population plus learner/teacher versions')
         require(set(config['update'])-{'preparation_workers','opening_objective','value_gradient','kl_control','fixed_entropy','entropy_schedule'}==set(UPDATE_V21) and
-                set(config['execution'])-{'shared_slot_bytes','inference_routing','replica_backlog','teacher_search_workers_per_turn','padding_ratio','model_cohorts'}==set(EXECUTION_V21),
+                set(config['execution'])-{'shared_slot_bytes','inference_routing','replica_backlog','teacher_search_workers_per_turn','padding_ratio','model_cohorts','collector_validation','replay_bindings'}==set(EXECUTION_V21),
                 '2.1 requires revised update/execution')
         require(config['update'].get('preparation_workers',0)<=available,'PPO preparation exceeds CPU budget')
     require(set(config)==fields and version=='step5-training/2.2.0' and config['players']==4,

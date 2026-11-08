@@ -95,7 +95,7 @@ class ValueBuffer:
     Retired shards stay on disk until the existing retention workflow commits.
     No ordinary replay reader sees these paths or records.
     """
-    def __init__(self, directory, reward_id, *, receipts=(), retired=()):
+    def __init__(self, directory, reward_id, *, receipts=(), retired=(), pending_files=(), pending_directory=None):
         self.directory = Path(directory).resolve()
         self.reward_id = reward_id
         self.receipts = copy.deepcopy(list(receipts))
@@ -103,9 +103,21 @@ class ValueBuffer:
         self.cache = {}
         require(len({r['file'] for r in self.receipts}) == len(self.receipts), 'Duplicate value shard receipt')
         known = {r['file'] for r in self.receipts+self.retired}
+        require(all(isinstance(name,str) and Path(name).name==name and name.endswith('.json.gz') for name in pending_files),
+            'Invalid pending value shard names')
+        staged=set(pending_files);partials={Path(name).with_suffix('.partial').name for name in staged}
+        self.recovered_partials=[]
         if self.directory.exists():
-            require(all(p.is_file() and not p.is_symlink() and p.name in known for p in self.directory.iterdir()),
-                    'Unknown/uncommitted value files; recover the interrupted publication before resume')
+            files=list(self.directory.iterdir());allowed=known|staged|(partials if pending_directory is not None else set())
+            require(all(p.is_file() and not p.is_symlink() and p.name in allowed for p in files),
+                'Unknown/uncommitted value files; recover the interrupted publication before resume')
+            for p in files:
+                if p.name in partials and pending_directory is not None:
+                    from .retention import safe
+                    import uuid
+                    target=safe(self.directory.parent,Path(pending_directory));target.mkdir(parents=True,exist_ok=True)
+                    destination=safe(self.directory.parent,target/(p.name+'-'+uuid.uuid4().hex))
+                    safe(self.directory.parent,p).rename(destination);self.recovered_partials.append(str(destination))
         for r in self.receipts: self._read(r)
 
     def _path(self, receipt):

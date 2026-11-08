@@ -111,7 +111,8 @@ class InputBoundary:
             branch=branches.get(kind) if isinstance(kind,str) else None
             self._part('choice',choice,(branch or validator('choice')).validate)
         history = view['history']
-        require(type(history) is list, 'Observation history must be an array')
+        from .admitted_inputs import FrozenList,OwnedList
+        require(type(history) in (list,FrozenList,OwnedList), 'Observation history must be an array')
         # Public history usually grows by appending one event. Hash bounded
         # chunks in the JSON encoder instead of rehashing every prior event in
         # Python at every subchoice. Content keys still detect edits anywhere;

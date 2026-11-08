@@ -73,10 +73,16 @@ class TeacherTerm:
         self.config = config; self.mode = config['mode']; self.seed = seed; self.generation = generation
         self.state = copy.deepcopy(state or {})
         self.beta = self.state.get('beta', 1.); self.calibrated = self.state.get('calibrated', False)
+        from .teacher_gradient_qualification import restore
+        self.qualification=restore(self.state.get('gradient_qualification'),config['term']['share_target'])
         self.shadow = self.state.get('shadow_shares', []); self.outside = self.state.get('outside_streak', 0)
         require(np.isfinite(self.beta) and .01 <= self.beta <= 10, 'Invalid teacher beta state')
         target = config['term']['share_target']; old_target = self.state.get('share_target', target)
-        if self.mode == 'on' and self.shadow and (self.state.get('mode') == 'shadow' or not self.calibrated):
+        if self.qualification is not None and self.qualification['passed']:
+            self.beta=self.qualification['beta'];self.calibrated=True
+        elif self.mode=='on' and self.qualification is not None:
+            raise ValueError('Two full shadow gradient qualifications are required before using fixed beta')
+        elif self.mode == 'on' and self.shadow and (self.state.get('mode') == 'shadow' or not self.calibrated):
             values = [v for iteration in self.shadow for v in iteration if v > 0]
             if values:
                 self.beta = float(np.clip(target / np.median(values), *config['term']['beta_bounds']))
@@ -154,6 +160,8 @@ class TeacherTerm:
             self.outside = self.outside + 1 if share < target / 2 or share > target * 2 else 0
         self.state = dict(mode=self.mode, beta=self.beta, calibrated=self.calibrated,
             share_target=self.config['term']['share_target'], shadow_shares=self.shadow, outside_streak=self.outside)
+        from .teacher_gradient_qualification import finish as qualify_gradient
+        qualify_gradient(self,self.state)
         return copy.deepcopy(self.state)
 
     def report(self):
@@ -161,6 +169,10 @@ class TeacherTerm:
             return dict(Counter({str(k): sum(n for i, n in self.presentations.items() if key(i) == k)
                                  for k in {key(i) for i in self.presentations}}))
         return dict(mode=self.mode, beta=self.beta_used, beta_next=self.beta, steps=len(self.steps), rows=len(self.rows),
+            fixed_beta=self.qualification['beta'] if self.qualification and self.qualification['passed'] else None,
+            gradient_qualification=copy.deepcopy(self.qualification),
+            projected_fixed_share=summary([s['raw_share']*self.beta for s in self.steps if s['raw_share'] is not None])
+                if self.qualification and self.qualification['passed'] else None,
             share=summary([s['share'] for s in self.steps]), raw_share=summary([s['raw_share'] for s in self.steps]),
             cosine=summary([s['cosine'] for s in self.steps]), staleness=self.staleness,
             improvement_by_phase=self.improvement_by_phase, presentations=sum(self.presentations.values()),

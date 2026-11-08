@@ -24,14 +24,17 @@ def prepared(games, predicate=None, neutral=False, insolvency=None, reward=None,
     require(reward is None or insolvency==reward['insolvency'],'Return/cost reward mismatch')
     encoder, data = PreparedEncoder(), []
     for game in games:
+        from .replay_binding import memo
         if hasattr(game,'assert_metadata'): game.assert_metadata()
-        target = terminal_targets(game['result']) if outcome_targets is None else outcome_targets[game['game_id']]
+        target = memo(game,'terminal_targets',None,lambda:terminal_targets(game['result'])) if outcome_targets is None else outcome_targets[game['game_id']]
         prior=([min(insolvency['max_cost'],n*insolvency['event_cost']) for n in game['branch']['prior_events']]
                if 'branch' in game and insolvency is not None else None)
-        costs,summaries=insolvency_returns(game['records'],insolvency,prior) if insolvency is not None else (None,None)
+        costs,summaries=memo(game,'insolvency_targets',dict(spec=insolvency,prior=prior),
+            lambda:insolvency_returns(game['records'],insolvency,prior)) if insolvency is not None else (None,None)
         if reward is not None:
             from brass_ai.learning.reward import replay_returns
-            labels,rewards=replay_returns(game['records'],game['result'],reward,prior)
+            labels,rewards=memo(game,'reward_targets',dict(spec=reward,prior=prior),
+                lambda:replay_returns(game['records'],game['result'],reward,prior))
         annotated=set()
         for step,row in enumerate(game['records']):
             if 'branch' in game and step==0:

@@ -1,0 +1,96 @@
+{
+  "contract": "brass-collector-performance-verification/1",
+  "date": "2026-11-07",
+  "scope": "PI00-PI03 and prerequisite PI05-A core, production ordinary modules; no real training updates",
+  "execution": {
+    "implementation": "52ba99aeba875ccbf785b25022d197c7656aa9b53dcc17e857b9b8d1af8b23ca",
+    "qualified_implementation": "9efcf34f853d75ab844366b6819da4b0921be38d3e2dfb806cf282ace76e7a30",
+    "replay_location_review": "9d9b614858f37e27d0e9e00ac9fe00287a9f4486465273b2c2ebde4e69f54ca9"
+  },
+  "ordinary_source": "f103ea62c89a7e2f9e2b3c97faa65e6594a41d9f0fcd964e4c92ee4a35a7ca92",
+  "teacher_producer": "dbe27fb771be5297cebcdcdf56d9d054bf5a6b270ec37008f75f80ce3f717101",
+  "source_review": {
+    "exact_before_after_hashes_checked": true,
+    "qualified_source_reconstructed_from_base_commit": "7244d6b",
+    "source_files": 362,
+    "reviewed_changes": 40
+  },
+  "regressions": {
+    "python_distinct_passed": 94,
+    "rust_distinct_passed": 2,
+    "python_groups": [
+      {
+        "path": "artifacts/pi00-final-runtime-tests.log",
+        "sha256": "4d7d543a79e901f46f7327560a23d5fcb96fff537a233a0d9063dda8ebe8a2ee",
+        "distinct_tests": 50,
+        "seconds": 25.584,
+        "result": "passed"
+      },
+      {
+        "path": "artifacts/pi00-final-shadow-recovery-tests.log",
+        "sha256": "7599580188b01bbf29ff73c49562cb30d5ba9205a64cd3b8b213a3b0dd6224cd",
+        "distinct_tests": 42,
+        "seconds": 43.177,
+        "result": "passed"
+      }
+    ],
+    "additional_python_tests": {
+      "distinct_tests": 2,
+      "result": "passed",
+      "seconds": 0.099,
+      "tests": [
+        "test_collector_performance.Performance.test_matched_snapshot_is_checked_on_failure_and_keeps_first_error_without_gpu",
+        "test_collector_performance.Performance.test_matched_generation_failure_exports_without_collection_or_checkpoint_load"
+      ]
+    },
+    "post_guard_recheck": {
+      "path": "artifacts/pi00-final-identity-tests.log",
+      "sha256": "55b01b7d08f0eedc1e7ad0322959438dd1ff8b456acf9058941ee8cf83dee84f",
+      "passed": 5,
+      "overlaps_distinct_count": true
+    },
+    "repeated_candidate_reuse": {
+      "result": "passed",
+      "seconds": 0.117,
+      "overlaps_distinct_count": true
+    },
+    "rust": {
+      "path": "artifacts/pi00-native-20261107/test-final.log",
+      "sha256": "b1582b6edc39b39ed9475b31bf56c884dc65d7de7a3a51de4fd91000f4cd5e50",
+      "passed": 2,
+      "build_sources_byte_identical": true,
+      "binary_sha256": "bc597777ecaa5cb3080e5279be247598dd2d471b2f655ca65f64a48ebaaec90a"
+    }
+  },
+  "measurements": {
+    "cpu_components_forward": "cpu-components-forward.json",
+    "cpu_components_reverse": "cpu-components-reverse.json",
+    "native_wire": "native-wire.json",
+    "checkpoint": null,
+    "training_updates": 0,
+    "local_nn_benchmark_run": false,
+    "limits": "Authored four-family publication data and bounded fixed native states only; no claim about full training throughput. Reports retain their actual intermediate execution identity; final ordinary Rust source/binary matches wire report."
+  },
+  "compatibility": {
+    "search_v1_changed": false,
+    "teacher_search_changed": false,
+    "teacher_shadow": {
+      "tables": 32,
+      "branching": 0,
+      "share_target": 0.25
+    },
+    "training_state_modified": false,
+    "old_archives_modified": false
+  },
+  "pending": [
+    "Linux/CUDA matched frozen-checkpoint short profile",
+    "Normal shadow32 full-iteration throughput and two-iteration continuation on lab",
+    "PI04 additional IPC merging/copy reduction",
+    "PI05-B remaining repeated immutable-label/history/pack/reader checks"
+  ],
+  "artifacts": {
+    "cpu-components-forward.json": "d444cbdbb7403dbc57c3cfc1de278a277f0b4178b4dbfbb14356474f7a7781cf",
+    "cpu-components-reverse.json": "a7c3de16dd282ca7a9431f68c9c37b634b06711aa3096109d4d4cec5b9a5e3aa",
+    "native-wire.json": "21942f5b1a157af6bb9e526603c5544c762fefe3bdf800133acbbd2f623c66a0"
+  }
+}

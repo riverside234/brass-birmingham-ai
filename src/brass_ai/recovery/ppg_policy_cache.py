@@ -32,7 +32,10 @@ class PolicyInputs:
         # eight-age globally padded action array.
         for start in range(0,len(rows),64):
             group=rows[start:start+64];end=start+len(group)
-            for row in group:check_encoded(row);check_action_selectors(row.actions)
+            from .replay_binding import checked_encoded
+            for row in group:
+                check_encoded(row)
+                if not checked_encoded(row):check_action_selectors(row.actions)
             self.states[start:end]=torch.from_numpy(np.stack([r.state for r in group])).to(self.storage)
             self.mapping[start:end]=torch.from_numpy(np.stack([r.stable_to_relative for r in group])).to(self.storage)
             a=int(offsets[start]);b=int(offsets[end]) if end<len(rows) else total

@@ -5,6 +5,7 @@ iteration. The full execution fingerprint remains distinct and is recorded in
 the next checkpoint/report. This is not a general source-upgrade exemption.
 """
 import copy
+from functools import lru_cache
 
 from brass_ai.bank import read
 from brass_ai.learning.contracts import CONFIG_DIR,digest,require
@@ -52,16 +53,30 @@ def accepts_execution(saved):
             saved.get('qualified_implementation')==current['qualified_implementation'])
 
 
+@lru_cache(maxsize=8)
+def reviewed_validator(identity):
+    """Known reviewed code may retain its original coverage on cold recovery.
+
+    This never grants a warm heap capability or relabels an old disk receipt.
+    Exact replay/features are still checked by the current reader.
+    """
+    current=execution()
+    return current['replay_location_review'] is not None and identity in {
+        v['implementation'] for v in read(REVIEW).get('predecessor_executions',[])}
+
+
 def training_signature(state,signature):
     """Keep frozen jobs/receipts byte-identical only for the exact native fix."""
     value=state.get('native_backend')
     if value is None or state['signature']==signature:return signature
     current=execution();old=state['signature']
+    from .lab_shadow_config import is_shadow,approved
+    target=dict(signature,implementation=old['implementation'])
     require(current['replay_location_review'] is not None and
             signature['implementation']==current['implementation'] and
             old['implementation']==value['implementation']==current['qualified_implementation'] and
             value['mode'] in ('rust','reference') and
-            old['config'].get('teacher_phase',{}).get('mode','off')=='off' and
-            dict(signature,implementation=old['implementation'])==old,
+            (old['config'].get('teacher_phase',{}).get('mode','off')=='off' or is_shadow(old['config'])) and
+            (target==old or approved(state,target)),
             'Native continuation source/config differs from the exact replay-location review')
-    return copy.deepcopy(old)
+    return copy.deepcopy(target)

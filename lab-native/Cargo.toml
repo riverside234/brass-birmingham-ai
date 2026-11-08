@@ -24,7 +24,7 @@ required-features = ["teacher"]
 [dependencies]
 brass-ai-core = { path = "../native/brass-ai-core" }
 serde = { version = "=1.0.228", features = ["derive"] }
-serde_json = "=1.0.149"
+serde_json = { version = "=1.0.149", features = ["raw_value"] }
 sha2 = "=0.10.9"
 
 [profile.release]

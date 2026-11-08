@@ -1,0 +1,223 @@
+{
+  "passed": true,
+  "scope": "Frozen authored CPU components only; no NN/checkpoint/simulator/training; not whole-training throughput",
+  "checkpoint_sha256": null,
+  "frozen_jobs": "9ddce1fd802922c87e4fb4b68561e427aecc5ccdcc8b6e969fb1257c83690c77",
+  "families": 2,
+  "decisions": 128,
+  "workers": 2,
+  "arms": {
+    "shared_fast_bindings_on": {
+      "immutable_bindings": true,
+      "startup_seconds": 6.5984931999119,
+      "handoff_seconds": 0.01110470003914088,
+      "temporary_payload_write_bytes": 0,
+      "publication_seconds": 0.49271710007451475,
+      "reader_seconds": 0.4884606999112293,
+      "reader_binding_checks": {
+        "input_hash_executed": 128,
+        "label_hash_executed": 128,
+        "array_detached_bytes": 2102672,
+        "array_validation_reused": 128,
+        "immutable_games_sealed": 2
+      },
+      "preparation_seconds": 0.04923110001254827,
+      "preparation_binding_checks": {
+        "array_validation_reused": 256,
+        "metadata_hash_reused": 8,
+        "terminal_targets_executed": 2,
+        "insolvency_targets_executed": 2,
+        "reward_targets_executed": 2,
+        "immutable_row_reused": 128
+      },
+      "publication_binding_checks": {
+        "metadata_hash_executed": 6,
+        "publication_row_binding_reused": 128,
+        "family_json_encoding_executed": 2,
+        "input_hash_executed": 320,
+        "pack_finite_executed": 2,
+        "label_hash_executed": 320,
+        "replay_family_encoding_reused": 2
+      },
+      "semantic_outputs": [
+        {
+          "game": "beb528e6ff87f9b53595d8168dc2165c4e81d83248ba4b1ed09c63861a787cbb",
+          "features": "8e061bd7e821e6e038b948205d7a254878b0a34825dafb13da1d59ab4b7ad339"
+        },
+        {
+          "game": "c43b63fb90db04eb6b438754f0d2ecbf86e70b024f9709a48e0e713db0a72797",
+          "features": "8e061bd7e821e6e038b948205d7a254878b0a34825dafb13da1d59ab4b7ad339"
+        }
+      ],
+      "prepared_rows": 128,
+      "coverage": [
+        {
+          "policy": {
+            "contract": "brass-collector-validation/1",
+            "mode": "production_fast",
+            "job": "17edb6aa80bb43fb61c6bb42b2c8c755c25ce47000cd0194bff2a19d5f15c217",
+            "ordinal": 0,
+            "first": true,
+            "semantic": true,
+            "branch": true,
+            "family_every": 64,
+            "branch_every": 16
+          },
+          "structural_admitted": true,
+          "semantic_audited": true,
+          "branch_audited": false
+        },
+        {
+          "policy": {
+            "contract": "brass-collector-validation/1",
+            "mode": "production_fast",
+            "job": "388d69436b9cd993b28c3fb1b9563776dde9f6edb65e3800671993189d680245",
+            "ordinal": 1,
+            "first": false,
+            "semantic": false,
+            "branch": false,
+            "family_every": 64,
+            "branch_every": 16
+          },
+          "structural_admitted": true,
+          "semantic_audited": false,
+          "branch_audited": false
+        }
+      ],
+      "worker_phase_sums": {
+        "unclaimed_retirement_seconds": 0.0015068999491631985,
+        "part_read_seconds": 0.09102229995187372,
+        "family_assembly_seconds": 0.0002009000163525343,
+        "full_validation_and_assembly_seconds": 0.30942499986849725,
+        "json_encoding_seconds": 0.05375390010885894,
+        "family_seal_seconds": 0.0011257000733166933,
+        "replay_write_hash_seconds": 0.02236040006391704,
+        "feature_cache_seconds": 0.1487452998990193
+      },
+      "shutdown_seconds": 0.5416173000121489,
+      "resources": {
+        "active_bytes": 0,
+        "peak_bytes": 4316150,
+        "budget_bytes": 1073741824,
+        "active_leases": 0
+      },
+      "cpu": {
+        "capacity": 8,
+        "active": 0,
+        "peak": 2,
+        "queued": 0,
+        "aborted": false
+      },
+      "accepted_work_seconds": 8.181624099961482,
+      "probe_wall_seconds": 8.512875799904577
+    },
+    "shared_fast_bindings_off": {
+      "immutable_bindings": false,
+      "startup_seconds": 6.378046300029382,
+      "handoff_seconds": 0.009226399939507246,
+      "temporary_payload_write_bytes": 0,
+      "publication_seconds": 0.6684523000149056,
+      "reader_seconds": 0.27236089995130897,
+      "reader_binding_checks": {
+        "input_hash_executed": 128,
+        "label_hash_executed": 128
+      },
+      "preparation_seconds": 0.06432300002779812,
+      "preparation_binding_checks": {
+        "metadata_hash_executed": 2,
+        "input_hash_executed": 128,
+        "label_hash_executed": 128
+      },
+      "publication_binding_checks": {
+        "metadata_hash_executed": 8,
+        "family_json_encoding_executed": 2,
+        "input_hash_executed": 448,
+        "pack_finite_executed": 2,
+        "label_hash_executed": 448,
+        "replay_family_encoding_reused": 2
+      },
+      "semantic_outputs": [
+        {
+          "game": "beb528e6ff87f9b53595d8168dc2165c4e81d83248ba4b1ed09c63861a787cbb",
+          "features": "8e061bd7e821e6e038b948205d7a254878b0a34825dafb13da1d59ab4b7ad339"
+        },
+        {
+          "game": "c43b63fb90db04eb6b438754f0d2ecbf86e70b024f9709a48e0e713db0a72797",
+          "features": "8e061bd7e821e6e038b948205d7a254878b0a34825dafb13da1d59ab4b7ad339"
+        }
+      ],
+      "prepared_rows": 128,
+      "coverage": [
+        {
+          "policy": {
+            "contract": "brass-collector-validation/1",
+            "mode": "production_fast",
+            "job": "17edb6aa80bb43fb61c6bb42b2c8c755c25ce47000cd0194bff2a19d5f15c217",
+            "ordinal": 0,
+            "first": true,
+            "semantic": true,
+            "branch": true,
+            "family_every": 64,
+            "branch_every": 16
+          },
+          "structural_admitted": true,
+          "semantic_audited": true,
+          "branch_audited": false
+        },
+        {
+          "policy": {
+            "contract": "brass-collector-validation/1",
+            "mode": "production_fast",
+            "job": "388d69436b9cd993b28c3fb1b9563776dde9f6edb65e3800671993189d680245",
+            "ordinal": 1,
+            "first": false,
+            "semantic": false,
+            "branch": false,
+            "family_every": 64,
+            "branch_every": 16
+          },
+          "structural_admitted": true,
+          "semantic_audited": false,
+          "branch_audited": false
+        }
+      ],
+      "worker_phase_sums": {
+        "unclaimed_retirement_seconds": 0.0018553000409156084,
+        "part_read_seconds": 0.0891342000104487,
+        "family_assembly_seconds": 0.000197199871763587,
+        "full_validation_and_assembly_seconds": 0.3896014998899773,
+        "json_encoding_seconds": 0.0687053999863565,
+        "family_seal_seconds": 0.0011413999600335956,
+        "replay_write_hash_seconds": 0.02760769985616207,
+        "feature_cache_seconds": 0.2020638999529183
+      },
+      "shutdown_seconds": 0.5595776999834925,
+      "resources": {
+        "active_bytes": 0,
+        "peak_bytes": 4316150,
+        "budget_bytes": 1073741824,
+        "active_leases": 0
+      },
+      "cpu": {
+        "capacity": 8,
+        "active": 0,
+        "peak": 2,
+        "queued": 0,
+        "aborted": false
+      },
+      "accepted_work_seconds": 7.951986599946395,
+      "probe_wall_seconds": 8.018597700051032
+    }
+  },
+  "implementation": "7ee553d580b2fe106abad357eb5f99fc5e552b3b92bd1c89b3f0bf343a07df86",
+  "probe_sources": {
+    "tests/RustBackendLab/profile_collector_performance.py": "8ab9d6c9e7923fc38e31d8ed874338543ffbd46b11ca84a48e30e4ed3cbb1264",
+    "tests/RustBackendLab/test_collector_performance.py": "86646bf568db203698bd06d576713f077bdb9f5529690c9ed4590084a4de8b0e",
+    "tests/RustBackendLab/test_b03.py": "3018f9c923d93dba64f5a47087c6d0f27855f76a973f7fabc1458e9962649b7c",
+    "scripts/rust_lab_b06_ordinary.py": "29fb566b30950cceef207b4be335afc4767706c67b99357dd61815198fb14996",
+    "scripts/rust_lab_b06_metrics.py": "b827ff4e564770534a667da7d2769ac43d519c5fc4bf8e30f28279c3b6a68a20"
+  },
+  "immutable_bindings": true,
+  "equal_training_outputs": true,
+  "source_unchanged": true
+}

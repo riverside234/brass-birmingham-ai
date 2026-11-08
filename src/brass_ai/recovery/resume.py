@@ -55,6 +55,8 @@ def check_signature(state, signature, reviewed=False):
     unchanged = lambda s: {k: v for k, v in s.items() if k not in ('implementation', 'config')}
     require(unchanged(previous) == unchanged(signature),
             'Reviewed resume requires unchanged config, data/IL, opponents and learning contracts')
+    from brass_ai.rust_backend.lab_shadow_config import approved as shadow_approved
+    if shadow_approved(state,signature):return True
     approvals = expand_source_reviews(read(CONFIG_DIR / 'selfplay-resume-sources.json'))
     transitions = [e for e in approvals['transitions'] if e['from_implementation'] == previous['implementation']
                 and e['to_implementation'] == signature['implementation']
@@ -487,18 +489,20 @@ def teacher_receipt_preserved(state,signature,raw,entry):
     still resets readiness. Never infer permission from equal model weights.
     """
     from .teacher_phase_config import mode_only_signature
+    from brass_ai.rust_backend.lab_shadow_config import signature_transition
+    compatible=lambda a,b:mode_only_signature(a,b) or signature_transition(a,b)
     origin=raw['training'].get('signature')
     known={digest(state['signature']):state['signature']}
     for transition in reversed(state.get('source_transitions',[])):
         if transition['checkpoint']==entry and transition['to_signature'] in known:
             known[digest(transition['from_signature'])]=transition['from_signature']
     before=known.get(origin)
-    if before is None or not mode_only_signature(before,signature):return False
+    if before is None or not compatible(before,signature):return False
     safe_bindings={origin}
     for transition in state.get('source_transitions',[]):
         if transition['checkpoint']!=entry:continue
         old=transition['from_signature'];target=known.get(transition['to_signature'])
-        if digest(old) in safe_bindings and target is not None and mode_only_signature(old,target):
+        if digest(old) in safe_bindings and target is not None and compatible(old,target):
             safe_bindings.add(transition['to_signature'])
     return digest(state['signature']) in safe_bindings
 
@@ -611,6 +615,8 @@ def commit_transition(run, state, signature,*,opponent_pool=None,pool_migration=
         config_changes={k:dict(before=previous['signature']['config'].get(k),after=v)
                         for k,v in signature['config'].items() if previous['signature']['config'].get(k)!=v}))
     updated['signature'] = signature
+    from brass_ai.rust_backend.lab_shadow_config import rebind_backend
+    rebind_backend(previous,updated)
     from .entropy_schedule import automatic_receipt
     reward_transition=automatic_receipt(signature['config'],previous)
     if reward_transition is not None:

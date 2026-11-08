@@ -1,0 +1,242 @@
+{
+  "scope": "Frozen authored CPU components only; no NN/checkpoint/simulator/training; not whole-training throughput",
+  "checkpoint_sha256": null,
+  "frozen_jobs": "2197a5a7a1e5f1ace6d151152e53a719fd995920640af9234d6813fb40fb36bc",
+  "families": 4,
+  "decisions": 256,
+  "workers": 2,
+  "arms": {
+    "legacy_strict": {
+      "startup_seconds": 7.275242099887691,
+      "handoff_seconds": 0.5739382000174373,
+      "temporary_payload_write_bytes": 4586236,
+      "publication_seconds": 1.0821168000111356,
+      "reader_seconds": 0.8576727999607101,
+      "preparation_seconds": 0.20488710002973676,
+      "semantic_outputs": [
+        {
+          "game": "beb528e6ff87f9b53595d8168dc2165c4e81d83248ba4b1ed09c63861a787cbb",
+          "features": "8e061bd7e821e6e038b948205d7a254878b0a34825dafb13da1d59ab4b7ad339"
+        },
+        {
+          "game": "c43b63fb90db04eb6b438754f0d2ecbf86e70b024f9709a48e0e713db0a72797",
+          "features": "8e061bd7e821e6e038b948205d7a254878b0a34825dafb13da1d59ab4b7ad339"
+        },
+        {
+          "game": "bf301ce8ec2fe333d06ad68284a4e099a71e1e73fd7028b24b9e5eb36b522769",
+          "features": "8e061bd7e821e6e038b948205d7a254878b0a34825dafb13da1d59ab4b7ad339"
+        },
+        {
+          "game": "c1d34fe2d3865c7fd109202de1bdb023f9a26ab83243025daae0c02ba019b037",
+          "features": "8e061bd7e821e6e038b948205d7a254878b0a34825dafb13da1d59ab4b7ad339"
+        }
+      ],
+      "prepared_rows": 256,
+      "coverage": [
+        null,
+        null,
+        null,
+        null
+      ],
+      "worker_phase_sums": {
+        "part_read_seconds": 0.5032589997863397,
+        "family_seal_seconds": 0.06952709995675832,
+        "full_validation_and_assembly_seconds": 0.6122743001906201,
+        "json_encoding_seconds": 0.1202006998937577,
+        "replay_write_hash_seconds": 0.047158199828118086,
+        "feature_cache_seconds": 0.19942700013052672
+      },
+      "shutdown_seconds": 0.5874262999277562,
+      "resources": {
+        "active_bytes": 0,
+        "peak_bytes": 0,
+        "budget_bytes": 1073741824,
+        "active_leases": 0
+      },
+      "cpu": {
+        "capacity": 8,
+        "active": 0,
+        "peak": 2,
+        "queued": 0,
+        "aborted": false
+      },
+      "accepted_work_seconds": 10.581283299834467,
+      "probe_wall_seconds": 10.74409419996664
+    },
+    "shared_strict": {
+      "startup_seconds": 7.43348440004047,
+      "handoff_seconds": 0.027418999932706356,
+      "temporary_payload_write_bytes": 0,
+      "publication_seconds": 1.058965399977751,
+      "reader_seconds": 0.5547130999621004,
+      "preparation_seconds": 0.1416696000378579,
+      "semantic_outputs": [
+        {
+          "game": "beb528e6ff87f9b53595d8168dc2165c4e81d83248ba4b1ed09c63861a787cbb",
+          "features": "8e061bd7e821e6e038b948205d7a254878b0a34825dafb13da1d59ab4b7ad339"
+        },
+        {
+          "game": "c43b63fb90db04eb6b438754f0d2ecbf86e70b024f9709a48e0e713db0a72797",
+          "features": "8e061bd7e821e6e038b948205d7a254878b0a34825dafb13da1d59ab4b7ad339"
+        },
+        {
+          "game": "bf301ce8ec2fe333d06ad68284a4e099a71e1e73fd7028b24b9e5eb36b522769",
+          "features": "8e061bd7e821e6e038b948205d7a254878b0a34825dafb13da1d59ab4b7ad339"
+        },
+        {
+          "game": "c1d34fe2d3865c7fd109202de1bdb023f9a26ab83243025daae0c02ba019b037",
+          "features": "8e061bd7e821e6e038b948205d7a254878b0a34825dafb13da1d59ab4b7ad339"
+        }
+      ],
+      "prepared_rows": 256,
+      "coverage": [
+        null,
+        null,
+        null,
+        null
+      ],
+      "worker_phase_sums": {
+        "part_read_seconds": 0.35753830010071397,
+        "family_seal_seconds": 0.07755909999832511,
+        "full_validation_and_assembly_seconds": 0.6799744998570532,
+        "json_encoding_seconds": 0.11190259992145002,
+        "replay_write_hash_seconds": 0.06962140009272844,
+        "feature_cache_seconds": 0.2242973999818787
+      },
+      "shutdown_seconds": 0.5411175999324769,
+      "resources": {
+        "active_bytes": 0,
+        "peak_bytes": 8632302,
+        "budget_bytes": 1073741824,
+        "active_leases": 0
+      },
+      "cpu": {
+        "capacity": 8,
+        "active": 0,
+        "peak": 2,
+        "queued": 0,
+        "aborted": false
+      },
+      "accepted_work_seconds": 9.757369099883363,
+      "probe_wall_seconds": 9.916611300082877
+    },
+    "shared_fast": {
+      "startup_seconds": 7.479569800081663,
+      "handoff_seconds": 0.02174399991054088,
+      "temporary_payload_write_bytes": 0,
+      "publication_seconds": 0.8948234999552369,
+      "reader_seconds": 0.8637443000916392,
+      "preparation_seconds": 0.18523980001918972,
+      "semantic_outputs": [
+        {
+          "game": "beb528e6ff87f9b53595d8168dc2165c4e81d83248ba4b1ed09c63861a787cbb",
+          "features": "8e061bd7e821e6e038b948205d7a254878b0a34825dafb13da1d59ab4b7ad339"
+        },
+        {
+          "game": "c43b63fb90db04eb6b438754f0d2ecbf86e70b024f9709a48e0e713db0a72797",
+          "features": "8e061bd7e821e6e038b948205d7a254878b0a34825dafb13da1d59ab4b7ad339"
+        },
+        {
+          "game": "bf301ce8ec2fe333d06ad68284a4e099a71e1e73fd7028b24b9e5eb36b522769",
+          "features": "8e061bd7e821e6e038b948205d7a254878b0a34825dafb13da1d59ab4b7ad339"
+        },
+        {
+          "game": "c1d34fe2d3865c7fd109202de1bdb023f9a26ab83243025daae0c02ba019b037",
+          "features": "8e061bd7e821e6e038b948205d7a254878b0a34825dafb13da1d59ab4b7ad339"
+        }
+      ],
+      "prepared_rows": 256,
+      "coverage": [
+        {
+          "policy": {
+            "contract": "brass-collector-validation/1",
+            "mode": "production_fast",
+            "job": "17edb6aa80bb43fb61c6bb42b2c8c755c25ce47000cd0194bff2a19d5f15c217",
+            "ordinal": 0,
+            "first": true,
+            "semantic": true,
+            "branch": true,
+            "family_every": 64,
+            "branch_every": 16
+          },
+          "structural_admitted": true,
+          "semantic_audited": true,
+          "branch_audited": false
+        },
+        {
+          "policy": {
+            "contract": "brass-collector-validation/1",
+            "mode": "production_fast",
+            "job": "388d69436b9cd993b28c3fb1b9563776dde9f6edb65e3800671993189d680245",
+            "ordinal": 1,
+            "first": false,
+            "semantic": false,
+            "branch": false,
+            "family_every": 64,
+            "branch_every": 16
+          },
+          "structural_admitted": true,
+          "semantic_audited": false,
+          "branch_audited": false
+        },
+        {
+          "policy": {
+            "contract": "brass-collector-validation/1",
+            "mode": "production_fast",
+            "job": "457149637c7518617a412871e06add5a5e8b2a3ff3d3b04080993f90ecd9812f",
+            "ordinal": 2,
+            "first": false,
+            "semantic": false,
+            "branch": true,
+            "family_every": 64,
+            "branch_every": 16
+          },
+          "structural_admitted": true,
+          "semantic_audited": false,
+          "branch_audited": false
+        },
+        {
+          "policy": {
+            "contract": "brass-collector-validation/1",
+            "mode": "production_fast",
+            "job": "c44146113e05f8e5d8d8528e47d949a1e596ab2cd9c79581dba6a053dcd80f9a",
+            "ordinal": 3,
+            "first": false,
+            "semantic": false,
+            "branch": false,
+            "family_every": 64,
+            "branch_every": 16
+          },
+          "structural_admitted": true,
+          "semantic_audited": false,
+          "branch_audited": false
+        }
+      ],
+      "worker_phase_sums": {
+        "part_read_seconds": 0.24582110007759184,
+        "family_seal_seconds": 0.08358970005065203,
+        "full_validation_and_assembly_seconds": 0.4214737999718636,
+        "json_encoding_seconds": 0.21043169999029487,
+        "replay_write_hash_seconds": 0.05428650008980185,
+        "feature_cache_seconds": 0.2215303999837488
+      },
+      "shutdown_seconds": 0.5141927000368014,
+      "resources": {
+        "active_bytes": 0,
+        "peak_bytes": 8632302,
+        "budget_bytes": 1073741824,
+        "active_leases": 0
+      },
+      "cpu": {
+        "capacity": 8,
+        "active": 0,
+        "peak": 2,
+        "queued": 0,
+        "aborted": false
+      },
+      "accepted_work_seconds": 9.959314100095071,
+      "probe_wall_seconds": 10.146160800009966
+    }
+  },
+  "equal_training_outputs": true
+}

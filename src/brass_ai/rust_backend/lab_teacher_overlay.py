@@ -16,9 +16,26 @@ CONTRACT = 'brass-lab-teacher/2.0.0'
 def source_fingerprint():
     paths = [Path(__file__), *sorted((SOURCE_ROOT / 'lab-native').rglob('*.rs')),
              SOURCE_ROOT / 'lab-native/Cargo.toml', SOURCE_ROOT / 'lab-native/Cargo.lock']
-    return digest(dict(contract=CONTRACT, base=SOURCE, files={p.relative_to(SOURCE_ROOT).as_posix():
+    files={p.relative_to(SOURCE_ROOT).as_posix():
         hashlib.sha256(p.read_bytes().replace(b'\r\n', b'\n')).hexdigest()
-        for p in paths if 'target' not in p.parts}))
+        for p in paths if 'target' not in p.parts}
+    # Exact reviewed ordinary-only wire changes do not replace the qualified
+    # teacher executable or relabel its producer. Unknown edits still get a new
+    # producer. The review itself enters the full training execution fingerprint.
+    review=SOURCE_ROOT/'configs/learning/collector-performance-teacher-reuse.json'
+    if review.is_file():
+        import json
+        value=json.loads(review.read_text(encoding='utf-8'))
+        allowed={'lab-native/src/main.rs','lab-native/src/ordinary_delta.rs','lab-native/Cargo.toml',
+                 'src/brass_ai/rust_backend/lab_teacher_overlay.py'}
+        original=value['original_files']
+        changed={k for k in set(files)|set(original) if files.get(k)!=original.get(k)}
+        if (value.get('contract')=='brass-ordinary-transport-teacher-reuse/1' and changed<=allowed
+                and files==value['current_files']):
+            before=digest(dict(contract=CONTRACT,base=SOURCE,files=original))
+            require(before==value['original_producer'],'Invalid teacher producer equivalence review')
+            return before
+    return digest(dict(contract=CONTRACT, base=SOURCE, files=files))
 
 
 def apply(directory):
