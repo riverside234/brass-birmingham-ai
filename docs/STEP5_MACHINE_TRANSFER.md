@@ -94,7 +94,7 @@ For a manual upload, create a new Release/tag targeting the export's `git_commit
 
 ## Destination: restore and verify
 
-Clone the code at the export's exact Git commit/Release tag. Install the OS/Python/PyTorch/CUDA/Mono dependencies from [the lab guide](TRAINING_RECOVERY_LAB.md); the archive is not a conda/system image. Select your allocated GPU using `CUDA_VISIBLE_DEVICES`. Retained native binaries require a compatible Linux CPU/ABI; use preflight to check the destination before training.
+Use a full Git clone containing the export's exact Git commit/Release tag. Keep the training code at its recorded source and update the transfer tools to the latest repair: `scripts/step5-transfer.py`, `scripts/step5_transfer_runtime.py` and `scripts/step5_transfer_restore.py`. Newer transfer tools can restore an older archive without replacing themselves. Install the OS/Python/PyTorch/CUDA/Mono dependencies from [the lab guide](TRAINING_RECOVERY_LAB.md); the archive is not a conda/system image. Select your allocated GPU using `CUDA_VISIBLE_DEVICES`. Retained native binaries require a compatible Linux CPU/ABI; use preflight to check the destination before training.
 
 ```bash
 # ROOT is the NEW checkout; DOWNLOAD contains all archive parts and the index.
@@ -103,6 +103,7 @@ DOWNLOAD=/scratch/bob/transfer-g1284
 cd "$ROOT"
 python -m pip install -r requirements-transfer.txt
 
+set -e
 python scripts/step5-transfer.py restore --root "$ROOT" --relocate \
   --bundle "$DOWNLOAD/selfplay-migration.tar.zst.parts.json" \
   > "$DOWNLOAD/restore.json"
@@ -110,7 +111,15 @@ python scripts/step5-transfer.py verify --root "$ROOT" \
   --bundle "$DOWNLOAD/selfplay-migration.tar.zst.parts.json"
 ```
 
-No manual concatenation is needed. Restoration verifies every payload, source file and destination conflict before accepting the snapshot; it does not overwrite differing files. `--relocate` supports a different absolute project directory. `.step5-relocation.json` maps historical root components at access time, including Rust receipt/binary paths. Signed historical JSON is unchanged. Restored native workers retain their Linux executable bit. Keep this machine-local mapping with the checkout; do not edit path strings inside saved checkpoints or receipts.
+No manual concatenation is needed. Restoration verifies all archive payloads and preflights every destination file before writing. Identical files already present in a clone are reused. Differing **Git-tracked text/config/source files** in the declared repository trees are backed up first, then replaced with the exact archive-pinned bytes. All backups finish before any replacement. This handles source-machine edits to tracked launch configs such as `configs/step5/joint7-v11-2-g1290-trained-restart-rust-shadow32-no-branch-share025.json`, and LF/CRLF differences. Git HEAD and index are unchanged; restored source/config overrides can appear as working-tree modifications.
+
+If a repository dependency was omitted from the archive in `repo` mode, the restore tool can recover it from the archive's exact recorded Git commit, including an LF/CRLF variant only when its complete SHA-256 matches. It performs no fetch/reset/checkout and never accepts merely similar content. A missing commit or unresolved dependency remains a blocking error with all affected paths reported together. No new archive export is needed for this repair.
+
+Backups and the interruption-safe receipt live under `artifacts/step5-transfer/restore-<archive-id-prefix>/`; `restore.json` lists their exact paths in `repository_reconciliation.backups`. The first destination-state identity is retained so retries cannot lose the fresh-buffer instruction after a partial restore. Later edits to an already backed-up file, changed backups, or a different journal/archive binding fail closed. Existing **checkpoints, run state, data, private binaries and untracked files** are never overwritten on a mismatch. `--strict-repo-files` retains the original policy of refusing any differing repository file. `verify` only checks; it never repairs/replaces files.
+
+Current transfer tools stay in the checkout. Their older archive versions are retained as hash-verified snapshots in that receipt directory; only these three named, non-training tools use this mapping. Other archived files remain at their original relative paths, and the full training-source fingerprint is still required. This keeps fixes available for retries and verification without weakening the archived model/config/data/source bindings. The archive itself is unchanged.
+
+`--relocate` supports a different absolute project directory. `.step5-relocation.json` maps historical root components at access time, including Rust receipt/binary paths. Signed historical JSON is unchanged. Restored native workers retain their Linux executable bit. Keep the relocation mapping and restore receipt/backups with the checkout; do not edit path strings inside saved checkpoints or receipts.
 
 Run archive `verify` before any subsequent training changes. Full verification against the old archive is expected to fail once new training commits change its state. Keep the archive so the original checkpoint can still be restored into a clean directory.
 

@@ -332,5 +332,13 @@
     "python_debug_checks_passed": 7,
     "native_rebuild_required": false,
     "lab_real_archive": "Pending"
+  },
+  "transfer_clone_restore_repair": {
+    "receipt": "distribution/rust-collector-performance/transfer-clone-restore-fix.json",
+    "implementation": "9577ab0db846fe6783963ad11cb1f5ab46d67cbe0ce57e7454425c8fa96431a4",
+    "python_debug_checks_passed": 23,
+    "native_rebuild_required": false,
+    "reexport_required": false,
+    "lab_restore": "Pending"
   }
 }

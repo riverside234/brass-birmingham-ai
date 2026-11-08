@@ -794,7 +794,7 @@ def commands(root, manifest, *, iterations=20, device='cuda'):
     return result
 
 
-def restore(root, bundle, *, verify_only=False, relocate=False):
+def restore(root, bundle, *, verify_only=False, relocate=False, strict_repo_files=False):
     root = Path(root).resolve()
     manifest = inspect_bundle(bundle)  # verify all archive bytes BEFORE filesystem writes
     original_state_present = (root/manifest['run']/'state.json').is_file()
@@ -819,56 +819,52 @@ def restore(root, bundle, *, verify_only=False, relocate=False):
     runs = [below(root, n) for n in manifest['runs']]
     require(all(not p.exists() or p.is_dir() for p in runs), 'Conflicting destination run directory')
     require(all(not active(p) for p in runs), 'Destination run is active')
-    for record in manifest['files']:
-        path = below(root, record['path'])
-        if path.exists():
-            require(path.is_file() and sha(path) == record['sha256'], 'Conflicting destination; nothing overwritten: ' + record['path'])
-        else:
-            require(not record.get('external', False), 'Missing external dependency; sync matching code/runtime first: ' + record['path'])
-            require(not verify_only, 'Missing restored file: ' + record['path'])
+    from step5_transfer_restore import RestorePlan
+    plan=RestorePlan(root,manifest,below=below,sha=sha,require=require,read=read,encode=encode,publish=publish,
+        verify_only=verify_only,strict=strict_repo_files,original_state_present=original_state_present)
     if not verify_only:
         with ExitStack() as leases:
             for run in runs:
                 leases.enter_context(lease(run))
+            plan.prepare()  # All clone backups become durable before any replacement.
+            def install(record,source):
+                path=plan.target(record);path.parent.mkdir(parents=True,exist_ok=True)
+                temporary=path.with_name('.transfer-'+uuid.uuid4().hex+'.partial')
+                try:
+                    with temporary.open('xb') as target:
+                        while block:=source.read(CHUNK):target.write(block)
+                    require(sha(temporary)==record['sha256'],'Restored file hash differs')
+                    plan.install(record,temporary)
+                finally:temporary.unlink(missing_ok=True)
+                return path
+            for record in manifest['files']:
+                if record['path'] in plan.external:
+                    install(record,io.BytesIO(plan.external[record['path']]))
             needed = {}
             for record in manifest['files']:
-                if not below(root, record['path']).exists():
+                if not record.get('external',False) and (not plan.target(record).exists() or record['path'] in plan.replacements):
                     needed.setdefault(payload_name(manifest, record), []).append(record)
             with open_bundle(bundle) as members:
                 for name, size, stream in members:
                     first = None
                     for record in needed.pop(name, []):
-                        path = below(root, record['path'])
-                        path.parent.mkdir(parents=True, exist_ok=True)
-                        # Model filenames already contain a full digest. Do not
-                        # append another long suffix and exceed Windows limits.
-                        temporary = path.with_name('.transfer-' + uuid.uuid4().hex + '.partial')
-                        try:
-                            # A deduplicated object is decoded once. Subsequent
-                            # paths get separate files, so training can mutate
-                            # them independently (no hard links).
-                            with ExitStack() as copying:
-                                source = stream if first is None else copying.enter_context(first.open('rb'))
-                                target = copying.enter_context(temporary.open('xb'))
-                                while block := source.read(CHUNK):
-                                    target.write(block)
-                            require(sha(temporary) == record['sha256'], 'Restored file hash differs')
-                            require(not path.exists(), 'Destination appeared during restore')
-                            publish(temporary, path)
-                            first = path
-                        finally:
-                            if temporary.exists():
-                                temporary.unlink()
+                        # Decode a deduplicated object once; copy subsequent
+                        # paths independently, preserving existing no-hardlink semantics.
+                        with ExitStack() as copying:
+                            source=stream if first is None else copying.enter_context(first.open('rb'))
+                            first=install(record,source)
             require(not needed, 'Missing archive payloads during restore')
         # Native Rust workers launch directly on Linux. Archive payload bytes
         # alone are insufficient if restoration loses their executable bit.
         for record in manifest['files']:
             if record.get('executable',False):
-                path=below(root,record['path'])
+                path=plan.target(record)
                 path.chmod(path.stat().st_mode | stat.S_IXUSR)
     if verify_only and os.name!='nt':
-        require(all(not r.get('executable',False) or below(root,r['path']).stat().st_mode & stat.S_IXUSR
+        require(all(not r.get('executable',False) or plan.target(r).stat().st_mode & stat.S_IXUSR
             for r in manifest['files']), 'Restored native executable permission is missing')
+    require(all(plan.target(r).is_file() and sha(plan.target(r))==r['sha256'] for r in manifest['files']),
+            'Restored file changed before final verification')
     # Archives written before the throughput hosts used the previous recipe.
     # Verify their original identity; never relabel it as the current source.
     require(source_identity(root, recipe=manifest.get('source_recipe', 1)) == manifest['implementation'],
@@ -887,13 +883,14 @@ def restore(root, bundle, *, verify_only=False, relocate=False):
         from brass_ai.recovery.transfer_resume import install_instruction
         # In-place archive verification on the source must never reset its
         # buffers. A new destination receives a checkpoint-bound instruction.
-        if not same_root or not original_state_present:
+        if not same_root or not plan.identity['original_state_present']:
             install_instruction(root, manifest)
     if manifest.get('buffer_rebuild') is not None and verify_only and not same_root:
         from brass_ai.recovery.transfer_resume import instruction
         marker = instruction(root, root/manifest['run'])
         require(marker is not None and marker['archive_id'] == manifest['id'], 'Missing/different fresh-buffer transfer instruction')
     return dict(summary(manifest), verified=True, destination_root=str(root), relocated=needs_mapping,
+                repository_reconciliation=plan.report(),
                 imitation_run=(below(root, manifest['imitation_run']).relative_to(root).as_posix()
                                if manifest['imitation_run'] else None),
                 requires_code_update=needs_mapping and (manifest.get('source_recipe', 1) < 3 or
@@ -920,12 +917,13 @@ def main():
         cmd.add_argument('--root', required=True, type=Path)
         cmd.add_argument('--bundle', required=True, type=Path)
         cmd.add_argument('--relocate', action='store_true', help='Use --root as a new project directory; preserve signed files and persist confined old-root mappings')
+        cmd.add_argument('--strict-repo-files',action='store_true',help='Reject differing Git-managed files instead of backing them up and restoring archive-pinned bytes')
     a = parser.parse_args()
     if a.command == 'export':
         result = export(a.root, a.run, a.bundle, dry_run=a.dry_run, mode=a.mode, dependencies=a.dependencies, part_mb=a.part_mb,
                         archive_format=a.archive_format, zstd_level=a.zstd_level, threads=a.threads)
     else:
-        result = restore(a.root, a.bundle, verify_only=a.command == 'verify', relocate=a.relocate)
+        result = restore(a.root, a.bundle, verify_only=a.command == 'verify', relocate=a.relocate,strict_repo_files=a.strict_repo_files)
     print(json.dumps(result, indent=2, allow_nan=False))
 
 

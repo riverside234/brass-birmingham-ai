@@ -265,3 +265,15 @@ buffers remain excluded. See
 [transfer-rating-summary-fix.json](transfer-rating-summary-fix.json). Sync both
 transfer scripts; training/native fingerprints and the prepared adapter stay
 valid.
+
+Clone restoration now reuses identical files and backs up differing Git-tracked
+repository text/config/source files before installing exact archive bytes. It
+recovers omitted dependencies only from the exact archive Git commit/hash,
+preserves newer transfer tools with verified archived snapshots, and keeps
+private state/checkpoint/binary and untracked conflicts blocking. All conflicts
+are reported before writes; backup and fresh-buffer publication retries retain
+their original destination identity. See
+[transfer-clone-restore-fix.json](transfer-clone-restore-fix.json) and the transfer
+guide. Update all three transfer modules on the destination and reuse the
+existing archive and prepared adapter; no training qualification or native
+rebuild is needed.
