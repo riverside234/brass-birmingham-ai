@@ -37,6 +37,16 @@ def adopt(config):
 
 def validate(c):
     expected = defaults()
+    if 'schedule' in c:
+        from .search_value_schedule import defaults as schedule_defaults,validate as schedule_validate
+        schedule_validate(c)
+        expected.update(schedule=schedule_defaults())
+        expected['schedule']['validation_during_beta_qualification']=c['schedule']['validation_during_beta_qualification']
+        expected['buffer']['staleness']='none'
+        expected['gate']=dict(mode='diagnostic-only',games=4,evaluation_target='final-utility-to-go')
+        expected['head_to_head']['games']=0
+        expected['trunk']['kl']=.003
+        expected['trunk']['ordinary_heldout_tolerance']=None
     require(set(c) == set(expected), 'Search value fields differ')
     fixed = copy.deepcopy(c)
     fixed['stage'] = expected['stage']

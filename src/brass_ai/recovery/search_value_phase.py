@@ -2,13 +2,14 @@
 import copy
 import json
 import math
+import time
 from collections import defaultdict
 
 import numpy as np
 
 from brass_ai.learning.contracts import digest, require
 from .search_value_config import validate
-from .search_value_rows import ValueBuffer, complete_game
+from .search_value_rows import ValueBuffer, complete_game, copy_row
 from .search_value_training import Companion, StageMachine, clustered_gate, predict_rows, guarded_pass
 
 
@@ -22,14 +23,17 @@ class SearchValuePhase:
         self.options = copy.deepcopy(validate(options))
         self.model, self.reward_id = model, reward_id
         saved = saved or {}
-        self.machine = StageMachine(saved=saved.get('stage'), startup=startup)
+        self.machine = StageMachine(saved=saved.get('stage'), startup=startup,options=options)
         if options['stage'] == 'off': self.machine.manual('off')
         self.companion = (Companion(model, saved=saved.get('companion'))
                           if (trainable and options['stage'] != 'off' and not defer_install) or hasattr(model,'search_value_head') else None)
         self.trainable=trainable
         self.buffer = ValueBuffer(directory, reward_id, receipts=saved.get('buffer', {}).get('receipts', ()),
                                   retired=saved.get('buffer', {}).get('retired', ()),pending_files=pending_files,pending_directory=pending_directory)
-        self.label_ages = copy.deepcopy(saved.get('label_ages', []))
+        # Revised return fitting uses validated numeric value rows directly.
+        # Policy staleness still belongs to TeacherTerm; duplicating its full
+        # label views here both starved the head and inflated checkpoints.
+        self.label_ages = [] if 'schedule' in options else copy.deepcopy(saved.get('label_ages', []))
         self.report = {}
 
     def ensure_companion(self):
@@ -61,15 +65,15 @@ class SearchValuePhase:
             # Seal each complete table independently. Charging the entire batch
             # to every final turn makes identical work fail as lane count grows.
             self.buffer.publish(generation,job['split'],rows,game_id=job['expected']['game_id'])
-            if job['split'] == 'train': labels.extend(copy.deepcopy(result['rows']))
+            if job['split'] == 'train' and 'schedule' not in self.options: labels.extend(copy.deepcopy(result['rows']))
             counts[job['split']] += len(rows)
             elapsed = time.monotonic()-table_began
             timings[job['expected']['job_id']] = elapsed
             # Keep attribution and finite accounting, without a per-turn
             # deadline on independently checked label/shard publication.
         self.label_ages = [a for a in self.label_ages if 0 <= generation-a['generation'] < 8 and a['reward_id'] == self.reward_id]
-        self.label_ages.append(dict(generation=generation,reward_id=self.reward_id,
-            rows=labels))
+        if 'schedule' not in self.options:
+            self.label_ages.append(dict(generation=generation,reward_id=self.reward_id,rows=labels))
         self.report['rows'] = dict(counts)
         self.report['value_admission_seconds'] = time.monotonic()-began
         self.report['value_admission_per_table_seconds'] = timings
@@ -98,7 +102,7 @@ class SearchValuePhase:
     def _targets(self, rows):
         lam = self.machine.state['lam'] or 1.
         groups = defaultdict(list)
-        for row in rows: groups[row['game_id']].append(copy.deepcopy(row))
+        for row in rows: groups[row['game_id']].append(copy_row(row))
         result = []
         for game in groups.values():
             game.sort(key=lambda r:r['index'])
@@ -117,6 +121,7 @@ class SearchValuePhase:
         if mode != 'on' or self.options['stage']=='off':
             return dict(updated=False,reason='Search value off/shadow; no training')
         self.ensure_companion()
+        if 'schedule' in self.options:return self._scheduled_after_ppg(generation,guarded=guarded)
         self.report.pop('update',None)
         state = self.machine.state
         heldout = self.buffer.rows(generation,'heldout')
@@ -144,6 +149,42 @@ class SearchValuePhase:
             delta=dict(mean=float(np.abs(delta).mean()) if len(delta) else None,p90=float(np.quantile(np.abs(delta),.9)) if len(delta) else None))
         self.report['updated'] = bool(self.report.get('update',{}).get('steps') or
                                       any(i['accepted'] for i in self.report.get('update',{}).get('intervals',[])))
+        return copy.deepcopy(self.report)
+
+    def trunk_scale(self):
+        if 'schedule' in self.options:
+            from .search_value_schedule import trunk_scale
+            return trunk_scale(self.machine.state)
+        return self.machine.state['scale']
+
+    def _scheduled_after_ppg(self,generation,*,guarded):
+        from .search_value_schedule import diagnostics
+        from .search_value_training import unconditional_pass
+        began=time.perf_counter()
+        if self.machine.state['lam'] is None:self.machine.choose_lambda(1.)
+        # No policy-drift filter or validation gate on residual return fitting.
+        # In particular current-G data must remain usable after its PPO update.
+        train=self._targets(self.buffer.rows(generation,'train'))
+        prepared=time.perf_counter()
+        scale=self.trunk_scale();self.report.pop('update',None)
+        if train:
+            if scale>0:
+                if guarded is not None:
+                    self.report['update']=unconditional_pass(self.companion,train,scale=scale,**guarded)
+                else:self.report['update']=dict(steps=0,reason='No ordinary PPG probe; trunk update deferred')
+            else:self.report['update']=self.companion.head_only(train,generation=generation)
+        else:self.report['update']=dict(steps=0,reason='No admitted training value rows')
+        updated=time.perf_counter()
+        # Never reuse an older validation as this iteration's observation.
+        heldout=[r for r in self.buffer.rows(generation,'heldout') if r['generation']==generation]
+        main,delta=predict_rows(self.model,heldout) if heldout else ([],[])
+        diagnostic=diagnostics(heldout,np.asarray(main),np.asarray(delta))
+        self.report.update(validation=diagnostic,stage=self.machine.advance(generation,diagnostic),
+            updated=bool(self.report['update'].get('steps')),training_scale=scale,
+            delta=dict(mean=float(np.abs(delta).mean()) if len(delta) else None,
+                p90=float(np.quantile(np.abs(delta),.9)) if len(delta) else None))
+        self.report['timings']=dict(value_read_and_target_seconds=prepared-began,update_seconds=updated-prepared,
+            validation_seconds=time.perf_counter()-updated,total_seconds=time.perf_counter()-began)
         return copy.deepcopy(self.report)
 
     def payload(self):

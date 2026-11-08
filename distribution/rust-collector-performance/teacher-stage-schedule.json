@@ -1,0 +1,331 @@
+{
+  "contract": "brass-teacher-stage-schedule-review/1",
+  "date": "2026-11-08",
+  "execution": {
+    "implementation": "521e5ee49e33d45981bfd2b30d79b0d8bc981cd8c207b0e3ed046b1ead9daddb",
+    "qualified_implementation": "9efcf34f853d75ab844366b6819da4b0921be38d3e2dfb806cf282ace76e7a30",
+    "replay_location_review": "bb292c1b1f6b4d10a3c5de47a1d2043cdab38cb1607f1a6142b68e69ead6beff"
+  },
+  "results_commit": "ebe6084eb2e29486b8e31f9c35fdc6f78529bb49",
+  "export": "results/joint7-v11-2-g1290-trained-restart-g1280-20261108T173525364834Z",
+  "state_sha256": "f3ba04084911d60301358e2f190d8b7184e60616eb7fac444ad0f7b9857cbf1d",
+  "generation": 1280,
+  "checkpoint": {
+    "path": "artifacts/step5/joint7-v11-2-g1290-trained-restart/generation-1280.pt",
+    "sha256": "0eeb499da77bebe32508731add936eb9f286ded8643547a922fc52625b5e7fcd",
+    "model_id": "c37d4c61160739d7414ea284ea35c17ed8565c0e3c62c4acf5e37d0126148068",
+    "generation": 1280
+  },
+  "qualified_teacher_beta": 0.16110139609854138,
+  "teacher_mode": "on",
+  "reviewed_reports": [
+    {
+      "generation": 1278,
+      "path": "results/joint7-v11-2-g1290-trained-restart-g1280-20261108T173525364834Z/iteration-1278/report.json",
+      "sha256": "576a4092d18708b35d5cc6307907e8cae236e6d260c4995227f82ea29453218c",
+      "auxiliary_updated": false,
+      "delta": {
+        "mean": 0.0,
+        "p90": 0.0
+      },
+      "staleness": {
+        "7": {
+          "improvement": 0.004206940484762864,
+          "drift": 0.06108728146059173,
+          "skipped": true
+        },
+        "6": {
+          "improvement": 0.003697976307481406,
+          "drift": 0.0568829856814325,
+          "skipped": true
+        },
+        "5": {
+          "improvement": 0.003597041052395744,
+          "drift": 0.0555919658224321,
+          "skipped": true
+        },
+        "4": {
+          "improvement": 0.0029486196779562484,
+          "drift": 0.03097481496751112,
+          "skipped": true
+        },
+        "3": {
+          "improvement": 0.005246087760280288,
+          "drift": 0.027662056568373377,
+          "skipped": true
+        },
+        "2": {
+          "improvement": 0.0029635870237791537,
+          "drift": 0.01764419976368301,
+          "skipped": true
+        },
+        "1": {
+          "improvement": 0.0032819516348608162,
+          "drift": 0.02068431080915875,
+          "skipped": true
+        },
+        "0": {
+          "improvement": 0.0030154697230054405,
+          "drift": 0.00529953473433359,
+          "skipped": true
+        }
+      },
+      "teacher": {
+        "beta": 0.16110139609854138,
+        "rows": 448,
+        "share": {
+          "median": 0.1546314967820733,
+          "p10": 0.08824199409547041,
+          "p90": 0.24594213012671964
+        },
+        "cosine": {
+          "median": 0.05643946014004887,
+          "p10": -0.06799147815935032,
+          "p90": 0.19647684189692857
+        },
+        "outside_share_warning": false,
+        "heldout": {
+          "all": 0.0024018251935564953,
+          "canal_early": 0.00647929027880152,
+          "canal_late": 0.0017039561430110984,
+          "rail_early": 0.001813232066602972,
+          "rail_late": -0.00038917771418960686
+        },
+        "tables": {
+          "train": 28,
+          "heldout": 4
+        },
+        "root_label_yield": 0.998046875
+      },
+      "timings": {
+        "collection_seconds": 206.45668749703327,
+        "teacher_collection_seconds": 122.80430523699033,
+        "ppo_seconds": 78.37291343099787,
+        "value_phase_seconds": 44.020736645994475,
+        "checkpoint_seconds": 21.294138905010186,
+        "iteration_seconds": 495.9408915930253
+      }
+    },
+    {
+      "generation": 1279,
+      "path": "results/joint7-v11-2-g1290-trained-restart-g1280-20261108T173525364834Z/iteration-1279/report.json",
+      "sha256": "948eff038cfee3c79d2823e9ec2d32d4c106cb65c6e9cd57630a654a8ccfc518",
+      "auxiliary_updated": false,
+      "delta": {
+        "mean": 0.0,
+        "p90": 0.0
+      },
+      "staleness": {
+        "7": {
+          "improvement": 0.003697976307481406,
+          "drift": 0.057732129876102316,
+          "skipped": true
+        },
+        "6": {
+          "improvement": 0.003597041052395744,
+          "drift": 0.05905955742761621,
+          "skipped": true
+        },
+        "5": {
+          "improvement": 0.0029486196779562484,
+          "drift": 0.03633501026624696,
+          "skipped": true
+        },
+        "4": {
+          "improvement": 0.005246087760280288,
+          "drift": 0.03378612861754253,
+          "skipped": true
+        },
+        "3": {
+          "improvement": 0.0029635870237791537,
+          "drift": 0.024364627703696937,
+          "skipped": true
+        },
+        "2": {
+          "improvement": 0.0032819516348608162,
+          "drift": 0.02740146409895012,
+          "skipped": true
+        },
+        "1": {
+          "improvement": 0.0030154697230054405,
+          "drift": 0.011547654101633803,
+          "skipped": true
+        },
+        "0": {
+          "improvement": 0.003861113407844382,
+          "drift": 0.01093924352784033,
+          "skipped": true
+        }
+      },
+      "teacher": {
+        "beta": 0.16110139609854138,
+        "rows": 449,
+        "share": {
+          "median": 0.1485411608916209,
+          "p10": 0.10096544444931167,
+          "p90": 0.3913043521613667
+        },
+        "cosine": {
+          "median": 0.10316260395845969,
+          "p10": -0.027690513740050077,
+          "p90": 0.21792313869059135
+        },
+        "outside_share_warning": false,
+        "heldout": {
+          "all": 0.011561698369208426,
+          "canal_early": 0.035102037739236966,
+          "canal_late": 0.006800658292461863,
+          "rail_early": 0.0018859394569937956,
+          "rail_late": 0.002458157988141073
+        },
+        "tables": {
+          "train": 28,
+          "heldout": 4
+        },
+        "root_label_yield": 0.998046875
+      },
+      "timings": {
+        "collection_seconds": 204.4392992540088,
+        "teacher_collection_seconds": 123.71504883098532,
+        "ppo_seconds": 68.44881515498855,
+        "value_phase_seconds": 67.90469212201424,
+        "checkpoint_seconds": 20.920579508994706,
+        "iteration_seconds": 927.3171167260152
+      }
+    }
+  ],
+  "cause": "Policy staleness was rechecked after PPO for all head ages, including current G; head had no training rows and residual stayed zero",
+  "revision": {
+    "config": "configs/step5/joint7-v11-2-g1290-trained-restart-rust-teacher-on-stages-v2-share025.json",
+    "stages": {
+      "A": {
+        "iterations": 10,
+        "head_only": true,
+        "validation_gates": false
+      },
+      "B": {
+        "iterations": 20,
+        "blend_step": 0.05,
+        "unconditional": true
+      },
+      "C": {
+        "warmup_iterations": 10,
+        "trunk_step": 0.1,
+        "unconditional": true,
+        "joint_kl_cap": 0.003,
+        "rollback": "over-cap interval only; transactional exception recovery retained"
+      }
+    },
+    "head_to_head_games": 0,
+    "normal_ppg_beta_floor": 0.25,
+    "ppg_contract": "ppg-value-phase/25.0.0",
+    "heldout": {
+      "contract": "search-value-stage-schedule/2.0.0",
+      "stage_a_iterations": 10,
+      "stage_b_iterations": 20,
+      "stage_c_iterations": 10,
+      "validation_interval": 10,
+      "validation_during_beta_qualification": true
+    },
+    "validation_1280": {
+      "due": false,
+      "games": 0,
+      "qualifying": false,
+      "forced_by_beta_qualification": false,
+      "interval": 10,
+      "reason": "not-scheduled"
+    },
+    "validation_1289": {
+      "due": true,
+      "games": 4,
+      "qualifying": false,
+      "forced_by_beta_qualification": false,
+      "interval": 10,
+      "reason": "periodic"
+    },
+    "stage_a_origin": 1280,
+    "stage_b_boundary": 1290,
+    "stage_c_boundary": 1310,
+    "full_trunk_boundary": 1320
+  },
+  "preserved": [
+    "full strict weights_only checkpoint loading",
+    "head/main weights and both Adam histories on adoption",
+    "ordinary replay/RNG/population/PPG progress",
+    "fixed teacher beta and policy-label staleness",
+    "independent numeric value-row admission/reward/hash/shard integrity",
+    "eight-age value buffer",
+    "cancellation and failed-publication recovery",
+    "ordinary critic holdouts/pre-PPG policy KL probe",
+    "search_v1 and optimized native collection/inference/CPU limits",
+    "independent setup-seed cursor on skipped heldouts"
+  ],
+  "removed": [
+    "auxiliary policy-staleness filter",
+    "validation-driven auxiliary stage gates/rollback",
+    "256-game H2H requirement",
+    "head duplication of unused full policy-label history",
+    "intervening held-out jobs and empty held-out shards"
+  ],
+  "debug": {
+    "distinct_passed": 47,
+    "new_schedule_checks": 19,
+    "existing_affected_checks": 28,
+    "logs": [
+      {
+        "path": "artifacts/teacher-stage-schedule/debug.log",
+        "sha256": "6754076f4ab8eb18b690fed6fa4a1e2c3c555cd58c1d25ffca4978d88dd30c45"
+      },
+      {
+        "path": "artifacts/teacher-stage-schedule/affected-debug.log",
+        "sha256": "3c94f19ddfb65928ca7f73662707314f35c7e6e82eb82b8f5b00151ac0920c75"
+      },
+      {
+        "path": "artifacts/teacher-stage-schedule/final-debug.log",
+        "sha256": "4140bebf6d55f8dba5f8b5412068c7301fd3d3ed076365416c3824649de95c4b"
+      },
+      {
+        "path": "artifacts/teacher-stage-schedule/launcher-debug.log",
+        "sha256": "311b5c6b4f98efd83e0e38a203b9c32aea756003683df32bd4f664c0e7a5ab4b"
+      }
+    ],
+    "initial_fixture_repairs": "Correct reward metadata for a small PPG model, and compare plain state-dict containers; corrected strict restore tests pass",
+    "coverage": [
+      "direct 32-step head update without policy-staleness gate",
+      "A10/B20/C10 and exact restart counters",
+      "first B collection .05 and first C gradient scale .1",
+      "sparse four-game schedule and qualification override",
+      "strict head/Adam/RNG checkpoint restore",
+      "hard .003 KL rejection restores both Adams and retains preceding accepted interval",
+      "cancellation and spent-KL-budget cleanup",
+      "PPG floor migration and no repeated beta reset",
+      "reviewed source/recipe guards, lossless pending archive, real loader and transition-commit retries",
+      "actual public launcher config/default routing",
+      "ordinary PPO/PPG, publication and zero-weight inference regressions"
+    ],
+    "no_local_benchmarks": true,
+    "no_native_games": true,
+    "no_full_training": true,
+    "no_unrelated_qualification_reruns": true
+  },
+  "native": {
+    "ordinary_source": "51d8e85bd7aa9c43c87ae609d57da3c8cfcab9473f90b9d4140fb8811c1fb6ec",
+    "teacher_adapter_source": "cb78f5f55ad4f2468841be51dba9cf387ba5830b9319b6dfd6501e980025dbbd",
+    "sources_unchanged": true,
+    "rebuild_required": false
+  },
+  "source_review": {
+    "qualified_source_reconstructed": true,
+    "source_files": 368,
+    "reviewed_changes": 63,
+    "previous_execution": {
+      "implementation": "e6ee2a8755617efcbdc6516bba8742ed002a229d16da4d96db71dc7a724efa51",
+      "qualified_implementation": "9efcf34f853d75ab844366b6819da4b0921be38d3e2dfb806cf282ace76e7a30",
+      "replay_location_review": "dfc7dd6b93faf1259f37d583a94dc2c408c09e8b8ae0cde29c7f92f9b8ebe2c3"
+    }
+  },
+  "continuation": [
+    "python scripts/continue-rust-teacher.py --expected-generation 1280 --iterations 10 --share-target 0.25"
+  ],
+  "first_revised_lab_iteration": "Pending"
+}

@@ -112,8 +112,9 @@ class SearchValueIteration:
         # existing companions restore eagerly from the full checkpoint.
         if self.mode=='on':phase.ensure_companion()
         old_stage = copy.deepcopy(phase.machine.state)
+        scale=phase.trunk_scale()
         rollback = (Selection(self.model,guarded['value_optimizer'],{'search':0.},companion=phase.companion)
-                    if guarded is not None and old_stage['scale'] > 0 else None)
+                    if guarded is not None and scale > 0 else None)
         head_rollback = ((copy.deepcopy(self.model.search_value_head.state_dict()),phase.companion.snapshot())
                          if rollback is None and self.mode == 'on' and phase.companion is not None else None)
         try:
@@ -127,7 +128,7 @@ class SearchValueIteration:
             if rollback is not None and old_stage['stage']=='C' and phase.machine.state['stage']!='C':
                 rollback.restore(self.model,guarded['value_optimizer'])
                 result.update(updated=False,stage_guard_rollback=True)
-            if result.get('updated') and old_stage['scale'] > 0:
+            if result.get('updated') and scale > 0:
                 self.model.utility_calibration = None
             self.report = result
         except BaseException:
@@ -142,7 +143,7 @@ class SearchValueIteration:
     def finish_ppg(self):
         require(self.pending_generation is not None, 'Search value PPG boundary missing')
         if self.report is None:
-            if self.mode == 'on' and self.phase.machine.state['scale'] > 0:
+            if self.mode == 'on' and self.phase.trunk_scale() > 0 and 'schedule' not in self.phase.options:
                 self.report = dict(updated=False,reason='No ordinary PPG probe; guarded pass deferred')
             else: self._finish()
         return self.report

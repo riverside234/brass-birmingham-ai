@@ -1,6 +1,52 @@
 # PI00–PI05 ordinary collector performance supplement
 
-## 当前 teacher on / Stage A 续训（2026-11-08）
+## PPG / 辅助 value phase 性能优化
+
+新优化保留 A10/B20/C10、固定 teacher beta、PPG beta floor .25 和 KL cap .003。
+无 retained PPG update 时不再全量扫描 train rows；有更新时仍精确测量原始/最终
+weights 的完整 calibration。value-only / policy-only forward 去掉未使用分支；
+critic mmap 分块写入保持逐字节相同；辅助 target/input 减少复制。30 个受影响 debug
+回归通过；GPU 实际加速仍待 lab 测量。新报告分别记录 cache、calibration、fit 和 head。
+
+若当前仍为 g1280，可只做一次正常续训记录 timing：
+
+```bash
+python scripts/continue-rust-teacher.py --expected-generation 1280 --iterations 1 --share-target 0.25
+```
+
+若已推进则填写实际 generation；下方 A10 的十轮命令仍只执行剩余轮次。
+无须 rebuild Rust、完整 bundle 或重跑已通过 qualification。详见
+[分析与 timing 字段](../../ai-research/RUST_VALUE_PHASE_PERFORMANCE.md) 和
+[机器凭据](teacher-value-performance.json)。
+
+## 当前 g1280 辅助 head 修订（2026-11-08）
+
+已拉取 `results/` 到 `ebe6084`。policy teacher 已运行至 g1280，固定 beta 保持
+0.16110139609854138。辅助 head 的全部 value ages 在 PPO 后被旧 policy-staleness
+规则过滤，导致一直没有更新。新路径直接使用通过独立校验的 return/value buffer，
+不再重复保存 head 不需要的 policy-label history；policy teacher 自身的 staleness 保留。
+
+按用户修订：**A 10 轮 head-only → B 20 轮无条件 blend warm-up (.05→1) →
+C 10 轮无条件 trunk warm-up (.1→1)**。移除辅助 validation gates、validation rollback
+和 256-game test；只保留硬 joint KL cap **.003**，仅撤销超 cap 的 interval。
+PPG cloning beta floor **.25**，不重置高于 floor 的已保存 beta。
+4-game held-out diagnostics 每 10 轮一次，其他轮不运行 held-out games。
+`teacher_phase.search_value.schedule.validation_during_beta_qualification=true`
+使未完成 beta qualification 的 shadow rounds 仍每轮运行 4 games。
+
+同步代码、退出旧 trainer 后在 lab 运行：
+
+```bash
+python scripts/continue-rust-teacher.py --expected-generation 1280 --iterations 10 --share-target 0.25
+```
+
+从 g1280 开始新的 A10，g1290 进入 B；保留现有 head、完整 checkpoint/Adam/RNG/PPG/
+population、value shards、search_v1 和原 collector 性能机制。无须重编译 Rust、完整 bundle
+或重做已通过资格。首次 revised lab training 仍 Pending。详见
+[审查、配置与监控](../../ai-research/RUST_TEACHER_STAGE_SCHEDULE_REVISION.md) 和
+[机器凭据](teacher-stage-schedule.json)。下方为历史记录。
+
+## 历史 teacher on / Stage A 续训（2026-11-08）
 
 已在 `results/` 拉取用户给出的 `92dbef3` 和 `a966c75`。四轮完整 28+4 shadow
 已通过，当前 committed checkpoint 为 **g1261**。184 个有效梯度比例的 pooled

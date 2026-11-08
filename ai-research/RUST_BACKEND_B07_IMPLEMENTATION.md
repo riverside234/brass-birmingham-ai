@@ -1,5 +1,24 @@
 # B07: cheaper native collection and bounded adoption
 
+**Value-phase performance follow-up:** the current PPG/head path now avoids
+full-train diagnostics when no PPG update survives, computes only consumed heads,
+writes identical critic bytes in blocks and reduces target/input copies. Separate
+timings distinguish cache, full calibration, fitting and auxiliary work. Thirty
+affected debug checks pass; actual lab GPU speedup remains Pending. The revised
+stage schedule and all learning/integrity guards are retained. See
+[value-phase analysis and command](RUST_VALUE_PHASE_PERFORMANCE.md).
+
+**Current auxiliary schedule (2026-11-08):** pulled results `ebe6084`, committed
+g1280. Policy teaching is active, but all post-PPO value ages were filtered and
+the residual stayed zero in Stage A. The revised production recipe directly
+fits the admitted value buffer, uses unconditional A10/B20/C10, removes the
+256-game test and all validation-based progression/rollback, and retains the
+hard joint KL .003 cap. PPG beta floor is .25. Four diagnostic games run every
+tenth iteration, with an explicit every-iteration beta-qualification override.
+See [review, details and g1280 continuation](RUST_TEACHER_STAGE_SCHEDULE_REVISION.md).
+The first revised lab head update remains Pending. Earlier activation/gated
+auxiliary notes below retain their historical scope.
+
 **Current teacher activation (2026-11-08):** results `92dbef3` / `a966c75` confirm
 four full 28+4 shadow iterations through **g1261**, 184 valid measurements and
 qualified fixed β **0.16110139609854138** at target 0.25. Teacher **on** and

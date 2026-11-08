@@ -1,5 +1,12 @@
 # Qualified teacher activation and search-value Stage A
 
+**Superseded auxiliary specification:** subsequent results `ebe6084` reach g1280
+with policy teaching active but auxiliary updates starved by post-PPO staleness.
+The user replaces gated progression with A10/B20/C10, sparse four-game diagnostics,
+no H2H/validation rollback, KL cap .003 and PPG beta floor .25. Use the
+[current review and continuation](RUST_TEACHER_STAGE_SCHEDULE_REVISION.md).
+The four-iteration beta evidence below remains valid and unchanged.
+
 Reviewed 2026-11-08. Pulled inside `results/` through commits
 `92dbef3e5f76ecfe71f384101ebcd1f91200ffa6` and
 `a966c7583590577393bbf687a14b894cd6c657b3`. The four full-volume shadow

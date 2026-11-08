@@ -1,5 +1,28 @@
 # Rust Simulation and Gumbel IS-MCTS Backend Migration Plan
 
+**Value-phase performance follow-up, 2026-11-08:** g1278/g1279 spend 44.0/67.9s
+on value work while retaining 0/16 updates. Defer unused full-train diagnostics
+on fully rejected v24/v25 phases, use explicit value-only/policy-only forwards,
+batch byte-identical critic-cache writes, reduce auxiliary copies and record
+separate cache/fit/calibration/head timings. Accepted phases keep exact full
+pre/final calibration; no changes to learning, stages, guards or recovery.
+Thirty affected debug checks pass; actual GPU timing remains Pending on lab.
+See [evidence, improvements and next command](RUST_VALUE_PHASE_PERFORMANCE.md).
+
+**Auxiliary-stage revision, 2026-11-08:** results `ebe6084` reach g1280 with the
+policy teacher active, but head return fitting is starved by its post-PPO
+policy-staleness filter. The revised production recipe removes auxiliary
+validation/staleness gates: **A10** head-only iterations, **B20** unconditional
+blend warm-up (.05→1), then **C10** unconditional trunk warm-up (.1→1), with no
+256-game test or validation-based rollback. Keep only the hard joint KL cap
+**.003** (undo an over-cap interval) and set the normal PPG beta floor to **.25**.
+Run four held-out diagnostic games every tenth iteration, with a configurable
+every-iteration override during pending beta qualification. Train tables remain
+28 every iteration. The existing head/Adam/value shards and fixed teacher beta
+are preserved; new A counting starts at g1280. See [review, implementation and
+current lab command](RUST_TEACHER_STAGE_SCHEDULE_REVISION.md). This supersedes
+the older auxiliary gates/status below; first revised lab training is Pending.
+
 **Teacher activation, 2026-11-08:** four full 28+4 shadow iterations g1257→g1261
 passed on the lab. Results commits `92dbef3` and `a966c75` qualify fixed
 β **0.16110139609854138** for target 0.25 from 184 gradient measurements.
@@ -895,7 +918,7 @@ Keep Python target construction, GAE, PPO behavior likelihoods, critic/local-sco
 | B04.5 | **Passed on pinned g1250** | Exact r3 source/model/device; two shadow tables, 49 policy labels, 128 value rows, one isolated head step; production unchanged |
 | B05 | **Passed on pinned g1250** | R2 CUDA ordinary/teacher component updates, head-only update, full-state/age restoration; no new games or production adoption |
 | B06 | **Passed bounded correctness/measurement; useful performance gate not passed** | Same 3 families / 1,161 decisions; native accepted work 55.265s vs reference 28.596s; Python collection/admission bottleneck identified; eight 4s/K16 teacher turns passed |
-| B07 | **Passed adoption/restart and four full shadow iterations through g1261; teacher on / search-head Stage A implemented; first on-mode lab iteration Pending** | Results `92dbef3` / `a966c75` qualify fixed β 0.16110139609854138 at target 0.25 from 184 measurements. Keep branching 0%, 28+4 tables, 24 actors / 48 lanes, up to 24 publishers and 60 CPU slots. Continue g1261→g1262 with the qualified on-mode helper; no repeated qualification or native rebuild. [Review and command](RUST_TEACHER_ON_STAGE_A_REVIEW.md) |
+| B07 | **Passed adoption/restart/gradient qualification; policy teacher on through g1280; revised A10/B20/C10 auxiliary schedule implemented, lab training Pending** | Results `ebe6084` reveal head starvation; remove auxiliary policy-staleness/validation gates and the 256-game test. Retain fixed teacher β .16110139609854138, zero branching, 28 train tables, four diagnostic games each tenth iteration (each pending beta round via config), current optimized collection and CPU limits. Joint KL cap .003; PPG beta floor .25. [Review and current command](RUST_TEACHER_STAGE_SCHEDULE_REVISION.md) |
 
 The [g1261 teacher activation review](RUST_TEACHER_ON_STAGE_A_REVIEW.md) supersedes
 the historical full-shadow Pending notes below. On-mode reuses the qualified
@@ -1190,7 +1213,9 @@ Future milestones deliver **code, tests, documentation and current manifests thr
 - [x] Implement the g1257 descriptor-lifetime repair, user-selected zero branching, full 28+4 shadow barrier, gradient recording/fixed-beta receipt and explicit 0.25/0.4/0.5 targets, with bounded debug coverage.
 - [x] Four real full-volume shadow iterations g1257→g1261 pass lab recovery and gradient qualification; the measured receipt is reviewed (β 0.16110139609854138, target 0.25, 184 observations).
 - [x] User explicitly authorizes production task-teacher on-mode and auxiliary search-head Stage A; implement readiness/qualification/source checks and the same-run continuation command.
-- [ ] First normal on-mode g1261→g1262 iteration commits on the lab, with policy-teacher gradients, head-only training and complete restart evidence; retain later blend/trunk gates.
+- [x] Policy-teacher on-mode commits through g1280 on lab; fixed beta is applied and readiness remains measured. Latest auxiliary head remains untrained because every age was filtered after PPO; this is not a passed head-training gate.
+- [x] Implement the explicit A10/B20/C10 schedule, direct value-head fitting, sparse validation/qualification override, no H2H/validation rollback, joint KL .003 and PPG beta floor .25.
+- [ ] First revised lab iteration trains the head and commits its counters/Adam; complete A10 then the unconditional B20/C10 warm-ups during normal continuation. Do not repeat passed qualifications.
 - [ ] Every later stage has Git-delivered code/commands, pinned supplemental assets only when needed, and a Git-visible success/failure/deferred report.
 
 ### B8. Implementation references and existing regression anchors

@@ -143,7 +143,7 @@ def metrics(model,dataset,ids,config,*,unknown=False,evidence=False,preparation=
     arrays=[];order=[];model.eval()
     with torch.no_grad():
         for part,ix,inputs in dataset.value_batches(value_parts(dataset,ids,config,model),model,executor=preparation):
-            out=value_output(model,inputs,dataset,ix,unknown=unknown)
+            out=value_output(model,inputs,dataset,ix,unknown=unknown,heads_only=True)
             value=value_losses(out,tuple(t[ix] for t in dataset.targets))[0]
             error=out[4].float()-dataset.utility[ix]
             seats=dataset.seats[ix];positions=torch.arange(len(ix),device=ix.device)
@@ -198,6 +198,7 @@ def metrics(model,dataset,ids,config,*,unknown=False,evidence=False,preparation=
 class RawPolicyReference:
     """Frozen post-PPO legal distributions and phase-local immutable inputs."""
     def __init__(self,model,dataset,ids,config):
+        from .updates import policy_output
         self.dataset,self.config=dataset,config;self.ids=list(ids);self.rows={}
         from .ppg_policy_cache import PolicyInputs
         self.cache=PolicyInputs(dataset,self.ids) if self.ids else None
@@ -205,7 +206,7 @@ class RawPolicyReference:
         with torch.no_grad():
             for part in self.microbatches(ids):
                 inputs=self.inputs(part)
-                p=torch.softmax(model(*inputs)[0].float(),-1)
+                p=torch.softmax(policy_output(model,inputs).float(),-1)
                 self.cache.store_old(part,p)
                 p=p.cpu()
                 for j,i in enumerate(part):self.rows[i]=p[j,:len(dataset.rows[i]['choices'])].clone()
@@ -217,7 +218,8 @@ class RawPolicyReference:
     def inputs(self,part):return self.cache.inputs(part)
 
     def loss(self,part,inputs,model):
-        logits=model(*inputs)[0].float()
+        from .updates import policy_output
+        logits=policy_output(model,inputs).float()
         old=self.cache.probabilities(part,logits.shape[1])
         logp=torch.log_softmax(logits,-1).masked_fill(~inputs[2],0.)
         return (old*(old.clamp_min(1e-30).log()-logp)).sum(-1)
@@ -288,11 +290,22 @@ class DeferredKL:
         raise AssertionError('Missing frozen post-PPO KL-safe checkpoint')
 
 
+def defer_train_metrics(model,config):
+    from .updates import state_value_model
+    return state_value_model(model) and config['contract'] in ('ppg-value-phase/24.0.0','ppg-value-phase/25.0.0')
+
+
 def fit(model,optimizer,dataset,train_ids,heldout_ids,actor_ids,probe_ids,config,update,*,beta,
         value_dataset=None,value_train_ids=None,validation_dataset=None,current_count=None,dropout=None,
         companion=None,preparation=None,gate_dataset=None,gate_ids=None,post_fit=None):
     from .updates import autocast,value_losses,value_output
     began=time.perf_counter();model.eval()
+    timings={}
+    def measure(name,*args,**kwargs):
+        start=time.perf_counter()
+        result=metrics(*args,**kwargs)
+        timings[name]=timings.get(name,0.)+time.perf_counter()-start
+        return result
     value_dataset=dataset if value_dataset is None else value_dataset
     value_train_ids=list(train_ids) if value_train_ids is None else list(value_train_ids)
     current_count=len(dataset.data) if current_count is None else current_count
@@ -338,26 +351,35 @@ def fit(model,optimizer,dataset,train_ids,heldout_ids,actor_ids,probe_ids,config
                     if true_ev is not None and unknown_ev is not None else None),
                 calibration_receipt=None,
                 scope='PPG disabled; current post-PPO whole-game critic holdout diagnostics only; no value optimizer steps or previous rows')
-        report['seconds']=time.perf_counter()-began;return report
+        report['seconds']=time.perf_counter()-began;report['timings']=timings;return report
+    started=time.perf_counter()
     clones=clone_indices(dataset,actor_ids,config['clone_rows'])
     if companion is not None and hasattr(companion,'diversity') and companion.diversity.config['mode']=='apply':
         training=set(train_ids)
         clones=clone_indices(dataset,[i for i in actor_ids if i in training],config['clone_rows'])
         if not clones:
             raise ValueError('DOMiNO PPG requires nonforced training-game cloning rows')
+    timings['clone_selection_seconds']=time.perf_counter()-started;started=time.perf_counter()
     reference=RawPolicyReference(model,dataset,sorted(set(clones)|set(probe_ids)),update)
-    train_before=metrics(model,value_dataset,value_train_ids,update,preparation=preparation);before=metrics(model,validation_dataset,heldout_ids,update,evidence=True)
-    gate_before=metrics(model,gate_dataset,gate_ids,update,evidence=True) if separate_gate else before
+    timings['policy_reference_seconds']=time.perf_counter()-started
+    deferred_train=defer_train_metrics(model,config)
+    train_before=None if deferred_train else measure('train_before_seconds',model,value_dataset,value_train_ids,update,preparation=preparation)
+    before=measure('acceptance_validation_seconds',model,validation_dataset,heldout_ids,update,evidence=True)
+    gate_before=measure('current_validation_seconds',model,gate_dataset,gate_ids,update,evidence=True) if separate_gate else before
     current=before;epochs=[];used=set();presentations=0;clone_presentations=0
     max_kl=0.;attempted_kl_checks=0;accepted_kl=0.;last_attempt=None;previous_presentations=0;role_presentations=defaultdict(int);branch_presentations=0
     deferred=config.get('kl_check_steps',1)>1
     guard=DeferredKL(model,optimizer,companion,reference,probe_ids,config['kl_cap'],report) if deferred else None
+    # Reuse the already-owned post-PPO snapshot. A rejected phase never issues
+    # readiness, so its expensive full-training diagnostics need not run.
+    calibration_source=(guard.points[0]['model'] if deferred else copy.deepcopy(model.state_dict())) if deferred_train else None
     if deferred:report['acceptance']='kl-checked-retained-interval/1.0.0'
     retained=[]
     from .ppg_g210 import scheduled as scheduled_rate,rate_factor
     scheduled=scheduled_rate(config)
     total_steps=math.ceil(len(value_train_ids)/config['batch_size'])*config['max_epochs']
     if scheduled:report.update(planned_steps=total_steps,attempted_learning_rates=[])
+    training_began=time.perf_counter()
     for epoch in range(config['max_epochs']):
         order=[value_train_ids[j] for j in torch.randperm(len(value_train_ids)).tolist()]
         batches=[order[start:start+config['batch_size']] for start in range(0,len(order),config['batch_size'])]
@@ -388,7 +410,7 @@ def fit(model,optimizer,dataset,train_ids,heldout_ids,actor_ids,probe_ids,config
                     drop=None if dropout is None else (dropout[0],epoch,dropout[1],'value')
                     with autocast(update,value_dataset.device):
                         if companion is not None:out,local_loss=companion.forward(model,inputs,value_dataset,ix,dropout=drop)
-                        else:out,local_loss=value_output(model,inputs,value_dataset,ix,dropout=drop),None
+                        else:out,local_loss=value_output(model,inputs,value_dataset,ix,dropout=drop,heads_only=True),None
                     loss=value_losses(out,tuple(t[ix] for t in value_dataset.targets))[0]
                     loss=loss+(out[4].float()-value_dataset.utility[ix]).square().mean(-1)
                     if local_loss is not None:
@@ -430,7 +452,7 @@ def fit(model,optimizer,dataset,train_ids,heldout_ids,actor_ids,probe_ids,config
             report['attempted_steps']+=attempted;epoch_steps+=attempted;epoch_safe+=safe_steps
             # The KL reference stays frozen across the phase. With spaced KL
             # checks a passing loss boundary is provisional until retention.
-            last_attempt=metrics(model,validation_dataset,heldout_ids,update,evidence=True)
+            last_attempt=measure('acceptance_validation_seconds',model,validation_dataset,heldout_ids,update,evidence=True)
             loss_increased=last_attempt['loss']>current['loss']
             rejected=not safe_steps or loss_increased
             rejection_reason='heldout_loss_increased' if loss_increased else 'no_safe_steps' if rejected else None
@@ -497,12 +519,23 @@ def fit(model,optimizer,dataset,train_ids,heldout_ids,actor_ids,probe_ids,config
             entry.update(accepted_steps=kept,safe_steps=kept,accepted=bool(kept),partial=kept<len(batches),
                 probe_kl=accepted[-1].get('retained_probe_kl',accepted[-1]['probe_kl']) if accepted else None)
             if kept:report['epochs']+=1;report['partial_epochs' if entry['partial'] else 'completed_epochs']+=1
+    timings['training_and_retention_seconds']=time.perf_counter()-training_began
     optimizer.zero_grad(set_to_none=True);model.eval()
     # One fresh receipt for the final accepted weights. No head refit on the
     # holdout, and no stale pre-value-phase receipt after trunk movement.
     # A fully rejected phase restored the exact post-PPO weights. Reuse its
     # already measured train metrics instead of scanning the whole buffer again.
-    train_after=metrics(model,value_dataset,value_train_ids,update,preparation=preparation) if report['optimizer_steps'] else copy.deepcopy(train_before)
+    if deferred_train:
+        if report['optimizer_steps']:
+            accepted_weights=copy.deepcopy(model.state_dict())
+            try:
+                model.load_state_dict(calibration_source)
+                train_before=measure('train_before_seconds',model,value_dataset,value_train_ids,update,preparation=preparation)
+            finally:model.load_state_dict(accepted_weights)
+        else:
+            train_before=dict(rows=len(value_train_ids),games=None,loss=None,utility_mse=None,explained_variance=None,
+                measured=False,reason='No retained PPG updates; no readiness is issued, so full-training diagnostics are omitted')
+    train_after=measure('train_after_seconds',model,value_dataset,value_train_ids,update,preparation=preparation) if report['optimizer_steps'] else copy.deepcopy(train_before)
     if report['optimizer_steps']:
         ready=train_after['utility_mse']<=train_before['utility_mse']+1e-8
         model.utility_calibration=dict(version=config['contract'],reward_id=digest(model.config.utility),ready=ready,
@@ -513,7 +546,8 @@ def fit(model,optimizer,dataset,train_ids,heldout_ids,actor_ids,probe_ids,config
         # PPO already moved the trunk. A skipped/rejected value fit cannot
         # reissue its old pre-PPO receipt as evidence about these weights.
         model.utility_calibration=None
-    gate_after=metrics(model,gate_dataset,gate_ids,update,evidence=True) if separate_gate else current
+    gate_after=measure('current_validation_seconds',model,gate_dataset,gate_ids,update,evidence=True) if separate_gate else current
+    started=time.perf_counter()
     report.update(train_before=train_before,train_after=train_after,heldout_before=gate_before,heldout_after=gate_after,
         last_attempted_heldout=last_attempt,heldout_attempt_scope=('Loss-accepted boundaries remain provisional until a safe exact KL receipt; attempted diagnostics may precede final rollback'
             if deferred else 'Safe interval/prefix after any violating step is restored'),
@@ -529,6 +563,8 @@ def fit(model,optimizer,dataset,train_ids,heldout_ids,actor_ids,probe_ids,config
         current_presentations=presentations-previous_presentations,previous_presentations=previous_presentations,
         epoch_reports=epochs,calibration_receipt=copy.deepcopy(model.utility_calibration),
         train_metrics_reused=not bool(report['optimizer_steps']),
+        train_metrics_deferred=deferred_train,train_metrics_measured=bool(report['optimizer_steps']) or not deferred_train,
+        full_train_metric_rows_avoided=len(value_train_ids) if deferred_train and not report['optimizer_steps'] else 0,
         seconds=time.perf_counter()-began)
     if separate_gate:
         report.update(acceptance_heldout_before=before,acceptance_heldout_after=current,
@@ -536,7 +572,8 @@ def fit(model,optimizer,dataset,train_ids,heldout_ids,actor_ids,probe_ids,config
             acceptance_scope='Pooled row-mean loss across all available held-out games/branch families in both critic ages',
             gate_evidence_scope='Current iteration only; previous held-out evidence is not counted again',
             scope='Critic training and loss acceptance: two cached iterations. Cloning/probe and GAE/snapshot evidence: current iteration only.')
-    unknown_metrics=metrics(model,gate_dataset,gate_ids,update,unknown=True)
+    timings['policy_diagnostics_seconds']=time.perf_counter()-started
+    unknown_metrics=measure('descriptor_diagnostics_seconds',model,gate_dataset,gate_ids,update,unknown=True)
     from .critic_data import learner_ev
     true_ev=learner_ev(gate_after);unknown_ev=learner_ev(unknown_metrics)
     report.update(heldout_unknown=unknown_metrics,
@@ -552,6 +589,9 @@ def fit(model,optimizer,dataset,train_ids,heldout_ids,actor_ids,probe_ids,config
         report['strategy_clone_rows']=dict(Counter(str(dataset.rows[i]['_domino']['strategy_id']) for i in clones))
     require(report['probe_kl']<=config['kl_cap']+1e-7,'Accepted value phase exceeds policy KL cap')
     if post_fit is not None:
+        started=time.perf_counter()
         post_fit(model=model,optimizer=optimizer,reference=reference,clones=clones,probe_ids=probe_ids,
                  dataset=validation_dataset,heldout_ids=heldout_ids,config=config,update=update,beta=beta,report=report)
+        timings['post_ppg_auxiliary_seconds']=time.perf_counter()-started
+    report.update(timings=timings,wall_seconds_with_auxiliary=time.perf_counter()-began)
     return report

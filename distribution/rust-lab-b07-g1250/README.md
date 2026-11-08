@@ -1,6 +1,59 @@
 # B07 g1250: Git checkout continuation after passed qualification
 
-## Current teacher on / Stage A continuation (2026-11-08)
+## Value-phase performance follow-up
+
+The current code also optimizes PPG/auxiliary work: defer unused full-train
+diagnostics when no updates survive, preserve exact full calibration for accepted
+weights, compute only consumed model outputs, batch identical dense cache bytes
+and reduce auxiliary target/input copies. Thirty affected debug checks pass;
+actual GPU speedup is Pending. New timings separate cache, calibration, updates
+and head work. No learning/stage/guard changes and no native rebuild.
+
+For one normal lab timing iteration, if the run is still at g1280:
+
+```bash
+python scripts/continue-rust-teacher.py --expected-generation 1280 --iterations 1 --share-target 0.25
+```
+
+Use the actual committed generation if it has advanced. The ten-iteration A10
+command below remains valid for completing its remaining work. No qualification
+rerun is required. See [analysis and timing fields](../../ai-research/RUST_VALUE_PHASE_PERFORMANCE.md)
+and [debug/source receipt](../rust-collector-performance/teacher-value-performance.json).
+
+## Current g1280 unconditional auxiliary stages
+
+Results `ebe6084` confirm policy teaching is active through g1280. The head stayed
+zero because all value ages were removed by the post-PPO policy-staleness gate.
+The revised head path fits admitted return rows directly and drops duplicate
+policy-label views from its checkpoint. The policy teacher retains its own
+staleness rule and fixed beta **0.16110139609854138**.
+
+- **A:** 10 head-only iterations, then enter B directly.
+- **B:** 20 unconditional blend steps, **.05→1.0**, then enter C directly.
+- **C:** unconditional trunk warm-up **.1→1.0** over 10 iterations. No validation
+  rollback or qualifications; retain only the hard joint KL cap **.003**, undoing
+  an over-cap interval. No 256-game test.
+- **Validation:** four diagnostic games each tenth iteration; no held-out games
+  in intervening iterations. Config flag
+  `teacher_phase.search_value.schedule.validation_during_beta_qualification=true`
+  runs all four on every pending beta-qualification iteration.
+- **PPG cloning beta floor:** **.25**; retain larger saved beta and both Adams.
+
+After syncing Git and exiting the old trainer, run in the lab environment:
+
+```bash
+python scripts/continue-rust-teacher.py --expected-generation 1280 --iterations 10 --share-target 0.25
+```
+
+This begins the new ten-iteration A schedule and reaches g1290/B, preserving the
+existing head, full checkpoint/Adam/RNG/population/PPG and validated value shards.
+The helper defaults to the revised recipe and resumes only remaining requested
+work. Both Rust adapters are unchanged: no rebuild, ZIP or repeat qualification.
+First revised lab training is Pending. See [review, schema and monitoring](../../ai-research/RUST_TEACHER_STAGE_SCHEDULE_REVISION.md)
+and [debug/source receipt](../rust-collector-performance/teacher-stage-schedule.json).
+Previous sections are historical.
+
+## Historical teacher on / Stage A continuation (2026-11-08)
 
 Pulled `results/` through `92dbef3` and `a966c75`: four full 28+4 shadow
 iterations passed through **g1261**. The 184 measured gradient ratios qualify

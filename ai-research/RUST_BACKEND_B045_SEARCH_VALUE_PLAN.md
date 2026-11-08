@@ -1,5 +1,15 @@
 # B04.5 plan: all-seat teacher tables and a search-value correction head
 
+**Current production stage specification (2026-11-08):** the user replaces the
+auxiliary gates below with **A10 head-only → B20 unconditional blend warm-up →
+C10 unconditional trunk warm-up**. No 256-game test or validation-based rollback.
+Four held-out games provide diagnostics every tenth iteration, except each
+pending beta-qualification iteration when the new config override is true.
+Remove the head's policy-staleness gate (which starved it through g1280); keep
+independently validated value shards, the hard joint KL cap .003 and PPG beta
+floor .25. All original gated-stage/window/H2H specifications below are historical
+for this revised recipe. See [replacement specification and implementation](RUST_TEACHER_STAGE_SCHEDULE_REVISION.md).
+
 **Current Stage A activation (2026-11-08):** B04.5/B05/B07 lab gates and four
 full 28+4 shadow gradient iterations have passed through g1261. The user now
 requests teacher on-mode and residual-head Stage A training. The reviewed

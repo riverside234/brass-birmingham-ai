@@ -19,7 +19,7 @@ def is_on(config):
     except (KeyError,TypeError,ValueError):return False
 
 
-def configure(before,target=None):
+def configure(before,target=None,*,revise_stages=False):
     from brass_ai.recovery.collector_runtime import recipe
     from brass_ai.recovery.config import validate_config
     from .lab_shadow_config import is_shadow
@@ -28,6 +28,9 @@ def configure(before,target=None):
     require(before['teacher_phase']['term']['shadow_iterations']==4,'Finish four shadow measurements first')
     after=copy.deepcopy(before);after['teacher_phase']['mode']='on'
     if target is not None:after['teacher_phase']['term']['share_target']=target
+    if revise_stages:
+        from brass_ai.recovery.search_value_schedule import revise
+        after=revise(after)
     require(is_on(after),'Only fixed-beta teacher on / search-head Stage A is reviewed')
     validate_config(after)
     return after
@@ -88,3 +91,7 @@ def validate_backend(state,value):
     require(receipt.get('contract')==CONTRACT and receipt.get('tables')=={'train':28,'held_out':4} and
         receipt.get('gradient_qualification')==q['sha256'] and receipt.get('beta')==q['beta'] and
         receipt.get('qualified_generation')==q['qualified_generation'], 'Teacher activation receipt changed')
+    options=state['signature']['config']['teacher_phase']['search_value']
+    if 'schedule' in options:
+        require(receipt.get('stage_schedule')==digest(options['schedule']) and receipt.get('ppg_beta_floor')==.25,
+            'Teacher stage schedule activation receipt changed')

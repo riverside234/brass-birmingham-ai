@@ -4,6 +4,7 @@ Production invokes this lifecycle only after B05/B07 adoption. The qualification
 uses the same objects against an isolated copy and never the ordinary datasets.
 """
 import copy
+import time
 from collections import defaultdict
 
 import numpy as np
@@ -64,7 +65,7 @@ def h2h_verdict(comparisons):
 
 
 class StageMachine:
-    def __init__(self, *, saved=None, startup='immediate'):
+    def __init__(self, *, saved=None, startup='immediate', options=None):
         self.state = copy.deepcopy(saved or dict(contract=CONTRACT, stage='A', w=0., scale=0.,
             generation=-1, lam=None, startup=startup, g0_passed=startup == 'immediate',
             history=[], ordinary=[], baseline=None, full_scale_generation=None, h2h=None))
@@ -72,6 +73,9 @@ class StageMachine:
         from brass_ai.learning.search_value import binding
         binding(self.state['w'])
         require(0 <= self.state['scale'] <= 1 and self.state['lam'] in (None,.5,.8,.95,1.), 'Invalid resumed stage parameters')
+        if options is not None and 'schedule' in options:
+            from .search_value_schedule import initialize
+            initialize(self.state,options)
 
     def choose_lambda(self, value):
         require(value in (.5,.8,.95,1.) and self.state['lam'] in (None,value), 'Lambda changes require reviewed buffer retirement')
@@ -86,6 +90,8 @@ class StageMachine:
 
     def advance(self, generation, gate, *, ordinary=None, h2h=None, annealing=False):
         s = self.state
+        from .search_value_schedule import CONTRACT as SCHEDULE,advance
+        if s.get('schedule')==SCHEDULE:return advance(s,generation,gate)
         require(type(generation) is int and generation > s['generation'], 'Stage transition already committed/out of order')
         s['generation'] = generation
         if ordinary is not None:
@@ -179,6 +185,7 @@ class Companion:
                     for p,s in self.optimizer.state.items()), 'Search companion Adam moment shape differs')
 
     def head_only(self, rows, *, generation, steps=32):
+        began=time.perf_counter()
         require(rows and all(r['split'] == 'train' for r in rows) and 1 <= steps <= 32, 'Invalid head-only training data')
         model = self.model
         # Encode once per pass, then run all 32 head steps on cached features.
@@ -195,6 +202,7 @@ class Companion:
                 mappings.append(mapping)
                 targets.append(state.new_tensor([r['target'] for r in batch]))
         x, base, mapping, target = map(torch.cat,(inputs,mains,mappings,targets))
+        encoded_at=time.perf_counter()
         rng = np.random.default_rng(int(digest([self.seed,generation,self.steps])[:16],16))
         losses = []
         model.zero_grad(set_to_none=True)
@@ -206,9 +214,13 @@ class Companion:
             loss.backward()
             require(all(p.grad is None for n,p in model.named_parameters() if not n.startswith('search_value_head.')), 'Search loss reached ordinary parameters')
             torch.nn.utils.clip_grad_norm_(model.search_value_head.parameters(),1.,error_if_nonfinite=True)
-            self.optimizer.step(); self.steps += 1; losses.append(float(loss.detach()))
+            self.optimizer.step(); self.steps += 1; losses.append(loss.detach())
         self.optimizer.zero_grad(set_to_none=True)
-        return dict(steps=steps, rows=len(rows), loss_before=losses[0], loss_after=losses[-1], trunk_gradient=0., policy_kl=0.)
+        # Preserve every observed loss without 32 separate device-to-host reads.
+        losses=torch.stack(losses).float().cpu().tolist()
+        return dict(steps=steps, rows=len(rows), loss_before=losses[0], loss_after=losses[-1], trunk_gradient=0., policy_kl=0.,
+            timings=dict(input_and_frozen_encoder_seconds=encoded_at-began,head_update_seconds=time.perf_counter()-encoded_at,
+                total_seconds=time.perf_counter()-began))
 
 
 def guarded_pass(companion, rows, heldout, value_optimizer, *, scale, measure_ordinary,
@@ -260,3 +272,56 @@ def guarded_pass(companion, rows, heldout, value_optimizer, *, scale, measure_or
         finally:
             model.zero_grad(set_to_none=True)
     return dict(intervals=reports)
+
+
+def unconditional_pass(companion,rows,value_optimizer,*,scale,cloning_loss,measure_joint_kl,
+                       beta,rate_for_step,kl_cap=.003,**unused):
+    """No validation/loss qualification; retain only the hard pre-PPG KL cap.
+
+    A rejected interval restores both Adams and weights. There is no stage or
+    validation rollback. Exceptions retain the normal transactional recovery.
+    """
+    from .ppg_selection import Selection
+    require(rows and all(r['split']=='train' for r in rows) and 0<scale<=1 and kl_cap==.003,
+        'Invalid unconditional trunk pass')
+    model=companion.model;head_ids={id(p) for p in model.search_value_head.parameters()}
+    require(not head_ids & {id(p) for g in value_optimizer.param_groups for p in g['params']},'Search head has two Adam owners')
+    initial=measure_joint_kl()
+    require(np.isfinite(initial) and initial>=0,'Nonfinite initial search/PPG joint KL')
+    if initial>=kl_cap:return dict(intervals=[],steps=0,reason='No shared PPG KL budget',cap=kl_cap)
+    # Inputs are fixed, but trunk encodings must be recomputed after each
+    # optimizer step. Pack numeric rows once, retaining exact sample order/RNG.
+    states=np.asarray([r['state'] for r in rows],dtype=np.float32)
+    mappings=np.asarray([r['mapping'] for r in rows],dtype=np.int64)
+    remaining_costs=np.asarray([r['remaining'] for r in rows],dtype=np.float32)
+    targets=np.asarray([r['target'] for r in rows],dtype=np.float32)
+    device=next(model.parameters()).device
+    rng=np.random.default_rng(companion.seed+companion.steps);reports=[];steps=0
+    for interval in range(2):
+        rollback=Selection(model,value_optimizer,{'search':0.},companion=companion)
+        try:
+            for step in range(16):
+                selected=rng.choice(len(rows),min(512,len(rows)),replace=False)
+                state,mapping,remaining=(torch.as_tensor(a[selected],device=device) for a in (states,mappings,remaining_costs))
+                encoded=model.encode_state(state)
+                with torch.no_grad():main=model.heads_from_encoded(encoded,mapping,remaining)[-1]
+                delta=correction(model,encoded,mapping,remaining,scale=scale)
+                loss=torch.nn.functional.mse_loss(main+delta,torch.as_tensor(targets[selected],device=device))
+                value_optimizer.zero_grad(set_to_none=True);companion.optimizer.zero_grad(set_to_none=True)
+                loss.backward()
+                require(all(p.grad is None for n,p in model.named_parameters() if n.startswith(('outcomes.','utility_head.'))),
+                    'Correction reached main value head')
+                (beta*cloning_loss()).backward()
+                torch.nn.utils.clip_grad_norm_(model.parameters(),1.,error_if_nonfinite=True)
+                for group in value_optimizer.param_groups:group['lr']=rate_for_step(interval*16+step+1,32)
+                value_optimizer.step();companion.optimizer.step();companion.steps+=1
+            kl=measure_joint_kl();require(np.isfinite(kl) and kl>=0,'Nonfinite search/PPG joint KL')
+            accepted=kl<=kl_cap
+            reports.append(dict(accepted=accepted,joint_kl=kl,cap=kl_cap,scale=scale,
+                reason='within-joint-kl-cap' if accepted else 'joint-kl-cap'))
+            if not accepted:rollback.restore(model,value_optimizer);break
+            steps+=16
+        except BaseException:
+            rollback.restore(model,value_optimizer);raise
+        finally:model.zero_grad(set_to_none=True)
+    return dict(intervals=reports,steps=steps,cap=kl_cap,validation_gates=False)

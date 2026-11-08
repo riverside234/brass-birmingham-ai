@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Continue the same Rust run with branching off and 32-table shadow gradients."""
+"""Continue the same Rust run with branching off and shadow or qualified teaching."""
 import argparse
 from pathlib import Path
 import subprocess
@@ -40,7 +40,7 @@ def run_training(argv,log):
         finally:process.stdout.close()
 
 
-def prepare(root,run_path,expected,iterations,share_target=.25,*,mode='shadow'):
+def prepare(root,run_path,expected,iterations,share_target=.25,*,mode='shadow',revise_stages=False):
     from brass_ai.bank import read,sha
     from brass_ai.learning.contracts import project_path,require
     from brass_ai.recovery.collector_runtime import configured,from_config,recipe
@@ -61,16 +61,21 @@ def prepare(root,run_path,expected,iterations,share_target=.25,*,mode='shadow'):
         import copy
         before=recipe(state['signature']['config'])
         if mode=='on':
-            config=enable(before,share_target);authorize(state,config)
+            config=enable(before,share_target,revise_stages=revise_stages);authorize(state,config)
         elif is_shadow(before):
             config=copy.deepcopy(before);config['teacher_phase']['term']['share_target']=share_target
             config['teacher_phase']['term']['shadow_iterations']=4
         else:config=configure(before,share_target)
+        if revise_stages and mode=='shadow':
+            from brass_ai.recovery.search_value_schedule import revise
+            config=revise(config)
         require(is_on(config) if mode=='on' else is_shadow(config),'Invalid teacher continuation recipe')
         diagnostic_only=qualification_upgrade(before,config)
         require(config==before or diagnostic_only or state['iteration']==expected,'Change shadow settings at the requested starting generation')
         tag=str(share_target).replace('.','')
         prefix='-rust-teacher-on-stage-a-share' if mode=='on' else '-rust-shadow32-no-branch-share'
+        if 'schedule' in config['teacher_phase']['search_value']:
+            prefix='-rust-teacher-on-stages-v2-share' if mode=='on' else '-rust-shadow-stages-v2-share'
         output=root/'configs/step5'/(run.name+prefix+tag+'.json')
         existing=read(output) if output.exists() else state['signature']['config']
         require(not output.exists() or recipe(existing)==config or qualification_upgrade(recipe(existing),config),'Existing shadow config differs')
@@ -85,11 +90,13 @@ def prepare(root,run_path,expected,iterations,share_target=.25,*,mode='shadow'):
         return state,output,expected+iterations-state['iteration']
 
 
-def main(*,default_mode='shadow'):
+def main(*,default_mode='shadow',default_stage_revision=False):
     p=argparse.ArgumentParser(description=__doc__)
     p.add_argument('--run',default='artifacts/step5/joint7-v11-2-g1290-trained-restart')
     p.add_argument('--expected-generation',type=int,required=True)
     p.add_argument('--mode',choices=('shadow','on'),default=default_mode)
+    p.add_argument('--revise-stages',action='store_true',default=default_stage_revision,
+        help='Unconditional A10/B20/C10 stages, sparse validation and PPG beta floor .25')
     p.add_argument('--iterations',type=int,default=1 if default_mode=='on' else 4)
     p.add_argument('--share-target',type=float,choices=(.25,.4,.5),default=.25)
     p.add_argument('--device',default='cuda');p.add_argument('--mono',default='mono')
@@ -108,12 +115,19 @@ def main(*,default_mode='shadow'):
         tables=dict(train=28,held_out=4),share_target=args.share_target,qualification_iterations=4,expected_generation=args.expected_generation)
     try:
         report['execution_source']=execution()
-        state,config,remaining=prepare(ROOT,args.run,args.expected_generation,args.iterations,args.share_target,mode=args.mode)
+        kwargs=dict(mode=args.mode)
+        if args.revise_stages:kwargs['revise_stages']=True
+        state,config,remaining=prepare(ROOT,args.run,args.expected_generation,args.iterations,args.share_target,**kwargs)
         from brass_ai.recovery.collector_runtime import from_config
-        report['collector_runtime']=from_config(read(config))
-        print('Branching=0%; teacher='+args.mode+'; tables=28+4; '+
-            ('qualified fixed beta; search head Stage A (w=0, frozen trunk).' if args.mode=='on' else
+        options=read(config);report['collector_runtime']=from_config(options)
+        revised='schedule' in options['teacher_phase']['search_value']
+        report['stage_schedule']=options['teacher_phase']['search_value'].get('schedule')
+        cadence=('tables=28 + 4 held-out every tenth iteration; qualification override='+
+            str(report['stage_schedule']['validation_during_beta_qualification'])+'; ') if revised else 'tables=28+4; '
+        print('Branching=0%; teacher='+args.mode+'; '+cadence+
+            (('qualified fixed beta; residual stage restored from checkpoint.' if revised else 'qualified fixed beta; search head Stage A (w=0, frozen trunk).') if args.mode=='on' else
              'qualification=4 iterations; teacher gradients are diagnostic only.'),flush=True)
+        if revised:print('Residual stages: A10 head-only; B20 blend warm-up; C10 trunk warm-up; KL cap .003; PPG beta floor .25.',flush=True)
         print('Collector runtime: '+str(report['collector_runtime'])+' (training config)',flush=True)
         if remaining:
             argv=[sys.executable,'-u',str(ROOT/'scripts/step5.py'),'--root',str(ROOT),'--config',str(config),

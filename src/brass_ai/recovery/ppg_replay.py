@@ -281,29 +281,9 @@ class Buffer:
         disk_peak=sum(p.stat().st_size for p in self.directory.iterdir() if p.is_file())
         part=self.path(generation,'critic.npy.partial')
         a=np.lib.format.open_memmap(part,mode='w+',dtype=row_dtype(),shape=(len(ids),))
-        games={};contexts={};context_values=[]
         try:
-            for j,i in enumerate(ids):
-                row,target,identity,encoded=dataset.data[i];role=row.get('_critic_role','learner')
-                require(role in ('learner','snapshot') and row['_reward_id']==self.reward_id
-                    and selection['games'].get(identity[0])==row.get('_table_kind','selfplay')
-                    and row.get('behavior',{}).get('component')!='branch_move' and not row.get('_copied_prefix',False)
-                    and ((role=='learner' and row['behavior']['policy_id']==source['policy_id']) or
-                         (role=='snapshot' and source.get('snapshot_rows') and row['behavior']['policy_id']!=source['policy_id'])),
-                    'Invalid cached MC row/source')
-                check_encoded(encoded);context=row['view']['context'];key=digest(context)
-                if key not in contexts:contexts[key]=len(contexts);context_values.append(copy.deepcopy(context))
-                e=a[j];e['state']=encoded.state;e['action']=encoded.actions[0];e['mapping']=encoded.stable_to_relative
-                e['targets']=[target[k] for k in ('win_share','placement','vp')]
-                e['utility']=row['_reward_return'];e['remaining']=row['_reward_remaining']
-                e['seat']=row['seat'];e['game']=games.setdefault(identity[0],len(games));e['context']=contexts[key]
-                e['forced']=len(encoded.choice_ids)==1
-                from brass_ai.learning.seat_descriptors import validate,unknown_numpy
-                e['descriptors']=validate(row.get('_seat_descriptors',unknown_numpy()))
-                e['role']=('learner','snapshot').index(role);e['table']=('selfplay','historical','legacy').index(row.get('_table_kind','selfplay'))
-                e['descriptor_generation']=row.get('_descriptor_generation',generation-1)
-                require(identity[1]==row['seat'] and all(np.isfinite(e[k]).all() for k in ('state','action','targets','utility','remaining')),
-                    'Nonfinite/mismatched cached critic row')
+            from .ppg_cache_writer import write_critic
+            games,context_values,serialization=write_critic(a,dataset,ids,source,self.reward_id,selection,generation)
             a.flush()
         finally:a._mmap.close()
         disk_peak=max(disk_peak,sum(p.stat().st_size for p in self.directory.iterdir() if p.is_file()))
@@ -386,6 +366,7 @@ class Buffer:
         write_json(self.path(generation,'json'),r)
         self.pending=(self.receipts+[r])[-self.window:]
         return dict(buffer_iterations=self.window,ages=list(range(len(self.pending))),generations=[r['generation'] for r in self.pending],
+            serialization=serialization,
             rows_by_age={str(generation-x['generation']):x['rows'] for x in self.pending},
             critic_bytes=sum(f['bytes'] for x in self.pending for ext,f in x['files'].items()
                 if ext not in ('actions.npy','policy-actions.npy','local-scoring.json')),

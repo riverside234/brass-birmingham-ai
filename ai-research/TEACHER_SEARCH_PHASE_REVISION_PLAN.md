@@ -1,5 +1,16 @@
 # Teacher search phase revision plan
 
+**2026-11-08 stage/cadence revision:** policy teaching is active through g1280;
+retain its fixed beta .16110139609854138 and label staleness checks. The auxiliary
+head now fits validated return rows directly and uses unconditional A10/B20/C10
+without gates or the 256-game test. Collect the four held-out games every tenth
+iteration; `search_value.schedule.validation_during_beta_qualification=true`
+retains all four on every pending shadow qualification round. Stage C keeps
+only the hard joint KL cap .003; normal PPG beta floor is .25. See the
+[replacement auxiliary specification, results review and command](RUST_TEACHER_STAGE_SCHEDULE_REVISION.md).
+This supersedes every-iteration production validation and gated auxiliary-stage
+details below; ordinary PPO/PPG holdouts and policy-teacher qualification remain.
+
 **2026-11-08 activation:** results `92dbef3` and `a966c75` confirm four complete
 full-volume shadow iterations through g1261. The sealed four-iteration receipt
 qualifies β **0.16110139609854138**, target 0.25, from 184 raw gradient

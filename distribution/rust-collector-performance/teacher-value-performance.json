@@ -1,0 +1,138 @@
+{
+  "contract": "brass-value-phase-performance/1",
+  "date": "2026-11-08",
+  "execution": {
+    "implementation": "675a38930b1dca9b00b953fbce8308283312e1170d695d79157f64ebc624153c",
+    "qualified_implementation": "9efcf34f853d75ab844366b6819da4b0921be38d3e2dfb806cf282ace76e7a30",
+    "replay_location_review": "90d3bd97dc85666908508b484e33d727152e88ddef7d8afcd88468342d0f329b"
+  },
+  "results_commit": "ebe6084eb2e29486b8e31f9c35fdc6f78529bb49",
+  "generation": 1280,
+  "checkpoint": {
+    "path": "artifacts/step5/joint7-v11-2-g1290-trained-restart/generation-1280.pt",
+    "sha256": "0eeb499da77bebe32508731add936eb9f286ded8643547a922fc52625b5e7fcd",
+    "model_id": "c37d4c61160739d7414ea284ea35c17ed8565c0e3c62c4acf5e37d0126148068",
+    "generation": 1280
+  },
+  "measured_lab_baseline": [
+    {
+      "generation": 1278,
+      "path": "results/joint7-v11-2-g1290-trained-restart-g1280-20261108T173525364834Z/iteration-1278/report.json",
+      "sha256": "576a4092d18708b35d5cc6307907e8cae236e6d260c4995227f82ea29453218c",
+      "whole_value_seconds": 44.020736645994475,
+      "ppg_fit_seconds": 20.230018828995526,
+      "cache_write_seconds": 7.169544264994329,
+      "remaining_unattributed_seconds": 16.62117355200462,
+      "retained_steps": 0,
+      "attempted_steps": 16,
+      "train_rows": 235728,
+      "prepared_batches": 589,
+      "prepared_bytes": 4367424208,
+      "worker_wait_seconds": 0.16608660347992554,
+      "dense_bytes": 3599500466
+    },
+    {
+      "generation": 1279,
+      "path": "results/joint7-v11-2-g1290-trained-restart-g1280-20261108T173525364834Z/iteration-1279/report.json",
+      "sha256": "948eff038cfee3c79d2823e9ec2d32d4c106cb65c6e9cd57630a654a8ccfc518",
+      "whole_value_seconds": 67.90469212201424,
+      "ppg_fit_seconds": 35.38601113000186,
+      "cache_write_seconds": 16.233474509004736,
+      "remaining_unattributed_seconds": 16.28520648300764,
+      "retained_steps": 16,
+      "attempted_steps": 32,
+      "train_rows": 236014,
+      "prepared_batches": 1178,
+      "prepared_bytes": 8743140700,
+      "worker_wait_seconds": 0.33480561527539976,
+      "dense_bytes": 3601690419
+    }
+  ],
+  "verified_work_reductions": {
+    "rejected_full_train_scan": {
+      "rows": 235728,
+      "batches": 461,
+      "fraction_of_old_prepared_batches": 0.7826825127334465,
+      "scope": "Counted avoided work for a zero-retained phase; not a measured wall-clock speedup"
+    },
+    "cache_finite_array_checks": {
+      "rows": 124242,
+      "before": 621210,
+      "after": 2430,
+      "dense_bytes_identical": true,
+      "block_rows": 256
+    },
+    "auxiliary": "Flat numeric copies replace recursive scalar copies; Stage-C arrays packed once; sampled indices/RNG and fresh trunk encoding retained"
+  },
+  "preserved": [
+    "PPO full likelihood verification and outputs",
+    "critic predictions/gradients and Adam/RNG",
+    "policy-only clone/reference/probe probabilities/gradients",
+    "held-out PPG acceptance and exact KL checks",
+    "full pre/final training calibration for accepted weights; readiness stays null with zero retained work",
+    "all source/role/holdout/prefix/seat/descriptor/layout checks and FP32 finite/overflow rejection",
+    "cache bytes/order/metadata, sealed receipts/publication/recovery",
+    "auxiliary lambda targets and mutation isolation",
+    "A10/B20/C10, sparse diagnostic/qualification cadence, beta .25 floor, fixed teacher beta and .003 cap",
+    "original native search_v1/collector binaries and frozen jobs"
+  ],
+  "timing_fields": [
+    "value_phase.value_work",
+    "value_phase.timings",
+    "value_phase.wall_seconds_with_auxiliary",
+    "value_phase.train_metrics_measured",
+    "value_phase.full_train_metric_rows_avoided",
+    "value_phase.buffer.serialization",
+    "search_value.timings",
+    "search_value.update.timings"
+  ],
+  "debug": {
+    "distinct_passed": 30,
+    "new_checks": 10,
+    "existing_affected_checks": 20,
+    "cuda_skipped": 1,
+    "logs": [
+      {
+        "path": "artifacts/teacher-value-performance/debug.log",
+        "sha256": "60f30a1d16867ece9f55a00839f1c4a27872f84ee99887c594b7d93929bc4687"
+      },
+      {
+        "path": "artifacts/teacher-value-performance/final-debug.log",
+        "sha256": "3c688b4e2a7d2f3a458c19ce401ccef8199d7fd57cc6f73b339ae5b9b6d828c0"
+      },
+      {
+        "path": "artifacts/teacher-value-performance/integration-debug.log",
+        "sha256": "7ebc7717b1a8ee209afaa18e6d108f2cbdce3442196de515b1812a5da2dcbc9f"
+      }
+    ],
+    "corrected_regressions": "Shared value_output also serves PPO likelihood verification: use an explicit heads_only flag. Full PPO parity now passes. Custom test model accepts the existing descriptor API.",
+    "no_local_benchmarks": true,
+    "no_native_games": true,
+    "no_full_training": true,
+    "no_unrelated_qualification_reruns": true
+  },
+  "native": {
+    "ordinary_source": "51d8e85bd7aa9c43c87ae609d57da3c8cfcab9473f90b9d4140fb8811c1fb6ec",
+    "teacher_adapter_source": "cb78f5f55ad4f2468841be51dba9cf387ba5830b9319b6dfd6501e980025dbbd",
+    "unchanged": true,
+    "rebuild_required": false
+  },
+  "source_review": {
+    "qualified_source_reconstructed": true,
+    "source_files": 369,
+    "reviewed_changes": 66,
+    "previous_execution": {
+      "implementation": "521e5ee49e33d45981bfd2b30d79b0d8bc981cd8c207b0e3ed046b1ead9daddb",
+      "qualified_implementation": "9efcf34f853d75ab844366b6819da4b0921be38d3e2dfb806cf282ace76e7a30",
+      "replay_location_review": "bb292c1b1f6b4d10a3c5de47a1d2043cdab38cb1607f1a6142b68e69ead6beff"
+    }
+  },
+  "lab_profile_command": "python scripts/continue-rust-teacher.py --expected-generation 1280 --iterations 1 --share-target 0.25",
+  "actual_gpu_wall_speedup": "Pending lab",
+  "remaining": [
+    "Accepted phases still require two complete train scans",
+    "dense critic disk volume is unchanged",
+    "necessary full-model forward/backward, cloning and KL/acceptance checks",
+    "new auxiliary training performs real work absent in the old stalled-head baseline"
+  ]
+}

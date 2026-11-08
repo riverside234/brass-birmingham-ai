@@ -207,7 +207,7 @@
     "Actual g1257 to g1259 shadow continuation and ordinary/shadow timing"
   ],
   "continuation": [
-    "python scripts/continue-rust-teacher.py --expected-generation 1261 --iterations 1 --share-target 0.25"
+    "python scripts/continue-rust-teacher.py --expected-generation 1280 --iterations 10 --share-target 0.25"
   ],
   "artifacts": {
     "pi04-components-forward.json": "7d56bd5eedd8c92df6adc7dbe7421781c3c96b8380f24b92d82c960aa3e47e0e",
@@ -274,6 +274,37 @@
     "search_value_stage": "A",
     "focused_debug_checks_passed": 38,
     "first_on_iteration": "Pending lab",
+    "native_rebuild_required": false
+  },
+  "teacher_stage_schedule": {
+    "report": "teacher-stage-schedule.json",
+    "execution": {
+      "implementation": "521e5ee49e33d45981bfd2b30d79b0d8bc981cd8c207b0e3ed046b1ead9daddb",
+      "qualified_implementation": "9efcf34f853d75ab844366b6819da4b0921be38d3e2dfb806cf282ace76e7a30",
+      "replay_location_review": "bb292c1b1f6b4d10a3c5de47a1d2043cdab38cb1607f1a6142b68e69ead6beff"
+    },
+    "generation": 1280,
+    "fixed_teacher_beta": 0.16110139609854138,
+    "schedule": "A10/B20/C10 unconditional",
+    "heldout_interval": 10,
+    "validation_during_beta_qualification": true,
+    "joint_kl_cap": 0.003,
+    "ppg_beta_floor": 0.25,
+    "focused_debug_checks_passed": 47,
+    "first_revised_lab_iteration": "Pending",
+    "native_rebuild_required": false
+  },
+  "teacher_value_performance": {
+    "report": "teacher-value-performance.json",
+    "execution": {
+      "implementation": "675a38930b1dca9b00b953fbce8308283312e1170d695d79157f64ebc624153c",
+      "qualified_implementation": "9efcf34f853d75ab844366b6819da4b0921be38d3e2dfb806cf282ace76e7a30",
+      "replay_location_review": "90d3bd97dc85666908508b484e33d727152e88ddef7d8afcd88468342d0f329b"
+    },
+    "focused_debug_checks_passed": 30,
+    "cuda_skipped": 1,
+    "lab_profile_command": "python scripts/continue-rust-teacher.py --expected-generation 1280 --iterations 1 --share-target 0.25",
+    "actual_gpu_wall_speedup": "Pending lab",
     "native_rebuild_required": false
   }
 }

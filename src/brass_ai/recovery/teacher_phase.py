@@ -10,6 +10,7 @@ from .teacher_phase_config import CONTRACT, SCHEDULE, SOURCE, validate, buffer_i
 from .teacher_buffer import TeacherBuffer
 from .teacher_labels import PHASES
 from .teacher_term import TeacherTerm, heldout_measure, summary
+from .search_value_schedule import validation_plan
 
 KEY = 'teacher_phase'
 
@@ -40,8 +41,12 @@ def plan_jobs(config, state, *, model_id, export_hash, epoch, ready, native_sour
     c = validate(config); cursor = state.get('teacher_seed_cursor', initial_cursor(config))
     if c['mode'] == 'off' or not ready: return [], cursor
     jobs = []; generation = state['iteration']; reward_id = digest(c['search']['reward'])
+    validation=validation_plan(config,state)
     for split, partition, count in (('train', 'train', c['tables']['train']), ('heldout', 'validation', c['tables']['held_out'])):
         seeds, cursor = seeds_for(cursor, count, partition=partition)
+        # Reserve the same independent seed stream, but create no held-out jobs
+        # or search/inference work on intervening iterations.
+        if split=='heldout' and not validation['due']:continue
         for seed in seeds:
             identity = dict(contract=CONTRACT, generation=generation, split=split, seed=seed, model_id=model_id,
                             profile=buffer_identity(config))
@@ -59,6 +64,10 @@ def plan_jobs(config, state, *, model_id, export_hash, epoch, ready, native_sour
         # edit and must not reset when the ordinary iteration starts again.
         if not isinstance(progress, dict): progress = state.get('search_value', {})
         weight = progress.get('w', c['search_value']['blend']['w'])
+        if 'schedule' in c['search_value'] and progress.get('stage')=='B':
+            # The first B collection uses .05; its committed counter then owns
+            # that weight. Twenty collections reach one without a zero step.
+            weight=min(1.,round(weight+.05,2))
         if c['search_value']['blend']['w'] > 0:
             require(progress.get('stage') in ('B','head_to_head','C') and
                     progress.get('w') == c['search_value']['blend']['w'], 'Search blend requires committed stage progress')
@@ -139,6 +148,7 @@ class TeacherPhase:
             post_spent[job['expected']['job_id']]=time.perf_counter()-table_began+result.get('metrics',{}).get('shadow_cache_seconds',0.)
         if self.jobs:
             for split, rows in splits.items():
+                if not rows:continue
                 seal_began=time.perf_counter()
                 self.buffer.publish(self.generation, split, rows, model_id=self.jobs[0]['expected']['model_id'], reward_id=self.reward_id)
                 seal_seconds=time.perf_counter()-seal_began
@@ -160,6 +170,7 @@ class TeacherPhase:
             fallback_played_fraction=sum(l['fallback_played'] for l in labels) / len(labels) if labels else None,
             collection_metrics=table_metrics,
             scope='Native search/lane/inference metrics supplied by B04; absent metrics are unmeasured')
+        self.metrics['heldout_validation']=validation_plan(self.config,self.state)
         reached=self.metrics['reached_reserved_turns']
         self.metrics['root_label_yield']=self.metrics['root_labels']/reached if reached else None
         self.metrics['root_label_yield_pass']=bool(reached and self.metrics['root_label_yield']>=.95)

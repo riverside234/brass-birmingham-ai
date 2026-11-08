@@ -25,7 +25,8 @@ def configure(before,share_target=.25):
 def is_shadow(config):
     # Recover the exact reviewed base; no other recipe/search/optimizer edits.
     from brass_ai.recovery.collector_runtime import recipe
-    try:config=recipe(config)
+    from brass_ai.recovery.search_value_schedule import previous_recipe
+    try:config=previous_recipe(recipe(config))
     except (ValueError,TypeError):return False
     before=copy.deepcopy(config);phase=before.pop('teacher_phase',None)
     if phase is None:return False
@@ -67,17 +68,23 @@ def signature_transition(before,after):
     from .lab_replay_compat import QUALIFIED,execution
     old,new=before['config'],after['config']
     from .lab_teacher_activation import is_on
+    from brass_ai.recovery.search_value_schedule import previous_recipe
+    old_revised='schedule' in old.get('teacher_phase',{}).get('search_value',{})
+    new_revised='schedule' in new.get('teacher_phase',{}).get('search_value',{})
+    if old_revised and not new_revised:return False
+    try:old_compare,new_compare=previous_recipe(old),previous_recipe(new)
+    except (ValueError,KeyError,TypeError):return False
     if is_on(new):
         config_ok=False
         if is_on(old) or is_shadow(old) and old['teacher_phase']['term']['shadow_iterations']==4:
-            expected=copy.deepcopy(old);expected['teacher_phase']['mode']='on'
+            expected=copy.deepcopy(old_compare);expected['teacher_phase']['mode']='on'
             expected['teacher_phase']['term']['share_target']=new['teacher_phase']['term']['share_target']
-            config_ok=expected==new
+            config_ok=expected==new_compare
     elif is_shadow(old):
-        expected=copy.deepcopy(old);expected['teacher_phase']['term']['share_target']=new.get('teacher_phase',{}).get('term',{}).get('share_target')
+        expected=copy.deepcopy(old_compare);expected['teacher_phase']['term']['share_target']=new.get('teacher_phase',{}).get('term',{}).get('share_target')
         if old['teacher_phase']['term']['shadow_iterations']==2:
             expected['teacher_phase']['term']['shadow_iterations']=new.get('teacher_phase',{}).get('term',{}).get('shadow_iterations')
-        config_ok=is_shadow(new) and expected==new
+        config_ok=is_shadow(new) and expected==new_compare
     else:config_ok=digest(old)==BASE_CONFIG and is_shadow(new)
     return (before.get('implementation')==after.get('implementation')==QUALIFIED and
         {k:v for k,v in before.items() if k!='config'}=={k:v for k,v in after.items() if k!='config'} and
@@ -122,6 +129,9 @@ def rebind_backend(previous,updated):
         q=authorize(previous,updated['signature']['config'])
         after['teacher']=dict(contract=ON,tables=dict(train=28,held_out=4),gradient_qualification=q['sha256'],
             beta=q['beta'],qualified_generation=q['qualified_generation'],generation=previous['iteration'])
+        options=updated['signature']['config']['teacher_phase']['search_value']
+        if 'schedule' in options:
+            after['teacher'].update(stage_schedule=digest(options['schedule']),ppg_beta_floor=.25)
     updated['native_backend']=after
     updated['native_backend_switch']=dict(checkpoint=copy.deepcopy(previous['history'][-1]),
         before=copy.deepcopy(before),after=copy.deepcopy(after))

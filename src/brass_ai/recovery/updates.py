@@ -238,7 +238,7 @@ def state_value_model(model):
     return type(model) in (FourSeatNet,UtilityNet)
 
 
-def value_output(model,inputs,dataset,indices,*,dropout=None,unknown=False,detach=False,capture_encoded=None):
+def value_output(model,inputs,dataset,indices,*,dropout=None,unknown=False,detach=False,capture_encoded=None,heads_only=False):
     from brass_ai.learning.model import ARCHITECTURE
     from brass_ai.learning.seat_descriptors import critic_inputs
     extra={}
@@ -246,7 +246,9 @@ def value_output(model,inputs,dataset,indices,*,dropout=None,unknown=False,detac
         ids=indices.detach().cpu().tolist() if isinstance(indices,torch.Tensor) else list(indices)
         extra['descriptors']=critic_inputs(dataset,ids,dropout=dropout,unknown=unknown)
     if dataset.remaining is not None:extra['remaining']=dataset.remaining[indices]
-    if detach or capture_encoded is not None:
+    # PPO likelihood verification also uses this helper and needs real logits.
+    # Omit them only at an explicit value-only call site.
+    if detach or capture_encoded is not None or (heads_only and state_value_model(model)):
         from .ppg_phasic import stop_value_gradient
         require(state_value_model(model),'Detached PPO critic requires the supported state-only model')
         if detach:
@@ -256,6 +258,13 @@ def value_output(model,inputs,dataset,indices,*,dropout=None,unknown=False,detac
         heads=model.heads_from_encoded(encoded,inputs[3],extra.get('remaining'),extra.get('descriptors'))
         return (inputs[1].new_zeros(inputs[1].shape[:2]),)+heads
     return model(*inputs,**extra)
+
+
+def policy_output(model,inputs):
+    """Policy-only counterpart to value_output; custom forwards keep fallback."""
+    if not state_value_model(model):return model(*inputs)[0]
+    encoded=model.encode_state(inputs[0])
+    return model.score_prepared(inputs[1],model.prepare_candidates(encoded)).masked_fill(~inputs[2],-torch.inf)
 
 
 def rehearsal_dataset(data,device):
