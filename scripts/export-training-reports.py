@@ -6,7 +6,10 @@ The manifest records both source and exported hashes for transformed history.
 Checkpoints, replay shards,
 feature caches and profiler traces are not part of this report-only export.
 With --continue, unchanged reports remain in earlier bundles and the new
-manifest records their verified locations. Rating slots include only the latest
+manifest records their verified locations. Detailed reports and teacher
+calibration/collection diagnostics use the latest committed iterations only.
+External training console logs and launcher failure evidence are not selected.
+Rating slots include only the latest
 committed generation; the cumulative archive is still included when present.
 The CLI publishes to the independent ai-training-results repository by default.
 Fetch/push use the configured results URL directly, independently of origin.
@@ -43,7 +46,8 @@ COMPACT_JSON = 'json-whitespace-only/1.0.0'
 GZIP_JSON = 'gzip-json-whitespace-only/1.0.0'
 REPORT_NAMES = {'state.json', 'retention-history.json', 'report.json', 'spec.json',
                 'config.json', 'best.json', 'summary.json', 'comparison.json',
-                'validation-comparison.json', 'receipt.json', 'manifest.json'}
+                'validation-comparison.json', 'receipt.json', 'manifest.json',
+                'collection.json', 'calibration.json'}
 SKIP_DIRS = {'.git', '.retention', '.retention-trash', '__pycache__', 'population'}
 
 
@@ -542,6 +546,7 @@ def export(root, run, output=None, *, latest=2, extras=(), continue_export=False
               'Retention history is gzip-compressed whitespace-minified JSON (.json.gz); load_json accepts both formats. '
               'Its source_bytes/source_sha256 describe the original '
               'and bytes/sha256 describe the exported file. Other reports preserve original bytes. '
+              'Latest teacher collection/calibration reports are included; external console/failure logs are excluded. '
               'Incremental exports require the previous bundles named in reused_files; references point to original physical files.')
     output.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix='.report-export-', dir=output.parent) as temporary:
@@ -573,9 +578,9 @@ def main():
     parser.add_argument('--root', type=Path, default=ROOT, help='Project root; defaults to this script\'s project')
     parser.add_argument('--run', default=DEFAULT_RUN, help=f'Self-play run under artifacts/ (default: {DEFAULT_RUN})')
     parser.add_argument('--output', help='New results/ folder; default includes run, generation and UTC timestamp')
-    parser.add_argument('--latest', type=int, default=2, help='Number of latest committed iteration reports (default: 2)')
+    parser.add_argument('--latest', type=int, default=2, help='Number of latest detailed committed iterations (default: 2)')
     parser.add_argument('--continue', dest='continue_export', action='store_true',
-                        help='Skip unchanged files already in previous same-run exports; record their locations in the manifest')
+                        help='Reuse unchanged same-run exported files with verified locations; keep the --latest detail limit')
     parser.add_argument('--extra', action='append', default=[], help='Additional JSON report or directory; repeat as needed')
     parser.add_argument('--no-push', action='store_true', help='Local export only; do not initialize/fetch/commit/push results Git')
     parser.add_argument('--push-only', action='store_true', help='Retry committed results uploads without exporting again')

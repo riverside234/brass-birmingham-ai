@@ -42,6 +42,107 @@ class ExportTests(unittest.TestCase):
     def export(self, **kwargs):
         return reports.export(self.root, self.run, **kwargs)
 
+    def teacher_diagnostics(self):
+        qualification=dict(passed=True,required_iterations=4,target=.25,beta=.16110139609854138,
+            observations=[dict(generation=g,raw_shares=[1.25,1.75]) for g in range(56,60)])
+        self.state['teacher_phase']=dict(weight=dict(gradient_qualification=qualification))
+        self.state['search_value']=dict(stage=dict(stage='A',w=0.,scale=0.))
+        self.put(self.run+'/state.json',self.state)
+        history={'iteration-0057/report.json':dict(teacher_phase=dict(term=dict(fixed_beta=qualification['beta'])))}
+        self.put(self.run+'/retention-history.json',history)
+        source={}
+        for iteration in (58,59):
+            prefix=f'{self.run}/iteration-{iteration:04d}'
+            self.put(prefix+'/report.json',dict(iteration=iteration,timings=dict(iteration_seconds=1),
+                teacher_phase=dict(term=dict(mode='shadow',beta=1.,fixed_beta=qualification['beta'],
+                    gradient_qualification=qualification)),search_value=dict(updated=False,stage=dict(stage='A',w=0.))))
+            for name,value in [('collection.json',dict(tables=dict(train=28,heldout=4),
+                    shadow_collection_seconds=120.3,inference=dict(positions=100))),
+                    ('calibration.json',dict(estimate_ns=25_000_000,samples=[dict(root_index=0,warmup=False,elapsed_ns=200_000_000)]))]:
+                path=self.put(prefix+'/teacher-shadow/'+name,reports.encode(value).replace(b'\n',b'\r\n'))
+                source[path.relative_to(self.root/self.run).as_posix()]=path.read_bytes()
+            self.put(prefix+'/teacher-shadow/table.json.gz',b'large teacher payload excluded')
+            self.put(prefix+'/teacher-shadow/table.json.gz.receipt.json',dict(payload_only='not selected'))
+        # Old/pending diagnostics and unrelated launcher logs must not even be parsed.
+        for iteration in (57,60):
+            for name in ('collection.json','calibration.json'):
+                self.put(f'{self.run}/iteration-{iteration:04d}/teacher-shadow/{name}',b'not selected JSON')
+        outside='artifacts/rust-backend/20261108T000000000000Z-shadow-training-fixture'
+        self.put(outside+'/qualification.json',dict(training_command=['python','step5.py','train','--run',self.run],
+            error='external launcher failure'))
+        self.put(outside+'/training.log',b'not selected console output\xff')
+        self.put(self.run+'/generation-0060.pt',b'checkpoint excluded')
+        return source,qualification
+
+    def test_recent_teacher_calibration_collection_and_beta_are_exported_without_external_logs(self):
+        source,qualification=self.teacher_diagnostics()
+        before={p:p.read_bytes() for p in (self.root/'artifacts').rglob('*') if p.is_file()}
+        output,manifest=self.export(continue_export=True)
+        self.assertEqual(manifest['latest_iterations'],[58,59])
+        diagnostics={e['path']:e for e in manifest['files'] if '/teacher-shadow/' in e['path']}
+        self.assertEqual(set(diagnostics),set(source))
+        for name,raw in source.items():
+            self.assertEqual((output/name).read_bytes(),raw)
+            self.assertEqual(diagnostics[name]['sha256'],reports.checksum(raw))
+        state=reports.load_json(output/'state.json')
+        self.assertEqual(state['teacher_phase']['weight']['gradient_qualification'],qualification)
+        self.assertEqual(state['search_value']['stage'],dict(stage='A',w=0.,scale=0.))
+        for iteration in (58,59):
+            term=reports.load_json(output/f'iteration-{iteration:04d}/report.json')['teacher_phase']['term']
+            self.assertEqual(term['gradient_qualification'],qualification)
+        self.assertEqual(reports.load_json(output/'retention-history.json')['iteration-0057/report.json']
+            ['teacher_phase']['term']['fixed_beta'],qualification['beta'])
+        self.assertFalse((output/'iteration-0057').exists());self.assertFalse((output/'iteration-0060').exists())
+        self.assertFalse(any('rust-backend/' in e['source'] or e['source'].endswith('.log') for e in manifest['files']))
+        self.assertFalse(any(p.suffix in ('.pt','.npz','.log') for p in output.rglob('*')))
+        self.assertEqual(before,{p:p.read_bytes() for p in before})
+
+    def test_continue_backfills_new_teacher_diagnostics_then_reuses_or_repairs_verified_bytes(self):
+        source,_=self.teacher_diagnostics()
+        with patch.object(reports,'REPORT_NAMES',reports.REPORT_NAMES-{'collection.json','calibration.json'}):
+            old,_=self.export(output='results/old-export')
+        self.assertFalse((old/'iteration-0059/teacher-shadow').exists())
+        added,manifest=self.export(output='results/diagnostics-added',continue_export=True)
+        self.assertEqual({e['path'] for e in manifest['files']},set(source))
+        self.assertTrue(any(e['path']=='state.json' for e in manifest['reused_files']))
+        _,reused=self.export(output='results/diagnostics-reused',continue_export=True)
+        self.assertEqual(reused['files'],[])
+        for entry in reused['reused_files']:
+            if entry['path'] in source:
+                self.assertEqual(entry['previous_export'],'results/diagnostics-added')
+                self.assertEqual((self.root/entry['previous_export']/entry['previous_path']).read_bytes(),source[entry['path']])
+        name='iteration-0059/teacher-shadow/calibration.json'
+        (added/name).write_bytes(b'tampered old export')
+        fixed,manifest=self.export(output='results/diagnostics-repaired',continue_export=True)
+        self.assertEqual((fixed/name).read_bytes(),source[name])
+        self.assertEqual({e['path'] for e in manifest['files']},{name})
+
+    def test_cli_latest_limit_applies_to_teacher_details_with_incremental_export(self):
+        self.teacher_diagnostics()
+        history=reports.load_json(self.root/self.run/'retention-history.json')
+        history['iteration-0058/report.json']=dict(summary=dict(iteration=58))
+        self.put(self.run+'/retention-history.json',history)
+        completed=subprocess.run([sys.executable,'-B',str(ROOT/'scripts/export-training-reports.py'),
+            '--root',str(self.root),'--run',self.run,'--continue','--latest','1',
+            '--output','results/one-detailed-iteration','--no-push'],capture_output=True,text=True)
+        self.assertEqual(completed.returncode,0,completed.stderr)
+        output=self.root/'results/one-detailed-iteration';manifest=reports.load_json(output/'export-manifest.json')
+        self.assertEqual(manifest['latest_iterations'],[59])
+        self.assertEqual({e['path'] for e in manifest['files'] if '/teacher-shadow/' in e['path']},
+            {'iteration-0059/teacher-shadow/collection.json','iteration-0059/teacher-shadow/calibration.json'})
+        self.assertFalse((output/'iteration-0058').exists())
+
+    def test_teacher_diagnostic_mutation_aborts_before_publication(self):
+        self.teacher_diagnostics()
+        path=self.root/self.run/'iteration-0059/teacher-shadow/calibration.json';original_encode=reports.encode
+        def mutate(value):
+            if value.get('format')==reports.FORMAT:path.write_bytes(b'{"estimate_ns":1}\n')
+            return original_encode(value)
+        with patch.object(reports,'encode',side_effect=mutate):
+            with self.assertRaisesRegex(ValueError,'Report changed during export'):
+                self.export(output='results/changed-teacher-diagnostic')
+        self.assertFalse((self.root/'results/changed-teacher-diagnostic').exists())
+
     def test_domino_adoption_and_compact_evidence_are_retained(self):
         receipt=dict(contract='domino-adoption/1.0.0',generation=60,
                      checkpoint_sha256='a'*64,model_id='b'*64)

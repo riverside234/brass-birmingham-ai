@@ -28,6 +28,31 @@ python scripts/export-training-reports.py \
   --continue
 ```
 
+### Rust teacher diagnostics (2026-11-08)
+
+The same command now also selects the available `teacher-shadow/collection.json`
+and `teacher-shadow/calibration.json` for the latest **two committed iterations**.
+`--latest N` controls that detail window; `--continue` keeps the limit and reuses
+verified earlier exports. It also fills these newly selected files when an older
+export of the same iteration omitted them. Historical trends continue to use
+`retention-history.json.gz`, with the existing interrupted-cleanup gap handling.
+
+`collection.json` contains teacher collection/inference timing and table metrics.
+`calibration.json` contains the search throughput/quota estimate and warm-up
+samples. It is included by explicit user choice; beta gradient calibration is
+separate. The saved beta/observations remain in
+`state.json` → `teacher_phase.weight.gradient_qualification`; iteration reports
+retain `teacher_phase.term` measurements and the `search_value` phase/update
+metrics. These documents preserve their original bytes and source hashes.
+
+External `artifacts/rust-backend/*/training.log` and launcher failure/qualification
+records are **not automatically selected or uploaded**. Bulk teacher trajectories,
+value rows, replay shards, checkpoints and feature arrays remain excluded.
+Pruned or never-recorded details cannot be reconstructed. Local validation uses
+disposable report files and `--no-push`, with no training or benchmark sessions.
+The affected exporter suite completed 47 tests: 46 passed, and the optional
+archived-generation-60 fixture was skipped because its source files are absent.
+
 The CLI fetches and publishes through the independent `results/` repository.
 Its default destination is `https://github.com/riverside234/ai-training-results.git`,
 configured in `scripts/results_git.py`. Every fetch/push uses that URL directly;
