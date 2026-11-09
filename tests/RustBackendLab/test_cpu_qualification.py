@@ -178,6 +178,127 @@ class Reporting(unittest.TestCase):
         self.assertFalse(Q.startup(SimpleNamespace(ordinary_report=None))['passed'])
 
 
+class CrashedIteration(unittest.TestCase):
+    def setUp(self):
+        directory = tempfile.TemporaryDirectory()
+        self.addCleanup(directory.cleanup)
+        self.run_dir = Path(directory.name)/'run'
+        (self.run_dir/'iteration-1290/teacher-shadow').mkdir(parents=True)
+        (self.run_dir/'iteration-1290/teacher-shadow/table.json.gz').write_bytes(b'finished table')
+        (self.run_dir/'state.json').write_text(json.dumps(dict(iteration=1290)))
+        (self.run_dir/'teacher-labels').mkdir()
+        (self.run_dir/'teacher-labels/generation-001290-train.jsonl.gz').write_bytes(b'published shard')
+        (self.run_dir/'teacher-labels/generation-001289-train.jsonl.gz').write_bytes(b'committed shard')
+
+    def test_inventory_covers_the_iteration_and_its_uncommitted_shards_only(self):
+        files = Q.pending_inventory(self.run_dir, 1290)
+        self.assertEqual(sorted(files), ['iteration-1290/teacher-shadow/table.json.gz', 'teacher-labels/generation-001290-train.jsonl.gz'])
+
+    def test_a_missing_iteration_is_empty(self):
+        self.assertEqual(Q.pending_inventory(self.run_dir, 7), {})
+
+    def test_capture_runs_past_a_crashed_iteration(self):
+        from brass_ai.rust_backend import lab_snapshot as S
+        def capture(root, run, devices):
+            self.assertEqual(S.pending_paths(Path(run), 1290), [])
+            return dict(generation=1290), 'model', 'raw'
+        with patch.object(S, 'capture', side_effect=capture):
+            snapshot, model, raw, pending = Q.capture_run(self.run_dir, 'cuda:0')
+        self.assertEqual((model, raw), ('model', 'raw'))
+        self.assertEqual([Path(p).name for p in snapshot['pending_work']], ['iteration-1290'])
+        self.assertEqual(len(pending['files']), 2)
+        self.assertEqual(len(S.pending_paths(self.run_dir, 1290)), 1)
+
+    def test_an_unfinished_checkpoint_still_stops_it(self):
+        from brass_ai.rust_backend import lab_snapshot as S
+        (self.run_dir/'generation-1291.pt.tmp').write_bytes(b'partial')
+        with patch.object(S, 'capture', side_effect=AssertionError('must not capture')), self.assertRaisesRegex(ValueError, 'unfinished checkpoint'):
+            Q.capture_run(self.run_dir, 'cuda:0')
+
+    def pending(self):
+        return dict(paths=[], generation=1290, files=Q.pending_inventory(self.run_dir, 1290))
+
+    def test_an_untouched_iteration_confirms(self):
+        from brass_ai.rust_backend import lab_snapshot as S
+        with patch.object(S, 'verify_unchanged') as verify:
+            Q.confirm_unchanged(dict(), self.pending(), self.run_dir)
+        verify.assert_called_once()
+
+    def test_a_changed_iteration_is_reported(self):
+        from brass_ai.rust_backend import lab_snapshot as S
+        pending = self.pending()
+        (self.run_dir/'iteration-1290/teacher-shadow/new.json').write_bytes(b'x')
+        with patch.object(S, 'verify_unchanged'), self.assertRaisesRegex(ValueError, 'changed during qualification'):
+            Q.confirm_unchanged(dict(), pending, self.run_dir)
+
+
+class Retry(unittest.TestCase):
+    identity = dict(contract='c', implementation='i', cpu_build='b', checkpoint='k')
+
+    def setUp(self):
+        directory = tempfile.TemporaryDirectory()
+        self.addCleanup(directory.cleanup)
+        self.base = Path(directory.name)
+        self.current = self.base/'9-cpu-qualification-now'
+        self.current.mkdir()
+
+    def attempt(self, stamp, stages, identity=None):
+        directory = self.base/(stamp+'-cpu-qualification-x')
+        directory.mkdir()
+        (directory/'qualification.json').write_text(json.dumps(dict(identity=identity or self.identity, stages=stages)))
+        for name, stage in stages.items():
+            if 'skipped' not in stage:
+                (directory/(name+'.json')).write_text(json.dumps(dict(passed=stage['passed'], marker=stamp)))
+
+    def test_a_passed_stage_is_reused(self):
+        self.attempt('1', dict(teacher=dict(passed=True), rating=dict(passed=False)))
+        found = Q.passed_stages(self.base, self.current, self.identity)
+        self.assertEqual(sorted(found), ['teacher'])
+        self.assertEqual(found['teacher']['result']['marker'], '1')
+
+    def test_the_newest_attempt_decides(self):
+        self.attempt('1', dict(teacher=dict(passed=True), rating=dict(passed=False)))
+        self.attempt('2', dict(teacher=dict(passed=False), rating=dict(passed=True)))
+        self.assertEqual(sorted(Q.passed_stages(self.base, self.current, self.identity)), ['rating'])
+
+    def test_other_code_builds_or_checkpoints_never_count(self):
+        self.attempt('1', dict(teacher=dict(passed=True)), identity=dict(self.identity, checkpoint='other'))
+        self.assertEqual(Q.passed_stages(self.base, self.current, self.identity), {})
+
+    def test_environment_and_bundles_always_run_again(self):
+        self.attempt('1', dict(environment=dict(passed=True), bundles=dict(passed=True), startup=dict(passed=True)))
+        self.assertEqual(Q.passed_stages(self.base, self.current, self.identity), {})
+
+    def test_a_skipped_stage_is_not_a_pass(self):
+        self.attempt('1', dict(ordinary=dict(passed=False, skipped='Needs bundles')))
+        self.assertEqual(Q.passed_stages(self.base, self.current, self.identity), {})
+
+
+class PreparedSuite(unittest.TestCase):
+    def log(self, text):
+        from brass_ai.rust_backend.lab_contract import pin
+        directory = tempfile.TemporaryDirectory()
+        self.addCleanup(directory.cleanup)
+        path = Path(directory.name)/'regressions.log'
+        path.write_text(text)
+        return dict(regressions=pin(str(path)))
+
+    def test_a_passing_prepare_is_reused(self):
+        value = self.log('Ran 43 tests in 300s\n\nOK (skipped=3)\n')
+        self.assertEqual(Q.prepared_suite(value), value['regressions'])
+
+    def test_a_failed_or_mostly_skipped_prepare_is_not(self):
+        for text in ('Ran 43 tests in 300s\n\nFAILED (errors=1)\n', 'Ran 43 tests in 1s\n\nOK (skipped=20)\n', 'Ran 10 tests in 1s\n\nOK\n'):
+            with self.subTest(text=text):
+                self.assertIsNone(Q.prepared_suite(self.log(text)))
+
+    def test_a_missing_or_changed_log_is_not(self):
+        value = self.log('Ran 43 tests in 300s\n\nOK (skipped=3)\n')
+        Path(value['regressions']['path']).write_text('Ran 43 tests in 300s\n\nOK\n')
+        self.assertIsNone(Q.prepared_suite(value))
+        self.assertIsNone(Q.prepared_suite(dict(regressions=None)))
+
+
 @unittest.skipUnless(os.environ.get('BRASS_CPU_TEACHER') and os.environ.get('BRASS_CPU_BOOTSTRAP'), 'Needs built workers and a bootstrap')
 class StagesOnFixtures(unittest.TestCase):
     """The bundle, parity and teacher stages, with fixture models and a small budget."""

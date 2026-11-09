@@ -20,6 +20,8 @@ python scripts/continue-rust-teacher.py --expected-generation 1290 --iterations 
 
 The prepare step rebuilds the two workers, because their source changed. The qualification only reads the run and takes roughly 15–20 minutes; see section 3. Push its evidence with the commands it prints.
 
+A retry repeats only what has not passed. It skips stages that passed on the same code, build, checkpoint and settings, and it does not rerun the main test suite that the prepare step already passed on this build. `--fresh` repeats everything.
+
 To return to the GPU path at any committed generation, use `--inference gpu`.
 
 **The first iteration keeps its old teacher tables.** The crashed run had already finished and published the 32 teacher tables for g1290 at N=256/48. The next run reuses them, which is the normal crash recovery. Recollecting them at the new budget would stop on `Uncommitted teacher shard differs`, because those shards are bound to their bytes. N=640/96 starts with the tables for g1291.
@@ -57,7 +59,7 @@ The real cause is still unknown. It is narrow and repeatable, which points to a 
 
 ## 3. Lab qualification
 
-`scripts/qualify-rust-cpu-inference.py` holds the run lock, reads the run and never writes to it. It keeps going after a failure, so one run shows every problem.
+`scripts/qualify-rust-cpu-inference.py` holds the run lock, reads the run and never writes to it. It keeps going after a failure, so one run shows every problem. The unfinished `iteration-1290` from the crashed run stays where it is for the normal recovery. The qualification records its files beforehand and fails if any change.
 
 | Stage | What it proves |
 | --- | --- |

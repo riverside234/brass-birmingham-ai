@@ -2,7 +2,12 @@
 """Complete lab qualification of in-worker CPU inference. The run is never changed.
 
 Each stage writes its own evidence file and the qualification carries on after
-a failure, so one run shows every problem:
+a failure, so one run shows every problem. A retry on the same code, build,
+checkpoint and settings skips stages that already passed; --fresh repeats them.
+A crashed iteration's unfinished work is read around, left in place and checked
+afterwards, so the normal recovery still finds it.
+
+Stages:
 
   environment  host, CPU layout, memory, Mono, package versions, pinned checkpoint
   regressions  the CPU test suite against the prepared Linux workers
@@ -30,6 +35,7 @@ import subprocess
 import sys
 import time
 import traceback
+from unittest.mock import patch
 import uuid
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -45,6 +51,15 @@ MAX_REJECTED_LABELS = .05
 BLENDS = (0., .25, 1.)
 EXPECTED_SKIPS = 2
 MINIMUM_TESTS = 60
+# What prepare could not run: it has no bootstrap, so these need one here.
+REMAINING_MODULES = ('test_cpu_inference.RealLane', 'test_cpu_qualification')
+REMAINING_MINIMUM_TESTS = 22
+PREPARE_MAXIMUM_SKIPS = 3
+PREPARE_MINIMUM_TESTS = 40
+OK_LINE = re.compile(r'^OK(?: \(skipped=(\d+)\))?$', re.M)
+RAN_LINE = re.compile(r'^Ran (\d+) tests?', re.M)
+# Quick host checks and the bundle receipts other stages need always run.
+REUSABLE = ('regressions', 'parity', 'teacher', 'ordinary', 'rating')
 
 
 def write(path, value):
@@ -156,6 +171,94 @@ def blend_error(model, row, weight):
     return float(np.max(np.abs(values-reference)/np.maximum(np.abs(reference), 1.)))
 
 
+def pending_inventory(run, generation):
+    """Size and modification time of every file a crashed iteration left behind."""
+    run = Path(run)
+    roots = [run/f'iteration-{generation:04d}', *(run/'teacher-labels').glob(f'generation-{generation:06d}-*'),
+             *(run/'search-values').glob(f'{generation:06d}-*')]
+    files = {}
+    for root in roots:
+        if not root.exists():
+            continue
+        for path in ([root] if root.is_file() else sorted(root.rglob('*'))):
+            if path.is_file():
+                info = path.stat()
+                files[path.relative_to(run).as_posix()] = (info.st_size, info.st_mtime_ns)
+    return files
+
+
+def only_unfinished_iteration(run, generation):
+    """An unfinished checkpoint is a different situation: recover that first."""
+    from brass_ai.learning.contracts import require
+    from brass_ai.rust_backend import lab_snapshot as snapshots
+    pending = snapshots.pending_paths(Path(run), generation)
+    require(all(Path(p).name == f'iteration-{generation:04d}' for p in pending),
+            'An unfinished checkpoint exists; recover it before qualifying: '+', '.join(pending))
+    return pending
+
+
+def capture_run(run, device):
+    """Capture a run whose current iteration crashed before it committed."""
+    from brass_ai.rust_backend import lab_snapshot as snapshots
+    generation = json.loads((Path(run)/'state.json').read_text(encoding='utf-8-sig'))['iteration']
+    paths = only_unfinished_iteration(run, generation)
+    with patch.object(snapshots, 'pending_paths', return_value=[]):
+        snapshot, model, raw = snapshots.capture(ROOT, run, devices=[device])
+    snapshot['pending_work'] = paths
+    return snapshot, model, raw, dict(paths=paths, generation=generation, files=pending_inventory(run, generation))
+
+
+def confirm_unchanged(snapshot, pending, run):
+    from brass_ai.learning.contracts import require
+    from brass_ai.rust_backend import lab_snapshot as snapshots
+    with patch.object(snapshots, 'pending_paths', return_value=[]):
+        snapshots.verify_unchanged(snapshot)
+    only_unfinished_iteration(run, pending['generation'])
+    require(pending_inventory(run, pending['generation']) == pending['files'], 'The unfinished iteration changed during qualification')
+
+
+def passed_stages(base, current, identity):
+    """Stages that passed on this exact code, build, checkpoint and settings.
+
+    The newest attempt at each stage decides, so a stage that last failed runs again.
+    """
+    seen, passed = set(), {}
+    for directory in sorted(Path(base).glob('*-cpu-qualification-*'), reverse=True):
+        path = directory/'qualification.json'
+        if directory == Path(current) or not path.is_file():
+            continue
+        try:
+            earlier = json.loads(path.read_text(encoding='utf-8'))
+        except ValueError:
+            continue
+        if earlier.get('identity') != identity:
+            continue
+        for name, stage in earlier.get('stages', {}).items():
+            if name in seen or 'skipped' in stage:
+                continue
+            seen.add(name)
+            evidence = directory/(name+'.json')
+            if name in REUSABLE and stage.get('passed') is True and evidence.is_file():
+                result = json.loads(evidence.read_text(encoding='utf-8'))
+                if result.get('passed') is True:
+                    passed[name] = dict(directory=directory.name, result=result)
+    return passed
+
+
+def prepared_suite(value):
+    """The CPU suite's receipt from prepare, if it passed on this exact build."""
+    from brass_ai.rust_backend.lab_contract import pin
+    receipt = value.get('regressions')
+    if not receipt or not Path(receipt['path']).is_file() or pin(receipt['path']) != receipt:
+        return None
+    text = Path(receipt['path']).read_text(errors='replace')
+    ok, ran = OK_LINE.search(text), RAN_LINE.search(text)
+    # A native-worker skip would count every test in its class, so this proves they ran.
+    if ok is None or ran is None or int(ok.group(1) or 0) > PREPARE_MAXIMUM_SKIPS or int(ran.group(1)) < PREPARE_MINIMUM_TESTS:
+        return None
+    return receipt
+
+
 # ----------------------------------------------------------------------- stages
 
 class Context:
@@ -207,19 +310,23 @@ def regressions(c):
         BRASS_CPU_TEACHER=value['teacher']['path'], BRASS_CPU_COLLECTOR=value['collector']['path'], BRASS_CPU_RUNTIME=value['runtime']['path'],
         BRASS_CPU_FIXTURES=str(c.fixtures), BRASS_CPU_CORE=value['teacher_core'], BRASS_CPU_NATIVE=str(native),
         BRASS_CPU_BOOTSTRAP=c.gpu_build['bootstrap']['binary']['path'], BRASS_CPU_MONO=c.args.mono, CUDA_VISIBLE_DEVICES='')
+    # Prepare already ran the main suite on this exact build; only finish what it could not.
+    prepared = prepared_suite(value)
+    modules, skips, minimum = ((list(REMAINING_MODULES), 0, REMAINING_MINIMUM_TESTS) if prepared else
+                               (['test_cpu_inference', 'test_cpu_qualification'], EXPECTED_SKIPS, MINIMUM_TESTS))
     log = c.out/'regressions.log'
     with log.open('w') as stream:
-        result = subprocess.run([sys.executable, '-B', '-m', 'unittest', 'test_cpu_inference', 'test_cpu_qualification', '-v'], cwd=ROOT, env=env,
+        result = subprocess.run([sys.executable, '-B', '-m', 'unittest', *modules, '-v'], cwd=ROOT, env=env,
                                 stdout=stream, stderr=subprocess.STDOUT, timeout=2400)
     text = log.read_text(errors='replace')
     tail = text.splitlines()[-6:]
     expect(checks, 'suite', result.returncode == 0, tail)
-    ok = re.search(r'^OK(?: \(skipped=(\d+)\))?$', text, re.M)
-    # Only the timed-budget test and the local-host rating game may skip here.
-    expect(checks, 'only_expected_skips', ok is not None and int(ok.group(1) or 0) == EXPECTED_SKIPS, ok.group(0) if ok else None)
-    ran = re.search(r'^Ran (\d+) tests', text, re.M)
-    expect(checks, 'native_suites_ran', ran is not None and int(ran.group(1)) >= MINIMUM_TESTS, ran.group(0) if ran else None)
-    return finish(checks, log_tail=tail)
+    ok = OK_LINE.search(text)
+    # With the full suite, only the timed-budget test and the local-host rating game may skip.
+    expect(checks, 'only_expected_skips', ok is not None and int(ok.group(1) or 0) == skips, ok.group(0) if ok else None)
+    ran = RAN_LINE.search(text)
+    expect(checks, 'native_suites_ran', ran is not None and int(ran.group(1)) >= minimum, ran.group(0) if ran else None)
+    return finish(checks, log_tail=tail, modules=modules, reused_prepare_suite=prepared)
 
 
 def league_entries(c):
@@ -571,6 +678,7 @@ def main():
     p.add_argument('--matched-games', type=int, default=16, help='Of those, also run on the GPU arm')
     p.add_argument('--rating-games', type=int, default=2)
     p.add_argument('--skip-regressions', action='store_true', help='Only when the suite already ran on this exact build')
+    p.add_argument('--fresh', action='store_true', help='Repeat stages that already passed on this exact code, build and checkpoint')
     args = p.parse_args()
     import torch
     from brass_ai.learning.contracts import project_path, require
@@ -582,7 +690,6 @@ def main():
     from brass_ai.rust_backend.lab_perf_runtime import resolve as resolve_ordinary
     from brass_ai.rust_backend.lab_replay_compat import execution as execution_source
     from brass_ai.rust_backend.lab_shadow import teacher_build
-    from brass_ai.rust_backend.lab_snapshot import capture, verify_unchanged
     from rust_lab_results import export
     out = ROOT/'artifacts/rust-backend'/(datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S%fZ')+'-cpu-qualification-'+uuid.uuid4().hex[:8])
     out.mkdir(parents=True)
@@ -593,7 +700,8 @@ def main():
         report['execution_source'] = execution_source()
         run = project_path(ROOT, args.run)
         with run_lock(run):
-            snapshot, model, raw = capture(ROOT, run, devices=[args.device])
+            snapshot, model, raw, pending = capture_run(run, args.device)
+            report['pending_work'] = dict(paths=pending['paths'], files=len(pending['files']), left_in_place=True)
             require(snapshot['generation'] == args.expected_generation, 'Run is not at the expected generation')
             try:
                 backend = validate_state(snapshot['state'])
@@ -611,6 +719,11 @@ def main():
                 with R.scope(c.cpu_settings):
                     c.cpu_execution = R.effective_execution(c.execution)
                 report['budget'] = c.block['teacher_budget']
+                report['identity'] = dict(contract=CONTRACT, implementation=report['execution_source']['implementation'],
+                    cpu_build=c.cpu_value['receipt']['sha256'], checkpoint=snapshot['checkpoint']['sha256'], workers=args.workers,
+                    budget=c.block['teacher_budget'], ordinary_games=args.ordinary_games, matched_games=args.matched_games,
+                    rating_games=args.rating_games)
+                earlier = {} if args.fresh else passed_stages(ROOT/'artifacts/rust-backend', out, report['identity'])
                 torch.set_num_threads(2)
                 with InferenceService(c.cpu_execution, args.device) as c.service:
                     require(c.service.register(model) == snapshot['model_id'], 'Learner identity changed')
@@ -618,6 +731,16 @@ def main():
                     for name, stage in STAGES:
                         if name == 'regressions' and args.skip_regressions:
                             report['stages'][name] = dict(passed=None, skipped='--skip-regressions')
+                            continue
+                        if name in earlier:
+                            result = dict(earlier[name]['result'], reused_from=earlier[name]['directory'])
+                            write(out/(name+'.json'), result)
+                            finished[name] = True
+                            if name == 'ordinary':
+                                c.ordinary_report, c.ordinary_usage = result['cpu']['report'], result['usage']
+                            report['stages'][name] = dict(passed=True, reused_from=result['reused_from'], failed_checks=[])
+                            print(f"Qualification stage: {name}: already passed in {result['reused_from']}", flush=True)
+                            write(out/'qualification.json', report)
                             continue
                         missing = [need for need in NEEDS.get(name, ()) if not finished.get(need)]
                         if missing:
@@ -640,7 +763,7 @@ def main():
                     require(c.service.error is None, 'Inference service failed: '+str(c.service.error))
                 report['passed'] = all(s.get('passed') is not False for s in report['stages'].values())
             finally:
-                verify_unchanged(snapshot)
+                confirm_unchanged(snapshot, pending, run)
     except BaseException as error:
         report.update(passed=False, error=str(error), traceback=traceback.format_exc())
         raise
