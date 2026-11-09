@@ -1,0 +1,25 @@
+{
+  "contract": "step5-old-machine-bundle-discovery-repair/1.0.0",
+  "date": "2026-11-08",
+  "implementation": "9577ab0db846fe6783963ad11cb1f5ab46d67cbe0ce57e7454425c8fa96431a4",
+  "failure": "Unset DOWNLOAD expanded the supplied bundle path to /selfplay-migration.tar.zst.parts.json before run backup or mutation",
+  "fix": [
+    "Optional --bundle; discover original exports under ROOT/artifacts/step5-transfer",
+    "Match small export-result receipts by generation and run; support manual ZIP/zstd/split exports without receipts",
+    "Check index structure and part sizes without reading large payloads during discovery",
+    "Group identical copies by archive hash; list distinct eligible archives instead of selecting by timestamp",
+    "Retain complete archive and source verification in prepare before any run move",
+    "Explicit missing-path errors identify the unset-variable possibility and how to retry"
+  ],
+  "command": "python scripts/continue-rust-revised.py --expected-generation 1284 --preserve-current-generation 1286 --iterations 5 --share-target 0.25 --device cuda",
+  "reward_buffer_stage_c_changes": "unchanged and still required by full-revision summary",
+  "validation": {
+    "static_ast_files": 2,
+    "training_source_unchanged": true,
+    "authored_discovery_regressions": 8,
+    "local_tests_run": false,
+    "local_benchmarks_run": false,
+    "local_training_run": false,
+    "actual_server_run": "Pending"
+  }
+}

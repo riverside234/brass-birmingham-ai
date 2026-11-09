@@ -25,6 +25,87 @@ def transfer_module(root):
     return module
 
 
+def select_bundle(root,requested,run_path,generation,*,search_dir=None):
+    """Find the source export without depending on a DOWNLOAD shell variable.
+
+    Discovery reads only small export receipts/indexes and checks part sizes.
+    prepare() still fully authenticates every selected archive before any move.
+    Distinct eligible archives are never chosen by timestamp or silently mixed.
+    """
+    root=Path(root).resolve()
+    def actual(path):
+        path=Path(path).expanduser().resolve()
+        if not path.is_file() and Path(str(path)+'.parts.json').is_file():path=Path(str(path)+'.parts.json')
+        return path if path.is_file() else None
+    if requested is not None:
+        result=actual(requested)
+        if result is None:
+            raise ValueError('Archive does not exist: '+str(requested)+
+                '. DOWNLOAD may be unset. Omit --bundle to discover exports under '+str(root/'artifacts/step5-transfer')+
+                ', or give --bundle an existing absolute path. No run data has been moved.')
+        return result
+    base=Path(search_dir).expanduser().resolve() if search_dir is not None else root/'artifacts/step5-transfer'
+    candidates=set();receipts={};rejected=[]
+    def small_json(path):
+        if path.stat().st_size>32_000_000:raise ValueError('Oversized export metadata')
+        return json.loads(path.read_text(encoding='utf-8-sig'))
+    if base.is_dir():
+        for name in ('*.parts.json','*.tar.zst','*.zip'):
+            candidates.update(p.resolve() for p in base.rglob(name) if p.is_file())
+        for path in base.rglob('export-result.json'):
+            try:
+                info=small_json(path);declared=Path(info['bundle'])
+                located=actual(path.parent/declared.name) or actual(declared)
+                if located is not None:
+                    candidates.add(located);receipts[located]=info
+            except (OSError,ValueError,KeyError,TypeError):continue
+    eligible=[]
+    for path in sorted(candidates):
+        try:
+            info=receipts.get(path)
+            if info is None and (path.parent/'export-result.json').is_file():
+                try:
+                    info=small_json(path.parent/'export-result.json')
+                    if Path(info['bundle']).name!=path.name:info=None
+                except (OSError,ValueError,KeyError,TypeError):info=None
+            confirmed=bool(info and info.get('iteration')==generation and info.get('run')==run_path)
+            if info and not confirmed:continue
+            if path.name.endswith('.parts.json'):
+                from brass_ai.learning.contracts import digest
+                data=small_json(path)
+                if data.get('format')!='step5-transfer-parts/1.0.0' or data.get('id')!=digest({k:v for k,v in data.items() if k!='id'}):
+                    raise ValueError('Invalid parts index')
+                if not data['parts']:raise ValueError('Empty parts index')
+                total=0;names=set()
+                for part in data['parts']:
+                    name=part['name']
+                    if (not isinstance(name,str) or not name or '/' in name or '\\' in name or ':' in name or
+                            name in ('.','..') or name.casefold() in names):raise ValueError('Invalid part name')
+                    names.add(name.casefold());file=path.parent/name
+                    if type(part['bytes']) is not int or part['bytes']<=0 or not file.is_file() or file.stat().st_size!=part['bytes']:
+                        raise ValueError('Missing/truncated part: '+name)
+                    total+=part['bytes']
+                if (total!=data['bytes'] or not isinstance(data['sha256'],str) or len(data['sha256'])!=64 or
+                        any(c not in '0123456789abcdef' for c in data['sha256'])):
+                    raise ValueError('Invalid parts size/digest')
+                identity=(data['sha256'],total)
+            else:
+                identity=(info['bundle_sha256'],path.stat().st_size) if confirmed else ('file',str(path))
+            eligible.append((path,confirmed,identity))
+        except (OSError,ValueError,KeyError,TypeError) as error:rejected.append(str(path)+': '+str(error))
+    if any(confirmed for _,confirmed,_ in eligible):eligible=[item for item in eligible if item[1]]
+    groups={}
+    for item in eligible:groups.setdefault(item[2],[]).append(item[0])
+    if not groups:
+        raise ValueError('No complete export found for generation '+str(generation)+' under '+str(base)+
+            '. Supply --bundle /absolute/path/to/the/g'+str(generation)+'/parts.json (or --bundle-directory /export/folder). '+
+            'No run data has been moved.'+ ('\n'+'\n'.join(rejected) if rejected else ''))
+    if len(groups)>1:
+        raise ValueError('Multiple distinct exports are available; select one with --bundle PATH:\n'+
+            '\n'.join(str(path) for paths in groups.values() for path in paths)+'\nNo run data has been moved.')
+    return next(iter(groups.values()))[0]
+
+
 def prepare(root,bundle,run_path,generation,preserve_generation):
     from brass_ai.learning.contracts import digest,require,project_path
     from brass_ai.learning.post_transfer_reward import REVISION,revise
@@ -145,7 +226,8 @@ def revision_summary(state,share_target):
 
 def main():
     p=argparse.ArgumentParser(description=__doc__)
-    p.add_argument('--bundle',type=Path,required=True)
+    p.add_argument('--bundle',type=Path,help='Explicit archive/index; default discovers the source export without DOWNLOAD')
+    p.add_argument('--bundle-directory',type=Path,help='Directory to search instead of artifacts/step5-transfer')
     p.add_argument('--run',default='artifacts/step5/joint7-v11-2-g1290-trained-restart')
     p.add_argument('--expected-generation',type=int,default=1284)
     p.add_argument('--preserve-current-generation',type=int,default=1286)
@@ -155,6 +237,11 @@ def main():
     p.add_argument('--prepare-only',action='store_true',help='Restore/authorize the revision; do not start training')
     args=p.parse_args()
     if args.iterations<=0 or args.preserve_current_generation<args.expected_generation:p.error('Invalid generation/iteration boundary')
+    from brass_ai.learning.contracts import project_path
+    run_name=project_path(ROOT,args.run).relative_to(ROOT).as_posix()
+    try:args.bundle=select_bundle(ROOT,args.bundle,run_name,args.expected_generation,search_dir=args.bundle_directory)
+    except ValueError as error:p.error(str(error))
+    print('Selected source archive: '+str(args.bundle),flush=True)
     result=prepare(ROOT,args.bundle,args.run,args.expected_generation,args.preserve_current_generation)
     state=json.loads((ROOT/result['run']/'state.json').read_text(encoding='utf-8-sig'))
     result['revision']=revision_summary(state,args.share_target)

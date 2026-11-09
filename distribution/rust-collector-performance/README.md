@@ -311,3 +311,11 @@ loss stopping, joint KL .003, PPG floor .25, validation cadence, fixed beta,
 branch-off/search_v1 and zero-charge/canal-delta reward settings. Seven authored
 regressions await server execution; only static checks were performed locally.
 See [old-machine-full-revision.json](old-machine-full-revision.json).
+
+The old-machine launcher now discovers the local source export without a
+`DOWNLOAD` variable or `--bundle` argument. It uses run/generation export
+receipts and complete part sizes, groups duplicate copies, and retains full
+archive verification before moving any run data. Explicit missing paths and
+ambiguous archives have actionable messages. Eight discovery regressions are
+authored for the server; no local tests/benchmarks were run. See
+[old-machine-bundle-discovery-fix.json](old-machine-bundle-discovery-fix.json).

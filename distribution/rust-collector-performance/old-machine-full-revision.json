@@ -51,5 +51,6 @@
     "local_training_run": false,
     "server_validation": "Pending"
   },
-  "command": "python scripts/continue-rust-revised.py --bundle \"$DOWNLOAD/selfplay-migration.tar.zst.parts.json\" --expected-generation 1284 --preserve-current-generation 1286 --iterations 5 --share-target 0.25 --device cuda"
+  "command": "python scripts/continue-rust-revised.py --expected-generation 1284 --preserve-current-generation 1286 --iterations 5 --share-target 0.25 --device cuda",
+  "archive_discovery": "distribution/rust-collector-performance/old-machine-bundle-discovery-fix.json"
 }

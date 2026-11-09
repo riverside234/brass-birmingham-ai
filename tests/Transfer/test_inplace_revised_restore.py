@@ -1,7 +1,9 @@
 """Same-project rollback + complete revised-reward reset, without training."""
 import copy
 import importlib.util
+import hashlib
 from pathlib import Path
+import tempfile
 import unittest
 from unittest.mock import patch
 
@@ -11,6 +13,77 @@ from brass_ai.recovery import transfer_resume as R
 
 spec=importlib.util.spec_from_file_location('inplace_revised_driver',ROOT/'scripts/continue-rust-revised.py')
 driver=importlib.util.module_from_spec(spec);spec.loader.exec_module(driver)
+
+
+class BundleDiscovery(unittest.TestCase):
+    def setUp(self):
+        self.tmp=tempfile.TemporaryDirectory(dir=ROOT/'artifacts');self.addCleanup(self.tmp.cleanup)
+        self.root=Path(self.tmp.name);self.exports=self.root/'artifacts/step5-transfer';self.run='artifacts/step5/example'
+
+    def bundle(self,name,*,generation=1284,body=b'sealed archive fixture',receipt=True):
+        folder=self.exports/name;folder.mkdir(parents=True)
+        part=folder/'selfplay-migration.tar.zst.part0001';part.write_bytes(body)
+        index=folder/'selfplay-migration.tar.zst.parts.json'
+        data=dict(format=transfer.PARTS_FORMAT,bytes=len(body),sha256=hashlib.sha256(body).hexdigest(),
+            parts=[dict(name=part.name,bytes=len(body),sha256=hashlib.sha256(body).hexdigest())])
+        data['id']=transfer.digest(data);index.write_bytes(transfer.encode(data))
+        if receipt:
+            result=dict(iteration=generation,run=self.run,bundle='/original/root/'+name+'/'+index.name,
+                bundle_sha256=transfer.sha(index))
+            (folder/'export-result.json').write_bytes(transfer.encode(result))
+        return index
+
+    def select(self,requested=None,**kwargs):
+        return driver.select_bundle(self.root,requested,self.run,1284,**kwargs)
+
+    def test_source_export_is_found_without_a_download_variable(self):
+        index=self.bundle('step5-transfer-1234-1')
+        with patch.dict('os.environ',{},clear=True):self.assertEqual(self.select(),index)
+        self.assertFalse((self.root/'.training-rollback').exists())
+
+    def test_wrong_generation_and_run_export_receipts_are_excluded(self):
+        target=self.bundle('g1284');self.bundle('g1286',generation=1286,body=b'newer archive')
+        other=self.bundle('other-run',body=b'other run')
+        result=transfer.read(other.parent/'export-result.json');result['run']='artifacts/step5/different'
+        (other.parent/'export-result.json').write_bytes(transfer.encode(result))
+        self.assertEqual(self.select(),target)
+
+    def test_empty_shell_expansion_has_an_actionable_error_without_mutation(self):
+        with self.assertRaisesRegex(ValueError,'DOWNLOAD may be unset'):
+            self.select(self.root/'missing/selfplay-migration.tar.zst.parts.json')
+        self.assertFalse((self.root/'.training-rollback').exists())
+        self.assertFalse(self.exports.exists())
+
+    def test_duplicate_downloads_of_same_archive_are_not_ambiguous_or_scanned(self):
+        a=self.bundle('a');self.bundle('b')
+        original=Path.open
+        def guarded(path,*args,**kwargs):
+            if path.name.endswith('.part0001'):raise AssertionError('Discovery must not read large part payloads')
+            return original(path,*args,**kwargs)
+        with patch.object(Path,'open',guarded):self.assertEqual(self.select(),a)
+
+    def test_distinct_eligible_exports_require_an_explicit_selection(self):
+        a=self.bundle('a');b=self.bundle('b',body=b'distinct frozen archive')
+        with self.assertRaisesRegex(ValueError,'Multiple distinct exports') as error:self.select()
+        self.assertIn(str(a),str(error.exception));self.assertIn(str(b),str(error.exception))
+        self.assertEqual(self.select(b),b)
+
+    def test_incomplete_export_is_not_selected(self):
+        index=self.bundle('incomplete');index.with_name('selfplay-migration.tar.zst.part0001').unlink()
+        with self.assertRaisesRegex(ValueError,'Missing/truncated part'):self.select()
+        self.assertFalse((self.root/'.training-rollback').exists())
+
+    def test_manual_zip_and_parts_exports_without_output_receipts_are_supported(self):
+        index=self.bundle('manual',receipt=False)
+        self.assertEqual(self.select(),index)
+        index.unlink();index.with_name('selfplay-migration.tar.zst.part0001').unlink()
+        archive=index.parent/'manual.zip';archive.write_bytes(b'archive checked in prepare, not during discovery')
+        self.assertEqual(self.select(),archive)
+
+    def test_directory_override_and_unsplit_filename_resolve_existing_parts_index(self):
+        index=self.bundle('manual')
+        self.assertEqual(self.select(search_dir=index.parent),index)
+        self.assertEqual(self.select(index.with_name('selfplay-migration.tar.zst')),index)
 
 
 class InplaceRevisedRestore(unittest.TestCase):

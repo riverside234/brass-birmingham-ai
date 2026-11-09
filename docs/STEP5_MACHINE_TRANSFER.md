@@ -60,12 +60,13 @@ ROOT=/data/not_backed_up/yxu209/ai-training
 cd "$ROOT" || exit 1
 export CUDA_VISIBLE_DEVICES=0
 
-# DOWNLOAD is the existing directory containing the g1284 archive parts/index.
+# The driver discovers the source export; no DOWNLOAD shell variable is needed.
 python scripts/continue-rust-revised.py \
-  --bundle "$DOWNLOAD/selfplay-migration.tar.zst.parts.json" \
   --expected-generation 1284 --preserve-current-generation 1286 \
   --iterations 5 --share-target 0.25 --device cuda
 ```
+
+The driver discovers archives under `$ROOT/artifacts/step5-transfer/`, including manual `g1284/...` exports and workflow `step5-transfer-<run-id>-<attempt>/...` folders. It reads small `export-result.json` receipts to match the run/generation, checks that all indexed parts exist with the recorded sizes, and groups duplicate copies by archive SHA-256. It prints the selected archive path, then performs the existing complete archive validation before retiring any data. Multiple distinct eligible exports produce a list and require `--bundle /absolute/path/to/chosen.parts.json`. `--bundle-directory /export/folder` changes the search directory. An explicit missing path explains that `DOWNLOAD` may be unset instead of raising a bare file-not-found traceback. This discovery step does not scan large part payloads or require a download variable, new export or network access.
 
 The driver verifies the archive generation and complete source identity before retiring the old run; it refuses a different current committed generation instead of silently discarding more work. It journals the reversible move and verifies the g1286 state/checkpoint backup on retries. A partially completed restore resumes, and an existing completed adoption is never restored/reset a second time. It preserves all archived g1284 weights, optimizers, RNG, fixed beta and residual-stage progress. Old replay is absent from the restored working run; the g1286 backup remains available. This uses the existing revised reward/transfer/teacher code, without a new learner-source transition.
 
