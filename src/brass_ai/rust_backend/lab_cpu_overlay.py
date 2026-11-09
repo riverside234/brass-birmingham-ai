@@ -82,7 +82,14 @@ PATCHES = {
         ('                k: if turn_work.fast { 4 } else { 16 },\n',
          '                k: crate::cpu_eval::teacher_k(turn_work.fast, calibration, if turn_work.fast { 4 } else { 16 }),\n'),
         ('                simulations: 8,\n',
-         '                simulations: crate::cpu_eval::teacher_simulations(turn_work.fast, calibration),\n'),
+         '                simulations: crate::cpu_eval::teacher_simulations(turn_work.fast, calibration),\n'
+         '                c2: crate::cpu_eval::teacher_c_scale(),\n'),
+        ('    let target: Vec<f32> = e.policy()?.into_iter().map(|v| v as f32).collect();\n',
+         '    let target: Vec<f32> = crate::cpu_eval::teacher_policy(&e.stats, e.info.actor)?\n'
+         '        .into_iter()\n'
+         '        .map(|v| v as f32)\n'
+         '        .collect();\n'),
+        ('"c1":50,"c2":0.1,"max_n":', '"c1":50,"c2":crate::cpu_eval::teacher_c_scale(),"max_n":'),
         ('                profile_budget(clock.now_ns(), turn_work.fast)?,\n',
          '                match crate::cpu_eval::teacher_turn_budget(clock.now_ns(), turn_work.fast, calibration)? {\n'
          '                    Some(budget) => budget,\n'

@@ -15,6 +15,8 @@ PHASES = ('canal_early', 'canal_late', 'rail_early', 'rail_late')
 KINDS = ('root', 'continuation', 'replanned_root')
 IDENTITY = ('job_id', 'game_id', 'generation', 'model_id', 'export_hash', 'reward_id',
             'source_fingerprint', 'epoch')
+# c2 is the Gumbel c_scale. The qualified GPU binaries only ever produce .1.
+C_SCALES = (.1, 1.)
 
 
 def vector(value, size, name):
@@ -38,7 +40,7 @@ def improved_policy(logits, counts, means, value, c1=50, c2=.1):
                ((logits, 'logits'), (counts, 'counts'), (means, 'means')))
     require(np.equal(n, np.floor(n)).all() and (n >= 0).all(), 'Invalid teacher counts')
     require(type(value) in (int, float) and np.isfinite(value), 'Non-finite node value')
-    require(c1 == 50 and c2 == .1 and type(c1) is not bool and type(c2) is not bool,
+    require(c1 == 50 and c2 in C_SCALES and type(c1) is not bool and type(c2) is not bool,
             'Teacher search constants differ')
     visited = n > 0; total = n.sum()
     # Restricted softmax also handles underflow when the visited prior mass is tiny.

@@ -577,6 +577,11 @@ class TrainingPhases:
         self.split['preparation_timing_scope']='Host wall time; asynchronous device work may complete in the next section'
         return self.train_ids
 
+    def stage_early(self,model):
+        """The PPG cache reads only frozen rows, so it can be written while PPO runs."""
+        from . import ppg_g210
+        if ppg_g210.active(self.options['value_phase']):ppg_g210.begin_stage(self,model)
+
     def advantages(self,mc,actor_ids):
         ds=self.dataset
         from brass_ai.learning.reward_timing import policy_returns

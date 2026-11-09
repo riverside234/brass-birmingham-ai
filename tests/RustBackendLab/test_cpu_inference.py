@@ -63,7 +63,7 @@ class Configuration(unittest.TestCase):
     def test_default_block_uses_fixed_count_budgets(self):
         block = R.cpu_block()
         R.validate_cpu(block)
-        self.assertEqual(block['teacher_budget'], dict(mode='count', full=640, full_k=16, fast=96, fast_k=8))
+        self.assertEqual(block['teacher_budget'], dict(mode='count', full=640, full_k=16, fast=96, fast_k=8, c_scale=1.))
         self.assertEqual({block[k] for k in ('ordinary', 'teacher', 'rating')}, {'cpu-ort'})
 
     def test_python_and_native_safety_caps_stay_equal(self):
@@ -100,7 +100,8 @@ class Configuration(unittest.TestCase):
         spec = importlib.util.spec_from_file_location('continue_rust_shadow_fixture', path)
         launcher = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(launcher)
-        options = dict(workers=64, teacher_budget='count', teacher_full=640, teacher_fast=96, teacher_fast_k=8, no_pinning=False)
+        options = dict(workers=64, teacher_budget='count', teacher_full=640, teacher_fast=96, teacher_fast_k=8, no_pinning=False,
+                       c_scale=1., no_overlap=False, readers=24)
         block = launcher.inference_choice(SimpleNamespace(inference='cpu', **options))
         self.assertEqual(block, R.cpu_block())
         self.assertIsNone(launcher.inference_choice(SimpleNamespace(inference='gpu', **options)))
@@ -602,6 +603,23 @@ class NativeWorkers(unittest.TestCase):
             delta = correction(self.model, encoded, mapping, remaining).float()
         return utility, delta
 
+    def test_a_unit_c_scale_reaches_the_search_and_its_labels(self):
+        from brass_ai.recovery.teacher_labels import improved_policy, validate_improved_policy
+        budget = dict(mode='count', full=64, full_k=16, fast=24, fast_k=8, c_scale=1.)
+        job, result, verifier = self.run_all_seat(0., budget)
+        self.assertEqual(result['metrics']['cpu_inference']['budget'], budget)
+        self.assertGreater(len(result['rows']), 0)
+        for row in result['rows']:
+            label = row['teacher']
+            self.assertEqual((label['c1'], label['c2']), (50, 1.))
+            self.assertIsNotNone(validate_improved_policy(label, row['choices']))
+            target, _ = improved_policy(label['logits'], label['counts'], label['mean_returns'], label['node_value'], 50, 1.)
+            np.testing.assert_allclose(target, label['target'], atol=1e-5)
+        # The same counts under the old constant would give a much softer target.
+        label = result['rows'][0]['teacher']
+        gentle, _ = improved_policy(label['logits'], label['counts'], label['mean_returns'], label['node_value'], 50, .1)
+        self.assertGreater(max(label['target']), float(gentle.max()))
+
     def test_all_seat_table_blends_the_search_head_like_the_gpu_path(self):
         budget = dict(mode='count', full=64, full_k=16, fast=24, fast_k=8)
         job, result, verifier = self.run_all_seat(.45, budget)
@@ -616,7 +634,7 @@ class NativeWorkers(unittest.TestCase):
         self.assertTrue(all(s['effective_k'] <= (16 if s['profile'] == 'full' else 8)
                             for s in metrics['searches'] if s['frozen_n'] > 0))
         self.assertEqual(max(s['effective_k'] for s in metrics['searches'] if s['frozen_n'] > 0 and s['profile'] == 'fast'), 8)
-        self.assertEqual(metrics['cpu_inference']['budget'], budget)
+        self.assertEqual(metrics['cpu_inference']['budget'], dict(budget, c_scale=.1))
         self.assertTrue(all(r['search_value'] == job['search_value'] for r in rows))
         for row in rows[:6]:
             utility, delta = self.root_heads(row)

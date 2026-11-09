@@ -6,6 +6,7 @@ for interrupted-update recovery; disk reloads take full row/value admission.
 import gzip
 import json
 from pathlib import Path
+import threading
 import time
 
 import torch
@@ -110,6 +111,35 @@ class TableCache:
         return elapsed
 
 
+class TeacherRun:
+    """Teacher tables running beside ordinary collection; finish() admits them."""
+    def __init__(self,collector,core_plan,collect,finish):
+        self.collector,self.core_plan,self.finish_tables=collector,core_plan,finish
+        self.live=None;self.error=None;self.finished=False
+        self.thread=threading.Thread(target=self.run,args=(collect,),name='rust-teacher-tables',daemon=True)
+        self.thread.start()
+
+    def run(self,collect):
+        try:
+            self.live=collect()
+        except BaseException as error:
+            self.error=error
+            # Stop ordinary work now instead of after its last game.
+            if self.core_plan is not None:self.core_plan.fail(error)
+
+    def abort(self):
+        """Ordinary collection failed: stop the tables and wait for their threads."""
+        self.collector.cancel.set()
+        self.thread.join()
+
+    def finish(self):
+        self.thread.join()
+        require(not self.finished,'Teacher run finished twice')
+        self.finished=True
+        if self.error is not None:raise self.error
+        self.finish_tables(self.live)
+
+
 class ShadowCollector:
     def __init__(self,root,run,state,*,mono=None):
         from .lab_shadow_config import is_active
@@ -118,6 +148,15 @@ class ShadowCollector:
         require(is_active(state['signature']['config']),'Teacher collection requires its explicit reviewed recipe')
 
     def collect(self,phase,state,model,service,directory):
+        """Run the teacher barrier to completion, before any ordinary work."""
+        run=self.begin(phase,state,model,service,directory)
+        if run is not None:run.finish()
+
+    def begin(self,phase,state,model,service,directory,*,overlap=False):
+        """Launch the tables. With ``overlap`` they run beside ordinary collection.
+
+        Returns a TeacherRun to finish later, or None when nothing is in flight.
+        """
         from .lab_teacher import TeacherCollector,calibrate
         from .lab_backend import checked_pin
         require(phase.options['mode'] in ('shadow','on'),'Teacher barrier requires shadow/on mode')
@@ -142,7 +181,7 @@ class ShadowCollector:
             cache=TableCache(self.run,directory/'teacher-shadow',jobs)
             cached={j['expected']['job_id']:cache.load(j) for j in jobs}
             missing=[j for j in jobs if cached[j['expected']['job_id']] is None]
-            collector=None;live=[];cpu_metrics=None
+            collector=None;cpu_metrics=None;core_plan=None
             if missing:
                 build=self.build;bootstrap=[build['bootstrap']['binary']['path']]
                 import os
@@ -166,44 +205,68 @@ class ShadowCollector:
                     calibration=(count_calibration(build['core_source'],missing[0]) if block['teacher_budget']['mode']=='count' else
                         calibrate_cpu(plan['binary'],build['core_source'],origins,missing[0],plan['inference'],cores))
                     write_json(directory/'teacher-shadow/calibration.json',calibration)
+                    from .lab_cpu_runtime import CorePlan
+                    # Timed searches read a clock, so only fixed-count tables may share CPUs.
+                    overlap=overlap and block['teacher_budget']['mode']=='count'
+                    if overlap:core_plan=CorePlan(cores)
                     collector=TeacherCollector(plan['binary'],build['core_source'],bootstrap,service,calibration,
-                        lanes=lanes,model=model,history=state['history'],inference=plan['inference'],cores=cores)
+                        lanes=lanes,model=model,history=state['history'],inference=plan['inference'],cores=cores,core_plan=core_plan)
                     cpu_metrics=dict(receipt=plan['receipt'],budget=plan['inference']['budget'],
                         exported_bundles=plan['exported_bundles'],lanes=lanes,cores=len(cores),pinning=block['pinning'])
                 else:
+                    overlap=False  # The GPU path keeps its tables ahead of ordinary games.
                     calibration=calibrate(build['binary']['path'],build['core_source'],origins,missing[0],service)
                     write_json(directory/'teacher-shadow/calibration.json',calibration)
                     lanes=min(len(missing),service.cpu.capacity,state['signature']['config']['execution']['processes']*
                         state['signature']['config']['execution']['hosts_per_process'])
                     collector=TeacherCollector(build['binary']['path'],build['core_source'],bootstrap,service,calibration,
                         lanes=lanes,model=model,history=state['history'])
-                live=collector.collect(missing,on_result=cache.publish)
-                cached.update({r['job_id']:r for r in live})
-            results=[cached[j['expected']['job_id']] for j in jobs]
-            # Cached JSON never inherits a process-local verification capability.
-            # Rebuild that capability through normal complete row admission.
-            if collector is None:
-                phase.admit_collection(results,model)
-            else:
-                verifier=collector.verifier
-                from .lab_admission import admit_teacher_rows
-                class MixedVerifier:
-                    def take(self,result,job,model):
-                        if job['expected']['job_id'] in verifier.cache:return verifier.take(result,job,model)
-                        return admit_teacher_rows(result['rows'],job=job,model=model,history=state['history'])
-                phase.admit_collection(results,model,verifier=MixedVerifier())
-            if cpu_metrics is not None:phase.metrics['cpu_inference']=cpu_metrics
-            mono=sorted(r['metrics']['mono_bootstrap_seconds'] for r in live if 'mono_bootstrap_seconds' in r['metrics'])
-            if mono:
-                phase.metrics['mono_bootstrap_seconds']=dict(tables=len(mono),min=mono[0],p50=mono[len(mono)//2],max=mono[-1],total=sum(mono))
-                print(f"Teacher Mono bootstrap: {len(mono)} tables, p50 {mono[len(mono)//2]:.3f}s, max {mono[-1]:.3f}s",flush=True)
-            phase.metrics.update(shadow=phase.options['mode']=='shadow',mode=phase.options['mode'],
-                cached_tables=len(jobs)-len(missing),new_tables=len(live),wall_seconds=time.monotonic()-began,
-                gradient_qualification='Measured during ordinary PPO; never applied' if phase.options['mode']=='shadow' else
-                    'Qualified fixed beta; teacher policy gradients use the existing guarded PPO step')
-            phase.metrics['inference']={key:service.metrics.get(key,0)-before.get(key,0) for key in
-                ('positions','batches','model_loads','shared_requests','shared_replies','inline_requests')}
-            if phase.search_value is not None:
-                phase.metrics['recovered_value_partials']=phase.search_value.phase.buffer.recovered_partials
-            if seed is not None:phase.metrics['readiness_seed']=dict(source=seed['source'],sha256=seed['sha256'],fit_checkpoint=seed['fit_checkpoint'])
-            write_json(directory/'teacher-shadow/collection.json',phase.metrics)
+        def collect():return collector.collect(missing,on_result=cache.publish)
+        def finish(live):
+            with torch.random.fork_rng(devices=devices):
+                self.admit(phase,state,model,service,directory,jobs,cached,missing,live,collector,cpu_metrics,seed,began,before,
+                           overlapped=core_plan is not None)
+        if collector is None:
+            finish([]);return None
+        if core_plan is None:
+            with torch.random.fork_rng(devices=devices):live=collect()
+            finish(live);return None
+        # A background thread must not touch the global RNG; nothing here draws from it.
+        return TeacherRun(collector,core_plan,collect,finish)
+
+    def admit(self,phase,state,model,service,directory,jobs,cached,missing,live,collector,cpu_metrics,seed,began,before,*,overlapped=False):
+        """Everything after the tables exist: labels, buffers and evidence, in one order."""
+        cached.update({r['job_id']:r for r in live})
+        from brass_ai.recovery.collector_runtime import teacher_c_scale
+        if getattr(collector,'inference',None) is not None:
+            scale=teacher_c_scale()
+            require(all(row['teacher']['c2']==scale for r in live for row in r['rows']),'Teacher tables used another c_scale')
+        results=[cached[j['expected']['job_id']] for j in jobs]
+        # Cached JSON never inherits a process-local verification capability.
+        # Rebuild that capability through normal complete row admission.
+        if collector is None:
+            phase.admit_collection(results,model)
+        else:
+            verifier=collector.verifier
+            from .lab_admission import admit_teacher_rows
+            class MixedVerifier:
+                def take(self,result,job,model):
+                    if job['expected']['job_id'] in verifier.cache:return verifier.take(result,job,model)
+                    return admit_teacher_rows(result['rows'],job=job,model=model,history=state['history'])
+            phase.admit_collection(results,model,verifier=MixedVerifier())
+        if cpu_metrics is not None:phase.metrics['cpu_inference']=cpu_metrics
+        mono=sorted(r['metrics']['mono_bootstrap_seconds'] for r in live if 'mono_bootstrap_seconds' in r['metrics'])
+        if mono:
+            phase.metrics['mono_bootstrap_seconds']=dict(tables=len(mono),min=mono[0],p50=mono[len(mono)//2],max=mono[-1],total=sum(mono))
+            print(f"Teacher Mono bootstrap: {len(mono)} tables, p50 {mono[len(mono)//2]:.3f}s, max {mono[-1]:.3f}s",flush=True)
+        phase.metrics.update(shadow=phase.options['mode']=='shadow',mode=phase.options['mode'],
+            cached_tables=len(jobs)-len(missing),new_tables=len(live),wall_seconds=time.monotonic()-began,
+            overlapped_with_ordinary=overlapped,
+            gradient_qualification='Measured during ordinary PPO; never applied' if phase.options['mode']=='shadow' else
+                'Qualified fixed beta; teacher policy gradients use the existing guarded PPO step')
+        phase.metrics['inference']={key:service.metrics.get(key,0)-before.get(key,0) for key in
+            ('positions','batches','model_loads','shared_requests','shared_replies','inline_requests')}
+        if phase.search_value is not None:
+            phase.metrics['recovered_value_partials']=phase.search_value.phase.buffer.recovered_partials
+        if seed is not None:phase.metrics['readiness_seed']=dict(source=seed['source'],sha256=seed['sha256'],fit_checkpoint=seed['fit_checkpoint'])
+        write_json(directory/'teacher-shadow/collection.json',phase.metrics)

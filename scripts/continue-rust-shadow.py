@@ -45,8 +45,10 @@ def inference_choice(args):
     if args.inference=='keep':return 'keep'
     if args.inference=='gpu':return None
     from brass_ai.recovery.collector_runtime import cpu_block,validate_cpu
-    budget=dict(mode='timed') if args.teacher_budget=='timed' else dict(mode='count',full=args.teacher_full,full_k=16,fast=args.teacher_fast,fast_k=args.teacher_fast_k)
-    block=cpu_block(workers=args.workers,teacher_budget=budget,pinning='none' if args.no_pinning else 'one-lane-per-cpu')
+    budget=(dict(mode='timed') if args.teacher_budget=='timed' else
+            dict(mode='count',full=args.teacher_full,full_k=16,fast=args.teacher_fast,fast_k=args.teacher_fast_k,c_scale=args.c_scale))
+    block=cpu_block(workers=args.workers,teacher_budget=budget,pinning='none' if args.no_pinning else 'one-lane-per-cpu',
+                    overlap=not args.no_overlap,readers=args.readers)
     validate_cpu(block)
     return block
 
@@ -132,6 +134,9 @@ def main(*,default_mode='shadow',default_stage_revision=False):
     p.add_argument('--teacher-fast',type=int,default=96,help='Trajectories per quick teacher search')
     p.add_argument('--teacher-fast-k',type=int,choices=(2,4,8,16),default=8,help='Considered actions per quick teacher search')
     p.add_argument('--no-pinning',action='store_true',help='Leave CPU lane placement to the operating system')
+    p.add_argument('--c-scale',type=float,choices=(.1,1.),default=1.,help='Gumbel c_scale (the search constant c2) for count-budget teacher searches')
+    p.add_argument('--no-overlap',action='store_true',help='Run teacher tables before ordinary games instead of beside them')
+    p.add_argument('--readers',type=int,default=24,help='Replay reader processes on the CPU path')
     args=p.parse_args()
     import os
     os.environ['CUDA_VISIBLE_DEVICES']=os.environ.get('CUDA_VISIBLE_DEVICES','0').split(',',1)[0]

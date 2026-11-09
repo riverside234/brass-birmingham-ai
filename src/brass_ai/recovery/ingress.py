@@ -1,5 +1,5 @@
 """Parallel, checked self-play ingestion; board histories stay in CPU readers."""
-from concurrent.futures import ProcessPoolExecutor, as_completed
+from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor, as_completed
 from contextlib import contextmanager
 import multiprocessing
 import time
@@ -189,6 +189,14 @@ def load_collection(records,policy_id,kinds,*,executor=None,workers=1,telemetry=
     return result
 
 
+def _seal_part(future):
+    """Establish the learner's numerical boundary for one finished shard."""
+    headers,data,diagnostics,metrics=future.result()
+    from .replay_binding import seal_encoded,enabled
+    if enabled():data=[(row,target,identity,seal_encoded(encoded)) for row,target,identity,encoded in data]
+    return headers,data,diagnostics,metrics
+
+
 class StreamingCollection:
     """Bounded preparation after durable shard publication, before PPO starts.
 
@@ -199,6 +207,9 @@ class StreamingCollection:
         self.executor,self.workers=executor,workers
         self.arguments=(policy_id,kinds,insolvency,reward)
         self.futures={};self.identities={};self.lock=threading.Lock()
+        # Seal each shard as it arrives, so the learner does not pay for all
+        # 124k rows at once after the last game (about 7 s of single-threaded work).
+        self.sealed={};self.sealer=ThreadPoolExecutor(max_workers=4,thread_name_prefix='replay-seal')
         self.slots=threading.Semaphore(max(1,2*workers));self.began=time.perf_counter();self.ready_before_finish=0
 
     def submit(self,records):
@@ -220,13 +231,14 @@ class StreamingCollection:
                     else:future=self.executor.submit(_prepare,task)
                     self.futures[path]=future;self.identities[path]=identity
                     future.add_done_callback(lambda _:self.slots.release())
+                    self.sealed[path]=self.sealer.submit(_seal_part,future)
             except BaseException:self.slots.release();raise
 
     def result(self,task):
         from brass_ai.learning.contracts import digest
         group=task[0];path=group[0]['path']
         require(path in self.futures and self.identities[path]==digest(group),'Changed streaming receipt')
-        return self.futures[path].result()
+        return self.sealed[path].result()
 
     def finish(self,records,telemetry):
         self.ready_before_finish=sum(f.done() for f in self.futures.values())
@@ -236,5 +248,6 @@ class StreamingCollection:
 
     def __enter__(self):return self
     def __exit__(self,kind,*_):
+        self.sealer.shutdown(wait=kind is None,cancel_futures=kind is not None)
         if kind is not None:
             for future in self.futures.values():future.cancel()

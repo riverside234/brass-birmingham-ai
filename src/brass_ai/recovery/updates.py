@@ -105,6 +105,27 @@ def bc_loss(logits, chosen):
     return F.cross_entropy(logits.float(), chosen, reduction='none')
 
 
+class ExplorationMixture:
+    """Each row's exploration distribution, computed the first time it is used.
+
+    Building this walks every legal choice of every row in Python. Behavior
+    policies with zero exploration never read it.
+    """
+    def __init__(self,rows):
+        self.rows=rows;self.values=[None]*len(rows)
+
+    def __len__(self):return len(self.values)
+
+    def __getitem__(self,index):
+        value=self.values[index]
+        if value is None:
+            row=self.rows[index]
+            value=exploration_distribution(row['choices'],row['intent'],row['behavior'].get('exploration_version',2),
+                row.get('view',{}).get('context',{}).get('phase')).astype(np.float32)
+            self.values[index]=value
+        return value
+
+
 class Dataset:
     def __init__(self, data, device, policy=True, progress=None):
         self.data, self.device = data, device
@@ -140,8 +161,7 @@ class Dataset:
             self.vp_paid=torch.tensor([r['_reward_vp_paid'] for r in self.rows],device=device,dtype=torch.float32)
             require(self.vp_paid.shape==(len(self.rows),4) and bool(torch.isfinite(self.vp_paid).all()),'Invalid paid VP credits')
         if log:log(2)
-        self.q=[exploration_distribution(r['choices'],r['intent'],r['behavior'].get('exploration_version',2),
-                    r.get('view',{}).get('context',{}).get('phase')).astype(np.float32) for r in self.rows] if policy else None
+        self.q=ExplorationMixture(self.rows) if policy else None
         self.temperatures=torch.tensor([r['behavior'].get('temperature',1.) for r in self.rows],device=device)[:,None]
         if log:log(3)
         self.forced_cpu=[len(r['choices'])==1 for r in self.rows]
@@ -548,6 +568,7 @@ def _ppo_nonforced(model,optimizer,games,behavior,config,*,profile,profile_steps
             'Teacher term requires a nonforced ordinary PPO KL probe')
     with timings.phase('ppo.critic_prepare'):
         critic_ids=phases.prepare(ds) if phases is not None else list(range(count))
+    if hasattr(phases,'stage_early'):phases.stage_early(model)
     critic_ds=phases.critic_dataset if phases is not None else ds
     critic_count=len(critic_ids)
     planned_steps=config['epochs']*math.ceil(len(actor_ids)/config['effective_batch_size'] if actor_ids else critic_count/config['critic_batch_size'])
@@ -571,7 +592,7 @@ def _ppo_nonforced(model,optimizer,games,behavior,config,*,profile,profile_steps
     advantages=torch.zeros(count,device=device);model.eval()
     frozen=None
     diversity=getattr(phases,'diversity',None)
-    from .value_preservation import TrunkGradients
+    from .value_preservation import TrunkGradients,measure_actor_gradients
     if preserve:
         from .value_preservation import FrozenValues,TrunkGradients
         with timings.phase('ppo.freeze_values'):
@@ -631,7 +652,7 @@ def _ppo_nonforced(model,optimizer,games,behavior,config,*,profile,profile_steps
                 if companion is not None:companion.begin('ppo')
                 if diversity is not None:diversity.begin('ppo')
                 intrinsic_count=sum(diversity.eligible(critic_ds,crit)) if diversity is not None and diversity.active else 0
-                gradient_terms=TrunkGradients(model) if frozen or teacher_term is not None else None
+                gradient_terms=TrunkGradients(model,measure=measure_actor_gradients(steps,teacher_term)) if frozen or teacher_term is not None else None
                 with timings.phase('ppo.forward_backward'):
                     parts=ds.microbatches(batch,config['microbatch_size'],config['max_candidate_cells'],config['bucket'])
                     for part,ix,inputs,q in ds.policy_batches(parts,behavior.exploration,executor):
@@ -678,7 +699,8 @@ def _ppo_nonforced(model,optimizer,games,behavior,config,*,profile,profile_steps
                         ((combined*critic_ds.critic_weights[ix]).sum()/len(crit)).backward()
                         value_totals+=torch.stack([v.detach().sum() for v in values]);critic_seen+=len(part)
                     if frozen is not None:
-                        frozen.gradients.append(gradient_terms.finish(steps+1))
+                        measured=gradient_terms.finish(steps+1)
+                        if measured is not None:frozen.gradients.append(measured)
                     if demo:
                         sample=torch.randint(len(demo.data),(min(config['effective_batch_size'],len(demo.data)),)).tolist()
                         meaningful=[i for i in sample if not demo.forced_cpu[i]]

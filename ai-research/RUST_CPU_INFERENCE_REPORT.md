@@ -108,5 +108,5 @@ Measured on the lab at g1290, before the startup fix:
 ## 6. Known limits
 
 - The teacher phase took 45 s for 16 tables on the lab at N=640/96, so a 32-table phase should take about the same on 32 lanes. A full iteration has not yet run at this budget.
-- Teacher and ordinary collection still run one after the other, so the teacher phase uses only 32 of the 64 lanes.
+- Teacher and ordinary collection now overlap by default; see [RUST_OVERLAP_AND_TRAINING_SPEED_REPORT.md](RUST_OVERLAP_AND_TRAINING_SPEED_REPORT.md). `--no-overlap` restores the sequential order.
 - The lab usable CPU count is exactly 64, so 64 pinned lanes leave none spare for the publishers and the parent process; they share those CPUs.

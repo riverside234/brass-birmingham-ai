@@ -6,6 +6,7 @@ unselected, every lane keeps today's GPU path and its original binaries.
 import copy
 import os
 from pathlib import Path
+import threading
 
 from brass_ai.learning.contracts import require
 from .lab_contract import pin
@@ -83,6 +84,56 @@ def core_allocation(count):
     return [ordered[i % len(ordered)] for i in range(count)]
 
 
+class CorePlan:
+    """The logical CPUs that teacher tables hold while ordinary games run beside them.
+
+    Longest work first: every table (about 50 s) starts at once on its own CPU
+    and ordinary lanes fill the rest. When a table ends its CPU goes straight to a
+    parked ordinary lane, so both workloads keep every CPU busy until the end.
+    """
+    def __init__(self, cores):
+        self.cores = frozenset(cores)
+        self.lock = threading.Lock()
+        self.freed = []
+        self.released = None
+        self.failed = None
+        self.error = None
+
+    def holds(self, core):
+        with self.lock:
+            return core in self.cores and core not in self.freed
+
+    def release(self, core):
+        with self.lock:
+            if core not in self.cores or core in self.freed:
+                return
+            self.freed.append(core)
+            listener = self.released
+        if listener is not None:
+            listener(core)
+
+    def attach(self, released, failed):
+        """Connect the ordinary pool; a table may already have finished or failed."""
+        with self.lock:
+            self.released, self.failed = released, failed
+            freed, error = list(self.freed), self.error
+        for core in freed:
+            released(core)
+        if error is not None:
+            failed(error)
+
+    def detach(self):
+        with self.lock:
+            self.released = self.failed = None
+
+    def fail(self, error):
+        with self.lock:
+            self.error = error
+            failed = self.failed
+        if failed is not None:
+            failed(error)
+
+
 def count_search_limits(inference):
     """The worker's fixed-count caps, so verified turns are not refused; None if timed."""
     if inference is None or inference['budget'].get('mode') != 'count':
@@ -118,7 +169,7 @@ def pin_child(pid, cpu):
 def worker_settings(root, block, service, identities, value):
     """Runtime pin plus bundles for the models one collection will use."""
     from .lab_cpu_models import ensure
-    bundles, exported = ensure(root, service.models, identities)
+    bundles, exported = ensure(root, service.models, identities, materialize=getattr(service, 'materialize', None))
     return dict(contract=CONTRACT, runtime=dict(path=value['runtime']['path'], sha256=value['runtime']['sha256']),
                 bundles=bundles, exported_bundles=exported, model_cache=block['model_cache'], pinning=block['pinning'])
 
@@ -140,5 +191,5 @@ def teacher_plan(root, build, service, jobs, block):
 
 def rating_settings(root, block, service, identities):
     from .lab_cpu_models import ensure
-    bundles, exported = ensure(root, service.models, identities)
+    bundles, exported = ensure(root, service.models, identities, materialize=getattr(service, 'materialize', None))
     return dict(contract=CONTRACT, bundles=bundles, exported_bundles=exported)

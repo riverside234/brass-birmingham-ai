@@ -105,7 +105,9 @@ class TeacherPhase:
         require(all(any(e['generation'] == r['generation'] and e['model_id'] == r['model_id']
                         for e in state['history']) for r in cache.get('receipts', ())),
                 'Teacher buffer model is not in committed run lineage')
-        self.buffer = TeacherBuffer(root, run, buffer_identity(config), receipts=cache.get('receipts', ()), retired=cache.get('retired', ()))
+        from .collector_runtime import teacher_c_scale
+        self.buffer = TeacherBuffer(root, run, buffer_identity(config), receipts=cache.get('receipts', ()),
+                                    retired=cache.get('retired', ()), c_scale=teacher_c_scale())
         self.weight = saved.get('weight', {}); self.term = None; self.jobs = []; self.heldout = []
         if cache and cache.get('identity') != self.buffer.identity:
             self.weight = {}  # Static producer/profile changes retire beta with its labels.

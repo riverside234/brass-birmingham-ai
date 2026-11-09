@@ -113,14 +113,26 @@ class FrozenValues:
             scope='After PPO, before PPG. All critic-train rows for loss; nonforced learner PPO probe for four-seat utility RMS. True descriptors, no dropout; heldouts excluded from fitting. Core uses beta*value_weight; existing local-head weights are preserved separately.')
 
 
+# The actor-gradient norms need a second backward pass through the shared
+# encoders. They are diagnostics, so once beta is fixed one step in four is enough.
+GRADIENT_SAMPLE_EVERY=4
+
+
+def measure_actor_gradients(step,teacher_term):
+    """Every step while a shadow teacher still qualifies its beta; sampled after."""
+    return step%GRADIENT_SAMPLE_EVERY==0 or (teacher_term is not None and teacher_term.mode!='on')
+
+
 class TrunkGradients:
     """Exact pre-clipping actor and preservation gradients without changing them."""
-    def __init__(self,model):
+    def __init__(self,model,measure=True):
         self.parameters=tuple(p for name,p in model.named_parameters()
             if name.startswith(('state_encoder.','entity_encoder.')) and p.requires_grad)
-        self.actor=[torch.zeros_like(p) for p in self.parameters]
+        self.measure=measure
+        self.actor=[torch.zeros_like(p) for p in self.parameters] if measure else []
 
     def add_actor(self,loss):
+        if not self.measure:return
         values=torch.autograd.grad(loss,self.parameters,retain_graph=True,allow_unused=True)
         for total,g in zip(self.actor,values):
             if g is not None:total.add_(g.detach())
@@ -133,13 +145,16 @@ class TrunkGradients:
         for p in self.parameters:p.grad=None
 
     def finish(self,step):
-        norm_a=norm_v=dot=self.actor[0].new_zeros(())
-        for a,p,b in zip(self.actor,self.parameters,self.before):
-            v=p.grad.detach() if p.grad is not None else torch.zeros_like(p)
-            norm_a=norm_a+a.square().sum();norm_v=norm_v+v.square().sum();dot=dot+(a*v).sum()
+        # Recombining is what the optimizer needs; the norms only report on it.
+        norm_a=norm_v=dot=self.parameters[0].new_zeros(())
+        for index,(p,b) in enumerate(zip(self.parameters,self.before)):
+            if self.measure:
+                a=self.actor[index];v=p.grad.detach() if p.grad is not None else torch.zeros_like(p)
+                norm_a=norm_a+a.square().sum();norm_v=norm_v+v.square().sum();dot=dot+(a*v).sum()
             if b is not None:
                 if p.grad is None:p.grad=b
                 else:p.grad.add_(b)
+        if not self.measure:return None
         a,v,d=torch.stack((norm_a.sqrt(),norm_v.sqrt(),dot)).double().cpu().tolist()
         return dict(step=step,actor_norm=a,preservation_norm=v,cosine=d/(a*v) if a*v>0 else None,
             scope='Shared state/entity encoders; actor excludes entropy/rehearsal, preservation includes configured core/local weights; before clipping')

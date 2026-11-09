@@ -36,7 +36,7 @@ class CollectionFailures(unittest.TestCase):
             reward_id=jobs[0]['expected']['reward_id'],device='cpu',profile=digest(jobs[0]['search']),
             samples=[{}],estimate_ns=1000)
         class Worker:
-            def __init__(self,executable,request,*args):
+            def __init__(self,executable,request,*args,**kwargs):
                 self.split=request['job']['split'];self.failure=None
             def collect(self,*args,**kwargs):
                 if self.split=='train':

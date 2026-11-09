@@ -142,8 +142,16 @@ def export_bundle(model, destination):
     return manifest
 
 
-def ensure(root, models, identities):
-    """Return ``{model_id: {manifest, sha256}}``, exporting anything missing."""
+def bundle_ready(root, identity):
+    return (bundle_root(root)/identity/'manifest.json').is_file()
+
+
+def ensure(root, models, identities, *, materialize=None):
+    """Return ``{model_id: {manifest, sha256}}``, exporting anything missing.
+
+    ``materialize`` loads a checkpoint whose load was deferred, for a model
+    whose bundle turns out to be gone.
+    """
     base = bundle_root(root)
     base.mkdir(parents=True, exist_ok=True)
     wanted = sorted(set(identities))
@@ -153,6 +161,8 @@ def ensure(root, models, identities):
     for identity in wanted:
         directory = base/identity
         if not (directory/'manifest.json').is_file():
+            if materialize is not None:
+                materialize(identity)
             require(identity in models, 'Unregistered model cannot be exported for CPU inference')
             manifest = export_bundle(models[identity], directory)
             require(manifest['model_id'] == identity, 'CPU bundle model identity differs')

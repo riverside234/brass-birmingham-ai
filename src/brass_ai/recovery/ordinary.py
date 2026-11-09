@@ -1,5 +1,6 @@
 """Frozen ordinary collection plans and explicit learner sample attribution."""
 from collections import Counter
+from concurrent.futures import ThreadPoolExecutor
 import random
 
 from brass_ai.bank import sha
@@ -14,6 +15,29 @@ from .champion import enabled as champion_enabled,selfplay_policies
 from . import champion_mix
 from . import v4_share
 from . import v4_history
+
+
+def verify_pool_checkpoints(root,members,verified):
+    """Hash a whole opponent pool at once; one file at a time costs about 10 s."""
+    entries={m['model_id']:m for m in members if not v4_history.bot(m) and m['model_id'] not in verified}
+    def check(entry):
+        require(sha(project_path(root,entry['path']))==entry['sha256'],'Historical checkpoint changed')
+    if entries:
+        with ThreadPoolExecutor(max_workers=8) as pool:list(pool.map(check,entries.values()))
+        verified.update(entries)
+
+
+def register_opponent(root,service,entry,path):
+    """CPU workers read a bundle, so they rarely need the checkpoint loaded (about 3 s each)."""
+    if entry['model_id'] in service.models:return
+    from .collector_runtime import native_inference
+    block=native_inference()
+    defer=getattr(service,'defer_checkpoint',None)
+    if defer is not None and block is not None and block['ordinary']=='cpu-ort':
+        from brass_ai.rust_backend.lab_cpu_models import bundle_ready
+        if bundle_ready(root,entry['model_id']):
+            defer(entry['model_id'],path);return
+    service.register_checkpoint(path)
 
 
 def plan_collection(root,directory,state,config,signature,service,current,profiles,opponent_specs,fast_specs,window,*,fingerprints=None,exploration=None):
@@ -53,6 +77,7 @@ def plan_collection(root,directory,state,config,signature,service,current,profil
         require(not (state['quality_pool'].get('planning') or {}).get('il_gate') or gate==state['quality_pool']['planning']['il_gate'],
             'Committed IL PFSP sampling requires its original retired-panel gate')
         quality_planning=quality_pool.distribution(state['quality_pool'],il_gate=gate)
+        verify_pool_checkpoints(root,state['quality_pool']['members'],verified_snapshots)
     v4_in_history=v4_history.active(state.get('quality_pool'))
     from .training_revision_g1041 import mixed,exposure
     if mixed(config):
@@ -101,7 +126,7 @@ def plan_collection(root,directory,state,config,signature,service,current,profil
                 if entry['model_id'] not in verified_snapshots:
                     require(sha(path)==entry['sha256'],'Historical checkpoint changed')
                     verified_snapshots.add(entry['model_id'])
-                if entry['model_id'] not in service.models: service.register_checkpoint(path)
+                register_opponent(root,service,entry,path)
                 opponents.append(neural_spec(entry['model_id'],config['exploration'] if exploration and exploration['version']==3 else .05,'neutral',**settings))
             policies=[learner]*learner_count+opponents
             history_ordinal+=1

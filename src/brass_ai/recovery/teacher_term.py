@@ -130,13 +130,20 @@ class TeacherTerm:
         by_parameter = {id(p): g for p, g in zip(parameters, gradients)}
         zero = next(model.parameters()).new_zeros(())
         an, tn, dot = zero, zero, zero
-        for p, a in zip(actor.parameters, actor.actor):
-            g = by_parameter.get(id(p))
-            an = an + a.square().sum()
-            if g is not None: tn = tn + g.square().sum(); dot = dot + (a * g).sum()
+        measured = getattr(actor, 'measure', True)
+        if measured:
+            for p, a in zip(actor.parameters, actor.actor):
+                g = by_parameter.get(id(p))
+                an = an + a.square().sum()
+                if g is not None: tn = tn + g.square().sum(); dot = dot + (a * g).sum()
+        else:
+            # A step without the actor pass still reports the teacher's own norm.
+            for p in actor.parameters:
+                g = by_parameter.get(id(p))
+                if g is not None: tn = tn + g.square().sum()
         a, t, d = torch.stack((an.sqrt(), tn.sqrt(), dot)).double().detach().cpu().tolist()
         require(all(np.isfinite(v) for v in (a, t, d)), 'Non-finite teacher gradients')
-        raw_share = t / a if a > 0 else None
+        raw_share = t / a if measured and a > 0 else None
         if self.mode == 'on':
             for p, g in zip(parameters, gradients):
                 if g is None: continue
@@ -145,7 +152,7 @@ class TeacherTerm:
                 else: p.grad.add_(g)
         self.steps.append(dict(step=step, rows=len(rows), loss=float(loss.detach()), raw_share=raw_share,
             share=raw_share * self.beta_used if raw_share is not None else None,
-            cosine=d / (a * t) if a * t > 0 else None, actor_norm=a, teacher_norm=t * self.beta_used))
+            cosine=d / (a * t) if measured and a * t > 0 else None, actor_norm=a if measured else None, teacher_norm=t * self.beta_used))
         for i in indices: self.presentations[i] += 1; self.used.add(i)
         self.seconds += time.perf_counter() - began
 

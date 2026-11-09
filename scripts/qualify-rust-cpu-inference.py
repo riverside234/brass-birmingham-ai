@@ -585,7 +585,7 @@ def planned_jobs(c):
     return jobs
 
 
-def native_arm(c, jobs, name, *, cpu):
+def native_arm(c, jobs, name, *, cpu, core_plan=None):
     from brass_ai.rust_backend import lab_admission as admission
     from brass_ai.rust_backend.lab_pool import NativePool
     output = c.out/'payload/ordinary'/name
@@ -596,7 +596,7 @@ def native_arm(c, jobs, name, *, cpu):
     build = c.cpu_build if cpu else c.gpu_build
     execution = c.cpu_execution if cpu else c.execution
     signature = frozen[0]['provenance']['spec']
-    with NativePool(ROOT, c.service, execution, build, c.config, signature, mono=c.args.mono, scope='diagnostic', cpu=cpu) as pool:
+    with NativePool(ROOT, c.service, execution, build, c.config, signature, mono=c.args.mono, scope='diagnostic', cpu=cpu, core_plan=core_plan) as pool:
         began = time.perf_counter()
         records = pool.collect(frozen)
         elapsed = time.perf_counter()-began
@@ -638,6 +638,65 @@ def ordinary(c):
     expect(checks, 'matched_games_stay_together', fraction <= MAX_DIVERGED_GAMES, comparison['diverged'])
     c.ordinary_report, c.ordinary_usage = report['report'], usage
     return finish(checks, jobs=len(chosen), matched=len(matched), comparison=comparison, gpu=gpu_report, cpu=report, usage=usage)
+
+
+def overlap(c):
+    """Teacher tables beside ordinary games, on the CPUs the training run would give them."""
+    from brass_ai.learning.contracts import digest
+    from brass_ai.recovery import collector_runtime as R
+    from brass_ai.recovery.teacher_phase import readiness
+    from brass_ai.rust_backend.lab_cpu_runtime import CorePlan, core_allocation, ordinary_plan, teacher_plan
+    from brass_ai.rust_backend.lab_shadow import TeacherRun, teacher_build
+    from brass_ai.rust_backend.lab_teacher import TeacherCollector, count_calibration
+    checks = {}
+    state = c.snapshot['state']
+    build = teacher_build(state)
+    receipt, ready = readiness(state.get('teacher_phase', {}).get('readiness'), c.raw['training'].get('utility_calibration'),
+                               digest(c.model.config.utility))
+    if not expect(checks, 'teacher_readiness', ready, receipt):
+        return finish(checks)
+    c.readiness = receipt
+    jobs = teacher_jobs(c, 0., c.args.overlap_tables, 800000)
+    games = planned_jobs(c)[:c.args.overlap_games]
+    expect(checks, 'work_planned', len(jobs) == c.args.overlap_tables and len(games) > 0, dict(tables=len(jobs), games=len(games)))
+    bootstrap = [build['bootstrap']['binary']['path']]
+    if os.name != 'nt':
+        bootstrap.insert(0, c.args.mono)
+    lanes = min(len(jobs), c.block['workers'])
+    cores = core_allocation(lanes) if c.block['pinning'] == 'one-lane-per-cpu' else []
+    done = []
+    with R.scope(c.cpu_settings):
+        plan = teacher_plan(ROOT, build, c.service, jobs, c.block)
+        calibration = count_calibration(build['core_source'], jobs[0])
+        c.cpu_build, settings = ordinary_plan(ROOT, c.gpu_build, c.service, games, c.block)
+        core_plan = CorePlan(cores)
+        collector = TeacherCollector(plan['binary'], build['core_source'], bootstrap, c.service, calibration, lanes=lanes, model=c.model,
+                                     history=state['history'], inference=plan['inference'], cores=cores, core_plan=core_plan)
+        began = time.perf_counter()
+        run = TeacherRun(collector, core_plan, lambda: collector.collect(jobs), done.extend)
+        try:
+            played, report = native_arm(c, games, 'overlap', cpu=settings, core_plan=core_plan)
+        except BaseException:
+            run.abort()
+            raise
+        ordinary_seconds = time.perf_counter()-began
+        run.finish()
+        wall = time.perf_counter()-began
+    expect(checks, 'all_tables_finished', len(done) == len(jobs), len(done))
+    expect(checks, 'all_games_finished', len(played) == len(games), len(played))
+    scale = c.block['teacher_budget']['c_scale']
+    expect(checks, 'labels_use_c_scale', all(row['teacher']['c2'] == scale for table in done for row in table['rows']), scale)
+    accepted = rejected = 0
+    for table, job in zip(done, jobs, strict=True):
+        good, bad = collector.verifier.take(table, job, c.model)
+        accepted += len(good)
+        rejected += sum(bad.values())
+    expect(checks, 'labels_accepted', accepted > 0 and rejected == 0, dict(accepted=accepted, rejected=rejected))
+    if cores:
+        expect(checks, 'lanes_waited_for_tables', report['report']['overlap']['parked_lanes'] == len(cores), report['report']['overlap'])
+    expect(checks, 'tables_and_games_overlapped', ordinary_seconds < wall+1e-6 and wall < 2*ordinary_seconds,
+           dict(wall=wall, ordinary_seconds=ordinary_seconds))
+    return finish(checks, wall_seconds=wall, ordinary_seconds=ordinary_seconds, tables=len(jobs), games=len(games), cpu=report)
 
 
 def rating(c):
@@ -700,9 +759,9 @@ def startup(c):
 
 
 STAGES = [('environment', environment), ('regressions', regressions), ('bundles', bundles), ('parity', parity),
-          ('teacher', teacher), ('ordinary', ordinary), ('rating', rating), ('startup', startup)]
+          ('teacher', teacher), ('ordinary', ordinary), ('overlap', overlap), ('rating', rating), ('startup', startup)]
 # A stage that cannot run without these results is skipped, never reported as passed.
-NEEDS = dict(parity=('bundles',), teacher=('bundles',), ordinary=('bundles',), rating=('bundles',), startup=('ordinary',))
+NEEDS = dict(parity=('bundles',), teacher=('bundles',), ordinary=('bundles',), overlap=('bundles',), rating=('bundles',), startup=('ordinary',))
 
 
 def main():
@@ -715,6 +774,8 @@ def main():
     p.add_argument('--ordinary-games', type=int, default=128, help='Real frozen jobs on the CPU arm')
     p.add_argument('--matched-games', type=int, default=16, help='Of those, also run on the GPU arm')
     p.add_argument('--rating-games', type=int, default=2)
+    p.add_argument('--overlap-tables', type=int, default=8, help='Teacher tables in the overlap stage')
+    p.add_argument('--overlap-games', type=int, default=64, help='Ordinary games beside those tables')
     p.add_argument('--skip-regressions', action='store_true', help='Only when the suite already ran on this exact build')
     p.add_argument('--fresh', action='store_true', help='Repeat stages that already passed on this exact code, build and checkpoint')
     args = p.parse_args()

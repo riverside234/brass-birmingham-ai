@@ -437,14 +437,35 @@ def startup(phases,generation):
     return dict(result,fresh_ppg=True,next_phase=generation+1)
 
 
+def begin_stage(phases,model):
+    """Write this collection's dense PPG cache beside PPO instead of after it.
+
+    The stage reads only the frozen critic rows and writes only new partial files,
+    so its bytes and receipts are unchanged. PPG waits for it before opening the cache.
+    """
+    from concurrent.futures import ThreadPoolExecutor
+    require(phases.collection_source is not None,'g210 PPG requires sealed collection provenance')
+    require(getattr(phases,'staging',None) is None,'PPG cache stage is already running')
+    pool=ThreadPoolExecutor(max_workers=1,thread_name_prefix='ppg-cache-stage')
+    # g210 selects no policy rows, so the post-PPO actor list is not an input.
+    phases.staging=(pool,pool.submit(phases.buffer.stage,phases.critic_dataset,phases.train_ids,phases.heldout_ids,[],
+        phases.collection_source,model,phases.split['selection']))
+
+
 def fit(phases,model,preparation_pool):
     from . import value_phase
     from .ppg_phasic import RATE_KEY
     from .ppo_preparation import phase_preparation
     require(phases.collection_source is not None,'g210 PPG requires sealed collection provenance')
     began=time.perf_counter();c=phases.options['value_phase'];rate=getattr(phases,'ppo_peak',None)
-    cache=phases.buffer.stage(phases.critic_dataset,phases.train_ids,phases.heldout_ids,phases.actor_ids,
-        phases.collection_source,model,phases.split['selection'])
+    staging=getattr(phases,'staging',None)
+    if staging is None:
+        cache=phases.buffer.stage(phases.critic_dataset,phases.train_ids,phases.heldout_ids,phases.actor_ids,
+            phases.collection_source,model,phases.split['selection'])
+    else:
+        pool,future=staging;phases.staging=None
+        try:cache=future.result()
+        finally:pool.shutdown(wait=True)
     staged=time.perf_counter()
     clock=None
     if two_iteration(c):

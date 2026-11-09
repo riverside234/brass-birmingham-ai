@@ -462,8 +462,10 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
     if native_inference() is not None:
         from brass_ai.rust_backend.lab_cpu_runtime import raise_open_file_limit
         raise_open_file_limit()
+    from .collector_runtime import overlap_collection,reader_workers
+    reader_count=reader_workers(config['audit_workers'])
     with InferenceService(worker_execution,device,profile=run/'profile-collection' if config['profile_steps'] else None,
-                          profile_steps=config['profile_steps'],inference_devices=inference_devices) as service,reader_pool(config['audit_workers'],admission=service.cpu) as readers:
+                          profile_steps=config['profile_steps'],inference_devices=inference_devices) as service,reader_pool(reader_count,admission=service.cpu) as readers:
         with RoutedPool(root,collection_host,service,config,state,mono=mono,execution=worker_execution) as ordinary,ActorPool(root,collection_host,service,worker_execution,mono=mono,heavy=True) as heavy,PreparationPool(config['update'].get('preparation_workers',0)) as preparation_pool:
             from .champion import schedule as schedule_champion
             # Resume an interrupted gate for the committed candidate before
@@ -488,10 +490,10 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                 retired_v4=v4_history.active(state.get('quality_pool'))
                 if phases is not None:phases.retired_tables=('legacy',) if retired_v4 else ()
                 current=service.register(model);behavior=Behavior(current,config['exploration'],exploration_settings)
-                shadow_seconds=0.
+                shadow_seconds=0.;teacher_run=None
                 if shadow_collector is not None:
                     shadow_began=time.monotonic()
-                    shadow_collector.collect(teacher_phase,state,model,service,directory)
+                    teacher_run=shadow_collector.begin(teacher_phase,state,model,service,directory,overlap=overlap_collection())
                     shadow_seconds=time.monotonic()-shadow_began
                     inference_before=service.report()
                 elif teacher_phase is not None:teacher_phase.begin(state,model)
@@ -506,8 +508,14 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                         fingerprints['contexts']=Fingerprints(root,run,fixed_probe,model,config['update'],
                             {m['model_id']:m for m in state['quality_pool']['members']},neutral=fingerprints['learner'])
                 from .ordinary import plan_collection,sampling_report
-                plan=plan_collection(root,directory,state,config,signature,service,current,
-                                     profiles,opponent_specs,fast_specs,window,fingerprints=fingerprints,exploration=exploration_settings)
+                plan_began=time.monotonic()
+                try:
+                    plan=plan_collection(root,directory,state,config,signature,service,current,
+                                         profiles,opponent_specs,fast_specs,window,fingerprints=fingerprints,exploration=exploration_settings)
+                except BaseException:
+                    if teacher_run is not None:teacher_run.abort()
+                    raise
+                planning_seconds=time.monotonic()-plan_began
                 jobs=plan['jobs'];kind_by_group=plan['kind_by_group'];composition=plan['composition']
                 cursor=plan['cursor'];context_counter=plan['context_counter'];incumbent=plan['incumbent']
                 historical_generations=plan['historical_generations'];mix_receipts=plan['mix_receipts']
@@ -516,8 +524,15 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                 normal=[j for j in jobs if j['provenance']['legacy_mode']!='searched']
                 legacy=[j for j in jobs if j['provenance']['legacy_mode']=='searched']
                 from .ingress import StreamingCollection
-                with StreamingCollection(readers,config['audit_workers'],behavior.policy_id,kind_by_group,
+                def finish_teacher():
+                    # Time spent waiting for the tables counts as teacher time.
+                    joined=time.monotonic();teacher_run.finish()
+                    return time.monotonic()-joined
+                with StreamingCollection(readers,reader_count,behavior.policy_id,kind_by_group,
                                          config.get('insolvency'),reward) as prepared_collection:
+                    if teacher_run is not None and legacy:
+                        # The heavy pool brings its own CPU groups; keep it sequential.
+                        shadow_seconds+=finish_teacher();teacher_run=None
                     if revised and config['overlap_pools'] and normal and legacy:
                         with ThreadPoolExecutor(max_workers=2) as coordinators:
                             pending=[coordinators.submit(ordinary.collect,normal,on_records=prepared_collection.submit),
@@ -531,8 +546,14 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                                 for future in pending:future.cancel()
                                 raise
                     else:
-                        if normal: records+=ordinary.collect(normal,on_records=prepared_collection.submit)
-                        if legacy: records+=heavy.collect(legacy,on_records=prepared_collection.submit)
+                        try:
+                            if normal: records+=ordinary.collect(normal,on_records=prepared_collection.submit,
+                                **({} if teacher_run is None else dict(core_plan=teacher_run.core_plan)))
+                            if legacy: records+=heavy.collect(legacy,on_records=prepared_collection.submit)
+                        except BaseException:
+                            if teacher_run is not None:teacher_run.abort()
+                            raise
+                    if teacher_run is not None:shadow_seconds+=finish_teacher();teacher_run=None
                     load_began=time.monotonic();ingress_metrics={}
                     games,learner_data,diagnostics=prepared_collection.finish(records,ingress_metrics)
                 if normal and ordinary.last_collection_report is not None:
@@ -725,6 +746,7 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                     selfplay_opponents=champion_mix.summarize(state,config,mix_receipts) if champion_mix.enabled(config) else None,
                     games_done=done,cumulative_games=state['previous_games']+done,
                     timings=dict(collection_seconds=load_began-began-shadow_seconds,
+                        planning_seconds=planning_seconds,
                         teacher_collection_seconds=shadow_seconds,
                         shadow_collection_seconds=shadow_seconds if not is_on(config) else 0.,
                         sampling_seconds=sampling_finished-collected,

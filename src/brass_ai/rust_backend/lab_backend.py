@@ -96,7 +96,7 @@ class RoutedPool:
         self.last_collection_report=None
         self.backend=validate_state(state)
         self._ordinary_build=None
-    def collect(self,jobs,*,on_records=None):
+    def collect(self,jobs,*,on_records=None,core_plan=None):
         training=all(j['provenance'].get('purpose')=='training' for j in jobs)
         if not self.backend or self.backend['mode']=='reference':
             result=self.reference.collect(jobs,on_records=on_records)
@@ -118,10 +118,14 @@ class RoutedPool:
         from brass_ai.recovery.collector_runtime import native_inference
         from .lab_cpu_runtime import accept_cached_cpu_work,ordinary_plan
         block=native_inference();cpu=None
-        if block is not None and block['ordinary']=='cpu-ort':build,cpu=ordinary_plan(self.root,build,self.service,jobs,block)
+        if block is not None and block['ordinary']=='cpu-ort':
+            # A job that still routes through the GPU service needs every opponent loaded.
+            from .lab_collection import route
+            if getattr(self.service,'deferred',None) and any(route(j)[0]!='rust' for j in jobs):self.service.materialize_all()
+            build,cpu=ordinary_plan(self.root,build,self.service,jobs,block)
         else:build=accept_cached_cpu_work(self.root,build)
         with NativePool(self.root,self.service,self.execution,build,
-                        self.config,digest(collection_signature(self.state['signature'])),mono=self.mono,cpu=cpu) as pool:
+                        self.config,digest(collection_signature(self.state['signature'])),mono=self.mono,cpu=cpu,core_plan=core_plan) as pool:
             result=pool.collect(jobs,on_records=on_records)
             self.last_collection_report=pool.last_collection_report
             return result

@@ -244,7 +244,7 @@ class InferenceService:
         self.reply_channels=ReplyChannels(self.mp,config.get('shared_slot_bytes',2*1024*1024))
         self.connections=self.reply_channels.connections;self.children=self.reply_channels.children;self.slots=self.reply_channels.slots
         self.leases=[];self._lease_channels={}
-        self.models={};self.cache=OrderedDict()
+        self.models={};self.cache=OrderedDict();self.deferred={}
         self.lock=threading.RLock();self.stop=threading.Event();self.error=None
         self.started=self.closed=False
         self.timings=Timings();self.profile,self.profile_steps=profile,profile_steps
@@ -272,12 +272,26 @@ class InferenceService:
             model,raw=load_checkpoint(path,device='cpu')
         return self.register(model)
 
+    def defer_checkpoint(self,identity,path):
+        """Remember a model that CPU workers read from its bundle; load it only if needed."""
+        with self.lock:
+            if identity not in self.models:self.deferred[identity]=path
+
+    def materialize(self,identity):
+        with self.lock:path=self.deferred.pop(identity,None)
+        if path is not None:self.register_checkpoint(path)
+
+    def materialize_all(self):
+        for identity in list(self.deferred):self.materialize(identity)
+
     def trim(self, identities):
         """Called only after all round jobs/replies have finished."""
         with self.lock:
             keep=set(identities)
             for key in list(self.models):
                 if key not in keep: self.models.pop(key);self.cache.pop(key,None)
+            for key in list(self.deferred):
+                if key not in keep: self.deferred.pop(key)
 
     def channels(self,count):
         from .inference_channels import allocate_lease

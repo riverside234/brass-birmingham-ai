@@ -1,7 +1,7 @@
 {
   "contract": "brass-b07-replay-location-review/1.0.0",
   "qualified_implementation": "9efcf34f853d75ab844366b6819da4b0921be38d3e2dfb806cf282ace76e7a30",
-  "execution_implementation": "54350dbd05bb9abd992bc5a818f77d488cb916d2a892f3408e0345cc181a906a",
+  "execution_implementation": "102d4622c3ec190e8df9ba4f4e8a17adc2f63e7a82b6264064190c985e452931",
   "base_commit": "7244d6b",
   "changes": {
     "configs/learning/collector-performance-teacher-reuse.json": {
@@ -403,6 +403,11 @@
       "implementation": "9577ab0db846fe6783963ad11cb1f5ab46d67cbe0ce57e7454425c8fa96431a4",
       "qualified_implementation": "9efcf34f853d75ab844366b6819da4b0921be38d3e2dfb806cf282ace76e7a30",
       "replay_location_review": "50fc205a1d72bbe2e65b83de87ff5f4779eef07635c045969a053438e58610b2"
+    },
+    {
+      "implementation": "54350dbd05bb9abd992bc5a818f77d488cb916d2a892f3408e0345cc181a906a",
+      "qualified_implementation": "9efcf34f853d75ab844366b6819da4b0921be38d3e2dfb806cf282ace76e7a30",
+      "replay_location_review": "2e7bc31828fc215d7fff8ef6a20366dc0f5074d4e72fc67892f0f4437b2dda0d"
     }
   ],
   "performance_evidence": "results/joint7-v11-2-g1290-trained-restart-g1253-20261107T145415686647Z/iteration-1252/report.json",
@@ -526,6 +531,12 @@
     "contract": "brass-lab-cpu-inference/1.0.0",
     "source_plan": "ai-research/RUST_CPU_INFERENCE_AND_SEARCH_V3_PLAN.md",
     "scope": "Opt-in in-worker ONNX Runtime inference for teacher search, ordinary lanes and rating, stripped from the training signature and absent by default. Without the execution block every GPU path, binary, frozen job, checkpoint and RNG stream is unchanged.",
+    "qualified_implementation_unchanged": true
+  },
+  "collection_overlap": {
+    "contract": "brass-lab-collection-overlap/1.0.0",
+    "source_report": "ai-research/RUST_OVERLAP_AND_TRAINING_SPEED_REPORT.md",
+    "scope": "CPU path only: teacher tables run beside ordinary games, the PPG cache is written beside PPO and replay shards are sealed as they arrive. Search c_scale (c2) comes from the operational native_inference block and is recorded on every label. Without that block every GPU path, binary, frozen job and RNG stream is unchanged.",
     "qualified_implementation_unchanged": true
   }
 }

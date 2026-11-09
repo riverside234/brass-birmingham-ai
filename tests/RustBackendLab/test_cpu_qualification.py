@@ -29,7 +29,7 @@ def tables(*rows):
 
 class Budgets(unittest.TestCase):
     def test_production_budget_is_the_requested_one(self):
-        self.assertEqual(BUDGET, dict(mode='count', full=640, full_k=16, fast=96, fast_k=8))
+        self.assertEqual(BUDGET, dict(mode='count', full=640, full_k=16, fast=96, fast_k=8, c_scale=1.))
 
     def run_checks(self, *rows):
         checks = {}

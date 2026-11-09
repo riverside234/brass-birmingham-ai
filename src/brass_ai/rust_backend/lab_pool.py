@@ -357,10 +357,35 @@ def publisher_workers(jobs,capacity):
     return min(24,desired,len(jobs),capacity)
 
 
+class Lanes:
+    """Ordinary lanes free for work.
+
+    A lane on a CPU that a teacher table still holds stays out of the queue, and
+    joins it the moment that table ends. Without teacher overlap every lane joins at once.
+    """
+    def __init__(self,core_plan=None):
+        self.core_plan=core_plan;self.queue=queue.Queue();self.parked={};self.parked_lanes=0
+
+    def add(self,connection,core):
+        if self.core_plan is not None and core is not None and self.core_plan.holds(core):
+            self.parked[core]=connection;self.parked_lanes+=1
+        else:self.queue.put(connection)
+
+    def release(self,core):
+        connection=self.parked.pop(core,None)
+        if connection is not None:self.queue.put(connection)
+
+    def get(self):
+        # While a teacher table holds a CPU, a free lane can take a table's length to appear.
+        return self.queue.get(timeout=1800 if self.parked_lanes else 120)
+
+    def put(self,connection):self.queue.put(connection)
+
+
 class NativePool:
-    def __init__(self,root,service,execution,build,config,signature,*,mono='mono',scope='ordinary',cpu=None):
+    def __init__(self,root,service,execution,build,config,signature,*,mono='mono',scope='ordinary',cpu=None,core_plan=None):
         require(scope in ('ordinary','diagnostic'),'Unknown native pool scope')
-        self.cpu=cpu
+        self.cpu=cpu;self.core_plan=core_plan
         from .lab_teacher_activation import is_on
         require(config.get('teacher_phase',{}).get('mode','off') in ('off','shadow') or is_on(config),
                 'Ordinary backend excludes unqualified teacher on-mode')
@@ -428,7 +453,7 @@ class NativePool:
         # and fully validated by a publisher before it is returned or reused.
         probe=Publisher(directory,self.producer,self.config,self.scope)
         candidates=[j for j in jobs if Path(str(probe.path(j))+'.record.json').exists()]
-        available=queue.Queue();width=lanes=0
+        core_plan=getattr(self,'core_plan',None);available=Lanes(core_plan);width=lanes=0
         began=time.perf_counter();first=[];failure_lock=threading.Lock()
         def fail(error):
             with failure_lock:
@@ -509,7 +534,8 @@ class NativePool:
                         self.processes.append(p);p.start()
                     finally:
                         for a,b in pairs:b.close()
-                    for a,b in pairs:available.put(a);new_connections.append(a)
+                    for a,b in pairs:
+                        new_connections.append(a);available.add(a,cores[number] if cores else None)
                 process_start_seconds=time.perf_counter()-began_processes
                 if not progressive:
                     for connection in new_connections:
@@ -517,10 +543,11 @@ class NativePool:
                         require(message.get('ready') is True,'Native startup failed')
                         if message.get('startup'):lane_startup.append(message['startup'])
             actor_startup=time.perf_counter()-actor_began if missing and not progressive else 0.
+            if core_plan is not None:core_plan.attach(available.release,fail)
             def on_ready(message):
                 if message.get('startup'):lane_startup.append(message['startup'])
             def collect(job,continuation,submit):
-                connection=available.get(timeout=120)
+                connection=available.get()
                 try:
                     connection.send(dict(job=job,continuation=continuation,validation=validations[job['index']]))
                     return self.receive(connection,submit=submit,timeout=360,shared_allocate=self.shared.allocate,
@@ -532,6 +559,10 @@ class NativePool:
                 model_cohorts=config.get('model_cohorts',False),on_error=fail,
                 publication_workers=min(publisher_count,max(1,lanes)),cached_records=cached)
             live_seconds=report['wall_seconds']
+            if core_plan is not None:
+                core_plan.detach()
+                report['overlap']=dict(parked_lanes=available.parked_lanes,lanes_still_parked_at_end=len(available.parked),
+                    scope='Ordinary lanes on CPUs that teacher tables held when collection started')
             breakdown=startup_breakdown(lane_startup,wall_began,width=width,lanes=lanes,barrier=not progressive,
                 process_start_seconds=process_start_seconds,channel_seconds=channel_seconds)
             if progressive and lane_startup:actor_startup=breakdown['last_lane_ready_seconds']
@@ -574,6 +605,7 @@ class NativePool:
             self.last_collection_report=report
             return records
         except BaseException:
+            if getattr(self,'core_plan',None) is not None:self.core_plan.detach()
             self.stop.set();self.service.cpu.abort()
             if first:
                 error,tb=first[0];raise error.with_traceback(tb)

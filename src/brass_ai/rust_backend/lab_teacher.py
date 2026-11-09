@@ -193,13 +193,14 @@ class TeacherCollector:
     gated by B05/B07; this class is also the exact two-table qualification path.
     """
     def __init__(self, executable, core_source, bootstrap, service, calibration, *, lanes=2, cancel=None,
-                 model=None, history=(), inference=None, cores=()):
+                 model=None, history=(), inference=None, cores=(), core_plan=None):
         self.executable, self.core_source, self.bootstrap = executable,core_source,bootstrap
         self.service, self.calibration = service, calibration
         require(type(lanes) is int and 1 <= lanes <= 256,'Invalid teacher lanes')
         self.lanes = lanes;self.cancel = cancel or threading.Event()
         self.model,self.history = model,history
         self.inference,self.cores = inference,tuple(cores)
+        self.core_plan = core_plan
         self.verifier = None
         self.failures = []
 
@@ -228,8 +229,10 @@ class TeacherCollector:
         owned = [_CpuLane(self.cores[i] if i < len(self.cores) else None) for i in range(count)] if lease is None else [lease.acquire() for _ in range(count)]
         for e in owned:endpoints.put(e)
         failure_lock = threading.Lock(); first_failure = []; self.failures = []
+        unstarted = [len(jobs)]
         def one(job):
             endpoint = None; worker = None
+            with failure_lock:unstarted[0] -= 1
             try:
                 endpoint = endpoints.get(timeout=30)
                 from brass_ai.recovery.telemetry import Timings
@@ -263,7 +266,12 @@ class TeacherCollector:
                     self.cancel.set()
                 raise
             finally:
-                if endpoint is not None:endpoints.put(endpoint)
+                if endpoint is not None:
+                    endpoints.put(endpoint)
+                    # Hand this CPU to an ordinary lane once no table needs it again.
+                    core = getattr(endpoint,'cpu',None)
+                    if self.core_plan is not None and core is not None and unstarted[0] == 0:
+                        self.core_plan.release(core)
         try:
             try:
                 from .lab_families import _failure_scope

@@ -17,10 +17,10 @@ OWNER = dict(contract=CONTRACT, purpose='policy-only search-v1 labels')
 
 
 class TeacherBuffer:
-    def __init__(self, root, run, identity, *, receipts=(), retired=()):
+    def __init__(self, root, run, identity, *, receipts=(), retired=(), c_scale=.1):
         self.root, self.run = owned(root, run)
         self.directory = safe(self.run, self.run / 'teacher-labels')
-        self.identity = identity
+        self.identity = identity; self.c_scale = c_scale
         self.receipts = copy.deepcopy(list(receipts)); self.retired = copy.deepcopy(list(retired))
         self.pending = list(self.receipts); self._rows = {}
         require(len({r['path'] for r in self.receipts}) == len(self.receipts), 'Duplicate teacher shard receipt')
@@ -60,6 +60,9 @@ class TeacherBuffer:
         receipt = dict(contract=CONTRACT, path=f'teacher-labels/generation-{generation:06d}-{split}.jsonl.gz',
             generation=generation, split=split, rows=len(rows), model_id=model_id, reward_id=reward_id,
             profile_digest=self.identity, sha256=hashlib.sha256(data).hexdigest())
+        scales = {r.label['c2'] for r in rows}
+        require(len(scales) <= 1, 'Teacher shard mixes search constants')
+        if scales and scales != {.1}: receipt['c_scale'] = next(iter(scales))
         path, sidecar = self.paths(receipt)
         require(not path.exists() or sha(path) == receipt['sha256'], 'Uncommitted teacher shard differs; recover before recollection')
         require(not sidecar.exists() or read(sidecar) == receipt, 'Teacher receipt differs')
@@ -74,7 +77,10 @@ class TeacherBuffer:
         return receipt
 
     def window(self, generation):
-        keep = [r for r in self.pending if r['profile_digest'] == self.identity and 0 <= generation - r['generation'] < 4]
+        # A changed c_scale is a different search target, so older labels retire
+        # with it. The current generation stays: a crash may have sealed its tables.
+        keep = [r for r in self.pending if r['profile_digest'] == self.identity and 0 <= generation - r['generation'] < 4
+                and (r['generation'] == generation or r.get('c_scale', .1) == self.c_scale)]
         removed = [r for r in self.pending if r not in keep]
         for r in removed:
             if r not in self.retired: self.retired.append(r)

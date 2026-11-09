@@ -22,6 +22,7 @@ from brass_ai.learning.batching import collate
 from brass_ai.learning.contracts import require,SOURCE_ROOT
 from brass_ai.learning.features import Encoded
 from .batch_cache import array_digest
+from .replay_binding import checked_encoded
 
 
 def initialize():
@@ -175,8 +176,10 @@ class Preparation:
         for index,row in zip(part,dataset._batch_rows(part,value_only)):
             q=dataset.q[index] if exploration else None
             arrays=(row.state,row.actions,row.stable_to_relative)
-            # Recheck source bytes on reuse: stale snapshots cannot hide mutation.
-            seal=tuple(array_digest(a) for a in arrays)+(array_digest(q) if q is not None else None,)
+            if q is not None and q.flags.writeable:q.setflags(write=False)
+            # Sealed rows are bytes-backed and immutable, so hashing them again
+            # cannot find anything. Other inputs are still rechecked on reuse.
+            seal=None if checked_encoded(row) else tuple(array_digest(a) for a in arrays)+(array_digest(q) if q is not None else None,)
             key=(id(dataset),index,bool(exploration),value_only)
             cached=self.cache.get(key)
             if cached is None:
