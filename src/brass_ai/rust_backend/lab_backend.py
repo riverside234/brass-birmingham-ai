@@ -86,9 +86,11 @@ def rollback_fork(root,value):
 
 
 class RoutedPool:
-    def __init__(self,root,host,service,config,state,*,mono=None):
+    def __init__(self,root,host,service,config,state,*,mono=None,execution=None):
         from brass_ai.recovery.execution import ActorPool
-        self.reference=ActorPool(root,host,service,config['execution'],mono=mono)
+        # The worker topology may differ from the signed recipe, which stays intact.
+        self.execution=config['execution'] if execution is None else execution
+        self.reference=ActorPool(root,host,service,self.execution,mono=mono)
         self.root,self.service,self.config,self.state,self.mono=root,service,config,state,mono
         self.host=host
         self.last_collection_report=None
@@ -104,7 +106,7 @@ class RoutedPool:
             # Evaluation keeps its reference semantics without retaining an
             # idle second population of Python workers during native collection.
             from brass_ai.recovery.execution import ActorPool
-            with ActorPool(self.root,self.host,self.service,self.config['execution'],mono=self.mono) as evaluation:
+            with ActorPool(self.root,self.host,self.service,self.execution,mono=self.mono) as evaluation:
                 result=evaluation.collect(jobs,on_records=on_records)
                 self.last_collection_report=evaluation.last_collection_report
                 return result
@@ -118,7 +120,7 @@ class RoutedPool:
         block=native_inference();cpu=None
         if block is not None and block['ordinary']=='cpu-ort':build,cpu=ordinary_plan(self.root,build,self.service,jobs,block)
         else:build=accept_cached_cpu_work(self.root,build)
-        with NativePool(self.root,self.service,self.config['execution'],build,
+        with NativePool(self.root,self.service,self.execution,build,
                         self.config,digest(collection_signature(self.state['signature'])),mono=self.mono,cpu=cpu) as pool:
             result=pool.collect(jobs,on_records=on_records)
             self.last_collection_report=pool.last_collection_report

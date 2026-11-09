@@ -39,6 +39,7 @@ To return to the GPU path at any committed generation, use `--inference gpu`.
 | Workers | 64 lanes × 1, CPU budget 64, reserve 0, one lane per CPU, spread across sockets. Applied at run time only. |
 | Lane startup | Each lane process now receives only the two paths it reads, which removes the serial wait described below. CPU lanes also start work as soon as they are ready and no longer lease GPU reply channels. Each lane warms its Mono bootstrap before its first game. |
 | Startup measurement | Every collection records `startup_breakdown` per lane, and teacher tables record `mono_bootstrap_seconds`. See section 5. |
+| Training entry | The ordinary pool now receives the signed recipe and the 64-lane worker settings separately. The teacher on-mode check compares a digest of the recipe, including its worker counts, so it must see the signed one. |
 | Tolerance | CPU-sourced labels use the 2e-4 cross-runtime bound in `check_logits`. GPU labels keep 2e-5 / 1e-5. |
 
 The whole feature sits behind the `native_inference` block in `execution`, which `collector_runtime.recipe` strips before the training signature. With the block absent, the GPU code path, binaries and call arguments are as they were, apart from the extra startup measurement. `lab-native/` is not edited: `lab-native-cpu/` and `lab_cpu_overlay.py` patch a detached copy, so the qualified GPU binaries keep their fingerprints. The review in `b07-replay-location-review.json` records the new execution identity.

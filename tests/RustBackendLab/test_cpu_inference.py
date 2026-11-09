@@ -700,6 +700,45 @@ def fixture_cpu_actors(connections, root, build, execution, mono, lease, cpu, st
         list(pool.map(lane, connections))
 
 
+EXPORT = SOURCE_ROOT/'results/joint7-v11-2-g1290-trained-restart-g1290-20261109T041246972332Z'
+
+
+@unittest.skipUnless((EXPORT/'state.json').is_file(), 'Needs the g1290 export')
+class TrainingEntry(unittest.TestCase):
+    def test_the_on_mode_check_sees_the_signed_recipe_with_a_64_lane_topology(self):
+        """The exact call that stopped the second lab run."""
+        from unittest.mock import patch
+        from brass_ai.bank import read
+        from brass_ai.rust_backend import lab_backend as B, lab_pool as P
+        from brass_ai.rust_backend.lab_teacher_activation import is_on
+        state = read(EXPORT/'state.json')
+        config = state['signature']['config']
+        self.assertTrue(is_on(config))
+        settings = dict(R.from_config(config), native_inference=R.cpu_block())
+        with R.scope(settings):
+            effective = R.effective_execution(config['execution'])
+        self.assertEqual(effective['processes'], 64)
+        self.assertFalse(is_on(dict(config, execution=effective)))
+        seen = {}
+        def collect(pool, jobs, on_records=None):
+            seen.update(execution=pool.execution, config=pool.config)
+            pool.last_collection_report = dict(wall_seconds=0.)
+            return ['record']
+        build = dict(_receipt_sha256='0'*64, b01=dict(sha256='1'*64))
+        cpu = dict(contract=R.CPU_CONTRACT)
+        service = SimpleNamespace(cpu=None, error=None)
+        with R.scope(settings), patch('brass_ai.recovery.execution.ActorPool'), \
+                patch.object(B, 'validate_state', return_value=dict(mode='rust', build=dict(path='x'))), \
+                patch.object(B, 'check_build', return_value=build), \
+                patch('brass_ai.rust_backend.lab_perf_runtime.resolve', return_value=build), \
+                patch('brass_ai.rust_backend.lab_cpu_runtime.ordinary_plan', return_value=(build, cpu)), \
+                patch.object(P.NativePool, 'collect', collect):
+            pool = B.RoutedPool(SOURCE_ROOT, 'host', service, config, state, mono='mono', execution=effective)
+            self.assertEqual(pool.collect([dict(provenance=dict(purpose='training'))]), ['record'])
+        self.assertIs(seen['execution'], effective)
+        self.assertIs(seen['config'], config)
+
+
 class CpuPool(unittest.TestCase):
     def test_cpu_lanes_need_no_channels_and_report_their_startup(self):
         import multiprocessing
@@ -758,7 +797,7 @@ class RealLane(unittest.TestCase):
                        exported_bundles=1, model_cache=2, pinning='none')
             build = dict(bootstrap=dict(binary=dict(path=os.environ['BRASS_CPU_BOOTSTRAP'])), collector=dict(path=os.environ['BRASS_CPU_COLLECTOR']))
             execution = dict(max_decisions=5000, batch_size=32, max_candidate_cells=8192, worker_threads=1, processes=1, hosts_per_process=1,
-                             collector_validation='strict', replay_bindings=True, native_inference=R.cpu_block(workers=1))
+                             collector_validation='production_fast', replay_bindings=True, native_inference=R.cpu_block(workers=1))
             spec = neural_spec(identity, 0., 'neutral', version=3)
             job = dict(index=0, seed=19, sampling_seed=31, policies=[spec]*4, provenance={}, stable_game_id='lane-fixture')
             parent, child = mp.Pipe()
@@ -776,18 +815,20 @@ class RealLane(unittest.TestCase):
                 startup = ready['startup']
                 self.assertGreater(startup['mono_bootstrap_seconds'], 0)
                 self.assertGreater(startup['total_seconds'], startup['mono_bootstrap_seconds'])
-                parent.send(dict(job=job, continuation=None, validation=None))
-                result = None
-                while result is None:
-                    self.assertTrue(parent.poll(240), 'lane stopped answering')
-                    message = parent.recv()
-                    self.assertNotIn('error', message, message.get('error'))
-                    if 'shared_allocate' in message:
-                        parent.send(dict(shared_lease=registry.allocate(message['shared_allocate']['size'])))
-                    elif 'result' in message:
-                        result = message['result']
-                self.assertEqual(result['format'], lab_shared.FORMAT)
-                self.assertGreater(result['size'], 0)
+                # Strict games are audited in full. Training validates most games the fast way.
+                for number, validation in enumerate((None, dict(semantic=False, branch=False))):
+                    parent.send(dict(job=dict(job, seed=19+number, stable_game_id=f'lane-fixture-{number}'), continuation=None, validation=validation))
+                    result = None
+                    while result is None:
+                        self.assertTrue(parent.poll(240), 'lane stopped answering')
+                        message = parent.recv()
+                        self.assertNotIn('error', message, message.get('error'))
+                        if 'shared_allocate' in message:
+                            parent.send(dict(shared_lease=registry.allocate(message['shared_allocate']['size'])))
+                        elif 'result' in message:
+                            result = message['result']
+                    self.assertEqual(result['format'], lab_shared.FORMAT)
+                    self.assertGreater(result['size'], 0)
             finally:
                 stop.set()
                 parent.send(None)

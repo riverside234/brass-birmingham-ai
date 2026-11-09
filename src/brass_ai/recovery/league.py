@@ -464,7 +464,7 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
         raise_open_file_limit()
     with InferenceService(worker_execution,device,profile=run/'profile-collection' if config['profile_steps'] else None,
                           profile_steps=config['profile_steps'],inference_devices=inference_devices) as service,reader_pool(config['audit_workers'],admission=service.cpu) as readers:
-        with RoutedPool(root,collection_host,service,dict(config,execution=worker_execution),state,mono=mono) as ordinary,ActorPool(root,collection_host,service,worker_execution,mono=mono,heavy=True) as heavy,PreparationPool(config['update'].get('preparation_workers',0)) as preparation_pool:
+        with RoutedPool(root,collection_host,service,config,state,mono=mono,execution=worker_execution) as ordinary,ActorPool(root,collection_host,service,worker_execution,mono=mono,heavy=True) as heavy,PreparationPool(config['update'].get('preparation_workers',0)) as preparation_pool:
             from .champion import schedule as schedule_champion
             # Resume an interrupted gate for the committed candidate before
             # advancing the learner or writing a new gate specification.

@@ -61,9 +61,9 @@ RAN_LINE = re.compile(r'^Ran (\d+) tests?', re.M)
 # Quick host checks and the bundle receipts other stages need always run.
 REUSABLE = ('regressions', 'parity', 'teacher', 'ordinary', 'rating')
 # Reviewed source changes that cannot affect a stage that already passed.
-REVIEWED_CHANGES = {'38c3b310e6ee8a9798f4b593922f48074bfcf5e52a2eacd6a2b1c31fedaefccd': dict(
-    previous='d94919c118abb4a2182cc244d2fd0acc4d8d95aa906d4968dfd821fbe707db75',  # Only how ordinary lane processes receive their paths.
-    stages=('regressions', 'parity', 'teacher'))}
+REVIEWED_CHANGES = {'54350dbd05bb9abd992bc5a818f77d488cb916d2a892f3408e0345cc181a906a': dict(
+    previous='38c3b310e6ee8a9798f4b593922f48074bfcf5e52a2eacd6a2b1c31fedaefccd',  # Only how training hands the pool its recipe and worker settings.
+    stages=REUSABLE)}
 # Starting a process should not wait for it; the old bug measured about 0.7 s each.
 MAX_PROCESS_START_SECONDS = .2
 
